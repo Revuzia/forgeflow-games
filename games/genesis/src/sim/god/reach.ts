@@ -56,7 +56,7 @@ export const REACH = {
   popMin: 12,
   popEase: 0.02 / 12,
   /** free basics that can be repeated carry a cooldown (ticks) in a bound world */
-  freeCooldown: { rain: 60, lightning: 60, 'omen-rainbow': 240, 'heal-person': 30 } as Record<string, number>,
+  freeCooldown: { rain: 60, lightning: 60, 'heal-person': 30, gift: 120, ignite: 60, extinguish: 30 } as Record<string, number>,
 } as const;
 
 export function isBound(u: Universe): boolean {
@@ -299,7 +299,6 @@ function freeClay(u: Universe, R: ReachState, p: Planet | undefined, tier: numbe
 
 /** price x size: a wider radius or a stronger cast than the power's default costs in proportion */
 export function priceOf(u: Universe, pw: PowerDef, cmd?: Command | Record<string, unknown>): number {
-  if (pw.free) return 0;
   let k = 1;
   const c = cmd as Record<string, unknown> | undefined;
   const def = (pw.params?.radius as number | undefined) ?? (pw.schema?.radius?.default as number | undefined);
@@ -307,11 +306,13 @@ export function priceOf(u: Universe, pw: PowerDef, cmd?: Command | Record<string
   if (c && typeof c.power === 'number') k *= Math.max(1, c.power);
   if (c && typeof c.scale === 'number' && pw.command === 'disaster.spawn') k *= Math.max(1, c.scale);
   const scale = u.god.laws['restraint.costScale'] ?? 1;
+  // a free basic spell is free at its own size only: cast wider or stronger it costs like the basics (half its old cost x size)
+  if (pw.free) return k > 1 && pw.id in REACH.freeCooldown ? r2(Math.max(1, Math.round((pw.cost ?? 0) / 2)) * k * scale) : 0;
   return r2((pw.price ?? 0) * k * scale);
 }
 
 function waitText(R: ReachState, need: number): string {
-  if (R.believers <= 0) return 'No one gives to you yet. Be seen: rain, a stroke of lightning and the rainbow are always yours.';
+  if (R.believers <= 0) return 'No one gives to you yet. Be seen: rain, a small gift and a stroke of lightning are always yours.';
   if (R.inc <= 0) return 'The people have not given yet today.';
   const d = Math.ceil(need / R.inc);
   return d <= 1 ? 'About a day more.' : `About ${d} days more.`;
@@ -338,7 +339,9 @@ export function chargeCheck(u: Universe, cmd: Command, pw: PowerDef | undefined,
   if (pw.free) {
     const cd = clay ? 0 : REACH.freeCooldown[pw.id] ?? 0;
     if (cd > 0 && ready > u.tick) return `${pw.name} is still gathering strength (${Math.ceil(ready - u.tick)} minutes more).`;
-    return cd > 0 ? { price: 0, cooldown: cd, key, power: pw.id, beyond: false } : null;
+    const big = clay ? 0 : priceOf(u, pw, cmd);
+    if (big > 0 && pool(u) + 1e-9 < big) return `${pw.name} at this size needs ${big} worship; ${pool(u)} is gathered. ${waitText(R, big - pool(u))}`;
+    return cd > 0 || big > 0 ? { price: big, cooldown: cd, key, power: pw.id, beyond: false } : null;
   }
   if (clay) return null;
   const why = lockedWhy(R, pw);

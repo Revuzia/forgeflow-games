@@ -14,12 +14,14 @@ test('reach: a new bound world starts with a pool; a power is charged its price,
   const x = ctx(sim);
   assert.equal(x.pool(), REACH.start);
   sim.drainEvents();
-  let r = x.cast({ k: 'settlement.gift', settlement: x.st.id, items: { bread: 6 } });
+  let r = x.cast({ k: 'god.omen', kind: 'aurora', settlement: x.st.id });
+  if (!r.ok) r = x.cast({ k: 'life.cure', settlement: x.st.id });
   assert.ok(r.ok, r.msg);
-  assert.equal(x.pool(), REACH.start - 3);
+  const first = REACH.start - x.pool();
+  assert.ok(first > 0, 'a priced power was charged');
   const spent = sim.drainEvents().filter((e) => e.t === 'worship.spent');
   assert.equal(spent.length, 1);
-  assert.deepEqual(spent[0].data, { power: 'gift', amount: 3, beyond: false });
+  assert.equal((spent[0].data as { amount: number }).amount, first);
   // size: twice the default radius costs twice
   const before = x.pool();
   r = x.cast({ k: 'terrain.raise', pos: x.at, radius: 500 });
@@ -54,10 +56,16 @@ test('reach: out of reach, unaffordable and failed casts are refused in plain wo
   assert.ok(r.ok, r.msg);
   assert.equal(x.pool(), 5000 - 30);
   // not enough gathered: refused, nothing taken, no cooldown started
-  x.pool(2);
-  r = x.cast({ k: 'settlement.gift', settlement: x.st.id, items: { bread: 6 } });
+  x.pool(1);
+  r = x.cast({ k: 'terrain.raise', pos: x.at });
   assert.equal(r.ok, false);
-  assert.match(String(r.msg), /needs 3 worship; 2 is gathered\. No one gives to you yet\./);
+  assert.match(String(r.msg), /needs 2 worship; 1 is gathered\. No one gives to you yet\./);
+  assert.equal(x.pool(), 1);
+  x.pool(2);
+  // a free spell is free at its own size; cast ten times as wide it is priced, and refused when the pool is short
+  r = x.cast({ k: 'fire.ignite', pos: x.at, radius: 600 });
+  assert.equal(r.ok, false);
+  assert.match(String(r.msg), /at this size needs 30 worship/);
   assert.equal(x.pool(), 2);
   // a cast the handler itself refuses (a rainbow needs the sun; an unknown idea) charges nothing
   x.pool(100);
@@ -75,9 +83,11 @@ test('reach: the clock, the Hand, the answers and the very basic spells are free
   x.pool(0);
   const list = powers(sim);
   const free = new Set(list.filter((p) => p.free).map((p) => p.id));
-  for (const id of ['speed', 'save', 'load', 'grab', 'place', 'slap', 'stroke', 'possess-move', 'answer-prayer', 'tower-warn', 'vow-gentle', 'answer-mercy', 'rain', 'lightning', 'omen-rainbow']) assert.ok(free.has(id), `${id} is free`);
+  for (const id of ['speed', 'save', 'load', 'grab', 'place', 'slap', 'stroke', 'possess-move', 'answer-prayer', 'tower-warn', 'vow-gentle', 'answer-mercy', 'rain', 'heal-person', 'plant', 'lightning', 'gift', 'ignite', 'extinguish']) assert.ok(free.has(id), `${id} is free`);
   // the free list holds a small help, a small harm and a small wonder (a way to earn belief by each road)
-  assert.ok(free.has('rain') && free.has('lightning') && free.has('omen-rainbow'));
+  assert.ok(free.has('rain') && free.has('gift') && free.has('lightning') && free.has('ignite'));
+  assert.equal(free.has('omen-rainbow'), false, 'the rainbow is a sign and is priced (owner 2026-11-16, third)');
+  assert.equal(list.find((p) => p.id === 'omen-rainbow')!.price, 5);
   assert.ok(x.cast({ k: 'water.rain', pos: x.at }).ok);
   const again = x.cast({ k: 'water.rain', pos: x.at });
   assert.equal(again.ok, false);
@@ -120,11 +130,11 @@ test('reach: no dead end. Empty pool and no believers: nothing refills; the free
   assert.equal(v.believers, 0);
   assert.equal(v.pool, 0, 'the pool cannot refill without believers');
   // (2) everything priced is refused; the free spells still work
-  assert.equal(x.cast({ k: 'settlement.gift', settlement: x.st.id, items: { bread: 6 } }).ok, false);
+  assert.equal(x.cast({ k: 'terrain.raise', pos: x.at }).ok, false);
   let cast = 0;
   for (let d = 0; d < 12 && (v.believers === 0 || v.pool <= 0); d++) {
     for (let h = 0; h < 4; h++) {
-      for (const c of [{ k: 'god.omen', kind: 'rainbow', settlement: x.st.id }, { k: 'water.rain', pos: [...x.st.pos] }, { k: 'miracle.lightning', pos: [...x.st.pos], wrath: 0.3 }]) if (x.cast(c).ok) cast++;
+      for (const c of [{ k: 'settlement.gift', settlement: x.st.id, items: { bread: 6 } }, { k: 'water.rain', pos: [...x.st.pos] }, { k: 'miracle.lightning', pos: [...x.st.pos], wrath: 0.3 }]) if (x.cast(c).ok) cast++;
       assert.equal(x.pool() >= 0, true);
       sim.step(360);
     }
@@ -136,6 +146,6 @@ test('reach: no dead end. Empty pool and no believers: nothing refills; the free
   assert.notEqual(v.standing, 'Unknown');
   // (3) and with it a priced power is in reach again
   if (v.pool < 3) sim.step(2 * 1440);
-  const r = x.cast({ k: 'settlement.gift', settlement: x.st.id, items: { bread: 6 } });
+  const r = x.cast({ k: 'terrain.raise', pos: x.at });
   assert.ok(r.ok, r.msg);
 });

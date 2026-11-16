@@ -13,9 +13,9 @@ The 2026-11-16 rulings (verbatim):
 | Area | v2 | v3 |
 |---|---|---|
 | What costs worship | bands 1 to 4, plus a short list of "heavy hands" | **every power**, by size (`price` in `powers.json`), except the free list (§3.2) |
-| What is free | most of band 0 | what is not a power over the world (the clock, save and load, the camera, possession's movement, the Hand, names, the settings, every story answer) and **five very basic spells**: `rain`, `heal-person`, `plant`, `lightning`, `omen-rainbow` |
+| What is free | most of band 0 | what is not a power over the world (the clock, save and load, the camera, possession's movement, the Hand, names, the settings, every story answer) and **seven very basic spells**: `rain`, `heal-person`, `plant`, `gift`, `extinguish`, `lightning`, `ignite` (owner 2026-11-16, third: not the rainbow) |
 | Refilling | a "least gift" of `4 + 0.1 F` a day | **no income without believers.** The pool refills only from the people's rites. No least gift, no trickle |
-| No dead end | the least gift | the free basics (a small help, a small harm, a small wonder), the starting pool of a new world (40), free clay, and no charge on a failed cast (§3.6) |
+| No dead end | the least gift | the free basics (small helps and small harms, each also seen as a wonder), the starting pool of a new world (40), free clay, and no charge on a failed cast (§3.6) |
 | The two roads | one road at a time | **a person may be on both.** Neither erases the other, in the count or in the sim (§2.1, §4) |
 | A person on both roads | n/a | counts 2, the same as on one road: a mixed god is neither weaker nor stronger (§2.1) |
 | Trust and fear in the UI | words only | **two bars** on the god's card (§6) |
@@ -176,11 +176,13 @@ All four are applied at the moment worship is credited (§7.3), not after the fa
 | 4 world | the old cost | 60 | 400 | 3 000 (`erase-world`) |
 
 - **Size.** The price is multiplied by `max(1, radius / the power's default radius)`, by `max(1, power)` for a cast, and by `max(1, scale)` for a disaster, then by `restraint.costScale`. A brush twice as wide costs twice.
-- **The free list (47), by the owner's second ruling of 2026-11-16.**
+- **The free list (49), by the owner's second and third rulings of 2026-11-16.**
   - Not powers over the world: `speed step rewind edit-past save load resume` (the clock, save and load), the camera (not a power), `possess possess-move possess-act` (the god's own body), the Hand `grab throw release place drop slap stroke`, `rename-person rename-settlement`, the settings `wrath restraint natural-disasters rival rival-remove`, `cancel-disaster`, `recall-ship`, `prophet-abandon`, `disciple-order`.
   - The story answers: `answer-prayer`, `tower-confuse tower-strike tower-warn tower-let`, `vow-no-flood vow-spare-the-many vow-gentle vow-warn-first vow-none`, `answer-wrath answer-mercy answer-sign answer-patience`. A deed an answer fires through the registry is part of the answer and is not gated or charged.
-  - **The very basic spells (5):** `rain` (a small help), `heal-person` (a small help to one), `plant`, `lightning` (a small harm), `omen-rainbow` (a small wonder). These are the smallest acts of band 0 that earn belief by each road, so a god with an empty pool and no believers can always begin again.
-- **The free spells cannot be chained.** In a bound world they carry `REACH.freeCooldown`: `rain` 60 minutes, `lightning` 60, `heal-person` 30, `omen-rainbow` 240. `plant` has none.
+  - **The very basic spells (7) (v3, third ruling: "not rainbow, needs to be other basic things").** Help: `rain` (a shower), `heal-person` (one person), `plant` (a patch of green), `gift` (a small gift of food to one town), `extinguish` (put out a small fire). Harm: `lightning` (one stroke), `ignite` (a small fire, 60 m). Each is single-target or small, and each is witnessed, so a god with an empty pool and no believers can always begin again by either road. Rain and the small fire are also read as wonders by those who see them.
+  - `omen-rainbow` is **not** free: it is a sign, priced at the smallest sign price (5), and stays in band 0.
+  - `wind` was considered and left priced (3): its default is a wind over the whole world held for three days, which is not a small act. `extinguish` takes its place as the nearest basic equivalent, and pairs with `ignite`.
+- **The free spells cannot replace priced powers.** In a bound world they carry `REACH.freeCooldown`: `rain` 60 minutes, `lightning` 60, `ignite` 60, `gift` 120, `heal-person` 30, `extinguish` 30; `plant` has none. And they are free **at their own size only**: cast with a wider radius or more power than the default, a free spell costs half its old cost x the size (a 600 m `ignite` costs 30).
 - Content rule (tested): every power that is not free has a price above 0; no band-0 price exceeds the starting pool (40); the cheapest price of each band is no lower than that of the band below.
 
 
@@ -270,8 +272,8 @@ All four are applied at the moment worship is credited (§7.3), not after the fa
 **Time is free.** As v2. The cap, the halved giving of unattended towns and the fading of belief bound what fast-forward can gather.
 
 **No dead end: the guarantee, with numbers (v3)**
-1. **The free basics always work**, at any standing, with an empty pool: `rain` (help), `lightning` (harm), `omen-rainbow` (wonder), `heal-person`, `plant`. Each is witnessed, so each can make believers on its road.
-2. **Believers refill the pool.** Tested from the worst case (`tests/reach-charge.test.ts`): pool 0, every person's faith, trust and fear set to 0, only the three free spells cast (about four a day each as their cooldowns allow). Believers appear, the standing leaves Unknown and the pool is above 0 within 12 game days; a priced power is then cast.
+1. **The free basics always work**, at any standing, with an empty pool: `rain`, `gift`, `heal-person`, `plant`, `extinguish` (help) and `lightning`, `ignite` (harm). Each is witnessed, so each can make believers on its road.
+2. **Believers refill the pool.** Tested from the worst case (`tests/reach-charge.test.ts`): pool 0, every person's faith, trust and fear set to 0, only three free spells cast (`gift`, `rain`, `lightning`, about four a day each as their cooldowns allow). Believers appear, the standing leaves Unknown and the pool is above 0 within 12 game days; a priced power is then cast.
 3. **A new world starts with 40**, so the first acts on a peopled world are not all free spells.
 4. **Free clay is free.** A world no one has lived on takes every power at no cost, at any standing (a tier 4 act only while no world is peopled). A dead world can be re-seeded: `people` costs 25, under the Unknown cap, and the free spells above earn it.
 5. **A failed or refused cast charges nothing** and starts no cooldown. The pool never goes below zero. There is no debt, no upkeep and no decay.
@@ -365,7 +367,7 @@ The probes of §8 require the two roads within 15% on standing, income and susta
 
 | When | Standing | What the player has and sees |
 |---|---|---|
-| Start | Unknown | Pool 40 of 40. Every band-0 power works and costs a little; the five basic spells cost nothing. Card: "No one knows you yet. Whispered when three believe." |
+| Start | Unknown | Pool 40 of 40. Every band-0 power works and costs a little; the seven basic spells cost nothing. Card: "No one knows you yet. Whispered when three believe." |
 | Day 1 to 4 | Whispered | Signs open; a first gift of 10. The pool begins to fill from the people's rites (3 to 5 a day at first, about 38 a day once the town believes) |
 | Day 4 to 20 | Whispered | The card shows the hold filling: "Known when 30 have followed for a season (12 of 30 days)." A sign and several small acts a day can be kept up |
 | Day 20 to 30 | Known | Local miracles open with a gift of 20. About two local miracles a day can be kept up in a town of 23 believers |
@@ -392,7 +394,7 @@ No new screen. Every power is always shown.
   - Open but not affordable: new class `gn-rad-poor`, cost numeral dimmed. Tooltip: "Storm needs 15 worship. 9 is gathered. About a day more."
   - Locked: class `gn-rad-locked`, dimmed, with a small mark of the standing needed. Tooltip: "Beyond your reach. Opens when you are Worshipped: 70 follow."
   - Newly opened powers pulse once.
-- **Refusals** come from the sim as sentences (built), so wheel, gesture, freeform and typed commands read the same: "Beyond your reach. Plenty opens when you are Known: 30 follow, 0 now." / "Gift needs 3 worship; 2 is gathered. About a day more." With no believers: "... No one gives to you yet. Be seen: rain, a stroke of lightning and the rainbow are always yours."
+- **Refusals** come from the sim as sentences (built), so wheel, gesture, freeform and typed commands read the same: "Beyond your reach. Plenty opens when you are Known: 30 follow, 0 now." / "Gift needs 3 worship; 2 is gathered. About a day more." With no believers: "... No one gives to you yet. Be seen: rain, a small gift and a stroke of lightning are always yours."
 - **`ui/powers.ts`.** `lockedBy(p)`, `reachShort(p)`, `priceOf(p)`, `affordable(p)` beside `minWrathOf` and `wrathShort`, fed by `powersQuery`.
 - **Town popover (`ui/living.ts`).** "22 of 30 believe, most in trust. They gave 12 yesterday." Plus, as they apply: "They have given all they will today." / "Trade and pilgrims carry your name here." / "You have not been seen here; they give less." / "They count for nothing while they defy you."
 - **Moments.** A toast, one pulse and a Book line on each rise or fall. One new SFX cue. The approved music is untouched.
@@ -521,7 +523,7 @@ Probe: `node _harness/probes/reach-pacing.ts <scenario> <help|severe|mixed|free|
 | `shore` (30 people) | help | 1, 2, 3 | 2, 2, 2 | 22, 22, 22 | not in 60 days (people too few) | - | day 60: F 46 to 50, all on trust, gathering 39 to 40 a day |
 | `shore` | severe | 1, 2, 3 | 2, 2, 2 | 26, 29, 25 | - | - | day 60: people 14 to 20 of 30, F 20, 10 on both roads, gathering 13 a day |
 | `shore` | mixed | 1, 2, 3 | 1, 1, 1 | 21, 21, 21 | - | - | day 60: F 34 to 50, every believer on both roads, gathering 23 to 32 a day |
-| `shore` | free spells only | 1, 2 | 1, 1 | 23, 22 | - | - | never spent; pool 386 |
+| `shore` | free spells only (seed 1 re-run with gift, rain, lightning: 1 and 22; seed 2 with the earlier list) | 1, 2 | 1, 1 | 22, 22 | - | - | never spent; pool 386 |
 | `shore` | silent | 1, 2 | never | never | - | - | F 0 for 60 days, pool unchanged at 40 |
 | `babel` (370 people, 4 towns) | help | 1 | 4 | 19 | 94 | not in 420 days | day 420: F 476, 204 on trust, 66 on fear, pool at its cap of 2 068 |
 | `babel` | severe | 1 | 2 | 17 | 92 | not in 200 days | day 192: people 256 of 368, F 305, 124 on trust, 113 on fear |
@@ -583,17 +585,17 @@ Tuning order if a target fails: for pace, `REACH.scale`; for road balance in the
 | 6 | Arc hooks (pride, defiance, broken covenant on count and measure), chronicle lines, Book line, SFX cue, scenario start standings and pools, the bound ARC §1 probe | sonnet, opus review of the arc hooks |
 | 7 | Full probe pass against §8, tuning, spec edits to CONTRACT pillars 1 and 3, §8.8 and §11.4, ARC §0.1, §0.5, §5.3 and §8.7, and STATUS | opus |
 
-## 10. Open decisions for the owner (v3)
+## 10. Decisions (v3): all settled
 
-The v2 decisions are settled by the rulings of 2026-11-16 (1 to 4 and 6 to 8 "all recommended"; 5 changed to "every power costs"; trust and fear as two bars). Four remain from v3:
+The owner answered the four v3 decisions on 2026-11-16 (third set): *"yes, all recommended - but not rainbow, needs to be other basic things. maybe 2-3 others."*
 
-1. **The five free spells.** `rain`, `heal-person`, `plant`, `lightning`, `omen-rainbow`, each with a short wait between casts. *Recommended: accept.* They are the smallest help, harm and wonder, and they are what lets a god with nothing begin again. Adding `gift` or `ignite` would make early play looser; removing `lightning` would leave the road of fear without a free start.
-2. **How plentiful worship is.** As built, a believing town gives about 1.6 a day per believer. A small world can run dry in a day of heavy casting; a large devout world (`babel`) keeps its pool full. *Recommended: keep for now and halve `REACH.rite` after the UI is in and the owner has played an hour*, because the right value is a feel question.
-3. **Cruelty still costs trust, at half.** In bound worlds help no longer lowers fear and a deserved or foretold harm no longer lowers trust. An unprovoked harm still lowers trust, by half of what it does today. *Recommended: accept*: it is the people's judgment of injustice, and without it "the people act, the god reacts" has no teeth. The other choice is no trust loss at all from any harm.
-4. **The pace numbers.** Holds of 1 / 30 / 150 / 360 game days give Known in about 20 to 30 game days and Worshipped at about year 8 at the earliest. In real time that depends on the speed the owner plays at (§5 assumes about 5x on average). *Recommended: accept, and tell the lead the usual play speed*; `REACH.hold` scales everything.
+1. **The free spells: changed.** `omen-rainbow` is priced (5). `rain`, `heal-person`, `plant` and `lightning` stay free, and `gift`, `ignite` and `extinguish` are added (§3.2). `wind` was the lead's third suggestion; it is world-wide by default, so `extinguish` was taken instead.
+2. **How plentiful worship is: kept** (`REACH.rite` 1.0) until the owner has played with the UI; then revisit.
+3. **Cruelty costs trust at half in bound worlds: accepted.**
+4. **The pace: accepted**, holds of 1 / 30 / 150 / 360 game days.
+5. The five reach events are registered silent in the audio map (owner: yes) until the SFX stage gives them cues.
 
-Also to confirm (lead's reading, built as read): possession, renaming, the settings (`wrath`, `natural-disasters`, rival gods) and `cancel-disaster` are on the free list as "not powers over the world".
-
+Still the lead's reading, built as read: possession, renaming, the settings (`wrath`, `natural-disasters`, rival gods) and `cancel-disaster` are free as "not powers over the world".
 
 ---------------------------------------------------------------------------------------------------------------------
 
@@ -603,13 +605,13 @@ Also to confirm (lead's reading, built as read): possession, renaming, the setti
 3. A believer on either road, or on both, counts double. A god who is both kind and severe is exactly as strong as one who is only kind or only severe.
 4. Belief only counts in towns that have seen you act. A silent god stays Unknown.
 5. Every power costs worship, more for bigger powers and for bigger sizes of the same power.
-6. Free: the clock, save and load, the camera, the Hand, every story answer, and five very basic spells (rain, heal one person, plant, a stroke of lightning, a rainbow).
+6. Free: the clock, save and load, the camera, the Hand, every story answer, and seven very basic spells (rain, heal one person, plant, a small gift of food, put out a fire, a stroke of lightning, a small fire). The rainbow is a sign and costs a little.
 7. The pool heals only from believers. Each town gives up to a daily measure; with no believers nothing comes in.
 8. You can never be stuck: the free spells make believers by either road, a new world starts with 40 worship, an empty world is free clay, and a failed cast costs nothing.
 9. The pace is slow on purpose: Whispered in the first session, Known after about 20 to 30 game days, Worshipped after about 8 game years, Most High only in a long game with a large people.
 10. The card will show your standing name, the worship gauge and two bars, Trust and Fear. No alignment meter and no good or evil words.
 11. Old saves load unbound and unchanged; the sandbox stays a setting. The sim core is built and tested; the UI is not.
-12. Four decisions need your answer (§10). I recommend yes to all four.
+12. No decision is open (§10).
 
 ---------------------------------------------------------------------------------------------------------------------
 

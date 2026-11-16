@@ -57,3 +57,10 @@ Knobs: REACH.hold (pace), REACH.rite (income), REACH.terror, REACH.freeCooldown.
   FIX for the ui/audio lane, in `SILENT_EVENTS` (or real cues): keys `reach.rose`, `reach.fell`, `reach.falling`, `reach.unbound`,
   `worship.spent`, each with a reason string longer than 10 characters. Nothing else is needed for the check to go green.
 - No existing test pin was changed; no existing test needed `bound: false` (worker tests pass with the bound default).
+
+## Stint 2 (owner ruling 2026-11-16 third: "not rainbow, 2-3 other basics")
+- Free basics now: rain, heal-person, plant, gift, extinguish, lightning, ignite (49 free in all). omen-rainbow priced 5 (tier 0).
+  `wind` left priced: its default is world-wide for 3 days; `extinguish` taken instead.
+- Free cooldowns: rain 60, lightning 60, ignite 60, gift 120, heal-person 30, extinguish 30. A free spell cast above its default
+  radius / power is priced (half old cost x size): `priceOf` + the free branch of `chargeCheck`.
+- Tag script, powers.json, spec §3.2 / §3.6 / §10 / summary, tests and the probe's `free` list updated.

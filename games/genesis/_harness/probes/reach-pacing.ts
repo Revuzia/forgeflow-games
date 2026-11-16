@@ -12,7 +12,7 @@ const ps = p.people;
 type C = Record<string, unknown>;
 const HELP: C[] = [{ k: 'miracle.food' }, { k: 'miracle.water' }, { k: 'settlement.gift', items: { bread: 6 } }, { k: 'water.rain' }];
 const SEVERE: C[] = [{ k: 'miracle.storm', wrath: 0.3 }, { k: 'weather.paint', kind: 'hail', radius: 300, intensity: 0.8 }, { k: 'fire.ignite' }, { k: 'miracle.lightning', wrath: 0.3 }];
-const FREE: C[] = [{ k: 'god.omen', kind: 'rainbow' }, { k: 'water.rain' }, { k: 'miracle.lightning', wrath: 0.3 }];
+const FREE: C[] = [{ k: 'settlement.gift', items: { bread: 6 } }, { k: 'water.rain' }, { k: 'miracle.lightning', wrath: 0.3 }];
 function town() {
   let best: (typeof ps.settlements)[number] | null = null, bn = -1;
   for (const s of ps.settlements) { if (s.fallen >= 0 || s.band) continue; const n = ps.members.get(s.id)?.length ?? 0; if (n > bn) { bn = n; best = s; } }

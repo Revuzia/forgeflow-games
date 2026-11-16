@@ -14,7 +14,9 @@ const T4o = w('axial-tilt remove-air gravity spin star-kind star-brightness star
 const FREE = w(`speed step rewind edit-past save load resume grab throw release place drop slap stroke possess possess-move possess-act rename-person rename-settlement
  wrath restraint natural-disasters rival rival-remove cancel-disaster recall-ship answer-prayer prophet-abandon disciple-order
  tower-confuse tower-strike tower-warn tower-let vow-no-flood vow-spare-the-many vow-gentle vow-warn-first vow-none answer-wrath answer-mercy answer-sign answer-patience
- rain heal-person plant lightning omen-rainbow`);
+ rain heal-person plant lightning gift ignite extinguish`);
+// priced away from the half-cost rule (owner 2026-11-16, third: the rainbow is a sign, priced as the smallest sign)
+const PRICE = { 'omen-rainbow': 5 };
 const count = [0, 0, 0, 0, 0];
 for (const p of j.powers) {
   let t = 0;
@@ -24,7 +26,7 @@ for (const p of j.powers) {
   const free = FREE.includes(p.id);
   // price by size: the basics cost a little (half the old restraint cost, 1..40 so a new world's pool always covers one), the
   // bands above cost their data cost (regional acts x 1.25)
-  const price = free ? 0 : t === 0 ? Math.max(1, Math.min(40, Math.round(c * 0.5))) : t === 3 ? Math.round(c * 1.25) : Math.max(1, c);
+  const price = free ? 0 : PRICE[p.id] !== undefined ? PRICE[p.id] : t === 0 ? Math.max(1, Math.min(40, Math.round(c * 0.5))) : t === 3 ? Math.round(c * 1.25) : Math.max(1, c);
   p.tier = t; p.price = price;
   if (free) p.free = true; else delete p.free;
   count[t]++;

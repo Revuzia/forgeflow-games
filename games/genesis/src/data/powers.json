@@ -4906,7 +4906,8 @@
    "desc": "Give a settlement things (they may refuse).",
    "cost": 5,
    "tier": 0,
-   "price": 3
+   "price": 0,
+   "free": true
   },
   {
    "id": "wood-miracle",
@@ -5814,7 +5815,8 @@
     "radius": 500
    },
    "tier": 0,
-   "price": 3
+   "price": 0,
+   "free": true
   },
   {
    "id": "extinguish",
@@ -5855,7 +5857,8 @@
     "radius": 500
    },
    "tier": 0,
-   "price": 2
+   "price": 0,
+   "free": true
   },
   {
    "id": "fire-miracle",
@@ -10612,8 +10615,7 @@
    "desc": "A rainbow after rain, the sun low behind them: a promise where they trust you, a reprieve where they fear you.",
    "cost": 4,
    "tier": 0,
-   "price": 0,
-   "free": true
+   "price": 5
   },
   {
    "id": "omen-eclipse",
