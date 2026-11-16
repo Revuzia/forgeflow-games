@@ -247,6 +247,40 @@ section('fighters-only: the enemy fighter in range is picked over a minion neare
   check('the fighter is attacked', a.length === 1 && a[0].dst === r.foe.id, { got: a.map((e) => e.dst), minion: m.id, fighter: r.foe.id });
 });
 
+section('fighters-only (orch1 live r2, ruling 42): a ground shot or swing under Z passes Wicks; it lands only on a fighter', () => {
+  {
+    const r = world('fx_slinger');
+    const m = addUnit(r.w, 'fx_dummy', 1, 12, 45);
+    cmd(r, { type: 'attackAt', x: 20, y: 30, fighters: true });
+    let placed = false;
+    steps(r, 60, () => {
+      if (!placed && r.w.entities.some((q) => q.kind === 'projectile' && q.ownerEid === r.h.id && !q.removed)) {
+        m.x = 15.6; m.y = 30; r.foe.x = 16.9; r.foe.y = 30; r.w.hashDirty = true; r.w.vision.update(r.w.entities, r.w.tick); placed = true;
+      }
+    });
+    check('the shot was thrown at the ground', attacks(r).length === 1 && attacks(r)[0].dst === -1, attacks(r).map((e) => e.dst));
+    check('the Wick on the line is passed, the fighter behind it is hit', dmgTo(r, m.id) === 0 && dmgTo(r, r.foe.id) === 1, [dmgTo(r, m.id), dmgTo(r, r.foe.id)]);
+  }
+  {
+    const r = world('fx_slinger');
+    const m = addUnit(r.w, 'fx_dummy', 1, 12, 45);
+    cmd(r, { type: 'attackAt', x: 20, y: 30 });
+    let placed = false;
+    steps(r, 60, () => {
+      if (!placed && r.w.entities.some((q) => q.kind === 'projectile' && q.ownerEid === r.h.id && !q.removed)) { m.x = 15.6; m.y = 30; r.w.hashDirty = true; placed = true; }
+    });
+    check('without Z the same shot still hits the Wick it meets', dmgTo(r, m.id) === 1, dmgTo(r, m.id));
+  }
+  {
+    const r = world('fx_brawler');
+    const m = addUnit(r.w, 'fx_dummy', 1, 12, 45);
+    cmd(r, { type: 'attackAt', x: 16, y: 30, fighters: true });
+    let moved = false;
+    steps(r, 30, () => { if (!moved && r.h.atkWindup >= 0) { m.x = 13.7; m.y = 30.3; r.w.hashDirty = true; moved = true; } });
+    check('a melee swing under Z misses a Wick in its arc', dmgTo(r, m.id) === 0, dmgTo(r, m.id));
+  }
+});
+
 section('reach (orch1 r2): a ground shot never lands on an enemy a targeted attack could not reach', () => {
   for (const over of [0.02, 0.1, 0.14, 0.3]) {
     const r = world('fx_slinger');

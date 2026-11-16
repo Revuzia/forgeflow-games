@@ -219,12 +219,12 @@ function releaseAimed(w: World, e: Entity): void {
   let dx = e.atkAimX - e.x, dy = e.atkAimY - e.y;
   const l = Math.sqrt(dx * dx + dy * dy);
   if (l > 1e-6) { dx /= l; dy /= l; } else { dx = dcos(e.facing); dy = dsin(e.facing); }
-  if (ad.projectileSpeed) { spawnAttackShot(w, e, dx, dy, reach, e.atkCrit, ad.damageType, effects, ctx); return; }
+  if (ad.projectileSpeed) { spawnAttackShot(w, e, dx, dy, reach, e.atkCrit, ad.damageType, effects, ctx, e.atkAtFighters); return; }
   const n = w.query(e.x, e.y, reach + 2, scratch);
   let best: Entity | null = null, bestD = Infinity;
   for (let i = 0; i < n; i++) {
     const c = scratch[i];
-    if (!attackable(w, e, c) || !inAttackRange(e, c)) continue;
+    if (!attackable(w, e, c) || !inAttackRange(e, c) || (e.atkAtFighters && c.kind !== 'fighter')) continue;
     const vx = c.x - e.x, vy = c.y - e.y, vl = Math.sqrt(vx * vx + vy * vy);
     if (vl > 1e-6 && (vx * dx + vy * dy) / vl < SWING_ARC) continue;
     if (vl < bestD - 1e-9 || (Math.abs(vl - bestD) <= 1e-9 && best !== null && c.id < best.id)) { bestD = vl; best = c; }

@@ -106,7 +106,7 @@ export function spawnAttackProjectile(w: World, src: Entity, target: Entity, cri
 const AIM_SHOT_W = 0.3;
 /** a ranged basic attack thrown at the ground (ruling 39): along (dx, dy) for `reach` m, the attack on the first enemy hit */
 export function spawnAttackShot(w: World, src: Entity, dx: number, dy: number, reach: number, crit: boolean, dtype: 'phys' | 'magic' | 'true',
-  empower: readonly EffectT[] | null, empCtx: EffectCtx | null): void {
+  empower: readonly EffectT[] | null, empCtx: EffectCtx | null, fighters = false): void {
   const ad = src.attackDef!;
   const p = newProjectile(w, src, src.def, src.x, src.y, AIM_SHOT_W, ad.present?.vfx);
   const speed = ad.projectileSpeed ?? 20;
@@ -118,7 +118,7 @@ export function spawnAttackShot(w: World, src: Entity, dx: number, dy: number, r
   p.proj = {
     attack: true, eff: null, ctx: empCtx, src, target: -1, targetLife: 0, homing: false, speed, range: reach, traveled: 0, width: AIM_SHOT_W,
     pierceLeft: 0, hits: [], returning: false, stopAtWalls: true, dirX: dx, dirY: dy, tx: src.x + dx * reach, ty: src.y + dy * reach,
-    crit, dtype, empower: empower ? empower.slice() : null, empowerSrc: '',
+    crit, dtype, empower: empower ? empower.slice() : null, empowerSrc: '', fighters,
   };
   w.emit({ e: 'projectile', t: w.time, id: p.id, src: src.id, ability: 'attack', vfx: ad.present?.vfx });
 }
@@ -206,7 +206,7 @@ export function projectileSystem(w: World): void {
     for (let k = 0; k < cn; k++) {
       const u = scratch[k];
       if (pd.hits.includes(u.id)) continue;
-      if (eff ? !matchesFilter(w, pd.src, u, eff.filter) : !attackable(w, pd.src, u)) continue;
+      if (eff ? !matchesFilter(w, pd.src, u, eff.filter) : !attackable(w, pd.src, u) || (pd.fighters && u.kind !== 'fighter')) continue;
       const th = segmentCircleT(sx, sy, ex, ey, u.x, u.y, u.radius + half);
       if (th < 0) continue;
       // insertion by (t, id)

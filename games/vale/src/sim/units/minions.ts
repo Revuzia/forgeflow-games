@@ -52,6 +52,8 @@ const FLANK_TICKS = 60;
 /** the attack spots tried round the target, off the line it came in on (radians, nearer first) */
 const FLANK_ANGLES = [0.7, 1.4, 2.1];
 const flankNear: Entity[] = [];
+/** ticks a boxed-in Wick passes through its own wave (ruling 42) */
+const PASS_TICKS = 90;
 
 type V2T = readonly [number, number];
 interface MinionState {
@@ -64,6 +66,8 @@ interface MinionState {
   chaseT: number; chaseGap: number; chaseAt: number; flankUntil: number;
   /** creep watch: the Wick's actionSeq at the window start, where it stood then, the window's start tick */
   creepSeq: number; creepX: number; creepY: number; creepAt: number;
+  /** passing its own wave to reach its target (e.passOwn) until this tick */
+  passUntil: number;
 }
 interface WaveState { n: number; nextAt: number; paths: V2T[][][] }
 const KEY = 'waves';
@@ -120,7 +124,7 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
         const row = Math.floor(i / 3), col = (i % 3) - 1;
         const x = sx - dx * row * ROW_GAP - dy * col * COL_GAP, y = sy - dy * row * ROW_GAP + dx * col * COL_GAP;
         const e = spawnUnit(w, units[i], team, x, y, { level, facing });
-        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1, creepSeq: -1, creepX: e.x, creepY: e.y, creepAt: 0 });
+        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1, creepSeq: -1, creepX: e.x, creepY: e.y, creepAt: 0, passUntil: -1 });
         followLane(w, e, minionState(e)!);
       }
     }
@@ -219,7 +223,12 @@ function unblockChase(w: World, e: Entity, m: MinionState, t: Entity): boolean {
       p = flankSpot(w, e, o);
       if (p) break;
     }
-    if (!p) return false;
+    if (!p) {
+      // boxed in by its own wave (orch1 r3 verifier: a melee Wick 6-12 s behind its own casters, pressed by 3+ of them, its
+      // target 4.7-5.4 m off): it walks through them to the front, as a melee wave leads its casters
+      e.passOwn = true; m.passUntil = w.tick + PASS_TICKS;
+      return false;
+    }
   }
   m.flankUntil = w.tick + FLANK_TICKS;
   m.lastWpX = NaN;
@@ -237,6 +246,8 @@ export function minionSystem(w: World): void {
     if (!m) continue;
     const b = behaviorOf(e.unit);
     const cur = e.order === ORDER_ATTACK ? w.live(e.orderTarget) : null;
+    // passing its own wave ends when it is in reach of its target, it no longer chases, or the time is up
+    if (e.passOwn && (w.tick >= m.passUntil || !cur || inAttackRange(e, cur))) e.passOwn = false;
     const chase2 = b.chaseRange * b.chaseRange;
     const curOk = !!cur && attackable(w, e, cur) && dist2(cur, m.cx, m.cy) <= chase2;
     const lost = e.order === ORDER_ATTACK && !curOk;
@@ -255,6 +266,9 @@ export function minionSystem(w: World): void {
     if (best) {
       if (!m.chasing) { m.chasing = true; m.cx = e.x; m.cy = e.y; }
       if (best !== cur) { issueAttack(w, e, best); m.lastWpX = NaN; }
+      // the creep watch runs whichever branch took the target (orch1 live r2: a brightwick switching between its wave's
+      // targets every think stood 15-17 s boxed behind its own glimwicks, the step-out never asked)
+      if (unblockChase(w, e, m, best)) continue;
       useUnitAbilities(w, e, best);
       continue;
     }
