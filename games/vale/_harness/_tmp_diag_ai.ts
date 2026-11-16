@@ -43,11 +43,33 @@ function lineup(catalog: CatalogT, seed: number, diff: string): MatchSetup {
   return { matchId: `diag-rift-${seed}-${diff}`, seed, queue: queue.id, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
 }
 
+/** FRAY seating (the tactics probe's): rotated by seed, one team per seat */
+function frayLineup(catalog: CatalogT, seed: number, diff: string): MatchSetup {
+  const mode = catalog.modes.find((m) => m.id === 'fray')!;
+  const queue = catalog.queues.find((q) => q.mode === mode.id && q.kind === 'standard') ?? catalog.queues.find((q) => q.mode === mode.id)!;
+  const n = mode.teams * mode.perTeam, pool = mode.rules.itemPool ?? '';
+  const all = catalog.fighters.map((f) => f.id).sort();
+  const seats: SeatSetup[] = [];
+  const start = (seed * n) % all.length;
+  for (let i = 0; i < n; i++) {
+    const fighter = all[(start + ((i + seed) % n)) % all.length];
+    const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
+    seats.push({ player: i, team: Math.floor(i / mode.perTeam), name: catalog.botNames[i % catalog.botNames.length], fighter, skin,
+      loadout: pickLoadout(catalog, fighter, pool), controller: 'bot', botDifficulty: diff as SeatSetup['botDifficulty'], colorIndex: i });
+  }
+  return { matchId: `diag-fray-${seed}-${diff}`, seed, queue: queue.id, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
+}
+
 const WHAT = opt('what', 'wof');
 const diff = opt('diff', 'veteran'), seeds = Number(opt('seeds', '8')), seed0 = Number(opt('seed0', '101')), cut = Number(opt('cut', '1800'));
 const catalog = loadCatalog();
 for (let seed = seed0; seed < seed0 + seeds; seed++) {
-  const setup = lineup(catalog, seed, diff);
+  const setup = WHAT === 'fray' ? frayLineup(catalog, seed, diff) : lineup(catalog, seed, diff);
+  // (fray) low episodes: start, my position, the nearest foe and whether it was hunting me
+  const lowEp = new Map<number, { t: number; x: number; y: number; foe: number; hunted: number }>();
+  const lowCd = new Map<number, number>();
+  const FR: Record<string, number> = {};
+  const fadd = (k: string, v = 1): void => { FR[k] = (FR[k] ?? 0) + v; };
   const ctrls: (BotController | null)[] = setup.seats.map(() => null);
   const factory = createBots(catalog, setup);
   const sim = createSim(catalog, setup, { bots: (seat, host) => { const c = factory(seat, host); ctrls[seat.player] = c; return c; }, pregameSeconds: 0 });
@@ -100,6 +122,34 @@ for (let seed = seed0; seed < seed0 + seeds; seed++) {
         console.log(`DITHER seed ${seed} t ${now.toFixed(0)} p${p} t${f.team}: ${tr.filter((_, i) => i % 3 === 0).join(' | ')}`);
       }
     }
+    if (WHAT === 'fray' && w.tick % 3 === 0) for (let p = 0; p < w.players.length; p++) {
+      const f = w.players[p].ent; if (!f) continue;
+      let nd = Infinity, nf: Entity | null = null;
+      for (const q of w.players) { const g = q.ent; if (g && g !== f && g.alive && g.team !== f.team) { const d = Math.hypot(g.x - f.x, g.y - f.y); if (d < nd) { nd = d; nf = g; } } }
+      const le = lowEp.get(p);
+      if (le) {
+        if (!f.alive) { fadd('died'); lowEp.delete(p); lowCd.set(p, now + 8); continue; }
+        if (now - le.t < 4) continue;
+        const st = nd <= 12; fadd(st ? 'stayed' : 'clear');
+        const moved = Math.hypot(f.x - le.x, f.y - le.y);
+        fadd(st ? 'stayed.moved' : 'clear.moved', moved);
+        if (st) {
+          const same = nf && nf.id === le.foe; fadd(same ? 'stayed.sameFoe' : 'stayed.otherFoe');
+          if (le.hunted) fadd('stayed.wasHunted');
+          const nc = nf ? ctrls[w.players.findIndex((x) => x.entity === nf!.id)] as unknown as { mode?: string; huntTarget?: Entity | null } : null;
+          if (nc && nc.huntTarget === f) fadd('stayed.foeHuntsMe');
+          fadd(`stayed.foeMode.${nc?.mode}`);
+          fadd(`stayed.myMode.${(ctrls[p] as unknown as { mode?: string }).mode}`);
+          fadd('stayed.foeSpeedEdge', (nf ? nf.stats.moveSpeed : 0) - f.stats.moveSpeed);
+        }
+        lowEp.delete(p); lowCd.set(p, now + 8); continue;
+      }
+      if (!f.alive || f.hp >= f.maxHp * 0.25 || now < (lowCd.get(p) ?? 0) || nd > 10 || !nf) continue;
+      let hunted = 0;
+      for (let q = 0; q < w.players.length; q++) { const c = ctrls[q] as unknown as { huntTarget?: Entity | null; mode?: string }; if (q !== p && c && c.huntTarget === f && c.mode === 'hunt') hunted++; }
+      fadd('episodes'); if (hunted > 0) fadd('ep.hunted'); fadd('ep.huntedBy', hunted);
+      lowEp.set(p, { t: now, x: f.x, y: f.y, foe: nf.id, hunted });
+    }
     // pace: each team brain's plan every 30 s from 22:00
     if (WHAT === 'pace' && now >= 1320 && w.tick % 900 === 0) {
       for (const team of [0, 1]) {
@@ -114,4 +164,5 @@ for (let seed = seed0; seed < seed0 + seeds; seed++) {
     }
     if (w.tick % 30 === 0) for (let p = 0; p < w.players.length; p++) { const h = hist.get(p) ?? []; h.push(String(ctl(p)?.mode ?? '?').slice(0, 4)); if (h.length > 6) h.shift(); hist.set(p, h); }
   }
+  if (WHAT === 'fray') console.log(`FRAY seed ${seed} ${JSON.stringify(FR)}`);
 }

@@ -555,7 +555,7 @@ export abstract class BotBase {
     }
     // minions / monsters / structures
     if ((u & (U_WAVECLEAR | U_DAMAGE | U_EXECUTE)) && (this.pFarm === 2 || this.pMonsters)) {
-      if (resF < 0.3 && !(u & U_EXECUTE) && (info.def.cost as number) !== 0) return false;
+      if (resF < (this.pClear ? 0.12 : 0.3) && !(u & U_EXECUTE) && (info.def.cost as number) !== 0) return false;
       return this.farmCast(s, info);
     }
     return false;
@@ -721,7 +721,9 @@ export abstract class BotBase {
         if (target.kind !== 'monster') return false;
       }
     }
-    const need = info.minTargets > 0 ? info.minTargets : monsters ? 1 : (u & U_WAVECLEAR) ? 2 : 3;
+    // (owner_rulings 46: a defender clearing a wave off its own structure spends its damage on the wave — one Wick is enough
+    // to aim at; held back for three, the spells stayed up while two fit defenders watched a Lantern fall to Wicks)
+    const need = info.minTargets > 0 ? info.minTargets : monsters || this.pClear ? 1 : (u & U_WAVECLEAR) ? 2 : 3;
     const o = this.aimOut;
     o.x = target.x; o.y = target.y;
     const d = Math.sqrt(this.dist2(target, e.x, e.y));
@@ -900,7 +902,9 @@ export abstract class BotBase {
       if (!u.alive || !u.targetable) continue;
       const d2 = this.dist2(u, e.x, e.y);
       if (d2 > sq(r + u.radius)) continue;
-      const s = u.hp + Math.sqrt(d2) * 25;
+      let s = u.hp + Math.sqrt(d2) * 25;
+      // (owner_rulings 46: clearing a wave off a structure of mine, the Wicks hitting it go first)
+      if (this.pClear && u.atkTarget >= 0) { const a = this.w.entity(u.atkTarget); if (a && a.kind === 'structure' && a.team === e.team) s -= 400; }
       if (s < bs) { bs = s; best = u; }
     }
     return best;

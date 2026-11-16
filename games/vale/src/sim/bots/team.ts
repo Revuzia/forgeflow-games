@@ -445,7 +445,10 @@ export class TeamBrain {
       // two defenders; scaled by the tier's defendMatch)
       // (owner_rulings 46: in the laning phase a wave at an inner Needle is its road's to clear — only the base takes a defender
       // off a road for Wicks; the round-2 bots' solo laners spent 2-4 % of the laning phase posted to waves, against 1 %)
-      else if (cls > (laning ? 1 : 0) && minions - mine >= 4) need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
+      // (owner_rulings 46: a wave alone calls a defender only where the tier's defender holds against the wave (holdWave, and
+      // from 25:00 the base only) — a beginner, or a late inner post, backed off the wave it was sent to and stood fit beside
+      // the structure while the Wicks took it: novice falls to Wicks beside two fit defenders 0.61 → 0.91 a game)
+      else if (d.holdWave && cls > (laning ? 1 : closing ? 1 : 0) && minions - mine >= 4) need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
       // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
       // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
       const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));

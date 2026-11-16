@@ -38,7 +38,7 @@
 
 import {
   Color, Frustum, Matrix4, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, Sphere, SRGBColorSpace,
-  Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
+  Vector2, Vector3, WebGLRenderer, WebGLRenderTarget, type BufferGeometry, type SkinnedMesh,
 } from 'three';
 import type { CatalogT, MapDefT } from '../contracts/catalog.ts';
 import type { MatchClient, Settings } from '../contracts/session.ts';
@@ -49,13 +49,13 @@ import { Assets, type AssetUrlFn, collectGpu } from './assets.ts';
 import { CameraRig, type CameraMode } from './camera.ts';
 import { Director, type EventVfxMap, type StatusVfxMap } from './director.ts';
 import { FogOfWar } from './fog.ts';
-import { Sun } from './lighting.ts';
+import { applyCharTone, applyEnvKey, charToneSwitch, envKeySwitch, Sun } from './lighting.ts';
 import { MenuWorld } from './menu.ts';
 import { BAR_KIND, BarLayer, type BarSpec, CC_PLATE, GLYPH, SHAPE } from './overlay/bars.ts';
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { HoverOutline, hoverRimUniforms } from './overlay/hover.ts';
 import { inkShadows, releaseShadowRefs } from './ink.ts';
-import { lodReady, lodSwitch, shadowLods } from './lod.ts';
+import { bodyLod2Of, LOD, lodReady, lodSwitch, shadowLods } from './lod.ts';
 import { CROWD_INK_TRIS_HIGH, CROWD_INK_TRIS_LOW, CROWD_OUTLINE_CROWDED, CROWD_OUTLINE_MAX, CrowdHardLatch, CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
 import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
@@ -248,6 +248,9 @@ class ValeRenderer implements Renderer {
   private readonly dyn = new DynamicResolution();
   /** harness seam (perf PERF-m5, _harness/probe_lod.mjs): the shadow LOD switch (lod.ts) */
   readonly lodSwitch = lodSwitch;
+  /** harness seam (orch1 W2-A A/B in one page): the environment re-key and the fighter tone switches; call apply() after
+   *  a change */
+  readonly w2a = { envKey: envKeySwitch, charTone: charToneSwitch, apply: (): void => { applyEnvKey(); applyCharTone(); } };
   /** harness seam (W5a refix, _harness/probe_landmark_cull.mjs): the landmarks' and casters' box cull (terrain.ts) */
   readonly landmarkCull = landmarkCull;
   /** rebuilt on a restored context (its queries and extension belonged to the lost one) */
@@ -876,6 +879,52 @@ class ValeRenderer implements Renderer {
     _frustum.setFromProjectionMatrix(_m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
     this.culledVis.length = 0;
     for (const a of this.actors.values()) this.updateActor(a, dt, alpha, false);
+    this.bodyLod2();
+  }
+
+  /** orch1 W2-A (GFX-4 LOD, FU-15, TECH-14): a match fighter on screen that is not yours draws its face-locked LOD2
+   *  (lod.ts LOD.body2) beyond farM of the camera's ground centre (back under nearM), or past the `keep` nearest on
+   *  screen. A swap of the body mesh's geometry view (the same attributes, its own index): no program, no new material.
+   *  Harness seam: lod2Switch.on = false keeps every fighter on LOD1. */
+  readonly lod2Switch = { on: true, drawn: 0 };
+  private readonly lod2Of = new WeakMap<Actor, { model: object; mesh: SkinnedMesh | null; lod1: BufferGeometry | null; lod2: BufferGeometry | null; far: boolean }>();
+  private readonly lod2Rank: { a: Actor; d: number }[] = [];
+  private bodyLod2(): void {
+    const cfg = LOD.body2, cam = this.rig.camera;
+    cam.getWorldDirection(_v);
+    const t = _v.y < -1e-3 ? -cam.position.y / _v.y : 0;
+    const cx = cam.position.x + _v.x * t, cz = cam.position.z + _v.z * t;
+    const rank = this.lod2Rank;
+    rank.length = 0;
+    const p = this.palette;
+    for (const a of this.actors.values()) {
+      const v = a.view;
+      if (!v || v.kind !== 'fighter' || !a.model) continue;
+      let e = this.lod2Of.get(a);
+      if (!e || e.model !== a.model) {
+        let mesh: SkinnedMesh | null = null;
+        a.model.traverse((o) => { if (!mesh && (o as SkinnedMesh).isSkinnedMesh && (o as SkinnedMesh).geometry.name === 'vale_body_lod1') mesh = o as SkinnedMesh; });
+        const m = mesh as SkinnedMesh | null;
+        e = { model: a.model, mesh: m, lod1: m?.geometry ?? null, lod2: m ? bodyLod2Of(m, m.geometry) : null, far: false };
+        this.lod2Of.set(a, e);
+      }
+      if (!e.lod2 || !e.mesh || !e.lod1) continue;
+      const d = Math.hypot(a.x - cx, a.y - cz);
+      e.far = d > (e.far ? cfg.nearM : cfg.farM);
+      const self = p.relation(v.team, v.owner, true) === 'self';
+      if (self || !this.lod2Switch.on || a.culled || !a.visible) { if (e.mesh.geometry !== e.lod1) e.mesh.geometry = e.lod1; continue; }
+      rank.push({ a, d });
+    }
+    rank.sort((x, y) => x.d - y.d);
+    let drawn = 0;
+    rank.forEach((r, i) => {
+      const e = this.lod2Of.get(r.a)!;
+      // the local fighter never enters the rank, so `keep` counts the nearest others
+      const want = e.far || i >= cfg.keep - 1 ? e.lod2! : e.lod1!;
+      if (e.mesh!.geometry !== want) e.mesh!.geometry = want;
+      if (want !== e.lod1) drawn++;
+    });
+    this.lod2Switch.drawn = drawn;
   }
 
   private updateActor(a: Actor, dt: number, alpha: number, recheck: boolean): void {
