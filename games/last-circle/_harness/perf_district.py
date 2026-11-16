@@ -31,6 +31,10 @@ honest; the _v<N> suffix is the view-spec version; --no-cache re-measures): the 
 --plant NAME changes the CANDIDATE after the match is loaded (never a file): extra-calls adds 60 always-drawn meshes (+60 calls), extra-tris
 adds 10 always-drawn 82k-triangle spheres (IcosahedronGeometry detail 63 = 20 x 64^2 faces, +820k); since the Wave-7 completion round both are SIZED FROM THE BASELINES (at least those numbers): the candidate may be lighter than
 the baseline, and a plant that cannot reach "+40 calls / x1.25" proves nothing; in plant mode only the designated row counts and exit 1 = the planted cost was seen.
+W10 R1A pass 5 (orchestrator ruling 2026-11-15, like for like; no bar changed): the candidate's drop view is drawn from the BASELINE's drop camera
+(the same world position on both builds: the cached baseline view's spec), and the candidate's own default drop view is measured too ('landing') and
+judged absolutely - tris-landing: its triangles <= x1.25 (phone x1.20) the heaviest baseline view (drop / street / endgame); drop-view-calls reads it.
+Plant furn-tris: every house inside / furniture chunk draws +30 % of its own triangles -> tris-vs-baseline or tris-landing FAILS.
 Exit 0 pass / 1 fail / 2 could-not-judge (server refused, a match load timed out, a view measured nothing).
 """
 from __future__ import annotations
@@ -60,7 +64,11 @@ DROP_AT = {"ashgrid": "downtown", "isla_viva": "coco_village", "deepwood": "logg
 STREET = {"ashgrid": "outpost", "isla_viva": "coco_village", "deepwood": "lakeside"}
 VIEWS = ["drop", "street", "endgame"]
 VIEWSPEC = 3                            # bump when SPEC_JS changes (it names the cached baseline files); 3 = Wave 7b: camera + focus pinned to the view while stepping
-PLANT_ROWS = {"extra-calls": {"calls-vs-baseline"}, "extra-tris": {"tris-vs-baseline"}}
+PLANT_ROWS = {"extra-calls": {"calls-vs-baseline"}, "extra-tris": {"tris-vs-baseline"},
+              # (W10 R1A pass 5, orchestrator ruling 2026-11-15) the like-for-like rows' real-content control: every house inside / furniture chunk mesh
+              # (userData.hgChunk) draws 30 % more of its own triangles (a child mesh: drawn exactly where the chunk is) - the pinned drop / street / endgame
+              # rows or the landing row must FAIL
+              "furn-tris": {"tris-vs-baseline", "tris-landing"}}
 
 # Everything below runs in the page. One call = one view.
 PLANT_JS = r"""([kind, count]) => { const W = window.__LC__.W, T = W.THREE, sc = W.kernel.scene;
@@ -70,6 +78,17 @@ PLANT_JS = r"""([kind, count]) => { const W = window.__LC__.W, T = W.THREE, sc =
     for (let i = 0; i < count; i++) { const m = new T.Mesh(new T.BoxGeometry(0.2, 0.2, 0.2), new T.MeshBasicMaterial({ color: 0xff00ff })); m.frustumCulled = false; m.castShadow = false; g.add(m); }
   } else if (kind === 'extra-tris') {
     for (let i = 0; i < count; i++) { const m = new T.Mesh(new T.IcosahedronGeometry(1, 63), new T.MeshBasicMaterial({ color: 0xff00ff })); m.frustumCulled = false; m.castShadow = false; m.scale.setScalar(0.1); g.add(m); }
+  } else if (kind === 'furn-tris') {
+    // (W10 R1A pass 5) +30 % of every house chunk's own triangles, as a child of the chunk (its visibility and its distance cull are the chunk's)
+    const chunks = []; W.group('map').traverse((o) => { if ((o.isMesh || o.isInstancedMesh) && o.userData && o.userData.hgChunk && o.name !== 'perf-plant') chunks.push(o); });
+    let tris = 0, n = 0;
+    for (const o of chunks) { const gq = o.geometry, ix = gq.index; const nt = Math.floor((ix ? ix.count : gq.attributes.position.count) / 3 * 0.3); if (nt < 1) continue;
+      const g2 = new T.BufferGeometry(); for (const k in gq.attributes) g2.setAttribute(k, gq.attributes[k]);
+      if (ix) g2.setIndex(new T.BufferAttribute(ix.array.slice(0, nt * 3), 1)); else g2.setDrawRange(0, nt * 3);
+      const m = o.isInstancedMesh ? new T.InstancedMesh(g2, o.material, o.count) : new T.Mesh(g2, o.material);
+      if (o.isInstancedMesh) { m.instanceMatrix = o.instanceMatrix; m.count = o.count; }
+      m.name = 'perf-plant'; m.frustumCulled = o.frustumCulled; m.castShadow = o.castShadow; m.receiveShadow = o.receiveShadow; o.add(m); n++; tris += nt * (o.isInstancedMesh ? o.count : 1); }
+    return { meshes: n, tris, chunks: chunks.length };
   } else return 'unknown plant';
   sc.add(g); let tris = 0, n = 0; g.traverse((o) => { if (o.isMesh) { n++; tris += o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; } });
   return { meshes: n, tris }; }"""
@@ -78,7 +97,8 @@ SPEC_JS = r"""([kind, opt]) => { const W = window.__LC__.W, M = W.map;
   const H = (x, z) => M.heightAt(x, z);
   const poi = (id) => M.pois.find((p) => p.id === id);
   let spec;
-  if (kind === 'drop') { const p = poi(opt.dropAt); spec = [p.x - 170, 330, p.z + 260, p.x, 0, p.z, 60]; }
+  if (opt.spec) spec = opt.spec.slice();      // (W10 R1A pass 5) a camera pinned to a world position (the baseline's own drop camera): the same spot on both builds
+  else if (kind === 'drop') { const p = poi(opt.dropAt); spec = [p.x - 170, 330, p.z + 260, p.x, 0, p.z, 60]; }
   else if (kind === 'street') { const p = poi(opt.streetAt), x0 = p.x - p.r * 0.55, z = p.z + 1; spec = [x0, H(x0, z) + 1.62, z, x0 + 60, H(x0 + 60, z + 1) + 1.8, z + 1, 70]; }
   else {
     // the endgame: 8 m up on the rim of storm circle 6 (matched seed), looking at its centre; never start inside a collider
@@ -142,7 +162,7 @@ def git_sha(rev):
     return sha
 
 
-def measure(args, label, map_id, rev, plant, save_png, seed=None, plant_n=None):
+def measure(args, label, map_id, rev, plant, save_png, seed=None, plant_n=None, pin=None):
     """One Chrome, one match, three views. rev None = the working copy (--disk)."""
     seed = args.seed if seed is None else seed
     a = copy.copy(args)
@@ -170,14 +190,20 @@ def measure(args, label, map_id, rev, plant, save_png, seed=None, plant_n=None):
             res["plant"] = s.js(PLANT_JS, [plant, plant_n])
             print("  [%s %s] plant %s: %s" % (label, map_id, plant, res["plant"]), flush=True)
         opt = {"dropAt": DROP_AT[map_id], "streetAt": STREET[map_id], "png": bool(save_png)}
-        for kind in VIEWS:
-            spec = s.js(SPEC_JS, [kind, opt])
+        # (W10 R1A pass 5, orchestrator ruling 2026-11-15) pin: {view: camera spec} - the view drawn from THAT world position (the baseline's drop camera),
+        # and the build's own default drop view measured as well, as 'landing' (the new landing view: an absolute row)
+        for kind in VIEWS + (["landing"] if pin else []):
+            o2 = dict(opt)
+            if pin and kind in pin:
+                o2["spec"] = pin[kind]
+            spec = s.js(SPEC_JS, ["drop" if kind == "landing" else kind, o2])
             s.step_frames(14, dt=1.0 / 20, render=False)
             s.step_frames(12, dt=1.0 / 20, render=False)
             foc = s.js(FOCUS_JS)
             s.js(UNPIN_JS)
             r = s.js(VIEW_JS, [kind, spec, opt])
             r["focusAtDraw"] = foc
+            r["spec"] = spec
             png = r.pop("png", None)
             if png and save_png:
                 os.makedirs(C.SHOTS, exist_ok=True)
@@ -267,7 +293,9 @@ def main_fn(v0, args):
                 plant_n = max(60, max(b["calls"] for b in allb) + CALLS_MAX_DELTA + 5)
             else:
                 plant_n = max(10, int(-(-1.3 * max(b["tris"] for b in allb) // 81920)))
-        cand = measure(args, clabel, m, crev, plant, True, seed, plant_n)
+        b0d = bases_n[0]["views"].get("drop") or {}
+        pin = {"drop": b0d.get("spec") or b0d.get("camera")} if (b0d.get("spec") or b0d.get("camera")) else None
+        cand = measure(args, clabel, m, crev, plant, True, seed, plant_n, pin)
         if cand["pageErrors"] or cand["failedRequests"]:
             v0.check("errors [%s]" % tag0, False, "page errors %s, failed requests %d %s" % (cand["pageErrors"], cand["failedRequests"], cand.get("failedList") or ""))
         for bsha, base in zip(bshas, bases_n):
@@ -307,7 +335,16 @@ def main_fn(v0, args):
                 v.check("identical-to-baseline [%s]" % tag, not diffs and bool(rows_c),
                         "the candidate reads the baseline's numbers on every view (calls within +-%d, triangles within x%.3f)" % (IDENTICAL_CALLS, 1 + IDENTICAL_TRIS) if not diffs else "differs from the baseline: " + "; ".join(diffs),
                         "x1.000 everywhere: common.LIVE_REV must be the build the working copy was deployed from")
-            d = cand["views"].get("drop")
+            # (W10 R1A pass 5) the drop rows above compare the SAME world position (the baseline's drop camera); the candidate's own default landing view is
+            # judged absolutely: its triangles <= x tris_max the HEAVIEST baseline view (drop / street / endgame), and its calls by the drop-view bar below
+            d = cand["views"].get("landing") or cand["views"].get("drop")
+            if bsha == bshas[0] and cand["views"].get("landing"):
+                hv = max(((base["views"].get(k) or {}).get("tris") or 0, k) for k in VIEWS)
+                lt = cand["views"]["landing"]["tris"]
+                v.check("tris-landing [%s]" % tag0, bool(hv[0]) and lt <= tris_max * hv[0],
+                        "the candidate's own drop (landing) view %s tris (camera %s) vs the heaviest baseline view (%s) %s: x%.3f; pinned drop view %s" % (
+                            f(lt), cand["views"]["landing"].get("camera"), hv[1], f(hv[0]), lt / hv[0] if hv[0] else 0, f(cand["views"]["drop"]["tris"])),
+                        "<= x%.2f the heaviest baseline view" % tris_max)
             if d and d["callsAll"]:
                 if d["callsAll"] > w.get("drop", (0,))[0]:
                     w["drop"] = (d["callsAll"], tag0)
