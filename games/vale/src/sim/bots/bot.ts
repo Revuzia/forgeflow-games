@@ -1092,9 +1092,10 @@ export class Bot extends BotBase implements BotController {
       const dived = burst >= (lp ? 0.22 : 0.15) * a.maxHp;
       if (!dived && !held) continue;
       // (a road's laning phase: a duo's trades are laning — only a partner held, or one taken under half, is a dive)
-      if (lp && !held && a.hp > a.maxHp * 0.5) continue;
-      // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's)
-      if (lp && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;
+      if (lp && !held && a.hp > a.maxHp * this.diff.peelLaneHp) continue;
+      // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's —
+      // the grovehunter answers a dive on any road it stands beside, the genre's counter-gank)
+      if (lp && !this.jungle && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;
       let diver: Entity | null = null;
       if (burst > 0) { const id = m.topHurter(a.id, now, 2); const f = id >= 0 ? this.w.entity(id) : null; if (f && f.alive && f.kind === 'fighter' && this.isNoticed(f)) diver = f; }
       if (!diver) {
@@ -1140,7 +1141,8 @@ export class Bot extends BotBase implements BotController {
     const tank = this.prof.style === 'frontline' || this.prof.style === 'warden' || this.support;
     const contact = dhypot(d.x - a.x, d.y - a.y) <= d.stats.range + d.radius + a.radius + 1.5;
     // (a body-block is for a partner I stand beside; from farther off the diver is reached faster than the gap between them)
-    if (this.diff.peelBodyBlock && tank && !contact && !inAttackRange(e, d) && this.dist2(a, e.x, e.y) <= 4 * 4) {
+    // (only a melee diver can be blocked: a ranged one shoots past the body, so the tank goes at it instead)
+    if (this.diff.peelBodyBlock && tank && !contact && d.stats.range <= 3 && !inAttackRange(e, d) && this.dist2(a, e.x, e.y) <= 4 * 4) {
       const dx = d.x - a.x, dy = d.y - a.y, dd = dhypot(dx, dy) || 1;
       const bx = a.x + (dx / dd) * 1.6, by = a.y + (dy / dd) * 1.6;
       if (this.w.nav.walkable(bx, by) && sq(bx - e.x) + sq(by - e.y) > 1.2 * 1.2) { this.pMoveX = bx; this.pMoveY = by; this.pFight = null; }

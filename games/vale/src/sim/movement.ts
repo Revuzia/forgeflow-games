@@ -60,7 +60,7 @@ import { noteMoved } from './triggers.ts';
 import type { World } from './world.ts';
 import { zoneBlocks } from './zones.ts';
 import { datan2, dcos, dsin } from './dmath.ts';
-import { collectDiscs, discsClear, ghosts, laneDiscs, laneLen, planLane, RASTER_SLACK } from './bodypath.ts';
+import { collectDiscs, discsClear, ghosts, laneDear, laneDiscs, laneLen, planLane, RASTER_SLACK } from './bodypath.ts';
 
 /** a move that ended this close (m, |dx| + |dy|) to its snapped goal finished it: the same point re-sent is a no-op */
 const FINISHED_NEAR = 0.5;
@@ -92,6 +92,10 @@ const LANE_RECHECK = 5;
 const LANE_AHEAD = 4;
 /** ticks before a failed plan is retried (walk straight and shove meanwhile) */
 const LANE_RETRY = 10;
+/** a lane planned behind crossing bodies is swapped for a fresh plan to its end that is this much (m) shorter (the bodies
+ *  stopped, e.g. at a fight: orch1 r2 waves repro, vashil s3 t1665 walked 11.4 m round a stopped wave against 7.7 m) */
+const LANE_SWAP_GAIN = 1.5;
+const laneAlt: number[] = [];
 /** a lane longer than LANE_DETOUR × the straight line + LANE_DETOUR_M, or leading more than LANE_AWAY m further from its
  *  end than the walker starts, is not taken */
 const LANE_DETOUR = 1.5;
@@ -483,7 +487,7 @@ function routeLeft(e: Entity, x: number, y: number, gx: number, gy: number): num
 
 /** reset the progress watchdog (a new order, or not walking) */
 export function resetWatch(e: Entity): void { e.watchTicks = 0; e.watchStage = 0; e.watchFails = 0; e.laneAll = false; e.lanePlanned = false; clearLane(e); e.laneCheck = 0; }
-function clearLane(e: Entity): void { e.lane.length = 0; e.laneIdx = 0; e.steerSide = 0; }
+function clearLane(e: Entity): void { e.lane.length = 0; e.laneIdx = 0; e.steerSide = 0; e.laneDear = false; }
 const onLane = (e: Entity): boolean => e.lane.length > 0 && e.laneIdx * 2 < e.lane.length;
 
 /**
@@ -522,7 +526,21 @@ function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number,
         left -= Math.sqrt((qx - px) * (qx - px) + (qy - py) * (qy - py));
         px = qx; py = qy;
       }
-      if (ok) return;
+      if (ok) {
+        if (!e.laneDear) return;
+        // planned behind crossing bodies: if they stopped, the way in front may be shorter now
+        const S = 4;
+        collectDiscs(w, e, Math.min(e.x, ex) - S, Math.min(e.y, ey) - S, Math.max(e.x, ex) + S, Math.max(e.y, ey) + S, ux, uy, gx, gy, ARRIVE_NEAR, e.laneAll);
+        const dear = laneDear();
+        if (planLane(w, e, ex, ey, r, laneAlt) && laneLen(e.x, e.y, laneAlt, 0) + LANE_SWAP_GAIN < laneLen(e.x, e.y, e.lane, e.laneIdx * 2)) {
+          e.lane.length = 0;
+          for (let i = 0; i < laneAlt.length; i++) e.lane.push(laneAlt[i]);
+          e.laneIdx = 0; e.laneDear = dear;
+          const fx = e.lane[0] - e.x, fy = e.lane[1] - e.y;
+          e.steerSide = ux * fy - uy * fx > 0 ? -1 : 1;
+        }
+        return;
+      }
       clearLane(e);
       e.laneCheck = 0;
       // fall through: re-plan from here (the shortest way round now: keeping a side cost more in the wave probe)
@@ -543,7 +561,7 @@ function updateLane(w: World, e: Entity, aimX: number, aimY: number, gx: number,
   while (s < aD && inDisc(s)) s = Math.min(aD, s + 0.25);
   const tx = e.x + ux * s, ty = e.y + uy * s;
   if (!inDisc(s) && planLane(w, e, tx, ty, r, e.lane) && laneFair(e, tx, ty)) {
-    e.laneIdx = 0; e.laneAimX = aimX; e.laneAimY = aimY; e.laneCheck = LANE_RECHECK; e.lanePlanned = true;
+    e.laneIdx = 0; e.laneAimX = aimX; e.laneAimY = aimY; e.laneCheck = LANE_RECHECK; e.lanePlanned = true; e.laneDear = laneDear();
     const fx = e.lane[0] - e.x, fy = e.lane[1] - e.y;
     e.steerSide = ux * fy - uy * fx > 0 ? -1 : 1;
   } else {

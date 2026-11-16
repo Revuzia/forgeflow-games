@@ -108,7 +108,16 @@ def zone_mask(sid: str, glb: str, z: dict, size: tuple, tmp: str, i: int) -> str
         missing = [p for p in z["parts"] if p not in names]
         if missing:
             raise SystemExit(f"{sid}: parts {missing} are not in the part map")
-        pmask = np.isin(pm["part"], [names.index(p) for p in z["parts"]])
+        # orch1 W1-B fix round 2 (verify_w1b_r2 UV-seam lines): the part map misses the outermost texel ring of many
+        # islands (texels a triangle covers but the map labels -1), which kept the pre-grade cream at every island
+        # edge; unlabelled texels take a labelled neighbour's part (3 rings), the gutter beyond is re-padded later
+        part = pm["part"].copy()
+        for _ in range(3):
+            for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                nb = np.roll(part, (dy, dx), axis=(0, 1))
+                hole = (part < 0) & (nb >= 0)
+                part[hole] = nb[hole]
+        pmask = np.isin(part, [names.index(p) for p in z["parts"]])
         m = np.asarray(Image.fromarray((pmask * 255).astype("uint8")).resize((W, H), Image.NEAREST)) >= 128
 
     def geomask(boxes, cyls, tag):
@@ -199,7 +208,11 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
                                + (["--reserve-ceil", str(rec["reserveCeil"])] if "reserveCeil" in rec else [])
                                + (["--dark-guard", str(rec["darkGuard"])] if "darkGuard" in rec else [])
                                + (["--gutter-sat", str(rec["gutterSat"])] if "gutterSat" in rec else [])
-                               + (["--protect-max-s", str(rec["protectMaxS"])] if "protectMaxS" in rec else []) + prot + tint, cwd=GAME, capture_output=True, text=True)
+                               + (["--protect-max-s", str(rec["protectMaxS"])] if "protectMaxS" in rec else [])
+                               # orch1 W1-B fix round 2: re-pad the UV gutter from the graded islands (no pre-grade
+                               # cream / orange seam lines) and keep the re-padded ring out of the reserve cap's gutter tier
+                               + (["--gutter-fill", str(rec["gutterFill"])] if "gutterFill" in rec else [])
+                               + (["--island-grow", str(rec["islandGrow"])] if "islandGrow" in rec else []) + prot + tint, cwd=GAME, capture_output=True, text=True)
                 if r.returncode:
                     raise SystemExit(r.stderr[-1200:])
                 if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= qmin:

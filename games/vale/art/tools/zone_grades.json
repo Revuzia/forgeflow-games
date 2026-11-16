@@ -450,25 +450,25 @@
  "ardit": {
   "zones": [
    {
-    "why": "orch1 W1-B fix 2 (FU-3): the helm a deep steel-teal (albedo HSV ~186; fix-1's HSV 196 at L 10 rendered HSV 187-204, median 194.4 with two runs in the ally band), so in game it sits at HSV 180-190 out of the ally band (200-225) on every seating",
+    "why": "orch1 W1-B fix round 2 (FU-3; verify_w1b_r2: the helm roof, the top 12 %, read HSV 170 at fix 2's albedo HSV ~186 while the top 25 % read 182.6): the helm a deep steel-teal at CIELAB h ~224 (albedo HSV ~197 at L* 14), so the lit roof reads HSV 180-190 in game; C* 28 so Ardit's top owns a hue (fix 2 C* 13, dE 15.9 to Ervet)",
     "parts": [
      "helm"
     ],
-    "hex": "#2D7780",
+    "hex": "#567D88",
     "L": 14,
-    "C": 26
+    "C": 28
    },
    {
-    "why": "orch1 FU-3: pauldrons and tiers a cool slate (low chroma, teal-leaning), so no pale blue mass on the shoulders reads ally or Lisvel",
+    "why": "orch1 W1-B fix round 2 (FU-3): pauldrons and tiers a cool teal-slate (CIELAB h ~200, albedo HSV ~180, C* 12), a step greener than the helm so the top 25 % stays at HSV 180-190 and out of the ally band",
     "parts": [
      "pauldron_R",
      "pauldron_L",
      "tier_R",
      "tier_L"
     ],
-    "hex": "#2F6F78",
+    "hex": "#557E7F",
     "L": 28,
-    "C": 6
+    "C": 12
    },
    {
     "why": "u3: the signature periwinkle moves to the coat (mid body), so the crown leaves the lilac family and sigPct holds",
@@ -479,7 +479,9 @@
     "L": 42,
     "C": 18
    }
-  ]
+  ],
+  "gutterFill": 24,
+  "islandGrow": 4
  },
  "ilsheta": {
   "zones": [
@@ -526,7 +528,7 @@
  "hesmi": {
   "zones": [
    {
-    "why": "orch1 FU-1: the hood a deep teal-ink (CIELAB h ~180, in game L* ~40), out of the violet family Vashil keeps and away from Ardit's steel-teal and Lisvel's pale cyan by hue or value; k 0.35 bakes out the old cream crease lines (each texel keeps only a third of its deviation from the hood mean)",
+    "why": "orch1 W1-B fix round 2 (FU-1; verify_w1b_r2: fix 2's top read C* 12.7, near neutral, dE 6.0 to Ilsheta): the hood a deep teal-ink (CIELAB h ~170: 30+ deg from Lisvel's cyan 201 and Ardit's steel-teal, 23 deg and a value step from Marund's pale green; HSV ~160, outside the heal band) at C* 24, so Hesmi's top owns a hue at C >= 15; k 0.35 keeps the old cream crease lines baked out and the gutter is re-padded from the graded hood (the crease lines were the pre-grade cream padding at the UV seams)",
     "boxes": [
      [
       -0.4,
@@ -551,13 +553,13 @@
       2.14
      ]
     ],
-    "hex": "#1F5E58",
+    "hex": "#6A9485",
     "L": 20,
-    "C": 18,
+    "C": 24,
     "k": 0.35
    },
    {
-    "why": "orch1 FU-1: the shards' honed upper sections (z > 2.12, the game camera's crown) a pale teal stone (bible top band; low chroma, so no hue pair with Lisvel's cyan or Marund's green)",
+    "why": "orch1 W1-B fix round 2 (FU-1): the shards' honed upper sections (z > 2.12, the game camera's crown) a pale teal stone (bible top band) at C* 13 in the hood's hue (CIELAB h ~170), so the top cluster keeps Hesmi's teal instead of a near-neutral",
     "boxes": [
      [
       -0.45,
@@ -572,9 +574,9 @@
      0.0,
      0.79
     ],
-    "hex": "#2E6650",
+    "hex": "#6A9485",
     "L": 93,
-    "C": 7,
+    "C": 13,
     "k": 1.0
    },
    {
@@ -593,44 +595,46 @@
      0.0,
      0.79
     ],
-    "hex": "#2E6650",
+    "hex": "#6A9485",
     "L": 22,
-    "C": 16,
+    "C": 20,
     "k": 1.0
    }
-  ]
+  ],
+  "gutterFill": 24,
+  "islandGrow": 4
  },
  "odrum": {
   "zones": [
    {
-    "why": "orch1 W1-B fix 2 (units_gate P1, FU-2): the mask a deep muted honey (CIELAB h ~98, albedo L* 32, in game HSV h ~40-47, L* ~45-55); it keeps its honey hue and every painted feature (k 0.8) and sits a value step under Nurrow's, Tunlan's, Sukri's and Ilsheta's pale tops (fix-1 run 0 read L* 74 h 83, dE 7.9 to Nurrow) and 30+ deg of hue from Burdam's russet",
+    "why": "orch1 W1-B fix round 2 (FU-2, verify_w1b_r2: the fix-2 mask read grey-sage, in game L* 55 C* 11): the mask a light honey (CIELAB h ~80, albedo L* 52 C* 24: HSV s ~0.40, so the honey keeps its chroma under ruling 32's cap without a desaturating knee; in game HSV h ~35-42, L* ~65-70); it keeps every painted feature (k 0.8). The honey is in the harm band by FU-2's design, so the rest of the top cluster (cap, shirt, pots) is a low-chroma olive-grey and the top median's saturation stays under 0.40 (units_gate P2)",
     "parts": [
      "mask"
     ],
-    "hex": "#5B553B",
-    "L": 32,
-    "C": 13,
+    "hex": "#AD9269",
+    "L": 40,
+    "C": 21,
     "k": 0.8
    },
    {
-    "why": "orch1 FU-2: the felt cap a real deep olive (CIELAB h ~112, HSV h ~65: out of the harm band; in game L* <= 40; r3's #B3A400 L 36 read L 58 khaki at HSV h 49 in game beside Sukri and Ilsheta); the mask and hands are never zoned",
+    "why": "orch1 W1-B fix round 2 (FU-2, cap L* <= 40 in game; verify_w1b_r2 read L* 43-46 at albedo L* 20): the felt cap a near-black deep olive (CIELAB h ~115, albedo L* 11 C* 10, low chroma so the top median's saturation stays under 0.40); the mask and hands are never zoned",
     "parts": [
      "cap"
     ],
-    "hex": "#3F4B32",
-    "L": 20,
-    "C": 20,
+    "hex": "#515441",
+    "L": 11,
+    "C": 10,
     "k": 0.6
    },
    {
-    "why": "orch1 FU-2 / W1-B fix 2: the pale linen shirt (coat texels L* >= 50) a mid olive-grey (L* 40): in game the sunlit shoulders sit in the top quarter of the silhouette, and a pale shirt (fix-1 L* 52 read L* 69) lifted the top into the honey fighters' value",
+    "why": "orch1 W1-B fix round 2: the pale linen shirt (coat texels L* >= 50) a near-neutral warm grey (L* 40 C* 3): the sunlit shoulders sit in the top quarter of the silhouette, and a chromatic shirt pulled the top median into the harm band (units_gate P2 HSV 45 S 0.435)",
     "parts": [
      "coat"
     ],
     "minL": 50,
     "hex": "#6B6E5C",
     "L": 40,
-    "C": 6
+    "C": 3
    },
    {
     "why": "orch1 W1-B fix 1 (units_gate P1/P2): the carried pots and their rims a deep olive glaze in the cap's family; in game the yoke lifts the pots into the top quarter of the silhouette, where their pale honey clay read the whole top as Nurrow's and Tunlan's honey (dE 5.3); the honey resin in the mouths, the mask and the hands keep their honey",
@@ -642,7 +646,7 @@
     ],
     "hex": "#4E5236",
     "L": 34,
-    "C": 14,
+    "C": 8,
     "k": 0.5
    },
    {
@@ -653,7 +657,7 @@
     ],
     "hex": "#4E5236",
     "L": 32,
-    "C": 10,
+    "C": 6,
     "k": 0.5
    },
    {
@@ -683,10 +687,12 @@
   },
   "reserveGutterFirst": true,
   "protectSat": 0.375,
-  "capMax": 7.0,
+  "capMax": 6.5,
   "darkGuard": 90,
-  "protectMaxS": 0.41,
-  "qMin": 40
+  "protectMaxS": 0.45,
+  "qMin": 40,
+  "gutterFill": 24,
+  "islandGrow": 4
  },
  "dunsom": {
   "zones": [
@@ -730,16 +736,18 @@
   },
   "reserveGutterFirst": true,
   "darkGuard": 90,
-  "capMax": 7.0
+  "capMax": 7.0,
+  "gutterFill": 24,
+  "islandGrow": 4
  },
  "ulkro": {
   "zones": [
    {
-    "why": "orch1 W1-B fix 2: the hood's lit dome (z > 1.70) a deep forest moss (CIELAB h ~155, albedo L* 22, in game L* ~45-55, HSV h ~105-120: outside the harm and heal bands), a value step under Ilsheta's, Sukri's, Nurrow's and Marund's pale tops (fix-1 dE 18-21) and 30 deg of hue from Odrum's olive",
+    "why": "orch1 W1-B fix round 2 (verify_w1b_r2: fix 2's lab h 155 moss put 31 % of the top cluster in the heal band, HSV 125-150, and sat 0.8 deg of hue from Marund): the hood's lit dome (z > 1.70) a deep yellow-green moss (CIELAB h ~127, Ulkro's own signature side of green, albedo L* 22; in game HSV h ~85-105, outside the heal and harm bands), a value step under Ilsheta's, Sukri's, Nurrow's and Marund's pale tops and 20+ deg of hue from Marund's teal-green",
     "parts": [
      "hood"
     ],
-    "hex": "#2B4E39",
+    "hex": "#5F704D",
     "L": 22,
     "C": 17,
     "k": 0.8,
@@ -760,7 +768,7 @@
      "hood",
      "hood_tail"
     ],
-    "hex": "#2B4E39",
+    "hex": "#5F704D",
     "L": 14,
     "C": 12,
     "k": 0.8,
@@ -781,7 +789,7 @@
      "cowl",
      "sleeves"
     ],
-    "hex": "#2B4E39",
+    "hex": "#5F704D",
     "L": 16,
     "C": 10,
     "k": 0.7
@@ -804,7 +812,7 @@
      "plate_L1",
      "plate_L2"
     ],
-    "hex": "#2B4E39",
+    "hex": "#5F704D",
     "L": 22,
     "C": 10,
     "k": 0.7
@@ -828,6 +836,8 @@
   "reserveGutterFirst": true,
   "darkGuard": 90,
   "capMax": 7.0,
-  "qMin": 48
+  "qMin": 48,
+  "gutterFill": 24,
+  "islandGrow": 4
  }
 }

@@ -480,7 +480,7 @@
   },
   "screens": { "menu": "mus_menu", "draft": "mus_draft", "postgame": "mus_postgame" },
   "stings": { "victory": "m_victory_sting", "defeat": "m_defeat_sting", "placement": "m_placement_sting" },
-  "mix": { "$comment": "orch1 AUD-O1: each mode's static sfx trim (dB) on all three sfx paths; src/audio/index.ts `leveller` rides the density on top (cut only, <= 8 dB, toward -19 LUFS sfx short-term). The 5v5 maps are denser by design: BRIDGE read -11.8 and FRAY -15.0 LUFS master at RIFT's trim",
+  "mix": { "$comment": "orch1 AUD-O1: each mode's static sfx trim (dB) on all three sfx paths; src/audio/index.ts `leveller` rides the density on top (cut only, <= 8 dB, toward -20 LUFS sfx short-term, RIFT -23 with its trim raised to match) and its match-long stage withdraws up to 2 dB of a positive trim while the master's gated integrated reads over -18 LUFS. The 5v5 maps are denser by design: BRIDGE read -11.8 and FRAY -15.0 LUFS master at RIFT's trim",
     "modes": { "rift": { "sfxTrimDb": 3.7 }, "bridge": { "sfxTrimDb": -4.5 }, "fray": { "sfxTrimDb": -3 } } },
   "music": {
     "mus_menu": {"file": "assets/audio/music/mus_menu.ogg", "bpm": 60, "loopStart": 0, "gain": 0.8, "layers": [

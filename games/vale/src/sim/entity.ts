@@ -424,6 +424,8 @@ export class Entity implements EntityView {
   laneAll = false;
   /** a lane was found since the last no-progress window (else a second such window ends a move to a point) */
   lanePlanned = false;
+  /** the lane was planned behind crossing bodies (bodypath AHEAD_S): re-checked against a fresh plan in case they stopped */
+  laneDear = false;
   /** static blocker (structures): never moves, pushes units out */
   static = false;
   /** radius this entity blocks in the nav grid (structures; 0 = none) — removed on death */

@@ -31,6 +31,10 @@
 //               alone never pushes it below LEVEL_BG_ROOM_LU under the target (your own burst of casts does not empty
 //               the world around it); what is still over the target then comes down on all three paths together, at
 //               most LEVEL_PRIO_MAX_CUT_DB (a loud brawler's own kit ran a RIFT seat 2 LU over a quiet one's).
+//               Stage 3, match-long: the master's gated integrated loudness so far withdraws at most
+//               LEVEL_LONG_MAX_CUT_DB of the mode's own make-up trim, 0.05 dB/s, while it reads over
+//               LEVEL_LONG_TARGET_LUFS (a fight-heavy seat against a quiet one; never past the trim, so the net
+//               sfx cut under unity stays inside LEVEL_MAX_CUT_DB).
 //               Per mode a static sfx trim (content audio.mix.modes.<mode>.sfxTrimDb), after the leveller, sets the
 //               mode's level on all three paths (the leveller rides the density, the trim the mode's base)
 //   ducking     voice > sfx > music (CONTRACT §11): while an announcer line plays, music and ambience sit
@@ -458,6 +462,19 @@ const LEVEL_POLL_MS = 100;      // one 4096-sample read per path per poll (85 ms
 const LEVEL_PRIO_MAX_CUT_DB = 4; // the whole sfx's cut (the priority sub-bus included) when it alone is over the target
 const LEVEL_BG_ROOM_LU = 6;     // the background is never cut below this under the target (see levelPoll)
 const LEVEL_REF_SFX = 0.8;      // the default sfx slider: the detector is referred to it, so the slider still sets the level
+// (AUD-O1 stage 3) the match-long normaliser: the output's (the trim node, before the limiter) gated integrated loudness so far (BS.1770: 400 ms blocks,
+// -70 LUFS absolute and -10 LU relative gates), referred to the default master slider and estimated as it would read
+// without this stage, withdraws up to LEVEL_LONG_MAX_CUT_DB of the mode's own sfx make-up (never more than the trim
+// itself, so the net sfx gain under unity still never passes LEVEL_MAX_CUT_DB) while it reads over LEVEL_LONG_TARGET_LUFS,
+// at LEVEL_LONG_SLEW_DB_S (inaudible: 1 dB takes 20 s). The density stages level a fight against the lane; this one levels
+// a fight-heavy seat against a quiet one (RIFT co-op seed 3, Lisvel in a duo lane 46 % of the match under the leveller,
+// read -16.6 LUFS master where seed 21's Ardit read -18.8 at the same trim)
+const LEVEL_LONG_TARGET_LUFS = -18;
+const LEVEL_LONG_MAX_CUT_DB = 2;
+const LEVEL_LONG_SLEW_DB_S = 0.05;
+const LEVEL_LONG_MIN_BLOCKS = 75;   // 30 s of gated blocks before it acts
+const LEVEL_LONG_SFX_SHARE = 0.75;  // the share of the master its cut reaches (the sfx), for the uncut estimate
+const LEVEL_REF_MASTER = 0.8;       // the default master slider
 const OWN_KIT_GAIN = Math.pow(10, OWN_KIT_DB / 20);
 const CAMP_GAIN = Math.pow(10, CAMP_DB / 20);
 const CLIP_KNEE = 0.7;       // the soft clip is linear up to −3.1 dBFS …
@@ -678,7 +695,15 @@ class Engine implements ValeAudioPort {
   private levTarget = LEVEL_TARGET_LUFS;
   /** the leveller's stage-2 cap in this match (LEVEL_PRIO_MAX_CUT_MODE_DB, else LEVEL_PRIO_MAX_CUT_DB) */
   private levPrioCap = LEVEL_PRIO_MAX_CUT_DB;
-  readonly levStats = { polls: 0, cutPolls: 0, cut3Polls: 0, maxCutDb: 0, sumCutDb: 0, prioShareSum: 0, prioSharePolls: 0, prioCutPolls: 0, sumPrioCutDb: 0 };
+  /** (stage 3) the match-long normaliser's cut (dB, >= 0) on the mode's trim, its master detector, the 400 ms block it
+   *  is filling and the match's gated-block histogram (0.1 dB bins from -70 LUFS) of the uncut estimate */
+  private levLong = 0;
+  private levMasterDet: AnalyserNode[] = [];
+  private levBlock = { e: 0, n: 0 };
+  private levHist = new Float64Array(900);
+  private levHistN = 0;
+  private levInMatch = false;
+  readonly levStats = { polls: 0, cutPolls: 0, cut3Polls: 0, maxCutDb: 0, sumCutDb: 0, prioShareSum: 0, prioSharePolls: 0, prioCutPolls: 0, sumPrioCutDb: 0, longCutDb: 0, longMaxCutDb: 0, longMasterLUFS: -70 };
   /** content audio.mix.modes: mode id → its sfx trim (dB) */
   private readonly modeTrim: Record<string, number> = {};
   /** the alert path, one gain per bus, straight into the limiter (see `alert path` in the header) */
@@ -1169,6 +1194,7 @@ class Engine implements ValeAudioPort {
       });
     };
     this.levDet = [...kw([this.bus.get('sfx')!, this.threat]), ...kw([this.prio])];
+    this.levMasterDet = kw([this.trim]);   // after the master volume and the mix makeup: the output before the limiter
     this.levBuf = new Float32Array(4096);
     this.levelTrim(this.sfxTrimDb, true);
     clearInterval(this.levTimer);
@@ -1180,7 +1206,7 @@ class Engine implements ValeAudioPort {
     this.sfxTrimDb = db;
     const ctx = this.ctx;
     if (!ctx || !this.levSfx) return;
-    const t = ctx.currentTime, k = Math.pow(10, db / 20);
+    const t = ctx.currentTime, k = Math.pow(10, (db - this.levLong) / 20);
     for (const [p, v] of [[this.levSfx.gain, k * this.levGain], [this.levThreat.gain, k * this.levGain], [this.prioTrim.gain, k * this.levPrio]] as const) {
       if (now) { p.cancelScheduledValues(t); p.setValueAtTime(v, t); } else glide(p, v, t, 0.3);
     }
@@ -1196,6 +1222,8 @@ class Engine implements ValeAudioPort {
       return s / buf.length;
     };
     const now = ctx.currentTime;
+    const long0 = this.levLong;
+    this.levelLongPoll(ms);
     const n = ms(this.levDet[0]) + ms(this.levDet[1]), p = ms(this.levDet[2]) + ms(this.levDet[3]);
     this.levWin.push({ t: now, n, p });
     while (this.levWin.length && this.levWin[0].t < now - LEVEL_WINDOW_S) this.levWin.shift();
@@ -1233,12 +1261,45 @@ class Engine implements ValeAudioPort {
     const pcut = -20 * Math.log10(gp);
     if (pcut > 0.1) st.prioCutPolls++;
     st.sumPrioCutDb += pcut;
-    if (Math.abs(g - this.levGain) < 1e-4 && Math.abs(gp - this.levPrio) < 1e-4) return;
-    const tk = Math.pow(10, this.sfxTrimDb / 20);
+    if (Math.abs(g - this.levGain) < 1e-4 && Math.abs(gp - this.levPrio) < 1e-4 && Math.abs(this.levLong - long0) < 1e-4) return;
+    const tk = Math.pow(10, (this.sfxTrimDb - this.levLong) / 20);
     const tau = (to: number, from: number): number => (to < from ? LEVEL_ATTACK_S : LEVEL_RELEASE_S);
     for (const prm of [this.levSfx.gain, this.levThreat.gain]) { prm.cancelScheduledValues(now); prm.setTargetAtTime(tk * g, now, tau(g, this.levGain)); }
     this.prioTrim.gain.cancelScheduledValues(now); this.prioTrim.gain.setTargetAtTime(tk * gp, now, tau(gp, this.levPrio));
     this.levGain = g; this.levPrio = gp;
+  }
+
+  /** stage 3 (see LEVEL_LONG_TARGET_LUFS): one poll of the master detector into the 400 ms block; a full block joins the
+   *  match's histogram as its uncut estimate, and the cut slews toward what brings the gated integrated to the target */
+  private levelLongPoll(ms: (a: AnalyserNode) => number): void {
+    if (this.levMasterDet.length < 2 || !this.levInMatch) return;
+    const vm = this.vol.master;
+    if (!(vm > 0)) return;
+    const b = this.levBlock;
+    b.e += (ms(this.levMasterDet[0]) + ms(this.levMasterDet[1])) * (LEVEL_REF_MASTER / vm) ** 2;
+    if (++b.n < 4) return;
+    const e = (b.e / b.n) * (1 + LEVEL_LONG_SFX_SHARE * (Math.pow(10, this.levLong / 10) - 1));
+    b.e = 0; b.n = 0;
+    const lufs = -0.691 + 10 * Math.log10(Math.max(e, 1e-30));
+    if (lufs <= -70) return;
+    this.levHist[Math.min(this.levHist.length - 1, Math.floor((lufs + 70) * 10))]++;
+    this.levHistN++;
+    if (this.levHistN < LEVEL_LONG_MIN_BLOCKS) return;
+    const H = this.levHist, en = (i: number): number => Math.pow(10, (-70 + (i + 0.5) / 10 + 0.691) / 10);
+    let se = 0, sn = 0;
+    for (let i = 0; i < H.length; i++) if (H[i]) { se += H[i] * en(i); sn += H[i]; }
+    const rel = -0.691 + 10 * Math.log10(se / sn) - 10;
+    const i0 = Math.max(0, Math.ceil((rel + 70) * 10));
+    se = 0; sn = 0;
+    for (let i = i0; i < H.length; i++) if (H[i]) { se += H[i] * en(i); sn += H[i]; }
+    if (!sn) return;
+    const I = -0.691 + 10 * Math.log10(se / sn);
+    const cap = Math.min(LEVEL_LONG_MAX_CUT_DB, Math.max(0, this.sfxTrimDb));
+    const want = Math.min(cap, Math.max(0, I - LEVEL_LONG_TARGET_LUFS));
+    const step = LEVEL_LONG_SLEW_DB_S * (4 * LEVEL_POLL_MS) / 1000;
+    this.levLong += Math.max(-step, Math.min(step, want - this.levLong));
+    const st = this.levStats;
+    st.longCutDb = this.levLong; st.longMaxCutDb = Math.max(st.longMaxCutDb, this.levLong); st.longMasterLUFS = I;
   }
 
   /** dev / probes: the leveller as it stands (its gain in dB, the mode trim) and the three sfx paths' post-leveller
@@ -2421,6 +2482,7 @@ class Engine implements ValeAudioPort {
     this.ambMap = client?.setup?.map ?? null;
     // the mode's static sfx trim (see `leveller`); out of a match none, and the leveller's window starts over
     this.levWin = [];
+    this.levLong = 0; this.levBlock = { e: 0, n: 0 }; this.levHist.fill(0); this.levHistN = 0; this.levInMatch = !!client;
     this.levTarget = LEVEL_TARGET_LUFS + (client ? LEVEL_TARGET_MODE_DB[client.view.mode] ?? 0 : 0);
     this.levPrioCap = (client ? LEVEL_PRIO_MAX_CUT_MODE_DB[client.view.mode] : undefined) ?? LEVEL_PRIO_MAX_CUT_DB;
     this.levelTrim(client ? this.modeTrim[client.view.mode] ?? 0 : 0);

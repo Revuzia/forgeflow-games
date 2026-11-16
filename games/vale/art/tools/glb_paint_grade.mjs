@@ -289,6 +289,58 @@ for (const spec of args.flatMap((a, i) => (a === '--part-tint' ? [args[i + 1]] :
   });
   console.log(`${path}: ${idx.length} texels tinted ${hex} (mean L* ${mL.toFixed(1)} -> ${Lt}, chroma ${mC.toFixed(1)} -> ${Ct})`);
 }
+// --gutter-fill N (orch1 W1-B fix round 2, verify_w1b_r2 UV-seam bleed): after the tints, the UV gutter (texels no
+// triangle covers) is re-padded from the islands' graded colours, N rings deep (each ring the mean of its already-filled
+// 8-neighbours). The bake's own padding kept the PRE-grade colour (cream, or a reserve-cap's orange), which the bilinear
+// and mip filters drew as thin bright lines along every regraded island edge.
+const fillN = Number(opt('--gutter-fill', 0));
+if (fillN > 0) {
+  const done = new Uint8Array(W * H);
+  rasterUV((p) => { done[p] = 1; });
+  let front = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const p = y * W + x;
+    if (done[p]) continue;
+    if ((x > 0 && done[p - 1]) || (x < W - 1 && done[p + 1]) || (y > 0 && done[p - W]) || (y < H - 1 && done[p + W])) front.push(p);
+  }
+  let filled = 0;
+  for (let ring = 0; ring < fillN && front.length; ring++) {
+    const cols = [];
+    for (const p of front) {
+      const x = p % W, y = (p / W) | 0;
+      let n = 0, r = 0, g = 0, b = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const q = yy * W + xx;
+        if (!done[q]) continue;
+        n++; r += data[q * C]; g += data[q * C + 1]; b += data[q * C + 2];
+      }
+      cols.push(n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : null);
+    }
+    const next = [];
+    front.forEach((p, i) => {
+      if (!cols[i]) return;
+      data[p * C] = cols[i][0]; data[p * C + 1] = cols[i][1]; data[p * C + 2] = cols[i][2];
+      done[p] = 2;
+      filled++;
+    });
+    for (const p of front) {
+      if (done[p] !== 2) continue;
+      const x = p % W, y = (p / W) | 0;
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const q = yy * W + xx;
+        if (!done[q]) { done[q] = 3; next.push(q); }
+      }
+    }
+    for (const q of next) done[q] = 0;
+    front = next;
+  }
+  console.log(`gutter-fill: ${filled} gutter texels re-padded from the graded islands (${fillN} rings)`);
+}
 // --reserve-cap pct (MAX2 round 2, ruling 32): after the rest, bring every reserved hue band (tokens vfx.reservedHuesHSV,
 // measured as art/tools/zone_grade.py reserved_pct: HSV hue in the band, saturation > 0.4, of the painted texels) to at
 // most pct % of the albedo. The cheapest texels move first (those nearest the 0.4 line), so the visible change is the
@@ -326,13 +378,16 @@ if (args.includes('--reserve-cap')) {
   if (args.includes('--reserve-gutter-first')) {
     island = new Uint8Array(W * H);
     rasterUV((p) => { island[p] = 1; });
-    // a texel the bilinear / mip filter reads from an island's edge counts as island (1 texel dilation)
-    const grow = island.slice();
-    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
-      const p = y * W + x;
-      if (!island[p] && (island[p - 1] || island[p + 1] || island[p - W] || island[p + W])) grow[p] = 1;
+    // a texel the bilinear / mip filter reads from an island's edge counts as island (1 texel dilation; --island-grow R
+    // rings, orch1 W1-B fix round 2: the re-padded gutter ring next to an island keeps the island's colour)
+    for (let k = 0; k < Number(opt('--island-grow', 1)); k++) {
+      const grow = island.slice();
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const p = y * W + x;
+        if (!island[p] && (island[p - 1] || island[p + 1] || island[p - W] || island[p + W])) grow[p] = 1;
+      }
+      island = grow;
     }
-    island = grow;
   }
   for (const [name, [a, b]] of Object.entries(bands)) {
     const how = modes[name] ?? 'edge';
