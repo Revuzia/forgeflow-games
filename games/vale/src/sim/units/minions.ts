@@ -46,7 +46,7 @@ export const LANE_LOOK = 2.0;
 const LANE_REJOIN = 1.5;
 const LANE_REISSUE = 1;
 const LANE_SCOUT = 6;
-export const SLOT_GAP = 0.55;
+export const SLOT_GAP = 0.9;
 /** a chase that has not closed in by CHASE_GAIN m for this long (ticks) is blocked: step out to an open attack spot */
 const CHASE_STALL_TICKS = 60;
 const CHASE_GAIN = 0.3;
