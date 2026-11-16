@@ -3,6 +3,15 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-16 — Wave 10 round 2b: light fix (rooms, street shadows, skin sheen)
+
+Wave 10 round 2b re-merges lane R2A (`w10-r2-water-light`, head 932956106) onto `w10` with its light fix. No world change: `MAP_GEN_VERSION` stays 8.
+
+- Rooms and street shadows readable again under the W10 light. The output pass's contrast curve now fades in over the deep shadows and gives the deepest shadows a small lift (x1.18, gone by about 40/255), so a shadow at 50/255 no longer drops to 11/255. Savanna's sun goes 1.18 -> 1.26 to keep its ground spread. interiorcheck light is green again on match, housegen and the fixture (min mean 30.42 / 34.42 / 50.85 of 255).
+- The stronger W10 sun no longer brings back plastic-looking skin: the character body shader scales direct specular by 1 / (the map's sun boost x (1 + 0.3 x its contrast strength)) on desktop medium and up (1 on low and touch). w10_gunhold sheen c_face / c_near 0.375 / 0.468 x the W9 tip (bar 0.6). The scale applies to the whole character body material, so metal or plastic trim on characters also loses some sun highlight.
+- Deepwood's grass blades a little taller (x1.15) so they still read against the darker forest ground.
+- Gate w10_waterlook: new rows light: shadowed road (road p5 >= 12/255, <= 10 % under 16/255 on every map) and light: interiors darkest view, which now renders interiorcheck's own views (room entrances + room centre x 4 headings, third-person camera, PRACTICE seed 7) of isla_viva volcano_rim@p54, ashgrid downtown@p4/p27/p44, the housegen house s7h2 and the fixture. Bar unchanged (mean >= 25/255, dark share <= 30 %). New controls in gate.py, each must FAIL: plants crushed-toe and dark-rooms, and the R2A merge 3065e2c7a (`w10_waterlook-rev-r2a-merge`).
+
 ## 2026-11-15 — Wave 10 round 2: water, sky and light; recorded sound
 
 Round 2 of Wave 10 (plan `F:/lc_p23/w10/PLAN.md`). This release carries lanes R2A (`w10-r2-water-light`) and R2B (`w10-r2-sound`),

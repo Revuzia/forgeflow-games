@@ -746,6 +746,12 @@ NEGATIVE = [
     ("w10_waterlook-plant-grass-on-low", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "low", "--plant", "grass-on-low"], 3600),
     ("w10_waterlook-plant-uw-sky-sharp", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "uw", "--plant", "uw-sky-sharp"], 3600),
     ("w10_waterlook-rev-r2-base", "p23/waterlook.py", ["--rev", "cbf0a1ff"], 7000),
+    # ---- Wave 10 R2A fix5/fix6: the light-slip controls (each must FAIL; add next to the other w10_waterlook plants)
+    ("w10_waterlook-plant-crushed-toe", "p23/waterlook.py", ["--parts", "light", "--plant", "crushed-toe"], 3600),   # FAILs light: shadowed road + light: interiors darkest view
+    ("w10_waterlook-plant-dark-rooms", "p23/waterlook.py", ["--parts", "light", "--plant", "dark-rooms"], 3600),     # FAILs light: interiors darkest view (+ road, + interiors ratio)
+    ("w10_waterlook-rev-r2a-merge", "p23/waterlook.py", ["--rev", "3065e2c7a", "--parts", "light"], 3600),          # the R2A merge slip: MUST FAIL light: shadowed road + light: interiors darkest view
+    # (the w10_waterlook main row needs no change: the darkest-view row now also renders interiorcheck's own views of match isla_viva
+    #  volcano_rim@p54, ashgrid downtown@p4/p27/p44, housegen s7h2 and the fixture house in 4 extra Chromes; full run ~7.5 min, well inside 7000 s)
     # stormfx_fx controls (run by the integrator from driver scripts, not registered: plant curve-at-0 FAILs the BIT-IDENTICAL row, plant meshopt
     #   wrong geometry FAILs the meshopt row; F:/lc_p23/w10/t/R2A/fix4/plant_curve_at0.py, plant_meshopt_geom.py)
     # ---- Wave 10 R2B: each planted fault must FAIL its own w10_sfx / p23_audiotap row; the W10 R1 base cbf0a1ff1 must FAIL w10_sfx
