@@ -184,6 +184,10 @@ export class TeamBrain {
   private tradeX = 0; private tradeY = 0;
   /** lane AI G7: an objective to light up before it spawns (lamps round the pit), and enemy lamps there to clear */
   visionPit: CampInfo | null = null;
+  /** owner_rulings 44: an enemy fighter in sight alone in our half of the Dialwood, and the fighters sent to punish it */
+  invader: Entity | null = null;
+  readonly hunters = new Set<PlayerId>();
+  private invaderUntil = -1e9;
 
 
   /** shared with the match: map structure id → when it fell */
@@ -280,6 +284,66 @@ export class TeamBrain {
     this.thinkAnswers(w);
     this.thinkGuard(w);
     this.thinkSplit(w);
+    this.thinkInvader(w);
+  }
+
+  /**
+   * owner_rulings 44 — punish an invader (RIFT, tiers with punishInvade, from punishFrom): an enemy fighter in our sight in
+   * our own half of the Dialwood (off every road by 9 m, nearer our fountain than theirs, outside its own towers' cover) with
+   * no other enemy fighter seen within 14 m, in sight for punishDelay s, is hunted by up to punishInvade fighters above 60 %
+   * health that can be on it within 14 s (the grovehunter first) — together at least as strong as it. The hunt holds while it
+   * stays in our half and is seen (3 s grace), at most 20 s; it ends at once when a second enemy fighter turns up beside it.
+   * The genre's veteran: an invader caught in your jungle at 8:00 is a free kill for the two nearest players, not a sight to
+   * ignore while it takes your camps for a minute.
+   */
+  private thinkInvader(w: World): void {
+    const k = this.k, d = this.diff, now = w.time, tp = this.perc;
+    const prev = this.invader;
+    this.invader = null;
+    if (k.kind !== 'rift' || d.punishInvade <= 0 || now < d.punishFrom || this.rush || this.stage) { this.hunters.clear(); return; }
+    const own = k.bases.find((b) => b.team === this.team), foe = k.bases.find((b) => b.team !== this.team);
+    if (!own || !foe) { this.hunters.clear(); return; }
+    let best: Entity | null = null, bs = -Infinity;
+    for (const f of tp.enemyFighters) {
+      if (!f.alive || (f.visibleMask & tp.bit) === 0) continue;
+      const mine = sq(f.x - own.fx) + sq(f.y - own.fy) < sq(f.x - foe.fx) + sq(f.y - foe.fy);
+      let offRoad = true;
+      for (const l of k.lanes) if (this.projectTo(l.index, f.x, f.y).d2 < 9 * 9) { offRoad = false; break; }
+      let alone = true;
+      for (const g of tp.enemyFighters) if (g !== f && g.alive && sq(g.x - f.x) + sq(g.y - f.y) <= 14 * 14) { alone = false; break; }
+      let covered = false;
+      for (const st of tp.enemyStructs) if (st.alive && st.attackDef && sq(st.x - f.x) + sq(st.y - f.y) <= sq(st.stats.range + st.radius + 4)) { covered = true; break; }
+      const ok = mine && offRoad && alone && !covered;
+      if (!this.held(`inv${f.id}`, ok, now, prev === f ? 0 : d.punishDelay)) continue;
+      const sc = (prev === f ? 1 : 0) - f.hp / Math.max(1, f.maxHp);
+      if (sc > bs) { bs = sc; best = f; }
+    }
+    if (best !== prev) { this.hunters.clear(); if (best) this.invaderUntil = now + 20; }
+    if (!best || now > this.invaderUntil) { this.hunters.clear(); return; }
+    this.invader = best;
+    // keep the hunters that still can; fill up by arrival time
+    const tgt = best;
+    for (const p of [...this.hunters]) { const e = w.players[p]?.ent; if (!e || !e.alive || e.hp < e.maxHp * 0.4) this.hunters.delete(p); }
+    const powerOf = (e: Entity): number => (e.hp + e.shield) * Math.max(1, e.stats.ad * e.stats.attackSpeed + e.stats.ap * 0.6 + e.level * 12);
+    let pw = 0;
+    for (const p of this.hunters) { const e = w.players[p]?.ent; if (e) pw += powerOf(e); }
+    while (this.hunters.size < d.punishInvade) {
+      let bp: PlayerId = -1, bt = Infinity;
+      for (const p of w.players) {
+        if (!p || p.team !== this.team || this.hunters.has(p.player) || this.guard.has(p.player) || this.answer.has(p.player)) continue;
+        const e = p.ent;
+        if (!e || !e.alive || e.hp < e.maxHp * 0.6 || e.stateOverride === 'recall') continue;
+        const jg = this.assign.get(p.player)?.jungle ?? false;
+        const eta = dhypot(e.x - tgt.x, e.y - tgt.y) * 1.2 / Math.max(1, e.stats.moveSpeed) - (jg ? 4 : 0);
+        if (eta > 14 || eta >= bt) continue;
+        bt = eta; bp = p.player;
+      }
+      if (bp < 0) break;
+      this.hunters.add(bp);
+      const e = w.players[bp]?.ent; if (e) pw += powerOf(e);
+    }
+    // (never a fair fight called a punish: the hunters together at least as strong as the invader, else nobody goes)
+    if (pw < powerOf(tgt) * 0.9) { this.hunters.clear(); this.invader = null; }
   }
 
   /**
@@ -307,6 +371,16 @@ export class TeamBrain {
     const base = k.bases.find((b) => b.team === this.team);
     const rt = k.rules.recall ? recallTime(w) : Infinity;
     const threats: { st: Entity; info: StructInfo; cls: StructClass; need: number; n: number }[] = [];
+    // (owner_rulings 44: each enemy fighter threatens the one own structure nearest it — a push on the Bell Needles is theirs,
+    // not a "coming" threat on the untouched Lantern beside them, which held a full-health veteran posted 3 m from it, idle,
+    // while all five enemies took both Bell Needles and the Hourbell 14-21 m away)
+    const nearestOwn = new Map<Entity, Entity>();
+    for (const f of tp.enemyFighters) {
+      if (!f.alive) continue;
+      let bs: Entity | null = null, bd = Infinity;
+      for (const st of tp.allyStructs) { if (!st.alive) continue; const d2 = sq(f.x - st.x) + sq(f.y - st.y); if (d2 < bd) { bd = d2; bs = st; } }
+      if (bs) nearestOwn.set(f, bs);
+    }
     for (const st of tp.allyStructs) {
       if (!st.alive) continue;
       const info = this.structInfoOf(st);
@@ -320,7 +394,8 @@ export class TeamBrain {
       for (const f of tp.enemyFighters) {
         if (!f.alive) continue;
         const d2 = sq(f.x - st.x) + sq(f.y - st.y);
-        if (d2 <= reach * reach) n++; else if (front && d2 <= 28 * 28) coming++;
+        if (d2 <= reach * reach) { if (nearestOwn.get(f) === st || d2 <= 9 * 9) n++; }
+        else if (front && d2 <= 28 * 28 && nearestOwn.get(f) === st) coming++;
       }
       for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) minions++;
       for (const u of tp.allyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) mine++;
@@ -336,6 +411,15 @@ export class TeamBrain {
     }
     // the deepest structure first, then the bigger push (map order breaks ties: deterministic)
     threats.sort((a, b) => b.cls - a.cls || b.n - a.n);
+    // (owner_rulings 44: a post on a structure that is no longer threatened is handed on at once while a threatened one is
+    // short of defenders — its defendHold is for a quiet base, not for standing beside an untouched Lantern while the core falls)
+    let short = false;
+    for (const th of threats) {
+      let have = 0;
+      for (const g of this.guard.values()) if (g.sid === th.info.id) have++;
+      if (have < th.need) { short = true; break; }
+    }
+    if (short) for (const [p, g] of [...this.guard]) if (!threats.some((th) => th.info.id === g.sid)) this.guard.delete(p);
     for (const th of threats) {
       const { st, info, cls } = th;
       let have = 0;
@@ -792,9 +876,11 @@ export class TeamBrain {
           if (early && ttk <= 30 && aa >= ae) desire = Math.max(desire, 0.75);
           // (a won fight with a structure to take: a short camp is worth it only on the way — the structure first)
           if (!early && this.window && this.siege && !long && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
-          if (d.contests && aa >= ae) {
+          if (d.contests && aa >= ae && this.pitOdds(c) >= 0) {
             for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
           }
+          // (owner_rulings 44: two or more of theirs more at the pit than ours within 45 m — not a call; the cross-map trade is)
+          if (this.pitOdds(c) <= -2) desire = 0;
           // on it and it is not falling: give up for a while (the roads matter more than a door that will not open)
           let at = 0;
           for (const f of this.perc.allyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 14 * 14) at++;
@@ -819,14 +905,24 @@ export class TeamBrain {
         // (a beginner, objectiveEven 0, takes it only with a fighter more: three Splinters at even numbers kept novice in games)
         if (early && aa >= ae && d.objectiveEven > 0) desire = Math.max(desire, 0.75);
         // (contest: the enemy is at it and we are not short of bodies)
-        if (d.contests && aa >= ae) {
+        if (d.contests && aa >= ae && this.pitOdds(c) >= 0) {
           for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
         }
+        if (this.pitOdds(c) <= -2) desire = 0;
       } else desire = aa >= ae ? 0.4 : 0;
       // (macroDelay: the call goes out once it has held)
       if (!this.held(`obj${c.index}`, desire > 0, now)) desire = 0;
       if (desire > (this.objective?.desire ?? 0)) this.objective = { camp: c, desire, alive };
     }
+  }
+
+  /** owner_rulings 44: our fighters within 45 m of the pit (they can be at it within seconds) minus the enemy fighters seen at it
+   *  (16 m) — a contest is called only at even odds or better, and none at all two down */
+  private pitOdds(c: CampInfo): number {
+    let ours = 0, theirs = 0;
+    for (const f of this.perc.allyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 45 * 45) ours++;
+    for (const f of this.perc.enemyFighters) if (f.alive && (f.visibleMask & this.perc.bit) !== 0 && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) theirs++;
+    return ours - theirs;
   }
 
   /** the long objective is worth it at even numbers: time to kill within the tier's longshadeTtk, four fit fighters, and

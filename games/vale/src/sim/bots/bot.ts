@@ -507,6 +507,12 @@ export class Bot extends BotBase implements BotController {
     }
     if (this.towerAggro && !(this.mode === 'allin' && this.killTarget && this.killTarget.hp < this.killTarget.maxHp * 0.25 && hpF > 0.5)) retreat = Math.max(retreat, 0.86);
     if (kind === 'fray' && hpF < thr && this.recentDps > 0) retreat = Math.max(retreat, 0.75);
+    // (owner_rulings 44: FRAY — nearly out with a foe within 10 m and no kill of mine on, a skilled fighter breaks off whether or
+    // not the blows are landing this moment; the old read needed fresh damage, so a fighter at 15 % between swings stood in
+    // reach: 98 of 150 such moments at veteran ended with the foe still within 12 m 4 s later. Not under the Noon Toll, which
+    // is there to end the arena)
+    if (kind === 'fray' && this.diff.frayBreak > 0 && hpF < this.diff.frayBreak + (lastLife ? 0.1 : 0) && !tolled && this.nearestEnemyFighter(10) !== null &&
+      !(this.killTarget && this.killMargin >= 1.2)) retreat = Math.max(retreat, 0.9);
     // (lane AI G5: leave early when the visible enemies' burst would take most of my health before my side finishes one of
     // them — RIFT from the mid game: not in a road's laning phase, whose trades CL-1 tuned, never off a kill that is on, and
     // not in FRAY, where every seat turning from the hardest hitter handed it the placements, ulkro 2.7 against the 3.5 floor)
@@ -706,8 +712,11 @@ export class Bot extends BotBase implements BotController {
       // (a jungler ganks between its camps from JUNGLE_GANK_FROM: not with a camp up right here, and only a road in reach;
       // a laner holds its road through the laning phase — CW3 CL-1 measured laners' roams from a shoved road: the road
       // they left lost more Wicks than the roams won takedowns)
+      // (owner_rulings 44: sent to punish an invader in our half of the Dialwood — before the lane and the camps)
+      const inv = b.hunters.has(this.player) ? b.invader : null;
+      if (inv && inv.alive && hpF > 0.5 && this.isNoticed(inv)) consider('roam', 0.74);
       const g = this.roamGoal();
-      if (g && g.alive && hpF > 0.6 && !this.exposed && now >= this.roamBlockUntil) {
+      if (!inv && g && g.alive && hpF > 0.6 && !this.exposed && now >= this.roamBlockUntil) {
         // (a planned gank whose target slipped out of sight a moment ago is measured from the thicket I walk to, not its hidden spot)
         const d2 = this.isNoticed(g) ? this.dist2(e, g.x, g.y) : this.dist2(e, this.roamX, this.roamY);
         // (lane AI G3: a planned approach and a lurk take longer than a straight walk)
@@ -807,9 +816,23 @@ export class Bot extends BotBase implements BotController {
     }
     if (n === 0) { this.safeX = e.x; this.safeY = e.y; return; }
     const d = dhypot(ax, ay) || 1;
-    let tx = e.x + (ax / d) * 8, ty = e.y + (ay / d) * 8;
+    // (owner_rulings 44: a skilled FRAY fighter breaking off runs farther — 12 m, not 8 — and toward a heal on the ground when one
+    // lies away from the threat within 30 m: an 8 m step pulled a fifth of the way back to the middle kept it in its chaser's reach)
+    const brk = this.k.ffa && this.diff.frayBreak > 0 && this.mode === 'retreat';
+    const step = brk ? 12 : 8;
+    let tx = e.x + (ax / d) * step, ty = e.y + (ay / d) * step;
     // pull toward the map centre so a bot does not pin itself on the edge
-    tx = tx * 0.8 + this.k.mapCenterX * 0.2; ty = ty * 0.8 + this.k.mapCenterY * 0.2;
+    const pull = brk ? 0.1 : 0.2;
+    tx = tx * (1 - pull) + this.k.mapCenterX * pull; ty = ty * (1 - pull) + this.k.mapCenterY * pull;
+    if (brk) {
+      let bd = 30 * 30;
+      for (const pk of this.perc.pickups) {
+        if (!pk.alive) continue;
+        const px = pk.x - e.x, py = pk.y - e.y, d2 = px * px + py * py;
+        // (away from the threat: not more than a right angle off the escape line)
+        if (d2 < bd && px * ax + py * ay > 0) { bd = d2; tx = pk.x; ty = pk.y; }
+      }
+    }
     this.safeX = tx; this.safeY = ty;
   }
 
@@ -1140,7 +1163,9 @@ export class Bot extends BotBase implements BotController {
     const tank = this.prof.style === 'frontline' || this.prof.style === 'warden' || this.support;
     // (owner_rulings 42: a healthy frontline, or anyone fit beside a partner about to fall, follows the diver under its tower —
     // standing off at the tower's edge while the partner died there was no peel at all)
-    const dive = !this.lanePhase() && this.hpF > 0.6 && (tank || a.hp < a.maxHp * 0.4) && !this.towerAggro;
+    // (owner_rulings 44: by tier — veteran as ruling 42, adept only for a partner about to fall, a beginner never)
+    const pdv = this.diff.peelDive;
+    const dive = pdv !== 'none' && !this.lanePhase() && this.hpF > 0.6 && ((pdv === 'all' && tank) || a.hp < a.maxHp * 0.4) && !this.towerAggro;
     this.pFight = d; this.pAggro = 0.9; this.pFarm = 0; this.pDive = dive;
     this.pMove = true; this.pMoveX = d.x; this.pMoveY = d.y;
     const contact = dhypot(d.x - a.x, d.y - a.y) <= d.stats.range + d.radius + a.radius + 1.5;
@@ -1184,6 +1209,36 @@ export class Bot extends BotBase implements BotController {
     // (owner_rulings 42: a partner dived at the post is the post's fight — its diver first)
     const pd = this.protectDiver;
     if (pd && pd.alive && this.isNoticed(pd) && this.dist2(pd, g.x, g.y) <= 15 * 15) { t = pd; inside = true; }
+    // (owner_rulings 44: a quiet post beside a structure of ours that enemy fighters are hitting is that structure's defence —
+    // the post is the base, not one stone of it; the team brain hands the post on within its next think, this is the moment
+    // between)
+    if (!t) {
+      let hs: Entity | null = null, hd = 26 * 26;
+      for (const f of this.perc.enemyFighters) {
+        if (!this.isNoticed(f) || f.atkTarget < 0) continue;
+        const s = this.w.entity(f.atkTarget);
+        if (!s || s.kind !== 'structure' || s.team !== this.team || !s.alive) continue;
+        const d2 = this.dist2(s, e.x, e.y);
+        if (d2 < hd) { hd = d2; hs = s; }
+      }
+      if (hs) {
+        const info = this.m.structInfo(hs);
+        const reach = info && info.attacks ? Math.max(0, info.range + info.radius - 1) : 0;
+        g = { ...g, x: hs.x, y: hs.y, standX: hs.x, standY: hs.y, reach };
+        for (const f of this.perc.enemyFighters) {
+          if (!this.isNoticed(f) || this.dist2(f, g.x, g.y) > 15 * 15) continue;
+          nE++;
+          const inR = reach > 0 && this.dist2(f, g.x, g.y) <= sq(reach + f.radius);
+          const sc = f.hp + Math.sqrt(this.dist2(f, e.x, e.y)) * 40 - (inR ? 5000 : 0);
+          if (sc < bs) { bs = sc; t = f; inside = inR; }
+        }
+        // (the structure's own side, inside its reach, until the attacker is under it)
+        if (this.brain) {
+          const base = this.k.bases.find((x) => x.team === this.team);
+          if (base) { const dx = base.fx - hs.x, dy = base.fy - hs.y, dd = dhypot(dx, dy) || 1, off = reach > 0 ? Math.min(reach * 0.5, 3.5) : hs.radius + 1.5; g.standX = hs.x + (dx / dd) * off; g.standY = hs.y + (dy / dd) * off; }
+        }
+      }
+    }
     const nA = this.alliesNear(g.x, g.y, 15);
     // (fight the diver under the tower, never in front of it — unless we have the bodies there, or the post does not shoot)
     if (t && (g.reach === 0 || inside || nA > nE || this.adv >= 0.58)) {
@@ -1239,6 +1294,8 @@ export class Bot extends BotBase implements BotController {
   private planRoam(t: Entity): void {
     const b = this.brain, e = this.e;
     this.roamTarget = t.id; this.roamLostAt = -1; this.roamPhase = 'strike';
+    // (owner_rulings 44: an invader in our own Dialwood is run down at once — it is in our ground, out of its towers' cover)
+    if (b && b.invader === t) return;
     // (the laning phase's ganks are on a clock — the road's fight is on now: they walk straight in, as CW3 CL-1 tuned them; a
     // planned approach through a thicket cost a quarter of the laning takedowns and half the grovehunter's)
     if (this.diff.lurkMax <= 0 || !b || this.k.kind !== 'rift' || b.gankLane < 0 || this.now < LANE_PHASE_END) return;
@@ -1326,7 +1383,12 @@ export class Bot extends BotBase implements BotController {
       }
     } else if (grouped && b) { mx = b.groupX; my = b.groupY; }
     // group with the team: do not run ahead alone
-    if (grouped && b && !this.pSiege && this.alliesNear(e.x, e.y, 10) < 2 && this.dist2(e, b.groupX, b.groupY) < 20 * 20) { mx = b.groupX; my = b.groupY; }
+    // (owner_rulings 44: judged at the destination, not where I stand — "allies beside me" sent a fighter that reached the group
+    // back to its wave point, and alone there back to the group: a full-health veteran paced 10 m back and forth for 12 s)
+    if (grouped && b && !this.pSiege && this.dist2(e, b.groupX, b.groupY) < 20 * 20) {
+      const meThere = this.dist2(e, mx, my) <= 10 * 10 ? 1 : 0;
+      if (this.alliesNear(mx, my, 10) - meThere < 1) { mx = b.groupX; my = b.groupY; }
+    }
     this.pMoveX = mx; this.pMoveY = my;
     const f = this.pickFightTarget(9);
     if (f && this.adv >= 0.45 && this.hpF > 0.4 && this.towerSafe(f.x, f.y, 0)) { this.pFight = f; this.pAggro = 0.7; }
@@ -1378,6 +1440,8 @@ export class Bot extends BotBase implements BotController {
    *  outer one after the laning phase (in it the stacked wave at an outer Needle is the road's laning), and from 25:00 only the
    *  base (a late game's inner Needles fall to waves as death timers decide it; holding them too drew it out past the pace bar) */
   private holdsWave(cls: number): boolean {
+    // (owner_rulings 44: a beginner backs off a stacked wave — the hold is a skilled tier's)
+    if (!this.diff.holdWave) return false;
     if (this.now >= 1500) return cls >= 2;
     return cls >= 1 || this.now >= LANE_PHASE_END;
   }
@@ -1459,8 +1523,23 @@ export class Bot extends BotBase implements BotController {
     this.pAggro = 0.7;
     const allies = this.alliesNear(c.x, c.y, 13);
     const up = this.campUp(c.x, c.y);
+    // (owner_rulings 44: outnumbered at the pit — two or more enemy fighters more than us within 18 m — the monster is left to
+    // them unless my burst finishes it now (a steal is the genre's play); the fighters there are the fight)
+    const foes = this.enemiesNear(c.x, c.y, 18), mates = this.alliesNear(c.x, c.y, 18);
+    let steal = false;
+    if (up && foes >= mates + 2) {
+      let mon: Entity | null = null;
+      for (const m of this.perc.monsters) if (m.alive && Math.abs(m.x - c.x) < 8 && Math.abs(m.y - c.y) < 8 && (!mon || m.hp + m.shield > mon.hp + mon.shield)) mon = m;
+      steal = !!mon && mon.hp + mon.shield <= this.burstOn(mon) * 0.9 && this.dist2(mon, e.x, e.y) <= 10 * 10;
+    }
     // start (and keep at) it only when the fighters there can take it: never a lone attempt
-    if (up && allies >= 2 && this.campOdds(c.x, c.y)) {
+    if (up && steal) { this.pMonsters = true; this.pMonsterX = c.x; this.pMonsterY = c.y; }
+    else if (up && foes >= mates + 2) {
+      // (wait out of their reach on our side; the team brain drops the call)
+      const base = this.k.bases.find((x) => x.team === this.team);
+      if (base) { const dx = base.fx - c.x, dy = base.fy - c.y, d = dhypot(dx, dy) || 1; this.pMoveX = c.x + (dx / d) * 16; this.pMoveY = c.y + (dy / d) * 16; }
+    }
+    else if (up && allies >= 2 && this.campOdds(c.x, c.y)) {
       this.pMonsters = true; this.pMonsterX = c.x; this.pMonsterY = c.y;
     } else {
       // wait outside its reach for the team
@@ -1471,12 +1550,12 @@ export class Bot extends BotBase implements BotController {
       }
     }
     const f = this.pickFightTarget(10);
-    if (f && this.dist2(f, c.x, c.y) < 14 * 14) { this.pFight = f; this.pMonsters = false; }
+    if (steal) { /* the last blow on the monster first */ }
+    else if (f && this.dist2(f, c.x, c.y) < 14 * 14 && (foes < mates + 2 || this.adv >= 0.5)) { this.pFight = f; this.pMonsters = false; }
     // (lane AI G7: an enemy lamp watching the pit is cleared first while nobody of theirs is near)
     else if (this.diff.visionSetup && this.nearestEnemyFighter(12) === null) {
       for (const wd of this.perc.enemyWards) if (wd.alive && wd.targetable && this.dist2(wd, c.x, c.y) <= 20 * 20) { this.pSiege = wd; this.pMonsters = false; this.pMoveX = wd.x; this.pMoveY = wd.y; break; }
     }
-    void e;
   }
 
   private execFarm(): void {
@@ -1517,7 +1596,9 @@ export class Bot extends BotBase implements BotController {
   /** the team's gank target — or, while I walk to or wait in a planned thicket, my own target through up to 3 s out of
    *  sight (the team read needs it in view, and a lurk loses sight of its target as it should) */
   private roamGoal(): Entity | null {
-    const g = this.brain?.gank ?? null;
+    const b = this.brain;
+    if (b && b.invader && b.hunters.has(this.player)) return b.invader;
+    const g = b?.gank ?? null;
     if (this.mode !== 'roam' || this.roamPhase === 'strike' || this.roamTarget < 0 || (g && g.id === this.roamTarget)) return g;
     const own = this.w.entity(this.roamTarget);
     if (!own || !own.alive || own.kind !== 'fighter') return g;
