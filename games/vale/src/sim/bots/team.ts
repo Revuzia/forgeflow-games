@@ -188,6 +188,11 @@ export class TeamBrain {
   invader: Entity | null = null;
   readonly hunters = new Set<PlayerId>();
   private invaderUntil = -1e9;
+  /** owner_rulings 44: the core's own guards (the structures the core requires), own structures' health at the last think
+   *  and when each was last hurt */
+  private readonly coreGuards = new Set<string>();
+  private readonly structHp = new Map<number, number>();
+  private readonly structHitAt = new Map<number, number>();
 
 
   /** shared with the match: map structure id → when it fell */
@@ -215,6 +220,7 @@ export class TeamBrain {
       return d;
     };
     for (const st of k.structs) this.classes.set(st.id, st.isCore || st.lane < 0 ? 2 : Math.min(2, depth(st.id, 0)) as StructClass);
+    for (const st of k.structs) if (st.isCore && st.team === team) for (const r of st.requires) this.coreGuards.add(r);
     // gank entries and ambush spots
     const th = k.map.thickets;
     for (let i = 0; i < th.length; i++) {
@@ -313,7 +319,8 @@ export class TeamBrain {
       for (const g of tp.enemyFighters) if (g !== f && g.alive && sq(g.x - f.x) + sq(g.y - f.y) <= 14 * 14) { alone = false; break; }
       let covered = false;
       for (const st of tp.enemyStructs) if (st.alive && st.attackDef && sq(st.x - f.x) + sq(st.y - f.y) <= sq(st.stats.range + st.radius + 4)) { covered = true; break; }
-      const ok = mine && offRoad && alone && !covered;
+      // (owner_rulings 44, collapseRoads: from 14:00 a lone enemy on a road in our half, out of its towers' cover, too)
+      const ok = mine && (offRoad || (d.collapseRoads && now >= 840)) && alone && !covered;
       if (!this.held(`inv${f.id}`, ok, now, prev === f ? 0 : d.punishDelay)) continue;
       const sc = (prev === f ? 1 : 0) - f.hp / Math.max(1, f.maxHp);
       if (sc > bs) { bs = sc; best = f; }
@@ -370,32 +377,47 @@ export class TeamBrain {
     const closing = now >= 1500;
     const base = k.bases.find((b) => b.team === this.team);
     const rt = k.rules.recall ? recallTime(w) : Infinity;
-    const threats: { st: Entity; info: StructInfo; cls: StructClass; need: number; n: number }[] = [];
-    // (owner_rulings 44: each enemy fighter threatens the one own structure nearest it — a push on the Bell Needles is theirs,
-    // not a "coming" threat on the untouched Lantern beside them, which held a full-health veteran posted 3 m from it, idle,
-    // while all five enemies took both Bell Needles and the Hourbell 14-21 m away)
+    // (owner_rulings 44: own structures' health is the owner's to know — a drop since the last think is a hit, seen or not)
+    const hurt = new Set<Entity>();
+    for (const st of tp.allyStructs) {
+      if (!st.alive) continue;
+      const prev = this.structHp.get(st.id);
+      if (prev !== undefined && st.hp < prev - 1) { hurt.add(st); this.structHitAt.set(st.id, now); }
+      else if (now - (this.structHitAt.get(st.id) ?? -1e9) <= 2) hurt.add(st);
+      this.structHp.set(st.id, st.hp);
+    }
+    const threats: { st: Entity; info: StructInfo; cls: StructClass; value: number; need: number; n: number }[] = [];
+    // (owner_rulings 44: each enemy fighter threatens the one own structure it is hitting, else the nearest one it can hurt — a
+    // push on the Bell Needles is theirs, not a "coming" threat on the untouched Lantern beside them, which held a full-health
+    // veteran posted 3 m from it, idle, while all five enemies took both Bell Needles and the Hourbell 14-21 m away)
     const nearestOwn = new Map<Entity, Entity>();
     for (const f of tp.enemyFighters) {
       if (!f.alive) continue;
       let bs: Entity | null = null, bd = Infinity;
-      for (const st of tp.allyStructs) { if (!st.alive) continue; const d2 = sq(f.x - st.x) + sq(f.y - st.y); if (d2 < bd) { bd = d2; bs = st; } }
+      const at = f.atkTarget >= 0 ? w.entity(f.atkTarget) : undefined;
+      if (at && at.kind === 'structure' && at.team === this.team && at.alive) bs = at;
+      else for (const st of tp.allyStructs) { if (!st.alive || !st.targetable) continue; const d2 = sq(f.x - st.x) + sq(f.y - st.y); if (d2 < bd) { bd = d2; bs = st; } }
       if (bs) nearestOwn.set(f, bs);
     }
     for (const st of tp.allyStructs) {
-      if (!st.alive) continue;
+      // (a structure its guards still shield cannot be hurt: no threat — the Bell Needles behind a standing Lantern)
+      if (!st.alive || !st.targetable) continue;
       const info = this.structInfoOf(st);
       if (!info) continue;
       const cls = this.classOf(info);
+      const value = this.valueOf(info);
       const reach = Math.max(9, info.range + info.radius + 6);
-      let n = 0, minions = 0, mine = 0, coming = 0;
+      let n = 0, minions = 0, mine = 0, coming = 0, hitting = 0;
       // (an inner or base structure that is the front of its road — everything in front of it has fallen — is defended
       // before the push reaches it: enemy fighters within 28 m count, as a player holds the next tower)
       const front = cls > 0 && !laning && info.requires.every((r) => !this.ownStanding(r));
       for (const f of tp.enemyFighters) {
         if (!f.alive) continue;
         const d2 = sq(f.x - st.x) + sq(f.y - st.y);
-        if (d2 <= reach * reach) { if (nearestOwn.get(f) === st || d2 <= 9 * 9) n++; }
-        else if (front && d2 <= 28 * 28 && nearestOwn.get(f) === st) coming++;
+        const mineF = nearestOwn.get(f) === st;
+        if (f.atkTarget === st.id) hitting++;
+        if (d2 <= reach * reach) { if (mineF || d2 <= 9 * 9) n++; }
+        else if (front && d2 <= 28 * 28 && mineF) coming++;
       }
       for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) minions++;
       for (const u of tp.allyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) mine++;
@@ -405,21 +427,20 @@ export class TeamBrain {
         if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing ? 1 : 0)) * d.defendMatch - 1e-9));
       } else if (coming > 0) need = Math.max(1, Math.ceil(coming * d.defendMatch - 1e-9));
       else if (cls > 0 && minions - mine >= 4) need = 1;
-      const delay = cls === 0 ? d.macroDelay : Math.min(d.macroDelay, 5);
+      // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
+      // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
+      const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));
+      if (coreHit && d.coreAll) need = Math.max(need, 5);
+      const delay = cls === 0 ? d.macroDelay : coreHit ? Math.min(d.macroDelay, 1) : Math.min(d.macroDelay, 5);
       if (!this.held(`g:${info.id}`, need > 0, now, delay)) need = 0;
-      if (need > 0) threats.push({ st, info, cls, need, n: n + coming });
+      if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming });
     }
-    // the deepest structure first, then the bigger push (map order breaks ties: deterministic)
-    threats.sort((a, b) => b.cls - a.cls || b.n - a.n);
-    // (owner_rulings 44: a post on a structure that is no longer threatened is handed on at once while a threatened one is
-    // short of defenders — its defendHold is for a quiet base, not for standing beside an untouched Lantern while the core falls)
-    let short = false;
-    for (const th of threats) {
-      let have = 0;
-      for (const g of this.guard.values()) if (g.sid === th.info.id) have++;
-      if (have < th.need) { short = true; break; }
-    }
-    if (short) for (const [p, g] of [...this.guard]) if (!threats.some((th) => th.info.id === g.sid)) this.guard.delete(p);
+    // (owner_rulings 44: the most valuable structure first — the Hourbell, then its Bell Needles, the Lanterns, the inner and the
+    // outer Needles — then the bigger push; map order breaks ties: deterministic)
+    threats.sort((a, b) => b.value - a.value || b.n - a.n);
+    const valueOfPost = new Map<string, number>();
+    for (const th of threats) if (!valueOfPost.has(th.info.id)) valueOfPost.set(th.info.id, th.value);
+    // (a post on a structure that is no longer threatened is worth nothing while another is: handed on below)
     for (const th of threats) {
       const { st, info, cls } = th;
       let have = 0;
@@ -437,7 +458,12 @@ export class TeamBrain {
       while (have < th.need) {
         let best: PlayerId = -1, bt = Infinity, bRecall = false;
         for (const p of w.players) {
-          if (!p || p.team !== this.team || this.guard.has(p.player) || (this.guardDeclined.get(p.player) ?? -1) > now) continue;
+          if (!p || p.team !== this.team) continue;
+          const cur = this.guard.get(p.player);
+          // (owner_rulings 44: a post is dropped the moment a more valuable structure in reach is threatened — a defender
+          // posted to a lesser threat, or to a quiet structure, is taken for this one)
+          if (cur && (cur.sid === info.id || (valueOfPost.get(cur.sid) ?? 0) >= th.value)) continue;
+          if (!cur && (this.guardDeclined.get(p.player) ?? -1) > now && th.value < 4) continue;
           const e = p.ent;
           if (!e || !e.alive || e.hp < e.maxHp * 0.35) continue;
           // (the laning phase's grovehunter keeps its clear and its ganks at the outer Needles: an inner or base call
@@ -451,7 +477,8 @@ export class TeamBrain {
             const r = rt + dhypot(base.fx - st.x, base.fy - st.y) * 1.15 / ms;
             if (r + 8 <= walk) { eta = r; rec = true; }
           }
-          if (eta > cap || eta >= bt) continue;
+          // (a defender already posted is taken only when it is close: the lesser post keeps one farther off)
+          if (eta > (cur ? Math.min(cap, 20) : cap) || eta >= bt) continue;
           bt = eta; best = p.player; bRecall = rec;
         }
         if (best < 0) break;
@@ -459,6 +486,23 @@ export class TeamBrain {
         have++;
       }
     }
+    // (a post at a structure nobody threatens any more is ended while another structure is short of defenders)
+    let short = false;
+    for (const th of threats) {
+      let have = 0;
+      for (const g of this.guard.values()) if (g.sid === th.info.id) have++;
+      if (have < th.need) { short = true; break; }
+    }
+    if (short) for (const [p, g] of [...this.guard]) if (!valueOfPost.has(g.sid)) this.guard.delete(p);
+  }
+
+  /** owner_rulings 44: what a structure is worth defending — the Hourbell 5, its Bell Needles 4, a Lantern or other base
+   *  structure 3, an inner Needle 2, an outer one 1 */
+  valueOf(info: StructInfo): number {
+    if (info.isCore) return 5;
+    if (this.coreGuards.has(info.id)) return 4;
+    const c = this.classOf(info);
+    return c === 2 ? 3 : c === 1 ? 2 : 1;
   }
 
   /**
@@ -729,12 +773,17 @@ export class TeamBrain {
     let cx = 0, cy = 0, cn = 0;
     for (const f of tp.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }
     if (cn > 0) { cx /= cn; cy /= cn; } else { cx = this.groupX; cy = this.groupY; }
+    // (owner_rulings 44, closeOut: ahead — a fighter up, or 1,500 Gleam with nobody of ours down more than theirs — with the
+    // enemy core open, the team goes for the core's guards and the core, not the next outer Needle: the late game's long
+    // stalls were won teams walking back to the roads with the Bell Needles open)
+    const closeOut = d.closeOut && k.kind === 'rift' && this.phase !== 'early' && this.aliveAllies >= 3 && (aliveDiff >= 1 || (lead >= 1500 && aliveDiff >= 0));
     for (const e of tp.enemyStructs) {
       if (!e.alive || !e.targetable) continue;
       const info = this.structInfoOf(e);
       if (!info) continue;
       let score: number;
       if (info.isCore) score = 1000;
+      else if (closeOut && info.lane < 0 && !info.respawns) score = 900 - dhypot(e.x - cx, e.y - cy) * 0.5;
       else if (this.respawning(info)) score = towersLeft === 0 ? 500 - dhypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 : -1;
       else {
         // the least-pushed lane first: towers nearer our side score higher
@@ -784,7 +833,7 @@ export class TeamBrain {
       let ready = 0;
       for (const f of tp.allyFighters) if (f.alive && f.hp > f.maxHp * 0.5 && sq(f.x - this.groupX) + sq(f.y - this.groupY) < 18 * 18) ready++;
       const need = Math.min(4, Math.max(1, this.aliveAllies));
-      if (clock || ready >= need || this.aliveEnemies <= 2) this.rush = aliveDiff >= -1 || this.aliveEnemies <= 2;
+      if (clock || ready >= need || this.aliveEnemies <= 2 || (closeOut && ready >= Math.min(3, need))) this.rush = aliveDiff >= -1 || this.aliveEnemies <= 2;
       else this.stage = true;
     }
     // (lane AI G7: a cross-map trade — the enemy is on an objective we cannot contest: press the structure farthest from

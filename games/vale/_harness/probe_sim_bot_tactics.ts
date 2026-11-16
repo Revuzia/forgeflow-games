@@ -197,6 +197,18 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
   const lowEp = new Map<number, { t: number }>();
   const lowCd = new Map<number, number>();
   const castAt = new Map<number, number>();
+  // (owner_rulings 44, round 2) the designated peeler: a dive (enemy fighters took 20 % of a fighter's health in 2 s) is
+  // answered by the support of its team within 8 m, else the nearest teammate within 12 m above 35 % health (not recalling)
+  // — damage on a diver, a hold on a diver it cast, or a heal or shield on the partner; the latency is kept
+  const respEp = new Map<number, { start: number; resp: number; divers: Set<number>; lat: number; lane: boolean }>();
+  const respCd = new Map<number, number>();
+  // (owner_rulings 44, round 2) the collapse: a lone enemy fighter seen in a team's half (in its Dialwood, or on a road),
+  // outside its towers' cover, with two or more of the team free — 2+ of the team within 12 m of it (or it dead) within 15 s
+  const colEp = new Map<number, { team: number; start: number; seen: number; last: number; jungle: boolean; free: number; done: boolean }>();
+  const colCd = new Map<number, number>();
+  // (owner_rulings 44, round 2) RIFT low health with a foe within 10 m (FRAY's read, on the roads)
+  const rLowEp = new Map<number, { t: number; m: string }>();
+  const rLowCd = new Map<number, number>();
   const lim = cut > 0 ? cut : 3600;
   let guard = 0;
   while (sim.view.phase !== 'ended' && guard++ < 30 * 3700) {
@@ -237,6 +249,27 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
             for (const [, pe] of partnerEp) { if (pe.partner === src.id && pe.divers.has(dst.id)) pe.resp = true; }
             const pe0 = partnerEp.get(dst.id); if (pe0) pe0.divers.add(src.id);
             const ie = invEp.get(dst.id); if (ie && ie.hitAt < 0 && src.team !== dst.team) ie.hitAt = now;
+            // designated peeler: its blow on a diver answers; a new dive opens an episode
+            for (const [, re] of respEp) if (re.lat < 0 && re.resp === src.id && re.divers.has(dst.id)) re.lat = now - re.start;
+            const re0 = respEp.get(dst.id);
+            if (re0) re0.divers.add(src.id);
+            else if (!isFray && now >= (respCd.get(dst.id) ?? 0)) {
+              let burst2 = 0; const dv = new Set<number>();
+              for (const x of l) if (now - x.t <= 2) { burst2 += x.a; dv.add(x.src); }
+              if (burst2 >= dst.maxHp * 0.2) {
+                let best: Entity | null = null, bd = Infinity, sup: Entity | null = null;
+                for (const q of w.players) {
+                  const a = q.ent; if (!a || a === dst || !a.alive || a.team !== dst.team || a.hp < a.maxHp * 0.35 || a.stateOverride === 'recall') continue;
+                  const d2 = (a.x - dst.x) ** 2 + (a.y - dst.y) ** 2;
+                  if (d2 > 144) continue;
+                  if (d2 <= 64 && ctl(q.player)?.support) sup = a;
+                  if (d2 < bd) { bd = d2; best = a; }
+                }
+                const r = sup ?? best;
+                if (r) respEp.set(dst.id, { start: now, resp: r.id, divers: dv, lat: -1, lane: now < 840 });
+                else { add(C, 'resp.noneNear'); respCd.set(dst.id, now + 4); }
+              }
+            }
           }
           break;
         }
@@ -246,6 +279,7 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
           if (CC.has(ev.status)) for (const [, pe] of peel) if (pe.divers.has(dst.id)) pe.resp.add('ccDiver');
           // (a status event carries no source: a CC on a diver the partner cast at within the last second is the partner's)
           if (CC.has(ev.status)) for (const [, pe] of partnerEp) if (pe.divers.has(dst.id) && now - (castAt.get(pe.partner) ?? -1e9) <= 1) pe.resp = true;
+          if (CC.has(ev.status)) for (const [, re] of respEp) if (re.lat < 0 && re.divers.has(dst.id) && now - (castAt.get(re.resp) ?? -1e9) <= 1) re.lat = now - re.start;
           break;
         }
         case 'heal': {
@@ -253,11 +287,12 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
           if (dst && src && dst.kind === 'fighter' && src.id !== dst.id) {
             const pe = peel.get(dst.id); if (pe && pe.helpers.has(src.id)) pe.resp.add('healShield');
             const pp = partnerEp.get(dst.id); if (pp && pp.partner === src.id) pp.resp = true;
+            const rr = respEp.get(dst.id); if (rr && rr.lat < 0 && rr.resp === src.id) rr.lat = now - rr.start;
             add(C, 'allyHeal.amt', ev.amount);
           }
           break;
         }
-        case 'shield': { const pe = peel.get(ev.dst); if (pe) pe.resp.add('shieldAny'); const pp = partnerEp.get(ev.dst); if (pp && now - (castAt.get(pp.partner) ?? -1e9) <= 0.6) pp.resp = true; break; }
+        case 'shield': { const pe = peel.get(ev.dst); if (pe) pe.resp.add('shieldAny'); const pp = partnerEp.get(ev.dst); if (pp && now - (castAt.get(pp.partner) ?? -1e9) <= 0.6) pp.resp = true; const rr = respEp.get(ev.dst); if (rr && rr.lat < 0 && now - (castAt.get(rr.resp) ?? -1e9) <= 0.6) rr.lat = now - rr.start; break; }
         case 'cast': {
           const src = w.entity(ev.src); if (!src || src.kind !== 'fighter') break;
           const p = ent2p(src.id);
@@ -376,7 +411,10 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
             let foes = 0, fit = 0;
             for (const pl of w.players) { const f = pl.ent; if (!f || !f.alive) continue; const d2 = (f.x - st.x) ** 2 + (f.y - st.y) ** 2;
               if (f.team !== st.team && d2 <= 15 * 15) foes++; else if (f.team === st.team && d2 <= 16 * 16 && f.hp > f.maxHp * 0.6) fit++; }
-            if (foes === 0 && fit >= 2) add(C, `fall.${c}.wicksOverFit`);
+            if (foes === 0 && fit >= 2) {
+              add(C, `fall.${c}.wicksOverFit`);
+              for (const pl of w.players) { const f = pl.ent; if (f && f.alive && f.team === st.team && (f.x - st.x) ** 2 + (f.y - st.y) ** 2 <= 16 * 16 && f.hp > f.maxHp * 0.6) add(H('fall.wicksOverFit.mode'), modeOf(pl.player)); }
+            }
           }
           break;
         }
@@ -614,6 +652,79 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
         if (walked >= 15 && net <= 5 && rev >= 2 && f.stateOverride !== 'recall') { add(C, 'dither.episodes'); add(H('dither.mode'), modeOf(p)); ditherCd[p] = now + 12; }
       }
     }
+    // ── owner_rulings 44, round 2 ──
+    if (!isFray) {
+      // (f) the designated peeler's episodes close 4 s after the dive
+      for (const [vid, re] of [...respEp]) {
+        if (now - re.start < 4) continue;
+        add(C, re.lane ? 'resp.lane.episodes' : 'resp.episodes');
+        if (re.lat >= 0) R(re.lane ? 'resp.lane.lat' : 'resp.lat', re.lat);
+        else { add(C, re.lane ? 'resp.lane.none' : 'resp.none'); const rp = ent2p(re.resp); if (rp >= 0) add(H('resp.noneMode'), modeOf(rp)); }
+        respEp.delete(vid); respCd.set(vid, now + 4);
+      }
+      // (g) collapse on a lone enemy in a team's half
+      for (let team = 0; team < teams; team++) for (const pl of players) {
+        const f = pl.ent; if (!f || f.team === team) continue;
+        const key = f.id * 8 + team;
+        let ok = f.alive && visTo(f, team) && ownHalf(team, f.x, f.y) && now >= 180;
+        if (ok) for (const q of players) { const g = q.ent; if (g && g !== f && g.alive && g.team === f.team && (g.x - f.x) ** 2 + (g.y - f.y) ** 2 <= 14 * 14) { ok = false; break; } }
+        if (ok) for (const s of sList()) { const st = s.ent; if (st.alive && st.team === f.team && st.attackDef && (st.x - f.x) ** 2 + (st.y - f.y) ** 2 <= (st.stats.range + st.radius + 4) ** 2) { ok = false; break; } }
+        let ce = colEp.get(key);
+        if (ce && !ce.done) {
+          // resolved: two of the team within 12 m of it, or it died
+          let at = 0; for (const q of players) { const g = q.ent; if (g && g.alive && g.team === team && (g.x - f.x) ** 2 + (g.y - f.y) ** 2 <= 12 * 12) at++; }
+          if (!f.alive || at >= 2) { ce.done = true; add(C, ce.jungle ? 'col.j.episodes' : now < 840 ? 'col.l.episodes' : 'col.r.episodes'); add(C, ce.jungle ? 'col.j.ok' : now < 840 ? 'col.l.ok' : 'col.r.ok'); R(ce.jungle ? 'col.j.lat' : 'col.r.lat', now - ce.start); colCd.set(key, now + 20); continue; }
+          if (ok) { ce.seen += dt; ce.last = now; }
+          if (now - ce.start > 15 || now - ce.last > 3) {
+            ce.done = true;
+            // (counted only when it stayed in our ground in sight for 6 s: a target that left at once was not there to punish)
+            if (ce.seen >= 6) { add(C, ce.jungle ? 'col.j.episodes' : now < 840 ? 'col.l.episodes' : 'col.r.episodes'); }
+            colCd.set(key, now + 20);
+          }
+          continue;
+        }
+        if (!ok || now < (colCd.get(key) ?? 0)) { if (ce && ce.done) colEp.delete(key); continue; }
+        // free fighters: alive, above 60 %, not recalling, within 50 m of it, no other visible enemy fighter within 15 m of them
+        let free = 0;
+        for (const q of players) {
+          const g = q.ent; if (!g || !g.alive || g.team !== team || g.hp < g.maxHp * 0.6 || g.stateOverride === 'recall') continue;
+          if ((g.x - f.x) ** 2 + (g.y - f.y) ** 2 > 50 * 50) continue;
+          let busy = false; for (const o of players) { const h = o.ent; if (h && h !== f && h.alive && h.team !== team && visTo(h, team) && (h.x - g.x) ** 2 + (h.y - g.y) ** 2 <= 15 * 15) { busy = true; break; } }
+          if (!busy) free++;
+        }
+        if (free < 2) continue;
+        colEp.set(key, { team, start: now, seen: 0, last: now, jungle: offRoad(f.x, f.y, 9), free, done: false });
+      }
+      // (h) RIFT: under 25 % with an enemy fighter within 10 m — 4 s later still within 12 m of one and alive
+      for (const pl of players) {
+        const f = pl.ent; if (!f) continue;
+        const nearest = (): number => { let bd = Infinity; for (const q of players) { const g = q.ent; if (g && g.alive && g.team !== f.team) bd = Math.min(bd, Math.hypot(g.x - f.x, g.y - f.y)); } return bd; };
+        const le = rLowEp.get(pl.player);
+        if (le) {
+          if (!f.alive) { add(C, 'rift.low.died'); rLowEp.delete(pl.player); rLowCd.set(pl.player, now + 8); }
+          else if (now - le.t >= 4) { const st = nearest() <= 12; add(C, st ? 'rift.low.stayed' : 'rift.low.clear'); if (st) add(H('rift.low.stayMode'), le.m); rLowEp.delete(pl.player); rLowCd.set(pl.player, now + 8); }
+          continue;
+        }
+        if (!f.alive || f.hp >= f.maxHp * 0.25 || now < (rLowCd.get(pl.player) ?? 0) || nearest() > 10) continue;
+        add(C, 'rift.low.episodes'); rLowEp.set(pl.player, { t: now, m: modeOf(pl.player) });
+      }
+      // (i) a fit fighter away from its base while enemy fighters hit a base structure: 25-80 m off, not closing in, no enemy
+      // fighter within 12 m of it, not recalling (the whole team turns for the core)
+      const awayDone = new Set<number>();
+      for (const s of sList()) {
+        const st = s.ent; if (!st.alive || cls(s.def.id) !== 'base' || now - (sFDmgAt.get(st.id) ?? -1e9) > 1.5) continue;
+        for (const pl of players) {
+          const f = pl.ent; if (!f || !f.alive || f.team !== st.team || f.hp < f.maxHp * 0.6 || f.stateOverride === 'recall' || awayDone.has(f.id)) continue;
+          const d = Math.hypot(f.x - st.x, f.y - st.y); if (d <= 25 || d > 80) continue;
+          const ph = posHist.get(f.id); if (!ph || ph.length < 4) continue;
+          const [ox, oy] = ph[ph.length - 4];
+          if (Math.hypot(ox - st.x, oy - st.y) - d >= 1.5) continue;
+          let near = false; for (const q of players) { const g = q.ent; if (g && g.alive && g.team !== f.team && (g.x - f.x) ** 2 + (g.y - f.y) ** 2 <= 12 * 12) { near = true; break; } }
+          if (near) continue;
+          awayDone.add(f.id); add(C, 'base.fitAway', dt); add(H('base.fitAwayMode'), modeOf(pl.player), dt);
+        }
+      }
+    }
     // (e) FRAY: under 25 % with an enemy fighter within 10 m — 4 s later still within 12 m of one ("stayed"), clear, or dead
     if (isFray) for (const pl of players) {
       const f = pl.ent; if (!f) continue;
@@ -745,7 +856,10 @@ function gates(runs: TierRun[]): string[] {
     left: { novice: 0.20, adept: 0.16, veteran: 0.165 }, wicksOver: { novice: 2, adept: 1.6, veteran: 1.1 }, roamVis: { novice: 0.25, adept: 0.15, veteran: 0.15 },
     // (owner_rulings 44)
     idle: { novice: 60, adept: 20, veteran: 10 }, punish: { novice: 0, adept: 0.3, veteran: 0.5 }, partner: { novice: 0.3, adept: 0.6, veteran: 0.75 },
-    dither: { novice: 3, adept: 1.5, veteran: 1 }, frayStay: { novice: 1, adept: 0.6, veteran: 0.5 } } as const;
+    dither: { novice: 3, adept: 1.5, veteran: 1 }, frayStay: { novice: 1, adept: 0.6, veteran: 0.5 },
+    // (owner_rulings 44, round 2)
+    respLat: { novice: 2.5, adept: 2.5, veteran: 1.5 }, resp: { novice: 0, adept: 0.8, veteran: 0.8 }, collapse: { novice: 0, adept: 0, veteran: 0.6 },
+    riftStay: { novice: 1, adept: 1, veteran: 1 }, away: { novice: 1e9, adept: 1e9, veteran: 1e9 }, objOut: { novice: 1, adept: 0.05, veteran: 0.05 } } as const;
   const undefShare: Record<string, number> = {}, noRespShare: Record<string, number> = {};
   for (const diff of ['novice', 'adept', 'veteran'] as const) {
     const b = by[diff];
@@ -804,6 +918,28 @@ function gates(runs: TierRun[]): string[] {
       const dith = sum(R, 'dither.episodes') / R.length;
       line(dith <= T.dither[diff], `${diff} dithering: full health, no enemy within 30 m, 15 m walked for under 5 m gained in 12 s (per game)`, dith.toFixed(2), `≤ ${T.dither[diff]}`);
       rpt(`${diff} objectives taken with one of ours against three of theirs within 22 m`, String(sum(R, 'obj.outnumbered')));
+      // ── owner_rulings 44, round 2 ──
+      const lats = R.flatMap((g) => g.resp['resp.lat'] ?? []), rEp = sum(R, 'resp.episodes');
+      const lim = T.respLat[diff], inT = lats.filter((x) => x <= lim).length, rs = share(inT, rEp);
+      const rSe = Math.sqrt(rs * (1 - rs) / Math.max(1, rEp));
+      if (diff !== 'novice' && rEp >= 30) line(rs >= T.resp[diff], `${diff} peel: the designated peeler (support within 8 m, else the nearest teammate within 12 m) answers a dive within ${lim} s (from 14:00)`, `${pct(rs)} ± ${pct(rSe)} of ${rEp}`, `≥ ${pct(T.resp[diff])}`);
+      else rpt(`${diff} designated peeler answers within ${lim} s (from 14:00)`, `${pct(rs)} ± ${pct(rSe)} of ${rEp}`);
+      { const ll = R.flatMap((g) => g.resp['resp.lane.lat'] ?? []), le2 = sum(R, 'resp.lane.episodes'); rpt(`${diff} designated peeler answers within ${lim} s (laning phase)`, `${pct(share(ll.filter((x) => x <= lim).length, le2))} of ${le2}`); }
+      const cj = sum(R, 'col.j.episodes'), cr = sum(R, 'col.r.episodes'), cok = sum(R, 'col.j.ok') + sum(R, 'col.r.ok'), cs = share(cok, cj + cr);
+      const cSe = Math.sqrt(cs * (1 - cs) / Math.max(1, cj + cr));
+      if (diff === 'veteran' && cj + cr >= 20) line(cs >= T.collapse[diff], `${diff} sneak: a lone enemy seen 6 s in our Dialwood (3:00+) or on a road in our half (14:00+), out of its towers' cover, two of ours free: 2+ on it within 15 s`, `${pct(cs)} ± ${pct(cSe)} of ${cj + cr} (Dialwood ${pct(share(sum(R, 'col.j.ok'), cj))} of ${cj}, roads ${pct(share(sum(R, 'col.r.ok'), cr))} of ${cr})`, `≥ ${pct(T.collapse[diff])}`);
+      else rpt(`${diff} collapse on a lone enemy in our half`, `${pct(cs)} ± ${pct(cSe)} of ${cj + cr} (Dialwood ${pct(share(sum(R, 'col.j.ok'), cj))} of ${cj}, roads ${pct(share(sum(R, 'col.r.ok'), cr))} of ${cr}; laning-phase roads ${pct(share(sum(R, 'col.l.ok'), sum(R, 'col.l.episodes')))} of ${sum(R, 'col.l.episodes')})`);
+      const rle = sum(R, 'rift.low.episodes'), rls = share(sum(R, 'rift.low.stayed'), rle);
+      { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['rift.low.stayMode'] ?? {})) add(hs, k2, v); rpt(`${diff} RIFT low and stayed: mode at the start`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
+      { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['fall.wicksOverFit.mode'] ?? {})) add(hs, k2, v); rpt(`${diff} falls to Wicks beside fit defenders: the fit defenders' modes`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
+      { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['resp.noneMode'] ?? {})) add(hs, k2, v); rpt(`${diff} designated peeler that did not answer: its mode`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
+      { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['base.fitAwayMode'] ?? {})) add(hs, k2, v); rpt(`${diff} fit and away while the base is hit: mode (s)`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v.toFixed(0)}`).join(', ')); }
+      line(rls <= T.riftStay[diff], `${diff} self-preservation: under 25 % with a foe in 10 m, still beside one 4 s later (RIFT)`, `${pct(rls)} of ${rle} (clear ${pct(share(sum(R, 'rift.low.clear'), rle))}, died ${pct(share(sum(R, 'rift.low.died'), rle))})`, `≤ ${pct(T.riftStay[diff])}`);
+      const away = R.map((g) => g.c['base.fitAway'] ?? 0), am = away.reduce((a, b) => a + b, 0) / R.length;
+      const aSe = Math.sqrt(away.reduce((a, b) => a + (b - am) ** 2, 0) / Math.max(1, R.length - 1) / R.length);
+      line(am <= T.away[diff], `${diff} base defence: fit fighters 25-80 m from a base structure under fighter attack, not closing in, no foe within 12 m (s per game)`, `${am.toFixed(1)} ± ${aSe.toFixed(1)}`, `≤ ${T.away[diff]}`);
+      const ob = sum(R, 'obj.outnumbered');
+      if (diff !== 'novice') line(ob / R.length <= T.objOut[diff], `${diff} objectives: taken with one of ours against three of theirs within 22 m (per game)`, `${(ob / R.length).toFixed(3)} (${ob})`, `≤ ${T.objOut[diff]}`);
     }
     if (F.length > 0) {
       const fd = F.reduce((a, g) => a + (g.h['death.mode3s']?.retreat ?? 0), 0), all = sum(F, 'f.deaths');

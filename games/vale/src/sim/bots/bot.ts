@@ -117,6 +117,8 @@ export class Bot extends BotBase implements BotController {
   private protectAlly: Entity | null = null;
   private protectDiver: Entity | null = null;
   private protectU = 0;
+  /** owner_rulings 44: I am the designated peeler of the partner I protect */
+  private protectDes = false;
   /** an answered dive is seen through for 3 s after its last trigger (it does not drop the moment the burst pauses) */
   private protectUntil = -1e9;
   private protectAllyId = -1; private protectDiverId = -1;
@@ -1098,8 +1100,23 @@ export class Bot extends BotBase implements BotController {
    * the diver must be noticed (reaction delay). Utility 0.66 + 0.2 × its value (a carry, or under 40 %: 1, else 0.5)
    * + 0.1 for a tank or support − 0.3 when I am under 35 % − 0.2 when the diver stands under an enemy tower.
    */
+  /** owner_rulings 44: the teammate whose peel a dive on `a` is — the support within 8 m of it, else the nearest teammate within
+   *  12 m; above 35 % health and not recalling (fixed scan order: every bot of the team reads the same one) */
+  private designatedPeeler(a: Entity): Entity | null {
+    let best: Entity | null = null, bd = Infinity, sup: Entity | null = null;
+    const b = this.brain;
+    for (const f of this.perc.allyFighters) {
+      if (f === a || !f.alive || f.hp < f.maxHp * 0.35 || f.stateOverride === 'recall') continue;
+      const d2 = this.dist2(f, a.x, a.y);
+      if (d2 > 12 * 12) continue;
+      if (!sup && d2 <= 8 * 8 && b && f.player && b.laneOf(f.player.player).support) sup = f;
+      if (d2 < bd) { bd = d2; best = f; }
+    }
+    return sup ?? best;
+  }
+
   private protectUtility(): number {
-    this.protectAlly = null; this.protectDiver = null;
+    this.protectAlly = null; this.protectDiver = null; this.protectDes = false;
     const k = this.k;
     // (RIFT: BRIDGE keeps the fights its G5 pace was measured with — one road, the whole team always on it)
     if (k.kind !== 'rift') return 0;
@@ -1115,11 +1132,14 @@ export class Bot extends BotBase implements BotController {
       const held = (a.ccMask & CC_HARD) !== 0 || holdLeft(a) > 0;
       const dived = burst >= (lp ? 0.22 : 0.15) * a.maxHp;
       if (!dived && !held) continue;
+      // (owner_rulings 44: the designated peeler — the support within 8 m of the partner, else the nearest fit teammate within
+      // 12 m — always answers at a tier with peelFirst: no roll, and in the laning phase too; the others as before)
+      const des = this.diff.peelFirst && this.designatedPeeler(a) === e;
       // (a road's laning phase: a duo's trades are laning — only a partner held, or one taken under half, is a dive)
-      if (lp && !held && a.hp > a.maxHp * this.diff.peelLaneHp) continue;
+      if (!des && lp && !held && a.hp > a.maxHp * this.diff.peelLaneHp) continue;
       // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's —
       // the grovehunter answers a dive on any road it stands beside, the genre's counter-gank)
-      if (lp && !this.jungle && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;
+      if (!des && lp && !this.jungle && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;
       let diver: Entity | null = null;
       if (burst > 0) { const id = m.topHurter(a.id, now, 2); const f = id >= 0 ? this.w.entity(id) : null; if (f && f.alive && f.kind === 'fighter' && this.isNoticed(f)) diver = f; }
       if (!diver) {
@@ -1130,7 +1150,7 @@ export class Bot extends BotBase implements BotController {
       let r = this.peelRolls.get(a.id);
       if (!r || now - r.last > 3) { r = { at: now, last: now, ok: this.rng.chance(this.diff.peelChance) }; this.peelRolls.set(a.id, r); }
       r.last = now;
-      if (!r.ok) continue;
+      if (!r.ok && !des) continue;
       const st = k.profiles.get(a.def)?.style;
       const carry = st === 'marksman' || st === 'artillery' || st === 'burst';
       const value = carry || a.hp < a.maxHp * 0.4 ? 1 : 0.5;
@@ -1138,7 +1158,8 @@ export class Bot extends BotBase implements BotController {
       // (from 0.72: a dive is urgent — it overrides a mode younger than its minimum time; a kill of mine that is on comes first)
       const u = 0.72 + 0.2 * value + (tank ? 0.1 : 0) - (this.hpF < 0.35 ? 0.3 : 0) - (this.towerSafe(diver.x, diver.y, 0) ? 0 : 0.2) -
         (this.mode === 'allin' && this.killTarget && this.killTarget !== diver && this.killMargin >= 1.2 ? 0.25 : 0);
-      if (u > best) { best = u; this.protectAlly = a; this.protectDiver = diver; }
+      const ud = des && this.hpF >= 0.35 ? Math.max(u, 0.97) : u;
+      if (ud > best) { best = ud; this.protectAlly = a; this.protectDiver = diver; this.protectDes = des; }
     }
     if (this.peelRolls.size > 12) for (const [id, r] of [...this.peelRolls]) if (now - r.last > 6) this.peelRolls.delete(id);
     if (best > 0 && this.protectAlly && this.protectDiver) {
@@ -1165,7 +1186,9 @@ export class Bot extends BotBase implements BotController {
     // standing off at the tower's edge while the partner died there was no peel at all)
     // (owner_rulings 44: by tier — veteran as ruling 42, adept only for a partner about to fall, a beginner never)
     const pdv = this.diff.peelDive;
-    const dive = pdv !== 'none' && !this.lanePhase() && this.hpF > 0.6 && ((pdv === 'all' && tank) || a.hp < a.maxHp * 0.4) && !this.towerAggro;
+    const dive = (pdv !== 'none' && !this.lanePhase() && this.hpF > 0.6 && ((pdv === 'all' && tank) || a.hp < a.maxHp * 0.4) && !this.towerAggro) ||
+      // (owner_rulings 44: the designated peeler follows the diver a step under its tower when fit, outside the laning phase)
+      (this.protectDes && pdv !== 'none' && !this.lanePhase() && this.hpF > 0.5 && !this.towerAggro);
     this.pFight = d; this.pAggro = 0.9; this.pFarm = 0; this.pDive = dive;
     this.pMove = true; this.pMoveX = d.x; this.pMoveY = d.y;
     const contact = dhypot(d.x - a.x, d.y - a.y) <= d.stats.range + d.radius + a.radius + 1.5;
@@ -1261,6 +1284,23 @@ export class Bot extends BotBase implements BotController {
       }
     }
     this.pMove = true; this.pMoveX = sx; this.pMoveY = sy;
+    // (owner_rulings 44: no fighter to fight — the Wicks at the structure are the post's work: walk into reach of the one
+    // nearest the structure, inside its cover; standing at the post while the wave took the structure was the commonest
+    // "fell to Wicks beside two fit defenders")
+    if (!t) {
+      const sr = Math.max(9, g.reach + 3);
+      let wk: Entity | null = null, wd = sr * sr;
+      for (const u of this.perc.enemyUnits) {
+        if (!u.alive || u.kind !== 'minion' || !u.targetable) continue;
+        const d2 = this.dist2(u, g.x, g.y);
+        if (d2 < wd) { wd = d2; wk = u; }
+      }
+      if (wk) {
+        const r = this.e.stats.range + this.e.radius + wk.radius;
+        const dx = sx - wk.x, dy = sy - wk.y, dd = dhypot(dx, dy) || 1;
+        if (this.dist2(wk, e.x, e.y) > sq(r + 0.5)) { this.pMoveX = wk.x + (dx / dd) * Math.max(0.5, r - 0.6); this.pMoveY = wk.y + (dy / dd) * Math.max(0.5, r - 0.6); }
+      }
+    }
     this.selfDefense();
     this.waveGuard(this.holdsWave(g.cls));
   }

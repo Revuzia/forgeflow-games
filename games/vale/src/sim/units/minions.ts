@@ -11,10 +11,10 @@
 //   * a valid current target (attackable, within chaseRange of where the chase began) is kept
 //     unless a call-for-help token outranks it (common.ts);
 //   * otherwise the best target within aggroRange by `priority` is chased with an attack order;
-//   * with nothing to fight it attack-moves along its lane: the next waypoint is the end of the
-//     path segment nearest to it, never one behind the last reached (so a minion pulled off the
-//     lane rejoins it ahead, not behind); past the last waypoint it holds the lane end and
-//     attacks what comes in range (the enemy core sits there).
+//   * with nothing to fight it attack-moves along its lane: it steers at a carrot LANE_LOOK m ahead of
+//     its projection on the lane line (never on a segment behind the last reached, so a minion pulled
+//     off the lane rejoins it ahead, not behind), held at its column's slot off the line (ruling 44);
+//     past the last waypoint it holds the lane end and attacks what comes in range (the enemy core).
 //   * a chase that has not closed in for CHASE_STALL_TICKS (a melee Wick behind the front row, a tower ringed by its
 //     wave: owner 2026-11-15 "minions get stuck ... at the first tower", ruling 39) steps out to an open attack spot on
 //     the target's ring (FLANK_ANGLES, the side nearest first, alternating by id) as an attack-move, fighting whatever
@@ -26,7 +26,6 @@
 import { practiceWaves } from '../modes/practice.ts';
 import { attackable, attackRange, inAttackRange } from '../attack.ts';
 import { ORDER_ATTACK, ORDER_ATTACK_MOVE, type Entity } from '../entity.ts';
-import { segPointDist2 } from '../math.ts';
 import { issueAttack, issueMove } from '../movement.ts';
 import { spawnUnit } from '../spawn.ts';
 import type { World } from '../world.ts';
@@ -38,6 +37,14 @@ export const MINION_THINK_TICKS = 6;
 export const WAYPOINT_REACH = 2.5;
 /** spacing of a wave's rows / columns at spawn */
 const ROW_GAP = 1.3, COL_GAP = 1.1;
+/** lane line (ruling 44, owner 2026-11-15 "they dont follow the straight path"): a marching Wick steers at a carrot
+ *  LANE_LOOK m ahead of its projection on the lane polyline (LANE_REJOIN × its distance off its column line when further
+ *  out: a rejoin after a fight comes in at under ~34°), offset by its column slot (SLOT_GAP between columns, a partial
+ *  last row centred); the attack-move is re-sent once the carrot moved LANE_REISSUE m */
+export const LANE_LOOK = 3.0;
+const LANE_REJOIN = 1.5;
+const LANE_REISSUE = 1;
+export const SLOT_GAP = 0.55;
 /** a chase that has not closed in by CHASE_GAIN m for this long (ticks) is blocked: step out to an open attack spot */
 const CHASE_STALL_TICKS = 60;
 const CHASE_GAIN = 0.3;
@@ -68,6 +75,8 @@ interface MinionState {
   creepSeq: number; creepX: number; creepY: number; creepAt: number;
   /** passing its own wave to reach its target (e.passOwn) until this tick */
   passUntil: number;
+  /** its column's lateral offset from the lane line (m, left of travel +), kept the whole walk (ruling 44) */
+  slot: number;
 }
 interface WaveState { n: number; nextAt: number; paths: V2T[][][] }
 const KEY = 'waves';
@@ -122,9 +131,11 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
       const facing = datan2(dy, dx);
       for (let i = 0; i < units.length; i++) {
         const row = Math.floor(i / 3), col = (i % 3) - 1;
+        // the lane slot: its column, a partial last row centred on the line
+        const inRow = Math.min(3, units.length - row * 3), slot = ((i % 3) - (inRow - 1) / 2) * SLOT_GAP;
         const x = sx - dx * row * ROW_GAP - dy * col * COL_GAP, y = sy - dy * row * ROW_GAP + dx * col * COL_GAP;
         const e = spawnUnit(w, units[i], team, x, y, { level, facing });
-        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1, creepSeq: -1, creepX: e.x, creepY: e.y, creepAt: 0, passUntil: -1 });
+        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1, creepSeq: -1, creepX: e.x, creepY: e.y, creepAt: 0, passUntil: -1, slot });
         followLane(w, e, minionState(e)!);
       }
     }
@@ -132,19 +143,58 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
   w.emit({ e: 'wave', t: w.time, n });
 }
 
-/** advance the waypoint (never backwards) and attack-move to it */
+/** the Wick's projection on its lane (never behind segment m.wp; m.wp moves up to it) and the carrot it steers at:
+ *  `look` m further along the line (LANE_LOOK, or LANE_REJOIN × its distance off its column line when further out),
+ *  offset by its column slot along the left normal of the segment the carrot lies on. Writes carrot; returns false
+ *  when the carrot runs past the lane end (the Wick then holds the end itself). Only + − × ÷ √ (deterministic). */
+const carrot = { x: 0, y: 0 };
+function laneCarrot(e: Entity, m: MinionState): boolean {
+  const p = m.path, last = p.length - 1;
+  let k = Math.max(1, m.wp), t = 0, bestD = Infinity, side = 0;
+  for (let j = k; j <= last; j++) {
+    const ax = p[j - 1][0], ay = p[j - 1][1], dx = p[j][0] - ax, dy = p[j][1] - ay, l2 = dx * dx + dy * dy;
+    let u = l2 > 1e-12 ? ((e.x - ax) * dx + (e.y - ay) * dy) / l2 : 0;
+    if (u < 0) u = 0; else if (u > 1) u = 1;
+    const qx = e.x - ax - dx * u, qy = e.y - ay - dy * u, d2 = qx * qx + qy * qy;
+    if (d2 < bestD - 1e-9) { bestD = d2; k = j; t = u; side = dx * qy - dy * qx; }
+  }
+  m.wp = Math.max(m.wp, k);
+  // signed offset (left of travel +) and the distance from its own column line
+  const off = Math.sqrt(bestD) * (side < 0 ? -1 : 1) - m.slot;
+  let look = Math.max(LANE_LOOK, LANE_REJOIN * (off < 0 ? -off : off));
+  for (; k <= last; k++, t = 0) {
+    const ax = p[k - 1][0], ay = p[k - 1][1], dx = p[k][0] - ax, dy = p[k][1] - ay, l = Math.sqrt(dx * dx + dy * dy);
+    const rest = (1 - t) * l;
+    if (look <= rest && l > 1e-6) {
+      const u = t + look / l, nx = -dy / l, ny = dx / l;
+      carrot.x = ax + dx * u + nx * m.slot; carrot.y = ay + dy * u + ny * m.slot;
+      return true;
+    }
+    look -= rest;
+  }
+  return false;
+}
+
+/** steer at a carrot on the lane line (ruling 44: never at the far vertex, so no corner is cut and the columns never
+ *  pinch at a shared point), as an attack-move; past the last waypoint it holds the lane end */
 function followLane(w: World, e: Entity, m: MinionState): void {
   const p = m.path;
-  // nearest segment end ahead of us
-  let bestK = m.wp, bestD = Infinity;
-  for (let k = Math.max(1, m.wp); k < p.length; k++) {
-    const d = segPointDist2(p[k - 1][0], p[k - 1][1], p[k][0], p[k][1], e.x, e.y);
-    if (d < bestD - 1e-9) { bestD = d; bestK = k; }
+  if (p.length > 1 && laneCarrot(e, m)) {
+    const tx = carrot.x, ty = carrot.y;
+    // walking to the carrot: re-sent only once it has moved LANE_REISSUE m on (issueMove drops the route each time),
+    // and not while a nav detour (round a lantern, a wall) is walked unless that is nearly done
+    if (e.order === ORDER_ATTACK_MOVE && m.lastWpX === m.lastWpX) {
+      if (e.path.length > 0 && dist2(e, m.lastWpX, m.lastWpY) > LANE_LOOK * LANE_LOOK * 0.25) return;
+      const dx = tx - m.lastWpX, dy = ty - m.lastWpY;
+      if (dx * dx + dy * dy < LANE_REISSUE * LANE_REISSUE) return;
+    }
+    m.lastWpX = tx; m.lastWpY = ty;
+    issueMove(w, e, tx, ty, true);
+    return;
   }
-  m.wp = Math.max(m.wp, bestK);
+  m.wp = p.length - 1;
+  const [tx, ty] = p[p.length - 1];
   const reach2 = WAYPOINT_REACH * WAYPOINT_REACH;
-  while (m.wp < p.length - 1 && dist2(e, p[m.wp][0], p[m.wp][1]) < reach2) m.wp++;
-  const [tx, ty] = p[Math.min(m.wp, p.length - 1)];
   // already heading there, or holding the lane end
   if (m.lastWpX === tx && m.lastWpY === ty && (e.order === ORDER_ATTACK_MOVE || dist2(e, tx, ty) < reach2)) return;
   m.lastWpX = tx; m.lastWpY = ty;
