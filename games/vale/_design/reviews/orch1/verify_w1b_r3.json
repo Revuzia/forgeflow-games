@@ -1,0 +1,70 @@
+{
+  "lane": "W1-B",
+  "round": 3,
+  "verifier": "independent adversarial sensitivity + colour verifier (opus)",
+  "at": "2026-11-15T23:58-06:00",
+  "head": "72cd0f20e (lane commits c0c52cb7f, 72cd0f20e; GLBs last touched by wip sync f7a89bd76); lane start 97cff3317^, fix 2 04784cd56",
+  "pass": false,
+  "score": 7.3,
+  "safeToShip": true,
+  "blockers": [],
+  "doneWhen": {
+    "unitsGatePass": {
+      "holds": false,
+      "evidence": "my run _design/reviews/orch1/evidence/units/verify_w1b_r3.json (+ _sheet.png): 3 seeds (7,11,23) x 3 seatings, all 16 fighters seen 9/9 runs, 0 errors, 159 s. Gate FAIL, 15 fails (lane start units_gate_head 32, verify r2 16). 0 fails on a lane fighter. Remaining: P1 burdam-kemdo 22.1, ilsheta-sukri 24.3, kemdo-tunlan 19.9, nurrow-sukri 13.2, nurrow-tunlan 7.8, sukri-tunlan 18.6; P3 burdam 62.5, sukri 87.5, tunlan 85.1; P4 ilsheta, marund, nurrow, rishal, sukri, vashil. The line asks for a PASS over all 16 fighters; the 15 fails are on fighters outside W1-B's owned files."
+    },
+    "laneTops": {
+      "odrum": {"topLab": [39.7, 18.3, 100.4], "hsv": [50.8, 0.388], "harmShareOfTop": 0.45, "inHarm": false, "P3top25": 72.4, "crown": [37.2, 21.1, "break 9/9"]},
+      "ulkro": {"topLab": [50.6, 30.6, 129.8], "hsv": [88.8, 0.409], "healShare": 0.0, "P3top25": 74.9, "crown": [14.3, 0, "break 9/9"]},
+      "ardit": {"topLab": [40.6, 13.6, 229.8], "hsv": [183.2, 0.657], "crownHsvH": 187.5, "allyShare": 0.017, "P3top25": 70.1, "crown": [14.9, 0, "break 6/9"]},
+      "dunsom": {"topLab": [39.0, 40.0, 298.5], "hsv": [245.7, 0.387], "allyShare": 0.077, "P3top25": 71.6, "crown": [10.9, 1.7, "break 6/9"]},
+      "hesmi": {"topLab": [64.3, 12.7, 159.7], "hsv": [183.9, 0.25], "P3top25": 70.1, "crown": [8.5, 0, "break 6/9"]}
+    },
+    "odrumMaskHue28to50": {"holds": true, "evidence": "three r186 head close-up (front zoom cell, px L* > 45): HSV h 42.4 S 0.22 V 0.62; CIELAB L 61.6 (p90 67.3) C 14.1 h 91.9. Fix 2: HSV 40.7, L 56.4 C 11.2. Lane start: HSV 35.5, L 76.4 C 15.8."},
+    "odrumMaskNotPaleLowChroma": {"holds": true, "evidence": "share of mask px with L* > 75 and C < 20: 0.026 (lane start 0.596). Median L* 61.6."},
+    "odrumCapLle40": {"holds": true, "evidence": "three r186 gameplay camera (52 deg, 28.5 m, 1:1 px), cap window, 8 facings, cap px (L < 55): L* 30.8-35.1, C 6.4-7.0, lab h 101-102 (fix 2: 41.1-45.4; lane start 40.6-44.3). Whole-window median L* 31.8-42.7."},
+    "arditHelm180to190": {"holds": true, "evidence": "units_gate top HSV h 183.2, crown (top 12 %) HSV h 187.5 (r2 crown 170.2)"},
+    "arditLisvelDE25": {"holds": true, "evidence": "units_gate pair ardit-lisvel dEMin 30.3"},
+    "ruling32HarmCap7": {"holds": true, "evidence": "zone_grade.reserved_pct on the HEAD albedo, harm PIL / max(PIL, float): odrum 4.54 / 4.87, ulkro 5.69 / 5.87, dunsom 4.93 / 4.99 (lane start max: 6.53, 13.25, 16.64). Ardit 1.04, Hesmi 0.01; Hesmi heal 1.56, Ardit ally 1.13."},
+    "glbBudget": {"holds": true, "evidence": "KiB: odrum 1148.2, ulkro 1146.0, ardit 1155.2, dunsom 1133.9, hesmi 1114.4 (budget 1172). Skin GLBs untouched (git diff 97cff3317^..HEAD lists only the 5 base GLBs). dist-catalog 2026.11.6 references the HEAD GLB of each (md5 match)."},
+    "perf1080TrianglePeak": {"holds": true, "evidence": "perf_1080 not re-run (texture-only change): index-accessor triangle counts identical lane start vs HEAD: odrum 19544, ulkro 17022, ardit 21149, dunsom 22407, hesmi 19883. Implementer's perf run reports 452k peak."},
+    "sensitivityAB": {"holds": true, "evidence": "my renders of all 5 GLBs at lane start / fix 2 / HEAD (three r186): gameplay camera 8 facings 1:1, head close-ups (front, 3/4 both sides, profile, back, zoom), full-body and head at 128 and 64 px: _design/reviews/orch1/evidence/units/verify_w1b_r3_ab/{head,face2,card,gc}_<fighter>.jpg; in-engine units_gate sheet. Head-part texels changed vs lane start (> 24 levels): odrum mask 100 % (intended), neckwrap/wraps 0 %; ulkro head 0.0 %, eyeband 0.44 %; ardit face 0.0 %; dunsom hood 0.0 %, mask 0.24 %; hesmi (no part map) unchanged by eye. No skull, bone, blank, mannequin or glowing-eye read introduced on any changed fighter; skins unchanged."},
+    "colourLensScore": {"holds": false, "score": 7.3}
+  },
+  "sensitivityRead": {
+    "odrum": "Mask is a pale sand/khaki carved mask (L 62, C 14), warmer and darker than the lane-start bone-ivory (L 76) but paler than fix 2. Reads as a carved clay or wood mask, not bone or skull: block brow, nose ridge, no teeth or nasal cavity. Eye holes are dark matte, no glow. UV-seam cream lines from fix 2 are gone. Cap is a near-black grey (C 7), so it reads as a dark knit cap, barely olive. At 64 px: pale tan mask under a dark cap, not bone.",
+    "ulkro": "Hood is a clean yellow-green moss with no seam lines. The face (wrap plus dark eyeband, no eyes) is unchanged (0.0 % head texels). In the darker hood the pale wrap reads as a desert face-scarf with a goggle band, but it now has more contrast and is the focal point at card size. Pre-existing face design, not introduced here; it is a watch item for the cards/faces lane (eyeless wrapped face).",
+    "ardit": "Helm deep steel-teal, no seam lines; T-visor face (pale oval) is unchanged (0.0 %). It is pre-existing and largely hidden at the game camera. Light-blue visor bar does not glow.",
+    "dunsom": "Hat deep indigo, coat pale linen, hood lilac; face (lidded eyes) unchanged. No issue.",
+    "hesmi": "Hood is a deep teal-green, rounded (not pointed). The cream crease lines (FU-1) are gone. Face band with dark almond eyes and catchlights is unchanged. No issue."
+  },
+  "problems": [
+    "Done-when line 1 not met: units_gate FAILs with 15 fails, all on non-lane fighters (Nurrow, Tunlan, Sukri, Kemdo, Burdam, Ilsheta, Marund, Rishal, Vashil). The fix is outside W1-B's owned files, so it needs a lead ruling or a follow-up lane.",
+    "FU-1 hue wheel is not met in spirit: Hesmi (C 12.7) and Ardit (C 13.6) tops are near-neutral and skip P1. hesmi-ilsheta dE 6.4 (lane start 13.4), hesmi-marund dE 23.5 at dHue 4.8 (lane start 37.7 / 117.9), ardit-ervet dE 21.9 (lane start 39.1). All pass the gate only through the C >= 15 exemption.",
+    "odrum-ulkro dEMin 16.6 and dHueMin 24.5 come from different run pairs. The gate (min over run pairs) passes it with no failing pair; median dE 20.4 at dHue 29.4.",
+    "Odrum P2 passes by a thin margin: top HSV h 50.8 (band edge 50) and S 0.388 (edge 0.40); 45 % of the top cluster is still in the harm band.",
+    "Odrum mask is a muted sand/khaki (HSV 42, C 14), not the honey asked for in FU-2. The cap is near-neutral dark grey (C 7), not a clear deep olive.",
+    "New minor texture defect on Odrum: the brown gourd on the left shows a grey-teal ring patch in the close-up and card crops (present since fix 2, absent at lane start). Not visible at the game camera.",
+    "Ulkro's eyeless wrapped face now stands out more against the dark moss hood (pre-existing, 0.0 % head texels changed). Flagged for the faces/cards lane.",
+    "content/version.json not bumped (npm run content warning), per the implementer; not checked further."
+  ],
+  "improvementsVsBeforeLane": [
+    "units_gate fails 32 -> 15; 0 lane-fighter fails (r2: 1, Odrum P2)",
+    "Odrum mask no longer bone-ivory (L 76 -> 62, pale-low-chroma share 0.596 -> 0.026); cap L* 41-44 -> 31-35; crown dL 9 -> 37",
+    "UV-seam bleed lines (fix 2) gone on Odrum, Ulkro and Ardit; Hesmi creases gone",
+    "Ulkro heal-band share 0.311 (fix 2) -> 0.000; harm albedo 13.25 % -> 5.87 %",
+    "Dunsom harm albedo 16.64 % -> 4.99 %; crown dL 2.8 -> 10.9",
+    "Ardit out of the ally band (HSV 204.8 -> 183.2, crown 187.5); Ardit-Lisvel dE 30.3"
+  ],
+  "safeToShipNote": "No gate line on a lane fighter got worse than at lane start. Fighter-level metrics are better on every lane fighter, and every lane pair that passed before still passes. The pair dE drops listed in problems are inside the gate's near-neutral exemption. The gourd ring is close-up only.",
+  "harness": [
+    "_harness/_tmp_vfy_w1b_r3_render.sh (runs _harness/_tmp_vfy_w1b_faces.mjs on lane-start / fix-2 / HEAD GLBs, via heavy.py)",
+    "_harness/_tmp_vfy_w1b_r3_sheet.py, _harness/_tmp_vfy_w1b_r3_meas.py (Odrum mask and cap), _harness/_tmp_vfy_w1b_r3_albedo.py (ruling 32 + head-part texel diff)",
+    "units_gate: heavy.py run -- node _harness/units_gate.mjs --seeds 7,11,23 --seatings 3 --q high --tag verify_w1b_r3"
+  ],
+  "notes": [
+    "System python3 (3.15) has no PIL; the PIL/numpy scripts ran with the repo-level .venv python.",
+    "No hesmi part map in art/.cache/fighters/partmap, so Hesmi's head texels were checked by eye only.",
+    "No instructions in files or tool output pointed outside this lane."
+  ]
+}
