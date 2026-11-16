@@ -47,7 +47,7 @@
      "hood"
     ],
     "hex": "#F2896C",
-    "L": 50,
+    "L": 56,
     "C": 22
    },
    {
@@ -79,8 +79,8 @@
      0.84,
      1.0
     ],
-    "hex": "#C37F76",
-    "L": 34,
+    "hex": "#C57D84",
+    "L": 48,
     "C": 34
    },
    {
@@ -100,8 +100,8 @@
      1.0
     ],
     "minL": 17,
-    "hex": "#C37F76",
-    "L": 50,
+    "hex": "#C57D84",
+    "L": 72,
     "C": 24
    },
    {
@@ -129,7 +129,7 @@
      0.8
     ],
     "minL": 33,
-    "hex": "#C37F76",
+    "hex": "#C57D84",
     "L": 18,
     "C": 22,
     "notBoxes": [
@@ -156,7 +156,7 @@
      ]
     ],
     "maxL": 24,
-    "hex": "#B30300",
+    "hex": "#C57D84",
     "L": 28,
     "C": 12,
     "k": 0.6
@@ -188,8 +188,8 @@
       2.3
      ]
     ],
-    "hex": "#C37F76",
-    "L": 16,
+    "hex": "#C57D84",
+    "L": 30,
     "C": 12
    }
   ],
@@ -244,7 +244,7 @@
      "halo_ring"
     ],
     "hex": "#A66CF2",
-    "L": 80,
+    "L": 86,
     "C": 12
    }
   ]
@@ -271,16 +271,16 @@
     "C": 24
    },
    {
-    "why": "orch1 UNITS2: the broad hat a deep plum lacquer (the top-down read; the pale straw hat matched Nurrow and Sukri at the game camera, units_gate P1 dE 7.9 / 18.6)",
+    "why": "orch1 UNITS2: the broad hat a pale wisteria lacquer (CIELAB h ~278 at the game camera, HSV ~230 at S < 0.3, outside the ally band): the straw hat matched Nurrow and Sukri, a plum hat could not clear both Dunsom and Ervet",
     "parts": [
      "hat"
     ],
-    "hex": "#AB83B1",
-    "L": 6,
-    "C": 30
+    "hex": "#6994C5",
+    "L": 54,
+    "C": 14
    },
    {
-    "why": "orch1 UNITS2: the stepped octagonal crown pale lacquered straw, a value break against the plum brim (P4 crown break)",
+    "why": "orch1 UNITS2: the stepped octagonal crown the signature deep plum (P4 crown break against the pale brim)",
     "parts": [
      "hat"
     ],
@@ -289,14 +289,14 @@
       0,
       0,
       0,
-      0.33,
+      0.25,
       1.9,
       2.3
      ]
     ],
-    "hex": "#C8A97A",
-    "L": 56,
-    "C": 17
+    "hex": "#AB83B1",
+    "L": 16,
+    "C": 24
    },
    {
     "why": "orch1 UNITS2: the iron rim a deep plum iron round the whole brim",
@@ -354,7 +354,7 @@
     "C": 26
    },
    {
-    "why": "orch1 UNITS2: the pale lacquer helm a rose-white (the cool white helm sat 17 dE from Lisvel, ruling 44); the face is excluded by a box",
+    "why": "orch1 UNITS2: the pale lacquer helm a warm ivory (one run read the cool white helm blue-grey, 17 dE from Lisvel; ruling 44); the face is excluded by a box",
     "boxes": [
      [
       -0.5,
@@ -376,12 +376,12 @@
      ]
     ],
     "minL": 60,
-    "hex": "#C57E7C",
+    "hex": "#A78D5C",
     "L": 82,
     "C": 6
    },
    {
-    "why": "orch1 UNITS2: the pale shoulder plate a rose-white (its cool white turned one run blue-grey at the game camera)",
+    "why": "orch1 UNITS2: the pale shoulder plate the signature crimson lacquer (P4 crown break under the ivory helm; its cool white read blue-grey at the game camera)",
     "boxes": [
      [
       0.1,
@@ -397,9 +397,9 @@
      0.72
     ],
     "minL": 55,
-    "hex": "#C57E7C",
-    "L": 74,
-    "C": 6
+    "hex": "#C47C89",
+    "L": 40,
+    "C": 24
    }
   ]
  },
@@ -528,9 +528,9 @@
     "parts": [
      "hood"
     ],
-    "hex": "#4D9F8B",
-    "L": 12,
-    "C": 26
+    "hex": "#469F91",
+    "L": 6,
+    "C": 36
    },
    {
     "why": "orch1 UNITS2: the scarf and the mantle's shoulders the hood's deep teal, so the top-down read is one teal family (the pale scarf and mantle kept the top a near-neutral grey)",
@@ -548,18 +548,18 @@
       1.3
      ]
     ],
-    "hex": "#4D9F8B",
-    "L": 24,
-    "C": 20
+    "hex": "#469F91",
+    "L": 14,
+    "C": 30
    },
    {
     "why": "orch1 UNITS2: the lamp chimney over the hood the same deep green-teal (its pale glass grey held the top cluster near-neutral)",
     "parts": [
      "chimney"
     ],
-    "hex": "#4D9F8B",
-    "L": 30,
-    "C": 18
+    "hex": "#469F91",
+    "L": 14,
+    "C": 28
    },
    {
     "why": "orch1 UNITS2: the lower mantle a paler blue-white (the brightest quarter of the body keeps the bible band under the deep teal top)",
@@ -580,7 +580,15 @@
     "L": 48,
     "C": 5
    }
-  ]
+  ],
+  "materialTint": {
+   "gem_chimglass": [
+    0.05,
+    0.28,
+    0.18,
+    0.75
+   ]
+  }
  },
  "lisvel": {
   "zones": [
@@ -602,8 +610,8 @@
     "parts": [
      "hood"
     ],
-    "hex": "#829865",
-    "L": 16,
+    "hex": "#7E9967",
+    "L": 10,
     "C": 24
    },
    {
@@ -615,14 +623,14 @@
      [
       -0.6,
       -0.6,
-      1.46,
+      1.5,
       0.6,
       0.6,
       1.8
      ]
     ],
-    "hex": "#829865",
-    "L": 49,
+    "hex": "#7E9967",
+    "L": 60,
     "C": 24
    }
   ],
@@ -660,12 +668,12 @@
      ]
     ],
     "hex": "#6A9485",
-    "L": 13,
+    "L": 8,
     "C": 22,
     "k": 0.35
    },
    {
-    "why": "orch1 UNITS2: the shards' honed upper sections a mid stone grey (the pale cool stone made a near-neutral top 13 dE from Lisvel; ruling 44 asks dE >= 20 of a near-neutral top)",
+    "why": "orch1 UNITS2: the shards' honed upper sections a violet-grey stone (the signature violet, muted: the cool pale stone made a near-neutral top 13 dE from Lisvel and the warm one 10 from Rishal; ruling 44 asks dE >= 20)",
     "boxes": [
      [
       -0.45,
@@ -680,9 +688,9 @@
      0.0,
      0.79
     ],
-    "hex": "#AB8C5D",
-    "L": 72,
-    "C": 2,
+    "hex": "#9F87B9",
+    "L": 60,
+    "C": 8,
     "k": 1.0
    },
    {
@@ -702,9 +710,26 @@
      0.79
     ],
     "hex": "#6A9485",
-    "L": 16,
+    "L": 8,
     "C": 20,
     "k": 1.0
+   },
+   {
+    "why": "orch1 UNITS2: the pale chest wrap and hip stones a light warm linen (the brightest quarter of the body keeps the bible band 70-85 under the mid-grey shards)",
+    "boxes": [
+     [
+      -0.7,
+      -0.6,
+      0.7,
+      0.7,
+      0.6,
+      1.6
+     ]
+    ],
+    "minL": 45,
+    "hex": "#B88664",
+    "L": 84,
+    "C": 6
    }
   ],
   "gutterFill": 24,
@@ -960,15 +985,34 @@
       -0.01,
       0.0,
       0.0,
-      0.27,
+      0.33,
       1.6,
       2.0
      ]
     ],
     "hex": "#A38F5C",
-    "L": 18,
-    "C": 14,
+    "L": 8,
+    "C": 6,
     "k": 0.5
+   },
+   {
+    "why": "orch1 UNITS2: the pale straw brim a touch less saturated (the top read HSV 36-39 at S 0.39-0.40, the edge of the reserved harm band)",
+    "parts": [
+     "hat_cone"
+    ],
+    "cyls": [
+     [
+      -0.01,
+      0.0,
+      0.33,
+      0.6,
+      1.6,
+      2.0
+     ]
+    ],
+    "hex": "#A68E5C",
+    "L": 74,
+    "C": 22
    }
   ]
  }

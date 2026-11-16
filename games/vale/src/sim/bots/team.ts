@@ -823,7 +823,9 @@ export class TeamBrain {
       else if (closeOut && info.lane < 0 && !info.respawns) score = 900 - dhypot(e.x - cx, e.y - cy) * 0.5;
       // (closeOut: the way to the core — the middle road's Needles and its Lantern — before the other roads' towers)
       else if (closeOut && this.enemyCorePath.has(info.id)) score = (this.respawning(info) ? 600 : 300) - (e.hp / Math.max(1, e.maxHp)) * 10;
-      else if (this.respawning(info)) score = towersLeft === 0 ? 500 - dhypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 : -1;
+      // (round 2: with every tower down, the Lantern on the way to the core before the side roads' — a side Lantern relights to
+      // be taken again, the middle one opens the Bell Needles)
+      else if (this.respawning(info)) score = towersLeft === 0 ? 500 - dhypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 + (this.enemyCorePath.has(info.id) ? 60 : 0) : -1;
       else {
         // the least-pushed lane first: towers nearer our side score higher
         const l = info.lane >= 0 ? k.lanes[info.lane] : null;
@@ -873,7 +875,11 @@ export class TeamBrain {
       let ready = 0;
       for (const f of tp.allyFighters) if (f.alive && f.hp > f.maxHp * 0.5 && sq(f.x - this.groupX) + sq(f.y - this.groupY) < 18 * 18) ready++;
       const need = Math.min(4, Math.max(1, this.aliveAllies));
-      if (clock || ready >= need || this.aliveEnemies <= 2 || (closeOut && ready >= Math.min(3, need))) this.rush = aliveDiff >= -1 || this.aliveEnemies <= 2;
+      // (owner_rulings 44, round 2: a tier that closes out goes into a held base only with a fighter more, or two of theirs left,
+      // or a Lantern's clock running at even numbers — a defended base won every even dive, and the fights lost at its door
+      // were the long games' back-and-forth)
+      const commit = d.closeOut && k.kind === 'rift' ? aliveDiff >= 1 || this.aliveEnemies <= 2 || (clock && aliveDiff >= 0) : aliveDiff >= -1 || this.aliveEnemies <= 2;
+      if ((clock || ready >= need || this.aliveEnemies <= 2 || (closeOut && ready >= Math.min(3, need))) && commit) this.rush = true;
       else this.stage = true;
     }
     // (lane AI G7: a cross-map trade — the enemy is on an objective we cannot contest: press the structure farthest from

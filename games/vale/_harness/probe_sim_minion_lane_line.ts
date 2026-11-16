@@ -8,22 +8,25 @@
 // Scenarios: idle (fighters stand, towers alive, 8 min) and bots (all ten seats played, 14 min); maps RIFT (three
 // roads) and BRIDGE; seeds 3,7,11,19,23,31. Every tick, every Wick:
 //   free   its order is not ATTACK, not chasing, not stepping out, not passing its wave, no attackable enemy in aggro
-//   clear  > 3 m from any live structure rim, any live body not of its team and any standing Wick of its own, > 16 m of arc from its spawn end and
-//          > 6 m from the far end, no forced movement (dash, knock, fear, taunt, hard CC)
+//   clear  > 3 m from any live structure rim, any live body not of its team and any Wick of its own held under 0.6 of
+//          its walk; > 16 m of arc from its spawn end and > 6 m from the far end; no forced movement (dash, knock, fear,
+//          taunt, hard CC, or shoved over 1.5 × its walk in a tick)
 //   d      signed offset from the lane polyline, left of its travel +; off = d − its column slot
 // Bars (every map, road, team and 4 m arc bin; both scenarios):
 //   B1 wave centroid  mean off of a wave's free+clear Wicks, not settling, in a bin (a wave: the Wicks of a road and
-//                     side passing the bin together, no 2 s gap; waves with ≥ 15 samples there):
+//                     side passing the bin together, no 2 s gap; waves of ≥ 2 Wicks with ≥ 15 samples there; a lone
+//                     Wick is B2's):
 //                     median |.| ≤ 0.20 m, max ≤ 0.30 m (raw mean d, slots not taken off, is reported beside it)
-//   settling         a Wick that turns free (a fight over) with |off| > 0.3 m, until |off| ≤ 0.3 m or 3 + 2|off| m of
-//                    arc on: left out of B1 and B2 (its return is B4); one still off after that counts again
+//   settling         a Wick that turns free (a fight over) or comes out of forced movement with |off| > 0.3 m,
+//                    until |off| ≤ 0.3 m or 3 + 2|off| m of arc on: left out of B1 and B2 (its return is B4); one still off after that counts again
 //   B2 single Wick    free+clear samples, not settling: |off| p95 ≤ 0.6 m, max ≤ 1.2 m
 //   B3 no reversal    0 Wicks free+clear for a whole 0.5 s whose net move along the road is < −0.3 m
 //   B4 rejoin         a Wick turning free with |off| > 1 m: arc walked until |off| ≤ 0.5 m, p95 ≤ 6 m (max and
 //                     overshoots past the line reported; episodes cut short by a new fight are dropped)
-//   B5 timing         idle, waves 1-3: the first tick a Wick of the wave is within rim + 8 m of each tower of its road
-//                     (own towers: marching only), and first Wick-on-Wick damage per road: within ±0.5 s of BASE (the
+//   B5 timing         idle, waves 1-3: the first tick a Wick of the wave is within rim + 8 m of each of its own towers
+//                     on its road (the march), and the wave's first Wick-on-Wick damage per road (first contact): within ±0.5 s of BASE (the
 //                     values at c20d06630, before ruling 44). --record prints the table instead.
+//   B7 lantern        (reported) free Wicks walking a nav detour (e.path) in their first 20 m of arc, no enemy in aggro
 //   B6 determinism    RIFT idle seed 7 twice (3 min): identical x,y trace hash.
 //   node _harness/probe_sim_minion_lane_line.ts [--seeds 3,7,11,19,23,31] [--maps rift,bridge] [--scen idle,bots]
 //        [--idle-min 8] [--bots-min 14] [--record] [--verbose]
@@ -52,8 +55,30 @@ const built = buildContent(defaultOptions({ check: true, allowMissingAssets: tru
 if (!built.catalog) { console.log('SKIP content build failed'); process.exit(77); }
 const catalog: CatalogT = built.catalog;
 
-// B5 baseline: `${map}|${road}|t${team}|w${wave}|${tower or 'contact'}` → seconds (seed 3,7,11,19,23,31 means), c20d06630
-const BASE: Record<string, number> = {};
+// B5 baseline (idle, the 6-seed means at c20d06630, before ruling 44): `map|road|t<team>|w<wave>|<own tower>` the wave
+// reaching the tower, `map|road|w<wave>|contact` its first Wick-on-Wick damage (seconds)
+const BASE: Record<string, number> = {
+  'bridge|road_span|t0|w1|a_span_needle_inner': 24.67, 'bridge|road_span|t0|w1|a_span_needle_outer': 29.63, 'bridge|road_span|t0|w2|a_span_needle_inner': 49.67,
+  'bridge|road_span|t0|w2|a_span_needle_outer': 54.63, 'bridge|road_span|t0|w3|a_span_needle_inner': 74.67, 'bridge|road_span|t0|w3|a_span_needle_outer': 79.63,
+  'bridge|road_span|t1|w1|s_span_needle_inner': 24.67, 'bridge|road_span|t1|w1|s_span_needle_outer': 29.63, 'bridge|road_span|t1|w2|s_span_needle_inner': 49.67,
+  'bridge|road_span|t1|w2|s_span_needle_outer': 54.63, 'bridge|road_span|t1|w3|s_span_needle_inner': 74.67, 'bridge|road_span|t1|w3|s_span_needle_outer': 79.63,
+  'bridge|road_span|w1|contact': 38.8, 'bridge|road_span|w2|contact': 64.23, 'bridge|road_span|w3|contact': 89,
+  'rift|road_high|t0|w1|a_high_needle_inner': 37.3, 'rift|road_high|t0|w1|a_high_needle_outer': 44.47, 'rift|road_high|t0|w2|a_high_needle_inner': 67.3,
+  'rift|road_high|t0|w2|a_high_needle_outer': 74.47, 'rift|road_high|t0|w3|a_high_needle_inner': 97.3, 'rift|road_high|t0|w3|a_high_needle_outer': 104.47,
+  'rift|road_high|t1|w1|s_high_needle_inner': 37.3, 'rift|road_high|t1|w1|s_high_needle_outer': 44.47, 'rift|road_high|t1|w2|s_high_needle_inner': 67.3,
+  'rift|road_high|t1|w2|s_high_needle_outer': 74.47, 'rift|road_high|t1|w3|s_high_needle_inner': 97.3, 'rift|road_high|t1|w3|s_high_needle_outer': 104.47,
+  'rift|road_high|w1|contact': 55.2, 'rift|road_high|w2|contact': 85.37, 'rift|road_high|w3|contact': 115.7,
+  'rift|road_low|t0|w1|a_low_needle_inner': 37.3, 'rift|road_low|t0|w1|a_low_needle_outer': 44.47, 'rift|road_low|t0|w2|a_low_needle_inner': 67.3,
+  'rift|road_low|t0|w2|a_low_needle_outer': 74.47, 'rift|road_low|t0|w3|a_low_needle_inner': 97.3, 'rift|road_low|t0|w3|a_low_needle_outer': 104.47,
+  'rift|road_low|t1|w1|s_low_needle_inner': 37.3, 'rift|road_low|t1|w1|s_low_needle_outer': 44.47, 'rift|road_low|t1|w2|s_low_needle_inner': 67.3,
+  'rift|road_low|t1|w2|s_low_needle_outer': 74.47, 'rift|road_low|t1|w3|s_low_needle_inner': 97.3, 'rift|road_low|t1|w3|s_low_needle_outer': 104.47,
+  'rift|road_low|w1|contact': 55.2, 'rift|road_low|w2|contact': 85.5, 'rift|road_low|w3|contact': 115.57,
+  'rift|road_seat|t0|w1|a_seat_needle_inner': 34.67, 'rift|road_seat|t0|w1|a_seat_needle_outer': 39.67, 'rift|road_seat|t0|w2|a_seat_needle_inner': 64.67,
+  'rift|road_seat|t0|w2|a_seat_needle_outer': 69.67, 'rift|road_seat|t0|w3|a_seat_needle_inner': 94.67, 'rift|road_seat|t0|w3|a_seat_needle_outer': 99.67,
+  'rift|road_seat|t1|w1|s_seat_needle_inner': 34.67, 'rift|road_seat|t1|w1|s_seat_needle_outer': 39.63, 'rift|road_seat|t1|w2|s_seat_needle_inner': 64.67,
+  'rift|road_seat|t1|w2|s_seat_needle_outer': 69.63, 'rift|road_seat|t1|w3|s_seat_needle_inner': 94.67, 'rift|road_seat|t1|w3|s_seat_needle_outer': 99.63,
+  'rift|road_seat|w1|contact': 49.4, 'rift|road_seat|w2|contact': 79.47, 'rift|road_seat|w3|contact': 109.63,
+};
 
 function setupFor(modeId: string, seed: number): MatchSetup {
   const mode = catalog.modes.find((m) => m.id === modeId)!;
@@ -101,7 +126,7 @@ const pct = (a: number[], p: number): number => { if (!a.length) return NaN; con
 const q: Entity[] = [];
 
 interface Track { road: number; wave: number; slot: number; freeRun: number; hist: number[]; wasFree: boolean;
-  rj: { s0: number; off0: number; done: boolean } | null; lastS: number; settle: number; settleArc: number }
+  rj: { s0: number; off0: number; done: boolean } | null; lastS: number; settle: number; settleArc: number; px: number; py: number; forced: boolean }
 interface Acc {
   centroid: Map<string, Map<string, { off: number; d: number; n: number; ids: Map<number, { n: number; off: number; fr: number; t: number }> }>>;   // bin key → wave key → sums
   single: Map<string, number[]>;                                                  // bin key → |off|
@@ -109,9 +134,12 @@ interface Acc {
   rejoin: number[]; rejoinWorst: string; rejoinOvershoot: number;
   timing: Map<string, number[]>;
   grp: Map<string, { last: number; idx: number }>;
+  singleWho: Map<string, { n: number; off: number; t: number }>;
+  detour: Set<string>;
+  detourAt: Map<string, number>;
   samples: number;
 }
-const newAcc = (): Acc => ({ centroid: new Map(), single: new Map(), rev: [], revIds: new Set(), rejoin: [], rejoinWorst: '', rejoinOvershoot: 0, timing: new Map(), samples: 0, grp: new Map() });
+const newAcc = (): Acc => ({ centroid: new Map(), single: new Map(), rev: [], revIds: new Set(), rejoin: [], rejoinWorst: '', rejoinOvershoot: 0, timing: new Map(), samples: 0, grp: new Map(), singleWho: new Map(), detour: new Set(), detourAt: new Map() });
 
 function freeOf(w: World, e: Entity): boolean {
   const m = minionState(e)!;
@@ -131,9 +159,10 @@ function clearOf(w: World, e: Entity): boolean {
   for (let i = 0; i < n; i++) {
     const o = q[i];
     if (o === e || !o.alive || o.kind === 'projectile' || o.kind === 'zone' || o.kind === 'ward' || o.kind === 'pickup') continue;
-    // its own side's bodies block only when they stand (fighting Wicks it walks round); fighters of its side ghost
+    // its own side's Wicks block when they stand or are held up (under 0.6 of their walk: fighting, a jammed blob it
+    // presses through); fighters of its side ghost
     if (o.kind !== 'structure' && o.team === e.team) {
-      const sp = o.stats.moveSpeed * 0.3;
+      const sp = o.stats.moveSpeed * 0.6;
       if (o.kind !== 'minion' || o.vx * o.vx + o.vy * o.vy >= sp * sp) continue;
     }
     if (Math.hypot(o.x - e.x, o.y - e.y) - o.radius - e.radius < CLEAR) return false;
@@ -172,7 +201,7 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
         const p0 = m.path[0];
         const road = roads.findIndex((g) => { const a = e.team === 0 ? g.pts[0] : g.pts[g.pts.length - 1]; return a[0] === p0[0] && a[1] === p0[1]; });
         const mm = m as unknown as { slot?: number };
-        t = { road, wave: 0, slot: mm.slot ?? 0, freeRun: 0, hist: [], wasFree: false, rj: null, lastS: NaN, settle: NaN, settleArc: 0 };
+        t = { road, wave: 0, slot: mm.slot ?? 0, freeRun: 0, hist: [], wasFree: false, rj: null, lastS: NaN, settle: NaN, settleArc: 0, px: e.x, py: e.y, forced: false };
         // wave number from spawn time (first + (n − 1) × interval)
         const mw = w.rules.minionWaves!;
         t.wave = Math.round((e.spawnTime - mw.first) / mw.interval) + 1;
@@ -187,18 +216,25 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       const off = dT - t.slot;
       // B5 timing (idle, waves 1-3)
       if (scen === 'idle' && t.wave <= 3) for (const tw of towers) {
-        if (tw.lane !== g.id || !tw.ent.alive) continue;
+        if (tw.lane !== g.id || !tw.ent.alive || tw.team !== e.team) continue;
         if (Math.hypot(tw.ent.x - e.x, tw.ent.y - e.y) - tw.ent.radius > 8) continue;
         const k = `${map}|${g.id}|t${e.team}|w${t.wave}|${tw.id}`;
         if (!firstT.has(k)) firstT.set(k, w.time);
       }
       const free = freeOf(w, e);
-      const clear = free && clearOf(w, e) && sT > SPAWN_SKIP && sT < g.len - END_SKIP;
+      // shoved faster than it walks (a knock, a blink landing on it): forced, and settling from there like after a fight
+      const shoved = Math.hypot(e.x - t.px, e.y - t.py) > e.stats.moveSpeed / 30 * 1.5;
+      t.px = e.x; t.py = e.y;
+      // … or feared, taunted, stunned, knocked: forced movement
+      const forced = shoved || !!e.dash || (e.ccMask & (CC_HARD | CC_FEAR | CC_TAUNT)) !== 0;
+      const wasForced = t.forced; t.forced = forced;
+      if (free && sT < 20 && e.path.length > 0 && !acc.detour.has(`${seed}#${e.id}`)) { acc.detour.add(`${seed}#${e.id}`); if (VERBOSE) { const k3 = `${g.id} t${e.team} s${Math.floor(sT / 4) * 4} slot${t.slot.toFixed(2)}`; acc.detourAt.set(k3, (acc.detourAt.get(k3) ?? 0) + 1); } }
+      const clear = free && !forced && clearOf(w, e) && sT > SPAWN_SKIP && sT < g.len - END_SKIP;
       // B4 rejoin episodes
       if (free && !t.wasFree && Math.abs(off) > 1) t.rj = { s0: sT, off0: off, done: false };
       // settling back on its column after a fight (any |off| > SETTLE): out of B1/B2 until |off| ≤ SETTLE or SETTLE_ARC + 2|off| m on
-      if (free && !t.wasFree && Math.abs(off) > SETTLE) { t.settle = sT; t.settleArc = SETTLE_ARC + 2 * Math.abs(off); }
-      if (!free || Math.abs(off) <= SETTLE || sT - t.settle > t.settleArc) t.settle = NaN;
+      if (free && !forced && (!t.wasFree || wasForced) && Math.abs(off) > SETTLE) { t.settle = sT; t.settleArc = SETTLE_ARC + 2 * Math.abs(off); }
+      if (!free || forced || Math.abs(off) <= SETTLE || sT - t.settle > t.settleArc) t.settle = NaN;
       if (!free && t.rj && !t.rj.done) t.rj = null;
       if (t.rj && free) {
         if (!t.rj.done && Math.abs(off) <= 0.5) {
@@ -223,7 +259,10 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       acc.samples++;
       const bk = `${map}|${scen}|${g.id}|t${e.team}|s${Math.floor(sT / BIN) * BIN}`;
       const inRejoin = !Number.isNaN(t.settle);
-      if (!inRejoin) { let b = acc.single.get(bk); if (!b) acc.single.set(bk, b = []); b.push(Math.abs(off)); }
+      if (!inRejoin) {
+        let b = acc.single.get(bk); if (!b) acc.single.set(bk, b = []); b.push(Math.abs(off));
+        if (VERBOSE && Math.abs(off) > 0.6) { const k2 = `${bk}|${seed}#${e.id}`; const o = acc.singleWho.get(k2); if (!o || o.n < 1e9) acc.singleWho.set(k2, { n: (o?.n ?? 0) + 1, off: Math.max(o?.off ?? 0, Math.abs(off)), t: o?.t ?? w.time }); }
+      }
       if (inRejoin) continue;
       let c = acc.centroid.get(bk); if (!c) acc.centroid.set(bk, c = new Map());
       // a wave is what passes the bin together (Wicks of one road and side, no 2 s gap): waves that merged after a
@@ -233,7 +272,7 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       gr.last = w.time;
       const wk = `${seed}/${gr.idx}`; let cw = c.get(wk); if (!cw) c.set(wk, cw = { off: 0, d: 0, n: 0, ids: new Map() });
       cw.off += off; cw.d += dT; cw.n++;
-      if (VERBOSE) { let r = cw.ids.get(e.id); if (!r) cw.ids.set(e.id, r = { n: 0, off: 0, fr: Infinity, t: w.time }); r.n++; r.off += off; r.fr = Math.min(r.fr, t.freeRun); }
+      { let r = cw.ids.get(e.id); if (!r) cw.ids.set(e.id, r = { n: 0, off: 0, fr: Infinity, t: w.time }); r.n++; r.off += off; r.fr = Math.min(r.fr, t.freeRun); }
     }
     if (!hashOnly && tick % 300 === 0) for (const id of tr.keys()) { const e = w.entity(id); if (!e || !e.alive) tr.delete(id); }
   }
@@ -254,7 +293,7 @@ for (const map of MAPS) for (const scen of SCENS) {
   let worstCMed = 0, worstCMax = 0, worstRaw = 0, worstP95 = 0, worstMax = 0, kC = '', kS = '', kM = '', kR = '';
   let bins = 0;
   for (const [bk, c] of acc.centroid) {
-    const cs = [...c.values()].filter((v) => v.n >= 15);
+    const cs = [...c.values()].filter((v) => v.n >= 15 && v.ids.size >= 2);
     if (cs.length === 0) continue;
     bins++;
     const offs = cs.map((v) => Math.abs(v.off / v.n)), raws = cs.map((v) => Math.abs(v.d / v.n));
@@ -266,7 +305,7 @@ for (const map of MAPS) for (const scen of SCENS) {
     if (mx > 0.30) bad(`B1 ${bk}: wave-centroid max |off| ${mx.toFixed(2)} > 0.30 (${cs.length} waves)`);
     if (VERBOSE) out.push(`    ${bk.padEnd(34)} centroid med ${med.toFixed(2)} max ${mx.toFixed(2)} raw max ${rmx.toFixed(2)} (${cs.length} waves)`);
     if (VERBOSE && mx > 0.3) {
-      const [wk2, v] = [...c].filter(([, v]) => v.n >= 15).sort((a, b) => Math.abs(b[1].off / b[1].n) - Math.abs(a[1].off / a[1].n))[0];
+      const [wk2, v] = [...c].filter(([, v]) => v.n >= 15 && v.ids.size >= 2).sort((a, b) => Math.abs(b[1].off / b[1].n) - Math.abs(a[1].off / a[1].n))[0];
       out.push(`      worst wave ${wk2}: ${[...v.ids].map(([id, r]) => `#${id} n${r.n} off ${(r.off / r.n).toFixed(2)} freeFor ${(r.fr / 30).toFixed(1)}s @${r.t.toFixed(1)}`).join(' | ')}`);
     }
   }
@@ -276,10 +315,12 @@ for (const map of MAPS) for (const scen of SCENS) {
     if (p95 > worstP95) { worstP95 = p95; kS = bk; }
     if (mx > worstMax) { worstMax = mx; kM = bk; }
     if (p95 > 0.6) bad(`B2 ${bk}: single-Wick |off| p95 ${p95.toFixed(2)} > 0.6 (n ${b.length})`);
+    if (VERBOSE && (p95 > 0.6 || mx > 1.2)) out.push(`      over 0.6: ${[...acc.singleWho].filter(([k]) => k.startsWith(`${bk}|`)).sort((a, b) => b[1].n - a[1].n).slice(0, 8).map(([k, v]) => `${k.slice(bk.length + 1)} n${v.n} max ${v.off.toFixed(2)} @${v.t.toFixed(1)}`).join(' | ')}`);
     if (mx > 1.2) bad(`B2 ${bk}: single-Wick |off| max ${mx.toFixed(2)} > 1.2 (n ${b.length})`);
   }
   out.push(`${map} ${scen}: ${acc.samples} free+clear samples, ${bins} bins; B1 centroid worst median ${worstCMed.toFixed(2)}, max ${worstCMax.toFixed(2)} (${kC}); raw mean-d max ${worstRaw.toFixed(2)} (${kR})`);
   out.push(`  B2 single Wick |off| worst p95 ${worstP95.toFixed(2)} (${kS}), max ${worstMax.toFixed(2)} (${kM})`);
+  out.push(`  B7 lantern detours in the first 20 m: ${acc.detour.size} Wicks${VERBOSE ? ` ${[...acc.detourAt].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k}: ${v}`).join('; ')}` : ''}`);
   out.push(`  B3 reversals ${acc.rev.length}${acc.rev.length ? `: ${acc.rev.slice(0, 5).map((r) => `${r.key} ${r.at}`).join('; ')}` : ''}`);
   if (acc.rev.length > 0) bad(`B3 ${map} ${scen}: ${acc.rev.length} marching Wicks reversed`);
   const rj = acc.rejoin;

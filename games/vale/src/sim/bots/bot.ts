@@ -46,6 +46,8 @@ import { fighterPower, memoryWeight } from './perception.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
 const MODE_TICKS = 6;
+/** round 2 experiment switch: plan-mode hysteresis and a sticky defend destination */
+const STICKY_PLAN = false;
 const MIN_MODE_TIME = 1.5;
 /** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
  *  — until this time, unless its team starts the endgame push sooner */
@@ -119,6 +121,8 @@ export class Bot extends BotBase implements BotController {
   private protectU = 0;
   /** owner_rulings 44: I am the designated peeler of the partner I protect */
   private protectDes = false;
+  /** round 2: the defend call I walk to, kept 5 s while it stands */
+  private defX = 0; private defY = 0; private defUntil = -1e9;
   /** an answered dive is seen through for 3 s after its last trigger (it does not drop the moment the burst pauses) */
   private protectUntil = -1e9;
   private protectAllyId = -1; private protectDiverId = -1;
@@ -493,6 +497,9 @@ export class Bot extends BotBase implements BotController {
       if (s <= 0) return;
       s += gauss(this.rng) * this.diff.decisionNoise * 0.3;
       if (m === this.mode) s += now - this.modeSince < 3 ? 0.12 : 0.05;
+      // (owner_rulings 44, round 2: between the team's plans — a defend call, the group's push, an objective — the plan I am on
+      // holds 8 s against a newcomer only a little better: the full-health back-and-forth walks were these three trading places)
+      if (STICKY_PLAN && m === this.mode && now - this.modeSince < 8 && (m === 'defend' || m === 'push' || m === 'objective')) s += 0.06;
       if (s > bestS) { bestS = s; best = m; }
     };
     // retreat
@@ -1449,6 +1456,14 @@ export class Bot extends BotBase implements BotController {
     if (ans !== undefined) { x = b.answerX[ans]; y = b.answerY[ans]; best = 3; }
     else if (this.lane >= 0 && b.defend[this.lane] > 0.05) { x = b.defendX[this.lane]; y = b.defendY[this.lane]; best = 2; }
     for (let i = 0; i < b.defend.length; i++) if (b.defend[i] > best) { best = b.defend[i]; x = b.defendX[i]; y = b.defendY[i]; }
+    // (round 2: the call I walk to holds 5 s while its threat stands — the strongest call changing lane every think sent the
+    // defender back and forth between two roads)
+    if (STICKY_PLAN && ans === undefined && this.now < this.defUntil && best > 0.05) {
+      let keep = this.defX === b.baseX && this.defY === b.baseY && b.baseThreat > 0.05;
+      for (let i = 0; i < b.defend.length && !keep; i++) if (b.defend[i] > 0.05 && b.defendX[i] === this.defX && b.defendY[i] === this.defY) keep = true;
+      if (keep) { x = this.defX; y = this.defY; }
+    }
+    if (x !== this.defX || y !== this.defY) { this.defX = x; this.defY = y; this.defUntil = this.now + 5; }
     // (round 2: no call left to answer — the mode is a moment stale: carry on with the plan, never toward the map's corner)
     if (best <= 0.05) { this.execLaneOrPush(); return; }
     this.pMove = true; this.pMoveX = x; this.pMoveY = y;

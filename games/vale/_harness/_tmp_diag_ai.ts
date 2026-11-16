@@ -100,6 +100,18 @@ for (let seed = seed0; seed < seed0 + seeds; seed++) {
         console.log(`DITHER seed ${seed} t ${now.toFixed(0)} p${p} t${f.team}: ${tr.filter((_, i) => i % 3 === 0).join(' | ')}`);
       }
     }
+    // pace: each team brain's plan every 30 s from 22:00
+    if (WHAT === 'pace' && now >= 1320 && w.tick % 900 === 0) {
+      for (const team of [0, 1]) {
+        const p0 = setup.seats.findIndex((x) => x.team === team);
+        const b = (ctrls[p0] as unknown as { brain?: { siege: Entity | null; rush: boolean; stage: boolean; group: boolean; window: boolean; press: boolean; gleamLead: number; aliveAllies: number; aliveEnemies: number; groupX: number; groupY: number; guard: Map<number, unknown> } }).brain;
+        if (!b) continue;
+        const sid = b.siege ? structuresOf(w).find((x) => x.ent === b.siege)?.def.id : '-';
+        const modes = setup.seats.filter((x) => x.team === team).map((x) => { const f = w.players[x.player].ent; const c = ctrls[x.player] as unknown as { mode?: string }; return f && f.alive ? `${String(c.mode).slice(0, 4)}${Math.round(f.hp / f.maxHp * 100)}` : `dead${Math.round(w.players[x.player].respawnIn)}`; }).join(' ');
+        const standing = structuresOf(w).filter((x) => x.def.team !== team && x.ent.alive).map((x) => x.def.id.replace(/^[as]_/, '').replace('needle_', 'n').replace('lantern', 'L')).join(',');
+        console.log(`seed ${seed} t ${(now / 60).toFixed(1)} T${team} siege ${sid} rush ${b.rush ? 1 : 0} stage ${b.stage ? 1 : 0} group ${b.group ? 1 : 0} win ${b.window ? 1 : 0} press ${b.press ? 1 : 0} lead ${b.gleamLead} alive ${b.aliveAllies}v${b.aliveEnemies} posts ${b.guard.size} | ${modes} | enemy up: ${standing}`);
+      }
+    }
     if (w.tick % 30 === 0) for (let p = 0; p < w.players.length; p++) { const h = hist.get(p) ?? []; h.push(String(ctl(p)?.mode ?? '?').slice(0, 4)); if (h.length > 6) h.shift(); hist.set(p, h); }
   }
 }

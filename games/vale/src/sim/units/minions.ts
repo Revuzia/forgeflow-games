@@ -147,7 +147,7 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
  *  `look` m further along the line (LANE_LOOK, or LANE_REJOIN × its distance off its column line when further out),
  *  offset by its column slot along the left normal of the segment the carrot lies on. Writes carrot; returns false
  *  when the carrot runs past the lane end (the Wick then holds the end itself). Only + − × ÷ √ (deterministic). */
-const carrot = { x: 0, y: 0 };
+const carrot = { x: 0, y: 0, lx: 0, ly: 0 };
 function laneCarrot(e: Entity, m: MinionState): boolean {
   const p = m.path, last = p.length - 1;
   let k = Math.max(1, m.wp), t = 0, bestD = Infinity, side = 0;
@@ -167,7 +167,8 @@ function laneCarrot(e: Entity, m: MinionState): boolean {
     const rest = (1 - t) * l;
     if (look <= rest && l > 1e-6) {
       const u = t + look / l, nx = -dy / l, ny = dx / l;
-      carrot.x = ax + dx * u + nx * m.slot; carrot.y = ay + dy * u + ny * m.slot;
+      carrot.lx = ax + dx * u; carrot.ly = ay + dy * u;
+      carrot.x = carrot.lx + nx * m.slot; carrot.y = carrot.ly + ny * m.slot;
       return true;
     }
     look -= rest;
@@ -180,7 +181,10 @@ function laneCarrot(e: Entity, m: MinionState): boolean {
 function followLane(w: World, e: Entity, m: MinionState): void {
   const p = m.path;
   if (p.length > 1 && laneCarrot(e, m)) {
-    const tx = carrot.x, ty = carrot.y;
+    let tx = carrot.x, ty = carrot.y;
+    // where the road narrows (a lantern or needle beside it) the column squeezes onto the line itself: a slot the walker
+    // cannot walk straight to would send it round on a nav detour
+    if (m.slot !== 0 && !w.nav.lineOfWalk(e.x, e.y, tx, ty, Math.min(e.radius, w.nav.cell * 0.45))) { tx = carrot.lx; ty = carrot.ly; }
     // walking to the carrot: re-sent only once it has moved LANE_REISSUE m on (issueMove drops the route each time),
     // and not while a nav detour (round a lantern, a wall) is walked unless that is nearly done
     if (e.order === ORDER_ATTACK_MOVE && m.lastWpX === m.lastWpX) {

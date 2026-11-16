@@ -229,10 +229,35 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
         if bad:
             raise SystemExit(f"{sid}: zone grade breaks the reserved-hue cap {cap} % (ruling 32, before -> after %): {bad}")
         shutil.copyfile(trial, glb)
+        if rec.get("materialTint"):
+            material_tints(glb, rec["materialTint"])
         print(r.stdout.strip().replace(trial, glb))
         print(f"{sid}: reserved hues (ruling 32) % before {pre} after {post}")
         print(f"{sid}: reserve aim {aim} % margin {margin} deg, WebP q {q}, GLB {before / 1024:.1f} -> {os.path.getsize(glb) / 1024:.1f} KiB")
     return {"sid": sid, "ok": True}
+
+
+def material_tints(glb: str, tints: dict) -> None:
+    """orch1 UNITS2: recipe "materialTint" {material name: [r, g, b, a]} sets an untextured material's base colour factor
+    (Ilsheta's chimney glass is its own BLEND material, outside the albedo the zones grade). Only the JSON chunk changes."""
+    with open(glb, "rb") as f:
+        b = f.read()
+    ln, ty = struct.unpack_from("<II", b, 12)
+    if ty != 0x4E4F534A:
+        raise SystemExit(f"{glb}: first chunk is not JSON")
+    js = json.loads(b[20:20 + ln])
+    rest = b[20 + ln:]
+    names = [m.get("name") for m in js.get("materials", [])]
+    for name, rgba in tints.items():
+        if name not in names:
+            raise SystemExit(f"{glb}: no material {name} ({names})")
+        js["materials"][names.index(name)].setdefault("pbrMetallicRoughness", {})["baseColorFactor"] = [float(v) for v in rgba]
+    raw = json.dumps(js, separators=(",", ":")).encode()
+    raw += b" " * (-len(raw) % 4)
+    out = struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(raw) + len(rest)) + struct.pack("<II", len(raw), 0x4E4F534A) + raw + rest
+    with open(glb, "wb") as f:
+        f.write(out)
+    print(f"material tints {tints}")
 
 
 def fighter_glb(sid: str) -> str | None:
