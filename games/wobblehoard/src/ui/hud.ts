@@ -95,18 +95,38 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
   setLabel(o.label);
 
   // One line, always: shrink the hint a little (down to 12 px) when the screen is too narrow for it at full size, and only
-  // wrap as a last resort. System fonts differ a lot in width, so this is measured, not guessed.
+  // wrap as a last resort (then on two lines at the largest size, up to the full one, that still fits in two). System fonts differ a lot in
+  // width, so this is measured, not guessed. The TEXT itself is measured (a Range) against the widest content box the pill may have (its
+  // max-width less border and padding). The old test compared scrollWidth with the padding box, and Chromium's scrollWidth leaves out the end
+  // padding of a line that overflows, so a line that ran into the pill's right padding counted as fitting (SHELL-4: the touch line at 390 px
+  // sat 6 px from the pill's right edge and 17 px from its left). Runs only on a resize, a wording change or the fonts loading.
   const MIN_FONT = 12;
+  const hintRange = document.createRange();
+  const hintTextWidth = (): number => { hintRange.selectNodeContents(hintEl); return hintRange.getBoundingClientRect().width; };
+  const hintLines = (): number => {
+    hintRange.selectNodeContents(hintEl);
+    const rs = hintRange.getClientRects(), tops: number[] = [];
+    for (let i = 0; i < rs.length; i++) { const t = Math.round(rs[i].top); if (!tops.includes(t)) tops.push(t); }
+    return tops.length;
+  };
   const fitHint = (): void => {
     hintEl.style.fontSize = '';
     hintEl.style.whiteSpace = 'nowrap';
     const cs = getComputedStyle(hintEl);
-    let size = parseFloat(cs.fontSize) || 14;
+    const full = parseFloat(cs.fontSize) || 14;
+    let size = full;
     const max = parseFloat(cs.maxWidth);
-    const border = hintEl.offsetWidth - hintEl.clientWidth; // box-sizing: border-box, scrollWidth excludes the border
-    const avail = (Number.isFinite(max) ? max : document.documentElement.clientWidth - 32) - border;
-    while (hintEl.scrollWidth > avail + 0.5 && size > MIN_FONT) { size -= 0.5; hintEl.style.fontSize = `${size}px`; }
-    if (hintEl.scrollWidth > avail + 0.5) hintEl.style.whiteSpace = ''; // still too long at the minimum: let it wrap
+    const side = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) + (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+    const avail = (Number.isFinite(max) ? max : document.documentElement.clientWidth - 32) - side;   // box-sizing: border-box
+    while (hintTextWidth() > avail + 0.5 && size > MIN_FONT) { size -= 0.5; hintEl.style.fontSize = `${size}px`; }
+    if (hintTextWidth() <= avail + 0.5) return;
+    // still too long at the minimum: let it wrap, and grow back while it stays on two lines
+    hintEl.style.whiteSpace = '';
+    while (size < full) {
+      hintEl.style.fontSize = `${size + 0.5}px`;
+      if (hintLines() > 2) { hintEl.style.fontSize = `${size}px`; break; }
+      size += 0.5;
+    }
   };
   fitHint();
   // The HUD root is fixed full-screen, so a ResizeObserver on it fires after every viewport / orientation change, once layout

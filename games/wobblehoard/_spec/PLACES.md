@@ -23,6 +23,12 @@ the Float rule is one rule (P12, D-83); (7) weather strikes ring things but coun
 gate flagged in the cells and three hard names are replaced ("stops it still", "beans in a jar", "tinkly"; the Fireplace, Fireside Warmth,
 Window Chill), and CS-05 applies to names only (7).
 
+**Revision 4, 2026-11-16 (the last fix pass, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93):** (1) Home's corral bounds hold
+every slot and LIFE's Home targets lie between framed points (4.1, D-87); (2) Home's other five things have laid spots in both frames, each with the
+party size from which it shows, all at 3 or fewer; the Keepsake Shelf is 1.2 m wide and Lamp Warmth is r 1.2 (4.1, D-88); (3) every ride keeps its
+rider's whole path inside the bounds and has room for a pusher, and the cabin is re-laid to it in both layouts (P7, M8, 4.2, D-91); (4) the Leaf
+Teeter's pivot is 0.24 m, so its board clears the floor (4.5); (5) the Shake Pine can be shaken by keyboard (4.4, D-93).
+
 **Owner asks this page serves:** ask 1 (places: Home plus nine places beyond it, the owner's beach, snowy mountain and log cabin among them)
 and ask 2 (things in each place that every material family uses in its own way). The checks named here (DT-, PH-, RD-, FN-, CS-) are defined in
 `PLAYGROUND_BUILD.md` section 18.
@@ -41,7 +47,7 @@ Coordinates: metres, x to the right, **z toward the default camera** (positive z
 | P4 | **Water is shallow everywhere:** a water surface is at most **0.30 m** above the ground (pools, baths, the steam pool, the glow pool; puddles, surf and dishes 0.04 to 0.12 m). No rims to climb: the edge of the water is a render-only ring (foam, bubbles, steam, glowing moss, frost) that hides the water's side, and a 0.4 m depth ramp in physics so nothing pops at the edge. | The lowest eye anchor of any whole squishy is about 0.40 m (R 0.40 at an eye elevation of 3 degrees): every resting body keeps its eyes above water, so nothing ever looks like drowning (JUDGE_FUN F11, JUDGE_COHERENCE M12). Who floats is generated from data (2.5). |
 | P5 | **At most 8 moving props and 20 collider primitives per place** (a ring counts its segments, at most 6); at most **one free prop** (a ball). Every moving prop is a 1-DOF joint (hinge or slider) or the one ball. | Props integrate once a frame with a one-frame lag, stable only for damped 1-DOF joints and one clamped ball (PHYS map 2, E5); the broad phase is a bounding-sphere test per primitive per substep, so the cap keeps it small (PH-12 measures it). |
 | P6 | **A clear ceremony pad**: a disc of r 1.2 m at (0, 0) with no thing in it and **no physics zone reaching into it** (water, current, wind, updraft, magnet: the pad is dry and still; a warm, cold, wet or echo flag may reach into its edge); the capsule lands there and the reveal plays there. **Spawn spots: at least five** (one per whole of the high tier; six where the place allows), each at least 0.9 m from every thing (a moving prop's swept range counts: a swing's arc, a seesaw's tilt, a chime's swing), inside the bounds shrunk by R 0.625 + 0.2 m, and at least 1.25 m apart where the place allows (never under 1.0 m). **Things keep at least 0.3 m between their colliders**, swept ranges included (walls excepted). These hold in **each layout** (P7). | Ceremonies assume a clear pad at (0, 0) on y = 0 (RENDER map 7); a floater revealed in water would float during its reveal (REVIEW_game-truth M15); a body brought onto an occupied spot pops out (STATUS known open); 0.9 m = the largest R 0.625 plus 0.275 m; a body is at most 1.25 m across. |
-| P7 | **Two layouts per place** (`PlaceDef` holds the wide one and `PlaceDef.tall`; D-68). **Wide** (a frame with aspect 0.9 or more, the `matLayout` test): play bounds a rounded rectangle, half sizes 3.4 x 2.4 m, corner radius 0.8, centred at (0, 0); the soft rim bounce of today (RIM_BOUNCE 0.35) at the open front; walls and parapets are static boxes. Things sit in four bands around the pad: left and right (abs x 1.3 to 3.4), back (z -2.4 to -1.3) and front (z 1.3 to 2.4, low things only: static things at most 0.4 m tall, so nothing hides the party from the camera; a ball may start there). A thing may stand in a rounded corner against the walls (inside the walls' rectangle); every use spot stays inside the rounded bounds. **Tall** (aspect under 0.9, a portrait phone): body bounds half sizes **1.25 x 3.0 m**, corner radius 0.4; things stand in the back band (z under -1.3), in the side strips between the bounds and **the tall frame** (abs x at most 1.82 - 0.128 z, from z -3.7 to 3.4: the floor seen inside the HUD insets at 390 x 844 when the camera frames the tall bounds, less 0.1 m) and in the front band (low things); rides and every use spot inside the bounds. The layout is chosen at arrival; a rotation that crosses 0.9 re-lays the place at the next idle moment under the travel crossfade. | A body is 0.8 to 1.25 m across (R 0.4 to 0.625, shape.ts 68); 6.8 x 4.8 m holds 5 wholes with room to move. Framed whole on a 390 x 844 phone, that frame makes a 1 m squishy about 57 CSS px wide (the width binds, REVIEW_game-truth M1); the tall layout gives about 101 px at the front and 83 px mid (RD-17; my fit, PLAYGROUND_BUILD 14.4). |
+| P7 | **Two layouts per place** (`PlaceDef` holds the wide one and `PlaceDef.tall`; D-68). **Wide** (a frame with aspect 0.9 or more, the `matLayout` test): play bounds a rounded rectangle, half sizes 3.4 x 2.4 m, corner radius 0.8, centred at (0, 0); the soft rim bounce of today (RIM_BOUNCE 0.35) at the open front; walls and parapets are static boxes. Things sit in four bands around the pad: left and right (abs x 1.3 to 3.4), back (z -2.4 to -1.3) and front (z 1.3 to 2.4, low things only: static things at most 0.4 m tall, so nothing hides the party from the camera; a ball may start there). A thing may stand in a rounded corner against the walls (inside the walls' rectangle); every use spot stays inside the rounded bounds. **Tall** (aspect under 0.9, a portrait phone): body bounds half sizes **1.25 x 3.0 m**, corner radius 0.4; things stand in the back band (z under -1.3), in the side strips between the bounds and **the tall frame** (abs x at most 1.82 - 0.128 z, from z -3.7 to 3.4: the floor seen inside the HUD insets at 390 x 844 when the camera frames the tall bounds, less 0.1 m) and in the front band (low things); rides and every use spot inside the bounds. **A ride keeps its rider's whole path inside the bounds** (a swing's seat centre over its whole arc, rope x sin(limit) to each side; a seesaw's rider spots), with a rider of R 0.625 on it clear of every wall and 0.625 m from every other collider, and **a swing has a push spot** (one end of the seat's arc plus 1.3 m) inside the bounds with room for a pusher of R 0.625 (revision 4, D-91; DT-01). The layout is chosen at arrival; a rotation that crosses 0.9 re-lays the place at the next idle moment under the travel crossfade. | A body is 0.8 to 1.25 m across (R 0.4 to 0.625, shape.ts 68); 6.8 x 4.8 m holds 5 wholes with room to move. Framed whole on a 390 x 844 phone, that frame makes a 1 m squishy about 57 CSS px wide (the width binds, REVIEW_game-truth M1); the tall layout gives about 101 px at the front and 83 px mid (RD-17; my fit, PLAYGROUND_BUILD 14.4). |
 | P8 | **The camera frames the whole play bounds of the layout in use** (`StageLike.setPlayBounds`), whole bodies and a back body's bubble inside the HUD insets (for the tall layout my fit used pitch 0.5 rad at about 14 m on 390 x 844, inside the allowed pitch range); the player orbits (yaw within 60 degrees of the place's front, pitch 0.15 to 0.9 rad) and zooms (0.7 to 1.6) as today. **Autonomy never moves the camera.** At Home the framing stays today's framing of the mat slots in use (4.1). | JUDGE_COHERENCE M10: a follow of a wandering party is autonomous camera motion. |
 | P9 | **Colours are mixes of the 8 `theme.ts` tokens** in OKLCH (ink, plum, dusk, felt, amber, lagoon, coral, cream; `src/ui/theme.ts` 4-13) with their derived tones; no other hue. Words like "brass", "copper" or "wood" in this page name the thing, not a new colour: the look is an amber, coral or plum mix. No pastel (L at least 0.80 with chroma under 0.09 is forbidden, the probe_catalog pastel rule). **Play-area mean linear luminance at most 0.35** (CS-06), so the additive glows, light pools and rings still read; a bright place keeps the ceremony dim (eases in at least 1.0 s, counted by the flash probe). | JUDGE_COHERENCE M13; the look is built on a dark backdrop (RENDER map 7). |
 | P10 | **No animals and no people**: things are objects, plants and weather; no bird, insect or animal sounds in any ambience. The squishies are the only creatures. | DIRECTION D10. |
@@ -67,7 +73,7 @@ Coordinates: metres, x to the right, **z toward the default camera** (positive z
 | M5 | ramp | box, fixed, tilted, with capsule side rails | angle at most 16 degrees; top at most 0.55 m; mu 0.05..0.6 | no | **ride**: slides down when the player sets it at the top; asks with a ride wish |
 | M6 | pool | a water zone over flat ground with a render-only edge ring | surface 0.04..0.30 m; a 0.4 m physics depth ramp at the edge | via the zone | walks in and out anywhere; floats or wades by its family (2.5) |
 | M7 | seesaw | box board on hinge1 (horizontal axis at mid-thickness) | board length L 1.6..2.4 m (two riders need 2 x 0.625 + a gap), thickness t at least 0.16; pivot 0.12..0.30 m; limit at most 14 degrees; **the floor rule: pivot >= (L / 2) sin(limit) + (t / 2) cos(limit)**, so the low end never goes below y = 0 (the table pass holds every particle at y >= 0, the prop pass has no floor: a board through the floor would squeeze a rider between them); at least 0.6 m from a board end to a wall; I 0.3..0.8; damping 0.6..1.5 /s | yes | **ride**: two the player sets on it teeter by themselves (turn by turn, small hops in turn; each stays on for its RIDE, LIFE B20) |
-| M8 | swing | capsule seat on hinge1 hung from a pivot | rope 1.2..1.5 m; limit at most 30 degrees (seat speed at most 2.0 m/s: v = sqrt(2 g L (1 - cos limit)), 1.94 m/s at 1.4 m and 30 degrees); seat r 0.08..0.10 at 0.15..0.22 m, its total length 0.5..0.9 m; damping 0.15..0.4 /s | yes | pushes a friend's seat from behind (floor level); riding is a **ride** |
+| M8 | swing | capsule seat on hinge1 hung from a pivot | rope 1.2..1.5 m; limit at most 30 degrees (seat speed at most 2.0 m/s: v = sqrt(2 g L (1 - cos limit)), 1.94 m/s at 1.4 m and 30 degrees); seat r 0.08..0.10 at 0.15..0.22 m, its total length 0.5..0.9 m; damping 0.15..0.4 /s | yes | pushes a friend's seat from its push spot (one end of the seat's arc plus 1.3 m, `ThingDef.push`, floor level; S11); riding is a **ride**; the rider's whole path stays inside the bounds (P7) |
 | M9 | turntable | disc box on hinge1 (vertical axis), **flush: its top at y = 0**, optional motor | r 0.5..0.8; motor at most 0.4 rad/s (rim at most 0.3 m/s) | yes | walks onto it and rides round |
 | M10 | chime | small capsule or box hanging on hinge1 at body height, struck by contact | note from D major pentatonic (MIDI 62..83); limit 25 degrees; damping 0.8 /s; hang height 0.30..0.70 m | yes (light) | bumps past it: it swings and rings |
 | M11 | pad | disc box on slider1 (vertical), **flush: top at y = 0 at rest**, kicks up when struck | r 0.35..0.6; travel up at most 0.10 m; gain 1.0..1.25 x the family's bounce gain; apex cap at most 0.35 m; at most 5 bounces in a row | yes | walks on, one small hop, and the pad does the rest |
@@ -244,35 +250,59 @@ designer). Ambience recipes are built from the existing synthesis blocks (AUDIO 
 thing out it is today's frame bit for bit, and until the life chunk lands (the first seconds of play, PLAYGROUND_BUILD 11.14) Home is today's toy.
 **Ground** felt, every modifier 1.0, so every existing probe row stays valid. **Camera** today's framing of the mat slots in use (no camera
 move from autonomy; P8). **Spawn** `'matLayout'`: today's `stage.matLayout(n)` slots (stage.ts 87-88; nested, x bodyScale), checked by DT-01 on
-the real slot output, never a fixed list. **Bounds** (D-67): Home's LIFE bounds are **the visible table** (`StageLike.visibleTable`: the table
-area inside the frame and outside the HUD insets at the rest framing) shrunk by R + 0.2 m, a rounded rectangle recomputed when the party or the
-frame changes, never from autonomy; the Felt Ball's prop bounds are the visible table shrunk by its radius, so a boop never rolls it out of view.
-(By projection with the stage's camera, one body shows a half-width of about 0.76 m of table on 390 x 844 and 1.51 m on 1280 x 800; a disc of r
-3.1 m, the first design, let the only squishy walk out of a phone's view: REVIEW_game-truth B2.) **Zones** Lamp Warmth (warm 0.4, disc r 0.8
-around the Warm Lamp).
+the real slot output, never a fixed list. **Bounds and LIFE's targets** (revision 4, D-87; said once here, in LIFE 5.7 and in PLAYGROUND_BUILD
+11.13): the corral (`setBounds`) gets the smallest rectangle (corner radius 0) that holds the visible table (`StageLike.visibleTable`: the full
+visible depth by the near row's x range, PLAYGROUND_BUILD 9) and the body of every slot in use plus 0.05 m, recomputed when the party or the frame
+changes, never from autonomy, so the corral never moves a body resting at its own slot; LIFE's targets are points on a segment between two framed
+points (the home slots of the characters out, and the use spots of the arrived things), which are in view by construction; the Felt Ball's prop
+bounds are the visible table shrunk by its radius, so a boop never rolls it out of view. (By projection with the stage's camera, the near row of
+the table with one body is only 0.78 to 1.22 m wide on 390 x 844 at scale 0.8 to 1.25, about the body's own width, and on 1280 x 800 the bottom
+HUD covers the table in front of the body; revision 3 shrank that table by R + 0.2 m for the corral too, which left the body's own slot outside it
+in every case, CONFIRM CT-M8; a disc of r 3.1 m, the first design, let the only squishy walk out of a phone's view: REVIEW_game-truth B2.)
+**Zones** Lamp Warmth (warm 0.4, disc r 1.2 around the Warm Lamp; revision 4: at r 0.8 a body of R 0.625 could not stand with its centre in the
+glow beside the lamp's base).
 
 **Things arrive one by one** (so minute 0 stays clean and Home grows as you play). Each thing has a **spot per frame** (TALL and WIDE, the
-`matLayout` test) **in slot units, multiplied by bodyScale** like the slots themselves (`PlaceDef.unit = 'slot'`); it arrives at its event
-(the table) **and only once its footprint is inside the visible table** at the current party (the view changes only with the party, a player act or
-a ceremony); until then it waits, not drawn and with no collider; it arrives with a little scale-in (Calm or reduced motion: a fade). The
-rules every spot must pass (DT-01's Home row and RD-16): at least 0.275 m from every body of every `matLayout` slot (both frames, 1 to 5 bodies,
-body scale 0.8 to 1.25, R = 0.5 x scale), the free Felt Ball at least 0.05 m; things 0.3 m apart; in view at the party where it is meant to arrive.
-**The Felt Ball's spots** are TALL (0, 0.9) and WIDE (0.85, -0.75), x bodyScale: by my script (`ballcheck2.mjs`, stage.ts 87-88 and its camera
-scaled with the body as stage.ts 468 does) the gap to the nearest slot body is 0.10 / 0.18 / 0.28 m (TALL) and 0.08 / 0.15 / 0.25 m (WIDE) at
-scale 0.8 / 1.0 / 1.25, and the whole ball is in the one-body view inside the HUD insets at 390 x 844 and 1280 x 800. **The other five spots are
-laid by the DATA lane** against these rules and RD-16, each reported: with one squishy on a phone the visible table holds the body and the ball
-only, so the Music Box, the rug and the lamp arrive when the party has widened the view (my candidate spots for them, at the frame's side edges,
-failed either the slot gap or the one-body view, so I give the rules and not numbers). A ring does not fit at Home, so Home's nap spot is a flat
-patch, the Snooze Rug.
+`matLayout` test) **in slot units, multiplied by bodyScale** like the slots themselves (`PlaceDef.unit = 'slot'`; WIDE in the PlaceDef's own
+fields, TALL in `tall`), with **the smallest party from which it shows** in that frame (`fromN`). It shows once its event (the table) has happened
+**and** the party is at least its `fromN` (the view changes only with the party, a player act or a ceremony); until then it waits, not drawn and
+with no collider; it arrives with a little scale-in (Calm or reduced motion: a fade); if the party later drops under `fromN` it is parked until
+the party is back. **The rules every spot passes** (DT-01's Home row and RD-16): at least 0.275 m from every body of every `matLayout` slot (both
+frames, 1 to 5 bodies, body scale 0.8 to 1.25, R = 0.5 x scale), the free Felt Ball at least 0.05 m; colliders 0.3 m apart; on the felt; its
+footprint corners at y 0 and at its top inside the HUD insets at every party from `fromN` to 5 and every scale; its top centre behind no slot body
+and no other shown thing; nothing over 0.4 m tall in front of the front slot row (it would hide the party); `fromN` at most 3, so every tier shows
+every thing; and its use spot (where a body stands to use it) holds a whole body in view clear of the other slot bodies.
+
+**The spots (revision 4, D-88; slot units x bodyScale).** Found by my search (scratch `pg_fix4/homespots.mjs`, with the earlier fixer's camera
+model `pg_fix3/homegeo.mjs`, which follows stage.ts 87-88, 255-330 and 520-535) and confirmed by that fixer's independent checker
+(`pg_fix3/check2.mjs`: every spot "ok"); the use spots by `usespots.mjs` and `lampglow.mjs`. The HUD insets assumed: 390 x 844 top 151, bottom
+170, left 16, right 60 CSS px; 1280 x 800 120 / 150 / 24 / 24 (PLAYGROUND_BUILD 11.13 says what happens if the UI overhaul's differ).
+
+| Thing | TALL spot (a portrait frame) | shows from | WIDE spot | shows from | Use spot (TALL; WIDE) | Slot gap at the worst scale (TALL; WIDE) |
+|---|---|---|---|---|---|---|
+| Felt Ball | (0, 0.9) | 1 out | (0.85, -0.75) | 1 out | behind the ball, toward where it should roll | 0.10; 0.08 m (needs 0.05) |
+| Music Box | (0.75, 1.55) | 2 out | (2.25, -1.05) | 2 out | none (they sway and sing where they stand) | 0.76; 0.29 m |
+| Snooze Rug | (0.3, 0) | 2 out | (0, -0.35) | 2 out | the play body naps on it at its own slot (the rug's centre is within 0.65 m of slot 0 at every scale); the second napper at (0.25, -1.0); (-0.25, -1.0) | a walk-on patch |
+| Warm Lamp | (-1.05, 0.45) | 3 out | (-0.6, -2.35) | 3 out | in its glow at (-0.76, 1.2); (0.16, -2.2) | 0.28; 1.33 m |
+| Keepsake Shelf | (0.2, -2.5) | 2 out | (0.9, -1.6) | 1 out | none (they look at a new keepsake from where they are) | 0.28; 0.73 m |
+| Bounce Pad (S2) | (-0.8, 1.75) | 3 out | (-0.75, -1.25) | 3 out | on it at (-0.65, 1.9); (-0.65, -1.45) | 0.74; 0.29 m |
+
+The closest colliders are 0.31 m apart (TALL: the ball and the pad) and 0.30 m (WIDE: the pad and the lamp). With one squishy on a phone the view
+holds the body and the Felt Ball only, so everything else waits for the newcomer (the Music Box and the rug at two out, as the S0 exit and H10
+need) or the third squishy (the lamp and the pad on a phone). **The Felt Ball on a phone with one squishy** leaves only 0.02 / 0.09 / 0.16 m of
+roll room away from the body at scale 0.8 / 1.0 / 1.25, and no ball spot in that view gives more than 0.08 m (`ballroom.mjs`): FN-01's 0.2 m
+cannot hold there with today's framing, so PLAYGROUND_BUILD 24's first question decides how (on 1280 x 800 it is 0.24 / 0.38 / 0.55 m). A ring
+does not fit at Home, so Home's nap spot is a flat patch, the Snooze Rug; the 1.8 m shelf of revision 3 did not fit both frames with the others,
+so the shelf is 1.2 m wide with two rows of ten keepsakes.
 
 | Thing | Arrives | Mechanism and numbers | You can | They do by themselves |
 |---|---|---|---|---|
 | Felt Ball | at the start | M13 ball r 0.22, mass 0.2, roll damping 0.6 /s, at its spot above | tap or flick it to roll it ("Roll the Felt Ball" on the keyboard) | notice it, hop to it, boop it (the first minute: LIFE 4.1 FIRST_PLAY, QUESTS 13); pass it between two |
-| Music Box | at the start, once its spot is in view | M1 block 0.40 x 0.30 x 0.30 + M14 tune | tap it: an 8-bar tune (29.1 s at 66 BPM) in the sounding field (the bed mutes its mallets), at most one start per 40 s; a second tap stops it (D-81) | sway on the beat and sing along (Sing together) |
-| Snooze Rug | after the first hello | ground patch, a darker stitched felt disc r 0.7, grip 1.15, a nap spot (rest falls twice as fast) | carry a sleepy one there | sleepy ones go there to nap; two or more make a snuggle pile |
-| Warm Lamp | after the first capsule | M1 base 0.36 x 0.20 x 0.36 + warm zone r 0.8 + M14 dim and bright | tap it: dim or bright | bask in the glow (sun bubble); marshmallows go faintly golden (toast at most 0.3) |
-| Keepsake Shelf | with the Home finale | M1 block 1.8 x 0.32 x 0.36, holds up to 20 keepsakes (QUESTS 10) | tap a keepsake: it rings or glows and says where it came from | look at a new keepsake with a sparkle |
-| Bounce Pad | after the Hearthlog finale, once the flush pad ships (S2; in an S1 build the finale gives its keepsake and gift only) | M11 pad r 0.40, flush, gain 1.1, apex cap 0.30 m | drop a squishy on it: boing | bouncy ones walk on and bounce three times |
+| Music Box | at the start, once its spot is in view (two out in both frames, the table above) | M1 block 0.40 x 0.30 x 0.30 + M14 tune | tap it: an 8-bar tune (29.1 s at 66 BPM) in the sounding field (the bed mutes its mallets), at most one start per 40 s; a second tap stops it (D-81) | sway on the beat and sing along (Sing together) |
+| Snooze Rug | after the first hello (two out) | ground patch, a darker stitched felt disc r 0.7, grip 1.15, a nap spot (rest falls twice as fast) | carry a sleepy one there | sleepy ones go there to nap; two or more make a snuggle pile |
+| Warm Lamp | after the first capsule, once its spot is in view (three out in both frames) | M1 base 0.36 x 0.20 x 0.36 (its shade reaches 0.6 m) + warm zone r 1.2 + M14 dim and bright | tap it: dim or bright | bask in the glow (sun bubble); marshmallows go faintly golden (toast at most 0.3) |
+| Keepsake Shelf | with the Home finale, once its spot is in view (two out on a phone, one on a wide frame) | M1 block 1.2 x 0.45 x 0.30 with two rows of ten, holds up to 20 keepsakes (QUESTS 10) | tap a keepsake: it rings or glows and says where it came from | look at a new keepsake with a sparkle |
+| Bounce Pad | after the Hearthlog finale, once the flush pad ships (S2; in an S1 build the finale gives its keepsake and gift only), from three out | M11 pad r 0.40, flush, gain 1.1, apex cap 0.30 m | drop a squishy on it: boing | bouncy ones walk on and bounce three times |
 
 | Family | Felt Ball | Snooze Rug | Warm Lamp | Music Box | Bounce Pad |
 |---|---|---|---|---|---|
@@ -313,27 +343,33 @@ edge, 1.8 m. **Window Chill**: cold 0.3, a box.
 | Fireplace | (-2.4, -2.15) | (1.18, -3.4) |
 | Fireside Warmth (fire point) | (-2.4, -1.6) (its edge reaches 0.12 m into the pad's rim: a flag zone, P6) | (1.18, -2.85) |
 | Window Chill | box 1.8 x 1.2 at (2.4, -1.9) | box 0.8 x 1.0 at (-0.8, -1.7) |
-| Singing Kettle | (2.6, -1.95) | (-1.98, -3.44) |
-| Pillow Swing | pivot (0, 1.62, -1.85); swings across the room (along x): the seat sweeps x -0.79..0.79 | pivot (-1.08, 1.62, -2.88); swings toward the camera (along z): the seat sweeps z -3.67..-2.09 |
+| Singing Kettle | (3.15, -1.95) (revision 4: against the side wall, so the swing's push spot is clear) | (-1.98, -3.44) |
+| Pillow Swing | pivot (0, 1.62, -1.7) (revision 4: 0.15 m forward, so a rider of R 0.625 clears the back wall); swings across the room (along x): the seat's centre sweeps x -0.70..0.70 (-0.79..0.79 with its radius); push spot (2.0, -1.7), from the side | pivot (-0.93, 1.62, -2.29) (revision 4: the rider's whole path now inside the bounds); swings toward the camera (along z): the seat's centre sweeps z -2.99..-1.59 (-3.08..-1.50 with its radius); push spot (-0.93, -0.29), from the front |
 | Rocker Board | (1.55, 2.05), along x; riders at x 0.80 and 2.30; its end 0.75 m from the wall | (0.03, 3.0), along x; riders at x -0.72 and 0.78, on the bounds' front edge (inside: the corral acts only past the dead zone's edge, softbody.ts 1609) |
 | Snug Basket | (-1.8, -0.45), gap toward the room (+x); warmth 0.70 at its centre | (1.05, -1.85), gap toward the camera (+z); warmth 0.87 at its centre |
-| Yarn Ball (start) | (-1.35, 1.9) | (1.07, 2.07) |
+| Yarn Ball (start) | (-1.35, 1.9) | (1.25, 2.15) (revision 4: 0.2 m out of the spawn strip) |
 | Rug | disc r 1.4 at (0.8, 0.9) | disc r 1.0 at (0, 1.0) |
-| Spawn | (-0.6, -0.5), (0.75, -0.2), (2.15, 0.55), (-0.15, 0.75), (1.95, -0.75), (-2.55, 1.5): 6 spots, the closest pair 1.31 m apart | (-0.41, -0.69), (0.42, -0.13), (-0.38, 0.48), (0.39, 1.13), (-0.37, 1.8): 5 spots, the closest pair 1.00 m apart |
+| Spawn | (-0.65, -0.42), (0.75, -0.2), (2.15, 0.55), (-0.15, 0.75), (1.95, -0.75), (-2.55, 1.5): 6 spots, the closest pair 1.27 m apart (revision 4 moved the first 0.09 m off the swing's swept range) | (-0.4, -0.6), (0.4, 0), (-0.4, 0.6), (0.4, 1.2), (-0.4, 1.8): 5 spots, the closest pair 1.00 m apart (re-laid in revision 4: the swing's new sweep closed the old ones) |
 
-**Layout check** (2026-11-15, revision 3: the scratch script `final_cabin2.mjs`, after a randomized search, with DT-01's rules as revised:
-colliders inside the walls (wide) or the tall frame and outside the pad, swept ranges, thing-to-thing clearance 0.3 m, spawn spots at least 0.9 m
-from every thing and inside the bounds shrunk by 0.825 m, the back and front bands, the seesaw floor rule, the ring opening): **0 problems in each
-layout**, with one size per thing for both layouts (a `ThingDef` has one size; a layout gives only x, z and yaw). The revision 2 cabin failed the
-new rules: its rocker's low corner went 0.085 m into the floor at 12 degrees (REVIEW_code-truth M9), its 1.6 m board could not hold two riders
-and ended 0.15 m from the wall (REVIEW_game-truth m4), and its basket's opening (1.20 m) was narrower than the largest body (M8).
+**Layout check** (2026-11-16, revision 4: the scratch script `pg_fix4/cabin_final3.mjs`, with DT-01's rules as revised: colliders inside the walls
+(wide) or the tall frame and outside the pad, swept ranges, thing-to-thing clearance 0.3 m, spawn spots at least 0.9 m from every thing and inside
+the bounds shrunk by 0.825 m, the back and front bands, the seesaw floor rule, the ring opening, **and the revision 4 ride rows**: every rider's
+centre on its whole path inside the rounded bounds, a rider of R 0.625 on it clear of the walls and 0.625 m from every other collider, the swing's
+push spot inside the bounds with a pusher of R 0.625 clear, the basket's inner spot and gap waypoint inside the bounds): **0 problems in each
+layout**, with one size per thing for both layouts (a `ThingDef` has one size; a layout gives only x, z and yaw). The closest rider comes 0.72 m
+(wide) and 0.84 m (tall) from a collider; the pushers are 0.90 m and 1.55 m clear; the basket's warmth stays 0.70 (wide) and 0.87 (tall). The
+revision 3 cabin failed the ride rows: its tall rider reached z -3.58, 0.58 m past the bounds and 0.45 m into the back wall (CONFIRM N3; DT-01 had
+checked only the rider's rest spot), and its wide rider of R 0.625 reached 0.075 m into the back wall with the free push spot 0.35 m from the kettle.
+The revision 2 cabin had failed the rules before them: its rocker's low corner went 0.085 m into the floor at 12 degrees (REVIEW_code-truth M9), its
+1.6 m board could not hold two riders and ended 0.15 m from the wall (REVIEW_game-truth m4), and its basket's opening (1.20 m) was narrower than the
+largest body (M8).
 
 | Thing | Mechanism and numbers | You can | They do by themselves |
 |---|---|---|---|
 | Fireplace | M1 block 1.4 x 0.9 x 0.5 + Fireside Warmth + M14 fire: the fire puffs up for 5 s (more embers, a louder crackle) | tap it: the fire grows ("Tap the fireplace" on the keyboard, "Tap it yourself") | bask; marshmallows toast golden, then **hop back from the heat** when they are done (a hop away from the fire point once toast passes 0.6); mochi rises; slime oozes flat; the firm ones bask with slow, deep breaths |
-| Rocker Board | M7 seesaw: board 2.2 x 0.16 x 0.6 along x, pivot 0.24 m, limit 8 degrees (the floor rule needs 1.1 sin 8 + 0.08 cos 8 = 0.232 m), I 0.7, damping 0.9 /s; riders' spots at its ends, +-0.75 m from the pivot | poke an end to rock it; set two squishies on the ends | **ride**: two set on it stay for their ride (RIDE, LIFE B20) and teeter by themselves, one at a time; one alone shows a star bubble, "Ride with me!" |
+| Rocker Board | M7 seesaw: board 2.2 x 0.16 x 0.6 along x, pivot 0.24 m, limit 8 degrees (the floor rule needs 1.1 sin 8 + 0.08 cos 8 = 0.232 m), I 0.7, damping 0.9 /s; riders' spots at its ends, +-0.75 m from the pivot | poke an end to rock it ("Rock the Rocker Board" by keyboard, "Tap it yourself"); set two squishies on the ends | **ride**: two set on it stay for their ride (RIDE, LIFE B20) and teeter by themselves, one at a time; one alone shows a star bubble, "Ride with me!" |
 | Yarn Ball | M13 ball r 0.24, mass 0.2, roll damping 0.5 /s | tap or flick it ("Roll the Yarn Ball") | chase it, boop it, pass it between friends; sticky ones carry it a little |
-| Pillow Swing | M8 swing hung from a ceiling beam (render only): rope 1.4 m, pivot 1.62 m up, seat capsule r 0.09 and 0.7 m total length at 0.22 m, limit 30 degrees (the seat sweeps 0.79 m to each side and rises to 0.41 m), damping 0.25 /s | set a squishy on the seat; poke the seat to push | push a friend's seat from the side it swings toward; riding is a **ride** |
+| Pillow Swing | M8 swing hung from a ceiling beam (render only): rope 1.4 m, pivot 1.62 m up, seat capsule r 0.09 and 0.7 m total length at 0.22 m, limit 30 degrees (the seat's centre sweeps 1.4 sin 30 = 0.70 m to each side, 0.79 m with its radius, and rises to 0.41 m), damping 0.25 /s; its push spot per layout (the table above) | set a squishy on the seat; poke the seat to push ("Push the Pillow Swing" by keyboard, "Tap it yourself") | push a friend's seat from the push spot as it swings back (S11); riding is a **ride** |
 | Snug Basket | M4 ring r 0.89, 6 segments r 0.09, gap 120 degrees toward the room: a clear opening of 2 x 0.89 x sin 60 - 0.18 = 1.36 m and a clear inner radius of 0.80 m, inside the warmth | drop a squishy in | **one curls up inside** and naps, warm from the fireplace; **friends nap against it** (a pile counts for the basket when any napper's centre is inside it, D-76) |
 | Singing Kettle | M1 stove block 0.5 x 0.5 x 0.4 + a kettle sphere r 0.22 on top + M14 tune; it **whistles by itself**: one bar (3.6 s) every 45 to 90 s (seeded), never within 60 s of a Music Box tune, with a steam puff (wet look +0.2 on bodies within 1.2 m for 4 s) (D-81) | tap it: it whistles now | everyone turns to look; the chatty ones **answer the kettle** with their own call (Use LISTEN) |
 
@@ -415,7 +451,7 @@ gusts across the back third every 9 to 14 s for 2 s, strength 0.6: airborne bodi
 | Icicle Bells | M10 x4 hanging bars r 0.08 x 0.25, notes A4 D5 E5 A5, under an M2 rail, at (-2.9, 0.7) | tap each one | ring them when they pass; a wind gust rings them too (a sound only: no USE event, no quest, D-64) |
 | Snowdrift Nest | M4 ring r 0.90, 5 segments r 0.10 (snow look), gap 125 degrees (a clear opening of 2 x 0.90 x sin 62.5 - 0.20 = 1.40 m), at (-1.9, 1.7) (to be re-checked by DT-01 in the S2 re-lay) | drop a squishy in | one curls up inside out of the wind; friends nap against it |
 | Snowball | M13 ball r 0.25, mass 0.35, roll damping 0.6 /s, at (0.6, 1.6) | tap or flick it | push it to a friend: it rolls into them and leaves them snowy (+0.3) |
-| Shake Pine | M2 trunk r 0.12, 1.2 m tall + a branch on M8 hinge1 (capsule r 0.08, 0.5 m, pivot at 0.95 m, limit 20 degrees, damping 2 /s), at (-0.6, -2.0) | tap it: it shakes | a bump on the trunk at 0.3 m/s or more swings the branch: a snow puff falls on anyone within 0.7 m (snow +0.5, a wow) |
+| Shake Pine | M2 trunk r 0.12, 1.2 m tall + a branch on M8 hinge1 (capsule r 0.08, 0.5 m, pivot at 0.95 m, limit 20 degrees, damping 2 /s), at (-0.6, -2.0) | tap it: it shakes ("Shake the pine" by keyboard, "Tap it yourself": the same poke on the branch, PLAYGROUND_BUILD D-93) | a bump on the trunk at 0.3 m/s or more swings the branch: a snow puff falls on anyone within 0.7 m (snow +0.5, a wow; the puff is a `lifeAddLook` with the pine as its source, so I4 counts it whoever shook the pine) |
 
 | Family | Snow and Cold | Ice Pond and Glide Ramp | Steam Pool | Shake Pine | Snowball | Icicle Bells | Snowdrift Nest |
 |---|---|---|---|---|---|---|---|
@@ -448,7 +484,7 @@ Leaf Drip (wet 1.0 under the drip leaf, a disc r 0.6).
 | Thing | Mechanism and numbers | You can | They do by themselves |
 |---|---|---|---|
 | Splash Spots | M6 x3 shallow pools, no edge ring (a puddle needs none) | toss a squishy in: a big splash | hop into them: **splash jumps** (a small hop that lands in the water: splash, wet) |
-| Leaf Teeter | M7 seesaw: a leaf board 1.8 x 0.16 x 0.8 on a pebble pivot 0.16 m, limit 10 degrees, at (2.4, -0.9) | poke an end; set two on it | **ride**: two set on it teeter |
+| Leaf Teeter | M7 seesaw: a leaf board 1.8 x 0.16 x 0.8 on a pebble pivot **0.24 m** (revision 4: the floor rule needs 0.9 sin 10 + 0.08 cos 10 = 0.235 m; at 0.16 m its low corner went 0.075 m into the floor, CONFIRM CT-M9), limit 10 degrees, at (2.4, -0.9) | poke an end ("Tap it yourself" by keyboard); set two on it | **ride**: two set on it teeter |
 | Moss Bouncer | M11 pad r 0.45, flush, a soft moss look, gain 1.2, apex cap 0.30 m, at (-2.4, -0.3) | drop a squishy on it | walk on, a little hop, boing, boing |
 | Drip Leaf | M1 stalk 0.20 x 1.6 x 0.20 + a leaf card + Leaf Drip zone + M14 shower, at (-1.6, -2.0) | tap it: the leaf tips a shower | stand under it for a shower; foams soak and then squirt |
 | Stepping Stones | ground patch path | line squishies up on it | follow the leader along the stones |
@@ -755,7 +791,8 @@ a mixing bowl (M4 ring), a rolling pin (M13 with a capsule shape flag; it pairs 
 | Checks | automatic: DT-01..16, RD-01..04, RD-07, RD-13, RD-16, RD-17, AU-06 run on every PlaceDef and both of its layouts | |
 
 About two engineer-days of content plus one browser pass. The size gate grows by the place's three chunks: the nine places fill D9's 2000 KB total
-with the life chunk (PLAYGROUND_BUILD 14.3), so a tenth place needs the place chunks to average under 40 KB or the owner to raise D9's ceiling (V4).
+with the life chunk (PLAYGROUND_BUILD 14.3: 1990 KB by the caps in revision 4), so a tenth place needs the ten place chunks to average at most
+41.5 KB or the owner to raise D9's ceiling (V4).
 
 ---
 
@@ -788,3 +825,9 @@ Ball's Home spots (`ballcheck2.mjs`), the tall frame (`tallvis.mjs`: the floor s
 screen above. **Not checked:** the tall framing on any other portrait size; Home's other five spots; Fizzwell's and Cloudloft's new positions;
 any S2 or S3 tall layout (none exists yet); whether each S2 and S3 cell maps to a channel (DT-06 will); a rider on the tall rocker at the bounds'
 edge under real physics (PH rows).
+**Revision 4, what I checked:** the cabin's two layouts with the ride rows (`pg_fix4/cabin_final3.mjs`, 0 problems each; the revision 3 layout fails
+them), the tall swing's pivot and both layouts' spawn spots by search (`tallsearch.mjs`, `spawn3.mjs`), Home's twelve spots and their use spots
+(`homespots.mjs`, `usespots.mjs`, `lampglow.mjs`; cross-checked by `pg_fix3/check2.mjs`), the Felt Ball's room (`ballroom.mjs`), the Leaf Teeter's
+floor rule by hand (0.235 m needed). **Not checked:** the Home spots against the UI overhaul's real HUD insets (they are not built yet); Home with the
+player's orbit or zoom (the spots are for the rest framing); any S2 or S3 ride or push spot (the Leaf Teeter, the Clothesline Hammock and the Kite
+Swing get the ride rows when their slice is laid); the tall framing's px numbers after the swing's move (the bounds did not change).

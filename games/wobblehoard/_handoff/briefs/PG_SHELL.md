@@ -13,6 +13,14 @@ path); the keyboard keeps Tab for the browser (D-77); only completable quests ar
 the Float rule (D-83); the quest moment's haptic only for the player's own deed (D-84); settings version 3; the Snap shutter with an in-page
 preview; landscape layouts and one live-region queue.
 
+**Revision 4 (2026-11-16, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93).** What changed for you: the awake budget's
+**floor** (1.06 on low at F = 4) and the **ride allowance** (while a ride moment runs, the riders' units add to the cap and its own mover is never
+cancelled; D-85); **Home's corral rectangle** is the union of `visibleTable` and every slot's body plus 0.05 m, and LIFE's Home targets come from
+**`lifeSetHome`** (D-87); Home's things show by their spot's **`fromN`** (D-88, PLACES 4.1's table); **`lifeSetPlace` takes the PlaceDef, the
+layout and the body scale**, with the same visit number on a re-lay (D-89); **"Tap it yourself"** reaches every thing a tap moves (D-93);
+`wishes.ts`, the moments queue, the party toolbar, the name-tag popover and the Snap shutter are **imported statically by the LIFE host** and
+ship in the life chunk (150 KB; D-92); `auto` never counts a lock alone (D-86).
+
 ## When you may start
 **Only after SHELL-4 is verified** (both independent verifiers, STATUS "IN PROGRESS") **and the UI overhaul has landed its tokens and components**
 (STATUS "QUEUED" 1, `_spec/UI.md`). The SHELL-4 engineer is in `src/shell`, `src/ui`, `src/input` and `_harness/browser_shell.mjs` today. You
@@ -25,7 +33,9 @@ unit weights before PG_LIFE fixes the caps; the over-budget rule reads the caps 
   (travel), the life chunk loader; the party manager grows out of `mat.ts`; additions to `game.ts`, `cut.ts`, `feedback.ts`, `hudBinding.ts`,
   `debugHook.ts`, `boot.ts`
 - `src/ui/**`: `journal/*`, `travel.ts`, `tracker.ts`, `wishes.ts` (bubble hit areas and word labels), the moments queue, the gift card, the
-  settings rows, the party toolbar, the Snap shutter and preview; `src/input/**` (`keyboard.ts`); `src/core/settings.ts`; **the Settings members of
+  settings rows, the party toolbar, the Snap shutter and preview (revision 4: `wishes.ts`, `moments.ts`, `partybar.ts`, `nametag.ts` and
+  `shutter.ts` are imported statically by `src/shell/life.ts`, so they ship in the life chunk, PLAYGROUND_BUILD 11.10; the Journal, Travel and the
+  gift card in the screens chunk); `src/input/**` (`keyboard.ts`); `src/core/settings.ts`; **the Settings members of
   `src/contracts.ts`** (11.9, one change with settings.ts so the typecheck stays clean)
 - `_harness/browser_shell.mjs` (new sections, the PF rows, the T2 G0 row), `_harness/shellview/node_checks.ts` (new sections), `_harness/uikit/`
   entries for every new HUD element
@@ -84,8 +94,11 @@ arrival rule) and 4.2 (the cabin's two layouts); `_spec/UI.md`; `_spec/LOCK.md` 
    style, the Music setting, your own sim-time tune timers, the 66 BPM grid on sim time, never `musicClock`, D-66); `units` with PF-00's weights;
    the `phone` boolean (coarse pointer or short side under 600 CSS px); `quiet` (a ceremony, a cut busy, any non-Hand tool, Travel or Journal open,
    the desktop Hoard's hold, a hidden tab; the cut squishy's own group leaves it 1 s after the swipe); **the one arbiter** (finger > cut and
-   ceremony > LIFE; SCOOT to `scootTo` only); **the awake budget** (D-61, SH-22: over `unitCap` cancel the farthest untouched LIFE mover and
-   `sleep()` untouched still wholes, farthest first; the touched, carried, tossed and riding bodies are never forced); `lifeLooks` to `setBodyLook`
+   ceremony > LIFE; SCOOT to `scootTo` only); **the awake budget** (D-61, D-85, SH-22: over `unitCap`, with the floor from `attention.ts` and the
+   riders' units added while their ride moment runs, cancel the farthest untouched LIFE mover, never a ride moment's own mover, and `sleep()`
+   untouched still wholes, farthest first; the touched, carried, tossed and riding bodies are never forced); **the place into LIFE** (D-89):
+   `lifeSetPlace(w, placeIdx, visit, def, layout, bodyScale)` on travel and, with the same visit number, on a re-lay; at Home
+   `lifeSetHome(w, slot, x, z)` per character (its `stage.matLayout` slot) at spawn and on every party or frame change; `lifeLooks` to `setBodyLook`
    and `mods[4]` **for every family**; `lifeAddLook` with its source thing; `lifeSetJournal(owned, openPlaces, favKnown, thingKinds)` on a journal
    or open-place change; `lifeSetPair`; **`lifeScript`** for FIRST_PLAY (a fresh profile, 6 s after the player lets go of Dollop, once ever),
    FIRST_WISH (60 s after the first reveal, at the latest 5:00; **its arg is the wisher's slot by D-70**: Dollop if out, else a Hearthlog fan out,
@@ -113,11 +126,14 @@ arrival rule) and 4.2 (the cabin's two layouts); `_spec/UI.md`; `_spec/LOCK.md` 
    `resolveSettings`, **`SETTINGS_VERSION` 3**; `settingsCtl.ts` applies them live; `settingsPanel.ts` rows "Voices", "Place sounds", "Squishies move
    on their own" with its help line "When off, they stay where you put them. They still look around and chirp, and play when you ask.", "Words
    under bubbles"; node_checks section 6 reads a v2 and a v3 blob, including with the old code).
-9. **Home's view and things** (11.13, PLACES 4.1, SH-21): Home keeps today's framing of the mat slots in use; each thing arrives at its event
-   (the ball and the Music Box at the start, the rug after the first hello, the lamp after the first capsule, the shelf with the Home finale, the
-   Bounce Pad only once pads ship in S2) **and only once its footprint is inside `stage.visibleTable`** at the current party, with a scale-in (Calm
-   or reduced motion: a fade); Home's LIFE bounds = the visible table shrunk by R + 0.2 m and the Felt Ball's bounds = the visible table shrunk by
-   its radius, recomputed when the party or the frame changes, never from autonomy. Then the **tracker pill** (SH-20: the first unfinished main
+9. **Home's view and things** (11.13, PLACES 4.1, SH-21; revision 4, D-87, D-88): Home keeps today's framing of the mat slots in use; each thing
+   shows after its event (the ball and the Music Box at the start, the rug after the first hello, the lamp after the first capsule, the shelf with
+   the Home finale, the Bounce Pad only once pads ship in S2) **and while the party is at least its spot's `fromN`** in the frame in use (PLACES
+   4.1's table; parked, no collider, below it), with a scale-in (Calm or reduced motion: a fade). **The corral rectangle** (`setBounds` on every
+   party body) = the smallest rectangle (round 0) holding `stage.visibleTable` and every slot's body plus 0.05 m; **LIFE's Home targets** come
+   from `lifeSetHome` (the slots) and the arrived things' use spots, never a shrunk table; the Felt Ball's bounds = the visible table shrunk by its
+   radius; all three recomputed when the party or the frame changes, never from autonomy. The spots assume the HUD insets of PLAYGROUND_BUILD
+   11.13: report the insets the UI overhaul really gives (`setSafeInsets`) to PG_DATA, whose DT-01 Home row re-lays a spot that fails on them. Then the **tracker pill** (SH-20: the first unfinished main
    quest of this place's chapter that can be done now, K when the last input was a key, never a hidden quest, then Home's, then Friends
    Everywhere's); **the Journal** with Home's chapter on the UI overhaul's components (the lazy screens chunk), the family name on every page and
    tile, the button's name "Journal, something new" while its dot shows; the party toolbar and Space on the focused squishy; the dev hook's
@@ -128,7 +144,9 @@ arrival rule) and 4.2 (the cabin's two layouts); `_spec/UI.md`; `_spec/LOCK.md` 
 11. **SZ-01 at S0**: once the orchestrator has landed task T1 (the G0 split in `vite.config.ts`), do task T2 (the prod-build row reads the build's
     own `[G0]` line: first load at most 1300 KB, total at most 2000 KB) and measure the PLAYGROUND first-load delta and each lane's cap (one build:
     a heavy job). **Your first-load cap is 12 KB** (the ring, the `simStep` lines, the party manager, the buttons, the pill's shell, the settings
-    rows, the keyboard); everything else of yours goes in the life chunk or the screens chunk. After every step report the minified bytes of each
+    rows, the keyboard); everything else of yours goes in the life chunk (the hosts, the attention wiring and, imported statically by the LIFE host,
+    `wishes.ts`, `moments.ts`, `partybar.ts`, `nametag.ts`, `shutter.ts`: about 15 KB, D-92) or the screens chunk. Until the life chunk lands, the
+    keyboard and the Snap bar work as today (one squishy, Save = capture + download). After every step report the minified bytes of each
     new or grown module (14.3's one-file rolldown build); a lane over its cap moves code out before the next step.
 
 ## Build: S1 "Hearthlog Cabin" (first shippable)
@@ -137,7 +155,8 @@ arrival rule) and 4.2 (the cabin's two layouts); `_spec/UI.md`; `_spec/LOCK.md` 
     false` places are not shown), "Who's coming?", `whenIdle`, `leaving()` (reconnect a cut, release locks), `loadPlaceDef`, `stage.loadPlace` and
     `audio.loadAmbience` prefetched on idle when the place opens, **the layout from the frame's aspect** (under 0.9: the tall layout, D-68), the 0.6 s
     crossfade, `buildPropWorld(place, layout, bodyScale)`, `setPropWorld`, `setBounds` (the layout's bounds), the modifiers, spawn at rest then
-    `sleep()` except the first moverCap members (B09's arrival hop through the gate), `lifeSetPlace`, VISIT, `setAmbience`, `setMusicStyle`,
+    `sleep()` except the first moverCap members (B09's arrival hop through the gate), `lifeSetPlace(w, placeIdx, visit, def, layout, bodyScale)`
+    (a new visit number; the same one on a re-lay after a rotation), VISIT, `setAmbience`, `setMusicStyle`,
     `setPlayBounds` with the layout's bounds, `setObstacles`; "Packing up..." after 300 ms; a load failure keeps the player where they were
     ("Hearthlog Cabin did not load. Try again."); the arrival line "You are at Hearthlog Cabin.". **A rotation that crosses aspect 0.9** re-lays the
     place at the next idle moment by the same path under the crossfade (nothing is lost); until then the camera frames the current layout.
@@ -157,14 +176,17 @@ arrival rule) and 4.2 (the cabin's two layouts); `_spec/UI.md`; `_spec/LOCK.md` 
     squishy's 3:1 ring and name tag; Space on the focused squishy; the keyboard stretch (hold Space, an arrow pulls through the real driver, paid
     like a pull); **Enter** opens its wish card, else the name tag popover, and reads a showing bubble into the live region (counts as EMOTE_TAP,
     H6); the popover's "Go play with..." (floor things: PLAY_WITH, which works with autonomy off; rides: `carryTo`, never paid) and **"Tap it
-    yourself"** (every switch and ball, by the same path as a pointer tap, by PLAYER: "Tap the fireplace", "Roll the Felt Ball"); the Escape order
+    yourself"** (revision 4, D-93: every switch, every ball and every thing a tap swings: the Shake Pine, the chimes, bells, crystals and
+    lanterns, a seesaw end, a swing seat; a thing of several parts taps its next part in prop order at each press; by the same path and impulse
+    as a pointer tap, by PLAYER: "Tap the fireplace", "Roll the Felt Ball", "Shake the pine"); the Escape order
     (tray, Settings, Journal, Places, Hoard, tool, plate, then locks), focus back to the opener. SH-14 walks C8 end to end by keyboard.
-16. **The Snap shutter** (11.15): a shutter button that captures one clean frame, shows an in-page preview from a downscaled data URL and pushes PHOTO
+16. **The Snap shutter** (11.15; `src/ui/shutter.ts`, in the life chunk: until it lands the Snap bar's Save works as today): a shutter button that captures one clean frame, shows an in-page preview from a downscaled data URL and pushes PHOTO
     into the ring at that moment; Save (the download) is optional in the preview; "Bubbles in photo" (`setEmotesInPhoto`) and "Pose!"; Snap hides
     the DOM overlays; the Friendship Frame's thumbnail (at most 12 KB, `wobblehoard:v2:journal.frame`) at the X8 photo (SH-18: X8 with no download).
 17. **Landscape** (QUESTS 15, SH-15): at 844 x 390 and 568 x 320 the plate and the wish card sit in the left half under the pill.
 18. Browser rows SH-14 to SH-19 and UI-01 to UI-04; **PF-01 to PF-04** (the Hearthlog med cap scenario with a 4x CPU throttle; low; the cut scenario
-    3 wholes + 5 pieces with the others asleep; a 10-minute soak) against the caps PF-00 set; FN-03's scripted Home and Hearthlog visits, in both
+    3 wholes + 5 pieces with the others asleep; a 10-minute soak) against the caps PF-00 set; **PF-06** (revision 4: the ride case, two riders
+    teetering and one rider pushed by a LIFE pusher, on low and med; physics at most 8.0 ms and the frame at most 16.7 ms); FN-03's scripted Home and Hearthlog visits, in both
     layouts.
 
 ## Build: S2 and S3
@@ -175,13 +197,13 @@ uses the same rule: the spray, `lifeAddLook` wet +0.3 and soak -0.4, `lifeScript
 motor, a tune, the echo, the comet), wind gusts in the zone mask only while a gust blows, the five places.
 
 ## Acceptance ids you must make pass
-SH-01 to SH-22, UI-01 to UI-04, PF-01 to PF-04, SZ-01 to SZ-04 (with T1 and T2), FN-01 (SH-19), FN-03 (scripted visits through the dev hook); SH-05
+SH-01 to SH-22, UI-01 to UI-04, PF-01 to PF-04 and PF-06, SZ-01 to SZ-04 (with T1 and T2), FN-01 (SH-19), FN-03 (scripted visits through the dev hook); SH-05
 is the node twin of EC-03; SH-11 is the Float rule (was PH-21); the existing gates stay green (`shellview/node_checks` 124/124 and up, `probe_app`
 183/183, `probe_gestures` 128/128, `probe_cut`, and the SHELL-4 browser sections). One browser at a time.
 
 ## Budgets
 Shell 0.6 ms and UI 1.0 ms of a 16.7 ms med frame; 0 B per 600 frames with no physics event (SH-01, SH-04); your first-load share at most 12 KB, the
-hosts and the attention wiring in the life chunk (about 16 KB of its 110), the Journal and Travel UI in the lazy screens chunk (at most 45 KB with
+hosts and the attention wiring in the life chunk (about 16 KB of its 150) with the five play-time UI modules (about 15 KB), the Journal and Travel UI in the lazy screens chunk (at most 45 KB with
 `journal_text.ts`); 44 px targets; every grid takes its columns from the width (320 x 568); every new colour pair in `CONTRAST_PAIRS`; every new HUD
 element in `_harness/uikit/` in every state (UI.md 5).
 

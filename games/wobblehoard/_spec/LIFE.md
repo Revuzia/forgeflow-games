@@ -25,6 +25,13 @@ table (5.7); (8) "the player is touching" never means a lock alone, and B08 is b
 falls only while its cause is absent (3, 3.1); (10) autonomy off still lets a player-asked use and a ride move that one squishy (5.6); (11) one
 wish bubble on screen, one piece group everywhere (10.1), and the colours and Calm fades of the bubbles (7).
 
+**Revision 4, 2026-11-16 (the last fix pass, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93):** (1) the motion gate's floor
+holds one awake whole and every sleeper, a ride moment has its riders' allowance, and a boop that does not fit is a soft boop, so LIFE never
+freezes on low and every moment plays on every tier (10.3, 6.1); (2) a body bump is `auto` unless a finger, a grab or a carry is on either body,
+never for a lock alone (L3, 10.2); (3) Home's targets lie between framed points, and use spots are exempt from the R + 0.2 m shrink (5.7); (4)
+LIFE receives its PlaceDef, layout and body scale, and Home's home slots (12); (5) a floater leaves the water by `scootTo` (5.3); (6) S11's
+pusher pushes from the swing's push spot (6.1, 5.3); (7) a switch tap is noticed by every squishy near it (5.3).
+
 **Owner asks this page serves:** ask 2 (things used "in their own way": the gaits, poses and family reactions), ask 3 (several squishies at once,
 social and cute, with emotes and little voices), ask 4 (pieces join in, and the feedback stays calm with many characters).
 
@@ -36,7 +43,7 @@ social and cute, with emotes and little voices), ask 4 (pieces join in, and the 
 |---|---|---|
 | L1 | **LIFE is pure**: `src/life/**` imports only `./`, `../core/`, `../data/` and `../contracts.ts` (types); no DOM, three, physics, render, audio, shell, timers, `Date.now`, `Math.random` or `performance.now`. Same seed and same snapshots give the same intents, bit for bit (LF-01, LF-12). | Determinism under the dev hook; node-testable. |
 | L2 | **The player comes first.** A touch, grab, carry or lock on a character makes its brain HELD in the same step (section 5.5); player-caused feedback (`feedback.ts`) is never budgeted; while the player is touching (a finger down, a grab or a carry, never a lock alone), other bubbles stop and other voices duck. | DIRECTION D1; C 5.4; a lock may stay while the player watches (LOCK.md 1), so it must not silence the party. |
-| L3 | **Autonomy can never pay.** No intent kind presses, grabs or locks; every autonomous landing and prop bump carries `auto` and is dropped before `collection.feed`; the quest reducer never sees a meter function. A no-input hour earns 0 squish points, 0 task progress, 0 capsules, 0 gifts (EC-02). | DESIGN 5.4 (taps pay nothing; release and snap are the only paying kinds, `meterfeed.ts` 43-65). |
+| L3 | **Autonomy can never pay.** No intent kind presses, grabs or locks; every autonomous landing, prop bump and body bump carries `auto` (a body bump is `auto` unless a finger, a grab or a carry is on either body, never for a lock alone: PLAYGROUND_BUILD D-86) and is dropped before `collection.feed`; the quest reducer never sees a meter function. A no-input hour earns 0 squish points, 0 task progress, 0 capsules, 0 gifts (EC-02). | DESIGN 5.4 (taps pay nothing; release and snap are the only paying kinds, `meterfeed.ts` 43-65). |
 | L4 | **Mostly still, so bodies sleep.** Most behaviours do not translate the body: gaze, blinks, expressions, bubbles and the render-side lean and sway cost about nothing. Only scoot, hop, glide and the last centimetres to a contact are physics, and they need a mover token (section 10.3); every joint moment moves one character at a time while the others wait still (and may sleep). | A resting awake body costs 0.69 ms, asleep it should cost about 0.02 (PHYS map 4, 6); on the phone (F = 4) a med frame holds about 1.5 awake wholes (10.3). |
 | L5 | **One brain per whole squishy; a cut squishy keeps one brain** that leads its pieces as a group. | No messaging, no double booking; pieces add no brains (C R5). |
 | L6 | **No guilt, no loss.** Needs exist only while a squishy is out and reset each time it comes out; nothing decays; a huff starts only from a squishy-to-squishy event in the scene, lasts at most 3 s and any touch turns it into a giggle. No "sad", "lonely", "grumpy", "hurt", "misses you", "come back" or "hurry" anywhere (LF-13, DT-02). | JUDGE_FUN F3, JUDGE_COHERENCE M4; DESIGN 8.4. |
@@ -116,7 +123,7 @@ piece, C = chunk.
 |---|---|---|---|---|---|---|---|---|
 | B01 | idle | always (0.10) | still | breathing, blinks, a look about every 2.2..5.8 s | none | anything better | none | W F C |
 | B02 | notice | a thing moves within 1.5 m, a body arrives, a land or bump within 1.5 m, or a new thing or squishy within the perception radius not seen this visit (0.9, once per target per visit) | still | gaze within 0.15 s, then a render lean of 0.06 R toward it | question if curious > 0.5; a rising chirp | 1.5 s | 4 s per source | W F |
-| B03 | wander | play > 0.3, nothing of interest within 1.5 m, untouched 4 s (0.3 + 0.4 play x bouncy) | moves | gait steps to a point inside bounds - (R + 0.2) (at Home: the visible table shrunk by R + 0.2, 5.7), outside the things' 0.4 m keep-outs | none | arrived, or blocked 2 s | 6 s | W F |
+| B03 | wander | play > 0.3, nothing of interest within 1.5 m, untouched 4 s (0.3 + 0.4 play x bouncy) | moves | gait steps to a point inside bounds - (R + 0.2) (at Home: a point between two framed points, 5.7; with one squishy on a portrait phone that is only the way to the ball and back, so B03 does not fire there), outside the things' 0.4 m keep-outs | none | arrived, or blocked 2 s | 6 s | W F |
 | B04 | use a thing | play > 0.4 and a free floor-usable thing within 3 m (0.3 + 0.5 play + 0.3 [favourite] + family affinity) | moves, then still or riding | walk to its use spot, then the mechanism use (5.3) in the family's way (PLACES 3, 4) | the thing's icon (ball, bell, star, droplet, note); a joy call | the use is done (3..12 s), or rest > 0.8 | 15 s per thing | W F |
 | B05 | bask or warm up | a comfort look > 0.5 with a remedy zone within 3 m, or a warm zone within 2 m and dozy > 0.5 (0.7), or a warm zone within 3 m it has not been in this visit (0.5: everyone goes to look at the fire once) | moves, then still | walk in, then the family's warm pose (PLACES 2.4); a family with `toast` whose toast passes 0.6 hops once away from the heat point (about 0.3 m) and basks on there, so "toasts golden, then hops back from the heat" is a real behaviour (PLACES 4.2, D-80) | sun, flame or droplet | the look under 0.1, or 15 s | 20 s | W F |
 | B06 | nap | rest > 0.75, or dozy > 0.6 with a nap spot within 2 m (0.8 + 0.4 dozy) | moves, then still | walk to a nap spot (a rug, a warm corner, or a ring: first to a waypoint 0.6 m outside its gap's mouth, then in through the gap) or beside a sleeping friend; settle; **the body sleeps** | sleepy eyes; one zzz (one per pile) | a touch; rest < 0.1 after 30..90 s; a toss landing within 1 m (it wakes with a blink) | 30 s | W F C |
@@ -124,7 +131,7 @@ piece, C = chunk.
 | B08 | afterglow | the player released, snapped or poked it (1.0) | still | spring back (physics), gaze to the camera | its loved touch: sparkle and a happy squint, a chirp an octave up (+1 warmth, at most 3 a day); else a giggle 40% of the time. Its bubble and voice are **budgeted as P1** requests (10.2): quick taps across a party never pass the caps | 1.5 s | none | W F C |
 | B09 | arrive | a trip ended, or it came out (1.0) | one hop, through the motion gate | one arrival hop (a pulse for non-hoppers) for the members that get a mover token; the others arrive asleep (the shell spawns them at rest) and show a happy squint; a NEW squishy keeps 0.5 m of extra distance and looks down between glances for 20 s (the shy arrival), and still says hello within 5 s from where it is (that hello is an S01 greet with the nearest party member, whatever the distance, so it counts for H5 and friendship) | one shared sparkle for the party | 1 s (20 s shy) | per visit | W F C |
 | B10 | love its place | its first 10 s in its favourite place, once per visit (0.95) | still | a big squash and stretch pose, a render wiggle at 3 Hz for 0.6 s | sparkle; the joy call | 2 s | per visit | W F |
-| B11 | come back | outside bounds - 0.4 m after a toss (1.0) | moves | gait back toward the middle | none | inside | none | W F C |
+| B11 | come back | outside bounds - 0.4 m after a toss (1.0; at Home: a toss that lands more than 0.5 m from every segment between framed points, 5.7) | moves | gait back toward the middle (at Home: to its home slot) | none | inside | none | W F C |
 | B12 | pose | the Snap tool is in hand, or "Pose!" is pressed (1.0) | still | stop, face the camera, happy eyes | one sparkle | the tool changes | none | W F |
 | B13 | watch | the player touches another character within 3 m, or a cut starts nearby (0.6) | still | gaze at it | one shared wow if it is tossed or cut | the touch ends | none | W F |
 | B14 | cheer | a quest completes, a squishy is whole again, a friend arrives (shell-scripted, 1.0) | one hop | one small hop | star or sparkle; a trill | 1.2 s | none | W F |
@@ -232,13 +239,13 @@ chain, no wiggle above 2 Hz, no bubble bob (JUDGE_COHERENCE M24).
 | pad | walk on, one small hop; the pad's gain does the rest (at most 5 bounces) | drop it on |
 | turntable | walk on, ride round (friction with the surface velocity) | set it on; wind the motor |
 | ball | walk or hop into it toward a partner or a target; chase it | flick it (`PropWorldLike.poke`) |
-| chime, bell, crystal, lantern | bump past it (a contact strikes it) | tap it |
-| pool, puddle, dish | walk in and out anywhere; floaters float, the rest wade (PLACES 2.5); a splash jump is one small hop that lands in it; **after 30 s in water by itself it heads out** to the nearest dry spot (a floater by `moveTo` on the surface), and it never naps in water (S2; LF-18, CS-07) | toss or carry it in (a squishy the player set in water stays until it has had its 30 s) |
+| chime, bell, crystal, lantern | bump past it (a contact strikes it) | tap it (or "Tap it yourself" by keyboard: the next part at each press, PLAYGROUND_BUILD D-93) |
+| pool, puddle, dish | walk in and out anywhere; floaters float, the rest wade (PLACES 2.5); a splash jump is one small hop that lands in it; **after 30 s in water by itself it heads out** to the nearest dry spot (a floater by `scootTo` too, never `moveTo`: `scootTo` glides a floating body horizontally while the water holds its height, and the body becomes a sitter as the depth ramps down at the edge, PLAYGROUND_BUILD 8.7, PH-15), and it never naps in water (S2; LF-18, CS-07) | toss or carry it in (a squishy the player set in water stays until it has had its 30 s) |
 | block, bar, mound | lean on it; peekaboo at its two peek spots (left and right of it as the camera sees it, `ThingDef.peek`, S13); parade under an arch | set it on a mound (it slides off) |
-| swing | push a friend's seat from behind (floor level) | **ride**: set it on the seat (it stays, B20), poke to push |
+| swing | push a friend's seat from the swing's **push spot** (`ThingDef.push`: one end of the seat's arc plus 1.3 m, inside the bounds, laid by DT-01; floor level), S11 | **ride**: set it on the seat (it stays, B20), poke to push |
 | seesaw | two on it teeter by themselves: small hops in turn (a hop from a supported prop face, PLAYGROUND_BUILD.md 8.3) | **ride**: set two on the ends (each stays, B20) |
 | ramp, raft, mound top | watch and cheer when another slides | **ride**: set it at the top or on it |
-| switch | never; it watches, and answers a tune. A switch that is a squishy's favourite thing counts for F2 when the player taps it while that squishy is within 1.5 m and watching it (B02 or B18) | tap it (or "Tap it yourself" by keyboard) |
+| switch | never; it watches, and answers a tune. **A switch tap is always noticed** (B02) by every squishy within 1.5 m that is not napping or held, outside B02's once-per-target rule (4 s per source), so its gaze is on the thing within 0.15 s. A switch that is a squishy's favourite thing counts for F2 when the player taps it while that squishy is within 1.5 m and watching it (B02 or B18, QUESTS 9) | tap it (or "Tap it yourself" by keyboard) |
 
 A squishy that wants a ride shows a **ride wish**: a star in a thought bubble beside the ride (QUESTS 8). Granting it (the player sets it there) is
 the purpose; the slide or swing gets a cheer from the others.
@@ -276,11 +283,22 @@ help line says so: "When off, they stay where you put them. They still look arou
 ### 5.7 Keeping squishies inside the place
 
 Three layers: physics `setBounds` (the corral's brake and rim bounce about the place's area, replacing the home spot for LIFE bodies; `setHome`
-moves the home to where a body last rested); LIFE never targets a point outside the bounds shrunk by R + 0.2 m, nor inside a thing's 0.4 m
-keep-out except its use spot; walls and parapets are static boxes (LF-06, PH-18). The bounds are the layout in use (the wide one, or the tall one
-on a portrait frame, PLACES P7). **At Home** the bounds are the visible table (`StageLike.visibleTable`: the table inside the frame and outside
-the HUD insets at the rest framing of the mat slots in use), recomputed when the party or the frame changes and never from autonomy, so the only
-squishy can never wander out of a phone's view (one body shows about +-0.76 m of table on 390 x 844; PLAYGROUND_BUILD D-67).
+moves the home to where a body last rested; a centre inside the bounds is never touched, and a body riding a moving prop is never corralled,
+PLAYGROUND_BUILD D-91); LIFE's targets (below); walls and parapets are static boxes (LF-06, PH-18). This is the one statement of the rule
+(PLAYGROUND_BUILD 11.13 and PLACES 4.1 say the same):
+- **In a place** the bounds are the layout in use (the wide one, or the tall one on a portrait frame, PLACES P7), which LIFE reads from the PlaceDef
+  `lifeSetPlace` hands it (12, D-89). A **free target** (B03 wander, B11 come back) lies inside the bounds shrunk by R + 0.2 m and outside every
+  thing's 0.4 m keep-out. **A use target is exempt from the shrink** (D-90): a thing's use spot, its peek spots, a ring's gap waypoint, a swing's
+  push spot and a ride's rider spots, each laid by DT-01 inside the bounds with a body of R 0.625 there clear of every wall and every other
+  collider, so the corral never acts on a body there and it never meets a wall; LIFE walks to such a spot from the nearest free target and
+  enters the keep-out of that thing only.
+- **At Home** (D-87) the corral's rectangle is the shell's (the smallest rectangle holding `StageLike.visibleTable` and the body of every slot in
+  use plus 0.05 m), and LIFE's targets are **points on a segment between two framed points**: the home slots of the characters out (`lifeSetHome`,
+  12; the camera frames them) and the use spots of the arrived things (laid in view by DT-01's Home row; a ball's use point counts while it lies
+  inside the visible table shrunk by R). The centres at which a whole body is in view form a convex set (each body corner inside each inset line
+  is a half-plane, and the felt is a disc), so every such point is in view, with no shrink and no camera model in LIFE. Both are recomputed when
+  the party or the frame changes and never from autonomy, so the only squishy can never walk out of a phone's view: with one body on 390 x 844
+  the near row of the table is only 0.78 to 1.22 m wide (about the body's own width), so it plays with the ball, comes home, and does not wander.
 
 ---
 
@@ -290,7 +308,7 @@ squishy can never wander out of a phone's view (one body shows about +-0.76 m of
 
 "n" counts characters, and **pieces count** (a low-tier player can reach 4 with pieces). Points go to the species pair (6.2). **Every joint
 moment moves one character at a time** (the others wait still, leaning and swaying by render, and may sleep; only S15 and S18 move two together,
-and only where moverCap is 2 or more), so it can start with one mover token; it also reserves the units of every body it will wake (a boop wakes its target) and starts only if they fit (10.3). No character is in two
+and only where moverCap is 2 or more), so it can start with one mover token; it also reserves the units of every body it will wake (a physics boop wakes its target; where that does not fit, S03 is a soft boop that wakes nobody; S11's pusher wakes on the ride allowance) and starts only if they fit (10.3). No character is in two
 joint moments at once (LF-10, LF-11). **Who:** W a whole, F a face piece, C a chunk; a piece group takes part as one character. "Awake" in a
 moment means not napping (LIFE), never "physics-awake": a still squishy in a snuggle or a song may be asleep in physics.
 
@@ -298,7 +316,7 @@ moment means not napping (LIFE), never "physics-awake": a still squishy in a snu
 |---|---|---|---|---|---|---|---|---|
 | S01 | greet | W F | another whole within 1.6 m, this pair not greeted this visit (a friend-wish grant greets once more, with no points, QUESTS 8) | hello on both | the first two syllables of its motif; the other answers 0.35..0.7 s later with the same rhythm, the contour mirrored | one hello hop toward it (or a lean) | 2.5 s | +1 once per pair per visit |
 | S02 | chat | W | two met squishies within 1.5 m, both idle | none (the voices carry it); hello on the first only; with sound off (muted or Voices at 0) one hello bubble on the first speaker | 2..4 alternating syllables from each one's motif | small leans toward each other (render) | 3..5 s | +1 a chat, at most 3 a visit |
-| S03 | boop | W F | bouncy > 0.6, another idle within 1.2 m, and the units for both bodies fit (the target wakes) | giggle on the booped one | a chirp, then a giggle trill | a hop into it at 0.4 m/s (a soft bump of intensity about 0.13, `auto`: no haptic, no feedback.ts) | the wobble settles | +1 |
+| S03 | boop | W F | bouncy > 0.6, another idle within 1.2 m | giggle on the booped one | a chirp, then a giggle trill | where the units for both bodies and their touching pair fit (the target wakes; at F = 4 only on high, 10.3): a hop into it at 0.4 m/s (a soft bump of intensity about 0.13, `auto`: no haptic, no feedback.ts); otherwise **a soft boop**: the booper's last centimetres at 0.04 m/s (the target stays asleep) and the target's wobble a render wiggle of 0.05 R at 3 Hz for 0.6 s (2 Hz in Calm or with reduced motion) | the wobble settles | +1 |
 | S04 | nuzzle | W F | both idle within 1.0 m, and Friends or closer, or either cuddly >= 0.6 | snug (with the sparkle badge for best friends) | purr, purr back (a duet in thirds for Friends) | both lean 0.1 R toward each other (render); one closes the last centimetres at 0.04 m/s | 3..6 s | +2 |
 | S05 | copy, follow the leader | W F C | a curious one within 2 m sees a hop or a thing use; with 3 or more and a leader with bouncy >= 0.6, a little parade | star on the copier (on the leader for a parade) | the copier repeats the leader's phrase one step higher; a chirp at each turn | the same action 0.6 s later; a parade goes **turn by turn**: each in turn glides up behind the one in front (0.7 m gaps), like a little caterpillar | 3 copies, or the loop is done | +1 (each neighbour pair in a parade) |
 | S06 | sing together | W F C | 2+ idle within 2.5 m of a tune (Music Box, the kettle's whistle, a tapped chime row, the fire puff) or 2 chatty friends, once per 2 min per place | one shared note bubble | each sings its motif on the place's field's rest tones (8.4), on the eighth grid of the sim-time 66 BPM clock, for 2 bars | a render sway on the beat (no physics) | 2 bars (7.3 s at 66 BPM) | +1 per pair, at most 3 pairs a song |
@@ -306,7 +324,7 @@ moment means not napping (LIFE), never "physics-awake": a still squishy in a snu
 | S08 | nap pile | W F C | 2+ napping in contact (B06), each walking in on its own turn; for a ring, one curls up inside and the others nap against it | one zzz for the pile | one soft yawn, then silence | contact, then sleep as one island | a touch wakes one; the rest wake over 1..3 s | +1 per pair per pile |
 | S09 | comfort | W F | B17 | snug, then a sparkle on both | a low coo, then a rising chirp | walk over, lean in (the approach at 0.04 m/s) | 3 s | +2 |
 | S10 | teeter | W F C | two on one seesaw (set there by the player: both RIDE) | swirl | a trill at each tip | small hops in turn rock it (both already awake on a moving prop: no body to wake) | 6..12 s | +2 |
-| S11 | push the swing | W F | one on a swing or hammock (set there by the player: RIDE) and **any other squishy within 2.5 m** (not a friendship level) | star on the pusher | a coo from the rider at each swing | the pusher walks into the seat along the swing's direction of travel, from an end of its arc that lies inside LIFE's targets (from the side for the cabin's wide layout, from the front for its tall one, PLACES 4.2) | 3 pushes | +1 |
+| S11 | push the swing | W F | one on a swing or hammock (set there by the player: RIDE) and **any other squishy within 2.5 m** (not a friendship level) | star on the pusher | a coo from the rider at each swing | the pusher walks to the swing's **push spot** (`ThingDef.push`: one end of the seat's arc plus 1.3 m, inside the bounds, from the side in the cabin's wide layout and from the front in its tall one, PLACES 4.2) and pushes the seat along its direction of travel as it comes back; it wakes on the **ride allowance** (the rider's units, 10.3), so S11 plays on every tier | 3 pushes | +1 |
 | S12 | pass the ball | W F C | two within 2.5 m of a ball, one bouncy > 0.5 | ball | a chirp at each touch | each in turn boops the ball toward the other | 3 passes, or the ball stops | +1 |
 | S13 | peekaboo | W F | **a behaviour**: two idle within 3 m of a thing with peek spots (`ThingDef.peek`: left and right of it as the camera sees it, both inside LIFE's targets); each walks to one spot in turn | question, then sparkle | a rising chirp, a giggle | the walks, one at a time; then lean out and back 2 or 3 times (render) | 4 s | +1 |
 | S14 | squirt game | W (the foam), any target | **the player** squeezes a soaked foam with another character within 1.2 m: the nearest one within 60 degrees of the foam's gaze, else the nearest within 1.2 m (a keyboard squeeze uses the same rule) | wow on the target, then giggle | a splash, the target's surprised chirp | a 12-drop spray arc (4 in Calm) in 0.4 s; target wet +0.3; the foam's soak -0.4 | 1.5 s | +1 |
@@ -530,7 +548,7 @@ and sound 6 dB quieter. **The player comes first:** player-caused feedback goes 
 afterglow bubble and voice and B20's lone-rider star are **P1 requests** (they follow a player act, but they are LIFE's, so quick taps across a party
 never pass the caps); while the player is touching (a finger down, a grab or a carry; never a lock alone, 5.5), P2 and P3 bubbles stop and other
 voices duck (8.4) until 0.6 s after the release. Bumps between two untouched bodies closing under 0.8 m/s are silent; every other `auto` event
-(lands, prop bumps and **body bumps**: physics flags a body bump `auto` unless either body is HELD or was thrown, D-62) plays a budgeted soft
+(lands, prop bumps and **body bumps**: physics flags a body bump `auto` unless a finger, a grab or a carry is on either body, or the player threw it, D-62; a lock alone never counts, D-86) plays a budgeted soft
 variant, never through `feedback.ts` (which would play a bump sound, `haptics.pop()` and a shake). A sound-off voiced moment's bubble asks at
 its voice's priority.
 
@@ -539,23 +557,33 @@ its voice's priority.
 **The budget behind the gate (PLAYGROUND_BUILD 14.2, D-60, D-61).** The phone budget for physics is 4.0 / 6.0 / 10.0 ms a frame (low / med / high);
 on this container that is B / F, where F is the phone factor PF-00 measures once (F = 4 until then: Chromium costs what node costs here, so only the
 4x throttle remains). Measured costs here: an awake detail-3 whole 0.87 ms pressed (0.69 resting), a detail-2 piece 0.19 ms, a touching pair +0.22
-ms, a sleeper about 0.02 ms, the props near an awake body about 0.2 ms (PHYS map 4 and 6). So **unitCap = (B / F - 0.20) / 0.87** awake-whole
-units, never under 1.0, and **moverCap = max(1, floor(unitCap))**:
+ms, a sleeper about 0.02 ms, the props near an awake body about 0.2 ms (PHYS map 4 and 6). So **unitCap = max((B / F - 0.20) / 0.87, 1.0 + 0.03 x
+(the tier's wholes cap - 1))** awake-whole units: the formula, but never under **the floor of one awake whole plus every other whole asleep**
+(1.06 / 1.09 / 1.12 for low / med / high; PLAYGROUND_BUILD D-85), and **moverCap = max(1, floor(unitCap))**; every comparison has a 0.001 tolerance:
 
 | F | low unitCap / moverCap | med | high |
 |---|---|---|---|
-| 4 (provisional, until PF-00) | 1.0 / 1 | 1.49 / 1 | 2.64 / 2 |
+| 4 (provisional, until PF-00) | 1.06 / 1 (the formula gives 0.92: the floor) | 1.49 / 1 | 2.64 / 2 |
 | 3 | 1.30 / 1 | 2.07 / 2 | 3.60 / 3 |
 | 2 | 2.07 / 2 | 3.22 / 3 | 5.52 / 5 |
 
 **units** = 1.0 per awake whole + 0.22 per awake piece + 0.03 per sleeping body + 0.25 per pair of awake bodies in contact (the pairs from
-`SoftMetrics.contacts`), computed by the shell from the bodies' flags (the same every run); PF-00 re-measures the weights. **The gate:** LIFE may
-**start** moving k characters (a piece group counts 1) only if **movers + k <= moverCap**, and, when the start wakes bodies, **units + delta <=
-unitCap**, where delta = 0.97 for each sleeping whole it wakes (a boop's target included) and 0.19 for each sleeping piece; a start that wakes
-nobody (its bodies are already awake, for example two riders the player set on the rocker) needs only the mover token (LF-10). **Every joint moment
-moves one character at a time** (6.1), so every moment and every quest works at moverCap 1. **Over the cap** (the player woke bodies: a touch, a
-toss, a ride; or a trip), the shell cancels the motion of the untouched LIFE mover farthest from the frame centre (it settles) and puts untouched,
-still wholes to sleep (`sleep()`), farthest first, until units are back under unitCap; it never forces a touched, carried, tossed or riding body.
+`SoftMetrics.contacts`), computed by the shell from the bodies' flags (the same every run); PF-00 re-measures the weights (and the floor follows
+the sleeper's weight). **The gate:** LIFE may **start** moving k characters (a piece group counts 1) only if **movers + k <= moverCap**, and, when
+the start wakes bodies, **units + delta <= unitCap**, where delta = 0.97 for each sleeping whole it wakes (a boop's target included, with +0.25 for
+the touching pair a boop makes) and 0.19 for each sleeping piece; a start that wakes nobody (its bodies are already awake, for example two riders
+the player set on the rocker) needs only the mover token (LF-10). Why the floor: revision 3's floor of 1.0 refused every start with two or three
+squishies out on low (waking one of n sleeping wholes gives 1.0 + 0.03 (n - 1)), so LIFE froze there (CONFIRM CT-B2); now waking one of three
+sleepers is 0.09 + 0.97 = 1.06, granted, and one awake with two asleep is exactly the cap, not over it.
+**The ride allowance (D-85):** the riders the player set on a ride (RIDE, B20) are the player's bodies, so while their ride moment runs (S10, S11)
+the gate and the over-budget rule add the riders' units to unitCap: S11's pusher wakes against the rider it pushes (low: 1.0 + 0.06 + 0.97 = 2.03
+against 1.06 + 1.0), and the shell never cancels a ride moment's own mover; S10 wakes nobody. At most two awake wholes come of it (a ride seats
+at most two), for the moment's length; PF-06 measures that case. **The soft boop (D-85):** where a boop's start would pass unitCap (at F = 4 on
+low and med: 2.28 and 2.31 against 1.06 and 1.49), S03 closes its last centimetres at 0.04 m/s and the target's wobble is a render wiggle (6.1).
+**Every joint moment moves one character at a time** (6.1), so with the floor, the ride allowance and the soft boop **every moment and every quest
+works at moverCap 1** (QUESTS Q4, QU-03, LF-10). **Over the cap** (the player woke bodies: a touch, a toss, a ride; or a trip), the shell cancels
+the motion of the untouched LIFE mover farthest from the frame centre (it settles; never a ride moment's own mover) and puts untouched, still
+wholes to sleep (`sleep()`), farthest first, until units are back under unitCap; it never forces a touched, carried, tossed or riding body.
 On travel the party is spawned at rest and asleep; B09's arrival hop goes through the gate (members without a token show a happy squint). The old
 floor of 2 movers on low (D-13) is gone: with F = 4 two awake wholes plus props cost 1.94 ms against low's 1.0 ms (REVIEW_code-truth B2); pair play
 survives because pairs take turns.
@@ -572,7 +600,7 @@ The wholes are today's `MAT_LIMIT` (mat.ts 22) and the pieces today's `MAX_PIECE
 cap - (wholes - 1))**: with 4 wholes out on med a cut makes at most 5 pieces. **The party stays when you cut** (today a cut empties the mat, cut.ts 283;
 re-specified in PLAYGROUND_BUILD.md 11.4). Before a cut the shell puts every untouched whole to sleep; only if the new pieces (0.22 units each) and
 what is still awake would pass unitCap does it refuse kindly: "It's busy here. Put one squishy back on the shelf to cut." (At F = 4 that does not
-happen once the others sleep: med 5 pieces + 3 sleepers = 1.19 units against 1.49; low 4 pieces + 2 sleepers = 0.94 against 1.0.) **No detail-2 whole squishies in S1 and S2**
+happen once the others sleep: med 5 pieces + 3 sleepers = 1.19 units against 1.49; low 4 pieces + 2 sleepers = 0.94 against 1.06.) **No detail-2 whole squishies in S1 and S2**
 (sleep does the work; the player can pick and squeeze any party member, and detail-2 press, pull and fold rows are ungated: PHYS map 4). When the
 quality tier drops, the shell sleeps untouched wholes first; only if the wholes still exceed the cap does it send the most recently brought out
 untouched one back to the shelf, with the line "Plumpet went back to the shelf for a rest."
@@ -604,7 +632,16 @@ Types are in `src/contracts.ts` (PLAYGROUND block: `LifeSnapshot`, `LifeIntents`
 // src/life/step.ts (pure; allocates only in createLifeWorld)
 export interface LifeWorld { /* struct of arrays: needs, behaviour, timers, cooldowns, pair cooldowns 16 x 16, rng states, group table */ }
 export function createLifeWorld(seed: number, maxChars: number): LifeWorld;                       // once per session
-export function lifeSetPlace(w: LifeWorld, placeIdx: number, visit: number): void;               // on travel: resets visit-scoped state
+export function lifeSetPlace(w: LifeWorld, placeIdx: number, visit: number, def: PlaceDef, layout: 0 | 1, bodyScale: number): void;
+  // revision 4 (D-89): on travel (a new visit number: visit-scoped state resets) and on a re-lay after a rotation (the same visit number:
+  // nothing resets, only the layout changes). `def` is the PlaceDef the shell loaded (loadPlaceDef; Home's is in the life chunk); LIFE imports
+  // its TYPE only (from ../data/places.ts, erased), keeps the reference, and copies the bounds of the layout in use (0 wide: the PlaceDef's own
+  // fields; 1 tall: `def.tall`) and every use, peek, push and rider spot (Home's slot units x bodyScale) into its own preallocated arrays here,
+  // never per tick
+export function lifeSetHome(w: LifeWorld, slot: number, x: number, z: number): void;
+  // revision 4 (D-87): at Home, a character's home slot (its stage.matLayout slot in use); the shell sends it at spawn and whenever the party or the
+  // frame changes, never from autonomy. LIFE's Home targets are points on a segment between two framed points: these home slots and the use spots
+  // of the things that have arrived (5.7). NaN x clears it (in a place, where the layout's bounds rule)
 export function lifeAdd(w: LifeWorld, slot: number, genome: Genome, kind: 0 | 1 | 2, group: number, warmth: number, isNew: boolean): void;  // at spawn, cut, join
 export function lifeRemove(w: LifeWorld, slot: number): void;
 export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents): void;  // zero allocation
@@ -636,10 +673,11 @@ both partners in the same call and moving them one at a time); plan voices (call
 the AudioContext clock); run the attention filter. **What the shell host does with it** (PLAYGROUND_BUILD.md 11.2): applies due intents through its one arbiter (finger > cut and
 ceremony > LIFE; SCOOT goes to `scootTo`, never `moveTo`) before the next `bodies.step`; sends granted EMOTE and VOICE intents to the stage and
 audio (a VOICE's `at` mapped onto `musicClock` there, after LIFE decided); reads `lifeLooks` and writes the looks and `mods[4]` for every family;
-turns LifeEvents into play-event ring records (with `lifeWishOf` for a wish's kind and target); never calls a finger, grab or lock API for autonomy. **TOUCH ids** (data) include a squeeze held 1 s or more and a pull to level 0.6 or more as their own ids,
+turns LifeEvents into play-event ring records (with `lifeWishOf` for a wish's kind and target); calls `lifeSetPlace` on travel and on a re-lay and
+`lifeSetHome` at Home (D-89, D-87); never calls a finger, grab or lock API for autonomy. **TOUCH ids** (data) include a squeeze held 1 s or more and a pull to level 0.6 or more as their own ids,
 because the touch wish is granted by them (QUESTS 8), CUT for a cut that starts on a character (B13), and TOSS_HARD for a toss that lands
-faster than 3 m/s (5.5). These eight functions are LIFE values, not contract members: the snapshot, intents and events stay as `src/contracts.ts`
-declares them. **Who plans a voice:** LIFE's `src/life/voice.ts` plans every phrase (which syllables, which pentatonic steps, when, the answer's
+faster than 3 m/s (5.5). These functions (the eight seam functions, the wider `lifeSetPlace` and `lifeSetHome` of revision 4) are LIFE values,
+not contract members: the snapshot, intents and events stay as `src/contracts.ts` declares them. **Who plans a voice:** LIFE's `src/life/voice.ts` plans every phrase (which syllables, which pentatonic steps, when, the answer's
 mirror, the pair duet from `DUET_SALT`, the sung notes on the sounding field); `src/audio/creature.ts` synthesises it (timbre by flavour, the pitch
 snap, the echo, the group voice, the limiter).
 
@@ -648,3 +686,9 @@ snap, the echo, the group voice, the limiter).
 Nobody has heard a creature voice or seen a squishmoji; "cute" is a design intent until the S1 verifiers listen and look (AUDIO map 6). No hop,
 pose, render sway or sleep has been run on a real body: the numbers in sections 5 and 10 are targets for PH-01, PH-09, RD-11 and PF-01. The trait
 spreads in section 2 are from one seed per species without the twist.
+
+**Revision 4.** The gate's floor, the ride allowance and the soft boop are arithmetic on PHYS map 4's costs at F = 4 (PLAYGROUND_BUILD 14.2), not
+a measurement: PF-06 measures the ride case. The Home rule (targets between framed points) rests on the convexity of the area where a whole body is
+in view, which holds for the camera model of PLAYGROUND_BUILD 23's scripts (yaw 0, the rest framing); the player's orbit and zoom change the view,
+not the targets (they are fixed at the rest framing, as `visibleTable` is). I did not build `lifeSetPlace` or `lifeSetHome`; their cost is a copy at
+travel and at a party change.

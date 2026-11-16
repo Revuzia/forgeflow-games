@@ -492,15 +492,20 @@ export interface DebugHook {
  * Revision 3 (2026-11-15, after the adversarial review; PLAYGROUND_BUILD.md 2 D-60..D-84 and 23): auto on body bumps, contactSlot / other /
  * contacts, scootTo, sleep, the prop-to-thing map and prop order, strike causes, visibleTable, LIFE on sim time only, thingId / zoneThing /
  * patchThing, LifeIntents.e, the part index and the autonomy-off flag in the play-event ring.
+ * Revision 4 (2026-11-16, after _handoff/design/CONFIRM.md; PLAYGROUND_BUILD.md D-85..D-93): no member added, renamed or removed; four doc
+ * comments rewritten: SoftEvent.auto (a lock alone never stops it, D-86), setBounds (the corral is off on a moving prop, D-91; Home's corral
+ * rectangle, D-87), scootTo (it also glides a floating body), visibleTable (its exact box, D-87).
  */
 
 /* ── PLAYGROUND physics (src/physics; PLAYGROUND_BUILD.md 8) ── */
 
 export interface SoftEvent {
   /** PLAYGROUND: true when the player did not cause it: a LIFE hop or scoot, a spring-pad bounce, a prop launch, a fall the player did
-   *  not throw, a bump between two bodies the player is not holding. Physics sets it on every 'land', every prop 'bump' AND every
-   *  body-to-body 'bump' UNLESS the body (for a body-to-body bump: either of the two bodies) is HELD (fingers, a grab, a carry or a lock)
-   *  or was thrown by the player (a carry released, a toss) since its last landing. A body bump always has intensity >= 0.117 (it fires
+   *  not throw, a bump between two bodies the player is not touching. Physics sets it on every 'land', every prop 'bump' AND every
+   *  body-to-body 'bump' UNLESS the player is touching the body (for a body-to-body bump: either of the two bodies) with a finger, a grab or
+   *  a carry, or threw it (a carry released, a toss) since its last landing. A lock alone never stops `auto` (PLAYGROUND_BUILD.md D-86): a
+   *  LIFE body bumping a locked body nobody touches gives an auto bump, while the lock still makes that body HELD for the touch gate and for
+   *  its own brain (SoftMetrics.locked). A body bump always has intensity >= 0.117 (it fires
    *  above 0.35 m/s, intensity = speed / 3), so without this flag feedback.ts would play a bump sound and haptics.pop() for LIFE's own
    *  boop. The shell sends EVERY auto event (land, prop bump, body bump) to the attention budget only (budgeted soft sounds, never a
    *  haptic, never a shake), never to feedback.ts and never to collection.feed (PLAYGROUND_BUILD.md 8.8, SH-06, EC-03). */
@@ -522,7 +527,8 @@ export interface SoftMetrics {
   /** PLAYGROUND: no particle is touching the table or a supporting prop face (a hop, a toss, a bounce, floating). */
   airborne?: boolean;
   /** LOCK.md section 3 (planned for physics round 3; PHYS fills it): locked lobes on this body. Declared here because PLAYGROUND's
-   *  touch gate counts a lock as a touch: HELD = fingers > 0 || grabbed || carried || (locked ?? 0) > 0. */
+   *  touch gate counts a lock as a touch: HELD = fingers > 0 || grabbed || carried || (locked ?? 0) > 0, for the touch gate and the body's
+   *  own brain only; SoftEvent.auto and "the player is touching" (LIFE.md 5.5) never count a lock alone (D-86). */
   locked?: number;
   /** PLAYGROUND: putty, mochi dough or bead squeeze whose plastic memory has not converged (max |MEM - Q| over 0.02 x restRadius): a
    *  dent, a Stamp print or a stud print is still healing, so setSquash is refused and hop returns false (LIFE.md 5.4). The shell copies
@@ -545,7 +551,11 @@ export interface SoftBodyLike {
   readonly mods?: Float64Array;
   /** PLAYGROUND: place bounds that replace the home-spot corral for this body (the same brake, glide back and rim bounce, about the
    *  place's area instead of the body's home). shape 0 = disc (a = radius), 1 = rounded rectangle (a, b = half sizes, round = corner
-   *  radius); shape -1 clears them (back to the home corral). Called on travel and spawn, not per frame. */
+   *  radius); shape -1 clears them (back to the home corral). Called on travel and spawn, not per frame. The dead zone is the whole area
+   *  (a centre inside it is never touched). The corral is OFF while the body is supported by a moving prop (onProp names a hinge or slider
+   *  prop: a rider on a seesaw or a swing), as it is for a grabbed body and while moveTo or scootTo acts (D-91). At Home the shell passes the
+   *  smallest rectangle (round 0) holding StageLike.visibleTable and the body of every mat slot in use plus 0.05 m, re-sent when the party
+   *  or the frame changes, so the corral never moves a body resting at its own slot (D-87). */
   setBounds?(shape: number, cx: number, cz: number, a: number, b: number, round: number): void;
   /** PLAYGROUND: move the corral's home spot (where a LIFE body last came to rest), so the corral never drags it back to its spawn. */
   setHome?(x: number, z: number): void;
@@ -562,7 +572,9 @@ export interface SoftBodyLike {
    *  momentum, the table carries the height), the corral off while it acts (as for moveTo). Paused and eased out within 0.12 s while the
    *  body is HELD; it yields to moveTo (no effect while a ceremony or the cut drives the body). NaN x releases it. A glide at 0.04 m/s or
    *  slower into a sleeping partner never wakes it (the wake speed is 0.05 m/s, PLAYGROUND_BUILD.md 8.6): the contact approach of a
-   *  nuzzle, a comfort or a pile. Wakes this body. Returns false (and does nothing) when HELD or a ceremony driver is on. */
+   *  nuzzle, a comfort or a pile. It also glides a FLOATING body: the glide stays horizontal and the water zone holds the height (a current's
+   *  drift adds to it), so a floater leaves the water by this driver (LIFE.md 5.3). Wakes this body. Returns false (and does nothing) when HELD
+   *  or a ceremony driver is on. */
   scootTo?(x: number, z: number, speed: number): boolean;
   /** PLAYGROUND LIFE driver: a hop: an impulse with the family's glue and peel damping suspended for 10 substeps, so the same impulse
    *  leaves the ground at the same height in every family. Allowed only while supported (by the table or an up-facing prop face); on a
@@ -661,9 +673,12 @@ export interface StageLike {
    *  bounds, never live LIFE positions; the player still orbits and zooms. */
   setPlayBounds?(cx: number, cz: number, hx: number, hz: number): void;
   /** PLAYGROUND (Home): the table area visible inside the frame and outside the HUD safe insets at the REST framing (yaw 0, zoom 1, no
-   *  ceremony push) of the mat slots in use, as the largest ground box inside it, [xMin, zMin, xMax, zMax] in metres into out[0..3]. The
-   *  shell sets Home's LIFE bounds and the Felt Ball's bounds from it and lets a Home thing arrive only when its footprint is inside it
-   *  (PLACES.md 4.1). Reads the framing, never moves the camera. Zero allocation; false before the first frame. */
+   *  ceremony push) of the mat slots in use, as ONE ground box inside it, [xMin, zMin, xMax, zMax] in metres into out[0..3]: its z range
+   *  runs from the ground row under the top inset line to the ground row under the bottom inset line, and its x range is the near row's (the
+   *  narrowest: the visible ground narrows toward the camera), each clipped to +-3.4 m (PLAYGROUND_BUILD.md 9, D-87). The shell builds Home's
+   *  corral rectangle from it and the mat slots in use (setBounds) and the Felt Ball's prop bounds (it shrunk by the ball's radius); Home's
+   *  things show by their data's party size, which DT-01 and RD-16 prove in view (PLACES.md 4.1, D-88). Reads the framing, never moves the
+   *  camera. Zero allocation; false before the first frame. */
   visibleTable?(out: Float32Array): boolean;
   /** PLAYGROUND: prop footprints (x, z, r triples) the meter-full capsule must land clear of. */
   setObstacles?(xzr: Float32Array | null, n: number): void;
@@ -794,7 +809,8 @@ export interface LifeSnapshot {
   quiet: boolean;
   /** Deterministic awake-cost units right now, in awake-whole equivalents (LIFE.md 10.3; the weights are the measured cost ratios of
    *  PF-00, provisional: an awake whole 1.0, an awake piece 0.22, a sleeper 0.03, a touching pair of awake bodies +0.25; the pairs come
-   *  from SoftMetrics.contacts). LIFE's motion gate reads this, never a measured frame time. */
+   *  from SoftMetrics.contacts). LIFE's motion gate reads this, never a measured frame time; the gate's floor (one awake whole plus every
+   *  sleeper) and the ride allowance (a ride moment adds its riders' units to the cap) are LIFE's rules (LIFE.md 10.3, D-85), not fields. */
   units: number;
   /** Music as LIFE may use it, ALL deterministic (never SquishAudio.musicClock, whose AudioContext clock DebugHook.step does not advance):
    *  musicField = the place's music style's main field (src/data/places.ts), musicOn = the Music setting is on (not the audio unlock

@@ -12,6 +12,11 @@ while autonomy was off, D-79); PIECES carry n, a USE RING carries its part in `v
 wish has a wisher with no Dollop (D-70) and H8 completes on the first arrival with any party; gifts only after the Home finale (H8); new rows
 QU-13 to QU-16, CO-10, CO-11; your code ships in the **life chunk** (D-69), with 2 KB of first-load collection code.
 
+**Revision 4 (2026-11-16, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93).** What changed for you: **QU-03** checks Q4
+against LIFE 10.3's revised gate (the floor, the ride allowance for C3, L9, U4, C5 and G3, the soft boop), not by hand; **QU-09's producer table**
+gains "Tap it yourself" for every thing a tap swings (the Shake Pine, so I4 is truly K; chimes, bells, crystals and lanterns part by part, D-93),
+and a K quest no route can produce fails the row; F2's watchers are **B02 or B18** (QUESTS 9); the life chunk's cap is 150 KB (D-92).
+
 ## You own
 - `src/core/quests.ts` (new: the pure reducer)
 - `src/collection/journal.ts` and `src/collection/journal_store.ts` (new), and the PLAYGROUND additions in `src/collection/constants.ts` (the
@@ -64,7 +69,8 @@ names: they may appear only in `ghost.ts`, `drops.ts` and `merge.ts`, so never w
    at 1, Friends at 12, Close friends at 40; a derived FRIEND event at each level; at most 128 rows; eviction never drops a pair at Friends or
    closer or a best-friend pair (LF-15 checks LIFE's side, QU-04 and CO-03 yours). A friend wish's grant greets once more with **no points**.
 4. **Facts** F0 to F11 from QUESTS 9's "Found when" column (F0 from BRING, CAPSULE or GIFT; F1 from REACT LOVE; **F2 from a USE or a REACT whose
-   thing is the favourite, or a switch favourite switched by the player with the fan watching**; F3 from the authored pair's first greet; ...);
+   thing is the favourite, or a switch favourite switched by the player with the fan watching within 1.5 m (its gaze on the thing by B02 or B18,
+   LIFE 5.3)**; F3 from the authored pair's first greet; ...);
    **keepsakes** (20 bits, QUESTS 10); **warmth** per item (LIFE 6.3: +1 loved touch at most 3 a day, +3 a granted wish, +2 a visit to its
    favourite place once a day, +1 a nap there once a day; never falls; a merge keeps the larger, CO-06); **wishes** kept (at most 3 resting, the
    newest 3 of a two-tab union, QU-12); **gift readiness** (5 for life, Common or Uncommon, at most 1 per UTC day, **only after the Home finale
@@ -108,7 +114,7 @@ names: they may appear only in `ghost.ts`, `drops.ts` and `merge.ts`, so never w
 
 ## Build: S2 and S3
 The reducer is generic: each new chapter is data. As each place ships, re-run QU-02 (every quest from its minimal event script), QU-06 (opening in
-order), QU-09 (keyboard parity: K derived from the producer table), QU-13 (the real `lifeStep`), QU-14 (shown quests against the shipped set),
+order), QU-09 (keyboard parity: K derived from the producer table, with revision 4's "Tap it yourself" routes), QU-13 (the real `lifeStep`), QU-14 (shown quests against the shipped set),
 QU-16 (autonomy off) and QU-11 (the scripted regular-player stream with the gift pair Puddlo and Boingle, reported against QUESTS 7, +-50%).
 
 ## Acceptance ids you must make pass
@@ -122,7 +128,7 @@ QUESTS 11: nothing new feeds the meter.
 
 ## Budgets
 0 B allocated over 10 000 reducer events (QU-01); the quest host's share of LIFE's 0.4 ms frame budget; the worst-case journal at most 16 000
-characters (CO-02). **Size:** the reducer, the journal and its store load in the life chunk (about 22 KB of its 110 by PLAYGROUND_BUILD 14.3);
+characters (CO-02). **Size:** the reducer, the journal and its store load in the life chunk (about 22 KB of its 150 by PLAYGROUND_BUILD 14.3);
 **at most 2 KB of yours in the first load** (`ghostGrantGift` and the hooks); after every step report the minified bytes of each new or grown
 module (14.3's one-file rolldown build).
 

@@ -10,6 +10,12 @@ replaces any floor contact for hinges; the Float rule is the shell's (D-83, PH-2
 the phone factor F, D-60), so PF-05 is 6.0 / F ms, not 2.0 ms; a byte cap for your first-load code (18 KB) and `props.ts` in the life chunk (D-69);
 the probe runs its quick set with no arguments.
 
+**Revision 4 (2026-11-16, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93).** What changed for you: `auto` is stopped only by
+a finger, a grab or a carry, **never by a lock alone** (D-86; a lock still makes the body HELD for the touch gate); **the corral is off for a body
+supported by a moving prop** (D-91); Home's bounds are the rectangle the shell passes (the union of `visibleTable` and the slots, D-87); `scootTo`
+also glides a floating body (8.7); the cabin's tall swing pivot moved to (-0.93, 1.62, -2.29) and the wide one to (0, 1.62, -1.7) (data, PLACES
+4.2); new rows PH-24 and PF-06's node twin; a 0.24 m pivot for the S2 Leaf Teeter (data).
+
 ## When you may start
 **Only after the queued physics work is verified**, in one physics owner's hands (JUDGE_COHERENCE M15): STATUS "QUEUED" 2 (the independent
 re-verification of checkpoint 47 and the lift fix) and 3 (physics round 3: the pull-into-the-ground fix, multi-pull and LOCK per `_spec/LOCK.md`,
@@ -67,7 +73,8 @@ recipe), 5.4 (memory families), 5.5 (HELD), 10.3 (units); `_spec/LOCK.md` 3; `_h
 **S0 "Life at Home"** (the exit is FN-01; Home's things are static blocks, a rug patch and one ball):
 1. **E9 touch gate** (8.7): while `fingers > 0 || grabbed || carried || locked > 0`, the LIFE drivers (`scootTo`, `setSquash`, `hop`) pause and
    ease out within 0.12 s; `moveTo` and the other ceremony drivers (`setFold`, `tremble`, `burstOpen`) are untouched. Fill `SoftMetrics.locked`
-   from LOCK (a locked body is HELD for its own brain; it never silences the party, which is the shell's rule, D-84).
+   from LOCK (a locked body is HELD for the touch gate and its own brain; it never silences the party, which is the shell's rule, D-84, and it
+   never stops `auto`, step 7, D-86).
 2. **E7 drivers** (8.7): **`scootTo(x, z, speed)`** (D-63): 0.04..0.5 m/s, a rigid horizontal glide eased in and out over 0.12 s, the corral off
    while it acts (the corral test at 1858 also checks the scoot flag), touch-gated, yielding to `moveTo`, NaN x releases it, false when HELD or a
    ceremony driver is on; a scoot at 0.04 m/s or slower into a sleeping partner never wakes it (the wake speed is 0.05 m/s). `setSquash(s, tauS)`
@@ -86,13 +93,17 @@ recipe), 5.4 (memory families), 5.5 (HELD), 10.3 (units); `_spec/LOCK.md` 3; `_h
    body at rest at once, false if it is moving, on a moving prop or in float mode; the shell uses it for untouched party members over the awake
    budget and for bodies spawned at rest on travel (PH-22).
 5. **E3 bounds** `setBounds` / `setHome` (a place-bounds branch of `matCorral`, 1600-1620: a disc or a rounded rectangle with a corner radius;
-   shape -1 restores today's corral). Home's bounds are the visible table the shell passes; a place's are the bounds of the layout in use.
+   shape -1 restores today's corral; the dead zone is the whole area). Home's bounds are the rectangle the shell passes (the union of
+   `visibleTable` and the body of every slot in use plus 0.05 m, D-87: PH-24 checks a body resting at any slot is never moved); a place's are the
+   bounds of the layout in use. **The corral is off while the body is supported by a moving prop** (`onProp` names a hinge or slider prop: a
+   rider), as for a grabbed body and while `moveTo` or `scootTo` acts (D-91; PH-04's new clause).
 6. **E2 modifiers** `mods` (8 floats, eased over 0.3 s; all 1 except [7] = today bit for bit: PH-10 rows unchanged at Home). **[4] density is
    used for every family** (the pop dome floats as the float table says). **A write wakes a sleeper only when a modifier that acts where the body
    is changes by more than 0.02** ([0..3] on the ground or a prop face, [4] only in a water zone, [5] only in wind or an updraft, [6] only on a
    pad); otherwise it applies at the next wake (a drying foam's mods[4] changing every 0.1 s on dry ground never keeps it awake).
-7. **Events** (8.8): `auto` on every `land`, every prop `bump` **and every body-to-body `bump`**, unless the body (for a body bump: either body) is
-   HELD or was thrown by the player since its last landing; `prop` = the prop index on prop bumps; **`other`** = the partner's contact slot on
+7. **Events** (8.8): `auto` on every `land`, every prop `bump` **and every body-to-body `bump`**, unless the player is touching the body (for a
+   body bump: either body) with a finger, a grab or a carry, or threw it since its last landing; **a lock alone never stops it** (D-86: a LIFE body
+   bumping a locked body nobody touches gives an `auto` bump; PH-14's new case); `prop` = the prop index on prop bumps; **`other`** = the partner's contact slot on
    body bumps (PH-14).
 8. **Collide** (8.9): bound radii cached once per body per frame; asleep-asleep pairs skipped before the sphere test; the bump memory widened to
    32 slots keyed by the shell-assigned **`contactSlot`** (0..31; a body without one keeps today's key), and **`SoftMetrics.contacts`** = a bit per
@@ -111,7 +122,8 @@ recipe), 5.4 (memory families), 5.5 (HELD), 10.3 (units); `_spec/LOCK.md` 3; `_h
 
 **S1 "Hearthlog Cabin"** (static, hinge and ball only: PLACES 4.2, both layouts):
 10. **hinge1** for the Rocker Board (seesaw: board 2.2 x 0.16 x 0.6, pivot 0.24 m, limit 8 degrees) and the Pillow Swing (rope 1.4, limit 30
-    degrees, swinging across the room in the wide layout and toward the camera in the tall one): limits, inertia, damping; **moving props advance
+    degrees, swinging across the room in the wide layout and toward the camera in the tall one, both pivots moved in revision 4 so every rider's
+    path stays inside the bounds, PLACES 4.2): limits, inertia, damping; **moving props advance
     per substep** (pose(t0) + v x k x H, as fingertips at 2129), seat speed at most 2.0 m/s; **weight transfer** (D-12: a body supported by a
     moving prop adds bodyMass x g x its supported share at its contact centroid every substep); teeter hops from the board (S10 in LIFE, turn by
     turn). **Hinges have no floor contact**: the floor rule (pivot >= (L / 2) sin(limit) + (t / 2) cos(limit), 0.232 m for the cabin's board)
@@ -122,7 +134,8 @@ recipe), 5.4 (memory families), 5.5 (HELD), 10.3 (units); `_spec/LOCK.md` 3; `_h
     LIFE mover and three asleep): **at most 6.0 / F ms (1.5 at F = 4)**. 14.2 recomputes them at 1.13 and 1.16 ms. PF-02's low case (one awake
     whole, 1.11 ms against 1.0) may miss: that is today's one-body cost, which you report as a physics perf item, never a reason to raise a bar.
 
-**S2 "Water and cold"**: E6 water as a gravity scale (g_eff = g x (1 - f_sub / density), f_sub from the depth at the centre with the zone's 0.4 m edge
+**S2 "Water and cold"**: `scootTo` on a floating body (horizontal, the water holding the height, a current adding its drift; PH-15's new clause);
+E6 water as a gravity scale (g_eff = g x (1 - f_sub / density), f_sub from the depth at the centre with the zone's 0.4 m edge
 ramp; g_eff < 0 rises with drag 2.5 /s relative to the water; whole body only); the current for floating bodies and floaters (at most 0.15 m/s);
 `metrics.submerged`; the **flush pad** (slider1 that kicks up: upward speed = gain x landing speed, capped by the apex, at most 5 bounces; the
 sticky hold of stickystretch 0.4 s and slimegoo 0.6 s); chimes struck by contact (hinge1, `drainStrikes` with intensity, cause and slot); ice
@@ -142,7 +155,7 @@ queued Stamp and Roll tools; PH-13 if there is time (heavy, optional).
 - If one awake whole alone misses PF-02 (low), report it as today's one-body cost (14.2); the shell's awake budget never goes under one whole.
 
 ## Acceptance ids you must make pass
-PH-01 to PH-12, PH-14, PH-18 to PH-20, **PH-22, PH-23** and PF-05 (S0 and S1); PH-15 and PH-16 (S2); PH-17 (S3); PH-13 optional (PH-21 moved to
+PH-01 to PH-12, PH-14, PH-18 to PH-20, **PH-22, PH-23, PH-24** and PF-05 and PF-06's node twin (S0 and S1); PH-15 and PH-16 (S2); PH-17 (S3); PH-13 optional (PH-21 moved to
 SH-11). Plus every existing gate unchanged with no PropWorld bound and sleep off (`probe_softbody --quick`, `probe_species`, `probe_families`,
 `probe_cut`, and the shell's `probe_app` and `probe_gestures`, which you run but do not edit), and a clean typecheck.
 

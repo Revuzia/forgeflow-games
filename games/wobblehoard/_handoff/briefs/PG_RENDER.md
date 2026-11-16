@@ -11,6 +11,15 @@ inside the insets (RD-17: at least 100 CSS px at the front and 80 px mid on 390 
 fixes (one accent at 3:1 on the cream fill); **Calm or reduced motion: every new motion is a fade**, and a wish re-glance is an opacity lift;
 particle presets for the reaction cells (D-80); new rows RD-16 and RD-17; your first-load share is capped at 16 KB.
 
+**Revision 4 (2026-11-16, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93).** What changed for you: **`visibleTable`'s box is
+exact** (the full visible depth by the near row's x range, clipped to +-3.4 m; PLAYGROUND_BUILD 9) and the shell turns it into Home's corral
+rectangle (with the slots) and the Felt Ball's bounds, while Home's things show by their data's party size (`fromN`, PLACES 4.1's spot table,
+D-87, D-88); **RD-16** checks a whole body at every LIFE target and use spot, every slot inside the corral rectangle and every shown thing in view;
+the Keepsake Shelf is 1.2 x 0.45 x 0.30 m with two rows of ten and the Warm Lamp's glow is r 1.2; the cabin's swing pivots moved (PLACES 4.2,
+D-91); S03's soft boop needs a **render wiggle** on the booped body (0.05 R at 3 Hz for 0.6 s, 2 Hz in Calm or with reduced motion: `setBodyPose`);
+the away chunk's cap is **90 KB** (D-92); section 24 of PLAYGROUND_BUILD asks the orchestrator whether the one-squishy portrait framing at Home
+should count the Felt Ball's spot as `framingFor` counts a capsule (FN-01: do not build it before that answer).
+
 ## You own
 - `src/render/**`: additions to `stage.ts` and `material.ts`, and new modules: `emotes.ts`, the place host `place.ts` (the away chunk), the props kit,
   water, marks, weather presets, `places/<id>.ts` (one lazy chunk per place)
@@ -61,14 +70,17 @@ render findings (the "four-eyed" look through a clear jelly, the bridge's tube l
    framing follow only player-caused motion (a toss) and otherwise frame the mat slots in use. The neck-swell stopgap in `framingFor` stays
    Home-only until PHYS fixes the swell (T10).
 7. **`visibleTable(out)`** (D-67, RD-16): [xMin, zMin, xMax, zMax] of the table seen inside the frame and outside the HUD insets at the rest
-   framing of the slots in use (the camera scales with the body, stage.ts 468), true when valid; it must match the rendered frame within 0.05 m at
+   framing of the slots in use (the camera scales with the body, stage.ts 468), true when valid; **exactly** (revision 4, D-87): z from the ground
+   row under the top inset line to the ground row under the bottom inset line, x the near row's range (the narrowest), each clipped to +-3.4 m; it must match the rendered frame within 0.05 m at
    390 x 844 and 1280 x 800 with 1 to 5 bodies at body scale 0.8, 1.0 and 1.25. Measured by projection with the stage's constants (fov 35, pitch
    0.27, target y 0.42, distance max(3.0, 2.4 / aspect)): one body on 390 x 844 sees about +-0.76 m at the table centre, on 1280 x 800 about
    +-1.51 m with no table in front of the body (the bottom HUD covers z > 0.3 x scale).
 8. `setObstacles` (the capsule lands clear of prop footprints), `bodyScreenPoint` (out-param), `bindProps` (the props in `PropWorldLike`'s fixed
    order, with `propThing` and `propPart`).
-9. Home's things (PLACES 4.1): the Felt Ball, the Music Box, the Snooze Rug (a darker stitched felt disc), the Warm Lamp and its glow, the Keepsake
-   Shelf with 20 small procedural keepsakes (QUESTS 10), all tiny, in the stage chunk; each drawn only once it has arrived (the shell tells you),
+9. Home's things (PLACES 4.1): the Felt Ball, the Music Box, the Snooze Rug (a darker stitched felt disc), the Warm Lamp (a 0.36 m base, its shade
+   reaching 0.6 m) and its glow (r 1.2), the Keepsake Shelf (1.2 x 0.45 x 0.30 m, two rows of ten) with 20 small procedural keepsakes (QUESTS 10),
+   all tiny, in the stage chunk, at the spots of PLACES 4.1's table; each drawn only once it has arrived (the shell tells you: its event and the
+   party at least its `fromN`; parked below it),
    with a little scale-in (**Calm or reduced motion: a fade**). With no thing out, Home is today's frame bit for bit.
 
 ## Build: S1 "Hearthlog Cabin"
@@ -91,7 +103,8 @@ render findings (the "four-eyed" look through a clear jelly, the bridge's tube l
     `src/data/place_hearthlog.ts`, which the size gate counts with it, PLAYGROUND_BUILD 13 and T1), **both layouts from the same kit**: round-log
     walls in plum and dusk, the stone fireplace with the amber firelight key and embers (additive, 24 / 16 / 8 by tier, x0.3 in Calm, none with
     reduced motion), the back window with snow behind the pane (a card), the braided coral and cream rug, the 2.2 m Rocker Board, the Yarn Ball,
-    the Pillow Swing under a ceiling beam (it swings across the room in the wide layout and toward the camera in the tall one), the Snug Basket,
+    the Pillow Swing under a ceiling beam (it swings across the room in the wide layout and toward the camera in the tall one; both pivots moved in
+    revision 4, PLACES 4.2), the Snug Basket,
     the Singing Kettle with its steam puff when it whistles; mean luminance about 0.20; token colours only.
 14. **Body looks** in the jelly program: `uToast` (with `uHeatPos` from `setHeatPoint`), `uWet`, `uFrost`; cache key `wh-jelly-v5`; each checked on
     the WH_LOW path; with every look at 0 the gallery is pixel-identical to v4 (RD-02). The finale spectacle: the fire swells and the embers rise in
@@ -116,7 +129,8 @@ F25). One browser at a time.
 Render CPU at most 4.5 ms a frame on a med phone; under today's 8.9 KB allocated a frame; at most 60 draw calls for a place's set and props in
 each layout (RD-08); 4 asleep bodies at most 0.3x the CPU update of 4 awake (RD-05); 6 pieces against 2 wholes at most 1.2x (RD-06, from x1.32 to
 x1.45 today); play-area mean linear luminance at most 0.35 per place, no pastel (L at least 0.80 with chroma under 0.09), token colours only
-(`src/ui/theme.ts` 4-13) in OKLCH mixes (RD-13); each place at most 45 KB with its audio recipe and data module, the away chunk at most 120 KB;
+(`src/ui/theme.ts` 4-13) in OKLCH mixes (RD-13); each place at most 45 KB with its audio recipe and data module, the away chunk at most 90 KB
+(revision 4, D-92: report its bytes at S1's first step; the estimate is 44 to 66 KB with PG_AUDIO's ambience bed and prop voices);
 **your first-load share at most 16 KB** minified (gaze, expressions, poses, looks, `visibleTable`, the emote draw, Home's thing meshes;
 PLAYGROUND_BUILD 14.3); after every step report the minified bytes of each new or grown module (14.3's one-file rolldown build); the flash gate of
 DESIGN 6.6 (at most 2 flashes a second, RD-03).

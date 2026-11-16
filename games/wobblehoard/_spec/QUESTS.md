@@ -22,6 +22,12 @@ that has not shipped (9, 15);
 "kind" means a family everywhere (6); (10) the screens: Tab stays the browser's, landscape rows, live lines, "New stamp", the shutter, the quest
 moment's haptic only for the player's own deed (15).
 
+**Revision 4, 2026-11-16 (the last fix pass, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93):** (1) Q4 holds at low caps
+because the motion gate's floor admits one awake whole and every sleeper, a ride moment has its riders' allowance (C3, L9 and U4's pushers), and a
+boop that does not fit is a soft boop (LIFE 10.3); (2) "Tap it yourself" reaches every thing a tap moves or switches, so I4's Shake Pine has a
+keyboard route and its K is true (6, 15); (3) F2's watchers are B02 or B18, as LIFE 5.3 says (9); (4) Home's things show from a laid party size
+in each frame (13, PLACES 4.1); (5) DT-09 exempts VISIT titles, as Q7 already allowed.
+
 ## 1. The purpose, in one paragraph
 
 Squish Keeper's loop today is touch, meter, capsule, merge: good for a session, with no answer to "why tomorrow?". The **Journal** is that answer,
@@ -40,7 +46,7 @@ gift squishies for life**; nothing in the Journal pays squish points or capsules
 | Q1 | No currency: stamps, warmth and friendship points are counts that only grow; nothing is ever spent, exchanged or decremented. | QU-10 (CS-13) |
 | Q2 | No timers that punish, no fail states, no streaks, no calendar gates on content. A quest can always be done later. Places open by stamps only. | QU-06, audit 15 |
 | Q3 | No quest needs a tap or a poke **on a squishy** (taps on squishies pay nothing and are free play, FUN 2). Taps on things, switches, balls and bubbles are fine: they are how the player plays with a place. | QU-03 (no TOUCH clause accepts a press under 0.4 s) |
-| Q4 | A main quest names a family only if that family has at least 2 Commons (jellygel, waterfill, gummy, marshmallow, mochidough); no quest needs a species above Uncommon; every clause is reachable at `low` caps (3 wholes, 6 characters with pieces) **with one mover at a time** (LIFE 10.3: at the provisional phone factor low and med move one squishy at a time; every joint moment takes turns, so a snuggle of three gathers one by one). | QU-03 |
+| Q4 | A main quest names a family only if that family has at least 2 Commons (jellygel, waterfill, gummy, marshmallow, mochidough); no quest needs a species above Uncommon; every clause is reachable at `low` caps (3 wholes, 6 characters with pieces) **with one mover at a time** (LIFE 10.3: at the provisional phone factor low and med move one squishy at a time; every joint moment takes turns, so a snuggle of three gathers one by one; revision 4: the gate's floor admits one awake whole and every sleeper, the pusher of C3, L9 and U4 wakes on the riders' allowance, and a boop on low and med is a soft boop, PLAYGROUND_BUILD D-85). | QU-03 |
 | Q5 | Counts stay small: a main quest repeats one deed at most 3 times (a distinct count at most 4); a bonus at most 5 (distinct 6). "Distinct" is preferred: three different squishies teaches "in their own way". | QU-04 (JUDGE_FUN F14) |
 | Q6 | Every finale opens at 5 of its chapter's 7 main quests (Home's opens when the first wish shows); a finale that gives a gift has at least one clause the player causes (a touch, a toss, a player use, a ride the player sets up, a photo, a wish the player granted: `by PLAYER`, section 4), so LIFE alone can never earn an item. | QU-05, QU-07 (JUDGE_COHERENCE M1) |
 | Q7 | A title says what you do, and its verb matches its rule's event ("Say hello" is a greet, never a squeeze). A VISIT quest's title may name the place's feel ("Sand and sea") because its hint carries the verb ("Go to Ripple Shore."); its hint, and every hint, must match its rule's count ("two times" for x2). | DT-09 (JUDGE_FUN F23) |
@@ -102,8 +108,9 @@ own" and the tracker skips it. Rules below use the shorthand `Ev{fields} xN`.
 ## 6. The chapters
 
 "Keys": **K** = the keyboard can complete it, **derived per clause from a producer table of the keyboard routes** (QU-09; PLAYGROUND_BUILD.md
-11.8): Space on the focused squishy, the keyboard stretch, "Go play with..." for uses and rides, **"Tap it yourself"** for every switch and every
-ball, **Enter on a focused squishy while its bubble shows** (a bubble tap), the Wishes now list, the Cut bar's Split in two and Reconnect all, the
+11.8): Space on the focused squishy, the keyboard stretch, "Go play with..." for uses and rides, **"Tap it yourself"** for every thing a tap moves or
+switches (every switch, every ball, and every thing a tap swings: the Shake Pine, chimes, bells, crystals and lanterns part by part, a seesaw end, a
+swing seat; PLAYGROUND_BUILD D-93), **Enter on a focused squishy while its bubble shows** (a bubble tap), the Wishes now list, the Cut bar's Split in two and Reconnect all, the
 Snap shutter, Travel. **K\*** = needs the keyboard stretch: the opening thresholds must be reachable without it (CS-02); its stamp counts like any
 other.
 
@@ -361,7 +368,7 @@ open wish as a row with a button ("Bring Crimpo", "Go to Ripple Shore", "Set Hoo
 |---|---|---|---|---|
 | F0 | Met | "You met Puddlo." | BRING or CAPSULE or GIFT of the species | "Bring it out to meet it." |
 | F1 | Favourite place | "Puddlo loves Ripple Shore." | a REACT LOVE of the species (B10 plays in its favourite place) | "Take it on a trip to find the place it loves." |
-| F2 | Favourite thing | "Its favourite thing is the Rock Pool." | a USE **or REACT** event of the species whose `thing` is its favourite thing (by itself, or a ride you set up). For a switch favourite (Tap, Horseshoe Magnet, Star Scope, Echo Stone: a squishy never uses a switch, PLACES 2.1 M14), the player switches it while a squishy of that species is within 1.5 m and watching it (B13 or B18). DT-03: every favourite thing has such an event | "Watch what it plays with in the place it loves." |
+| F2 | Favourite thing | "Its favourite thing is the Rock Pool." | a USE **or REACT** event of the species whose `thing` is its favourite thing (by itself, or a ride you set up). For a switch favourite (Tap, Horseshoe Magnet, Star Scope, Echo Stone: a squishy never uses a switch, PLACES 2.1 M14), the player switches it while a squishy of that species is within 1.5 m and watching it (B02 or B18: a switch tap is always noticed by a squishy within 1.5 m that is not napping or held, LIFE 5.3). DT-03: every favourite thing has such an event | "Watch what it plays with in the place it loves." |
 | F3 | Best friend | "Its best friend is Boingle." | the authored pair greets for the first time | "Its best friend loves Frostbell Ridge." (the friend's favourite place), **only while that place has shipped**; otherwise "Its best friend is a {family name} squishy." (for example "Its best friend is a Jelly Gel squishy."; the names of `MATERIAL_FAMILIES`) |
 | F4 | Water way | "In water, Puddlo wades and sloshes." (the family's line) | a REACT FLOAT, WADE, SOAK or SPLASH of the species | "Find out what it does in water." |
 | F5 | Warm way | "By the fire, it relaxes a little flatter." | a REACT WARM, TOAST, RISE or OOZE | "Find out what it does by something warm." |
@@ -473,13 +480,13 @@ until the server op exists (PLAYGROUND_BUILD T8; CO-09). The Hoard shows **"Gift
 
 | Time | What happens | Quests |
 |---|---|---|
-| 0:00 | Title, "Wake it up". Dollop on the felt at Home with the Felt Ball beside it. Home's other things appear one by one, each at its arrival event and only once its spot is inside the visible table (PLACES 4.1, PLAYGROUND_BUILD 11.13), so with one squishy on a phone the Music Box may wait for a wider view. Until the life chunk lands (about the first seconds of play, 11.14) Home is today's toy. The tracker pill: "A gentle squeeze". The hint says "Hold to squeeze". | |
+| 0:00 | Title, "Wake it up". Dollop on the felt at Home with the Felt Ball beside it. Home's other things appear one by one, each at its arrival event and only from the party size its spot shows at (PLACES 4.1, PLAYGROUND_BUILD 11.13): the Music Box and the Snooze Rug from two squishies out in both frames, so with one squishy they wait for the newcomer. Until the life chunk lands (about the first seconds of play, 11.14) Home is today's toy. The tracker pill: "A gentle squeeze". The hint says "Hold to squeeze". | |
 | 0:05 to 0:40 | A held squeeze: the first stamp lands ("New stamp: A gentle squeeze"). | H1 |
 | 0:40 | **The first minute (FN-01):** the player lets go for 6 s; the shell sends LIFE the FIRST_PLAY script (LIFE.md 4.1). Within 10 s Dollop looks at the Felt Ball (a question bubble with the word "curious"), hops three small hops to it and boops it; the ball rolls at least 0.2 m; a sparkle. If the player never pauses, Dollop does it during the first capsule's wait. | H2 |
 | about 1:00 | A stretch and let go (touch or mouse; keyboard players skip it). | H3 |
 | 1:17 | The meter fills; the capsule drops (built). | |
 | 1:30 | Open it. **The newcomer stays out** (a new rule: a new squishy comes out to say hello when the party has room). Its shy arrival: it keeps a little distance and looks down between glances, but says hello within 5 s (B09's rule for every NEW squishy, LIFE.md 4: that hello is an S01 greet with Dollop, whatever the distance): a hello hop from Dollop, a call and a mirrored answer, the word "hello" under the bubble. The Snooze Rug arrives. | H4, H5 |
-| 2:00 to 3:00 | Free play. They play by themselves between touches. If no bubble was tapped after 2 minutes, the tracker says "Tap a bubble". The Warm Lamp arrives (after the first capsule). | H6 |
+| 2:00 to 3:00 | Free play. They play by themselves between touches. If no bubble was tapped after 2 minutes, the tracker says "Tap a bubble". The Warm Lamp arrives (after the first capsule: at once on a wide frame, with the third squishy on a portrait phone, PLACES 4.1). | H6 |
 | about 2:30 to 5:00 | 60 s after the first reveal (5:00 at the latest), the wisher faces you with a postcard thought bubble: Dollop if it is out, else a cabin fan, else the squishy out longest (LIFE 4.1); no other wish shows before it. Tap it: "Dollop wishes for a warm place: Hearthlog Cabin." [Let's go] [Not now]. Hearthlog opens; the Places button appears with one 400 ms scale-in (no pulse; Calm or reduced motion: a fade). "Not now" leaves the wish resting in the Journal. If nobody can show it by 5:00, it rests in the Journal at once and Hearthlog opens all the same. | H7 |
 | about 3:30 to 5:30 | Travel (the party comes along; a 0.6 s snapshot crossfade; the place's data and chunk were prefetched when it opened; a portrait phone gets the tall layout, PLACES 4.2). Arrival hops, one shared sparkle. The wish comes true on the first arrival, whoever is in the party: the **Home finale** (Felt Star; "A wish came true!"). Dollop's love moment, if Dollop came: "Dollop loves Hearthlog Cabin." | H8, C1, C10 |
 | 5:30 to 7:00 | Dollop and the newcomer walk to the fireplace (flame bubbles); a marshmallow would toast golden and hop back from the heat. The yarn ball rolls; the player flicks it and they chase it. The second capsule (50 SP) around now. | C2, C4 |
@@ -581,8 +588,8 @@ squishy shows a ring under it and its name tag. **Space presses the focused squi
 it to that side (the keyboard stretch), released with Space. **Enter** on the focused squishy opens its wish card when it has a wish, otherwise its
 name tag popover; either way a bubble showing over it then is read into the live region ("Hello!") and counts as tapping that bubble (H6). The
 popover has **"Go play with..."** (floor things ask LIFE for that use, which also works with autonomy off; rides perform a scripted lift onto them,
-`carryTo`, which never pays) and **"Tap it yourself"** (every switch and ball in the place, the same path as a tap: "Tap the fireplace", "Roll the
-Felt Ball"). Escape order: tray, Settings, Journal, Places, Hoard, tool, plate, then locks (LOCK 3); focus returns to the opener.
+`carryTo`, which never pays) and **"Tap it yourself"** (every switch, ball and thing a tap swings in the place, the same path as a tap: "Tap the fireplace", "Roll the
+Felt Ball", "Shake the pine", "Ring the shells"; a thing of several parts rings its next part at each press). Escape order: tray, Settings, Journal, Places, Hoard, tool, plate, then locks (LOCK 3); focus returns to the opener.
 
 ## 16. Not checked
 
@@ -591,4 +598,6 @@ scripted stream; a real playtest is the verifiers' FN-01 and FN-06). The 390 x 8
 re-laid on the UI overhaul's components; the landscape rows (844 x 390, 568 x 320) are rules, not measured positions. I ran the name gate on every
 name, title and hint of this page (PLAYGROUND_BUILD.md 20). **Revision 3:** I re-screened every new or changed title, hint and line (the retitled
 quests, the wish and gift lines, the live lines, the settings help line, "New stamp", the F3 and F11 hints) with the same gate code; I did not
-re-time the first ten minutes, run QU-09 or QU-15, or check the Friends Everywhere split against a real S1 shipped set (QU-14 will).
+re-time the first ten minutes, run QU-09 or QU-15, or check the Friends Everywhere split against a real S1 shipped set (QU-14 will). **Revision 4:** I
+checked Q4 against the gate's arithmetic (LIFE 10.3) for every S1 social clause with one mover at a time, not against running code; I did not
+re-time the first ten minutes with Home's new arrival party sizes (the Music Box now waits for the newcomer at about 1:30).

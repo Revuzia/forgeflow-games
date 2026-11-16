@@ -56,6 +56,20 @@ bubbles without taking Tab (D-77); Friends Everywhere's place-spanning quests wa
 I re-ran the layout geometry by script (Hearthlog wide and tall pass DT-01 with 0 problems; Home's ball spots by projection), the camera
 projections for B2 and M1, and the name gate on every new line (section 20). Typecheck clean after the contract change.
 
+**Revision 4, 2026-11-16 (the second and last fix pass, after the independent confirmer, `_handoff/design/CONFIRM.md`: 9 findings unresolved and
+8 new problems).** Each is fixed at its root in every file it touches, as decisions **D-85 to D-93** (section 2), or listed in section 24 (open
+questions for the orchestrator). The biggest: the motion gate's floor holds one awake whole and every sleeper, and a ride moment has its riders'
+allowance, so LIFE never freezes on low and S11 and S03 play on every tier (D-85, 14.2, PF-06); `auto` counts only a finger, a grab or a carry
+(D-86); Home's corral bounds hold every slot and LIFE's Home targets lie between framed points (D-87); Home's five other things have laid spots,
+each with the party size from which it shows, all at 3 or fewer (D-88); LIFE receives its PlaceDef and layout (D-89); use spots are exempt from
+LIFE's shrink (D-90); rides stay inside the bounds and the cabin is re-laid in both layouts (D-91); the life chunk is re-budgeted from measured
+data bytes, the five play-time UI modules are named, and an overflow rule says what moves or ships `shipped: false` (D-92); "Tap it yourself"
+reaches every thing a tap moves (D-93). Smaller: a floater leaves the water by `scootTo` (LIFE 5.3), the Leaf Teeter's pivot is 0.24 m (PLACES
+4.5), DT-09 exempts VISIT titles, F2's watchers are B02 or B18 in both pages, CS-02 cites QU-09. Scripts (scratch `pg_fix4/`, reusing the earlier
+fixer's `pg_fix3/` camera model, which I re-checked against stage.ts 87-88, 255-330 and 520-535): `homebounds.mjs`, `standarea.mjs`,
+`homespots.mjs` (cross-checked by `pg_fix3/check2.mjs`), `usespots.mjs`, `lampglow.mjs`, `ballroom.mjs`, `cabin_final3.mjs`, `tallsearch.mjs`,
+`spawn3.mjs`, and `pg_fix3/datagen.mjs` for the data bytes. Section 22 says what I checked and what I did not.
+
 ---
 
 ## 1. The owner's five asks, traced
@@ -116,7 +130,7 @@ Where the judges disagreed, the row says so. "F" = JUDGE_FUN, "K"/"F#" in feasib
 | D-38 | Tabletop gravity forced in places and with more than one body out (the exact rule, which also keeps Float working at Home, is D-83) | none addressed it | K15, F10: the hover pulls every body to the world origin. |
 | D-39 | **Any non-Hand tool quiets autonomy**; memory families get no LIFE squash while their memory has not converged | only Cut pauses | M9: room for Stamp and Roll; a print must heal as FUN says. |
 | D-40 | Keyboard parity: the focused squishy, a keyboard stretch, "Go play with..." with a scripted lift (`carryTo`) | Space presses the screen centre today | M7, CS-02. |
-| D-41 | **Superseded by D-69** (revision 3). It read: first load at most 1300 KB, the PLAYGROUND first-load delta 60 KB target and 70 KB hard, total 1900 KB, each place 45 KB, the away chunk 120 KB, the screens chunk 45 KB. Kept: the first load at most 1300 KB, the delta 60 / 70 KB, the place, away and screens chunk caps | C 1290 / 1850; M14 1300 / 1850; F15 60 KB / 1900 | The estimate behind the 70 KB delta was 2 to 3x low on measured bytes (REVIEW_code-truth M1). |
+| D-41 | **Superseded by D-69** (revision 3). It read: first load at most 1300 KB, the PLAYGROUND first-load delta 60 KB target and 70 KB hard, total 1900 KB, each place 45 KB, the away chunk 120 KB, the screens chunk 45 KB. Kept: the first load at most 1300 KB, the delta 60 / 70 KB, the place, away and screens chunk caps (revision 4 lowered the away cap to 90 KB, D-92) | C 1290 / 1850; M14 1300 / 1850; F15 60 KB / 1900 | The estimate behind the 70 KB delta was 2 to 3x low on measured bytes (REVIEW_code-truth M1). |
 | D-42 | Player text is lazy (`src/data/journal_text.ts`, the screens chunk) except the three bubble words; Home's chapter text (`HOME_TEXT`) and the place names load with the life chunk (D-69) | C: all data in the first load | F15; C's 12 KB estimate is about 3x low (K). |
 | D-43 | Contracts carry numbers, strings and typed arrays; the id unions live in data | B: unions in contracts.ts | F24: a new place must never be a contract change. |
 | D-44 | The five Settings members land **with** `src/core/settings.ts`, not in my contract change | apply them now | Mine: `resolveSettings` returns every key of `Settings`, so a key without its default breaks the typecheck; settings.ts is the SHELL lane's file (11.9). |
@@ -136,13 +150,13 @@ Where the judges disagreed, the row says so. "F" = JUDGE_FUN, "K"/"F#" in feasib
 | D-58 | **The LIFE host and the quest host are their own lines in `simStep`**, never `game.onStep` hooks | the first draft of this page: "steps 2 and 5 may start as an onStep hook" | SHELL_4.md ("Seams for PLAYGROUND" 1): onStep hooks are UI listeners that run after the capsules and ceremonies, in registration order. |
 | D-59 | **LIFE plans every phrase; audio synthesises it** (`lifePhrase` fills the `phrase` array of `SquishAudio.creature`) | the first draft of section 10: the motif and the duet in `src/audio/creature.ts` | The answer mirrors the caller's phrase and the duet belongs to a pair: that is state across characters, which LIFE has and audio does not; the contract's `creature()` already takes ready syllables. Audio keeps the timbre, the snap, the echo, the group voice and the limiter. |
 | D-60 | **One physics bar, two harnesses.** The bar is the phone budget per tier (14.2); in Chromium with a 4x CPU throttle it is measured as is (PF-01..03), in node it is the same number divided by the phone factor **F** (PF-05 = B / F). F is measured once, by PF-00 at step 0, before `attention.ts` fixes its caps; until then F = 4 | PF-05 at 2.0 ms in node beside PF-01 at 6.0 ms throttled | REVIEW_code-truth B2: the two bars contradicted each other (2.0 x 4 = 8.0 > 6.0). F = 4 because Chromium's physics cost on this container matches node's (SHELL_4.md 75-77 against PHYS map 4), so only the throttle remains. |
-| D-61 | **The awake budget comes from measured costs, and joint moments are played turn by turn.** unitCap = (B / F - 0.20 ms of props) / 0.87 ms (an awake detail-3 whole, pressed), at least 1.0: at F = 4 that is 1.0 / 1.49 / 2.64 for low / med / high; moverCap = max(1, floor(unitCap)) = 1 / 1 / 2; the unit weights are PF-00's cost ratios (a piece 0.22, a touching pair 0.25, a sleeper 0.03). A start that wakes a body must keep units at or under unitCap; one that wakes nobody needs only a mover token. Every joint moment moves one character at a time (the partner waits still and may sleep; contact approaches end at 0.04 m/s, under the wake speed). Over the cap the shell cancels the farthest untouched LIFE mover and puts untouched wholes to sleep (`sleep()`); the player's bodies are never forced | D-13's movers 2 / 3 / 4 and units 3.0 / 4.0 / 5.5; the reviewer's "low = 1 awake whole + the touched one" (at F = 4 that is 1.94 ms against low's 1.0) | B2: the old floor (2 movers + 1 touched) was 10.7 ms throttled on low, 2.7x its budget; turn-taking keeps every social moment and every quest reachable at moverCap 1 (Q4). LIFE.md 10.3 has the table for F = 2, 3 and 4. |
-| D-62 | **`auto` on body-to-body bumps too** (true unless either body is HELD or was thrown by the player since its last landing); every `auto` event (land, prop bump, body bump) goes to the attention budget, never to `feedback.handle` | `auto` on lands and prop bumps only | REVIEW_code-truth B1: a body bump fires above 0.35 m/s, so its intensity is at least 0.117, and `feedback.handle` plays `audio.bump` and `haptics.pop()` above 0.05 (feedback.ts 146-151): LIFE's own boop would buzz the phone. |
+| D-61 | **The awake budget comes from measured costs, and joint moments are played turn by turn.** unitCap = (B / F - 0.20 ms of props) / 0.87 ms (an awake detail-3 whole, pressed), at least the floor of D-85 (revision 4: one awake whole plus every other whole asleep, 1.0 + 0.03 x (the tier's wholes cap - 1)): at F = 4 that is 1.06 / 1.49 / 2.64 for low / med / high; moverCap = max(1, floor(unitCap)) = 1 / 1 / 2; the unit weights are PF-00's cost ratios (a piece 0.22, a touching pair 0.25, a sleeper 0.03). A start that wakes a body must keep units at or under unitCap; one that wakes nobody needs only a mover token. Every joint moment moves one character at a time (the partner waits still and may sleep; contact approaches end at 0.04 m/s, under the wake speed). Over the cap the shell cancels the farthest untouched LIFE mover and puts untouched wholes to sleep (`sleep()`); the player's bodies are never forced | D-13's movers 2 / 3 / 4 and units 3.0 / 4.0 / 5.5; the reviewer's "low = 1 awake whole + the touched one" (at F = 4 that is 1.94 ms against low's 1.0) | B2: the old floor (2 movers + 1 touched) was 10.7 ms throttled on low, 2.7x its budget; turn-taking keeps every social moment and every quest reachable at moverCap 1 (Q4) once D-85's floor, ride allowance and soft boop are in (revision 3's floor of 1.0 froze LIFE on low and blocked S11 and S03, CONFIRM CT-B2). LIFE.md 10.3 has the table for F = 2, 3 and 4. |
+| D-62 | **`auto` on body-to-body bumps too** (true unless the player is touching either body, with a finger, a grab or a carry, never a lock alone (revision 4, D-86), or threw it since its last landing); every `auto` event (land, prop bump, body bump) goes to the attention budget, never to `feedback.handle` | `auto` on lands and prop bumps only | REVIEW_code-truth B1: a body bump fires above 0.35 m/s, so its intensity is at least 0.117, and `feedback.handle` plays `audio.bump` and `haptics.pop()` above 0.05 (feedback.ts 146-151): LIFE's own boop would buzz the phone. |
 | D-63 | **LIFE travels with its own driver, `scootTo`** (touch-gated, eased in and out over 0.12 s, horizontal, the corral off as for `moveTo`); `moveTo` stays the ceremonies' and the cut's and is never gated | gate the one `moveTo` | REVIEW_code-truth M3: physics has one `moveTo` (one target, one flag, softbody.ts 1213-1219); gating it breaks the ceremony slide and the cut's steering (cut.ts 213), not gating it lets LIFE scoot under the finger. |
 | D-64 | **Props map back to things and parts** (`PropWorldLike.propThing`, `propPart`), in one fixed prop order (every prop of things[0] with its parts in order, then things[1] ..., walls last); the snapshot carries `thingId` for the things out now; strikes carry their cause (player, body, weather) and the striking body's slot; a USE RING record carries the part in `v` | each lane re-derives PG_PHYS's packing | REVIEW_code-truth M4, REVIEW_game-truth M16 and m1: one ThingDef is several props (5 chimes and posts, 6 ring segments), Home's things arrive one by one, and the weather alone could finish R3 and I9. |
 | D-65 | **Body identity for contacts**: a writable `contactSlot` (0..31) keys the bump memory; `SoftEvent.other` names the partner of a body bump; `SoftMetrics.contacts` is a bit per slot touching | the shell infers partners | REVIEW_code-truth M5: a bump names no partner (softbody.ts 1409), the bump memory is `bodyId & 15` (1405, aliasing past 16 bodies), and nothing reported which pairs touch, so the units' contact term had no input. |
 | D-66 | **LIFE decides on sim time only.** Bar lines come from t on the 66 BPM grid, the field from the place's music style; `musicClock` goes only into `creature()`'s `at` and the render sway phase, after LIFE has decided | the snapshot carried the AudioContext clock | REVIEW_code-truth M6: that clock runs in real time while `DebugHook.step` jumps sim time and is absent before unlock, so intents differed run to run with music on. |
-| D-67 | **Home's view and things.** Home keeps today's framing of the mat slots in use (no camera follow of autonomy, D-37); Home's things stand at per-frame spots given in slot units (x bodyScale, as `matLayout`), clear of every slot at every scale; a thing arrives only once its footprint is inside the visible table (`StageLike.visibleTable`); LIFE's Home bounds and the Felt Ball's bounds are that visible table shrunk by R + 0.2 m (the ball by its radius) | spawn and spots from a fixed list; LIFE in a disc of r 3.1 m | REVIEW_game-truth B2 (by projection only the Keepsake Shelf was in view on 1280 x 800; B03 could walk the only squishy out of a phone frame) and REVIEW_code-truth M8 (DT-01 failed at Home by its own numbers: gaps of 0.17 and 0.26 m). |
+| D-67 | **Home's view and things.** Home keeps today's framing of the mat slots in use (no camera follow of autonomy, D-37); Home's things stand at per-frame spots given in slot units (x bodyScale, as `matLayout`), clear of every slot at every scale; a thing arrives only once its spot is in view at the current party (revision 4, D-88: the data's `fromN`, laid and checked by DT-01's Home row); the Felt Ball's bounds are the visible table (`StageLike.visibleTable`) shrunk by its radius; Home's corral bounds and LIFE's Home targets are D-87's (revision 3 shrank the visible table by R + 0.2 m for both, which left the body's own slot outside the corral) | spawn and spots from a fixed list; LIFE in a disc of r 3.1 m | REVIEW_game-truth B2 (by projection only the Keepsake Shelf was in view on 1280 x 800; B03 could walk the only squishy out of a phone frame) and REVIEW_code-truth M8 (DT-01 failed at Home by its own numbers: gaps of 0.17 and 0.26 m). |
 | D-68 | **A tall (portrait) layout for every place.** On a frame with aspect under 0.9 (the `matLayout` test) a place uses its tall layout: body bounds of half sizes 1.25 x 3.0 m (corner radius 0.4), things in the back band and the side strips of the tall frame (PLACES P7), rides inside the bounds; chosen at arrival, re-laid on a rotation at the next idle moment under the travel crossfade. A 1 m squishy is then about 100 CSS px at the front and 80 px at mid-depth on 390 x 844 (57 px with the wide layout framed whole) | one layout framed whole; a party-follow camera (D-37); the reviewer's 1.9 x 2.4 bounds | REVIEW_game-truth M1. My fit script shows 1.9 x 2.4 gives the same 57 px once whole bodies and the HUD insets are framed: the width binds (section 23). |
 | D-69 | **The life chunk and the size re-budget.** LIFE, the quest reducer, the journal store, the LIFE and quest hosts, `props.ts` and the LIFE and quest data load in one lazy "life chunk", requested after the first frame of play (Home is today's toy until it lands, a few seconds); the first load keeps only what boot's chunks must hold, with a byte cap per lane (14.3); each place's data moves to its own lazy module (`src/data/place_<id>.ts`); the reaction cells become channel data in those modules and their words leave the build except the fact lines; every lane reports the minified bytes of each new module after every step; the total rises to D9's ceiling, 2000 KB | D-41's single estimate; the reviewer's split without the life chunk (its code alone is about 100 KB) | REVIEW_code-truth M1: one place's data is about 7.5 KB, not 1.5; code minifies to 13 to 21 B a line; a realistic first-load delta was 140 to 250 KB against a 70 KB cap. D9 counts "everything it needs before play", which the life chunk is not. |
 | D-70 | **The first wish no longer needs Dollop.** FIRST_WISH's wisher: Dollop if out, else a Hearthlog fan out, else the party member out longest; natural wishes wait until it has shown; it ignores the 120 s gap; if nobody can show it by 5:00 of play, it rests in the Journal and Hearthlog opens; it is granted by the first arrival at Hearthlog with any party | Dollop only | REVIEW_game-truth B1, REVIEW_rules-and-clarity B2: Dollop can be merged away (only a hearted or locked item refuses a merge, ghost.ts 221) or left on the shelf, which stranded every place for good. |
@@ -152,7 +166,7 @@ Where the judges disagreed, the row says so. "F" = JUDGE_FUN, "K"/"F#" in feasib
 | D-74 | **A RIDE state**: a squishy the player set on a ride stays 20 s (or to the end of its joint moment, or a touch), with a star bubble at P1 | the ride wish only | REVIEW_game-truth M6: three seconds after release LIFE could walk off the rocker. |
 | D-75 | **Snuggle and peekaboo are behaviours**: S07 gathers 3 or more idle squishies into a row (one mover at a time); S13 uses two peek spots left and right of the thing as the camera sees it | detections with no driver | REVIEW_game-truth M7: R8's gift needed luck; the back-band rocks and logs put "behind" outside LIFE's targets. |
 | D-76 | **Rings**: a pile counts for a ring thing when any napper's centre is inside it ("one curls up inside, friends nap against it"); B06 enters by a gap-mouth waypoint; a ring's clear opening is at least 1.35 m | "a pile of 3 fits" | REVIEW_game-truth M8, REVIEW_code-truth minor 1: the clear inner radius (0.81 m) holds two bodies only at R 0.405 or under. |
-| D-77 | **Keyboard routes without taking Tab**: Tab stays the browser's; the party is one Tab stop (a toolbar of focus proxies, roving tabindex, [ and ] inside it); Enter opens the wish card or the name tag popover and reads a showing bubble; the popover's "Tap it yourself" taps a switch or flicks a ball by the same path as a pointer; K is derived per clause from a producer table | Tab and [ ] move the party focus; K tags by hand | REVIEW_rules-and-clarity B1 and M1, REVIEW_game-truth M9: the S1 gift finale C8 had no keyboard path, and Tab would have trapped focus (WCAG 2.1.2). |
+| D-77 | **Keyboard routes without taking Tab**: Tab stays the browser's; the party is one Tab stop (a toolbar of focus proxies, roving tabindex, [ and ] inside it); Enter opens the wish card or the name tag popover and reads a showing bubble; the popover's "Tap it yourself" taps a switch, flicks a ball or pokes a thing a tap swings (revision 4, D-93) by the same path as a pointer; K is derived per clause from a producer table | Tab and [ ] move the party focus; K tags by hand | REVIEW_rules-and-clarity B1 and M1, REVIEW_game-truth M9: the S1 gift finale C8 had no keyboard path, and Tab would have trapped focus (WCAG 2.1.2). |
 | D-78 | **Only completable quests are shown.** A quest whose clause needs an unshipped place or a thing kind no shipped place has is hidden (and skipped by the tracker); a finale is shown once its chapter can reach 5 shown main quests; so Friends Everywhere's X4, X5, X7, X8 and X9 wait for S2, and its other quests count from S1 | its place quests "complete as places arrive" | REVIEW_game-truth M10, REVIEW_rules-and-clarity m8: in S1 only 4 of its 7 main quests were possible. |
 | D-79 | **Autonomy off still completes the Journal**: a player-asked use ("Go play with...") and a ride the player set up still move that one squishy; a by-SELF clause accepts a by-PLAYER event recorded while autonomy was off; a quest still blocked shows "Needs: Squishies move on their own" and the tracker skips it | autonomy off = no motion at all | REVIEW_game-truth M12: Hearthlog's finale could not open with it off. |
 | D-80 | **Every reaction cell carries a real channel** (a pose target, a render pose, a look and its level, a particle preset, a sound id or a behaviour id); DT-06 counts only cells with one; the cabin's "turn round" became "hops back from the heat when golden" | words with no mechanism | REVIEW_game-truth M13. |
@@ -160,6 +174,15 @@ Where the judges disagreed, the row says so. "F" = JUDGE_FUN, "K"/"F#" in feasib
 | D-82 | **"Kind" means family in every player line**, and the Journal shows the family name (`MATERIAL_FAMILIES[f].name`, already the Hoard's words) on every page and tile | "kind" for species in two lines | REVIEW_rules-and-clarity M4. |
 | D-83 | **The Float rule**: Float works at Home with one squishy out; while it is on, the shell binds no PropWorld (Home's things are parked, not drawn) and LIFE issues no motion; with more than one out, or in any place, the shell forces gravity at run time (the saved setting is never changed), shows "Here your squishies stand on the ground." once a session, and never calls `setFloatMode(true)` | PH-21 "with a PropWorld bound, gravity = false is ignored" (from S0 a PropWorld is always bound at Home); P12's "autonomy paused" | REVIEW_code-truth M7, REVIEW_rules-and-clarity m11: three rules disagreed and Float died at Home. |
 | D-84 | **Who the feedback belongs to**: the quest-complete haptic and `registerFx` only when the event that completed it was by PLAYER (otherwise the stamp sound is an auto UI sound with no haptic); "the player is touching" is a finger, a grab or a carry, never a lock alone; B08's emote and voice go through the attention budget as P1 | a haptic on every quest moment; HELD (with locks) silencing the party | REVIEW_game-truth M11 and m8, REVIEW_rules-and-clarity M2 and M3. |
+| D-85 | **The motion gate's floor holds one awake whole and every sleeper, and a ride moment has its riders' allowance** (revision 4). unitCap = max((B / F - 0.20) / 0.87, 1.0 + 0.03 x (the tier's wholes cap - 1)): the floors are 1.06 / 1.09 / 1.12, so at F = 4 unitCap is 1.06 / 1.49 / 2.64 (compared with a 0.001 tolerance). The riders the player set on a ride are the player's bodies: while their ride moment runs (S10 teeter, S11 push), the start test and the over-budget rule add the riders' units to unitCap, so S11's one pusher may wake; at most two awake wholes come of it (a ride seats at most two, S10 wakes nobody, S11 is one rider and one pusher), which PF-06 bounds. Where a boop's two bodies and their touching pair do not fit (low and med at F = 4), S03 is a **soft boop**: the last centimetres at 0.04 m/s (the target stays asleep), the target's wobble a render wiggle | "a sleeping whole costs 0 in the start test"; drop C3, L9 and U4 from Q4's low and med promise (both CONFIRM CT-B2's options) | CONFIRM CT-B2 and N4: with the floor at 1.0, waking one of n sleeping wholes gives 1.0 + 0.03 (n - 1) > 1.0, so LIFE froze on low with 2 or 3 out, and PF-02's own "one awake, two asleep" (1.06) was over the cap; a rider on a hinge prop never sleeps (the rest test needs a static face, 8.6), so S11's pusher needed about 2.0 units against 1.0 and 1.49. A sleeper's cost is real (about 0.02 ms, PHYS map 4), so it stays in the units and the floor rises by exactly what the other wholes cost asleep; hiding C3, an S1 main quest, on low and med phones would hide a cabin quest from most players. |
+| D-86 | **`auto` counts only the player's hands** (revision 4): a land, a prop bump or a body bump is `auto` unless the player is touching the body (for a body bump: either body) with a finger, a grab or a carry, or threw it since its last landing. A lock alone never counts here; it still makes the locked body HELD for its own brain and for the touch gate | count a lock as HELD for `auto` (revision 3's contract wording) | CONFIRM CT-B1 and N5: a LIFE body bumping a locked body nobody touches (LOCK.md 1 allows walking away) gave a non-`auto` bump, which reached `feedback.handle` and `haptics.pop()` (feedback.ts 150): autonomy buzzed the phone, against L7 and D-84. |
+| D-87 | **Home's corral bounds hold every slot; Home's LIFE targets lie between framed points** (revision 4). `setBounds` at Home gets the smallest rectangle (corner radius 0) that holds `visibleTable` and the body of every slot in use plus 0.05 m, recomputed when the party or the frame changes, never from autonomy; LIFE's targets at Home are points on a segment between two of its **framed points**: the home slots of the characters out (`lifeSetHome`) and the use spots of the things that have arrived (D-88), so no shrink and no camera model are needed in the shell or LIFE | revision 3: the visible table shrunk by R + 0.2 m for both; the confirmer's fix: the union for `setBounds` and the union shrunk by R + 0.2 m for LIFE | CONFIRM CT-M8. My script (`pg_fix4/homebounds.mjs`): the revision 3 rule left a slot centre outside the corral in all 100 cases (n 1 to 5, both frames, 10 scales; worst 1.69 m); the union shrunk by R + 0.2 m is empty for one body on 390 x 844 (the table is 0.78 to 1.22 m wide, the shrink needs 1.20 to 1.65 m) and on 1280 x 800 with 1 or 2 out puts the body's top under the top HUD over 22 to 66 of 121 sample points of its back part. The centres at which a whole body is in view form a convex set (each corner inside each inset line is a half-plane, and the felt is a disc), so every point between two framed points is in view (`standarea.mjs`). |
+| D-88 | **Home's thing spots are laid**, one per thing per frame with the smallest party from which it shows (`Spot.fromN`, every one at 3 or fewer, so every tier shows every thing); the Keepsake Shelf is 1.2 x 0.45 x 0.30 m with two rows of ten; Lamp Warmth is r 1.2 m; each thing's use spot has a whole body in view (PLACES 4.1) | revision 3: rules without numbers | CONFIRM GT-B2: only the Felt Ball had spots. My search (`pg_fix4/homespots.mjs`, cross-checked by the earlier fixer's `pg_fix3/check2.mjs`: every spot "ok") under DT-01's Home row, the in-view rule from the arrival party to 5 at every scale, a "seen" rule (the top centre not behind a slot body or another thing), no thing over 0.4 m tall in front of the front row, and a usable use spot (`usespots.mjs`, `lampglow.mjs`). The 1.8 m shelf did not fit both frames with the others. |
+| D-89 | **LIFE receives its place**: `lifeSetPlace(w, placeIdx, visit, def, layout, bodyScale)` with the loaded PlaceDef, the layout in use (0 wide, 1 tall) and the body scale (Home's spots are in slot units), on travel (a new visit: visit-scoped state resets) and on a re-lay after a rotation (the same visit: nothing resets); `lifeSetHome(w, slot, x, z)` gives a character's home slot at Home | an index only (revision 3) | CONFIRM N1: D-69 put each PlaceDef in a lazy module that pure, synchronous LIFE cannot import, and the snapshot has no bounds, layout or spot field, so LF-06 could not be built and "the snapshot's place bounds" named no member. LIFE imports the PlaceDef type only (erased), so L1 holds. |
+| D-90 | **Use spots are exempt from LIFE's shrink**: the R + 0.2 m shrink applies to free targets (B03 wander, B11 come back); a thing's use spot, its peek spots, a ring's gap waypoint, a swing's push spot and a ride's rider spots need only lie inside the bounds, with a body of R 0.625 there clear of every wall and every other collider (DT-01) | DT-01 checks use spots against the bounds shrunk by R + 0.2 m for the largest R | CONFIRM N2: the tall layout's shrunk half-width is 0.425 m for R 0.625, so no side-strip thing could be used (the Snug Basket's centre is at x 1.05); a body centred inside the bounds is never corralled (the corral acts only past their edge, softbody.ts 1609), and DT-01's body clearance keeps it off the walls. |
+| D-91 | **Rides stay inside the bounds, and the corral leaves a rider alone**: DT-01 checks a rider's whole path (a swing's arc, a seesaw's rider spots) inside the bounds, a rider of R 0.625 on it clear of every wall and 0.625 m from every collider, and a swing's push spot (the end of its arc plus 1.3 m) with room for a pusher of R 0.625; physics turns the corral off for a body supported by a moving prop; the cabin is re-laid in both layouts (PLACES 4.2) | one of the two alone (the confirmer's either-or) | CONFIRM N3. My check (`pg_fix4/cabin_final3.mjs`, the seat's centre sweeping 1.4 sin 30 = 0.70 m): the revision 3 tall rider reached z -3.58, 0.58 m past the bounds and 0.45 m into the back wall; the wide rider of R 0.625 at z -1.85 reached 0.075 m into the back wall, and its only free push spot was 0.35 m from the kettle. DT-01 then proves the paths; the corral rule keeps a rider tossed near the edge from being dragged off. |
+| D-92 | **The life chunk is re-budgeted from measured data bytes, the five play-time UI modules are named, and an overflow rule says what moves** (14.3): the life chunk 150 KB (its data measured on stand-ins at 41.5 KB as objects, 29.2 KB packed; `wishes.ts`, the moments queue, the party toolbar, the name-tag popover and the Snap shutter and preview, about 15 KB, statically imported by the LIFE host), the away chunk 90 KB (my estimate 44 to 66 KB), the total by caps 1990 KB; over a cap a lane packs, then moves into a lazier named chunk; over 2000 KB the place that opens last ships `shipped: false` | keep 110 KB and hope (the data alone is 2.6x its 16 KB estimate); raise the total past D9 | CONFIRM CT-M1: the 16 KB data share was low, five UI modules belonged to no named chunk (T1 fails on those), and nothing said what moves when a chunk or the total goes over. |
+| D-93 | **"Tap it yourself" reaches every thing a tap moves or switches**: every switch (M14), every ball (M13) and every thing a tap swings (the Shake Pine's branch, chimes, bells, crystals and lanterns, a seesaw end, a swing seat; a thing of several parts taps its next part in order), each by the pointer's own path, by PLAYER | mark I4 as not K | CONFIRM RC-B1: I4's Shake Pine is neither a switch nor a ball and no behaviour bumps its trunk at 0.3 m/s, so I4 had no keyboard route while tagged K; a keyboard player should be able to do whatever a pointer tap does. |
 
 ---
 
@@ -170,7 +193,7 @@ Where the judges disagreed, the row says so. "F" = JUDGE_FUN, "K"/"F#" in feasib
 | V1 | Every new name (places, things, keepsakes, chapters, quest titles) | edit the `name` and text fields in `src/data/places.ts` and `src/data/journal_text.ts`; ids are append-only and stay; DT-02 re-screens |
 | V2 | Nine places beyond Home (more than the three asked for) | set `shipped: false` on a place: the unlock rule skips it and its chunk is never imported |
 | V3 | The cabin first, the beach in S2 | swap the slice order in section 15 (all data exists); the beach needs S2's water physics first |
-| V4 | The size budget (first load 1300, delta 70, the life chunk 110, total 2000 = D9's ceiling, 45 per place, away 120, screens 45 KB); a tenth place beyond these nine needs the total raised past D9's 2000 KB | the numbers in the `sizeBudget(...)` call in `vite.config.ts` (task T1) |
+| V4 | The size budget (first load 1300, delta 70, the life chunk 150, total 2000 = D9's ceiling, 45 per place, away 90, screens 45 KB; revision 4, D-92); a tenth place beyond these nine needs the total raised past D9's 2000 KB; over the total, the place that opens last ships `shipped: false` (14.3) | the numbers in the `sizeBudget(...)` call in `vite.config.ts` (task T1) |
 | V5 | Character caps (wholes 3 / 4 / 5, pieces 4 / 6 / 6, characters 6 / 8 / 10); the awake budget and movers follow from the measured phone factor (D-61: at F = 4, one mover at a time on low and med, two on high) | `MAT_LIMIT` (mat.ts 22), `MAX_PIECES` (cut.ts 38), `CHAR_CAP` in `src/life/attention.ts`; the awake budget only by measurement (PF-00), never by hand |
 | V6 | **Rewards that touch the economy: 5 gift squishies for life** (Common or Uncommon, at most 1 a day) | `GIFT_LISTS` in `src/data/quests.ts` (an empty list makes that finale keepsake-only); never a capsule without re-running `sim_economy.ts` |
 | V7 | **Autonomy on by default** ("Squishies move on their own") | `optionalDefaults` autonomy in `src/core/settings.ts` |
@@ -273,9 +296,12 @@ export interface ThingDef { readonly id: ThingId; readonly place: PlaceId; reado
   readonly switch?: 'zone' | 'motor' | 'tune' | 'shower' | 'echo' | 'fire' | 'comet';
   readonly notes?: readonly number[]; readonly useSpot?: readonly [number, number];
   readonly peek?: readonly [number, number, number, number];    // S13's two peek spots, left and right of the thing as the camera sees it (D-75)
+  readonly push?: readonly [number, number];                    // a swing's S11 push spot: one end of the seat's arc plus 1.3 m, inside the bounds (D-91)
+  readonly fromN?: number;                                      // Home only: the smallest party from which the thing shows in this frame (D-88)
   readonly verb: number; readonly icon: number; readonly look: string; readonly sound: number;
   readonly arrives?: { readonly after: string } }               // mech 0 = a patch or zone thing with no collider (the Ice Pond, the Updraft)
-export interface Spot { readonly x: number; readonly z: number; readonly yaw: number; readonly use?: readonly [number, number]; readonly peek?: readonly [number, number, number, number] }
+export interface Spot { readonly x: number; readonly z: number; readonly yaw: number; readonly use?: readonly [number, number]; readonly peek?: readonly [number, number, number, number];
+  readonly push?: readonly [number, number]; readonly fromN?: number }   // the tall layout's (or Home's TALL frame's) spot of one ThingDef
 export interface LayoutDef { readonly bounds: Area & { readonly round: number }; readonly walls: readonly Area[];
   readonly spawn: readonly (readonly [number, number])[] | 'matLayout';
   readonly things: readonly Spot[]; readonly zones: readonly Area[]; readonly patches: readonly Area[] }   // one per ThingDef, ZoneDef, PatchDef, same order
@@ -285,7 +311,8 @@ export interface PlaceDef { readonly id: PlaceId; readonly idx: number; readonly
   readonly things: readonly ThingDef[]; readonly bounds: Area & { readonly round: number }; readonly walls: readonly Area[];
   readonly pad: readonly [number, number, number]; readonly spawn: readonly (readonly [number, number])[] | 'matLayout';   // Home: 'matLayout' (D-67)
   readonly tall: LayoutDef;                                     // the portrait layout (D-68); the fields above are the wide layout
-  readonly unit?: 'slot';                                       // Home: thing spots are in slot units, x bodyScale like stage.matLayout (D-67)
+  readonly unit?: 'slot';                                       // Home: thing spots are in slot units, x bodyScale like stage.matLayout (D-67);
+                                                                // Home's WIDE frame is the PlaceDef's own fields and its TALL frame is `tall` (D-88)
   readonly camera: { readonly yawRange: number; readonly pitch: readonly [number, number]; readonly zoom: readonly [number, number] };
   readonly light: string; readonly sky: string; readonly weather: string; readonly ambience: string; readonly music: string;
   readonly ceremonyDim: number; readonly signature: number; readonly finale: number;
@@ -333,16 +360,18 @@ export const QUEST_TEXT, THING_TEXT, KEEPSAKE_TEXT, FACT_LINES, FAMILY_LINES, WI
 ## 7. The contract members (applied to `src/contracts.ts` on 2026-11-15; typecheck clean)
 
 All in one PLAYGROUND block at the end of the file, by interface merging, so no existing member changed (`git diff --stat`: 357 insertions, 0
-deletions, then 4 more insertions for `memoryBusy`). Every member is optional and documented in the file.
+deletions, then 4 more insertions for `memoryBusy`). Every member is optional and documented in the file. **Revision 4 adds and renames no
+member**: it rewrites four doc comments (`SoftEvent.auto`, D-86; `setBounds`, D-87 and D-91; `scootTo` on a floating body; `visibleTable`'s exact
+box, D-87) and the block's header; LIFE's new `lifeSetHome` and the wider `lifeSetPlace` are LIFE values, not contract members (D-89).
 
 | Interface | Members |
 |---|---|
-| `SoftEvent` | `auto?` (revision 3: on body-to-body bumps too, D-62), `prop?`, `other?` (revision 3: the partner's contact slot, D-65) |
+| `SoftEvent` | `auto?` (revision 3: on body-to-body bumps too, D-62; revision 4: only a finger, a grab or a carry stops it, never a lock alone, D-86), `prop?`, `other?` (revision 3: the partner's contact slot, D-65) |
 | `SoftMetrics` | `asleep?`, `submerged?`, `onProp?`, `airborne?`, `locked?` (LOCK's planned count, declared now because the touch gate reads it), `memoryBusy?` (added by the continuing synthesizer: the host needs it for the snapshot's MEMORY_BUSY flag, and nothing else reported it; typecheck clean after it), `contacts?` (revision 3: a bit per contact slot touching, D-65) |
-| `SoftBodyLike` | `mods?` (Float64Array of 8; revision 3: the wake rule and density for every family), `setBounds?`, `setHome?`, `setPropWorld?`, `setSquash?` (revision 3: an identical call is a no-op), `scootTo?` (revision 3, D-63), `hop?`, `carryTo?`, `sleepEnabled?`, `wake?`, `sleep?` (revision 3), `contactSlot?` (revision 3, D-65) |
+| `SoftBodyLike` | `mods?` (Float64Array of 8; revision 3: the wake rule and density for every family), `setBounds?` (revision 4: the corral is off on a moving prop, D-91; Home's union, D-87), `setHome?`, `setPropWorld?`, `setSquash?` (revision 3: an identical call is a no-op), `scootTo?` (revision 3, D-63; revision 4: it also glides a floating body), `hop?`, `carryTo?`, `sleepEnabled?`, `wake?`, `sleep?` (revision 3), `contactSlot?` (revision 3, D-65) |
 | `PropWorldLike` (new) | `count` (revision 3: the fixed prop order), `propThing`, `propPart` (revision 3, D-64), `poses`, `zoneCount`, `zoneOn`, `beginFrame`, `endFrame`, `setZoneOn`, `setMotor`, `raycast`, `poke`, `drainStrikes` (revision 3: quads with the cause and the striking slot), `setKinematic?`, `stateHash` |
 | `AddBodyOpts` | `lite?` |
-| `StageLike` | `loadPlace?`, `setPlace?`, `bindProps?`, `setPlayBounds?` (revision 3: the layout in use, inside the safe insets), `visibleTable?` (revision 3, Home, D-67), `setObstacles?`, `setBodyGaze?`, `setBodyExpression?`, `setBodyPose?`, `setBodyLook?`, `setHeatPoint?`, `setBodyWater?`, `setBodyAsleep?`, `emoteSlots?`, `emote?`, `clearEmote?`, `emoteScreen?`, `setEmotesInPhoto?`, `stampMark?`, `bodyScreenPoint?` |
+| `StageLike` | `loadPlace?`, `setPlace?`, `bindProps?`, `setPlayBounds?` (revision 3: the layout in use, inside the safe insets), `visibleTable?` (revision 3, Home, D-67; revision 4: its exact box, D-87), `setObstacles?`, `setBodyGaze?`, `setBodyExpression?`, `setBodyPose?`, `setBodyLook?`, `setHeatPoint?`, `setBodyWater?`, `setBodyAsleep?`, `emoteSlots?`, `emote?`, `clearEmote?`, `emoteScreen?`, `setEmotesInPhoto?`, `stampMark?`, `bodyScreenPoint?` |
 | `AudioSettings` | `chatter?`, `ambience?` |
 | `SquishAudio` | `creature?` and `prop?` (revision 3: the caller reuses the object, audio keeps no reference), `musicClock?` (revision 3: never in the snapshot), `loadAmbience?`, `setAmbience?`, `musicBox?` (revision 3: the tune lengths and spacing, D-81), `setMusicStyle?` |
 | `DebugHook` | `life?`, `quests?`, `travel?` |
@@ -373,7 +402,11 @@ otherwise it applies at the next wake (a drying foam's `mods[4]` changing every 
 
 ### 8.2 Bounds and home (E3)
 `setBounds(shape, cx, cz, a, b, round)` adds a place-bounds branch to `matCorral` (softbody.ts 1600-1620): the same dead zone, brake, glide back and
-rim bounce, about the place's disc or rounded rectangle; `setHome(x, z)` moves the home spot; shape -1 restores today's corral.
+rim bounce, about the place's disc or rounded rectangle; `setHome(x, z)` moves the home spot; shape -1 restores today's corral. The dead zone is the
+whole bounds: a centre inside them is never touched. **The corral is off for a body supported by a moving prop** (`onProp` names a hinge or
+slider prop: a rider on a seesaw, a swing or a raft), as it is today for a grabbed body and while `moveTo` or `scootTo` acts (revision 4, D-91;
+DT-01 keeps every rider's path inside the bounds anyway). **At Home** the shell passes the smallest rectangle (corner radius 0) that holds
+`visibleTable` and the body of every slot in use plus 0.05 m, so the corral never moves a body resting at its own slot (D-87).
 
 ### 8.3 The prop contact pass (E4) and support on prop faces
 - **Where:** once per substep, between the fingertip pass and the table pass (softbody.ts about 2197-2217), on XP, against the bound world's packed
@@ -434,7 +467,9 @@ write wakes only by the rule of 8.1; `scootTo` and every other driver wake.
 ### 8.7 LIFE drivers and the touch gate (E9, E7)
 **LIFE's own travel driver, `scootTo(x, z, speed)` (D-63):** a horizontal rigid glide of the centre like `moveTo` (no momentum, the table carries
 the height), eased in and out over 0.12 s, the corral off while it acts (the corral test at softbody.ts 1858 also checks the scoot flag), yielding
-to `moveTo`. `moveTo` stays the ceremonies' and the cut's (cut.ts 213) and is never touch-gated, so PH-02's "ceremony drivers untouched" holds.
+to `moveTo`. **It also glides a floating body** (revision 4): the glide stays horizontal and the water zone's buoyancy holds the height, as the
+table holds a grounded body's; a current's drift (at most 0.15 m/s) adds to it; as the depth ramps down at the water's edge the body becomes a
+sitter and the table takes over, so a floater leaves the water by the same driver (LIFE 5.3, LF-18; PH-15 adds the row). `moveTo` stays the ceremonies' and the cut's (cut.ts 213) and is never touch-gated, so PH-02's "ceremony drivers untouched" holds.
 **Touch gate:** at the substep start (softbody.ts 1849-1853), while `fingers > 0 || grabbed || carried || locked > 0`, the LIFE drivers (`scootTo`,
 `setSquash`, `hop`) pause and ease out within 0.12 s; ceremony drivers (`moveTo`, `setFold`, `tremble`, `burstOpen`) are untouched. `setSquash` scales the goal GB volume-preservingly in
 `frameUpdate` (softbody.ts 2391-2397); refused for putty, mochi and beads while their memory has not converged (it reports `MEMORY_BUSY`). `hop`
@@ -443,9 +478,10 @@ lifts the whole body kinematically along an arc (as the carry follows the hand, 
 no press, grab or snap.
 
 ### 8.8 Events
-`auto` on every `land`, every prop `bump` and **every body-to-body `bump`** unless the body (for a body bump: either body) is HELD or was thrown by
-the player since its last landing (F#11, C's rule; D-62: a body bump fires above 0.35 m/s, so its intensity is at least 0.117, and
-`feedback.handle` buzzes above 0.05, feedback.ts 146-151); `prop` on prop bumps; `other` (the partner's contact slot) on body bumps; land
+`auto` on every `land`, every prop `bump` and **every body-to-body `bump`** unless the player is touching the body (for a body bump: either body)
+with a finger, a grab or a carry, or threw it since its last landing (F#11, C's rule; D-62: a body bump fires above 0.35 m/s, so its intensity is
+at least 0.117, and `feedback.handle` buzzes above 0.05, feedback.ts 146-151). **A lock alone never counts** (revision 4, D-86): a LIFE body
+bumping a locked body nobody touches gives an `auto` bump (the lock still makes that body HELD for the touch gate and its own brain); `prop` on prop bumps; `other` (the partner's contact slot) on body bumps; land
 detection also when the first support after flight is a prop face. `emit` allocates three objects per event (softbody.ts 2696-2699) and keeps
 doing so: PH-11 measures allocation over windows in which no event fires, and the event rate limit bounds the rest.
 
@@ -494,12 +530,16 @@ mode is unchanged: the Float rule is the shell's (D-83, SH-11), so physics needs
 - **Camera:** in a place, `setPlayBounds` frames the whole play bounds of the layout in use (the wide layout, or the tall one on a frame with aspect
   under 0.9, D-68) so that a body anywhere inside them, its bubble included, stays inside the HUD safe insets; **no camera motion from autonomy**
   (M10) anywhere. At Home the framing stays today's framing of the mat slots in use: with LIFE on, the one-body follow (stage.ts 533) and
-  `framingFor`'s live framing follow only player-caused motion (a toss) and otherwise frame the slots in use; **`visibleTable(out)`** reports the
-  table area inside the frame and outside the insets at that rest framing (D-67), which the shell turns into Home's LIFE bounds, the Felt Ball's
-  bounds and the arrival test of Home's things. Measured by projection with the stage's constants (fov 35, pitch 0.27, target y 0.42, distance
-  max(3.0, 2.4 / aspect), section 23): with one body the desktop shows no table in front of it (the bottom HUD covers z > 0.3 x scale) and a
-  phone shows |x| up to about 0.5 to 0.7 x scale, so Home's spots are given in slot units and each arrives only when it is in view. The cut
-  neck-swell stopgap in `framingFor` (STATUS known open) stays Home-only until PHYS fixes the swell.
+  `framingFor`'s live framing follow only player-caused motion (a toss) and otherwise frame the slots in use; **`visibleTable(out)`** reports one
+  ground box inside the frame and outside the insets at that rest framing (D-67), **exactly** (revision 4, D-87): its z range runs from the ground
+  row under the top inset line to the ground row under the bottom inset line, each clipped to the felt's z range (+-3.4 m), and its x range is
+  the near row's (the narrowest: the visible ground narrows toward the camera), clipped to +-3.4 m. The shell turns it into Home's corral bounds
+  (with the slots in use, D-87) and the Felt Ball's bounds; Home's things arrive by the data's `fromN` (D-88), which DT-01 proves in view and RD-16
+  checks on the rendered frame. Measured by projection with the stage's constants (fov 35, pitch 0.27, target y 0.42, distance max(3.0, 2.4 /
+  aspect), section 23; re-run in revision 4 by `pg_fix4/homebounds.mjs`): with one body the desktop shows no table in front of it (the bottom HUD
+  covers z > 0.3 x scale) and on 390 x 844 the near row is only 0.78 to 1.22 m wide at scale 0.8 to 1.25, about the body's own width, so Home's
+  spots are given in slot units and each shows only from its party size. The cut neck-swell stopgap in `framingFor` (STATUS known open) stays
+  Home-only until PHYS fixes the swell.
 - **Capsule spot** avoids prop footprints (`setObstacles`); the pad is clear by data.
 - **Eyes seen through another body** are depth-faded (SHELL_4.md 95-98 reported a "four-eyed" look: a squishy's eyes crisp through a clear jelly in
   front of it), a must-fix for parties (RD-12).
@@ -543,9 +583,13 @@ only (D-66: the place's music style, the Music setting, its own sim-time tune ti
 busy, any non-Hand tool, Travel or Journal open, the desktop Hoard's hold, a hidden tab), except for the cut squishy's own group from 1 s after the
 swipe ends (D-73). **The one arbiter:** finger > cut and ceremony > LIFE; LIFE's SCOOT is sent to `scootTo` only (physics pauses it under a touch
 and makes it yield to `moveTo`); ceremonies and the cut steering (cut.ts 194-215) keep `moveTo` (D-63). Never calls `fingerDown`, `grab*` or a lock
-API for autonomy. **The awake budget (D-61):** while `units` is over `unitCap` it cancels the motion of the untouched LIFE mover farthest from the
-frame centre (it settles) and calls `sleep()` on untouched, still wholes (not RIDE, not on a moving prop), farthest first, until `units` is back
-under the cap; the touched, carried, tossed and riding bodies are never forced. After each tick it reads `lifeLooks` and writes `setBodyLook` and
+API for autonomy. **The awake budget (D-61, D-85):** while `units` is over `unitCap` (the formula with D-85's floor, from `attention.ts`; plus the
+riders' units while their ride moment runs: the ride allowance) it cancels the motion of the untouched LIFE mover farthest from the frame centre
+(it settles; never a ride moment's own mover, S11's pusher) and calls `sleep()` on untouched, still wholes (not RIDE, not on a moving prop),
+farthest first, until `units` is back under the cap; the touched, carried, tossed and riding bodies are never forced. **The place reaches LIFE
+through `lifeSetPlace(w, placeIdx, visit, def, layout, bodyScale)`** (D-89: on travel with a new visit number, and on a re-lay after a rotation
+with the same one) and, at Home, **`lifeSetHome(w, slot, x, z)`** for each character's home slot (`stage.matLayout`'s slot in use), sent at spawn
+and whenever the party or the frame changes, never from autonomy (D-87). After each tick it reads `lifeLooks` and writes `setBodyLook` and
 `mods[4]` for every family (FAMILY_REACT's density, a soaked foam lerping to its soaked density, 8.1); it calls `lifeAddLook` with the source thing
 for the pine's snow puff, the kettle's steam and the squirt game, `lifeSetJournal` when the journal's owned species, open places, known favourites
 or the open places' thing kinds change (never per frame), `lifeSetPair` at spawn, cut and join and on a FRIEND event, `lifeScript` for the six
@@ -568,7 +612,7 @@ ground." once a session, and never calls `stage.setFloatMode(true)` (game.ts 365
 `clearMat()` (cut.ts 283) no longer empties the mat; pieces = min(MAX_PIECES, cap - (wholes - 1)); before a cut the shell puts every untouched
 whole to sleep (`sleep()`); if the pieces' units (0.22 each) plus what is still awake would pass `unitCap`, it refuses kindly ("It's busy here. Put
 one squishy back on the shelf to cut."): at F = 4 that never happens once the others sleep (med: 5 pieces 1.10 + 3 sleepers 0.09 = 1.19 against
-1.49; low: 4 pieces 0.88 + 0.06 against 1.0); cutting a second party member reconnects the first, animated; an `onCut` / `onWhole` hook fires
+1.49; low: 4 pieces 0.88 + 0.06 against 1.06, D-85); cutting a second party member reconnects the first, animated; an `onCut` / `onWhole` hook fires
 from the swipe AND from the Cut bar's Split in two and Reconnect all (today they emit nothing, and `joined` is never emitted, SHELL map 4); the
 cut squishy's group leaves the non-Hand-tool quiet 1 s after the swipe ends (its pieces follow, huddle and join in while the Cut tool stays in
 hand; every other character stays quiet, D-73).
@@ -588,11 +632,12 @@ cut, Snap at the shot, the Journal UI, ceremony ends, gift claims); drained once
 ### 11.7 Travel (`src/shell/places.ts`, `src/ui/travel.ts`)
 QUESTS 15: `whenIdle`, `leaving()` (reconnect a cut, release locks), `loadPlaceDef`, `stage.loadPlace` and `audio.loadAmbience` (all three
 prefetched on idle when the place opens), the layout from the frame's aspect (under 0.9: the tall layout, D-68), the 0.6 s crossfade,
-`buildPropWorld(place, layout, bodyScale)`, `setPropWorld`, `setBounds`, the modifiers, spawn (at rest, then `sleep()`, 11.3), `lifeSetPlace`,
-VISIT, `setAmbience`, `setMusicStyle`, `setPlayBounds` with the layout's bounds, `setObstacles`; "Packing up..." after 300 ms; a load failure
-keeps the player where they were. A rotation that changes the layout (the aspect crosses 0.9) re-lays the place at the next idle moment by the
-same path under the crossfade (a player act; things and bodies are re-placed, nothing is lost); until then the camera frames the current
-layout. A live line on arrival: "You are at Hearthlog Cabin."
+`buildPropWorld(place, layout, bodyScale)`, `setPropWorld`, `setBounds`, the modifiers, spawn (at rest, then `sleep()`, 11.3),
+`lifeSetPlace(w, placeIdx, visit, def, layout, bodyScale)` with a new visit number (D-89), VISIT, `setAmbience`, `setMusicStyle`, `setPlayBounds`
+with the layout's bounds, `setObstacles`; "Packing up..." after 300 ms; a load failure keeps the player where they were. A rotation that changes
+the layout (the aspect crosses 0.9) re-lays the place at the next idle moment by the same path under the crossfade (a player act; things and
+bodies are re-placed, nothing is lost), with `lifeSetPlace` called again with **the same visit number**, so LIFE keeps its visit-scoped state and
+only its layout changes; until then the camera frames the current layout. A live line on arrival: "You are at Hearthlog Cabin."
 
 ### 11.8 Keyboard (`src/input/keyboard.ts`)
 J the Journal, P Places. **Tab stays the browser's** (D-77: it must always reach the Journal, Places, mute and gear buttons and leave the
@@ -603,10 +648,13 @@ centre today); the **keyboard stretch**: hold Space on the focused squishy, then
 grab that pays like a pull, because the player did it), released with Space. **Enter** on the focused squishy opens its wish card when it has a
 wish, otherwise its name tag popover; either way a bubble showing over it at that moment is also read into the polite live region ("Hello!") and
 counts as UI EMOTE_TAP (H6). The popover holds **"Go play with..."** (floor things: a player-asked LIFE use, which also works with autonomy off;
-rides: `carryTo`) and **"Tap it yourself"**: every thing with a switch (M14) and every ball in the place, each calling the same switch or
-`PropWorldLike.poke` path as a pointer tap, recorded by PLAYER ("Tap the fireplace", "Roll the Felt Ball"). The bubble hit areas are
-`tabindex="-1"` (they move every 250 ms and must never hold focus). The Escape order tray, Settings, Journal, Places, Hoard, tool, plate, then
-locks; focus returns to the opener. QU-15 derives each quest's K from a producer table of these routes (D-77).
+rides: `carryTo`) and **"Tap it yourself"**: every thing a pointer tap acts on (revision 4, D-93): every thing with a switch (M14), every ball
+(M13) and every thing a tap swings (the Shake Pine's branch, every chime, bell, crystal and lantern, a seesaw end, a swing seat), each calling
+the same switch or `PropWorldLike.poke` path as a pointer tap with the same impulse, recorded by PLAYER ("Tap the fireplace", "Roll the Felt Ball",
+"Shake the pine", "Ring the shells"); a thing of several parts (the Shell Chimes, the Icicle Bells, the Crystals, the Lantern Line) taps its next
+part in prop order at each press, so a distinct-part quest is reachable by keyboard. The bubble hit areas are `tabindex="-1"` (they move every 250
+ms and must never hold focus). The Escape order tray, Settings, Journal, Places, Hoard, tool, plate, then locks; focus returns to the opener. QU-09
+derives each quest's K from a producer table of these routes (D-77).
 
 ### 11.9 Settings (the exact change; one commit, so the typecheck stays clean)
 In `src/contracts.ts`, add to the PLAYGROUND block:
@@ -631,25 +679,45 @@ by the old code included.
 ### 11.10 Screens
 QUESTS 15: the Journal (`src/ui/journal/*`), the tracker (`src/ui/tracker.ts`), wish cards and bubble hit areas and word labels (`src/ui/wishes.ts`),
 the moments queue (the plate slot), the gift card, the Travel sheet, the settings rows; on the UI overhaul's components and tokens; every new HUD
-element in `_harness/uikit/` in every state (UI.md 5); the Journal and Travel in one lazy screens chunk. Revision 3 adds (QUESTS 15): the tracker
+element in `_harness/uikit/` in every state (UI.md 5); the Journal and Travel in one lazy screens chunk. **Which chunk each play-time module ships
+in** (revision 4, D-92; T1 fails on a lazy chunk it cannot name): `src/ui/wishes.ts` (wish cards, bubble hit areas, word labels; about 4 KB), the
+moments queue `src/ui/moments.ts` (about 3 KB), the party toolbar `src/ui/partybar.ts` (focus proxies, roving tabindex, the focus ring and name
+tag; about 3 KB), the name-tag popover `src/ui/nametag.ts` ("Go play with...", "Tap it yourself"; about 3 KB) and the Snap shutter and preview
+`src/ui/shutter.ts` (about 3 KB) are imported **statically by the LIFE host** (`src/shell/life.ts`), so they ship inside the life chunk and T1
+names them through it (estimates at 18 B a source line, 14.3; each lane reports the real bytes). None of them is needed before the life chunk
+lands: until then Home is one squishy, today's keyboard and today's Snap bar (11.14). Revision 3 adds (QUESTS 15): the tracker
 shows only a quest that can be done now (D-78, D-79); portrait and **landscape** layouts (844 x 390 and 568 x 320: the plate and the wish card in
 the left half under the pill); the wish card `min(358px, 100vw - 32px)` wide (it may wrap to two lines, at most 120 px tall) and the plate
 `min(320px, 100vw - 32px)`; one queue for the polite live region (quest and wish lines first, at least 2 s apart) with the new lines (a place
 opens, an arrival); the Journal button's name "Journal, something new" while its dot shows; the family name on every Journal page and tile
 (D-82); "New stamp: ..." for a quest moment; "Your gift will wait here for now." on a signed-in ledger; and **the Snap shutter** (11.15).
 
-### 11.13 Home's view and things (D-67)
-Home's PlaceDef gives every thing a spot per frame (TALL and WIDE, the `matLayout` test) in slot units, multiplied by bodyScale; each thing waits
-for its arrival event (PLACES 4.1) **and** for its footprint to be inside `stage.visibleTable` at the current party (the frame changes only with
-the party, a player act, or a ceremony), then arrives with its little scale-in (Calm or reduced motion: a fade). Home's LIFE bounds are the visible
-table shrunk by R + 0.2 m (a rounded rectangle passed to `setBounds` and to LIFE through the snapshot's place bounds), recomputed when the party or
-the frame changes, never from autonomy; the Felt Ball's prop bounds are the visible table shrunk by its radius, so a boop never rolls it out of
-view. RD-16 checks every arrived thing and every LIFE target inside the frame and outside the insets at 390 x 844 and 1280 x 800 with 1 to 5 bodies.
+### 11.13 Home's view and things (D-67, revision 4: D-87, D-88)
+Home's PlaceDef gives every thing a spot per frame (TALL and WIDE, the `matLayout` test) in slot units, multiplied by bodyScale, with the smallest
+party from which it shows there (`fromN`, PLACES 4.1's table: every one at 3 or fewer). Each thing shows once its arrival event has happened
+(PLACES 4.1) **and** the party is at least its `fromN` (the frame changes only with the party, a player act, or a ceremony), arriving with its
+little scale-in (Calm or reduced motion: a fade); if the party later drops under `fromN` it is parked (not drawn, no collider) until the party is
+back, which is not a new arrival. Said once, here and in LIFE 5.7 and PLACES 4.1:
+- **The corral** (`setBounds` on every party body): the smallest rectangle (shape 1, corner radius 0) that holds `stage.visibleTable` and the body
+  of every slot in use plus 0.05 m, recomputed when the party or the frame changes, never from autonomy; every slot centre is inside it, so the
+  corral never moves a body resting at its slot.
+- **LIFE's targets** (`lifeSetHome`, D-89): points on a segment between two framed points (the home slots of the characters out, and the use spots
+  of the arrived things); no shrink. Both ends are in view by construction and the centres at which a whole body is in view form a convex set, so
+  every target is in view. With one squishy on a portrait phone that is the segment from its slot to the Felt Ball's use point: it plays and
+  comes home, and does not wander.
+- **The Felt Ball's prop bounds**: the visible table shrunk by its radius, so a boop never rolls it out of view.
+RD-16 checks, at 390 x 844 and 1280 x 800 with 1 to 5 bodies at scale 0.8, 1.0 and 1.25, every arrived thing inside the frame and outside the
+insets, a whole body at every LIFE target and every use spot inside them, and every slot centre inside the corral rectangle; SH-21 checks the
+same rules in node with `visibleTable` stubbed from DT-01's projection table. The spots assume the HUD insets of the earlier fixer's model (390 x 844: top 151, bottom 170, left 16,
+right 60 CSS px; 1280 x 800: 120, 150, 24, 24); the real ones are measured from the DOM (`hudBinding.ts` 121-141), so DT-01's Home row reads them
+from a table the UI overhaul fills, and a spot that fails on the real insets is re-laid by the DATA lane before S0's exit.
 
 ### 11.14 The life chunk (D-69)
 `boot` builds the game as today; after the first frame of play the shell requests one lazy chunk holding `src/life/**`, `src/core/quests.ts`, the
-journal store and its modules, the LIFE host, the quest host, the attention wiring, `src/physics/props.ts` and the life, quest and Home data.
-Until it lands Home is today's toy (one squishy, no brain, no things) and the ring keeps the player's events; when it lands, the hosts attach,
+journal store and its modules, the LIFE host, the quest host, the attention wiring, `src/physics/props.ts`, the life, quest and Home data, and
+the five play-time UI modules of 11.10 (wishes, moments, the party toolbar, the name-tag popover, the Snap shutter and preview; D-92).
+Until it lands Home is today's toy (one squishy, no brain, no things, today's keyboard, today's Snap Save) and the ring keeps the player's
+events; when it lands, the hosts attach,
 the journal loads, Home's things begin to arrive and the tracker pill fades in. A load failure retries on the next idle moment and never breaks
 play (the toy works without it).
 
@@ -658,7 +726,9 @@ Today one Save press captures, encodes a PNG and downloads it (hudBinding.ts 268
 Snap bar gets a **shutter**: it captures one clean frame (as today), shows an in-page preview from a downscaled data URL (the CSP allows
 `img-src 'self' data:`, not `blob:`, index.html 13), and pushes PHOTO into the ring at that moment; **Save** (the download) is an optional button
 in the preview. The Friendship Frame keeps one thumbnail of at most 12 KB (a JPEG data URL of about 160 x 120) under its own key
-`wobblehoard:v2:journal.frame`, written once at the X8 photo. SH-18 checks that X8 completes with no download.
+`wobblehoard:v2:journal.frame`, written once at the X8 photo. SH-18 checks that X8 completes with no download. The shutter and its preview
+(`src/ui/shutter.ts`) ship in the life chunk (D-92): until the chunk lands, the Snap bar's Save works exactly as today, and no PHOTO is lost,
+since the Journal that counts it is in the same chunk.
 
 ### 11.11 Dev hook
 `life()`, `quests()`, `travel()` (dev only, out of the production bundle: the `bundle` section's grep).
@@ -727,8 +797,9 @@ and `other` set, 0 `feedback.handle` calls for it and 0 haptics (mock bodies emi
 | Chunk | Holds | Loaded |
 |---|---|---|
 | first load | the entry, the shell's seams (the ring, the `simStep` lines that call the life chunk, the party manager, the buttons, the tracker pill's shell, the settings rows, the keyboard), `ghostGrantGift` and the collection's small hooks, and boot's three imports (`boot.ts` 94-98: physics with the drivers, sleep, support on prop faces and the prop contact pass; the stage with gaze, expressions, poses, looks, `visibleTable`, Home's thing meshes and the emote draw; audio with the chatter and ambience buses, `musicClock`, creature synthesis, the limiter and Home's prop voices) | at boot |
-| **life (D-69)** | `src/life/**`, `src/core/quests.ts`, `src/collection/journal.ts` and `journal_store.ts`, the LIFE host, the quest host and the attention wiring (`src/shell/life.ts`, `src/shell/attention.ts`, the quest host), `src/physics/props.ts`, `src/data/life.ts`, `src/data/quests.ts` (all 110 rules and `HOME_TEXT`), `src/data/places.ts` and `src/data/place_home.ts` | requested after the first frame of play (never before play, so D9 does not count it) |
+| **life (D-69)** | `src/life/**`, `src/core/quests.ts`, `src/collection/journal.ts` and `journal_store.ts`, the LIFE host, the quest host and the attention wiring (`src/shell/life.ts`, `src/shell/attention.ts`, the quest host), `src/physics/props.ts`, `src/data/life.ts`, `src/data/quests.ts` (all 110 rules and `HOME_TEXT`), `src/data/places.ts` and `src/data/place_home.ts`, and (revision 4, D-92) the five play-time UI modules the LIFE host imports statically: `src/ui/wishes.ts`, `moments.ts`, `partybar.ts`, `nametag.ts`, `shutter.ts` | requested after the first frame of play (never before play, so D9 does not count it) |
 | away | the place host, the props kit for places, water, marks, weather, the ambience bed and the place prop voices | with the first trip (prefetched on idle when Hearthlog opens) |
+| play (only if the life chunk overflows, 14.3) | the five play-time UI modules, moved out of the life chunk as one named chunk (`ui/play.ts` the facade) | with the life chunk, right after it |
 | screens | the Journal, Travel and gift screens and `src/data/journal_text.ts` (all player text but the three bubble words) | on the first Journal or Places open (prefetched 30 s after the first reveal) |
 | one per place | `src/render/places/<id>.ts`, `src/audio/places/<id>.ts` and `src/data/place_<id>.ts`: three dynamic imports (`loadPlace`, `loadAmbience`, `loadPlaceDef`), so three chunks the size gate sums per place (T1) | when the place opens, on idle |
 
@@ -762,23 +833,40 @@ target); props near an awake body about 0.2 ms (PH-12's 1.25x bar). The review's
 at F = 4 an awake whole is 2.8 to 3.5 ms on the phone, so low (4.0 ms) holds ONE awake whole, and the old floor of 2 movers plus a touched body
 (2.67 ms here, 10.7 ms on the phone) broke it 2.7 times over.
 
-**The awake budget (D-61; LIFE.md 10.3 has the full table):** unitCap = (B / F - 0.20) / 0.87 in awake-whole units, never under 1.0 (the player's
-own touch is never refused); moverCap = max(1, floor(unitCap)).
+**The awake budget (D-61, D-85; LIFE.md 10.3 has the full table):** unitCap = max((B / F - 0.20) / 0.87, 1.0 + 0.03 x (the tier's wholes cap -
+1)) in awake-whole units: **the floor is one awake whole plus every other whole asleep** (1.06 / 1.09 / 1.12 for low / med / high), so waking one
+of three sleeping wholes on low (0.09 + 0.97 = 1.06) is always granted and PF-02's own state (one awake, two asleep: 1.06) is not over the cap
+(revision 3's floor of 1.0 refused both: CONFIRM CT-B2); the player's own touch is never refused; moverCap = max(1, floor(unitCap)); every
+comparison uses a 0.001 tolerance.
 | F | low unitCap / movers | med | high |
 |---|---|---|---|
-| 4 (until PF-00) | 1.0 / 1 (0.92 by the formula: one awake whole with props is 1.07 ms against 1.0, so if PF-02 misses with one awake body it is today's one-body cost, a PHYS perf item, not a LIFE cap) | 1.49 / 1 | 2.64 / 2 |
+| 4 (until PF-00) | 1.06 / 1 (0.92 by the formula, so the floor holds: one awake whole with props and two sleepers is 1.11 ms against 1.0; if PF-02 misses with one awake body it is today's one-body cost, a PHYS perf item, not a LIFE cap) | 1.49 / 1 | 2.64 / 2 |
 | 3 | 1.30 / 1 | 2.07 / 2 | 3.60 / 3 |
 | 2 | 2.07 / 2 | 3.22 / 3 | 5.52 / 5 |
 
+**The ride allowance (D-85).** The riders the player set on a ride (RIDE, D-74) are the player's bodies: while their ride moment runs (S10 teeter,
+S11 push), the start test and the over-budget rule add the riders' units to unitCap. So S11's one pusher may wake against the rider it pushes
+(low: rider 1.0 + two sleepers 0.06 + the pusher 0.97 = 2.03 against 1.06 + 1.0 = 2.06; med with four out: 2.06 against 2.49), and the over-budget
+rule never cancels a ride moment's own mover; S10 wakes nobody (both riders are awake on a moving prop), so it needs only the mover token. At most
+**two awake wholes** come of it (a ride seats at most two; S10 has two riders and no other mover, S11 one rider and one pusher), for at most the
+moment's length (S10 6 to 12 s, S11 three pushes, about 10 s) or the RIDE's 20 s; **PF-06** bounds it. **The soft boop (D-85):** where a boop's
+start (the booper 1.0, the target 0.97, their touching pair 0.25, plus the sleepers) would pass unitCap, which at F = 4 is every boop on low (with
+all three out: 1.06 + 0.97 + 0.25 = 2.28 against 1.06) and on med (four out: 2.31 against 1.49), S03 closes its last centimetres at 0.04 m/s (the
+target stays asleep) and the target's wobble is a render wiggle; on high (five out: 2.34 against 2.64) the physics boop plays.
+
 **The scenarios, recomputed (node ms at F = 4):** PF-01 med cap (4 wholes in the cabin): the player touches one, the other three asleep: 0.87 + 3 x
 0.02 + 0.2 = 1.13 ms (bar 1.5); untouched, one LIFE mover and three asleep: 0.9 + 0.06 + 0.2 = 1.16 ms. PF-02 low (3 wholes): one awake and two
-asleep: 0.87 + 0.04 + 0.2 = 1.11 ms (bar 1.0: the one-body case above). PF-03 cut (3 wholes and 5 pieces, med): the other two wholes asleep
-before the cut (11.4): 5 x 0.19 + 0.04 + 0.2 = 1.19 ms (bar 1.5; the review's 3.56 ms assumed every whole awake). **PF-05 is PF-01's node twin**
-(bar 1.5 ms at F = 4), not a separate 2.0 ms number. Bodies the player wakes are never refused (a touch, a toss, setting two riders on a seesaw);
-the shell's over-budget rule (11.2) puts the untouched ones back to sleep, travel spawns at rest and asleep (11.3), and B09's arrival hop goes
-through the gate (members without a token show a happy squint and the shared sparkle).
+asleep: 0.87 + 0.04 + 0.2 = 1.11 ms (bar 1.0: the one-body case above; 1.06 units, exactly the floor, so the gate allows it). PF-03 cut (3 wholes
+and 5 pieces, med): the other two wholes asleep before the cut (11.4): 5 x 0.19 + 0.04 + 0.2 = 1.19 ms (bar 1.5; the review's 3.56 ms assumed
+every whole awake). **PF-06 (the ride case, new in revision 4):** two awake wholes on a ride and the rest asleep, low or med: 2 x 0.87 + 0.2 +
+0.04 = 1.98 ms in node, about 7.9 ms on the phone, against the physics bar of 4.0 (low) or 6.0 (med): over the physics share for the ride's length,
+so its bar is the whole frame, at most 16.7 ms mean with the 4x throttle (physics 7.9 plus the other rows of the table without their GC slack is
+15.0 ms) and physics at most 8.0 ms; if it misses, section 24 lists the choices. **PF-05 is PF-01's node twin** (bar 1.5 ms at F = 4), not a
+separate 2.0 ms number. Bodies the player wakes are never refused (a touch, a toss, setting two riders on a seesaw); the shell's over-budget rule
+(11.2) puts the untouched ones back to sleep, travel spawns at rest and asleep (11.3), and B09's arrival hop goes through the gate (members
+without a token show a happy squint and the shared sparkle).
 
-### 14.3 Size (D9, re-specified; V4; revision 3, D-69)
+### 14.3 Size (D9, re-specified; V4; revision 3, D-69; revision 4, D-92)
 The first estimate was 2 to 3x low (REVIEW_code-truth M1, which I re-derived): code minifies to 13 to 21 B a source line here (`cut.ts` 12 764 B
 for 623 lines, `store.ts` 12 597 B, `softbody.ts` 62 860 B), and one place's data built to section 6's fields is about 7.5 KB, not 1.5 (its PlaceDef
 2.3 KB, its reaction cells as `{ tag, key }` 4.1 KB, its quests 1.1 KB). LIFE alone (19 behaviours, 18 moments, wishes, the voice planner,
@@ -790,17 +878,35 @@ from the first seconds of play, not before it, so it loads just after play start
 | UI overhaul + SHELL-4 allowance | +90 KB | UI.md 2.7 | |
 | PLAYGROUND first-load delta | **60 KB target, 70 KB hard**, split into lane caps: physics 18 (drivers, sleep, support on prop faces, the prop pass in `softbody.ts`), render 16 (gaze, expressions, poses, looks, `visibleTable`, the emote draw, Home's thing meshes), audio 8 (the buses, `musicClock`, creature synthesis, the limiter, Home's prop voices), shell 12 (the ring, the `simStep` lines, the party manager, the buttons, the pill's shell, the settings rows, the keyboard), collection 2 (`ghostGrantGift`, the hooks), data 4 (any id table boot code needs) | the lane caps | SZ-01 |
 | **first load** | **at most 1300 KB** | | SZ-01 |
-| **life chunk** (new) | at most 110 KB | LIFE about 45, the reducer, journal store and journal about 22, the LIFE and quest hosts and the attention wiring about 16, `props.ts` about 8, data (life tables, 110 quest rules, `HOME_TEXT`, `places.ts`, `place_home.ts`) about 16: about 107 | SZ-02 |
-| away chunk | at most 120 KB | | SZ-02 |
+| **life chunk** (new) | at most **150 KB** (revision 4; was 110) | LIFE about 45, the reducer, journal store and journal about 22, the LIFE and quest hosts and the attention wiring about 16, `props.ts` about 8, **the data about 42 (measured, below)**, **the five play-time UI modules about 15** (11.10): about 148, or about 135 with the two big tables packed | SZ-02 |
+| away chunk | at most **90 KB** (revision 4; was 120) | the place host, the props kit, water, marks, weather, the ambience bed and the place prop voices: about 44 to 66 (my estimate at 18 B a line over about 2 450 to 3 650 lines; nobody had estimated it) | SZ-02 |
 | screens chunk | at most 45 KB | Journal and Travel UI about 25, `journal_text.ts` about 18 (the reaction cells' words do not ship, D-69) | SZ-02 |
-| each place chunk | at most 45 KB (9 x 45 = 405): its render module, its audio recipe and its data module together | render 30 to 36, audio 4 to 6, data 3 to 6 (the PlaceDef with both layouts and its reaction channels) | SZ-02 |
-| **whole build** | **at most 2000 KB** (D9's ceiling) | 1300 + 110 + 120 + 45 + 405 = 1980 | SZ-02 |
+| each place chunk | at most 45 KB (9 x 45 = 405): its render module, its audio recipe and its data module together | render 30 to 36, audio 4 to 6, data 3.6 to 6.2 (the cabin's stand-in PlaceDef with both layouts: 6.2 KB as objects, 3.6 KB with its reaction channels packed) | SZ-02 |
+| **whole build** | **at most 2000 KB** (D9's ceiling) | by the caps 1300 + 150 + 90 + 45 + 405 = **1990** | SZ-02 |
+
+**The life chunk's data, measured (revision 4; CONFIRM CT-M1 estimated 22 to 30 KB against the 16 KB written here).** Stand-ins built to section
+6's field lists and counts with realistic values (the earlier fixer's scratch `pg_fix3/datagen.mjs`, re-run by me), minified one file at a time by
+the rolldown method below: `life.ts` 18 108 B (of it `DEFAULT_REACTIONS` as objects 4 969 B and `SPECIES_LIFE` 3 348 B), `quests.ts` 14 462 B (the
+110 rules as objects 11 592 B), `places.ts` 3 838 B, `place_home.ts` 6 046 B: **41.5 KB as objects**; with the 110 rules packed as flat number
+arrays (5 024 B) and the default cells packed (1 570 B), **29.2 KB**. They are stand-ins, not the real modules: PG_DATA reports the real bytes
+after its first step, and 14.3's numbers follow the measurement.
+
+**When a chunk or the total goes over (revision 4, D-92), in this order, each step reported with its bytes:**
+1. **A lazy chunk over its cap** (the life chunk, a place, the away or the screens chunk): the lane first packs its largest tables as flat number
+   arrays read through a small accessor (the quest rules and the default reaction cells: -6.6 KB and -3.4 KB on the stand-ins; a place's
+   reaction channels: -2.6 KB on the cabin's stand-in); then it moves what is not needed at once into a lazier **named** chunk (for the life chunk:
+   the five play-time UI modules into the `play` chunk of section 13, loaded right after it; for a place: nothing moves out, its render module
+   trims backdrop-card detail first). Nothing ever moves into the first load, and no lane raises a cap.
+2. **The whole build over 2000 KB** (SZ-02 measures it): the place that opens last and is not yet shipped stays `shipped: false` and its three
+   chunks leave the build (`loadPlaceDef`, `stage.loadPlace` and `audio.loadAmbience` list only shipped places, so its modules are never
+   imported); in the S3 build that is Cloudloft, then Echo Hollow, and so on in reverse opening order. Its chapter is hidden (QU-14) and its
+   stamps keep counting toward the others (QU-06); the owner may raise D9's ceiling to bring it back (V4). A place that has shipped never leaves.
 
 **Measured at every step, not at S0 only:** each lane reports the minified bytes of every new or grown module after every step, from a one-file
 build in node (light): rolldown from `node_modules`, the module as the only input, every import external, `output: { minify: true, format: 'es' }`,
 `write: false`; the reported number is the output's length. A lane over its first-load cap moves code into the life chunk (or its own lazy module)
-before the next step. SZ-01 measures the real build once at S0. A tenth place beyond these nine does not fit 2000 KB at 45 KB: it needs the
-place chunks to average under 40 KB or the owner to raise D9's ceiling (V4).
+before the next step. SZ-01 measures the real build once at S0. A tenth place beyond these nine does not fit 2000 KB at 45 KB: with the caps
+above it needs the ten place chunks to average at most 41.5 KB ((2000 - 1300 - 150 - 90 - 45) / 10) or the owner to raise D9's ceiling (V4).
 
 ### 14.4 Per place
 At most 60 draw calls for the set and props (RD-08), 8 moving props and 20 collider primitives (DT-01, in each layout), weather caps per tier x0.3
@@ -818,8 +924,8 @@ reducer events (QU-01), per 600 shell frames with no physics event (SH-01, SH-04
 
 | Slice | Contents | Playable result | Exit |
 |---|---|---|---|
-| **S0 "Life at Home"** (internal milestone) | PF-00 (the phone factor and the unit weights, step 0); PHYS touch gate, `setSquash`, `scootTo`, `hop`, support on prop faces, sleep and `sleep()`, `auto` (lands, prop and body bumps), `contactSlot` / `other` / `contacts`, collide caching, the prop pass with static props and the ball, Home's bounds; LIFE traits, needs, looks, B01-B20, REACT_TRIGGERS, the six scripts (FIRST_PLAY makes FN-01 hold; FIRST_WISH with D-70's wisher), S01-S09, S12, S13, S15 turn by turn, pieces P01-P04, attention, voice planning on sim time, the wish scheduler with `lifeSetJournal`; RENDER gaze, expressions, render pose, emotes, sleep skip, lite chunk mesh, eyes through jelly, Home's camera rule and `visibleTable`; AUDIO creature voices, chatter bus, limiter, `musicClock`, Home's prop voices (ball, music box); SHELL the life chunk loader, LIFE host, party manager (stable ids and contact slots, survives ceremonies and cuts, the newcomer stays out), the bus, the attention wiring (every `auto` event), the over-budget rule, Home's arrival rule, the tracker, the Journal with Home's chapter, settings rows (v3), the party toolbar and Space; DATA all places' numbers (both layouts) and all text; QUESTS reducer, journal store, backfill | Home comes alive: Dollop plays with the ball by itself, a newcomer says hello, they sing to the Music Box and nap on the rug, all in view; Home's chapter up to its wish | **FN-01** passes in node and once in the browser; SZ-01 measures the first-load delta and the life chunk |
-| **S1 "Hearthlog Cabin"** (first shippable) | S0 + the place system (place host, the cabin chunk, the away chunk, Travel, the wide and tall layouts, bounds and modifiers), the cabin's 6 things (the re-laid hinge rocker and swing, the yarn ball, the snug basket ring, the hearth's warmth, the singing kettle's whistle), warm and cold looks and poses, toast, the ambience bed with the cabin's recipe, the cabin's prop voices, wishes and wish cards, the RIDE state, moments, keepsakes and the Home shelf, the gift path (the Hearthlog gift, the verified step 2), the Snap shutter and preview, chapters Home and Hearthlog and Friends Everywhere's X1, X2, X3, X6 and X10 (its place-spanning quests and its finale are hidden until S2, D-78), the squirt-free S1 copy | all five asks in one new place: things used in each family's way, a social party, pieces joining in calmly, voices and emotes, and a Journal with onboarding | node rows (QU-13 from LIFE's real output), then PF-01..03 against the caps PF-00 set, then the browser rows; independent verifiers (PG_VERIFY) |
+| **S0 "Life at Home"** (internal milestone) | PF-00 (the phone factor and the unit weights, step 0); PHYS touch gate, `setSquash`, `scootTo`, `hop`, support on prop faces, sleep and `sleep()`, `auto` (lands, prop and body bumps), `contactSlot` / `other` / `contacts`, collide caching, the prop pass with static props and the ball, Home's bounds; LIFE traits, needs, looks, B01-B20, REACT_TRIGGERS, the six scripts (FIRST_PLAY makes FN-01 hold; FIRST_WISH with D-70's wisher), S01-S09, S12, S13, S15 turn by turn, pieces P01-P04, attention, voice planning on sim time, the wish scheduler with `lifeSetJournal`; RENDER gaze, expressions, render pose, emotes, sleep skip, lite chunk mesh, eyes through jelly, Home's camera rule and `visibleTable`; AUDIO creature voices, chatter bus, limiter, `musicClock`, Home's prop voices (ball, music box); SHELL the life chunk loader, LIFE host, party manager (stable ids and contact slots, survives ceremonies and cuts, the newcomer stays out), the bus, the attention wiring (every `auto` event), the over-budget rule, Home's arrival rule, the tracker, the Journal with Home's chapter, settings rows (v3), the party toolbar and Space; DATA all places' numbers (both layouts) and all text; QUESTS reducer, journal store, backfill | Home comes alive: Dollop plays with the ball by itself, a newcomer says hello, they sing to the Music Box and nap on the rug, all in view (the Music Box and the rug show from two out in both frames, D-88; PLACES 4.1's spot table); Home's chapter up to its wish | **FN-01** passes in node and once in the browser; SZ-01 measures the first-load delta and the life chunk |
+| **S1 "Hearthlog Cabin"** (first shippable) | S0 + the place system (place host, the cabin chunk, the away chunk, Travel, the wide and tall layouts, bounds and modifiers), the cabin's 6 things (the re-laid hinge rocker and swing, the swing re-laid again in revision 4 so every rider's path stays inside the bounds, D-91, the yarn ball, the snug basket ring, the hearth's warmth, the singing kettle's whistle), warm and cold looks and poses, toast, the ambience bed with the cabin's recipe, the cabin's prop voices, wishes and wish cards, the RIDE state, moments, keepsakes and the Home shelf, the gift path (the Hearthlog gift, the verified step 2), the Snap shutter and preview, chapters Home and Hearthlog and Friends Everywhere's X1, X2, X3, X6 and X10 (its place-spanning quests and its finale are hidden until S2, D-78), the squirt-free S1 copy | all five asks in one new place: things used in each family's way, a social party, pieces joining in calmly, voices and emotes, and a Journal with onboarding | node rows (QU-13 from LIFE's real output), then PF-01..03 against the caps PF-00 set, then the browser rows; independent verifiers (PG_VERIFY) |
 | **S2 "Water and cold"** | water as a gravity scale and the float table, current, the flush pad, chimes struck by contact, ice and wet patches, marks, snow and rain weather, the water surface and tint, the ceremony dim; Ripple Shore, Frostbell Ridge, Rainleaf Garden (re-laid in both layouts by DT-01) with their chapters and gifts; Friends Everywhere's X4, X5, X7, X9 and its finale X8 (the Friendship Frame and a gift); the squirt game; the raised hops per family after PH-01 | three more places; floating and wading; splash jumps; glides; the sunset, the stars, the rain that stops | per-place node and browser rows; verifiers |
 | **S3 "Fields and echo"** | airborne-only wind and updraft, the magnet and the steel marble, the motor turntable, the echo; Fizzwell Tub, Cogwhistle Bench, Lanternroof, Echo Hollow, Cloudloft with their chapters | the whole world of ten places | per-place rows; a full verifier pass over the whole game |
 
@@ -841,9 +947,9 @@ reducer events (QU-01), per 600 shell frames with no physics event (SH-01, SH-04
 
 | # | Owner | File | Change |
 |---|---|---|---|
-| T1 | INTEGRATION (the orchestrator) | `vite.config.ts` | Replace the one total gate (`G0_BUDGET_BYTES = 1.2 MB`, line 24; `sizeBudget(limit)`, lines 171-187) with `sizeBudget({ firstLoad: 1300 * 1024, total: 2000 * 1024, lifeChunk: 110 * 1024, placeChunk: 45 * 1024, awayChunk: 120 * 1024, screensChunk: 45 * 1024 })`: in `generateBundle`, compute the **first-load closure** = the entry chunk, its static imports, and the closures of the three dynamic imports in `src/shell/boot.ts` 94-98 (`physics/softbody.ts`, `render/stage.ts`, `audio/engine.ts`); name each other chunk by its facade module: the life chunk (`life/step.ts` with the hosts), **a place = the sum of `render/places/<id>.ts`, `audio/places/<id>.ts` and `data/place_<id>.ts`** (three separate dynamic imports), the away chunk = the sum of `render/place.ts` and `audio/ambience.ts`, the screens chunk = `ui/journal/*` and `ui/travel.ts`; **fail on any lazy chunk it cannot name** and when a lazy facade is in the first-load closure; in `closeBundle` keep the total over the whole output folder (public files included) and print `[G0] first load N of 1300 KB, life N of 110 KB, total N of 2000 KB, largest place N of 45 KB, away N of 120 KB, screens N of 45 KB`. Do it after SHELL-4 closes and before any place chunk lands. |
+| T1 | INTEGRATION (the orchestrator) | `vite.config.ts` | Replace the one total gate (`G0_BUDGET_BYTES = 1.2 MB`, line 24; `sizeBudget(limit)`, lines 171-187) with `sizeBudget({ firstLoad: 1300 * 1024, total: 2000 * 1024, lifeChunk: 150 * 1024, placeChunk: 45 * 1024, awayChunk: 90 * 1024, screensChunk: 45 * 1024 })`: in `generateBundle`, compute the **first-load closure** = the entry chunk, its static imports, and the closures of the three dynamic imports in `src/shell/boot.ts` 94-98 (`physics/softbody.ts`, `render/stage.ts`, `audio/engine.ts`); name each other chunk by its facade module: the life chunk (`life/step.ts` with the hosts), **a place = the sum of `render/places/<id>.ts`, `audio/places/<id>.ts` and `data/place_<id>.ts`** (three separate dynamic imports), the away chunk = the sum of `render/place.ts` and `audio/ambience.ts`, the screens chunk = `ui/journal/*` and `ui/travel.ts`, and the `play` chunk = `ui/play.ts` only if 14.3's overflow rule made it (revision 4, D-92); **fail on any lazy chunk it cannot name** and when a lazy facade is in the first-load closure; in `closeBundle` keep the total over the whole output folder (public files included) and print `[G0] first load N of 1300 KB, life N of 150 KB, total N of 2000 KB, largest place N of 45 KB, away N of 90 KB, screens N of 45 KB`. Do it after SHELL-4 closes and before any place chunk lands. |
 | T2 | SHELL | `_harness/browser_shell.mjs`, the prod-build row "dist stays under the 1.2 MB budget (G0)" (line 3448 at HEAD 4fe77736; find it by its text, SHELL-4 still moves lines) | The row "dist stays under the 1.2 MB budget (G0)" becomes "first load at most 1300 KB and the build at most 2000 KB (G0, D9)": read the build's own `[G0]` line or recompute the same two numbers; a re-specification with this written reason (the owner's D9 and this page). |
-| T3 | DOCS (the orchestrator) | `_spec/CONTRACT.md` | Section 6 G0 row: "`npx tsc --noEmit -p tsconfig.json`, `npm run build`: clean; first load at most 1300 KB and the whole build at most 2000 KB, the life chunk at most 110 KB, each place (its render, audio and data chunks) at most 45 KB, the away chunk 120 KB, the screens chunk 45 KB; `vite build` itself fails over any of them and on any lazy chunk it cannot name (`vite.config.ts`); PLAYGROUND_BUILD.md 14.3". Section 2: add the rows LIFE (`src/life/**`), WORLD DATA (`src/data/places.ts`, `life.ts`, `quests.ts`, `journal_text.ts`, `place_<id>.ts`), QUESTS (`src/core/quests.ts`, the journal files in `src/collection`). Sections 4 to 8: a pointer to PLAYGROUND_BUILD.md 7 for the PLAYGROUND members. |
+| T3 | DOCS (the orchestrator) | `_spec/CONTRACT.md` | Section 6 G0 row: "`npx tsc --noEmit -p tsconfig.json`, `npm run build`: clean; first load at most 1300 KB and the whole build at most 2000 KB, the life chunk at most 150 KB, each place (its render, audio and data chunks) at most 45 KB, the away chunk 90 KB, the screens chunk 45 KB; `vite build` itself fails over any of them and on any lazy chunk it cannot name (`vite.config.ts`); PLAYGROUND_BUILD.md 14.3". Section 2: add the rows LIFE (`src/life/**`), WORLD DATA (`src/data/places.ts`, `life.ts`, `quests.ts`, `journal_text.ts`, `place_<id>.ts`), QUESTS (`src/core/quests.ts`, the journal files in `src/collection`). Sections 4 to 8: a pointer to PLAYGROUND_BUILD.md 7 for the PLAYGROUND members. |
 | T4 | DOCS | `_spec/CUT.md` | Section 2, after rule 4: "PLAYGROUND (2026-11-15): cutting keeps the party on the mat or in the place (the mat is no longer emptied); the pieces a cut may make = min(the tier's pieces, the character cap - (wholes - 1)); one squishy is in pieces at a time. Pressing another party member is not switching squishy: the first body keeps its pieces. Rule 2 (leaving reconnects) is unchanged." |
 | T5 | DOCS | `_spec/DESIGN.md` | 5.13 or a new 5.14: a pointer to QUESTS.md 11 (the Journal's only economy touch is 5 gift squishies for life, origin restock; no capsule or SP rewards); 6.6: autonomy obeys Calm and reduced motion (LIFE.md 10.1, 5.2). Optional, at the Stage C doc pass. |
 | T6 | CORE | `_harness/probe_catalog.ts` | none: PG_DATA copies the gate into `_harness/name_gate.ts` and a row checks the copied function sources match. |
@@ -854,14 +960,14 @@ reducer events (QU-01), per 600 shell frames with no physics event (SH-01, SH-04
 | T11 | DOCS (the orchestrator) | `_spec/LOCK.md` | Rule 3 (section 2), after "switching squishy": "(PLAYGROUND, 2026-11-15: pressing another party member is not switching squishy: the first body keeps its locks, LIFE.md 5.5)". And, in rule 4's spirit: a locked lobe is HELD for its own squishy only; it never silences the party (LIFE.md 10.2, D-84). |
 | T12 | DOCS (the orchestrator, before the Stamp tool ships) | `_spec/FUN.md` | Rename the queued **Stamp** tool (FUN 1), for example to **Prints**, because "stamp" is the Journal's unit ("Opens at 28 stamps", the Stamps tab, "New stamp: ..."); a child would expect stamping a squishy to earn stamps (REVIEW_rules-and-clarity m6, V19). |
 | T13 | INTEGRATION (the orchestrator, step 0, one heavy job) | none (a measurement) | **PF-00**: the phone factor F and the unit weights (14.2), reported in `_handoff/reports/PG_PF00.md`, before PG_LIFE fixes `attention.ts`'s caps. |
-| T14 | DOCS (the orchestrator) | `_spec/NEXT_STEPS.md` | The PLAYGROUND paragraph (about line 206) still quotes "total 1900 KB": it becomes "total 2000 KB (D9's ceiling) with a 110 KB life chunk" (D-69, 14.3). FUN.md section 4's "the Float setting itself stays for one squishy at Home" already matches D-83. |
+| T14 | DOCS (the orchestrator) | `_spec/NEXT_STEPS.md` | The PLAYGROUND paragraph (about line 206) still quotes "total 1900 KB": it becomes "total 2000 KB (D9's ceiling) with a 150 KB life chunk and a 90 KB away chunk" (D-69, D-92, 14.3). FUN.md section 4's "the Float setting itself stays for one squishy at Home" already matches D-83. |
 
 ## 18. The acceptance checklist (N = node, B = browser, O = offline audio; ids per lane)
 
 **DATA** (`_harness/probe_pg_data.ts`, N)
 | Id | Check | Bar |
 |---|---|---|
-| DT-01 | every PlaceDef, **both layouts**: every collider inside the walls' rectangle (wide) or the tall frame (abs x at most 1.82 - 0.128 z, z -3.7 to 3.4, PLACES P7) and every use spot and peek spot inside the rounded bounds, none in the pad, **no physics zone reaching into the pad either** (water, current, wind, updraft, magnet: a dry, still pad; warm, cold, wet and echo flags may reach its edge, PLACES P6); spawn spots at least 0.9 m from every thing, a moving prop's swept range counted (a swing's arc, a seesaw's tilt, a chime's swing), inside the bounds shrunk by 0.825 m, at least 1.0 m apart (1.25 m where the place allows), at least 5 (one per whole of the high tier); every ride's seat or rider spots inside the bounds (the corral never pulls a rider off); thing-to-thing clearance at least 0.3 m with swept ranges (walls excepted); static things in the front band at most 0.4 m tall; parameters inside MECH_RANGES; **a seesaw's floor rule: pivot >= (L / 2) sin(limit) + (t / 2) cos(limit)**; every collider part at least 0.16 m thick, a ball r at least 0.20, a capsule's length taken as its total length with both caps; at most 8 moving props and 20 primitives (D-55); **a ring's clear opening at least 1.35 m** (the chord minus both segment radii: the largest body, 2 x 0.625 + 0.1); water surfaces at most 0.30 m; ramps at most 16 degrees; pads and turntables flush; swing seats at most 2.0 m/s from rope and limit (with GRAVITY 10). **Home** (spots in slot units, D-67): every thing at least 0.275 m from every body of every `stage.matLayout` slot (both frames, 1 to 5 bodies, body scale 0.8 to 1.25, R = 0.5 x scale), the free Felt Ball at least 0.05 m; things 0.3 m apart | all; each moved thing reported |
+| DT-01 | every PlaceDef, **both layouts**: every collider inside the walls' rectangle (wide) or the tall frame (abs x at most 1.82 - 0.128 z, z -3.7 to 3.4, PLACES P7) and **every use spot, peek spot, ring gap waypoint (0.6 m outside the gap's mouth), swing push spot and rider spot inside the rounded bounds, with a body of R 0.625 centred there clear of every wall and 0.625 m from every collider but its own thing's** (a ring's inner spot: its clear inner radius), these spots being exempt from LIFE's R + 0.2 m shrink (revision 4, D-90); none in the pad, **no physics zone reaching into the pad either** (water, current, wind, updraft, magnet: a dry, still pad; warm, cold, wet and echo flags may reach its edge, PLACES P6); spawn spots at least 0.9 m from every thing, a moving prop's swept range counted (a swing's arc, a seesaw's tilt, a chime's swing), inside the bounds shrunk by 0.825 m, at least 1.0 m apart (1.25 m where the place allows), at least 5 (one per whole of the high tier); **every rider's whole path inside the rounded bounds** (a swing's seat centre over its arc, rope x sin(limit) to each side; a seesaw's rider spots) **with a rider of R 0.625 on it clear of every wall and 0.625 m from every other collider, and each swing's push spot (the end of its arc plus 1.3 m) inside the bounds with a pusher of R 0.625 clear** (revision 4, D-91: the revision 3 check took only the rider's rest spot, so the tall cabin's rider left the bounds by 0.58 m); thing-to-thing clearance at least 0.3 m with swept ranges (walls excepted); static things in the front band at most 0.4 m tall; parameters inside MECH_RANGES; **a seesaw's floor rule: pivot >= (L / 2) sin(limit) + (t / 2) cos(limit)**; every collider part at least 0.16 m thick, a ball r at least 0.20, a capsule's length taken as its total length with both caps; at most 8 moving props and 20 primitives (D-55); **a ring's clear opening at least 1.35 m** (the chord minus both segment radii: the largest body, 2 x 0.625 + 0.1); water surfaces at most 0.30 m; ramps at most 16 degrees; pads and turntables flush; swing seats at most 2.0 m/s from rope and limit (with GRAVITY 10). **Home** (spots in slot units, D-67): every thing at least 0.275 m from every body of every `stage.matLayout` slot (both frames, 1 to 5 bodies, body scale 0.8 to 1.25, R = 0.5 x scale), the free Felt Ball at least 0.05 m; things 0.3 m apart; **and, for each thing and frame, a spot that shows from its `fromN` (at most 3, revision 4, D-88): its footprint corners at y 0 and at its top inside the HUD insets at every party from `fromN` to 5 and every scale, its top centre behind no slot body and no other shown thing, nothing over 0.4 m tall in front of the front slot row, and its use spot (the lamp's glow, the rug's second napper, the pad) with a whole body in view and clear of the other slot bodies; the rug's centre within 0.65 m of slot 0 at every scale; every slot centre inside the corral rectangle (D-87); the HUD insets from the UI overhaul's table (11.13)** | all; each moved thing reported |
 | DT-02 | the name gate split (PLACES 7): coined words NAME rules, the rest PROSE rules, run over every name, every player line **and every reaction cell of PLACES 3 and 4** (they are the source of the family lines); pop dome promise words; the copy words of QUESTS Q10; CS-05 **on names only** (places, things, zones, patches, keepsakes, chapters: first four letters, edit distance 2 for coined words, unique prefixes) | 0 hits |
 | DT-03 | favourites: 50 rows; each place beyond Home at least 4 fans and 1 Common fan; each family in at least 2 places; the thing in the place; each gift list 3 Common or Uncommon fans of the next place; **every favourite thing has an event its fan can make by itself (a USE, or a REACT with that thing), or is a ride, or is a switch counted when the player taps it with the fan watching within 1.5 m** (QUESTS 9 F2) | all |
 | DT-04 | best friends: a perfect matching, symmetric, cross-lane, tier gap at most 1 | all |
@@ -869,7 +975,7 @@ reducer events (QU-01), per 600 shell frames with no physics event (SH-01, SH-04
 | DT-06 | every family has at least 3 reactions **with a real channel** (a pose target, a render pose, a look and its level, a particle preset, a sound id or a behaviour id; D-80) in every place; a cell whose only effect is a word or the place's light fails | all |
 | DT-07 | the data modules are flat, acyclic, and each loads first in a bare node (probe_genome 87-120) | all |
 | DT-08 | text lengths and readability (QUESTS Q10) | all |
-| DT-09 | each title's verb matches its rule's event (a reviewed keyword table) | all |
+| DT-09 | each title's verb matches its rule's event (a reviewed keyword table), **except a VISIT quest's title**, which may name the place's feel because its hint carries the verb ("Go to Ripple Shore."; QUESTS Q7: "Sand and sea", "Pitter-patter", "Bubbles up", "Tick, tock"); every hint matches its rule's count ("two times" for x2) | all |
 | DT-10 | the float table is generated from density x depth x radius band; every water reaction cell agrees; every resting body's eye anchor at least 0.10 m above every water surface (CS-07) | all |
 | DT-11 | the salts differ from each other, from the 16 in src and from the 2 base seeds (LIFE.md 11), re-grepped from src | all |
 | DT-12 | every self-use is floor level; every ride is flagged and has a ride wish | all |
@@ -886,11 +992,11 @@ reducer events (QU-01), per 600 shell frames with no physics event (SH-01, SH-04
 | LF-03 | cost at 16 characters | median at most 0.1 ms a tick |
 | LF-04 | a HELD character (touched, carried or locked) gets 0 motion intents in the same tick, its queue is cancelled, and none for 1.5 s after release; **a lock with no finger down silences nobody else**: other characters' bubbles and voices go on unducked (D-84) | always |
 | LF-05 | no intent kind can press, grab or lock (type-level), and the host source holds no `fingerDown`, `grab` or lock call | 0 |
-| LF-06 | no scoot or hop target outside bounds - (R + 0.2) or inside a keep-out | 0 |
+| LF-06 | no free target (wander, come back) outside the bounds shrunk by R + 0.2; no target at all outside the bounds; none inside a keep-out except its own thing's use spot; a use spot, peek spot, gap waypoint, push spot or rider spot is taken as DT-01 laid it (D-90); **at Home every target lies on a segment between two framed points** (the home slots of `lifeSetHome` and the arrived things' use spots, within 0.01 m, D-87); the bounds come from `lifeSetPlace`'s def and layout (D-89), so the wide and the tall layout give different targets | 0 |
 | LF-07 | a storm at the snapshot's capacity (16 characters, for example 6 wholes and 10 pieces in a synthetic snapshot, asking 50 a second): no cap of LIFE 10.1 exceeded in any rolling second, all four columns, the wish slot and wish dots included; a P1 never starved | 0 over |
 | LF-08 | 6 pieces doing one action within 0.5 s give 1 bubble and 1 voice | exact |
 | LF-09 | every behaviour and social moment fires in its scripted scenario (S07 gathers 3 idle squishies into a row by itself; S13 uses the two peek spots); a 5-minute visit to the cabin on med with 4 wholes and no input gives every pair one greet, at least 1 nap, and each squishy 2 to 3 thing uses | all |
-| LF-10 | movers never exceed the tier's moverCap; every start that wakes a body keeps units at most unitCap; a start that wakes nobody needs only a mover token; every joint moment moves one character at a time (S15 and S18 hop together only where moverCap is 2 or more, otherwise they dance with the render sway) | always |
+| LF-10 | movers never exceed the tier's moverCap; every start that wakes a body keeps units at most unitCap; a start that wakes nobody needs only a mover token; every joint moment moves one character at a time (S15 and S18 hop together only where moverCap is 2 or more, otherwise they dance with the render sway). **Revision 4 rows (D-85):** on low at F = 4 with 3 wholes all asleep (units 0.09), a start that wakes one is granted (1.06, the cap) and a second mover is refused; one awake and two asleep is not over the cap; on med with 4 asleep likewise; with one rider the player set on the Pillow Swing and the others asleep, S11's pusher starts on low and on med (the ride allowance) and the over-budget rule never cancels it; two riders teeter on the Rocker Board on low and on med; a boop on low and med is a soft boop (the target stays asleep, its wobble a render wiggle) and on high a physics boop | always |
 | LF-11 | no character is in two joint moments at once | 0 |
 | LF-12 | the import purity of `src/life/**` | 0 |
 | LF-13 | the huff's triggers are squishy-to-squishy scene events only (a static table), it lasts at most 3 s, ends on any touch, never in a session's first 60 s (CS-04) | all |
@@ -915,7 +1021,7 @@ arguments, run_probes.ts 12); `--full` runs every row on 12 families x 3 genomes
 | PH-01 | hops on 12 families x 3 genomes and 1/8 pieces: apex (the lowest particle's rise above the ground) within +-25% of target; S1 apex at most 3.6 cm (the ballistic 3.53 cm of vy 0.84 with GRAVITY 10) and no `land`; no second hop; no fold over 120 degrees; no hop or squash while memory is busy; the S2 raised hops with `auto` landings per family | all |
 | PH-02 | the touch gate eases LIFE drivers (`scootTo`, `setSquash`, `hop`) out within 0.12 s; `moveTo` (ceremonies, the cut's steering) and every other ceremony driver untouched; `scootTo` yields to `moveTo`; a lock counts | all |
 | PH-03 | static props (block, bar, mound, ring) x 12 families x 3 genomes and detail-2 pieces, dropped on and walked into: no fold over 120 degrees, no NaN, penetration at most 1% R; a body rests 3 s on a box top with creep at most 2 mm and sleeps | all |
-| PH-04 | seesaw and swing with 2 bodies for 60 s: inside the limits, energy only decays; a seesaw tips under a sitter (weight transfer); teeter hops from the board; the seat at most 2.0 m/s | all |
+| PH-04 | seesaw and swing with 2 bodies for 60 s: inside the limits, energy only decays; a seesaw tips under a sitter (weight transfer); teeter hops from the board; the seat at most 2.0 m/s; **a rider is never corralled while it rides** (the corral is off for a body supported by a moving prop, D-91): a rider set at a swing's or a seesaw's end next to the bounds' edge keeps its seat for 20 s | all |
 | PH-05 | the ball: at most 2.0 m/s, never through a wall, rests within 6 s; no particle over 6 m/s from a prop contact | all |
 | PH-06 | mass parity: one species at detail 3 and 2 tilts a seesaw within 5%; a 1/8 piece an eighth as much | within |
 | PH-07 | squash poses keep the volume inside the family band (G1) | all |
@@ -925,8 +1031,8 @@ arguments, run_probes.ts 12); `--full` runs every row on 12 families x 3 genomes
 | PH-11 | allocation with props, zones and drivers, over 120-frame windows in which no SoftEvent fires (an emitted event allocates three objects by design; reported separately per event) | 0 B per window |
 | PH-12 | an awake detail-3 body with 4 props in reach (the worked-contact fold gate on) | at most 1.25x |
 | PH-13 | (heavy, optional, S3) 50 species at detail 2 with rest, press, pull and hop rows | listed |
-| PH-14 | `auto` on hop, pad and fall landings, prop bumps and **body-to-body bumps between two untouched bodies** (with `other` set), never on a player toss or a bump with a HELD body; the largest autonomous landing speed per family reported | exact |
-| PH-15 | (S2) water: float or sit matches the generated table, 12 families x 3 radius bands; drift only when floating; no NaN; clean exits; the bulge slosh in water | all |
+| PH-14 | `auto` on hop, pad and fall landings, prop bumps and **body-to-body bumps between two untouched bodies** (with `other` set), never on a player toss or a bump with a body the player touches (a finger, a grab or a carry); **a LIFE body bumping a locked body nobody touches gives an `auto` bump** (revision 4, D-86: a lock alone never counts), and that bump reaches no `feedback.handle` and no haptic (SH-06); the largest autonomous landing speed per family reported | exact |
+| PH-15 | (S2) water: float or sit matches the generated table, 12 families x 3 radius bands; drift only when floating; no NaN; clean exits; the bulge slosh in water; **`scootTo` glides a floating body horizontally with the water holding its height, and a floater scooted to the nearest dry spot leaves the water and becomes a sitter** (revision 4, LIFE 5.3) | all |
 | PH-16 | (S2) the flush pad: apex at most the cap for every family; at most 5 bounces; the sticky hold within +-0.1 s | all |
 | PH-17 | (S3) wind and updraft only on airborne or floating bodies; nothing wakes under 0.25 m/s^2; the magnet moves only the steel marble | all |
 | PH-18 | bounds hold 200 random 6 m/s tosses within bounds + 0.1 m | all |
@@ -935,6 +1041,7 @@ arguments, run_probes.ts 12); `--full` runs every row on 12 families x 3 genomes
 | PH-21 | (moved to SH-11: the Float rule is the shell's, D-83) | |
 | PH-22 | `sleep()` sleeps a body at rest at once and refuses one that is moving, on a moving prop or in float mode; an identical `setSquash` never wakes; a `mods` write wakes only when a modifier that acts where the body is changes by more than 0.02 | all |
 | PH-23 | the prop order and map: `propThing` and `propPart` follow ThingDef order with walls last; `drainStrikes` reports cause 0 for a poke, 1 with the slot for a body, 2 for a gust or a wave | exact |
+| PH-24 | (revision 4) Home's corral rectangle: a body resting at any slot of `stage.matLayout` (1 to 5, both frames, scale 0.8 to 1.25) with Home's `setBounds` rectangle (D-87) is never moved by the corral over 10 s; a body tossed outside it glides back inside | all |
 
 **RENDER** (`_harness/browser_render.mjs` new sections `place`, `props`, `emote`, `marks`, `pose`; port 5364; B)
 | Id | Check | Bar |
@@ -954,7 +1061,7 @@ arguments, run_probes.ts 12); `--full` runs every row on 12 families x 3 genomes
 | RD-13 | the play area's mean linear luminance at most 0.35 per place; no pastel; token colours only (CS-06) | all |
 | RD-14 | no camera motion while only autonomy moves bodies, at Home and in places | 0 |
 | RD-15 | water: the surface draws over the right bodies, the tint below the line, the edge ring hides the side | visual pass |
-| RD-16 | Home in view (D-67): at 390 x 844 and 1280 x 800 with 1 to 5 bodies at body scale 0.8, 1.0 and 1.25, every Home thing that has arrived and every LIFE target point lies inside the frame and outside the HUD insets; `visibleTable` matches the rendered frame within 0.05 m | all |
+| RD-16 | Home in view (D-67; revision 4, D-87, D-88): at 390 x 844 and 1280 x 800 with 1 to 5 bodies at body scale 0.8, 1.0 and 1.25, every Home thing that shows (its `fromN` reached) lies inside the frame and outside the HUD insets with its top centre behind no body; **a whole body (its box and its top) at every LIFE target and every use spot** lies inside them; every slot centre lies inside the corral rectangle passed to `setBounds`; `visibleTable` matches the rendered frame within 0.05 m by section 9's exact definition | all |
 | RD-17 | on-screen size (14.4): on 390 x 844 with the tall layout, a 1 m squishy at least 100 CSS px wide at the front of the play area and 80 px at mid-depth; on 1280 x 800 with the wide layout at least 150 px at mid-depth; every place, both layouts framed whole inside the insets | all |
 
 **AUDIO** (`_harness/audioview/life_checks.mjs`, O; AU-10 N)
@@ -980,13 +1087,13 @@ arguments, run_probes.ts 12); `--full` runs every row on 12 families x 3 genomes
 |---|---|---|
 | QU-01 | the reducer is pure and allocation-free (0 B over 10 000 events); no meter import; no capsule-roll text (probe I03) | 0 |
 | QU-02 | every quest completes from its generated minimal event script; replaying changes nothing; a near-miss script does not complete it | all |
-| QU-03 | the fairness rules (QUESTS Q3, Q4): no TOUCH clause accepts a press under 0.4 s (no quest needs a tap or a poke on a squishy; taps on things, switches, balls and bubbles are fine); every clause reachable at low caps with one mover at a time | all |
+| QU-03 | the fairness rules (QUESTS Q3, Q4): no TOUCH clause accepts a press under 0.4 s (no quest needs a tap or a poke on a squishy; taps on things, switches, balls and bubbles are fine); every clause reachable at low caps with one mover at a time, **with the gate of LIFE 10.3 as revision 4 writes it** (D-85: the floor, the ride allowance for C3, L9, U4, C5, G3, and the soft boop), checked against LF-10's scripted gate, not by hand | all |
 | QU-04 | the count rules (Q5) | all |
 | QU-05 | each finale opens at 5 of 7 main quests (Home's at the first wish), never earlier | exact |
 | QU-06 | stamp thresholds open places in order; an unshipped place is skipped and its stamps kept | exact |
 | QU-07 | each gift finale has a player-caused clause: an event kind only the player makes (TOUCH, PHOTO) or a clause with `by PLAYER`; a script where LIFE alone grants a nap, song, thing or warm-up wish completes no gift finale | all |
 | QU-08 | every event kind a rule uses has a named producer; a photo counts at the shutter; the producer and the reducer agree on every field a rule reads (a REACT's thing, a PIECES count, a USE RING's part in `v`, flag bit 3) | all |
-| QU-09 | keyboard parity (CS-02): **K is derived per clause from a producer table of the keyboard routes** (PLAYGROUND_BUILD 11.8: Space, the stretch, "Go play with...", "Tap it yourself", Enter on a bubble, the Wishes now list, the Cut bar, the shutter, Travel), never from a hand-written tag; the K quests of every opened set reach every threshold | all |
+| QU-09 | keyboard parity (CS-02): **K is derived per clause from a producer table of the keyboard routes** (PLAYGROUND_BUILD 11.8: Space, the stretch, "Go play with...", "Tap it yourself" for every switch, ball and thing a tap swings (D-93: the Shake Pine, chimes, bells, crystals and lanterns part by part, a seesaw end, a swing seat), Enter on a bubble, the Wishes now list, the Cut bar, the shutter, Travel), never from a hand-written tag; a quest tagged K whose clauses no route can produce fails the row (revision 3's I4); the K quests of every opened set reach every threshold | all |
 | QU-10 | no path ever decrements stamps, warmth or friendship (CS-13); no main quest has a within-visit clause | 0 |
 | QU-11 | a scripted regular-player stream opens the places near the times of QUESTS 7 (reported, +-50%) | reported |
 | QU-12 | the wish caps of QUESTS 8 at the reducer and store level | all |
@@ -1030,15 +1137,15 @@ arguments, run_probes.ts 12); `--full` runs every row on 12 families x 3 genomes
 | SH-11 | N: the Float rule (D-83; was PH-21): Float works at Home with one squishy out (no PropWorld bound, Home's things parked, 0 LIFE motion); with more than one out or in a place gravity is forced at run time, the saved setting unchanged, the line once a session, and `setFloatMode(true)` never called | all |
 | SH-12 | N: a tier drop sleeps, then shelves, with the kind line | all |
 | SH-13 | N: autonomy off: 0 motion intents applied except a player-asked use and a ride the player set up (one squishy each); gaze, render leans and sways, reactions stay | all |
-| SH-14 | B: keyboard only: J, P; **Tab reaches every DOM control and leaves the party** (one Tab stop, roving tabindex, [ and ] inside it, the 3:1 focus ring under the focused squishy); Space presses the focused squishy; the keyboard stretch; Enter opens the wish card or the popover and reads a showing bubble (H6); "Go play with..." and **"Tap it yourself"** (the fireplace, the Felt Ball); **C8 walked end to end by keyboard**; the Escape order, focus return | all |
+| SH-14 | B: keyboard only: J, P; **Tab reaches every DOM control and leaves the party** (one Tab stop, roving tabindex, [ and ] inside it, the 3:1 focus ring under the focused squishy); Space presses the focused squishy; the keyboard stretch; Enter opens the wish card or the popover and reads a showing bubble (H6); "Go play with..." and **"Tap it yourself"** (the fireplace, the Felt Ball; in S2, the Shake Pine and the Shell Chimes part by part, D-93); **C8 walked end to end by keyboard**; the Escape order, focus return | all |
 | SH-15 | B: 390 x 844, 320 x 568, **844 x 390 and 568 x 320**: no overlap of pill, buttons, plate, capsule and meter; the wish card at most `min(358px, 100vw - 32px)` wide and 120 px tall, the plate `min(320px, 100vw - 32px)`; landscape puts the plate and the card in the left half under the pill; targets at least 44 px; grids take their columns from the width (CS-08) | all |
 | SH-16 | B: quest moments at least 1 s from bursts, never over a reveal, one polite line each; a moment's haptic only when the completing record is by PLAYER, none for a self-completed quest; the live region is one queue (quest and wish lines first, at least 2 s apart) with the place-open and arrival lines | all |
 | SH-17 | B: wish hit areas at least 44 x 44, never over the body's silhouette (CS-09), `tabindex="-1"`; every friend and place wish names its target in the card and the live region (CS-11) | all |
 | SH-18 | B: Snap hides the DOM overlays; bubbles in the photo by default, off with the switch; **the shutter shows an in-page preview and pushes PHOTO at that moment, Save is optional: X8 completes with no download** (11.15) | all |
 | SH-19 | B: the new-player flow in the real shell through the dev hook (FN-01), with a screenshot at each quest | pass |
 | SH-20 | N: the tracker pill shows the first unfinished main quest of the current place's chapter that can be done now (K when the last input was a key, every clause's place shipped, not blocked by autonomy off), then Home's, then Friends Everywhere's; it never shows a hidden quest | all |
-| SH-21 | N: Home's arrival rule (D-67): a thing arrives only after its event and once its footprint is inside `visibleTable`; LIFE's Home bounds and the Felt Ball's bounds follow the visible table when the party changes, never from autonomy | all |
-| SH-22 | N: the awake budget (D-61): over `unitCap` the shell cancels the farthest untouched LIFE mover and sleeps untouched still wholes until units are back under; touched, carried, tossed and riding bodies are never forced; travel spawns at rest and asleep except the first moverCap members | all |
+| SH-21 | N: Home's rules (D-67; revision 4, D-87, D-88), with `visibleTable` stubbed from DT-01's projection table: a thing shows only after its event and while the party is at least its `fromN`, and is parked (no collider) below it; **for n = 1 to 5, both frames and body scales 0.8 to 1.25, every slot centre lies inside the rectangle passed to `setBounds`**, and `lifeSetHome` gives LIFE every slot in use; the corral rectangle, the home slots and the Felt Ball's bounds follow the party and the frame, never autonomy | all |
+| SH-22 | N: the awake budget (D-61, D-85): over `unitCap` (with D-85's floor, plus the riders' units while their ride moment runs) the shell cancels the farthest untouched LIFE mover, never a ride moment's own mover, and sleeps untouched still wholes until units are back under; on low with 3 out, one awake and two asleep is not over; touched, carried, tossed and riding bodies are never forced; travel spawns at rest and asleep except the first moverCap members | all |
 | UI-01 | new colour pairs in `CONTRAST_PAIRS`, passing | all |
 | UI-02 | reduced motion **or** Calm, each on its own: every new motion is a fade (the stamp, the Places button's scale-in, Home's thing arrivals, the keepsake drop, the wish re-glance as an opacity lift), no camera moves | all |
 | UI-03 | sound off (muted or Voices at 0): the voice-to-bubble table is total, chat included (a chat shows one hello bubble on its first speaker, inside the budget); a voiced moment's bubble takes its voice's priority | all |
@@ -1053,15 +1160,16 @@ arguments, run_probes.ts 12); `--full` runs every row on 12 families x 3 genomes
 | PF-03 | the cut scenario (3 wholes and 5 pieces, med; the other wholes asleep before the cut, 11.4): physics at most 6.0 ms | at most |
 | PF-04 | a 10-minute soak: no GC pause over 8 ms from src; the frame mean stable within 5% | all |
 | PF-05 | N: PF-01's node twin on this container (the same scenarios) | at most 6.0 / F ms (1.5 at F = 4) |
+| PF-06 | (revision 4, D-85) the ride case with a 4x CPU throttle, on low and on med, the other wholes asleep: two riders the player set on the Rocker Board teetering for 12 s; one rider on the Pillow Swing pushed three times by a LIFE pusher (the ride allowance); in Hearthlog, both layouts | physics at most 8.0 ms and the whole frame at most 16.7 ms (means over the moment); node twin at most 8.0 / F ms (2.0 at F = 4) |
 | SZ-01 | first load at most 1300 KB with the UI overhaul landed; the PLAYGROUND delta at most 70 KB (target 60) and each lane inside its first-load cap (14.3), measured at S0 | at most |
-| SZ-02 | total at most 2000 KB; the life chunk 110 KB; each place (its render, audio and data chunks summed) 45 KB, the away chunk 120 KB, the screens chunk 45 KB; no lazy chunk the gate cannot name | at most |
+| SZ-02 | total at most 2000 KB; the life chunk 150 KB (with the five play-time UI modules, D-92); each place (its render, audio and data chunks summed) 45 KB, the away chunk 90 KB, the screens chunk 45 KB; no lazy chunk the gate cannot name; over a cap or the total, 14.3's overflow order was followed and reported | at most |
 | SZ-03 | no lazy module in the first-load closure | 0 |
 | SZ-04 | no dev names in the production bundle | 0 |
 
 **FUN** (the verifiers, by eye and by script)
 | Id | Check | Bar |
 |---|---|---|
-| FN-01 | the first minute: on a fresh profile, once the player has let go for 6 s, Dollop does a visible thing use (notice, hops, a boop that moves the ball at least 0.2 m, all inside the frame) within 10 s; its first labelled bubble within 10 s of that first 6 s release (a held squishy shows no autonomous bubble, L2); the newcomer says hello within 5 s of coming out (node through the dev hook, then once in the browser at 390 x 844 and 1280 x 800) | pass |
+| FN-01 | the first minute: on a fresh profile, once the player has let go for 6 s, Dollop does a visible thing use (notice, hops, a boop that moves the ball at least 0.2 m, all inside the frame) within 10 s; its first labelled bubble within 10 s of that first 6 s release (a held squishy shows no autonomous bubble, L2); the newcomer says hello within 5 s of coming out (node through the dev hook, then once in the browser at 390 x 844 and 1280 x 800). **Revision 4 caveat:** by projection, on 390 x 844 with one squishy the Felt Ball's spot leaves only 0.02 / 0.09 / 0.16 m of roll room away from the body at scale 0.8 / 1.0 / 1.25 (the best spot anywhere in that view, 0.08 m; `pg_fix4/homebounds.mjs`, `ballroom.mjs`), so the 0.2 m cannot hold there today: section 24's first question decides how; on 1280 x 800 it is 0.24 / 0.38 / 0.55 m | pass |
 | FN-02 | "own way" by the fire: a screenshot by the hearth with jelly, marshmallow, mochi and slime shows 4 visibly different shapes or looks, named by the verifier | pass |
 | FN-03 | every place's signature verb event fires in a 5-minute scripted visit | all |
 | FN-06 | a 10-minute visit to the cabin on med with 4 wholes and no input: each squishy at least 2 social moments and 2 thing uses, one mover at a time where the caps say so; the phone bubble cap never exceeded | all |
@@ -1069,7 +1177,7 @@ arguments, run_probes.ts 12); `--full` runs every row on 12 families x 3 genomes
 **COHERENCE and SAFETY map** (JUDGE_COHERENCE 8): CS-01 = EC-02 + QU-07; CS-02 = QU-09; CS-03 = CO-05; CS-04 = LF-13 + DT-02; CS-05 = DT-02; CS-06
 = RD-13; CS-07 = DT-10 + PH-15 + LF-18; CS-08 = SH-15; CS-09 = SH-17; CS-10 = SH-09; CS-11 = SH-17; CS-12 = SZ-01 + SZ-02; CS-13 = QU-10 + CO-06; CS-14 = LF-01 +
 LF-26 + SH-01 (LIFE reads no clock, not even the music's: the units and the music fields are deterministic parts of the snapshot). CS-02 also needs
-SH-14 (C8 by keyboard) and QU-15's producer table. FN-04 = QU-03 + QU-04; FN-05 = DT-02 + LF-13; FN-07 = DT-10.
+SH-14 (C8 by keyboard) and QU-09's producer table. FN-04 = QU-03 + QU-04; FN-05 = DT-02 + LF-13; FN-07 = DT-10.
 
 ## 19. Verification charters (detail in `_handoff/briefs/PG_VERIFY.md`)
 
@@ -1120,6 +1228,8 @@ the "No hurry" note, PLACES 7's "Squishy chatter" note). DT-02 now screens every
 | the first load grows past 1300 KB | per-lane first-load caps measured by every lane at every step with the one-file build (14.3); LIFE and the Journal are in the post-play life chunk; SZ-01 at S0 |
 | sleep changes hash rows | opt-in `sleepEnabled`; the re-baselined rows are listed (PH-10) |
 | SHELL-4, the UI overhaul and physics round 3 slip | the pure lanes (DATA, LIFE, QUESTS, AUDIO creature, RENDER emotes) do not wait for them |
+| a ride moment's two awake wholes overrun low's frame (revision 4) | the ride allowance is bounded (at most two awake wholes, for the moment's length, D-85) and measured by PF-06; if PF-06 misses, section 24 lists the choices; the floor never admits more than one awake whole outside a ride |
+| the UI overhaul's HUD insets differ from the ones Home's spots were laid with (revision 4) | DT-01's Home row reads the insets from a table the UI overhaul fills, RD-16 checks the real frame, and the DATA lane re-lays a failing spot before S0's exit (11.13); every spot now shows by 3 out, with room to spare in the search (homespots.mjs found hundreds of candidates per thing) |
 
 ## 22. What I did not check
 
@@ -1157,7 +1267,28 @@ the tall frame is fitted for 390 x 844 only; the S2 and S3 places' tall layouts 
 DT-01); Fizzwell's water and Cloudloft's arch are moved by hand with no DT-01 run; Home's spots beyond the Felt Ball are rules, not numbers (my
 candidate spots failed the slot gap or the one-body view).
 
-## 23. Review findings not adopted (revision 3)
+**Revision 4, what I checked and what I did not.** Checked in the code: softbody.ts 55-75 and 1585-1625 (the corral: nothing inside its dead zone,
+then a brake and a glide back that stops at the zone's edge, a rim past it; params.ts 141: `matR0` 0.6, `matRim` 2.5) and 1850-1862 (the corral
+test skips a grabbed body and `moveOn`); stage.ts 84-88 (the TALL chevron and the WIDE row of slots), 133-137 (TARGET_Y 0.42), 183-187 (fov
+35), 210-216 (pitch 0.27), 255-330 (`fitDistance`, `hwPerNow`, `framingFor`'s one-body and several-body rules), 462-470 and 520-545 (the aim:
+one body at 0.6 of its centre, several at their middle); table.ts 214-216 (the felt is a disc of r 3.5); hudBinding.ts 121-141 (the insets are
+measured from the DOM's top bar and bottom row at run time). Ran, in node (light), in scratch `pg_fix4/`: `homebounds.mjs` (the corral union
+holds every slot in all 100 cases; the union shrunk by R + 0.2 m is empty for one body on 390 x 844 at every scale, and on 1280 x 800 with 1 or 2
+out its back part puts the body's top under the top HUD at 22 to 66 of 121 sample points; the Felt Ball's room above); `standarea.mjs` (the area
+where a whole body stands in view is never empty, but with one body on the phone it is a 0.11 to 0.13 m2 patch far behind the body);
+`homespots.mjs`, cross-checked by `pg_fix3/check2.mjs` ("ok" for all twelve spots), `usespots.mjs` and `lampglow.mjs` (the use spots: the
+lamp's glow needs r 1.2 on the desktop, 688 grid points pass); `ballroom.mjs` (no ball spot in the one-body phone view gives 0.2 m: best
+0.08 m); `cabin_final3.mjs` (both cabin layouts: 0 problems with the new ride rows; the revision 3 layout fails them), `tallsearch.mjs` and
+`spawn3.mjs` (the tall swing's pivot and both layouts' spawn spots); `pg_fix3/datagen.mjs` re-run (the data bytes by rolldown one-file builds);
+the typecheck after the contract's doc edits. **Not checked:** nothing ran on a body, in a browser, a build or an audio render. The Home geometry
+uses the earlier fixer's model of `framingFor` (the camera settled at its target framing, round bodies of R = 0.5 x scale, yaw 0, zoom 1) and
+assumed HUD insets (390 x 844: 151 / 170 / 16 / 60 CSS px; 1280 x 800: 120 / 150 / 24 / 24), not measured ones (11.13 says what happens when the
+real ones differ). The data bytes are stand-ins built to section 6's shapes, not the real modules; the away chunk's 44 to 66 KB and the five UI
+modules' 15 KB are line-count estimates; PF-06's 7.9 ms is arithmetic from PHYS map 4's costs at F = 4. I did not re-lay the S2 and S3 places
+(the Leaf Teeter's pivot is a number change, not a DT-01 run), did not model the Felt Ball pull-back of section 24, and did not re-run the name
+gate (revision 4 adds no new name; the new player lines are "Shake the pine" and "Ring the shells", plain words from the existing titles).
+
+## 23. Review findings not adopted (revision 3; and the confirmer's, revision 4)
 
 The three reviews (`_handoff/design/REVIEW_code-truth.md`, `REVIEW_game-truth.md`, `REVIEW_rules-and-clarity.md`) raised 86 findings, many of them
 the same fault seen through two or three lenses. I verified every blocker and major myself before acting (the code lines are in section 22's
@@ -1168,7 +1299,7 @@ wrong or contradictory, and section 14 shows its arithmetic.
 
 | Finding (lens, id) | The part not adopted | Why, and what I did instead |
 |---|---|---|
-| CODE TRUTH B2 (the physics budget) | "for example low = 1 awake whole + the touched one" | At F = 4 two awake wholes cost 0.87 + 0.87 + 0.2 = 1.94 ms against low's 1.0 ms (the reviewer's own numbers). I adopted the method instead: PF-00 measures F, every bar is in container ms, the awake budget follows by formula (low 1.0, med 1.49, high 2.64 at F = 4), the mover floor is 1, moments are turn by turn, the shell sleeps over-budget wholes, and Q4 is re-quoted (D-60, D-61, 14.2). |
+| CODE TRUTH B2 (the physics budget) | "for example low = 1 awake whole + the touched one" | At F = 4 two awake wholes cost 0.87 + 0.87 + 0.2 = 1.94 ms against low's 1.0 ms (the reviewer's own numbers). I adopted the method instead: PF-00 measures F, every bar is in container ms, the awake budget follows by formula (low 1.0, med 1.49, high 2.64 at F = 4; revision 4 raises low's floor to 1.06, D-85), the mover floor is 1, moments are turn by turn, the shell sleeps over-budget wholes, and Q4 is re-quoted (D-60, D-61, 14.2). |
 | CODE TRUTH M1 (size) | "First load holds the ten names, stampsToOpen, Home's PlaceDef and the rules of chapters 0, 1 and 10"; "Hearthlog's PlaceDef into the away chunk"; "REACTIONS into journal_text.ts as one tag string per thing" | The data split alone leaves LIFE, the reducer, the journal and the hosts (about 100 KB by the reviewer's bytes per line) in a 70 KB first load. They run from the first seconds of play, not before it, so they and all the data now load in a post-play life chunk (D-69). Each place's data is its own lazy module, Hearthlog's included (prefetched when it opens, which is what the away chunk would have given). The reaction cells' channels are run-time data, so they ship in each PlaceDef; only the family lines are text, in `journal_text.ts`. The per-lane caps and the per-step byte reports are adopted (14.3). The total rises from my own 1900 to D9's 2000 KB ceiling to hold the life chunk; a tenth place now needs the owner (V4). |
 | CODE TRUTH M2 (the gift grant) | "On load, a granted gift found on no shelf and in no blend row's parents goes back to pending" | A blend row keeps only its own parents' ids (store.ts 101, 110), so a gift merged twice leaves no trace of its id: reverting on absence would grant it a second time. With step 3 written only after step 2 is verified in storage (adopted, D-71, with the failing-storage CO-05 row), "granted with no row" cannot arise from the grant. |
 | CODE TRUTH M8 (Home's spawn) | "or a disc of r 4.2" for Home's LIFE bounds | With one body a phone shows about +-0.76 m of table: a 4.2 m disc would let the only squishy walk out of view (GAME TRUTH B2). Home's LIFE bounds are the visible table instead (D-67); `spawn: 'matLayout'` and DT-01 on the real slot output are adopted. |
@@ -1185,3 +1316,34 @@ wrong or contradictory, and section 14 shows its arithmetic.
 | RULES AND CLARITY M4 (kind) | "use distinct species in those three rules" | The family is what reacts differently (who floats, who glides), so R2, I3 and X6 keep families; the reviewer's other option is adopted: "kind" means family in every player line and the Journal shows the family name on every page and tile (D-82). |
 | RULES AND CLARITY M7 (landscape) | "drop landscape from PG_VERIFY 6" | UI.md 3 covers portrait and landscape. The landscape rows and the width rules are adopted instead (QUESTS 15, SH-15). |
 | RULES AND CLARITY m6 (stamp) | renaming the Journal's unit | "Stamp" already names the unit in many lines and the tab; the queued tool is renamed instead (T12, V19). |
+
+**Revision 4: the confirmer's fixes (`_handoff/design/CONFIRM.md`) not adopted as written.** Every finding is fixed; where I took another road,
+the reason is here.
+
+| Finding | The part not adopted | Why, and what I did instead |
+|---|---|---|
+| CT-B2 / N4 (the gate) | "let a sleeping whole cost 0 in the start test" | A sleeper costs about 0.02 ms (PHYS map 4); zero in one test and 0.03 in the over-budget rule would make the two disagree. The floor rises by exactly what the sleepers cost instead (D-85), so both tests agree and still admit one awake whole. The pusher's wake is adopted as the ride allowance, generalised to every ride moment and to the over-budget rule; the soft boop answers S03, which the confirmer listed without a fix. |
+| CT-M8 (Home's bounds) | "shrink only for LIFE targets" (the union shrunk by R + 0.2 m) and "the target area is not empty" | My script shows that area empty for one body on 390 x 844 and partly out of view on 1280 x 800 with 1 or 2 out. The union for `setBounds` is adopted; LIFE's Home targets are segments between framed points (D-87), which are never empty (they always hold the home slots) and are in view by convexity; RD-16 and SH-21 check them. |
+| N1 (LIFE's place) | `lifeSetBounds(w, shape, cx, cz, a, b, round)` for Home's moving bounds | LIFE's Home targets are not a bounds shape (D-87), so `lifeSetHome(w, slot, x, z)` gives it the home slots; `lifeSetPlace(..., def, layout, bodyScale)` is adopted as proposed (D-89). |
+| N2 (use spots) | "DT-01 checks use spots against the bounds shrunk by R + 0.2 for the smallest R" | For every body to reach a spot it would have to be the largest R, which leaves the tall layout 0.85 m wide and no side-strip thing usable. The exemption is adopted with a body-clearance rule in DT-01 (D-90). |
+| N3 (the tall swing) | "or" | Both halves are adopted: DT-01 checks the rider's whole path and its walls, and the corral leaves a rider alone (D-91); the cabin is re-laid. |
+| CT-M9 / N8 (the Leaf Teeter) | the 5 degree limit | A pivot of 0.24 m keeps the 10 degree teeter (its end moves 0.156 m instead of 0.078 m: a livelier rock for the child); the floor rule needs 0.235 m. |
+
+## 24. Open design questions for the orchestrator (revision 4)
+
+1. **FN-01 on a portrait phone with one squishy.** By projection the one-body view on 390 x 844 holds the body and a strip in front of it: the
+   Felt Ball's spot leaves 0.02 / 0.09 / 0.16 m of roll room at scale 0.8 / 1.0 / 1.25, and no ball spot in that view gives more than 0.08 m
+   (my scratch script `pg_fix4/ballroom.mjs`, not in the repo), so FN-01's "a boop that moves the ball at least 0.2 m, all inside the frame" cannot pass there today. The options:
+   (a) on a portrait frame with one squishy out and the Felt Ball arrived, Home's rest framing counts the ball's spot as `framingFor` already
+   counts a capsule (stage.ts 266-310: "with a single squishy on a narrow portrait frame the camera pulls back and aims between the two"): by its own
+   formula about a 1.28x pull-back, so the body draws about 22% smaller and the ball gets about 0.6 m of room (my estimate from the formula, not
+   projected); the frame changes once, when the ball arrives a few seconds into play (the arrival rule, not autonomy, so D-37 holds); (b) on that
+   frame only, FN-01's ball bar becomes "the ball moves and stays in view" (a nudge against the near edge; the notice, the hops and the boop still
+   read); (c) on that frame only, the ball's bounds reach 0.25 m under the bottom HUD (it rolls a moment under the tray and back). My
+   recommendation is (a): FN-01 is the first minute, and a ball that cannot roll reads as broken; but it changes today's one-squishy phone view,
+   which the owner may want to see first. RENDER owns `framingFor`; whichever is chosen, RD-16 and FN-01 then check it.
+2. **If PF-06 misses on low** (two awake wholes on a ride, D-85). The options: (a) accept a frame drop for at most a ride's 20 s, which only the
+   player starts; (b) on low, a ride seats one rider (a second one set on it lands beside it, and the lone rider shows its "Ride with me!" star),
+   which hides C5 and G3 on low by QU-14; (c) on low, S11's push becomes a render lean of the pusher (asleep at its push spot) with a
+   `PropWorldLike.poke` on the seat at each return, so only the rider is awake (S10 keeps two riders: (a) or (b) still decide it). My
+   recommendation: decide from PF-06's numbers; prefer (c) for S11 and (a) for S10 if the frame stays under 20 ms.

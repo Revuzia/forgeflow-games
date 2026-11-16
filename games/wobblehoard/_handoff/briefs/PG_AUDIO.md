@@ -10,6 +10,13 @@ reference to the caller's reused object (AU-11); LIFE decides on sim time only, 
 decided, and a sung degree may be re-voiced here onto the sounding field's rest tones (D-66); the touch duck is for a finger, a grab or a carry,
 never a lock alone (AU-13, D-84); prop strikes carry a cause, and a weather strike is still a sound; your first-load share is capped at 8 KB.
 
+**Revision 4 (2026-11-16, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93).** What changed for you: the **away chunk** that
+holds your ambience bed and the place prop voices is capped at **90 KB** with the render place host (D-92: report your share at S1's first step);
+a keyboard "Tap it yourself" now rings chimes, bells, crystals and lanterns part by part and shakes the Shake Pine through the same
+`drainStrikes` path as a pointer tap (cause 0, D-93); S03's **soft boop** on low and med makes no physics bump (the contact is at 0.04 m/s), so the
+boop's sound is its voice phrase only (a chirp, then the target's giggle trill, LIFE 6.1); `auto` bumps now also include a LIFE body bumping a
+locked body nobody touches (D-86), which you play as a budgeted soft variant like any other `auto` event.
+
 ## You own
 - `src/audio/**`: new `creature.ts`, `ambience.ts`, `props.ts`, `places/<id>.ts` (one recipe per place, inside that place's lazy chunk); additions to
   `engine.ts`, the master chain and `music.ts`

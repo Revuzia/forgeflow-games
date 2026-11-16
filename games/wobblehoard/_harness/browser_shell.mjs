@@ -39,8 +39,18 @@ function check(name, ok, extra = '') {
   if (!ok) failures++;
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra !== '' ? '  ' + extra : ''}`);
 }
+// Pages shared by a CHAIN of sections (D: desktop-boot .. settings-panel-desktop; C: capsule-loop .. calm-mode) are closed by the chain's last
+// section. With --only that section may be filtered out, and the page then stayed open and LIVE, rendering at full speed under every later
+// section of the batch (SHELL-4, fourth engineer: batch G ran capsule-loop first, then cut-x took 773 s against 318 to 377 s before and
+// phone-names about 8 min against 52 s; the third engineer's batch F the same way). A chain registers its closer here; a section outside the
+// chain closes the page before it runs. A full run is unchanged (every chain section runs in order and closes its own page).
+const chains = [];
+async function closeForeignChains(name) {
+  for (const c of chains) if (!c.sections.has(name)) { try { await c.close(); } catch { /* already closed */ } }
+}
 async function section(name, fn) {
   if (ONLY.length && !ONLY.includes(name)) { notRun.push(`${name} (filtered by --only)`); return; }
+  await closeForeignChains(name);
   currentSection = name;
   console.log(`\n== ${name}`);
   const t0 = Date.now();
@@ -247,6 +257,8 @@ async function main() {
     // G3: boot, title card, wake, canvas, HUD
     // ------------------------------------------------------------------------------------------------
     let D = null;
+    chains.push({ sections: new Set(['desktop-boot', 'mouse-gestures', 'shift-pull', 'shift-hint-reflow', 'shift-touch', 'hook-deterministic', 'settings-panel-desktop']),
+      close: async () => { if (D) { const d = D; D = null; await d.context.close(); } } });
     await section('desktop-boot', async () => {
       const html = readFileSync(resolve(ROOT, 'index.html'), 'utf8');
       const inlineScripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].filter((m) => !/\bsrc=/.test(m[1]) || m[2].trim()).length;
@@ -811,6 +823,8 @@ async function main() {
     // stepped deterministically (SwiftShader renders a 1280x800 frame in ~0.3 s on this shared machine).
     // ------------------------------------------------------------------------------------------------
     let C = null;
+    chains.push({ sections: new Set(['capsule-loop', 'merge-dev', 'skip-timing', 'ceremony-spacing', 'calm-mode']),
+      close: async () => { if (C) { const c = C; C = null; await c.context.close(); } } });
     await section('capsule-loop', async () => {
       // a section that failed half-way leaves its page open and rendering: close it, or every later page competes with it for the CPU
       if (D) { try { await D.context.close(); } catch { /* closed */ } D = null; }
@@ -1950,6 +1964,10 @@ async function main() {
         const p3 = await R();
         await shot(page, `snap_${vp.width}`);
         check(`phone ${vp.width}: the Snap bar fits`, inside(p3.snapbar) && p3.sw <= vp.width, JSON.stringify(p3.snapbar));
+        // SHELL-4 (fourth engineer, a step-4 screenshot finding, _shots/shell/snap_390.png): on a phone the Snap bar's line said "(right-drag with a
+        // mouse), pinch or scroll to zoom": mouse words a phone cannot use. A touch screen names only its own gestures.
+        const snapLine = await page.evaluate(() => document.querySelector('.snapbar-text')?.textContent ?? '');
+        check(`phone ${vp.width}: the Snap bar's line names the touch gestures only (drag to turn, pinch to zoom; no mouse, right-drag or scroll)`, /drag to turn/i.test(snapLine) && /pinch/i.test(snapLine) && !/mouse|right-drag|scroll/i.test(snapLine), snapLine);
         await context.close();
       }
     });
@@ -2155,8 +2173,13 @@ async function main() {
       const rC = await cutHalf();
       await toolOn('hand');
       await page.evaluate(() => window.__WH__.shell.fill(0));
+      // TEST FAULT fixed 2026-11-16 (SHELL-4, fourth engineer; e4_G: "squeeze on the chunk 0.0500, on the face 0.0367"): the meter's freshness rule
+      // (meter.ts: pay x (seconds since the last touch of the same kind / 2.4 s)^2) reads the EPOCH clock, i.e. wall time, and the two squeezes were
+      // only one stepped 5 s of SIM time apart, about 2 s of wall time on a fast machine (0.73 = (2.05 / 2.4)^2), so the second one was paid as a
+      // re-squeeze. The row compares like with like: each squeeze is made fresh by moving the dev epoch clock 5 s ahead first. Threshold unchanged.
       const squeezeOn = (which) => page.evaluate(async ([which, vw, vh]) => {
         const wh = window.__WH__; wh.pause();
+        wh.shell.clockAhead(5000);
         const m = wh.shell.matInfo(), b = m.bodies[which];
         const read = () => wh.shell.meter().fill + wh.shell.meter().credits;
         const before = read();
@@ -2525,6 +2548,37 @@ async function main() {
         const bad = rows.filter((r) => r.text !== r.want || r.clipped || r.font < 12 || r.sw > vp.width || r.tag.x < 0 || r.tag.r > vp.width || overlap(r.tag, r.hoard) || overlap(r.tag, r.toys));
         const narrow = [...rows].sort((a, b) => a.font - b.font).slice(0, 3).map((r) => `${r.text} ${r.font}px`);
         check(`phone ${vp.width}: all ${rows.length} species names fit the name tag without being cut off (none clipped, none under 12 px, tag clear of the Hoard and Toys buttons, no sideways scroll); smallest sizes: ${narrow.join(', ')}`, rows.length === 50 && bad.length === 0, bad.slice(0, 3).map((r) => JSON.stringify(r)).join(' | ') || `${rows.length} names`);
+        await context.close();
+      }
+    });
+
+    // SHELL-4 (fourth engineer, a step-4 screenshot finding: _shots/shell/play_phone.png, hint_capsule_390x844.png): the hint's TEXT keeps inside
+    // the pill's padding. At 390 x 844 the touch line ran about 9 px into the pill's right padding (6 px from its right edge, 17 px from its left):
+    // hud.ts fitHint compared scrollWidth, which in Chromium leaves out the end padding of a block whose line overflows, so the line counted as
+    // fitting and was never shrunk. `hintClipped` (scrollWidth > clientWidth) cannot see it either: this row measures the text itself (a Range).
+    await section('hint-fit', async () => {
+      const cases = [
+        ['390x844 touch', PHONE, true], ['360x740 touch', { ...PHONE, viewport: { width: 360, height: 740 } }, true],
+        ['320x568 touch', { ...PHONE, viewport: { width: 320, height: 568 } }, true], ['1280x800 mouse', DESKTOP, false],
+        ['568x320 mouse', { viewport: { width: 568, height: 320 } }, false],
+      ];
+      for (const [label, ctx, touch] of cases) {
+        const { page, context, w } = await open({ query: '?dev=1&quality=low', ctx });
+        mainWatches.push([`hint-fit-${label}`, w]);
+        await wake(page, { touch });
+        await page.evaluate(() => window.__WH__.pause());
+        await settle(page);
+        const m = await page.evaluate(() => {
+          const el = document.querySelector('.hint'), cs = getComputedStyle(el), b = el.getBoundingClientRect();
+          const rg = document.createRange(); rg.selectNodeContents(el);
+          const t = rg.getBoundingClientRect();
+          const inL = b.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft), inR = b.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight);
+          return { text: el.textContent, font: parseFloat(cs.fontSize), lines: new Set([...rg.getClientRects()].map((q) => Math.round(q.top))).size,
+            padL: +(t.left - inL).toFixed(1), padR: +(inR - t.right).toFixed(1), pill: { x: +b.left.toFixed(1), r: +b.right.toFixed(1) }, iw: innerWidth, sw: document.documentElement.scrollWidth };
+        });
+        await shot(page, `hint_fit_${label.split(' ')[0]}`);
+        check(`hint ${label}: the line keeps inside the pill's padding on both sides (never run into its edge), readable (>= 12 px), at most two lines, the pill inside the screen`,
+          m.padL >= -0.5 && m.padR >= -0.5 && m.font >= 12 && m.lines <= 2 && m.pill.x >= 0 && m.pill.r <= m.iw && m.sw <= m.iw, JSON.stringify(m));
         await context.close();
       }
     });
@@ -3447,7 +3501,8 @@ async function main() {
       const total = files.reduce((n, f) => n + statSync(f).size, 0);
       check('dist stays under the 1.2 MB budget (G0)', total < 1.2 * 1024 * 1024, `${(total / 1024).toFixed(0)} KB`);
       const text = files.filter((f) => /\.(js|css|html)$/.test(f)).map((f) => [f, readFileSync(f, 'utf8')]);
-      const FORBIDDEN = ['__WH__', '__shot', '__report', 'Sound lab', 'squish (hold)', 'playSound', 'createDebugTools', 'capsuleScreen', 'lab-btn', 'stageInfo'];
+      // SHELL-4 (fourth engineer): + the dev hook's SHELL-4 test seams (spy, piece gaps, face anchor, stage views, the offline fake): none may ship
+      const FORBIDDEN = ['__WH__', '__shot', '__report', 'Sound lab', 'squish (hold)', 'playSound', 'createDebugTools', 'capsuleScreen', 'lab-btn', 'stageInfo', 'spyStart', 'pieceGaps', 'faceAnchor', 'stageViews', 'forceOffline'];
       const hits = FORBIDDEN.flatMap((s) => text.filter(([, t]) => t.includes(s)).map(([f]) => `${s} in ${f.slice(out.length + 1)}`));
       check('production bundle: no DebugHook, no sound lab, no /__shot poster, no dev CSS (grep of every .js / .css / .html; audit findings 6 / 20)', hits.length === 0, hits.slice(0, 4).join(', ') || `${FORBIDDEN.length} strings, ${text.length} files`);
       const html = readFileSync(resolve(out, 'index.html'), 'utf8');

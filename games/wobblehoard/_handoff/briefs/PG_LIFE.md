@@ -11,6 +11,13 @@ piles count with one napper inside (D-76); thing wishes respect a thing-kind mas
 "the player is touching" never means a lock alone, and B08 is budgeted (D-84); autonomy off still moves a player-asked squishy (D-79); your
 code ships in the **life chunk**, after the first frame of play (D-69).
 
+**Revision 4 (2026-11-16, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93).** What changed for you: the motion gate's
+**floor** is one awake whole plus every sleeper (1.06 on low at F = 4), a **ride moment** adds its riders' units to the cap (S11's pusher wakes on
+it), and a boop that does not fit is a **soft boop** (D-85, LIFE 10.3); `lifeSetPlace` takes the **PlaceDef, layout and body scale**, and the new
+**`lifeSetHome`** gives Home's home slots (D-89); **at Home your targets lie on segments between framed points** (home slots and arrived things'
+use spots), and **use spots are exempt from the R + 0.2 m shrink** (D-87, D-90, LIFE 5.7); S11 pushes from the swing's push spot; a floater
+leaves the water by SCOOT; a switch tap is noticed by every squishy within 1.5 m; the life chunk's cap is 150 KB (D-92).
+
 ## You own
 - `src/life/**` (new). Suggested modules: `traits.ts`, `world.ts` (the struct of arrays), `brain.ts` (behaviours), `social.ts` (joint moments),
   `looks.ts`, `react.ts` (the REACT triggers), `wish.ts` (the wish scheduler), `voice.ts` (phrase planning), `attention.ts` (caps, priority, the
@@ -57,8 +64,10 @@ capacity 16).
    owner from `zoneThing` / `patchThing`, or the source thing of the `lifeAddLook` that caused it, which always emits). They fire whatever behaviour
    wins; B15 is only the pose and the bubble (LF-21).
 4. Behaviours B01 to B20 (LIFE 4) as utility choice with the seeded noise and the current-behaviour bonus; cooldowns; "Moves?" behaviours ask the
-   motion gate. Home's uses only in S0: the Felt Ball, the Music Box tune (sing and sway), the Snooze Rug nap, the Warm Lamp bask. Home's LIFE
-   bounds are the visible table shrunk by R + 0.2 m, which the host passes as the place bounds (5.7).
+   motion gate. Home's uses only in S0: the Felt Ball, the Music Box tune (sing and sway), the Snooze Rug nap, the Warm Lamp bask. **Home's targets
+   (revision 4, D-87):** points on a segment between two framed points: the home slots the host sends with `lifeSetHome` and the use spots of
+   the things that have arrived (the snapshot's `thingId` list; the spots from `place_home.ts` in slot units x the body scale `lifeSetPlace` gave
+   you; PLACES 4.1's table); never a shrunk visible table, and with one squishy on a portrait phone no wander at all (LIFE 5.7).
 5. **The six scripts** (LIFE 4.1, `lifeScript`): FIRST_PLAY makes FN-01 hold by design (play to at least 0.6, the ball as the next B04);
    **FIRST_WISH with its wisher** (the slot the shell sends: Dollop if out, else a Hearthlog fan out, else the party member out longest), which
    ignores the 120 s and 180 s gaps, **with no natural wish before it**, and the 5:00 rest-in-the-Journal case; PLAY_WITH; POSE; CHEER; SQUIRTED.
@@ -68,9 +77,10 @@ capacity 16).
    poses (an identical pose is never re-sent as a change), POSE (render lean and sway; the phase from sim time in `LifeIntents.e`), gaits from
    `GAITS` (5.2); memory families get no squash, pose or hop while `MEMORY_BUSY` (5.4); HELD (a finger, a grab or a carry on it, or a lock on it:
    HELD for its own brain only) and the 1.5 s afterglow plus 1.5 s grace (5.5); quiet (5.6, with **autonomy off: no motion except a player-asked
-   use and a ride the player set up**, LF-24); never a target outside the bounds shrunk by R + 0.2 m or inside a keep-out (5.7, LF-06).
-7. Social S01 to S09, S12, S13 and S15 (LIFE 6.1): joint moments reserve their tokens and units together or do not start; no character in two at
-   once; **every joint moment moves one character at a time** (the partner waits still and may sleep: LF-10). **S07 gathers 3 or more idle
+   use and a ride the player set up**, LF-24); never a free target outside the bounds shrunk by R + 0.2 m or inside a keep-out, but a use spot, peek
+   spot, gap waypoint, push spot or rider spot exactly as DT-01 laid it (inside the unshrunk bounds, D-90); at Home the segment rule (5.7, LF-06).
+7. Social S01 to S09, S12, S13 and S15 (LIFE 6.1): joint moments reserve their tokens and units together or do not start; **S03 is a soft boop
+   where its two bodies do not fit** (a 0.04 m/s contact, the target asleep, a render wiggle; D-85); no character in two at once; **every joint moment moves one character at a time** (the partner waits still and may sleep: LF-10). **S07 gathers 3 or more idle
    squishies into a row** (one mover at a time) and **S13 uses the two peek spots** of its thing (`ThingDef.peek`) (D-75). B09's hello is an S01
    greet with the nearest party member (H5). Points are the reducer's job: you emit SOCIAL events with `a`, `b`, `n2`. `bumps` come from
    `SoftEvent.other`.
@@ -89,28 +99,38 @@ capacity 16).
    wish).
 10. `attention.ts` (10.1 caps for phone, phone Calm, desktop, desktop Calm, with the wish slot; 10.2 priority, drop not queue, the touch duck
     while the player is touching: a finger, a grab or a carry, **never a lock alone**), **`motionGate` (10.3)**: unitCap = (B / F - 0.20) / 0.87,
-    at least 1.0, moverCap = max(1, floor(unitCap)); at F = 4: 1.0 / 1.49 / 2.64 units and 1 / 1 / 2 movers for low / med / high; unit weights
+    at least the floor below, moverCap = max(1, floor(unitCap)); at F = 4: 1.06 / 1.49 / 2.64 units and 1 / 1 / 2 movers for low / med / high; unit weights
     a whole 1.0, a piece 0.22, a touching pair 0.25 (from `contacts`), a sleeper 0.03 (PF-00 replaces them); a start that wakes a body must keep
     units at or under unitCap, one that wakes nobody needs only a mover token (LF-10); the character caps as data for the shell (10.4).
+    **Revision 4 (D-85):** unitCap = max(the formula, 1.0 + the sleeper weight x (the tier's wholes cap - 1)), so at F = 4 it is **1.06** / 1.49 /
+    2.64 (a 0.001 tolerance on every comparison); **the ride allowance**: while a ride moment of riders the player set runs (S10, S11), add the
+    riders' units to unitCap, so S11's pusher may wake; LF-10's new rows (3 asleep on low: one start granted, a second refused; S11 starts on low
+    and med; a soft boop on low and med).
 11. The step API exactly as LIFE 12 writes it: `createLifeWorld`, `lifeSetPlace`, `lifeAdd`, `lifeRemove`, `lifeStep`, `lifeScript`,
     **`lifeSetJournal(w, owned, openPlaces, favKnown, thingKinds)`**, `lifeSetPair`, `lifeLooks`, **`lifeAddLook(w, slot, look, amount, thing)`**,
     `lifeWishOf`, `lifePhrase`, `lifeMotif`, `createAttention`, `attentionFilter`, `motionGate`. Think on 0.1 s sim-time boundaries staggered by
-    slot (LF-16).
+    slot (LF-16). **Revision 4 (D-89):** `lifeSetPlace(w, placeIdx, visit, def, layout, bodyScale)` (import the `PlaceDef` TYPE from
+    `../data/places.ts`, which L1 allows and the compiler erases; copy the layout's bounds and every use, peek, push and rider spot into your
+    preallocated arrays there, never per tick; the same visit number on a re-lay after a rotation resets nothing) and `lifeSetHome(w, slot, x, z)`.
 
 ## Build: S1 "Hearthlog Cabin"
 The cabin's uses (PLACES 4.2 and LIFE 5.3): bask by the fireplace with each family's warm pose (setSquash targets of PLACES 2.4, memory families
 only when converged); **marshmallows toast golden, then hop back from the heat** once toast passes 0.6 (B05; the signature verb); the firm and pop
 dome families bask with slow, deep breaths (a render pose); the kettle answer when it whistles (B18, Use LISTEN); the yarn ball chase and pass
 (S12); the basket nap (S08: one curls up inside and friends nap against it; a pile counts when any napper's centre is inside; B06 first walks to
-a waypoint 0.6 m outside the gap's mouth; one zzz, the pile sleeps as one island); the ride wish (a star beside the rocker and the swing, LIFE
+a waypoint 0.6 m outside the gap's mouth, which like the basket's inner spot is a use target exempt from the shrink, D-90; one zzz, the pile sleeps
+as one island); the ride wish (a star beside the rocker and the swing, LIFE
 5.3); **RIDE (B20)**: a squishy the player set on a ride stays 20 s, to the end of its moment or until a touch, and a lone rider shows the star
 bubble "Ride with me!" at P1 (LF-23); teeter (S10: small hops in turn once the player set two on the rocker); push the swing (S11; "a friend" is
-any other squishy within 2.5 m); sing together with the fire puff (S06); comfort (S09, B17); snuggle (S07); copy and parade (S05); peekaboo (S13);
+any other squishy within 2.5 m; it walks to the swing's push spot, `ThingDef.push` or the tall layout's `Spot.push`, and wakes on the ride
+allowance); sing together with the fire puff (S06); comfort (S09, B17); snuggle (S07); copy and parade (S05); peekaboo (S13);
 duet (S17) and twirl (S18) for Friends and Close friends. Wishes of every kind the mask allows. The cabin's Window Chill (cold 0.3) gives SHIVER
-and FROST for the cold families (a look falls only while its cause is absent, so 0.3 still frosts).
+and FROST for the cold families (a look falls only while its cause is absent, so 0.3 still frosts). **A switch tap is noticed** (B02) by every
+squishy within 1.5 m that is not napping or held, outside B02's once-per-target rule, so F2's "watching it" (B02 or B18) holds (LIFE 5.3).
 
 ## Build: S2 and S3
-S2: water (float or wade from `submerged`; **the 30 s water exit and no nap in water, LF-18**), splash jumps, soak and the squirt game's reactions
+S2: water (float or wade from `submerged`; **the 30 s water exit by SCOOT, a floater too (`scootTo` glides a floating body), and no nap in water,
+LF-18**), splash jumps, soak and the squirt game's reactions
 (SQUIRTED), ice glides (GLIDE on a slick patch), the snow cap, the pine's snow puff (+0.5) and the snowball (+0.3), both through `lifeAddLook`
 from the host with their source thing, the raised hops per family once PH-01 passes (vyS2 in `GAITS`; you switch by a slice flag, never per
 frame). S3: echo talk (S16), hold on in a gust (B19), the bead squeezes' scoot toward the magnet, turntable rides, the updraft's LIFT reactions,
@@ -125,7 +145,8 @@ CS-14 (LF-01 with SH-01). `run_probes.ts` runs your probes automatically: keep t
 ## Budgets
 At most 0.1 ms median per tick at 16 characters on this container (LF-03); 0 B allocated over 6000 ticks (LF-02); LIFE, attention and the quest
 host together at most 0.4 ms of the 16.7 ms frame (PLAYGROUND_BUILD 14.2); the caps of LIFE 10.1 in every rolling second (LF-07). **Size:** all of
-`src/life` ships in the life chunk (at most 110 KB with the reducer, the journal, the hosts, `props.ts` and the data; LIFE about 45 KB by 14.3's
+`src/life` ships in the life chunk (at most 150 KB with the reducer, the journal, the hosts, `props.ts`, the data and the five play-time UI modules,
+revision 4, D-92; LIFE about 45 KB by 14.3's
 estimate); after every step report the minified bytes of each new or grown module (14.3's one-file rolldown build). **The unit caps follow
 PF-00**: when it reports F and the weights, you recompute the caps by the formula in `attention.ts` and quote the measurement in your report;
 PF-01 to PF-03 (SHELL, 4x CPU throttle) then confirm them.

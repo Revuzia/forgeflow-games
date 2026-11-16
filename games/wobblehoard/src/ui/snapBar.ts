@@ -3,7 +3,14 @@
 // the frame (none under Calm effects). The tint is a soft-light vignette from the edges in: the same gradient in CSS over the live canvas
 // (mix-blend-mode) and painted onto the saved frame (canvas 2D, globalCompositeOperation 'soft-light'), so what you see is what you save.
 import { PALETTE } from './theme.ts';
-import { h } from './dom.ts';
+import { h, isCoarsePointer } from './dom.ts';
+
+/** The Snap bar's line. A phone or tablet (a coarse pointer) names only its own gestures; elsewhere one line covers a mouse (the RIGHT button turns
+ *  the view: owner decision 2026-10-06), a pen or a touch screen (a drag), the wheel and a pinch. */
+export const SNAP_LINE = {
+  touch: 'Drag to turn, pinch to zoom.',
+  pointer: 'Drag to turn (right-drag with a mouse), pinch or scroll to zoom.',
+} as const;
 
 export interface Tint { id: string; label: string; color: string | null }
 /** Night is the scene as it is; the others are the palette's lagoon, dusk violet and ember coral. */
@@ -57,7 +64,7 @@ export function createSnapBar(root: HTMLElement, o: { onSave(): void; onDone(): 
   save.addEventListener('click', () => o.onSave());
   done.addEventListener('click', () => o.onDone());
   const el = h('div', { class: 'snapbar', attrs: { role: 'group', 'aria-label': 'Photo', hidden: '' } },
-    h('p', { class: 'snapbar-text', text: 'Drag to turn (right-drag with a mouse), pinch or scroll to zoom.' }),
+    h('p', { class: 'snapbar-text', text: isCoarsePointer() ? SNAP_LINE.touch : SNAP_LINE.pointer }),
     h('div', { class: 'snapbar-row' }, h('span', { class: 'snapbar-label', text: 'Backdrop' }), tints),
     h('div', { class: 'snapbar-acts' }, save, done));
   // the tint must blend with the CANVAS: #ui is a fixed layer (its own stacking context), so the overlay sits beside it, just before it

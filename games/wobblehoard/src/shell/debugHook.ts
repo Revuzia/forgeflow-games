@@ -59,6 +59,10 @@ export interface ShellDevApi {
   matBusyMs(ms: number): void;
   /** move the collection's epoch clock one day ahead (the dev skew): a new UTC day for the meter's daily cap, the gift, tasks and merges */
   nextDay(): boolean;
+  /** move the collection's epoch clock `ms` ahead (the dev skew; true when there is one): rows that compare two paying touches make each one
+   *  fresh this way (the meter's freshness rule reads the epoch clock, i.e. wall time, so a stepped row on a fast machine squeezed again
+   *  within tau and was paid less: SHELL-4 cut-x X06, 0.0367 vs 0.0500) */
+  clockAhead(ms: number): boolean;
   /** feed synthetic touches through the REAL collection.feed path until today's task `id` is done (clock pushed ahead like fill) */
   doTask(id: string): boolean;
   /** the next collection.merge answers this refusal (test seam for the pad's refusal handling, e.g. 'odds_changed') */
@@ -267,6 +271,11 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       };
     },
     cutSwipe: (x0, y0, x1, y1) => { const v = vp(); return game.cut.swipe(x0 * v.w, y0 * v.h, x1 * v.w, y1 * v.h); },
+    clockAhead(ms) {
+      if (!o.skew || !(ms >= 0)) return false;
+      o.skew.ms += ms;
+      return true;
+    },
     nextDay() {
       if (!o.skew) return false;
       o.skew.ms += 86_400_000;

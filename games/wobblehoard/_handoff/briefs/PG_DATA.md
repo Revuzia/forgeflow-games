@@ -12,6 +12,15 @@ carries a **channel**, and the cell words do not ship except the family lines (D
 length, no physics zone in the pad, both layouts) and rows DT-15 and DT-16; CS-05 applies to names only; three renames and four word fixes in the
 cells; "kind" means a family in every player line (D-82).
 
+**Revision 4 (2026-11-16, after `_handoff/design/CONFIRM.md`; PLAYGROUND_BUILD.md D-85 to D-93).** What changed for you: **Home's spots are laid**
+(PLACES 4.1's table: TALL and WIDE for every thing, each with `fromN`, all at 3 or fewer, and their use spots; the Keepsake Shelf 1.2 x 0.45 x
+0.30 m with two rows of ten; Lamp Warmth r 1.2; D-88); **the cabin is re-laid** (PLACES 4.2: the wide kettle at (3.15, -1.95), the wide swing
+pivot (0, 1.62, -1.7), the first wide spawn spot (-0.65, -0.42); the tall swing pivot (-0.93, 1.62, -2.29), the tall yarn ball at (1.25, 2.15),
+five new tall spawn spots; a push spot per layout; D-91); new data fields `ThingDef.push`, `ThingDef.fromN`, `Spot.push`, `Spot.fromN`
+(PLAYGROUND_BUILD 6); **new DT-01 rows** (every rider's whole path inside the bounds and clear of walls, the push spots, every use spot with a body
+of R 0.625 clear, Home's laid-spot row); **DT-09 exempts VISIT titles**; the Leaf Teeter's pivot is 0.24 m; the life chunk's data is measured on
+stand-ins at about 42 KB as objects (29 KB packed), inside a 150 KB life chunk (D-92).
+
 ## You own
 - `src/data/places.ts`, **`src/data/place_<id>.ts` (one per place, ten files)**, `src/data/life.ts`, `src/data/quests.ts`,
   `src/data/journal_text.ts` (all new)
@@ -68,12 +77,15 @@ Land in this order, because PG_LIFE, PG_RENDER and PG_AUDIO code against your ta
    own fields) and **`tall: LayoutDef`** (bounds with their corner radius, walls, spawn, one `Spot` (x, z, yaw, use, peek) per ThingDef and one Area
    per zone and patch, in the same order), camera, presets, and **`reactions`**: each per-thing cell of PLACES 4 as `{ target, family, tag, chan,
    arg }` (D-80; a cell whose words have no channel goes back to the designer, never ships as words). **Home** (`place_home.ts`): `spawn:
-   'matLayout'`, `unit: 'slot'`, the Felt Ball's spots TALL (0, 0.9) and WIDE (0.85, -0.75) as PLACES 4.1 gives them, and **the other five spots
-   laid by you** against DT-01's Home row and RD-16 (report each spot with its slot gap at scale 0.8 / 1.0 / 1.25 and the party size at which it
-   comes into view); each `arrives.after` as a short event key the shell reads (for example `'start'`, `'firstHello'`, `'firstCapsule'`,
+   'matLayout'`, `unit: 'slot'`, **every thing's TALL and WIDE spot, its `fromN` and its use spot exactly as PLACES 4.1's table gives them**
+   (revision 4, D-88: laid by script and cross-checked; WIDE in the ThingDef's own `x`, `z` and `fromN`, TALL in `tall.things`), the Keepsake Shelf
+   at 1.2 x 0.45 x 0.30 and Lamp Warmth at r 1.2; your DT-01 Home row re-checks them with the HUD insets of the table the UI overhaul fills
+   (PLAYGROUND_BUILD 11.13), and a spot that fails on the real insets you re-lay before S0's exit and report (its slot gap at scale 0.8 / 1.0 /
+   1.25 and its `fromN`, which must stay at 3 or fewer); each `arrives.after` as a short event key the shell reads (for example `'start'`, `'firstHello'`, `'firstCapsule'`,
    `'finale:home'`, `'finale:hearthlog'`), listed in your report; the Bounce Pad's arrival also waits for the flush pad (S2 physics): the shell
-   checks that, not your data. **The cabin** (`place_hearthlog.ts`): PLACES 4.2's two layouts exactly (the thing id stays `hearth`, its name is
-   "Fireplace"; the zones are "Fireside Warmth" and "Window Chill"). **S2 and S3 places**: the wide layout as PLACES writes it and a tall layout you
+   checks that, not your data. **The cabin** (`place_hearthlog.ts`): PLACES 4.2's two layouts exactly, as re-laid in revision 4 (the swing pivots, the wide
+   kettle, the tall yarn ball, the spawn spots and the push spots; the thing id stays `hearth`, its name is "Fireplace"; the zones are "Fireside
+   Warmth" and "Window Chill"). **S2 and S3 places**: the wide layout as PLACES writes it and a tall layout you
    lay under P7 (both checked by DT-01; a place whose things do not fit the tall frame, or need a move over 0.5 m, comes back to the designer).
 4. `quests.ts`: `EV`, `REACT_KIND` (with LOVE), `SOCIAL_KIND`, `USE_VERB`, `WISH_STATE`, `FACT`; all 110 `QUESTS` as `Clause` rules exactly as QUESTS 6
    writes them (I8's first clause has `by: 1`; X10 has `by: 1`; a `distinct 'part'` reads `v`); `playerClause` on the five gift finales C8, R8,
@@ -102,9 +114,20 @@ How to build the hard rows:
   primitives (D-55); **a seesaw's floor rule** pivot >= (L / 2) sin(limit) + (t / 2) cos(limit) and at least 0.6 m from a board end to a wall;
   **a ring's clear opening** (the gap chord minus both segment radii) at least 1.35 m; water at most 0.30 m; ramps at most 16 degrees; pads and
   turntables flush; swing seat speed sqrt(2 x 10 x L x (1 - cos limit)) at most 2.0 m/s (the physics' GRAVITY is 10, `src/physics/params.ts` 16).
+  **Revision 4 rows (D-90, D-91):** every rider's whole path inside the rounded bounds (a swing's seat centre over its whole arc, L sin(limit) to
+  each side, 0.70 m for the cabin's swing; a seesaw's rider spots) with a rider of R 0.625 on it clear of every wall and 0.625 m from every other
+  collider; each swing's push spot (`push`: one end of the arc plus 1.3 m) inside the bounds with a pusher of R 0.625 clear; every use spot, peek
+  spot, ring gap waypoint (0.6 m outside the gap's mouth) and rider spot inside the rounded bounds with a body of R 0.625 there clear of the walls
+  and 0.625 m from every collider but its own thing's (these are exempt from LIFE's R + 0.2 m shrink). Reproduce the cabin with PLACES 4.2's
+  revision 4 table: expect 0 problems in each layout (my scratch `pg_fix4/cabin_final3.mjs`); the revision 3 table fails the ride rows.
   **Home's row** (spots in slot units): every thing at least 0.275 m from every body of every `stage.matLayout` slot (both frames, 1 to 5 bodies,
-  body scale 0.8 to 1.25, R = 0.5 x scale; the slots of stage.ts 87-88), the free Felt Ball at least 0.05 m; things 0.3 m apart. You may reproduce
-  the cabin check with PLACES 4.2's table: expect 0 problems in each layout.
+  body scale 0.8 to 1.25, R = 0.5 x scale; the slots of stage.ts 87-88), the free Felt Ball at least 0.05 m; things 0.3 m apart; **and (revision
+  4, D-88) for each thing and frame its spot shows from `fromN` (at most 3)**: footprint corners at y 0 and at its top inside the HUD insets at
+  every party from `fromN` to 5 and every scale (the camera model the scratch `pg_fix3/homegeo.mjs` implements; scratch can be wiped, so build
+  yours from stage.ts itself: the slots 87-88, fov 35 at 185, pitch 0.27 at 213, TARGET_Y 0.42 at 135, `fitDistance` and `framingFor` 255-330 and
+  the aim 520-535, with the camera settled at its target framing), its top centre behind no slot body and no other shown thing, nothing over 0.4 m tall in front of the front slot row, its
+  use spot with a whole body in view clear of the other slot bodies, the rug's centre within 0.65 m of slot 0 at every scale; and every slot
+  centre inside the corral rectangle (D-87).
 - **DT-03** adds: every favourite thing has an event its fan makes by itself (a USE, or a REACT whose thing it is), or is a ride, or is a switch
   (counted when the player switches it with the fan watching within 1.5 m).
 - **DT-06** counts only cells **with a real channel** (a pose target, a render pose, a look and its level, a particle preset, a sound id or a
@@ -119,7 +142,9 @@ How to build the hard rows:
   grumpy, hurt, misses you, come back, hurry) and **CS-05 on names only** (places, things, zones, patches, keepsakes, chapters: no word of 4+
   letters sharing a species' first four letters; no coined word within edit distance 2 of a species name; unique coined prefixes). The designer's
   run of the same code over 1042 texts and the new names gave 0 hits in player text (PLAYGROUND_BUILD 20).
-- **DT-09** is a keyword table you review by hand (title verb to event kind), printed by the probe.
+- **DT-09** is a keyword table you review by hand (title verb to event kind), printed by the probe, **with VISIT quests exempt** (revision 4: QUESTS
+  Q7 lets a VISIT title name the place's feel, "Sand and sea", "Pitter-patter", "Bubbles up", "Tick, tock", because its hint carries the verb, "Go
+  to ..."); every hint must still match its rule's count.
 - **DT-15**: every REACT kind a quest or fact uses has a `REACT_TRIGGERS` row; every quest rule that filters a REACT by thing names a thing that
   owns a zone or patch (`ThingDef.zone`, `ThingDef.patch`) or is a `lifeAddLook` source.
 - **DT-16**: `THING_KINDS` equals the kinds of the things in each place.
@@ -132,7 +157,8 @@ How to build the hard rows:
 
 ## Build: S2 (Ripple Shore, Frostbell Ridge, Rainleaf Garden) and S3 (the other five)
 Only Hearthlog's positions have been through DT-01's geometry (PLACES 4.11 note). For each place of the slice: lay its tall layout, run DT-01 on
-both layouts, move what fails (at most 0.5 m, or re-orient a swing or seesaw), report every move with the rule it fixed, regenerate DT-10 for its
+both layouts (with the revision 4 ride rows: the Leaf Teeter, the Clothesline Hammock and the Kite Swing need rider paths inside the bounds and,
+for the two swings, a push spot; the Leaf Teeter's pivot is already 0.24 m), move what fails (at most 0.5 m, or re-orient a swing or seesaw), report every move with the rule it fixed, regenerate DT-10 for its
 water, re-run DT-02 on its text, check every cell's channel (DT-06). Known now: Ripple's Driftwood Log and Echo Hollow's Hum Rock must move forward
 so their peek spots lie inside LIFE's targets; Fizzwell's water is hand-placed at z < -1.25 (PLACES 4.6, not yet DT-01 checked); Cloudloft's arch
 goes in the back band (4.10). The orchestrator flips `shipped` when the slice is verified.
@@ -142,8 +168,10 @@ DT-01 to DT-16 and the T6 row (PLAYGROUND_BUILD 18), node, in `_harness/probe_pg
 files in; `npx tsc --noEmit -p tsconfig.json` clean after every step.
 
 ## Budgets
-- **First load: at most 4 KB of yours** (PLAYGROUND_BUILD 14.3). The life chunk (at most 110 KB in all) carries `places.ts`, `life.ts`, `quests.ts`
-  and `place_home.ts` (about 16 KB of data by 14.3's estimate); each other place module about 3 to 6 KB, inside its place's 45 KB with the render
+- **First load: at most 4 KB of yours** (PLAYGROUND_BUILD 14.3). The life chunk (at most 150 KB in all) carries `places.ts`, `life.ts`, `quests.ts`
+  and `place_home.ts` (revision 4: about 42 KB as objects by my measured stand-ins, 29 KB with the 110 quest rules and the default reaction cells
+  packed, PLAYGROUND_BUILD 14.3; report your real bytes after step 1 and, if the life chunk would pass its 150 KB, pack those two tables first,
+  14.3's overflow order); each other place module about 3.6 to 6.2 KB, inside its place's 45 KB with the render
   and audio chunks; `journal_text.ts` about 18 KB, inside the 45 KB screens chunk. After every step report the minified bytes of each module
   (14.3's one-file rolldown build) and its gzip size (`node -e` with `zlib.gzipSync`); SZ-01 measures the real build at S0.
 - The journal save must stay under 16 000 characters (CO-02): keep every saved index small (ids are indexes, never strings, in the save).
