@@ -355,7 +355,7 @@
     "C": 26
    },
    {
-    "why": "orch1 UNITS2: the pale lacquer helm a warm ivory (one run read the cool white helm blue-grey, 17 dE from Lisvel; ruling 44); the face is excluded by a box",
+    "why": "orch1 UNITS2: the pale lacquer helm a warm ivory (one run read the cool white helm blue-grey, 17 dE from Lisvel; ruling 45); the face is excluded by a box",
     "boxes": [
      [
       -0.5,
@@ -489,7 +489,7 @@
  "ardit": {
   "zones": [
    {
-    "why": "orch1 W1-B fix round 2 (FU-3; verify_w1b_r2: the helm roof, the top 12 %, read HSV 170 at fix 2's albedo HSV ~186 while the top 25 % read 182.6): the helm a deep steel-teal at CIELAB h ~224 (albedo HSV ~197 at L* 14), so the lit roof reads HSV 180-190 in game; C* 28 so Ardit's top owns a hue (fix 2 C* 13, dE 15.9 to Ervet); orch1 UNITS2: L* 14 -> 17, C* 28 -> 38 (the top read C* 13.6, a near-neutral 9.6-21.9 dE from Ervet's dark run and Odrum under ruling 44; now C* 17.6, crown HSV 191)",
+    "why": "orch1 W1-B fix round 2 (FU-3; verify_w1b_r2: the helm roof, the top 12 %, read HSV 170 at fix 2's albedo HSV ~186 while the top 25 % read 182.6): the helm a deep steel-teal at CIELAB h ~224 (albedo HSV ~197 at L* 14), so the lit roof reads HSV 180-190 in game; C* 28 so Ardit's top owns a hue (fix 2 C* 13, dE 15.9 to Ervet); orch1 UNITS2: L* 14 -> 17, C* 28 -> 38 (the top read C* 13.6, a near-neutral 9.6-21.9 dE from Ervet's dark run and Odrum under ruling 45; now C* 17.6, crown HSV 191)",
     "parts": [
      "helm"
     ],
@@ -674,7 +674,7 @@
     "k": 0.35
    },
    {
-    "why": "orch1 UNITS2: the shards' honed upper sections a violet-grey stone (the signature violet, muted: the cool pale stone made a near-neutral top 13 dE from Lisvel and the warm one 10 from Rishal; ruling 44 asks dE >= 20)",
+    "why": "orch1 UNITS2: the shards' honed upper sections a violet-grey stone (the signature violet, muted: the cool pale stone made a near-neutral top 13 dE from Lisvel and the warm one 10 from Rishal; ruling 45 asks dE >= 20)",
     "boxes": [
      [
       -0.45,
@@ -769,17 +769,17 @@
     "C": 3
    },
    {
-    "why": "orch1 W1-B fix 1 (units_gate P1/P2): the carried pots and their rims a deep olive glaze in the cap's family; in game the yoke lifts the pots into the top quarter of the silhouette, where their pale honey clay read the whole top as Nurrow's and Tunlan's honey (dE 5.3); the honey resin in the mouths, the mask and the hands keep their honey; orch1 UNITS2: warmer olive (lab h ~92, C* 10) and flatter (k 0.3): the low-chroma glaze left a grey-teal ring patch on each gourd",
+    "why": "orch1 W1-B fix 1 (units_gate P1/P2): the carried pots and their rims a deep olive glaze in the cap's family; in game the yoke lifts the pots into the top quarter of the silhouette, where their pale honey clay read the whole top as Nurrow's and Tunlan's honey (dE 5.3); the honey resin in the mouths, the mask and the hands keep their honey",
     "parts": [
      "pot_R",
      "pot_L",
      "pot_rim_R",
      "pot_rim_L"
     ],
-    "hex": "#9A925C",
+    "hex": "#4E5236",
     "L": 34,
-    "C": 8,
-    "k": 0.3
+    "C": 6,
+    "k": 0.5
    },
    {
     "why": "orch1 W1-B fix 1: the yoke staff and its caps a dark olive-grey seasoned wood (it rises over the head in most stances; an olive, not a brown, so the crown leaves the harm band)",
