@@ -1,0 +1,103 @@
+{
+ "lane": "W1-C",
+ "round": 1,
+ "role": "independent verifier (critical listening)",
+ "date": "2026-11-15",
+ "headMeasured": "72cd0f20e (no src/audio, content/audio.json or audio/ change after c9cb7ffa3)",
+ "machine": "shared: every run through heavy.py with the bot-soak, perf_1080 and units_gate lanes on the other slots; load1 5-10",
+ "pass": true,
+ "score": 8.0,
+ "safeToShip": true,
+ "blockers": [],
+ "doneWhen": {
+  "runtimeMasterInTokensMargin05": {
+   "holds": true,
+   "want": "-18 +/- 1.5 LUFS, margin >= 0.5 LU, own-kit share >= 50 %",
+   "runs": {
+    "rift_coop_3":  {"fighter": "lisvel", "masterLUFS": -17.20, "marginLU": 0.70, "kitPct": 69.73, "stage3CutDbEnd": 1.97},
+    "rift_coop_7":  {"fighter": "kemdo",  "masterLUFS": -17.67, "marginLU": 1.17, "kitPct": 72.79, "stage3CutDbEnd": 0.65},
+    "rift_coop_11": {"fighter": "ervet",  "masterLUFS": -17.90, "marginLU": 1.40, "kitPct": 65.85, "stage3CutDbEnd": 0.18},
+    "rift_coop_21": {"fighter": "ardit",  "masterLUFS": -18.60, "marginLU": 0.90, "kitPct": 75.43, "stage3CutDbEnd": 0.11},
+    "bridge_standard_3":  {"fighter": "kemdo",  "masterLUFS": -18.32, "marginLU": 1.18, "kitPct": 78.66},
+    "bridge_standard_7":  {"fighter": "ulkro",  "masterLUFS": -17.98, "marginLU": 1.48, "kitPct": 77.83},
+    "bridge_standard_11": {"fighter": "ervet",  "masterLUFS": -18.35, "marginLU": 1.15, "kitPct": 80.53},
+    "fray_standard_3":  {"fighter": "lisvel", "masterLUFS": -17.83, "marginLU": 1.33, "kitPct": 78.55},
+    "fray_standard_7":  {"fighter": "tunlan", "masterLUFS": -18.78, "marginLU": 0.72, "kitPct": 80.33},
+    "fray_standard_11": {"fighter": "hesmi",  "masterLUFS": -17.83, "marginLU": 1.33, "kitPct": 83.75}
+   },
+   "range": "-18.78..-17.20 (spread 1.58 LU), min margin 0.70 LU (rift 3), min kit share 65.85 %",
+   "implementerClaimed": "-18.81..-17.41, min margin 0.69; reproduced within run-to-run spread (rift 3 -17.41 -> -17.20)"
+  },
+  "announcerAndHeal": {
+   "holds": true,
+   "announcerPeakOverSfxP99Db": {"rift 3/7/11/21": [4.39, 3.47, 4.27, 4.89], "bridge 3/7/11": [8.46, 8.20, 9.67], "fray 3/7/11": [8.47, 8.73, 8.69]},
+   "healPerMin": {"bridge 3/7/11": [4.14, 4.86, 4.13], "fray 3/7/11": [1.86, 1.51, 2.43], "rift 3/7/11/21": [0.85, 0.86, 1.00, 0.71]},
+   "allTenRunsPass": true
+  },
+  "buildGatesSeamsSpots": {
+   "holds": true,
+   "buildPyGates": "exit 0, PASS (../../.venv/bin/python audio/build.py --gates)",
+   "seamSilenceMs": "ffmpeg decode of every audio/out/amb_* .ogg and .m4a, run < -90 dBFS over last+first 200 ms: every continuous loop <= 0.06 ms (want <= 5); amb_bridge_creak 400 / amb_rift_insects 256 / amb_wren 400 ms are sparse event loops with 0.85-3.7 s designed gaps mid-file (not seam dropouts, not flagged by verify_ambience)",
+   "spotsMinAmbienceUnderMusicLU": {"rift_coop": 9.7, "bridge_standard": 9.9, "fray_standard": 9.4, "want": 8}
+  },
+  "pitsAnnouncerKits": {
+   "holds": true,
+   "pits": {"3": "PASS sunsplinter 19.79 / longshade 21.12 LU presence under music, bus 11.04 / 13.05", "7": "PASS 19.86 / 19.30, bus 10.95 / 11.29", "21": "PASS 19.82 / 19.18, bus 10.96 / 11.22"},
+   "probe_audio_announcer": "PASS",
+   "probe_audio_kits": "PASS"
+  },
+  "listeningBridge5v5": {
+   "holds": true,
+   "capture": "_harness/_tmp_vfy_w1c_r1_fight.mjs bridge_standard seed 7 (ulkro), 420 s, 4984 blocks of 85 ms; fight = >= 3 foes and >= 2 allies within 14 m of you: 127.6 s (46.1 s at >= 4v4 incl. you); three 42 s WAVs of the final output; analysis _harness/_tmp_vfy_w1c_r1_fight_an.py -> _harness/_reports/vfy_w1c_r1/fight_bridge_standard_7/analysis.json",
+   "pumping": {
+    "bgLevellerGainFightDb": {"p5": -8.0, "p50": -8.0, "p95": -1.32},
+    "bgAtFloorPctFight": 75.5,
+    "prioGainFightDb": {"p5": -4.0, "p50": -3.47, "p95": 0.0},
+    "appliedBgGainMomentaryMod0p3to3HzRmsDb": "0.47 max / 0.39 median (actual post/pre bg level, inaudible: < 1 dB)",
+    "targetGainMod0p3to3HzRmsDb": "bg 1.27 max / 0.88 median, prio 0.49 / 0.32",
+    "pumpCycles3dBwithin3s": "2 in 127.6 s fight (0.94 / min), both at fight lulls (the gain releases ~5 dB over ~1.5 s and re-cuts), not a per-hit breathing",
+    "limiterReductionFightDb": {"p50": 0.0, "p95": 1.07, "max": 7.64, "mod0p3to3HzRmsMedian": 0.02},
+    "musicMomentaryStdFightLU": 1.15,
+    "outShortTermFightLUFS": {"p5": -20.81, "p50": -17.54, "p95": -13.44, "std": 2.15},
+    "sfxShortTermStdLU": "pre-leveller 2.18, post 2.47 (stage-1 sits on its floor, so the leveller passes the fight's own dynamics instead of flattening it)",
+    "wavs": "peak -1.13..-1.16 dBFS, 0 clipped samples; 50 ms RMS p10/p50/p90 about -28/-23.7/-17.8 dBFS; spectrogram shows no periodic broadband swell",
+    "verdict": "no audible pumping"
+   },
+   "priority": {
+    "prioShareFightPct": {"preLeveller": 44.6, "heard": 61.3},
+    "relativeLiftPrioOverBgDb": {"p5": 1.32, "p50": 4.0, "p95": 7.07, "min": 0.0},
+    "blocksPrioCutMoreThanBg": 0,
+    "perCuePrioPathOverBgMomentaryLU_preVsHeard": {
+     "ownAutoHits_n88": {"pre": {"p10": -6.6, "p50": 0.23, "fracGe0": 0.511}, "heard": {"p10": -3.6, "p50": 4.51, "fracGe0": 0.705}},
+     "onYou_n225":      {"pre": {"p10": -7.42, "p50": 1.04, "fracGe0": 0.609}, "heard": {"p10": -3.37, "p50": 4.89, "fracGe0": 0.791}},
+     "enemyWindup_n60": {"pre": {"p10": -9.09, "p50": 0.34, "fracGe0": 0.55}, "heard": {"p10": -5.62, "p50": 4.4, "fracGe0": 0.767}}
+    },
+    "verdict": "own autos and incoming threats come forward ~4 LU against the unlevelled mix; never cut more than the background"
+   }
+  },
+  "heavyWindNotRegressed": {
+   "holds": true,
+   "evidence": "spots min 9.7/9.9/9.4 LU under music (ruling 37 bar 8; review_audio measured 10.5-16.8 whole-match); ambienceUnderMusic and ambienceQuietUnderMusic true on all 10 runs; pit buses >= 10.95 LU under music; build.py whoosh/AMB gates PASS; continuous loop seams <= 0.06 ms"
+  }
+ },
+ "beforeLaneVsHead": {
+  "bridgeMasterLUFS": "-11.84 (r37b seed 3) -> -18.32",
+  "frayMasterLUFS": "-15.0 -> -17.83",
+  "riftSeatSpreadLU": "2.35 -> 1.40 (rift 3..21 this round)",
+  "bridgeAnnouncerPeakOverSfxP99Db": "0.29 -> 8.46",
+  "bridgeHealPerMin": "25.9 (181 in 7 min) -> 4.14",
+  "ownAutosOverBgFracGe0": "0.511 -> 0.705"
+ },
+ "problems": [
+  "minor: BRIDGE stage-1 leveller sits on its -8 dB floor 75.5 % of fight time (with the -4.5 dB mode trim the background is 12.5 dB under unity); the floor, not the leveller, sets the 5v5 level, so denser fights than seed 7 are not levelled further",
+  "minor: RIFT seed 3 holds its 0.70 LU margin only through stage 3, which ended at 1.97 dB of its 2 dB cap; a louder RIFT seat has no headroom left in stage 3",
+  "minor: RIFT seed 7 announcer peak over sfx p99 is 3.47 dB, 0.47 dB over the gate",
+  "minor: 30 % of own auto hits in the fight still sit under the background momentary level at the hit (p10 -3.6 LU), down from 49 % before the leveller",
+  "minor: leveller.gainDb / prioDb read by the probes is the solved target, not the glided AudioParam, so the probe's gainDbMin and cut statistics overstate fast movement (max target step 68 dB/s); the applied-gain trace is 0.39-0.47 dB RMS in 0.3-3 Hz",
+  "spec deviation (documented): sfx target -20 LUFS (RIFT -23 with +3.7 trim) instead of -19; LEVEL_TARGET_MODE_DB / LEVEL_PRIO_MAX_CUT_MODE_DB live in src/audio/index.ts, not content/audio.json (catalog schema, needs lead)",
+  "not measured this round: rift_coop 3 enemyDownFires (no in-sight enemy death by another hand and none forced); lamp gates null on 8/10 runs as before",
+  "process: the stage-3 code landed under a 'vale wip sync' commit (9153be2c3), not a W1-C commit"
+ ],
+ "harness": ["_harness/_tmp_vfy_w1c_r1_fight.mjs", "_harness/_tmp_vfy_w1c_r1_fight_an.py"],
+ "reports": "_harness/_reports/vfy_w1c_r1/ (git-ignored): m_<queue>_<seed>.json x10, pits_3/7/21, announcer, kits, spots_<queue>, gates.log, fight_bridge_standard_7/{trace.json,analysis.json,fight0-2.wav,fight0-2_spec.png}"
+}
