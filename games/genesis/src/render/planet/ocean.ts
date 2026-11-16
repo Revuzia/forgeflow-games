@@ -43,7 +43,7 @@ const WATERLAND = perfSwitch('waterland');
  *  constants precomputed, the ripples' shared noises taken once for both flow phases. Same formulas otherwise. */
 const WFAST = WNOISE;
 /** PERF s21 debug `?wdebug=class,nodepth`: class = flat colour by vDepth class (red: ground above the sheet by more
- *  than 8 cm, yellow: by less, green: draped film, blue: water); nodepth = the water ignores the depth buffer */
+ *  than 8 cm, yellow: by less, green: draped film, blue: water); nodepth = the water passes the depth test everywhere (it still writes depth): what a failing test would show */
 const WDEBUG = perfList('wdebug');
 
 // the 14 ripple wavelets' constants (WFAST): what ripples() derives per fragment and per wavelet from its index
@@ -918,7 +918,7 @@ export function makeOceanMaterial(shared: Record<string, IUniform>, morph: IUnif
     vertexShader: OCEAN_VERT,
     fragmentShader: OCEAN_FRAG,
     uniforms,
-    depthWrite: !WDEBUG.has('nodepth'),
+    depthWrite: true,
     depthTest: !WDEBUG.has('nodepth'),
     transparent: false,
   });

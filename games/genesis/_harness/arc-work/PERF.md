@@ -1923,3 +1923,11 @@ long press frame-rate independent. Report after 1-2 verified.
     COUNT after: 20 T (taps, ~12 ops each) instead of 20 s; ripples loop ~45 instead of ~110 ops a wavelet; rivers 20 T
     (was 24 s). Everything else as before.
 - Probe: `_harness/arc-work/probe-s21.mjs` (probe-s20 + views land land2 sea seafar lake shore river night dusk, water on).
+
+## LEAD NOTE after MAC ROUND 14 (2026-11-16, build e50830af, quiet Mac, Ultra 1686x963)
+- N 333-383 ms (2.5-2.9 fps). tnoise=tex 483-532 ms: SLOWER (about 100-200 3D taps with second-difference correction per
+  fragment cost more than the arithmetic noise on the M5). tnoise=tex is a DEAD END for speed; leave it off.
+- tshade=nonoise 150 ms; + noveg 133; + nofloor 133; + nolayers / nobump / nojoints: nothing.
+- Look of tnoise=tex on the Mac: matches (slightly stronger dune ripples close up) — irrelevant now.
+- Decision: go to the texture-space material cache (`?tcache=1`, design in SESSION 19 PART B): evaluate the surface once per
+  patch texel and amortise, so the per-pixel cost is a few 2D taps regardless of how the noise is computed.
