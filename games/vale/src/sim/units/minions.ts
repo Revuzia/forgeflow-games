@@ -12,7 +12,7 @@
 //     unless a call-for-help token outranks it (common.ts);
 //   * otherwise the best target within aggroRange by `priority` is chased with an attack order;
 //   * with nothing to fight it attack-moves along its lane: it steers at a carrot LANE_LOOK m ahead of
-//     its projection on the lane line (never on a segment behind the last reached, so a minion pulled
+//     its projection on the lane line (the carrot always ahead of where it stands, so a minion pulled
 //     off the lane rejoins it ahead, not behind), held at its column's slot off the line (ruling 44);
 //     past the last waypoint it holds the lane end and attacks what comes in range (the enemy core).
 //   * a chase that has not closed in for CHASE_STALL_TICKS (a melee Wick behind the front row, a tower ringed by its
@@ -145,14 +145,16 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
   w.emit({ e: 'wave', t: w.time, n });
 }
 
-/** the Wick's projection on its lane (never behind segment m.wp; m.wp moves up to it) and the carrot it steers at:
+/** the Wick's projection on its lane (segment m.wp − 1 on; m.wp only moves up) and the carrot it steers at:
  *  `look` m further along the line (LANE_LOOK, or LANE_REJOIN × its distance off its column line when further out),
  *  offset by its column slot along the left normal of the segment the carrot lies on. Writes carrot; returns false
  *  when the carrot runs past the lane end (the Wick then holds the end itself). Only + − × ÷ √ (deterministic). */
 const carrot = { x: 0, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, ex: 0, ey: 0 };
 function laneCarrot(e: Entity, m: MinionState): boolean {
   const p = m.path, last = p.length - 1;
-  let k = Math.max(1, m.wp), t = 0, bestD = Infinity, side = 0;
+  // the segment it last reached and the one before it (a Wick pulled back past a vertex measures its way back from where
+  // it stands: the carrot is still ahead of it, never behind)
+  let k = Math.max(1, m.wp - 1), t = 0, bestD = Infinity, side = 0;
   for (let j = k; j <= last; j++) {
     const ax = p[j - 1][0], ay = p[j - 1][1], dx = p[j][0] - ax, dy = p[j][1] - ay, l2 = dx * dx + dy * dy;
     let u = l2 > 1e-12 ? ((e.x - ax) * dx + (e.y - ay) * dy) / l2 : 0;
