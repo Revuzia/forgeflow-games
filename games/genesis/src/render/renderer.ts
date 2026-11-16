@@ -18,7 +18,7 @@ import { CAM_FAR, CAM_NEAR, REVZ, chooseDepthMode, confirmDepthMode, frustumFrom
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
 import { triStats } from './tristats.ts';
-import { OVERDRAW, ZPRE, ZPRE_LAYER, overdrawPatch } from './overdraw.ts';
+import { OVERDRAW, VZPRE, ZPRE, ZPRE_LAYER, overdrawPatch } from './overdraw.ts';
 import { syncPlanetVisuals } from './planet/planetsync.ts';
 import { SunShadows } from './planet/lights.ts';
 import { makeWaterSceneUniforms } from './planet/ocean.ts';
@@ -610,11 +610,15 @@ export class Renderer {
       if (SW_FLAT) this.scene.overrideMaterial = _flatMat ??= new MeshBasicMaterial({ color: 0x7a7a72 });
       if (OVERDRAW) overdrawPatch(this.scene);
       // (PERF s19 `?zpre=1`: the terrain's depth first, with its depth-only twin; then the colour pass as it is)
-      const zpre = ZPRE && this.zpreOn && !SW_FLAT && !OVERDRAW && primaryVis && !SW_HIDE.has('terrain') ? primaryVis : null;
+      const zpre = (ZPRE || VZPRE) && this.zpreOn && !SW_FLAT && !OVERDRAW && primaryVis && !SW_HIDE.has('terrain') ? primaryVis : null;
       if (zpre) {
-        zpre.swapZpre(true); cam.layers.set(ZPRE_LAYER);
+        if (ZPRE) zpre.swapZpre(true);
+        if (VZPRE) zpre.vegetation.swapZpre(true);
+        cam.layers.set(ZPRE_LAYER);
         r.render(this.scene, cam);
-        cam.layers.set(0); zpre.swapZpre(false);
+        cam.layers.set(0);
+        if (ZPRE) zpre.swapZpre(false);
+        if (VZPRE) zpre.vegetation.swapZpre(false);
         r.autoClear = false;
       }
       r.render(this.scene, cam);

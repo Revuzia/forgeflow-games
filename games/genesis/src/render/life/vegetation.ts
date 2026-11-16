@@ -21,6 +21,7 @@
 //     Per tree: snow on the branches, fire char (a past fire's scar or the fire burning there now), leaf fall of
 //     deciduous species from late autumn to spring. Trees cast shadows.
 
+import { VZPRE, ZPRE_LAYER, ZPRE_INVARIANT } from '../overdraw.ts';
 import { shadeCut } from '../shaders/shadecut.ts';
 /** PERF s19 bisection `?vshade=` (shaders/shadecut.ts): nonoise novor fbm1 noshadow all */
 const VSHADE = shadeCut('vshade');
@@ -478,6 +479,20 @@ const FAR_HULLS: IUniform<Texture | null> = { value: null };
 let farTable: ReturnType<typeof farHullTable> | null = null;
 
 /** the vegetation material (also used by the near-camera ground cover, render/life/groundcover.ts, with its own band) */
+/**
+ * PERF s19 `?vzpre=1`: the depth-only twin of a vegetation material for the colour pass's prepass: the SAME program
+ * source up to the last alpha-test discard (all of them sit in the colour chunk), then `return`; no colour writes.
+ */
+export function makeVegZpreMaterial(src: MeshStandardMaterial): MeshStandardMaterial {
+  const mat = new MeshStandardMaterial({ roughness: 0.8, metalness: 0, side: src.side, vertexColors: src.vertexColors, colorWrite: false });
+  mat.defines = { ...src.defines };
+  mat.onBeforeCompile = (shader, r) => {
+    src.onBeforeCompile(shader, r);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_begin>', 'gl_FragColor = vec4(0.0);\n  return;\n#include <normal_fragment_begin>');
+  };
+  mat.customProgramCacheKey = () => `${src.customProgramCacheKey()}-zpre`;
+  return mat;
+}
 export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform<{ x: number; y: number }>, leafTex: IUniform, far?: { on: IUniform<number>; layer: boolean }): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0, side: DoubleSide });
   if (far?.layer) mat.defines = { VEG_FAR: '' };
@@ -615,8 +630,9 @@ ${LEAF_ALPHA}
   }`)
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${VEG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${VEG_AMBIENT}`);
+    if (VZPRE) shader.vertexShader = shader.vertexShader.replace('void main() {', ZPRE_INVARIANT);
   };
-  mat.customProgramCacheKey = () => (far?.layer ? 'genesis-veg-v13-far' : 'genesis-veg-v12') + VSHADE.key;
+  mat.customProgramCacheKey = () => (far?.layer ? 'genesis-veg-v13-far' : 'genesis-veg-v12') + VSHADE.key + (VZPRE ? '-inv' : '');
   return mat;
 }
 
@@ -1014,6 +1030,16 @@ export class Vegetation {
     for (const b of this.buckets) { if (on) b.mesh.layers.enable(1); else b.mesh.layers.disable(1); }
     for (const b of this.far) if (b) { if (on) b.mesh.layers.enable(1); else b.mesh.layers.disable(1); }
   }
+
+  /** PERF s19 `?vzpre=1`: swap the trees to / from their depth-only twins (the colour pass's prepass, ZPRE_LAYER) */
+  swapZpre(on: boolean): void {
+    this.zpreNear ??= makeVegZpreMaterial(this.material);
+    this.zpreFar ??= makeVegZpreMaterial(this.farMat);
+    for (const b of this.buckets) { b.mesh.layers.enable(ZPRE_LAYER); b.mesh.material = on ? this.zpreNear : this.material; }
+    for (const b of this.far) if (b) { b.mesh.layers.enable(ZPRE_LAYER); b.mesh.material = on ? this.zpreFar : this.farMat; }
+  }
+  private zpreNear: MeshStandardMaterial | null = null;
+  private zpreFar: MeshStandardMaterial | null = null;
 
   swapDepth(depth: boolean): void {
     for (const b of this.buckets) b.mesh.material = depth ? b.depth : this.material;

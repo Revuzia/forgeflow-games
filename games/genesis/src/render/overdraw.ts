@@ -6,10 +6,16 @@
 //   ?zpre=1      a depth-only prepass of the terrain (planetview.ts swapZpre, terrainmat.ts makeTerrainZpreMaterial)
 //                on layer ZPRE_LAYER before the colour pass.
 import { AdditiveBlending, Material, type Object3D, type Scene } from 'three';
-import { perfSwitch } from './perfswitch.ts';
+import { perfNum, perfSwitch } from './perfswitch.ts';
 
 export const OVERDRAW = perfSwitch('overdraw', false);
-export const ZPRE = perfSwitch('zpre', false);
+const Z = perfNum('zpre', 0) ?? 0;
+/** `?zpre=1` the terrain's depth prepass; `?zpre=2` terrain + vegetation */
+export const ZPRE = Z >= 1;
+/** `?vzpre=1` (or `?zpre=2`): the trees' (near + far) depth prepass with alpha-tested twins of their own material */
+export const VZPRE = perfSwitch('vzpre', false) || Z >= 2;
+/** both programs of a prepass pair must compute the same position and log depth to the bit */
+export const ZPRE_INVARIANT = 'invariant gl_Position;\n#ifdef USE_LOGARITHMIC_DEPTH_BUFFER\ninvariant vFragDepth;\n#endif\nvoid main() {';
 export const ZPRE_LAYER = 8;
 
 const seen = new WeakSet<Material>();

@@ -18,7 +18,7 @@
 // ambient is the sky's SH irradiance + sky-LUT reflections — so sunsets redden the ground, the night side is dark,
 // and every planet in a system view is lit from its own side.
 
-import { ZPRE } from '../overdraw.ts';
+import { ZPRE, ZPRE_INVARIANT } from '../overdraw.ts';
 import { shadeCut } from '../shaders/shadecut.ts';
 import {
   Matrix3, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector2, Vector3, Vector4, Color, type IUniform, type Texture,
@@ -1909,7 +1909,6 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
 }
 
 /** (zpre) both programs must compute the same position and log depth to the bit: `invariant` on both outputs */
-const ZPRE_INVARIANT = 'invariant gl_Position;\n#ifdef USE_LOGARITHMIC_DEPTH_BUFFER\ninvariant vFragDepth;\n#endif\nvoid main() {';
 const ZPRE_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>

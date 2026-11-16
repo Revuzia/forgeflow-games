@@ -1716,3 +1716,31 @@ long press frame-rate independent. Report after 1-2 verified.
     far-tree casters as the 4-sided hull in cascades 2-3 (4 M -> ~2 M shadow triangles; shadow of a tree a few
     texels wide); (c) the terrain cache (design above).
 - (2) `?tcache=1`: NOT STARTED beyond the design above.
+### SESSION 19c — lead: build vzpre + shhull now (default off)
+- BUILT `?vzpre=1` and `?zpre=2` (= terrain zpre + vzpre; `?zpre=1` stays terrain only): overdraw.ts VZPRE / ZPRE;
+  vegetation.ts makeVegZpreMaterial + Vegetation.swapZpre. The twin of the near-tree and the far-tree material is
+  the SAME material source (its onBeforeCompile is called), with `gl_FragColor = vec4(0); return;` put right after
+  the colour chunk (every alpha-test discard of the vegetation shader sits in that chunk: LEAF_ALPHA, LOD chunk
+  hash, leaf loss, crown gaps, near dither), colorWrite off; `invariant gl_Position / vFragDepth` on both programs
+  (ZPRE_INVARIANT, only when the switch is on: the default programs are untouched). Not the shadow twins
+  (VEG_DEPTH_*): another vertex shader, their position would not match to the bit. Prepass = one extra scene
+  render on layer 8 (terrain twins if ZPRE, tree twins if VZPRE), then the colour pass unchanged: LEQUAL + depth write
+  kept (the safe form; EQUAL not used). It pays only where the GPU can test depth early: zcons on the log path, or
+  `revz=1`. NOT in the prepass: ground cover (its own two materials, 0.08 M triangles locally), buildings, people.
+  Cost of the prepass itself: the tree triangles are drawn twice (scene triangles +trees +fartrees) with a leaf
+  texture fetch per fragment.
+- PROOF zpre=2 (medium 320x180, in-page A/B one frame apart, vz.log, sheet-vz.png LOOKED AT: no holes, no halos at
+  leaf edges, x4 diff = foliage sway + the hand ring): town on/off 3.63 (on/on2 3.85, off/off2 3.39); forest on/off
+  1.40 (1.34, 1.34); land on/off 2.95. 0 page errors, 0 shader / GL errors. `revz=1` with it: NOT run locally.
+- `?shhull=1` NOT BUILT. Exact next steps (vegetation.ts): far buckets are per (distance band, hull lod); a lod-0
+  bucket draws the 5-sided hull's canonical index list (farcrown.ts FAR_HULL_VERTS[0] vertices; the vertex data comes
+  from the table row iHull = (kind x variants + variant) x 2 + lod by gl_VertexID, FAR_FETCH). The 4-sided hull has
+  its OWN shorter index list, so the swap needs (1) per lod-0 far bucket a second BufferGeometry with the lod-1
+  index list sharing the bucket's instanced attributes — mind bufring.ts: the instance attributes are rings of 3
+  swapped per frame, the second geometry must be re-pointed with them (ringify / ringOf); (2) a depth-material
+  uniform uShHull that makes farFetch read row `iHull + 1.0` when iHull is even; (3) in Renderer.perCascade(k):
+  for k >= 2 set mesh.geometry = alt and uShHull = 1, back at k < 2 and at k = -1; (4) proof: shots of the far
+  forest's ground shadow at a low sun, ridge 17.6 h, shhull on/off in-page.
+- `?tcache=1`: not started (design above, build order (1)-(5)).
+- ROUND 10+ ASK additions: `zpre=2`, `zpre=2&revz=1` (look for holes / leaf halos), `vzpre=1`; read the two new
+  `tris by layer` lines.
