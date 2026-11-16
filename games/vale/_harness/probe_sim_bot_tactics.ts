@@ -3,9 +3,11 @@
 // changes a decision — it reads events, entity state and each controller's public and private fields after the step.
 // Grown from the diagnosis probe _tmp_diag_ai.ts (commit e5ea2bac1), whose numbers are the baseline in ruling 40.
 //
-//   node _harness/probe_sim_bot_tactics.ts                      the gate (npm run probe): RIFT 8 seeds + FRAY 8 seeds per
+//   node _harness/probe_sim_bot_tactics.ts                      the gate (npm run probe): RIFT 16 seeds + FRAY 16 seeds per
 //                                                               tier (novice, adept, veteran; same tier on both sides),
 //                                                               cut at 30:00, one worker per tier
+//                                                               (16, was 8: an 8-game window swung the base-defence and
+//                                                               ahead-death reads by 6-12 points between seed windows)
 //   flags: --seeds N (RIFT; FRAY gets the same) · --seed0 N · --cut S · --diffs a,b · --suites rift,bridge,fray
 //          --out <json> (raw per-game data) · --merge a.json,b.json (print the table of saved runs, no gates) · --table
 //
@@ -677,7 +679,7 @@ const MERGE = opt('merge', '');
 const WORKER = opt('worker', '');
 if (MERGE) merge(MERGE.split(','));
 else if (WORKER) {
-  const seeds = Number(opt('seeds', '8')), seed0 = Number(opt('seed0', '1')), cut = Number(opt('cut', '1800'));
+  const seeds = Number(opt('seeds', '16')), seed0 = Number(opt('seed0', '1')), cut = Number(opt('cut', '1800'));
   const suites = opt('suites', 'rift,fray').split(',');
   const catalog = loadCatalog();
   const games: GameOut[] = [];
