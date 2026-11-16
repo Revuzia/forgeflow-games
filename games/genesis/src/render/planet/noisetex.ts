@@ -19,11 +19,13 @@ import {
   type IUniform, type Texture, type WebGLRenderer,
 } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
-import { perfList } from '../perfswitch.ts';
+import { perfList, perfSwitch } from '../perfswitch.ts';
 
 const SET = perfList('tnoise');
 /** the terrain fragment reads its simplex noise from the volume */
 export const TNOISE = SET.has('tex') || SET.has('tex256');
+/** PERF s21 `?wfast=1` (ocean.ts): the water reads the same volume, so it is built when either switch is on */
+export const WNOISE = perfSwitch('wfast', false);
 const TN_N = SET.has('tex256') ? 256 : 128;
 const TN_TEXELS = 8;                  // texels per lattice unit of snoise
 const TN_PERIOD = TN_N / TN_TEXELS;   // lattice units before the volume repeats
@@ -51,8 +53,8 @@ function rot(q: [number, number, number, number]): string {
 }
 const ROTS = [[0.19, 0.41, -0.27, 0.85], [-0.52, 0.13, 0.36, 0.76], [0.31, -0.62, 0.48, 0.53], [0.71, 0.29, 0.57, -0.3]] as [number, number, number, number][];
 
-/** GLSL placed after the noise library in the terrain fragment: later snoise / fbm3 calls become taps */
-export const TNOISE_GLSL = !TNOISE ? '' : /* glsl */ `
+/** the volume's uniforms and its tap functions (no macros): ocean.ts uses these with its own call sites */
+export const NOISETEX_FN_GLSL = /* glsl */ `
 uniform highp sampler3D uTNoise;
 uniform vec2 uTNoiseK;
 const mat3 TN_ROT[4] = mat3[4](${ROTS.map(rot).join(',\n  ')});
@@ -66,6 +68,9 @@ float snoiseT(vec3 v, int site) {
   return s.r - 0.125 * dot(t * (1.0 - t), s.gba);
 }
 float fbm3T(vec3 p, int site) { return 0.5 * snoiseT(p, site) + 0.25 * snoiseT(p * 2.03 + 17.1, site + 1) + 0.125 * snoiseT(p * 4.07 - 9.3, site + 2); }
+`;
+/** GLSL placed after the noise library in the terrain fragment: later snoise / fbm3 calls become taps */
+export const TNOISE_GLSL = !TNOISE ? '' : NOISETEX_FN_GLSL + /* glsl */ `
 #define snoise(p) snoiseT(p, __LINE__)
 #define fbm3(p) fbm3T(p, __LINE__)
 `;
@@ -105,7 +110,7 @@ export let tnoiseBytes = 0;
 
 /** render the volume once (call at the top of a frame, outside any render pass); a no-op afterwards and when off */
 export function ensureTNoise(r: WebGLRenderer): void {
-  if (!TNOISE || built) return;
+  if (!(TNOISE || WNOISE) || built) return;
   built = true;
   const half = r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
   if (!half) console.warn('[genesis] tnoise: no float render target, the noise volume is 8-bit');

@@ -28,6 +28,43 @@
 import { shadeCut } from '../shaders/shadecut.ts';
 /** PERF s19 bisection `?wshade=` (shaders/shadecut.ts): nonoise novor fbm1 noshadow all */
 const WSHADE = shadeCut('wshade');
+import { perfList, perfSwitch } from '../perfswitch.ts';
+import { NOISETEX_FN_GLSL, TNOISE_UNIFORMS, WNOISE } from './noisetex.ts';
+/**
+ * PERF s21 `?waterland=0` = the old behaviour. On (default): a water fragment whose ground stands above the sheet
+ * (vDepth = level - ground at this very point of the same patch geometry), or that lies BEHIND the opaque scene by the
+ * linear depth copy (this pixel and its four neighbours), is discarded FIRST, before any shading, and the shore blend
+ * fades with vDepth too: nothing of a sheet can show over land even where the hardware depth test does not hide it
+ * (it stays the exact, per-sample test). Before: only sheets more than 0.6 m under their ground were discarded; the rest relied on the
+ * depth test, and where that let them through they drew at up to 70 % (the shore's noise bite) over low ground.
+ */
+const WATERLAND = perfSwitch('waterland');
+/** PERF s21 `?wfast=1` (default off): the fragment's simplex noise from the noise volume, the ripples' per-wavelet
+ *  constants precomputed, the ripples' shared noises taken once for both flow phases. Same formulas otherwise. */
+const WFAST = WNOISE;
+/** PERF s21 debug `?wdebug=class,nodepth`: class = flat colour by vDepth class (red: ground above the sheet by more
+ *  than 8 cm, yellow: by less, green: draped film, blue: water); nodepth = the water ignores the depth buffer */
+const WDEBUG = perfList('wdebug');
+
+// the 14 ripple wavelets' constants (WFAST): what ripples() derives per fragment and per wavelet from its index
+const f32 = Math.fround;
+const sst = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const RP = Array.from({ length: 14 }, (_, i) => {
+  const s = [Math.sin(f32(i * 12.9898)), Math.cos(f32(i * 78.233)), Math.sin(f32(i * 37.719 + 1.3))];
+  const l = Math.hypot(s[0], s[1], s[2]);
+  const L = 0.17 * Math.pow(1.42, i), k = 6.2831853 / L;
+  const fr = (x: number): number => x - Math.floor(x);
+  return {
+    D: s.map((v) => v / l), L, k, w: Math.sqrt(9.8 * k), ph: i * 1.7, share: (0.6 + 0.4 * fr(i * 0.618)) * Math.min(1, k * 0.8),
+    gc: Math.cos(i * 1.9), gs: Math.sin(i * 1.9), cap: sst(2.0, 0.3, L), feedK: sst(0.5, 6.0, L),
+  };
+});
+const fl = (v: number): string => { const t = v.toPrecision(9); return /[.e]/.test(t) ? t : t + '.0'; };
+const RIPPLE_CONSTS = /* glsl */ `
+const vec4 RP_D[14] = vec4[14](${RP.map((r) => `vec4(${r.D.map(fl).join(', ')}, ${fl(r.L)})`).join(', ')});
+const vec4 RP_K[14] = vec4[14](${RP.map((r) => `vec4(${fl(r.k)}, ${fl(r.w)}, ${fl(r.ph)}, ${fl(r.share)})`).join(', ')});
+const vec4 RP_G[14] = vec4[14](${RP.map((r) => `vec4(${fl(r.gc)}, ${fl(r.gs)}, ${fl(r.cap)}, ${fl(r.feedK)})`).join(', ')});
+`;
 import { Matrix4, ShaderMaterial, Vector2, Vector4, type IUniform } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
@@ -55,8 +92,10 @@ float windFeed(vec3 dT, vec3 windT, float k) {
 // dead-straight crests hundreds of metres long, each catching the sun or mirroring the sky as a parallel line — brushed
 // metal at 40–300 m. A slow warp of every wave's phase (its own share) and an amplitude that swells and fades in
 // patches, from two noises evaluated where the wave is (the vertex's rest position, the pixel's point: the same field)
-float gwWarpAt(vec3 P, float t) { return snoise(P * 0.021 + vec3(0.0, t * 0.01, 0.0)) * 2.2 + snoise(P * 0.067 + 3.0) * 0.8; }
-vec2 gwGroupAt(vec3 P, float t) { return vec2(snoise(P * 0.035 + vec3(t * 0.02, 0.0, 0.0)), snoise(P * 0.09 + 11.0)); }
+// (WFAST: taps of the noise volume at FIXED sites, so the vertex and the fragment shader read the same field)
+${WFAST ? '#define GW_N(p, s) snoiseT(p, s)' : '#define GW_N(p, s) snoise(p)'}
+float gwWarpAt(vec3 P, float t) { return GW_N(P * 0.021 + vec3(0.0, t * 0.01, 0.0), 0) * 2.2 + GW_N(P * 0.067 + 3.0, 1) * 0.8; }
+vec2 gwGroupAt(vec3 P, float t) { return vec2(GW_N(P * 0.035 + vec3(t * 0.02, 0.0, 0.0), 2), GW_N(P * 0.09 + 11.0, 3)); }
 float gwGroup(vec2 g, int i) { return clamp(0.6 + 0.6 * (g.x * cos(float(i) * 2.3) + g.y * sin(float(i) * 2.3)), 0.15, 1.4); }
 float gwPhase(float w, int i) { return w * (0.7 + 0.3 * fract(float(i) * 0.618)); }
 // sea state from the local wind (m/s): 1 at a 7 m/s breeze, calm ~0.3, a gale ~2.2
@@ -79,6 +118,7 @@ uniform float uTime;
 uniform float uWind;
 uniform vec4 uTide;
 ${NOISE_GLSL}
+${WFAST ? NOISETEX_FN_GLSL : ''}
 ${WAVES_GLSL}
 varying vec3 vBodyPos;
 varying vec3 vViewPos;
@@ -168,6 +208,70 @@ ${TERRAIN_VERT_CORE}
 }
 `;
 
+const RIPPLES_REF = /* glsl */ `
+vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
+  vec3 g = vec3(0.0);
+  // the crests wander: a slow, broad warp of every wavelet's phase (each by its own share) — pure sinusoids summed into
+  // long straight crest lines that crossed in a regular plaid, woven linen in the mirrored sky
+  float warp = snoise(P * 0.045 + vec3(0.0, t * 0.02, 0.0)) * 2.4 + snoise(P * 0.13 + 7.0) * 0.9;
+  // ... and come in groups: each wavelet's amplitude swells and fades in patches (gusts, cat's paws), its own mix of two
+  // drifting noises — equal amplitude everywhere, the crossing families read as a regular woven plaid
+  float gA = snoise(P * 0.09 + vec3(t * 0.05, 0.0, -t * 0.03)), gB = snoise(P * 0.23 + vec3(3.0, t * 0.07, 1.0));
+  for (int i = 0; i < 14; i++) {
+    float fi = float(i);
+    vec3 seed = vec3(sin(fi * 12.9898), cos(fi * 78.233), sin(fi * 37.719 + 1.3));
+    float L = 0.17 * pow(1.42, fi);           // 0.17 m .. ~16 m
+    // the longer wavelets run with the wind, capillaries go every way
+    vec3 D = normalize(seed);
+    vec3 d = waveTan(D, up);
+    float k = 6.2831853 / L;
+    // capillaries depend most on the wind (a calm sea is glassy, a breeze roughens it at once)
+    float grp = clamp(0.55 + 0.75 * (gA * cos(fi * 1.9) + gB * sin(fi * 1.9)), 0.08, 1.35);
+    float amp = L * 0.012 * uWind * mix(gSea, gSea * gSea, smoothstep(2.0, 0.3, L)) * windFeed(d, gWindT, smoothstep(0.5, 6.0, L)) * grp;
+    // (gone by ~3 pixels per wavelength: drawn down to 2 px, the crossing ripple families wove a linen moiré into the
+    // mirrored sky and treeline)
+    float aa = 1.0 - smoothstep(0.1, 0.33, fwWave(D, up) / L);
+    gUnresolved += (amp * k) * (amp * k) * 0.5 * (1.0 - aa);
+    gResolved += (amp * k) * (amp * k) * 0.5 * aa;
+    if (aa <= 0.0) continue;
+    float w = sqrt(9.8 * k);
+    float ph = k * dot(P - offset, D) - w * t + fi * 1.7 + warp * (0.6 + 0.4 * fract(fi * 0.618)) * min(1.0, k * 0.8);
+    g += d * (amp * k * cos(ph) * aa);
+  }
+  return g;
+}
+`;
+const RIPPLES_FAST = /* glsl */ `
+float gRW = 0.0, gRA = 0.0, gRB = 0.0;
+// (WFAST) the three noises every ripples() call shares (they do not depend on the flow offset): taken once in main
+void rippleNoise(vec3 P, float t) {
+  gRW = snoise(P * 0.045 + vec3(0.0, t * 0.02, 0.0)) * 2.4 + snoise(P * 0.13 + 7.0) * 0.9;
+  gRA = snoise(P * 0.09 + vec3(t * 0.05, 0.0, -t * 0.03));
+  gRB = snoise(P * 0.23 + vec3(3.0, t * 0.07, 1.0));
+}
+// (WFAST) the same sum as the reference ripples() below in ocean.ts, its per-wavelet constants from RP_D / RP_K / RP_G
+vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
+  vec3 g = vec3(0.0);
+  float sea2 = gSea * gSea;
+  for (int i = 0; i < 14; i++) {
+    vec3 D = RP_D[i].xyz;
+    float L = RP_D[i].w;
+    vec3 d = waveTan(D, up);
+    float k = RP_K[i].x;
+    float grp = clamp(0.55 + 0.75 * (gRA * RP_G[i].x + gRB * RP_G[i].y), 0.08, 1.35);
+    float amp = L * 0.012 * uWind * mix(gSea, sea2, RP_G[i].z) * windFeed(d, gWindT, RP_G[i].w) * grp;
+    float aa = 1.0 - smoothstep(0.1, 0.33, fwWave(D, up) / L);
+    float e = (amp * k) * (amp * k) * 0.5;
+    gUnresolved += e * (1.0 - aa);
+    gResolved += e * aa;
+    if (aa <= 0.0) continue;
+    float ph = k * dot(P - offset, D) - RP_K[i].y * t + RP_K[i].z + gRW * RP_K[i].w;
+    g += d * (amp * k * cos(ph) * aa);
+  }
+  return g;
+}
+`;
+
 const OCEAN_FRAG = /* glsl */ `
 #include <common>
 ${NOISE_GLSL}
@@ -176,7 +280,10 @@ ${SKY_LOOKUP}
 ${CLOUD_DENSITY_GLSL}
 ${SHADOW_GLSL}
 ${WSHADE.glsl}
+${WFAST ? NOISETEX_FN_GLSL : ''}
 ${WAVES_GLSL}
+${WFAST && !WSHADE.has('nonoise') ? '#define snoise(p) snoiseT(p, __LINE__)' : ''}
+${WFAST ? RIPPLE_CONSTS : ''}
 #include <logdepthbuf_pars_fragment>
 uniform mat3 uBodyToView;
 uniform vec3 uSunDirBody;
@@ -255,38 +362,7 @@ float gUnresolved = 0.0;
 // ... and of the ripple octaves it does draw (LEAN: folded into the roughness wherever the reflection looks up the
 // long waves' normal only)
 float gResolved = 0.0;
-vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
-  vec3 g = vec3(0.0);
-  // the crests wander: a slow, broad warp of every wavelet's phase (each by its own share) — pure sinusoids summed into
-  // long straight crest lines that crossed in a regular plaid, woven linen in the mirrored sky
-  float warp = snoise(P * 0.045 + vec3(0.0, t * 0.02, 0.0)) * 2.4 + snoise(P * 0.13 + 7.0) * 0.9;
-  // ... and come in groups: each wavelet's amplitude swells and fades in patches (gusts, cat's paws), its own mix of two
-  // drifting noises — equal amplitude everywhere, the crossing families read as a regular woven plaid
-  float gA = snoise(P * 0.09 + vec3(t * 0.05, 0.0, -t * 0.03)), gB = snoise(P * 0.23 + vec3(3.0, t * 0.07, 1.0));
-  for (int i = 0; i < 14; i++) {
-    float fi = float(i);
-    vec3 seed = vec3(sin(fi * 12.9898), cos(fi * 78.233), sin(fi * 37.719 + 1.3));
-    float L = 0.17 * pow(1.42, fi);           // 0.17 m .. ~16 m
-    // the longer wavelets run with the wind, capillaries go every way
-    vec3 D = normalize(seed);
-    vec3 d = waveTan(D, up);
-    float k = 6.2831853 / L;
-    // capillaries depend most on the wind (a calm sea is glassy, a breeze roughens it at once)
-    float grp = clamp(0.55 + 0.75 * (gA * cos(fi * 1.9) + gB * sin(fi * 1.9)), 0.08, 1.35);
-    float amp = L * 0.012 * uWind * mix(gSea, gSea * gSea, smoothstep(2.0, 0.3, L)) * windFeed(d, gWindT, smoothstep(0.5, 6.0, L)) * grp;
-    // (gone by ~3 pixels per wavelength: drawn down to 2 px, the crossing ripple families wove a linen moiré into the
-    // mirrored sky and treeline)
-    float aa = 1.0 - smoothstep(0.1, 0.33, fwWave(D, up) / L);
-    gUnresolved += (amp * k) * (amp * k) * 0.5 * (1.0 - aa);
-    gResolved += (amp * k) * (amp * k) * 0.5 * aa;
-    if (aa <= 0.0) continue;
-    float w = sqrt(9.8 * k);
-    float ph = k * dot(P - offset, D) - w * t + fi * 1.7 + warp * (0.6 + 0.4 * fract(fi * 0.618)) * min(1.0, k * 0.8);
-    g += d * (amp * k * cos(ph) * aa);
-  }
-  return g;
-}
-
+${WFAST ? RIPPLES_FAST : RIPPLES_REF}
 // Screen-space reflection against the opaque depth, coloured from the previous frame's composited image (sky, clouds
 // and aerial perspective included) REPROJECTED to where that frame saw the hit point (uViewToPrevClip: this frame's
 // view space → the planet's body frame → last frame's clip space), so reflections neither lag nor swim while the
@@ -345,7 +421,27 @@ vec4 ssr(vec3 posV, vec3 rV, vec3 nV) {
 
 void main() {
   #include <logdepthbuf_fragment>
-  if (vDepth < -0.6) discard;
+  ${WATERLAND ? `// the ground stands above the sheet here (by more than 8 cm and the depth's change over the pixel, so a
+  // shoreline pixel keeps every sample the depth test gives it): not water, nothing to shade
+  float landCut = max(-0.6, -0.08 - 1.5 * fwidth(vDepth));
+  if (vDepth < landCut) { discard; return; }
+  // ... and the opaque scene stands in front of the sheet here (the linear depth copy the refraction reads anyway; a
+  // margin of 5 cm + 0.4 %): hidden water, nothing to shade. Only where the four neighbouring pixels agree, so the
+  // one-pixel rim round an occluder is still left to the per-sample depth test (its anti-aliased edge)
+  {
+    vec2 wuv = gl_FragCoord.xy / uResolution, wpx = 1.0 / uResolution;
+    float wz = -vViewPos.z * 0.996 - 0.05;
+    if (texture(tSceneDepth, wuv).r < wz) {
+      float zn = max(max(texture(tSceneDepth, wuv + vec2(wpx.x, 0.0)).r, texture(tSceneDepth, wuv - vec2(wpx.x, 0.0)).r),
+                     max(texture(tSceneDepth, wuv + vec2(0.0, wpx.y)).r, texture(tSceneDepth, wuv - vec2(0.0, wpx.y)).r));
+      if (zn < wz) { discard; return; }
+    }
+  }` : 'if (vDepth < -0.6) discard;'}
+  ${WDEBUG.has('class') ? `{
+    vec3 dc = vDepth < -0.08 ? vec3(1.0, 0.0, 0.0) : vDepth < 0.0 ? vec3(1.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
+    if (vSimD > 0.1 && vSimD < 3.0 && vDepth < 0.185 && vDepth > 0.1) dc = vec3(0.0, 1.0, 0.0);
+    gl_FragColor = vec4(dc * 0.6, 1.0); return;
+  }` : ''}
   vec3 P = vBodyPos;
   vec3 up = normalize(P);
   float fw = length(fwidth(P));
@@ -406,6 +502,7 @@ void main() {
   float flowSpd = length(vFlow);
   vec3 g1, g2;
   float mixF = 0.0;
+  ${WFAST ? 'rippleNoise(P, uTime);' : ''}
   if (flowSpd > 0.05) {
     // two-phase flow map: ripples advected along the flow, phases offset by half a cycle and cross-faded
     float cyc = 2.5;
@@ -788,6 +885,7 @@ void main() {
     // again here it drew a dotted line of tiny pools wherever the 3 m detail relief dips under the level)
     float film = smoothstep(0.03, 0.3, thickE);
     vec3 wetGround = mix(refr, refr * 0.8 + skyR * F * 0.3, film);
+    ${WATERLAND ? 'edge *= smoothstep(landCut, min(landCut + 0.06, 0.0), vDepth);' : ''}
     col = mix(wetGround, col, edge * (1.0 - paper));
   }
   // (UI lane, additive) a map overlay (the UI's O key, overlaytex.ts) tints the sea with its colour too, at the
@@ -807,13 +905,14 @@ export function makeOceanMaterial(shared: Record<string, IUniform>, morph: IUnif
   const uniforms: Record<string, IUniform> = {};
   for (const k of Object.keys(shared)) uniforms[k] = shared[k];
   for (const k of Object.keys(scene)) uniforms[k] = scene[k];
+  if (WFAST) for (const k of Object.keys(TNOISE_UNIFORMS)) uniforms[k] = TNOISE_UNIFORMS[k];
   uniforms.uMorph = morph;
   const m = new ShaderMaterial({
     vertexShader: OCEAN_VERT,
     fragmentShader: OCEAN_FRAG,
     uniforms,
-    depthWrite: true,
-    depthTest: true,
+    depthWrite: !WDEBUG.has('nodepth'),
+    depthTest: !WDEBUG.has('nodepth'),
     transparent: false,
   });
   m.extensions = { clipCullDistance: false, multiDraw: false } as ShaderMaterial['extensions'];

@@ -1873,3 +1873,53 @@ long press frame-rate independent. Report after 1-2 verified.
      307987276, 59.7 m, 5.1 km west of Amonshis) with `overdraw=1` and normal.
   3. `?tcache=1` (design in SESSION 19 PART B) only if round 14 shows tnoise=tex + the non-noise block cuts leave the
      terrain far above nosurf.
+
+## SESSION 21 (2026-11-16 ~23:30Z, WATER agent; a container restart early on, nothing lost) — water ~100 ms on the M5
+- STATIC COUNT, GENESIS water FRAGMENT (ocean.ts OCEAN_FRAG; s = arithmetic simplex ~150 ALU ops), open sea, per fragment:
+  * 20 s always: gwWarpAt 2 + gwGroupAt 2 (wave crests), ripples() 4 (warp 2 + group 2), SSR march jitter 1, foam 8
+    (pulse, band, surf, surge excess 2, whitecap 2, gale streak 1), shore bite edgeN 3. + 5-8 more where foam shows
+    (lace 4, falls 1, surge churn 3), +2 s + 1 voronoi3 on ice, +2 in silted water. RIVERS (flow > 0.05): ripples() runs
+    TWICE (two-phase flow map) = +4 s and a second 14-wavelet loop.
+  * loops: 4 Gerstner + 3 swell (trig, sqrt, normalize each); ripples = 14 wavelets, each 5 trig + pow + sqrt + normalize
+    of values that only depend on the index, + windFeed + fwWave + cos; silt zones 4.
+  * taps: sunShadow 5 PCF; cloud shadow = 1 cube + cloudDensityAt (1 cube tap); mirrored clouds = the same again + sky
+    LUTs; sky/sun LUTs ~8; scene depth 2 + scene colour 1; SSR = up to 28 steps x (mat4 mul + 1 depth tap), + 8 refine
+    + 3 previous-frame taps on a hit; moon: sky LUT + cloud shadow again; glitter 3 hashes.
+  * Sum: ~3000 ALU ops of simplex + ~1500 of loops + up to ~45 dependent taps. wshade=all (noise = const, no PCF) took
+    the pass from ~100 to ~27-30 ms on the M5: the 20 simplex + 5 PCF are ~70 % of it; SSR + clouds + loops the rest.
+  * The pass also writes gl_FragDepth (log depth): without the conservative-depth early reject every rasterised water
+    fragment runs all of this before its depth test, hidden or not.
+- SIBLING GAMES (the owner's "smooth, beautiful water"):
+  * pirates-cove (ffg_openseas3d.js) = three's addons Water.js (MIT) unchanged: 4 taps of ONE tiling normal map
+    (waternormals.jpg) scrolling at 4 speeds / scales, 1 tap of a planar mirror (a second scene render at half
+    cost, not per-pixel work), analytic sun specular + Schlick. ~5 taps + ~60 ALU ops per fragment. No noise, no loop.
+  * driftwake water.glsl.js: analytic, 0 taps, 0 noise, 0 loops (sines in the vertex shader, a few in the fragment).
+  * crestbound water.js: 4 Gerstner in the VERTEX shader, 2 tiny value-noise helpers (wh / wn) in the fragment, a
+    procedural sky function, a per-vertex baked shore distance (CPU rings) for foam. 0 taps.
+  * dyefield water.ts: 1 tap (a baked shore-depth texture) + one 6-iteration analytic noise loop.
+  * So: 50-300 ALU ops and 0-5 taps a fragment, against GENESIS's ~4500 ops + ~45 taps: 15-50x cheaper. What they have
+    in common: every high-frequency detail is a TEXTURE tap or a handful of sines; shore foam from BAKED distance/depth.
+    What GENESIS has that they lack: SSR of the shore, Beer-Lambert depth colour off the real scene depth, wind/storm
+    sea state per cell, whitecaps, surge foam, ice, mirrored cloud deck. Those stay; the noise becomes taps.
+- WATER OVER LAND, what is emitted: every terrain patch with ONE wet (or shore-level) vertex cell draws its WHOLE
+  geometry again as a water sheet (chunks.ts vertexWater; WATER_SHARE: the same vertices). At the landing spot (palm
+  beach, land cells at +0.6 / +5.4 m beside sea cells at -19..-74 m, level 0) the sheet lies flat at level 0 UNDER the
+  +0.6 m ground; only `vDepth < -0.6` was discarded, so the sheet 0-0.6 m under the low ground was left to the depth
+  test. A fragment that gets past the depth test there shades with thickness 0, and the shore's noise bite
+  (edgeN, up to +0.12 m of fake thickness) blends the full rippled water colour at up to ~70 % over the ground, with the
+  scene copy (trees) refracted through it = the owner's "rippled translucent sheet, trunks through it". SwiftShader's
+  depth test hides it; `?wdebug=nodepth` (water ignores depth) reproduces it. WHY the M5 lets them through is NOT
+  established (not zcons, not zedge by the owner's tests).
+- BUILT (ocean.ts; noisetex.ts: WNOISE + NOISETEX_FN_GLSL export, 6 lines):
+  * `?waterland=0` old. Default ON: `if (vDepth < -0.08 - 1.5 * fwidth(vDepth)) discard` FIRST in main (vDepth = level
+    - ground of the same patch geometry, so with a working depth test the picture is the same), and the shore blend's
+    `edge` fades with vDepth over the next 6 cm: nothing of a sheet under ground can show whatever the depth test does.
+  * `?wdebug=class` (red = ground > 8 cm above the sheet, yellow = 0-8 cm, green = draped film, blue = water),
+    `?wdebug=nodepth` (water depthTest / depthWrite off).
+  * `?wfast=1` (default OFF): (a) every fragment snoise = 1 tap of the s20 noise volume (built when tnoise OR wfast);
+    gwWarpAt / gwGroupAt tap at FIXED sites in the vertex AND fragment shader (the same field: normals stay on the
+    geometry's crests); (b) the 14 wavelets' index-only values are const arrays (RP_D / RP_K / RP_G, computed in TS);
+    (c) the ripples' 3 shared noises are taken once, not once per flow phase. Formulas unchanged.
+    COUNT after: 20 T (taps, ~12 ops each) instead of 20 s; ripples loop ~45 instead of ~110 ops a wavelet; rivers 20 T
+    (was 24 s). Everything else as before.
+- Probe: `_harness/arc-work/probe-s21.mjs` (probe-s20 + views land land2 sea seafar lake shore river night dusk, water on).
