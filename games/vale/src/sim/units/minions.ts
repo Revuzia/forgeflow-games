@@ -246,8 +246,9 @@ export function minionSystem(w: World): void {
     if (!m) continue;
     const b = behaviorOf(e.unit);
     const cur = e.order === ORDER_ATTACK ? w.live(e.orderTarget) : null;
-    // passing its own wave ends when it is in reach of its target, it no longer chases, or the time is up
-    if (e.passOwn && (w.tick >= m.passUntil || !cur || inAttackRange(e, cur))) e.passOwn = false;
+    // passing its own wave ends when the time is up or it is in reach of its target (a target the front row kills is not
+    // the end of it: the next one is behind the same wave)
+    if (e.passOwn && (w.tick >= m.passUntil || (cur && inAttackRange(e, cur)))) e.passOwn = false;
     const chase2 = b.chaseRange * b.chaseRange;
     const curOk = !!cur && attackable(w, e, cur) && dist2(cur, m.cx, m.cy) <= chase2;
     const lost = e.order === ORDER_ATTACK && !curOk;

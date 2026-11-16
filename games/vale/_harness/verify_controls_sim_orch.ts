@@ -449,7 +449,13 @@ async function held(L: L) {
   const out: Record<string, unknown> = {};
   const crowdAt = (w: World, me: Entity, x: number, y: number) => w.entities
     .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < o.radius + me.radius + 0.6).length;
+  // ctl r3 (ruling 42): a held move whose hero starts boxed in by bodies (the reference finds no way through them, as
+  // in the waves sweep) ends where the bodies let it: reported, not counted as short
+  const heldBodies = (w: World, me: Entity, x: number, y: number, R: number) => w.entities
+    .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < R)
+    .map((o) => ({ x: o.x, y: o.y, r: o.radius }));
   for (const modeId of ['rift', 'bridge']) {
+    let boxedShort = 0;
     let deadOrDisplaced = 0, n = 0, rev3 = 0, rev5 = 0, revMax = 0, shortUncrowded = 0, shortAny = 0, regress1 = 0, worstRegress = 0, nearTower = 0, worstShort = 0, forcedN = 0, regress1Free = 0, worstRegressFree = 0;
     const tArrive: number[] = [];
     const bad: string[] = [];
@@ -477,6 +483,7 @@ async function held(L: L) {
         if (Math.hypot(me.x - hx, me.y - hy) > 0.6 || !me.alive) continue;
         const x0 = me.x, y0 = me.y, ux = (gx - x0) / Math.hypot(gx - x0, gy - y0), uy = (gy - y0) / Math.hypot(gx - x0, gy - y0);
         const tw = Math.min(...w.entities.filter((e) => e.kind === 'structure' && e.alive).map((e) => Math.hypot(e.x - x0, e.y - y0)));
+        const lane0 = refPath(x0, y0, gx, gy, heldBodies(w, me, x0, y0, 18), me.radius, (x, y) => nav.walkable(x, y));
         if (tw < 12) nearTower++;
         let minD = Math.hypot(gx - x0, gy - y0), regress = 0, arrivedAt = -1;
         let ext = 0, dirSign = 0, revs = 0;
@@ -515,17 +522,18 @@ async function held(L: L) {
         if (forced) forcedN++;
         else { if (regress > 1) regress1Free++; worstRegressFree = Math.max(worstRegressFree, regress); }
         if (dEnd > 2) shortAny++;
-        if (dEnd > 2 && crowd === 0) { shortUncrowded++; worstShort = Math.max(worstShort, dEnd); }
+        if (dEnd > 2 && crowd === 0 && !isFinite(lane0)) boxedShort++;
+        else if (dEnd > 2 && crowd === 0) { shortUncrowded++; worstShort = Math.max(worstShort, dEnd); }
         if (arrivedAt >= 0) tArrive.push(arrivedAt / 30);
         const tags: string[] = [];
         if (revs >= 3) tags.push(`reversals ${revs}`);
         if (regress > 1) tags.push(`regress ${f2(regress)}${forced ? ' (forced)' : ''}`);
-        if (dEnd > 2) tags.push(`short ${f2(dEnd)} crowd ${crowd}`);
+        if (dEnd > 2) tags.push(`short ${f2(dEnd)} crowd ${crowd}${isFinite(lane0) ? '' : ' (boxed in: no way through the bodies)'}`);
         if (tags.length && (bad.length < 16 || revs >= 3 || (dEnd > 2 && crowd === 0)) && bad.length < 40) bad.push(`${who} s${seed} k${k - 1} t${f2(w.tick / 30)}s (${f2(x0)},${f2(y0)})→(${f2(gx)},${f2(gy)}) tower ${f2(tw)} m ${tags.join(' ')}`);
       }
     }
     const s = [...tArrive].sort((a, b) => a - b);
-    out[modeId] = { n, excludedDeadOrDisplaced: deadOrDisplaced, reversals3plus: rev3, reversals5plus: rev5, revMax, regressOver1m: regress1, worstRegress: f2(worstRegress), forcedMoves: forcedN, regressOver1mUnforced: regress1Free, worstRegressUnforced: f2(worstRegressFree), endedOver2mShort: shortAny, endedOver2mShortUncrowded: shortUncrowded,
+    out[modeId] = { n, boxedInShort: boxedShort, excludedDeadOrDisplaced: deadOrDisplaced, reversals3plus: rev3, reversals5plus: rev5, revMax, regressOver1m: regress1, worstRegress: f2(worstRegress), forcedMoves: forcedN, regressOver1mUnforced: regress1Free, worstRegressUnforced: f2(worstRegressFree), endedOver2mShort: shortAny, endedOver2mShortUncrowded: shortUncrowded,
       worstShortUncrowded: f2(worstShort), startsWithin12mOfStructure: nearTower, arrived: s.length, arriveP50s: s.length ? f2(s[s.length >> 1]) : null, arriveP95s: s.length ? f2(s[Math.floor(s.length * 0.95)]) : null, bad };
     console.log(modeId, JSON.stringify(out[modeId]));
   }

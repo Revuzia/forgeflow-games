@@ -64,6 +64,7 @@ for (const m of ['rift', 'bridge']) {
     check('0 regress > 1 m with no forced movement', n(h, 'regressOver1mUnforced') === 0, h.bad);
     check('0 end > 2 m short of an uncrowded point', n(h, 'endedOver2mShortUncrowded') === 0, h.bad);
     check('0 with 5+ reversals', n(h, 'reversals5plus') === 0, h.bad);
+    console.log(`  ${m}: boxed in by bodies (no way through, ruling 42) ${h.boxedInShort ?? 0}`);
     console.log(`  ${m}: forced ${h.forcedMoves} (regress > 1 m all moves ${h.regressOver1m}, worst unforced ${h.worstRegressUnforced}); 3+ reversals ${h.reversals3plus}; arrive p95 ${h.arriveP95s} s`);
   });
 }
