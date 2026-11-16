@@ -46,6 +46,7 @@ const CAM = {
   rock: { mode: 'orbit', poi: 'peak', dist: 40, tilt: 45, hour, blend: 0 },
   peak: { mode: 'orbit', poi: 'peak', dist: 500, tilt: 45, hour: 16.5, blend: 0 }, // rock and snow
   sand: { mode: 'orbit', poi: 'coast', dist: 30, tilt: 40, hour, blend: 0 },
+  sand2: { mode: 'orbit', poi: 'coast', dist: 120, tilt: 50, hour, blend: 0 },
   desert: { mode: 'orbit', poi: 'desert', dist: 60, tilt: 40, hour, blend: 0 },
   far: { mode: 'orbit', target: S1, dist: 2600, tilt: 35, hour: 15, blend: 0 },
   orbit: { mode: 'orbit', lat: 18, lon: -35, dist: 7800, hour: 16.25, blend: 0 },

@@ -1796,3 +1796,14 @@ long press frame-rate independent. Report after 1-2 verified.
   bare rock     ~60 s                       ~57 T + 3 snoiseGrad
   far land      ~40 s                       ~40 T
   lighting taps unchanged (14-15). MEMORY: +16.8 MB GPU (128^3 x 8 B), one allocation, never re-uploaded.
+
+## LEAD NOTE after MAC ROUND 12 + quiet-Mac check (2026-11-16) — the frame budget on a quiet M5 (Ultra, 1686x963)
+- Round 12 (build dbadbde1, quiet Mac, S = all four shade cuts): S 83-100 ms; scene=0&shadows=0 50 ms; + every post/cloud/
+  atmo/gtao/msaa/water off 17 ms (60 fps, the display cap) -> NO fixed floor; my geometry-floor hypothesis is REFUTED
+  (fartrees=0: -8 M shadow / -2 M scene tris, no gain; zpre=2 slower). Frame times step in 16.7 ms (vsync).
+- Budget: terrain surface ~450-500 ms (base Ultra 520-620 vs S ~90); post chain ~33 ms (scene=0&shadows=0 50 -> all off 17);
+  simplified scene + shadows ~35-50 ms; 600x363 window with S: 33 ms.
+- So: (1) terrain surface cost first (SESSION 20, in progress) -> ~10 fps; (2) then the post chain (33 ms -> ~10) and the
+  remaining scene + shadow cost to reach 33 ms total.
+- Unexplained: the quiet-Mac check's S run on build cfe751b9 was 251 ms (Finder at 97 % CPU, iCloud syncing, WindowServer
+  ~66 % GPU while the game ran) vs ~90 ms for S on dbadbde1 an hour later. Round 13 re-measures base/Low/High on dbadbde1.
