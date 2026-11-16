@@ -565,13 +565,16 @@ export class NavGrid {
         if (n > 0) {
           const floodMax = Math.min(capMax * 1.09 + c, SNAP_STUCK_FLOOD);
           this.flood(sx, sy, floodMax);
+          // priced up front: the planner's grid searches below reuse the flood's arrays
+          cost.length = 0;
+          for (let k = 0; k < n; k++) cost.push(this.closedGen[cand[k]] === this.gen ? this.g[cand[k]] * c : Infinity);
           let tries = 0;
           for (let k = 0; k < n; k++) {
             const i = cand[k];
             const px = ((i % this.w) + 0.5) * c, py = (Math.floor(i / this.w) + 0.5) * c;
             const D = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy));
             const capS = D * SNAP_STUCK + SNAP_STUCK_M;
-            const g = this.closedGen[i] === this.gen ? this.g[i] * c : Infinity;
+            const g = cost[k];
             // the flood priced it out of reach (it ran far enough for this bound), or clearly within it
             if (g > capS * 1.09 + slack && capS * 1.09 + c <= floodMax) continue;
             if (g <= capS - slack) { gx = px; gy = py; break; }
