@@ -185,7 +185,7 @@ async function waves(L: L) {
   const crowdAt = (w: World, me: Entity, x: number, y: number) => w.entities
     .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < o.radius + me.radius + 0.6).length;
   for (const modeId of ['rift', 'bridge']) {
-    let n = 0, dither = 0, ditherMax = 0, shortLane = 0, shortAny = 0, reversals = 0, revMax = 0, rev5 = 0, clear = 0, over15 = 0, worstClear = 0, awayGoal = 0, worstAwayGoal = 0, detVsLane = 0, postDrift = 0;
+    let n = 0, dither = 0, ditherMax = 0, shortLane = 0, shortAny = 0, reversals = 0, revMax = 0, rev5 = 0, clear = 0, over15 = 0, worstClear = 0, awayGoal = 0, worstAwayGoal = 0, detVsLane = 0, postDrift = 0, awayGoalLane = 0;
     const ratios: number[] = [], laneRatios: number[] = [];
     const bad: string[] = [];
     for (const seed of [3, 13, 29]) for (const who of L.fs) {
@@ -242,6 +242,7 @@ async function waves(L: L) {
         const wk = walk(tr), dEnd = Math.hypot(tr[tr.length - 1].x - gx, tr[tr.length - 1].y - gy);
         reversals += wk.flips; revMax = Math.max(revMax, wk.flips); if (wk.flips > 4) rev5++;
         if (ag > 1) awayGoal++;
+        if (ag > 1 && isFinite(lane)) awayGoalLane++;
         worstAwayGoal = Math.max(worstAwayGoal, ag);
         const crowd = crowdAt(w, me, gx, gy);
         const tags: string[] = [];
@@ -253,14 +254,14 @@ async function waves(L: L) {
           if (wk.len > straight * 1.15) over15++;
         }
         if (dith >= 5) tags.push(`dither ${dith}`);
-        if (ag > 1) tags.push(`awayFromGoal ${f2(ag)}`);
+        if (ag > 1) tags.push(`awayFromGoal ${f2(ag)}${isFinite(lane) ? '' : ' (boxed in: no way through the bodies)'}`);
         if (wk.flips > 4) tags.push(`reversals ${wk.flips}`);
         if (tags.length && bad.length < 14) bad.push(`${who} s${seed} t${t} (${f2(x0)},${f2(y0)})→(${f2(gx)},${f2(gy)}) ${tags.join(' ')}`);
       }
     }
     const pct = (arr: number[], p: number) => { const s = [...arr].sort((a, b) => a - b); return s.length ? f2(s[Math.min(s.length - 1, Math.floor(p * s.length))]) : null; };
     out[modeId] = { n, dither5in1s: dither, ditherMax, shortOfOpenGoalWithLane: shortLane, endedOver2mShortUncrowded: shortAny, reversals, revMax, movesOver4Reversals: rev5,
-      walkedOver1mAwayFromGoal: awayGoal, worstAwayFromGoal: f2(worstAwayGoal), arrivedDetourOverLane1_3p1: detVsLane, orderRestartedAfterEnd: postDrift,
+      walkedOver1mAwayFromGoal: awayGoal, walkedOver1mAwayWithAWayThrough: awayGoalLane, worstAwayFromGoal: f2(worstAwayGoal), arrivedDetourOverLane1_3p1: detVsLane, orderRestartedAfterEnd: postDrift,
       clearLane: clear, clearOver1_15: over15, clearOver1_15Pct: f2(100 * over15 / Math.max(1, clear)), worstClear: f2(worstClear),
       ratioP50: pct(ratios, 0.5), ratioP95: pct(ratios, 0.95), ratioMax: pct(ratios, 0.9999), vsLaneP95: pct(laneRatios, 0.95), vsLaneMax: pct(laneRatios, 0.9999), bad };
     console.log(modeId, JSON.stringify(out[modeId]));
@@ -449,7 +450,7 @@ async function held(L: L) {
   const crowdAt = (w: World, me: Entity, x: number, y: number) => w.entities
     .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < o.radius + me.radius + 0.6).length;
   for (const modeId of ['rift', 'bridge']) {
-    let deadOrDisplaced = 0, n = 0, rev3 = 0, rev5 = 0, revMax = 0, shortUncrowded = 0, shortAny = 0, regress1 = 0, worstRegress = 0, nearTower = 0, worstShort = 0;
+    let deadOrDisplaced = 0, n = 0, rev3 = 0, rev5 = 0, revMax = 0, shortUncrowded = 0, shortAny = 0, regress1 = 0, worstRegress = 0, nearTower = 0, worstShort = 0, forcedN = 0, regress1Free = 0, worstRegressFree = 0;
     const tArrive: number[] = [];
     const bad: string[] = [];
     for (const seed of [7, 19]) for (const who of L.fs) {
@@ -480,7 +481,7 @@ async function held(L: L) {
         let minD = Math.hypot(gx - x0, gy - y0), regress = 0, arrivedAt = -1;
         let ext = 0, dirSign = 0, revs = 0;
         const diag = DIAG === `${modeId}:${who}:${seed}:${k}`;
-        let displaced = false, px = me.x, py = me.y;
+        let displaced = false, px = me.x, py = me.y, forced = false;
         const dtr: string[] = [];
         for (let q = 0; q < 270; q++) {
           const dg = Math.hypot(me.x - gx, me.y - gy);
@@ -492,6 +493,9 @@ async function held(L: L) {
           else { if (p < ext) ext = p; else if (p - ext >= 0.5) { revs++; dirSign = 1; ext = p; } }
           const d2 = Math.hypot(me.x - gx, me.y - gy);
           if (Math.hypot(me.x - px, me.y - py) > 1.2) displaced = true;
+          // forced movement (orch1 r2 late-held repro: an enemy's knock moved the hero 1.4 m off its goal): crowd control
+          // on the hero, or a step faster than it walks (a dash or knock pushed it)
+          if ((me as unknown as { ccMask: number }).ccMask !== 0 || Math.hypot(me.x - px, me.y - py) > me.stats.moveSpeed / 30 * 1.5 + 0.02) forced = true;
           px = me.x; py = me.y;
           regress = Math.max(regress, d2 - minD); minD = Math.min(minD, d2);
           if (arrivedAt < 0 && d2 < 0.5) arrivedAt = q;
@@ -508,18 +512,20 @@ async function held(L: L) {
         if (!me.alive || displaced) { k--; n--; deadOrDisplaced++; continue; }
         revMax = Math.max(revMax, revs); if (revs >= 3) rev3++; if (revs >= 5) rev5++;
         if (regress > 1) regress1++; worstRegress = Math.max(worstRegress, regress);
+        if (forced) forcedN++;
+        else { if (regress > 1) regress1Free++; worstRegressFree = Math.max(worstRegressFree, regress); }
         if (dEnd > 2) shortAny++;
         if (dEnd > 2 && crowd === 0) { shortUncrowded++; worstShort = Math.max(worstShort, dEnd); }
         if (arrivedAt >= 0) tArrive.push(arrivedAt / 30);
         const tags: string[] = [];
         if (revs >= 3) tags.push(`reversals ${revs}`);
-        if (regress > 1) tags.push(`regress ${f2(regress)}`);
+        if (regress > 1) tags.push(`regress ${f2(regress)}${forced ? ' (forced)' : ''}`);
         if (dEnd > 2) tags.push(`short ${f2(dEnd)} crowd ${crowd}`);
         if (tags.length && (bad.length < 16 || revs >= 3 || (dEnd > 2 && crowd === 0)) && bad.length < 40) bad.push(`${who} s${seed} k${k - 1} t${f2(w.tick / 30)}s (${f2(x0)},${f2(y0)})→(${f2(gx)},${f2(gy)}) tower ${f2(tw)} m ${tags.join(' ')}`);
       }
     }
     const s = [...tArrive].sort((a, b) => a - b);
-    out[modeId] = { n, excludedDeadOrDisplaced: deadOrDisplaced, reversals3plus: rev3, reversals5plus: rev5, revMax, regressOver1m: regress1, worstRegress: f2(worstRegress), endedOver2mShort: shortAny, endedOver2mShortUncrowded: shortUncrowded,
+    out[modeId] = { n, excludedDeadOrDisplaced: deadOrDisplaced, reversals3plus: rev3, reversals5plus: rev5, revMax, regressOver1m: regress1, worstRegress: f2(worstRegress), forcedMoves: forcedN, regressOver1mUnforced: regress1Free, worstRegressUnforced: f2(worstRegressFree), endedOver2mShort: shortAny, endedOver2mShortUncrowded: shortUncrowded,
       worstShortUncrowded: f2(worstShort), startsWithin12mOfStructure: nearTower, arrived: s.length, arriveP50s: s.length ? f2(s[s.length >> 1]) : null, arriveP95s: s.length ? f2(s[Math.floor(s.length * 0.95)]) : null, bad };
     console.log(modeId, JSON.stringify(out[modeId]));
   }

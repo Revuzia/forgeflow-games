@@ -33,10 +33,11 @@ const SWEEP_S = 0.25;
 /** a body that may block a lane: the segment its centre sweeps over SWEEP_S (from (x, y) to (x2, y2); a point when it
  *  stands), and the radius the walker's centre must stay out of */
 export interface Disc { x: number; y: number; x2: number; y2: number; r: number }
-/** a Wick marching its lane across the walker's line (its velocity more across the line than along it) also makes the ground it is
- *  heading into, from SWEEP_S out to AHEAD_S s, dear to plan through (a step there costs 1 + AHEAD_COST its length; never blocked): the
- *  lane passes behind a crossing column rather than racing its front end (orch1 r2 waves repro, lisvel s3 t1147: a lane
- *  in front of a Wick column marching across the click walked 3.7 m with the column and 10.8 m against a 6.6 m way) */
+/** a Wick on the move across the walker's line (its velocity more across the line than along it) also makes the ground
+ *  it is heading into, from SWEEP_S out to AHEAD_S s, dear to plan through (a step there costs 1 + AHEAD_COST its length;
+ *  never blocked): the lane passes behind a crossing column rather than racing its front end (orch1 r2 waves repro,
+ *  lisvel s3 t1147: a lane in front of a Wick column crossing the click walked 3.7 m with the column, 10.8 m against a
+ *  6.6 m way). A lane planned so is re-checked against a fresh plan (movement.ts LANE_SWAP_GAIN) in case they stop. */
 const AHEAD_S = 1.0;
 const AHEAD_COST = 1.5;
 const CROSS_COS = 0.5;
@@ -139,8 +140,8 @@ export function collectDiscs(w: World, e: Entity, minX: number, minY: number, ma
     disc.x = x1; disc.y = y1; disc.x2 = x2; disc.y2 = y2; disc.r = R;
     laneDiscs.push(disc);
     const v = Math.sqrt(o.vx * o.vx + o.vy * o.vy);
-    // a Wick walking at its pace (marching or running at a target; a fight's jostle is slower and no intent), across the line
-    if (o.kind === 'minion' && v > 0.8 * o.stats.moveSpeed && Math.abs(o.vx * ux + o.vy * uy) < CROSS_COS * v) {
+    // a Wick on the move (marching, or running at a target) across the line: fighters dodge and turn, a Wick walks on
+    if (o.kind === 'minion' && v > 0.3 * e.stats.moveSpeed && Math.abs(o.vx * ux + o.vy * uy) < CROSS_COS * v) {
       const a = discPool.pop() ?? { x: 0, y: 0, x2: 0, y2: 0, r: 0 };
       a.x = x2; a.y = y2; a.x2 = o.x + o.vx * AHEAD_S; a.y2 = o.y + o.vy * AHEAD_S; a.r = R0;
       aheadDiscs.push(a);
