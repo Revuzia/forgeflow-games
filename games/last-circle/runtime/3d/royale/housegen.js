@@ -1451,11 +1451,25 @@ export function generate(parcel, opts) {
       }
       // (still none: a bath nook of <= 3 cells that is the way on is an inner hall when the house has another bath)
       if (!leaf && B.cells.length <= 3 && floors.some((G) => G.regs.some((q) => q !== B && q.kind === "bath"))) { B.kind = "hall"; continue; }
+      // (W10 R1A pass 6, still none: a study / store room the trees end in but for a BACK door - the inside's last room, its other doorway the yard's - takes the
+      // bath, and the nook it leaves (<= 3 cells) is an inner hall: ashgrid s2026 outpost@p22, a 1 x 2 bath between a bedroom and the back study)
+      let backLeaf = false;
+      if (!leaf) for (const G of floors) G.regs.forEach((q, ri) => { if (!leaf && ri !== G.root && !q.hall && (q.kind === "office" || q.kind === "storage") && q.cells.length <= 6 &&
+        doors.filter((d) => d.floor === G.f && (d.a === ri || d.b === ri) && d.kind === "interior").length === 1 && dg(G, ri) === 2) { leaf = [q, G.f]; backLeaf = true; } });
       if (!leaf) { notes.push("a bath on floor " + F.f + " is a pass-through (no room the trees end in can take it)"); break; }
       const k = leaf[0].kind; leaf[0].kind = "bath";
-      B.kind = k === "bedroom" && B.cells.length < 4 ? "storage" : k;          // (a nook a bedroom cannot be: a utility room on the way)
+      B.kind = backLeaf && B.cells.length <= 3 ? "hall" : k === "bedroom" && B.cells.length < 4 ? "storage" : k;          // (a nook a bedroom cannot be: a utility room on the way)
     }
   }
+  // (W10 R1A pass 6) a home's one-cell-wide study / store strip (<= 3 cells) that is the way into another room (>= 2 doorways) is a CORRIDOR: entered from its long
+  // side it showed a 2.3 m rack across a pass-through (ashgrid s2 metro@p7 / outpost@p1: the kitchen behind a 1 x 2 office); a floor's WC strip took this when the
+  // floor had no bath (above)
+  if (home && LANDING_HALL) for (const F of floors) F.regs.forEach((q, ri) => {
+    if (q.hall || q.cells.length > 3 || (q.kind !== "office" && q.kind !== "storage")) return;
+    const is = q.cells.map((c) => c % nx), js = q.cells.map((c) => Math.floor(c / nx));
+    if (Math.min(Math.max(...is) - Math.min(...is), Math.max(...js) - Math.min(...js)) !== 0) return;
+    if (doors.filter((d) => d.floor === F.f && (d.a === ri || d.b === ri)).length >= 2) q.kind = "hall";
+  });
   // windows
   for (const F of floors) {
     const winOK = (c) => c >= 0 && F.type[c] === 1;
