@@ -12,6 +12,8 @@ seed 7), turned into bar rows (PLAN.md "Lane R2A" acceptance bars; the audit val
     python _harness/p23/waterlook.py --disk --plant lip-static       # foam on the static level, not the bobbing one - MUST FAIL shore lip
     python _harness/p23/waterlook.py --disk --plant wet-flat         # wet sand by height alone (whole islets)     - MUST FAIL wet sand from the air
     python _harness/p23/waterlook.py --disk --plant wet-seabed       # the seabed darkened under the water (halo)  - MUST FAIL wet sand from the air (live frame)
+    python _harness/p23/waterlook.py --disk --plant crushed-toe      # the contrast curve without its toe (the merge's) - MUST FAIL light: shadowed road
+    python _harness/p23/waterlook.py --disk --plant dark-rooms       # crushed toe + no indoor lift                  - MUST FAIL light: interiors darkest view
     python _harness/p23/waterlook.py --disk --plant sparse-grass     # the blade cell 0.56 -> 1.4 m                 - MUST FAIL grass
     python _harness/p23/waterlook.py --disk --plant grass-on-low     # the blade layer built on low too             - MUST FAIL low-identical
     python _harness/p23/waterlook.py --disk --plant grass-on-sand    # the blades without the grass-ness mask (on beaches) - MUST FAIL grass-sand
@@ -35,6 +37,9 @@ clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest 
   light         ground luminance spread p95 - p5 >= 0.25 on every map (mean of ground / ground2 / groundlow, lower half) [0.14 / 0.17 / 0.28];
                 the OD-2 drop view mean 0.45-0.55 held; far sea: no colour step along the map edge in the drop view
                 (p90 <= 0.02); interiors (3 houses' biggest ground-floor rooms) mean >= 0.9 x the base's ON EVERY MAP
+                fix5: interiors darkest view - every view (4 headings per room, + the watch houses' ground-floor rooms, level headings) mean luma
+                >= 25 / 255 and dark share (< 16 / 255) <= 30 % (interiorcheck's numbers); shadowed road - the street view's road (lower third)
+                p5 >= 12 / 255 and <= 10 % under 16 / 255 on every map [R2A merge Savanna: p5 2.1, 44.9 %]
   grass-sand    medium, a low view (0.5 m) over dry non-grass ground (the nearest 30 m disc - the blade ring - that is >= 95 % sand band, dunes,
                 dry wash, mud, snow or rock by the blade layer's own grass-ness bake): the blades A/B moves <= 0.5 % of the lower half
                 [build 1: the sand under blades]
@@ -105,6 +110,11 @@ PLANTS = {
     # wet-seabed = the fix3 wet term: 3-7 m swash band at every distance AND the seabed darkened down to 8 m under the water - every coast a thick dark
     #              halo from the air, a submerged neck muddy - MUST FAIL wet sand from the air (live frame)
     "wet-seabed": [(RP + "maps.js", [(WET_LINE, "  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * ( 1.0 - smoothstep( 3.0, 7.0, lwd ) ) * step( -8.0, lhw );")])],
+    # fix5: the contrast curve without its toe (the R2A merge's curve: a shadow at 50 / 255 -> 11 / 255) - must FAIL light: shadowed road and the interiors darkest view
+    "crushed-toe": [("runtime/3d/lc_output_pass.js", [("        lp = mix( l0, lp, smoothstep( vec3( 0.05 ), vec3( 0.25 ), l0 ) );", "")])],
+    # fix5: the merge's crushed toe AND no W10 indoor lift (rooms lit by the cut fill alone, their shadows crushed) - must FAIL light: interiors darkest view
+    "dark-rooms": [("runtime/3d/lc_output_pass.js", [("        lp = mix( l0, lp, smoothstep( vec3( 0.05 ), vec3( 0.25 ), l0 ) );", "")]),
+                   (RP + "maps.js", [("const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);", "const HG_INDOOR = (mapId === \"deepwood\" ? 0.95 : 0.8) * (W10V ? 0.7 : 1);")])],
     "sparse-grass": [(RP + "maps.js", [("lamps: 4, grassR: 30, grassC: 0.56,", "lamps: 4, grassR: 30, grassC: 1.4,")])],
     # grass-on-low = the blade layer (and the ground lattice texture it stands on) built on the low tier too
     "grass-on-low": [(RP + "maps.js", [("lamps: 0, grassR: 0, grassC: 1,", "lamps: 0, grassR: 30, grassC: 0.56,"),
@@ -208,13 +218,75 @@ WALLCAM_JS = r"""([dist]) => { const W = window.__LC__.W, M = W.map, st = W.stor
   const b = best; return [b.x, b.h + 25, b.z, b.x + b.dx * dist, b.h + 30, b.z + b.dz * dist, 66]; }"""
 
 # interiors: the 3 houses nearest the drop POI, each one's biggest ground-floor room, camera at its centre 1.6 m up looking at its far corner
+# fix5: houses whose rooms read darkest in interiorcheck (seed 7, the R2A merge: isla_viva volcano_rim@p54 f0r1 / f0r2 mean 21.4-24.2 / 255, dark share
+# 0.4-0.6). Every ground-floor room of these is viewed (4 headings) for the interiors darkest-view row only (the base ratio keeps its 3 houses)
+WATCH_HOUSES = {"isla_viva": ["volcano_rim@p54"]}
+WATCH_JS = r"""([ids]) => { const M = window.__LC__.W.map, out = [];
+  for (const H of M.houses || []) { if (!ids.includes(H.id)) continue;
+    for (const R of H.rooms || []) { if (R.floor !== 0 || !(R.area >= 4)) continue;
+      // the player's own read of the room: eye height, LEVEL, the 4 headings interiorcheck renders from the room centre (walls and ceiling in frame, not mostly floor)
+      const e = [R.cx, R.y + 1.6, R.cz];
+      out.push({ id: H.id, room: R.id, specs: [0, 1.5708, 3.1416, 4.7124].map((yw) => e.concat([R.cx + Math.sin(yw) * 6, R.y + 1.55, R.cz + Math.cos(yw) * 6, 70])) }); } }
+  return out; }"""
+# fix6: interiorcheck's OWN views of the rooms it read darkest (the verifier of fix5: the watch house seen from this gate's 4 level headings read
+# 28.0 / 255 on the R2A merge while interiorcheck read 21.39 there - not the same cameras). A separate Chrome per entry stands up exactly what
+# interiorcheck does (PRACTICE match, seed 7, its page probe probe_interior*.js, the door-leaf adapter on the match source, its seeded 10-house
+# sample) and renders the watched houses through its own views(): every room entrance (door / stair top) and the room centre x 4 headings, from the
+# player's third-person camera. Watched: interiorcheck's darkest rooms on the R2A merge (match isla_viva volcano_rim@p54 f0r1 / f0r2; ashgrid's
+# downtown houses of its sample), housegen ashgrid s7h2 (f0r3 23.25 / dark 0.48) and the fixture house (kitchen dark 0.36).
+IC_WATCH = [("match", "isla_viva", ["volcano_rim@p54"]), ("match", "ashgrid", ["downtown@p4", "downtown@p27", "downtown@p44"]),
+            ("housegen", "ashgrid", ["s7h2"]), ("fixture", "ashgrid", None)]          # None = every injected house
+
+
+def part_icwatch(args, plant, v, shots):
+    import interiorcheck as IC
+    out = []
+    for src, map_id, ids in IC_WATCH:
+        with C.Session(args, "w10_waterlook_ic") as s:
+            plant(s)
+            s.boot()
+            s.start_match(mode="practice", seed=SEED, map_id=map_id, guard=True)
+            s.freeze_loop()
+            s.js("() => { const p = window.__LC__.W.player; return !!p; }")
+            s.js(IC.read(IC.LIB)); s.js(IC.read(IC.FIX))
+            if os.path.exists(IC.HGA):
+                s.js(IC.read(IC.HGA))
+            s.js(IC.read(IC.PAGE))
+            setup = s.js("(o) => window.__LCINT_PAGE__.setup(o)", {"source": src, "plant": None, "seed": SEED, "exposeRecords": False})
+            if setup and setup.get("error"):
+                out.append({"src": src, "map": map_id, "error": setup["error"]})
+                continue
+            if src == "match":
+                s.js("(o) => (" + IC.LEAF_JS + ")(o)", {"plant": None, "layer": IC.LEAF_LAYER})
+            hl = s.js("(o) => window.__LCINT_PAGE__.houses(o)", {"max": 10, "seed": SEED})
+            lst = [h["id"] for h in (hl.get("list") or [])]
+            for i, hid in enumerate(lst):
+                if ids is not None and hid not in ids:
+                    continue
+                vw = s.js("([i, n]) => window.__LCINT_PAGE__.views(i, { shots: n })", [i, 2])
+                for k, sh in enumerate(vw.pop("shots", [])):
+                    save(sh["url"], shots, "ic_%s_%s_%s.png" % (src, map_id, sh["name"].replace("@", "_").replace(".", "_")))
+                for e in vw.get("entrances", []) + vw.get("centres", []):
+                    out.append({"src": src, "map": map_id, "house": hid, "room": e["room"], "view": e.get("from") or e.get("yaw"),
+                                "mean": e["luma"]["mean"], "dark": e["luma"]["dark"]})
+            got = sorted(set(o["house"] for o in out if o.get("src") == src and o.get("map") == map_id and o.get("house")))
+            miss = [h for h in (ids or []) if h not in got] if ids else ([] if got else ["(no injected house)"])
+            if miss:
+                out.append({"src": src, "map": map_id, "error": "watched house(s) not in interiorcheck's sample: %s (sample %s)" % (miss, lst)})
+            print("  [icwatch %s %s] %d views of %s; darkest %s" % (src, map_id, sum(1 for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o), got,
+                  sorted([(o["mean"], o["dark"], o["house"], o["room"], o["view"]) for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o])[:2]), flush=True)
+    return out
+
+
 ROOMS_JS = r"""([poi]) => { const W = window.__LC__.W, M = W.map; const P = M.pois.find((p) => p.id === poi) || M.pois[0]; const hs = (M.houses || []).map((H, i) => [H, i]);
   hs.sort((a, b) => Math.hypot(a[0].cx - P.x, a[0].cz - P.z) - Math.hypot(b[0].cx - P.x, b[0].cz - P.z));
   const out = [];
   for (const [H, i] of hs) { if (out.length >= 3) break; let best = null;
     for (const R of H.rooms || []) { if (R.floor !== 0 || !(R.area >= 9)) continue; if (!best || R.area > best.area) best = R; }
     if (!best) continue; const R = best;
-    out.push({ house: i, id: H.id, room: R.id, kind: R.kind, spec: [R.cx, R.y + 1.6, R.cz, R.x1 - 0.3, R.y + 1.1, R.z1 - 0.3, 70] }); }
+    out.push({ house: i, id: H.id, room: R.id, kind: R.kind, spec: [R.cx, R.y + 1.6, R.cz, R.x1 - 0.3, R.y + 1.1, R.z1 - 0.3, 70],
+      more: [[R.cx, R.y + 1.6, R.cz, R.x0 + 0.3, R.y + 1.1, R.z0 + 0.3, 70], [R.cx, R.y + 1.6, R.cz, R.x0 + 0.3, R.y + 1.1, R.z1 - 0.3, 70],
+             [R.cx, R.y + 1.6, R.cz, R.x1 - 0.3, R.y + 1.1, R.z0 + 0.3, 70]] }); }
   return out; }"""
 
 # the blade layer's placement in JS (the vertex shader's: world cell grid, hash jitter, ground lattice, mask): cards within r m of (x, z) whose
@@ -446,13 +518,39 @@ def part_map(s, v, R, map_id, shots, want, interiors=True):
                     M["wetDrop"]["framePct"] = round(float((dv > 0.02).mean() * 100), 3)          # the whole live frame: land AND seabed through the water
                     M["wetDrop"]["seabedPct"] = round(float(((dv > 0.02) & ~land).mean() * 100), 3)
                     Image.fromarray(np.concatenate([Ow, Fw], axis=0)[..., :3].astype(np.uint8)).save(os.path.join(shots, "%s_drop_wet_on_off.png" % tag))
+            # fix5: the street at eye height (the shotsheet's street view): the road in the lower third of the frame is mostly in the buildings' shadow
+            # there. Its luminance floor - the shadow keeps its tone and detail, not a black band (the R2A light at merge: Savanna road 45 % under 16 / 255). Shot AFTER the drop
+            # view's own renders: the wet-sand A/B re-renders the drop spec and compares it to the first drop shot
+            sspec = s.js(SS.SPEC_JS, ["street", {"dropAt": SS.DEF_DROP[map_id], "streetAt": SS.DEF_STREET[map_id], "plant": None}])
+            s.js(SS.UNPIN_JS)
+            if sspec:
+                rs = shoot(s, sspec, shots, "%s_street" % tag, settle=VIEW_T)
+                Ls = lum(rs["A"]) * 255.0
+                road = Ls[Ls.shape[0] * 2 // 3:]
+                M["street"] = {"p5": round(float(np.percentile(road, 5)), 2), "p10": round(float(np.percentile(road, 10)), 2), "mean": round(float(road.mean()), 2),
+                               "dark": round(float((road < 16.0).mean()), 4)}
         if interiors:
             rooms = s.js(ROOMS_JS, [SS.DEF_DROP[map_id]])
             im = []
             for i, rm in enumerate(rooms):
                 r = shoot(s, rm["spec"], shots, "%s_room%d" % (tag, i), settle=VIEW_T)
-                im.append({"house": rm["id"], "mean": round(float(lum(r["A"]).mean()), 4)})
+                L0 = lum(r["A"]) * 255.0
+                e = {"house": rm["id"], "mean": round(float(L0.mean() / 255.0), 4), "views": [{"mean": round(float(L0.mean()), 2), "dark": round(float((L0 < 16.0).mean()), 4)}]}
+                # fix5: interiorcheck's light numbers (mean luma >= 25 / 255, <= 30 % of the pixels under 16 / 255) on every view: the first view (to the
+                # room's far corner, the one the base ratio compares) plus the room seen from its far corner back toward the near one and two side headings
+                for j, sp2 in enumerate(rm.get("more") or []):
+                    r2 = shoot(s, sp2, shots, "%s_room%d_%d" % (tag, i, j + 1), settle=VIEW_T)
+                    L2 = lum(r2["A"]) * 255.0
+                    e["views"].append({"mean": round(float(L2.mean()), 2), "dark": round(float((L2 < 16.0).mean()), 4)})
+                im.append(e)
             M["interiors"] = im
+            wv = []
+            for wr in s.js(WATCH_JS, [WATCH_HOUSES.get(map_id, [])]) or []:
+                for j, sp2 in enumerate(wr["specs"]):
+                    r2 = shoot(s, sp2, shots, "%s_watch_%s_%d" % (tag, wr["room"].replace("@", "_").replace(".", "_"), j), settle=VIEW_T)
+                    L2 = lum(r2["A"]) * 255.0
+                    wv.append({"house": wr["id"], "room": wr["room"], "view": j, "mean": round(float(L2.mean()), 2), "dark": round(float((L2 < 16.0).mean()), 4)})
+            M["interiorsWatch"] = {"want": WATCH_HOUSES.get(map_id, []), "views": wv}
     # ---- grass: density at the ground camera + the blade A/B in the low ground view
     if "grass" in want and cams.get("_ground"):
         g = s.js(GRASSSPOT_JS, [cams["_ground"]["x"], cams["_ground"]["z"], 30.0]) or cams["_ground"]
@@ -783,6 +881,8 @@ def main():
                     s.step_frames(6, 1 / 30, render=True)
                     progs.append(["isla_viva %s" % tier, p0, L.programs(s)])
                     diag.append(s.diagnostics())
+        if "light" in want:
+            R["icWatch"] = part_icwatch(args, plant, v, shots)
         R["programs"] = progs
         # ---------------- base numbers
         base = None
@@ -861,6 +961,14 @@ def main():
                 v.check("light: wet sand from the air, live frame - the wet-sand term darkens <= 6 % of the whole drop view and <= 1 % of it under the water (a thin swash line; fix3's seabed term: 47.1 / 42.0 %)",
                         all(x.get("framePct") is not None and x["framePct"] <= 6.0 and x["seabedPct"] <= 1.0 for x in wd.values()),
                         {m: {k: x.get(k) for k in ("framePct", "seabedPct")} for m, x in wd.items()}, "<= 6 % frame, <= 1 % seabed")
+            st = {m: R.get(m, {}).get("street") for m in maps}
+            if not all(st.values()):
+                v.cnj("light: shadowed road", "no street view on %s" % [m for m, x in st.items() if not x])
+            else:
+                # fix5: the street view's road (lower third; the buildings' shadow lies across it): a luminance floor - p5 >= 12 / 255 and <= 10 % of it
+                # under 16 / 255 (the R1 base: Savanna p5 21.8, 0.1 %; the R2A merge: p5 2.1, 44.9 % = a black band with no detail)
+                v.check("light: shadowed road - the street view's road (lower third) keeps a luminance floor: p5 >= 12 / 255 and <= 10 % of it under 16 / 255 (every map)",
+                        all(x["p5"] >= 12.0 and x["dark"] <= 0.10 for x in st.values()), st, "p5 >= 12, dark <= 0.10")
             se = {m: R.get(m, {}).get("seaEdge") for m in maps if (R.get(m, {}).get("seaEdge") or {}).get("n", 0) >= 8}
             if not se:
                 v.cnj("light: far-sea edge", "no drop view shows >= 8 points of the map edge over water: %s" % {m: R.get(m, {}).get("seaEdge") for m in maps})
@@ -883,6 +991,22 @@ def main():
             else:
                 v.check("light: interiors (every map, 3 houses each) mean luminance >= 0.9 x the base's", all(x["ratio"] >= 0.9 for x in rows.values()),
                         rows, ">= 0.9x every map")
+                # fix5: the mean ratio alone let the R2A merge through while interiorcheck failed (darkest view 21.39 / 255, dark share 0.36-0.48): every
+                # view of every room is judged on interiorcheck's own numbers too - mean luma >= 25 / 255 and <= 30 % of its pixels under 16 / 255
+                vw = [(m, x["house"], j, w) for m in maps for x in (R.get(m, {}).get("interiors") or []) for j, w in enumerate(x.get("views") or [])]
+                vw += [(m, "%s %s" % (w["house"], w["room"]), w["view"], w) for m in maps for w in ((R.get(m, {}).get("interiorsWatch") or {}).get("views") or [])]
+                wmis = [m for m in maps if (R.get(m, {}).get("interiorsWatch") or {}).get("want") and not R[m]["interiorsWatch"]["views"]]
+                icw = R.get("icWatch") or []
+                vw += [(w["map"], "interiorcheck %s %s %s" % (w["src"], w["house"], w["room"]), w["view"], w) for w in icw if "mean" in w]
+                wmis += [w["error"] for w in icw if "error" in w] or ([] if icw else ["interiorcheck views: none rendered"])
+                bad = [q for q in vw if q[3]["mean"] < 25.0 or q[3]["dark"] > 0.30]
+                worst = sorted(vw, key=lambda q: q[3]["mean"])[:3]
+                wdk = sorted(vw, key=lambda q: -q[3]["dark"])[:3]
+                if not vw or wmis:
+                    v.cnj("light: interiors darkest view", "no per-view numbers (a build measured before fix5) or a watch house not found: %s" % wmis)
+                else:
+                    v.check("light: interiors darkest view - every view of every room (4 headings, 3 houses per map + the watch houses' ground-floor rooms + interiorcheck's own views of its darkest houses: match isla_viva volcano_rim@p54, ashgrid downtown, housegen s7h2, the fixture) mean luma >= 25 / 255 and dark share (< 16 / 255) <= 30 % (interiorcheck's bar)",
+                            not bad, {"views": len(vw), "bad": bad[:6], "darkestMean": worst, "darkestShare": wdk}, ">= 25 / 255, <= 0.30")
         if "grass" in want:
             gr = {m: R.get(m, {}).get("grass") for m in maps}
             ok = all(x and x.get("perM2") is not None and x["perM2"] >= 0.8 and x.get("bladePixPct", 0) >= 8.0 for x in gr.values())
