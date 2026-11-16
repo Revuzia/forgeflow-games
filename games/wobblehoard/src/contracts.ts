@@ -486,18 +486,30 @@ export interface DebugHook {
  * Contracts carry numbers, strings and typed arrays only. The id tables (places, things, zone kinds, emotes, expressions, syllables,
  * flavours, prop sounds, event kinds, flag bits) are VALUES in src/data/places.ts, src/data/life.ts and src/data/quests.ts, so a new
  * place, thing or icon is a data change, never a contract change. Hot-path members take numbers or caller-owned typed arrays and return
- * numbers or booleans (no object per call), the zero-allocation rule of softbody.ts lines 3-7.
+ * numbers or booleans (no object per call), the zero-allocation rule of softbody.ts lines 3-7. The two audio members that take a parameter
+ * object (SquishAudio.creature and SquishAudio.prop) are called with ONE object (and one phrase array) that the caller allocates once and
+ * reuses for every call: audio copies what it needs during the call and never keeps a reference to the object or its arrays (AU-11).
+ * Revision 3 (2026-11-15, after the adversarial review; PLAYGROUND_BUILD.md 2 D-60..D-84 and 23): auto on body bumps, contactSlot / other /
+ * contacts, scootTo, sleep, the prop-to-thing map and prop order, strike causes, visibleTable, LIFE on sim time only, thingId / zoneThing /
+ * patchThing, LifeIntents.e, the part index and the autonomy-off flag in the play-event ring.
  */
 
 /* ── PLAYGROUND physics (src/physics; PLAYGROUND_BUILD.md 8) ── */
 
 export interface SoftEvent {
-  /** PLAYGROUND: true when the player did not cause it: a LIFE hop, a spring-pad bounce, a prop launch, a fall the player did not
-   *  throw. Physics sets it on every 'land' and every prop 'bump' UNLESS the body was thrown by the player (a carry released, a toss)
-   *  since its last landing. The shell sends auto events to the attention budget, never to feedback.ts and never to collection.feed. */
+  /** PLAYGROUND: true when the player did not cause it: a LIFE hop or scoot, a spring-pad bounce, a prop launch, a fall the player did
+   *  not throw, a bump between two bodies the player is not holding. Physics sets it on every 'land', every prop 'bump' AND every
+   *  body-to-body 'bump' UNLESS the body (for a body-to-body bump: either of the two bodies) is HELD (fingers, a grab, a carry or a lock)
+   *  or was thrown by the player (a carry released, a toss) since its last landing. A body bump always has intensity >= 0.117 (it fires
+   *  above 0.35 m/s, intensity = speed / 3), so without this flag feedback.ts would play a bump sound and haptics.pop() for LIFE's own
+   *  boop. The shell sends EVERY auto event (land, prop bump, body bump) to the attention budget only (budgeted soft sounds, never a
+   *  haptic, never a shake), never to feedback.ts and never to collection.feed (PLAYGROUND_BUILD.md 8.8, SH-06, EC-03). */
   auto?: boolean;
   /** PLAYGROUND: this 'bump' was against a prop: the prop's index in the bound PropWorldLike. Absent (or -1) = another body. */
   prop?: number;
+  /** PLAYGROUND: on a body-to-body 'bump', the partner's contactSlot (SoftBodyLike.contactSlot); -1 or absent when it has none or the bump
+   *  was against a prop. The shell fills LifeSnapshot.bumpA / bumpB from it. */
+  other?: number;
 }
 
 export interface SoftMetrics {
@@ -512,14 +524,24 @@ export interface SoftMetrics {
   /** LOCK.md section 3 (planned for physics round 3; PHYS fills it): locked lobes on this body. Declared here because PLAYGROUND's
    *  touch gate counts a lock as a touch: HELD = fingers > 0 || grabbed || carried || (locked ?? 0) > 0. */
   locked?: number;
+  /** PLAYGROUND: putty, mochi dough or bead squeeze whose plastic memory has not converged (max |MEM - Q| over 0.02 x restRadius): a
+   *  dent, a Stamp print or a stud print is still healing, so setSquash is refused and hop returns false (LIFE.md 5.4). The shell copies
+   *  it into the LifeSnapshot flag MEMORY_BUSY. Always false (or absent) for the other nine families. */
+  memoryBusy?: boolean;
+  /** PLAYGROUND: a bit per contactSlot (bit k = the body with contactSlot k) of the bodies this body was in contact with in its last
+   *  collide; 0 = none. The shell counts the touching pairs of LifeSnapshot.units from it (a pair touches when either body reports it). */
+  contacts?: number;
 }
 
 export interface SoftBodyLike {
   /** PLAYGROUND: 8 eased per-body modifiers written by the shell (on change, at most 10 Hz), eased by physics over 0.3 s:
    *  [0] grip (x tableMu), [1] glue (x tack layer), [2] peel (x peel damping), [3] drag (x the baked air drag; ice needs it low),
-   *  [4] density relative to water (water zones only: g_eff = g x (1 - submerged / density); 1 = today's behaviour),
+   *  [4] density relative to water (water zones only: g_eff = g x (1 - submerged / density); 1 = today's behaviour; the shell writes it
+   *  for EVERY family from FAMILY_REACT, a soaked foam lerping to its soaked density, so the pop dome floats as the float table says),
    *  [5] field catch (wind and updraft act ONLY on an airborne or floating body, scaled by this), [6] bounce gain (spring pads),
-   *  [7] reserved (0). All 1 except [7] = today's behaviour bit for bit. Never a stiffness or damping change (PLACES.md 1). */
+   *  [7] reserved (0). All 1 except [7] = today's behaviour bit for bit. Never a stiffness or damping change (PLACES.md 1).
+   *  A write wakes a sleeping body only when a modifier that acts where the body is changes by more than 0.02 ([0]..[3] on the ground or a
+   *  prop face, [4] only inside a water zone, [5] only in wind or an updraft, [6] only on a pad); otherwise it applies at the next wake. */
   readonly mods?: Float64Array;
   /** PLAYGROUND: place bounds that replace the home-spot corral for this body (the same brake, glide back and rim bounce, about the
    *  place's area instead of the body's home). shape 0 = disc (a = radius), 1 = rounded rectangle (a, b = half sizes, round = corner
@@ -532,8 +554,16 @@ export interface SoftBodyLike {
   setPropWorld?(w: PropWorldLike | null): void;
   /** PLAYGROUND LIFE driver: a volume-preserving goal squash (y x s, x and z x 1 / sqrt(s)), eased with time constant tauS (>= 0.08 s).
    *  s 0.75..1.12; 1 releases it. Paused and eased out within 0.12 s while the body is HELD (see SoftMetrics.locked); ceremony drivers
-   *  are not affected. Refused (no effect) for putty, mochi dough and bead squeeze while their plastic memory has not converged. */
+   *  are not affected. Refused (no effect) for putty, mochi dough and bead squeeze while their plastic memory has not converged. A call
+   *  with the same s and tauS as the one in force is a no-op and never wakes a sleeping body (a converged pose can sleep). */
   setSquash?(s: number, tauS: number): void;
+  /** PLAYGROUND LIFE driver, the ONLY one LIFE travels with (ceremonies and the cut keep moveTo, which is never touch-gated): a horizontal
+   *  glide of the centre toward (x, z) at `speed` m/s (0.04..0.5), eased in and out over 0.12 s, a rigid translation like moveTo (no
+   *  momentum, the table carries the height), the corral off while it acts (as for moveTo). Paused and eased out within 0.12 s while the
+   *  body is HELD; it yields to moveTo (no effect while a ceremony or the cut drives the body). NaN x releases it. A glide at 0.04 m/s or
+   *  slower into a sleeping partner never wakes it (the wake speed is 0.05 m/s, PLAYGROUND_BUILD.md 8.6): the contact approach of a
+   *  nuzzle, a comfort or a pile. Wakes this body. Returns false (and does nothing) when HELD or a ceremony driver is on. */
+  scootTo?(x: number, z: number, speed: number): boolean;
   /** PLAYGROUND LIFE driver: a hop: an impulse with the family's glue and peel damping suspended for 10 substeps, so the same impulse
    *  leaves the ground at the same height in every family. Allowed only while supported (by the table or an up-facing prop face); on a
    *  moving prop the horizontal part is relative to the prop's surface velocity. vy is clamped to the slice's hop cap (S1: 0.84 m/s,
@@ -548,6 +578,15 @@ export interface SoftBodyLike {
   sleepEnabled?: boolean;
   /** PLAYGROUND: wake now (a LIFE action is about to drive the body). Waking never moves a particle. */
   wake?(): void;
+  /** PLAYGROUND: sleep now, if the body passes the rest test's bounds this instant (kinetic < 0.02, centre speed < 0.01 m/s, supported by
+   *  the table or a STATIC prop face, no driver, timer or easing active); returns false and changes nothing otherwise, on a moving prop, in
+   *  float mode, or without sleepEnabled. The shell uses it for party bodies over the awake budget (LIFE.md 10.3) and for bodies spawned at
+   *  rest on travel. Zero position change. */
+  sleep?(): boolean;
+  /** PLAYGROUND: the shell's slot for this body, 0..31, written at spawn, cut and join (-1 or absent = none). It keys the bump memory (32
+   *  entries, so two partners never share one, PH-19; today's key is a per-process bodyId & 15) and is the index SoftEvent.other and
+   *  SoftMetrics.contacts use. */
+  contactSlot?: number;
 }
 
 /** PLAYGROUND: one place's props (rigid things built from the mechanism library, PLACES.md 2) and zones (water, wind, updraft, warm,
@@ -556,10 +595,19 @@ export interface SoftBodyLike {
  *  substep k (as fingertips advance), so a prop never jumps; the world integrates the accumulated impulses ONCE per frame after every
  *  body stepped (a one-frame lag, stable for the damped 1-DOF joints and the one clamped free ball the library allows). */
 export interface PropWorldLike {
-  /** Props in this world. */
+  /** Props in this world. THE PROP ORDER (every lane uses it): every prop of the place's things[0] (its parts in ThingDef order: the
+   *  chimes, ring segments, lanterns or crystals one by one, a frame or post after the parts it holds), then things[1] and so on, and the
+   *  walls and parapets last. A thing that has not arrived yet (Home's things arrive one by one) has its props built and parked (no
+   *  contact, propThing still set). */
   readonly count: number;
-  /** 8 floats per prop, rewritten by endFrame(): x, y, z, qx, qy, qz, qw, state (hinge angle in radians, slider offset in m, or ball
-   *  speed in m/s). The stage binds this array once (StageLike.bindProps) and reads it in update(); LIFE reads it through the shell. */
+  /** Per prop: the place-local index of the ThingDef it belongs to (PlaceDef.things order); -1 for a wall or a parapet. */
+  readonly propThing: Int16Array;
+  /** Per prop: its part index within that thing (0..7 in ThingDef order; 0 for a one-part thing), or the wall's index for a wall. A USE
+   *  RING record carries this part index in PlayEventRing.v (QUESTS.md 5, distinct 'part'). */
+  readonly propPart: Uint8Array;
+  /** 8 floats per prop in the prop order above, rewritten by endFrame(): x, y, z, qx, qy, qz, qw, state (hinge angle in radians, slider
+   *  offset in m, or ball speed in m/s). The stage binds this array once (StageLike.bindProps) and reads it in update(); LIFE reads it
+   *  through the shell. */
   readonly poses: Float32Array;
   /** Zones in this world, and one on/off byte per zone (a switch thing toggles its zone: the tap, the magnet, the echo stone). */
   readonly zoneCount: number;
@@ -577,8 +625,10 @@ export interface PropWorldLike {
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number;
   /** A player's tap or flick on a prop: an impulse in m/s at its centre (a ball rolls, a seesaw end dips, a chime swings). */
   poke(prop: number, ix: number, iy: number, iz: number): void;
-  /** Struck chimes, bells, crystals and pads since the last call, as triples [prop, intensity 0..1, auto 0 | 1] into `out`; returns the
-   *  number of triples written (at most out.length / 3). Drives prop sounds and Use events. */
+  /** Struck chimes, bells, crystals and pads since the last call, as quads [prop, intensity 0..1, cause, slot] into `out`: cause 0 = the
+   *  player (a poke or a tap), 1 = a body (slot = that body's contactSlot, -1 when it has none), 2 = the weather (a gust, a wave; slot -1).
+   *  Returns the number of quads written (at most out.length / 4). Drives prop sounds (all causes) and USE events (causes 0 and 1 only: a
+   *  weather strike makes a sound and never a USE, QUESTS.md 4). */
   drainStrikes(out: Float32Array): number;
   /** For the queued Stamp and Roll tools (FUN.md 1) and the player's own pushes: drive prop `prop` kinematically (a tool shape the player
    *  moves) to this pose and velocity for the coming frame. Only props built with the kinematic flag accept it. */
@@ -602,11 +652,19 @@ export interface StageLike {
    *  ground, backdrop, weather, lights (and the jelly light uniforms and white balance), environment panels (the old cube is disposed)
    *  and the prop kit. Returns false when the place is not loaded. */
   setPlace?(id: string | null, fadeS: number): boolean;
-  /** PLAYGROUND: bind the PropWorldLike poses array (8 floats per prop, place order) once per travel; the stage reads it in update(). */
+  /** PLAYGROUND: bind the PropWorldLike poses array (8 floats per prop, in PropWorldLike's prop order; propThing and propPart say which
+   *  thing and part each pose drives) once per travel; the stage reads it in update(). */
   bindProps?(poses: Float32Array | null, count: number): void;
-  /** PLAYGROUND: frame the camera on the whole play bounds of the place (or of Home's mat). Autonomy never moves the camera: framing
-   *  uses these bounds, never live LIFE positions; the player still orbits and zooms. */
+  /** PLAYGROUND: frame the camera on the whole play bounds of the place layout in use (the wide layout, or the tall one on a frame with
+   *  aspect under 0.9, PLACES.md P7) so that a body anywhere inside them, its bubble included, stays inside the HUD safe insets
+   *  (setSafeInsets). Not used at Home (Home frames the mat slots in use, as today). Autonomy never moves the camera: framing uses these
+   *  bounds, never live LIFE positions; the player still orbits and zooms. */
   setPlayBounds?(cx: number, cz: number, hx: number, hz: number): void;
+  /** PLAYGROUND (Home): the table area visible inside the frame and outside the HUD safe insets at the REST framing (yaw 0, zoom 1, no
+   *  ceremony push) of the mat slots in use, as the largest ground box inside it, [xMin, zMin, xMax, zMax] in metres into out[0..3]. The
+   *  shell sets Home's LIFE bounds and the Felt Ball's bounds from it and lets a Home thing arrive only when its footprint is inside it
+   *  (PLACES.md 4.1). Reads the framing, never moves the camera. Zero allocation; false before the first frame. */
+  visibleTable?(out: Float32Array): boolean;
   /** PLAYGROUND: prop footprints (x, z, r triples) the meter-full capsule must land clear of. */
   setObstacles?(xzr: Float32Array | null, n: number): void;
   /** PLAYGROUND: where a body's eyes look (world point) with weight 0..1; weight 0 hands them back to the pointer and the idle wander. The
@@ -664,12 +722,17 @@ export interface SquishAudio {
    *  flavour 0..5 = gel, sticky, foam, beads, dough, firm (audio/cut.ts FAMILY_FLAVOUR); register 0 whole, 1 piece (one octave up, 7 dB
    *  quieter); pitch = pitchRatio(genome) (snapped to D major pentatonic inside audio); pan -1..1; level 0..1 (distance from the frame
    *  centre); group 1..3 = one group voice of that many detuned oscillators (pieces, never N voices); echo = one scheduled repeat
-   *  (+220 ms, -12 dB, no DelayNode); at = AudioContext time to start (0 = now; the shell passes a bar line from musicClock for harmony).
-   *  Never asks the music to make room (not in ROOM_KINDS), priority -1 (stolen before any player sound), its own rng stream, silent
-   *  during ceremonies and for 1 s after. Returns false when the backstop ChatterLimiter refuses it. */
+   *  (+220 ms, -12 dB, no DelayNode); at = AudioContext time to start (0 = now): the shell maps LIFE's sim-time start to the next eighth or
+   *  bar line of musicClock AFTER LIFE has decided (LIFE never sees the AudioContext clock; a sung note may be re-voiced onto the sounding
+   *  field's rest tones here, in audio, which changes no LIFE decision). Never asks the music to make room (not in ROOM_KINDS), priority -1
+   *  (stolen before any player sound), its own rng stream, silent during ceremonies and for 1 s after. The caller reuses one `p` object and
+   *  one `phrase` array for every call; audio copies what it needs during the call and keeps no reference (AU-11). Returns false when the
+   *  backstop ChatterLimiter refuses it. */
   creature?(p: { phrase: Float32Array; n: number; flavour: number; register: number; pitch: number; pan: number; level: number; group?: number; echo?: boolean; at?: number }): boolean;
   /** PLAYGROUND: the music as it SOUNDS now into out: [field index sounding (0 home, 1 lift, 2 dusk, 3 glow), bar start (AudioContext
-   *  time), bpm, AudioContext now, eighth-slot length s]. false before unlock or with the music off. */
+   *  time), bpm, AudioContext now, eighth-slot length s]. false before unlock or with the music off. The shell uses it ONLY for
+   *  creature()'s `at` and for the render sway phase it passes to setBodyPose; it never enters LifeSnapshot (it runs on the AudioContext
+   *  clock, which DebugHook.step does not advance: LIFE decides on sim time only, LIFE.md 8.4, SH-01). */
   musicClock?(out: Float64Array): boolean;
   /** PLAYGROUND: lazily import a place's ambience recipe (src/audio/places/<id>.ts); true when ready. */
   loadAmbience?(place: string): Promise<boolean>;
@@ -678,9 +741,12 @@ export interface SquishAudio {
   setAmbience?(p: { place?: string | null; on?: boolean; volume?: number }): void;
   /** PLAYGROUND: a thing's sound: kind id (src/data/places.ts PROP_SOUND: ball, creak, chime, splash, crunch, crackle, boing, bell, tick,
    *  kettle, rustle, whoosh), intensity 0..1, a D major pentatonic MIDI note for tuned things, pan, auto = moved by itself or by a squishy
-   *  (never makes room in the music; budgeted), key = prop index for held voices (a creaking rocker), held = 0..1 for a held voice. */
+   *  (never makes room in the music; budgeted), key = prop index for held voices (a creaking rocker), held = 0..1 for a held voice.
+   *  The caller reuses one `p` object; audio keeps no reference to it. */
   prop?(p: { kind: number; intensity: number; note?: number; pan?: number; auto: boolean; key?: number; held?: number }): void;
-  /** PLAYGROUND: the Music Box and the Singing Kettle tune: while it plays the music bed mutes its own mallets so two melodies never clash. */
+  /** PLAYGROUND: the Music Box tune (8 bars, 29.1 s at 66 BPM; at most one start per 40 s, a second tap stops it) and the Singing Kettle's
+   *  whistle (1 bar, 3.6 s; by itself every 45 to 90 s, never within 60 s of a Music Box tune): while one plays the music bed mutes its own
+   *  mallets so two melodies never clash. With no input, tunes sound at most 20% of a 10-minute cabin visit (AU-14). */
   musicBox?(p: { on: boolean; tune?: number }): void;
   /** PLAYGROUND: a place's music style (field weights and mallet timbre only; the key stays D and the tempo 66 BPM, so ceremonies and the
    *  whole-again run stay in tune). 'home' (the default) is bit-identical to today. */
@@ -691,7 +757,9 @@ export interface SquishAudio {
  * The five PLAYGROUND settings (chatter, ambience, autonomy, bubbleWords, bubblesInPhoto) are NOT declared here yet on purpose:
  * src/core/settings.ts resolveSettings() returns Required<Settings>, so a Settings key and its default must land in ONE change. The SHELL
  * lane adds them to `Settings` in this file together with SETTING_KEYS, OPTIONAL_UNITS / OPTIONAL_BOOLS, optionalDefaults and
- * resolveSettings (exact text: PLAYGROUND_BUILD.md 11.9). */
+ * resolveSettings, and raises SETTINGS_VERSION to 3 so an older v2 build carries the five keys through its saves instead of dropping
+ * them (settings.ts 8-9: unknown keys are kept only for a blob with v > 2); migration stays by absence (exact text: PLAYGROUND_BUILD.md
+ * 11.9). */
 
 export interface DebugHook {
   /** PLAYGROUND (dev only): brain states, needs, behaviour ids, the attention counters and the awake units, as plain JSON. */
@@ -724,10 +792,14 @@ export interface LifeSnapshot {
   /** No new LIFE motion: a ceremony, a cut neck or join, any non-Hand tool in hand, the Travel or Journal sheet open, the desktop Hoard
    *  holding input, a hidden tab. Gaze, expressions and needs keep working. */
   quiet: boolean;
-  /** Deterministic awake-cost units right now (LIFE.md 10.3: an awake whole 1.0, a sleeper 0.03, an awake piece 0.35, an awake pair in
-   *  contact +0.3). LIFE's motion gate reads this, never a measured frame time. */
+  /** Deterministic awake-cost units right now, in awake-whole equivalents (LIFE.md 10.3; the weights are the measured cost ratios of
+   *  PF-00, provisional: an awake whole 1.0, an awake piece 0.22, a sleeper 0.03, a touching pair of awake bodies +0.25; the pairs come
+   *  from SoftMetrics.contacts). LIFE's motion gate reads this, never a measured frame time. */
   units: number;
-  /** Music as it sounds (SquishAudio.musicClock): field index, on, the Music Box or kettle tune playing, beat phase 0..1. */
+  /** Music as LIFE may use it, ALL deterministic (never SquishAudio.musicClock, whose AudioContext clock DebugHook.step does not advance):
+   *  musicField = the place's music style's main field (src/data/places.ts), musicOn = the Music setting is on (not the audio unlock
+   *  state), musicBoxOn = the shell's own sim-time timer of a Music Box or kettle tune, beatPhase = (t x 66 / 60) mod 1, the 66 BPM grid
+   *  on sim time (a bar is 4 beats, 3.636 s). */
   musicField: number;
   musicOn: boolean;
   musicBoxOn: boolean;
@@ -749,19 +821,29 @@ export interface LifeSnapshot {
   /** Screen position 0..1 over the canvas; NaN when off screen. */
   sx: Float32Array;
   sy: Float32Array;
-  /** LIFE_FLAG bits (TOUCHED, CARRIED, LOCKED, ASLEEP, GROUNDED, ON_PROP, IN_WATER, AIRBORNE, TOSSED, NEW, VISIBLE, MEMORY_BUSY). */
+  /** LIFE_FLAG bits (TOUCHED, CARRIED, LOCKED, ASLEEP, GROUNDED, ON_PROP, IN_WATER, AIRBORNE, TOSSED, NEW, VISIBLE, MEMORY_BUSY, RIDE).
+   *  A character is HELD for its own brain when TOUCHED, CARRIED or LOCKED; "the player is touching" (the duck and the bubble stop of
+   *  LIFE.md 10.2) means some character is TOUCHED or CARRIED, never LOCKED alone. RIDE: the player set it on a ride (a carry or a toss
+   *  that came to rest on a ride prop, or carryTo), set by the shell and cleared after 20 s, at the end of its joint moment, or on a touch. */
   flags: Uint16Array;
   /** Zone kinds at the centre as bits (ZONE kind ids), submerged share 0..1, warmth glow dots 0..5 of the instance. */
   zoneMask: Uint16Array;
   submerged: Float32Array;
   warmth: Uint8Array;
-  /** Live things: count, centre x and z, a state number (hinge angle, slider offset, ball speed) and a busy byte (someone uses it). */
+  /** Per character: the place-global thing index (THING_IDS) owning the strongest zone at its centre (ThingDef.zone) and the ground patch
+   *  under its centre (ThingDef.patch); -1 = none. REACT events carry it as their thing (LIFE.md 4.2). */
+  zoneThing: Int16Array;
+  patchThing: Int16Array;
+  /** Live things: count (the things out NOW: a Home thing that has not arrived is not in the list), the place-global thing index of each
+   *  row (THING_IDS), centre x and z, a state number (hinge angle, slider offset, ball speed) and a busy byte (someone uses it). */
   nThings: number;
+  thingId: Int16Array;
   thingX: Float32Array;
   thingZ: Float32Array;
   thingState: Float32Array;
   thingBusy: Uint8Array;
-  /** Body-to-body contacts that STARTED since the last tick (character slots), and how many. */
+  /** Body-to-body contacts that STARTED since the last tick (character slots, from each 'bump' event's body and SoftEvent.other), and how
+   *  many. */
   nBumps: number;
   bumpA: Int8Array;
   bumpB: Int8Array;
@@ -772,17 +854,20 @@ export interface LifeSnapshot {
 /** What LIFE asks for (filled by lifeStep, applied by the shell host through its one arbiter: finger > cut and ceremony > LIFE). */
 export interface LifeIntents {
   n: number;
-  /** INTENT ids: GAZE, SCOOT (moveTo), HOP, SQUASH, POSE (render lean and sway), GLIDE (a nudge on a slick patch), SETTLE, EXPRESS,
-   *  EMOTE, VOICE, CANCEL, USE (ask the shell to perform a player-asked use). No intent kind can press, grab or lock: autonomy never pays. */
+  /** INTENT ids: GAZE, SCOOT (SoftBodyLike.scootTo, never moveTo), HOP, SQUASH, POSE (render lean and sway), GLIDE (a nudge on a slick
+   *  patch), SETTLE, EXPRESS, EMOTE, VOICE, CANCEL, USE (ask the shell to perform a player-asked use). No intent kind can press, grab or
+   *  lock: autonomy never pays. */
   kind: Uint8Array;
-  /** Character slot, start delay (s, the host queues at most 4 per character). */
+  /** Character slot, start delay (s of sim time, the host queues at most 4 per character). */
   who: Uint8Array;
   delayS: Float32Array;
-  /** Arguments by kind (target x, y, z, speed or amount, frequency, phase ...). */
+  /** Arguments by kind (SCOOT: target x, z, speed; HOP: vx, vy, vz; POSE: lean x, lean z, sway amplitude, sway Hz in a..d and the sway
+   *  phase in e, from sim time: the host may replace that phase with musicClock's beat for the render only ...). */
   a: Float32Array;
   b: Float32Array;
   c: Float32Array;
   d: Float32Array;
+  e: Float32Array;
   /** EMOTE: icon (EMOTE id), style (0 say, 1 think, 2 group), priority score (LIFE.md 10.2), group key (one bubble per piece group),
    *  dots (piece count 1..3). VOICE uses icon as the phrase id. */
   icon: Uint8Array;
@@ -793,8 +878,10 @@ export interface LifeIntents {
 }
 
 /** What happened in LIFE this tick, for the play-event ring (Social, Use, React, Wish, Discover, Pieces). LIFE_EV ids in src/data/life.ts;
- *  a and b are character slots (the host maps them to species and items), thing a thing index or -1, sub the kind's sub id, n2 the
- *  participants (pieces count). Capacity 32. */
+ *  a and b are character slots (the host maps them to species and items), thing a place-global thing index or -1 (a REACT carries the
+ *  zoneThing or patchThing of its character, or the source thing of the lifeAddLook that caused it: LIFE.md 4.2), sub the kind's sub id,
+ *  n2 the participants (pieces count); for a PIECES event n2 is the group's piece count at a new high for this visit: the pieces inside the
+ *  zone, or the pieces that used the thing within the last 4 s (LIFE.md 9). Capacity 32. */
 export interface LifeEvents {
   n: number;
   kind: Uint8Array;
@@ -824,11 +911,13 @@ export interface PlayEventRing {
   fam: Uint8Array;
   /** Participants (pieces count), 0 when it does not apply. */
   n2: Uint8Array;
-  /** 0 = by itself (LIFE or physics), 1 = by the player (a touch, a flick, a switch, a ride the player set up, a scripted "Go play with..."). */
+  /** 0 = by itself (LIFE or physics), 1 = by the player (a touch, a flick, a switch, a ride the player set up, a scripted "Go play with...",
+   *  a "Tap it yourself", a switch tapped next to a watching squishy). A weather strike is never a USE record. */
   by: Uint8Array;
-  /** Bit 0 a piece took part, bit 1 a best-friend pair, bit 2 a species new to the player. */
+  /** Bit 0 a piece took part, bit 1 a best-friend pair, bit 2 a species new to the player, bit 3 "Squishies move on their own" was off when
+   *  it happened (a by-SELF clause then accepts it from the player: QUESTS.md 5). */
   flag: Uint8Array;
-  /** A value the rule may need (a hold in s, a pull level, a glide in m). */
+  /** A value the rule may need (a hold in s, a pull level, a glide in m; for USE RING the struck part index 0..7, PropWorldLike.propPart). */
   v: Float32Array;
 }
 

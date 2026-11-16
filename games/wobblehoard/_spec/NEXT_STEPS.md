@@ -188,3 +188,23 @@ described honestly with per-account rate buckets added, and Tidy-up sub-keys can
 **Not done:** no code under `src` or `_harness`; nothing under `supabase/`; nothing deployed; no trademark or legal search; no run on a real
 Supabase project (PostgREST, RLS as Supabase configures it, the Edge Function, Deno); no UI; no load test. The physics, render and audio gate
 numbers in section 1 are copied from those lanes' own reports, not re-run here.
+
+---
+
+## 8. PLAYGROUND (owner request, 2026-11-15): pointer to its four specs
+
+The owner asked for places to take squishies to, things in each place that every squishy uses in its own way, several social squishies at once with
+little emotes and voices, cut pieces that join in calmly when many characters are out, and a real purpose. Nothing above is rewritten by it; its
+design, order and checks live in:
+- [`PLACES.md`](PLACES.md): Home plus nine places (the owner's beach, snowy mountain and log cabin among them), the 14-mechanism library, the family
+  reactions, favourites, best friends and the cost of a tenth place.
+- [`LIFE.md`](LIFE.md): personality, needs, looks, behaviours, social play, friendship and warmth, the 24 squishmoji, voices, pieces, the attention
+  budget with its caps, and the pure LIFE step interface.
+- [`QUESTS.md`](QUESTS.md): the Journal of 110 stamp quests over 11 chapters, wishes, 12 facts per species, keepsakes, the unlock order, onboarding,
+  day 2 / 7 / 30, the five gift squishies for life and the proof that the tested economy pace holds, and the screens.
+- [`PLAYGROUND_BUILD.md`](PLAYGROUND_BUILD.md): architecture, lanes and file ownership, the contract members (the PLAYGROUND block at the end of
+  `src/contracts.ts`), budgets (first load at most 1300 KB, total 1900 KB, 45 KB a place), slices S0 "Life at Home", S1 Hearthlog Cabin, S2 water and
+  cold, S3 fields and echo, the build order, the acceptance checks and the owner's veto list (its section 3).
+- The lane briefs are `_handoff/briefs/PG_DATA.md`, `PG_PHYS.md`, `PG_LIFE.md`, `PG_RENDER.md`, `PG_AUDIO.md`, `PG_QUESTS.md`, `PG_SHELL.md` and
+  `PG_VERIFY.md`. Changes to files outside those lanes (the G0 size gate in `vite.config.ts`, CONTRACT.md, CUT.md, DESIGN.md, `sim_economy.ts`, the
+  server op for gifts on signed-in accounts) are written as tasks T1 to T10 in PLAYGROUND_BUILD.md section 17.

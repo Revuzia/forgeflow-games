@@ -58,3 +58,18 @@ their numbers re-tuned for it (`DESIGN.md` 5.4).
 3. Snap (photo): shell and render only, no physics.
 4. Stamp and Roll: a physics round for kinematic tool shapes pressing the body (the plastic families' memory does the rest).
 5. Float: later.
+
+## 4. PLAYGROUND (owner request, 2026-11-15): where these activities go next
+
+The owner asked for places to take squishies to, things in them that each squishy uses in its own way, several squishies at once that are social
+(little emotes and voices), cut pieces that join in calmly, and a real purpose. The design is in four specs; this page is not rewritten by them:
+- [`PLACES.md`](PLACES.md): Home and nine places (Hearthlog Cabin, Ripple Shore, Frostbell Ridge, Rainleaf Garden, Fizzwell Tub, Cogwhistle Bench,
+  Lanternroof, Echo Hollow, Cloudloft), the 14-mechanism library and how every material family reacts.
+- [`LIFE.md`](LIFE.md): a small brain per squishy, social moments, the 24 squishmoji, the voices, pieces, and the attention budget.
+- [`QUESTS.md`](QUESTS.md): the Journal (stamps, facts, wishes, keepsakes, five gift squishies for life).
+- [`PLAYGROUND_BUILD.md`](PLAYGROUND_BUILD.md): architecture, lanes, contract, budgets, slices S0 to S3, checks and the owner's veto list.
+
+How it touches this page: **Float** (section 1) is fulfilled by Fizzwell Tub, a shallow bath place (PLAYGROUND_BUILD D-47; the Float setting
+itself stays for one squishy at Home). **Stamp and Roll** stay queued: any non-Hand tool quiets the squishies' own moves, memory families are never
+squashed by LIFE while a print heals, and the prop library keeps a kinematic shape for the tools (D-39). **XP** (section 2) is unchanged: autonomy
+pays nothing, the Journal pays no squish points or capsules, and the keyboard stretch pays like any stretch because the player does it.
