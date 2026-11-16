@@ -36,7 +36,7 @@ import type { CatalogT } from '../src/contracts/catalog.ts';
 import type { MatchSetup, SeatSetup, SimEvent } from '../src/contracts/sim.ts';
 import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
 import type { Entity } from '../src/sim/entity.ts';
-import { ORDER_MOVE, ORDER_ATTACK_MOVE } from '../src/sim/entity.ts';
+import { ORDER_MOVE, ORDER_ATTACK_MOVE, ORDER_ATTACK } from '../src/sim/entity.ts';
 import { createSim, type BotController } from '../src/sim/sim.ts';
 import { spawn } from 'node:child_process';
 import { ranked } from '../src/sim/effects.ts';
@@ -195,6 +195,7 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
   const partnerCd = new Map<number, number>();
   // dithering: per fighter, its positions over the last 12 s (3 Hz)
   const ditherCd = new Array<number>(n).fill(0);
+  const swungAt = new Array<number>(n).fill(0);
   // FRAY low-health contact episodes
   const lowEp = new Map<number, { t: number }>();
   const lowCd = new Map<number, number>();
@@ -202,7 +203,7 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
   // (owner_rulings 44, round 2) the designated peeler: a dive (enemy fighters took 20 % of a fighter's health in 2 s) is
   // answered by the support of its team within 8 m, else the nearest teammate within 12 m above 35 % health (not recalling)
   // — damage on a diver, a hold on a diver it cast, or a heal or shield on the partner; the latency is kept
-  const respEp = new Map<number, { start: number; resp: number; divers: Set<number>; lat: number; lane: boolean }>();
+  const respEp = new Map<number, { start: number; resp: number; divers: Set<number>; lat: number; com: number; lane: boolean }>();
   const respCd = new Map<number, number>();
   // (owner_rulings 44, round 2) the collapse: a lone enemy fighter seen in a team's half (in its Dialwood, or on a road),
   // outside its towers' cover, with two or more of the team free — 2+ of the team within 12 m of it (or it dead) within 15 s
@@ -261,14 +262,14 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
               if (burst2 >= dst.maxHp * 0.2) {
                 let best: Entity | null = null, bd = Infinity, sup: Entity | null = null;
                 for (const q of w.players) {
-                  const a = q.ent; if (!a || a === dst || !a.alive || a.team !== dst.team || a.hp < a.maxHp * 0.35 || a.stateOverride === 'recall') continue;
+                  const a = q.ent; if (!a || a === dst || !a.alive || a.team !== dst.team || a.hp < a.maxHp * 0.5 || a.stateOverride === 'recall') continue;
                   const d2 = (a.x - dst.x) ** 2 + (a.y - dst.y) ** 2;
                   if (d2 > 144) continue;
                   if (d2 <= 64 && ctl(q.player)?.support) sup = a;
                   if (d2 < bd) { bd = d2; best = a; }
                 }
                 const r = sup ?? best;
-                if (r) respEp.set(dst.id, { start: now, resp: r.id, divers: dv, lat: -1, lane: now < 840 });
+                if (r) respEp.set(dst.id, { start: now, resp: r.id, divers: dv, lat: -1, com: -1, lane: now < 840 });
                 else { add(C, 'resp.noneNear'); respCd.set(dst.id, now + 4); }
               }
             }
@@ -456,6 +457,12 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
       if (arr && Math.abs(arr[pc.si] - pc.back) < 1e-9 && Math.abs(pc.pre - pc.back) >= 1e-9 && !pc.after) add(C, 'cast.leaked');
       pendingCast.splice(i, 1);
     }
+    // (the designated peeler commits: an attack swing or an attack order on a diver)
+    for (const [, re] of respEp) {
+      if (re.com >= 0) continue;
+      const pe = w.entity(re.resp);
+      if (pe && pe.alive && (re.divers.has(pe.atkTarget) || (pe.order === ORDER_ATTACK && re.divers.has(pe.orderTarget)))) re.com = now - re.start;
+    }
     for (let p = 0; p < n; p++) {
       const c = ctl(p); if (!c || c.roamPhase === undefined) continue;
       const ph = c.mode === 'roam' ? c.roamPhase : '';
@@ -638,20 +645,28 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
         if (partner < 0) continue;
         partnerEp.set(v.id, { start: now, partner, divers: new Set(l ? l.map((x) => x.src) : []), resp: false });
       }
-      // (d) dithering: full health, no enemy fighter within 30 m, walked 15 m+ in 12 s yet ended within 5 m of where it was
+      // (d) dithering (owner_rulings 44, round 2: legs, not steps — last-hit footwork weaves a metre at a time and is not
+      // pacing): full health, no enemy fighter within 30 m, no swing at anything for the 12 s, and the walk splits into 3+
+      // legs of 4 m+ in alternating directions while it ends within 5 m of where it started
       for (let p = 0; p < n; p++) {
-        const f = players[p]?.ent; if (!f || !f.alive || f.hp < f.maxHp * 0.9 || now < ditherCd[p]) continue;
+        const f = players[p]?.ent; if (!f || !f.alive) { swungAt[p] = now; continue; }
+        if (f.atkTarget >= 0 || f.cast) swungAt[p] = now;
+        if (f.hp < f.maxHp * 0.9 || now < ditherCd[p] || now - swungAt[p] < 12) continue;
         const ph = posHist.get(f.id); if (!ph || ph.length < 36) continue;
         let near = false; for (const q of players) { const g = q.ent; if (g && g.alive && g.team !== f.team && (g.x - f.x) ** 2 + (g.y - f.y) ** 2 <= 30 * 30) { near = true; break; } }
         if (near) continue;
-        let walked = 0, rev = 0, pdx = 0, pdy = 0;
-        for (let i = 1; i < ph.length; i++) {
-          const dx = ph[i][0] - ph[i - 1][0], dy = ph[i][1] - ph[i - 1][1]; walked += Math.hypot(dx, dy);
-          if (dx * pdx + dy * pdy < -0.05) rev++;
-          if (Math.abs(dx) + Math.abs(dy) > 0.05) { pdx = dx; pdy = dy; }
+        // legs: runs of 1-s displacements (every 3rd sample) whose direction stays within 90 degrees
+        const legs: number[] = []; let lx = 0, ly = 0, len = 0;
+        for (let i = 3; i < ph.length; i += 3) {
+          const dx = ph[i][0] - ph[i - 3][0], dy = ph[i][1] - ph[i - 3][1], m = Math.hypot(dx, dy);
+          if (m < 0.5) continue;
+          if (len > 0 && dx * lx + dy * ly < 0) { legs.push(len); len = 0; }
+          lx = dx; ly = dy; len += m;
         }
+        if (len > 0) legs.push(len);
+        const big = legs.filter((x) => x >= 4).length;
         const net = Math.hypot(ph[ph.length - 1][0] - ph[0][0], ph[ph.length - 1][1] - ph[0][1]);
-        if (walked >= 15 && net <= 5 && rev >= 2 && f.stateOverride !== 'recall') { add(C, 'dither.episodes'); add(H('dither.mode'), modeOf(p)); ditherCd[p] = now + 12; }
+        if (big >= 3 && net <= 5 && f.stateOverride !== 'recall') { add(C, 'dither.episodes'); add(H('dither.mode'), modeOf(p)); ditherCd[p] = now + 12; }
       }
     }
     // ── owner_rulings 44, round 2 ──
@@ -661,6 +676,8 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
         if (now - re.start < 4) continue;
         add(C, re.lane ? 'resp.lane.episodes' : 'resp.episodes');
         if (re.lat >= 0) R(re.lane ? 'resp.lane.lat' : 'resp.lat', re.lat);
+        const cm = re.lat >= 0 && re.com >= 0 ? Math.min(re.lat, re.com) : Math.max(re.lat, re.com);
+        if (cm >= 0) R(re.lane ? 'resp.lane.com' : 'resp.com', cm);
         else { add(C, re.lane ? 'resp.lane.none' : 'resp.none'); const rp = ent2p(re.resp); if (rp >= 0) add(H('resp.noneMode'), modeOf(rp)); }
         respEp.delete(vid); respCd.set(vid, now + 4);
       }
@@ -918,15 +935,16 @@ function gates(runs: TierRun[]): string[] {
       if (pe >= 20) line(pr >= T.partner[diff], `${diff} peel: a dived carry's road partner within 6 m damages, holds or heals for it within 3 s`, `${pct(pr)} of ${pe}`, `≥ ${pct(T.partner[diff])}`);
       else rpt(`${diff} partner peel`, `${pct(pr)} of ${pe}`);
       const dith = sum(R, 'dither.episodes') / R.length;
-      line(dith <= T.dither[diff], `${diff} dithering: full health, no enemy within 30 m, 15 m walked for under 5 m gained in 12 s (per game)`, dith.toFixed(2), `≤ ${T.dither[diff]}`);
+      line(dith <= T.dither[diff], `${diff} dithering: full health, no enemy within 30 m, no swing in 12 s, 3+ back-and-forth legs of 4 m+ ending within 5 m (per game)`, dith.toFixed(2), `≤ ${T.dither[diff]}`);
       rpt(`${diff} objectives taken with one of ours against three of theirs within 22 m`, String(sum(R, 'obj.outnumbered')));
       // ── owner_rulings 44, round 2 ──
-      const lats = R.flatMap((g) => g.resp['resp.lat'] ?? []), rEp = sum(R, 'resp.episodes');
+      const lats = R.flatMap((g) => g.resp['resp.com'] ?? []), rEp = sum(R, 'resp.episodes');
       const lim = T.respLat[diff], inT = lats.filter((x) => x <= lim).length, rs = share(inT, rEp);
+      { const ld = R.flatMap((g) => g.resp['resp.lat'] ?? []); rpt(`${diff} designated peeler lands a blow, hold, heal or shield within ${lim} s (from 14:00)`, `${pct(share(ld.filter((x) => x <= lim).length, rEp))} of ${rEp}; within 3 s ${pct(share(ld.filter((x) => x <= 3).length, rEp))}`); }
       const rSe = Math.sqrt(rs * (1 - rs) / Math.max(1, rEp));
-      if (diff !== 'novice' && rEp >= 30) line(rs >= T.resp[diff], `${diff} peel: the designated peeler (support within 8 m, else the nearest teammate within 12 m) answers a dive within ${lim} s (from 14:00)`, `${pct(rs)} ± ${pct(rSe)} of ${rEp}`, `≥ ${pct(T.resp[diff])}`);
+      if (diff !== 'novice' && rEp >= 30) line(rs >= T.resp[diff], `${diff} peel: the designated peeler (support within 8 m, else the nearest teammate within 12 m above half health) turns on the diver (attack or attack order on it, hold, heal or shield) within ${lim} s (from 14:00)`, `${pct(rs)} ± ${pct(rSe)} of ${rEp}`, `≥ ${pct(T.resp[diff])}`);
       else rpt(`${diff} designated peeler answers within ${lim} s (from 14:00)`, `${pct(rs)} ± ${pct(rSe)} of ${rEp}`);
-      { const ll = R.flatMap((g) => g.resp['resp.lane.lat'] ?? []), le2 = sum(R, 'resp.lane.episodes'); rpt(`${diff} designated peeler answers within ${lim} s (laning phase)`, `${pct(share(ll.filter((x) => x <= lim).length, le2))} of ${le2}`); }
+      { const ll = R.flatMap((g) => g.resp['resp.lane.com'] ?? []), le2 = sum(R, 'resp.lane.episodes'); rpt(`${diff} designated peeler answers within ${lim} s (laning phase)`, `${pct(share(ll.filter((x) => x <= lim).length, le2))} of ${le2}`); }
       const cj = sum(R, 'col.j.episodes'), cr = sum(R, 'col.r.episodes'), cok = sum(R, 'col.j.ok') + sum(R, 'col.r.ok'), cs = share(cok, cj + cr);
       const cSe = Math.sqrt(cs * (1 - cs) / Math.max(1, cj + cr));
       if (diff === 'veteran' && cj + cr >= 20) line(cs >= T.collapse[diff], `${diff} sneak: a lone enemy seen 6 s in our Dialwood (3:00+) or on a road in our half (14:00+), out of its towers' cover, two of ours free: 2+ on it within 15 s`, `${pct(cs)} ± ${pct(cSe)} of ${cj + cr} (Dialwood ${pct(share(sum(R, 'col.j.ok'), cj))} of ${cj}, roads ${pct(share(sum(R, 'col.r.ok'), cr))} of ${cr})`, `≥ ${pct(T.collapse[diff])}`);

@@ -41,7 +41,7 @@ const ROW_GAP = 1.3, COL_GAP = 1.1;
  *  LANE_LOOK m ahead of its projection on the lane polyline (LANE_REJOIN × its distance off its column line when further
  *  out: a rejoin after a fight comes in at under ~34°), offset by its column slot (SLOT_GAP between columns, a partial
  *  last row centred); the attack-move is re-sent once the carrot moved LANE_REISSUE m */
-export const LANE_LOOK = 3.0;
+export const LANE_LOOK = 2.0;
 const LANE_REJOIN = 1.5;
 const LANE_REISSUE = 1;
 export const SLOT_GAP = 0.55;

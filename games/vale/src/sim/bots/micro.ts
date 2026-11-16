@@ -101,6 +101,8 @@ export abstract class BotBase {
   /** the structure outranks the fight target (endgame) */
   pSiegeFirst = false;
   pFarm = 0;
+  /** owner_rulings 44: clearing a wave off an own structure — every swing on the wave, no waiting on last hits */
+  pClear = false;
   pMonsters = false;
   pMonsterX = 0; pMonsterY = 0;
   pAggro = 0;
@@ -946,6 +948,9 @@ export abstract class BotBase {
       if (m) { this.attack(m); return; }
     }
     // 6. minions
+    // (owner_rulings 44: a defender clearing the wave off its structure hits the wave — the last-hit wait between swings
+    // left two fit defenders beside a Lantern that a stacked wave took)
+    if (this.pClear && e.atkWindup < 0) { const t = this.pushTarget(); if (t) { this.attack(t); return; } }
     if (this.pFarm > 0) {
       const lh = this.lastHitTarget();
       if (lh) {

@@ -12,12 +12,15 @@
 //          > 6 m from the far end, no forced movement (dash, knock, fear, taunt, hard CC)
 //   d      signed offset from the lane polyline, left of its travel +; off = d − its column slot
 // Bars (every map, road, team and 4 m arc bin; both scenarios):
-//   B1 wave centroid  mean off of a wave's free+clear Wicks outside a rejoin (B4) in a bin (waves with ≥ 15 samples there):
+//   B1 wave centroid  mean off of a wave's free+clear Wicks, not settling, in a bin (a wave: the Wicks of a road and
+//                     side passing the bin together, no 2 s gap; waves with ≥ 15 samples there):
 //                     median |.| ≤ 0.20 m, max ≤ 0.30 m (raw mean d, slots not taken off, is reported beside it)
-//   B2 single Wick    free+clear samples outside a rejoin: |off| p95 ≤ 0.6 m, max ≤ 1.2 m
+//   settling         a Wick that turns free (a fight over) with |off| > 0.3 m, until |off| ≤ 0.3 m or 3 + 2|off| m of
+//                    arc on: left out of B1 and B2 (its return is B4); one still off after that counts again
+//   B2 single Wick    free+clear samples, not settling: |off| p95 ≤ 0.6 m, max ≤ 1.2 m
 //   B3 no reversal    0 Wicks free+clear for a whole 0.5 s whose net move along the road is < −0.3 m
-//   B4 rejoin         a Wick turning free with |off| > 1 m: arc walked until |off| ≤ 0.5 m, p95 ≤ 6 m, max ≤ 9 m
-//                     (reported; episodes cut short by a new fight are dropped)
+//   B4 rejoin         a Wick turning free with |off| > 1 m: arc walked until |off| ≤ 0.5 m, p95 ≤ 6 m (max and
+//                     overshoots past the line reported; episodes cut short by a new fight are dropped)
 //   B5 timing         idle, waves 1-3: the first tick a Wick of the wave is within rim + 8 m of each tower of its road
 //                     (own towers: marching only), and first Wick-on-Wick damage per road: within ±0.5 s of BASE (the
 //                     values at c20d06630, before ruling 44). --record prints the table instead.
@@ -43,6 +46,7 @@ const MAPS = opt('maps', 'rift,bridge').split(',');
 const SCENS = opt('scen', 'idle,bots').split(',');
 const IDLE_MIN = Number(opt('idle-min', '8')), BOTS_MIN = Number(opt('bots-min', '14'));
 const RECORD = argv.includes('--record'), VERBOSE = argv.includes('--verbose');
+const SETTLE = 0.3, SETTLE_ARC = 3;
 const BIN = 4, SPAWN_SKIP = 16, END_SKIP = 6, CLEAR = 3, WIN = 15;
 const built = buildContent(defaultOptions({ check: true, allowMissingAssets: true, quiet: true }));
 if (!built.catalog) { console.log('SKIP content build failed'); process.exit(77); }
@@ -97,16 +101,17 @@ const pct = (a: number[], p: number): number => { if (!a.length) return NaN; con
 const q: Entity[] = [];
 
 interface Track { road: number; wave: number; slot: number; freeRun: number; hist: number[]; wasFree: boolean;
-  rj: { s0: number; off0: number; done: boolean } | null; lastS: number }
+  rj: { s0: number; off0: number; done: boolean } | null; lastS: number; settle: number; settleArc: number }
 interface Acc {
-  centroid: Map<string, Map<string, { off: number; d: number; n: number }>>;   // bin key → wave key → sums
+  centroid: Map<string, Map<string, { off: number; d: number; n: number; ids: Map<number, { n: number; off: number; fr: number; t: number }> }>>;   // bin key → wave key → sums
   single: Map<string, number[]>;                                                  // bin key → |off|
   rev: { key: string; at: string }[]; revIds: Set<string>;
   rejoin: number[]; rejoinWorst: string; rejoinOvershoot: number;
   timing: Map<string, number[]>;
+  grp: Map<string, { last: number; idx: number }>;
   samples: number;
 }
-const newAcc = (): Acc => ({ centroid: new Map(), single: new Map(), rev: [], revIds: new Set(), rejoin: [], rejoinWorst: '', rejoinOvershoot: 0, timing: new Map(), samples: 0 });
+const newAcc = (): Acc => ({ centroid: new Map(), single: new Map(), rev: [], revIds: new Set(), rejoin: [], rejoinWorst: '', rejoinOvershoot: 0, timing: new Map(), samples: 0, grp: new Map() });
 
 function freeOf(w: World, e: Entity): boolean {
   const m = minionState(e)!;
@@ -167,7 +172,7 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
         const p0 = m.path[0];
         const road = roads.findIndex((g) => { const a = e.team === 0 ? g.pts[0] : g.pts[g.pts.length - 1]; return a[0] === p0[0] && a[1] === p0[1]; });
         const mm = m as unknown as { slot?: number };
-        t = { road, wave: 0, slot: mm.slot ?? 0, freeRun: 0, hist: [], wasFree: false, rj: null, lastS: NaN };
+        t = { road, wave: 0, slot: mm.slot ?? 0, freeRun: 0, hist: [], wasFree: false, rj: null, lastS: NaN, settle: NaN, settleArc: 0 };
         // wave number from spawn time (first + (n − 1) × interval)
         const mw = w.rules.minionWaves!;
         t.wave = Math.round((e.spawnTime - mw.first) / mw.interval) + 1;
@@ -191,6 +196,9 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       const clear = free && clearOf(w, e) && sT > SPAWN_SKIP && sT < g.len - END_SKIP;
       // B4 rejoin episodes
       if (free && !t.wasFree && Math.abs(off) > 1) t.rj = { s0: sT, off0: off, done: false };
+      // settling back on its column after a fight (any |off| > SETTLE): out of B1/B2 until |off| ≤ SETTLE or SETTLE_ARC + 2|off| m on
+      if (free && !t.wasFree && Math.abs(off) > SETTLE) { t.settle = sT; t.settleArc = SETTLE_ARC + 2 * Math.abs(off); }
+      if (!free || Math.abs(off) <= SETTLE || sT - t.settle > t.settleArc) t.settle = NaN;
       if (!free && t.rj && !t.rj.done) t.rj = null;
       if (t.rj && free) {
         if (!t.rj.done && Math.abs(off) <= 0.5) {
@@ -204,6 +212,7 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
         }
       }
       t.wasFree = free;
+      t.freeRun = free ? t.freeRun + 1 : 0;
       // B3 reversal: free+clear for a whole 0.5 s window
       if (clear) { t.hist.push(sT); if (t.hist.length > WIN + 1) t.hist.shift(); } else t.hist.length = 0;
       if (t.hist.length === WIN + 1 && t.hist[WIN] - t.hist[0] < -0.3) {
@@ -213,12 +222,18 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       if (!clear) continue;
       acc.samples++;
       const bk = `${map}|${scen}|${g.id}|t${e.team}|s${Math.floor(sT / BIN) * BIN}`;
-      const inRejoin = !!t.rj && !t.rj.done;
+      const inRejoin = !Number.isNaN(t.settle);
       if (!inRejoin) { let b = acc.single.get(bk); if (!b) acc.single.set(bk, b = []); b.push(Math.abs(off)); }
       if (inRejoin) continue;
       let c = acc.centroid.get(bk); if (!c) acc.centroid.set(bk, c = new Map());
-      const wk = `${seed}/${t.wave}`; let cw = c.get(wk); if (!cw) c.set(wk, cw = { off: 0, d: 0, n: 0 });
+      // a wave is what passes the bin together (Wicks of one road and side, no 2 s gap): waves that merged after a
+      // fight walk as one blob and are judged as one
+      const gk = `${bk}|${seed}`; let gr = acc.grp.get(gk); if (!gr) acc.grp.set(gk, gr = { last: -Infinity, idx: 0 });
+      if (w.time - gr.last > 2) gr.idx++;
+      gr.last = w.time;
+      const wk = `${seed}/${gr.idx}`; let cw = c.get(wk); if (!cw) c.set(wk, cw = { off: 0, d: 0, n: 0, ids: new Map() });
       cw.off += off; cw.d += dT; cw.n++;
+      if (VERBOSE) { let r = cw.ids.get(e.id); if (!r) cw.ids.set(e.id, r = { n: 0, off: 0, fr: Infinity, t: w.time }); r.n++; r.off += off; r.fr = Math.min(r.fr, t.freeRun); }
     }
     if (!hashOnly && tick % 300 === 0) for (const id of tr.keys()) { const e = w.entity(id); if (!e || !e.alive) tr.delete(id); }
   }
@@ -250,6 +265,10 @@ for (const map of MAPS) for (const scen of SCENS) {
     if (med > 0.20) bad(`B1 ${bk}: wave-centroid median |off| ${med.toFixed(2)} > 0.20 (${cs.length} waves)`);
     if (mx > 0.30) bad(`B1 ${bk}: wave-centroid max |off| ${mx.toFixed(2)} > 0.30 (${cs.length} waves)`);
     if (VERBOSE) out.push(`    ${bk.padEnd(34)} centroid med ${med.toFixed(2)} max ${mx.toFixed(2)} raw max ${rmx.toFixed(2)} (${cs.length} waves)`);
+    if (VERBOSE && mx > 0.3) {
+      const [wk2, v] = [...c].filter(([, v]) => v.n >= 15).sort((a, b) => Math.abs(b[1].off / b[1].n) - Math.abs(a[1].off / a[1].n))[0];
+      out.push(`      worst wave ${wk2}: ${[...v.ids].map(([id, r]) => `#${id} n${r.n} off ${(r.off / r.n).toFixed(2)} freeFor ${(r.fr / 30).toFixed(1)}s @${r.t.toFixed(1)}`).join(' | ')}`);
+    }
   }
   for (const [bk, b] of acc.single) {
     if (b.length < 30) continue;
@@ -264,6 +283,7 @@ for (const map of MAPS) for (const scen of SCENS) {
   out.push(`  B3 reversals ${acc.rev.length}${acc.rev.length ? `: ${acc.rev.slice(0, 5).map((r) => `${r.key} ${r.at}`).join('; ')}` : ''}`);
   if (acc.rev.length > 0) bad(`B3 ${map} ${scen}: ${acc.rev.length} marching Wicks reversed`);
   const rj = acc.rejoin;
+  if (pct(rj, 0.95) > 6) bad(`B4 ${map} ${scen}: rejoin arc p95 ${pct(rj, 0.95).toFixed(1)} m > 6`);
   out.push(`  B4 rejoins ${rj.length}: arc to |off| ≤ 0.5 p50 ${pct(rj, 0.5).toFixed(1)} p95 ${pct(rj, 0.95).toFixed(1)} max ${rj.length ? Math.max(...rj).toFixed(1) : '-'} m; overshoot ${acc.rejoinOvershoot}${rj.length ? `; worst ${acc.rejoinWorst}` : ''}`);
 }
 // B5 timing

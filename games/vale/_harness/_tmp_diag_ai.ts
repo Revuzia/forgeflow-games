@@ -1,18 +1,13 @@
-// _tmp probe (diagnosis only, 2026-11-15, owner: "the bots need to be much smarter, they need to defend their base, sneak
-// attack, defend their partners"): a deterministic OBSERVATION probe of the opponent/ally brains. It never changes a
-// decision — it reads events, entity state and each controller's public fields (mode, lane, jungle) after the step.
+// _tmp probe (lane AI diagnosis, owner_rulings 44 round 2): what the fit defenders were doing when an inner or base structure
+// fell to Wicks alone (no enemy fighter within 15 m) with two of its team above 60 % within 16 m. Observation only: it reads
+// events, entity state and each controller's fields after the step; it never changes a decision.
 //
-//   node _harness/_tmp_diag_ai.ts --diff veteran [--suites rift,bridge,fray] [--seeds 8] [--seed0 1] [--cut 1800] --out <json>
-//   node _harness/_tmp_diag_ai.ts --merge a.json,b.json,c.json        (prints the per-tier table)
-//
-// Same-tier matches (both teams at --diff), role-correct lineups (the bot soak's 'rotate' seating, reproduced here).
+//   node _harness/_tmp_diag_ai.ts --diff veteran --seeds 8 --seed0 101 [--cut 1800] [--what wof|dither]
 // Every match is a pure function of (catalog, setup).
-import { writeFileSync, readFileSync } from 'node:fs';
 import type { CatalogT } from '../src/contracts/catalog.ts';
-import type { MatchSetup, SeatSetup, SimEvent } from '../src/contracts/sim.ts';
+import type { MatchSetup, SeatSetup } from '../src/contracts/sim.ts';
 import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
 import type { Entity } from '../src/sim/entity.ts';
-import { ORDER_MOVE, ORDER_ATTACK_MOVE } from '../src/sim/entity.ts';
 import { createSim, type BotController } from '../src/sim/sim.ts';
 import { structuresOf } from '../src/sim/units/structures.ts';
 import { buildContent, defaultOptions } from '../tools/build_content.ts';
@@ -20,507 +15,91 @@ import { buildContent, defaultOptions } from '../tools/build_content.ts';
 const argv = process.argv.slice(2);
 const opt = (k: string, d: string): string => { const i = argv.indexOf(`--${k}`); return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : d; };
 
-const CC = new Set(['stun', 'root', 'silence', 'disarm', 'airborne', 'taunt', 'fear', 'sleep', 'slow']);
-const HARD_CC = new Set(['stun', 'root', 'airborne', 'taunt', 'fear', 'sleep']);
-
 function loadCatalog(): CatalogT {
   const r = buildContent(defaultOptions({ check: true, allowMissingAssets: true, quiet: true }));
   if (!r.catalog) { console.error('content build failed'); process.exit(77); }
   return r.catalog;
 }
 
-function lineup(catalog: CatalogT, modeId: string, seed: number, diff: string): MatchSetup {
-  const mode = catalog.modes.find((m) => m.id === modeId)!;
+function lineup(catalog: CatalogT, seed: number, diff: string): MatchSetup {
+  const mode = catalog.modes.find((m) => m.id === 'rift')!;
   const queue = catalog.queues.find((q) => q.mode === mode.id && q.kind === 'standard') ?? catalog.queues.find((q) => q.mode === mode.id)!;
   const n = mode.teams * mode.perTeam;
   const pool = mode.rules.itemPool ?? '';
   const seats: SeatSetup[] = [];
   const all = catalog.fighters.map((f) => f.id).sort();
-  if (!mode.roles || mode.teams > 2) {
-    const start = (seed * n) % all.length;
-    for (let i = 0; i < n; i++) {
-      const fighter = all[(start + ((i + seed) % n)) % all.length];
-      const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
-      seats.push({ player: i, team: Math.floor(i / mode.perTeam), name: catalog.botNames[i % catalog.botNames.length], fighter, skin,
-        loadout: pickLoadout(catalog, fighter, pool), controller: 'bot', botDifficulty: diff as SeatSetup['botDifficulty'], colorIndex: i });
-    }
-  } else {
-    const roles = catalog.roles.filter((r) => r.assign).sort((a, b) => (a.assign?.order ?? 0) - (b.assign?.order ?? 0)).map((r) => r.id);
-    const natives = new Map<string, string[]>();
-    for (const f of catalog.fighters) { const l = natives.get(f.role) ?? []; l.push(f.id); natives.set(f.role, l); }
-    for (const l of natives.values()) l.sort();
-    for (let i = 0; i < n; i++) {
-      const team = Math.floor(i / mode.perTeam), slot = i % mode.perTeam, role = roles[slot % roles.length];
-      const pl = natives.get(role) ?? all;
-      const fighter = pl[(seed + slot + team) % pl.length];
-      const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
-      seats.push({ player: i, team, name: catalog.botNames[i % catalog.botNames.length], fighter, skin, role,
-        loadout: pickLoadout(catalog, fighter, pool, role), controller: 'bot', botDifficulty: diff as SeatSetup['botDifficulty'], colorIndex: i });
-    }
+  const roles = catalog.roles.filter((r) => r.assign).sort((a, b) => (a.assign?.order ?? 0) - (b.assign?.order ?? 0)).map((r) => r.id);
+  const natives = new Map<string, string[]>();
+  for (const f of catalog.fighters) { const l = natives.get(f.role) ?? []; l.push(f.id); natives.set(f.role, l); }
+  for (const l of natives.values()) l.sort();
+  for (let i = 0; i < n; i++) {
+    const team = Math.floor(i / mode.perTeam), slot = i % mode.perTeam, role = roles[slot % roles.length];
+    const pl = natives.get(role) ?? all;
+    const fighter = pl[(seed + slot + team) % pl.length];
+    const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
+    seats.push({ player: i, team, name: catalog.botNames[i % catalog.botNames.length], fighter, skin, role,
+      loadout: pickLoadout(catalog, fighter, pool, role), controller: 'bot', botDifficulty: diff as SeatSetup['botDifficulty'], colorIndex: i });
   }
-  return { matchId: `diag-${modeId}-${seed}-${diff}`, seed, queue: queue.id, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
+  return { matchId: `diag-rift-${seed}-${diff}`, seed, queue: queue.id, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
 }
 
-type Acc = Record<string, number>;
-const add = (a: Acc, k: string, v = 1): void => { a[k] = (a[k] ?? 0) + v; };
-
-interface GameOut {
-  mode: string; seed: number; dur: number; winner: number; reason: string;
-  c: Acc;                          // counters
-  h: Record<string, Acc>;          // histograms
-  resp: Record<string, number[]>;  // response-time samples
-}
-
-function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, cut: number): GameOut {
-  const setup = lineup(catalog, modeId, seed, diff);
-  const n = setup.seats.length;
+const WHAT = opt('what', 'wof');
+const diff = opt('diff', 'veteran'), seeds = Number(opt('seeds', '8')), seed0 = Number(opt('seed0', '101')), cut = Number(opt('cut', '1800'));
+const catalog = loadCatalog();
+for (let seed = seed0; seed < seed0 + seeds; seed++) {
+  const setup = lineup(catalog, seed, diff);
   const ctrls: (BotController | null)[] = setup.seats.map(() => null);
   const factory = createBots(catalog, setup);
-  const bots = (seat: SeatSetup, host: Parameters<typeof factory>[1]): BotController | null => { const c = factory(seat, host); ctrls[seat.player] = c; return c; };
-  const sim = createSim(catalog, setup, { bots, pregameSeconds: 0 });
-  const W = () => sim.world;
-  const ctl = (p: number) => ctrls[p] as unknown as { mode?: string; lane?: number; jungle?: boolean; support?: boolean; brain?: { answer: Map<number, number> } } | null;
-  const modeOf = (p: number): string => ctl(p)?.mode ?? '?';
-  const out: GameOut = { mode: modeId, seed, dur: 0, winner: -1, reason: 'cut', c: {}, h: {}, resp: {} };
-  const C = out.c, H = (k: string): Acc => (out.h[k] ??= {}), R = (k: string, v: number): void => { (out.resp[k] ??= []).push(v); };
-  const ffa = setup.seats.some((s) => s.team !== Math.floor(s.player / Math.max(1, setup.seats.filter((x) => x.team === 0).length)));
-  const teams = new Set(setup.seats.map((s) => s.team)).size;
-  const isFray = teams > 2;
-  void ffa;
-  const thicketAt = (x: number, y: number): number => (W().vision as unknown as { thicketAt(x: number, y: number): number }).thicketAt(x, y);
-  const visTo = (e: Entity, team: number): boolean => team >= 0 && team < 31 && (e.visibleMask & (1 << team)) !== 0;
-
-  // structure classes by requires-depth: outer (0), inner (1), base (2+)
-  const sList = () => structuresOf(W());
-  const depthOf = new Map<string, number>();
-  {
-    const defs = new Map(sList().map((s) => [s.def.id, s.def] as const));
-    const dep = (id: string, g = 0): number => {
-      if (depthOf.has(id)) return depthOf.get(id)!;
-      const d = defs.get(id); if (!d || g > 10) return 0;
-      const v = (d.requires ?? []).length ? 1 + Math.max(...(d.requires ?? []).map((r) => dep(r, g + 1))) : 0;
-      depthOf.set(id, v); return v;
-    };
-    for (const id of defs.keys()) dep(id);
-  }
-  const cls = (id: string): string => { const d = depthOf.get(id) ?? 0; return d === 0 ? 'outer' : d === 1 ? 'inner' : 'base'; };
-
-  // per-structure siege state
-  const sDmgAt = new Map<number, number>(), sFDmgAt = new Map<number, number>();
-  const sEpisode = new Map<number, { start: number; fighters: boolean; responded: boolean }>();
-  // per-fighter damage log from enemy fighters (victim → [t, amount, src])
-  const dmgLog = new Map<number, { t: number; a: number; src: number }[]>();
-  const ccAt = new Map<number, number>();
-  const lastFDmg = new Map<number, number>();   // victim → last time a fighter damaged it (engagement opener)
-  const peel = new Map<number, { start: number; helpers: Set<number>; divers: Set<number>; resp: Set<string>; d0: Map<number, number>; victimTeam: number }>();
-  const peelCd = new Map<number, number>();
-  const visHist: Map<number, boolean[]> = new Map();  // fighter → visible-to-enemy over the last 10 s at 3 Hz (FIFO 30)
-  const posHist: Map<number, [number, number][]> = new Map();
-  const minionPos = new Map<number, [number, number, number]>(); // id → x, y, since
-  const roamStart = new Map<number, number>(); const roamVis = new Map<number, [number, number]>();
-  const prevMode = new Array<string>(n).fill('');
-  const modeHist: string[][] = setup.seats.map(() => []);
-  const respawnAt = new Array<number>(n).fill(-1e9);
-  const ultAt6 = new Array<number>(n).fill(-1);
-  const lastCast = new Map<number, { t: number; slot: string }>();
-  const baseIntr: Map<number, { start: number; x: number; y: number; done: boolean }> = new Map();
-  let lowFor = new Array<number>(n).fill(0);
-  const goldAt: Record<number, number[]> = {};
-  const ent2p = (id: number): number => W().players.findIndex((p) => p.entity === id);
-  const credit = (id: number): Entity | null => { const w = W(); const e = id >= 0 ? w.entity(id) ?? null : null; return e ? w.creditFighter(e) : null; };
-
-  const camps = (catalog.maps.find((m) => m.id === setup.map)?.camps ?? []).map((c) => ({ id: c.id, objective: !!c.objective, x: c.units[0]?.at[0] ?? 0, y: c.units[0]?.at[1] ?? 0, unit: c.units[0]?.unit ?? '' }));
-  const lim = cut > 0 ? cut : 3600;
-  let guard = 0;
-  while (sim.view.phase !== 'ended' && guard++ < 30 * 3700) {
-    const evs: SimEvent[] = sim.step();
-    const w = W(), now = w.time;
-    if (now > lim) break;
+  const sim = createSim(catalog, setup, { bots: (seat, host) => { const c = factory(seat, host); ctrls[seat.player] = c; return c; }, pregameSeconds: 0 });
+  const ctl = (p: number) => ctrls[p] as unknown as { mode?: string; brain?: { guard: Map<number, { sid: string }> } } | null;
+  const fHit = new Map<number, number>();
+  const hist = new Map<number, string[]>();
+  const trail: string[][] = [], swung: number[] = [], dcd: number[] = [];
+  while (sim.view.phase !== 'ended') {
+    const evs = sim.step();
+    const w = sim.world, now = w.time;
+    if (now > cut) break;
     for (const ev of evs) {
-      switch (ev.e) {
-        case 'damage': {
-          const dst = w.entity(ev.dst); if (!dst) break;
-          const src = credit(ev.src);
-          if (dst.kind === 'structure') {
-            sDmgAt.set(dst.id, now);
-            if (src) sFDmgAt.set(dst.id, now);
-          } else if (dst.kind === 'fighter' && src && src.team !== dst.team) {
-            let l = dmgLog.get(dst.id); if (!l) { l = []; dmgLog.set(dst.id, l); }
-            l.push({ t: now, a: ev.amount, src: src.id });
-            // engagement opener: first fighter hit on this victim in 8 s
-            if (now - (lastFDmg.get(dst.id) ?? -1e9) > 8) {
-              add(C, 'open.n');
-              if (thicketAt(src.x, src.y) >= 0) add(C, 'open.fromBush');
-              const vh = visHist.get(src.id);
-              if (vh && vh.length >= 6 && vh.slice(-6, -2).every((v) => !v)) add(C, 'open.fromFog');
-            }
-            lastFDmg.set(dst.id, now);
-            // peel responses: a helper hitting a diver
-            for (const [vid, pe] of peel) if (pe.divers.has(dst.id) && pe.helpers.has(src.id) && vid !== src.id) pe.resp.add('hitDiver');
-          }
-          break;
-        }
-        case 'status': {
-          const dst = w.entity(ev.dst); if (!dst || dst.kind !== 'fighter') break;
-          if (HARD_CC.has(ev.status)) ccAt.set(dst.id, now);
-          if (CC.has(ev.status)) for (const [, pe] of peel) if (pe.divers.has(dst.id)) pe.resp.add('ccDiver');
-          break;
-        }
-        case 'heal': {
-          const dst = w.entity(ev.dst); const src = credit(ev.src);
-          if (dst && src && dst.kind === 'fighter' && src.id !== dst.id) {
-            const pe = peel.get(dst.id); if (pe && pe.helpers.has(src.id)) pe.resp.add('healShield');
-            add(C, 'allyHeal.amt', ev.amount);
-          }
-          break;
-        }
-        case 'shield': { const pe = peel.get(ev.dst); if (pe) pe.resp.add('shieldAny'); break; }
-        case 'cast': {
-          const src = w.entity(ev.src); if (!src || src.kind !== 'fighter') break;
-          const p = ent2p(src.id);
-          add(H('cast.slot'), ev.slot);
-          // fog leak: a cast the other teams cannot see (the bots' castSeen records every cast)
-          for (let t = 0; t < teams; t++) if (t !== src.team) { add(C, 'cast.observers'); if (!visTo(src, t)) add(C, 'cast.unseenObservers'); }
-          let ef = 0;
-          for (const pl of w.players) { const f = pl.ent; if (f && f.alive && f.team !== src.team && (f.x - src.x) ** 2 + (f.y - src.y) ** 2 <= 15 * 15) ef++; }
-          if (ev.slot === 'ult') { add(C, 'ult.casts'); if (ef === 0) add(C, 'ult.noEnemy15'); }
-          if (ev.slot === 'a1' || ev.slot === 'a2' || ev.slot === 'a3' || ev.slot === 'ult') {
-            add(C, 'abil.casts'); if (ef > 0) add(C, 'abil.casts.withEnemy');
-            const lc = lastCast.get(src.id);
-            if (lc && lc.slot !== ev.slot && now - lc.t <= 2 && ef > 0) add(C, 'abil.chain');
-            lastCast.set(src.id, { t: now, slot: ev.slot });
-          }
-          if (ev.slot.startsWith('spell')) add(C, 'spell.casts');
-          if (ev.slot.startsWith('item')) add(C, 'itemActive.casts');
-          void p;
-          break;
-        }
-        case 'levelUp': if (ev.level === 6) ultAt6[ev.player] = now; break;
-        case 'respawn': respawnAt[ev.player] = now; break;
-        case 'recall': if (ev.state === 'start') {
-          add(C, 'recall.start');
-          const me = w.players[ev.player]?.ent;
-          for (const [team, bi] of baseIntr) if (me && team === me.team && !bi.done && (me.x - bi.x) ** 2 + (me.y - bi.y) ** 2 > 45 * 45) add(C, 'base.recallToDefend');
-        } break;
-        case 'gold': if (ev.reason === 'cs') add(C, 'cs.fighter'); break;
-        case 'death': {
-          const v = w.entity(ev.dst);
-          if (ev.kind === 'minion') { add(C, 'minion.deaths'); if (now <= 840) { add(C, 'minion.deaths14'); const k = credit(ev.killer); if (k && v && k.team !== v.team) add(C, 'minion.lh14'); } }
-          if (ev.kind === 'monster' && v) {
-            const cp = camps.find((c) => Math.abs(c.x - v.x) < 9 && Math.abs(c.y - v.y) < 9);
-            const k = credit(ev.killer);
-            if (cp && k && (v.def === cp.unit)) {
-              const side = cp.id.startsWith('a_') ? 0 : cp.id.startsWith('s_') ? 1 : -1;
-              add(H('camp.kill'), `${cp.unit}:${side < 0 ? 'mid' : side === k.team ? 'own' : 'invade'}`);
-            }
-          }
-          if (ev.kind === 'fighter' && v) {
-            const p = ent2p(v.id); const mh = p >= 0 ? modeHist[p] : [];
-            const md = mh.length >= 10 ? mh[mh.length - 10] : mh[0] ?? '?';
-            add(C, 'f.deaths'); add(H('death.mode3s'), md);
-            if (!isFray && teams === 2) { let lead = 0; for (const t of w.teams) lead += t.team === v.team ? t.gold : -t.gold; add(C, lead <= -2000 ? 'death.behind' : lead >= 2000 ? 'death.ahead' : 'death.even'); }
-            const k = credit(ev.killer);
-            if (!k && ev.assists.length === 0) add(C, 'f.deaths.unforced');
-            // died under an enemy tower
-            for (const s of sList()) { const st = s.ent; if (st.alive && st.team !== v.team && st.attackDef && (st.x - v.x) ** 2 + (st.y - v.y) ** 2 <= (st.stats.range + st.radius + 1.5) ** 2) { add(C, 'f.deaths.underEnemyTower'); break; } }
-            if (p >= 0 && lowFor[p] >= 2) add(C, 'f.deaths.stayedLow');
-            if (p >= 0 && now - respawnAt[p] < 75 && respawnAt[p] > 0) add(C, 'f.deaths.within75sOfRespawn');
-            // isolated: no ally within 25 m
-            let ally = false;
-            for (const pl of w.players) { const f = pl.ent; if (f && f !== v && f.alive && f.team === v.team && (f.x - v.x) ** 2 + (f.y - v.y) ** 2 <= 25 * 25) { ally = true; break; } }
-            if (!ally && !isFray) add(C, 'f.deaths.isolated');
-            // a diver punished
-            for (const [, pe] of peel) if (pe.divers.has(v.id)) pe.resp.add('diverDied');
-          }
-          break;
-        }
-        case 'takedown': {
-          const vp = w.players[ev.victim]; const ve = vp?.ent; if (!ve) break;
-          add(C, 'td.n');
-          const parts = [ev.killer, ...ev.assists].filter((x) => x >= 0);
-          if (isFray) {
-            const kp = w.players[ev.killer]?.ent;
-            if (kp) {
-              // was the victim the lowest-health enemy in 15 m of the killer, and the score leader?
-              let lowest = true; let lead = 0;
-              for (const pl of w.players) { if ((pl.score ?? 0) > lead) lead = pl.score ?? 0; const f = pl.ent; if (!f || !f.alive || f === kp || f === ve) continue; if ((f.x - kp.x) ** 2 + (f.y - kp.y) ** 2 <= 225 && f.hp / f.maxHp < ve.maxHp * 0 + 0.0001 + 0) lowest = false; }
-              void lowest;
-              if ((vp.score ?? 0) >= lead && lead > 0) add(C, 'fray.killLeader');
-            }
-            break;
-          }
-          // RIFT/BRIDGE: rotations — a participant from another road or the grove, and whether it came out of the fog
-          let lane = -1, bd = Infinity;
-          for (let p = 0; p < n; p++) {
-            const c = ctl(p); const f = w.players[p]?.ent;
-            if (!c || !f || f.team !== ve.team || c.jungle || (c.lane ?? -1) < 0) continue;
-            void bd; void lane;
-          }
-          let rot = false, fog = false;
-          const vic = ctl(ev.victim);
-          for (const pp of parts) {
-            const c = ctl(pp), f = w.players[pp]?.ent; if (!c || !f) continue;
-            const moved = c.jungle || (vic && (vic.lane ?? -1) >= 0 && (c.lane ?? -1) >= 0 && c.lane !== vic.lane);
-            if (moved) {
-              rot = true;
-              const vh = visHist.get(f.id);
-              if (vh && vh.length >= 24 && vh.slice(0, vh.length - 9).filter((x) => x).length <= (vh.length - 9) * 0.3) fog = true;
-            }
-          }
-          if (rot) { add(C, 'td.rotation'); if (fog) add(C, 'td.rotationFromFog'); }
-          if (parts.length >= 2) add(C, 'td.multi');
-          add(H('td.time'), now < 840 ? 'lane' : now < 1500 ? 'mid' : 'late');
-          break;
-        }
-        case 'structure': {
-          const st = w.entity(ev.id); const s = sList().find((x) => x.ent === st);
-          if (st && s) {
-            const c = cls(s.def.id); let def = 0, alive = 0;
-            for (const pl of w.players) { const f = pl.ent; if (f && f.alive && f.team === st.team) { alive++; if ((f.x - st.x) ** 2 + (f.y - st.y) ** 2 <= 20 * 20) def++; } }
-            add(C, `fall.${c}`); if (def === 0 && alive >= 2) add(C, `fall.${c}.noDefender`);
-          }
-          break;
-        }
-        case 'objective': {
-          const cp = camps.find((c) => c.unit === ev.unit) ?? null;
-          add(H('obj'), `${ev.unit}`);
-          if (cp) {
-            let enemy = 0, own = 0;
-            for (const pl of w.players) { const f = pl.ent; if (!f || !f.alive || (f.x - cp.x) ** 2 + (f.y - cp.y) ** 2 > 25 * 25) continue; if (f.team === ev.team) own++; else enemy++; }
-            if (enemy > 0) add(C, 'obj.contested');
-            add(C, 'obj.n'); add(C, 'obj.ownAt', own);
-            // taken by the team behind on Gleam?
-            let lead = 0; for (const t of w.teams) lead += t.team === ev.team ? t.gold : -t.gold;
-            if (lead < -1000) add(C, 'obj.byBehind');
-          }
-          break;
-        }
-        case 'end': out.winner = ev.result.winningTeam; out.reason = 'end'; break;
-        default: break;
+      if (ev.e === 'damage') { const d = w.entity(ev.dst); const s = w.entity(ev.src); const src = s ? w.creditFighter(s) : null; if (d && d.kind === 'structure' && src) fHit.set(d.id, now); }
+      if (ev.e !== 'structure' || WHAT !== 'wof') continue;
+      const st = w.entity(ev.id); if (!st) continue;
+      const s = structuresOf(w).find((x) => x.ent === st); if (!s) continue;
+      let foes = 0; const fit: Entity[] = [];
+      for (const pl of w.players) { const f = pl.ent; if (!f || !f.alive) continue; const d2 = (f.x - st.x) ** 2 + (f.y - st.y) ** 2;
+        if (f.team !== st.team && d2 <= 225) foes++; else if (f.team === st.team && d2 <= 256 && f.hp > f.maxHp * 0.6) fit.push(f); }
+      if (foes > 0 || fit.length < 2) continue;
+      let em = 0, om = 0;
+      for (const u of w.entities) if (!u.removed && u.alive && u.kind === 'minion' && (u.x - st.x) ** 2 + (u.y - st.y) ** 2 <= 144) { if (u.team === st.team) om++; else em++; }
+      const t = `${Math.floor(now / 60)}:${String(Math.floor(now % 60)).padStart(2, '0')}`;
+      console.log(`seed ${seed} ${t} ${s.def.id} fell: enemy Wicks in 12 m ${em}, ours ${om}, fighters last hit it ${(now - (fHit.get(st.id) ?? -1e9)).toFixed(0)} s ago`);
+      for (const f of fit) {
+        const p = w.players.findIndex((x) => x.entity === f.id); const c = ctl(p);
+        const at = f.atkTarget >= 0 ? w.entity(f.atkTarget) : null;
+        const post = c?.brain?.guard.get(p)?.sid ?? '-';
+        console.log(`   p${p} ${setup.seats[p].fighter} mode ${c?.mode} post ${post} d ${Math.hypot(f.x - st.x, f.y - st.y).toFixed(1)} hp ${(f.hp / f.maxHp * 100).toFixed(0)}% atk ${at ? at.kind : '-'} modes(6s) ${(hist.get(p) ?? []).join(',')}`);
       }
     }
-    // ── 3 Hz sampling ──
-    if (w.tick % 10 !== 0 || w.phase !== 'live') continue;
-    const dt = 10 / 30;
-    const players = w.players;
-    // visibility / position histories
-    for (let p = 0; p < n; p++) {
-      const f = players[p]?.ent; if (!f) continue;
-      let vh = visHist.get(f.id); if (!vh) { vh = []; visHist.set(f.id, vh); }
-      let vis = false; for (let t = 0; t < teams; t++) if (t !== f.team && visTo(f, t)) { vis = true; break; }
-      vh.push(f.alive && vis); if (vh.length > 30) vh.shift();
-      let ph = posHist.get(f.id); if (!ph) { ph = []; posHist.set(f.id, ph); }
-      ph.push([f.x, f.y]); if (ph.length > 30) ph.shift();
-      if (!f.alive) { lowFor[p] = 0; continue; }
-      const md = modeOf(p);
-      modeHist[p].push(md); if (modeHist[p].length > 12) modeHist[p].shift();
-      if (ultAt6[p] < 0 && f.level >= 6) ultAt6[p] = now;
-      add(H('mode.time'), md, dt);
-      if (f.hp < f.maxHp * 0.3 && md !== 'retreat' && md !== 'recall') lowFor[p] += dt; else if (f.hp >= f.maxHp * 0.3) lowFor[p] = 0;
-      // bush waits
-      if (thicketAt(f.x, f.y) >= 0) { add(C, 'bush.time', dt); if (Math.abs(f.vx) + Math.abs(f.vy) < 0.1) add(C, 'bush.stillTime', dt); }
-      // stuck: a move order running, < 0.4 m in 3 s, not casting / held
-      if ((f.order === ORDER_MOVE || f.order === ORDER_ATTACK_MOVE) && ph.length >= 10 && !f.cast && !f.dash && f.stateOverride !== 'recall') {
-        const [ox, oy] = ph[ph.length - 10];
-        if ((f.x - ox) ** 2 + (f.y - oy) ** 2 < 0.16 && (f.orderReqX - f.x) ** 2 + (f.orderReqY - f.y) ** 2 > 4) { add(C, 'stuck.time', dt); add(H('stuck.where'), `${Math.round(f.x / 5) * 5},${Math.round(f.y / 5) * 5}`, dt); }
-      }
-      // roam episodes
-      if (md === 'roam' && prevMode[p] !== 'roam') { roamStart.set(p, now); roamVis.set(p, [0, 0]); add(C, 'roam.n'); }
-      if (md === 'roam') { const rv = roamVis.get(p)!; rv[0]++; if (vh[vh.length - 1]) rv[1]++; }
-      if (prevMode[p] === 'roam' && md !== 'roam') {
-        const rv = roamVis.get(p); if (rv && rv[0] > 0) { add(C, 'roam.samples', rv[0]); add(C, 'roam.visibleSamples', rv[1]); }
-        R('roam.len', now - (roamStart.get(p) ?? now));
-      }
-      if (md === 'defend' && prevMode[p] !== 'defend') add(C, 'defend.entries');
-      prevMode[p] = md;
-    }
-    if (!isFray && teams === 2) for (let tm = 0; tm < 2; tm++) { let lead = 0; for (const t of w.teams) lead += t.team === tm ? t.gold : -t.gold; add(C, lead <= -2000 ? 'tm.behind' : lead >= 2000 ? 'tm.ahead' : 'tm.even', dt / 60); }
-    // team gold
-    if (!isFray && Math.abs(now % 60) < dt) { const m = Math.round(now / 60); goldAt[m] = w.teams.map((t) => t.gold); }
-    // structures under siege
-    for (const s of sList()) {
-      const st = s.ent; if (!st.alive) { sEpisode.delete(st.id); continue; }
-      const att = now - (sDmgAt.get(st.id) ?? -1e9) <= 1.2, fatt = now - (sFDmgAt.get(st.id) ?? -1e9) <= 1.5;
-      const c = cls(s.def.id);
-      let def = 0, alive = 0, nearest = Infinity;
-      for (const pl of players) {
-        const f = pl.ent; if (!f || !f.alive || f.team !== st.team) continue;
-        alive++;
-        const d2 = (f.x - st.x) ** 2 + (f.y - st.y) ** 2; if (d2 < nearest) nearest = d2;
-        if (d2 <= 16 * 16) def++;
-      }
-      if (att) {
-        add(C, `siege.${c}.time`, dt);
-        if (def === 0) { add(C, `siege.${c}.undefended`, dt); if (alive >= 2) add(C, `siege.${c}.undefendedBodies`, dt); }
-        if (fatt) {
-          add(C, `fsiege.${c}.time`, dt);
-          if (def === 0 && alive >= 2) {
-            add(C, `fsiege.${c}.undefendedBodies`, dt);
-            for (const pl of players) { const f = pl.ent; if (f && f.alive && f.team === st.team) add(H(`fsiege.${c}.absentMode`), modeOf(pl.player), dt); }
-          }
-        }
-      }
-      let ep = sEpisode.get(st.id);
-      if (fatt && !ep) { ep = { start: now, fighters: true, responded: def > 0 }; sEpisode.set(st.id, ep); add(C, `ep.${c}`); if (def > 0) add(C, `ep.${c}.defendedAtStart`); }
-      if (ep && !ep.responded && def > 0) { ep.responded = true; R(`resp.${c}`, now - ep.start); }
-      if (ep && !att && now - (sDmgAt.get(st.id) ?? 0) > 8) { if (!ep.responded) add(C, `resp.${c}.never`); sEpisode.delete(st.id); }
-    }
-    // base intrusion (enemy fighter within 20 m of a base-class structure of a team)
-    if (!isFray) for (let team = 0; team < teams; team++) {
-      let ix = 0, iy = 0, hit = false;
-      for (const s of sList()) {
-        if (s.def.team !== team || cls(s.def.id) !== 'base' || !s.ent.alive) continue;
-        for (const pl of players) { const f = pl.ent; if (f && f.alive && f.team !== team && (f.x - s.ent.x) ** 2 + (f.y - s.ent.y) ** 2 <= 20 * 20) { hit = true; ix = f.x; iy = f.y; break; } }
-        if (hit) break;
-      }
-      let bi = baseIntr.get(team);
-      if (hit && (!bi || bi.done && now - bi.start > 30)) { bi = { start: now, x: ix, y: iy, done: false }; baseIntr.set(team, bi); add(C, 'base.intrusions'); }
-      if (bi && !bi.done) {
-        let at = 0, alive = 0;
-        for (const pl of players) { const f = pl.ent; if (f && f.alive && f.team === team) { alive++; if ((f.x - bi.x) ** 2 + (f.y - bi.y) ** 2 <= 25 * 25) at++; } }
-        if (at >= Math.min(2, alive) && alive > 0) { bi.done = true; R('resp.base2', now - bi.start); }
-        else if (!hit && now - bi.start > 20) { bi.done = true; add(C, 'base.intrusion.unanswered'); }
-        if (!bi.done) add(C, 'base.intrusion.time', dt);
+    // dither episodes (the tactics probe's detector), with the mode / post / move-point trail
+    if (WHAT === 'dither' && w.tick % 10 === 0) for (let p = 0; p < w.players.length; p++) {
+      const f = w.players[p].ent; const tr = (trail[p] ??= []);
+      if (!f || !f.alive) { tr.length = 0; swung[p] = now; continue; }
+      if (f.atkTarget >= 0 || f.cast) swung[p] = now;
+      const c = ctrls[p] as unknown as { mode?: string; pMoveX?: number; pMoveY?: number; brain?: { guard: Map<number, { sid: string }> } };
+      tr.push(`${f.x.toFixed(0)},${f.y.toFixed(0)} ${String(c.mode).slice(0, 4)} ${c.brain?.guard.get(p)?.sid ?? '-'} ->${(c.pMoveX ?? 0).toFixed(0)},${(c.pMoveY ?? 0).toFixed(0)}`);
+      if (tr.length > 36) tr.shift();
+      const ph = tr.map((x) => x.split(' ')[0].split(',').map(Number));
+      if (f.hp < f.maxHp * 0.9 || now < (dcd[p] ?? 0) || now - (swung[p] ?? 0) < 12 || ph.length < 36) continue;
+      let near = false; for (const q of w.players) { const g = q.ent; if (g && g.alive && g.team !== f.team && (g.x - f.x) ** 2 + (g.y - f.y) ** 2 <= 900) { near = true; break; } }
+      if (near) continue;
+      const legs: number[] = []; let lx = 0, ly = 0, len = 0;
+      for (let i = 3; i < ph.length; i += 3) { const dx = ph[i][0] - ph[i - 3][0], dy = ph[i][1] - ph[i - 3][1], m = Math.hypot(dx, dy); if (m < 0.5) continue; if (len > 0 && dx * lx + dy * ly < 0) { legs.push(len); len = 0; } lx = dx; ly = dy; len += m; }
+      if (len > 0) legs.push(len);
+      const net = Math.hypot(ph[35][0] - ph[0][0], ph[35][1] - ph[0][1]);
+      if (legs.filter((x) => x >= 4).length >= 3 && net <= 5 && f.stateOverride !== 'recall') {
+        dcd[p] = now + 12;
+        console.log(`DITHER seed ${seed} t ${now.toFixed(0)} p${p} t${f.team}: ${tr.filter((_, i) => i % 3 === 0).join(' | ')}`);
       }
     }
-    // peel episodes
-    for (const pl of players) {
-      const v = pl.ent; if (!v || !v.alive) continue;
-      const l = dmgLog.get(v.id); if (l) while (l.length && now - l[0].t > 2.5) l.shift();
-      const burst = l ? l.reduce((a, x) => a + x.a, 0) : 0;
-      const cc = now - (ccAt.get(v.id) ?? -1e9) < 0.5;
-      if (!peel.has(v.id) && now >= (peelCd.get(v.id) ?? 0) && (burst >= v.maxHp * 0.2 || (cc && l && l.length > 0))) {
-        const helpers = new Set<number>(), d0 = new Map<number, number>();
-        for (const q of players) { const a = q.ent; if (a && a !== v && a.alive && a.team === v.team && (a.x - v.x) ** 2 + (a.y - v.y) ** 2 <= 144) { helpers.add(a.id); d0.set(a.id, Math.hypot(a.x - v.x, a.y - v.y)); } }
-        const divers = new Set(l ? l.map((x) => x.src) : []);
-        if (isFray) continue;
-        add(C, 'peel.episodes');
-        if (helpers.size === 0) { add(C, 'peel.isolated'); peelCd.set(v.id, now + 5); continue; }
-        peel.set(v.id, { start: now, helpers, divers, resp: new Set(), d0, victimTeam: v.team });
-      }
-    }
-    for (const [vid, pe] of [...peel]) {
-      if (now - pe.start < 3) continue;
-      const v = w.entity(vid);
-      add(C, 'peel.withHelpers');
-      if (pe.resp.has('hitDiver')) add(C, 'peel.hitDiver');
-      if (pe.resp.has('ccDiver')) add(C, 'peel.ccDiver');
-      if (pe.resp.has('healShield')) add(C, 'peel.healShield');
-      if (pe.resp.has('diverDied')) add(C, 'peel.diverDied');
-      if (pe.resp.size === 0 || (pe.resp.size === 1 && pe.resp.has('shieldAny'))) add(C, 'peel.noResponse');
-      let fled = 0;
-      for (const hid of pe.helpers) { const a = w.entity(hid); if (!a || !a.alive || !v) continue; if (Math.hypot(a.x - v.x, a.y - v.y) > (pe.d0.get(hid) ?? 0) + 4) fled++; const p = ent2p(hid); add(H('peel.helperMode'), modeOf(p)); }
-      if (fled === pe.helpers.size) add(C, 'peel.allHelpersLeft');
-      if (!v || !v.alive) add(C, 'peel.victimDied');
-      peel.delete(vid); peelCd.set(vid, now + 5);
-    }
-    // focus coherence: teams with >= 3 fighters attacking enemy fighters
-    if (!isFray) for (let team = 0; team < teams; team++) {
-      const tg: Acc = {}; let k = 0;
-      for (const pl of players) { const f = pl.ent; if (!f || !f.alive || f.team !== team || f.atkTarget < 0) continue; const t = w.entity(f.atkTarget); if (t && t.kind === 'fighter' && t.team !== team) { add(tg, String(t.id)); k++; } }
-      if (k >= 3) { add(C, 'focus.samples'); add(C, 'focus.onTop', Math.max(...Object.values(tg)) / k); }
-    }
-    // grouping vs split from 14:00 (every 5 s)
-    if (!isFray && now >= 840 && w.tick % 150 === 0) for (let team = 0; team < teams; team++) {
-      const fs = players.map((q) => q.ent).filter((f): f is Entity => !!f && f.alive && f.team === team);
-      if (fs.length < 3) continue;
-      let big = 0;
-      for (const a of fs) { let c = 0; for (const b of fs) if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 <= 20 * 20) c++; if (c > big) big = c; }
-      add(C, 'group.samples'); add(C, 'group.largestShare', big / fs.length);
-      for (const a of fs) {
-        let alone = true; for (const b of fs) if (b !== a && (a.x - b.x) ** 2 + (a.y - b.y) ** 2 <= 45 * 45) { alone = false; break; }
-        if (!alone) continue;
-        let nearES = false; for (const s of sList()) if (s.ent.alive && s.def.team !== team && (s.ent.x - a.x) ** 2 + (s.ent.y - a.y) ** 2 <= 30 * 30) { nearES = true; break; }
-        add(C, nearES ? 'group.splitPushers' : 'group.aloneElsewhere');
-      }
-    }
-    // minions stuck (no target, < 0.3 m in 3 s)
-    if (w.tick % 30 === 0) for (const u of w.entities) {
-      if (u.removed || !u.alive || u.kind !== 'minion') continue;
-      const mp = minionPos.get(u.id);
-      if (!mp || (u.x - mp[0]) ** 2 + (u.y - mp[1]) ** 2 > 0.09) { minionPos.set(u.id, [u.x, u.y, now]); continue; }
-      if (u.atkTarget < 0 && now - mp[2] >= 3) { add(C, 'minion.stuckSec'); add(H('minion.stuckWhere'), `${Math.round(u.x / 4) * 4},${Math.round(u.y / 4) * 4}`); }
-    }
-    // FRAY: time with no enemy within 25 m
-    if (isFray) for (const pl of players) { const f = pl.ent; if (!f || !f.alive) continue; let any = false; for (const q of players) { const g = q.ent; if (g && g !== f && g.alive && (g.x - f.x) ** 2 + (g.y - f.y) ** 2 <= 625) { any = true; break; } } add(C, any ? 'fray.engagedTime' : 'fray.idleTime', dt); }
+    if (w.tick % 30 === 0) for (let p = 0; p < w.players.length; p++) { const h = hist.get(p) ?? []; h.push(String(ctl(p)?.mode ?? '?').slice(0, 4)); if (h.length > 6) h.shift(); hist.set(p, h); }
   }
-  const w = W();
-  out.dur = w.time;
-  // ult usage per minute alive after level 6
-  for (let p = 0; p < n; p++) if (ultAt6[p] >= 0) add(C, 'ult.minutesAfter6', (w.time - ultAt6[p]) / 60);
-  // ahead / behind at 15:00
-  const g15 = goldAt[15];
-  if (g15 && g15.length === 2) {
-    const lead = g15[0] - g15[1];
-    add(H('lead15'), Math.abs(lead) < 1500 ? 'even' : (lead > 0) === (out.winner === 0) ? 'aheadWon' : out.winner < 0 ? 'aheadUndecided' : 'aheadLost');
-  }
-  // items held at the end
-  const anti = new Set(catalog.items.filter((i) => JSON.stringify(i).includes('grievous')).map((i) => i.id));
-  for (const pl of w.players) {
-    const its = pl.items.filter((x): x is string => !!x);
-    add(C, 'items.held', its.length);
-    if (its.some((x) => anti.has(x))) add(C, 'items.antiHealOwners');
-    for (const it of its) add(H('items'), `${setup.seats[pl.player].role ?? '-'}:${it}`);
-  }
-  add(C, 'players', w.players.length);
-  return out;
-}
-
-function merge(paths: string[]): void {
-  const by: Record<string, GameOut[]> = {};
-  for (const p of paths) { const j = JSON.parse(readFileSync(p, 'utf8')) as { diff: string; games: GameOut[] }; for (const g of j.games) (by[`${g.mode}/${j.diff}`] ??= []).push(g); }
-  for (const [key, gs] of Object.entries(by).sort()) {
-    const C: Acc = {}, H: Record<string, Acc> = {}, R: Record<string, number[]> = {};
-    for (const g of gs) { for (const [k, v] of Object.entries(g.c)) add(C, k, v); for (const [k, a] of Object.entries(g.h)) for (const [x, v] of Object.entries(a)) add((H[k] ??= {}), x, v); for (const [k, a] of Object.entries(g.resp)) (R[k] ??= []).push(...a); }
-    const mins = gs.reduce((a, g) => a + g.dur / 60, 0);
-    const med = (a: number[]): string => { if (!a.length) return '-'; const s = [...a].sort((x, y) => x - y); return s[s.length >> 1].toFixed(1); };
-    const pc = (a: number, b: number): string => (b > 0 ? `${((a / b) * 100).toFixed(0)}%` : '-');
-    console.log(`\n=== ${key}: ${gs.length} games, ${mins.toFixed(0)} game-min, median ${med(gs.map((g) => g.dur / 60))} min, ends ${gs.filter((g) => g.reason === 'end').length}`);
-    for (const c of ['outer', 'inner', 'base']) {
-      console.log(`  ${c}: sieged ${(C[`siege.${c}.time`] ?? 0).toFixed(0)} s, undefended ${pc(C[`siege.${c}.undefended`] ?? 0, C[`siege.${c}.time`] ?? 0)} (with ≥2 alive ${pc(C[`siege.${c}.undefendedBodies`] ?? 0, C[`siege.${c}.time`] ?? 0)}); by fighters ${(C[`fsiege.${c}.time`] ?? 0).toFixed(0)} s, undefended-with-bodies ${pc(C[`fsiege.${c}.undefendedBodies`] ?? 0, C[`fsiege.${c}.time`] ?? 0)}; fighter-siege episodes ${C[`ep.${c}`] ?? 0} (defended at start ${C[`ep.${c}.defendedAtStart`] ?? 0}); undefended-start response median ${med(R[`resp.${c}`] ?? [])} s (n ${(R[`resp.${c}`] ?? []).length}), never answered ${C[`resp.${c}.never`] ?? 0}; falls ${C[`fall.${c}`] ?? 0}, with no defender in 20 m and ≥2 alive ${C[`fall.${c}.noDefender`] ?? 0}`);
-      const am = H[`fsiege.${c}.absentMode`]; if (am) console.log(`     absent defenders' modes: ${Object.entries(am).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([k, v]) => `${k} ${v.toFixed(0)}s`).join(', ')}`);
-    }
-    console.log(`  base intrusions ${C['base.intrusions'] ?? 0}: 2-defender response median ${med(R['resp.base2'] ?? [])} s, unanswered ${C['base.intrusion.unanswered'] ?? 0}, recalls-to-defend ${C['base.recallToDefend'] ?? 0}`);
-    console.log(`  peel: episodes ${C['peel.episodes'] ?? 0}, isolated ${pc(C['peel.isolated'] ?? 0, C['peel.episodes'] ?? 0)}; with helpers ${C['peel.withHelpers'] ?? 0}: hit diver ${pc(C['peel.hitDiver'] ?? 0, C['peel.withHelpers'] ?? 0)}, cc diver ${pc(C['peel.ccDiver'] ?? 0, C['peel.withHelpers'] ?? 0)}, heal/shield ${pc(C['peel.healShield'] ?? 0, C['peel.withHelpers'] ?? 0)}, no response ${pc(C['peel.noResponse'] ?? 0, C['peel.withHelpers'] ?? 0)}, all helpers left ${pc(C['peel.allHelpersLeft'] ?? 0, C['peel.withHelpers'] ?? 0)}, victim died ${pc(C['peel.victimDied'] ?? 0, C['peel.withHelpers'] ?? 0)}, diver died ${pc(C['peel.diverDied'] ?? 0, C['peel.withHelpers'] ?? 0)}`);
-    if (H['peel.helperMode']) console.log(`     helper modes: ${Object.entries(H['peel.helperMode']).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} ${v}`).join(', ')}`);
-    console.log(`  takedowns ${C['td.n'] ?? 0} (${((C['td.n'] ?? 0) / mins).toFixed(2)}/min): rotations ${pc(C['td.rotation'] ?? 0, C['td.n'] ?? 0)}, of them from fog ${pc(C['td.rotationFromFog'] ?? 0, C['td.rotation'] ?? 0)}; multi-participant ${pc(C['td.multi'] ?? 0, C['td.n'] ?? 0)}; phase ${JSON.stringify(H['td.time'] ?? {})}`);
-    console.log(`  roams ${C['roam.n'] ?? 0} (median ${med(R['roam.len'] ?? [])} s), visible to enemy ${pc(C['roam.visibleSamples'] ?? 0, C['roam.samples'] ?? 0)} of roam time`);
-    console.log(`  engagement openers ${C['open.n'] ?? 0}: from a thicket ${pc(C['open.fromBush'] ?? 0, C['open.n'] ?? 0)}, out of fog ${pc(C['open.fromFog'] ?? 0, C['open.n'] ?? 0)}; thicket time ${((C['bush.time'] ?? 0) / Math.max(1, C['players'] ?? 1) / gs.length * 0 + (C['bush.time'] ?? 0) / (mins * 60 * 10) * 100).toFixed(1)}% of fighter-time, standing still in one ${((C['bush.stillTime'] ?? 0) / (mins * 60 * 10) * 100).toFixed(2)}%`);
-    console.log(`  focus: ${(C['focus.samples'] ?? 0)} samples with ≥3 on fighters, share on the top target ${(((C['focus.onTop'] ?? 0) / Math.max(1, C['focus.samples'] ?? 0)) * 100).toFixed(0)}%`);
-    console.log(`  deaths ${C['f.deaths'] ?? 0} (${((C['f.deaths'] ?? 0) / mins).toFixed(2)}/min): under enemy tower ${pc(C['f.deaths.underEnemyTower'] ?? 0, C['f.deaths'] ?? 0)}, stayed <30% ≥2 s outside retreat ${pc(C['f.deaths.stayedLow'] ?? 0, C['f.deaths'] ?? 0)}, isolated ${pc(C['f.deaths.isolated'] ?? 0, C['f.deaths'] ?? 0)}, <75 s after respawn ${pc(C['f.deaths.within75sOfRespawn'] ?? 0, C['f.deaths'] ?? 0)}, unforced ${pc(C['f.deaths.unforced'] ?? 0, C['f.deaths'] ?? 0)}`);
-    if (H['death.mode3s']) console.log(`     mode 3 s before death: ${Object.entries(H['death.mode3s']).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
-    if (C['tm.even'] !== undefined) console.log(`     deaths per team-minute: behind ≥2000 ${((C['death.behind'] ?? 0) / Math.max(0.1, C['tm.behind'] ?? 0)).toFixed(2)} (${(C['tm.behind'] ?? 0).toFixed(0)} min), even ${((C['death.even'] ?? 0) / Math.max(0.1, C['tm.even'] ?? 0)).toFixed(2)}, ahead ${((C['death.ahead'] ?? 0) / Math.max(0.1, C['tm.ahead'] ?? 0)).toFixed(2)}`);
-    console.log(`  last hits (Wicks by fighters before 14:00) ${pc(C['minion.lh14'] ?? 0, C['minion.deaths14'] ?? 0)}`);
-    const fm = (C['players'] ?? 10) / gs.length * mins / gs.length * gs.length;
-    void fm;
-    const seatMin = gs.reduce((a, g) => a + (g.c['players'] ?? 10) * g.dur / 60, 0);
-    console.log(`  abilities ${((C['abil.casts'] ?? 0) / seatMin).toFixed(2)}/seat-min (with an enemy fighter in 15 m ${pc(C['abil.casts.withEnemy'] ?? 0, C['abil.casts'] ?? 0)}), chains ${pc(C['abil.chain'] ?? 0, C['abil.casts.withEnemy'] ?? 0)}; ults ${((C['ult.casts'] ?? 0) / Math.max(1, C['ult.minutesAfter6'] ?? 1)).toFixed(2)}/min after lvl 6, no enemy in 15 m ${pc(C['ult.noEnemy15'] ?? 0, C['ult.casts'] ?? 0)}; spells ${((C['spell.casts'] ?? 0) / seatMin).toFixed(2)}/seat-min, item actives ${((C['itemActive.casts'] ?? 0) / seatMin).toFixed(3)}/seat-min`);
-    console.log(`  fog: casts recorded by observers that could not see the caster ${pc(C['cast.unseenObservers'] ?? 0, C['cast.observers'] ?? 0)}`);
-    console.log(`  objectives ${JSON.stringify(H['obj'] ?? {})}: contested ${pc(C['obj.contested'] ?? 0, C['obj.n'] ?? 0)}, mean own at ${((C['obj.ownAt'] ?? 0) / Math.max(1, C['obj.n'] ?? 0)).toFixed(1)}, by the team behind ${C['obj.byBehind'] ?? 0}; camps ${JSON.stringify(H['camp.kill'] ?? {})}`);
-    console.log(`  grouping (14:00+): largest cluster ${(((C['group.largestShare'] ?? 0) / Math.max(1, C['group.samples'] ?? 0)) * 100).toFixed(0)}% of the living team; split pushers ${((C['group.splitPushers'] ?? 0) / Math.max(1, C['group.samples'] ?? 0)).toFixed(2)}/team-sample, alone elsewhere ${((C['group.aloneElsewhere'] ?? 0) / Math.max(1, C['group.samples'] ?? 0)).toFixed(2)}`);
-    console.log(`  lead at 15:00 ${JSON.stringify(H['lead15'] ?? {})}; defend entries ${C['defend.entries'] ?? 0}; recalls ${C['recall.start'] ?? 0}`);
-    const mt = H['mode.time'] ?? {}; const tot = Object.values(mt).reduce((a, b) => a + b, 0);
-    console.log(`  mode share: ${Object.entries(mt).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((v / tot) * 100).toFixed(1)}%`).join(', ')}`);
-    console.log(`  stuck (move order, < 0.4 m in 3 s): ${((C['stuck.time'] ?? 0) / seatMin).toFixed(2)} s/seat-min; hotspots ${Object.entries(H['stuck.where'] ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `${k}:${v.toFixed(0)}s`).join(' ')}`);
-    console.log(`  Wicks stuck (no target, < 0.3 m in 3 s): ${(C['minion.stuckSec'] ?? 0)} Wick-s; hotspots ${Object.entries(H['minion.stuckWhere'] ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k}:${v}`).join(' ')}`);
-    if (key.startsWith('fray')) console.log(`  fray: idle (no one in 25 m) ${pc(C['fray.idleTime'] ?? 0, (C['fray.idleTime'] ?? 0) + (C['fray.engagedTime'] ?? 0))}, kills on the score leader ${pc(C['fray.killLeader'] ?? 0, C['td.n'] ?? 0)}`);
-    console.log(`  items: anti-heal owners ${pc(C['items.antiHealOwners'] ?? 0, C['players'] ?? 0)}, mean held ${((C['items.held'] ?? 0) / Math.max(1, C['players'] ?? 1)).toFixed(1)}`);
-  }
-}
-
-const MERGE = opt('merge', '');
-if (MERGE) merge(MERGE.split(','));
-else {
-  const diff = opt('diff', 'adept'), seeds = Number(opt('seeds', '8')), seed0 = Number(opt('seed0', '1')), cut = Number(opt('cut', '1800'));
-  const suites = opt('suites', 'rift,bridge,fray').split(',');
-  const catalog = loadCatalog();
-  const games: GameOut[] = [];
-  const t0 = Date.now();
-  for (const s of suites) {
-    const ns = s === 'rift' ? seeds : s === 'bridge' ? Math.max(2, seeds >> 1) : Math.max(4, seeds);
-    for (let i = 0; i < ns; i++) { const g = runGame(catalog, s, seed0 + i, diff, cut); games.push(g); console.log(`${s} ${diff} seed ${seed0 + i}: ${(g.dur / 60).toFixed(1)} min ${g.reason} winner ${g.winner} (${((Date.now() - t0) / 1000).toFixed(0)} s)`); }
-  }
-  const outp = opt('out', `_harness/_reports/_tmp_diag_ai_${diff}.json`);
-  writeFileSync(outp, JSON.stringify({ diff, games }));
-  console.log(`wrote ${outp}`);
 }

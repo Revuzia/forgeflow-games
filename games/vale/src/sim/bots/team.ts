@@ -61,6 +61,8 @@ export interface Guard {
 export interface Entry { readonly x: number; readonly y: number; readonly lane: number; readonly thicket: number }
 
 export const TEAM_THINK_TICKS = 15;
+/** owner_rulings 44, round 2: seconds a defend call or an answer stands after its threat last showed */
+const DEFEND_STICK = 4;
 
 function roleOf(k: Knowledge, s: SeatSetup): string {
   if (s.role) return s.role;
@@ -191,6 +193,12 @@ export class TeamBrain {
   /** owner_rulings 44: the core's own guards (the structures the core requires), own structures' health at the last think
    *  and when each was last hurt */
   private readonly coreGuards = new Set<string>();
+  private readonly enemyCorePath = new Set<string>();
+  /** round 2: the sticky defend calls (until, value, point, fighters per lane; the base's) and the sticky answers */
+  private readonly stickDef: Float64Array; private readonly stickVal: Float64Array;
+  private readonly stickX: Float64Array; private readonly stickY: Float64Array; private readonly stickF: Int32Array;
+  private stickBase = -1e9; private stickBaseV = 0; private stickBaseX = 0; private stickBaseY = 0;
+  private readonly answerUntil = new Map<PlayerId, { lane: number; until: number }>();
   private readonly structHp = new Map<number, number>();
   private readonly structHitAt = new Map<number, number>();
 
@@ -207,6 +215,7 @@ export class TeamBrain {
     this.defendX = new Float64Array(n); this.defendY = new Float64Array(n);
     this.defendFighters = new Int32Array(n); this.laners = new Int32Array(n);
     this.answerX = new Float64Array(n); this.answerY = new Float64Array(n);
+    this.stickDef = new Float64Array(n).fill(-1e9); this.stickVal = new Float64Array(n); this.stickX = new Float64Array(n); this.stickY = new Float64Array(n); this.stickF = new Int32Array(n);
     this.campReady = new Float64Array(k.camps.length);
     this.campBlock = new Float64Array(k.camps.length);
     this.campOn = new Float64Array(k.camps.length).fill(-1);
@@ -221,6 +230,9 @@ export class TeamBrain {
     };
     for (const st of k.structs) this.classes.set(st.id, st.isCore || st.lane < 0 ? 2 : Math.min(2, depth(st.id, 0)) as StructClass);
     for (const st of k.structs) if (st.isCore && st.team === team) for (const r of st.requires) this.coreGuards.add(r);
+    // (the enemy core's requires-closure: the structures standing between a push and its core)
+    const walk = (id: string, g: number): void => { if (g > 12 || this.enemyCorePath.has(id)) return; this.enemyCorePath.add(id); const st = k.structs.find((x) => x.id === id); if (st) for (const r of st.requires) walk(r, g + 1); };
+    for (const st of k.structs) if (st.isCore && st.team !== team) for (const r of st.requires) walk(r, 0);
     // gank entries and ambush spots
     const th = k.map.thickets;
     for (let i = 0; i < th.length; i++) {
@@ -427,7 +439,9 @@ export class TeamBrain {
         if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing ? 1 : 0)) * d.defendMatch - 1e-9));
       } else if (coming > 0) need = Math.max(1, Math.ceil(coming * d.defendMatch - 1e-9));
       // (owner_rulings 44: a big wave — eight or more over ours — is two defenders' work, as is a wave on a structure under half)
-      else if (cls > 0 && minions - mine >= 4) need = minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1;
+      // (round 2: a stacked wave of fourteen or more over ours is three — the late game's 18-33 Wick stacks took Lanterns from
+      // two defenders; scaled by the tier's defendMatch)
+      else if (cls > 0 && minions - mine >= 4) need = Math.max(1, Math.ceil((minions - mine >= 14 ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
       // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
       // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
       const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));
@@ -557,8 +571,20 @@ export class TeamBrain {
    */
   private thinkAnswers(w: World): void {
     this.answer.clear();
+    const k = this.k, now = w.time;
+    if (k.kind !== 'rift' || this.phase === 'early' || this.rush || !this.diff.readsWaves) { this.answerUntil.clear(); return; }
+    this.answerFill(w);
+    // (round 2: an answer stands DEFEND_STICK s after it was last given, while its fighter is fit — see delayDefend)
+    for (const [p, lane] of this.answer) this.answerUntil.set(p, { lane, until: now + DEFEND_STICK });
+    for (const [p, a] of [...this.answerUntil]) {
+      const e = w.players[p]?.ent;
+      if (now > a.until || !e || !e.alive || e.hp < e.maxHp * 0.5) { this.answerUntil.delete(p); continue; }
+      if (!this.answer.has(p)) this.answer.set(p, a.lane);
+    }
+  }
+
+  private answerFill(w: World): void {
     const k = this.k, tp = this.perc, now = w.time;
-    if (k.kind !== 'rift' || this.phase === 'early' || this.rush || !this.diff.readsWaves) return;
     for (const l of k.lanes) {
       const i = l.index;
       let need = 0, x = 0, y = 0;
@@ -707,11 +733,21 @@ export class TeamBrain {
 
   /** macroDelay on defend calls: a threat is answered once it has held the tier's delay */
   private delayDefend(now: number): void {
-    if (this.diff.macroDelay <= 0) return;
-    for (let i = 0; i < this.defend.length; i++) {
-      if (!this.held(`def${i}`, this.defend[i] > 0.05, now)) { this.defend[i] = 0; this.defendFighters[i] = 0; }
+    if (this.diff.macroDelay > 0) {
+      for (let i = 0; i < this.defend.length; i++) {
+        if (!this.held(`def${i}`, this.defend[i] > 0.05, now)) { this.defend[i] = 0; this.defendFighters[i] = 0; }
+      }
+      if (!this.held('base', this.baseThreat > 0.05, now)) this.baseThreat = 0;
     }
-    if (!this.held('base', this.baseThreat > 0.05, now)) this.baseThreat = 0;
+    // (owner_rulings 44, round 2: a defend call stands DEFEND_STICK s after its threat last showed — an attacker flickering in
+    // and out of sight turned the call on and off every think, and the fighters it named paced between the road and the
+    // structure: most of veteran's full-health back-and-forth walks)
+    for (let i = 0; i < this.defend.length; i++) {
+      if (this.defend[i] > 0.05) { this.stickDef[i] = now + DEFEND_STICK; this.stickVal[i] = this.defend[i]; this.stickX[i] = this.defendX[i]; this.stickY[i] = this.defendY[i]; this.stickF[i] = this.defendFighters[i]; }
+      else if (now < this.stickDef[i]) { this.defend[i] = this.stickVal[i]; this.defendX[i] = this.stickX[i]; this.defendY[i] = this.stickY[i]; this.defendFighters[i] = this.stickF[i]; }
+    }
+    if (this.baseThreat > 0.05) { this.stickBase = now + DEFEND_STICK; this.stickBaseV = this.baseThreat; this.stickBaseX = this.baseX; this.stickBaseY = this.baseY; }
+    else if (now < this.stickBase) { this.baseThreat = this.stickBaseV; this.baseX = this.stickBaseX; this.baseY = this.stickBaseY; }
   }
 
   structInfoOf(e: Entity): StructInfo | undefined {
@@ -785,6 +821,8 @@ export class TeamBrain {
       let score: number;
       if (info.isCore) score = 1000;
       else if (closeOut && info.lane < 0 && !info.respawns) score = 900 - dhypot(e.x - cx, e.y - cy) * 0.5;
+      // (closeOut: the way to the core — the middle road's Needles and its Lantern — before the other roads' towers)
+      else if (closeOut && this.enemyCorePath.has(info.id)) score = (this.respawning(info) ? 600 : 300) - (e.hp / Math.max(1, e.maxHp)) * 10;
       else if (this.respawning(info)) score = towersLeft === 0 ? 500 - dhypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 : -1;
       else {
         // the least-pushed lane first: towers nearer our side score higher
@@ -814,7 +852,8 @@ export class TeamBrain {
         if (g && g.respawns && this.downAt.has(g.id) && !this.structAliveInfo(g)) { opened = true; break; }
       }
     }
-    const endgame = !!this.siege && !!bestInfo && (bestInfo.isCore || (bestInfo.respawns && towersLeft === 0) || opened);
+    const endgame = !!this.siege && !!bestInfo && (bestInfo.isCore || (bestInfo.respawns && towersLeft === 0) || opened ||
+      (closeOut && (bestInfo.lane < 0 || bestInfo.respawns)));
     if (endgame) {
       group = true;
       let gatesTotal = 0, gatesUp = 0;

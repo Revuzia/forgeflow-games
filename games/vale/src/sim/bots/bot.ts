@@ -212,7 +212,7 @@ export class Bot extends BotBase implements BotController {
   }
 
   private clearPlan(): void {
-    this.pMove = false; this.pFight = null; this.pSiege = null; this.pSiegeFirst = false; this.pFarm = 0; this.pMonsters = false; this.pAggro = 0; this.pDive = false; this.pLhFight = false;
+    this.pMove = false; this.pFight = null; this.pSiege = null; this.pSiegeFirst = false; this.pFarm = 0; this.pMonsters = false; this.pAggro = 0; this.pDive = false; this.pLhFight = false; this.pClear = false;
     this.caged = false;
     this.peelVictim = null; this.peelDiver = null;
   }
@@ -1101,12 +1101,12 @@ export class Bot extends BotBase implements BotController {
    * + 0.1 for a tank or support − 0.3 when I am under 35 % − 0.2 when the diver stands under an enemy tower.
    */
   /** owner_rulings 44: the teammate whose peel a dive on `a` is — the support within 8 m of it, else the nearest teammate within
-   *  12 m; above 35 % health and not recalling (fixed scan order: every bot of the team reads the same one) */
+   *  12 m; above half health and not recalling (fixed scan order: every bot of the team reads the same one) */
   private designatedPeeler(a: Entity): Entity | null {
     let best: Entity | null = null, bd = Infinity, sup: Entity | null = null;
     const b = this.brain;
     for (const f of this.perc.allyFighters) {
-      if (f === a || !f.alive || f.hp < f.maxHp * 0.35 || f.stateOverride === 'recall') continue;
+      if (f === a || !f.alive || f.hp < f.maxHp * 0.5 || f.stateOverride === 'recall') continue;
       const d2 = this.dist2(f, a.x, a.y);
       if (d2 > 12 * 12) continue;
       if (!sup && d2 <= 8 * 8 && b && f.player && b.laneOf(f.player.player).support) sup = f;
@@ -1158,7 +1158,7 @@ export class Bot extends BotBase implements BotController {
       // (from 0.72: a dive is urgent — it overrides a mode younger than its minimum time; a kill of mine that is on comes first)
       const u = 0.72 + 0.2 * value + (tank ? 0.1 : 0) - (this.hpF < 0.35 ? 0.3 : 0) - (this.towerSafe(diver.x, diver.y, 0) ? 0 : 0.2) -
         (this.mode === 'allin' && this.killTarget && this.killTarget !== diver && this.killMargin >= 1.2 ? 0.25 : 0);
-      const ud = des && this.hpF >= 0.35 ? Math.max(u, 0.97) : u;
+      const ud = des ? Math.max(u, 0.97) : u;
       if (ud > best) { best = ud; this.protectAlly = a; this.protectDiver = diver; this.protectDes = des; }
     }
     if (this.peelRolls.size > 12) for (const [id, r] of [...this.peelRolls]) if (now - r.last > 6) this.peelRolls.delete(id);
@@ -1194,7 +1194,8 @@ export class Bot extends BotBase implements BotController {
     const contact = dhypot(d.x - a.x, d.y - a.y) <= d.stats.range + d.radius + a.radius + 1.5;
     // (a body-block is for a partner I stand beside; from farther off the diver is reached faster than the gap between them)
     // (only a melee diver can be blocked: a ranged one shoots past the body, so the tank goes at it instead)
-    if (this.diff.peelBodyBlock && tank && !contact && d.stats.range <= 3 && !inAttackRange(e, d) && this.dist2(a, e.x, e.y) <= 4 * 4) {
+    // (owner_rulings 44: the designated peeler goes at the diver itself — a block lands nothing on it)
+    if (this.diff.peelBodyBlock && tank && !this.protectDes && !contact && d.stats.range <= 3 && !inAttackRange(e, d) && this.dist2(a, e.x, e.y) <= 4 * 4) {
       const dx = d.x - a.x, dy = d.y - a.y, dd = dhypot(dx, dy) || 1;
       const bx = a.x + (dx / dd) * 1.6, by = a.y + (dy / dd) * 1.6;
       if (this.w.nav.walkable(bx, by) && sq(bx - e.x) + sq(by - e.y) > 1.2 * 1.2) { this.pMoveX = bx; this.pMoveY = by; this.pFight = null; }
@@ -1296,6 +1297,7 @@ export class Bot extends BotBase implements BotController {
         if (d2 < wd) { wd = d2; wk = u; }
       }
       if (wk) {
+        this.pClear = true;
         const r = this.e.stats.range + this.e.radius + wk.radius;
         const dx = sx - wk.x, dy = sy - wk.y, dd = dhypot(dx, dy) || 1;
         if (this.dist2(wk, e.x, e.y) > sq(r + 0.5)) { this.pMoveX = wk.x + (dx / dd) * Math.max(0.5, r - 0.6); this.pMoveY = wk.y + (dy / dd) * Math.max(0.5, r - 0.6); }
@@ -1447,6 +1449,8 @@ export class Bot extends BotBase implements BotController {
     if (ans !== undefined) { x = b.answerX[ans]; y = b.answerY[ans]; best = 3; }
     else if (this.lane >= 0 && b.defend[this.lane] > 0.05) { x = b.defendX[this.lane]; y = b.defendY[this.lane]; best = 2; }
     for (let i = 0; i < b.defend.length; i++) if (b.defend[i] > best) { best = b.defend[i]; x = b.defendX[i]; y = b.defendY[i]; }
+    // (round 2: no call left to answer — the mode is a moment stale: carry on with the plan, never toward the map's corner)
+    if (best <= 0.05) { this.execLaneOrPush(); return; }
     this.pMove = true; this.pMoveX = x; this.pMoveY = y;
     this.pFarm = 2; this.pAggro = 0.75;
     const e = this.e;
@@ -1466,6 +1470,8 @@ export class Bot extends BotBase implements BotController {
       const info = this.m.structInfo(st);
       if (info && this.holdsWave(b.classOf(info))) { atStruct = true; break; }
     }
+    // (owner_rulings 44: and clears it — every swing on the wave)
+    if (atStruct && !(t && this.adv >= 0.38)) this.pClear = true;
     this.waveGuard(atStruct);
   }
 
@@ -1567,7 +1573,8 @@ export class Bot extends BotBase implements BotController {
     // them unless my burst finishes it now (a steal is the genre's play); the fighters there are the fight)
     const foes = this.enemiesNear(c.x, c.y, 18), mates = this.alliesNear(c.x, c.y, 18);
     let steal = false;
-    if (up && foes >= mates + 2) {
+    // (owner_rulings 44, round 2: never against three or more — a lone steal into four was the verifier's 1-against-4 take)
+    if (up && foes >= mates + 2 && foes < 3) {
       let mon: Entity | null = null;
       for (const m of this.perc.monsters) if (m.alive && Math.abs(m.x - c.x) < 8 && Math.abs(m.y - c.y) < 8 && (!mon || m.hp + m.shield > mon.hp + mon.shield)) mon = m;
       steal = !!mon && mon.hp + mon.shield <= this.burstOn(mon) * 0.9 && this.dist2(mon, e.x, e.y) <= 10 * 10;
