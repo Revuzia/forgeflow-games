@@ -1,4 +1,4 @@
-// GENESIS — reversed-Z float depth in place of the logarithmic depth buffer (ROADMAP-60FPS step 8, `?revz=0` off).
+// GENESIS — reversed-Z float depth in place of the logarithmic depth buffer (ROADMAP-60FPS step 8, `?revz=1` on; default off).
 //
 // The logarithmic depth buffer makes EVERY fragment shader write gl_FragDepth. A shader that writes depth cannot be
 // depth-tested before it runs (and on Apple GPUs it switches the tile renderer's hidden-surface removal off), so the
@@ -14,7 +14,7 @@
 //   - the sun's shadow cascades stay as they were (orthographic, standard depth, sampler2DShadow LessEqual, the same
 //     uShadowMat): standardDepth() switches the clip convention back for that pass, so the atlas is the same;
 //   - CPU frusta: frustumFromProjection() passes the camera's reversedDepth on.
-// Without EXT_clip_control (or with ?revz=0) nothing changes: log depth + zcons, as before.
+// Without EXT_clip_control, or without `?revz=1` (default off for now), nothing changes: log depth + zcons, as before.
 
 import type { Camera, Frustum, Matrix4, WebGLRenderer } from 'three';
 import { perfSwitch, perfSwitchNote } from '../perfswitch.ts';
@@ -23,7 +23,9 @@ import { perfSwitch, perfSwitchNote } from '../perfswitch.ts';
 export const CAM_NEAR = 0.05;
 export const CAM_FAR = 2e7;
 
-const WANT = perfSwitch('revz', true);
+// DEFAULT OFF (PERF s18): the image pairs agree in six views, but decals and roads are not image-proven yet and two
+// later pairs were dominated by world-state drift; `?revz=1` turns it on (the Mac's A/B), `?revz=0` / nothing = log depth.
+const WANT = perfSwitch('revz', false);
 
 /** what the renderer ended up with (the perf report prints it) */
 export const REVZ = { on: false, clipControl: false, why: 'not decided', ext: '' };
@@ -42,7 +44,7 @@ export function chooseDepthMode(gl: WebGL2RenderingContext | null, allow = WANT)
   try { have = gl.getSupportedExtensions() ?? []; } catch { /* lost context */ }
   REVZ.clipControl = have.includes('EXT_clip_control');
   REVZ.ext = DEPTH_EXT.map((e) => `${have.includes(e) ? '+' : '-'}${e}`).join(' ');
-  if (!allow) { REVZ.why = 'switched off (?revz=0)'; perfSwitchNote('revz', '0'); return false; }
+  if (!allow) { REVZ.why = 'off (default; ?revz=1 turns it on)'; perfSwitchNote('revz', '0'); return false; }
   if (!REVZ.clipControl) { REVZ.why = 'EXT_clip_control missing: logarithmic depth'; perfSwitchNote('revz', '0(no-ext)'); return false; }
   REVZ.on = true;
   REVZ.why = 'EXT_clip_control: reversed-Z, 32-bit float depth, no gl_FragDepth';

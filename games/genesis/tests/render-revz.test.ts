@@ -16,7 +16,7 @@ test('revz: with EXT_clip_control the reversed path is chosen; without it, or sw
   assert.match(revzReport()[0], /LOGARITHMIC.*EXT_clip_control NO/);
   assert.match(revzReport()[1], /-EXT_clip_control/);
   assert.equal(chooseDepthMode(fakeGl(['EXT_clip_control']), false), false);
-  assert.match(revzReport()[0], /LOGARITHMIC.*EXT_clip_control YES.*revz=0/);
+  assert.match(revzReport()[0], /LOGARITHMIC.*EXT_clip_control YES.*revz=1/);
   assert.equal(chooseDepthMode(null, true), false);
 });
 

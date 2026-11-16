@@ -1548,3 +1548,10 @@ long press frame-rate independent. Report after 1-2 verified.
   vs default over 3 loads in one tab (GPU process / tab MB); the triangles should be gone (`?upsched=0` if not).
   Then step 9 (shcache). Open: a decal image pair under revz (fix the probe's injection or fire a real miracle);
   roads close-up pair; the tab's JS heap of a bfcache-kept page (app lane: drop the world on pagehide).
+- FINAL DEFAULT: `revz` is OFF by default, `?revz=1` turns it on (lead's rule: default off unless every view is proven
+  equal). Reason: the last pairs on distB (gr-shore vs gl-shore 10.2/255, gr-town vs gl-town-2 8.4/255) differ beyond
+  the floor — by cloud drift and by the lake's coarse-sheet state, both of which also differ between two runs of the
+  SAME mode (r1 vs r2 town 8.5; l3-town vs l3-towndecal), so they prove nothing either way; decals and roads are not
+  image-proven. Nothing that looked like z-fighting or a depth error was seen in any reversed image. The report's
+  `depth:` lines print EXT_clip_control YES/NO in both modes. Mac round 8: ABAB default vs `?revz=1`.
+- GATE check3.log (final tree, revz default off): npm run check 1005 pass, 0 fail, exit 0; npm run build exit 0 (build-prod3.log).
