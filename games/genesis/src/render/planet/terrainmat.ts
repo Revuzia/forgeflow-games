@@ -30,6 +30,7 @@ import { SHADOW_GLSL } from './lights.ts';
 import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS } from './terrainvert.glsl.ts';
 import { GROUND_FRAG_PARS, GROUND_UNIFORMS, GROUND_VERT_MAIN, GROUND_VERT_PARS } from './groundfloor.ts';
 import { orthoDepth } from '../shaders/zcons.ts';
+import { TNOISE, TNOISE_GLSL, TNOISE_UNIFORMS } from './noisetex.ts';
 
 /** planet kind → palette / behaviour code used by the shaders */
 export function kindCode(kind: string): number {
@@ -76,6 +77,7 @@ ${CLOUD_DENSITY_GLSL}
 ${SHADOW_GLSL}
 ${TS_DEFS}
 ${TSHADE.glsl}
+${TNOISE_GLSL}
 varying vec3 vBodyPos;
 varying vec3 vBodyN;
 varying vec4 vF0;  // snow sand soil ash
@@ -1887,6 +1889,7 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
   mat.onBeforeCompile = (shader) => {
     for (const k of Object.keys(shared)) shader.uniforms[k] = shared[k];
     Object.assign(shader.uniforms, GROUND_UNIFORMS);
+    if (TNOISE) Object.assign(shader.uniforms, TNOISE_UNIFORMS);
     shader.uniforms.uMorph = morph;
     shader.vertexShader = shader.vertexShader
       .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VERT_PARS}`)
@@ -1904,7 +1907,7 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
     if (TSHADE.has('albedo')) shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', 'outgoingLight = ts.albedo * 0.6;\n#include <opaque_fragment>');
   };
-  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}`;
+  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}${TNOISE ? '-tnoise' : ''}`;
   return mat;
 }
 

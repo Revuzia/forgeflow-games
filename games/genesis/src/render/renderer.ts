@@ -19,6 +19,7 @@ import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
 import { triStats } from './tristats.ts';
 import { OVERDRAW, VZPRE, ZPRE, ZPRE_LAYER, overdrawPatch } from './overdraw.ts';
+import { ensureTNoise } from './planet/noisetex.ts';
 import { syncPlanetVisuals } from './planet/planetsync.ts';
 import { SunShadows } from './planet/lights.ts';
 import { makeWaterSceneUniforms } from './planet/ocean.ts';
@@ -427,6 +428,7 @@ export class Renderer {
     const t0 = performance.now();
     const r = this.three;
     r.info.reset();
+    ensureTNoise(r);   // PERF s20 `?tnoise=tex`: the noise volume, rendered once (a no-op when off)
     const q = this.quality;
     this.frameNo++;
     gpuMem.tick();

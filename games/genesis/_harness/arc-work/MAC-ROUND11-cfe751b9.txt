@@ -1,0 +1,38 @@
+GENESIS Mac ROUND 11, build cfe751b9 (all 21 headers say "cfe751b9+dirty built 2026-11-16T16:53Z"). Full reports attached.
+Clean Chrome, 1686x963, Ultra unless noted, every run landed at 59.7 m.
+CAVEAT: something outside the test kept the GPU 47-58% busy before, during and after the round (likely the main Chrome).
+  Runs 20/21 came out at about half of round 9's speed (Low 3.3 vs 6.2, High 1.7 vs 3.8).
+  Compare within this round only.
+
+S = tshade=all&vshade=all&bshade=all&wshade=all. S runs: 5.4 / 5.0 / 7.1 / 4.9 / 5.8 / 6.1 fps (mean ~5.7).
+run switch (+S)                               fps  p50/p95 ms
+ 1  S                                         5.4  183/201
+ 2  msaa=0                                    8.1  117/183   <- only clear win
+ 3  clouds=0                                  5.3  167/234
+ 4  S                                         5.0  184/250
+ 5  atmo=0&clouds=0                           6.1  150/234
+ 6  gtao=0                                    6.1  150/233
+ 7  shadows=0                                 6.7  150/167
+ 8  S                                         7.1  134/151
+ 9  bloom=0&godrays=0&lum=0&fx=0&decals=0     5.9  167/184
+10  water=0                                   6.5  150/168
+11  hide=veg                                  5.0  200/217
+12  S                                         4.9  200/218
+13  hide=terrain                              5.9  167/184
+14  scene=0                                   6.4  151/168
+15  rscale=0.5 (843x482)                      7.0  149/166
+16  S                                         5.8  167/184
+17  everything off                            6.0  167/184
+18  tshade=all,nolight                        6.2  166/169
+19  S                                         6.1  167/184
+20  normal link, Low (1265x722)               3.3  301/335
+21  normal link, High                         1.7  600/635
+
+S varies by about 2 fps between repeats, so only msaa=0 stands clearly above it.
+rscale=0.5 has 1/4 of the pixels but only reaches 7.0 fps: in the simplified picture the cost no longer scales with pixels.
+"Everything off" (6.0) is no better than S even though msaa=0 alone gave 8.1, which points to a floor of ~150-170 ms per frame.
+Frame times sit on ~16.7 ms steps (117/134/150/167/184/200), so the display refresh rounds them.
+The "tris by layer" lines are missing, as expected for this build. Where this differs from the protocol:
+
+* Run 18: I replaced “tshade=all” in S with “tshade=all,nolight”, as you described.
+* Same as earlier rounds: I added the usual launch flags to the clean Chrome and set the preset with the Settings button.

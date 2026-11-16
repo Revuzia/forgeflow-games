@@ -1744,3 +1744,14 @@ long press frame-rate independent. Report after 1-2 verified.
 - `?tcache=1`: not started (design above, build order (1)-(5)).
 - ROUND 10+ ASK additions: `zpre=2`, `zpre=2&revz=1` (look for holes / leaf halos), `vzpre=1`; read the two new
   `tris by layer` lines.
+
+## LEAD NOTE after MAC ROUND 11 (2026-11-16) — the ~150 ms floor
+- With every shader simplified (S), nothing single removes the floor: scene=0 151 ms, shadows=0 150, everything-off (post) 167,
+  rscale=0.5 149, msaa=0 117. No run had scene=0 AND shadows=0 together.
+- Hypothesis: the floor is GEOMETRY throughput (vertex + raster of ~8-10 M scene + ~19 M shadow triangles a frame, mostly trees;
+  hide=veg leaves the trees' shadows). It does not scale with pixels (rscale 0.5 no gain; tiny window 116 ms in round 9), msaa
+  helps (per-sample raster of small triangles). Round 12 tests scene=0&shadows=0, shadows=0&hide=veg,cover,life, fartrees=0 etc.
+  on build dbadbde1 (prints tris by layer).
+- If confirmed: cached far shadow cascades (roadmap step 9), far-tree hull casters (shhull, steps in SESSION 19c), then the
+  scene-side tree triangle budget.
+- Caveat: round 11 ran with another process holding the GPU 47-58 % busy.
