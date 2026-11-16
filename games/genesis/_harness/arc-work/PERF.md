@@ -1807,3 +1807,14 @@ long press frame-rate independent. Report after 1-2 verified.
   remaining scene + shadow cost to reach 33 ms total.
 - Unexplained: the quiet-Mac check's S run on build cfe751b9 was 251 ms (Finder at 97 % CPU, iCloud syncing, WindowServer
   ~66 % GPU while the game ran) vs ~90 ms for S on dbadbde1 an hour later. Round 13 re-measures base/Low/High on dbadbde1.
+
+## LEAD NOTE after MAC ROUND 13 (2026-11-16, build dbadbde1, Ultra 1686x963; CPU busy with other jobs, GPU idle before)
+- N (normal) Ultra 500-517 ms, High 267, Low 133; N + all four shade cuts 133 ms.
+- P = scene=0&shadows=0: 117-133 ms. P + water=0: 17 ms (53 fps). P + msaa=0: 83. P + rscale=0.5: 49.
+  clouds / atmo / gtao / bloom+godrays+lum+fx+decals off: all within noise of P.
+- So the WATER pass costs ~100 ms a frame at full shading (round 12: ~30 ms with wshade=all) and scales with pixels; MSAA
+  multiplies it. The post chain, clouds, atmosphere and GTAO are NOT a cost worth work now.
+- Budget: terrain surface ~370 ms, water ~100 ms, everything else ~30 ms (incl. vsync step).
+- Connect with the owner's long-standing visual bug "a rippled water sheet lies over the hills at the landing spot, trunks
+  showing through" (rounds 2-8): water sheets are being shaded over land. Fixing where water is drawn is both the visual
+  fix and a large part of the water cost; the water fragment shader's noise needs the same treatment as the terrain's.
