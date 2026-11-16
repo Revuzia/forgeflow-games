@@ -31,8 +31,13 @@ export const BEH = {
 export const NBEH = 26;
 
 /** Scratch float slots in w.f (named, so no helper returns a double). NOW = the sim time of the think (or of the per-call pass) every brain
- *  function reads, instead of taking it as a parameter (a double argument to a call V8 does not inline is boxed: LF-02); DT = the think's dt. */
-export const F = { X: 0, Z: 1, D: 2, X2: 3, Z2: 4, S: 5, T: 6, A: 7, B: 8, C: 9, E: 10, G: 11, NOW: 12, DT: 13 } as const;
+ *  function reads, instead of taking it as a parameter (a double argument to a call V8 does not inline is boxed: LF-02); DT = the think's dt;
+ *  PX, PZ = the query point of the geometry tests below (inBounds, inKeepOut, inAreaAt, zoneStrengthAt, d2p). The world's scalar doubles
+ *  live here too, never in object fields (a double stored to a tagged field is boxed every time): LAST_T the previous call's t (NaN before
+ *  the first), T0 the session's first t, UNITS the units LIFE's own starts woke this call (not yet in the snapshot), MUSIC_ON the Music
+ *  Box's last start, NEW_WISH the last new wish on screen, SONG the last S06 song. */
+export const F = { X: 0, Z: 1, D: 2, X2: 3, Z2: 4, S: 5, T: 6, A: 7, B: 8, C: 9, E: 10, G: 11, NOW: 12, DT: 13, PX: 14, PZ: 15,
+  LAST_T: 16, T0: 17, UNITS: 18, MUSIC_ON: 19, NEW_WISH: 20, SONG: 21 } as const;
 
 export interface LifeWorld {
   seed: number; maxChars: number;
@@ -112,11 +117,11 @@ export interface LifeWorld {
   owned: Uint32Array; openPlaces: number; favKnown: Uint32Array; thingKinds: number;
   /* scripts */
   firstPlayDone: number; firstWishDone: number; firstWishPending: number; firstWishSlot: number; firstWishDeadline: number; poseOn: number;
-  lastNewWishT: number; lastSongT: number; cheerCause: number; squirtDue: Uint8Array;
+  cheerCause: number; squirtDue: Uint8Array;
   /* per-call */
-  sessionT0: number; lastT: number; touching: number; touchingUntil: number; musicPrev: number; musicOnT: number;
+  musicPrev: number;
   rowOfLocal: Int8Array; thingPrevX: Float32Array; thingPrevZ: Float32Array; thingPrevS: Float32Array; thingMovedT: Float64Array;
-  bumpT: Float64Array; bumpWith: Int8Array; unitsAdd: number; movers: number; nOut: number;
+  bumpT: Float64Array; bumpWith: Int8Array; movers: number; nOut: number;
   /* intents bookkeeping */
   perChar: Uint8Array; phrase: Float32Array; phraseN: Uint8Array; phraseHead: number;
   f: Float64Array;
@@ -179,14 +184,14 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     pieceUseT: nanF64(n), leaderIdleT: nanF64(32),
     owned: new Uint32Array(2), openPlaces: 1, favKnown: new Uint32Array(4), thingKinds: 0,
     firstPlayDone: 0, firstWishDone: 0, firstWishPending: 0, firstWishSlot: -1, firstWishDeadline: 0, poseOn: 0,
-    lastNewWishT: -1e9, lastSongT: -1e9, cheerCause: -1, squirtDue: u8(n),
-    sessionT0: NaN, lastT: NaN, touching: 0, touchingUntil: -1e9, musicPrev: 0, musicOnT: -1e9,
+    cheerCause: -1, squirtDue: u8(n), musicPrev: 0,
     rowOfLocal: i8(T).fill(-1), thingPrevX: f32(T).fill(NaN), thingPrevZ: f32(T).fill(NaN), thingPrevS: f32(T).fill(NaN), thingMovedT: nanF64(T),
-    bumpT: nanF64(n), bumpWith: i8(n).fill(-1), unitsAdd: 0, movers: 0, nOut: 0,
+    bumpT: nanF64(n), bumpWith: i8(n).fill(-1), movers: 0, nOut: 0,
     perChar: u8(n), phrase: f32(PHRASE_CAP * 16), phraseN: u8(PHRASE_CAP), phraseHead: 0,
-    f: f64(16),
+    f: f64(24),
     att: createAttention(),
   };
+  w.f[F.LAST_T] = NaN; w.f[F.T0] = NaN; w.f[F.MUSIC_ON] = -1e9; w.f[F.NEW_WISH] = -1e9; w.f[F.SONG] = -1e9;
   return w;
 }
 
@@ -250,77 +255,77 @@ export function copyPlace(w: LifeWorld, def: PlaceDef, layout: number): void {
   }
 }
 
-/* ───────────────────────────── geometry (results in w.f) ───────────────────────────── */
+/* ───────────────────────────── geometry (LF-02: no double crosses a call; results in w.f or as integers) ───────────────────────────── */
 
-/** Is (x, z) inside an area (disc r, or box hx hz turned by yaw) grown by `grow`? */
-export function inArea(shape: number, ax: number, az: number, r: number, hx: number, hz: number, yaw: number, x: number, z: number, grow: number): boolean {
-  const dx = x - ax, dz = z - az;
-  if (shape === 0) return dx * dx + dz * dz <= (r + grow) * (r + grow);
-  const c = Math.cos(yaw), s = Math.sin(yaw);
-  const lx = dx * c + dz * s, lz = -dx * s + dz * c;
-  return Math.abs(lx) <= hx + grow && Math.abs(lz) <= hz + grow;
+/** Squared distances as integers in cm² (never boxed): character i to character j, to thing row r, to the query point (w.f[F.PX], w.f[F.PZ]). */
+export const CM2 = 1e4;
+export function d2c(s: LifeSnapshot, i: number, j: number): number { const dx = s.x[i] - s.x[j], dz = s.z[i] - s.z[j]; return ((dx * dx + dz * dz) * CM2) | 0; }
+export function d2t(s: LifeSnapshot, i: number, r: number): number { const dx = s.x[i] - s.thingX[r], dz = s.z[i] - s.thingZ[r]; return ((dx * dx + dz * dz) * CM2) | 0; }
+export function d2p(w: LifeWorld, s: LifeSnapshot, i: number): number { const dx = s.x[i] - w.f[F.PX], dz = s.z[i] - w.f[F.PZ]; return ((dx * dx + dz * dz) * CM2) | 0; }
+/** The distance between characters i and j in mm (an integer). */
+export function dmm(s: LifeSnapshot, i: number, j: number): number { const dx = s.x[i] - s.x[j], dz = s.z[i] - s.z[j]; return (Math.sqrt(dx * dx + dz * dz) * 1000) | 0; }
+
+/** Is the query point inside zone k (patch 0) or patch k (patch 1)? (a disc of r, or a box of hx, hz turned by yaw) */
+export function inAreaAt(w: LifeWorld, patch: number, k: number): boolean {
+  const dx = w.f[F.PX] - (patch ? w.patchX[k] : w.zoneX[k]), dz = w.f[F.PZ] - (patch ? w.patchZ[k] : w.zoneZ[k]);
+  if ((patch ? w.patchShape[k] : w.zoneShape[k]) === 0) { const r = patch ? w.patchR[k] : w.zoneR[k]; return dx * dx + dz * dz <= r * r; }
+  const yaw = patch ? w.patchYaw[k] : w.zoneYaw[k], c = Math.cos(yaw), sn = Math.sin(yaw);
+  return Math.abs(dx * c + dz * sn) <= (patch ? w.patchHX[k] : w.zoneHX[k]) && Math.abs(dz * c - dx * sn) <= (patch ? w.patchHZ[k] : w.zoneHZ[k]);
 }
 
-/** Zone k's strength at (x, z) into w.f[F.S] (0 outside); with a falloff [full radius, edge strength] it falls evenly to the edge. */
-export function zoneStrengthAt(w: LifeWorld, k: number, x: number, z: number): void {
+/** Zone k's strength at the query point into w.f[F.S] (0 outside); with a falloff [full radius, edge strength] it falls evenly to the edge. */
+export function zoneStrengthAt(w: LifeWorld, k: number): void {
   w.f[F.S] = 0;
-  if (!inArea(w.zoneShape[k], w.zoneX[k], w.zoneZ[k], w.zoneR[k], w.zoneHX[k], w.zoneHZ[k], w.zoneYaw[k], x, z, 0)) return;
+  if (!inAreaAt(w, 0, k)) return;
   let s = w.zoneStr[k];
   if (w.zoneShape[k] === 0 && w.zoneFall0[k] >= 0) {
-    const d = Math.sqrt((x - w.zoneX[k]) * (x - w.zoneX[k]) + (z - w.zoneZ[k]) * (z - w.zoneZ[k])), r0 = w.zoneFall0[k], r1 = w.zoneR[k];
+    const dx = w.f[F.PX] - w.zoneX[k], dz = w.f[F.PZ] - w.zoneZ[k], d = Math.sqrt(dx * dx + dz * dz), r0 = w.zoneFall0[k], r1 = w.zoneR[k];
     if (d > r0 && r1 > r0) s = s + (w.zoneFall1[k] - s) * ((d - r0) / (r1 - r0));
   }
   w.f[F.S] = s;
 }
 
-/** The strongest zone of `kind` at (x, z): its index (or -1), strength into w.f[F.S]. */
-export function strongestZone(w: LifeWorld, kind: number, x: number, z: number): number {
-  let best = -1, bs = 0;
-  for (let k = 0; k < w.nZones; k++) {
-    if (w.zoneKind[k] !== kind) continue;
-    zoneStrengthAt(w, k, x, z);
-    if (w.f[F.S] > bs) { bs = w.f[F.S]; best = k; }
-  }
-  w.f[F.S] = bs;
-  return best;
-}
-
-/** Inside the place's bounds shrunk by `shrink` (a rounded box: the corner circle of radius `round`)? */
-export function inBounds(w: LifeWorld, x: number, z: number, shrink: number): boolean {
-  const dx = x - w.bx, dz = z - w.bz;
+/** Is the query point inside the place's bounds shrunk by shrinkMm / 1000 m (a rounded box: the corner circle of radius `round`)? */
+export function inBounds(w: LifeWorld, shrinkMm: number): boolean {
+  const shrink = shrinkMm * 0.001, dx = w.f[F.PX] - w.bx, dz = w.f[F.PZ] - w.bz;
   if (w.bShape === 0) { const r = w.ba - shrink; return r > 0 && dx * dx + dz * dz <= r * r; }
   const hx = w.ba - shrink, hz = w.bb - shrink;
   if (hx <= 0 || hz <= 0) return false;
   const ax = Math.abs(dx), az = Math.abs(dz);
   if (ax > hx || az > hz) return false;
-  const rr = Math.max(0, w.bround - shrink);
+  const rr = w.bround - shrink;
   if (rr <= 0) return true;
   const cx = hx - rr, cz = hz - rr;
   if (ax <= cx || az <= cz) return true;
   return (ax - cx) * (ax - cx) + (az - cz) * (az - cz) <= rr * rr;
 }
 
-/** Is (x, z) inside thing k's keep-out (its footprint grown by `grow`)? Patch and walk-on things (rug, pad, turntable, pool) have none. */
-export function inKeepOut(w: LifeWorld, s: LifeSnapshot, k: number, x: number, z: number, grow: number): boolean {
-  const m = w.thingMech[k];
+/** Is the query point inside thing k's keep-out (its footprint grown by growMm / 1000 m)? Patch and walk-on things (rug, pad, turntable,
+ *  pool) have none. */
+export function inKeepOut(w: LifeWorld, s: LifeSnapshot, k: number, growMm: number): boolean {
+  const m = w.thingMech[k], g = growMm * 0.001;
   let tx = w.thingX[k], tz = w.thingZ[k];
   const row = w.rowOfLocal[k];
   if (row >= 0) { tx = s.thingX[row]; tz = s.thingZ[row]; }
   else if (s.nThings > 0 || w.home) return false; // not out now (Home's things arrive one by one)
   if (m === 0 || m === MECH.pad || m === MECH.turntable || m === MECH.pool) return false;
-  if (m === MECH.ball) { const r = w.thingS0[k] + grow; return (x - tx) * (x - tx) + (z - tz) * (z - tz) <= r * r; }
-  if (m === MECH.ring) {
-    const d = Math.sqrt((x - tx) * (x - tx) + (z - tz) * (z - tz));
-    return Math.abs(d - w.thingS0[k]) <= w.thingS1[k] + grow;
-  }
-  if (m === MECH.swing) {
-    const hx = 0.7 + w.thingS1[k] * 0.5;
-    return inArea(1, tx, tz, 0, hx, w.thingS1[k] * 0.5, w.thingYaw[k], x, z, grow);
-  }
-  if (m === MECH.bar) return inArea(1, tx, tz, 0, w.thingS1[k] * 0.5, w.thingS0[k], w.thingYaw[k], x, z, grow);
-  if (m === MECH.mound || m === MECH.chime) return inArea(0, tx, tz, w.thingS0[k], 0, 0, 0, x, z, grow);
-  return inArea(1, tx, tz, 0, w.thingS0[k], w.thingS2[k], w.thingYaw[k], x, z, grow);
+  const dx = w.f[F.PX] - tx, dz = w.f[F.PZ] - tz, s0 = w.thingS0[k], s1 = w.thingS1[k];
+  if (m === MECH.ball || m === MECH.mound || m === MECH.chime) { const r = s0 + g; return dx * dx + dz * dz <= r * r; }
+  if (m === MECH.ring) return Math.abs(Math.sqrt(dx * dx + dz * dz) - s0) <= s1 + g;
+  const yaw = w.thingYaw[k], c = Math.cos(yaw), sn = Math.sin(yaw), lx = Math.abs(dx * c + dz * sn), lz = Math.abs(dz * c - dx * sn);
+  if (m === MECH.swing) return lx <= 0.7 + s1 * 0.5 + g && lz <= s1 * 0.5 + g;
+  if (m === MECH.bar) return lx <= s1 * 0.5 + g && lz <= s0 + g;
+  return lx <= s0 + g && lz <= w.thingS2[k] + g;
 }
+/** Is the query point clear of every thing's keep-out grown by growMm? */
+export function clearOfThings(w: LifeWorld, s: LifeSnapshot, growMm: number): boolean {
+  for (let k = 0; k < w.nThingDefs; k++) if (inKeepOut(w, s, k, growMm)) return false;
+  return true;
+}
+/** A free target's keep-out growth for a body of radius r: 0.4 m, and at least R + 0.05 m (mm). */
+export function keepMm(s: LifeSnapshot, i: number): number { return s.r[i] + 0.05 > 0.4 ? ((s.r[i] + 0.05) * 1000) | 0 : 400; }
+/** The shrink R + 0.2 m of a free target for character i (mm). */
+export function shrinkMm(s: LifeSnapshot, i: number): number { return ((s.r[i] + 0.2) * 1000) | 0; }
 
 /* ───────────────────────────── randomness (LIFE 11: one stream per character, in a Uint32Array) ───────────────────────────── */
 
@@ -364,9 +369,3 @@ export function pushEvent(ev: LifeEvents, kind: number, sub: number, a: number, 
 
 /** The pair index of slots a and b (ordered). */
 export function pairIdx(a: number, b: number): number { return a < b ? a * CAP + b : b * CAP + a; }
-
-/** Squared horizontal distance between two characters' centres into w.f[F.D] (and the distance into w.f[F.E]). */
-export function distChars(w: LifeWorld, s: LifeSnapshot, i: number, j: number): void {
-  const dx = s.x[j] - s.x[i], dz = s.z[j] - s.z[i];
-  w.f[F.D] = dx * dx + dz * dz; w.f[F.E] = Math.sqrt(w.f[F.D]);
-}

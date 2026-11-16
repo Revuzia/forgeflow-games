@@ -55,6 +55,7 @@ export interface ZoneDef extends Area { readonly id: string; readonly kind: numb
  *  [r, TOTAL length including both caps, 0] (lying along local x; p.standing = 1 stands it up); a ring [ringR, segR, gapDeg] with yaw = the gap
  *  direction (atan2(z, x): pi/2 opens toward the camera); a ball [r, 0, 0]; a mound [sphere r, top above ground, 0]; a pad or turntable
  *  [r, half thickness, 0]; a pool [r (or hx), surfaceY, 0 (or hz)]; mech 0 (a patch or zone thing) its area [r, 0, 0] or [hx, 0, hz].
+ *  A ramp slopes DOWN toward its local +x (yaw points downhill): its top (where the player sets a rider) is at local -x, its foot at +x.
  *  A thing of several parts (chimes, bells, crystals, lanterns: p.n parts spaced evenly over p.span metres along its yaw axis; the puff pads:
  *  p.x1, p.z1, p.x2, p.z2 for parts 1 and 2) keeps its parts in that order (PropWorldLike's prop order). p holds the mechanism parameters
  *  (MECH_RANGES' names; angles in degrees). useSpot: where a body stands to use it (a ring: its inner spot; the swing and rides: their

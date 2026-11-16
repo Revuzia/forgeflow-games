@@ -62,7 +62,7 @@ export function canShow(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
 /** Show wish (kind, target) on character i: B07 (face the camera, one small hop or a still pulse), the think bubble (P1), the asking phrase. */
 export function showWish(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, kind: number, target: number): void {
   const tb = w.f[F.NOW];
-  w.wishKind[i] = kind; w.wishTarget[i] = target; w.wishT[i] = tb; w.wishGlance[i] = 0; w.wishLastNewT[i] = tb; w.lastNewWishT = tb;
+  w.wishKind[i] = kind; w.wishTarget[i] = target; w.wishT[i] = tb; w.wishGlance[i] = 0; w.wishLastNewT[i] = tb; w.f[F.NEW_WISH] = tb;
   if (kind === WISH_KIND.TOUCH) w.touchWishT[i] = tb;
   if (w.moving[i]) stopMove(w, out, i);
   w.beh[i] = BEH.WISH; w.phase[i] = 0; w.behT0[i] = tb; w.behEnd[i] = tb + 2; w.behScore[i] = 0.7;
@@ -90,7 +90,7 @@ export function wishThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
   if (!w.firstWishDone && (w.openPlaces & (1 << HEARTHLOG)) === 0) return false;
   if (w.firstWishPending) return false;
   if (!canShow(w, s, i)) return false;
-  if (tb - w.wishLastNewT[i] < WISH.gapSelfS || tb - w.lastNewWishT < WISH.gapAnyS || tb - w.addT[i] < WISH.gapSelfS) return false;
+  if (tb - w.wishLastNewT[i] < WISH.gapSelfS || tb - w.f[F.NEW_WISH] < WISH.gapAnyS || tb - w.addT[i] < WISH.gapSelfS) return false;
   if (openCount(w) >= WISH.kept) return false;
   const tr = i * 5, sp = w.species[i];
   rnd(w, i);

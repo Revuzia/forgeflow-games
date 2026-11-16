@@ -24,7 +24,7 @@ import type { Gait } from '../data/life.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 import type { LifeWorld } from './world.ts';
 import { pushIntent, F, CAP } from './world.ts';
-import { WAKE, UNIT, GATE_TOL, moverCapOf, unitCapOf, UNIT_CAP, STYLE } from './attention.ts';
+import { WAKE, UNIT, GATE_TOL, MOVER_CAP, UNIT_CAP, tierOf, STYLE } from './attention.ts';
 
 export const HELD_BITS = LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.LOCKED;
 const TWO_PI = Math.PI * 2;
@@ -53,14 +53,14 @@ function groupMoving(w: LifeWorld, i: number): boolean {
 export function gateStart(w: LifeWorld, s: LifeSnapshot, i: number, extraMilli: number, allowanceMilli: number): boolean {
   if (w.moving[i]) return true;
   const inGroup = groupMoving(w, i);
-  const moverCap = moverCapOf(s.tier);
+  const moverCap = MOVER_CAP[tierOf(s)];
   if (!inGroup && w.movers + 1 > moverCap) return false;
   let delta = extraMilli * 0.001;
   if ((s.flags[i] & LIFE_FLAG.ASLEEP) !== 0) delta += w.kind[i] === 0 ? WAKE.whole : WAKE.piece;
   if (delta > 0) {
-    const cap = UNIT_CAP[s.tier < 0 ? 0 : s.tier > 2 ? 2 : s.tier | 0] + allowanceMilli * 0.001;
-    if (s.units + w.unitsAdd + delta > cap + GATE_TOL) return false;
-    w.unitsAdd += delta;
+    const cap = UNIT_CAP[tierOf(s)] + allowanceMilli * 0.001;
+    if (s.units + w.f[F.UNITS] + delta > cap + GATE_TOL) return false;
+    w.f[F.UNITS] += delta;
     if ((s.flags[i] & LIFE_FLAG.ASLEEP) !== 0) w.wakeClaimT[i] = s.t;
   }
   w.moving[i] = 1;
@@ -70,12 +70,11 @@ export function gateStart(w: LifeWorld, s: LifeSnapshot, i: number, extraMilli: 
 }
 /** Would a start that also wakes `extraMilli` more fit? (no state change) */
 export function gateFits(w: LifeWorld, s: LifeSnapshot, i: number, extraMilli: number, allowanceMilli: number): boolean {
-  const moverCap = moverCapOf(s.tier);
-  if (!w.moving[i] && !groupMoving(w, i) && w.movers + 1 > moverCap) return false;
+  if (!w.moving[i] && !groupMoving(w, i) && w.movers + 1 > MOVER_CAP[tierOf(s)]) return false;
   let delta = extraMilli * 0.001;
   if (!w.moving[i] && (s.flags[i] & LIFE_FLAG.ASLEEP) !== 0) delta += w.kind[i] === 0 ? WAKE.whole : WAKE.piece;
   if (delta <= 0) return true;
-  return s.units + w.unitsAdd + delta <= UNIT_CAP[s.tier < 0 ? 0 : s.tier > 2 ? 2 : s.tier | 0] + allowanceMilli * 0.001 + GATE_TOL;
+  return s.units + w.f[F.UNITS] + delta <= UNIT_CAP[tierOf(s)] + allowanceMilli * 0.001 + GATE_TOL;
 }
 /** Release character i's mover token and its travel driver. */
 export function stopMove(w: LifeWorld, out: LifeIntents, i: number): void {

@@ -17,6 +17,7 @@ import { CATALOG, LANES } from '../src/data/catalog.ts';
 import type { SpeciesId } from '../src/data/catalog.ts';
 import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES } from '../src/data/materials.ts';
 import { nameReason, proseReason } from './name_gate.ts';
+import { visibleTableAt } from '../src/render/homeview.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = resolve(HERE, '..');
 const VERBOSE = process.argv.includes('--verbose');
@@ -155,9 +156,22 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
       if ((t.p.pivot ?? 0) < need - 1e-9) probs.push(`${t.id} floor rule: pivot ${t.p.pivot} < ${need.toFixed(3)} m`);
       if (walls.length) for (const sg of [-1, 1]) { const g = wallGap(pos[i].x + sg * t.size[0] * c, pos[i].z + sg * t.size[0] * s); if (g < 0.6 - 1e-9) probs.push(`${t.id} board end ${f2(g)} m from a wall (0.6)`); }
     }
+    // every other ride's seat and rider spots (the brief's DT-01 list; D-91 / PLACES rev 4 (3): every ride keeps its rider's whole path inside
+    // the bounds): a ramp's path from its top to its foot (local +x is downhill, places.ts ThingDef), a mound's top, a floater's centre, each with
+    // a rider of R 0.625 clear of the walls and 0.625 m from every other collider (R2: the probe had checked swings and seesaws only)
+    if (t.ride && t.mech === MECH.ramp) { const c = Math.cos(pos[i].yaw), s = Math.sin(pos[i].yaw), h = t.size[0] * Math.cos((t.p.angle ?? 0) * D2R);
+      for (let k = 0; k <= 10; k++) { const u = -h + 2 * h * k / 10; bodyOK(`${t.id} rider`, pos[i].x + u * c, pos[i].z + u * s, i); } }
+    if (t.ride && (t.mech === MECH.mound || t.mech === MECH.floater)) bodyOK(`${t.id} rider`, pos[i].x, pos[i].z, i);
+    // a floater lies in a water zone deep enough to float in (PLACES 2.1 M12; shallow water, at most 0.12 m, gives drag only, 2.2)
+    if (t.mech === MECH.floater && !P.zones.some((zd, k) => zd.kind === ZONE.water && (zd.surfaceY ?? 0) > 0.12 + 1e-9
+      && fp[i].every((sh) => outline(sh).every(([x, z]) => dist(x, z, areaShape(tall ? P.tall.zones[k] : zd)) <= 1e-9)))) probs.push(`${t.id} floater not wholly inside a deep water zone`);
+    // a pool IS its water zone (M6): the thing stands where its own zone is, in each layout
+    if (t.mech === MECH.pool) { const k = P.zones.findIndex((zd) => ownsArea(t.zone, zd.id)), a = k < 0 ? null : tall ? P.tall.zones[k] : P.zones[k];
+      if (!a || Math.hypot(a.x - pos[i].x, a.z - pos[i].z) > 1e-6) probs.push(`${t.id} pool does not stand on its own water zone`); }
     if (t.mech === MECH.ring) {
       const open = 2 * t.size[0] * Math.sin(t.size[2] / 2 * D2R) - 2 * t.size[1]; if (open < 1.35 - 1e-9) probs.push(`${t.id} clear opening ${f2(open)} m (at least 1.35)`);
-      const g = [pos[i].x + Math.cos(pos[i].yaw) * (t.size[0] + 0.6), pos[i].z + Math.sin(pos[i].yaw) * (t.size[0] + 0.6)];
+      // the gap waypoint as LIFE lays it (src/life/world.ts copyPlace: p.way, default 0.6, outside the ring's radius along its yaw)
+      const way = t.size[0] + (t.p.way ?? 0.6), g = [pos[i].x + Math.cos(pos[i].yaw) * way, pos[i].z + Math.sin(pos[i].yaw) * way];
       bodyOK(`${t.id} gap waypoint`, g[0], g[1], i);
       if (!inRound(pos[i].x, pos[i].z, b)) probs.push(`${t.id} inner spot outside the bounds`);
       if (t.size[0] - t.size[1] < 0.625 - 1e-9) probs.push(`${t.id} clear inner radius ${f2(t.size[0] - t.size[1])} m holds no body of R 0.625`);
@@ -242,18 +256,19 @@ function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: numbe
   return { ok, why: ok ? '' : `stage.ts camera changed (fov ${fov}, pitch ${pitch}, TARGET_Y ${ty}, slots ${WIDE.length}/${TALL.length}, missing: ${missing.join(' | ')})`, TALL, WIDE, fov, pitch, ty };
 }
 const SM = stageModel();
-interface Cam { W: number; H: number; A: number; ins: { t: number; b: number; l: number; r: number }; slots: number[][]; s: number; C: number[]; f: number[]; u: number[] }
+interface Cam { W: number; H: number; A: number; ins: { t: number; b: number; l: number; r: number }; slots: number[][]; s: number; C: number[]; f: number[]; u: number[]; aim: number[]; d: number }
 const TF = Math.tan((SM.fov || 35) * D2R / 2);
 function cam(fr: 'phone' | 'desktop', n: number, s: number): Cam {
   const I = HUD_INSETS[fr], A = I.W / I.H, base = Math.max(3.0, 2.4 / Math.max(0.2, A)), hwPer = base * TF * A;
   const slots = (A < 0.9 ? SM.TALL : SM.WIDE).slice(0, n).map(([x, z]) => [x * s, z * s]);
   let want: number, tx = 0, ty: number, tz = 0;
-  if (n === 1) { want = Math.max(s, 0.58 * s / hwPer); ty = SM.ty * want + Math.max(0, 0.5 * s - SM.ty * want) * 0.7; }
+  // one body: restAim (stage.ts 604-610) aims at ITS slot (slot 0, x bodyScale) x 0.6 and its rest centre height (restCy = R = 0.5 x scale)
+  if (n === 1) { want = Math.max(s, 0.58 * s / hwPer); tx = slots[0][0] * 0.6; tz = slots[0][1] * 0.6; ty = SM.ty * want + Math.max(0, 0.5 * s - SM.ty * want) * 0.7; }
   else { const r = 0.625 * s; let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (const [x, z] of slots) { x0 = Math.min(x0, x - r); x1 = Math.max(x1, x + r); z0 = Math.min(z0, z - r); z1 = Math.max(z1, z + r); }
     want = Math.max(s, ((x1 - x0) / 2 + 0.1 + (A < 0.9 ? 0.12 : 0.35) * (z1 - z0) / 2) / hwPer); tx = (x0 + x1) / 2; tz = 0.8 * (z0 + z1) / 2; ty = SM.ty * s; }
   const d = want * base, P = SM.pitch;
-  return { W: I.W, H: I.H, A, ins: I, slots, s, C: [tx, ty + d * Math.sin(P), tz + d * Math.cos(P)], f: [0, -Math.sin(P), -Math.cos(P)], u: [0, Math.cos(P), -Math.sin(P)] };
+  return { W: I.W, H: I.H, A, ins: I, slots, s, C: [tx, ty + d * Math.sin(P), tz + d * Math.cos(P)], f: [0, -Math.sin(P), -Math.cos(P)], u: [0, Math.cos(P), -Math.sin(P)], aim: [tx, ty, tz], d };
 }
 function proj(c: Cam, x: number, y: number, z: number): [number, number] {
   const vx = x - c.C[0], vy = y - c.C[1], vz = z - c.C[2], depth = vy * c.f[1] + vz * c.f[2], uy = vy * c.u[1] + vz * c.u[2];
@@ -322,6 +337,9 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
     });
     // every slot centre inside the corral rectangle (visibleTable and every slot body in use + 0.05: D-87)
     for (let n = 1; n <= 5; n++) for (const s of SCALES) { const c = camOf(fr, n, s), v = visibleTable(c), R = 0.5 * s;
+      // the model's box against the stage's own pure projection (src/render/homeview.ts visibleTableAt, what stage.visibleTable returns)
+      const real = [0, 0, 0, 0]; visibleTableAt(c.aim[0], c.aim[1], c.aim[2], c.d, SM.pitch, SM.fov, c.W, c.H, c.ins.t, c.ins.r, c.ins.b, c.ins.l, real);
+      if (real.some((q, j) => Math.abs(q - v[j]) > 1e-6)) probs.push(`${frame} n${n} s${s}: the model's visible table [${v.map(f2)}] differs from homeview.visibleTableAt [${real.map(f2)}]`);
       let x0 = v[0], z0 = v[1], x1 = v[2], z1 = v[3]; for (const [x, z] of c.slots) { x0 = Math.min(x0, x - R - 0.05); x1 = Math.max(x1, x + R + 0.05); z0 = Math.min(z0, z - R - 0.05); z1 = Math.max(z1, z + R + 0.05); }
       for (const [x, z] of c.slots) if (x < x0 || x > x1 || z < z0 || z > z1) probs.push(`${frame} n${n} s${s}: a slot centre outside the corral`); }
   }

@@ -270,3 +270,19 @@ optional note that `THING_PLACE` / `PLACE_CAPS` could move to data, QU-14 alread
 - Result: `node _harness/probe_pg_data.ts` **exit 0** (1.6 s). Home row, slot gap at the worst scale, identical to round 1's table: TALL Felt
   Ball 0.10, Music Box 0.76, Rug walk-on, Lamp 0.28, Shelf 0.28, Pad 0.74; WIDE 0.08, 0.29, walk-on, 1.33, 0.73, 0.29; all "ok".
   `npx tsc --noEmit -p tsconfig.json` clean. HUD insets: still the assumed table (no measured one exists yet; grep of src / reports).
+
+### R2 step 1 re-verified (engineer 4, a second round-2 run; HEAD def44f133; the first round-2 run was cut off after step 1)
+- As found at def44f133: tsc clean (1.4 s); `node _harness/probe_pg_data.ts` exit 0 (1.9 s), every row ok, S2 / S3 PENDING counts as above.
+- Read stage.ts's camera myself against the probe's `cam()`: `framePoint` (slot k x bodyScale when `autoFraming`), `framingFor` (one body:
+  want = max(bodyScale, (restHalfW x 1.06 + 0.05 x scale) / hwPer) = max(s, 0.58 s / hwPer) for a round body; several: reach r = max(restRadius
+  x 1.25, restHalfW x 1.12) = 0.625 s, want from the reach box, `multi` true since `solo` needs a capsule), `restAim` (slot x 0.6, y = TARGET_Y x
+  want + max(0, restCy - TARGET_Y x want) x 0.7), `updateCamera` (multi: aim (mx, TARGET_Y x bodyScale, mz x 0.8); distance camScale x base;
+  position aim + d (0, sin p, cos p)), `applySize` (aspect = cssW / cssH, no view offset), `visibleTable` (rest framing, REST_PITCH). The model
+  matches: **the framing did not change, no Home spot re-laid** (engineer 3's finding confirmed).
+- Two strengthenings (nothing loosened): (a) the one-body aim now reads slot 0 x 0.6 from the slot table (it was a literal 0: right today,
+  but blind to a moved slot 0); (b) the corral check now compares the model's visible-table box with `src/render/homeview.ts`
+  `visibleTableAt` (the pure function `stage.visibleTable` calls) at every frame, party and scale, to 1e-6. Teeth: a scratch copy with the
+  model's far clip at -3.3 instead of -3.4 FAILS "the model's visible table [-0.44,-3.30,0.34,0.97] differs from homeview.visibleTableAt
+  [-0.44,-3.40,0.34,0.97]"; the real probe passes (all 2 x 5 x 10 boxes agree).
+- Result: tsc clean; probe exit 0; Home spots and slot gaps unchanged (TALL 0.10 / 0.76 / walk-on / 0.28 / 0.28 / 0.74; WIDE 0.08 / 0.29 /
+  walk-on / 1.33 / 0.73 / 0.29). **Step 1 DONE.**

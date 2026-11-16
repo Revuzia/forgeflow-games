@@ -18,6 +18,8 @@ import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeSt
 import type { LifeWorld } from '../src/life/step.ts';
 
 const HEAVY = process.argv.includes('--heavy'), VERBOSE = process.argv.includes('--verbose');
+/** LF-02's measurement runs in a child process of its own (`--lf02`): see the LF-02 section. */
+const LF02_CHILD = process.argv.includes('--lf02');
 let fails = 0, oks = 0;
 const check = (id: string, what: string, ok: boolean, detail = ''): void => {
   if (ok) oks++; else fails++;
@@ -199,7 +201,7 @@ function home(seed: number, species: string[], layout: 0 | 1 = 0, scale = 1, fps
 }
 
 /* ───────────────────────────── 1. traits (LIFE 2) ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   const tmp = new Float32Array(5), cols: number[][] = [[], [], [], [], []];
   for (const d of CATALOG) { traitsOf(speciesBaseGenome(d.id, 7), tmp, 0, false); for (let k = 0; k < 5; k++) cols[k].push(tmp[k]); }
   const spec = [[0.17, 0.52, 0.89], [0.26, 0.53, 0.90], [0.10, 0.39, 0.84], [0.38, 0.65, 0.82], [0.07, 0.37, 0.82]];
@@ -219,7 +221,7 @@ function home(seed: number, species: string[], layout: 0 | 1 = 0, scale = 1, fps
 }
 
 /* ───────────────────────────── 2. the motion gate's caps (LF-10, 10.3) ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   const caps = [0, 1, 2].map((t) => unitCapOf(t)), movers = [0, 1, 2].map((t) => moverCapOf(t));
   check('LF-10', `unitCap at F = 4 by the formula with D-85's floor: ${caps.map((c) => c.toFixed(3)).join(' / ')} (1.06 / 1.49 / 2.64), moverCap ${movers.join(' / ')} (1 / 1 / 2)`,
     Math.abs(caps[0] - 1.06) < 0.001 && Math.abs(caps[1] - 1.494) < 0.002 && Math.abs(caps[2] - 2.644) < 0.002 && movers.join() === '1,1,2');
@@ -271,7 +273,7 @@ function runWatched(sim: Sim, seconds: number, rows: { movers: number; moment: n
 const gateRows = { movers: 0, moment: 0, wake: 0, maxUnits: -9 };
 
 /* ───────────────────────────── FN-01 (LIFE's part): the first minute at Home ───────────────────────────── */
-for (const [layout, label] of [[0, 'wide'], [1, 'tall']] as const) {
+if (!LF02_CHILD) for (const [layout, label] of [[0, 'wide'], [1, 'tall']] as const) {
   const sim = home(3, ['dollop'], layout);
   sim.run(6); // the player let go 6 s ago
   const t0 = sim.t;
@@ -286,7 +288,7 @@ for (const [layout, label] of [[0, 'wide'], [1, 'tall']] as const) {
   const before = sim.w.nextUse[0];
   check('LF-19', `${label}: FIRST_PLAY fires at most once (a second call changes nothing)`, before === -1 && sim.w.nextUse[0] === -1);
 }
-{
+if (!LF02_CHILD) {
   const sim = home(5, ['dollop'], 0);
   sim.run(3);
   sim.add(1, 'crimpo', 1.3, 0.2, { isNew: true }); sim.home(1, 1.3, 0.2);
@@ -299,7 +301,7 @@ for (const [layout, label] of [[0, 'wide'], [1, 'tall']] as const) {
 }
 
 /* ───────────────────────────── LF-01 determinism, LF-26 sim time only ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   const secs = HEAVY ? 600 : 90;
   const hashes: number[] = [];
   for (const seed of [1, 2, 3]) {
@@ -320,7 +322,7 @@ for (const [layout, label] of [[0, 'wide'], [1, 'tall']] as const) {
 }
 
 /* ───────────────────────────── LF-16 30 and 60 fps ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   const run = (fps: number): number => {
     const sim = cabin(4, ['dollop', 'crimpo', 'capnap', 'puddlo'], 1, fps); sim.physics = false; sim.keepLog = true;
     sim.run(60);
@@ -334,7 +336,7 @@ for (const [layout, label] of [[0, 'wide'], [1, 'tall']] as const) {
 }
 
 /* ───────────────────────────── LF-04 HELD, LF-05 ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   const sim = cabin(21, ['dollop', 'crimpo', 'capnap']);
   sim.run(20);
   sim.extraFlags[0] = LIFE_FLAG.TOUCHED; sim.touch[0] = TOUCH.SQUEEZE;
@@ -381,32 +383,43 @@ function cloneSnap(s: LifeSnapshot): LifeSnapshot {
   for (const k of Object.keys(c)) { const v = c[k]; if (ArrayBuffer.isView(v)) c[k] = (v as Float32Array).slice(); }
   return c as unknown as LifeSnapshot;
 }
-{
+/** LF-02's measurement (in its own process): a live crowd (6 wholes and a cut squishy's 10 pieces in the cabin, high tier) is recorded for
+ *  WARM + N ticks; the same snapshots are replayed into fresh worlds built the same way (identical decisions), `passes` times over the
+ *  whole run to warm the JIT, then into one more fresh world: WARM ticks, then N ticks measured in windows of 1000 (new-space growth; a
+ *  window with a GC is negative and skipped). Every code path of a measured window has run in the warm-up passes. */
+function lf02Measure(passes: number, warm: number, n: number): { wins: number[]; looks: number[] } {
+  const rec = crowd(31); rec.keepLog = false;
+  const snaps: LifeSnapshot[] = [];
+  for (let f = 0; f < warm + n; f++) { rec.frame++; rec.t = rec.frame / rec.fps; rec.fill(); snaps.push(cloneSnap(rec.s)); lifeStep(rec.w, rec.s, rec.out, rec.ev); rec.apply(1 / rec.fps); }
+  const out = mkIntents(), ev = mkEvents();
+  const replay = (w: LifeWorld, a: number, b: number): void => { for (let f = a; f < b; f++) lifeStep(w, snaps[f], out, ev); };
+  for (let p = 0; p < passes; p++) replay(crowd(31).w, 0, warm + n);
+  const rep = crowd(31).w;
+  replay(rep, 0, warm);
+  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+  const base: number[] = []; for (let k = 0; k < 6; k++) { const u0 = newUsed(); base.push(newUsed() - u0); }
+  const b0 = base[5], wins: number[] = [];
+  (globalThis as { lf02Hook?: () => void }).lf02Hook?.();
+  for (let wdw = 0; wdw < n / 1000; wdw++) { const u0 = newUsed(); replay(rep, warm + wdw * 1000, warm + (wdw + 1) * 1000); wins.push(newUsed() - u0 - b0); }
+  (globalThis as { lf02Done?: () => void }).lf02Done?.();
+  // LIFE's own looks calls
+  const lo = new Float32Array(6);
+  const looksLoop = (m: number): void => { for (let k = 0; k < m; k++) { lifeLooks(rep, k & 7, lo); lifeAddLook(rep, k & 7, LOOK.wet, 0.0001, -1); } };
+  looksLoop(50000);
+  const looks: number[] = []; for (let k = 0; k < 4; k++) { const u0 = newUsed(); looksLoop(20000); looks.push(newUsed() - u0 - b0); }
+  return { wins, looks };
+}
+if (LF02_CHILD) {
+  const passes = Number(process.argv.find((a) => a.startsWith('--passes='))?.slice(9) ?? 3);
+  console.log('LF02 ' + JSON.stringify(lf02Measure(passes, 1000, 6000)));
+  process.exit(0);
+}
+if (!LF02_CHILD) {
   const WARM = 1000, N = 6000;
   const rec = crowd(31); rec.keepLog = false;
   const snaps: LifeSnapshot[] = [];
   for (let f = 0; f < WARM + N; f++) { rec.frame++; rec.t = rec.frame / rec.fps; rec.fill(); snaps.push(cloneSnap(rec.s)); lifeStep(rec.w, rec.s, rec.out, rec.ev); rec.apply(1 / rec.fps); }
-  // LF-02: replay the same snapshots into fresh worlds (identical decisions): one world warms the JIT over the whole run, a second one is
-  // measured over windows of 1000 ticks (new-space growth; a window with a GC is negative and skipped), like probe_collection's C08
   const out = mkIntents(), ev = mkEvents();
-  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
-  const replay = (w: LifeWorld, a: number, b: number): void => { for (let f = a; f < b; f++) lifeStep(w, snaps[f], out, ev); };
-  for (let pass = 0; pass < 3; pass++) replay(crowd(31).w, 0, WARM + N);
-  const rep = crowd(31);
-  replay(rep.w, 0, WARM);
-  const base: number[] = []; for (let k = 0; k < 6; k++) { const u0 = newUsed(); base.push(newUsed() - u0); }
-  const b0 = base[5], wins: number[] = [];
-  for (let wdw = 0; wdw < N / 1000; wdw++) { const u0 = newUsed(); replay(rep.w, WARM + wdw * 1000, WARM + (wdw + 1) * 1000); wins.push(newUsed() - u0 - b0); }
-  const pos = wins.filter((d) => d >= 0);
-  check('LF-02', `lifeStep allocates 0 B over ${N} ticks at 16 characters after warm-up (new-space growth per 1000-tick window: ${wins.join(', ')} B; a window with a GC is negative)`,
-    pos.length >= 3 && pos.every((d) => d <= 64), `max ${Math.max(...pos)} B`);
-  // LIFE's own looks calls
-  const lw = rep.w, lo = new Float32Array(6);
-  const looksLoop = (n: number): void => { for (let k = 0; k < n; k++) { lifeLooks(lw, k & 7, lo); lifeAddLook(lw, k & 7, LOOK.wet, 0.0001, -1); } };
-  looksLoop(50000);
-  const lw2: number[] = []; for (let k = 0; k < 4; k++) { const u0 = newUsed(); looksLoop(20000); lw2.push(newUsed() - u0 - b0); }
-  const dl = Math.min(...lw2.filter((d) => d > -4096)); // a window with a GC is far below 0; -64..64 is the measurement's own noise
-  check('LF-20', `lifeLooks and lifeAddLook allocate 0 B (20 000 calls each, best of 4 windows: ${lw2.join(', ')} B)`, dl <= 64);
   // LF-03: the cost per tick, a fresh world replaying the same snapshots
   const tw = crowd(31), times: number[] = [];
   for (let f = 0; f < WARM + N; f++) { const t0 = performance.now(); lifeStep(tw.w, snaps[f], out, ev); const dt = performance.now() - t0; if (f >= WARM) times.push(dt); }
@@ -417,7 +430,7 @@ function cloneSnap(s: LifeSnapshot): LifeSnapshot {
 }
 
 /* ───────────────────────────── LF-10 the gate's rows, LF-11, and the scenarios of LF-09 ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   // low, 3 wholes all asleep (units 0.09): a start that wakes one is granted (1.06, the cap) and a second mover is refused
   for (const [tier, n] of [[0, 3], [1, 4]] as const) {
     const sim = cabin(41, ['dollop', 'crimpo', 'capnap', 'puddlo'].slice(0, n), tier);
@@ -485,7 +498,7 @@ function cloneSnap(s: LifeSnapshot): LifeSnapshot {
 }
 
 /* LF-09: a 5-minute cabin visit on med with 4 wholes and no input; the pairs become Met after their greet (the reducer's FRIEND -> lifeSetPair) */
-{
+if (!LF02_CHILD) {
   const sim = cabin(51, ['dollop', 'crimpo', 'capnap', 'puddlo'], 1);
   const end = sim.frame + 300 * 60;
   const begun = new Set<number>();
@@ -507,12 +520,12 @@ function cloneSnap(s: LifeSnapshot): LifeSnapshot {
   check('LF-09', `every pair greets (${greets.size} of 6 pairs) and at least 1 nap (${napStarts} nappers)`, greets.size === 6 && napStarts >= 1);
   check('LF-09', `each squishy 2 to 3 thing uses (USE events: ${uses.join(' / ')})`, uses.every((u) => u >= 2 && u <= 3));
 }
-check('LF-10', `movers never exceed the tier's moverCap in the scenarios above (${gateRows.movers} frames over)`, gateRows.movers === 0);
-check('LF-11', `no character is in two joint moments at once (${gateRows.moment} violations)`, gateRows.moment === 0);
-check('LF-10', `every LIFE start that woke a body kept units at or under unitCap + the ride allowance (${gateRows.wake} over)`, gateRows.wake === 0);
+if (!LF02_CHILD) check('LF-10', `movers never exceed the tier's moverCap in the scenarios above (${gateRows.movers} frames over)`, gateRows.movers === 0);
+if (!LF02_CHILD) check('LF-11', `no character is in two joint moments at once (${gateRows.moment} violations)`, gateRows.moment === 0);
+if (!LF02_CHILD) check('LF-10', `every LIFE start that woke a body kept units at or under unitCap + the ride allowance (${gateRows.wake} over)`, gateRows.wake === 0);
 
 /* ───────────────────────────── LF-06 targets ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   for (const layout of [0, 1] as const) {
     const sim = cabin(61, ['dollop', 'crimpo', 'capnap', 'puddlo', 'thumbly'], 2, 60, layout);
     let bad = 0, outside = 0, free = 0, n = 0;
@@ -573,7 +586,7 @@ check('LF-10', `every LIFE start that woke a body kept units at or under unitCap
 }
 
 /* ───────────────────────────── LF-07 a storm of requests, LF-08 pieces merge, LF-17 Calm ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   for (const [phone, calm] of [[true, false], [true, true], [false, false], [false, true]] as const) {
     const a = createAttention(), s = mkSnapshot(), o = mkIntents();
     s.n = 16; s.phone = phone; s.calm = calm;
@@ -635,7 +648,7 @@ check('LF-10', `every LIFE start that woke a body kept units at or under unitCap
 }
 
 /* ───────────────────────────── LF-13 huff, LF-23 RIDE, LF-24 autonomy off ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   check('LF-13', `the huff's triggers are a static table of squishy-to-squishy scene events only: ${HUFF_TRIGGERS.join('; ')}`, HUFF_TRIGGERS.length === 2 && HUFF_TRIGGERS.every((t) => /another squishy/.test(t)));
   // stage a take: two wholes in B04 on the same ball; the late one huffs only after the session's first 60 s, at most 3 s, a touch ends it
   const stage = (at: number): Sim => {
@@ -684,7 +697,7 @@ check('LF-10', `every LIFE start that woke a body kept units at or under unitCap
 }
 
 /* ───────────────────────────── LF-19 the scripts, LF-14 and LF-25 wishes ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   const journal = (sim: Sim, open: number, kinds: number): void => lifeSetJournal(sim.w, new Uint32Array(2), open, new Uint32Array(4), kinds);
   // FIRST_WISH with no Dollop owned: the slot the shell names; no natural wish before it (a touch wish due before 2:30)
   const a = home(91, ['glugbean', 'capnap'], 0); journal(a, 1, THING_KIND.ball | THING_KIND.note);
@@ -748,7 +761,7 @@ check('LF-10', `every LIFE start that woke a body kept units at or under unitCap
 }
 
 /* ───────────────────────────── LF-20 looks, LF-21 REACT from LIFE's real output ───────────────────────────── */
-{
+if (!LF02_CHILD) {
   // the Window Chill (cold 0.3): frost rises at 0.015 a s and does not fall while the cause is present; FROST once per visit at 0.5
   const sim = new Sim(111, CABIN, 0); sim.s.place = 1;
   CABIN.things.forEach((t) => sim.addThing(t.id, t.x, t.z));

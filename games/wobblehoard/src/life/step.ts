@@ -23,7 +23,7 @@ import { traitsOf, signatureCode } from './traits.ts';
 import { senseZones, integrate, reactZones, addLook, resetNeedsLooks, emitReact, cutReacts } from './looks.ts';
 import { touchPass, behave } from './brain.ts';
 import { wishCheck, wishFromEvents, firstWishThink, wishOf, THING_ICON_KIND } from './wish.ts';
-import { attentionFilter, moverCapOf, unitCapOf, UNIT_CAP, WAKE } from './attention.ts';
+import { attentionFilter, MOVER_CAP, UNIT_CAP, tierOf, WAKE } from './attention.ts';
 import type { Attention } from './attention.ts';
 import { emitEmote } from './act.ts';
 import { emitVoice, PHRASE as PH } from './voice.ts';
@@ -142,7 +142,7 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
   out.n = 0; ev.n = 0;
   w.perChar.fill(0);
   const t = s.t;
-  if (!(w.sessionT0 === w.sessionT0)) w.sessionT0 = t;
+  if (!(w.f[F.T0] === w.f[F.T0])) w.f[F.T0] = t;
   // newly added characters start thinking from now; a cut's time is now
   w.nOut = 0;
   for (let i = 0; i < CAP; i++) {
@@ -152,7 +152,8 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
       // its first think is its first boundary after the previous call (not after this call's time), so the frame rate never shifts it (LF-16)
       w.addPending[i] = 0;
       const off = i * STAGGER_S;
-      if (w.lastT === w.lastT) w.tick[i] = Math.floor((w.lastT - off) / THINK_S + 1e-9) + 1;
+      const lastT = w.f[F.LAST_T];
+      if (lastT === lastT) w.tick[i] = Math.floor((lastT - off) / THINK_S + 1e-9) + 1;
       else w.tick[i] = t < THINK_S + off ? 0 : Math.ceil((t - off) / THINK_S - 1e-9); // added before the first call: from the grid's start
       w.lastThink[i] = -1e9;
       w.addT[i] = w.tick[i] * THINK_S + off;
@@ -171,7 +172,7 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
     if (px === px && (Math.abs(s.thingX[r] - px) > 0.02 || Math.abs(s.thingZ[r] - pz) > 0.02 || Math.abs(s.thingState[r] - ps) > 0.05)) w.thingMovedT[k] = t;
     w.thingPrevX[k] = s.thingX[r]; w.thingPrevZ[k] = s.thingZ[r]; w.thingPrevS[k] = s.thingState[r];
   }
-  if (s.musicBoxOn && !w.musicPrev) w.musicOnT = t;
+  if (s.musicBoxOn && !w.musicPrev) w.f[F.MUSIC_ON] = t;
   w.musicPrev = s.musicBoxOn ? 1 : 0;
   for (let b = 0; b < s.nBumps; b++) {
     const a = s.bumpA[b], c = s.bumpB[b];
@@ -180,21 +181,22 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
   }
   // movers (a piece group counts 1) and the wakes LIFE claimed that the snapshot does not show yet
   let movers = 0, groups = 0;
-  w.unitsAdd = 0;
+  w.f[F.UNITS] = 0;
   for (let i = 0; i < CAP; i++) {
     if (!w.active[i]) { w.moving[i] = 0; continue; }
     if (w.moving[i]) {
       if (w.kind[i] === 0) movers++;
       else { const bit = 1 << (w.group[i] & 31); if ((groups & bit) === 0) { groups |= bit; movers++; } }
     }
-    if (i < s.n && t - w.wakeClaimT[i] < 0.3 && (s.flags[i] & LIFE_FLAG.ASLEEP) !== 0) w.unitsAdd += w.kind[i] === 0 ? WAKE.whole : WAKE.piece;
+    if (i < s.n && t - w.wakeClaimT[i] < 0.3 && (s.flags[i] & LIFE_FLAG.ASLEEP) !== 0) w.f[F.UNITS] += w.kind[i] === 0 ? WAKE.whole : WAKE.piece;
   }
   w.movers = movers;
   const a = w.att;
-  a.movers = movers; a.moverCap = moverCapOf(s.tier); a.unitCap = UNIT_CAP[s.tier < 0 ? 0 : s.tier > 2 ? 2 : s.tier | 0];
+  a.movers = movers; a.moverCap = MOVER_CAP[tierOf(s)];
+  if (a.unitCap !== UNIT_CAP[tierOf(s)]) a.unitCap = UNIT_CAP[tierOf(s)];
   let anyRideMoment = false;
   for (let m = 0; m < MAX_MOMENTS; m++) if (w.mKind[m] === 10 || w.mKind[m] === 11) anyRideMoment = true;
-  if (!anyRideMoment) a.allowance = 0;
+  if (!anyRideMoment && a.allowance !== 0) a.allowance = 0;
   // every brain function reads the time from w.f[F.NOW] (LF-02): the per-call passes run at the snapshot's t, each think at its boundary
   w.f[F.NOW] = t;
   // lifeAddLook's REACTs (every time, with the source thing)
@@ -235,12 +237,12 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
   w.f[F.NOW] = t;
   wishFromEvents(w, s, out, ev);
   attentionFilter(a, s, out);
-  w.lastT = t;
+  w.f[F.LAST_T] = t;
 }
 
 function think(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
   const tb = w.f[F.NOW], last = w.lastThink[i];
-  w.f[F.DT] = last > -1e8 ? Math.min(0.5, tb - last) : THINK_S;
+  if (last > -1e8) w.f[F.DT] = Math.min(0.5, tb - last); else w.f[F.DT] = THINK_S; // no phi with a tagged constant (a boxed double, LF-02)
   w.lastThink[i] = tb;
   senseZones(w, s, i);
   integrate(w, s, ev, i);

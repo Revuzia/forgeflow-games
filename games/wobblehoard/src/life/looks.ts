@@ -6,7 +6,7 @@ import { LOOK, LOOK_RATES, NEEDS, FAMILY_REACT, REACT_TRIGGERS, REACT_COND, REAC
 import { ZONE } from '../data/places.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, F, inArea, zoneStrengthAt, pushEvent, MAX_ZONES } from './world.ts';
+import { CAP, F, inAreaAt, zoneStrengthAt, pushEvent, MAX_ZONES } from './world.ts';
 import { TRAIT } from './traits.ts';
 
 /** Per family: soak rate, toast, shiver, warm pose (flat). */
@@ -32,19 +32,18 @@ for (let k = 0; k < NT; k++) {
 export const TRIGGER_OF = new Int8Array(32).fill(-1);
 for (let k = 0; k < NT; k++) TRIGGER_OF[TR_KIND[k]] = k;
 
-const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
-
 /* ───────────────────────────── zone sensing ───────────────────────────── */
 
 /** Which zones character i stands in (its centre), how warm, cold and wet it is there, and a B15 entry due (first entry this visit). */
 export function senseZones(w: LifeWorld, s: LifeSnapshot, i: number): void {
   const tb = w.f[F.NOW];
-  const x = s.x[i], z = s.z[i], mask = s.zoneMask[i];
+  const mask = s.zoneMask[i];
+  w.f[F.PX] = s.x[i]; w.f[F.PZ] = s.z[i];
   let warm = 0, cold = 0, wet = 0, wk = -1, ck = -1, wat = -1, wind = -1, up = -1;
   for (let k = 0; k < w.nZones && k < MAX_ZONES; k++) {
-    zoneStrengthAt(w, k, x, z);
+    zoneStrengthAt(w, k);
     const st = w.f[F.S], o = i * MAX_ZONES + k, kind = w.zoneKind[k];
-    const inside = st > 0 || (inArea(w.zoneShape[k], w.zoneX[k], w.zoneZ[k], w.zoneR[k], w.zoneHX[k], w.zoneHZ[k], w.zoneYaw[k], x, z, 0) && (mask & (1 << kind)) !== 0);
+    const inside = st > 0 || (inAreaAt(w, 0, k) && (mask & (1 << kind)) !== 0);
     if (!inside) { w.zoneInT[o] = -1e9; continue; }
     if (w.zoneInT[o] < -1e8) {
       w.zoneInT[o] = w.enterAtOnce[i] ? tb - 100 : tb;
@@ -68,7 +67,7 @@ export function senseZones(w: LifeWorld, s: LifeSnapshot, i: number): void {
   // the nap patch or sand patch under it
   let nap = -1, sand = 0;
   for (let k = 0; k < w.nPatches; k++) {
-    if (!inArea(w.patchShape[k], w.patchX[k], w.patchZ[k], w.patchR[k], w.patchHX[k], w.patchHZ[k], w.patchYaw[k], x, z, 0)) continue;
+    if (!inAreaAt(w, 1, k)) continue;
     if (w.patchNap[k] && nap < 0) nap = k;
     if (w.patchSand[k]) sand = 1;
   }
@@ -206,7 +205,7 @@ export function integrate(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: numb
   if ((fl & LIFE_FLAG.AIRBORNE) !== 0) { if (w.airT[i] < -1e8) w.airT[i] = tb; } else w.airT[i] = -1e9;
   if (w.kind[i] !== 2 && !(w.kind[i] === 1 && w.cutT[w.group[i] & 31] > tb - 2)) {
     // play
-    if (!held && !napping) w.play[i] = clamp01(w.play[i] + NEEDS.play.rise * (0.5 + w.traits[t5 + TRAIT.bouncy]) * dt);
+    if (!held && !napping) w.play[i] = Math.min(1, w.play[i] + NEEDS.play.rise * (0.5 + w.traits[t5 + TRAIT.bouncy]) * dt);
     // company: nobody within 2 m
     let near = false;
     for (let j = 0; j < CAP; j++) {
@@ -214,14 +213,14 @@ export function integrate(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: numb
       const dx = s.x[j] - s.x[i], dz = s.z[j] - s.z[i];
       if (dx * dx + dz * dz < 4) { near = true; break; }
     }
-    if (!near) w.company[i] = clamp01(w.company[i] + NEEDS.company.rise * (0.5 + w.traits[t5 + TRAIT.chatty]) * dt);
+    if (!near) w.company[i] = Math.min(1, w.company[i] + NEEDS.company.rise * (0.5 + w.traits[t5 + TRAIT.chatty]) * dt);
   }
   // rest: x1.5 in a warm zone or on a nap spot; napping falls (twice as fast on a nap spot)
-  if (napping) w.rest[i] = clamp01(w.rest[i] + NEEDS.rest.nap * (w.onNap[i] >= 0 ? 2 : 1) * dt);
+  if (napping) w.rest[i] = Math.max(0, w.rest[i] + NEEDS.rest.nap * (w.onNap[i] >= 0 ? 2 : 1) * dt);
   else if (!held) {
     const active = w.moving[i] ? NEEDS.rest.riseActive : NEEDS.rest.rise;
     const k = w.zWarm[i] > 0 || w.onNap[i] >= 0 ? NEEDS.rest.warmFactor : 1;
-    w.rest[i] = clamp01(w.rest[i] + active * (0.5 + w.traits[t5 + TRAIT.dozy]) * k * dt);
+    w.rest[i] = Math.min(1, w.rest[i] + active * (0.5 + w.traits[t5 + TRAIT.dozy]) * k * dt);
   }
   // looks (only while the rising cause is absent does a look fall)
   const o = i * 6, warm = w.zWarm[i], cold = w.zCold[i], moving = Math.abs(s.vx[i]) + Math.abs(s.vz[i]) > 0.05;

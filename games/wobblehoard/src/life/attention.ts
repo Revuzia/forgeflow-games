@@ -38,7 +38,11 @@ export function moverCapOf(tier: number, f: number = PHONE_FACTOR): number {
   const m = Math.floor(unitCapOf(tier, f) + GATE_TOL);
   return m < 1 ? 1 : m;
 }
-for (let t = 0; t < 3; t++) UNIT_CAP[t] = unitCapOf(t);
+/** moverCap per tier at F = PHONE_FACTOR (the hot path reads it). */
+export const MOVER_CAP = new Int8Array(3);
+for (let t = 0; t < 3; t++) { UNIT_CAP[t] = unitCapOf(t); MOVER_CAP[t] = moverCapOf(t); }
+/** The snapshot's tier clamped to 0..2. */
+export function tierOf(s: LifeSnapshot): number { const t = s.tier | 0; return t < 0 ? 0 : t > 2 ? 2 : t; }
 
 /* ───────────────────────────── the caps of 10.1 ───────────────────────────── */
 
@@ -59,15 +63,19 @@ export const P1_WAIT_S = 2.0;
 export const DUCK_AFTER_S = 0.6;
 const PEND = 4;
 
+/** Slots of Attention.g (the token buckets and timers are doubles in a typed array: a double stored to an object field is boxed, LF-02). */
+const G = { T: 0, BUB_TOK: 1, BUB_T: 2, SYL_TOK: 3, SYL_T: 4, SND_TOK: 5, SND_T: 6, PART_TOK: 7, PART_T: 8, TOUCH_UNTIL: 9, LAST_SYL: 10 } as const;
+
 export interface Attention {
-  t: number; bubTok: number; bubT: number; sylTok: number; sylT: number; sndTok: number; sndT: number; partTok: number; partT: number;
+  /** the token buckets and timers (G slots): the last call's t, bubble and syllable tokens, auto sounds, particles, the touch duck */
+  g: Float64Array;
   /** say / group bubble on screen until (per character slot), whether it is a group bubble, the wish slot's owner, wish dots on screen */
   bubUntil: Float64Array; bubGroup: Int16Array; wishOwner: number; wishDot: Uint8Array;
-  voiceUntil: Float64Array; voiceGroup: Uint8Array; lastSylT: number;
-  charGapT: Float64Array; iconT: Float64Array; touchUntil: number;
+  voiceUntil: Float64Array; voiceGroup: Uint8Array;
+  charGapT: Float64Array; iconT: Float64Array;
   /** P1 requests waiting (at most 2 s) */
   pN: number; pWho: Int8Array; pUntil: Float64Array; pF: Float32Array; pB: Uint8Array; pKind: Uint8Array;
-  /** written by lifeStep each tick: LIFE's movers, the tier's caps and the ride allowance (D-85) */
+  /** written by lifeStep: LIFE's movers, the tier's caps and the ride allowance (D-85; the doubles only when they change) */
   movers: number; moverCap: number; unitCap: number; allowance: number;
   /** scratch */
   keep: Uint8Array; order: Int8Array;
@@ -76,11 +84,13 @@ export interface Attention {
 }
 
 export function createAttention(): Attention {
+  const g = new Float64Array(12).fill(-1e9);
+  g[G.BUB_TOK] = 3; g[G.SYL_TOK] = 6; g[G.SND_TOK] = 3; g[G.PART_TOK] = 48;
   return {
-    t: -1e9, bubTok: 3, bubT: -1e9, sylTok: 6, sylT: -1e9, sndTok: 3, sndT: -1e9, partTok: 48, partT: -1e9,
+    g,
     bubUntil: new Float64Array(16).fill(-1e9), bubGroup: new Int16Array(16).fill(-1), wishOwner: -1, wishDot: new Uint8Array(16),
-    voiceUntil: new Float64Array(8).fill(-1e9), voiceGroup: new Uint8Array(8), lastSylT: -1e9,
-    charGapT: new Float64Array(16).fill(-1e9), iconT: new Float64Array(16 * 25).fill(-1e9), touchUntil: -1e9,
+    voiceUntil: new Float64Array(8).fill(-1e9), voiceGroup: new Uint8Array(8),
+    charGapT: new Float64Array(16).fill(-1e9), iconT: new Float64Array(16 * 25).fill(-1e9),
     pN: 0, pWho: new Int8Array(PEND), pUntil: new Float64Array(PEND), pF: new Float32Array(PEND * 8), pB: new Uint8Array(PEND * 5), pKind: new Uint8Array(PEND),
     movers: 0, moverCap: 1, unitCap: 1.06, allowance: 0,
     keep: new Uint8Array(64), order: new Int8Array(64),
@@ -90,30 +100,30 @@ export function createAttention(): Attention {
 
 /** May LIFE start moving k more characters? movers + k <= moverCap (a start that wakes nobody needs only this, LF-10). */
 export function motionGate(a: Attention, s: LifeSnapshot, k: number): boolean {
-  a.moverCap = moverCapOf(s.tier);
+  a.moverCap = MOVER_CAP[tierOf(s)];
   return a.movers + k <= a.moverCap;
 }
 /** The full start test: the mover tokens, and units + delta <= unitCap + allowance (the ride allowance while a ride moment runs). */
 export function motionGateWake(a: Attention, s: LifeSnapshot, k: number, units: number, delta: number, allowance: number): boolean {
   if (!motionGate(a, s, k)) return false;
   if (delta <= 0) return true;
-  a.unitCap = UNIT_CAP[s.tier < 0 ? 0 : s.tier > 2 ? 2 : s.tier | 0];
-  return units + delta <= a.unitCap + allowance + GATE_TOL;
+  return units + delta <= UNIT_CAP[tierOf(s)] + allowance + GATE_TOL;
 }
 
 /* ───────────────────────────── the filter (10.1, 10.2) ───────────────────────────── */
 
 function refill(a: Attention, s: LifeSnapshot, col: number): void {
-  const t = s.t;
-  if (t > a.bubT) { a.bubTok = Math.min(CAPS.bubbleBurst[col], a.bubTok + (t - a.bubT) * CAPS.bubbleRate[col]); a.bubT = t; }
-  if (t > a.sylT) { a.sylTok = Math.min(CAPS.sylBurst[col], a.sylTok + (t - a.sylT) * CAPS.sylRate[col]); a.sylT = t; }
-  if (a.bubTok > CAPS.bubbleBurst[col]) a.bubTok = CAPS.bubbleBurst[col];
-  if (a.sylTok > CAPS.sylBurst[col]) a.sylTok = CAPS.sylBurst[col];
+  const t = s.t, g = a.g;
+  if (t > g[G.BUB_T]) { g[G.BUB_TOK] = Math.min(CAPS.bubbleBurst[col], g[G.BUB_TOK] + (t - g[G.BUB_T]) * CAPS.bubbleRate[col]); g[G.BUB_T] = t; }
+  if (t > g[G.SYL_T]) { g[G.SYL_TOK] = Math.min(CAPS.sylBurst[col], g[G.SYL_TOK] + (t - g[G.SYL_T]) * CAPS.sylRate[col]); g[G.SYL_T] = t; }
+  if (g[G.BUB_TOK] > CAPS.bubbleBurst[col]) g[G.BUB_TOK] = CAPS.bubbleBurst[col];
+  if (g[G.SYL_TOK] > CAPS.sylBurst[col]) g[G.SYL_TOK] = CAPS.sylBurst[col];
 }
 
-function onScreen(a: Attention, t: number): number {
+/** Bubbles on screen now, in quarters (a wish's still dot counts 1 quarter): an integer, never boxed (LF-02). */
+function onScreen4(a: Attention, s: LifeSnapshot): number {
   let n = 0;
-  for (let i = 0; i < 16; i++) { if (a.bubUntil[i] > t) n += 1; if (a.wishDot[i]) n += 0.25; }
+  for (let i = 0; i < 16; i++) { if (a.bubUntil[i] > s.t) n += 4; if (a.wishDot[i]) n++; }
   return n;
 }
 
@@ -129,13 +139,13 @@ function emoteOk(a: Attention, s: LifeSnapshot, out: LifeIntents, k: number, col
   if (style === STYLE.THINK || style === STYLE.WISH_DOT) {
     const o = a.wishOwner;
     if (o < 0 || o === who || o >= s.n || !(s.sx[o] === s.sx[o])) {
-      if (a.wishOwner !== who) { if (a.bubTok < 1) return false; a.bubTok -= 1; }
+      if (a.wishOwner !== who) { if (a.g[G.BUB_TOK] < 1) return false; a.g[G.BUB_TOK] -= 1; }
       a.wishOwner = who; a.wishDot[who] = 0; out.style[k] = STYLE.THINK;
       return true;
     }
     // the wish slot is taken: its still dot (0.25 of a bubble, inside the at-once cap)
     if (a.wishDot[who]) return false;
-    if (onScreen(a, t) + 0.25 > CAPS.bubbles[col] + 1e-9) return false;
+    if (onScreen4(a, s) + 1 > CAPS.bubbles[col] * 4) return false;
     a.wishDot[who] = 1; out.style[k] = STYLE.WISH_DOT;
     return true;
   }
@@ -146,9 +156,9 @@ function emoteOk(a: Attention, s: LifeSnapshot, out: LifeIntents, k: number, col
     for (let i = 0; i < 16; i++) if (a.bubUntil[i] > t && a.bubGroup[i] >= 0 && i !== who) return false;
   }
   if (a.bubUntil[who] > t) return false; // at most one bubble per character
-  if (onScreen(a, t) + 1 > CAPS.bubbles[col] + 1e-9) return false;
-  if (a.bubTok < 1) return false;
-  a.bubTok -= 1; a.bubUntil[who] = t + BUBBLE_S; a.bubGroup[who] = style === STYLE.GROUP ? out.groupKey[k] : -1;
+  if (onScreen4(a, s) + 4 > CAPS.bubbles[col] * 4) return false;
+  if (a.g[G.BUB_TOK] < 1) return false;
+  a.g[G.BUB_TOK] -= 1; a.bubUntil[who] = t + BUBBLE_S; a.bubGroup[who] = style === STYLE.GROUP ? out.groupKey[k] : -1;
   a.charGapT[who] = t; a.iconT[who * 25 + icon] = t;
   return true;
 }
@@ -160,10 +170,11 @@ function voiceOk(a: Attention, s: LifeSnapshot, out: LifeIntents, k: number, col
   for (let v = 0; v < 8; v++) { if (a.voiceUntil[v] > t) { live++; if (a.voiceGroup[v]) liveG++; } else if (free < 0) free = v; }
   if (free < 0 || live + 1 > CAPS.voices[col]) return false;
   if (group && liveG >= CAPS.groupVoices[col]) return false;
-  if (touching) { if (t - a.lastSylT < nSyl) return false; } // ducked: one syllable a second
-  else if (a.sylTok < nSyl) return false;
-  a.sylTok -= nSyl; if (a.sylTok < 0) a.sylTok = 0;
-  a.lastSylT = t; a.voiceUntil[free] = t + out.delayS[k] + dur; a.voiceGroup[free] = group ? 1 : 0;
+  const g = a.g;
+  if (touching) { if (t - g[G.LAST_SYL] < nSyl) return false; } // ducked: one syllable a second
+  else if (g[G.SYL_TOK] < nSyl) return false;
+  g[G.SYL_TOK] -= nSyl; if (g[G.SYL_TOK] < 0) g[G.SYL_TOK] = 0;
+  g[G.LAST_SYL] = t; a.voiceUntil[free] = t + out.delayS[k] + dur; a.voiceGroup[free] = group ? 1 : 0;
   return true;
 }
 
@@ -206,8 +217,8 @@ export function attentionFilter(a: Attention, s: LifeSnapshot, out: LifeIntents)
   refill(a, s, col);
   let touchNow = false;
   for (let i = 0; i < s.n; i++) if ((s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) !== 0) { touchNow = true; break; }
-  if (touchNow) a.touchUntil = s.t + DUCK_AFTER_S;
-  const touching = touchNow || s.t < a.touchUntil;
+  if (touchNow) a.g[G.TOUCH_UNTIL] = s.t + DUCK_AFTER_S;
+  const touching = touchNow || s.t < a.g[G.TOUCH_UNTIL];
   unpend(a, s, out);
   const n = out.n, keep = a.keep;
   // non-expressive intents pass; expressive ones are judged highest priority first
@@ -237,22 +248,24 @@ export function attentionFilter(a: Attention, s: LifeSnapshot, out: LifeIntents)
     w++;
   }
   out.n = w;
-  a.t = s.t;
+  a.g[G.T] = s.t;
 }
 
 /** A budgeted `auto` land, bump or prop sound (10.1: 2 / 1 / 3 / 1.5 a second): true when it may play. Never a haptic, never a shake. */
 export function attentionSound(a: Attention, s: LifeSnapshot): boolean {
   const col = capColumn(s), rate = CAPS.autoSounds[col];
-  if (s.t > a.sndT) { a.sndTok = Math.min(rate, a.sndTok + (s.t - a.sndT) * rate); a.sndT = s.t; }
-  if (a.sndTok < 1) return false;
-  a.sndTok -= 1;
+  const g = a.g;
+  if (s.t > g[G.SND_T]) { g[G.SND_TOK] = Math.min(rate, g[G.SND_TOK] + (s.t - g[G.SND_T]) * rate); g[G.SND_T] = s.t; }
+  if (g[G.SND_TOK] < 1) return false;
+  g[G.SND_TOK] -= 1;
   return true;
 }
 /** How many of `n` autonomous effect particles may spawn now (10.1: 24 / 8 / 48 / 16 a second). */
 export function attentionParticles(a: Attention, s: LifeSnapshot, n: number): number {
   const col = capColumn(s), rate = CAPS.particles[col];
-  if (s.t > a.partT) { a.partTok = Math.min(rate, a.partTok + (s.t - a.partT) * rate); a.partT = s.t; }
-  const g = Math.min(n, Math.floor(a.partTok));
-  a.partTok -= g;
-  return g;
+  const g = a.g;
+  if (s.t > g[G.PART_T]) { g[G.PART_TOK] = Math.min(rate, g[G.PART_TOK] + (s.t - g[G.PART_T]) * rate); g[G.PART_T] = s.t; }
+  const k = Math.min(n, Math.floor(g[G.PART_TOK]));
+  g[G.PART_TOK] -= k;
+  return k;
 }

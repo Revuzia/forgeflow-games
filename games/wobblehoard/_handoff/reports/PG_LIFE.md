@@ -122,3 +122,15 @@ ticks), LF-09 (4 of 6 pairs greet; uses 3/3/3/5), LF-13 (the staged take gives n
 | R2 step | What | State |
 |---|---|---|
 | 0 | read brief, report, SESSION3, LIFE.md all, QUESTS 4/8, PB 18 rows, all src/life + probe; other lanes' requests | DONE 11:31 |
+
+Engineer 2 was cut off after a partial LF-02 refactor (committed at def44f133: brain / social / act / looks / wish / step read the think
+time from `w.f[F.NOW]` instead of a `tb` parameter; `UNIT_CAP` table in attention.ts). Nothing else of the scope was done.
+
+### Round 2, engineer 3 (started 2026-11-16 ~14:10 UTC, from HEAD def44f133)
+Re-measured at the start: tsc clean (1.6 s); `node _harness/probe_life.ts` 76 ok / 5 FAIL (2.4 s): LF-02 (now max 188 952 B per 1000 ticks,
+down from 245 952), LF-09 x2 (4 of 6 pairs; uses 3/3/3/5), LF-13 x2. Scratch: `.../scratchpad/pg_life3/`. Same constraint (no edits under
+src/physics, src/shell, src/ui, src/input, vite.config.ts).
+
+| R2/e3 step | What | State |
+|---|---|---|
+| 0 | read brief, report, specs (LIFE 3-6, 9-12; QUESTS 8), all src/life + probe, other lanes' requests | DONE 14:15 |

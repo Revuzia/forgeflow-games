@@ -7,7 +7,7 @@ import { LIFE_FLAG, LIFE_EV, EMOTE, EXPR, REACT_KIND, TOUCH, USE_VERB, BRAIN, SP
 import { MECH, ZONE, PLACE_IDS } from '../data/places.ts';
 import { SPECIES } from '../data/species.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, BEH, F, MAX_ZONES, pushEvent, pushIntent, rnd, U16, inBounds, inKeepOut, pairIdx } from './world.ts';
+import { CAP, BEH, F, MAX_ZONES, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2 } from './world.ts';
 import { gateStart, stopMove, travelTo, travelStep, emitHop, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot,
   emitCancel, HELD_BITS, G_HOPS, groupCount } from './act.ts';
 import { emitVoice, PHRASE } from './voice.ts';
@@ -31,9 +31,10 @@ const ONCE = { LOVE: 1 << 16, BASKED: 1 << 17, ARRIVED: 1 << 18, HELLO: 1 << 19,
 
 /* ───────────────────────────── helpers ───────────────────────────── */
 
-function setBeh(w: LifeWorld, i: number, b: number, score: number, durS: number): void {
+/** Start behaviour b with its score (x 1000) for durMs ms (integers: a double argument is boxed, LF-02). */
+function setBeh(w: LifeWorld, i: number, b: number, scoreMilli: number, durMs: number): void {
   const tb = w.f[F.NOW];
-  w.beh[i] = b; w.phase[i] = 0; w.behT0[i] = tb; w.behEnd[i] = tb + durS; w.behScore[i] = score;
+  w.beh[i] = b; w.phase[i] = 0; w.behT0[i] = tb; w.behEnd[i] = tb + durMs * 0.001; w.behScore[i] = scoreMilli * 0.001;
 }
 function endBeh(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, coolS: number): void {
   const tb = w.f[F.NOW];
@@ -44,7 +45,6 @@ function endBeh(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, cool
 }
 function ready(w: LifeWorld, i: number, b: number): boolean {
   const tb = w.f[F.NOW]; return tb >= w.cool[i * 26 + b]; }
-function dist2(s: LifeSnapshot, i: number, x: number, z: number): number { const dx = s.x[i] - x, dz = s.z[i] - z; return dx * dx + dz * dz; }
 /** Thing k's live position (the snapshot's row) into w.f[F.X2], w.f[F.Z2]; false when it is not out now. */
 function thingPos(w: LifeWorld, s: LifeSnapshot, k: number): boolean {
   const r = w.rowOfLocal[k];
@@ -85,8 +85,8 @@ function framedPoint(w: LifeWorld, s: LifeSnapshot, idx: number): boolean {
 }
 /** A free target for character i into w.f[F.X], w.f[F.Z]: in a place inside the bounds shrunk by R + 0.2 m and clear of every thing's
  *  keep-out (0.4 m, and at least R + 0.05 m); at Home a point between two framed points (D-87). False when none was found. */
-export function freeTarget(w: LifeWorld, s: LifeSnapshot, i: number, maxR: number): boolean {
-  const R = s.r[i];
+export function freeTarget(w: LifeWorld, s: LifeSnapshot, i: number, maxRMm: number): boolean {
+  const maxR = maxRMm * 0.001;
   if (w.home) {
     let n = 0;
     for (let p = 0; p < CAP + w.nThingDefs; p++) if (framedPoint(w, s, p)) n++;
@@ -103,7 +103,9 @@ export function freeTarget(w: LifeWorld, s: LifeSnapshot, i: number, maxR: numbe
         q++;
       }
       const x = ax + (bx - ax) * u, z = az + (bz - az) * u;
-      if (dist2(s, i, x, z) > maxR * maxR || dist2(s, i, x, z) < 0.04) continue;
+      w.f[F.PX] = x; w.f[F.PZ] = z;
+      const d2 = d2p(w, s, i);
+      if (d2 > maxR * maxR * CM2 || d2 < 0.04 * CM2) continue;
       w.f[F.X] = x; w.f[F.Z] = z;
       return true;
     }
@@ -112,10 +114,8 @@ export function freeTarget(w: LifeWorld, s: LifeSnapshot, i: number, maxR: numbe
   for (let tries = 0; tries < 8; tries++) {
     const ang = rnd(w, i) * U16 * Math.PI * 2, d = 0.4 + rnd(w, i) * U16 * (maxR - 0.4);
     const x = s.x[i] + Math.cos(ang) * d, z = s.z[i] + Math.sin(ang) * d;
-    if (!inBounds(w, x, z, R + 0.2)) continue;
-    let bad = false;
-    for (let k = 0; k < w.nThingDefs && !bad; k++) if (inKeepOut(w, s, k, x, z, R + 0.05 > 0.4 ? R + 0.05 : 0.4)) bad = true;
-    if (bad) continue;
+    w.f[F.PX] = x; w.f[F.PZ] = z;
+    if (!inBounds(w, shrinkMm(s, i)) || !clearOfThings(w, s, keepMm(s, i))) continue;
     w.f[F.X] = x; w.f[F.Z] = z;
     return true;
   }
@@ -134,14 +134,11 @@ function towardParty(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
   }
   const j = ungreeted >= 0 ? ungreeted : pick;
   if (j < 0) return false;
-  const R = s.r[i];
   for (let tries = 0; tries < 6; tries++) {
-    const a = rnd(w, i) * U16 * Math.PI * 2, d = s.r[j] + R + 0.15 + rnd(w, i) * U16 * 0.35;
+    const a = rnd(w, i) * U16 * Math.PI * 2, d = s.r[j] + s.r[i] + 0.15 + rnd(w, i) * U16 * 0.35;
     const x = s.x[j] + Math.cos(a) * d, z = s.z[j] + Math.sin(a) * d;
-    if (!inBounds(w, x, z, R + 0.2)) continue;
-    let bad = false;
-    for (let k = 0; k < w.nThingDefs && !bad; k++) if (inKeepOut(w, s, k, x, z, R + 0.05 > 0.4 ? R + 0.05 : 0.4)) bad = true;
-    if (bad) continue;
+    w.f[F.PX] = x; w.f[F.PZ] = z;
+    if (!inBounds(w, shrinkMm(s, i)) || !clearOfThings(w, s, keepMm(s, i))) continue;
     w.f[F.X] = x; w.f[F.Z] = z;
     return true;
   }
@@ -169,7 +166,7 @@ export function touchPass(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
         // B13: others within 3 m watch it
         for (let j = 0; j < s.n; j++) {
           if (j === i || !w.active[j] || w.kind[j] === 2 || (s.flags[j] & HELD_BITS) !== 0 || w.moment[j] >= 0 || w.beh[j] === BEH.NAP) continue;
-          if (dist2(s, j, s.x[i], s.z[i]) <= 9) w.watchDue[j] = i;
+          if (d2c(s, j, i) <= 9 * CM2) w.watchDue[j] = i;
         }
       }
     } else if (!held && w.held[i]) {
@@ -188,7 +185,7 @@ export function touchPass(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
         for (let j = 0; j < s.n; j++) if (j !== i && w.active[j] && w.watchDue[j] === i) { emitEmote(w, s, out, j, EMOTE.wow, STYLE.SAY, 2, 0, 0, 0); break; }
       }
       if (tk === TOUCH.CUT) {
-        for (let j = 0; j < s.n; j++) if (j !== i && w.active[j] && w.kind[j] === 0 && dist2(s, j, s.x[i], s.z[i]) <= 9) { w.watchDue[j] = i; }
+        for (let j = 0; j < s.n; j++) if (j !== i && w.active[j] && w.kind[j] === 0 && d2c(s, j, i) <= 9 * CM2) { w.watchDue[j] = i; }
         for (let j = 0; j < s.n; j++) if (j !== i && w.active[j] && w.kind[j] === 0) { emitEmote(w, s, out, j, EMOTE.wow, STYLE.SAY, 2, 0, 0, 1); break; }
       }
       if ((tk === TOUCH.SQUEEZE_1S || tk === TOUCH.STRETCH_06)) wishCheck(w, s, out, ev, i);
@@ -238,15 +235,15 @@ export function behave(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Life
 
   // B11 come back after a toss
   if ((fl & LIFE_FLAG.TOSSED) !== 0 && (fl & LIFE_FLAG.AIRBORNE) === 0 && w.beh[i] !== BEH.COMEBACK && canMove && needsComeBack(w, s, i)) {
-    if (comeBackTarget(w, s, i)) { endBeh(w, s, out, i, 0); if (travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.COMEBACK, 1, 15); w.phase[i] = 1; return; } }
+    if (comeBackTarget(w, s, i)) { endBeh(w, s, out, i, 0); if (travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.COMEBACK, 1000, 15000); w.phase[i] = 1; return; } }
   }
 
   // a newcomer says hello within 5 s (B09's shy arrival: an S01 greet with the nearest party member, whatever the distance)
   if (w.isNew[i] && (w.onceVisit[i] & ONCE.HELLO) === 0 && tb - w.addT[i] >= 1 && tb - w.addT[i] < 5 && w.kind[i] === 0) {
-    let best = -1, bd = 1e9;
+    let best = -1, bd = 0x3fffffff;
     for (let j = 0; j < s.n; j++) {
       if (j === i || !w.active[j] || w.kind[j] !== 0 || w.moment[j] >= 0 || (s.flags[j] & HELD_BITS) !== 0) continue;
-      const d = dist2(s, i, s.x[j], s.z[j]);
+      const d = d2c(s, i, j);
       if (d < bd) { bd = d; best = j; }
     }
     if (best >= 0) {
@@ -262,7 +259,7 @@ export function behave(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Life
   if (TOAST[w.family[i]] && w.looks[i * 6 + 5] > BRAIN.toastHopAt && w.zWarmK[i] >= 0 && (w.onceVisit[i] & ONCE.TOASTED) === 0 && canMove && w.beh[i] !== BEH.BASK && w.beh[i] !== BEH.NAP) {
     w.onceVisit[i] |= ONCE.TOASTED;
     if (w.beh[i] !== BEH.IDLE && w.beh[i] !== BEH.NONE) endBeh(w, s, out, i, 0);
-    setBeh(w, i, BEH.BASK, 0.7, 30); w.phase[i] = 3; w.tThing[i] = w.zoneThing[w.zWarmK[i]];
+    setBeh(w, i, BEH.BASK, 700, 30000); w.phase[i] = 3; w.tThing[i] = w.zoneThing[w.zWarmK[i]];
     runBask(w, s, out, ev, i);
     return;
   }
@@ -302,7 +299,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   const src = noticeCandidate(w, s, i);
   if (src >= 0) { const v = 0.9 + (rnd(w, i) * NZ - BRAIN.noise) + (src >= 1000 ? 0.2 : 0); if (v > bs) { bs = v; best = BEH.NOTICE; bArg = src; } }
   // B18 answer a thing (a tune starts: the Music Box, the kettle's whistle)
-  if (s.musicBoxOn && tb - w.musicOnT < 3 && w.traits[tr + TRAIT.chatty] > 0.5 && ready(w, i, BEH.ANSWER) && w.beh[i] !== BEH.NAP) {
+  if (s.musicBoxOn && tb - w.f[F.MUSIC_ON] < 3 && w.traits[tr + TRAIT.chatty] > 0.5 && ready(w, i, BEH.ANSWER) && w.beh[i] !== BEH.NAP) {
     const v = 0.7 + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.ANSWER; }
   }
   // the forced next use (FIRST_PLAY, PLAY_WITH)
@@ -315,7 +312,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
       if (k >= 0) { const v = w.f[F.A] + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.USE; bArg = k; } }
     }
     // B05 bask or warm up
-    if (ready(w, i, BEH.BASK)) { const v0 = baskScore(w, s, i); if (v0 > 0) { const v = v0 + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.BASK; } } }
+    if (ready(w, i, BEH.BASK)) { const v0 = baskScore(w, s, i); if (v0 > 0) { const v = v0 * 0.001 + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.BASK; } } }
     // B06 nap (never in water)
     if (ready(w, i, BEH.NAP) && w.zWaterK[i] < 0) {
       const dozy = w.traits[tr + TRAIT.dozy];
@@ -343,12 +340,12 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   }
   if (w.beh[i] !== BEH.IDLE && w.beh[i] !== BEH.NONE) endBeh(w, s, out, i, 0);
   switch (best) {
-    case BEH.WATCH: setBeh(w, i, BEH.WATCH, 0.6, 3); w.tChar[i] = bArg; w.f[F.X] = s.x[bArg]; w.f[F.Z] = s.z[bArg]; emitGaze(w, out, i, 1); break;
+    case BEH.WATCH: setBeh(w, i, BEH.WATCH, 600, 3000); w.tChar[i] = bArg; w.f[F.X] = s.x[bArg]; w.f[F.Z] = s.z[bArg]; emitGaze(w, out, i, 1); break;
     case BEH.HUFF: startHuff(w, s, out, i, bArg); break;
     case BEH.ZONE: startZone(w, s, out, ev, i, bArg); break;
     case BEH.LOVE: startLove(w, s, out, ev, i); break;
     case BEH.HOLDON: {
-      setBeh(w, i, BEH.HOLDON, 0.8, 2.5);
+      setBeh(w, i, BEH.HOLDON, 800, 2500);
       w.f[F.X2] = -0.08; w.f[F.Z2] = 0; w.f[F.A] = 0; w.f[F.B] = 0; emitPose(w, s, out, i, 0);
       emitExpr(w, out, i, EXPR.happy, 30);
       emitReact(w, s, ev, i, REACT_KIND.HOLD_ON, -1, 0);
@@ -356,10 +353,10 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     }
     case BEH.NOTICE: startNotice(w, s, out, i, bArg); break;
     case BEH.ANSWER: startAnswer(w, s, out, ev, i); break;
-    case BEH.USE: startUse(w, s, out, ev, i, bArg, bs); break;
-    case BEH.BASK: startBask(w, s, out, i, bs); break;
-    case BEH.NAP: startNap(w, s, out, ev, i, bs); break;
-    case BEH.WANDER: if ((towardParty(w, s, i) || freeTarget(w, s, i, 2.5)) && travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.WANDER, bs, 20); w.phase[i] = 1; } else w.cool[i * 26 + BEH.WANDER] = tb + 2; break;
+    case BEH.USE: startUse(w, s, out, ev, i, bArg, (bs * 1000) | 0); break;
+    case BEH.BASK: startBask(w, s, out, i, (bs * 1000) | 0); break;
+    case BEH.NAP: startNap(w, s, out, ev, i, (bs * 1000) | 0); break;
+    case BEH.WANDER: if ((towardParty(w, s, i) || freeTarget(w, s, i, 2500)) && travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.WANDER, (bs * 1000) | 0, 20000); w.phase[i] = 1; } else w.cool[i * 26 + BEH.WANDER] = tb + 2; break;
   }
   // the natural wish scheduler: only while idle
   if (w.beh[i] === BEH.IDLE) wishThink(w, s, out, ev, i);
@@ -405,21 +402,21 @@ function runBehaviour(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeE
 function noticeCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
   const tb = w.f[F.NOW];
   if (w.kind[i] === 2 || w.beh[i] === BEH.NAP) return -1;
-  const per = BRAIN.perceive0 + BRAIN.perceiveCurious * w.traits[i * 5 + TRAIT.curious], per2 = per * per, n15 = BRAIN.noticeR * BRAIN.noticeR;
+  const per = BRAIN.perceive0 + BRAIN.perceiveCurious * w.traits[i * 5 + TRAIT.curious], per2 = per * per * CM2, n15 = BRAIN.noticeR * BRAIN.noticeR * CM2;
   for (let k = 0; k < w.nThingDefs; k++) {
     const r = w.rowOfLocal[k];
     if (r < 0) continue;
-    const d2 = dist2(s, i, s.thingX[r], s.thingZ[r]);
+    const d2 = d2t(s, i, r);
     const moved = tb - w.thingMovedT[k] < 0.35 && tb - w.noticeT[i * 48 + k] >= 4;
     if (moved && w.thingSwitch[k] !== 0 && d2 <= n15) return 1000 + k; // a switch tap: always noticed within 1.5 m
     if (moved && d2 <= n15) return k;
     const seen = (w.seenThings[i * 2 + (k >>> 5)] & (1 << (k & 31))) !== 0;
-    if (!seen && d2 <= per2 + w.thingS0[k]) return k;
+    if (!seen && d2 <= per2 + w.thingS0[k] * CM2) return k;
   }
   for (let j = 0; j < s.n; j++) {
     if (j === i || !w.active[j]) continue;
-    const d2 = dist2(s, i, s.x[j], s.z[j]);
-    if ((w.seenChars[i] & (1 << j)) === 0 && d2 <= per2 + 1) return 32 + j;
+    const d2 = d2c(s, i, j);
+    if ((w.seenChars[i] & (1 << j)) === 0 && d2 <= per2 + CM2) return 32 + j;
     if (tb - w.landT[j] < 0.35 && d2 <= n15 && tb - w.noticeT[i * 48 + 32 + j] >= 4) return 32 + j;
     if (tb - w.bumpT[j] < 0.35 && d2 <= n15 && tb - w.noticeT[i * 48 + 32 + j] >= 4 && w.bumpWith[j] !== i) return 32 + j;
   }
@@ -438,7 +435,7 @@ function startNotice(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number,
     if ((w.seenChars[i] & (1 << j)) === 0) { w.seenChars[i] |= 1 << j; first = 1; }
   }
   w.noticeT[i * 48 + src] = tb; w.lastNoticeT[i] = tb; w.noticeTarget[i] = src;
-  setBeh(w, i, BEH.NOTICE, 0.9, 1.5);
+  setBeh(w, i, BEH.NOTICE, 900, 1500);
   if (w.moving[i]) stopMove(w, out, i);
   w.f[F.X] = x; w.f[F.Z] = z; emitGaze(w, out, i, 1);
   const dx = x - s.x[i], dz = z - s.z[i], d = Math.sqrt(dx * dx + dz * dz) || 1;
@@ -449,10 +446,10 @@ function startNotice(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number,
 }
 
 function interestNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
-  for (let k = 0; k < w.nThingDefs; k++) { const r = w.rowOfLocal[k]; if (r >= 0 && tbMoved(w, k) && dist2(s, i, s.thingX[r], s.thingZ[r]) < 2.25) return true; }
+  for (let k = 0; k < w.nThingDefs; k++) { const r = w.rowOfLocal[k]; if (r >= 0 && tbMoved(w, k) && d2t(s, i, r) < 2.25 * CM2) return true; }
   return false;
 }
-function tbMoved(w: LifeWorld, k: number): boolean { return w.lastT - w.thingMovedT[k] < 1; }
+function tbMoved(w: LifeWorld, k: number): boolean { return w.f[F.LAST_T] - w.thingMovedT[k] < 1; }
 
 /* B04 use a thing: the score into w.f[F.A] and the thing; a free floor-usable thing within 3 m (the ball in S0 and S1). */
 function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
@@ -463,7 +460,8 @@ function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
     if (!thingPos(w, s, k)) continue;
     const r = w.rowOfLocal[k];
     if (r >= 0 && s.thingBusy[r]) continue;
-    if (dist2(s, i, w.f[F.X2], w.f[F.Z2]) > 9) continue;
+    w.f[F.PX] = w.f[F.X2]; w.f[F.PZ] = w.f[F.Z2];
+    if (d2p(w, s, i) > 9 * CM2) continue;
     let v = 0.3 + 0.5 * w.play[i] + ((PREFS[w.family[i]] & (1 << w.thingMech[k])) !== 0 ? 0.15 : 0) - 0.12 * w.usesVisit[i];
     if (w.def && w.def.things[k].id === fav) v += 0.3;
     if (v > bs) { bs = v; best = k; }
@@ -472,7 +470,7 @@ function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
   return best;
 }
 
-function startUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, k: number, score: number): void {
+function startUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, k: number, score: number /* x 1000 */): void {
   const tb = w.f[F.NOW];
   const asked = w.playWith[i] === k;
   // a ride the player asked for: the shell lifts it there (carryTo); LIFE never climbs
@@ -481,7 +479,7 @@ function startUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvent
     w.playWith[i] = -1; w.nextUse[i] = -1;
     return;
   }
-  setBeh(w, i, BEH.USE, score > 1 ? 1 : score, 12); w.tThing[i] = k; w.useStage[i] = asked ? 2 : 1;
+  setBeh(w, i, BEH.USE, score > 1000 ? 1000 : score, 12000); w.tThing[i] = k; w.useStage[i] = asked ? 2 : 1;
   w.nextUse[i] = -1; w.playWith[i] = -1;
   // notice it first (gaze and a question bubble), then go
   if (thingPos(w, s, k)) { w.f[F.X] = w.f[F.X2]; w.f[F.Z] = w.f[F.Z2]; emitGaze(w, out, i, 1); }
@@ -503,8 +501,8 @@ function ballUsePoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number, overl
   const back = s.r[i] + w.thingS0[k] + 0.03 - overlapMm * 0.001;
   w.f[F.X] = bx - dx * back; w.f[F.Z] = bz - dz * back; w.f[F.A] = dx; w.f[F.B] = dz;
   if (w.home && back > d) { w.f[F.X] = ox; w.f[F.Z] = oz; }
-  if (!w.home && !inBounds(w, w.f[F.X], w.f[F.Z], 0)) return false;
-  return true;
+  w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+  return w.home || inBounds(w, 0);
 }
 
 function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
@@ -523,7 +521,8 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     if (tb < w.behNext[i]) return;
     if (!ballUsePoint(w, s, i, k, 0)) { endBeh(w, s, out, i, 15); return; }
     if (!mayMove(w, s, i, asked)) { if (tb - w.behT0[i] > 6) endBeh(w, s, out, i, 5); return; }
-    if (dist2(s, i, w.f[F.X], w.f[F.Z]) < 0.0036) { w.phase[i] = 2; w.behNext[i] = tb; return; }
+    w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+    if (d2p(w, s, i) < 36) { w.phase[i] = 2; w.behNext[i] = tb; return; }
     if (travelTo(w, s, out, i, 0, 0)) { w.phase[i] = 1; w.behNext[i] = tb; }
     else if (tb - w.behT0[i] > 8) endBeh(w, s, out, i, 5);
     return;
@@ -544,7 +543,8 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
       const bx = w.f[F.X2], bz = w.f[F.Z2], reach = s.r[i] + w.thingS0[k] - 0.06;
       w.f[F.X] = bx - dx * reach; w.f[F.Z] = bz - dz * reach;
     }
-    if (w.home || inBounds(w, w.f[F.X], w.f[F.Z], 0)) emitScoot(w, out, i, 300, 0);
+    w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+    if (w.home || inBounds(w, 0)) emitScoot(w, out, i, 300, 0);
     w.f[F.X2] = dx; w.f[F.Z2] = dz;
     emitHop(w, s, out, i, 400, 1000);
     emitEmote(w, s, out, i, w.thingIcon[k] || EMOTE.ball, STYLE.SAY, 2, 0, 0, w.firstPlay[i]);
@@ -562,7 +562,7 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
 function takenBy(w: LifeWorld, i: number, k: number): number {
   for (let j = 0; j < CAP; j++) if (j !== i && w.active[j] && w.beh[j] === BEH.USE && w.tThing[j] === k && w.phase[j] >= 2) return j;
   const u = w.thingUser[k];
-  if (u >= 0 && u !== i && w.lastT - w.thingUseT[k] < 1.5) return u;
+  if (u >= 0 && u !== i && w.f[F.NOW] - w.thingUseT[k] < 1.5) return u;
   return -1;
 }
 /** B16's only triggers (LF-13): HUFF_TRIGGERS. Never from the player's act, absence or time; never in a session's first 60 s; 5 min apart. */
@@ -570,13 +570,13 @@ export const HUFF_TRIGGERS = ['another squishy took the ball it was chasing', 'a
 export function huffScene(w: LifeWorld, i: number, other: number): void {
   const tb = w.f[F.NOW];
   if (w.kind[i] !== 0 || other < 0 || w.kind[other] === 2) return;
-  if (!(w.sessionT0 === w.sessionT0) || tb - w.sessionT0 < BRAIN.huffQuietS) return;
+  if (!(tb - w.f[F.T0] >= BRAIN.huffQuietS)) return; // NaN (no session yet) is never 60 s
   if (tb < w.cool[i * 26 + BEH.HUFF]) return;
   w.huffDue[i] = 1; w.huffFrom[i] = other; w.huffT[i] = tb;
 }
 function startHuff(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, o: number): void {
   const tb = w.f[F.NOW];
-  setBeh(w, i, BEH.HUFF, 0.5, BRAIN.huffMaxS);
+  setBeh(w, i, BEH.HUFF, 500, BRAIN.huffMaxS * 1000);
   const dx = s.x[i] - s.x[o], dz = s.z[i] - s.z[o], d = Math.sqrt(dx * dx + dz * dz) || 1;
   w.f[F.X2] = dx / d * 0.08; w.f[F.Z2] = dz / d * 0.08; w.f[F.A] = 0; w.f[F.B] = 0;
   emitPose(w, s, out, i, 0);
@@ -598,19 +598,20 @@ function baskScore(w: LifeWorld, s: LifeSnapshot, i: number): number {
   }
   if (!near3) return 0;
   const comfort = w.looks[i * 6] > 0.5 || w.looks[i * 6 + 1] > 0.5 || w.looks[i * 6 + 2] > 0.5;
-  if (comfort || (near2 && w.traits[i * 5 + TRAIT.dozy] > 0.5)) return 0.7;
-  if (unvisited) return 0.5;
+  if (comfort || (near2 && w.traits[i * 5 + TRAIT.dozy] > 0.5)) return 700;
+  if (unvisited) return 500;
   return 0;
 }
 function startBask(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, score: number): void {
   const tb = w.f[F.NOW];
   // the warm zone's thing's use spot (the Warm Lamp), else the warmest free spot sampled near the zone's centre
-  let zk = -1, bd = 1e9;
+  let zk = -1, bd = 0x3fffffff;
   for (let k = 0; k < w.nZones; k++) {
     if (w.zoneKind[k] !== ZONE.warm) continue;
     const t = w.zoneThing[k];
     if (w.home && t >= 0 && w.rowOfLocal[t] < 0) continue;
-    const d = dist2(s, i, w.zoneX[k], w.zoneZ[k]);
+    w.f[F.PX] = w.zoneX[k]; w.f[F.PZ] = w.zoneZ[k];
+    const d = d2p(w, s, i);
     if (d < bd) { bd = d; zk = k; }
   }
   if (zk < 0) { w.cool[i * 26 + BEH.BASK] = tb + 5; return; }
@@ -623,10 +624,8 @@ function startBask(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, s
     for (let n = 0; n < 12; n++) {
       const a = rnd(w, i) * U16 * Math.PI * 2, r = 0.3 + rnd(w, i) * U16 * 1.0;
       const x = w.zoneX[zk] + Math.cos(a) * r, z = w.zoneZ[zk] + Math.sin(a) * r;
-      if (!inBounds(w, x, z, s.r[i] + 0.2)) continue;
-      let bad = false;
-      for (let k = 0; k < w.nThingDefs && !bad; k++) if (inKeepOut(w, s, k, x, z, s.r[i] + 0.05 > 0.4 ? s.r[i] + 0.05 : 0.4)) bad = true;
-      if (bad) continue;
+      w.f[F.PX] = x; w.f[F.PZ] = z;
+      if (!inBounds(w, shrinkMm(s, i)) || !clearOfThings(w, s, keepMm(s, i))) continue;
       const dx = x - w.zoneX[zk], dz = z - w.zoneZ[zk], d = Math.sqrt(dx * dx + dz * dz);
       const st = w.zoneFall0[zk] >= 0 && d > w.zoneFall0[zk] ? 1 - (1 - w.zoneFall1[zk]) * (d - w.zoneFall0[zk]) / (w.zoneR[zk] - w.zoneFall0[zk]) : 1;
       if (st > bestS) { bestS = st; bx = x; bz = z; }
@@ -635,8 +634,9 @@ function startBask(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, s
   }
   if (!ok) { w.cool[i * 26 + BEH.BASK] = tb + 5; return; }
   w.tx[i] = w.f[F.X]; w.tz[i] = w.f[F.Z];
-  setBeh(w, i, BEH.BASK, score, TOAST[w.family[i]] ? 40 : 30); w.tThing[i] = t;
-  if (dist2(s, i, w.f[F.X], w.f[F.Z]) < 0.01) { w.phase[i] = 2; w.behNext[i] = tb; return; }
+  setBeh(w, i, BEH.BASK, score, TOAST[w.family[i]] ? 40000 : 30000); w.tThing[i] = t;
+  w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+  if (d2p(w, s, i) < 100) { w.phase[i] = 2; w.behNext[i] = tb; return; }
   if (travelTo(w, s, out, i, 0, 0)) w.phase[i] = 1; else { w.beh[i] = BEH.IDLE; w.cool[i * 26 + BEH.BASK] = tb + 3; }
 }
 function runBask(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
@@ -667,7 +667,8 @@ function runBask(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents
         w.f[F.X2] = dx / d; w.f[F.Z2] = dz / d;
         emitHop(w, s, out, i, 500, 1000);
         w.f[F.X] = s.x[i] + dx / d * BRAIN.toastHop; w.f[F.Z] = s.z[i] + dz / d * BRAIN.toastHop;
-        if (!w.home && !inBounds(w, w.f[F.X], w.f[F.Z], s.r[i] + 0.2)) { w.f[F.X] = s.x[i]; w.f[F.Z] = s.z[i]; }
+        w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+        if (!w.home && !inBounds(w, shrinkMm(s, i))) { w.f[F.X] = s.x[i]; w.f[F.Z] = s.z[i]; }
         emitScoot(w, out, i, 250, 0);
         emitEmote(w, s, out, i, EMOTE.flame, STYLE.SAY, 2, 0, 0, 1);
         w.phase[i] = 4; w.behNext[i] = tb + 1.5; w.behEnd[i] = tb + 6;
@@ -692,19 +693,25 @@ function napSpotWithin(w: LifeWorld, s: LifeSnapshot, i: number, r: number): boo
     if (!w.patchNap[k]) continue;
     const t = w.patchThing[k];
     if (w.home && t >= 0 && w.rowOfLocal[t] < 0) continue;
-    const d = Math.sqrt(dist2(s, i, w.patchX[k], w.patchZ[k])) - w.patchR[k];
-    if (d <= r) return true;
+    w.f[F.PX] = w.patchX[k]; w.f[F.PZ] = w.patchZ[k];
+    if (Math.sqrt(d2p(w, s, i) / CM2) - w.patchR[k] <= r) return true;
   }
-  for (let k = 0; k < w.nThingDefs; k++) if (w.thingMech[k] === MECH.ring && Math.sqrt(dist2(s, i, w.thingX[k], w.thingZ[k])) - w.thingS0[k] <= r) return true;
+  for (let k = 0; k < w.nThingDefs; k++) {
+    if (w.thingMech[k] !== MECH.ring) continue;
+    w.f[F.PX] = w.thingX[k]; w.f[F.PZ] = w.thingZ[k];
+    if (Math.sqrt(d2p(w, s, i) / CM2) - w.thingS0[k] <= r) return true;
+  }
   return false;
 }
 function ringFree(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean {
-  for (let j = 0; j < s.n; j++) if (j !== i && w.active[j] && ((w.beh[j] === BEH.NAP && w.tThing[j] === k) || dist2(s, j, w.thingX[k], w.thingZ[k]) < (w.thingS0[k] - 0.1) * (w.thingS0[k] - 0.1))) return false;
+  w.f[F.PX] = w.thingX[k]; w.f[F.PZ] = w.thingZ[k];
+  const r = w.thingS0[k] - 0.1;
+  for (let j = 0; j < s.n; j++) if (j !== i && w.active[j] && ((w.beh[j] === BEH.NAP && w.tThing[j] === k) || d2p(w, s, j) < r * r * CM2)) return false;
   return true;
 }
 function startNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, score: number): void {
   const tb = w.f[F.NOW];
-  setBeh(w, i, BEH.NAP, score, 30 + 60 * (rnd(w, i) * U16)); w.tThing[i] = -1; w.tChar[i] = -1;
+  setBeh(w, i, BEH.NAP, score, 30000 + ((rnd(w, i) * 60000) >>> 16)); w.tThing[i] = -1; w.tChar[i] = -1;
   let ok = false;
   if (w.home) {
     // the play body naps at its own slot (the rug's centre is within 0.65 m of slot 0); the second napper at the rug's use spot
@@ -717,15 +724,18 @@ function startNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvent
   } else {
     // a ring within 3 m that is free: first to its gap's waypoint (0.6 m outside the mouth), then in
     for (let k = 0; k < w.nThingDefs && !ok; k++) {
-      if (w.thingMech[k] !== MECH.ring || dist2(s, i, w.thingX[k], w.thingZ[k]) > 9 + w.thingS0[k] * 6 || !ringFree(w, s, i, k)) continue;
+      if (w.thingMech[k] !== MECH.ring) continue;
+      w.f[F.PX] = w.thingX[k]; w.f[F.PZ] = w.thingZ[k];
+      if (d2p(w, s, i) > (9 + w.thingS0[k] * 6) * CM2 || !ringFree(w, s, i, k)) continue;
       w.f[F.X] = w.thingWayX[k]; w.f[F.Z] = w.thingWayZ[k]; w.tThing[i] = k; w.useStage[i] = 1; ok = true;
     }
     // beside a sleeping friend (the contact approach)
     if (!ok) for (let j = 0; j < s.n && !ok; j++) {
-      if (j === i || !w.active[j] || w.beh[j] !== BEH.NAP || w.phase[j] < 2 || dist2(s, i, s.x[j], s.z[j]) > 9) continue;
+      if (j === i || !w.active[j] || w.beh[j] !== BEH.NAP || w.phase[j] < 2 || d2c(s, i, j) > 9 * CM2) continue;
       const dx = s.x[i] - s.x[j], dz = s.z[i] - s.z[j], d = Math.sqrt(dx * dx + dz * dz) || 1, r = s.r[i] + s.r[j] + 0.08;
       w.f[F.X] = s.x[j] + dx / d * r; w.f[F.Z] = s.z[j] + dz / d * r;
-      if (inBounds(w, w.f[F.X], w.f[F.Z], 0)) { w.tChar[i] = j; w.tThing[i] = w.tThing[j]; ok = true; }
+      w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+      if (inBounds(w, 0)) { w.tChar[i] = j; w.tThing[i] = w.tThing[j]; ok = true; }
     }
     // a nap patch (a rug)
     if (!ok) for (let k = 0; k < w.nPatches && !ok; k++) {
@@ -733,17 +743,16 @@ function startNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvent
       for (let n = 0; n < 6 && !ok; n++) {
         const a = rnd(w, i) * U16 * Math.PI * 2, r = rnd(w, i) * U16 * Math.max(0, w.patchR[k] - 0.3);
         const x = w.patchX[k] + Math.cos(a) * r, z = w.patchZ[k] + Math.sin(a) * r;
-        if (!inBounds(w, x, z, s.r[i] + 0.2)) continue;
-        let bad = false;
-        for (let q = 0; q < w.nThingDefs && !bad; q++) if (inKeepOut(w, s, q, x, z, 0.4)) bad = true;
-        if (bad) continue;
+        w.f[F.PX] = x; w.f[F.PZ] = z;
+        if (!inBounds(w, shrinkMm(s, i)) || !clearOfThings(w, s, 400)) continue;
         w.f[F.X] = x; w.f[F.Z] = z; w.tThing[i] = w.patchThing[k]; ok = true;
       }
     }
   }
   if (!ok) { w.f[F.X] = s.x[i]; w.f[F.Z] = s.z[i]; }
   w.tx[i] = w.f[F.X]; w.tz[i] = w.f[F.Z];
-  if (dist2(s, i, w.f[F.X], w.f[F.Z]) < 0.01 || !mayMove(w, s, i, false)) { w.phase[i] = 2; settleNap(w, s, out, ev, i); return; }
+  w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+  if (d2p(w, s, i) < 100 || !mayMove(w, s, i, false)) { w.phase[i] = 2; settleNap(w, s, out, ev, i); return; }
   if (travelTo(w, s, out, i, w.tChar[i] >= 0 ? 0 : 0, 0)) w.phase[i] = 1; else { w.phase[i] = 2; settleNap(w, s, out, ev, i); }
 }
 function settleNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
@@ -754,7 +763,7 @@ function settleNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEven
   clearPose(w, s, out, i);
   // one zzz per pile: none when joining a napping friend
   let joined = false;
-  for (let j = 0; j < s.n; j++) if (j !== i && w.active[j] && w.beh[j] === BEH.NAP && w.phase[j] >= 2 && touching(s, i, j, 0.15)) joined = true;
+  for (let j = 0; j < s.n; j++) if (j !== i && w.active[j] && w.beh[j] === BEH.NAP && w.phase[j] >= 2 && touching(s, i, j, 150)) joined = true;
   if (!joined) emitEmote(w, s, out, i, EMOTE.zzz, w.kind[i] === 0 ? STYLE.SAY : STYLE.GROUP, 2, 0, 0, 0);
   emitVoice(w, s, out, i, PHRASE.SLEEPY, 0, -1, 0, 3, 0);
   // a nap on a nap thing (the Snug Basket, the Snooze Rug) is a use of it (USE NAP)
@@ -764,8 +773,8 @@ function settleNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEven
     if (w.kind[i] !== 0) pieceUse(w, s, ev, i, k);
   }
 }
-function touching(s: LifeSnapshot, i: number, j: number, slack: number): boolean {
-  const dx = s.x[j] - s.x[i], dz = s.z[j] - s.z[i], r = s.r[i] + s.r[j] + slack;
+function touching(s: LifeSnapshot, i: number, j: number, slackMm: number): boolean {
+  const dx = s.x[j] - s.x[i], dz = s.z[j] - s.z[i], r = s.r[i] + s.r[j] + slackMm * 0.001;
   return dx * dx + dz * dz <= r * r;
 }
 function runNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
@@ -781,7 +790,7 @@ function runNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     }
     if (r === 1 && w.tChar[i] >= 0) { // the last centimetres to a sleeping friend at 0.04 m/s (it stays asleep)
       const j = w.tChar[i];
-      if (!touching(s, i, j, 0.03)) { w.tChar[i] = -1; const dx = s.x[i] - s.x[j], dz = s.z[i] - s.z[j], d = Math.sqrt(dx * dx + dz * dz) || 1, rr = s.r[i] + s.r[j];
+      if (!touching(s, i, j, 30)) { w.tChar[i] = -1; const dx = s.x[i] - s.x[j], dz = s.z[i] - s.z[j], d = Math.sqrt(dx * dx + dz * dz) || 1, rr = s.r[i] + s.r[j];
         w.f[F.X] = s.x[j] + dx / d * rr; w.f[F.Z] = s.z[j] + dz / d * rr; stopMove(w, out, i); if (travelTo(w, s, out, i, 1, 0)) return; }
     }
     settleNap(w, s, out, ev, i);
@@ -790,18 +799,22 @@ function runNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   // asleep: a pile (S08) when it touches another napper; one island
   if (w.phase[i] === 2) {
     for (let j = 0; j < s.n; j++) {
-      if (j === i || !w.active[j] || w.beh[j] !== BEH.NAP || w.phase[j] < 2 || !touching(s, i, j, 0.15)) continue;
+      if (j === i || !w.active[j] || w.beh[j] !== BEH.NAP || w.phase[j] < 2 || !touching(s, i, j, 150)) continue;
       const p = pairIdx(i, j);
       if (w.pairNear[p] & 2) continue;
       w.pairNear[p] |= 2;
       let n = 1, thing = -1;
-      for (let q = 0; q < s.n; q++) if (q !== i && w.active[q] && w.beh[q] === BEH.NAP && w.phase[q] >= 2 && touching(s, i, q, 0.15)) n++;
+      for (let q = 0; q < s.n; q++) if (q !== i && w.active[q] && w.beh[q] === BEH.NAP && w.phase[q] >= 2 && touching(s, i, q, 150)) n++;
       // the pile counts for a ring when any napper's centre is inside it (D-76), for a rug when one lies on it
       for (let q = 0; q < s.n && thing < 0; q++) {
-        if (!w.active[q] || w.beh[q] !== BEH.NAP || w.phase[q] < 2 || !(q === i || touching(s, i, q, 0.15))) continue;
+        if (!w.active[q] || w.beh[q] !== BEH.NAP || w.phase[q] < 2 || !(q === i || touching(s, i, q, 150))) continue;
         const t = w.tThing[q];
-        if (t >= 0 && w.thingMech[t] === MECH.ring && dist2(s, q, w.thingX[t], w.thingZ[t]) < (w.thingS0[t] - w.thingS1[t]) * (w.thingS0[t] - w.thingS1[t])) thing = w.thingGlobal[t];
-        else if (w.onNap[q] >= 0 && w.patchThing[w.onNap[q]] >= 0) thing = w.thingGlobal[w.patchThing[w.onNap[q]]];
+        if (t >= 0 && w.thingMech[t] === MECH.ring) {
+          w.f[F.PX] = w.thingX[t]; w.f[F.PZ] = w.thingZ[t];
+          const ri = w.thingS0[t] - w.thingS1[t];
+          if (d2p(w, s, q) < ri * ri * CM2) thing = w.thingGlobal[t];
+        }
+        if (thing < 0 && w.onNap[q] >= 0 && w.patchThing[w.onNap[q]] >= 0) thing = w.thingGlobal[w.patchThing[w.onNap[q]]];
       }
       pushEvent(ev, LIFE_EV.SOCIAL, MOM_SUB_PILE, i, j, n, thing);
       w.company[i] = Math.max(0, w.company[i] - 0.5); w.company[j] = Math.max(0, w.company[j] - 0.5);
@@ -809,7 +822,7 @@ function runNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     }
     // wakes: rest under 0.1 after its 30..90 s; a toss landing within 1 m (it wakes with a blink)
     let wake = tb >= w.behEnd[i] && w.rest[i] < 0.1;
-    for (let j = 0; j < s.n && !wake; j++) if (j !== i && w.active[j] && tb - w.landT[j] < 0.3 && (s.flags[j] & LIFE_FLAG.TOSSED) !== 0 && dist2(s, i, s.x[j], s.z[j]) < 1 + s.r[i] + s.r[j]) wake = true;
+    for (let j = 0; j < s.n && !wake; j++) if (j !== i && w.active[j] && tb - w.landT[j] < 0.3 && (s.flags[j] & LIFE_FLAG.TOSSED) !== 0 && d2c(s, i, j) < (1 + s.r[i] + s.r[j]) * CM2) wake = true;
     if (tb - w.behT0[i] > 150) wake = true;
     if (wake) { emitExpr(w, out, i, EXPR.none, 0); endBeh(w, s, out, i, 30); for (let j = 0; j < CAP; j++) w.pairNear[pairIdx(i, j)] &= ~2; }
   }
@@ -820,7 +833,7 @@ const MOM_SUB_PILE = 9;
 function startZone(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, k: number): void {
   const tb = w.f[F.NOW];
   w.b15Zone[i] = 0;
-  setBeh(w, i, BEH.ZONE, 0.95, 2 + 2 * (rnd(w, i) * U16));
+  setBeh(w, i, BEH.ZONE, 950, 2000 + ((rnd(w, i) * 2000) >>> 16));
   const kind = w.zoneKind[k], f = w.family[i];
   let icon: number = EMOTE.droplet;
   if (kind === ZONE.warm) {
@@ -837,7 +850,7 @@ function startZone(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEven
 function startLove(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
   const tb = w.f[F.NOW];
   w.onceVisit[i] |= ONCE.LOVE;
-  setBeh(w, i, BEH.LOVE, 0.95, 2);
+  setBeh(w, i, BEH.LOVE, 950, 2000);
   w.f[F.X2] = 0; w.f[F.Z2] = 0; w.f[F.A] = 0.05; w.f[F.B] = s.calm || s.reducedMotion ? 2 : 3; emitPose(w, s, out, i, 0);
   emitEmote(w, s, out, i, EMOTE.sparkle, STYLE.SAY, 2, 0, 0, 1);
   emitVoice(w, s, out, i, PHRASE.JOY, 0, -1, 0, 2, 0);
@@ -846,7 +859,7 @@ function startLove(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEven
 }
 function startAnswer(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
   const tb = w.f[F.NOW];
-  setBeh(w, i, BEH.ANSWER, 0.7, 2.5);
+  setBeh(w, i, BEH.ANSWER, 700, 2500);
   const k = tuneThing(w, s);
   if (k >= 0 && thingPos(w, s, k)) { w.f[F.X] = w.f[F.X2]; w.f[F.Z] = w.f[F.Z2]; emitGaze(w, out, i, 1); }
   emitVoice(w, s, out, i, PHRASE.THING, 300, -1, 0, 2, 0);
@@ -855,7 +868,7 @@ function startAnswer(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEv
 function startAfterglow(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
   const tb = w.f[F.NOW];
   if (w.moving[i]) stopMove(w, out, i);
-  setBeh(w, i, BEH.AFTERGLOW, 1, 1.5);
+  setBeh(w, i, BEH.AFTERGLOW, 1000, 1500);
   emitGaze(w, out, i, 2);
   const t = w.lastTouch[i], sig = w.signature[i];
   const loved = (sig === 1 && t === TOUCH.POKE) || (sig === 2 && (t === TOUCH.SQUEEZE || t === TOUCH.SQUEEZE_1S)) || (sig === 3 && (t === TOUCH.STRETCH || t === TOUCH.STRETCH_06));
@@ -873,7 +886,7 @@ function startAfterglow(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Lif
 }
 function startArrive(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
   const tb = w.f[F.NOW];
-  setBeh(w, i, BEH.ARRIVE, 1, w.isNew[i] ? 1 : 1);
+  setBeh(w, i, BEH.ARRIVE, 1000, 1000);
   if (FAV_PLACE[w.species[i]] === w.placeIdx) w.favPlaceT[i] = tb;
   // one arrival hop for those that get a mover token (through the gate); the others a happy squint
   w.f[F.X2] = 0; w.f[F.Z2] = 0;
@@ -888,14 +901,14 @@ function startArrive(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEv
 function startPose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): void {
   const tb = w.f[F.NOW];
   if (w.moving[i]) stopMove(w, out, i);
-  setBeh(w, i, BEH.POSE, 1, 1e9);
+  setBeh(w, i, BEH.POSE, 1000, 1e9);
   emitGaze(w, out, i, 2); emitExpr(w, out, i, EXPR.happy, 100); clearPose(w, s, out, i);
   emitEmote(w, s, out, i, EMOTE.sparkle, STYLE.SAY, 2, 0, 0, 0);
 }
 function startCheer(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): void {
   const tb = w.f[F.NOW];
   if (w.beh[i] !== BEH.IDLE && w.beh[i] !== BEH.NONE && w.beh[i] !== BEH.NAP) endBeh(w, s, out, i, 0);
-  setBeh(w, i, BEH.CHEER, 1, 1.2);
+  setBeh(w, i, BEH.CHEER, 1000, 1200);
   w.f[F.X2] = 0; w.f[F.Z2] = 0;
   if (!(mayMove(w, s, i, false) && gateStart(w, s, i, 0, 0) && emitHop(w, s, out, i, 0, 700)) && w.moving[i]) stopMove(w, out, i);
   emitEmote(w, s, out, i, EMOTE.star, STYLE.SAY, 1, 0, 0, 0);
@@ -909,12 +922,14 @@ function rideThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEven
   if (!w.ridePrev[i] || w.beh[i] !== BEH.RIDE) {
     w.ridePrev[i] = 1;
     if (w.moving[i]) stopMove(w, out, i);
-    setBeh(w, i, BEH.RIDE, 1, BRAIN.rideS); w.rideUntil[i] = tb + BRAIN.rideS;
+    setBeh(w, i, BEH.RIDE, 1000, BRAIN.rideS * 1000); w.rideUntil[i] = tb + BRAIN.rideS;
     // the ride it sits on: the nearest ride thing
-    let best = -1, bd = 1e9;
+    let best = -1, bd = 0x3fffffff;
     for (let k = 0; k < w.nThingDefs; k++) {
       if (!w.thingRide[k]) continue;
-      const r = w.rowOfLocal[k], x = r >= 0 ? s.thingX[r] : w.thingX[k], z = r >= 0 ? s.thingZ[r] : w.thingZ[k], d = dist2(s, i, x, z);
+      const r = w.rowOfLocal[k];
+      w.f[F.PX] = r >= 0 ? s.thingX[r] : w.thingX[k]; w.f[F.PZ] = r >= 0 ? s.thingZ[r] : w.thingZ[k];
+      const d = d2p(w, s, i);
       if (d < bd) { bd = d; best = k; }
     }
     w.rideThing[i] = best; w.rideStarT[i] = -1e9;
@@ -951,14 +966,16 @@ function needsComeBack(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
     }
     return best > 0.5;
   }
-  return !inBounds(w, s.x[i], s.z[i], 0.4);
+  w.f[F.PX] = s.x[i]; w.f[F.PZ] = s.z[i];
+  return !inBounds(w, 400);
 }
 function comeBackTarget(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
   if (w.home) { if (!(w.homeX[i] === w.homeX[i])) return false; w.f[F.X] = w.homeX[i]; w.f[F.Z] = w.homeZ[i]; return true; }
   // toward the middle, to the first point inside the bounds shrunk by R + 0.2 m
   for (let k = 1; k <= 10; k++) {
     const u = k / 10, x = s.x[i] + (w.bx - s.x[i]) * u, z = s.z[i] + (w.bz - s.z[i]) * u;
-    if (inBounds(w, x, z, s.r[i] + 0.2)) { w.f[F.X] = x; w.f[F.Z] = z; return true; }
+    w.f[F.PX] = x; w.f[F.PZ] = z;
+    if (inBounds(w, shrinkMm(s, i))) { w.f[F.X] = x; w.f[F.Z] = z; return true; }
   }
   return false;
 }
@@ -998,16 +1015,16 @@ function chunkThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEve
   if (w.beh[i] === BEH.HOPTOG || w.beh[i] === BEH.ZONE) { if (tb >= w.behEnd[i]) { if (w.beh[i] === BEH.ZONE) clearPose(w, s, out, i); endBeh(w, s, out, i, 0); } return; }
   // B15 (W F C): a chunk reacts to its first entry into a zone too (its bubble merges into the group's)
   if (w.b15Zone[i] > 0) { startZone(w, s, out, ev, i, w.b15Zone[i] - 1); return; }
-  if (w.beh[lead] === BEH.NAP && w.phase[lead] >= 2 && w.beh[i] !== BEH.NAP) { setBeh(w, i, BEH.NAP, 0.8, 1e9); w.phase[i] = 2; emitExpr(w, out, i, EXPR.sleepy, 100); return; }
+  if (w.beh[lead] === BEH.NAP && w.phase[lead] >= 2 && w.beh[i] !== BEH.NAP) { setBeh(w, i, BEH.NAP, 800, 1e9); w.phase[i] = 2; emitExpr(w, out, i, EXPR.sleepy, 100); return; }
   if (w.beh[i] === BEH.NAP) { if (w.beh[lead] !== BEH.NAP) endBeh(w, s, out, i, 0); return; }
   if (!canMove) return;
-  const d = Math.sqrt(dist2(s, i, s.x[lead], s.z[lead])) - s.r[i] - s.r[lead];
+  const d = Math.sqrt(d2c(s, i, lead) / CM2) - s.r[i] - s.r[lead];
   // P03 hop together: the face piece hopped; the chunks follow in a jiggle wave, staggered 0.12 s by rank
   if (tb - w.lastHopT[lead] < 0.25 && tb - w.lastHopT[i] > 0.8) {
     let rank = 0; for (let j = 0; j < i; j++) if (w.active[j] && w.kind[j] === 2 && w.group[j] === w.group[i]) rank++;
     if (tb - w.lastHopT[lead] >= 0.12 * (rank + 1) - 0.1 && gateStart(w, s, i, 0, 0)) {
       w.f[F.X2] = 0; w.f[F.Z2] = 0;
-      if (emitHop(w, s, out, i, 0, 800)) { setBeh(w, i, BEH.HOPTOG, 0.6, 0.6); pieceUse(w, s, ev, i, -1); return; }
+      if (emitHop(w, s, out, i, 0, 800)) { setBeh(w, i, BEH.HOPTOG, 600, 600); pieceUse(w, s, ev, i, -1); return; }
       stopMove(w, out, i);
     }
   }
@@ -1017,8 +1034,9 @@ function chunkThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEve
   if (d > 0.6 || (leadIdle && d > 0.25)) {
     const dx = s.x[i] - s.x[lead], dz = s.z[i] - s.z[lead], L = Math.sqrt(dx * dx + dz * dz) || 1, rr = s.r[i] + s.r[lead] + (leadIdle ? 0.08 : 0.3);
     w.f[F.X] = s.x[lead] + dx / L * rr; w.f[F.Z] = s.z[lead] + dz / L * rr;
-    if (!w.home && !inBounds(w, w.f[F.X], w.f[F.Z], s.r[i] + 0.1)) { w.f[F.X] = s.x[lead]; w.f[F.Z] = s.z[lead]; }
-    if (travelTo(w, s, out, i, 0, 0)) setBeh(w, i, d > 0.6 ? BEH.FOLLOW : BEH.HUDDLE, 0.5, 8);
+    w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+    if (!w.home && !inBounds(w, ((s.r[i] + 0.1) * 1000) | 0)) { w.f[F.X] = s.x[lead]; w.f[F.Z] = s.z[lead]; }
+    if (travelTo(w, s, out, i, 0, 0)) setBeh(w, i, d > 0.6 ? BEH.FOLLOW : BEH.HUDDLE, 500, 8000);
   }
 }
 

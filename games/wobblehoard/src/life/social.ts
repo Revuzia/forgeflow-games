@@ -7,11 +7,11 @@ import type { LifeSnapshot, LifeIntents, LifeEvents } from '../contracts.ts';
 import { SOCIAL_KIND, LIFE_EV, LIFE_FLAG, EMOTE, SOCIAL } from '../data/life.ts';
 import { MECH } from '../data/places.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, F, MAX_MOMENTS, MAX_MEMBERS, BEH, pushEvent, pairIdx, rnd, U16 } from './world.ts';
+import { CAP, F, MAX_MOMENTS, MAX_MEMBERS, BEH, pushEvent, pairIdx, rnd, U16, dmm, inBounds, shrinkMm } from './world.ts';
 import { gateStart, gateFits, stopMove, travelTo, travelStep, emitHop, emitPose, clearPose, emitGaze, emitEmote, emitExpr, emitScoot,
   HELD_BITS } from './act.ts';
-import { moverCapOf, UNIT, STYLE } from './attention.ts';
-import { emitVoice, PHRASE, toNextBar, BAR_S } from './voice.ts';
+import { MOVER_CAP, tierOf, UNIT, STYLE } from './attention.ts';
+import { emitVoice, PHRASE, toNextBarMs, BAR_S } from './voice.ts';
 import { TRAIT } from './traits.ts';
 
 export const S = SOCIAL_KIND;
@@ -97,7 +97,6 @@ export function abortFor(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
 /* ───────────────────────────── choosing a moment (scores feed the brain's utility choice) ───────────────────────────── */
 
 function idle(w: LifeWorld, j: number): boolean { const b = w.beh[j]; return b === BEH.IDLE || b === BEH.NONE || b === BEH.WANDER || b === BEH.NOTICE || b === BEH.WATCH; }
-function dist(s: LifeSnapshot, i: number, j: number): number { const dx = s.x[j] - s.x[i], dz = s.z[j] - s.z[i]; return Math.sqrt(dx * dx + dz * dz); }
 
 /** The best moment character i could start now: its id (0 none); score into w.f[F.A], partner into w.f[F.B], a third member into w.f[F.C]. */
 export function socialPick(w: LifeWorld, s: LifeSnapshot, i: number, canMove: boolean): number {
@@ -109,13 +108,13 @@ export function socialPick(w: LifeWorld, s: LifeSnapshot, i: number, canMove: bo
   for (let j = 0; j < s.n; j++) {
     if (j === i || !w.active[j]) continue;
     // S11 push the swing: any other squishy within 2.5 m of a rider the player set on a swing (the rider is RIDE, not free)
-    if (canMove && (s.flags[j] & LIFE_FLAG.RIDE) !== 0 && w.moment[j] < 0 && (s.flags[j] & HELD_BITS) === 0 && dist(s, i, j) < 2.5 + 0.8) {
+    if (canMove && (s.flags[j] & LIFE_FLAG.RIDE) !== 0 && w.moment[j] < 0 && (s.flags[j] & HELD_BITS) === 0 && dmm(s, i, j) < 3300) {
       const rt = w.rideThing[j];
       if (rt >= 0 && w.thingMech[rt] === MECH.swing && w.thingPushX[rt] === w.thingPushX[rt] && 0.8 > bs) { bs = 0.8; best = MOM.PUSH; bp = j; }
       continue;
     }
     if (!isFree(w, s, j, false)) continue;
-    const d = dist(s, i, j), p = pairIdx(i, j), lvl = w.pairLevel[p], cool = tb < w.pairCool[p];
+    const d = dmm(s, i, j) * 0.001, p = pairIdx(i, j), lvl = w.pairLevel[p], cool = tb < w.pairCool[p];
     if (d < 2.5 && idle(w, j) && w.kind[j] !== 2) { nIdle++; if (tb - w.lastJoyT[j] < 8) happy = true; }
     if (w.kind[j] === 2) continue;
     let sc = 0, k = 0;
@@ -154,7 +153,7 @@ export function socialPick(w: LifeWorld, s: LifeSnapshot, i: number, canMove: bo
     if (k !== 0 && sc > bs) { bs = sc; best = k; bp = j; }
   }
   // S06 sing together: a tune plays (Music Box, the kettle) and 2+ idle within 2.5 m of it, or 2 chatty friends, once per 2 min per place
-  if (tb - w.lastSongT >= 120 && idle(w, i) && nIdle >= 1) {
+  if (tb - w.f[F.SONG] >= 120 && idle(w, i) && nIdle >= 1) {
     let v = 0;
     if (s.musicBoxOn && tuneNear(w, s, i)) v = 0.8;
     else if (w.traits[tr + TRAIT.chatty] > 0.6 && friendChattyNear(w, s, i)) v = 0.45;
@@ -200,7 +199,7 @@ function tuneNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
 function friendChattyNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
   for (let j = 0; j < s.n; j++) {
     if (j === i || !w.active[j] || w.kind[j] !== 0) continue;
-    if (w.pairLevel[pairIdx(i, j)] >= 2 && w.traits[j * 5 + TRAIT.chatty] > 0.6 && dist(s, i, j) < 2.5 && idle(w, j)) return true;
+    if (w.pairLevel[pairIdx(i, j)] >= 2 && w.traits[j * 5 + TRAIT.chatty] > 0.6 && dmm(s, i, j) < 2500 && idle(w, j)) return true;
   }
   return false;
 }
@@ -216,10 +215,10 @@ export function beginPicked(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev:
     const maxN = kind === MOM.SING ? 6 : 4;
     for (let j = 0; j < s.n && w.mN[m] < maxN; j++) {
       if (j === i || !w.active[j] || w.kind[j] === 2 || !isFree(w, s, j, false) || !idle(w, j)) continue;
-      if (dist(s, i, j) < 2.5 + (kind === MOM.SING && w.home ? 2 : 0)) addMember(w, out, m, j);
+      if (dmm(s, i, j) < (kind === MOM.SING && w.home ? 4500 : 2500)) addMember(w, out, m, j);
     }
     if (w.mN[m] < (kind === MOM.SNUGGLE ? 3 : 2)) { endMoment(w, s, out, ev, m, false); return false; }
-    if (kind === MOM.SING) { w.lastSongT = tb; w.mThing[m] = tuneThing(w, s); }
+    if (kind === MOM.SING) { w.f[F.SONG] = tb; w.mThing[m] = tuneThing(w, s); }
     return true;
   }
   if (p < 0) return false;
@@ -266,7 +265,8 @@ function besides(w: LifeWorld, s: LifeSnapshot, i: number, j: number, gapMm: num
   }
   let dx = s.x[i] - s.x[j], dz = s.z[i] - s.z[j], d = Math.sqrt(dx * dx + dz * dz) || 1;
   w.f[F.X] = s.x[j] + dx / d * r; w.f[F.Z] = s.z[j] + dz / d * r;
-  if (!inBoundsAt(w, w.f[F.X], w.f[F.Z], 0)) {
+  w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+  if (!inBounds(w, 0)) {
     dx = w.bx - s.x[j]; dz = w.bz - s.z[j]; d = Math.sqrt(dx * dx + dz * dz) || 1;
     w.f[F.X] = s.x[j] + dx / d * r; w.f[F.Z] = s.z[j] + dz / d * r;
   }
@@ -296,7 +296,7 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
   if (tb < w.mNext[m]) return;
   switch (kind) {
     case MOM.GREET: {
-      if (w.mPhase[m] === 0 && w.mStep[m] === 0 && dist(s, a, b) > 1.6 + 0.05) {
+      if (w.mPhase[m] === 0 && w.mStep[m] === 0 && dmm(s, a, b) > 1650) {
         besides(w, s, a, b, 300);
         w.mTurn[m] = 0; w.mEnd[m] = tb + 15;
         if (travelTo(w, s, out, a, 0, 0)) { w.mStep[m] = 1; return; }
@@ -351,7 +351,7 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
         } else {
           const dx = s.x[b] - s.x[a], dz = s.z[b] - s.z[a], d = Math.sqrt(dx * dx + dz * dz) || 1;
           w.f[F.X2] = dx / d; w.f[F.Z2] = dz / d;
-          w.unitsAdd += asleepUnitsMilli(w, s, b) * 0.001 + UNIT.pair;
+          w.f[F.UNITS] += asleepUnitsMilli(w, s, b) * 0.001 + UNIT.pair;
           if (gateStart(w, s, a, 0, 0)) emitHop(w, s, out, a, 400, 1000);
           w.mPhase[m] = 3; w.mNext[m] = tb + 0.5;
         }
@@ -397,7 +397,7 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
         emitVoice(w, s, out, a, kind === MOM.MIRROR ? PHRASE.HUM : PHRASE.DUET, 0, b, 0, 2, 0);
         emitVoice(w, s, out, b, kind === MOM.MIRROR ? PHRASE.HUM : PHRASE.DUET, 0, a, kind === MOM.MIRROR ? 0 : 1, 2, 0);
         // together only where moverCap is 2 or more and both fit; otherwise a mirrored render sway (it still counts)
-        const two = moverCapOf(s.tier) >= 2 && gateFits(w, s, a, asleepUnitsMilli(w, s, b), 0) && gateStart(w, s, a, asleepUnitsMilli(w, s, b), 0) && gateStart(w, s, b, 0, 0);
+        const two = MOVER_CAP[tierOf(s)] >= 2 && gateFits(w, s, a, asleepUnitsMilli(w, s, b), 0) && gateStart(w, s, a, asleepUnitsMilli(w, s, b), 0) && gateStart(w, s, b, 0, 0);
         if (two) {
           w.f[F.X2] = 0; w.f[F.Z2] = 0; emitHop(w, s, out, a, 0, 800); emitHop(w, s, out, b, 0, 800); w.mSoft[m] = 0;
         } else { stopMove(w, out, a); stopMove(w, out, b); sway(w, s, out, a, 40, 1500, 1); sway(w, s, out, b, 40, 1500, 1); w.mSoft[m] = 1; }
@@ -410,25 +410,25 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
     }
     case MOM.DUET: {
       if (w.mPhase[m] === 0) {
-        const wait = toNextBar(tb);
+        const wait = toNextBarMs(w) * 0.001;
         sway(w, s, out, a, 30, 1100, 1); sway(w, s, out, b, 30, 1100, 1);
         emitEmote(w, s, out, a, EMOTE.snug, STYLE.SAY, 2, w.pairBest[pairIdx(a, b)], 1, 1);
-        emitVoice(w, s, out, a, PHRASE.DUET, (wait * 1000) | 0, b, 0, 2, 0);
-        emitVoice(w, s, out, b, PHRASE.DUET, (wait * 1000) | 0, a, 1, 2, 0);
+        emitVoice(w, s, out, a, PHRASE.DUET, toNextBarMs(w), b, 0, 2, 0);
+        emitVoice(w, s, out, b, PHRASE.DUET, toNextBarMs(w), a, 1, 2, 0);
         w.mPhase[m] = 1; w.mEnd[m] = tb + wait + 2 * BAR_S; w.mNext[m] = w.mEnd[m];
       }
       return;
     }
     case MOM.SING: {
       if (w.mPhase[m] === 0) {
-        const wait = toNextBar(tb), voiced = s.phone ? 2 : 3;
+        const waitMs = toNextBarMs(w), wait = waitMs * 0.001, voiced = s.phone ? 2 : 3;
         emitEmote(w, s, out, a, EMOTE.note, STYLE.SAY, 2, 0, 0, 1);
         for (let k = 0; k < n; k++) {
           const j = mem(w, m, k);
           sway(w, s, out, j, 30, 1100, 1);
           if (k < voiced) {
-            emitVoice(w, s, out, j, PHRASE.SING, (wait * 1000) | 0, -1, k, 2, 0);
-            emitVoice(w, s, out, j, PHRASE.SING, ((wait + BAR_S) * 1000) | 0, -1, k + 16, 2, 0);
+            emitVoice(w, s, out, j, PHRASE.SING, waitMs, -1, k, 2, 0);
+            emitVoice(w, s, out, j, PHRASE.SING, waitMs + ((BAR_S * 1000) | 0), -1, k + 16, 2, 0);
           }
         }
         w.mPhase[m] = 1; w.mEnd[m] = tb + wait + 2 * BAR_S; w.mNext[m] = w.mEnd[m];
@@ -451,8 +451,9 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
           // beside the previous one along x (the row runs across the view)
           const side = k & 1 ? 1 : -1, r = s.r[j] + s.r[prev] + 0.06;
           w.f[F.X] = s.x[prev] + side * r; w.f[F.Z] = s.z[prev];
-          if (!w.home && !inBoundsAt(w, w.f[F.X], w.f[F.Z], s.r[j] + 0.2)) w.f[F.X] = s.x[prev] - side * r;
-          if (!w.home && !inBoundsAt(w, w.f[F.X], w.f[F.Z], s.r[j] + 0.2)) { // neither side fits: toward the middle
+          w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+          if (!w.home && !inBounds(w, shrinkMm(s, j))) { w.f[F.X] = s.x[prev] - side * r; w.f[F.PX] = w.f[F.X]; }
+          if (!w.home && !inBounds(w, shrinkMm(s, j))) { // neither side fits: toward the middle
             const mx = w.bx - s.x[prev], mz = w.bz - s.z[prev], md = Math.sqrt(mx * mx + mz * mz) || 1;
             w.f[F.X] = s.x[prev] + mx / md * r; w.f[F.Z] = s.z[prev] + mz / md * r;
           }
@@ -487,7 +488,8 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
         const fx = w.home && w.homeX[j] === w.homeX[j] ? bx + (bx - w.homeX[j]) : s.x[o], fz = w.home && w.homeX[j] === w.homeX[j] ? bz + (bz - w.homeZ[j]) : s.z[o];
         const dx = fx - bx, dz = fz - bz, d = Math.sqrt(dx * dx + dz * dz) || 1;
         w.f[F.X] = bx - dx / d * (s.r[j] + br + 0.03); w.f[F.Z] = bz - dz / d * (s.r[j] + br + 0.03);
-        if (!inBoundsAt(w, w.f[F.X], w.f[F.Z], 0) && !w.home) { w.mCount[m] = 3; return; }
+        w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+        if (!w.home && !inBounds(w, 0)) { w.mCount[m] = 3; return; }
         w.mTurn[m] = j === a ? 0 : 1;
         if (travelTo(w, s, out, j, 0, 0)) { w.mStep[m] = 1; w.mNext[m] = tb + 0.1; w.mPhase[m] = 1; w.mEnd[m] = tb + 25; } else w.mNext[m] = tb + 0.5;
         return;
@@ -500,7 +502,8 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
         if (gateStart(w, s, j, 0, 0) && !emitHop(w, s, out, j, 400, 1000)) {
           // a non-hopper glides the last centimetres into it (to the ball's centre: the far end of its framed segment at Home)
           w.f[F.X] = bx - dx / d * (s.r[j] + w.thingS0[k] - 0.06); w.f[F.Z] = bz - dz / d * (s.r[j] + w.thingS0[k] - 0.06);
-          if (w.home || inBoundsAt(w, w.f[F.X], w.f[F.Z], 0)) emitScoot(w, out, j, 300, 0);
+          w.f[F.PX] = w.f[F.X]; w.f[F.PZ] = w.f[F.Z];
+          if (w.home || inBounds(w, 0)) emitScoot(w, out, j, 300, 0);
         }
         emitVoice(w, s, out, j, PHRASE.NOTICE, 0, -1, 0, 3, 0);
         pushEvent(ev, LIFE_EV.USE, w.thingVerb[k], j, -1, 1, w.thingGlobal[k]);
@@ -546,7 +549,7 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
       // the pusher (a) walks to the swing's push spot (it wakes on the ride allowance) and pushes the seat 3 times
       const k = w.mThing[m];
       if (k < 0 || (s.flags[b] & LIFE_FLAG.RIDE) === 0) { w.mEnd[m] = tb; return; }
-      w.att.allowance = rideAllowance(w, s, m) * 0.001;
+      { const al = rideAllowance(w, s, m) * 0.001; if (w.att.allowance !== al) w.att.allowance = al; }
       if (w.mPhase[m] === 0) {
         emitEmote(w, s, out, a, EMOTE.star, STYLE.SAY, 2, 0, 0, 1);
         w.f[F.X] = w.thingPushX[k]; w.f[F.Z] = w.thingPushZ[k];
@@ -573,11 +576,6 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
 
 function contactMm(w: LifeWorld, s: LifeSnapshot, m: number, j: number): number {
   return w.mKind[m] === MOM.PUSH ? 80 : 60;
-}
-function inBoundsAt(w: LifeWorld, x: number, z: number, shrink: number): boolean {
-  const dx = x - w.bx, dz = z - w.bz;
-  if (w.bShape === 0) return dx * dx + dz * dz <= (w.ba - shrink) * (w.ba - shrink);
-  return Math.abs(dx) <= w.ba - shrink && Math.abs(dz) <= w.bb - shrink;
 }
 
 /** S10 teeter: two characters the player set on the same seesaw (both RIDE) start it from either rider's think. */

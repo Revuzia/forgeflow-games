@@ -36,10 +36,11 @@ export const MOTIF_SYL = new Uint8Array(NS * 3);
 export const MOTIF_INT = new Int8Array(NS * 2);
 export const SPECIES_FLAVOUR = new Uint8Array(NS);
 export const SPECIES_HASH = new Uint32Array(NS);
-function m32(st: Uint32Array): number {
+/** mulberry32's next draw x in [0, 1) on st[0], returned as floor(x * n) (an integer: never boxed). */
+function m32n(st: Uint32Array, n: number): number {
   const a = (st[0] + 0x6d2b79f5) >>> 0; st[0] = a;
   let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  return ((((t ^ (t >>> 14)) >>> 0) / 4294967296) * n) | 0;
 }
 const ST = new Uint32Array(1);
 for (let i = 0; i < NS; i++) {
@@ -47,8 +48,8 @@ for (let i = 0; i < NS; i++) {
   SPECIES_FLAVOUR[i] = fl; SPECIES_HASH[i] = hashString(id);
   ST[0] = (SPECIES_HASH[i] ^ SALTS.motif) >>> 0;
   const opts = FLAVOUR_SYL[fl] ?? FLAVOUR_SYL[FLAVOUR.gel];
-  for (let k = 0; k < 3; k++) MOTIF_SYL[i * 3 + k] = opts[Math.floor(m32(ST) * opts.length)];
-  for (let k = 0; k < 2; k++) MOTIF_INT[i * 2 + k] = Math.floor(m32(ST) * 5) - 2;
+  for (let k = 0; k < 3; k++) MOTIF_SYL[i * 3 + k] = opts[m32n(ST, opts.length)];
+  for (let k = 0; k < 2; k++) MOTIF_INT[i * 2 + k] = m32n(ST, 5) - 2;
 }
 
 /** A species' 3-syllable call (the Journal's "Its song") into out (4 floats a syllable: syl, degree, start s, length scale); returns 3. */
@@ -73,12 +74,12 @@ export function lifePhrase(w: LifeWorld, intent: number, out: Float32Array): num
   return n;
 }
 
-const clampDeg = (d: number): number => (d < -4 ? -4 : d > 4 ? 4 : d);
-
-/** Write syllable k of phrase h. */
-function syl(w: LifeWorld, h: number, k: number, s: number, deg: number, at: number, len: number): void {
-  const o = h * 16 + k * 4;
-  w.phrase[o] = s; w.phrase[o + 1] = clampDeg(deg); w.phrase[o + 2] = at; w.phrase[o + 3] = len;
+/** Write syllable k of phrase h at the running time w.f[F.T] (s), length scale len10 / 10, then advance w.f[F.T] by its length and gapMs.
+ *  Integers only cross the call (LF-02). */
+function syl(w: LifeWorld, h: number, k: number, s: number, deg: number, len10: number, gapMs: number): void {
+  const o = h * 16 + k * 4, t = w.f[F.T];
+  w.phrase[o] = s; w.phrase[o + 1] = deg < -4 ? -4 : deg > 4 ? 4 : deg; w.phrase[o + 2] = t; w.phrase[o + 3] = len10 * 0.1;
+  w.f[F.T] = t + SYL_LEN[s] * len10 * 0.1 + gapMs * 0.001;
 }
 
 /** Plan a phrase for character `who` into the next handle; w.f[F.T] = its length (s); returns the handle. `partner` is the other voice of a
@@ -88,48 +89,46 @@ export function planPhrase(w: LifeWorld, who: number, phrase: number, partner: n
   const sp = w.species[who] < NS ? w.species[who] : 0;
   const s0 = MOTIF_SYL[sp * 3], s1 = MOTIF_SYL[sp * 3 + 1], s2 = MOTIF_SYL[sp * 3 + 2];
   const i1 = MOTIF_INT[sp * 2], i2 = MOTIF_INT[sp * 2 + 1];
-  let n = 0, t = 0;
+  let n = 0;
+  w.f[F.T] = 0;
   switch (phrase) {
-    case PHRASE.GREET: syl(w, h, 0, s0, 0, 0, 1); t = SYL_LEN[s0] + 0.05; syl(w, h, 1, s1, i1, t, 1); t += SYL_LEN[s1]; n = 2; break;
+    case PHRASE.GREET: syl(w, h, 0, s0, 0, 10, 50); syl(w, h, 1, s1, i1, 10, 0); n = 2; break;
     case PHRASE.ANSWER: { // the caller's rhythm, its contour mirrored, a third or fourth away (LIFE 8.3)
       const cs = partner >= 0 && w.species[partner] < NS ? w.species[partner] : sp;
       const c0 = MOTIF_SYL[cs * 3], c1 = MOTIF_SYL[cs * 3 + 1], ci = MOTIF_INT[cs * 2], off = (arg & 1) === 0 ? 2 : 3;
-      syl(w, h, 0, c0, off, 0, 1); t = SYL_LEN[c0] + 0.05; syl(w, h, 1, c1, off - ci, t, 1); t += SYL_LEN[c1]; n = 2; break;
+      syl(w, h, 0, c0, off, 10, 50); syl(w, h, 1, c1, off - ci, 10, 0); n = 2; break;
     }
     case PHRASE.CHAT: { const k = 2 + (arg & 1); n = k;
-      for (let j = 0; j < k; j++) { const sy = j === 0 ? s0 : j === 1 ? s1 : s2; syl(w, h, j, sy, j === 0 ? 0 : j === 1 ? i1 : i1 + i2, t, 1); t += SYL_LEN[sy] + 0.06; }
+      for (let j = 0; j < k; j++) syl(w, h, j, j === 0 ? s0 : j === 1 ? s1 : s2, j === 0 ? 0 : j === 1 ? i1 : i1 + i2, 10, 60);
       break; }
-    case PHRASE.JOY: syl(w, h, 0, s0, 0, 0, 1); t = SYL_LEN[s0] + 0.04; syl(w, h, 1, s1, i1, t, 1); t += SYL_LEN[s1] + 0.04;
-      syl(w, h, 2, s2, i1 + i2, t, 1); t += SYL_LEN[s2] + 0.04; syl(w, h, 3, SYL.trill, i1 + i2 + 1, t, 1); t += SYL_LEN[SYL.trill]; n = 4; break;
-    case PHRASE.LOVED: syl(w, h, 0, SYL.chirp, 4, 0, 1); t = SYL_LEN[SYL.chirp]; n = 1; break; // an octave up: the audio snap folds +5 steps; 4 is the cap
-    case PHRASE.SLEEPY: syl(w, h, 0, SYL.coo, -1, 0, 2); t = SYL_LEN[SYL.coo] * 2; n = 1; break;
-    case PHRASE.WISH: syl(w, h, 0, s0, 0, 0, 1); t = SYL_LEN[s0] + 0.05; syl(w, h, 1, s1, i1, t, 1); t += SYL_LEN[s1] + 0.05;
-      syl(w, h, 2, SYL.chirp, i1 + 2, t, 1); t += SYL_LEN[SYL.chirp]; n = 3; break;
-    case PHRASE.GRANTED: syl(w, h, 0, SYL.trill, 0, 0, 1); t = SYL_LEN[SYL.trill] + 0.05; syl(w, h, 1, SYL.hum, 2, t, 1.2); t += SYL_LEN[SYL.hum] * 1.2; n = 2; break;
+    case PHRASE.JOY: syl(w, h, 0, s0, 0, 10, 40); syl(w, h, 1, s1, i1, 10, 40); syl(w, h, 2, s2, i1 + i2, 10, 40); syl(w, h, 3, SYL.trill, i1 + i2 + 1, 10, 0); n = 4; break;
+    case PHRASE.LOVED: syl(w, h, 0, SYL.chirp, 4, 10, 0); n = 1; break; // 4 pentatonic steps up (a sixth): the contract's range caps it (PG_AUDIO)
+    case PHRASE.SLEEPY: syl(w, h, 0, SYL.coo, -1, 20, 0); n = 1; break;
+    case PHRASE.WISH: syl(w, h, 0, s0, 0, 10, 50); syl(w, h, 1, s1, i1, 10, 50); syl(w, h, 2, SYL.chirp, i1 + 2, 10, 0); n = 3; break;
+    case PHRASE.GRANTED: syl(w, h, 0, SYL.trill, 0, 10, 50); syl(w, h, 1, SYL.hum, 2, 12, 0); n = 2; break;
     case PHRASE.SING: { // 4 notes on the eighth grid of sim time, on the field's rest tones (8.4)
       const rt = REST_TONES[(arg & 15) % 3];
-      syl(w, h, 0, s0, rt, 0, 1.4); syl(w, h, 1, s1, rt + i1, EIGHTH_S * 2, 1.4); syl(w, h, 2, s2, rt, EIGHTH_S * 4, 1.4);
-      syl(w, h, 3, s0, rt + i1 + i2, EIGHTH_S * 6, 2); t = EIGHTH_S * 8; n = 4; break;
+      syl(w, h, 0, s0, rt, 14, 0); w.f[F.T] = EIGHTH_S * 2; syl(w, h, 1, s1, rt + i1, 14, 0); w.f[F.T] = EIGHTH_S * 4;
+      syl(w, h, 2, s2, rt, 14, 0); w.f[F.T] = EIGHTH_S * 6; syl(w, h, 3, s0, rt + i1 + i2, 20, 0); w.f[F.T] = EIGHTH_S * 8; n = 4; break;
     }
-    case PHRASE.HUFF: syl(w, h, 0, SYL.coo, -2, 0, 1.3); t = SYL_LEN[SYL.coo] * 1.3; n = 1; break; // 5 semitones down before the snap
-    case PHRASE.COMFORT: syl(w, h, 0, SYL.coo, 0, 0, 1); t = SYL_LEN[SYL.coo] + 0.1; syl(w, h, 1, SYL.coo, -1, t, 1); t += SYL_LEN[SYL.coo]; n = 2; break;
-    case PHRASE.PEEP: syl(w, h, 0, SYL.peep, 0, 0, 1); t = SYL_LEN[SYL.peep]; n = 1; break;
-    case PHRASE.THING: syl(w, h, 0, s0, 1, 0, 1); t = SYL_LEN[s0] + 0.05; syl(w, h, 1, s1, 1 + i1, t, 1); t += SYL_LEN[s1] + 0.05;
-      syl(w, h, 2, s2, 1 + i1 + i2, t, 1); t += SYL_LEN[s2]; n = 3; break;
+    case PHRASE.HUFF: syl(w, h, 0, SYL.coo, -2, 13, 0); n = 1; break; // 5 semitones down before the snap
+    case PHRASE.COMFORT: syl(w, h, 0, SYL.coo, 0, 10, 100); syl(w, h, 1, SYL.coo, -1, 10, 0); n = 2; break;
+    case PHRASE.PEEP: syl(w, h, 0, SYL.peep, 0, 10, 0); n = 1; break;
+    case PHRASE.THING: syl(w, h, 0, s0, 1, 10, 50); syl(w, h, 1, s1, 1 + i1, 10, 50); syl(w, h, 2, s2, 1 + i1 + i2, 10, 0); n = 3; break;
     case PHRASE.DUET: { // the pair's own 2-note call (DUET_SALT), in thirds: the second voice two steps up
       const ps = partner >= 0 && w.species[partner] < NS ? w.species[partner] : sp;
       ST[0] = (SPECIES_HASH[sp < ps ? sp : ps] ^ SPECIES_HASH[sp < ps ? ps : sp] ^ SALTS.duet) >>> 0;
-      const d0 = Math.floor(m32(ST) * 5) - 2, d1 = Math.floor(m32(ST) * 5) - 2, up = (arg & 1) ? 2 : 0;
-      syl(w, h, 0, SYL.hum, d0 + up, 0, 1.5); t = SYL_LEN[SYL.hum] * 1.5 + 0.1; syl(w, h, 1, SYL.hum, d1 + up, t, 2); t += SYL_LEN[SYL.hum] * 2; n = 2; break;
+      const up = (arg & 1) ? 2 : 0;
+      const d0 = m32n(ST, 5) - 2, d1 = m32n(ST, 5) - 2;
+      syl(w, h, 0, SYL.hum, d0 + up, 15, 100); syl(w, h, 1, SYL.hum, d1 + up, 20, 0); n = 2; break;
     }
-    case PHRASE.GIGGLE: syl(w, h, 0, SYL.trill, 1, 0, 1); t = SYL_LEN[SYL.trill]; n = 1; break;
-    case PHRASE.NOTICE: syl(w, h, 0, SYL.chirp, 0, 0, 1); t = SYL_LEN[SYL.chirp]; n = 1; break;
-    case PHRASE.HUM: syl(w, h, 0, SYL.hum, (arg & 1) ? 2 : 0, 0, 1.5); t = SYL_LEN[SYL.hum] * 1.5; n = 1; break;
-    case PHRASE.PURR: syl(w, h, 0, SYL.purr, (arg & 1) ? 2 : 0, 0, 1.5); t = SYL_LEN[SYL.purr] * 1.5; n = 1; break;
-    default: syl(w, h, 0, s0, 0, 0, 1); t = SYL_LEN[s0]; n = 1;
+    case PHRASE.GIGGLE: syl(w, h, 0, SYL.trill, 1, 10, 0); n = 1; break;
+    case PHRASE.NOTICE: syl(w, h, 0, SYL.chirp, 0, 10, 0); n = 1; break;
+    case PHRASE.HUM: syl(w, h, 0, SYL.hum, (arg & 1) ? 2 : 0, 15, 0); n = 1; break;
+    case PHRASE.PURR: syl(w, h, 0, SYL.purr, (arg & 1) ? 2 : 0, 15, 0); n = 1; break;
+    default: syl(w, h, 0, s0, 0, 10, 0); n = 1;
   }
   w.phraseN[h] = n;
-  w.f[F.T] = t;
   return h;
 }
 
@@ -149,8 +148,9 @@ export function emitVoice(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, who: 
   return true;
 }
 
-/** Seconds from sim time t to the next bar line of the 66 BPM grid (LIFE 8.4: a singer enters on the next sim-time bar line). */
-export function toNextBar(t: number): number {
-  const b = Math.ceil(t / BAR_S - 1e-9) * BAR_S;
-  return b - t;
+/** Milliseconds (an integer) from the think's sim time to the next bar line of the 66 BPM grid (LIFE 8.4: a singer enters on the next
+ *  sim-time bar line). */
+export function toNextBarMs(w: LifeWorld): number {
+  const t = w.f[F.NOW];
+  return ((Math.ceil(t / BAR_S - 1e-9) * BAR_S - t) * 1000) | 0;
 }
