@@ -33,6 +33,13 @@ const SWEEP_S = 0.25;
 /** a body that may block a lane: the segment its centre sweeps over SWEEP_S (from (x, y) to (x2, y2); a point when it
  *  stands), and the radius the walker's centre must stay out of */
 export interface Disc { x: number; y: number; x2: number; y2: number; r: number }
+/** a body crossing the walker's line (its velocity more across the line than along it) also makes the ground it is
+ *  heading into, from SWEEP_S out to AHEAD_S s, dear to plan through (a step there costs 1 + AHEAD_COST its length; never blocked): the
+ *  lane passes behind a crossing column rather than racing its front end (orch1 r2 waves repro, lisvel s3 t1147: a lane
+ *  in front of a Wick column marching across the click walked 3.7 m with the column and 10.8 m against a 6.6 m way) */
+const AHEAD_S = 0.7;
+const AHEAD_COST = 1.5;
+const CROSS_COS = 0.5;
 /** squared distance from (px, py) to the segment a–b, and the closest point (into seg) */
 const seg = { x: 0, y: 0 };
 function pointSeg2(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
@@ -53,6 +60,7 @@ function segSeg2(ax: number, ay: number, bx: number, by: number, cx: number, cy:
 }
 
 const blocked = new Uint8Array(LANE_N * LANE_N);
+const dear = new Uint8Array(LANE_N * LANE_N);
 const gCost = new Float32Array(LANE_N * LANE_N);
 const parent = new Int32Array(LANE_N * LANE_N);
 const openGen = new Uint32Array(LANE_N * LANE_N);
@@ -64,6 +72,8 @@ const cells: number[] = [];
 const pts: number[] = [];
 const near: Entity[] = [];
 export const laneDiscs: Disc[] = [];
+/** the ground crossing bodies are heading into (AHEAD_S): dear, not blocked (planLane only) */
+const aheadDiscs: Disc[] = [];
 const discPool: Disc[] = [];
 
 /**
@@ -106,7 +116,8 @@ export function inTheWay(e: Entity, o: Entity, ux: number, uy: number, all: bool
 export function collectDiscs(w: World, e: Entity, minX: number, minY: number, maxX: number, maxY: number,
   ux: number, uy: number, gx: number, gy: number, goalNear: number, all: boolean): void {
   for (const d of laneDiscs) discPool.push(d);
-  laneDiscs.length = 0;
+  for (const d of aheadDiscs) discPool.push(d);
+  laneDiscs.length = 0; aheadDiscs.length = 0;
   const cx = (minX + maxX) * 0.5, cy = (minY + maxY) * 0.5;
   const n = w.hash.query(cx, cy, Math.sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY)) * 0.5 + 1.5, near);
   for (let i = 0; i < n; i++) {
@@ -125,6 +136,12 @@ export function collectDiscs(w: World, e: Entity, minX: number, minY: number, ma
     const disc = discPool.pop() ?? { x: 0, y: 0, x2: 0, y2: 0, r: 0 };
     disc.x = x1; disc.y = y1; disc.x2 = x2; disc.y2 = y2; disc.r = R;
     laneDiscs.push(disc);
+    const v = Math.sqrt(o.vx * o.vx + o.vy * o.vy);
+    if (v > 0.3 * e.stats.moveSpeed && Math.abs(o.vx * ux + o.vy * uy) < CROSS_COS * v) {
+      const a = discPool.pop() ?? { x: 0, y: 0, x2: 0, y2: 0, r: 0 };
+      a.x = x2; a.y = y2; a.x2 = o.x + o.vx * AHEAD_S; a.y2 = o.y + o.vy * AHEAD_S; a.r = R0;
+      aheadDiscs.push(a);
+    }
   }
 }
 
@@ -190,6 +207,18 @@ export function planLane(w: World, e: Entity, tx: number, ty: number, r: number,
     const y = minY + (j + 0.5) * C;
     for (let i = 0; i < W; i++) blocked[j * W + i] = nav.walkable(minX + (i + 0.5) * C, y) ? 0 : 1;
   }
+  dear.fill(0, 0, W * H);
+  for (let k = 0; k < aheadDiscs.length; k++) {
+    const d = aheadDiscs[k];
+    const lo = Math.min(d.x, d.x2), hi = Math.max(d.x, d.x2), loY = Math.min(d.y, d.y2), hiY = Math.max(d.y, d.y2);
+    const i0 = Math.max(0, Math.floor((lo - d.r - minX) / C)), i1 = Math.min(W - 1, Math.floor((hi + d.r - minX) / C));
+    const j0 = Math.max(0, Math.floor((loY - d.r - minY) / C)), j1 = Math.min(H - 1, Math.floor((hiY + d.r - minY) / C));
+    const r2 = d.r * d.r;
+    for (let j = j0; j <= j1; j++) {
+      const y = minY + (j + 0.5) * C;
+      for (let i = i0; i <= i1; i++) if (pointSeg2(minX + (i + 0.5) * C, y, d.x, d.y, d.x2, d.y2) < r2) dear[j * W + i] = 1;
+    }
+  }
   for (let k = 0; k < laneDiscs.length; k++) {
     const d = laneDiscs[k];
     // a cell is blocked when its centre is inside the disc shrunk by RASTER_SLACK: a gap the exact discs leave open
@@ -230,6 +259,7 @@ export function planLane(w: World, e: Entity, tx: number, ty: number, r: number,
       if (blocked[m] || closedGen[m] === gen) continue;
       let cost = 1;
       if (NDX[k] !== 0 && NDY[k] !== 0) { if (blocked[ny * W + mx] || blocked[my * W + nx]) continue; cost = SQRT2; }
+      if (dear[m]) cost *= 1 + AHEAD_COST;
       const ng = gn + cost;
       if (openGen[m] !== gen || ng < gCost[m]) {
         gCost[m] = ng; parent[m] = n; openGen[m] = gen;

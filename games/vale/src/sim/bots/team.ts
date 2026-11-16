@@ -53,6 +53,8 @@ export interface Guard {
   recall: boolean;
   /** the post holds until then (renewed while the threat holds) */
   until: number;
+  /** when the post was given (a defender that has not turned to it 2 s later, away from it, hands it on) */
+  readonly since: number;
 }
 
 /** a place a ganker can wait out of sight beside a road: a thicket whose centre is 4–22 m off the road (lane AI G3) */
@@ -161,6 +163,8 @@ export class TeamBrain {
   missing = 0;
   /** lane AI G1: fighters posted to threatened own structures */
   readonly guard = new Map<PlayerId, Guard>();
+  /** defenders that handed a post on (busy elsewhere: a siege, a fight, a trip home), not asked again until then */
+  readonly guardDeclined = new Map<PlayerId, number>();
   /** structure id → class (outer / inner / base) */
   private readonly classes = new Map<string, StructClass>();
   /** lane AI G3: thickets beside each road a ganker can wait in, and every thicket centre (ambush spots) */
@@ -345,7 +349,7 @@ export class TeamBrain {
       while (have < th.need) {
         let best: PlayerId = -1, bt = Infinity, bRecall = false;
         for (const p of w.players) {
-          if (!p || p.team !== this.team || this.guard.has(p.player)) continue;
+          if (!p || p.team !== this.team || this.guard.has(p.player) || (this.guardDeclined.get(p.player) ?? -1) > now) continue;
           const e = p.ent;
           if (!e || !e.alive || e.hp < e.maxHp * 0.35) continue;
           // (the laning phase's grovehunter keeps its clear and its ganks at the outer Needles: an inner or base call
@@ -363,7 +367,7 @@ export class TeamBrain {
           bt = eta; best = p.player; bRecall = rec;
         }
         if (best < 0) break;
-        this.guard.set(best, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach, cls, recall: bRecall, until: now + d.defendHold });
+        this.guard.set(best, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach, cls, recall: bRecall, until: now + d.defendHold, since: now });
         have++;
       }
     }

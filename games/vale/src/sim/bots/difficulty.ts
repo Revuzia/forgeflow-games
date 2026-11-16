@@ -166,7 +166,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 30, objectiveEven: 0.55, contests: true, objectiveSense: false,
     defendMatch: 1, recallDefend: 'base', defendHold: 6, peelChance: 0.7, peelBodyBlock: true, lurkMax: 4, avoidVision: false,
-    flank: false, riskCap: 2.0, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
+    flank: false, riskCap: 1.75, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
   },
   veteran: {
@@ -176,7 +176,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     decisionNoise: 0.03, focusDiscipline: 1, abilityEvery: 0.2,
     macroDelay: 0, convertsLeads: true, leadGleam: 1500, readsWaves: true,
     objectiveLead: 50, objectiveEven: 0.68, contests: true, objectiveSense: true,
-    defendMatch: 1, recallDefend: (typeof process !== 'undefined' && process.env?.VALE_AB_RD === 'base' ? 'base' : 'inner'), defendHold: 6, peelChance: 1, peelBodyBlock: true, lurkMax: 8, avoidVision: true,
+    defendMatch: 1, recallDefend: 'inner', defendHold: 6, peelChance: 1, peelBodyBlock: true, lurkMax: 8, avoidVision: true,
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
   },

@@ -669,7 +669,8 @@ export class Bot extends BotBase implements BotController {
       if (b.answer.has(this.player) && hpF > 0.5) consider('defend', 0.8);
       // (lane AI G1: posted to a threatened structure — the post comes before the plan, and in the laning phase too)
       const post = b.guard.get(this.player);
-      if (post && hpF > 0.3) consider('defend', post.cls === 0 ? 0.78 : 0.84);
+      // (the base outranks a siege at its tower — 0.92 — an inner Needle does not: that siege hands the post on, below)
+      if (post && hpF > 0.3) consider('defend', post.cls === 0 ? 0.78 : post.cls === 1 ? 0.84 : 0.95);
       const d = this.lane >= 0 ? b.defend[this.lane] : 0;
       let global = 0;
       // (a tier that reads waves sends answers to a threatened road; the whole team turns for a push of three or more
@@ -704,9 +705,10 @@ export class Bot extends BotBase implements BotController {
       // (a jungler ganks between its camps from JUNGLE_GANK_FROM: not with a camp up right here, and only a road in reach;
       // a laner holds its road through the laning phase — CW3 CL-1 measured laners' roams from a shoved road: the road
       // they left lost more Wicks than the roams won takedowns)
-      const g = b.gank;
+      const g = this.roamGoal();
       if (g && g.alive && hpF > 0.6 && !this.exposed && now >= this.roamBlockUntil) {
-        const d2 = this.dist2(e, g.x, g.y);
+        // (a planned gank whose target slipped out of sight a moment ago is measured from the thicket I walk to, not its hidden spot)
+        const d2 = this.isNoticed(g) ? this.dist2(e, g.x, g.y) : this.dist2(e, this.roamX, this.roamY);
         // (lane AI G3: a planned approach and a lurk take longer than a straight walk)
         const roaming = this.mode === 'roam' && now - this.modeSince < ROAM_MAX + this.diff.lurkMax;
         if (this.jungle) {
@@ -730,6 +732,14 @@ export class Bot extends BotBase implements BotController {
       else if (kind === 'fray' && d < 12) consider('pickup', 0.42);
     }
     if (bestS < 0) best = laner ? 'lane' : this.jungle ? 'farm' : kind === 'fray' ? 'hunt' : 'push';
+    // (lane AI G1: a defender that has not turned to its post 2 s after it was given, and is not at it, hands it on — the
+    // team brain asks the next fastest; one held by a siege or a trip home used to keep the post while the tower fell)
+    if (b) {
+      const post = b.guard.get(this.player);
+      if (post && best !== 'defend' && now - post.since >= 2 && this.dist2(e, post.x, post.y) > 18 * 18) {
+        b.guard.delete(this.player); b.guardDeclined.set(this.player, now + 10);
+      }
+    }
     // hysteresis: a young mode is kept unless the newcomer is urgent
     if (best === 'allin' && this.killTarget && (best !== this.mode || this.allinTarget < 0)) this.allinTarget = this.killTarget.id;
     if (best !== this.mode) {
@@ -1176,7 +1186,9 @@ export class Bot extends BotBase implements BotController {
     let sx = g.standX, sy = g.standY;
     // (defensive ambush, tiers that lurk: an enemy at the post that has not committed under it — wait in a thicket
     // beside the tower and come out when it does)
-    if (t && this.diff.lurkMax > 0 && this.brain && !(typeof process !== 'undefined' && process.env?.VALE_AB_NOAMB === '1')) {
+    // (not at the base, and not once the diver is on the structure: then the post is under it)
+    const onPost = !!t && t.atkTarget >= 0 && (() => { const a = this.w.entity(t.atkTarget); return !!a && a.kind === 'structure' && this.dist2(a, g.x, g.y) <= 4; })();
+    if (t && this.diff.lurkMax > 0 && this.brain && g.cls < 2 && !onPost) {
       const b = this.brain;
       let bd = 10 * 10;
       for (let i = 0; i < b.thicketXs.length; i++) {
@@ -1464,8 +1476,19 @@ export class Bot extends BotBase implements BotController {
    * 11 m; strike — the old straight run at it (gap-closer or CC first, the laner joins through its gank read). The
    * approach is given up when the target is lost for 3 s or a second enemy fighter stands beside it.
    */
+  /** the team's gank target — or, while I walk to or wait in a planned thicket, my own target through up to 3 s out of
+   *  sight (the team read needs it in view, and a lurk loses sight of its target as it should) */
+  private roamGoal(): Entity | null {
+    const g = this.brain?.gank ?? null;
+    if (this.mode !== 'roam' || this.roamPhase === 'strike' || this.roamTarget < 0 || (g && g.id === this.roamTarget)) return g;
+    const own = this.w.entity(this.roamTarget);
+    if (!own || !own.alive || own.kind !== 'fighter') return g;
+    if (this.isNoticed(own) || (this.roamLostAt >= 0 && this.now - this.roamLostAt <= 3)) return own;
+    return g;
+  }
+
   private execRoam(): void {
-    const b = this.brain, t = b?.gank, e = this.e, now = this.now;
+    const b = this.brain, t = this.roamGoal(), e = this.e, now = this.now;
     if (!t || !t.alive) { this.execLaneOrPush(); return; }
     if (this.roamTarget !== t.id) this.planRoam(t);
     if (b && b.gankLane >= 0) { b.gankComing = b.gankLane; b.gankComingAt = now; }
@@ -1505,10 +1528,12 @@ export class Bot extends BotBase implements BotController {
     if (seen && d2 < 9 * 9) { this.pFight = t; this.pAggro = 1; }
   }
 
-  /** fog-honest: an enemy fighter, Wick or tower I can see stands with me inside its sight, or a lamp I know of covers me */
+  /** fog-honest: an enemy fighter or tower I can see stands with me inside its sight, or a lamp I know of covers me (a Wick
+   *  passing on its road is no watcher for the lower tiers: the approach skirts the road) */
   private spottedOnApproach(): boolean {
     const e = this.e, p = this.perc;
-    for (const l of [p.enemyFighters, p.enemyUnits, p.enemyStructs]) {
+    // (the tiers that route round known vision, veteran, also turn back from a Wick's glimpse)
+    for (const l of this.diff.avoidVision ? [p.enemyFighters, p.enemyStructs, p.enemyUnits] : [p.enemyFighters, p.enemyStructs]) {
       for (const o of l) { if (o.alive && o.sight > 0 && sq(o.x - e.x) + sq(o.y - e.y) <= sq(o.sight)) return true; }
     }
     for (const wd of p.enemyWards) if (wd.alive && sq(wd.x - e.x) + sq(wd.y - e.y) <= sq(Math.max(6, wd.sight))) return true;
