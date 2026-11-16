@@ -289,3 +289,104 @@ export const DEFAULT_REACTIONS: Readonly<Record<DefaultColumn, readonly (readonl
   echo: [1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1,1,2,6,1],
   tune: [1,3,3,2,1,3,3,2,1,3,3,2,1,3,3,2,1,3,3,2,1,3,7,18,1,3,3,2,1,3,3,2,1,3,7,18,1,3,7,18,1,3,3,2,1,2,6,8],
 });
+
+/* ═══════════════════════════════════════ REACT triggers (LIFE 4.2; D-72, DT-15, LF-21) ═══════════════════════════════════════ */
+
+/** The producer conditions. IN_WATER_FLOAT: in a water zone and not grounded for forS; IN_WATER_WADE: in water with a surface of `min` m or
+ *  more, grounded, for forS; LOOK_UP: look `arg` crosses `min` upward (a lifeAddLook of it fires every time: `addEvent`); POSE_AT: warm pose
+ *  `arg` (x 100) reached for family `fam` in a warm zone of `min` or more; IN_ZONE: inside a zone of kind `arg` with strength `min` or more for
+ *  forS (`shiverOnly`: a family with `shiver`); GLIDE: a glide on a patch of grip under `arg` that carries it `min` m; LAND_SHALLOW: a landing
+ *  in water with a surface under `min` m; CURRENT: floating and carried `min` m by a current; UPDRAFT: airborne in an updraft for forS;
+ *  NEAR_MAGNET: a bead squeeze within `min` m of a switched-on magnet; GLOW_WATER: in a glowing water zone for forS; SKY: idle within `min` m of
+ *  a sky thing for forS at night (or on screen when the comet crosses: `addEvent`); FIRST_PRINT: its first print mark on a marking ground;
+ *  UNDER_DRIP: under a shower zone while it drips for forS; FIZZ_ZONE: in the Bubble Patch for forS; BEHAVIOUR: behaviour `arg` starts;
+ *  LOOK_DRY: soak or wet falls under `min` in a warm zone after reaching 0.5. */
+export const REACT_COND = { IN_WATER_FLOAT: 1, IN_WATER_WADE: 2, LOOK_UP: 3, POSE_AT: 4, IN_ZONE: 5, GLIDE: 6, LAND_SHALLOW: 7, CURRENT: 8, UPDRAFT: 9, NEAR_MAGNET: 10,
+  GLOW_WATER: 11, SKY: 12, FIRST_PRINT: 13, UNDER_DRIP: 14, FIZZ_ZONE: 15, BEHAVIOUR: 16, LOOK_DRY: 17 } as const;
+/** once 'visit': once per character per zone or thing per visit; 'event': every time, after cooldownS. thing: where the REACT's thing comes
+ *  from: the zone's owning thing (LifeSnapshot.zoneThing), the patch's (patchThing), the source thing of the lifeAddLook or switch that caused
+ *  it, or none (-1). addEvent: a lifeAddLook (or the comet) also fires it, every time, with its source thing. */
+export interface ReactTrigger { readonly kind: number; readonly cond: number; readonly arg: number; readonly min?: number; readonly forS?: number; readonly fam?: MaterialFamilyId;
+  readonly shiverOnly?: boolean; readonly once: 'visit' | 'event'; readonly cooldownS: number; readonly thing: 'zone' | 'patch' | 'source' | 'none'; readonly addEvent?: boolean }
+export const REACT_TRIGGERS: readonly ReactTrigger[] = [
+  { kind: REACT_KIND.FLOAT, cond: REACT_COND.IN_WATER_FLOAT, arg: 0, forS: 1, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.WADE, cond: REACT_COND.IN_WATER_WADE, arg: 0, min: 0.12, forS: 1, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.SOAK, cond: REACT_COND.LOOK_UP, arg: LOOK.soak, min: 0.5, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.TOAST, cond: REACT_COND.LOOK_UP, arg: LOOK.toast, min: 0.5, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.RISE, cond: REACT_COND.POSE_AT, arg: 106, min: 0.6, fam: 'mochidough', once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.OOZE, cond: REACT_COND.POSE_AT, arg: 82, min: 0.6, fam: 'slimegoo', once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.WARM, cond: REACT_COND.IN_ZONE, arg: 6, min: 0.5, forS: 2, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.SHIVER, cond: REACT_COND.IN_ZONE, arg: 7, min: 0, forS: 2, shiverOnly: true, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.FROST, cond: REACT_COND.LOOK_UP, arg: LOOK.frost, min: 0.5, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.SNOWCAP, cond: REACT_COND.LOOK_UP, arg: LOOK.snow, min: 0.5, once: 'visit', cooldownS: 0, thing: 'source', addEvent: true },
+  { kind: REACT_KIND.GLIDE, cond: REACT_COND.GLIDE, arg: 0.5, min: 0.5, once: 'event', cooldownS: 10, thing: 'patch' },
+  { kind: REACT_KIND.SPLASH, cond: REACT_COND.LAND_SHALLOW, arg: 0, min: 0.12, once: 'event', cooldownS: 5, thing: 'zone' },
+  { kind: REACT_KIND.DRIFT, cond: REACT_COND.CURRENT, arg: 0, min: 0.3, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.LIFT, cond: REACT_COND.UPDRAFT, arg: 0, forS: 0.3, once: 'event', cooldownS: 5, thing: 'zone' },
+  { kind: REACT_KIND.RATTLE, cond: REACT_COND.NEAR_MAGNET, arg: 0, min: 0.6, fam: 'beadsqueeze', once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.GLOW, cond: REACT_COND.GLOW_WATER, arg: 0, forS: 1, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.GAZE_SKY, cond: REACT_COND.SKY, arg: 0, min: 1.5, forS: 3, once: 'visit', cooldownS: 0, thing: 'source', addEvent: true },
+  { kind: REACT_KIND.PRINT, cond: REACT_COND.FIRST_PRINT, arg: 0, once: 'visit', cooldownS: 0, thing: 'patch' },
+  { kind: REACT_KIND.SHOWER, cond: REACT_COND.UNDER_DRIP, arg: 0, forS: 1, once: 'event', cooldownS: 20, thing: 'zone' },
+  { kind: REACT_KIND.FIZZ, cond: REACT_COND.FIZZ_ZONE, arg: 0, forS: 1, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.HOLD_ON, cond: REACT_COND.BEHAVIOUR, arg: 19, once: 'event', cooldownS: 0, thing: 'none' },
+  { kind: REACT_KIND.DRY, cond: REACT_COND.LOOK_DRY, arg: LOOK.soak, min: 0.1, once: 'visit', cooldownS: 0, thing: 'zone' },
+  { kind: REACT_KIND.LOVE, cond: REACT_COND.BEHAVIOUR, arg: 10, once: 'visit', cooldownS: 0, thing: 'none' },
+];
+
+/* ═══════════════════════════════════════ favourites and best friends (PLACES 5; DT-03, DT-04) ═══════════════════════════════════════ */
+
+/** A species' favourite place and thing and its best friend (one of 25 authored, symmetric pairs). Species facts, never per instance. */
+export interface SpeciesLife { readonly place: PlaceId; readonly thing: ThingId; readonly friend: SpeciesId }
+export const SPECIES_LIFE = {
+  dollop: { place: 'hearthlog', thing: 'yarnball', friend: 'crimpo' },
+  plumpet: { place: 'fizzwell', thing: 'spongeraft', friend: 'wisplet' },
+  twangle: { place: 'cloudloft', thing: 'kiteswing', friend: 'chunkle' },
+  puddlo: { place: 'ripple', thing: 'rockpool', friend: 'boingle' },
+  glugbean: { place: 'fizzwell', thing: 'bathwater', friend: 'thumbly' },
+  crumbit: { place: 'ripple', thing: 'shellchimes', friend: 'cushlet' },
+  chunkle: { place: 'lanternroof', thing: 'lanternline', friend: 'twangle' },
+  munchip: { place: 'rainleaf', thing: 'mossbouncer', friend: 'dimpla' },
+  wisplet: { place: 'cloudloft', thing: 'updraft', friend: 'plumpet' },
+  cushlet: { place: 'cogwhistle', thing: 'springplate', friend: 'crumbit' },
+  crimpo: { place: 'hearthlog', thing: 'hearth', friend: 'dollop' },
+  thumbly: { place: 'hearthlog', thing: 'rockerboard', friend: 'glugbean' },
+  boingle: { place: 'frostbell', thing: 'icepond', friend: 'puddlo' },
+  dimpla: { place: 'echohollow', thing: 'echostone', friend: 'munchip' },
+  nuzzo: { place: 'cloudloft', thing: 'cloudball', friend: 'capnap' },
+  tadpolo: { place: 'fizzwell', thing: 'swirlride', friend: 'swishel' },
+  swishel: { place: 'ripple', thing: 'pebbleball', friend: 'tadpolo' },
+  granulo: { place: 'ripple', thing: 'sandmound', friend: 'sproutle' },
+  sproutle: { place: 'rainleaf', thing: 'seedpod', friend: 'granulo' },
+  wrigglo: { place: 'rainleaf', thing: 'splashspots', friend: 'knubby' },
+  acornel: { place: 'rainleaf', thing: 'dripleaf', friend: 'hooplet' },
+  capnap: { place: 'hearthlog', thing: 'snugbasket', friend: 'nuzzo' },
+  knubby: { place: 'frostbell', thing: 'steampool', friend: 'wrigglo' },
+  kneadle: { place: 'cogwhistle', thing: 'spinningcog', friend: 'burrbin' },
+  hooplet: { place: 'frostbell', thing: 'glideramp', friend: 'acornel' },
+  spirelo: { place: 'echohollow', thing: 'crystals', friend: 'diademo' },
+  zingle: { place: 'lanternroof', thing: 'hammock', friend: 'gloopsy' },
+  petalop: { place: 'rainleaf', thing: 'leafteeter', friend: 'marigel' },
+  burrbin: { place: 'cogwhistle', thing: 'magnet', friend: 'kneadle' },
+  marigel: { place: 'rainleaf', thing: 'steppingstones', friend: 'petalop' },
+  gloopsy: { place: 'fizzwell', thing: 'soapslide', friend: 'zingle' },
+  hushpuff: { place: 'hearthlog', thing: 'hearth', friend: 'thudge' },
+  slumbrel: { place: 'cloudloft', thing: 'cloudnest', friend: 'caromel' },
+  thudge: { place: 'cogwhistle', thing: 'tickclock', friend: 'hushpuff' },
+  diademo: { place: 'frostbell', thing: 'iciclebells', friend: 'spirelo' },
+  taffelin: { place: 'lanternroof', thing: 'vanedisc', friend: 'cindergoo' },
+  rattlebead: { place: 'fizzwell', thing: 'bubblepatch', friend: 'pastrel' },
+  cindergoo: { place: 'echohollow', thing: 'glowpool', friend: 'taffelin' },
+  selenuff: { place: 'lanternroof', thing: 'moondish', friend: 'flipdome' },
+  pastrel: { place: 'hearthlog', thing: 'kettle', friend: 'rattlebead' },
+  flipdome: { place: 'cogwhistle', thing: 'littlebell', friend: 'selenuff' },
+  caromel: { place: 'cloudloft', thing: 'puffpads', friend: 'slumbrel' },
+  ambrosel: { place: 'echohollow', thing: 'stoneslide', friend: 'fossilo' },
+  tidelume: { place: 'ripple', thing: 'bobring', friend: 'glimglop' },
+  glimglop: { place: 'fizzwell', thing: 'tap', friend: 'tidelume' },
+  somnuff: { place: 'lanternroof', thing: 'chimneycorner', friend: 'constello' },
+  fossilo: { place: 'echohollow', thing: 'humrock', friend: 'ambrosel' },
+  skeinara: { place: 'lanternroof', thing: 'starscope', friend: 'prismelo' },
+  constello: { place: 'frostbell', thing: 'snowdriftnest', friend: 'somnuff' },
+  prismelo: { place: 'echohollow', thing: 'mossbed', friend: 'skeinara' },
+} as const satisfies Record<SpeciesId, SpeciesLife>;
