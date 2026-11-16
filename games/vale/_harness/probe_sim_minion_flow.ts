@@ -15,7 +15,8 @@
 // Every 10 ticks each Wick's arc-length progress along its own road is sampled. A Wick is STUCK when for 6 s it gains
 // under 0.5 m along its road while it is free to walk: no attack order, no swing or windup, no hard CC or root, no
 // attackable enemy within its aggro range + 1.5 m (a Wick queuing behind a fight or waiting for its turn at a tower is
-// fighting, not stuck), and more than 8 m from its road's end (holding the end is its job). Gate: 0 stuck Wicks on
+// fighting, not stuck), and more than 8 m from its road's end (holding the end is its job); a Wick that came 1 m nearer
+// its road in the window is walking back to it after a chase (ruling 42), not stuck. Gate: 0 stuck Wicks on
 // every road of both maps (all six seeds, both scenarios).
 // A Wick is IDLE (what a viewer reads as stuck, fighting or not) when for 6 s it neither swings nor gains 0.5 m along its
 // road nor covers 1 m of ground, away from its road's end and not held by CC: a melee Wick waiting behind the front row
@@ -50,6 +51,8 @@ const MAPS = opt('maps', 'rift,bridge').split(',');
 const SCENS = opt('scen', 'player,idle').split(',');
 const OUT = opt('out', join(HERE, '_reports', 'minion_flow.json'));
 const SAMPLE = 10;
+/** a Wick that came this much (m) nearer its road over the window is walking back to it, not stuck */
+const RETURN_GAIN = 1;
 /** --trace map,scen,seed,id,from,to: print one Wick's state every 0.5 s (diagnosis) */
 const TRACE = ((t) => t ? { map: t[0], scen: t[1], seed: Number(t[2]), id: Number(t[3]), from: Number(t[4]), to: Number(t[5]) } : null)(opt('trace', '') ? opt('trace', '').split(',') : null);
 const STUCK_TICKS = 180;
@@ -93,6 +96,8 @@ function geom(path: readonly (readonly [number, number])[]): LaneG {
   for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
   return { pts, cum, len: cum[cum.length - 1] };
 }
+/** distance (m) from (x, y) to the road (projectOff) */
+let projectOff = 0;
 function project(g: LaneG, x: number, y: number): number {
   let bs = 0, bd = Infinity;
   for (let i = 1; i < g.pts.length; i++) {
@@ -103,6 +108,7 @@ function project(g: LaneG, x: number, y: number): number {
     const d = Math.hypot(x - (ax + abx * t), y - (ay + aby * t));
     if (d < bd) { bd = d; bs = g.cum[i - 1] + t * Math.sqrt(l2); }
   }
+  projectOff = bd;
   return bs;
 }
 const near: Entity[] = [];
@@ -137,7 +143,7 @@ const IDLE_GROUND = 0.75;
 const frozenAll: Stuck[] = [];
 
 interface Stuck { map: string; scen: string; seed: number; t: string; id: number; team: number; at: string; s: string; road: string; struct: string; bodies: number; fighterD: string; order: number; path: number; np: number; ot?: string }
-interface Track { since: number; s0: number; g: LaneG; road: string; idle: number; ix: number; iy: number; is0: number }
+interface Track { since: number; s0: number; off0: number; g: LaneG; road: string; idle: number; ix: number; iy: number; is0: number }
 
 function structNear(w: World, x: number, y: number): string {
   let best = '', bd = Infinity;
@@ -239,8 +245,8 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; i
       if (!seen.has(e.id)) { seen.add(e.id); wicks++; }
       let tr = tracks.get(e.id);
       const { g, road } = tr ?? laneOf(m.path);
-      const s = project(g, e.x, e.y);
-      if (!tr) { tr = { since: w.tick, s0: s, g, road, idle: w.tick, ix: e.x, iy: e.y, is0: s }; tracks.set(e.id, tr); continue; }
+      const s = project(g, e.x, e.y), off = projectOff;
+      if (!tr) { tr = { since: w.tick, s0: s, off0: off, g, road, idle: w.tick, ix: e.x, iy: e.y, is0: s }; tracks.set(e.id, tr); continue; }
       // IDLE (what a viewer reads as stuck, fight or no fight): 6 s with no swing, under 0.5 m along the road and under
       // 0.75 m of ground (the orch1 r2 verifier's bar), away from the road's end and not held by CC
       if (g.len - s < END_NEAR || e.atkWindup >= 0 || e.atkAnim > 0 || e.cast || (e.ccMask & (CC_HARD | CC_ROOT)) !== 0 || s - tr.is0 >= STUCK_GAIN || Math.hypot(e.x - tr.ix, e.y - tr.iy) >= IDLE_GROUND) {
@@ -266,7 +272,9 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; i
           ot: e.order === ORDER_ATTACK ? (() => { const o = w.entity(e.orderTarget); return o ? `${o.kind} ${f1(Math.hypot(o.x - e.x, o.y - e.y) - o.radius - e.radius)} m` : '?'; })() : '' } as Stuck);
         tr.idle = w.tick; tr.ix = e.x; tr.iy = e.y; tr.is0 = s;
       }
-      if (g.len - s < END_NEAR || !free(w, e) || s - tr.s0 >= STUCK_GAIN) { tr.since = w.tick; tr.s0 = s; continue; }
+      // walking back to its road after a chase pulled it off (orch1 r3 controls: two Wicks dragged 12 m into the low
+      // jungle by a fighter, returning at full speed, gained nothing along the road for 6 s): coming back is progress
+      if (g.len - s < END_NEAR || !free(w, e) || s - tr.s0 >= STUCK_GAIN || tr.off0 - off >= RETURN_GAIN) { tr.since = w.tick; tr.s0 = s; tr.off0 = off; continue; }
       if (w.tick - tr.since >= STUCK_TICKS) {
         let bodies = 0, fd = Infinity;
         for (const o of w.entities) {
@@ -277,7 +285,7 @@ function runOne(modeId: string, scen: string, seed: number): { stuck: Stuck[]; i
         }
         stuck.push({ map: modeId, scen, seed, t: `${Math.floor(w.time / 60)}:${String(Math.floor(w.time % 60)).padStart(2, '0')}`, id: e.id, team: e.team,
           at: `(${f1(e.x)}, ${f1(e.y)})`, s: `${f1(s)}/${f1(g.len)}`, road, struct: structNear(w, e.x, e.y), bodies, fighterD: f1(fd), order: e.order, path: e.path.length >> 1, np: e.noProgress });
-        tr.since = w.tick; tr.s0 = s;
+        tr.since = w.tick; tr.s0 = s; tr.off0 = off;
       }
     }
     for (const id of tracks.keys()) { const e = w.entity(id); if (!e || !e.alive) tracks.delete(id); }
