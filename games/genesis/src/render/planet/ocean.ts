@@ -437,6 +437,13 @@ void main() {
       if (zn < wz) { discard; return; }
     }
   }` : 'if (vDepth < -0.6) discard;'}
+  ${WDEBUG.has('zdiff') ? `{
+    float zs = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r, zf = -vViewPos.z;
+    float rel = (zs - zf) / zf;
+    vec3 dc = rel < -0.004 ? vec3(0.0, 1.0, 0.0) : rel < 0.0 ? vec3(1.0, 0.0, 1.0) : vec3(0.0, 0.0, 1.0);
+    if (vDepth < 0.0) dc *= 0.35;
+    gl_FragColor = vec4(dc * 0.6, 1.0); return;
+  }` : ''}
   ${WDEBUG.has('class') ? `{
     vec3 dc = vDepth < -0.08 ? vec3(1.0, 0.0, 0.0) : vDepth < 0.0 ? vec3(1.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
     if (vSimD > 0.1 && vSimD < 3.0 && vDepth < 0.185 && vDepth > 0.1) dc = vec3(0.0, 1.0, 0.0);
