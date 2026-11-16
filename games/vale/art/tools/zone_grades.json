@@ -377,7 +377,7 @@
     ],
     "minL": 60,
     "hex": "#A78D5C",
-    "L": 82,
+    "L": 90,
     "C": 6
    },
    {
@@ -452,7 +452,7 @@
      "cap"
     ],
     "hex": "#5E9D7D",
-    "L": 40,
+    "L": 46,
     "C": 14
    },
    {
@@ -528,7 +528,7 @@
     "parts": [
      "hood"
     ],
-    "hex": "#469F91",
+    "hex": "#429F95",
     "L": 6,
     "C": 36
    },
@@ -548,8 +548,8 @@
       1.3
      ]
     ],
-    "hex": "#469F91",
-    "L": 14,
+    "hex": "#429F95",
+    "L": 8,
     "C": 30
    },
    {
@@ -557,8 +557,8 @@
     "parts": [
      "chimney"
     ],
-    "hex": "#469F91",
-    "L": 14,
+    "hex": "#429F95",
+    "L": 8,
     "C": 28
    },
    {
@@ -583,10 +583,10 @@
   ],
   "materialTint": {
    "gem_chimglass": [
-    0.05,
-    0.28,
-    0.18,
-    0.75
+    0.03,
+    0.17,
+    0.13,
+    0.8
    ]
   }
  },
@@ -606,12 +606,12 @@
  "sukri": {
   "zones": [
    {
-    "why": "orch1 UNITS2: the hood a lemon-lime, the lower hood a deep shade of it (units_gate P1: the lemon hood sat 17 deg from Nurrow's straw; P3 top L* 87.5 > 85)",
+    "why": "orch1 UNITS2: the lower hood a deep green-teal under the lemon-lime crown (P4 crown break by hue; the lemon hood sat 17 deg from Nurrow's straw)",
     "parts": [
      "hood"
     ],
-    "hex": "#7E9967",
-    "L": 10,
+    "hex": "#689C75",
+    "L": 16,
     "C": 24
    },
    {
@@ -629,7 +629,7 @@
       1.8
      ]
     ],
-    "hex": "#7E9967",
+    "hex": "#829865",
     "L": 60,
     "C": 24
    }
@@ -688,9 +688,9 @@
      0.0,
      0.79
     ],
-    "hex": "#9F87B9",
-    "L": 60,
-    "C": 8,
+    "hex": "#948ABE",
+    "L": 56,
+    "C": 4,
     "k": 1.0
    },
    {
@@ -728,7 +728,7 @@
     ],
     "minL": 45,
     "hex": "#B88664",
-    "L": 84,
+    "L": 92,
     "C": 6
    }
   ],
@@ -768,17 +768,17 @@
     "C": 3
    },
    {
-    "why": "orch1 W1-B fix 1 (units_gate P1/P2): the carried pots and their rims a deep olive glaze in the cap's family; in game the yoke lifts the pots into the top quarter of the silhouette, where their pale honey clay read the whole top as Nurrow's and Tunlan's honey (dE 5.3); the honey resin in the mouths, the mask and the hands keep their honey",
+    "why": "orch1 W1-B fix 1 (units_gate P1/P2): the carried pots and their rims a deep olive glaze in the cap's family; in game the yoke lifts the pots into the top quarter of the silhouette, where their pale honey clay read the whole top as Nurrow's and Tunlan's honey (dE 5.3); the honey resin in the mouths, the mask and the hands keep their honey; orch1 UNITS2: warmer olive (lab h ~92, C* 10) and flatter (k 0.3): the low-chroma glaze left a grey-teal ring patch on each gourd",
     "parts": [
      "pot_R",
      "pot_L",
      "pot_rim_R",
      "pot_rim_L"
     ],
-    "hex": "#4E5236",
+    "hex": "#9A925C",
     "L": 34,
-    "C": 6,
-    "k": 0.5
+    "C": 8,
+    "k": 0.3
    },
    {
     "why": "orch1 W1-B fix 1: the yoke staff and its caps a dark olive-grey seasoned wood (it rises over the head in most stances; an olive, not a brown, so the crown leaves the harm band)",
@@ -976,7 +976,7 @@
   "islandGrow": 4,
   "zones": [
    {
-    "why": "orch1 UNITS2: crown break (P4: the pale straw disc read one value from rim to crown, dL 1.3): the cone round the knob a deep smoked straw, the brim keeps its pale straw",
+    "why": "orch1 UNITS2: the straw brim a deeper honey straw (the far brim leads the top-down read)",
     "parts": [
      "hat_cone"
     ],
@@ -984,35 +984,35 @@
      [
       -0.01,
       0.0,
-      0.0,
-      0.33,
-      1.6,
-      2.0
-     ]
-    ],
-    "hex": "#A38F5C",
-    "L": 8,
-    "C": 6,
-    "k": 0.5
-   },
-   {
-    "why": "orch1 UNITS2: the pale straw brim a touch less saturated (the top read HSV 36-39 at S 0.39-0.40, the edge of the reserved harm band)",
-    "parts": [
-     "hat_cone"
-    ],
-    "cyls": [
-     [
-      -0.01,
-      0.0,
-      0.33,
+      0.3,
       0.6,
       1.6,
       2.0
      ]
     ],
     "hex": "#A68E5C",
-    "L": 74,
+    "L": 50,
     "C": 22
+   },
+   {
+    "why": "orch1 UNITS2: crown break (P4: the straw disc read one value from rim to crown, dL 1.3): the cone round the knob a pale bleached straw over the deeper brim (a dark crown reads as the ground's shadow at the game camera, units_gate drops it)",
+    "parts": [
+     "hat_cone"
+    ],
+    "cyls": [
+     [
+      -0.01,
+      0.0,
+      0.0,
+      0.3,
+      1.6,
+      2.0
+     ]
+    ],
+    "hex": "#A68E5C",
+    "L": 80,
+    "C": 14,
+    "k": 0.5
    }
   ]
  }

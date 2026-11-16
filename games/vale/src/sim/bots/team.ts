@@ -441,7 +441,7 @@ export class TeamBrain {
       // (owner_rulings 44: a big wave — eight or more over ours — is two defenders' work, as is a wave on a structure under half)
       // (round 2: a stacked wave of fourteen or more over ours is three — the late game's 18-33 Wick stacks took Lanterns from
       // two defenders; scaled by the tier's defendMatch)
-      else if (cls > 0 && minions - mine >= 4) need = Math.max(1, Math.ceil((minions - mine >= 14 ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
+      else if (cls > 0 && minions - mine >= 4) need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
       // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
       // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
       const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));
@@ -790,6 +790,10 @@ export class TeamBrain {
     for (const p of w.players) if (p && p.team === this.team && p.ent && p.ent.alive && p.ent.hp >= p.ent.maxHp * 0.45) fit++;
     this.press = this.held('press', d.convertsLeads && w.teams.length === 2 && lead >= d.leadGleam && aliveDiff >= 0 && (single || this.phase !== 'early') &&
       (!d.objectiveSense || k.kind !== 'rift' || fit >= Math.min(this.aliveEnemies, 3)), now0);
+    // (owner_rulings 44, round 2 — closeOut: in the late game a lead of 3,000 Gleam is pressed by a tier that closes out even
+    // if it does not convert early leads: adept teams 5,000-15,000 ahead from 20:00 lost their own Needles to the team behind
+    // and ended at 34-39 minutes)
+    if (!this.press && d.closeOut && k.kind === 'rift' && this.phase === 'late' && lead >= 3000 && aliveDiff >= 0 && fit >= Math.min(this.aliveEnemies, 3)) this.press = true;
     if (this.window || this.press) group = true;
     if (k.kind === 'rift') {
       if (this.phase === 'late') group = true;

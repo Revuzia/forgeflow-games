@@ -40,10 +40,12 @@ const ROW_GAP = 1.3, COL_GAP = 1.1;
 /** lane line (ruling 44, owner 2026-11-15 "they dont follow the straight path"): a marching Wick steers at a carrot
  *  LANE_LOOK m ahead of its projection on the lane polyline (LANE_REJOIN × its distance off its column line when further
  *  out: a rejoin after a fight comes in at under ~34°), offset by its column slot (SLOT_GAP between columns, a partial
- *  last row centred); the attack-move is re-sent once the carrot moved LANE_REISSUE m */
+ *  last row centred; on the line itself where the road narrows); the attack-move is re-sent once the carrot moved
+ *  LANE_REISSUE m */
 export const LANE_LOOK = 2.0;
 const LANE_REJOIN = 1.5;
 const LANE_REISSUE = 1;
+const LANE_SCOUT = 6;
 export const SLOT_GAP = 0.55;
 /** a chase that has not closed in by CHASE_GAIN m for this long (ticks) is blocked: step out to an open attack spot */
 const CHASE_STALL_TICKS = 60;
@@ -147,7 +149,7 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
  *  `look` m further along the line (LANE_LOOK, or LANE_REJOIN × its distance off its column line when further out),
  *  offset by its column slot along the left normal of the segment the carrot lies on. Writes carrot; returns false
  *  when the carrot runs past the lane end (the Wick then holds the end itself). Only + − × ÷ √ (deterministic). */
-const carrot = { x: 0, y: 0, lx: 0, ly: 0 };
+const carrot = { x: 0, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, ex: 0, ey: 0 };
 function laneCarrot(e: Entity, m: MinionState): boolean {
   const p = m.path, last = p.length - 1;
   let k = Math.max(1, m.wp), t = 0, bestD = Infinity, side = 0;
@@ -161,17 +163,29 @@ function laneCarrot(e: Entity, m: MinionState): boolean {
   m.wp = Math.max(m.wp, k);
   // signed offset (left of travel +) and the distance from its own column line
   const off = Math.sqrt(bestD) * (side < 0 ? -1 : 1) - m.slot;
-  let look = Math.max(LANE_LOOK, LANE_REJOIN * (off < 0 ? -off : off));
-  for (; k <= last; k++, t = 0) {
+  const look = Math.max(LANE_LOOK, LANE_REJOIN * (off < 0 ? -off : off));
+  if (!along(p, k, t, look)) return false;
+  carrot.lx = at.x; carrot.ly = at.y;
+  carrot.x = at.x + at.nx * m.slot; carrot.y = at.y + at.ny * m.slot;
+  // … and the line LANE_SCOUT m further on (the end at most): what stands on the line is seen that far out
+  const end = !along(p, at.k, at.t, LANE_SCOUT);
+  carrot.sx = end ? p[p.length - 1][0] : at.x; carrot.sy = end ? p[p.length - 1][1] : at.y;
+  // the way round is planned to the end of that segment (one route, as straight as the vertex allows)
+  carrot.ex = end ? carrot.sx : p[at.k][0]; carrot.ey = end ? carrot.sy : p[at.k][1];
+  return true;
+}
+/** the point `d` m along the path from segment k (p[k−1]→p[k]) at fraction t: writes `at`; false past the end */
+const at = { x: 0, y: 0, nx: 0, ny: 0, k: 0, t: 0 };
+function along(p: readonly V2T[], k: number, t: number, d: number): boolean {
+  for (; k < p.length; k++, t = 0) {
     const ax = p[k - 1][0], ay = p[k - 1][1], dx = p[k][0] - ax, dy = p[k][1] - ay, l = Math.sqrt(dx * dx + dy * dy);
     const rest = (1 - t) * l;
-    if (look <= rest && l > 1e-6) {
-      const u = t + look / l, nx = -dy / l, ny = dx / l;
-      carrot.lx = ax + dx * u; carrot.ly = ay + dy * u;
-      carrot.x = carrot.lx + nx * m.slot; carrot.y = carrot.ly + ny * m.slot;
+    if (d <= rest && l > 1e-6) {
+      const u = t + d / l;
+      at.x = ax + dx * u; at.y = ay + dy * u; at.nx = -dy / l; at.ny = dx / l; at.k = k; at.t = u;
       return true;
     }
-    look -= rest;
+    d -= rest;
   }
   return false;
 }
@@ -182,15 +196,25 @@ function followLane(w: World, e: Entity, m: MinionState): void {
   const p = m.path;
   if (p.length > 1 && laneCarrot(e, m)) {
     let tx = carrot.x, ty = carrot.y;
-    // where the road narrows (a lantern or needle beside it) the column squeezes onto the line itself: a slot the walker
-    // cannot walk straight to would send it round on a nav detour
-    if (m.slot !== 0 && !w.nav.lineOfWalk(e.x, e.y, tx, ty, Math.min(e.radius, w.nav.cell * 0.45))) { tx = carrot.lx; ty = carrot.ly; }
-    // walking to the carrot: re-sent only once it has moved LANE_REISSUE m on (issueMove drops the route each time),
-    // and not while a nav detour (round a lantern, a wall) is walked unless that is nearly done
-    if (e.order === ORDER_ATTACK_MOVE && m.lastWpX === m.lastWpX) {
-      if (e.path.length > 0 && dist2(e, m.lastWpX, m.lastWpY) > LANE_LOOK * LANE_LOOK * 0.25) return;
+    const walking = e.order === ORDER_ATTACK_MOVE && m.lastWpX === m.lastWpX;
+    // walking a nav route round something (a needle on the line, a wall): kept until the carrot is in plain reach
+    const detour = walking && e.path.length > 0;
+    // walking to the carrot: re-sent only once it has moved LANE_REISSUE m on (issueMove drops the route each time)
+    if (walking && !detour) {
       const dx = tx - m.lastWpX, dy = ty - m.lastWpY;
       if (dx * dx + dy * dy < LANE_REISSUE * LANE_REISSUE) return;
+    }
+    const r = Math.min(e.radius, w.nav.cell * 0.45);
+    // something on the line ahead (a needle standing on it), seen LANE_SCOUT m past the carrot: one route round it to the
+    // end of that segment (a carrot just behind it would end each short route at its back and stop and go)
+    if (!w.nav.lineOfWalk(carrot.lx, carrot.ly, carrot.sx, carrot.sy, r)) {
+      tx = carrot.ex; ty = carrot.ey;
+      if (walking && m.lastWpX === tx && m.lastWpY === ty) return;
+    } else if (!w.nav.lineOfWalk(e.x, e.y, tx, ty, r)) {
+      // where the road narrows (a lantern or needle beside it) the column squeezes onto the line itself: a slot the
+      // walker cannot walk straight to would send it round on a nav detour
+      if (m.slot !== 0 && w.nav.lineOfWalk(e.x, e.y, carrot.lx, carrot.ly, r)) { tx = carrot.lx; ty = carrot.ly; }
+      else if (detour) return;
     }
     m.lastWpX = tx; m.lastWpY = ty;
     issueMove(w, e, tx, ty, true);

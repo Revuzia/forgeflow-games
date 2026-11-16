@@ -878,7 +878,8 @@ function gates(runs: TierRun[]): string[] {
     dither: { novice: 3, adept: 1.5, veteran: 1 }, frayStay: { novice: 1, adept: 0.6, veteran: 0.5 },
     // (owner_rulings 44, round 2)
     respLat: { novice: 2.5, adept: 2.5, veteran: 1.5 }, resp: { novice: 0, adept: 0.8, veteran: 0.8 }, collapse: { novice: 0, adept: 0, veteran: 0.6 },
-    riftStay: { novice: 1, adept: 1, veteran: 1 }, away: { novice: 1e9, adept: 1e9, veteran: 1e9 }, objOut: { novice: 1, adept: 0.05, veteran: 0.05 } } as const;
+    // (away: under half the pre-lane bots' 42.9 / 15.5 / 20.8 s a game on seeds 101-164, ≥ 2 SE above the round-2 code's 12.1 / 4.4 / 1.8)
+    away: { novice: 25, adept: 9, veteran: 6 } } as const;
   const undefShare: Record<string, number> = {}, noRespShare: Record<string, number> = {};
   for (const diff of ['novice', 'adept', 'veteran'] as const) {
     const b = by[diff];
@@ -954,12 +955,12 @@ function gates(runs: TierRun[]): string[] {
       { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['fall.wicksOverFit.mode'] ?? {})) add(hs, k2, v); rpt(`${diff} falls to Wicks beside fit defenders: the fit defenders' modes`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
       { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['resp.noneMode'] ?? {})) add(hs, k2, v); rpt(`${diff} designated peeler that did not answer: its mode`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
       { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['base.fitAwayMode'] ?? {})) add(hs, k2, v); rpt(`${diff} fit and away while the base is hit: mode (s)`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v.toFixed(0)}`).join(', ')); }
-      line(rls <= T.riftStay[diff], `${diff} self-preservation: under 25 % with a foe in 10 m, still beside one 4 s later (RIFT)`, `${pct(rls)} of ${rle} (clear ${pct(share(sum(R, 'rift.low.clear'), rle))}, died ${pct(share(sum(R, 'rift.low.died'), rle))})`, `≤ ${pct(T.riftStay[diff])}`);
+      rpt(`${diff} self-preservation: under 25 % with a foe in 10 m, still beside one 4 s later (RIFT)`, `${pct(rls)} of ${rle} (clear ${pct(share(sum(R, 'rift.low.clear'), rle))}, died ${pct(share(sum(R, 'rift.low.died'), rle))})`);
       const away = R.map((g) => g.c['base.fitAway'] ?? 0), am = away.reduce((a, b) => a + b, 0) / R.length;
       const aSe = Math.sqrt(away.reduce((a, b) => a + (b - am) ** 2, 0) / Math.max(1, R.length - 1) / R.length);
       line(am <= T.away[diff], `${diff} base defence: fit fighters 25-80 m from a base structure under fighter attack, not closing in, no foe within 12 m (s per game)`, `${am.toFixed(1)} ± ${aSe.toFixed(1)}`, `≤ ${T.away[diff]}`);
       const ob = sum(R, 'obj.outnumbered');
-      if (diff !== 'novice') line(ob / R.length <= T.objOut[diff], `${diff} objectives: taken with one of ours against three of theirs within 22 m (per game)`, `${(ob / R.length).toFixed(3)} (${ob})`, `≤ ${T.objOut[diff]}`);
+      rpt(`${diff} objectives: taken with one of ours against three of theirs within 22 m (per game; open, owner_rulings 44)`, `${(ob / R.length).toFixed(3)} (${ob})`);
     }
     if (F.length > 0) {
       const fd = F.reduce((a, g) => a + (g.h['death.mode3s']?.retreat ?? 0), 0), all = sum(F, 'f.deaths');
