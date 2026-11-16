@@ -64,7 +64,7 @@
  "burdam": {
   "zones": [
    {
-    "why": "signature oxblood red on the coat (mid body). Box zones, not part names: Burdam's paint-pose wrapper writes no part map, so a rebuild (cards lane) would leave a stale one. The head, mask and cowl are untouched (cards lane)",
+    "why": "signature oxblood on the coat (mid body; box zones: Burdam's part map is stale). orch1 UNITS2 fix 1: back to W1-B's deep oxblood jerkin (round 1's pink read baby pink), k 0.6 evens the folds",
     "boxes": [
      [
       -0.75,
@@ -79,12 +79,13 @@
      0.84,
      1.0
     ],
-    "hex": "#C57D84",
-    "L": 48,
-    "C": 34
+    "hex": "#B30300",
+    "L": 30,
+    "C": 30,
+    "k": 0.6
    },
    {
-    "why": "orch1 UNITS2: the skirt under the cowl a light oxblood-rose (the brightest quarter of the body was L* 57-65, the bible band 70-85); minL keeps the trousers inside it dark",
+    "why": "orch1 UNITS2 fix 1: the skirt under the jerkin a warm cream-tan linen, as on the cards (round 1's light rose with minL 17 left blotchy brown folds); no minL, k 0.5 so the folds stay one even cloth; keeps the brightest quarter in the bible band",
     "boxes": [
      [
       -0.45,
@@ -99,10 +100,10 @@
      0.84,
      1.0
     ],
-    "minL": 17,
-    "hex": "#C57D84",
+    "hex": "#C8A97A",
     "L": 72,
-    "C": 24
+    "C": 12,
+    "k": 0.5
    },
    {
     "why": "r2: the cream shoulder plates an oxblood lacquer (box x lacquer roughness x the pale texels only; the hood, cowl and mask stay the cards lane's); notBoxes keeps the hood and cowl out (cards lane)",
@@ -355,7 +356,7 @@
     "C": 26
    },
    {
-    "why": "orch1 UNITS2: the pale lacquer helm a warm ivory (one run read the cool white helm blue-grey, 17 dE from Lisvel; ruling 45); the face is excluded by a box",
+    "why": "orch1 UNITS2 fix 1: the pale lacquer helm a bright, barely warm ivory (L* 92 C* 4): round 1's warmer ivory sat 20.0 dE from Nurrow's straw and 15.9 from Hesmi; the face is excluded by a box",
     "boxes": [
      [
       -0.5,
@@ -377,30 +378,36 @@
      ]
     ],
     "minL": 60,
-    "hex": "#A78D5C",
-    "L": 90,
-    "C": 6
+    "hex": "#A39B85",
+    "L": 92,
+    "C": 4
    },
    {
-    "why": "orch1 UNITS2: the pale shoulder plate the signature crimson lacquer (P4 crown break under the ivory helm; its cool white read blue-grey at the game camera)",
+    "why": "orch1 UNITS2 fix 1 (P4 crown break): the helm's crest and crown (z > 1.80 m) the signature crimson lacquer over the ivory helm; replaces round 1's red shoulder-wing box (verify_units2_r1: box seams across the wing)",
     "boxes": [
      [
-      0.1,
       -0.5,
-      1.28,
-      0.6,
+      -0.5,
+      1.8,
       0.5,
-      1.56
+      0.5,
+      2.1
      ]
     ],
-    "rough": [
-     0.0,
-     0.72
+    "notBoxes": [
+     [
+      -0.11,
+      -0.4,
+      1.45,
+      0.11,
+      -0.03,
+      1.78
+     ]
     ],
     "minL": 55,
-    "hex": "#C47C89",
-    "L": 40,
-    "C": 24
+    "hex": "#B3004A",
+    "L": 42,
+    "C": 30
    }
   ]
  },
@@ -534,26 +541,6 @@
     "C": 36
    },
    {
-    "why": "orch1 UNITS2: the scarf and the mantle's shoulders the hood's deep teal, so the top-down read is one teal family (the pale scarf and mantle kept the top a near-neutral grey)",
-    "parts": [
-     "scarf",
-     "mantle"
-    ],
-    "boxes": [
-     [
-      -0.6,
-      -0.6,
-      0.85,
-      0.6,
-      0.6,
-      1.3
-     ]
-    ],
-    "hex": "#429F95",
-    "L": 8,
-    "C": 30
-   },
-   {
     "why": "orch1 UNITS2: the lamp chimney over the hood the same deep green-teal (its pale glass grey held the top cluster near-neutral)",
     "parts": [
      "chimney"
@@ -563,23 +550,23 @@
     "C": 28
    },
    {
-    "why": "orch1 UNITS2: the lower mantle a paler blue-white (the brightest quarter of the body keeps the bible band under the deep teal top)",
+    "why": "orch1 UNITS2 fix 1: the scarf and mantle one dip-dyed cloth: the hood's deep teal at the shoulders (z > 1.05 m) fading over 8 steps to the pale blue-white hem (z < 0.75 m); round 1's hard box cut at 0.85 m read as a seam (verify_units2_r1)",
     "parts": [
+     "scarf",
      "mantle"
-    ],
-    "boxes": [
-     [
-      -0.6,
-      -0.6,
-      0.0,
-      0.6,
-      0.6,
-      0.85
-     ]
     ],
     "hex": "#B0C0E0",
     "L": 48,
-    "C": 5
+    "C": 5,
+    "ramp": {
+     "axis": "z",
+     "from": 0.75,
+     "to": 1.05,
+     "n": 8,
+     "hex": "#429F95",
+     "L": 8,
+     "C": 30
+    }
    }
   ],
   "materialTint": {
@@ -589,7 +576,16 @@
     0.13,
     0.8
    ]
-  }
+  },
+  "keepUV": [
+   [
+    0.63,
+    0.9,
+    0.7,
+    0.995
+   ]
+  ],
+  "keepUVWhy": "orch1 UNITS2 fix 1 (verify_units2_r1 blocker): the pale mask island (UV u 0.636-0.695, v 0.907-0.989) is labelled 'chimney' in the part map; no zone touches it, so the mask and amber eyes stay the bake's"
  },
  "lisvel": {
   "zones": [
@@ -607,38 +603,30 @@
  "sukri": {
   "zones": [
    {
-    "why": "orch1 UNITS2: the lower hood a deep green-teal under the lemon-lime crown (P4 crown break by hue; the lemon hood sat 17 deg from Nurrow's straw)",
+    "why": "orch1 UNITS2 fix 1: the hood one dip-dyed cloth, deep green-teal at the shoulders (z < 1.30 m) fading over 8 steps to the pale lemon-lime crown (z > 1.62 m): the crown break by value without round 1's hard horizontal split",
     "parts": [
      "hood"
     ],
     "hex": "#689C75",
     "L": 8,
-    "C": 24
-   },
-   {
-    "why": "orch1 UNITS2: crown break: the hood's crown (z > 1.33 m) the pale lemon-lime over its deeper lower half",
-    "parts": [
-     "hood"
-    ],
-    "boxes": [
-     [
-      -0.6,
-      -0.6,
-      1.47,
-      0.6,
-      0.6,
-      1.8
-     ]
-    ],
-    "hex": "#829865",
-    "L": 60,
-    "C": 24
+    "C": 24,
+    "ramp": {
+     "axis": "z",
+     "from": 1.3,
+     "to": 1.62,
+     "n": 8,
+     "hex": "#829865",
+     "L": 62,
+     "C": 24
+    }
    }
   ],
   "reserveModes": {
    "harm": "sat"
   },
-  "capMax": 7.0
+  "capMax": 7.0,
+  "gutterFill": 24,
+  "islandGrow": 4
  },
  "hesmi": {
   "zones": [
@@ -674,7 +662,7 @@
     "k": 0.35
    },
    {
-    "why": "orch1 UNITS2: the shards' honed upper sections a violet-grey stone (the signature violet, muted: the cool pale stone made a near-neutral top 13 dE from Lisvel and the warm one 10 from Rishal; ruling 45 asks dE >= 20)",
+    "why": "orch1 UNITS2 fix 1: the shards' honed upper sections a mauve-grey stone (CIELAB h ~330, C* 8): round 1's violet-grey sat 18.7 dE from Ardit's steel-teal and 15.9 from Rishal's ivory (ruling 45 asks 20); the mauve leans away from both",
     "boxes": [
      [
       -0.45,
@@ -689,9 +677,9 @@
      0.0,
      0.79
     ],
-    "hex": "#948ABE",
-    "L": 56,
-    "C": 4,
+    "hex": "#B281AB",
+    "L": 58,
+    "C": 8,
     "k": 1.0
    },
    {
@@ -716,7 +704,7 @@
     "k": 1.0
    },
    {
-    "why": "orch1 UNITS2: the pale chest wrap and hip stones a light warm linen (the brightest quarter of the body keeps the bible band 70-85 under the mid-grey shards)",
+    "why": "orch1 UNITS2 fix 1: the chest wrap and hip cloth (cloth roughness only, no minL) a light warm linen: round 1's minL cut left hard cream blotches on the stone shoulder blocks and leg shards",
     "boxes": [
      [
       -0.7,
@@ -727,10 +715,13 @@
       1.6
      ]
     ],
-    "minL": 45,
     "hex": "#B88664",
-    "L": 92,
-    "C": 6
+    "L": 86,
+    "C": 5,
+    "rough": [
+     0.8,
+     1.0
+    ]
    }
   ],
   "gutterFill": 24,
@@ -977,13 +968,22 @@
   "islandGrow": 4,
   "zones": [
    {
-    "why": "orch1 UNITS2: the pale straw cone a touch less saturated and a hair yellower (the top read HSV 36-39 at S 0.39-0.40 on the reserved harm band edge, and sat 17 deg from Sukri). No crown zone: a dark crown reads as the ground's shadow and drops out of the units_gate silhouette, a pale one pushed the top quarter over L* 85 (P4 crown break left open)",
+    "why": "orch1 UNITS2 fix 1 (P4 crown break): the straw cone darkens toward its brim in 6 rings (r 0.24 -> 0.40 m, L* 74 -> 56, chroma 22 -> 16), so the far brim that tops the silhouette at the game camera reads a step under the sunlit crown; same straw hue, out of the harm band",
     "parts": [
      "hat_cone"
     ],
     "hex": "#A68E5C",
     "L": 74,
-    "C": 22
+    "C": 22,
+    "ramp": {
+     "axis": "r",
+     "from": 0.24,
+     "to": 0.4,
+     "n": 6,
+     "hex": "#A68E5C",
+     "L": 56,
+     "C": 16
+    }
    }
   ]
  }

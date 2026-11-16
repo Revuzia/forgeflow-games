@@ -197,7 +197,7 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
   const ditherCd = new Array<number>(n).fill(0);
   const swungAt = new Array<number>(n).fill(0);
   // FRAY low-health contact episodes
-  const lowEp = new Map<number, { t: number }>();
+  const lowEp = new Map<number, { t: number; m: string }>();
   const lowCd = new Map<number, number>();
   const castAt = new Map<number, number>();
   // (owner_rulings 44, round 2) the designated peeler: a dive (enemy fighters took 20 % of a fighter's health in 2 s) is
@@ -431,7 +431,10 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
             // (owner_rulings 44: taken with one of the taking team there while three or more enemies stood within 22 m)
             let own22 = 0, en22 = 0;
             for (const pl of w.players) { const f = pl.ent; if (!f || !f.alive || (f.x - cp.x) ** 2 + (f.y - cp.y) ** 2 > 22 * 22) continue; if (f.team === ev.team) own22++; else en22++; }
-            if (own22 <= 1 && en22 >= 3) add(C, 'obj.outnumbered');
+            if (own22 <= 1 && en22 >= 3) {
+              add(C, 'obj.outnumbered');
+              for (const pl of w.players) { const f = pl.ent; if (f && f.alive && f.team === ev.team && (f.x - cp.x) ** 2 + (f.y - cp.y) ** 2 <= 22 * 22) add(H('obj.outnumbered.mode'), `${modeOf(pl.player)}/${ev.unit}`); }
+            }
             let lamp = false;
             for (const u of w.entities) if (!u.removed && u.alive && u.kind === 'ward' && u.team === ev.team && (u.x - cp.x) ** 2 + (u.y - cp.y) ** 2 <= 16 * 16) { lamp = true; break; }
             if (lamp) add(C, 'obj.lamp');
@@ -751,11 +754,11 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
       const le = lowEp.get(pl.player);
       if (le) {
         if (!f.alive) { add(C, 'fray.low.died'); lowEp.delete(pl.player); lowCd.set(pl.player, now + 8); }
-        else if (now - le.t >= 4) { add(C, nearest() <= 12 ? 'fray.low.stayed' : 'fray.low.clear'); lowEp.delete(pl.player); lowCd.set(pl.player, now + 8); }
+        else if (now - le.t >= 4) { const st = nearest() <= 12; add(C, st ? 'fray.low.stayed' : 'fray.low.clear'); if (st) add(H('fray.low.stayMode'), le.m); lowEp.delete(pl.player); lowCd.set(pl.player, now + 8); }
         continue;
       }
       if (!f.alive || f.hp >= f.maxHp * 0.25 || now < (lowCd.get(pl.player) ?? 0) || nearest() > 10) continue;
-      add(C, 'fray.low.episodes'); lowEp.set(pl.player, { t: now });
+      add(C, 'fray.low.episodes'); lowEp.set(pl.player, { t: now, m: modeOf(pl.player) });
     }
     // focus coherence: teams with >= 3 fighters attacking enemy fighters
     if (!isFray) for (let team = 0; team < teams; team++) {
@@ -961,11 +964,13 @@ function gates(runs: TierRun[]): string[] {
       line(am <= T.away[diff], `${diff} base defence: fit fighters 25-80 m from a base structure under fighter attack, not closing in, no foe within 12 m (s per game)`, `${am.toFixed(1)} ± ${aSe.toFixed(1)}`, `≤ ${T.away[diff]}`);
       const ob = sum(R, 'obj.outnumbered');
       rpt(`${diff} objectives: taken with one of ours against three of theirs within 22 m (per game; open, owner_rulings 44)`, `${(ob / R.length).toFixed(3)} (${ob})`);
+      { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['obj.outnumbered.mode'] ?? {})) add(hs, k2, v); rpt(`${diff} objectives taken outnumbered: the taker's mode / camp`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
     }
     if (F.length > 0) {
       const fd = F.reduce((a, g) => a + (g.h['death.mode3s']?.retreat ?? 0), 0), all = sum(F, 'f.deaths');
       // (reported: FRAY keeps its retreat rules — an early-burst retreat there handed one kit the placements, owner_rulings 40)
       rpt(`${diff} fray: deaths that were already in retreat 3 s before`, pct(share(fd, all)));
+      { const hs: Acc = {}; for (const g of F) for (const [k2, v] of Object.entries(g.h['fray.low.stayMode'] ?? {})) add(hs, k2, v); rpt(`${diff} fray low and stayed: mode at the start`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
       rpt(`${diff} fray: kills on the score leader`, pct(share(sum(F, 'fray.killLeader'), sum(F, 'td.n'))));
       // (owner_rulings 44: under 25 % with a foe within 10 m — still within 12 m of one 4 s later and alive)
       const le = sum(F, 'fray.low.episodes'), ls = share(sum(F, 'fray.low.stayed'), le);

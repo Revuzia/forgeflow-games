@@ -354,7 +354,9 @@ export class TeamBrain {
         if (!e || !e.alive || e.hp < e.maxHp * 0.6 || e.stateOverride === 'recall') continue;
         const jg = this.assign.get(p.player)?.jungle ?? false;
         const eta = dhypot(e.x - tgt.x, e.y - tgt.y) * 1.2 / Math.max(1, e.stats.moveSpeed) - (jg ? 4 : 0);
-        if (eta > 14 || eta >= bt) continue;
+        // (owner_rulings 46: in the laning phase a laner leaves its road for the hunt only when the invader is at hand — 7 s;
+        // the grovehunter answers from 14 s — the road's wave and level come first)
+        if (eta > (!jg && now < 840 ? 7 : 14) || eta >= bt) continue;
         bt = eta; bp = p.player;
       }
       if (bp < 0) break;
@@ -441,7 +443,9 @@ export class TeamBrain {
       // (owner_rulings 44: a big wave — eight or more over ours — is two defenders' work, as is a wave on a structure under half)
       // (round 2: a stacked wave of fourteen or more over ours is three — the late game's 18-33 Wick stacks took Lanterns from
       // two defenders; scaled by the tier's defendMatch)
-      else if (cls > 0 && minions - mine >= 4) need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
+      // (owner_rulings 46: in the laning phase a wave at an inner Needle is its road's to clear — only the base takes a defender
+      // off a road for Wicks; the round-2 bots' solo laners spent 2-4 % of the laning phase posted to waves, against 1 %)
+      else if (cls > (laning ? 1 : 0) && minions - mine >= 4) need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
       // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
       // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
       const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));
@@ -817,7 +821,8 @@ export class TeamBrain {
     // (owner_rulings 44, closeOut: ahead — a fighter up, or 1,500 Gleam with nobody of ours down more than theirs — with the
     // enemy core open, the team goes for the core's guards and the core, not the next outer Needle: the late game's long
     // stalls were won teams walking back to the roads with the Bell Needles open)
-    const closeOut = d.closeOut && k.kind === 'rift' && this.phase !== 'early' && this.aliveAllies >= 3 && (aliveDiff >= 1 || (lead >= 1500 && aliveDiff >= 0));
+    // (owner_rulings 46: not in the laning phase — before 14:00 the roads hold, as CW3 CL-1 tuned them)
+    const closeOut = d.closeOut && k.kind === 'rift' && this.phase !== 'early' && now0 >= 840 && this.aliveAllies >= 3 && (aliveDiff >= 1 || (lead >= 1500 && aliveDiff >= 0));
     for (const e of tp.enemyStructs) {
       if (!e.alive || !e.targetable) continue;
       const info = this.structInfoOf(e);

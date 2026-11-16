@@ -46,6 +46,9 @@ import { fighterPower, memoryWeight } from './perception.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
 const MODE_TICKS = 6;
+/** owner_rulings 46: the plans a calm fighter does not swap back and forth (macro), and the ones whose walk point is held */
+const MACRO: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return', 'lane']);
+const WALKS: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return']);
 const MIN_MODE_TIME = 1.5;
 /** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
  *  — until this time, unless its team starts the endgame push sooner */
@@ -73,6 +76,16 @@ export class Bot extends BotBase implements BotController {
   readonly eco: Economy;
   readonly stagger: number;
   modeSince = -1e9;
+  /** owner_rulings 46 (no pacing): the macro mode last left, when, and the walk point a calm fighter is committed to */
+  private prevMacro: Mode | null = null;
+  private prevMacroLeftAt = -1e9;
+  private latchX = 0;
+  private latchY = 0;
+  private latchAt = -1e9;
+  private latchMode: Mode = 'lane';
+  private fleeX = 0;
+  private fleeY = 0;
+  private fleeAt = -1e9;
   lane = -1;
   jungle = false;
   support = false;
@@ -169,6 +182,7 @@ export class Bot extends BotBase implements BotController {
     if ((w.tick + this.stagger) % MODE_TICKS === 0) this.selectMode();
     this.clearPlan();
     this.execute();
+    this.holdWalk();
     this.act();
     // publish the focus target for teammates
     if (this.brain) { if (this.pFight && this.pFight.kind === 'fighter') this.brain.focus.set(this.player, this.pFight.id); else this.brain.focus.delete(this.player); }
@@ -756,6 +770,15 @@ export class Bot extends BotBase implements BotController {
     if (best === 'allin' && this.killTarget && (best !== this.mode || this.allinTarget < 0)) this.allinTarget = this.killTarget.id;
     if (best !== this.mode) {
       if (now - this.modeSince < MIN_MODE_TIME && bestS < 0.8) return;
+      // (owner_rulings 46: no pacing — a calm fighter (fit, nothing hitting it, no enemy fighter in 25 m) does not swap one plan
+      // for another every few seconds as the team's calls flicker: a switch between plans waits 5 s in the current one, a
+      // switch back to the plan it just left 9 s; an urgent call (a post at an inner or base structure, the rush) is not held.
+      // The flicker walked a full-health fighter back and forth 3-5 times a game — push to a defend call to an objective)
+      if (kind === 'rift' && bestS < 0.83 && MACRO.has(best) && MACRO.has(this.mode) && this.calm()) {
+        const back = best === this.prevMacro && now - this.prevMacroLeftAt < 12;
+        if (now - this.modeSince < (back ? 9 : 5)) return;
+      }
+      if (MACRO.has(this.mode)) { this.prevMacro = this.mode; this.prevMacroLeftAt = now; }
       if (this.mode === 'allin') this.allinTarget = -1;
       if (this.mode === 'roam') this.roamTarget = -1;
       if (best === 'allin' && this.killTarget) this.allinTarget = this.killTarget.id;
@@ -764,6 +787,29 @@ export class Bot extends BotBase implements BotController {
       this.recallTriedAt = -1e9;
       this.campTarget = -1;
     }
+  }
+
+  /** owner_rulings 46: fit, nothing hitting me, no enemy fighter noticed within 25 m */
+  private calm(): boolean {
+    return this.hpF >= 0.85 && this.recentDps <= 0 && this.nearestEnemyFighter(25) === null;
+  }
+
+  /** owner_rulings 46 (no pacing): a calm fighter on a plan (not fighting, sieging, clearing or farming a camp) keeps walking
+   *  to the point it set out for when the plan's point flips behind it, for up to 4 s or until it gets there — two calls,
+   *  two roads or two camps traded places as their values crossed, and the walk turned round with them */
+  private holdWalk(): void {
+    if (this.k.kind !== 'rift' || !this.pMove) return;
+    const e = this.e, now = this.now;
+    const nx = this.pMoveX - e.x, ny = this.pMoveY - e.y;
+    const busy = this.pFight !== null || this.pSiege !== null || this.pClear || this.pMonsters || !WALKS.has(this.mode) || this.mode !== this.latchMode ||
+      (this.mode === 'defend' && !!this.brain && this.brain.guard.has(this.player)) || !this.calm();
+    this.latchMode = this.mode;
+    if (!busy && now - this.latchAt < 4) {
+      const lx = this.latchX - e.x, ly = this.latchY - e.y;
+      if (lx * lx + ly * ly > 9 && nx * nx + ny * ny > 36 && nx * lx + ny * ly < 0) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; return; }
+    }
+    const lx = this.pMoveX - this.latchX, ly = this.pMoveY - this.latchY;
+    if (busy || lx * lx + ly * ly > 16 || now - this.latchAt >= 4) { this.latchX = this.pMoveX; this.latchY = this.pMoveY; this.latchAt = now; }
   }
 
   // ── executors ─────────────────────────────────────────────────────────────────────────────────
@@ -821,21 +867,61 @@ export class Bot extends BotBase implements BotController {
     // (owner_rulings 44: a skilled FRAY fighter breaking off runs farther — 12 m, not 8 — and toward a heal on the ground when one
     // lies away from the threat within 30 m: an 8 m step pulled a fifth of the way back to the middle kept it in its chaser's reach)
     const brk = this.k.ffa && this.diff.frayBreak > 0 && this.mode === 'retreat';
+    if (brk && this.fleePoint()) return;
     const step = brk ? 12 : 8;
     let tx = e.x + (ax / d) * step, ty = e.y + (ay / d) * step;
     // pull toward the map centre so a bot does not pin itself on the edge
     const pull = brk ? 0.1 : 0.2;
     tx = tx * (1 - pull) + this.k.mapCenterX * pull; ty = ty * (1 - pull) + this.k.mapCenterY * pull;
-    if (brk) {
-      let bd = 30 * 30;
-      for (const pk of this.perc.pickups) {
-        if (!pk.alive) continue;
-        const px = pk.x - e.x, py = pk.y - e.y, d2 = px * px + py * py;
-        // (away from the threat: not more than a right angle off the escape line)
-        if (d2 < bd && px * ax + py * ay > 0) { bd = d2; tx = pk.x; ty = pk.y; }
-      }
-    }
     this.safeX = tx; this.safeY = ty;
+  }
+
+  /**
+   * owner_rulings 46 (FRAY self-preservation): where a skilled fighter breaking off runs — the open point 8 or 15 m off (16
+   * headings, walkable at its middle and end) that ends farthest from every foe it has seen within 30 m, not past one of them,
+   * a thicket to break their sight worth 3 m and a heal on the ground worth 6 m. The old straight step away ran into walls
+   * and back past a second foe: 70 % of the breaks still had a foe within 12 m 4 s later. False when nothing is in reach.
+   */
+  private fleePoint(): boolean {
+    const e = this.e, nav = this.w.nav;
+    const foes: Entity[] = [];
+    for (const f of this.perc.enemyFighters) if (f.alive && this.isNoticed(f) && this.dist2(f, e.x, e.y) <= 30 * 30) foes.push(f);
+    if (foes.length === 0) return false;
+    const b = this.brain;
+    let bx = e.x, by = e.y, bs = -Infinity;
+    const score = (x: number, y: number): number => {
+      let m = Infinity;
+      for (const f of foes) {
+        const dd = dhypot(f.x - x, f.y - y);
+        // (a foe nearer the line's middle than I am is in the way)
+        const mx = (x + e.x) * 0.5, my = (y + e.y) * 0.5;
+        if (dhypot(f.x - mx, f.y - my) < 4) return -Infinity;
+        if (dd < m) m = dd;
+      }
+      return m;
+    };
+    // (the point already chosen is kept unless another is 2 m better: no turning on the spot every tick)
+    if (this.now - this.fleeAt < 0.5 && sq(this.fleeX - e.x) + sq(this.fleeY - e.y) > 2 * 2) { const sc = score(this.fleeX, this.fleeY) + 2; if (sc > bs) { bs = sc; bx = this.fleeX; by = this.fleeY; } }
+    for (const r of [8, 15]) for (let k = 0; k < 16; k++) {
+      const x = e.x + dcos(k * Math.PI / 8) * r, y = e.y + dsin(k * Math.PI / 8) * r;
+      if (!nav.walkable(x, y) || !nav.walkable((x + e.x) * 0.5, (y + e.y) * 0.5)) continue;
+      const sc = score(x, y);
+      if (sc > bs) { bs = sc; bx = x; by = y; }
+    }
+    if (b) for (let i = 0; i < b.thicketXs.length; i++) {
+      const x = b.thicketXs[i], y = b.thicketYs[i];
+      if (sq(x - e.x) + sq(y - e.y) > 18 * 18 || !nav.walkable(x, y)) continue;
+      const sc = score(x, y) + 3;
+      if (sc > bs) { bs = sc; bx = x; by = y; }
+    }
+    if (this.hpF < 0.5) for (const pk of this.perc.pickups) {
+      if (!pk.alive || sq(pk.x - e.x) + sq(pk.y - e.y) > 25 * 25) continue;
+      const sc = score(pk.x, pk.y) + 6;
+      if (sc > bs) { bs = sc; bx = pk.x; by = pk.y; }
+    }
+    if (bs === -Infinity) return false;
+    this.safeX = bx; this.safeY = by; this.fleeX = bx; this.fleeY = by; this.fleeAt = this.now;
+    return true;
   }
 
   /** the lane stand point behind my wave (last-hit position), tower-safe; `wary`: with no wave of
