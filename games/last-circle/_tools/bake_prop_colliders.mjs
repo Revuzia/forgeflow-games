@@ -249,9 +249,20 @@ function bakeKind(kind) {
         const rounded = outline.map((p) => [r4(p[0]), r4(p[1])]).filter((p, i, a) => !i || p[0] !== a[i - 1][0] || p[1] !== a[i - 1][1]);
         const topV = pts.reduce((b, p) => (p[1] > b[1] ? p : b), pts[0]);       // the highest vertex: where a tilted rock's top actually is
         const peak = [r4(topV[0] - anchor[0]), r4(topV[2] - anchor[1])];
-        parts.push({ t: "hull", name: s.node, hull: rounded, peak, top: r4(topV[1]) });
+        // `lean` (W10 R1A): the vertices that can be the part's highest point once the instance leans (laid on a slope: maps.js tg, up to ~16 deg) -
+        // for 8 lean directions x 3 lean gradients (0.1 / 0.2 / 0.3) the vertex maximising y + gradient * offset along the direction, deduplicated,
+        // as [x, z, y] in the part's frame. maps.js takes the highest of them under the instance's own lean as the part's drawn top (the peak's lift
+        // alone read a leaned flat part up to 0.14 m low: isla_viva s7 cover rocks, collisioncheck clip)
+        const lean = [], seen = new Set();
+        for (let k = 0; k < 8; k++) for (const g of [0.1, 0.2, 0.3]) {
+          const dx = Math.cos(k * Math.PI / 4) * g, dz = Math.sin(k * Math.PI / 4) * g;
+          const v = pts.reduce((b, p) => (p[1] + dx * (p[0] - anchor[0]) + dz * (p[2] - anchor[1]) > b[1] + dx * (b[0] - anchor[0]) + dz * (b[2] - anchor[1]) ? p : b), pts[0]);
+          const q = [r4(v[0] - anchor[0]), r4(v[2] - anchor[1]), r4(v[1])], key = q.join(",");
+          if (!seen.has(key)) { seen.add(key); lean.push(q); }
+        }
+        parts.push({ t: "hull", name: s.node, hull: rounded, peak, top: r4(topV[1]), lean });
         // the companion (see LIP in the header): same outline, a lower top, so maps.js builds a second box of exactly the same footprint
-        if (P.lip && topV[1] >= P.lip.minTop) parts.push({ t: "hull", name: s.node + "_lip", hull: rounded, peak, top: r4(topV[1] - P.lip.drop) });
+        if (P.lip && topV[1] >= P.lip.minTop) parts.push({ t: "hull", name: s.node + "_lip", hull: rounded, peak, top: r4(topV[1] - P.lip.drop), lean });
       }
     }
     out.parts = parts;

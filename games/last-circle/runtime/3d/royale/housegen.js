@@ -1451,11 +1451,25 @@ export function generate(parcel, opts) {
       }
       // (still none: a bath nook of <= 3 cells that is the way on is an inner hall when the house has another bath)
       if (!leaf && B.cells.length <= 3 && floors.some((G) => G.regs.some((q) => q !== B && q.kind === "bath"))) { B.kind = "hall"; continue; }
+      // (W10 R1A pass 6, still none: a study / store room the trees end in but for a BACK door - the inside's last room, its other doorway the yard's - takes the
+      // bath, and the nook it leaves (<= 3 cells) is an inner hall: ashgrid s2026 outpost@p22, a 1 x 2 bath between a bedroom and the back study)
+      let backLeaf = false;
+      if (!leaf) for (const G of floors) G.regs.forEach((q, ri) => { if (!leaf && ri !== G.root && !q.hall && (q.kind === "office" || q.kind === "storage") && q.cells.length <= 6 &&
+        doors.filter((d) => d.floor === G.f && (d.a === ri || d.b === ri) && d.kind === "interior").length === 1 && dg(G, ri) === 2) { leaf = [q, G.f]; backLeaf = true; } });
       if (!leaf) { notes.push("a bath on floor " + F.f + " is a pass-through (no room the trees end in can take it)"); break; }
       const k = leaf[0].kind; leaf[0].kind = "bath";
-      B.kind = k === "bedroom" && B.cells.length < 4 ? "storage" : k;          // (a nook a bedroom cannot be: a utility room on the way)
+      B.kind = backLeaf && B.cells.length <= 3 ? "hall" : k === "bedroom" && B.cells.length < 4 ? "storage" : k;          // (a nook a bedroom cannot be: a utility room on the way)
     }
   }
+  // (W10 R1A pass 6) a home's one-cell-wide study / store strip (<= 3 cells) that is the way into another room (>= 2 doorways) is a CORRIDOR: entered from its long
+  // side it showed a 2.3 m rack across a pass-through (ashgrid s2 metro@p7 / outpost@p1: the kitchen behind a 1 x 2 office); a floor's WC strip took this when the
+  // floor had no bath (above)
+  if (home && LANDING_HALL) for (const F of floors) F.regs.forEach((q, ri) => {
+    if (q.hall || q.cells.length > 3 || (q.kind !== "office" && q.kind !== "storage")) return;
+    const is = q.cells.map((c) => c % nx), js = q.cells.map((c) => Math.floor(c / nx));
+    if (Math.min(Math.max(...is) - Math.min(...is), Math.max(...js) - Math.min(...js)) !== 0) return;
+    if (doors.filter((d) => d.floor === F.f && (d.a === ri || d.b === ri)).length >= 2) q.kind = "hall";
+  });
   // windows
   for (const F of floors) {
     const winOK = (c) => c >= 0 && F.type[c] === 1;
@@ -2832,8 +2846,14 @@ export function generate(parcel, opts) {
   };
   const visOf = (p) => { if (p.vis == null) p.vis = counted(p) ? visMask(p.room, p.rect, s[p.f] + (p.y0 || 0), s[p.f] + (p.y0 || 0) + p.cat.h, null, p.room._acc ? p.room._accMask : 0) : 0; return p.vis; };
   const viewCounts = (R) => {                               // pieces seen from each entrance of R (its own, + the other rooms' once measured)
+    // (W10 R1A, CPU) kept while nothing it reads changes: the room's pieces (R._pv steps on every put / unput), its other-room counts (R._ext: a new array
+    // whenever reset) and the view model (_acc / _accMask / _subst; every model switch also resets _ext). Every counted piece's vis is cached by the
+    // call that filled the memo, so a hit is the same answer; every place that clears the pieces' vis drops the memo (R._vcm = null). A fresh array per call
+    const M = R._vcm;
+    if (M && M.pv === R._pv && M.ext === R._ext && M.acc === R._acc && M.am === R._accMask && M.sub === R._subst) return M.n.slice();
     const V = roomView(R), n = R._ext ? R._ext.slice() : new Array(V.ents.length).fill(0);
     for (const p of R._ps || []) if (counted(p)) { const m = visOf(p); for (let ei = 0; ei < n.length; ei++) if (m & (1 << ei)) n[ei]++; }
+    R._vcm = { pv: R._pv, ext: R._ext, acc: R._acc, am: R._accMask, sub: R._subst, n: n.slice() };
     return n;
   };
   const bestView = (R) => { const n = viewCounts(R); let b = -1, bi = -1; n.forEach((x, i) => { if (x > b || (x === b && i === roomView(R).prim)) { b = x; bi = i; } }); return { n: Math.max(0, b), ei: bi }; };
@@ -3272,7 +3292,7 @@ export function generate(parcel, opts) {
         // a room the eye read but the camera did not (housegen_demo_looks lodge_tower.f1r1: two box stacks behind a 2.1 m rack in line with the right-shoulder
         // camera) stopped here. FALLBACK: when the accurate search cannot reach 3, the eye-only search runs as before (no regression against interiorcheck's
         // first-person judge; the looks gate keeps reporting such a room).
-        const model5 = (acc) => { R._acc = acc; if (acc) R._accMask = (1 << Math.min(30, V5.ents.length)) - 1; R._ext = null; R._tall = null; for (const q of placed) q.vis = null; };
+        const model5 = (acc) => { R._acc = acc; if (acc) R._accMask = (1 << Math.min(30, V5.ents.length)) - 1; R._ext = null; R._tall = null; R._vcm = null; for (const q of placed) q.vis = null; };
         model5(true);
         if (bestView(R).n >= NEED5) return;
         const run5 = () => {
@@ -3387,7 +3407,7 @@ export function generate(parcel, opts) {
               if (!got) { const b = put(keep.cat, keep.u, keep.v, keep.fq, keep.tint, keep.o); b.vis = null; break; }
             }
           } }
-        const mode = (on) => { R._subst = on; R._acc = on; if (on) R._accMask = (1 << Math.min(30, V8.ents.length)) - 1; R._ext = null; R._tall = null; for (const q of placed) q.vis = null; };
+        const mode = (on) => { R._subst = on; R._acc = on; if (on) R._accMask = (1 << Math.min(30, V8.ents.length)) - 1; R._ext = null; R._tall = null; R._vcm = null; for (const q of placed) q.vis = null; };
         mode(true);
         const b0 = bestView(R);
         if (b0.n < LIVED_SEE && b0.ei >= 0) {
@@ -3538,7 +3558,7 @@ export function generate(parcel, opts) {
         // (counted again from the two entrances the cheap model rates best: the camera's count is for where a player reads the room)
         const cn = viewCounts(R), top2 = cn.map((n, i) => [n, i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, 2);
         R._accMask = top2.reduce((m, q) => m | (1 << q[1]), 0);
-        R._acc = true; R._tall = null; R._ext = null; for (const p of R._ps || []) p.vis = null;     // (the next rooms' pieces too: counted again below if needed)
+        R._acc = true; R._tall = null; R._ext = null; R._vcm = null; for (const p of R._ps || []) p.vis = null;     // (the next rooms' pieces too: counted again below if needed)
       }
       if (!roomView(R).ents.length || bestView(R).n >= GOAL) { R._acc = false; return X; }
       // (stage B, lane I1: no extCounts(R) here any more - round 3 let the next rooms' pieces seen through the doorway count from phase 3 on, so a room could stop
@@ -4177,14 +4197,14 @@ export function generate(parcel, opts) {
     for (let k = furn.length - 1; k >= 0; k--) if (furn[k].f === fl && !furn[k].cat.deco && !furn[k].slot) { li = k; break; }
     if (li < 0) { notes.push("floor " + fl + ": unreachable with no furniture left"); break; }
     const p = furn.splice(li, 1)[0];
-    { const l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); if (p.room._rw) p.room._rw.stale = true; }
+    { const l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); p.room._vcm = null; if (p.room._rw) p.room._rw.stale = true; }
     tris[p.f] -= p.cat.tris;
     if (p.host) p.host.tops = (p.host.tops || 1) - 1;
     // a rug left under a removed coffee table is fine; chairs of a removed table are removed with it by the next passes if they block
     removed++;
   }
   // (a piece standing on a removed one goes with it: tops are placed after their hosts, so the walk removes them first; this is the guard)
-  for (let k = furn.length - 1; k >= 0; k--) if (furn[k].host && !furn.includes(furn[k].host)) { const p = furn[k], l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); if (p.room._rw) p.room._rw.stale = true; tris[p.f] -= p.cat.tris; furn.splice(k, 1); removed++; }
+  for (let k = furn.length - 1; k >= 0; k--) if (furn[k].host && !furn.includes(furn[k].host)) { const p = furn[k], l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); p.room._vcm = null; if (p.room._rw) p.room._rw.stale = true; tris[p.f] -= p.cat.tris; furn.splice(k, 1); removed++; }
   if (removed) notes.push("walk: removed " + removed + " piece(s) that closed a path");
 
   // ---- (W10 R1A item 8) model variety: the house's variants swapped in for the pieces they fit (see VARIETY)
