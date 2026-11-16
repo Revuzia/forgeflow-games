@@ -38,7 +38,10 @@ export async function runEngineTests3() {
   const safe = (label, fn) => { try { return fn(); } catch (e) { caught.push(`${label}: ${e && e.message || e}`); return undefined; } };
   const spy = installContextSpy();
   const tr = installTracker();
-  const CHAIN_NODES = 10;   // boost, plain, music, bus (gains), high-pass, compressor, waveshaper, duck, master, analyser
+  // boost, plain, music, chatter, ambience, bus (gains), high-pass, compressor, waveshaper, duck, master, analyser. Re-specified 10 -> 12
+  // by PG_AUDIO (2026-11-16, written reason in _handoff/reports/PG_AUDIO.md): PLAYGROUND_BUILD 10 adds the chatter and ambience input
+  // gains to the chain; the check's point (nothing but the chain stays alive after the music is drained) is unchanged.
+  const CHAIN_NODES = 12;
   const drain = async (a, ms = 25000) => { const t0 = performance.now(); while (performance.now() - t0 < ms && (a.stats().live > 0 || a.detailStats().music.sessions > 0)) await sleep(200); };
 
   try {

@@ -101,6 +101,14 @@ import { safeTier } from './rarity.ts';
 import { ScreenFx } from './screenfx.ts';
 import { Table, PALETTE } from './table.ts';
 import type { StrandEvent } from './strands.ts';
+import type { Emotes, EmoteFrame } from './emotes.ts';
+import type { HomeKit } from './homekit.ts';
+import { visibleTableAt } from './homeview.ts';
+import type { PlayFrame } from './placeview.ts';
+import type { PlaceHost, StageCtx } from './place.ts';
+
+/** The camera's rest pitch (the default the player orbits from): visibleTable reports the table at it (PLAYGROUND_BUILD.md 9). */
+const REST_PITCH = 0.27;
 
 type RoundTwo = Required<Pick<StageLike, 'addBody' | 'removeBody' | 'clearBodies' | 'primaryBodyId' | 'setBodyTier' | 'setCalmEffects' | 'dropCapsule' | 'playCapsuleReveal' | 'playMergeCeremony'>>;
 
@@ -130,6 +138,12 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageEx
   };
   readonly views: readonly BodyView[];
   readonly flash: FlashGovernor;
+  /** PLAYGROUND (dev): the bubble layer, Home's things, the autonomy framing flag. */
+  readonly emotes: Emotes | null;
+  readonly homeKit: HomeKit | null;
+  /** (dev) load the lazy LIFE look now (bubbles, Home's things). */
+  loadLifeLook(): Promise<void>;
+  readonly autoFraming: boolean;
 }
 
 const TARGET_Y = 0.42;
@@ -209,8 +223,59 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   let tier = governor.tier;
   renderer.transmissionResolutionScale = TIERS[tier].transmissionScale;
 
+  // ---- PLAYGROUND: bubbles, Home's things, the autonomy framing, reduced motion, capsule obstacles ----
+  // the bubbles and Home's things live in a LAZY module (lifelook.ts; PLAYGROUND_BUILD 14.3's overflow rule: the render lane's first-load share
+  // is capped at 16 KB): loaded on first use, which only ever comes from the LIFE host; what was asked before it landed is replayed
+  let emotes: Emotes | null = null;
+  let home: HomeKit | null = null;
+  let lifeLoad: Promise<void> | null = null;
+  const pendEm = new Float64Array(8 * 7), pendOn = new Uint8Array(8);
+  const pendThing = new Float64Array(6 * 5);   // set, shown, x, z, yaw
+  let pendKeep = -1, pendPhoto = 1, pendBind: [Float32Array | null, number, Int16Array | null] | null = null;
+  function needLife(): void {
+    if (lifeLoad || disposed) return;
+    lifeLoad = import('./lifelook.ts').then((m) => {
+      if (disposed) return;
+      const em = new m.Emotes(), hk = new m.HomeKit(hub);
+      scene.add(em.mesh); scene.add(hk.group);
+      emotes = em; home = hk;
+      em.setInPhoto(pendPhoto === 1);
+      for (let i = 0; i < 8; i++) if (pendOn[i]) { const o = i * 7; em.show(i, pendEm[o], pendEm[o + 1], pendEm[o + 2], pendEm[o + 3], pendEm[o + 4], pendEm[o + 5]); }
+      if (pendBind) hk.bind(pendBind[0], pendBind[1], pendBind[2]);
+      for (let k = 0; k < 6; k++) { const o = k * 5; if (pendThing[o]) hk.setThing(k, pendThing[o + 1] === 1, pendThing[o + 2], pendThing[o + 3], pendThing[o + 4]); }
+      if (pendKeep >= 0) hk.setKeepsakes(pendKeep);
+    }).catch(() => { lifeLoad = null; });   // a failed load retries on the next call
+  }
+  /** setAutonomyFraming: LIFE is on at Home: frame the mat slots in use, follow only the player's motion (D-37, RD-14). */
+  let autoFraming = false;
+  /** prefers-reduced-motion, read by the stage itself: every new PLAYGROUND motion is a fade with it OR with Calm (each on its own, RD-09). */
+  let reducedMotion = false, coarsePointer = false;
+  const mqReduce = (() => { try { return typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null; } catch { return null; } })();
+  const mqCoarse = (() => { try { return typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : null; } catch { return null; } })();
+  const onMotionPref = (): void => { reducedMotion = !!mqReduce?.matches; coarsePointer = !!mqCoarse?.matches; };
+  onMotionPref();
+  try { mqReduce?.addEventListener('change', onMotionPref); mqCoarse?.addEventListener('change', onMotionPref); } catch { /* an old browser: read once */ }
+  /** setObstacles: prop footprints (x, z, r) the meter-full capsule lands clear of. */
+  const obstacles = new Float32Array(3 * 32);
+  let obstacleN = 0;
+  const anchorV = new THREE.Vector3(), anchorR = new THREE.Vector3();
+  /** setPlayBounds (a place): the bounds of the layout in use and the framing fitted to them for this frame (null = Home's framing). */
+  const playB = new Float64Array(4);
+  let play: PlayFrame | null = null;
+  function refitPlay(): void {
+    play = placeHost && Number.isFinite(playB[2]) && playB[2] > 0 ? placeHost.fit(playB[0], playB[1], playB[2], playB[3], camera.fov, cssW, cssH, safe.top, safe.right, safe.bottom, safe.left) : null;
+    if (play) { tYaw = 0; tPitch = play.pitch; tZoom = 1; }
+  }
+  // ---- PLAYGROUND places (the away chunk src/render/place.ts, which swaps, poses and frames a place; one look chunk per place) ----
+  let placeHost: PlaceHost | null = null;
+  /** bindProps: the PropWorldLike poses and which thing each drives (Home's things and a place's movers read them). */
+  let propPoses: Float32Array | null = null, propCount = 0, propThing: Int16Array | null = null;
+  /** setHeatPoint: the place's heat point (xyz; w 1 = set), shared by every jelly (toast browns the side facing it). */
+  const heat = new THREE.Vector4(0, 0, 0, 0);
+  const capPt = { x: 0, y: 0, r: 0 };
+
   // ---- camera rig ----
-  let yaw = 0, pitch = 0.27, zoomF = 1;
+  let yaw = 0, pitch = REST_PITCH, zoomF = 1;
   let tYaw = yaw, tPitch = pitch, tZoom = zoomF;
   const tgt = new THREE.Vector3(0, TARGET_Y, 0);
   const cameraFx = { dist: 1, yaw: 0, pitch: 0 };   // ceremony push / pull-back / arc, layered on top of the user's orbit (never touches the targets)
@@ -268,15 +333,33 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
    * frame the camera pulls back and aims between the two. (Several bodies: their table extents plus a margin; one body alone: a wide
    * species still fits a narrow frame whole.) Used by the camera every frame and by the capsule's spot search.
    */
-  function framingFor(withCap: boolean, cx: number, cz: number, cs: number): typeof frameOut {
+  /**
+   * PLAYGROUND (D-37, RD-14): where a body counts for the framing. Off (autoFraming false): its live centre, as always. On (LIFE at Home):
+   * its mat slot (the k-th whole body out takes matLayout's k-th slot), unless the player is moving it (a finger, a grab, a toss until it
+   * is still), so LIFE's own motion never moves the camera; a cut squishy's chunks count only while the player moves them. `rest` = the
+   * rest framing whatever the player does (visibleTable). Writes slotXZ; false = leave this body out of the framing.
+   */
+  const slotXZ = { x: 0, z: 0 };
+  function framePoint(v: BodyView, k: number, rest: boolean): boolean {
+    const live = !(rest || autoFraming) || (!rest && v.playerMoving);
+    if (live) { slotXZ.x = v.proxy.center.x; slotXZ.z = v.proxy.center.z; return true; }
+    if (v.chunk) return false;
+    const sl = camera.aspect < 0.9 ? MAT_SLOTS_TALL : MAT_SLOTS_WIDE, i = Math.min(k, sl.length - 1);
+    slotXZ.x = sl[i][0] * bodyScale; slotXZ.z = sl[i][1] * bodyScale;
+    return true;
+  }
+  function framingFor(withCap: boolean, cx: number, cz: number, cs: number, rest = false): typeof frameOut {
     const pv = primary();
     let want = framing ?? bodyScale * (pv ? pv.growth : 1), n = 0, bcx = 0;   // (a piece that grew since it was built: setFrac)
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;          // a mat of bodies: generous reach
     let tx0 = Infinity, tx1 = -Infinity, tz0 = Infinity, tz1 = -Infinity;      // one body and a capsule: its silhouette's reach
+    let k = 0;
     for (const v of views) {
       if (!v.visible) continue;
+      const kk = k; if (!v.chunk) k++;
+      if (!framePoint(v, kk, rest)) continue;
       n++;
-      const gk = v.growth, c = v.proxy.center, r = Math.max(v.proxy.restRadius * 1.25, v.restHalfW * 1.12) * gk, t = (v.restHalfW * 1.06 + 0.05 * v.scale) * gk;
+      const gk = v.growth, c = slotXZ, r = Math.max(v.proxy.restRadius * 1.25, v.restHalfW * 1.12) * gk, t = (v.restHalfW * 1.06 + 0.05 * v.scale) * gk;
       bcx = c.x;
       if (c.x - r < x0) x0 = c.x - r; if (c.x + r > x1) x1 = c.x + r; if (c.z - r < z0) z0 = c.z - r; if (c.z + r > z1) z1 = c.z + r;
       if (c.x - t < tx0) tx0 = c.x - t; if (c.x + t > tx1) tx1 = c.x + t; if (c.z - t < tz0) tz0 = c.z - t; if (c.z + t > tz1) tz1 = c.z + t;
@@ -422,6 +505,12 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // off the safe frame counts 3x: a capsule half under the HUD or off the edge cannot be tapped; a little overlap only hides some of it
     let bad = 3 * (Math.max(0, safe.top + m - b[1]) + Math.max(0, b[3] - (H - safe.bottom - m)));
     if (!spotReframes) bad += 3 * (Math.max(0, safe.left + m - (cx - rh)) + Math.max(0, cx + rh - (W - safe.right - m)));
+    // PLAYGROUND (setObstacles): never on a prop's footprint (a thing at Home, a place's props): metres of overlap, weighted like a hidden capsule
+    for (let i = 0; i < obstacleN; i++) {
+      const ox = x - obstacles[i * 3], oz = z - obstacles[i * 3 + 1], need = obstacles[i * 3 + 2] + CAP_R * size + 0.04;
+      const d2 = ox * ox + oz * oz;
+      if (d2 < need * need) bad += 2000 * (need - Math.sqrt(d2));
+    }
     // (the overlap test works on the box grown by a small margin: a capsule that only just clears a body's box still reads as touching it)
     const gm = 8;
     for (const o of spotBoxes) {
@@ -456,9 +545,11 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 
   /** The frame, the HUD rows or the bodies changed: a waiting capsule's spot is checked again once things have settled (see replaceCapsule). */
   function markCapSpot(): void { if (capsule && !capFixed) capRecheck = CAP_RECHECK_S; }
-  function addView(body: SoftBodyLike, genome: Genome, t: TierName, owned: boolean, pos?: V3, chunk = false): BodyView {
+  function addView(body: SoftBodyLike, genome: Genome, t: TierName, owned: boolean, pos?: V3, chunk = false, lite = false): BodyView {
     markCapSpot();
-    const v = new BodyView(nextId++, body, genome, t, TIERS[tier], hub, quad, owned, chunk);
+    const v = new BodyView(nextId++, body, genome, t, TIERS[tier], hub, quad, owned, chunk, lite);
+    v.mats.uniforms.uHeat.value = heat;   // (one shared heat point: setHeatPoint)
+    if (placeHost?.light) v.mats.setLight(placeHost.light);
     v.setCalm(calm);
     // (the proxy's centre carries the offset only after a sync: without one the camera, which runs before the views update, framed a body added at an offset as if it stood at the
     // origin for one frame: a mat re-added after a swap dipped the framing by 2 .. 3% and eased back; VERIFY_RENDER_B measured 0.0314 / frame on the phone)
@@ -472,6 +563,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     markCapSpot();
     const i = views.indexOf(v);
     if (i >= 0) views.splice(i, 1);
+    emotes?.dropBody(v.id);
     cut.bodyRemoved(v);
     v.dispose();
     if (primaryId === v.id) { primaryId = views.length ? views[0].id : null; }
@@ -507,11 +599,31 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     governor.resetWindow(24);
   }
 
+  /** The camera's aim for ONE body at its slot and rest height (updateCamera's one-body follow with the live centre replaced). */
+  const aimOut = { x: 0, y: 0, z: 0 };
+  function restAim(p: BodyView, scale: number): void {
+    let k = 0;
+    for (const v of views) { if (v === p) break; if (v.visible && !v.chunk) k++; }
+    framePoint(p, k, true);
+    aimOut.x = slotXZ.x * 0.6; aimOut.z = slotXZ.z * 0.6;
+    aimOut.y = TARGET_Y * scale + Math.max(0, p.restCy * p.growth - TARGET_Y * scale) * 0.7;
+  }
   function updateCamera(dt: number, time: number): void {
     const k = 1 - Math.exp(-dt * 12);
     yaw += (tYaw - yaw) * k;
     pitch += (tPitch - pitch) * k;
     zoomF += (tZoom - zoomF) * k;
+    // PLAYGROUND (a place, P8): the camera frames the play bounds of the layout in use, fitted once (setPlayBounds); it never follows a body
+    if (play) {
+      const kt = 1 - Math.exp(-dt * 6);
+      tgt.x += (play.aimX - tgt.x) * kt; tgt.y += (play.aimY - tgt.y) * kt; tgt.z += (play.aimZ - tgt.z) * kt;
+      const d = play.dist * zoomF * cameraFx.dist;
+      const yw = yaw + cameraFx.yaw, pt = clamp(pitch + cameraFx.pitch, 0.06, 1.38), cp = Math.cos(pt);
+      camera.position.set(tgt.x + d * Math.sin(yw) * cp, tgt.y + d * Math.sin(pt), tgt.z + d * Math.cos(yw) * cp);
+      camera.lookAt(tgt);
+      camera.updateMatrixWorld();
+      return;
+    }
     // stage B1: with 2..5 bodies out on the mat, frame them all (their table extents, plus a margin) and aim at their middle
     let want = framing ?? bodyScale, multi = false, mx = 0, mz = 0;
     if (!director.active) {
@@ -530,8 +642,14 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     if (multi) { wx = mx; wz = mz * 0.8; wy = TARGET_Y * bodyScale; }   // the bodies stand on the table whatever the zoom: aim at their middle
     else if (p && !director.active) {
       const c = p.proxy.center;
-      wx = c.x * 0.6; wz = c.z * 0.6;
-      wy = TARGET_Y * camScale + Math.max(0, c.y - TARGET_Y * camScale) * 0.7;
+      if (autoFraming && !p.playerMoving) {
+        // PLAYGROUND (D-37): LIFE at Home: the one body is framed at its slot and rest height, so its own hops and scoots never move the camera
+        restAim(p, camScale);
+        wx = aimOut.x; wy = aimOut.y; wz = aimOut.z;
+      } else {
+        wx = c.x * 0.6; wz = c.z * 0.6;
+        wy = TARGET_Y * camScale + Math.max(0, c.y - TARGET_Y * camScale) * 0.7;
+      }
     }
     const kt = 1 - Math.exp(-dt * 6);
     tgt.x += (wx - tgt.x) * kt; tgt.y += (wy - tgt.y) * kt; tgt.z += (wz - tgt.z) * kt;
@@ -553,6 +671,75 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     }
     camera.lookAt(tgt);
     camera.updateMatrixWorld();
+  }
+
+  /**
+   * RD-12 (SHELL_4.md: the "four-eyed" look): the eyes draw after every jelly with no depth from them, so a squishy's eyes read crisp
+   * THROUGH a clear body standing in front of it. Each eye that the ray from the camera passes through another body's jelly (its rest
+   * ellipsoid from the jelly's box, shrunk to its silhouette) on the way, with that body's centre nearer the camera, fades: to 0.15 behind a
+   * clear jelly, to 0 behind an opaque family (the share of transmission the front body keeps), softly at the silhouette's edge, eased (~0.06 s).
+   * One body alone, or eyes in front, keep opacity 1 exactly (today's pixels). Zero allocation.
+   */
+  function fadeOccludedEyes(dt: number): void {
+    const cp = camera.position, ke = 1 - Math.exp(-dt * 18);
+    const fw = camera.matrixWorld.elements, fx = -fw[8], fy = -fw[9], fz = -fw[10];   // the view direction
+    for (const v of views) {
+      if (!v.visible || v.chunk || v.faceHidden) continue;
+      const E = v.face.eyeWorld;
+      for (let e = 0; e < 2; e++) {
+        const ex = E[e * 3], ey = E[e * 3 + 1], ez = E[e * 3 + 2];
+        const eyeDepth = (ex - cp.x) * fx + (ey - cp.y) * fy + (ez - cp.z) * fz;
+        let target = 1;
+        for (const o of views) {
+          if (o === v || !o.visible) continue;
+          const j = o.jelly;
+          const cx = (j.minX + j.maxX) * 0.5, cy = (j.minY + j.maxY) * 0.5, cz = (j.minZ + j.maxZ) * 0.5;
+          if ((cx - cp.x) * fx + (cy - cp.y) * fy + (cz - cp.z) * fz >= eyeDepth) continue;   // that body is not in front of this eye
+          const rx = Math.max(0.03, (j.maxX - j.minX) * 0.47), ry = Math.max(0.03, (j.maxY - j.minY) * 0.47), rz = Math.max(0.03, (j.maxZ - j.minZ) * 0.47);
+          // the segment camera -> eye in the ellipsoid's unit space: its closest approach to the centre
+          const ox = (cp.x - cx) / rx, oy = (cp.y - cy) / ry, oz = (cp.z - cz) / rz;
+          const dx = (ex - cp.x) / rx, dy = (ey - cp.y) / ry, dz = (ez - cp.z) / rz;
+          const dd = dx * dx + dy * dy + dz * dz;
+          const t = dd > 1e-12 ? Math.min(1, Math.max(0, -(ox * dx + oy * dy + oz * dz) / dd)) : 0;
+          const mx = ox + t * dx, my = oy + t * dy, mz = oz + t * dz;
+          const m = Math.sqrt(mx * mx + my * my + mz * mz);
+          if (m >= 1) continue;
+          const u = Math.min(1, (1 - m) / 0.2), occ = u * u * (3 - 2 * u);
+          const floor = 0.15 * Math.max(0, Math.min(1, (o.mats.keep - 0.3) / 0.7));   // clear jelly: 0.15 (0.25 still read four-eyed by eye); the most opaque family: 0
+          const a = 1 - occ * (1 - floor);
+          if (a < target) target = a;
+        }
+        const now = v.face.eyeAlpha[e];
+        let next = now + (target - now) * ke;
+        if (target === 1 && next > 0.999) next = 1;
+        v.face.setEyeAlpha(e, next);
+      }
+    }
+  }
+
+  /** What the place host needs of the stage (its own objects). */
+  const placeCtx: StageCtx = {
+    renderer, scene, table, key, rim, fill, views: () => views, heat,
+    setSkyBand: (r, g, b) => emotes?.setSky(r, g, b),
+  };
+  /** What the bubbles need this frame (one reused object). */
+  const emoteFrame: EmoteFrame = {
+    camera, cssW: 1, cssH: 1, dpr: 1, safe, capX: 0, capY: 0, capR: 0, ceremony: false, quiet: false, phone: false,
+    anchor(bodyId: number, out: Float32Array): boolean {
+      const v = viewById(bodyId);
+      if (!v || !v.visible) return false;
+      const c = v.proxy.center, R = v.proxy.restRadius * v.growth;
+      out[0] = c.x; out[2] = c.z;
+      out[1] = Math.max(v.jelly.maxY + 0.15 * R, c.y + 1.3 * R);   // the tail tip just above the top (LIFE.md 7.2: 1.3 x rest radius over the centre)
+      return true;
+    },
+  };
+  function fillEmoteFrame(quiet: boolean): void {
+    const f = emoteFrame;
+    f.cssW = cssW; f.cssH = cssH; f.dpr = renderer.getPixelRatio(); f.quiet = quiet; f.ceremony = director.active;
+    f.phone = coarsePointer || Math.min(cssW, cssH) < 600;
+    const s = capsule && !capsuleParked && capsule.group.visible ? capsule.screenPoint(camera, cssW, cssH, capPt) : null;
+    if (s) { f.capX = s.x; f.capY = s.y; f.capR = s.r; } else f.capR = 0;
   }
 
   // ---- ceremony host ----
@@ -667,7 +854,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 
     addBody(body, genome, opts?: AddBodyOpts) {
       if (disposed) return -1;
-      const v = addView(body, genome, safeTier(opts?.tier), false, opts?.position, !!opts?.chunk);
+      const v = addView(body, genome, safeTier(opts?.tier), false, opts?.position, !!opts?.chunk, !!opts?.lite);
       governor.resetWindow(24);
       return v.id;
     },
@@ -760,11 +947,18 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (pendingDrop && sized) { const f = pendingDrop; pendingDrop = null; f(); }
       else if (capRecheck >= 0) { capRecheck -= d; if (capRecheck < 0 && !director.active) replaceCapsule(); else if (capRecheck < 0) capRecheck = CAP_RECHECK_S; }
       table.update(camera);
+      const quiet = calm || reducedMotion;
       for (const v of views) {
         v.clock += d;                     // every view ages, hidden ones too (a ceremony result is created hidden at t = 0)
         if (!v.visible) continue;
+        v.quiet = quiet;
         v.update(d, v.clock, input.pointerNdc, camera, floatT, v.owned ? d * ts : 0);
       }
+      // PLAYGROUND: eyes seen through another body's jelly are depth-faded (RD-12), Home's things, the bubbles (after the camera moved)
+      fadeOccludedEyes(d);
+      if (home) home.update(d, quiet);
+      if (placeHost) placeHost.update(d, time, quiet, reducedMotion, tier === 'high' ? 0 : tier === 'med' ? 1 : 2, propPoses, propCount, propThing);
+      if (emotes) { fillEmoteFrame(quiet); emotes.update(d, emoteFrame); }
       // Back-to-front order of the translucent jellies. Their meshes sit at the origin with world-space vertices, so three's own
       // transparent / transmissive sort sees one depth for all of them and falls back to creation order (a back body painted over a front
       // one: plainly wrong in a 3-parent merge). renderOrder 10.00..10.99, far first; everything else keeps its own order.
@@ -812,6 +1006,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       cssW = w; cssH = h; sized = true;
       dpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
       applySize();
+      if (play) refitPlay();
       governor.resetWindow(10);
     },
 
@@ -819,12 +1014,13 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (!Number.isFinite(dYaw) || !Number.isFinite(dPitch)) return;
       tYaw -= dYaw;
       tPitch = clamp(tPitch + dPitch, 0.06, 1.38);   // never under the table, never exactly top-down
+      if (play) { tYaw = clamp(tYaw, -Math.PI / 3, Math.PI / 3); tPitch = clamp(tPitch, 0.15, 0.9); }   // a place: yaw within 60 degrees of its front (P8)
     },
 
     zoom(delta) {
       if (!Number.isFinite(delta)) return;
       const k = Math.abs(delta) > 4 ? 0.0016 : 0.12;
-      tZoom = clamp(tZoom * Math.exp(delta * k), 0.55, 1.9);
+      tZoom = clamp(tZoom * Math.exp(delta * k), play ? 0.7 : 0.55, play ? 1.6 : 1.9);
     },
 
     shake(amount) {
@@ -842,14 +1038,110 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 
     spawnFx(kind: FxKind, at: V3, intensity: number) { primary()?.spawnFx(kind, at, intensity); },
 
+    /* ── PLAYGROUND (PLAYGROUND_BUILD.md 9; contracts.ts PLAYGROUND block) ── */
+    setBodyGaze(id, x, y, z, weight) {
+      const v = viewById(id);
+      if (!v) return;
+      const g = v.face.gaze, w = Number.isFinite(weight) ? Math.max(0, Math.min(1, weight)) : 0;
+      if (w > 0 && Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) { g[0] = x; g[1] = y; g[2] = z; g[3] = w; } else g[3] = 0;
+    },
+    setBodyExpression(id, expr, amount) { viewById(id)?.face.setExpression(expr, amount); },
+    setBodyPose(id, leanX, leanZ, swayAmp, swayHz, swayPhase) { viewById(id)?.pose.set(leanX, leanZ, swayAmp, swayHz, swayPhase, viewById(id)?.clock ?? 0); },
+    setBodyBreath(id, depth) { const v = viewById(id); if (v) v.pose.deep = Number.isFinite(depth) ? Math.max(0, Math.min(1, depth)) : 0; },
+    setBodyAsleep(id, asleep) { const v = viewById(id); if (v) { v.asleep = !!asleep; v.pose.asleep = !!asleep; } },
+    setBodyLook(id, frost, wet, sand, toast, snow) {
+      const v = viewById(id);
+      if (!v) return;
+      const c = (x: number): number => (Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0);
+      v.look[0] = c(frost); v.look[1] = c(wet); v.look[2] = c(sand); v.look[3] = c(toast); v.look[4] = c(snow);
+    },
+    setHeatPoint(x, y, z) { if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) heat.set(x, y, z, 1); else heat.set(0, 0, 0, 0); },
+    emoteSlots: 8,
+    emote(slot, bodyId, icon, style, lifeS, dots, flags) {
+      if (disposed) return;
+      if (emotes) { emotes.show(slot, bodyId, icon, style, lifeS, dots, flags); return; }
+      const i = Math.floor(slot);
+      if (i >= 0 && i < 8) { pendOn[i] = 1; pendEm.set([bodyId, icon, style, lifeS, dots, flags], i * 7); }
+      needLife();
+    },
+    clearEmote(slot) { if (emotes) emotes.clear(slot); else { const i = Math.floor(slot); if (i >= 0 && i < 8) pendOn[i] = 0; } },
+    emoteScreen(slot, out) { return emotes ? emotes.screen(slot, out) : false; },
+    setEmotesInPhoto(on) { pendPhoto = on ? 1 : 0; emotes?.setInPhoto(!!on); },
+    bodyScreenPoint(id, out) {
+      const v = viewById(id);
+      if (!v || !v.visible || !sized) return false;
+      const c = v.proxy.center;
+      anchorV.set(c.x, c.y, c.z).project(camera);
+      if (anchorV.z > 1 || Math.abs(anchorV.x) > 1 || Math.abs(anchorV.y) > 1) return false;
+      const sx = (anchorV.x * 0.5 + 0.5) * cssW, sy = (1 - (anchorV.y * 0.5 + 0.5)) * cssH;
+      const e = camera.matrixWorld.elements, R = v.proxy.restRadius * v.growth;
+      anchorR.set(c.x + e[0] * R, c.y + e[1] * R, c.z + e[2] * R).project(camera);
+      out[0] = sx; out[1] = sy; out[2] = Math.abs((anchorR.x * 0.5 + 0.5) * cssW - sx);
+      return true;
+    },
+    setObstacles(xzr, n) {
+      const k = xzr ? Math.max(0, Math.min(32, Math.floor(n) || 0, Math.floor(xzr.length / 3))) : 0;
+      for (let i = 0; i < k * 3; i++) obstacles[i] = Number.isFinite(xzr![i]) ? xzr![i] : 0;
+      obstacleN = k;
+      markCapSpot();
+    },
+    visibleTable(out) {
+      if (!sized || disposed) return false;
+      // the REST framing of the mat slots in use: yaw 0, zoom 1, no ceremony push, the rest pitch (stage.ts updateCamera with slots for centres)
+      const f = framingFor(false, 0, 0, 1, true);
+      let ax: number, ay: number, az: number;
+      if (f.multi) { ax = f.mx; az = f.mz * 0.8; ay = TARGET_Y * bodyScale; }
+      else { const p = primary(); if (p) { restAim(p, f.want); ax = aimOut.x; ay = aimOut.y; az = aimOut.z; } else { ax = 0; az = 0; ay = TARGET_Y * f.want; } }
+      const dist = f.want * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
+      return visibleTableAt(ax, ay, az, dist, REST_PITCH, camera.fov, cssW, cssH, safe.top, safe.right, safe.bottom, safe.left, out);
+    },
+    setAutonomyFraming(on) { autoFraming = !!on; if (autoFraming) needLife(); },
+    async loadPlace(id) {
+      if (!id || id === 'home') return true;
+      if (disposed) return false;
+      try {
+        if (!placeHost) { const m = await import('./place.ts'); placeHost ??= new m.PlaceHost(hub); }
+        const ok = await placeHost.load(id);
+        if (ok && !play) refitPlay();   // (bounds set before the away chunk landed)
+        return ok;
+      } catch { return false; }
+    },
+    setPlace(id, fadeS) {
+      if (disposed) return false;
+      const isHome = !id || id === 'home';
+      if (!isHome && !placeHost?.look(id!)) return false;
+      // the swap hides under a snapshot crossfade (screenfx.ts: a fade from the frame as it was, never a flash)
+      if (!lost && sized) { renderer.render(scene, camera); screen.beginCrossfade(renderer, Math.max(0.05, Number.isFinite(fadeS) ? fadeS : 0.35), 'linear'); }
+      if (isHome) { playB.set([0, 0, NaN, NaN]); play = null; }
+      return placeHost ? placeHost.enter(placeCtx, isHome ? null : id, camera.aspect < 0.9 ? 1 : 0) : true;
+    },
+    setPlayBounds(cx, cz, hx, hz) {
+      // (a non-finite or empty bounds clears it: Home's framing again)
+      if ([cx, cz, hx, hz].every(Number.isFinite) && hx > 0 && hz > 0) playB.set([cx, cz, hx, hz]); else playB.set([0, 0, NaN, NaN]);
+      refitPlay();
+    },
+    bindProps(poses, count, pThing) {
+      propPoses = poses; propCount = poses ? Math.max(0, Math.min(Math.floor(count) || 0, Math.floor(poses.length / 8))) : 0; propThing = pThing ?? null;
+      if (home) home.bind(poses, count, pThing ?? null); else { pendBind = [poses, count, pThing ?? null]; if (poses && !placeHost?.active) needLife(); }
+    },
+    setHomeThing(thing, shown, x, z, yaw) {
+      const k = Math.floor(thing);
+      if (home) { home.setThing(k, !!shown, x, z, yaw); return; }
+      if (k >= 0 && k < 6) { pendThing.set([1, shown ? 1 : 0, x, z, yaw], k * 5); if (shown) needLife(); }
+    },
+    setKeepsakes(mask) { const m = Number.isFinite(mask) ? mask : 0; if (home) home.setKeepsakes(m); else { pendKeep = m; if (m) needLife(); } },
+
     dispose() {
       if (disposed) return;
       disposed = true;
       director.abort();
       canvas.removeEventListener('webglcontextlost', onLost, false);
       canvas.removeEventListener('webglcontextrestored', onRestored, false);
+      try { mqReduce?.removeEventListener('change', onMotionPref); mqCoarse?.removeEventListener('change', onMotionPref); } catch { /* read once */ }
       while (views.length) removeView(views[views.length - 1]);
       discardCapsule(); discardRevealCapsule();
+      emotes?.dispose(); home?.dispose(); emotes = null; home = null;
+      placeHost?.enter(placeCtx, null, 0);
       table.dispose(); quad.dispose(); screen.dispose(); particles.dispose(); cut.dispose();
       hub.dispose();
       renderer.dispose();
@@ -867,6 +1159,11 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       scene: { value: scene },
       views: { get: () => views },
       flash: { value: flash },
+      emotes: { get: () => emotes },
+      homeKit: { get: () => home },
+      /** (dev) the lazy LIFE look (bubbles and Home's things) loads now; resolves when it is ready. */
+      loadLifeLook: { value: (): Promise<void> => { needLife(); return lifeLoad ?? Promise.resolve(); } },
+      autoFraming: { get: () => autoFraming },
       memory: { value: () => { const i = renderer.info; return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, calls: i.render.calls, triangles: i.render.triangles }; } },
       loseContext: {
         value: () => {

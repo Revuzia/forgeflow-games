@@ -10,15 +10,17 @@
 import type { SquishAudio, AudioSettings, SquishVoiceHandle, TierName } from '../contracts.ts';
 import { clamp } from '../core/rng.ts';
 import { c01, fin, liveNodeCount, makeRng, noiseBuffer, type VoiceGroup } from './dsp.ts';
-import { createMasterChain, musicGain, type MasterChain } from './chain.ts';
+import { AMBIENCE_DEFAULT, CHATTER_DEFAULT, createMasterChain, musicGain, type MasterChain } from './chain.ts';
 import { blend, land, poke, pop, release, squish, type SquishVoice } from './voices.ts';
 import { BURST_LOOKAHEAD_S, TIERS, capsuleBurst, crack, grab, meterFull, mergeStart, mythicDuck, reveal, tierIdx, type MergeVoice } from './ceremony.ts';
 import {
-  Composer, FADE_OUT_S, LOOKAHEAD_S as MUSIC_LOOKAHEAD_S, MUSIC_DEFAULT, MusicBed, PAUSE_FADE_S, TICK_MS,
+  Composer, FADE_OUT_S, LOOKAHEAD_S as MUSIC_LOOKAHEAD_S, MUSIC_BPM, MUSIC_DEFAULT, MUSIC_STYLES, MusicBed, PAUSE_FADE_S, SLOT_S, TICK_MS,
   oneShotRoom, roomClearDelay, squishRoom, strandRoom, type RoomRequest,
 } from './music.ts';
 import { BumpLimiter, bump, lift, strand, strandSnap, toss, type StrandVoice } from './interact.ts';
 import { CutLimiter, cutFrac, cutPop, cutSlice, neckLen, rejoin as rejoinVoice } from './cut.ts';
+import type { LifeVoices, LifeVoiceHost } from './life_voices.ts';
+import type { Ambience } from './ambience.ts';
 
 export const MAX_VOICES = 24;
 /** Hard ceiling including voices that are fading out after being stolen. */
@@ -70,7 +72,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   let pumpTimer: ReturnType<typeof setInterval> | null = null;
   let lastStatsT = 0;
   let dropped = 0;
-  const settings: AudioSettings & { music: number } = { master: 0.8, squishBoost: 0, muted: false, music: MUSIC_DEFAULT };
+  const settings: AudioSettings & { music: number; chatter: number; ambience: number } = { master: 0.8, squishBoost: 0, muted: false, music: MUSIC_DEFAULT, chatter: CHATTER_DEFAULT, ambience: AMBIENCE_DEFAULT };
   const started: Record<string, number> = {};
   for (const k of KINDS) started[k] = 0;
   const groups: VoiceGroup[] = [];
@@ -111,6 +113,17 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   let sliceV: VoiceGroup | null = null;
   let lastStrandUpd = -1e9;
   const perfS = (): number => (typeof performance !== 'undefined' ? performance.now() / 1000 : 0);
+
+  /* ───── PLAYGROUND (PG_AUDIO): the voices live in a lazy module (life_voices.ts, loaded at the first unlock: PLAYGROUND_BUILD 14.3's
+   * overflow rule), behind the thin stubs below. Their own rng stream (src/data/life.ts SALTS.chatter), never engRng (AU-07). ───── */
+  const pgRng = makeRng(((opts.seed ?? 0x57a15b00) ^ 0x1b873593) >>> 0);
+  let lv: LifeVoices | null = null;
+  let lvLoading = false;
+  let touchWanted = false;
+  /* the away chunk (ambience.ts): the place's bed and the place thing voices, loaded with the first trip */
+  let away: typeof import('./ambience.ts') | null = null;
+  let amb: Ambience | null = null;
+  const ambWant: { place?: string | null; on?: boolean } = {};
 
   function musicWantPlay(): boolean {
     return musicWanted && !disposed && !paused && !settings.muted && settings.music > 0.001;
@@ -188,6 +201,8 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     if (!ctx) return;
     const u = fin(until, 0);
     if (u > duckHoldUntil) duckHoldUntil = u;
+    // PLAYGROUND: the ceremony owns the moment: every creature voice sounding or scheduled fades now (AU-09)
+    for (const g of groups) if (g.kind === 'creature' && !g.dying) g.kill(0.04);
     if (!musicInst) return;
     try { musicInst.duckSpan(ctx.currentTime, u); } catch { /* ignore */ }
   }
@@ -212,10 +227,11 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     try { askRoom(q); } catch { /* ignore */ }
   }
 
-  /** register() + make room for it in the music. */
+  /** register() + make room for it in the music (and, PLAYGROUND, the place's bed takes its shallow dip). */
   function registerFx(g: VoiceGroup, kind: string, t0: number): void {
     register(g);
     musicRoom(kind, g, t0);
+    if (amb) { try { amb.dip(t0, (Number.isFinite(g.endTime) ? g.endTime : t0 + 0.5) + 0.3); } catch { /* closed */ } }
   }
 
   function prune(): void {
@@ -323,6 +339,56 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     order.set(g, ++serial);
   }
 
+  /** PLAYGROUND accept(): the same bookkeeping, mute and polyphony, but NO draw from engRng and no round-robin phase (the new kinds
+   *  are not in KINDS), so every existing seeded session sounds as before. */
+  function acceptPg(kind: string, clearKind: string): { c: AudioContext; t0: number } | null {
+    if (!ctx || disposed) { dropped++; return null; }
+    if (!ready()) { dropped++; tryResume(); return null; }
+    started[kind] = (started[kind] ?? 0) + 1;
+    if (settings.muted) return null;
+    sweep();
+    stealIfNeeded();
+    const t = ctx.currentTime;
+    let t0 = t + LOOKAHEAD;
+    if (musicInst) { try { t0 += roomClearDelay(clearKind, musicInst.roomLevelAt(t), musicBoostDb()); } catch { /* closed */ } }
+    return { c: ctx, t0 };
+  }
+
+  const host: LifeVoiceHost = {
+    ctx: () => (ready() ? ctx : null),
+    chain: () => chain,
+    ready,
+    muted: () => settings.muted,
+    voicesOn: () => settings.chatter > 0.001,
+    rng: pgRng,
+    accept: acceptPg,
+    register,
+    registerFx,
+    sweepSteal: () => { sweep(); stealIfNeeded(); },
+    fieldAt: (t) => { try { const b = musicInst ? musicInst.barAt(t) : null; return b ? b.field : 0; } catch { return 0; } },
+    barAt: (t) => (musicInst ? musicInst.barAt(t) : null),
+    quietMelody: (a, b) => { if (musicInst) { try { musicInst.quietMelody(a, b); } catch { /* closed */ } } },
+    pumpLater,
+    ceremonyUntil: () => duckHoldUntil,
+    drop: () => { dropped++; },
+    throttle: (k, n) => { throttled[k] = (throttled[k] ?? 0) + n; },
+    started: (k) => { started[k] = (started[k] ?? 0) + 1; },
+    away: () => (away && amb ? { creak: away.creak, puff: (t: number) => amb?.puff(t) } : null),
+  };
+
+  /** Make the place's bed match the wanted state (setAmbience, mute, pause, the Place sounds slider). */
+  function syncAmb(): void {
+    if (!amb) return;
+    try { if (settings.muted || paused || settings.ambience <= 0.001) amb.halt(); else amb.sync(); } catch { /* closed */ }
+  }
+
+  /** Load the PLAYGROUND voices (once). Until they are here a PLAYGROUND call is dropped (counted), never queued. */
+  function loadLv(): void {
+    if (lv || lvLoading || disposed) return;
+    lvLoading = true;
+    import('./life_voices.ts').then((m) => { lv = m.createLifeVoices(host); if (touchWanted) lv.setTouching(true); }, () => { lvLoading = false; });
+  }
+
   function build(): void {
     const w = globalThis as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
     const Ctor = w.AudioContext ?? w.webkitAudioContext;
@@ -335,7 +401,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     // that needs it (measured: that made the first music note's tick, and the first poke, ~20-30 ms slower)
     try { noiseBuffer(ctx); } catch { /* the first voice will build it */ }
     // the music (re)starts whenever the context reaches 'running' and music is wanted (unlock, resume after a pause or an interruption)
-    try { ctx.addEventListener('statechange', () => { if (ctx && ctx.state === 'running') syncMusic(); }); } catch { /* old browsers: unlock()/setPaused() still sync */ }
+    try { ctx.addEventListener('statechange', () => { if (ctx && ctx.state === 'running') { syncMusic(); syncAmb(); } }); } catch { /* old browsers: unlock()/setPaused() still sync */ }
     if (!timer) timer = setInterval(sweep, 500);
   }
 
@@ -392,7 +458,8 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       silentBuffer(c);
       // resume() can stay pending for ever without a user gesture, so never await it unbounded
       const wait = res ? Promise.race([res.catch(() => { /* needs a gesture */ }), new Promise<void>((ok) => setTimeout(ok, 1200))]) : Promise.resolve();
-      return wait.then(() => { syncMusic(); }, () => { /* never reject */ });
+      loadLv();
+      return wait.then(() => { syncMusic(); syncAmb(); }, () => { /* never reject */ });
     } catch { return Promise.resolve(); /* an unlock failure must never break the game: ready stays false */ }
   }
 
@@ -411,9 +478,12 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (s.squishBoost !== undefined) settings.squishBoost = c01(s.squishBoost, settings.squishBoost);
       if (s.muted !== undefined) { const m = !!s.muted; if (m !== settings.muted) { settings.muted = m; if (ctx) claimSession(); } }
       if (s.music !== undefined) settings.music = c01(s.music, settings.music);
+      if (s.chatter !== undefined) settings.chatter = c01(s.chatter, settings.chatter);
+      if (s.ambience !== undefined) settings.ambience = c01(s.ambience, settings.ambience);
       if (chain) chain.apply(settings);
       if (settings.muted) killAll(0.03);
       syncMusic();
+      syncAmb();
     },
 
     poke(p) {
@@ -724,6 +794,73 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       } catch { dropped++; }
     },
 
+    /* ───── PLAYGROUND (PG_AUDIO; LIFE.md 8, PLAYGROUND_BUILD.md 10): thin stubs over life_voices.ts ───── */
+
+    creature(p) {
+      if (!p || typeof p !== 'object' || !(p.phrase instanceof Float32Array)) { dropped++; return false; }
+      if (!lv) { loadLv(); dropped++; return false; }
+      try { return lv.creature(p); } catch { dropped++; return false; }
+    },
+
+    setTouching(on) {
+      touchWanted = on === true;
+      if (lv) { try { lv.setTouching(touchWanted); } catch { /* closed */ } }
+    },
+
+    musicClock(out) {
+      if (!ctx || disposed || !ready() || !musicInst || !out || out.length < 5) return false;
+      const t = ctx.currentTime;
+      const b = musicInst.barAt(t);
+      if (!b) return false;
+      out[0] = b.field; out[1] = b.barT; out[2] = MUSIC_BPM; out[3] = t; out[4] = SLOT_S;
+      return true;
+    },
+
+    setMusicStyle(style) {
+      composer.style = (typeof style === 'string' && Object.prototype.hasOwnProperty.call(MUSIC_STYLES, style) ? MUSIC_STYLES[style] : null) ?? MUSIC_STYLES.home;
+    },
+
+    musicBox(p) {
+      if (!p || typeof p !== 'object') { dropped++; return; }
+      if (!lv) { loadLv(); dropped++; return; }
+      try { lv.musicBox(p); } catch { dropped++; }
+    },
+
+    prop(p) {
+      if (!p || typeof p !== 'object') { dropped++; return; }
+      if (!lv) { loadLv(); dropped++; return; }
+      try { lv.prop(p); } catch { dropped++; }
+    },
+
+    autoThud(p) {
+      if (!p || typeof p !== 'object') { dropped++; return; }
+      if (!lv) { loadLv(); dropped++; return; }
+      try { lv.autoThud(p); } catch { dropped++; }
+    },
+
+    loadAmbience(place) {
+      if (typeof place !== 'string' || disposed) return Promise.resolve(false);
+      return import('./ambience.ts').then((m) => {
+        away = m;
+        if (!amb) {
+          amb = m.createAmbience({
+            ctx: () => (ready() ? ctx : null), now: () => (ctx && !disposed ? ctx.currentTime : null), out: () => (chain ? chain.ambience : null),
+            ok: () => !settings.muted && !paused && settings.ambience > 0.001, rng: makeRng((pgRng() * 4294967296) >>> 0),
+          });
+          amb.set(ambWant);
+        }
+        return m.loadRecipe(place).then((ok) => { syncAmb(); return ok; });
+      }, () => false);
+    },
+
+    setAmbience(p) {
+      if (!p || typeof p !== 'object') { dropped++; return; }
+      if (p.place !== undefined) ambWant.place = p.place;
+      if (p.on !== undefined) ambWant.on = p.on === true;
+      if (p.volume !== undefined) { settings.ambience = c01(p.volume, settings.ambience); if (chain) chain.apply(settings); }
+      if (amb) { try { amb.set(ambWant); } catch { /* closed */ } syncAmb(); }
+    },
+
     detailStats() {
       const t = now();
       const sessions = [...retiring, ...(musicInst ? [musicInst] : [])];
@@ -772,6 +909,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const token = ++pauseToken;
       if (paused) {
         pumped.length = 0;
+        syncAmb();
         syncMusic();                    // a playing music session retires with the short PAUSE_FADE_S fade
         // every session still fading out (this one, or a 1.4 s music-off/mute fade) is made silent within PAUSE_FADE_S,
         // and the context is suspended only after that: a second setPaused(true) (visibilitychange + pagehide/blur) can
@@ -793,7 +931,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         } else suspend();
       } else {
         if (suspendTimer) { clearTimeout(suspendTimer); suspendTimer = null; }
-        c.resume().then(() => { if (token === pauseToken) syncMusic(); }).catch(() => { /* needs a gesture: unlock() will retry */ });
+        c.resume().then(() => { if (token === pauseToken) { syncMusic(); syncAmb(); } }).catch(() => { /* needs a gesture: unlock() will retry */ });
       }
     },
 
@@ -807,6 +945,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       pumped.length = 0;
       freeAll();
       freeMusic();
+      if (amb) { try { amb.halt(); } catch { /* closed */ } }
       if (chain) chain.disconnect();
       if (ctx) { ctx.close().catch(() => { /* already closed */ }); }
     },

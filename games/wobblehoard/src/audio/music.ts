@@ -131,6 +131,9 @@ export const ROOM_KINDS: Readonly<Record<string, number>> = {
   release: ROOM_DB, land: ROOM_DB, bump: ROOM_DB, lift: ROOM_DB, toss: ROOM_DB,
   // CUT (cut.ts): the slice (a slow onset: it declares one), the separation pop and the rejoin blorp (fast: they clear the way)
   cut: ROOM_DB, cutPop: ROOM_DB, rejoin: ROOM_DB,
+  // PLAYGROUND: a thing the PLAYER struck (cause 0) may make room; a sound that moved by itself never calls registerFx at all, and
+  // the creature voices ('creature') are never here (LIFE 8.4: the music never dips for chatter)
+  ball: ROOM_DB,
 };
 /** Held voices: each update holds its depth this long plus the activity tail ROOM_TAIL_S (so a rubbing squish that dips
  *  and swells frame by frame keeps the deepest dip instead of tremoloing the music). Held requests are rounded (depth down
@@ -271,6 +274,19 @@ export const FIELD_NEXT: readonly (readonly (readonly [number, number])[])[] = [
 /** How many bars a field lasts (8 bars = 29 s at 66 BPM). */
 export const FIELD_BARS: readonly (readonly [number, number])[] = [[8, 0.35], [12, 0.4], [16, 0.25]];
 
+/**
+ * PLAYGROUND (D-51): a place's music style changes the field drift weights and the mallet's timbre only; the key stays D, the tempo
+ * 66 BPM, so the ceremonies and the whole-again run stay in tune. `home` IS today's score (FIELD_NEXT, no filter): bit-identical
+ * (AU-07). A style only re-weights the next field (pick() draws exactly one number whatever the weights), so the composer's stream
+ * never shifts. `lp` (Hz) puts a gentle low-pass on each mallet note (a warmer, darker felt).
+ */
+export interface MusicStyle { readonly next: readonly (readonly (readonly [number, number])[])[]; readonly lp: number }
+export const MUSIC_STYLES: Readonly<Record<string, MusicStyle>> = {
+  home: { next: FIELD_NEXT, lp: 0 },
+  // Hearthlog Cabin: more dusk and home fields (the fireside evening), a warmer low-passed mallet
+  cabin: { next: [[[1, 0.15], [2, 0.6], [3, 0.25]], [[0, 0.55], [2, 0.35], [3, 0.1]], [[1, 0.15], [3, 0.2], [0, 0.65]], [[0, 0.55], [2, 0.45]]], lp: 1500 },
+};
+
 /** Rhythm cells: eighth-note slots (0..7) inside a bar. About two thirds start on the downbeat; the rest are lazy
  *  off-beat figures and pickups, so the line does not lock to the bar line. */
 const CELLS: readonly (readonly [readonly number[], number])[] = [
@@ -330,6 +346,8 @@ export class Composer {
   private queue: Role[] = [];
   private lastCall: { cell: readonly number[]; steps: number[] } | null = null;
   private restRun = 0;
+  /** PLAYGROUND: the music style (field drift weights, the mallet's low-pass); MUSIC_STYLES.home is today's score. */
+  style: MusicStyle = MUSIC_STYLES.home;
   /** History of field changes (bar index, field, length in bars): the probe checks the drift rules from it. */
   readonly fieldLog: { bar: number; field: number; bars: number }[] = [];
 
@@ -429,7 +447,7 @@ export class Composer {
   nextBar(): PlannedBar {
     let fieldStart = this.bar === 0;
     if (this.barsLeft <= 0) {
-      this.field = pick(this.r, FIELD_NEXT[this.field]);
+      this.field = pick(this.r, this.style.next[this.field] ?? FIELD_NEXT[this.field]);
       this.barsLeft = pick(this.r, FIELD_BARS);
       this.fieldLog.push({ bar: this.bar, field: this.field, bars: this.barsLeft });
       fieldStart = true;
@@ -516,9 +534,12 @@ function padChord(ctx: Ctx, dest: AudioNode, t: number, endT: number, field: Fie
  * and the octave again ECHO_S later at ECHO_LEVEL, panned to the other side (scheduled, not a DelayNode: see MusicBed).
  * Node lifetime ~2.2 s at 600 Hz.
  */
-function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pan: number, seed: number): { bag: Bag; end: number } {
+function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pan: number, seed: number, styleLp = 0): { bag: Bag; end: number } {
   const r = makeRng(seed);
   const bag = new Bag(ctx, dest, 'mallet', pan);
+  // PLAYGROUND style (MusicStyle.lp): a warmer felt. Only when asked, so `home` builds exactly today's note (AU-07).
+  let head: AudioNode = bag.head;
+  if (styleLp > 0) { const f2 = bag.biquad('lowpass', styleLp, 0.5); f2.connect(bag.head); head = f2; }
   const A = MALLET_LEVEL * Math.pow(clamp(vel, 0, 1), 1.3);
   const tau = 0.39 * Math.pow(600 / f, 0.35);
   let end = t;
@@ -538,7 +559,7 @@ function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pa
       const e = u + 0.004 + 5 * T;
       const o = bag.osc('sine', fq, u, e + 0.03);
       const g = bag.gain(0);
-      o.connect(g); g.connect(k ? ep : bag.head);
+      o.connect(g); g.connect(k ? ep : head);
       g.gain.setValueAtTime(0, u);
       g.gain.linearRampToValueAtTime(a, u + (k ? 0.008 : 0.004));
       g.gain.exponentialRampToValueAtTime(a * 0.0067, e);
@@ -549,7 +570,7 @@ function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pa
   const n = bag.noise(r, t, t + 0.03);
   const lp = bag.biquad('lowpass', 1300, 0.7);
   const ng = bag.gain(0);
-  n.connect(lp); lp.connect(ng); ng.connect(bag.head);
+  n.connect(lp); lp.connect(ng); ng.connect(head);
   ng.gain.setValueAtTime(0, t);
   ng.gain.linearRampToValueAtTime(A * 0.35, t + 0.0015);
   ng.gain.linearRampToValueAtTime(0, t + 0.007);
@@ -574,8 +595,8 @@ export interface MusicLogEntry {
   midi: readonly number[];
   field: number;
   vel: number;
-  /** Not played: the live-note cap was full, or the note was already late. */
-  dropped?: 'cap' | 'late';
+  /** Not played: the live-note cap was full, the note was already late, or a tune held the melody (PLAYGROUND musicBox). */
+  dropped?: 'cap' | 'late' | 'quiet';
 }
 
 /** A room hold (makeRoom): the dip `db` (melody scale) from `at` until `until`, going down with time constant `atk`. */
@@ -602,11 +623,14 @@ export interface MusicBedOptions {
   layers?: { pad?: number; mallet?: number };
 }
 
+/** How many planned bars MusicBed remembers for musicClock (a field lasts 8 to 16 bars; the composer plans one bar ahead). */
+const BAR_LOG = 8;
+
 export class MusicBed {
   readonly ctx: Ctx;
   readonly t0: number;
   readonly log: MusicLogEntry[] | null;
-  readonly stats = { notes: 0, bubbles: 0, pads: 0, dropped: 0, late: 0, maxLive: 0 };
+  readonly stats = { notes: 0, bubbles: 0, pads: 0, dropped: 0, late: 0, maxLive: 0, quiet: 0 };
   private readonly composer: Composer;
   private readonly bus: Bag;
   private readonly melBus: GainNode;
@@ -637,6 +661,14 @@ export class MusicBed {
   private stoppedAt = Infinity;
   private endT = Infinity;
   private freed = false;
+  /** PLAYGROUND (musicClock): the start time and field of the last BAR_LOG planned bars (a ring), so the field SOUNDING at a time can
+   *  be read (the composer plans up to a bar ahead: its `field` is the one being planned, not the one heard). */
+  private readonly barT = new Float64Array(BAR_LOG);
+  private readonly barF = new Int8Array(BAR_LOG);
+  private barN = 0;
+  /** PLAYGROUND (musicBox): spans in which the bed's own melody (mallets and bubbles) is silent while a tune plays. */
+  private quiet: { from: number; until: number }[] = [];
+  private readonly melLevel: number;
 
   constructor(ctx: Ctx, out: AudioNode, composer: Composer, t0: number, opts: MusicBedOptions = {}) {
     this.ctx = ctx;
@@ -659,7 +691,8 @@ export class MusicBed {
     this.roomMel = bag.gain(1);
     this.roomPad = bag.gain(1);
     const lay = opts.layers ?? {};
-    this.melBus = bag.gain(clamp(fin(lay.mallet, 1), 0, 4));
+    this.melLevel = clamp(fin(lay.mallet, 1), 0, 4);
+    this.melBus = bag.gain(this.melLevel);
     this.padIn = bag.gain(clamp(fin(lay.pad, 1), 0, 4));
     this.padFill = bag.gain(1);
     this.duckG.connect(fadeIn); fadeIn.connect(this.fadeOut); this.fadeOut.connect(this.pauseG); this.pauseG.connect(bag.head);
@@ -717,6 +750,7 @@ export class MusicBed {
     while (this.nextBarT < horizon + BAR_S) {
       const b = this.composer.nextBar();
       const bt = this.nextBarT;
+      this.barT[this.barN % BAR_LOG] = bt; this.barF[this.barN % BAR_LOG] = b.field; this.barN++;
       if (b.fieldStart || this.first) {
         this.pending.push({ t: bt, kind: 'pad', midi: 0, field: b.field, vel: 1, pan: 0, seed: b.seed, end: bt + b.barsLeft * BAR_S });
       }
@@ -750,13 +784,14 @@ export class MusicBed {
       if (e.kind !== 'pad' || now > e.end - 1) { this.stats.late++; this.logIt(e, t, t, 'late'); return; }
       t = now + 0.005;
     }
+    if (e.kind !== 'pad' && this.quiet.length && this.isQuiet(t)) { this.stats.quiet++; this.logIt(e, t, t, 'quiet'); return; }
     if (e.kind !== 'pad' && this.liveNotesAt(t) >= MAX_LIVE_NOTES - PAD_SLOTS) { this.stats.dropped++; this.logIt(e, t, t, 'cap'); return; }
     let end: number;
     if (e.kind === 'pad') {
       const p = padChord(this.ctx, this.padIn, t, e.end, FIELDS[e.field], e.seed, this.pr);
       this.groups.push(p.bag); end = p.end; this.stats.pads++;
     } else if (e.kind === 'mallet') {
-      const m = mallet(this.ctx, this.melBus, t, midiHz(e.midi) * this.pr, e.vel, e.pan, e.seed);
+      const m = mallet(this.ctx, this.melBus, t, midiHz(e.midi) * this.pr, e.vel, e.pan, e.seed, this.composer.style.lp);
       this.groups.push(m.bag); end = m.end; this.stats.notes++;
     } else {
       // the game's Minnaert bubble, tuned (musicBubble): a small upward settle centred on the note, a slightly longer ring
@@ -769,10 +804,46 @@ export class MusicBed {
     if (this.groups.length > 16) this.groups = this.groups.filter((g) => g.alive);
   }
 
-  private logIt(e: Pending, t: number, end: number, dropped?: 'cap' | 'late'): void {
+  private logIt(e: Pending, t: number, end: number, dropped?: 'cap' | 'late' | 'quiet'): void {
     if (!this.log) return;
     const midi = e.kind === 'pad' ? FIELDS[e.field].pad.slice() : [e.midi];
     this.log.push({ t, end, kind: e.kind, midi, field: e.field, vel: e.vel, ...(dropped ? { dropped } : {}) });
+  }
+
+  /** PLAYGROUND (musicClock): the bar sounding at time t: its start and field, from the planned-bar ring (the first planned bar when t
+   *  is before it). null before anything is planned. */
+  barAt(t: number): { barT: number; field: number } | null {
+    if (!this.barN) return null;
+    const lo = Math.max(0, this.barN - BAR_LOG);
+    let k = lo;
+    for (let i = lo; i < this.barN; i++) if (this.barT[i % BAR_LOG] <= t + 1e-9) k = i;
+    return { barT: this.barT[k % BAR_LOG], field: this.barF[k % BAR_LOG] };
+  }
+
+  private isQuiet(t: number): boolean {
+    for (const q of this.quiet) if (t >= q.from - 0.06 && t < q.until) return true;
+    return false;
+  }
+
+  /** PLAYGROUND (musicBox): the bed's own melody rests from `from` until `until` (a tune plays: two melodies never clash). The pad
+   *  plays on. Notes that would start inside are not built; the melody bus fades out (time constant 0.1 s) and back (0.5 s). A later
+   *  call with the same `from` re-times the end (a second tap stops the Music Box). */
+  quietMelody(from: number, until: number): void {
+    if (this.freed) return;
+    const now = this.ctx.currentTime;
+    const a = Math.max(now, fin(from, now)), b = Math.max(a, fin(until, a));
+    this.quiet = this.quiet.filter((q) => q.until > now - 1 && Math.abs(q.from - a) > 1e-6);
+    this.quiet.push({ from: a, until: b });
+    this.quiet.sort((p, q) => p.from - q.from);
+    try {
+      const g = this.melBus.gain;
+      g.cancelScheduledValues(now);
+      for (const q of this.quiet) {
+        if (q.until <= now) continue;
+        g.setTargetAtTime(0, Math.max(now, q.from - 0.06), 0.1);
+        g.setTargetAtTime(this.melLevel, q.until, 0.5);
+      }
+    } catch { /* closed */ }
   }
 
   /** Duck the session by DUCK_DB from `from` until at least `until` (repeated calls extend it). Smooth: setTarget only. */

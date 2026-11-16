@@ -205,6 +205,7 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
     for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++) { const d = Math.hypot(sp[i][0] - sp[j][0], sp[i][1] - sp[j][1]); if (d < gap - 1e-9) probs.push(`spawn pair ${f2(d)} m apart (at least ${gap})`); }
   }
   if (moving > 8) probs.push(`${moving} moving props (at most 8)`);
+  const balls = P.things.filter((t) => t.mech === MECH.ball).length; if (balls > 1) probs.push(`${balls} free props (balls; at most one, P5)`);
   if (prims > 20) probs.push(`${prims} collider primitives (at most 20)`);
   return probs;
 }
@@ -382,7 +383,9 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
   const selfVerbs: readonly number[] = [USE_VERB.ROLL, USE_VERB.RING, USE_VERB.NAP, USE_VERB.BOUNCE, USE_VERB.SPIN, USE_VERB.WADE, USE_VERB.LEAN, USE_VERB.FLOAT_ON, USE_VERB.STEP, USE_VERB.LISTEN];
   for (const d of CATALOG) { const s = SL[d.id], P = thingsOf.get(s.place)!, t = P.things.find((x) => x.id === s.thing);
     if (!t) { probs.push(`${d.id}: ${s.thing} is not in ${s.place}`); continue; }
-    const owns = P.zones.some((z) => ownsArea(t.zone, z.id)) || P.patches.some((p) => ownsArea(t.patch, p.id)), self = selfVerbs.includes(t.verb) && t.mech !== MECH.block || owns;
+    // A block's by-itself use counts only when it is a tuned block (LIFE 5.3: "chime, bell, crystal, lantern: bump past it (a contact strikes it)";
+    // the Singing Crystals are tuned M1 blocks, PLACES 4.9); any other block favourite needs a zone or patch, a ride or a switch.
+    const owns = P.zones.some((z) => ownsArea(t.zone, z.id)) || P.patches.some((p) => ownsArea(t.patch, p.id)), self = selfVerbs.includes(t.verb) && (t.mech !== MECH.block || (t.verb === USE_VERB.RING && !!t.p.tuned)) || owns;
     if (!(self || t.ride || t.switch)) probs.push(`${d.id}: favourite ${t.id} has no self event, ride or switch`); }
   for (const [ch, list] of Object.entries(GIFT_LISTS)) { const c = Number(ch); if (list.length !== 3) probs.push(`gift list ${ch} has ${list.length}`);
     for (const id of list) { const d = byId.get(id)!; if (d.tier !== 'common' && d.tier !== 'uncommon') probs.push(`gift ${id} is ${d.tier}`);
@@ -457,10 +460,13 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
 
 /* ═══════════════════════════════ DT-09: a title's verb matches its rule's event (VISIT exempt); a hint matches its count ═══════════════════════════════ */
 {
-  /** The reviewed keyword table: an event kind and the words a title may use for it (printed below for review by hand). */
+  /** The reviewed keyword table: an event kind and the words a title may use for it (printed below for review by hand). Engineer 2's review
+   *  (2026-11-16) added three words for three QUESTS 6 titles: USE "down" (I7 "Down the glide ramp": sliding down it, USE SLIDE), USE "scale"
+   *  (E3 "Crystal scale": a scale is played by ringing the crystals in turn, PLACES 4.9; a noun title, noted for the designer), SOCIAL "roll"
+   *  (U7 "Roll the cloud ball": S12 pass the ball, "each in turn boops the ball toward the other", LIFE 6.1). */
   const KW: Record<number, RegExp> = {
-    [EV.TOUCH]: /squeeze|stretch/i, [EV.USE]: /play|roll|chase|answer|kettle|ring|slide|whee|ride|round|boing|bounce|tap|wind|marble|magnet|sing|ding|light|lantern|vane|star|echo|swing|push|machine|fireside/i,
-    [EV.CAPSULE]: /capsule/i, [EV.SOCIAL]: /hello|nap|push|rocker|teeter|song|sing|snuggle|pass|peekaboo|squirt|nuzzle|snug|follow|leader|copy|parade|echo|turn|machine|swing/i,
+    [EV.TOUCH]: /squeeze|stretch/i, [EV.USE]: /play|roll|chase|answer|kettle|ring|slide|whee|ride|round|boing|bounce|tap|wind|marble|magnet|sing|ding|light|lantern|vane|star|echo|swing|push|machine|fireside|down|scale/i,
+    [EV.CAPSULE]: /capsule/i, [EV.SOCIAL]: /hello|nap|push|rocker|teeter|song|sing|snuggle|pass|peekaboo|squirt|nuzzle|snug|follow|leader|copy|parade|echo|turn|machine|swing|roll/i,
     [EV.UI]: /bubble/i, [EV.WISH]: /wish/i, [EV.REACT]: /cozy|toast|golden|pool|frosty|zoom|ice|snow|pine|splash|shower|soak|float|sit|fizz|moon|hold on|breeze|glow|water|fire|way|react|drift|tap/i,
     [EV.PIECES]: /bits/i, [EV.DISCOVER]: /loves|best friends/i, [EV.FRIEND]: /friends/i, [EV.PHOTO]: /picture|rain stops/i };
   const NUM: Record<number, RegExp> = { 2: /\b(two|twice)\b/i, 3: /\bthree\b/i, 4: /\bfour\b/i, 5: /\bfive\b/i };
@@ -479,7 +485,12 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
   const FR = FAMILY_REACT as Readonly<Record<string, { density: number; soakedDensity: number }>>;
   const deep = DEFS.flatMap((P) => P.zones.filter((z) => z.kind === ZONE.water && (z.surfaceY ?? 0) >= 0.12).map((z) => ({ P, z })));
   const floats = (f: string, h: number, soaked = false): boolean[] => BANDS.map((R) => share(h, R) > (soaked ? FR[f].soakedDensity : FR[f].density));
-  for (const f of MATERIAL_FAMILY_IDS) table.push(`${f} ${floats(f, 0.28).map((x) => (x ? 'F' : 's')).join('')}`);
+  const soaks = (f: string): boolean => FR[f].soakedDensity !== FR[f].density;
+  for (const f of MATERIAL_FAMILY_IDS) table.push(`${f} ${floats(f, 0.28).map((x) => (x ? 'F' : 's')).join('')}${soaks(f) ? '/' + floats(f, 0.28, true).map((x) => (x ? 'F' : 's')).join('') + ' soaked' : ''}`);
+  // PLACES 2.5's own figures for the 0.28 m pool (share 0.282 / 0.191 / 0.128) and its soaked row (slow-rise and marshmallow sit at every band)
+  BANDS.forEach((R, k) => { if (Math.abs(share(0.28, R) - [0.282, 0.191, 0.128][k]) > 0.0015) p.push(`share(0.28, ${R}) = ${share(0.28, R).toFixed(3)}, PLACES 2.5 says ${[0.282, 0.191, 0.128][k]}`); });
+  for (const f of ['slowrise', 'marshmallow']) if (!soaks(f) || floats(f, 0.28, true).some(Boolean)) p.push(`${f} soaked does not sit at every band (PLACES 2.5)`);
+  for (const P of DEFS) for (const z of P.zones) if (z.kind === ZONE.water && (z.surfaceY ?? 0) >= 0.12) for (const f of MATERIAL_FAMILY_IDS) if (soaks(f) && floats(f, z.surfaceY!, true).some(Boolean)) p.push(`${f} soaked floats in ${P.id} ${z.id}`);
   // every water cell (the default pool column and each place's deep-water columns) against the table, at every deep zone of that place
   const WATER_COLS: Record<string, string[]> = { '3.1': ['Pool (0.28 m)'], '4.3': ['Rock Pool'], '4.4': ['Steam Pool'], '4.6': ['Bath Water'], '4.9': ['Glow Pool'] };
   const placeOfSec = (sec: string): PlaceDef | undefined => DEFS.find((P) => `4.${P.idx + 1}` === sec);

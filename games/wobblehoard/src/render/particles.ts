@@ -64,7 +64,11 @@ void main() {
     a = 1.0;
     a *= 1.0 - smoothstep(0.92, 1.0, r);
   }
+#ifdef WH_NORMAL
+  gl_FragColor = vec4(tint, clamp(a, 0.0, 1.0) * vCol.a);   // the normal-blend twin (snow, rain, steam wisps: an additive flake vanishes on a pale sky)
+#else
   gl_FragColor = vec4(tint * a * vCol.a, 1.0);
+#endif
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -105,7 +109,8 @@ export class Particles {
   /** Running totals (probe): particles emitted, and emits refused because the pool was full. */
   emitted = 0; dropped = 0;
 
-  constructor(cap: number, renderOrder = 32) {
+  /** `normal`: PLAYGROUND's normal-blend twin (weather: snow, rain, steam wisps; PLACES P14); default additive light, as before. */
+  constructor(cap: number, renderOrder = 32, normal = false) {
     this.cap = cap;
     const mk = (): Float32Array => new Float32Array(cap);
     this.px = mk(); this.py = mk(); this.pz = mk(); this.vx = mk(); this.vy = mk(); this.vz = mk();
@@ -126,6 +131,11 @@ export class Particles {
       vertexShader: VERT, fragmentShader: FRAG, uniforms: { uTime: { value: 0 }, uTwinkle: { value: 1 } },
       transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false,
     });
+    if (normal) {
+      this.mat.defines = { WH_NORMAL: '' };
+      Object.assign(this.mat, { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+        blendEquationAlpha: THREE.AddEquation, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor });
+    }
     this.mesh = new THREE.Mesh(this.geo, this.mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = renderOrder;

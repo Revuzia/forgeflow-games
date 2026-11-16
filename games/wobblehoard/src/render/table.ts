@@ -13,6 +13,9 @@ export const PALETTE = {
 } as const;
 
 export const GROUND_Y = -0.045;
+/** A place's sky (PLAYGROUND, Table.setSky): the 9 colours of the sky shader (linear RGB) and its fog distances. */
+export const SKY_KEYS = ['uZenith', 'uInk', 'uPlum', 'uHorizon', 'uGlowWarm', 'uGlowCool', 'uBase', 'uWarm'] as const;
+export type SkyLook = Record<(typeof SKY_KEYS)[number], readonly [number, number, number]> & { uFogNear: number; uFogFar: number };
 
 const SKY_VERT = /* glsl */`
 varying vec3 vDir;
@@ -220,6 +223,17 @@ export class Table {
     this.matTop.renderOrder = -50;
     this.group.add(this.sky, this.matTop);
   }
+
+  /** PLAYGROUND (a place, PLAYGROUND_BUILD 9): the sky's 9 colours and its fog (linear colours as [r, g, b]); null = Home's sky again. */
+  setSky(p: SkyLook | null): void {
+    const u = this.skyMat.uniforms;
+    if (!this.homeSky) { this.homeSky = {} as Record<string, unknown>; for (const k of SKY_KEYS) this.homeSky[k] = (u[k].value as THREE.Color).clone(); this.homeSky.uFogNear = u.uFogNear.value; this.homeSky.uFogFar = u.uFogFar.value; }
+    for (const k of SKY_KEYS) (u[k].value as THREE.Color).copy(p ? new THREE.Color().setRGB(p[k][0], p[k][1], p[k][2], THREE.LinearSRGBColorSpace) : (this.homeSky[k] as THREE.Color));
+    u.uFogNear.value = p ? p.uFogNear : this.homeSky.uFogNear; u.uFogFar.value = p ? p.uFogFar : this.homeSky.uFogFar;
+  }
+  /** PLAYGROUND: the felt mat shows (Home) or not (a place draws its own ground). */
+  setFelt(on: boolean): void { this.matTop.visible = on; }
+  private homeSky: Record<string, unknown> | null = null;
 
   /** Low tier: two grain octaves instead of four (the felt covers half the screen). */
   setLite(on: boolean): void { const u = feltUniforms.get(this.feltMat); if (u) u.uOctaves.value = on ? 2 : 4; }

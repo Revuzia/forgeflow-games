@@ -4,10 +4,14 @@
 // `boost` is the input for poke/squish/release voices (the "louder squish" setting adds up to +9 dB there); `plain` is the
 // input for land/pop/blend and everything newer. Round 3: `music` is the music bed's input (its own volume, music.ts). All
 // three feed the bus, so the music goes through the same limiter, master gain and mute as the effects.
+// PLAYGROUND (PG_AUDIO): `chatter` (the creature voices, the "Voices" slider) and `ambience` (each place's bed, the "Place sounds"
+// slider) are created AFTER `music`, so the harness's labels of the first three createGain() calls stay right
+// (engine_offline.js: boost, plain, music; then chatter, ambience). With nothing connected to them they add exact zeros: every
+// existing render is unchanged (AU-07).
 import { clamp } from '../core/rng.ts';
 import { c01, dbToGain, fin, softClipCurve } from './dsp.ts';
 
-export interface ChainSettings { master: number; squishBoost: number; muted: boolean; music?: number }
+export interface ChainSettings { master: number; squishBoost: number; muted: boolean; music?: number; chatter?: number; ambience?: number }
 
 export const BOOST_MAX_DB = 9;
 
@@ -24,11 +28,29 @@ export const musicGain = (v: number): number => {
   return dbToGain(x <= d ? 40 * Math.log10(x / d) : (6 * (x - d)) / (1 - d));
 };
 
+/** PLAYGROUND: the "Voices" slider. 0.6 (the default) = -4 dB, 1 = 0 dB (a whole squishy's syllable then peaks at about -21 dBFS,
+ *  LIFE 8.4's -20 dBFS cap), 0 = silent. */
+export const CHATTER_DEFAULT = 0.6;
+export const chatterGain = (v: number): number => { const x = c01(v, CHATTER_DEFAULT); return x <= 0.001 ? 0 : Math.pow(x, 0.9); };
+/** PLAYGROUND: the "Place sounds" slider. 0.5 (the default) = 0 dB = the recipes' designed level (at least 6 dB under the music long
+ *  term, AU-06); below it a squared taper like the master, above it a gentle rise to +6 dB at 1. */
+export const AMBIENCE_DEFAULT = 0.5;
+export const ambienceGain = (v: number): number => {
+  const x = c01(v, AMBIENCE_DEFAULT);
+  if (x <= 0.001) return 0;
+  const d = AMBIENCE_DEFAULT;
+  return dbToGain(x <= d ? 40 * Math.log10(x / d) : (6 * (x - d)) / (1 - d));
+};
+
 export interface MasterChain {
   readonly boost: GainNode;
   readonly plain: GainNode;
   /** Round 3: the music bed's input (gain = musicGain(settings.music)). */
   readonly music: GainNode;
+  /** PLAYGROUND: the creature voices' input (gain = chatterGain(settings.chatter)). */
+  readonly chatter: GainNode;
+  /** PLAYGROUND: the place ambience bed's input (gain = ambienceGain(settings.ambience)). */
+  readonly ambience: GainNode;
   readonly analyser: AnalyserNode;
   readonly nodes: AudioNode[];
   /** `immediate`: set the values with no smoothing (offline renders, first setup). */
@@ -49,6 +71,8 @@ export function createMasterChain(ctx: BaseAudioContext): MasterChain {
   const boost = add(ctx.createGain());
   const plain = add(ctx.createGain());
   const music = add(ctx.createGain());
+  const chatter = add(ctx.createGain());
+  const ambience = add(ctx.createGain());
   const bus = add(ctx.createGain());
   const hp = add(ctx.createBiquadFilter());
   hp.type = 'highpass'; hp.frequency.value = 20; hp.Q.value = 0.707;
@@ -66,7 +90,7 @@ export function createMasterChain(ctx: BaseAudioContext): MasterChain {
   analyser.fftSize = 32768;
   analyser.smoothingTimeConstant = 0;
 
-  boost.connect(bus); plain.connect(bus); music.connect(bus);
+  boost.connect(bus); plain.connect(bus); music.connect(bus); chatter.connect(bus); ambience.connect(bus);
   // Round 3: the bus (and so everything after it) is always stereo. With the default 'max' mode the chain switched between
   // mono and stereo processing whenever a panned voice started or freed itself, and each switch restarted a channel's
   // filter/limiter state (a tiny transient, measured as run-to-run differences of up to 6e-4 at those moments). A mono
@@ -78,20 +102,26 @@ export function createMasterChain(ctx: BaseAudioContext): MasterChain {
   const buf = new Float32Array(analyser.fftSize);
 
   return {
-    boost, plain, music, analyser, nodes,
+    boost, plain, music, chatter, ambience, analyser, nodes,
     apply(s, immediate = false) {
       const now = ctx.currentTime;
       const m = s.muted ? 0 : masterGain(s.master);
       const b = boostGain(s.squishBoost);
       const mu = musicGain(s.music ?? MUSIC_DEFAULT_VOLUME);
+      const ch = chatterGain(s.chatter ?? CHATTER_DEFAULT);
+      const am = ambienceGain(s.ambience ?? AMBIENCE_DEFAULT);
       if (immediate) {
         master.gain.setValueAtTime(m, now);
         boost.gain.setValueAtTime(b, now);
         music.gain.setValueAtTime(mu, now);
+        chatter.gain.setValueAtTime(ch, now);
+        ambience.gain.setValueAtTime(am, now);
       } else {
         master.gain.setTargetAtTime(m, now, 0.015);
         boost.gain.setTargetAtTime(b, now, 0.03);
         music.gain.setTargetAtTime(mu, now, 0.05);
+        chatter.gain.setTargetAtTime(ch, now, 0.05);
+        ambience.gain.setTargetAtTime(am, now, 0.05);
       }
     },
     duck(db, ms, atTime) {

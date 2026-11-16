@@ -7,7 +7,7 @@
 //
 // Result shapes copy the server's reply fields (snake_case: item_id, genome_code, tier_idx, is_new, ...) so the shell's ceremony code
 // (COLLECTION 10, MERGE 7) is the same for both ledgers; they add `ledger` and the decoded `item`.
-import type { SoftEvent } from '../contracts.ts';
+import type { PlayEventRing, SoftEvent } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import type { MeterState, TouchKind } from '../core/meter.ts';
 import type { TaskDef, TaskState } from '../core/drops.ts';
@@ -237,6 +237,14 @@ export interface ClaimOk {
 }
 export type ClaimResult = ClaimOk | Fail<'not_offered' | 'already_claimed' | 'shelf_full' | 'unavailable'>;
 
+/** PLAYGROUND: a Journal gift (QUESTS 11). `added` is false when the deterministic id was already on the shelf (that is a success: nothing is
+ *  added twice). Refusals: not_offered (not on the chapter's list, or no such species), not_ready (its finale or the Home finale not done, or
+ *  5 for life), one_a_day ("One gift a day. This one will wait for you."), shelf_full ("Your shelf is full. Your gift will wait here."),
+ *  not_saved (step 2's verified write failed: "Your gift will wait here."), signed_in (a real ledger: "Your gift will wait here for now.",
+ *  no Yes button until the server op exists, T8), unavailable (the journal is not attached yet). */
+export type GiftClaimResult = (ClaimOk & { added: boolean; chapter: number })
+  | Fail<'not_offered' | 'not_ready' | 'one_a_day' | 'shelf_full' | 'not_saved' | 'signed_in' | 'unavailable'>;
+
 export interface RestockView {
   ledger: Ledger;
   /** UTC day the offer belongs to. */
@@ -339,7 +347,14 @@ export type CollectionEvent =
   | { type: 'resting' }                                             // the daily rate dropped to 25%
   | { type: 'done-today' }                                          // the 12-a-day stop
   | { type: 'storage'; report: StorageReport }                      // the save started or stopped failing
-  | { type: 'external' };                                           // another tab changed the Hoard and this one folded it in
+  | { type: 'external' }                                            // another tab changed the Hoard and this one folded it in
+  // PLAYGROUND (the Journal, _spec/QUESTS.md; emitted only once the life chunk attached the journal, attachJournal):
+  | { type: 'quest'; quest: number; chapter: number; byPlayer: boolean }   // a stamp ("New stamp: ..."); the haptic only when byPlayer (D-84)
+  | { type: 'fact'; species: number; fact: number }                       // a fact found (species idx, fact bit F0..F11)
+  | { type: 'keepsake'; bit: number }                                     // a keepsake found (QUESTS 10 bit)
+  | { type: 'friend'; a: number; b: number; level: number }               // a species pair reached Met 1 / Friends 2 / Close friends 3
+  | { type: 'unlock'; place: number }                                     // a place opened (idx); 100 = Friends Everywhere opened
+  | { type: 'gift'; chapter: number; state: 'ready' | 'pending' | 'granted'; itemId?: string }; // QUESTS 11
 
 /** The practice summary (shelf size and counters the UI shows). */
 export interface PracticeSummary { ghosts: number; cap: number; full: boolean; opened: number; mergesToday: number; mergeCap: number }
@@ -404,6 +419,78 @@ export interface Collection {
   /** Write now if anything changed (pagehide, visibilitychange hidden). */
   flush(): void;
   dispose(): void;
+  /* ── PLAYGROUND (the Journal: _spec/QUESTS.md, _spec/PLAYGROUND_BUILD.md 7 and 12). All optional and feature-detected: they answer only
+   *    once the post-play life chunk has attached the journal (journal_store.ts attachJournal, D-69); until then journal() is null, feedPlay
+   *    does nothing (the shell's ring keeps its events), claimGift answers 'unavailable' and warmthOf 0. ── */
+  /** The journal's read model (quests, facts, friends, keepsakes, places, wishes, gifts), or null before it is attached. */
+  journal?(): JournalView | null;
+  /** Drain the shell's play-event ring into the pure reducer (src/core/quests.ts). `nowMs`: any ms clock (the UTC day comes from deps.now).
+   *  Allocation-free when nothing completes. The ring's n is read, never reset here: the shell owns the ring. */
+  feedPlay?(ring: PlayEventRing, nowMs: number): void;
+  /** Claim a chapter's gift (QUESTS 11's three steps, the hoard write verified before "granted"). Practice ledger only. */
+  claimGift?(chapter: number, pick: SpeciesId): Promise<GiftClaimResult>;
+  /** Warmth 0..50 of an item (LIFE 6.3); 0 for an unknown id. */
+  warmthOf?(itemId: string): number;
+  /** The party as item ids, slot by slot (warmth belongs to items; the ring carries species only). Call on every party change. */
+  setJournalParty?(itemIds: readonly string[]): void;
+  /** The life chunk attaches the journal here and gets the hoard's side of the gift grant (journal_store.ts attachJournal). */
+  attachJournal?(impl: JournalImpl): HoardGiftPort;
   // Trade, offer shelf, friends, board, block and report (TRADE.md 7.2) are NOT part of this build. When the server exists they
   // join this interface as server-only members (real ledger, signed in); a guest sees "Sign in to trade" (COLLECTION 6).
+}
+
+/* ═══════════════════════════════════════ PLAYGROUND: the Journal's seam inside the collection ═══════════════════════════════════════ */
+
+/** One quest as the Journal and the tracker show it. */
+export interface JournalQuestView { idx: number; id: string; chapter: number; kind: 'main' | 'finale' | 'bonus'; shown: boolean; open: boolean; done: boolean;
+  have: number; need: number; keys: boolean; needsAutonomy: boolean }
+/** The journal's read model (a fresh object per call: for the Journal screens, not the frame loop). */
+export interface JournalView {
+  stamps: number;
+  /** places open: a bit per place idx */
+  places: number;
+  /** Friends Everywhere is open */
+  friendsOpen: boolean;
+  quests: JournalQuestView[];
+  /** fact masks by species idx (bit F0..F11) */
+  facts: number[];
+  keepsakes: number;
+  friends: { a: number; b: number; points: number; level: number; best: boolean }[];
+  wishes: { species: number; kind: number; target: number; day: number }[];
+  /** the scripted first wish: 0 not shown, 1 shown, 2 granted; its wisher species idx (255 none) */
+  firstWish: number;
+  wisher: number;
+  /** gift rows by chapter: ready, pending or granted, with the pick */
+  gifts: { chapter: number; state: 'ready' | 'pending' | 'granted'; species: number; day: number }[];
+  /** false on a signed-in (real) ledger: the gift card reads "Your gift will wait here for now." with no Yes button (CO-09, M3) */
+  giftsAllowed: boolean;
+  /** the tracker's quest (SH-20) for the place, last input and autonomy given to tracker(); -1 none */
+  tracker(place: number, lastInputKey: boolean, autonomy: boolean): number;
+  /** storage: the journal store's report */
+  storage: StorageReport;
+}
+/** What the life chunk's journal gives the collection (journal_store.ts). */
+export interface JournalImpl {
+  view(): JournalView;
+  feedPlay(ring: PlayEventRing, nowMs: number): void;
+  claimGift(chapter: number, pick: SpeciesId): Promise<GiftClaimResult>;
+  warmthOf(itemId: string): number;
+  setParty(itemIds: readonly string[]): void;
+  flush(): void;
+  dispose(): void;
+}
+/** What the collection gives the journal: the hoard's side of the gift grant (QUESTS 11 step 2, verified: D-71), the shelf (backfill, warmth
+ *  across merges, ids by ledger) and the event stream. */
+export interface HoardGiftPort {
+  deviceId(): string;
+  /** the ledger the Hoard shows: a gift only on 'practice' (CO-09) */
+  ledger(): Ledger;
+  items(): readonly HoardItem[];
+  item(id: string): HoardItem | null;
+  /** practice capsules opened, lifetime (the backfill: QUESTS 13) */
+  opened(): number;
+  /** Step 2: ghostGrantGift, then the hoard store's flush(); ok only when report().save === 'ok' and the row's id is in the stored text. */
+  grantGift(chapter: number, pick: SpeciesId): GiftClaimResult;
+  emit(e: CollectionEvent): void;
+  now(): number;
 }

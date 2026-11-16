@@ -18,16 +18,17 @@ import {
 } from '../core/drops.ts';
 import type { MergeError, MergeInput, MergePreviewOk, MergeState } from '../core/merge.ts';
 import { MERGE_COST, MERGE_DAILY_CAP, MERGE_OUTPUT_LOCK_HOURS, previewMerge, rollMerge } from '../core/merge.ts';
+import { hashString } from '../core/rng.ts';
 import { SPECIES, getSpecies, speciesBaseGenome, tierIndexOf } from '../data/catalog.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import {
-  GENTLE_POKE_FRESHNESS, GHOST_CAP, HOUR_MS, SNAP_TASK_INTENSITY, SOFT_POP_STREAK_S, SQUEEZE_TASK_DEFAULT_S, STRETCH_FULL_INTENSITY,
+  GENTLE_POKE_FRESHNESS, GHOST_CAP, GIFT_ID_PREFIX, HOUR_MS, ID_PATTERN, SNAP_TASK_INTENSITY, SOFT_POP_STREAK_S, SQUEEZE_TASK_DEFAULT_S, STRETCH_FULL_INTENSITY,
   TASK_CAPSULE_CAP, TIDY_MAX, WH_QUEUE_MAX,
 } from './constants.ts';
 import { oddsDigest } from './oddsDigest.ts';
 import { FLAG_FAV, makeRow, newGhostId, rowToItem } from './store.ts';
 import type {
-  ClaimResult, HoardItem, HoardSave, MergeErrorCode, MergePreviewResult, MergeResult, MirrorRow, OpenResult, RestockView, TaskResult, TaskRow,
+  ClaimResult, GiftClaimResult, HoardItem, HoardSave, MergeErrorCode, MergePreviewResult, MergeResult, MirrorRow, OpenResult, RestockView, TaskResult, TaskRow,
   TidyResult,
 } from './types.ts';
 
@@ -163,6 +164,35 @@ export function ghostClaimRestock(save: HoardSave, pick: SpeciesId, ctx: Practic
   save.ghostRestockDay = day;
   const tier = tierIndexOf(def.id);
   return { ok: true, ledger: L, item_id: id, species_idx: def.idx, tier_idx: tier, genome_code: row[2], is_new: before === 0, copies: before + 1, item: ghostItem(row), quick: before > 0 && tier <= 1 };
+}
+
+/* ───────────────────────────────────────────────── Journal gifts (PLAYGROUND: _spec/QUESTS.md 11) ───────────────────────────────────────────────── */
+
+/** The gift's deterministic item id: 'jg-' + deviceId + '-' + chapter (DEVICE_ID_PATTERN keeps it at most 46 characters of [a-z0-9-]). */
+export const giftItemId = (deviceId: string, chapter: number): string => GIFT_ID_PREFIX + deviceId + '-' + chapter;
+
+/**
+ * Step 2 of the gift grant (QUESTS 11): add the chapter's gift to the Practice shelf. Origin 'restock' (an existing code: a new one would make
+ * older builds drop the row), the genome speciesBaseGenome(pick, hashString(deviceId + ':gift:' + chapter)) (no roll, no random draw), the
+ * deterministic id. A row with that id already there is a success that adds nothing (`added: false`); at GHOST_CAP it refuses. The caller
+ * (index.ts) verifies the write (flush, report, the id in the stored text) before the journal may say "granted"; the list, the day and the
+ * ledger rules are the journal's claim (the life chunk), so this first-load function stays small.
+ */
+export function ghostGrantGift(save: HoardSave, chapter: number, pick: SpeciesId, ctx: { now: number }): GiftClaimResult {
+  const def = getSpecies(pick);
+  const id = giftItemId(save.deviceId, chapter);
+  if (!def || !ID_PATTERN.test(id)) return fail('not_offered');
+  const have = findRow(save, id);
+  const before = countSpecies(save, def.idx);
+  let row = have;
+  if (!row) {
+    if (save.ghosts.length >= GHOST_CAP) return fail('shelf_full');
+    row = makeRow(id, speciesBaseGenome(def.id, hashString(save.deviceId + ':gift:' + chapter)), ctx.now, 0, 'restock');
+    save.ghosts.push(row);
+  }
+  const tier = tierIndexOf(SPECIES[row[1]]);
+  return { ok: true, ledger: L, item_id: id, species_idx: row[1], tier_idx: tier, genome_code: row[2], is_new: !have && before === 0, copies: countSpecies(save, row[1]),
+    item: ghostItem(row), quick: false, added: !have, chapter };
 }
 
 /* ───────────────────────────────────────────────── tasks ───────────────────────────────────────────────── */

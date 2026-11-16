@@ -73,3 +73,10 @@ export const GENTLE_POKE_FRESHNESS = 0.5;
 
 /** 24 h output lock of a merge (MERGE 3.2), in ms. The hour count itself is MERGE_OUTPUT_LOCK_HOURS in core/merge.ts. */
 export const HOUR_MS = 3_600_000;
+
+/* ── PLAYGROUND: the Journal (_spec/PLAYGROUND_BUILD.md 12, D-36; _spec/QUESTS.md 11). Its own key, never inside the hoard (older builds never
+ *    read it, so a rollback cannot eat it). Only what first-load code needs lives here (the 2 KB first-load cap, PLAYGROUND_BUILD 14.3); the
+ *    backup and frame keys, the version and the limits live with the journal in the life chunk (journal.ts). ── */
+export const JOURNAL_KEY = 'wobblehoard:v2:journal';
+/** A Journal gift's deterministic item id is GIFT_ID_PREFIX + deviceId + '-' + chapter (at most 46 characters of [a-z0-9-], inside ID_PATTERN). */
+export const GIFT_ID_PREFIX = 'jg-';

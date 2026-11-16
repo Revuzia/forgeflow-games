@@ -6,7 +6,7 @@ import type { MergePreviewOk } from '../core/merge.ts';
 import { TIER_NAMES, oddsPerSpecies } from '../core/rarity.ts';
 import type { TierId } from '../core/rarity.ts';
 import { getSpecies } from '../data/catalog.ts';
-import { GHOST_CAP } from './constants.ts';
+import { GHOST_CAP, GIFT_ID_PREFIX } from './constants.ts';
 import type { HoardLoadStatus, HoardSaveState, MergeErrorCode, MeterView, Stack, TaskRow } from './types.ts';
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
@@ -198,7 +198,19 @@ export function plinthLabel(s: Pick<Stack, 'species' | 'tier' | 'copies' | 'spar
   return parts.join(', ');
 }
 
-/** Where a copy came from, on its swatch (9.3). A ghost's swatch also carries COPY.practiceLabel. */
-export function originCopy(o: 'starter' | 'drop' | 'task' | 'restock' | 'blend'): string {
+/** Where a copy came from, on its swatch (9.3). A ghost's swatch also carries COPY.practiceLabel. PLAYGROUND: pass the item's id too, and a
+ *  Journal gift (an id starting 'jg-', stored with origin 'restock' so older builds keep it) reads "Gift" (QUESTS 11). */
+export function originCopy(o: 'starter' | 'drop' | 'task' | 'restock' | 'blend', id?: string): string {
+  if (o === 'restock' && typeof id === 'string' && id.startsWith(GIFT_ID_PREFIX)) return 'Gift';
   return o === 'drop' ? 'Capsule' : o === 'blend' ? 'Merge' : o === 'restock' ? 'Restock' : o === 'task' ? 'Task' : 'Starter';
 }
+/** The same for a HoardItem (the Hoard's swatch: `itemOriginCopy(it)`). */
+export const itemOriginCopy = (it: { origin: 'starter' | 'drop' | 'task' | 'restock' | 'blend'; id: string }): string => originCopy(it.origin, it.id);
+
+/** PLAYGROUND: the gift claim's waiting lines (QUESTS 11, 15). The gift always waits: nothing is lost. */
+export const GIFT_COPY = {
+  wait: 'Your gift will wait here.',
+  shelfFull: 'Your shelf is full. Your gift will wait here.',
+  oneADay: 'One gift a day. This one will wait for you.',
+  signedIn: 'Your gift will wait here for now.',
+} as const;

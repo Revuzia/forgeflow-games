@@ -4,6 +4,8 @@
 //   audio-4 (the music's room under play, through the real engine run offline): part of round 3; --no-room skips it,
 //   --only-room runs only it
 //   CUT & RECONNECT (cut / rejoin voices, _spec/CUT.md): part of a full run; --no-cut skips it, --only-cut runs only it
+//   PLAYGROUND (PG_AUDIO: creature voices, chatter, musicClock, tunes, the ambience bed; AU-01..AU-14, audioview/life_checks.mjs):
+//   part of a full run; --no-life skips it, --only-life runs only it (also runnable alone: node _harness/audioview/life_checks.mjs)
 // Renders every voice offline in Chromium (OfflineAudioContext, 48 kHz) through the SAME master chain the game uses,
 // analyses the samples in Node, writes WAV + spectrogram PNG per voice to _harness/_renders/ (gitignored), prints a table
 // and exits 1 on any failed check. Nobody on the build machine can listen: every number here is a measurement.
@@ -17,6 +19,7 @@ import { ceremonyChecks } from './audioview/ceremony_checks.mjs';
 import { round3Checks } from './audioview/music_checks.mjs';
 import { roomChecks } from './audioview/room_checks.mjs';
 import { cutChecks } from './audioview/cut_checks.mjs';
+import { lifeChecks } from './audioview/life_checks.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
 const PORT = Number(args.port ?? 5363);
@@ -25,7 +28,8 @@ mkdirSync(OUT, { recursive: true });
 const only = args.voices ? String(args.voices).split(',') : null;
 const onlyRoom = !!args['only-room'];
 const onlyCut = !!args['only-cut'];
-const only3 = !!args.only3 || onlyRoom || onlyCut;
+const onlyLife = !!args['only-life'];
+const only3 = !!args.only3 || onlyRoom || onlyCut || onlyLife;
 
 /* ───────────────────────── checks bookkeeping ───────────────────────── */
 const checks = [];
@@ -373,14 +377,22 @@ async function main() {
     }
     // round 3 runs after the round-1/2 live tests, so their conditions are exactly what they were before round 3 (the long
     // music renders below leave a lot of garbage behind)
-    if (!only && !args['no-round3'] && !onlyCut) {
+    if (!only && !args['no-life'] && (!only3 || onlyLife)) {
+      try {
+        // PLAYGROUND: the creature voices, chatter bus, tunes and ambience bed through the real engine run offline (fresh page)
+        await page.goto(`${vite.url}_harness/audioview/index.html`);
+        await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
+        extra.life = await lifeChecks({ page, check, OUT: resolve(OUT, 'life') });
+      } catch (e) { check('life', 'PLAYGROUND audio checks ran', false, String(e && e.stack || e), 'no exception'); }
+    }
+    if (!only && !args['no-round3'] && !onlyCut && !onlyLife) {
       try {
         await page.goto(`${vite.url}_harness/audioview/index.html`);
         await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
         if (!onlyRoom) extra.round3 = await round3Checks({ page, check, OUT });
       } catch (e) { check('round 3', 'round-3 offline gates ran', false, String(e && e.stack || e), 'no exception'); }
     }
-    if (!only && !args['no-round3'] && !args['no-room'] && !onlyCut) {
+    if (!only && !args['no-round3'] && !args['no-room'] && !onlyCut && !onlyLife) {
       try {
         // audio-4: pumping, isolated separation and the exposed gate through the REAL engine run offline (fresh page)
         await page.goto(`${vite.url}_harness/audioview/index.html`);
@@ -388,7 +400,7 @@ async function main() {
         extra.room = await roomChecks({ page, check, OUT });
       } catch (e) { check('room under play', 'audio-4 room checks ran', false, String(e && e.stack || e), 'no exception'); }
     }
-    if (!only && !args['no-cut'] && !onlyRoom && (!args.only3 || onlyCut)) {
+    if (!only && !args['no-cut'] && !onlyRoom && !onlyLife && (!args.only3 || onlyCut)) {
       try {
         // CUT & RECONNECT: the slice, the separation pop, the rejoin and whole-again voices; rate limit, calm, families, and
         // their room in the music through the real engine run offline (fresh page)
@@ -397,7 +409,7 @@ async function main() {
         extra.cut = await cutChecks({ page, check, OUT });
       } catch (e) { check('cut', 'CUT & RECONNECT checks ran', false, String(e && e.stack || e), 'no exception'); }
     }
-    if (!args['no-engine'] && !only && !args['no-round3'] && !onlyRoom && !onlyCut) {
+    if (!args['no-engine'] && !only && !args['no-round3'] && !onlyRoom && !onlyCut && !onlyLife) {
       try {
         // round 3 live engine: music bed + interaction voices, on a fresh page (clean counters)
         await page.goto(`${vite.url}_harness/audioview/index.html`);

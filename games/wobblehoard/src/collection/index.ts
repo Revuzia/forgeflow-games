@@ -29,16 +29,16 @@ import type { StorageLike } from '../core/settings.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import { GHOST_CAP, HOARD_KEY, MAX_SQUEEZE_SECONDS, RELEASE_SQUEEZE_MIN_S, TIDY_MAX, WH_QUEUE_MAX } from './constants.ts';
 import {
-  createFeedOutcome, dayOf, ghostClaimRestock, ghostCompleteTask, ghostFeed, ghostMerge, ghostOpen, ghostPreviewMerge, ghostRestockView, ghostTaskRows,
-  ghostTidy, mergesToday,
+  createFeedOutcome, dayOf, ghostClaimRestock, ghostCompleteTask, ghostFeed, ghostGrantGift, ghostMerge, ghostOpen, ghostPreviewMerge, ghostRestockView,
+  ghostTaskRows, ghostTidy, mergesToday,
 } from './ghost.ts';
 import { SNAP_MIN_LEVEL, clampHold, createMappedTouch, mapSoftEvent } from './meterfeed.ts';
-import { mergeErrorCopy, openErrorCopy, restockErrorCopy, taskErrorCopy } from './copy.ts';
+import { GIFT_COPY, mergeErrorCopy, openErrorCopy, restockErrorCopy, taskErrorCopy } from './copy.ts';
 import { buildStacks, defaultMergeInputs, tidyCandidates } from './stacks.ts';
 import { FLAG_FAV, FLAG_SEEN, createHoardStore, rowToItem, sanitizePrefs } from './store.ts';
 import type {
-  ClaimResult, Collection, CollectionEvent, HoardItem, HoardPrefs, Ledger, MergePreviewResult, MergeResult, MeterView, OpenResult, PracticeSummary,
-  RestockView, Stack, StorageReport, TaskResult, TaskRow, TidyResult,
+  ClaimResult, Collection, CollectionEvent, HoardGiftPort, HoardItem, HoardPrefs, JournalImpl, Ledger, MergePreviewResult, MergeResult, MeterView, OpenResult,
+  PracticeSummary, RestockView, Stack, StorageReport, TaskResult, TaskRow, TidyResult,
 } from './types.ts';
 
 export type * from './types.ts';
@@ -233,6 +233,29 @@ export function createCollection(deps: CollectionDeps): Collection {
   };
 
   const ctx = (): { rand: () => number; now: number } => ({ rand, now: now() });
+
+  // ---- PLAYGROUND: the Journal's hooks (first load, kept small; the journal itself is the life chunk's: journal_store.ts attachJournal) ----
+  let journal: JournalImpl | null = null;
+  /** Is a row with this id in the hoard text storage holds now (QUESTS 11 step 2's check, D-71)? A row starts ["id",<species idx>. */
+  const storedHas = (id: string): boolean => {
+    try { const t = deps.storage ? deps.storage.getItem(HOARD_KEY) : null; return !!t && new RegExp('\\["' + id + '",\\d').test(t); } catch { return false; }
+  };
+  const port: HoardGiftPort = {
+    deviceId: () => store.save.deviceId,
+    ledger: () => ledger,
+    items: () => practiceItems(),
+    item: (id) => { practiceItems(); return byId.get(id) ?? null; },
+    opened: () => store.save.ghostOpened,
+    grantGift(chapter, pick) {
+      const r = ghostGrantGift(store.save, chapter, pick, { now: now() });
+      if (!r.ok) return r;
+      if (r.added) changed();
+      store.flush(); // the verified write: never the throttled markDirty alone (D-71)
+      return store.report().save === 'ok' && storedHas(r.item_id) ? r : { ok: false, ledger, error: 'not_saved' };
+    },
+    emit,
+    now,
+  };
   const unavailable = <E extends string>(error: E): { ok: false; ledger: Ledger; error: E } => ({ ok: false, ledger: 'real', error });
 
   const collection: Collection = {
@@ -326,10 +349,17 @@ export function createCollection(deps: CollectionDeps): Collection {
     },
     storage: (): StorageReport => store.report(),
     sync() { if (!disposed) store.sync(); },
-    flush() { store.flush(); },
+    flush() { store.flush(); if (journal) journal.flush(); },
+    journal: () => (journal ? journal.view() : null),
+    feedPlay(ring, t) { if (journal && !disposed) journal.feedPlay(ring, t); },
+    claimGift: (chapter, pick) => (journal ? journal.claimGift(chapter, pick) : Promise.resolve({ ok: false, ledger, error: 'unavailable', message: GIFT_COPY.wait })),
+    warmthOf: (id) => (journal ? journal.warmthOf(id) : 0),
+    setJournalParty(ids) { if (journal) journal.setParty(ids); },
+    attachJournal(impl) { journal = impl; return port; },
     dispose() {
       if (disposed) return;
       disposed = true;
+      if (journal) journal.dispose();
       store.dispose();
       listeners = [];
       eventListeners = [];

@@ -52,9 +52,11 @@ void main() {
 }
 `;
 
-interface PanelDef { dir: THREE.Vector3; dist: number; w: number; h: number; color: [number, number, number]; k: number; soft: number; radius: number; roll?: number }
+/** One emissive panel of the baked environment (PLAYGROUND: a place passes its own, EnvHub.setPanels). */
+export interface PanelDef { dir: THREE.Vector3; dist: number; w: number; h: number; color: [number, number, number]; k: number; soft: number; radius: number; roll?: number }
 
-const PANELS: PanelDef[] = [
+/** Home's studio. */
+export const PANELS: PanelDef[] = [
   // key: big amber-white softbox, front-left-up
   { dir: KEY_DIR, dist: 4.5, w: 2.4, h: 1.7, color: [1.0, 0.74, 0.42], k: 6.5, soft: 0.6, radius: 0.75, roll: 0.25 },
   // left strip softbox: the long vertical highlight on the shoulder
@@ -69,7 +71,7 @@ const PANELS: PanelDef[] = [
   { dir: new THREE.Vector3(-0.8, -0.05, -0.55).normalize(), dist: 4.5, w: 1.6, h: 0.5, color: [0.3, 0.7, 0.9], k: 2.2, soft: 0.2, radius: 0.2 },
 ];
 
-export function createEnvironment(renderer: THREE.WebGLRenderer, size = 256): Environment {
+export function createEnvironment(renderer: THREE.WebGLRenderer, size = 256, panels: readonly PanelDef[] = PANELS): Environment {
   const scene = new THREE.Scene();
   const geos: THREE.BufferGeometry[] = [];
   const mats: THREE.ShaderMaterial[] = [];
@@ -80,7 +82,7 @@ export function createEnvironment(renderer: THREE.WebGLRenderer, size = 256): En
   scene.add(new THREE.Mesh(roomGeo, roomMat));
 
   const up = new THREE.Vector3(0, 1, 0);
-  for (const p of PANELS) {
+  for (const p of panels) {
     const geo = new THREE.PlaneGeometry(1, 1);
     const mat = new THREE.ShaderMaterial({
       vertexShader: PANEL_VERT, fragmentShader: PANEL_FRAG, side: THREE.DoubleSide, depthWrite: false, toneMapped: false,
@@ -118,6 +120,8 @@ export class EnvHub {
   private env: Environment;
   private readonly size: number;
   private readonly users = new Set<THREE.MeshStandardMaterial>();
+  /** PLAYGROUND: the panels in use (a place's, or Home's): a context restore re-bakes these. */
+  private panels: readonly PanelDef[] = PANELS;
 
   constructor(renderer: THREE.WebGLRenderer, size = 128) {
     this.size = size;
@@ -136,9 +140,16 @@ export class EnvHub {
    * NOT disposed: that would only make the driver warn about deleting objects of another context.
    */
   rebuild(renderer: THREE.WebGLRenderer): void {
-    this.env = createEnvironment(renderer, this.size);
+    this.env = createEnvironment(renderer, this.size, this.panels);
     this.texture = this.env.texture;
     for (const m of this.users) m.envMap = this.texture;
+  }
+  /** PLAYGROUND (a place swap, not a context loss): bake a new set of panels (null = Home's) and DISPOSE the old cube (it belongs to this context). */
+  setPanels(renderer: THREE.WebGLRenderer, panels: readonly PanelDef[] | null): void {
+    const old = this.env;
+    this.panels = panels ?? PANELS;
+    this.rebuild(renderer);
+    old.dispose();
   }
     dispose(): void { this.env.dispose(); this.users.clear(); }
 }

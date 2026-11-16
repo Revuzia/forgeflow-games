@@ -1390,6 +1390,106 @@ try {
     await pctx.close();
   }
 
+  // ---- PLAYGROUND (PG_RENDER, PLAYGROUND_BUILD 18 RENDER rows): sections emote (RD-04, RD-09 bubbles, RD-10 faces, RD-12 eyes through jelly),
+  // pose (RD-05 sleep skip, RD-06 lite chunk mesh, RD-11 a swaying sleeper's eyes), homeview (RD-14 no camera from autonomy, RD-16 Home in view).
+  // Every scenario lives in _harness/renderview/pg.ts (window.__RV__.pg). Shots land in _shots/render/pg/. ----
+  if (ON('emote') || ON('pose') || ON('homeview')) {
+    const PGOUT = resolve(OUT, 'pg');
+    mkdirSync(PGOUT, { recursive: true });
+    const bodyQ = BODY === 'auto' ? '' : BODY;
+    const PG = (report.pg = {});
+    const SPECIES = ['dollop', 'twangle', 'chunkle', 'wisplet', 'kneadle'];
+    for (const [label, vp, kind] of [['phone', { width: 390, height: 844 }, 'phone'], ['desktop', { width: 1280, height: 800 }, 'desktop']]) {
+      const gctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+      const { page: gp, bad: gbad } = await openView(gctx, `quality=med&body=${bodyQ}`, `pg-${label}`, [/GPU stall due to ReadPixels/i]);
+      const loaded = await gp.evaluate(() => window.__RV__.pg.load());
+      check(loaded, `PG ${label}: the lazy LIFE look (bubbles, Home's things: src/render/lifelook.ts) loads`);
+      if (ON('emote')) {
+        for (const calm of [false, true]) for (const page of [0, 1, 2, 3]) {
+          const r = await gp.evaluate(([p, c, k]) => window.__RV__.pg.iconSheet(p, c, k), [page, calm, kind]);
+          writeFileSync(resolve(PGOUT, `icons_${label}_${page}${calm ? '_calm' : ''}.png`), b64(r.png));
+          if (page === 0 && !calm) check(r.drawn === 8 && r.draws === 1, `RD-04 ${label}: 8 bubbles in ONE draw call`, `drawn ${r.drawn}, draw calls for the bubbles ${r.draws}`);
+        }
+        const f = await gp.evaluate((sp) => window.__RV__.pg.faces(sp), SPECIES);
+        writeFileSync(resolve(PGOUT, `faces_${label}.png`), b64(f.png));
+        const e = await gp.evaluate(() => window.__RV__.pg.eyesThrough());
+        writeFileSync(resolve(PGOUT, `eyes_through_${label}.png`), b64(e.png));
+        PG[`eyes:${label}`] = e.alphas;
+        check(Math.min(...e.alphas) < 0.6, `RD-12 ${label}: the back body's eyes behind a clear ${e.frontFamily} body are depth-faded`, `eye alphas ${e.alphas.map((a) => a.toFixed(2)).join(', ')}`);
+      }
+      if (ON('pose') && label === 'desktop') {
+        const p = await gp.evaluate(() => window.__RV__.pg.poseProbe());
+        writeFileSync(resolve(PGOUT, `pose_a.png`), b64(p.pngA)); writeFileSync(resolve(PGOUT, `pose_b.png`), b64(p.pngB));
+        PG.pose = { maxPx: p.maxPx };
+        check(p.maxPx <= 1, 'RD-11: a leaning, swaying sleeper\'s eye beads stay on their posed anchor (within 1 px)', `max ${p.maxPx.toFixed(3)} px`);
+        const s = await gp.evaluate((sp) => window.__RV__.pg.sleepCost(sp), SPECIES);
+        PG.sleep = s;
+        check(s.fineWhileAsleep === 0 && s.ratio <= 0.3, 'RD-05: sleeping bodies do 0 fine-mesh updates; 4 asleep cost at most 0.3x the CPU update of 4 awake',
+          `awake ${s.awakeMs.toFixed(2)} ms, asleep ${s.asleepMs.toFixed(2)} ms, x${s.ratio.toFixed(3)}, fine updates while asleep ${s.fineWhileAsleep}`);
+        const l = await gp.evaluate(() => window.__RV__.pg.liteCost(3));
+        const best = (a) => [...a].sort((x, y) => x - y)[0];
+        const rLite = best(l.sixLite) / best(l.two), rFull = best(l.sixFull) / best(l.two);
+        PG.lite = { ...l, rLite, rFull };
+        check(l.liteVerts === 2562 && rLite <= 1.2, 'RD-06: 6 pieces (chunks on the lite 2562-vertex mesh) vs 2 wholes frame ratio at most 1.2 (SwiftShader, best of 3)',
+          `lite x${rLite.toFixed(3)} (chunks not lite x${rFull.toFixed(3)}), chunk vertices ${l.liteVerts}`);
+      }
+      if (ON('homeview')) {
+        const cam = await gp.evaluate((sp) => window.__RV__.pg.cameraAutonomy(sp), SPECIES);
+        PG[`camera:${label}`] = cam;
+        check(cam.onMax <= 1e-3 && cam.offMax > 0.01, `RD-14 ${label}: with the autonomy framing on, a body that slides and hops by itself moves the camera 0 m (off: it follows)`,
+          `on ${cam.onMax.toExponential(2)} m, off ${cam.offMax.toFixed(3)} m`);
+        let worstBox = 0, thingsBad = [], slotsBad = 0, cases = 0;
+        for (const scale of [0.8, 1.0, 1.25]) for (const n of [1, 2, 3, 4, 5]) {
+          const shotIt = scale === 1.0 && (n === 1 || n === 3 || n === 5);
+          const h = await gp.evaluate(([n, s, k, sh]) => window.__RV__.pg.homeView(n, s, k, sh), [n, scale, kind, shotIt]);
+          cases++;
+          worstBox = Math.max(worstBox, h.boxErr);
+          for (const t of h.things) if (t.shown && !t.inView) thingsBad.push(`${t.id} n${n} s${scale} +${t.worstPx.toFixed(0)}px`);
+          if (!h.slotsIn) slotsBad++;
+          if (h.png) writeFileSync(resolve(PGOUT, `home_${label}_n${n}.png`), b64(h.png));
+          PG[`home:${label}:n${n}:s${scale}`] = { box: h.box, boxErr: h.boxErr, species: h.species, out: h.things.filter((t) => t.shown && !t.inView).map((t) => t.id) };
+        }
+        check(worstBox <= 0.05, `RD-16 ${label}: visibleTable matches the rendered frame within 0.05 m (n 1..5, scale 0.8 / 1.0 / 1.25: ${cases} cases)`, `worst ${worstBox.toFixed(4)} m`);
+        check(slotsBad === 0, `RD-16 ${label}: every slot centre inside the corral rectangle (visibleTable united with the slot bodies + 0.05 m)`, `${slotsBad} cases out`);
+        check(thingsBad.length === 0, `RD-16 ${label}: every Home thing that shows (its fromN reached) lies inside the frame and outside the HUD insets (PLACES 4.1's spots, the assumed insets)`,
+          thingsBad.length ? thingsBad.slice(0, 10).join('; ') + (thingsBad.length > 10 ? ` ... (${thingsBad.length})` : '') : 'all in view');
+      }
+      report.problems.push(...gbad);
+      await gctx.close();
+    }
+  }
+
+  // ---- PLAYGROUND S1 (PG_RENDER): section place: Hearthlog Cabin in both layouts (RD-01 boots clean, RD-07 swaps, RD-08 draw calls,
+  // RD-13 luminance, RD-17 on-screen size measured on the live camera) and FN-02's fireplace scene. ----
+  if (ON('place')) {
+    const PGOUT = resolve(OUT, 'pg');
+    mkdirSync(PGOUT, { recursive: true });
+    const bodyQ = BODY === 'auto' ? '' : BODY;
+    const PL = (report.place = {});
+    for (const [label, vp, kind] of [['phone', { width: 390, height: 844 }, 'phone'], ['desktop', { width: 1280, height: 800 }, 'desktop']]) {
+      const pctx2 = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+      const { page: lp, bad: lbad } = await openView(pctx2, `quality=med&body=${bodyQ}`, `place-${label}`, [/GPU stall due to ReadPixels/i]);
+      const r = await lp.evaluate((k) => window.__RV__.pg.placeShot(k, 4), kind);
+      writeFileSync(resolve(PGOUT, `cabin_${r.layout}_${label}.png`), b64(r.png));
+      PL[label] = { layout: r.layout, setCalls: r.setCalls, setTris: r.setTris, luma: r.luma, frontPx: r.frontPx, midPx: r.midPx, info: r.info };
+      check(r.ok, `RD-01 ${label}: the cabin loads and is set (${r.layout} layout)`);
+      check(r.setCalls <= 60, `RD-08 ${label}: the cabin's set and props (${r.layout}) at most 60 draw calls`, `${r.setCalls} calls (the felt-less frame with no body: sky, set, props, shadows, embers; med tier draws opaque twice), ${r.setTris} triangles`);
+      check(r.luma <= 0.35, `RD-13 ${label}: the play area's mean linear luminance at most 0.35 (${r.layout})`, `${r.luma.toFixed(3)} (PLACES 4.2: about 0.20)`);
+      const bar = r.layout === 'tall' ? r.frontPx >= 100 && r.midPx >= 80 : r.midPx >= 150;
+      check(bar, `RD-17 ${label}: a 1 m squishy on screen (${r.layout}: ${r.layout === 'tall' ? '100 px front, 80 px mid' : '150 px mid'})`, `front ${r.frontPx.toFixed(1)} px, mid ${r.midPx.toFixed(1)} px (whole bodies framed inside the insets: see PG_RENDER.md, spec conflict)`);
+      if (label === 'desktop') {
+        const f = await lp.evaluate(() => window.__RV__.pg.fireplace());
+        writeFileSync(resolve(PGOUT, `fn02_fireplace.png`), b64(f.png));
+        const sw = await lp.evaluate(() => window.__RV__.pg.placeSwaps(10));
+        PL.swaps = sw;
+        check(sw.after.every((v, i) => Math.abs(v - sw.base[i]) <= 2), 'RD-07: 10 place swaps (Home -> cabin -> Home): programs, textures and geometries back to Home\'s baseline +-2',
+          `programs ${sw.base[0]} -> ${sw.after[0]}, textures ${sw.base[1]} -> ${sw.after[1]}, geometries ${sw.base[2]} -> ${sw.after[2]}`);
+      }
+      report.problems.push(...lbad);
+      await pctx2.close();
+    }
+  }
+
   check(report.problems.length === 0, 'zero console errors / warnings / page errors / failed requests (incl. shader compile errors)', report.problems.length ? '\n    ' + report.problems.slice(0, 12).join('\n    ') : '');
 } catch (e) {
   console.error('probe crashed:', e);

@@ -17,6 +17,8 @@ import { renderPalette, type JellyPalette } from './oklch.ts';
 import type { TierSpec } from './quality.ts';
 import { RarityFx, TIER_STYLES, type TierStyle } from './rarity.ts';
 import { TackStrands } from './strands.ts';
+import { RenderPose } from './pose.ts';
+import { TIERS } from './quality.ts';
 
 type TipSphere = { x: number; y: number; z: number; r: number; depth: number };
 /** Calm effects: the cut seam's strength on top of the stage's calm halving (see update). */
@@ -33,6 +35,8 @@ export class BodyView {
   readonly restHalfW: number;
   /** Height of the rest silhouette above the table (world units): what the camera must fit vertically (x growth). */
   readonly restH: number;
+  /** PLAYGROUND: the centre's rest height above the table (world units). */
+  readonly restCy: number;
   /** The stage steps owned bodies itself (ceremony bodies); the shell steps the others. */
   owned: boolean;
   tier: TierName;
@@ -92,9 +96,29 @@ export class BodyView {
   private shown = true;
   private disposed = false;
   get isDisposed(): boolean { return this.disposed; }
+  // ---- PLAYGROUND ----
+  /** setBodyPose / setBodyBreath / setBodyAsleep: the render pose (pose.ts), in the jelly's vertex stage and on the eye anchors. */
+  readonly pose = new RenderPose();
+  /** setBodyAsleep: the fine mesh is not re-evaluated (the body is frozen); the eyes still blink and the pose still sways (RD-05). */
+  asleep = false;
+  /** AddBodyOpts.lite: the low fine mesh (2562 vertices) whatever the tier (a cut squishy's chunks on med and high, RD-06). */
+  readonly lite: boolean;
+  /** Fine-mesh evaluations so far (the harness counts them: a sleeper does none, RD-05). */
+  fineUpdates = 0;
+  /** Calm effects or reduced motion (the stage's own reading): the pose's sway is held to 2 Hz. */
+  quiet = false;
+  /** Seconds the body has been still (centre speed under 0.05 m/s) since it was last touched: the stage's "player-caused motion" latch (RD-14). */
+  stillS = 0;
+  /** The player moved this body (a finger, a grab, a toss until it settles): the camera may follow it (D-37). */
+  playerMoving = false;
+  /** setBodyLook targets (frost, wet, sand, toast, snow), each 0..1, and their eased values (about 0.4 s); all 0 = today's pixels. */
+  readonly look = new Float32Array(5);
+  private readonly lookNow = new Float32Array(5);
+  private lastCx = NaN; private lastCz = NaN;
 
-  constructor(id: number, inner: SoftBodyLike, genome: Genome, tier: TierName, spec: TierSpec, hub: EnvHub, quad: THREE.BufferGeometry, owned: boolean, chunk = false) {
+  constructor(id: number, inner: SoftBodyLike, genome: Genome, tier: TierName, spec: TierSpec, hub: EnvHub, quad: THREE.BufferGeometry, owned: boolean, chunk = false, lite = false) {
     this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned; this.chunk = chunk;
+    this.lite = lite;
     this.frac0 = typeof inner.frac === 'number' && Number.isFinite(inner.frac) && inner.frac > 0 ? inner.frac : 1;
     this.proxy = new BodyProxy(inner);
     this.palette = renderPalette(genome);
@@ -104,12 +128,15 @@ export class BodyView {
     { const P = inner.positions, c = inner.center; for (let i = 0; i < P.length; i += 3) { const d = Math.hypot(P[i] - c.x, P[i + 2] - c.z); if (d > hw) hw = d; } }
     this.restHalfW = hw;
     { const P = inner.positions; let top = 0, low = Infinity; for (let i = 1; i < P.length; i += 3) { if (P[i] > top) top = P[i]; if (P[i] < low) low = P[i]; } this.restH = Math.max(0.1, top - (Number.isFinite(low) ? low : 0)); }
+    // PLAYGROUND: the rest height of the centre above the table (the rest shape's centroid over its lowest point): the camera's rest aim (D-37)
+    { const R = inner.restLocal; let lo = Infinity, sum = 0, n = 0; for (let i = 1; i < R.length; i += 3) { sum += R[i]; n++; if (R[i] < lo) lo = R[i]; } this.restCy = n ? sum / n - lo : inner.restRadius; }
     this.mats = new JellyMaterials(genome, this.palette, this.scale, hub, this.style);
-    this.jelly = new JellyView(this.proxy, this.mats.get(spec.tier), spec.fineFreq);
+    this.jelly = new JellyView(this.proxy, this.mats.get(spec.tier), this.fineFreqFor(spec));
     this.jelly.mesh.renderOrder = 10;
     this.core = new Core(genome, this.palette, this.scale, this.style);
     this.core.setLite(!spec.transmission);
     this.face = new Face(this.proxy, genome, this.jelly, hub);
+    this.face.pose = this.pose;
     this.fx = new Fx(genome, this.palette, this.jelly.mapper, spec, this.scale, this.style);
     this.decals = new Decals(quad);
     this.applyPoolColour();
@@ -150,10 +177,14 @@ export class BodyView {
     this.applyPoolColour();
   }
 
+  /** The fine mesh's geodesic frequency: the tier's, or the low tier's for a lite body (AddBodyOpts.lite: 2562 vertices). */
+  private fineFreqFor(spec: TierSpec): number { return this.lite ? Math.min(spec.fineFreq, TIERS.low.fineFreq) : spec.fineFreq; }
+
   applyQuality(spec: TierSpec): void {
     this.spec = spec;
     this.jelly.mesh.material = this.mats.get(spec.tier);
-    if (this.jelly.freq !== spec.fineFreq) this.jelly.rebuild(spec.fineFreq);
+    const ff = this.fineFreqFor(spec);
+    if (this.jelly.freq !== ff) this.jelly.rebuild(ff);
     this.fx.setTier(spec);
     this.core.setLite(!spec.transmission);
   }
@@ -169,7 +200,18 @@ export class BodyView {
     if (this.owned && simDt > 0) this.proxy.inner.step(simDt);
     this.proxy.sync(dt, time);
     const body = this.proxy, m = body.metrics, j = this.jelly;
-    j.update();
+    // PLAYGROUND: a sleeping body is frozen, so its fine mesh (the bulk of a view's CPU) keeps last frame's evaluation (RD-05); a touch wakes it
+    // first in physics, and the shell clears the flag (a finger on a body flagged asleep re-evaluates anyway)
+    if (!this.asleep || m.fingers > 0 || m.grabbed || this.fineUpdates === 0) { j.update(); this.fineUpdates++; }
+    // the player-caused-motion latch (RD-14, D-37): a finger or a grab sets it; it clears once the body has been still for 0.4 s
+    {
+      const c = body.center, ddx = c.x - this.lastCx, ddz = c.z - this.lastCz;   // (no Math.hypot: it boxes its arguments)
+      const sp = Number.isFinite(this.lastCx) && dt > 1e-5 ? Math.sqrt(ddx * ddx + ddz * ddz) / dt : 0;
+      this.lastCx = c.x; this.lastCz = c.z;
+      if (m.fingers > 0 || m.grabbed) { this.playerMoving = true; this.stillS = 0; }
+      else if (sp < 0.05) { this.stillS += dt; if (this.stillS > 0.4) this.playerMoving = false; }
+      else this.stillS = 0;
+    }
     // "squeeze": the body's global compression, or the deepest local dent (a poke barely changes the global metric);
     // the local dent only counts while a finger is down or just lifted (a jiggling body also moves off its rigid goal)
     this.touchGate += ((m.fingers > 0 ? 1 : 0) - this.touchGate) * (1 - Math.exp(-dt * (m.fingers > 0 ? 30 : 7)));
@@ -208,7 +250,14 @@ export class BodyView {
     // the happy squint is the RELEASE expression: while a finger or a grab still holds the body, a wobble of the squeeze (negative rate)
     // must not trigger it, the eyes stay wide (CONTRACT 7: widen when squeezed, squint into happy arcs on release)
     const rate = Math.min(this.sqRate, m.compressionRate);
-    if (!this.chunk) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate);
+    // PLAYGROUND render pose: about the body's ground point, sized by its rest radius and height (the eye anchors read the same numbers)
+    this.pose.update(dt, time, body.center.x, body.center.z, j.minY, this.restH * this.sizeK, body.restRadius * this.sizeK, this.quiet);
+    u.uPose.value.copy(this.pose.u); u.uPoseC.value.copy(this.pose.c);
+    // PLAYGROUND looks: eased toward their targets; exactly 0 once settled at 0 (the shader then skips the block)
+    { const L = this.look, N = this.lookNow, k = 1 - Math.exp(-dt * 2.5);
+      for (let i = 0; i < 5; i++) { N[i] += (L[i] - N[i]) * k; if (L[i] === 0 && N[i] < 1e-4) N[i] = 0; }
+      u.uLook.value.set(N[0], N[1], N[2], N[3]); }
+    if (!this.chunk) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate, m.fingers > 0 || m.grabbed);
     // CUT seam: eased in (~0.1 s) and out (~0.2 s): a glow, never a step
     // (calm: the stage's glowK halves every cut light, and the seam takes a further x0.45: the jelly shader's seam term saturates (tone mapped), so a plain half of a
     // glow that was already clipped to white read exactly as bright as the full one, VERIFY_RENDER_B B-m3)

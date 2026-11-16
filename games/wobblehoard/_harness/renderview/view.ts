@@ -9,6 +9,7 @@ import { genomeFromParam, type Genome } from '../../src/core/genome.ts';
 import type { CapsuleHandle, CeremonyHandle, CutPlane, FxKind, QualityTier, SoftBodyCtor, SoftBodyLike, SoftEvent, TierName, V3 } from '../../src/contracts.ts';
 import { capsuleDuration, mergeDuration } from '../../src/render/ceremony.ts';
 import { getSpecies, speciesBaseGenome } from '../../src/data/catalog.ts';
+import { makePg } from './pg.ts';
 
 type BodyKind = 'real' | 'stub';
 const params = new URLSearchParams(location.search);
@@ -1779,8 +1780,24 @@ const RV = {
   },
 };
 
-declare global { interface Window { __RV__?: typeof RV; __RV_READY__?: boolean } }
-window.__RV__ = RV;
+// PLAYGROUND (PG_RENDER): the scenarios of the emote, pose and homeview sections (_harness/renderview/pg.ts)
+const PG = makePg({
+  stage, canvas, makeBody,
+  tick(bs, n, dt = 1 / 60, render = false) {
+    for (let i = 0; i < n; i++) {
+      for (const b of bs) { b.step(dt); events.length = 0; b.drainEvents(events); }
+      time += dt; frameNo++;
+      stage.update(dt, { time, pointerNdc: null });
+    }
+    if (render) stage.render();
+  },
+  snapshot: () => RV.snapshot(),
+  timeRender: (n) => RV.timeRender(n),
+});
+const RVX = Object.assign(RV, { pg: PG });
+
+declare global { interface Window { __RV__?: typeof RVX; __RV_READY__?: boolean } }
+window.__RV__ = RVX;
 
 async function boot(): Promise<void> {
   await loadReal();

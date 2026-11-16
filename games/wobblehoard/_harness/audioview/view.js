@@ -11,6 +11,7 @@ import * as CT from '/src/audio/cut.ts';
 import { runEngineTests } from './engine_tests.js';
 import { runEngineTests3 } from './engine_tests3.js';
 import { runEngineOffline } from './engine_offline.js';
+import { lifeApi } from './life_view.js';
 
 export const SR = 48000;
 const BOOSTED = new Set(['poke', 'squish', 'release']);   // everything else (incl. all ceremony voices) goes to the plain bus
@@ -507,6 +508,7 @@ window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngin
 }, limiterConsts: { MIN_INTENSITY: I3.BumpLimiter.MIN_INTENSITY, MIN_GAP_S: I3.BumpLimiter.MIN_GAP_S, CAPACITY: I3.BumpLimiter.CAPACITY, REFILL_PER_S: I3.BumpLimiter.REFILL_PER_S, RECENT_S: I3.BumpLimiter.RECENT_S },
   strandConsts: { SILENCE_S: I3.STRAND_SILENCE_S, STOP_S: I3.STRAND_STOP_S },
   cutConsts: { FLAVOURS: CT.CUT_FLAVOURS, FAMILY_FLAVOUR: CT.FAMILY_FLAVOUR, REJOIN_RUN: CT.REJOIN_RUN, CALM_DB: CT.CUT_CALM_DB, SLICE: CT.CutLimiter.SLICE, POP: CT.CutLimiter.POP, REJOIN: CT.CutLimiter.REJOIN, ALL_GAP_S: CT.CutLimiter.ALL_GAP_S } };
+Object.assign(window.AV, lifeApi);   // PG_AUDIO (life_view.js): creature phrase renders for life_checks.mjs
 window.AV.noteOnsets = (tier, durationS, calm, burst) => { const ti = C.tierIdx(tier); const lay = C.layout(ti, durationS, !!calm, !!burst); return { lay, onsets: C.noteOnsets(ti, lay) }; };
 
 /* ───────────── human-facing sound lab (live engine) ───────────── */

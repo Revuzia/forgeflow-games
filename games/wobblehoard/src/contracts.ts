@@ -665,8 +665,9 @@ export interface StageLike {
    *  and the prop kit. Returns false when the place is not loaded. */
   setPlace?(id: string | null, fadeS: number): boolean;
   /** PLAYGROUND: bind the PropWorldLike poses array (8 floats per prop, in PropWorldLike's prop order; propThing and propPart say which
-   *  thing and part each pose drives) once per travel; the stage reads it in update(). */
-  bindProps?(poses: Float32Array | null, count: number): void;
+   *  thing and part each pose drives) once per travel; the stage reads it in update(). PG_RENDER (2026-11-16, additive): the optional
+   *  third argument is the world's `propThing` (the stage maps each pose to its thing by it: pass PropWorldLike.propThing). */
+  bindProps?(poses: Float32Array | null, count: number, propThing?: Int16Array | null): void;
   /** PLAYGROUND: frame the camera on the whole play bounds of the place layout in use (the wide layout, or the tall one on a frame with
    *  aspect under 0.9, PLACES.md P7) so that a body anywhere inside them, its bubble included, stays inside the HUD safe insets
    *  (setSafeInsets). Not used at Home (Home frames the mat slots in use, as today). Autonomy never moves the camera: framing uses these
@@ -720,6 +721,24 @@ export interface StageLike {
   /** PLAYGROUND: a body's centre on screen in CSS px and its projected rest radius into out[0..2]; false when off screen or unknown.
    *  Zero allocation (DebugHook.bodyScreen is the dev-only 0..1 version). */
   bodyScreenPoint?(id: number, out: Float32Array): boolean;
+
+  /* PG_RENDER additions (2026-11-16; optional, additive; reported in _handoff/reports/PG_RENDER.md) */
+  /** PLAYGROUND (Home, D-37, RD-14): on = LIFE is on at Home: the camera frames the mat slots in use (matLayout of the bodies out, the rest
+   *  framing visibleTable reports) and follows a body's live position only while the player moves it (a finger or a grab, then a toss until
+   *  it has been still for 0.4 s), never LIFE's motion. Off (the default) = today's framing, bit for bit. */
+  setAutonomyFraming?(on: boolean): void;
+  /** PLAYGROUND (LIFE.md 5.1, PLACES 3.1): the slow, deep breaths of a basking firm silicone or pop dome, depth 0..1 (0 = off). A body that is
+   *  asleep (setBodyAsleep) breathes slowly by itself. Render only, in the jelly's vertex stage and on the eye anchors like setBodyPose. */
+  setBodyBreath?(id: number, depth: number): void;
+  /** PLAYGROUND (Home, PLACES.md 4.1, D-88): show one of Home's things (its THING_IDS index 0..5) at its spot for the frame in use (x, z in
+   *  metres: the spot x bodyScale; yaw in radians), or park it (shown false: not drawn). It arrives with a little scale-in (Calm or reduced
+   *  motion: a fade). The shell calls it when the thing's event has happened and the party reaches its spot's fromN, and again when the party
+   *  or the frame changes; a bound prop's pose (bindProps with propThing) moves it after that (the Felt Ball rolling). The Bounce Pad (5)
+   *  draws nothing until pads ship (S2). */
+  setHomeThing?(thing: number, shown: boolean, x: number, z: number, yaw: number): void;
+  /** PLAYGROUND (Home, QUESTS.md 10): the keepsakes on the Keepsake Shelf, a 20-bit set in keepsake bit order; a newly set bit drops into
+   *  its place (Calm or reduced motion: it fades in). */
+  setKeepsakes?(mask: number): void;
 }
 
 /* ── PLAYGROUND audio (src/audio; PLAYGROUND_BUILD.md 10) ── */
@@ -742,8 +761,20 @@ export interface SquishAudio {
    *  field's rest tones here, in audio, which changes no LIFE decision). Never asks the music to make room (not in ROOM_KINDS), priority -1
    *  (stolen before any player sound), its own rng stream, silent during ceremonies and for 1 s after. The caller reuses one `p` object and
    *  one `phrase` array for every call; audio copies what it needs during the call and keeps no reference (AU-11). Returns false when the
-   *  backstop ChatterLimiter refuses it. */
-  creature?(p: { phrase: Float32Array; n: number; flavour: number; register: number; pitch: number; pan: number; level: number; group?: number; echo?: boolean; at?: number }): boolean;
+   *  backstop ChatterLimiter refuses it. PG_AUDIO addition (2026-11-16, additive): `sing` = a sung phrase (SING, the duet, a finale): its
+   *  degrees are pentatonic steps from D (LIFE's REST_TONES), placed in the voice's octave and re-voiced onto the sounding field's rest
+   *  tones; absent = a spoken phrase, degrees from the voice's own snapped note. A piece's `pitch` is pitchRatio x popSize(frac)
+   *  ((0.5 / frac)^0.4, audio/cut.ts), and a cold place's voice is the pitch x 2^(-1/12): the caller folds both into `pitch`. */
+  creature?(p: { phrase: Float32Array; n: number; flavour: number; register: number; pitch: number; pan: number; level: number; group?: number; echo?: boolean; at?: number; sing?: boolean }): boolean;
+  /** PLAYGROUND (PG_AUDIO addition, 2026-11-16, additive): the player is touching (a finger down, a grab or a carry; never a lock alone,
+   *  D-84). The shell calls it on each change. While true and until 0.6 s after false, the chatter ducks 6 dB and the backstop allows
+   *  at most 1 syllable a second (LIFE 8.4, AU-13). */
+  setTouching?(on: boolean): void;
+  /** PLAYGROUND (PG_AUDIO addition, 2026-11-16, additive): the budgeted soft variant for a body's own `auto` event (SoftEvent.auto,
+   *  D-62, D-86): kind 0 a landing, 1 a body-to-body bump. A soft thud (the land / bump voice at about half the intensity), at most 3
+   *  a second with prop({ auto: true }) sounds (LIFE 10.1, desktop), never asking the music for room and never a haptic. The shell sends
+   *  every `auto` land and body bump here (a prop bump goes to prop() with auto), never to land() / bump(). */
+  autoThud?(p: { kind: number; intensity: number; pitch?: number; pan?: number }): void;
   /** PLAYGROUND: the music as it SOUNDS now into out: [field index sounding (0 home, 1 lift, 2 dusk, 3 glow), bar start (AudioContext
    *  time), bpm, AudioContext now, eighth-slot length s]. false before unlock or with the music off. The shell uses it ONLY for
    *  creature()'s `at` and for the render sway phase it passes to setBodyPose; it never enters LifeSnapshot (it runs on the AudioContext
@@ -759,9 +790,11 @@ export interface SquishAudio {
    *  (never makes room in the music; budgeted), key = prop index for held voices (a creaking rocker), held = 0..1 for a held voice.
    *  The caller reuses one `p` object; audio keeps no reference to it. */
   prop?(p: { kind: number; intensity: number; note?: number; pan?: number; auto: boolean; key?: number; held?: number }): void;
-  /** PLAYGROUND: the Music Box tune (8 bars, 29.1 s at 66 BPM; at most one start per 40 s, a second tap stops it) and the Singing Kettle's
+  /** PLAYGROUND: the Music Box tune (tune 0 or absent: 8 bars, 29.1 s at 66 BPM; at most one start per 40 s, a second tap stops it) and the Singing Kettle's
    *  whistle (1 bar, 3.6 s; by itself every 45 to 90 s, never within 60 s of a Music Box tune): while one plays the music bed mutes its own
-   *  mallets so two melodies never clash. With no input, tunes sound at most 20% of a 10-minute cabin visit (AU-14). */
+   *  mallets so two melodies never clash. With no input, tunes sound at most 20% of a 10-minute cabin visit (AU-14). The kettle is
+   *  tune 1 (PG_AUDIO, 2026-11-16); `on: false` stops that tune. Audio keeps the spacing rules as a backstop (a refused start is a
+   *  no-op). */
   musicBox?(p: { on: boolean; tune?: number }): void;
   /** PLAYGROUND: a place's music style (field weights and mallet timbre only; the key stays D and the tempo 66 BPM, so ceremonies and the
    *  whole-again run stay in tune). 'home' (the default) is bit-identical to today. */

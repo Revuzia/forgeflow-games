@@ -5,6 +5,11 @@
 // many times faster than real time. Adapted from the independent audio-3 verifier's driver.
 // Output: three stems, each mono (L+R)/2: `mix` (the master output), `music` (chain.music's output: the music after its own
 // room dips, slow duck and volume, before the shared limiter) and `fx` (the boost + plain inputs: every effect).
+// PLAYGROUND (PG_AUDIO): with spec.taps the 4th and 5th createGain() calls (chain.ts: chatter, ambience) are tapped too, as stems
+// `chatter` and `ambience` (the context then has 10 channels; without spec.taps it is exactly as before, so AU-07's renders are
+// unchanged). Ops for the life checks: `creature` (a.phrase as a plain array becomes a Float32Array), `creatureMut` (creature(a), then
+// the SAME object and phrase array are scrambled at once: AU-11), `singNextBar` (musicClock, then a sung phrase at the next bar line:
+// AU-08). spec.recordReturns keeps every call's return value and musicClock reading in `rets`.
 import { createAudio } from '/src/audio/engine.ts';
 
 const SR = 48000;
@@ -35,12 +40,13 @@ export async function runEngineOffline(spec) {
   let theCtx = null;
   let gainCount = 0;
   const taps = {};
+  const NCH = spec.taps ? 10 : 6;
   class OAC extends OfflineAudioContext {
-    constructor() { super(6, N, SR); theCtx = this; }
+    constructor() { super(NCH, N, SR); theCtx = this; }
     get state() { return 'running'; }
     resume() { return Promise.resolve(); }
-    // createMasterChain() makes boost, plain and music first: tap them for the stems
-    createGain() { const g = super.createGain(); gainCount++; if (gainCount <= 3) taps[['boost', 'plain', 'music'][gainCount - 1]] = g; return g; }
+    // createMasterChain() makes boost, plain and music first (PLAYGROUND: then chatter and ambience): tap them for the stems
+    createGain() { const g = super.createGain(); gainCount++; if (gainCount <= 5) taps[['boost', 'plain', 'music', 'chatter', 'ambience'][gainCount - 1]] = g; return g; }
   }
   const runTimers = (to) => {
     for (let guard = 0; guard < 100000; guard++) {
@@ -59,6 +65,7 @@ export async function runEngineOffline(spec) {
   window.AudioContext = OAC;
   let audio, buf;
   const statLog = [];
+  const rets = [];
   let errors = 0;
   try {
     audio = createAudio({ seed: spec.seed ?? 0x57a15b00 });
@@ -68,7 +75,7 @@ export async function runEngineOffline(spec) {
     window.AudioContext = orig.AC;
     const ctx = theCtx;
     ctx.destination.channelInterpretation = 'discrete';
-    const merger = ctx.createChannelMerger(6);
+    const merger = ctx.createChannelMerger(NCH);
     const sm = ctx.createChannelSplitter(2);
     taps.music.connect(sm); sm.connect(merger, 0, 2); sm.connect(merger, 1, 3);
     const fxSum = ctx.createGain();
@@ -76,7 +83,18 @@ export async function runEngineOffline(spec) {
     taps.boost.connect(fxSum); taps.plain.connect(fxSum);
     const sf = ctx.createChannelSplitter(2);
     fxSum.connect(sf); sf.connect(merger, 0, 4); sf.connect(merger, 1, 5);
+    if (spec.taps) {
+      // through an explicitly stereo gain (like fxSum): a mono voice is upmixed L = R, so the stem's (L + R) / 2 is its true level
+      for (const [k, ch] of [['chatter', 6], ['ambience', 8]]) {
+        const st = ctx.createGain(); st.channelCount = 2; st.channelCountMode = 'explicit'; st.channelInterpretation = 'speakers';
+        const sp = ctx.createChannelSplitter(2); taps[k].connect(st); st.connect(sp); sp.connect(merger, 0, ch); sp.connect(merger, 1, ch + 1);
+      }
+    }
     merger.connect(ctx.destination);
+    // PLAYGROUND: a place's ambience bed from the start (the away chunk and the place recipe are imported now, in real time)
+    if (spec.ambience) { await audio.loadAmbience(spec.ambience); audio.setAmbience({ place: spec.ambience, on: true }); }
+    // PLAYGROUND: unlock() started the lazy import of life_voices.ts; give it real time to arrive before the clock starts
+    if (spec.preload) { for (let k = 0; k < 40; k++) await new Promise((r) => orig.st.call(window, r, 10)); }
 
     const qz = spec.quantum ?? Q;
     const qt = (t) => Math.max(Q, Math.round(Math.ceil(t / qz - 1e-9) * qz / Q) * Q);
@@ -87,15 +105,34 @@ export async function runEngineOffline(spec) {
     for (const e of evs) if (e.tq < secs - 0.02) stops.add(Math.round(e.tq / Q));
     const times = [...stops].sort((a, b) => a - b).map((k) => k * Q);
     const handles = new Map();
+    const clock = new Float64Array(5);
+    const f32 = (a) => (a && Array.isArray(a.phrase) ? { ...a, phrase: Float32Array.from(a.phrase) } : a);
     let ei = 0, lastStat = -1;
     const doEvent = (e) => {
       try {
-        const a = e.a ?? {};
+        const a = f32(e.a ?? {});
         switch (e.op) {
+          case 'creature': { const r = audio.creature(a); if (spec.recordReturns) rets.push([e.t, 'creature', r]); break; }
+          case 'creatureMut': {
+            const r = audio.creature(a);
+            a.phrase.fill(0); a.phrase[0] = 5; a.phrase[3] = 2; a.n = 4; a.pitch = 2; a.level = 1; a.flavour = 5; a.pan = -1; a.at = 0; a.echo = true; a.group = 3;
+            if (spec.recordReturns) rets.push([e.t, 'creatureMut', r]);
+            break;
+          }
+          case 'clock': { const ok = audio.musicClock(clock); rets.push([e.t, 'clock', ok, clock[0], clock[1], ctx.currentTime]); break; }
+          case 'touch': audio.setTouching(!!a.on); break;
+          case 'singNextBar': {
+            const ok = audio.musicClock(clock);
+            const now = ctx.currentTime;
+            const at = ok ? clock[1] + Math.ceil((now + 0.05 - clock[1]) / (8 * clock[4]) - 1e-9) * (8 * clock[4]) : now + 0.05;
+            const r = audio.creature({ ...a, at, sing: true });
+            if (spec.recordReturns) rets.push([e.t, 'sing', r, ok, at, clock[0], clock[1], clock[4], now]);
+            break;
+          }
           case 'squishStart': handles.set(e.id, audio.squishStart(a)); break;
           case 'squishUpdate': { const h = handles.get(e.id); if (h) h.update(a); break; }
           case 'squishEnd': { const h = handles.get(e.id); if (h) h.end(a.fade); handles.delete(e.id); break; }
-          default: audio[e.op](a);
+          default: { const r = audio[e.op](a); if (spec.recordReturns) rets.push([e.t, e.op, r === undefined ? null : r]); }
         }
       } catch (err) { errors++; console.error(e.op, err); }
     };
@@ -108,7 +145,7 @@ export async function runEngineOffline(spec) {
         if (t - lastStat >= 0.05) {
           lastStat = t;
           const d = audio.detailStats(), s = audio.stats();
-          statLog.push([+t.toFixed(4), d.music.ducked ? 1 : 0, d.music.liveNotes, s.liveNodes, s.live, d.music.sessions]);
+          statLog.push([+t.toFixed(4), d.music.ducked ? 1 : 0, d.music.liveNotes, s.liveNodes, s.live, d.music.sessions, (s.liveKinds && s.liveKinds.creature) || 0]);
         }
         OfflineAudioContext.prototype.resume.call(ctx);
       });
@@ -126,5 +163,7 @@ export async function runEngineOffline(spec) {
   if (want.includes('mix')) stems.mix = b64(mono(0, 1));
   if (want.includes('music')) stems.music = b64(mono(2, 3));
   if (want.includes('fx')) stems.fx = b64(mono(4, 5));
-  return { sr: SR, n: buf.length, stems, errors, statLog, final: { music: d.music, throttled: d.throttled, stats: s } };
+  if (spec.taps && want.includes('chatter')) stems.chatter = b64(mono(6, 7));
+  if (spec.taps && want.includes('ambience')) stems.ambience = b64(mono(8, 9));
+  return { sr: SR, n: buf.length, stems, errors, statLog, final: { music: d.music, throttled: d.throttled, stats: s }, rets: spec.recordReturns ? rets : undefined };
 }

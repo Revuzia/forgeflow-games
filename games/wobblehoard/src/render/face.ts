@@ -8,12 +8,22 @@
 //
 // Behaviour: seeded random blinks, iris and glints follow StageFrameInput.pointerNdc (idle wander when absent), widen
 // when compression > ~0.3, squint into happy arcs while compressionRate < 0 (springing back), no mouth.
+//
+// PLAYGROUND (PLAYGROUND_BUILD.md 9, LIFE.md L8, RD-10, RD-11): a per-body gaze target (StageLike.setBodyGaze: weighted over the pointer and
+// the idle wander; the pointer always wins while the player touches this body), five eased eyes-only expressions (setBodyExpression: happy,
+// sleepy, surprised, shy, proud; never a mouth or a blush), the render pose on the eye anchors (pose.ts, the CPU twin of the jelly's vertex
+// stage), the eye positions for the stage's depth fade through another body's jelly (RD-12) and a per-eye opacity for it. With no gaze,
+// no expression, no pose and full opacity every number is today's.
 import * as THREE from 'three';
 import type { SoftBodyLike } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { mulberry32, clamp, smoothstep } from '../core/rng.ts';
 import { evalSurface, type JellyView, type SurfaceHit } from './jelly.ts';
 import type { EnvHub } from './env.ts';
+import type { RenderPose } from './pose.ts';
+
+/** Expression ids (src/data/life.ts EXPR; copied here so the stage chunk never imports the LIFE data module). */
+export const EXPR_HAPPY = 1, EXPR_SLEEPY = 2, EXPR_SURPRISED = 3, EXPR_SHY = 4, EXPR_PROUD = 5;
 
 interface StyleDef { sx: number; sy: number; sz: number; iris: number; glint: number; lid: number; droop: number }
 const STYLES: Record<Genome['eyeStyle'], StyleDef> = {
@@ -97,6 +107,25 @@ export class Face {
   private readonly vS = new THREE.Vector3();
 
   private readonly hub: EnvHub;
+  // ---- PLAYGROUND ----
+  /** setBodyGaze: world point (x, y, z) and weight 0..1 (0 = the pointer and the idle wander, as before). */
+  readonly gaze = new Float32Array(4);
+  private exprId = 0;
+  private exprGoal = 0;
+  /** Eased expression amounts by EXPR id (index 0 unused). */
+  readonly expr = new Float32Array(6);
+  private prevSurprise = 0;
+  /** Which way a shy squishy looks away (seeded: -1 or 1). */
+  private readonly shySide: number;
+  /** The render pose (setBodyPose), applied to the eye anchors exactly as the jelly's vertex stage applies it to the skin. */
+  pose: RenderPose | null = null;
+  /** Each eye's world position this frame (x0, y0, z0, x1, y1, z1): the stage's depth fade reads it. */
+  readonly eyeWorld = new Float32Array(6);
+  /** Each eye's opacity (the depth fade through another body's jelly, RD-12): 1 = as today. */
+  readonly eyeAlpha = new Float32Array([1, 1]);
+  private readonly irisU: { value: number }[] = [];
+  private readonly irisBase: number;
+  private readonly lookTmp = { x: 0, y: 0 };
 
   constructor(body: SoftBodyLike, genome: Genome, view: JellyView, hub: EnvHub) {
     this.hub = hub;
@@ -106,6 +135,8 @@ export class Face {
     this.seed = genome.seed;
     this.rng = mulberry32(genome.seed ^ 0xeee1e5);
     this.blinkAt = 1.4 + this.rng() * 2.4;
+    this.shySide = (genome.seed & 1) ? 1 : -1;
+    this.irisBase = this.style.iris;
 
     // dome: unit hemisphere with its pole on +Z, optional flat lid cut
     const dome = new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -130,10 +161,12 @@ export class Face {
       });
       hub.apply(mat, 2.2);
       const uLook = { value: new THREE.Vector2() };
-      const iris = this.style.iris, glint = this.style.glint;
+      const glint = this.style.glint;
+      const uIris = { value: this.style.iris };   // (kept: a surprised squishy's iris shrinks; the same program)
+      this.irisU.push(uIris);
       mat.onBeforeCompile = (shader) => {
         shader.uniforms.uLook = uLook;
-        shader.uniforms.uIris = { value: iris };
+        shader.uniforms.uIris = uIris;
         shader.uniforms.uGlint = { value: glint };
         shader.vertexShader = shader.vertexShader
           .replace('#include <common>', '#include <common>\nvarying vec3 vLocal;')
@@ -192,29 +225,74 @@ export class Face {
     if (eye.restN.dot(d) < 0) eye.restN.negate();
   }
 
-  /** `comp` / `rate`: the renderer's squeeze (0..1) and its rate of change (1/s, negative = springing back). */
-  update(dt: number, time: number, pointer: { x: number; y: number } | null, camera: THREE.PerspectiveCamera | null, comp: number, rate: number): void {
+  /** setBodyExpression: an eyes-only expression (EXPR id, 0 none) eased in over ~0.2 s at `amount` 0..1. */
+  setExpression(expr: number, amount: number): void {
+    const id = Number.isFinite(expr) ? Math.floor(expr) : 0;
+    this.exprId = id >= 1 && id <= 5 ? id : 0;
+    this.exprGoal = this.exprId ? Math.max(0, Math.min(1, Number.isFinite(amount) ? amount : 0)) : 0;
+  }
+  /** The eye's opacity (the stage's depth fade, RD-12). */
+  setEyeAlpha(e: number, a: number): void {
+    if (this.eyeAlpha[e] === a) return;
+    this.eyeAlpha[e] = a;
+    this.mats[e * 2].opacity = a; this.mats[e * 2 + 1].opacity = a;
+  }
+
+  /** The look toward NDC point (nx, ny) from the eye at this.vA, in the eye's own axes (this.vX, this.vY), into this.lookTmp. */
+  private lookToward(nx: number, ny: number, camera: THREE.PerspectiveCamera): void {
+    let lx = 0, ly = 0;
+    this.ndc.copy(this.vA).project(camera);
+    const dx = (nx - this.ndc.x) * camera.aspect, dy = ny - this.ndc.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > 1e-4) { const mag = Math.min(1, len * 1.8); lx = (dx / len) * mag; ly = (dy / len) * mag; }
+    // express the screen-space look in the eye frame: eye axes projected into camera space (view matrix 3x3)
+    const ve = camera.matrixWorldInverse.elements;
+    const ex = this.vX.x * ve[0] + this.vX.y * ve[4] + this.vX.z * ve[8];
+    const ey = this.vX.x * ve[1] + this.vX.y * ve[5] + this.vX.z * ve[9];
+    const fx = this.vY.x * ve[0] + this.vY.y * ve[4] + this.vY.z * ve[8];
+    const fy = this.vY.x * ve[1] + this.vY.y * ve[5] + this.vY.z * ve[9];
+    this.lookTmp.x = lx * ex + ly * ey; this.lookTmp.y = lx * fx + ly * fy;
+  }
+
+  /** `comp` / `rate`: the renderer's squeeze (0..1) and its rate of change (1/s, negative = springing back). `touched`: a finger or a grab
+   *  is on this body (the pointer then wins over a gaze target). */
+  update(dt: number, time: number, pointer: { x: number; y: number } | null, camera: THREE.PerspectiveCamera | null, comp: number, rate: number, touched = false): void {
     const body = this.body, P = body.positions, N = this.view.simN, idx = body.indices;
     const r0 = this.radius, st = this.style;
 
+    // --- PLAYGROUND expressions (eyes only), eased over ~0.2 s ---
+    const ex = this.expr, kE = 1 - Math.exp(-dt * 11);
+    for (let k = 1; k <= 5; k++) {
+      const goal = this.exprId === k ? this.exprGoal : 0;
+      ex[k] += (goal - ex[k]) * kE;
+      if (goal === 0 && ex[k] < 1e-4) ex[k] = 0;
+    }
+    const happy = ex[EXPR_HAPPY], sleepy = ex[EXPR_SLEEPY], surprised = ex[EXPR_SURPRISED], shy = ex[EXPR_SHY], proud = ex[EXPR_PROUD];
+    // surprised: one quick blink as it starts, and a smaller iris
+    if (surprised > 0.3 && this.prevSurprise <= 0.3 && this.squint < 0.2) this.blinkAt = Math.min(this.blinkAt, time);
+    this.prevSurprise = surprised;
+    const irisNow = this.irisBase * (1 - 0.32 * surprised);
+    if (this.irisU[0].value !== irisNow) { this.irisU[0].value = irisNow; this.irisU[1].value = irisNow; }
+
     // --- expression state ---
-    this.wide += (smoothstep(0.3, 0.8, comp) - this.wide) * (1 - Math.exp(-dt * 16));
+    this.wide += (Math.max(smoothstep(0.3, 0.8, comp), surprised) - this.wide) * (1 - Math.exp(-dt * 16));
     if (rate < -0.5 && this.prevComp > 0.07) this.squintHold = 0.5;
     this.prevComp = comp;
     this.squintHold = Math.max(0, this.squintHold - dt);
-    const sqTarget = this.squintHold > 0 || (rate < -0.3 && comp > 0.15) ? 1 : 0;
+    const sqTarget = Math.max(this.squintHold > 0 || (rate < -0.3 && comp > 0.15) ? 1 : 0, happy);
     this.squint += (sqTarget - this.squint) * (1 - Math.exp(-dt * (sqTarget > this.squint ? 26 : 8)));
-    // blink
+    // blink (a sleepy squishy blinks slower and less often)
     if (time >= this.blinkAt && this.squint < 0.2) {
       this.blinkStart = time;
-      this.blinkLen = 0.13 + this.rng() * 0.05;
-      this.blinkAt = time + 2.2 + this.rng() * 3.6;
+      this.blinkLen = (0.13 + this.rng() * 0.05) * (1 + sleepy);
+      this.blinkAt = time + (2.2 + this.rng() * 3.6) * (1 + 1.5 * sleepy);
       if (!this.doubleBlink && this.rng() < 0.18) { this.blinkAt = time + 0.34; this.doubleBlink = true; } else this.doubleBlink = false;
     }
     const bp = (time - this.blinkStart) / this.blinkLen;
     const blink = bp >= 0 && bp < 1 ? Math.sin(bp * Math.PI) : 0;
     // squash-and-stretch of the surface under the eye never fully applies; a bead eye is stiffer than the jelly
-    const openY = (1 - 0.93 * Math.max(blink, smoothstep(0.0, 0.55, this.squint)));
+    // (PLAYGROUND: sleepy = heavy lids, shy = a little lowered, proud = a content half-lid)
+    const openY = (1 - 0.93 * Math.max(blink, smoothstep(0.0, 0.55, this.squint))) * (1 - 0.62 * sleepy - 0.18 * shy - 0.3 * proud);
     const arcK = smoothstep(0.3, 0.9, this.squint);
     const idleT = time * 0.5 + this.seed * 0.0001;
 
@@ -253,26 +331,36 @@ export class Face {
       this.vA.set(this.sp[0] + this.vZ.x * lift, this.sp[1] + this.vZ.y * lift, this.sp[2] + this.vZ.z * lift);
       // droop: sleepy eyes sit a little lower in their socket
       if (st.droop) this.vA.addScaledVector(this.vY, -rr * st.droop);
+      // PLAYGROUND: sleepy eyes droop a little more, a proud eye line lifts a little; then the render pose moves the anchor with the skin
+      if (sleepy > 0) this.vA.addScaledVector(this.vY, -rr * 0.12 * sleepy);
+      if (proud > 0) this.vA.addScaledVector(this.vY, rr * 0.08 * proud);
+      const pose = this.pose;
+      if (pose && pose.active) {
+        const q3 = this.sp;
+        pose.apply(this.vA.x, this.vA.y, this.vA.z, q3, 0);
+        this.vA.set(q3[0], q3[1], q3[2]);
+      }
+      this.eyeWorld[e * 3] = this.vA.x; this.eyeWorld[e * 3 + 1] = this.vA.y; this.eyeWorld[e * 3 + 2] = this.vA.z;
 
       // --- look: pointer relative to this eye on screen, expressed in the eye's own axes ---
       let lx = 0, ly = 0;
       if (pointer && camera) {
-        this.ndc.copy(this.vA).project(camera);
-        const dx = (pointer.x - this.ndc.x) * camera.aspect, dy = pointer.y - this.ndc.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len > 1e-4) { const mag = Math.min(1, len * 1.8); lx = (dx / len) * mag; ly = (dy / len) * mag; }
-        // express the screen-space look in the eye frame: eye axes projected into camera space (view matrix 3x3)
-        const ve = camera.matrixWorldInverse.elements;
-        const ex = this.vX.x * ve[0] + this.vX.y * ve[4] + this.vX.z * ve[8];
-        const ey = this.vX.x * ve[1] + this.vX.y * ve[5] + this.vX.z * ve[9];
-        const fx = this.vY.x * ve[0] + this.vY.y * ve[4] + this.vY.z * ve[8];
-        const fy = this.vY.x * ve[1] + this.vY.y * ve[5] + this.vY.z * ve[9];
-        const tx = lx * ex + ly * ey, ty = lx * fx + ly * fy;
-        lx = tx; ly = ty;
+        this.lookToward(pointer.x, pointer.y, camera);
+        lx = this.lookTmp.x; ly = this.lookTmp.y;
       } else {
         lx = 0.32 * Math.sin(idleT * 1.7 + e * 0.4) + 0.12 * Math.sin(idleT * 4.1);
         ly = 0.18 * Math.sin(idleT * 1.3 + 1.0);
       }
+      // PLAYGROUND gaze (setBodyGaze): toward a world point, weighted over the pointer or idle look; the pointer wins on a touched body
+      const gw = this.gaze[3];
+      if (gw > 0 && !touched && camera) {
+        this.ndc.set(this.gaze[0], this.gaze[1], this.gaze[2]).project(camera);
+        this.lookToward(this.ndc.x, this.ndc.y, camera);
+        lx += (this.lookTmp.x - lx) * gw; ly += (this.lookTmp.y - ly) * gw;
+      }
+      // shy: down and away; proud: a little up
+      if (shy > 0) { lx += (0.55 * this.shySide - lx) * shy; ly += (-0.55 - ly) * shy; }
+      if (proud > 0) ly += (0.5 - ly) * proud;
       eye.look.x += (lx - eye.look.x) * (1 - Math.exp(-dt * 16));
       eye.look.y += (ly - eye.look.y) * (1 - Math.exp(-dt * 16));
       const lm = Math.sqrt(eye.look.x * eye.look.x + eye.look.y * eye.look.y);
