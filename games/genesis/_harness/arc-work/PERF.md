@@ -1755,3 +1755,44 @@ long press frame-rate independent. Report after 1-2 verified.
 - If confirmed: cached far shadow cascades (roadmap step 9), far-tree hull casters (shhull, steps in SESSION 19c), then the
   scene-side tree triangle budget.
 - Caveat: round 11 ran with another process holding the GPU 47-58 % busy.
+
+## SESSION 20 (2026-11-16 ~18:20Z) — round 10 (MAC-ROUND10-cfe751b9): the terrain SURFACE is the cost -> stage (a) `?tnoise=tex`
+- READ OF ROUND 10 THAT DECIDES THE ORDER: base 550-570 ms; nosurf 251 (the whole surface = ~300 ms); nonoise 399 (every
+  noise call a constant = ~150 ms); all 217. So the arithmetic noise is HALF of the surface cost at most; the other
+  ~150 ms is evalTerrain's non-noise arithmetic (281 smoothsteps, ~120 branches, rk_joints' lattice, hashes, mixes),
+  which `nonoise` could even constant-fold in part. Stage (a) can therefore reach ~400 ms + its taps at best, NOT
+  nosurf's 251: only the store-once cache (c) removes the rest. (a) is built first because it is small, safe, and
+  it also makes every later BAKE of the cache cheaper.
+  ASK FOR ROUND 11 (no new code, the s19 switches combine): `tshade=nonoise,noveg`, `tshade=nonoise,nolayers`,
+  `tshade=nonoise,nofloor`, `tshade=nonoise,nojoints`, `tshade=nonoise,nobump` — which block holds the ~150 ms that
+  is not noise — next to `tnoise=tex` and base.
+- BUILT `?tnoise=tex` (default OFF; header prints `tnoise=tex` / `tnoise=none`): src/render/planet/noisetex.ts (new),
+  3 lines in terrainmat.ts (GLSL after the cut macros, uniforms, program key), 1 line in renderer.ts (ensureTNoise at
+  the top of render()).
+  * a 128^3 RGBA16F volume, REPEAT, LINEAR, no mips, rendered once at the first frame by a full-screen shader that
+    includes noise.glsl.ts: r = snoise ITSELF at 8 texels per lattice unit, made periodic (period 16 units) by a
+    cross-fade with its own shifted copies over the last 3 units of each axis, weights renormalised (variance kept);
+    gba = 4 x the second differences of r along x y z.
+  * `#define snoise(p) snoiseT(p, __LINE__)` and `fbm3(p) -> fbm3T` AFTER the noise library and the tshade macros, so
+    every later call in terrainmat.ts + groundfloor.ts becomes a tap; the cloud-shadow code (before the macro) and
+    every other material are untouched. snoiseT = ONE textureLod(.., 0) tap + `r - 0.125 * dot(t(1-t), gba)`: the
+    quadratic term makes the interpolant's GRADIENT continuous (slope = central difference at each texel centre).
+    Why: ts.bump goes through screen derivatives (bumpNormal); plain trilinear has a constant slope per texel that
+    jumps ~40 % of the slope's range at each texel face = faceted bump close up. (First cut was R16F plain trilinear.)
+  * each call site looks up through one of 4 fixed rotations (site = __LINE__ & 3): a periodic volume on a sphere
+    repeats as rows of look-alike blobs only in thin bands (~+-2 deg) round the 3 great circles normal to the
+    volume's axes; with 4 rotations the terms of one fragment never have their bands in the same place.
+  * textureLod level 0: no implicit derivatives (taps sit inside dynamic branches), no mips (each term is already
+    faded by its footprint through aaF, as before).
+  * NOT replaced (still arithmetic): snoiseGrad x6 (micro normal, fw < 0.6 m only), voronoi3 x10 (`novor` = no gain
+    on the M5), gn_hash*, craterField.
+  * no float render target (EXT_color_buffer_float / half_float missing): RGBA8 volume + a console warning (not the
+    Mac, not SwiftShader).
+- STATIC COUNT per terrain fragment (s = arithmetic simplex ~150 ALU ops, T = one RGBA16F 3D trilinear tap + ~12 ops):
+  program: 173 snoise sites (111 terrainmat + 62 groundfloor) + 10 fbm3 (3 each) -> 203 T; 6 snoiseGrad + 10 V stay.
+  path          before                      after
+  near meadow   ~95-100 s + 1-2 V           ~95-100 T + 0-2 snoiseGrad + 1-2 V
+  forest floor  ~125 s + 2-3 V              ~125 T + 2-3 V
+  bare rock     ~60 s                       ~57 T + 3 snoiseGrad
+  far land      ~40 s                       ~40 T
+  lighting taps unchanged (14-15). MEMORY: +16.8 MB GPU (128^3 x 8 B), one allocation, never re-uploaded.
