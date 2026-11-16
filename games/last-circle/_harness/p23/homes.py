@@ -65,7 +65,7 @@ HG = "runtime/3d/royale/housegen.js"
 TG = "runtime/3d/royale/towngen.js"
 MJ = "runtime/3d/royale/maps.js"
 # plant -> (rows that must FAIL, [(file, regex, replacement)]) - each regex must match exactly once in the scratch copy (else could-not-judge)
-STOREYS_POOLED = 40          # (pass 2: plan scope cut 1 took it to 30; pass 6: back at 40 - the like-for-like frame rows leave room for the plan share)
+STOREYS_POOLED = 30          # (pass 2: plan scope cut 1 - was 40)
 
 PLANTS = {
     # (pass 2, scope cut 1: the storeys floor is 30 % - the 7.5 m one-storey house_s alone leaves ~34 % two-storey, so storeys gets its own control, flat-homes)
