@@ -1,21 +1,35 @@
 {
  "probe": "orch1 W1-C AUD-O13 audio runtime proof",
- "head": "2ef93bd19",
- "machine": "shared (other lanes held heavy slots; load1 per run below). Loudness and cue gates are block-metered on the output and do not depend on frame timing; the A/V sync mode was not part of this set.",
+ "head": "a0de4d763",
+ "machine": "shared (bot-soak and controls lanes held the other heavy slots throughout; per-run load not sampled). Loudness and cue gates are block-metered on the output and do not depend on frame timing; the A/V sync mode was not part of this set.",
  "tokens": {
   "masterLUFS": "-18 +/- 1.5",
   "marginWantLU": 0.5
  },
  "mix": {
-  "levellerTargetSfxLUFS": -20,
+  "levellerTargetSfxLUFS": {
+   "default": -20,
+   "rift": -23
+  },
+  "specAsked": -19,
   "maxCutDb": 8,
   "attackS": 0.8,
   "releaseS": 3,
-  "prioMaxCutDb": 4,
+  "prioMaxCutDb": {
+   "default": 4,
+   "rift": 8
+  },
   "bgRoomLU": 6,
+  "stage3MatchLong": {
+   "targetOutLUFS": -18,
+   "maxCutDb": "min(2, max(0, mode trim))",
+   "slewDbPerS": 0.05,
+   "minGatedBlocks": 75,
+   "note": "cut only; withdraws the mode make-up, so net sfx gain under unity never passes 8 dB; inactive on BRIDGE/FRAY (negative trims)"
+  },
   "modeTrimsDb": {
    "rift": {
-    "sfxTrimDb": 1.2
+    "sfxTrimDb": 3.7
    },
    "bridge": {
     "sfxTrimDb": -4.5
@@ -43,29 +57,28 @@
     "ambienceQuietUnderMusic": true
    },
    "notMeasured": [],
-   "masterLUFS": -17.02,
-   "marginLU": 0.52,
-   "sfxLUFS": -19.16,
+   "masterLUFS": -17.41,
+   "marginLU": 0.91,
+   "sfxLUFS": -19.32,
    "musicLUFS": -28.95,
-   "ambienceLUFS": -41.28,
-   "kitSharePct": 70.04,
-   "announcerPeakOverSfxP99": 4.82,
-   "announcerMedianOverTeamfightP99": 3.79,
-   "healPerMin": 1,
+   "ambienceLUFS": -41.4,
+   "kitSharePct": 69.79,
+   "announcerPeakOverSfxP99": 4.51,
+   "announcerMedianOverTeamfightP99": 3.12,
+   "healPerMin": 1.28,
    "leveller": {
-    "trimDb": 1.2,
-    "gainDbP50": 0,
-    "gainDbP10": -7.31,
+    "trimDb": 3.7,
+    "gainDbP50": -0.41,
+    "gainDbP10": -8,
     "gainDbMin": -8,
-    "cutOver1dBPct": 29.09,
-    "prioSharePct": 62.94,
-    "threatSharePct": 10.69
+    "cutOver1dBPct": 47.51,
+    "prioSharePct": 59.97,
+    "threatSharePct": 12.19,
+    "longCutDbEnd": 1.5,
+    "longEstUncutLUFS": -16.5
    },
-   "machine": {
-    "load1Max": 6.46,
-    "load1Mean": 5.43
-   },
-   "report": "_harness/_reports/w1c/i_rift_coop_3.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/m_rift_coop_3.json"
   },
   {
    "queue": "rift_coop",
@@ -84,29 +97,28 @@
     "ambienceQuietUnderMusic": true
    },
    "notMeasured": [],
-   "masterLUFS": -18.69,
-   "marginLU": 0.81,
-   "sfxLUFS": -20.38,
-   "musicLUFS": -30,
-   "ambienceLUFS": -40.82,
-   "kitSharePct": 73.95,
-   "announcerPeakOverSfxP99": 4.63,
-   "announcerMedianOverTeamfightP99": 2.24,
-   "healPerMin": 0.57,
+   "masterLUFS": -17.87,
+   "marginLU": 1.37,
+   "sfxLUFS": -19.2,
+   "musicLUFS": -29.95,
+   "ambienceLUFS": -40.92,
+   "kitSharePct": 74.78,
+   "announcerPeakOverSfxP99": 4.35,
+   "announcerMedianOverTeamfightP99": 2.91,
+   "healPerMin": 0.86,
    "leveller": {
-    "trimDb": 1.2,
+    "trimDb": 3.7,
     "gainDbP50": 0,
-    "gainDbP10": 0,
+    "gainDbP10": -4.36,
     "gainDbMin": -8,
-    "cutOver1dBPct": 7.97,
-    "prioSharePct": 63.74,
-    "threatSharePct": 6.73
+    "cutOver1dBPct": 19.64,
+    "prioSharePct": 69.75,
+    "threatSharePct": 5.81,
+    "longCutDbEnd": 0.2,
+    "longEstUncutLUFS": -17.8
    },
-   "machine": {
-    "load1Max": 5.22,
-    "load1Mean": 4.08
-   },
-   "report": "_harness/_reports/w1c/i_rift_coop_7.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/m_rift_coop_7.json"
   },
   {
    "queue": "rift_coop",
@@ -127,29 +139,28 @@
    "notMeasured": [
     "lampSetFires"
    ],
-   "masterLUFS": -18.42,
-   "marginLU": 1.08,
-   "sfxLUFS": -21.07,
-   "musicLUFS": -28.87,
-   "ambienceLUFS": -41.69,
-   "kitSharePct": 69.68,
-   "announcerPeakOverSfxP99": 5.03,
-   "announcerMedianOverTeamfightP99": 4.03,
-   "healPerMin": 0.86,
+   "masterLUFS": -17.8,
+   "marginLU": 1.3,
+   "sfxLUFS": -19.88,
+   "musicLUFS": -28.98,
+   "ambienceLUFS": -41.83,
+   "kitSharePct": 65.51,
+   "announcerPeakOverSfxP99": 4.39,
+   "announcerMedianOverTeamfightP99": 3,
+   "healPerMin": 1,
    "leveller": {
-    "trimDb": 1.2,
+    "trimDb": 3.7,
     "gainDbP50": 0,
-    "gainDbP10": -0.29,
+    "gainDbP10": -4.42,
     "gainDbMin": -8,
-    "cutOver1dBPct": 7.56,
-    "prioSharePct": 79.69,
-    "threatSharePct": 3.79
+    "cutOver1dBPct": 22.46,
+    "prioSharePct": 73.37,
+    "threatSharePct": 4.85,
+    "longCutDbEnd": 0.17,
+    "longEstUncutLUFS": -17.83
    },
-   "machine": {
-    "load1Max": 2.9,
-    "load1Mean": 1.93
-   },
-   "report": "_harness/_reports/w1c/i_rift_coop_11.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/n_rift_coop_11.json"
   },
   {
    "queue": "rift_coop",
@@ -168,29 +179,28 @@
     "ambienceQuietUnderMusic": true
    },
    "notMeasured": [],
-   "masterLUFS": -19.49,
-   "marginLU": 0.01,
-   "sfxLUFS": -20.92,
-   "musicLUFS": -30.14,
-   "ambienceLUFS": -40.65,
-   "kitSharePct": 71.99,
-   "announcerPeakOverSfxP99": 6.26,
-   "announcerMedianOverTeamfightP99": 4.67,
-   "healPerMin": 0.29,
+   "masterLUFS": -18.32,
+   "marginLU": 1.18,
+   "sfxLUFS": -19.15,
+   "musicLUFS": -29.96,
+   "ambienceLUFS": -40.72,
+   "kitSharePct": 73.48,
+   "announcerPeakOverSfxP99": 5.06,
+   "announcerMedianOverTeamfightP99": 3.96,
+   "healPerMin": 0.57,
    "leveller": {
-    "trimDb": 1.2,
+    "trimDb": 3.7,
     "gainDbP50": 0,
-    "gainDbP10": 0,
-    "gainDbMin": -7.93,
-    "cutOver1dBPct": 4.11,
-    "prioSharePct": 70.87,
-    "threatSharePct": 7.46
+    "gainDbP10": -2.01,
+    "gainDbMin": -8,
+    "cutOver1dBPct": 17.19,
+    "prioSharePct": 67.14,
+    "threatSharePct": 6.18,
+    "longCutDbEnd": 0.12,
+    "longEstUncutLUFS": -17.88
    },
-   "machine": {
-    "load1Max": 3.54,
-    "load1Mean": 2.51
-   },
-   "report": "_harness/_reports/w1c/i_rift_coop_21.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/m_rift_coop_21.json"
   },
   {
    "queue": "bridge_standard",
@@ -212,29 +222,28 @@
     "lampSetFires",
     "lampOutFires"
    ],
-   "masterLUFS": -17.77,
-   "marginLU": 1.27,
-   "sfxLUFS": -22.26,
-   "musicLUFS": -28.42,
-   "ambienceLUFS": -44.58,
-   "kitSharePct": 79.1,
-   "announcerPeakOverSfxP99": 8.89,
-   "announcerMedianOverTeamfightP99": 5.13,
-   "healPerMin": 3.98,
+   "masterLUFS": -18.34,
+   "marginLU": 1.16,
+   "sfxLUFS": -22.28,
+   "musicLUFS": -28.52,
+   "ambienceLUFS": -44.23,
+   "kitSharePct": 78.66,
+   "announcerPeakOverSfxP99": 8.54,
+   "announcerMedianOverTeamfightP99": 4.59,
+   "healPerMin": 4.12,
    "leveller": {
     "trimDb": -4.5,
-    "gainDbP50": -8,
+    "gainDbP50": -6.09,
     "gainDbP10": -8,
     "gainDbMin": -8,
-    "cutOver1dBPct": 76.25,
-    "prioSharePct": 59.22,
-    "threatSharePct": 8.03
+    "cutOver1dBPct": 65.58,
+    "prioSharePct": 50.54,
+    "threatSharePct": 14.64,
+    "longCutDbEnd": 0,
+    "longEstUncutLUFS": -19.16
    },
-   "machine": {
-    "load1Max": 2.9,
-    "load1Mean": 1.94
-   },
-   "report": "_harness/_reports/w1c/i_bridge_standard_3.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/n_bridge_standard_3.json"
   },
   {
    "queue": "bridge_standard",
@@ -245,37 +254,38 @@
     "healPerMinLe6": true,
     "enemyDownFires": true,
     "lampSetFires": true,
-    "lampOutFires": true,
+    "lampOutFires": null,
     "announcerPeakOverSfxP99Ge3": true,
     "masterIntegratedInTokens": true,
     "fighterKitShareGe50": true,
     "ambienceUnderMusic": true,
     "ambienceQuietUnderMusic": true
    },
-   "notMeasured": [],
-   "masterLUFS": -18.18,
-   "marginLU": 1.32,
-   "sfxLUFS": -22.57,
-   "musicLUFS": -28.57,
-   "ambienceLUFS": -44.47,
-   "kitSharePct": 77.98,
-   "announcerPeakOverSfxP99": 7.84,
+   "notMeasured": [
+    "lampOutFires"
+   ],
+   "masterLUFS": -17.97,
+   "marginLU": 1.47,
+   "sfxLUFS": -22.61,
+   "musicLUFS": -28.4,
+   "ambienceLUFS": -45.14,
+   "kitSharePct": 77.8,
+   "announcerPeakOverSfxP99": 8.33,
    "announcerMedianOverTeamfightP99": 4.63,
-   "healPerMin": 4.27,
+   "healPerMin": 4.86,
    "leveller": {
     "trimDb": -4.5,
-    "gainDbP50": -6.52,
+    "gainDbP50": -7.71,
     "gainDbP10": -8,
     "gainDbMin": -8,
-    "cutOver1dBPct": 70.6,
-    "prioSharePct": 44.22,
-    "threatSharePct": 16.95
+    "cutOver1dBPct": 77.71,
+    "prioSharePct": 51.24,
+    "threatSharePct": 14.15,
+    "longCutDbEnd": 0,
+    "longEstUncutLUFS": -18.7
    },
-   "machine": {
-    "load1Max": 3.54,
-    "load1Mean": 2.5
-   },
-   "report": "_harness/_reports/w1c/i_bridge_standard_7.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/n_bridge_standard_7.json"
   },
   {
    "queue": "bridge_standard",
@@ -296,29 +306,28 @@
    "notMeasured": [
     "lampOutFires"
    ],
-   "masterLUFS": -18.3,
-   "marginLU": 1.2,
-   "sfxLUFS": -22.86,
-   "musicLUFS": -28.39,
-   "ambienceLUFS": -44.95,
-   "kitSharePct": 80.16,
-   "announcerPeakOverSfxP99": 8.13,
-   "announcerMedianOverTeamfightP99": 4.31,
-   "healPerMin": 4.27,
+   "masterLUFS": -18.33,
+   "marginLU": 1.17,
+   "sfxLUFS": -22.75,
+   "musicLUFS": -28.43,
+   "ambienceLUFS": -45.15,
+   "kitSharePct": 80.5,
+   "announcerPeakOverSfxP99": 9.24,
+   "announcerMedianOverTeamfightP99": 4.97,
+   "healPerMin": 4.12,
    "leveller": {
     "trimDb": -4.5,
-    "gainDbP50": -8,
+    "gainDbP50": -7.87,
     "gainDbP10": -8,
     "gainDbMin": -8,
-    "cutOver1dBPct": 77.15,
-    "prioSharePct": 54.17,
-    "threatSharePct": 11.35
+    "cutOver1dBPct": 76.65,
+    "prioSharePct": 52.13,
+    "threatSharePct": 11.42,
+    "longCutDbEnd": 0,
+    "longEstUncutLUFS": -19.08
    },
-   "machine": {
-    "load1Max": 6.7,
-    "load1Mean": 3.05
-   },
-   "report": "_harness/_reports/w1c/i_bridge_standard_11.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/n_bridge_standard_11.json"
   },
   {
    "queue": "fray_standard",
@@ -340,29 +349,28 @@
     "lampSetFires",
     "lampOutFires"
    ],
-   "masterLUFS": -17.83,
-   "marginLU": 1.33,
-   "sfxLUFS": -21.94,
+   "masterLUFS": -17.84,
+   "marginLU": 1.34,
+   "sfxLUFS": -21.92,
    "musicLUFS": -28.64,
-   "ambienceLUFS": -43.21,
-   "kitSharePct": 78.71,
-   "announcerPeakOverSfxP99": 8.47,
-   "announcerMedianOverTeamfightP99": 7.17,
+   "ambienceLUFS": -43.18,
+   "kitSharePct": 78.65,
+   "announcerPeakOverSfxP99": 8.53,
+   "announcerMedianOverTeamfightP99": 7.24,
    "healPerMin": 1.85,
    "leveller": {
     "trimDb": -3,
-    "gainDbP50": -1.8,
-    "gainDbP10": -7.8,
+    "gainDbP50": -1.72,
+    "gainDbP10": -7.76,
     "gainDbMin": -8,
-    "cutOver1dBPct": 55.53,
-    "prioSharePct": 83.29,
-    "threatSharePct": 8.88
+    "cutOver1dBPct": 55.29,
+    "prioSharePct": 83.12,
+    "threatSharePct": 8.95,
+    "longCutDbEnd": 0,
+    "longEstUncutLUFS": -18.6
    },
-   "machine": {
-    "load1Max": 6.7,
-    "load1Mean": 3.34
-   },
-   "report": "_harness/_reports/w1c/i_fray_standard_3.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/n_fray_standard_3.json"
   },
   {
    "queue": "fray_standard",
@@ -384,29 +392,28 @@
     "lampSetFires",
     "lampOutFires"
    ],
-   "masterLUFS": -18.79,
-   "marginLU": 0.71,
-   "sfxLUFS": -21.76,
-   "musicLUFS": -29.17,
-   "ambienceLUFS": -41.45,
-   "kitSharePct": 80.57,
-   "announcerPeakOverSfxP99": 8.61,
-   "announcerMedianOverTeamfightP99": 6.24,
+   "masterLUFS": -18.81,
+   "marginLU": 0.69,
+   "sfxLUFS": -21.72,
+   "musicLUFS": -29.16,
+   "ambienceLUFS": -41.44,
+   "kitSharePct": 80.66,
+   "announcerPeakOverSfxP99": 8.51,
+   "announcerMedianOverTeamfightP99": 6.09,
    "healPerMin": 1.51,
    "leveller": {
     "trimDb": -3,
     "gainDbP50": 0,
-    "gainDbP10": -5.68,
+    "gainDbP10": -5.51,
     "gainDbMin": -8,
-    "cutOver1dBPct": 37.2,
-    "prioSharePct": 78.6,
-    "threatSharePct": 12.57
+    "cutOver1dBPct": 37.77,
+    "prioSharePct": 78.5,
+    "threatSharePct": 12.66,
+    "longCutDbEnd": 0,
+    "longEstUncutLUFS": -19.34
    },
-   "machine": {
-    "load1Max": 6.25,
-    "load1Mean": 5.34
-   },
-   "report": "_harness/_reports/w1c/i_fray_standard_7.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/n_fray_standard_7.json"
   },
   {
    "queue": "fray_standard",
@@ -428,29 +435,28 @@
     "lampSetFires",
     "lampOutFires"
    ],
-   "masterLUFS": -17.81,
-   "marginLU": 1.31,
-   "sfxLUFS": -21.88,
+   "masterLUFS": -17.77,
+   "marginLU": 1.27,
+   "sfxLUFS": -21.83,
    "musicLUFS": -28.53,
-   "ambienceLUFS": -43.32,
-   "kitSharePct": 83.65,
-   "announcerPeakOverSfxP99": 8.66,
-   "announcerMedianOverTeamfightP99": 7.63,
+   "ambienceLUFS": -43.33,
+   "kitSharePct": 83.63,
+   "announcerPeakOverSfxP99": 8.52,
+   "announcerMedianOverTeamfightP99": 7.5,
    "healPerMin": 2.42,
    "leveller": {
     "trimDb": -3,
-    "gainDbP50": -1.36,
-    "gainDbP10": -8,
+    "gainDbP50": -1.2,
+    "gainDbP10": -7.99,
     "gainDbMin": -8,
-    "cutOver1dBPct": 53.6,
-    "prioSharePct": 85.7,
-    "threatSharePct": 8.27
+    "cutOver1dBPct": 51.98,
+    "prioSharePct": 85.86,
+    "threatSharePct": 8.13,
+    "longCutDbEnd": 0,
+    "longEstUncutLUFS": -18.75
    },
-   "machine": {
-    "load1Max": 5.22,
-    "load1Mean": 4.08
-   },
-   "report": "_harness/_reports/w1c/i_fray_standard_11.json"
+   "machine": null,
+   "report": "_harness/_reports/w1c/n_fray_standard_11.json"
   }
  ],
  "summary": {
@@ -458,56 +464,106 @@
   "passed": 10,
   "missing": 0,
   "masterRangeLUFS": [
-   -19.49,
-   -17.02
+   -18.81,
+   -17.41
   ],
-  "minMarginLU": 0.01,
-  "minKitSharePct": 69.68,
-  "minAnnouncerPeakOverSfxP99": 4.63,
-  "maxHealPerMinBridge": 4.27
+  "minMarginLU": 0.69,
+  "minKitSharePct": 65.51,
+  "minAnnouncerPeakOverSfxP99": 4.35,
+  "maxMasterSpreadLU": 1.4,
+  "maxHealPerMinBridge": 4.86
  },
  "spots": {
   "rift_coop": {
-   "missing": true,
-   "report": "_harness/_reports/w1c/i_spots_rift_coop_3.json"
+   "pass": true,
+   "gates": null,
+   "report": "_harness/_reports/w1c/n_spots_rift_coop_3.json",
+   "machine": null,
+   "minAmbUnderMusicLU": 9.7,
+   "summary": "PASS min ambience under music 9.7 LU (want >= 8) \u2192 _harness/_reports/w1c/n_spots_rift_coop_3.json"
   },
   "bridge_standard": {
-   "missing": true,
-   "report": "_harness/_reports/w1c/i_spots_bridge_standard_3.json"
+   "pass": true,
+   "gates": null,
+   "report": "_harness/_reports/w1c/n_spots_bridge_standard_3.json",
+   "machine": null,
+   "minAmbUnderMusicLU": 10,
+   "summary": "PASS min ambience under music 10 LU (want >= 8) \u2192 _harness/_reports/w1c/n_spots_bridge_standard_3.json"
   },
   "fray_standard": {
-   "missing": true,
-   "report": "_harness/_reports/w1c/i_spots_fray_standard_3.json"
+   "pass": true,
+   "gates": null,
+   "report": "_harness/_reports/w1c/n_spots_fray_standard_3.json",
+   "machine": null,
+   "minAmbUnderMusicLU": 9.4,
+   "summary": "PASS min ambience under music 9.4 LU (want >= 8) \u2192 _harness/_reports/w1c/n_spots_fray_standard_3.json"
   }
  },
  "pits": {
   "3": {
-   "missing": true,
-   "report": "_harness/_reports/w1c/i_pits_3.json"
+   "pass": true,
+   "gates": {
+    "sunsplinterPresenceUnderMusicGe12": true,
+    "sunsplinterPitBusUnderMusicGe8": true,
+    "sunsplinterPresencePlaying": true,
+    "longshadePresenceUnderMusicGe12": true,
+    "longshadePitBusUnderMusicGe8": true,
+    "longshadePresencePlaying": true
+   },
+   "report": "_harness/_reports/w1c/n_pits_3.json",
+   "machine": null
   },
   "7": {
-   "missing": true,
-   "report": "_harness/_reports/w1c/i_pits_7.json"
+   "pass": true,
+   "gates": {
+    "sunsplinterPresenceUnderMusicGe12": true,
+    "sunsplinterPitBusUnderMusicGe8": true,
+    "sunsplinterPresencePlaying": true,
+    "longshadePresenceUnderMusicGe12": true,
+    "longshadePitBusUnderMusicGe8": true,
+    "longshadePresencePlaying": true
+   },
+   "report": "_harness/_reports/w1c/n_pits_7.json",
+   "machine": null
   },
   "21": {
-   "missing": true,
-   "report": "_harness/_reports/w1c/i_pits_21.json"
+   "pass": true,
+   "gates": {
+    "sunsplinterPresenceUnderMusicGe12": true,
+    "sunsplinterPitBusUnderMusicGe8": true,
+    "sunsplinterPresencePlaying": true,
+    "longshadePresenceUnderMusicGe12": true,
+    "longshadePitBusUnderMusicGe8": true,
+    "longshadePresencePlaying": true
+   },
+   "report": "_harness/_reports/w1c/n_pits_21.json",
+   "machine": null
   }
  },
  "announcer": {
-  "missing": true,
-  "report": "_harness/_reports/w1c/i_announcer.json"
+  "pass": true,
+  "gates": null,
+  "report": "_harness/_reports/w1c/n_announcer.json",
+  "machine": null
  },
  "kits": {
-  "missing": true,
-  "report": "_harness/_reports/w1c/i_kits.json"
+  "pass": true,
+  "gates": null,
+  "report": "_harness/_reports/w1c/n_kits.json",
+  "machine": null
  },
  "buildGates": {
   "cmd": "audio/build.py --gates",
   "exit": 0,
-  "log": "_harness/_reports/w1c/i_gates.log",
-  "seamHoleMsMax": 0.0,
-  "note": "every continuous ambience loop (.ogg and .m4a) 0.0 ms digital silence at its seam; sparse loops exempt"
+  "log": "_harness/_reports/w1c/l_gates.log",
+  "seamHoleMsMax": 0.06,
+  "seamCheck": "longest run under -90 dBFS across tail 200 ms + head 200 ms, ffmpeg decode of audio/out/amb_*",
+  "note": "every continuous ambience loop (.ogg and .m4a) <= 0.06 ms; sparse event loops exempt by design (amb_wren, amb_bridge_creak, amb_rift_insects)"
  },
- "pass": false
+ "pass": true,
+ "runToRunNote": "live matches are not frame-deterministic: before stage 3 the same seed read seed 21 -18.79 / -17.89 and seed 3 -16.57 / -16.79 LUFS on repeat runs; stage 3 (match-long normaliser) took seed 3 to -17.41 (cut 1.5 dB at the end), others 0-0.2 dB",
+ "notInThisProof": [
+  "Opus listening verifier on a BRIDGE 5v5 teamfight capture (verifier step)",
+  "A/V sync mode"
+ ]
 }
