@@ -426,7 +426,8 @@ export class TeamBrain {
         // (one more than the divers at an inner or base structure — not in the laning phase, where the roads hold first)
         if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing ? 1 : 0)) * d.defendMatch - 1e-9));
       } else if (coming > 0) need = Math.max(1, Math.ceil(coming * d.defendMatch - 1e-9));
-      else if (cls > 0 && minions - mine >= 4) need = 1;
+      // (owner_rulings 44: a big wave — eight or more over ours — is two defenders' work, as is a wave on a structure under half)
+      else if (cls > 0 && minions - mine >= 4) need = minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1;
       // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
       // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
       const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));

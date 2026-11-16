@@ -8,11 +8,11 @@
 // Scenarios: idle (fighters stand, towers alive, 8 min) and bots (all ten seats played, 14 min); maps RIFT (three
 // roads) and BRIDGE; seeds 3,7,11,19,23,31. Every tick, every Wick:
 //   free   its order is not ATTACK, not chasing, not stepping out, not passing its wave, no attackable enemy in aggro
-//   clear  > 3 m from any live structure rim and any live body not of its team, > 16 m of arc from its spawn end and
+//   clear  > 3 m from any live structure rim, any live body not of its team and any standing Wick of its own, > 16 m of arc from its spawn end and
 //          > 6 m from the far end, no forced movement (dash, knock, fear, taunt, hard CC)
 //   d      signed offset from the lane polyline, left of its travel +; off = d − its column slot
 // Bars (every map, road, team and 4 m arc bin; both scenarios):
-//   B1 wave centroid  mean off of a wave's free+clear Wicks in a bin (waves with ≥ 15 samples there):
+//   B1 wave centroid  mean off of a wave's free+clear Wicks outside a rejoin (B4) in a bin (waves with ≥ 15 samples there):
 //                     median |.| ≤ 0.20 m, max ≤ 0.30 m (raw mean d, slots not taken off, is reported beside it)
 //   B2 single Wick    free+clear samples outside a rejoin: |off| p95 ≤ 0.6 m, max ≤ 1.2 m
 //   B3 no reversal    0 Wicks free+clear for a whole 0.5 s whose net move along the road is < −0.3 m
@@ -126,7 +126,11 @@ function clearOf(w: World, e: Entity): boolean {
   for (let i = 0; i < n; i++) {
     const o = q[i];
     if (o === e || !o.alive || o.kind === 'projectile' || o.kind === 'zone' || o.kind === 'ward' || o.kind === 'pickup') continue;
-    if (o.kind !== 'structure' && o.team === e.team) continue;
+    // its own side's bodies block only when they stand (fighting Wicks it walks round); fighters of its side ghost
+    if (o.kind !== 'structure' && o.team === e.team) {
+      const sp = o.stats.moveSpeed * 0.3;
+      if (o.kind !== 'minion' || o.vx * o.vx + o.vy * o.vy >= sp * sp) continue;
+    }
     if (Math.hypot(o.x - e.x, o.y - e.y) - o.radius - e.radius < CLEAR) return false;
   }
   return true;
@@ -211,6 +215,7 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       const bk = `${map}|${scen}|${g.id}|t${e.team}|s${Math.floor(sT / BIN) * BIN}`;
       const inRejoin = !!t.rj && !t.rj.done;
       if (!inRejoin) { let b = acc.single.get(bk); if (!b) acc.single.set(bk, b = []); b.push(Math.abs(off)); }
+      if (inRejoin) continue;
       let c = acc.centroid.get(bk); if (!c) acc.centroid.set(bk, c = new Map());
       const wk = `${seed}/${t.wave}`; let cw = c.get(wk); if (!cw) c.set(wk, cw = { off: 0, d: 0, n: 0 });
       cw.off += off; cw.d += dT; cw.n++;

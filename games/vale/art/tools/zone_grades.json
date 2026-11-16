@@ -79,8 +79,8 @@
      0.84,
      1.0
     ],
-    "hex": "#B30300",
-    "L": 27,
+    "hex": "#C37F76",
+    "L": 20,
     "C": 30
    },
    {
@@ -100,8 +100,8 @@
      1.0
     ],
     "minL": 17,
-    "hex": "#B30300",
-    "L": 27,
+    "hex": "#C37F76",
+    "L": 22,
     "C": 24
    },
    {
@@ -128,9 +128,9 @@
      0.7,
      0.8
     ],
-    "minL": 45,
-    "hex": "#B30300",
-    "L": 40,
+    "minL": 33,
+    "hex": "#C37F76",
+    "L": 26,
     "C": 22,
     "notBoxes": [
      [
@@ -177,7 +177,7 @@
      0.84,
      1.0
     ],
-    "minL": 33,
+    "minL": 24,
     "notCyls": [
      [
       0.02,
@@ -188,8 +188,8 @@
       2.3
      ]
     ],
-    "hex": "#B30300",
-    "L": 30,
+    "hex": "#C37F76",
+    "L": 20,
     "C": 12
    }
   ],
@@ -220,13 +220,13 @@
     "k": 0.9
    },
    {
-    "why": "r2 crown break: the pale hood a lilac at its own value",
+    "why": "orch1 UNITS2: the hood a deep violet under the pale lilac halo (P4 crown break: halo and hood read one lilac, dL 0.4)",
     "parts": [
      "hood"
     ],
     "hex": "#A66CF2",
-    "L": 52,
-    "C": 16
+    "L": 30,
+    "C": 20
    },
    {
     "why": "r2: the cowl a deeper violet, the dark break between the pale hood and the pale robe (ruling 7)",
@@ -290,51 +290,41 @@
     ]
    },
    {
-    "why": "r2f: the hat back to the concept's pale lacquered straw, a touch paler and warmer than round 1 (L* 53 C 14 h 72 -> L* 56 C 17 h 81; the hue sits in the harm band's HSV range, so it stays under 0.4 saturation): the r2 plum hat rendered as Dunsom's lilac disc at the game camera (hat dE76 13.3). Tried and not kept: a deeper honey straw (L* 40) and plum bands on the brim's top (r 0.41 / 0.45 / 0.48 - 0.53 m): +1-2 dE in game for a lineup_qa top value band of 42.7-57.3 (bible 70-85)",
+    "why": "orch1 UNITS2: the broad hat a deep plum lacquer (the top-down read; the pale straw hat matched Nurrow and Sukri at the game camera, units_gate P1 dE 7.9 / 18.6)",
     "parts": [
      "hat"
+    ],
+    "hex": "#BA7EA2",
+    "L": 16,
+    "C": 22
+   },
+   {
+    "why": "orch1 UNITS2: the stepped octagonal crown pale lacquered straw, a value break against the plum brim (P4 crown break)",
+    "parts": [
+     "hat"
+    ],
+    "cyls": [
+     [
+      0,
+      0,
+      0,
+      0.21,
+      1.972,
+      2.3
+     ]
     ],
     "hex": "#C8A97A",
     "L": 56,
     "C": 17
    },
    {
-    "why": "r2f: the stepped octagonal crown a deep plum lacquer (the signature on the crown, read from above)",
-    "parts": [
-     "hat"
-    ],
-    "cyls": [
-     [
-      0,
-      0,
-      0,
-      0.21,
-      1.972,
-      2.3
-     ]
-    ],
-    "hex": "#9A00B4",
-    "L": 28,
-    "C": 16
-   },
-   {
-    "why": "r2f: the iron rim a deep plum iron",
+    "why": "orch1 UNITS2: the iron rim a deep plum iron round the whole brim",
     "parts": [
      "hat_rim"
     ],
     "hex": "#9A00B4",
-    "L": 24,
-    "C": 9,
-    "cyls": [
-     [
-      0,
-      0,
-      0,
-      0.21,
-      1.972,
-      2.3
-     ]
-    ]
+    "L": 14,
+    "C": 8
    }
   ]
  },
@@ -432,7 +422,7 @@
     "parts": [
      "cap"
     ],
-    "hex": "#009854",
+    "hex": "#5E9D7D",
     "L": 40,
     "C": 14
    },
@@ -441,9 +431,28 @@
     "parts": [
      "cap_band"
     ],
-    "hex": "#009854",
+    "hex": "#5E9D7D",
     "L": 50,
     "C": 10
+   },
+   {
+    "why": "orch1 UNITS2: crown break: the dome's apex (r < 0.22 m) a deep teal, the far shoulder of the dome keeps the mint",
+    "parts": [
+     "cap"
+    ],
+    "cyls": [
+     [
+      0.0,
+      0.0,
+      0.0,
+      0.22,
+      2.12,
+      2.4
+     ]
+    ],
+    "hex": "#5E9D7D",
+    "L": 18,
+    "C": 12
    }
   ]
  },
@@ -454,9 +463,9 @@
     "parts": [
      "helm"
     ],
-    "hex": "#557D86",
+    "hex": "#329EAB",
     "L": 14,
-    "C": 28
+    "C": 34
    },
    {
     "why": "orch1 W1-B fix round 2 (FU-3): pauldrons and tiers a cool teal-slate (CIELAB h ~200, albedo HSV ~180, C* 12), a step greener than the helm so the top 25 % stays at HSV 180-190 and out of the ally band",
@@ -466,9 +475,9 @@
      "tier_R",
      "tier_L"
     ],
-    "hex": "#557E7F",
+    "hex": "#3B9F9C",
     "L": 34,
-    "C": 14
+    "C": 20
    },
    {
     "why": "u3: the signature periwinkle moves to the coat (mid body), so the crown leaves the lilac family and sigPct holds",
@@ -486,13 +495,13 @@
  "ilsheta": {
   "zones": [
    {
-    "why": "U7/u3 crown: the pale hood the signature green, darker and stronger than r2f (L 46 C 22 read sage-cream at the game camera)",
+    "why": "orch1 UNITS2: the hood a deep teal-green (the pale sage hood made a near-neutral top 6 dE from Hesmi and 25 from Sukri; teal keeps 30 deg from Ulkro's green)",
     "parts": [
      "hood"
     ],
-    "hex": "#74B300",
-    "L": 42,
-    "C": 32
+    "hex": "#449F93",
+    "L": 22,
+    "C": 26
    }
   ]
  },
@@ -512,12 +521,31 @@
  "sukri": {
   "zones": [
    {
-    "why": "U7 crown: the cream hood a pale lemon at its own value",
+    "why": "orch1 UNITS2: the hood a lemon-lime, the lower hood a deep shade of it (units_gate P1: the lemon hood sat 17 deg from Nurrow's straw; P3 top L* 87.5 > 85)",
     "parts": [
      "hood"
     ],
-    "hex": "#F2F06C",
-    "L": 54,
+    "hex": "#879762",
+    "L": 30,
+    "C": 24
+   },
+   {
+    "why": "orch1 UNITS2: crown break: the hood's crown (z > 1.33 m) the pale lemon-lime over its deeper lower half",
+    "parts": [
+     "hood"
+    ],
+    "boxes": [
+     [
+      -0.6,
+      -0.6,
+      1.33,
+      0.6,
+      0.6,
+      1.8
+     ]
+    ],
+    "hex": "#879762",
+    "L": 44,
     "C": 24
    }
   ],
@@ -559,7 +587,7 @@
     "k": 0.35
    },
    {
-    "why": "orch1 W1-B fix round 2 (FU-1): the shards' honed upper sections (z > 2.12, the game camera's crown) a pale near-neutral stone (L* 89, C* 7, teal-leaning): the pale shards own the top cluster at the game camera, and any teal or cyan chroma on them sat between Marund's pale green and Lisvel's pale cyan (units_gate w1b_f3 / w1b_f3e: C* 9 -> Marund dE 24.9, C* 8.5 -> 21.5); the bible top band (P3 70-85) needs them pale",
+    "why": "orch1 UNITS2: the shards' honed upper sections a mid stone grey (the pale shards made a near-neutral top 13 dE from Lisvel; ruling 44 asks dE >= 20)",
     "boxes": [
      [
       -0.45,
@@ -575,7 +603,7 @@
      0.79
     ],
     "hex": "#6A9485",
-    "L": 89,
+    "L": 70,
     "C": 7,
     "k": 1.0
    },
@@ -839,5 +867,32 @@
   "qMin": 48,
   "gutterFill": 24,
   "islandGrow": 4
+ },
+ "nurrow": {
+  "gutterFill": 24,
+  "islandGrow": 4,
+  "zones": [
+   {
+    "why": "orch1 UNITS2: crown break (P4: the pale straw disc read one value from rim to crown, dL 1.3): the cone round the knob a deep smoked straw, the brim keeps its pale straw",
+    "parts": [
+     "hat_cone",
+     "hat_knob",
+     "hat_band"
+    ],
+    "cyls": [
+     [
+      -0.01,
+      0.0,
+      0.0,
+      0.17,
+      1.6,
+      2.0
+     ]
+    ],
+    "hex": "#A38F5C",
+    "L": 28,
+    "C": 14
+   }
+  ]
  }
 }

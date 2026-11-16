@@ -3,12 +3,14 @@
 // changes a decision — it reads events, entity state and each controller's public and private fields after the step.
 // Grown from the diagnosis probe _tmp_diag_ai.ts (commit e5ea2bac1), whose numbers are the baseline in ruling 40.
 //
-//   node _harness/probe_sim_bot_tactics.ts                      the gate (npm run probe): RIFT 16 seeds + FRAY 16 seeds per
+//   node _harness/probe_sim_bot_tactics.ts                      the gate (npm run probe): RIFT 48 seeds + FRAY 24 seeds per
 //                                                               tier (novice, adept, veteran; same tier on both sides),
 //                                                               cut at 30:00, one worker per tier
-//                                                               (16, was 8: an 8-game window swung the base-defence and
-//                                                               ahead-death reads by 6-12 points between seed windows)
-//   flags: --seeds N (RIFT; FRAY gets the same) · --seed0 N · --cut S · --diffs a,b · --suites rift,bridge,fray
+//                                                               (48, was 16: a 16-game window put the veteran Wick-falls read
+//                                                               at 0.88-1.31 a game across seed windows, a 1.1 bar inside the
+//                                                               noise — owner_rulings 44; every bar now sits ≥ 2 standard
+//                                                               errors from the value measured at the commit that set it)
+//   flags: --seeds N (RIFT; FRAY gets the same unless --fray-seeds N) · --seed0 N · --cut S · --diffs a,b · --suites rift,bridge,fray
 //          --out <json> (raw per-game data) · --merge a.json,b.json (print the table of saved runs, no gates) · --table
 //
 // Gates (per tier novice / adept / veteran; "-" = reported only):
@@ -967,15 +969,16 @@ const MERGE = opt('merge', '');
 const WORKER = opt('worker', '');
 if (MERGE) merge(MERGE.split(','));
 else if (WORKER) {
-  const seeds = Number(opt('seeds', '16')), seed0 = Number(opt('seed0', '1')), cut = Number(opt('cut', '1800'));
+  const seeds = Number(opt('seeds', '48')), seed0 = Number(opt('seed0', '1')), cut = Number(opt('cut', '1800'));
+  const fraySeeds = Number(opt('fray-seeds', argv.includes('--seeds') ? String(seeds) : '24'));
   const suites = opt('suites', 'rift,fray').split(',');
   const catalog = loadCatalog();
   const games: GameOut[] = [];
-  for (const s of suites) for (let i = 0; i < seeds; i++) games.push(runGame(catalog, s, seed0 + i, WORKER, cut));
+  for (const s of suites) for (let i = 0; i < (s === 'fray' ? fraySeeds : seeds); i++) games.push(runGame(catalog, s, seed0 + i, WORKER, cut));
   writeFileSync(opt('out', ''), JSON.stringify({ diff: WORKER, games }));
 } else {
   const diffs = opt('diffs', 'novice,adept,veteran').split(',');
-  const pass = ['seeds', 'seed0', 'cut', 'suites'].flatMap((k) => (argv.includes(`--${k}`) ? [`--${k}`, opt(k, '')] : []));
+  const pass = ['seeds', 'seed0', 'cut', 'suites', 'fray-seeds'].flatMap((k) => (argv.includes(`--${k}`) ? [`--${k}`, opt(k, '')] : []));
   const t0 = Date.now();
   const tmp = (d: string): string => `_harness/_reports/_tmp_tactics_${process.pid}_${d}.json`;
   const runs = await Promise.all(diffs.map((d) => new Promise<TierRun>((done, fail) => {

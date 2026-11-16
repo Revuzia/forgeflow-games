@@ -17,7 +17,9 @@
 //              convention) against tokens.json fighter.valueLstar; the spatial top/mid/bottom rows are reported too
 //   share      share of top-cluster pixels in the ally (HSV 200-225), harm/enemy (28-50) and heal (125-150) bands
 // Gates (FU-4; min over the runs of a fighter, never the median: lighting-dependent reads):
-//   P1  no pair of tops under 30 deg CIELAB hue (both C >= 15) with dE76 < 25 (min over every run pair)
+//   P1  no pair of tops under 30 deg CIELAB hue (both C >= 15) with dE76 < 25 (min over every run pair); a pair passes on
+//       dE >= 25 OR a hue gap >= 30. Near-neutral tops (the fighter's median top C* < 15) do not skip it: such a top must be
+//       dE76 >= 20 from every other top (min over every run pair; owner_rulings 44, orch1 UNITS2)
 //   P2  no top median inside the ally (200-225), enemy/harm (28-50) HSV band at S >= 0.40 (heal 125-150 reported only)
 //   P3  top-quarter L* inside the bible band (70-85) on the median run (tokens.json fighter.valueLstar note); the middle half and
 //       the darkest quarter are reported as valueMidOk / valueBottomOk, not gated (outline and cast shadows sit in the dark quarter)
@@ -36,6 +38,7 @@ mkdirSync(OUT, { recursive: true });
 const FIGHTERS = ['ardit', 'burdam', 'dunsom', 'ervet', 'hesmi', 'ilsheta', 'kemdo', 'lisvel', 'marund', 'nurrow', 'odrum', 'rishal', 'sukri', 'tunlan', 'ulkro', 'vashil'];
 const BAND = { top: [70, 85], mid: [45, 65], bottom: [20, 35] };       // tokens.json fighter.valueLstar
 const ALLY = [200, 225], HARM = [28, 50], HEAL = [125, 150];
+const NEUTRAL_C = 15, NEUTRAL_DE = 20;                                 // P1 near-neutral rule (owner_rulings 44)
 const t0 = Date.now();
 
 // ---- in-page measurement (runs in the bench page: it holds the canvas) ----
@@ -224,8 +227,13 @@ for (let i = 0; i < FIGHTERS.length; i++) for (let j = i + 1; j < FIGHTERS.lengt
   }
   const mA = per[FIGHTERS[i]], mB = per[FIGHTERS[j]];
   const medE = dE(mA.topLab, mB.topLab), medH = hdiff(mA.topH, mB.topH);
-  pairs.push({ a: FIGHTERS[i], b: FIGHTERS[j], dEMin: +minE.toFixed(1), dHueMin: +minH.toFixed(1), dEMedian: +medE.toFixed(1), dHueMedian: +medH.toFixed(1), fail: !!hit, worst: hit });
+  // orch1 UNITS2 lead ruling (owner_rulings 44): a near-neutral top (the fighter's median top C* < NEUTRAL_C) no longer
+  // skips P1: it must sit dE76 >= NEUTRAL_DE from every other top (min over every run pair, like the chromatic test)
+  const neutral = mA.topC < NEUTRAL_C || mB.topC < NEUTRAL_C;
+  const nHit = neutral && minE < NEUTRAL_DE ? { dE: +minE.toFixed(1), neutral: [FIGHTERS[i], FIGHTERS[j]].filter((f) => per[f].topC < NEUTRAL_C) } : null;
+  pairs.push({ a: FIGHTERS[i], b: FIGHTERS[j], dEMin: +minE.toFixed(1), dHueMin: +minH.toFixed(1), dEMedian: +medE.toFixed(1), dHueMedian: +medH.toFixed(1), neutral, fail: !!hit || !!nHit, worst: hit ?? nHit });
   if (hit) fails.push({ gate: 'P1 pair', a: FIGHTERS[i], b: FIGHTERS[j], ...hit });
+  if (nHit) fails.push({ gate: 'P1 near-neutral pair', a: FIGHTERS[i], b: FIGHTERS[j], ...nHit });
 }
 pairs.sort((x, y) => x.dEMin - y.dEMin);
 for (const f of FIGHTERS) {
