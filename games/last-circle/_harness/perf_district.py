@@ -35,6 +35,7 @@ W10 R1A pass 5 (orchestrator ruling 2026-11-15, like for like; no bar changed): 
 (the same world position on both builds: the cached baseline view's spec), and the candidate's own default drop view is measured too ('landing') and
 judged absolutely - tris-landing: its triangles <= x1.25 (phone x1.20) the heaviest baseline view (drop / street / endgame); drop-view-calls reads it.
 Plant furn-tris: every house inside / furniture chunk draws +30 % of its own triangles -> tris-vs-baseline or tris-landing FAILS.
+Plant landing-tris (tris-landing's own control): the extra-tris spheres counted on tris-landing alone -> tris-landing FAILS.
 Exit 0 pass / 1 fail / 2 could-not-judge (server refused, a match load timed out, a view measured nothing).
 """
 from __future__ import annotations
@@ -68,7 +69,11 @@ PLANT_ROWS = {"extra-calls": {"calls-vs-baseline"}, "extra-tris": {"tris-vs-base
               # (W10 R1A pass 5, orchestrator ruling 2026-11-15) the like-for-like rows' real-content control: every house inside / furniture chunk mesh
               # (userData.hgChunk) draws 30 % more of its own triangles (a child mesh: drawn exactly where the chunk is) - the pinned drop / street / endgame
               # rows or the landing row must FAIL
-              "furn-tris": {"tris-vs-baseline", "tris-landing"}}
+              "furn-tris": {"tris-vs-baseline", "tris-landing"},
+              # (W10 R1A pass 6) tris-landing's own control: the extra-tris spheres (1.3 x the heaviest baseline view, every view) counted on tris-landing
+              # ALONE - the candidate's landing view must read over x1.25 the heaviest baseline view (furn-tris reads x1.205 there: it fails the pinned rows)
+              "landing-tris": {"tris-landing"}}
+PLANT_KIND = {"landing-tris": "extra-tris"}     # the page-side fault a plant plants (default: its own name)
 
 # Everything below runs in the page. One call = one view.
 PLANT_JS = r"""([kind, count]) => { const W = window.__LC__.W, T = W.THREE, sc = W.kernel.scene;
@@ -187,7 +192,7 @@ def measure(args, label, map_id, rev, plant, save_png, seed=None, plant_n=None, 
         res["viewport"] = [sess_kw["viewport"]["width"], sess_kw["viewport"]["height"]] if args.phone else [args.width, args.height]
         print("  [%s %s s%d] loaded in %.0f s, landed %s, tier %s" % (label, map_id, seed, time.time() - t0, res["land"].get("onGround"), res["tier"]), flush=True)
         if plant:
-            res["plant"] = s.js(PLANT_JS, [plant, plant_n])
+            res["plant"] = s.js(PLANT_JS, [PLANT_KIND.get(plant, plant), plant_n])
             print("  [%s %s] plant %s: %s" % (label, map_id, plant, res["plant"]), flush=True)
         opt = {"dropAt": DROP_AT[map_id], "streetAt": STREET[map_id], "png": bool(save_png)}
         # (W10 R1A pass 5, orchestrator ruling 2026-11-15) pin: {view: camera spec} - the view drawn from THAT world position (the baseline's drop camera),
