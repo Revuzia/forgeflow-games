@@ -1,7 +1,7 @@
 // GENESIS — PERF s19 bisection views of the opaque scene pass (debug; both default off, printed in the report header).
 //   ?overdraw=1  heat view: every material drawn in the scene pass (layer 0) writes one constant, added up with the
-//                depth test off, so a pixel's brightness counts the fragments rasterised over it (dark red = 1 layer,
-//                orange ~4, yellow-white 8+). Alpha-test discards still apply. Read it with the sky and post passes
+//                depth test off, so a pixel's brightness counts the fragments rasterised over it (dark = 1 layer, brighter with each layer (a constant 0.03 0.01 0.003 per fragment before tonemapping);
+//                Alpha-test discards still apply. Read it with the sky and post passes
 //                off: `?overdraw=1&atmo=0&clouds=0&water=0&gtao=0&bloom=0&godrays=0&lum=0&fx=0`.
 //   ?zpre=1      a depth-only prepass of the terrain (planetview.ts swapZpre, terrainmat.ts makeTerrainZpreMaterial)
 //                on layer ZPRE_LAYER before the colour pass.
@@ -22,7 +22,7 @@ function patch(m: Material & { isRawShaderMaterial?: boolean }): void {
   m.onBeforeCompile = (sh, r) => {
     prev.call(m, sh, r);
     const i = sh.fragmentShader.lastIndexOf('}');
-    sh.fragmentShader = `${sh.fragmentShader.slice(0, i)}\n  gl_FragColor = vec4(0.09, 0.03, 0.008, 1.0);\n}${sh.fragmentShader.slice(i + 1)}`;
+    sh.fragmentShader = `${sh.fragmentShader.slice(0, i)}\n  gl_FragColor = vec4(0.03, 0.01, 0.003, 1.0);\n}${sh.fragmentShader.slice(i + 1)}`;
   };
   m.customProgramCacheKey = () => `${key}-overdraw`;
   m.blending = AdditiveBlending; m.depthTest = false; m.depthWrite = false; m.needsUpdate = true;

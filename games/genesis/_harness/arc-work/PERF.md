@@ -1555,3 +1555,121 @@ long press frame-rate independent. Report after 1-2 verified.
   image-proven. Nothing that looked like z-fighting or a depth error was seen in any reversed image. The report's
   `depth:` lines print EXT_clip_control YES/NO in both modes. Mac round 8: ABAB default vs `?revz=1`.
 - GATE check3.log (final tree, revz default off): npm run check 1005 pass, 0 fail, exit 0; npm run build exit 0 (build-prod3.log).
+
+## SESSION 19 (2026-11-16 ~16:00Z) — round 9 (MAC-ROUND9): pure GPU shading cost -> PART A bisection build, PART B the terrain material cache
+- READ FIRST (changes the picture of round 9): rounds 2-5 printed 22-40 M triangles a frame on the Mac (scene ~8-10 M +
+  shadow ~19 M) for a 1.6 MP canvas: the opaque scene pass has ~5 triangles per PIXEL. A fragment shader runs once
+  per triangle per covered 2x2 pixel quad (4 invocations at least, for the derivatives), and with MSAA once per
+  triangle touching ANY of a pixel's 4 samples. With sub-pixel triangles the terrain / tree shaders therefore run
+  10-20x per pixel, not once. This explains what the per-pixel arithmetic cannot: ~100 noise calls = ~10^4 ALU ops per
+  invocation is ~5 ms for 1.6 MP on an M5 if run once per pixel, yet the frame is 600 ms; MSAA off halves it (a
+  sub-pixel triangle that misses the pixel centre makes no fragment without MSAA); the small window is 5.6x faster
+  for 13 % of the pixels; flat material (no shading at all) is still ~147 ms (the triangles themselves).
+  So the frame is (invocations = triangles x quads) x (cost per invocation). PART B cuts the second factor (store
+  once, sample); the first factor (triangle density per pixel: terrainPixelError 4 on Ultra, tree LODs) is the next
+  item if the cache alone is not enough — the flat-material floor says it will matter.
+- PART A switches (all default off / none; every one is printed in the report header's switch line):
+  * `?tshade=<list>` terrain fragment cuts, compile-time (src/render/shaders/shadecut.ts + terrainmat.ts TS_ defines):
+    nonoise (every snoise / snoiseGrad / fbm3 / fbmAA / vnoise / voronoi3 call returns a constant), novor (voronoi3
+    only), fbm1 (fbm3 = 1 octave), noshadow (5 PCF taps), nocloudsh (cloud shadow cube lookups), nojoints (rk_joints
+    rock blocks), noveg (grass / shrub / canopy / crop layers), nolayers (snow sand ash lava wet ice burnt road fire),
+    nofloor (forest floor, groundfloor.ts), nobump (bump + micro normal), nolight (sun / moon / sky block), nosurf
+    (constant surface: lighting cost only), albedo (unlit albedo: surface cost only), all (every cut except
+    nolight / nosurf / albedo).
+  * `?vshade=` `?wshade=` `?bshade=` (vegetation, water, buildings): nonoise novor fbm1 noshadow all (the same macros).
+  * `?overdraw=1` (src/render/overdraw.ts): every layer-0 material writes one constant, additive, depth test off;
+    brightness = fragments rasterised per pixel. Use with `&atmo=0&clouds=0&water=0&gtao=0&bloom=0&godrays=0&lum=0&fx=0`.
+  * `?zpre=1`: terrain depth prepass (its own twin: the terrain's vertex shader, empty fragment, colorWrite off, on
+    layer 8) before the colour pass; `invariant gl_Position` + `invariant vFragDepth` on both programs; the colour pass
+    is unchanged (LEQUAL, depth write on), so the picture cannot change unless the two depths differ. Only the
+    terrain: it already draws last among the opaques (renderOrder 50), so everything else's depth is there before
+    it. NOTE: with log depth a fragment shader writes gl_FragDepth, so the prepass only pays through zcons
+    (conservative depth) — or with `?revz=1` (true early-Z). Test `zpre=1` and `zpre=1&revz=1`.
+  * msaashade: NOTHING forces per-sample shading: no gl_SampleID / gl_SamplePosition / `sample` / `centroid`
+    qualifier, no alphaToCoverage, no sampleCoverage anywhere in src/render or in the three chunks we include. No
+    switch added. MSAA's cost is per-TRIANGLE shading of every pixel a triangle's samples touch (see above).
+- STATIC COST of one terrain fragment (reading terrainmat.ts + groundfloor.ts; s = one 3D simplex noise, V = one
+  voronoi3 = 27 hashed cells):
+  program total: 179 snoise + 6 snoiseGrad + 10 fbm3 (3 s each) call sites, 5 rk_joints calls (3 s each) = ~230 s,
+  10 V, crater loops (4 tiers x 8 cells, airless only). Branches on the cell fields decide what runs:
+  always: macro m1 m2 (4 s) + warpV, big, rkLayered (7 s) + macro tint (6 s) + far breakup (4 s) = ~21 s
+  rock (fine, where rock shows): 13 s + 3 snoiseGrad + 3-4 rk_joints (9-12 s) = ~27 s
+  soil: 5 s + soilDetail 4 s | sand: sandDetail 5 s | ore 9 s + 2 V | road 3 s | snow 4 s | ice 2 s + 1 V
+  vegetation: 23 s + 3 fbm3 (9 s) + up to 3 V; swardDetail 22 s; meadowTint 11 s; forest floor ~26 s
+  lava 20 s + 4 V | fire 19 s + 2 fbm3 | micro normal (veryFine) 2 snoiseGrad | caustics 6 s (shallow water, near)
+  -> a near meadow fragment ~95-100 s + 1-2 V; near forest floor ~125 s + 2-3 V; near bare rock ~60 s; far land ~40 s.
+  texture taps (lighting, the same for every fragment): 5 shadow PCF + 1 cloud-shadow cube (2 with the moon) + 1
+  transmittance LUT + 4 irradiance SH + 2 sky LUT + 1 city-light cube = 14-15; +1 overlay when the map overlay is on.
+- PART B DESIGN — the terrain material cache `?tcache=1` (store once, sample; default off until proven). NOT BUILT YET.
+  WHY IT PAYS: the surface function evalTerrain (~40-125 noise calls) runs per triangle-quad invocation, 6-20x per
+  pixel with 1-2 px terrain triangles (PATCH_RES 32 -> ~1000 triangles a patch; rounds 2-5: the patches on screen
+  hold 1-2 M terrain triangles). Baked into a texture it runs once per TEXEL, and only when something it depends on
+  changes; the per-invocation cost left is 3 texture fetches + the lighting block (14-15 taps).
+  WHAT evalTerrain DEPENDS ON (read from the code; this decides what can be stored):
+   a. P, Nb and the cell fields (varyings vF0-5, vOre, vCurv, vFireWind): fixed per patch until the sim's field
+      textures change (snow, wetness, ash, burn, crops, paint / raise / crater edits) -> re-bake the patches whose
+      cells changed (fieldtex.ts already knows the dirty cells per sync) or, simpler first, every tile whose field
+      version is older than the snapshot's, budgeted.
+   b. fw (the pixel footprint: every aaF() fade, the `fine` / `veryFine` switches): in the bake fwidth(vBodyPos) is the
+      TEXEL footprint, so the tile's texel density must track the screen's (size classes below), and a tile is
+      re-baked when its class changes. Grazing angles (screen footprint >> texel footprint along the view) need the
+      tile's mip chain + anisotropic filtering: prefiltered instead of faded analytically. THIS is the part where
+      'identical' has to be shown by imgdiff, not assumed.
+   c. camDist (9 fades: 14-45 m crop under-storey, 120-500 m mid breakup, 150-550 m, 220-520 m gullies, 400-1300 m,
+      uVegFade / uCanopyFade instanced-tree hand-over) and the eye direction (sward sheen, terrainmat.ts ~674):
+      camera-dependent. Re-bake a tile when the camera's distance to the patch changed by more than ~2 % or its
+      direction by ~2 degrees since the bake (budgeted, nearest first). At rest: no bakes. A tile that is stale by
+      under 2 % is not visible; a tile further behind (fast flight) shows slightly old fades until its turn.
+   d. uSunDirBody (canopy shade ff_canopy, sunny-side tint, day/night fire), uYearFrac (season): slow -> re-bake on a
+      threshold of change, round robin.
+   e. uTime (lava skin, fire, embers) and fwidth(fire) / dFdx(P): LIVE. A fragment with lava > 0.01 or |fire| > 0.01
+      keeps the full evalTerrain path (a dynamic branch on the varyings; such patches are rare).
+  NOT stored: lighting (sun, shadow, cloud shadow, sky, moon, caustics), city lights, brush ring, map overlay: they
+  stay per fragment in the main shader exactly as now.
+  STORE (TSurf, 15 channels) in 3 RGBA8 targets per tile + mips: T0 = albedo (sqrt-encoded) + rough; T1 = bump
+  gradient in the patch's tangent frame (2 ch, replaces the screen-space derivative of ts.bump) + ao + sky; T2 =
+  microG (2 ch tangent) + sward + glint. emis only exists on the live path. If 8 bits band the albedo in the dark,
+  T0 becomes RGB10_A2 / RGBA16F (+33 % / +100 % of that target).
+  ADDRESSING: no new vertex data. A page is PATCH_PAGE = 16 slots of NVERT vertices in lattice order: slot =
+  gl_VertexID / NVERT, lattice (i, j) from gl_VertexID % NVERT (skirt vertices clamp to the edge) -> tile uv. Each
+  page owns 16 tiles in an atlas layer (two triangular patches share one square tile along the diagonal, with a 2 texel
+  gutter). A small per-page uniform array gives each slot's tile rect (size classes differ).
+  BAKE: the terrain program compiled with TC_BAKE: the same vertex shader and varyings, gl_Position = tile uv, three
+  MRT outputs = TSurf; drawn with the page's geometry and the slot's draw range into the tile's viewport, modelView
+  from the real camera (camDist, eye direction as on screen). Then the tile's mips. One bake costs one evalTerrain per
+  texel: a 64^2 tile ~ 2 k texels, i.e. a frame budget of 64 tiles is ~0.13 MP of heavy shading (today: ~10 MP+).
+  SIZE CLASSES (texels along the patch edge >= pixels along it): 32 / 64 / 128 / 256 / 512 by the patch's projected
+  edge, with hysteresis; the finest LOD close to the camera is the only user of 256-512.
+  MEMORY (Ultra, 1686x963, 16 GB Mac, GPU process ~1.75 GB today): ~1500 patches on screen: 1400 x 64^2 x 0.5 (two
+  per tile) x 3 targets x 4 B x 1.33 (mips) = ~46 MB; ~80 near patches at 256^2 = ~42 MB; ~10 at 512^2 = ~21 MB;
+  pool slack and off-screen kept tiles x2 -> ~220 MB. Hard cap 256 MB (LRU of tiles; over the cap the lowest class
+  wins). At dpr 2 full screen (5 MP) the classes rise one step: cap 512 MB. Both are small against 16 GB.
+  PROOF PLAN (imgdiff vs `tcache=0` at the animation floor ~3/255, speed 0): town 90 m, forest 200 m, low grazing
+  view, ridge 1800 m, orbit; LOD seams (pan sequence p1-p6); edits (paint / raise / crater via __GENESIS__); snow /
+  wet / ash over sim time; lava + fire live path. Plus the in-page toggle (as zpreOn) for frame-adjacent pairs.
+  BUILD ORDER: (1) TC_BAKE program + one fixed 128 class + display path, in-page toggle, town imgdiff; (2) mips +
+  aniso + gutters, grazing view; (3) invalidation a-d + budgets; (4) size classes + LRU cap; (5) live path e.
+  EXPECTED GAIN AND ITS LIMIT: an earlier round's `hide=terrain` took 600 -> 270 ms: the cache can remove most of those ~330 ms,
+  NOT the other 270 (trees and far trees: 4-5 M sub-pixel triangles with alpha-test shaders, 19 M shadow triangles).
+  30 fps needs the triangle-density work on vegetation / shadows as well; `vshade=all`, `hide=veg`, `shadows=0`
+  and `msaa=0` runs of round 10 will size that.
+- PART A PROOF (local, SwiftShader, babel 307987276, medium 320x180, speed 0; probe _harness/arc-work/probe-s19.mjs;
+  logs + shots in _harness/scratch/arc/perf/s19/, sheets sheet-zab-town.png, sheet-a1.png, sheet-a2.png LOOKED AT):
+  every run 0 page errors, 0 shader / GL errors:
+  * zpre=1, in-page A/B one frame apart (Renderer.zpreOn): town on vs off 3.52/255, on vs on2 3.97, off vs off2 3.19;
+    low view on vs off 3.14, on vs on2 3.05, off vs off2 3.67 -> on/off is inside the same-mode frame-to-frame floor;
+    the x4 diff shows foliage sway and the hand ring only, no terrain holes or edges. (Log depth + zcons path. The
+    `zpre=1&revz=1` pair was NOT run locally: the Mac's look check must cover it.)
+  * tshade=all (bare lit ground, as expected), tshade=fbm1,novor,nojoints,nofloor,nocloudsh,albedo (unlit albedo),
+    tshade=nosurf,nolight + vshade=all + wshade=all + bshade=all (black ground, trees / houses / water drawn):
+    all compile and draw. The single cuts not run on their own: nonoise, noveg, nolayers, nobump, noshadow (all inside
+    `all`), nolight / nosurf (run together).
+  * overdraw=1: draws; shows the houses, tree cards and a net of bright lines = the terrain patches' SKIRTS (every
+    patch edge adds 2 layers) over an even ground layer. The per-fragment constant was lowered x3 after that shot
+    (0.03 0.01 0.003): one layer was already mid-orange.
+  * local triangle count at 320x180 (57.6 k pixels): scene 1.5-1.6 M, shadow 2.4-2.7 M triangles = ~27 scene
+    triangles per pixel here; the Mac's ~5 per pixel at 1686x963.
+  GATE: npm run check 1047 pass, 0 fail (check1.log); npm run build exit 0 (build-prod.log).
+- ROUND 10 ASK (Ultra, landing spot, same window): base; tshade=all; tshade=nonoise; tshade=albedo; tshade=nosurf;
+  tshade=noveg; tshade=nofloor; tshade=novor; vshade=all; bshade=all; wshade=all; tshade=all&vshade=all&bshade=all&
+  wshade=all; zpre=1; zpre=1&revz=1 (look: holes in the ground?); hide=veg; one overdraw screenshot.
