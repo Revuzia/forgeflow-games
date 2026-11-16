@@ -47,7 +47,7 @@ export function workAnim(kind: number): number {
     case TASK.build: return AnimState.build;
     case TASK.teach: case TASK.preach: return AnimState.teach;
     case TASK.learn: return AnimState.sit;
-    case TASK.pray: case TASK.worship: return AnimState.pray;
+    case TASK.pray: case TASK.worship: case TASK.offer: return AnimState.pray;
     case TASK.mourn: case TASK.bury: return AnimState.mourn;
     case TASK.socialize: case TASK.court: case TASK.raiseChild: return AnimState.sit;
     case TASK.flee: return AnimState.flee;

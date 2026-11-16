@@ -28,6 +28,8 @@ import { igniteArea, igniteCell, extinguishArea, fuelAt } from '../fields/fire.t
 import { forestArea } from '../fields/vegetation.ts';
 import { relationOf } from '../people/war.ts';
 import { godAct, miraclePotency } from './belief.ts';
+import { reachWiden } from './reach.ts';
+import { powerOf } from './powers.ts';
 import { giveTo } from './gifts.ts';
 import { hurtPeople } from './harm.ts';
 import { harmScale } from './wrath.ts';
@@ -329,7 +331,7 @@ export function registerMiracleCommands(r: CommandRegistry): void {
     r.register(`miracle.${k}`, ({ u, p, cmd }, a) => {
       const g = actor(cmd);
       const pos = norm(a.pos ?? herePos(u, p));
-      const power = miraclePotency(u, p, g, COST[k] ?? 10) * ((a.power as number | undefined) ?? 1);
+      const power = miraclePotency(u, p, g, COST[k] ?? 10) * ((a.power as number | undefined) ?? 1) * reachWiden(u, g, powerOf(u.content, cmd)?.tier ?? 0);
       return castMiracle(u, p, k, pos, {
         radius: a.radius as number | undefined, power, god: g, by: 'god', knowledge: a.knowledge as string | undefined,
         settlement: typeof a.settlement === 'number' ? a.settlement : undefined, duration: a.duration as number | undefined,
@@ -347,7 +349,7 @@ export function registerMiracleCommands(r: CommandRegistry): void {
     const g = actor(cmd);
     const pos = norm(a.pos ?? herePos(u, p));
     const k = String(a.kind);
-    const power = miraclePotency(u, p, g, COST[k] ?? 10) * ((a.power as number | undefined) ?? 1);
+    const power = miraclePotency(u, p, g, COST[k] ?? 10) * ((a.power as number | undefined) ?? 1) * reachWiden(u, g, powerOf(u.content, cmd)?.tier ?? 0);
     return castMiracle(u, p, k, pos, { radius: a.radius as number | undefined, power, god: g, by: 'god', knowledge: a.knowledge as string | undefined });
   }, {
     desc: 'Draw a sigil: any miracle by name (sigils map here)', category: 'Miracles',

@@ -436,6 +436,7 @@ export function heartSigns(u: Universe, p: Planet, b: MoverBlock): void {
     const task = A.task[s];
     let v: HeartSignId = HeartSign.none;
     if (task === TASK.defy) v = A.tData[s] === 2 ? HeartSign.hurl : HeartSign.fist;
+    else if (task === TASK.offer) v = HeartSign.fear;
     else if (task === TASK.pray || task === TASK.worship || task === TASK.pilgrimage) v = HeartSign.pray;
     else if (!(A.flags[s] & AgentFlag.child)) {
       const sid = b.group[k];

@@ -64,3 +64,46 @@ Knobs: REACH.hold (pace), REACH.rite (income), REACH.terror, REACH.freeCooldown.
 - Free cooldowns: rain 60, lightning 60, ignite 60, gift 120, heal-person 30, extinguish 30. A free spell cast above its default
   radius / power is priced (half old cost x size): `priceOf` + the free branch of `chargeCheck`.
 - Tag script, powers.json, spec §3.2 / §3.6 / §10 / summary, tests and the probe's `free` list updated.
+
+## Stint 3 (2026-11-16, "fix all things not in build yet") — sim lane, IN PROGRESS (see the end for the final state)
+- Code done + focused test `tests/reach-arc.test.ts` (6 tests) green: town view, clay / cooldown / size in the powers query,
+  §2.3 hooks (pride, open defiance, broken covenant) with chronicle lines, link, TASK.offer, templeWanted fear clause,
+  widening, scenario standings, Strict + legacy, first deed, made-person rule. Still to do when this line was written:
+  pacing probe re-run, full gate, spec §9 status edit.
+
+## Stint 3 FINAL (2026-11-16) — everything §9 listed as "Not built yet" on the sim side is built, bound worlds only
+- `reach.ts`: `townState` (bits 1 proud / 2 open defiance / 4 broken covenant count, 12 d / 8 gives half, 360 d), applied in `count`
+  and `measures`; `link` (trade/30, pilgrims within 360 d via `since.pilgrimFrom` | new `since.pilgT`, kin = contacts with half
+  believers /3); chronicle lines `reach.rose / reach.fell / reach.town.proud|defiant|broken|back` (events.json; NO new sim event types);
+  `doorOffering` + `offersToday` (TASK.offer = 60, `people/work.ts`, decision in `relDecide` while sun elevation 0.06..0.3 falling);
+  `fearTown` (templeWanted clause); `reachWiden` (miracles.ts both cast paths, `meteorScale` in acts.ts); `startStanding` + `R.floor`
+  (sim.ts reads `ScenarioDef.standing / standingDays`; scenarios.json: babel, coldforge 1/60; twoworlds-late, system 2/60; lookdev 4/0);
+  `isStrict` (bound + settings.restraint: price = max(price, old cost)); first deed (`deedFor`, `R.deeds`, tier <= 2, once per open
+  question, never spent by a free spell); made-person rule (powers.ts hook: makers `life.spawn-people`, `settlement.introduce`; the made
+  get faith/trust/fear 0 and loyalty 1e-6 so `freshen` skips them); `meta.reach { bound, strict? }` (leaving legacy restraint is one-way).
+- New state (optional, sorted on save): `towns[k].{n,nt,nf,nb,l,lt,lp,lk,x,k,yg,yf}`, `floor`, `deeds`, `off`.
+- Query fields for the UI: see the final report (`reach`.towns/worlds/clayAll/freeBasics/strict/legacy/floor, `SettlementView.reach`,
+  `powers` args + `size basePrice clay cooldown readyIn cooldownText freeDeed strict`, new query `reach.price`).
+- Tests: `tests/reach-arc.test.ts` (6). Gate: `bash _harness/slot.sh npm run check` 1034 / 1034, detban clean; `npm run build` ok.
+- Probe (n 20; day first reached W / K / Wo): shore s1 help 2/22/-, severe 2/29/-, mixed 1/21/-; shore s2 help 2/22/-, severe 2/38/-,
+  mixed 1/23/-; babel s1 (starts Whispered by §7.5) help 0/17/115, severe 0/16/102, mixed 0/17/106 (130 d; before: 19/94, 17/92, 18/94).
+  Worshipped is later because all four babel towns are proud (count single: F = believers, about 200-250 against the line 150).
+  Known in babel is day 16-17 against the target floor of 17: hold 30 / top speed 2 = 15 days after the first counted day, and the start
+  standing makes day 1 count. NOT retuned (hold 1/30/150/360 is an owner ruling); `hold[2]` 32 would give day >= 17 (32 / 2 + 1).
+- Not done / for others: spec §9 status paragraph not edited (outside this lane); K (kin) has no test with more than one town;
+  `disaster-random` filter and audio cues untouched; ARC Open Rebellion (unbuilt) has no hook.
+
+## Review 3 fixes (2026-11-16, fix agent) — sim
+- `reach.ts` `sizeK` (one size factor for `priceOf` and `sizeOf`): radius, power, scale as before, plus `everywhere` (as the widest
+  brush, schema radius max / default), heads (`REACH.heads`: `life.spawn-people` count / 20, `settlement.found` count / 12,
+  `settlement.introduce` people qty / 8), gift units / `REACH.giftFree` 20, rain duration / 720 x intensity, lightning wrath
+  (its own, else the law) / `REACH.wrathFree` 0.3. `reach.price` / `powers` args now also take count, qty, people, items, duration,
+  intensity, wrath, everywhere.
+- `restraint.costScale` no longer scales a bound price: it only scales the Strict floor (`max(price, cost x scale)`).
+- `REACH.freeCooldown`: `plant` 60 (so it is size-priced too), `throw` 30 (witnessed, wonder 0.2).
+- `powers.ts` MAKERS: + `settlement.found` (the founded start at faith / trust / fear 0).
+- `measures` keeps a town's given-so-far on a re-bind (unbind + bind in one day no longer reopens the measure; probe p1 P4).
+- "1 minute more" grammar in the free cooldown refusal.
+- Tests: `tests/reach-review3.test.ts` (5). Not done: no tier rise for large head counts (the price does it: 1 500 people = 1 875);
+  spec text §3.2 / §3.6 not edited for the new size terms.
+- Gate after review 3 fixes: check 1047 / 1047, detban clean (153 files), typecheck ok; build: see fix agent report.

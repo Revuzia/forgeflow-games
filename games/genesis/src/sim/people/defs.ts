@@ -49,6 +49,8 @@ export const TASK = {
   shelter: 56, pilgrimage: 57, evacuate: 58,
   // ARC §3.2 (god/defiance.ts): open defiance in the open under the sky; tData = DEFY id (curse 1, hurl 2, burn 3, idol 4)
   defy: 59,
+  // POWERS-GROWTH §3.6 (god/reach.ts, bound worlds only): a portion left at the door of the worship place before dusk
+  offer: 60,
 } as const;
 export type TaskKind = (typeof TASK)[keyof typeof TASK];
 export const TASK_NAMES: string[] = [];
@@ -70,6 +72,7 @@ export const TASK_VERBS: Record<number, string> = {
   [TASK.bathe]: 'swimming', [TASK.possessed]: 'moved by the god', [TASK.reverse]: 'studying a strange object',
   [TASK.camp]: 'sleeping at a camp',
   [TASK.play]: 'playing', [TASK.chore]: 'doing chores', [TASK.gather]: 'at a gathering',
+  [TASK.offer]: 'leaving an offering at the door',
   [TASK.shelter]: 'sheltering from the storm', [TASK.pilgrimage]: 'on pilgrimage', [TASK.evacuate]: 'fleeing the danger', [TASK.defy]: 'shouting at the sky',
 };
 

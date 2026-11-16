@@ -403,6 +403,8 @@ export interface SettlementView {
   /** latest defiant act, <= 2 days old */
   defiant?: { kind: DefyKind; tick: number };
   covenant?: { id: number; vow: Vow; status: 'kept' | 'broken'; year: number };
+  /** POWERS-GROWTH (bound worlds, towns with believers): this town's part in the god's reach */
+  reach?: import('./god/reach.ts').TownReach;
 }
 
 /** SettlementView.flags bits */

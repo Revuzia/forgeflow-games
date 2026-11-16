@@ -201,6 +201,9 @@ export interface ScenarioDef {
   startHour?: number;
   planets: ScenarioPlanetDef[];
   peoples: unknown[];
+  /** POWERS-GROWTH §7.5 (bound games only): the standing the god begins with, held as a floor for standingDays (0: for good) */
+  standing?: number;
+  standingDays?: number;
 }
 
 // ───────────────────────────── peoples (phase 2) ─────────────────────────────

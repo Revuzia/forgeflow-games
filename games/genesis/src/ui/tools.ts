@@ -21,7 +21,7 @@
 // Setting a people down warns at the cursor where they could not live: no air to breathe, deep water, too cold (they
 // would freeze) or too hot — from the cell's temperature and the species' own tolerance (it never refuses: the god may).
 
-import { costLine, type CastSize } from './reach.ts';
+import { costLine, cardCostText, readyLine, priceArgs, type CastSize, type SimPrice } from './reach.ts';
 import type { Command, CommandResult, EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { ParamSpec, Power, ToolMode } from './powers.ts';
@@ -286,8 +286,15 @@ export class Tools {
     }
     // POWERS-GROWTH §6: one cost line on every priced power; a locked one says why (nothing at all in an unbound world)
     this.costEl = null;
-    const cl = costLine(p, this.castSize(p));
-    if (cl !== null) { this.costEl = h('div', { class: 'gn-tool-cost', data: { key: 'reach-cost' }, text: p.locked ? (p.reason ?? 'Beyond your reach.') : cl }); this.cardBody.append(this.costEl); }
+    this.simPrice = null;
+    const cl = costLine(p);
+    if (cl !== null) {
+      this.costEl = h('div', { class: 'gn-tool-cost', data: { key: 'reach-cost' }, text: p.locked ? (p.reason ?? 'Beyond your reach.') : cl });
+      this.cardBody.append(this.costEl);
+      this.readyEl = h('div', { class: 'gn-tool-cost gn-tool-ready', data: { key: 'reach-ready' }, hidden: true });
+      this.cardBody.append(this.readyEl);
+      this.updateCost();
+    }
     else if (this.host.view.restraint && p.cost) this.cardBody.append(h('div', { class: 'gn-tool-cost', text: `Restraint: costs ${p.cost} worship${p.cooldown ? `, then rests ${Math.round(p.cooldown / 60)} h` : ''}.` }));
     this.moreBtn.hidden = !extra;
     this.moreBtn.textContent = this.view.more ? 'Fewer settings' : `More settings (${extra})`;
@@ -303,17 +310,58 @@ export class Tools {
    * says so before the cast, not after, and offers to raise this one cast's wrath to it (the law stays where it is).
    */
   private costEl: HTMLElement | null = null;
+  private readyEl: HTMLElement | null = null;
+  private simPrice: SimPrice | null = null;
+  private priceAsk = 0;
+  private priceTimer: ReturnType<typeof setTimeout> | null = null;
   /** the size the armed cast is aimed at: the brush, and a power or scale the card sets */
   private castSize(p: Power): CastSize {
     const num = (v: unknown) => (typeof v === 'number' ? v : undefined);
     return { radius: radiusParam(p) ? this.brushRadius : undefined, power: num(this.values.power), scale: num(this.values.scale) };
   }
-  /** the cost line follows the chosen size (a free spell cast wider is priced) */
+  /** where the armed cast is aimed: the world and point under the cursor, else the selected town, else the viewed world */
+  private aim: { planet: number; dir: [number, number, number] } | null = null;
+  private aimAsked = 0;
+  private aimAt(p: Power): { planet?: number; settlement?: number; pos?: ArrayLike<number> | null } {
+    if (this.aim) return { planet: this.aim.planet, pos: this.aim.dir };
+    const sel = this.host.selected();
+    if (sel && sel.kind === 'settlement' && p.schema.settlement) return { planet: sel.planet ?? this.host.primary(), settlement: sel.id };
+    return { planet: this.host.primary() };
+  }
+  /** the aim moved (per frame): ask the sim again, a few times a second at most, so the line follows from town to town */
+  private followAim(cursor: GroundHit | null): void {
+    if (!this.costEl) { this.aim = null; return; }
+    const a = this.aim;
+    if (!cursor) { if (a) { this.aim = null; this.updateCost(); } return; }
+    if (a && a.planet === cursor.planet && a.dir[0] === cursor.dir[0] && a.dir[1] === cursor.dir[1] && a.dir[2] === cursor.dir[2]) return;
+    const now = performance.now();
+    if (now - this.aimAsked < 400) return;
+    this.aimAsked = now;
+    this.aim = { planet: cursor.planet, dir: [cursor.dir[0], cursor.dir[1], cursor.dir[2]] };
+    this.updateCost();
+  }
+  /** the cost line follows the chosen size: the sim prices it (query 'reach.price'), asked a moment after the last change */
   private updateCost(): void {
     const p = this.armed;
     if (!this.costEl || !p) return;
-    const cl = costLine(p, this.castSize(p));
-    if (cl !== null && !p.locked) this.costEl.textContent = cl;
+    if (this.priceTimer) clearTimeout(this.priceTimer);
+    const mine = ++this.priceAsk;
+    this.priceTimer = setTimeout(() => {
+      this.priceTimer = null;
+      if (this.armed !== p) return;
+      void this.host.query('reach.price', priceArgs(p, this.castSize(p), this.aimAt(p))).then((r) => {
+        if (mine !== this.priceAsk || this.armed !== p || !r || typeof r !== 'object') return;
+        this.simPrice = r as SimPrice;
+        this.showCost(p);
+      }).catch(() => { /* the default-size line stands */ });
+    }, 120);
+    this.showCost(p);
+  }
+  private showCost(p: Power): void {
+    const cl = cardCostText(p, this.simPrice);
+    if (this.costEl && cl !== null) this.costEl.textContent = cl;
+    const rl = readyLine(p, this.simPrice);
+    if (this.readyEl) { this.readyEl.hidden = rl === null; this.readyEl.textContent = rl ?? ''; }
   }
 
   private renderNeed(): void {
@@ -782,6 +830,7 @@ export class Tools {
     const p = this.armed;
     if (!p) { this.warn.hidden = true; return; }
     this.peopleWarning(p, cursor, pointer);
+    this.followAim(cursor);
     const ringModes = this.mode === 'brush' || this.mode === 'front' || this.mode === 'once' || this.mode === 'aim' || (this.mode === 'line' && !!p.schema.radius);
     if (cursor && ringModes && p.schema.radius) {
       const col = CAT_COLOR[p.category] ?? [1.2, 0.95, 0.55];

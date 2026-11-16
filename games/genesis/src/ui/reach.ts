@@ -3,7 +3,7 @@
 // only says it in plain words. Rules of the owner: no alignment meter, no single bar between trust and fear, none of
 // the words good / evil / kind / cruel / light / dark, the two bars never compared or coloured as right and wrong.
 
-import type { ReachView } from '../sim/god/reach.ts';
+import type { ReachView, TownReach as TownReach_ } from '../sim/god/reach.ts';
 import type { Power } from './powers.ts';
 
 export type { ReachView };
@@ -63,35 +63,58 @@ export function powerState(p: Power): PowerState {
   return 'open';
 }
 
-/** the size a cast is aimed at: the brush radius, and a power or scale value when the card sets one */
+/** the size a cast is aimed at: the brush radius, and a power or scale value when the card sets one (sent to the sim's 'reach.price') */
 export interface CastSize { radius?: number; power?: number; scale?: number }
 
-/**
- * The price at the chosen size, as the sim charges it (reach.ts priceOf): price x (radius / default radius, at least 1) x
- * power x scale; a free spell is free at its own size only, wider it costs half its old cost x size. Null: unbound.
- */
-export function sizedPrice(p: Power, size: CastSize = {}): number | null {
-  if (p.priceNow === undefined) return null;
-  const def = typeof p.params.radius === 'number' ? p.params.radius : p.schema.radius?.default;
-  let k = 1;
-  if (typeof size.radius === 'number' && typeof def === 'number' && def > 0) k *= Math.max(1, size.radius / def);
-  if (typeof size.power === 'number') k *= Math.max(1, size.power);
-  if (typeof size.scale === 'number' && p.command === 'disaster.spawn') k *= Math.max(1, size.scale);
-  const mult = p.beyond ? 3 : 1;
-  if (p.free) return k > 1 && (p.cost ?? 0) > 0 ? Math.round(Math.max(1, Math.round((p.cost ?? 0) / 2)) * k * 100) / 100 : p.priceNow;
-  const base = p.price ?? p.priceNow / mult;
-  return Math.round(base * k * mult * 100) / 100;
+/** the sim's own price at a size (query 'reach.price'): the UI keeps no copy of the formula */
+export interface SimPrice { priceNow?: number; price?: number; free?: boolean; clay?: boolean; beyond?: boolean; basePrice?: number; freeDeed?: boolean; cooldownText?: string | null; readyIn?: number; locked?: boolean; reason?: string | null }
+
+/** the arguments of a 'reach.price' query for a power at a size, over a world and a town when the cast is aimed there */
+export function priceArgs(p: Power, size: CastSize = {}, at: { planet?: number; settlement?: number; pos?: ArrayLike<number> | null } = {}): Record<string, unknown> {
+  const a: Record<string, unknown> = { id: p.id };
+  if (typeof size.radius === 'number') a.radius = size.radius;
+  if (typeof size.power === 'number') a.power = size.power;
+  if (typeof size.scale === 'number') a.scale = size.scale;
+  if (typeof at.planet === 'number') a.planet = at.planet;
+  if (typeof at.settlement === 'number') a.settlement = at.settlement;
+  // the aimed point (the sim finds the town there: the free first deed in answer to its open question)
+  if (at.pos && at.pos.length >= 3) a.pos = [at.pos[0], at.pos[1], at.pos[2]];
+  return a;
 }
 
-/** the cost line on a power card, or null in an unbound world (no costs); `size` prices the cast at its chosen size */
-export function costLine(p: Power, size: CastSize = {}): string | null {
-  const now = sizedPrice(p, size);
-  if (now === null) return null;
-  if (!(now > 0)) return 'Free.';
-  if (p.beyond) return `Beyond your standing: ${money(now)} worship.`;
-  const base = p.free ? 0 : p.price;
+/**
+ * The cost line on a power card, or null in an unbound world (no costs). The numbers are the sim's: `sim` is its answer
+ * for this size (query 'reach.price'); without it the power's own 'powers' row (the default size) stands.
+ */
+export function costLine(p: Power, sim: SimPrice | null = null): string | null {
+  const q: SimPrice = sim ?? p;
+  const now = q.priceNow;
+  if (now === undefined) return null;
+  if (q.clay) return 'Free on empty ground.';
+  if (!(now > 0)) return q.freeDeed ? 'Free: the first deed in answer.' : 'Free.';
+  if (q.beyond ?? p.beyond) return `Beyond your standing: ${money(now)} worship.`;
+  const base = q.basePrice ?? p.basePrice ?? p.price;
   if (base === undefined || now > base + 1e-9) return `Costs ${money(now)} worship at this size.`;
   return `Costs ${money(now)} worship.`;
+}
+
+/**
+ * What the card's cost line says: the sim's answer for THIS world, size and aim decides (free clay and the free first
+ * deed open a power the planet-less 'powers' row calls locked); until it arrives the power's own row stands.
+ */
+export function cardCostText(p: Power, sim: SimPrice | null = null): string | null {
+  const known = sim !== null && typeof sim.locked === 'boolean';
+  const locked = known ? sim!.locked === true : p.locked === true;
+  if (locked) return (known ? sim!.reason : null) ?? p.reason ?? 'Beyond your reach.';
+  return costLine(p, sim);
+}
+
+/** the cooldown line, from the sim's own text ("Ready in 12 minutes."); null when ready or unbound */
+export function readyLine(p: Power, sim: SimPrice | null = null): string | null {
+  const q: SimPrice = sim ?? p;
+  const t = q.cooldownText;
+  if (typeof t === 'string' && t) return `Still gathering strength. ${t}`;
+  return null;
 }
 
 /** the tooltip for a wheel slot or palette row in the poor or locked state (null when open) */
@@ -118,20 +141,49 @@ export function costNumeral(p: Power): string {
 
 // ── the town ──
 
-export interface TownReach { pop?: number; believers?: number; trust?: number; fear?: number; gave?: number; spent?: boolean; trade?: boolean; unseen?: boolean; defiant?: boolean }
+export interface TownReach { pop?: number; believers?: number; trust?: number; fear?: number; gave?: number; spent?: boolean; trade?: boolean; unseen?: boolean; defiant?: boolean; proud?: boolean; broken?: boolean; freeDeed?: boolean }
 
-/** the town popover's lines (spec §6); only what is known is said */
+/** trust and fear in words, never numbers */
+function roadWords(trust: number, fear: number): string {
+  return trust > fear * 1.5 ? ', most in trust' : fear > trust * 1.5 ? ', most in fear' : ', in trust and in fear alike';
+}
+
+/** the town's lines (spec §6); only what is known is said */
 export function townReachLines(t: TownReach): string[] {
   const out: string[] = [];
   if (t.believers !== undefined && t.pop !== undefined && t.pop > 0) {
-    const road = (t.trust ?? 0) > (t.fear ?? 0) * 1.5 ? ', most in trust' : (t.fear ?? 0) > (t.trust ?? 0) * 1.5 ? ', most in fear' : ', in trust and in fear alike';
-    out.push(`${t.believers} of ${t.pop} believe${t.believers > 0 ? road : ''}.${t.gave !== undefined ? ` They gave ${r0(t.gave)} yesterday.` : ''}`);
+    out.push(`${t.believers} of ${t.pop} believe${t.believers > 0 ? roadWords(t.trust ?? 0, t.fear ?? 0) : ''}.${t.gave !== undefined ? ` They gave ${r0(t.gave)} yesterday.` : ''}`);
   }
   if (t.spent) out.push('They have given all they will today.');
   if (t.trade) out.push('Trade and pilgrims carry your name here.');
   if (t.unseen) out.push('You have not been seen here; they give less.');
+  if (t.proud) out.push('They are proud of what they have made; each counts for one.');
   if (t.defiant) out.push('They count for nothing while they defy you.');
+  if (t.broken) out.push('Your word to them was broken; only those on the road count, and they give half.');
+  if (t.freeDeed) out.push(FREE_DEED_TOWN);
   return out;
+}
+
+/** the lines of a town from the sim's per-town fields (TownReach in src/sim/god/reach.ts) and its population */
+export function townLines(t: SimTown | null | undefined, pop: number): string[] {
+  if (!t) return [];
+  return townReachLines({
+    pop: Math.max(pop, t.believers), believers: t.believers, trust: t.trust, fear: t.fear, gave: t.gaveYesterday?.total,
+    spent: t.measure > 0 && t.left <= 0.05, trade: (t.linkParts?.trade ?? 0) > 0 || (t.linkParts?.pilgrims ?? 0) > 0,
+    unseen: t.unseen, proud: t.proud && !t.defiant, defiant: t.defiant, broken: t.brokenCovenant, freeDeed: t.freeDeed,
+  });
+}
+export type SimTown = TownReach_;
+
+/** the town card's line while the town's open question waits: the first deed in answer costs nothing */
+export const FREE_DEED_TOWN = 'They wait for your answer; the first deed in answer costs nothing.';
+
+/**
+ * A town the sim's per-town list does not carry gives nothing: it has no believers, or the god was never seen in it.
+ * `belief` is the town's own belief (0..1) when the card has it. Never the meters' "They give to you in trust."
+ */
+export function townAbsentLine(belief?: number): string {
+  return typeof belief === 'number' && belief >= 0.3 ? 'You have not been seen here; no one here gives to you yet.' : 'No one here gives to you yet.';
 }
 
 /** a words-only fallback from the town's regard meters (no counts yet from the sim): one soft line, no numbers */
@@ -141,6 +193,13 @@ export function townRoadWords(regard: { trust: number; fear: number } | undefine
   if (t < 0.15 && f < 0.15) return null;
   if (t >= 0.15 && f >= 0.15) return 'They give to you in trust and in fear.';
   return t >= 0.15 ? 'They give to you in trust.' : 'They give to you in fear.';
+}
+
+/** the town's bars for the town card: the part of its believers on each road, as widths 0..100 */
+export function townBars(t: SimTown | null | undefined, pop: number): { trust: number; fear: number } | null {
+  if (!t || t.believers <= 0) return null;
+  const n = Math.max(pop, t.believers, 1);
+  return { trust: pct(t.trust / n), fear: pct(t.fear / n) };
 }
 
 // ── the moments ──
@@ -156,15 +215,38 @@ export function standingToast(type: string, data: { name?: string; to?: number }
 
 // ── the setting ──
 
-export type ReachSetting = 'unbound' | 'bound';
+export type ReachSetting = 'unbound' | 'bound' | 'strict';
 export const SETTING_CHOICES: { value: ReachSetting; label: string; title: string }[] = [
   { value: 'unbound', label: 'Unbound', title: 'Every power, anywhere, now: no standing, no worship to spend' },
   { value: 'bound', label: 'Belief bounds my power', title: 'What the people give, you may spend; the bigger miracles open as more follow you' },
+  { value: 'strict', label: 'Strict', title: 'As Belief bounds my power, and the small acts also cost worship and rest, as the old restraint did' },
 ];
-export const SETTING_NOTE = 'Unbound: every power, anywhere, now. Belief bounds my power: your standing and the worship the people give set what you can do.';
+export const SETTING_NOTE = 'Unbound: every power, anywhere, now. Belief bounds my power: your standing and the worship the people give set what you can do. Strict: the same, and small acts cost too.';
+export const LEGACY_LABEL = { label: 'Restraint (old save)', value: 'On', note: 'powers cost worship and need time, as in the save' };
+
+/** the position the world is in, from the sim's reach view (unknown until it answers) */
+export function settingOf(r: ReachView | null): ReachSetting {
+  return r?.bound ? (r.strict ? 'strict' : 'bound') : 'unbound';
+}
 
 /** the command for a position of the setting */
-export function settingCommand(v: string): { k: 'meta.reach'; bound: boolean } { return { k: 'meta.reach', bound: v === 'bound' }; }
+export function settingCommand(v: string): { k: 'meta.reach'; bound: boolean; strict?: boolean } {
+  // (the middle position names `strict: false`: without it the sim keeps Strict while the world stays bound)
+  return v === 'strict' ? { k: 'meta.reach', bound: true, strict: true } : v === 'bound' ? { k: 'meta.reach', bound: true, strict: false } : { k: 'meta.reach', bound: false };
+}
+
+// ── the first-run hint ──
+
+export const FIRST_HINT = 'Small acts are always yours. Greater works are paid in worship, and the people give as they believe.';
+export const HINT_KEY = 'genesis.reach.hint';
+/** whether the hint was dismissed before (a blocked store counts as dismissed for this visit only when it was set) */
+export function hintSeen(): boolean { try { return localStorage.getItem(HINT_KEY) === '1'; } catch { return false; } }
+export function hintDismiss(): void { try { localStorage.setItem(HINT_KEY, '1'); } catch { /* shown again next visit */ } }
+
+/** the 'powers' poll asks for the world looked at, so free clay there shows as free on the wheel and the palette */
+export function reachPollArgs(planet: number | null | undefined): Record<string, unknown> {
+  return typeof planet === 'number' && planet >= 0 ? { planet } : {};
+}
 
 // ── the live state ──
 

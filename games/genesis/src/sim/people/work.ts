@@ -39,6 +39,7 @@ import { choreDone, gatherDone, playDone, raiseDone } from './gatherings.ts';
 import { noteCraft, noteGathered } from './ledger.ts';
 import { craftOutlet, curiosityGain, statusGain, talkOutlet } from './outlets.ts';
 import { rise } from '../god/regard.ts';
+import { doorOffering } from '../god/reach.ts';
 
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
@@ -186,6 +187,8 @@ export function finishTask(x: PCtx, s: number): boolean {
     case TASK.explore: explore(x, s, st); return false;
     case TASK.reverse: reverse(x, s, st); return false;
     case TASK.pray: case TASK.worship: case TASK.preach: worship(x, s, st, kind); return false;
+    // POWERS-GROWTH §3.6: the offering at the door pays this person's part of the town's measure (god/reach.ts)
+    case TASK.offer: if (st) doorOffering(x.u, x.p, st.id, s); return false;
     case TASK.socialize: {
       A.needs[nb + BELONG] = Math.min(1, A.needs[nb + BELONG] + 0.45);
       talk(x, s, A.cell[s]);

@@ -26,7 +26,7 @@
         { "phase": 2, "species": "plains-folk", "planet": 0, "count": 40, "era": "stone", "knowledge": ["hunting"] },
         { "phase": 2, "species": "hive", "planet": 1, "count": 60, "era": "stone" }
       ] },
-    { "id": "twoworlds-late", "name": "Two worlds: the age of rockets", "description": "The plains folk of Gaia and the hive of Rust, both grown into their electric age: Gaia's launchpad stands ready, and Rust is a light in its telescopes.",
+    { "id": "twoworlds-late", "standing": 2, "standingDays": 60, "name": "Two worlds: the age of rockets", "description": "The plains folk of Gaia and the hive of Rust, both grown into their electric age: Gaia's launchpad stands ready, and Rust is a light in its telescopes.",
       "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
       "planets": [
         { "name": "Gaia", "kind": "terran", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
@@ -40,7 +40,7 @@
         { "phase": 4, "species": "hive", "planet": 1, "count": 80, "era": "electric",
           "knowledge": ["liquid-fuel-rocket", "launchpad"], "store": { "steel": 30, "rocket-fuel": 30, "engine-parts": 8, "telescope": 1 } }
       ] },
-    { "id": "system", "name": "Living system", "description": "Six worlds and a moon; several inhabited at different eras: a people of Gaia at the edge of rockets, a hive in its iron age, a cold people on the ice, methane drifters in the haze of Murk.",
+    { "id": "system", "standing": 2, "standingDays": 60, "name": "Living system", "description": "Six worlds and a moon; several inhabited at different eras: a people of Gaia at the edge of rockets, a hive in its iron age, a cold people on the ice, methane drifters in the haze of Murk.",
       "star": "G", "starName": "Aster", "focus": 2, "startHour": 10,
       "planets": [
         { "name": "Cinder", "kind": "volcanic", "overrides": { "n": 40 }, "orbit": { "a": 0.55, "e": 0.08, "inc": 3.4, "node": 115, "phase0": 250, "yearDays": 5 } },
@@ -58,7 +58,7 @@
         { "phase": 2, "species": "cold-folk", "planet": 4, "count": 40, "era": "stone" },
         { "phase": 2, "species": "methane-drifters", "planet": 5, "count": 50, "era": "classical" }
       ] },
-    { "id": "lookdev", "name": "Lookdev", "description": "A lush terran world for screenshots: forests, rivers, coasts and snowcaps.",
+    { "id": "lookdev", "standing": 4, "standingDays": 0, "name": "Lookdev", "description": "A lush terran world for screenshots: forests, rivers, coasts and snowcaps.",
       "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
       "planets": [
         { "name": "Gaia", "kind": "terran", "overrides": { "vegetation": 1.25 }, "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
@@ -68,7 +68,7 @@
       "peoples": [
         { "phase": 2, "species": "plains-folk", "planet": 0, "count": 80, "era": "bronze", "settlements": ["town", "city"] }
       ] },
-    { "id": "babel", "name": "One speech", "description": "Four proud towns of one people and one tongue in the bronze age, close enough to see each other's smoke.",
+    { "id": "babel", "standing": 1, "standingDays": 60, "name": "One speech", "description": "Four proud towns of one people and one tongue in the bronze age, close enough to see each other's smoke.",
       "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
       "planets": [
         { "name": "Gaia", "kind": "terran", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
@@ -98,7 +98,7 @@
         { "phase": 2, "species": "plains-folk", "planet": 0, "count": 40, "era": "stone", "knowledge": ["hunting"] },
         { "phase": 2, "species": "coastal-folk", "planet": 0, "count": 40, "era": "stone", "knowledge": ["hunting"] }
       ] },
-    { "id": "coldforge", "name": "The cold forge", "description": "A hardy people in their iron age on a world of ice. What to watch: what the winters ask of them, and what they lay by.",
+    { "id": "coldforge", "standing": 1, "standingDays": 60, "name": "The cold forge", "description": "A hardy people in their iron age on a world of ice. What to watch: what the winters ask of them, and what they lay by.",
       "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
       "planets": [
         { "name": "Rime", "kind": "ice", "overrides": { "n": 40, "climateOffset": 85 }, "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 } }

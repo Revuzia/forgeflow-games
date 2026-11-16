@@ -391,7 +391,7 @@ function reachJson(r: ReachState): ReachState {
   for (const k of Object.keys(r.roads).sort()) roads[k] = sortKeys(r.roads[k]);
   const towns: ReachState['towns'] = {};
   for (const k of Object.keys(r.towns).sort()) towns[k] = r.towns[k];
-  return { ...r, seen: sortKeys(r.seen), towns, roads, peopled: sortKeys(r.peopled) };
+  return { ...r, seen: sortKeys(r.seen), towns, roads, peopled: sortKeys(r.peopled), ...(r.deeds ? { deeds: sortKeys(r.deeds) } : {}), ...(r.off ? { off: sortKeys(r.off) } : {}) };
 }
 
 function relJson(rel: RelState): RelState {
@@ -502,9 +502,21 @@ export interface ReachState {
   f: number; believers: number; trust: number; fear: number; both: number;
   inc: number; incT: number; incF: number; day: number;
   seen: Record<string, number>;
-  towns: Record<string, { m: number; g: number; ff: number; fd: number }>;
+  /** stint 3 adds (all optional, an older bound save loads without them): n believers, nt / nf / nb on the road of
+   *  trust / of fear / on both, l the link (1.00 .. 1.45) with its parts lt trade, lp pilgrims, lk kin in the faith,
+   *  x the town's state bits (1 proud, 2 open defiance, 4 broken covenant: count, 8 broken covenant: gives half),
+   *  k the measure per unit of a person's rite (for the offering at the door), yg / yf what it gave yesterday and the
+   *  part of that given by fear */
+  towns: Record<string, { m: number; g: number; ff: number; fd: number; n?: number; nt?: number; nf?: number; nb?: number;
+    l?: number; lt?: number; lp?: number; lk?: number; x?: number; k?: number; yg?: number; yf?: number }>;
   roads: Record<string, Record<string, number>>;
   peopled: Record<string, number>;
+  /** a scenario's starting standing, held as a floor until this reach day (-1: for good) */
+  floor?: { tier: number; until: number };
+  /** "<planet>:<settlement>" -> the tick of the open question (defiance, Tower) whose first deed in answer was given free */
+  deeds?: Record<string, number>;
+  /** "<planet>:<agent id>" -> the tick they last left an offering at the door */
+  off?: Record<string, number>;
 }
 
 export function emptyRuntime(): RuntimeContent {

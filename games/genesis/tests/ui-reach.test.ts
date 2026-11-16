@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { standingLine, nextLine, gaugeTitle, barTitle, reachCard, costLine, powerState, stateTitle, lockMark, townReachLines, townRoadWords, standingToast, settingCommand, SETTING_CHOICES, ReachFeed, type ReachView } from '../src/ui/reach.ts';
+import { townLines, townBars, readyLine, priceArgs, settingOf, LEGACY_LABEL, FIRST_HINT, hintDismiss, type SimTown, standingLine, nextLine, gaugeTitle, barTitle, reachCard, costLine, powerState, stateTitle, lockMark, townReachLines, townRoadWords, standingToast, settingCommand, SETTING_CHOICES, ReachFeed, type ReachView } from '../src/ui/reach.ts';
 import { PowerBook, type Power } from '../src/ui/powers.ts';
 import { livingRows } from '../src/ui/controlstext.ts';
 
@@ -35,22 +35,42 @@ test('the card carries two independent bars, both can be full, nothing compares 
   assert.equal(reachCard(R({ bound: false })), null);
   const all = JSON.stringify(c);
   assert.ok(!BANNED.test(all));
-  const hud = readFileSync(new URL('../src/ui/hud.ts', import.meta.url), 'utf8');
+  const hud = readFileSync(new URL('../src/ui/living.ts', import.meta.url), 'utf8');
   assert.match(hud, /gn-reach-trust/);
   assert.match(hud, /gn-reach-fear/);
   assert.ok(!/trustShare\s*[-<>]\s*fearShare|fear\s*-\s*trust|trust\s*-\s*fear/.test(readFileSync(new URL('../src/ui/reach.ts', import.meta.url), 'utf8')));
 });
 
-test('the cost line: free, priced, wider, beyond; none in an unbound world', () => {
+test('the cost line says the sim\'s own number: free, priced, at size, beyond, free clay, free deed; none unbound', () => {
   assert.equal(costLine(P()), null);
   assert.equal(costLine(P({ free: true, price: 0, priceNow: 0 })), 'Free.');
   assert.equal(costLine(P({ price: 15, priceNow: 15 })), 'Costs 15 worship.');
-  assert.equal(costLine(P({ price: 15, priceNow: 15, params: { radius: 100 } }), { radius: 200 }), 'Costs 30 worship at this size.');
-  // a free spell is free at its own size, priced wider (half its old cost x size)
-  const ign = P({ free: true, price: 0, priceNow: 0, cost: 10, params: { radius: 60 } });
-  assert.equal(costLine(ign, { radius: 60 }), 'Free.');
-  assert.equal(costLine(ign, { radius: 600 }), 'Costs 50 worship at this size.');
+  // the sized price is the sim's answer (reach.price), not a UI formula
+  assert.equal(costLine(P({ price: 15, priceNow: 15 }), { priceNow: 30, basePrice: 15 }), 'Costs 30 worship at this size.');
   assert.equal(costLine(P({ price: 100, priceNow: 300, beyond: true })), 'Beyond your standing: 300 worship.');
+  assert.equal(costLine(P({ price: 15, priceNow: 0, clay: true })), 'Free on empty ground.');
+  assert.equal(costLine(P({ price: 15, priceNow: 15 }), { priceNow: 0, clay: true }), 'Free on empty ground.');
+  assert.match(costLine(P({ price: 15, priceNow: 0, freeDeed: true }))!, /^Free: the first deed/);
+  assert.deepEqual(priceArgs(P(), { radius: 90, power: 2 }, { planet: 0 }), { id: 'storm', radius: 90, power: 2, planet: 0 });
+  assert.ok(!/sizedPrice/.test(readFileSync(new URL('../src/ui/reach.ts', import.meta.url), 'utf8')));
+});
+
+test('the still-gathering line is the sim\'s cooldown text', () => {
+  assert.equal(readyLine(P({ priceNow: 15, cooldownText: 'Ready in 12 minutes.' })), 'Still gathering strength. Ready in 12 minutes.');
+  assert.equal(readyLine(P({ priceNow: 15, cooldownText: null })), null);
+  assert.equal(readyLine(P({ priceNow: 15 }), { cooldownText: 'Ready in 2 hours.' }), 'Still gathering strength. Ready in 2 hours.');
+});
+
+test('the powers book keeps the new fields, clears them unbound, and marks the sim\'s free basics', () => {
+  const b = new PowerBook();
+  const id = b.list[0].id;
+  b.applyReach([{ id, priceNow: 0, clay: true, size: 2, basePrice: 15, cooldownText: 'Ready in 2 hours.', readyIn: 120, freeDeed: true, strict: true }]);
+  const p = b.list[0];
+  assert.equal(p.clay, true); assert.equal(p.readyIn, 120); assert.equal(p.freeDeed, true);
+  b.markFree([id]);
+  assert.equal(p.free, true);
+  b.applyReach([{ id }]);
+  assert.equal(p.clay, undefined); assert.equal(p.cooldownText, undefined);
 });
 
 test('three wheel states, each with its plain tooltip', () => {
@@ -100,17 +120,50 @@ test('the town lines', () => {
   assert.equal(townRoadWords({ trust: 0.02, fear: 0.01 }), null);
 });
 
+test('the town line from the sim\'s per-town fields: words for trust and fear, every extra', () => {
+  const T = (o: Partial<SimTown> = {}): SimTown => ({ planet: 0, settlement: 1, name: 'Ash', believers: 22, trust: 20, fear: 5, both: 3, measure: 12, given: 4, left: 8, gaveYesterday: { total: 12, trust: 9, fear: 3 }, attended: true, unseen: false, link: 1, linkParts: { trade: 0, pilgrims: 0, kin: 0 }, proud: false, defiant: false, brokenCovenant: false, givesHalf: false, freeDeed: false, ...o });
+  assert.deepEqual(townLines(T(), 30), ['22 of 30 believe, most in trust. They gave 12 yesterday.']);
+  assert.match(townLines(T({ trust: 3, fear: 19 }), 30)[0], /most in fear/);
+  const all = townLines(T({ left: 0, linkParts: { trade: 0.5, pilgrims: 0, kin: 0 }, unseen: true, proud: true, brokenCovenant: true }), 30);
+  assert.equal(all.length, 6);
+  assert.ok(all.some((l) => /given all they will today/.test(l)) && all.some((l) => /Trade and pilgrims/.test(l)) && all.some((l) => /not been seen/.test(l)) && all.some((l) => /proud/.test(l)) && all.some((l) => /broken/.test(l)));
+  assert.deepEqual(townLines(T({ defiant: true, proud: true }), 30).slice(1), ['They count for nothing while they defy you.']);
+  assert.ok(!/\d/.test(townLines(T(), 30).join('').replace(/\d+ of \d+|gave \d+/g, '')), 'trust and fear are said in words');
+  assert.deepEqual(townBars(T(), 40), { trust: 50, fear: 13 });
+  assert.equal(townBars(T({ believers: 0 }), 40), null);
+  assert.deepEqual(townLines(null, 30), []);
+});
+
 test('the toast on a rise and a fall; none for other events', () => {
   assert.equal(standingToast('reach.rose', { name: 'Known' })!.text, 'They call you the Known now.');
   assert.match(standingToast('reach.fell', { name: 'Whispered' })!.text, /^Fewer speak your name/);
   assert.equal(standingToast('reach.falling', { name: 'x' }), null);
 });
 
-test('the setting: two positions (Strict waits on the sim), the command, no banned words', () => {
-  assert.deepEqual(SETTING_CHOICES.map((c) => c.value), ['unbound', 'bound']);
-  assert.deepEqual(settingCommand('bound'), { k: 'meta.reach', bound: true });
+test('the setting: three positions, the commands, the read-only legacy label, no banned words', () => {
+  assert.deepEqual(SETTING_CHOICES.map((c) => c.value), ['unbound', 'bound', 'strict']);
+  assert.deepEqual(settingCommand('bound'), { k: 'meta.reach', bound: true, strict: false });
   assert.deepEqual(settingCommand('unbound'), { k: 'meta.reach', bound: false });
-  assert.ok(!/strict/i.test(JSON.stringify(SETTING_CHOICES)));
+  assert.deepEqual(settingCommand('strict'), { k: 'meta.reach', bound: true, strict: true });
+  assert.equal(settingOf(R()), 'bound');
+  assert.equal(settingOf(R({ strict: true })), 'strict');
+  assert.equal(settingOf(R({ bound: false })), 'unbound');
+  assert.equal(settingOf(null), 'unbound');
+  assert.equal(LEGACY_LABEL.label, 'Restraint (old save)');
+});
+
+test('the god window and the town card carry the standing and the two bars when bound; the first-run hint', () => {
+  const living = readFileSync(new URL('../src/ui/living.ts', import.meta.url), 'utf8');
+  assert.match(living, /export function reachBlock/);
+  assert.match(living, /reach\?\.\(\)/);
+  const insp = readFileSync(new URL('../src/ui/inspector.ts', import.meta.url), 'utf8');
+  assert.match(insp, /townLines\(/);
+  assert.match(insp, /gn-reach-trust/);
+  assert.match(FIRST_HINT, /^Small acts are always yours\. Greater works are paid in worship, and the people give as they believe\.$/);
+  assert.ok(!BANNED.test(FIRST_HINT));
+  hintDismiss();
+  const css = readFileSync(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /body\.gn-reduce-motion \.gn-reach-hint[^{]*\{[^}]*animation: none/);
 });
 
 test('the F1 card says it, and no owner-banned word appears in any new text', () => {
@@ -120,4 +173,79 @@ test('the F1 card says it, and no owner-banned word appears in any new text', ()
   const strings = [...src.matchAll(/'([^'\n]{12,})'|`([^`\n]{12,})`/g)].map((m) => m[1] ?? m[2]).join('\n');
   assert.ok(!BANNED.test(strings), strings.match(BANNED)?.[0]);
   assert.ok(!BANNED.test(row![1]));
+});
+
+// ── review 3 (2026-11-16) ──
+import { Sim as Sim3 } from '../src/sim/sim.ts';
+import { srel as srel3 } from '../src/sim/god/regard.ts';
+import { world as world3, ctx as ctx3 } from './reach-helpers.ts';
+import { cardCostText, townAbsentLine, reachPollArgs, FREE_DEED_TOWN } from '../src/ui/reach.ts';
+
+test('review 3: the middle position leaves Strict (the command the Settings control sends)', () => {
+  const sim = world3();
+  const x = ctx3(sim);
+  assert.ok(x.cast(settingCommand('strict')).ok);
+  assert.equal((sim.query('reach') as ReachView).strict, true);
+  assert.ok(x.cast(settingCommand('bound')).ok);
+  const v = sim.query('reach') as ReachView;
+  assert.equal(v.bound, true);
+  assert.equal(v.strict, false);
+  assert.equal(settingOf(v), 'bound');
+});
+
+test('review 3: the wheel, the palette and the card read the viewed world: free clay is shown free', () => {
+  const sim = new Sim3({ seed: 5, scenario: 'twoworlds-late', overrides: { n: 20 }, bound: true });
+  const clay = (sim.query('reach') as ReachView).worlds!.find((w) => w.clay);
+  assert.ok(clay, 'the scenario has a world no one has lived on');
+  // (a low standing, so a great power is out of reach where people live)
+  sim.u.god.reach!.tier = 0; delete sim.u.god.reach!.floor;
+  assert.deepEqual(reachPollArgs(clay.planet), { planet: clay.planet });
+  assert.deepEqual(reachPollArgs(-1), {});
+  const row = (args: Record<string, unknown>) => (sim.query('powers', args) as { id: string; priceNow: number; clay: boolean; locked: boolean }[]).find((p) => p.id === 'disaster-quake')!;
+  assert.equal(row({}).locked, true);
+  const here = row(reachPollArgs(clay.planet));
+  assert.equal(here.locked, false); assert.equal(here.clay, true); assert.equal(here.priceNow, 0);
+  // the card: the planet-less row says locked, the sim's answer for this world says clay: the answer wins
+  const locked = P({ price: 80, priceNow: 80, locked: true, reason: 'Beyond your reach. Quake opens when you are Worshipped: 150 follow, 0 now.' });
+  assert.match(cardCostText(locked)!, /^Beyond your reach/);
+  const ans = sim.query('reach.price', { id: 'disaster-quake', planet: clay.planet }) as Record<string, unknown>;
+  assert.equal(cardCostText(locked, ans), 'Free on empty ground.');
+  // and the other way: an open row, an answer that says locked, with the sim's reason
+  assert.equal(cardCostText(P({ price: 15, priceNow: 15 }), { priceNow: 15, locked: true, reason: 'Beyond your reach. X.' }), 'Beyond your reach. X.');
+  assert.equal(cardCostText(P({ price: 15, priceNow: 15 }), { priceNow: 30, locked: false, basePrice: 15 }), 'Costs 30 worship at this size.');
+});
+
+test('review 3: the free first deed is shown: the aimed point reaches the sim, and the town card says it', () => {
+  const sim = world3();
+  const x = ctx3(sim);
+  for (const i of x.grown) x.set(i, 0.9, 0.9, 0);
+  x.seen(); x.day();
+  (srel3(sim.u, x.p.id, x.st.id) as unknown as { answer: { tick: number } }).answer = { tick: sim.u.tick };
+  const flood = P({ id: 'flood', price: 30, priceNow: 30, locked: true, reason: 'Beyond your reach.' });
+  // the card's old question (world only) cannot find the town; the aimed point, or the selected town, does
+  assert.equal((sim.query('reach.price', priceArgs(flood, {}, { planet: x.p.id })) as { freeDeed?: boolean }).freeDeed, undefined);
+  const aimed = priceArgs(flood, {}, { planet: x.p.id, pos: x.at });
+  assert.deepEqual(aimed.pos, x.at);
+  for (const args of [aimed, priceArgs(flood, {}, { planet: x.p.id, settlement: x.st.id })]) {
+    const ans = sim.query('reach.price', args) as Record<string, unknown>;
+    assert.equal(ans.freeDeed, true);
+    assert.equal(cardCostText(flood, ans), 'Free: the first deed in answer.');
+  }
+  const town = (sim.query('reach') as ReachView).towns!.find((t) => t.settlement === x.st.id)!;
+  assert.equal(town.freeDeed, true);
+  assert.ok(townLines(town, 30).includes(FREE_DEED_TOWN));
+  assert.ok(!townLines({ ...town, freeDeed: false }, 30).includes(FREE_DEED_TOWN));
+});
+
+test('review 3: a town that gives nothing is not told it gives in trust', () => {
+  const sim = world3();
+  const x = ctx3(sim);
+  // trusted, hardly believed: no believers, so the sim's list does not carry the town
+  for (const i of x.grown) x.set(i, 0.05, 0.6, 0);
+  x.seen(); x.day();
+  assert.equal((sim.query('reach') as ReachView).towns!.some((t) => t.settlement === x.st.id), false);
+  assert.equal(townAbsentLine(0.05), 'No one here gives to you yet.');
+  assert.equal(townAbsentLine(), 'No one here gives to you yet.');
+  assert.match(townAbsentLine(0.8), /^You have not been seen here/);
+  for (const s of [townAbsentLine(0), townAbsentLine(0.8), FREE_DEED_TOWN]) assert.doesNotMatch(s, /\b(good|evil|kind|cruel|light|dark)\b/i);
 });

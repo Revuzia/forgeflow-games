@@ -300,6 +300,12 @@
     {"id": "covenant.doubt", "kind": "god", "weight": 1, "text": ["{settlement} asks why the god let the waters rise."]},
     {"id": "covenant.declined", "kind": "god", "weight": 2, "text": ["The survivors of {settlement} waited, and the sky said nothing."]},
     {"id": "legend.retold", "kind": "culture", "weight": 1, "text": ["In {settlement} they tell it now: {legend}"]},
-    {"id": "tower.abandoned", "kind": "god", "weight": 2, "text": ["Hunger came to {host}, and the tower was left unfinished."]}
+    {"id": "tower.abandoned", "kind": "god", "weight": 2, "text": ["Hunger came to {host}, and the tower was left unfinished."]},
+    {"id": "reach.rose", "kind": "god", "weight": 3, "text": ["The name of the god went further. The god is {title} now: {count} follow."]},
+    {"id": "reach.fell", "kind": "god", "weight": 3, "text": ["Fewer hold to the god. The god is {title} now: {count} follow."]},
+    {"id": "reach.town.proud", "kind": "god", "weight": 2, "text": ["{settlement} has grown proud. Its people count for less among those who follow the god."]},
+    {"id": "reach.town.defiant", "kind": "god", "weight": 2, "text": ["{settlement} stands against the god in the open. It gives nothing until it is answered."]},
+    {"id": "reach.town.broken", "kind": "god", "weight": 2, "text": ["{settlement} remembers the promise the god broke. It gives half of what it gave."]},
+    {"id": "reach.town.back", "kind": "god", "weight": 1, "text": ["{settlement} counts among the following of the god as before."]}
   ]
 }

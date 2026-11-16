@@ -150,7 +150,7 @@ export const GOD_QUERIES = ['powers', 'gestures', 'gods', 'disasters', 'disaster
 export function godQuery(u: Universe, q: string, args: Record<string, unknown>): unknown {
   const g = u.god;
   switch (q) {
-    case 'powers': return powersQuery(u);
+    case 'powers': return powersQuery(u, args);
     case 'gestures': return gesturePowers(u.content);
     case 'gods': return g.gods.map((x) => ({ ...x, title: x.epithet ? `${x.name} ${x.epithet}` : x.name, worship: worshipOf(u, x.id), called: g.disciples.filter((d) => d.god === x.id).length, disciples: g.disciples.filter((d) => d.god === x.id).length }));
     case 'disasters': return g.disasters.map((d) => ({ ...d, name: u.content.disasters.find(d.kind)?.name ?? d.kind }));

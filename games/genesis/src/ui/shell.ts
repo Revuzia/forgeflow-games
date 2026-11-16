@@ -62,6 +62,7 @@ import { GodPanel, SignPicker, type GodRow, type SacredPlaceRow } from './living
 import { Invent } from './invent.ts';
 import { humanize } from './words.ts';
 import { DecisionCard, CovenantConfirm, towerCard } from './decision.ts';
+import { reachPollArgs } from './reach.ts';
 
 export interface ShellDeps {
   host: UiHost;
@@ -177,6 +178,7 @@ export class Shell {
   private godsAt = -1e9;
   private reachAt = -1e9;
   private reachWasBound = false;
+  private reachPlanet = -1;
   /** the sacred places (query 'sacred'), for the place card */
   private sacred: SacredPlaceRow[] = [];
   private deps: ShellDeps;
@@ -329,7 +331,7 @@ export class Shell {
     this.god = new GodPanel(root, {
       view: () => host.view, primary: () => host.primary(), query: (q, a) => host.query(q, a), cmd: (c) => host.cmd(c),
       select: (ref) => host.select(ref), lookAt: (planet, pos) => host.lookAt(planet, pos), arm: (id, preset) => this.armId(id, preset),
-      openSigns: (t) => this.signs.open(t), gods: () => this.gods, hint: (id) => host.keybinds.hint(id),
+      openSigns: (t) => this.signs.open(t), gods: () => this.gods, hint: (id) => host.keybinds.hint(id), reach: () => host.powers.reach.view,
     });
     this.invent = new Invent(root, {
       view: () => host.view, primary: () => host.primary(), cmd: (c) => host.cmd(c),
@@ -1262,8 +1264,12 @@ export class Shell {
    */
   private pollReach(): void {
     const now = performance.now();
-    if (now - this.reachAt < 4000 || this.host.source !== 'worker' || this.title.isOpen) return;
+    // the prices are for the world looked at (free clay: every power is free on a world no one has lived on), so a
+    // change of world asks again at once
+    const planet = this.host.primary();
+    if ((now - this.reachAt < 4000 && planet === this.reachPlanet) || this.host.source !== 'worker' || this.title.isOpen) return;
     this.reachAt = now;
+    this.reachPlanet = planet;
     const feed = this.host.powers.reach;
     void this.host.query('reach', {}).then((r) => {
       feed.setView(r);
@@ -1271,8 +1277,9 @@ export class Shell {
       const bound = feed.bound;
       if (!bound && !this.reachWasBound) return;
       this.reachWasBound = bound;
-      return this.host.query('powers', {}).then((rows) => {
+      return this.host.query('powers', reachPollArgs(planet)).then((rows) => {
         this.host.powers.applyReach(rows);
+        this.host.powers.markFree(feed.view?.freeBasics);
         if (Array.isArray(rows)) feed.noteLocks(rows as { id: string; locked?: boolean }[]);
       });
     }).catch(() => { /* the numbers wait */ });

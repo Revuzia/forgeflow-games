@@ -25,6 +25,7 @@ import { h, clear, cap, fmtNum, fmtTicks } from './dom.ts';
 import { icon } from './icons.ts';
 import { wrathWord, wrathMeans, WRATH_DEFAULT } from './powers.ts';
 import { heartGlyph } from './hearts.ts';
+import { reachCard, type ReachView } from './reach.ts';
 import { covenantRows, covenantTownNames, promiseLine, wrathNotch, type CovenantRow } from './book.ts';
 
 // ───────────────────────────── words ─────────────────────────────
@@ -411,6 +412,20 @@ export interface GodDeps {
   /** the rival gods (the shell asks the sim now and then) */
   gods(): GodRow[];
   hint(id: string): string;
+  /** POWERS-GROWTH: the god's standing (the shell polls query 'reach'); null or unbound: the window is what it was */
+  reach?(): ReachView | null;
+}
+
+/** the standing line, the worship gauge and the two independent bars (the HUD's god card and The god window draw the same) */
+export function reachBlock(rc: NonNullable<ReturnType<typeof reachCard>>): HTMLElement {
+  return h('div', { class: 'gn-reach' },
+    h('div', { class: 'gn-reach-stand', text: rc.stand }),
+    rc.next ? h('div', { class: 'gn-reach-next', text: rc.next }) : null,
+    rc.cap > 0 ? h('div', { class: 'gn-reach-gauge', title: rc.gaugeTitle, role: 'img', aria: { label: rc.gaugeTitle } }, h('i', { style: `width:${rc.gauge}%` })) : null,
+    rc.cap > 0 ? h('div', { class: 'gn-reach-cap', text: `${fmtNum(rc.pool)} of ${fmtNum(rc.cap)}` }) : null,
+    h('div', { class: 'gn-reach-bars' },
+      h('div', { class: 'gn-reach-bar gn-reach-trust', title: rc.trustTitle }, h('span', { text: 'Trust' }), h('span', { class: 'gn-reach-track', role: 'img', aria: { label: rc.trustTitle } }, h('i', { style: `width:${rc.trust}%` }))),
+      h('div', { class: 'gn-reach-bar gn-reach-fear', title: rc.fearTitle }, h('span', { text: 'Fear' }), h('span', { class: 'gn-reach-track', role: 'img', aria: { label: rc.fearTitle } }, h('i', { style: `width:${rc.fear}%` })))));
 }
 
 type Section = 'regard' | 'wrath' | 'promises' | 'prayers' | 'prophets' | 'signs' | 'sacred' | 'towns' | 'rivals';
@@ -518,13 +533,24 @@ export class GodPanel {
     const m = regardOf(view, planet);
     const r = regardValue(view, m);
     // ── the world's regard ──
-    this.put('regard', `${r.toFixed(2)}|${m ? METERS.map((k) => Math.round(m[k] * 100)).join(',') : '-'}|${m?.towns ?? 0}|${Math.round(view.worship[0] ?? 0)}`, (el) => {
-      el.append(
-        h('div', { class: 'gn-god-band' },
-          h('b', { class: `gn-band-${bandOf(r, m)}`, text: cap(bandOf(r, m)) }),
-          h('span', { class: 'gn-god-wor', title: 'Worship: what their prayers, rites and fear give you; miracles draw on it for strength' }, h('span', { html: icon('worship') }), `${fmtNum(Math.round(view.worship[0] ?? 0))} worship`)),
-        regardGauge(r),
-        h('p', { class: 'gn-god-say', text: regardSentence(r, m) }));
+    const rv = this.deps.reach?.() ?? null;
+    const rc = rv?.bound ? reachCard(rv) : null;
+    this.put('regard', rc
+      ? `B|${rc.stand}|${rc.next}|${rc.gauge}|${rc.trust}|${rc.fear}|${rc.pool}|${rc.gaugeTitle}|${rc.trustTitle}|${rc.fearTitle}|${m ? METERS.map((k) => Math.round(m[k] * 100)).join(',') : '-'}`
+      : `${r.toFixed(2)}|${m ? METERS.map((k) => Math.round(m[k] * 100)).join(',') : '-'}|${m?.towns ?? 0}|${Math.round(view.worship[0] ?? 0)}`, (el) => {
+      if (rc) {
+        // a bound world: the standing, the worship gauge and two bars that stand apart (no single line between them)
+        el.append(
+          h('div', { class: 'gn-god-band' }, h('span', { class: 'gn-god-wor', title: 'Worship: what the people give you; works draw on it' }, h('span', { html: icon('worship') }), `${fmtNum(Math.round(view.worship[0] ?? 0))} worship`)),
+          reachBlock(rc));
+      } else {
+        el.append(
+          h('div', { class: 'gn-god-band' },
+            h('b', { class: `gn-band-${bandOf(r, m)}`, text: cap(bandOf(r, m)) }),
+            h('span', { class: 'gn-god-wor', title: 'Worship: what their prayers, rites and fear give you; miracles draw on it for strength' }, h('span', { html: icon('worship') }), `${fmtNum(Math.round(view.worship[0] ?? 0))} worship`)),
+          regardGauge(r),
+          h('p', { class: 'gn-god-say', text: regardSentence(r, m) }));
+      }
       if (m) { const g = h('div', { class: 'gn-meters' }); for (const k of METERS) g.append(meterRow(k, m[k])); el.append(g); }
     });
     // ── wrath ──

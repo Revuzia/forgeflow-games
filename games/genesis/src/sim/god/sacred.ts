@@ -187,6 +187,8 @@ export function sacredHourly(u: Universe, p: Planet): void {
       A.faith[s * 4] = Math.min(1, A.faith[s * 4] + 0.05);
       A.needs[s * NEED_N + BELONG] = Math.min(1, A.needs[s * NEED_N + BELONG] + 0.3);
       relStat(u, 'pilgrims');
+      // POWERS-GROWTH §3.6 (bound only): pilgrims came to this town's holy place (the link's P)
+      if (u.god.bound && pl.settlement >= 0) { const hr = u.god.rel?.st[`${p.id}:${pl.settlement}`]; if (hr) hr.since.pilgT = u.tick; }
     }
     let set = at.get(pl.id);
     if (!set) at.set(pl.id, (set = new Set()));

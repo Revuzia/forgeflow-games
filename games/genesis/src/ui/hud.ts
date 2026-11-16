@@ -43,8 +43,8 @@ import { h, fmtNum, cap } from './dom.ts';
 import { icon } from './icons.ts';
 import { wrathWord, WRATH_DEFAULT } from './powers.ts';
 import { heartGlyph } from './hearts.ts';
-import { reachCard, type ReachView } from './reach.ts';
-import { PrayerMarks, labelSigns, regardOf, regardValue, bandOf, meterRow, openPrayers, godTitle, METERS, PRAYER_WORDS, type GodRow } from './living.ts';
+import { reachCard, hintSeen, hintDismiss, FIRST_HINT, type ReachView } from './reach.ts';
+import { PrayerMarks, reachBlock, labelSigns, regardOf, regardValue, bandOf, meterRow, openPrayers, godTitle, METERS, PRAYER_WORDS, type GodRow } from './living.ts';
 
 export interface HudActions {
   setSpeed(x: number): void;
@@ -172,6 +172,8 @@ export class Hud {
   private faith: HTMLDivElement;
   private faithKey = '';
   private reach: ReachView | null = null;
+  /** the one-time first-run hint on the card in a bound world, until the player dismisses it */
+  private reachHint = !hintSeen();
   private lastTier = -1;
   /** the rival gods by name and epithet (the shell asks the sim now and then: query 'gods') */
   private gods: GodRow[] = [];
@@ -526,7 +528,7 @@ export class Hud {
       this.lastTier = this.reach.tier;
     } else this.lastTier = -1;
     const rivals = this.gods.filter((g) => g.id !== 0 && g.alive !== false && (view.worship[g.id] ?? g.worship ?? 0) > 0.5);
-    const key = `${Math.round(w)}|${r.toFixed(2)}|${m ? METERS.map((k) => Math.round(m[k] * 100)).join(',') : '-'}|${prayers.length}:${prayers[0]?.settlement ?? ''}|${wrath.toFixed(2)}|${rivals.map((g) => `${g.id}:${Math.round(view.worship[g.id] ?? 0)}`).join(',')}|${view.restraint}|${rc ? `${rc.stand}|${rc.next}|${rc.gauge}|${rc.trust}|${rc.fear}|${rc.pool}|${rc.gaugeTitle}|${rc.trustTitle}|${rc.fearTitle}` : ''}|${now - this.spentAt < 2500 ? Math.round(this.spent) : 0}`;
+    const key = `${Math.round(w)}|${r.toFixed(2)}|${m ? METERS.map((k) => Math.round(m[k] * 100)).join(',') : '-'}|${prayers.length}:${prayers[0]?.settlement ?? ''}|${wrath.toFixed(2)}|${rivals.map((g) => `${g.id}:${Math.round(view.worship[g.id] ?? 0)}`).join(',')}|${view.restraint}|${rc ? `${rc.stand}|${rc.next}|${rc.gauge}|${rc.trust}|${rc.fear}|${rc.pool}|${rc.gaugeTitle}|${rc.trustTitle}|${rc.fearTitle}` : ''}|${this.reachHint && rc ? 'H' : ''}|${now - this.spentAt < 2500 ? Math.round(this.spent) : 0}`;
     if (key === this.faithKey) return;
     this.faithKey = key;
     this.faith.hidden = !m && w < 0.5 && !rc;
@@ -544,15 +546,12 @@ export class Hud {
     if (rc) {
       // the god's card (POWERS-GROWTH §6): the standing, its next step, the worship held against its cap, then two bars
       // that stand apart: each is its own share of the people, never set against the other
-      this.faith.append(
-        h('div', { class: 'gn-reach' },
-          h('div', { class: 'gn-reach-stand', text: rc.stand }),
-          rc.next ? h('div', { class: 'gn-reach-next', text: rc.next }) : null,
-          rc.cap > 0 ? h('div', { class: 'gn-reach-gauge', title: rc.gaugeTitle, role: 'img', aria: { label: rc.gaugeTitle } }, h('i', { style: `width:${rc.gauge}%` })) : null,
-          rc.cap > 0 ? h('div', { class: 'gn-reach-cap', text: `${fmtNum(rc.pool)} of ${fmtNum(rc.cap)}` }) : null,
-          h('div', { class: 'gn-reach-bars' },
-            h('div', { class: 'gn-reach-bar gn-reach-trust', title: rc.trustTitle }, h('span', { text: 'Trust' }), h('span', { class: 'gn-reach-track', role: 'img', aria: { label: rc.trustTitle } }, h('i', { style: `width:${rc.trust}%` }))),
-            h('div', { class: 'gn-reach-bar gn-reach-fear', title: rc.fearTitle }, h('span', { text: 'Fear' }), h('span', { class: 'gn-reach-track', role: 'img', aria: { label: rc.fearTitle } }, h('i', { style: `width:${rc.fear}%` }))))));
+      this.faith.append(reachBlock(rc));
+      if (this.reachHint) {
+        const x = h('button', { class: 'gn-btn gn-reach-hint-x', text: 'Got it', title: 'Do not show this again', aria: { label: 'Dismiss this hint' } });
+        x.addEventListener('click', (e) => { e.stopPropagation(); hintDismiss(); this.reachHint = false; this.faithKey = ''; });
+        this.faith.append(h('div', { class: 'gn-reach-hint', role: 'note' }, h('span', { text: FIRST_HINT }), x));
+      }
     }
     if (m && !rc) {
       const g = h('div', { class: 'gn-faith-m' });

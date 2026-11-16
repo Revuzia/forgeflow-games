@@ -146,6 +146,13 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-reach { display: grid; gap: 3px; margin-top: 4px; }
 .gn-reach-stand { font: 600 13px var(--gn-sans); color: var(--gn-text, #efe7d6); }
 .gn-reach-next { font: 400 12px var(--gn-sans); opacity: .8; }
+/* the first-run hint on the god's card: fades in once; still under reduce motion */
+.gn-reach-hint { display: flex; gap: 8px; align-items: center; margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: rgba(239, 231, 214, .1); font: 400 12px var(--gn-sans); animation: gn-hint-in .6s ease both; }
+.gn-reach-hint-x { flex: none; font-size: 11px; padding: 2px 8px; }
+@keyframes gn-hint-in { from { opacity: 0; } to { opacity: 1; } }
+body.gn-reduce-motion .gn-reach-hint { animation: none !important; }
+.gn-insp-reachbars { margin: 4px 0; }
+.gn-tool-ready { opacity: .8; }
 .gn-reach-gauge, .gn-reach-track { position: relative; display: block; height: 5px; border-radius: 3px; background: rgba(239, 231, 214, .16); overflow: hidden; }
 .gn-reach-gauge i, .gn-reach-track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
 .gn-reach-gauge i { background: rgba(243, 223, 174, .85); }

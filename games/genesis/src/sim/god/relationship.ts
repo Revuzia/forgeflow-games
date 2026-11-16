@@ -15,7 +15,7 @@
 //   views        SettlementView.regard / prayers / prophet / sacred, MoverBlock.flags2 (prophet, sheltering, pilgrim,
 //                called), Snapshot.regard / wrath; queries regard, prayers, prophets, sacred, omens, sigils
 
-import { credit, reachView } from './reach.ts';
+import { credit, fearTown, offersToday, reachPrice, reachView, townReach } from './reach.ts';
 import type { CommandRegistry, Args, ParamSchema } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
@@ -380,6 +380,15 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
     const t = prophetTask(x, s, st, night, pressing, U[C.drink] >= 1.2 && U[C.drink] >= pressing);
     if (t) return t;
   }
+  // POWERS-GROWTH §3.6 (bound only): those on the road of fear leave a portion at the door of the worship place in the
+  // last of the afternoon, before the evening worship gathers
+  if (u.god.bound && pressing < 1 && !babe && !(A.flags[s] & AgentFlag.child) && A.task[s] !== TASK.offer && A.task[s] !== TASK.worship) {
+    const el = sunElevation(u, x.p, x.tick, st.pos);
+    if (el >= VESPERS_HIGH && el < OFFER_HIGH && sunElevation(u, x.p, x.tick - 20, st.pos) > el && offersToday(u, x.p, st.id, s)) {
+      const place = worshipPlace(x, st);
+      return { kind: TASK.offer, goal: spotInCell(x.p, place.cell, A.id[s], 0x0ffe, [0, 0, 0]), goalCell: place.cell, work: 8 + Math.round(8 * hashFloat(A.id[s], x.tick, 0x0fff)), target: place.id };
+    }
+  }
   // evening worship at dusk: attendance ≈ 0.5 faith + 0.3 loyalty — once an evening each, at their first decision from
   // just before sunset to the end of dusk (integration, 2026-10-20: the old window was the 25 minutes of dusk itself, and
   // only 4–6 of a town's 23 adults decided in it — the rest were at work or on the way home — so 4 % of adults came
@@ -464,6 +473,8 @@ export const PRAY_K = 3;
 export const PRAY_CAP = 0.65;
 /** the evening worship window: the sun's elevation (rad), sinking, from just before sunset to the end of dusk */
 export const VESPERS_HIGH = 0.06, VESPERS_LOW = -0.25;
+/** the offering at the door is left while the sun stands between the dusk window and this (about an hour before it) */
+const OFFER_HIGH = 0.3;
 /** (fix r4 #14) the morning prayer: its window (the sun's elevation, rad, rising), who keeps it (base + piety share, plus
  * 0.2 × faith, + 0.25 × hardship) and its length (MATINS_WORK to 1.8 × MATINS_WORK minutes, × (1 + hardship)) —
  * calibrated on the §3.8 quiet-town and after-a-tornado targets (fix4/pray14) */
@@ -515,6 +526,8 @@ function worshipYield(x: PCtx, s: number, st: Settlement, kind: number): number 
 /** godHooks.templeWanted: faith > 0.4 and loyalty > 0.3 (else the shrine serves) */
 function templeWanted(x: PCtx, st: Settlement): boolean {
   const m = meansNow(x, st);
+  // POWERS-GROWTH §4 (bound only): a town that holds to the god by fear raises its temple too
+  if (m.faith > 0.4 && fearTown(x.u, x.p.id, st.id)) return true;
   return m.faith > 0.4 && m.loyalty > 0.3;
 }
 
@@ -780,6 +793,8 @@ export function relSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
     if (defiant) v.defiant = defiant;
     const cv = covenantTownView(u, p, st.id);
     if (cv) v.covenant = cv;
+    const tr = townReach(u, p.id, st.id);
+    if (tr) v.reach = tr;
   }
   covenantSnap(u, p, snap);
   const towers = towerViews(u, p);
@@ -806,7 +821,7 @@ export function relSnapGlobal(u: Universe): { regard: number; wrath: number } {
   return { regard: regardOf(u, 0), wrath: wrathLaw(u) };
 }
 
-export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers', 'defiance', 'covenants', 'ages', 'story', 'reach'];
+export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers', 'defiance', 'covenants', 'ages', 'story', 'reach', 'reach.price'];
 
 /** the stroke descriptions of the sigils, for the UI team's recogniser templates (hook H8) */
 export const SIGIL_STROKES: Record<string, string> = {
@@ -851,6 +866,7 @@ export function relQuery(u: Universe, q: string, args: Record<string, unknown>):
     case 'ages': return agesQuery(u, args);
     case 'story': return storyQuery(u, args);
     case 'reach': return reachView(u);
+    case 'reach.price': return reachPrice(u, args);
     case 'sigils': {
       const bySigil: Record<string, { power: string; name: string; command: string; stroke: string }[]> = {};
       for (const pw of u.content.powers.list) if (pw.sigil) (bySigil[pw.sigil] ??= []).push({ power: pw.id, name: pw.name, command: pw.command, stroke: SIGIL_STROKES[pw.sigil] ?? '' });

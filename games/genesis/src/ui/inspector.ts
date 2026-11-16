@@ -24,7 +24,7 @@ import type { InspectRef } from './host.ts';
 import type { Power, PowerBook } from './powers.ts';
 import { h, cap, clear, fmtNum, fmtDist, fmtTicks, fmtLatLon } from './dom.ts';
 import { icon } from './icons.ts';
-import { townRoadWords } from './reach.ts';
+import { townRoadWords, townLines, townBars, townAbsentLine, type SimTown } from './reach.ts';
 import { masteryWords } from './words.ts';
 import { DEFY_WORDS, HEART_KINDS, HEART_LABEL, captionOf, shareOf, shareWords, personHeartLine, prideWhyWords, type TownHeart } from './hearts.ts';
 import type { TowerCard } from './decision.ts';
@@ -811,10 +811,21 @@ export class Inspector {
       this.bar(g, 'Belief', num(d.belief), 'gn-love');
       this.bar(g, 'Fear', num(d.fear), 'gn-fear');
     }
-    // POWERS-GROWTH §6: how they give, in a bound world (the sim's per-town counts are not in the view yet: the words come from the meters)
-    if (this.deps.powers?.reach.bound) {
-      const road = townRoadWords(reg ? { trust: num(reg.trust), fear: num(reg.fear) } : undefined);
-      if (road) g.append(h('div', { class: 'gn-insp-reach', text: road }));
+    // POWERS-GROWTH §6: how they give, in a bound world: the sim's per-town counts, said in words (two bars: trust and fear, apart)
+    const rv = this.deps.powers?.reach.view;
+    if (rv?.bound) {
+      const tr = ((view?.reach ?? rv.towns?.find((t) => t.planet === planet && t.settlement === ref.id)) ?? null) as SimTown | null;
+      const pop = num(view?.population, num(d.population));
+      const bars = townBars(tr, pop);
+      if (bars && tr) {
+        g.append(h('div', { class: 'gn-reach-bars gn-insp-reachbars' },
+          h('div', { class: 'gn-reach-bar gn-reach-trust', title: `${tr.trust} trust you here` }, h('span', { text: 'Trust' }), h('span', { class: 'gn-reach-track', role: 'img', aria: { label: 'Trust, in this town' } }, h('i', { style: `width:${bars.trust}%` }))),
+          h('div', { class: 'gn-reach-bar gn-reach-fear', title: `${tr.fear} fear you here` }, h('span', { text: 'Fear' }), h('span', { class: 'gn-reach-track', role: 'img', aria: { label: 'Fear, in this town' } }, h('i', { style: `width:${bars.fear}%` })))));
+      }
+      // a town the sim's list does not carry gives nothing (no believers, or never seen): say so, never the meters' words
+      const lines = tr ? townLines(tr, pop) : Array.isArray(rv.towns) ? [townAbsentLine(typeof d.belief === 'number' ? d.belief : undefined)]
+        : [townRoadWords(reg ? { trust: num(reg.trust), fear: num(reg.fear) } : undefined)].filter((x): x is string => !!x);
+      for (const t of lines) g.append(h('div', { class: 'gn-insp-reach', text: t }));
     }
     // the open prayers, each with its answer
     const prayers = Array.isArray(view?.prayers) ? (view!.prayers as { id: number; kind: string; until: number; urgency: number }[]) : [];

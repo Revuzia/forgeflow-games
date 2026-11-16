@@ -64,6 +64,14 @@ export interface Power {
   affordable?: boolean;
   reason?: string | null;
   readyAt?: number;
+  /** from the sim when bound: free clay, the size multiplier, the price at default size, the cooldown, a free first deed, Strict */
+  clay?: boolean;
+  size?: number;
+  basePrice?: number;
+  cooldownText?: string | null;
+  readyIn?: number;
+  freeDeed?: boolean;
+  strict?: boolean;
 }
 
 /** radial / palette order of categories (CONTRACT §16.3, + Laws) */
@@ -122,6 +130,13 @@ function reachFields(raw: Record<string, unknown>): Partial<Power> {
   if (typeof raw.affordable === 'boolean') o.affordable = raw.affordable;
   if (typeof raw.reason === 'string') o.reason = raw.reason; else if (raw.reason === null) o.reason = null;
   if (typeof raw.readyAt === 'number') o.readyAt = raw.readyAt;
+  if (typeof raw.clay === 'boolean') o.clay = raw.clay;
+  if (typeof raw.size === 'number') o.size = raw.size;
+  if (typeof raw.basePrice === 'number') o.basePrice = raw.basePrice;
+  if (typeof raw.cooldownText === 'string') o.cooldownText = raw.cooldownText; else if (raw.cooldownText === null) o.cooldownText = null;
+  if (typeof raw.readyIn === 'number') o.readyIn = raw.readyIn;
+  if (raw.freeDeed === true) o.freeDeed = true;
+  if (typeof raw.strict === 'boolean') o.strict = raw.strict;
   return o;
 }
 
@@ -336,9 +351,16 @@ export class PowerBook {
       const p = r && typeof r.id === 'string' ? this.byId.get(r.id) : undefined;
       if (!p) continue;
       p.priceNow = p.locked = p.beyond = p.affordable = p.readyAt = undefined;
+      p.clay = p.size = p.basePrice = p.cooldownText = p.readyIn = p.freeDeed = p.strict = undefined;
       p.reason = undefined;
       Object.assign(p, reachFields(r));
     }
+  }
+
+  /** the sim's explicit list of the always-free basic spells (the reach view's freeBasics): marks them free */
+  markFree(ids: readonly string[] | undefined): void {
+    if (!ids) return;
+    for (const id of ids) { const p = this.byId.get(id); if (p) p.free = true; }
   }
 
   /** the band a locked power waits for, its price now, whether the pool covers it (from the last 'powers' query) */

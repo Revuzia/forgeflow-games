@@ -61,10 +61,10 @@ export function gesturePowers(c: Content): Record<string, string[]> {
 }
 
 /** the catalogue for the UI (palette / radial / gesture recogniser), with live enum values resolved */
-export function powersQuery(u: Universe): Record<string, unknown>[] {
+export function powersQuery(u: Universe, args: Record<string, unknown> = {}): Record<string, unknown>[] {
   return u.content.powers.list.map((pw) => ({
     ...pw,
-    ...reachPowerView(u, pw),
+    ...reachPowerView(u, pw, args),
     // (fix r2 #12, LIVING §3.7: a planet-scale disaster needs the wrath slider at huge — the palette says so)
     ...(pw.command === 'disaster.spawn' && typeof pw.params?.kind === 'string' && u.content.disasters.find(pw.params.kind)?.minWrath !== undefined
       ? { minWrath: u.content.disasters.find(pw.params.kind)!.minWrath } : {}),
@@ -89,10 +89,16 @@ export function installPowerHooks(reg: CommandRegistry): void {
   // only when the handler succeeded); rivals, and every god in an unbound world, go through restraintCheck as before.
   // A command a handler dispatches itself (an answer firing its deed) is part of the outer act: never gated or charged.
   const pend: (Charge | null)[] = [];
+  // POWERS-GROWTH §2.2 (bound, god 0): a person made by the god's hand starts with no regard for it. The highest agent
+  // id before a maker command (-1: not one); whoever is newer afterwards was made by it.
+  const made: number[] = [];
+  const MAKERS = new Set(['life.spawn-people', 'settlement.introduce', 'settlement.found']);
+  const topId = (p: Planet): number => { const A = p.people?.agents; let m = 0; if (A) for (let s = 0; s < A.hi; s++) if (A.alive[s] && A.id[s] > m) m = A.id[s]; return m; };
   reg.before.push((u: Universe, cmd: Command, p: Planet): CommandResult | null => {
     marks.push(witnessCounter.n);
     const nested = pend.length > 0;
     pend.push(null);
+    made.push(!nested && u.god.bound && actor(cmd) === 0 && MAKERS.has(cmd.k) && p?.people ? topId(p) : -1);
     if (PLUMBING.has(cmd.k)) return null;
     let why: string | null = null;
     if (u.god.bound && actor(cmd) === 0) {
@@ -101,23 +107,31 @@ export function installPowerHooks(reg: CommandRegistry): void {
         if (typeof c === 'string') why = c; else pend[pend.length - 1] = c;
       }
     } else why = restraintCheck(u, powerOf(u.content, cmd), actor(cmd), p);
-    if (why) { marks.pop(); pend.pop(); return { ok: false, msg: why }; }
+    if (why) { marks.pop(); pend.pop(); made.pop(); return { ok: false, msg: why }; }
     return null;
   });
   reg.after.push((u: Universe, cmd: Command, p: Planet, res: CommandResult, a: Args) => {
     const mark = marks.pop() ?? witnessCounter.n;
     const ch = pend.pop() ?? null;
+    const top = made.pop() ?? -1;
     if (ch && res.ok) chargeCommit(u, ch, p);
     if (!res.ok || PLUMBING.has(cmd.k)) return;
-    u.god.stat('acts');
-    // the handler let people see it already: nothing more to do
-    if (witnessCounter.n !== mark) return;
-    const pw = powerOf(u.content, cmd);
-    const w = pw?.witness;
-    if (!w) return;
-    // an act with a place is seen around it; a world-wide act (air, the star, the laws) by everyone on the world
-    const pos = a.pos as number[] | null | undefined;
-    const R = pos ? w.radius ?? 500 : Math.PI * p.st.radius * 1.01;
-    godAct(u, p, pos ?? [0, 0, 1], R, { help: w.help, harm: w.harm, wonder: w.wonder }, actor(cmd));
+    try {
+      u.god.stat('acts');
+      // the handler let people see it already: nothing more to do
+      if (witnessCounter.n !== mark) return;
+      const pw = powerOf(u.content, cmd);
+      const w = pw?.witness;
+      if (!w) return;
+      // an act with a place is seen around it; a world-wide act (air, the star, the laws) by everyone on the world
+      const pos = a.pos as number[] | null | undefined;
+      const R = pos ? w.radius ?? 500 : Math.PI * p.st.radius * 1.01;
+      godAct(u, p, pos ?? [0, 0, 1], R, { help: w.help, harm: w.harm, wonder: w.wonder }, actor(cmd));
+    } finally {
+      // the made start with nothing toward god 0 (faith, trust, fear 0) and do not inherit the town's faith: the
+      // smallest loyalty marks them as already met, so regard.ts freshen leaves them be. They must be won like anyone.
+      const A = top >= 0 ? p?.people?.agents : undefined;
+      if (A) for (let s = 0; s < A.hi; s++) if (A.alive[s] && A.id[s] > top) { A.faith[s * 4] = 0; A.love[s * 4] = 0; A.fear[s * 4] = 0; A.loyalty[s * 4] = 1e-6; }
+    }
   });
 }

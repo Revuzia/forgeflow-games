@@ -3,13 +3,21 @@
 // bless, curse), inspiring a person, laws given to a settlement, introductions beyond the peoples' own channels
 // (a substance, a law, a people), and restraint mode.
 
-import { setBound } from './reach.ts';
+import { isStrict, reachWiden, setBound } from './reach.ts';
+import { powerOf as powerOfCmd } from './powers.ts';
+
+/** POWERS-GROWTH §3.3: the god's meteor grows with its standing above the meteor's band (bound, god 0; else unchanged) */
+function meteorScale(u: Universe, cmd: Command, kind: string, scale: number | undefined): number | undefined {
+  if (kind !== 'meteor' || !u.god.bound || actor(cmd) !== 0) return scale;
+  const k = reachWiden(u, 0, powerOfCmd(u.content, cmd)?.tier ?? 3);
+  return k > 1 ? (scale ?? 1) * k : scale;
+}
 import type { CommandRegistry, ParamSchema, Args } from './commands.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import type { Settlement } from '../people/state.ts';
 import type { V3 } from './state.ts';
-import type { CommandResult } from '../types.ts';
+import type { Command, CommandResult } from '../types.ts';
 import { AgentFlag } from '../types.ts';
 import { makeCtx } from '../people/ctx.ts';
 import { DEATH, MEMK, NN, NS, NT, TRAIT } from '../people/defs.ts';
@@ -211,7 +219,7 @@ export function registerActCommands(r: CommandRegistry): void {
     if (life !== undefined && life < 0 && def0 && !lasting(def0)) { life = undefined; once = ` (a ${def0.name.toLowerCase()} strikes once: for an endless one, ask for ${def0.id === 'meteor' ? 'a meteor shower' : 'a lasting kind'} forever)`; }
     const d = spawnDisaster(u, p, kind, {
       pos, radius: a.radius as number | undefined, intensity: a.intensity as number | undefined,
-      scale: a.scale as number | undefined, life, god: actor(cmd), cause: 'god',
+      scale: meteorScale(u, cmd, kind, a.scale as number | undefined), life, god: actor(cmd), cause: 'god',
       toward: (a.toward as V3 | null) ?? null, heading: typeof a.heading === 'number' ? (a.heading * Math.PI) / 180 : undefined,
     });
     if (typeof d === 'string') return fail(d);
@@ -538,9 +546,16 @@ export function registerActCommands(r: CommandRegistry): void {
   }, { desc: 'Restraint mode (worship costs and cooldowns)', category: 'Laws', params: { on: { type: 'boolean', default: true } } });
   // POWERS-GROWTH: the setting. Bound: belief bounds the god's power (standing, worship prices). Unbound: the sandbox.
   r.register('meta.reach', ({ u }, a) => {
+    const was = u.god.bound;
     setBound(u, a.bound !== false);
-    return ok(u.god.bound ? 'Belief bounds your power: what the people give, you may spend.' : 'Unbound: every power, anywhere, now.');
-  }, { desc: 'Whether belief bounds the god (standing and worship prices) or the world is a sandbox', category: 'Laws', params: { bound: { type: 'boolean', default: true } } });
+    // Strict (§3.7) is bound + the old restraint costs. Leaving "Restraint (old save)" for the bounds is one-way: the
+    // old setting is put down unless Strict is asked for; unbinding always puts it down (the sandbox charges nothing).
+    if (typeof a.strict === 'boolean') u.settings.restraint = u.god.bound && a.strict;
+    else if (was !== u.god.bound) u.settings.restraint = false;
+    if (!u.god.bound) return ok('Unbound: every power, anywhere, now.');
+    return ok(isStrict(u) ? 'Strict: belief bounds your power, and no power costs less than it did under restraint.' : 'Belief bounds your power: what the people give, you may spend.');
+  }, { desc: 'Whether belief bounds the god (standing and worship prices; strict: with the old restraint costs too) or the world is a sandbox', category: 'Laws',
+    params: { bound: { type: 'boolean', default: true }, strict: { type: 'boolean' } } });
 }
 
 export { insertSorted };
