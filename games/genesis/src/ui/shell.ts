@@ -175,6 +175,8 @@ export class Shell {
   /** the gods of the worlds (query 'gods': the rivals' epithets), asked now and then */
   private gods: GodRow[] = [];
   private godsAt = -1e9;
+  private reachAt = -1e9;
+  private reachWasBound = false;
   /** the sacred places (query 'sacred'), for the place card */
   private sacred: SacredPlaceRow[] = [];
   private deps: ShellDeps;
@@ -1216,6 +1218,7 @@ export class Shell {
     host.powers.wrathLaw = host.view.wrath ?? host.powers.wrathLaw;
     this.god.frame();
     this.pollGods();
+    this.pollReach();
     // the world layer: busy (names and markers let presses through), hushed (names and markers hidden)
     const busy = pointerOwned || this.hand.busy || this.press !== 'none';
     const hush = this.radial.isOpen || this.palette.isOpen || this.gestures.active || this.gestures.armed || this.opening.hush || this.winCentre;
@@ -1251,6 +1254,28 @@ export class Shell {
     });
     this.hud.toasts.pump(host.view, performance.now(), host.primary());
     this.layout();
+  }
+
+  /**
+   * POWERS-GROWTH: the god's standing and the live price of every power, every ~4 s while the world is bound (and once
+   * more after it stops being, to clear the prices). An unbound world asks only the cheap 'reach' query.
+   */
+  private pollReach(): void {
+    const now = performance.now();
+    if (now - this.reachAt < 4000 || this.host.source !== 'worker' || this.title.isOpen) return;
+    this.reachAt = now;
+    const feed = this.host.powers.reach;
+    void this.host.query('reach', {}).then((r) => {
+      feed.setView(r);
+      this.hud.setReach(feed.view);
+      const bound = feed.bound;
+      if (!bound && !this.reachWasBound) return;
+      this.reachWasBound = bound;
+      return this.host.query('powers', {}).then((rows) => {
+        this.host.powers.applyReach(rows);
+        if (Array.isArray(rows)) feed.noteLocks(rows as { id: string; locked?: boolean }[]);
+      });
+    }).catch(() => { /* the numbers wait */ });
   }
 
   /** the gods (their epithets for the HUD and the god's window) and the sacred places (the place card), every ~6 s */

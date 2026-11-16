@@ -24,6 +24,7 @@ import type { InspectRef } from './host.ts';
 import type { Power, PowerBook } from './powers.ts';
 import { h, cap, clear, fmtNum, fmtDist, fmtTicks, fmtLatLon } from './dom.ts';
 import { icon } from './icons.ts';
+import { townRoadWords } from './reach.ts';
 import { masteryWords } from './words.ts';
 import { DEFY_WORDS, HEART_KINDS, HEART_LABEL, captionOf, shareOf, shareWords, personHeartLine, prideWhyWords, type TownHeart } from './hearts.ts';
 import type { TowerCard } from './decision.ts';
@@ -809,6 +810,11 @@ export class Inspector {
     } else if (typeof d.belief === 'number') {
       this.bar(g, 'Belief', num(d.belief), 'gn-love');
       this.bar(g, 'Fear', num(d.fear), 'gn-fear');
+    }
+    // POWERS-GROWTH §6: how they give, in a bound world (the sim's per-town counts are not in the view yet: the words come from the meters)
+    if (this.deps.powers?.reach.bound) {
+      const road = townRoadWords(reg ? { trust: num(reg.trust), fear: num(reg.fear) } : undefined);
+      if (road) g.append(h('div', { class: 'gn-insp-reach', text: road }));
     }
     // the open prayers, each with its answer
     const prayers = Array.isArray(view?.prayers) ? (view!.prayers as { id: number; kind: string; until: number; urgency: number }[]) : [];

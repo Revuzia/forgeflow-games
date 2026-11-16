@@ -9,6 +9,7 @@
 import type { Command } from '../sim/types.ts';
 import { BASE_PACK } from '../data/index.ts';
 import { fmtDist, fmtNum, fmtTicks } from './dom.ts';
+import { ReachFeed } from './reach.ts';
 
 export interface ParamSpec {
   type: 'number' | 'int' | 'pos' | 'entity' | 'enum' | 'boolean' | 'string' | 'any' | 'vec3' | string;
@@ -50,6 +51,19 @@ export interface Power {
    * supervolcano, gravity slip, moon-fall — is refused below huge, 0.85); undefined: any wrath
    */
   minWrath?: number;
+  /**
+   * POWERS-GROWTH (powersQuery): the band, the base price and whether it is free always; when the world is bound, its
+   * price now (3 x one band up), locked, beyond, affordable, the sim's plain reason and the tick it is ready again
+   */
+  tier?: number;
+  price?: number;
+  free?: boolean;
+  priceNow?: number;
+  locked?: boolean;
+  beyond?: boolean;
+  affordable?: boolean;
+  reason?: string | null;
+  readyAt?: number;
 }
 
 /** radial / palette order of categories (CONTRACT §16.3, + Laws) */
@@ -92,7 +106,23 @@ function normalizePower(raw: Record<string, unknown>): Power {
     synonyms: Array.isArray(raw.synonyms) ? (raw.synonyms as string[]) : [], desc: String(raw.desc ?? ''),
     cost: typeof raw.cost === 'number' ? raw.cost : undefined, cooldown: typeof raw.cooldown === 'number' ? raw.cooldown : undefined,
     minWrath: typeof raw.minWrath === 'number' && Number.isFinite(raw.minWrath) ? raw.minWrath : undefined,
+    ...reachFields(raw),
   };
+}
+
+/** the powersQuery's standing fields, kept only when they are the right type (absent in a world that was never bound) */
+function reachFields(raw: Record<string, unknown>): Partial<Power> {
+  const o: Partial<Power> = {};
+  if (typeof raw.tier === 'number') o.tier = raw.tier;
+  if (typeof raw.price === 'number') o.price = raw.price;
+  if (typeof raw.free === 'boolean') o.free = raw.free;
+  if (typeof raw.priceNow === 'number') o.priceNow = raw.priceNow;
+  if (typeof raw.locked === 'boolean') o.locked = raw.locked;
+  if (typeof raw.beyond === 'boolean') o.beyond = raw.beyond;
+  if (typeof raw.affordable === 'boolean') o.affordable = raw.affordable;
+  if (typeof raw.reason === 'string') o.reason = raw.reason; else if (raw.reason === null) o.reason = null;
+  if (typeof raw.readyAt === 'number') o.readyAt = raw.readyAt;
+  return o;
 }
 
 /**
@@ -203,6 +233,8 @@ export class PowerBook {
   byCategory = new Map<string, Power[]>();
   /** bumped whenever the list changes (UI caches rebuild) */
   version = 0;
+  /** POWERS-GROWTH: the god's standing, the pool and the newly opened powers (fed by the shell while the world is bound) */
+  readonly reach = new ReachFeed();
 
   constructor() {
     this.set(withClientPowers(((BASE_PACK.powers ?? []) as unknown as Record<string, unknown>[]).map(normalizePower)));
@@ -293,6 +325,28 @@ export class PowerBook {
     const own = typeof values.wrath === 'number' ? values.wrath : typeof p.params.wrath === 'number' ? p.params.wrath : this.wrathLaw;
     return own < min - 1e-9 ? min : null;
   }
+
+  /**
+   * POWERS-GROWTH: lay the live standing fields of a 'powers' query over the catalogue in place (no rebuild: the lists
+   * and the version stay). Unbound rows carry none, which clears them, so an unbound world looks as it always did.
+   */
+  applyReach(raw: unknown): void {
+    if (!Array.isArray(raw)) return;
+    for (const r of raw as Record<string, unknown>[]) {
+      const p = r && typeof r.id === 'string' ? this.byId.get(r.id) : undefined;
+      if (!p) continue;
+      p.priceNow = p.locked = p.beyond = p.affordable = p.readyAt = undefined;
+      p.reason = undefined;
+      Object.assign(p, reachFields(r));
+    }
+  }
+
+  /** the band a locked power waits for, its price now, whether the pool covers it (from the last 'powers' query) */
+  lockedBy(p: Power): string | null { return p.locked === true ? (p.reason ?? 'Beyond your reach.') : null; }
+  priceOf(p: Power): number | null { return p.priceNow ?? null; }
+  affordable(p: Power): boolean { return p.affordable !== false; }
+  /** the plain sentence when a power cannot be cast yet for want of standing or worship, else null */
+  reachShort(p: Power): string | null { return p.locked === true || p.affordable === false ? (p.reason ?? null) : null; }
 
   /** the commands' own schemas (query 'commands'): which parameters each power's command REQUIRES, and their types */
   private commands = new Map<string, Record<string, { type?: string; required?: boolean; values?: string[]; unit?: string }>>();

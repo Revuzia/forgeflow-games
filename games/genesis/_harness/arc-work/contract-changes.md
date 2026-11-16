@@ -232,3 +232,9 @@
   => Free: time, save/load, camera, story answers, AND the very basic powers (a short free list of the smallest tier-0 acts).
   => NO base trickle: with zero believers the pool does not refill. The no-dead-end guarantee therefore rests on the free basic
      powers (which must include ways to earn belief by both roads), the starting pool of a new world, and free clay.
+
+## Owner rulings 2026-11-16 (third)
+- "yes, all recommended" on POWERS-GROWTH v3 §10 (worship plenty kept until played; cruelty costs trust at half; pace holds 1/30/150/360)
+  and yes to registering the five reach events as silent in the audio map.
+- Free spells: "not rainbow, needs to be other basic things. maybe 2-3 others." => rain, heal-person, plant, lightning stay free;
+  omen-rainbow is priced; add 2-3 other very basic tier-0 acts.

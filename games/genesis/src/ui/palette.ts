@@ -12,6 +12,7 @@
 // becomes the selection only after a real pointer move (rows rebuilt under a resting cursor must not steal it from
 // what the keyboard chose), and never within 150 ms of a keystroke.
 
+import { powerState, stateTitle, costLine } from './reach.ts';
 import type { EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { Catalog, LawRow } from './catalog.ts';
@@ -49,6 +50,9 @@ interface Row {
   badge?: string;
   /** the badge is a warning (a power the wrath now refuses) */
   badgeWarn?: boolean;
+  /** POWERS-GROWTH: 'poor' or 'locked' (dimmed row, the sim's sentence as its tooltip) */
+  state?: 'poor' | 'locked';
+  tip?: string;
   hint?: string;
   /** what Shift+Enter would do, in words ("⇧↵ at Aru") */
   shiftHint?: string;
@@ -233,7 +237,9 @@ export class Palette {
         score = ri >= 0 ? 1000 - ri : -p.ring;
       }
       const mode = toolMode(p);
-      const cost = restraint && p.cost ? ` · ${p.cost} worship` : '';
+      const bound = costLine(p);
+      const cost = bound ? ` · ${bound}` : restraint && p.cost ? ` · ${p.cost} worship` : '';
+      const pst = powerState(p);
       const subVia = via && via !== p.desc && !via.startsWith(categoryLabel(p.category)) ? `“${via}” · ` : '';
       const placed = mode !== 'instant' && mode !== 'world';
       const world = this.host.view.planet(this.here?.planet ?? this.host.primary())?.name ?? 'this world';
@@ -245,7 +251,7 @@ export class Palette {
         badge: short !== null ? `Needs ${wrathWord(short)} wrath` : categoryLabel(p.category), badgeWarn: short !== null,
         hint: mode === 'instant' ? 'cast' : 'arm',
         shiftHint: placed ? (this.hereText ? `⇧↵ ${this.hereText}` : '⇧↵ no place') : mode === 'world' ? `⇧↵ on ${world}` : '',
-        score,
+        score, state: pst === 'open' ? undefined : pst, tip: stateTitle(p, this.host.powers.reach.view) ?? undefined,
         run: (shift) => {
           this.remember(`power:${p.id}`);
           const here = this.here;
@@ -358,7 +364,7 @@ export class Palette {
         this.list.append(h('div', { class: 'gn-pal-group', text: r.kind === 'power' ? 'Recent powers' : r.kind === 'action' ? 'Recent actions' : r.kind === 'cat' ? 'Browse' : r.kind }));
         lastKind = r.kind;
       }
-      const row = h('div', { class: `gn-pal-row gn-pal-${r.kind}${i === this.sel ? ' gn-pal-on' : ''}`, role: 'option', aria: { selected: String(i === this.sel) }, data: { i: String(i) } },
+      const row = h('div', { class: `gn-pal-row gn-pal-${r.kind}${r.state ? ` gn-pal-${r.state}` : ''}${i === this.sel ? ' gn-pal-on' : ''}`, title: r.tip ?? '', role: 'option', aria: { selected: String(i === this.sel) }, data: { i: String(i) } },
         h('span', { class: 'gn-pal-ico', html: r.iconHtml }),
         h('span', { class: 'gn-pal-text' }, h('span', { class: 'gn-pal-title', html: r.titleHtml ?? escapeText(r.title) }), h('span', { class: 'gn-pal-sub', text: r.sub })),
         r.badge ? h('span', { class: `gn-pal-badge${r.badgeWarn ? ' gn-warn' : ''}`, text: r.badge }) : null,

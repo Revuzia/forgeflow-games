@@ -21,6 +21,7 @@
 // Setting a people down warns at the cursor where they could not live: no air to breathe, deep water, too cold (they
 // would freeze) or too hot — from the cell's temperature and the species' own tolerance (it never refuses: the god may).
 
+import { costLine } from './reach.ts';
 import type { Command, CommandResult, EntityRef } from '../sim/types.ts';
 import type { GroundHit, UiHost } from './host.ts';
 import type { ParamSpec, Power, ToolMode } from './powers.ts';
@@ -283,7 +284,10 @@ export class Tools {
       this.cardBody.append(this.needEl);
       this.renderNeed();
     }
-    if (this.host.view.restraint && p.cost) this.cardBody.append(h('div', { class: 'gn-tool-cost', text: `Restraint: costs ${p.cost} worship${p.cooldown ? `, then rests ${Math.round(p.cooldown / 60)} h` : ''}.` }));
+    // POWERS-GROWTH §6: one cost line on every priced power; a locked one says why (nothing at all in an unbound world)
+    const cl = costLine(p);
+    if (cl !== null) this.cardBody.append(h('div', { class: 'gn-tool-cost', data: { key: 'reach-cost' }, text: p.locked ? (p.reason ?? 'Beyond your reach.') : cl }));
+    else if (this.host.view.restraint && p.cost) this.cardBody.append(h('div', { class: 'gn-tool-cost', text: `Restraint: costs ${p.cost} worship${p.cooldown ? `, then rests ${Math.round(p.cooldown / 60)} h` : ''}.` }));
     this.moreBtn.hidden = !extra;
     this.moreBtn.textContent = this.view.more ? 'Fewer settings' : `More settings (${extra})`;
     this.renderInstr();

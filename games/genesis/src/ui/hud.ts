@@ -43,6 +43,7 @@ import { h, fmtNum, cap } from './dom.ts';
 import { icon } from './icons.ts';
 import { wrathWord, WRATH_DEFAULT } from './powers.ts';
 import { heartGlyph } from './hearts.ts';
+import { reachCard, type ReachView } from './reach.ts';
 import { PrayerMarks, labelSigns, regardOf, regardValue, bandOf, meterRow, openPrayers, godTitle, METERS, PRAYER_WORDS, type GodRow } from './living.ts';
 
 export interface HudActions {
@@ -170,6 +171,8 @@ export class Hud {
   private worldBtns = new Map<number, HTMLButtonElement>();
   private faith: HTMLDivElement;
   private faithKey = '';
+  private reach: ReachView | null = null;
+  private lastTier = -1;
   /** the rival gods by name and epithet (the shell asks the sim now and then: query 'gods') */
   private gods: GodRow[] = [];
   /** prayer lamps over praying towns, from orbit */
@@ -488,6 +491,9 @@ export class Hud {
     for (const [id, b] of this.worldBtns) if (!view.planet(id)) { b.remove(); this.worldBtns.delete(id); }
   }
 
+  /** POWERS-GROWTH: the god's standing (query 'reach'); null or unbound: the card is what it always was */
+  setReach(r: ReachView | null): void { this.reach = r; }
+
   /** the rival gods by name and epithet (query 'gods') */
   setGods(list: GodRow[]): void { this.gods = list; }
 
@@ -513,22 +519,42 @@ export class Hud {
     }
     this.lastWorship = w;
     if (this.spentEl && now - this.spentAt > 2600) { this.spentEl.remove(); this.spentEl = null; }
+    const rc = this.reach?.bound ? reachCard(this.reach) : null;
+    // a rise or fall pulses the card once (a still card when motion is reduced: the stylesheet turns the animation off)
+    if (rc && this.reach) {
+      if (this.lastTier >= 0 && this.reach.tier !== this.lastTier) { this.faith.classList.remove('gn-stood'); void this.faith.offsetWidth; this.faith.classList.add('gn-stood'); }
+      this.lastTier = this.reach.tier;
+    } else this.lastTier = -1;
     const rivals = this.gods.filter((g) => g.id !== 0 && g.alive !== false && (view.worship[g.id] ?? g.worship ?? 0) > 0.5);
-    const key = `${Math.round(w)}|${r.toFixed(2)}|${m ? METERS.map((k) => Math.round(m[k] * 100)).join(',') : '-'}|${prayers.length}:${prayers[0]?.settlement ?? ''}|${wrath.toFixed(2)}|${rivals.map((g) => `${g.id}:${Math.round(view.worship[g.id] ?? 0)}`).join(',')}|${view.restraint}|${now - this.spentAt < 2500 ? Math.round(this.spent) : 0}`;
+    const key = `${Math.round(w)}|${r.toFixed(2)}|${m ? METERS.map((k) => Math.round(m[k] * 100)).join(',') : '-'}|${prayers.length}:${prayers[0]?.settlement ?? ''}|${wrath.toFixed(2)}|${rivals.map((g) => `${g.id}:${Math.round(view.worship[g.id] ?? 0)}`).join(',')}|${view.restraint}|${rc ? `${rc.stand}|${rc.next}|${rc.gauge}|${rc.trust}|${rc.fear}|${rc.pool}|${rc.gaugeTitle}|${rc.trustTitle}|${rc.fearTitle}` : ''}|${now - this.spentAt < 2500 ? Math.round(this.spent) : 0}`;
     if (key === this.faithKey) return;
     this.faithKey = key;
-    this.faith.hidden = !m && w < 0.5;
+    this.faith.hidden = !m && w < 0.5 && !rc;
     this.faith.innerHTML = '';
     const band = bandOf(r, m);
     this.faith.append(
       h('div', { class: 'gn-faith-top' },
         h('span', { class: 'gn-faith-i', html: icon('worship') }),
         h('span', { class: 'gn-faith-w' }, h('b', { text: fmtNum(Math.round(w)) }), h('small', { text: view.restraint ? 'worship · restraint' : 'worship' })),
-        h('span', { class: `gn-faith-band gn-band-${band}` },
+        // (a bound world has no band gauge: the standing and the two bars below say how the people hold you)
+        rc ? null : h('span', { class: `gn-faith-band gn-band-${band}` },
           h('b', { text: cap(band) }),
           h('span', { class: 'gn-faith-gauge' }, h('i', { style: `left:${Math.round((Math.max(-1, Math.min(1, r)) + 1) * 50)}%` })))),
     );
-    if (m) {
+    if (rc) {
+      // the god's card (POWERS-GROWTH §6): the standing, its next step, the worship held against its cap, then two bars
+      // that stand apart: each is its own share of the people, never set against the other
+      this.faith.append(
+        h('div', { class: 'gn-reach' },
+          h('div', { class: 'gn-reach-stand', text: rc.stand }),
+          rc.next ? h('div', { class: 'gn-reach-next', text: rc.next }) : null,
+          rc.cap > 0 ? h('div', { class: 'gn-reach-gauge', title: rc.gaugeTitle, role: 'img', aria: { label: rc.gaugeTitle } }, h('i', { style: `width:${rc.gauge}%` })) : null,
+          rc.cap > 0 ? h('div', { class: 'gn-reach-cap', text: `${fmtNum(rc.pool)} of ${fmtNum(rc.cap)}` }) : null,
+          h('div', { class: 'gn-reach-bars' },
+            h('div', { class: 'gn-reach-bar gn-reach-trust', title: rc.trustTitle }, h('span', { text: 'Trust' }), h('span', { class: 'gn-reach-track', role: 'img', aria: { label: rc.trustTitle } }, h('i', { style: `width:${rc.trust}%` }))),
+            h('div', { class: 'gn-reach-bar gn-reach-fear', title: rc.fearTitle }, h('span', { text: 'Fear' }), h('span', { class: 'gn-reach-track', role: 'img', aria: { label: rc.fearTitle } }, h('i', { style: `width:${rc.fear}%` }))))));
+    }
+    if (m && !rc) {
       const g = h('div', { class: 'gn-faith-m' });
       for (const k of METERS) g.append(meterRow(k, m[k], true));
       this.faith.append(g);

@@ -11,6 +11,7 @@ import { ACTIONS, comboLabel, comboOf, splitCombo, type ActionDef } from './keyb
 import { Panel, field, slider, toggle, select, segmented } from './panel.ts';
 import { h, clear, fmtNum, isEmbedded } from './dom.ts';
 import { icon } from './icons.ts';
+import { SETTING_CHOICES, SETTING_NOTE, settingCommand } from './reach.ts';
 
 type Tab = 'graphics' | 'audio' | 'interface' | 'controls' | 'game';
 
@@ -48,6 +49,17 @@ export class Settings {
   get isOpen(): boolean { return this.panel.isOpen; }
   open(tab?: Tab): void { if (tab) this.tab = tab; this.panel.open(); this.render(); this.panel.body.scrollTop = 0; }
   close(): void { this.panel.close(); }
+
+  /** Unbound / Belief bounds my power; read-only until the world answers which it is */
+  private reachControl(): HTMLElement {
+    const feed = this.host.powers.reach;
+    const known = feed.view !== null;
+    const seg = segmented(SETTING_CHOICES.map((c) => ({ value: c.value, label: c.label, title: c.title })), feed.bound ? 'bound' : 'unbound', (v) => {
+      void this.host.cmd(settingCommand(v)).then(() => { feed.view = null; if (this.panel.isOpen) setTimeout(() => this.render(), 4500); });
+    });
+    if (!known) for (const b of Array.from(seg.querySelectorAll('button'))) (b as HTMLButtonElement).disabled = true;
+    return field('Power', seg, SETTING_NOTE);
+  }
 
   private render(): void {
     clear(this.tabs);
@@ -125,7 +137,10 @@ export class Settings {
         natTg.disabled = true;
         natTg.title = 'Reading the world\'s law…';
         this.content.append(
-          field('Restraint', toggle(restraint, (on) => void this.host.cmd({ k: 'meta.restraint', on }), 'Restraint'), 'powers cost worship and need time — off: omnipotence'),
+          // POWERS-GROWTH §6: one control for how far belief bounds the god. (Strict, the third position, is not in the sim yet: left out.)
+          this.reachControl(),
+          // (a world loaded from an old save with restraint on keeps it, read-only: the new control does not touch it)
+          ...(restraint && !this.host.powers.reach.bound ? [field('Restraint (old save)', h('span', { class: 'gn-set-ro', text: 'On' }), 'powers cost worship and need time, as in the save')] : []),
           field('Natural disasters', natTg, 'the world sends its own (a law: see the laws of the world)'),
           field('Autosave', select([{ value: '0', label: 'Off' }, { value: '1', label: 'Every minute' }, { value: '2', label: 'Every 2 minutes' }, { value: '5', label: 'Every 5 minutes' }, { value: '10', label: 'Every 10 minutes' }, { value: '20', label: 'Every 20 minutes' }, { value: '30', label: 'Every 30 minutes' }],
             String(v.game.autosaveMinutes), (x) => { P.set('game.autosaveMinutes', Number(x)); P.set('game.autosaveChosen', true); })),

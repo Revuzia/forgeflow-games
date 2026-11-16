@@ -13,6 +13,7 @@
 // mode: click a category, then a power. Keyboard: arrows move, Enter picks, Esc steps back. Gamepad: the stick points
 // at a category, A opens it (then a group), the stick points at a power, A arms it, B steps back.
 
+import { powerState, stateTitle, costNumeral, lockMark } from './reach.ts';
 import type { UiHost } from './host.ts';
 import type { Power } from './powers.ts';
 import { categoryLabel, wrathNeedWords } from './powers.ts';
@@ -256,7 +257,13 @@ export class Radial {
         const more = it === 'more';
         const name = more ? 'More…' : it.name;
         const short = more ? null : this.host.powers.wrathShort(it);
-        const el = h('button', { class: `gn-rad-pow${more ? ' gn-rad-more' : ''}${short !== null ? ' gn-rad-need' : ''}`, title: more ? `Every ${categoryLabel(cat).toLowerCase()} power, in the palette` : short !== null ? `${it.name} — ${wrathNeedWords(short)}` : it.name, aria: { label: name }, html: more ? icon('search') : icon(it.icon, it.category) });
+        // POWERS-GROWTH §6: open (as ever), poor (cost dimmed, the shortfall in its tooltip), locked (dimmed, a mark of the standing it waits for)
+        const st = more ? 'open' : powerState(it);
+        const stTitle = more ? null : stateTitle(it, this.host.powers.reach.view);
+        const fresh = !more && st === 'open' && this.host.powers.reach.takeFresh(it.id);
+        const el = h('button', { class: `gn-rad-pow${more ? ' gn-rad-more' : ''}${short !== null ? ' gn-rad-need' : ''}${st === 'poor' ? ' gn-rad-poor' : st === 'locked' ? ' gn-rad-locked' : ''}${fresh ? ' gn-rad-new' : ''}`, title: more ? `Every ${categoryLabel(cat).toLowerCase()} power, in the palette` : stTitle ?? (short !== null ? `${it.name} — ${wrathNeedWords(short)}` : it.name), aria: { label: stTitle ? `${name}. ${stTitle}` : name }, html: more ? icon('search') : icon(it.icon, it.category) });
+        if (!more && st !== 'locked') { const n = costNumeral(it); if (n) el.append(h('span', { class: 'gn-rad-cost', text: n })); }
+        if (!more && st === 'locked') { const mk = lockMark(it); if (mk) el.append(h('span', { class: 'gn-rad-mark', text: mk })); }
         el.style.left = `${x}px`; el.style.top = `${y}px`;
         el.style.animationDelay = `${Math.min(k, 14) * 12}ms`;
         // its name, outward from the ring (shown on the slots nearest the pointer)

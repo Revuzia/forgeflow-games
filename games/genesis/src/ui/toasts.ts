@@ -23,6 +23,7 @@
 import type { ChronicleEntry, Command, EntityRef, SimEvent, UnitVec } from '../sim/types.ts';
 import type { WorldView } from '../client/worldview.ts';
 import { stripYear } from './words.ts';
+import { standingToast } from './reach.ts';
 import { defyAnsweredText, defyToastText } from './hearts.ts';
 
 export type ToastKind = 'discovery' | 'birth' | 'death' | 'founding' | 'refusal' | 'loss' | 'fall' | 'plague' | 'god' | 'nature' | 'war' | 'peace' | 'info' | 'warn';
@@ -474,6 +475,14 @@ export class Toasts {
       case 'prayer.answered': {
         const c = this.claim(e.tick, (q) => mentions(q.text, where));
         this.show({ kind: 'god', title: `Heard · ${place}`, text: c ? c.text : `The god heard ${where}: their prayer for ${PRAYER_TEXT[String(data.kind)] ?? 'help'} was answered.`, date: dateFrom(c, date), at, planet });
+        return;
+      }
+      // ── the god's standing rose or fell (POWERS-GROWTH §6); the Book line is the sim's own ──
+      case 'reach.rose':
+      case 'reach.fell': {
+        const t = standingToast(e.t, data as { name?: string });
+        if (!t) return;
+        this.show({ kind: 'god', title: t.title, text: t.text, date, planet });
         return;
       }
       case 'prayer.lapsed': {

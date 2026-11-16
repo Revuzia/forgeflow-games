@@ -285,6 +285,12 @@ export function cueFor(e: SimEvent): CueSpec | null {
  */
 export const SILENT_EVENTS: Record<string, string> = {
   aid: 'a town sends days of work to another: the chronicle line carries it, and it is frequent',
+  // POWERS-GROWTH (owner approved 2026-11-16): silent for now; the standing cue is designed with the UI stage (spec §6 Moments)
+  'reach.rose': 'the god gains a standing: the cue arrives with the on-screen moment, not yet built',
+  'reach.fell': 'the god loses a standing: the cue arrives with the on-screen moment, not yet built',
+  'reach.falling': 'a warning that the Following is thinning: a HUD line only, never a sound',
+  'reach.unbound': 'the player switched the bounds off in settings: a settings change, not a world event',
+  'worship.spent': 'every paid cast: the power itself is the sound, a second cue would double it',
   'content.plant': 'a modded plant placed: the world is the sound, nothing happened to a people',
   'fire.out': 'the last flame went out: the ambience fire bed fades on its own and a hiss would double the steam cue',
   harvest: 'every field, every day: far too frequent for a cue',

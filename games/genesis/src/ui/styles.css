@@ -142,6 +142,19 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-faith-band b { font: 600 15px/1 var(--gn-serif); letter-spacing: .08em; text-transform: uppercase; }
 .gn-faith-gauge { position: relative; height: 5px; border-radius: 3px; background: linear-gradient(90deg, var(--gn-feared), rgba(239, 231, 214, .45) 50%, var(--gn-trusted)); opacity: .85; }
 .gn-faith-gauge i { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); background: #fff8e6; box-shadow: 0 0 0 2px rgba(9, 11, 17, .8), 0 0 8px rgba(255, 240, 200, .8); }
+/* POWERS-GROWTH §6: the god's card — standing, next step, worship gauge, two bars that stand apart */
+.gn-reach { display: grid; gap: 3px; margin-top: 4px; }
+.gn-reach-stand { font: 600 13px var(--gn-sans); color: var(--gn-text, #efe7d6); }
+.gn-reach-next { font: 400 12px var(--gn-sans); opacity: .8; }
+.gn-reach-gauge, .gn-reach-track { position: relative; display: block; height: 5px; border-radius: 3px; background: rgba(239, 231, 214, .16); overflow: hidden; }
+.gn-reach-gauge i, .gn-reach-track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.gn-reach-gauge i { background: rgba(243, 223, 174, .85); }
+.gn-reach-cap { font: 400 11px var(--gn-sans); opacity: .7; }
+.gn-reach-bars { display: grid; gap: 3px; margin-top: 2px; }
+.gn-reach-bar { display: grid; grid-template-columns: 38px 1fr; align-items: center; gap: 6px; font: 400 11px var(--gn-sans); }
+.gn-reach-trust i { background: var(--gn-trusted, #e8c76a); }
+.gn-reach-fear i { background: var(--gn-feared, #b0584a); }
+.gn-stood { animation: gnPrayPulse 1.2s ease-out 1; }
 .gn-faith-m { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; }
 .gn-faith-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .gn-faith-chip { display: inline-flex; align-items: center; gap: 5px; font: 500 11.5px/1 var(--gn-sans); color: var(--gn-ivory-dim); padding: 4px 7px; border-radius: 9px; border: 1px solid var(--gn-line); background: rgba(255, 255, 255, .03); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -315,6 +328,16 @@ body[data-cvd='monochrome'] .gn-toast { --gn-tc: var(--gn-ivory-dim) !important;
 .gn-tool-need[hidden] { display: none; }
 .gn-tool-raise { font: 600 12px var(--gn-sans); padding: 3px 10px; border-color: rgba(232, 150, 100, .6); }
 .gn-pal-badge.gn-warn { color: #ffcfb2; border-color: rgba(232, 120, 86, .55); }
+/* POWERS-GROWTH §6: the wheel's three states (open: as ever; poor: cost dimmed; locked: dimmed with the standing's mark) and the pulse of a newly opened power */
+.gn-rad-pow.gn-rad-poor { opacity: .72; }
+.gn-rad-pow.gn-rad-locked { opacity: .42; filter: saturate(.5); }
+.gn-rad-pow .gn-rad-cost, .gn-rad-pow .gn-rad-mark { position: absolute; right: -2px; bottom: -4px; font: 600 10px var(--gn-sans); padding: 0 3px; border-radius: 6px; background: rgba(9, 11, 17, .8); color: var(--gn-text, #efe7d6); pointer-events: none; }
+.gn-rad-pow.gn-rad-poor .gn-rad-cost { opacity: .55; }
+.gn-rad-pow.gn-rad-new { animation: gnRing 1.4s ease-out 1; }
+body.gn-reduce-motion .gn-rad-pow.gn-rad-new, body.gn-reduce-motion .gn-stood { animation: none !important; }
+body.gn-reduce-motion .gn-rad-pow.gn-rad-new { box-shadow: 0 0 0 2px rgba(243, 223, 174, .7); }
+.gn-pal-row.gn-pal-poor { opacity: .75; }
+.gn-pal-row.gn-pal-locked { opacity: .5; }
 .gn-rad-pow.gn-rad-need { box-shadow: 0 0 0 2px rgba(232, 110, 80, .65); }
 .gn-tool-foot { display: flex; justify-content: flex-end; margin-top: 6px; }
 .gn-tool-foot .gn-tool-cast { color: #15110a; background: linear-gradient(180deg, var(--gn-gold-hi), var(--gn-gold)); border-color: transparent; padding: 7px 14px; }
