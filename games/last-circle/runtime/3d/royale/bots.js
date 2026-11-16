@@ -4363,7 +4363,10 @@ function moveTowardQ(W, b, dt, sprint, ty) {
     reqWhy = 1; requestPath(W, b, tx, tz, ty, true);
     // ... ONCE per item: the same item tripping again is parked, whatever the planner says (a route a bot cannot follow must
     // not keep it on the item for the rest of the match: measured, one bot looped 80 s on one item with a "good" route)
-    const routed = !hadRoute && bb.path && !bb.path.partial && !(bb.lootId && bb.lootId === bb.routeId);
+    // (W10 R1A fix6) ...and a PARTIAL route counts when the goal lies beyond the window planner's reach (CELL x GRID_R, ~31 m): there a partial route is
+    // the only answer the planner can give, and it is real progress (probe_match --sweep ashgrid seed 2: s1 in a hut whose door faces away from its loot,
+    // 40-80 m south, slid along the back wall 20 s - every trip found the route out of the door, partial, threw it away and parked the item: 5 episodes)
+    const routed = !hadRoute && bb.path && (!bb.path.partial || (goalD > CELL * GRID_R && !bb.path.hop)) && !(bb.lootId && bb.lootId === bb.routeId);
     if (routed && bb.lootId) bb.routeId = bb.lootId;
     /* And stop choosing the thing it cannot reach. onEnter('LOOT') re-picked
        the SAME item every time, so the bot escaped the wall and walked straight
