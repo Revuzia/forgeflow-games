@@ -528,7 +528,7 @@
  "hesmi": {
   "zones": [
    {
-    "why": "orch1 W1-B fix round 2 (FU-1; verify_w1b_r2: fix 2's top read C* 12.7, near neutral, dE 6.0 to Ilsheta): the hood a deep teal-ink (CIELAB h ~170: 30+ deg from Lisvel's cyan 201 and Ardit's steel-teal, 23 deg and a value step from Marund's pale green; HSV ~160, outside the heal band) at C* 24, so Hesmi's top owns a hue at C >= 15; k 0.35 keeps the old cream crease lines baked out and the gutter is re-padded from the graded hood (the crease lines were the pre-grade cream padding at the UV seams)",
+    "why": "orch1 W1-B fix round 2 (FU-1): the hood a deep teal-ink (CIELAB h ~170, albedo L* 13 C* 30: HSV ~160, outside the heal band; 30+ deg from Lisvel's cyan 201 and Ardit's steel-teal); k 0.35 keeps the old crease texture flat, and the gutter re-pad (gutterFill) removes the cream seam lines the verifier read as creases (they were the pre-grade padding at the UV seams)",
     "boxes": [
      [
       -0.4,
@@ -559,7 +559,7 @@
     "k": 0.35
    },
    {
-    "why": "orch1 W1-B fix round 2 (FU-1): the shards' honed upper sections (z > 2.12, the game camera's crown) a pale teal stone (bible top band) at C* 13 in the hood's hue (CIELAB h ~170), so the top cluster keeps Hesmi's teal instead of a near-neutral",
+    "why": "orch1 W1-B fix round 2 (FU-1): the shards' honed upper sections (z > 2.12, the game camera's crown) a pale near-neutral stone (L* 89, C* 7, teal-leaning): the pale shards own the top cluster at the game camera, and any teal or cyan chroma on them sat between Marund's pale green and Lisvel's pale cyan (units_gate w1b_f3 / w1b_f3e: C* 9 -> Marund dE 24.9, C* 8.5 -> 21.5); the bible top band (P3 70-85) needs them pale",
     "boxes": [
      [
       -0.45,
@@ -607,7 +607,7 @@
  "odrum": {
   "zones": [
    {
-    "why": "orch1 W1-B fix round 2 (FU-2, verify_w1b_r2: the fix-2 mask read grey-sage, in game L* 55 C* 11): the mask a light honey (CIELAB h ~80, albedo L* 52 C* 24: HSV s ~0.40, so the honey keeps its chroma under ruling 32's cap without a desaturating knee; in game HSV h ~35-42, L* ~65-70); it keeps every painted feature (k 0.8). The honey is in the harm band by FU-2's design, so the rest of the top cluster (cap, shirt, pots) is a low-chroma olive-grey and the top median's saturation stays under 0.40 (units_gate P2)",
+    "why": "orch1 W1-B fix round 2 (FU-2, verify_w1b_r2: the fix-2 mask read grey-sage, in game L* 55 C* 11): the mask a honey (CIELAB h ~94, albedo L* 40 C* 19; in the three_snapshot close-up L* 63 C* 14 HSV h 43, in the 28-50 band FU-2 asks; hue 94, not 80, keeps the top 30 deg from Burdam's russet: units_gate w1b_f3b Odrum-Burdam dE 11.3 at mask hue 80); it keeps every painted feature (k 0.8); protectMaxS 0.45 lets the honey keep chroma (ruling 32 harm 4.87 %). The rest of the top cluster (cap, shirt, pots) is low-chroma olive-grey so the top median leaves the harm band (w1b_f3_final HSV 50.8 S 0.394)",
     "parts": [
      "mask"
     ],
@@ -617,7 +617,7 @@
     "k": 0.8
    },
    {
-    "why": "orch1 W1-B fix round 2 (FU-2, cap L* <= 40 in game; verify_w1b_r2 read L* 43-46 at albedo L* 20): the felt cap a near-black deep olive (CIELAB h ~115, albedo L* 11 C* 10, low chroma so the top median's saturation stays under 0.40); the mask and hands are never zoned",
+    "why": "orch1 W1-B fix round 2 (FU-2, cap L* <= 40 in game; verify_w1b_r2 read L* 43-46 at albedo L* 20): the felt cap a near-black deep olive (CIELAB h ~115, albedo L* 11 C* 6; three_snapshot game camera L* 30.6-34.1 over 8 facings, verify_w1b_r2's window); the mask and hands are never zoned",
     "parts": [
      "cap"
     ],
