@@ -98,7 +98,7 @@ async function walls(L: L) {
   for (const modeId of ['rift', 'bridge']) for (const [rad, who] of byR) for (const kind of ['shallow', 'deep'] as const) {
     const N = kind === 'shallow' ? 320 : 120;
     let { sim, me } = L.fresh(modeId, who, 5);
-    let w = sim.world; const nav = w.nav; zeroTowers(w);
+    let w = sim.world; let nav = w.nav; zeroTowers(w);
     const [W, H] = w.mapDef.size;
     let notLive = 0;
     const main = nav.componentAt(me.x, me.y);
@@ -126,7 +126,7 @@ async function walls(L: L) {
         if (cx < 1 || cy < 1 || cx >= W - 1 || cy >= H - 1 || nav.walkable(cx, cy)) continue;
         if (nav.nearestWalkable(cx, cy, t, 16) && Math.hypot(t.x - cx, t.y - cy) < 1.5) continue;
       }
-      if (w.phase !== 'live' || w.tick > 30 * 600) { ({ sim, me } = L.fresh(modeId, who, 5)); w = sim.world; zeroTowers(w); }
+      if (w.phase !== 'live' || w.tick > 30 * 600) { ({ sim, me } = L.fresh(modeId, who, 5)); w = sim.world; nav = w.nav; zeroTowers(w); }   // ctl r3: the refreshed sim's nav (the first sim's, kept, priced the reference on that sim's fallen towers)
       if (w.entities.some((e) => e !== me && e.alive && !e.static && e.kind !== 'projectile' && e.kind !== 'zone' && (Math.hypot(e.x - hx, e.y - hy) < 14 || Math.hypot(e.x - cx, e.y - cy) < 10))) continue;
       place(w, me, hx, hy); sim.step();
       if (Math.hypot(me.x - hx, me.y - hy) > 0.3) continue;
@@ -188,7 +188,7 @@ async function waves(L: L) {
     let n = 0, dither = 0, ditherMax = 0, shortLane = 0, shortAny = 0, reversals = 0, revMax = 0, rev5 = 0, clear = 0, over15 = 0, worstClear = 0, awayGoal = 0, worstAwayGoal = 0, detVsLane = 0, postDrift = 0, awayGoalLane = 0;
     const ratios: number[] = [], laneRatios: number[] = [];
     const bad: string[] = [];
-    for (const seed of [3, 13, 29]) for (const who of L.fs) {
+    for (const seed of (process.env.WAVES_SEEDS ?? '3,13,29').split(',').map(Number)) for (const who of L.fs) {
       const { sim, me } = L.fresh(modeId, who, seed);
       const w = sim.world, nav = w.nav;
       zeroTowers(w);

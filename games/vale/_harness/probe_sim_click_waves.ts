@@ -32,7 +32,17 @@ function run(section: string, env: Record<string, string>): Promise<Record<strin
     });
   });
 }
-const [waves, held] = await Promise.all([run('waves', {}), run('held', { HELD_BOTS: '1', HELD_T0: '480' })]);
+const [waves0, wavesFresh, held] = await Promise.all([run('waves', {}), run('waves', { WAVES_SEEDS: '41,57,83' }), run('held', { HELD_BOTS: '1', HELD_T0: '480' })]);
+// the verifier's fresh seeds (orch1 r3: odrum s41 t2701, an enemy wave crossing and stalling the hero, 10.46 m against a
+// 6.56 m lane) are gated with the original three
+const waves: Record<string, Record<string, unknown>> = {};
+for (const m of ['rift', 'bridge']) {
+  const a0 = waves0[m], a1 = wavesFresh[m];
+  waves[m] = { ...a0 };
+  for (const k of Object.keys(a0)) if (typeof a0[k] === 'number' && typeof a1[k] === 'number' && !/Max|P50|P95|worst|Pct/.test(k)) waves[m][k] = (a0[k] as number) + (a1[k] as number);
+  for (const k of Object.keys(a0)) if (/Max$|^worst/.test(k) && typeof a0[k] === 'number') waves[m][k] = Math.max(a0[k] as number, a1[k] as number);
+  waves[m].bad = [...(a0.bad as string[] ?? []), ...(a1.bad as string[] ?? [])];
+}
 rmSync(dir, { recursive: true, force: true });
 const n = (o: Record<string, unknown>, k: string): number => Number(o[k]);
 
