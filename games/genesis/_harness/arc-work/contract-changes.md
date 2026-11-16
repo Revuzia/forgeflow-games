@@ -225,3 +225,10 @@
   => show trust and fear as two bars; neither erases the other (a person, and a people, can hold both); both earn the god's power.
 - Lead's reading, to confirm with the owner: time controls, camera, save/load and the story answers (Tower, defiance, covenant, prayer
   answers) stay free, because they are not powers over the world but the god's replies and the game's clock.
+
+## Owner rulings 2026-11-16 (second) — POWERS-GROWTH costs
+- (verbatim) "yes things that arent powers over the world should be free. but also very basic spells should be free as well. the pool
+  cannot refill without believers though"
+  => Free: time, save/load, camera, story answers, AND the very basic powers (a short free list of the smallest tier-0 acts).
+  => NO base trickle: with zero believers the pool does not refill. The no-dead-end guarantee therefore rests on the free basic
+     powers (which must include ways to earn belief by both roads), the starting pool of a new world, and free clay.
