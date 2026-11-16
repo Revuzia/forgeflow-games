@@ -247,7 +247,7 @@ section('fighters-only: the enemy fighter in range is picked over a minion neare
   check('the fighter is attacked', a.length === 1 && a[0].dst === r.foe.id, { got: a.map((e) => e.dst), minion: m.id, fighter: r.foe.id });
 });
 
-section('fighters-only (orch1 live r2, ruling 42): a ground shot or swing under Z passes Wicks; it lands only on a fighter', () => {
+section('fighters-only (orch1 live r2, ruling 43): a ground shot or swing under Z passes Wicks; it lands only on a fighter', () => {
   {
     const r = world('fx_slinger');
     const m = addUnit(r.w, 'fx_dummy', 1, 12, 45);

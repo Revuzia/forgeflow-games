@@ -86,7 +86,7 @@ const discPool: Disc[] = [];
  * `all`: every body counts (the progress watchdog's re-plan: allies walking with it have not cleared the way).
  */
 /** a fighter and the Wicks of its own side pass through each other (ruling 39): neither body-blocks nor shoves the other;
- *  so do two Wicks of a side while one of them is passing its own wave (passOwn, ruling 42: a melee Wick boxed behind
+ *  so do two Wicks of a side while one of them is passing its own wave (passOwn, ruling 43: a melee Wick boxed behind
  *  its own casters, with no open attack spot round its target, walks through them to the front) */
 export function ghosts(a: Entity, b: Entity): boolean {
   if (a.team !== b.team) return false;

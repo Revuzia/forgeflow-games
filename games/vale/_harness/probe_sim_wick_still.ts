@@ -1,4 +1,4 @@
-// probe (lane SIM, movement, ruling 42): no Wick ever stands still, by the orch1 controls r3 verifier's strict definition
+// probe (lane SIM, movement, ruling 43): no Wick ever stands still, by the orch1 controls r3 verifier's strict definition
 // (_tmp_vfy_ctl_r3_minsweep.ts, independent of probe_sim_minion_flow, NO exemption classes):
 //   STILL  a live Wick that for 6 s covers < 1.0 m of ground (max distance from where the window began), emits no
 //          'attack' event, is not under hard CC / root at any sample, and is > 8 m from the end of its own road.

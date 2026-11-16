@@ -1,4 +1,4 @@
-// probe (lane SIM, movement, ruling 42): a click into a wall or a structure goes to the open point nearest the click that
+// probe (lane SIM, movement, ruling 43): a click into a wall or a structure goes to the open point nearest the click that
 // the hero can reach, and a stuck hero (its straight walk gains under 1 m) takes the way round to it (orch1 controls r3
 // verifier, two MAJORs on ruling 41's snap):
 //   repros  the verifier's four exact cases: nav.snapGoal's stuck rescue (phase C) ran only when phase A picked nothing,

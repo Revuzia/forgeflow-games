@@ -240,7 +240,7 @@ export interface ProjData {
   dtype: DamageTypeT;
   empower: EffectT[] | null;
   empowerSrc: string;
-  /** an attack shot thrown under a fighters-only press (Z, ruling 42): passes every enemy but fighters */
+  /** an attack shot thrown under a fighters-only press (Z, ruling 43): passes every enemy but fighters */
   fighters?: boolean;
 }
 
@@ -428,7 +428,7 @@ export class Entity implements EntityView {
   lanePlanned = false;
   /** the lane was planned behind crossing bodies (bodypath AHEAD_S): re-checked against a fresh plan in case they stopped */
   laneDear = false;
-  /** a Wick passing through the Wicks of its own side to reach its target (ruling 42, units/minions.ts; bodypath ghosts) */
+  /** a Wick passing through the Wicks of its own side to reach its target (ruling 43, units/minions.ts; bodypath ghosts) */
   passOwn = false;
   /** static blocker (structures): never moves, pushes units out */
   static = false;

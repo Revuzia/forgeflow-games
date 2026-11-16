@@ -16,7 +16,7 @@
 // under 0.5 m along its road while it is free to walk: no attack order, no swing or windup, no hard CC or root, no
 // attackable enemy within its aggro range + 1.5 m (a Wick queuing behind a fight or waiting for its turn at a tower is
 // fighting, not stuck), and more than 8 m from its road's end (holding the end is its job); a Wick that came 1 m nearer
-// its road in the window is walking back to it after a chase (ruling 42), not stuck. Gate: 0 stuck Wicks on
+// its road in the window is walking back to it after a chase (ruling 43), not stuck. Gate: 0 stuck Wicks on
 // every road of both maps (all six seeds, both scenarios).
 // A Wick is IDLE (what a viewer reads as stuck, fighting or not) when for 6 s it neither swings nor gains 0.5 m along its
 // road nor covers 1 m of ground, away from its road's end and not held by CC: a melee Wick waiting behind the front row

@@ -777,7 +777,7 @@ async function live38(): Promise<void> {
       let s = 4242;
       const rnd = (): number => { s = (s * 16807) % 2147483647; return s / 2147483647; };
       const t = { x: 0, y: 0 }, route: number[] = [];
-      let n = 0, far = 0, long = 0, away1 = 0, tries = 0;
+      let n = 0, far = 0, long = 0, away1 = 0, tries = 0, stuckRound = 0;
       const bad: string[] = [];
       while (n < 120 && tries++ < 200000) {
         const hx = 3 + rnd() * (W - 6), hy = 3 + rnd() * (H - 6);
@@ -816,11 +816,19 @@ async function live38(): Promise<void> {
         let away = 0; for (const p of tr) away = Math.max(away, Math.hypot(p.x - cx, p.y - cy) - d0);
         const tags: string[] = [];
         if (exc > 1) { far++; tags.push(`far +${f2(exc)}`); }
-        if (wk.len > 1.6 * wk.net + 1) { long++; tags.push('long'); }
-        if (away > 1) { away1++; tags.push('away'); }
+        // a stuck click (the straight walk gains under 1 m: rulings 41, 43) walks round to the open point nearest the click,
+        // even away from it first: its long or away walk is the rescue's way round, reported, not gated
+        nav.raycast(x0, y0, cx, cy, t);
+        const stuck = d0 - Math.hypot(t.x - cx, t.y - cy) < 1;
+        if (stuck && (wk.len > 1.6 * wk.net + 1 || away > 1)) stuckRound++;
+        else {
+          if (wk.len > 1.6 * wk.net + 1) { long++; tags.push('long'); }
+          if (away > 1) { away1++; tags.push('away'); }
+        }
         if (tags.length && bad.length < 6) bad.push(`${tags.join('+')} (${f2(x0)},${f2(y0)})→(${f2(cx)},${f2(cy)}) end (${f2(me.x)},${f2(me.y)}) walked ${f2(wk.len)} net ${f2(wk.net)}`);
       }
-      check(`${modeId.toUpperCase()} ${n} deep wall clicks (≥ 2 m inside): 0 end > 1 m past the best reachable point (${far}), 0 paths > 1.6 × net + 1 m (${long}), 0 walk > 1 m away from the click (${away1})`,
+      console.log(`  ${modeId}: stuck clicks walked round (long or away, the rescue's way, rulings 41/43): ${stuckRound}`);
+      check(`${modeId.toUpperCase()} ${n} deep wall clicks (≥ 2 m inside): 0 end > 1 m past the best reachable point (${far}), 0 paths > 1.6 × net + 1 m (${long}), 0 walk > 1 m away from the click (${away1}) unless stuck`,
         n >= 100 && far === 0 && long === 0 && away1 === 0, bad);
     }
   }

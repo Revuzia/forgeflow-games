@@ -449,13 +449,13 @@ async function held(L: L) {
   const out: Record<string, unknown> = {};
   const crowdAt = (w: World, me: Entity, x: number, y: number) => w.entities
     .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < o.radius + me.radius + 0.6).length;
-  // ctl r3 (ruling 42): a held move whose hero starts boxed in by bodies (the reference finds no way through them, as
+  // ctl r3 (ruling 43): a held move whose hero starts boxed in by bodies (the reference finds no way through them, as
   // in the waves sweep) ends where the bodies let it: reported, not counted as short
   const heldBodies = (w: World, me: Entity, x: number, y: number, R: number) => w.entities
     .filter((o) => o !== me && o.alive && !o.static && (o.kind === 'minion' || o.kind === 'fighter' || o.kind === 'monster') && Math.hypot(o.x - x, o.y - y) < R)
     .map((o) => ({ x: o.x, y: o.y, r: o.radius }));
   for (const modeId of ['rift', 'bridge']) {
-    let boxedShort = 0;
+    let boxedShort = 0, endedUnder = 0;
     let deadOrDisplaced = 0, n = 0, rev3 = 0, rev5 = 0, revMax = 0, shortUncrowded = 0, shortAny = 0, regress1 = 0, worstRegress = 0, nearTower = 0, worstShort = 0, forcedN = 0, regress1Free = 0, worstRegressFree = 0;
     const tArrive: number[] = [];
     const bad: string[] = [];
@@ -517,6 +517,9 @@ async function held(L: L) {
         k++; n++;
         const dEnd = Math.hypot(me.x - gx, me.y - gy), crowd = crowdAt(w, me, gx, gy);
         if (!me.alive || displaced) { k--; n--; deadOrDisplaced++; continue; }
+        // the match ended under the move (ctl r3: BRIDGE ilsheta s19 k9 stood 2.95 m short from the tick the core fell;
+        // an ended sim moves nothing): not a move
+        if (w.phase !== 'live') { k--; n--; endedUnder++; break; }
         revMax = Math.max(revMax, revs); if (revs >= 3) rev3++; if (revs >= 5) rev5++;
         if (regress > 1) regress1++; worstRegress = Math.max(worstRegress, regress);
         if (forced) forcedN++;
@@ -533,7 +536,7 @@ async function held(L: L) {
       }
     }
     const s = [...tArrive].sort((a, b) => a - b);
-    out[modeId] = { n, boxedInShort: boxedShort, excludedDeadOrDisplaced: deadOrDisplaced, reversals3plus: rev3, reversals5plus: rev5, revMax, regressOver1m: regress1, worstRegress: f2(worstRegress), forcedMoves: forcedN, regressOver1mUnforced: regress1Free, worstRegressUnforced: f2(worstRegressFree), endedOver2mShort: shortAny, endedOver2mShortUncrowded: shortUncrowded,
+    out[modeId] = { n, boxedInShort: boxedShort, endedUnderTheMove: endedUnder, excludedDeadOrDisplaced: deadOrDisplaced, reversals3plus: rev3, reversals5plus: rev5, revMax, regressOver1m: regress1, worstRegress: f2(worstRegress), forcedMoves: forcedN, regressOver1mUnforced: regress1Free, worstRegressUnforced: f2(worstRegressFree), endedOver2mShort: shortAny, endedOver2mShortUncrowded: shortUncrowded,
       worstShortUncrowded: f2(worstShort), startsWithin12mOfStructure: nearTower, arrived: s.length, arriveP50s: s.length ? f2(s[s.length >> 1]) : null, arriveP95s: s.length ? f2(s[Math.floor(s.length * 0.95)]) : null, bad };
     console.log(modeId, JSON.stringify(out[modeId]));
   }

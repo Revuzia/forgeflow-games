@@ -52,7 +52,7 @@ const FLANK_TICKS = 60;
 /** the attack spots tried round the target, off the line it came in on (radians, nearer first) */
 const FLANK_ANGLES = [0.7, 1.4, 2.1];
 const flankNear: Entity[] = [];
-/** ticks a boxed-in Wick passes through its own wave (ruling 42) */
+/** ticks a boxed-in Wick passes through its own wave (ruling 43) */
 const PASS_TICKS = 90;
 
 type V2T = readonly [number, number];

@@ -47,7 +47,7 @@ const SNAP_STUCK_GAIN = 1;
 const SNAP_STUCK_R = 3;
 const SNAP_STUCK = 2;
 const SNAP_STUCK_M = 2;
-/** … it replaces a pick A made when it is this much (m) nearer the click (ruling 42) */
+/** … it replaces a pick A made when it is this much (m) nearer the click (ruling 43) */
 const SNAP_STUCK_BETTER = 0.5;
 /** … its flood runs at most this far (m of route; a candidate beyond is confirmed with the planner, SNAP_STUCK_SEARCHES) */
 const SNAP_STUCK_FLOOD = 60;
@@ -190,7 +190,7 @@ export class NavGrid {
   private obstacles: { x: number; y: number; r: number }[] = [];
   /**
    * block a disc for unit centres (structures: radius + clearance); remove with the same numbers. (Ruling 39 also sealed
-   * a strip under 1 m between the disc and a wall; ruling 42 dropped it: 300 paired RIFT adept bot games put the first
+   * a strip under 1 m between the disc and a wall; ruling 43 dropped it: 300 paired RIFT adept bot games put the first
    * outer Needle 0.4-0.65 min later and the game 0.4-0.8 min longer with it, Wick-only pushes stalled a mid inner Needle
    * 3.6 min, and nothing pins Wicks behind their own tower without it: the creep watch and passOwn in units/minions.ts)
    */
