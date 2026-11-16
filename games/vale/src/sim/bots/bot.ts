@@ -1176,7 +1176,7 @@ export class Bot extends BotBase implements BotController {
     let sx = g.standX, sy = g.standY;
     // (defensive ambush, tiers that lurk: an enemy at the post that has not committed under it — wait in a thicket
     // beside the tower and come out when it does)
-    if (t && this.diff.lurkMax > 0 && this.brain) {
+    if (t && this.diff.lurkMax > 0 && this.brain && !(typeof process !== 'undefined' && process.env?.VALE_AB_NOAMB === '1')) {
       const b = this.brain;
       let bd = 10 * 10;
       for (let i = 0; i < b.thicketXs.length; i++) {

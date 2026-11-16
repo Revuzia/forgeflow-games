@@ -447,6 +447,9 @@ const LEVEL_TARGET_LUFS = -20;
 // fights to one level (the 5v5 maps already sit on the leveller most of the match). TODO(lead): move to content
 // audio.mix.modes.<mode>.levelTargetDb once src/contracts/catalog.ts allows the key
 const LEVEL_TARGET_MODE_DB: Readonly<Record<string, number>> = { rift: -3 };
+// … and its stage-2 cap (LEVEL_PRIO_MAX_CUT_DB) per mode: RIFT seed 3 (Lisvel beside a co-op Marund) held the whole
+// sfx 3.5 dB over its target at short-term p90 with the 4 dB cap (the priority sub-bus alone over it)
+const LEVEL_PRIO_MAX_CUT_MODE_DB: Readonly<Record<string, number>> = { rift: 8 };
 const LEVEL_MAX_CUT_DB = 8;
 const LEVEL_ATTACK_S = 0.8;     // time constants of the gain's glide: down …
 const LEVEL_RELEASE_S = 3;      // … and back up
@@ -673,6 +676,8 @@ class Engine implements ValeAudioPort {
   private sfxTrimDb = 0;
   /** the leveller's target in this match (LEVEL_TARGET_LUFS + the mode's LEVEL_TARGET_MODE_DB) */
   private levTarget = LEVEL_TARGET_LUFS;
+  /** the leveller's stage-2 cap in this match (LEVEL_PRIO_MAX_CUT_MODE_DB, else LEVEL_PRIO_MAX_CUT_DB) */
+  private levPrioCap = LEVEL_PRIO_MAX_CUT_DB;
   readonly levStats = { polls: 0, cutPolls: 0, cut3Polls: 0, maxCutDb: 0, sumCutDb: 0, prioShareSum: 0, prioSharePolls: 0, prioCutPolls: 0, sumPrioCutDb: 0 };
   /** content audio.mix.modes: mode id → its sfx trim (dB) */
   private readonly modeTrim: Record<string, number> = {};
@@ -1215,7 +1220,7 @@ class Engine implements ValeAudioPort {
     // 56-76 % of the sfx heard) comes down on all three paths together, at most LEVEL_PRIO_MAX_CUT_DB, so the priority
     // voices keep their lead over the background (it is never cut less than they are)
     const rest = g * g * N + P;
-    const gp = rest > T ? Math.max(Math.pow(10, -LEVEL_PRIO_MAX_CUT_DB / 20), Math.sqrt(T / rest)) : 1;
+    const gp = rest > T ? Math.max(Math.pow(10, -this.levPrioCap / 20), Math.sqrt(T / rest)) : 1;
     g = Math.max(floor, g * gp);
     const st = this.levStats;
     st.polls++;
@@ -2417,6 +2422,7 @@ class Engine implements ValeAudioPort {
     // the mode's static sfx trim (see `leveller`); out of a match none, and the leveller's window starts over
     this.levWin = [];
     this.levTarget = LEVEL_TARGET_LUFS + (client ? LEVEL_TARGET_MODE_DB[client.view.mode] ?? 0 : 0);
+    this.levPrioCap = (client ? LEVEL_PRIO_MAX_CUT_MODE_DB[client.view.mode] : undefined) ?? LEVEL_PRIO_MAX_CUT_DB;
     this.levelTrim(client ? this.modeTrim[client.view.mode] ?? 0 : 0);
     if (client) {
       this.prewarm(client);
