@@ -31,6 +31,8 @@ const _p = new Vector3();
 const BODY_W = 0.5;
 /** feet this many px lower on screen = in front (nearer the camera); within it, two bodies stand side by side */
 const FRONT_PX = 3;
+/** feet and head must project within this many half-screens of the centre (1 = the screen edge) to be pickable */
+const OFF_NDC = 1.35;
 
 export function pickUnit(cam: Camera, cssW: number, cssH: number, units: Iterable<Pickable>, x: number, y: number, opts?: PickOptions): EntityId | null {
   const filter = opts?.filter, slop = Math.max(0, opts?.slop ?? 0);
@@ -43,9 +45,13 @@ export function pickUnit(cam: Camera, cssW: number, cssH: number, units: Iterabl
     const v = a.view;
     if (filter && !filter(v)) continue;
     _p.set(a.x, a.h, a.y).project(cam);
-    if (_p.z > 1) continue;
+    // Only a unit standing on (or just off) the screen can be picked. A unit far outside the view, close to the
+    // camera plane, projects to huge or flipped screen values and its box would cover the whole screen (FAR-PICK:
+    // a ground click sent the hero after a Wick 45-70 m away).
+    if (!(_p.z >= -1 && _p.z <= 1) || Math.abs(_p.x) > OFF_NDC || Math.abs(_p.y) > OFF_NDC) continue;
     const fx = sx(), fy = sy();
     _p.set(a.x, a.h + a.artHeight, a.y).project(cam);
+    if (!(_p.z >= -1 && _p.z <= 1) || Math.abs(_p.x) > OFF_NDC || Math.abs(_p.y) > OFF_NDC) continue;
     const hx = sx(), hy = sy();
     // the ground scale under the unit: across (screen x) and in depth (towards / away from the camera)
     const rr = v.radius + 0.15, ring = v.radius + 0.22;
