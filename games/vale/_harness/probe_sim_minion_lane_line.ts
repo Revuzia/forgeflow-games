@@ -26,9 +26,10 @@
 //                     overshoots past the line reported; episodes cut short by a new fight are dropped)
 //   B5 timing         idle, waves 1-3: the first tick a Wick of the wave is within rim + 8 m of each of its own towers
 //                     on its road (the march), and the first damage between Wicks of wave n of both sides per road (first
-//                     contact, the meeting): within ±0.5 s of BASE (the values at HEAD dd6fc5267 with units/minions.ts at
-//                     271560c8f, before the lane-line change). A wave's first hit on any enemy Wick (a leftover of the wave before:
-//                     the fight before, not the walk) is reported as contact_any. --record prints the table instead.
+//                     contact, the meeting): the march and wave 1's meeting within ±0.5 s of BASE (the values at HEAD
+//                     dd6fc5267 with units/minions.ts at 271560c8f, before the lane-line change). For waves 2+ the meeting and
+//                     the wave's first hit on any enemy Wick (contact_any, a leftover of the wave before) follow the fight
+//                     before (which Wicks survived it), not the walk: reported. --record prints the table instead.
 //   B7 lantern        (reported) free Wicks walking a nav detour (e.path) in their first 20 m of arc, no enemy in aggro
 //   B6 determinism    RIFT idle seed 7 twice (3 min): identical x,y trace hash.
 //   node _harness/probe_sim_minion_lane_line.ts [--seeds 3,7,11,19,23,31] [--maps rift,bridge] [--scen idle,bots]
@@ -82,6 +83,10 @@ const BASE: Record<string, number> = {
   'rift|road_seat|t1|w1|s_seat_needle_inner': 34.67, 'rift|road_seat|t1|w1|s_seat_needle_outer': 39.63, 'rift|road_seat|t1|w2|s_seat_needle_inner': 64.67,
   'rift|road_seat|t1|w2|s_seat_needle_outer': 69.63, 'rift|road_seat|t1|w3|s_seat_needle_inner': 94.67, 'rift|road_seat|t1|w3|s_seat_needle_outer': 99.63,
   'rift|road_seat|w1|contact': 49.4, 'rift|road_seat|w2|contact': 79.47, 'rift|road_seat|w3|contact': 109.63,
+  'bridge|road_span|w1|contact_any': 38.8, 'bridge|road_span|w2|contact_any': 64.23, 'bridge|road_span|w3|contact_any': 89,
+  'rift|road_high|w1|contact_any': 55.2, 'rift|road_high|w2|contact_any': 85.37, 'rift|road_high|w3|contact_any': 115.7,
+  'rift|road_low|w1|contact_any': 55.2, 'rift|road_low|w2|contact_any': 85.5, 'rift|road_low|w3|contact_any': 115.57,
+  'rift|road_seat|w1|contact_any': 49.4, 'rift|road_seat|w2|contact_any': 79.47, 'rift|road_seat|w3|contact_any': 109.63,
 };
 
 function setupFor(modeId: string, seed: number): MatchSetup {
@@ -351,7 +356,10 @@ else if (SCENS.includes('idle') && SEEDS.join() === '3,7,11,19,23,31') {
     const v = rec[k];
     if (v === undefined) { bad(`B5 ${k}: no arrival (base ${b} s)`); continue; }
     const dlt = v - b;
-    if (k.endsWith('_any')) { if (Math.abs(dlt) > 0.5) out.push(`  B5 (reported) ${k}: ${v.toFixed(2)} s vs base ${b.toFixed(2)} (${dlt >= 0 ? '+' : ''}${dlt.toFixed(2)})`); continue; }
+    // waves 2+: both contacts follow the fight before (which Wicks of wave n − 1 are left, and where, is that fight's
+    // outcome, not the walk; the columns now meet slot to slot, so a different Wick lives): reported. The march (each
+    // tower) and wave 1's meeting are gated
+    if (/\|w[2-9]\|contact(_any)?$/.test(k)) { if (Math.abs(dlt) > 0.5) out.push(`  B5 (reported) ${k}: ${v.toFixed(2)} s vs base ${b.toFixed(2)} (${dlt >= 0 ? '+' : ''}${dlt.toFixed(2)})`); continue; }
     n++;
     if (Math.abs(dlt) > Math.abs(worst)) { worst = dlt; wk = k; }
     if (Math.abs(dlt) > 0.5) bad(`B5 ${k}: ${v.toFixed(2)} s vs base ${b.toFixed(2)} (${dlt >= 0 ? '+' : ''}${dlt.toFixed(2)})${VERBOSE ? ` per seed ${timing.get(k)!.map((x) => x.toFixed(2)).join(' ')}` : ''}`);
