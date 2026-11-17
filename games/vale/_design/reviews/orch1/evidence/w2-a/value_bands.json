@@ -1,0 +1,278 @@
+{
+ "source": "_harness/_reports/w2a_v3.json",
+ "tags": {
+  "before": "before",
+  "after": "after",
+  "fray": "after3"
+ },
+ "maps": {
+  "rift": {
+   "bands": {
+    "lane": {
+     "before": 38,
+     "after": 51,
+     "band": [
+      50,
+      58
+     ],
+     "pass": true
+    },
+    "jungle": {
+     "before": 15,
+     "after": 29.5,
+     "band": [
+      28,
+      34
+     ],
+     "pass": true
+    },
+    "wallFace": {
+     "before": 13,
+     "after": 28,
+     "band": [
+      24,
+      30
+     ],
+     "pass": true
+    },
+    "wallLip": {
+     "before": 21,
+     "after": 36.5,
+     "info": true
+    },
+    "wallTop": {
+     "before": 19,
+     "after": 33.5,
+     "info": true
+    },
+    "camp": {
+     "before": 31,
+     "after": 45.5,
+     "info": true
+    },
+    "shadow": {
+     "before": 15,
+     "after": 30,
+     "info": true
+    },
+    "water": {
+     "before": 23,
+     "after": 36,
+     "info": true
+    },
+    "landmark": {
+     "before": 20.5,
+     "after": 35,
+     "info": true
+    }
+   },
+   "fighters": {
+    "top25": {
+     "before": 76.7,
+     "after": 72.5
+    },
+    "overLane": {
+     "before": 38.7,
+     "after": 21.5
+    },
+    "gt90": {
+     "before": 0.0026,
+     "after": 0.0008
+    }
+   },
+   "fog": {
+    "laneUnseenOverLit": {
+     "before": 0.537,
+     "after": 0.542,
+     "band": [
+      0.5,
+      0.6
+     ]
+    },
+    "jungle": {
+     "before": 0.537,
+     "after": 0.542
+    }
+   },
+   "frame": {
+    "envP99": {
+     "before": 106,
+     "after": 134
+    },
+    "env180other": {
+     "before": 0,
+     "after": 0.00002
+    }
+   },
+   "groundSat": {
+    "before": 0.31,
+    "after": 0.24
+   },
+   "flash": {
+    "before": 2.73,
+    "after": 2.1,
+    "bar": 2
+   },
+   "pass": true
+  },
+  "bridge": {
+   "bands": {
+    "lane": {
+     "before": 38,
+     "after": 51,
+     "band": [
+      50,
+      58
+     ],
+     "pass": true
+    },
+    "chasm": {
+     "before": 9,
+     "after": 15.5,
+     "band": [
+      14,
+      22
+     ],
+     "pass": true
+    },
+    "wallLip": {
+     "before": 19.5,
+     "after": 34.5,
+     "info": true
+    },
+    "landmark": {
+     "before": 34,
+     "after": 47.5,
+     "info": true
+    }
+   },
+   "fighters": {
+    "top25": {
+     "before": 77.4,
+     "after": 73.1
+    },
+    "overLane": {
+     "before": 39.4,
+     "after": 22.1
+    },
+    "gt90": {
+     "before": 0.0022,
+     "after": 0.0012
+    }
+   },
+   "fog": {
+    "laneUnseenOverLit": {
+     "before": 0.537,
+     "after": 0.542,
+     "band": [
+      0.5,
+      0.6
+     ]
+    },
+    "jungle": {}
+   },
+   "frame": {
+    "envP99": {
+     "before": 105,
+     "after": 134
+    },
+    "env180other": {
+     "before": 0,
+     "after": 0
+    }
+   },
+   "groundSat": {
+    "before": 0.32,
+    "after": 0.25
+   },
+   "flash": {
+    "before": 3.33,
+    "after": 2.5,
+    "bar": 2
+   },
+   "pass": true
+  },
+  "fray": {
+   "bands": {
+    "lane": {
+     "before": 37,
+     "after": 50,
+     "band": [
+      50,
+      58
+     ],
+     "pass": true
+    },
+    "wallFace": {
+     "before": 6.5,
+     "after": 25,
+     "band": [
+      24,
+      30
+     ],
+     "pass": true
+    },
+    "wallLip": {
+     "before": 24,
+     "after": 39.5,
+     "info": true
+    },
+    "wallTop": {
+     "before": 35.5,
+     "after": 49,
+     "info": true
+    },
+    "landmark": {
+     "before": 21.5,
+     "after": 37,
+     "info": true
+    }
+   },
+   "fighters": {
+    "top25": {
+     "before": 75.7,
+     "after": 68.1
+    },
+    "overLane": {
+     "before": 38.7,
+     "after": 18.1
+    },
+    "gt90": {
+     "before": 0.003,
+     "after": 0.0024
+    }
+   },
+   "fog": {
+    "laneUnseenOverLit": {
+     "before": 0.542,
+     "after": 0.547,
+     "band": [
+      0.5,
+      0.6
+     ]
+    },
+    "jungle": {}
+   },
+   "frame": {
+    "envP99": {
+     "before": 118,
+     "after": 142
+    },
+    "env180other": {
+     "before": 0,
+     "after": 0.00004
+    }
+   },
+   "groundSat": {
+    "before": 0.3,
+    "after": 0.24
+   },
+   "flash": {
+    "before": 2.63,
+    "after": 1.97,
+    "bar": 2
+   },
+   "pass": true
+  }
+ }
+}
