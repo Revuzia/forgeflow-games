@@ -1,6 +1,10 @@
 // Hearthlog Cabin (hearthlog, idx 1): its PlaceDef, both layouts and the channel of every reaction cell of PLACES 4.2 (D-80). Owned by PG_DATA.
 // A LAZY module: loaded with its place through loadPlaceDef('hearthlog') (D-69); never imported statically by boot, places.ts, life.ts or quests.ts.
-// Positions: PLACES 4.2 as written (revision 4).
+// Positions: PLACES 4.2 as written (revision 4), except round 5's re-lay for the camera that ships (FIX5_DATA B8, VERDICT_PG B8; DT-01's new
+// 'in the shipped place camera' rows): TALL the Kettle (-1.98, -3.44) -> (-0.1, -3.5) (cut by the phone's left edge), the Snug Basket
+// (1.05, -1.85) yaw 1.571 -> (0.8, -1.85) yaw 2.356 (cut by the right edge), the Yarn Ball (1.25, 2.15) -> (1.1, 2.1) (cut by the right edge);
+// WIDE the Rocker Board (1.55, 2.05) -> (1.6, 1.8) (under the desktop's party row). The TALL Rocker Board stays at (0.03, 3) under the phone's
+// hint pill: see FIX5_DATA.md B8 (no spot above the hint line keeps the layout's five spawn spots).
 // The cells' words do not ship (D-69): `reactions` is packed [target, family, tag, chan, arg] (target: a thing index, or 100 + a zone index;
 // tag 0 P, 1 L, 2 S, 3 B; chan a CHANNEL id of life.ts), unpacked once at load by places.ts cells().
 import type { PlaceDef } from './places.ts';
@@ -19,7 +23,7 @@ export const PLACE: PlaceDef = {
   ],
   things: [
     { id: 'hearth', place: 'hearthlog', mech: MECH.block, x: -2.4, z: -2.15, yaw: 0, size: [0.7, 0.45, 0.25], mu: 0.8, p: { puffS: 5, fireX: 0, fireZ: 0.55 }, ride: false, zone: 'firesidewarmth', switch: 'fire', verb: V.SWITCH, icon: E.flame, look: 'fireplace', sound: S.crackle },
-    { id: 'rockerboard', place: 'hearthlog', mech: MECH.seesaw, x: 1.55, z: 2.05, yaw: 0, size: [1.1, 0.08, 0.3], mu: 0.9, p: { pivot: 0.24, limit: 8, inertia: 0.7, damping: 0.9, rider: 0.75 }, ride: true, verb: V.ROCK, icon: E.swirl, look: 'rocker', sound: S.creak },
+    { id: 'rockerboard', place: 'hearthlog', mech: MECH.seesaw, x: 1.6, z: 1.8, yaw: 0, size: [1.1, 0.08, 0.3], mu: 0.9, p: { pivot: 0.24, limit: 8, inertia: 0.7, damping: 0.9, rider: 0.75 }, ride: true, verb: V.ROCK, icon: E.swirl, look: 'rocker', sound: S.creak },
     { id: 'yarnball', place: 'hearthlog', mech: MECH.ball, x: -1.35, z: 1.9, yaw: 0, size: [0.24, 0, 0], mu: 0.8, p: { mass: 0.2, rollDamp: 0.5 }, ride: false, verb: V.ROLL, icon: E.ball, look: 'yarn', sound: S.ball },
     { id: 'pillowswing', place: 'hearthlog', mech: MECH.swing, x: 0, z: -1.7, yaw: 0, size: [0.09, 0.7, 0], mu: 0.9, p: { rope: 1.4, pivotY: 1.62, limit: 30, seatY: 0.22, damping: 0.6 }, ride: true, push: [2, -1.7], verb: V.SWING, icon: E.star, look: 'pillow', sound: S.creak },
     { id: 'snugbasket', place: 'hearthlog', mech: MECH.ring, x: -1.8, z: -0.45, yaw: 0, size: [0.89, 0.09, 120], mu: 0.9, p: { segments: 6, way: 0.6 }, ride: false, useSpot: [-1.8, -0.45], verb: V.NAP, icon: E.zzz, look: 'basket', sound: 0 },
@@ -33,10 +37,10 @@ export const PLACE: PlaceDef = {
     things: [
       { x: 1.18, z: -3.4, yaw: 0 },
       { x: 0.03, z: 3, yaw: 0 },
-      { x: 1.25, z: 2.15, yaw: 0 },
+      { x: 1.1, z: 2.1, yaw: 0 },
       { x: -0.93, z: -2.29, yaw: 1.571, push: [-0.93, -0.29] },
-      { x: 1.05, z: -1.85, yaw: 1.571, use: [1.05, -1.85] },
-      { x: -1.98, z: -3.44, yaw: 0 },
+      { x: 0.8, z: -1.85, yaw: 2.356, use: [0.8, -1.85] },
+      { x: -0.1, z: -3.5, yaw: 0 },
     ],
     zones: [{ shape: 'disc', x: 1.18, z: -2.85, r: 1.8 }, { shape: 'box', x: -0.8, z: -1.7, hx: 0.4, hz: 0.5 }],
     patches: [{ shape: 'disc', x: 0, z: 1, r: 1 }],

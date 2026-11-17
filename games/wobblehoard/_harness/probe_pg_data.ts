@@ -18,6 +18,7 @@ import type { SpeciesId } from '../src/data/catalog.ts';
 import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES } from '../src/data/materials.ts';
 import { nameReason, proseReason } from './name_gate.ts';
 import { visibleTableAt } from '../src/render/homeview.ts';
+import { fitPlace, placeBand } from '../src/render/placeview.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = resolve(HERE, '..');
 const VERBOSE = process.argv.includes('--verbose');
@@ -255,17 +256,109 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
   if (prims > 20) probs.push(`${prims} collider primitives (at most 20)`);
   return probs;
 }
+/** B8 (round 5): the HUD a shipped place's things must clear (CSS px), measured at HEAD 16f6ba6fc in the cabin (VERDICT_PG's
+ *  B4_b4_phone_cabin_t54.png and this lane's shots): 390 x 844: the hint pill "Tap a tool to try it." 618..653 (centred), the party row 660..708,
+ *  the name tag and meter from 714: the bottom HUD starts at 618 (226 px); 1280 x 800: the hint pill 672..704, the party row 670..716: 130 px + 6.
+ *  Sides: 8 px (the Journal / map column at the top right is above every floor). */
+const PLACE_HUD = { phone: { W: 390, H: 844, b: 226, l: 8, r: 8 }, desktop: { W: 1280, H: 800, b: 136, l: 8, r: 8 } } as const;
+/** A collider's top height for the side test: blocks, bars, mounds, rings (heightOf), a swing's frame (its pivot), a seesaw's board (pivot + its
+ *  half thickness), a ball's top. */
+function thingTop(t: ThingDef): number {
+  const h = heightOf(t); if (h > 0) return h;
+  return t.mech === MECH.swing ? (t.p.pivotY ?? 1.6) : t.mech === MECH.seesaw ? (t.p.pivot ?? 0) + t.size[1] : t.mech === MECH.ball ? 2 * t.size[0] : 0;
+}
+/** The shell's play-bounds front (src/shell/later-life.ts frontReach, pinned below): the front-most z of every thing's footprint in a layout. */
+function frontReachOf(d: PlaceDef, tall: boolean): number {
+  let front = -Infinity;
+  for (let k = 0; k < d.things.length; k++) {
+    const t = d.things[k], sp = tall ? d.tall.things[k] ?? t : t, s = t.size;
+    let hx: number, hz: number;
+    switch (t.mech) {
+      case MECH.block: case MECH.seesaw: hx = s[0]; hz = s[2] ?? s[0]; break;
+      case MECH.bar: hx = (s[1] ?? 0) / 2; hz = s[0]; break;
+      case MECH.ring: hx = hz = s[0] + (s[1] ?? 0); break;
+      case MECH.swing: hx = s[0]; hz = (s[1] ?? 0) / 2; break;
+      default: hx = s[0]; hz = s[2] || s[0];
+    }
+    const c = Math.abs(Math.cos(sp.yaw)), sn = Math.abs(Math.sin(sp.yaw));
+    front = Math.max(front, sp.z + sn * hx + c * hz);
+  }
+  return front;
+}
+/** The camera a place ships with, rebuilt from its pure parts (render/placeview.ts fitPlace and placeBand: imported; the shell's setPlayBounds call
+ *  and frontReach: pinned by text, so a change fails the row): a projection of world points to CSS px. */
+function placeCam(P: PlaceDef, tall: boolean): { ok: boolean; why: string; proj: (x: number, y: number, z: number) => [number, number] } {
+  const sh = readFileSync(resolve(ROOT, 'src/shell/later-life.ts'), 'utf8'), st = readFileSync(resolve(ROOT, 'src/render/place.ts'), 'utf8');
+  const pins = ['const z0 = b.z - hz, z1 = Math.max(b.z + hz, frontReach(next, layout) + 0.1);', 'stage.setPlayBounds?.(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2)',
+    "const hx = b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), hz = b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4);",
+    'case MECH.block: case MECH.seesaw: hx = s[0]; hz = s[2] ?? s[0]; break;', 'case MECH.ring: hx = hz = s[0] + (s[1] ?? 0); break;', 'case MECH.swing: hx = s[0]; hz = (s[1] ?? 0) / 2; break;',
+    'default: hx = s[0]; hz = s[2] || s[0];', 'front = Math.max(front, sp.z + sn * hx + c * hz);'];
+  const pinsR = ['const B = placeBand({ top, right, bottom, left }, w, h, this.band);', 'return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3]);'];
+  const missing = [...pins.filter((x) => !sh.includes(x)).map((x) => `later-life.ts: ${x}`), ...pinsR.filter((x) => !st.includes(x)).map((x) => `place.ts: ${x}`)];
+  const none = (): [number, number] => [NaN, NaN];
+  if (missing.length) return { ok: false, why: `the place camera's code changed (missing: ${missing.join(' | ')})`, proj: none };
+  const L = tall ? P.tall : P, b = L.bounds, I = STAGE_INSETS[tall ? 'phone' : 'desktop'], W = tall ? 390 : 1280, H = tall ? 844 : 800;
+  const hx = b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), hz = b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4);
+  const z0 = b.z - hz, z1 = Math.max(b.z + hz, frontReachOf(P, tall) + 0.1);
+  const B = placeBand({ top: I.t, right: 0, bottom: I.b, left: 0 }, W, H, new Float64Array(4));
+  const f = fitPlace(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2, W, H, B[0], B[1], B[2], B[3]);
+  if (!f) return { ok: false, why: 'no place camera fits', proj: none };
+  const ty = Math.tan(f.fov * Math.PI / 360), tx = ty * W / H, sn = Math.sin(f.pitch), cs = Math.cos(f.pitch), C = [f.aimX, f.aimY + f.dist * sn, f.aimZ + f.dist * cs];
+  return { ok: true, why: '', proj: (x, y, z) => { const rx = x - C[0], ry = y - C[1], rz = z - C[2], dep = -ry * sn - rz * cs; return [((rx / (dep * tx)) * 0.5 + 0.5) * W, (1 - ((ry * cs - rz * sn) / (dep * ty) * 0.5 + 0.5)) * H]; } };
+}
+
+/** B8 (round 5, VERDICT_PG: "the cabin's tall layout: the Rocker Board under the hint pill and the quick-switch row, the kettle cut by the left
+ *  edge"): a SHIPPED place seen through the camera that ships (placeCam: placeview's fitPlace with placeBand of the rows the shell reports, on the
+ *  play bounds the shell sets, their front pushed to every thing's footprint + 0.1 m): every collider's whole outline, at the floor and at its
+ *  top, inside the frame's sides (8 px), and its floor outline above the bottom HUD (PLACE_HUD: the hint pill's top on the phone, the party row on
+ *  the desktop). checkPlace's P7 frame (|x| <= 1.82 - 0.128 z on a phone) is the layout rule; this is what the player sees. Its own row. */
+function camProblems(P: PlaceDef, tall: boolean): string[] {
+  const probs: string[] = [], pc = placeCam(P, tall), Hd = PLACE_HUD[tall ? 'phone' : 'desktop'];
+  if (!pc.ok) return [pc.why];
+  P.things.forEach((t, i) => {
+    const sp = tall ? P.tall.things[i] : { x: t.x, z: t.z, yaw: t.yaw }, fpi = footprints(t, sp.x, sp.z, sp.yaw);
+    if (!fpi.length) return;
+    const top = thingTop(t); let x0 = Infinity, x1 = -Infinity, yFloor = -Infinity;
+    for (const sh of fpi) for (const [x, z] of outline(sh)) {
+      const [ax, ay] = pc.proj(x, 0, z), [bx] = pc.proj(x, top, z);
+      x0 = Math.min(x0, ax, bx); x1 = Math.max(x1, ax, bx); yFloor = Math.max(yFloor, ay);
+    }
+    if (x0 < Hd.l - 1e-6 || x1 > Hd.W - Hd.r + 1e-6) probs.push(`${t.id} cut by the frame's side (${x0.toFixed(0)}..${x1.toFixed(0)} px of ${Hd.W})`);
+    if (yFloor > Hd.H - Hd.b + 1e-6) probs.push(`${t.id} under the bottom HUD (its floor down to ${yFloor.toFixed(0)} px; the HUD from ${Hd.H - Hd.b})`);
+  });
+  return probs;
+}
 
 /* ── Home's row: the camera model of src/render/stage.ts (the slots 87-88, fov 35 at 199, REST_PITCH 0.27 at 111, TARGET_Y 0.42 at 149,
  *    fitDistance 325, framePoint / framingFor 343-408 with LIFE's slot framing, restAim 604-610 and the aim 640-653, visibleTable 1088-1096),
  *    settled at its target framing (yaw 0, zoom 1), round bodies of R = 0.5 x scale (restCy = R). Built from stage.ts's text: a constant or a
  *    snippet that moves fails the row, so the model is re-checked. ── */
-/** The HUD insets per frame (CSS px). The UI overhaul fills this table with the measured ones (PLAYGROUND_BUILD 11.13); until then these are
- *  the earlier fixer's (390 x 844: S+104 = 151 top, 170 bottom, 16 left, 60 right; 1280 x 800: 120 / 150 / 24 / 24). */
-const HUD_INSETS = { phone: { W: 390, H: 844, t: 151, b: 170, l: 16, r: 60 }, desktop: { W: 1280, H: 800, t: 120, b: 150, l: 24, r: 24 } } as const;
+/** The HUD per frame (CSS px) a thing must stand clear of to be seen and reached (the in-view tests): the top band t, the bottom band b, the
+ *  frame's side edges l / r, and the right-hand button column (x >= colX down to colY). The top and bottom bands are the earlier fixer's (390 x 844:
+ *  S+104 = 151 top, 170 bottom; 1280 x 800: 120 / 150), kept: they hold the measured HUD at HEAD 16f6ba6fc (390 x 844: top row to 56, the tracker
+ *  pill and stamp moments under it at the top left, the name tag and meter row from 714, the dock from 778; 1280 x 800: top row to 56, the hint
+ *  pill and quick-switch row from 670). RE-SPECIFIED in round 5 (FIX5_DATA B5, written reason): the sides were 16 / 60 px (phone) and 24 / 24 px
+ *  (desktop) over the frame's whole height, an assumption (PLAYGROUND_BUILD 11.13: "a table the UI overhaul fills with the measured ones"); the
+ *  shipped HUD has nothing at the sides between the bands but the Journal / account column at the top right (measured 330..374 x 64..160 on the
+ *  phone, 1216..1264 x 64..160 on the desktop), which is now its own box, and the stage reports no side rows, so the Felt Ball's own bounds (the
+ *  visible table, full width) reach the frame's edges: a 60 px side rule failed every ball the bounds legally hold there. Sides: 8 px.
+ *  RE-SPECIFIED too (same reason): the desktop's bottom band 150 -> 136 px = the measured lowest HUD band + 6 px (with a party out its row
+ *  starts at 670 px: the quick-switch chips 670..714, the hint pill 672..704, "Put back" 682..722, the dock 722..782); the phone's 170 stays
+ *  (its quick-switch row starts at 660 = 184 px but spans only the left 16..260 px, under which no Home spot lies). */
+const HUD_INSETS = { phone: { W: 390, H: 844, t: 151, b: 170, l: 8, r: 8, colX: 322, colY: 168 }, desktop: { W: 1280, H: 800, t: 120, b: 136, l: 8, r: 8, colX: 1208, colY: 168 } } as const;
+/** Round 5 (FIX5_DATA, VERDICT_PG B5 / D1): the rows the shell REPORTS to the stage (hudBinding.ts reportInsets: setSafeInsets({ top, bottom }),
+ *  no side rows), measured in the browser at HEAD 16f6ba6fc (stage.info.insets, the dev build at 390 x 844 touch and 1280 x 800, 1 and 3 out):
+ *  they drive SR2's band framing (framing.ts: the lens shift, its scale demand) and the visible table the corral and the ball's bounds come from. */
+const STAGE_INSETS = { phone: { t: 56, b: 130 }, desktop: { t: 56, b: 78 } } as const;
+/** The rest columns the band framing measures each body at (framing.ts frameMode 1: top = restH, centre restCy, half width restHalfW; the disc
+ *  about the centre of restHalfW x 1.06 and of restRadius): a ball (2R, R, R), a squat dome (1.4R, 0.7R, 1.1R) and a flat cake (1.0R, 0.5R, 1.25R),
+ *  which bracket the lens measured in the browser (390 x 844 one Dollop 0.096 against 0.074 / 0.129 / 0.176; 1280 x 800 three out 0.153 against
+ *  -0.028 / 0.075 / 0.162). Every check holds for all three. */
+const SHAPES = [{ h: 2, cy: 1, hw: 1 }, { h: 1.4, cy: 0.7, hw: 1.1 }, { h: 1.0, cy: 0.5, hw: 1.25 }] as const;
 const SCALES = [0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25];
 function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: number[][]; fov: number; pitch: number; ty: number } {
   const st = readFileSync(resolve(ROOT, 'src/render/stage.ts'), 'utf8');
+  const fr = readFileSync(resolve(ROOT, 'src/render/framing.ts'), 'utf8'), hb = readFileSync(resolve(ROOT, 'src/shell/hudBinding.ts'), 'utf8');
   const arr = (name: string): number[][] => { const m = new RegExp(`${name}[^=]*=\\s*(\\[\\[[^;]*\\]\\]);`).exec(st); return m ? (JSON.parse(m[1]) as number[][]) : []; };
   const WIDE = arr('MAT_SLOTS_WIDE'), TALL = arr('MAT_SLOTS_TALL');
   // The rig's start pitch is either a literal or (PG_RENDER, HEAD 8dc806641) the named constant REST_PITCH, which visibleTable() also uses: the
@@ -273,7 +366,10 @@ function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: numbe
   const pm = /let yaw = 0, pitch = (REST_PITCH|[\d.]+)/.exec(st)?.[1];
   const pitch = Number(pm === 'REST_PITCH' ? /const REST_PITCH = ([\d.]+)/.exec(st)?.[1] : pm);
   const fov = Number(/new THREE\.PerspectiveCamera\((\d+(?:\.\d+)?)/.exec(st)?.[1]), ty = Number(/const TARGET_Y = ([\d.]+)/.exec(st)?.[1]);
-  const need = ['Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))', 'v.proxy.restRadius * 1.25, v.restHalfW * 1.12', "(camera.aspect < 0.9 ? 0.12 : 0.35)", '(solo ? 0.06 : 0.1)',
+  // (round 5: bf06cff67 counts a cut squishy's pieces as its whole at the slot (asWhole): for a whole body rr / hw ARE restRadius / restHalfW, so
+  // the reach is unchanged: max(R x 1.25, halfW x 1.12); the new text is pinned instead of the old one-line form)
+  const need = ['Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))', 'rr = asWhole ? v.wholeR : v.proxy.restRadius, hw = asWhole ? v.wholeHalfW : v.restHalfW',
+    'const r = Math.max(rr * 1.25, hw * 1.12) * gk', "(camera.aspect < 0.9 ? 0.12 : 0.35)", '(solo ? 0.06 : 0.1)',
     'wx = mx; wz = mz * 0.8; wy = TARGET_Y * bodyScale', 'wx = c.x * 0.6; wz = c.z * 0.6', 'Math.max(0, c.y - TARGET_Y * camScale) * 0.7',
     // HEAD 8dc806641 (D-37, RD-14): with LIFE at Home (autoFraming) every body is framed at its mat slot (the k-th whole body at the k-th slot,
     // x bodyScale) and one body is aimed at its slot x 0.6 and its rest centre height: exactly the slot bodies this model places. The one-body
@@ -282,41 +378,126 @@ function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: numbe
     'aimOut.x = slotXZ.x * 0.6; aimOut.z = slotXZ.z * 0.6', 'aimOut.y = TARGET_Y * scale + Math.max(0, p.restCy * p.growth - TARGET_Y * scale) * 0.7',
     'if (autoFraming && !p.playerMoving)', '((p1.restHalfW * (p1.style.dome > 0 ? 1.34 : 1.06) + 0.05 * p1.scale) * p1.growth) / hwPer',
     'const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))',
-    'const dist = f.want * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))', 'visibleTableAt(ax, ay, az, dist, REST_PITCH, camera.fov'];
-  const missing = need.filter((s) => !st.includes(s));
+    'const dist = f.want * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))', 'visibleTableAt(ax, ay, az, dist, REST_PITCH, camera.fov',
+    // round 5: SR2's band framing, which the model now carries (the shipped camera: the verdict's B5 ball sat 25 to 40 px from where the old model
+    // put it): its scale demand in framingFor, the rest column per slot body (LIFE at Home), the lens shift as a view offset, and the visible table's
+    // inset lines moved by the lens goal
+    'if (framer.wantScale > 0) want = Math.max(want, framer.wantScale);',
+    'fs[0] = slotXZ.x; fs[1] = slotXZ.z; fs[2] = (pw ? v.wholeH : v.restH) * g; fs[3] = (pw ? v.wholeCy : v.restCy) * g; fs[4] = (pw ? v.wholeHalfW : v.restHalfW) * 1.06 * g;',
+    'camera.setViewOffset(cssW, cssH, -lx * cssW * 0.5, ly * cssH * 0.5, cssW, cssH)',
+    'safe.top + ly * cssH * 0.5, safe.right + lx * cssW * 0.5, safe.bottom - ly * cssH * 0.5, safe.left - lx * cssW * 0.5'];
+  const needF = ['enabled: true', 'marginMin: 3, marginFrac: 0.02', 'maxScale: 3.2', 'minBand: 0.35', 'sideFitFrom: 6',
+    'p[0] = fs[0]; p[1] = fs[2]; p[2] = fs[1]; p[3] = fs[0]; p[4] = 0; p[5] = fs[1];', 'w[0] = fs[0]; w[1] = fs[3]; w[2] = fs[1]; w[6] = fs[4]; this.addDisc();',
+    'w[6] = v.proxy.restRadius * v.growth; this.addDisc();', 'this.fitY = (top - bot) / Math.max(0.05, B[0] - B[1] - 2 * my);',
+    'this.wantScale = f > 1 ? Math.min(T.maxScale, f * S) : 0;', 'this.goalY = Math.max(-0.7, Math.min(0.7, (B[0] + B[1]) / 2 - (top + bot) / 2));',
+    'const horiz = this.ins.left + this.ins.right > 0 || n >= FRAME_TUNING.sideFitFrom;',
+    'const kv = (t + b) > (1 - FRAME_TUNING.minBand) * H ? (1 - FRAME_TUNING.minBand) * H / (t + b) : 1;', 'B[0] = 1 - 2 * t / H; B[1] = -1 + 2 * b / H;'];
+  // (the shell reports the top and bottom rows only: no side rows, so the band framing never shifts the picture sideways up to five bodies)
+  const needH = ['st.setSafeInsets({ top, bottom })'];
+  const missing = [...need.filter((s) => !st.includes(s)), ...needF.filter((s) => !fr.includes(s)).map((s) => `framing.ts: ${s}`), ...needH.filter((s) => !hb.includes(s)).map((s) => `hudBinding.ts: ${s}`)];
   const ok = WIDE.length === 5 && TALL.length === 5 && fov === 35 && pitch === 0.27 && ty === 0.42 && missing.length === 0;
   return { ok, why: ok ? '' : `stage.ts camera changed (fov ${fov}, pitch ${pitch}, TARGET_Y ${ty}, slots ${WIDE.length}/${TALL.length}, missing: ${missing.join(' | ')})`, TALL, WIDE, fov, pitch, ty };
 }
 const SM = stageModel();
-interface Cam { W: number; H: number; A: number; ins: { t: number; b: number; l: number; r: number }; slots: number[][]; s: number; C: number[]; f: number[]; u: number[]; aim: number[]; d: number }
+interface Cam { W: number; H: number; A: number; ins: { t: number; b: number; l: number; r: number; colX: number; colY: number }; si: { t: number; b: number }; slots: number[][]; s: number; C: number[]; f: number[]; u: number[]; aim: number[]; d: number; ly: number; want: number; sh: number }
 const TF = Math.tan((SM.fov || 35) * D2R / 2);
-function cam(fr: 'phone' | 'desktop', n: number, s: number): Cam {
-  const I = HUD_INSETS[fr], A = I.W / I.H, base = Math.max(3.0, 2.4 / Math.max(0.2, A)), hwPer = base * TF * A;
+/** The camera settled at its target framing (yaw 0, zoom 1) for n slot bodies of scale s and rest shape SHAPES[sh]: framingFor's want (stage.ts:
+ *  the one-body reach / the mat's extents, then SR2's demand), the aim (restAim for one body, the mat's middle for more), and SR2's lens goal
+ *  (framing.ts measure + ease: the rest columns' extent in unshifted NDC centred in the band between the reported rows). The demand and the
+ *  one-body aim depend on the scale they are measured at, so the three are iterated to their fixed point (as the eased camera settles). */
+function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number): Cam {
+  const I = HUD_INSETS[fr], SI = STAGE_INSETS[fr], A = I.W / I.H, base = Math.max(3.0, 2.4 / Math.max(0.2, A)), hwPer = base * TF * A, P = SM.pitch;
   const slots = (A < 0.9 ? SM.TALL : SM.WIDE).slice(0, n).map(([x, z]) => [x * s, z * s]);
-  let want: number, tx = 0, ty: number, tz = 0;
-  // one body: restAim (stage.ts 604-610) aims at ITS slot (slot 0, x bodyScale) x 0.6 and its rest centre height (restCy = R = 0.5 x scale)
-  if (n === 1) { want = Math.max(s, 0.58 * s / hwPer); tx = slots[0][0] * 0.6; tz = slots[0][1] * 0.6; ty = SM.ty * want + Math.max(0, 0.5 * s - SM.ty * want) * 0.7; }
-  else { const r = 0.625 * s; let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  const R = 0.5 * s, S = SHAPES[sh], hw = S.hw * R, restH = S.h * R, restCy = S.cy * R;
+  const f = [0, -Math.sin(P), -Math.cos(P)], u = [0, Math.cos(P), -Math.sin(P)];
+  // framingFor without the band's demand: one body (stage.ts 503: its rest reach + a margin) or the mat (the slot extents, r = max(R x 1.25, hw x 1.12))
+  let base0: number, mx = 0, mz = 0;
+  if (n === 1) base0 = Math.max(s, (hw * 1.06 + 0.05 * s) / hwPer);
+  else { const r = Math.max(R * 1.25, hw * 1.12); let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (const [x, z] of slots) { x0 = Math.min(x0, x - r); x1 = Math.max(x1, x + r); z0 = Math.min(z0, z - r); z1 = Math.max(z1, z + r); }
-    want = Math.max(s, ((x1 - x0) / 2 + 0.1 + (A < 0.9 ? 0.12 : 0.35) * (z1 - z0) / 2) / hwPer); tx = (x0 + x1) / 2; tz = 0.8 * (z0 + z1) / 2; ty = SM.ty * s; }
-  const d = want * base, P = SM.pitch;
-  return { W: I.W, H: I.H, A, ins: I, slots, s, C: [tx, ty + d * Math.sin(P), tz + d * Math.cos(P)], f: [0, -Math.sin(P), -Math.cos(P)], u: [0, Math.cos(P), -Math.sin(P)], aim: [tx, ty, tz], d };
+    base0 = Math.max(s, ((x1 - x0) / 2 + 0.1 + (A < 0.9 ? 0.12 : 0.35) * (z1 - z0) / 2) / hwPer); mx = (x1 + x0) / 2; mz = (z0 + z1) / 2; }
+  // the band (framing.ts bandRows, band): the reported rows, scaled down together under minBand 0.35; the margin max(3, 0.02 H) px
+  const kv = (SI.t + SI.b) > 0.65 * I.H ? 0.65 * I.H / (SI.t + SI.b) : 1, B0 = 1 - 2 * SI.t * kv / I.H, B1 = -1 + 2 * SI.b * kv / I.H, my = 2 * Math.max(3, 0.02 * I.H) / I.H;
+  let want = base0, ly = 0, aim = [0, 0, 0], C = [0, 0, 0];
+  for (let it = 0; it < 40; it++) {
+    aim = n === 1 ? [slots[0][0] * 0.6, SM.ty * want + Math.max(0, restCy - SM.ty * want) * 0.7, slots[0][1] * 0.6] : [mx, SM.ty * s, mz * 0.8];
+    const d = want * base; C = [aim[0], aim[1] + d * Math.sin(P), aim[2] + d * Math.cos(P)];
+    const ndcY = (x: number, y: number, z: number): [number, number] => { const vy = y - C[1], vz = z - C[2], dep = vy * f[1] + vz * f[2]; return [(vy * u[1] + vz * u[2]) / (dep * TF), dep]; };
+    let top = -Infinity, bot = Infinity;
+    for (const [x, z] of slots) {
+      top = Math.max(top, ndcY(x, restH, z)[0]); bot = Math.min(bot, ndcY(x, 0, z)[0]);
+      for (const rr of [hw * 1.06, R]) { const [cy, dep] = ndcY(x, restCy, z), ry = rr / (dep * TF); top = Math.max(top, cy + ry); bot = Math.min(bot, cy - ry); }
+    }
+    const fitY = (top - bot) / Math.max(0.05, B0 - B1 - 2 * my), demand = fitY > 1 ? Math.min(3.2, fitY * want) : 0;
+    ly = Math.max(-0.7, Math.min(0.7, (B0 + B1) / 2 - (top + bot) / 2));
+    const w2 = Math.max(base0, demand);
+    if (Math.abs(w2 - want) < 1e-10) break;
+    want = w2;
+  }
+  return { W: I.W, H: I.H, A, ins: I, si: SI, slots, s, C, f, u, aim, d: want * base, ly, want, sh };
 }
+/** CSS px of a world point in the shown frame: the camera's projection with SR2's lens shift (content up by ly in NDC; no side shift). */
 function proj(c: Cam, x: number, y: number, z: number): [number, number] {
   const vx = x - c.C[0], vy = y - c.C[1], vz = z - c.C[2], depth = vy * c.f[1] + vz * c.f[2], uy = vy * c.u[1] + vz * c.u[2];
-  return [((vx / (depth * TF * c.A)) + 1) / 2 * c.W, (1 - uy / (depth * TF)) / 2 * c.H];
+  return [((vx / (depth * TF * c.A)) + 1) / 2 * c.W, (1 - (uy / (depth * TF) + c.ly)) / 2 * c.H];
+}
+/** A sphere's on-screen disc: centre (CSS px), radius (px), depth (m). */
+function discOf(c: Cam, x: number, y: number, z: number, r: number): [number, number, number, number] {
+  const [sx, sy] = proj(c, x, y, z), depth = (x - c.C[0]) * 0 + (y - c.C[1]) * c.f[1] + (z - c.C[2]) * c.f[2];
+  return [sx, sy, r / (depth * TF) * c.H / 2, depth];
 }
 function ground(c: Cam, sx: number, sy: number): [number, number] {
-  const nx = (sx / c.W) * 2 - 1, ny = 1 - (sy / c.H) * 2, dx = nx * TF * c.A, dy = c.f[1] + ny * TF * c.u[1], dz = c.f[2] + ny * TF * c.u[2], t = -c.C[1] / dy;
+  const nx = (sx / c.W) * 2 - 1, ny = 1 - (sy / c.H) * 2 - c.ly, dx = nx * TF * c.A, dy = c.f[1] + ny * TF * c.u[1], dz = c.f[2] + ny * TF * c.u[2], t = -c.C[1] / dy;
+  // (a row at or above the horizon never meets the ground: as far as it goes, homeview.ts rowZ / rowX)
+  if (dy >= -1e-9) return [nx < 0 ? -Infinity : Infinity, -Infinity];
   return [c.C[0] + t * dx, c.C[2] + t * dz];
 }
+/** What stage.visibleTable returns (the corral and the Felt Ball's bounds come from it): the ground under the REPORTED rows of the shown frame
+ *  (moved by the lens), full width (no side rows), each edge clipped to +-3.4 m; the x range the near row's. */
 function visibleTable(c: Cam): number[] {
-  const { ins, W, H } = c, [xlN, zN] = ground(c, ins.l, H - ins.b), [xrN] = ground(c, W - ins.r, H - ins.b), [xlF, zF] = ground(c, ins.l, ins.t), [xrF] = ground(c, W - ins.r, ins.t);
-  return [Math.max(xlN, xlF, -3.4), Math.max(zF, -3.4), Math.min(xrN, xrF, 3.4), Math.min(zN, 3.4)];
+  // (the reported rows moved by the lens, as the stage passes them, each kept inside the frame: homeview clamps an inset at 0)
+  const { si, W, H } = c, t = Math.max(0, si.t + c.ly * H / 2) - c.ly * H / 2, b = Math.max(0, si.b - c.ly * H / 2) + c.ly * H / 2;
+  const [xlN, zN] = ground(c, 0, H - b), [xrN] = ground(c, W, H - b), [, zF] = ground(c, 0, t);
+  return [Math.max(xlN, -3.4), Math.max(zF, -3.4), Math.min(xrN, 3.4), Math.min(zN, 3.4)];
 }
-const inIns = (c: Cam, [sx, sy]: [number, number]): boolean => sx >= c.ins.l && sx <= c.W - c.ins.r && sy >= c.ins.t && sy <= c.H - c.ins.b;
-const CAMS = new Map<string, Cam>(); for (const fr of ['phone', 'desktop'] as const) for (let n = 1; n <= 5; n++) for (const s of SCALES) CAMS.set(`${fr}${n}${s}`, cam(fr, n, s));
-const camOf = (fr: string, n: number, s: number): Cam => CAMS.get(`${fr}${n}${s}`)!;
+const inIns = (c: Cam, [sx, sy]: [number, number]): boolean => sx >= c.ins.l && sx <= c.W - c.ins.r && sy >= c.ins.t && sy <= c.H - c.ins.b && !(sx >= c.ins.colX && sy <= c.ins.colY);
+const CAMS = new Map<string, Cam[]>(); for (const fr of ['phone', 'desktop'] as const) for (let n = 1; n <= 5; n++) for (const s of SCALES) CAMS.set(`${fr}${n}${s}`, SHAPES.map((_, k) => cam(fr, n, s, k)));
+const camsOf = (fr: string, n: number, s: number): Cam[] => CAMS.get(`${fr}${n}${s}`)!;
+/** Where the free ball stands in a frame: its spot (x scale) pushed into its bounds, the visible table shrunk by its radius (props.ts setBallBounds,
+ *  D-67: the world's first step does exactly this). */
+function ballAt(c: Cam, x: number, z: number, r: number): [number, number] {
+  const v = visibleTable(c);
+  return [Math.min(v[2] - r, Math.max(v[0] + r, x)), Math.min(v[3] - r, Math.max(v[1] + r, z))];
+}
+/** The ball's free roll from (x, z) along (dx, dz) inside its bounds: to the first edge, then along that edge (its tangential part) to the corner. */
+function rollRoom(c: Cam, x: number, z: number, dx: number, dz: number, r: number): number {
+  const v = visibleTable(c), x0 = v[0] + r, x1 = v[2] - r, z0 = v[1] + r, z1 = v[3] - r;
+  const tx = dx > 1e-9 ? (x1 - x) / dx : dx < -1e-9 ? (x0 - x) / dx : Infinity, tz = dz > 1e-9 ? (z1 - z) / dz : dz < -1e-9 ? (z0 - z) / dz : Infinity;
+  const t = Math.max(0, Math.min(tx, tz)); let px = x + dx * t, pz = z + dz * t;
+  if (tx < tz) pz = dz > 1e-9 ? z1 : dz < -1e-9 ? z0 : pz; else px = dx > 1e-9 ? x1 : dx < -1e-9 ? x0 : px;
+  return Math.hypot(px - x, pz - z);
+}
+/** A slot body's on-screen ellipse in camera c, in the rest shape SHAPES[c.sh] the camera was framed for (centre at its rest centre height;
+ *  semi-axes its half width and half height; the ball shape is the sphere of R = 0.5 x scale): centre, semi-axes a / b (px), depth. */
+function bodyEll(c: Cam, x: number, z: number): [number, number, number, number, number] {
+  const R = 0.5 * c.s, Sh = SHAPES[c.sh], [cx, cy, k, depth] = discOf(c, x, Sh.cy * R, z, R);
+  return [cx, cy, Sh.hw * k, Sh.h / 2 * k, depth];
+}
+/** How far (px) a disc of radius r at (px, py) reaches into the ellipse (cx, cy, a, b) grown by `inner` (1 = the whole body, 0.6 its squeeze
+ *  area): the Minkowski sum approximated by the ellipse of semi-axes a + r, b + r; <= 0 = clear. */
+function ellReach(px: number, py: number, r: number, cx: number, cy: number, a: number, b: number, inner = 1): number {
+  const A = inner * a + r, B = inner * b + r, q = Math.hypot((px - cx) / A, (py - cy) / B);
+  return (1 - q) * Math.min(A, B);
+}
+/** The share of the ellipse's area the disc covers (sampled on a 24 x 24 grid over the disc). */
+function ellCover(px: number, py: number, r: number, cx: number, cy: number, a: number, b: number): number {
+  let inBoth = 0;
+  for (let i = 0; i < 24; i++) for (let j = 0; j < 24; j++) { const u = -1 + (i + 0.5) / 12, v = -1 + (j + 0.5) / 12; if (u * u + v * v > 1) continue;
+    const x = px + u * r, y = py + v * r; if (((x - cx) / a) ** 2 + ((y - cy) / b) ** 2 < 1) inBoth++; }
+  return (inBoth / (24 * 24)) * (4 * r * r) / (Math.PI * a * b);
+}
+const b5: string[] = [];
+const b5one: { cover: number; hide: number; room: number; sq: number; frac: number; gap: number }[] = [];
 function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
   const probs: string[] = [], lines: string[] = [];
   if (!SM.ok) { probs.push(SM.why); return { probs, lines }; }
@@ -342,20 +523,52 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
         for (const s of SCALES) { for (const [px, pz] of corners(k, sp.x * s, sp.z * s)) g = Math.min(g, dPt(ku, su.x * s, su.z * s, px, pz)); for (const [px, pz] of corners(ku, su.x * s, su.z * s)) g = Math.min(g, dPt(k, sp.x * s, sp.z * s, px, pz)); }
         if (g < 0.3 - 1e-9) issues.push(`${f2(g)} m from ${u.id}`); });
       // in view from fromN to 5 at every scale: footprint corners at y 0 and at its top inside the insets; its top centre seen
-      for (let n = Math.min(from, 5); n <= 5; n++) for (const s of SCALES) { const c = camOf(fr, n, s), x = sp.x * s, z = sp.z * s;
+      // (round 5: the free ball where it really stands in that frame: its spot pushed into its bounds, ballAt)
+      const ball = t.mech === MECH.ball, rb = t.size[0];
+      for (let n = Math.min(from, 5); n <= 5; n++) for (const s of SCALES) for (const c of camsOf(fr, n, s)) { let x = sp.x * s, z = sp.z * s; if (ball) [x, z] = ballAt(c, x, z, rb);
         for (const [px, pz] of corners(k, x, z)) { if (!inIns(c, proj(c, px, 0, pz)) || (k.h > 0 && !inIns(c, proj(c, px, k.h, pz)))) { issues.push(`n${n} out of view`); break; } }
         const [tx, tyy, tz] = topPt(k, x, z), [psx, psy] = proj(c, tx, tyy, tz);
-        for (const [bx, bz] of c.slots) { if (bz <= tz + 0.05) continue; const R = 0.5 * s, [cx, cy] = proj(c, bx, R, bz), depth = (R - c.C[1]) * c.f[1] + (bz - c.C[2]) * c.f[2];
-          if (Math.hypot(psx - cx, psy - cy) < 0.95 * R / (depth * Tf) * c.H / 2) { issues.push(`n${n} behind a body`); break; } }
+        for (const [bx, bz] of c.slots) { if (bz <= tz + 0.05) continue; const [cx, cy, ea, eb] = bodyEll(c, bx, bz);
+          if (Math.hypot((psx - cx) / ea, (psy - cy) / eb) < 0.95) { issues.push(`n${n} behind a body`); break; } }
         H.things.forEach((u, j) => { if (j === i) return; const ku = kind(u), su = spot(j); if (!ku.col || ku.h < 0.05 || (su.fromN ?? 9) > n || su.z * s <= z) return;
           let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const dx of [-ku.hx, ku.hx]) for (const dz of [-ku.hz, ku.hz]) for (const y of [0, ku.h]) { const [qx, qy] = proj(c, su.x * s + dx, y, su.z * s + dz); x0 = Math.min(x0, qx); x1 = Math.max(x1, qx); y0 = Math.min(y0, qy); y1 = Math.max(y1, qy); }
           if (psx > x0 && psx < x1 && psy > y0 && psy < y1) issues.push(`n${n} behind ${u.id}`); }); }
+      // B5 (round 5, VERDICT_PG): the Felt Ball where it stands (ballAt) against every slot body on screen (bodyEll: the body in the rest shape
+      // its camera was framed for): it covers NO body (its disc overlaps no farther body's disc: never in front of a squishy, never
+      // over its squeeze area) and hides behind none on a phone (no nearer body's disc overlaps it; WIDE: at most half its width, since a desktop
+      // party of four or five is one row 1.3 m apart with 0.3 m gaps, so the ball can be beside none of them: behind a gap is the place that covers
+      // none), its spot lies inside its bounds (no push), and with one squishy out (FN-01's first play) the boop from the home slot through the
+      // ball has 0.25 m of free roll in its bounds (0.2 m + a margin).
+      // TALL with one squishy out is checked by its own row (B5 one out, below): the same rules (covers none, hides behind none, 0.25 m of roll),
+      // measured where the ball stands then (its spot pushed into its bounds), kept apart because the shipped portrait one-body view cannot hold
+      // them (the row says why); this row stays strict for every other party and frame.
+      if (ball) { let cover = 0, coverN = '', hide = 0, push = 0, room = 9;
+        const one = { cover: 0, hide: 0, room: 9, sq: -9, frac: 0, gap: 9 };   // TALL with one out (the B5 one-out row)
+        for (let n = Math.min(from, 5); n <= 5; n++) for (const s of SCALES) for (const c of camsOf(fr, n, s)) {
+          const [x, z] = ballAt(c, sp.x * s, sp.z * s, rb), isOne = TALLF && n === 1, [bx, by, br, bd] = discOf(c, x, rb, z, rb);
+          if (!isOne) push = Math.max(push, Math.hypot(x - sp.x * s, z - sp.z * s));
+          c.slots.forEach(([qx, qz], q) => { const R = 0.5 * s, [cx, cy, ea, eb, cd] = bodyEll(c, qx, qz), ov = ellReach(bx, by, br, cx, cy, ea, eb);
+            if (isOne) { one.gap = Math.min(one.gap, Math.hypot(x - qx, z - qz) - R - rb);
+              if (cd > bd) { one.sq = Math.max(one.sq, ellReach(bx, by, br, cx, cy, ea, eb, 0.6)); one.frac = Math.max(one.frac, ellCover(bx, by, br, cx, cy, ea, eb)); if (ov > 0) one.cover = Math.max(one.cover, ov); }
+              else if (ov > 0) one.hide = Math.max(one.hide, ov / (2 * br)); return; }
+            if (ov <= 0) return;
+            if (cd > bd) { if (ov > cover) { cover = ov; coverN = `n${n} s${s} slot ${q}`; } } else hide = Math.max(hide, ov / (2 * br)); });
+          if (n === 1) { let dx = x - c.slots[0][0], dz = z - c.slots[0][1]; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl; const rr = rollRoom(c, x, z, dx, dz, rb);
+            if (isOne) one.room = Math.min(one.room, rr); else room = Math.min(room, rr); }
+        }
+        if (cover > 0) issues.push(`B5 in front of a body (${coverN}: ${cover.toFixed(1)} px over it)`);
+        if (hide > (TALLF ? 0 : 0.5)) issues.push(`B5 behind a body (${(hide * 100).toFixed(0)}% of its width hidden, at most ${TALLF ? 0 : 50})`);
+        if (push > 1e-6) issues.push(`B5 the spot lies outside its bounds (pushed ${f2(push)} m)`);
+        if (!TALLF && from <= 1 && room < 0.25 - 1e-9) issues.push(`B5 one out: ${f2(room)} m of roll room (at least 0.25)`);
+        if (TALLF && from <= 1) b5one.push(one);
+        b5.push(`${frame} n${TALLF ? Math.max(2, from) : from}..5: covers ${cover.toFixed(1)} px, ${(hide * 100).toFixed(0)}% hidden, pushed ${f2(push)} m${TALLF ? '' : `, one-out roll room ${f2(room)} m`}`);
+      }
       // nothing static over 0.4 m tall in front of the front slot row
       if (!isMoving(t) && k.h > 0.4 && sp.z - k.hz >= 0.5) issues.push(`${f2(k.h)} m tall in front of the front row`);
       // its use spot: a whole body in view from fromN to 5, clear of the other slot bodies (the lamp's: inside its glow, clear of its base)
       const use = sp.use; if (use) { const user = t.id === 'snoozerug' ? 1 : 0; let worst = 9;
-        for (let n = Math.max(from, user + 1); n <= 5; n++) for (const s of SCALES) { const c = camOf(fr, n, s), R = 0.5 * s, x = use[0] * s, z = use[1] * s;
-          let inv = Math.hypot(x, z) <= 3.4 - R; for (const dx of [-R, R]) for (const dz of [-R, R]) for (const y of [0, 2 * R]) if (!inIns(c, proj(c, x + dx, y, z + dz))) inv = false;
+        for (let n = Math.max(from, user + 1); n <= 5; n++) for (const s of SCALES) for (const c of camsOf(fr, n, s)) { const R = 0.5 * s, x = use[0] * s, z = use[1] * s, Sh = SHAPES[c.sh], hwR = Math.max(1, Sh.hw) * R;
+          let inv = Math.hypot(x, z) <= 3.4 - R; for (const dx of [-hwR, hwR]) for (const dz of [-hwR, hwR]) for (const y of [0, Sh.h * R]) if (!inIns(c, proj(c, x + dx, y, z + dz))) inv = false;
           if (!inv) { issues.push(`use spot n${n} s${s} not wholly in view`); break; }
           for (let q = 0; q < n; q++) { if (q === user) continue; const [ax, az] = slotsAll[q], d = Math.hypot(x - ax * s, z - az * s) - 2 * R; worst = Math.min(worst, d); if (d < -0.02) { issues.push(`use spot n${n} overlaps slot ${q}'s body`); break; } }
           if (t.id === 'warmlamp') { const zr = H.zones[0].r ?? 0, lx = sp.x * s, lz = sp.z * s; if (Math.hypot(x - lx, z - lz) > zr - 0.02) issues.push('use spot outside the glow');
@@ -368,9 +581,10 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
       for (const u of uniq) probs.push(`${frame} ${t.id}: ${u}`);
     });
     // every slot centre inside the corral rectangle (visibleTable and every slot body in use + 0.05: D-87)
-    for (let n = 1; n <= 5; n++) for (const s of SCALES) { const c = camOf(fr, n, s), v = visibleTable(c), R = 0.5 * s;
-      // the model's box against the stage's own pure projection (src/render/homeview.ts visibleTableAt, what stage.visibleTable returns)
-      const real = [0, 0, 0, 0]; visibleTableAt(c.aim[0], c.aim[1], c.aim[2], c.d, SM.pitch, SM.fov, c.W, c.H, c.ins.t, c.ins.r, c.ins.b, c.ins.l, real);
+    for (let n = 1; n <= 5; n++) for (const s of SCALES) for (const c of camsOf(fr, n, s)) { const v = visibleTable(c), R = 0.5 * s;
+      // the model's box against the stage's own pure projection (src/render/homeview.ts visibleTableAt, called as stage.visibleTable calls it: the
+      // reported rows moved by the lens goal, no side rows)
+      const real = [0, 0, 0, 0]; visibleTableAt(c.aim[0], c.aim[1], c.aim[2], c.d, SM.pitch, SM.fov, c.W, c.H, c.si.t + c.ly * c.H * 0.5, 0, c.si.b - c.ly * c.H * 0.5, 0, real);
       if (real.some((q, j) => Math.abs(q - v[j]) > 1e-6)) probs.push(`${frame} n${n} s${s}: the model's visible table [${v.map(f2)}] differs from homeview.visibleTableAt [${real.map(f2)}]`);
       let x0 = v[0], z0 = v[1], x1 = v[2], z1 = v[3]; for (const [x, z] of c.slots) { x0 = Math.min(x0, x - R - 0.05); x1 = Math.max(x1, x + R + 0.05); z0 = Math.min(z0, z - R - 0.05); z1 = Math.max(z1, z + R + 0.05); }
       for (const [x, z] of c.slots) if (x < x0 || x > x1 || z < z0 || z > z1) probs.push(`${frame} n${n} s${s}: a slot centre outside the corral`); }
@@ -381,15 +595,38 @@ for (const P of DEFS) {
   const strict = STRICT_PLACES.includes(P.id);
   if (P.id === 'home') {
     const h = homeRow(P);
-    if (VERBOSE || h.probs.length) for (const l of h.lines) console.log('     ' + l);
-    row('DT-01', h.probs.length === 0, 'Home: every thing\'s TALL and WIDE spot (slot gap, felt, 0.3 m apart, in view and seen from its fromN at every scale, front-row height, use spots, rug, corral)',
-      h.probs.length ? h.probs.slice(0, 6).join(' | ') : `${P.things.length} things x 2 frames x n 1..5 x ${SCALES.length} scales, stage.ts model ok`);
+    if (VERBOSE || h.probs.length) for (const l of [...h.lines, ...b5.map((x) => `B5 feltball ${x}`)]) console.log('     ' + l);
+    row('DT-01', h.probs.length === 0, 'Home: every thing\'s TALL and WIDE spot (slot gap, felt, 0.3 m apart, in view and seen from its fromN at every scale, front-row height, use spots, rug, corral; '
+      + 'round 5: the shipped camera with SR2\'s band framing and the measured rows, three rest shapes; B5: the Felt Ball covers no squishy and hides behind none, inside its bounds, 0.25 m of first-play roll)',
+      h.probs.length ? h.probs.slice(0, 6).join(' | ') : `${P.things.length} things x 2 frames x n 1..5 x ${SCALES.length} scales x ${SHAPES.length} shapes, stage.ts + framing.ts model ok; ${b5.join('; ')}`);
+    // B5 with ONE squishy out on a phone (VERDICT_PG B5, the orchestrator's round-5 ask: "beside the play squishy, never in front of it or over the
+    // squeeze area, and its first-play roll at least 0.2 m"): the same rules as the Home row's B5, where the ball stands with one out (its spot
+    // pushed into its bounds). Kept as its own row because the shipped camera cannot hold them: the one-body portrait view is the body plus about
+    // 66 px of floor to each side, and the ball's bounds (the visible table's near row) keep its centre within about +-0.31 m of the middle, so
+    // every spot there is in front of the body or behind it. It passes once Home's rest framing makes room for the ball with one out on a portrait
+    // frame (PLAYGROUND_BUILD 24.1 (a): RENDER's framingFor counting the ball's spot as it counts a capsule), then this model gains that framing.
+    { const o = b5one[0], ok = !!o && o.cover <= 0 && o.hide <= 0 && o.room >= 0.25 - 1e-9;
+      // the proof that no spot can: every spot of a 0.05 slot-unit grid over the one-out bounds (x +-0.8, z -3.2 to 2.2), at every scale and shape,
+      // where the ball would stand (pushed into its bounds), against the same rules plus 0.05 m from the body and in view
+      let tried = 0, found = '';
+      if (!ok) for (let gz = -3.2; gz <= 2.2 + 1e-9 && !found; gz += 0.05) for (let gx = -0.8; gx <= 0.8 + 1e-9 && !found; gx += 0.05) { tried++;
+        let good = true;
+        for (const s of SCALES) { for (const c of camsOf('phone', 1, s)) { const rb = P.things[0].size[0], [x, z] = ballAt(c, gx * s, gz * s, rb), [bx, by, br, bd] = discOf(c, x, rb, z, rb), [cx, cy, ea, eb, cd] = bodyEll(c, 0, 0);
+          const ov = ellReach(bx, by, br, cx, cy, ea, eb), dl = Math.hypot(x, z) || 1;
+          if (ov > 0 || Math.hypot(x, z) - 0.5 * s - rb < 0.05 || rollRoom(c, x, z, x / dl, z / dl, rb) < 0.25 || !inIns(c, [bx - br, by]) || !inIns(c, [bx + br, by]) || !inIns(c, [bx, by - br]) || !inIns(c, [bx, by + br])) { good = false; break; } void cd; void bd; }
+          if (!good) break; }
+        if (good) found = `${gx.toFixed(2)}, ${gz.toFixed(2)}`; }
+      row('DT-01', ok, 'Home B5, one squishy out on a phone (TALL n = 1): the Felt Ball where it stands covers no part of the squishy and hides behind none, with 0.25 m of first-play roll',
+        o ? `${ok ? '' : found ? `the spot (${found}) would pass: re-lay it; ` : `no spot can with the shipped camera (${tried} spots tried; needs RENDER: PLAYGROUND_BUILD 24.1 (a), the one-out portrait framing makes room for the ball); `}it covers ${o.cover.toFixed(1)} px of the body (${(o.frac * 100).toFixed(1)}% of it, ${o.sq > 0 ? `${o.sq.toFixed(1)} px into` : 'clear of'} its squeeze area), ${(o.hide * 100).toFixed(0)}% hidden, ${f2(o.gap)} m from it, ${f2(o.room)} m of roll room (worst scale and shape)` : 'no ball'); }
     continue;
   }
   for (const tall of [false, true]) {
     const probs = checkPlace(P, tall), label = `${P.name} ${tall ? 'tall' : 'wide'}`;
     if (strict) row('DT-01', probs.length === 0, `${label}: frame, pad, zones, spawn, rides and push spots, use / peek / gap spots, clearances, bands, ranges, floor rule, opening, counts`,
       probs.length ? `${probs.length} problems: ${probs.slice(0, 6).join(' | ')}` : '0 problems');
+    if (strict && P.shipped) { const cp = camProblems(P, tall);
+      row('DT-01', cp.length === 0, `${label} in the shipped place camera (B8, round 5): every collider inside the frame's sides and its floor above the bottom HUD (${tall ? 'the hint pill, 618 px' : 'the party row, 664 px'})`,
+        cp.length ? `${cp.length} problems: ${cp.join(' | ')}` : '0 problems'); }
     else { note('DT-01', `${label}: PENDING its slice (${P.id === 'ripple' || P.id === 'frostbell' || P.id === 'rainleaf' ? 'S2' : 'S3'}): ${probs.length} problems${probs.length && !VERBOSE ? ' (--verbose lists them)' : ''}`);
       if (VERBOSE) for (const p of probs) console.log('       ' + p); }
   }

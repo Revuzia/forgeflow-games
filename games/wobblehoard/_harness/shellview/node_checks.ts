@@ -1906,9 +1906,33 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     await stepA(120);
     const ride1 = (host.debug() as { counts: { ride: number } }).counts.ride;
     const paid = app.hoard.meter().sp !== sp0 || app.hoard.meter().credits !== cr0;
-    check('PLAYGROUND "Go play with..." a ride (playWith -> LIFE\'s USE -> physics carryTo): the play squishy is lifted onto the Pillow Swing\'s seat and is still riding it 2 s later; the lift pays nothing',
-      asked && seat >= 0 && ride1 === ride0 + 1 && onAt >= 0 && (app.body.metrics.onProp ?? -1) === seat && !paid,
-      `asked ${asked}, seat prop ${seat}, lifts ${ride0} -> ${ride1}, on the seat after ${onAt < 0 ? 'never' : `${(onAt + 1) * 10} frames`}, onProp now ${app.body.metrics.onProp}, meter sp ${sp0} -> ${app.hoard.meter().sp}`);
+    // round 5 (tightened, written reason): "riding" is ON the seat, not touching it: the squishy's centre within 0.15 m of the seat's centre across the floor and
+    // above it. The seat here still swings from the hand row above (0.29 m when asked); round 4 aimed the lift at the seat where it was when asked, so the squishy
+    // came down beside a seat that had swung on: with round 4's physics it leaned on the seat from the floor (0.53 m off its centre, onProp still the seat: the row
+    // passed by contact), with round 5's swing damping it slid off (onProp -1). The lift now aims at the seat's rest spot and a steadying hand holds it there.
+    const sx = bound.poses ? bound.poses[seat * 8] : NaN, sy = bound.poses ? bound.poses[seat * 8 + 1] : NaN, sz = bound.poses ? bound.poses[seat * 8 + 2] : NaN;
+    const off = Math.hypot(app.body.center.x - sx, app.body.center.z - sz), above = app.body.center.y - sy;
+    check('PLAYGROUND "Go play with..." a ride (playWith -> LIFE\'s USE -> physics carryTo): the play squishy is lifted onto the Pillow Swing\'s seat (still swinging from the push) and is still riding it 2 s later, ON it (its centre within 0.15 m of the seat\'s, above it); the lift pays nothing',
+      asked && seat >= 0 && ride1 === ride0 + 1 && onAt >= 0 && (app.body.metrics.onProp ?? -1) === seat && off < 0.15 && above > 0.1 && !paid,
+      `asked ${asked}, seat prop ${seat}, lifts ${ride0} -> ${ride1}, on the seat after ${onAt < 0 ? 'never' : `${(onAt + 1) * 10} frames`}, onProp now ${app.body.metrics.onProp}, centre ${off.toFixed(3)} m from the seat's, ${above.toFixed(3)} m above it, meter sp ${sp0} -> ${app.hoard.meter().sp}`);
+    // round 5: the lift's steadying hand lets go once the squishy sits (the seat is free again: AUTO, which a hand would override, swings it with its rider holding on)
+    {
+      const swk = host.autoThings().find((r) => r.id === 'pillowswing')?.k ?? -1;
+      const onA = swk >= 0 && host.setThingAuto(swk, true);
+      await stepA(240);
+      let lo = Infinity, hi = -Infinity, onN = 0, n = 0, offMax = 0;
+      for (let k = 0; k < 24; k++) {
+        await stepA(10);
+        const x = bound.poses ? bound.poses[seat * 8] : NaN, z = bound.poses ? bound.poses[seat * 8 + 2] : NaN;
+        lo = Math.min(lo, x); hi = Math.max(hi, x); n++;
+        if ((app.body.metrics.onProp ?? -1) === seat) onN++;
+        offMax = Math.max(offMax, Math.hypot(app.body.center.x - x, app.body.center.z - z));
+      }
+      const offA = swk >= 0 && host.setThingAuto(swk, false);
+      await stepA(600);
+      check('PLAYGROUND (round 5) after a "Go play with..." lift the steadying hand has let go: AUTO turned on swings the seat its arc WITH the squishy riding it (on the seat in every sample, within 0.2 m of its centre); AUTO off again',
+        onA && offA && hi - lo > 0.25 && onN === n && offMax < 0.2, `seat range with the rider ${(hi - lo).toFixed(3)} m, on the seat ${onN}/${n}, at most ${offMax.toFixed(3)} m off its centre; hands ${(host.debug() as { auto: { hands: number } }).auto.hands}`);
+    }
   }
   // R4 (5): the S2 places through the dev path only (data/places.ts says shipped: false, so the Travel sheet's path refuses them): each place's data loads,
   // the party arrives in it, its things that physics builds are bound with colliders, and the next trip leaves it
@@ -1978,11 +2002,23 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     await stepA(120);
     type UDbg = { units: number; life: { unitCap: number; allowance: number }; chars: Array<{ kind: number; asleep: boolean }> };
     const samples: Array<[number, number, number]> = [];
-    for (let k = 0; k < 30; k++) { await stepA(60); const d = host.debug() as UDbg; samples.push([+d.units.toFixed(2), +(d.life.unitCap + d.life.allowance).toFixed(3), d.chars.filter((c) => c.kind === 0 && c.asleep).length]); }
+    // (round 5, second engineer: the same stepping as stepA(60), six steps of 10 frames, read at each: the fine samples for the wake gate's row below)
+    const held0 = (host.debug() as { counts: { held?: number } }).counts.held ?? 0;
+    let fineN = 0, fineOver = 0;
+    for (let k = 0; k < 30; k++) {
+      for (let q = 0; q < 6; q++) { await stepA(10); if (k >= 6) { const d = host.debug() as UDbg; fineN++; if (d.units > d.life.unitCap + d.life.allowance + 0.001) fineOver++; } }
+      const d = host.debug() as UDbg; samples.push([+d.units.toFixed(2), +(d.life.unitCap + d.life.allowance).toFixed(3), d.chars.filter((c) => c.kind === 0 && c.asleep).length]);
+    }
     const late = samples.slice(6), over = late.filter(([u, c]) => u > c + 0.001).length;
     let run = 0, maxRun = 0; for (const [u, c] of late) { run = u > c + 0.001 ? run + 1 : 0; maxRun = Math.max(maxRun, run); }
     check('PLAYGROUND (round 5, B7; SH-22) 5 out on high and no touch: after 6 s the awake units stay at or under unitCap (+ the ride allowance) in at least 22 of the next 24 one-second samples and never over it 3 s in a row (untouched wholes put to sleep, farthest first)',
       app.mat.count === 5 && over <= 2 && maxRun < 3, `${app.mat.count} out; over the cap in ${over} of ${late.length}, longest run ${maxRun} s; [units, cap, asleep] ${JSON.stringify(samples)}`);
+    // round 5, second engineer (B7, SH-22): over the budget nothing wakes. LIFE keeps a mover's token while the over-budget rule puts its body to sleep, and its
+    // next scoot or hop woke it straight back (this window: 13 such wakes, over the cap in 270 of 1800 frames); the host now holds a motion intent for a sleeping
+    // body while waking it would pass the cap (never one the player asked for)
+    const held = ((host.debug() as { counts: { held?: number } }).counts.held ?? 0) - held0;
+    check('PLAYGROUND (round 5, B7; SH-22) the budget\'s wake gate: in the same window LIFE\'s motion for a sleeping squishy is held while waking it would pass unitCap, and the awake units are over the cap in at most 10 % of 6-a-second samples',
+      held > 0 && fineOver <= 0.1 * fineN, `${held} motion intents held; over the cap in ${fineOver} of ${fineN} samples (${(100 * fineOver / Math.max(1, fineN)).toFixed(1)} %)`);
   }
   app.dispose();
 }

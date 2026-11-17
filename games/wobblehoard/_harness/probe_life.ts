@@ -535,6 +535,10 @@ if (!LF02_CHILD) {
     w.beh[0] = BEH.USE; w.tT[0] = ball; w.ph[0] = 1; w.bT[0] = sim.t; w.bSc[0] = 1;
     w.beh[1] = BEH.USE; w.tT[1] = ball; w.ph[1] = 2; w.bT[1] = sim.t; w.bSc[1] = 1;
     sim.ballX = -1.35; sim.ballZ = 1.9; sim.ballVX = 0; sim.ballVZ = 0; sim.bodies[1].x = -1.35; sim.bodies[1].z = 1.15; sim.bodies[1].asleep = false;
+    // (round 5, FIX5_DATA, a fixture fix with its reason: the chaser's own spot was left to the 70 s of history before the take, so any change
+    // of the cabin's layout reshuffled it (the wide Rocker Board moved 0.25 m and Dollop stood at (0.87, -0.23), walked off at once and never
+    // saw the take). It now stands where HEAD's history left it, walking to the ball, as the taker's spot is set above; the checks are unchanged.)
+    sim.bodies[0].x = -1.47; sim.bodies[0].z = 0.65; sim.bodies[0].asleep = false;
     sim.s.thingBusy.fill(1);
     const orig = sim.fill.bind(sim); sim.fill = () => { orig(); for (let k = 0; k < sim.s.nThings; k++) if (sim.s.thingId[k] === TID('yarnball')) sim.s.thingBusy[k] = 1; };
     return sim;

@@ -5225,6 +5225,41 @@ async function main() {
       await context.close();
     });
 
+    // round 5, second engineer (VERDICT_PG B8: "Home with 5 on desktop is one long row: the left squishy is about 80 percent hidden behind the red one"): five out
+    // at Home on a desktop (quality high), LIFE stepped 40 s of sim, the bodies' screen discs read each second (shell.matInfo): no squishy may cover more than
+    // half of another's disc. The verifier's shot came before the awake budget (B7): every body awake and wandering along its segments behind the others.
+    await section('pg-home5', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242', ctx: DESKTOP, init: pgInit });
+      mainWatches.push(['pg-home5', w]);
+      const landed = await pgBoot(page, false);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 6);
+      await pgStep(page, 1);
+      const idNow = await page.evaluate(() => window.__WH__.shell.identity());
+      const items = (await hstate(page)).items;
+      const spp = [...new Set(items.filter((it) => it.id !== idNow.itemId && it.species !== idNow.species).map((it) => it.species))];
+      for (const sp of spp) { if ((await page.evaluate(() => window.__WH__.shell.matInfo().count)) >= 5) break; await bringOut(page, sp); }
+      await page.evaluate(() => window.__WH__.pause());
+      await pgStep(page, 4);
+      const ov = (r1, r2, d) => { if (d >= r1 + r2) return 0; if (d <= Math.abs(r1 - r2)) return Math.PI * Math.min(r1, r2) ** 2;
+        const a = r1 * r1 * Math.acos((d * d + r1 * r1 - r2 * r2) / (2 * d * r1)), b = r2 * r2 * Math.acos((d * d + r2 * r2 - r1 * r1) / (2 * d * r2));
+        return a + b - 0.5 * Math.sqrt((-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2)); };
+      let worst = 0, over = 0, n = 0, out = 0, inFrame = true;
+      for (let s = 0; s < 40; s++) {
+        await pgStep(page, 1);
+        const m = await page.evaluate(() => window.__WH__.shell.matInfo());
+        out = m.count; n++;
+        let wk = 0;
+        for (let i = 0; i < m.bodies.length; i++) for (let j = i + 1; j < m.bodies.length; j++) { const a = m.bodies[i], b = m.bodies[j], sm = Math.min(a.r, b.r); wk = Math.max(wk, ov(a.r, b.r, Math.hypot(a.x - b.x, a.y - b.y)) / (Math.PI * sm * sm)); }
+        worst = Math.max(worst, wk); if (wk > 0.5) over++;
+        if (!m.bodies.every((b) => b.x >= 0 && b.x <= 1280 && b.y > 0 && b.y < 800)) inFrame = false;
+        if (s === 20) await pgShot(page, 'pg_home5_desktop');
+      }
+      check('B8 (round 5) Home with 5 out on a desktop: over 40 s of LIFE no squishy covers more than half of another on screen (each second), every one in frame',
+        landed && out === 5 && over === 0 && inFrame, `${out} out; worst pair overlap ${(100 * worst).toFixed(1)} % of the smaller disc; seconds over half ${over}/${n}; in frame ${inFrame}`);
+      await context.close();
+    });
+
     // ------------------------------------------------------------------------------------------------
     // G3: zero console errors / warnings / failed requests across the main flows
     // ------------------------------------------------------------------------------------------------

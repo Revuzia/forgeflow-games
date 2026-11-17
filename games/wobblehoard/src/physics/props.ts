@@ -137,6 +137,11 @@ export class PropWorld implements PropWorldLike {
   private readonly handP: Float64Array;     // per prop 6: the grabbed spot relative to the pivot at hinge angle 0, and the hand's point (world)
   // the ball's bounds: shape 0 disc (cx, cz, r), 1 rounded rectangle (cx, cz, hx, hz, round), shrunk by each ball's radius when used
   private readonly bounds = new Float64Array(6);
+  /** Round 5 (FIX5_DATA, VERDICT_PG B5): per prop, 1 while a ball still rests where it was built (its Home spot, or that spot pushed into its bounds)
+   *  and nothing but its bounds has moved it; a body's push, a poke or a speed of its own clear it. setBallBounds re-places such a ball at its spot
+   *  pushed into the NEW bounds, so a party change that widens the visible table gives the untouched ball its spot back (it was held at the
+   *  one-out bounds' edge); a ball anyone has played with stays where it rolled. */
+  private readonly ballPin: Uint8Array;
   private boundsShape = 0;
   // strikes waiting for drainStrikes: quads [prop, intensity, cause, slot]
   private readonly strikes = new Float32Array(MAX_STRIKES * 4);
@@ -160,6 +165,7 @@ export class PropWorld implements PropWorldLike {
     this.zoneCount = zones; this.zoneOn = new Uint8Array(zones).fill(1);
     this.solve = { count: n, S: new Float64Array(n * PS), A: new Float64Array(n * PA) };
     this.kind = new Uint8Array(n); this.joint = new Uint8Array(n); this.parked = new Uint8Array(n); this.strikable = new Uint8Array(n);
+    this.ballPin = new Uint8Array(n);
     this.base = new Float64Array(n * 16); this.jp = new Float64Array(n * 8); this.st = new Float64Array(n * 12); this.motorOn = new Uint8Array(n); this.strikeT = new Float64Array(n); this.riderI = new Float64Array(n);
     this.autoOn = new Uint8Array(n); this.au = new Float64Array(n * 5); this.hand = new Uint8Array(n); this.heldT = new Float64Array(n); this.handP = new Float64Array(n * 6); this.freeRide = new Float64Array(n); this.rideHold = new Float64Array(n);
     this.things = new Int16Array(nThings * 2);   // [first prop, prop count] per thing: first -1 until it has one, count from 0
@@ -198,6 +204,7 @@ export class PropWorld implements PropWorldLike {
       } else if (b.joint === JOINT_BALL) {
         this.jp[J + 5] = b.mass ?? 0.2; this.jp[J + 6] = b.rollDamp ?? 0.6; this.jp[J + 7] = b.h[0];
         this.st[T] = b.c[0]; this.st[T + 1] = b.c[1]; this.st[T + 2] = b.c[2]; this.st[T + 9] = 1;   // (quaternion identity: x y z w at T+6..9)
+        this.ballPin[k] = 1;
       } else if (b.joint === JOINT_BOB) {
         this.jp[J] = b.bob ?? 0; this.jp[J + 1] = b.bobHz ?? 0;
       } else if (b.joint === JOINT_PAD) {
@@ -362,6 +369,7 @@ export class PropWorld implements PropWorldLike {
         const J = k * 8, T = k * 12, st = this.st;
         const m = this.jp[J + 5], r = this.jp[J + 7];
         const pushed = A[a] * A[a] + A[a + 1] * A[a + 1] + A[a + 2] * A[a + 2] > 1e-12;
+        if (pushed) this.ballPin[k] = 0;
         st[T + 3] += A[a] / m; st[T + 4] += A[a + 1] / m; st[T + 5] += A[a + 2] / m;
         st[T + 4] -= GRAVITY * h;
         // roll damping on the horizontal speed, and a little rolling friction on the floor (a felt or yarn ball stops: with the 0.5 /s damping alone 2 m/s took 8 s)
@@ -471,6 +479,7 @@ export class PropWorld implements PropWorldLike {
     const j = this.joint[k], T = k * 12, J = k * 8, B = k * 16;
     if (j === JOINT_BALL) {
       this.st[T + 3] += ix; this.st[T + 4] += iy; this.st[T + 5] += iz;
+      this.ballPin[k] = 0;
       this.clampBall(k);
     } else if (j === JOINT_HINGE) {
       const S = this.solve.S, o = k * PS;
@@ -524,6 +533,15 @@ export class PropWorld implements PropWorldLike {
     if (!Number.isFinite(minX + minZ + maxX + maxZ) || maxX <= minX || maxZ <= minZ) return;
     this.boundsShape = 1;
     this.bounds[0] = (minX + maxX) / 2; this.bounds[1] = (minZ + maxZ) / 2; this.bounds[2] = (maxX - minX) / 2; this.bounds[3] = (maxZ - minZ) / 2; this.bounds[4] = 0;
+    // (round 5) an untouched ball at rest goes to its spot pushed into the new bounds (ballPin)
+    for (let k = 0; k < this.count; k++) {
+      if (this.joint[k] !== JOINT_BALL || this.ballPin[k] === 0 || this.parked[k] === 1) continue;
+      const T = k * 12, B = k * 16, st = this.st, r = this.jp[k * 8 + 7];
+      if (st[T + 3] !== 0 || st[T + 4] !== 0 || st[T + 5] !== 0) { this.ballPin[k] = 0; continue; }
+      if (maxX - minX < 2 * r || maxZ - minZ < 2 * r) continue;   // (bounds narrower than the ball: leave it to the step's push)
+      st[T] = Math.min(maxX - r, Math.max(minX + r, this.base[B])); st[T + 2] = Math.min(maxZ - r, Math.max(minZ + r, this.base[B + 2]));
+      this.writePose(k);
+    }
   }
   /** A hinge's angle (rad) and angular velocity, or a ball's speed (harness readouts; NaN for a static prop). */
   angle(prop: number): number { const k = Math.floor(prop); return k >= 0 && k < this.count && this.joint[k] === JOINT_HINGE ? this.st[k * 12] : NaN; }

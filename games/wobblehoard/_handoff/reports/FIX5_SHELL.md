@@ -184,6 +184,116 @@ There was no earlier FIX5_SHELL report: this is the first round-5 shell engineer
 Started 18:04 UTC. browser_shell's 31 sections (the published ones + pg-playthrough + pg-phone, round 4's list), then trophies_check (game), lock_browser,
 photo_check (dev, phone, standalone), b4b_checks. Results below when it ends.
 
+**THE run above did not finish**: the container restarted at about 18:24 (`final1/browser_shell.log`: 130/153 in its first 8 sections, then every later section
+"Target page, context or browser has been closed"). Its one real FAIL before the cut: toolbar "Enter on Cut ... the live region says how it works ... the 1.4 s caption
+chip" (`live ""`, caption shown false): the same row round 4 classified as load timing (run 3: same values); re-measured in the second engineer's run below.
+
+# Round 5, second engineer (2026-11-17 from 19:35 UTC; HEAD 16f6ba6fc = engineer 1's work committed by the orchestrator; the container had just restarted)
+Picked up from the report above (engineer 1 was cut off during THE run). Scratch `S/r2/` (`S` = `.../scratchpad/fix5_shell`). Same method: every probe and browser
+run on a snapshot tree (`git archive HEAD` + only my lane's working files). No git write command.
+
+## R2.0 Baseline at HEAD 16f6ba6fc (`S/r2/tree_head`, `S/probes.sh`, logs `S/r2/base_head/`, one probe at a time, 19:36 to 19:46)
+| check | HEAD 16f6ba6fc |
+|---|---|
+| tsc (snapshot and working tree) | 0 |
+| shellview/node_checks | **167/168**: FAIL "Go play with... a ride" (`on the seat after 110 frames, onProp now -1`: lifted onto the swing, off it 2 s later) |
+| probe_app | 187/187 |
+| probe_gestures | 160/160 |
+| probe_merge / probe_trophies | 22/22 / 31/31 |
+| probe_playground (quick) | 55/55 (FIX5_DATA's new D-95 row) |
+| probe_pg_lifequests | 14/14 (FIX5_DATA's new FM row) |
+| probe_life | 117 ok, 1 FAIL (LF-02, PG_LIFE's / FIX5_DATA's) |
+| probe_chatter | 42/42 |
+| renderview/pg_node_checks | 40 ok, 0 FAIL |
+| probe_journal / probe_quests | all passed (28 ok) / all run passed (45 ok, NOT RUN rows: other lanes' code) |
+| probe_screens / probe_overlays / probe_uikit / probe_cut | 43/43 / 21/21 / 62/62 / 17/17 |
+
+## R2 steps (updated after every finished item)
+| item | what | state |
+|---|---|---|
+| R2.0 | baseline at HEAD 16f6ba6fc | DONE 19:46 |
+| R2.1 | node_checks "Go play with... a ride" (167/168 at HEAD): the real cause is the SHELL's (useRide aimed at a moving seat); fixed in later-life.ts with a steadying hand; the row tightened (ON the seat, not touching it) + 1 new row | DONE 20:00: node_checks 170/170 on my tree; the 3 rows FAIL on HEAD's src (167/170) |
+| R2.2 | B7 made robust: the budget's wake gate (later-life.ts applyIntent) + 1 new row (my R2.1 rows changed the history before the B7 window and engineer 1's B7 row then failed, 4 of 24 over the cap: it had passed at HEAD with 2 of 24, its own limit) | DONE 20:05 (same run: B7 1 of 24; the gate row 4.2 % of 144 samples, HEAD 9.0 % and 0 held) |
+| R2.3 | B8 Home with 5 out on a desktop (measured: no hiding once the budget holds; a browser row `pg-home5`) and the phone's party of 3 (measured; NOT changed: reasons below) | DONE 20:15 (row ok alone) |
+| R2.4 | every node probe on the final tree (`S/r2/tree_final` = HEAD + my 3 files: later-life.ts, node_checks.ts, browser_shell.mjs; logs `S/r2/probes_final/`) | DONE 20:28 (table R2.4) |
+| R2.5 | B1 re-proved in the browser on the final tree (the verifier's repro, `S/scripts/b1ghost.mjs`: 5 trips x 2 layouts, every body asleep before each trip) | DONE 20:32: 10/10 arrived, a sleeper at every arrival, jelly vs centre at most **0.039 m** at +1 s and +5 s (HEAD before round 5: 3.656 m), 0 errors |
+| R2.6 | THE browser run (`S/r2/run_final.sh final1`, from 20:33) | running |
+
+### R2.4 Node probes on the final tree (20:26 to 20:28)
+| check | HEAD 16f6ba6fc | final tree |
+|---|---|---|
+| tsc (snapshot and working tree) | 0 | **0** |
+| shellview/node_checks | 167/168 | **170/170** (+2 new rows: the steadying hand lets go, the wake gate; the swing row tightened) |
+| probe_app | 187/187 | **187/187** |
+| probe_gestures | 160/160 | **160/160** |
+| probe_merge / probe_trophies | 22/22 / 31/31 | **22/22 / 31/31** |
+| probe_playground (quick) | 55/55 | **55/55** |
+| probe_pg_lifequests | 14/14 | **14/14** |
+| probe_life | 117 ok, 1 FAIL (LF-02) | **117 ok, 1 FAIL** (LF-02: the data lane's) |
+| probe_chatter | 42/42 | **42/42** |
+| renderview/pg_node_checks | 40 ok | **40 ok, 0 FAIL** |
+| probe_journal / probe_quests | all / all run | **all (28 ok) / all run (45 ok)** |
+| probe_screens / probe_overlays / probe_uikit | 43 / 21 / 62 | **43/43 / 21/21 / 62/62** |
+The B1 shot `S/b1ghost_r2final/wide_trip1_5s.png` (the cabin 5 s after arrival, three asleep before the trip) was looked at: each squishy whole at its spot, no
+jelly left behind, no floating eyes.
+
+B6 in node first (`S/r2/scripts/fn01_probe.ts`: node_checks' FN-01 squeeze on the 1280x800 rig, the stage's `emote` calls timed): LIFE's first bubble (FIRST_PLAY's
+question, the first use's notice) comes **6.05 s after the release**, inside FN-01's 16 s; the browser row (engineer 1's, pg-playthrough) decides whether its word
+shows on screen.
+
+### R2.1 notes: "Go play with... a ride" (the cause is the shell's; nothing for the DATA lane to change)
+- Repro (`S/r2/scripts/ride_probe.ts`: node_checks section 13 up to the row, then the lift logged every 10 frames; logs `S/r2/ride_*.log`). HEAD: the seat still swings
+  from the hand row above (x 0.118 m when asked, about 0.29 m amplitude); `useRide` aimed `carryTo` at the seat's pose AT THE MOMENT LIFE's USE intent came; the lift
+  takes 1.7 s; the squishy was set down at x 0.157 while the seat had swung to -0.206 (0.36 m away; the seat is a 9 cm capsule): it sat on the seat's edge and
+  slid off 1.2 s later (onProp -1).
+- **The round-4 pass was a false pass**: the same repro with round 4's swing (`props.ts`, place_hearthlog and places.ts from f271a93b1, `S/r2/tree_ride_old`)
+  lands it 0.53 m beside the seat; the squishy stood on the FLOOR leaning on the seat (centre y 0.46, seat stuck at x -0.23), so `onProp` still named the seat.
+  The data lane's damping (0.25 -> 0.6) and rider hold changed where the miss ends, not whether it misses. **Message to the DATA lane: nothing to change on your
+  side for this row.**
+- Fix (`src/shell/later-life.ts` useRide + steadyStep): for a swing the lift aims at the seat's REST spot (thingSpot, pivotY - rope: the spot physics builds the
+  seat at) and a steadying hand (physics' own `grabProp` / `dragProp`, the hand that always wins over riders and AUTO, D-95) eases the seat there (a smoothstep of
+  the hand's point over 0.3 to 0.8 s, never a snap) and holds it until the squishy has sat on it for 0.3 s after the lift's planned end; it lets go then, on any
+  touch of the squishy, 2 s after the lift's end at the latest, on a world rebuild (trip, frame change) or `dropAll`; if the player's hand takes the seat meanwhile
+  the steadying hand is theirs (never let go for them). Not used when the player's own hand holds the seat (then round 4's aim, the seat where it is).
+- Rows (node_checks section 13): the existing row TIGHTENED with its written reason (riding = ON the seat: centre within 0.15 m of the seat's across the floor and
+  above it; the round-4 false pass would fail it) and a NEW row "after a Go play with lift the steadying hand has let go: AUTO turned on swings the seat its arc WITH
+  the squishy riding it (on the seat in every sample, within 0.2 m of its centre)". HEAD's src with the new node_checks (`S/r2/tree_pre`): **both FAIL** (centre 0.719 m
+  from the seat, onProp -1; on the seat 17/24, 0.739 m off); mine: **ok** (centre 0.000 m, 0.576 m above it; seat range with the rider 0.484 m, 24/24, 0.084 m off).
+- Also checked in scratch (not a row: it needs a touch to end the shell's 20 s RIDE flag after a scripted carry off the seat): **AUTO on, the empty seat swinging
+  0.43 m, "Go play with" the swing**: the lift starts at once, the seat eases to rest, the squishy lands centred (100 frames), the hand lets go and AUTO's arc comes
+  back with the rider on 12/12, at most 0.071 m off centre (`S/r2/ride_mine6.log`).
+
+### R2.2 notes: the budget's wake gate (B7, SH-22)
+- Seen with scratch logging (`S/r2/tree_dbg`, `S/r2/nc_dbg*.log`, the B7 window): LIFE's `gateStart` checks the unit cap only when a character STARTS to move; one
+  that already holds a mover token keeps it while the over-budget rule puts its body to sleep, and its next SCOOT or HOP woke it straight back (13 intents to
+  sleeping bodies in 30 s; over the cap in 270 of 1800 frames). Fix (`applyIntent`): a motion intent (scoot, hop, glide, squash) for a SLEEPING body is held while
+  waking it would put the awake units over unitCap + the ride allowance (this frame's earlier wakes count, `wakeClaim`); never for 15 s after the player asked
+  that squishy to play (`playWith`). After: 92 of 1800 frames over (the rest are physics' contact wakes, which the over-budget rule then sleeps).
+- New row (the same window, the same stepping read 6 times a second): "the budget's wake gate ... held ... over the cap in at most 10 % of samples": HEAD's src
+  **FAIL** (0 held, 9.0 %), mine **ok** (2 held, 4.2 %). Engineer 1's B7 row: 1 of 24 over (it allows 2).
+- For the DATA lane (information, no change asked): `act.ts gateStart` returns true for a character that already moves (`w.mo[i]`) without the unit check; the
+  host now covers that case on its side.
+
+### R2.3 B8: Home with 5 out on a desktop, and the phone's party of 3 (measured; depth rows NOT built, with the evidence)
+- **Measured first** (`S/r2/scripts/occl_probe.ts` in node, then `S/r2/scripts/home5.mjs` in the browser on my tree, dev hook, LIFE stepped 40 s, the bodies'
+  screen discs from `shell.matInfo` each second): **desktop 1280x800, quality high, 5 out: worst pair overlap 0.8 % of the smaller disc, 0 of 40 seconds over half**
+  (`S/r2/home5_mine/desk5_t*.png`: five in the row, every face clear, the lamp and the ball seen between them). The verifier's 80 % came from a run BEFORE the
+  awake budget: every body awake and walking its LIFE segments (from its slot to the things, all of which stand behind the row, PLACES 4.1 / D-88), so the outer
+  ones crossed behind the others. With B7's budget (engineer 1) and the R2.2 gate, 3 of 5 sleep at their slots and the movers stay near theirs.
+- **Why no depth rows**: a back row would stand exactly where Home's things are laid (the pad -0.75,-1.25; the ball 0.85,-0.75; the shelf 0.9,-1.6; the Music Box
+  2.25,-1.05, slot units: D-88's spots, the DATA lane's, proved by DT-01 / RD-16 against the row) and would put bodies BEHIND bodies, the thing VERIFY_RENDER_B
+  B-M1 removed from the published mat (a 2 x 2 grid hid one squishy behind another; the PC chose the row). Changing the published slot list also moves the
+  published mat for everyone.
+- **New browser row** (browser_shell section `pg-home5`, desktop, 5 out by the real Hoard sheet, 40 s of LIFE): "B8 Home with 5 out on a desktop: over 40 s of LIFE
+  no squishy covers more than half of another on screen (each second), every one in frame". Run alone on my tree: **ok** (worst 22.6 %, 0/40 seconds over half,
+  shot `pg_home5_desktop.png` looked at: five faces clear, the lamp and the ball between them, the Music Box behind the right-most squishy). It is in THE run.
+- **The phone's party of 3: NOT changed.** Measured (`S/r2/home5_mine/phone3_t*.png`, 390x844): the group box spans x 69..343 (70 % of the width) and y 323..469,
+  centred in the band between the top column and the hint pill; the back-right squishy is 47 % behind the play squishy (its face hidden). Making it bigger means a
+  tighter framing or a different TALL chevron: both move the PUBLISHED phone mat (B-M1's chevron, its framing rows) and Home's tall thing spots (DATA, DT-01). Proposal
+  for the render + data owners together: the TALL chevron's back pair at (+-1.1, -1.8) with the tall things re-laid, then the framing's reach for a tall frame from the
+  silhouettes (`t`) instead of the generous `r` (+25 %); not done here.
+- **For the DATA lane**: with 5 out on a desktop the Music Box (2.25, -1.05) stands behind the right-most squishy (slot 2.6): Home's spots for 4 and 5 out.
+
 ## 4. NOT done / known issues (honest list, updated at the end)
 - B8: Home with 5 out on desktop in depth rows (NOT done: see the B8 notes; the hiding comes from LIFE moving bodies along their segments; a two-row slot list puts
   the back row behind the front one at the camera's 0.27 rad pitch, VERIFY_RENDER_B B-M1, which is why the PC chose a row) and the phone's party-of-3 framing (render

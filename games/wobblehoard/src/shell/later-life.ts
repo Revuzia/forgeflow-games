@@ -57,6 +57,7 @@ const SHOWER_S = 4;      // a tapped Drip Leaf tips its shower this long (PLACES
 const SET_S = 6;         // a ride the body lands on within this many seconds of the player letting go of it (or lifting it there) is a ride the player SET UP
 const PAD_USE_GAP_S = 2; // one USE BOUNCE per body per this many seconds of pad kicks (a landing's kicks in a row are one bounce)
 const HUSH_S = 4;        // round 5 (B7): a body the over-budget rule must put to sleep takes no new LIFE motion for this long (it comes to rest, then sleeps)
+const ASKED_S = 15;      // round 5 (B7): for this long after the player asked a squishy to play ("Go play with..."), its motion is never held back by the budget
 /** Home's things by THING_IDS index: what each one arrives after (PLACES 4.1) */
 const THING_FELT = 0, THING_MUSIC = 1, THING_RUG = 2, THING_LAMP = 3, THING_SHELF = 4, THING_PAD = 5;
 /** the cut flavour index (audio/cut.ts CUT_FLAVOURS: gel, sticky, foam, beads, dough, firm) of each material family (MATERIAL_FAMILY_IDS order) */
@@ -100,10 +101,11 @@ interface Char {
   setT: number;           // sim time the player let go of it (a carry ended) or lifted it onto a ride (useRide): QUESTS 4's "rides the player set up"
   padT: number;           // sim time of its last USE BOUNCE from a pad kick
   hushT: number;          // round 5 (B7): until this sim time LIFE's motion intents for it are dropped (the over-budget rule is putting it to sleep)
+  askedT: number;         // round 5 (B7): sim time the player last asked it to play (playWith): the budget's wake gate lets its motion through for ASKED_S
 }
 const mkChar = (): Char => ({ on: false, body: null, genome: null, itemId: null, view: -1, kind: 0, group: -1, species: 255, family: 0, flavour: 0, pitch: 1, frac: 1, r: 0.5,
   offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, scooting: false, scootX: 0, scootZ: 0,
-  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, hushT: -1e9 });
+  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, hushT: -1e9, askedT: -1e9 });
 
 function mkSnapshot(): LifeSnapshot {
   const n = CAP;
@@ -185,7 +187,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const vis = new Float32Array(4);
   const wishOut = new Int32Array(2);
   const strikes = new Float32Array(32 * 4);
-  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0 };   // what LIFE did through the host (the dev view)
+  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0, held: 0 };   // what LIFE did through the host (the dev view; held: motion the budget's wake gate dropped)
+  let wakeClaim = 0;                       // round 5 (B7): the units this frame's allowed wakes add (the snapshot shows them next frame)
 
   // ---- the place: Home's world now, a place's world after a trip ----
   let placeIdx = 0, visit = 1, layout: 0 | 1 = 0, bodyScale = 1;
@@ -196,6 +199,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const homeShown = new Uint8Array(8);     // Home's things shown now
   let travelling = false;
   let floatParked = false;                 // the Float rule (D-83): Float with one squishy at Home binds no prop world
+  // round 5: a "Go play with..." lift onto a swing holds the seat with a steadying hand (useRide, steadyStep): its prop, the squishy, when it sat, the ease
+  let steadyP = -1, steadyI = -1, steadyOnT = -1, steadyT0 = 0, steadyEase = 0.5, steadyLand = 0, steadyEnd = 0;
+  const steadyFrom = new Float64Array(3), steadyTo = new Float64Array(3);
   let groundSaid = false;
 
   // ---- the journal, the ring and the moments ----
@@ -276,7 +282,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const ce = b.center;
     c.lastX = ce.x + off.x; c.lastZ = ce.z + off.z; c.vx = 0; c.vz = 0;
     c.homeX = c.lastX; c.homeZ = c.lastZ;
-    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.hushT = -1e9;
+    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.hushT = -1e9; c.askedT = -1e9;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
     if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
@@ -490,6 +496,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   }
   function mapThings(): void {
     const nt = def.things.length;
+    steadyP = -1; steadyI = -1; steadyOnT = -1;   // (a new world: no hand holds anything in it)
     thingFirst = new Int16Array(nt).fill(-1); thingGlobal = new Int16Array(nt);
     for (let k = 0; k < nt; k++) thingGlobal[k] = THING_IDS.indexOf(def.things[k].id);
     if (world) for (let p = world.count - 1; p >= 0; p--) { const t = world.propThing[p]; if (t >= 0 && t < nt) thingFirst[t] = p; }
@@ -520,7 +527,17 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (!c.on || !c.body) return;
     const body = c.body;
     // round 5 (B7, D-61): a body the over-budget rule is putting to sleep takes no new LIFE motion until it sleeps (or the hush ends): physics' sleep() needs it still
-    if (c.hushT > game.simTime && (kind === INTENT.SCOOT || kind === INTENT.HOP || kind === HOP_GO || kind === INTENT.GLIDE || kind === INTENT.SQUASH)) return;
+    const motion = kind === INTENT.SCOOT || kind === INTENT.HOP || kind === HOP_GO || kind === INTENT.GLIDE || kind === INTENT.SQUASH;
+    if (motion && c.hushT > game.simTime) return;
+    // round 5 (B7, SH-22): and over the budget nothing wakes. A motion intent for a SLEEPING body is dropped while waking it would put the awake units over
+    // unitCap (+ the ride allowance); this frame's earlier wakes count. LIFE's own gate checks a start's wake, but a squishy LIFE already counts as a mover
+    // keeps its token while this rule puts its body to sleep, and its next scoot or hop woke it straight back (node_checks' B7 window: 13 such wakes in 30 s
+    // with 5 out, over the cap in 4 of 24 samples). A use the player asked for ("Go play with...") is never held back.
+    if (motion && c.body.metrics.asleep === true && game.simTime - c.askedT > ASKED_S) {
+      const wake = c.kind === 0 ? UNIT.whole - UNIT.sleeper : UNIT.piece - UNIT.sleeper;
+      if (s.units + wakeClaim + wake > att.unitCap + att.allowance + 0.001) { counts.held++; return; }
+      wakeClaim += wake;
+    }
     switch (kind) {
       case INTENT.SCOOT:
         if (floatParked) return;
@@ -564,8 +581,22 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (!c.on || !c.body || !world || floatParked || !td || !td.ride || p < 0 || world.isParked(p)) return;
     const P = world.poses;
     let x = P[p * 8], z = P[p * 8 + 2], y = P[p * 8 + 1];
-    if (td.mech === MECH.swing) y += td.size[0];               // the seat: a capsule of radius size[0] across its travel
-    else {
+    let steady = false;
+    if (td.mech === MECH.swing) {
+      // round 5: the seat may be swinging (a push, AUTO). The lift aims at the seat's REST spot (under its beam: thingSpot, pivotY - rope, as physics builds
+      // it) and a steadying hand (physics' grabProp / dragProp, the hand that always wins, D-95) eases the seat there and holds it until the squishy sits on it
+      // (steadyStep lets go). Round 4 aimed at the seat where it was when asked: a swinging seat had moved on by the landing, so the squishy came down beside
+      // it and slid off or leaned on it from the floor. Not when the player's own hand has the seat (it is theirs): then the seat where it is now, as before.
+      if (!world.isHandHeld(p) && steadyP < 0) {
+        const sp = thingSpot(k), sy = (td.p.pivotY ?? 1.62) - (td.p.rope ?? 1.4);
+        if (world.grabProp(p, x, y, z)) {
+          steadyP = p; steadyI = i; steadyOnT = -1;
+          steadyFrom[0] = x; steadyFrom[1] = y; steadyFrom[2] = z; steadyTo[0] = sp[0]; steadyTo[1] = sy; steadyTo[2] = sp[1];
+          x = sp[0]; y = sy; z = sp[1]; steady = true;
+        }
+      }
+      y += td.size[0];                                         // the seat: a capsule of radius size[0] across its travel
+    } else {
       y += td.size[1];                                         // the board: half thickness size[1]; an end 60 % of the way out along its local x
       const yaw = layout === 1 ? (def.tall.things[k]?.yaw ?? td.yaw) : td.yaw, ex = Math.cos(yaw) * td.size[0] * 0.6, ez = Math.sin(yaw) * td.size[0] * 0.6;
       let near0 = 1e9, near1 = 1e9;
@@ -577,10 +608,39 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const sgn = near0 >= near1 ? 1 : -1;
       x += sgn * ex; z += sgn * ez;
     }
-    const d = Math.hypot(x - c.lastX, z - c.lastZ);
+    const d = Math.hypot(x - c.lastX, z - c.lastZ), T = Math.min(5, Math.max(0.6, 0.5 + d * 0.45));
     let ok = false;
-    try { ok = c.body.carryTo?.(x - c.offX, y - c.offY, z - c.offZ, Math.min(5, Math.max(0.6, 0.5 + d * 0.45))) === true; } catch (e) { report(e); }
+    try { ok = c.body.carryTo?.(x - c.offX, y - c.offY, z - c.offZ, T) === true; } catch (e) { report(e); }
     if (ok) { c.scooting = false; c.setT = game.simTime; counts.ride++; }
+    if (steady) {
+      if (!ok) { endSteady(); return; }
+      // the seat eases to rest over most of the lift (a smoothstep of the hand's point, never a snap), then the hand holds it there; at most 2 s past the
+      // lift's end the hand lets go whatever happened (steadyStep)
+      steadyT0 = game.simTime; steadyEase = Math.min(0.8, Math.max(0.3, 0.45 * T)); steadyLand = game.simTime + T; steadyEnd = steadyLand + 2;
+      steadyStep();
+    }
+  }
+  // ---- the steadying hand of a "Go play with..." lift onto a swing (useRide; its state is declared with the place's, a world rebuild clears it) ----
+  function endSteady(): void {
+    if (steadyP < 0) return;
+    const p = steadyP;
+    steadyP = -1; steadyI = -1; steadyOnT = -1;
+    // (the player's hand may have taken the seat meanwhile: grabAt clears steadyP first, so this never lets go of a hand that is the player's)
+    try { world?.releaseProp(p); } catch { /* gone */ }
+  }
+  /** once a frame before the props step (act): the hand's point eases from where the seat was to its rest spot, and the hand lets go once the squishy has sat
+   *  on the seat for 0.3 s after its lift, when a touch takes the squishy, or 2 s after the lift's planned end */
+  function steadyStep(): void {
+    if (steadyP < 0) return;
+    const c = steadyI >= 0 ? chars[steadyI] : null, b = c && c.on ? c.body : null, W = world;
+    if (!W || !b || W.isParked(steadyP) || !W.isHandHeld(steadyP)) { endSteady(); return; }
+    const t = game.simTime, m = b.metrics;
+    if (m.fingers > 0 || m.grabbed || m.carried === true || t > steadyEnd) { endSteady(); return; }
+    const u0 = (t - steadyT0) / steadyEase, u = u0 <= 0 ? 0 : u0 >= 1 ? 1 : u0, sm = u * u * (3 - 2 * u);
+    W.dragProp(steadyP, steadyFrom[0] + (steadyTo[0] - steadyFrom[0]) * sm, steadyFrom[1] + (steadyTo[1] - steadyFrom[1]) * sm, steadyFrom[2] + (steadyTo[2] - steadyFrom[2]) * sm);
+    // (sitting: on the seat once the lift is over (carryTo sets it down at rest at its planned end): a squishy brushing the seat on its arc does not count)
+    if ((m.onProp ?? -1) === steadyP && t >= steadyLand) { if (steadyOnT < 0) steadyOnT = t; else if (t - steadyOnT >= 0.3) endSteady(); }
+    else steadyOnT = -1;
   }
   function doHop(i: number, vx: number, vy: number, vz: number): void {
     const c = chars[i];
@@ -1118,6 +1178,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   function dropAll(): boolean {
     let any = false;
     for (let j = 0; j < 4; j++) if (handOn[j] === 1) { any = true; handOn[j] = 0; try { world?.releaseProp(handProp[j]); } catch { /* gone */ } }
+    endSteady();
     return any;
   }
   function grabAt(id: number, x: number, y: number): boolean {
@@ -1141,6 +1202,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (hit && hit.t < tThing) return false;
     }
     if (!W.grabProp(p, NaN, NaN, NaN)) return false;   // (NaN: the raycast's own hit on it)
+    if (p === steadyP) { steadyP = -1; steadyI = -1; steadyOnT = -1; }   // (a lift's steadying hand: the player's hand has the seat now, never let go of it for them)
     handOn[j] = 1; handId[j] = id; handProp[j] = p; handX[j] = x; handY[j] = y; handT[j] = game.clock.now(); handMoved[j] = 0; playerTouchT = game.simTime;
     tapWhy = `hand:${def.things[th].id}`;
     return true;
@@ -1458,6 +1520,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     },
     act(dt) {
       if (dt > 0 && world && !floatParked) world.beginFrame();
+      steadyStep();
       pumpRestore();
       syncParty();
       // the frame changed (a rotation, a resize across aspect 0.9) or the play body's size: Home re-lays its things (a place keeps its layout until the next trip)
@@ -1519,6 +1582,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const i = chars.findIndex((c) => c.on && c.kind === 0 && c.itemId === itemId);
       if (i < 0 || !def.things[k] || floatParked || travelling) return false;
       lifeScript(w, i, SCRIPT.PLAY_WITH, k);
+      chars[i].askedT = game.simTime;
       return true;
     },
     thingsNow() {
@@ -1561,6 +1625,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (dt > 0 && world && !floatParked) { world.endFrame(dt); drainProps(); heldVoices(); }
       if (finaleOff >= 0 && game.simTime >= finaleOff) { finaleOff = -1; try { stage.thingFx?.(-1, 2, 0); } catch { /* none */ } }
       fillSnapshot(dt);
+      wakeClaim = 0;   // (the snapshot's units now show every body woken before it)
       scripts();
       lifeStep(w, s, out, ev);
       s.nBumps = 0;

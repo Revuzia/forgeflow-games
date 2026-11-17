@@ -1,6 +1,11 @@
 // Home (home, idx 0): its PlaceDef, both layouts and the channel of every reaction cell of PLACES 4.1 (D-80). Owned by PG_DATA.
 // In the LIFE CHUNK (D-69): Home's spots are in SLOT UNITS (x bodyScale, unit: 'slot'); WIDE is the PlaceDef's own fields, TALL is `tall` (D-88).
-// Positions: PLACES 4.1 as written (revision 4).
+// Positions: PLACES 4.1 as written (revision 4), except round 5's re-lay for the shipped camera (FIX5_DATA B5, VERDICT_PG B5 / D1; DT-01's model
+// now carries SR2's band framing, the measured HUD rows and three rest shapes): the Felt Ball WIDE (0.85, -0.75) -> (0.7, -0.65) and TALL
+// (0, 0.9) -> (0.76, 1.06) (beside the play squishy, covering none with two to five out); the Music Box TALL (0.75, 1.55) -> (1.25, 0) (it
+// was 0.07 m from the ball's new spot); the Snooze Rug WIDE (0, -0.35) -> (0, -0.36) (its front edge under the bottom band at two out, small
+// bodies); the Bounce Pad WIDE (-0.75, -1.25) -> (-0.79, -1.25), its use spot (-0.65, -1.45) -> (-0.69, -1.45) (its top behind a body at
+// four out; the pad does not arrive at Home before S2).
 // The cells' words do not ship (D-69): `reactions` is packed [target, family, tag, chan, arg] (target: a thing index, or 100 + a zone index;
 // tag 0 P, 1 L, 2 S, 3 B; chan a CHANNEL id of life.ts), unpacked once at load by places.ts cells().
 import type { PlaceDef } from './places.ts';
@@ -11,18 +16,18 @@ export const PLACE: PlaceDef = {
   id: 'home', idx: 0, name: 'Home', stampsToOpen: 0, shipped: true, night: false,
   ground: { grip: 1, glue: 1, peel: 1, drag: 1, mark: 0, markLifeS: 0 },
   patches: [
-    { id: 'snoozerug', shape: 'disc', x: 0, z: -0.35, r: 0.7, mods: { grip: 1.15 }, nap: true },
+    { id: 'snoozerug', shape: 'disc', x: 0, z: -0.36, r: 0.7, mods: { grip: 1.15 }, nap: true },
   ],
   zones: [
     { id: 'lampwarmth', kind: ZONE.warm, strength: 0.4, shape: 'disc', x: -0.6, z: -2.35, r: 1.2, switchable: true },
   ],
   things: [
-    { id: 'feltball', place: 'home', mech: MECH.ball, x: 0.85, z: -0.75, yaw: 0, size: [0.22, 0, 0], mu: 0.6, p: { mass: 0.2, rollDamp: 0.6 }, ride: false, fromN: 1, verb: V.ROLL, icon: E.ball, look: 'felt', sound: S.ball, arrives: { after: 'start' } },
+    { id: 'feltball', place: 'home', mech: MECH.ball, x: 0.7, z: -0.65, yaw: 0, size: [0.22, 0, 0], mu: 0.6, p: { mass: 0.2, rollDamp: 0.6 }, ride: false, fromN: 1, verb: V.ROLL, icon: E.ball, look: 'felt', sound: S.ball, arrives: { after: 'start' } },
     { id: 'musicbox', place: 'home', mech: MECH.block, x: 2.25, z: -1.05, yaw: 0, size: [0.2, 0.15, 0.15], mu: 0.8, p: { tuneS: 29.1, gapS: 40 }, ride: false, switch: 'tune', fromN: 2, verb: V.LISTEN, icon: E.note, look: 'musicbox', sound: S.bell, arrives: { after: 'start' } },
-    { id: 'snoozerug', place: 'home', mech: 0, x: 0, z: -0.35, yaw: 0, size: [0.7, 0, 0], mu: 1, p: {  }, ride: false, patch: 'snoozerug', useSpot: [-0.25, -1], fromN: 2, verb: V.NAP, icon: E.zzz, look: 'rug', sound: 0, arrives: { after: 'firstHello' } },
+    { id: 'snoozerug', place: 'home', mech: 0, x: 0, z: -0.36, yaw: 0, size: [0.7, 0, 0], mu: 1, p: {  }, ride: false, patch: 'snoozerug', useSpot: [-0.25, -1], fromN: 2, verb: V.NAP, icon: E.zzz, look: 'rug', sound: 0, arrives: { after: 'firstHello' } },
     { id: 'warmlamp', place: 'home', mech: MECH.block, x: -0.6, z: -2.35, yaw: 0, size: [0.18, 0.1, 0.18], mu: 0.8, p: { shadeH: 0.6, toastCap: 0.3 }, ride: false, zone: 'lampwarmth', switch: 'zone', useSpot: [0.16, -2.2], fromN: 3, verb: V.SWITCH, icon: E.sun, look: 'lamp', sound: 0, arrives: { after: 'firstCapsule' } },
     { id: 'keepsakeshelf', place: 'home', mech: MECH.block, x: 0.9, z: -1.6, yaw: 0, size: [0.6, 0.225, 0.15], mu: 0.8, p: { rows: 2, perRow: 10 }, ride: false, fromN: 1, verb: V.RING, icon: E.sparkle, look: 'shelf', sound: S.bell, arrives: { after: 'finale:home' } },
-    { id: 'bouncepad', place: 'home', mech: MECH.pad, x: -0.75, z: -1.25, yaw: 0, size: [0.4, 0.05, 0], mu: 1, p: { gain: 1.1, apex: 0.3, travel: 0.1, maxBounces: 5 }, ride: false, useSpot: [-0.65, -1.45], fromN: 3, verb: V.BOUNCE, icon: E.star, look: 'feltpad', sound: S.boing, arrives: { after: 'finale:hearthlog' } },
+    { id: 'bouncepad', place: 'home', mech: MECH.pad, x: -0.79, z: -1.25, yaw: 0, size: [0.4, 0.05, 0], mu: 1, p: { gain: 1.1, apex: 0.3, travel: 0.1, maxBounces: 5 }, ride: false, useSpot: [-0.69, -1.45], fromN: 3, verb: V.BOUNCE, icon: E.star, look: 'feltpad', sound: S.boing, arrives: { after: 'finale:hearthlog' } },
   ],
   bounds: { shape: 'disc', x: 0, z: 0, r: 3.4, round: 0 }, walls: [],
   pad: [0, 0, 1.2], spawn: 'matLayout', unit: 'slot',
@@ -30,8 +35,8 @@ export const PLACE: PlaceDef = {
     bounds: { shape: 'disc', x: 0, z: 0, r: 3.4, round: 0 }, walls: [],
     spawn: 'matLayout',
     things: [
-      { x: 0, z: 0.9, yaw: 0, fromN: 1 },
-      { x: 0.75, z: 1.55, yaw: 0, fromN: 2 },
+      { x: 0.76, z: 1.06, yaw: 0, fromN: 1 },
+      { x: 1.25, z: 0, yaw: 0, fromN: 2 },
       { x: 0.3, z: 0, yaw: 0, use: [0.25, -1], fromN: 2 },
       { x: -1.05, z: 0.45, yaw: 0, use: [-0.76, 1.2], fromN: 3 },
       { x: 0.2, z: -2.5, yaw: 0, fromN: 2 },

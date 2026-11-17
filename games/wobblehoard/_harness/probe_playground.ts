@@ -1132,6 +1132,32 @@ if (run('ball')) {
     void lay;
     add(`PH-05 ball (${layout}): a flick of 4.1 m/s is clamped to 2.0 m/s, never passes a wall, and rests within 6 s`, `max ${f(vmax, 3)} m/s, through a wall ${through}, at rest after ${f(rest, 2)} s`, '<= 2.0, false, <= 6 s', vmax <= 2.0 + 1e-9 && !through && rest > 0 && rest <= 6);
   }
+  // B5 (round 5, FIX5_DATA): Home's TALL Felt Ball spot (0.76, 1.06) lies outside the one-out bounds on a phone (the visible table's near row,
+  // x +-0.533 at scale 1.026, measured in the browser): the world's first step pushes it in to x 0.313. When a party comes out the shell sets wider
+  // bounds; an UNTOUCHED ball must then stand at its spot again (the browser at HEAD left it at x 0.299 with three out, in front of the play
+  // squishy), while a ball someone booped stays where it rolled
+  {
+    const one = [-0.533, -3.4, 0.533, 1.85], three = [-1.092, -3.4, 1.101, 3.4], s = 1.026;
+    const at = (w: PropWorld): string => `(${f(w.poses[0], 3)}, ${f(w.poses[2], 3)})`;
+    const w = buildPropWorld(HOME, 'tall', s);
+    w.setParked(0, false); w.setBallBounds(one[0], one[1], one[2], one[3]);
+    for (let i = 0; i < 60; i++) { w.beginFrame(); w.endFrame(DT); }
+    const held = at(w), heldX = w.poses[0];
+    w.setBallBounds(three[0], three[1], three[2], three[3]);
+    for (let i = 0; i < 60; i++) { w.beginFrame(); w.endFrame(DT); }
+    const back = at(w), sx = HOME.tall.things[0].x * s, sz = HOME.tall.things[0].z * s;
+    const w2 = buildPropWorld(HOME, 'tall', s);
+    w2.setParked(0, false); w2.setBallBounds(one[0], one[1], one[2], one[3]);
+    for (let i = 0; i < 60; i++) { w2.beginFrame(); w2.endFrame(DT); }
+    w2.poke(0, -0.3, 0, 0.2);
+    for (let i = 0; i < 240; i++) { w2.beginFrame(); w2.endFrame(DT); }
+    const rolled = at(w2), rx = w2.poses[0], rz = w2.poses[2];
+    w2.setBallBounds(three[0], three[1], three[2], three[3]);
+    for (let i = 0; i < 60; i++) { w2.beginFrame(); w2.endFrame(DT); }
+    add('B5 (round 5) Home\'s Felt Ball, phone: untouched, it is held at the one-out bounds\' edge, then stands at its spot again when a party widens the bounds; once booped it stays where it rolled',
+      `one out ${held}, three out ${back} (spot (${f(sx, 3)}, ${f(sz, 3)})); booped: ${rolled} -> ${at(w2)}`, 'held x 0.313; back at the spot within 1 mm; the booped one unmoved',
+      Math.abs(heldX - (one[2] - 0.22)) < 1e-3 && Math.hypot(w.poses[0] - sx, w.poses[2] - sz) < 1e-3 && Math.hypot(w2.poses[0] - rx, w2.poses[2] - rz) < 1e-6);
+  }
   // a body boops the ball (scootTo into it at the gait speed): the ball rolls away; no particle over 6 m/s from the contact
   {
     const w = buildPropWorld(testPlace([thing(MECH.ball, 0.8, 0, [0.24, 0, 0], { mass: 0.2, rollDamp: 0.5 })]), 'wide', 1);
