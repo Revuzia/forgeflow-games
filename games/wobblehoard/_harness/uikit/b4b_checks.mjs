@@ -97,8 +97,10 @@ async function main() {
       const walk = await tabWalk(page);
       const ids = walk.map((s) => s.a.id || s.a.label || s.a.key);
       // RE-SPECIFIED, reason: the owner moved Table / Float to the toolbar on 2026-10-09 (the Gravity stop left the panel: 14 stops became 13, and no stop is Gravity)
-      check('Settings: the Tab walk visits close, the 4 sliders, the switches and Quality (one stop each: a radio group is one stop), the How to play link, then wraps to close (13 stops without Haptics, none of them Gravity)',
-        walk.length === 13 && !ids.includes('wh-gravity') && ids[0] === 'Close settings' && ids[ids.length - 1] === 'wh-howto-link' && ['wh-volume', 'wh-music', 'wh-boost', 'wh-shake', 'wh-uisounds', 'wh-extra', 'wh-calm', 'wh-skip', 'wh-fast', 'wh-keys'].every((i) => ids.includes(i)) && !ids.includes('wh-haptics'), ids.join(' > '));
+      // RE-SPECIFIED (PG_SHELL R4b), reason: PLAYGROUND_BUILD 11.9 (settings v3, built in round 3) adds the sliders "Voices" (wh-chatter) and "Place sounds" (wh-ambience)
+      // in Sound and the switch "Squishies move on their own" (wh-autonomy) in Other, so the walk has 16 stops; every published stop is still there, first and last unchanged
+      check('Settings: the Tab walk visits close, the 6 sliders (PLAYGROUND: Voices, Place sounds), the switches and Quality (one stop each: a radio group is one stop; PLAYGROUND: Squishies move on their own), the How to play link, then wraps to close (16 stops without Haptics, none of them Gravity)',
+        walk.length === 16 && !ids.includes('wh-gravity') && ids[0] === 'Close settings' && ids[ids.length - 1] === 'wh-howto-link' && ['wh-volume', 'wh-music', 'wh-boost', 'wh-shake', 'wh-uisounds', 'wh-extra', 'wh-calm', 'wh-skip', 'wh-fast', 'wh-keys', 'wh-chatter', 'wh-ambience', 'wh-autonomy'].every((i) => ids.includes(i)) && !ids.includes('wh-haptics'), ids.join(' > '));
       check('Settings: every stop but the sliders shows a focus ring of 3 px or more (outline) on its visual part (switch track, segment face, button)', walk.every((s) => s.ring && s.ring.w >= 3 && s.ring.style !== 'none'), walk.filter((s) => !(s.ring && s.ring.w >= 3)).map((s) => s.key).join(' | ') || `${walk.length} stops`);
       const sliderRings = [];
       for (const id of ['wh-volume', 'wh-music', 'wh-boost', 'wh-shake']) {

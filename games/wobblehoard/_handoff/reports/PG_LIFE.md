@@ -566,3 +566,95 @@ the switch-tap notice, the fire puff and a chime row as S06 tunes, the Star Scop
   passes, almost all V8's own tiering: step 5).
 - A song's voices (one voiced, above); PIECES GLIDE at a cut on the ice (I6); GAZE_SKY's pose and bubble; S2 / S3 B04 uses of pads, chimes,
   pools, turntables; the squirt game beyond SQUIRTED; S05 copying a whole's thing use; size 105.5 KB (the 75 KB target of round 2 not met).
+
+## Round 4, engineer 5 (started 2026-11-17 10:06 UTC, from HEAD ad49b7902, tree clean)
+Scope (orchestrator): the four FAIL rows of `probe_pg_lifequests.ts` (QU-13 med, QU-08: C8; QU-13 low and QU-03: C8, a regression of
+engineer 4's round: they passed at HEAD 7e64f2018 on a lucky seed), the regression first; a row that is wrong about the spec is re-specified
+only with the spec text and a written reason; probe_life stays at 114 ok / 1 FAIL (LF-02) or better, probe_chatter 42/42. PG_PHYS round 4
+notes: a floating body never sleeps and gets metrics.submerged; LIFE scoots never produce bump events. Scratch: `.../scratchpad/pg_life5/`.
+Baseline at 10:06 (HEAD ad49b7902): tsc clean (4.3 s); `node _harness/probe_life.ts` **114 ok, 1 FAIL (LF-02: max 123 160 B per 1000 ticks)**,
+7.8 s; probe_life_imports all LF-12 rows ok; probe_chatter 42/42; `node _harness/probe_pg_lifequests.ts` **9 ok, 4 FAIL** (QU-13 med C8 2/2
+stood in, QU-08 unmatched C8, QU-13 low C8, QU-03 C8; gate 0 / 0 / 0), 8.7 s. The finale's SING records (`--verbose`): med one SING n2 2 at the
+kettle; low two SING n2 2 at the kettle.
+
+| R4/e5 step | What | State |
+|---|---|---|
+| 0 | read report (all), SESSION3, brief (+ D-95 revised: LIFE never switches AUTO), the probe's session; baseline | DONE 10:08 |
+| 1 | the regression (QU-13 low, QU-03) and C8 on med (QU-13 med, QU-08): one cause, one LIFE fix (a song at a tune calls singers out of a snuggle or peekaboo) + 3 new probe_life rows | DONE 10:15: probe_pg_lifequests **all 13 ok**; probe_life **117 ok, 1 FAIL (LF-02)** |
+
+#### Step 1 (engineer 5): why the cabin finale gave no song of three, and the fix
+**Diagnosis** (scratch `pg_life5/plq.ts`: a copy of probe_pg_lifequests with absolute imports, a per-0.5 s timeline of each body's behaviour,
+moment and distance to the kettle in session step 5, and `SWEEP=1`: the probe's own finale staging over seeds 150..169 on its own host):
+the three carried beside the kettle at 30 s are free again at about 32 to 34 s (B08 afterglow, then B15 in the Window Chill, a notice) and,
+being three idle within 2.5 m with a joy in the last 8 s (the afterglow), **start an S07 snuggle** (a running moment) before the whistle at
+40 s. On low (seed 150) all three were inside the snuggle (with Glugbean) through the whole whistle (40.0 to 43.6 s): no song at all then.
+On med (seed 150) Crimpo was pulled into a snuggle with Puddlo and Glugbean (4.4 and 2.9 m from the kettle) at 34.5 s and was walking out of
+it (1.6 m from the kettle at 40 s): Dollop and Capnap sang, n2 2. LIFE never let a running moment give way. The low row passed at HEAD
+7e64f2018 only because in that one seed nobody snuggled first (engineer 4's S06 change made the three free sooner, so they snuggled).
+**The spec reading (written reason):** D-75 (PLAYGROUND_BUILD 2: "Snuggle and peekaboo are behaviours") makes S07 and S13 behaviours, and
+LIFE 4 says of every behaviour: "Utility choice: the highest of base x trait x need, plus a seeded noise of +-0.05 and **+0.15 for the
+current behaviour**". A running snuggle therefore keeps its 0.55 + 0.15 = 0.70 (a peekaboo at most 0.7 + 0.15 = 0.85) and a song at a tune
+(S06's 0.95, engineer 4's reading of PLACES 4.2's finale "the fire swells and everyone sings") beats it, as B02's notice already beats a
+running B04. The other moments (greet, chat, nuzzle, ...) are not behaviours and keep running. The two chatty friends' song (0.45) calls
+nobody away.
+**Built (src/life/social.ts only):** `inYielding(j)` = j is in a running snuggle or peekaboo and may sing (a whole or a face piece, not held,
+not riding); `singersNear` counts such a one near the tune; when a free singer starts S06 at a tune, `beginPicked` first ends the snuggle or
+peekaboo of each such one near the tune (`yieldToSong`), then gathers it as usual (the same think: in the cabin the kettle whistles on a bar
+line of the 66 BPM grid, so the song's first bar line was 0.03 s after its start and nobody could join later as a latecomer); when everyone
+near the tune is inside the moment, its first member's step ends it (`songCalls`: a song at that tune still before its first bar line, or a
+new song allowed (once per 2 min a place) with 2+ singers near) and they start the song on their next think. A snuggle whose row had formed
+happened: its SOCIAL goes out when it gives way; one still gathering, or a peekaboo, emits nothing. No character is ever in two moments (the
+old one ends before the song adds it). +760 B minified (social 18 987 -> 19 747; src/life 106 272 B min, 42 773 B gzip).
+**Numbers:**
+| scenario (probe_pg_lifequests' own host and staging, seeds 150..169) | before (HEAD ad49b7902) | now |
+|---|---|---|
+| the session's finale staging, med: a song of 3+ | 0 / 20 | **19 / 20** (157: n2 2) |
+| the same, low | 15 / 20 | **20 / 20** |
+| engineer 4's sweeps on probe_life's host (`pg_life4/sgN.ts`, `fire.ts`, `lf09.ts`): SG staging (45 whistles) | songs 7 of 2, 9 of 3, 4 of 4 | 9 of 2, 9 of 3, 5 of 4 |
+| fire puff, three set by the Fireplace 3 s before the tap: song of 3+ med / low / high | 16 / 17 / 12 of 20 | 16 / 17 / 13 of 20 |
+| LF-09 over seeds 51..74 | 19 / 24 | 19 / 24 (identical rows) |
+`node _harness/probe_pg_lifequests.ts`: **all 13 checks passed** (QU-13 med 25 of 25 with C8 by LIFE: SING n2 3 at the kettle, 47.3 s into
+the finale, Crimpo taken out of its snuggle; QU-08 every clause matched; QU-13 low 25 of 25, C8 by LIFE; QU-03 gate movers over 0, double
+moments 0, wakes over 0). No row of their probe was edited or re-specified.
+**New rows (probe_life.ts, after the S06 rows; staged like them, the gate watched on every step):** (a) three in a snuggle beside the kettle
+(1.53 / 0.92 / 2.42 m) at its whistle: the snuggle gives way with its SOCIAL (n2 3 at 40.0 s), SING n2 3 thing the kettle at 50.9 s;
+(b) a free squishy by the kettle starts the song and takes the two snuggling within 2.5 m out of a snuggle with two farther away (2 taken at
+the start, SING n2 3 at 47.3 s); (c) the control: a snuggle 3.6 m and more from the kettle is not called away (ends on its own at 48.2 s, 0
+SING). All: 0 in two moments, 0 movers over. `node _harness/probe_life.ts`: **117 ok, 1 FAIL (LF-02)**.
+**LF-02 and this change (measured, not assumed):** the in-probe LF-02 windows (3-pass warm-up) went from 86 832 / 123 152 / 119 040 / 68 496 /
+103 496 / 81 056 B (HEAD social.ts, scratch tree `pg_life5/treeH`) to 88 752 / **157 968** / 122 888 / 72 128 / 103 488 / 81 064 B (now,
+`treeN`; both reproducible to a few bytes over two runs each): the measured crowd's second window holds the kettle's 40 s whistle, where a
+snuggle now gives way to the song (a path run 4 times before the measurement, so in V8's baseline tier). In an isolated process after 30 and
+100 replay passes the windows are **byte-identical** for both trees (30: 18 496 / 21 232 / 35 024 / 17 888 / 16 144 / 28 120 vs ... 28 048;
+100: 208 / 4 576 / 624 / 4 032 / 9 056 / 9 168 both): the new path allocates nothing once optimized. LF-02 stays FAIL as before.
+| 2 | PG_PHYS round 4 notes checked against LIFE; regression probes; the life and quests probes together; this stop state | DONE 10:23 |
+
+#### Step 2 (engineer 5)
+**PG_PHYS round 4 notes, checked (no change needed):** (1) "LIFE scoots never produce bump events": LIFE reads `bumps` only for B02's "a land
+or bump within 1.5 m" (brain.ts `noticeCandidate`); its contact approaches (nuzzle, comfort, boop, snuggle) end on arrival by position
+(`travelStep`'s arrive distance, social.ts `contactMm` 60 / 80 mm), never on a bump, so nothing waits for a bump a scoot cannot make.
+(2) "A floating body never sleeps and gets metrics.submerged": a floater is then never ASLEEP in the snapshot, so LIFE counts it as an
+awake whole (units) and a start that moves it wakes nobody (correct); B06 starts nowhere in water anyway (LF-18). LIFE's FLOAT uses PLACES
+2.5's float table itself (looks.ts `floatsAt`: share h^2 (3R - h) / (4R^3) > density, the foam's soaked density by its soak look), the same
+rule PG_PHYS applies ("a body FLOATS when share(depth, R) > density"), so FLOAT and the physics agree; LIFE does not read `submerged`.
+**Regression probes**, each once, sequentially, with the other lanes' uncommitted edits in the tree (PG_SHELL R4b is editing
+src/shell/later-life.ts, lifeLink.ts, src/contracts.ts, shellview/node_checks.ts in parallel; it now calls `lifeThingTap` from the thing tap
+and reads `UNIT`): `npx tsc --noEmit -p tsconfig.json` **clean**; probe_app **187/187**; shellview/node_checks **163/163** (PG_SHELL's row
+count today); probe_gestures **160/160**; probe_merge **22/22**; probe_trophies **31/31**; probe_collection **74/74**; probe_economy all
+pass; probe_catalog all pass; probe_chatter **42/42**; renderview/pg_node_checks **40 ok, 0 FAIL**; probe_life_imports all LF-12 rows ok;
+probe_journal all pass; probe_pg_data 2 FAIL (DT-01 Home's camera, DT-11 a salt in PG_QUESTS' code: the same 2 as at HEAD, engineer 4
+checked them against HEAD's src/life; neither reads src/life/social.ts). **Two allocation rows outside LIFE flaked once each under machine
+load and passed on re-run:** probe_quests QU-01 (applyPlayEvent, 48 B per 10 000 events on the first run at load about 4; then 4 of 4 runs
+all pass) and probe_pg_lifequests FM (friendMaskOf, "Infinity B": every window had a GC; the next 2 direct runs pass). Neither calls LIFE.
+**The life and quests probes together, final run (10:21):** probe_life **117 ok, 1 FAIL (LF-02)** (6 s); probe_life_imports **all LF-12
+rows ok** (5 ok rows); probe_pg_lifequests **all 13 checks passed** (10 s); probe_quests **45 ok, 0 FAIL, 3 NOT RUN** (others' code);
+probe_journal all 28 ok; probe_chatter **42/42**.
+
+## STATE AT ENGINEER 5's STOP (2026-11-17 ~10:23 UTC). tsc CLEAN. Nothing of mine is running (port 5369 never used this round).
+Files changed (all mine): `src/life/social.ts` (inYielding, yieldToSong, songCalls; singersNear and the song gathering), `_harness/probe_life.ts`
+(3 new S06 rows), this report. Scratch: `pg_life5/plq.ts` (instrumented copy of probe_pg_lifequests: `W0= W1=` timeline, `SWEEP=1` finale
+sweep), `pg_life5/rows.ts`, `pg_life5/treeH` / `treeN` (HEAD vs new src for the LF-02 comparison), `pg_life5/head/` (HEAD's src/life).
+**The four rows of the scope pass** (QU-13 med, QU-08, QU-13 low, QU-03), from LIFE's own events, with no row of probe_pg_lifequests edited
+or re-specified. **Not done / still open (plainly):** LF-02 still FAILS its 0 B bar (round 3's proposal stays with the orchestrator); seed 157
+of the med finale sweep still sings only in two (19 / 20); the song's voices (one voiced of three: engineer 4's request to PG_AUDIO stands);
+the size, 106.3 KB minified (the 75 KB target of round 2 not met); the other items of engineer 4's "Not done" list are unchanged.

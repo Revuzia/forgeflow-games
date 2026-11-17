@@ -14,14 +14,13 @@
 // No call allocates per frame (typed arrays and reused objects only; an event's handling allocates nothing). Screens (the Journal, Travel)
 // call the LifeHostApi members, which may allocate (they are not per frame).
 //
-// FALLBACKS for what PG_PHYS round 3 did not build (PG_PHYS.md section 6), each marked FALLBACK below and listed in PG_SHELL.md:
-//   SoftEvent.auto      -> the host decides: a land of a body LIFE drove in the last 2 s that nobody touches or threw; a bump while nobody touches
-//                          any body and some body was LIFE-driven in the last 2 s (ev.auto wins whenever physics sets it)
-//   SoftEvent.other     -> a body bump's partner = the nearest other character to the contact point
-//   metrics.contacts    -> a touching pair = two characters whose centres are closer than r1 + r2 + 0.02 m
-//   setBounds / setHome -> the body's own mat corral, re-homed where LIFE last brought it to rest (setHome when physics offers it, else the
-//                          corral's home spot the constructor and placeAt write); places keep bodies in with their walls
-//   carryTo             -> "Go play with..." on a ride and LIFE's USE intent do nothing (no scripted lift exists)
+// Physics members used (PG_PHYS round 4 built every one; round 3's FALLBACKS are gone, PG_SHELL.md R4b.2):
+//   SoftEvent.auto / prop / other  an `auto` land or bump goes to the attention budget; a body bump's partner is `other` (its contactSlot = our slot)
+//   metrics.contacts               a touching pair of awake bodies (a bit per contactSlot) adds UNIT.pair to the units
+//   setBounds / setHome            a place's area on arrival and for a squishy who joins there (-1 at Home: the published corral about each body's
+//                                  spot); the corral's home moves where LIFE brought a body to rest
+//   carryTo                        LIFE's USE intent (a ride the player asked for): the body is lifted onto the seat or the board's free end
+//   setParked / setAuto / grabProp / dragPropRay / releaseProp   Home's things shown and parked; D-95's AUTO and the hand on a hinge ride
 import type { LifeEvents, LifeIntents, LifeSnapshot, PlayEventRing, SoftBodyLike, SoftEvent, TierName, V3 } from '../contracts.ts';
 import { cameraRay, projectToNdc, pxToNdc, raycastAt } from '../input/camera.ts';
 import type { Game } from './game.ts';
@@ -31,7 +30,7 @@ import { pitchRatio } from '../core/genome.ts';
 import type { StorageLike } from '../core/settings.ts';
 import type { StorageSubscribe } from '../core/save.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends,
-  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, attentionSound, PHRASE } from '../life/step.ts';
+  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, attentionSound, PHRASE, UNIT } from '../life/step.ts';
 import type { LifeWorld } from '../life/step.ts';
 import { buildPropWorld } from '../physics/props.ts';
 import type { PropWorld } from '../physics/props.ts';
@@ -50,13 +49,15 @@ import { HOME_TEXT } from '../data/quests.ts';
 const CAP = 16;          // characters (LIFE's world)
 const QCAP = 64;         // queued (delayed) intents
 const RING_CAP = 64;     // the play-event ring (QUESTS 4)
-const AUTO_WINDOW_S = 2; // FALLBACK auto: a body LIFE drove this recently
 const FIRST_PLAY_S = 6, FIRST_WISH_S = 60, FIRST_WISH_LATEST_S = 300;
 const HOP_LEAD_S = 0.12; // a HOP's anticipation squash comes this long before the impulse (LIFE act.ts)
 const HOP_GO = 200;      // an internal queued kind: the hop impulse itself
 const TAP_MS = 350, TAP_PX = 12;   // a press and release this short and this still is a tap on a thing (a longer or moving press is the camera's)
 const MUSIC_BOX_S = 29.1, MUSIC_BOX_GAP_S = 40, KETTLE_BAR_S = 3.6;   // PLACES 4.1 / 4.2, AU-14: the tune's 8 bars, one start per 40 s; the whistle's one bar
 const FLICK_MS = 1.2;    // a tapped ball rolls away from the camera at this speed (m/s): "Roll the Felt Ball"
+const SHOWER_S = 4;      // a tapped Drip Leaf tips its shower this long (PLACES 2.1 M14: "tap it: the leaf tips a shower")
+const SET_S = 6;         // a ride the body lands on within this many seconds of the player letting go of it (or lifting it there) is a ride the player SET UP
+const PAD_USE_GAP_S = 2; // one USE BOUNCE per body per this many seconds of pad kicks (a landing's kicks in a row are one bounce)
 /** Home's things by THING_IDS index: what each one arrives after (PLACES 4.1) */
 const THING_FELT = 0, THING_MUSIC = 1, THING_RUG = 2, THING_LAMP = 3, THING_SHELF = 4, THING_PAD = 5;
 /** the cut flavour index (audio/cut.ts CUT_FLAVOURS: gel, sticky, foam, beads, dough, firm) of each material family (MATERIAL_FAMILY_IDS order) */
@@ -87,14 +88,15 @@ interface Char {
   lastX: number; lastZ: number; vx: number; vz: number;
   homeX: number; homeZ: number;
   outAt: number;          // sim time it came out (FIRST_WISH's "out longest")
-  driveT: number;         // sim time LIFE last drove it (scoot or hop): the FALLBACK auto window
   scooting: boolean; scootX: number; scootZ: number;
   tossed: boolean; wasCarried: boolean; touchKind: number; asleepShown: boolean;
   rideUntil: number;      // RIDE (D-74)
+  setT: number;           // sim time the player let go of it (a carry ended) or lifted it onto a ride (useRide): QUESTS 4's "rides the player set up"
+  padT: number;           // sim time of its last USE BOUNCE from a pad kick
 }
 const mkChar = (): Char => ({ on: false, body: null, genome: null, itemId: null, view: -1, kind: 0, group: -1, species: 255, family: 0, flavour: 0, pitch: 1, frac: 1, r: 0.5,
-  offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, driveT: -1e9, scooting: false, scootX: 0, scootZ: 0,
-  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9 });
+  offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, scooting: false, scootX: 0, scootZ: 0,
+  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9 });
 
 function mkSnapshot(): LifeSnapshot {
   const n = CAP;
@@ -125,16 +127,24 @@ const questIdx = (id: string): number => QUESTS.findIndex((q) => q.id === id);
 /** a quest's player title (Home's from HOME_TEXT here; the others come from the screens chunk's journal_text) */
 export function homeQuestTitle(idx: number): string | null { const q = QUESTS[idx]; return q && q.chapter === 0 ? HOME_TEXT.quests[q.idx % 10]?.[0] ?? null : null; }
 
-/** Park or show a thing's props. FALLBACK (PG_PHYS, physics/props.ts): `setParked` counts a thing's props from -1 (the `things` table is filled with
- *  -1 and its count field is incremented from there), so it loops over count - 1 props and never parks or shows a ONE-part thing: every thing at Home.
- *  Built parked (Home), the Felt Ball and the Music Box then had no collider, did not roll and could not be tapped. This sets each prop's park byte
- *  and rewrites its pose and packed shape (props.ts writePose) exactly as setParked means to; setParked itself still runs first (right for 2+ parts). */
-export function parkThing(wd: PropWorld, thing: number, parked: boolean): void {
-  wd.setParked(thing, parked);
-  const x = wd as unknown as { parked?: Uint8Array; writePose?: (k: number) => void };
-  if (!x.parked || typeof x.writePose !== 'function') return;
-  const v = parked ? 1 : 0;
-  for (let k = 0; k < wd.count; k++) if (wd.propThing[k] === thing && x.parked[k] !== v) { x.parked[k] = v; x.writePose.call(wd, k); }
+/** The front-most z (toward the camera) of a place's things' floor footprints in a layout (a thing's half extents by mechanism, turned by its yaw;
+ *  patch and zone things count by their size too). For the camera's framing only (setPlayBounds), never for physics. */
+export function frontReach(d: PlaceDef, layout: 0 | 1): number {
+  let front = -Infinity;
+  for (let k = 0; k < d.things.length; k++) {
+    const t = d.things[k], sp = layout === 1 ? d.tall.things[k] ?? t : t, s = t.size;
+    let hx: number, hz: number;
+    switch (t.mech) {
+      case MECH.block: case MECH.seesaw: hx = s[0]; hz = s[2] ?? s[0]; break;
+      case MECH.bar: hx = (s[1] ?? 0) / 2; hz = s[0]; break;
+      case MECH.ring: hx = hz = s[0] + (s[1] ?? 0); break;
+      case MECH.swing: hx = s[0]; hz = (s[1] ?? 0) / 2; break;
+      default: hx = s[0]; hz = s[2] || s[0];
+    }
+    const c = Math.abs(Math.cos(sp.yaw)), sn = Math.abs(Math.sin(sp.yaw));
+    front = Math.max(front, sp.z + sn * hx + c * hz);
+  }
+  return front;
 }
 
 /** Build the LIFE host and attach it to the game (game.attachLife). Returns null when the game cannot host it (no stage camera). */
@@ -154,6 +164,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const phraseBuf = new Float32Array(16);
   const creatureP = { phrase: phraseBuf, n: 0, flavour: 0, register: 0, pitch: 1, pan: 0, level: 1, group: 1, echo: false, at: 0, sing: false };
   const thudP = { kind: 0, intensity: 0, pitch: 1, pan: 0 };
+  const nudgeV = { x: 0, y: 0, z: 0 };   // GLIDE's velocity change (one object, reused)
   const propP = { kind: 0, intensity: 0, note: 0, pan: 0, auto: true, size: 0.22 };
   // a held voice (PG_AUDIO: a creaking rocker or swing, a rolling ball): every frame while it moves, then once at 0 (its own object: `key` + `held` mark it held)
   const heldP = { kind: 0, intensity: 0, pan: 0, auto: true, key: 0, held: 0, size: 0.22 };
@@ -167,7 +178,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const vis = new Float32Array(4);
   const wishOut = new Int32Array(2);
   const strikes = new Float32Array(32 * 4);
-  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0 };   // what LIFE did through the host (the dev view)
+  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0 };   // what LIFE did through the host (the dev view)
 
   // ---- the place: Home's world now, a place's world after a trip ----
   let placeIdx = 0, visit = 1, layout: 0 | 1 = 0, bodyScale = 1;
@@ -257,7 +268,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const ce = b.center;
     c.lastX = ce.x + off.x; c.lastZ = ce.z + off.z; c.vx = 0; c.vz = 0;
     c.homeX = c.lastX; c.homeZ = c.lastZ;
-    c.outAt = game.simTime; c.driveT = -1e9; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9;
+    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
     if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
@@ -278,7 +289,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     c.frac = b.frac ?? 1; c.r = b.restRadius * Math.cbrt(c.frac);
     const ce = b.center;
     c.lastX = ce.x + c.offX; c.lastZ = ce.z + c.offZ; c.vx = 0; c.vz = 0; c.homeX = c.lastX; c.homeZ = c.lastZ;
-    c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.driveT = -1e9;
+    c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
     if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (x) { report(x); } }
     if (placeIdx === 0) lifeSetHome(w, i, c.homeX, c.homeZ);
@@ -445,7 +456,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const show = !floatParked && arrived(k) && n >= fromN;
       if ((homeShown[k] === 1) === show) continue;
       homeShown[k] = show ? 1 : 0;
-      try { parkThing(world, k, !show); } catch (e) { report(e); }
+      try { world.setParked(k, !show); } catch (e) { report(e); }
       const x = (spot ? spot.x : t.x) * bodyScale, z = (spot ? spot.z : t.z) * bodyScale, yaw = spot ? spot.yaw : t.yaw;
       try { stage.setHomeThing?.(k, show, x, z, yaw); } catch (e) { report(e); }
     }
@@ -460,7 +471,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     world = buildPropWorld(HOME, layout === 1 ? 'tall' : 'wide', bodyScale);
     mapThings();
     homeShown.fill(0);
-    for (let k = 0; k < HOME.things.length; k++) { try { parkThing(world, k, true); } catch { /* none */ } }
+    for (let k = 0; k < HOME.things.length; k++) { try { world.setParked(k, true); } catch { /* none */ } }
     for (const c of chars) if (c.on && c.body && !floatParked) { try { c.body.setPropWorld?.(world); } catch (e) { report(e); } }
     try { if (!floatParked) stage.bindProps?.(world.poses, world.count, world.propThing); } catch (e) { report(e); }
     lifeSetPlace(w, 0, visit, HOME, layout, bodyScale);
@@ -501,7 +512,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     switch (kind) {
       case INTENT.SCOOT:
         if (floatParked) return;
-        try { if (body.scootTo?.(a - c.offX, b - c.offZ, cc)) { c.driveT = game.simTime; c.scooting = true; c.scootX = a; c.scootZ = b; counts.scoot++; } } catch (x) { report(x); }
+        try { if (body.scootTo?.(a - c.offX, b - c.offZ, cc)) { c.scooting = true; c.scootX = a; c.scootZ = b; counts.scoot++; } } catch (x) { report(x); }
         return;
       case INTENT.HOP:
         if (floatParked) return;
@@ -511,7 +522,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       case HOP_GO: try { body.setSquash?.(1, 0.08); } catch { /* ignore */ } doHop(i, a, b, cc); return;
       case INTENT.SQUASH: if (!floatParked) { try { body.setSquash?.(a, b); } catch (x) { report(x); } } return;
       case INTENT.POSE: if (c.view >= 0) { counts.pose++; try { stage.setBodyPose?.(c.view, a, b, cc, d, e); } catch (x) { report(x); } } return;
-      case INTENT.GLIDE: if (!floatParked) { try { body.nudge({ x: a, y: 0, z: b }); c.driveT = game.simTime; } catch (x) { report(x); } } return;
+      case INTENT.GLIDE: if (!floatParked) { nudgeV.x = a; nudgeV.y = 0; nudgeV.z = b; try { body.nudge(nudgeV); } catch (x) { report(x); } } return;
       case INTENT.SETTLE: endScoot(i); return;
       case INTENT.CANCEL:
         for (let k = 0; k < qLen; k++) if (qWho[k] === i) qKind[k] = 0;
@@ -529,13 +540,39 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       case INTENT.EXPRESS: if (c.view >= 0) { try { stage.setBodyExpression?.(c.view, a, b); } catch (x) { report(x); } } return;
       case INTENT.EMOTE: counts.emote++; showEmote(i, icon, style, dots, a | 0); return;
       case INTENT.VOICE: counts.voice++; voice(i, a, b, cc, icon); return;
-      case INTENT.USE: return;   // FALLBACK: a player-asked use on a ride needs carryTo, which physics has not built
+      case INTENT.USE: useRide(i, a | 0); return;
       default: return;
     }
   }
+  /** LIFE's USE intent (LIFE act.ts: a ride the player asked for; LIFE never climbs): physics lifts the body onto the swing's seat or the rocker board's
+   *  end nobody is near (carryTo: y = the support's TOP, the body is set down standing there at rest; no event on the way, so never paid), and LIFE
+   *  takes it from there (the snapshot's RIDE, D-74). Nothing happens on a parked or missing thing, with Float's parked world, or while held. */
+  function useRide(i: number, k: number): void {
+    const c = chars[i], td = def.things[k], p = k >= 0 && k < thingFirst.length ? thingFirst[k] : -1;
+    if (!c.on || !c.body || !world || floatParked || !td || !td.ride || p < 0 || world.isParked(p)) return;
+    const P = world.poses;
+    let x = P[p * 8], z = P[p * 8 + 2], y = P[p * 8 + 1];
+    if (td.mech === MECH.swing) y += td.size[0];               // the seat: a capsule of radius size[0] across its travel
+    else {
+      y += td.size[1];                                         // the board: half thickness size[1]; an end 60 % of the way out along its local x
+      const yaw = layout === 1 ? (def.tall.things[k]?.yaw ?? td.yaw) : td.yaw, ex = Math.cos(yaw) * td.size[0] * 0.6, ez = Math.sin(yaw) * td.size[0] * 0.6;
+      let near0 = 1e9, near1 = 1e9;
+      for (let j = 0; j < CAP; j++) {
+        if (j === i || !chars[j].on) continue;
+        near0 = Math.min(near0, Math.hypot(chars[j].lastX - (x + ex), chars[j].lastZ - (z + ez)));
+        near1 = Math.min(near1, Math.hypot(chars[j].lastX - (x - ex), chars[j].lastZ - (z - ez)));
+      }
+      const sgn = near0 >= near1 ? 1 : -1;
+      x += sgn * ex; z += sgn * ez;
+    }
+    const d = Math.hypot(x - c.lastX, z - c.lastZ);
+    let ok = false;
+    try { ok = c.body.carryTo?.(x - c.offX, y - c.offY, z - c.offZ, Math.min(5, Math.max(0.6, 0.5 + d * 0.45))) === true; } catch (e) { report(e); }
+    if (ok) { c.scooting = false; c.setT = game.simTime; counts.ride++; }
+  }
   function doHop(i: number, vx: number, vy: number, vz: number): void {
     const c = chars[i];
-    try { if (c.body?.hop?.(vx, vy, vz)) { c.driveT = game.simTime; counts.hop++; } } catch (x) { report(x); }
+    try { if (c.body?.hop?.(vx, vy, vz)) counts.hop++; } catch (x) { report(x); }
   }
   function endScoot(i: number): void {
     const c = chars[i];
@@ -544,15 +581,11 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     c.scooting = false;
     rehome(i);
   }
-  /** FALLBACK for setHome (PG_PHYS has not built it): the corral's home moves to where LIFE brought the body to rest, so it never glides it back */
+  /** the corral's home moves to where LIFE brought the body to rest (physics setHome), so the corral never glides it back to its spawn spot */
   function rehome(i: number): void {
-    const c = chars[i], b = c.body as (SoftBodyLike & { homeX?: number; homeZ?: number }) | null;
+    const b = chars[i].body;
     if (!b) return;
-    const x = b.center.x, z = b.center.z;
-    try {
-      if (typeof b.setHome === 'function') b.setHome(x, z);
-      else if (typeof b.homeX === 'number' && typeof b.homeZ === 'number') { b.homeX = x; b.homeZ = z; }   // FALLBACK: the corral's own home spot (softbody.ts: the constructor and placeAt write it)
-    } catch { /* a mock */ }
+    try { b.setHome?.(b.center.x, b.center.z); } catch { /* a mock */ }
   }
   function queue(kind: number, who: number, delay: number, a: number, b: number, c: number, d: number, e: number, icon: number, style: number, dots: number): void {
     let k = -1;
@@ -575,27 +608,12 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   }
 
   // ---- auto events and the player's touches (drain) ----
-  function anyTouched(): boolean {
-    for (let i = 0; i < CAP; i++) { const c = chars[i]; if (!c.on || !c.body) continue; const m = c.body.metrics; if (m.fingers > 0 || m.grabbed || m.carried === true || c.tossed) return true; }
-    return false;
-  }
   function takeAuto(b: SoftBodyLike, e: SoftEvent): boolean {
     if (e.kind !== 'land' && e.kind !== 'bump') return false;
     const i = slotOfBody(b);
-    const t = game.simTime;
-    let auto: boolean;
-    const flag = (e as { auto?: boolean }).auto;
-    if (flag !== undefined) auto = flag;   // physics knows (PLAYGROUND 8.8)
-    else if (e.kind === 'land') {
-      // FALLBACK: a land of a body LIFE drove lately that nobody touches and nobody threw
-      const c = i >= 0 ? chars[i] : null;
-      auto = !!c && t - c.driveT < AUTO_WINDOW_S && !c.tossed && b.metrics.fingers === 0 && !b.metrics.grabbed && b.metrics.carried !== true;
-    } else {
-      // FALLBACK: a bump while nobody touches or threw any body and some body was LIFE-driven lately
-      let driven = false;
-      for (let k = 0; k < CAP; k++) if (chars[k].on && t - chars[k].driveT < AUTO_WINDOW_S) { driven = true; break; }
-      auto = driven && !anyTouched();
-    }
+    // physics marks it (PLAYGROUND 8.8, PG_PHYS round 4: true unless the player touches the body or let go of it since it settled; a lock alone
+    // never clears it, D-86); an event without the mark (an older physics, a mock) is the player's, as the published game treats every event
+    const auto = e.auto === true;
     if (e.kind === 'land' && i >= 0) chars[i].tossed = false;
     if (!auto) return false;
     counts.auto++;
@@ -606,18 +624,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         audio.autoThud(thudP);
       }
     } catch (x) { report(x); }
-    if (e.kind === 'bump' && i >= 0 && s.nBumps < 32 && ((e as { prop?: number }).prop ?? -1) < 0) {
-      // the partner: physics' SoftEvent.other (its contactSlot = our slot) when it gives one; FALLBACK: the nearest other character to the contact point
-      const other = (e as { other?: number }).other;
-      if (typeof other === 'number' && other >= 0 && other < CAP && other !== i && chars[other].on) { s.bumpA[s.nBumps] = i; s.bumpB[s.nBumps] = other; s.nBumps++; return true; }
-      let best = -1, bd = 1e9;
-      for (let k = 0; k < CAP; k++) {
-        if (k === i || !chars[k].on) continue;
-        const dx = chars[k].lastX - (e.at.x + chars[i].offX), dz = chars[k].lastZ - (e.at.z + chars[i].offZ), d = dx * dx + dz * dz;
-        if (d < bd) { bd = d; best = k; }
-      }
-      if (best >= 0) { s.bumpA[s.nBumps] = i; s.bumpB[s.nBumps] = best; s.nBumps++; }
-    }
+    // a BODY bump (a prop bump carries `prop` >= 0) with its partner: physics' SoftEvent.other, its contactSlot = our slot
+    const other = e.other ?? -1;
+    if (e.kind === 'bump' && i >= 0 && s.nBumps < 32 && (e.prop ?? -1) < 0 && other >= 0 && other < CAP && other !== i && chars[other].on) { s.bumpA[s.nBumps] = i; s.bumpB[s.nBumps] = other; s.nBumps++; }
     return true;
   }
   function noteEvent(b: SoftBodyLike, e: SoftEvent): void {
@@ -675,7 +684,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       s.x[i] = x; s.y[i] = ce.y + c.offY; s.z[i] = z; s.vx[i] = c.vx; s.vz[i] = c.vz;
       if (c.view >= 0 && stage.bodyScreenPoint?.(c.view, scr)) { s.sx[i] = scr[0] / vw; s.sy[i] = scr[1] / vh; } else { s.sx[i] = NaN; s.sy[i] = NaN; }
       const carried = m.carried === true;
-      if (c.wasCarried && !carried) c.tossed = true;   // a carry let go: a toss until it lands
+      if (c.wasCarried && !carried) { c.tossed = true; c.setT = t; }   // a carry let go: a toss until it lands (and a ride it lands on is one the player set up)
       if (!c.wasCarried && carried) c.touchKind = TOUCH.CARRY;
       c.wasCarried = carried;
       let f = 0;
@@ -691,10 +700,15 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (c.tossed) f |= LIFE_FLAG.TOSSED;
       if (s.sx[i] === s.sx[i]) f |= LIFE_FLAG.VISIBLE;
       if (m.memoryBusy === true) f |= LIFE_FLAG.MEMORY_BUSY;
+      if ((m.submerged ?? 0) > 0) f |= LIFE_FLAG.IN_WATER;   // (S2: physics' water share; LIFE's float table reads its own zones first)
       // RIDE (D-74): a body the player set down on a ride prop stays on it 20 s
       if (onProp >= 0 && world && c.tossed === false && (f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) === 0) {
         const th = onProp < world.count ? world.propThing[onProp] : -1;
-        if (th >= 0 && def.things[th]?.ride && c.rideUntil < t - 25) c.rideUntil = t + 20;
+        if (th >= 0 && def.things[th]?.ride && c.rideUntil < t - 25) {
+          c.rideUntil = t + 20;
+          // QUESTS 4: "the shell [gives USE] for rides the player set up" (I7 "Set a squishy at the top of the ramp", R9 the Sand Mound): the ride's verb, by PLAYER
+          if (t - c.setT < SET_S) write(EV.USE, def.things[th].verb, thingGlobal[th], c.species, 255, 1, BY.PLAYER, 0);
+        }
       }
       if ((f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) !== 0) c.rideUntil = -1e9;
       if (c.rideUntil > t) f |= LIFE_FLAG.RIDE;
@@ -704,20 +718,17 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       zonesAt(i, x, z);
       s.submerged[i] = m.submerged ?? 0;
       s.warmth[i] = 0;
-      units += asleep ? 0.03 : c.kind === 0 ? 1 : 0.22;
+      units += asleep ? UNIT.sleeper : c.kind === 0 ? UNIT.whole : UNIT.piece;   // (LIFE's own weights, PF-00: PG_LIFE round 4's request)
       if (asleep !== c.asleepShown && c.view >= 0) { c.asleepShown = asleep; try { stage.setBodyAsleep?.(c.view, asleep); } catch { /* ignore */ } }
-      // a scoot that has arrived: release the driver and re-home the corral there (FALLBACK setHome)
+      // a scoot that has arrived: release the driver and re-home the corral there (setHome)
       if (c.scooting && Math.hypot(x - c.scootX, z - c.scootZ) < 0.05 && Math.hypot(c.vx, c.vz) < 0.02) endScoot(i);
     }
-    // a touching pair of awake bodies adds 0.25 (LIFE 10.3): physics' metrics.contacts (a bit per contactSlot = our slot) when it gives them;
-    // FALLBACK: centres closer than r1 + r2 + 0.02 m
+    // a touching pair of awake bodies adds UNIT.pair (LIFE 10.3): physics' metrics.contacts, a bit per contactSlot (= our slot), published at each step
     for (let i = 0; i < CAP; i++) for (let j = i + 1; j < CAP; j++) {
       const a = chars[i], b = chars[j];
       if (!a.on || !b.on || !a.body || !b.body || (s.flags[i] & LIFE_FLAG.ASLEEP) || (s.flags[j] & LIFE_FLAG.ASLEEP)) continue;
-      const ca = a.body.metrics.contacts, cb = b.body.metrics.contacts;
-      if (typeof ca === 'number' && typeof cb === 'number') { if (((ca >>> j) & 1) !== 0 || ((cb >>> i) & 1) !== 0) units += 0.25; continue; }
-      const dx = a.lastX - b.lastX, dz = a.lastZ - b.lastZ, rr = a.r + b.r + 0.02;
-      if (dx * dx + dz * dz < rr * rr) units += 0.25;
+      const ca = a.body.metrics.contacts ?? 0, cb = b.body.metrics.contacts ?? 0;
+      if (((ca >>> j) & 1) !== 0 || ((cb >>> i) & 1) !== 0) units += UNIT.pair;
     }
     s.units = units;
     if (touching !== touchingNow) { touchingNow = touching; try { audio.setTouching?.(touching); } catch { /* ignore */ } }
@@ -749,6 +760,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     for (let k = 0; k < zones.length; k++) {
       const zd = zones[k], a = layout === 1 ? def.tall.zones[k] ?? zd : zd;
       if (zd.switchable && world && world.zoneOn[k] === 0) continue;
+      if (zd.shower && !showerPhaseOn(zd.shower)) continue;   // a shower envelope (Rainleaf's rain: 40 s on, 30 s off from the arrival, sim time)
       const dx = x - a.x * sc, dz = z - a.z * sc;
       const inside = a.shape === 'disc' ? dx * dx + dz * dz <= ((a.r ?? 0) * sc) ** 2 : Math.abs(dx) <= (a.hx ?? 0) * sc && Math.abs(dz) <= (a.hz ?? 0) * sc;
       if (!inside) continue;
@@ -821,6 +833,11 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       }
       if (cause === 2) continue;   // a weather strike is a sound only (QUESTS 4)
       if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.chime) write(EV.USE, td.verb, thingGlobal[th], chars[slot].species, 255, 1, BY.SELF, world.propPart[prop]);
+      // a pad's kick (physics strikes the pad, cause 1, the body's slot): one USE BOUNCE by the body per landing's run of kicks (G4 "Bounce on the Moss Bouncer")
+      else if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.pad && game.simTime - chars[slot].padT >= PAD_USE_GAP_S) {
+        chars[slot].padT = game.simTime;
+        write(EV.USE, td.verb, thingGlobal[th], chars[slot].species, 255, 1, BY.SELF, 0);
+      }
     }
   }
 
@@ -906,6 +923,15 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
 
   // ---- the kettle and the Music Box (D-81): a sim-time tune timer, the shell's own (LifeSnapshot.musicBoxOn) ----
   let musicBoxOnUntil = -1e9;
+  // the Drip Leaf's shower (a 'shower' switch's zone, off until a tap) and a place's shower envelope (its clock starts at the arrival, sim time)
+  let showerZone = -1, showerThing = -1, showerOff = -1, arriveT = 0;
+  const showerPhaseOn = (sh: { onS: number; offS: number }): boolean => { const cyc = sh.onS + sh.offS; return !(cyc > 0) || (game.simTime - arriveT) % cyc < sh.onS; };
+  function showerStep(): void {
+    if (showerOff < 0 || game.simTime < showerOff || !world) return;
+    showerOff = -1;
+    if (showerZone >= 0 && showerZone < world.zoneCount) world.setZoneOn(showerZone, false);
+    try { stage.thingFx?.(showerThing, 1, 0); } catch { /* none */ }
+  }
   let lastTuneT = -1e9;                    // the last start of a tune (the Music Box or the kettle): the kettle keeps 60 s from a Music Box tune
   let tuneKind = -1;                       // 0 the Music Box, 1 the kettle (the one playing now)
   let kettleK = -1, kettleNext = Infinity; // the place's kettle (its things index) and its next whistle on sim time
@@ -995,6 +1021,17 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (musicBoxOnUntil > game.simTime && tuneKind === tune && tune === 0) stopTune();   // a second tap stops the Music Box (AU-14)
       else if (!startTune(tune, th)) return true;                                       // one start per 40 s: the tap is taken, nothing plays
       write(EV.USE, td.verb, g, sp, 255, 1, BY.PLAYER, 0);
+      lifeThingTap(w, g);   // (PG_LIFE round 4: a switch tap is always noticed by everyone within 1.5 m)
+      return true;
+    }
+    if (td.switch === 'shower') {
+      // the Drip Leaf (PLACES 2.1 M14): the leaf tips a shower: its wet zone on for SHOWER_S, its puff and rustle; LIFE hears the tap (SHOWER under it, G7)
+      const zi = td.zone ? def.zones.findIndex((z) => z.id === td.zone) : -1;
+      if (zi >= 0) { world.setZoneOn(zi, true); showerZone = zi; showerThing = th; showerOff = game.simTime + SHOWER_S; }
+      try { stage.thingFx?.(th, 1, 1); } catch { /* none */ }
+      if (audio.prop && td.sound) { propP.kind = td.sound; propP.intensity = 0.8; propP.note = 0; propP.auto = false; propP.size = 0.22; propP.pan = 0; try { audio.prop(propP); } catch (x) { report(x); } }
+      write(EV.USE, USE_VERB.SWITCH, g, sp, 255, 1, BY.PLAYER, 0);
+      lifeThingTap(w, g);
       return true;
     }
     if (td.switch === 'fire' || td.switch === 'zone') {
@@ -1005,6 +1042,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // the fire's crackle puffs the bed (PG_AUDIO: prop({ kind: crackle }) for 5 s), only when the fire comes on
       if (td.sound === PROP_SOUND.crackle && zi >= 0 && world.zoneOn[zi] !== 0 && audio.prop) { propP.kind = td.sound; propP.intensity = 1; propP.note = 0; propP.auto = false; propP.size = 0.22; propP.pan = 0; try { audio.prop(propP); } catch (x) { report(x); } }
       write(EV.USE, USE_VERB.SWITCH, g, sp, 255, 1, BY.PLAYER, 0);
+      // LIFE hears it (PG_LIFE round 4): noticed by everyone near; a fire's puff is a tune they may sing to (C8's finale), so a fire only when it comes on
+      if (td.switch !== 'fire' || (zi >= 0 && world.zoneOn[zi] !== 0)) lifeThingTap(w, g);
       return true;
     }
     if (td.mech === MECH.ball) {
@@ -1017,6 +1056,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (td.mech === MECH.chime || td.mech === MECH.seesaw || td.mech === MECH.swing) {
       world.poke(p, ray.dir.x * 0.6, -0.4, ray.dir.z * 0.6);
       write(EV.USE, td.verb, g, sp, 255, 1, BY.PLAYER, world.propPart[p]);
+      if (td.mech === MECH.chime) lifeThingTap(w, g);   // a tapped chime row is one bar of tune (PG_LIFE round 4, LIFE 6.1)
       return true;
     }
     return false;
@@ -1031,16 +1071,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   // ---- D-95 (revised, the owner 2026-11-17): a hinge ride (the swing, the rocker) dies down by itself after a push (unchanged); AUTO is the PLAYER'S
   // toggle (a small control on the thing, ui/thingAuto.ts; off by default, never LIFE's or autonomy's) that keeps a gentle steady arc; a hand always
   // wins: the player grabs the seat or board (here: grabAt / dragAt / dropAt, physics grabProp / dragPropRay / releaseProp) or the rider (the
-  // gesture machine's grab, as any squishy). FALLBACK (physics without setAuto / grabProp: PG_PHYS round 4 builds them): no AUTO control is shown and
-  // a press on the seat stays round 3's tap (a poke) or the camera's drag.
-  type HingeWorld = PropWorld & { setAuto?(thing: number, on: boolean): boolean; grabProp?(prop: number, x: number, y: number, z: number): boolean;
-    dragPropRay?(prop: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): boolean; releaseProp?(prop: number): void };
+  // gesture machine's grab, as any squishy; physics' held-rider rule turns the seat with it). PG_PHYS round 4's PropWorld members, no fallback.
   const autoWanted = new Set<string>();   // the rides the player set to AUTO this session (a trip rebuilds the world: re-applied on arrival)
   const hingeRide = (td: ThingDef | undefined): boolean => !!td && (td.mech === MECH.swing || td.mech === MECH.seesaw);
-  const hasAuto = (): boolean => !!world && typeof (world as HingeWorld).setAuto === 'function';
+  const hasAuto = (): boolean => !!world;
   function applyAuto(): void {
     if (!hasAuto()) return;
-    for (let k = 0; k < def.things.length; k++) if (hingeRide(def.things[k])) { try { (world as HingeWorld).setAuto!(k, autoWanted.has(def.things[k].id)); } catch (e) { report(e); } }
+    for (let k = 0; k < def.things.length; k++) if (hingeRide(def.things[k])) { try { world!.setAuto(k, autoWanted.has(def.things[k].id)); } catch (e) { report(e); } }
   }
   // (a slot is in use by its own flag, never by a sentinel id: the dev hook's pointers have NEGATIVE ids, -1 for its pointer 0, and round 4's first
   //  version kept -1 as "free", so it took every move of the dev hook's pointer 0 and no squishy could be lifted through it: snap-mat / cut-real / shift-pull)
@@ -1049,12 +1086,12 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const handFree = (): number => { for (let j = 0; j < 4; j++) if (handOn[j] === 0) return j; return -1; };
   function dropAll(): boolean {
     let any = false;
-    for (let j = 0; j < 4; j++) if (handOn[j] === 1) { any = true; handOn[j] = 0; try { (world as HingeWorld | null)?.releaseProp?.(handProp[j]); } catch { /* gone */ } }
+    for (let j = 0; j < 4; j++) if (handOn[j] === 1) { any = true; handOn[j] = 0; try { world?.releaseProp(handProp[j]); } catch { /* gone */ } }
     return any;
   }
   function grabAt(id: number, x: number, y: number): boolean {
-    const W = world as HingeWorld | null;
-    if (!W || typeof W.grabProp !== 'function' || floatParked || s.quiet || game.tool !== 'hand' || handSlot(id) >= 0) return false;
+    const W = world;
+    if (!W || floatParked || s.quiet || game.tool !== 'hand' || handSlot(id) >= 0) return false;
     const j = handFree();
     if (j < 0) return false;
     const cam = stage.camera;
@@ -1080,9 +1117,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   function dragAt(id: number, x: number, y: number): boolean {
     const j = handSlot(id);
     if (j < 0) return false;
-    const W = world as HingeWorld | null, cam = stage.camera;
+    const W = world, cam = stage.camera;
     if (Math.hypot(x - handX[j], y - handY[j]) > TAP_PX) handMoved[j] = 1;
-    if (W && cam && typeof W.dragPropRay === 'function') {
+    if (W && cam) {
       try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
       const n = pxToNdc(x, y, game.viewport), ray = cameraRay(cam, n.x, n.y);
       W.dragPropRay(handProp[j], ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
@@ -1090,12 +1127,12 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     return true;
   }
   function dropAt(id: number, x: number, y: number): boolean {
-    const W = world as HingeWorld | null;
+    const W = world;
     const j = handSlot(id);
     if (j < 0) return false;
     handOn[j] = 0;
     const p = handProp[j];
-    try { W?.releaseProp?.(p); } catch (e) { report(e); }
+    try { W?.releaseProp(p); } catch (e) { report(e); }
     if (!W || x !== x) return true;   // a cancel
     const th = p >= 0 && p < W.count ? W.propThing[p] : -1;
     if (th < 0) return true;
@@ -1257,6 +1294,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     for (let i = 0; i < CAP; i++) if (chars[i].on) { clearBubbles(i); endScoot(i); }
     if (musicBoxOnUntil > game.simTime) stopTune();   // a tune does not follow the party to another place
     visit++;
+    showerOff = -1; showerZone = -1; showerThing = -1;   // (a shower in progress stays behind)
     def = next; placeIdx = next.idx;
     coldPitch = next.zones.some((z) => z.kind === ZONE.cold && z.strength >= 0.5) ? Math.pow(2, -1 / 12) : 1;
     heldWas.fill(0);
@@ -1296,11 +1334,20 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const lay = layout === 1 ? next.tall : next;
     world = buildPropWorld(next, layout === 1 ? 'tall' : 'wide', 1);
     mapThings();
-    for (let k = 0; k < next.things.length; k++) { try { parkThing(world, k, false); } catch { /* none */ } }
+    for (let k = 0; k < next.things.length; k++) { try { world.setParked(k, false); } catch { /* none */ } }
+    // a shower switch's zone is dry until the player taps its thing (the Drip Leaf); the place's shower envelope starts its clock now
+    arriveT = game.simTime; showerOff = -1; showerZone = -1; showerThing = -1;
+    for (const t of next.things) if (t.switch === 'shower' && t.zone) { const zi = next.zones.findIndex((z) => z.id === t.zone); if (zi >= 0) world.setZoneOn(zi, false); }
     applyAuto();   // (D-95: the rides the player set to AUTO keep it across trips)
     try { stage.bindProps?.(world.poses, world.count, world.propThing); } catch (e) { report(e); }
     const b = lay.bounds;
-    try { stage.setPlayBounds?.(b.x, b.z, b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4)); } catch (e) { report(e); }
+    {
+      // the framing: the layout's bounds, their FRONT edge (+z, the bottom of the screen) pushed out to every thing's footprint + 0.1 m, so a thing on
+      // the front edge stands above the HUD's bottom rows (R4b: the cabin's tall Rocker Board at z 3.0 lay under the hint, "Put back" and the name tag)
+      const hx = b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), hz = b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4);
+      const z0 = b.z - hz, z1 = Math.max(b.z + hz, frontReach(next, layout) + 0.1);
+      try { stage.setPlayBounds?.(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2); } catch (e) { report(e); }
+    }
     // the capsule lands clear of the things (x, z, r triples)
     try {
       const xzr = new Float32Array(3 * Math.min(32, next.things.length));
@@ -1390,6 +1437,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         else if (world && ++boundsTick >= 60) { boundsTick = 0; try { if (stage.visibleTable?.(vis)) world.setBallBounds(vis[0], vis[1], vis[2], vis[3]); } catch { /* an old stage */ } }
       }
       kettleStep();
+      showerStep();
       const t = game.simTime;
       for (let k = 0; k < qLen; k++) {
         if (qKind[k] === 0 || qDue[k] > t) continue;
@@ -1431,9 +1479,15 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const td = def.things[k];
       if (!hasAuto() || !hingeRide(td)) return false;
       let ok = false;
-      try { ok = (world as HingeWorld).setAuto!(k, on); } catch (e) { report(e); }
+      try { ok = world!.setAuto(k, on); } catch (e) { report(e); }
       if (!ok) return false;
       if (on) autoWanted.add(td.id); else autoWanted.delete(td.id);
+      return true;
+    },
+    playWith(itemId, k) {
+      const i = chars.findIndex((c) => c.on && c.kind === 0 && c.itemId === itemId);
+      if (i < 0 || !def.things[k] || floatParked || travelling) return false;
+      lifeScript(w, i, SCRIPT.PLAY_WITH, k);
       return true;
     },
     sense(dt) {
@@ -1477,7 +1531,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const v = safeView();
       return {
         life: lifeDebug(w), place: placeIdx, visit, layout, bodyScale, units: s.units, quiet: s.quiet, autonomy: s.autonomy, floatParked,
-        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true } : null)).filter(Boolean),
+        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1 } : null)).filter(Boolean),
         things: def.things.map((t, k) => {
           const p = thingFirst[k] ?? -1, at = !!world && p >= 0;
           // (its centre on screen in CSS px, for the harness's taps: the stage camera's projection, dev view only)
@@ -1489,6 +1543,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         ring: { dropped: ring.dropped }, firstPlaySent, firstWishSent, freshProfile,
         party: { held: partyHeld(), restoring: [...restoreQ], newcomer: newcomerId },
         tap: tapWhy,
+        zones: world ? def.zones.map((z, k) => [z.id, world!.zoneOn[k] ?? 1]) : null,
         auto: { api: hasAuto(), on: [...autoWanted], hands: [...handOn].filter((x) => x === 1).length },
         tune: { on: musicBoxOnUntil > game.simTime, kind: tuneKind, kettle: kettleK, kettleNext: Number.isFinite(kettleNext) ? +kettleNext.toFixed(2) : null },
         journal: v ? { stamps: v.stamps, places: v.places, firstWish: v.firstWish, done: v.quests.filter((q) => q.done).map((q) => q.id), keepsakes: v.keepsakes } : null,

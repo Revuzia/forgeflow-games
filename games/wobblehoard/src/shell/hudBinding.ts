@@ -571,6 +571,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
         done();
         if (!blob) { toaster.show('error', 'The photo could not be made. Try again.'); return; }
         lastPhoto = name;
+        try { g.life?.note('photo'); } catch { /* PLAYGROUND: the PHOTO record (QUESTS 4: G8, X8); no host = the published path */ }
         const route = routePhoto({ env: photoEnv(), card: () => showPhotoCard(blob), download: () => downloadBlob(blob, name) });
         if (route === 'download') toaster.show('success', 'Photo saved.');
       }, 'image/png');

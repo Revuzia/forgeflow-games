@@ -989,8 +989,8 @@ export interface LifeSnapshot {
    *  holding input, a hidden tab. Gaze, expressions and needs keep working. */
   quiet: boolean;
   /** Deterministic awake-cost units right now, in awake-whole equivalents (LIFE.md 10.3; the weights are the measured cost ratios of
-   *  PF-00, provisional: an awake whole 1.0, an awake piece 0.22, a sleeper 0.03, a touching pair of awake bodies +0.25; the pairs come
-   *  from SoftMetrics.contacts). LIFE's motion gate reads this, never a measured frame time; the gate's floor (one awake whole plus every
+   *  PF-00: LIFE's UNIT (src/life/attention.ts; an awake whole 1.0, an awake piece 0.26, a sleeper 0.03, a touching pair of awake bodies
+   *  +0.25: the shell reads UNIT, never its own numbers); the pairs come from SoftMetrics.contacts). LIFE's motion gate reads this, never a measured frame time; the gate's floor (one awake whole plus every
    *  sleeper) and the ride allowance (a ride moment adds its riders' units to the cap) are LIFE's rules (LIFE.md 10.3, D-85), not fields. */
   units: number;
   /** Music as LIFE may use it, ALL deterministic (never SquishAudio.musicClock, whose AudioContext clock DebugHook.step does not advance):

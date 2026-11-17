@@ -1693,27 +1693,37 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 {
   const THREE = await import('three');
   const { SoftBody } = await import('../../src/physics/softbody.ts');
-  const { attachLifeHost, parkThing } = await import('../../src/shell/later-life.ts');
+  const { attachLifeHost } = await import('../../src/shell/later-life.ts');
   const { buildPropWorld } = await import('../../src/physics/props.ts');
   const { PLACE: HOME } = await import('../../src/data/place_home.ts');
   const { createMockStage, createMockAudio, createMockHaptics } = await import('../mocks.ts');
   const { createProfileStore } = await import('../../src/core/save.ts');
   type SB = SoftBodyLike;
-  // the FALLBACK for props.ts setParked (PG_PHYS): a one-part thing (every thing at Home) is shown with a collider and parked again; the physics' own call alone is reported
+  // R4b: a place's framing reaches its front things (setPlayBounds' front edge = max(bounds, the things' footprints) + 0.1 m): the cabin's TALL Rocker Board
+  // (z 3.0, half width 0.3) lay on the bounds' front edge, under the phone's bottom HUD rows; the wide cabin is unchanged (every thing inside its bounds)
+  {
+    const { frontReach } = await import('../../src/shell/later-life.ts');
+    const { loadPlaceDef } = await import('../../src/data/places.ts');
+    const cab = await loadPlaceDef('hearthlog');
+    const tallF = frontReach(cab, 1), wideF = frontReach(cab, 0);
+    check('PLAYGROUND a place\'s framing reaches its front things: the cabin\'s tall layout frames to the Rocker Board\'s front edge (3.3 m, past the bounds\' 3.0); the wide layout\'s things all lie inside its bounds (2.4 m)',
+      Math.abs(tallF - 3.3) < 0.01 && wideF <= 2.4, `tall ${tallF.toFixed(3)} m, wide ${wideF.toFixed(3)} m`);
+  }
+  // Home's one-part things shown and parked by physics' own setParked (R4b re-specification, written reason: PG_PHYS round 4 fixed the prop count, so the
+  // shell's parkThing FALLBACK is gone; the row asserts the same outcomes on setParked alone, plus that the physics' first call already shows the ball)
   {
     const pw = buildPropWorld(HOME, 'wide', 1);
     const ray = (k: number): number => pw.raycast(0, 3, 6, pw.poses[k * 8], pw.poses[k * 8 + 1] - 3, pw.poses[k * 8 + 2] - 6);
-    pw.setParked(0, false);
-    const own = ray(0) === 0;
-    parkThing(pw, 0, false); parkThing(pw, 1, false);
+    const hidden = ray(0) === -1 && ray(1) === -1;
+    pw.setParked(0, false); pw.setParked(1, false);
     pw.beginFrame(); pw.endFrame(1 / 60);
     const shown = ray(0) === 0 && ray(1) === 1;
     pw.poke(0, 1.2, 0, 0);
     for (let i = 0; i < 30; i++) { pw.beginFrame(); pw.endFrame(1 / 60); }
     const rolled = pw.poses[0] - 0.85;
-    parkThing(pw, 1, true);
-    check('PLAYGROUND FALLBACK parkThing (props.ts setParked counts a thing\'s props from -1, so it never shows a one-part thing): Home\'s Felt Ball and Music Box get a collider (the ray hits them), the ball rolls from a poke, and parking takes the collider away again',
-      shown && rolled > 0.2 && ray(1) === -1, `physics' own setParked showed it: ${own}; rolled ${rolled.toFixed(3)} m in 0.5 s`);
+    pw.setParked(1, true);
+    check('PLAYGROUND Home\'s things by physics\' setParked (no shell fallback): built parked (no collider), the Felt Ball and Music Box shown get a collider (the ray hits them), the ball rolls from a poke, and parking takes the collider away again',
+      hidden && shown && rolled > 0.2 && ray(1) === -1, `built parked ${hidden}; shown ${shown}; rolled ${rolled.toFixed(3)} m in 0.5 s; parked again ${ray(1) === -1}`);
   }
   const W = 1280, H = 800;
   const st = createMockStage() as ReturnType<typeof createMockStage> & Record<string, unknown>;
@@ -1845,7 +1855,8 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const sw = rows.find((r) => r.id === 'pillowswing'), rk = rows.find((r) => r.id === 'rockerboard');
     const propCalls: Array<{ kind: number; key?: number; held?: number }> = [];   // (copies: the host reuses one object per call kind)
     const prop0 = audio.prop; audio.prop = (q: { kind: number; key?: number; held?: number }) => { propCalls.push({ ...q }); };
-    if (!api) check('PLAYGROUND D-95 FALLBACK (physics without setAuto / grabProp): no AUTO control is offered and the seat keeps round 3\'s tap', rows.length === 0, JSON.stringify(rows));
+    // (R4b: physics always has setAuto / grabProp now; the round-4 FALLBACK branch is gone, so a world without them FAILS here)
+    if (!api) check('PLAYGROUND D-95 the host sees physics\' AUTO and hand (PropWorld setAuto / grabProp)', false, JSON.stringify(rows));
     else {
       await stepA(600);   // (whatever the arrival stirred dies down first)
       const r0 = await range(3);
@@ -1878,6 +1889,23 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     }
     audio.prop = prop0;
   }
+  // R4b: "Go play with..." a ride (the host's playWith: LIFE's PLAY_WITH, its USE intent, physics' carryTo; round 4's FALLBACK did nothing): the play squishy is
+  // lifted onto the Pillow Swing's seat and stays on it as a rider, and the lift pays nothing (no collection event on the way)
+  {
+    const SWING = 3;
+    let seat = -1; if (bound.thing) for (let p = 0; p < bound.count; p++) if (bound.thing[p] === SWING) seat = p;
+    const ride0 = (host.debug() as { counts: { ride: number } }).counts.ride;
+    const sp0 = app.hoard.meter().sp, cr0 = app.hoard.meter().credits;
+    const asked = host.playWith?.(app.identity.itemId ?? '', SWING) === true;
+    let onAt = -1;
+    for (let k = 0; k < 60 && onAt < 0; k++) { await stepA(10); if ((app.body.metrics.onProp ?? -1) === seat && !(app.body as { carryingTo?: boolean }).carryingTo) onAt = k; }
+    await stepA(120);
+    const ride1 = (host.debug() as { counts: { ride: number } }).counts.ride;
+    const paid = app.hoard.meter().sp !== sp0 || app.hoard.meter().credits !== cr0;
+    check('PLAYGROUND "Go play with..." a ride (playWith -> LIFE\'s USE -> physics carryTo): the play squishy is lifted onto the Pillow Swing\'s seat and is still riding it 2 s later; the lift pays nothing',
+      asked && seat >= 0 && ride1 === ride0 + 1 && onAt >= 0 && (app.body.metrics.onProp ?? -1) === seat && !paid,
+      `asked ${asked}, seat prop ${seat}, lifts ${ride0} -> ${ride1}, on the seat after ${onAt < 0 ? 'never' : `${(onAt + 1) * 10} frames`}, onProp now ${app.body.metrics.onProp}, meter sp ${sp0} -> ${app.hoard.meter().sp}`);
+  }
   // R4 (5): the S2 places through the dev path only (data/places.ts says shipped: false, so the Travel sheet's path refuses them): each place's data loads,
   // the party arrives in it, its things that physics builds are bound with colliders, and the next trip leaves it
   {
@@ -1888,6 +1916,18 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       await stepA(60);
       const d = dbg();
       rows.push({ id, shut, ok, place: d.place, chars: d.chars.length, things: d.things.length, bound: d.things.filter((t) => t.parked === false).length, noProp: d.things.filter((t) => t.parked === null).map((t) => t.id) });
+      if (id === 'rainleaf') {
+        // R4b: the Drip Leaf (a 'shower' switch, PLACES 2.1 M14): its Leaf Drip zone is dry on arrival; a click tips a shower (the zone on, a USE SWITCH by PLAYER);
+        // SHOWER_S (4 s) later it is dry again
+        const zOf = (): number => ((dbg() as unknown as { zones: Array<[string, number]> }).zones.find((z) => z[0] === 'leafdrip')?.[1] ?? -1);
+        const z0 = zOf(), rec0 = (host.debug() as { counts: { records: number } }).counts.records;
+        await tap(thingPt(3, 0.3));
+        const z1 = zOf(), tapD = dbg().tap, rec1 = (host.debug() as { counts: { records: number } }).counts.records;
+        await stepA(300);
+        const z2 = zOf();
+        check('PLAYGROUND the Drip Leaf (Rainleaf, dev path): its Leaf Drip zone is dry on arrival, a click tips a shower (the zone on, one more record: USE SWITCH by PLAYER), and it is dry again 4 s later',
+          z0 === 0 && tapD === 'dripleaf' && z1 === 1 && rec1 > rec0 && z2 === 0, JSON.stringify({ z0, tap: tapD, z1, records: [rec0, rec1], z2 }));
+      }
     }
     check('PLAYGROUND S2 by the dev path (not shipped: the sheet\'s path refuses each): Ripple Shore, Frostbell Ridge and Rainleaf Garden load, the party arrives in each, the things physics builds are bound (the ones it does not build are listed)',
       rows.every((r) => r.shut === false && r.ok === true && r.chars === app.mat.count && (r.bound as number) >= 3), JSON.stringify(rows));

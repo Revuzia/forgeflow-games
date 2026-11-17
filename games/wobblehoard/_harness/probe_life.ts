@@ -815,6 +815,70 @@ if (!LF02_CHILD) {
     check('S06', `(round 4) a latecomer joins a song before its first bar line: the third, held when the fire puffed, joins at +${(joinedAt - lt0).toFixed(1)} s (the bar line +3.1 s); SING n2 = 3 (${lsg.map((e) => `n2 ${e.n2}`).join(', ') || 'none'})`,
       joinedAt > lt0 + 0.4 && joinedAt < lt0 + 3.1 && lsg.length === 1 && lsg[0].n2 === 3);
   }
+  // (round 4, engineer 5) S07 snuggle and S13 peekaboo are behaviours (D-75), so LIFE 4's utility choice holds while they run: a song at a
+  // tune (0.95) beats the running snuggle (0.55 + the 0.15 keep). Staged as above, but the snuggle is allowed for the members named, and
+  // the first of them is happy (a joy) at 35 s, so a snuggle is running when the kettle whistles at 40 s. The gate is watched on every step:
+  // no character in two moments (LF-11), movers within moverCap (LF-10).
+  {
+    const kt = CABIN.things.find((q) => q.id === 'kettle')!;
+    const snugStage = (sp: string[], pos: number[][], snug: number[], kettle: boolean): Sim => {
+      const sim = cabin(181, sp, 1);
+      sim.kettle = kettle;
+      pos.forEach(([x, z], i) => { const b = sim.bodies[i]; b.x = x; b.z = z; b.tx = x; b.tz = z; });
+      for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++) { sim.w.pG[i * 16 + j] |= 1; sim.w.pCo[i * 16 + j] = 1e9; }
+      for (let i = 0; i < sp.length; i++) for (const bh of [BEH.USE, BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT, BEH.ANSWER]) sim.w.coo[i * 26 + bh] = 1e9;
+      for (const i of snug) sim.w.coo[i * 26 + BEH.MOMENT] = 0;
+      sim.run(35); sim.w.lJT[snug[0]] = sim.t;
+      return sim;
+    };
+    const SNUG = 7, SING_M = 6;
+    const inSnug = (sim: Sim, i: number): boolean => sim.w.moo[i] >= 0 && sim.w.mK[sim.w.moo[i]] === SNUG;
+    const runGate = (sim: Sim, until: number, bad: { two: number; movers: number }): void => {
+      while (sim.t < until) {
+        sim.step();
+        if (sim.w.movers > moverCapOf(sim.s.tier)) bad.movers++;
+        const seen = new Set<number>();
+        for (let m = 0; m < 8; m++) { if (!sim.w.mK[m]) continue; for (let k = 0; k < sim.w.mN[m]; k++) { const j = sim.w.mM[m * 6 + k]; if (j < 0) continue; if (seen.has(j) || sim.w.moo[j] !== m) bad.two++; seen.add(j); } }
+      }
+    };
+    // (a) all three beside the kettle are in a snuggle when it whistles: the snuggle ends (its row had formed: its SOCIAL goes out) and they sing
+    {
+      const sim = snugStage(['dollop', 'crimpo', 'capnap'], [[kt.x - 0.7, kt.z + 0.5], [kt.x - 0.2, kt.z + 0.9], [kt.x - 1.0, kt.z - 0.1]], [0, 1, 2], true);
+      const bad = { two: 0, movers: 0 };
+      runGate(sim, 39.9, bad);
+      const before = [0, 1, 2].filter((i) => inSnug(sim, i)).length, d = [0, 1, 2].map((i) => Math.hypot(sim.bodies[i].x - kt.x, sim.bodies[i].z - kt.z));
+      runGate(sim, 54, bad);
+      const sg = sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING), sn = sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SNUGGLE).filter((e) => e.t >= 39.9);
+      check('S06', `(round 4, e5) three in a snuggle beside the kettle (${before} of 3 in it at 39.9 s, ${d.map((x) => x.toFixed(2)).join(' / ')} m from it) sing at its whistle: the snuggle gives way (its SOCIAL at ${sn.map((e) => `${e.t.toFixed(1)} s n2 ${e.n2}`).join(', ') || 'none'}), then SING n2 = 3, its thing the kettle (${sg.map((e) => `${e.t.toFixed(1)} s n2 ${e.n2} thing ${e.thing}`).join(', ') || 'none'}); in two moments ${bad.two}, movers over ${bad.movers}`,
+        before === 3 && d.every((x) => x < 2.5) && sn.length === 1 && sn[0].t < 40.2 && sg.length === 1 && sg[0].n2 === 3 && sg[0].thing === TID('kettle') && sg[0].t > 40 && sg[0].t < 40 + 3.7 + 2 * 3.64 + 0.2 && bad.two === 0 && bad.movers === 0);
+    }
+    // (b) a free squishy by the kettle starts the song and takes the two near it out of a snuggle with two farther away (in the same think:
+    // the song's first bar line is on the whistle's own bar line here, so they could not join later as latecomers)
+    {
+      const sim = snugStage(['dollop', 'crimpo', 'capnap', 'puddlo', 'glugbean'], [[kt.x, kt.z + 2.2], [kt.x - 0.4, kt.z + 1.9], [kt.x - 2.3, kt.z], [kt.x - 3.2, kt.z + 0.5], [kt.x - 4.0, kt.z - 0.1]], [2, 3, 4], true);
+      const bad = { two: 0, movers: 0 };
+      runGate(sim, 39.9, bad);
+      const free0 = !inSnug(sim, 0) && sim.w.moo[0] < 0, snugNear = [1, 2].filter((i) => inSnug(sim, i) && Math.hypot(sim.bodies[i].x - kt.x, sim.bodies[i].z - kt.z) < 2.5).length;
+      const farIn = [3, 4].filter((i) => inSnug(sim, i) && Math.hypot(sim.bodies[i].x - kt.x, sim.bodies[i].z - kt.z) >= 2.5).length;
+      let took = -1;
+      while (sim.t < 40.5) { runGate(sim, sim.t + 1 / 60, bad); if (took < 0 && sim.w.moo[0] >= 0 && sim.w.mK[sim.w.moo[0]] === SING_M) took = [1, 2].filter((i) => sim.w.moo[i] === sim.w.moo[0]).length; }
+      runGate(sim, 54, bad);
+      const sg = sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING);
+      check('S06', `(round 4, e5) a free squishy by the kettle starts the song at its whistle and takes the ${snugNear} snuggling within 2.5 m of it out of a snuggle (${farIn} more snuggling farther away): ${took} taken at the start; SING n2 = 3, its thing the kettle (${sg.map((e) => `${e.t.toFixed(1)} s n2 ${e.n2} a ${e.a} b ${e.b} thing ${e.thing}`).join(', ') || 'none'}); in two moments ${bad.two}, movers over ${bad.movers}`,
+        free0 && snugNear === 2 && farIn >= 1 && took === 2 && sg.length === 1 && sg[0].n2 === 3 && sg[0].thing === TID('kettle') && bad.two === 0 && bad.movers === 0);
+    }
+    // (c) the control: a snuggle 3.6 m and more from the kettle keeps going through its whistle and ends with its SOCIAL; no song
+    {
+      const sim = snugStage(['dollop', 'crimpo', 'capnap'], [[-1.5, 0.5], [-1.0, 0.9], [-1.8, 0.0]], [0, 1, 2], true);
+      const bad = { two: 0, movers: 0 };
+      runGate(sim, 39.9, bad);
+      const before = [0, 1, 2].filter((i) => inSnug(sim, i)).length, dmin = Math.min(...[0, 1, 2].map((i) => Math.hypot(sim.bodies[i].x - kt.x, sim.bodies[i].z - kt.z)));
+      runGate(sim, 54, bad);
+      const sn = sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SNUGGLE).filter((e) => e.t >= 39.9);
+      check('S06', `(round 4, e5) the control: a snuggle ${dmin.toFixed(1)} m and more from the kettle (${before} of 3 in it at 39.9 s) is not called away by its whistle: it ends on its own (${sn.map((e) => `${e.t.toFixed(1)} s n2 ${e.n2}`).join(', ') || 'none'}), ${sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING).length} SING`,
+        before === 3 && dmin > 2.5 && sn.length === 1 && sn[0].t > 44 && sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING).length === 0 && bad.two === 0 && bad.movers === 0);
+    }
+  }
 }
 
 /* ───────────────────────────── LF-20 looks, LF-21 REACT from LIFE's real output ───────────────────────────── */

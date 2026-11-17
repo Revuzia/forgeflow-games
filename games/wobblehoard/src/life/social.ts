@@ -272,11 +272,45 @@ function joinSong(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, m: number, j:
     emitVoice(w, s, out, j, PHRASE.SING, waitMs + ((BAR_S * 1000) | 0), -1, k + 16, 2, 0);
   }
 }
-/** How many may sing with i at tune tk (i included): within 2.5 m of the tune (Home: within 4.5 m of i). */
+/** How many may sing with i at tune tk (i included): within 2.5 m of the tune (Home: within 4.5 m of i); (round 4, engineer 5) one inside
+ *  a snuggle or a peekaboo counts (a song at a tune calls it away: inYielding). */
 function singersNear(w: LifeWorld, s: LifeSnapshot, i: number, tk: number): number {
   let n = 1;
-  for (let j = 0; j < s.n; j++) if (j !== i && canSing(w, s, j) && (w.home ? dmm(s, i, j) < 4500 : tuneNear(w, s, j, tk))) n++;
+  for (let j = 0; j < s.n; j++) if (j !== i && (canSing(w, s, j) || inYielding(w, s, j)) && (w.home ? dmm(s, i, j) < 4500 : tuneNear(w, s, j, tk))) n++;
   return n;
+}
+/** (round 4, engineer 5) Is j inside a running S07 snuggle or S13 peekaboo that a song at a tune calls it away from? Both are behaviours
+ *  (D-75), so LIFE 4's utility choice holds for them while they run: the running one keeps its score + 0.15 (a snuggle 0.55 + 0.15, a
+ *  peekaboo at most 0.7 + 0.15) and a song at a tune scores 0.95 (SONG_AT_TUNE). Only one that may sing: a whole or a face piece, not held,
+ *  not riding. (The two chatty friends' song, 0.45, calls nobody away.) */
+function inYielding(w: LifeWorld, s: LifeSnapshot, j: number): boolean {
+  const q = w.moo[j];
+  return q >= 0 && (w.mK[q] === MOM.SNUGGLE || w.mK[q] === MOM.PEEK) && w.ki[j] !== 2 && (s.flags[j] & (HELD_BITS | LIFE_FLAG.RIDE)) === 0;
+}
+/** End the snuggle or peekaboo q a song calls its members away from: a snuggle whose row had formed happened (its SOCIAL goes out); one
+ *  still gathering, or a peekaboo, did not. */
+function yieldToSong(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, q: number): void {
+  endMoment(w, s, out, ev, q, w.mK[q] === MOM.SNUGGLE && w.mP[q] === 2);
+}
+/** (round 4, engineer 5) Does a tune call the members of running snuggle or peekaboo m to sing, when none outside it starts the song (all
+ *  near the tune are inside it)? A member that may sing stands near the playing tune, and either a song at that tune is still before its
+ *  first bar line (they join it as latecomers) or a new song may start there (once per 2 min a place) with 2+ singers: the members near
+ *  the tune and the free singers near it. */
+function songCalls(w: LifeWorld, s: LifeSnapshot, m: number): boolean {
+  const tk = tunePlaying(w, s), tb = w.f[F.NOW];
+  if (tk === -1) return false;
+  let near = 0;
+  for (let k = 0; k < w.mN[m]; k++) {
+    const j = mem(w, m, k);
+    if (j >= 0 && j < s.n && inYielding(w, s, j) && tuneNear(w, s, j, tk)) near++;
+  }
+  if (near === 0) return false;
+  for (let q = 0; q < MAX_MOMENTS; q++) {
+    if (w.mK[q] === MOM.SING && w.mP[q] === 1 && w.mN[q] < MAX_MEMBERS && tb < w.mE[q] - 2 * BAR_S - 0.05 && (w.home || w.mTh[q] === tk)) return true;
+  }
+  if (tb - w.f[F.SONG] < 120) return false;
+  for (let j = 0; j < s.n; j++) if (canSing(w, s, j) && tuneNear(w, s, j, tk)) near++;
+  return near >= 2;
 }
 function friendChattyNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
   for (let j = 0; j < s.n; j++) {
@@ -302,6 +336,9 @@ export function beginPicked(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev:
     if (m < 0) return false;
     const maxN = kind === MOM.SING ? 6 : 4, tp = tunePlaying(w, s), tk = kind === MOM.SING ? tp : -1;
     for (let j = 0; j < s.n && w.mN[m] < maxN; j++) {
+      // (round 4, engineer 5) a song at a tune calls a singer near it out of a snuggle or a peekaboo (inYielding: LIFE 4's choice, 0.95
+      // against the running behaviour's score + 0.15); that moment ends first, then it sings
+      if (kind === MOM.SING && j !== i && tk !== -1 && !canSing(w, s, j) && inYielding(w, s, j) && (w.home ? dmm(s, i, j) < 4500 : tuneNear(w, s, j, tk))) yieldToSong(w, s, out, ev, w.moo[j]);
       if (j === i || (kind === MOM.SING ? !canSing(w, s, j) : (!w.ac[j] || w.ki[j] === 2 || !isFree(w, s, j, false) || !idle(w, j)))) continue;
       // (round 4) a snuggle does not take one who would rather sing: a tune plays near it with another singer (its own best, 0.95 > 0.55)
       if (kind === MOM.SNUGGLE && tp !== -1 && !w.home && tuneNear(w, s, j, tp) && singersNear(w, s, j, tp) >= 2) continue;
@@ -387,6 +424,11 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
   const tb = w.f[F.NOW];
   const kind = w.mK[m], a = mem(w, m, 0), b = w.mN[m] > 1 ? mem(w, m, 1) : -1, n = w.mN[m];
   if (tb >= w.mE[m]) { endMoment(w, s, out, ev, m, w.mP[m] >= 1 && w.mS[m] !== 1); return; }
+  // (round 4, engineer 5) S07 snuggle and S13 peekaboo are behaviours (D-75): a song at a tune near a member beats them by LIFE 4's
+  // utility choice (inYielding). A song a free singer starts takes them itself (beginPicked); when everyone near the tune is inside this
+  // moment, it ends here and they start the song on their next think. Before this, three set beside the kettle 10 s before its whistle
+  // were inside a snuggle when it whistled (probe_pg_lifequests' cabin finale, C8).
+  if ((kind === MOM.SNUGGLE || kind === MOM.PEEK) && songCalls(w, s, m)) { yieldToSong(w, s, out, ev, m); return; }
   // a traveller (one mover at a time) keeps checking its arrival
   if (w.mS[m] === 1) {
     const j = mem(w, m, w.mT[m]);

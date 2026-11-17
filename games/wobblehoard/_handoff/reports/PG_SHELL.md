@@ -334,3 +334,113 @@ not only its bounds, above the HUD rows. The hint pill no longer runs under "Put
     hoard-phone, menu-pause, fullscreen-gate, toasts, modal-layers, ui-sounds, **prod-build** (G0 2373 KB of 3072, G0b 459 KB gzip of 600; "no DebugHook, no sound
     lab, no dev CSS" grep of 50 files; strict CSP 0 violations; **`?dev=1&lab=1` on the build: no `window.__WH__`, NO STATS OVERLAY, no sound lab**: the dev
     overlay is harness-only, confirmed), console-and-network 40/40.
+
+# Round 4, second engineer (2026-11-17 from 10:06 UTC; HEAD ad49b7902; the container had just restarted: nothing of anyone running, tree clean)
+Picked up after engineer 1 was cut off after run 3 (410/432) and R4.11 / R4.12; its run 4 (`r4/pub4`) died at once (the browser closed: the restart).
+PG_PHYS has finished round 4 (`setParked` fixed; `setAuto`, `grabProp`, `dragPropRay`, `releaseProp`, `setBounds`, `setHome`, `carryTo`, events'
+`auto` / `prop` / `other`, `metrics.contacts`, S2 water, pad, ramp, floater, Shake Pine: all at HEAD): the FALLBACKS go. PG_QUESTS has no round 4: CO-12
+row 3 is NOT re-specified (the gift sweep stays blocked, see R4.2). New requests since engineer 1: PG_LIFE round 4 (`lifeThingTap`, `lifeGustOn`,
+`UNIT.piece`). Method as engineer 1: browser runs on a `git archive HEAD` snapshot (`r4/tree_r5`) + my lane's files only, port 5366 (5367 for prod-build).
+
+## R4b steps (updated after every finished step)
+| step | what | state |
+|---|---|---|
+| R4b.0 | read the report, SESSION3, the brief with D-95 revised, PG_PHYS round 4 (R4.2 to R4.5), PG_LIFE round 4's requests, PG_QUESTS (no round 4) | DONE 10:15 |
+| R4b.1 | re-run 4 (`r4/pub5`, tree_r5 = HEAD ad49b7902): the sections that failed in run 3 (toolbar, toolbar-gravity, toolbar-grid, toolbar-k04, cut-touch, fix2-dock, keyboard-only) + console-and-network | DONE 10:16: **177/178**. Every R4.12 target row passes (below); one new FAIL, an intermittent |
+| R4b.2 | the FALLBACKS go (later-life.ts): `parkThing` -> `world.setParked`; takeAuto reads `e.auto` only (an event without it is the player's, as the published game treats every event) and a body bump's partner is `e.other` only (`e.prop >= 0` is a prop bump); `metrics.contacts` only for the touching pairs; `setHome` only (the corral-field write is gone); the D-95 block on PropWorld's own `setAuto` / `grabProp` / `dragPropRay` / `releaseProp` (no optional-member typing, no fallback branch); **LIFE's USE intent now lifts the squishy onto the ride by `carryTo`** (the swing's seat top, or the rocker board's end nobody is near; 0.6..5 s; never paid) and the host has `playWith(itemId, thing)` (the name tag popover's "Go play with...", dev hook until the popover exists); GLIDE's per-call `{x,y,z}` allocation replaced by one reused object. Plus PG_LIFE round 4's requests: `lifeThingTap` after a tap's effect (every switch, a chime row; the fireplace only when the fire comes on), `UNIT.whole / piece / sleeper / pair` for `LifeSnapshot.units` (the piece was the literal 0.22, LIFE's is 0.26); the IN_WATER flag from physics' `metrics.submerged` (brief S2); the dev view's characters carry `sub` and `onProp` | DONE 10:22: tsc 0; node_checks **163/163** on HEAD + my files (`r4/tree_nc`; 162 + 1 new row) |
+
+### R4b.1 notes: re-run 4 against run 3's 22 FAILs (same machine, port 5366, HEAD = engineer 1's R4.11 + R4.12)
+- toolbar-gravity: all rows ok (the pair in the tray at 390x844, the Hoard's count given away, the Float pair box): the Journal is out of the dock (R4.12a).
+- toolbar-grid K02: all 30 rows ok at 1280, 888, 390, 320, 844x390, 568x320, 632x355, 358x201 (no bubble hit area clipped or under the HUD: R4.12b; no "Mute sound 41x44" either).
+- toolbar-k04 K04: the four walks ok. cut-touch: the real finger swipe draws the blade (R4.12c). fix2-dock 568x320: the Cut strip over the whole and its pieces under 5 % (ok without the Journal in the tray).
+  toolbar "Enter on Cut ... the 1.4 s caption chip": ok (run 3's was load timing). keyboard-only "Tab order in play" ok as re-specified (the Journal first, every published stop in its place).
+- **NEW, intermittent: keyboard-only "holding Space squishes (... compression > 0.1 while held)": FAIL once** (`press event true, compression 0.069, press 1.000, fingers 1`:
+  60 s held at full press and the body never compressed past 0.1). Run 3 passed it on the same code, and two solo re-runs of keyboard-only on the same tree pass
+  (compression 0.134 at press 0.50; 0.169 at press 0.63). Not seen in any PC report. The likeliest PLAYGROUND cause: the first Space tap counts as "the player let go",
+  so 6 s later FIRST_PLAY sends Dollop to the Felt Ball; a hold that lands while it leans on the ball or the Music Box presses a body that a prop holds up. Not fixed:
+  not reproduced; the row's detail now carries Dollop's LIFE state, prop and the ball (diagnostics only, the check unchanged) for the final run.
+| step | what | state |
+|---|---|---|
+| R4b.4 | polish and S2 producers found by the S2 look (R4b.5): (a) **the front framing**: a place's `setPlayBounds` front edge (+z, the bottom of the screen) reaches every thing's footprint + 0.1 m (`frontReach`, framing only, never physics): the cabin's tall Rocker Board (z 3.0, half width 0.3) lay under the phone's bottom rows; the wide cabin is unchanged (all inside 2.4); (b) **the PHOTO record**: the published Snap > Save now notes `photo` to the host when one exists (hudBinding.ts, one guarded line; no host = the published path): G8 / X8 need it and nothing produced it; (c) **"rides the player set up"** (QUESTS 4's USE producer): a ride the body lands on within 6 s of the player letting go of a carry (or of a `playWith` lift) writes USE with the ride's verb by PLAYER (I7 "Set a squishy at the top of the ramp", R9 the Sand Mound, a swing / rocker); (d) **a pad's kick** (physics strikes the pad, cause 1) writes one USE BOUNCE by the body per 2 s run of kicks (G4; the strikes reached only chimes before); (e) **the Drip Leaf** (a 'shower' switch): its Leaf Drip zone is dry on arrival, a tap tips a 4 s shower (the zone on, its puff, its rustle, USE SWITCH by PLAYER, `lifeThingTap`), and **a place's shower envelope** (Rainleaf's rain: 40 s on, 30 s off from the arrival, sim time) now gates the wet zone (it was wet all the time) | DONE (tsc 0); node rows below |
+
+### R4b.3 Requests to PG_SHELL: state after R4b (adds to R4.6; rows not listed here stand as R4.6 says)
+| from | request | state |
+|---|---|---|
+| PG_QUESTS R3 step 1 | the trophies' gift sweep (one line in achievementsBinding.ts `attach()`) | **NOT DONE, still blocked**: PG_QUESTS has no round 4, so its own passing row probe_journal CO-12 row 3 ("the trophies' save with a Journal attached, a ring fed and a gift granted equals the save without one") still forbids exactly what the sweep does (the gifted species counted: species 1 -> 2). I did not route the sweep through the life host to dodge the row (the rig has no host, so the row would stay green while the real game breaks the behaviour it asserts: that would be loosening it). Needs PG_QUESTS or the orchestrator to re-specify CO-12 row 3 as R4.2 words it; then the line goes in as written there |
+| PG_PHYS R4.5 (1) | `parkThing()` can go | DONE R4b.2 (`world.setParked`; node row re-specified onto it) |
+| PG_PHYS R4.5 (2) | takeAuto reads `e.prop` / `e.other`; setAuto / grabProp / dragPropRay / releaseProp / setBounds are real | DONE R4b.2 (fallback branches removed) |
+| PG_PHYS R4.5 (3) | `carryTo(x, y, z, s)` for LIFE's USE and "Go play with..." | DONE R4b.2 (USE intent -> carryTo onto the seat or the board's free end; `playWith` on the host; node row: Dollop lifted onto the Pillow Swing, still riding 2 s later, meter unchanged). The name tag popover that would offer "Go play with..." to the player is NOT built (11.8) |
+| PG_PHYS R4.5 (5) | `metrics.contacts` replaces the distance FALLBACK | DONE R4b.2 |
+| PG_PHYS R4.5 (6) | `setPropWorld(null)` when a body leaves play | already DONE (removeChar, rebind, dispose) |
+| PG_PHYS R4.7 | `mods` (E2) not built; physics reads `mods[4]` as density when the body has a `mods` array | NOT DONE: SoftBody has no `mods` array (the shell would have to add a field to a physics object); soaking a foam into its soaked density, ice grip and wet grip wait for PG_PHYS's E2. **Request to PG_PHYS:** give SoftBody its `mods` Float64Array(8) (all 1); the shell then writes [4] per family from FAMILY_REACT at 10 Hz |
+| PG_LIFE R4 (1) | `lifeThingTap(w, thing)` after a tap's effect (every switch, a chime row, the Star Scope; the fireplace only when the fire comes on) and for the keyboard's "Tap it yourself" | DONE for the pointer taps (R4b.2). The keyboard's "Tap it yourself" (11.8, D-93) is NOT built, so its half waits with it |
+| PG_LIFE R4 (2) | drive the wind's gust (audio weather, physics' force) from `lifeGustOn(w, k)` | NOT DONE: the wind zones are S3's (Lanternroof, Cloudloft; not open) and physics has no wind force (PG_PHYS R4.7) |
+| PG_LIFE R4 (3) | `LifeSnapshot.units` with `UNIT.piece` (0.26), not 0.22 | DONE R4b.2 (all four weights from UNIT; contracts.ts' comment on `units` now names UNIT) |
+| brief S2 | water flags: `submerged` into IN_WATER | DONE R4b.2 (`metrics.submerged > 0`) |
+
+### R4b.5 The S2 places: visited end to end through the Travel sheet; NOT opened this round (they stay "coming later"; reasons per place)
+Method (`scratchpad/pg_shell/r4/explore2.mjs`, log `explore2_run2.txt`, shots `r4/shots2/`): a SCRATCH tree (`r4/tree_s2` = HEAD + my files, and only there
+`shipped: true` and `stampsToOpen: 1` for the three in data/places.ts and their PlaceDefs: a player with 12 / 20 / 28 stamps, no repo file changed), the REAL game on
+5366, 1280x800 and 390x844 (dpr 2, touch), two squishies out (two capsules), the Places button and sheet (the postcards: Home, the cabin "A wish will show the way
+here.", Ripple / Frostbell / Rainleaf with "Go to", five "coming later"), then each trip by the sheet's own path (`travel(id)`, the shipped and open checks on), the
+player's tap on each chime / switch thing, 90 s of sim there, home again. The data, look and sound chunks load, the party arrives in the right layout (wide 0 /
+tall 1), the AUTO chip shows on Rainleaf's Leaf Teeter, home again shows Home's things; **0 console errors / failed requests on the desktop page** (the phone page's
+last screenshot was cut by my own 40 min timeout before its error line: not counted either way).
+| place | 90 s with two squishies, desktop / phone | why it does NOT hold up yet |
+|---|---|---|
+| Ripple Shore | R1 done; R3 (shell chimes) 1/3 by the player's tap; nobody went into the Rock Pool in 90 s (water share 0) | **R7 "SQUIRT"** needs the squirt game (S14: the shell's squeeze-a-soaked-foam rule plus a render spray and a sound; there is no seam for either in render or audio): a shown quest no player can finish (D-78). **The tall layout does not fit a phone**: the Rock Pool (x 1.40, r 1.3), the Bob Ring and the Shell Chimes stand past the frame's sides (`pg_r4b_ripple_stay_phone.png`: the pool is a strip at the right edge), so carrying squishies into it (R2, R6) is hard on a phone (PG_DATA). |
+| Frostbell Ridge | I1, I2 done; the Steam Pool took Dollop in (water share 0.16, IN_WATER); I9 1/5 by the player's bell tap; the Shake Pine tap is taken | **I3 "GLIDE" on the Ice Pond** needs physics' ice (`mods`, E2, not built): LIFE's glide nudge meets ordinary friction (0/2 in 2 x 90 s). The tall layout's Snowdrift Nest and its sleeper lie under the hint pill and "Put back" (`pg_r4b_frostbell_stay_phone.png`); the Shake Pine is cut by the right edge. I7 (the ramp) is producible now (R4b.4 c) but not yet seen in a browser. |
+| Rainleaf Garden | G1, G9 (SOAK) done; the Leaf Teeter AUTO chip; the drip leaf tap is taken | Closest to holding up: every one of its ten quests has a producer on paper after R4b.4 (G4 the pad's USE BOUNCE, G7 the Drip Leaf's shower, G8 the PHOTO record), but none of those three is seen in a browser yet (node: the Drip Leaf row only), and G2 SPLASH / G3 TEETER / G5 PARADE (three) / G6 PIECES SPLASH were not seen in 2 x 90 s. One scripted Rainleaf visit (three out, a toss onto the Moss Bouncer, a squishy under the Drip Leaf tapped, a Snap) would decide it. |
+Opening is a data flip (PLACE_INFO.shipped and each PlaceDef's `shipped`, the orchestrator's / PG_DATA's): the shell needs no change for it (the sheet, the trip,
+the journal's compiled rules and LIFE's thing kinds all follow PLACE_INFO), and node_checks' "S2 by the dev path" row checks the trip itself each run.
+Shots looked at: `pg_r4b_travel_desktop.png` (the sheet with the three: fine; the "New stamp" toasts stand over the sheet's top cards for their 3 s, the published toast
+layer), `pg_r4b_ripple_arrive_desktop.png` / `_stay_desktop.png` (the beach, the Bob Ring floating in the Rock Pool, the Shell Chimes, the log, the mound, the pebble ball;
+no stray Home thing), `pg_r4b_frostbell_arrive_desktop.png` (steam pool, ice pond, the ramp with rails, the snow nest, the pine; fine), `pg_r4b_hearthlog_arrive_phone.png`
+(the cabin's tall layout with the front framing: the Rocker Board now stands above "Put back" and the name tag, its base still under the hint pill; no black shape),
+`pg_r4b_ripple_stay_phone.png`, `pg_r4b_frostbell_stay_phone.png` (above).
+**Requests:** PG_DATA: the tall layouts of Ripple (the Rock Pool, the Bob Ring, the Shell Chimes) and Frostbell (the Shake Pine, the Snowdrift Nest) inside the
+phone frame and out of the front band. PG_RENDER / the orchestrator: the hint pill is not one of the HUD rows the shell reports to `setSafeInsets` (the PC's
+choice: STATUS "hint line covers part of the squishy on strip sizes"), so a place's front band lies under it on a phone; counting it would move the published Home
+framing, so I did not. PG_PHYS: `mods` for ice. Render + audio: a spray and a sound for the squirt game, then the shell builds S14.
+
+### R4b.6 Every node probe on the final tree (11:00, `r4/tree_final` = HEAD ad49b7902 + my lane's files only; `r4/probes.sh`, logs `r4/probes_final/`)
+| check | HEAD (R4.0 / PG_PHYS R4.6) | final tree |
+|---|---|---|
+| tsc | 0 | 0 (the working tree too, with the other lanes' edits) |
+| probe_app | 187/187 | **187/187** |
+| probe_gestures | 160/160 | **160/160** |
+| probe_merge | 22/22 | **22/22** |
+| probe_trophies | 31/31 | **31/31** |
+| probe_collection | 73/74 or 74/74 (C08 flaky) | **73/74** (C08 previewTouch allocation 160 000 B / 20 000 calls: the known flaky row, collection code) |
+| shellview/node_checks | 162/162 (HEAD) | **165/165** (+3: the front framing, "Go play with" onto the swing, the Drip Leaf; the parkThing row re-specified onto setParked, the D-95 fallback branch removed) |
+| probe_economy, probe_catalog | all | **all passed** |
+| probe_life | 114 ok, 1 fail (LF-02) | **114 ok, 1 fail** (LF-02, PG_LIFE's) |
+| probe_chatter | 42/42 | **42/42** |
+| renderview/pg_node_checks | 40 ok | **40 ok, 0 FAIL** |
+| probe_screens / probe_overlays / probe_uikit | 43 / 21 / 62 | **43/43, 21/21, 62/62** |
+| probe_journal | all (CO-12 included) | **all passed** (CO-12's info row: the gifted species still counted at the next sweep: R4b.3) |
+One-file sizes (14.3's method, `size.mjs`, HEAD -> now): later-life.ts 41 346 -> **42 755 B** (+1 409, life chunk: carryTo rides, playWith, the shower and envelope, the ride and pad USE, frontReach, lifeThingTap); hudBinding.ts 16 847 -> **16 880 B** (+33, first load: the photo note); game.ts, boot.ts, lifeLink.ts unchanged. The shell's first-load share stays about 4.0 KB of its 12 KB cap; the life chunk was already over its 150 KB cap at round 3 (D-92's moves still not done).
+
+### R4b.7 THE run: the published-feature sections + the PG sections + trophies, lock, photo, b4b on one tree (`r4/run_final.sh final1`, 11:04 to 12:27)
+Tree `r4/tree_final` = `git archive HEAD` (ad49b7902) + only my lane's working files (later-life.ts, lifeLink.ts, hudBinding.ts, contracts.ts comment,
+browser_shell.mjs, node_checks.ts); HEAD's `src/life` (PG_LIFE's working social.ts was mid-edit), port 5366 (prod-build and photo's CSP origin 5367: both free).
+| harness | result | the FAILs, each compared with the PC's own numbers |
+|---|---|---|
+| browser_shell, 31 sections (desktop-boot, mouse-gestures, shift-pull, shift-hint-reflow, shift-touch, settings-panel-desktop, hoard-loop, toolbar, snap-mat, cut-real, toolbar-phone, toolbar-gravity, toolbar-grid, toolbar-sweep, toolbar-k04, cut-touch, cut-x, fix2-dock, cut-swell, cut-low, hoard-phone, menu-pause, fullscreen-gate, toasts, modal-layers, ui-sounds, keyboard-only, prod-build, pg-playthrough, pg-phone, console-and-network) | **494/497** (run 3: 410/432) | (1) cut-real "leaving: a quick switch reconnects at once" (`tsw {p:2, x:1}`) and (2) "leaving: hidden 30 s ... over 60 s comes back whole" (`short 3, long 1`): **the PC's own on this machine**, identical numbers on the PC's published tree 9211d66ba (engineer 1's A/B, `r4/ab_pc`). (3) toolbar "the caption chip goes after about 1.4 s": **load timing** (a 1.4 s page timer read at 1.7 s while the GPU process ran at 347 % CPU): the toolbar section alone on the same tree right after: **13/13**; it passed in run 2, run 3 and re-run 4. Not run: the gift card row (it needs the cabin finale C8: reported as not run, never as a pass). |
+| uikit/trophies_check --only=game | **15/15** | - |
+| shellview/lock_browser | **17/17** | the PC's LOCK_SHELL / LOCK_GATE: 17/17 |
+| portal/photo_check --only=dev,phone,standalone | **23/23** | - |
+| uikit/b4b_checks | **77/78**, then **78/78** | the one FAIL was PLAYGROUND's: "Settings: the Tab walk ... 13 stops" met 16 (round 3's settings v3 added Voices, Place sounds and "Squishies move on their own"; probe_screens was re-specified then, b4b_checks was not). **Re-specified with the written reason in the code** (16 stops, the three new ids required, every published id, the first and the last stop unchanged); `b4b_checks --only=keyboard` on the same tree: **23/23**. The PC's UI_B7 count: 78. |
+Rows of note: prod-build G0 **2398 KB** of 3072, G0b **461 KB** gzip of 600, the strict CSP 0 violations, **`?dev=1&lab=1` on the build: no `window.__WH__`, no stats overlay, no sound lab** (the dev overlay is harness-only, confirmed again); keyboard-only all ok (the hold-Space row: compression 0.148, Dollop idle at the centre: its one FAIL stays 1 in 5 runs); hoard-loop's and pg-playthrough's "Put back 2" kit rows ok; console-and-network 102/102 (0 console errors, 0 failed requests on every page).
+**pg-playthrough (desktop) all 19 rows ok**: the life chunk 2.3 s after Wake, H1, H2 (FIRST_PLAY), the party through two capsules and the Hoard's Bring out (3 out), H5, LIFE at Home (emote 9, voice 25, scoot 15, hop 35, gaze 32, pose 48, auto 12 in 40 s), the Music Box on / off by real clicks, the Journal (Esc, focus back), the first wish opens the cabin, H7 by the wish bubble's 44 px hit area, the Travel sheet, the trip by the sheet (H8, C1, C10), D-95 AUTO by a real click (the seat swings by itself) and the hand on the seat (a real mouse drag, the view does not turn), the fireplace tap, home again in mat order; 0 console errors.
+**pg-phone (390x844, touch) all 9 rows ok** (step 8's missing half, now run): three out at Home in the tall frame; **"Put back 2" the kit button in the stack layout** (44 px, inside 390 px, clear of the hint pill); the Journal a bottom sheet inside 390 px; closed by a tap, no tooltip left standing; the cabin in its tall layout; **the Rocker Board above the bottom HUD rows** (centre y 614 against the rows' top 618: the front framing, R4b.4 a); the two AUTO chips inside the frame and clear of the HUD, a tap turns the swing's AUTO on (0.485 m range); a finger on the seat is the hand; 0 console errors.
+Shots looked at (`_shots/shell/pg_*.png`, copied from `r4/final1/shots`): `pg_cabin_phone.png` (no black shape; the Rocker Board's top above "Put back" and the name tag, its pivot still under the hint pill "Tap a tool to try it."; **two "New stamp" toasts stand over the Journal and Places buttons for their 3 s**: the toast stack and the R4.12 column share the top right at 390 px: NOT fixed, noted below), `pg_home_party_phone.png` (three on the mat, lamp, ball, Music Box; the published mat framing leaves the party small at 390), `pg_cabin_auto_desktop.png` (the swing mid-arc under its pressed Auto chip, the rocker's chip on its board).
+
+## R4b known issues and NOT done (honest list)
+- **S2 not opened** (R4b.5): Ripple (the squirt game, R7; its tall layout off the phone frame), Frostbell (ice needs `mods`), Rainleaf (closest: three new producers not yet seen in a browser). The S2 visits themselves work through the sheet's path in a scratch tree.
+- **The trophies' gift sweep**: blocked by PG_QUESTS's CO-12 row 3 (R4b.3); no re-specification exists.
+- keyboard-only "holding Space squishes": 1 FAIL in 5 runs (re-run 4), not reproduced; diagnostics in the row's detail.
+- On a 390 px phone the "New stamp" toasts cover the Journal / Places column for their 3 s (`pg_cabin_phone.png`). Not fixed (moving the toast stack would touch the published toasts section).
+- The hint pill is not in the insets the shell reports (the PC's own choice), so a place's front things and a squishy in the front band can sit under it on a phone (Frostbell's nest, the cabin's rocker pivot).
+- NOT built (as round 4 engineer 1 listed): the name tag popover ("Go play with...", the host's `playWith` is ready), the keyboard's "Tap it yourself", the Snap shutter / preview and the Friendship Frame, the wish card, the moments queue's caps, the tracker pill, the squirt game, `mods` writes, the wind gust drive, the life chunk's 150 KB cap (it is over).
+- No git write command was run. Nothing of mine is left running (`ps` checked at 12:31: no vite, no browser, no harness).

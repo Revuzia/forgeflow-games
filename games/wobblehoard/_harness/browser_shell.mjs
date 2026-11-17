@@ -4460,8 +4460,10 @@ async function main() {
       const kd = await waitUntil(page, () => window.__WH__.state().metrics.compression > 0.1, null, 60000);
       const kdm = (await state(page)).metrics;
       const kdv = (await started(page)).squish - a0.squish;
+      // (R4b diagnostics only, the check is unchanged: re-run 4 saw this row fail once in four runs with compression 0.069 at press 1.0; where LIFE had the squishy then)
+      const kdl = await page.evaluate(() => { const l = window.__WH__.life?.(); if (!l) return null; const c = l.chars[0], b = l.life?.chars?.[0]; return { c: c && { x: c.x, z: c.z, flags: c.flags, onProp: c.onProp, asleep: c.asleep }, beh: b?.beh, moving: b?.moving, ball: l.things.find((t) => t.id === 'feltball'), counts: l.counts }; });
       await page.keyboard.up('Space');
-      check('holding Space squishes (a press event, a squish voice, compression > 0.1 while held)', !!kpress && kd && kdv === 1 && kdm.fingers === 1, `press event ${!!kpress}, compression ${kdm.compression.toFixed(3)}, press ${typeof kdm.press === 'number' ? kdm.press.toFixed(3) : 'n/a'}, fingers ${kdm.fingers}, squish voices +${kdv}`);
+      check('holding Space squishes (a press event, a squish voice, compression > 0.1 while held)', !!kpress && kd && kdv === 1 && kdm.fingers === 1, `press event ${!!kpress}, compression ${kdm.compression.toFixed(3)}, press ${typeof kdm.press === 'number' ? kdm.press.toFixed(3) : 'n/a'}, fingers ${kdm.fingers}, squish voices +${kdv}; life ${JSON.stringify(kdl)}`);
       await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 60000);
       await page.keyboard.press('g'); await sleep(500);
       check('G on the squishy: float mode, announced in the live region ("Floating")', (await state(page)).settings.gravity === false && /Floating/.test(await live(page)), await live(page));
@@ -5086,6 +5088,16 @@ async function main() {
       check('PG phone: the life chunk lands; the first capsule keeps both out (D-52), the second replaces the play squishy as published, the Hoard brings the first newcomer back: three LIFE characters at Home in the tall frame (layout 1)',
         landed && l1.chars.length === 3 && l1.layout === 1, JSON.stringify({ chars: l1.chars.map((c) => [c.species, c.x, c.z]), layout: l1.layout, scale: l1.bodyScale }));
       await pgShot(page, 'pg_home_party_phone');
+      // "Put back n" on the phone (R4 polish, both layouts): the kit button, 44 px, inside the 390 px frame, clear of the hint pill (R4.5 lifts the pill a row)
+      const pchip = await page.evaluate(() => {
+        const c = document.querySelector('.mat-chip'); if (!c) return null;
+        const cs = getComputedStyle(c), r = c.getBoundingClientRect(), hint = document.querySelector('.hint[data-show="true"]')?.getBoundingClientRect() ?? null;
+        const over = !!hint && hint.width > 0 && !(r.right <= hint.left || hint.right <= r.left || r.bottom <= hint.top || hint.bottom <= r.top);
+        return { kit: c.classList.contains('k-btn'), hidden: c.hidden, w: r.width, h: r.height, x: r.x, right: r.right, radius: parseFloat(cs.borderTopLeftRadius), bg: cs.backgroundColor, font: cs.fontFamily, text: c.textContent, overHint: over };
+      });
+      check('PG phone "Put back 2" is the kit button in the stack layout too (k-btn, 44 px high, rounded, the kit surface and font, inside the 390 px frame, clear of the hint pill)',
+        !!pchip && pchip.kit && !pchip.hidden && pchip.h >= 44 && pchip.radius >= 8 && !/^rgb\(2[23]\d, 2[23]\d, 2[23]\d\)$/.test(pchip.bg) && !/^(Arial|system-ui|-apple-system)/.test(pchip.font)
+          && /Put back\s*2/.test(pchip.text) && pchip.x >= 0 && pchip.right <= 390 && !pchip.overHint, JSON.stringify(pchip));
       await page.evaluate(() => window.__WH__.resume());
       await hclick(page, '.dock-journal'); await settle(page);
       const jn = await page.evaluate(() => { const d = document.getElementById('wh-journal'); if (!d) return null; const r = d.getBoundingClientRect(); return { w: r.width, h: r.height, sw: document.documentElement.scrollWidth, iw: innerWidth }; });
@@ -5105,6 +5117,15 @@ async function main() {
       check('PG phone: the cabin in its TALL layout (aspect under 0.9): the party arrived (place 1, layout 1)', opened >= 0 && ok && l2.place === 1 && l2.layout === 1, JSON.stringify({ opened, ok, place: l2.place, layout: l2.layout, chars: l2.chars.map((c) => [c.species, c.x, c.z]) }));
       await page.evaluate(() => window.__WH__.resume()); await sleep(900); await page.evaluate(() => window.__WH__.pause());
       await pgShot(page, 'pg_cabin_phone');
+      // (R4b) the framing reaches the front things: the tall layout's Rocker Board stands on the bounds' front edge (z 3.0); its centre is drawn above the
+      // HUD's bottom rows (round 3's phone shot had it under the hint, "Put back" and the name tag)
+      const front = await page.evaluate(() => {
+        const L = window.__WH__.life(), rb = L.things.find((t) => t.id === 'rockerboard');
+        const low = [...document.querySelectorAll('.hud-bottom > *, #wh-dock, .mat-chip:not([hidden]), .hint[data-show="true"], .meter-cluster')].map((e) => e.getBoundingClientRect()).filter((q) => q.width > 0 && q.top > innerHeight / 2);
+        const bandTop = low.length ? Math.min(...low.map((q) => q.top)) : innerHeight;
+        return { rb: rb && [rb.sx, rb.sy], bandTop };
+      });
+      check('PG phone cabin (tall): the Rocker Board on the layout\'s front edge is drawn above the HUD\'s bottom rows (the framing reaches the front things)', !!front.rb && front.rb[1] !== null && front.rb[1] < front.bandTop, JSON.stringify(front));
       // D-95 (revised) on a phone: the two Auto chips inside the 390 px width and clear of the HUD; a TAP on the swing's chip turns AUTO on; a finger on the seat is the hand
       const pc0 = await pgChips(page);
       const pSw = pc0.find((c) => /Pillow Swing/.test(c.label ?? ''));

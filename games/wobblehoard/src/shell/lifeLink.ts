@@ -73,6 +73,9 @@ export interface LifeHostApi extends LifeHostLike {
   autoThings(): Array<{ k: number; id: string; on: boolean; x: number; y: number }>;
   /** the player switches AUTO of place-local thing k (a hinge ride) on or off; false when it cannot (no such ride, no AUTO in physics) */
   setThingAuto(k: number, on: boolean): boolean;
+  /** "Go play with..." (11.8; the name tag popover's entry, the dev hook until it is built): the squishy with this item id plays with place-local thing k
+   *  next (LIFE's PLAY_WITH, which works with autonomy off; a ride is reached by physics' carryTo, never paid); false when no such squishy or thing */
+  playWith?(itemId: string, k: number): boolean;
 }
 
 /** Raw early events (before the host attached): what the host needs to write TOUCH and CAPSULE records for them. At most EARLY_CAP; the rest
