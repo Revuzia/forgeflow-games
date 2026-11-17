@@ -28,7 +28,7 @@
 import { shadeCut } from '../shaders/shadecut.ts';
 /** PERF s19 bisection `?wshade=` (shaders/shadecut.ts): nonoise novor fbm1 noshadow all */
 const WSHADE = shadeCut('wshade');
-import { perfList, perfSwitch } from '../perfswitch.ts';
+import { perfList, perfNum, perfSwitch } from '../perfswitch.ts';
 import { NOISETEX_FN_GLSL, TNOISE_UNIFORMS, WNOISE } from './noisetex.ts';
 /**
  * PERF s21 `?waterland=0` = the old behaviour. On (default): a water fragment whose ground stands above the sheet
@@ -42,6 +42,47 @@ const WATERLAND = perfSwitch('waterland');
 /** PERF s21 `?wfast=1` (default off): the fragment's simplex noise from the noise volume, the ripples' per-wavelet
  *  constants precomputed, the ripples' shared noises taken once for both flow phases. Same formulas otherwise. */
 const WFAST = WNOISE;
+/**
+ * PERF s21 `?wfast=2` (default off): the sibling games' method (three's Water.js, pirates-cove): the fine ripples are
+ * taps of ONE tiling normal map (made once here from wavelets of the ripples' own steepness law, mips + anisotropy),
+ * two scales x two scroll directions, projected along the body axes (1-3 projections by the up vector). The Gerstner
+ * and swell normals, depth colour, glint and foam stay; the foam's and the shore bite's noises (still arithmetic: the
+ * waterline does not move) run only where their term can be non-zero; the SSR march is 8 steps (x1.9) + the sky.
+ */
+const WFAST2 = perfNum('wfast', 0) === 2;
+/** PERF s21 Mac bisection, `?wshade=` (debug, the look changes): nossr nopcf noripple nofoam norefr (+ nonoise ...) */
+const WCUT = perfList('wshade');
+/** PERF s21 `?wclock=<s>`: the water's clock pinned (probes: pixel-comparable water) */
+const WCLOCK = perfNum('wclock');
+/** PERF s21 `?wwind=<x>` (probes): the sea-state factor pinned (1 = a breeze, 2.2 = a gale) */
+const WWIND = perfNum('wwind');
+
+let ripMap: DataTexture | null = null;
+/** the ripple normal map: RG = the height gradient (+0.5) of 16 tiling wavelets, each of slope 0.03, 4-24 waves a tile */
+function rippleMap(): DataTexture {
+  if (ripMap) return ripMap;
+  const N = 256, C = 16, data = new Uint8Array(N * N * 4);
+  const cs: number[][] = [];
+  for (let j = 0; j < C; j++) {
+    const a = j * 2.399963, k = 4 * Math.pow(6, j / (C - 1));
+    let m = Math.round(k * Math.cos(a)), n = Math.round(k * Math.sin(a));
+    if (m === 0 && n === 0) m = 4;
+    const l = Math.hypot(m, n);
+    cs.push([m, n, j * 1.7, 0.03 * m / l, 0.03 * n / l]);
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let gx = 0, gy = 0;
+    for (const c of cs) { const sn = Math.sin(6.2831853 * (c[0] * x + c[1] * y) / N + c[2]); gx -= c[3] * sn; gy -= c[4] * sn; }
+    const o = (y * N + x) * 4;
+    data[o] = Math.max(0, Math.min(255, Math.round((gx + 0.5) * 255)));
+    data[o + 1] = Math.max(0, Math.min(255, Math.round((gy + 0.5) * 255)));
+    data[o + 3] = 255;
+  }
+  const t = new DataTexture(data, N, N, RGBAFormat, UnsignedByteType);
+  t.wrapS = t.wrapT = RepeatWrapping; t.minFilter = LinearMipmapLinearFilter; t.magFilter = LinearFilter;
+  t.generateMipmaps = true; t.anisotropy = 8; t.name = 'water-ripples'; t.needsUpdate = true;
+  return (ripMap = t);
+}
 /** PERF s21 debug `?wdebug=class,nodepth`: class = flat colour by vDepth class (red: ground above the sheet by more
  *  than 8 cm, yellow: by less, green: draped film, blue: water); nodepth = the water passes the depth test everywhere (it still writes depth): what a failing test would show */
 const WDEBUG = perfList('wdebug');
@@ -65,7 +106,7 @@ const vec4 RP_D[14] = vec4[14](${RP.map((r) => `vec4(${r.D.map(fl).join(', ')}, 
 const vec4 RP_K[14] = vec4[14](${RP.map((r) => `vec4(${fl(r.k)}, ${fl(r.w)}, ${fl(r.ph)}, ${fl(r.share)})`).join(', ')});
 const vec4 RP_G[14] = vec4[14](${RP.map((r) => `vec4(${fl(r.gc)}, ${fl(r.gs)}, ${fl(r.cap)}, ${fl(r.feedK)})`).join(', ')});
 `;
-import { Matrix4, ShaderMaterial, Vector2, Vector4, type IUniform } from 'three';
+import { DataTexture, LinearFilter, LinearMipmapLinearFilter, Matrix4, RGBAFormat, RepeatWrapping, ShaderMaterial, UnsignedByteType, Vector2, Vector4, type IUniform } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
@@ -272,6 +313,57 @@ vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
 }
 `;
 
+const RIPPLES_MAP = /* glsl */ `
+uniform sampler2D uRipMap;
+vec2 gNG = vec2(0.0);
+// one projection: tile A 5.3 m and 3.9 m (wavelets 0.16-1.3 m), tile B 37 m and 29 m (1.2-9 m); the second of each is
+// turned a quarter and scrolls another way, so the sum never repeats in step
+vec2 ripTap(vec2 q, vec2 dx, vec2 dy, float t, float kA, float kB) {
+  vec2 g = (textureGrad(uRipMap, q / 5.3 + vec2(0.11, 0.07) * t, dx / 5.3, dy / 5.3).rg - 0.5) * kA;
+  vec2 r = textureGrad(uRipMap, vec2(q.y, -q.x) / 3.9 + vec2(-0.09, 0.13) * t, vec2(dx.y, -dx.x) / 3.9, vec2(dy.y, -dy.x) / 3.9).rg - 0.5;
+  g += vec2(-r.y, r.x) * kA;
+  g += (textureGrad(uRipMap, q / 37.0 + vec2(-0.05, 0.04) * t, dx / 37.0, dy / 37.0).rg - 0.5) * kB;
+  r = textureGrad(uRipMap, vec2(q.y, -q.x) / 29.0 + vec2(0.06, 0.03) * t, vec2(dx.y, -dx.x) / 29.0, vec2(dy.y, -dy.x) / 29.0).rg - 0.5;
+  g += vec2(-r.y, r.x) * kB;
+  return g;
+}
+vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
+  vec3 Q = P - offset;
+  vec3 w = pow(abs(up), vec3(6.0));
+  w /= w.x + w.y + w.z;
+  // capillaries depend most on the wind; both swell and fade in patches with the long waves' group noise
+  float kA = 0.7 * uWind * mix(gSea, gSea * gSea, 0.6) * clamp(0.6 + 0.5 * gNG.y, 0.2, 1.3);
+  float kB = 0.7 * uWind * gSea * clamp(0.6 + 0.5 * gNG.x, 0.2, 1.3);
+  // the slope variance the mips filtered away (the glint and the mirror widen by it), by the footprint the anisotropic
+  // filter works with
+  float lx = length(gdPx), ly = length(gdPy);
+  float fwE = max(min(lx, ly), max(lx, ly) / 8.0);
+  float fA = clamp(log2(max(fwE * 48.0, 1e-4)) / 4.0, 0.0, 1.0);
+  float fB = clamp(log2(max(fwE * 6.9, 1e-4)) / 4.0, 0.0, 1.0);
+  float vA = 0.0145 * kA * kA, vB = 0.0145 * kB * kB;
+  gUnresolved += vA * fA + vB * fB;
+  gResolved += vA * (1.0 - fA) + vB * (1.0 - fB);
+  vec3 g = vec3(0.0);
+  vec2 r;
+  if (w.x > 0.02) { r = ripTap(Q.yz, gdPx.yz, gdPy.yz, t, kA, kB); g += w.x * vec3(0.0, r); }
+  if (w.y > 0.02) { r = ripTap(Q.zx, gdPx.zx, gdPy.zx, t, kA, kB); g += w.y * vec3(r.y, 0.0, r.x); }
+  if (w.z > 0.02) { r = ripTap(Q.xy, gdPx.xy, gdPy.xy, t, kA, kB); g += w.z * vec3(r, 0.0); }
+  return g - up * dot(g, up);
+}
+`;
+const RIPPLES_NONE = 'vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) { return vec3(0.0); }';
+const NOFOAM = WCUT.has('nofoam');
+// where a foam / shore noise can matter at all (WFAST2: its term is exactly zero elsewhere); default: everywhere
+const GATES = /* glsl */ `
+#define W_SHORE_ON ${NOFOAM ? 'false' : WFAST2 ? '(waveE > 0.0 && level > 0.0 && fw < 2.0 && vertThick < 1.4)' : 'true'}
+#define W_SURGE_ON ${NOFOAM ? 'false' : WFAST2 ? '(vSurge.x > 0.0)' : 'true'}
+#define W_CAP_ON ${NOFOAM ? 'false' : WFAST2 ? '(cover > 0.001 && vSalt > 0.3 && vDepth > 2.0 && calm > 0.0)' : 'true'}
+#define W_GALE_ON ${NOFOAM ? 'false' : WFAST2 ? '(windSpd * uWind > 9.0 && vSalt > 0.3 && calm > 0.0)' : 'true'}
+#define W_EDGE_ON ${WFAST2 ? '(vertThick < 1.6 && vSimD < 0.25)' : 'true'}
+${WCUT.has('nopcf') && !WSHADE.has('noshadow') ? '#define sunShadow(a, b) 1.0' : ''}
+`;
+const SSR_N = WFAST2 ? 8 : 28, SSR_G = WFAST2 ? '1.9' : '1.35', SSR_TH = WFAST2 ? '0.66' : '0.36';
+
 const OCEAN_FRAG = /* glsl */ `
 #include <common>
 ${NOISE_GLSL}
@@ -284,6 +376,7 @@ ${WFAST ? NOISETEX_FN_GLSL : ''}
 ${WAVES_GLSL}
 ${WFAST && !WSHADE.has('nonoise') ? '#define snoise(p) snoiseT(p, __LINE__)' : ''}
 ${WFAST ? RIPPLE_CONSTS : ''}
+${GATES}
 #include <logdepthbuf_pars_fragment>
 uniform mat3 uBodyToView;
 uniform vec3 uSunDirBody;
@@ -362,7 +455,7 @@ float gUnresolved = 0.0;
 // ... and of the ripple octaves it does draw (LEAN: folded into the roughness wherever the reflection looks up the
 // long waves' normal only)
 float gResolved = 0.0;
-${WFAST ? RIPPLES_FAST : RIPPLES_REF}
+${WCUT.has('noripple') ? RIPPLES_NONE : WFAST2 ? RIPPLES_MAP : WFAST ? RIPPLES_FAST : RIPPLES_REF}
 // Screen-space reflection against the opaque depth, coloured from the previous frame's composited image (sky, clouds
 // and aerial perspective included) REPROJECTED to where that frame saw the hit point (uViewToPrevClip: this frame's
 // view space → the planet's body frame → last frame's clip space), so reflections neither lag nor swim while the
@@ -370,16 +463,16 @@ ${WFAST ? RIPPLES_FAST : RIPPLES_REF}
 // the step, and a miss returns no confidence: the caller's sky radiance is then the one and only sky source.
 // Returns rgb + confidence.
 vec4 ssr(vec3 posV, vec3 rV, vec3 nV) {
-  if (uPrevValid < 0.5) return vec4(0.0);
+  if (uPrevValid < 0.5${WCUT.has('nossr') ? ' || true' : ''}) return vec4(0.0);
   // rays turning back toward the camera cannot be found on screen: fade them out (no hard cut line on the sea)
   float facing = 1.0 - smoothstep(0.05, 0.3, rV.z);
   if (facing <= 0.0) return vec4(0.0);
   // (a SPATIALLY SMOOTH offset of the march start, a metre-scale noise on the water: with no temporal accumulation a
   // per-pixel jitter made every ray that grazes a thin object hit in one pixel and miss in the next — a stipple of
   // specks, ponds as TV static — while none at all stair-steps the reflections into bands)
-  float t = (2.0 + 0.01 * length(posV)) * (1.0 + 0.12 * snoise(vBodyPos * 0.7));
+  float t = (2.0 + 0.01 * length(posV)) * (1.0 + 0.12 * ${WFAST2 ? '0.5 * (sin(vBodyPos.x * 0.9 + vBodyPos.y * 0.4) + sin(vBodyPos.z * 0.8 + vBodyPos.y * 0.7))' : 'snoise(vBodyPos * 0.7)'});
   float prz = -posV.z;
-  for (int i = 0; i < 28; i++) {
+  for (int i = 0; i < ${SSR_N}; i++) {
     vec3 q = posV + rV * t;
     vec4 c = uProj * vec4(q, 1.0);
     if (c.w <= 0.0) break;
@@ -390,9 +483,9 @@ vec4 ssr(vec3 posV, vec3 rV, vec3 nV) {
     // a hit is a CROSSING: the surface's depth lies between this sample's and the previous one's (with a thickness
     // that grows with the step). A ray that merely passes far behind a thin object (a tree) is not a hit — accepting
     // those smeared every treeline down the water in vertical streaks
-    if (sz < 1e8 && rz > sz && sz > prz - (0.5 + 0.02 * sz) && rz < sz + max(1.0, t * 0.36)) {
+    if (sz < 1e8 && rz > sz && sz > prz - (0.5 + 0.02 * sz) && rz < sz + max(1.0, t * ${SSR_TH})) {
       // refine between the last two samples
-      float t0 = t / 1.35, t1 = t;
+      float t0 = t / ${SSR_G}, t1 = t;
       vec3 qh = q;
       for (int k = 0; k < 8; k++) {
         float tm = 0.5 * (t0 + t1);
@@ -414,7 +507,7 @@ vec4 ssr(vec3 posV, vec3 rV, vec3 nV) {
       return vec4(rc, e.x * e.y * facing * far);
     }
     prz = rz;
-    t *= 1.35;
+    t *= ${SSR_G};
   }
   return vec4(0.0);
 }
@@ -509,7 +602,7 @@ void main() {
   float flowSpd = length(vFlow);
   vec3 g1, g2;
   float mixF = 0.0;
-  ${WFAST ? 'rippleNoise(P, uTime);' : ''}
+  ${WCUT.has('noripple') ? '' : WFAST2 ? 'gNG = gwG;' : WFAST ? 'rippleNoise(P, uTime);' : ''}
   if (flowSpd > 0.05) {
     // two-phase flow map: ripples advected along the flow, phases offset by half a cycle and cross-faded
     float cyc = 2.5;
@@ -544,16 +637,16 @@ void main() {
   // ── refraction + absorption ──
   vec2 suv = gl_FragCoord.xy / uResolution;
   float fragZ = -vViewPos.z;
-  float sceneZ0 = texture(tSceneDepth, suv).r;
+  float sceneZ0 = ${WCUT.has('norefr') ? 'fragZ + 5.0' : 'texture(tSceneDepth, suv).r'};
   float thick0 = max(sceneZ0 - fragZ, 0.0);
   // (gentle: with the waves really drawn, a 3.5 % screen offset shattered the shallow floor into a blocky mosaic)
   vec2 ruv = suv + nV.xy * 0.016 * clamp(thick0 * 0.25, 0.0, 1.0) / max(fragZ * 0.02, 1.0);
-  float sceneZ = texture(tSceneDepth, ruv).r;
+  float sceneZ = ${WCUT.has('norefr') ? 'sceneZ0' : 'texture(tSceneDepth, ruv).r'};
   if (sceneZ < fragZ) { ruv = suv; sceneZ = sceneZ0; }
   float cosV = max(abs(normalize(vViewPos).z), 0.05);
   float pathLen = max(sceneZ - fragZ, 0.0) / cosV;
   pathLen = min(pathLen, 400.0);
-  vec3 refr = texture(tSceneColor, ruv).rgb;
+  vec3 refr = ${WCUT.has('norefr') ? 'vec3(0.02, 0.05, 0.07)' : 'texture(tSceneColor, ruv).rgb'};
   // cold seas a little greener, warm shallows turquoise
   // (coastal and lake water carries plankton and silt: the floor fades within a few metres — a quay's foot 9 m down
   // stayed in plain view and every pool read as a swimming pool)
@@ -747,15 +840,18 @@ void main() {
   // not wear a white outline
   float waveE = smoothstep(0.1, 0.5, uWind) * mix(0.12, 1.0, smoothstep(0.3, 0.8, vSalt));
   // a 1–4 m band that pulses with the swell washing in and out, broken into patches
+  float shore = 0.0;
+  if (W_SHORE_ON) {
   float pulse = 0.5 + 0.5 * sin(uTime * 0.9 - vertThick * 2.4 + snoise(P * 0.05) * 3.0);
   float tN = vertThick + snoise(P * 0.35 + uTime * 0.05) * 0.25;
   float band = mix(0.35, 1.1, pulse);
-  float shore = smoothstep(0.02, 0.15, tN) * (1.0 - smoothstep(band * 0.5, band, tN)) * level * waveE;
+  shore = smoothstep(0.02, 0.15, tN) * (1.0 - smoothstep(band * 0.5, band, tN)) * level * waveE;
   // the band is a metre or so wide: once a pixel covers more than that it would only draw a white outline
   shore *= 1.0 - smoothstep(0.35, 2.0, fw);
   // streaks advected up and down the beach
   float surf = smoothstep(-0.2, 0.6, snoise(vec3(P.x * 0.18, P.y * 0.18 - uTime * 0.25, P.z * 0.18)));
   shore *= mix(0.15, 1.0, surf);
+  }
   float crest = smoothstep(0.75, 1.15, vCrest) * calm;
   // white water only where water really runs: a torrent (over ~4 m/s), or a leaning sheet that is moving (a cascade:
   // its film lies on the rock, a few decimetres to a metre or two thick); a still sheet on a slope is never painted as rapids, nor the shallow fringe of a river (the cell's speed
@@ -775,7 +871,8 @@ void main() {
   // and left a smooth grey slope that mirrored the sky like polished metal)
   // (the foam's margin is an iso-line of the excess: interpolated over sim triangles it runs in straight segments, so
   // it is broken by noise at ~15 m and ~5 m into a ragged, curving edge of churned water)
-  float excess = vSurge.x + (snoise(P * 0.067 + 5.0) * 0.65 + snoise(P * 0.19 + 9.0) * 0.35 * (1.0 - smoothstep(1.5, 5.0, fw))) * 0.045 * smoothstep(0.0, 0.06, vSurge.x);
+  float excess = vSurge.x;
+  if (W_SURGE_ON) excess += (snoise(P * 0.067 + 5.0) * 0.65 + snoise(P * 0.19 + 9.0) * 0.35 * (1.0 - smoothstep(1.5, 5.0, fw))) * 0.045 * smoothstep(0.0, 0.06, vSurge.x);
   float surge = smoothstep(0.045, 0.16, excess) * (1.0 - smoothstep(0.12, 0.3, bedSlope)) * smoothstep(1.0, 3.0, vDepth)
     * (1.0 - smoothstep(0.5, 1.5, riverK + max(flowSpd - 2.0, 0.0)) * (1.0 - smoothstep(0.1, 0.2, excess)));
   // (down the face: against the level's gradient, in the tangent plane)
@@ -799,12 +896,13 @@ void main() {
   // sea was either all white or not at all.) Body-frame noise instead, drawn out east–west (the zonal winds: trades and
   // westerlies) by an anisotropic scale, drifting and re-forming
   vec3 Pw = vec3(P.x * 0.38, P.y, P.z * 0.38);
-  float wcN = snoise(Pw * 0.16 + vec3(-uTime * 0.03, 0.0, uTime * 0.02)) * 0.55 + snoise(Pw * 0.9 + vec3(uTime * 0.09, uTime * 0.05, -uTime * 0.07)) * 0.3 + (vCrest - 0.6) * 0.35;
   float cover = clamp(0.0012 * pow(max(windSpd * uWind - 3.5, 0.0), 2.2), 0.0, 0.35);
+  float wcN = 0.0;
+  if (W_CAP_ON) wcN = snoise(Pw * 0.16 + vec3(-uTime * 0.03, 0.0, uTime * 0.02)) * 0.55 + snoise(Pw * 0.9 + vec3(uTime * 0.09, uTime * 0.05, -uTime * 0.07)) * 0.3 + (vCrest - 0.6) * 0.35;
   float whitecap = smoothstep(1.0 - cover * 4.0, 1.0 - cover * 2.0 + 0.02, wcN * 0.5 + 0.5) * step(0.001, cover) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
   // the streaks of foam a gale leaves behind (thin, long, along the wind)
-  whitecap = max(whitecap, smoothstep(0.75, 0.95, snoise(vec3(P.x * 0.03, P.y * 1.4, P.z * 0.03) + 3.1) * 0.5 + 0.5) * smoothstep(9.0, 16.0, windSpd * uWind) * 0.5 * calm * smoothstep(0.3, 0.8, vSalt));
-  float foamAmt = clamp(max(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), surge * 0.95), 0.0, 1.0);
+  if (W_GALE_ON) whitecap = max(whitecap, smoothstep(0.75, 0.95, snoise(vec3(P.x * 0.03, P.y * 1.4, P.z * 0.03) + 3.1) * 0.5 + 0.5) * smoothstep(9.0, 16.0, windSpd * uWind) * 0.5 * calm * smoothstep(0.3, 0.8, vSalt));
+  float foamAmt = ${NOFOAM ? '0.0 * ' : ''}clamp(max(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), surge * 0.95), 0.0, 1.0);
   if (foamAmt > 0.01) {
     // foam is LACE: a web of bright bubble filaments round dark holes (ridged noise at two scales, drifting with the
     // flow and slowly re-forming), thinning out in larger patches — the cells of a Voronoi read as white fish scales
@@ -877,7 +975,8 @@ void main() {
     // on flat ground the sim's wet / dry cells meet along straight 50 m triangle edges with no contour to follow:
     // a 10–20 m noise on the thickness bites the waterline into an irregular, natural shore (it only ever takes
     // water away near the edge, never adds any)
-    float edgeN = snoise(P * 0.07) * 0.3 + snoise(P * 0.45) * 0.08 + snoise(P * 1.9) * 0.03;
+    float edgeN = 0.0;
+    if (W_EDGE_ON) edgeN = snoise(P * 0.07) * 0.3 + snoise(P * 0.45) * 0.08 + snoise(P * 1.9) * 0.03;
     // (over the first ~0.18 m of depth: fading out over 0.4 m spread every gently shelving lake into a 10–20 m halo of
     // milky haze from 60 m up, a fog patch rather than water)
     // (from afar the depth buffer cannot tell a coarse patch's sheet from the coarse bed under it — the two meshes
@@ -913,6 +1012,9 @@ export function makeOceanMaterial(shared: Record<string, IUniform>, morph: IUnif
   for (const k of Object.keys(shared)) uniforms[k] = shared[k];
   for (const k of Object.keys(scene)) uniforms[k] = scene[k];
   if (WFAST) for (const k of Object.keys(TNOISE_UNIFORMS)) uniforms[k] = TNOISE_UNIFORMS[k];
+  if (WFAST2) uniforms.uRipMap = { value: rippleMap() };
+  if (WCLOCK != null) uniforms.uTime = { value: WCLOCK };
+  if (WWIND != null) uniforms.uWind = { value: WWIND };
   uniforms.uMorph = morph;
   const m = new ShaderMaterial({
     vertexShader: OCEAN_VERT,
