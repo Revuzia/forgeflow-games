@@ -197,6 +197,9 @@ const GLYPH_SVG =
 const EQ_GLYPH = {
   claymore: `<svg width="22" height="8" viewBox="0 0 27 10" aria-label="tripmine"><path d="M6 3.5q7.5-3 15 0V8H6zM8 8h1.4v2H8zM17.6 8H19v2h-1.6zM4 1l3 1.6-.5.8zM23 1l-3 1.6.5.8z" fill="currentColor"/></svg>`,
   frag: `<svg width="22" height="8" viewBox="0 0 27 10" aria-label="frag"><path d="M10.5 3.2a4.2 4.2 0 1 0 6 0zM12 0h4v2.6h-4zM16 .6l3.4-.6.3 1.2-3.7.6z" fill="currentColor"/></svg>`,
+  // [heavy weapons] rocket kills name the launcher (death event weaponId "anvil")
+  anvil: `<svg width="22" height="8" viewBox="0 0 27 10" aria-label="launcher"><path d="M5 3h17v3.2H5zM0 3.4 5 2.4v4.4L0 5.8zM22 2.6h4.4v4H22zM11 6.2h2.4l-.8 3h-2.2zM15 1.4h3V3h-3z" fill="currentColor"/></svg>`,
+  bastion: `<svg width="22" height="8" viewBox="0 0 27 10" aria-label="machine gun"><path d="M0 3h14V1.6h7l1 1.4h5v2.4h-6l-1 2.6h-2.6l.6-2.6H14v3.4h-4.6V5.4H0zM3 5.4l-2 3.6h1.1l2-3.6zM5 5.4l1.6 3.6H5.5L4 5.4z" fill="currentColor"/></svg>`,
   knife: `<svg width="22" height="8" viewBox="0 0 27 10" aria-label="knife"><path d="M2 4.2h15l6-2.2-.8 4.2H17v.6H2zM17 3h1.5v4.6H17z" fill="currentColor"/></svg>`,
 };
 

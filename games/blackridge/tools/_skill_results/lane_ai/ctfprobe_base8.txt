@@ -1,0 +1,14 @@
+lanternwalk n=8  caps/match 0.63 (caps by team 3:2, team-0 match share 56%)  carried 43% both 18% (carrier holding near stand 117% of carried time)
+            carrier deaths 57 (7.1/match) by quarter home [6,15,17,19]  could score 5/57  killer order {"attack":4,"carry":28,"lane":13,"intercept":12}  killer->carrier's stand median 16 m, killer->carrier 15 m  own mates within 15 m 0.46
+            top killer reasons carry/HOLD_NEAR_STAND 28, lane/LANE_QUOTA 13, intercept/CUTOFF_FEASIBLE 12, attack/CUTOFF_INFEASIBLE 3, attack/ATTACK_FLAG 1
+            drops 7.1/match: re-grabbed by the carrier's side 0.8, returned by touch 6.1  escorts: samples 274, median distance to carrier 26.4 m, ahead of carrier 29%
+switchyard  n=8  caps/match 1.00 (caps by team 3:5, team-0 match share 44%)  carried 61% both 31% (carrier holding near stand 120% of carried time)
+            carrier deaths 73 (9.1/match) by quarter home [2,11,14,46]  could score 7/73  killer order {"defend":1,"carry":21,"intercept":28,"attack":7,"lane":14,"escort":2}  killer->carrier's stand median 10 m, killer->carrier 11 m  own mates within 15 m 0.25
+            top killer reasons intercept/CUTOFF_FEASIBLE 28, carry/HOLD_NEAR_STAND 21, lane/LANE_QUOTA 14, attack/CUTOFF_INFEASIBLE 5, escort/ESCORT_STATION 2, attack/ATTACK_FLAG 2
+            drops 9.1/match: re-grabbed by the carrier's side 0.5, returned by touch 8.5  escorts: samples 244, median distance to carrier 38.3 m, ahead of carrier 20%
+saltmarket  n=8  caps/match 0.00 (caps by team 0:0, team-0 match share 50%)  carried 49% both 27% (carrier holding near stand 137% of carried time)
+            carrier deaths 64 (8.0/match) by quarter home [8,12,26,18]  could score 5/64  killer order {"carry":42,"lane":10,"intercept":10,"defend":1,"escort":1}  killer->carrier's stand median 30 m, killer->carrier 12 m  own mates within 15 m 0.36
+            top killer reasons carry/HOLD_NEAR_STAND 42, lane/LANE_QUOTA 10, intercept/CUTOFF_FEASIBLE 10, defend/DEFEND_STAND 1, escort/ESCORT_STATION 1
+            drops 8.0/match: re-grabbed by the carrier's side 0.8, returned by touch 7.1  escorts: samples 239, median distance to carrier 36.8 m, ahead of carrier 23%
+
+ctf_probe  secs=180 seeds=8  AI avg 0.183 ms/tick  OBJ 0.043 ms/tick  wall 107 s

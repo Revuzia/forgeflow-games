@@ -1,0 +1,13 @@
+lanternwalk n=16  caps/match 0.69 (caps by team 2:9, team-0 match share 31%)  carried 8% both 0% (carrier holding near stand 1% of carried time)
+            carrier deaths 15 (0.9/match) by quarter home [8,4,2,1]  could score 15/15  killer order {"attack":8,"defend":2,"lane":5}  killer->carrier's stand median 54 m, killer->carrier 5 m  own mates within 15 m 0.27
+            top killer reasons attack/CUTOFF_INFEASIBLE 5, lane/LANE_QUOTA 5, attack/ATTACK_FLAG 3, defend/DEFEND_STAND 2
+            drops 0.9/match: re-grabbed by the carrier's side 0.1, returned by touch 0.8  escorts: samples 521, median distance to carrier 23.8 m, ahead of carrier 75%
+switchyard  n=16  caps/match 1.50 (caps by team 4:20, team-0 match share 22%)  carried 34% both 7% (carrier holding near stand 54% of carried time)
+            carrier deaths 92 (5.8/match) by quarter home [34,17,22,19]  could score 55/92  killer order {"intercept":8,"lane":49,"defend":2,"attack":27,"carry":5,"escort":1}  killer->carrier's stand median 41 m, killer->carrier 7 m  own mates within 15 m 0.41
+            top killer reasons lane/LANE_QUOTA 49, attack/CUTOFF_INFEASIBLE 15, attack/ATTACK_FLAG 12, carry/HOLD_NEAR_STAND 5, intercept/HUNT 4, intercept/CUTOFF_FEASIBLE 4
+            drops 5.8/match: re-grabbed by the carrier's side 0.8, returned by touch 4.9  escorts: samples 2048, median distance to carrier 16.8 m, ahead of carrier 35%
+saltmarket  n=16  caps/match 1.25 (caps by team 2:18, team-0 match share 13%)  carried 26% both 1% (carrier holding near stand 12% of carried time)
+            carrier deaths 33 (2.1/match) by quarter home [9,19,5,0]  could score 27/33  killer order {"attack":15,"lane":15,"carry":2,"escort":1}  killer->carrier's stand median 56 m, killer->carrier 8 m  own mates within 15 m 0.36
+            top killer reasons lane/LANE_QUOTA 15, attack/ATTACK_FLAG 9, attack/CUTOFF_INFEASIBLE 6, carry/HOLD_NEAR_STAND 2, escort/ESCORT_STATION 1
+            drops 2.1/match: re-grabbed by the carrier's side 0.2, returned by touch 1.8  escorts: samples 1939, median distance to carrier 19.9 m, ahead of carrier 49%
+ctf_probe  secs=180 seeds=16  AI avg 0.442 ms/tick  OBJ 0.050 ms/tick  wall 163 s

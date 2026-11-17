@@ -90,6 +90,23 @@ for (let i = 0; i < 12; i++) PIKE_PATTERN.push([deg(i % 2 === 0 ? +0.15 : -0.15)
 const BREAKER_PATTERN = [];
 for (let i = 0; i < 12; i++) BREAKER_PATTERN.push([deg(i % 2 === 0 ? +0.35 : -0.35), deg(3.6)]);
 
+// Bastion (belt-fed LMG) — a heavy first kick that SETTLES: rows 1–10 climb hard
+// and fall away, then a low, nearly-vertical loop the arm can hold for the whole
+// belt. The point of the gun is that shot 40 lands where shot 12 did.
+const BASTION_PATTERN = [
+  [deg(+0.03), deg(0.62)], [deg(-0.05), deg(0.50)], [deg(+0.07), deg(0.44)],
+  [deg(+0.09), deg(0.38)], [deg(-0.04), deg(0.32)], [deg(-0.08), deg(0.27)],
+  [deg(+0.05), deg(0.22)], [deg(+0.06), deg(0.18)], [deg(-0.05), deg(0.15)],
+  [deg(-0.04), deg(0.13)],
+  // loop segment (shots 11–100 cycle these 4): settled
+  [deg(+0.04), deg(0.11)], [deg(-0.03), deg(0.11)], [deg(+0.03), deg(0.10)],
+  [deg(-0.04), deg(0.11)],
+];
+
+// Anvil (shoulder-fired launcher) — one shove per rocket.
+const ANVIL_PATTERN = [];
+for (let i = 0; i < 12; i++) ANVIL_PATTERN.push([deg(i % 2 === 0 ? +0.30 : -0.30), deg(4.2)]);
+
 // ---------------------------------------------------------------- weapons
 // view.* offsets are in VIEWMODEL-CAMERA space (camera at origin, −Z
 // forward, vFOV 46): posHip/posAds place the weapon-group origin; muzzle/
@@ -236,8 +253,11 @@ export const WEAPONS = {
       // 2026-11-13: ADS eye 15 cm behind the grip = cheek on the stock wrist, with the ghost
       // ring (now at the receiver's rear, a5) ~16 cm out framing the bead; at -0.25 the eye
       // floated 1 cm behind the buttpad and the stock + receiver top filled the picture.
-      posHip: [0.115, -0.165, -0.47], rot: [3, 5, -7], posAds: [0, -0.1237, -0.15],
-      muzzle: [0, 0.088, -0.75], eject: [0.02, 0.083, -0.1], sightY: 0.1237,
+      // 2026-11-14 guns pass: sight line raised to 0.1357 (ring + post on towers; A5BUILD) and
+      // the eye 3 cm further back, so the receiver top no longer fills the lower picture;
+      // adsKickMult tames the ADS shot's drive back into the eye (hip kick unchanged)
+      posHip: [0.115, -0.165, -0.47], rot: [3, 5, -7], posAds: [0, -0.1357, -0.18],
+      muzzle: [0, 0.088, -0.75], eject: [0.02, 0.083, -0.1], sightY: 0.1357, adsKickMult: 0.4, adsRiseMult: 0.15,
       scale: 1,
       // hand animation (viewmodel.js): per-shell loading with the gun canted
       anim: { kind: "shell", tilt: [8, 0, -26], lift: [-0.03, 0.055, 0.0],
@@ -265,10 +285,92 @@ export const WEAPONS = {
     penetration: null, // §3.2: Pike penetrates nothing
     view: {
       glb: "assets/weapons/pike.glb",
-      posHip: [0.10, -0.095, -0.34], posAds: [0, -0.0843, -0.34],
+      // 2026-11-14 guns pass: further out and higher (was [0.10,-0.095,-0.34]) — the pistol sat
+      // low and small with the hands' wrist cuffs filling the bottom edge; ADS arms extended
+      // rot (hip only, eased out at ADS): yawed to show the slide's left flank and the hands
+      // three-quarter on, instead of two glove backs seen square from behind
+      // 2026-11-15 hold pass: a real two-handed grip at arm's length (a5 A5_POSE pike) — ADS eye
+      // 52 cm behind the grip (was 38: the gloves filled the lower half and the slide read as a
+      // toy), hip pushed out with it
+      posHip: [0.095, -0.10, -0.48], rot: [4, 12, -6], posAds: [0, -0.0843, -0.52],
       muzzle: [0, 0.047, -0.186], eject: [0.014, 0.066, -0.04], sightY: 0.0843,
       scale: 1,
       anim: { kind: "gripmag", tilt: [26, 10, -38], lift: [-0.045, 0.10, 0.02], magDrop: 0.09 },
+    },
+  },
+
+  // HX-60 "Bastion" — belt-fed light machine gun, slot 6. A 100-round box you
+  // empty from a doorway: slow to shoulder, slow to move with, very slow to
+  // reload, but the pattern settles (BASTION_PATTERN) so long bursts stay on.
+  bastion: {
+    name: "HX-60 Bastion", class: "lmg", auto: true, rpm: 640,
+    damage: { body: 30, headMult: 1.35, limbMult: 1.0, falloffStart: 30, falloffEnd: 62, min: 22 },
+    spread: { hip: deg(4.4), hipDeg: 4.4, ads: 0, moveMult: 1.65, crouchMult: 0.75 },
+    pellets: 1,
+    recoil: {
+      pattern: BASTION_PATTERN, loop: { start: 10, len: 4 },
+      scale: 1.0, jitter: 0.14, hipMult: 0.9,
+      recoverPerS: deg(10), recoverDelayS: 0.10,
+      vmKick: 3.6, vmPunch: 0.85, vmPunchDecayPerS: 5,
+    },
+    adsTime: 0.420, adsFov: 54, adsMoveMult: 0.40,
+    moveMult: 0.88,                       // carried weight: every move speed x0.88
+    mag: 100, reserve: 200, reloadS: 5.2, reloadEmptyS: 6.0,
+    switchS: 0.70, raiseS: 0.70, holsterS: 0.42,
+    sprintOutMs: 330, tacSprintOutMs: 495,
+    muzzleVel: 760, tracerEvery: 3,
+    penetration: { classes: ["soft", "metal_thin"], retain: 0.75, maxThickM: 0.30 },
+    view: {
+      // MEASURED from the built GLB (tools/a5_build_guns.py A5BUILD bastion)
+      glb: "assets/weapons/bastion.glb",
+      posHip: [0.125, -0.165, -0.47], rot: [3, 6, -6],
+      posAds: [0, -0.146, -0.30],
+      muzzle: [0, 0.066, -0.78], eject: [0.0215, 0.065, 0.005], sightY: 0.146,
+      scale: 1,
+      // the 100-round box hangs under the left of the receiver: tug it free, a fresh
+      // box up from the pouch, seat it. Slow (5.2 s) — the beats scale with the timer.
+      anim: { kind: "mag", tilt: [10, 6, -22], lift: [-0.04, 0.07, 0.0], magDrop: 0.15 },
+    },
+  },
+
+  // KR-5 "Anvil" — shoulder-fired launcher, slot 7 (a SECONDARY in a class).
+  // One rocket in the tube, two spare. The rocket is a real travelling
+  // projectile (core/sim/grenades.js stepRockets): visible, ~52 m/s, explodes on
+  // contact through the frag explosion path — splash, self-damage, Blast Weave.
+  // A hit inside `splash.armM` of the muzzle is a dud (no blast, small impact).
+  anvil: {
+    name: "KR-5 Anvil", class: "launcher", auto: false, rpm: 50,
+    projectile: "rocket",
+    // damage.* is the STAT-LINE view of the splash (class editor bars); the sim
+    // resolves the rocket through splash.* (grenades.js), never falloffDamage.
+    damage: { body: 150, headMult: 1.0, limbMult: 1.0, falloffStart: 0, falloffEnd: 60, min: 20 },
+    splash: { radius: 6.0, dmgCenter: 150, dmgEdge: 20, armM: 3.0, speed: 52, gravity: -2.4, lifeS: 3.6, duddmg: 45 },
+    spread: { hip: deg(2.6), hipDeg: 2.6, ads: 0, moveMult: 1.65, crouchMult: 0.75 },
+    pellets: 1,
+    recoil: {
+      pattern: ANVIL_PATTERN, loop: { start: 8, len: 4 },
+      scale: 1.0, jitter: 0.10, hipMult: 0.9,
+      recoverPerS: deg(18), recoverDelayS: 0.12,
+      vmKick: 10, vmPunch: 2.8, vmPunchDecayPerS: 4,
+    },
+    adsTime: 0.550, adsFov: 50, adsMoveMult: 0.45,
+    moveMult: 0.90,
+    mag: 1, reserve: 2, reloadS: 3.6, reloadEmptyS: 3.6,
+    switchS: 0.80, raiseS: 0.80, holsterS: 0.50,
+    sprintOutMs: 380, tacSprintOutMs: 570,
+    muzzleVel: 52, tracerEvery: 0,
+    penetration: null,
+    view: {
+      glb: "assets/weapons/anvil.glb",
+      posHip: [0.135, -0.17, -0.42], rot: [2, 5, -4],
+      // the irons sit 8.8 cm LEFT of the tube (A5BUILD sightX -0.088): posAds.x = +0.088
+      // carries that sight line onto the vm camera's centre ray, like posAds.y does for height
+      posAds: [0.088, -0.150, -0.22],
+      muzzle: [0, 0.104, -0.576], eject: [0.03, 0.104, 0.3], sightY: 0.150,
+      scale: 1,
+      // the rocket (node "mag") is loaded into the FRONT of the tube: hand down to
+      // the pouch, a fresh round up in front of the muzzle, pushed home, palm slap
+      anim: { kind: "rocket", tilt: [14, 38, -12], lift: [-0.10, 0.04, 0.10], magDrop: 0.16 },
     },
   },
 };
@@ -281,6 +383,8 @@ export const WEAPON_NAMES = {
   breaker: "B-12 Breaker",
   corvus: "LR-1 Corvus",
   pike: "GS-9 Pike",
+  bastion: "HX-60 Bastion",
+  anvil: "KR-5 Anvil",
 };
 
 // FIXED INVENTORY SLOTS (keys 1-5). Every weapon owns one slot by class, so the
@@ -289,9 +393,19 @@ export const WEAPON_NAMES = {
 // picking a weapon up fills ITS slot. The campaign loadout is Warden + Pike
 // (keys 1 and 5); the rest are found — map racks, crates, and the guns bots
 // drop when they die.
+//
+// [heavy weapons] SHARED SLOTS. The Bastion LMG rides slot 1 with the Warden
+// (the heavy rifle slot) and the Anvil launcher rides slot 5 with the Pike (the
+// SECONDARY slot — in a class it replaces the sidearm). Keys 6-9 are the kill-
+// streak call-ins, so new keys were not an option; a slot holds ONE gun, and a
+// gun taken into an occupied slot REPLACES what was there (loadout.grant). A
+// ground walkover never silently swaps a slot's gun (loadout.autoEquip /
+// canWalkoverTake). SLOT_ORDER stays the five slot DEFAULTS (index = key-1);
+// ALL_WEAPON_IDS is every gun (preloads, HUD name tables, selftests).
 export const SLOT_COUNT = 5;
-export const WEAPON_SLOT = { warden: 1, vesper: 2, breaker: 3, corvus: 4, pike: 5 }; // 1-based key numbers
-export const SLOT_ORDER = ["warden", "vesper", "breaker", "corvus", "pike"];          // index = key-1
+export const WEAPON_SLOT = { warden: 1, vesper: 2, breaker: 3, corvus: 4, pike: 5, bastion: 1, anvil: 5 }; // 1-based key numbers
+export const SLOT_ORDER = ["warden", "vesper", "breaker", "corvus", "pike"];          // index = key-1 (slot defaults)
+export const ALL_WEAPON_IDS = ["warden", "vesper", "breaker", "corvus", "pike", "bastion", "anvil"];
 export function slotOf(weaponId) { return (WEAPON_SLOT[weaponId] || 0) - 1; }        // -1 = unknown weapon
 
 // §1.8 + §2.2 feel constants (A1's player.js embeds the same values; this
@@ -362,7 +476,7 @@ export const PENETRATION_MODEL = {
 export const SWAY = {
   // corvus: a REAL aim wobble through the 3.9x scope (viewmodel.js nudges the aim by the
   // differential of this signal), so it is sized to be seen and fought, not to be sub-pixel.
-  adsAmpDeg: { warden: 0.030, vesper: 0.022, breaker: 0.028, pike: 0.026, corvus: 0.16 },
+  adsAmpDeg: { warden: 0.030, vesper: 0.022, breaker: 0.028, pike: 0.026, corvus: 0.16, bastion: 0.040, anvil: 0.045 },
   baseFreqsHz: [0.9, 1.7], // two incommensurate sines per axis, differential
   movingMult: 2.2,
   corvusMovingMult: 2.5,

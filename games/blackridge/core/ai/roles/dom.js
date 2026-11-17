@@ -102,7 +102,22 @@ export function assign(ctx) {
     return n;
   };
   const contactsNear = (z) => (ctx.gid ? api.comms.contactWeightNear(ctx.gid, t, z.pos[0], z.pos[2], CONTACT_NEAR_M) : 0);
-  const threatened = (z) => z.owner === team && (z.contested || (z.capTeam === enemy && z.prog > 0));
+  // 2026-11: a held zone is also threatened the moment a team-mate dies on
+  // it (public killfeed, the last 8 s): the holder was shot from outside the
+  // ring, and the attackers walk in next. Responders used to be sent only once
+  // the enemy bar was already filling — 5 s to neutralise, and they arrived
+  // after it (dom_probe: most lost zones were "holder killed").
+  const holderLost = (z) => {
+    for (const d of api.deathRing) {
+      if (d.team !== team || t - d.t > 8) continue;
+      if (api.hdist(d.pos, z.pos) <= z.r + 4) return true;
+    }
+    return false;
+  };
+  // under attack NOW (contested / enemy bar filling): the holder's own hot
+  // posture; threatened (+ a holder just lost): the slot table's responders
+  const underAttack = (z) => z.owner === team && (z.contested || (z.capTeam === enemy && z.prog > 0));
+  const threatened = (z) => underAttack(z) || (z.owner === team && holderLost(z));
 
   // the zone the human is working (teammates come and help)
   let humanZone = null;
@@ -133,12 +148,31 @@ export function assign(ctx) {
   const diff = sit.us - sit.them;
   const ot = m.phase === "overtime";
   const remaining = Math.max(0, (sit.timeLimit || 600) - sit.elapsed);
+  // 2026-11 review (the "nobody holds" bug is a design problem, not a
+  // constant): (1) holding 2 of 3 OUT-SCORES the enemy (+0.4 pt/s net at
+  // 1 pt / 2.5 s / zone), so a team that holds two is in CONTROL even while
+  // behind on score — unless the clock cannot pay the deficit back. The old
+  // rule pressed whenever diff < 0, stripped the second zone to one defender
+  // on one zone, and the undefended zone flipped. (2) the posture now has a
+  // 6 s hold: it used to re-derive on every pass, so each flip re-shuffled
+  // every slot and pulled defenders off their rings.
   let posture;
+  const netRate = 0.4; // pts/s gained by holding 2 vs 1
+  const canPayBack = diff >= 0 || remaining * netRate > -diff + 10;
   if (ot) posture = "press";
   else if (heldUs === zones.length) posture = "lock";
-  else if (diff >= 0 && heldUs >= 2) posture = "control";
-  else if (diff < 0 || heldUs <= 1 || (remaining < 60 && diff <= 0)) posture = "press";
+  else if (heldUs >= 2 && canPayBack) posture = "control";
+  else if (heldUs <= 1 || !canPayBack) posture = "press";
   else posture = "balanced";
+  {
+    const ph = ctx.st._domPosture || (ctx.st._domPosture = new Map());
+    const prev = ph.get(team);
+    // lock / overtime / losing a zone take effect at once; anything else holds 6 s
+    const urgent = posture === "lock" || ot || (prev && prev.heldUs > heldUs);
+    if (prev && prev.p !== posture && !urgent && t - prev.t < 6) posture = prev.p;
+    if (!prev || prev.p !== posture) ph.set(team, { p: posture, t, heldUs });
+    else prev.heldUs = heldUs;
+  }
 
   const slots = []; // {role, zone, reason, kind}
   const perZone = new Map();
@@ -202,7 +236,9 @@ export function assign(ctx) {
   // ---- 3. slots → bots (latched bots keep a matching slot; nearest-first)
   const free = bots.slice();
   const assigned = new Map(); // b -> slot
-  const slotKey = (s) => s.kind + ":" + (s.z ? s.z.id : "-");
+  // a responder slot is the same HOLD as the defender slot on that zone: the
+  // man already on the ring keeps it when the zone comes under attack
+  const slotKey = (s) => (s.kind === "respond" ? "defend" : s.kind) + ":" + (s.z ? s.z.id : "-");
   // pass A: latches
   for (const s of slots) {
     const key = slotKey(s);
@@ -280,8 +316,28 @@ export function assign(ctx) {
       continue;
     }
     // defend / respond: a spot inside our ring, facing the enemy's side
-    const hot = threatened(z);
-    const spot = ringSpot(z, k, hot ? 1.5 : 2.4, enemyRef[0], enemyRef[2]);
+    const hot = underAttack(z);
+    let spot = ringSpot(z, k, hot ? 1.5 : 2.4, enemyRef[0], enemyRef[2]);
+    // where inside the ring: a cover node inside it that hides the holder
+    // from the enemy's side, if the ring has one (k-th best, so two holders
+    // do not share it); else the spread spot facing the enemy side
+    const cs = ctx.sim && ctx.sim.colliders && ctx.sim.colliders.cover;
+    if (cs && cs.length) {
+      const inRing = [];
+      for (let i = 0; i < cs.length; i++) {
+        const c = cs[i];
+        const dc = api.hdist(c.pos, z.pos);
+        if (dc > z.r - 0.9 || Math.abs((c.pos[1] || 0) - (z.pos[1] || 0)) > 1.5) continue;
+        // the cover's own facing (dir) toward the enemy side scores it
+        const ex = enemyRef[0] - c.pos[0], ez = enemyRef[2] - c.pos[2];
+        const el = Math.hypot(ex, ez) || 1;
+        const f = c.dir ? (c.dir[0] * ex + c.dir[2] * ez) / el : 0;
+        inRing.push({ i, sc: f - dc * 0.05 });
+      }
+      inRing.sort((a, b2) => (b2.sc - a.sc) || (a.i - b2.i));
+      if (inRing.length > k) spot = cs[inRing[k].i].pos.slice();
+    }
+    const leash = [z.pos[0], z.pos[1], z.pos[2], Math.max(1.5, z.r - 0.6)];
     if (dZone > NEAR_ZONE_M + 10) {
       const anchor = driveTo(ctx, b, spot);
       api.write(rec, body, {
@@ -290,10 +346,13 @@ export function assign(ctx) {
       });
     } else {
       rec.route = null;
+      // HOLD: the leash keeps the holder inside the ring for every reason of
+      // its own (wander, sounds, hunting a lost target, loot, cover, reload
+      // break); only this commander releases it (re-assignment)
       api.write(rec, body, {
         role: "defend", reason: s.reason, anchor: spot, anchorKind: hot ? "flag" : "station",
         priority: hot ? 0.85 : (engaged ? 0.5 : 0.65), firePolicy: "free", posture,
-        noFlank: true, noRetreat: hot,
+        noFlank: true, noRetreat: hot, leash: dZone <= z.r + 6 ? leash : null,
       });
     }
   }

@@ -40,6 +40,9 @@ export const UNLOCKS = {
   "weapon:vesper": 2,
   "weapon:breaker": 4,
   "weapon:corvus": 6,
+  // [heavy weapons] the belt-fed LMG and the launcher come later, as earned kit
+  "weapon:bastion": 10,
+  "weapon:anvil": 14,
   // equipment
   "equip:frag": 1,
   "equip:flash": 1,
@@ -88,16 +91,20 @@ export const ATTACH_UNLOCKS = {
 };
 export const WEAPON_CAMO_UNLOCKS = { gunmetal: 10, nightglass: 15, lantern: 20 };
 
-export const WEAPON_IDS = ["warden", "vesper", "breaker", "corvus", "pike"];
+export const WEAPON_IDS = ["warden", "vesper", "breaker", "corvus", "pike", "bastion", "anvil"];
 export const WEAPON_NAMES = {
   warden: "M-72 Warden", vesper: "KS-23 Vesper", breaker: "B-12 Breaker",
-  corvus: "LR-1 Corvus", pike: "GS-9 Pike",
+  corvus: "LR-1 Corvus", pike: "GS-9 Pike", bastion: "HX-60 Bastion", anvil: "KR-5 Anvil",
 };
+// [heavy weapons] weapons whose kill lands AFTER the trigger pull by more than the
+// 1 s "last shot" window (a rocket in flight): the death event names them itself.
+export const PROJECTILE_WEAPONS = { anvil: true };
 
 // Display names for the unlock list on the after-action screen.
 export const UNLOCK_NAMES = {
   "weapon:warden": "M-72 Warden", "weapon:pike": "GS-9 Pike", "weapon:vesper": "KS-23 Vesper",
   "weapon:breaker": "B-12 Breaker", "weapon:corvus": "LR-1 Corvus",
+  "weapon:bastion": "HX-60 Bastion", "weapon:anvil": "KR-5 Anvil",
   // [polish v149] the names the class editor and HUD use (TRIPMINE, CONCUSSION, FLASHBANG)
   "equip:frag": "Frag grenade", "equip:flash": "Flashbang", "equip:smoke": "Smoke grenade",
   "equip:stun": "Concussion grenade", "equip:claymore": "Tripmine",
@@ -568,7 +575,8 @@ export function createProgression(ctx, opts) {
       if (d.headshot) { s.hl.heads++; rec.life.heads++; award("headshot", XP.headshot, "Headshot"); }
       // the weapon: the player's last fire-time shot within a second (call-in and
       // grenade kills without a recent shot earn no weapon XP)
-      const w = !d.melee && !eqKill && lastShotW && now() - lastShotT <= 1.0 ? lastShotW : null; // [melee]
+      const w = !d.melee && !eqKill && PROJECTILE_WEAPONS[d.weaponId] ? d.weaponId // [heavy weapons] rocket kills
+        : !d.melee && !eqKill && lastShotW && now() - lastShotT <= 1.0 ? lastShotW : null; // [melee]
       if (w) {
         const rw = rec.weapons[w] || (rec.weapons[w] = { xp: 0, kills: 0, heads: 0 });
         rw.kills++; if (d.headshot) rw.heads++;

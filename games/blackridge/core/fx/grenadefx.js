@@ -59,6 +59,57 @@ export function createGrenadeFx(ctx) {
     frags.push({ g, glint, spin: 0, ax: new THREE.Vector3(1, 0, 0) });
   }
 
+  // ---- [heavy weapons] Anvil rockets in flight (sim.internal.rockets) -----------
+  // A dark olive body with a pale nose band and four fins, the motor burning at the
+  // tail (additive glow, flickering) and a grey smoke trail laid down behind it —
+  // the trail stays and fades after the rocket is gone so the shot's line reads.
+  const R_POOL = 6, TRAIL_N = 48, TRAIL_LIFE = 1.6, TRAIL_EVERY = 0.016;
+  const rBodyMat = new THREE.MeshStandardMaterial({ color: 0x3a4030, roughness: 0.6, metalness: 0.25, emissive: 0x080a06 });
+  const rNoseMat = new THREE.MeshStandardMaterial({ color: 0x8a8a78, roughness: 0.45, metalness: 0.4 });
+  const rBodyG = new THREE.CylinderGeometry(0.042, 0.042, 0.62, 12); rBodyG.rotateX(Math.PI / 2);
+  const rNoseG = new THREE.ConeGeometry(0.042, 0.20, 12); rNoseG.rotateX(-Math.PI / 2); rNoseG.translate(0, 0, -0.41);
+  const rBandG = new THREE.CylinderGeometry(0.044, 0.044, 0.05, 12); rBandG.rotateX(Math.PI / 2); rBandG.translate(0, 0, -0.27);
+  const rFinG = new THREE.BoxGeometry(0.006, 0.15, 0.12); rFinG.translate(0, 0, 0.26);
+  const smokeTex = (() => {
+    const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+    const g = cv.getContext("2d");
+    const r = g.createRadialGradient(32, 32, 0, 32, 32, 31);
+    r.addColorStop(0, "rgba(255,255,255,0.9)"); r.addColorStop(0.5, "rgba(255,255,255,0.35)"); r.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+    const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; return tx;
+  })();
+  const rockets = [];
+  for (let i = 0; i < R_POOL; i++) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(rBodyG, rBodyMat), new THREE.Mesh(rNoseG, rNoseMat), new THREE.Mesh(rBandG, rNoseMat));
+    for (let k = 0; k < 4; k++) { const f = new THREE.Mesh(rFinG, rBodyMat); f.rotation.z = k * Math.PI / 2; g.add(f); }
+    const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: gTex, color: 0xffa040, transparent: true, opacity: 1,
+      depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    flame.position.z = 0.42; flame.scale.setScalar(0.9);
+    const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: gTex, color: 0xfff0c0, transparent: true, opacity: 1,
+      depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    core.position.z = 0.37; core.scale.setScalar(0.38);
+    g.add(flame, core);
+    g.visible = false; g.frustumCulled = false;
+    root.add(g);
+    rockets.push({ g, flame, core, ref: null });
+  }
+  // shared trail pool (ring buffer) — puffs outlive the rocket
+  const trail = [];
+  for (let i = 0; i < R_POOL * TRAIL_N; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0x9a9890, transparent: true, opacity: 0,
+      depthWrite: false, fog: true }));
+    s.visible = false;
+    root.add(s);
+    trail.push({ s, born: -9, size: 0.3 });
+  }
+  let trailCursor = 0;
+  const _rq = new THREE.Vector3(), _rm = new THREE.Matrix4(), _up = new THREE.Vector3(0, 1, 0), _zero = new THREE.Vector3();
+  function puffAt(x, y, z, t) {
+    const p = trail[trailCursor]; trailCursor = (trailCursor + 1) % trail.length;
+    p.s.position.set(x, y, z); p.born = t; p.size = 0.22 + ((trailCursor * 0.6180339) % 1) * 0.12; p.s.visible = true;
+  }
+
   // ---- recon drone -----------------------------------------------------------
   const drone = new THREE.Group();
   {
@@ -96,6 +147,55 @@ export function createGrenadeFx(ctx) {
   let reconEndT = -1, reconT0 = 0, lastSweepT = -99;
   let lastSim = null;
 
+  // ---- [fx v152] kill cam replay feed (see update) ------------------------------
+  let lastRf = null;
+  const rFrag = [], rRock = [];
+  const rFragV = [], rRockV = [];
+  for (let i = 0; i < 4; i++) {
+    rFragV.push({ pos: [0, 0, 0], vel: [0, 0, 0], fuseLeft: 2, _p: [0, 0, 0], _id: -1 });
+    rRockV.push({ pos: [0, 0, 0], vel: [0, 0, -1], age: 1 });
+  }
+  function fragView(pool, i, q) {
+    const v = pool[i];
+    if (v._id !== q.id) { v._id = q.id; v._p[0] = q.x; v._p[1] = q.y; v._p[2] = q.z; }
+    // a spin axis from the recorded path (the recording keeps no velocity)
+    v.vel[0] = (q.x - v._p[0]) * 30; v.vel[1] = (q.y - v._p[1]) * 30; v.vel[2] = (q.z - v._p[2]) * 30;
+    v._p[0] = q.x; v._p[1] = q.y; v._p[2] = q.z;
+    v.pos[0] = q.x; v.pos[1] = q.y; v.pos[2] = q.z;
+    v.fuseLeft = q.a;
+    return v;
+  }
+  function rockView(pool, i, q) {
+    const v = pool[i];
+    v.pos[0] = q.x; v.pos[1] = q.y; v.pos[2] = q.z;
+    const cp = Math.cos(q.b);
+    v.vel[0] = Math.sin(q.a) * cp * 50; v.vel[1] = Math.sin(q.b) * 50; v.vel[2] = Math.cos(q.a) * cp * 50;
+    return v;
+  }
+  // replay-only tripmines (the live ones are equipment_fx's; a mine that made
+  // the kill no longer exists in the live sim when its kill is replayed)
+  const MINE_N = 4;
+  const mines = [];
+  {
+    const mm = new THREE.MeshStandardMaterial({ color: 0x3d4434, roughness: 0.7, metalness: 0.2 });
+    const legM = new THREE.MeshStandardMaterial({ color: 0x24261f, roughness: 0.8 });
+    const bodyG = new THREE.BoxGeometry(0.22, 0.12, 0.05); bodyG.translate(0, 0.11, 0);
+    const legG = new THREE.CylinderGeometry(0.006, 0.006, 0.07, 5); legG.translate(0, 0.035, 0);
+    for (let i = 0; i < MINE_N; i++) {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(bodyG, mm));
+      for (const x of [-0.08, 0.08]) { const l = new THREE.Mesh(legG, legM); l.position.x = x; g.add(l); }
+      const led = new THREE.Sprite(new THREE.SpriteMaterial({ map: gTex, color: 0xff2a1a, transparent: true, opacity: 0.6,
+        depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+      led.scale.setScalar(0.07); led.position.set(0.07, 0.16, -0.03);
+      g.add(led);
+      g.userData.led = led;
+      g.visible = false; g.frustumCulled = false;
+      root.add(g);
+      mines.push(g);
+    }
+  }
+
   function onStreak(d) {
     if (!d || d.id !== "recon") return;
     const s = ctx.sim && ctx.sim();
@@ -121,8 +221,39 @@ export function createGrenadeFx(ctx) {
       if (s !== lastSim) { lastSim = s; reconEndT = -1; }
       const t = s.state.time;
 
+      // [fx v152] KILL CAM REPLAY FEED. While killcam.js plays a replay it
+      // publishes ctx.replayFx: the RECORDED frags / rockets in flight (and
+      // tripmines that are about to go off). The live lists are the wrong
+      // timeline then — the rocket that made the kill is long gone — so they are
+      // swapped for the recording, and the trail pool is wiped at both cuts.
+      const rf = ctx.replayFx || null;
+      if (rf !== lastRf) {
+        lastRf = rf;
+        for (const p of trail) p.s.visible = false;
+        for (const R of rockets) { R.g.visible = false; R.ref = null; }
+      }
+      let list = (s.internal && s.internal.grenades) || [];
+      let rl = (s.internal && s.internal.rockets) || [];
+      if (rf) {
+        rFrag.length = 0; rRock.length = 0;
+        for (let i = 0; i < rf.n; i++) {
+          const q = rf.projs[i];
+          if (q.kind === 1) rFrag.push(fragView(rFragV, rFrag.length, q));
+          else if (q.kind === 2) rRock.push(rockView(rRockV, rRock.length, q));
+        }
+        list = rFrag; rl = rRock;
+      }
+      for (let i = 0; i < MINE_N; i++) {
+        const mn = mines[i];
+        const q = rf && i < rf.minesN ? rf.mines[i] : null;
+        if (!q) { if (mn.visible) mn.visible = false; continue; }
+        mn.visible = true;
+        mn.position.set(q.x, q.y - 0.05, q.z);
+        mn.rotation.set(0, q.yaw || 0, 0);
+        mn.userData.led.material.opacity = (t % 0.8) < 0.12 ? 1 : 0.25;
+      }
+
       // frags in flight
-      const list = (s.internal && s.internal.grenades) || [];
       for (let i = 0; i < POOL; i++) {
         const f = frags[i];
         const gr = list[i];
@@ -140,6 +271,43 @@ export function createGrenadeFx(ctx) {
         const fl = gr.fuseLeft != null ? gr.fuseLeft : 2;
         const rate = fl < 1 ? 16 : 7;
         f.glint.material.opacity = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(t * rate * Math.PI * 2));
+      }
+
+      // [heavy weapons] rockets in flight + their smoke trails
+      for (let i = 0; i < R_POOL; i++) {
+        const R = rockets[i];
+        const rk = rl[i];
+        if (!rk) { if (R.g.visible) R.g.visible = false; R.ref = null; continue; }
+        const v = rk.vel || [0, 0, -1];
+        R.g.visible = true;
+        R.g.position.set(rk.pos[0], rk.pos[1], rk.pos[2]);
+        // Matrix4.lookAt(eye, target) aims the object's +Z at eye - target: target = +v puts
+        // +Z (the motor end) BEHIND the flight and the -Z nose along it
+        _rq.set(v[0], v[1], v[2]);
+        if (_rq.lengthSq() > 1e-6) { _rm.lookAt(_zero, _rq, _up); R.g.quaternion.setFromRotationMatrix(_rm); }
+        const fl = 0.75 + 0.25 * Math.sin(t * 90 + i * 1.7) + 0.1 * Math.sin(t * 37);
+        R.flame.scale.setScalar(0.85 * fl + Math.min(0.35, rk.age * 1.2));
+        R.core.material.opacity = 0.8 + 0.2 * fl;
+        if (R.ref !== rk) { R.ref = rk; R.lastPuff = -9; R.lastP = rk.pos.slice(); }
+        if (t - R.lastPuff >= TRAIL_EVERY) {
+          // fill the gap since the last puff so a 0.9 m/tick rocket leaves a continuous line
+          const lp = R.lastP, d = Math.hypot(rk.pos[0] - lp[0], rk.pos[1] - lp[1], rk.pos[2] - lp[2]);
+          const n = Math.max(1, Math.min(8, Math.round(d / 0.22)));
+          for (let k = 1; k <= n; k++) {
+            const u = k / n;
+            puffAt(lp[0] + (rk.pos[0] - lp[0]) * u, lp[1] + (rk.pos[1] - lp[1]) * u, lp[2] + (rk.pos[2] - lp[2]) * u, t);
+          }
+          R.lastPuff = t; R.lastP = rk.pos.slice();
+        }
+      }
+      for (const p of trail) {
+        if (!p.s.visible) continue;
+        const a = t - p.born;
+        if (a < 0 || a > TRAIL_LIFE) { p.s.visible = false; continue; }
+        const u = a / TRAIL_LIFE;
+        p.s.material.opacity = 0.55 * (1 - u) * (1 - u);
+        p.s.scale.setScalar(p.size + u * 1.3);
+        p.s.position.y += dt * 0.25;                            // smoke lifts
       }
 
       // recon drone
@@ -164,7 +332,11 @@ export function createGrenadeFx(ctx) {
         u.cone.material.opacity = sw >= 0 && sw < 0.6 ? 0.07 * (1 - sw / 0.6) : 0;
       }
     },
-    clear() { reconEndT = -1; for (const f of frags) f.g.visible = false; drone.visible = false; },
+    clear() {
+      reconEndT = -1; for (const f of frags) f.g.visible = false; drone.visible = false;
+      for (const R of rockets) { R.g.visible = false; R.ref = null; }
+      for (const p of trail) p.s.visible = false;
+    },
     root,
   };
 }

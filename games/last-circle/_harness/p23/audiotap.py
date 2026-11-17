@@ -18,7 +18,16 @@ emit so every repeat plays the same variant (the comparisons see only the placem
   delay-450m      a sniper at 450 m is heard >= 1.2 s after the shot (sound speed)                                                     [+1.31 s]
   occlusion       a wall between source and ear (the same two points, the wall collider present vs removed): 4-8 dB quieter (rms)   [5.6-5.7]
   mix             an enemy step at 10 m is >= 6 dB louder than a team-mate's step at the same place                                    [13.7 dB]
+  W10 R2B (the recorded ambience; the beds run again with the match phase restored, the storm bed / chest hum held off, 6 s of threat decay):
+  amb-level       between fights, the ambience of every map theme reaches the ear at >= -45 dBFS RMS (3 s capture each)                [W10 base: 1 synth layer]
+  amb-spectrum    the three themes differ: spectral centroid apart by >= 20 % for every pair (the theme is the only input the audio
+                  module reads: W.map.K.theme is switched on the probe's map, so the three captures share one spot and one listener)
+  indoor          the ambience under a roof is <= -5 dB vs the same spot with that roof's collider removed (the listener's roof test)
   errors
+
+    python _harness/p23/audiotap.py --disk --plant amb-same     # every theme plays the Deepwood layers                - MUST FAIL amb-spectrum
+    python _harness/p23/audiotap.py --disk --plant amb-mute     # every recorded layer at level 0                      - MUST FAIL amb-level
+    python _harness/p23/audiotap.py --disk --plant roof-blind   # the roof test sees no colliders during the indoor capture - MUST FAIL indoor
 """
 from __future__ import annotations
 
@@ -36,6 +45,10 @@ C = L.C
 PLANTS = {
     "no-occlusion": "const q0 = W.map.queryColliders.bind(W.map); W.map.queryColliders = function (x, z, r, out) { if (window.__P23A_ON__) { if (out) { out.length = 0; return out; } return []; } return q0(x, z, r, out); }",
     "team-blind": "for (const a of W.actors) Object.defineProperty(a, 'teamId', { configurable: true, get: () => 'T' + a.id, set: () => {} })",
+    # W10 R2B controls (each MUST FAIL its row)
+    "amb-same": "const T = window.__AM__.sfxTable().AMB_REC; T.tropical = T.forest; T.savanna = T.forest",
+    "amb-mute": "const T = window.__AM__.sfxTable().AMB_REC; for (const k in T) T[k] = T[k].map((l) => [l[0], 0])",
+    "roof-blind": "const q1 = W.map.queryColliders.bind(W.map); W.map.queryColliders = function (x, z, r, out) { if (window.__P23R_ON__) { if (out) { out.length = 0; return out; } return []; } return q1(x, z, r, out); }",
 }
 
 TAP_JS = r"""(() => {
@@ -117,6 +130,116 @@ WALL_JS = r"""() => { const W = window.__LC__.W, M = W.map, out = []; const cand
     if (!clear(lx, lz, sx, sz, w.c) || !clear(lx, lz, ox, oz, null) || M.queryColliders(lx, lz, 0.8, out).length) continue;
     window.__WALL__ = w.c; return { listener: [lx, lz], source: [sx, M.heightAt(sx, sz) + 1.5, sz], yaw: Math.atan2(-(sx - lx), -(sz - lz)) }; }
   return null; }"""
+
+
+# ── W10 R2B: the ambience probes ──
+AMB_HOLD_JS = r"""() => { const W = window.__LC__.W; window.__AMBH__ = { storm: W.stormCtl, nc: W.nearbyChests, dc: W.debugChests, theme: W.map.K.theme };
+  W.stormCtl = null; W.nearbyChests = undefined; W.debugChests = undefined; return window.__AMBH__.theme; }"""
+AMB_RESTORE_JS = r"""() => { const W = window.__LC__.W, h = window.__AMBH__; if (!h) return; W.stormCtl = h.storm; W.nearbyChests = h.nc; W.debugChests = h.dc;
+  W.map.K.theme = h.theme; W.phase = 'probe'; window.__AM__.update(W, 0.02); }"""
+AMB_THEME_JS = r"""async (th) => { const W = window.__LC__.W, A = window.__AM__;
+  W.phase = 'menu'; A.update(W, 0.02); W.map.K.theme = th; W.phase = W.__probePhase || 'match';
+  let rb = null; for (let i = 0; i < 80; i++) { A.update(W, 0.25); rb = A.readback(W).ambience; if (rb && rb.recorded === th) break; await new Promise((r) => setTimeout(r, 100)); }
+  for (let i = 0; i < 24; i++) A.update(W, 0.25);
+  return A.readback(W).ambience; }"""
+AMB_TICK_JS = r"""() => { const W = window.__LC__.W; for (let i = 0; i < 4; i++) window.__AM__.update(W, 0.25); const r = window.__AM__.readback(W);
+  return { amb: r.ambience, roofed: r.listener.roofed, threat: r.threat }; }"""
+ROOF_JS = r"""() => { const W = window.__LC__.W, M = W.map, out = [], c0 = [];
+  for (const c of M.colliders) { if (c.kind !== 'box' || c.dead) continue; const sx = c.maxX - c.minX, sz = c.maxZ - c.minZ;
+    if (sx < 4 || sz < 4 || c.maxY - c.minY > 1.5) continue; const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2, gy = M.heightAt(cx, cz);
+    if (gy < M.waterY + 1 || c.minY < gy + 2.4 || c.minY > gy + 8) continue;
+    const above = M.queryColliders(cx, cz, 0.5, out).filter((o) => o !== c && o.kind === 'box' && !o.dead && cx > o.minX && cx < o.maxX && cz > o.minZ && cz < o.maxZ && o.minY > gy + 1.5 && o.minY < gy + 12);
+    if (above.length) continue; c0.push({ c, cx, cz, a: sx * sz }); }
+  c0.sort((a, b) => (b.a - a.a) || (a.cx - b.cx) || (a.cz - b.cz)); window.__ROOFS__ = c0.slice(0, 8).map((r) => r.c);
+  return c0.slice(0, 8).map((r) => [r.cx, r.cz, Math.round(r.a)]); }"""
+
+
+def capture_bed(s, secs):
+    """the raw tap output for `secs` (no event): mono-mixed RMS dBFS and the spectral centroid (Hz, 50 Hz - 16 kHz)"""
+    s.js("() => { window.__TAP__.chunks = []; window.__TAP__.times = []; window.__TAP__.on = true; }")
+    s.sleep(secs)
+    s.js("() => { window.__TAP__.on = false; }")
+    d = s.js(DRAIN_JS)
+    x = np.frombuffer(base64.b64decode(d["b64"]), dtype=np.float32)
+    x = x.reshape(-1, 2).mean(axis=1) if len(x) else np.zeros(0, np.float32)
+    if len(x) < 2048:
+        return {"empty": True}
+    rms = float(np.sqrt(np.mean(x.astype(np.float64) ** 2)))
+    sp = np.abs(np.fft.rfft(x * np.hanning(len(x))))
+    f = np.fft.rfftfreq(len(x), 1.0 / d["sr"])
+    band = (f >= 50) & (f <= 16000)
+    cen = float((f[band] * sp[band]).sum() / max(sp[band].sum(), 1e-12))
+    return {"rmsDb": round(20 * np.log10(max(rms, 1e-9)), 2), "centroidHz": round(cen, 1), "s": round(len(x) / d["sr"], 2)}
+
+
+def amb_rows(v, s, spot, plant):
+    """W10 R2B: amb-level / amb-spectrum / indoor"""
+    R = v.data.setdefault("rows", {})
+    s.js(PLACE_JS, [spot["x"], spot["z"], 0.7])
+    home = s.js(AMB_HOLD_JS)
+    amb = {}
+    for th in ("forest", "tropical", "savanna"):
+        rb = s.js(AMB_THEME_JS, th)
+        s.sleep(2.5)                                   # the layers' 0.8 s fade-in
+        c = capture_bed(s, 3.0)
+        c["readback"] = rb
+        amb[th] = c
+    R["ambience"] = amb
+    # W10 R2B repair: the decoded PCM the real browser holds after the 3 map changes (whole pack + resident ambience; the budget row is sfxcheck pcm-budget)
+    pcm = s.safe_js("() => { const r = window.__AM__.readback(window.__LC__.W); return { bytes: r.pcmBytes, resident: (r.ambience || {}).resident }; }", default=None)
+    v.info("pcm held in the browser after 3 map changes (whole pack + ambience)", pcm)
+    lv = {th: a.get("rmsDb") for th, a in amb.items()}
+    rec = {th: (a.get("readback") or {}).get("recorded") for th, a in amb.items()}
+    v.check("amb-level (between fights every theme's ambience >= -45 dBFS RMS, recorded layers up)",
+            all(x is not None and x >= -45.0 for x in lv.values()) and all(rec[th] == th for th in rec), {"rmsDb": lv, "recorded": rec}, ">= -45 dBFS")
+    cen = {th: a.get("centroidHz") for th, a in amb.items()}
+    pairs = {}
+    ths = list(cen)
+    for i in range(len(ths)):
+        for j in range(i + 1, len(ths)):
+            a, b = cen[ths[i]], cen[ths[j]]
+            pairs[ths[i] + "/" + ths[j]] = None if not a or not b else round(abs(a - b) / min(a, b), 3)
+    v.check("amb-spectrum (the three themes' spectral centroids apart by >= 20 % pairwise)", all(x is not None and x >= 0.2 for x in pairs.values()),
+            {"centroidHz": cen, "pairApart": pairs}, ">= 0.20")
+    # indoor: the map's own theme, under a roof slab with nothing else above it, vs the same spot with that slab's collider removed
+    s.js(AMB_THEME_JS, home or "savanna")
+    roofs = s.js(ROOF_JS) or []
+    R["roofCandidates"] = roofs
+    got = None
+    for i, (rx, rz, _a) in enumerate(roofs):
+        s.js(PLACE_JS, [rx, rz, 0.7])
+        s.js("(i) => { window.__ROOFS__[i].dead = false; }", i)
+        on = s.js(AMB_TICK_JS)
+        s.js("(i) => { window.__ROOFS__[i].dead = true; }", i)
+        off = s.js(AMB_TICK_JS)
+        s.js("(i) => { window.__ROOFS__[i].dead = false; }", i)
+        if on and off and on["roofed"] and not off["roofed"]:
+            got = i
+            break
+    if got is None:
+        s.js(AMB_RESTORE_JS)
+        v.cnj("indoor (ambience under a roof <= -5 dB vs the same spot, roof removed)", "no roof slab on this map toggles the listener roof test (%d candidates)" % len(roofs))
+        return
+    rx, rz, _a = roofs[got]
+    res = {}
+    s.js("() => { window.__P23R_ON__ = true; }")       # the roof-blind plant acts from here
+    for state in ("roofed", "open", "roofed2"):
+        s.js("([i, dead]) => { window.__ROOFS__[i].dead = dead; }", [got, state == "open"])
+        tk = s.js(AMB_TICK_JS)
+        s.sleep(2.0)                                   # the indoor stage's 0.25 s ramps
+        c = capture_bed(s, 3.0)
+        c["roofTest"] = tk["roofed"]
+        c["indoorGain"] = (tk["amb"] or {}).get("indoorGain")
+        res[state] = c
+    s.js("(i) => { window.__ROOFS__[i].dead = false; window.__P23R_ON__ = false; }", got)
+    s.js(AMB_RESTORE_JS)
+    ins = [res[k]["rmsDb"] for k in ("roofed", "roofed2") if res[k].get("rmsDb") is not None]
+    rin = float(np.mean(ins)) if ins else None
+    rout = res["open"].get("rmsDb")
+    drop = None if rin is None or rout is None else round(rin - rout, 2)
+    R["indoor"] = {"spot": [round(rx, 1), round(rz, 1)], "captures": res, "dropDb": drop}
+    v.check("indoor (ambience under a roof <= -5 dB vs the same spot with the roof removed)", drop is not None and drop <= -5.0,
+            {"dropDb": drop, "roofedRms": rin, "openRms": rout, "roofTest": {k: res[k]["roofTest"] for k in res}, "spot": R["indoor"]["spot"]}, "<= -5 dB")
 
 
 def analyse(sr, x, t0=None, emit_t=None):
@@ -269,6 +392,11 @@ def main():
             e, m = mean(en, "rms10"), mean(mt, "rms10")
             R["mix"] = {"enemy": e, "mate": m, "diffDb": None if e is None or m is None else round(e - m, 2)}
             v.check("mix (enemy step >= 6 dB louder than a team-mate's at 10 m)", R["mix"]["diffDb"] is not None and R["mix"]["diffDb"] >= 6.0, R["mix"], ">= 6 dB")
+            # W10 R2B: the recorded ambience (an audio.js without AMB_REC - a pre-W10 build - is could-not-judge, never a pass)
+            if s.safe_js("() => !!(window.__AM__.sfxTable && window.__AM__.sfxTable().AMB_REC)", default=False):
+                amb_rows(v, s, spot, args.plant)
+            else:
+                v.cnj("amb-level / amb-spectrum / indoor", "this build's audio.js has no recorded ambience (no sfxTable().AMB_REC)")
             s.js("() => { const W = window.__LC__.W; if (W.__probePhase) W.phase = W.__probePhase; }")
             L.errors_row(v, s)
     return C.run_gate("p23_audiotap", body, args)

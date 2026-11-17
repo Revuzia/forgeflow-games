@@ -1,0 +1,5 @@
+lanternwalk ctf n=8 ended 8/8  kills/min  13.0  acc 44.2%  ttk 1.22s  caps/match 2.6 (first@45s)  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.47  frag/min 1.33  pick/m 40.1  idle@wall 0.9%  rev/100 0.88
+switchyard  ctf n=8 ended 8/8  kills/min  14.7  acc 68.2%  ttk 0.93s  caps/match 2.1 (first@60s)  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.17  frag/min 1.77  pick/m 43.1  idle@wall 0.5%  rev/100 0.63
+saltmarket  ctf n=8 ended 8/8  kills/min  19.0  acc 55.9%  ttk 0.78s  caps/match 1.4 (first@58s)  stuck>3s/match 0.00  worstIdle 3s  flank/min 0.50  frag/min 1.00  pick/m 35.4  idle@wall 0.5%  rev/100 0.64
+
+expert_probe  difficulty=expert  secs=180  seeds=8  AI avg 0.391 ms/tick  wall 214 s

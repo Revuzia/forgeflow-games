@@ -892,13 +892,22 @@ export function createViewmodel(ctx) {
   function impulse(w, adsEase) {
     const vmK = w.recoil.vmKick || 3;     // rotational action-cycle read
     const vmP = w.recoil.vmPunch || 0.7;  // barrel-axis slide
-    const gv = KICK.adsVmMult + (1 - KICK.adsVmMult) * (1 - adsEase);
+    // (2026-11-14 guns pass) per-gun ADS gain (view.adsKickMult): the Breaker's 12/2.6 kick at
+    // a 15-18 cm eye relief drove the receiver up and back over a third of the sight picture
+    const am = KICK.adsVmMult * ((w.view && w.view.adsKickMult) || 1);
+    const gv = am + (1 - am) * (1 - adsEase);
     const gc = KICK.adsCamMult + (1 - KICK.adsCamMult) * (1 - adsEase);
     const side = kickSide > 0 ? 1 : KICK.altRollMult;
     kickSide = -kickSide;
 
-    K.rotX.v += vmK * KICK.rotXPerKick * gv;          // muzzle climbs
-    K.posY.v += vmK * KICK.posYPerKick * gv;          // gun rides up
+    // (2026-11-15 hold pass) view.adsRiseMult: at full ADS the gun's CLIMB (pitch + rise) is
+    // scaled separately from its drive back, so a heavy kick (Breaker) goes back into the
+    // shoulder and the felt kick lives in the camera punch — the receiver no longer rises
+    // over the target. 1 (or absent) = unchanged.
+    const ar = (w.view && w.view.adsRiseMult != null) ? w.view.adsRiseMult : 1;
+    const gr = gv * (1 - adsEase * (1 - ar));
+    K.rotX.v += vmK * KICK.rotXPerKick * gr;          // muzzle climbs
+    K.posY.v += vmK * KICK.posYPerKick * gr;          // gun rides up
     K.posZ.v += vmP * KICK.posZPerPunch * gv;         // gun drives back into the eye
     K.rotZ.v += vmK * KICK.rotZPerKick * gv * side;   // torque roll, alternating
     K.rotY.v -= vmK * KICK.rotYPerKick * gv * side;   // opposite lateral swing
@@ -1024,6 +1033,9 @@ export function createViewmodel(ctx) {
     armL.node.position.copy(armL.restP);
     armL.node.quaternion.copy(armL.restQ);
     if (mag) { mag.node.position.copy(mag.restP); mag.node.quaternion.copy(mag.restQ); mag.node.scale.copy(mag.restS); mag.node.visible = true; }
+    // [heavy weapons] the launcher's "mag" IS the rocket: once it is fired the tube is
+    // empty until a reload brings the next one (reloadRocket shows it in the hand)
+    if (mag && kind === "rocket" && wp && wp.mag <= 0 && dbg.reloadP == null) mag.node.visible = false;
     if (pump) pump.node.position.copy(pump.restP);
 
     // -- pump (shotgun): forend + support hand rack after every blast ---------------
@@ -1045,12 +1057,13 @@ export function createViewmodel(ctx) {
       const pp = reloading ? p : lastReloadP;
       const rw = reloadW;
       if (kind === "shell") reloadShell(group, w, anim, parts, pp, rw, wp, dt);
+      else if (kind === "rocket") reloadRocket(group, w, anim, parts, pp, rw, kind);
       else reloadMag(group, w, anim, parts, pp, rw, kind, dur);
     }
 
     // -- INSPECT: magazine check (mag weapons) — the support hand drops to the
     // magazine, tugs it a centimetre and seats it again while the gun is rolled over
-    if (inspectW > 0.001 && kind !== "shell" && mag) {
+    if (inspectW > 0.001 && kind !== "shell" && kind !== "rocket" && mag) {
       const q = inspectQ;
       const hw = ramp(q, 0.55, 0.63) * (1 - ramp(q, 0.80, 0.88)) * inspectW * (1 - reloadW);
       if (hw > 0.001) {
@@ -1195,7 +1208,18 @@ export function createViewmodel(ctx) {
     const mk = (o) => ({ p: new THREE.Vector3(), q: new THREE.Quaternion(), pose: o });
     const boreZ = (group.userData.muzzleOffset && group.userData.muzzleOffset[1]) || 0.06;
     let defs;
-    if (kind === "gripmag") {
+    if (kind === "rocket") {
+      // [heavy weapons] launcher: the support hand cradles the warhead from BELOW (the
+      // rocket is loaded into the muzzle end); the pouch is low on the left hip
+      defs = {
+        mag: H.mag || { palm: [mc[0] - 0.004, mc[1] - 0.02, bot - 0.030], fingers: [0.2, 1, 0.25], dir: [0.1, 0, 1] },
+        // (in-game: relative to the round, 66 cm out, the pouch put a fully stretched sleeve across
+        // the lower-left of the frame) — the pouch is on the BODY, so it is placed absolutely
+        pouch: H.pouch || { palm: [-0.15, 0.08, -0.10], fingers: [0.3, 0.5, 1], dir: [0.6, 0, 1] },
+        rack: H.rack || { palm: [0.0, -0.06, boreZ + 0.075], fingers: [0.6, 1, 0], dir: [0, 0, -1] },
+        port: H.port || { palm: [0, 0, 0], fingers: [1, 0, 0], dir: [0, 0, 1] },
+      };
+    } else if (kind === "gripmag") {
       // magazine inside the grip (pistol, SMG): the support hand cups the floor plate from
       // below and pulls it straight down
       defs = {
@@ -1229,7 +1253,8 @@ export function createViewmodel(ctx) {
     handPose(out, c.magOut.p, c.magOut.q);
     // the new magazine just below the well, before it is pushed home
     const below = JSON.parse(JSON.stringify(defs.mag));
-    below.palm[2] -= slide * 0.75;
+    if (kind === "rocket") { below.palm[1] += slide; below.palm[2] -= 0.012; } // a rocket goes in from the FRONT
+    else below.palm[2] -= slide * 0.75;
     c.magBelow = mk(below);
     handPose(below, c.magBelow.p, c.magBelow.q);
     // the palm SLAP: a centimetre past seated (the gun takes the blow, see the beats)
@@ -1376,6 +1401,58 @@ export function createViewmodel(ctx) {
         mag.node.quaternion.copy(_tumble).multiply(mag.restQ);
         mag.node.visible = tf < 0.36;
       }
+    }
+  }
+
+  // --- [heavy weapons] rocket reload (KR-5 Anvil) ------------------------------------
+  // Always an EMPTY reload (one round in the tube, fired). Locked to the sim's 65%
+  // commit and sfx.js's beats (pouch rustle ~22%, round seated at the commit, latch
+  // thrown at 85%): the support hand drops to the pouch, brings the next rocket up IN
+  // FRONT of the muzzle, pushes it home along the bore, palm-slaps it and returns.
+  // The muzzle cants up through the middle of it so the loading end is in frame.
+  const _rkKeys = [];
+  function reloadRocket(group, w, anim, parts, p, rw, kind) {
+    const armL = parts.armL, mag = parts.mag;
+    const C = handKeys(group, anim, kind);
+    const rest = armL.restP, restQ = armL.restQ;
+    const ks = _rkKeys;
+    let n = 0;
+    ks[n] = key(n, 0.00, rest, restQ); n++;
+    ks[n] = key(n, 0.20, C.pouch.p, C.pouch.q); n++;
+    ks[n] = key(n, 0.34, C.pouch.p, C.pouch.q); n++;        // round drawn
+    ks[n] = key(n, 0.52, C.magBelow.p, C.magBelow.q); n++;  // up in front of the tube
+    ks[n] = key(n, 0.64, C.mag.p, C.mag.q); n++;            // slid home along the bore
+    ks[n] = key(n, 0.68, C.slap.p, C.slap.q); n++;          // seated with the palm
+    ks[n] = key(n, 0.74, C.mag.p, C.mag.q); n++;
+    ks[n] = key(n, 0.92, rest, restQ); n++;
+    ks[n] = key(n, 1.00, rest, restQ); n++;
+    evalKeys(ks, n, p, _hp, _hq);
+    armL.node.position.lerp(_hp, rw);
+    armL.node.quaternion.slerp(_hq, rw);
+    // cant: muzzle up while the round goes in, settle as the hand returns
+    const cant = ramp(p, 0.0, 0.18) * (1 - ramp(p, 0.76, 0.95)) * rw;
+    out.rx += anim.tilt[0] * DEG * cant;
+    out.ry += anim.tilt[1] * DEG * cant;
+    out.rz += anim.tilt[2] * DEG * cant;
+    out.px += anim.lift[0] * cant;
+    out.py += anim.lift[1] * cant;
+    out.pz += (anim.lift[2] + 0.02) * cant;
+    if (mag) {
+      const mp = mag.node.position;
+      mp.copy(mag.restP);
+      mag.node.quaternion.copy(mag.restQ);
+      if (p < 0.30) mag.node.visible = false;                 // still in the pouch
+      else if (p < 0.64) {
+        mag.node.visible = true;                               // in the hand: ride the palm
+        _magR.copy(_hq).multiply(C.magQInv);
+        palmOf(_hp, _hq, _palm);
+        _v.copy(C.holdOff).applyQuaternion(_magR).add(_palm);
+        _v2.copy(mag.center).sub(mag.restP).applyQuaternion(_magR);
+        mp.copy(_v).sub(_v2);
+        mag.node.quaternion.copy(_magR).multiply(mag.restQ);
+        mp.lerp(mag.restP, 1 - rw);
+        mag.node.quaternion.slerp(mag.restQ, 1 - rw);
+      } else mag.node.visible = true;                          // seated
     }
   }
 

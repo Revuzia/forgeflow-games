@@ -27,8 +27,12 @@ import { validateBuild, gateBuild, opponentBuild } from "./attachments.js";
 // ------------------------------------------------------------------ weapons
 // Fixed choice lists. Ids only — display names come from weapon_data.js in the
 // UI; the sim validates each id against its own weapons table at spawn.
-export const PRIMARIES = ["warden", "vesper", "breaker", "corvus"];
-export const SECONDARIES = ["pike"];
+// [heavy weapons] the Bastion LMG is a primary; the Anvil launcher is a SECONDARY
+// (it replaces the sidearm — the trade is the whole point). Appended at the END of
+// each list: resolveKit's locked-choice fallback walks the list in order, so a
+// class saved before these existed still resolves to exactly the same kit.
+export const PRIMARIES = ["warden", "vesper", "breaker", "corvus", "bastion"];
+export const SECONDARIES = ["pike", "anvil"];
 
 // ---------------------------------------------------------------- equipment
 // LETHAL slot (frag | tripmine) and TACTICAL slot (flashbang | smoke |
@@ -247,9 +251,27 @@ export function opponentClass(seed, actorId, archetype) {
   const builds = {};
   const bp = opponentBuild(hash32, seed, actorId, shape.primary, role, 0);
   if (bp.attach.length || bp.camo) builds[shape.primary] = bp;
-  const bs = opponentBuild(hash32, seed, actorId, "pike", role, 1);
-  if (bs.attach.length || bs.camo) builds.pike = bs;
-  return { name: shape.name, primary: shape.primary, secondary: "pike", lethal, tactical, perks, builds };
+  // [heavy weapons] some operators carry the heavy kit. Separate hash salts (70/71),
+  // so every other draw above is unchanged for every (seed, actor): about one
+  // rifleman in five runs the Bastion as a SUPPORT gunner, and roughly one rifleman
+  // or marksman in six swaps the sidearm for the Anvil launcher. Entry men never
+  // carry the launcher (point-blank rockets are self-defeating).
+  let name = shape.name, primary = shape.primary, secondary = "pike";
+  if (role === "rifleman" && hash32(seed, actorId, 70) % 100 < 20) {
+    primary = "bastion"; name = "SUPPORT";
+    delete builds[shape.primary];
+    const bb = opponentBuild(hash32, seed, actorId, "bastion", role, 0);
+    if (bb.attach.length || bb.camo) builds.bastion = bb;
+  }
+  if (role !== "cqb" && hash32(seed, actorId, 71) % 100 < 17) {
+    secondary = "anvil";
+    delete builds.pike;
+    if (primary !== "bastion") name = role === "marksman" ? "LONG REACH" : "DEMOLITION";
+  } else {
+    const bs = opponentBuild(hash32, seed, actorId, "pike", role, 1);
+    if (bs.attach.length || bs.camo) builds.pike = bs;
+  }
+  return { name, primary, secondary, lethal, tactical, perks, builds };
 }
 
 // Integer index of a fixed STREAK threshold after perks.

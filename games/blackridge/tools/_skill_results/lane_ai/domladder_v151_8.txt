@@ -1,0 +1,12 @@
+lanternwalk dom    n=8 ended 8/8  held 21.7% (empty 78.3%)  flips/min 2.33  pts/min 54.9  owned 75.8%
+lanternwalk ladder n=8 ended 8/8  finished 8/8 @174s  top rung 11/11  knife-rung time 32 s/match, swings there 2.0/match  kills/min 25.4
+switchyard  dom    n=8 ended 8/8  held 9.4% (empty 90.6%)  flips/min 1.87  pts/min 55.1  owned 76.0%
+switchyard  ladder n=8 ended 8/8  finished 8/8 @167s  top rung 11/11  knife-rung time 43 s/match, swings there 14.4/match  kills/min 27.2
+saltmarket  dom    n=8 ended 8/8  held 18.7% (empty 81.3%)  flips/min 1.94  pts/min 56.8  owned 78.5%
+saltmarket  ladder n=8 ended 8/8  finished 8/8 @143s  top rung 12/11  knife-rung time 24 s/match, swings there 2.1/match  kills/min 30.0
+
+mode_probe  secs=240 seeds=8  AI avg 0.180 ms/tick  wall 227 s
+(node:13820) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/TestRun/AppData/Local/Temp/claude/4097386dafa9cdc3/7370adf0-7436-4a8b-8e44-47246b52f7f3/scratchpad/v151/games/blackridge/core/sim/sim.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\TestRun\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

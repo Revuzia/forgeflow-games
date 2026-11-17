@@ -30,6 +30,7 @@ import { mergedStore, onOtherTabWrite, merge3, cloneRecord } from "./store_merge
 
 export const WEAPON_NAMES = {
   warden: "Warden", vesper: "Vesper", breaker: "Breaker", corvus: "Corvus", pike: "Pike",
+  bastion: "Bastion", anvil: "Anvil",
 };
 export const MODE_NAMES = { tdm: "Skirmish", ctf: "Capture the Flag", ffa: "Free-for-All", dom: "Stronghold" };
 const MULTI = ["DOUBLE KILL", "TRIPLE KILL", "QUAD KILL", "MULTI KILL"];
@@ -70,6 +71,9 @@ export const DAILY = [
   t("d_pike", "weapon", "Sidearm Drill", "Get 5 eliminations with the Pike", "kill", { weapon: "pike" }, 5, 1500, { req: "weapon:pike" }),
   t("d_corvus_hs", "weapon", "Glass Line", "Get 4 headshot eliminations with the Corvus", "kill", { weapon: "corvus", headshot: true }, 4, 2000, { req: "weapon:corvus" }),
   t("d_breaker_pb", "weapon", "Point Blank", "Get 5 Breaker eliminations within 8 m", "kill", { weapon: "breaker", maxDist: 8 }, 5, 1500, { req: "weapon:breaker" }),
+  // [heavy weapons]
+  t("d_bastion", "weapon", "Belt Fed", "Get 12 eliminations with the Bastion", "kill", { weapon: "bastion" }, 12, 1250, { req: "weapon:bastion" }),
+  t("d_anvil", "weapon", "Heavy Delivery", "Get 3 eliminations with the Anvil", "kill", { weapon: "anvil" }, 3, 1500, { req: "weapon:anvil" }),
   t("d_warden_hs", "weapon", "Warden Precision", "Get 5 headshot eliminations with the Warden", "kill", { weapon: "warden", headshot: true }, 5, 1500, { req: "weapon:warden" }),
   // ---- equipment & call-ins
   t("d_trip", "gear", "Wired Shut", "Get 2 tripmine eliminations", "kill", { via: "claymore" }, 2, 2000, { req: "equip:claymore" }),
@@ -123,6 +127,8 @@ export const CAREER = [
   track("c_vesper", "Vesper Service", "Eliminations with the Vesper", "kills_vesper", [[100, 1500], [500, 4000], [1500, 8000]]),
   track("c_breaker", "Breaker Service", "Eliminations with the Breaker", "kills_breaker", [[100, 1500], [500, 4000], [1500, 8000]]),
   track("c_corvus", "Corvus Service", "Eliminations with the Corvus", "kills_corvus", [[100, 1500], [500, 4000], [1500, 8000]]),
+  track("c_bastion", "Bastion Service", "Eliminations with the Bastion", "kills_bastion", [[100, 1500], [500, 4000], [1500, 8000]]),
+  track("c_anvil", "Anvil Service", "Eliminations with the Anvil", "kills_anvil", [[25, 1500], [100, 4000], [300, 8000]]),
   track("c_pike", "Pike Service", "Eliminations with the Pike", "kills_pike", [[50, 1500], [250, 4000], [750, 8000]]),
   track("c_wins", "Victor", "Matches won", "wins", [[5, 750], [25, 2500], [100, 6000], [250, 12000]]),
   track("c_matches", "Veteran", "Matches completed", "matches", [[10, 500], [50, 2000], [200, 5000], [500, 10000]]),
@@ -691,6 +697,7 @@ export function createChallenges(ctx, progression, opts) {
       // [polish v149] the death event names equipment kills itself
       else if (d.weaponId === "claymore") via = "claymore";
       else if (d.weaponId === "frag") via = "frag";
+      else if (d.weaponId === "anvil") { via = "gun"; weapon = "anvil"; } // [heavy weapons] the rocket names itself
       else if (blast && blast.who === "P" && Math.abs(t - blast.t) < 1e-6) {
         via = blast.source === "claymore" ? "claymore" : blast.source === "streak" ? "streak" : "frag";
       } else if (lastShotW && t - lastShotT <= 1.0) { via = "gun"; weapon = lastShotW; }

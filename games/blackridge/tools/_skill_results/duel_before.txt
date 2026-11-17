@@ -1,0 +1,64 @@
+duel_probe  n=40 per cell   (Warden rifleman, flat open ground, player in plain view)
+
+player standing  at 15 m
+band      see->shot s   hit%   ttk s   win%   pre-reaction rounds
+recruit         5.09    68.5    1.27     95   0
+regular         3.21    71.7    1.02    100   0
+hardened        2.81    75.0    0.75    100   0
+veteran         2.19    81.2    0.66    100   0
+expert          1.96    85.1    0.63    100   0
+
+player standing  at 30 m
+band      see->shot s   hit%   ttk s   win%   pre-reaction rounds
+recruit         9.09    43.9    1.78     53   0
+regular         9.41    76.9    0.67     68   0
+hardened        7.81    84.0    1.29     83   0
+veteran         7.45    85.8    0.48     95   0
+expert          4.40    51.0    0.90    100   0
+
+player STRAFING  at 15 m
+band      see->shot s   hit%   ttk s   win%   pre-reaction rounds
+recruit         4.06    61.5    1.46    100   0
+regular         2.37    74.1    0.81    100   0
+hardened        1.75    77.6    0.58    100   0
+veteran         1.48    80.5    0.52    100   0
+expert          1.36    83.2    0.43    100   0
+
+player STRAFING  at 30 m
+band      see->shot s   hit%   ttk s   win%   pre-reaction rounds
+recruit         8.50    46.0    1.91     70   0
+regular         7.62    72.5    0.90     95   0
+hardened        6.72    82.3    0.50    100   0
+veteran         6.59    82.1    0.47    100   0
+expert          3.52    52.5    1.03    100   0
+persona_duel_probe  n=60 per cell  (Warden vs Warden, flat ground, 100 hp each, 18 m)
+
+opening: UNAWARE - the human sees the opponent first
+persona   vs band      human win%   draws%   mean resolve s   human hit%   opp hit%   opp 1st shot after confirm   human 1st shot   pre-reaction rounds
+novice    regular            78        0           2.05        20.2       53.7             1.12            -0.09   0
+novice    hardened           65        0           1.99        20.0       64.8             1.10            -0.09   0
+novice    veteran            53        0           1.90        19.7       78.5             1.07            -0.09   0
+novice    expert             23        0           1.55        17.0       56.2             0.27            -0.07   0
+regular   regular            90        0           1.74        41.5       57.1             1.13            -0.10   0
+regular   hardened           83        0           1.72        41.3       64.7             1.12            -0.10   0
+regular   veteran            68        0           1.71        39.7       70.2             1.08            -0.10   0
+regular   expert             28        0           1.32        35.6       57.0             0.27            -0.05   0
+expert    regular            98        0           1.20        55.5       42.9             1.14            -0.05   0
+expert    hardened           98        0           1.20        55.5       51.3             1.12            -0.05   0
+expert    veteran            97        0           1.18        55.8       67.4             1.09            -0.05   0
+expert    expert             63        0           1.11        52.2       48.1             0.27            -0.05   0
+
+opening: MEETING - reaction clocks start together (the opponent confirms the human)
+persona   vs band      human win%   draws%   mean resolve s   human hit%   opp hit%   opp 1st shot after confirm   human 1st shot   pre-reaction rounds
+novice    regular            48        0           3.21        25.6       59.0             0.63             0.54   0
+novice    hardened           22        0           2.58        26.9       68.0             0.42             0.54   0
+novice    veteran             5        0           2.32        24.8       71.5             0.34             0.54   0
+novice    expert              2        0           2.04        19.7       71.9             0.27             0.54   0
+regular   regular            63        0           3.24        45.9       49.7             0.63             0.37   0
+regular   hardened           48        0           2.65        51.0       55.5             0.42             0.37   0
+regular   veteran            20        0           2.33        48.9       65.1             0.34             0.37   0
+regular   expert              8        0           2.10        42.1       65.2             0.27             0.37   0
+expert    regular            92        0           2.74        71.0       45.6             0.63             0.26   0
+expert    hardened           83        0           2.41        70.6       43.4             0.42             0.26   0
+expert    veteran            70        0           2.17        75.0       54.7             0.34             0.26   0
+expert    expert             43        0           2.07        65.1       56.9             0.27             0.26   0

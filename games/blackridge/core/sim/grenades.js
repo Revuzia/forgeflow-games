@@ -43,6 +43,8 @@ export function spawnGrenade(sim, who, origin, vel, fuseLeft = GRENADE.FUSE_S) {
 // Immediate detonation helper (cooked-in-hand, drum chains — source knows why).
 // `opts` (kill-streak call-ins, streaks.js): {radius, dmgCenter, dmgEdge, noSelf}
 // override the frag numbers; noSelf spares the caller ("P") from their own strike.
+// [heavy weapons] opts.weaponId names the kill on the death event (the Anvil's
+// rocket: "anvil"); opts.quiet skips the frag-only `grenade` detonate phase.
 export function detonateAt(sim, who, pos, source = "grenade", opts = null) {
   explode(sim, who, pos, source, opts);
 }
@@ -52,8 +54,11 @@ function explode(sim, who, pos, source, opts) {
   const dC = (opts && opts.dmgCenter != null) ? opts.dmgCenter : GRENADE.DMG_CENTER;
   const dE = (opts && opts.dmgEdge != null) ? opts.dmgEdge : GRENADE.DMG_EDGE;
   const noSelf = !!(opts && opts.noSelf);
-  sim.emit("grenade", { phase: "detonate", who, pos: pos.slice() });
-  sim.emit("explosion", { pos: pos.slice(), radius: R, source });
+  const meta = opts && opts.weaponId ? { weaponId: opts.weaponId } : null;
+  if (!(opts && opts.quiet)) sim.emit("grenade", { phase: "detonate", who, pos: pos.slice() });
+  // `who` rides the explosion additively (challenge / killcam attribution without
+  // depending on a preceding grenade:detonate)
+  sim.emit("explosion", { pos: pos.slice(), radius: R, source, who });
   const world = sim.world;
   const hardOnly = (box) => (box.matClass || "hard") === "hard";
 
@@ -67,7 +72,7 @@ function explode(sim, who, pos, source, opts) {
     if (world.losBlocked(pos, chest, hardOnly)) dmg *= GRENADE.THROUGH_HARD;
     // BLAST WEAVE perk (class matches): frags, cooks AND call-in strikes
     if (hasPerk(body, "flak")) dmg *= PERK_FX.flak.explosiveMult;
-    if (dmg > 0.5) applyDamage(sim, victim, dmg, who, "body", "grenade");
+    if (dmg > 0.5) applyDamage(sim, victim, dmg, who, "body", "grenade", meta);
   };
 
   const p = sim.state.player;
@@ -79,8 +84,99 @@ function explode(sim, who, pos, source, opts) {
   if (sim.internal.equip) blastEquipment(sim, pos, R * 0.5, who);
 }
 
+// ===================================================================== ROCKETS
+// [heavy weapons] KR-5 Anvil. A rocket is a straight, fast, slightly dropping
+// projectile that detonates on the first wall / body it meets, through explode()
+// above — same falloff, same 25%-through-hard-cover rule, same BLAST WEAVE
+// multiplier, self-damage ON (the shooter is not spared). Inside `armM` of the
+// muzzle it has not armed: a DUD that clanks off (grenade:bounce — reused vocab,
+// the puff + knock the view already draws) and only bruises a body it strikes.
+// Deterministic: no rng is drawn. List: sim.internal.rockets (the view reads it).
+const ROCKET_R = 0.42;            // body hit radius around the capsule axis
+export function spawnRocket(sim, who, weaponId, weapon, origin, dir) {
+  const sp = (weapon && weapon.splash) || {};
+  const speed = sp.speed || weapon.muzzleVel || 50;
+  const list = sim.internal.rockets || (sim.internal.rockets = []);
+  const r = {
+    who, weaponId,
+    pos: origin.slice(), origin: origin.slice(),
+    vel: [dir[0] * speed, dir[1] * speed, dir[2] * speed],
+    age: 0, traveled: 0,
+    splash: {
+      radius: sp.radius || 6, dmgCenter: sp.dmgCenter != null ? sp.dmgCenter : 150,
+      dmgEdge: sp.dmgEdge != null ? sp.dmgEdge : 20, armM: sp.armM != null ? sp.armM : 3,
+      gravity: sp.gravity != null ? sp.gravity : -2.4, lifeS: sp.lifeS || 3.6, duddmg: sp.duddmg || 40,
+    },
+  };
+  list.push(r);
+  return r;
+}
+
+// closest body (not the shooter) whose capsule the segment a->a+d*len passes
+// within ROCKET_R of; returns {id, t} (t = metres along the segment) or null
+function rocketBodyHit(sim, r, d, len) {
+  let best = null;
+  const S = sim.state;
+  const test = (id, pos, stance) => {
+    if (id === r.who) return;
+    const top = pos[1] + (stance === "crouch" ? 1.25 : 1.8);
+    const n = Math.max(2, Math.ceil(len / 0.2));
+    for (let i = 0; i <= n; i++) {
+      const t = (len * i) / n;
+      const x = r.pos[0] + d[0] * t, y = r.pos[1] + d[1] * t, z = r.pos[2] + d[2] * t;
+      if (y < pos[1] - 0.05 || y > top + 0.1) continue;
+      if (Math.hypot(x - pos[0], z - pos[2]) <= ROCKET_R) {
+        if (!best || t < best.t) best = { id, t };
+        return;
+      }
+    }
+  };
+  if (S.player.alive) test("P", S.player.pos, S.player.stance);
+  for (const b of S.bots) if (b.alive) test(b.id, b.pos, b.stance);
+  return best;
+}
+
+export function stepRockets(sim, world, dt) {
+  const list = sim.internal.rockets;
+  if (!list || !list.length) return;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const r = list[i];
+    const sp = r.splash;
+    r.age += dt;
+    r.vel[1] += sp.gravity * dt;
+    const speed = Math.hypot(r.vel[0], r.vel[1], r.vel[2]) || 1e-6;
+    const d = [r.vel[0] / speed, r.vel[1] / speed, r.vel[2] / speed];
+    const step = speed * dt;
+    const wh = world.raycast(r.pos, d, step);
+    const wallT = wh && wh.dist <= step ? wh.dist : Infinity;
+    const bh = rocketBodyHit(sim, r, d, Math.min(step, wallT));
+    const hitT = bh ? bh.t : wallT;
+    const expired = r.age >= sp.lifeS;
+    if (hitT === Infinity && !expired) {
+      r.pos[0] += d[0] * step; r.pos[1] += d[1] * step; r.pos[2] += d[2] * step;
+      r.traveled += step;
+      continue;
+    }
+    const t = hitT === Infinity ? 0 : hitT;
+    // stop a hand's width short of the surface so the blast's cover rays start in the open
+    const back = bh ? 0 : Math.min(t, 0.12);
+    const at = [r.pos[0] + d[0] * (t - back), r.pos[1] + d[1] * (t - back), r.pos[2] + d[2] * (t - back)];
+    list.splice(i, 1);
+    if (r.traveled + t < sp.armM && !expired) {
+      // not armed yet: a dud — no blast, a knock on whatever it struck
+      if (bh) applyDamage(sim, bh.id, sp.duddmg, r.who, "body", "grenade", { weaponId: r.weaponId });
+      sim.emit("grenade", { phase: "bounce", who: r.who, pos: at });
+      continue;
+    }
+    explode(sim, r.who, at, "rocket", {
+      radius: sp.radius, dmgCenter: sp.dmgCenter, dmgEdge: sp.dmgEdge, weaponId: r.weaponId, quiet: true,
+    });
+  }
+}
+
 // Frozen stub signature. Ticked in tick-order slot 5 (with projectiles).
 export function stepGrenades(sim, world, dt) {
+  stepRockets(sim, world, dt); // [heavy weapons] the Anvil's rockets ride the same tick slot
   const list = sim.internal.grenades;
   for (let i = list.length - 1; i >= 0; i--) {
     const g = list[i];

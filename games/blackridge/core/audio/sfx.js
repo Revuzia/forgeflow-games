@@ -125,13 +125,18 @@ const MECH = {
   corvus: { kind: "bolt", f: 1600, durMs: 42, gapMs: 90, gain: 1.5 },    // heavy bolt CHUNK
   pike: { kind: "slide", f: 3500, durMs: 9, gapMs: 25, gain: 0.9 },      // crisp slide
   breaker: { kind: "pump", f: 2600, durMs: 38, gapMs: 0, gain: 1.35 },   // wide blast crack + roar
+  // [heavy weapons] the belt-fed gun: a lower, heavier double (feed tray + bolt)
+  bastion: { kind: "double", f: 3300, durMs: 11, gapMs: 19, gain: 1.2 },
 };
+// [heavy weapons] recorded-body pitch per weapon (the Bastion re-uses the AR takes,
+// slowed ~11%: a bigger calibre through a longer barrel reads lower and fatter)
+const BODY_RATE = { bastion: 0.89 };
 
 // weapon class → which recorded MID/FAR pool (mid_*, far_*) and which INDOOR
 // pool (in_*) it uses. The SMG shares the pistol-calibre distance takes (9 mm
 // and a .38 sound alike at 100 m); the DMR shares the AK5 hall take indoors.
-const DIST_CLASS = { ar: "ar", smg: "pistol", pistol: "pistol", dmr: "dmr", shotgun: "sg" };
-const INDOOR_CLASS = { ar: "ar", dmr: "ar", smg: "smg", pistol: "pistol", shotgun: "sg" };
+const DIST_CLASS = { ar: "ar", smg: "pistol", pistol: "pistol", dmr: "dmr", shotgun: "sg", lmg: "ar", launcher: "sg" };
+const INDOOR_CLASS = { ar: "ar", dmr: "ar", smg: "smg", pistol: "pistol", shotgun: "sg", lmg: "ar", launcher: "sg" };
 // Recorded-layer trims (takes are peak-normalised to −1 dBFS; MEASURED against
 // the previous processed layers with the OfflineAudioContext harness — lane report)
 const MID_REC_GAIN = 1.6;
@@ -173,6 +178,9 @@ const SWITCH_FOLEY = {
   ar:      { cloth: 0.22, clothRate: 1.00, seatAt: 0.66, seat: "click", rate: 1.00, g: 0.40, thump: 0.10, pump: false },
   dmr:     { cloth: 0.30, clothRate: 0.90, seatAt: 0.72, seat: "latch", rate: 0.90, g: 0.46, thump: 0.18, pump: false },
   shotgun: { cloth: 0.28, clothRate: 0.92, seatAt: 0.68, seat: "latch", rate: 0.80, g: 0.46, thump: 0.20, pump: true },
+  // [heavy weapons] lmg / launcher: the heaviest rustle and knock in the set
+  lmg:      { cloth: 0.32, clothRate: 0.86, seatAt: 0.74, seat: "latch", rate: 0.84, g: 0.48, thump: 0.22, pump: false },
+  launcher: { cloth: 0.36, clothRate: 0.80, seatAt: 0.76, seat: "latch", rate: 0.72, g: 0.46, thump: 0.26, pump: false },
 };
 
 // §7.3 shooter-tail send (2026-09-16 retune — see the tail block in bang() for
@@ -678,7 +686,35 @@ export function makeSfx(env) {
     }
   }
 
+  // [heavy weapons] KR-5 Anvil launch: not a gunshot — the motor's ignition. A low
+  // concussion (synth sub + chest), the recorded 12-gauge take slowed hard and
+  // low-passed for the back-blast, and a rising motor hiss as the rocket leaves.
+  // Same spatial / flight-delay model as bang(). The blast itself is onExplosion.
+  function rocketLaunch(d) {
+    const own = d.shooter === "P";
+    const origin = d.origin || camPos();
+    let dist = 0;
+    if (!own) {
+      const c = camPos();
+      dist = Math.hypot(origin[0] - c[0], (origin[1] || 0) - c[1], origin[2] - c[2]);
+      if (!Number.isFinite(dist) || dist > 300) return;
+    }
+    const when = own ? 0 : dist / 343;
+    const out = env.spatial(own ? null : origin, 320);
+    if (!out) return;
+    out.gain.value = gclamp((own ? 1 : gunDistGain(dist)) * (own ? OWN_GUN_LEVEL : ENEMY_GUN_LEVEL));
+    stats.rockets = (stats.rockets || 0) + 1;
+    const b = buf("gun_breaker");
+    if (b) voice(b, out, { rate: 0.62 + rng() * 0.04, gain: 0.55, when, lp: 2600 });
+    thump(out, { f0: 110, f1: 34, durMs: 420, gain: own ? 0.75 : 0.55, when });             // concussion
+    thump(out, { f0: 190, f1: 90, durMs: 90, gain: 0.25, when });                           // chest
+    burst(out, { f: 700, sweepTo: 2600, q: 0.55, durMs: 650, gain: own ? 0.22 : 0.16, when: when + 0.02, decayMs: 260 }); // motor
+    burst(out, { f: 3400, q: 1.4, durMs: 24, gain: 0.12, when });                           // ignition crack
+    if (env.music) env.music.gunDuck();
+  }
+
   function bang(d, V) {
+    if (d && d.rocket) { rocketLaunch(d); return; }
     const ac = env.ac;
     stats.bangs++;
     const own = d.shooter === "P";
@@ -778,7 +814,7 @@ export function makeSfx(env) {
     // per-take trim: the pistol takes peak at 1.3 (over full scale) — measured −2.5
     // dBFS own vs −4…−5 for the rifles; −2 dB puts it with them
     const bodyGain = 0.7 * (w === "pike" ? 0.8 : 1) * (1 + (rng() * 2 - 1) * 0.05) * (first ? 1.19 : 1) * (1 - 0.15 * sustained);
-    const bodyRate = (1 + (rng() * 2 - 1) * 0.05) * (1 - 0.02 * sustained);
+    const bodyRate = (BODY_RATE[w] || 1) * (1 + (rng() * 2 - 1) * 0.05) * (1 - 0.02 * sustained);
     let tapSrc = null;
     // recorded perspective pools for this weapon's class (null → old processed path)
     const cls = classOf(w);
@@ -1039,6 +1075,10 @@ export function makeSfx(env) {
     }
     if (d.hit && d.hit.pos && d.hit.surface) impact(d.hit, d);
     if (d.shooter === "P" && d.hit && d.hit.entity != null && !d.pen) {
+      // [feel v153] the KILLING round: the sim emits death BEFORE this shot, so
+      // onDeath() has already played the kill thock (which carries its own tick).
+      // Playing the hit tick as well flammed the two cues; the kill replaces it.
+      if (killCue.victim === d.hit.entity && Number.isFinite(t) && Math.abs(t - killCue.t) <= 0.07) return;
       const cue = feedbackFor(d, t, d.hit.part === "head");
       if (cue === 3) {
         // three or more pellets landed: a low "fat hit" under the tick
@@ -1234,7 +1274,19 @@ export function makeSfx(env) {
     // (back + home), or a slide snap for the pistol. The recorded mag slices put
     // their latch ~0.1 s in, so they start that much before the beat.
     const cls = classOf(d.weaponId);
-    const mRate = cls === "pistol" ? 1.06 : cls === "smg" ? 1.0 : cls === "dmr" ? 0.86 : 0.92;
+    const mRate = cls === "pistol" ? 1.06 : cls === "smg" ? 1.0 : cls === "dmr" ? 0.86 : cls === "lmg" ? 0.80 : cls === "launcher" ? 0.72 : 0.92;
+    if (cls === "launcher") {
+      // [heavy weapons] the rocket: a rustle as the fresh round leaves the pouch, the
+      // round seated at the commit (a low mag-in), the latch thrown home at 85%
+      const tIn = dur * (RELOAD_MODEL.commitFraction || 0.65);
+      const cl = buf("cloth"), mi = buf("f_mag_in") || buf("mag_in"), la = buf("latch");
+      for (const s of [cl ? voice(cl, out, { gain: g * 0.8, when: dur * 0.22, rate: 0.85 }) : null,
+                       mi ? voice(mi, out, { gain: g * 0.85, when: Math.max(0, tIn - 0.1), rate: 0.7 }) : null,
+                       la ? voice(la, out, { gain: g * 1.0, when: dur * 0.85, rate: 0.8 }) : null]) if (s) srcs.push(s);
+      thump(out, { f0: 160, f1: 90, durMs: 60, gain: g * 0.35, when: tIn });
+      pendingReload.set(key, srcs);
+      return;
+    }
     const tOut = dur * 0.18, tIn = dur * (RELOAD_MODEL.commitFraction || 0.65), tRack = dur * 0.84;
     const recOut = buf("f_mag_out"), recIn = buf("f_mag_in");
     const magIn = d.weaponId === "corvus" ? (buf("mag_in_corvus") || recIn || buf("mag_in")) : (recIn || buf("mag_in"));
@@ -1379,6 +1431,7 @@ export function makeSfx(env) {
     env.ctx.suppress = Math.min(1, (env.ctx.suppress || 0) + 0.3);
   }
 
+  const killCue = { victim: null, t: -9 };
   function onDeath(d) {
     if (!d) return;
     if (d.victim === "P") {
@@ -1391,6 +1444,9 @@ export function makeSfx(env) {
     if (d.attacker === "P" && d.victim !== "P") {
       // kill thock (§4.1): heavier than the hit tick — see killThock()
       killThock(!!d.headshot);
+      // SIM time (the shot handler's t is sim time; audio.js hands death no t)
+      const sm = env.ctx && env.ctx.sim && env.ctx.sim();
+      killCue.victim = d.victim; killCue.t = sm && sm.state ? sm.state.time : -9;
     }
     if (d.victim !== "P" && d.pos) {
       const out = env.spatial(d.pos, 35);
@@ -1629,7 +1685,7 @@ export function makeSfx(env) {
     const when = dist / 343;
     const out = env.spatial(d.pos, 300);
     if (!out) return;
-    const big = d.source === "drum" || d.source === "transformer" || d.source === "streak";
+    const big = d.source === "drum" || d.source === "transformer" || d.source === "streak" || d.source === "rocket";
     const b = buf(big ? "expl_large" : "expl_frag");
     let src = null;
     if (b) src = voice(b, out, { gain: EXPL_GAIN, rate: 1 + (rng() * 2 - 1) * 0.05, when });

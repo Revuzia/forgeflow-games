@@ -53,9 +53,13 @@ export function meleeVerbId() { return MELEE_VERB_ID; }
 export const LADDER_TIERS = Object.freeze([
   { weapon: "warden", attach: [] },
   { weapon: "warden", attach: ["holo", "compensator", "grip"] },
+  // [heavy weapons] the belt-fed gun right after the rifles (easy rung, lots of lead)
+  { weapon: "bastion", attach: [] },
   { weapon: "vesper", attach: [] },
   { weapon: "vesper", attach: ["laser", "rapidfire"] },
   { weapon: "breaker", attach: [] },
+  // ...and the launcher mid-ladder: three rockets a life, make them count
+  { weapon: "anvil", attach: [] },
   { weapon: "corvus", attach: [] },
   { weapon: "corvus", attach: ["reddot", "compensator"] },
   { weapon: "pike", attach: [] },

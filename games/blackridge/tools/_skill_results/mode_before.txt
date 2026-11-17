@@ -1,0 +1,18 @@
+lanternwalk dom    n=2 ended 2/2  held 21.2% (empty 78.8%)  flips/min 1.90  pts/min 56.4  owned 77.9%
+lanternwalk hill   n=2 ended 2/2  occupied 76.6%  held(one team) 76.0%  contested 0.6%  pts/min 43.0
+lanternwalk tags   n=2 ended 2/2  tags dropped 133  confirmed 45.9%  denied 36.8%  expired 12.8%  (rest still down at the horn)  confirms/min 7.5
+lanternwalk ladder n=2 ended 2/2  finished 2/2 @159s  top rung 11/11  knife-rung time 31 s/match, swings there 3.0/match  kills/min 26.2
+switchyard  dom    n=2 ended 2/2  held 11.3% (empty 88.7%)  flips/min 1.23  pts/min 54.8  owned 75.5%
+switchyard  hill   n=2 ended 2/2  occupied 75.8%  held(one team) 73.4%  contested 2.5%  pts/min 41.7
+switchyard  tags   n=2 ended 2/2  tags dropped 156  confirmed 57.7%  denied 35.3%  expired 3.2%  (rest still down at the horn)  confirms/min 11.1
+switchyard  ladder n=2 ended 2/2  finished 2/2 @149s  top rung 11/11  knife-rung time 19 s/match, swings there 2.0/match  kills/min 27.6
+saltmarket  dom    n=2 ended 2/2  held 23.7% (empty 76.3%)  flips/min 1.60  pts/min 61.7  owned 85.5%
+saltmarket  hill   n=2 ended 2/2  occupied 84.0%  held(one team) 81.2%  contested 2.8%  pts/min 47.0
+saltmarket  tags   n=2 ended 2/2  tags dropped 187  confirmed 42.8%  denied 47.6%  expired 4.8%  (rest still down at the horn)  confirms/min 9.9
+saltmarket  ladder n=2 ended 2/2  finished 2/2 @151s  top rung 11/11  knife-rung time 48 s/match, swings there 3.0/match  kills/min 29.7
+
+mode_probe  secs=240 seeds=2  AI avg 0.124 ms/tick  wall 88 s
+(node:263928) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/TestRun/AppData/Local/Temp/claude/4097386dafa9cdc3/7370adf0-7436-4a8b-8e44-47246b52f7f3/scratchpad/base/core/sim/sim.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\TestRun\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

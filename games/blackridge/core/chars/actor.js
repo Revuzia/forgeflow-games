@@ -21,6 +21,8 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 import { CLIP_FILES, CLIP_DERIVED, ANIMS, LOCO } from "./anim_map.js";
+// [hold pass 2026-11-15] the gun leads, the arms follow (per-weapon 3P holds)
+import { createHold } from "./hold.js";
 
 // ---------------------------------------------------------------------------
 // Loader (Draco decoder is vendored — a CDN outage must never take the
@@ -258,10 +260,26 @@ export function applyWetShoulder(mat) {
     // match (programs delta 0 during play — AC-49's FAIL gate).
     const rim = { c: { value: new THREE.Color(0, 0, 0) }, s: { value: 0 } };
     m.userData.__brRim = rim;
+    // [a11 operator looks] per-actor cloth/skin recolour (core/chars/operator_looks.js).
+    // uBrLook.x = 0 (the default, the campaign and the juggernaut) skips the branch
+    // entirely, so those frames are unchanged. Same ONE program for the whole cast.
+    const look = {
+      on: { value: new THREE.Vector4(0, 0.08, 0, 0) },      // x: cloth blend, y: flatten ref lum
+      mask: { value: _whiteTex() },
+      top: { value: new THREE.Vector4(1, 1, 1, 1) },         // rgb tint, a: camo contrast
+      low: { value: new THREE.Vector4(1, 1, 1, 1) },
+      skin: { value: new THREE.Vector3(1, 1, 1) },
+    };
+    m.userData.__brLook = look;
     m.customProgramCacheKey = () => "br_soldier_wet_rim";
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uBrRimC = rim.c;
       sh.uniforms.uBrRimS = rim.s;
+      sh.uniforms.uBrLook = look.on;
+      sh.uniforms.uBrMask = look.mask;
+      sh.uniforms.uBrTop = look.top;
+      sh.uniforms.uBrLow = look.low;
+      sh.uniforms.uBrSkin = look.skin;
       sh.vertexShader =
         "varying float vBrWetY;\n" +
         sh.vertexShader.replace(
@@ -270,7 +288,23 @@ export function applyWetShoulder(mat) {
         );
       sh.fragmentShader =
         "varying float vBrWetY;\nuniform vec3 uBrRimC;\nuniform float uBrRimS;\n" +
+        "uniform vec4 uBrLook;\nuniform sampler2D uBrMask;\nuniform vec4 uBrTop;\nuniform vec4 uBrLow;\nuniform vec3 uBrSkin;\n" +
         sh.fragmentShader.replace(
+          "#include <map_fragment>",
+          "#include <map_fragment>\n" +
+          "#ifdef USE_MAP\n" +
+          "\tif (uBrLook.x > 0.0) {\n" +
+          // mask R = bare skin, G = trousers (tools/a11_build_operators.py bake)
+          "\t\tvec3 brMk = texture2D(uBrMask, vMapUv).rgb;\n" +
+          "\t\tvec3 brC = diffuseColor.rgb;\n" +
+          "\t\tfloat brL = dot(brC, vec3(0.2126, 0.7152, 0.0722));\n" +
+          "\t\tvec4 brCl = mix(uBrTop, uBrLow, brMk.g);\n" +
+          "\t\tvec3 brRc = mix(uBrLook.y, brL, brCl.a) * brCl.rgb;\n" +
+          "\t\tbrC = mix(brC, brRc, (1.0 - brMk.r) * uBrLook.x);\n" +
+          "\t\tdiffuseColor.rgb = mix(brC, brC * uBrSkin, brMk.r);\n" +
+          "\t}\n" +
+          "#endif"
+        ).replace(
           "#include <roughnessmap_fragment>",
           "#include <roughnessmap_fragment>\n" +
           "\tfloat brWet = smoothstep(1.05, 1.42, vBrWetY);\n" +
@@ -655,6 +689,7 @@ export function createActor(proto) {
     o.material = Array.isArray(o.material) ? out : out[0];
   });
   const baseColor = new THREE.Color(1, 1, 1);
+  const gearMats = [];   // [a11] operator-look gear materials (addGear)
 
   // Bones (mixamorig: prefix — THREE sanitizes the colon away; normalize like
   // last-circle's findArmBones or every lookup silently no-ops).
@@ -691,6 +726,13 @@ export function createActor(proto) {
   bones.rKnuckle = byName.get("RightHandMiddle1") || bones.rHand;
   bones.lKnuckle = byName.get("LeftHandMiddle1") || bones.lHand;
   const grips = [];  // attached weapon holders, re-solved every update()
+  // [hold pass] weapon-first hold: the gun is placed from the body, both arms IK
+  // onto it (core/chars/hold.js). `held` = the live grip it drives.
+  const wHold = createHold({ root, bones, byName });
+  let holdCaptured = false;
+  let held = null;
+  const holdIn = { ry: 0, aimYaw: 0, aimPitch: 0, readyW: 1, speed: 0, armK: 0, engA: 0,
+                   melee: 0, reload: -1, on: false };
 
   /**
    * Seat the weapon in both hands. The firing palm holds the weapon ORIGIN,
@@ -764,7 +806,11 @@ export function createActor(proto) {
                      // exactly the way it compounded a finger to 153 deg.
                      bones.lArm, bones.rArm, bones.lFore, bones.rFore,
                      bones.lUpLeg, bones.rUpLeg, bones.lLeg, bones.rLeg,
-                     bones.lFoot, bones.rFoot].filter(Boolean);
+                     bones.lFoot, bones.rFoot,
+                     // [hold pass] the hold solve writes both hands and the right
+                     // clavicle (absolute world rotations) — snapshot them too so a
+                     // skipped mixer write can never leave our value behind
+                     bones.rHand, bones.lHand, byName.get("RightShoulder")].filter(Boolean);
   const snapQ = new Float32Array(poseBones.length * 4);
   let snapY = hipsRestY;      // hips.position.y as the CLIP wrote it
   let snapped = false;
@@ -1366,6 +1412,11 @@ export function createActor(proto) {
       // Solve once NOW: the actor is already settled into idle, so the very
       // first rendered frame is correct — never one frame of the bind basis.
       solveGrip(h);
+      // [hold pass] the authored grip is captured ONCE, on the first attach (the
+      // actor is still in the settled idle then, dressed and scaled); later swaps
+      // reuse it — the hand-on-grip relation does not depend on the gun
+      if (!holdCaptured) { wHold.capture(GRIP_Y); holdCaptured = true; }
+      if (hand !== "L" && group) { wHold.attach(h, group.userData.brKind || "ar"); held = h; }
       return holder;
     },
 
@@ -1383,7 +1434,7 @@ export function createActor(proto) {
      *  strength 0 (the default) is an exact no-op — the campaign never
      *  calls this, so its frames are unchanged (Amendment A2). */
     setRim(hex, strength = 0.4) {
-      for (const m of mats) {
+      for (const m of mats.concat(gearMats)) {
         const r = m.userData && m.userData.__brRim;
         if (!r) continue;
         r.c.value.set(hex);
@@ -1398,7 +1449,45 @@ export function createActor(proto) {
         if (on) m.color.copy(baseColor).multiplyScalar(1.6);
         else m.color.copy(baseColor);
       }
+      for (const m of gearMats) m.color.setScalar(on ? 1.6 : 1);
     },
+
+    // ---- [a11] operator looks (core/chars/operator_looks.js owns the data) ----
+    _model: model,
+    _boneByName: byName,
+    _hold: wHold,       // [hold pass] harness/debug read-only
+    /** [hold pass] world muzzle point of the held 3P gun (null when none) — for
+     *  fx to start bot tracers / flashes at the real barrel (hook, see report). */
+    muzzleWorld(out) {
+      if (!held || !held.holder.parent) return null;
+      const g = held.holder.children[0];
+      if (!g || !g.userData.brMuzzle) return null;
+      const m = g.userData.brMuzzle;
+      return out.set(m[0], m[1], m[2]).applyMatrix4(g.matrixWorld);
+    },
+    /** Add a gear mesh (already skinned to this actor's bones) under the model.
+     *  Its material joins rim / flash / dispose; geometry stays shared. */
+    addGear(mesh) {
+      model.add(mesh);
+      const ms = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of ms) gearMats.push(m);
+      return mesh;
+    },
+    /** Body cloth/skin recolour uniforms (see applyWetShoulder). null = off. */
+    setLook(u) {
+      for (const m of mats) {
+        const L = m.userData && m.userData.__brLook;
+        if (!L) continue;
+        if (!u) { L.on.value.x = 0; continue; }
+        L.mask.value = u.mask;
+        L.on.value.set(u.k, u.ref, 0, 0);
+        L.top.value.set(u.top[0], u.top[1], u.top[2], u.top[3]);
+        L.low.value.set(u.low[0], u.low[1], u.low[2], u.low[3]);
+        L.skin.value.set(u.skin[0], u.skin[1], u.skin[2]);
+      }
+    },
+    /** All materials this actor owns (body clones + gear) — fp_body patches them. */
+    get materials() { return mats.concat(gearMats); },
 
     /** Advance animation. Foot-planting: loco clips cycle at a fixed rate, so
      *  timeScale rides actual ground speed (colosseum trick) — sliding feet
@@ -1620,7 +1709,12 @@ export function createActor(proto) {
           - life.armK.x * 0.85
           + engA
           - meleeArm;                                       // [melee] arms punch out (− = raise forward)
-        if (armPitch && (bones.lArm || bones.rArm)) {
+        // [hold pass] with the weapon-first hold on, these channels move the GUN
+        // (hold.js) and the arms follow it by IK — writing them here too would
+        // be overwritten anyway
+        const holdOn = !!(held && !held.carry && wHold.state.ok);
+        holdIn.armK = life.armK.x; holdIn.engA = engA; holdIn.melee = meleeArm / 0.78;
+        if (!holdOn && armPitch && (bones.lArm || bones.rArm)) {
           _v1.set(rx, 0, rz);
           _q1.setFromAxisAngle(_v1, armPitch);
           if (bones.lArm) rotateBoneWorld(bones.lArm, _q1);
@@ -1642,9 +1736,10 @@ export function createActor(proto) {
           // an aiming soldier still checks off-axis — the scan is DAMPED under
           // aim, not switched off (killing it entirely removed the single most
           // legible channel from exactly the bots the filmstrip photographs)
-          const scanW = (1 - 0.68 * aimK) * still;
+          // [hold pass] cheek on the stock: a shouldered gun holds the head too
+          const scanW = (1 - 0.68 * aimK) * still * (held && !held.carry ? 1 - 0.8 * life.readyW : 1);
           const headYaw = LIFE.scanYaw * scan * scanW
-            + LIFE.engNeck * engN                       // fast off-axis checks
+            + LIFE.engNeck * engN * (held && !held.carry ? 1 - 0.7 * life.readyW : 1) // fast off-axis checks
             - yawSpine * 0.35 * aimK;
           const headPitch = LIFE.scanPitch * scanP * scanW
             + life.fireK.x * 0.75          // chin lifts with the muzzle
@@ -1680,8 +1775,29 @@ export function createActor(proto) {
       // reload. While the reload layer is in, the weapon instead rides the
       // firing hand rigidly on its last two-hand basis (holder.quaternion is
       // bone-local, so simply not re-solving holds it).
-      const reloadHold = upper.kind === "reload" && upper.want > 0;
-      if (!reloadHold) for (let i = 0; i < grips.length; i++) if (!grips[i].carry) solveGrip(grips[i]);
+      // [hold pass] the weapon-first hold owns the live grip whenever the soldier
+      // is alive and the gun is in his firing hand (not riding the left hand
+      // through a grenade toss); the legacy two-hand solve below keeps the dead
+      // and the carried cases.
+      let holdDone = false;
+      if (held && wHold.state.ok) {
+        holdIn.on = actor.lifeGain > 0.001 && !held.carry && !!held.holder.parent;
+        holdIn.ry = root.rotation.y - actor.legYaw * actor.lifeGain;
+        holdIn.aimYaw = life.aimYaw * life.aimW * actor.lifeGain;
+        holdIn.aimPitch = life.aimPitch * life.aimW * actor.lifeGain;
+        holdIn.readyW = life.readyW;
+        holdIn.speed = actor.groundSpeed || 0;
+        holdIn.reload = (upper.kind === "reload" && upper.want > 0 && upper.a)
+          ? Math.min(1, upper.a.time / Math.max(0.1, upper.a.getClip().duration)) : -1;
+        if (actor.lifeGain <= 0.001) { holdIn.armK = 0; holdIn.engA = 0; holdIn.melee = 0; }
+        holdDone = wHold.solve(holdIn, dt);
+      }
+      const reloadHold = !holdDone && upper.kind === "reload" && upper.want > 0;
+      if (!reloadHold) for (let i = 0; i < grips.length; i++) {
+        if (grips[i].carry) continue;
+        if (holdDone && grips[i] === held) continue;
+        solveGrip(grips[i]);
+      }
     },
 
     dispose() {
@@ -1689,6 +1805,7 @@ export function createActor(proto) {
       mixer.stopAllAction();
       // geometry + textures are the proto's (shared); only the clones die
       for (const m of mats) m.dispose();
+      for (const m of gearMats) m.dispose();
     },
   };
 
@@ -1700,3 +1817,13 @@ export function createActor(proto) {
 }
 
 const _WHITE = new THREE.Color(1, 1, 1);
+// [a11] 1x1 stand-in for the look mask so every soldier material binds the same
+// sampler (one program); never read while uBrLook.x == 0.
+let _WT = null;
+function _whiteTex() {
+  if (!_WT) {
+    _WT = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    _WT.needsUpdate = true;
+  }
+  return _WT;
+}

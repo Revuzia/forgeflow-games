@@ -1,0 +1,8 @@
+lanternwalk hill   n=8 ended 8/8  occupied 80.0%  held(one team) 78.2%  contested 1.7%  pts/min 44.7
+lanternwalk tags   n=8 ended 8/8  tags dropped 490  confirmed 43.7%  denied 38.8%  expired 11.2%  (rest still down at the horn)  confirms/min 6.6
+switchyard  hill   n=8 ended 8/8  occupied 85.4%  held(one team) 82.6%  contested 2.8%  pts/min 47.1
+switchyard  tags   n=8 ended 8/8  tags dropped 555  confirmed 63.2%  denied 32.1%  expired 1.4%  (rest still down at the horn)  confirms/min 10.8
+saltmarket  hill   n=8 ended 8/8  occupied 87.7%  held(one team) 84.9%  contested 2.8%  pts/min 48.8
+saltmarket  tags   n=8 ended 8/8  tags dropped 589  confirmed 51.1%  denied 42.4%  expired 2.7%  (rest still down at the horn)  confirms/min 9.3
+
+mode_probe  secs=240 seeds=8  AI avg 0.264 ms/tick  wall 425 s

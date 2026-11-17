@@ -90,12 +90,16 @@ async function main() {
     ok(CONTRACT.validateMatchContent(live, { modeIds: MATCH.MODE_IDS }).ok, "LIVE content.json passes the contract gate");
     const base = MODE.LADDER_TIERS;
     const ws = new Set(base.map((t) => t.weapon));
-    ok(base.length === 8 && ws.size === 5 && base.filter((t) => t.attach.length).length === 3 && base[base.length - 1].weapon === "pike",
-      "8 gun rungs: all five weapons, three attachment variants, the pistol last");
+    ok(base.length === 10 && ws.size === 7 && base.filter((t) => t.attach.length).length === 3 && base[base.length - 1].weapon === "pike",
+      "10 gun rungs: all seven weapons (Bastion + Anvil added), three attachment variants, the pistol last");
+    ok(base.findIndex((t) => t.weapon === "bastion") < base.findIndex((t) => t.weapon === "vesper") &&
+       base.findIndex((t) => t.weapon === "anvil") > base.findIndex((t) => t.weapon === "breaker") &&
+       base.findIndex((t) => t.weapon === "anvil") < base.findIndex((t) => t.weapon === "corvus"),
+      "ASCENT order: Bastion after the rifles, Anvil between Breaker and Corvus");
     ok(MODE.meleeVerbId() === "knife", "the melee verb is present in this tree (core/sim/melee.js) → knife rung on");
     const r = MODE.resolveTiers(W, "knife"), r0 = MODE.resolveTiers(W, null);
-    ok(r.tiers.length === 9 && r.tiers[8].knife && r.melee && r0.tiers.length === 8 && !r0.melee && !r0.tiers.some((t) => t.knife),
-      "with the verb: 9 rungs ending on the KNIFE; without it: 8, ending on the pistol, no demotion");
+    ok(r.tiers.length === 11 && r.tiers[10].knife && r.melee && r0.tiers.length === 10 && !r0.melee && !r0.tiers.some((t) => t.knife),
+      "with the verb: 11 rungs ending on the KNIFE; without it: 10, ending on the pistol, no demotion");
   }
 
   section("rules (mock facade)");

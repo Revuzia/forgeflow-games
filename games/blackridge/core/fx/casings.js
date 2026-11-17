@@ -34,6 +34,7 @@ const SHELL = {
   vesper: { w: 0.009, l: 0.028 },
   corvus: { w: 0.013, l: 0.052 },
   pike: { w: 0.009, l: 0.024 },
+  bastion: { w: 0.0115, l: 0.045 }, // [heavy weapons] full-power rifle case off the belt
   // 12-gauge hull: 18.5 mm × 70 mm overall, 12.5 mm brass base. `shell` = two-
   // part red/brass pump-gun shell, ejected on the rack (PUMP_EJECT_S).
   breaker: { w: 0.0185, l: 0.070, shell: true, baseL: 0.0125 },
