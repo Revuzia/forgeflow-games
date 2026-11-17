@@ -1,0 +1,1015 @@
+{
+ "phase": "w2e_rift",
+ "finishedAt": "2026-11-17T13:13:36.926Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 5.71,
+  "node": "v22.23.3",
+  "base": "http://localhost:5733",
+  "wallMs": 685696
+ },
+ "steps": [
+  {
+   "file": "1920x1080/w2e_rift_001_idle.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain, match live",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 306351,
+   "load1": 5.22,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_002_idle.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain, match live",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 306939,
+   "load1": 5.2,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_003_dial_crop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "dial_crop",
+   "desc": "Dial Bar crop",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 337531,
+   "load1": 5.4,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_004_dial_crop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "dial_crop",
+   "desc": "Dial Bar crop",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 368104,
+   "load1": 5.77,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_005_topbar_crop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "topbar_crop",
+   "desc": "top bar crop",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 398696,
+   "load1": 5.56,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_006_topbar_crop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "topbar_crop",
+   "desc": "top bar crop",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 429269,
+   "load1": 5.45,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_007_minimap_crop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "minimap_crop",
+   "desc": "minimap crop",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 459866,
+   "load1": 5.15,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_008_minimap_crop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "minimap_crop",
+   "desc": "minimap crop",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 490453,
+   "load1": 5.91,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_009_ping_wheel.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "ping_wheel",
+   "desc": "ping wheel (G held 0.5 s)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 492029,
+   "load1": 6.55,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_010_ping_wheel.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "ping_wheel",
+   "desc": "ping wheel (G held 0.5 s)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 493587,
+   "load1": 6.55,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_011_click_marker.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "click_marker",
+   "desc": "right-click move marker, shot as soon as the click returns",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 494176,
+   "load1": 6.55,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_012_fight.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first outgoing fighter damage (sim paused, t=443.1)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 498471,
+   "load1": 6.51,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_013_fight.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first outgoing fighter damage (sim paused, t=443.1)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 499046,
+   "load1": 6.51,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_014_fight_live.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight_live",
+   "desc": "same fight 0.5 s later, sim x1",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 500136,
+   "load1": 6.51,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_015_fight_live.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight_live",
+   "desc": "same fight 0.5 s later, sim x1",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 500713,
+   "load1": 6.51,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_016_midgame.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "late",
+   "name": "midgame",
+   "desc": "HUD at 443.1s",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 501302,
+   "load1": 6.51,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_017_midgame.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "late",
+   "name": "midgame",
+   "desc": "HUD at 443.1s",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 501878,
+   "load1": 6.51,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_018_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "late",
+   "name": "scoreboard",
+   "desc": "scoreboard held (Tab)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 503271,
+   "load1": 6.23,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_019_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "late",
+   "name": "scoreboard",
+   "desc": "scoreboard held (Tab)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 6615,
+   "tMs": 504667,
+   "load1": 6.23,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {}
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_020_teamfight.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "teamfight",
+   "name": "teamfight",
+   "desc": "4 fighters within 10 m (paused, t=1150.2)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 11124,
+   "tMs": 684607,
+   "load1": 5.71,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {}
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_021_teamfight.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "teamfight",
+   "name": "teamfight",
+   "desc": "4 fighters within 10 m (paused, t=1150.2)",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 6615,
+   "tMs": 685196,
+   "load1": 5.71,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {}
+   }
+  }
+ ],
+ "console": [
+  {
+   "step": "boot",
+   "type": "http504",
+   "text": "/node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=da048f44",
+   "at": "",
+   "tMs": 1332
+  },
+  {
+   "step": "boot",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)",
+   "at": "/node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=da048f44",
+   "tMs": 1332
+  },
+  {
+   "step": "boot",
+   "type": "requestfailed",
+   "text": "GET /node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=da048f44 net::ERR_ABORTED",
+   "at": "",
+   "tMs": 1332
+  },
+  {
+   "step": "boot",
+   "type": "warning",
+   "text": "[vale] renderer unavailable TypeError: Failed to fetch dynamically imported module: http://localhost:5733/src/render/index.ts",
+   "at": "/@vite/client:356",
+   "tMs": 1333
+  },
+  {
+   "step": "boot",
+   "type": "pageerror",
+   "text": "Cannot read properties of undefined (reading '__H')",
+   "at": "",
+   "tMs": 22079
+  }
+ ],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5733/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/w2e_rift_001_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_002_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_003_dial_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_004_dial_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_005_topbar_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_006_topbar_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_007_minimap_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_008_minimap_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_009_ping_wheel.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_010_ping_wheel.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_011_click_marker.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_rift_012_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_013_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_014_fight_live.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_015_fight_live.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_016_midgame.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_017_midgame.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_018_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  }
+ ],
+ "notes": [
+  {
+   "step": "idle",
+   "tMs": 498383,
+   "load1": 6.51,
+   "text": "number meter 4 s at x1 (frames, pops seen, pops over a bar at full alpha / reduced alpha, max per target, plates api)",
+   "data": {
+    "frames": 240,
+    "popsSeen": 0,
+    "overBarFull": 0,
+    "overBarSoft": 0,
+    "maxPerTarget": 0,
+    "plates": "undefined",
+    "samples": []
+   }
+  },
+  {
+   "step": "late",
+   "tMs": 684495,
+   "load1": 5.71,
+   "text": "number meter in the teamfight",
+   "data": {
+    "frames": 240,
+    "popsSeen": 0,
+    "overBarFull": 0,
+    "overBarSoft": 0,
+    "maxPerTarget": 0,
+    "plates": "undefined",
+    "samples": []
+   }
+  },
+  {
+   "step": "teamfight",
+   "tMs": 685696,
+   "load1": 5.71,
+   "text": "captured",
+   "data": [
+    "fight",
+    "late",
+    "teamfight"
+   ]
+  },
+  {
+   "step": "teamfight",
+   "tMs": 685696,
+   "load1": 5.71,
+   "text": "last poll",
+   "data": {
+    "phase": "live",
+    "time": 1150.2,
+    "dead": false,
+    "respawnIn": 0,
+    "near": 4,
+    "ended": false,
+    "evs": []
+   }
+  }
+ ],
+ "timings": {}
+}

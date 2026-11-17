@@ -1,0 +1,1282 @@
+{
+ "gate": "clutter",
+ "at": "2026-11-17T13:16:07.688Z",
+ "quality": "high",
+ "t0": 720,
+ "scan": 4500,
+ "bars": {
+  "medianOcclusion": 0.25,
+  "worstRunMs": 300,
+  "worstRunOcclusion": 0.6,
+  "teleEdge": 0.45,
+  "selfRing": 1,
+  "pass": {
+   "scan": false,
+   "medianOcclusion": true,
+   "worstRun": false,
+   "teleEdge": false,
+   "selfRing": true
+  },
+  "enforcedBy": "W2-B (measured here only)"
+ },
+ "seeds": [
+  {
+   "seed": 7,
+   "peakFrames4v4": 12,
+   "naturalPeakFrames": 0,
+   "scriptedPeakFrames": 12,
+   "scanSeconds": 98,
+   "looksWithSides": {
+    "minA": 5,
+    "minC": 5
+   },
+   "medianOcclusion": 0.214,
+   "p90Occlusion": 0.636,
+   "fighterSamples": 120,
+   "worstFighterRun": {
+    "ms": 800,
+    "id": 5,
+    "def": "vashil"
+   },
+   "selfRing": {
+    "frames": 12,
+    "found": 12,
+    "rate": 1
+   },
+   "teleEdge": {
+    "frames": 12,
+    "medianP90": 0.316
+   },
+   "particles": {
+    "peak": 739,
+    "median": 589,
+    "budget": 2000,
+    "overBudgetFrames": 0
+   },
+   "consoleErrors": [],
+   "looks": [
+    {
+     "t": 871.1,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 6250,
+       "occlusion": 0,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 5916,
+       "occlusion": 0,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 9006,
+       "occlusion": 0,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 14367,
+       "occlusion": 0,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 7580,
+       "occlusion": 0.026,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 4925,
+       "occlusion": 0,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 8059,
+       "occlusion": 0,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 10365,
+       "occlusion": 0,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 4497,
+       "occlusion": 0.002,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 8214,
+       "occlusion": 0.026,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 1578,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 4076,
+      "p90": 0.316,
+      "n": 2
+     },
+     "particles": 191,
+     "vfx": 45,
+     "telegraphs": 2,
+     "particleBudget": 2000
+    },
+    {
+     "t": 871.2,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 4871,
+       "occlusion": 0.103,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 5933,
+       "occlusion": 0.173,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 9734,
+       "occlusion": 0.039,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 14548,
+       "occlusion": 0.128,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 5642,
+       "occlusion": 0.119,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 4188,
+       "occlusion": 0.13,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 7113,
+       "occlusion": 0.033,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 10025,
+       "occlusion": 0.05,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 3603,
+       "occlusion": 0.004,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 6649,
+       "occlusion": 0.015,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 1698,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 20529,
+      "p90": 0.481,
+      "n": 4
+     },
+     "particles": 176,
+     "vfx": 45,
+     "telegraphs": 4,
+     "particleBudget": 2000
+    },
+    {
+     "t": 871.3,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 5196,
+       "occlusion": 0.287,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 6293,
+       "occlusion": 0.188,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 9394,
+       "occlusion": 0.104,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 12869,
+       "occlusion": 0.262,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 6196,
+       "occlusion": 0.216,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 4772,
+       "occlusion": 0.169,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 6636,
+       "occlusion": 0.047,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 8263,
+       "occlusion": 0.124,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 4220,
+       "occlusion": 0.179,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 6128,
+       "occlusion": 0.337,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 1536,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 37450,
+      "p90": 0.447,
+      "n": 5
+     },
+     "particles": 431,
+     "vfx": 70,
+     "telegraphs": 5,
+     "particleBudget": 2000
+    },
+    {
+     "t": 871.4,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 5195,
+       "occlusion": 0.47,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 6081,
+       "occlusion": 0.49,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 7186,
+       "occlusion": 0.051,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 13692,
+       "occlusion": 0.422,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 6066,
+       "occlusion": 0.616,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 4438,
+       "occlusion": 0.484,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 6610,
+       "occlusion": 0.037,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 8466,
+       "occlusion": 0.129,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 3869,
+       "occlusion": 0.147,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 6133,
+       "occlusion": 0.09,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 1916,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 68047,
+      "p90": 0.462,
+      "n": 5
+     },
+     "particles": 518,
+     "vfx": 65,
+     "telegraphs": 5,
+     "particleBudget": 2000
+    },
+    {
+     "t": 871.5,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 4719,
+       "occlusion": 0.333,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 5636,
+       "occlusion": 0.307,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 8835,
+       "occlusion": 0.18,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 13018,
+       "occlusion": 0.334,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 5586,
+       "occlusion": 0.688,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 7138,
+       "occlusion": 0.258,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 6609,
+       "occlusion": 0.035,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 8093,
+       "occlusion": 0.784,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 3586,
+       "occlusion": 0.154,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 5890,
+       "occlusion": 0.489,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 2959,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 95873,
+      "p90": 0.415,
+      "n": 6
+     },
+     "particles": 570,
+     "vfx": 64,
+     "telegraphs": 6,
+     "particleBudget": 2000
+    },
+    {
+     "t": 871.6,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 5225,
+       "occlusion": 0.287,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 5863,
+       "occlusion": 0.275,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 9145,
+       "occlusion": 0.191,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 12458,
+       "occlusion": 0.353,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 6015,
+       "occlusion": 0.692,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 5675,
+       "occlusion": 0.356,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 6889,
+       "occlusion": 0.039,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 8651,
+       "occlusion": 0.323,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 4137,
+       "occlusion": 0.14,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 6900,
+       "occlusion": 0.345,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 3331,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 121344,
+      "p90": 0.319,
+      "n": 6
+     },
+     "particles": 668,
+     "vfx": 66,
+     "telegraphs": 6,
+     "particleBudget": 2000
+    },
+    {
+     "t": 871.7,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 5289,
+       "occlusion": 0.325,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 5665,
+       "occlusion": 0.295,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 8774,
+       "occlusion": 0.266,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 12449,
+       "occlusion": 0.408,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 6968,
+       "occlusion": 0.688,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 6017,
+       "occlusion": 0.321,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 6828,
+       "occlusion": 0.037,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 9021,
+       "occlusion": 0.254,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 4208,
+       "occlusion": 0.128,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 6806,
+       "occlusion": 0.165,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 1883,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 153924,
+      "p90": 0.289,
+      "n": 5
+     },
+     "particles": 702,
+     "vfx": 71,
+     "telegraphs": 5,
+     "particleBudget": 2000
+    },
+    {
+     "t": 871.8,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 5523,
+       "occlusion": 0.368,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 6286,
+       "occlusion": 0.361,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 7729,
+       "occlusion": 0.573,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 13432,
+       "occlusion": 0.697,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 6707,
+       "occlusion": 0.798,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 6468,
+       "occlusion": 0.174,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 6718,
+       "occlusion": 0.038,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 10781,
+       "occlusion": 0.162,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 4606,
+       "occlusion": 0.233,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 7244,
+       "occlusion": 0.169,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 3559,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 132969,
+      "p90": 0.22,
+      "n": 3
+     },
+     "particles": 739,
+     "vfx": 81,
+     "telegraphs": 3,
+     "particleBudget": 2000
+    },
+    {
+     "t": 871.9,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 5337,
+       "occlusion": 0.437,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 6169,
+       "occlusion": 0.446,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 8990,
+       "occlusion": 0.741,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 13538,
+       "occlusion": 0.55,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 6271,
+       "occlusion": 0.786,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 6503,
+       "occlusion": 0.053,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 7099,
+       "occlusion": 0.054,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 10908,
+       "occlusion": 0.057,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 4844,
+       "occlusion": 0.936,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 7181,
+       "occlusion": 0.236,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 3337,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 120043,
+      "p90": 0.29,
+      "n": 2
+     },
+     "particles": 675,
+     "vfx": 89,
+     "telegraphs": 2,
+     "particleBudget": 2000
+    },
+    {
+     "t": 872,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 4766,
+       "occlusion": 0.236,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 6492,
+       "occlusion": 0.349,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 9005,
+       "occlusion": 0.614,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 13250,
+       "occlusion": 0.571,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 5840,
+       "occlusion": 0.984,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 5098,
+       "occlusion": 0.101,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 7353,
+       "occlusion": 0.015,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 10163,
+       "occlusion": 0.061,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 5020,
+       "occlusion": 0.534,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 6528,
+       "occlusion": 0.096,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 2595,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 2759,
+      "p90": 0.169,
+      "n": 1
+     },
+     "particles": 600,
+     "vfx": 94,
+     "telegraphs": 1,
+     "particleBudget": 2000
+    },
+    {
+     "t": 872.1,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 5385,
+       "occlusion": 0.214,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 5305,
+       "occlusion": 0.551,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 9131,
+       "occlusion": 0.594,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 12598,
+       "occlusion": 0.656,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 6128,
+       "occlusion": 0.606,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 4636,
+       "occlusion": 0.057,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 7649,
+       "occlusion": 0.055,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 10256,
+       "occlusion": 0.011,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 4677,
+       "occlusion": 0.636,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 6276,
+       "occlusion": 0.072,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 2699,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 2643,
+      "p90": 0.177,
+      "n": 1
+     },
+     "particles": 589,
+     "vfx": 105,
+     "telegraphs": 1,
+     "particleBudget": 2000
+    },
+    {
+     "t": 872.2,
+     "a": 5,
+     "c": 5,
+     "scripted": true,
+     "fighters": [
+      {
+       "id": 1,
+       "def": "ervet",
+       "team": 0,
+       "bodyPx": 6273,
+       "occlusion": 0.202,
+       "me": true
+      },
+      {
+       "id": 2,
+       "def": "odrum",
+       "team": 0,
+       "bodyPx": 5034,
+       "occlusion": 0.427,
+       "me": false
+      },
+      {
+       "id": 3,
+       "def": "burdam",
+       "team": 0,
+       "bodyPx": 8973,
+       "occlusion": 0.512,
+       "me": false
+      },
+      {
+       "id": 4,
+       "def": "marund",
+       "team": 0,
+       "bodyPx": 12956,
+       "occlusion": 0.315,
+       "me": false
+      },
+      {
+       "id": 5,
+       "def": "vashil",
+       "team": 0,
+       "bodyPx": 6437,
+       "occlusion": 0.546,
+       "me": false
+      },
+      {
+       "id": 6,
+       "def": "kemdo",
+       "team": 1,
+       "bodyPx": 5887,
+       "occlusion": 0.084,
+       "me": false
+      },
+      {
+       "id": 7,
+       "def": "tunlan",
+       "team": 1,
+       "bodyPx": 6955,
+       "occlusion": 0.048,
+       "me": false
+      },
+      {
+       "id": 8,
+       "def": "hesmi",
+       "team": 1,
+       "bodyPx": 10029,
+       "occlusion": 0.016,
+       "me": false
+      },
+      {
+       "id": 9,
+       "def": "rishal",
+       "team": 1,
+       "bodyPx": 3840,
+       "occlusion": 0.405,
+       "me": false
+      },
+      {
+       "id": 10,
+       "def": "dunsom",
+       "team": 1,
+       "bodyPx": 6266,
+       "occlusion": 0.07,
+       "me": false
+      }
+     ],
+     "selfRing": {
+      "px": 2724,
+      "found": true
+     },
+     "teleEdge": {
+      "px": 2559,
+      "p90": 0.188,
+      "n": 1
+     },
+     "particles": 538,
+     "vfx": 100,
+     "telegraphs": 1,
+     "particleBudget": 2000
+    }
+   ]
+  }
+ ],
+ "summary": {
+  "seedsWith30PeakFrames": 1,
+  "medianOcclusion": 0.214,
+  "worstRunMs": 800,
+  "teleEdge": 0.316,
+  "selfRingRate": 1,
+  "particlesPeak": 739
+ },
+ "load1": 12.658203125
+}

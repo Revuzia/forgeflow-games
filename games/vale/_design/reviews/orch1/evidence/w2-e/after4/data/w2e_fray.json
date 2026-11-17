@@ -1,0 +1,420 @@
+{
+ "phase": "w2e_fray",
+ "finishedAt": "2026-11-17T13:14:19.694Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 11.73,
+  "node": "v22.23.3",
+  "base": "http://localhost:5733",
+  "wallMs": 41075
+ },
+ "steps": [
+  {
+   "file": "1920x1080/w2e_fray_001_fray_draft.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_fray",
+   "step": "boot",
+   "name": "fray_draft",
+   "desc": "FRAY draft screen",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2068605,
+   "tMs": 13648,
+   "load1": 5.92,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_fray_002_fray_draft.png",
+   "viewport": "1366x768",
+   "phase": "w2e_fray",
+   "step": "boot",
+   "name": "fray_draft",
+   "desc": "FRAY draft screen",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1146125,
+   "tMs": 15448,
+   "load1": 6.32,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 53,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "clipped-y": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_fray_003_fray_idle.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_idle",
+   "desc": "FRAY HUD (hour board and chips)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2041488,
+   "tMs": 32099,
+   "load1": 11.46,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 66,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_fray_004_fray_idle.png",
+   "viewport": "1366x768",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_idle",
+   "desc": "FRAY HUD (hour board and chips)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1112609,
+   "tMs": 33185,
+   "load1": 11.46,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_fray_005_fray_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_scoreboard",
+   "desc": "FRAY scoreboard held",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1782012,
+   "tMs": 35475,
+   "load1": 12.23,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 179,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_fray_006_fray_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_scoreboard",
+   "desc": "FRAY scoreboard held",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 888995,
+   "tMs": 37308,
+   "load1": 12.23,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 182,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "clipped-y": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_fray_007_fray_shop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_shop",
+   "desc": "shop open",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1597399,
+   "tMs": 39634,
+   "load1": 12.23,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 116,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_fray_008_fray_shop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_shop",
+   "desc": "shop open",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 808341,
+   "tMs": 40557,
+   "load1": 11.73,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 118,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5733/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/w2e_fray_001_fray_draft.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_fray_002_fray_draft.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_fray_002_fray_draft.png",
+   "step": "boot",
+   "kind": "clipped-y",
+   "el": "span.skel.aimg__skel",
+   "text": "",
+   "scroll": 113,
+   "client": 75,
+   "font": "12.8px"
+  },
+  {
+   "file": "1920x1080/w2e_fray_003_fray_idle.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_fray_004_fray_idle.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_fray_005_fray_scoreboard.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_fray_006_fray_scoreboard.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_fray_006_fray_scoreboard.png",
+   "step": "hour",
+   "kind": "clipped-y",
+   "el": "span.skel.aimg__skel",
+   "text": "",
+   "scroll": 38,
+   "client": 26,
+   "font": "12px"
+  },
+  {
+   "file": "1366x768/w2e_fray_006_fray_scoreboard.png",
+   "step": "hour",
+   "kind": "clipped-y",
+   "el": "span.skel.aimg__skel",
+   "text": "",
+   "scroll": 38,
+   "client": 26,
+   "font": "12px"
+  },
+  {
+   "file": "1920x1080/w2e_fray_007_fray_shop.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_fray_008_fray_shop.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [],
+ "timings": {}
+}
