@@ -18,8 +18,11 @@ const LOAM = /* glsl */`
   float crumb = pN(p * 23.0) * (1.0 - smoothstep(0.01, 0.04, fw));
   vec3 c = uLoam * (0.8 + 0.3 * n + 0.12 * crumb);
   c = mix(c, uDamp, smoothstep(0.45, 0.7, d) * 0.6);
-  float fl = step(0.975, pH(floor(p * 4.0))) * (1.0 - smoothstep(0.18, 0.3, length(fract(p * 4.0) - 0.5))) * (1.0 - smoothstep(0.03, 0.08, fw));
-  diffuseColor.rgb = mix(c, uFleck, fl * 0.55);
+  ${/* (round 3: fewer, darker fallen-leaf flecks, each a small leaf shape; round 2's round coral dots read as a polka-dot print) */ ''}
+  vec2 fq = fract(p * 4.0) - 0.5; float fa = 6.2832 * pH(floor(p * 4.0) + 7.0);
+  fq = mat2(cos(fa), sin(fa), -sin(fa), cos(fa)) * fq;
+  float fl = step(0.984, pH(floor(p * 4.0))) * (1.0 - smoothstep(0.14, 0.22, length(fq * vec2(1.0, 2.4)))) * (1.0 - smoothstep(0.03, 0.08, fw));
+  diffuseColor.rgb = mix(c, uFleck, fl * 0.7);
 `;
 // the leaf (a teeter board, the drip leaf): a teal leaf with a paler midrib and veins, its outline cut by the uv (alpha test)
 const LEAF = /* glsl */`
@@ -35,16 +38,25 @@ const GARDEN = /* glsl */`
 void main() {
   vec2 p = vec2(vUv.x * 9.0, vUv.y);
   vec3 c = vec3(0.0); float a = 0.0;
-  for (int l = 0; l < 2; l++) {
+  ${/* (round 3: three layers of ovate leaves on stalks, widest low and pointed at the tip, folded along the midrib (the half toward the key lit),
+     side veins, the far layers hazier; round 2's two rows of identical lens shapes read as wallpaper) */ ''}
+  for (int l = 0; l < 3; l++) {
+    if (a > 0.5) break;
     float fl = float(l);
-    float x = p.x * (1.0 + fl * 0.6) + fl * 3.7, i = floor(x), f = fract(x) - 0.5;
-    float h = 0.55 + 0.4 * pH(vec2(i, fl)) - fl * 0.12;
-    float lean = (pH(vec2(i, 9.0 + fl)) - 0.5) * 0.5;
-    float yy = p.y / h, xx = f - lean * yy;
-    float w = 0.42 * sin(3.14159 * clamp(yy, 0.0, 1.0));
-    if (yy < 1.0 && abs(xx) < w && a < 0.5) {
-      float rib = 1.0 - smoothstep(0.0, 0.03, abs(xx));
-      c = mix(mix(uLeaf, uLeafFar, fl), uRib, rib * 0.5) * (0.8 + 0.3 * yy); a = 1.0;
+    float x = p.x * (1.0 + fl * 0.45) + fl * 3.7, i = floor(x), f = fract(x) - 0.5;
+    float top = 0.62 + 0.34 * pH(vec2(i, fl)) - fl * 0.03, base = 0.12 + 0.16 * pH(vec2(i, fl + 3.0));
+    float lean = (pH(vec2(i, 9.0 + fl)) - 0.5) * 0.55;
+    float yy = (p.y - base) / (top - base), yc = clamp(yy, 0.0, 1.0), xx = f - lean * yc;
+    float w = (0.4 + 0.06 * pH(vec2(i, fl + 5.0))) * pow(max(sin(3.14159 * pow(yc, 0.72)), 0.0), 0.85);
+    if (yy >= 0.0 && yy <= 1.0 && abs(xx) < w) {
+      float s = xx / max(w, 1e-3), rib = 1.0 - smoothstep(0.0, 0.028, abs(xx));
+      float v = fract(yc * 7.0 - abs(s) * 1.5);
+      float vein = (1.0 - smoothstep(0.03, 0.09, min(v, 1.0 - v))) * (1.0 - smoothstep(0.8, 1.0, abs(s))) * 0.3;
+      float lit = 0.92 - 0.16 * smoothstep(-0.06, 0.06, s);   // the key is front left: the left half of the fold is lit
+      c = mix(mix(uLeaf, uLeafFar, fl * 0.5), uRib, max(rib * 0.5, vein)) * lit * (0.84 + 0.16 * (1.0 - s * s)) * (0.8 + 0.3 * yc);
+      c = mix(c, uMist, fl * 0.2); a = 1.0;
+    } else if (p.y < base + 0.02 && abs(f) < 0.022 - 0.006 * fl) {
+      c = mix(uLeafFar * 0.75, uMist, fl * 0.25); a = 1.0;
     }
   }
   // mushrooms at the feet of the leaves
@@ -95,7 +107,7 @@ const LOOK: PlaceLook = {
     const zn = (i: number): { x: number; z: number; r?: number } => (tall ? T.zones[i] : PLACE.zones[i]);
     const stonesP = tall ? T.patches[0] : PLACE.patches[0];
     // ---- materials ----
-    const loamU = { uLoam: { value: col(tok('coral', 'amber', 0.45, 0.33)) }, uDamp: { value: col(tok('plum', 'ink', 0.4, 0.95)) }, uFleck: { value: col(tok('coral', 'plum', 0.35, 0.72)) } };
+    const loamU = { uLoam: { value: col(tok('coral', 'amber', 0.45, 0.33)) }, uDamp: { value: col(tok('plum', 'ink', 0.4, 0.95)) }, uFleck: { value: col(tok('lagoon', 'amber', 0.55, 0.42)) } };
     const loam = kit.surface('loam', [1, 1, 1], 0.55, LOAM, loamU, 0.55);
     // (round 3: the stones a low-chroma grey-mauve; the dusk-ink ones read as violet spots)
     const stone = kit.mat('stone', tok('ink', 'cream', 0.38, 0.95), 0.7, 0.4), pebble = kit.mat('pebble', tok('ink', 'cream', 0.45, 0.85), 0.6, 0.35);

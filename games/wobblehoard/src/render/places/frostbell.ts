@@ -43,13 +43,16 @@ void main() {
     float x = vUv.x * sc + fl * 4.7;
     float i = floor(x), f = fract(x);
     float hp = 0.45 + 0.55 * pH(vec2(i, fl)), sk = 0.3 + 0.4 * pH(vec2(i, fl + 7.0));
-    float pk = hp * (f < sk ? f / sk : (1.0 - f) / (1.0 - sk)) + 0.04 * (pN(vec2(x * 6.0, fl)) - 0.5);
+    float f2 = fract(x * 2.6 + 0.3 * fl);   // (round 3: a lower ridge on each slope, so a range is not one clean triangle per peak)
+    float pk = hp * (f < sk ? f / sk : (1.0 - f) / (1.0 - sk)) + 0.1 * hp * (1.0 - abs(2.0 * f2 - 1.0)) + 0.04 * (pN(vec2(x * 6.0, fl)) - 0.5);
     pk = pk * (0.36 - 0.07 * fl) + 0.1 + 0.06 * fl;   // (round 3: low ranges on the horizon; round 2's filled the tall frame's sky like icicles)
     float pkS = 0.13 + (pk - 0.13) * uH;              // (the heights above the horizon line, per layout: the wide frame's long lens magnifies them)
     if (vUv.y < pkS && a < 0.5) {
       vec3 m = mix(uNear, uFar, fl / 2.0);
       float cl = pkS - (0.03 + 0.03 * pN(vec2(x * 13.0, fl + 2.0))) * uH;   // (a crisp, jagged snow line under the tallest peaks; a soft one read as light beams)
       m = mix(m, uCap, smoothstep(cl - 0.004, cl + 0.004, vUv.y) * step(0.3, pk));
+      // (round 3: the low sun is on the left: each peak's left face lit, its right face in shade, less so in the haze; flat cut-outs read as paper)
+      m *= mix(1.0, mix(1.14, 0.8, smoothstep(sk - 0.015, sk + 0.015, f)), 1.0 - 0.45 * fl / 2.0);
       c = m; a = 1.0;
     }
   }
