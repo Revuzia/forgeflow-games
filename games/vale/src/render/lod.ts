@@ -63,6 +63,9 @@ export const LOD = {
   body2: { ratio: 0.5, errorM: 0.03, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5, farM: 22, nearM: 20, keep: 6 },
   /** a match fighter's ink copies (rest outline, victim flash, x-ray) over its LOD1 hull: a bound in metres */
   ink: { ratio: 0.4, errorM: 0.008, weld: true },
+  /** orch1 W2-A: the same copies over a LOD2 fighter's hull (actors.ts bodyLod2Parts): within 16 mm, under the flash's
+   *  25 mm slide toward the camera, so the coarser shell still covers the body it lights */
+  ink2: { ratio: 0.4, errorM: 0.016, weld: true },
   /** meshes under this many triangles keep their index (the saving would not pay for a second buffer) */
   minTris: 600,
   /** an instanced caster (scatter: trees, rocks) draws its mesh once per instance: a LOD pays from this size */
@@ -75,7 +78,7 @@ let ready = false;
 /** resolves when the simplifier can run (the loading screen awaits it) */
 export const lodReady: Promise<void> = MeshoptSimplifier.ready.then(() => { ready = true; }, () => { ready = false; });
 
-type Key = 'shadow' | 'hull' | 'crowd' | 'crowdHard' | 'ink';
+type Key = 'shadow' | 'hull' | 'crowd' | 'crowdHard' | 'ink' | 'ink2';
 /** per source index (or position, for a non-indexed mesh) attribute: the LOD per kind, null = not worth one */
 const cache = new WeakMap<object, Partial<Record<Key, BufferAttribute | null>>>();
 

@@ -72,7 +72,7 @@ import {
 } from './ink.ts';
 import type { FeelEvent } from './vfx/system.ts';
 import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
-import { composeIndex, dequantUnit, faceLockedLod, indexView, LOD, lodIndex, lodReady, lodSwitch, prepareShadowLod, shadowLods } from './lod.ts';
+import { bodyLod2Of, composeIndex, dequantUnit, faceLockedLod, indexView, LOD, lodIndex, lodReady, lodSwitch, prepareShadowLod, shadowLods } from './lod.ts';
 import { structureMaterial } from './structures.ts';
 import { BAR_CLEAR, fighterBarAnchor } from './bar_clearance.ts';
 import { CAMERA } from './camera.ts';
@@ -205,7 +205,17 @@ interface HullPart {
 /** perf PERF-m5: a fighter's match body. `mesh` (traverse order) draws `geometry` (its LOD1 over its own attributes);
  *  `hull` is the template's hull plan with that member's triangles swapped for the LOD1's, so the outline, flash, x-ray
  *  and veil copies keep lying on the surface the body draws */
-interface BodyLod { mesh: number; geometry: BufferGeometry; hull: HullPart[]; tris: number; lodTris: number }
+interface BodyLod {
+  mesh: number; geometry: BufferGeometry; hull: HullPart[]; tris: number; lodTris: number;
+  /** the template's own hull plan (composeIndex reads its index) and each part's lead dequantization (m per unit) */
+  base: HullPart[]; units: number[];
+  /** orch1 W2-A: the face-locked LOD2 and the hull plan over it (bodyLod2Parts; undefined = not built yet, null = none) */
+  lod2?: BodyLod2 | null;
+}
+/** orch1 W2-A (GFX-4 LOD, FU-15, TECH-14): a match fighter's LOD2 body (lod.ts LOD.body2, over the LOD1) and the hull
+ *  plan with the body member swapped for it, its ink copies through LOD.ink2: the outline, flash, x-ray and veil copies of a
+ *  far fighter follow its body down (the ink of 10 fighters was ~42k triangles a frame at the match peak) */
+interface BodyLod2 { geometry: BufferGeometry; hull: HullPart[] }
 
 const FORM_RE = /^form_([a-z0-9]+(?:_[a-z0-9]+)*?)(?:[._]\d+)?$/i;
 const hullCache = new WeakMap<Object3D, HullPart[]>();
@@ -391,9 +401,31 @@ function bodyLodOf(scene: Object3D, hull: HullPart[]): BodyLod | null {
     const ink = lodIndex(geometry, 'ink', LOD.minTris, lead?.isSkinnedMesh ? dequantUnit(lead) : 1);
     return { ...p, geometry, ink: ink ? indexView(geometry, ink, 'vale_hull_ink') : undefined };
   });
-  const out: BodyLod = { mesh: best, geometry, hull: parts, tris: r.tris, lodTris: r.lodTris };
+  const units = hull.map((p) => { const lead = meshes[p.lead] as SkinnedMesh; return lead?.isSkinnedMesh ? dequantUnit(lead) : 1; });
+  const out: BodyLod = { mesh: best, geometry, hull: parts, tris: r.tris, lodTris: r.lodTris, base: hull, units };
   bodyLodCache.set(scene, out);
   return out;
+}
+
+/** orch1 W2-A: the LOD2 of a match fighter's body and its hull plan (BodyLod2), built once per template on first use;
+ *  `body` is any clone's body mesh drawing the LOD1 (its skeleton carries the dequantization: bones carry no scale) */
+function bodyLod2Parts(lod: BodyLod, body: SkinnedMesh): BodyLod2 | null {
+  if (lod.lod2 !== undefined) return lod.lod2;
+  const was = body.geometry;
+  body.geometry = lod.geometry;
+  const geometry = bodyLod2Of(body, lod.geometry);
+  body.geometry = was;
+  if (!geometry?.index) { lod.lod2 = null; return null; }
+  const idx = geometry.index.array as ArrayLike<number>;
+  const hull = lod.base.map((p, i): HullPart => {
+    const I = composeIndex(p.geometry, p.members, (mesh) => (mesh === lod.mesh ? idx : null));
+    if (!I) return lod.hull[i];
+    const g = indexView(p.geometry, I, 'vale_hull_lod2');
+    const ink = lodIndex(g, 'ink2', LOD.minTris, lod.units[i]);
+    return { ...p, geometry: g, ink: ink ? indexView(g, ink, 'vale_hull_ink2') : lod.hull[i].ink };
+  });
+  lod.lod2 = { geometry, hull };
+  return lod.lod2;
 }
 
 /** CSS-pixel viewport the outline widths are measured in (ink.ts; the renderer keeps it current) */
@@ -1014,7 +1046,8 @@ export class Actor implements CrowdActor {
     // full body) and its hull copies over it
     const lod = this.kind === 'fighter' && lodSwitch.body ? t.bodyLod ?? null : null;
     this.hullParts = lod ? lod.hull : t.hull;
-    if (lod) { const b = meshesOf(model)[lod.mesh]; if (b) b.geometry = lod.geometry; }
+    this.bodyLod = lod; this.bodyMesh = null; this.bodyLevel = 1;
+    if (lod) { const b = meshesOf(model)[lod.mesh]; if (b) { b.geometry = lod.geometry; this.bodyMesh = b as SkinnedMesh; } }
     const s = scale * t.fit;
     model.scale.setScalar(s);
     this.accent = [];
@@ -1343,7 +1376,7 @@ export class Actor implements CrowdActor {
       if (!m) { m = mats[path] = [outlineMaterial(path, ou), flashMaterial(path, fu)]; this.inkMats.push(...m); }
       return m;
     };
-    for (const part of this.hullParts) {
+    for (const [pi, part] of this.hullParts.entries()) {
       const lead = cm[part.lead];
       if (!lead) continue;
       const pair = inkFor(part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid');
@@ -1362,6 +1395,7 @@ export class Actor implements CrowdActor {
         } else copy = new Mesh(geo, mat);
         copy.name = flash ? 'vale_flash' : 'vale_outline';
         copy.userData.valeOutline = true;
+        copy.userData.valeHullPart = pi;
         copy.castShadow = false; copy.receiveShadow = false;
         copy.renderOrder = flash ? 2 : 1;
         copy.matrixAutoUpdate = false;
@@ -1382,7 +1416,7 @@ export class Actor implements CrowdActor {
     const u = (this.xrayU = xrayU());
     u.uAlpha.value = OCCLUDED.fill; u.uPx.value = OCCLUDED.edgePx; u.uBias.value = OCCLUDED.biasM;
     const mats: Partial<Record<InkPath, Material>> = {};
-    for (const part of this.hullParts) {
+    for (const [pi, part] of this.hullParts.entries()) {
       const lead = cm[part.lead];
       if (!lead) continue;
       const path: InkPath = part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid';
@@ -1401,6 +1435,7 @@ export class Actor implements CrowdActor {
       } else copy = new Mesh(geo, mat);
       copy.name = 'vale_xray';
       copy.userData.valeOutline = true;
+      copy.userData.valeHullPart = pi;
       copy.userData.valeXray = true;
       copy.castShadow = false; copy.receiveShadow = false;
       copy.renderOrder = XRAY_ORDER;
@@ -1422,6 +1457,30 @@ export class Actor implements CrowdActor {
   }
   /** is the occluded silhouette drawn this frame (harness) */
   get xray(): boolean { return this.xrayOn; }
+
+  // ── body LOD2 (orch1 W2-A; renderer.ts bodyLod2 picks the level) ──────────────────────────────────
+  private bodyLod: BodyLod | null = null;
+  private bodyMesh: SkinnedMesh | null = null;
+  private bodyLevel: 1 | 2 = 1;
+  /** the body LOD a match fighter draws (1 or 2; harness) */
+  get bodyLodLevel(): 1 | 2 { return this.bodyLevel; }
+  /** can this actor draw a LOD2 body (a match fighter whose LOD2 gains something); builds it on first ask */
+  get hasBodyLod2(): boolean { return !!this.bodyLod && !!this.bodyMesh && !!bodyLod2Parts(this.bodyLod, this.bodyMesh); }
+  /** draw the body and every hull copy (outline, flash, x-ray, veil depth) at LOD `level`: geometry views over the same
+   *  attributes and skeleton, so no program, material or bind changes. Cheap when the level is unchanged. */
+  setBodyLevel(level: 1 | 2): void {
+    if (level === this.bodyLevel || !this.bodyLod || !this.bodyMesh) return;
+    const l2 = level === 2 ? bodyLod2Parts(this.bodyLod, this.bodyMesh) : null;
+    if (level === 2 && !l2) return;
+    this.bodyLevel = level;
+    this.bodyMesh.geometry = l2 ? l2.geometry : this.bodyLod.geometry;
+    const parts = l2 ? l2.hull : this.bodyLod.hull;
+    const inkOf = (p: HullPart): BufferGeometry => p.ink ?? (lodSwitch.outline ? outlineGeometry(p.geometry) : p.geometry);
+    for (const list of [this.hullMeshes, this.flashMeshes, this.xrayMeshes]) {
+      for (const m of list) { const p = parts[m.userData.valeHullPart as number]; if (p) m.geometry = inkOf(p); }
+    }
+    for (const m of this.veilDepth) { const p = parts[m.userData.valeHullPart as number]; if (p) m.geometry = p.geometry; }
+  }
 
   // ── crowd surface (crowd.ts CrowdActor) ────────────────────────────────────────────────────────
   /** the baked crowd form this actor draws through, or null (a per-actor model) */
@@ -1505,7 +1564,8 @@ export class Actor implements CrowdActor {
   private buildVeilDepth(model: Object3D): void {
     const cm = meshesOf(model).filter((m) => !m.userData.valeOutline);
     const mats: Partial<Record<InkPath, Material>> = {};
-    for (const part of this.hullParts) {
+    const parts = this.bodyLevel === 2 && this.bodyLod?.lod2 ? this.bodyLod.lod2.hull : this.hullParts;
+    for (const [pi, part] of parts.entries()) {
       const lead = cm[part.lead];
       if (!lead) continue;
       const path: InkPath = part.skinned && (lead as SkinnedMesh).isSkinnedMesh ? 'skin' : 'rigid';
@@ -1523,6 +1583,7 @@ export class Actor implements CrowdActor {
       } else copy = new Mesh(part.geometry, mat);
       copy.name = 'vale_veil_depth';
       copy.userData.valeOutline = true;
+      copy.userData.valeHullPart = pi;
       copy.castShadow = false; copy.receiveShadow = false;
       copy.renderOrder = 50;                 // after every opaque draw (the ground behind must already be there)
       copy.matrixAutoUpdate = false;

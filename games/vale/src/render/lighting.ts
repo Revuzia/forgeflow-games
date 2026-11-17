@@ -25,8 +25,12 @@ export interface SunSpec { sunDir: readonly [number, number, number]; sunColor: 
  *  wick and monster share of the crown. The same on every map: a character reads alike wherever it stands. */
 export const CHAR_LIGHT = {
   keyOfSun: 0.9,
-  crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 3.4, sunHue: 0.5, albedoFloor: 0.3 },
-  fill: { luminance: 0.7 },
+  // orch1 W2-A (GFX-2 / FU-5, owner reference targets 6-7): on FIGHTERS the crown is wider (Fresnel `fighterPower` 2.0, was
+  // 2.5) and brighter (x `fighterGain` 1.6), and the eye fill 0.7 -> 0.98 lights through a value floor (tone.fillFloor):
+  // fighters' edges lift off the mid-value ground and dark kits come up toward the value band while pale kits stay under
+  // top-25 L* ~80 (the roll-off below). Wicks and monsters keep the crown as it was (power 2.5, their share of 3.4).
+  crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 3.4, sunHue: 0.5, albedoFloor: 0.3, fighterGain: 1.6, fighterPower: 2.0 },
+  fill: { luminance: 0.98 },
   knee: [0.25, 0.75] as const,
   unitShare: 0.35,
   /** a jungle monster's share of the world's light (sun, sky, its crown share) and of its own glow (wicks keep 1).
@@ -37,14 +41,14 @@ export const CHAR_LIGHT = {
   /** orch1 W2-A GFX-2 / FU-5 (fighters only, world_material.ts CHAR_AO): the baked AO's weight on a fighter's body, and
    *  the hue-preserving roll-off of its diffuse light: the brightest channel eases from `knee` toward `ceiling` (linear),
    *  every channel scaled alike, so a pale top keeps its hue under the tone map's shoulder and the top-25 % L* stays
-   *  at or under 80 */
-  tone: { aoWeight: 0.6, knee: 0.5, ceiling: 0.72 },
+   *  at or under ~80; `fillFloor`: the linear albedo luminance the eye fill lights a darker texel as (hue kept) */
+  tone: { aoWeight: 0.6, knee: 0.5, ceiling: 0.72, fillFloor: 0.25 },
 } as const;
 /** harness seam (W2-A A/B): false puts fighters back on the r12 B5 character light (full AO, no roll-off) */
 export const charToneSwitch = { on: true };
 export function applyCharTone(): void {
   const t = CHAR_LIGHT.tone, on = charToneSwitch.on;
-  worldUniforms.valeCharAo.value.set(on ? t.aoWeight : 1, on ? t.knee : 0, on ? t.ceiling : 0, 0);
+  worldUniforms.valeCharAo.value.set(on ? t.aoWeight : 1, on ? t.knee : 0, on ? t.ceiling : 0, on ? t.fillFloor : 0);
 }
 /** orch1 W2-A GFX-1 (owner ruling 46): the environment value re-key (world_material.ts valeRekey), the same on every map.
  *  The world's display L* goes through L*' = 100 gain (L* / 100)^lstarExp, easing back to the identity over easeL (lamps
@@ -118,6 +122,7 @@ export class Sun {
     const crown = _crown.copy(NOONWHITE).lerp(_sunHue.setStyle(spec.sunColor), C.crown.sunHue);
     crown.multiplyScalar(C.crown.luminance / lum(crown));
     W.valeCharRim.value.set(crown.r, crown.g, crown.b, C.crown.power);
+    W.valeCharCrown.value.set(C.crown.fighterGain, C.crown.fighterPower);
     W.valeCharRimDir.value.set(C.crown.viewDir[0], C.crown.viewDir[1], C.crown.viewDir[2]).normalize();
     W.valeCharFill.value.copy(NOONWHITE).multiplyScalar(C.fill.luminance / lum(NOONWHITE));
     W.valeCharShape.value.set(C.crown.albedoFloor, C.unitShare, C.knee[0], C.knee[1]);

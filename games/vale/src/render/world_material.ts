@@ -134,6 +134,8 @@ export const worldUniforms = {
   // zw = the knee (linear luminance of the world's light on the surface where the character light starts / ends fading)
   valeCharRimDir: { value: new Vector3(0, 0.8, -0.6).normalize() },
   valeCharRim: { value: new Vector4(0, 0, 0, 3) },
+  // orch1 W2-A: a fighter's crown gain over valeCharRim.rgb and its own Fresnel power (wicks and monsters keep valeCharRim)
+  valeCharCrown: { value: new Vector2(1, 3) },
   valeCharFill: { value: new Color(0, 0, 0) },
   valeCharShape: { value: new Vector4(0.3, 0.35, 0.25, 0.75) },
   // a jungle monster's share of the world's light and of its own glow (wicks keep 1)
@@ -149,7 +151,8 @@ export const worldUniforms = {
   // orch1 W2-A GFX-2 / FU-5 (fighters only): x = the weight of the baked AO (aoMap) on a fighter's body, y / z = the
   // knee and the ceiling of the hue-preserving value roll-off on its diffuse light (the brightest channel eases from y
   // toward z; every channel scales by the same factor, so a pale kit keeps its hue instead of the tone map's shoulder
-  // bleaching it to cream), w unused. lighting.ts CHAR_LIGHT.tone sets it; (1, 0, 0) = off
+  // bleaching it to cream), w = the eye fill's albedo value floor (linear luminance; CHAR_LIGHT.tone.fillFloor). lighting.ts
+  // CHAR_LIGHT.tone sets it; (1, 0, 0, 0) = off
   valeCharAo: { value: new Vector4(1, 0, 0, 0) },
   // max env ENV-10: drifting cloud shadow on the sun term of world (non-character) materials: x = its amplitude (0 =
   // off; setCloudShadow: the map's art.terrain.cloudShadow × the tier's switch), y = 1 / the cloud scale (m),
@@ -333,6 +336,7 @@ uniform vec3 valeKeyDir;
 uniform float valeCharKey;
 uniform vec3 valeCharRimDir;
 uniform vec4 valeCharRim;
+uniform vec2 valeCharCrown;
 uniform vec3 valeCharFill;
 uniform vec4 valeCharShape;
 uniform float valeCharMonster;
@@ -372,7 +376,12 @@ const CHAR_LIGHT = /* glsl */`
     // wicks and monsters keep the sun as their key: a share of the crown, on their darker cloth only (a pale hood takes none)
     valeAdd = valeCharShape.y * ( 1.0 - smoothstep( 0.05, 0.16, valeLa ) ) * valeCharRim.rgb * valeRim * valeAlb;
   } else {
-    valeAdd = valeCharRim.rgb * valeRim * valeAlb + valeCharFill * ( 0.4 + 0.6 * valeNdV ) * material.diffuseColor;
+    // orch1 W2-A (GFX-2 / FU-5): the eye fill lights the albedo through a value floor (valeCharAo.w, linear luminance;
+    // hue kept), so a dark kit's mid-tones lift toward the band while a pale kit's fill is unchanged
+    float valeLd = dot( material.diffuseColor, vec3( 0.2126, 0.7152, 0.0722 ) );
+    vec3 valeFillAlb = min( material.diffuseColor * ( valeLd < valeCharAo.w ? valeCharAo.w / max( valeLd, 0.02 ) : 1.0 ), vec3( 1.0 ) );
+    float valeRimF = pow( 1.0 - valeNdV, valeCharCrown.y ) * valeUp * valeUp;
+    valeAdd = valeCharCrown.x * valeCharRim.rgb * valeRimF * valeAlb + valeCharFill * ( 0.4 + 0.6 * valeNdV ) * valeFillAlb;
   }
   // the knee: the character light fades where the world's light (key, sky, specular) already lights the surface
   // brightly, so a pale kit never blows out and the lift goes to the mid-tones and the shadow side
