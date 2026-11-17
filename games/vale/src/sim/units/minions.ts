@@ -63,6 +63,10 @@ const FLANK_ANGLES = [0.7, 1.4, 2.1];
 const flankNear: Entity[] = [];
 /** ticks a boxed-in Wick passes through its own wave (ruling 43) */
 const PASS_TICKS = 90;
+/** a marching Wick that covers under MARCH_GAIN m in MARCH_TICKS with one of its own wave pressed on it (two Wicks rejoining
+ *  through the one-body strip behind their own tower, each on the other's waypoint: 4.5 s locked, probe_sim_wick_still
+ *  rift bots 305) passes its own wave for MARCH_PASS ticks (ruling 47) */
+const MARCH_TICKS = 45, MARCH_GAIN = 0.6, MARCH_PASS = 45;
 
 type V2T = readonly [number, number];
 interface MinionState {
@@ -79,6 +83,8 @@ interface MinionState {
   passUntil: number;
   /** its column's lateral offset from the lane line (m, left of travel +), kept the whole walk (ruling 47) */
   slot: number;
+  /** march watch: where it stood when the window began, that tick, the last tick it marched (a fight in between restarts it) */
+  marchX: number; marchY: number; marchAt: number; marchSeen: number;
 }
 interface WaveState { n: number; nextAt: number; paths: V2T[][][] }
 const KEY = 'waves';
@@ -137,7 +143,7 @@ function spawnWave(w: World, st: WaveState, n: number, at: number): void {
         const inRow = Math.min(3, units.length - row * 3), slot = ((i % 3) - (inRow - 1) / 2) * SLOT_GAP;
         const x = sx - dx * row * ROW_GAP - dy * col * COL_GAP, y = sy - dy * row * ROW_GAP + dx * col * COL_GAP;
         const e = spawnUnit(w, units[i], team, x, y, { level, facing });
-        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1, creepSeq: -1, creepX: e.x, creepY: e.y, creepAt: 0, passUntil: -1, slot });
+        setExt<MinionState>(e, MKEY, { path, wp: path.length > 1 ? 1 : 0, chasing: false, cx: e.x, cy: e.y, lastWpX: NaN, lastWpY: NaN, chaseT: -1, chaseGap: Infinity, chaseAt: 0, flankUntil: -1, creepSeq: -1, creepX: e.x, creepY: e.y, creepAt: 0, passUntil: -1, slot, marchX: e.x, marchY: e.y, marchAt: w.tick, marchSeen: w.tick });
         followLane(w, e, minionState(e)!);
       }
     }
@@ -206,6 +212,7 @@ function along(p: readonly V2T[], k: number, t: number, d: number): boolean {
  *  pinch at a shared point), as an attack-move; past the last waypoint it holds the lane end */
 function followLane(w: World, e: Entity, m: MinionState): void {
   const p = m.path;
+  marchWatch(w, e, m);
   if (p.length > 1 && laneCarrot(e, m)) {
     let tx = carrot.x, ty = carrot.y;
     const walking = e.order === ORDER_ATTACK_MOVE && m.lastWpX === m.lastWpX;
@@ -244,6 +251,23 @@ function followLane(w: World, e: Entity, m: MinionState): void {
   if (m.lastWpX === tx && m.lastWpY === ty && (e.order === ORDER_ATTACK_MOVE || dist2(e, tx, ty) < reach2)) return;
   m.lastWpX = tx; m.lastWpY = ty;
   issueMove(w, e, tx, ty, true);
+}
+
+/** a marching Wick held in place by one of its own (both walking at the same open point): it passes its own wave */
+function marchWatch(w: World, e: Entity, m: MinionState): void {
+  if (w.tick - m.marchSeen > MINION_THINK_TICKS || dist2(e, m.marchX, m.marchY) >= MARCH_GAIN * MARCH_GAIN) {
+    m.marchX = e.x; m.marchY = e.y; m.marchAt = w.tick;
+  } else if (w.tick - m.marchAt >= MARCH_TICKS && !e.passOwn && dist2(e, m.path[m.path.length - 1][0], m.path[m.path.length - 1][1]) > WAYPOINT_REACH * WAYPOINT_REACH * 4) {
+    const n = w.query(e.x, e.y, e.radius + 1.5, flankNear);
+    for (let i = 0; i < n; i++) {
+      const o = flankNear[i];
+      if (o === e || !o.alive || o.kind !== 'minion' || o.team !== e.team) continue;
+      const rr = o.radius + e.radius + 0.3;
+      if (dist2(o, e.x, e.y) < rr * rr) { e.passOwn = true; m.passUntil = w.tick + MARCH_PASS; break; }
+    }
+    m.marchX = e.x; m.marchY = e.y; m.marchAt = w.tick;
+  }
+  m.marchSeen = w.tick;
 }
 
 /** the whole body (radius r) fits at (x, y): its centre and eight rim points are open, clear of walls and structures */
