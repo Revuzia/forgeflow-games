@@ -1,0 +1,388 @@
+{
+ "phase": "w2e_fray",
+ "finishedAt": "2026-11-17T20:34:35.316Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 2.7,
+  "node": "v22.23.3",
+  "base": "http://localhost:5811",
+  "wallMs": 36120
+ },
+ "steps": [
+  {
+   "file": "1920x1080/w2e_fray_001_fray_draft.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_fray",
+   "step": "boot",
+   "name": "fray_draft",
+   "desc": "FRAY draft screen",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2068594,
+   "tMs": 10926,
+   "load1": 2.45,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_fray_002_fray_draft.png",
+   "viewport": "1366x768",
+   "phase": "w2e_fray",
+   "step": "boot",
+   "name": "fray_draft",
+   "desc": "FRAY draft screen",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1146002,
+   "tMs": 11642,
+   "load1": 2.34,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 48,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_fray_003_fray_idle.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_idle",
+   "desc": "FRAY HUD (hour board and chips)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2177104,
+   "tMs": 29246,
+   "load1": 3.01,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_fray_004_fray_idle.png",
+   "viewport": "1366x768",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_idle",
+   "desc": "FRAY HUD (hour board and chips)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1191634,
+   "tMs": 30008,
+   "load1": 3.01,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_fray_005_fray_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_scoreboard",
+   "desc": "FRAY scoreboard held",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1880176,
+   "tMs": 31679,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 177,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_fray_006_fray_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_scoreboard",
+   "desc": "FRAY scoreboard held",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 930684,
+   "tMs": 33198,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 181,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_fray_007_fray_shop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_shop",
+   "desc": "shop open",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1675155,
+   "tMs": 34918,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 116,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_fray_008_fray_shop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_fray",
+   "step": "hour",
+   "name": "fray_shop",
+   "desc": "shop open",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 850307,
+   "tMs": 35623,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 117,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5811/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/w2e_fray_001_fray_draft.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_fray_002_fray_draft.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_fray_003_fray_idle.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_fray_004_fray_idle.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_fray_005_fray_scoreboard.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_fray_006_fray_scoreboard.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_fray_007_fray_shop.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_fray_008_fray_shop.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [],
+ "timings": {}
+}

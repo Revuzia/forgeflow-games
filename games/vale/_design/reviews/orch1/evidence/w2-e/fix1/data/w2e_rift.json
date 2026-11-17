@@ -1,0 +1,1264 @@
+{
+ "phase": "w2e_rift",
+ "finishedAt": "2026-11-17T20:33:41.182Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 2.39,
+  "node": "v22.23.3",
+  "base": "http://localhost:5811",
+  "wallMs": 170358
+ },
+ "steps": [
+  {
+   "file": "1920x1080/w2e_rift_001_idle.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain, match live",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2613447,
+   "tMs": 53338,
+   "load1": 2.84,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 46,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_002_idle.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain, match live",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1386751,
+   "tMs": 54092,
+   "load1": 2.84,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_003_dial_crop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "dial_crop",
+   "desc": "Dial Bar crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 564,
+    "y": 912,
+    "w": 792,
+    "h": 168
+   },
+   "bytes": 154109,
+   "tMs": 54697,
+   "load1": 3.01,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_004_dial_crop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "dial_crop",
+   "desc": "Dial Bar crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 365,
+    "y": 632,
+    "w": 637,
+    "h": 136
+   },
+   "bytes": 108310,
+   "tMs": 55300,
+   "load1": 3.01,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_005_topbar_crop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "topbar_crop",
+   "desc": "top bar crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 572,
+    "y": 0,
+    "w": 776,
+    "h": 72
+   },
+   "bytes": 46724,
+   "tMs": 55888,
+   "load1": 3.01,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_006_topbar_crop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "topbar_crop",
+   "desc": "top bar crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 371,
+    "y": 0,
+    "w": 624,
+    "h": 61
+   },
+   "bytes": 33401,
+   "tMs": 56483,
+   "load1": 3.01,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_007_minimap_crop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "minimap_crop",
+   "desc": "minimap crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1532,
+    "y": 816,
+    "w": 368,
+    "h": 244
+   },
+   "bytes": 97089,
+   "tMs": 57082,
+   "load1": 3.01,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_008_minimap_crop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "minimap_crop",
+   "desc": "minimap crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1054,
+    "y": 555,
+    "w": 298,
+    "h": 198
+   },
+   "bytes": 70182,
+   "tMs": 57677,
+   "load1": 3.01,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_009_ping_wheel.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "ping_wheel",
+   "desc": "ping wheel (G held 0.5 s)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2709568,
+   "tMs": 59566,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_010_ping_wheel.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "ping_wheel",
+   "desc": "ping wheel (G held 0.5 s)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1519859,
+   "tMs": 61267,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_011_click_marker.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "click_marker",
+   "desc": "right-click move marker, shot as soon as the click returns",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2869452,
+   "tMs": 62152,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_012_fight.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first outgoing fighter damage (sim paused, t=322.9)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2817734,
+   "tMs": 144390,
+   "load1": 2.3,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_013_fight.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first outgoing fighter damage (sim paused, t=322.9)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1517498,
+   "tMs": 145138,
+   "load1": 2.3,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 57,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_014_fight_live.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight_live",
+   "desc": "same fight 0.5 s later, sim x1",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2814840,
+   "tMs": 146583,
+   "load1": 2.3,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 56,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_015_fight_live.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight_live",
+   "desc": "same fight 0.5 s later, sim x1",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1519119,
+   "tMs": 147329,
+   "load1": 2.3,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_016_teamfight.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "teamfight",
+   "name": "teamfight",
+   "desc": "4 fighters within 10 m (paused, t=329.8)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2817595,
+   "tMs": 152413,
+   "load1": 2.36,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_017_teamfight.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "teamfight",
+   "name": "teamfight",
+   "desc": "4 fighters within 10 m (paused, t=329.8)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1517087,
+   "tMs": 153149,
+   "load1": 2.36,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_018_midgame.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "late",
+   "name": "midgame",
+   "desc": "HUD at 334.6s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2823085,
+   "tMs": 154221,
+   "load1": 2.36,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 59,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_019_midgame.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "late",
+   "name": "midgame",
+   "desc": "HUD at 334.6s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1402702,
+   "tMs": 154962,
+   "load1": 2.57,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_020_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "late",
+   "name": "scoreboard",
+   "desc": "scoreboard held (Tab)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2091968,
+   "tMs": 156602,
+   "load1": 2.57,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 157,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_021_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "late",
+   "name": "scoreboard",
+   "desc": "scoreboard held (Tab)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1022411,
+   "tMs": 158113,
+   "load1": 2.57,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 157,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_022_dead_recap.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "dead",
+   "name": "dead_recap",
+   "desc": "dead, respawn in 17.6 s (x1; t=356.6)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1600650,
+   "tMs": 166128,
+   "load1": 2.25,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 85,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_023_dead_recap.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "dead",
+   "name": "dead_recap",
+   "desc": "dead, respawn in 17.6 s (x1; t=356.6)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 919874,
+   "tMs": 166834,
+   "load1": 2.25,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 85,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_024_dead_later.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "dead",
+   "name": "dead_later",
+   "desc": "dead, 3 s after the death",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1564033,
+   "tMs": 169156,
+   "load1": 2.25,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 83,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_025_dead_later.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "dead",
+   "name": "dead_later",
+   "desc": "dead, 3 s after the death",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 898535,
+   "tMs": 169865,
+   "load1": 2.39,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 82,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5811/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/w2e_rift_001_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_002_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_003_dial_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_004_dial_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_005_topbar_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_006_topbar_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_007_minimap_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_008_minimap_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_009_ping_wheel.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_010_ping_wheel.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_011_click_marker.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_rift_012_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_013_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_014_fight_live.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_015_fight_live.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_016_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_017_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_018_midgame.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_019_midgame.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_020_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_021_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_022_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_023_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_024_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_025_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "idle",
+   "tMs": 144011,
+   "load1": 2.42,
+   "text": "number meter 4 s at x1 (frames, pops seen, pops over a bar at full alpha / reduced alpha, max per target, plates api)",
+   "data": {
+    "frames": 240,
+    "popsSeen": 5,
+    "overBarFull": 0,
+    "overBarSoft": 33,
+    "maxPerTarget": 2,
+    "plates": "object",
+    "samples": []
+   }
+  },
+  {
+   "step": "fight",
+   "tMs": 152025,
+   "load1": 2.36,
+   "text": "number meter in the teamfight",
+   "data": {
+    "frames": 240,
+    "popsSeen": 10,
+    "overBarFull": 0,
+    "overBarSoft": 197,
+    "maxPerTarget": 1,
+    "plates": "object",
+    "samples": []
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 170358,
+   "load1": 2.39,
+   "text": "captured",
+   "data": [
+    "fight",
+    "teamfight",
+    "late",
+    "dead"
+   ]
+  },
+  {
+   "step": "dead",
+   "tMs": 170358,
+   "load1": 2.39,
+   "text": "last poll",
+   "data": {
+    "phase": "live",
+    "time": 356.6,
+    "dead": true,
+    "respawnIn": 17.600000000000023,
+    "near": 3,
+    "ended": false,
+    "evs": [
+     {
+      "e": "dmg",
+      "t": 355.93333333333334,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 356,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 356.1666666666667,
+      "other": "fighter",
+      "dir": "in"
+     },
+     {
+      "e": "died",
+      "t": 356.1666666666667
+     }
+    ]
+   }
+  }
+ ],
+ "timings": {}
+}

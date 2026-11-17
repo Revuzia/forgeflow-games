@@ -517,6 +517,7 @@
 .recap__head { display: flex; align-items: center; gap: calc(10 * var(--px)); }
 .recap__face { width: calc(48 * var(--px)); height: calc(48 * var(--px)); border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 2px var(--team-enemy); flex: none; }
 .recap__unit { display: block; width: 100%; height: 100%; background: var(--ink-3); }
+.recap__unit--init { display: grid; place-items: center; font-weight: 700; font-size: calc(15 * var(--px)); color: var(--text-1); box-shadow: inset 0 0 0 1px var(--line-2); }   /* W2-E r1: a source with no portrait (a ward, a structure) shows its initial, not an empty disc */
 .recap__titles { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .recap__rows { display: flex; flex-direction: column; gap: calc(8 * var(--px)); margin: 0; padding: 0; list-style: none; }
 .rrow { display: flex; gap: calc(8 * var(--px)); align-items: center; }
@@ -592,7 +593,7 @@
 .reduce-motion .viewplate__dial::after { animation: none; }
 
 /* ── the shop (Lampwright) ────────────────────────────────────────────────────────────────────── */
-.lshop { position: absolute; left: 50%; top: calc(80 * var(--px)); transform: translateX(-50%); width: min(calc(1120 * var(--px)), 94vw, calc(100vw - 2 * (var(--edge) + 300 * var(--px)))); height: min(calc(700 * var(--px)), calc(100vh - 260 * var(--px)));
+.lshop { position: absolute; left: 50%; top: calc(80 * var(--px)); transform: translateX(-50%); width: min(calc(1120 * var(--px)), 94vw, calc(100vw - 2 * (var(--edge) + 330 * var(--px)))); height: min(calc(700 * var(--px)), calc(100vh - 260 * var(--px)));
   z-index: 6; display: flex; flex-direction: column; animation: shop-in var(--dur-panel) var(--ease-dawn) both; }
 @keyframes shop-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .lshop__head { display: flex; align-items: center; gap: calc(16 * var(--px)); padding: calc(12 * var(--px)) calc(16 * var(--px)); border-bottom: 1px solid var(--line-1); }
