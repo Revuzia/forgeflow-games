@@ -454,6 +454,10 @@ const GLYPHS = { // per weapon class, tiny original silhouettes for the killfeed
   pistol: "M6 2h14v2h-7l-1 4h-4l1-4H6z",
   // pump shotgun: barrel, magazine tube under it, pump forend, receiver + stock
   shotgun: "M0 2.6h16v1.4H0zM2.5 4.6H16v1.4H2.5zM7 6h6v2H7zM16 2h5l1 1h5v5l-4.5-.5L21 7h-5z",
+  // [heavy weapons] belt-fed LMG: long barrel + bipod legs, box under the receiver, stock
+  lmg: "M0 3h14V1.6h7l1 1.4h5v2.4h-6l-1 2.6h-2.6l.6-2.6H14v3.4h-4.6V5.4H0zM3 5.4l-2 3.6h1.1l2-3.6zM5 5.4l1.6 3.6H5.5L4 5.4z",
+  // [heavy weapons] launcher tube with the warhead out front, grip + sight block
+  launcher: "M5 3h17v3.2H5zM0 3.4 5 2.4v4.4L0 5.8zM22 2.6h4.4v4H22zM11 6.2h2.4l-.8 3h-2.2zM15 1.4h3V3h-3z",
   // [polish v149] equipment + melee own their glyphs (never the held gun's)
   mine: "M6 3.5q7.5-3 15 0V8H6zM8 8h1.4v2H8zM17.6 8H19v2h-1.6zM4 1l3 1.6-.5.8zM23 1l-3 1.6.5.8z", // curved tripmine on legs + cone ticks
   frag: "M10.5 3.2a4.2 4.2 0 1 0 6 0zM12 0h4v2.6h-4zM16 .6l3.4-.6.3 1.2-3.7.6z",
@@ -1131,6 +1135,20 @@ export function createHud(ctx) {
     threat.appendChild(a);
     arcs.push({ el: a, t: -9, deg: 0, live: false, dir: null, lastOp: "", lastTr: "" });
   }
+  // [feel v153] NEAR-MISS cue: the sim's `whiz` event (a hostile round passing
+  // within 3 m of your head) had only a sound and a vignette squeeze — no
+  // direction. A thin pale sliver of the same crescent, inside the red ring,
+  // flicks in on the side the round passed and is gone in 0.35 s. Pale, never
+  // red: red is damage, this is "you are being shot at".
+  const whizArcs = [];
+  for (let i = 0; i < 3; i++) {
+    const a = document.createElement("div");
+    a.className = "a10-arc a10-whiz";
+    a.innerHTML = `<svg viewBox="0 0 400 400"><path d="${arcPath}" fill="#e8e8e4" fill-opacity=".85" ` +
+      `stroke="rgba(0,0,0,.45)" stroke-width="1"/></svg>`;
+    threat.appendChild(a);
+    whizArcs.push({ el: a, t: -9, deg: 0, k: 0, pos: null, live: false, lastOp: "", lastTr: "" });
+  }
   root.appendChild(threat);
 
   // grenade warning ----------------------------------------------------------
@@ -1362,6 +1380,7 @@ export function createHud(ctx) {
     st.tallies.hitmarkers = 0; st.tallies.killfeed = 0;
     for (const r of feedRows) { r.live = false; r.el.style.opacity = "0"; }
     for (const a of arcs) a.live = false;
+    for (const w of whizArcs) w.live = false;
     hideDebrief();
   }
 
@@ -1413,6 +1432,19 @@ export function createHud(ctx) {
     wslot.bearing = norm360((Math.atan2((d.dir || [0, 0, 1])[0], -(d.dir || [0, 0, 1])[2])) * DEG);
   }
 
+  // [feel v153] near-miss crack: {pos, dist} from ballistics (dist < 3 m)
+  function onWhiz(d) {
+    if (!d || !d.pos) return;
+    const sim = ctx.sim(); if (!sim || !sim.state.player.alive) return;
+    const t = simNow();
+    const k = Math.max(0.25, Math.min(1, 1.15 - (d.dist || 0) / 3));
+    let slot = whizArcs[0];
+    for (const w of whizArcs) if (w.t < slot.t) slot = w;
+    slot.live = true; slot.t = t; slot.k = k;
+    slot.pos = slot.pos || [0, 0, 0];
+    slot.pos[0] = d.pos[0]; slot.pos[1] = d.pos[1]; slot.pos[2] = d.pos[2];
+  }
+
   function onDeath(d) {
     const t = simNow();
     const sim = ctx.sim(); if (!sim || !d) return;
@@ -1429,7 +1461,9 @@ export function createHud(ctx) {
     const kName = nameOf(d.attacker), vName = nameOf(d.victim);
     // [polish v149] equipment / melee kills: the death event names its own weapon
     const eqW = d.melee ? "knife" : (d.weaponId === "claymore" || d.weaponId === "frag") ? d.weaponId : null;
-    const wid = eqW ? eqW : d.attacker === "P"
+    // [heavy weapons] a rocket kill lands seconds after the pull: the death event names the launcher
+    const projW = !eqW && d.weaponId && W[d.weaponId] && W[d.weaponId].projectile ? d.weaponId : null;
+    const wid = eqW ? eqW : projW ? projW : d.attacker === "P"
       ? ((hmSt.fireW && t >= hmSt.fireT && t - hmSt.fireT <= 0.6 && hmSt.fireW) ||
          (sim.state.player.weapon && sim.state.player.weapon.id) ||
          st.lastHitWeapon[d.victim])
@@ -1779,6 +1813,19 @@ export function createHud(ctx) {
       if (os !== a.lastOp) { a.lastOp = os; a.el.style.opacity = os; }
       if (ts !== a.lastTr) { a.lastTr = ts; a.el.style.transform = ts; }
     }
+    // [feel v153] near-miss slivers: 0.35 s, inside the damage ring, pale
+    for (const w of whizArcs) {
+      if (!w.live) { if (w.lastOp !== "0") { w.lastOp = "0"; w.el.style.opacity = "0"; } continue; }
+      const age = t - w.t;
+      if (age > 0.35 || age < 0 || !p.alive) { w.live = false; w.lastOp = "0"; w.el.style.opacity = "0"; continue; }
+      const deg = relDegTo(sim, w.pos);
+      const alpha = 0.55 * w.k * (age < 0.08 ? 1 : 1 - (age - 0.08) / 0.27);
+      const sc = 0.80 + 0.06 * Math.min(1, age / 0.35);
+      const os = alpha.toFixed(2);
+      const ts = `rotate(${deg.toFixed(1)}deg) scale(${sc.toFixed(3)},${(sc * 0.94).toFixed(3)})`;
+      if (os !== w.lastOp) { w.lastOp = os; w.el.style.opacity = os; }
+      if (ts !== w.lastTr) { w.lastTr = ts; w.el.style.transform = ts; }
+    }
 
     // ---- grenade warning (§5.9: icon + direction arrow within 6 m).
     // [polish v149] reads the LIVE projectiles (view-only) so the arrow tracks
@@ -2072,6 +2119,7 @@ export function createHud(ctx) {
     attach(bridge) {
       bridge.register("shot", onShot);
       bridge.register("hurt", onHurt);
+      bridge.register("whiz", onWhiz); // [feel v153] near-miss direction cue
       bridge.register("death", onDeath);
       bridge.register("objective", onObjective);
       bridge.register("zonecap", (d) => zoneHud.onZone(d, simNow())); // [lane dom]

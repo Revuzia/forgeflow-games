@@ -1,0 +1,29 @@
+core/ai/ai.selftest.cjs: RESULT: OK
+core/ai/identity.selftest.cjs: identity selftest: 97 passed, 0 failed
+core/ai/objective.selftest.cjs: 78 passed, 0 failed, 0 skipped
+core/aim_assist.selftest.cjs: AIM ASSIST SELFTEST: PASS
+core/hud/callouts.selftest.cjs: callouts selftest: 166 passed, 0 failed
+core/hud/minimap.selftest.cjs: minimap selftest: 86 passed, 0 failed
+core/match/match.selftest.cjs: 111 passed, 0 failed, 0 skipped
+core/match/modes/ctf.selftest.cjs: 157 passed, 0 failed
+core/match/modes/dom.selftest.cjs: GREEN — dom.selftest: 68 passed, 0 failed
+core/match/modes/ffa.selftest.cjs: 90 passed, 0 failed
+core/match/modes/hill.selftest.cjs: GREEN — hill.selftest: 56 passed, 0 failed
+core/match/modes/ladder.selftest.cjs: GREEN — ladder.selftest: 44 passed, 0 failed
+core/match/modes/tags.selftest.cjs: GREEN — tags.selftest: 38 passed, 0 failed
+core/match/modes/tdm.selftest.cjs: 87 passed, 0 failed
+core/match/spawns.selftest.cjs: ===== 45 passed, 0 failed =====
+core/meta/achievements.selftest.cjs: RESULT: OK
+core/meta/challenges.selftest.cjs: RESULT: OK
+core/meta/migration.selftest.cjs: RESULT: OK
+core/meta/progression.selftest.cjs: RESULT: OK
+core/meta/store_merge.selftest.cjs: RESULT: OK
+core/render/replay_buffer.selftest.cjs: ===== 29 passed, 0 failed =====
+core/settings.selftest.cjs: PASS: 47 passed, 0 failed
+core/sim/attachments.selftest.cjs: RESULT: OK
+core/sim/equipment.selftest.cjs: RESULT: OK
+core/sim/heavy.selftest.cjs: RESULT: OK
+core/sim/loadout.selftest.cjs: RESULT: OK
+core/sim/loadouts.selftest.cjs: RESULT: OK
+core/sim/melee.selftest.cjs: RESULT: OK
+core/sim/sim.selftest.cjs: RESULT: OK

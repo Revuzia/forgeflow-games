@@ -1,0 +1,14 @@
+lanternwalk dom    n=2 ended 2/2  held 65.8% (empty 34.2%)  flips/min 2.47  pts/min 58.4  owned 81.0%
+lanternwalk hill   n=2 ended 2/2  occupied 76.6%  held(one team) 75.5%  contested 1.2%  pts/min 43.0
+lanternwalk tags   n=2 ended 2/2  tags dropped 117  confirmed 47.9%  denied 35.0%  expired 9.4%  (rest still down at the horn)  confirms/min 6.9
+lanternwalk ladder n=2 ended 2/2  finished 2/2 @179s  top rung 11/11  knife-rung time 48 s/match, swings there 1.0/match  kills/min 23.2
+switchyard  dom    n=2 ended 2/2  held 86.7% (empty 13.3%)  flips/min 2.10  pts/min 56.5  owned 78.1%
+switchyard  hill   n=2 ended 2/2  occupied 86.2%  held(one team) 82.0%  contested 4.2%  pts/min 46.4
+switchyard  tags   n=2 ended 2/2  tags dropped 140  confirmed 66.4%  denied 30.7%  expired 0.0%  (rest still down at the horn)  confirms/min 11.5
+switchyard  ladder n=2 ended 2/2  finished 2/2 @208s  top rung 12/11  knife-rung time 29 s/match, swings there 3.0/match  kills/min 21.7
+saltmarket  dom    n=2 ended 2/2  held 90.6% (empty 9.4%)  flips/min 1.48  pts/min 61.7  owned 85.5%
+saltmarket  hill   n=2 ended 2/2  occupied 88.2%  held(one team) 85.3%  contested 2.8%  pts/min 48.8
+saltmarket  tags   n=2 ended 2/2  tags dropped 143  confirmed 53.1%  denied 44.1%  expired 0.7%  (rest still down at the horn)  confirms/min 9.4
+saltmarket  ladder n=2 ended 2/2  finished 2/2 @175s  top rung 11/11  knife-rung time 20 s/match, swings there 2.5/match  kills/min 25.6
+
+mode_probe  secs=240 seeds=2  AI avg 0.116 ms/tick  wall 90 s

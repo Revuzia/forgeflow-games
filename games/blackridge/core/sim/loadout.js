@@ -38,13 +38,37 @@ export function owns(body, id) {
 }
 
 // AUTO-EQUIP TIER (ground-loot walkovers only): a gun you run over is raised only
-// when it beats the one in hand, or the held gun is dry. Pistol < SMG/shotgun < AR/DMR.
-const TIER = { pike: 0, vesper: 1, breaker: 1, warden: 2, corvus: 2 };
+// when it beats the one in hand, or the held gun is dry. Pistol < SMG/shotgun < AR/DMR/LMG.
+// The launcher is tier 0 (it is a sidearm-slot tool, not a gun upgrade).
+const TIER = { pike: 0, anvil: 0, vesper: 1, breaker: 1, warden: 2, corvus: 2, bastion: 2 };
 export const tierOf = (id) => (TIER[id] != null ? TIER[id] : 1);
 export function autoEquip(body, newId) {
   const w = body.weapon;
   if (!w) return true;
   return (w.mag + w.reserve) <= 0 || tierOf(newId) > tierOf(w.id);
+}
+
+// [heavy weapons] SHARED SLOTS (weapon_data.js): the gun already in `newId`'s slot,
+// when it is a DIFFERENT gun (Warden vs Bastion in slot 1, Pike vs Anvil in slot 5).
+export function slotRival(body, newId) {
+  const i = slotOf(newId);
+  const cur = i >= 0 && body.slots ? body.slots[i] : null;
+  return cur && cur !== newId ? cur : null;
+}
+function ammoOf(body, id) {
+  const w = body.weapon;
+  if (w && w.id === id) return w.mag + w.reserve;
+  const a = body._slotAmmo && body._slotAmmo[id];
+  return a ? a.mag + a.reserve : 0;
+}
+// A ground WALKOVER only takes a gun whose slot is free, already holds that gun, or
+// holds a rival that is dry or of a lower tier — running over a Bastion never
+// silently trades away a loaded Warden (and a Pike never loses its slot to an Anvil
+// lying on the floor). Explicit grants (racks via interact, scenario, kits) replace.
+export function walkoverTakes(body, newId) {
+  const rival = slotRival(body, newId);
+  if (!rival) return true;
+  return ammoOf(body, rival) <= 0 || tierOf(newId) > tierOf(rival);
 }
 
 // Make sure `body` has a well-formed 5-slot inventory (older saves / test
@@ -123,6 +147,16 @@ export function grant(sim, body, id, opts, whoTag) {
 
   // new weapon: stow what is in hand, fill ITS slot
   body._slotAmmo[held] = { mag: w.mag, reserve: w.reserve };
+  // [heavy weapons] a shared slot holding a different gun: that gun is REPLACED
+  // (its ammo goes with it); if it was the one in hand, the new gun must be raised
+  const rival = slotRival(body, id);
+  let mustEquip = false;
+  if (rival) {
+    delete body._slotAmmo[rival];
+    if (rival === held) mustEquip = true;
+    if (body._lastWeapon === rival) body._lastWeapon = null;
+    res.replaced = rival;
+  }
   body.slots[res.slot] = id;
   const mag = typeof o.mag === "number" ? Math.max(0, Math.min(wt.mag, o.mag)) : wt.mag;
   const reserve = typeof o.reserve === "number" ? o.reserve : wt.reserve;
@@ -132,13 +166,14 @@ export function grant(sim, body, id, opts, whoTag) {
   // Default: raise the new gun (racks, crates, scenario/test grants all mean "put
   // this in my hands"). Ground-loot walkovers pass an explicit equip decision
   // (autoEquip below) so running over a dropped pistol never yanks your rifle away.
-  const equip = o.equip != null ? !!o.equip : true;
+  const equip = mustEquip || (o.equip != null ? !!o.equip : true);
   if (equip) {
-    body._lastWeapon = held;
     w.id = id; w.mag = mag; w.reserve = reserve;
     w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
     w.recoilIndex = 0; w._shotCount = 0; w._reloadCommitted = false;
     res.equipped = true;
+    // (a replaced held gun is gone: `last` must not point back at it)
+    body._lastWeapon = mustEquip ? null : held;
     sim.emit("switch", { who: whoTag || (body === sim.state.player ? "P" : body.id), from: held, to: id });
   }
   return res;

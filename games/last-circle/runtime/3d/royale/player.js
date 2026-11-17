@@ -266,6 +266,11 @@ let _rimFarNow = RIM_FAR;
 // (W10 R1B, combat finding 7 step 1) skin / cloth roughness derived from the albedo in the body shader: ONE shared knob,
 // 1 on desktop medium+, 0 on low and touch (the W9 look, roughness as authored)
 const SHEEN_K = { value: 1 };
+// (W10 R2A fix5) the characters' DIRECT specular x 1 / (the map's W10 sun boost x the contrast curve's lift of a skin highlight, ~1 + 0.3 x its
+// strength) (maps.js W._w10Sun / W._w10Con: Savanna 1.26 / 1.0, others 1.12 / 0.4; 1 on low / touch): the world's stronger sun and curve light the
+// body's diffuse as before, but the skin's highlight on screen stays at the W10 R1 light's - else the pink-plastic skin of the W9 tip came back
+// (w10_gunhold sheen c_near 0.63 x the W9 tip with the sun alone divided out, bar 0.6). Indirect (environment) specular untouched.
+const SPEC_K = { value: 1 };
 const RIM_ALLY_NEAR = 0.30, RIM_ALLY_FAR = 0.45;
 const RIM_GAIN = { value: 0.8 };
 // -- character exposure (R4, player_rim) --------------------------------------
@@ -930,7 +935,8 @@ export async function loadActorModels(W) {
         // "Dith1" (P23, LC-32): the camera-focus body's screen-door dither (uniform zDither, 1 = opaque) is in the program too
         // "Exp1" (R4): the character exposure (uniform zExpK = CHAR_EXPO) is in the program too
         // "Rgh1" (W10 R1B): the albedo-derived roughness (uniform zShK) is in the program too - one program, as before
-        m.customProgramCacheKey = () => "lcZoneTintRim1Dith1Exp1Rgh1";
+        // "Spk1" (W10 R2A fix5): the direct-specular scale (uniform zSpK) is in the program too
+        m.customProgramCacheKey = () => "lcZoneTintRim1Dith1Exp1Rgh1Spk1";
         m.onBeforeCompile = (sh) => {
           sh.uniforms.zLegs = { value: zc[0] }; sh.uniforms.zTorso = { value: zc[1] }; sh.uniforms.zHead = { value: zc[2] };
           // rim light: colour + (near, far) strength per material (SQUAD UP allies get
@@ -938,6 +944,7 @@ export async function loadActorModels(W) {
           sh.uniforms.zRimCol = { value: new THREE.Color(RIM_COOL) };
           sh.uniforms.zRimP = { value: new THREE.Vector2(RIM_NEAR, _rimFarNow) };
           sh.uniforms.zShK = SHEEN_K;
+          sh.uniforms.zSpK = SPEC_K;
           sh.uniforms.zRimK = RIM_GAIN;
           sh.uniforms.zExpK = CHAR_EXPO;
           m.userData.zRimCol = sh.uniforms.zRimCol;
@@ -954,7 +961,7 @@ export async function loadActorModels(W) {
           // injected AFTER <color_fragment>, which in three r172's meshphysical
           // fragment runs after <map_fragment> — so diffuseColor is already
           // (diffuse * texture) and dividing `diffuse` out leaves the texture.
-          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\nuniform float zExpK;\nuniform float zDither;\nuniform float zShK;\n" + sh.fragmentShader.replace(
+          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\nuniform float zExpK;\nuniform float zDither;\nuniform float zShK;\nuniform float zSpK;\n" + sh.fragmentShader.replace(
             "#include <color_fragment>",
             // (P23, LC-32) 4x4 ordered (Bayer) screen-door: a fragment whose threshold is at or above zDither is dropped
             "if ( zDither < 0.999 ) {\n    vec2 zdp = mod( floor( gl_FragCoord.xy ), 4.0 );\n    vec4 zr = zdp.y < 0.5 ? vec4( 0.0, 8.0, 2.0, 10.0 ) : zdp.y < 1.5 ? vec4( 12.0, 4.0, 14.0, 6.0 ) : zdp.y < 2.5 ? vec4( 3.0, 11.0, 1.0, 9.0 ) : vec4( 15.0, 7.0, 13.0, 5.0 );\n    float zb = ( zdp.x < 0.5 ? zr.x : zdp.x < 1.5 ? zr.y : zdp.x < 2.5 ? zr.z : zr.w ) / 16.0 + 0.03125;\n    if ( zb >= zDither ) discard;\n  }\n" +
@@ -965,6 +972,10 @@ export async function loadActorModels(W) {
             // trim) keep the authored value. max(): nothing gets shinier than it was. zShK = 0 is the authored look.
             "#include <roughnessmap_fragment>",
             "#include <roughnessmap_fragment>\n  {\n    float zL = dot( zAlb, vec3( 0.2126, 0.7152, 0.0722 ) );\n    float zW = clamp( ( zAlb.r - zAlb.b ) / max( zAlb.r, 0.001 ), 0.0, 1.0 );\n    float zSk = smoothstep( 0.22, 0.5, zW ) * smoothstep( 0.02, 0.08, zL ) * ( 1.0 - smoothstep( 0.55, 0.85, zL ) );\n    float zMt = smoothstep( 0.45, 0.7, zL ) * ( 1.0 - smoothstep( 0.08, 0.25, zW ) );\n    float zR = mix( max( roughnessFactor, mix( 0.8, 0.55, zSk ) ), roughnessFactor, zMt );\n    roughnessFactor = mix( roughnessFactor, zR, zShK );\n  }"
+          ).replace(
+            // (W10 R2A fix5) the sun's highlight at the W10 R1 sun's strength (zSpK = 1 / the map's W10 sun boost; 1 = as lit)
+            "#include <aomap_fragment>",
+            "reflectedLight.directSpecular *= zSpK;\n#include <aomap_fragment>"
           ).replace(
             // RIM (VALORANT-style readability edge): added to the OUTGOING light, so it
             // is the same everywhere on the cast whatever the sun/shade there, which is
@@ -2175,6 +2186,7 @@ function deskHi(W) {
 function rimSync(W) {
   const hi = deskHi(W);
   SHEEN_K.value = hi ? 1 : 0;
+  SPEC_K.value = hi && W._w10Sun > 0.05 ? 1 / (W._w10Sun * (1 + 0.3 * (W._w10Con || 0))) : 1;
   const rf = hi ? RIM_FAR_DESK : RIM_FAR;
   if (rf === _rimFarNow) return;
   _rimFarNow = rf;

@@ -1,0 +1,5 @@
+nav_probe  pairs=300 seed=1 cell=0.75 mode=squad driver=aiNavGoto
+meridian_ward  squads=60 bots arrived 300/300 (100.00%)  spread mean=2.89s p95=6.18s  overlap(<0.45m) samples=82 [spawn 31 / parked at goal 10 / travelling 41]
+lanternwalk    squads=60 bots arrived 300/300 (100.00%)  spread mean=3.23s p95=7.83s  overlap(<0.45m) samples=61 [spawn 19 / parked at goal 8 / travelling 34]
+switchyard     squads=60 bots arrived 300/300 (100.00%)  spread mean=3.13s p95=6.95s  overlap(<0.45m) samples=56 [spawn 25 / parked at goal 9 / travelling 22]
+saltmarket     squads=60 bots arrived 295/295 (100.00%)  spread mean=3.01s p95=6.35s  overlap(<0.45m) samples=71 [spawn 31 / parked at goal 8 / travelling 32]  (excluded 5 bots spawned on an island with no route)

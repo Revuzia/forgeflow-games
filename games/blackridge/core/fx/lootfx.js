@@ -11,6 +11,7 @@ import * as THREE from "three";
 
 const COLORS = {
   warden: 0xffc15a, vesper: 0x62e2ff, breaker: 0xff7a3a, corvus: 0xb890ff, pike: 0xf2f2f2, ammo: 0x6dff8a,
+  bastion: 0xffe27a, anvil: 0xff5a4a, // [heavy weapons]
 };
 
 function gradTex(kind) {
@@ -195,6 +196,11 @@ export function createLootFx(ctx) {
     update(dt) {
       const s = ctx.sim ? ctx.sim() : null;
       if (!s) return;
+      // [fx v152] a kill cam replay shows the seconds BEFORE the kill: the loot
+      // the victim dropped (live state) would sit glowing at his feet before he
+      // dies. Hidden for the replay; nothing else changes.
+      const rep = !!ctx.replayFx;
+      if (root.visible === rep) root.visible = !rep;
       clock += Math.min(dt, 0.1);
       if (s !== lastSim) { for (const e of items.values()) dispose(e); items.clear(); for (const e of pads.values()) root.remove(e.g); pads.clear(); lastSim = s; }
       const loot = s.state.loot || [];

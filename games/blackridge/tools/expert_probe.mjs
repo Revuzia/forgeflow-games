@@ -38,6 +38,7 @@ const SECS = parseFloat(argOf("--secs", "240"));
 const DIFF = argOf("--difficulty", "expert");
 const DET = argv.includes("--det");
 const JSON_OUT = argOf("--json", null);
+const WHY = argv.includes("--why"); const WHYM = new Map(); const WHYX = []; const FIRST = new Map();
 
 const S = await import(u("core/sim/sim.js"));
 const MATCH = await import(u("core/match/match.js"));
@@ -109,13 +110,15 @@ function runMatch(mapId, mode, seed) {
       const t = sim.state.time;
       for (const b of sim.state.bots) {
         if (!b.alive) { win.delete(b.id); lastHead.delete(b.id); stuck.delete(b.id); continue; }
+        if (WHY && !FIRST.has(b.id)) FIRST.set(b.id, t);
         const br = b._brain, sp = Math.hypot(b.vel[0], b.vel[2]);
         // path-following stuck: a path is active, the brain commands movement, < 0.3 m in 3 s
         let w = win.get(b.id);
         const trying = !!(br && br.mvActive && !br.arrived);
         if (!w) { w = { x: b.pos[0], z: b.pos[2], t, flagged: false }; win.set(b.id, w); }
         if (!trying || Math.hypot(b.pos[0] - w.x, b.pos[2] - w.z) > 0.3) { w.x = b.pos[0]; w.z = b.pos[2]; w.t = t; w.flagged = false; }
-        else if (t - w.t >= 3 && !w.flagged) { w.flagged = true; pathStuckEvents++; }
+        else if (t - w.t >= 3 && !w.flagged) { w.flagged = true; pathStuckEvents++;
+          if (WHY) { const o = b._obj; console.log("  STUCK", JSON.stringify({ t: +t.toFixed(1), id: b.id, st: b.state, pos: b.pos.map((v) => +v.toFixed(2)), goal: br.goal && br.goal.map((v) => +v.toFixed(2)), pathI: br.pathI, n: br.path && br.path.length, wp: br.path && br.path[br.pathI] && br.path[br.pathI].map((v) => +v.toFixed(2)), role: o && o.role, pri: o && o.priority, v: +sp.toFixed(2), yield: br.yielding, yieldN: br.yieldN, stuckN: br.stuckN, carLine: br._carLine, space: br.spaceOn })); } }
         // matchprobe AC-4 (1 Hz proxy: pushing, not engaged, not at a station, < 0.5 m)
         if (ticks % 60 === 0) {
           const P = b.percept;
@@ -137,7 +140,17 @@ function runMatch(mapId, mode, seed) {
         } else lastHead.delete(b.id);
         if ((b.state === "patrol" || b.state === "alert") && sp < 0.3) {
           mv.idle++;
-          if (sim.world.capsuleBlocked(b.pos[0], b.pos[1], b.pos[2], 0.62, 1.7)) mv.idleWall++;
+          if (sim.world.capsuleBlocked(b.pos[0], b.pos[1], b.pos[2], 0.62, 1.7)) {
+            mv.idleWall++;
+            if (WHY) {
+              const o = b._obj, br2 = b._brain;
+              if (!FIRST.has(b.id)) FIRST.set(b.id, sim.state.time);
+              const age = sim.state.time - FIRST.get(b.id);
+              const k = `${b.state}|${o ? o.role + "/" + o.anchorKind + "/p" + (o.priority || 0).toFixed(2) : "-"}|clr${nav.clearAt(b.pos)}|${br2 && br2.arrived ? "arrived" : "notArrived"}|idle${br2 && br2.idleSinceT > 0 ? Math.min(9, Math.floor(sim.state.time - br2.idleSinceT)) : "-"}|age${age < 1 ? "<1" : age < 3 ? "<3" : "3+"}|goal${br2 && br2.goal ? (br2.path ? "P" + br2.path.length : "noPath") : "-"}${br2 && br2.yielding ? "|yield" : ""}`;
+              WHYM.set(k, (WHYM.get(k) || 0) + 1);
+              if (WHYX.length < 12 && sim.state.time > (process.env.WHYT ? +process.env.WHYT : 20) && (!process.env.WHYK || k.includes(process.env.WHYK))) { const bx = sim.world.capsuleBlocked(b.pos[0], b.pos[1], b.pos[2], 0.62, 1.7); WHYX.push({ t: +sim.state.time.toFixed(1), id: b.id, k, pos: b.pos.map((v) => +v.toFixed(2)), goal: br2 && br2.goal && br2.goal.map((v) => +v.toFixed(2)), anchor: o && o.anchor && o.anchor.map((v) => +v.toFixed(2)), box: bx && bx.id, goalClr: br2 && br2.goal ? nav.clearAt(br2.goal) : null, mv: br2 && br2.mvActive, pathI: br2 && br2.pathI, wp: br2 && br2.path && br2.path[br2.pathI] && br2.path[br2.pathI].map((v) => +v.toFixed(2)), loot: br2 && br2.lootUntil > sim.state.time, detour: br2 && br2.detourUntil > sim.state.time, think: br2 && +(sim.state.time - br2.lastThinkT).toFixed(2), cmd: b.cmd && [+b.cmd.moveX.toFixed(2), +b.cmd.moveZ.toFixed(2)], yld: br2 && br2.yielding }); }
+            }
+          }
         }
       }
     }
@@ -180,4 +193,6 @@ for (const mapId of MAPS) for (const mode of MODES) {
     `  stuck>3s/match ${row.stuck.toFixed(2)}  worstIdle ${row.worstIdle.toFixed(0)}s  flank/min ${row.flank.toFixed(2)}  frag/min ${row.frag.toFixed(2)}  pick/m ${row.picks.toFixed(1)}  idle@wall ${row.idleWall.toFixed(1)}%  rev/100 ${row.rev.toFixed(2)}`);
 }
 console.log(`\nexpert_probe  difficulty=${DIFF}  secs=${SECS}  seeds=${SEEDS}  AI avg ${BF.AI_PERF.avgMs.toFixed(3)} ms/tick  wall ${Math.round((Date.now() - t0) / 1000)} s` + (DET ? `  determinism ${detBad.length ? "MISMATCH " + detBad.join(",") : "OK (every match run twice, identical snapshot hash)"}` : ""));
+if (WHY) for (const x of WHYX) console.log("  x", JSON.stringify(x));
+if (WHY) for (const [k, v] of [...WHYM.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log("  idle@wall", v, k);
 if (JSON_OUT) fs.writeFileSync(JSON_OUT, JSON.stringify(rows.filter((r) => r.summary).map((r) => r.summary), null, 1));

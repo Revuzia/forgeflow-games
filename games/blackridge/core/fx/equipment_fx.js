@@ -308,7 +308,11 @@ export function createEquipmentFx(ctx, deps) {
       const a = rnd() * Math.PI * 2, u = rnd() * 2 - 1, rr = Math.cbrt(rnd()) * 0.92;
       const sq = Math.sqrt(1 - u * u);
       puffs.push({
-        ox: Math.cos(a) * sq * rr, oy: u * rr * 0.62 - 0.05, oz: Math.sin(a) * sq * rr,
+        // [feel v153] squash 0.62 -> 0.82: the sim blocks sight through a 5 m
+        // SPHERE (chord >= 1.6 m, so up to ~6 m above the street), while the
+        // squashed cloud thinned out above ~3.5 m and a head-height-plus line
+        // was blocked by smoke you could see through. Taller core, same puffs.
+        ox: Math.cos(a) * sq * rr, oy: u * rr * 0.82 + 0.05, oz: Math.sin(a) * sq * rr,
         size: 3.2 + rnd() * 1.6, rot: rnd() * 6.28, spin: (rnd() - 0.5) * 0.14,
         drift: rnd() * 6.28, a: 0.8 + rnd() * 0.2 - rr * 0.2,
       });
@@ -544,9 +548,13 @@ export function createEquipmentFx(ctx, deps) {
     // concussion: the look slows (input) and the view sways (camera, view-only)
     const inp = D.input || ctx.input;
     if (inp) inp.lookMult = alive ? stunTurnMult(p, t) : 1;
-    if (st > 0) {
-      cam.rotateZ(Math.sin(t * 1.9) * 0.05 * st);
-      cam.rotateX(Math.sin(t * 1.3 + 1) * 0.018 * st);
+    // [feel v153] the sway is camera motion: it follows the screen-shake setting
+    // (the slowed look is gameplay and stays)
+    const shk = ctx.settings && ctx.settings.shake != null ? Number(ctx.settings.shake) : 1;
+    const sway = st * (shk >= 0 && shk <= 1 ? shk : 1);
+    if (sway > 0) {
+      cam.rotateZ(Math.sin(t * 1.9) * 0.05 * sway);
+      cam.rotateX(Math.sin(t * 1.3 + 1) * 0.018 * sway);
     }
 
     // ---- tactical chip (keyboard/pad; touch has its own TAC button)

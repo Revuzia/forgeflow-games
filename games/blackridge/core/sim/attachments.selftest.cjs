@@ -320,7 +320,12 @@ async function main() {
     run(sim, 60 * 20);
     const supIds = new Set(sim.state.bots.filter((b) => sim.weaponOf(b, b.weapon.id).suppressed).map((b) => b.id));
     const botShots = events.filter((e) => e.type === "shot" && e.data.shooter !== "P" && !e.data.impactOnly);
-    ok(botShots.every((e) => !!e.data.suppressed === supIds.has(e.data.shooter) || !sim.state.bots.find((b) => b.id === e.data.shooter)),
+    // 2026-11 (AI lane): judged against the gun that FIRED the shot (its
+    // weaponId), not the one in hand at the end of the run — an operator that
+    // fired its suppressed secondary and then swapped back failed this check
+    // although every flag was right
+    const supOf = (e) => { const b = sim.state.bots.find((x) => x.id === e.data.shooter); return b && e.data.weaponId ? !!sim.weaponOf(b, e.data.weaponId).suppressed : supIds.has(e.data.shooter); };
+    ok(botShots.every((e) => !!e.data.suppressed === supOf(e) || !sim.state.bots.find((b) => b.id === e.data.shooter)),
       `operator shot events carry suppressed exactly when their gun is (${botShots.length} shots, ${supIds.size} suppressed shooters)`);
   }
   {

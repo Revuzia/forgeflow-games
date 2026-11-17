@@ -97,6 +97,61 @@ const CLUSTER_BAN_S = 20.0; // FFA per-actor cluster ban (modes §4.4)
 function d2h(ax, az, bx, bz) { const dx = ax - bx, dz = az - bz; return dx * dx + dz * dz; }
 function distH(a, b) { return Math.sqrt(d2h(a[0], a[2], b[0], b[2])); }
 
+// 2026-11 CTF fairness — each team's side of the map, from geometry alone:
+// the clusters clearly on its own half (centroid nearer its own stand than
+// 0.7 x the distance to the enemy stand) and not ON its own flag (centroid
+// >= CTF_SIDE_MIN_M from it). The two HOME clusters are chosen as a PAIR:
+// each near CTF_HOME_M from its own stand, and as alike as the map allows in
+// both the walk to defend and the walk to attack (|own_0 - own_1| and
+// |enemy_0 - enemy_1|, the latter weighted double), and as deep behind its
+// own flag as the map allows (see the depth term) — so neither team respawns
+// on top of its flag, or 15 m nearer the enemy's, while the other walks
+// (measured before: lanternwalk SLATE locked to a cluster 3 m from its own
+// flag vs AMBER's 20 m; saltmarket AMBER flipped to a cluster 34 m from the
+// ENEMY stand, because the authored side sets name lanternwalk clusters only
+// and the lock stood down on the other two maps). Returns null when the
+// arena has no two flag homes.
+const CTF_SIDE_MIN_M = 12.0, CTF_HOME_M = 24.0, CTF_DEPTH_W = 0.6;
+export function ctfSides(arena) {
+  const fl = arena && arena.flags;
+  if (!fl || fl.length < 2 || !arena.spawnPoints || !arena.spawnPoints.length) return null;
+  const homeOf = (team) => { const f = fl.find((x) => x.team === team); return f ? f.home : null; };
+  const h0 = homeOf(0), h1 = homeOf(1);
+  if (!h0 || !h1) return null;
+  const cen = {};
+  for (const p of arena.spawnPoints) {
+    const c = p.cluster || "SC_DEFAULT";
+    const e = cen[c] || (cen[c] = [0, 0, 0]);
+    e[0] += p.pos[0]; e[1] += p.pos[2]; e[2]++;
+  }
+  const ids = Object.keys(cen).sort();
+  const out = { sets: [[], []], home: [null, null] };
+  const meas = [[], []];
+  for (let team = 0; team < 2; team++) {
+    const own = team === 0 ? h0 : h1, foe = team === 0 ? h1 : h0;
+    for (const id of ids) {
+      const c = cen[id];
+      const p = [c[0] / c[2], 0, c[1] / c[2]];
+      const dO = distH(p, own), dE = distH(p, foe);
+      if (dO < CTF_SIDE_MIN_M || dO > 0.7 * dE) continue;
+      out.sets[team].push(id);
+      meas[team].push({ id, dO, dE });
+    }
+  }
+  let bestS = Infinity;
+  for (const a of meas[0]) for (const b of meas[1]) {
+    // + depth: prefer homes BEHIND their own flag (far from the enemy stand).
+    // A home in front of its flag turns every respawn into a wall across the
+    // stand (lanternwalk ARCADE/NORTH, 46-47 m from the enemy flag: 1.6 grabs
+    // and 0.6 captures a match; WEST/GALLERY, 62-64 m: 2.2 captures, 16 seeds)
+    const sc = Math.abs(a.dO - CTF_HOME_M) + Math.abs(b.dO - CTF_HOME_M) +
+      Math.abs(a.dO - b.dO) + 2 * Math.abs(a.dE - b.dE) - CTF_DEPTH_W * (a.dE + b.dE);
+    if (sc < bestS - 1e-9) { bestS = sc; out.home[0] = a.id; out.home[1] = b.id; }
+  }
+  if (!out.home[0] || !out.home[1]) return null;
+  return out;
+}
+
 export function makeSpawns(arena, opts = {}) {
   const allPoints = (arena && arena.spawnPoints ? arena.spawnPoints : []).map((p) => ({
     id: p.id,
@@ -126,6 +181,11 @@ export function makeSpawns(arena, opts = {}) {
 
   const homeClusters = Object.assign({}, opts.homeClusters || null); // team → clusterId
   const lockModes = opts.lockModes || ["ctf"]; // modes.md §4.3.2
+  // 2026-11 CTF fairness: a CTF director seeds each team's home from the
+  // geometric side rule (ctfSides above) unless the caller named homes, and
+  // trap flips stay on the team's own side
+  const ctfSide = opts.mode === "ctf" ? ctfSides(arena) : null;
+  if (ctfSide) for (let team = 0; team < 2; team++) if (homeClusters[team] == null) homeClusters[team] = ctfSide.home[team];
 
   const deathLog = [];      // {pos:[3], t, team, actorId}
   const explosions = [];    // {pos:[3], t}
@@ -268,6 +328,7 @@ export function makeSpawns(arena, opts = {}) {
     let best = null, bestV = -Infinity;
     for (const id in clusters) {
       if (id === enemyHome) continue;
+      if (ctfSide && lockActive(m) && ctfSide.sets[team] && ctfSide.sets[team].indexOf(id) < 0) continue;
       const c = clusters[id];
       let any = false, sum = 0, n = 0;
       for (const p of c.points) {
@@ -443,6 +504,39 @@ export function makeSpawns(arena, opts = {}) {
       + W.jitter * rng();
   }
 
+  // 2026-11 idle@wall: a spawn point authored against a prop (crate, drums,
+  // van) puts the operator's body in contact with it — it stands there through
+  // the 3 s warm-up freeze and again until its first orders after every
+  // respawn (expert_probe idle@wall: the largest single class). The point is
+  // stood off to the nearest walkable spot within 1.5 m whose operator-sized
+  // capsule (0.62 m) is clear, computed ONCE per point (deterministic, no
+  // rng; the authored position is kept when nothing better is in reach or the
+  // sim has no world/nav yet). Every veto and score still uses the authored
+  // point; only the body is placed off the prop.
+  const SPAWN_CLEAR_R = 0.62;
+  function openPosOf(m, p) {
+    if (p._open) return p._open;
+    const W = m.world, N = m.nav;
+    if (!W || !W.capsuleBlocked || !N || !N.openSpot) return p.pos;
+    const y = p.pos[1] || 0;
+    if (!W.capsuleBlocked(p.pos[0], y, p.pos[2], SPAWN_CLEAR_R, 1.7)) { p._open = p.pos; return p._open; }
+    let best = null, bd = Infinity;
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      for (const r of [0.35, 0.6, 0.9, 1.2, 1.5]) {
+        const x = p.pos[0] + Math.cos(a) * r, z = p.pos[2] + Math.sin(a) * r;
+        if (r >= bd) break;
+        if (W.capsuleBlocked(x, y, z, SPAWN_CLEAR_R, 1.7)) continue;
+        if (N.clearAt && N.clearAt([x, y, z]) < 0) continue; // off the walkable mesh
+        if (N.lineClear && !N.lineClear(p.pos, [x, y, z], 0)) continue;
+        best = [x, y, z]; bd = r;
+        break;
+      }
+    }
+    p._open = best || p.pos;
+    return p._open;
+  }
+
   // -- the pick --------------------------------------------------------------
   function pick(m, actor) {
     const t = mTime(m);
@@ -494,7 +588,8 @@ export function makeSpawns(arena, opts = {}) {
       if (best) {
         record(m, actor, best, t, ffa, st);
         counters.picks++; counters.stressSum += rung;
-        return { pointId: best.id, pos: [best.pos[0], best.pos[1], best.pos[2]], yaw: best.yaw, stress: rung, protectS: null };
+        const op = openPosOf(m, best);
+        return { pointId: best.id, pos: [op[0], op[1], op[2]], yaw: best.yaw, stress: rung, protectS: null };
       }
     }
 

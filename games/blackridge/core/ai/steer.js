@@ -167,27 +167,63 @@ export function followPath(sim, nav, bot, brain, dt) {
     // past the waypoint but its projection onto the previous leg is still < 1,
     // so a carrot anchored there lands BEHIND the bot and it turns back
     // (nav_probe: a 3-waypoint-long oscillation at a 120 deg final leg).
+    // 2026-11 review: a waypoint is only PASSED when the next one is in
+    // capsule-clear line from where the bot actually stands. The old rule
+    // (projection past B, or within 0.5 m of it) let a bot that had been
+    // pushed off the corner line (separation, a nudge, momentum) drop B and
+    // aim at C through the very corner B was there to round — nav_probe
+    // skipWP 105-505 per 300 routes, and most snag episodes started there.
+    // Checked at most once per waypoint per 0.1 s (lineClear is the cost).
     while (i < path.length - 1) {
       const A = path[i - 1], B = path[i];
       const sx = B[0] - A[0], sz = B[2] - A[2];
       const L2 = sx * sx + sz * sz;
       const u = L2 > 1e-6 ? ((px - A[0]) * sx + (pz - A[2]) * sz) / L2 : 1;
-      if (u >= 1 || hd(px, pz, B[0], B[2]) < REACH) { i++; continue; }
+      let adv = u >= 1 || hd(px, pz, B[0], B[2]) < REACH;
       // is the NEXT leg clearly closer than this one? (bot already beyond the corner)
       const C = path[i + 1];
-      const tx2 = C[0] - B[0], tz2 = C[2] - B[2];
-      const M2 = tx2 * tx2 + tz2 * tz2;
-      if (M2 > 1e-6) {
-        let u2 = ((px - B[0]) * tx2 + (pz - B[2]) * tz2) / M2;
-        u2 = u2 < 0 ? 0 : (u2 > 1 ? 1 : u2);
-        const d2 = hd(px, pz, B[0] + tx2 * u2, B[2] + tz2 * u2);
-        let u1 = u < 0 ? 0 : u;
-        const d1 = hd(px, pz, A[0] + sx * u1, A[2] + sz * u1);
-        if (d2 + 0.05 < d1 && u2 > 0.02) { i++; continue; }
+      if (!adv) {
+        const tx2 = C[0] - B[0], tz2 = C[2] - B[2];
+        const M2 = tx2 * tx2 + tz2 * tz2;
+        if (M2 > 1e-6) {
+          let u2 = ((px - B[0]) * tx2 + (pz - B[2]) * tz2) / M2;
+          u2 = u2 < 0 ? 0 : (u2 > 1 ? 1 : u2);
+          const d2 = hd(px, pz, B[0] + tx2 * u2, B[2] + tz2 * u2);
+          let u1 = u < 0 ? 0 : u;
+          const d1 = hd(px, pz, A[0] + sx * u1, A[2] + sz * u1);
+          if (d2 + 0.05 < d1 && u2 > 0.02) adv = true;
+        }
       }
-      break;
+      if (!adv) break;
+      if (nav && nav.lineClear && hd(px, pz, B[0], B[2]) > 0.12) {
+        const tNow = sim.state.time;
+        const same = brain._advI === i && brain._advPath === path;
+        if (!same) brain._advT0 = tNow;
+        // safety valve: never hold one waypoint longer than 0.8 s this way
+        if (!(same && tNow - brain._advT0 > 0.8)) {
+          if (same && tNow < brain._advT) break;
+          if (!nav.lineClear(bot.pos, C, 0)) {
+            brain._advI = i; brain._advPath = path; brain._advT = tNow + 0.1;
+            break;
+          }
+        }
+      }
+      i++;
     }
     brain.pathI = i;
+    // 2026-11 review: a path can END SHORT of its goal (the goal sits off the
+    // mesh / inside a prop's footprint and is not line-reachable from the
+    // last node, so findPath does not append it). Standing on that last node
+    // the bot used to orbit it forever, 0.8-1.5 m from a goal it could not
+    // reach (expert_probe saltmarket ctf: a stand defender, 'stuck' 5 s+ on
+    // every visit). At the end of the route, within 2 m of the goal: arrived.
+    if (i === path.length - 1) {
+      const E = path[i];
+      if (hd(px, pz, E[0], E[2]) < 0.35 && hd(E[0], E[2], goal[0], goal[2]) > 0.4 && dGoal < 2.0) {
+        brain.arrived = true;
+        return false;
+      }
+    }
     const A = path[i - 1], B = path[i];
     const sx = B[0] - A[0], sz = B[2] - A[2];
     const L2 = sx * sx + sz * sz;
@@ -208,6 +244,20 @@ export function followPath(sim, nav, bot, brain, dt) {
     } else {
       pointAt(path, cum, i, s0 + look, car); found = true;
     }
+    // 2026-11 review: when no padded carrot is clear (a door slit / 1 m lane
+    // the 0.10 pad cannot fit), try an unpadded one, and failing that steer
+    // BACK ONTO THE PATH LINE (a point 0.35 m ahead of the bot's projection)
+    // instead of beelining to the next waypoint. Path legs are capsule-clear
+    // (nav_probe badSeg 0); the bot standing 5-10 cm beside one is not, and
+    // the beeline kept that offset into the gap: the square footprint hit the
+    // corner's end face and stopped dead (lanternwalk n_hoard_w / van slit,
+    // 0.72 m wide: 98% of snag ticks were this fallback).
+    if (!found && nav && nav.lineClear) {
+      pointAt(path, cum, i, s0 + look * 0.55, car);
+      if (nav.lineClear(bot.pos, car, 0)) found = true;
+      else { pointAt(path, cum, i, s0 + 0.35, car); found = true; brain._carLine = true; }
+    }
+    brain._carOk = found;
     if (found) { tx = car[0]; tz = car[2]; ty = car[1]; }
     else { tx = B[0]; tz = B[2]; ty = B[1]; }
   } else if (path === null && nav) {
@@ -239,8 +289,19 @@ export function followPath(sim, nav, bot, brain, dt) {
   // this a squad walks THROUGH itself and stacks inside doorways)
   const bots = sim.state.bots;
   let rx = 0, rz = 0;
-  for (let i = 0; i < bots.length; i++) {
-    const o = bots[i];
+  // 2026-11 review: the human body counts too (it was invisible to this
+  // loop, so team-mates walked through the player and parked in the doorway
+  // the player stood in), and a body AHEAD in the same direction of travel is
+  // queued behind instead of squeezed past (2026-11: 0.85 m / 0.67 s, was
+  // 0.75 m / 0.4 s; meridian squad overlaps while travelling 41 -> 27): a 1-tick hold while a lower-id
+  // body (or the player) is < 0.85 m ahead inside a 40 deg cone and not
+  // walking toward us. Lower id never yields to higher, so a queue cannot
+  // deadlock; head-on meetings are left to the lateral separation below.
+  const pl = sim.state.player;
+  const nO = bots.length + (pl && pl.alive && pl.pos ? 1 : 0);
+  let yieldTo = false;
+  for (let i = 0; i < nO; i++) {
+    const o = i < bots.length ? bots[i] : pl;
     if (o === bot || !o.alive) continue;
     const ex = px - o.pos[0], ez = pz - o.pos[2];
     if (ex > SEP_R || ex < -SEP_R || ez > SEP_R || ez < -SEP_R) continue;
@@ -251,8 +312,25 @@ export function followPath(sim, nav, bot, brain, dt) {
     if (d < 0.05) { // exactly stacked: split by id parity, perpendicular to travel
       const sg = (bot.id & 1) ? 1 : -1;
       rx += -dz * sg * w; rz += dx * sg * w;
-    } else { rx += (ex / d) * w; rz += (ez / d) * w; }
+    } else {
+      rx += (ex / d) * w; rz += (ez / d) * w;
+      if (!yieldTo && d < 0.85 && (o === pl || o.id < bot.id)) {
+        const ahead = -(ex * dx + ez * dz) / d; // cos of the angle to o vs travel
+        if (ahead > 0.77) {
+          const ov = o.vel || [0, 0, 0];
+          if (ov[0] * dx + ov[2] * dz > -0.5) yieldTo = true; // not coming at us
+        }
+      }
+    }
   }
+  if (yieldTo && (brain.yieldN | 0) < 40) { // never more than 0.67 s in a row
+    brain.yieldN = (brain.yieldN | 0) + 1;
+    brain.mvActive = false;
+    brain.yielding = true;
+    return false;
+  }
+  if (!yieldTo) brain.yieldN = 0;
+  brain.yielding = false;
   if (rx !== 0 || rz !== 0) {
     // only the lateral part may oppose travel (a corridor head-on must not
     // freeze both bots); anything pushing along/against dir is damped
@@ -280,6 +358,50 @@ export function stepTo(bot, brain, tx, tz) {
   brain.moveYaw = Math.atan2(-brain.mvx, -brain.mvz);
   brain.mvActive = true;
   return d;
+}
+
+// 2026-11 review: a STANDING bot that has another body (bot or the human)
+// inside 0.6 m on its floor steps out to ~0.9 m. Arrival / hold / cover
+// points are chosen per bot, and two of them (or the player's own spot) can
+// coincide: nav_probe --squad counted ~1/3 of its body overlaps at the
+// goals, i.e. two operators parked inside each other. Lower id stays put
+// (one of a pair moves), the step must be capsule-clear, never more than
+// once per 0.25 s. Returns true when it wrote a move.
+export function spaceOut(sim, nav, bot, brain) {
+  const t = sim.state.time;
+  if (brain.spaceT != null && t < brain.spaceT) return brain.spaceOn === true && t < brain.spaceUntil && stepTo(bot, brain, brain.spaceTo[0], brain.spaceTo[2]) > 0.08;
+  brain.spaceT = t + 0.25;
+  brain.spaceOn = false;
+  const bots = sim.state.bots, pl = sim.state.player;
+  const px = bot.pos[0], pz = bot.pos[2];
+  let ax = 0, az = 0, n = 0;
+  const nO = bots.length + (pl && pl.alive && pl.pos ? 1 : 0);
+  for (let i = 0; i < nO; i++) {
+    const o = i < bots.length ? bots[i] : pl;
+    if (o === bot || !o.alive) continue;
+    if (o !== pl && o.id > bot.id) continue;
+    const ex = px - o.pos[0], ez = pz - o.pos[2];
+    if (ex > 0.6 || ex < -0.6 || ez > 0.6 || ez < -0.6) continue;
+    if (Math.abs(bot.pos[1] - o.pos[1]) > 1.2) continue;
+    const d = Math.sqrt(ex * ex + ez * ez);
+    if (d >= 0.6) continue;
+    if (d < 0.02) { const a = (bot.id * 2.399963) % 6.283; ax += Math.cos(a); az += Math.sin(a); }
+    else { ax += ex / d; az += ez / d; }
+    n++;
+  }
+  if (!n || !nav || !nav.lineClear) return false;
+  const l = Math.hypot(ax, az) || 1;
+  ax /= l; az /= l;
+  for (const rot of [0, 0.9, -0.9, 1.6, -1.6]) {
+    const c = Math.cos(rot), s = Math.sin(rot);
+    const dx = ax * c - az * s, dz = ax * s + az * c;
+    const tp = [px + dx * 0.55, bot.pos[1], pz + dz * 0.55];
+    if (nav.lineClear(bot.pos, tp, 0.02)) {
+      brain.spaceTo = tp; brain.spaceOn = true; brain.spaceUntil = t + 0.4;
+      return stepTo(bot, brain, tp[0], tp[2]) > 0.08;
+    }
+  }
+  return false;
 }
 
 // ------------------------------------------------------------- stuck ladder

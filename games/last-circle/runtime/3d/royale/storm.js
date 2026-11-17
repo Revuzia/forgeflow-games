@@ -73,6 +73,8 @@ const TINT_SKY_TOP = 0x7662a6;              // a touch deeper overhead, the same
 const TINT_FOG_DENS_K = 1.5, TINT_FOG_DENS_ADD = 0.0006;   // FogExp2 density: base * k + add at full tint
 const N_BOLTS = 6;
 const ALPHA_CAP = 0.40;                     // a silhouette 20 m behind the wall keeps >= 60 % of its contrast
+const WALL_FAR = [700, 1100];               // W10 R2A: the whole wall fades out between these camera distances (m; desktop medium+). Was 420-700: the far end of a tangent view along the closing wall (stormfx_storm phase2/tangent) lost its ground band (19.9-20.5 vs the 20/255 bar; 29.4 with no fade)
+const WALL_FADE_IN_S = 4;                   // W10 R2A: ... and in over its first seconds once circle 1 starts closing
 // Wall palette. base = the dense violet layer hugging the ground (alpha at the cap up to baseH0 m, blending
 // into the curtain by baseH1 m); band = the 0-bandH m line where the wall meets the ground; streak = the hue
 // of the falling streaks, whose BRIGHTNESS is streakGain x the curtain luminance under them (glare bar <= 2x).
@@ -145,6 +147,7 @@ uniform vec4 uFar;          // P1-E distance fade: x, y = camera distance (m) of
 uniform vec2 uStreakFar;    // P1-E: camera distance (m) where the streaks start / finish fading out
 uniform vec4 uFine;         // R1 near rain: x = spacing (m), y = strength, z = glow share, w = hash cut (cells without a line)
 uniform vec2 uFineUp;       // R1 near rain: metres where its haze thinning starts / is full (lower than the big streaks' base -> curtain blend)
+uniform vec3 uVis;          // W10 R2A: x, y = camera distance (m) where the whole wall fades out (desktop medium+); z = its fade-in after circle 1 starts closing
 varying vec2 vUv;
 varying vec3 vW;
 
@@ -245,6 +248,10 @@ void main() {
   float aS = mix( a, a * mix( 1.0, uStreakAlpha, up ), sk );          // the dense base stays dense: the big streaks there only glow
   float aF = mix( a, a * mix( 1.0, uStreakAlpha, smoothstep( uFineUp.x, uFineUp.y, hA ) ), skF );
   a = min( aS, aF );
+  // W10 R2A (visuals 4): the wall fades out with the camera's distance (no lilac band on a far horizon) and in over its first seconds. Low / touch:
+  // uVis = ( 1e9, 2e9, 1 ) -> exactly 1.0 (bit-identical)
+  float lvis = uVis.z * ( 1.0 - smoothstep( uVis.x, uVis.y, dC ) );
+  rgb *= lvis; a *= lvis;
   gl_FragColor = vec4( rgb, a );                                      // premultiplied
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -411,6 +418,7 @@ export function createStorm(W) {
       uStreakFar: { value: new THREE.Vector2(PAL.streakD0, PAL.streakD1) },
       uFine: { value: new THREE.Vector4(PAL.fineM, PAL.fineK, PAL.fineGlow, PAL.fineP) },
       uFineUp: { value: new THREE.Vector2(PAL.fineH0, PAL.fineH1) },
+      uVis: { value: new THREE.Vector3(1e9, 2e9, 1) },
     },
     vertexShader: WALL_VS, fragmentShader: WALL_FS,
     transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending,
@@ -449,7 +457,7 @@ export function createStorm(W) {
   const ctl = {
     storm, wall, bolts, tex: lut, lut, lutData, wallMat, boltMat, boltTex, boltGeo, wallGeo,
     lutT: -99, lutCx: 1e9, lutCz: 1e9, lutR: -1, lutRefreshes: 0,
-    lastPhase: 0, tickAcc: 0, warned: {},
+    lastPhase: 0, tickAcc: 0, warned: {}, visT: 0,
     bolt: [], boltCount: 0,
     camInside: true,
     _disposed: false,
@@ -502,7 +510,16 @@ export function update(W, dt) {
   // wall follows the live circle — hidden while the pre-shrink super-circle
   // still surrounds the whole map (a wall past the coastline just reads as
   // white streaks on the horizon everywhere)
-  if (st.radius > 0.5 && st.radius < W.map.half * 1.02) {
+  // W10 R2A (visuals 4, owner default 2; desktop medium+): no wall on the horizon before circle 1 starts closing - the band stood in every pre-storm
+  // view and read as a rendering fault. Then it fades in over WALL_FADE_IN_S and fades out with the camera's distance (WALL_FAR). Low / touch: as before.
+  const v10 = W.gfxTier !== "low" && !(W._gfx && W._gfx.touch);
+  const early = v10 && (st.phase < 1 || (st.phase === 1 && !st.closing));
+  // the fade-in runs on the STORM's clock (seconds since circle 1 began to close), not on accumulated frames: a seek / fast-forward lands on the same wall
+  const tl0 = ctl.storm.timeline && ctl.storm.timeline[0];
+  ctl.visT = early ? 0 : (tl0 ? Math.max(0, W.t - tl0.shrinkStart) : WALL_FADE_IN_S);
+  const vu = ctl.wallMat.uniforms.uVis.value;
+  if (v10) vu.set(WALL_FAR[0], WALL_FAR[1], Math.min(1, ctl.visT / WALL_FADE_IN_S)); else vu.set(1e9, 2e9, 1);
+  if (!early && st.radius > 0.5 && st.radius < W.map.half * 1.02) {
     ctl.wall.visible = true;
     ctl.wall.position.x = st.center.x;
     ctl.wall.position.z = st.center.z;

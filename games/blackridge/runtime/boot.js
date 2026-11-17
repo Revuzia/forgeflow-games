@@ -283,6 +283,8 @@ try {
   // miscount there cross-wires two modules silently.
   const { createKillCam } = await import(`../core/render/killcam.js${V}`);
   const killcam = createKillCam(ctx);
+  // [a11] first-person lower body + the player's own shadow (view only)
+  const { createFpBody } = await import(`../core/chars/fp_body.js${V}`);
   // Loot + weapon slots + kill streaks: HUD bar/tray/medals, the world loot models,
   // the call-in lead-in effects, and their small synthesized cues. Own modules,
   // imported separately for the same reason as the kill cam (index-matched
@@ -337,6 +339,7 @@ try {
   const recoil = createRecoil(input);
   const fx = createFx(ctx);
   const soldiers = createSoldiers(ctx);
+  const fpBody = createFpBody(ctx, { killcam }); // [a11]
   const audio = createAudio(ctx);
   const hud = createHud(ctx);
   const ldHud = createLoadoutHud(ctx);
@@ -777,6 +780,7 @@ try {
     // [killcam replay] while a replay is on screen the soldiers draw the
     // recorded clip (killcam swaps ctx.sim for that one call); else live.
     if (!killcam.driveSoldiers(soldiers, dt)) soldiers.update(dt, alpha);
+    fpBody.update(dt, alpha); // [a11] after the camera + killcam: hidden while either owns the view
     fx.update(dt);
     hud.update(dt);
     ldHud.update(dt);
@@ -949,6 +953,7 @@ try {
     minimap, // [minimap lane] stats() / toggleFull() for checks
     callouts, nameplates, // [identity lane] log / stats() for checks
     killcam, // [killcam replay] state()/skip() for checks
+    fpBody, // [a11] first-person body: stats() for checks
     settings: S,
     version: `v${VN}`, // MUST equal the boot.js?v number
     _bridge: bridge, // private extra (v2.2): harness/diagnostic event taps —

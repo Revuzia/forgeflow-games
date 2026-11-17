@@ -1,0 +1,8 @@
+lanternwalk n=8 flips/min 1.97  neutralised 22 (/min 0.69)  by cause {"holderKilled":10,"onlyTravelling":12}  by zone(loser's view) {"own":6,"enemy":3,"centre":13}  owned-before-loss median 56 s, <20 s 1/22  attackers inside (max) mean 1.45
+            holder deaths 148 (4.63/min): in ring 68, killer in ring 13, killer distance median 21.4 m
+switchyard  n=8 flips/min 2.19  neutralised 25 (/min 0.78)  by cause {"holderKilled":16,"onlyTravelling":6,"holderAliveLeft":3}  by zone(loser's view) {"own":6,"enemy":3,"centre":16}  owned-before-loss median 39 s, <20 s 6/25  attackers inside (max) mean 1.44
+            holder deaths 98 (3.06/min): in ring 59, killer in ring 16, killer distance median 12.9 m
+saltmarket  n=8 flips/min 1.91  neutralised 20 (/min 0.63)  by cause {"holderKilled":14,"onlyTravelling":5,"holderAliveLeft":1}  by zone(loser's view) {"centre":18,"own":1,"enemy":1}  owned-before-loss median 49 s, <20 s 5/20  attackers inside (max) mean 1.65
+            holder deaths 89 (2.78/min): in ring 44, killer in ring 13, killer distance median 11.4 m
+
+dom_probe  secs=240 seeds=8  AI avg 0.258 ms/tick  wall 215 s

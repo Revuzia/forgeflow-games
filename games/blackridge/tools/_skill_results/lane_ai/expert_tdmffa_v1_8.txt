@@ -1,0 +1,46 @@
+lanternwalk tdm n=8 ended 8/8  kills/min  13.9  acc 32.8%  ttk 1.60s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.78  frag/min 1.89  pick/m 30.9  idle@wall 0.5%  rev/100 1.14
+  STUCK {"t":3.3,"id":5,"st":"suspicious","pos":[-40.68,0,-14.45],"goal":[-28.5,0,13.5],"pathI":1,"n":8,"wp":[-35.88,0,-12.63],"v":0.87,"yield":false,"yieldN":0,"stuckN":0,"space":false}
+lanternwalk ffa n=8 ended 8/8  kills/min  25.4  acc 43.9%  ttk 0.84s  stuck>3s/match 0.13  worstIdle 2s  flank/min 0.66  frag/min 2.29  pick/m 25.9  idle@wall 0.6%  rev/100 0.93
+switchyard  tdm n=8 ended 8/8  kills/min  17.7  acc 58.6%  ttk 0.71s  stuck>3s/match 0.00  worstIdle 3s  flank/min 0.94  frag/min 2.42  pick/m 42.0  idle@wall 0.6%  rev/100 1.06
+switchyard  ffa n=8 ended 8/8  kills/min  26.6  acc 70.5%  ttk 0.69s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.66  frag/min 2.05  pick/m 26.6  idle@wall 0.0%  rev/100 0.79
+saltmarket  tdm n=8 ended 8/8  kills/min  18.5  acc 49.3%  ttk 0.73s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.94  frag/min 1.84  pick/m 46.8  idle@wall 0.7%  rev/100 0.66
+saltmarket  ffa n=8 ended 8/8  kills/min  28.7  acc 56.2%  ttk 0.75s  stuck>3s/match 0.00  worstIdle 2s  flank/min 0.66  frag/min 2.09  pick/m 39.3  idle@wall 0.2%  rev/100 0.86
+
+expert_probe  difficulty=expert  secs=180  seeds=8  AI avg 0.511 ms/tick  wall 554 s
+  x {"t":161,"id":40,"k":"alert|lane/lane/p0.80|clr0|notArrived|idle-|age3+|goalP7","pos":[-20.25,0,14.23],"goal":[-33.5,0,12],"anchor":[-33.5,0,12],"box":"ps_skip","goalClr":2,"mv":true,"pathI":1,"wp":[-23.13,0,14.3],"loot":false,"detour":false,"think":0.17,"cmd":[0.98,0.2],"yld":false}
+  x {"t":30.3,"id":11,"k":"alert|attack/lane/p0.80|clr0|notArrived|idle-|age<3|goalP4","pos":[-22.25,0,18.72],"goal":[-34,0,13.5],"anchor":[-34,0,13.5],"box":"yd_c1m","goalClr":1,"mv":true,"pathI":1,"wp":[-24.88,0,18.38],"loot":false,"detour":false,"think":0.2,"cmd":[-0.95,0.33],"yld":false}
+  x {"t":170.5,"id":51,"k":"alert|attack/lane/p0.80|clr0|notArrived|idle-|age<1|goalP3","pos":[-36.2,0,25.12],"goal":[-28.63,0,28.13],"anchor":[-28,0,28],"box":"os_c28m","goalClr":1,"mv":true,"pathI":1,"wp":[-33.13,0,25.13],"loot":false,"detour":false,"think":0.3,"cmd":[-0.95,0.3],"yld":false}
+  x {"t":70,"id":18,"k":"alert|lane/lane/p0.80|clr0|notArrived|idle-|age3+|goalP8","pos":[-22.37,0,13.39],"goal":[-15.9,0,-4],"anchor":[-34,0,13.5],"box":"yd_p16~move","goalClr":1,"mv":true,"pathI":1,"wp":[-21.13,0,10.88],"loot":true,"detour":false,"think":0.07,"cmd":[1,0],"yld":false}
+  x {"t":34.8,"id":11,"k":"alert|lane/lane/p0.80|clr0|arrived|idle-|age3+|goalnoPath","pos":[-12.49,0,-8.78],"goal":[-5,2.8,-11.75],"anchor":[-5,2.8,-11.75],"box":"ctr_hall","goalClr":0,"mv":false,"pathI":0,"wp":null,"loot":false,"detour":false,"think":0.25,"cmd":[0,0],"yld":false}
+  x {"t":134,"id":52,"k":"alert|lane/lane/p0.60|clr0|notArrived|idle-|age<1|goalP11|yield","pos":[-20.04,0,-8.45],"goal":[-16.63,0,3.88],"anchor":[-24,0,-6],"box":"vc_w_1","goalClr":1,"mv":false,"pathI":6,"wp":[-19.38,0,-8.38],"loot":true,"detour":false,"think":0.12,"cmd":[0,0],"yld":true}
+  x {"t":62.8,"id":18,"k":"alert|lane/lane/p0.80|clr0|arrived|idle-|age<1|goalnoPath","pos":[-5.16,0,-12.57],"goal":[3,2.8,-11.75],"anchor":[3,2.8,-11.75],"box":"gw_n_2","goalClr":1,"mv":false,"pathI":0,"wp":null,"loot":false,"detour":false,"think":0.1,"cmd":[0,0],"yld":false}
+  x {"t":63,"id":18,"k":"alert|lane/lane/p0.80|clr0|arrived|idle-|age<1|goalnoPath","pos":[-5.16,0,-12.57],"goal":[3,2.8,-11.75],"anchor":[3,2.8,-11.75],"box":"gw_n_2","goalClr":1,"mv":false,"pathI":0,"wp":null,"loot":false,"detour":false,"think":0.35,"cmd":[0,0],"yld":false}
+  x {"t":102.3,"id":32,"k":"alert|lane/lane/p0.80|clr0|arrived|idle-|age<1|goalnoPath","pos":[-5.14,0,-12.59],"goal":[3,2.8,-11.75],"anchor":[3,2.8,-11.75],"box":"gw_n_2","goalClr":1,"mv":false,"pathI":0,"wp":null,"loot":false,"detour":false,"think":0.08,"cmd":[0,0],"yld":false}
+  x {"t":102.5,"id":32,"k":"alert|lane/lane/p0.80|clr0|arrived|idle-|age<1|goalnoPath","pos":[-5.14,0,-12.59],"goal":[3,2.8,-11.75],"anchor":[3,2.8,-11.75],"box":"gw_n_2","goalClr":1,"mv":false,"pathI":0,"wp":null,"loot":false,"detour":false,"think":0.33,"cmd":[0,0],"yld":false}
+  x {"t":120,"id":36,"k":"alert|trade/freeform/p0.80|clr0|arrived|idle-|age<1|goalP16","pos":[-5.13,0,-12.59],"goal":[-5,0,-14],"anchor":[-9,0,-3],"box":"gw_n_2","goalClr":0,"mv":false,"pathI":15,"wp":[-5.13,0,-12.59],"loot":true,"detour":false,"think":0.32,"cmd":[0,0],"yld":false}
+  x {"t":122.8,"id":42,"k":"alert|attack/lane/p0.80|clr0|notArrived|idle-|age<1|goalP5","pos":[21.81,0,3.05],"goal":[16.63,0,11.13],"anchor":[16.26,0,11.22],"box":"m_pr_crate_4","goalClr":1,"mv":true,"pathI":1,"wp":[22.63,0,5.13],"loot":false,"detour":false,"think":0.03,"cmd":[-0.73,-0.68],"yld":false}
+  idle@wall 8 patrol|lane/lane/p0.80|clr0|arrived|idle0|age3+|goalP3
+  idle@wall 8 patrol|attack/lane/p0.80|clr0|arrived|idle0|age3+|goalP3
+  idle@wall 5 alert|lane/lane/p0.80|clr0|arrived|idle-|age<1|goalnoPath
+  idle@wall 4 patrol|lane/lane/p0.45|clr0|arrived|idle0|age3+|goalP5
+  idle@wall 4 patrol|attack/lane/p0.80|clr0|arrived|idle1|age3+|goalP3
+  idle@wall 4 patrol|lane/lane/p0.45|clr0|arrived|idle0|age3+|goalnoPath
+  idle@wall 3 patrol|lane/lane/p0.80|clr0|arrived|idle1|age3+|goalP3
+  idle@wall 3 patrol|lane/lane/p0.75|clr0|arrived|idle0|age3+|goalP4
+  idle@wall 2 patrol|lane/lane/p0.80|clr0|arrived|idle-|age3+|goalP3
+  idle@wall 2 patrol|attack/lane/p0.80|clr0|arrived|idle-|age3+|goalP3
+  idle@wall 2 alert|attack/lane/p0.45|clr0|notArrived|idle-|age<1|goalP18|yield
+  idle@wall 2 alert|attack/lane/p0.80|clr0|arrived|idle-|age<1|goalnoPath
+  idle@wall 1 alert|lane/lane/p0.80|clr0|notArrived|idle-|age3+|goalP7
+  idle@wall 1 patrol|lane/lane/p0.75|clr0|arrived|idle-|age3+|goalP4
+  idle@wall 1 patrol|lane/lane/p0.45|clr0|arrived|idle-|age3+|goalP5
+  idle@wall 1 patrol|lane/lane/p0.75|clr0|arrived|idle0|age3+|goalP5
+  idle@wall 1 alert|attack/lane/p0.80|clr0|notArrived|idle-|age<3|goalP4
+  idle@wall 1 alert|attack/lane/p0.80|clr0|notArrived|idle-|age<1|goalP3
+  idle@wall 1 alert|lane/lane/p0.80|clr0|notArrived|idle-|age3+|goalP8
+  idle@wall 1 alert|lane/lane/p0.80|clr0|arrived|idle-|age3+|goalnoPath
+  idle@wall 1 alert|lane/lane/p0.60|clr0|notArrived|idle-|age<1|goalP11|yield
+  idle@wall 1 alert|trade/freeform/p0.80|clr0|arrived|idle-|age<1|goalP16
+  idle@wall 1 alert|attack/lane/p0.80|clr0|notArrived|idle-|age<1|goalP5
+  idle@wall 1 alert|lane/lane/p0.80|clr0|arrived|idle-|age<1|goalP7
+  idle@wall 1 alert|lane/lane/p0.80|clr0|arrived|idle-|age<1|goalP8

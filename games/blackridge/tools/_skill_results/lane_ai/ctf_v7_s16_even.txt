@@ -1,0 +1,13 @@
+lanternwalk n=16  caps/match 0.56 (caps by team 3:6, team-0 match share 41%)  carried 6% both 0% (carrier holding near stand 2% of carried time)
+            carrier deaths 17 (1.1/match) by quarter home [11,6,0,0]  could score 16/17  killer order {"attack":12,"lane":5}  killer->carrier's stand median 53 m, killer->carrier 6 m  own mates within 15 m 0.06
+            top killer reasons attack/CUTOFF_INFEASIBLE 7, lane/LANE_QUOTA 5, attack/ATTACK_FLAG 5
+            drops 1.1/match: re-grabbed by the carrier's side 0.0, returned by touch 1.1  escorts: samples 245, median distance to carrier 13.9 m, ahead of carrier 54%
+switchyard  n=16  caps/match 1.31 (caps by team 13:8, team-0 match share 63%)  carried 16% both 3% (carrier holding near stand 37% of carried time)
+            carrier deaths 41 (2.6/match) by quarter home [27,7,4,3]  could score 30/41  killer order {"attack":17,"defend":5,"lane":16,"intercept":2,"carry":1}  killer->carrier's stand median 56 m, killer->carrier 8 m  own mates within 15 m 0.20
+            top killer reasons lane/LANE_QUOTA 16, attack/CUTOFF_INFEASIBLE 12, attack/ATTACK_FLAG 5, defend/DEFEND_STAND 4, intercept/HUNT 2, defend/CLEAR_STAND 1
+            drops 2.6/match: re-grabbed by the carrier's side 0.1, returned by touch 2.4  escorts: samples 711, median distance to carrier 13.5 m, ahead of carrier 43%
+saltmarket  n=16  caps/match 0.44 (caps by team 4:3, team-0 match share 53%)  carried 13% both 0% (carrier holding near stand 4% of carried time)
+            carrier deaths 27 (1.7/match) by quarter home [10,15,0,2]  could score 22/27  killer order {"lane":11,"attack":14,"carry":2}  killer->carrier's stand median 58 m, killer->carrier 10 m  own mates within 15 m 0.22
+            top killer reasons attack/ATTACK_FLAG 13, lane/LANE_QUOTA 11, carry/HOLD_NEAR_STAND 2, attack/CUTOFF_INFEASIBLE 1
+            drops 1.7/match: re-grabbed by the carrier's side 0.0, returned by touch 1.6  escorts: samples 911, median distance to carrier 27.7 m, ahead of carrier 54%
+ctf_probe --even (one SLATE operator benched)  secs=180 seeds=16  AI avg 0.349 ms/tick  OBJ 0.043 ms/tick  wall 136 s

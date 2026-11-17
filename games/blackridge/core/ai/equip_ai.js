@@ -227,7 +227,8 @@ export function react(sim, bot, brain, c, dt, t, rng, band, ctx) {
         brain.curYaw = ay;
         c.pitch = ap;
         const w = sim.weapons[bot.weapon.id];
-        if (w && w.auto) c.fire = true; else { brain.semiToggle = !brain.semiToggle; c.fire = brain.semiToggle; }
+        if (w && w.class === "launcher") { /* [heavy weapons] no blind rockets */ }
+        else if (w && w.auto) c.fire = true; else { brain.semiToggle = !brain.semiToggle; c.fire = brain.semiToggle; }
       }
     } else {
       // stagger: the head swings off the line, slowly
@@ -299,7 +300,7 @@ export function react(sim, bot, brain, c, dt, t, rng, band, ctx) {
         if (inCone && nd < EQUIP.CLAYMORE.TRIGGER_R + 1.2) c.moveZ = -1;
         const onTarget = Math.abs(angDiff(brain.curYaw, ay)) < 2.5 * DEG;
         const w = sim.weapons[bot.weapon.id];
-        if (onTarget && w && bot.weapon.mag > 0 && bot.weapon.state !== "reloading" && bot.weapon.state !== "switching" &&
+        if (onTarget && w && w.class !== "launcher" && bot.weapon.mag > 0 && bot.weapon.state !== "reloading" && bot.weapon.state !== "switching" &&
             !sim.world.losBlocked(eye, cpos)) {
           brain.semiToggle = !brain.semiToggle;
           c.fire = w.auto ? true : brain.semiToggle;

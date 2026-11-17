@@ -252,11 +252,16 @@ function atlasTexture() {
   // ---- cell 1: SCORCH (explosions.js) ------------------------------------
   function scorch(cell) {
     const x0 = cell * CELL;
+    // [fx v152] SOOT IS BLACK. The decal shader writes the texel straight to
+    // the (linear) frame, and the post chain's sRGB encode lifts 6/255 to ~40/255
+    // — brighter than wet night cobbles — so every scorch rendered as a pale
+    // brown rug laid over the street (fx/scorch_after.png vs scorch_nodecal.png).
+    // Pure black blots darken by alpha only; the soot's spread is in the alpha.
     const blot = (x, y, r, a) => {
       const s2 = g.createRadialGradient(x, y, 1, x, y, r);
-      s2.addColorStop(0, `rgba(6,6,6,${a})`);
-      s2.addColorStop(0.6, `rgba(10,9,8,${a * 0.55})`);
-      s2.addColorStop(1, "rgba(12,11,10,0)");
+      s2.addColorStop(0, `rgba(0,0,0,${a})`);
+      s2.addColorStop(0.6, `rgba(1,1,1,${a * 0.55})`);
+      s2.addColorStop(1, "rgba(1,1,1,0)");
       g.fillStyle = s2;
       g.fillRect(x0, 0, CELL, CELL);
     };
@@ -265,9 +270,11 @@ function atlasTexture() {
     blot(x0 + R * 1.30, R * 1.20, R * 0.50, 0.55);
     // ashy pale rim so the blot still separates from a dark night surface
     const rim = g.createRadialGradient(x0 + R, R, R * 0.60, x0 + R, R, R * 0.98);
-    rim.addColorStop(0.00, "rgba(78,74,69,0)");
-    rim.addColorStop(0.55, "rgba(78,74,69,0.13)");
-    rim.addColorStop(1.00, "rgba(70,67,62,0)");
+    // [fx v152] the old pale rim (78,74,69 @ 0.13) read as a glowing ring round
+    // every blast for the same encode reason; a faint dark-ash ring instead
+    rim.addColorStop(0.00, "rgba(14,13,12,0)");
+    rim.addColorStop(0.55, "rgba(14,13,12,0.10)");
+    rim.addColorStop(1.00, "rgba(14,13,12,0)");
     g.fillStyle = rim;
     g.fillRect(x0, 0, CELL, CELL);
   }
