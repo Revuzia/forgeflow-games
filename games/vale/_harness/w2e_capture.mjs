@@ -70,8 +70,8 @@ async function rift() {
     await p.waitForFunction(() => window.__vale.state.match.value.view.phase === 'live', null, { timeout: 90000 }).catch(() => {});
     await wait(p, 1500);
     rec.step('idle'); await rec.snap2('idle', 'HUD at the fountain, match live');
-    await rec.snap2('dial_crop', 'Dial Bar crop', { clip: { x: 560, y: 900, width: 800, height: 180 } });
-    await rec.snap2('topbar_crop', 'top bar crop', { clip: { x: 540, y: 0, width: 840, height: 110 } });
+    await rec.snap2('dial_crop', 'Dial Bar crop', { clipSel: '.hud__bottom' });
+    await rec.snap2('topbar_crop', 'top bar crop', { clipSel: '.hud__top' });
     await rec.snap2('minimap_crop', 'minimap crop', { clipSel: '.hud__map' });
     await p.mouse.move(980, 520);
     await rec.snap2('ping_wheel', 'ping wheel (G held 0.5 s)', { before: async (pg) => { await pg.mouse.move(980, 520); await pg.keyboard.down('KeyG'); await pg.waitForTimeout(600); }, after: async (pg) => { await pg.keyboard.up('KeyG'); } });

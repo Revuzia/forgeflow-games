@@ -1,0 +1,188 @@
+{
+ "matchMatrix": {
+  "at": "2026-11-17T03:36:43.508Z",
+  "head": "c0d09e682",
+  "load1": {
+   "start": 3.48,
+   "end": 28.44
+  },
+  "quiet": null,
+  "scale": 4,
+  "bars": {
+   "hard": {
+    "tris": 500000,
+    "draws": 450,
+    "programs": 40
+   },
+   "w2": {
+    "programs": 36,
+    "tris": 470000,
+    "draws": 450,
+    "lateAfter60s": 0
+   }
+  },
+  "cases": [
+   {
+    "mode": "rift",
+    "tier": "low",
+    "seed": 7,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 280499,
+    "peakTrisAt": 0.4,
+    "peakDraws": 181,
+    "peakPrograms": 24,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": true,
+     "late": true,
+     "pass": true
+    }
+   },
+   {
+    "mode": "rift",
+    "tier": "medium",
+    "seed": 7,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 288111,
+    "peakTrisAt": 599.8,
+    "peakDraws": 214,
+    "peakPrograms": 36,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": true,
+     "late": true,
+     "pass": true
+    }
+   },
+   {
+    "mode": "rift",
+    "tier": "high",
+    "seed": 7,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 314112,
+    "peakTrisAt": 597.9,
+    "peakDraws": 218,
+    "peakPrograms": 36,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": true,
+     "late": true,
+     "pass": true
+    }
+   },
+   {
+    "mode": "rift",
+    "tier": "ultra",
+    "seed": 7,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 312487,
+    "peakTrisAt": 596.9,
+    "peakDraws": 218,
+    "peakPrograms": 36,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": true,
+     "late": true,
+     "pass": true
+    }
+   },
+   {
+    "mode": "rift",
+    "tier": "high",
+    "seed": 11,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 312353,
+    "peakTrisAt": 509.2,
+    "peakDraws": 206,
+    "peakPrograms": 36,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": true,
+     "late": true,
+     "pass": true
+    }
+   },
+   {
+    "mode": "rift",
+    "tier": "high",
+    "seed": 23,
+    "endT": 600,
+    "ended": false,
+    "peakTris": 313297,
+    "peakTrisAt": 570.8,
+    "peakDraws": 212,
+    "peakPrograms": 36,
+    "lateProgramsAfter60s": 0,
+    "hardPass": true,
+    "w2": {
+     "bar": {
+      "programs": 36,
+      "tris": 470000,
+      "draws": 450,
+      "lateAfter60s": 0
+     },
+     "tris": true,
+     "draws": true,
+     "programs": true,
+     "late": true,
+     "pass": true
+    }
+   }
+  ],
+  "maxAcrossCases": {
+   "tris": 314112,
+   "draws": 218,
+   "programs": 36
+  }
+ }
+}

@@ -276,7 +276,7 @@
 .dport__flash { position: absolute; left: calc(19 * var(--px)); top: calc(19 * var(--px)); width: calc(94 * var(--px)); height: calc(94 * var(--px)); border-radius: 50%; box-shadow: 0 0 0 3px var(--chalk-hi), 0 0 18px rgba(255, 248, 234, 0.6); opacity: 0; pointer-events: none; }
 .dport__respawn { position: absolute; left: calc(19 * var(--px)); top: calc(19 * var(--px)); width: calc(94 * var(--px)); height: calc(94 * var(--px)); display: grid; place-items: center;
   font-size: calc(34 * var(--px)); font-weight: 700; color: var(--chalk-hi); text-shadow: 0 2px 6px var(--ink-0); }
-.dport__level { position: absolute; left: 50%; bottom: calc(-4 * var(--px)); transform: translateX(-50%); min-width: calc(30 * var(--px)); height: calc(24 * var(--px)); padding: 0 calc(6 * var(--px));
+.dport__level { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); min-width: calc(30 * var(--px)); height: calc(24 * var(--px)); padding: 0 calc(6 * var(--px));
   display: grid; place-items: center; font-size: calc(16 * var(--px)); font-weight: 700; color: var(--chalk-hi);
   background: linear-gradient(180deg, #2A2F38, #14171D); border-radius: 3px; box-shadow: 0 0 0 1px #6E6A62, 0 0 0 2px var(--ink-0), 0 3px 6px rgba(0, 0, 0, 0.5); }
 .dport__sp { position: absolute; right: calc(10 * var(--px)); top: calc(8 * var(--px)); width: calc(14 * var(--px)); height: calc(14 * var(--px)); border-radius: 50%;

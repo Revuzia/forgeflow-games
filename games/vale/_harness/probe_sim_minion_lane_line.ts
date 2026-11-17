@@ -330,7 +330,7 @@ for (const map of MAPS) for (const scen of SCENS) {
 // B5 timing
 const rec: Record<string, number> = {};
 for (const [k, v] of [...timing].sort()) rec[k] = Math.round(v.reduce((a, b) => a + b, 0) / v.length * 100) / 100;
-if (RECORD) console.log(`BASE ${JSON.stringify(rec)}`);
+if (RECORD) { console.log(`BASE ${JSON.stringify(rec)}`); if (VERBOSE) for (const [k, v] of [...timing].sort()) console.log(`  ${k} ${v.map((x) => x.toFixed(2)).join(' ')}`); }
 else if (SCENS.includes('idle') && SEEDS.join() === '3,7,11,19,23,31') {
   let n = 0, worst = 0, wk = '';
   for (const [k, b] of Object.entries(BASE)) {
@@ -340,7 +340,7 @@ else if (SCENS.includes('idle') && SEEDS.join() === '3,7,11,19,23,31') {
     n++;
     const dlt = v - b;
     if (Math.abs(dlt) > Math.abs(worst)) { worst = dlt; wk = k; }
-    if (Math.abs(dlt) > 0.5) bad(`B5 ${k}: ${v.toFixed(2)} s vs base ${b.toFixed(2)} (${dlt >= 0 ? '+' : ''}${dlt.toFixed(2)})`);
+    if (Math.abs(dlt) > 0.5) bad(`B5 ${k}: ${v.toFixed(2)} s vs base ${b.toFixed(2)} (${dlt >= 0 ? '+' : ''}${dlt.toFixed(2)})${VERBOSE ? ` per seed ${timing.get(k)!.map((x) => x.toFixed(2)).join(' ')}` : ''}`);
   }
   out.push(`B5 timing: ${n} arrivals and first contacts (6-seed means) vs c20d06630, worst ${worst >= 0 ? '+' : ''}${worst.toFixed(2)} s (${wk})`);
 } else out.push('B5 timing: skipped (needs the idle scenario on the default seeds)');

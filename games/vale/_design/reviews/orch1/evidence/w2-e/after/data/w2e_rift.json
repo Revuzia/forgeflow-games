@@ -1,0 +1,280 @@
+{
+ "phase": "w2e_rift",
+ "finishedAt": "2026-11-17T03:20:08.334Z",
+ "env": {
+  "chrome": "157.0.8103.78",
+  "load1End": 3.88,
+  "node": "v22.23.3",
+  "base": "http://localhost:5299",
+  "wallMs": 60751
+ },
+ "steps": [
+  {
+   "file": "1920x1080/w2e_rift_001_idle.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain, match live",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2713042,
+   "tMs": 58490,
+   "load1": 3.88,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_002_idle.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain, match live",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1438880,
+   "tMs": 59300,
+   "load1": 3.88,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_003_dial_crop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "dial_crop",
+   "desc": "Dial Bar crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 560,
+    "y": 900,
+    "w": 800,
+    "h": 180
+   },
+   "bytes": 168147,
+   "tMs": 59910,
+   "load1": 3.88,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_005_FAILED.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "idle",
+   "name": "FAILED",
+   "desc": "state at failure",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1464035,
+   "tMs": 60751,
+   "load1": 3.88,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 2
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.7 (schema 1) from http://localhost:5299/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/w2e_rift_001_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_rift_001_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_002_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_rift_002_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_003_dial_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_rift_003_dial_crop.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    649,
+    1058,
+    679,
+    1082
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_005_FAILED.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_rift_005_FAILED.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.dport__level.num",
+   "text": "1",
+   "rect": [
+    434,
+    750,
+    458,
+    770
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "idle",
+   "tMs": 60446,
+   "load1": 3.88,
+   "text": "rift failed: Error: page.screenshot: Clipped area is either empty or outside the resulting image\nCall log:\n  - taking page screenshot\n  - waiting for fonts to load...\n  - fonts loaded\n"
+  }
+ ],
+ "timings": {}
+}
