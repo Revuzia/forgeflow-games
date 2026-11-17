@@ -1992,3 +1992,14 @@ long press frame-rate independent. Report after 1-2 verified.
   the albedo by the slot table (ground white / black): `color_vertex` / `color_fragment` are removed from the terrain
   program when tcache is on. Also `__TCACHE__` now names the PRIMARY planet's cache.
 - NEXT: views forest floor / rock / sand / snow / far / orbit / a true grazing camera; then edits + time; then the pan.
+- STEP 2 (in progress): 8-view run `--tag=v` (graze floor rock sand2 desert peak far orbit) on the build BEFORE the two
+  changes below; log s22/pv.log, shots s22/shots/v-*-{c,l}.png, sheet tool s22/sheet.py (also wanted in arc-work).
+  FOUND in `graze` (which is a top-down 160 m view, not grazing: `tilt` is from the vertical): a shallow lake bed read
+  sandy in the cache and blue-grey live, mean |d| 4.75. Cause: evalTerrain's `uwFar` (ground standing in for open water)
+  follows the PIXEL footprint. FIXED in source (not yet re-run): the bake leaves uwFar 0, the display applies the
+  uwFar block (albedo, rough, sward, bump) to the fetched surface from the live footprint. This is the class of
+  difference to look for in every view: terms keyed to fw as a stand-in for distance.
+  ADDED in source (not yet run): when the cap is full a near patch takes the tile of the farthest drawn one (>= 1.5x as
+  far, at most 12 a try); a class that found no room is not retried in that frame.
+- NEXT: rebuild into s22/dist2, re-run graze + the views that differ, then a REAL grazing camera (tilt ~85), then
+  edits (`--edits=1`), the pan (`--pan=8`), then the Ultra 1686x963 tile count (`scene=0`), then check + build.

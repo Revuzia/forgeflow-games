@@ -1260,7 +1260,12 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // ground's own fragments can stand in front of the water: they take the open water's look (a dark blue body, a
     // glossy mirror of the sky — FRAG_AMBIENT lets them reflect) instead of a dark silt bed, so no lake is ever a black
     // hole in the land (uwFar, shared with the ambient)
+#ifdef TC_BAKE
+    // (tcache.ts: this term follows the PIXEL's footprint, so the display applies it to the tile's surface)
+    uwFar = 0.0;
+#else
     uwFar = smoothstep(0.6, 2.5, fw) * smoothstep(0.3, 1.5, uw);
+#endif
     col = mix(col, vec3(0.012, 0.028, 0.04), uwFar);
     rough = mix(rough, 0.07, uwFar);
     s.sward *= 1.0 - uwFar;
@@ -1643,7 +1648,14 @@ ${TCACHE ? TC_FRAG_BAKE_OUT : ''}
   else {
     float tcG = 1.0 - clamp(dot(normalize(vBodyPos), normalize(transpose(uBodyToView) * normalize(vViewPosition))), 0.0, 1.0);
     ts = tcFetch(tcDx, tcDy, length(vViewPosition), tcG * tcG, tcD);
+    // open water seen from afar (evalTerrain's uwFar block): by this pixel's footprint, on the tile's surface
     uwFar = smoothstep(0.6, 2.5, tFw) * smoothstep(0.3, 1.5, vF4.y - vF4.w);
+    if (uwFar > 0.0) {
+      ts.albedo = mix(ts.albedo, vec3(0.012, 0.028, 0.04), uwFar);
+      ts.rough = mix(ts.rough, 0.07, uwFar);
+      ts.sward *= 1.0 - uwFar;
+      tcD *= 1.0 - uwFar;
+    }
   }
 #else
   TSurf ts = evalTerrain(vBodyPos, normalize(vBodyN), tFw, length(vViewPosition));
