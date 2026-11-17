@@ -9,7 +9,7 @@
 // roads) and BRIDGE; seeds 3,7,11,19,23,31. Every tick, every Wick:
 //   free   its order is not ATTACK, not chasing, not stepping out, not passing its wave, no attackable enemy in aggro
 //   clear  > 3 m from any live structure rim, any live body not of its team and any Wick of its own held under 0.6 of
-//          its walk; > 16 m of arc from its spawn end and > 6 m from the far end; no forced movement (dash, knock, fear,
+//          its walk or of another wave pressed against it (rim gap < 0.1 m: merged waves, two Wicks to a column); > 16 m of arc from its spawn end and > 6 m from the far end; no forced movement (dash, knock, fear,
 //          taunt, hard CC, or shoved over 1.5 × its walk in a tick)
 //   d      signed offset from the lane polyline, left of its travel +; off = d − its column slot
 // Bars (every map, road, team and 4 m arc bin; both scenarios):
@@ -155,7 +155,7 @@ function freeOf(w: World, e: Entity): boolean {
   }
   return true;
 }
-function clearOf(w: World, e: Entity): boolean {
+function clearOf(w: World, e: Entity, waveOf: (o: Entity) => number): boolean {
   if (e.dash || (e.ccMask & (CC_HARD | CC_FEAR | CC_TAUNT)) !== 0) return false;
   const n = w.query(e.x, e.y, CLEAR + 3, q);
   for (let i = 0; i < n; i++) {
@@ -165,7 +165,11 @@ function clearOf(w: World, e: Entity): boolean {
     // presses through); fighters of its side ghost
     if (o.kind !== 'structure' && o.team === e.team) {
       const sp = o.stats.moveSpeed * 0.6;
-      if (o.kind !== 'minion' || o.vx * o.vx + o.vy * o.vy >= sp * sp) continue;
+      if (o.kind !== 'minion') continue;
+      // … and a Wick of another wave of its side pressed against it (waves merged after a fight walk as one blob, two
+      // Wicks to a column: one is shoved off it)
+      const pressed = Math.hypot(o.x - e.x, o.y - e.y) - o.radius - e.radius < 0.1 && waveOf(o) !== waveOf(e);
+      if (!pressed && o.vx * o.vx + o.vy * o.vy >= sp * sp) continue;
     }
     if (Math.hypot(o.x - e.x, o.y - e.y) - o.radius - e.radius < CLEAR) return false;
   }
@@ -235,7 +239,7 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       const forced = shoved || !!e.dash || (e.ccMask & (CC_HARD | CC_FEAR | CC_TAUNT)) !== 0;
       const wasForced = t.forced; t.forced = forced;
       if (free && sT < 20 && e.path.length > 0 && !acc.detour.has(`${seed}#${e.id}`)) { acc.detour.add(`${seed}#${e.id}`); if (VERBOSE) { const k3 = `${g.id} t${e.team} s${Math.floor(sT / 4) * 4} slot${t.slot.toFixed(2)}`; acc.detourAt.set(k3, (acc.detourAt.get(k3) ?? 0) + 1); } }
-      const clear = free && !forced && clearOf(w, e) && sT > SPAWN_SKIP && sT < g.len - END_SKIP;
+      const clear = free && !forced && clearOf(w, e, (o) => tr.get(o.id)?.wave ?? -1) && sT > SPAWN_SKIP && sT < g.len - END_SKIP;
       // B4 rejoin episodes
       if (free && !t.wasFree && Math.abs(off) > 1) t.rj = { s0: sT, off0: off, done: false };
       // settling back on its column after a fight (any |off| > SETTLE): out of B1/B2 until |off| ≤ SETTLE or SETTLE_ARC + 2|off| m on
