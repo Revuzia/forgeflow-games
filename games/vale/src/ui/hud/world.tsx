@@ -33,7 +33,8 @@ const MERGE_MS = 120;
 const MAX_POPS = 16;
 const MAX_PER_TARGET = 4;
 /** damage numbers by amount: 15 px (a graze) to 26 px (350+), a crit a third larger (1080p reference px) */
-const popPx = (amount: number, crit: boolean): number => (15 + 11 * Math.min(1, Math.sqrt(Math.max(0, amount) / 350))) * (crit ? 1.3 : 1);
+// W2-E r1: size follows the amount over a wide band (a 15-point nick 13 px, a 400-point blow 30 px at 1080), crits 1.25x
+const popPx = (amount: number, crit: boolean): number => (13 + 17 * Math.pow(Math.min(1, Math.max(0, (amount - 15) / 385)), 0.7)) * (crit ? 1.25 : 1);
 const POP_MS = { damage: 900, heal: 1100, gold: 1100 } as const;
 const MARKER_MS = 900;
 const PING_MS = 4000;
@@ -124,9 +125,17 @@ export function WorldLayer(p: { marks: WorldMarks }): JSX.Element {
       }
       plateRects = rects;
       // stack ranks: per target and side, the newest stands lowest and the older ones are pushed up
+      // (ranked per bar plate, not per target id: two targets that share the nearest plate stack instead of printing on one rect)
       const order = pops.filter((x) => x.n.kind !== 'gold').sort((a, b) => b.born - a.born);
       const seen = new Map<string, number>();
-      for (const x of order) { const k = `${x.n.dst}:${x.side}`; const r = seen.get(k) ?? 0; seen.set(k, r + 1); x.rank = r; }
+      for (const x of order) {
+        const e0 = x.n.dst >= 0 ? v.entity(x.n.dst as EntityId) : undefined;
+        const ax = e0 && e0.alive ? e0.x : x.n.x, ay = e0 && e0.alive ? e0.y : x.n.y;
+        let near: PlateRect | undefined, bd = 1.5 * 1.5;
+        for (const q of rects) { const dd = (q.x - ax) ** 2 + (q.z - ay) ** 2; if (dd < bd) { bd = dd; near = q; } }
+        const k = near ? `p${near.x.toFixed(2)}:${near.z.toFixed(2)}:${x.side}` : `${x.n.dst}:${x.side}`;
+        const r = seen.get(k) ?? 0; seen.set(k, r + 1); x.rank = r;
+      }
       for (let i = pops.length - 1; i >= 0; i--) {
         const x = pops[i];
         const life = POP_MS[x.n.kind];
@@ -157,11 +166,11 @@ export function WorldLayer(p: { marks: WorldMarks }): JSX.Element {
         }
         if (!vis) { x.el.style.opacity = '0'; continue; }
         x.el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) translate(-50%, -50%) scale(${pop.toFixed(3)})`;
-        let op = t > 0.7 ? Math.max(0, 1 - (t - 0.7) / 0.3) : 1;
+        let op = t > 0.78 ? Math.max(0, 1 - (t - 0.78) / 0.22) : 1;
         // CUX-8: a number crossing ANY bar plate drops to 60 % alpha for as long as it does
-        if (x.n.kind !== 'gold' && op > 0.6) {
+        if (x.n.kind !== 'gold' && op > 0.72) {
           const hw = x.w / 2, hh = x.h / 2;
-          for (const q of rects) if (px + hw > q.l && px - hw < q.r && py + hh > q.t && py - hh < q.b) { op = 0.6; break; }
+          for (const q of rects) if (px + hw > q.l && px - hw < q.r && py + hh > q.t && py - hh < q.b) { op = 0.72; break; }
         }
         x.el.style.opacity = String(op);
       }

@@ -62,7 +62,9 @@
 /* ── top: sky strip + announcer + vote ────────────────────────────────────────────────────────── */
 .hud__top { position: absolute; left: 50%; top: calc(8 * var(--px)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(10 * var(--px)); }
 .sky { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: calc(760 * var(--px)); height: calc(56 * var(--px)); padding: 0 calc(40 * var(--px)) calc(4 * var(--px));
-  background: url('../art/hud/sky.webp') center / 100% 100% no-repeat; }
+  background: url('../art/hud/sky.webp') center / 100% 100% no-repeat; isolation: isolate; }
+/* W2-E r1: an opaque ink backing inside the sky art, so world nameplates and structure bars never read through the clock */
+.sky::before { content: ''; position: absolute; z-index: -1; left: calc(14 * var(--px)); right: calc(14 * var(--px)); top: calc(3 * var(--px)); bottom: calc(7 * var(--px)); border-radius: calc(8 * var(--px)); background: rgba(11, 13, 17, 0.94); }
 .sky__team { display: flex; align-items: center; gap: calc(14 * var(--px)); }
 .sky__team--enemy { justify-content: flex-end; }
 .sky__mark { display: grid; place-items: center; }
@@ -217,7 +219,7 @@
 .hmenu:active { transform: translateY(1px); }
 .hmenu__glyph { width: calc(14 * var(--px)); height: calc(14 * var(--px)); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; flex: none; }
 .hmenu__glyph circle { fill: var(--chalk); stroke: none; }
-.hmenu__key { font-family: var(--font-numeric); font-size: max(10px, calc(10 * var(--px))); letter-spacing: 0.02em; text-transform: none; color: var(--text-3);
+.hmenu__key { font-family: var(--font-numeric); font-size: max(11px, calc(11 * var(--px))); letter-spacing: 0.02em; text-transform: none; color: var(--text-3);
   padding: 0 calc(4 * var(--px)); line-height: calc(15 * var(--px)); border-radius: 2px; box-shadow: inset 0 0 0 1px var(--line-1); }
 
 /* ── left edge: ally frames ───────────────────────────────────────────────────────────────────── */
@@ -244,6 +246,8 @@
 
 /* ── bottom left: the feed ────────────────────────────────────────────────────────────────────── */
 .hud__bl { position: absolute; left: var(--edge); bottom: calc(150 * var(--px)); width: calc(420 * var(--px)); }
+/* W2-E r1: with the shop open the hint feed drops to the screen edge, below the shop's bottom, clear of the Dial Bar */
+.hud--shop .hud__bl { bottom: var(--edge); }
 .feed { display: flex; flex-direction: column; gap: calc(4 * var(--px)); pointer-events: none !important; }
 .feed__line { align-self: flex-start; max-width: 100%; padding: calc(4 * var(--px)) calc(10 * var(--px)); background: rgba(11, 13, 17, 0.72); border-radius: var(--radius); color: var(--text-1);
   animation: krow-in var(--dur-base) var(--ease-dawn) both; border-left: 2px solid var(--line-2); }
@@ -354,12 +358,12 @@
 .hpbar__num { position: absolute; z-index: 3; inset: 0; display: block; text-align: center; white-space: nowrap; line-height: max(13px, calc(14 * var(--px))); font-size: max(12px, calc(13 * var(--px))); font-weight: 700; color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
 .hpbar__num .quiet { color: rgba(255, 255, 255, 0.72); font-weight: 500; }
 /* quiet regeneration readouts at the bars' right ends (r12 m1) */
-.hpbar__regen { position: absolute; z-index: 3; right: calc(6 * var(--px)); top: 0; bottom: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.74); text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.hpbar__regen { position: absolute; z-index: 3; right: 0; top: 0; bottom: 0; display: grid; place-items: center; padding: 0 calc(5 * var(--px)) 0 calc(6 * var(--px)); font-size: 11px; line-height: 1; font-weight: 700; color: #fff; background: linear-gradient(90deg, rgba(7, 9, 12, 0), rgba(7, 9, 12, 0.92) 28%); text-shadow: 0 1px 1px #000; }   /* W2-E r1: an ink chip, so the number never sits on the hatch and tick lines */
 .resbar { position: relative; height: max(11px, calc(12 * var(--px))); background: #07090C; border-radius: 1px; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(237, 230, 214, 0.1); }
 /* W2-E CUX-7: the resource bar is 12 px (11 minimum) and says its number like health does; the regeneration rides inside its right end */
 .resbar__num { position: absolute; z-index: 3; inset: 0; display: block; text-align: center; white-space: nowrap; line-height: max(11px, calc(12 * var(--px))); font-size: max(11px, calc(11 * var(--px))); font-weight: 700; letter-spacing: 0.01em;
   color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000, 0 0 1px #000; }
-.resbar__regen { position: absolute; right: calc(5 * var(--px)); top: 0; bottom: 0; z-index: 3; display: grid; place-items: center; font-size: 11px; line-height: 1; font-weight: 600; color: rgba(255, 255, 255, 0.78); text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.resbar__regen { position: absolute; right: 0; top: 0; bottom: 0; z-index: 3; display: grid; place-items: center; padding: 0 calc(5 * var(--px)) 0 calc(6 * var(--px)); font-size: 11px; line-height: 1; font-weight: 700; color: #fff; background: linear-gradient(90deg, rgba(7, 9, 12, 0), rgba(7, 9, 12, 0.92) 28%); text-shadow: 0 1px 2px #000, 0 0 3px #000; }
 .resbar__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 1px; background: linear-gradient(180deg, color-mix(in srgb, var(--res) 60%, white), var(--res) 50%, color-mix(in srgb, var(--res) 70%, black)); transition: width var(--dur-fast) linear; }
 .resbar--heat .resbar__fill { background: repeating-linear-gradient(45deg, var(--res) 0 4px, color-mix(in srgb, var(--res) 70%, var(--ink-0)) 4px 8px); }
 .resbar--none { visibility: hidden; }
@@ -372,7 +376,7 @@
 .islot__secs { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; font-size: max(12px, calc(14 * var(--px))); font-weight: 700; color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0); }
 .islot__secs.is-long { letter-spacing: -0.06em; }
 .islot .aslot__lockglyph { width: 50%; height: 50%; }
-.islot__key { position: absolute; right: 2px; bottom: 0; font-family: var(--font-numeric); font-size: 12px; color: var(--text-2); text-shadow: 0 1px 1px var(--ink-0); }
+.islot__key { position: absolute; right: 2px; bottom: 0; font-family: var(--font-numeric); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-2); text-shadow: 0 1px 1px var(--ink-0); }
 .gleambtn { display: inline-flex; align-items: center; gap: calc(5 * var(--px)); padding: 0 calc(10 * var(--px)); border-radius: 999px; background: linear-gradient(180deg, #0B0D11, #161A21);
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8); color: var(--chalk-hi); z-index: 1; }
 .gleambtn:hover, .gleambtn.is-open { box-shadow: inset 0 0 0 1px var(--chalk); }
@@ -505,7 +509,7 @@
 
 /* W2-E CUX-4: the recap sits LEFT of the Dial Bar (never over its D/F slots), top-anchored at 14 vh, capped so its bottom stays
    above the screen edge margin; the source list scrolls (3 rows by default, "+N more"), the totals and the advice stay pinned */
-.recap { position: absolute; right: calc(50% + (388 + 12) * var(--px)); top: 14vh; width: calc(340 * var(--px)); max-height: calc(100vh - 14vh - var(--edge)); padding: calc(14 * var(--px)); z-index: 4;
+.recap { position: absolute; right: calc(50% + (388 + 12) * var(--px)); top: 14vh; width: min(calc(340 * var(--px)), calc(50vw - 400 * var(--px) - var(--edge) - 184 * var(--px))); max-height: calc(100vh - 14vh - var(--edge)); padding: calc(14 * var(--px)); z-index: 4;
   display: flex; flex-direction: column; gap: calc(8 * var(--px)); animation: krow-in var(--dur-panel) var(--ease-dawn) both; overflow: hidden; }
 .recap > * { flex: none; }
 .recap__list { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: calc(6 * var(--px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -588,7 +592,7 @@
 .reduce-motion .viewplate__dial::after { animation: none; }
 
 /* ── the shop (Lampwright) ────────────────────────────────────────────────────────────────────── */
-.lshop { position: absolute; left: 50%; top: calc(80 * var(--px)); transform: translateX(-50%); width: min(calc(1120 * var(--px)), 94vw); height: min(calc(700 * var(--px)), calc(100vh - 260 * var(--px)));
+.lshop { position: absolute; left: 50%; top: calc(80 * var(--px)); transform: translateX(-50%); width: min(calc(1120 * var(--px)), 94vw, calc(100vw - 2 * (var(--edge) + 300 * var(--px)))); height: min(calc(700 * var(--px)), calc(100vh - 260 * var(--px)));
   z-index: 6; display: flex; flex-direction: column; animation: shop-in var(--dur-panel) var(--ease-dawn) both; }
 @keyframes shop-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .lshop__head { display: flex; align-items: center; gap: calc(16 * var(--px)); padding: calc(12 * var(--px)) calc(16 * var(--px)); border-bottom: 1px solid var(--line-1); }
@@ -642,7 +646,7 @@
 
 /* ── world layer ──────────────────────────────────────────────────────────────────────────────── */
 .hudworld { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
-.wpop { position: absolute; left: 0; top: 0; font-weight: 700; font-size: max(14px, calc(var(--ps, 18) * 1px * var(--k))); line-height: 1; white-space: nowrap; will-change: transform, opacity;
+.wpop { position: absolute; left: 0; top: 0; font-weight: 700; font-size: max(13px, calc(var(--ps, 18) * 1px * var(--k))); line-height: 1; white-space: nowrap; will-change: transform, opacity;
   text-shadow: 0 1px 0 var(--ink-0), 0 0 3px var(--ink-0), 0 0 1px var(--ink-0); }
 .wpop.is-crit { text-shadow: 0 1px 0 var(--ink-0), 0 0 3px var(--ink-0), 0 0 8px rgba(255, 248, 234, 0.35); }
 .wpop--phys { color: var(--dmg-physical); }
@@ -653,12 +657,12 @@
 .wpop--gold::before { content: ''; display: inline-block; width: 0.7em; height: 0.7em; margin-right: 3px; vertical-align: 0; background: currentColor;
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
 /* W2-E ref target 20: the click marker is a bold ring (ink keyline both sides) closing on a centre dot, over a soft chalk wash: it reads on grass, stone and water */
-.wmark { position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 50%; box-shadow: 0 0 0 2px var(--ink-0), inset 0 0 0 2px var(--ink-0), 0 0 14px rgba(255, 248, 234, 0.55); border: 3px solid var(--chalk-hi);
+.wmark { position: absolute; left: 0; top: 0; width: 64px; height: 64px; border-radius: 50%; box-shadow: 0 0 0 2px var(--ink-0), inset 0 0 0 2px var(--ink-0), 0 0 14px rgba(255, 248, 234, 0.55); border: 4px solid var(--chalk-hi);
   background: radial-gradient(circle, rgba(255, 248, 234, 0.34) 0 45%, rgba(255, 248, 234, 0.08) 70%, transparent 72%); will-change: transform, opacity; }
-.wmark::after { content: ''; position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--chalk-hi); box-shadow: 0 0 0 2px var(--ink-0); }
+.wmark::after { content: ''; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--chalk-hi); box-shadow: 0 0 0 2px var(--ink-0); }
 .wmark--attackMove { border-color: var(--team-enemy); border-style: dashed; }
 .wmark--attackMove::after, .wmark--attack::after { background: var(--team-enemy); }
-.wmark--attack { width: 60px; height: 60px; border-color: var(--team-enemy); background: radial-gradient(circle, rgba(255, 120, 96, 0.30) 0 45%, rgba(255, 120, 96, 0.08) 70%, transparent 72%); }
+.wmark--attack { width: 80px; height: 80px; border-color: var(--team-enemy); background: radial-gradient(circle, rgba(255, 120, 96, 0.30) 0 45%, rgba(255, 120, 96, 0.08) 70%, transparent 72%); }
 .wping { position: absolute; left: 0; top: 0; width: 0; height: 0; color: var(--team-ally); will-change: transform, opacity; }
 .wping.is-harm { color: var(--team-enemy); }
 /* HUD-11: a world ping reads on any ground — two rings in the ping's colour open outward on the ground (each with an
