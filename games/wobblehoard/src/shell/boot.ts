@@ -232,7 +232,8 @@ export async function boot(): Promise<(() => void) | null> {
         phone: () => isCoarsePointer() || Math.min(window.innerWidth, window.innerHeight) < 600,
         reducedMotion: () => prefersReducedMotion(),
       });
-      if (host) { const taps = m.attachBubbleTaps(root, canvas, host, (t) => ui.announcer.say(t)); lifeUiOff = () => taps.destroy(); }
+      // (a tapped wish reads its card's line, from the screens chunk on demand: QUESTS 8 / 15)
+      if (host) { const taps = m.attachBubbleTaps(root, canvas, host, (t) => ui.announcer.say(t), (sp, k, t) => import('../ui/later-journal.ts').then((j) => j.wishLine(sp, k, t))); lifeUiOff = () => taps.destroy(); }
       ui.lifeAttached();
     }).catch((e: unknown) => {
       console.error(e);

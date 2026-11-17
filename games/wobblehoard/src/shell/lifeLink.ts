@@ -23,6 +23,11 @@ export interface LifeHostLike {
   quest(): void;
   /** the shell's own moments the host turns into records (a capsule opened, a ceremony ended, the Snap shutter) */
   note(kind: LifeNote, arg?: string | number): void;
+  /** a Hand press (CSS px over the canvas) and its release: a short still press that hits no squishy and lands on a shown thing taps it (a ball
+   *  rolls, the Music Box plays, the fireplace switches; one USE record by PLAYER). The press still goes to the gesture machine as before. */
+  pressAt(id: number, x: number, y: number): void;
+  /** true when the release made a thing tap */
+  releaseAt(id: number, x: number, y: number): boolean;
   /** the dev hook's view (allocates: dev only) */
   debug(): unknown;
   dispose(): void;

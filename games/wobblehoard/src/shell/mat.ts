@@ -37,7 +37,9 @@ export interface Mat {
   has(itemId: string | null): boolean;
   /** null = it may come out; otherwise why not */
   refusal(item?: MatItem): MatRefusal | null;
-  add(item: MatItem): MatRefusal | null;
+  /** `restore` (PLAYGROUND 11.3: the party coming back right after a ceremony): it was out already, so the frame-time guard ('busy') does not
+   *  refuse it; 'full', 'already' and the rest still do. */
+  add(item: MatItem, opts?: { restore?: boolean }): MatRefusal | null;
   remove(itemId: string): boolean;
   /** put every extra back (one tap) */
   clear(): void;
@@ -104,9 +106,9 @@ export function createMat(d: MatDeps): Mat {
       if (d.bodies.extras.length > 0 && d.frameMs() > busyMs) return 'busy';
       return null;
     },
-    add(item) {
+    add(item, opts) {
       const why = mat.refusal(item);
-      if (why) return why;
+      if (why && !(why === 'busy' && opts?.restore === true)) return why;
       const n = d.bodies.extras.length + 2;
       const pos = offsets(n);
       const spot = pos[n - 2];

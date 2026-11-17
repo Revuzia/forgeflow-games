@@ -793,6 +793,55 @@ function press(r: Rig, x: number, y: number, ms: number): number {
   check('keyboard: shortcuts are inert while the title card is up', t3.app.settings.gravity === true && t3.w.body.rec.count('fingerDown') === 0);
 }
 
+// ============================================================ PLAYGROUND (PG_SHELL round 3): the first-load seams, the mat's restore, the chunk names
+// (the LIFE host itself is shellview/node_checks.ts sections 12 and 13: mock and REAL bodies; these rows are the parts that ship in the first load or the build)
+{
+  const { createEarlyLog, noteEarly, EARLY_CAP } = await import('../src/shell/lifeLink.ts');
+  const L = createEarlyLog();
+  for (let i = 0; i < EARLY_CAP + 3; i++) noteEarly(L, 1, 0.5, 7);
+  const L2 = createEarlyLog(); noteEarly(L2, 2, NaN, 999);
+  check('PLAYGROUND early log (lifeLink.ts): typed arrays, at most EARLY_CAP records (the rest counted, never wrapped), a non-finite value kept as 0 and an unknown species as 255',
+    L.n === EARLY_CAP && L.dropped === 3 && L.kind instanceof Uint8Array && L.v instanceof Float32Array && L2.v[0] === 0 && L2.species[0] === 255, `n ${L.n} dropped ${L.dropped}`);
+  // before the life chunk lands the game is today's toy: no host, and the player's squeeze and stretch are kept for the Journal (11.14)
+  const r = rig();
+  const c = centre(r);
+  press(r, c.x, c.y, 1200);
+  r.w.run(r.app, 100);
+  check('PLAYGROUND before the life chunk: game.life is null and a held squeeze (a release with heldFor) is kept in the early log, exactly once',
+    r.app.life === null && r.app.earlyLog.n === 1 && r.app.earlyLog.kind[0] === 1 && r.app.earlyLog.v[0] >= 1, `n ${r.app.earlyLog.n} kind ${r.app.earlyLog.kind[0]} v ${r.app.earlyLog.v[0]}`);
+  // the mat's restore option (11.3: the party coming back after a ceremony): it skips only the frame-time guard
+  const r2 = rig();
+  let vid = 100;
+  Object.assign(r2.w.stage as unknown as Record<string, unknown>, { stats: () => ({ drawCalls: 0, triangles: 0, tier: 'med', frameMsEma: 45 }), addBody: () => ++vid, removeBody: () => {} });   // (the mat needs a stage that draws extras)
+  const g1 = randomGenome(31), g2 = randomGenome(32), g3 = randomGenome(33), g4 = randomGenome(34);
+  const a1 = r2.app.mat.add({ genome: g1, itemId: 'p-1' });
+  const a2 = r2.app.mat.add({ genome: g2, itemId: 'p-2' });
+  const a3 = r2.app.mat.add({ genome: g2, itemId: 'p-2' }, { restore: true });
+  const a4 = r2.app.mat.add({ genome: g3, itemId: 'p-3' }, { restore: true });
+  const a5 = r2.app.mat.add({ genome: g4, itemId: 'p-4' }, { restore: true });
+  check('PLAYGROUND mat.add restore: with the frame time over the guard a second squishy is refused as "busy", but a squishy coming back from a ceremony (restore) comes out; "already" and "full" (med holds 4) still refuse it',
+    a1 === null && a2 === 'busy' && a3 === null && r2.app.mat.add({ genome: g2, itemId: 'p-2' }, { restore: true }) === 'already' && a4 === null && a5 === 'full' && r2.app.mat.count === 4, [a1, a2, a3, a4, a5].join());
+  // the chunk names (vite.config.ts, PLAYGROUND_BUILD 13, D-69): what G0b counts is what a first play downloads
+  const { laterChunkName } = await import('../vite.config.ts');
+  const id = (p: string): string => `/x/src/${p}`;
+  const names = {
+    away: laterChunkName(id('render/place.ts'), [id('render/place.ts'), id('render/placeview.ts')]),
+    awaySound: laterChunkName(id('audio/ambience.ts'), [id('audio/ambience.ts')]),
+    cabin: laterChunkName(id('render/places/hearthlog.ts'), [id('render/places/hearthlog.ts')]),
+    cabinSound: laterChunkName(id('audio/places/hearthlog.ts'), [id('audio/places/hearthlog.ts')]),
+    cabinData: laterChunkName(id('data/place_hearthlog.ts'), [id('data/place_hearthlog.ts')]),
+    lifelook: laterChunkName(id('render/lifelook.ts'), [id('render/lifelook.ts')]),
+    text: laterChunkName(id('data/journal_text.ts'), [id('data/journal_text.ts')]),
+    shared: laterChunkName(null, [id('life/brain.ts'), id('data/quests.ts'), id('core/quests.ts'), id('collection/journal_store.ts')]),
+    mixed: laterChunkName(null, [id('life/brain.ts'), id('core/rng.ts')]),
+    first: laterChunkName(id('shell/boot.ts'), [id('shell/boot.ts')]),
+    voices: laterChunkName(id('audio/life_voices.ts'), [id('audio/life_voices.ts')]),
+  };
+  check('PLAYGROUND chunk names: the away, place (look, sound, data), lifelook and journal-text facades are later-*; a facade-less chunk is later-shared only when EVERY module in it is lazy-only; boot and the voices the engine loads at the first unlock stay first-play (null: G0b counts them)',
+    names.away === 'later-away' && names.awaySound === 'later-away-sound' && names.cabin === 'later-place-hearthlog' && names.cabinSound === 'later-place-hearthlog-sound' && names.cabinData === 'later-place-hearthlog-data'
+      && names.lifelook === 'later-lifelook' && names.text === 'later-journal-text' && names.shared === 'later-shared' && names.mixed === null && names.first === null && names.voices === null, JSON.stringify(names));
+}
+
 console.error = realError;
 console.log(`\n${total - bad}/${total} shell checks passed`);
 process.exit(bad ? 1 : 0);

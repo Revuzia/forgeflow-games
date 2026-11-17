@@ -4,7 +4,7 @@
 //   fatal-frame path, context-loss suspend, atomic body swap, resultBody adoption, the ceremony beat -> sound map, the 350 ms skip gate,
 //   input lock during ceremonies, settings resolution + migration + calm, the press-driven squelch, the capsule table, the meter mapping,
 //   keyboard focus rules, audio disposal on a failed boot, and the body CALIBRATION measured on the REAL SoftBody.
-import type { CapsuleHandle, CapsuleRevealSpec, CeremonyBeat, CeremonyHandle, CeremonyHooks, MergeCeremonySpec, SoftBodyLike, SoftEvent, StageLike, TierName } from '../../src/contracts.ts';
+import type { CapsuleHandle, CapsuleRevealSpec, CeremonyBeat, CeremonyHandle, CeremonyHooks, MergeCeremonySpec, SoftBodyCtor, SoftBodyLike, SoftEvent, StageLike, TierName, V3 } from '../../src/contracts.ts';
 import { createApp } from '../../src/app.ts';
 import type { App } from '../../src/app.ts';
 import { makeStarterGenome, encodeGenome } from '../../src/core/genome.ts';
@@ -1685,6 +1685,158 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check('LIFE host: travel refuses a place that has not shipped or is not open (the player stays where they were)', okHome === false && host.place === 0);
   r.app.dispose();
   check('LIFE host: dispose detaches it (game.life null after the game is disposed)', r.app.life === null);
+}
+
+/* ───────────── 13. PLAYGROUND on the REAL SoftBody (PG_SHELL round 3): FN-01, the party through a ceremony (11.3, D-52), thing taps, the cabin's kettle, coming home ─────────────
+ * The real physics (props.ts and softbody.ts) and the real LIFE, journal and reducer, with a recording stage that projects through a real camera and drops a capsule at once
+ * (no round-2 reveal: the ceremony's own swapTo path). Sim time only (the stepping below), so every row is repeatable. */
+{
+  const THREE = await import('three');
+  const { SoftBody } = await import('../../src/physics/softbody.ts');
+  const { attachLifeHost, parkThing } = await import('../../src/shell/later-life.ts');
+  const { buildPropWorld } = await import('../../src/physics/props.ts');
+  const { PLACE: HOME } = await import('../../src/data/place_home.ts');
+  const { createMockStage, createMockAudio, createMockHaptics } = await import('../mocks.ts');
+  const { createProfileStore } = await import('../../src/core/save.ts');
+  type SB = SoftBodyLike;
+  // the FALLBACK for props.ts setParked (PG_PHYS): a one-part thing (every thing at Home) is shown with a collider and parked again; the physics' own call alone is reported
+  {
+    const pw = buildPropWorld(HOME, 'wide', 1);
+    const ray = (k: number): number => pw.raycast(0, 3, 6, pw.poses[k * 8], pw.poses[k * 8 + 1] - 3, pw.poses[k * 8 + 2] - 6);
+    pw.setParked(0, false);
+    const own = ray(0) === 0;
+    parkThing(pw, 0, false); parkThing(pw, 1, false);
+    pw.beginFrame(); pw.endFrame(1 / 60);
+    const shown = ray(0) === 0 && ray(1) === 1;
+    pw.poke(0, 1.2, 0, 0);
+    for (let i = 0; i < 30; i++) { pw.beginFrame(); pw.endFrame(1 / 60); }
+    const rolled = pw.poses[0] - 0.85;
+    parkThing(pw, 1, true);
+    check('PLAYGROUND FALLBACK parkThing (props.ts setParked counts a thing\'s props from -1, so it never shows a one-part thing): Home\'s Felt Ball and Music Box get a collider (the ray hits them), the ball rolls from a poke, and parking takes the collider away again',
+      shown && rolled > 0.2 && ray(1) === -1, `physics' own setParked showed it: ${own}; rolled ${rolled.toFixed(3)} m in 0.5 s`);
+  }
+  const W = 1280, H = 800;
+  const st = createMockStage() as ReturnType<typeof createMockStage> & Record<string, unknown>;
+  const cam = st.camera as InstanceType<typeof THREE.PerspectiveCamera>;
+  cam.fov = 35; cam.aspect = W / H; cam.near = 0.1; cam.far = 200;
+  { const dd = Math.max(3.0, 2.4 / (W / H)), pitch = 0.27; cam.position.set(0, 0.42 + dd * Math.sin(pitch) + 1.2, dd * Math.cos(pitch) + 2.5); cam.lookAt(0, 0.42, -0.6); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true); }
+  let viewId = 100, primary = 1;
+  const views = new Map<number, SB>();
+  const log = recorder();
+  Object.assign(st, {
+    primaryBodyId: () => primary,
+    setBody: (b: SB) => { views.clear(); primary = ++viewId; views.set(primary, b); },
+    addBody: (b: SB) => { const vid = ++viewId; views.set(vid, b); return vid; },
+    removeBody: (vid: number) => { views.delete(vid); },
+    setBodyTier: () => {},
+    matLayout: (n: number) => [[0, 0], [1.3, 0], [-1.3, 0], [2.6, 0], [-2.6, 0]].slice(0, Math.max(1, Math.min(5, n))).map(([x, z]) => ({ x, y: 0, z })),
+    visibleTable: (out: Float32Array) => { out[0] = -3.0; out[1] = -2.6; out[2] = 3.0; out[3] = 0.9; return true; },
+    stats: () => ({ drawCalls: 0, triangles: 0, tier: 'high', frameMsEma: 0 }),
+    emote: () => {}, clearEmote: () => {}, emoteScreen: (_k: number, o: Float32Array) => { o[0] = 600; o[1] = 300; o[2] = 20; return true; },
+    loadPlace: async () => true, setPlace: () => true,
+    dropCapsule: (o?: { onLand?: () => void }) => { const c = { landed: false, removed: false }; setTimeout(() => { c.landed = true; o?.onLand?.(); }, 0);
+      return { id: 1, get landed() { return c.landed && !c.removed; }, screenPoint: () => (c.landed && !c.removed ? { x: 700, y: 400, r: 40 } : null), hitTest: () => false, setSqueeze: () => {}, wobble: () => {}, remove: () => { c.removed = true; } }; },
+  });
+  let bound: { poses: Float32Array | null; count: number; thing: Int16Array | null } = { poses: null, count: 0, thing: null };
+  st.bindProps = (poses: Float32Array | null, count: number, thing: Int16Array | null) => { bound = { poses, count, thing }; };
+  for (const k of ['setHomeThing', 'setAutonomyFraming', 'setBodyPose', 'setBodyGaze', 'setBodyExpression', 'setBodyLook', 'setBodyAsleep', 'setKeepsakes', 'setObstacles', 'setHeatPoint', 'setPlayBounds', 'thingFx']) st[k] = (...a: unknown[]) => log.rec(k, ...a);
+  const v3 = new THREE.Vector3();
+  const proj = (x: number, y: number, z: number): { x: number; y: number } | null => { v3.set(x, y, z).project(cam); return Math.abs(v3.x) > 1 || Math.abs(v3.y) > 1 ? null : { x: (v3.x * 0.5 + 0.5) * W, y: (0.5 - v3.y * 0.5) * H }; };
+  st.bodyScreenPoint = (vid: number, out: Float32Array) => { const b = views.get(vid); const p = b ? proj(b.center.x, b.center.y, b.center.z) : null; if (!p) return false; out[0] = p.x; out[1] = p.y; out[2] = 40; return true; };
+  const audio = createMockAudio() as ReturnType<typeof createMockAudio> & Record<string, unknown>;
+  audio.creature = () => true;
+  for (const k of ['setTouching', 'autoThud', 'prop', 'musicBox', 'setAmbience', 'setMusicStyle']) audio[k] = (...a: unknown[]) => log.rec('a.' + k, ...a);
+  audio.loadAmbience = async () => true;
+  const mem = memoryStorage();
+  let clockT = 1000;
+  const devSkew = { ms: 0 };
+  const profile = createProfileStore(mem);   // (boot.ts: the profile and the collection share the starter id)
+  const coll = createCollection({ storage: mem, profile: profile.profile, now: () => 1_700_000_000_000 + clockT + devSkew.ms, random: () => 0.4 });
+  const app = createApp({
+    createBody: (g, o) => (o?.piece ? new (SoftBody as unknown as SoftBodyCtor)(g, { piece: o.piece }) : o?.at ? new (SoftBody as unknown as SoftBodyCtor)(g, { piece: { frac: 1, chunk: false, at: o.at } }) : new SoftBody(g)),
+    createStage: () => st as unknown as StageLike, createAudio: () => audio as unknown as ReturnType<typeof createMockAudio>, haptics: createMockHaptics(), storage: mem, collection: coll, profile, devSkew,
+    env: { vibrate: false, reducedMotion: false }, now: () => clockT, epochNow: () => 1_700_000_000_000 + clockT, raf: () => 0, caf: () => {},
+  });
+  app.resize(W, H, 1); app.setPhase('play');
+  const said: string[] = [];
+  const host = attachLifeHost(app, { storage: mem, say: (t) => said.push(t), moment: (t) => said.push('MOMENT ' + t), setTimer: () => 0, clearTimer: () => {} })!;
+  const step = (n: number): void => { for (let i = 0; i < n; i++) { clockT += 1000 / 60; app.clock.advance?.(1000 / 60); app.stepOnce(1 / 60); } };
+  const stepA = async (n: number): Promise<void> => { for (let i = 0; i < n; i += 10) { step(10); await tick(); } };
+  type Dbg = { chars: Array<{ slot: number; species: string; itemId: string }>; party: { held: boolean }; tune: { on: boolean; kind: number; kettle: number; kettleNext: number | null }; place: number; tap: string; firstPlaySent: boolean; things: Array<{ id: string; shown: boolean; parked: boolean | null; x: number | null; z: number | null }> };
+  const dbg = (): Dbg => host.debug() as Dbg;
+  const done = (): string[] => ((app.debug.quests?.() as { quests: Array<{ id: string; done: boolean }> } | null)?.quests ?? []).filter((q) => q.done).map((q) => q.id);
+  const thingPt = (thing: number, dy = 0): { x: number; y: number } | null => { if (!bound.poses || !bound.thing) return null; for (let p = 0; p < bound.count; p++) if (bound.thing[p] === thing) return proj(bound.poses[p * 8], bound.poses[p * 8 + 1] + dy, bound.poses[p * 8 + 2]); return null; };
+  const tap = async (pt: { x: number; y: number } | null): Promise<void> => { if (!pt) return; app.input.pointerDown({ id: 7, x: pt.x, y: pt.y, type: 'mouse', button: 0 }); await stepA(6); app.input.pointerUp({ id: 7, x: pt.x, y: pt.y, type: 'mouse', button: 0 }); await stepA(2); };
+  step(30);
+  // FN-01: a held squeeze (H1), then the player lets go and Dollop plays by itself 6 s later (FIRST_PLAY -> a USE by SELF: H2)
+  const cc = app.input.screenCentre()!;
+  app.input.pointerDown({ id: 1, x: cc.x, y: cc.y, type: 'touch' }); step(75); app.input.pointerUp({ id: 1, x: cc.x, y: cc.y, type: 'touch' });
+  await stepA(720);
+  check('PLAYGROUND FN-01 (real body): a held squeeze is H1; 6 s after the player lets go Dollop plays by itself (FIRST_PLAY, a USE by SELF at Home: H2); the Felt Ball is shown with its collider',
+    done().includes('H1') && done().includes('H2') && dbg().firstPlaySent && dbg().things[0].shown && dbg().things[0].parked === false, JSON.stringify({ done: done(), ball: dbg().things[0] }));
+  // the player's taps on the Felt Ball (one squishy out: nothing in front of it): three flicks roll it (H9)
+  const b0 = { ...dbg().things[0] };
+  for (let k = 0; k < 3; k++) { await tap(thingPt(0)); await stepA(120); }
+  const b1 = dbg().things[0];
+  check('PLAYGROUND thing taps: three still clicks on the Felt Ball roll it away from the camera (USE ROLL by PLAYER x3: H9 "Roll the ball")',
+    done().includes('H9') && Math.hypot((b1.x ?? 0) - (b0.x ?? 0), (b1.z ?? 0) - (b0.z ?? 0)) > 0.3, `${JSON.stringify(done())}; ball ${b0.x},${b0.z} -> ${b1.x},${b1.z}`);
+  // the first capsule: the newcomer in play, Dollop back beside it in its LIFE slot (11.3, D-52), the newcomer NEW (its hello: H5)
+  const dollopSlot = dbg().chars[0]?.slot;
+  app.debug.shell.grant(1);
+  await stepA(30);
+  const op1 = app.capsules.openNext();
+  for (let k = 0; k < 60 && app.ceremonies.active; k++) await stepA(10);
+  await op1;
+  await stepA(30);
+  const d1 = dbg();
+  check('PLAYGROUND party through a ceremony (11.3, D-52): after the first capsule two are out (the newcomer in play, Dollop beside it), Dollop kept its LIFE slot, nothing is held',
+    app.mat.count === 2 && d1.chars.some((c) => c.species === 'dollop' && c.slot === dollopSlot) && !d1.party.held && app.identity.itemId !== null && d1.chars.some((c) => c.itemId === app.identity.itemId),
+    JSON.stringify({ count: app.mat.count, chars: d1.chars.map((c) => [c.slot, c.species]) }));
+  await stepA(300);
+  check('PLAYGROUND the newcomer arrives NEW (B09) and says hello within 5 s: "Say hello" (H5) done, and "New stamp: Open a capsule" (H4) said', done().includes('H5') && said.includes('MOMENT New stamp: Open a capsule'), JSON.stringify({ done: done(), said: said.slice(-4) }));
+  // the Music Box (shown from 2 out): a tap plays its tune (LIFE hears musicBoxOn), a second tap stops it
+  const mb = thingPt(1);
+  await tap(mb);
+  const t1 = { ...dbg().tune }, tap1 = dbg().tap;
+  await stepA(30);
+  await tap(mb);
+  const t2 = dbg().tune;
+  check('PLAYGROUND thing taps: a click on the Music Box plays its tune (audio.musicBox tune 0); a second click stops it', tap1 === 'musicbox' && t1.on && t1.kind === 0 && !t2.on && log.of('a.musicBox').length >= 2, JSON.stringify({ tap1, t1, t2 }));
+  // 60 s after the first reveal the first wish opens Hearthlog; the trip; the kettle
+  for (let k = 0; k < 40 && !(host.openPlaces() & 2); k++) await stepA(300);
+  const okC = await host.travel('hearthlog');
+  await stepA(60);
+  const dc = dbg();
+  check('PLAYGROUND travel: the first wish opens Hearthlog ("Hearthlog Cabin is open. Find it in Places."); the trip arrives ("You are at Hearthlog Cabin.": VISIT -> H8, C1) with the kettle armed 45..90 s ahead',
+    okC && dc.place === 1 && said.includes('Hearthlog Cabin is open. Find it in Places.') && said.includes('You are at Hearthlog Cabin.') && done().includes('H8') && done().includes('C1')
+      && dc.tune.kettle >= 0 && dc.tune.kettleNext !== null && dc.tune.kettleNext - app.simTime >= 40 && dc.tune.kettleNext - app.simTime <= 91, JSON.stringify({ tune: dc.tune, done: done() }));
+  check('PLAYGROUND stamp moments outside Home carry their titles (journal_text, loaded lazily): "New stamp: Come in from the snow" (C1)', said.some((t) => t === 'MOMENT New stamp: Come in from the snow'), JSON.stringify(said.filter((t) => t.startsWith('MOMENT')).slice(-3)));
+  await stepA(Math.ceil(((dc.tune.kettleNext ?? 0) - app.simTime + 1) * 60));
+  check('PLAYGROUND the kettle whistles by itself (audio.musicBox tune 1 for its one bar, the steam puff thingFx)', log.of('a.musicBox').some((c) => (c.args[0] as { on: boolean; tune?: number }).on && (c.args[0] as { tune?: number }).tune === 1) && log.of('thingFx').length > 0,
+    JSON.stringify(log.of('a.musicBox').slice(-2).map((c) => c.args[0])));
+  const fx0 = log.of('thingFx').length;
+  await tap(thingPt(0, 0.2));
+  check('PLAYGROUND thing taps: a click on the cabin\'s fireplace switches it (its puff; a USE SWITCH by PLAYER, C8\'s first clause)', dbg().tap === 'hearth' && log.of('thingFx').length > fx0, dbg().tap);
+  const okH = await host.travel('home');
+  await stepA(60);
+  const L = (st.matLayout as (n: number) => V3[])(app.mat.count), xs = app.bodies.extras.filter((x) => !x.piece);
+  check('PLAYGROUND home again: "You are at Home."; the play body at mat slot 0 and each squishy out at its mat order\'s slot (as mat.ts built them)',
+    okH && dbg().place === 0 && said.includes('You are at Home.') && Math.hypot(app.body.center.x - L[0].x, app.body.center.z - L[0].z) < 0.35 && xs.every((x, j) => Math.hypot(x.body.center.x - L[j + 1].x, x.body.center.z - L[j + 1].z) < 0.35),
+    `play ${app.body.center.x.toFixed(2)},${app.body.center.z.toFixed(2)}; extras ${xs.map((x) => `${x.body.center.x.toFixed(2)},${x.body.center.z.toFixed(2)}`).join(' ')}`);
+  // a cut (LIFE.md 9, step.ts: lifeRemove the whole, lifeAdd each piece with group = the whole's old slot): Split in two makes a face piece and a chunk of ONE group; Reconnect all, one whole again
+  type CDbg = { chars: Array<{ slot: number; kind: number; group: number; species: string; itemId: string | null }> };
+  const before = (host.debug() as CDbg).chars.find((c) => c.itemId === app.identity.itemId)!;
+  const sr = app.cut.splitInTwo();
+  for (let k = 0; k < 120 && app.cut.busy; k++) await stepA(10);
+  await stepA(30);
+  const cutC = (host.debug() as CDbg).chars.filter((c) => c.kind !== 0);
+  app.cut.reconnectAll(false);
+  await stepA(30);
+  const after = (host.debug() as CDbg).chars.filter((c) => c.itemId === app.identity.itemId);
+  check('PLAYGROUND a cut with LIFE: Split in two gives the squishy\'s pieces as LIFE characters of ONE group (the face piece kind 1 and a chunk kind 2, group = the whole\'s old slot); Reconnect all makes it one whole character again',
+    sr === 'cut' && app.cut.pieces === 1 && cutC.length === 2 && cutC.every((c) => c.group === before.slot) && cutC.some((c) => c.kind === 1) && cutC.some((c) => c.kind === 2) && after.length === 1 && after[0].kind === 0,
+    JSON.stringify({ sr, before: [before.slot, before.kind], pieces: cutC.map((c) => [c.slot, c.kind, c.group]), after: after.map((c) => [c.slot, c.kind]) }));
+  app.dispose();
 }
 
 console.error = realError;

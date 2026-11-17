@@ -85,3 +85,56 @@ Files: `src/shell/**`, `src/ui/**`, `src/input/**`, `vite.config.ts`, `src/core/
 The honesty check passed (no first-play chunk statically imports a later-* chunk). Renamed lazy chunks: later-away (18.6 KB), later-away-sound (13.3), later-lifelook (23.8), later-place-<id> (render), -sound, -data for every place, 2 x later-shared (17.6, 9.5: data/life, places, quests, journal_text shared by the lazy chunks). NOT renamed, on purpose: `life_voices` (15.6 KB: the audio engine loads it at the first unlock, which is the start of play, so it is first-play and G0b counts it).
 **One-file bytes (14.3's method, rolldown, imports external, minified)**: first load: game.ts 15 572 -> 16 402 (+830), hudBinding.ts 15 608 -> 16 831 (+1 223), boot.ts 7 556 -> 8 301 (+745), settingsCtl.ts +86, settings.ts +192, icons.ts +69, lifeLink.ts 362 (new): **+3.5 KB of the shell's 12 KB cap**. Life chunk: later-life.ts 29 162 B (the spec estimated 16 KB for the hosts and the attention wiring), wishes.ts 1 318 B. Screens: later-journal.ts 10 221 B, screenCopy.ts +318 (later-screens).
 **The life chunk is OVER its 150 KB cap: 168.15 KB** (src/life alone is ~98 KB per PG_LIFE, the reducer + journal ~38 KB per PG_QUESTS, props.ts 15 KB, the host 29 KB). D-92's overflow rule names the next moves (pack the big tables; move the play-time UI to a `play` chunk); none is done this run.
+
+# Round 3, second engineer (2026-11-17 from 02:35 UTC; HEAD 8a6a05e49; the container restarted at 02:33)
+Continued from the report above. Verified at the start: tsc 0; the first engineer's code is committed (later-life.ts, lifeLink.ts, later-journal.ts, wishes.ts,
+journal.css, settings v3, vite names); node_checks already held a section 12 with 8 LIFE-host rows (so 144 = 130 + 6 settings + 8 host, not the 136 above);
+probe_app 183/183. The scratch FN-01 run (`scratchpad/pg_shell/fn01.ts`) still passes its story in node.
+
+## Steps (this engineer)
+| step | what | state |
+|---|---|---|
+| 6 | review of the host against the real PC shell and the lanes' APIs; fixes below | DONE 03:40 (tsc 0; node scratch `scratchpad/pg_shell/fn02.ts` 8/8; probe_app 183/183; node_checks 144/144) |
+
+### Step 6 notes: what was wrong or missing, and what changed
+- **The party was lost at every ceremony** (ceremonies' `beforeStart` -> `mat.clear()`), and a capsule's newcomer REPLACED the play squishy. Now (11.3, D-52, QUESTS 13 "the
+  newcomer stays out"): the host reads the stash from its registry at the ceremony's start (who was out), holds the registry while the ceremony runs and until the party is back
+  (no lifeRemove / lifeAdd for a ceremony, as LIFE's step.ts header asks), and right after the end brings the squishies back one per step (`mat.add(..., { restore: true })`:
+  `restore` skips only the frame-time 'busy' refusal, mat.ts); for a capsule the squishy that was in play comes back beside the newcomer when the party has room, else "X went
+  back to the shelf for a rest.". A character whose squishy comes back in a new body keeps its LIFE slot and brain (`rebind` by item id; also a quick switch to a squishy that
+  was out). The newcomer is added NEW (lifeAdd isNew: B09's shy arrival and its hello within 5 s: H5 lands within seconds of the first capsule). Done in the LIFE chunk only, so
+  the published first-load code path (and every probe without the host) is unchanged.
+- **PG_PHYS bug, FALLBACK in the shell: Home's things never got a collider.** `props.ts` fills its `things` table with -1 and increments the per-thing prop COUNT from -1, so
+  `setParked(thing, ...)` loops over count - 1 props: a one-part thing (every Home thing) is never shown or parked. Home's world is built all parked, so the Felt Ball never
+  rolled, nothing at Home could be bumped or tapped (`raycast` skips parked props). `parkThing()` (later-life.ts, exported, marked FALLBACK) sets each prop's park byte and rewrites
+  its pose (`writePose`) exactly as setParked means to. Verified: Home's 4 props raycast after showing, a 1.2 m/s poke rolls the ball 0.5 m in 0.5 s, re-parking removes the
+  collider again. **Request to PG_PHYS:** count from 0 (`things[t * 2 + 1]` starts at -1); then parkThing's own loop finds nothing to do.
+- **Thing taps (new; D-93's pointer half, PLACES 2.1 M13 / M14):** a Hand press that hits no squishy, released within 350 ms and 12 px over a shown thing (`world.raycast` from the
+  camera ray; a squishy in front of the thing takes the press): a ball rolls away from the camera (1.2 m/s), a hinge or chime is poked, the Music Box plays its tune (a second
+  tap stops it, one start per 40 s), the kettle whistles, the fireplace / lamp switch (its zone byte and its puff). One USE record by PLAYER each (H9 "roll the ball" x3 and C8's
+  fire clause become reachable). game.ts passes the press and release to the host (two lines; only with a host).
+- **The kettle (PLACES 4.2, C7):** a seeded whistle every 45 to 90 s of sim time in a place with a kettle, never within 60 s of a Music Box tune, never while LIFE is quiet:
+  `audio.musicBox({ on: true, tune: 1 })`, the snapshot's musicBoxOn for its 3.6 s bar (LIFE's B18 answer -> USE LISTEN), `stage.thingFx(kettle, 1, 1)` and the steam
+  (`lifeAddLook` wet +0.2 within 1.2 m, the kettle the source). A tune stops when the party travels.
+- **Coming home** put the squishies at mat slots by LIFE slot order; now the play body at slot 0 and the k-th squishy out at slot k (as mat.ts builds them).
+- **"New stamp: ..."** had no title outside Home; the title now comes from journal_text, imported lazily (its own chunk `later-journal-text`, vite.config.ts facade).
+- In a place, a squishy that joins (the Hoard, back from a ceremony) stands at the layout's free spawn spot (the mat builds it at Home's mat spot, which may be inside a thing).
+- The Felt Ball's bounds follow the rest framing at 1 Hz at Home (visibleTable is zero-allocation); travel waits while a ceremony runs or its party is coming back.
+- The debug view adds `party` (held, restoring, newcomer), `tap` (the last tap's outcome) and `tune` (the Music Box / kettle state).
+- scratch `fn02.ts` (node, real SoftBody, stub stage with a capsule drop): Felt Ball x3 by the player -> H9; first capsule -> 2 out, Dollop kept its slot; 3 capsules -> 4 out,
+  slots kept; Music Box tap on / tap off; the cabin opens 60 s after the first reveal; the kettle armed 45..90 s ahead and whistles by itself (C7 "Answer the kettle"); a tap on
+  the fireplace switches it; home again in mat order. 8/8.
+| 7 | checks: node_checks section 13 on the REAL SoftBody (11 rows: the parkThing FALLBACK, FN-01 H1 + H2, three ball flicks -> H9, the party through a capsule (D-52) and the newcomer's hello (H5), the Music Box tap on / off, the first wish -> the cabin (H8, C1) with the kettle armed, the cabin's stamp titles, the kettle's whistle, the fireplace tap, home in mat order); probe_app's PLAYGROUND section (4 rows: the early log, the squeeze kept before the host, mat.add restore, the chunk-name rules of vite.config.ts `laterChunkName`) | DONE 03:15: **node_checks 155/155** (38.7 s), **probe_app 187/187**, tsc 0 |
+| 8 | browser: new sections `pg-playthrough` (1280 x 800) and `pg-phone` (390 x 844) in browser_shell.mjs (the scripted S0 + S1 playthrough on the real game; sim stepped through the dev hook) | RUN 1 in progress (03:00): desktop rows all ok (below) |
+
+### Step 7 / 8 notes
+- The Journal's selected tab had no fill (journal.css used `--k-sel-bg`, which the kit does not define): now the kit's selected pair (`--k-sel-fill` / `--k-sel-edge`, as `.k-chip[aria-pressed]`) and a forced-colors rule.
+- A tapped WISH bubble now reads its card's line ("Dollop wishes for a warm place: Hearthlog Cabin.") through a lazy import of `later-journal.ts` `wishLine` (boot.ts passes it to `attachBubbleTaps`); the words stay in the screens chunk. The wish CARD itself ([Let's go] [Not now]) is NOT built.
+- Browser run 1, `pg-playthrough` (desktop), every row ok: the life chunk lands 2.6 s after Wake (the Journal in the dock, Places hidden); H1 with its toast "New stamp: A gentle squeeze";
+  FIRST_PLAY 6 s after the release, H2, the Felt Ball shown with a collider and **moved 0.23 m by Dollop's own boop**; the first capsule's newcomer in play with Dollop back beside it in
+  its LIFE slot; a third out by the Hoard's real "Bring out" (3 out); H5; in 40 s of sim LIFE did emote 7, voice 20, scoot 12, hop 24, gaze 21, pose 44, auto events 8 (all through the
+  attention budget), Home's ball, Music Box, rug and lamp arrived; a real mouse click on the Music Box plays the tune, a second stops it; the Journal (4 tabs, H1 H2 H4 H5 done, LIFE
+  quiet under it, Esc closes, focus back on the button); the first wish opens Hearthlog (the live line, the Places button); the Travel sheet (Home here, the cabin "Go to", the 8 unshipped
+  "coming later"); the trip by the sheet arrives in 1.75 s of sim (H8, C1, C10 "Who loves the cabin?"); a real click on the fireplace is a thing tap; home again by the sheet in mat order.
+  Screenshots (looked at): `_shots/shell/pg_home_party_desktop.png` (three out, the lamp, the Music Box, the rug, Journal in the dock), `pg_journal_desktop.png`, `pg_travel_desktop.png`,
+  `pg_cabin_desktop.png` (the fireplace lit, swing, kettle, yarn ball, rocker, Dollop napping in the snug basket by the fire), `pg_home_first_minute_desktop.png`, `pg_home_back_desktop.png`.

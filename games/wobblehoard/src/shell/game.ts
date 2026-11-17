@@ -715,6 +715,7 @@ export function createGame(deps: GameDeps): Game {
           return;
         }
       }
+      if (life !== null && (p.button ?? 0) === 0) life.pressAt(p.id, p.x, p.y);   // PLAYGROUND: a still tap may land on a thing (the host decides at the release)
       gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0, type: p.type, ...shiftOf(p) });
     },
     pointerMove(p) {
@@ -752,6 +753,7 @@ export function createGame(deps: GameDeps): Game {
       }
       if (tool === 'snap') { snapDrag.delete(p.id); return; }
       if (capsules.pointerUp(p.id)) return;
+      if (life !== null && inputLive()) { try { life.releaseAt(p.id, p.x, p.y); } catch (e) { report(e); } }
       gestures.pointerUp({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), ...shiftOf(p) });
     },
     pointerCancel(id) {

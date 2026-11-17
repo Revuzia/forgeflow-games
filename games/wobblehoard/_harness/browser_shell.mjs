@@ -4807,6 +4807,231 @@ async function main() {
       } finally { server.close(); }
     });
 
+    // ================================================================================================
+    // PLAYGROUND (PG_SHELL round 3): the scripted S0 "Life at Home" + S1 "Hearthlog Cabin" playthrough on the REAL game (real SoftBody, stage, audio, the
+    // life chunk after the first frame of play). The sim is stepped (DebugHook.step), so LIFE runs on sim time and every number is repeatable.
+    //   pg-playthrough (1280 x 800, mouse): wake; the life chunk lands (the Journal in the dock); a held squeeze (H1); the first minute (FIRST_PLAY: H2);
+    //     the first capsule's newcomer stays out beside Dollop and a third comes out of the Hoard (3 out); they greet (H5) and play by themselves (LIFE's
+    //     bubbles, gazes, scoots; the Felt Ball rolls); the Journal; the first wish opens Hearthlog (the Places button); Travel to the cabin by the sheet
+    //     (H8, C1); a tap on the fireplace; home again by the sheet; screenshots of each.
+    //   pg-phone (390 x 844, touch): the same party at Home, the Journal and the cabin's tall layout.
+    // ================================================================================================
+    const pgLife = (page) => page.evaluate(() => window.__WH__.life());
+    const pgDone = (page) => page.evaluate(() => (window.__WH__.quests()?.quests ?? []).filter((q) => q.done).map((q) => q.id));
+    const pgInit = () => {
+      window.__liveLog = []; window.__toastLog = [];
+      const rec = () => {
+        const el = document.getElementById('wh-live'), ui = document.getElementById('ui');
+        if (!el || !ui) { setTimeout(rec, 30); return; }
+        new MutationObserver(() => { if (el.textContent) window.__liveLog.push(el.textContent); }).observe(el, { childList: true, characterData: true, subtree: true });
+        new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('toast')) window.__toastLog.push(n.textContent ?? ''); }).observe(ui, { childList: true, subtree: true });
+      };
+      rec();
+    };
+    /** the scene the player sees: the canvas centre's colour spread (a blank or frozen canvas fails) */
+    const pgBoot = async (page, touch) => {
+      await wake(page, { touch });
+      const landed = await waitUntil(page, () => !!window.__WH__.life(), null, 60000);
+      await page.evaluate(() => { const wh = window.__WH__; wh.pause(); wh.shell.matBusyMs(1e9); wh.setSetting('quality', 'high'); });
+      return landed;
+    };
+    /** a held squeeze of the play body (CSS px of its centre), through the dev hook's pointer (a touch pointer of the real input path) */
+    const pgSqueeze = (page, s) => page.evaluate(([sec]) => { const wh = window.__WH__, b = wh.bodyScreen(); wh.pointerDown(b.x, b.y, 0); wh.step(1 / 60, Math.round(sec * 60)); wh.pointerUp(0); wh.step(1 / 60, 30); }, [s]);
+    /** step the sim in slices (a task between them, so the life chunk's promises and the journal's timers run as they do live) */
+    const pgStep = (page, seconds, slice = 0.5) => page.evaluate(async ([s, sl]) => { for (let t = 0; t < s - 1e-9; t += sl) { window.__WH__.step(1 / 60, Math.round(Math.min(sl, s - t) * 60)); await new Promise((r) => setTimeout(r, 0)); } }, [seconds, slice]);
+
+    await section('pg-playthrough', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242', init: pgInit });
+      mainWatches.push(['pg-playthrough', w]);
+      const t0 = Date.now();
+      const landed = await pgBoot(page, false);
+      const dock0 = await page.evaluate(() => ({ journal: !document.querySelector('.dock-journal')?.hidden, places: !document.querySelector('.dock-places')?.hidden, life: !!window.__WH__.life() }));
+      check('PG: the life chunk lands after the first frame of play (game.life attached) and the Journal shows in the dock; Places waits for a second place', landed && dock0.journal && !dock0.places, JSON.stringify({ ...dock0, ms: Date.now() - t0 }));
+      // H1: a held squeeze (1.2 s)
+      await pgSqueeze(page, 1.2);
+      await pgStep(page, 1);
+      const d1 = await pgDone(page);
+      check('PG H1: a held squeeze is the first stamp ("New stamp: A gentle squeeze")', d1.includes('H1') && (await page.evaluate(() => window.__toastLog.some((t) => /New stamp: A gentle squeeze/.test(t)))), JSON.stringify({ done: d1, toasts: await page.evaluate(() => window.__toastLog.slice(-3)) }));
+      // the first minute: the player lets go for 6 s, Dollop goes to play with the Felt Ball by itself (FIRST_PLAY -> a USE by SELF: H2)
+      const ball0 = (await pgLife(page)).things.find((t) => t.id === 'feltball');
+      await pgStep(page, 14);
+      const l2 = await pgLife(page), d2 = await pgDone(page);
+      const ball1 = l2.things.find((t) => t.id === 'feltball');
+      const ballMoved = ball0 && ball1 && ball0.x !== null && Math.hypot(ball1.x - ball0.x, ball1.z - ball0.z);
+      check('PG H2 (the first minute, FN-01): 6 s after the player lets go, Dollop plays by itself (FIRST_PLAY sent; a USE by SELF at Home completes "Watch it play"); the Felt Ball is shown with a collider (not parked)',
+        l2.firstPlaySent && d2.includes('H2') && ball1?.shown && ball1?.parked === false, JSON.stringify({ firstPlay: l2.firstPlaySent, done: d2, ball0, ball1, moved: ballMoved, counts: l2.counts }));
+      await shot(page, 'pg_home_first_minute_desktop');
+      // the first capsule: the newcomer stays out beside Dollop (D-52); a third squishy comes out of the Hoard (the published Bring out)
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      const dollop = (await pgLife(page)).chars.find((c) => c.species === 'dollop');
+      await openCapsules(page, 1);
+      await pgStep(page, 1);
+      const l3 = await pgLife(page);
+      check('PG party (11.3, D-52): after the first capsule the newcomer is in play and Dollop is back beside it, in the same LIFE slot (its brain kept), nothing held',
+        (await page.evaluate(() => window.__WH__.shell.matInfo().count)) === 2 && l3.chars.some((c) => c.species === 'dollop' && c.slot === dollop.slot) && !l3.party.held,
+        JSON.stringify({ chars: l3.chars.map((c) => [c.slot, c.species]), party: l3.party }));
+      // a second capsule: as published, its newcomer REPLACES the play squishy (D-52 keeps both out only at the FIRST capsule), and the party around it survives the
+      // ceremony (11.3: Dollop comes back); then the first newcomer, back on the shelf, comes out again through the published Hoard card ("Bring out")
+      const first = l3.chars.find((c) => c.species !== 'dollop');
+      await openCapsules(page, 1);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', false));
+      await pgStep(page, 1);
+      const l3b = await pgLife(page);
+      const idNow = await page.evaluate(() => window.__WH__.shell.identity());
+      const card = async () => page.evaluate(() => document.querySelector('.hcard-actions [data-key="mat"]')?.textContent ?? null);
+      await hclick(page, '.hoard-btn'); await settle(page);
+      await hclick(page, `.hoard .plinth[data-species="${first.species}"]`); await settle(page);
+      const btn = await card();
+      if (/Bring out/.test(btn ?? '')) { await hclick(page, '.hcard-actions [data-key="mat"]'); await settle(page); }
+      else { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await settle(page); }
+      await page.evaluate(() => window.__WH__.pause());
+      await pgStep(page, 1);
+      const l4 = await pgLife(page);
+      check('PG party: after a second capsule its newcomer is in play and Dollop survived the ceremony (2 out; the first newcomer back on the shelf, as published); the Hoard card\'s "Bring out" brings the first newcomer out again (3 out), each a LIFE character with its own slot',
+        l3b.chars.length === 2 && l3b.chars.some((c) => c.species === 'dollop') && l3b.chars.some((c) => c.itemId === idNow.itemId) && !l3b.chars.some((c) => c.itemId === first.itemId)
+          && /Bring out/.test(btn ?? '') && l4.chars.length === 3 && l4.chars.some((c) => c.itemId === first.itemId) && (await page.evaluate(() => window.__WH__.shell.matInfo().count)) === 3,
+        JSON.stringify({ after2: l3b.chars.map((c) => [c.slot, c.species]), play: idNow.species, btn, now: l4.chars.map((c) => [c.slot, c.species, c.x, c.z]) }));
+      // they greet and play by themselves: step 40 s of sim
+      const c0 = l4.counts;
+      await pgStep(page, 40);
+      const l5 = await pgLife(page), d5 = await pgDone(page);
+      const dc = Object.fromEntries(Object.keys(l5.counts).map((k) => [k, l5.counts[k] - c0[k]]));
+      check('PG H5: two squishies out say hello (SOCIAL GREET): "Say hello" done', d5.includes('H5'), JSON.stringify(d5));
+      check('PG LIFE at Home: in 40 s of sim the three show bubbles, look around, voice and move by themselves through the host (emote, gaze, voice, scoot or hop > 0); Home\'s things arrived (ball, Music Box, rug)',
+        dc.emote > 0 && dc.gaze > 0 && dc.voice > 0 && dc.scoot + dc.hop > 0 && ['feltball', 'musicbox', 'snoozerug'].every((id) => l5.things.find((t) => t.id === id)?.shown),
+        JSON.stringify({ counts: dc, things: l5.things.filter((t) => t.shown).map((t) => t.id), units: l5.units }));
+      await shot(page, 'pg_home_party_desktop');
+      // a click on the Music Box (a still press on a thing nobody stands in front of): its tune (8 bars); a second click stops it
+      const mb = l5.things.find((t) => t.id === 'musicbox');
+      if (mb?.sx !== null && mb?.sx !== undefined) await page.mouse.click(mb.sx, mb.sy);
+      await pgStep(page, 0.5);
+      const t1 = (await pgLife(page)).tune, tap1 = (await pgLife(page)).tap;
+      if (mb?.sx !== null && mb?.sx !== undefined) await page.mouse.click(mb.sx, mb.sy);
+      await pgStep(page, 0.5);
+      const t2 = (await pgLife(page)).tune;
+      check('PG Home: a click on the Music Box plays its tune (musicBox tune 0, LIFE hears it); a second click stops it', tap1 === 'musicbox' && t1.on && t1.kind === 0 && !t2.on, JSON.stringify({ tap1, t1, t2, at: mb && [mb.sx, mb.sy] }));
+      // the Journal from the dock (a later-* screen): Stamps with Home's chapter; Esc closes it, focus back on the button
+      await page.evaluate(() => window.__WH__.resume());
+      await hclick(page, '.dock-journal'); await settle(page);
+      const jn = await page.evaluate(() => { const d = document.getElementById('wh-journal'); return d ? { open: true, title: d.querySelector('.jn-title')?.textContent, tabs: [...d.querySelectorAll('.jn-tab')].map((b) => b.textContent), quests: [...d.querySelectorAll('.jn-quest')].map((q) => `${q.dataset.quest}:${q.dataset.state}`), quiet: window.__WH__.life().quiet } : { open: false }; });
+      await shot(page, 'pg_journal_desktop');
+      await page.keyboard.press('Escape'); await settle(page);
+      const jnClosed = await page.evaluate(() => ({ gone: !document.getElementById('wh-journal'), focus: document.activeElement?.classList.contains('dock-journal'), quiet: window.__WH__.life().quiet }));
+      check('PG Journal: the dock\'s Journal opens its screen (4 tabs; Home\'s quests with H1 H2 H5 done); LIFE is quiet under it; Esc closes it and the focus returns to the Journal button',
+        jn.open && jn.tabs.length === 4 && ['H1', 'H2', 'H5'].every((q) => jn.quests.includes(`${q}:done`)) && jn.quiet && jnClosed.gone && jnClosed.focus && !jnClosed.quiet, JSON.stringify({ jn, jnClosed }));
+      // the first wish (60 s after the first reveal, 5:00 at the latest) opens Hearthlog: the Places button appears, the live line says so
+      await page.evaluate(() => window.__WH__.pause());
+      await pgStep(page, 30);
+      const opened = await stepUntil(page, `(wh) => (wh.quests()?.places & 2) !== 0`, 300, 2);
+      await page.evaluate(() => window.__WH__.resume()); await sleep(1500); await settle(page);
+      const pl = await page.evaluate(() => ({ places: !document.querySelector('.dock-places')?.hidden, live: window.__liveLog.filter((t) => /Hearthlog Cabin is open/.test(t)).length }));
+      check('PG the first wish: Hearthlog opens ("Hearthlog Cabin is open. Find it in Places.") and the Places button appears in the dock', opened >= 0 && pl.places && pl.live >= 1, JSON.stringify({ opened, ...pl, done: await pgDone(page) }));
+      // the wish's thought bubble: its 44 px hit area (ui/wishes.ts, placed every 250 ms); a click reads the wish's line (from the screens chunk) and counts as the wish seen (H7)
+      await page.evaluate(() => window.__WH__.pause());
+      let wishBtn = null;
+      for (let k = 0; k < 30 && !wishBtn; k++) {
+        await sleep(350);
+        wishBtn = await page.evaluate(() => { const b = [...document.querySelectorAll('.bubble-tap')].find((x) => !x.hidden && /^A wish/.test(x.getAttribute('aria-label') ?? '')); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, label: b.getAttribute('aria-label'), w: r.width }; });
+        if (!wishBtn) await pgStep(page, 1);
+      }
+      if (wishBtn) await page.mouse.click(wishBtn.x, wishBtn.y);
+      await sleep(600); await pgStep(page, 0.5);
+      const wl = await page.evaluate(() => window.__liveLog.filter((t) => /wishes|wants/.test(t)).slice(-1)[0] ?? null);
+      check('PG H7: the wish bubble has a 44 px hit area; a click reads the wish\'s line in the live region ("... wishes for a warm place: Hearthlog Cabin.") and "A first wish" (H7) is done',
+        !!wishBtn && wishBtn.w >= 44 && !!wl && (await pgDone(page)).includes('H7'), JSON.stringify({ wishBtn, wl, done: await pgDone(page) }));
+      await page.evaluate(() => window.__WH__.resume());
+      // Travel: the Places sheet lists Home (here), the cabin (Go), the eight unshipped ones as "coming later"; Go -> the cabin
+      await hclick(page, '.dock-places'); await settle(page);
+      const tv = await page.evaluate(() => { const d = document.getElementById('wh-travel'); return d ? { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place), later: d.querySelectorAll('.jn-later-row').length } : null; });
+      await shot(page, 'pg_travel_desktop');
+      check('PG Travel sheet: Home and Hearthlog Cabin as postcards (the cabin open with "Go to"), the other eight shown as coming later (their data says shipped: false)',
+        !!tv && tv.cards.join() === 'home:true,hearthlog:true' && tv.go.join() === 'hearthlog' && tv.later === 8, JSON.stringify(tv));
+      await page.evaluate(() => window.__WH__.pause());
+      await pclick(page, '.jn-go[data-place="hearthlog"]');
+      const arrived = await stepUntil(page, `(wh) => wh.life()?.place === 1 && !wh.life()?.travelling`, 30, 0.25);
+      await pgStep(page, 6);
+      const l6 = await pgLife(page), d6 = await pgDone(page);
+      check('PG travel to the cabin (by the sheet): the party arrives (place 1, a new visit), "You are at Hearthlog Cabin.", the cabin\'s things bound; the wish comes true (H8) and C1 done',
+        arrived >= 0 && l6.place === 1 && l6.chars.length === 3 && l6.things.length === 6 && d6.includes('H8') && d6.includes('C1') && (await page.evaluate(() => window.__liveLog.some((t) => /You are at Hearthlog Cabin\./.test(t)))),
+        JSON.stringify({ arrived, place: l6.place, chars: l6.chars.map((c) => [c.species, c.x, c.z, c.asleep]), done: d6, sheet: await page.evaluate(() => !!document.getElementById('wh-travel')) }));
+      await pgStep(page, 20);
+      await shot(page, 'pg_cabin_desktop');
+      // a tap on the fireplace (a real mouse click, a still press on the thing): its switch and puff, one USE by PLAYER (C8's first clause)
+      const hearth = (await pgLife(page)).things.find((t) => t.id === 'hearth');
+      if (hearth?.sx !== null && hearth?.sx !== undefined) await page.mouse.click(hearth.sx, hearth.sy - 6);
+      await pgStep(page, 0.5);
+      const tapH = (await pgLife(page)).tap;
+      check('PG cabin: a click on the fireplace is a thing tap (its switch: the fire puff, a USE SWITCH by PLAYER)', tapH === 'hearth', JSON.stringify({ tap: tapH, at: hearth && [hearth.sx, hearth.sy] }));
+      // home again by the sheet
+      await page.evaluate(() => window.__WH__.resume());
+      await hclick(page, '.dock-places'); await settle(page);
+      await page.evaluate(() => window.__WH__.pause());
+      await pclick(page, '.jn-go[data-place="home"]');
+      const home = await stepUntil(page, `(wh) => wh.life()?.place === 0 && !wh.life()?.travelling`, 30, 0.25);
+      await pgStep(page, 4);
+      const l7 = await pgLife(page);
+      check('PG home again (by the sheet): place 0, "You are at Home.", the three back at their mat slots, Home\'s things shown again', home >= 0 && l7.place === 0 && l7.chars.length === 3 && l7.things.find((t) => t.id === 'feltball')?.shown && (await page.evaluate(() => window.__liveLog.some((t) => /You are at Home\./.test(t)))),
+        JSON.stringify({ home, chars: l7.chars.map((c) => [c.species, c.x, c.z]) }));
+      await shot(page, 'pg_home_back_desktop');
+      // the gift (QUESTS 11): after the Home finale the Journal's Stamps page holds the gift card; a pick puts the new friend on the practice shelf
+      await page.evaluate(() => window.__WH__.resume());
+      await hclick(page, '.dock-journal'); await settle(page);
+      const g0 = await page.evaluate(() => ({ card: !!document.querySelector('#wh-journal .jn-gift'), picks: [...document.querySelectorAll('#wh-journal .jn-gift-pick')].map((b) => b.textContent), wishes: document.querySelectorAll('#wh-journal .jn-wish').length }));
+      const items0 = (await hstate(page)).items.length;
+      await shot(page, 'pg_journal_gift_desktop');
+      if (g0.picks.length) { await hclick(page, '#wh-journal .jn-gift-pick'); await sleep(800); await settle(page); }
+      const items1 = (await hstate(page)).items.length;
+      const gl = await page.evaluate(() => window.__liveLog.slice(-2));
+      await page.keyboard.press('Escape'); await settle(page);
+      // (the first gift needs BOTH finales: Home's H8 and the cabin's C8, whose 3-squishy song by the hearth a short scripted visit cannot promise: without a ready gift the row is
+      // reported as not run, never as a pass)
+      if (g0.card) check('PG the gift card (QUESTS 11): the Journal shows it with three picks; a pick puts that squishy on the practice shelf (one more item) and says so',
+        g0.picks.length === 3 && items1 === items0 + 1, JSON.stringify({ ...g0, items0, items1, live: gl }));
+      else notRun.push(`pg-playthrough gift card (no gift ready: it needs the cabin finale C8; done ${JSON.stringify(await pgDone(page))})`);
+      const noise = w.errors.filter((e) => !/Download the React DevTools/.test(e));
+      check('PG playthrough: 0 console errors / warnings / page errors, 0 failed requests', noise.length === 0 && w.pageErrors.length === 0 && w.failed.length === 0 && w.bad.length === 0, [...noise, ...w.failed, ...w.bad].slice(0, 4).join(' | '));
+      console.log(`   live lines: ${JSON.stringify(await page.evaluate(() => [...new Set(window.__liveLog)].slice(-12)))}`);
+      console.log(`   toasts: ${JSON.stringify(await page.evaluate(() => window.__toastLog.slice(-12)))}`);
+      await context.close();
+    });
+
+    await section('pg-phone', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242', ctx: PHONE, init: pgInit });
+      mainWatches.push(['pg-phone', w]);
+      const landed = await pgBoot(page, true);
+      await pgSqueeze(page, 1.2);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 1);
+      await pgStep(page, 1);
+      const firstP = (await pgLife(page)).chars.find((c) => c.species !== 'dollop');
+      await openCapsules(page, 1);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', false));
+      await pgStep(page, 1);
+      if (firstP) await bringOut(page, firstP.species);   // (the published Hoard sheet on a phone)
+      await page.evaluate(() => window.__WH__.pause());
+      await pgStep(page, 30);
+      const l1 = await pgLife(page);
+      check('PG phone: the life chunk lands; the first capsule keeps both out (D-52), the second replaces the play squishy as published, the Hoard brings the first newcomer back: three LIFE characters at Home in the tall frame (layout 1)',
+        landed && l1.chars.length === 3 && l1.layout === 1, JSON.stringify({ chars: l1.chars.map((c) => [c.species, c.x, c.z]), layout: l1.layout, scale: l1.bodyScale }));
+      await shot(page, 'pg_home_party_phone');
+      await page.evaluate(() => window.__WH__.resume());
+      await hclick(page, '.dock-journal'); await settle(page);
+      const jn = await page.evaluate(() => { const d = document.getElementById('wh-journal'); if (!d) return null; const r = d.getBoundingClientRect(); return { w: r.width, h: r.height, sw: document.documentElement.scrollWidth, iw: innerWidth }; });
+      await shot(page, 'pg_journal_phone');
+      check('PG phone Journal: a bottom sheet inside the 390 px width (no sideways scroll)', !!jn && jn.w <= 390 && jn.sw <= jn.iw, JSON.stringify(jn));
+      await page.keyboard.press('Escape'); await settle(page);
+      await page.evaluate(() => window.__WH__.pause());
+      const opened = await stepUntil(page, `(wh) => (wh.quests()?.places & 2) !== 0`, 300, 2);
+      const ok = await page.evaluate(() => window.__WH__.travel('hearthlog'));
+      await pgStep(page, 8);
+      const l2 = await pgLife(page);
+      check('PG phone: the cabin in its TALL layout (aspect under 0.9): the party arrived (place 1, layout 1)', opened >= 0 && ok && l2.place === 1 && l2.layout === 1, JSON.stringify({ opened, ok, place: l2.place, layout: l2.layout, chars: l2.chars.map((c) => [c.species, c.x, c.z]) }));
+      await shot(page, 'pg_cabin_phone');
+      const noise = w.errors.filter((e) => !/Download the React DevTools/.test(e));
+      check('PG phone: 0 console errors / warnings / page errors, 0 failed requests', noise.length === 0 && w.pageErrors.length === 0 && w.failed.length === 0 && w.bad.length === 0, [...noise, ...w.failed, ...w.bad].slice(0, 4).join(' | '));
+      await context.close();
+    });
+
     // ------------------------------------------------------------------------------------------------
     // G3: zero console errors / warnings / failed requests across the main flows
     // ------------------------------------------------------------------------------------------------

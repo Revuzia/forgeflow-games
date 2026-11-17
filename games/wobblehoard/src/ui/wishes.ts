@@ -10,8 +10,9 @@ export interface BubbleTaps { readonly el: HTMLElement; destroy(): void }
 
 const HIT = 44;
 
-/** `wishLine(species, kind, target)`: the wish card's words for a tapped wish (the screens chunk owns the card; this says it in the live region). */
-export function attachBubbleTaps(root: HTMLElement, canvas: HTMLCanvasElement, host: LifeHostApi, say: (t: string) => void, wishLine?: (species: number, kind: number, target: number) => string): BubbleTaps {
+/** `wishLine(species, kind, target)`: the wish card's words for a tapped wish (the screens chunk owns the card and its words: boot.ts passes a lazy import of
+ *  ui/later-journal.ts wishLine, so the words never ship in the life chunk; until it answers the bubble's meaning is said). */
+export function attachBubbleTaps(root: HTMLElement, canvas: HTMLCanvasElement, host: LifeHostApi, say: (t: string) => void, wishLine?: (species: number, kind: number, target: number) => string | Promise<string>): BubbleTaps {
   const layer = h('div', { class: 'bubble-taps', attrs: { 'aria-hidden': 'false' } });
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2;';
   const xyr = new Float32Array(4);
@@ -25,7 +26,9 @@ export function attachBubbleTaps(root: HTMLElement, canvas: HTMLCanvasElement, h
       const r = host.tapBubble(k);
       if (!r) return;
       const meaning = BUBBLE_MEANINGS[r.icon] ?? '';
-      say(r.wish && wishLine ? wishLine(r.species, r.kind, r.target) : meaning);
+      if (!r.wish || !wishLine) { say(meaning); return; }
+      // the wish's own line ("Dollop wishes for a warm place: Hearthlog Cabin."), else its meaning
+      Promise.resolve().then(() => wishLine(r.species, r.kind, r.target)).then((t) => say(t || meaning), () => say(meaning));
     });
     btns.push(b);
     layer.append(b);

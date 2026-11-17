@@ -45,6 +45,9 @@ const LATER_FACADES: ReadonlyArray<readonly [RegExp, (m: RegExpMatchArray) => st
   [/[\\/]src[\\/]audio[\\/]places[\\/]([a-z]+)\.ts$/, (m) => `later-place-${m[1]}-sound`],
   [/[\\/]src[\\/]data[\\/]place_([a-z]+)\.ts$/, (m) => `later-place-${m[1]}-data`],
   [/[\\/]src[\\/]render[\\/]lifelook\.ts$/, () => 'later-lifelook'],
+  // the Journal's words (the screens chunk imports them; the life chunk imports them lazily for a stamp's title outside Home): when the split makes them a
+  // chunk of their own, it is lazy-only (LAZY_ONLY below) and named so
+  [/[\\/]src[\\/]data[\\/]journal_text\.ts$/, () => 'later-journal-text'],
 ];
 /** modules that only lazy code imports (the LIFE chunk, the Journal, the away and place chunks, the stage's lazy bubbles) */
 const LAZY_ONLY: readonly RegExp[] = [

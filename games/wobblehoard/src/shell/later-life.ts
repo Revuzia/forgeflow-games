@@ -22,7 +22,8 @@
 //   setBounds / setHome -> the body's own mat corral, re-homed where LIFE last brought it to rest (setHome when physics offers it, else the
 //                          corral's home spot the constructor and placeAt write); places keep bodies in with their walls
 //   carryTo             -> "Go play with..." on a ride and LIFE's USE intent do nothing (no scripted lift exists)
-import type { LifeEvents, LifeIntents, LifeSnapshot, PlayEventRing, SoftBodyLike, SoftEvent, V3 } from '../contracts.ts';
+import type { LifeEvents, LifeIntents, LifeSnapshot, PlayEventRing, SoftBodyLike, SoftEvent, TierName, V3 } from '../contracts.ts';
+import { cameraRay, projectToNdc, pxToNdc, raycastAt } from '../input/camera.ts';
 import type { Game } from './game.ts';
 import type { LifeHostApi, LifeNote } from './lifeLink.ts';
 import type { Genome } from '../core/genome.ts';
@@ -30,14 +31,14 @@ import { pitchRatio } from '../core/genome.ts';
 import type { StorageLike } from '../core/settings.ts';
 import type { StorageSubscribe } from '../core/save.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends,
-  lifeLooks, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, attentionSound, PHRASE } from '../life/step.ts';
+  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, attentionSound, PHRASE } from '../life/step.ts';
 import type { LifeWorld } from '../life/step.ts';
 import { buildPropWorld } from '../physics/props.ts';
 import type { PropWorld } from '../physics/props.ts';
 import { PLACE as HOME } from '../data/place_home.ts';
 import { PLACE_INFO, THING_IDS, THING_KINDS, loadPlaceDef, MECH } from '../data/places.ts';
 import type { PlaceDef, PlaceId, ThingDef } from '../data/places.ts';
-import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, WISH_KIND, SPECIES_LIFE } from '../data/life.ts';
+import { INTENT, LIFE_FLAG, LIFE_EV, LOOK, SCRIPT, TOUCH, USE_VERB, WISH_KIND, SPECIES_LIFE } from '../data/life.ts';
 import { EV, BY, WISH_STATE, UI_KIND, EV_FLAG, QUESTS } from '../data/quests.ts';
 import { CATALOG, speciesIdx, familyOf } from '../data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
@@ -53,6 +54,9 @@ const AUTO_WINDOW_S = 2; // FALLBACK auto: a body LIFE drove this recently
 const FIRST_PLAY_S = 6, FIRST_WISH_S = 60, FIRST_WISH_LATEST_S = 300;
 const HOP_LEAD_S = 0.12; // a HOP's anticipation squash comes this long before the impulse (LIFE act.ts)
 const HOP_GO = 200;      // an internal queued kind: the hop impulse itself
+const TAP_MS = 350, TAP_PX = 12;   // a press and release this short and this still is a tap on a thing (a longer or moving press is the camera's)
+const MUSIC_BOX_S = 29.1, MUSIC_BOX_GAP_S = 40, KETTLE_BAR_S = 3.6;   // PLACES 4.1 / 4.2, AU-14: the tune's 8 bars, one start per 40 s; the whistle's one bar
+const FLICK_MS = 1.2;    // a tapped ball rolls away from the camera at this speed (m/s): "Roll the Felt Ball"
 /** Home's things by THING_IDS index: what each one arrives after (PLACES 4.1) */
 const THING_FELT = 0, THING_MUSIC = 1, THING_RUG = 2, THING_LAMP = 3, THING_SHELF = 4, THING_PAD = 5;
 /** the cut flavour index (audio/cut.ts CUT_FLAVOURS: gel, sticky, foam, beads, dough, firm) of each material family (MATERIAL_FAMILY_IDS order) */
@@ -121,6 +125,18 @@ const questIdx = (id: string): number => QUESTS.findIndex((q) => q.id === id);
 /** a quest's player title (Home's from HOME_TEXT here; the others come from the screens chunk's journal_text) */
 export function homeQuestTitle(idx: number): string | null { const q = QUESTS[idx]; return q && q.chapter === 0 ? HOME_TEXT.quests[q.idx % 10]?.[0] ?? null : null; }
 
+/** Park or show a thing's props. FALLBACK (PG_PHYS, physics/props.ts): `setParked` counts a thing's props from -1 (the `things` table is filled with
+ *  -1 and its count field is incremented from there), so it loops over count - 1 props and never parks or shows a ONE-part thing: every thing at Home.
+ *  Built parked (Home), the Felt Ball and the Music Box then had no collider, did not roll and could not be tapped. This sets each prop's park byte
+ *  and rewrites its pose and packed shape (props.ts writePose) exactly as setParked means to; setParked itself still runs first (right for 2+ parts). */
+export function parkThing(wd: PropWorld, thing: number, parked: boolean): void {
+  wd.setParked(thing, parked);
+  const x = wd as unknown as { parked?: Uint8Array; writePose?: (k: number) => void };
+  if (!x.parked || typeof x.writePose !== 'function') return;
+  const v = parked ? 1 : 0;
+  for (let k = 0; k < wd.count; k++) if (wd.propThing[k] === thing && x.parked[k] !== v) { x.parked[k] = v; x.writePose.call(wd, k); }
+}
+
 /** Build the LIFE host and attach it to the game (game.attachLife). Returns null when the game cannot host it (no stage camera). */
 export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const stage = game.stage, audio = game.audio, bodies = game.bodies;
@@ -144,6 +160,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const vis = new Float32Array(4);
   const wishOut = new Int32Array(2);
   const strikes = new Float32Array(32 * 4);
+  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0 };   // what LIFE did through the host (the dev view)
 
   // ---- the place: Home's world now, a place's world after a trip ----
   let placeIdx = 0, visit = 1, layout: 0 | 1 = 0, bodyScale = 1;
@@ -167,9 +184,18 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   let firstReleaseT = -1, firstRevealT = -1, firstPlaySent = false, firstWishSent = false, freshProfile = false;
   let touchingNow = false;
   let lastCeremony: 'capsule' | 'merge' | null = null;
+  // the party through a ceremony (11.3, D-52): beforeStart's mat.clear() is a STASH; right after the end the squishies come back, one a step
+  let ceremonyOn = false;
+  const stash: string[] = [];              // item ids of the squishies out when the ceremony started (not the play body)
+  let prevPlay: string | null = null;      // the play squishy's item id when it started (a capsule's newcomer takes its place: it comes back beside it)
+  const restoreQ: string[] = [];           // item ids still to bring back (at most 5)
+  const shelved: string[] = [];            // names that found no room ("... went back to the shelf for a rest.")
+  let newcomerId: string | null = null;    // the capsule's newcomer: added NEW (B09's shy arrival and hello)
+  let firstCapsule = false;                // this capsule is the player's first (the Journal's H4 not done when it started): D-52 keeps both out
 
   const write = (kind: number, sub: number, thing: number, a: number, b: number, n2: number, by: number, v = 0, flag = 0): void => {
     if (ring.n >= ring.kind.length) { ring.dropped++; return; }
+    counts.records++;
     const i = ring.n++;
     ring.kind[i] = kind; ring.sub[i] = sub; ring.place[i] = placeIdx; ring.thing[i] = thing; ring.a[i] = a; ring.b[i] = b; ring.fam[i] = famIdxOfSpecies(a);
     ring.n2[i] = n2; ring.by[i] = by; ring.flag[i] = flag | (game.settings.autonomy ? 0 : EV_FLAG.AUTONOMY_OFF); ring.v[i] = v;
@@ -209,7 +235,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     for (let i = 0; i < CAP; i++) if (chars[i].on) on++;
     return on !== n;
   }
-  function addChar(b: SoftBodyLike, g: Genome, itemId: string | null, off: V3, kind: 0 | 1 | 2, group: number): number {
+  function addChar(b: SoftBodyLike, g: Genome, itemId: string | null, off: V3, kind: 0 | 1 | 2, group: number, isNew = false): number {
     const i = freeSlot();
     if (i < 0) return -1;
     const c = chars[i];
@@ -229,9 +255,26 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
     try { warm = itemId ? Math.min(5, Math.floor((game.hoard.warmthOf?.(itemId) ?? 0))) : 0; } catch { warm = 0; }
-    lifeAdd(w, i, g, kind, c.group, warm, false);
+    lifeAdd(w, i, g, kind, c.group, warm, isNew);
     if (placeIdx === 0 && kind === 0) lifeSetHome(w, i, c.homeX, c.homeZ);
     return i;
+  }
+  /** the same squishy in another body (it came back from a ceremony's stash, or a quick switch made a squishy that was out the play body): the
+   *  character keeps its slot and its brain (needs, looks, friendships: a ceremony is not "coming out", LIFE 3), only its body and view change */
+  function rebind(i: number, e: { b: SoftBodyLike; off: V3 }): void {
+    const c = chars[i], b = e.b;
+    clearBubbles(i);
+    for (let k = 0; k < qLen; k++) if (qWho[k] === i) qKind[k] = 0;
+    try { c.body?.setPropWorld?.(null); } catch { /* gone */ }
+    c.body = b; c.view = bodies.viewIdOf(b) ?? -1;
+    c.offX = e.off.x; c.offY = e.off.y; c.offZ = e.off.z;
+    c.frac = b.frac ?? 1; c.r = b.restRadius * Math.cbrt(c.frac);
+    const ce = b.center;
+    c.lastX = ce.x + c.offX; c.lastZ = ce.z + c.offZ; c.vx = 0; c.vz = 0; c.homeX = c.lastX; c.homeZ = c.lastZ;
+    c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.driveT = -1e9;
+    try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
+    if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (x) { report(x); } }
+    if (placeIdx === 0) lifeSetHome(w, i, c.homeX, c.homeZ);
   }
   function removeChar(i: number): void {
     const c = chars[i];
@@ -243,9 +286,11 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     for (let k = 0; k < qLen; k++) if (qWho[k] === i) qKind[k] = 0;
     c.on = false; c.body = null; c.genome = null; c.itemId = null; c.view = -1;
   }
+  /** the party is inside a ceremony or coming back from one (11.3): the registry waits, so nobody is lifeRemoved / lifeAdded for it */
+  const partyHeld = (): boolean => ceremonyOn || game.ceremonies.active || game.ceremonies.pending || restoreQ.length > 0;
   /** bring the registry in line with the bodies on the mat (allocates only when something changed: a squishy out or back, a cut, a join) */
   function syncParty(): void {
-    if (!partyChanged()) return;
+    if (partyHeld() || !partyChanged()) return;
     const cutNow = game.cut.pieces > 1;
     const playId = game.identity.itemId;
     // the bodies now (the play body first)
@@ -256,6 +301,11 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     for (let i = 0; i < CAP; i++) {
       const c = chars[i];
       if (!c.on || list.some((e) => e.b === c.body)) continue;
+      // the same squishy, whole, in a new body (back from a ceremony's stash; a quick switch to a squishy that was out): it keeps its brain
+      if (c.kind === 0 && c.itemId !== null) {
+        const e = list.find((x) => !x.piece && x.id === c.itemId && slotOfBody(x.b) < 0);
+        if (e) { rebind(i, e); continue; }
+      }
       if (cutNow && c.kind === 0 && c.itemId !== null && c.itemId === playId) wholeCut = i;   // the whole that was cut: its slot is its pieces' group key
       removeChar(i);
     }
@@ -270,9 +320,28 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     for (const e of list) {
       if (slotOfBody(e.b) >= 0) continue;
       if (e.piece && cutGroup >= 0) addChar(e.b, e.g, e.id, e.off, e.b === bodies.body ? 1 : 2, cutGroup);
-      else addChar(e.b, e.g, e.id, e.off, 0, -1);
+      else {
+        // a capsule's newcomer arrives NEW (B09: the shy arrival, and its hello within 5 s); in a place a squishy who joins stands at a free spawn spot
+        const i = addChar(e.b, e.g, e.id, e.off, 0, -1, e.id !== null && e.id === newcomerId);
+        if (i >= 0 && placeIdx !== 0 && !travelling) settleInPlace(i);
+      }
     }
+    newcomerId = null;
     afterPartyChange();
+  }
+  /** in a place: a squishy who came out (the Hoard, back from a ceremony) stands at the layout's spawn spot farthest from everyone else, at rest
+   *  (the mat builds it at Home's mat spot, which in a place may be inside a thing) */
+  function settleInPlace(i: number): void {
+    const lay = layout === 1 ? def.tall : def;
+    const spawn = lay.spawn === 'matLayout' ? null : lay.spawn;
+    if (!spawn || !spawn.length || !chars[i].body) return;
+    let best = 0, bd = -1;
+    for (let k = 0; k < spawn.length; k++) {
+      let d = 1e9;
+      for (let j = 0; j < CAP; j++) if (j !== i && chars[j].on) d = Math.min(d, Math.hypot(chars[j].lastX - spawn[k][0], chars[j].lastZ - spawn[k][1]));
+      if (d > bd) { bd = d; best = k; }
+    }
+    place(chars[i], spawn[best][0], spawn[best][1]);
   }
   function addCharAt(slot: number, e: { b: SoftBodyLike; g: Genome; id: string | null; off: V3 }): void {
     // a fresh whole in a given (free) slot: take the lowest free one, then move it if needed (slots are LIFE keys only)
@@ -355,7 +424,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const show = !floatParked && arrived(k) && n >= fromN;
       if ((homeShown[k] === 1) === show) continue;
       homeShown[k] = show ? 1 : 0;
-      try { world.setParked(k, !show); } catch (e) { report(e); }
+      try { parkThing(world, k, !show); } catch (e) { report(e); }
       const x = (spot ? spot.x : t.x) * bodyScale, z = (spot ? spot.z : t.z) * bodyScale, yaw = spot ? spot.yaw : t.yaw;
       try { stage.setHomeThing?.(k, show, x, z, yaw); } catch (e) { report(e); }
     }
@@ -370,7 +439,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     world = buildPropWorld(HOME, layout === 1 ? 'tall' : 'wide', bodyScale);
     mapThings();
     homeShown.fill(0);
-    for (let k = 0; k < HOME.things.length; k++) { try { world.setParked(k, true); } catch { /* none */ } }
+    for (let k = 0; k < HOME.things.length; k++) { try { parkThing(world, k, true); } catch { /* none */ } }
     for (const c of chars) if (c.on && c.body && !floatParked) { try { c.body.setPropWorld?.(world); } catch (e) { report(e); } }
     try { if (!floatParked) stage.bindProps?.(world.poses, world.count, world.propThing); } catch (e) { report(e); }
     lifeSetPlace(w, 0, visit, HOME, layout, bodyScale);
@@ -411,7 +480,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     switch (kind) {
       case INTENT.SCOOT:
         if (floatParked) return;
-        try { if (body.scootTo?.(a - c.offX, b - c.offZ, cc)) { c.driveT = game.simTime; c.scooting = true; c.scootX = a; c.scootZ = b; } } catch (x) { report(x); }
+        try { if (body.scootTo?.(a - c.offX, b - c.offZ, cc)) { c.driveT = game.simTime; c.scooting = true; c.scootX = a; c.scootZ = b; counts.scoot++; } } catch (x) { report(x); }
         return;
       case INTENT.HOP:
         if (floatParked) return;
@@ -420,7 +489,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         return;
       case HOP_GO: try { body.setSquash?.(1, 0.08); } catch { /* ignore */ } doHop(i, a, b, cc); return;
       case INTENT.SQUASH: if (!floatParked) { try { body.setSquash?.(a, b); } catch (x) { report(x); } } return;
-      case INTENT.POSE: if (c.view >= 0) { try { stage.setBodyPose?.(c.view, a, b, cc, d, e); } catch (x) { report(x); } } return;
+      case INTENT.POSE: if (c.view >= 0) { counts.pose++; try { stage.setBodyPose?.(c.view, a, b, cc, d, e); } catch (x) { report(x); } } return;
       case INTENT.GLIDE: if (!floatParked) { try { body.nudge({ x: a, y: 0, z: b }); c.driveT = game.simTime; } catch (x) { report(x); } } return;
       case INTENT.SETTLE: endScoot(i); return;
       case INTENT.CANCEL:
@@ -430,21 +499,22 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         return;
       case INTENT.GAZE:
         if (c.view < 0) return;
+        counts.gaze++;
         try {
           if (Number.isNaN(a)) { const p = stage.camera.position; stage.setBodyGaze?.(c.view, p.x, p.y, p.z, d > 0 ? d : 1); }
           else stage.setBodyGaze?.(c.view, a, b, cc, d);
         } catch (x) { report(x); }
         return;
       case INTENT.EXPRESS: if (c.view >= 0) { try { stage.setBodyExpression?.(c.view, a, b); } catch (x) { report(x); } } return;
-      case INTENT.EMOTE: showEmote(i, icon, style, dots, a | 0); return;
-      case INTENT.VOICE: voice(i, a, b, cc, icon); return;
+      case INTENT.EMOTE: counts.emote++; showEmote(i, icon, style, dots, a | 0); return;
+      case INTENT.VOICE: counts.voice++; voice(i, a, b, cc, icon); return;
       case INTENT.USE: return;   // FALLBACK: a player-asked use on a ride needs carryTo, which physics has not built
       default: return;
     }
   }
   function doHop(i: number, vx: number, vy: number, vz: number): void {
     const c = chars[i];
-    try { if (c.body?.hop?.(vx, vy, vz)) c.driveT = game.simTime; } catch (x) { report(x); }
+    try { if (c.body?.hop?.(vx, vy, vz)) { c.driveT = game.simTime; counts.hop++; } } catch (x) { report(x); }
   }
   function endScoot(i: number): void {
     const c = chars[i];
@@ -507,6 +577,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     }
     if (e.kind === 'land' && i >= 0) chars[i].tossed = false;
     if (!auto) return false;
+    counts.auto++;
     // the attention budget: a soft thud at most (never a haptic, never a shake, never the meter)
     try {
       if (attentionSound(att, s) && audio.autoThud) {
@@ -786,14 +857,137 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
 
   // ---- the kettle and the Music Box (D-81): a sim-time tune timer, the shell's own (LifeSnapshot.musicBoxOn) ----
   let musicBoxOnUntil = -1e9;
+  let lastTuneT = -1e9;                    // the last start of a tune (the Music Box or the kettle): the kettle keeps 60 s from a Music Box tune
+  let tuneKind = -1;                       // 0 the Music Box, 1 the kettle (the one playing now)
+  let kettleK = -1, kettleNext = Infinity; // the place's kettle (its things index) and its next whistle on sim time
+  let kRng = 0x6b657474;                   // the whistle's seeded timer (an LCG of its own: LIFE's streams stay untouched)
+  const kRand = (): number => { kRng = (Math.imul(kRng, 1664525) + 1013904223) >>> 0; return kRng / 4294967296; };
+  function kettleArm(from: number): void {
+    if (kettleK < 0) { kettleNext = Infinity; return; }
+    const p = def.things[kettleK].p as { everyMin?: number; everyMax?: number };
+    const a = p.everyMin ?? 45, b = p.everyMax ?? 90;
+    kettleNext = from + a + kRand() * Math.max(0, b - a);
+  }
+  /** a tune starts (tune 0 the Music Box's 8 bars, 1 the kettle's one bar): the audio, the shell's own timer for LIFE, the kettle's steam */
+  function startTune(tune: 0 | 1, k: number): boolean {
+    const t = game.simTime;
+    if (tune === 0 && t - lastTuneT < MUSIC_BOX_GAP_S && tuneKind === 0) return false;
+    try { audio.musicBox?.({ on: true, tune }); } catch (x) { report(x); }
+    tuneKind = tune; lastTuneT = t; musicBoxOnUntil = t + (tune === 0 ? MUSIC_BOX_S : KETTLE_BAR_S);
+    if (tune === 1 && k >= 0) {
+      try { stage.thingFx?.(k, 1, 1); } catch { /* no puff drawn */ }
+      // the steam (PLACES 4.2): wet +0.2 on every squishy within 1.2 m of the kettle, its source the kettle (a REACT names it)
+      const p = def.things[k].p as { steamWet?: number; steamR?: number };
+      const sp = thingSpot(k), r = p.steamR ?? 1.2;
+      for (let i = 0; i < CAP; i++) if (chars[i].on && Math.hypot(chars[i].lastX - sp[0], chars[i].lastZ - sp[1]) <= r) lifeAddLook(w, i, LOOK.wet, p.steamWet ?? 0.2, thingGlobal[k]);
+    }
+    return true;
+  }
+  function stopTune(): void {
+    try { audio.musicBox?.({ on: false, tune: tuneKind < 0 ? 0 : tuneKind }); } catch (x) { report(x); }
+    musicBoxOnUntil = -1e9; tuneKind = -1;
+  }
+  /** once a step in a place with a kettle: it whistles by itself every 45 to 90 s, never within 60 s of a Music Box tune, never while LIFE is quiet */
+  function kettleStep(): void {
+    if (kettleK < 0 || travelling) return;
+    const t = game.simTime;
+    if (t < kettleNext || s.quiet) return;
+    if (musicBoxOnUntil > t || (tuneKind === 0 && t - lastTuneT < 60)) { kettleNext = Math.max(t, lastTuneT + 60) + 1; return; }
+    startTune(1, kettleK);
+    kettleArm(t);
+  }
+
+  // ---- the player's taps on things (PLACES 2.1 M13 / M14, D-93's "tap it yourself" by pointer): a press that hits no squishy and lands on a shown
+  // thing, released within 350 ms and 12 px (a longer or moving press is the camera's): a ball rolls away, a hinge or chime is poked, a switch
+  // switches (the Music Box's tune, the kettle's whistle, the fireplace's fire). Each is one USE record by PLAYER (H9 "roll the ball", C8's fire).
+  const tapId = new Int32Array(4).fill(-1), tapX = new Float32Array(4), tapY = new Float32Array(4), tapT = new Float64Array(4);
+  let tapWhy = '';   // the last tap's outcome (the dev hook's view): a thing id, or why it was not a thing tap
+  function pressAt(id: number, x: number, y: number): void {
+    let k = -1;
+    for (let j = 0; j < 4; j++) if (tapId[j] === id || (k < 0 && tapId[j] < 0)) k = j;
+    if (k < 0) k = 0;
+    tapId[k] = id; tapX[k] = x; tapY[k] = y; tapT[k] = game.clock.now();
+  }
+  function releaseAt(id: number, x: number, y: number): boolean {
+    let k = -1;
+    for (let j = 0; j < 4; j++) if (tapId[j] === id) { k = j; break; }
+    if (k < 0) return false;
+    tapId[k] = -1;
+    if (game.clock.now() - tapT[k] > TAP_MS || Math.hypot(x - tapX[k], y - tapY[k]) > TAP_PX) return false;
+    return tapThing(x, y);
+  }
+  function tapThing(x: number, y: number): boolean {
+    if (!world || floatParked || s.quiet || game.tool !== 'hand') { tapWhy = 'off'; return false; }
+    const cam = stage.camera;
+    if (!cam) { tapWhy = 'nocam'; return false; }
+    try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
+    const n = pxToNdc(x, y, game.viewport);
+    const ray = cameraRay(cam, n.x, n.y);
+    const p = world.raycast(ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    if (p < 0) { tapWhy = 'miss'; return false; }
+    const th = world.propThing[p];
+    if (th < 0 || th >= def.things.length) { tapWhy = 'wall'; return false; }
+    // a squishy in front of the thing takes the press (the gesture machine has it already)
+    const pr = world.poses, px = pr[p * 8] - ray.origin.x, py = pr[p * 8 + 1] - ray.origin.y, pz = pr[p * 8 + 2] - ray.origin.z;
+    const tThing = px * ray.dir.x + py * ray.dir.y + pz * ray.dir.z;
+    for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || !c.body) continue;
+      const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ });
+      if (hit && hit.t < tThing) { tapWhy = 'body'; return false; }
+    }
+    tapWhy = def.things[th].id;
+    const td = def.things[th], g = thingGlobal[th];
+    const actor = nearestTo(pr[p * 8], pr[p * 8 + 2]);
+    const sp = actor >= 0 ? chars[actor].species : 255;
+    if (td.switch === 'tune') {
+      const tune: 0 | 1 = td.id === 'kettle' ? 1 : 0;
+      if (musicBoxOnUntil > game.simTime && tuneKind === tune && tune === 0) stopTune();   // a second tap stops the Music Box (AU-14)
+      else if (!startTune(tune, th)) return true;                                       // one start per 40 s: the tap is taken, nothing plays
+      write(EV.USE, td.verb, g, sp, 255, 1, BY.PLAYER, 0);
+      return true;
+    }
+    if (td.switch === 'fire' || td.switch === 'zone') {
+      // the fireplace's fire, the lamp's warmth: the thing's zone on or off, its puff; the warm zone follows (zonesAt reads zoneOn)
+      const zi = td.zone ? def.zones.findIndex((z) => z.id === td.zone) : -1;
+      if (zi >= 0) world.setZoneOn(zi, world.zoneOn[zi] === 0);
+      try { stage.thingFx?.(th, 1, 1); } catch { /* none */ }
+      write(EV.USE, USE_VERB.SWITCH, g, sp, 255, 1, BY.PLAYER, 0);
+      return true;
+    }
+    if (td.mech === MECH.ball) {
+      // a flick: the ball rolls away from the camera
+      const hx = ray.dir.x, hz = ray.dir.z, hl = Math.hypot(hx, hz) || 1;
+      world.poke(p, (hx / hl) * FLICK_MS, 0, (hz / hl) * FLICK_MS);
+      write(EV.USE, td.verb, g, sp, 255, 1, BY.PLAYER, 0);
+      return true;
+    }
+    if (td.mech === MECH.chime || td.mech === MECH.seesaw || td.mech === MECH.swing) {
+      world.poke(p, ray.dir.x * 0.6, -0.4, ray.dir.z * 0.6);
+      write(EV.USE, td.verb, g, sp, 255, 1, BY.PLAYER, world.propPart[p]);
+      return true;
+    }
+    return false;
+  }
+  /** the character nearest a point (the squishy "watching" a thing the player tapped: its species goes in the USE record), -1 when none */
+  function nearestTo(x: number, z: number): number {
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < CAP; i++) { const c = chars[i]; if (!c.on || c.kind !== 0) continue; const d = Math.hypot(c.lastX - x, c.lastZ - z); if (d < bd) { bd = d; best = i; } }
+    return best;
+  }
 
   // ---- the collection's journal events: moments, the unlock line, friendships back into LIFE ----
   const offEvents = game.hoard.onEvent((e: CollectionEvent) => {
     try {
       switch (e.type) {
         case 'quest': {
+          // "New stamp: ..." (QUESTS 15): Home's titles ship here (HOME_TEXT); every other chapter's come from the lazy journal_text (later-journal-text)
           const title = homeQuestTitle(e.quest);
-          deps.moment?.(title ? `New stamp: ${title}` : 'New stamp');
+          if (title) deps.moment?.(`New stamp: ${title}`);
+          else {
+            const q = e.quest;
+            void import('../data/journal_text.ts').then((m) => { const t = m.QUEST_TEXT[q]?.[0]; deps.moment?.(t ? `New stamp: ${t}` : 'New stamp'); }, () => { deps.moment?.('New stamp'); });
+          }
           if (e.byPlayer) deps.stampHaptic?.();
           pushJournal();
           if (placeIdx === 0) homeThings();
@@ -821,12 +1015,53 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     } catch (x) { report(x); }
   });
   const offCeremony = game.on('ceremony', (e) => {
-    if (e.type === 'start') { lastCeremony = e.kind; return; }
+    if (e.type === 'start') {
+      lastCeremony = e.kind;
+      // 11.3: the start's mat.clear() (ceremonies beforeStart) is a stash. The registry still lists who was out (syncParty waits while the
+      // party is held), so the stash is read from it; a ceremony queued behind another keeps the first one's squishies still to come back.
+      ceremonyOn = true;
+      const playId = game.identity.itemId;
+      for (const id of restoreQ) if (id !== playId && !stash.includes(id)) stash.push(id);
+      restoreQ.length = 0;
+      for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.kind === 0 && c.itemId !== null && c.itemId !== playId && !stash.includes(c.itemId)) stash.push(c.itemId); }
+      if (prevPlay === null) prevPlay = playId;
+      if (e.kind === 'capsule') { const v = safeView(), h4 = questIdx('H4'); firstCapsule = !!v && h4 >= 0 && !v.quests[h4]?.done; }
+      return;
+    }
     if (e.type === 'end') {
-      if (lastCeremony === 'capsule') { write(EV.CAPSULE, 0, -1, (() => { try { return speciesIdx(e.info.item.genome.species); } catch { return 255; } })(), 255, 1, BY.PLAYER); if (firstRevealT < 0) firstRevealT = game.simTime; }
+      const kind = lastCeremony;
+      if (kind === 'capsule') { write(EV.CAPSULE, 0, -1, (() => { try { return speciesIdx(e.info.item.genome.species); } catch { return 255; } })(), 255, 1, BY.PLAYER); if (firstRevealT < 0) firstRevealT = game.simTime; }
       lastCeremony = null;
+      ceremonyOn = false;
+      // the result is the play body now (ceremonies.ts adopts it before this event): the stash comes back beside it, then, for the player's FIRST
+      // capsule only, the squishy that was in play (D-52 and 11.3: "the first capsule's newcomer stays out when there is room"; QUESTS 13's first
+      // hello). Every later reveal replaces the play squishy as the published game does; the party around it survives every ceremony (11.3).
+      const nowPlay = game.identity.itemId;
+      const has = (id: string): boolean => { try { return !!game.hoard.item(id); } catch { return false; } };
+      for (const id of stash) if (id !== nowPlay && has(id)) restoreQ.push(id);
+      if (kind === 'capsule' && firstCapsule && prevPlay !== null && prevPlay !== nowPlay && has(prevPlay) && !restoreQ.includes(prevPlay)) restoreQ.push(prevPlay);
+      firstCapsule = false;
+      if (kind === 'capsule') newcomerId = nowPlay;
+      stash.length = 0; prevPlay = null; shelved.length = 0;
     }
   });
+  /** one squishy of the stash back on the mat per step once no ceremony runs or waits (5 at most: within 0.1 s; 11.3 asks 0.5 s) */
+  function pumpRestore(): void {
+    if (!restoreQ.length || ceremonyOn || game.ceremonies.active || game.ceremonies.pending || game.phase !== 'play') return;
+    const id = restoreQ.shift()!;
+    let it: ReturnType<typeof game.hoard.item> = null;
+    try { it = game.hoard.item(id); } catch { it = null; }
+    if (it && it.id !== game.identity.itemId && !game.mat.has(it.id)) {
+      let r: string | null = null;
+      try { r = game.mat.add({ genome: it.genome, itemId: it.id, tier: it.tier as TierName, name: it.name }, { restore: true }); } catch (x) { report(x); r = 'failed'; }
+      if (r === 'full') shelved.push(it.name);
+    }
+    if (!restoreQ.length && shelved.length) {
+      // the tier drop policy's kind line (11.3): who found no room goes back to the shelf, said once
+      deps.say?.(shelved.length === 1 ? `${shelved[0]} went back to the shelf for a rest.` : `${shelved.length} squishies went back to the shelf for a rest.`);
+      shelved.length = 0;
+    }
+  }
 
   // ---- attach: the early log, the journal, Home ----
   attachT = game.simTime;
@@ -847,12 +1082,12 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   buildHome();
   try { stage.setAutonomyFraming?.(true); } catch (e) { report(e); }
   try { const v = safeView(); if (v) stage.setKeepsakes?.(v.keepsakes); } catch { /* ignore */ }
-  let lastTall = frameTall(), lastScale = bodyScale;
+  let lastTall = frameTall(), lastScale = bodyScale, boundsTick = 0;
   const offSettings = game.on('settings', () => { floatRule(); });
 
   // ---- travel (S1): the place picker's path (QUESTS 15, 11.7) ----
   async function travel(id: string): Promise<boolean> {
-    if (travelling) return false;
+    if (travelling || partyHeld()) return false;   // (whenIdle: never during a ceremony or while its party is coming back)
     const target = PLACE_INFO.find((p) => p.id === id);
     if (!target) return false;
     if (target.idx === placeIdx) return true;
@@ -880,24 +1115,31 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   }
   function enterPlace(next: PlaceDef): void {
     for (let i = 0; i < CAP; i++) if (chars[i].on) { clearBubbles(i); endScoot(i); }
+    if (musicBoxOnUntil > game.simTime) stopTune();   // a tune does not follow the party to another place
     visit++;
     def = next; placeIdx = next.idx;
+    kettleK = placeIdx === 0 ? -1 : next.things.findIndex((t) => t.switch === 'tune' && t.id === 'kettle');
     if (placeIdx === 0) {
-      // home again: every body back at its mat slot, Home's framing and world
+      // home again: every body back at its mat slot (the play body at slot 0, the k-th squishy out at slot k: mat.ts builds them there),
+      // Home's framing and world
       try { stage.setPlayBounds?.(NaN, NaN, NaN, NaN); } catch { /* ignore */ }
       try { audio.setAmbience?.({ place: null }); audio.setMusicStyle?.('home'); } catch (e) { report(e); }
       try { stage.setHeatPoint?.(NaN, NaN, NaN); } catch { /* ignore */ }
       const L = (stage as { matLayout?: (n: number) => V3[] }).matLayout?.(Math.max(1, wholesOut())) ?? [];
-      let k = 0;
-      for (let i = 0; i < CAP; i++) {
-        const c = chars[i];
-        if (!c.on || !c.body || c.kind !== 0) continue;
+      const p0 = slotOfBody(bodies.body);
+      if (p0 >= 0 && chars[p0].kind === 0) place(chars[p0], L[0]?.x ?? 0, L[0]?.z ?? 0);
+      let k = 1;
+      for (const x of bodies.extras) {
+        if (x.piece) continue;
+        const i = slotOfBody(x.body);
+        if (i < 0 || chars[i].kind !== 0) continue;
         const spot = L[k++] ?? { x: 0, y: 0, z: 0 };
-        place(c, spot.x, spot.z);
+        place(chars[i], spot.x, spot.z);   // (place-space: place() takes the body's own draw offset off)
       }
       homeShown.fill(0);
       buildHome();
       try { stage.setAutonomyFraming?.(true); } catch { /* ignore */ }
+      kettleNext = Infinity;
       return;
     }
     try { stage.setAutonomyFraming?.(false); } catch { /* ignore */ }
@@ -905,7 +1147,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const lay = layout === 1 ? next.tall : next;
     world = buildPropWorld(next, layout === 1 ? 'tall' : 'wide', 1);
     mapThings();
-    for (let k = 0; k < next.things.length; k++) { try { world.setParked(k, false); } catch { /* none */ } }
+    for (let k = 0; k < next.things.length; k++) { try { parkThing(world, k, false); } catch { /* none */ } }
     try { stage.bindProps?.(world.poses, world.count, world.propThing); } catch (e) { report(e); }
     const b = lay.bounds;
     try { stage.setPlayBounds?.(b.x, b.z, b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4)); } catch (e) { report(e); }
@@ -937,6 +1179,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (woke < Math.max(1, att.moverCap)) { woke++; continue; }
       try { c.body.sleep?.(); } catch { /* ignore */ }
     }
+    kettleArm(game.simTime);   // the kettle's first whistle 45 to 90 s after the arrival
   }
   /** put a body at rest at (x, z) on the floor (under the travel crossfade), its corral home there */
   function place(c: Char, x: number, z: number): void {
@@ -985,12 +1228,16 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     },
     act(dt) {
       if (dt > 0 && world && !floatParked) world.beginFrame();
+      pumpRestore();
       syncParty();
       // the frame changed (a rotation, a resize across aspect 0.9) or the play body's size: Home re-lays its things (a place keeps its layout until the next trip)
       if (placeIdx === 0 && !travelling) {
         const tall = frameTall(), sc = measureScale();
         if (tall !== lastTall || Math.abs(sc - lastScale) > 1e-3) { lastTall = tall; lastScale = sc; buildHome(); }
+        // the Felt Ball's bounds follow the rest framing the camera eases to after a party change (visibleTable is zero-allocation): 1 Hz
+        else if (world && ++boundsTick >= 60) { boundsTick = 0; try { if (stage.visibleTable?.(vis)) world.setBallBounds(vis[0], vis[1], vis[2], vis[3]); } catch { /* an old stage */ } }
       }
+      kettleStep();
       const t = game.simTime;
       for (let k = 0; k < qLen; k++) {
         if (qKind[k] === 0 || qDue[k] > t) continue;
@@ -1002,6 +1249,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     },
     takeAuto,
     noteEvent,
+    pressAt,
+    releaseAt,
     sense(dt) {
       if (dt > 0 && world && !floatParked) { world.endFrame(dt); drainProps(); }
       fillSnapshot(dt);
@@ -1043,8 +1292,18 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       return {
         life: lifeDebug(w), place: placeIdx, visit, layout, bodyScale, units: s.units, quiet: s.quiet, autonomy: s.autonomy, floatParked,
         chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true } : null)).filter(Boolean),
-        things: placeIdx === 0 ? HOME.things.map((t, k) => ({ id: t.id, shown: homeShown[k] === 1 })) : def.things.map((t) => ({ id: t.id, shown: true })),
+        things: def.things.map((t, k) => {
+          const p = thingFirst[k] ?? -1, at = !!world && p >= 0;
+          // (its centre on screen in CSS px, for the harness's taps: the stage camera's projection, dev view only)
+          let sx: number | null = null, sy: number | null = null;
+          if (at) { try { const n = projectToNdc(stage.camera, { x: world!.poses[p * 8], y: world!.poses[p * 8 + 1], z: world!.poses[p * 8 + 2] }); if (n) { sx = +((n.x + 1) * 0.5 * game.viewport.w).toFixed(1); sy = +((1 - n.y) * 0.5 * game.viewport.h).toFixed(1); } } catch { /* a mock camera */ } }
+          return { id: t.id, shown: placeIdx === 0 ? homeShown[k] === 1 : true, parked: at ? world!.isParked(p) : null, x: at ? +world!.poses[p * 8].toFixed(3) : null, z: at ? +world!.poses[p * 8 + 2].toFixed(3) : null, sx, sy };
+        }),
+        counts: { ...counts },
         ring: { dropped: ring.dropped }, firstPlaySent, firstWishSent, freshProfile,
+        party: { held: partyHeld(), restoring: [...restoreQ], newcomer: newcomerId },
+        tap: tapWhy,
+        tune: { on: musicBoxOnUntil > game.simTime, kind: tuneKind, kettle: kettleK, kettleNext: Number.isFinite(kettleNext) ? +kettleNext.toFixed(2) : null },
         journal: v ? { stamps: v.stamps, places: v.places, firstWish: v.firstWish, done: v.quests.filter((q) => q.done).map((q) => q.id), keepsakes: v.keepsakes } : null,
       };
     },

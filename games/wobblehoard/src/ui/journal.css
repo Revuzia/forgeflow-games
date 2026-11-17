@@ -11,7 +11,8 @@
 .jn-tabs { grid-area: tabs; justify-self: end; display: flex; flex-wrap: wrap; gap: var(--wh-s1); }
 .jn-close { grid-area: close; }
 .jn-tab { min-height: var(--wh-hit); padding: 0 var(--wh-s3); font: var(--wh-w-bold) var(--wh-fs-small)/1.2 var(--wh-font-ui); }
-.jn-tab[aria-selected="true"] { background: var(--k-sel-bg); color: var(--k-sel-fg); }
+.jn-tab[aria-selected="true"] { --k-sh: inset 0 0 0 1px var(--k-sel-edge); background: var(--k-sel-fill); border-color: var(--k-sel-edge); color: var(--k-sel-fg); }   /* the kit's selected pair (kit.css .k-chip[aria-pressed]) */
+@media (forced-colors: active) { .jn-tab[aria-selected="true"] { forced-color-adjust: none; background-color: Highlight; color: HighlightText; border-color: Highlight; } }
 .jn-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: var(--wh-s2) var(--wh-s5) var(--wh-s5); }
 .jn-scroll:focus-visible { outline: var(--k-ring-w) solid var(--k-ring); outline-offset: calc(-1 * var(--k-ring-w)); }
 .jn-pane, .jn-group { display: grid; gap: var(--wh-s3); min-width: 0; }
