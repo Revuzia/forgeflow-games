@@ -7,7 +7,8 @@ import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import type { LedgerEntry, MatchHistoryEntry, Profile } from '../../contracts/session.ts';
 import type { CatalogView } from '../catalog_view.ts';
-import { useApp } from '../app_ctx.ts';
+import { useApp, type AppCtx } from '../app_ctx.ts';
+import { effect } from '@preact/signals';
 import { Button } from '../components/Button.tsx';
 import { Currency } from '../components/Currency.tsx';
 import { ClassGlyph, classShapeOf, Icon } from '../components/Glyphs.tsx';
@@ -47,14 +48,40 @@ function openRename(overlay: ReturnType<typeof useApp>['overlay'], cv: ReturnTyp
   overlay.open({ title: cv.t('profile.rename', 'Change name'), size: 's', render: (close) => <RenameForm current={current} onDone={(n) => { done(n); close(); }} onCancel={close} /> });
 }
 
-function RenameForm(p: { current: string; onDone: (n: string) => void; onCancel: () => void }): JSX.Element {
+// ── W2-E CUX-13: the one-time name prompt ───────────────────────────────────────────────────────────
+// A new profile plays as "Player 2909". The first time Home is up (after the first-run video calibration window), the RenameForm
+// opens once as a welcome step: skippable, and never again on this device (WELCOME_KEY; the session keeps no tutorial flag a UI
+// can write). A profile that already has a chosen name never sees it.
+const WELCOME_KEY = 'vale.welcome.name.v1';
+export function maybeWelcomeName(ctx: AppCtx): void {
+  const { state, router, overlay, cv, session } = ctx;
+  try { if (localStorage.getItem(WELCOME_KEY)) return; } catch { return; }
+  if (navigator.webdriver && new URLSearchParams(location.search).get('welcome') !== '1') return;   // automated browsers keep their shots clean
+  const base = cv.t('session.default_name', 'Player').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!new RegExp(`^${base} \\d+$`).test(state.profile.peek().identity.displayName)) { try { localStorage.setItem(WELCOME_KEY, 'named'); } catch { /* per device */ } return; }
+  let done = false;
+  const stop = effect(() => {
+    if (done || router.route.value.screen !== 'home' || state.match.value || overlay.modals.value.length) return;
+    done = true;
+    queueMicrotask(() => stop());
+    // the calibration verdict (a few seconds of the Home scene) lands first; the prompt follows it
+    setTimeout(() => {
+      if (state.match.value || overlay.modals.value.length) return;
+      try { localStorage.setItem(WELCOME_KEY, new Date().toISOString()); } catch { /* per device */ }
+      overlay.open({ title: cv.t('welcome.name.title', 'What should we call you?'), size: 's',
+        render: (close) => <RenameForm current={state.profile.peek().identity.displayName} welcome onDone={(n) => { session.rename(n); close(); }} onCancel={close} /> });
+    }, 4500);
+  });
+}
+
+function RenameForm(p: { current: string; welcome?: boolean; onDone: (n: string) => void; onCancel: () => void }): JSX.Element {
   const { cv, sound } = useApp();
   const [v, setV] = useState(p.current);
   const [err, setErr] = useState<string | null>(null);
   const submit = (e?: Event): void => {
     e?.preventDefault();
     const n = v.trim();
-    const why = n.length < 2 ? cv.t('error.rename.short', 'Names need at least 2 characters.') : n.length > 16 ? cv.t('error.rename.long', 'Names can be up to 16 characters.') : n === p.current ? cv.t('error.rename.same', 'That is already your name.') : null;
+    const why = n.length < 2 ? cv.t('error.rename.short', 'Names need at least 2 characters.') : n.length > 16 ? cv.t('error.rename.long', 'Names can be up to 16 characters.') : n === p.current && !p.welcome ? cv.t('error.rename.same', 'That is already your name.') : null;
     if (why) { setErr(why); sound.play('error'); return; }
     sound.play('confirm');
     p.onDone(n);
@@ -62,6 +89,7 @@ function RenameForm(p: { current: string; onDone: (n: string) => void; onCancel:
   return (
     <form class="confirm" onSubmit={submit}>
       <div class="confirm__body">
+        {p.welcome ? <p class="t-body-s muted">{cv.t('welcome.name.body', 'Your name shows over your fighter, on the scoreboard and in the feed. You can change it later in Profile.')}</p> : null}
         <label class="field">
           <span class="t-label">{cv.t('profile.name', 'Display name')}</span>
           <input class={`input t-body ${err ? 'is-error' : ''}`} value={v} maxLength={24} autoFocus data-autofocus="" aria-invalid={err ? 'true' : undefined} aria-describedby="rename-hint"
@@ -70,7 +98,7 @@ function RenameForm(p: { current: string; onDone: (n: string) => void; onCancel:
         </label>
       </div>
       <div class="confirm__actions">
-        <Button variant="quiet" cue="back" onPress={p.onCancel}>{cv.t('common.cancel', 'Cancel')}</Button>
+        <Button variant="quiet" cue="back" onPress={p.onCancel}>{p.welcome ? cv.t('welcome.name.skip', 'Skip for now') : cv.t('common.cancel', 'Cancel')}</Button>
         <Button variant="chalk" type="submit" cue={null}>{cv.t('common.save', 'Save')}</Button>
       </div>
     </form>

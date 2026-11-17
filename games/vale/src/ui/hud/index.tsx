@@ -158,7 +158,7 @@ export function Hud(p: { client: MatchClient; onMenu?: () => void }): JSX.Elemen
     <HudContext.Provider value={ctx}>
       <div ref={surface} class={`hudsurface cur-${cursor}`} aria-hidden="true" />
       <WorldLayer marks={marks} />
-      <div class={`hud hud--${model.ffa ? 'ffa' : 'team'} hud--map-${side} hud--mode-${mode?.id ?? 'x'}`} style={{ '--hk': state.settings.value.access.hudScale || 1 } as CSSProperties}>
+      <div class={`hud hud--${model.ffa ? 'ffa' : 'team'} hud--map-${side} hud--mode-${mode?.id ?? 'x'}${shopOpen.value ? ' hud--shop' : ''}`} style={{ '--hk': state.settings.value.access.hudScale || 1 } as CSSProperties}>
         <ScreenEdge />
         {p.onMenu ? <MenuButton onMenu={p.onMenu} /> : null}
         <div class="hud__top">
