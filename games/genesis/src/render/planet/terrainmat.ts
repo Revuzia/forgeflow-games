@@ -31,6 +31,7 @@ import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS } from './terrainvert.glsl.ts';
 import { GROUND_FRAG_PARS, GROUND_UNIFORMS, GROUND_VERT_MAIN, GROUND_VERT_PARS } from './groundfloor.ts';
 import { orthoDepth } from '../shaders/zcons.ts';
 import { TNOISE, TNOISE_GLSL, TNOISE_UNIFORMS } from './noisetex.ts';
+import { TCACHE, TC_BAKE_SIDE, TC_FRAG_BAKE_OUT, TC_FRAG_FETCH, TC_FRAG_PARS, TC_VERT_MAIN, TC_VERT_PARS } from './tcache.ts';
 
 /** planet kind → palette / behaviour code used by the shaders */
 export function kindCode(kind: string): number {
@@ -89,6 +90,7 @@ varying vec4 vF5;  // treeSpecies cropSpecies light biome
 varying vec4 vOre; // ore outcrops: the ore's colour × richness (rgb), richness (a) — fieldtex.ts O
 varying float vCurv; // concavity (m), field N.w
 varying vec3 vFireWind; // the surface wind (m/s, body frame) where the fire field is non-zero (fire fronts run downwind)
+${TCACHE ? TC_FRAG_PARS : ''}
 uniform mat3 uBodyToView;
 uniform vec3 uSunDirBody;
 uniform vec4 uSilt[4];   // ARC §10: flood-warning silt zones (planet/silt.ts; shared with ocean.ts)
@@ -128,6 +130,7 @@ ${GROUND_FRAG_PARS}
 
 // sky: ambient-only occlusion (forest canopy over its floor); ao darkens ambient and, partly, the sun
 struct TSurf { vec3 albedo; float rough; float bump; float ao; vec3 emis; float glint; vec3 microG; float sky; float sward; };
+${TCACHE ? TC_FRAG_FETCH : ''}
 
 // fade a pattern out before it is resolved by fewer than ~6 pixels per feature (no speckle at distance)
 float aaF(float fw, float feature) { return 1.0 - smoothstep(0.12, 0.45, fw / feature); }
@@ -673,8 +676,13 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       if (uDebug > 4.5 && uDebug < 5.5) gcol = mix(gcol, vec3(1.0, 0.0, 1.0), midK);
     }
     // tufts, tips and gaps (groundfloor.ts swardDetail): the sward's own texture at 3–60 m
+#ifdef TC_BAKE
+    // (tcache.ts: the eye's grazing term is one value per tile, corrected per fragment at display)
+    vec4 swd = swardDetail(P, fw, 1.0 - sqrt(uTcBakeF.y));
+#else
     vec3 vEye = normalize(transpose(uBodyToView) * normalize(vViewPosition));
     vec4 swd = swardDetail(P, fw, dot(up, vEye));
+#endif
     swardTop = clamp(0.45 + 0.75 * swd.y - 0.6 * swd.w, 0.0, 1.0);
     gcol *= swd.x;
     gcol = mix(gcol, gcol * vec3(1.24, 1.13, 0.7), swd.y * 0.32 * (1.0 - cold * 0.5));
@@ -1557,6 +1565,7 @@ varying vec4 vF5;
 varying float vCurv;
 varying vec3 vFireWind;
 ${GROUND_VERT_PARS}
+${TCACHE ? TC_VERT_PARS : ''}
 `;
 
 const VERT_MAIN = /* glsl */ `
@@ -1608,6 +1617,7 @@ ${TERRAIN_VERT_CORE}
   // (fetched only near fire: the rest of the planet pays nothing for it)
   vFireWind = abs(vF3.w) > 0.001 ? tfInterp(uFieldD, aCells, aMisc.x).yzw : vec3(0.0);
 ${GROUND_VERT_MAIN}
+${TCACHE ? TC_VERT_MAIN : ''}
   vec3 objectNormal = tNrm;
 #ifdef USE_TANGENT
   vec3 objectTangent = vec3(1.0, 0.0, 0.0);
@@ -1618,6 +1628,23 @@ const FRAG_SURFACE = /* glsl */ `
   float tFw = length(fwidth(vBodyPos));
 #ifdef TS_NOSURF
   TSurf ts; ts.albedo = vec3(0.3, 0.34, 0.2); ts.rough = 0.85; ts.bump = 0.0; ts.ao = 1.0; ts.emis = vec3(0.0); ts.glint = 0.0; ts.microG = vec3(0.0); ts.sky = 1.0; ts.sward = 0.0;
+#elif defined(TC_BAKE)
+  // (tcache.ts) the bake: the surface at this texel for the anchor's distance, written to the tile's three targets
+  TSurf ts = evalTerrain(vBodyPos, normalize(vBodyN), tFw, uTcBakeF.x);
+${TCACHE ? TC_FRAG_BAKE_OUT : ''}
+#elif defined(TC_ON)
+  // (tcache.ts) a patch with a valid tile reads its surface; any other runs the surface function as before. The
+  // choice is per patch (a flat varying), so a pixel quad never straddles the two paths
+  vec2 tcDx = dFdx(vTcUV.xy), tcDy = dFdy(vTcUV.xy);
+  bool tcLive = vTc0.x < -0.5;
+  vec3 tcD = vec3(0.0);
+  TSurf ts;
+  if (tcLive) ts = evalTerrain(vBodyPos, normalize(vBodyN), tFw, length(vViewPosition));
+  else {
+    float tcG = 1.0 - clamp(dot(normalize(vBodyPos), normalize(transpose(uBodyToView) * normalize(vViewPosition))), 0.0, 1.0);
+    ts = tcFetch(tcDx, tcDy, length(vViewPosition), tcG * tcG, tcD);
+    uwFar = smoothstep(0.6, 2.5, tFw) * smoothstep(0.3, 1.5, vF4.y - vF4.w);
+  }
 #else
   TSurf ts = evalTerrain(vBodyPos, normalize(vBodyN), tFw, length(vViewPosition));
 #endif
@@ -1704,7 +1731,7 @@ const FRAG_LIGHT = /* glsl */ `
     // snow sparkle: rare facets mirror the sun
     if (ts.glint > 0.997) {
       float gl = pow(max(dot(reflect(-geometryViewDir, geometryNormal), uSunDirView), 0.0), 64.0);
-      reflectedLight.directSpecular += sunCol * gl * 6.0;
+      reflectedLight.directSpecular += sunCol * gl * 6.0${TCACHE ? ' * tcGlintK' : ''};
     }
     // moonlight (renderer.ts: the brightest moon in the sky, art-directed): a second directional light, no shadow maps
     if (dot(uMoonE, uMoonE) > 0.0) {
@@ -1896,18 +1923,45 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
       .replace('#include <beginnormal_vertex>', VERT_MAIN)
       .replace('#include <begin_vertex>', 'vec3 transformed = tPos;');
     if (ZPRE) shader.vertexShader = shader.vertexShader.replace('void main() {', ZPRE_INVARIANT);
+    if (TCACHE) shader.vertexShader = shader.vertexShader.replace('#include <fog_vertex>', '#include <fog_vertex>\n#ifdef TC_BAKE\n  gl_Position = vec4(tcClip, 0.0, 1.0);\n#endif');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\nuniform float uRadius;\n${TERRAIN_FRAG_PARS}`)
       .replace('#include <map_fragment>', FRAG_SURFACE)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = ts.rough;')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = 0.0;')
-      .replace('#include <normal_fragment_maps>', TSHADE.has('nobump') ? '' : 'if (uDebug < 2.5 || uDebug > 3.5) { normal = bumpNormal(-vViewPosition, normal, ts.bump); normal = normalize(normal - uBodyToView * ts.microG); }')
+      .replace('#include <normal_fragment_maps>', TSHADE.has('nobump') ? '' : TCACHE
+        ? '#ifdef TC_ON\nif (!tcLive) normal = normalize(normal - uBodyToView * tcD); else\n#endif\nif (uDebug < 2.5 || uDebug > 3.5) { normal = bumpNormal(-vViewPosition, normal, ts.bump); normal = normalize(normal - uBodyToView * ts.microG); }'
+        : 'if (uDebug < 2.5 || uDebug > 3.5) { normal = bumpNormal(-vViewPosition, normal, ts.bump); normal = normalize(normal - uBodyToView * ts.microG); }')
       .replace('#include <emissivemap_fragment>', FRAG_EMISSIVE)
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
     if (TSHADE.has('albedo')) shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', 'outgoingLight = ts.albedo * 0.6;\n#include <opaque_fragment>');
   };
-  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}${TNOISE ? '-tnoise' : ''}`;
+  // (tcache.ts: the display program reads tiles; TC_ON / TC_BAKE are material defines, part of three's program key)
+  if (TCACHE) mat.defines = { ...(mat.defines ?? {}), TC_ON: '' };
+  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}${TNOISE ? '-tnoise' : ''}${TCACHE ? '-tc' : ''}`;
+  return mat;
+}
+
+/**
+ * PERF s22 `?tcache=1` (tcache.ts): the terrain program that BAKES a patch's surface into its tile — the same vertex
+ * shader and varyings, the position replaced by the tile's, the fragment's output replaced by the surface terms.
+ */
+export function makeTerrainBakeMaterial(shared: Record<string, IUniform>): MeshStandardMaterial {
+  const mat = makeTerrainMaterial(shared, 0);
+  const ud = mat.userData as Record<string, IUniform>;
+  ud.uTcBake = { value: new Vector4() }; ud.uTcBakeF = { value: new Vector4() }; ud.uTcBakeK = { value: new Vector4(1, 0, 0, 0) };
+  ud.uTcEi = { value: new Vector3() }; ud.uTcEj = { value: new Vector3() };
+  ud.uMorph.value = new Vector4(1e30, 1e30, 0, 0);
+  const base = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader, r) => {
+    base(shader, r);
+    for (const k of ['uTcBake', 'uTcBakeF', 'uTcBakeK', 'uTcEi', 'uTcEj']) shader.uniforms[k] = ud[k];
+  };
+  mat.defines = { TC_BAKE: '' };
+  mat.side = TC_BAKE_SIDE;
+  mat.depthTest = false;
+  mat.depthWrite = false;
   return mat;
 }
 

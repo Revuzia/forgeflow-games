@@ -41,6 +41,7 @@ import { earlyGeo } from '../uploadsched.ts';
 import { registerPageWorker } from '../pagerelease.ts';
 
 export { PATCH_RES };
+import { TCACHE, tcInitPage } from './tcache.ts';
 
 // ───────────────────────────── shared topology ─────────────────────────────
 
@@ -259,6 +260,8 @@ class PatchPage {
     // batch has no per-instance colour, so WHICH instance a draw reads changes nothing: the table is uploaded once,
     // the multi-draw lists (CPU arrays passed with the draw call) still change per pass. Same image.
     keepIndirectTable(this.mesh);
+    // (PERF s22 `?tcache=1`) the page's slot table for the terrain material cache (tcache.ts)
+    if (TCACHE) tcInitPage(this.mesh);
   }
   get live(): number { return this.used - this.free.length; }
   /** (PERF s16) the last frame this page's buffers were drawn (terrain or its water sheet; keepIndirectTable) */
@@ -500,6 +503,17 @@ class PatchBatch {
 
   /** the mesh drawing slot `s` */
   meshOf(s: number): BatchedMesh { return this.pages[Math.floor(s / PATCH_PAGE)]!.mesh; }
+  /** (tcache) the page mesh of slot `s`, or null */
+  pageMesh(s: number): BatchedMesh | null { return this.pages[Math.floor(s / PATCH_PAGE)]?.mesh ?? null; }
+  /** (tcache) slot `s`'s range in its page's geometry; null unless its vertices start at slot * NVERT */
+  slotRange(s: number): { mesh: BatchedMesh; indexStart: number; indexCount: number; vertexStart: number } | null {
+    const p = this.pages[Math.floor(s / PATCH_PAGE)];
+    if (!p) return null;
+    const k = s % PATCH_PAGE;
+    const r = p.mesh.getGeometryRangeAt(p.geomId[k]) as { vertexStart: number; indexStart: number } | null;
+    if (!r || r.vertexStart !== k * NVERT) return null;
+    return { mesh: p.mesh, indexStart: r.indexStart, indexCount: NINDEX, vertexStart: r.vertexStart };
+  }
 
   setMaterial(m: Material): void { this.material = m; for (const p of this.pages) if (p) p.mesh.material = m; }
 
@@ -1383,6 +1397,24 @@ export class ChunkLOD {
       this.live.delete(p);
     }
     this.shrinkPools();
+  }
+
+  // ── PERF s22 `?tcache=1` (tcache.ts): what the terrain material cache needs of a built patch ──
+  /** the page mesh that draws the patch (its slot is tSlot % PATCH_PAGE) */
+  tcMesh(p: Patch): BatchedMesh | null {
+    if (!p.built || p.tSlot < 0) return null;
+    return this.tBatch[p.level]?.pageMesh(p.tSlot) ?? null;
+  }
+  /** the patch's index / vertex range in its page's geometry (null: not in the layout the cache's shader assumes) */
+  tcRange(p: Patch): { mesh: BatchedMesh; indexStart: number; indexCount: number; vertexStart: number } | null {
+    if (!p.built || p.tSlot < 0) return null;
+    return this.tBatch[p.level]?.slotRange(p.tSlot) ?? null;
+  }
+  /** unit directions of the patch's lattice corners (0,0), (R,0), (0,R) */
+  tcCorners(p: Patch, a: Vector3, b: Vector3, c: Vector3): void {
+    this.flatDir(p.face, p.a[0], p.a[1], a);
+    this.flatDir(p.face, p.b[0], p.b[1], b);
+    this.flatDir(p.face, p.c[0], p.c[1], c);
   }
 
   /** morph distances for a level: (full-morph distance, morph start) — infinity for level 0 */

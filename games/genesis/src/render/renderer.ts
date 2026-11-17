@@ -587,6 +587,8 @@ export class Renderer {
     } else {
       this.shadows.uniforms.uShadowOn.value = 0;
     }
+    // PERF s22 `?tcache=1`: this frame's terrain tile bakes (they read this frame's shadow maps; a no-op when off)
+    primaryVis?.bakeTerrainCache(r, cam);
     const callsShadow = r.info.render.calls, trisShadow = r.info.render.triangles;
     perfmon.end('shadows');
     perfmon.begin('scene');

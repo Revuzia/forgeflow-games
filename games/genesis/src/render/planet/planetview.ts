@@ -12,7 +12,8 @@ import type { SunShadows } from './lights.ts';
 import { FieldTextures } from './fieldtex.ts';
 import { ChunkLOD } from './chunks.ts';
 import { DirFieldCube } from './dirtex.ts';
-import { kindCode, makePlanetUniforms, makeTerrainDepthMaterial, makeTerrainMaterial, makeTerrainZpreMaterial, paletteFor, type PlanetShaderUniforms } from './terrainmat.ts';
+import { kindCode, makePlanetUniforms, makeTerrainBakeMaterial, makeTerrainDepthMaterial, makeTerrainMaterial, makeTerrainZpreMaterial, paletteFor, type PlanetShaderUniforms } from './terrainmat.ts';
+import { TCACHE, TerrainCache } from './tcache.ts';
 import { ZPRE } from '../overdraw.ts';
 import { makeOceanMaterial } from './ocean.ts';
 import { FAR_PX, PX_PER_RAD, Vegetation } from '../life/vegetation.ts';
@@ -76,6 +77,9 @@ export class PlanetVisual {
   readonly atmo = new AtmosphereModel();
   readonly uniforms: PlanetShaderUniforms;
   readonly terrainMats: MeshStandardMaterial[] = [];
+  /** PERF s22 `?tcache=1`: the terrain material cache (null: off) and its bake program */
+  tcache: TerrainCache | null = null;
+  private tcacheMat: MeshStandardMaterial | null = null;
   /** PERF s19 `?zpre=1`: per level, the terrain material's depth-only twin (same vertex shader) */
   private zpreMats: MeshStandardMaterial[] = [];
   readonly depthMats: ShaderMaterial[] = [];
@@ -137,6 +141,12 @@ export class PlanetVisual {
       get geomVersion() { return self.fields.geomVersion; },
     // (the noise seed lets the patch building worker make the same Noise3: terrain builds leave the main thread)
     }, { seed: pv.seed });
+    if (TCACHE) {
+      // (before the first material compiles: the terrain programs take the cache's samplers from the shared uniforms)
+      this.tcacheMat = makeTerrainBakeMaterial(sharedRec);
+      this.tcache = new TerrainCache(this.lod, sharedRec, this.fields.tex, pv.grid.count, this.tcacheMat,
+        (level) => this.terrainMat(level, sharedRec, deps).userData.uMorph as IUniform<Vector4>);
+    }
     this.vegetation = new Vegetation(sharedRec);
     this.group.add(this.vegetation.group);
     this.groundCover = new GroundCover(sharedRec);
@@ -274,6 +284,13 @@ export class PlanetVisual {
       const m = this.terrainMats[L].userData.uMorph as IUniform<{ set(x: number, y: number, z: number, w: number): void }>;
       m.value.set(full, start, this.lod.skirtDepth(L), this.lod.silK);
     }
+    // PERF s22 `?tcache=1`: which drawn patches read their tile this frame, and what is to bake (tcache.ts)
+    if (this.tcache && ctx.renderH) this.tcache.update(this.camBody, 0.5 * ctx.renderH * ctx.proj.elements[5], ctx.frame, u.uSunDirBody.value as Vector3, ctx.yearFrac, ctx.primary);
+  }
+
+  /** PERF s22 `?tcache=1`: this frame's tile bakes (Renderer: after the shadow pass, before the scene pass) */
+  bakeTerrainCache(renderer: WebGLRenderer, camera: Camera): void {
+    this.tcache?.bake(renderer, camera);
   }
 
   /** fire, smoke and embers over the composited image (Renderer, after the atmosphere): see render/fx/particles.ts */
@@ -300,6 +317,8 @@ export class PlanetVisual {
   }
 
   dispose(): void {
+    this.tcache?.dispose();
+    this.tcacheMat?.dispose();
     for (const m of this.zpreMats) m.dispose();
     this.lod.dispose();
     this.vegetation.dispose();
