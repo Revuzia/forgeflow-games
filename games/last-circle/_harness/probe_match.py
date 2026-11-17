@@ -178,12 +178,11 @@ def swimcheck(s, v):
 PEN_MAP, PEN_SEED, PEN_PRE_S, PEN_T = "isla_viva", 5, 20.0, 30.0
 PEN_GOAL, PEN_CORNER, PEN_FACE_FOOT = (-67.0, -44.5), (-71.6, -77.6), (-80.0, -78.0)
 PEN_SETUPS = ((-63.4, -77.6, 17), (-66.0, -79.0, 17), (-63.4, -77.6, 40))
-PENCHECK_JS = r"""async ([sx, sz, hp, gx, gz, cx, cz, fx, fz, T, want]) => {
+PENCHECK_JS = r"""async ([sx, sz, hp, gx, gz, cx, cz, fx, fz, T]) => {
   const W = window.__LC__.W, C = window.__LC__, M = W.map, K = W.SIM, wy = M.waterY, H = (M.half || 760) - 30;
   const cl = (v) => Math.max(-H, Math.min(H, v));
   const geo = { start: +M.heightAt(sx, sz).toFixed(2), foot: +M.heightAt(fx, fz).toFixed(2), goal: +M.heightAt(gx, gz).toFixed(2) };
-  const free = W.actors.filter((a) => a.isBot && a.alive && !a.downed && !a.gliding).sort((p, q) => Math.hypot(p.pos.x - sx, p.pos.z - sz) - Math.hypot(q.pos.x - sx, q.pos.z - sz));
-  const b = (want && free.find((a) => a.id === want)) || free[0];
+  const b = W.actors.filter((a) => a.isBot && a.alive && !a.downed && !a.gliding).sort((p, q) => Math.hypot(p.pos.x - sx, p.pos.z - sz) - Math.hypot(q.pos.x - sx, q.pos.z - sz))[0];
   if (!b || !b.brain) return { geo, error: 'no free bot' };
   const put = (a, x, z, y) => { a.pos.set(x, y, z); a.vel.set(0, 0, 0); a.gliding = false; if (a.obj) a.obj.position.copy(a.pos); };
   const fence = () => { for (const o of W.actors) { if (o === b || !o.alive || o.gliding) continue; const dx = o.pos.x - b.pos.x, dz = o.pos.z - b.pos.z, d = Math.hypot(dx, dz);
@@ -198,8 +197,8 @@ PENCHECK_JS = r"""async ([sx, sz, hp, gx, gz, cx, cz, fx, fz, T, want]) => {
   const prev = W._tickHook;
   // (fix mergefix) the route's corner is looked for on EVERY tick (was: the 0.5 s samples): an early turn (bots.js EDGE_EARLY) moves it <= 1.2 m and it
   // can be taken inside one sample (the scripted corner: reached in 1-2 s)
-  let cornerD = 1e9, path0 = null;
-  W._tickHook = (w) => { if (prev) prev(w); fence(); const P = b.brain && b.brain.bb.path; if (P && !path0) path0 = P.slice(0, 8).map((q) => [+q.x.toFixed(1), +q.z.toFixed(1)]); if (P) for (let k = 0; k < P.length && k < 4; k++) cornerD = Math.min(cornerD, Math.hypot(P[k].x - cx, P[k].z - cz)); };
+  let cornerD = 1e9;
+  W._tickHook = (w) => { if (prev) prev(w); fence(); const P = b.brain && b.brain.bb.path; if (P) for (let k = 0; k < P.length && k < 4; k++) cornerD = Math.min(cornerD, Math.hypot(P[k].x - cx, P[k].z - cz)); };
   const MOV = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1 };
   const t0 = W.t, ring = [], eps = [], states = {}, track = [];
   let open = false, reachT = null, minD = 1e9;
@@ -219,7 +218,7 @@ PENCHECK_JS = r"""async ([sx, sz, hp, gx, gz, cx, cz, fx, fz, T, want]) => {
     } else open = false;
   }
   W._tickHook = prev;
-  return { geo, bot: b.id, path0, hp, reachT, minD: +minD.toFixed(1), cornerD: +cornerD.toFixed(2), episodes: eps.length, eps, alive: b.alive, states,
+  return { geo, bot: b.id, hp, reachT, minD: +minD.toFixed(1), cornerD: +cornerD.toFixed(2), episodes: eps.length, eps, alive: b.alive, states,
            end: [+b.pos.x.toFixed(1), +b.pos.y.toFixed(1), +b.pos.z.toFixed(1)], track: track.filter((_, i) => i % 4 === 0) };
 }"""
 
@@ -230,11 +229,11 @@ def pencheck(s, v):
         st = s.start_match("quick", PEN_SEED, PEN_MAP, enter=True)
         s.freeze_loop()
         s.page.evaluate("(t) => window.__LC__.fastForward(t, 1 / 30)", PEN_PRE_S)
-        r = s.page.evaluate(PENCHECK_JS, [sx, sz, hp, PEN_GOAL[0], PEN_GOAL[1], PEN_CORNER[0], PEN_CORNER[1], PEN_FACE_FOOT[0], PEN_FACE_FOOT[1], PEN_T, __import__("os").environ.get("LC_PEN_BOT")])
+        r = s.page.evaluate(PENCHECK_JS, [sx, sz, hp, PEN_GOAL[0], PEN_GOAL[1], PEN_CORNER[0], PEN_CORNER[1], PEN_FACE_FOOT[0], PEN_FACE_FOOT[1], PEN_T])
         r["start"], r["load"] = [sx, sz], st
         out.append(r)
-        print("  pencheck start (%.1f, %.1f) hp %d: bot %s reach %s s, %s stuck episodes, corner %s m, geo %s, route %s" % (
-            sx, sz, hp, r.get("bot"), r.get("reachT"), r.get("episodes"), r.get("cornerD"), r.get("geo"), r.get("path0")), flush=True)
+        print("  pencheck start (%.1f, %.1f) hp %d: bot %s reach %s s, %s stuck episodes, corner %s m, geo %s" % (
+            sx, sz, hp, r.get("bot"), r.get("reachT"), r.get("episodes"), r.get("cornerD"), r.get("geo")), flush=True)
     v.data["pencheck"] = out
     name = ("pen scripted (Volcano Rim, %s seed %d: an hp-limited calm bot on the terrace top, its goal %.0f m north along the top past a corner 1.5-2 m "
             "short of an 8.4 m face, %d setups): every setup reaches the goal in %.0f s with 0 stuck episodes on the way" % (PEN_MAP, PEN_SEED, 33, len(PEN_SETUPS), PEN_T))
