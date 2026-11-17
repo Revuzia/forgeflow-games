@@ -3,7 +3,7 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
-## 2026-11-16 — Wave 10 round 2b: light fix (rooms, street shadows, skin sheen)
+## 2026-11-16 — Wave 10 round 2b: light fix (rooms, street shadows, skin sheen) (LIVE ?v=1794894969)
 
 Wave 10 round 2b re-merges lane R2A (`w10-r2-water-light`, head 932956106) onto `w10` with its light fix. No world change: `MAP_GEN_VERSION` stays 8.
 
