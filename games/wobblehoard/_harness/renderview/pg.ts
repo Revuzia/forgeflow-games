@@ -565,6 +565,100 @@ export function makePg(E: PgEnv) {
       const m1 = S.memory();
       return { base, after: [m1.programs, m1.textures, m1.geometries] };
     },
+    /**
+     * RD-03 (round 3): the ceremony dim of a place (PLACES 2.3: a bright place dims its lights while a ceremony plays, easing in and out over
+     * at least 1.0 s). Puts the place up (wide, desktop insets), plays a capsule reveal of `tier`, steps at 1/30 s and records the place host's
+     * dim every frame, then 3 s after the end. Returns the trace and the ease times (first frame above 0 to the first at the full dim; last
+     * frame at the full dim to the first back at 0) and the largest per-frame step.
+     */
+    async placeDim(id: string, tier: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic' = 'mythic'): Promise<{ full: number; peak: number; inS: number; outS: number; maxStep: number; ended: boolean; frames: number }> {
+      pg.insets('desktop');
+      await S.loadPlace!(id); S.setPlace!(id, 0.05);
+      const b = PLACES[id].bounds; S.setPlayBounds!(b.x, b.z, b.hx ?? 3, b.hz ?? 2);
+      S.clearBodies(); bodies = [];
+      const g = speciesBaseGenome('dollop', 3), bb = E.makeBody(g); S.addBody!(bb, g, { tier: 'common' }); bodies.push(bb);
+      E.tick(bodies, 30, 1 / 30, false);
+      const ph = (S as unknown as { placeHost: { dimNow: number; look(id: string): { ceremonyDim?: number } | null } | null }).placeHost;
+      if (!ph) return { full: NaN, peak: NaN, inS: NaN, outS: NaN, maxStep: NaN, ended: false, frames: 0 };
+      const full = ph.look(id)?.ceremonyDim ?? 0;
+      const h = S.playCapsuleReveal({ result: { genome: speciesBaseGenome('twangle', 7), tier, isNew: true }, createBody: (gg: Genome) => E.makeBody(gg) });
+      const tr: number[] = [ph.dimNow];
+      let f = 0;
+      while (h.active && f < 1500) { E.tick(bodies, 1, 1 / 30, false); tr.push(ph.dimNow); f++; }
+      const ended = !h.active;
+      for (let k = 0; k < 90; k++) { E.tick(bodies, 1, 1 / 30, false); tr.push(ph.dimNow); }
+      const peak = Math.max(...tr);
+      let maxStep = 0; for (let k = 1; k < tr.length; k++) maxStep = Math.max(maxStep, Math.abs(tr[k] - tr[k - 1]));
+      const i0 = tr.findIndex((v) => v > 1e-6), i1 = tr.findIndex((v) => v >= peak - 1e-6);
+      let j0 = -1; for (let k = tr.length - 1; k >= 0; k--) if (tr[k] >= peak - 1e-6) { j0 = k; break; }
+      const j1 = j0 < 0 ? -1 : tr.findIndex((v, k) => k > j0 && v <= 1e-6);
+      S.clearBodies(); bodies = [];
+      return { full, peak, inS: i0 < 0 ? 0 : (i1 - i0 + 1) / 30, outS: j1 < 0 ? (peak > 0 ? NaN : 0) : (j1 - j0) / 30, maxStep, ended, frames: f };
+    },
+    /** RD-14 in a place (round 3): 3 bodies at the layout's spawn points, the HUD rows of `kind`; a body slides and hops by itself (no finger);
+     *  the camera position, lens shift, camera scale and fov must not move, with the autonomy framing off (what the shell sets in a place) and on. */
+    async placeAutonomy(kind: 'phone' | 'desktop', id: string): Promise<{ off: number[]; on: number[] }> {
+      pg.insets(kind);
+      await pg.enterPlace(id);
+      const D = PLACES[id], L = S.camera.aspect < 0.9 ? D.tall : D, spawn = L.spawn as readonly (readonly [number, number])[];
+      const run = (on: boolean): number[] => {
+        S.clearBodies(); bodies = [];
+        for (let k = 0; k < 3; k++) { const g = speciesBaseGenome(['dollop', 'twangle', 'chunkle'][k], 1 + k), bb = E.makeBody(g); S.addBody!(bb, g, { tier: 'common', position: { x: spawn[k][0], y: 0, z: spawn[k][1] } }); bodies.push(bb); }
+        S.setAutonomyFraming!(on);
+        E.tick(bodies, 240, 1 / 60, false);
+        const p0 = S.camera.position.clone(), i0 = S.info, l0x = i0.lens.x, l0y = i0.lens.y, c0 = i0.camScale, f0 = S.camera.fov;
+        let mx = 0, ml = 0, ms = 0, mf = 0;
+        for (let i = 0; i < 180; i++) {
+          if (i % 30 === 0) bodies[1].nudge({ x: 0.9, y: i % 60 === 0 ? 0.8 : 0, z: 0.5 });
+          E.tick(bodies, 1, 1 / 60, false);
+          const inf = S.info;
+          mx = Math.max(mx, S.camera.position.distanceTo(p0)); ml = Math.max(ml, Math.abs(inf.lens.x - l0x), Math.abs(inf.lens.y - l0y)); ms = Math.max(ms, Math.abs(inf.camScale - c0)); mf = Math.max(mf, Math.abs(S.camera.fov - f0));
+        }
+        S.setAutonomyFraming!(false);
+        return [mx, ml, ms, mf];
+      };
+      const off = run(false), on = run(true);
+      S.clearBodies(); bodies = [];
+      return { off, on };
+    },
+    /**
+     * The finale spectacle (PLACES P13, round 3): `placeShot`'s scene in place `id`, then thingFx(-1, 2, 1) and 4.5 s at 1/30 s (Calm: 7.5 s),
+     * the frame's mean linear luminance every 3rd frame; then thingFx(-1, 2, 0) and the way back. Returns whether the place took it, the host's
+     * eased amount trace (its time to 1), the luminance trace's largest reversal (a flicker; a fade only goes one way) and the two shots.
+     */
+    async placeFinale(id: string, calm = false): Promise<{ took: boolean; toOneS: number; backS: number; lumaA: number; lumaB: number; reversal: number; pngA: string; pngB: string }> {
+      const r0 = await pg.placeShot('desktop', 4, undefined, id);
+      const ph = (S as unknown as { placeHost: { finNow?: number } | null }).placeHost;
+      S.setCalmEffects(calm);
+      const luma = (): number => {
+        const cv = document.createElement('canvas'), w = 64, h = 40; cv.width = w; cv.height = h; const cx = cv.getContext('2d')!; cx.drawImage(E.canvas, 0, 0, w, h);
+        const d = cx.getImageData(0, 0, w, h).data, L = (c: number): number => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        let s = 0; for (let i = 0; i < d.length; i += 4) s += 0.2126 * L(d[i]) + 0.7152 * L(d[i + 1]) + 0.0722 * L(d[i + 2]);
+        return s / (w * h);
+      };
+      E.tick(bodies, 1, 1 / 30, true);
+      const lumaA = luma();
+      const took = S.thingFx!(-1, 2, 1);
+      const tr: number[] = [], lt: number[] = [lumaA];
+      const n = Math.round((calm ? 7.5 : 4.5) * 30);
+      for (let f = 0; f < n; f++) { const k = f % 3 === 2; E.tick(bodies, 1, 1 / 30, k); tr.push(ph?.finNow ?? NaN); if (k) lt.push(luma()); }
+      const pngB = E.snapshot();
+      let rev = 0, dir = 0, piv = lt[0];
+      for (const v of lt) { if (dir === 0) { if (Math.abs(v - piv) > 1e-4) dir = Math.sign(v - piv); piv = v; } else if ((v - piv) * dir >= 0) piv = v; else rev = Math.max(rev, Math.abs(v - piv)); }
+      const i1 = tr.findIndex((v) => v >= 1 - 1e-6);
+      S.thingFx!(-1, 2, 0);
+      let back = 0; for (; back < 600 && (ph?.finNow ?? 0) > 1e-6; back++) E.tick(bodies, 1, 1 / 30, false);
+      S.setCalmEffects(false);
+      S.clearBodies(); bodies = [];
+      return { took, toOneS: i1 < 0 ? NaN : (i1 + 1) / 30, backS: back / 30, lumaA, lumaB: lt[lt.length - 1], reversal: rev, pngA: r0.png, pngB };
+    },
+    /** Put a place up with its layout's bounds for this frame's aspect, the insets left as they are (RD-03's flash rows run R.runCeremony in it). */
+    async enterPlace(id: string): Promise<boolean> {
+      const ok = (await S.loadPlace!(id)) && S.setPlace!(id, 0.05);
+      const D = PLACES[id], b = (S.camera.aspect < 0.9 ? D.tall : D).bounds;
+      S.setPlayBounds!(b.x, b.z, b.hx ?? 3, b.hz ?? 2);
+      return ok;
+    },
     home(): void { S.setPlace!(null, 0.05); S.setPlayBounds!(NaN, NaN, NaN, NaN); },
   };
   return pg;

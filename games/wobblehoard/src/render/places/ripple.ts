@@ -48,7 +48,8 @@ void main() {
 const HEADLAND = /* glsl */`
 void main() {
   float x = vUv.x;
-  float h = 0.18 + 0.5 * smoothstep(0.62, 1.0, x) * (0.75 + 0.25 * pN(vec2(x * 9.0, 0.0))) + 0.32 * smoothstep(0.3, 0.0, x) * (0.8 + 0.2 * pN(vec2(x * 7.0, 3.0)));
+  ${/* (round 3: open sea to the horizon in the middle; round 2's 0.18 floor ran a flat blue wall across the whole width) */ ''}
+  float h = 0.015 + 0.6 * smoothstep(0.6, 0.95, x) * (0.75 + 0.25 * pN(vec2(x * 9.0, 0.0))) + 0.42 * smoothstep(0.36, 0.05, x) * (0.8 + 0.2 * pN(vec2(x * 7.0, 3.0)));
   if (vUv.y > h) discard;
   gl_FragColor = vec4(mix(uLand, uHaze, 0.35 + 0.35 * vUv.y / max(h, 1e-3)), 1.0);
   #include <colorspace_fragment>
@@ -60,7 +61,7 @@ const LOOK: PlaceLook = {
   // (round 3: the lagoon-cream mid sky and band read green (OKLCH passes through it) and a tall frame shows a third of sky: blue mids, a lower horizon)
   skyBand: tok('lagoon', 'dusk', 0.2, 0.85),
   sky: {
-    uZenith: tok('lagoon', 'dusk', 0.45, 0.7), uInk: tok('lagoon', 'dusk', 0.3, 0.82), uPlum: tok('lagoon', 'dusk', 0.15, 0.8), uHorizon: tok('cream', 'amber', 0.3, 0.74),
+    uZenith: tok('lagoon', 'dusk', 0.45, 0.7), uInk: tok('lagoon', 'dusk', 0.3, 0.82), uPlum: tok('lagoon', 'dusk', 0.15, 0.8), uHorizon: tok('cream', 'coral', 0.3, 0.8),   // (round 3: a peach horizon; the cream-amber one was the sand's own tan)
     uGlowWarm: tok('amber', 'cream', 0.25, 0.55), uGlowCool: tok('lagoon', 'lagoon', 0, 0.25), uBase: tok('lagoon', 'dusk', 0.3, 0.7), uWarm: tok('amber', 'amber', 0, 0.06),
     uFogNear: 10, uFogFar: 40,
   },
@@ -73,6 +74,12 @@ const LOOK: PlaceLook = {
       fillSky: tok('amber', 'cream', 0.55, 0.85), fillGround: tok('amber', 'cream', 0.5, 0.8), fillI: 2.6,   // (round 3: a warm sky fill: a lagoon one turned the sand outside the key's cone olive or green)
       keyTint: [1.0, 0.86, 0.62],
     };
+  },
+  // the finale spectacle (PLACES 4.3, P13; round 3): the sky warms to sunset: a coral-amber sun lower in strength, plum shade, a coral
+  // horizon over a plum-dusk sky, and (build: update) the sea's far haze, deep water and glints warm with it
+  finale: {
+    light: { key: tok('amber', 'cream', 0.3), keyI: 560, rim: tok('coral', 'plum', 0.25, 1.1), fillSky: tok('plum', 'dusk', 0.45, 0.9), fillGround: tok('plum', 'amber', 0.45, 0.6) },   // (a golden sun and violet shade: a coral key turned the sand burnt orange)
+    sky: { uHorizon: tok('coral', 'amber', 0.35, 0.9), uGlowWarm: tok('coral', 'amber', 0.3, 0.75), uPlum: tok('plum', 'coral', 0.45, 1.0), uInk: tok('dusk', 'plum', 0.45, 0.85), uZenith: tok('dusk', 'plum', 0.6, 0.7) },
   },
   panels: [
     { dir: new THREE.Vector3(0.55, 0.45, 0.7).normalize(), dist: 4.5, w: 2.6, h: 1.6, color: [1.0, 0.86, 0.6], k: 6.5, soft: 0.6, radius: 0.7 },    // the sun, gold
@@ -96,7 +103,7 @@ const LOOK: PlaceLook = {
     const sand = kit.surface('sand', [1, 1, 1], 0.95, SAND, sandU, 0.25);
     const rock = kit.mat('rock', tok('ink', 'dusk', 0.35, 1.05), 0.9, 0.25), drift = kit.mat('drift', tok('amber', 'cream', 0.7, 0.66), 0.9, 0.2);
     const coral = kit.mat('ring', tok('coral', 'amber', 0.15), 0.6, 0.35), cream = kit.mat('cream', tok('cream', 'amber', 0.15, 0.95), 0.6, 0.35);
-    const shellM = kit.mat('shell', tok('cream', 'coral', 0.3), 0.5, 0.4), stringM = kit.mat('string', tok('cream', 'amber', 0.2, 0.8), 0.9, 0.1);
+    const shellM = kit.mat('shell', tok('coral', 'cream', 0.4), 0.45, 0.45), stringM = kit.mat('string', tok('cream', 'amber', 0.2, 0.8), 0.9, 0.1);
     const pebble = kit.mat('pebble', tok('ink', 'cream', 0.5, 0.9), 0.55, 0.35);
     const unitIco = kit.geo('ico', () => new THREE.IcosahedronGeometry(1, 1)), unitCyl = kit.cyl(1, 1, 1, 12);
     const unitCylX = kit.geo('cylX', () => new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2));
@@ -158,7 +165,8 @@ const LOOK: PlaceLook = {
     for (let k = 0; k < n; k++) {
       const o = (n > 1 ? k / (n - 1) - 0.5 : 0) * span, sg = new THREE.Group();
       sg.position.set(sc.x + cx * o, BAR_Y - hang, sc.z + cz * o);
-      const shell = kit.mesh(kit.geo('shell', () => new THREE.ConeGeometry(shR * 1.25, shL + 2 * shR, 7, 1)), shellM, 0, 0, 0, 3); shell.rotation.x = Math.PI; sg.add(shell);
+      // (round 3: each shell a flat coral fan seen face-on, as wide as its collider is long; round 2's thin cream spikes read as the rungs of a ladder)
+      const shell = kit.mesh(kit.geo('shell', () => new THREE.SphereGeometry(1, 12, 8).scale(shR * 1.7, shL / 2 + shR, shR * 0.5)), shellM, 0, 0, 0, 3); sg.add(shell);
       sg.add(kit.mesh(kit.cyl(0.006, 0.006, hang - shL / 2, 4), stringM, 0, (hang + shL / 2) / 2, 0, 3));
       g.add(sg); shells.push(sg);
     }
@@ -187,13 +195,21 @@ const LOOK: PlaceLook = {
     g.add(spray.particles.mesh); kit.own(spray);
 
     const movers: (THREE.Object3D | readonly THREE.Object3D[] | null)[] = [null, bob, null, shells, ball, null];
-    let t = 0;
+    // the finale's sea: from the day colours toward sunset ones (lerped in place, no allocation)
+    const SU = seaM.uniforms, seaDay = [SU.uDeep.value.clone(), SU.uHaze.value.clone(), SU.uGlint.value.clone(), headU.uHaze.value.clone()] as THREE.Color[];
+    const seaSun = [col(tok('dusk', 'plum', 0.4, 0.8)), col(tok('coral', 'cream', 0.45, 0.85)), col(tok('amber', 'cream', 0.3, 1.0)), col(tok('coral', 'plum', 0.45, 0.8))];
+    let t = 0, finWas = 0;
     return {
       group: g, movers, moverKind: [0, 1, 0, 1, 1, 0], heat: null,
-      update(dt, time, quiet, reduced, tier) {
+      update(dt, time, quiet, reduced, tier, finale = 0) {
         t += dt;
         const m = reduced ? 0 : quiet ? 0.3 : 1;
         seaM.uniforms.uTime.value = t; seaM.uniforms.uMotion.value = m;
+        if (finale !== finWas) {
+          finWas = finale;
+          SU.uDeep.value.lerpColors(seaDay[0], seaSun[0], finale); SU.uHaze.value.lerpColors(seaDay[1], seaSun[1], finale);
+          SU.uGlint.value.lerpColors(seaDay[2], seaSun[2], finale); headU.uHaze.value.lerpColors(seaDay[3], seaSun[3], finale);
+        }
         poolW.u.uTime.value = t; poolW.u.uMotion.value = m; surfW.u.uTime.value = t; surfW.u.uMotion.value = m;
         // the surf's swell (render only: a slow rise and fall of the shallow water, 0.06 to 0.12 m, about every 8.5 s; still with reduced motion)
         const sw = 0.5 - 0.5 * Math.cos((t / 8.5) * Math.PI * 2);

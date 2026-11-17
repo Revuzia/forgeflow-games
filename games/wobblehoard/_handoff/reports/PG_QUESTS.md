@@ -155,3 +155,95 @@ Stopped at a clean, type-checked state: `npx tsc --noEmit -p tsconfig.json` exit
 74/74 on the last run (73/74 on others: C08 only); probe_collection_imports 10/10; no process of mine running. The next engineer starts with the
 "next" row of the status table, which waits on PG_SHELL's quest host and ring and PG_LIFE's lifeStep (build order step 3), then SZ-02 for the
 life chunk's bytes.
+
+## Round 3 (engineer R3, started 2026-11-17 ~00:20 UTC, HEAD c049b83c2; no earlier round-3 work was found in my files: `git log` shows my
+files last changed in 8dc806641, the report ended at round 1's stop)
+Scope: (1) the Journal beside the PC line's trophies wrapper; (2) the reducer side of `lifeSetFriends`, AUTONOMY_ONLY_SOCIALS vs LF-24;
+(3) the QU / EC rows NOT RUN for lack of PG_LIFE, on a kinematic node host; (4) PLACE_CAPS / THING_PLACE vs PG_DATA's S2/S3 PlaceDefs (QU-14),
+QU-11's multi-day S2 stream; (5) DT-11's salt. Files: src/core/quests.ts, src/collection/**, my probes. No git write command.
+
+| Step | What | State |
+|---|---|---|
+| 0 | read brief, SESSION3, MERGE_PC, PG_LIFE round 2, the trophies binding (src/shell/achievementsBinding.ts, src/core/achStore.ts); baseline | DONE 00:25: tsc clean, probe_quests all run ok (4 NOT RUN), probe_journal all ok |
+| 1 | the Journal beside the trophies: read `observeCollection` (a Proxy: hooks feed/openCapsule/completeTask/merge/tidy/claimRestock, binds every other member to the target) and `createAchStore` (key `wobblehoard:v1:ach`, its own bus filter); 7 CO-12 rows in probe_journal | DONE 00:50: all ok, no code change needed in src |
+
+### Step 1 findings (the trophies wrapper)
+- **Nothing in my files needed to change.** `attachJournal(ach.observe(hoard), deps)` works: the Proxy binds `attachJournal`, `journal`, `feedPlay`,
+  `claimGift`, `warmthOf`, `setJournalParty` to the real collection, so the journal attaches to the real one and the port's grant runs inside it.
+- CO-12 rows (probe_journal, all ok): the hooks answer through the Proxy; the gift grant through it writes only `wobblehoard:v2:hoard` and
+  `wobblehoard:v2:journal` (never `wobblehoard:v1:ach`), one row, "Gift"; **two boot-like rigs on one storage and one 'storage' bus, the same
+  touches, one with a Journal attached + a ring fed + a gift granted: the trophies' stored save (nine counters, earned set) is byte-equal**
+  (`squeezes 6, stretches 4, species 1`, earned first_squish, first_stretch, medley in both); a trophies-key bus event re-reads only the
+  trophies, a journal-key event only the journal; a journal fold-in from another tab fires no collection `external` (which would make the
+  trophies and the capsule table re-sync); the dev hook's replace-and-restore on the wrapper still reaches the journal. No journal source file
+  names the trophies' key.
+- **One behaviour to decide (PG_SHELL, `src/shell/achievementsBinding.ts`, not my file):** the trophies count species owned on open, merge,
+  restock and another tab's hoard (`sweepSpecies`), not on a gift: a gift of a new species is counted at the next sweep (info row: species 1
+  right after the grant while 2 are owned). A restock is counted at once, so the consistent fix is one line in `attach()`:
+  `g.hoard.onEvent((e) => { if (e.type === 'gift' && e.state === 'granted') sweepSpecies(false); ... })` (or a `claimGift` entry in the
+  `hooks` table calling `w.itemsChanged()` on `ok`). Until the life chunk is wired no gift exists, so the live game is unchanged either way.
+| 5 | DT-11's salt 0x2c1b3c6d: whose rule, the right fix | DONE 01:00: diagnosed, not my files (below) |
+
+### Step 5 finding (DT-11)
+- **The salt is PG_AUDIO's**: `src/audio/music.ts:826`, added in 2a5898f0d (PLAYGROUND round 2): a sparser music style (`MusicStyle.thin`)
+  drops a mallet note at play time by the note's own seed, `Math.imul(e.seed ^ 0x2c1b3c6d, 0x297a2d39)`, so the composer's stream is never
+  drawn. PG_AUDIO's `_harness/probe_chatter.ts:206` uses the same constant to measure the drop rate.
+- **The rule is PG_DATA's**: DT-11 lives in `_harness/probe_pg_data.ts:573-586` (PLAYGROUND_BUILD 18 row DT-11, the list of LIFE.md 11). It
+  re-greps src for `^ 0x...` and `mulberry32(0x...)` and fails on any constant not in its KNOWN list, by design ("add them to this row's list
+  and re-check").
+- **Checked**: 0x2c1b3c6d differs from all 6 SALTS (XORs 560ac230 095ec8fc 1075cf1f 67cddfdc 4612da0a 379c09fe), from the 16 listed and
+  from the 2 base seeds (XOR 7bba676d, 211a2c64); it salts a note seed, not a genome seed, so it cannot line up with a LIFE stream.
+- **Right fix (PG_DATA, not loosening the check):** add `0x2c1b3c6d` (comment `music.ts thin`) to KNOWN in probe_pg_data.ts DT-11 and say
+  "the 17 in src"; the designer adds it to LIFE.md 11's list. PG_AUDIO changes nothing. I did not edit either file (not my lane).
+| 2 | the reducer side of `lifeSetFriends`; AUTONOMY_ONLY_SOCIALS vs LF-24 | DONE 01:40: `friendMaskOf` + `collection.friendMask`; new probe `_harness/probe_pg_lifequests.ts` FM x4, FW x2, AU x1 all ok |
+
+### Step 2 (the friend wish's reducer side)
+- **`src/core/quests.ts` `friendMaskOf(st, defs, speciesIdx, out: Uint32Array): boolean`**: out[0..1] = every species at Friends or closer
+  (>= 12 points) with it, plus its authored best friend only once its F3 is found; never itself. Zero allocation (0 B / 10 000 calls).
+- **Collection seam** (additive, optional): `Collection.friendMask?(speciesIdx, out)` (types.ts; index.ts +1 line, first-load cost about
+  90 B min) -> `JournalImpl.friendMask` (journal_store.ts). Before the journal attaches it answers false with 0, 0.
+- **For PG_SHELL (the LIFE host), the whole wiring**: after `lifeSetJournal`, for every owned species `c.friendMask(sp, m); lifeSetFriends(w, sp, m)`;
+  then on a collection `friend` event of level >= 2 do it for `e.a` and `e.b`, on a `fact` event with `fact === 3` (F3) for `e.species`.
+  Record conventions (already in the reducer): a SOCIAL with LIFE `thing = -2` goes to the ring as `thing -1, v = -1` (no points); a WISH
+  GRANTED whose SHOWN had kind FRIEND (lifeWishOf at SHOWN) is written `by = PLAYER`. `probe_pg_lifequests.ts`'s `QHost` is a working sketch.
+- Rows: FM (Met-only hidden, Friends both ways, best friend hidden before F3 and named after, unrelated empty; the collection seam; 0 B);
+  **FW end to end on the real lifeStep**: the reducer's mask (via the collection at the trip) -> LIFE -> Crimpo's friend wish for Dollop
+  (+180 s, ring v = FRIEND, thing = Dollop) -> Dollop brought out (BRING by PLAYER) -> the greet grants it -> ring GRANTED by PLAYER ->
+  Wish Jar +1, X10 1 of 5, F10 found.
+- **AUTONOMY_ONLY_SOCIALS confirmed against LIFE's real output (AU row)**: autonomy off, a 4-whole cabin party on high, 3 seeds x 4 min:
+  only GREET and CHAT appear, none of the set; with autonomy on the same runs show PARADE SNUGGLE COPY COMFORT PASS (all in the set) and
+  GREET CHAT PILE. Agrees with PG_LIFE's step-9 reading (LF-24). The constant is unchanged.
+| 3 | the QU / EC rows NOT RUN for lack of PG_LIFE, on a kinematic node host (`_harness/probe_pg_lifequests.ts`, about 5 s) | DONE 02:45: 10 ok, **2 FAIL (QU-13 med, QU-08: both C8's song of three)** |
+
+### Step 3 (QU-13, QU-03 gate half, QU-08 producer half, EC-02 LIFE part on the real lifeStep)
+**The host**: PG_LIFE's kinematic Sim (scoots glide, hops lift, a ball rolls when pushed, still bodies sleep after 1.5 s) copied verbatim from
+`probe_life.ts`, plus my `QHost`: LIFE events -> ring records (slots -> species, `fam`, a wish's kind/target from `lifeWishOf` at SHOWN, a
+grant of a FRIEND / PLACE / RIDE / TOUCH wish by PLAYER, a grant greet as `v = -1`), `feedPlay` once a frame into a real collection + journal,
+`friend` events back into `lifeSetPair` and the friend masks into `lifeSetFriends`. The scripted player writes only what the shell's own producers
+write (squeeze, stretch, capsule, emote tap, the card's tap, three Felt Ball flicks, Travel, BRING, the Fireplace switch, a cut, carries, the
+rides it sets). One journal, one clock, a regular player's order: Home (minute by minute until the rug pile, 7 min), the cabin with five (8 min),
+the two rides, a cut in the warmth, the cabin finale run, three days of Friends Everywhere, five friend wishes.
+- **QU-13 (med): 24 of 25 shown S1 quests complete from LIFE's real events; C8 does not**: its SING with 3 or more at Hearthlog never came on
+  med (one SING of 2 in the finale run). To check the X chapter anyway the probe marks C8 done (labelled STAND-IN; the row still fails on it):
+  then X1 X3 X6 (day 1), X2 (day 2), X10 (five friend wishes) all complete from LIFE.
+- **QU-13 (low): 25 of 25, C8 by LIFE** (a SING of 3 in the finale run), with one retry visit (3 out for 10 min, then four families carried
+  to the hearth) for C4 and X6, which the 5-out cabin visit did not reach on low.
+- **QU-03 gate half: ok** on low with LF-10's gate watched on every step: 0 frames over moverCap, 0 double moments, 0 wakes over unitCap +
+  allowance (also 0 on med). Found on the way: with the host's sleep rule the two Rocker Board riders fell asleep between hops and every hop
+  "woke" one: 4 starts at 2.03 units over 1.49 (med) / 1.06 (low) with allowance 0. A rider on a rocking board is never still, so the host
+  now keeps riders awake (written in the probe). **For PG_LIFE**: LF-10's teeter row does not assert `rows.wake`; if LIFE can see a rider
+  asleep (real physics settling a board), the C5 ride allowance would have to cover that start.
+- **QU-08 producer half (LIFE's kinds): 12 of 13 clauses matched field by field** by a record LIFE really produced; unmatched: C8 (SING minN 3).
+  H8's grant is the reducer's own (QU-15), excluded with that reason.
+- **SG diagnostic (info) for C8**: 45 kettle whistles with four carried beside the kettle 5 s before (5 seeds, high): **0 SING, 41 USE LISTEN**.
+  B18 (answer the tune: chatty > 0.5, within 3 s of the tune starting) takes the singers first, and S06 SING needs the starter and its members
+  idle. **For PG_LIFE / the designer**: in an S1 cabin the kettle is the only tune, so C8 (the cabin's finale and a gift) depends on a 3-way
+  SING that LIFE rarely starts on med or high. Options: let S06 take precedence over B18 when 2+ idle are near the tune, let a LISTENing
+  squishy join a SING, or re-specify C8's clause (minN 2). I did not change C8 (data/quests.ts is PG_DATA's) or LIFE.
+- **EC-02 (LIFE's part): ok**: 30 min at Home + 30 at the cabin, 4 out, no input: 220 LIFE records, 10 quest moments (H5 H2 H10 H8 C1 C10 C4
+  C7 C2 C9, none by the player), SP 0 -> 0, credits 0 -> 0, task rows unchanged, capsules 0, gifts ready 0.
+- **NOT RUN (need the shell)**: EC-02's rig half (4 moving mock bodies, haptics, camera, 2 min on real SoftBodies), EC-03 (the `auto`/`prop`
+  spy before `collection.feed`), QU-08's producer half for the shell's kinds (VISIT, BRING, TOUCH, PHOTO, UI, USE RING's part), and QU-13's
+  S2/S3 quests (R2, R6, R8, R5, E7: their places are not shipped).
+- Host limits (what a kinematic host cannot show): contacts and real riding, the shell's own producers, a LifeWorld kept across trips (each
+  visit here is a fresh world, so a natural place wish is never granted on arrival), real sleep.

@@ -355,6 +355,7 @@ export function createCollection(deps: CollectionDeps): Collection {
     claimGift: (chapter, pick) => (journal ? journal.claimGift(chapter, pick) : Promise.resolve({ ok: false, ledger, error: 'unavailable', message: GIFT_COPY.wait })),
     warmthOf: (id) => (journal ? journal.warmthOf(id) : 0),
     setJournalParty(ids) { if (journal) journal.setParty(ids); },
+    friendMask: (sp, o) => (journal ? journal.friendMask(sp, o) : ((o[0] = o[1] = 0), false)),
     attachJournal(impl) { journal = impl; return port; },
     dispose() {
       if (disposed) return;

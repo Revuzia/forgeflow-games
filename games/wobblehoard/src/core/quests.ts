@@ -721,6 +721,26 @@ export function friendLevel(x: number): number {
   return x >= FRIENDSHIP.close ? FRIEND_LEVEL.CLOSE : x >= FRIENDSHIP.friends ? FRIEND_LEVEL.FRIENDS : x >= FRIENDSHIP.met ? FRIEND_LEVEL.MET : 0;
 }
 
+/** The friend wish's input for LIFE's `lifeSetFriends(w, sp, mask)` (QUESTS 8, PG_LIFE round 2): the species `sp` may wish to see, as a 2-word
+ *  mask by catalog idx in out[0..1]: every species at Friends or closer with it, and its authored best friend only once F3 is found (a wish never
+ *  gives the riddle away). LIFE adds "owned" and "not out" itself. Zero allocation; call on a journal change (a FRIEND event of level 2+, an F3
+ *  fact, a load), never per frame. Returns whether the mask is not empty. */
+export function friendMaskOf(st: QuestState, d: QuestDefs, sp: number, out: Uint32Array): boolean {
+  out[0] = 0; out[1] = 0;
+  if (!(sp >= 0 && sp < SPECIES_BITS)) return false;
+  const n = st.sc[SC.FRN];
+  for (let r = 0; r < n; r++) {
+    if (st.frPts[r] < FRIENDSHIP.friends) continue;
+    const lo = st.frLo[r], hi = st.frHi[r];
+    const o = lo === sp ? hi : hi === sp ? lo : NO;
+    if (o < SPECIES_BITS && o !== sp) out[o >>> 5] |= 1 << (o & 31);
+  }
+  const bf = d.spFriend[sp];
+  if (bf < SPECIES_BITS && (st.fx[sp] & (1 << FACT.FRIEND)) !== 0) out[bf >>> 5] |= 1 << (bf & 31);
+  out[0] >>>= 0; out[1] >>>= 0;
+  return (out[0] | out[1]) !== 0;
+}
+
 /* ── warmth (LIFE 6.3): per item, never falls; gains capped per day ── */
 function warmSpecies(st: QuestState, out: QuestOut, sp: number, add: number, dayBit: number): void {
   const n = st.sc[SC.PARTYN];

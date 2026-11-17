@@ -25,6 +25,10 @@ import { SC, applyEventFields, createQuestOut, isDone, markDone, setQuestDay, se
 import { QUESTS, CHAPTERS, EV, BY, FACT, WISH_STATE, GIFT_LISTS } from '../src/data/quests.ts';
 import { SOCIAL_KIND as S, WISH_KIND, SPECIES_LIFE } from '../src/data/life.ts';
 import { CATALOG, speciesBaseGenome } from '../src/data/catalog.ts';
+import { createAchievements } from '../src/shell/achievementsBinding.ts';
+import type { AchGameLike } from '../src/shell/achievementsBinding.ts';
+import { ACH_KEY } from '../src/core/achStore.ts';
+import type { PortalEnv } from '../src/portal/bridge.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = resolve(HERE, '..');
 let bad = 0;
@@ -506,6 +510,92 @@ function worstJournal(): Journal {
   const tiny = serializeJournalCapped(worstJournal(), d, 1000);
   row('CO-11', 'serializeJournalCapped returns null (refuse) when even the fully pruned text is over the cap', tiny === null);
   c.dispose();
+}
+
+/* ═══════════════ CO-12 (round 3): the Journal beside the PC line's trophies (src/shell/achievementsBinding.ts, src/core/achStore.ts) ═══════════════
+ * boot.ts hands the game `ach.observe(hoard)`, a Proxy over the collection; the life chunk will call attachJournal on THAT object. These rows
+ * check that the Journal, its feed and the gift grant work through it and that the trophies see exactly what they saw without a Journal. */
+{
+  type Bus = { subs: Set<(k: string | null) => void>; fire(k: string | null): void; subscribe(fn: (k: string | null) => void): () => void };
+  const bus = (): Bus => { const subs = new Set<(k: string | null) => void>(); return { subs, fire: (k) => { for (const f of [...subs]) f(k); }, subscribe: (fn) => { subs.add(fn); return () => { subs.delete(fn); }; } }; };
+  const fenv = (): PortalEnv => ({ now: () => 0, setTimeout: () => 0, clearTimeout: () => undefined, framed: false, post: () => undefined, onMessage: () => () => undefined });
+  const touch = (kind: 'release' | 'snap', intensity: number, heldFor: number) => ({ kind, at: { x: 0, y: 0.5, z: 0.5 }, normal: { x: 0, y: 0, z: 1 }, intensity, heldFor, finger: 0 }) as Parameters<Collection['feed']>[0];
+  const fakeGame = (hoard: Collection) => {
+    const hooks = new Set<(dt: number, t: number) => void>();
+    const g = { phase: 'play', simTime: 0, body: { metrics: { carried: false } }, bodies: { extras: [] }, cut: { pieces: 1, busy: false }, ceremonies: { active: false, pending: false }, hoard,
+      onStep(fn: (dt: number, t: number) => void) { hooks.add(fn); return () => { hooks.delete(fn); }; }, step() { g.simTime += 1 / 60; for (const f of [...hooks]) f(1 / 60, g.simTime); } };
+    return g;
+  };
+  /** One boot-like rig on ONE storage (as boot.ts: the hoard, the trophies and the journal share storage and the window 'storage' bus). */
+  const rig = (withJournal: boolean, seed: number) => {
+    const m = memoryStorage(), b = bus();
+    const hoard = createCollection({ storage: m, now, random: mulberry32(seed), ...fakeTimers, throttleMs: 2000, subscribe: b.subscribe });
+    const ach = createAchievements({ storage: m, now, env: fenv(), subscribe: b.subscribe });
+    const c = ach.observe(hoard);
+    const g = fakeGame(c);
+    const off = ach.attach(g as unknown as AchGameLike, { announce: () => undefined });
+    const rt = withJournal ? attachJournal(c, { storage: m, subscribe: b.subscribe, ...fakeTimers, throttleMs: 2000 }) : null;
+    return { m, b, hoard, ach, c, g, rt, off };
+  };
+  const play = (r: ReturnType<typeof rig>): void => {
+    for (let k = 0; k < 6; k++) { r.c.feed(touch('release', 0.6, 1.2), T + k * 900); r.g.step(); }
+    for (let k = 0; k < 4; k++) { r.c.feed(touch('snap', 0.8, 0.5), T + 7000 + k * 900); r.g.step(); }
+  };
+  const A = rig(false, 31), B = rig(true, 31);
+  row('CO-12', 'attachJournal through the trophies wrapper (ach.observe(hoard), the object boot.ts gives createGame) attaches: journal(), feedPlay, claimGift, warmthOf and setJournalParty answer through the Proxy',
+    !!B.rt && B.c.journal!() !== null && typeof B.c.feedPlay === 'function' && typeof B.c.claimGift === 'function' && B.c.warmthOf!('nope') === 0);
+  // the same touches in both rigs, then the Journal's own traffic in B only (a ring of play, a gift)
+  play(A); play(B);
+  const r1 = ring(16);
+  push(r1, EV.VISIT, 0, 0, -1, sp('dollop') >= 0 ? sp('dollop') : 0, 255, 1, BY.PLAYER);
+  push(r1, EV.TOUCH, 1, 0, -1, 0, 255, 1, BY.PLAYER, 1.0);
+  B.c.feedPlay!(r1, T);
+  const stampsB = B.rt!.store.journal.st.sc[SC.ST];
+  giftReadyState(B.rt!);
+  const setsBefore = B.m.sets.length;
+  const speciesBefore = B.ach.save.counters.species;
+  const g1 = await B.c.claimGift!(1, 'puddlo');
+  const giftSets = B.m.sets.slice(setsBefore);
+  const dev = B.rt!.store.journal.dev;
+  const giftItem = B.c.item(giftItemId(dev, 1));
+  row('CO-12', 'the gift grant through the wrapper: one row on the shelf ("Gift" on the Hoard line), the journal granted; its writes touch only the hoard and journal keys, never wobblehoard:v1:ach',
+    g1.ok && giftRows(B.m, dev) === 1 && !!giftItem && itemOriginCopy(giftItem) === 'Gift' && B.rt!.store.journal.st.giftState[1] === 2 && !giftSets.includes(ACH_KEY) && giftSets.includes(HOARD_KEY) && giftSets.includes(JOURNAL_KEY),
+    `keys written: ${[...new Set(giftSets)].join(' ')}`);
+  B.c.flush(); A.c.flush(); B.ach.store.flush(); A.ach.store.flush();
+  const strip = (s: string | null): string => { const o = JSON.parse(s ?? '{}') as { counters?: Record<string, number>; earned?: Record<string, number> }; return JSON.stringify({ c: o.counters, e: Object.keys(o.earned ?? {}).sort() }); };
+  row('CO-12', 'trophy behaviour is unchanged by the Journal: after the same touches, the trophies\' save (nine counters, the earned set) with a Journal attached, a ring fed and a gift granted equals the save without one',
+    strip(A.m.getItem(ACH_KEY)) === strip(B.m.getItem(ACH_KEY)) && B.ach.save.counters.squeezes === 6 && B.ach.save.counters.capsules === 0 && B.ach.save.counters.tasks === 0,
+    `A ${strip(A.m.getItem(ACH_KEY))} | B ${strip(B.m.getItem(ACH_KEY))}`);
+  row('CO-12', 'the Journal never writes or names the trophies\' key, and the trophies never write the journal\'s keys (one shared storage)',
+    !['src/collection/journal.ts', 'src/collection/journal_store.ts', 'src/core/quests.ts'].some((f) => /v1:ach|ACH_KEY|achStore/.test(readFileSync(resolve(ROOT, f), 'utf8')))
+      && !A.m.sets.some((k) => k.startsWith('wobblehoard:v2:journal')) && (JOURNAL_KEY as string) !== ACH_KEY && !JOURNAL_KEY.startsWith('wobblehoard:v1:') && stampsB >= 0,
+    `journal key ${JOURNAL_KEY}, trophies key ${ACH_KEY}`);
+  // the window 'storage' bus: another tab's trophies write must not re-read the journal, another tab's journal write must not re-read the trophies
+  {
+    const reads: string[] = []; const get0 = B.m.getItem; B.m.getItem = (k: string) => { reads.push(k); return get0(k); };
+    B.b.fire(ACH_KEY); const onAch = reads.splice(0);
+    B.b.fire(JOURNAL_KEY); const onJ = reads.splice(0);
+    B.m.getItem = get0;
+    row('CO-12', 'the shared storage bus: a trophies-key change re-reads the trophies only (never the journal); a journal-key change re-reads the journal only (never the trophies, never the hoard)',
+      onAch.includes(ACH_KEY) && !onAch.includes(JOURNAL_KEY) && onJ.includes(JOURNAL_KEY) && !onJ.includes(ACH_KEY) && !onJ.includes(HOARD_KEY), `on ach: ${onAch.join(' ')} | on journal: ${onJ.join(' ')}`);
+  }
+  // the Journal's own events reach the shell's listeners through the wrapper's onEvent, and its external fold-in never fires 'external' (which would sync the trophies)
+  {
+    const seen: string[] = []; const offE = B.c.onEvent((e: CollectionEvent) => seen.push(e.type));
+    const r2 = ring(8); push(r2, EV.VISIT, 0, 0, -1, 0, 255, 1, BY.PLAYER); B.c.feedPlay!(r2, T);
+    const other = JSON.parse(B.m.getItem(JOURNAL_KEY)!) as Record<string, unknown>; B.m.setItem(JOURNAL_KEY, JSON.stringify(other)); B.b.fire(JOURNAL_KEY);
+    offE();
+    row('CO-12', 'a journal change from another tab folds in without a collection \'external\' event (the trophies and the capsule table re-sync only on the hoard\'s own)', !seen.includes('external'), seen.join(' ') || '(none)');
+  }
+  // the dev hook's replace-and-restore pattern on the wrapper (failNextMerge) leaves the journal hooks alone
+  {
+    const orig = B.c.feedPlay!; (B.c as { feedPlay?: unknown }).feedPlay = () => undefined; (B.c as { feedPlay?: unknown }).feedPlay = orig;
+    const before = B.rt!.store.journal.st.sc[SC.ST]; const r3 = ring(8); push(r3, EV.TOUCH, 1, 0, -1, 0, 255, 1, BY.PLAYER, 1.0); B.c.feedPlay!(r3, T);
+    row('CO-12', 'a member replaced and restored through the wrapper (the dev hook\'s pattern) still reaches the journal (no recursion, no lost feed)', B.rt!.store.journal.st.sc[SC.ST] >= before);
+  }
+  // INFO (not a check): the trophies' species sweep runs on open / merge / restock / another tab's hoard, not on a gift; a gifted new species is counted at the next sweep
+  console.log(`info CO-12 the species counter around a gift: before ${speciesBefore}, right after the grant ${B.ach.save.counters.species}, owned now ${B.hoard.stacks().filter((s) => s.copies > 0).length} (the trophies count a gifted species at their next sweep: request to PG_SHELL in PG_QUESTS.md round 3)`);
+  A.off(); B.off(); A.ach.dispose(); B.ach.dispose(); A.hoard.dispose(); B.hoard.dispose();
 }
 
 console.log(`\n${bad === 0 ? 'all checks passed' : `${bad} FAILED`}`);

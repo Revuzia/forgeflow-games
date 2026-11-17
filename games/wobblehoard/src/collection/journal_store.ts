@@ -14,7 +14,7 @@ import { migrateVersioned } from '../core/save.ts';
 import type { StorageLike } from '../core/settings.ts';
 import type { QuestDefs } from '../core/quests.ts';
 import {
-  QOUT, SC, UNLOCK_FRIENDS, applyEventFields, applyPlayEvent, createQuestOut, giftListHas, giftReady, openPlacesByStamps, setGiftState, setQuestDay,
+  QOUT, SC, UNLOCK_FRIENDS, applyEventFields, applyPlayEvent, createQuestOut, friendMaskOf, giftListHas, giftReady, openPlacesByStamps, setGiftState, setQuestDay,
 } from '../core/quests.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import { SPECIES, getSpecies } from '../data/catalog.ts';
@@ -324,6 +324,7 @@ export function attachJournal(collection: Collection, deps: JournalDeps): Journa
       setJournalParty(store.journal, itemIds, (id) => { const it = p.item(id); return it ? it.speciesIdx : -1; });
       store.markDirty();
     },
+    friendMask(sp: number, o: Uint32Array): boolean { if (!store) { o[0] = o[1] = 0; return false; } return friendMaskOf(store.journal.st, defs, sp, o); },
     flush(): void { if (store) store.flush(); },
     dispose(): void { if (store) store.dispose(); },
   };

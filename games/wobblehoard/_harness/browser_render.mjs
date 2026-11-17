@@ -1837,6 +1837,14 @@ try {
           `worst ${rf.before.toFixed(1)} px, with the bar ${rf.after.toFixed(1)} px, after ${rf.back.toFixed(1)} px; lens ${rf.fov.map((v) => v.toFixed(1)).join(' -> ')} deg`);
         check(rf.stepM <= 0.25 && rf.stepFov <= 1.0, `MERGE_PC doubt 4 ${label}: the refit eases (no jump: the camera moves at most 0.25 m and its lens 1 deg in one frame)`, `largest step ${rf.stepM.toFixed(3)} m, ${rf.stepFov.toFixed(2)} deg`);
       }
+      {   // RD-14 in a place (round 3): LIFE's kind of motion (no finger) moves no part of the place camera
+        const pid = label === 'phone' ? 'ripple' : 'frostbell';
+        const a = await lp.evaluate(([k, p]) => window.__RV__.pg.placeAutonomy(k, p), [kind, pid]);
+        PL[`rd14:${label}`] = a;
+        const z = (v) => v[0] <= 1e-4 && v[1] <= 1e-4 && v[2] <= 1e-4 && v[3] <= 1e-3;
+        check(z(a.off) && z(a.on), `RD-14 ${label} in a place (${pid}): a body sliding and hopping by itself moves neither the camera, the lens shift, the camera scale nor the lens (autonomy framing off, as the shell sets it in a place, and on)`,
+          `off ${a.off.map((v) => v.toExponential(1)).join(' / ')}; on ${a.on.map((v) => v.toExponential(1)).join(' / ')} (m / lens / scale / deg)`);
+      }
       if (label === 'phone') {
         const bc = await lp.evaluate(() => window.__RV__.pg.bubbleClamp('ripple'));
         writeFileSync(resolve(PGOUT, `bubble_clamp_phone.png`), b64(bc.png));
@@ -1859,9 +1867,63 @@ try {
         PL.swaps = sw;
         check(sw.after.every((v, i) => Math.abs(v - sw.base[i]) <= 2), 'RD-07: 12 place swaps (Home -> each place in turn -> Home): programs, textures and geometries back to Home\'s baseline +-2',
           `programs ${sw.base[0]} -> ${sw.after[0]}, textures ${sw.base[1]} -> ${sw.after[1]}, geometries ${sw.base[2]} -> ${sw.after[2]}`);
+        // RD-03 (round 3), the dim half: a place's ceremony dim eases in and out over at least 1.0 s (PLACES P9 / 2.3), a mythic reveal
+        for (const id of PLACE_IDS) {
+          const d = await lp.evaluate(([pid]) => window.__RV__.pg.placeDim(pid, 'mythic'), [id]);
+          PL[`dim:${id}`] = d;
+          const okDim = d.ended && Math.abs(d.peak - d.full) < 1e-6 && (d.full === 0 || (d.inS >= 1.0 && d.outS >= 1.0));
+          check(okDim, `RD-03 ${id}: the ceremony dim (${d.full}) eases in and back out over at least 1.0 s each way (a mythic reveal, 1/30 s steps)`,
+            `peak ${d.peak.toFixed(3)}, in ${d.inS.toFixed(2)} s, out ${d.outS.toFixed(2)} s, largest step ${d.maxStep.toFixed(4)} a frame, reveal ${d.frames} frames`);
+        }
+        // the finale spectacle (PLACES P13, round 3): every place takes thingFx(-1, 2); where the host eases the light and sky (Ripple's sunset,
+        // Frostbell's evening and stars) it takes at least 3 s (Calm 6 s), a one-way fade (no luminance reversal over 0.02), and comes back
+        for (const id of PLACE_IDS) {
+          const fz = await lp.evaluate(([pid]) => window.__RV__.pg.placeFinale(pid, false), [id]);
+          const name = id === 'hearthlog' ? 'cabin' : id;
+          writeFileSync(resolve(PGOUT, `finale_${name}_before.png`), b64(fz.pngA)); writeFileSync(resolve(PGOUT, `finale_${name}_after.png`), b64(fz.pngB));
+          const hosted = id === 'ripple' || id === 'frostbell';
+          let calmS = NaN;
+          if (hosted) calmS = (await lp.evaluate(([pid]) => window.__RV__.pg.placeFinale(pid, true), [id])).toOneS;
+          PL[`finale:${id}`] = { took: fz.took, toOneS: fz.toOneS, calmS, backS: fz.backS, lumaA: fz.lumaA, lumaB: fz.lumaB, reversal: fz.reversal };
+          check(fz.took && fz.reversal <= 0.02 && (!hosted || (fz.toOneS >= 3 - 1e-6 && calmS >= 6 - 1e-6 && fz.backS >= 3 - 0.05)),
+            `P13 ${id}: the finale spectacle starts (thingFx(-1, 2)), fades one way without a flicker${hosted ? ', over 3 s (Calm 6 s) and back over 3 s' : ' (its own effect: the place chunk)'}`,
+            `took ${fz.took}${hosted ? `, to full ${fz.toOneS.toFixed(2)} s, Calm ${calmS.toFixed(2)} s, back ${fz.backS.toFixed(2)} s` : ''}; frame luminance ${fz.lumaA.toFixed(3)} -> ${fz.lumaB.toFixed(3)}, largest reversal ${fz.reversal.toFixed(4)}`);
+        }
+        await lp.evaluate(() => window.__RV__.pg.home());
       }
       report.problems.push(...lbad);
       await pctx2.close();
+    }
+    // RD-03 (round 3), the flash half: every capsule and merge tier played IN each place, the `cer` section's gate and frame (320x240, 1/30 s
+    // steps, per-frame mean linear luminance; a transition = a direction flip after a swing of 0.04; at most 3 in any 1 s window, which is
+    // stricter than RD-03's "at most 2 flashes a second"; the screen light at most 0.25)
+    if (!flag('no-flash', false)) {
+      const fctx = await browser.newContext({ viewport: { width: 320, height: 240 }, deviceScaleFactor: 1 });
+      const { page: fp, bad: fbad } = await openView(fctx, `quality=med&body=${bodyQ}`, 'place-flash', [/GPU stall due to ReadPixels/i]);
+      const THR = 0.04;
+      const zz = (L) => { const idx = []; let dir = 0, pivot = L[0];
+        for (let k = 1; k < L.length; k++) { const v = L[k];
+          if (dir === 0) { if (v - pivot >= THR) { dir = 1; pivot = v; idx.push(k); } else if (pivot - v >= THR) { dir = -1; pivot = v; idx.push(k); } }
+          else if (dir === 1) { if (v > pivot) pivot = v; else if (pivot - v >= THR) { dir = -1; pivot = v; idx.push(k); } }
+          else { if (v < pivot) pivot = v; else if (v - pivot >= THR) { dir = 1; pivot = v; idx.push(k); } } }
+        return idx; };
+      const ww = (idx, dt) => { let w = 0; for (let i = 0; i < idx.length; i++) { let n = 0; for (let j = i; j < idx.length && idx[j] - idx[i] < 1 / dt; j++) n++; w = Math.max(w, n); } return w; };
+      for (const id of PLACE_IDS) {
+        await fp.evaluate(([pid]) => window.__RV__.pg.enterPlace(pid), [id]);
+        let worst = 0, at = '', maxL = 0, lo = Infinity, hi = 0;
+        for (const kind of ['capsule', 'merge']) for (const tier of ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic']) {
+          const r = await fp.evaluate((o) => window.__RV__.runCeremony(o).then((x) => ({ lumas: x.lumas, maxLight: x.maxLight })), { kind, tier, dt: 1 / 30 });
+          const w = ww(zz(r.lumas), 1 / 30);
+          if (w > worst || !at) { worst = Math.max(worst, w); at = `${kind}:${tier}`; }
+          maxL = Math.max(maxL, r.maxLight); for (const v of r.lumas) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+        }
+        PL[`flash:${id}`] = { worst, at, maxL, lo, hi };
+        check(worst <= 3 && maxL <= 0.25 + 1e-6, `RD-03 ${id}: the flash gate in the place for every capsule and merge tier (<= 3 luminance transitions in any 1 s, screen light <= 0.25)`,
+          `worst 1 s window ${worst} transitions (${at}), screen light <= ${maxL.toFixed(3)}, frame luminance ${lo.toFixed(3)}..${hi.toFixed(3)}`);
+      }
+      await fp.evaluate(() => window.__RV__.pg.home());
+      report.problems.push(...fbad);
+      await fctx.close();
     }
   }
 

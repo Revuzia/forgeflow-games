@@ -433,6 +433,11 @@ export interface Collection {
   warmthOf?(itemId: string): number;
   /** The party as item ids, slot by slot (warmth belongs to items; the ring carries species only). Call on every party change. */
   setJournalParty?(itemIds: readonly string[]): void;
+  /** The friend wish's input for LIFE (round 3): fills out[0..1] with the mask `lifeSetFriends(w, speciesIdx, out)` takes (species at Friends or
+   *  closer with `speciesIdx`, plus its best friend once F3 is found; core/quests.ts friendMaskOf). False (and 0, 0) before the journal is
+   *  attached. The host calls it for every owned species at load and, for the species named, on a `friend` event of level 2+ (a and b) and a
+   *  `fact` event of fact 3 (F3). Allocation-free. */
+  friendMask?(speciesIdx: number, out: Uint32Array): boolean;
   /** The life chunk attaches the journal here and gets the hoard's side of the gift grant (journal_store.ts attachJournal). */
   attachJournal?(impl: JournalImpl): HoardGiftPort;
   // Trade, offer shelf, friends, board, block and report (TRADE.md 7.2) are NOT part of this build. When the server exists they
@@ -476,6 +481,7 @@ export interface JournalImpl {
   claimGift(chapter: number, pick: SpeciesId): Promise<GiftClaimResult>;
   warmthOf(itemId: string): number;
   setParty(itemIds: readonly string[]): void;
+  friendMask(speciesIdx: number, out: Uint32Array): boolean;
   flush(): void;
   dispose(): void;
 }

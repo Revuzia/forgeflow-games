@@ -50,14 +50,27 @@ void main() {
     if (vUv.y < pkS && a < 0.5) {
       vec3 m = mix(uNear, uFar, fl / 2.0);
       float cl = pkS - (0.03 + 0.03 * pN(vec2(x * 13.0, fl + 2.0))) * uH;   // (a crisp, jagged snow line under the tallest peaks; a soft one read as light beams)
-      m = mix(m, uCap, smoothstep(cl - 0.004, cl + 0.004, vUv.y) * step(0.3, pk));
-      // (round 3: the low sun is on the left: each peak's left face lit, its right face in shade, less so in the haze; flat cut-outs read as paper)
-      m *= mix(1.0, mix(1.14, 0.8, smoothstep(sk - 0.015, sk + 0.015, f)), 1.0 - 0.45 * fl / 2.0);
+      // (round 3: the low sun is on the left: each peak's left face lit, its right face in shade, less so in the haze; flat cut-outs read as
+      // paper. The snow on a lit face cream, on a shaded face a pale cold blue, both a little into the haze for the far ranges)
+      float side = smoothstep(sk - 0.015, sk + 0.015, f);
+      m *= mix(1.0, mix(1.14, 0.8, side), 1.0 - 0.45 * fl / 2.0);
+      m = mix(m, mix(mix(uCap, uCapS, side), uFar, 0.2 * fl), smoothstep(cl - 0.004, cl + 0.004, vUv.y) * step(0.3, pk));
       c = m; a = 1.0;
     }
   }
   if (a < 0.5) discard;
   gl_FragColor = vec4(c, 1.0);
+  #include <colorspace_fragment>
+}`;
+
+// the finale's stars (round 3): a field of small twinkling points behind the ranges, additive, its strength the eased finale amount
+const STARS = /* glsl */`
+void main() {
+  vec2 q = vUv * vec2(150.0, 40.0), i = floor(q), f = fract(q) - 0.5 - (vec2(pH(i + 1.0), pH(i + 2.0)) - 0.5) * 0.6;
+  float h = pH(i), r = 0.05 + 0.07 * pH(i + 3.0);
+  float st = step(0.94, h) * (1.0 - smoothstep(r * 0.4, r, length(f)));
+  float tw = 0.7 + 0.3 * sin(uTime * uMotion * (1.0 + 2.0 * pH(i + 5.0)) + h * 40.0);
+  gl_FragColor = vec4(uStar, st * tw * uAmt * smoothstep(0.05, 0.25, vUv.y));
   #include <colorspace_fragment>
 }`;
 
@@ -67,8 +80,9 @@ const LOOK: PlaceLook = {
   // (round 3: cream-lagoon mixes pass through green in OKLCH: the horizon, the band and the snow's fill are lagoon-dusk blues or a cream-amber now)
   skyBand: tok('lagoon', 'dusk', 0.2, 1.0),
   sky: {
-    uZenith: tok('lagoon', 'dusk', 0.4, 0.68), uInk: tok('lagoon', 'dusk', 0.25, 0.8), uPlum: tok('lagoon', 'dusk', 0.12, 0.88), uHorizon: tok('cream', 'amber', 0.12, 0.84),
-    uGlowWarm: tok('cream', 'amber', 0.3, 0.45), uGlowCool: tok('lagoon', 'lagoon', 0, 0.2), uBase: tok('lagoon', 'dusk', 0.25, 0.95), uWarm: tok('cream', 'cream', 0, 0.04),
+    // (round 3: a cold periwinkle horizon (toward dusk: a lagoon haze over the cream snow mixed to green); the cream-amber one put a tan band behind the peaks and, through the ground haze, an olive band on the far snow)
+    uZenith: tok('lagoon', 'dusk', 0.4, 0.68), uInk: tok('lagoon', 'dusk', 0.25, 0.8), uPlum: tok('lagoon', 'dusk', 0.12, 0.88), uHorizon: tok('lagoon', 'dusk', 0.38, 1.0),
+    uGlowWarm: tok('cream', 'coral', 0.25, 0.45), uGlowCool: tok('lagoon', 'lagoon', 0, 0.2), uBase: tok('lagoon', 'dusk', 0.4, 0.95), uWarm: tok('cream', 'cream', 0, 0.04),
     uFogNear: 10, uFogFar: 40,
   },
   light(layout: 0 | 1): PlaceLight {
@@ -80,6 +94,12 @@ const LOOK: PlaceLook = {
       fillSky: tok('lagoon', 'dusk', 0.35), fillGround: tok('lagoon', 'dusk', 0.2, 0.9), fillI: 2.0,
       keyTint: [1.0, 0.97, 0.9],
     };
+  },
+  // the finale spectacle (PLACES 4.4, P13; round 3): evening comes: a rose low sun on the snow, a violet-rose horizon under a deepening sky,
+  // the stars come out (build: a star card) and the snow slows (build: the flakes' clock)
+  finale: {
+    light: { key: tok('cream', 'coral', 0.35, 0.92), keyI: 320, rim: tok('dusk', 'lagoon', 0.35), fillSky: tok('dusk', 'lagoon', 0.3, 0.8), fillI: 1.7 },
+    sky: { uHorizon: tok('coral', 'dusk', 0.7, 0.8), uGlowWarm: tok('coral', 'amber', 0.25, 0.4), uPlum: tok('dusk', 'lagoon', 0.2, 0.72), uInk: tok('dusk', 'ink', 0.45, 0.95), uZenith: tok('ink', 'dusk', 0.35, 0.9) },
   },
   panels: [
     { dir: new THREE.Vector3(-0.8, 0.35, 0.45).normalize(), dist: 4.5, w: 2.4, h: 1.2, color: [1.0, 0.93, 0.8], k: 6.0, soft: 0.5, radius: 0.6 },     // the low sun
@@ -105,8 +125,14 @@ const LOOK: PlaceLook = {
 
     // ---- the ground (snow) and the mountains ----
     g.add(kit.ground(snow));
-    const mU = { uNear: { value: col(tok('dusk', 'plum', 0.2, 1.05)) }, uFar: { value: col(tok('dusk', 'lagoon', 0.4, 1.1)) }, uCap: { value: col(tok('dusk', 'lagoon', 0.62, 1.15)) }, uH: { value: tall ? 1 : 0.45 } };   // (caps an icy light blue: cream ones were the sky's own colour and read as cut-off peaks)
+    const mU = { uNear: { value: col(tok('dusk', 'plum', 0.2, 1.05)) }, uFar: { value: col(tok('dusk', 'lagoon', 0.4, 1.1)) }, uCap: { value: col(tok('cream', 'cream', 0, 0.9)) }, uCapS: { value: col(tok('lagoon', 'dusk', 0.55, 0.92)) }, uH: { value: tall ? 1 : 0.45 } };   // (round 3: cream caps in the sun, cold blue in the shade, against a blue sky; round 2's cream caps on a cream horizon read as cut-off peaks, the light blue ones as glowing ice)
     g.add(kit.card(MOUNTAINS, mU, 80, 14, 0, 5.2, tall ? -15 : -13, 0, -70));
+    const M_KEYS = ['uNear', 'uFar', 'uCap', 'uCapS'] as const, mDay = M_KEYS.map((k) => (mU[k].value as THREE.Color).clone());
+    const mEve = [col(tok('dusk', 'ink', 0.45, 0.95)), col(tok('dusk', 'plum', 0.3, 0.95)), col(tok('cream', 'coral', 0.4, 0.92)), col(tok('dusk', 'lagoon', 0.25, 0.85))];
+    let finWas = 0;
+    const starU = { uAmt: { value: 0 }, uStar: { value: col(tok('cream', 'lagoon', 0.15, 1.0)) } };
+    const stars = kit.card(STARS, starU, 110, 30, 0, 15, tall ? -19 : -17, 0, -72, true);
+    (stars.material as THREE.ShaderMaterial).blending = THREE.AdditiveBlending; stars.visible = false; g.add(stars);
 
     // ---- the Ice Pond: dark gloss with cracks and a frosted rim (flush: no collider, y 0.004) ----
     const iceU = { uC: { value: new THREE.Vector4(pond.x, pond.z, pond.r ?? 1.4, 0) }, uDeep: { value: col(tok('dusk', 'lagoon', 0.45, 0.62)) }, uPale: { value: col(tok('cream', 'lagoon', 0.3, 0.85)) } };
@@ -206,12 +232,18 @@ const LOOK: PlaceLook = {
     let t = 0;
     return {
       group: g, movers, moverKind: [0, 0, 0, 1, 0, 1, 1], heat: null,
-      update(dt, time, quiet, reduced, tier) {
+      update(dt, time, quiet, reduced, tier, finale = 0) {
         t += dt;
         const m = reduced ? 0 : quiet ? 0.3 : 1;
         pool.u.uTime.value = t; pool.u.uMotion.value = m;
+        starU.uAmt.value = finale; stars.visible = finale > 0.001;
+        if (finale !== finWas) {   // the ranges into evening: darker rock, alpenglow on the lit snow, dusk in the shade (lerped in place)
+          finWas = finale;
+          for (let k = 0; k < 4; k++) (mU as unknown as Record<string, { value: THREE.Color }>)[M_KEYS[k]].value.lerpColors(mDay[k], mEve[k], finale);
+        }
+        (stars.material as THREE.ShaderMaterial).uniforms.uTime.value = t; (stars.material as THREE.ShaderMaterial).uniforms.uMotion.value = m;
         wisps.update(dt, time, quiet, reduced, tier);
-        flakes.update(dt, time, quiet, reduced, tier);
+        flakes.update(dt * (1 - 0.6 * finale), time, quiet, reduced, tier);   // the snow slows
         puff.update(dt, time, quiet, reduced, tier);
         q = quiet; rm = reduced; tr = tier;
       },

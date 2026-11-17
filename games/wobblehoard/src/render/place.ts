@@ -48,7 +48,8 @@ export interface PlaceBuilt {
   /** The heat point (the fire): toast browns the side facing it (StageLike.setHeatPoint). */
   readonly heat: readonly [number, number, number] | null;
   /** Draw calls the set and props use (RD-08 counts them in the browser; this is the kit's own count). */
-  update(dt: number, time: number, quiet: boolean, reduced: boolean, tier: number): void;
+  /** One frame; `finale` = the host's eased finale amount 0..1 (PlaceLook.finale; 0 when the place has none). */
+  update(dt: number, time: number, quiet: boolean, reduced: boolean, tier: number, finale?: number): void;
   /** StageLike.thingFx: a thing's own effect (kind 1 a puff: the kettle's steam, the hearth's fire, the pine's snow, the drip leaf's shower;
    *  thing -1 kind 2: the finale spectacle, amount 0..1 eased by the place). False when the place has no such effect. */
   thingFx?(thing: number, kind: number, amount: number): boolean;
@@ -63,6 +64,10 @@ export interface PlaceLook {
   readonly skyBand: Rgb;
   /** PLACES 2.3: how far a ceremony dims the place's light (0 = none; a bright place 0.3), eased over at least 1.0 s (RD-03). */
   readonly ceremonyDim?: number;
+  /** PLACES P13 (round 3): the finale spectacle's light and sky. While `thingFx(-1, 2, amount)` holds, the host eases the place's lights and
+   *  sky toward these by the amount (3 s, Calm or reduced motion 6 s: a slow fade, inside the flash gate); the built place gets the eased
+   *  amount in update() for its own part (Ripple's sea, Frostbell's stars and slow snow). Missing members keep the place's own value. */
+  readonly finale?: { readonly light?: Partial<Pick<PlaceLight, 'key' | 'keyI' | 'rim' | 'rimI' | 'fillSky' | 'fillGround' | 'fillI'>>; readonly sky?: Partial<Record<Exclude<keyof SkyLook, 'uFogNear' | 'uFogFar'>, Rgb>> };
   build(kit: PropKit, layout: 0 | 1): PlaceBuilt;
 }
 
@@ -386,7 +391,11 @@ export class PlaceHost {
   readonly fx = new ReactFx();
   /** The ceremony dim (PLACES 2.3, RD-03): eased toward the place's dim while a ceremony plays, over at least 1.0 s each way. */
   private dimNow = 0;
-  private baseI = [0, 0, 0];
+  /** The finale spectacle (PlaceLook.finale): its target and eased amount, the place's own light it eases from, the sky being mixed. */
+  private finT = 0;
+  private finNow = 0;
+  private pl: PlaceLight | null = null;
+  private skyMix: Record<string, unknown> | null = null;
   constructor(hub: EnvHub) { this.hub = hub; }
   get active(): string | null { return this.cur ? this.cur.id : null; }
   /** setPlayBounds' framing and lens (placeview.ts): the camera lives in the stage, the search here (it only runs in a place). */
@@ -412,8 +421,26 @@ export class PlaceHost {
       c.fill.color.copy(col(l.fillSky)); c.fill.groundColor.copy(col(l.fillGround)); c.fill.intensity = l.fillI;
       this.light = { keyDir: new THREE.Vector3(l.keyPos[0], l.keyPos[1] - 0.4, l.keyPos[2]).normalize(), rimDir: rd, keyCol: col(l.key), rimCol: col(l.rim), keyTint: l.keyTint };
     }
-    this.baseI = [c.key.intensity, c.rim.intensity, c.fill.intensity]; this.dimNow = 0;
+    this.dimNow = 0;
+    this.pl = l; this.finT = 0; this.finNow = 0; this.skyMix = null;
     for (const v of c.views()) v.mats.setLight(this.light);
+  }
+  /** The place's lights (and, with a finale, the jellies' light terms and the sky) at the eased finale amount, times the ceremony dim. */
+  private mixLight(c: StageCtx, look: PlaceLook): void {
+    const l = this.pl;
+    if (!l) return;
+    const f = this.finNow, k = 1 - this.dimNow, F = look.finale, L = F?.light ?? {};
+    const lerp = (a: number, b: number | undefined): number => a + ((b ?? a) - a) * f;
+    const lc = (a: Rgb, b: Rgb | undefined, o: THREE.Color): void => { const t = b ?? a; o.setRGB(a[0] + (t[0] - a[0]) * f, a[1] + (t[1] - a[1]) * f, a[2] + (t[2] - a[2]) * f, THREE.LinearSRGBColorSpace); };
+    c.key.intensity = lerp(l.keyI, L.keyI) * k; c.rim.intensity = lerp(l.rimI, L.rimI) * k; c.fill.intensity = lerp(l.fillI, L.fillI) * k;
+    if (!F) return;
+    lc(l.key, L.key, c.key.color); lc(l.rim, L.rim, c.rim.color); lc(l.fillSky, L.fillSky, c.fill.color); lc(l.fillGround, L.fillGround, c.fill.groundColor);
+    if (this.light) { this.light.keyCol.copy(c.key.color); this.light.rimCol.copy(c.rim.color); for (const v of c.views()) v.mats.setLight(this.light); }
+    if (F.sky) {
+      const S = (this.skyMix ??= { ...look.sky }) as Record<string, unknown>, B = look.sky as unknown as Record<string, Rgb>;
+      for (const key of Object.keys(F.sky) as (keyof typeof F.sky)[]) { const a = B[key], t = F.sky[key]!; S[key] = [a[0] + (t[0] - a[0]) * f, a[1] + (t[1] - a[1]) * f, a[2] + (t[2] - a[2]) * f]; }
+      c.table.setSky(S as unknown as SkyLook);
+    }
   }
   /** Swap a loaded place in for the layout (0 wide, 1 tall); id null = back to Home. False when that place is not loaded. */
   enter(c: StageCtx, id: string | null, layout: 0 | 1): boolean {
@@ -444,8 +471,11 @@ export class PlaceHost {
   }
   /** StageLike.thingFx: a thing's own effect in the place (the place chunk draws it). */
   thingFx(thing: number, kind: number, amount: number): boolean {
-    const b = this.cur?.built;
-    return !!b && !!b.thingFx && b.thingFx(Math.floor(thing), Math.floor(kind), Number.isFinite(amount) ? Math.max(0, Math.min(1, amount)) : 1);
+    const b = this.cur?.built, a = Number.isFinite(amount) ? Math.max(0, Math.min(1, amount)) : 1;
+    const own = !!b && !!b.thingFx && b.thingFx(Math.floor(thing), Math.floor(kind), a);
+    // (round 3) the finale's light and sky, eased by the host for any place whose look has a finale
+    if (b && Math.floor(thing) === -1 && Math.floor(kind) === 2 && this.cur!.look.finale) { this.finT = a; return true; }
+    return own;
   }
   /** One frame: movers posed from the bound poses (each thing's props in PropWorldLike's order: part 0, 1, ...), the ceremony dim, the
    *  reaction presets, then the place's own weather and fire. */
@@ -467,15 +497,24 @@ export class PlaceHost {
         if (c.built.moverKind[k]) o.quaternion.set(P[i + 3], P[i + 4], P[i + 5], P[i + 6]);
       }
     }
-    // the ceremony dim: linear, 1.2 s for the whole way each way (RD-03: at least 1.0 s)
-    const dimT = ceremony ? c.look.ceremonyDim ?? 0 : 0;
+    // the ceremony dim: linear, 1.2 s for the whole way each way (RD-03: at least 1.0 s). (round 3: the step is the place's own dim over
+    // 1.2 s; round 2 stepped 1 / 1.2 per second whatever the depth, so a 0.3 dim arrived in 0.36 s)
+    const dimFull = c.look.ceremonyDim ?? 0, dimT = ceremony ? dimFull : 0;
+    let relight = false;
     if (this.dimNow !== dimT && this.ctx) {
-      this.dimNow = dimT > this.dimNow ? Math.min(dimT, this.dimNow + dt / 1.2) : Math.max(dimT, this.dimNow - dt / 1.2);
-      const k = 1 - this.dimNow, x = this.ctx;
-      x.key.intensity = this.baseI[0] * k; x.rim.intensity = this.baseI[1] * k; x.fill.intensity = this.baseI[2] * k;
+      const st = (Math.max(dimFull, this.dimNow) * dt) / 1.2;
+      this.dimNow = dimT > this.dimNow ? Math.min(dimT, this.dimNow + st) : Math.max(dimT, this.dimNow - st);
+      relight = true;
     }
+    // the finale: 3 s each way, 6 s in Calm or with reduced motion (a slow fade); linear, so its light never flickers (RD-03's gate)
+    if (this.finNow !== this.finT) {
+      const st = dt / (quiet || reduced ? 6 : 3);
+      this.finNow = this.finT > this.finNow ? Math.min(this.finT, this.finNow + st) : Math.max(this.finT, this.finNow - st);
+      relight = true;
+    }
+    if (relight && this.ctx) this.mixLight(this.ctx, c.look);
     this.fx.update(dt, time, quiet, reduced, this.ctx ? this.ctx.phone() : true, this.ctx);
-    c.built.update(dt, time, quiet, reduced, tier);
+    c.built.update(dt, time, quiet, reduced, tier, this.finNow);
   }
   async load(id: string): Promise<boolean> {
     if (this.looks.has(id)) return true;
