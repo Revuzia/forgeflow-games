@@ -1,0 +1,5 @@
+after s3 top_team0_base_to_2nd: wicks 83 marching samples 34684  |d| p50 0.84 p95 0.94 max 1.04  |d-slot| p50 0.01 p95 0.30 max 0.89  render-sim gap p50 0.11 p95 0.11 max 0.11
+after s3 top_team1_base_to_2nd: wicks 83 marching samples 34730  |d| p50 0.84 p95 0.95 max 1.08  |d-slot| p50 0.01 p95 0.29 max 0.87  render-sim gap p50 0.11 p95 0.11 max 0.11
+after s3 bot_team0_base_to_2nd: wicks 83 marching samples 34732  |d| p50 0.84 p95 0.95 max 1.08  |d-slot| p50 0.01 p95 0.29 max 0.87  render-sim gap p50 0.11 p95 0.11 max 0.11
+after s3 bot_team1_base_to_2nd: wicks 83 marching samples 34683  |d| p50 0.84 p95 0.94 max 1.04  |d-slot| p50 0.01 p95 0.30 max 0.89  render-sim gap p50 0.11 p95 0.11 max 0.11
+frames 11728 end t 480.0
