@@ -1,12 +1,12 @@
 {
  "phase": "w2e_rift",
- "finishedAt": "2026-11-17T13:13:36.926Z",
+ "finishedAt": "2026-11-17T14:15:43.983Z",
  "env": {
   "chrome": "157.0.8103.79",
-  "load1End": 5.71,
+  "load1End": 5.33,
   "node": "v22.23.3",
   "base": "http://localhost:5733",
-  "wallMs": 685696
+  "wallMs": 308174
  },
  "steps": [
   {
@@ -17,17 +17,17 @@
    "name": "idle",
    "desc": "HUD at the fountain, match live",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 8516,
-   "tMs": 306351,
-   "load1": 5.22,
+   "bytes": 2352561,
+   "tMs": 55853,
+   "load1": 8.03,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 47,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -47,17 +47,17 @@
    "name": "idle",
    "desc": "HUD at the fountain, match live",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 4820,
-   "tMs": 306939,
-   "load1": 5.2,
+   "bytes": 1263632,
+   "tMs": 56801,
+   "load1": 8.03,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 47,
     "docScroll": {
      "w": 1366,
      "h": 768,
@@ -77,17 +77,22 @@
    "name": "dial_crop",
    "desc": "Dial Bar crop",
    "route": "scr--match",
-   "hud": false,
-   "crop": null,
-   "bytes": 8516,
-   "tMs": 337531,
-   "load1": 5.4,
+   "hud": true,
+   "crop": {
+    "x": 564,
+    "y": 912,
+    "w": 792,
+    "h": 168
+   },
+   "bytes": 150373,
+   "tMs": 57595,
+   "load1": 8.03,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 45,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -107,17 +112,22 @@
    "name": "dial_crop",
    "desc": "Dial Bar crop",
    "route": "scr--match",
-   "hud": false,
-   "crop": null,
-   "bytes": 4820,
-   "tMs": 368104,
-   "load1": 5.77,
+   "hud": true,
+   "crop": {
+    "x": 365,
+    "y": 632,
+    "w": 637,
+    "h": 136
+   },
+   "bytes": 105607,
+   "tMs": 58277,
+   "load1": 8.03,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 45,
     "docScroll": {
      "w": 1366,
      "h": 768,
@@ -137,17 +147,22 @@
    "name": "topbar_crop",
    "desc": "top bar crop",
    "route": "scr--match",
-   "hud": false,
-   "crop": null,
-   "bytes": 8516,
-   "tMs": 398696,
-   "load1": 5.56,
+   "hud": true,
+   "crop": {
+    "x": 572,
+    "y": 0,
+    "w": 776,
+    "h": 72
+   },
+   "bytes": 64792,
+   "tMs": 58945,
+   "load1": 8.59,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 45,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -167,17 +182,22 @@
    "name": "topbar_crop",
    "desc": "top bar crop",
    "route": "scr--match",
-   "hud": false,
-   "crop": null,
-   "bytes": 4820,
-   "tMs": 429269,
-   "load1": 5.45,
+   "hud": true,
+   "crop": {
+    "x": 371,
+    "y": 0,
+    "w": 624,
+    "h": 61
+   },
+   "bytes": 44294,
+   "tMs": 59646,
+   "load1": 8.59,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 45,
     "docScroll": {
      "w": 1366,
      "h": 768,
@@ -197,17 +217,22 @@
    "name": "minimap_crop",
    "desc": "minimap crop",
    "route": "scr--match",
-   "hud": false,
-   "crop": null,
-   "bytes": 8516,
-   "tMs": 459866,
-   "load1": 5.15,
+   "hud": true,
+   "crop": {
+    "x": 1532,
+    "y": 816,
+    "w": 368,
+    "h": 244
+   },
+   "bytes": 97156,
+   "tMs": 60401,
+   "load1": 8.59,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 45,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -227,17 +252,22 @@
    "name": "minimap_crop",
    "desc": "minimap crop",
    "route": "scr--match",
-   "hud": false,
-   "crop": null,
-   "bytes": 4820,
-   "tMs": 490453,
-   "load1": 5.91,
+   "hud": true,
+   "crop": {
+    "x": 1054,
+    "y": 555,
+    "w": 298,
+    "h": 198
+   },
+   "bytes": 70377,
+   "tMs": 60998,
+   "load1": 8.59,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 45,
     "docScroll": {
      "w": 1366,
      "h": 768,
@@ -257,17 +287,17 @@
    "name": "ping_wheel",
    "desc": "ping wheel (G held 0.5 s)",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 8516,
-   "tMs": 492029,
-   "load1": 6.55,
+   "bytes": 2504399,
+   "tMs": 63377,
+   "load1": 8.59,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 55,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -287,17 +317,17 @@
    "name": "ping_wheel",
    "desc": "ping wheel (G held 0.5 s)",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 4820,
-   "tMs": 493587,
-   "load1": 6.55,
+   "bytes": 1383467,
+   "tMs": 65279,
+   "load1": 8.38,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 55,
     "docScroll": {
      "w": 1366,
      "h": 768,
@@ -317,17 +347,17 @@
    "name": "click_marker",
    "desc": "right-click move marker, shot as soon as the click returns",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 8516,
-   "tMs": 494176,
-   "load1": 6.55,
+   "bytes": 2548497,
+   "tMs": 66797,
+   "load1": 8.38,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 45,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -340,24 +370,24 @@
    }
   },
   {
-   "file": "1920x1080/w2e_rift_012_fight.png",
+   "file": "1920x1080/w2e_rift_012_teamfight.png",
    "viewport": "1920x1080",
    "phase": "w2e_rift",
-   "step": "fight",
-   "name": "fight",
-   "desc": "first outgoing fighter damage (sim paused, t=443.1)",
+   "step": "teamfight",
+   "name": "teamfight",
+   "desc": "4 fighters within 10 m (paused, t=313.7)",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 8516,
-   "tMs": 498471,
-   "load1": 6.51,
+   "bytes": 2460265,
+   "tMs": 147164,
+   "load1": 7.19,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 50,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -370,24 +400,24 @@
    }
   },
   {
-   "file": "1366x768/w2e_rift_013_fight.png",
+   "file": "1366x768/w2e_rift_013_teamfight.png",
    "viewport": "1366x768",
    "phase": "w2e_rift",
-   "step": "fight",
-   "name": "fight",
-   "desc": "first outgoing fighter damage (sim paused, t=443.1)",
+   "step": "teamfight",
+   "name": "teamfight",
+   "desc": "4 fighters within 10 m (paused, t=313.7)",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 4820,
-   "tMs": 499046,
-   "load1": 6.51,
+   "bytes": 1340561,
+   "tMs": 148057,
+   "load1": 7.19,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 50,
     "docScroll": {
      "w": 1366,
      "h": 768,
@@ -400,24 +430,84 @@
    }
   },
   {
-   "file": "1920x1080/w2e_rift_014_fight_live.png",
+   "file": "1920x1080/w2e_rift_014_fight.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first outgoing fighter damage (sim paused, t=319.6)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2498722,
+   "tMs": 154149,
+   "load1": 6.68,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 58,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_rift_015_fight.png",
+   "viewport": "1366x768",
+   "phase": "w2e_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first outgoing fighter damage (sim paused, t=319.6)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1358950,
+   "tMs": 154939,
+   "load1": 6.68,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 57,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_rift_016_fight_live.png",
    "viewport": "1920x1080",
    "phase": "w2e_rift",
    "step": "fight",
    "name": "fight_live",
    "desc": "same fight 0.5 s later, sim x1",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 8516,
-   "tMs": 500136,
-   "load1": 6.51,
+   "bytes": 2476627,
+   "tMs": 156775,
+   "load1": 6.68,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 58,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -430,24 +520,24 @@
    }
   },
   {
-   "file": "1366x768/w2e_rift_015_fight_live.png",
+   "file": "1366x768/w2e_rift_017_fight_live.png",
    "viewport": "1366x768",
    "phase": "w2e_rift",
    "step": "fight",
    "name": "fight_live",
    "desc": "same fight 0.5 s later, sim x1",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 4820,
-   "tMs": 500713,
-   "load1": 6.51,
+   "bytes": 1368899,
+   "tMs": 157746,
+   "load1": 6.68,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 57,
     "docScroll": {
      "w": 1366,
      "h": 768,
@@ -460,24 +550,24 @@
    }
   },
   {
-   "file": "1920x1080/w2e_rift_016_midgame.png",
+   "file": "1920x1080/w2e_rift_018_midgame.png",
    "viewport": "1920x1080",
    "phase": "w2e_rift",
    "step": "late",
    "name": "midgame",
-   "desc": "HUD at 443.1s",
+   "desc": "HUD at 330.2s",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 8516,
-   "tMs": 501302,
-   "load1": 6.51,
+   "bytes": 2539209,
+   "tMs": 160327,
+   "load1": 7.83,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 59,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -490,24 +580,24 @@
    }
   },
   {
-   "file": "1366x768/w2e_rift_017_midgame.png",
+   "file": "1366x768/w2e_rift_019_midgame.png",
    "viewport": "1366x768",
    "phase": "w2e_rift",
    "step": "late",
    "name": "midgame",
-   "desc": "HUD at 443.1s",
+   "desc": "HUD at 330.2s",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 4820,
-   "tMs": 501878,
-   "load1": 6.51,
+   "bytes": 1373968,
+   "tMs": 161397,
+   "load1": 7.83,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 57,
     "docScroll": {
      "w": 1366,
      "h": 768,
@@ -520,24 +610,24 @@
    }
   },
   {
-   "file": "1920x1080/w2e_rift_018_scoreboard.png",
+   "file": "1920x1080/w2e_rift_020_scoreboard.png",
    "viewport": "1920x1080",
    "phase": "w2e_rift",
    "step": "late",
    "name": "scoreboard",
    "desc": "scoreboard held (Tab)",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 8516,
-   "tMs": 503271,
-   "load1": 6.23,
+   "bytes": 2030889,
+   "tMs": 163618,
+   "load1": 7.83,
    "layout": {
     "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 155,
     "docScroll": {
      "w": 1920,
      "h": 1080,
@@ -550,127 +640,37 @@
    }
   },
   {
-   "file": "1366x768/w2e_rift_019_scoreboard.png",
+   "file": "1366x768/w2e_rift_021_scoreboard.png",
    "viewport": "1366x768",
    "phase": "w2e_rift",
    "step": "late",
    "name": "scoreboard",
    "desc": "scoreboard held (Tab)",
    "route": "scr--match",
-   "hud": false,
+   "hud": true,
    "crop": null,
-   "bytes": 6615,
-   "tMs": 504667,
-   "load1": 6.23,
+   "bytes": 1031726,
+   "tMs": 165166,
+   "load1": 7.52,
    "layout": {
     "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
     },
-    "textNodes": 1,
+    "textNodes": 155,
     "docScroll": {
      "w": 1366,
      "h": 768,
      "vw": 1366,
      "vh": 768
     },
-    "counts": {}
-   }
-  },
-  {
-   "file": "1920x1080/w2e_rift_020_teamfight.png",
-   "viewport": "1920x1080",
-   "phase": "w2e_rift",
-   "step": "teamfight",
-   "name": "teamfight",
-   "desc": "4 fighters within 10 m (paused, t=1150.2)",
-   "route": "scr--match",
-   "hud": false,
-   "crop": null,
-   "bytes": 11124,
-   "tMs": 684607,
-   "load1": 5.71,
-   "layout": {
-    "minFont": {
-     "px": 15,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
-    },
-    "textNodes": 1,
-    "docScroll": {
-     "w": 1920,
-     "h": 1080,
-     "vw": 1920,
-     "vh": 1080
-    },
-    "counts": {}
-   }
-  },
-  {
-   "file": "1366x768/w2e_rift_021_teamfight.png",
-   "viewport": "1366x768",
-   "phase": "w2e_rift",
-   "step": "teamfight",
-   "name": "teamfight",
-   "desc": "4 fighters within 10 m (paused, t=1150.2)",
-   "route": "scr--match",
-   "hud": false,
-   "crop": null,
-   "bytes": 6615,
-   "tMs": 685196,
-   "load1": 5.71,
-   "layout": {
-    "minFont": {
-     "px": 12,
-     "el": "a.skip.t-label \"SKIP TO CONTENT\""
-    },
-    "textNodes": 1,
-    "docScroll": {
-     "w": 1366,
-     "h": 768,
-     "vw": 1366,
-     "vh": 768
-    },
-    "counts": {}
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
    }
   }
  ],
- "console": [
-  {
-   "step": "boot",
-   "type": "http504",
-   "text": "/node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=da048f44",
-   "at": "",
-   "tMs": 1332
-  },
-  {
-   "step": "boot",
-   "type": "error",
-   "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)",
-   "at": "/node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=da048f44",
-   "tMs": 1332
-  },
-  {
-   "step": "boot",
-   "type": "requestfailed",
-   "text": "GET /node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=da048f44 net::ERR_ABORTED",
-   "at": "",
-   "tMs": 1332
-  },
-  {
-   "step": "boot",
-   "type": "warning",
-   "text": "[vale] renderer unavailable TypeError: Failed to fetch dynamically imported module: http://localhost:5733/src/render/index.ts",
-   "at": "/@vite/client:356",
-   "tMs": 1333
-  },
-  {
-   "step": "boot",
-   "type": "pageerror",
-   "text": "Cannot read properties of undefined (reading '__H')",
-   "at": "",
-   "tMs": 22079
-  }
- ],
+ "console": [],
  "consoleCounts": {
   "log": 0,
   "info": 2,
@@ -848,7 +848,37 @@
    "vh": 1080
   },
   {
-   "file": "1920x1080/w2e_rift_012_fight.png",
+   "file": "1920x1080/w2e_rift_012_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_013_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_rift_014_fight.png",
    "step": "fight",
    "kind": "outside-scroll-ancestor",
    "el": "a.skip.t-label",
@@ -863,7 +893,7 @@
    "vh": 1080
   },
   {
-   "file": "1366x768/w2e_rift_013_fight.png",
+   "file": "1366x768/w2e_rift_015_fight.png",
    "step": "fight",
    "kind": "outside-scroll-ancestor",
    "el": "a.skip.t-label",
@@ -878,7 +908,7 @@
    "vh": 768
   },
   {
-   "file": "1920x1080/w2e_rift_014_fight_live.png",
+   "file": "1920x1080/w2e_rift_016_fight_live.png",
    "step": "fight",
    "kind": "outside-scroll-ancestor",
    "el": "a.skip.t-label",
@@ -893,7 +923,7 @@
    "vh": 1080
   },
   {
-   "file": "1366x768/w2e_rift_015_fight_live.png",
+   "file": "1366x768/w2e_rift_017_fight_live.png",
    "step": "fight",
    "kind": "outside-scroll-ancestor",
    "el": "a.skip.t-label",
@@ -908,7 +938,7 @@
    "vh": 768
   },
   {
-   "file": "1920x1080/w2e_rift_016_midgame.png",
+   "file": "1920x1080/w2e_rift_018_midgame.png",
    "step": "late",
    "kind": "outside-scroll-ancestor",
    "el": "a.skip.t-label",
@@ -923,7 +953,7 @@
    "vh": 1080
   },
   {
-   "file": "1366x768/w2e_rift_017_midgame.png",
+   "file": "1366x768/w2e_rift_019_midgame.png",
    "step": "late",
    "kind": "outside-scroll-ancestor",
    "el": "a.skip.t-label",
@@ -938,7 +968,7 @@
    "vh": 768
   },
   {
-   "file": "1920x1080/w2e_rift_018_scoreboard.png",
+   "file": "1920x1080/w2e_rift_020_scoreboard.png",
    "step": "late",
    "kind": "outside-scroll-ancestor",
    "el": "a.skip.t-label",
@@ -951,28 +981,28 @@
    ],
    "vw": 1920,
    "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_rift_021_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
   }
  ],
  "notes": [
   {
    "step": "idle",
-   "tMs": 498383,
-   "load1": 6.51,
-   "text": "number meter 4 s at x1 (frames, pops seen, pops over a bar at full alpha / reduced alpha, max per target, plates api)",
-   "data": {
-    "frames": 240,
-    "popsSeen": 0,
-    "overBarFull": 0,
-    "overBarSoft": 0,
-    "maxPerTarget": 0,
-    "plates": "undefined",
-    "samples": []
-   }
-  },
-  {
-   "step": "late",
-   "tMs": 684495,
-   "load1": 5.71,
+   "tMs": 146270,
+   "load1": 7.19,
    "text": "number meter in the teamfight",
    "data": {
     "frames": 240,
@@ -980,32 +1010,47 @@
     "overBarFull": 0,
     "overBarSoft": 0,
     "maxPerTarget": 0,
-    "plates": "undefined",
+    "plates": "object",
     "samples": []
    }
   },
   {
    "step": "teamfight",
-   "tMs": 685696,
-   "load1": 5.71,
+   "tMs": 153388,
+   "load1": 7.09,
+   "text": "number meter 4 s at x1 (frames, pops seen, pops over a bar at full alpha / reduced alpha, max per target, plates api)",
+   "data": {
+    "frames": 240,
+    "popsSeen": 5,
+    "overBarFull": 0,
+    "overBarSoft": 13,
+    "maxPerTarget": 2,
+    "plates": "object",
+    "samples": []
+   }
+  },
+  {
+   "step": "late",
+   "tMs": 308173,
+   "load1": 5.33,
    "text": "captured",
    "data": [
+    "teamfight",
     "fight",
-    "late",
-    "teamfight"
+    "late"
    ]
   },
   {
-   "step": "teamfight",
-   "tMs": 685696,
-   "load1": 5.71,
+   "step": "late",
+   "tMs": 308173,
+   "load1": 5.33,
    "text": "last poll",
    "data": {
     "phase": "live",
-    "time": 1150.2,
+    "time": 900.2,
     "dead": false,
     "respawnIn": 0,
-    "near": 4,
+    "near": 1,
     "ended": false,
     "evs": []
    }
