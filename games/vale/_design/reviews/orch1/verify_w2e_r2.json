@@ -1,0 +1,54 @@
+{
+  "lane": "W2-E",
+  "round": 2,
+  "verifier": "independent adversarial verifier (UX art director, HUD lens)",
+  "date": "2026-11-17",
+  "commitVerified": "4d991f46f (plus wip sync 70667dbde: index.tsx, world.tsx, hud.css)",
+  "pass": true,
+  "score": 7.8,
+  "safeToShip": true,
+  "blockers": [],
+  "r1ItemsClosed": {
+    "RECAP-OVER-ALLIES": "closed. 1366 settled recap [160,108,363,600], allies [13,269,147,455], gap +13 px (r1: -56 px overlap). At 1920 the recap is still [220,151,560,620] with a 36 px gap. Frame vfy_r2/1366x768/vfy_dead_004_dead_settled.png: all four ally names and HP bars are fully visible.",
+    "HP REGEN TEXT": "closed. '+2.6' / '+1.6' sit on an ink chip at the bar's right end, 11 px bold white, inside the bar rect at both viewports (1366 rect [819,737.6,855.8,748.9] in an 11.3 px bar). They are legible in vfy_r2/1920x1080/vfy_rift_007_cast_cd.png and 1366x768/vfy_rift_004_dial.png.",
+    "TOP BAR SEE-THROUGH": "closed. .sky::before is rgba(11,13,17,0.94). In FRAY at 1366 (vfy_fray_004_idle) and RIFT (vfy_rift_011_teamfight) nothing reads through the clock.",
+    "SHOP vs HOUR BOARD": "closed. At 1366 the shop is [277,64,1089,624] and the Hour Board is [1117,10,1353,203], a 28 px gap (r1: 14 px overlap). At 1920 the shop is [400,80,1520,780] and the board [1642,12,1904,251]. The hint feed drops to [13,663,349,755], clear of the shop and the Dial Bar.",
+    "CLICK MARKER": "closed. The ring is 64 px CSS with a 12 px dot and reads about 64x44 px on the foreshortened ground at 1366 (vfy_rift_006_click) and on stone/grass at 1920 (vfy_misc_005_click_marker).",
+    "DAMAGE NUMBERS": "improved. Two '61' magic pops on one spot now stack at [763,465..482] and [763,485..502] instead of sharing one rect. Size follows the amount: 15.7 px for 42 and 17.0 px for 64 at 1080, and 13 px (the floor) at 1366. Early-game amounts only, so the 30 px top of the formula was not seen live.",
+    "TYPE NITS": "closed. 0 non-tabular numeric nodes and 0 HUD text under 11 px across every hudfacts sample. The recap shows initials 'G', 'S' for Glimwick, Greatwick and Shieldwick (vfy_dead_006)."
+  },
+  "problems": [
+    "RECAP-EXPANDED vs HINT FEED (1366, minor): when the player expands the recap with '+2 more', its plate grows to [160,108,363,702] and covers the W3-C hint line in .hud__bl by 189 x 24 px. The line is cut to 'Open the shop at home'. This is user-initiated and the recap stays readable on top, but it is an overlap at 1366. In the default 3-row state the recap bottom (600) clears the hint (625). Frame vfy_r2/1366x768/vfy_dead_006_dead_expanded.png. Fix: lift .hud__bl or cap the recap above it while .recap is shown.",
+    "RECAP CRAMPED AT 1366 (nit): at about 203 px wide, 'TAKEN DOWN BY DAX_SHADELINE' wraps to 3 lines and the Physical / Magic / Piercing chips wrap to 2 rows. It is legible but tall (492 px default, 594 px expanded).",
+    "DAMAGE NUMBERS STILL MODEST (target 14 partly): 13 px at 1366 and 16-17 px at 1080 for typical early hits. They are legible on stone with an ink halo, but they do not punch. The 13-30 px range by amount is in code and not shown on screen.",
+    "WORLD NAMEPLATE STACKING (nit, bars.ts): two allied plates standing together overlap ('stillwater_jo' over 'Player 2628' in vfy_rift_006_click). This is common in the genre and was not a Done-when item.",
+    "Implementer gaps now covered by this verifier: DOM scan, copy lint, frame guard, content:check and perf were re-run here on seeds 31 and 41 (see doneWhen)."
+  ],
+  "doneWhen": [
+    {
+      "line": "ux DOM scan at 1366x768 and 1920x1080: 0 outside-viewport plates, 0 truncation findings for the listed strings, recap fully visible in first and settled frames",
+      "holds": true,
+      "numbers": "49 verifier shots before pruning (RIFT seed 31: 21, dead seed 31: 6, FRAY seed 31: 8, pops seed 41: 8, misc seed 41: 6). Layout findings: only outside-scroll-ancestor (the hidden skip link) once per shot. outside-viewport 0, outside-viewport-plate 0, ellipsis-truncated 0, clipped-x/y 0. Pairwise HUD plate overlaps: 0 in every sample except the dead_expanded 1366 sample (recap vs .hud__bl, see problems). Recap in viewport: 1366 [160,108,363,600] (expanded 702 < 768), 1920 [220,151,560,620/628] (expanded 736). At 1366 the first sample at +250 ms came before the 1.2 s open delay (no recap yet); settled and expanded were fully visible. Hour board, shop names and draft were checked visually with no truncation."
+    },
+    {
+      "line": "hud_fight re-shoots: 0 damage numbers drawn over an HP bar at full alpha; <= 4 numbers per target",
+      "holds": true,
+      "numbers": "RIFT seed 31 at x1: 5 meter windows, 1320 frames, 12 pops. overBarFull 0, overBarSoft 37 frame-hits (alpha 0.72), maxPerTarget 2. Seed 41 paused captures: 6 pops, 0 hitting a bar plate."
+    },
+    {
+      "line": "copy_lint passes; 0 console errors; frame_layout F.res fits",
+      "holds": true,
+      "numbers": "content:check: OK, 0 warnings. probe_copy_no_bots: ok. probe_frame_guard: 18 passed, 0 failed. Console and network errors: 0 on all 5 verifier runs. F.res: at 1080 the 26 px .dbars slot holds HP 14 + resource 12 px (overflow 0, HP/res overlap 0); at 1366 it holds 11.3 + 9.5 px (overflow 0). Resource bar reads '330 / 330'. Pips 8.1x3 px at 1080 and 6.7x3 at 1366. typecheck: 1 error, only in another lane's _harness/_tmp_vfy_ai42_fog.ts."
+    },
+    {
+      "line": "Opus UX verifier: score >= 7.5 for the HUD lens",
+      "holds": true,
+      "numbers": "7.8. Every r1 must-fix is closed, the HUD reads in under a second in fights at both viewports, and no target this lane owns is 'not met'."
+    }
+  ],
+  "referenceTargets": "14 damage numbers: PARTLY. Colour-coded (physical cream rgb(241,226,198), magic pink rgb(255,123,213)). 0 over an HP bar at full alpha in 1320 frames. Stacked, not doubled. Size follows the amount but is modest live: 15.7-17 px at 1080, 13 px at 1366 (vfy_r2/1920x1080/vfy_pops_002_pop_crop.png, 1366x768/vfy_pops_006_pop_crop.png). | 16 compact bottom-centre HUD: MET. Dial Bar 5.99 % of the screen at 1080, 7.57 % at 1366. Portrait medallion, HP and resource bars with numbers and regen chips, ability slots with key labels, a big countdown number and dimmed cooldown state, items beside. Dark plates with thin keylines (vfy_r2/1920x1080/vfy_rift_007_cast_cd.png, 1366x768/vfy_rift_004_dial.png). | 17 minimap: MET. Bottom-right, high-contrast, blue and orange team icons, objective timers on it (vfy_rift_015_late). | 18 top bar: PARTLY. Score, clock and objective timers in a compact opaque strip that now blocks the world behind it (vfy_fray_004_idle, vfy_rift_011_teamfight). There are no team portraits in it; VALE puts them in the left ally frames, its own layout. | 19 typography: MET. Atkinson Hyperlegible Mono for numbers, Instrument Sans for labels, Gloock only for the 'Begin' banner. 0 non-tabular numeric nodes, 0 text under 11 px, sizes cluster at 11-13 px (1366) and 12-15 px (1080). | 20 click feedback: MET. A 64 px chalk ring with an ink keyline and a centre dot, about 64x44 px on screen, clear on stone and grass (vfy_rift_006_click, vfy_misc_005_click_marker).",
+  "originality": "VALE's own design: the sundial medallion and gnomon Dial Bar, chalk-on-ink plates with keylines, the 'Sky' strip with objective chips (Sunsplinter, Longshade), the Lampwright shop, the Hour Board, the VALE ping vocabulary ('Lamp wanted', 'Pull back', 'Claim it', 'Heading there') and initial discs in the recap. No League of Legends icons, layouts, names, art or sounds were seen in any frame, and no reference images are stored.",
+  "budgets": "perf_1080 --prod --match-only RIFT High seed 7, 6 game-minutes at x4: peak 314k triangles (<= 500k), 218 draws (<= 450), 36 programs (<= 40), 0 programs first seen after 1:00, GATE PASS. Match memory was not measured in this run. The lane's changes are CSS and DOM only (no assets, no WebGL), so there is no memory-path change.",
+  "method": "Own vite on :5823 with a private dep cache (_harness/_tmp_vfy_w2e_vite.config.ts), stopped afterwards. Own probe _harness/_tmp_vfy_w2e_r2.mjs, the r1 probe extended with recap-vs-allies gap, regen chip rects, sky backing, pop font-size range, and .lshop / .hboard / .hud__bl rects. Summary helper: _harness/_tmp_vfy_w2e_sum.py. Seeds 31 and 41, not the implementer's 7 and 11. Every run went through heavy.py.",
+  "evidence": "_design/reviews/orch1/evidence/w2-e/vfy_r2/ (15 cited frames, data/*.json with every hudfacts sample)"
+}
