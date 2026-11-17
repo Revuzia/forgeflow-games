@@ -2068,3 +2068,14 @@ long press frame-rate independent. Report after 1-2 verified.
   nearer than class 576 resolves, patches spanning > 5 rungs, everything unbaked or past the memory cap.
 - NEXT: read d1.4 / d2, pick the default; Ultra 1686x963 tile count (`scene=0&msaa=0`, quality ultra, `--nolive=1`,
   stats only) for the measured coverage at 247 MB; `npm run build`; hand back.
+- DENSITY RUNS READ (dist5, sheet s22/sheet-d.png): top-down 160 m at tcdens 1.4: 3.84, G 116.8 vs 114.2, B 65.2 vs 67.5,
+  detail 5.14 / 5.74; at tcdens 2: 3.90, G 117.0 vs 114.3, B 65.6 vs 67.5, detail 5.19 / 5.75. DENSITY IS NOT THE CAUSE
+  (my reading above was wrong; dist3's better number was 40 % of the patches being live). The shift (+G, -B, softer) is
+  the footprint: the bake evaluated at the TEXEL's footprint (0.3-0.6 m) what the full shader evaluates at the pixel's
+  (~0.9 m), and evalTerrain's footprint fades are not mean-preserving (sward tips, flowers). tcdens stays (default 1.4).
+  `npm run check` on the dist5 source: 1047 pass, 0 fail (s22/check1.log).
+- FIX in source, build s22/dist6: each anchor is baked for the pixel footprint of ITS distance (face on):
+  fw = max(texel footprint, anchor distance / pxPerRad); the distance blend then carries the footprint fades too. What
+  stays different by design: at grazing angles the full shader uses the long footprint axis and fades more.
+  pxPerRad is now part of the global key (a resize re-bakes).
+- NEXT: run `--views=peak,graze,town` on dist6 (peak first = the landing view), then the Ultra count, check again, build.

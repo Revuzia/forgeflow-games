@@ -119,7 +119,7 @@ export const TC_VERT_MAIN = /* glsl */ `
 
 export const TC_FRAG_PARS = /* glsl */ `
 #ifdef TC_BAKE
-uniform vec4 uTcBakeF;   // anchor distance (m), baked graze, 0, 0
+uniform vec4 uTcBakeF;   // anchor distance (m), baked graze, the anchor's pixel footprint (m), 0
 uniform vec4 uTcBakeK;   // D scale, D offset (8-bit fallback)
 #define tcGlintK 1.0
 layout(location = 1) out highp vec4 tcOut1;
@@ -399,7 +399,7 @@ export class TerrainCache {
     // inputs that are the same for every tile: a change re-bakes everything (full shader meanwhile)
     const vf = u.uVegFade.value as { x: number; y: number }, cf = u.uCanopyFade.value as { x: number; y: number };
     const silt = (u.uSiltK?.value as number[] | undefined)?.reduce((s, x) => s + x, 0) ?? 0;
-    const gkey = `${Math.round(vf.x)},${Math.round(vf.y)},${Math.round(cf.x)},${Math.round(cf.y)},${u.uShadowOn?.value},${u.uDebug.value},${u.uKind.value},${u.uHasAtmo?.value},${u.uSeasonAmp.value},${Math.round(silt * 20)}`;
+    const gkey = `${Math.round(pxPerRad)},${Math.round(vf.x)},${Math.round(vf.y)},${Math.round(cf.x)},${Math.round(cf.y)},${u.uShadowOn?.value},${u.uDebug.value},${u.uKind.value},${u.uHasAtmo?.value},${u.uSeasonAmp.value},${Math.round(silt * 20)}`;
     if (gkey !== this.gkey) { this.gkey = gkey; st.globals++; }
     if (this.watchFields()) {
       this.fieldEpoch++;
@@ -555,7 +555,12 @@ export class TerrainCache {
       r.setRenderTarget(rt);
       for (let anchor = 0; anchor < 2; anchor++) {
         bu.uTcBake.value.set(S, anchor, range.vertexStart, 0);
-        bu.uTcBakeF.value.set(anchor ? t.kB : t.kA, t.g, 0, 0);
+        // the footprint the surface is evaluated for: a pixel's, face on, at the anchor's distance (never under the
+        // texel's own, never over the patch's nearest point for anchor A): evalTerrain's footprint fades are art-directed
+        // by distance and not mean-preserving (sward tips tint the meadow yellow-green only while resolved), so a tile
+        // baked at its texel's footprint read greener and softer from 160 m than the full shader
+        const da = anchor ? t.kB : Math.min(t.kA, Math.max(t.dn, 0.5));
+        bu.uTcBakeF.value.set(anchor ? t.kB : t.kA, t.g, da / this.pxPerRad, 0);
         r.render(this.scene, camera);
       }
       geo.setDrawRange(0, Infinity);

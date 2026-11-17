@@ -1635,7 +1635,7 @@ const FRAG_SURFACE = /* glsl */ `
   TSurf ts; ts.albedo = vec3(0.3, 0.34, 0.2); ts.rough = 0.85; ts.bump = 0.0; ts.ao = 1.0; ts.emis = vec3(0.0); ts.glint = 0.0; ts.microG = vec3(0.0); ts.sky = 1.0; ts.sward = 0.0;
 #elif defined(TC_BAKE)
   // (tcache.ts) the bake: the surface at this texel for the anchor's distance, written to the tile's three targets
-  TSurf ts = evalTerrain(vBodyPos, normalize(vBodyN), tFw, uTcBakeF.x);
+  TSurf ts = evalTerrain(vBodyPos, normalize(vBodyN), max(tFw, uTcBakeF.z), uTcBakeF.x);
 ${TCACHE ? TC_FRAG_BAKE_OUT : ''}
 #elif defined(TC_ON)
   // (tcache.ts) a patch with a valid tile reads its surface; any other runs the surface function as before. The
