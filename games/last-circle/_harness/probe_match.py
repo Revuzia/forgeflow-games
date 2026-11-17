@@ -32,7 +32,7 @@ GATES (PLAN L6; pooled over DISTINCT (seed, map) runs unless stated):
   --sweep (W9 R1B): the episode sweep, 3 maps x seeds 1-6 (18 runs, no paths): the worst bot's stuck episodes <= 4 in every run (the R2 movers bar)
   --swimcheck (W9 R1B): the scripted swimmer trap (natural swim traps: 0 in the 18-run sweep, base and lane alike) - see SWIMCHECK_JS
   --plant swim-exempt (needs --disk / --rev): bots.js served with swimmers exempt from the loop breaker again - MUST FAIL the scripted swim-trap row
-  --pencheck (W9 R1B pass 3): ONLY the scripted Volcano Rim pen (isla_viva seed 5, 3 setups; no match runs) - see PENCHECK_JS; --plant no-pen-fix (EDGE_TURN off) MUST FAIL it
+  --pencheck (W9 R1B pass 3): ONLY the scripted terrace-corner pen (isla_viva seed 5, 3 setups, re-anchored W10 R1A fix10; no match runs) - see PENCHECK_JS; --plant no-pen-fix (EDGE_TURN off) MUST FAIL it
   --sweep --plant stall-surge: every moving bot held 3.6 s of every 25 s - MUST FAIL the sweep's worst <= 4 row (its measure control)
   --pencheck --plant no-calm-lag (W9 R1 fix mergefix): a calm hold re-plans although the route does not go the held way - MUST FAIL the pen row (setup 3)
   --cornercheck (W9 R1 fix mergefix): ONLY the scripted Coco Village corner (isla_viva seed 1, 3 setups; a grid corner 0.6 m from a face) - see cornercheck;
@@ -175,9 +175,19 @@ def swimcheck(s, v):
 # look's 0.8 m-sampled face distance) held it for good - setup 1 reach 19 s / 1 episode, setup 2 never (minD 33.2) / 1 episode. A real pen in the
 # game, not a moved setup (296edc14: 3/3, 9.5 / 8 / 9.5 s). Fixed in bots.js routeTurnsBefore (run-on sampled from the corner at 0.2 m,
 # EDGE_TURN_M 1.1): 3/3 reach 11 / 8 / 10 s, 0 episodes; --plant no-pen-fix: reach 19 / never / 28.5 s, 1 episode each - FAIL.
+# (W10 R1A fix10, orchestrator ruling R-a 2026-11-17: RE-ANCHORED) The Volcano Rim corner is gone from the MAP_GEN 9 world: the terrace and face are
+# unchanged (start 26.73, foot 18.38) but the homes lane's town grid no longer routes along the top - the route cuts west-north-west through
+# (-70.1, -74.6), 4 m short of the face (cornerD 9.7 / 3.2 / 9.7 m on the three old setups: could-not-judge), and a scan of 2,500 start / goal pairs on
+# that terrace top (26-27.5 m) found no route corner with an >= 7 m face 1-3.2 m ahead. A map-wide scan of seed 5 found this corner of the same class:
+# the terrace top at y 49.6-49.7 north-west of the village (x 3 .. 23, z -14 .. -6), whose west face falls 11.4 m (49.72 -> 38.3) 2.25-2.5 m past the
+# route's corner (4.88, -9.84); the grid route from the east runs WEST at the face to that corner, then turns 42 deg south-west along the top to the big
+# shield at (3.1, -13.8). Measured (fix10, 2026-11-17): head 3/3 reach 4 / 4 / 6.5 s, 0 episodes, cornerD 0.01 m; --plant no-pen-fix: setup 1 never
+# (2 episodes, held at (6.6, -9.8), 1.8 m short of the corner), setup 2 never (3 episodes), setup 3 reaches in 6.5 s - FAIL. Same driver, bar and SETUP
+# test; only the anchors and the start band (PEN_START_Y, the terrace top's height) moved.
 PEN_MAP, PEN_SEED, PEN_PRE_S, PEN_T = "isla_viva", 5, 20.0, 30.0
-PEN_GOAL, PEN_CORNER, PEN_FACE_FOOT = (-67.0, -44.5), (-71.6, -77.6), (-80.0, -78.0)
-PEN_SETUPS = ((-63.4, -77.6, 17), (-66.0, -79.0, 17), (-63.4, -77.6, 40))
+PEN_GOAL, PEN_CORNER, PEN_FACE_FOOT = (3.1, -13.8), (4.88, -9.84), (0.0, -10.6)
+PEN_SETUPS = ((22.6, -7.2, 100), (18.0, -6.0, 40), (22.6, -7.2, 17))
+PEN_START_Y = (49.0, 50.5)                                          # the terrace top's terrain height band at the starts (SETUP); was 26.0 .. 27.5 (Volcano Rim)
 PENCHECK_JS = r"""async ([sx, sz, hp, gx, gz, cx, cz, fx, fz, T]) => {
   const W = window.__LC__.W, C = window.__LC__, M = W.map, K = W.SIM, wy = M.waterY, H = (M.half || 760) - 30;
   const cl = (v) => Math.max(-H, Math.min(H, v));
@@ -235,9 +245,9 @@ def pencheck(s, v):
         print("  pencheck start (%.1f, %.1f) hp %d: bot %s reach %s s, %s stuck episodes, corner %s m, geo %s" % (
             sx, sz, hp, r.get("bot"), r.get("reachT"), r.get("episodes"), r.get("cornerD"), r.get("geo")), flush=True)
     v.data["pencheck"] = out
-    name = ("pen scripted (Volcano Rim, %s seed %d: an hp-limited calm bot on the terrace top, its goal %.0f m north along the top past a corner 1.5-2 m "
-            "short of an 8.4 m face, %d setups): every setup reaches the goal in %.0f s with 0 stuck episodes on the way" % (PEN_MAP, PEN_SEED, 33, len(PEN_SETUPS), PEN_T))
-    bad = [r for r in out if r.get("error") or not (26.0 <= r["geo"]["start"] <= 27.5 and r["geo"]["start"] - r["geo"]["foot"] >= 7.0) or r.get("cornerD", 1e9) > 1.5]
+    name = ("pen scripted (north-west terrace, %s seed %d: a calm bot on the terrace top, its goal %.0f m away along the top past a route corner 2.3-2.5 m "
+            "short of an 11.4 m face, %d setups): every setup reaches the goal in %.0f s with 0 stuck episodes on the way" % (PEN_MAP, PEN_SEED, 20, len(PEN_SETUPS), PEN_T))
+    bad = [r for r in out if r.get("error") or not (PEN_START_Y[0] <= r["geo"]["start"] <= PEN_START_Y[1] and r["geo"]["start"] - r["geo"]["foot"] >= 7.0) or r.get("cornerD", 1e9) > 1.5]
     if bad:
         v.cnj(name, "SETUP missed in %d of %d setups (geometry moved, no bot, or the route did not use the corner): %s" % (
             len(bad), len(out), [{k: r.get(k) for k in ("start", "error", "geo", "cornerD")} for r in bad]))
@@ -323,7 +333,7 @@ def main():
                     help="the run list is too small for the 'sniper kills in MOST matches' row (a share of matches: Wave 7's Savanna run has 2 distinct matches): that one row is information; every other row is judged as usual")
     ap.add_argument("--farwall", action="store_true", help="also run probe_farwall (far-bot wall clipping; gates farToNearInside == 0, PLAN L5 d)")
     ap.add_argument("--swimcheck", action="store_true", help="W9 R1B: the scripted swimmer trap (see SWIMCHECK_JS); --plant swim-exempt must FAIL it")
-    ap.add_argument("--pencheck", action="store_true", help="W9 R1B pass 3: ONLY the scripted Volcano Rim pen (no match runs; see PENCHECK_JS); --plant no-pen-fix must FAIL it")
+    ap.add_argument("--pencheck", action="store_true", help="W9 R1B pass 3: ONLY the scripted terrace-corner pen (no match runs; see PENCHECK_JS); --plant no-pen-fix must FAIL it")
     ap.add_argument("--cornercheck", action="store_true", help="W9 R1 fix mergefix: ONLY the scripted Coco Village corner (no match runs; see cornercheck); --plant no-early-turn must FAIL it")
     ap.add_argument("--sweep", action="store_true", help="W9 R1B: the episode sweep (3 maps x seeds 1-6, --no-paths, --small-run); adds the worst <= %d row" % SWEEP_WORST_MAX)
     ap.add_argument("--plant", default=None, choices=sorted(PLANTS), help="a planted fault served into bots.js (this gate must then FAIL); needs --disk / --rev")
