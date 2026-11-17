@@ -72,10 +72,42 @@ function paceOf(W) {
 
 const ITEM_FILES = { medkit: "item_medkit", bandage: "item_bandage", mini_shield: "item_shield_s", big_shield: "item_shield_l" };
 const itemProtoCache = {};
+// (W10 R3B, combat finding 5) the ground-loot models: one per ammo type and the two grenades (assets/props/loot, built from CC0
+// parts: Kenney Survival Kit + the Quaternius crate, recoloured per type; vertex colours, ONE shared material = one program).
+// Desktop medium and up only: desktop Low and touch keep the W9 box / capsule (same draws, same triangles there).
+const LOOT_FILES = { "ammo:light": "ammo_light", "ammo:medium": "ammo_medium", "ammo:heavy": "ammo_heavy", "ammo:shells": "ammo_shells",
+                     "ammo:grenades": "ammo_grenades", "c:frag": "frag", "c:smoke": "smoke" };
+const lootModels = {};                 // pool key -> Group (centred, metres) | null (failed: the W9 shape)
+let lootLoad = null, lootMat = null;
+/** desktop medium and up (the R1B rule): the loot models; low / touch: the W9 shapes */
+function lootHi(W) {
+  if (W._gfx && W._gfx.touch) return false;
+  const t = W.gfxTier || (W._gfx && W._gfx.tier) || (W.settings && W.settings.graphics) || "medium";
+  return t !== "low";
+}
+function ensureLootModels(W) {
+  if (lootLoad) return lootLoad;
+  if (!lootMat) lootMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.18 });
+  lootLoad = Promise.all(Object.keys(LOOT_FILES).map((k) => W.kernel.loadGLTF(W.assetBase + "assets/props/loot/" + LOOT_FILES[k] + ".glb").then((m) => {
+    m.traverse((o) => { if (o.isMesh) { o.material = lootMat; o.castShadow = false; if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals(); } });   // (no normals = NaN lighting)
+    const g = new THREE.Group(); g.add(m); lootModels[k] = g;
+  }, () => { lootModels[k] = null; })));
+  return lootLoad;
+}
+/** (W10 R3B) the pool key a pickup draws with: the loot model's own key on desktop medium+ when it exists, else the W9 key */
+function lootKey(W, d) {
+  if (d.kind !== "ammo" && d.kind !== "consumable") return null;
+  const k = d.kind === "ammo" ? "ammo:" + d.id : "c:" + d.id;
+  return LOOT_FILES[k] && lootHi(W) && lootModels[k] ? k : null;
+}
 
 export function init(W) {
   K = W.SIM;
   ensureCrateProto(W);             // the supply crate model (LC-28): loads now, long before populate and the warm-up need it
+  // (W10 R3B) the 7 ground-loot models, long before the warm-up: init runs before the boot applies the tier (W._gfx), so the
+  // touch / tier test here reads the same inputs the boot does (a phone never downloads them)
+  { let touch = false; try { touch = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) && (navigator.maxTouchPoints || 0) > 0; } catch (e) { touch = false; }
+    if (!touch && lootHi(W)) ensureLootModels(W); }
   // Meshy 3D pickup models (medkit / bandage / shield potions) with a cached
   // normalized proto per id; consumers: ground items + HUD slot icons.
   W.itemProto = async (id) => {
@@ -335,6 +367,10 @@ export function warmObjects(W) {
   // a kind that first appears mid-match would otherwise link its program on the frame it comes into view.
   if (W._weaponProtos) for (const id in W._weaponProtos) itemPool(W, { kind: "weapon", id });
   itemPool(W, { kind: "ammo", id: "light" });
+  // (W10 R3B) every loot model kind, so the warm frame links its (one, shared) instanced program (a tier raised from low after boot loads
+  // them now: the kinds whose model is not in yet keep the W9 shape for this match)
+  if (lootHi(W)) ensureLootModels(W);
+  for (const k in LOOT_FILES) if (lootModels[k] && lootHi(W)) itemPool(W, k.startsWith("ammo:") ? { kind: "ammo", id: k.slice(5) } : { kind: "consumable", id: k.slice(2) });
   for (const id in ITEM_FILES) if (itemProtoCache[id] !== undefined) itemPool(W, { kind: "consumable", id });
   if (chestProto) chestPools(W);
   for (const Q of VIS.values()) if (Q.parts) for (const m of Q.parts) { if (!m.parent) g.add(m); out.push(m); }
@@ -1222,6 +1258,8 @@ const _rootXf = (y, rz, root) => {
 const ITEM_POOL_KEY = (d) => (d.kind === "weapon" ? "w:" + d.id : d.kind === "ammo" ? "ammo" : d.kind === "consumable" ? "c:" + d.id : null);
 /** The pool an item's model is drawn by (created on first use; null = the item has no model, e.g. a gun before weapons.js exists). */
 function itemPool(W, data) {
+  const lk = lootKey(W, data);
+  if (lk) return VIS.get(lk) || visPool(lk, () => [lootModels[lk], _rootXf(lk.startsWith("ammo:") ? 0.35 : 0.4, 0, null)]);
   const key = ITEM_POOL_KEY(data);
   if (!key) return null;
   if (VIS.has(key)) return VIS.get(key);
