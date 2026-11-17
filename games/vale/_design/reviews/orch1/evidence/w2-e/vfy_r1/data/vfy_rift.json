@@ -1,0 +1,716 @@
+{
+ "phase": "vfy_rift",
+ "finishedAt": "2026-11-17T14:30:50.813Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 6.06,
+  "node": "v22.23.3",
+  "base": "http://localhost:5761",
+  "wallMs": 513700
+ },
+ "steps": [
+  {
+   "file": "1920x1080/vfy_rift_001_idle.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 307422,
+   "load1": 5.09,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_002_idle.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 308010,
+   "load1": 5.09,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_003_dial.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "idle",
+   "name": "dial",
+   "desc": "dial bar crop",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 338603,
+   "load1": 5.71,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_004_dial.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "idle",
+   "name": "dial",
+   "desc": "dial bar crop",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 369178,
+   "load1": 6.04,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_005_click.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "click",
+   "name": "click",
+   "desc": "right-click marker ~60 ms after",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 369829,
+   "load1": 6.04,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_006_click.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "click",
+   "name": "click",
+   "desc": "right-click marker ~60 ms after",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 370455,
+   "load1": 6.04,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_007_fight.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first fight, paused t=383.3",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 387133,
+   "load1": 6.37,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_008_fight.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first fight, paused t=383.3",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 387705,
+   "load1": 6.37,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_009_late.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "late",
+   "name": "late",
+   "desc": "HUD at 420.4s",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 397935,
+   "load1": 6.55,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_010_late.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "late",
+   "name": "late",
+   "desc": "HUD at 420.4s",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 4820,
+   "tMs": 398521,
+   "load1": 6.55,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_011_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "late",
+   "name": "scoreboard",
+   "desc": "Tab",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 8516,
+   "tMs": 399918,
+   "load1": 6.35,
+   "layout": {
+    "minFont": {
+     "px": 15,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_012_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "late",
+   "name": "scoreboard",
+   "desc": "Tab",
+   "route": "scr--match",
+   "hud": false,
+   "crop": null,
+   "bytes": 6615,
+   "tMs": 401321,
+   "load1": 6.35,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 1,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {}
+   }
+  }
+ ],
+ "console": [
+  {
+   "step": "boot",
+   "type": "http504",
+   "text": "/node_modules/.vite/deps/three_addons_utils_BufferGeometryUtils__js.js?v=bcd961ce",
+   "at": "",
+   "tMs": 1274
+  },
+  {
+   "step": "boot",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)",
+   "at": "/node_modules/.vite/deps/three_addons_utils_BufferGeometryUtils__js.js?v=bcd961ce",
+   "tMs": 1274
+  },
+  {
+   "step": "boot",
+   "type": "requestfailed",
+   "text": "GET /node_modules/.vite/deps/three_addons_utils_BufferGeometryUtils__js.js?v=bcd961ce net::ERR_ABORTED",
+   "at": "",
+   "tMs": 1275
+  },
+  {
+   "step": "boot",
+   "type": "warning",
+   "text": "[vale] renderer unavailable TypeError: Failed to fetch dynamically imported module: http://localhost:5761/src/render/index.ts",
+   "at": "/@vite/client:356",
+   "tMs": 1275
+  },
+  {
+   "step": "boot",
+   "type": "pageerror",
+   "text": "Cannot read properties of undefined (reading '__H')",
+   "at": "",
+   "tMs": 22332
+  }
+ ],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5761/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/vfy_rift_001_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_002_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_003_dial.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_004_dial.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_005_click.png",
+   "step": "click",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_006_click.png",
+   "step": "click",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_007_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_008_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_009_late.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_010_late.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_011_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  }
+ ],
+ "notes": [
+  {
+   "step": "idle",
+   "tMs": 306331,
+   "load1": 5.09,
+   "text": "hudfacts idle 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [],
+    "kids": [],
+    "overlaps": [],
+    "fonts": {},
+    "sizes": {},
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": null,
+    "dbarAreaPct": null,
+    "bottomAreaPct": null,
+    "resH": null,
+    "hpH": null,
+    "resText": null,
+    "hpText": null,
+    "pip": null
+   }
+  },
+  {
+   "step": "idle",
+   "tMs": 306828,
+   "load1": 5.09,
+   "text": "hudfacts idle 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [],
+    "kids": [],
+    "overlaps": [],
+    "fonts": {},
+    "sizes": {},
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": null,
+    "dbarAreaPct": null,
+    "bottomAreaPct": null,
+    "resH": null,
+    "hpH": null,
+    "resText": null,
+    "hpText": null,
+    "pip": null
+   }
+  },
+  {
+   "step": "click",
+   "tMs": 370959,
+   "load1": 6.04,
+   "text": "marker elements",
+   "data": []
+  },
+  {
+   "step": "click",
+   "tMs": 387043,
+   "load1": 6.37,
+   "text": "cooldown slots after Q/W/E",
+   "data": []
+  },
+  {
+   "step": "fight",
+   "tMs": 388209,
+   "load1": 6.37,
+   "text": "hudfacts fight 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [],
+    "kids": [],
+    "overlaps": [],
+    "fonts": {},
+    "sizes": {},
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": null,
+    "dbarAreaPct": null,
+    "bottomAreaPct": null,
+    "resH": null,
+    "hpH": null,
+    "resText": null,
+    "hpText": null,
+    "pip": null
+   }
+  },
+  {
+   "step": "fight",
+   "tMs": 388709,
+   "load1": 6.34,
+   "text": "hudfacts fight 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [],
+    "kids": [],
+    "overlaps": [],
+    "fonts": {},
+    "sizes": {},
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": null,
+    "dbarAreaPct": null,
+    "bottomAreaPct": null,
+    "resH": null,
+    "hpH": null,
+    "resText": null,
+    "hpText": null,
+    "pip": null
+   }
+  },
+  {
+   "step": "late",
+   "tMs": 513696,
+   "load1": 6.06,
+   "text": "rift failed: Error: page.evaluate: Target page, context or browser has been closed"
+  }
+ ],
+ "timings": {}
+}

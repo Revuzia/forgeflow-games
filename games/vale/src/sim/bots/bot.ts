@@ -49,6 +49,8 @@ const MODE_TICKS = 6;
 /** owner_rulings 46: the plans whose walk a calm fighter does not turn round on more than once in 8 s */
 const WALKS: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return', 'lane']);
 const MIN_MODE_TIME = 1.5;
+/** owner_rulings 47: how far above frayBreak a losing FRAY fighter starts to leave (env VALE_FRAY_EARLY for the A/B only) */
+const FRAY_EARLY = Number((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VALE_FRAY_EARLY ?? '0.2');
 /** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
  *  — until this time, unless its team starts the endgame push sooner */
 const LANE_PHASE_END = 840;
@@ -534,6 +536,11 @@ export class Bot extends BotBase implements BotController {
     // is there to end the arena)
     if (kind === 'fray' && this.diff.frayBreak > 0 && hpF < this.diff.frayBreak + (lastLife ? 0.1 : 0) && !tolled && this.nearestEnemyFighter(10) !== null &&
       !(this.killTarget && this.killMargin >= 1.2)) retreat = Math.max(retreat, 0.9);
+    // (owner_rulings 47: FRAY early break — a skilled fighter whose health is going and whose fight is not won (blows landing on
+    // me, the trade read against me, no kill of mine on) leaves while it still has the health to walk away on; breaking at the
+    // last fifth left the chaser in reach for the whole walk: 70 % of the low moments still had a foe within 12 m 4 s later)
+    if (kind === 'fray' && this.diff.frayBreak > 0 && !tolled && hpF < this.diff.frayBreak + FRAY_EARLY && this.recentDps > 0 && this.adv < 0.5 &&
+      !(this.killTarget && this.killMargin >= 1)) retreat = Math.max(retreat, 0.88);
     // (lane AI G5: leave early when the visible enemies' burst would take most of my health before my side finishes one of
     // them — RIFT from the mid game: not in a road's laning phase, whose trades CL-1 tuned, never off a kill that is on, and
     // not in FRAY, where every seat turning from the hardest hitter handed it the placements, ulkro 2.7 against the 3.5 floor)

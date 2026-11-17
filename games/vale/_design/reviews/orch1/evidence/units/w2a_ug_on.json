@@ -1,0 +1,10387 @@
+{
+ "gate": "units_gate",
+ "tag": "w2a_ug_on",
+ "pass": false,
+ "seeds": [
+  7,
+  11
+ ],
+ "seatings": 2,
+ "q": "high",
+ "mode": "rift",
+ "zoom": 28.5,
+ "load1": "19.59 14.86 16.30",
+ "seconds": 147,
+ "bands": {
+  "ally": [
+   200,
+   225
+  ],
+  "harmEnemy": [
+   28,
+   50
+  ],
+  "heal": [
+   125,
+   150
+  ],
+  "valueLstar": {
+   "top": [
+    70,
+    85
+   ],
+   "mid": [
+    45,
+    65
+   ],
+   "bottom": [
+    20,
+    35
+   ]
+  }
+ },
+ "fails": [
+  {
+   "gate": "P1 near-neutral pair",
+   "a": "ardit",
+   "b": "ervet",
+   "dE": 15.4,
+   "neutral": [
+    "ardit"
+   ]
+  },
+  {
+   "gate": "P1 pair",
+   "a": "burdam",
+   "b": "kemdo",
+   "dE": 18.8,
+   "dHue": 2.6,
+   "runA": "7/0",
+   "runB": "7/0"
+  },
+  {
+   "gate": "P1 pair",
+   "a": "dunsom",
+   "b": "vashil",
+   "dE": 24.7,
+   "dHue": 23.2,
+   "runA": "7/0",
+   "runB": "7/0"
+  },
+  {
+   "gate": "P1 near-neutral pair",
+   "a": "hesmi",
+   "b": "ilsheta",
+   "dE": 9.5,
+   "neutral": [
+    "hesmi",
+    "ilsheta"
+   ]
+  },
+  {
+   "gate": "P1 near-neutral pair",
+   "a": "hesmi",
+   "b": "lisvel",
+   "dE": 14.2,
+   "neutral": [
+    "hesmi"
+   ]
+  },
+  {
+   "gate": "P1 near-neutral pair",
+   "a": "hesmi",
+   "b": "rishal",
+   "dE": 14.2,
+   "neutral": [
+    "hesmi",
+    "rishal"
+   ]
+  },
+  {
+   "gate": "P1 pair",
+   "a": "ilsheta",
+   "b": "marund",
+   "dE": 17.8,
+   "dHue": 16.5,
+   "runA": "7/1",
+   "runB": "7/0"
+  },
+  {
+   "gate": "P1 near-neutral pair",
+   "a": "ilsheta",
+   "b": "marund",
+   "dE": 17.5,
+   "neutral": [
+    "ilsheta"
+   ]
+  },
+  {
+   "gate": "P1 near-neutral pair",
+   "a": "ilsheta",
+   "b": "rishal",
+   "dE": 8.7,
+   "neutral": [
+    "ilsheta",
+    "rishal"
+   ]
+  },
+  {
+   "gate": "P1 pair",
+   "a": "kemdo",
+   "b": "tunlan",
+   "dE": 20,
+   "dHue": 24.5,
+   "runA": "7/0",
+   "runB": "7/0"
+  },
+  {
+   "gate": "P1 pair",
+   "a": "nurrow",
+   "b": "sukri",
+   "dE": 13.1,
+   "dHue": 17.2,
+   "runA": "7/0",
+   "runB": "7/0"
+  },
+  {
+   "gate": "P1 pair",
+   "a": "nurrow",
+   "b": "tunlan",
+   "dE": 6.4,
+   "dHue": 8.9,
+   "runA": "7/0",
+   "runB": "7/0"
+  },
+  {
+   "gate": "P1 pair",
+   "a": "odrum",
+   "b": "ulkro",
+   "dE": 15.2,
+   "dHue": 24,
+   "runA": "7/0",
+   "runB": "7/0"
+  },
+  {
+   "gate": "P1 near-neutral pair",
+   "a": "rishal",
+   "b": "tunlan",
+   "dE": 19.2,
+   "neutral": [
+    "rishal"
+   ]
+  },
+  {
+   "gate": "P1 pair",
+   "a": "sukri",
+   "b": "tunlan",
+   "dE": 18.8,
+   "dHue": 26.1,
+   "runA": "7/0",
+   "runB": "7/0"
+  },
+  {
+   "gate": "P3 value band (top25)",
+   "fighter": "ardit",
+   "valueBands": {
+    "top": 68.8,
+    "mid": 42.5,
+    "bottom": 19.7
+   },
+   "bible": [
+    70,
+    85
+   ]
+  },
+  {
+   "gate": "P3 value band (top25)",
+   "fighter": "burdam",
+   "valueBands": {
+    "top": 61,
+    "mid": 34.4,
+    "bottom": 16.7
+   },
+   "bible": [
+    70,
+    85
+   ]
+  },
+  {
+   "gate": "P3 value band (top25)",
+   "fighter": "dunsom",
+   "valueBands": {
+    "top": 68.4,
+    "mid": 40.1,
+    "bottom": 22.5
+   },
+   "bible": [
+    70,
+    85
+   ]
+  },
+  {
+   "gate": "P3 value band (top25)",
+   "fighter": "ervet",
+   "valueBands": {
+    "top": 69.2,
+    "mid": 43.5,
+    "bottom": 20.5
+   },
+   "bible": [
+    70,
+    85
+   ]
+  },
+  {
+   "gate": "P3 value band (top25)",
+   "fighter": "hesmi",
+   "valueBands": {
+    "top": 67.9,
+    "mid": 32.9,
+    "bottom": 14.4
+   },
+   "bible": [
+    70,
+    85
+   ]
+  },
+  {
+   "gate": "P4 crown break",
+   "fighter": "hesmi",
+   "crown": {
+    "dL": 5.7,
+    "dHue": 0,
+    "breakRuns": 0,
+    "break": false
+   }
+  },
+  {
+   "gate": "P4 crown break",
+   "fighter": "ilsheta",
+   "crown": {
+    "dL": 5.8,
+    "dHue": 0,
+    "breakRuns": 0,
+    "break": false
+   }
+  },
+  {
+   "gate": "P4 crown break",
+   "fighter": "lisvel",
+   "crown": {
+    "dL": 4.5,
+    "dHue": 0.5,
+    "breakRuns": 0,
+    "break": false
+   }
+  },
+  {
+   "gate": "P4 crown break",
+   "fighter": "marund",
+   "crown": {
+    "dL": 1.2,
+    "dHue": 0.5,
+    "breakRuns": 0,
+    "break": false
+   }
+  },
+  {
+   "gate": "P2 enemy/harm band",
+   "fighter": "nurrow",
+   "topHsv": [
+    37.6,
+    0.431,
+    0.855
+   ],
+   "crownHsv": [
+    37.3,
+    0.434,
+    0.859
+   ]
+  },
+  {
+   "gate": "P4 crown break",
+   "fighter": "nurrow",
+   "crown": {
+    "dL": 0.7,
+    "dHue": 2.7,
+    "breakRuns": 0,
+    "break": false
+   }
+  },
+  {
+   "gate": "P3 value band (top25)",
+   "fighter": "odrum",
+   "valueBands": {
+    "top": 69.4,
+    "mid": 29.8,
+    "bottom": 13
+   },
+   "bible": [
+    70,
+    85
+   ]
+  },
+  {
+   "gate": "P4 crown break",
+   "fighter": "sukri",
+   "crown": {
+    "dL": 0.2,
+    "dHue": 1.6,
+    "breakRuns": 0,
+    "break": false
+   }
+  },
+  {
+   "gate": "P2 enemy/harm band",
+   "fighter": "tunlan",
+   "topHsv": [
+    31.7,
+    0.4,
+    0.863
+   ],
+   "crownHsv": [
+    31.4,
+    0.4,
+    0.867
+   ]
+  },
+  {
+   "gate": "P4 crown break",
+   "fighter": "tunlan",
+   "crown": {
+    "dL": 1.6,
+    "dHue": 1.1,
+    "breakRuns": 0,
+    "break": false
+   }
+  },
+  {
+   "gate": "P4 crown break",
+   "fighter": "vashil",
+   "crown": {
+    "dL": 1.1,
+    "dHue": 2.7,
+    "breakRuns": 0,
+    "break": false
+   }
+  }
+ ],
+ "knownOnHead": {
+  "Vashil-Dunsom dE 6.3": {
+   "dEMin": 24.7,
+   "dEMedian": 25.7,
+   "fail": true
+  },
+  "Ardit helm in the ally band": {
+   "topHsv": [
+    193.2,
+    0.706,
+    0.4
+   ],
+   "crownHsv": [
+    193.7,
+    0.418,
+    0.812
+   ],
+   "inAlly": false
+  }
+ },
+ "fighters": {
+  "ardit": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    38.7,
+    -6.1,
+    -8.9
+   ],
+   "topC": 10.8,
+   "topH": 235.6,
+   "topHsv": [
+    193.2,
+    0.706,
+    0.4
+   ],
+   "crownHsv": [
+    193.7,
+    0.418,
+    0.812
+   ],
+   "valueBands": {
+    "top": 68.8,
+    "mid": 42.5,
+    "bottom": 19.7
+   },
+   "valueBandsMinMax": {
+    "top": [
+     66.9,
+     69
+    ],
+    "mid": [
+     34,
+     42.5
+    ],
+    "bottom": [
+     15.9,
+     19.8
+    ]
+   },
+   "crown": {
+    "dL": 39.9,
+    "dHue": 0,
+    "breakRuns": 4,
+    "break": true
+   },
+   "bandShare": {
+    "ally": 0.027,
+    "harm": 0.089,
+    "heal": 0
+   },
+   "heightPx": 198,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": false,
+   "valueMidOk": false,
+   "valueOk": false
+  },
+  "burdam": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    44.9,
+    15.3,
+    22.8
+   ],
+   "topC": 27.5,
+   "topH": 56.1,
+   "topHsv": [
+    17.3,
+    0.57,
+    0.541
+   ],
+   "crownHsv": [
+    165,
+    0.571,
+    0.31
+   ],
+   "valueBands": {
+    "top": 61,
+    "mid": 34.4,
+    "bottom": 16.7
+   },
+   "valueBandsMinMax": {
+    "top": [
+     52.7,
+     61
+    ],
+    "mid": [
+     31,
+     34.4
+    ],
+    "bottom": [
+     15.5,
+     16.7
+    ]
+   },
+   "crown": {
+    "dL": 37.4,
+    "dHue": 3,
+    "breakRuns": 4,
+    "break": true
+   },
+   "bandShare": {
+    "ally": 0.03,
+    "harm": 0.07,
+    "heal": 0
+   },
+   "heightPx": 176,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": false,
+   "valueMidOk": false,
+   "valueOk": false
+  },
+  "dunsom": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    50.4,
+    19.6,
+    -32.3
+   ],
+   "topC": 37.8,
+   "topH": 301.2,
+   "topHsv": [
+    252.3,
+    0.418,
+    0.588
+   ],
+   "crownHsv": [
+    248.3,
+    0.399,
+    0.816
+   ],
+   "valueBands": {
+    "top": 68.4,
+    "mid": 40.1,
+    "bottom": 22.5
+   },
+   "valueBandsMinMax": {
+    "top": [
+     68.2,
+     68.4
+    ],
+    "mid": [
+     38.6,
+     40.1
+    ],
+    "bottom": [
+     21.6,
+     22.5
+    ]
+   },
+   "crown": {
+    "dL": 29.6,
+    "dHue": 145.3,
+    "breakRuns": 4,
+    "break": true
+   },
+   "bandShare": {
+    "ally": 0.077,
+    "harm": 0.001,
+    "heal": 0
+   },
+   "heightPx": 178,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": true,
+   "valueMidOk": false,
+   "valueOk": false
+  },
+  "ervet": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    60.3,
+    36.3,
+    -1.7
+   ],
+   "topC": 36.3,
+   "topH": 357.3,
+   "topHsv": [
+    335.8,
+    0.397,
+    0.761
+   ],
+   "crownHsv": [
+    330.4,
+    0.376,
+    0.741
+   ],
+   "valueBands": {
+    "top": 69.2,
+    "mid": 43.5,
+    "bottom": 20.5
+   },
+   "valueBandsMinMax": {
+    "top": [
+     39.9,
+     69.2
+    ],
+    "mid": [
+     24.4,
+     43.5
+    ],
+    "bottom": [
+     8,
+     20.5
+    ]
+   },
+   "crown": {
+    "dL": 20.8,
+    "dHue": 2.7,
+    "breakRuns": 2,
+    "break": true
+   },
+   "bandShare": {
+    "ally": 0.041,
+    "harm": 0.054,
+    "heal": 0
+   },
+   "heightPx": 145,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": true,
+   "valueMidOk": false,
+   "valueOk": false
+  },
+  "hesmi": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    68.8,
+    -11.6,
+    5.7
+   ],
+   "topC": 12.9,
+   "topH": 153.8,
+   "topHsv": [
+    175.3,
+    0.233,
+    0.647
+   ],
+   "crownHsv": [
+    175.4,
+    0.148,
+    0.694
+   ],
+   "valueBands": {
+    "top": 67.9,
+    "mid": 32.9,
+    "bottom": 14.4
+   },
+   "valueBandsMinMax": {
+    "top": [
+     66.1,
+     67.9
+    ],
+    "mid": [
+     32.3,
+     32.9
+    ],
+    "bottom": [
+     13,
+     14.4
+    ]
+   },
+   "crown": {
+    "dL": 5.7,
+    "dHue": 0,
+    "breakRuns": 0,
+    "break": false
+   },
+   "bandShare": {
+    "ally": 0.165,
+    "harm": 0.164,
+    "heal": 0.007
+   },
+   "heightPx": 180,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": false,
+   "valueMidOk": false,
+   "valueOk": false
+  },
+  "ilsheta": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    77.4,
+    -6.1,
+    13.5
+   ],
+   "topC": 14.8,
+   "topH": 114.3,
+   "topHsv": [
+    68.7,
+    0.276,
+    0.769
+   ],
+   "crownHsv": [
+    54.5,
+    0.115,
+    0.714
+   ],
+   "valueBands": {
+    "top": 78.1,
+    "mid": 56.4,
+    "bottom": 35.6
+   },
+   "valueBandsMinMax": {
+    "top": [
+     77.8,
+     78.1
+    ],
+    "mid": [
+     51.3,
+     56.4
+    ],
+    "bottom": [
+     24.9,
+     35.8
+    ]
+   },
+   "crown": {
+    "dL": 5.8,
+    "dHue": 0,
+    "breakRuns": 0,
+    "break": false
+   },
+   "bandShare": {
+    "ally": 0.001,
+    "harm": 0.011,
+    "heal": 0
+   },
+   "heightPx": 138,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": false,
+   "valueMidOk": true,
+   "valueOk": true
+  },
+  "kemdo": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    65,
+    22.9,
+    24.9
+   ],
+   "topC": 33.8,
+   "topH": 47.4,
+   "topHsv": [
+    16.9,
+    0.502,
+    0.824
+   ],
+   "crownHsv": [
+    15.8,
+    0.436,
+    0.855
+   ],
+   "valueBands": {
+    "top": 71.3,
+    "mid": 43.3,
+    "bottom": 22.4
+   },
+   "valueBandsMinMax": {
+    "top": [
+     67,
+     71.3
+    ],
+    "mid": [
+     41.2,
+     43.3
+    ],
+    "bottom": [
+     21.7,
+     22.4
+    ]
+   },
+   "crown": {
+    "dL": 9.5,
+    "dHue": 3,
+    "breakRuns": 2,
+    "break": true
+   },
+   "bandShare": {
+    "ally": 0,
+    "harm": 0.094,
+    "heal": 0
+   },
+   "heightPx": 122,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": true,
+   "valueMidOk": false,
+   "valueOk": true
+  },
+  "lisvel": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    72.8,
+    -18.9,
+    -5.8
+   ],
+   "topC": 19.8,
+   "topH": 197.1,
+   "topHsv": [
+    180,
+    0.319,
+    0.733
+   ],
+   "crownHsv": [
+    181,
+    0.326,
+    0.757
+   ],
+   "valueBands": {
+    "top": 76.5,
+    "mid": 65.9,
+    "bottom": 29.6
+   },
+   "valueBandsMinMax": {
+    "top": [
+     73,
+     76.5
+    ],
+    "mid": [
+     38.1,
+     65.9
+    ],
+    "bottom": [
+     23.1,
+     29.6
+    ]
+   },
+   "crown": {
+    "dL": 4.5,
+    "dHue": 0.5,
+    "breakRuns": 0,
+    "break": false
+   },
+   "bandShare": {
+    "ally": 0.006,
+    "harm": 0,
+    "heal": 0
+   },
+   "heightPx": 120,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": true,
+   "valueMidOk": false,
+   "valueOk": true
+  },
+  "marund": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    78.2,
+    -26.8,
+    19.8
+   ],
+   "topC": 33.3,
+   "topH": 143.5,
+   "topHsv": [
+    123.4,
+    0.257,
+    0.808
+   ],
+   "crownHsv": [
+    122.2,
+    0.261,
+    0.816
+   ],
+   "valueBands": {
+    "top": 78.9,
+    "mid": 52.1,
+    "bottom": 13.5
+   },
+   "valueBandsMinMax": {
+    "top": [
+     78.3,
+     78.9
+    ],
+    "mid": [
+     50.4,
+     52.1
+    ],
+    "bottom": [
+     13.1,
+     13.5
+    ]
+   },
+   "crown": {
+    "dL": 1.2,
+    "dHue": 0.5,
+    "breakRuns": 0,
+    "break": false
+   },
+   "bandShare": {
+    "ally": 0.029,
+    "harm": 0.051,
+    "heal": 0.002
+   },
+   "heightPx": 181,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": false,
+   "valueMidOk": true,
+   "valueOk": true
+  },
+  "nurrow": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    75.8,
+    5.3,
+    34
+   ],
+   "topC": 34.4,
+   "topH": 81.1,
+   "topHsv": [
+    37.6,
+    0.431,
+    0.855
+   ],
+   "crownHsv": [
+    37.3,
+    0.434,
+    0.859
+   ],
+   "valueBands": {
+    "top": 77.7,
+    "mid": 42.4,
+    "bottom": 19.5
+   },
+   "valueBandsMinMax": {
+    "top": [
+     76.1,
+     77.7
+    ],
+    "mid": [
+     40.5,
+     42.4
+    ],
+    "bottom": [
+     19,
+     19.5
+    ]
+   },
+   "crown": {
+    "dL": 0.7,
+    "dHue": 2.7,
+    "breakRuns": 0,
+    "break": false
+   },
+   "bandShare": {
+    "ally": 0.043,
+    "harm": 0.804,
+    "heal": 0
+   },
+   "heightPx": 135,
+   "inAlly": false,
+   "inHarm": true,
+   "inHeal": false,
+   "valueBottomOk": false,
+   "valueMidOk": false,
+   "valueOk": true
+  },
+  "odrum": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    40.1,
+    -5.3,
+    24.3
+   ],
+   "topC": 24.9,
+   "topH": 102.3,
+   "topHsv": [
+    92,
+    0.471,
+    0.4
+   ],
+   "crownHsv": [
+    71.6,
+    0.497,
+    0.592
+   ],
+   "valueBands": {
+    "top": 69.4,
+    "mid": 29.8,
+    "bottom": 13
+   },
+   "valueBandsMinMax": {
+    "top": [
+     63.8,
+     69.4
+    ],
+    "mid": [
+     29.7,
+     29.8
+    ],
+    "bottom": [
+     11.9,
+     13
+    ]
+   },
+   "crown": {
+    "dL": 34.1,
+    "dHue": 27.8,
+    "breakRuns": 4,
+    "break": true
+   },
+   "bandShare": {
+    "ally": 0,
+    "harm": 0.413,
+    "heal": 0
+   },
+   "heightPx": 145,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": false,
+   "valueMidOk": false,
+   "valueOk": false
+  },
+  "rishal": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    77.2,
+    2.4,
+    11.3
+   ],
+   "topC": 11.6,
+   "topH": 78,
+   "topHsv": [
+    29.2,
+    0.212,
+    0.812
+   ],
+   "crownHsv": [
+    32.4,
+    0.175,
+    0.831
+   ],
+   "valueBands": {
+    "top": 75.2,
+    "mid": 47.1,
+    "bottom": 23.8
+   },
+   "valueBandsMinMax": {
+    "top": [
+     73.3,
+     75.2
+    ],
+    "mid": [
+     43.6,
+     47.1
+    ],
+    "bottom": [
+     22.3,
+     23.8
+    ]
+   },
+   "crown": {
+    "dL": 18.6,
+    "dHue": 0,
+    "breakRuns": 2,
+    "break": true
+   },
+   "bandShare": {
+    "ally": 0,
+    "harm": 0.149,
+    "heal": 0
+   },
+   "heightPx": 142,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": true,
+   "valueMidOk": true,
+   "valueOk": true
+  },
+  "sukri": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    81.5,
+    -5.7,
+    39.8
+   ],
+   "topC": 40.2,
+   "topH": 98.2,
+   "topHsv": [
+    51.3,
+    0.415,
+    0.851
+   ],
+   "crownHsv": [
+    50.2,
+    0.42,
+    0.859
+   ],
+   "valueBands": {
+    "top": 81.7,
+    "mid": 67.4,
+    "bottom": 28.9
+   },
+   "valueBandsMinMax": {
+    "top": [
+     80.6,
+     81.7
+    ],
+    "mid": [
+     55.8,
+     67.4
+    ],
+    "bottom": [
+     22,
+     28.9
+    ]
+   },
+   "crown": {
+    "dL": 0.2,
+    "dHue": 1.6,
+    "breakRuns": 0,
+    "break": false
+   },
+   "bandShare": {
+    "ally": 0,
+    "harm": 0.225,
+    "heal": 0
+   },
+   "heightPx": 110,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": true,
+   "valueMidOk": false,
+   "valueOk": true
+  },
+  "tunlan": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    75.3,
+    9.2,
+    29
+   ],
+   "topC": 30.4,
+   "topH": 72.4,
+   "topHsv": [
+    31.7,
+    0.4,
+    0.863
+   ],
+   "crownHsv": [
+    31.4,
+    0.4,
+    0.867
+   ],
+   "valueBands": {
+    "top": 76.1,
+    "mid": 60.6,
+    "bottom": 25
+   },
+   "valueBandsMinMax": {
+    "top": [
+     76,
+     76.1
+    ],
+    "mid": [
+     46.4,
+     60.6
+    ],
+    "bottom": [
+     24.9,
+     25
+    ]
+   },
+   "crown": {
+    "dL": 1.6,
+    "dHue": 1.1,
+    "breakRuns": 0,
+    "break": false
+   },
+   "bandShare": {
+    "ally": 0,
+    "harm": 0.266,
+    "heal": 0
+   },
+   "heightPx": 137,
+   "inAlly": false,
+   "inHarm": true,
+   "inHeal": false,
+   "valueBottomOk": true,
+   "valueMidOk": true,
+   "valueOk": true
+  },
+  "ulkro": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    48.3,
+    -19.9,
+    23.5
+   ],
+   "topC": 30.8,
+   "topH": 130.3,
+   "topHsv": [
+    93.6,
+    0.435,
+    0.482
+   ],
+   "crownHsv": [
+    204,
+    0.185,
+    0.682
+   ],
+   "valueBands": {
+    "top": 74.4,
+    "mid": 36.3,
+    "bottom": 14.9
+   },
+   "valueBandsMinMax": {
+    "top": [
+     69.3,
+     74.4
+    ],
+    "mid": [
+     32.1,
+     36.3
+    ],
+    "bottom": [
+     13.2,
+     14.9
+    ]
+   },
+   "crown": {
+    "dL": 21.3,
+    "dHue": 0,
+    "breakRuns": 4,
+    "break": true
+   },
+   "bandShare": {
+    "ally": 0,
+    "harm": 0.026,
+    "heal": 0
+   },
+   "heightPx": 138,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": false,
+   "valueMidOk": false,
+   "valueOk": true
+  },
+  "vashil": {
+   "runs": 4,
+   "seenRuns": 4,
+   "emptyRuns": 0,
+   "topLab": [
+    68.1,
+    18,
+    -13.8
+   ],
+   "topC": 22.7,
+   "topH": 322.5,
+   "topHsv": [
+    286.2,
+    0.2,
+    0.765
+   ],
+   "crownHsv": [
+    289.7,
+    0.181,
+    0.761
+   ],
+   "valueBands": {
+    "top": 71.8,
+    "mid": 45.6,
+    "bottom": 22.9
+   },
+   "valueBandsMinMax": {
+    "top": [
+     70.9,
+     71.8
+    ],
+    "mid": [
+     43.1,
+     45.6
+    ],
+    "bottom": [
+     17.5,
+     22.9
+    ]
+   },
+   "crown": {
+    "dL": 1.1,
+    "dHue": 2.7,
+    "breakRuns": 0,
+    "break": false
+   },
+   "bandShare": {
+    "ally": 0.005,
+    "harm": 0,
+    "heal": 0
+   },
+   "heightPx": 155,
+   "inAlly": false,
+   "inHarm": false,
+   "inHeal": false,
+   "valueBottomOk": true,
+   "valueMidOk": true,
+   "valueOk": true
+  }
+ },
+ "pairsWorst10": [
+  {
+   "a": "nurrow",
+   "b": "tunlan",
+   "dEMin": 6.4,
+   "dHueMin": 8.7,
+   "dEMedian": 6.4,
+   "dHueMedian": 8.7,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 6.4,
+    "dHue": 8.9,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "ilsheta",
+   "b": "rishal",
+   "dEMin": 8.7,
+   "dHueMin": 35.7,
+   "dEMedian": 8.8,
+   "dHueMedian": 36.3,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 8.7,
+    "neutral": [
+     "ilsheta",
+     "rishal"
+    ]
+   }
+  },
+  {
+   "a": "hesmi",
+   "b": "ilsheta",
+   "dEMin": 9.5,
+   "dHueMin": 26.5,
+   "dEMedian": 12.8,
+   "dHueMedian": 39.5,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 9.5,
+    "neutral": [
+     "hesmi",
+     "ilsheta"
+    ]
+   }
+  },
+  {
+   "a": "nurrow",
+   "b": "sukri",
+   "dEMin": 12.7,
+   "dHueMin": 16.2,
+   "dEMedian": 13.7,
+   "dHueMedian": 17.1,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 13.1,
+    "dHue": 17.2,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "odrum",
+   "b": "ulkro",
+   "dEMin": 13.8,
+   "dHueMin": 20.2,
+   "dEMedian": 16.8,
+   "dHueMedian": 28,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 15.2,
+    "dHue": 24,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "hesmi",
+   "b": "lisvel",
+   "dEMin": 14.2,
+   "dHueMin": 36.7,
+   "dEMedian": 14.2,
+   "dHueMedian": 43.3,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 14.2,
+    "neutral": [
+     "hesmi"
+    ]
+   }
+  },
+  {
+   "a": "hesmi",
+   "b": "rishal",
+   "dEMin": 14.2,
+   "dHueMin": 72.3,
+   "dEMedian": 17.3,
+   "dHueMedian": 75.8,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 14.2,
+    "neutral": [
+     "hesmi",
+     "rishal"
+    ]
+   }
+  },
+  {
+   "a": "ardit",
+   "b": "ervet",
+   "dEMin": 15.4,
+   "dHueMin": 1.3,
+   "dEMedian": 48.1,
+   "dHueMedian": 121.7,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 15.4,
+    "neutral": [
+     "ardit"
+    ]
+   }
+  },
+  {
+   "a": "ilsheta",
+   "b": "marund",
+   "dEMin": 17.5,
+   "dHueMin": 16.3,
+   "dEMedian": 21.7,
+   "dHueMedian": 29.2,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 17.8,
+    "dHue": 16.5,
+    "runA": "7/1",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "kemdo",
+   "b": "tunlan",
+   "dEMin": 17.6,
+   "dHueMin": 24.5,
+   "dEMedian": 17.6,
+   "dHueMedian": 25,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 20,
+    "dHue": 24.5,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  }
+ ],
+ "pairs": [
+  {
+   "a": "nurrow",
+   "b": "tunlan",
+   "dEMin": 6.4,
+   "dHueMin": 8.7,
+   "dEMedian": 6.4,
+   "dHueMedian": 8.7,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 6.4,
+    "dHue": 8.9,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "ilsheta",
+   "b": "rishal",
+   "dEMin": 8.7,
+   "dHueMin": 35.7,
+   "dEMedian": 8.8,
+   "dHueMedian": 36.3,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 8.7,
+    "neutral": [
+     "ilsheta",
+     "rishal"
+    ]
+   }
+  },
+  {
+   "a": "hesmi",
+   "b": "ilsheta",
+   "dEMin": 9.5,
+   "dHueMin": 26.5,
+   "dEMedian": 12.8,
+   "dHueMedian": 39.5,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 9.5,
+    "neutral": [
+     "hesmi",
+     "ilsheta"
+    ]
+   }
+  },
+  {
+   "a": "nurrow",
+   "b": "sukri",
+   "dEMin": 12.7,
+   "dHueMin": 16.2,
+   "dEMedian": 13.7,
+   "dHueMedian": 17.1,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 13.1,
+    "dHue": 17.2,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "odrum",
+   "b": "ulkro",
+   "dEMin": 13.8,
+   "dHueMin": 20.2,
+   "dEMedian": 16.8,
+   "dHueMedian": 28,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 15.2,
+    "dHue": 24,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "hesmi",
+   "b": "lisvel",
+   "dEMin": 14.2,
+   "dHueMin": 36.7,
+   "dEMedian": 14.2,
+   "dHueMedian": 43.3,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 14.2,
+    "neutral": [
+     "hesmi"
+    ]
+   }
+  },
+  {
+   "a": "hesmi",
+   "b": "rishal",
+   "dEMin": 14.2,
+   "dHueMin": 72.3,
+   "dEMedian": 17.3,
+   "dHueMedian": 75.8,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 14.2,
+    "neutral": [
+     "hesmi",
+     "rishal"
+    ]
+   }
+  },
+  {
+   "a": "ardit",
+   "b": "ervet",
+   "dEMin": 15.4,
+   "dHueMin": 1.3,
+   "dEMedian": 48.1,
+   "dHueMedian": 121.7,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 15.4,
+    "neutral": [
+     "ardit"
+    ]
+   }
+  },
+  {
+   "a": "ilsheta",
+   "b": "marund",
+   "dEMin": 17.5,
+   "dHueMin": 16.3,
+   "dEMedian": 21.7,
+   "dHueMedian": 29.2,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 17.8,
+    "dHue": 16.5,
+    "runA": "7/1",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "kemdo",
+   "b": "tunlan",
+   "dEMin": 17.6,
+   "dHueMin": 24.5,
+   "dEMedian": 17.6,
+   "dHueMedian": 25,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 20,
+    "dHue": 24.5,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "ervet",
+   "b": "odrum",
+   "dEMin": 18.2,
+   "dHueMin": 109,
+   "dEMedian": 53.1,
+   "dHueMedian": 105,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "kemdo",
+   "dEMin": 18.8,
+   "dHueMin": 2.6,
+   "dEMedian": 21.6,
+   "dHueMedian": 8.7,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 18.8,
+    "dHue": 2.6,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "sukri",
+   "b": "tunlan",
+   "dEMin": 18.8,
+   "dHueMin": 25.9,
+   "dEMedian": 19.4,
+   "dHueMedian": 25.8,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 18.8,
+    "dHue": 26.1,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "rishal",
+   "b": "tunlan",
+   "dEMin": 19.2,
+   "dHueMin": 0.7,
+   "dEMedian": 19.1,
+   "dHueMedian": 5.6,
+   "neutral": true,
+   "fail": true,
+   "worst": {
+    "dE": 19.2,
+    "neutral": [
+     "rishal"
+    ]
+   }
+  },
+  {
+   "a": "burdam",
+   "b": "odrum",
+   "dEMin": 20.6,
+   "dHueMin": 46.6,
+   "dEMedian": 21.2,
+   "dHueMedian": 46.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ilsheta",
+   "b": "lisvel",
+   "dEMin": 21.6,
+   "dHueMin": 69.7,
+   "dEMedian": 23.6,
+   "dHueMedian": 82.8,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "nurrow",
+   "b": "rishal",
+   "dEMin": 22.4,
+   "dHueMin": 0.4,
+   "dEMedian": 22.9,
+   "dHueMedian": 3.1,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "hesmi",
+   "b": "marund",
+   "dEMin": 22.6,
+   "dHueMin": 10,
+   "dEMedian": 22.8,
+   "dHueMedian": 10.3,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "kemdo",
+   "b": "nurrow",
+   "dEMin": 22.6,
+   "dHueMin": 33.4,
+   "dEMedian": 22.6,
+   "dHueMedian": 33.7,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ilsheta",
+   "b": "tunlan",
+   "dEMin": 22.9,
+   "dHueMin": 44.8,
+   "dEMedian": 21.9,
+   "dHueMedian": 41.9,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "vashil",
+   "dEMin": 24,
+   "dHueMin": 37.2,
+   "dEMedian": 23.3,
+   "dHueMedian": 34.8,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ilsheta",
+   "b": "nurrow",
+   "dEMin": 24.2,
+   "dHueMin": 35.1,
+   "dEMedian": 23.5,
+   "dHueMedian": 33.2,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "odrum",
+   "dEMin": 24.6,
+   "dHueMin": 119.7,
+   "dEMedian": 33.2,
+   "dHueMedian": 133.3,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "vashil",
+   "dEMin": 24.7,
+   "dHueMin": 21.3,
+   "dEMedian": 25.7,
+   "dHueMedian": 21.3,
+   "neutral": false,
+   "fail": true,
+   "worst": {
+    "dE": 24.7,
+    "dHue": 23.2,
+    "runA": "7/0",
+    "runB": "7/0"
+   }
+  },
+  {
+   "a": "lisvel",
+   "b": "rishal",
+   "dEMin": 25,
+   "dHueMin": 115.5,
+   "dEMedian": 27.7,
+   "dHueMedian": 119.1,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "rishal",
+   "b": "vashil",
+   "dEMin": 25.4,
+   "dHueMin": 111.5,
+   "dEMedian": 30.9,
+   "dHueMedian": 115.5,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ilsheta",
+   "b": "sukri",
+   "dEMin": 26.1,
+   "dHueMin": 18.9,
+   "dEMedian": 26.6,
+   "dHueMedian": 16.1,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "hesmi",
+   "b": "ulkro",
+   "dEMin": 26.5,
+   "dHueMin": 23.1,
+   "dEMedian": 28.4,
+   "dHueMedian": 23.5,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "lisvel",
+   "b": "marund",
+   "dEMin": 27.1,
+   "dHueMin": 53.2,
+   "dEMedian": 27.3,
+   "dHueMedian": 53.6,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "kemdo",
+   "b": "rishal",
+   "dEMin": 27.7,
+   "dHueMin": 23.8,
+   "dEMedian": 27.5,
+   "dHueMedian": 30.6,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "marund",
+   "b": "sukri",
+   "dEMin": 28.8,
+   "dHueMin": 45.3,
+   "dEMedian": 29.3,
+   "dHueMedian": 45.3,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "rishal",
+   "b": "sukri",
+   "dEMin": 28.9,
+   "dHueMin": 16.8,
+   "dEMedian": 29.9,
+   "dHueMedian": 20.2,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "marund",
+   "b": "rishal",
+   "dEMin": 29.7,
+   "dHueMin": 62.1,
+   "dEMedian": 30.4,
+   "dHueMedian": 65.5,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "hesmi",
+   "dEMin": 29.9,
+   "dHueMin": 69.4,
+   "dEMedian": 33.9,
+   "dHueMedian": 81.8,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "kemdo",
+   "dEMin": 29.9,
+   "dHueMin": 49.8,
+   "dEMedian": 30.2,
+   "dHueMedian": 50.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ilsheta",
+   "b": "ulkro",
+   "dEMin": 30.9,
+   "dHueMin": 2.9,
+   "dEMedian": 33.7,
+   "dHueMedian": 16,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "marund",
+   "b": "ulkro",
+   "dEMin": 30.9,
+   "dHueMin": 12.9,
+   "dEMedian": 30.9,
+   "dHueMedian": 13.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "rishal",
+   "dEMin": 31.3,
+   "dHueMin": 11.9,
+   "dEMedian": 36.6,
+   "dHueMedian": 21.9,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "hesmi",
+   "b": "odrum",
+   "dEMin": 31.8,
+   "dHueMin": 43.8,
+   "dEMedian": 34.8,
+   "dHueMedian": 51.5,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "hesmi",
+   "b": "tunlan",
+   "dEMin": 31.8,
+   "dHueMin": 81.4,
+   "dEMedian": 31.9,
+   "dHueMedian": 81.4,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "tunlan",
+   "dEMin": 32.7,
+   "dHueMin": 12.6,
+   "dEMedian": 31.6,
+   "dHueMedian": 16.3,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ilsheta",
+   "b": "kemdo",
+   "dEMin": 32.8,
+   "dHueMin": 69.5,
+   "dEMedian": 33.5,
+   "dHueMedian": 66.9,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "hesmi",
+   "b": "nurrow",
+   "dEMin": 32.9,
+   "dHueMin": 71.7,
+   "dEMedian": 33.7,
+   "dHueMedian": 72.7,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "ervet",
+   "dEMin": 33,
+   "dHueMin": 53.1,
+   "dEMedian": 35.8,
+   "dHueMedian": 58.8,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "hesmi",
+   "b": "vashil",
+   "dEMin": 33.6,
+   "dHueMin": 159.5,
+   "dEMedian": 35.5,
+   "dHueMedian": 168.7,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "ulkro",
+   "dEMin": 34,
+   "dHueMin": 70.6,
+   "dEMedian": 35.4,
+   "dHueMedian": 74.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "marund",
+   "b": "nurrow",
+   "dEMin": 34.4,
+   "dHueMin": 61.5,
+   "dEMedian": 35.2,
+   "dHueMedian": 62.4,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ilsheta",
+   "b": "vashil",
+   "dEMin": 34.7,
+   "dHueMin": 157.2,
+   "dEMedian": 37.6,
+   "dHueMedian": 151.8,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "lisvel",
+   "dEMin": 35,
+   "dHueMin": 32,
+   "dEMedian": 36.6,
+   "dHueMedian": 38.5,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "dunsom",
+   "dEMin": 35.3,
+   "dHueMin": 61,
+   "dEMedian": 36.7,
+   "dHueMedian": 65.6,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ilsheta",
+   "b": "odrum",
+   "dEMin": 35.5,
+   "dHueMin": 7.2,
+   "dEMedian": 38.8,
+   "dHueMedian": 12,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "kemdo",
+   "b": "sukri",
+   "dEMin": 35.7,
+   "dHueMin": 50.6,
+   "dEMedian": 36.2,
+   "dHueMedian": 50.8,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "rishal",
+   "b": "ulkro",
+   "dEMin": 35.8,
+   "dHueMin": 48.7,
+   "dEMedian": 38.5,
+   "dHueMedian": 52.3,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "burdam",
+   "dEMin": 35.9,
+   "dHueMin": 170.1,
+   "dEMedian": 38.7,
+   "dHueMedian": 179.5,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "hesmi",
+   "b": "sukri",
+   "dEMin": 35.9,
+   "dHueMin": 55.5,
+   "dEMedian": 36.9,
+   "dHueMedian": 55.6,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "nurrow",
+   "dEMin": 36,
+   "dHueMin": 21.5,
+   "dEMedian": 34.4,
+   "dHueMedian": 25,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "ulkro",
+   "dEMin": 36.1,
+   "dHueMin": 99,
+   "dEMedian": 36.5,
+   "dHueMedian": 105.3,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "hesmi",
+   "dEMin": 36.2,
+   "dHueMin": 94.2,
+   "dEMedian": 39.8,
+   "dHueMedian": 97.7,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "ilsheta",
+   "dEMin": 36.2,
+   "dHueMin": 57.6,
+   "dEMedian": 40,
+   "dHueMedian": 58.2,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "kemdo",
+   "b": "odrum",
+   "dEMin": 36.3,
+   "dHueMin": 58.5,
+   "dEMedian": 37.6,
+   "dHueMedian": 54.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "rishal",
+   "dEMin": 36.6,
+   "dHueMin": 74.3,
+   "dEMedian": 40,
+   "dHueMedian": 80.7,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "odrum",
+   "b": "rishal",
+   "dEMin": 36.6,
+   "dHueMin": 24.7,
+   "dEMedian": 40.1,
+   "dHueMedian": 24.3,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "lisvel",
+   "b": "vashil",
+   "dEMin": 36.7,
+   "dHueMin": 122.1,
+   "dEMedian": 38,
+   "dHueMedian": 125.4,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "marund",
+   "b": "tunlan",
+   "dEMin": 37.3,
+   "dHueMin": 71.2,
+   "dEMedian": 37.3,
+   "dHueMedian": 71.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "ervet",
+   "dEMin": 37.9,
+   "dHueMin": 58.7,
+   "dEMedian": 36.2,
+   "dHueMedian": 56.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "lisvel",
+   "b": "ulkro",
+   "dEMin": 38,
+   "dHueMin": 66.3,
+   "dEMedian": 38.2,
+   "dHueMedian": 66.8,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "nurrow",
+   "b": "ulkro",
+   "dEMin": 38.2,
+   "dHueMin": 48.1,
+   "dEMedian": 38.7,
+   "dHueMedian": 49.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "ulkro",
+   "dEMin": 38.6,
+   "dHueMin": 103.6,
+   "dEMedian": 62.7,
+   "dHueMedian": 133,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "nurrow",
+   "b": "odrum",
+   "dEMin": 38.7,
+   "dHueMin": 24.1,
+   "dEMedian": 38.5,
+   "dHueMedian": 21.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "sukri",
+   "b": "ulkro",
+   "dEMin": 38.7,
+   "dHueMin": 31.9,
+   "dEMedian": 39.6,
+   "dHueMedian": 32.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "rishal",
+   "dEMin": 39,
+   "dHueMin": 148.2,
+   "dEMedian": 44.3,
+   "dHueMedian": 157.6,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "kemdo",
+   "b": "vashil",
+   "dEMin": 39.1,
+   "dHueMin": 87,
+   "dEMedian": 39.1,
+   "dHueMedian": 84.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "odrum",
+   "b": "tunlan",
+   "dEMin": 39.1,
+   "dHueMin": 33.8,
+   "dEMedian": 38.4,
+   "dHueMedian": 29.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "vashil",
+   "dEMin": 39.4,
+   "dHueMin": 84.2,
+   "dEMedian": 38.3,
+   "dHueMedian": 86.9,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "hesmi",
+   "b": "kemdo",
+   "dEMin": 39.6,
+   "dHueMin": 106.1,
+   "dEMedian": 39.7,
+   "dHueMedian": 106.4,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "vashil",
+   "dEMin": 39.8,
+   "dHueMin": 90.3,
+   "dEMedian": 43.4,
+   "dHueMedian": 93.6,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "tunlan",
+   "b": "ulkro",
+   "dEMin": 40.1,
+   "dHueMin": 57.8,
+   "dEMedian": 40.1,
+   "dHueMedian": 57.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "ilsheta",
+   "dEMin": 41.9,
+   "dHueMin": 102.4,
+   "dEMedian": 44.7,
+   "dHueMedian": 121.3,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "marund",
+   "b": "odrum",
+   "dEMin": 43.1,
+   "dHueMin": 33.6,
+   "dEMedian": 44,
+   "dHueMedian": 41.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "hesmi",
+   "dEMin": 43.3,
+   "dHueMin": 74,
+   "dEMedian": 49.2,
+   "dHueMedian": 156.5,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "odrum",
+   "b": "sukri",
+   "dEMin": 43.3,
+   "dHueMin": 7.9,
+   "dEMedian": 44.2,
+   "dHueMedian": 4.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "tunlan",
+   "dEMin": 43.5,
+   "dHueMin": 75,
+   "dEMedian": 43.6,
+   "dHueMedian": 75.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "tunlan",
+   "b": "vashil",
+   "dEMin": 43.9,
+   "dHueMin": 112.2,
+   "dEMedian": 44.3,
+   "dHueMedian": 109.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "kemdo",
+   "b": "ulkro",
+   "dEMin": 44.4,
+   "dHueMin": 82.5,
+   "dEMedian": 46,
+   "dHueMedian": 82.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "lisvel",
+   "b": "tunlan",
+   "dEMin": 44.7,
+   "dHueMin": 124.6,
+   "dEMedian": 44.8,
+   "dHueMedian": 124.7,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "lisvel",
+   "b": "odrum",
+   "dEMin": 45.8,
+   "dHueMin": 87,
+   "dEMedian": 46.5,
+   "dHueMedian": 94.8,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "lisvel",
+   "b": "nurrow",
+   "dEMin": 45.9,
+   "dHueMin": 114.9,
+   "dEMedian": 46.7,
+   "dHueMedian": 116,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "sukri",
+   "dEMin": 46.4,
+   "dHueMin": 38.7,
+   "dEMedian": 45.5,
+   "dHueMedian": 42.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "ilsheta",
+   "dEMin": 46.4,
+   "dHueMin": 107,
+   "dEMedian": 48.2,
+   "dHueMedian": 117,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "rishal",
+   "dEMin": 46.6,
+   "dHueMin": 133,
+   "dEMedian": 54,
+   "dHueMedian": 136.8,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "lisvel",
+   "b": "sukri",
+   "dEMin": 47.4,
+   "dHueMin": 98.7,
+   "dEMedian": 48.3,
+   "dHueMedian": 98.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "hesmi",
+   "dEMin": 47.9,
+   "dHueMin": 136.3,
+   "dEMedian": 52.5,
+   "dHueMedian": 147.4,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "lisvel",
+   "dEMin": 49.2,
+   "dHueMin": 98.9,
+   "dEMedian": 51.8,
+   "dHueMedian": 104.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "nurrow",
+   "b": "vashil",
+   "dEMin": 49.4,
+   "dHueMin": 121.1,
+   "dEMedian": 50.1,
+   "dHueMedian": 118.6,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "nurrow",
+   "dEMin": 49.8,
+   "dHueMin": 83.9,
+   "dEMedian": 49.8,
+   "dHueMedian": 83.8,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "lisvel",
+   "dEMin": 50.4,
+   "dHueMin": 137.4,
+   "dEMedian": 52.6,
+   "dHueMedian": 141,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "kemdo",
+   "dEMin": 51,
+   "dHueMin": 171.4,
+   "dEMedian": 51.7,
+   "dHueMedian": 171.8,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "dunsom",
+   "dEMin": 51.1,
+   "dHueMin": 111.8,
+   "dEMedian": 55.5,
+   "dHueMedian": 114.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "kemdo",
+   "b": "marund",
+   "dEMin": 51.7,
+   "dHueMin": 95.9,
+   "dEMedian": 51.7,
+   "dHueMedian": 96.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "kemdo",
+   "b": "lisvel",
+   "dEMin": 52.3,
+   "dHueMin": 149.3,
+   "dEMedian": 52.4,
+   "dHueMedian": 149.7,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "lisvel",
+   "dEMin": 52.5,
+   "dHueMin": 36.6,
+   "dEMedian": 56.7,
+   "dHueMedian": 160.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "odrum",
+   "b": "vashil",
+   "dEMin": 52.9,
+   "dHueMin": 146.2,
+   "dEMedian": 52.7,
+   "dHueMedian": 139.8,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "marund",
+   "dEMin": 53.1,
+   "dHueMin": 85.9,
+   "dEMedian": 53,
+   "dHueMedian": 92.1,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "burdam",
+   "b": "marund",
+   "dEMin": 53.7,
+   "dHueMin": 84,
+   "dEMedian": 53.8,
+   "dHueMedian": 87.4,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "ilsheta",
+   "dEMin": 54.6,
+   "dHueMin": 169.3,
+   "dEMedian": 59.1,
+   "dHueMedian": 173.1,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "marund",
+   "b": "vashil",
+   "dEMin": 55.7,
+   "dHueMin": 176,
+   "dEMedian": 56.9,
+   "dHueMedian": 179,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ulkro",
+   "b": "vashil",
+   "dEMin": 55.8,
+   "dHueMin": 170.2,
+   "dEMedian": 56.7,
+   "dHueMedian": 167.8,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "odrum",
+   "dEMin": 56.1,
+   "dHueMin": 167.7,
+   "dEMedian": 62.7,
+   "dHueMedian": 161.1,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "tunlan",
+   "dEMin": 56.7,
+   "dHueMin": 157.3,
+   "dEMedian": 54.9,
+   "dHueMedian": 163.2,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "kemdo",
+   "dEMin": 58.5,
+   "dHueMin": 108.5,
+   "dEMedian": 59.1,
+   "dHueMedian": 106.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "sukri",
+   "b": "vashil",
+   "dEMin": 58.7,
+   "dHueMin": 138.3,
+   "dEMedian": 60.1,
+   "dHueMedian": 135.7,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "nurrow",
+   "dEMin": 59.2,
+   "dHueMin": 147.6,
+   "dEMedian": 57.9,
+   "dHueMedian": 154.5,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "sukri",
+   "dEMin": 62,
+   "dHueMin": 101.1,
+   "dEMedian": 62.7,
+   "dHueMedian": 100.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ervet",
+   "b": "marund",
+   "dEMin": 64.8,
+   "dHueMin": 90.5,
+   "dEMedian": 69,
+   "dHueMedian": 146.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "ardit",
+   "b": "sukri",
+   "dEMin": 65.7,
+   "dHueMin": 131.4,
+   "dEMedian": 64.8,
+   "dHueMedian": 137.4,
+   "neutral": true,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "tunlan",
+   "dEMin": 66.5,
+   "dHueMin": 133.7,
+   "dEMedian": 67,
+   "dHueMedian": 131.2,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "ulkro",
+   "dEMin": 66.5,
+   "dHueMin": 165.9,
+   "dEMedian": 68.4,
+   "dHueMedian": 170.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "nurrow",
+   "dEMin": 71.5,
+   "dHueMin": 142.6,
+   "dEMedian": 72.4,
+   "dHueMedian": 139.9,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "marund",
+   "dEMin": 73,
+   "dHueMin": 152.8,
+   "dEMedian": 75.1,
+   "dHueMedian": 157.7,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  },
+  {
+   "a": "dunsom",
+   "b": "sukri",
+   "dEMin": 80.6,
+   "dHueMin": 159.8,
+   "dEMedian": 82.5,
+   "dHueMedian": 157,
+   "neutral": false,
+   "fail": false,
+   "worst": null
+  }
+ ],
+ "lineup": null,
+ "errors": [],
+ "runs": [
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 1,
+   "def": "ardit",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 7175,
+   "seen": true,
+   "heightPx": 154,
+   "top": {
+    "n": 1571,
+    "lab": [
+     35.9,
+     -6.1,
+     -8.9
+    ],
+    "C": 10.8,
+    "h": 235.7,
+    "rgb": [
+     50,
+     89,
+     100
+    ],
+    "hsv": [
+     193.2,
+     0.5,
+     0.392
+    ],
+    "meanL": 40
+   },
+   "mid": {
+    "n": 3478,
+    "lab": [
+     49,
+     -3.9,
+     -5
+    ],
+    "C": 6.3,
+    "h": 232,
+    "rgb": [
+     99,
+     114,
+     135
+    ],
+    "hsv": [
+     215,
+     0.267,
+     0.529
+    ],
+    "meanL": 49.8
+   },
+   "bottom": {
+    "n": 1203,
+    "lab": [
+     24.7,
+     -1.1,
+     -4
+    ],
+    "C": 4.2,
+    "h": 254.4,
+    "rgb": [
+     54,
+     60,
+     64
+    ],
+    "hsv": [
+     204,
+     0.156,
+     0.251
+    ],
+    "meanL": 28.8
+   },
+   "valueBandsSpatial": {
+    "top": 40,
+    "mid": 49.8,
+    "bottom": 28.8
+   },
+   "valueBands": {
+    "top": 68.8,
+    "mid": 42.5,
+    "bottom": 19.7
+   },
+   "crown": {
+    "lab": [
+     44.3,
+     -9.2,
+     -7.2
+    ],
+    "C": 11.7,
+    "h": 218.2,
+    "hsv": [
+     192.9,
+     0.418,
+     0.478
+    ],
+    "shoulders": [
+     22.4,
+     -5.2,
+     -9.2
+    ],
+    "dL": 21.9,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     193.2,
+     0.5,
+     0.392
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.027,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 2,
+   "def": "burdam",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 12864,
+   "seen": true,
+   "heightPx": 176,
+   "top": {
+    "n": 1551,
+    "lab": [
+     44.9,
+     15.3,
+     18.5
+    ],
+    "C": 24.1,
+    "h": 50.4,
+    "rgb": [
+     138,
+     95,
+     83
+    ],
+    "hsv": [
+     13.1,
+     0.399,
+     0.541
+    ],
+    "meanL": 48.7
+   },
+   "mid": {
+    "n": 8919,
+    "lab": [
+     31.8,
+     10,
+     14.2
+    ],
+    "C": 17.4,
+    "h": 54.8,
+    "rgb": [
+     78,
+     68,
+     59
+    ],
+    "hsv": [
+     28.4,
+     0.244,
+     0.306
+    ],
+    "meanL": 31.4
+   },
+   "bottom": {
+    "n": 1162,
+    "lab": [
+     23.3,
+     7.5,
+     8.6
+    ],
+    "C": 11.5,
+    "h": 48.8,
+    "rgb": [
+     63,
+     55,
+     47
+    ],
+    "hsv": [
+     30,
+     0.254,
+     0.247
+    ],
+    "meanL": 23
+   },
+   "valueBandsSpatial": {
+    "top": 48.7,
+    "mid": 31.4,
+    "bottom": 23
+   },
+   "valueBands": {
+    "top": 52.7,
+    "mid": 31,
+    "bottom": 16.7
+   },
+   "crown": {
+    "lab": [
+     32.9,
+     -2.9,
+     0.2
+    ],
+    "C": 2.9,
+    "h": 175.8,
+    "hsv": [
+     165,
+     0.101,
+     0.31
+    ],
+    "shoulders": [
+     55.4,
+     18.8,
+     24.4
+    ],
+    "dL": 22.5,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     13.1,
+     0.399,
+     0.541
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.03,
+    "harm": 0.07,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 3,
+   "def": "dunsom",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 10894,
+   "seen": true,
+   "heightPx": 178,
+   "top": {
+    "n": 1558,
+    "lab": [
+     50.4,
+     16.3,
+     -32.3
+    ],
+    "C": 36.2,
+    "h": 296.7,
+    "rgb": [
+     119,
+     111,
+     150
+    ],
+    "hsv": [
+     252.3,
+     0.26,
+     0.588
+    ],
+    "meanL": 53.3
+   },
+   "mid": {
+    "n": 6899,
+    "lab": [
+     32.3,
+     3.6,
+     0.5
+    ],
+    "C": 3.7,
+    "h": 7.6,
+    "rgb": [
+     73,
+     77,
+     77
+    ],
+    "hsv": [
+     180,
+     0.052,
+     0.302
+    ],
+    "meanL": 39.9
+   },
+   "bottom": {
+    "n": 1094,
+    "lab": [
+     52.8,
+     4.8,
+     -0.2
+    ],
+    "C": 4.8,
+    "h": 357,
+    "rgb": [
+     125,
+     122,
+     126
+    ],
+    "hsv": [
+     285,
+     0.032,
+     0.494
+    ],
+    "meanL": 40.1
+   },
+   "valueBandsSpatial": {
+    "top": 53.3,
+    "mid": 39.9,
+    "bottom": 40.1
+   },
+   "valueBands": {
+    "top": 68.4,
+    "mid": 38.6,
+    "bottom": 22.5
+   },
+   "crown": {
+    "lab": [
+     76.1,
+     2.2,
+     22.2
+    ],
+    "C": 22.3,
+    "h": 84.3,
+    "hsv": [
+     37.7,
+     0.298,
+     0.816
+    ],
+    "shoulders": [
+     46.5,
+     18.3,
+     -33
+    ],
+    "dL": 29.6,
+    "dHue": 145.3,
+    "break": true,
+    "hsvTop": [
+     252.3,
+     0.26,
+     0.588
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.077,
+    "harm": 0.001,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 4,
+   "def": "ervet",
+   "team": 0,
+   "meshes": 21,
+   "silPx": 9964,
+   "seen": true,
+   "heightPx": 145,
+   "top": {
+    "n": 1470,
+    "lab": [
+     60.3,
+     36.3,
+     -1.7
+    ],
+    "C": 36.4,
+    "h": 357.3,
+    "rgb": [
+     194,
+     117,
+     148
+    ],
+    "hsv": [
+     335.8,
+     0.397,
+     0.761
+    ],
+    "meanL": 57
+   },
+   "mid": {
+    "n": 6580,
+    "lab": [
+     34.1,
+     -2.7,
+     0
+    ],
+    "C": 2.7,
+    "h": 180.8,
+    "rgb": [
+     77,
+     81,
+     77
+    ],
+    "hsv": [
+     120,
+     0.049,
+     0.318
+    ],
+    "meanL": 42.8
+   },
+   "bottom": {
+    "n": 476,
+    "lab": [
+     24,
+     -2.8,
+     1
+    ],
+    "C": 2.9,
+    "h": 160.4,
+    "rgb": [
+     54,
+     58,
+     56
+    ],
+    "hsv": [
+     150,
+     0.069,
+     0.227
+    ],
+    "meanL": 23.3
+   },
+   "valueBandsSpatial": {
+    "top": 57,
+    "mid": 42.8,
+    "bottom": 23.3
+   },
+   "valueBands": {
+    "top": 69.2,
+    "mid": 43.5,
+    "bottom": 20.5
+   },
+   "crown": {
+    "lab": [
+     61.1,
+     34.2,
+     -3.1
+    ],
+    "C": 34.3,
+    "h": 354.8,
+    "hsv": [
+     330.4,
+     0.376,
+     0.741
+    ],
+    "shoulders": [
+     60.2,
+     37.5,
+     -1.6
+    ],
+    "dL": 0.9,
+    "dHue": 2.7,
+    "break": false,
+    "hsvTop": [
+     335.8,
+     0.397,
+     0.761
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.041,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 5,
+   "def": "hesmi",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 11702,
+   "seen": true,
+   "heightPx": 180,
+   "top": {
+    "n": 1958,
+    "lab": [
+     64.3,
+     -11.6,
+     4.1
+    ],
+    "C": 12.3,
+    "h": 160.4,
+    "rgb": [
+     125,
+     163,
+     160
+    ],
+    "hsv": [
+     175.3,
+     0.233,
+     0.639
+    ],
+    "meanL": 58.9
+   },
+   "mid": {
+    "n": 6880,
+    "lab": [
+     31.5,
+     -2.7,
+     1.7
+    ],
+    "C": 3.1,
+    "h": 148.4,
+    "rgb": [
+     68,
+     77,
+     71
+    ],
+    "hsv": [
+     140,
+     0.117,
+     0.302
+    ],
+    "meanL": 32.7
+   },
+   "bottom": {
+    "n": 1269,
+    "lab": [
+     17,
+     12.4,
+     -9.9
+    ],
+    "C": 15.9,
+    "h": 321.4,
+    "rgb": [
+     53,
+     31,
+     49
+    ],
+    "hsv": [
+     310.9,
+     0.415,
+     0.208
+    ],
+    "meanL": 17.8
+   },
+   "valueBandsSpatial": {
+    "top": 58.9,
+    "mid": 32.7,
+    "bottom": 17.8
+   },
+   "valueBands": {
+    "top": 66.1,
+    "mid": 32.3,
+    "bottom": 13
+   },
+   "crown": {
+    "lab": [
+     69.4,
+     -9.6,
+     3.6
+    ],
+    "C": 10.3,
+    "h": 159.3,
+    "hsv": [
+     175.4,
+     0.148,
+     0.69
+    ],
+    "shoulders": [
+     63.7,
+     -12,
+     4.2
+    ],
+    "dL": 5.7,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     175.3,
+     0.233,
+     0.639
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.165,
+    "harm": 0,
+    "heal": 0.007
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 6,
+   "def": "ilsheta",
+   "team": 1,
+   "meshes": 6,
+   "silPx": 9702,
+   "seen": true,
+   "heightPx": 138,
+   "top": {
+    "n": 991,
+    "lab": [
+     73.4,
+     -6.1,
+     11.9
+    ],
+    "C": 13.4,
+    "h": 117.3,
+    "rgb": [
+     176,
+     180,
+     133
+    ],
+    "hsv": [
+     65.1,
+     0.261,
+     0.706
+    ],
+    "meanL": 66.4
+   },
+   "mid": {
+    "n": 5532,
+    "lab": [
+     58.9,
+     -3.4,
+     3.5
+    ],
+    "C": 4.9,
+    "h": 133.9,
+    "rgb": [
+     130,
+     144,
+     129
+    ],
+    "hsv": [
+     116,
+     0.104,
+     0.565
+    ],
+    "meanL": 54.9
+   },
+   "bottom": {
+    "n": 2399,
+    "lab": [
+     37.7,
+     -2.1,
+     -18.7
+    ],
+    "C": 18.8,
+    "h": 263.6,
+    "rgb": [
+     62,
+     91,
+     121
+    ],
+    "hsv": [
+     210.5,
+     0.488,
+     0.475
+    ],
+    "meanL": 37.3
+   },
+   "valueBandsSpatial": {
+    "top": 66.4,
+    "mid": 54.9,
+    "bottom": 37.3
+   },
+   "valueBands": {
+    "top": 78.1,
+    "mid": 51.3,
+    "bottom": 24.9
+   },
+   "crown": {
+    "lab": [
+     71.3,
+     -1,
+     6.1
+    ],
+    "C": 6.2,
+    "h": 99.6,
+    "hsv": [
+     39,
+     0.112,
+     0.698
+    ],
+    "shoulders": [
+     74.2,
+     -9.5,
+     14.5
+    ],
+    "dL": 2.9,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     65.1,
+     0.261,
+     0.706
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.001,
+    "harm": 0.011,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 7,
+   "def": "kemdo",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 6698,
+   "seen": true,
+   "heightPx": 121,
+   "top": {
+    "n": 1025,
+    "lab": [
+     61,
+     22.6,
+     24.9
+    ],
+    "C": 33.6,
+    "h": 47.8,
+    "rgb": [
+     205,
+     131,
+     102
+    ],
+    "hsv": [
+     16.9,
+     0.502,
+     0.804
+    ],
+    "meanL": 60.8
+   },
+   "mid": {
+    "n": 3890,
+    "lab": [
+     34.6,
+     12,
+     16.6
+    ],
+    "C": 20.4,
+    "h": 54.2,
+    "rgb": [
+     110,
+     72,
+     59
+    ],
+    "hsv": [
+     15.3,
+     0.464,
+     0.431
+    ],
+    "meanL": 41.6
+   },
+   "bottom": {
+    "n": 596,
+    "lab": [
+     24.1,
+     5.1,
+     13.2
+    ],
+    "C": 14.1,
+    "h": 69,
+    "rgb": [
+     66,
+     57,
+     48
+    ],
+    "hsv": [
+     30,
+     0.273,
+     0.259
+    ],
+    "meanL": 30.5
+   },
+   "valueBandsSpatial": {
+    "top": 60.8,
+    "mid": 41.6,
+    "bottom": 30.5
+   },
+   "valueBands": {
+    "top": 67,
+    "mid": 43.3,
+    "bottom": 21.7
+   },
+   "crown": {
+    "lab": [
+     67.4,
+     23.1,
+     24.3
+    ],
+    "C": 33.6,
+    "h": 46.5,
+    "hsv": [
+     15.2,
+     0.436,
+     0.855
+    ],
+    "shoulders": [
+     57.9,
+     22.5,
+     26.3
+    ],
+    "dL": 9.5,
+    "dHue": 3,
+    "break": true,
+    "hsvTop": [
+     16.9,
+     0.502,
+     0.804
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.094,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 8,
+   "def": "lisvel",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 3591,
+   "seen": true,
+   "heightPx": 95,
+   "top": {
+    "n": 533,
+    "lab": [
+     71.9,
+     -19.5,
+     -6.3
+    ],
+    "C": 20.5,
+    "h": 197.8,
+    "rgb": [
+     126,
+     185,
+     185
+    ],
+    "hsv": [
+     180,
+     0.319,
+     0.725
+    ],
+    "meanL": 69.9
+   },
+   "mid": {
+    "n": 1383,
+    "lab": [
+     59.6,
+     -3.3,
+     -2
+    ],
+    "C": 3.8,
+    "h": 211,
+    "rgb": [
+     124,
+     147,
+     148
+    ],
+    "hsv": [
+     182.5,
+     0.162,
+     0.58
+    ],
+    "meanL": 56.8
+   },
+   "bottom": {
+    "n": 825,
+    "lab": [
+     73.3,
+     0.4,
+     24.7
+    ],
+    "C": 24.7,
+    "h": 89.1,
+    "rgb": [
+     200,
+     177,
+     135
+    ],
+    "hsv": [
+     38.8,
+     0.325,
+     0.784
+    ],
+    "meanL": 57
+   },
+   "valueBandsSpatial": {
+    "top": 69.9,
+    "mid": 56.8,
+    "bottom": 57
+   },
+   "valueBands": {
+    "top": 76.5,
+    "mid": 65.9,
+    "bottom": 29.6
+   },
+   "crown": {
+    "lab": [
+     73.8,
+     -19.3,
+     -6.4
+    ],
+    "C": 20.3,
+    "h": 198.4,
+    "hsv": [
+     181,
+     0.326,
+     0.757
+    ],
+    "shoulders": [
+     69.3,
+     -19.6,
+     -6.3
+    ],
+    "dL": 4.5,
+    "dHue": 0.5,
+    "break": false,
+    "hsvTop": [
+     180,
+     0.319,
+     0.725
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 9,
+   "def": "marund",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 12420,
+   "seen": true,
+   "heightPx": 154,
+   "top": {
+    "n": 2819,
+    "lab": [
+     78.2,
+     -27.1,
+     19.8
+    ],
+    "C": 33.6,
+    "h": 143.9,
+    "rgb": [
+     153,
+     206,
+     154
+    ],
+    "hsv": [
+     121.1,
+     0.257,
+     0.808
+    ],
+    "meanL": 75.2
+   },
+   "mid": {
+    "n": 5746,
+    "lab": [
+     41,
+     -6.3,
+     14.3
+    ],
+    "C": 15.7,
+    "h": 113.8,
+    "rgb": [
+     91,
+     100,
+     73
+    ],
+    "hsv": [
+     80,
+     0.27,
+     0.392
+    ],
+    "meanL": 43.7
+   },
+   "bottom": {
+    "n": 2092,
+    "lab": [
+     18.1,
+     4.7,
+     9.3
+    ],
+    "C": 10.4,
+    "h": 63.1,
+    "rgb": [
+     52,
+     40,
+     29
+    ],
+    "hsv": [
+     28.7,
+     0.442,
+     0.204
+    ],
+    "meanL": 22.9
+   },
+   "valueBandsSpatial": {
+    "top": 75.2,
+    "mid": 43.7,
+    "bottom": 22.9
+   },
+   "valueBands": {
+    "top": 78.3,
+    "mid": 50.4,
+    "bottom": 13.1
+   },
+   "crown": {
+    "lab": [
+     78.6,
+     -27.5,
+     20.2
+    ],
+    "C": 34.1,
+    "h": 143.6,
+    "hsv": [
+     122.2,
+     0.26,
+     0.816
+    ],
+    "shoulders": [
+     77.4,
+     -26.8,
+     19.7
+    ],
+    "dL": 1.2,
+    "dHue": 0.1,
+    "break": false,
+    "hsvTop": [
+     121.1,
+     0.257,
+     0.808
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.051,
+    "heal": 0.002
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 0,
+   "id": 10,
+   "def": "nurrow",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 9826,
+   "seen": true,
+   "heightPx": 125,
+   "top": {
+    "n": 1580,
+    "lab": [
+     75.8,
+     5.3,
+     34
+    ],
+    "C": 34.4,
+    "h": 81.2,
+    "rgb": [
+     218,
+     181,
+     124
+    ],
+    "hsv": [
+     36.4,
+     0.431,
+     0.855
+    ],
+    "meanL": 72.8
+   },
+   "mid": {
+    "n": 6313,
+    "lab": [
+     34.3,
+     0.7,
+     7.3
+    ],
+    "C": 7.3,
+    "h": 84.8,
+    "rgb": [
+     84,
+     80,
+     70
+    ],
+    "hsv": [
+     42.9,
+     0.167,
+     0.329
+    ],
+    "meanL": 41.6
+   },
+   "bottom": {
+    "n": 1061,
+    "lab": [
+     22.9,
+     12.8,
+     8.6
+    ],
+    "C": 15.4,
+    "h": 33.9,
+    "rgb": [
+     73,
+     48,
+     42
+    ],
+    "hsv": [
+     11.6,
+     0.425,
+     0.286
+    ],
+    "meanL": 23.5
+   },
+   "valueBandsSpatial": {
+    "top": 72.8,
+    "mid": 41.6,
+    "bottom": 23.5
+   },
+   "valueBands": {
+    "top": 76.1,
+    "mid": 42.4,
+    "bottom": 19
+   },
+   "crown": {
+    "lab": [
+     76.3,
+     5.1,
+     34.8
+    ],
+    "C": 35.2,
+    "h": 81.7,
+    "hsv": [
+     37.3,
+     0.434,
+     0.859
+    ],
+    "shoulders": [
+     75.6,
+     5.6,
+     33.7
+    ],
+    "dL": 0.7,
+    "dHue": 1.1,
+    "break": false,
+    "hsvTop": [
+     36.4,
+     0.431,
+     0.855
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.804,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 1,
+   "id": 5,
+   "def": "odrum",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 4194,
+   "seen": true,
+   "heightPx": 127,
+   "top": {
+    "n": 646,
+    "lab": [
+     40.1,
+     -7.1,
+     24.3
+    ],
+    "C": 25.3,
+    "h": 106.3,
+    "rgb": [
+     102,
+     93,
+     54
+    ],
+    "hsv": [
+     48.8,
+     0.471,
+     0.4
+    ],
+    "meanL": 41.9
+   },
+   "mid": {
+    "n": 1755,
+    "lab": [
+     31.4,
+     -0.1,
+     9.2
+    ],
+    "C": 9.2,
+    "h": 90.4,
+    "rgb": [
+     77,
+     73,
+     65
+    ],
+    "hsv": [
+     40,
+     0.156,
+     0.302
+    ],
+    "meanL": 37.2
+   },
+   "bottom": {
+    "n": 801,
+    "lab": [
+     20.2,
+     5.2,
+     7.5
+    ],
+    "C": 9.2,
+    "h": 55.4,
+    "rgb": [
+     53,
+     41,
+     35
+    ],
+    "hsv": [
+     20,
+     0.34,
+     0.208
+    ],
+    "meanL": 20
+   },
+   "valueBandsSpatial": {
+    "top": 41.9,
+    "mid": 37.2,
+    "bottom": 20
+   },
+   "valueBands": {
+    "top": 63.8,
+    "mid": 29.8,
+    "bottom": 11.9
+   },
+   "crown": {
+    "lab": [
+     25.8,
+     -8.4,
+     18.6
+    ],
+    "C": 20.4,
+    "h": 114.4,
+    "hsv": [
+     71.6,
+     0.484,
+     0.251
+    ],
+    "shoulders": [
+     59.9,
+     0.5,
+     29.3
+    ],
+    "dL": 34.1,
+    "dHue": 25.5,
+    "break": true,
+    "hsvTop": [
+     48.8,
+     0.471,
+     0.4
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.413,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 1,
+   "id": 6,
+   "def": "rishal",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 6351,
+   "seen": true,
+   "heightPx": 142,
+   "top": {
+    "n": 995,
+    "lab": [
+     71,
+     2.4,
+     7.1
+    ],
+    "C": 7.5,
+    "h": 71.6,
+    "rgb": [
+     189,
+     161,
+     149
+    ],
+    "hsv": [
+     18,
+     0.212,
+     0.741
+    ],
+    "meanL": 62.4
+   },
+   "mid": {
+    "n": 3962,
+    "lab": [
+     37.9,
+     -3.9,
+     1.8
+    ],
+    "C": 4.3,
+    "h": 155.2,
+    "rgb": [
+     113,
+     86,
+     79
+    ],
+    "hsv": [
+     12.4,
+     0.301,
+     0.443
+    ],
+    "meanL": 45
+   },
+   "bottom": {
+    "n": 633,
+    "lab": [
+     24.1,
+     -3,
+     -1.6
+    ],
+    "C": 3.4,
+    "h": 208.6,
+    "rgb": [
+     57,
+     57,
+     60
+    ],
+    "hsv": [
+     240,
+     0.05,
+     0.235
+    ],
+    "meanL": 23.4
+   },
+   "valueBandsSpatial": {
+    "top": 62.4,
+    "mid": 45,
+    "bottom": 23.4
+   },
+   "valueBands": {
+    "top": 73.3,
+    "mid": 43.6,
+    "bottom": 22.3
+   },
+   "crown": {
+    "lab": [
+     79.7,
+     2,
+     11.2
+    ],
+    "C": 11.4,
+    "h": 79.7,
+    "hsv": [
+     32.4,
+     0.175,
+     0.831
+    ],
+    "shoulders": [
+     61.1,
+     9.3,
+     5.5
+    ],
+    "dL": 18.6,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     18,
+     0.212,
+     0.741
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.07,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 1,
+   "id": 7,
+   "def": "sukri",
+   "team": 1,
+   "meshes": 6,
+   "silPx": 7291,
+   "seen": true,
+   "heightPx": 110,
+   "top": {
+    "n": 1265,
+    "lab": [
+     80.8,
+     -5.7,
+     39
+    ],
+    "C": 39.4,
+    "h": 98.4,
+    "rgb": [
+     215,
+     202,
+     127
+    ],
+    "hsv": [
+     51.1,
+     0.409,
+     0.843
+    ],
+    "meanL": 75.4
+   },
+   "mid": {
+    "n": 4046,
+    "lab": [
+     57.9,
+     -1.9,
+     25.7
+    ],
+    "C": 25.8,
+    "h": 94.3,
+    "rgb": [
+     154,
+     136,
+     87
+    ],
+    "hsv": [
+     43.9,
+     0.435,
+     0.604
+    ],
+    "meanL": 52.1
+   },
+   "bottom": {
+    "n": 647,
+    "lab": [
+     21.6,
+     1.3,
+     6.3
+    ],
+    "C": 6.4,
+    "h": 78.7,
+    "rgb": [
+     55,
+     51,
+     32
+    ],
+    "hsv": [
+     49.6,
+     0.418,
+     0.216
+    ],
+    "meanL": 19.3
+   },
+   "valueBandsSpatial": {
+    "top": 75.4,
+    "mid": 52.1,
+    "bottom": 19.3
+   },
+   "valueBands": {
+    "top": 80.6,
+    "mid": 55.8,
+    "bottom": 22
+   },
+   "crown": {
+    "lab": [
+     80.7,
+     -5.2,
+     39.1
+    ],
+    "C": 39.4,
+    "h": 97.6,
+    "hsv": [
+     49.9,
+     0.412,
+     0.847
+    ],
+    "shoulders": [
+     80.9,
+     -6.3,
+     39
+    ],
+    "dL": 0.2,
+    "dHue": 1.6,
+    "break": false,
+    "hsvTop": [
+     51.1,
+     0.409,
+     0.843
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.225,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 1,
+   "id": 8,
+   "def": "tunlan",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 12021,
+   "seen": true,
+   "heightPx": 137,
+   "top": {
+    "n": 2463,
+    "lab": [
+     75.3,
+     9.2,
+     28.9
+    ],
+    "C": 30.3,
+    "h": 72.3,
+    "rgb": [
+     220,
+     178,
+     132
+    ],
+    "hsv": [
+     31.4,
+     0.4,
+     0.863
+    ],
+    "meanL": 64.7
+   },
+   "mid": {
+    "n": 7199,
+    "lab": [
+     35,
+     7.4,
+     4.4
+    ],
+    "C": 8.6,
+    "h": 30.8,
+    "rgb": [
+     84,
+     82,
+     75
+    ],
+    "hsv": [
+     46.7,
+     0.107,
+     0.329
+    ],
+    "meanL": 46.1
+   },
+   "bottom": {
+    "n": 1315,
+    "lab": [
+     25.5,
+     32.6,
+     -16.6
+    ],
+    "C": 36.6,
+    "h": 333,
+    "rgb": [
+     88,
+     48,
+     98
+    ],
+    "hsv": [
+     288,
+     0.51,
+     0.384
+    ],
+    "meanL": 31.5
+   },
+   "valueBandsSpatial": {
+    "top": 64.7,
+    "mid": 46.1,
+    "bottom": 31.5
+   },
+   "valueBands": {
+    "top": 76,
+    "mid": 46.4,
+    "bottom": 25
+   },
+   "crown": {
+    "lab": [
+     75.4,
+     9.2,
+     29.2
+    ],
+    "C": 30.6,
+    "h": 72.6,
+    "hsv": [
+     30.7,
+     0.398,
+     0.867
+    ],
+    "shoulders": [
+     73.8,
+     9.6,
+     28.6
+    ],
+    "dL": 1.6,
+    "dHue": 1.1,
+    "break": false,
+    "hsvTop": [
+     31.4,
+     0.4,
+     0.863
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.214,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 1,
+   "id": 9,
+   "def": "ulkro",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 4618,
+   "seen": true,
+   "heightPx": 138,
+   "top": {
+    "n": 542,
+    "lab": [
+     48.3,
+     -19.9,
+     23.5
+    ],
+    "C": 30.8,
+    "h": 130.3,
+    "rgb": [
+     97,
+     123,
+     71
+    ],
+    "hsv": [
+     90,
+     0.423,
+     0.482
+    ],
+    "meanL": 49.6
+   },
+   "mid": {
+    "n": 2713,
+    "lab": [
+     31.3,
+     -1,
+     17.9
+    ],
+    "C": 17.9,
+    "h": 93.3,
+    "rgb": [
+     74,
+     75,
+     48
+    ],
+    "hsv": [
+     62.2,
+     0.36,
+     0.294
+    ],
+    "meanL": 40.7
+   },
+   "bottom": {
+    "n": 325,
+    "lab": [
+     21.5,
+     -0.6,
+     10.1
+    ],
+    "C": 10.1,
+    "h": 93.7,
+    "rgb": [
+     54,
+     52,
+     44
+    ],
+    "hsv": [
+     48,
+     0.185,
+     0.212
+    ],
+    "meanL": 22.1
+   },
+   "valueBandsSpatial": {
+    "top": 49.6,
+    "mid": 40.7,
+    "bottom": 22.1
+   },
+   "valueBands": {
+    "top": 74.4,
+    "mid": 36.3,
+    "bottom": 14.9
+   },
+   "crown": {
+    "lab": [
+     67.5,
+     -5.7,
+     -6.5
+    ],
+    "C": 8.6,
+    "h": 228.9,
+    "hsv": [
+     204,
+     0.115,
+     0.682
+    ],
+    "shoulders": [
+     46.2,
+     -20.2,
+     24.5
+    ],
+    "dL": 21.3,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     90,
+     0.423,
+     0.482
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.026,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 0,
+   "half": 1,
+   "id": 10,
+   "def": "vashil",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 6305,
+   "seen": true,
+   "heightPx": 143,
+   "top": {
+    "n": 771,
+    "lab": [
+     68.1,
+     18,
+     -15.2
+    ],
+    "C": 23.6,
+    "h": 319.9,
+    "rgb": [
+     186,
+     156,
+     195
+    ],
+    "hsv": [
+     286.2,
+     0.2,
+     0.765
+    ],
+    "meanL": 68.9
+   },
+   "mid": {
+    "n": 2470,
+    "lab": [
+     55.9,
+     14.9,
+     -12.9
+    ],
+    "C": 19.7,
+    "h": 319.1,
+    "rgb": [
+     154,
+     120,
+     156
+    ],
+    "hsv": [
+     296.7,
+     0.231,
+     0.612
+    ],
+    "meanL": 52
+   },
+   "bottom": {
+    "n": 2015,
+    "lab": [
+     27.6,
+     19,
+     -22.1
+    ],
+    "C": 29.1,
+    "h": 310.8,
+    "rgb": [
+     75,
+     60,
+     103
+    ],
+    "hsv": [
+     260.9,
+     0.417,
+     0.404
+    ],
+    "meanL": 27.8
+   },
+   "valueBandsSpatial": {
+    "top": 68.9,
+    "mid": 52,
+    "bottom": 27.8
+   },
+   "valueBands": {
+    "top": 71.8,
+    "mid": 45.6,
+    "bottom": 17.5
+   },
+   "crown": {
+    "lab": [
+     68.7,
+     16.7,
+     -13.5
+    ],
+    "C": 21.4,
+    "h": 321.1,
+    "hsv": [
+     289.7,
+     0.18,
+     0.761
+    ],
+    "shoulders": [
+     67.6,
+     18.9,
+     -16.7
+    ],
+    "dL": 1.1,
+    "dHue": 2.7,
+    "break": false,
+    "hsvTop": [
+     286.2,
+     0.2,
+     0.765
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 1,
+   "def": "ilsheta",
+   "team": 0,
+   "meshes": 6,
+   "silPx": 7271,
+   "seen": true,
+   "heightPx": 132,
+   "top": {
+    "n": 1099,
+    "lab": [
+     77.4,
+     -10.4,
+     13.6
+    ],
+    "C": 17.1,
+    "h": 127.4,
+    "rgb": [
+     188,
+     196,
+     141
+    ],
+    "hsv": [
+     68.7,
+     0.281,
+     0.769
+    ],
+    "meanL": 76.1
+   },
+   "mid": {
+    "n": 3305,
+    "lab": [
+     58.2,
+     -3.8,
+     -0.1
+    ],
+    "C": 3.8,
+    "h": 180.9,
+    "rgb": [
+     124,
+     141,
+     129
+    ],
+    "hsv": [
+     137.6,
+     0.121,
+     0.553
+    ],
+    "meanL": 56.8
+   },
+   "bottom": {
+    "n": 1876,
+    "lab": [
+     46.2,
+     -3.2,
+     -14
+    ],
+    "C": 14.3,
+    "h": 257.2,
+    "rgb": [
+     91,
+     112,
+     132
+    ],
+    "hsv": [
+     209.3,
+     0.311,
+     0.518
+    ],
+    "meanL": 44.8
+   },
+   "valueBandsSpatial": {
+    "top": 76.1,
+    "mid": 56.8,
+    "bottom": 44.8
+   },
+   "valueBands": {
+    "top": 77.8,
+    "mid": 56.4,
+    "bottom": 35.8
+   },
+   "crown": {
+    "lab": [
+     73.2,
+     -2.6,
+     3.2
+    ],
+    "C": 4.1,
+    "h": 128.4,
+    "hsv": [
+     54.5,
+     0.12,
+     0.718
+    ],
+    "shoulders": [
+     79,
+     -14.2,
+     28.1
+    ],
+    "dL": 5.8,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     68.7,
+     0.281,
+     0.769
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.002,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 2,
+   "def": "kemdo",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 8776,
+   "seen": true,
+   "heightPx": 122,
+   "top": {
+    "n": 1080,
+    "lab": [
+     65,
+     22.9,
+     24.7
+    ],
+    "C": 33.7,
+    "h": 47.1,
+    "rgb": [
+     210,
+     141,
+     115
+    ],
+    "hsv": [
+     16.4,
+     0.452,
+     0.824
+    ],
+    "meanL": 60.5
+   },
+   "mid": {
+    "n": 5346,
+    "lab": [
+     36.3,
+     1,
+     7.7
+    ],
+    "C": 7.8,
+    "h": 82.5,
+    "rgb": [
+     92,
+     85,
+     82
+    ],
+    "hsv": [
+     18,
+     0.109,
+     0.361
+    ],
+    "meanL": 45.4
+   },
+   "bottom": {
+    "n": 1456,
+    "lab": [
+     25,
+     1.7,
+     5.8
+    ],
+    "C": 6,
+    "h": 73.9,
+    "rgb": [
+     61,
+     59,
+     59
+    ],
+    "hsv": [
+     0,
+     0.033,
+     0.239
+    ],
+    "meanL": 25.9
+   },
+   "valueBandsSpatial": {
+    "top": 60.5,
+    "mid": 45.4,
+    "bottom": 25.9
+   },
+   "valueBands": {
+    "top": 71.3,
+    "mid": 41.2,
+    "bottom": 22.4
+   },
+   "crown": {
+    "lab": [
+     67.8,
+     23.6,
+     24.4
+    ],
+    "C": 34,
+    "h": 46,
+    "hsv": [
+     15.8,
+     0.436,
+     0.855
+    ],
+    "shoulders": [
+     63.1,
+     22.2,
+     25.1
+    ],
+    "dL": 4.7,
+    "dHue": 2.6,
+    "break": false,
+    "hsvTop": [
+     16.4,
+     0.452,
+     0.824
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.042,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 3,
+   "def": "lisvel",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 5385,
+   "seen": true,
+   "heightPx": 120,
+   "top": {
+    "n": 712,
+    "lab": [
+     72.8,
+     -18.9,
+     -5.8
+    ],
+    "C": 19.8,
+    "h": 197.1,
+    "rgb": [
+     131,
+     187,
+     181
+    ],
+    "hsv": [
+     173.6,
+     0.299,
+     0.733
+    ],
+    "meanL": 71
+   },
+   "mid": {
+    "n": 3088,
+    "lab": [
+     32.2,
+     -2.5,
+     1.9
+    ],
+    "C": 3.2,
+    "h": 142.4,
+    "rgb": [
+     73,
+     77,
+     72
+    ],
+    "hsv": [
+     108,
+     0.065,
+     0.302
+    ],
+    "meanL": 39.4
+   },
+   "bottom": {
+    "n": 463,
+    "lab": [
+     26.1,
+     -1.7,
+     2
+    ],
+    "C": 2.6,
+    "h": 130.2,
+    "rgb": [
+     59,
+     63,
+     60
+    ],
+    "hsv": [
+     135,
+     0.063,
+     0.247
+    ],
+    "meanL": 24.6
+   },
+   "valueBandsSpatial": {
+    "top": 71,
+    "mid": 39.4,
+    "bottom": 24.6
+   },
+   "valueBands": {
+    "top": 73,
+    "mid": 38.1,
+    "bottom": 23.1
+   },
+   "crown": {
+    "lab": [
+     73.6,
+     -19.2,
+     -6.8
+    ],
+    "C": 20.4,
+    "h": 199.4,
+    "hsv": [
+     181,
+     0.326,
+     0.757
+    ],
+    "shoulders": [
+     70.9,
+     -10.9,
+     -3.6
+    ],
+    "dL": 2.7,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     173.6,
+     0.299,
+     0.733
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.006,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 4,
+   "def": "marund",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 14515,
+   "seen": true,
+   "heightPx": 181,
+   "top": {
+    "n": 3967,
+    "lab": [
+     78.2,
+     -26.8,
+     19.6
+    ],
+    "C": 33.2,
+    "h": 143.7,
+    "rgb": [
+     153,
+     206,
+     156
+    ],
+    "hsv": [
+     123.4,
+     0.257,
+     0.808
+    ],
+    "meanL": 72.2
+   },
+   "mid": {
+    "n": 8019,
+    "lab": [
+     31.7,
+     -2.5,
+     12.5
+    ],
+    "C": 12.7,
+    "h": 101.1,
+    "rgb": [
+     72,
+     77,
+     65
+    ],
+    "hsv": [
+     85,
+     0.156,
+     0.302
+    ],
+    "meanL": 39.9
+   },
+   "bottom": {
+    "n": 1281,
+    "lab": [
+     21.7,
+     2.8,
+     11
+    ],
+    "C": 11.3,
+    "h": 75.9,
+    "rgb": [
+     56,
+     51,
+     46
+    ],
+    "hsv": [
+     30,
+     0.179,
+     0.22
+    ],
+    "meanL": 35.5
+   },
+   "valueBandsSpatial": {
+    "top": 72.2,
+    "mid": 39.9,
+    "bottom": 35.5
+   },
+   "valueBands": {
+    "top": 78.9,
+    "mid": 52.1,
+    "bottom": 13.5
+   },
+   "crown": {
+    "lab": [
+     78.5,
+     -27.5,
+     20.3
+    ],
+    "C": 34.2,
+    "h": 143.5,
+    "hsv": [
+     122.2,
+     0.261,
+     0.812
+    ],
+    "shoulders": [
+     77.9,
+     -26.5,
+     19.3
+    ],
+    "dL": 0.6,
+    "dHue": 0.5,
+    "break": false,
+    "hsvTop": [
+     123.4,
+     0.257,
+     0.808
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.029,
+    "harm": 0.011,
+    "heal": 0.002
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 5,
+   "def": "nurrow",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 12501,
+   "seen": true,
+   "heightPx": 135,
+   "top": {
+    "n": 1838,
+    "lab": [
+     75.8,
+     4.6,
+     33.5
+    ],
+    "C": 33.9,
+    "h": 82.2,
+    "rgb": [
+     216,
+     182,
+     125
+    ],
+    "hsv": [
+     37.6,
+     0.421,
+     0.847
+    ],
+    "meanL": 72.6
+   },
+   "mid": {
+    "n": 8221,
+    "lab": [
+     32.6,
+     -1.3,
+     5.3
+    ],
+    "C": 5.5,
+    "h": 104.1,
+    "rgb": [
+     75,
+     77,
+     73
+    ],
+    "hsv": [
+     90,
+     0.052,
+     0.302
+    ],
+    "meanL": 42.4
+   },
+   "bottom": {
+    "n": 1626,
+    "lab": [
+     23.8,
+     10.9,
+     4.7
+    ],
+    "C": 11.8,
+    "h": 23.2,
+    "rgb": [
+     67,
+     55,
+     52
+    ],
+    "hsv": [
+     12,
+     0.224,
+     0.263
+    ],
+    "meanL": 24.6
+   },
+   "valueBandsSpatial": {
+    "top": 72.6,
+    "mid": 42.4,
+    "bottom": 24.6
+   },
+   "valueBands": {
+    "top": 77.7,
+    "mid": 40.5,
+    "bottom": 19.5
+   },
+   "crown": {
+    "lab": [
+     75.4,
+     5.7,
+     33.5
+    ],
+    "C": 34,
+    "h": 80.4,
+    "hsv": [
+     36.1,
+     0.429,
+     0.851
+    ],
+    "shoulders": [
+     76.1,
+     4.1,
+     33.6
+    ],
+    "dL": 0.7,
+    "dHue": 2.7,
+    "break": false,
+    "hsvTop": [
+     37.6,
+     0.421,
+     0.847
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.043,
+    "harm": 0.783,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 6,
+   "def": "odrum",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 6677,
+   "seen": true,
+   "heightPx": 145,
+   "top": {
+    "n": 1225,
+    "lab": [
+     28.2,
+     -5.3,
+     14.5
+    ],
+    "C": 15.4,
+    "h": 110.1,
+    "rgb": [
+     60,
+     68,
+     53
+    ],
+    "hsv": [
+     92,
+     0.221,
+     0.267
+    ],
+    "meanL": 33.1
+   },
+   "mid": {
+    "n": 3550,
+    "lab": [
+     30.5,
+     -2.1,
+     9.9
+    ],
+    "C": 10.1,
+    "h": 102.3,
+    "rgb": [
+     66,
+     74,
+     65
+    ],
+    "hsv": [
+     113.3,
+     0.122,
+     0.29
+    ],
+    "meanL": 40
+   },
+   "bottom": {
+    "n": 735,
+    "lab": [
+     11.9,
+     7.2,
+     6
+    ],
+    "C": 9.3,
+    "h": 39.9,
+    "rgb": [
+     43,
+     27,
+     20
+    ],
+    "hsv": [
+     18.3,
+     0.535,
+     0.169
+    ],
+    "meanL": 17.5
+   },
+   "valueBandsSpatial": {
+    "top": 33.1,
+    "mid": 40,
+    "bottom": 17.5
+   },
+   "valueBands": {
+    "top": 69.4,
+    "mid": 29.7,
+    "bottom": 13
+   },
+   "crown": {
+    "lab": [
+     57.1,
+     -0.4,
+     29.9
+    ],
+    "C": 29.9,
+    "h": 90.8,
+    "hsv": [
+     48,
+     0.497,
+     0.592
+    ],
+    "shoulders": [
+     26.8,
+     -5.8,
+     10.7
+    ],
+    "dL": 30.3,
+    "dHue": 27.8,
+    "break": true,
+    "hsvTop": [
+     92,
+     0.221,
+     0.267
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.234,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 7,
+   "def": "rishal",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 5826,
+   "seen": true,
+   "heightPx": 126,
+   "top": {
+    "n": 424,
+    "lab": [
+     77.2,
+     1.7,
+     11.3
+    ],
+    "C": 11.4,
+    "h": 81.6,
+    "rgb": [
+     207,
+     188,
+     170
+    ],
+    "hsv": [
+     29.2,
+     0.179,
+     0.812
+    ],
+    "meanL": 74.7
+   },
+   "mid": {
+    "n": 3730,
+    "lab": [
+     49.9,
+     -1.9,
+     3.2
+    ],
+    "C": 3.7,
+    "h": 120.7,
+    "rgb": [
+     133,
+     111,
+     115
+    ],
+    "hsv": [
+     349.1,
+     0.165,
+     0.522
+    ],
+    "meanL": 50
+   },
+   "bottom": {
+    "n": 839,
+    "lab": [
+     24.9,
+     -2.3,
+     -10.8
+    ],
+    "C": 11,
+    "h": 258.1,
+    "rgb": [
+     52,
+     60,
+     70
+    ],
+    "hsv": [
+     213.3,
+     0.257,
+     0.275
+    ],
+    "meanL": 26.6
+   },
+   "valueBandsSpatial": {
+    "top": 74.7,
+    "mid": 50,
+    "bottom": 26.6
+   },
+   "valueBands": {
+    "top": 75.2,
+    "mid": 47.1,
+    "bottom": 23.8
+   },
+   "crown": {
+    "lab": [
+     80.1,
+     1.3,
+     7.4
+    ],
+    "C": 7.5,
+    "h": 80.3,
+    "hsv": [
+     31.4,
+     0.101,
+     0.812
+    ],
+    "shoulders": [
+     76.7,
+     2.1,
+     12.7
+    ],
+    "dL": 3.4,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     29.2,
+     0.179,
+     0.812
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.149,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 8,
+   "def": "sukri",
+   "team": 1,
+   "meshes": 6,
+   "silPx": 3708,
+   "seen": true,
+   "heightPx": 82,
+   "top": {
+    "n": 766,
+    "lab": [
+     81.5,
+     -5.9,
+     39.8
+    ],
+    "C": 40.3,
+    "h": 98.4,
+    "rgb": [
+     217,
+     204,
+     127
+    ],
+    "hsv": [
+     51.3,
+     0.415,
+     0.851
+    ],
+    "meanL": 81.5
+   },
+   "mid": {
+    "n": 2372,
+    "lab": [
+     63.3,
+     -5.9,
+     35
+    ],
+    "C": 35.5,
+    "h": 99.6,
+    "rgb": [
+     164,
+     155,
+     90
+    ],
+    "hsv": [
+     52.7,
+     0.451,
+     0.643
+    ],
+    "meanL": 55.6
+   },
+   "bottom": {
+    "n": 228,
+    "lab": [
+     64.2,
+     -1.9,
+     20.1
+    ],
+    "C": 20.2,
+    "h": 95.5,
+    "rgb": [
+     167,
+     155,
+     106
+    ],
+    "hsv": [
+     48.2,
+     0.365,
+     0.655
+    ],
+    "meanL": 56.4
+   },
+   "valueBandsSpatial": {
+    "top": 81.5,
+    "mid": 55.6,
+    "bottom": 56.4
+   },
+   "valueBands": {
+    "top": 81.7,
+    "mid": 67.4,
+    "bottom": 28.9
+   },
+   "crown": {
+    "lab": [
+     81.5,
+     -5.5,
+     39.9
+    ],
+    "C": 40.2,
+    "h": 97.8,
+    "hsv": [
+     50.2,
+     0.42,
+     0.859
+    ],
+    "shoulders": [
+     81.6,
+     -6.1,
+     39.8
+    ],
+    "dL": 0.1,
+    "dHue": 1,
+    "break": false,
+    "hsvTop": [
+     51.3,
+     0.415,
+     0.851
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.178,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 9,
+   "def": "tunlan",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 7531,
+   "seen": true,
+   "heightPx": 133,
+   "top": {
+    "n": 2139,
+    "lab": [
+     75.3,
+     9.2,
+     29
+    ],
+    "C": 30.4,
+    "h": 72.5,
+    "rgb": [
+     219,
+     178,
+     132
+    ],
+    "hsv": [
+     31.7,
+     0.397,
+     0.859
+    ],
+    "meanL": 67.7
+   },
+   "mid": {
+    "n": 3066,
+    "lab": [
+     65.5,
+     9,
+     25
+    ],
+    "C": 26.5,
+    "h": 70.2,
+    "rgb": [
+     200,
+     146,
+     132
+    ],
+    "hsv": [
+     12.4,
+     0.34,
+     0.784
+    ],
+    "meanL": 56.6
+   },
+   "bottom": {
+    "n": 1265,
+    "lab": [
+     30,
+     34.1,
+     -25.2
+    ],
+    "C": 42.4,
+    "h": 323.5,
+    "rgb": [
+     102,
+     56,
+     112
+    ],
+    "hsv": [
+     289.3,
+     0.5,
+     0.439
+    ],
+    "meanL": 32.6
+   },
+   "valueBandsSpatial": {
+    "top": 67.7,
+    "mid": 56.6,
+    "bottom": 32.6
+   },
+   "valueBands": {
+    "top": 76.1,
+    "mid": 60.6,
+    "bottom": 24.9
+   },
+   "crown": {
+    "lab": [
+     75.4,
+     9.1,
+     29.4
+    ],
+    "C": 30.8,
+    "h": 72.8,
+    "hsv": [
+     31.4,
+     0.4,
+     0.863
+    ],
+    "shoulders": [
+     75.2,
+     9.3,
+     28.7
+    ],
+    "dL": 0.2,
+    "dHue": 0.7,
+    "break": false,
+    "hsvTop": [
+     31.7,
+     0.397,
+     0.859
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.266,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 0,
+   "id": 10,
+   "def": "ulkro",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 5761,
+   "seen": true,
+   "heightPx": 127,
+   "top": {
+    "n": 516,
+    "lab": [
+     44.9,
+     -20,
+     23.2
+    ],
+    "C": 30.6,
+    "h": 130.8,
+    "rgb": [
+     87,
+     115,
+     65
+    ],
+    "hsv": [
+     93.6,
+     0.435,
+     0.451
+    ],
+    "meanL": 45.7
+   },
+   "mid": {
+    "n": 3815,
+    "lab": [
+     33,
+     -1.2,
+     14.8
+    ],
+    "C": 14.9,
+    "h": 94.6,
+    "rgb": [
+     79,
+     78,
+     65
+    ],
+    "hsv": [
+     55.7,
+     0.177,
+     0.31
+    ],
+    "meanL": 36.6
+   },
+   "bottom": {
+    "n": 622,
+    "lab": [
+     21.4,
+     1,
+     12.6
+    ],
+    "C": 12.7,
+    "h": 85.5,
+    "rgb": [
+     59,
+     50,
+     31
+    ],
+    "hsv": [
+     40.7,
+     0.475,
+     0.231
+    ],
+    "meanL": 30.6
+   },
+   "valueBandsSpatial": {
+    "top": 45.7,
+    "mid": 36.6,
+    "bottom": 30.6
+   },
+   "valueBands": {
+    "top": 69.3,
+    "mid": 32.1,
+    "bottom": 13.2
+   },
+   "crown": {
+    "lab": [
+     61.8,
+     -6.7,
+     1.4
+    ],
+    "C": 6.8,
+    "h": 168.3,
+    "hsv": [
+     109.3,
+     0.185,
+     0.592
+    ],
+    "shoulders": [
+     43.5,
+     -20.1,
+     23.7
+    ],
+    "dL": 18.3,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     93.6,
+     0.435,
+     0.451
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.008,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 1,
+   "id": 5,
+   "def": "vashil",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 8037,
+   "seen": true,
+   "heightPx": 155,
+   "top": {
+    "n": 1149,
+    "lab": [
+     68.1,
+     16.6,
+     -13.8
+    ],
+    "C": 21.6,
+    "h": 320.1,
+    "rgb": [
+     185,
+     156,
+     194
+    ],
+    "hsv": [
+     285.8,
+     0.196,
+     0.761
+    ],
+    "meanL": 66.4
+   },
+   "mid": {
+    "n": 4777,
+    "lab": [
+     38.5,
+     7.5,
+     -8.4
+    ],
+    "C": 11.3,
+    "h": 312,
+    "rgb": [
+     101,
+     84,
+     124
+    ],
+    "hsv": [
+     265.5,
+     0.323,
+     0.486
+    ],
+    "meanL": 43.6
+   },
+   "bottom": {
+    "n": 793,
+    "lab": [
+     21.1,
+     17.5,
+     -19.8
+    ],
+    "C": 26.4,
+    "h": 311.4,
+    "rgb": [
+     57,
+     44,
+     90
+    ],
+    "hsv": [
+     257,
+     0.511,
+     0.353
+    ],
+    "meanL": 22.9
+   },
+   "valueBandsSpatial": {
+    "top": 66.4,
+    "mid": 43.6,
+    "bottom": 22.9
+   },
+   "valueBands": {
+    "top": 70.9,
+    "mid": 43.1,
+    "bottom": 22.9
+   },
+   "crown": {
+    "lab": [
+     68.6,
+     13.9,
+     -11.9
+    ],
+    "C": 18.3,
+    "h": 319.4,
+    "hsv": [
+     288,
+     0.181,
+     0.757
+    ],
+    "shoulders": [
+     67.5,
+     18.2,
+     -16
+    ],
+    "dL": 1.1,
+    "dHue": 0.8,
+    "break": false,
+    "hsvTop": [
+     285.8,
+     0.196,
+     0.761
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.005,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 1,
+   "id": 6,
+   "def": "ardit",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 14366,
+   "seen": true,
+   "heightPx": 198,
+   "top": {
+    "n": 954,
+    "lab": [
+     38.7,
+     -9.5,
+     -11.3
+    ],
+    "C": 14.8,
+    "h": 229.8,
+    "rgb": [
+     30,
+     98,
+     102
+    ],
+    "hsv": [
+     183.3,
+     0.706,
+     0.4
+    ],
+    "meanL": 43
+   },
+   "mid": {
+    "n": 10022,
+    "lab": [
+     32.5,
+     -4.4,
+     -4.8
+    ],
+    "C": 6.5,
+    "h": 227.4,
+    "rgb": [
+     59,
+     79,
+     96
+    ],
+    "hsv": [
+     207.6,
+     0.385,
+     0.376
+    ],
+    "meanL": 38.4
+   },
+   "bottom": {
+    "n": 1811,
+    "lab": [
+     18.1,
+     -0.7,
+     -4.8
+    ],
+    "C": 4.9,
+    "h": 261.3,
+    "rgb": [
+     41,
+     45,
+     47
+    ],
+    "hsv": [
+     200,
+     0.128,
+     0.184
+    ],
+    "meanL": 30.9
+   },
+   "valueBandsSpatial": {
+    "top": 43,
+    "mid": 38.4,
+    "bottom": 30.9
+   },
+   "valueBands": {
+    "top": 66.9,
+    "mid": 34,
+    "bottom": 15.9
+   },
+   "crown": {
+    "lab": [
+     78.5,
+     -6.5,
+     -7
+    ],
+    "C": 9.6,
+    "h": 226.8,
+    "hsv": [
+     193.7,
+     0.169,
+     0.812
+    ],
+    "shoulders": [
+     38.6,
+     -10.1,
+     -13.1
+    ],
+    "dL": 39.9,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     183.3,
+     0.706,
+     0.4
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.013,
+    "harm": 0.089,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 1,
+   "id": 7,
+   "def": "burdam",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 9921,
+   "seen": true,
+   "heightPx": 152,
+   "top": {
+    "n": 1134,
+    "lab": [
+     38.1,
+     13.3,
+     22.8
+    ],
+    "C": 26.4,
+    "h": 59.7,
+    "rgb": [
+     128,
+     76,
+     55
+    ],
+    "hsv": [
+     17.3,
+     0.57,
+     0.502
+    ],
+    "meanL": 38.1
+   },
+   "mid": {
+    "n": 5061,
+    "lab": [
+     37.3,
+     17.2,
+     20.6
+    ],
+    "C": 26.9,
+    "h": 50.2,
+    "rgb": [
+     127,
+     78,
+     66
+    ],
+    "hsv": [
+     11.8,
+     0.48,
+     0.498
+    ],
+    "meanL": 41
+   },
+   "bottom": {
+    "n": 2187,
+    "lab": [
+     22.2,
+     13.7,
+     13.2
+    ],
+    "C": 19,
+    "h": 43.8,
+    "rgb": [
+     70,
+     47,
+     34
+    ],
+    "hsv": [
+     21.7,
+     0.514,
+     0.275
+    ],
+    "meanL": 24.7
+   },
+   "valueBandsSpatial": {
+    "top": 38.1,
+    "mid": 41,
+    "bottom": 24.7
+   },
+   "valueBands": {
+    "top": 61,
+    "mid": 34.4,
+    "bottom": 15.5
+   },
+   "crown": {
+    "lab": [
+     16.3,
+     8.1,
+     12.3
+    ],
+    "C": 14.7,
+    "h": 56.7,
+    "hsv": [
+     22.5,
+     0.571,
+     0.22
+    ],
+    "shoulders": [
+     53.7,
+     19.9,
+     27.2
+    ],
+    "dL": 37.4,
+    "dHue": 3,
+    "break": true,
+    "hsvTop": [
+     17.3,
+     0.57,
+     0.502
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.06,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 1,
+   "id": 8,
+   "def": "dunsom",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 9594,
+   "seen": true,
+   "heightPx": 133,
+   "top": {
+    "n": 1951,
+    "lab": [
+     36.2,
+     19.6,
+     -35.9
+    ],
+    "C": 40.9,
+    "h": 298.6,
+    "rgb": [
+     84,
+     82,
+     141
+    ],
+    "hsv": [
+     242,
+     0.418,
+     0.553
+    ],
+    "meanL": 37.6
+   },
+   "mid": {
+    "n": 5485,
+    "lab": [
+     34.5,
+     3.9,
+     2.7
+    ],
+    "C": 4.7,
+    "h": 35.2,
+    "rgb": [
+     81,
+     81,
+     75
+    ],
+    "hsv": [
+     60,
+     0.074,
+     0.318
+    ],
+    "meanL": 42.6
+   },
+   "bottom": {
+    "n": 1459,
+    "lab": [
+     63.4,
+     4.8,
+     -8.3
+    ],
+    "C": 9.6,
+    "h": 300,
+    "rgb": [
+     152,
+     152,
+     175
+    ],
+    "hsv": [
+     240,
+     0.131,
+     0.686
+    ],
+    "meanL": 47.7
+   },
+   "valueBandsSpatial": {
+    "top": 37.6,
+    "mid": 42.6,
+    "bottom": 47.7
+   },
+   "valueBands": {
+    "top": 68.2,
+    "mid": 40.1,
+    "bottom": 21.6
+   },
+   "crown": {
+    "lab": [
+     45.1,
+     19.7,
+     -34.6
+    ],
+    "C": 39.8,
+    "h": 299.6,
+    "hsv": [
+     248.3,
+     0.399,
+     0.639
+    ],
+    "shoulders": [
+     33.1,
+     19.6,
+     -36.8
+    ],
+    "dL": 12,
+    "dHue": 1.6,
+    "break": true,
+    "hsvTop": [
+     242,
+     0.418,
+     0.553
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 1,
+   "id": 9,
+   "def": "ervet",
+   "team": 1,
+   "meshes": 21,
+   "silPx": 1979,
+   "seen": true,
+   "heightPx": 57,
+   "top": {
+    "n": 533,
+    "lab": [
+     22.6,
+     -1.8,
+     -2.5
+    ],
+    "C": 3.1,
+    "h": 234.4,
+    "rgb": [
+     41,
+     56,
+     52
+    ],
+    "hsv": [
+     164,
+     0.268,
+     0.22
+    ],
+    "meanL": 22.9
+   },
+   "mid": {
+    "n": 869,
+    "lab": [
+     28.1,
+     -1.9,
+     4.9
+    ],
+    "C": 5.2,
+    "h": 111.2,
+    "rgb": [
+     63,
+     67,
+     59
+    ],
+    "hsv": [
+     90,
+     0.119,
+     0.263
+    ],
+    "meanL": 25.7
+   },
+   "bottom": {
+    "n": 83,
+    "lab": [
+     19.5,
+     -0.9,
+     13.3
+    ],
+    "C": 13.4,
+    "h": 93.7,
+    "rgb": [
+     53,
+     47,
+     26
+    ],
+    "hsv": [
+     46.7,
+     0.509,
+     0.208
+    ],
+    "meanL": 19
+   },
+   "valueBandsSpatial": {
+    "top": 22.9,
+    "mid": 25.7,
+    "bottom": 19
+   },
+   "valueBands": {
+    "top": 39.9,
+    "mid": 24.4,
+    "bottom": 8
+   },
+   "crown": {
+    "lab": [
+     7.4,
+     0.7,
+     -1.9
+    ],
+    "C": 2.1,
+    "h": 288.9,
+    "hsv": [
+     280,
+     0.125,
+     0.094
+    ],
+    "shoulders": [
+     28.2,
+     -5.4,
+     -6.1
+    ],
+    "dL": 20.8,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     164,
+     0.268,
+     0.22
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.011,
+    "harm": 0.054,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 7,
+   "seating": 1,
+   "half": 1,
+   "id": 10,
+   "def": "hesmi",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 16017,
+   "seen": true,
+   "heightPx": 174,
+   "top": {
+    "n": 1709,
+    "lab": [
+     68.8,
+     -11.6,
+     5.7
+    ],
+    "C": 12.9,
+    "h": 153.9,
+    "rgb": [
+     148,
+     165,
+     139
+    ],
+    "hsv": [
+     99.2,
+     0.158,
+     0.647
+    ],
+    "meanL": 60.2
+   },
+   "mid": {
+    "n": 9507,
+    "lab": [
+     33.4,
+     -1.4,
+     6.1
+    ],
+    "C": 6.3,
+    "h": 102.6,
+    "rgb": [
+     80,
+     80,
+     69
+    ],
+    "hsv": [
+     60,
+     0.138,
+     0.314
+    ],
+    "meanL": 37.8
+   },
+   "bottom": {
+    "n": 2776,
+    "lab": [
+     20,
+     6.5,
+     5.6
+    ],
+    "C": 8.6,
+    "h": 40.8,
+    "rgb": [
+     59,
+     43,
+     49
+    ],
+    "hsv": [
+     337.5,
+     0.271,
+     0.231
+    ],
+    "meanL": 20.1
+   },
+   "valueBandsSpatial": {
+    "top": 60.2,
+    "mid": 37.8,
+    "bottom": 20.1
+   },
+   "valueBands": {
+    "top": 67.9,
+    "mid": 32.9,
+    "bottom": 14.4
+   },
+   "crown": {
+    "lab": [
+     72.7,
+     -10.3,
+     5.4
+    ],
+    "C": 11.6,
+    "h": 152.3,
+    "hsv": [
+     110,
+     0.102,
+     0.694
+    ],
+    "shoulders": [
+     67.5,
+     -11.8,
+     5.6
+    ],
+    "dL": 5.2,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     99.2,
+     0.158,
+     0.647
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.164,
+    "heal": 0.007
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 1,
+   "def": "ardit",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 7213,
+   "seen": true,
+   "heightPx": 154,
+   "top": {
+    "n": 1575,
+    "lab": [
+     35.9,
+     -6.1,
+     -8.9
+    ],
+    "C": 10.7,
+    "h": 235.7,
+    "rgb": [
+     50,
+     89,
+     100
+    ],
+    "hsv": [
+     193.2,
+     0.5,
+     0.392
+    ],
+    "meanL": 40
+   },
+   "mid": {
+    "n": 3515,
+    "lab": [
+     49.1,
+     -3.8,
+     -4.9
+    ],
+    "C": 6.3,
+    "h": 232.1,
+    "rgb": [
+     99,
+     114,
+     135
+    ],
+    "hsv": [
+     215,
+     0.267,
+     0.529
+    ],
+    "meanL": 49.9
+   },
+   "bottom": {
+    "n": 1225,
+    "lab": [
+     24.8,
+     -1.1,
+     -4
+    ],
+    "C": 4.1,
+    "h": 254.1,
+    "rgb": [
+     54,
+     60,
+     65
+    ],
+    "hsv": [
+     207.3,
+     0.169,
+     0.255
+    ],
+    "meanL": 29
+   },
+   "valueBandsSpatial": {
+    "top": 40,
+    "mid": 49.9,
+    "bottom": 29
+   },
+   "valueBands": {
+    "top": 69,
+    "mid": 42.5,
+    "bottom": 19.8
+   },
+   "crown": {
+    "lab": [
+     44.3,
+     -9.1,
+     -7.1
+    ],
+    "C": 11.6,
+    "h": 218,
+    "hsv": [
+     192.7,
+     0.426,
+     0.478
+    ],
+    "shoulders": [
+     22.5,
+     -5.2,
+     -9.2
+    ],
+    "dL": 21.8,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     193.2,
+     0.5,
+     0.392
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.026,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 2,
+   "def": "burdam",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 12864,
+   "seen": true,
+   "heightPx": 176,
+   "top": {
+    "n": 1551,
+    "lab": [
+     44.9,
+     15.3,
+     18.5
+    ],
+    "C": 24.1,
+    "h": 50.4,
+    "rgb": [
+     138,
+     95,
+     83
+    ],
+    "hsv": [
+     13.1,
+     0.399,
+     0.541
+    ],
+    "meanL": 48.7
+   },
+   "mid": {
+    "n": 8919,
+    "lab": [
+     31.8,
+     10,
+     14.2
+    ],
+    "C": 17.4,
+    "h": 54.8,
+    "rgb": [
+     78,
+     68,
+     59
+    ],
+    "hsv": [
+     28.4,
+     0.244,
+     0.306
+    ],
+    "meanL": 31.4
+   },
+   "bottom": {
+    "n": 1162,
+    "lab": [
+     23.3,
+     7.5,
+     8.6
+    ],
+    "C": 11.5,
+    "h": 48.8,
+    "rgb": [
+     63,
+     55,
+     47
+    ],
+    "hsv": [
+     30,
+     0.254,
+     0.247
+    ],
+    "meanL": 23
+   },
+   "valueBandsSpatial": {
+    "top": 48.7,
+    "mid": 31.4,
+    "bottom": 23
+   },
+   "valueBands": {
+    "top": 52.7,
+    "mid": 31,
+    "bottom": 16.7
+   },
+   "crown": {
+    "lab": [
+     32.9,
+     -2.9,
+     0.2
+    ],
+    "C": 2.9,
+    "h": 175.8,
+    "hsv": [
+     165,
+     0.101,
+     0.31
+    ],
+    "shoulders": [
+     55.4,
+     18.8,
+     24.4
+    ],
+    "dL": 22.5,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     13.1,
+     0.399,
+     0.541
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.03,
+    "harm": 0.07,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 3,
+   "def": "dunsom",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 10894,
+   "seen": true,
+   "heightPx": 178,
+   "top": {
+    "n": 1558,
+    "lab": [
+     50.4,
+     16.3,
+     -32.3
+    ],
+    "C": 36.2,
+    "h": 296.7,
+    "rgb": [
+     119,
+     111,
+     150
+    ],
+    "hsv": [
+     252.3,
+     0.26,
+     0.588
+    ],
+    "meanL": 53.3
+   },
+   "mid": {
+    "n": 6899,
+    "lab": [
+     32.3,
+     3.6,
+     0.5
+    ],
+    "C": 3.7,
+    "h": 7.6,
+    "rgb": [
+     73,
+     77,
+     77
+    ],
+    "hsv": [
+     180,
+     0.052,
+     0.302
+    ],
+    "meanL": 39.9
+   },
+   "bottom": {
+    "n": 1094,
+    "lab": [
+     52.8,
+     4.8,
+     -0.2
+    ],
+    "C": 4.8,
+    "h": 357,
+    "rgb": [
+     125,
+     122,
+     126
+    ],
+    "hsv": [
+     285,
+     0.032,
+     0.494
+    ],
+    "meanL": 40.1
+   },
+   "valueBandsSpatial": {
+    "top": 53.3,
+    "mid": 39.9,
+    "bottom": 40.1
+   },
+   "valueBands": {
+    "top": 68.4,
+    "mid": 38.6,
+    "bottom": 22.5
+   },
+   "crown": {
+    "lab": [
+     76.1,
+     2.2,
+     22.2
+    ],
+    "C": 22.3,
+    "h": 84.3,
+    "hsv": [
+     37.7,
+     0.298,
+     0.816
+    ],
+    "shoulders": [
+     46.5,
+     18.3,
+     -33
+    ],
+    "dL": 29.6,
+    "dHue": 145.3,
+    "break": true,
+    "hsvTop": [
+     252.3,
+     0.26,
+     0.588
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.077,
+    "harm": 0.001,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 4,
+   "def": "ervet",
+   "team": 0,
+   "meshes": 21,
+   "silPx": 9964,
+   "seen": true,
+   "heightPx": 145,
+   "top": {
+    "n": 1470,
+    "lab": [
+     60.3,
+     36.3,
+     -1.7
+    ],
+    "C": 36.4,
+    "h": 357.3,
+    "rgb": [
+     194,
+     117,
+     148
+    ],
+    "hsv": [
+     335.8,
+     0.397,
+     0.761
+    ],
+    "meanL": 57
+   },
+   "mid": {
+    "n": 6580,
+    "lab": [
+     34.1,
+     -2.7,
+     0
+    ],
+    "C": 2.7,
+    "h": 180.8,
+    "rgb": [
+     77,
+     81,
+     77
+    ],
+    "hsv": [
+     120,
+     0.049,
+     0.318
+    ],
+    "meanL": 42.8
+   },
+   "bottom": {
+    "n": 476,
+    "lab": [
+     24,
+     -2.8,
+     1
+    ],
+    "C": 2.9,
+    "h": 160.4,
+    "rgb": [
+     54,
+     58,
+     56
+    ],
+    "hsv": [
+     150,
+     0.069,
+     0.227
+    ],
+    "meanL": 23.3
+   },
+   "valueBandsSpatial": {
+    "top": 57,
+    "mid": 42.8,
+    "bottom": 23.3
+   },
+   "valueBands": {
+    "top": 69.2,
+    "mid": 43.5,
+    "bottom": 20.5
+   },
+   "crown": {
+    "lab": [
+     61.1,
+     34.2,
+     -3.1
+    ],
+    "C": 34.3,
+    "h": 354.8,
+    "hsv": [
+     330.4,
+     0.376,
+     0.741
+    ],
+    "shoulders": [
+     60.2,
+     37.5,
+     -1.6
+    ],
+    "dL": 0.9,
+    "dHue": 2.7,
+    "break": false,
+    "hsvTop": [
+     335.8,
+     0.397,
+     0.761
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.041,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 5,
+   "def": "hesmi",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 11702,
+   "seen": true,
+   "heightPx": 180,
+   "top": {
+    "n": 1958,
+    "lab": [
+     64.3,
+     -11.6,
+     4.1
+    ],
+    "C": 12.3,
+    "h": 160.4,
+    "rgb": [
+     125,
+     163,
+     160
+    ],
+    "hsv": [
+     175.3,
+     0.233,
+     0.639
+    ],
+    "meanL": 58.9
+   },
+   "mid": {
+    "n": 6880,
+    "lab": [
+     31.5,
+     -2.7,
+     1.7
+    ],
+    "C": 3.1,
+    "h": 148.4,
+    "rgb": [
+     68,
+     77,
+     71
+    ],
+    "hsv": [
+     140,
+     0.117,
+     0.302
+    ],
+    "meanL": 32.7
+   },
+   "bottom": {
+    "n": 1269,
+    "lab": [
+     17,
+     12.4,
+     -9.9
+    ],
+    "C": 15.9,
+    "h": 321.4,
+    "rgb": [
+     53,
+     31,
+     49
+    ],
+    "hsv": [
+     310.9,
+     0.415,
+     0.208
+    ],
+    "meanL": 17.8
+   },
+   "valueBandsSpatial": {
+    "top": 58.9,
+    "mid": 32.7,
+    "bottom": 17.8
+   },
+   "valueBands": {
+    "top": 66.1,
+    "mid": 32.3,
+    "bottom": 13
+   },
+   "crown": {
+    "lab": [
+     69.4,
+     -9.6,
+     3.6
+    ],
+    "C": 10.3,
+    "h": 159.3,
+    "hsv": [
+     175.4,
+     0.148,
+     0.69
+    ],
+    "shoulders": [
+     63.7,
+     -12,
+     4.2
+    ],
+    "dL": 5.7,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     175.3,
+     0.233,
+     0.639
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.165,
+    "harm": 0,
+    "heal": 0.007
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 6,
+   "def": "ilsheta",
+   "team": 1,
+   "meshes": 6,
+   "silPx": 9702,
+   "seen": true,
+   "heightPx": 138,
+   "top": {
+    "n": 991,
+    "lab": [
+     73.4,
+     -6.1,
+     11.9
+    ],
+    "C": 13.4,
+    "h": 117.3,
+    "rgb": [
+     176,
+     180,
+     133
+    ],
+    "hsv": [
+     65.1,
+     0.261,
+     0.706
+    ],
+    "meanL": 66.4
+   },
+   "mid": {
+    "n": 5532,
+    "lab": [
+     58.9,
+     -3.4,
+     3.5
+    ],
+    "C": 4.9,
+    "h": 133.9,
+    "rgb": [
+     130,
+     144,
+     129
+    ],
+    "hsv": [
+     116,
+     0.104,
+     0.565
+    ],
+    "meanL": 54.9
+   },
+   "bottom": {
+    "n": 2399,
+    "lab": [
+     37.7,
+     -2.1,
+     -18.7
+    ],
+    "C": 18.8,
+    "h": 263.6,
+    "rgb": [
+     62,
+     91,
+     121
+    ],
+    "hsv": [
+     210.5,
+     0.488,
+     0.475
+    ],
+    "meanL": 37.3
+   },
+   "valueBandsSpatial": {
+    "top": 66.4,
+    "mid": 54.9,
+    "bottom": 37.3
+   },
+   "valueBands": {
+    "top": 78.1,
+    "mid": 51.3,
+    "bottom": 24.9
+   },
+   "crown": {
+    "lab": [
+     71.3,
+     -1,
+     6.1
+    ],
+    "C": 6.2,
+    "h": 99.6,
+    "hsv": [
+     39,
+     0.112,
+     0.698
+    ],
+    "shoulders": [
+     74.2,
+     -9.5,
+     14.5
+    ],
+    "dL": 2.9,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     65.1,
+     0.261,
+     0.706
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.001,
+    "harm": 0.011,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 7,
+   "def": "kemdo",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 6698,
+   "seen": true,
+   "heightPx": 121,
+   "top": {
+    "n": 1025,
+    "lab": [
+     61,
+     22.6,
+     24.9
+    ],
+    "C": 33.6,
+    "h": 47.8,
+    "rgb": [
+     205,
+     131,
+     102
+    ],
+    "hsv": [
+     16.9,
+     0.502,
+     0.804
+    ],
+    "meanL": 60.8
+   },
+   "mid": {
+    "n": 3890,
+    "lab": [
+     34.6,
+     12,
+     16.6
+    ],
+    "C": 20.4,
+    "h": 54.2,
+    "rgb": [
+     110,
+     72,
+     59
+    ],
+    "hsv": [
+     15.3,
+     0.464,
+     0.431
+    ],
+    "meanL": 41.6
+   },
+   "bottom": {
+    "n": 596,
+    "lab": [
+     24.1,
+     5.1,
+     13.2
+    ],
+    "C": 14.1,
+    "h": 69,
+    "rgb": [
+     66,
+     57,
+     48
+    ],
+    "hsv": [
+     30,
+     0.273,
+     0.259
+    ],
+    "meanL": 30.5
+   },
+   "valueBandsSpatial": {
+    "top": 60.8,
+    "mid": 41.6,
+    "bottom": 30.5
+   },
+   "valueBands": {
+    "top": 67,
+    "mid": 43.3,
+    "bottom": 21.7
+   },
+   "crown": {
+    "lab": [
+     67.4,
+     23.1,
+     24.3
+    ],
+    "C": 33.6,
+    "h": 46.5,
+    "hsv": [
+     15.2,
+     0.436,
+     0.855
+    ],
+    "shoulders": [
+     57.9,
+     22.5,
+     26.3
+    ],
+    "dL": 9.5,
+    "dHue": 3,
+    "break": true,
+    "hsvTop": [
+     16.9,
+     0.502,
+     0.804
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.094,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 8,
+   "def": "lisvel",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 3591,
+   "seen": true,
+   "heightPx": 95,
+   "top": {
+    "n": 533,
+    "lab": [
+     71.9,
+     -19.5,
+     -6.3
+    ],
+    "C": 20.5,
+    "h": 197.8,
+    "rgb": [
+     126,
+     185,
+     185
+    ],
+    "hsv": [
+     180,
+     0.319,
+     0.725
+    ],
+    "meanL": 69.9
+   },
+   "mid": {
+    "n": 1383,
+    "lab": [
+     59.6,
+     -3.3,
+     -2
+    ],
+    "C": 3.8,
+    "h": 211,
+    "rgb": [
+     124,
+     147,
+     148
+    ],
+    "hsv": [
+     182.5,
+     0.162,
+     0.58
+    ],
+    "meanL": 56.8
+   },
+   "bottom": {
+    "n": 825,
+    "lab": [
+     73.3,
+     0.4,
+     24.7
+    ],
+    "C": 24.7,
+    "h": 89.1,
+    "rgb": [
+     200,
+     177,
+     135
+    ],
+    "hsv": [
+     38.8,
+     0.325,
+     0.784
+    ],
+    "meanL": 57
+   },
+   "valueBandsSpatial": {
+    "top": 69.9,
+    "mid": 56.8,
+    "bottom": 57
+   },
+   "valueBands": {
+    "top": 76.5,
+    "mid": 65.9,
+    "bottom": 29.6
+   },
+   "crown": {
+    "lab": [
+     73.8,
+     -19.3,
+     -6.4
+    ],
+    "C": 20.3,
+    "h": 198.4,
+    "hsv": [
+     181,
+     0.326,
+     0.757
+    ],
+    "shoulders": [
+     69.3,
+     -19.6,
+     -6.3
+    ],
+    "dL": 4.5,
+    "dHue": 0.5,
+    "break": false,
+    "hsvTop": [
+     180,
+     0.319,
+     0.725
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 9,
+   "def": "marund",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 12420,
+   "seen": true,
+   "heightPx": 154,
+   "top": {
+    "n": 2819,
+    "lab": [
+     78.2,
+     -27.1,
+     19.8
+    ],
+    "C": 33.6,
+    "h": 143.9,
+    "rgb": [
+     153,
+     206,
+     154
+    ],
+    "hsv": [
+     121.1,
+     0.257,
+     0.808
+    ],
+    "meanL": 75.2
+   },
+   "mid": {
+    "n": 5746,
+    "lab": [
+     41,
+     -6.3,
+     14.3
+    ],
+    "C": 15.7,
+    "h": 113.8,
+    "rgb": [
+     91,
+     100,
+     73
+    ],
+    "hsv": [
+     80,
+     0.27,
+     0.392
+    ],
+    "meanL": 43.7
+   },
+   "bottom": {
+    "n": 2092,
+    "lab": [
+     18.1,
+     4.7,
+     9.3
+    ],
+    "C": 10.4,
+    "h": 63.1,
+    "rgb": [
+     52,
+     40,
+     29
+    ],
+    "hsv": [
+     28.7,
+     0.442,
+     0.204
+    ],
+    "meanL": 22.9
+   },
+   "valueBandsSpatial": {
+    "top": 75.2,
+    "mid": 43.7,
+    "bottom": 22.9
+   },
+   "valueBands": {
+    "top": 78.3,
+    "mid": 50.4,
+    "bottom": 13.1
+   },
+   "crown": {
+    "lab": [
+     78.6,
+     -27.5,
+     20.2
+    ],
+    "C": 34.1,
+    "h": 143.6,
+    "hsv": [
+     122.2,
+     0.26,
+     0.816
+    ],
+    "shoulders": [
+     77.4,
+     -26.8,
+     19.7
+    ],
+    "dL": 1.2,
+    "dHue": 0.1,
+    "break": false,
+    "hsvTop": [
+     121.1,
+     0.257,
+     0.808
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.051,
+    "heal": 0.002
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 0,
+   "id": 10,
+   "def": "nurrow",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 9826,
+   "seen": true,
+   "heightPx": 125,
+   "top": {
+    "n": 1580,
+    "lab": [
+     75.8,
+     5.3,
+     34
+    ],
+    "C": 34.4,
+    "h": 81.2,
+    "rgb": [
+     218,
+     181,
+     124
+    ],
+    "hsv": [
+     36.4,
+     0.431,
+     0.855
+    ],
+    "meanL": 72.8
+   },
+   "mid": {
+    "n": 6313,
+    "lab": [
+     34.3,
+     0.7,
+     7.3
+    ],
+    "C": 7.3,
+    "h": 84.8,
+    "rgb": [
+     84,
+     80,
+     70
+    ],
+    "hsv": [
+     42.9,
+     0.167,
+     0.329
+    ],
+    "meanL": 41.6
+   },
+   "bottom": {
+    "n": 1061,
+    "lab": [
+     22.9,
+     12.8,
+     8.6
+    ],
+    "C": 15.4,
+    "h": 33.9,
+    "rgb": [
+     73,
+     48,
+     42
+    ],
+    "hsv": [
+     11.6,
+     0.425,
+     0.286
+    ],
+    "meanL": 23.5
+   },
+   "valueBandsSpatial": {
+    "top": 72.8,
+    "mid": 41.6,
+    "bottom": 23.5
+   },
+   "valueBands": {
+    "top": 76.1,
+    "mid": 42.4,
+    "bottom": 19
+   },
+   "crown": {
+    "lab": [
+     76.3,
+     5.1,
+     34.8
+    ],
+    "C": 35.2,
+    "h": 81.7,
+    "hsv": [
+     37.3,
+     0.434,
+     0.859
+    ],
+    "shoulders": [
+     75.6,
+     5.6,
+     33.7
+    ],
+    "dL": 0.7,
+    "dHue": 1.1,
+    "break": false,
+    "hsvTop": [
+     36.4,
+     0.431,
+     0.855
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.804,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 1,
+   "id": 5,
+   "def": "odrum",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 4194,
+   "seen": true,
+   "heightPx": 127,
+   "top": {
+    "n": 646,
+    "lab": [
+     40.1,
+     -7.1,
+     24.3
+    ],
+    "C": 25.3,
+    "h": 106.3,
+    "rgb": [
+     102,
+     93,
+     54
+    ],
+    "hsv": [
+     48.8,
+     0.471,
+     0.4
+    ],
+    "meanL": 41.9
+   },
+   "mid": {
+    "n": 1755,
+    "lab": [
+     31.4,
+     -0.1,
+     9.2
+    ],
+    "C": 9.2,
+    "h": 90.4,
+    "rgb": [
+     77,
+     73,
+     65
+    ],
+    "hsv": [
+     40,
+     0.156,
+     0.302
+    ],
+    "meanL": 37.2
+   },
+   "bottom": {
+    "n": 801,
+    "lab": [
+     20.2,
+     5.2,
+     7.5
+    ],
+    "C": 9.2,
+    "h": 55.4,
+    "rgb": [
+     53,
+     41,
+     35
+    ],
+    "hsv": [
+     20,
+     0.34,
+     0.208
+    ],
+    "meanL": 20
+   },
+   "valueBandsSpatial": {
+    "top": 41.9,
+    "mid": 37.2,
+    "bottom": 20
+   },
+   "valueBands": {
+    "top": 63.8,
+    "mid": 29.8,
+    "bottom": 11.9
+   },
+   "crown": {
+    "lab": [
+     25.8,
+     -8.4,
+     18.6
+    ],
+    "C": 20.4,
+    "h": 114.4,
+    "hsv": [
+     71.6,
+     0.484,
+     0.251
+    ],
+    "shoulders": [
+     59.9,
+     0.5,
+     29.3
+    ],
+    "dL": 34.1,
+    "dHue": 25.5,
+    "break": true,
+    "hsvTop": [
+     48.8,
+     0.471,
+     0.4
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.413,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 1,
+   "id": 6,
+   "def": "rishal",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 6351,
+   "seen": true,
+   "heightPx": 142,
+   "top": {
+    "n": 995,
+    "lab": [
+     71,
+     2.4,
+     7.1
+    ],
+    "C": 7.5,
+    "h": 71.6,
+    "rgb": [
+     189,
+     161,
+     149
+    ],
+    "hsv": [
+     18,
+     0.212,
+     0.741
+    ],
+    "meanL": 62.4
+   },
+   "mid": {
+    "n": 3962,
+    "lab": [
+     37.9,
+     -3.9,
+     1.8
+    ],
+    "C": 4.3,
+    "h": 155.2,
+    "rgb": [
+     113,
+     86,
+     79
+    ],
+    "hsv": [
+     12.4,
+     0.301,
+     0.443
+    ],
+    "meanL": 45
+   },
+   "bottom": {
+    "n": 633,
+    "lab": [
+     24.1,
+     -3,
+     -1.6
+    ],
+    "C": 3.4,
+    "h": 208.6,
+    "rgb": [
+     57,
+     57,
+     60
+    ],
+    "hsv": [
+     240,
+     0.05,
+     0.235
+    ],
+    "meanL": 23.4
+   },
+   "valueBandsSpatial": {
+    "top": 62.4,
+    "mid": 45,
+    "bottom": 23.4
+   },
+   "valueBands": {
+    "top": 73.3,
+    "mid": 43.6,
+    "bottom": 22.3
+   },
+   "crown": {
+    "lab": [
+     79.7,
+     2,
+     11.2
+    ],
+    "C": 11.4,
+    "h": 79.7,
+    "hsv": [
+     32.4,
+     0.175,
+     0.831
+    ],
+    "shoulders": [
+     61.1,
+     9.3,
+     5.5
+    ],
+    "dL": 18.6,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     18,
+     0.212,
+     0.741
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.07,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 1,
+   "id": 7,
+   "def": "sukri",
+   "team": 1,
+   "meshes": 6,
+   "silPx": 7291,
+   "seen": true,
+   "heightPx": 110,
+   "top": {
+    "n": 1265,
+    "lab": [
+     80.8,
+     -5.7,
+     39
+    ],
+    "C": 39.4,
+    "h": 98.4,
+    "rgb": [
+     215,
+     202,
+     127
+    ],
+    "hsv": [
+     51.1,
+     0.409,
+     0.843
+    ],
+    "meanL": 75.4
+   },
+   "mid": {
+    "n": 4046,
+    "lab": [
+     57.9,
+     -1.9,
+     25.7
+    ],
+    "C": 25.8,
+    "h": 94.3,
+    "rgb": [
+     154,
+     136,
+     87
+    ],
+    "hsv": [
+     43.9,
+     0.435,
+     0.604
+    ],
+    "meanL": 52.1
+   },
+   "bottom": {
+    "n": 647,
+    "lab": [
+     21.6,
+     1.3,
+     6.3
+    ],
+    "C": 6.4,
+    "h": 78.7,
+    "rgb": [
+     55,
+     51,
+     32
+    ],
+    "hsv": [
+     49.6,
+     0.418,
+     0.216
+    ],
+    "meanL": 19.3
+   },
+   "valueBandsSpatial": {
+    "top": 75.4,
+    "mid": 52.1,
+    "bottom": 19.3
+   },
+   "valueBands": {
+    "top": 80.6,
+    "mid": 55.8,
+    "bottom": 22
+   },
+   "crown": {
+    "lab": [
+     80.7,
+     -5.2,
+     39.1
+    ],
+    "C": 39.4,
+    "h": 97.6,
+    "hsv": [
+     49.9,
+     0.412,
+     0.847
+    ],
+    "shoulders": [
+     80.9,
+     -6.3,
+     39
+    ],
+    "dL": 0.2,
+    "dHue": 1.6,
+    "break": false,
+    "hsvTop": [
+     51.1,
+     0.409,
+     0.843
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.225,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 1,
+   "id": 8,
+   "def": "tunlan",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 12021,
+   "seen": true,
+   "heightPx": 137,
+   "top": {
+    "n": 2463,
+    "lab": [
+     75.3,
+     9.2,
+     28.9
+    ],
+    "C": 30.3,
+    "h": 72.3,
+    "rgb": [
+     220,
+     178,
+     132
+    ],
+    "hsv": [
+     31.4,
+     0.4,
+     0.863
+    ],
+    "meanL": 64.7
+   },
+   "mid": {
+    "n": 7199,
+    "lab": [
+     35,
+     7.4,
+     4.4
+    ],
+    "C": 8.6,
+    "h": 30.8,
+    "rgb": [
+     84,
+     82,
+     75
+    ],
+    "hsv": [
+     46.7,
+     0.107,
+     0.329
+    ],
+    "meanL": 46.1
+   },
+   "bottom": {
+    "n": 1315,
+    "lab": [
+     25.5,
+     32.6,
+     -16.6
+    ],
+    "C": 36.6,
+    "h": 333,
+    "rgb": [
+     88,
+     48,
+     98
+    ],
+    "hsv": [
+     288,
+     0.51,
+     0.384
+    ],
+    "meanL": 31.5
+   },
+   "valueBandsSpatial": {
+    "top": 64.7,
+    "mid": 46.1,
+    "bottom": 31.5
+   },
+   "valueBands": {
+    "top": 76,
+    "mid": 46.4,
+    "bottom": 25
+   },
+   "crown": {
+    "lab": [
+     75.4,
+     9.2,
+     29.2
+    ],
+    "C": 30.6,
+    "h": 72.6,
+    "hsv": [
+     30.7,
+     0.398,
+     0.867
+    ],
+    "shoulders": [
+     73.8,
+     9.6,
+     28.6
+    ],
+    "dL": 1.6,
+    "dHue": 1.1,
+    "break": false,
+    "hsvTop": [
+     31.4,
+     0.4,
+     0.863
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.214,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 1,
+   "id": 9,
+   "def": "ulkro",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 4618,
+   "seen": true,
+   "heightPx": 138,
+   "top": {
+    "n": 542,
+    "lab": [
+     48.3,
+     -19.9,
+     23.5
+    ],
+    "C": 30.8,
+    "h": 130.3,
+    "rgb": [
+     97,
+     123,
+     71
+    ],
+    "hsv": [
+     90,
+     0.423,
+     0.482
+    ],
+    "meanL": 49.6
+   },
+   "mid": {
+    "n": 2713,
+    "lab": [
+     31.3,
+     -1,
+     17.9
+    ],
+    "C": 17.9,
+    "h": 93.3,
+    "rgb": [
+     74,
+     75,
+     48
+    ],
+    "hsv": [
+     62.2,
+     0.36,
+     0.294
+    ],
+    "meanL": 40.7
+   },
+   "bottom": {
+    "n": 325,
+    "lab": [
+     21.5,
+     -0.6,
+     10.1
+    ],
+    "C": 10.1,
+    "h": 93.7,
+    "rgb": [
+     54,
+     52,
+     44
+    ],
+    "hsv": [
+     48,
+     0.185,
+     0.212
+    ],
+    "meanL": 22.1
+   },
+   "valueBandsSpatial": {
+    "top": 49.6,
+    "mid": 40.7,
+    "bottom": 22.1
+   },
+   "valueBands": {
+    "top": 74.4,
+    "mid": 36.3,
+    "bottom": 14.9
+   },
+   "crown": {
+    "lab": [
+     67.5,
+     -5.7,
+     -6.5
+    ],
+    "C": 8.6,
+    "h": 228.9,
+    "hsv": [
+     204,
+     0.115,
+     0.682
+    ],
+    "shoulders": [
+     46.2,
+     -20.2,
+     24.5
+    ],
+    "dL": 21.3,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     90,
+     0.423,
+     0.482
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.026,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 0,
+   "half": 1,
+   "id": 10,
+   "def": "vashil",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 6305,
+   "seen": true,
+   "heightPx": 143,
+   "top": {
+    "n": 771,
+    "lab": [
+     68.1,
+     18,
+     -15.2
+    ],
+    "C": 23.6,
+    "h": 319.9,
+    "rgb": [
+     186,
+     156,
+     195
+    ],
+    "hsv": [
+     286.2,
+     0.2,
+     0.765
+    ],
+    "meanL": 68.9
+   },
+   "mid": {
+    "n": 2470,
+    "lab": [
+     55.9,
+     14.9,
+     -12.9
+    ],
+    "C": 19.7,
+    "h": 319.1,
+    "rgb": [
+     154,
+     120,
+     156
+    ],
+    "hsv": [
+     296.7,
+     0.231,
+     0.612
+    ],
+    "meanL": 52
+   },
+   "bottom": {
+    "n": 2015,
+    "lab": [
+     27.6,
+     19,
+     -22.1
+    ],
+    "C": 29.1,
+    "h": 310.8,
+    "rgb": [
+     75,
+     60,
+     103
+    ],
+    "hsv": [
+     260.9,
+     0.417,
+     0.404
+    ],
+    "meanL": 27.8
+   },
+   "valueBandsSpatial": {
+    "top": 68.9,
+    "mid": 52,
+    "bottom": 27.8
+   },
+   "valueBands": {
+    "top": 71.8,
+    "mid": 45.6,
+    "bottom": 17.5
+   },
+   "crown": {
+    "lab": [
+     68.7,
+     16.7,
+     -13.5
+    ],
+    "C": 21.4,
+    "h": 321.1,
+    "hsv": [
+     289.7,
+     0.18,
+     0.761
+    ],
+    "shoulders": [
+     67.6,
+     18.9,
+     -16.7
+    ],
+    "dL": 1.1,
+    "dHue": 2.7,
+    "break": false,
+    "hsvTop": [
+     286.2,
+     0.2,
+     0.765
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 1,
+   "def": "ilsheta",
+   "team": 0,
+   "meshes": 6,
+   "silPx": 7322,
+   "seen": true,
+   "heightPx": 132,
+   "top": {
+    "n": 1094,
+    "lab": [
+     77.5,
+     -10.3,
+     13.5
+    ],
+    "C": 17,
+    "h": 127.4,
+    "rgb": [
+     188,
+     196,
+     142
+    ],
+    "hsv": [
+     68.9,
+     0.276,
+     0.769
+    ],
+    "meanL": 76.2
+   },
+   "mid": {
+    "n": 3324,
+    "lab": [
+     58.3,
+     -3.8,
+     -0.1
+    ],
+    "C": 3.8,
+    "h": 180.9,
+    "rgb": [
+     125,
+     142,
+     130
+    ],
+    "hsv": [
+     137.6,
+     0.12,
+     0.557
+    ],
+    "meanL": 57
+   },
+   "bottom": {
+    "n": 1920,
+    "lab": [
+     45.9,
+     -3.2,
+     -13.9
+    ],
+    "C": 14.3,
+    "h": 257,
+    "rgb": [
+     91,
+     111,
+     130
+    ],
+    "hsv": [
+     209.2,
+     0.3,
+     0.51
+    ],
+    "meanL": 44.5
+   },
+   "valueBandsSpatial": {
+    "top": 76.2,
+    "mid": 57,
+    "bottom": 44.5
+   },
+   "valueBands": {
+    "top": 77.8,
+    "mid": 56.4,
+    "bottom": 35.6
+   },
+   "crown": {
+    "lab": [
+     73.2,
+     -2.6,
+     3.3
+    ],
+    "C": 4.2,
+    "h": 127.8,
+    "hsv": [
+     57.1,
+     0.115,
+     0.714
+    ],
+    "shoulders": [
+     79,
+     -14.2,
+     28.2
+    ],
+    "dL": 5.8,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     68.9,
+     0.276,
+     0.769
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.001,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 2,
+   "def": "kemdo",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 8776,
+   "seen": true,
+   "heightPx": 122,
+   "top": {
+    "n": 1080,
+    "lab": [
+     65,
+     22.9,
+     24.7
+    ],
+    "C": 33.7,
+    "h": 47.1,
+    "rgb": [
+     210,
+     141,
+     115
+    ],
+    "hsv": [
+     16.4,
+     0.452,
+     0.824
+    ],
+    "meanL": 60.5
+   },
+   "mid": {
+    "n": 5346,
+    "lab": [
+     36.3,
+     1,
+     7.7
+    ],
+    "C": 7.8,
+    "h": 82.5,
+    "rgb": [
+     92,
+     85,
+     82
+    ],
+    "hsv": [
+     18,
+     0.109,
+     0.361
+    ],
+    "meanL": 45.4
+   },
+   "bottom": {
+    "n": 1456,
+    "lab": [
+     25,
+     1.7,
+     5.8
+    ],
+    "C": 6,
+    "h": 73.9,
+    "rgb": [
+     61,
+     59,
+     59
+    ],
+    "hsv": [
+     0,
+     0.033,
+     0.239
+    ],
+    "meanL": 25.9
+   },
+   "valueBandsSpatial": {
+    "top": 60.5,
+    "mid": 45.4,
+    "bottom": 25.9
+   },
+   "valueBands": {
+    "top": 71.3,
+    "mid": 41.2,
+    "bottom": 22.4
+   },
+   "crown": {
+    "lab": [
+     67.8,
+     23.6,
+     24.4
+    ],
+    "C": 34,
+    "h": 46,
+    "hsv": [
+     15.8,
+     0.436,
+     0.855
+    ],
+    "shoulders": [
+     63.1,
+     22.2,
+     25.1
+    ],
+    "dL": 4.7,
+    "dHue": 2.6,
+    "break": false,
+    "hsvTop": [
+     16.4,
+     0.452,
+     0.824
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.042,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 3,
+   "def": "lisvel",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 5385,
+   "seen": true,
+   "heightPx": 120,
+   "top": {
+    "n": 712,
+    "lab": [
+     72.8,
+     -18.9,
+     -5.8
+    ],
+    "C": 19.8,
+    "h": 197.1,
+    "rgb": [
+     131,
+     187,
+     181
+    ],
+    "hsv": [
+     173.6,
+     0.299,
+     0.733
+    ],
+    "meanL": 71
+   },
+   "mid": {
+    "n": 3088,
+    "lab": [
+     32.2,
+     -2.5,
+     1.9
+    ],
+    "C": 3.2,
+    "h": 142.4,
+    "rgb": [
+     73,
+     77,
+     72
+    ],
+    "hsv": [
+     108,
+     0.065,
+     0.302
+    ],
+    "meanL": 39.4
+   },
+   "bottom": {
+    "n": 463,
+    "lab": [
+     26.1,
+     -1.7,
+     2
+    ],
+    "C": 2.6,
+    "h": 130.2,
+    "rgb": [
+     59,
+     63,
+     60
+    ],
+    "hsv": [
+     135,
+     0.063,
+     0.247
+    ],
+    "meanL": 24.6
+   },
+   "valueBandsSpatial": {
+    "top": 71,
+    "mid": 39.4,
+    "bottom": 24.6
+   },
+   "valueBands": {
+    "top": 73,
+    "mid": 38.1,
+    "bottom": 23.1
+   },
+   "crown": {
+    "lab": [
+     73.6,
+     -19.2,
+     -6.8
+    ],
+    "C": 20.4,
+    "h": 199.4,
+    "hsv": [
+     181,
+     0.326,
+     0.757
+    ],
+    "shoulders": [
+     70.9,
+     -10.9,
+     -3.6
+    ],
+    "dL": 2.7,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     173.6,
+     0.299,
+     0.733
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.006,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 4,
+   "def": "marund",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 14515,
+   "seen": true,
+   "heightPx": 181,
+   "top": {
+    "n": 3967,
+    "lab": [
+     78.2,
+     -26.8,
+     19.6
+    ],
+    "C": 33.2,
+    "h": 143.7,
+    "rgb": [
+     153,
+     206,
+     156
+    ],
+    "hsv": [
+     123.4,
+     0.257,
+     0.808
+    ],
+    "meanL": 72.2
+   },
+   "mid": {
+    "n": 8019,
+    "lab": [
+     31.7,
+     -2.5,
+     12.5
+    ],
+    "C": 12.7,
+    "h": 101.1,
+    "rgb": [
+     72,
+     77,
+     65
+    ],
+    "hsv": [
+     85,
+     0.156,
+     0.302
+    ],
+    "meanL": 39.9
+   },
+   "bottom": {
+    "n": 1281,
+    "lab": [
+     21.7,
+     2.8,
+     11
+    ],
+    "C": 11.3,
+    "h": 75.9,
+    "rgb": [
+     56,
+     51,
+     46
+    ],
+    "hsv": [
+     30,
+     0.179,
+     0.22
+    ],
+    "meanL": 35.5
+   },
+   "valueBandsSpatial": {
+    "top": 72.2,
+    "mid": 39.9,
+    "bottom": 35.5
+   },
+   "valueBands": {
+    "top": 78.9,
+    "mid": 52.1,
+    "bottom": 13.5
+   },
+   "crown": {
+    "lab": [
+     78.5,
+     -27.5,
+     20.3
+    ],
+    "C": 34.2,
+    "h": 143.5,
+    "hsv": [
+     122.2,
+     0.261,
+     0.812
+    ],
+    "shoulders": [
+     77.9,
+     -26.5,
+     19.3
+    ],
+    "dL": 0.6,
+    "dHue": 0.5,
+    "break": false,
+    "hsvTop": [
+     123.4,
+     0.257,
+     0.808
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.029,
+    "harm": 0.011,
+    "heal": 0.002
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 5,
+   "def": "nurrow",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 12501,
+   "seen": true,
+   "heightPx": 135,
+   "top": {
+    "n": 1838,
+    "lab": [
+     75.8,
+     4.6,
+     33.5
+    ],
+    "C": 33.9,
+    "h": 82.2,
+    "rgb": [
+     216,
+     182,
+     125
+    ],
+    "hsv": [
+     37.6,
+     0.421,
+     0.847
+    ],
+    "meanL": 72.6
+   },
+   "mid": {
+    "n": 8221,
+    "lab": [
+     32.6,
+     -1.3,
+     5.3
+    ],
+    "C": 5.5,
+    "h": 104.1,
+    "rgb": [
+     75,
+     77,
+     73
+    ],
+    "hsv": [
+     90,
+     0.052,
+     0.302
+    ],
+    "meanL": 42.4
+   },
+   "bottom": {
+    "n": 1626,
+    "lab": [
+     23.8,
+     10.9,
+     4.7
+    ],
+    "C": 11.8,
+    "h": 23.2,
+    "rgb": [
+     67,
+     55,
+     52
+    ],
+    "hsv": [
+     12,
+     0.224,
+     0.263
+    ],
+    "meanL": 24.6
+   },
+   "valueBandsSpatial": {
+    "top": 72.6,
+    "mid": 42.4,
+    "bottom": 24.6
+   },
+   "valueBands": {
+    "top": 77.7,
+    "mid": 40.5,
+    "bottom": 19.5
+   },
+   "crown": {
+    "lab": [
+     75.4,
+     5.7,
+     33.5
+    ],
+    "C": 34,
+    "h": 80.4,
+    "hsv": [
+     36.1,
+     0.429,
+     0.851
+    ],
+    "shoulders": [
+     76.1,
+     4.1,
+     33.6
+    ],
+    "dL": 0.7,
+    "dHue": 2.7,
+    "break": false,
+    "hsvTop": [
+     37.6,
+     0.421,
+     0.847
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.043,
+    "harm": 0.783,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 6,
+   "def": "odrum",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 6677,
+   "seen": true,
+   "heightPx": 145,
+   "top": {
+    "n": 1225,
+    "lab": [
+     28.2,
+     -5.3,
+     14.5
+    ],
+    "C": 15.4,
+    "h": 110.1,
+    "rgb": [
+     60,
+     68,
+     53
+    ],
+    "hsv": [
+     92,
+     0.221,
+     0.267
+    ],
+    "meanL": 33.1
+   },
+   "mid": {
+    "n": 3550,
+    "lab": [
+     30.5,
+     -2.1,
+     9.9
+    ],
+    "C": 10.1,
+    "h": 102.3,
+    "rgb": [
+     66,
+     74,
+     65
+    ],
+    "hsv": [
+     113.3,
+     0.122,
+     0.29
+    ],
+    "meanL": 40
+   },
+   "bottom": {
+    "n": 735,
+    "lab": [
+     11.9,
+     7.2,
+     6
+    ],
+    "C": 9.3,
+    "h": 39.9,
+    "rgb": [
+     43,
+     27,
+     20
+    ],
+    "hsv": [
+     18.3,
+     0.535,
+     0.169
+    ],
+    "meanL": 17.5
+   },
+   "valueBandsSpatial": {
+    "top": 33.1,
+    "mid": 40,
+    "bottom": 17.5
+   },
+   "valueBands": {
+    "top": 69.4,
+    "mid": 29.7,
+    "bottom": 13
+   },
+   "crown": {
+    "lab": [
+     57.1,
+     -0.4,
+     29.9
+    ],
+    "C": 29.9,
+    "h": 90.8,
+    "hsv": [
+     48,
+     0.497,
+     0.592
+    ],
+    "shoulders": [
+     26.8,
+     -5.8,
+     10.7
+    ],
+    "dL": 30.3,
+    "dHue": 27.8,
+    "break": true,
+    "hsvTop": [
+     92,
+     0.221,
+     0.267
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.234,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 7,
+   "def": "rishal",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 5826,
+   "seen": true,
+   "heightPx": 126,
+   "top": {
+    "n": 424,
+    "lab": [
+     77.2,
+     1.7,
+     11.3
+    ],
+    "C": 11.4,
+    "h": 81.6,
+    "rgb": [
+     207,
+     188,
+     170
+    ],
+    "hsv": [
+     29.2,
+     0.179,
+     0.812
+    ],
+    "meanL": 74.7
+   },
+   "mid": {
+    "n": 3730,
+    "lab": [
+     49.9,
+     -1.9,
+     3.2
+    ],
+    "C": 3.7,
+    "h": 120.7,
+    "rgb": [
+     133,
+     111,
+     115
+    ],
+    "hsv": [
+     349.1,
+     0.165,
+     0.522
+    ],
+    "meanL": 50
+   },
+   "bottom": {
+    "n": 839,
+    "lab": [
+     24.9,
+     -2.3,
+     -10.8
+    ],
+    "C": 11,
+    "h": 258.1,
+    "rgb": [
+     52,
+     60,
+     70
+    ],
+    "hsv": [
+     213.3,
+     0.257,
+     0.275
+    ],
+    "meanL": 26.6
+   },
+   "valueBandsSpatial": {
+    "top": 74.7,
+    "mid": 50,
+    "bottom": 26.6
+   },
+   "valueBands": {
+    "top": 75.2,
+    "mid": 47.1,
+    "bottom": 23.8
+   },
+   "crown": {
+    "lab": [
+     80.1,
+     1.3,
+     7.4
+    ],
+    "C": 7.5,
+    "h": 80.3,
+    "hsv": [
+     31.4,
+     0.101,
+     0.812
+    ],
+    "shoulders": [
+     76.7,
+     2.1,
+     12.7
+    ],
+    "dL": 3.4,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     29.2,
+     0.179,
+     0.812
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.149,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 8,
+   "def": "sukri",
+   "team": 1,
+   "meshes": 6,
+   "silPx": 3708,
+   "seen": true,
+   "heightPx": 82,
+   "top": {
+    "n": 766,
+    "lab": [
+     81.5,
+     -5.9,
+     39.8
+    ],
+    "C": 40.3,
+    "h": 98.4,
+    "rgb": [
+     217,
+     204,
+     127
+    ],
+    "hsv": [
+     51.3,
+     0.415,
+     0.851
+    ],
+    "meanL": 81.5
+   },
+   "mid": {
+    "n": 2372,
+    "lab": [
+     63.3,
+     -5.9,
+     35
+    ],
+    "C": 35.5,
+    "h": 99.6,
+    "rgb": [
+     164,
+     155,
+     90
+    ],
+    "hsv": [
+     52.7,
+     0.451,
+     0.643
+    ],
+    "meanL": 55.6
+   },
+   "bottom": {
+    "n": 228,
+    "lab": [
+     64.2,
+     -1.9,
+     20.1
+    ],
+    "C": 20.2,
+    "h": 95.5,
+    "rgb": [
+     167,
+     155,
+     106
+    ],
+    "hsv": [
+     48.2,
+     0.365,
+     0.655
+    ],
+    "meanL": 56.4
+   },
+   "valueBandsSpatial": {
+    "top": 81.5,
+    "mid": 55.6,
+    "bottom": 56.4
+   },
+   "valueBands": {
+    "top": 81.7,
+    "mid": 67.4,
+    "bottom": 28.9
+   },
+   "crown": {
+    "lab": [
+     81.5,
+     -5.5,
+     39.9
+    ],
+    "C": 40.2,
+    "h": 97.8,
+    "hsv": [
+     50.2,
+     0.42,
+     0.859
+    ],
+    "shoulders": [
+     81.6,
+     -6.1,
+     39.8
+    ],
+    "dL": 0.1,
+    "dHue": 1,
+    "break": false,
+    "hsvTop": [
+     51.3,
+     0.415,
+     0.851
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.178,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 9,
+   "def": "tunlan",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 7531,
+   "seen": true,
+   "heightPx": 133,
+   "top": {
+    "n": 2139,
+    "lab": [
+     75.3,
+     9.2,
+     29
+    ],
+    "C": 30.4,
+    "h": 72.5,
+    "rgb": [
+     219,
+     178,
+     132
+    ],
+    "hsv": [
+     31.7,
+     0.397,
+     0.859
+    ],
+    "meanL": 67.7
+   },
+   "mid": {
+    "n": 3066,
+    "lab": [
+     65.5,
+     9,
+     25
+    ],
+    "C": 26.5,
+    "h": 70.2,
+    "rgb": [
+     200,
+     146,
+     132
+    ],
+    "hsv": [
+     12.4,
+     0.34,
+     0.784
+    ],
+    "meanL": 56.6
+   },
+   "bottom": {
+    "n": 1265,
+    "lab": [
+     30,
+     34.1,
+     -25.2
+    ],
+    "C": 42.4,
+    "h": 323.5,
+    "rgb": [
+     102,
+     56,
+     112
+    ],
+    "hsv": [
+     289.3,
+     0.5,
+     0.439
+    ],
+    "meanL": 32.6
+   },
+   "valueBandsSpatial": {
+    "top": 67.7,
+    "mid": 56.6,
+    "bottom": 32.6
+   },
+   "valueBands": {
+    "top": 76.1,
+    "mid": 60.6,
+    "bottom": 24.9
+   },
+   "crown": {
+    "lab": [
+     75.4,
+     9.1,
+     29.4
+    ],
+    "C": 30.8,
+    "h": 72.8,
+    "hsv": [
+     31.4,
+     0.4,
+     0.863
+    ],
+    "shoulders": [
+     75.2,
+     9.3,
+     28.7
+    ],
+    "dL": 0.2,
+    "dHue": 0.7,
+    "break": false,
+    "hsvTop": [
+     31.7,
+     0.397,
+     0.859
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.266,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 0,
+   "id": 10,
+   "def": "ulkro",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 5761,
+   "seen": true,
+   "heightPx": 127,
+   "top": {
+    "n": 516,
+    "lab": [
+     44.9,
+     -20,
+     23.2
+    ],
+    "C": 30.6,
+    "h": 130.8,
+    "rgb": [
+     87,
+     115,
+     65
+    ],
+    "hsv": [
+     93.6,
+     0.435,
+     0.451
+    ],
+    "meanL": 45.7
+   },
+   "mid": {
+    "n": 3815,
+    "lab": [
+     33,
+     -1.2,
+     14.8
+    ],
+    "C": 14.9,
+    "h": 94.6,
+    "rgb": [
+     79,
+     78,
+     65
+    ],
+    "hsv": [
+     55.7,
+     0.177,
+     0.31
+    ],
+    "meanL": 36.6
+   },
+   "bottom": {
+    "n": 622,
+    "lab": [
+     21.4,
+     1,
+     12.6
+    ],
+    "C": 12.7,
+    "h": 85.5,
+    "rgb": [
+     59,
+     50,
+     31
+    ],
+    "hsv": [
+     40.7,
+     0.475,
+     0.231
+    ],
+    "meanL": 30.6
+   },
+   "valueBandsSpatial": {
+    "top": 45.7,
+    "mid": 36.6,
+    "bottom": 30.6
+   },
+   "valueBands": {
+    "top": 69.3,
+    "mid": 32.1,
+    "bottom": 13.2
+   },
+   "crown": {
+    "lab": [
+     61.8,
+     -6.7,
+     1.4
+    ],
+    "C": 6.8,
+    "h": 168.3,
+    "hsv": [
+     109.3,
+     0.185,
+     0.592
+    ],
+    "shoulders": [
+     43.5,
+     -20.1,
+     23.7
+    ],
+    "dL": 18.3,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     93.6,
+     0.435,
+     0.451
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.008,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 1,
+   "id": 5,
+   "def": "vashil",
+   "team": 0,
+   "meshes": 5,
+   "silPx": 8037,
+   "seen": true,
+   "heightPx": 155,
+   "top": {
+    "n": 1149,
+    "lab": [
+     68.1,
+     16.6,
+     -13.8
+    ],
+    "C": 21.6,
+    "h": 320.1,
+    "rgb": [
+     185,
+     156,
+     194
+    ],
+    "hsv": [
+     285.8,
+     0.196,
+     0.761
+    ],
+    "meanL": 66.4
+   },
+   "mid": {
+    "n": 4777,
+    "lab": [
+     38.5,
+     7.5,
+     -8.4
+    ],
+    "C": 11.3,
+    "h": 312,
+    "rgb": [
+     101,
+     84,
+     124
+    ],
+    "hsv": [
+     265.5,
+     0.323,
+     0.486
+    ],
+    "meanL": 43.6
+   },
+   "bottom": {
+    "n": 793,
+    "lab": [
+     21.1,
+     17.5,
+     -19.8
+    ],
+    "C": 26.4,
+    "h": 311.4,
+    "rgb": [
+     57,
+     44,
+     90
+    ],
+    "hsv": [
+     257,
+     0.511,
+     0.353
+    ],
+    "meanL": 22.9
+   },
+   "valueBandsSpatial": {
+    "top": 66.4,
+    "mid": 43.6,
+    "bottom": 22.9
+   },
+   "valueBands": {
+    "top": 70.9,
+    "mid": 43.1,
+    "bottom": 22.9
+   },
+   "crown": {
+    "lab": [
+     68.6,
+     13.9,
+     -11.9
+    ],
+    "C": 18.3,
+    "h": 319.4,
+    "hsv": [
+     288,
+     0.181,
+     0.757
+    ],
+    "shoulders": [
+     67.5,
+     18.2,
+     -16
+    ],
+    "dL": 1.1,
+    "dHue": 0.8,
+    "break": false,
+    "hsvTop": [
+     285.8,
+     0.196,
+     0.761
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.005,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 1,
+   "id": 6,
+   "def": "ardit",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 14366,
+   "seen": true,
+   "heightPx": 198,
+   "top": {
+    "n": 954,
+    "lab": [
+     38.7,
+     -9.5,
+     -11.3
+    ],
+    "C": 14.8,
+    "h": 229.8,
+    "rgb": [
+     30,
+     98,
+     102
+    ],
+    "hsv": [
+     183.3,
+     0.706,
+     0.4
+    ],
+    "meanL": 43
+   },
+   "mid": {
+    "n": 10022,
+    "lab": [
+     32.5,
+     -4.4,
+     -4.8
+    ],
+    "C": 6.5,
+    "h": 227.4,
+    "rgb": [
+     59,
+     79,
+     96
+    ],
+    "hsv": [
+     207.6,
+     0.385,
+     0.376
+    ],
+    "meanL": 38.4
+   },
+   "bottom": {
+    "n": 1811,
+    "lab": [
+     18.1,
+     -0.7,
+     -4.8
+    ],
+    "C": 4.9,
+    "h": 261.3,
+    "rgb": [
+     41,
+     45,
+     47
+    ],
+    "hsv": [
+     200,
+     0.128,
+     0.184
+    ],
+    "meanL": 30.9
+   },
+   "valueBandsSpatial": {
+    "top": 43,
+    "mid": 38.4,
+    "bottom": 30.9
+   },
+   "valueBands": {
+    "top": 66.9,
+    "mid": 34,
+    "bottom": 15.9
+   },
+   "crown": {
+    "lab": [
+     78.5,
+     -6.5,
+     -7
+    ],
+    "C": 9.6,
+    "h": 226.8,
+    "hsv": [
+     193.7,
+     0.169,
+     0.812
+    ],
+    "shoulders": [
+     38.6,
+     -10.1,
+     -13.1
+    ],
+    "dL": 39.9,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     183.3,
+     0.706,
+     0.4
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.013,
+    "harm": 0.089,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 1,
+   "id": 7,
+   "def": "burdam",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 9921,
+   "seen": true,
+   "heightPx": 152,
+   "top": {
+    "n": 1134,
+    "lab": [
+     38.1,
+     13.3,
+     22.8
+    ],
+    "C": 26.4,
+    "h": 59.7,
+    "rgb": [
+     128,
+     76,
+     55
+    ],
+    "hsv": [
+     17.3,
+     0.57,
+     0.502
+    ],
+    "meanL": 38.1
+   },
+   "mid": {
+    "n": 5061,
+    "lab": [
+     37.3,
+     17.2,
+     20.6
+    ],
+    "C": 26.9,
+    "h": 50.2,
+    "rgb": [
+     127,
+     78,
+     66
+    ],
+    "hsv": [
+     11.8,
+     0.48,
+     0.498
+    ],
+    "meanL": 41
+   },
+   "bottom": {
+    "n": 2187,
+    "lab": [
+     22.2,
+     13.7,
+     13.2
+    ],
+    "C": 19,
+    "h": 43.8,
+    "rgb": [
+     70,
+     47,
+     34
+    ],
+    "hsv": [
+     21.7,
+     0.514,
+     0.275
+    ],
+    "meanL": 24.7
+   },
+   "valueBandsSpatial": {
+    "top": 38.1,
+    "mid": 41,
+    "bottom": 24.7
+   },
+   "valueBands": {
+    "top": 61,
+    "mid": 34.4,
+    "bottom": 15.5
+   },
+   "crown": {
+    "lab": [
+     16.3,
+     8.1,
+     12.3
+    ],
+    "C": 14.7,
+    "h": 56.7,
+    "hsv": [
+     22.5,
+     0.571,
+     0.22
+    ],
+    "shoulders": [
+     53.7,
+     19.9,
+     27.2
+    ],
+    "dL": 37.4,
+    "dHue": 3,
+    "break": true,
+    "hsvTop": [
+     17.3,
+     0.57,
+     0.502
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.06,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 1,
+   "id": 8,
+   "def": "dunsom",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 9594,
+   "seen": true,
+   "heightPx": 133,
+   "top": {
+    "n": 1951,
+    "lab": [
+     36.2,
+     19.6,
+     -35.9
+    ],
+    "C": 40.9,
+    "h": 298.6,
+    "rgb": [
+     84,
+     82,
+     141
+    ],
+    "hsv": [
+     242,
+     0.418,
+     0.553
+    ],
+    "meanL": 37.6
+   },
+   "mid": {
+    "n": 5485,
+    "lab": [
+     34.5,
+     3.9,
+     2.7
+    ],
+    "C": 4.7,
+    "h": 35.2,
+    "rgb": [
+     81,
+     81,
+     75
+    ],
+    "hsv": [
+     60,
+     0.074,
+     0.318
+    ],
+    "meanL": 42.6
+   },
+   "bottom": {
+    "n": 1459,
+    "lab": [
+     63.4,
+     4.8,
+     -8.3
+    ],
+    "C": 9.6,
+    "h": 300,
+    "rgb": [
+     152,
+     152,
+     175
+    ],
+    "hsv": [
+     240,
+     0.131,
+     0.686
+    ],
+    "meanL": 47.7
+   },
+   "valueBandsSpatial": {
+    "top": 37.6,
+    "mid": 42.6,
+    "bottom": 47.7
+   },
+   "valueBands": {
+    "top": 68.2,
+    "mid": 40.1,
+    "bottom": 21.6
+   },
+   "crown": {
+    "lab": [
+     45.1,
+     19.7,
+     -34.6
+    ],
+    "C": 39.8,
+    "h": 299.6,
+    "hsv": [
+     248.3,
+     0.399,
+     0.639
+    ],
+    "shoulders": [
+     33.1,
+     19.6,
+     -36.8
+    ],
+    "dL": 12,
+    "dHue": 1.6,
+    "break": true,
+    "hsvTop": [
+     242,
+     0.418,
+     0.553
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 1,
+   "id": 9,
+   "def": "ervet",
+   "team": 1,
+   "meshes": 21,
+   "silPx": 1979,
+   "seen": true,
+   "heightPx": 57,
+   "top": {
+    "n": 533,
+    "lab": [
+     22.6,
+     -1.8,
+     -2.5
+    ],
+    "C": 3.1,
+    "h": 234.4,
+    "rgb": [
+     41,
+     56,
+     52
+    ],
+    "hsv": [
+     164,
+     0.268,
+     0.22
+    ],
+    "meanL": 22.9
+   },
+   "mid": {
+    "n": 869,
+    "lab": [
+     28.1,
+     -1.9,
+     4.9
+    ],
+    "C": 5.2,
+    "h": 111.2,
+    "rgb": [
+     63,
+     67,
+     59
+    ],
+    "hsv": [
+     90,
+     0.119,
+     0.263
+    ],
+    "meanL": 25.7
+   },
+   "bottom": {
+    "n": 83,
+    "lab": [
+     19.5,
+     -0.9,
+     13.3
+    ],
+    "C": 13.4,
+    "h": 93.7,
+    "rgb": [
+     53,
+     47,
+     26
+    ],
+    "hsv": [
+     46.7,
+     0.509,
+     0.208
+    ],
+    "meanL": 19
+   },
+   "valueBandsSpatial": {
+    "top": 22.9,
+    "mid": 25.7,
+    "bottom": 19
+   },
+   "valueBands": {
+    "top": 39.9,
+    "mid": 24.4,
+    "bottom": 8
+   },
+   "crown": {
+    "lab": [
+     7.4,
+     0.7,
+     -1.9
+    ],
+    "C": 2.1,
+    "h": 288.9,
+    "hsv": [
+     280,
+     0.125,
+     0.094
+    ],
+    "shoulders": [
+     28.2,
+     -5.4,
+     -6.1
+    ],
+    "dL": 20.8,
+    "dHue": 0,
+    "break": true,
+    "hsvTop": [
+     164,
+     0.268,
+     0.22
+    ]
+   },
+   "topBandShare": {
+    "ally": 0.011,
+    "harm": 0.054,
+    "heal": 0
+   }
+  },
+  {
+   "seed": 11,
+   "seating": 1,
+   "half": 1,
+   "id": 10,
+   "def": "hesmi",
+   "team": 1,
+   "meshes": 5,
+   "silPx": 16017,
+   "seen": true,
+   "heightPx": 174,
+   "top": {
+    "n": 1709,
+    "lab": [
+     68.8,
+     -11.6,
+     5.7
+    ],
+    "C": 12.9,
+    "h": 153.9,
+    "rgb": [
+     148,
+     165,
+     139
+    ],
+    "hsv": [
+     99.2,
+     0.158,
+     0.647
+    ],
+    "meanL": 60.2
+   },
+   "mid": {
+    "n": 9507,
+    "lab": [
+     33.4,
+     -1.4,
+     6.1
+    ],
+    "C": 6.3,
+    "h": 102.6,
+    "rgb": [
+     80,
+     80,
+     69
+    ],
+    "hsv": [
+     60,
+     0.138,
+     0.314
+    ],
+    "meanL": 37.8
+   },
+   "bottom": {
+    "n": 2776,
+    "lab": [
+     20,
+     6.5,
+     5.6
+    ],
+    "C": 8.6,
+    "h": 40.8,
+    "rgb": [
+     59,
+     43,
+     49
+    ],
+    "hsv": [
+     337.5,
+     0.271,
+     0.231
+    ],
+    "meanL": 20.1
+   },
+   "valueBandsSpatial": {
+    "top": 60.2,
+    "mid": 37.8,
+    "bottom": 20.1
+   },
+   "valueBands": {
+    "top": 67.9,
+    "mid": 32.9,
+    "bottom": 14.4
+   },
+   "crown": {
+    "lab": [
+     72.7,
+     -10.3,
+     5.4
+    ],
+    "C": 11.6,
+    "h": 152.3,
+    "hsv": [
+     110,
+     0.102,
+     0.694
+    ],
+    "shoulders": [
+     67.5,
+     -11.8,
+     5.6
+    ],
+    "dL": 5.2,
+    "dHue": 0,
+    "break": false,
+    "hsvTop": [
+     99.2,
+     0.158,
+     0.647
+    ]
+   },
+   "topBandShare": {
+    "ally": 0,
+    "harm": 0.164,
+    "heal": 0.007
+   }
+  }
+ ]
+}

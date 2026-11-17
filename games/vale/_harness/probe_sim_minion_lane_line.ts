@@ -20,7 +20,8 @@
 //   settling         a Wick that turns free (a fight over) or comes out of forced movement with |off| > 0.3 m,
 //                    until |off| ≤ 0.3 m or 3 + 2|off| m of arc on: left out of B1 and B2 (its return is B4); one still off after that counts again
 //   B2 single Wick    free+clear samples, not settling: |off| p95 ≤ 0.6 m, max ≤ 1.2 m
-//   B3 no reversal    0 Wicks free+clear for a whole 0.5 s whose net move along the road is < −0.3 m
+//   B3 no reversal    0 Wicks free+clear and on the road (|off| ≤ 3 m) for a whole 0.5 s whose net move along the road
+//                     is < −0.3 m
 //   B4 rejoin         a Wick turning free with |off| > 1 m: arc walked until |off| ≤ 0.5 m, p95 ≤ 6 m (max and
 //                     overshoots past the line reported; episodes cut short by a new fight are dropped)
 //   B5 timing         idle, waves 1-3: the first tick a Wick of the wave is within rim + 8 m of each of its own towers
@@ -52,7 +53,7 @@ const SCENS = opt('scen', 'idle,bots').split(',');
 const IDLE_MIN = Number(opt('idle-min', '8')), BOTS_MIN = Number(opt('bots-min', '14'));
 const RECORD = argv.includes('--record'), VERBOSE = argv.includes('--verbose');
 const SETTLE = 0.3, SETTLE_ARC = 3;
-const BIN = 4, SPAWN_SKIP = 16, END_SKIP = 6, CLEAR = 3, WIN = 15;
+const BIN = 4, SPAWN_SKIP = 16, END_SKIP = 6, CLEAR = 3, WIN = 15, ROAD = 3;
 const built = buildContent(defaultOptions({ check: true, allowMissingAssets: true, quiet: true }));
 if (!built.catalog) { console.log('SKIP content build failed'); process.exit(77); }
 const catalog: CatalogT = built.catalog;
@@ -260,8 +261,9 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       }
       t.wasFree = free;
       t.freeRun = free ? t.freeRun + 1 : 0;
-      // B3 reversal: free+clear for a whole 0.5 s window
-      if (clear) { t.hist.push(sT); if (t.hist.length > WIN + 1) t.hist.shift(); } else t.hist.length = 0;
+      // B3 reversal: free+clear and on the road (|off| ≤ ROAD) for a whole 0.5 s window: a Wick a chase took 10 m into the
+      // jungle walks back out the way it went in (a nav route round the wall), which is not a marching Wick turning
+      if (clear && Math.abs(off) <= ROAD) { t.hist.push(sT); if (t.hist.length > WIN + 1) t.hist.shift(); } else t.hist.length = 0;
       if (t.hist.length === WIN + 1 && t.hist[WIN] - t.hist[0] < -0.3) {
         const id = `${map}/${scen}/${seed}#${e.id}`;
         if (!acc.revIds.has(id)) { acc.revIds.add(id); acc.rev.push({ key: id, at: `${g.id} t${e.team} s${sT.toFixed(1)} ${w.time.toFixed(1)}s net ${(t.hist[WIN] - t.hist[0]).toFixed(2)} m` }); }
