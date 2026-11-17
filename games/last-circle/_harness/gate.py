@@ -395,6 +395,14 @@ GATES = [
     # INFORMATION (never counted): the live-measure probe on the iGPU profile (a player's first run; perfcheck's own default is the dGPU)
     # ---- Wave 10 R1B (guns in hand): w10_gunhold - grip, flash-tip, smg-dir, pistol (slide <= 1.1 m/s on EVERY skin), lengths, death, flinch, flash-size, sheen
     ("w10_gunhold", "p23/gunhold.py", [], 3600, False),
+    # ---- Wave 10 R2A (water, sky and light): w10_waterlook - water-detail, glint, fresnel, shore (+ shore lip at crest / level / trough), storm-early / late,
+    #      light (interiors on every map >= 0.9x base, far-sea edge, wet sand from the air: land <= 10 %, live frame <= 6 % / <= 1 % under the water), grass,
+    #      grass-sand, low-identical, underwater, tiers, programs. stormfx_fx (above) judges the meshopt round trip again (in-repo fixture, _harness/new/fixtures)
+    ("w10_waterlook", "p23/waterlook.py", [], 7000, False),
+    # ---- Wave 10 R2B (sound): w10_sfx - census, synth-count, events, loudness, swap-level, reload-classes, amb-layers, pcm-rate, pcm-bounded, pcm-budget,
+    #      lazy-play, storm-siren, bytes, licence, bed-hiss, snow-birds, loop-seam, no-clip, xcat. (p23_audiotap above now also carries amb-level /
+    #      amb-spectrum / indoor + an INFO pcm-held row)
+    ("w10_sfx", "p23/sfxcheck.py", [], 1800, False),
     ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
@@ -724,6 +732,48 @@ NEGATIVE = [
     ("w10_gunhold-plant-small-flash", "p23/gunhold.py", ["--skins", "soldier", "--plant", "small-flash", "--parts", "flash"], 1800),
     ("w10_gunhold-plant-shiny-skin", "p23/gunhold.py", ["--skins", "soldier", "--plant", "shiny-skin", "--parts", "sheen"], 1800),
     ("w10_gunhold-rev-w9-tip", "p23/gunhold.py", ["--rev", "361c5ec3"], 3600),
+    # ---- Wave 10 R2A: each planted fault must FAIL its own w10_waterlook row; the W10 R1 base cbf0a1ff must FAIL the gate
+    ("w10_waterlook-plant-flat-water", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "water", "--plant", "flat-water"], 3600),
+    ("w10_waterlook-plant-lip-static", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "water", "--plant", "lip-static"], 3600),
+    ("w10_waterlook-plant-storm-early", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "storm", "--plant", "storm-early"], 3600),
+    ("w10_waterlook-plant-flat-light", "p23/waterlook.py", ["--maps", "ashgrid", "--parts", "light", "--plant", "flat-light"], 3600),
+    ("w10_waterlook-plant-dim-rooms", "p23/waterlook.py", ["--parts", "light", "--plant", "dim-rooms"], 3600),
+    ("w10_waterlook-plant-sea-edge", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "light", "--plant", "sea-edge"], 3600),
+    ("w10_waterlook-plant-wet-flat", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "light", "--plant", "wet-flat"], 3600),
+    ("w10_waterlook-plant-wet-seabed", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "light", "--plant", "wet-seabed"], 3600),
+    ("w10_waterlook-plant-sparse-grass", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "grass", "--plant", "sparse-grass"], 3600),
+    ("w10_waterlook-plant-grass-on-sand", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "grass", "--plant", "grass-on-sand"], 3600),
+    ("w10_waterlook-plant-grass-on-low", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "low", "--plant", "grass-on-low"], 3600),
+    ("w10_waterlook-plant-uw-sky-sharp", "p23/waterlook.py", ["--maps", "isla_viva", "--parts", "uw", "--plant", "uw-sky-sharp"], 3600),
+    ("w10_waterlook-rev-r2-base", "p23/waterlook.py", ["--rev", "cbf0a1ff"], 7000),
+    # ---- Wave 10 R2A fix5/fix6: the light-slip controls (each must FAIL; add next to the other w10_waterlook plants)
+    ("w10_waterlook-plant-crushed-toe", "p23/waterlook.py", ["--parts", "light", "--plant", "crushed-toe"], 3600),   # FAILs light: shadowed road + light: interiors darkest view
+    ("w10_waterlook-plant-dark-rooms", "p23/waterlook.py", ["--parts", "light", "--plant", "dark-rooms"], 3600),     # FAILs light: interiors darkest view (+ road, + interiors ratio)
+    ("w10_waterlook-rev-r2a-merge", "p23/waterlook.py", ["--rev", "3065e2c7a", "--parts", "light"], 3600),          # the R2A merge slip: MUST FAIL light: shadowed road + light: interiors darkest view
+    # (the w10_waterlook main row needs no change: the darkest-view row now also renders interiorcheck's own views of match isla_viva
+    #  volcano_rim@p54, ashgrid downtown@p4/p27/p44, housegen s7h2 and the fixture house in 4 extra Chromes; full run ~7.5 min, well inside 7000 s)
+    # stormfx_fx controls (run by the integrator from driver scripts, not registered: plant curve-at-0 FAILs the BIT-IDENTICAL row, plant meshopt
+    #   wrong geometry FAILs the meshopt row; F:/lc_p23/w10/t/R2A/fix4/plant_curve_at0.py, plant_meshopt_geom.py)
+    # ---- Wave 10 R2B: each planted fault must FAIL its own w10_sfx / p23_audiotap row; the W10 R1 base cbf0a1ff1 must FAIL w10_sfx
+    ("w10_sfx-plant-synth-loot", "p23/sfxcheck.py", ["--plant", "synth-loot"], 900),          # synth-count
+    ("w10_sfx-plant-mute-grenade", "p23/sfxcheck.py", ["--plant", "mute-grenade"], 900),      # events
+    ("w10_sfx-plant-hot-step", "p23/sfxcheck.py", ["--plant", "hot-step"], 900),              # loudness
+    ("w10_sfx-plant-no-amb", "p23/sfxcheck.py", ["--plant", "no-amb"], 900),                  # amb-layers
+    ("w10_sfx-plant-no-licence-row", "p23/sfxcheck.py", ["--plant", "no-licence-row"], 900),  # licence
+    ("w10_sfx-plant-pcm-lossy", "p23/sfxcheck.py", ["--plant", "pcm-lossy"], 900),            # pcm-rate
+    ("w10_sfx-plant-amb-leak", "p23/sfxcheck.py", ["--plant", "amb-leak"], 900),              # pcm-bounded
+    ("w10_sfx-plant-lazy-hoard", "p23/sfxcheck.py", ["--plant", "lazy-hoard"], 900),          # pcm-budget
+    ("w10_sfx-plant-lazy-drop", "p23/sfxcheck.py", ["--plant", "lazy-drop"], 900),            # lazy-play / events
+    ("w10_sfx-plant-snow-birds", "p23/sfxcheck.py", ["--plant", "snow-birds"], 900),          # snow-birds
+    ("w10_sfx-plant-hiss-bed", "p23/sfxcheck.py", ["--plant", "hiss-bed"], 900),              # bed-hiss
+    ("w10_sfx-plant-seam-gap", "p23/sfxcheck.py", ["--plant", "seam-gap"], 900),              # loop-seam
+    ("w10_sfx-plant-xcat-hot", "p23/sfxcheck.py", ["--plant", "xcat-hot"], 900),              # xcat / no-clip
+    ("w10_sfx-plant-siren-gone", "p23/sfxcheck.py", ["--plant", "siren-gone"], 900),          # storm-siren
+    ("w10_sfx-plant-clip-hot", "p23/sfxcheck.py", ["--plant", "clip-hot"], 900),              # no-clip / loudness
+    ("w10_sfx-rev-w10-base", "p23/sfxcheck.py", ["--rev", "cbf0a1ff1"], 900),                 # 12 rows FAIL at the base
+    ("p23_audiotap-plant-amb-same", "p23/audiotap.py", ["--plant", "amb-same"], 3600),   # amb-spectrum
+    ("p23_audiotap-plant-amb-mute", "p23/audiotap.py", ["--plant", "amb-mute"], 3600),   # amb-level
+    ("p23_audiotap-plant-roof-blind", "p23/audiotap.py", ["--plant", "roof-blind"], 3600),   # indoor
 ]
 # the P2 / P3 feature gates' planted faults: they bite only on a tree that HAS the feature (on the base every one of them fails anyway, which proves
 # nothing), so they join the negative controls when the integrator sets P23_PENDING = False

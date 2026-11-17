@@ -32,6 +32,7 @@ import common  # noqa: E402
 import numpy as np  # noqa: E402
 
 SCRATCH = "C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/82f9ca33-342f-4680-86ad-98a5ab9d2079/scratchpad/lc_improve/wave4/STORMFX"
+FIXTURES = os.path.join(HERE, "fixtures")  # meshopt test GLB + make_meshopt_glb.mjs (was under SCRATCH, a temp dir that was deleted)
 
 FX_JS = r"""() => {
   if (window.__FX__) return 'already';
@@ -76,10 +77,11 @@ def main(v, args):
     out_dir = args.shots
     os.makedirs(out_dir, exist_ok=True)
     M = {}
-    meshopt_glb = os.path.join(SCRATCH, "meshopt_quad.glb")
+    # the meshopt fixture lives IN the repo (_harness/new/fixtures: the GLB + the script that builds it); it is rebuilt only when missing
+    meshopt_glb = os.path.join(FIXTURES, "meshopt_quad.glb")
     if not os.path.exists(meshopt_glb):
         try:
-            subprocess.run(["node", os.path.join(SCRATCH, "make_meshopt_glb.mjs"), meshopt_glb], check=True, capture_output=True, timeout=60)
+            subprocess.run(["node", os.path.join(FIXTURES, "make_meshopt_glb.mjs"), meshopt_glb], check=True, capture_output=True, timeout=60)
         except Exception as e:
             v.note("could not build the meshopt test GLB: %s" % e)
     with common.Session(args, name="stormfx_fx") as s:
@@ -189,15 +191,22 @@ def main(v, args):
           const idx = comp.passes.length - 1; const lc = comp.passes[idx];
           if (!lc.isLCOutputPass) return { error: 'last pass is not LCOutputPass' };
           lc.setStormGrade(0);
+          // grade 0 = EVERY grade term of the pass at 0: the storm grade AND the W10 R2A look terms (lcGrade: contrast curve, underwater murk - set each
+          // frame by maps.js on desktop medium+), zeroed for this A/B and restored after; with them restored the pass differs from stock (reported)
+          const lg = lc.uniforms && lc.uniforms.lcGrade ? lc.uniforms.lcGrade.value : null, lg0 = lg ? lg.toArray() : null;
+          if (lg) lg.set(0, 0, 0, 0);
           const stock = new OutputPass(); stock.renderToScreen = lc.renderToScreen;
           const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
           const grab = () => { const a = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, a); return a; };
           const render = (pass) => { comp.passes[idx] = pass; comp.render(0); return grab(); };
           let A, B, A2, G;
-          try { A = render(lc); B = render(stock); A2 = render(lc); lc.setStormGrade(0.5); G = render(lc); } finally { lc.setStormGrade(0); comp.passes[idx] = lc; stock.dispose(); }
+          let L1 = null;
+          try { A = render(lc); B = render(stock); A2 = render(lc); lc.setStormGrade(0.5); G = render(lc); lc.setStormGrade(0);
+                if (lg && lg0 && (lg0[0] || lg0[1])) { lg.fromArray(lg0); L1 = render(lc); } }
+          finally { lc.setStormGrade(0); if (lg && lg0) lg.fromArray(lg0); comp.passes[idx] = lc; stock.dispose(); }
           const diff = (x, y) => { let n = 0, mx = 0; for (let i = 0; i < x.length; i++) { const d = Math.abs(x[i] - y[i]); if (d) { n++; if (d > mx) mx = d; } } return { differingBytes: n, maxDiff: mx }; };
           let lit = 0; for (let i = 0; i < A.length; i += 4) if (A[i] | A[i + 1] | A[i + 2]) lit++;
-          return { w, h, litPixels: lit, lcVsStock: diff(A, B), lcVsLc: diff(A, A2), grade05VsNeutral: diff(A, G) };
+          return { w, h, litPixels: lit, lcVsStock: diff(A, B), lcVsLc: diff(A, A2), grade05VsNeutral: diff(A, G), lcGradeLive: lg0, lookTermsVsNeutral: L1 ? diff(A, L1) : null };
         }"""
         # P2-F: bit identity is judged with the AA pass OFF (on medium / high the FXAA / SMAA step lives INSIDE LCOutputPass, so LC vs stock can never be
         # bit-identical with AA on: P1-C measured 0 differing bytes with ?aa=0). AA itself is P1-C's aa probe's to judge.
