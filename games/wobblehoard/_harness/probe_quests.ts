@@ -10,13 +10,14 @@ import type { PlayEventRing } from '../src/contracts.ts';
 import {
   SC, applyEventFields, applyPlayEvent, blockedByAutonomy, buildQuestDefs, chapterOpen, createQuestOut, createQuestState, finaleOpen, hasKeys, isDone, isShown, markDone,
   needsAutonomy, openPlacesByStamps, placeOpen, questOpen, setQuestDay, setQuestParty, trackerQuest, QOUT, UNLOCK_FRIENDS, keyRoute, SQUEEZE_MIN_S,
+  doableAt, giftReady, setGiftState,
 } from '../src/core/quests.ts';
 import type { QuestDefs, QuestState, PlaceCaps } from '../src/core/quests.ts';
 import { PLACE_CAPS, THING_PLACE, journalDefs, createJournal, mergeJournals, serializeJournal } from '../src/collection/journal.ts';
 import { PLACE_IDS, PLACE_INFO, THING_IDS, MECH, ZONE } from '../src/data/places.ts';
 import type { PlaceDef } from '../src/data/places.ts';
 import { REACT_KIND as R, SOCIAL_KIND as S, USE_VERB, WISH_KIND, TOUCH, SPECIES_LIFE } from '../src/data/life.ts';
-import { QUESTS, CHAPTERS, EV, BY, EV_FLAG, FACT, WISH_STATE, FRIEND_LEVEL, PIECES_USE, UI_KIND } from '../src/data/quests.ts';
+import { QUESTS, CHAPTERS, EV, BY, EV_FLAG, FACT, WISH_STATE, FRIEND_LEVEL, PIECES_USE, UI_KIND, GIFT_LISTS } from '../src/data/quests.ts';
 import { CATALOG } from '../src/data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
 
@@ -491,13 +492,11 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
 }
 
 /* ═══════════════════════════════ QU-11: the regular-player stream ═══════════════════════════════ */
-{
-  // QUESTS 13's first ten minutes as a timed record stream (a new player; Dollop, then the first capsule's newcomer Puddlo, then a third, Thumbly)
-  const st = createQuestState(dS1), out = createQuestOut(256);
-  setQuestDay(st, 20407);
-  const D = sp('dollop'), P = sp('puddlo'), H = sp('thumbly');
-  const tt = (id: string): number => THING_IDS.indexOf(id as typeof THING_IDS[number]);
-  const script: [number, Rec][] = [
+const tt = (id: string): number => THING_IDS.indexOf(id as typeof THING_IDS[number]);
+/** QUESTS 13's first ten minutes as timed records: Dollop, the first capsule's newcomer P, a third H (minutes of play). */
+function firstTen(P: number, H: number): [number, Rec][] {
+  const D = sp('dollop');
+  return [
     [0.4, [EV.TOUCH, TOUCH.SQUEEZE, 0, -1, D, 255, famOf(D), 1, BY.PLAYER, 0, 0.9]],
     [0.7, [EV.USE, USE_VERB.ROLL, 0, tt('feltball'), D, 255, famOf(D), 1, BY.SELF, 0, 0]],
     [1.0, [EV.TOUCH, TOUCH.STRETCH, 0, -1, D, 255, famOf(D), 1, BY.PLAYER, 0, 0.6]],
@@ -517,6 +516,12 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
     [9.0, [EV.CAPSULE, 0, 1, -1, H, 255, famOf(H), 1, BY.PLAYER, 0, 0]],
     [9.5, [EV.SOCIAL, S.PILE, 1, tt('snugbasket'), H, P, famOf(H), 2, BY.SELF, 0, 0]],
   ];
+}
+{
+  // QUESTS 13's first ten minutes as a timed record stream (a new player; Dollop, then the first capsule's newcomer Puddlo, then a third, Thumbly)
+  const st = createQuestState(dS1), out = createQuestOut(256);
+  setQuestDay(st, 20407);
+  const script = firstTen(sp('puddlo'), sp('thumbly'));
   const at: string[] = [];
   let hearth = -1, h8 = -1;
   for (const [min, r] of script) {
@@ -530,7 +535,100 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
   row('QU-11', 'the first ten minutes of QUESTS 13 as a timed stream (S1 part): about 10 stamps in 10 minutes (+-50%), Hearthlog open at 2:30-5:00 and H8 at 3:30-5:30 (+-50%), every stamp the table names',
     n10 >= 5 && n10 <= 15 && hearth >= 1.25 && hearth <= 7.5 && h8 >= 1.75 && h8 <= 8.25 && ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7', 'H8', 'C1', 'C10', 'C2', 'C4', 'C7', 'C5'].every((id) => at.some((x) => x.startsWith(id + '@'))),
     `${n10} stamps: ${at.join(' ')}; Hearthlog open at ${hearth} min, H8 at ${h8} min`);
-  skip('QU-11', 'the multi-day stream (Ripple to Cloudloft opening near QUESTS 7\'s days, the gift pair Puddlo and Boingle for X3)', 'S2 and S3 work: in this S1 build no place beyond Hearthlog has shipped, so no stamp threshold can open anything');
+}
+{
+  // QU-11's multi-day half for an S2 build (Home, Hearthlog, Ripple, Frostbell, Rainleaf shipped). The player: QUESTS 13's first ten minutes
+  // (newcomer Thumbly, third Munchip: neither is a best friend of the other or of Dollop), then at the start of the session after a place
+  // opens, a trip there (0.5 min and a VISIT) once the chapter in hand has its finale or nothing left to do; otherwise the tracker's choice at the place they are in,
+  // else a finale or another open quest there, else travel (0.5 min and a VISIT) to the newest open place with work left. PACE (an assumption
+  // taken from QUESTS 7, not a measurement): a main quest about every 3.5 min of play, a finale 5, a VISIT 0.5, a "who loves it" find 2; an
+  // active day is 25 min (day 1 in two sessions of 12.5). Each quest's records are QU-02's minimal script, all at open places. Gifts: claimed at
+  // once, one a day (the collection's rule): Hearthlog's Puddlo and Ripple's Boingle (QUESTS 6.10), then each list's first. X3 is the GREET of
+  // that gift pair. Gate row: the order, the stamp counts, no stall, X3 by the pair. Reported (QU-11 is a "reported" row): the times against
+  // QUESTS 7, +-50% (Ripple in day 1's second session, est. 18.75 min; Frostbell day 2, 37.5; Rainleaf day 3, 62.5; Friends Everywhere the
+  // second session, 18.75).
+  const SHIP2 = PLACE_INFO.map((_, i) => i <= 4);
+  const d2 = defsFor(SHIP2);
+  const st = createQuestState(d2), out = createQuestOut(256);
+  const DAY0 = 20407, DAYLEN = 25;
+  let t = 0, cur = 0, stalls = 0, lastClaim = -1;
+  setQuestDay(st, DAY0);
+  const opened: number[] = PLACE_IDS.map(() => -1), stampsAt: number[] = PLACE_IDS.map(() => -1), events: string[] = [];
+  let fe = -1, x3 = -1, x3pair = '';
+  const owned = new Set<number>([sp('dollop')]);
+  const feed = (r: Rec, min: number): void => {
+    out.n = 0; apply(st, d2, out, r);
+    for (let k = 0; k < out.n; k++) {
+      if (out.kind[k] === QOUT.QUEST) { const id = QUESTS[out.a[k]].id; if (id === 'X3' && x3 < 0) { x3 = min; x3pair = `${CATALOG[r[4]]?.id}+${CATALOG[r[5]]?.id}`; } if (QUESTS[out.a[k]].kind === 'finale') events.push(`${id}@${min.toFixed(1)}`); }
+      if (out.kind[k] === QOUT.UNLOCK) { if (out.a[k] === UNLOCK_FRIENDS) { if (fe < 0) fe = min; } else if (out.a[k] < opened.length && opened[out.a[k]] < 0) { opened[out.a[k]] = min; stampsAt[out.a[k]] = st.sc[SC.ST]; } }
+    }
+    for (let p = 0; p < PLACE_IDS.length; p++) if (opened[p] < 0 && placeOpen(st, p)) { opened[p] = min; stampsAt[p] = st.sc[SC.ST]; }
+    if (fe < 0 && chapterOpen(st, CHAPTERS.length - 1)) fe = min;
+  };
+  const GIFT_PICK: Record<number, string> = { 1: 'puddlo', 2: 'boingle' };
+  const claimGifts = (): void => {
+    const today = DAY0 + Math.floor(t / DAYLEN);
+    for (let ch = 1; ch < CHAPTERS.length; ch++) {
+      if (lastClaim === today || !giftReady(st, ch)) continue;
+      const s0 = sp(GIFT_PICK[ch] ?? GIFT_LISTS[ch][0]);
+      setGiftState(st, ch, 2, s0, today); lastClaim = today; owned.add(s0);
+      feed([EV.GIFT, 0, cur, -1, s0, 255, famOf(s0), 1, BY.PLAYER, 0, 0], t);
+      events.push(`gift:${CATALOG[s0].id}@${t.toFixed(1)}`);
+    }
+  };
+  for (const [min, r] of firstTen(sp('thumbly'), sp('munchip'))) { t = min; cur = r[2]; feed(r, t); if (r[0] === EV.CAPSULE) owned.add(r[4]); }
+  t = 10; claimGifts();
+  const PUD = sp('puddlo'), BOI = sp('boingle'), X3 = qIdx('X3');
+  const recsOf = (q: number): Rec[] => q === X3 ? [[EV.SOCIAL, S.GREET, cur, -1, PUD, BOI, famOf(PUD), 2, BY.SELF, EV_FLAG.BEST_PAIR, 0]] : scriptFor(d2, PLACE_CAPS, q);
+  const ready = (q: number): boolean => {
+    if (!isShown(d2, q) || isDone(st, q) || !questOpen(st, d2, q)) return false;
+    if (q === X3) return owned.has(PUD) && owned.has(BOI);
+    const recs = recsOf(q);
+    return recs.length > 0 && recs.every((r) => r[2] === 0 || placeOpen(st, r[2]));
+  };
+  const costOf = (q: number): number => (QUESTS[q].kind === 'finale' ? 5 : d2.cEv[d2.qFirst[q]] === EV.VISIT ? 0.5 : d2.cEv[d2.qFirst[q]] === EV.DISCOVER ? 2 : 3.5);
+  const order: string[] = [];
+  const sessionOf = (m: number): number => (m < DAYLEN ? (m < DAYLEN / 2 ? 0 : 1) : 1 + Math.floor(m / DAYLEN));
+  let visitedNewest = 1;
+  while (t < 4 * DAYLEN) {
+    setQuestDay(st, DAY0 + Math.floor(t / DAYLEN));
+    // a newly opened place: the player goes there at the start of the next session (the Places button shows it; nothing pushes)
+    let newest = -1;
+    for (let p = PLACE_IDS.length - 1; p > visitedNewest && newest < 0; p--) if (opened[p] >= 0 && sessionOf(t) > sessionOf(opened[p])) newest = p;
+    const chCur = CHAPTERS.findIndex((c) => c.place === cur);
+    if (newest >= 0 && chCur >= 0 && !isDone(st, CHAPTERS[chCur].finale) && QUESTS.some((qq, j) => qq.chapter === chCur && ready(j))) newest = -1;
+    if (newest >= 0) { visitedNewest = newest; if (cur !== newest) { cur = newest; t += 0.5; feed([EV.VISIT, 0, cur, -1, 255, 255, 255, 2, BY.PLAYER, 0, 0], t); order.push(`>${PLACE_IDS[cur]}@${t.toFixed(1)}`); claimGifts(); continue; } }
+    let q = trackerQuest(st, d2, cur, false, true);
+    if (q >= 0 && !ready(q)) q = -1;
+    if (q < 0) for (let j = 0; j < NQ && q < 0; j++) if (ready(j) && doableAt(d2, j, cur)) q = j;
+    if (q < 0) {
+      // travel to the newest open place with work left
+      let to = -1;
+      for (let p = PLACE_IDS.length - 1; p >= 0 && to < 0; p--) if (p !== cur && (p === 0 || placeOpen(st, p))) for (let j = 0; j < NQ; j++) if (ready(j) && doableAt(d2, j, p)) { to = p; break; }
+      if (to < 0) { stalls++; t += 3.5; claimGifts(); continue; }
+      cur = to; t += 0.5; order.push(`>${PLACE_IDS[cur]}@${t.toFixed(1)}`);
+      feed([EV.VISIT, 0, cur, -1, 255, 255, 255, 2, BY.PLAYER, 0, 0], t);
+      claimGifts();
+      continue;
+    }
+    t += costOf(q);
+    order.push(`${QUESTS[q].id}@${t.toFixed(1)}`);
+    for (const r of recsOf(q)) { if (r[2] !== cur && r[2] !== 0 && placeOpen(st, r[2])) { cur = r[2]; } feed(r, t); }
+    claimGifts();
+  }
+  const within = (v: number, est: number): boolean => v >= est * 0.5 && v <= est * 1.5;
+  const rip = opened[2], fro = opened[3], rain = opened[4];
+  const boiAt = events.find((e) => e.startsWith('gift:boingle')), pudAt = events.find((e) => e.startsWith('gift:puddlo'));
+  const after = (e: string | undefined): number => (e ? Number(e.split('@')[1]) : Infinity);
+  const inOrder = rip >= 0 && fro > rip && rain > fro && stampsAt[2] >= 12 && stampsAt[3] >= 20 && stampsAt[4] >= 28 && stampsAt[2] < 14 && stampsAt[3] < 22 && stampsAt[4] < 30;
+  // the hard part of the stream (a gate): every S2 place opens within four active days, in order, at its stamp count; no stall; X3 by the gift pair
+  row('QU-11', 'the multi-day stream, S2 build: Ripple, Frostbell and Rainleaf open in order at 12, 20 and 28 stamps within four active days; Fizzwell (S3) stays shut; the player never runs out of open work; X3 completes by the gift pair Puddlo and Boingle after both are claimed',
+    inOrder && !placeOpen(st, 5) && stalls === 0 && x3 >= after(boiAt) && x3pair === 'puddlo+boingle',
+    `stamps at opening ${stampsAt[2]} / ${stampsAt[3]} / ${stampsAt[4]}; ${st.sc[SC.ST]} stamps at ${t.toFixed(1)} min (Fizzwell needs 36); stalls ${stalls}; X3 at ${x3.toFixed(1)} min (${x3pair}); ${pudAt ?? 'no Puddlo'} ${boiAt ?? 'no Boingle'}`);
+  // QU-11 is a REPORTED row (PLAYGROUND_BUILD 18): the times against QUESTS 7's estimates, +-50%, at the pace assumed above
+  const rep = (name: string, v: number, est: number, when: string): string => `${name} ${v.toFixed(1)} min (QUESTS 7: ${when}, est. ${est} -> ${within(v, est) ? 'within' : 'OUTSIDE'} +-50%)`;
+  info('QU-11', `reported, S2 stream vs QUESTS 7: ${rep('Ripple', rip, 18.75, "day 1's second session")}; ${rep('Frostbell', fro, 37.5, 'about day 2')}; ${rep('Rainleaf', rain, 62.5, 'about day 3')}; ${rep('Friends Everywhere', fe, 18.75, 'the second session')}; finales and gifts ${events.join(' ')}`);
+  info('QU-11', `S2 stream order: ${order.join(' ')}`);
 }
 
 /* ═══════════════════════════════ QU-12: wish caps ═══════════════════════════════ */

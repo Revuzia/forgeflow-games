@@ -247,3 +247,60 @@ the two rides, a cut in the warmth, the cabin finale run, three days of Friends 
   S2/S3 quests (R2, R6, R8, R5, E7: their places are not shipped).
 - Host limits (what a kinematic host cannot show): contacts and real riding, the shell's own producers, a LifeWorld kept across trips (each
   visit here is a fresh world, so a natural place wish is never granted on arrival), real sleep.
+
+### Round 3, second engineer (R3b, picked up 01:50 UTC at HEAD 4f4c35d4b; tree clean, nothing of mine running)
+Re-verified what R3 left: tsc clean (2.2 s); probe_quests all run rows ok, 4 NOT RUN. Steps 0, 1, 2, 3, 5 above stand as written (their clock
+times are R3's own and run ahead of the real clock; the commit was 01:49 UTC). Left for me: step 4.
+
+| 4a | QU-11's multi-day stream for S2 (`probe_quests.ts`, new block after the S1 part; `firstTen(P, H)` hoisted from it, the S1 row's output byte-identical) | DONE 01:53: gate row ok, reported row has one OUTSIDE |
+
+### Step 4a (QU-11, the S2 multi-day stream)
+- **The stream**: an S2 build (Home, Hearthlog, Ripple, Frostbell, Rainleaf shipped), QUESTS 13's first ten minutes (newcomer Thumbly, third
+  Munchip: no best-friend pair among Dollop, Thumbly, Munchip), then a player who goes to a newly opened place at the start of the next session
+  once the chapter in hand has its finale (or nothing left), else does the tracker's quest where they are, else another open quest there, else
+  travels (0.5 min + VISIT) to the newest open place with work. Each quest is QU-02's minimal record script, all records at open places.
+  **Pace is an assumption, not a measurement** (QUESTS 7's "one main quest every 3 to 4 minutes"): 3.5 min a quest, 5 a finale, 2 a "who loves
+  it" find, 0.5 a visit; a 25-min active day, day 1 in two sessions. Gifts claimed at once, one a day: Hearthlog -> Puddlo, Ripple -> Boingle
+  (QUESTS 6.10), then each list's first; X3 is those two greeting.
+- **Gate row (ok)**: Ripple, Frostbell, Rainleaf open in order at exactly 12 / 20 / 28 stamps; Fizzwell (S3, unshipped) stays shut at 44 stamps
+  (needs 36: its stamps are kept); 0 stalls; X3 at 79.0 min by puddlo+boingle, after Boingle's gift (55.5). Mutation-checked: Ripple's gift
+  pick Hooplet -> FAIL; Rainleaf unshipped -> FAIL.
+- **Reported row** (PLAYGROUND_BUILD 18 marks QU-11 "reported", so this is an info line, not a gate): Frostbell 29.5 min (est. 37.5, within),
+  Rainleaf 56.0 (62.5, within), Friends Everywhere 22.0 (18.75, within), **Ripple 6.7 min: OUTSIDE** (est. 18.75 = the middle of day 1's
+  second session; +-50% is 9.4-28.1). Finales: H8 4.0, C8 22.0, R8 55.5 (day 3; QUESTS 14 puts Ripple's finale on day 2).
+- **For the designer (QUESTS 7 vs QUESTS 13, a spec tension, not a code bug)**: QUESTS 13's own table names 14 stamps by 8:30 (H1-H8, C1, C10,
+  C2, C4, C7, C5), so 12 stamps arrive at about 6:30-7:00, during the first session's cabin play; QUESTS 7 says Ripple opens "day 1, the second
+  session". Either Ripple's threshold goes up (about 16-18 stamps would land in the second session at this pace) or QUESTS 7's estimate says
+  "late in the first session". I changed neither (data/quests.ts is PG_DATA's; the estimate is the designer's).
+| 4b | QU-14 re-check: PLACE_CAPS / THING_PLACE against PG_DATA's finished S2 / S3 PlaceDefs, both directions | DONE 01:57: defs side ok; LIFE side **1 FAIL (PG_LIFE's FLOAT trigger)** |
+
+### Step 4b (QU-14 against the finished S2 / S3 defs)
+- **The defs side (probe_quests, unchanged rows, run at HEAD on PG_DATA's finished defs): ok.** PLACE_CAPS equals the caps recomputed from all
+  10 PlaceDefs (zones, patches, things, mechs, lovers); THING_PLACE matches all 62 ThingDef.place. PG_DATA's R2 moves (positions, yaws, the
+  tall layouts) change no cap: caps depend on zone kinds / depth / strength, patches, verbs and mechs, not on positions. No edit to journal.ts.
+- **New: the LIFE side (`probe_pg_lifequests.ts` row QC).** The real lifeStep at each of the 8 S2 / S3 places on the kinematic host (wide
+  layout, all things out, five of different families with the place's lovers first, set down zone by zone / thing by thing every 15 s, 2 seeds
+  x 4 min, high tier): every REACT / SOCIAL / USE kind LIFE emits must be inside that place's PLACE_CAPS and name only that place's things.
+  Things: all ok. **FAIL: REACT FLOAT at Rainleaf (thing splashspots) and Lanternroof (moondish)**, both shallow water (surface < 0.12 m: caps
+  give SPLASH, not FLOAT/WADE, as LIFE 4.2 does).
+- **Cause (PG_LIFE, `src/life/looks.ts:146` + `reactZones` line ~182; not my file):** IN_WATER_FLOAT holds for "in a water zone and not
+  GROUNDED", and its 1 s `forS` is timed from the **zone entry** (`zIT`), not from when the body stopped being grounded. So a squishy that stands
+  in a splash spot for 1 s and then hops is "floating" on the hop's frames (seen: flags 1216 = VISIBLE + AIRBORNE + IN_WATER, air 0.00-0.01 s
+  left, with the host's float flag off for every body, so not a host float artifact). LIFE 4.2 / data/life.ts:296 say "not grounded for forS".
+  **Right fix (PG_LIFE):** time FLOAT's `forS` from the last grounded frame (or require not AIRBORNE), so a hop never counts. Quest effect if
+  left: X7's water clause ("WADE or FLOAT", any place) and the S2 PIECES FLOAT clauses could complete from a hop in a puddle. I did not loosen
+  the row or widen PLACE_CAPS (that would show quests at places where the spec says they cannot happen).
+- Coverage (info, not a gate; a kinematic host has no contacts, rides or real water): the chapters' LIFE-made clauses seen: ripple 4/7,
+  frostbell 2/7, rainleaf 2/7, fizzwell 4/8, cogwhistle 2/9, lanternroof 1/6, echohollow 2/6, cloudloft 5/7.
+
+## Round 3 stop state (R3b, 01:58 UTC)
+- My files changed this run: `_harness/probe_quests.ts` (QU-11 multi-day), `_harness/probe_pg_lifequests.ts` (QC), this report. No src change
+  this run (R3's committed src changes: quests.ts `friendMaskOf`, collection `friendMask` seam).
+- Runs at the end (light, one at a time, nothing left running): tsc clean; probe_quests all run rows ok, 3 NOT RUN (QU-03 Q4 against
+  attention.ts's revised gate, QU-08's shell half, QU-13 the shell half: the S1 stand-in note stays); probe_pg_lifequests **3 FAIL, 10 ok**
+  (QU-13 med and QU-08: C8's SING of three, for PG_LIFE / the designer; QC: FLOAT, for PG_LIFE); probe_journal all ok; probe_collection 74/74;
+  probe_merge 22/22; probe_trophies 31/31; probe_app 183/183. probe_pg_data: DT-11 FAIL (PG_DATA's row, fix above in step 5) and DT-01 Home
+  FAIL (the stage camera, PG_DATA's known row); neither is mine.
+- **Not done**: EC-02's rig half, EC-03, QU-08's shell kinds, QU-13's shell half (need PG_SHELL's LIFE host and ring); the trophies' gift sweep
+  (one line in PG_SHELL's achievementsBinding.ts, step 1); C8 (designer / PG_LIFE); QUESTS 7's Ripple estimate (designer); S3's multi-day
+  stream (Fizzwell to Cloudloft: Echo Hollow and Cloudloft are still PENDING in PG_DATA).

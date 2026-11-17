@@ -4,8 +4,8 @@ import type { IconName } from '../icons.ts';
 import { PRIVACY_LINE } from '../../portal/copy.ts';
 
 // ---------------------------------------------------------------------------------------------------------------- Settings
-export type SliderKey = 'volume' | 'music' | 'squishBoost' | 'shake';
-export type SwitchKey = 'uiSounds' | 'extraSquish' | 'haptics' | 'calm' | 'skipAnimations' | 'fastOpen' | 'shortcuts';
+export type SliderKey = 'volume' | 'music' | 'squishBoost' | 'shake' | 'chatter' | 'ambience';
+export type SwitchKey = 'uiSounds' | 'extraSquish' | 'haptics' | 'calm' | 'skipAnimations' | 'fastOpen' | 'shortcuts' | 'autonomy';
 export type SegKey = 'quality';
 
 export interface SegOption { value: string; label: string; icon?: IconName }
@@ -34,6 +34,9 @@ export const SETTINGS_GROUPS: readonly SettingGroup[] = [
   { id: 'sound', title: 'Sound', rows: [
     { kind: 'slider', id: 'wh-volume', key: 'volume', label: 'Volume' },
     { kind: 'slider', id: 'wh-music', key: 'music', label: 'Music' },
+    // PLAYGROUND (PLAYGROUND_BUILD 11.9, D-28): the squishies' little voices and each place's own sounds, each on its own slider
+    { kind: 'slider', id: 'wh-chatter', key: 'chatter', label: 'Voices' },
+    { kind: 'slider', id: 'wh-ambience', key: 'ambience', label: 'Place sounds' },
     { kind: 'switch', id: 'wh-uisounds', key: 'uiSounds', label: 'Button sounds', hint: 'Soft taps and chimes when you press things.' },
     { kind: 'slider', id: 'wh-boost', key: 'squishBoost', label: 'Louder squish' },
   ] },
@@ -49,6 +52,8 @@ export const SETTINGS_GROUPS: readonly SettingGroup[] = [
     { kind: 'switch', id: 'wh-fast', key: 'fastOpen', label: 'Fast open', hint: 'Quick pop for repeats.' },
   ] },
   { id: 'other', title: 'Other', rows: [
+    // PLAYGROUND (11.9, LIFE.md 5.6): autonomy, on by default; the help line is the spec's word for word
+    { kind: 'switch', id: 'wh-autonomy', key: 'autonomy', label: 'Squishies move on their own', hint: 'When off, they stay where you put them. They still look around and chirp, and play when you ask.' },
     { kind: 'switch', id: 'wh-keys', key: 'shortcuts', label: 'Keyboard shortcuts', hint: 'G gravity, M sound, H Hoard, 1 2 3 tools (C cut, S snap), [ ] switch squishy.' },
     { kind: 'link', id: 'wh-howto-link', label: 'How to play', icon: 'help', to: 'howto' },
   ] },

@@ -3,15 +3,18 @@
 //
 // Stored under SETTINGS_KEY as JSON. Versions:
 //   (no `v`)  slice 1 (2026-10-02): volume, squishBoost, haptics, shake, gravity, quality.
-//   v: 2      SHELL-2a: the same six plus the OPTIONAL round-2 fields (music, extraSquish, calm, skipAnimations, fastOpen, shortcuts).
+//   v: 2      SHELL-2a: the same six plus the OPTIONAL round-2 fields (music, extraSquish, calm, skipAnimations, fastOpen, shortcuts; uiSounds).
+//   v: 3      PLAYGROUND (PG_SHELL round 3, PLAYGROUND_BUILD.md 11.9): + the optional chatter ("Voices"), ambience ("Place sounds") and autonomy
+//             ("Squishies move on their own"). Raised from 2 so the published v2 build (and a rollback, an older tab) CARRIES these keys through
+//             its saves instead of dropping them: a v2 build keeps unknown keys only for a blob with v > 2. A v2 blob reads as v3 (by absence).
 // Migration is by absence: a round-2 field that is not in the blob means "the player never chose", and resolveSettings() supplies the
-// default at use time (so Calm keeps following prefers-reduced-motion until the player sets it). A blob from a NEWER build (v > 2) is
+// default at use time (so Calm keeps following prefers-reduced-motion until the player sets it). A blob from a NEWER build (v > 3) is
 // read for the fields this build knows, and its unknown keys are carried through every save so a rollback never eats them.
 import type { Settings, QualityTier } from '../contracts.ts';
 import { clamp } from './rng.ts';
 
 export const SETTINGS_KEY = 'wobblehoard:v1:settings';
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 
 /** The slice of Web Storage we use. localStorage satisfies it; so does a Map-backed fake. */
 export interface StorageLike {
@@ -90,9 +93,10 @@ export function defaultSettings(env: SettingsEnv = detectEnv()): Settings {
 /** Every field present: what the shell actually applies. */
 export type ResolvedSettings = Required<Settings>;
 
-/** Defaults of the optional round-2 fields (SOUND.md round 3: music 0.45; DESIGN 6.6: calm follows reduced motion). */
-export function optionalDefaults(env: SettingsEnv): Pick<ResolvedSettings, 'music' | 'extraSquish' | 'calm' | 'skipAnimations' | 'fastOpen' | 'shortcuts' | 'uiSounds'> {
-  return { music: 0.45, extraSquish: false, calm: env.reducedMotion, skipAnimations: false, fastOpen: false, shortcuts: true, uiSounds: true };
+/** Defaults of the optional fields (SOUND.md round 3: music 0.45; DESIGN 6.6: calm follows reduced motion; PLAYGROUND_BUILD 11.9: Voices 0.6,
+ *  Place sounds 0.5, autonomy on). */
+export function optionalDefaults(env: SettingsEnv): Pick<ResolvedSettings, 'music' | 'extraSquish' | 'calm' | 'skipAnimations' | 'fastOpen' | 'shortcuts' | 'uiSounds' | 'chatter' | 'ambience' | 'autonomy'> {
+  return { music: 0.45, extraSquish: false, calm: env.reducedMotion, skipAnimations: false, fastOpen: false, shortcuts: true, uiSounds: true, chatter: 0.6, ambience: 0.5, autonomy: true };
 }
 
 /** Fill the optional fields the player never chose with their defaults. Never throws. */
@@ -102,12 +106,14 @@ export function resolveSettings(s: Settings, env: SettingsEnv): ResolvedSettings
     volume: s.volume, squishBoost: s.squishBoost, haptics: s.haptics, shake: s.shake, gravity: s.gravity, quality: s.quality,
     music: s.music ?? d.music, extraSquish: s.extraSquish ?? d.extraSquish, calm: s.calm ?? d.calm,
     skipAnimations: s.skipAnimations ?? d.skipAnimations, fastOpen: s.fastOpen ?? d.fastOpen, shortcuts: s.shortcuts ?? d.shortcuts, uiSounds: s.uiSounds ?? d.uiSounds,
+    chatter: s.chatter ?? d.chatter, ambience: s.ambience ?? d.ambience, autonomy: s.autonomy ?? d.autonomy,
   };
 }
 
-export const SETTING_KEYS = ['volume', 'squishBoost', 'haptics', 'shake', 'gravity', 'quality', 'music', 'extraSquish', 'calm', 'skipAnimations', 'fastOpen', 'shortcuts', 'uiSounds'] as const;
-const OPTIONAL_UNITS = ['music'] as const;
-const OPTIONAL_BOOLS = ['extraSquish', 'calm', 'skipAnimations', 'fastOpen', 'shortcuts', 'uiSounds'] as const;
+export const SETTING_KEYS = ['volume', 'squishBoost', 'haptics', 'shake', 'gravity', 'quality', 'music', 'extraSquish', 'calm', 'skipAnimations', 'fastOpen', 'shortcuts', 'uiSounds',
+  'chatter', 'ambience', 'autonomy'] as const;
+const OPTIONAL_UNITS = ['music', 'chatter', 'ambience'] as const;
+const OPTIONAL_BOOLS = ['extraSquish', 'calm', 'skipAnimations', 'fastOpen', 'shortcuts', 'uiSounds', 'autonomy'] as const;
 
 const unit = (v: unknown, fallback: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? clamp(v, 0, 1) : fallback;
@@ -165,7 +171,7 @@ export function loadSettings(storage: StorageLike | null, env: SettingsEnv = det
   return parseSettingsText(text, env) ?? base;
 }
 
-/** Persist (format v2: the six slice fields always, an optional field only once the player chose it). Returns false when storage is
+/** Persist (format v3: the six slice fields always, an optional field only once the player chose it). Returns false when storage is
  *  missing or refused the write (the caller may ignore it). Unknown keys of a blob written by a NEWER build are kept. */
 export function saveSettings(storage: StorageLike | null, s: Settings): boolean {
   if (!storage) return false;

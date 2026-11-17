@@ -1,0 +1,56 @@
+/* PLAYGROUND: the Journal and the Travel sheet (QUESTS.md 15): a later-* chunk's sheet (loaded with later-journal.ts, never in the first download), on the kit's own
+   pieces (k-panel, k-scrim, k-card, k-btn, k-group-title) like the Trophies screen (trophies.css): colour from the --k-* roles, size from the --wh-* tokens. The only
+   motion is the kit's own fade and sheet entry, so Calm keeps it. Forms: a card (wide), a bottom sheet (stack), the full height (strip), the whole screen (tiny). Every grid
+   takes its columns from the width (320 px: one column). */
+.jn-scrim { grid-template: minmax(0, 1fr) / minmax(0, 1fr); animation: ov-fade var(--k-fd-3) linear backwards; }
+.jn { width: min(760px, 100%); height: min(100%, 720px); max-height: 100%; overflow: hidden; display: flex; flex-direction: column; animation: ov-move-up var(--k-mv-3) var(--wh-ease-spring) backwards; }
+.jn :where(h2, h3, p, ul) { margin: 0; }
+.jn-head { flex: none; display: grid; grid-template: "title tabs close" / auto minmax(0, 1fr) auto; align-items: center; gap: var(--wh-s3); min-height: 68px; padding: var(--wh-s3) var(--wh-s3) var(--wh-s2) var(--wh-s5); }
+.jn-title { grid-area: title; min-width: 0; }
+.jn-title:focus { outline: none; }
+.jn-tabs { grid-area: tabs; justify-self: end; display: flex; flex-wrap: wrap; gap: var(--wh-s1); }
+.jn-close { grid-area: close; }
+.jn-tab { min-height: var(--wh-hit); padding: 0 var(--wh-s3); font: var(--wh-w-bold) var(--wh-fs-small)/1.2 var(--wh-font-ui); }
+.jn-tab[aria-selected="true"] { background: var(--k-sel-bg); color: var(--k-sel-fg); }
+.jn-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: var(--wh-s2) var(--wh-s5) var(--wh-s5); }
+.jn-scroll:focus-visible { outline: var(--k-ring-w) solid var(--k-ring); outline-offset: calc(-1 * var(--k-ring-w)); }
+.jn-pane, .jn-group { display: grid; gap: var(--wh-s3); min-width: 0; }
+.jn-pane { gap: var(--wh-s4); }
+.jn-group .k-group-title { margin-top: var(--wh-s2); }
+.jn-lead { font: var(--wh-w-bold) var(--wh-fs-small)/1.35 var(--wh-font-ui); color: var(--k-fg); }
+.jn-quests, .jn-tiles, .jn-cards, .jn-wishes, .jn-later, .jn-facts { display: grid; gap: var(--wh-s2); padding: 0; list-style: none; min-width: 0; }
+.jn-tiles, .jn-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: var(--wh-s3); }
+.jn-quest, .jn-wish { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: var(--wh-s3); align-items: start; padding: var(--wh-s3); }
+.jn-wish { grid-template-columns: 24px minmax(0, 1fr); align-items: center; font: var(--wh-w-mid) var(--wh-fs-small)/1.35 var(--wh-font-ui); }
+.jn-quest[data-state="done"] { opacity: 0.86; }
+.jn-quest[data-state="done"] .jn-stamp { color: var(--k-ok, var(--k-fg)); }
+.jn-stamp { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--k-surface-2, transparent); color: var(--k-fg-dim); }
+.jn-stamp .k-icon { width: 20px; height: 20px; }
+.jn-q-text { display: grid; gap: 2px; min-width: 0; }
+.jn-q-title, .jn-tile-name, .jn-card-name { font: var(--wh-w-bold) var(--wh-fs-body, 16px)/1.25 var(--wh-font-ui); color: var(--k-fg); overflow-wrap: anywhere; }
+.jn-q-hint, .jn-tile-fam, .jn-q-need, .jn-tile-n { font: var(--wh-w-mid) var(--wh-fs-small)/1.35 var(--wh-font-ui); color: var(--k-fg-dim); overflow-wrap: anywhere; }
+.jn-q-need, .jn-tile-n { font-variant-numeric: tabular-nums; }
+.jn-tile, .jn-card { display: grid; gap: var(--wh-s1); align-content: start; padding: var(--wh-s3) var(--wh-s4); min-width: 0; }
+.jn-tile[data-got="false"] { opacity: 0.8; }
+.jn-facts { gap: 2px; font: var(--wh-w-mid) var(--wh-fs-small)/1.35 var(--wh-font-ui); color: var(--k-fg); }
+.jn-gift { display: grid; gap: var(--wh-s2); padding: var(--wh-s3) var(--wh-s4); }
+.jn-gift-line { font: var(--wh-w-mid) var(--wh-fs-small)/1.35 var(--wh-font-ui); color: var(--k-fg); }
+.jn-gift-row { display: flex; flex-wrap: wrap; gap: var(--wh-s2); }
+.jn-gift-pick, .jn-go { min-height: var(--wh-hit); }
+.jn-sky { display: block; height: 56px; border-radius: var(--wh-r-card, 12px); background: linear-gradient(160deg, var(--k-accent-2, #f6c89a), var(--k-accent, #e9906a)); }
+.jn-card[data-sky="home"] .jn-sky { background: linear-gradient(160deg, var(--k-surface-2, #f3e3cf), var(--k-accent-2, #f6c89a)); }
+.jn-card[data-open="false"] { opacity: 0.86; }
+.jn-later-row { display: flex; align-items: center; gap: var(--wh-s2); font: var(--wh-w-mid) var(--wh-fs-small)/1.35 var(--wh-font-ui); color: var(--k-fg-dim); }
+.jn-later-row .k-icon { width: 18px; height: 18px; }
+body[data-layout="stack"] .jn-scrim { align-items: end; padding: 0; }   /* stack: a bottom sheet */
+body[data-layout="stack"] .jn { width: min(560px, 100%); height: min(100%, 94dvh); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; border-bottom: 0; animation: ov-sheet var(--k-mv-4) var(--wh-ease) backwards; }
+body[data-layout="stack"] .jn .k-panel-grip { display: block; }
+body[data-layout="stack"] .jn-head { grid-template: "title close" "tabs tabs" / minmax(0, 1fr) auto; min-height: 0; padding: var(--wh-s2) var(--wh-s3) var(--wh-s2) var(--wh-s4); row-gap: var(--wh-s2); }
+body[data-layout="stack"] .jn-tabs { justify-self: stretch; }
+body[data-layout="stack"] .jn-scroll { padding: var(--wh-s2) calc(var(--safe-r, 0px) + var(--wh-s4)) calc(var(--safe-b, 0px) + var(--wh-s5)) calc(var(--safe-l, 0px) + var(--wh-s4)); }
+body[data-layout="strip"] .jn { height: 100%; }
+body[data-layout="strip"] .jn-head { min-height: 56px; padding-block: var(--wh-s1); }
+body[data-layout="tiny"] .jn-scrim { padding: 0; }
+body[data-layout="tiny"] .jn { width: 100%; height: 100%; }
+body[data-layout="tiny"] .jn-head { grid-template: "title close" "tabs tabs" / minmax(0, 1fr) auto; min-height: 0; padding: var(--wh-s1) var(--wh-s2); }
+body[data-layout="tiny"] .jn-scroll { padding: var(--wh-s1) var(--wh-s3) var(--wh-s3); }

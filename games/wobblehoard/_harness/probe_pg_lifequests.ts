@@ -5,7 +5,8 @@
 // conventions of PG_LIFE.md and PG_QUESTS.md) and the real collection + journal it feeds. What this host cannot show: real contacts (a ride
 // the player sets is a flag, a ball roll is a push rule), the shell's own producers (VISIT, BRING, TOUCH, PHOTO, UI are written as the
 // scripted player's records), real SoftBodies.
-// Run: node _harness/probe_pg_lifequests.ts   (exit 1 on any failure; about 20 s)
+// QC (round 3, R3b): QU-14's LIFE half, the real lifeStep at the 8 S2 / S3 places against journal.ts PLACE_CAPS and THING_PLACE.
+// Run: node _harness/probe_pg_lifequests.ts   (exit 1 on any failure; about 9 s)
 import v8 from 'node:v8';
 import type { LifeSnapshot, LifeIntents, LifeEvents, PlayEventRing } from '../src/contracts.ts';
 import type { Genome } from '../src/core/genome.ts';
@@ -14,9 +15,10 @@ import { SPECIES } from '../src/data/species.ts';
 import type { PlaceDef } from '../src/data/places.ts';
 import { PLACE as HOME } from '../src/data/place_home.ts';
 import { PLACE as CABIN } from '../src/data/place_hearthlog.ts';
-import { THING_IDS, ZONE, MECH } from '../src/data/places.ts';
+import { THING_IDS, ZONE, MECH, PLACE_IDS } from '../src/data/places.ts';
+import { PLACE_CAPS, THING_PLACE } from '../src/collection/journal.ts';
 import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, THING_KIND, USE_VERB, SPECIES_LIFE as SPECIES_LIFE_T } from '../src/data/life.ts';
-import { WISH_STATE, EV, BY, QUESTS, FACT, UI_KIND, EV_FLAG } from '../src/data/quests.ts';
+import { WISH_STATE, EV, BY, QUESTS, FACT, UI_KIND, EV_FLAG, CHAPTERS } from '../src/data/quests.ts';
 import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends, lifeWishOf,
   moverCapOf, unitCapOf } from '../src/life/step.ts';
@@ -707,6 +709,70 @@ for (const tier of [1, 0]) {
     m1.sp === m0.sp && m1.credits === m0.credits && tasks1 === tasks0 && h.c.practice().opened === opened0 && ready === 0 && byP === 0 && quests.length > 0 && quests.every((e) => !e.byPlayer),
     `${h.records.length} LIFE records; SP ${m0.sp} -> ${m1.sp}, credits ${m0.credits} -> ${m1.credits}, gifts ready ${ready}`);
   h.c.dispose();
+}
+
+/* ═══════════════ QC: QU-14's LIFE half on every PlaceDef (S2 / S3 included: PG_DATA's finished defs) ═══════════════
+ * journal.ts PLACE_CAPS says what can happen at each place (QU-14 recomputes it from the defs in probe_quests). Here the REAL lifeStep runs at
+ * every place on this kinematic host (wide layout, all its things out, five of different families with the place's lovers first; every 15 s
+ * the host sets each body down in the next zone or at the next thing, as a carry would) and the check is the other direction: every REACT,
+ * SOCIAL and USE that LIFE emits at a place is inside that place's caps, and every thing it names is THING_PLACE's for that place. A LIFE kind
+ * outside the caps would mean the shown set hides a quest LIFE can do there (or the tracker skips it). The coverage line (info) lists the
+ * chapter's clauses LIFE produced on this host; what it did not produce is not evidence of a problem (no contacts, no real water or riding). */
+{
+  const PLACE_MODS: PlaceDef[] = [];
+  for (const id of PLACE_IDS) PLACE_MODS.push(((await import(`../src/data/place_${id}.ts`)) as { PLACE: PlaceDef }).PLACE);
+  const bitOf = (k: number): number => 1 << k;
+  const famFirst = MATERIAL_FAMILY_IDS.map((f) => CATALOG.find((c) => c.family === f)!.id);
+  const outside: string[] = [], cover: string[] = [];
+  let totalEv = 0;
+  for (let p = 2; p < PLACE_MODS.length; p++) {
+    const def = PLACE_MODS[p], caps = PLACE_CAPS[p];
+    const lovers = Object.entries(SPECIES_LIFE_T as Record<string, { place: string }>).filter(([, l]) => l.place === def.id).map(([id]) => id);
+    const party: string[] = [];
+    for (const id of [...lovers, ...famFirst]) if (party.length < 5 && !party.includes(id) && !party.some((q) => CATALOG.find((c) => c.id === q)!.family === CATALOG.find((c) => c.id === id)!.family && !lovers.includes(id))) party.push(id);
+    const seen = { react: new Set<number>(), social: new Set<number>(), use: new Set<string>() };
+    for (const seed of [5, 6]) {
+      const sim = new Sim(seed, def, 0, 30);
+      sim.s.place = p; sim.s.tier = 2;
+      const spawn = (Array.isArray(def.spawn) ? def.spawn : [[0, 0]]) as readonly (readonly [number, number])[];
+      party.forEach((sp, i) => sim.add(i, sp, spawn[i % spawn.length][0], spawn[i % spawn.length][1], { seed: seed * 1000 + i * 101, float: i % 2 === 0 }));
+      def.things.forEach((t) => sim.addThing(t.id, t.x, t.z));
+      const spots: number[][] = [...def.zones.map((z) => [z.x, z.z]), ...def.things.map((t) => [t.x, t.z])];
+      for (let k = 0; k < 16; k++) {
+        party.forEach((_, i) => { const sp2 = spots[(k + i * 3) % spots.length], b = sim.bodies[i]; b.x = sp2[0] + 0.15 * i; b.z = sp2[1]; b.scoot = false; b.asleep = false; b.still = 0; });
+        sim.run(15);
+      }
+      for (const e of sim.evs) {
+        if (e.kind !== LIFE_EV.REACT && e.kind !== LIFE_EV.SOCIAL && e.kind !== LIFE_EV.USE && e.kind !== LIFE_EV.PIECES) continue;
+        totalEv++;
+        const tag = `${def.id}:${e.kind === LIFE_EV.REACT ? 'REACT' : e.kind === LIFE_EV.SOCIAL ? 'SOCIAL' : e.kind === LIFE_EV.USE ? 'USE' : 'PIECES'} ${e.sub}${e.thing >= 0 ? ' ' + THING_IDS[e.thing] : ''}`;
+        if (e.kind === LIFE_EV.REACT) { seen.react.add(e.sub); if (!(caps.reacts & bitOf(e.sub))) outside.push(tag); }
+        if (e.kind === LIFE_EV.SOCIAL) { seen.social.add(e.sub); if (!(caps.socials & bitOf(e.sub))) outside.push(tag); }
+        if (e.kind === LIFE_EV.USE) { seen.use.add(`${e.sub}:${e.thing}`); if (!(caps.verbs & bitOf(e.sub))) outside.push(tag); }
+        if (e.thing >= 0 && THING_PLACE[e.thing] !== p) outside.push(`${tag} (thing of place ${THING_PLACE[e.thing]})`);
+      }
+    }
+    // coverage: the chapter's REACT / SOCIAL / USE clauses LIFE produced here (by sub and, when named, thing)
+    const ch = CHAPTERS.findIndex((c) => c.place === p);
+    const want: string[] = [], got: string[] = [];
+    for (const q of QUESTS) {
+      if (q.chapter !== ch) continue;
+      for (const c of q.clauses) {
+        if (c.ev !== EV.REACT && c.ev !== EV.SOCIAL && c.ev !== EV.USE) continue;
+        const subs: readonly number[] = c.sub ?? [];
+        const th = c.thing ?? -1;
+        if ((c.by ?? 0) === 1) continue;   // the player's own (set on, ring): not LIFE's
+        want.push(q.id);
+        const hit = c.ev === EV.REACT ? (subs.length === 0 ? seen.react.size > 0 : subs.some((x) => seen.react.has(x))) : c.ev === EV.SOCIAL ? (subs.length === 0 ? seen.social.size > 0 : subs.some((x) => seen.social.has(x)))
+          : [...seen.use].some((u) => { const [v, t] = u.split(':').map(Number); return (subs.length === 0 || subs.includes(v)) && (th < 0 || t === th); });
+        if (hit) got.push(q.id);
+      }
+    }
+    cover.push(`${def.id} ${got.length}/${want.length}${want.filter((x) => !got.includes(x)).length ? ' (not on this host: ' + want.filter((x) => !got.includes(x)).join(' ') + ')' : ''}`);
+  }
+  check('QC', `(QU-14's LIFE half) at the 8 S2 / S3 places the real lifeStep (2 seeds x 4 min each, five out, set down zone by zone) emits only REACT / SOCIAL / USE kinds inside journal.ts PLACE_CAPS, and names only that place's things (THING_PLACE)`,
+    outside.length === 0 && totalEv > 0, outside.length ? [...new Set(outside)].join(', ') : `${totalEv} LIFE events`);
+  console.log(`info QC the chapters' REACT / SOCIAL / USE clauses LIFE produced on this host: ${cover.join('; ')}`);
 }
 
 console.log(`\n${fails === 0 ? `all ${oks} checks passed` : `${fails} FAILED, ${oks} ok`}`);

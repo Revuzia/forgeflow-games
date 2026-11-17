@@ -940,12 +940,21 @@ export interface SquishAudio {
 }
 
 /* ── PLAYGROUND shell and the dev hook (src/shell, src/ui; PLAYGROUND_BUILD.md 11) ──
- * The five PLAYGROUND settings (chatter, ambience, autonomy, bubbleWords, bubblesInPhoto) are NOT declared here yet on purpose:
- * src/core/settings.ts resolveSettings() returns Required<Settings>, so a Settings key and its default must land in ONE change. The SHELL
- * lane adds them to `Settings` in this file together with SETTING_KEYS, OPTIONAL_UNITS / OPTIONAL_BOOLS, optionalDefaults and
- * resolveSettings, and raises SETTINGS_VERSION to 3 so an older v2 build carries the five keys through its saves instead of dropping
- * them (settings.ts 8-9: unknown keys are kept only for a blob with v > 2); migration stays by absence (exact text: PLAYGROUND_BUILD.md
- * 11.9). */
+ * The PLAYGROUND settings land with src/core/settings.ts in ONE change (resolveSettings() returns Required<Settings>, so a key and its
+ * default go together), and SETTINGS_VERSION is 3 so an older v2 build carries these keys through its saves instead of dropping them
+ * (settings.ts: unknown keys are kept only for a blob with v > the build's version); migration stays by absence (PLAYGROUND_BUILD.md 11.9).
+ * PG_SHELL round 3 (2026-11-17) landed THREE of the five: chatter ("Voices"), ambience ("Place sounds") and autonomy ("Squishies move on
+ * their own"). bubbleWords and bubblesInPhoto wait for the word labels and the Snap shutter (not built yet): adding them later is again one
+ * change in this block and settings.ts (no version bump needed: v 3 already carries unknown keys of a newer blob). */
+export interface Settings {
+  /** PLAYGROUND: the "Voices" slider 0..1 (= AudioSettings.chatter: creature voices only; 0 mutes them). Default 0.6. */
+  chatter?: number;
+  /** PLAYGROUND: the "Place sounds" slider 0..1 (= AudioSettings.ambience: each place's ambience bed). Default 0.5. */
+  ambience?: number;
+  /** PLAYGROUND: "Squishies move on their own" (LIFE.md 5.6). Default true. Off: LIFE issues no motion of its own (a player-asked
+   *  "Go play with..." and a ride the player set up still move that one squishy); gaze, expressions, bubbles and voices go on. */
+  autonomy?: boolean;
+}
 
 export interface DebugHook {
   /** PLAYGROUND (dev only): brain states, needs, behaviour ids, the attention counters and the awake units, as plain JSON. */

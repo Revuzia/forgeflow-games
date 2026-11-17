@@ -11,6 +11,7 @@ import type { SpeciesId } from '../data/catalog.ts';
 import type { Game } from './game.ts';
 import { TUNING } from './feel.ts';
 import { bestMultiSwipe, tipSwipe, toPx } from './cutProbe.ts';
+import type { LifeHostApi } from './lifeLink.ts';
 
 export interface LabApi {
   play(kind: 'poke' | 'squish' | 'release' | 'land' | 'pop' | 'blend'): void;
@@ -491,6 +492,10 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       } catch { return { ok: false }; }
     },
     playSound(kind) { lab.play(kind); },
+    // PLAYGROUND (contracts.ts DebugHook; dev only): the LIFE host's state, the journal, a trip by the Travel sheet's own path
+    life: () => (game.life ? game.life.debug() : null),
+    quests: () => { const h = game.life as LifeHostApi | null; const v = h ? h.journal() : null; return v ? { stamps: v.stamps, places: v.places, firstWish: v.firstWish, wisher: v.wisher, keepsakes: v.keepsakes, quests: v.quests.filter((q) => q.shown).map((q) => ({ id: q.id, done: q.done, open: q.open, have: q.have, need: q.need })), wishes: v.wishes, gifts: v.gifts } : null; },
+    travel: (place) => { const h = game.life as LifeHostApi | null; return h ? h.travel(String(place)) : Promise.resolve(false); },
     bodyScreen() {
       const d = game.host.bodyScreen();
       return d ? { x: d.x / vp().w, y: d.y / vp().h, rPx: d.r } : null;

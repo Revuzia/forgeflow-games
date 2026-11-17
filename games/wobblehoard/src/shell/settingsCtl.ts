@@ -9,6 +9,8 @@
 //   quality / gravity              stage.setQuality, body.gravity + stage.setFloatMode
 //   haptics                        haptics.setEnabled(haptics && the device really vibrates)
 //   extraSquish / skipAnimations / fastOpen / shortcuts are read where they act (driver, ceremonies, capsules, keyboard)
+//   chatter / ambience (PLAYGROUND) audio.setSettings({ ..., chatter, ambience }): the Voices and Place sounds buses
+//   autonomy (PLAYGROUND)           read by the LIFE host every frame (shell/life.ts: LifeSnapshot.autonomy)
 import type { Settings, SoftBodyLike, SquishAudio, StageLike } from '../contracts.ts';
 import type { ResolvedSettings, SettingsEnv, StorageLike } from '../core/settings.ts';
 import { SETTING_KEYS, loadSettings, resolveSettings, sanitizeSetting, sanitizeSettings, saveSettings } from '../core/settings.ts';
@@ -54,8 +56,9 @@ export function createSettingsController(d: SettingsDeps): SettingsController {
   function apply(force = false): void {
     const a = applied, s = settings, { audio, stage } = d;
     const mutedNow = d.muted() || (d.audioPaused() && !audio.setPaused);   // setPaused (suspend) is better; mute is the fallback
-    if (force || a.volume !== s.volume || a.squishBoost !== s.squishBoost || a.muted !== mutedNow || a.uiSounds !== s.uiSounds) {
-      audio.setSettings({ master: s.volume, squishBoost: s.squishBoost, muted: mutedNow, uiSounds: s.uiSounds });
+    // (PLAYGROUND 11.9: "Voices" and "Place sounds" are AudioSettings.chatter / .ambience, the engine's own buses: in the same one call)
+    if (force || a.volume !== s.volume || a.squishBoost !== s.squishBoost || a.muted !== mutedNow || a.uiSounds !== s.uiSounds || a.chatter !== s.chatter || a.ambience !== s.ambience) {
+      audio.setSettings({ master: s.volume, squishBoost: s.squishBoost, muted: mutedNow, uiSounds: s.uiSounds, chatter: s.chatter, ambience: s.ambience });
     }
     if (force || a.music !== s.music) {
       try {

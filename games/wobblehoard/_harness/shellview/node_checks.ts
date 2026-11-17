@@ -9,7 +9,8 @@ import { createApp } from '../../src/app.ts';
 import type { App } from '../../src/app.ts';
 import { makeStarterGenome, encodeGenome } from '../../src/core/genome.ts';
 import type { Genome } from '../../src/core/genome.ts';
-import { SETTINGS_KEY, defaultSettings, loadSettings, memoryStorage, resolveSettings, saveSettings } from '../../src/core/settings.ts';
+import { SETTINGS_KEY, SETTINGS_VERSION, defaultSettings, loadSettings, memoryStorage, resolveSettings, saveSettings } from '../../src/core/settings.ts';
+import * as settingsV2 from './settings_v2_frozen.ts';
 import { speciesBaseGenome, tierOf } from '../../src/data/catalog.ts';
 import * as cat2 from '../../src/data/catalog.ts';
 import { KEY_POINTER_ID, attachKeyboard } from '../../src/input/keyboard.ts';
@@ -965,17 +966,53 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check('migration: a slice-1 blob (no v) loads its six fields; the round-2 fields stay unset (they follow their defaults)', l1.volume === 0.3 && l1.quality === 'low' && l1.music === undefined && l1.calm === undefined && resolveSettings(l1, env).calm === true);
   saveSettings(v1, { ...l1, calm: false });
   const s1 = JSON.parse(v1.getItem(SETTINGS_KEY)!);
-  check('migration: the first save writes v: 2 with the chosen round-2 field only', s1.v === 2 && s1.calm === false && !('music' in s1) && s1.volume === 0.3);
-  const v3 = memoryStorage({ [SETTINGS_KEY]: JSON.stringify({ v: 3, volume: 0.5, futureThing: { a: 1 } }) });
+  // RE-SPECIFIED by PG_SHELL round 3 (2026-11-17): the format is v3 now (PLAYGROUND_BUILD.md 11.9: raised from 2 so the published v2 build carries the PLAYGROUND
+  // keys through its saves); the row checks the same rule against the build's own version, which is 3
+  check('migration: the first save writes v: 3 (SETTINGS_VERSION) with the chosen round-2 field only', SETTINGS_VERSION === 3 && s1.v === 3 && s1.calm === false && !('music' in s1) && s1.volume === 0.3);
+  // RE-SPECIFIED with the same reason: a NEWER build is now v: 4 (a v: 3 blob is this build's own format)
+  const v3 = memoryStorage({ [SETTINGS_KEY]: JSON.stringify({ v: 4, volume: 0.5, futureThing: { a: 1 } }) });
   const l3 = loadSettings(v3, env);
   saveSettings(v3, { ...l3, music: 0.2 });
   const s3 = JSON.parse(v3.getItem(SETTINGS_KEY)!);
-  check('a blob from a NEWER build (v: 3): known fields read, its unknown keys and version survive our save', l3.volume === 0.5 && s3.v === 3 && s3.futureThing?.a === 1 && s3.music === 0.2);
+  check('a blob from a NEWER build (v: 4): known fields read, its unknown keys and version survive our save', l3.volume === 0.5 && s3.v === 4 && s3.futureThing?.a === 1 && s3.music === 0.2);
+  // PLAYGROUND (PG_SHELL round 3, PLAYGROUND_BUILD.md 11.9): Voices, Place sounds and autonomy
+  check('PLAYGROUND settings: Voices 0.6, Place sounds 0.5 and "Squishies move on their own" on by default (resolveSettings fills them by absence)',
+    res.chatter === 0.6 && res.ambience === 0.5 && res.autonomy === true);
+  const v2 = memoryStorage({ [SETTINGS_KEY]: JSON.stringify({ v: 2, volume: 0.4, squishBoost: 0.4, haptics: false, shake: 0.35, gravity: true, quality: 'auto', music: 0.3, calm: false }) });
+  const l2 = loadSettings(v2, env), r2 = resolveSettings(l2, env);
+  check('migration: a v2 blob (the published build) reads as v3: its fields kept, the three PLAYGROUND settings at their defaults',
+    l2.volume === 0.4 && l2.music === 0.3 && l2.calm === false && l2.chatter === undefined && r2.chatter === 0.6 && r2.ambience === 0.5 && r2.autonomy === true);
+  saveSettings(v2, { ...l2, chatter: 0.25, ambience: 0, autonomy: false });
+  const s2 = JSON.parse(v2.getItem(SETTINGS_KEY)!);
+  const l2b = loadSettings(v2, env);
+  check('a v3 save keeps the chosen PLAYGROUND values (Voices 0.25, Place sounds 0 = off, autonomy off) and reads them back',
+    s2.v === 3 && s2.chatter === 0.25 && s2.ambience === 0 && s2.autonomy === false && l2b.chatter === 0.25 && l2b.ambience === 0 && l2b.autonomy === false);
+  const bad = loadSettings(memoryStorage({ [SETTINGS_KEY]: JSON.stringify({ v: 3, chatter: 'loud', ambience: 7, autonomy: 'yes' }) }), env);
+  check('a hostile v3 blob: a non-number Voices and a non-boolean autonomy stay unset (defaults), Place sounds 7 is clamped to 1', bad.chatter === undefined && bad.ambience === 1 && bad.autonomy === undefined);
+  // the OLD code (the published v2 build, frozen in shellview/settings_v2_frozen.ts) saving over our v3 blob: it carries the three keys (it keeps unknown keys of a v > 2 blob)
+  const old = settingsV2.loadSettings(v2, env);
+  settingsV2.saveSettings(v2, { ...old, volume: 0.9 });
+  const sOld = JSON.parse(v2.getItem(SETTINGS_KEY)!);
+  check('rollback: the published v2 code reads our v3 blob and its save CARRIES Voices, Place sounds and autonomy (and keeps v: 3), so a rollback or an older tab never erases them',
+    settingsV2.SETTINGS_VERSION === 2 && sOld.v === 3 && sOld.volume === 0.9 && sOld.chatter === 0.25 && sOld.ambience === 0 && sOld.autonomy === false && loadSettings(v2, env).autonomy === false,
+    JSON.stringify(sOld));
   const r = rig({ env, storage: memoryStorage() });
   check('boot under reduced motion: Calm on (stage.setCalmEffects(true)), shake scale 0, music bed on at 0.45 via setMusic',
     r.fake.log.of('setCalmEffects').at(-1)?.args[0] === true && r.w.stage.rec.of('setShakeScale').at(-1)!.args[0] === 0 && JSON.stringify(r.fake.log.of('setMusic').at(-1)?.args[0]) === '{"on":true,"volume":0.45}');
   r.app.setSetting('music', 0);
   check('music 0 = off: setMusic({ on: false, volume: 0 })', JSON.stringify(r.fake.log.of('setMusic').at(-1)?.args[0]) === '{"on":false,"volume":0}');
+  {
+    const first = r.w.audio.rec.of('setSettings')[0]?.args[0] as { chatter?: number; ambience?: number } | undefined;
+    r.app.setSetting('chatter', 0.3);
+    const a1 = r.w.audio.rec.of('setSettings').at(-1)?.args[0] as { chatter?: number; ambience?: number } | undefined;
+    r.app.setSetting('ambience', 0);
+    const a2 = r.w.audio.rec.of('setSettings').at(-1)?.args[0] as { chatter?: number; ambience?: number } | undefined;
+    const n0 = r.w.audio.rec.of('setSettings').length;
+    r.app.setSetting('autonomy', false);
+    check('PLAYGROUND settings live: Voices and Place sounds reach audio.setSettings (chatter / ambience: 0.6 / 0.5 at boot, then 0.3, then 0); autonomy changes no audio call',
+      first?.chatter === 0.6 && first?.ambience === 0.5 && a1?.chatter === 0.3 && a2?.ambience === 0 && a2?.chatter === 0.3 && r.w.audio.rec.of('setSettings').length === n0 && r.app.settings.autonomy === false,
+      JSON.stringify({ first, a1, a2 }));
+  }
   r.app.setSetting('extraSquish', true);
   const c = r.app.input.screenCentre()!;
   r.app.input.pointerDown({ id: 3, x: c.x, y: c.y, t: r.w.clock.t });
@@ -1581,6 +1618,73 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check(`label: a ${other.tier} genome shows its catalog name "${other.name}" and tier, no invented nickname`, r.app.label.species === other.name && r.app.label.tier === other.tier && r.app.label.nickname === null);
   check('label: the starter shows "Dollop", Common', rig().app.label.species === 'Dollop' && rig().app.label.tier === 'common');
   void encodeGenome;
+}
+
+/* ───────────────────────── 12. PLAYGROUND: the LIFE host (PG_SHELL round 3; PLAYGROUND_BUILD.md 11.1, 11.2, 11.5, 11.14; SH-05 / SH-06 / EC-03 on mock bodies) ───────────────────────── */
+{
+  const { attachLifeHost } = await import('../../src/shell/later-life.ts');
+  const mem = memoryStorage();
+  const r = rig({ storage: mem });
+  const before = r.app.life === null && r.app.earlyLog.n === 0;
+  // a 1.2 s squeeze through the real input path BEFORE the life chunk lands: the early log keeps it
+  const c = r.app.input.screenCentre()!;
+  r.app.input.pointerDown({ id: 7, x: c.x, y: c.y, t: r.w.clock.t });
+  run(r, 1200);
+  r.app.input.pointerUp({ id: 7, x: c.x, y: c.y, t: r.w.clock.t });
+  run(r, 200);
+  const early = r.app.earlyLog.n;
+  check('LIFE host: before the life chunk lands the game is today\'s toy (no host) and the early log keeps the player\'s squeeze (11.14: "the ring keeps the player\'s events")',
+    before && r.app.life === null && early >= 1 && r.app.earlyLog.kind[0] === 1 && r.app.earlyLog.v[0] >= 1, `early ${early}`);
+  const host = attachLifeHost(r.app, { storage: mem, setTimer: () => 0, clearTimer: () => {} })!;
+  run(r, 100);
+  const dbg0 = host.debug() as { chars: Array<{ slot: number }>; journal: { done: string[] } | null };
+  check('LIFE host: attachLifeHost attaches it (game.life), the early squeeze becomes a TOUCH record the journal counts (H1 "A gentle squeeze" done) and the log is emptied',
+    r.app.life === host && r.app.earlyLog.n === 0 && !!dbg0.journal && dbg0.journal.done.includes('H1'), JSON.stringify(dbg0.journal));
+  const items = r.app.hoard.items();
+  const g2 = items[0]?.genome ?? speciesBaseGenome('crimpo', 3);
+  r.app.mat.add({ genome: speciesBaseGenome('crimpo', 3), itemId: 'g-nodecrimpo1' });
+  r.app.mat.add({ genome: speciesBaseGenome('capnap', 4), itemId: 'g-nodecapnap1' });
+  void g2;
+  run(r, 100);
+  const dbg1 = host.debug() as { chars: Array<{ slot: number; species: string; itemId: string | null }> };
+  const slots = [r.app.body, ...r.app.bodies.extras.map((x) => x.body)].map((b) => (b as unknown as { contactSlot?: number }).contactSlot);
+  check('LIFE host: the party is LIFE\'s characters by stable slot (the play body and the two brought out), each body carries its contactSlot (D-65)',
+    dbg1.chars.length === 3 && JSON.stringify(slots) === '[0,1,2]' && dbg1.chars.map((x) => x.species).join() === 'dollop,crimpo,capnap', JSON.stringify({ chars: dbg1.chars.map((x) => x.species), slots }));
+  // SH-05 / SH-06: an `auto` land and an `auto` bump never reach feedback.handle (no land / bump sound, no shake, no haptic) nor the meter (EC-03)
+  const land0 = r.w.audio.rec.count('land'), shake0 = r.w.stage.rec.count('shake'), pop0 = r.w.haptics.rec.count('pop'), dust0 = r.w.stage.rec.of('spawnFx').length;
+  const fed: string[] = [];
+  const realFeed = r.app.hoard.feed.bind(r.app.hoard);
+  (r.app.hoard as unknown as { feed: typeof realFeed }).feed = (e, t) => { fed.push(e.kind); return realFeed(e, t); };
+  const xb = r.app.bodies.extras[0].body as unknown as { queue(e: Record<string, unknown>): void };
+  xb.queue({ kind: 'land', auto: true, intensity: 0.7 });
+  xb.queue({ kind: 'bump', auto: true, intensity: 0.4, finger: -1 });
+  run(r, 50);
+  const autoOk = r.w.audio.rec.count('land') === land0 && r.w.stage.rec.count('shake') === shake0 && r.w.haptics.rec.count('pop') === pop0 && r.w.stage.rec.of('spawnFx').length === dust0 && !fed.includes('land') && !fed.includes('bump');
+  check('LIFE host (SH-05, SH-06, EC-03): an auto land and an auto bump go to the attention budget only: no land sound, no dust, no shake, no haptic, and never collection.feed',
+    autoOk, JSON.stringify({ land: r.w.audio.rec.count('land') - land0, shake: r.w.stage.rec.count('shake') - shake0, pop: r.w.haptics.rec.count('pop') - pop0, fed }));
+  // ... and a land LIFE did not cause (no physics flag, no LIFE drive: a toss, a ceremony drop) is the published path, bit for bit: the land sound and the dust
+  xb.queue({ kind: 'land', intensity: 0.7 });
+  run(r, 50);
+  check('LIFE host: a land LIFE did not cause still takes the published path (feedback.handle: the land sound and its dust)', r.w.audio.rec.count('land') === land0 + 1 && fed.includes('land'), `land +${r.w.audio.rec.count('land') - land0}`);
+  (r.app.hoard as unknown as { feed: typeof realFeed }).feed = realFeed;
+  // quiet: any non-Hand tool; autonomy off reaches the snapshot
+  r.app.setTool('snap');
+  run(r, 50);
+  const q1 = (host.debug() as { quiet: boolean }).quiet;
+  r.app.setTool('hand');
+  run(r, 50);
+  const q0 = (host.debug() as { quiet: boolean }).quiet;
+  r.app.setSetting('autonomy', false);
+  run(r, 50);
+  const a0 = (host.debug() as { autonomy: boolean }).autonomy;
+  r.app.setSetting('autonomy', true);
+  run(r, 50);
+  check('LIFE host: quiet while Snap is in hand (any non-Hand tool) and not with the Hand; "Squishies move on their own" off reaches LIFE (snapshot.autonomy false)', q1 && !q0 && a0 === false && (host.debug() as { autonomy: boolean }).autonomy === true);
+  // the ring: the Journal's UI record and the travel refusal of a place that is not open
+  const okHome = await host.travel('ripple');
+  check('LIFE host: travel refuses a place that has not shipped or is not open (the player stays where they were)', okHome === false && host.place === 0);
+  r.app.dispose();
+  check('LIFE host: dispose detaches it (game.life null after the game is disposed)', r.app.life === null);
 }
 
 console.error = realError;

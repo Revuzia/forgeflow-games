@@ -833,7 +833,8 @@ async function main() {
       await page.focus('.panel .icon-btn'); await page.keyboard.press('Enter'); await sleep(400);
       check('settings: the close button returns focus to the control it was opened from (the Menu button; the gear is gone)', await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Menu'));
       const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('wobblehoard:v1:settings')));
-      check('settings: persisted under wobblehoard:v1:settings as v: 2 with the chosen round-2 fields', stored && stored.v === 2 && stored.volume === 0 && stored.quality === 'low' && stored.gravity === false && stored.squishBoost === 1 && stored.music === 0 && stored.fastOpen === true && stored.extraSquish === true && !('calm' in stored), JSON.stringify(stored));
+      // RE-SPECIFIED by PG_SHELL round 3 (2026-11-17): the format is v3 (PLAYGROUND_BUILD.md 11.9: raised so the published v2 build carries the PLAYGROUND settings through its saves)
+      check('settings: persisted under wobblehoard:v1:settings as v: 3 with the chosen round-2 fields', stored && stored.v === 3 && stored.volume === 0 && stored.quality === 'low' && stored.gravity === false && stored.squishBoost === 1 && stored.music === 0 && stored.fastOpen === true && stored.extraSquish === true && !('calm' in stored), JSON.stringify(stored));
       await page.reload({ waitUntil: 'load' });
       await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
       const afterReload = await state(page);
@@ -3810,19 +3811,21 @@ async function main() {
         await openSettings(page); await sleep(400);
         await page.focus('#wh-music'); await page.keyboard.press('End'); await sleep(300);
         const raw1 = JSON.parse(await page.evaluate(() => localStorage.getItem('wobblehoard:v1:settings')));
-        check('migration: the first change writes v: 2, keeps the old values and adds only the chosen field', raw1.v === 2 && raw1.volume === 0.3 && raw1.quality === 'low' && raw1.music === 1 && !('calm' in raw1), JSON.stringify(raw1));
+        // RE-SPECIFIED by PG_SHELL round 3 (2026-11-17): v: 3 now (PLAYGROUND_BUILD.md 11.9), the same rule otherwise
+        check('migration: the first change writes v: 3, keeps the old values and adds only the chosen field', raw1.v === 3 && raw1.volume === 0.3 && raw1.quality === 'low' && raw1.music === 1 && !('calm' in raw1), JSON.stringify(raw1));
         await page.reload({ waitUntil: 'load' });
         await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
         check('migration: the new field survives a reload', (await state(page)).settings.music === 1);
         await context.close();
       }
       {
-        const { page, context, w } = await open({ query: '?dev=1', init: seed({ v: 3, volume: 0.5, quality: 'high', futureField: { keep: true } }) });
+        // RE-SPECIFIED by PG_SHELL round 3 (2026-11-17): this build writes v: 3 itself (PLAYGROUND_BUILD.md 11.9), so a NEWER build is v: 4; the rule is unchanged
+        const { page, context, w } = await open({ query: '?dev=1', init: seed({ v: 4, volume: 0.5, quality: 'high', futureField: { keep: true } }) });
         mainWatches.push(['newer-blob', w]);
         const s = (await state(page)).settings;
         await page.evaluate(() => window.__WH__.setSetting('fastOpen', true));
         const raw = JSON.parse(await page.evaluate(() => localStorage.getItem('wobblehoard:v1:settings')));
-        check('a blob from a newer build (v: 3): its known values are used, and our save keeps its version and unknown keys', s.volume === 0.5 && s.quality === 'high' && raw.v === 3 && raw.futureField?.keep === true && raw.fastOpen === true, JSON.stringify(raw));
+        check('a blob from a newer build (v: 4): its known values are used, and our save keeps its version and unknown keys', s.volume === 0.5 && s.quality === 'high' && raw.v === 4 && raw.futureField?.keep === true && raw.fastOpen === true, JSON.stringify(raw));
         await context.close();
       }
     });

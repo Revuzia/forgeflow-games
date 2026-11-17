@@ -61,6 +61,9 @@ import type { MeterView } from '../collection/types.ts';
 import { projectToNdc } from '../input/camera.ts';
 import type { Gain, GainKind, Pending } from './xp.ts';
 import { createPending, gainOf } from './xp.ts';
+import type { EarlyLog, LifeHostLike } from './lifeLink.ts';
+import { createEarlyLog, noteEarly } from './lifeLink.ts';
+import { speciesIdx } from '../data/catalog.ts';
 
 export type Phase = 'boot' | 'title' | 'play' | 'error';
 /** LOCK: the polite live-region lines (spoken only: the click and the marker are for the eyes and ears of the player who did it). Nothing is said when nothing locked. */
@@ -272,6 +275,12 @@ export interface Game {
   onSettings(cb: (s: Settings) => void): () => void;
   onMute(cb: (muted: boolean) => void): () => void;
   onPhase(cb: (p: Phase) => void): () => void;
+  /** PLAYGROUND (PLAYGROUND_BUILD 11.14, D-69): the LIFE host of the life chunk (shell/later-life.ts), or null until it has landed (Home is today's toy) */
+  readonly life: LifeHostLike | null;
+  /** attach the host (its act / sense / quest lines in simStep start at the next step); null detaches it (dispose is the host's own) */
+  attachLife(h: LifeHostLike | null): void;
+  /** the player's touches and capsules from before the host landed (the host turns them into ring records when it attaches) */
+  readonly earlyLog: EarlyLog;
   dispose(): void;
 }
 
@@ -328,6 +337,10 @@ export function createGame(deps: GameDeps): Game {
   let pointerNdc: { x: number; y: number } | null = null;
   const frameInput: StageFrameInput = { time: 0, pointerNdc: null };
   const evBuf: SoftEvent[] = [];
+  // PLAYGROUND (PLAYGROUND_BUILD 4, 11.1): the life chunk's host, and the player's events from before it landed (D-69)
+  let life: LifeHostLike | null = null;
+  const early = createEarlyLog();
+  let ceremonyKind: 'capsule' | 'merge' | null = null;
   // the debug ring: preallocated, copied into (no allocation per event)
   const RING = TUNING.recentEvents;
   const ring: SoftEvent[] = Array.from({ length: RING }, () => ({ kind: 'poke', at: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 0 }, intensity: 0, heldFor: 0, finger: 0 }));
@@ -420,9 +433,14 @@ export function createGame(deps: GameDeps): Game {
     beforeStart: () => { leaving(); setTool('hand'); try { mat.clear(); } catch (e) { report(e); } },   // a ceremony shows its own bodies
     markSeen: (ids) => { try { collection.markSeen(ids); } catch (e) { report(e); } },
     ui: {
-      start: (kind) => emit('ceremony', { type: 'start', kind }),
+      start: (kind) => { ceremonyKind = kind; emit('ceremony', { type: 'start', kind }); },
       reveal: (info) => emit('ceremony', { type: 'reveal', info }),
-      end: (info) => { emit('ceremony', { type: 'end', info }); capsules.sync(); queueMicrotask(applyPendingSwitch); },
+      end: (info) => {
+        // PLAYGROUND: a capsule opened before the life chunk landed is kept for the Journal (QUESTS 4: CAPSULE); the host hears the ceremony itself afterwards
+        if (ceremonyKind === 'capsule' && life === null) { try { noteEarly(early, 3, 0, speciesIdx(info.item.genome.species)); } catch { noteEarly(early, 3, 0, 255); } }
+        ceremonyKind = null;
+        emit('ceremony', { type: 'end', info }); capsules.sync(); queueMicrotask(applyPendingSwitch);
+      },
     },
     report,
   });
@@ -576,9 +594,14 @@ export function createGame(deps: GameDeps): Game {
       ringHead = (ringHead + 1) % RING; if (ringCount < RING) ringCount++;
       // a Shift pull's second hand (driver.touch.mirrorEvent): feedback makes no second sound for it, and it is no touch of its own: the meter,
       // the tasks and the sparks see ONE pull (feeding it paid the pull twice, the second at the 3 percent freshness floor: INPUT_SHIFT report)
+      // PLAYGROUND (D-62, SH-05): an `auto` event (LIFE's own motion: nothing the player touched or threw) goes to the host's attention budget, never to
+      // feedback (no bump haptic, no shake) and never to the meter (autonomy never pays); before the host lands nothing is auto
+      if (life !== null && life.takeAuto(b, ev)) continue;
       const twin = (ev.kind === 'snap' || ev.kind === 'grab') && b === activeBody() && driver.touch.mirrorEvent(ev.kind, ev.finger);
       feedback.handle(ev, twin);
       if (twin) continue;
+      if (life !== null) life.noteEvent(b, ev);
+      else if (ev.kind === 'release' || ev.kind === 'snap') noteEarly(early, ev.kind === 'release' ? 1 : 2, ev.kind === 'release' ? ev.heldFor : ev.intensity, speciesOfBody(b));
       // visible XP: a touch kind is read before and after the feed (only these events: the meter view allocates)
       const kind = GAIN_KIND[ev.kind];
       const before = kind && L.gain.length ? meterView : null;
@@ -590,6 +613,15 @@ export function createGame(deps: GameDeps): Game {
       }
     }
   }
+  /** the catalog species idx of a body on the mat (255 when it is none of them); no allocation */
+  function speciesOfBody(b: SoftBodyLike): number {
+    try {
+      if (b === bodies.body) return speciesIdx(bodies.identity.genome.species);
+      const xs = bodies.extras;
+      for (let i = 0; i < xs.length; i++) if (xs[i].body === b) return speciesIdx(xs[i].genome.species);
+    } catch { /* an unknown species */ }
+    return 255;
+  }
   function drain(): void {
     drainBody(bodies.body, ORIGIN);
     const xs = bodies.extras;
@@ -600,17 +632,23 @@ export function createGame(deps: GameDeps): Game {
   function simStep(dt: number): void {
     gestures.update(clock.now());
     driver.flushPendingUps();
+    // PLAYGROUND step 2 (D-58: its own line, never an onStep hook): LIFE act, the due intents through the one arbiter, before the bodies step
+    if (life !== null) { try { life.act(dt); } catch (e) { report(e); } }
     if (dt > 0) bodies.step(dt);
     simTime += dt;
     stepCount++;
     driver.notePress();
     drain();
+    // PLAYGROUND step 5: LIFE sense and think (the snapshot from this step's bodies and events)
+    if (life !== null) { try { life.sense(dt); } catch (e) { report(e); } }
     if (lockOn || lockMarkerN > 0) syncLockMarkers();   // LOCK: the markers follow the held lobes (the body jiggles)
     timers.run(simTime);
     feedback.update(dt);
     try { cut.update(dt); } catch (e) { report(e); }
     capsules.update();
     ceremonies.update();   // a queued ceremony starts once the 1 s burst spacing has passed (flash safety)
+    // PLAYGROUND step 7: the quest host drains the play-event ring into the journal once a frame
+    if (life !== null) { try { life.quest(); } catch (e) { report(e); } }
     for (let i = 0; i < stepHooks.length; i++) { try { stepHooks[i](dt, simTime); } catch (e) { report(e); } }
   }
 
@@ -922,7 +960,12 @@ export function createGame(deps: GameDeps): Game {
     onSettings(cb) { return game.on('settings', cb); },
     onMute(cb) { return game.on('mute', cb); },
     onPhase(cb) { return game.on('phase', cb); },
+    get life() { return life; },
+    attachLife(h) { life = h; },
+    get earlyLog() { return early; },
     dispose() {
+      try { life?.dispose(); } catch (e) { report(e); }
+      life = null;
       loop.stop();
       try { ceremonies.abort(); } catch (e) { report(e); }
       releaseEverything();

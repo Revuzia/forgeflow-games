@@ -15,7 +15,7 @@ import { attachKeyboard } from '../input/keyboard.ts';
 import { attachLifecycle } from '../input/lifecycle.ts';
 import { attachPointerInput } from '../input/pointer.ts';
 import { BOOT_TOTAL, createBootCard } from '../ui/bootCard.ts';
-import { h } from '../ui/dom.ts';
+import { h, isCoarsePointer, prefersReducedMotion } from '../ui/dom.ts';
 import { showErrorCard, webgl2Available } from '../ui/errorCard.ts';
 import { layerCount } from '../ui/modal.ts';
 import { setCalm } from '../ui/motion.ts';
@@ -215,6 +215,32 @@ export async function boot(): Promise<(() => void) | null> {
   });
   const detachLife = attachLifecycle(g);
 
+  // ---- PLAYGROUND: the life chunk (shell/later-life.ts: LIFE, the Journal, Home's things), requested AFTER the first frame of play (D-69), so it is never in
+  // the first-play download; until it lands Home is today's toy (one squishy, no brain, no things) and game.ts's early log keeps the player's events.
+  // A load that fails retries at the next idle moment and never breaks play.
+  let lifeTries = 0, lifeTimer = 0, lifeGone = false, lifeUiOff: () => void = () => { /* nothing yet */ };
+  const loadLife = (): void => {
+    if (lifeGone || g.life || g.phase !== 'play') return;
+    lifeTries++;
+    import('./later-life.ts').then((m) => {
+      if (lifeGone || g.life) return;
+      const host = m.attachLifeHost(g, {
+        storage, subscribe,
+        say: (t) => ui.announcer.say(t),
+        moment: (t) => { ui.toasts.show('success', t, { ms: 3200 }); },
+        stampHaptic: () => { try { g.haptics.uiTap?.('ready'); } catch { /* none */ } },
+        phone: () => isCoarsePointer() || Math.min(window.innerWidth, window.innerHeight) < 600,
+        reducedMotion: () => prefersReducedMotion(),
+      });
+      if (host) { const taps = m.attachBubbleTaps(root, canvas, host, (t) => ui.announcer.say(t)); lifeUiOff = () => taps.destroy(); }
+      ui.lifeAttached();
+    }).catch((e: unknown) => {
+      console.error(e);
+      if (lifeTries < 5) lifeTimer = window.setTimeout(loadLife, 3000 * lifeTries);
+    });
+  };
+  const offLifePhase = g.on('phase', (ph) => { if (ph === 'play' && !g.life) requestAnimationFrame(() => { lifeTimer = window.setTimeout(loadLife, 0); }); });
+
   // another tab changed the settings: follow it (the 'storage' event fires in the OTHER tabs only)
   const onStorage = (e: StorageEvent): void => {
     if (e.key !== SETTINGS_KEY) return;
@@ -270,6 +296,7 @@ export async function boot(): Promise<(() => void) | null> {
   // teardown (a host that unmounts the game, a test): every listener off, the saves flushed, GL context and AudioContext released
   return () => {
     clearTimeout(lostTimer);
+    lifeGone = true; clearTimeout(lifeTimer); offLifePhase(); lifeUiOff();
     offMute();
     removePause(); detachUiSound();
     detachPointer(); detachKeys(); detachLife();

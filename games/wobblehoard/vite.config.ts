@@ -30,6 +30,35 @@ const MAX_REPORT_BYTES = 8 * 1024 * 1024;
 const G0_BUDGET_BYTES = 3 * 1024 * 1024;
 const G0B_FIRST_PLAY_GZIP_BYTES = 600 * 1024;
 
+// PLAYGROUND (PG_SHELL round 3; PLAYGROUND_BUILD.md 13, 14.3, D-69): the lazy chunks that only load AFTER the first frame of play are named `later-*`, so G0b counts
+// what a first play downloads and nothing else. By file name already: `shell/later-life.ts` (the LIFE chunk, requested after the first frame of play) and
+// `ui/later-journal.ts` (the Journal and Travel screens). By facade here: the away chunk (the place host and the ambience bed, loaded with the first trip), each
+// place's three modules (render look, audio recipe, data; loaded when the place is visited) and the stage's lazy bubbles-and-Home-things module (`render/lifelook.ts`:
+// the stage loads it only when the LIFE host first draws a bubble or a thing). A chunk with no facade is `later-shared-*` only when EVERY module in it is one of
+// these lazy-only modules. NOT renamed: `audio/life_voices.ts` (the engine loads it at the first audio unlock, i.e. at the start of play: it is first-play, and G0b
+// counts it). The HONESTY CHECK (sizeBudget's generateBundle): a build FAILS when a chunk counted as first-play statically imports a later-* chunk, because then
+// the later-* name would hide first-play bytes from G0b.
+const LATER_FACADES: ReadonlyArray<readonly [RegExp, (m: RegExpMatchArray) => string]> = [
+  [/[\\/]src[\\/]render[\\/]place\.ts$/, () => 'later-away'],
+  [/[\\/]src[\\/]audio[\\/]ambience\.ts$/, () => 'later-away-sound'],
+  [/[\\/]src[\\/]render[\\/]places[\\/]([a-z]+)\.ts$/, (m) => `later-place-${m[1]}`],
+  [/[\\/]src[\\/]audio[\\/]places[\\/]([a-z]+)\.ts$/, (m) => `later-place-${m[1]}-sound`],
+  [/[\\/]src[\\/]data[\\/]place_([a-z]+)\.ts$/, (m) => `later-place-${m[1]}-data`],
+  [/[\\/]src[\\/]render[\\/]lifelook\.ts$/, () => 'later-lifelook'],
+];
+/** modules that only lazy code imports (the LIFE chunk, the Journal, the away and place chunks, the stage's lazy bubbles) */
+const LAZY_ONLY: readonly RegExp[] = [
+  /[\\/]src[\\/]life[\\/]/, /[\\/]src[\\/]data[\\/](life|places|quests|journal_text|place_[a-z]+)\.ts$/, /[\\/]src[\\/]core[\\/]quests\.ts$/,
+  /[\\/]src[\\/]collection[\\/]journal(_store)?\.ts$/, /[\\/]src[\\/]physics[\\/]props\.ts$/, /[\\/]src[\\/](shell|ui)[\\/]later-/, /[\\/]src[\\/]ui[\\/](wishes\.ts|journal\.css)$/,
+  /[\\/]src[\\/]render[\\/](place|placeview|lifelook|homekit|emotes)\.ts$/, /[\\/]src[\\/]render[\\/]places[\\/]/, /[\\/]src[\\/]audio[\\/](ambience|props|things)\.ts$/, /[\\/]src[\\/]audio[\\/]places[\\/]/,
+];
+export function laterChunkName(facade: string | null, moduleIds: readonly string[]): string | null {
+  const f = facade ?? '';
+  for (const [re, nm] of LATER_FACADES) { const m = f.match(re); if (m) return nm(m); }
+  if (!facade && moduleIds.length > 0 && moduleIds.every((id) => LAZY_ONLY.some((re) => re.test(id)))) return 'later-shared';
+  return null;
+}
+
 type Next = (err?: unknown) => void;
 
 function safeName(raw: string, fallback: string): string {
@@ -193,6 +222,16 @@ export function sizeBudget(limit: number, firstPlayLimit: number): Plugin {
     name: 'wobblehoard-g0-size-budget',
     apply: 'build',
     configResolved(config) { outDir = resolve(config.root, config.build.outDir); },
+    // the honesty check of the later-* names (PG_SHELL round 3): a chunk G0b counts (not later-*) must never STATICALLY import a later-* chunk
+    generateBundle(_o, bundle) {
+      const later = (f: string): boolean => /(^|\/)later-[^/]*$/.test(f);
+      const bad: string[] = [];
+      for (const [f, c] of Object.entries(bundle)) {
+        if (c.type !== 'chunk' || later(f)) continue;
+        for (const imp of c.imports) if (later(imp)) bad.push(`${f} -> ${imp}`);
+      }
+      if (bad.length) throw new Error(`[G0b] a first-play chunk statically imports a later-* chunk, so its later-* name would hide first-play bytes: ${bad.join(', ')}`);
+    },
     closeBundle() {
       const total = dirBytes(outDir);
       const first = firstPlayGzipBytes(outDir);
@@ -235,5 +274,11 @@ export default defineConfig({
     sourcemap: false,
     assetsInlineLimit: 4096,
     chunkSizeWarningLimit: 1024,
+    rolldownOptions: {
+      output: {
+        // PLAYGROUND: the later-* names of the lazy chunks (laterChunkName above); every other chunk keeps Vite's default name
+        chunkFileNames: (c) => { const n = laterChunkName(c.facadeModuleId ?? null, c.moduleIds); return n ? `assets/${n}-[hash].js` : 'assets/[name]-[hash].js'; },
+      },
+    },
   },
 });

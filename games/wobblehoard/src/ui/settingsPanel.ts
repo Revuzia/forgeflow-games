@@ -49,6 +49,7 @@ export const boostWords = (v: number): string => (v <= 0.001 ? 'Off' : v < 0.34 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 const FORMAT: Record<string, (v: number) => string> = {
   volume: pct, music: (v) => (v <= 0.001 ? 'Off' : pct(v)), squishBoost: boostWords, shake: (v) => (v === 0 ? 'Off' : pct(v)),
+  chatter: (v) => (v <= 0.001 ? 'Off' : pct(v)), ambience: (v) => (v <= 0.001 ? 'Off' : pct(v)),
 };
 
 /** Fill `shell` (or make a section) and return the panel. */

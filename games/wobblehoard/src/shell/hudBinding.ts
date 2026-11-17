@@ -52,6 +52,8 @@ import { setTrophyToastSink, trophyToastSub } from './trophyToast.ts';
 import { createTrophiesLauncher } from './trophiesOpen.ts';
 import type { Achievements } from './achievementsBinding.ts';
 import { trophyLine } from '../portal/copy.ts';
+import { attachTooltip } from '../ui/tooltip.ts';
+import type { LifeHostApi } from './lifeLink.ts';
 import '../ui/hoard.css';
 import { COPY } from '../collection/copy.ts';
 
@@ -95,6 +97,11 @@ export interface UiBinding {
   keyUsed(): void;
   /** [ / ]: switch to the oldest / the newest squishy of the quick switcher */
   switchBy(dir: -1 | 1): void;
+  /** PLAYGROUND: the life chunk has landed (boot.ts): the Journal entry shows in the dock, Places once a second place is open */
+  lifeAttached(): void;
+  /** PLAYGROUND: open the Journal / the Travel sheet (later-* chunk); resolves true when it is open */
+  openJournal(from?: HTMLElement): Promise<boolean>;
+  openTravel(from?: HTMLElement): Promise<boolean>;
   destroy(): void;
 }
 
@@ -216,6 +223,46 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   }, true);
   hud.slot.append(hoard.button, hoard.matChip);
   tb.adoptHoard(hoard.button);
+  // ---- PLAYGROUND (QUESTS 15): the Journal and Places entries in the dock's Collection group, beside the Hoard. Hidden until the life chunk lands (boot.ts calls
+  // lifeAttached); Places only once a second place is open. Each opens a later-* screen (ui/later-journal.ts) like the Trophies screen; LIFE goes quiet under it.
+  const lifeBtn = (cls: string, ico: 'book' | 'map', label: string): HTMLButtonElement => {
+    const b = h('button', { class: `k-btn k-tool dock-tool ${cls}`, attrs: { type: 'button', 'aria-label': label, hidden: '' } }, icon(ico), h('span', { class: 'k-btn-label k-tool-label dock-tool-label', text: label }));
+    off.push(attachTooltip(b, label, { place: () => 'above' }).destroy);
+    return b;
+  };
+  const journalBtn = lifeBtn('dock-journal', 'book', 'Journal');
+  const placesBtn = lifeBtn('dock-places', 'map', 'Places');
+  tb.group.append(journalBtn, placesBtn);
+  let screenBusy = false;
+  const openLifeScreen = async (kind: 'journal' | 'travel', from?: HTMLElement): Promise<boolean> => {
+    const host = g.life as LifeHostApi | null;
+    if (!host || screenBusy || g.phase !== 'play') return false;
+    screenBusy = true;
+    const opener = from ?? (kind === 'journal' ? journalBtn : placesBtn);
+    if (hoard.isOpen) hoard.close();
+    if (p.isOpen()) p.close('escape');
+    let m: typeof import('../ui/later-journal.ts');
+    try { m = await import('../ui/later-journal.ts'); } catch (e) { console.error(e); screenBusy = false; screenFailed(); return false; }
+    host.setSheet(kind, true);
+    const onClose = (): void => { host.setSheet(kind, false); screenBusy = false; syncLifeButtons(); };
+    const o = { root, host, game: g, say: (t: string) => announcer.say(t), from: opener, onClose };
+    if (kind === 'journal') m.openJournal(o); else m.openTravel(o);
+    return true;
+  };
+  journalBtn.addEventListener('click', () => { void openLifeScreen('journal'); });
+  placesBtn.addEventListener('click', () => { void openLifeScreen('travel'); });
+  let lifeOn = false, placesShown = false;
+  const syncLifeButtons = (): void => {
+    const host = g.life as LifeHostApi | null;
+    if (!host || !lifeOn) return;
+    if (journalBtn.hidden) { journalBtn.hidden = false; tb.fit(); }
+    const more = (host.openPlaces() & ~1) !== 0;
+    if (more !== placesShown) {
+      placesShown = more; placesBtn.hidden = !more; tb.fit();   // (the host says "Hearthlog Cabin is open. Find it in Places." when it opens)
+    }
+  };
+  const lifeTimer = window.setInterval(syncLifeButtons, 1000);
+  off.push(() => window.clearInterval(lifeTimer));
   off.push(bindHoard(layout, hoard.button, { dock: tb.group, row: hud.slot }, hoard.matChip));
   let dockKey = '';
   const syncDock = (force = false): void => {
@@ -607,6 +654,9 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
       return false;
     },
     keyUsed() { document.body.dataset.kbd = '1'; if (!isCoarsePointer()) hud.setHintMode('keyboard'); },
+    lifeAttached() { lifeOn = true; syncLifeButtons(); },
+    openJournal: (from) => openLifeScreen('journal', from),
+    openTravel: (from) => openLifeScreen('travel', from),
     switchBy(dir) {
       const list = choices().slice(0, QUICK_MAX);
       if (!list.length) { announcer.say('No other squishy to switch to yet.'); return; }
