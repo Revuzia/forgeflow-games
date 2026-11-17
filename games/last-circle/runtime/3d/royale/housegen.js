@@ -689,7 +689,8 @@ const FREEPOOL = { living: ["armchair", "ottoman", "lampSq", "plant"], bedroom: 
 const RESCUE = ["wallShelf", "wallCab", "plant", "lampSq", "trash", "sideTable", "bookcaseLow", "filingCab", "chairMod", "box"];
 // (stage B) the low clutter a mover steps onto in passing (lowest top 0.2 .. 0.55 m): never within 0.9 m of a piece one more step up (see stairsOK)
 const VIS_OCC = [], VIS_OCC3 = [];          // (W10 R1A: the occluders near one entrance's sight lines, reused buffers - see visMask)
-const VIS_PTS = new Float64Array(30);      // (the view model's sample points: one buffer, generate() is synchronous)
+const VIS_PTS = new Float64Array(30), SEG = new Float64Array(16), ROOM_PEND = [];
+const WR_G = { rect: [0, 0, 0, 0], u: 0, v: 0, fq: 0 }, WR_G5 = { rect: [0, 0, 0, 0], u: 0, v: 0, fq: 0 };   // (W10 R1A, CPU: scratch wall spots for tryWall's scan / the guarantee's search)      // (the view model's sample points: one buffer, generate() is synchronous)
 const STEP_CLUTTER = new Set(["rubble", "carton", "cartonOpen", "sacks", "hayBale", "boxStack", "box", "boxOpen", "palletLoad"]);
 // pieces nothing is stood on (a lamp on a bed, a box on a crate stack): everything else with a flat top may carry a lamp / a small plant / a box
 const NOHOST = new Set(["rubble", "hayStack", "sacks", "palletLoad", "boxStack", "cartonOpen", "officeChair", "stoolA", "deskA", "bed", "bedSingle", "sofa", "sofaDesign", "chair", "chairMod", "chairDesk", "stool", "armchair", "ottoman", "crateStack", "bathtub", "toilet", "basin", "sink", "gondola", "shelfLow", "pallet"]);
@@ -2498,8 +2499,15 @@ export function generate(parcel, opts) {
   const NU = Math.round((W + 2 * RING) / GRID), NV = Math.round((D + 2 * RING) / GRID);
   const su = (a) => -W / 2 - RING + (a + 0.5) * GRID, sv = (b) => -D / 2 - RING + (b + 0.5) * GRID;
   const cellOfS = (a, b) => { const i = Math.floor((su(a) + W / 2) / U), j = Math.floor((sv(b) + D / 2) / U); return i >= 0 && j >= 0 && i < nx && j < nz && inFoot(i, j) ? cIdx(i, j) : -1; };
+  const NO_BOXES = [];
   const pieceBoxes = (p) => {                             // local collider boxes of a placed piece: [u0, u1, y0, y1, v0, v1]
-    if (p.cat.deco) return [];
+    if (p.cat.deco) return NO_BOXES;
+    // (W10 R1A, CPU: kept on the piece while its rect / cat / height stand - the variety swap gives a piece a new rect and cat; the callers only read it)
+    if (p._pb && p._pbR === p.rect && p._pbC === p.cat && p._pbY === p.y0) return p._pb;
+    p._pbR = p.rect; p._pbC = p.cat; p._pbY = p.y0;
+    return (p._pb = pieceBoxes0(p));
+  };
+  const pieceBoxes0 = (p) => {
     const yb = s[p.f] + (p.y0 || 0);
     // (round 3: a piece over 0.2 m - a coffee table, an ottoman, a carton - blocks the walk like a tall one: the capsule could step onto it, but
     // the game's NavGrid does not route bots across furniture tops, and a layout that is only open over a coffee table strands them; a 0.14 m
@@ -2539,6 +2547,7 @@ export function generate(parcel, opts) {
       }
     }
   };
+  const blockIntoB = (fr, sfl, pb, stampV, extra) => blockInto(fr, sfl, pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], stampV, extra);   // (W10 R1A, CPU: a box array in, unpacked where blockInto is inlined)
   const blockInto = (fr, sfl, u0, u1, yA, yB, v0, v1, stampV, extra) => {      // (extra: PASS_MARGIN for the ports check)
     const val = stampV || 0;
     if (!(yB > sfl + CAPSULE.step && yA < sfl + CAPSULE.h)) return;
@@ -2594,14 +2603,19 @@ export function generate(parcel, opts) {
       }
     });
     const E = 1e-4, DEEP = 0.01;
-    const covers = (bi, lo, hi) => {                       // is the region lo..hi ([u, y, v]) inside a box other than bi? (such a box holds its centre: one bucket)
-      const l = bucket.get(bkey(Math.floor((lo[0] + hi[0]) / 2 / BK), Math.floor((lo[2] + hi[2]) / 2 / BK)));
+    // (W10 R1A, CPU: the region rides in one Float64Array, CVR = lo[0..2], hi[0..2] - was two arrays a call; the same tests)
+    const CVR = new Float64Array(6);
+    const cv = (a0, a1, a2, b0, b1, b2) => { CVR[0] = a0; CVR[1] = a1; CVR[2] = a2; CVR[3] = b0; CVR[4] = b1; CVR[5] = b2; return CVR; };
+    const covers = (bi, R6) => {                           // is the region lo..hi ([u, y, v]) inside a box other than bi? (such a box holds its centre: one bucket)
+      const l0 = R6[0], l1 = R6[1], l2 = R6[2], h0 = R6[3], h1 = R6[4], h2 = R6[5];
+      const l = bucket.get(bkey(Math.floor((l0 + h0) / 2 / BK), Math.floor((l2 + h2) / 2 / BK)));
       if (!l) return false;
-      for (const oi of l) {
+      for (let i = 0; i < l.length; i++) {
+        const oi = l[i];
         if (oi === bi) continue;
         const o = boxes[oi];
         if (o.p === "skin" || o.p === "glass") continue;      // dressing never hides a face (a pane is see-through, a skin is not a wall)
-        if (o.u0 <= lo[0] + E && o.u1 >= hi[0] - E && o.y0 <= lo[1] + E && o.y1 >= hi[1] - E && o.v0 <= lo[2] + E && o.v1 >= hi[2] - E) return true;
+        if (o.u0 <= l0 + E && o.u1 >= h0 - E && o.y0 <= l1 + E && o.y1 >= h1 - E && o.v0 <= l2 + E && o.v1 >= h2 - E) return true;
       }
       return false;
     };
@@ -2610,17 +2624,17 @@ export function generate(parcel, opts) {
       if (b.p === "gable") { b.h = 63; return; }          // an attic layer: a collider inside the plank + end-wall polygons that draw it (never drawn itself)
       if (b.hp != null) { b.h = b.hp; return; }           // a plate whose wall side is known where it was made (the selftest's flatOn proves the wall is there)
       if (b.p === "skin") {                                // a skin is a PLATE (below): only which thin face lies on the wall matters
-        if (b.y1 - b.y0 <= 0.0151) b.h = covers(bi, [b.u0, b.y1, b.v0], [b.u1, b.y1 + DEEP, b.v1]) ? 63 & ~8 : covers(bi, [b.u0, b.y0 - DEEP, b.v0], [b.u1, b.y0, b.v1]) ? 63 & ~4 : 0;    // a ceiling light
-        else if (b.u1 - b.u0 <= 0.0151) b.h = covers(bi, [b.u0 - DEEP, b.y0, b.v0], [b.u0, b.y1, b.v1]) ? 63 & ~1 : covers(bi, [b.u1, b.y0, b.v0], [b.u1 + DEEP, b.y1, b.v1]) ? 63 & ~2 : 0;
-        else b.h = covers(bi, [b.u0, b.y0, b.v0 - DEEP], [b.u1, b.y1, b.v0]) ? 63 & ~16 : covers(bi, [b.u0, b.y0, b.v1], [b.u1, b.y1, b.v1 + DEEP]) ? 63 & ~32 : 0;
+        if (b.y1 - b.y0 <= 0.0151) b.h = covers(bi, cv(b.u0, b.y1, b.v0, b.u1, b.y1 + DEEP, b.v1)) ? 63 & ~8 : covers(bi, cv(b.u0, b.y0 - DEEP, b.v0, b.u1, b.y0, b.v1)) ? 63 & ~4 : 0;    // a ceiling light
+        else if (b.u1 - b.u0 <= 0.0151) b.h = covers(bi, cv(b.u0 - DEEP, b.y0, b.v0, b.u0, b.y1, b.v1)) ? 63 & ~1 : covers(bi, cv(b.u1, b.y0, b.v0, b.u1 + DEEP, b.y1, b.v1)) ? 63 & ~2 : 0;
+        else b.h = covers(bi, cv(b.u0, b.y0, b.v0 - DEEP, b.u1, b.y1, b.v0)) ? 63 & ~16 : covers(bi, cv(b.u0, b.y0, b.v1, b.u1, b.y1, b.v1 + DEEP)) ? 63 & ~32 : 0;
         return;
       }
-      if (covers(bi, [b.u1, b.y0, b.v0], [b.u1 + DEEP, b.y1, b.v1])) h |= 1;
-      if (covers(bi, [b.u0 - DEEP, b.y0, b.v0], [b.u0, b.y1, b.v1])) h |= 2;
-      if (covers(bi, [b.u0, b.y1, b.v0], [b.u1, b.y1 + DEEP, b.v1])) h |= 4;
-      if (b.y0 <= y0 + E || covers(bi, [b.u0, b.y0 - DEEP, b.v0], [b.u1, b.y0, b.v1])) h |= 8;
-      if (covers(bi, [b.u0, b.y0, b.v1], [b.u1, b.y1, b.v1 + DEEP])) h |= 16;
-      if (covers(bi, [b.u0, b.y0, b.v0 - DEEP], [b.u1, b.y1, b.v0])) h |= 32;
+      if (covers(bi, cv(b.u1, b.y0, b.v0, b.u1 + DEEP, b.y1, b.v1))) h |= 1;
+      if (covers(bi, cv(b.u0 - DEEP, b.y0, b.v0, b.u0, b.y1, b.v1))) h |= 2;
+      if (covers(bi, cv(b.u0, b.y1, b.v0, b.u1, b.y1 + DEEP, b.v1))) h |= 4;
+      if (b.y0 <= y0 + E || covers(bi, cv(b.u0, b.y0 - DEEP, b.v0, b.u1, b.y0, b.v1))) h |= 8;
+      if (covers(bi, cv(b.u0, b.y0, b.v1, b.u1, b.y1, b.v1 + DEEP))) h |= 16;
+      if (covers(bi, cv(b.u0, b.y0, b.v0 - DEEP, b.u1, b.y1, b.v0))) h |= 32;
       // (a skin, <= 1.5 cm trim / shutter / blind window, is a PLATE: only its outward face is drawn - its back lies on the wall; its 1.5 cm edges
       // are not worth two triangles each: nothing can be seen through a 1.5 cm edge but the wall it lies on)
       b.h = h;
@@ -2672,8 +2686,12 @@ export function generate(parcel, opts) {
       let rr = r;
       for (let pass = 0; pass < 2; pass++) {
         let t0 = 0, t1 = best, miss = false;
-        const slab = (o, d, lo, hi) => { if (miss) return; if (d > -1e-9 && d < 1e-9) { if (o < lo - rr || o > hi + rr) miss = true; return; } let a = (lo - rr - o) / d, b = (hi + rr - o) / d; if (a > b) { const tq = a; a = b; b = tq; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) miss = true; };
-        slab(ox, dx, q[0], q[1]); slab(oy, dy, q[2], q[3]); slab(oz, dz, q[4], q[5]);
+        // (W10 R1A, CPU: the three slabs written out - was a closure made per box and pass: garbage; the same arithmetic in the same order)
+        for (let ax = 0; ax < 3 && !miss; ax++) {
+          const o = ax === 0 ? ox : ax === 1 ? oy : oz, d = ax === 0 ? dx : ax === 1 ? dy : dz, lo = q[2 * ax], hi = q[2 * ax + 1];
+          if (d > -1e-9 && d < 1e-9) { if (o < lo - rr || o > hi + rr) miss = true; continue; }
+          let a = (lo - rr - o) / d, b = (hi + rr - o) / d; if (a > b) { const tq = a; a = b; b = tq; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) miss = true;
+        }
         if (miss) break;
         if (t0 > 0) { best = t0; break; }
         if (pass === 1) break;
@@ -2690,25 +2708,31 @@ export function generate(parcel, opts) {
   const occluders = boxes.filter((b) => b.p !== "glass" && b.p !== "skin" && b.p !== "slab" && b.p !== "roof" && b.p !== "shell" && b.p !== "gable" && b.p !== "trim").concat(leafBoxes);
   // (stage B, lane I1: the same boolean, faster - a box wholly outside the segment's bounding box is skipped before the slab divisions, and the view model's
   //  extra lists (the room's tall pieces but the one tested, a body) are walked in place instead of being concatenated per call: no garbage)
-  const segBlocked = (ax, ay, az, bx, by, bz, list, tMax, list2, skip, one) => {
-    const dx = bx - ax, dy = by - ay, dz = bz - az;
+  // (W10 R1A, CPU) the sight line rides in one Float64Array (SEG: ax ay az, bx by bz, tMax; then dx dy dz and the segment's box) instead of 8-15 double
+  // arguments a call: a double passed to a call that is not inlined is boxed (garbage per call, ~0.6 MB a house). The same arithmetic in the same order.
+  const segBlocked = (list, list2, skip, one) => {
+    const S_ = SEG, ax = S_[0], ay = S_[1], az = S_[2], tMax = S_[6];
+    const dx = S_[3] - ax, dy = S_[4] - ay, dz = S_[5] - az;
     const ex = ax + dx * tMax, ey = ay + dy * tMax, ez = az + dz * tMax;
-    const x0 = ax < ex ? ax : ex, x1 = ax < ex ? ex : ax, y0 = ay < ey ? ay : ey, y1 = ay < ey ? ey : ay, z0 = az < ez ? az : ez, z1 = az < ez ? ez : az;
-    if (segHit(ax, ay, az, dx, dy, dz, tMax, list, x0, x1, y0, y1, z0, z1, null)) return true;
-    if (list2 && segHit(ax, ay, az, dx, dy, dz, tMax, list2, x0, x1, y0, y1, z0, z1, skip)) return true;
-    if (one && segHit1(ax, ay, az, dx, dy, dz, tMax, one, x0, x1, y0, y1, z0, z1)) return true;
+    S_[7] = dx; S_[8] = dy; S_[9] = dz;
+    S_[10] = ax < ex ? ax : ex; S_[11] = ax < ex ? ex : ax; S_[12] = ay < ey ? ay : ey; S_[13] = ay < ey ? ey : ay; S_[14] = az < ez ? az : ez; S_[15] = az < ez ? ez : az;
+    if (segHit(list, null)) return true;
+    if (list2 && segHit(list2, skip)) return true;
+    if (one && segHit1(one)) return true;
     return false;
   };
-  const segHit = (ax, ay, az, dx, dy, dz, tMax, list, x0, x1, y0, y1, z0, z1, skip) => {
+  const segHit = (list, skip) => {
+    const S_ = SEG, x0 = S_[10], x1 = S_[11], y0 = S_[12], y1 = S_[13], z0 = S_[14], z1 = S_[15];
     for (let i = 0; i < list.length; i++) {
       const b = list[i];
       if (b.u1 <= x0 || b.u0 >= x1 || b.y1 <= y0 || b.y0 >= y1 || b.v1 <= z0 || b.v0 >= z1) continue;
       if (skip && b.u0 === skip[0] && b.v0 === skip[1] && b.u1 === skip[2] && b.v1 === skip[3]) continue;
-      if (segHit1(ax, ay, az, dx, dy, dz, tMax, b, x0, x1, y0, y1, z0, z1)) return true;
+      if (segHit1(b)) return true;
     }
     return false;
   };
-  const segHit1 = (ax, ay, az, dx, dy, dz, tMax, b) => {
+  const segHit1 = (b) => {
+    const S_ = SEG, ax = S_[0], ay = S_[1], az = S_[2], tMax = S_[6], dx = S_[7], dy = S_[8], dz = S_[9];
     {
       let t0 = 0, t1 = tMax;
       if (Math.abs(dx) < 1e-12) { if (ax <= b.u0 || ax >= b.u1) return false; } else { let a = (b.u0 - ax) / dx, c = (b.u1 - ax) / dx; if (a > c) { const q = a; a = c; c = q; } if (a > t0) t0 = a; if (c < t1) t1 = c; if (t0 >= t1) return false; }
@@ -2761,6 +2785,13 @@ export function generate(parcel, opts) {
     R._view = { ents, prim, occ, occ3, inner };
     return R._view;
   };
+  // (W10 R1A, CPU) the occluders meeting the box round a sight line's origin and the sample points' box (was a closure made per visMask call: garbage)
+  const visNear = (list, out, ax, ay, az, px0, px1, py0, py1, pz0, pz1) => {
+    const x0 = ax < px0 ? ax : px0, x1 = ax > px1 ? ax : px1, y0 = ay < py0 ? ay : py0, y1 = ay > py1 ? ay : py1, z0 = az < pz0 ? az : pz0, z1 = az > pz1 ? az : pz1;
+    out.length = 0;
+    for (let i = 0; i < list.length; i++) { const b = list[i]; if (b.u1 <= x0 || b.u0 >= x1 || b.y1 <= y0 || b.y0 >= y1 || b.v1 <= z0 || b.v0 >= z1) continue; out.push(b); }
+    return out;
+  };
   const visMask = (R, rect, yA, yB, occ, only) => {      // (only: a mask of the entrances to test; default all)              // bit e = entrance e sees the box rect x [yA, yB] (absolute heights)
     if (yB - yA < 0.25) return 0;
     const V = roomView(R), ey = s[R.floor] + EYE_H;
@@ -2784,12 +2815,6 @@ export function generate(parcel, opts) {
     // sight line's own box lies inside it, so segHit skips every other one anyway: the same answer, one pass over the list instead of ten (two lists, accurate)
     let px0 = Infinity, px1 = -Infinity, py0 = Infinity, py1 = -Infinity, pz0 = Infinity, pz1 = -Infinity;
     for (let pi = 0; pi < 30; pi += 3) { const a = P[pi], b = P[pi + 1], c = P[pi + 2]; if (a < px0) px0 = a; if (a > px1) px1 = a; if (b < py0) py0 = b; if (b > py1) py1 = b; if (c < pz0) pz0 = c; if (c > pz1) pz1 = c; }
-    const near = (list, out, ax, ay, az) => {
-      const x0 = ax < px0 ? ax : px0, x1 = ax > px1 ? ax : px1, y0 = ay < py0 ? ay : py0, y1 = ay > py1 ? ay : py1, z0 = az < pz0 ? az : pz0, z1 = az > pz1 ? az : pz1;
-      out.length = 0;
-      for (let i = 0; i < list.length; i++) { const b = list[i]; if (b.u1 <= x0 || b.u0 >= x1 || b.y1 <= y0 || b.y0 >= y1 || b.v1 <= z0 || b.v0 >= z1) continue; out.push(b); }
-      return out;
-    };
     for (let ei = 0; ei < V.ents.length && ei < 30; ei++) {
       if (only && !(only & (1 << ei))) continue;
       const e = V.ents[ei];
@@ -2808,8 +2833,9 @@ export function generate(parcel, opts) {
         if (Math.abs(dy) > hz * TAN_V) continue;
         const dist = Math.sqrt(hz * hz + dy * dy);
         if (dist < 0.2 || dist > 30) continue;
-        if (occE === null) occE = near(occ, VIS_OCC, e.u, ey, e.v);
-        if (segBlocked(e.u, ey, e.v, p0, p1, p2, occE, 1 - 0.02 / dist, tall, rect, null)) continue;
+        if (occE === null) occE = visNear(occ, VIS_OCC, e.u, ey, e.v, px0, px1, py0, py1, pz0, pz1);
+        SEG[0] = e.u; SEG[1] = ey; SEG[2] = e.v; SEG[3] = p0; SEG[4] = p1; SEG[5] = p2; SEG[6] = 1 - 0.02 / dist;
+        if (segBlocked(occE, tall, rect, null)) continue;
         // (the accurate model) and from the third-person camera - through the doorway, past the body
         if (acc) { const du3 = p0 - e.cu, dv3 = p2 - e.cv, dy3 = p1 - e.cy, fwd3 = du3 * e.fu + dv3 * e.fv;
           if (fwd3 <= 0.3) continue;
@@ -2819,8 +2845,9 @@ export function generate(parcel, opts) {
           if (Math.abs(dy3) > hz3 * TAN_V3) continue;
           const dist3 = Math.sqrt(hz3 * hz3 + dy3 * dy3);
           if (dist3 > 30) continue;
-          if (o3 === null) o3 = near(occX || e.occ3, VIS_OCC3, e.cu, e.cy, e.cv);
-          if (segBlocked(e.cu, e.cy, e.cv, p0, p1, p2, o3, 1 - 0.02 / dist3, tall, rect, one)) continue; }
+          if (o3 === null) o3 = visNear(occX || e.occ3, VIS_OCC3, e.cu, e.cy, e.cv, px0, px1, py0, py1, pz0, pz1);
+          SEG[0] = e.cu; SEG[1] = e.cy; SEG[2] = e.cv; SEG[3] = p0; SEG[4] = p1; SEG[5] = p2; SEG[6] = 1 - 0.02 / dist3;
+          if (segBlocked(o3, tall, rect, one)) continue; }
         if (++n >= 2) break;
       }
       if (n >= 2) m |= 1 << ei;
@@ -2999,10 +3026,12 @@ export function generate(parcel, opts) {
         for (let b = wb0; b <= wb1; b++) { const o = b * NU; for (let a = wa0; a <= wa1; a++) RW.free[o + a] = sf0[o + a]; }
       }
       // the pieces not yet in the cache are stamped (not copied in): a sample is free when the cache says so and no new piece stamps it
-      const pend = placed.filter((p) => !RW.inc.has(p)), st = ++roomStamp.b;
-      for (const p of pend) for (const pb of pieceBoxes(p)) blockInto(roomBlk, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], st, pm);
+      const pend = ROOM_PEND, st = ++roomStamp.b; pend.length = 0;
+      for (let i = 0; i < placed.length; i++) if (!RW.inc.has(placed[i])) pend.push(placed[i]);     // (W10 R1A, CPU: a reused list - roomOK is not re-entered)
+      const sfl = s[f];
+      for (let i = 0; i < pend.length; i++) { const pbs = pieceBoxes(pend[i]); for (let j = 0; j < pbs.length; j++) blockIntoB(roomBlk, sfl, pbs[j], st, pm); }
       const ok = roomOK0(RW.free, st);
-      if (ok) for (const p of pend) { const lg = []; for (const pb of pieceBoxes(p)) blockLog(RW.free, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], pm, lg); RW.inc.add(p); RW.log.push(p, lg); }
+      if (ok) for (let i = 0; i < pend.length; i++) { const p = pend[i], lg = [], pbs = pieceBoxes(p); for (let j = 0; j < pbs.length; j++) { const pb = pbs[j]; blockLog(RW.free, sfl, pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], pm, lg); } RW.inc.add(p); RW.log.push(p, lg); }
       return ok;
     };
     const roomOK0 = (fr, bst) => {
@@ -3045,15 +3074,23 @@ export function generate(parcel, opts) {
       if (run.axis === "u") { const v0 = run.sg > 0 ? face : face - cat.d, v1 = run.sg > 0 ? face + cat.d : face; return { rect: [t - cat.w / 2, v0, t + cat.w / 2, v1], u: t, v: (v0 + v1) / 2, fq: run.sg > 0 ? 0 : 2 }; }
       const u0 = run.sg > 0 ? face : face - cat.d, u1 = run.sg > 0 ? face + cat.d : face; return { rect: [u0, t - cat.w / 2, u1, t + cat.w / 2], u: (u0 + u1) / 2, v: t, fq: run.sg > 0 ? 1 : 3 };
     };
+    // (W10 R1A, CPU: the positions' de-duplication written out - was a closure made per call)
+    const rpAdd = (out, t, lo, hi) => { if (t < lo - 1e-6 || t > hi + 1e-6) return; for (let q = 0; q < out.length; q++) if (Math.abs(out[q] - t) < 1e-3) return; out.push(t); };
+    // (the same rect / centre / facing as wallRect, into a reused record)
+    const wallRectInto = (run, cat, t, g) => {
+      const face = run.line + run.sg * JAMB, r = g.rect;
+      if (run.axis === "u") { const v0 = run.sg > 0 ? face : face - cat.d, v1 = run.sg > 0 ? face + cat.d : face; r[0] = t - cat.w / 2; r[1] = v0; r[2] = t + cat.w / 2; r[3] = v1; g.u = t; g.v = (v0 + v1) / 2; g.fq = run.sg > 0 ? 0 : 2; return g; }
+      const u0 = run.sg > 0 ? face : face - cat.d, u1 = run.sg > 0 ? face + cat.d : face; r[0] = u0; r[1] = t - cat.w / 2; r[2] = u1; r[3] = t + cat.w / 2; g.u = (u0 + u1) / 2; g.v = t; g.fq = run.sg > 0 ? 1 : 3; return g;
+    };
+    const wrCopy = (g) => ({ rect: [g.rect[0], g.rect[1], g.rect[2], g.rect[3]], u: g.u, v: g.v, fq: g.fq });
     const runPositions = (run, wdt, pref) => {
       const lo = run.t0 + wdt / 2, hi = run.t1 - wdt / 2;
       if (hi < lo - 1e-6) return [];
       const out = [];
-      const add = (t) => { if (t < lo - 1e-6 || t > hi + 1e-6) return; for (let q = 0; q < out.length; q++) if (Math.abs(out[q] - t) < 1e-3) return; out.push(t); };
       const lo2 = Math.max(lo, run.t0 + JAMB + wdt / 2), hi2 = Math.min(hi, run.t1 - JAMB - wdt / 2);
-      if (pref === "corner") { add(lo2); add(hi2); add(lo); add(hi); }
-      add((lo + hi) / 2);
-      for (let t = lo; t <= hi + 1e-6; t += 0.5) add(Math.round(t * 1000) / 1000);
+      if (pref === "corner") { rpAdd(out, lo2, lo, hi); rpAdd(out, hi2, lo, hi); rpAdd(out, lo, lo, hi); rpAdd(out, hi, lo, hi); }
+      rpAdd(out, (lo + hi) / 2, lo, hi);
+      for (let t = lo; t <= hi + 1e-6; t += 0.5) rpAdd(out, Math.round(t * 1000) / 1000, lo, hi);
       if (pref === "center") out.sort((a, b) => Math.abs(a - (lo + hi) / 2) - Math.abs(b - (lo + hi) / 2) || a - b);
       return out;
     };
@@ -3111,16 +3148,19 @@ export function generate(parcel, opts) {
         if (!roomOK()) { unput(p); return null; }
         return Object.assign(p, { run, t, sideways: !!side });
       };
+      // (W10 R1A, CPU: a candidate spot is written into one scratch record - a copy is made only for a spot that is kept as a spare or passed on: the same spots)
       const scan = (dims, side) => {
-        for (const run of order) for (const t of runPositions(run, dims.w, side ? "corner" : pref)) {
-          const g = wallRect(run, dims, t);
+        const g = WR_G;
+        for (let oi = 0; oi < order.length; oi++) { const run = order[oi], ts = runPositions(run, dims.w, side ? "corner" : pref);
+        for (let ti = 0; ti < ts.length; ti++) { const t = ts[ti];
+          wallRectInto(run, dims, t, g);
           if (!valid(g.rect, y0p, yTop)) continue;
           if (opts.also && !opts.also(run, g)) continue;
           const m = want ? visMask(R, g.rect, s[f] + y0p, s[f] + y0p + cat.h, null, want) : null;
-          if (want && !(m & want)) { if (!mustSee && spare.length < 4) spare.push([run, t, g, side, m]); continue; }
+          if (want && !(m & want)) { if (!mustSee && spare.length < 4) spare.push([run, t, wrCopy(g), side, m]); continue; }
           const p = attempt(run, t, g, side, m);
           if (p) return p;
-        }
+        } }
         return null;
       };
       let p = scan(cat, false);
@@ -3321,7 +3361,7 @@ export function generate(parcel, opts) {
             let done = false;
             if (mode === "wall") {
               const y0 = cat.mount === "wall" ? cat.y0 : 0;
-              for (const run of merged) { if (done) break; for (let t = run.t0 + cat.w / 2; t <= run.t1 - cat.w / 2 + 1e-6 && !done; t += 0.1) done = tryPiece(cat, wallRect(run, cat, Math.round(t * 1000) / 1000), y0, want, ei); }
+              for (const run of merged) { if (done) break; for (let t = run.t0 + cat.w / 2; t <= run.t1 - cat.w / 2 + 1e-6 && !done; t += 0.1) done = tryPiece(cat, wallRectInto(run, cat, Math.round(t * 1000) / 1000, WR_G5), y0, want, ei); }   // (a scratch spot: tryPiece keeps none)
             } else {
               for (const fq of [fqTo, (fqTo + 1) % 4, (fqTo + 3) % 4]) {
                 const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
@@ -3329,7 +3369,8 @@ export function generate(parcel, opts) {
                 // the same over 1,080 houses, ruins 8 short of 4 in 797 rooms vs 4)
                 for (let pu = inner[0] + w / 2; pu <= inner[2] - w / 2 + 1e-6 && !done; pu += FREE5_STEP) for (let pv = inner[1] + d / 2; pv <= inner[3] - d / 2 + 1e-6 && !done; pv += FREE5_STEP) {
                   const u = Math.round(pu * 1000) / 1000, v = Math.round(pv * 1000) / 1000;
-                  done = tryPiece(cat, { rect: [u - w / 2, v - d / 2, u + w / 2, v + d / 2], u, v, fq }, 0, want, ei);
+                  const G = WR_G5, gr = G.rect; gr[0] = u - w / 2; gr[1] = v - d / 2; gr[2] = u + w / 2; gr[3] = v + d / 2; G.u = u; G.v = v; G.fq = fq;
+                  done = tryPiece(cat, G, 0, want, ei);
                 }
                 if (done) break;
               }
