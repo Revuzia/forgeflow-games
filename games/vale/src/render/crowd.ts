@@ -541,7 +541,7 @@ class CrowdSet {
       const bk = { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: h.bind } };
       const om = inkMaterial('crowd', INK.outline, { side: BackSide, blend: 'normal', depthWrite: false, offset: [1, 2], uniforms: { ...bk, ...this.outlineU, uOutlineRes: outlineRes } });
       // perf PERF-m5: the hull draws through its members' LODs (bakeCrowd); CW1 refix (perf done:7): the rest ink
-      // through a welded LOD of that hull within 8 mm (LOD.ink, as a match fighter's outline draws: an untextured shell
+      // through a welded LOD of that hull within 10 mm (LOD.ink, as a match fighter's outline draws: an untextured shell
       // needs no seams), about half its triangles. The victim flash keeps the body's own triangles (it covers the body)
       const hullLod = h.lod;
       const base = hullLod ?? h.geometry.index;

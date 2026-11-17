@@ -16,7 +16,7 @@
 //             metre; the error bound stops it near 0.55), the normals weighted 0.5 and every vertex skinned >= 0.5 to the
 //             `head` bone locked, so the face never changes. The hull plan is rebuilt over it (the veil's depth copy
 //             draws exactly the body's triangles).
-//   ink       a match fighter's rest outline, victim flash and x-ray draw a welded LOD of that LOD1 hull within 8 mm
+//   ink       a match fighter's rest outline, victim flash and x-ray draw a welded LOD of that LOD1 hull within 10 mm
 //             (actors.ts bodyLodOf; the flash slides toward the camera so the coarser shell still covers the body).
 //   crowd     the crowd (crowd.ts: Wicks and small monsters; Wicks have no face) draws its body through a LOD held
 //             within 12 mm in metres (each mesh's own dequantization, see below; textured, so never welded): ~1 px at
@@ -56,16 +56,17 @@ export const LOD = {
    *  Burdam's front pauldron roundel whole at the gameplay camera, the chars lane's _lod1.mjs --uv-weight), the locked
    *  bone and weight */
   body: { ratio: 0.4, errorM: 0.012, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5 },
-  /** orch1 W2-A (GFX-4 LOD, FU-15, TECH-14): a match fighter's face-locked LOD2, simplified from its LOD1 (half of it,
-   *  ~0.2 of the full body), held within 30 mm (under 2 px at the default zoom on a far fighter), the same face lock.
+  /** orch1 W2-A (GFX-4 LOD, FU-15, TECH-14): a match fighter's face-locked LOD2, simplified from its LOD1 (half asked),
+   *  held within 45 mm (under 4 px at the default zoom, 82 px a metre), the same face lock: the head (~25 % of a LOD1)
+   *  never changes, so it reaches 0.55-0.80 of the LOD1 (30 mm reached 0.63-0.84; _harness/_tmp_w2a_lodsweep.mjs).
    *  renderer.ts draws it for a non-local fighter farther than `farM` from the camera's ground centre (back to LOD1
-   *  under `nearM`) or past the `keep` nearest fighters on screen */
-  body2: { ratio: 0.5, errorM: 0.03, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5, farM: 22, nearM: 20, keep: 6 },
+   *  under `nearM`: the outer ring of the screen at the default zoom) or past the `keep` nearest fighters on screen */
+  body2: { ratio: 0.5, errorM: 0.045, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5, farM: 16, nearM: 14, keep: 5 },
   /** a match fighter's ink copies (rest outline, victim flash, x-ray) over its LOD1 hull: a bound in metres */
-  ink: { ratio: 0.4, errorM: 0.008, weld: true },
-  /** orch1 W2-A: the same copies over a LOD2 fighter's hull (actors.ts bodyLod2Parts): within 16 mm, under the flash's
+  ink: { ratio: 0.3, errorM: 0.01, weld: true },
+  /** orch1 W2-A: the same copies over a LOD2 fighter's hull (actors.ts bodyLod2Parts): within 20 mm, under the flash's
    *  25 mm slide toward the camera, so the coarser shell still covers the body it lights */
-  ink2: { ratio: 0.4, errorM: 0.016, weld: true },
+  ink2: { ratio: 0.3, errorM: 0.02, weld: true },
   /** meshes under this many triangles keep their index (the saving would not pay for a second buffer) */
   minTris: 600,
   /** an instanced caster (scatter: trees, rocks) draws its mesh once per instance: a LOD pays from this size */
