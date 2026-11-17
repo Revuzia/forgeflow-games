@@ -1931,3 +1931,53 @@ long press frame-rate independent. Report after 1-2 verified.
 - Look of tnoise=tex on the Mac: matches (slightly stronger dune ripples close up) — irrelevant now.
 - Decision: go to the texture-space material cache (`?tcache=1`, design in SESSION 19 PART B): evaluate the surface once per
   patch texel and amortise, so the per-pixel cost is a few 2D taps regardless of how the noise is computed.
+
+## SESSION 22 (2026-11-17, TERRAIN agent) — `?tcache=1` (default OFF): the terrain material cache, texture-space shading
+- STATE: code written and type-clean (`npx tsc --noEmit`), NOT YET BOOTED in a browser. Nothing proven. Next step is at the end.
+- FILES: new `src/render/planet/tcache.ts` (the cache: GLSL pieces, allocator, validity, bake); `terrainmat.ts` (hooks +
+  `makeTerrainBakeMaterial`); `chunks.ts` (`tcInitPage` in PatchPage, `ChunkLOD.tcMesh / tcRange / tcCorners`,
+  `PatchBatch.pageMesh / slotRange`); `planetview.ts` (`tcache`, `bakeTerrainCache`); `renderer.ts` 1 line (bake after the
+  shadow pass, before the scene pass). Switches: `tcache` (0), `tcmb` (256), `tcbudget` (200000 texels a frame), `tcbias` (0).
+  Probe handle: `globalThis.__TCACHE__` (`.stats`, `.enabled` = in-page A/B). Header: `tcache=1(<MB>,<layers>L)`, `tcstat=...`.
+- DESIGN DECISIONS (each one is a finding from reading evalTerrain, not a preference):
+  1. STORE, 16 B a texel + 2 mips: T0 sRGB8_A8 albedo/1.5 + rough; T1 RGBA16F D + ao; T2 RGBA8 sky, sward, glint share.
+     D is the whole normal offset in the body frame: display normal = normalize(N - D), D = G + |N - G| * microG, G = the
+     bump height's surface gradient taken in the bake. This reproduces the live nesting exactly and needs no screen
+     derivative of a stored height (8-bit height derivatives would terrace). three r186 has no RGB10_A2: 16F it is.
+  2. ADDRESSING, no new vertex data: slot = gl_VertexID / NVERT, lattice (i, j) from gl_VertexID % NVERT in closed form
+     (tcLattice). Per-slot data (layer, tile origin, tile size, knots, graze) sits in an 8x4 RGBA32F table per page that
+     three binds as the BatchedMesh colour texture (`_colorsTexture`, sampled by slot, not by instance: keepIndirectTable
+     makes the instance id unreliable). ASSUMES vertexStart = slot * NVERT; `slotRange` returns null otherwise (= live).
+  3. TILES: 2D array textures made with raw GL (texStorage3D, 3 mips; three's array render targets allocate no mips for
+     MRT) and handed to three by `properties.get(tex).__webglTexture`. Layer 1152^2 cut in 576 slabs, one class each:
+     96 / 144 / 192 / 288 / 576 texels. A tile is a square: lower-left triangle = anchor A, the same lattice rotated 180
+     degrees = anchor B. Bake goes to a three MRT scratch target of the class size, then blits (mip 0 nearest, mips 1-2
+     2:1 linear). three's copyTextureToTexture is NOT usable: its blit ignores the destination offset for srcLevel != 0.
+  4. CAMERA DISTANCE (9 fades in evalTerrain, all mid-pipeline, not separable without 6+ more channels): two anchors
+     at the knots of a global ladder 14 * 2^(i/2) m bracketing the patch's distance range, blended per fragment by its
+     live distance. Interpolation error of a smoothstep fade over one rung < 0.5 % of the fade. No re-bake inside the
+     bracket; outside it the patch goes LIVE (correct, old cost) until re-baked. Cost: 2x memory.
+  5. EYE DIRECTION: swardDetail's graze term (val x 0.94..1.07, tip, gap) is baked at one quantised value per tile and
+     corrected per fragment to first order with ts.sward as the weight; re-bake when the centre's graze moves > 0.2.
+  6. FOOTPRINT: the bake's fw is the texel's. Class = smallest with usable edge >= 1.1 x the patch's edge in pixels at
+     its nearest point, so texels >= pixels; non-max levels need <= pixelError x 32 (Ultra 128 -> class 144). Max-level
+     patches near the camera climb classes; nearer than class 576 resolves (~25 m at 963 px) they stay LIVE.
+     KNOWN LOOK DIFFERENCE TO MEASURE: at grazing angles the live shader fades detail by the long footprint axis; the
+     cache keeps it and filters with mips + 16x aniso (gradients clamped to mip 1.5: the 2-texel border). `tcbias` exists
+     to compare.
+  7. SEAMS: the patch's own skirt is pushed outward by 2 texels in tile space and vBodyPos is EXTRAPOLATED along the
+     patch's lattice steps (uTcEi / uTcEj), so border texels hold the function just outside the patch with real
+     derivatives; live/cached is chosen per PATCH (flat varying), so a pixel quad never straddles the two paths.
+  8. forest floor mask reads this frame's shadow maps (ff_canopy): baked as is, hence the bake runs after the shadow
+     pass; sun moved > 4 deg or year > 0.004 = re-bake at low priority, shown stale meanwhile (the only stale display).
+  9. EDITS / SIM: field textures carry no per-cell dirt, so tcache diffs each changed texture against a reference copy
+     with per-channel thresholds (WATCH) and invalidates the tiles whose vcells moved (live until re-baked).
+  10. LIVE always: patches with lava or fire cells (uTime), emissive only exists there.
+- MEMORY: 247 MB planned at the default cap = 9 layers = 36 slabs. A class-144 tile is 436 kB with both anchors, so the
+  cap holds ~570 class-144 tiles (fewer with near classes). If ~1000 patches are on screen at Ultra the far ones stay
+  live. Levers, not built: class 96 for patches beyond 1.44 x split distance (in the code already, by `need`), single
+  anchor beyond the last fade, a low-res second anchor, `tcmb=512`.
+- NOT HANDLED YET: stealing tiles from far patches for near ones when full; downgrading an over-dense tile; a planet
+  that stops being primary keeps its GL memory; TS_NOSURF with tcache does not compile (debug combination).
+- NEXT (exact): `npm run build`, then a 320x180 probe `?tcache=1` on the town view: 0 shader errors, `__TCACHE__.stats`
+  shows bakes, screenshot pair with `__TCACHE__.enabled` false/true one frame apart -> imgdiff. Then views, edits, pan.

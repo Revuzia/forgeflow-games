@@ -262,7 +262,6 @@ export class TerrainCache {
     this.mesh.layers.mask = -1;
     this.scene.matrixWorldAutoUpdate = false;
     this.scene.add(this.mesh);
-    (globalThis as unknown as { __TCACHE__?: TerrainCache }).__TCACHE__ = this;
   }
 
   /** the GL side, made at the first bake: three array textures with MIPS levels, the scratch targets, two framebuffers */
@@ -377,6 +376,8 @@ export class TerrainCache {
   update(camBody: Vector3, pxPerRad: number, frame: number, sunBody: Vector3, yearFrac: number, primary = true): void {
     const st = this.stats, u = this.shared;
     this.frame = frame; this.pxPerRad = pxPerRad; this.cam.copy(camBody);
+    // (probes: the primary planet's cache)
+    if (primary) (globalThis as unknown as { __TCACHE__?: TerrainCache }).__TCACHE__ = this;
     // inputs that are the same for every tile: a change re-bakes everything (full shader meanwhile)
     const vf = u.uVegFade.value as { x: number; y: number }, cf = u.uCanopyFade.value as { x: number; y: number };
     const silt = (u.uSiltK?.value as number[] | undefined)?.reduce((s, x) => s + x, 0) ?? 0;
