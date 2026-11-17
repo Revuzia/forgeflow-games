@@ -170,3 +170,13 @@ report the minified bytes of each new or grown module (PLAYGROUND_BUILD 14.3's o
 ## Report
 Before and after numbers for every row, the re-baselined hash rows with reasons, per-family hop apex and landing speed (PH-14), PF-05 with the load
 and the F it used, the module byte sizes after each step, and what you did not check.
+
+## OWNER DECISION 2026-11-17 (D-95): the swing works both ways
+The owner decided: "the swing can work automatically, or a user can swing it using their mouse - should be both options".
+1. **Automatic:** with a squishy riding and nobody touching, the swing keeps swinging by itself at a gentle, steady arc (a light motor or
+   pumping that tops up what damping removes; it must not die after 2 to 3 half swings as PG_PHYS round 3 measured). It settles when the
+   rider leaves.
+2. **By hand:** the player can grab the seat (or the rider) with mouse or finger and pull or push it; release lets it swing freely from
+   that arc, then it eases back to the automatic arc. A hand always wins over the motor (the touch gate).
+3. Empty swing: sways a little if pushed; no motor.
+The same two-way rule applies to the rocker where it makes sense. Autonomy off: the motor is off, the hand still works.

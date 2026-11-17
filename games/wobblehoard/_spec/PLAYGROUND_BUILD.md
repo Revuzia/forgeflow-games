@@ -1347,3 +1347,13 @@ the reason is here.
    which hides C5 and G3 on low by QU-14; (c) on low, S11's push becomes a render lean of the pusher (asleep at its push spot) with a
    `PropWorldLike.poke` on the seat at each return, so only the rider is awake (S10 keeps two riders: (a) or (b) still decide it). My
    recommendation: decide from PF-06's numbers; prefer (c) for S11 and (a) for S10 if the frame stays under 20 ms.
+
+## OWNER DECISION 2026-11-17 (D-95): the swing works both ways
+The owner decided: "the swing can work automatically, or a user can swing it using their mouse - should be both options".
+1. **Automatic:** with a squishy riding and nobody touching, the swing keeps swinging by itself at a gentle, steady arc (a light motor or
+   pumping that tops up what damping removes; it must not die after 2 to 3 half swings as PG_PHYS round 3 measured). It settles when the
+   rider leaves.
+2. **By hand:** the player can grab the seat (or the rider) with mouse or finger and pull or push it; release lets it swing freely from
+   that arc, then it eases back to the automatic arc. A hand always wins over the motor (the touch gate).
+3. Empty swing: sways a little if pushed; no motor.
+The same two-way rule applies to the rocker where it makes sense. Autonomy off: the motor is off, the hand still works.
