@@ -20,6 +20,7 @@ into bar rows.
     python _harness/p23/gunhold.py --disk --plant swim-cam-under  # the camera follows the sunk swim body      - MUST FAIL swim-view
     python _harness/p23/gunhold.py --disk --plant swim-sunk       # the sink keyed off the chest, clip lean kept - MUST FAIL swim-head
     python _harness/p23/gunhold.py --disk --plant swim-lean       # the upright correction off (clip lean kept) - MUST FAIL swim
+    python _harness/p23/gunhold.py --disk --plant swim-arms-up    # the arms ride the straightened torso up     - MUST FAIL swim-arms
     python _harness/p23/gunhold.py --rev 361c5ec3                 # the W10 base (W9 R1 live): every bar row MUST FAIL
 
 Rows (PLAN.md "Lane R1B" acceptance bars; the audit value each replaces in brackets):
@@ -57,6 +58,9 @@ Wave 10 round 3 lane R3B rows (parts reload, swim, swap):
   swim-head      treading water, head out: on every settled swimming frame of the same run (still after 0.7 s, and swimming on) the
                  Head bone >= 0.15 m above the water surface (with the swim row's chest below it: head and shoulders out)
                  [verify2: Head -0.05..+0.01 m, only the crown of the hair out]
+  swim-arms      treading / stroking, not hands-up: on >= 80 % of the settled swimming frames of the same run BOTH wrists (LeftHand,
+                 RightHand bones) at or below the drawn water surface, and on 0 settled frames a wrist above the Head bone
+                 [verify3: both wrists 0.12-0.31 m above the water, a hand above the Head on 258 of 258 frames]
   swap           a gun swap lowers the barrel >= 25 deg off the aim mid-swap (max over 0.08-0.20 s after the swap); with >= 9 armed
                  two-gun bots on screen within 35 m, 1 <= actors drawing a slung gun <= 8 and = min(8, eligible) [none]
 plus: 0 new programs over the run, 0 page / console errors, 0 failed requests, 0 shader errors, 0 [rig] lines.
@@ -123,6 +127,8 @@ PLANTS = {
                                       ("if (layers && a.swimming && a.armBones && a.alive && deskHi(W)) {", "if (false) {")])],
     # the upright correction off, the head-keyed sink kept: the leaning clip lifts the chest out of the water
     "swim-lean": [(RP + "player.js", [("swimUpright(a, a._swTilt);", "")])],
+    # verify3 finding: straightening Hips..Head swung the clip's arms (posed for its 31 deg lean) up to the face - hands-up, not treading
+    "swim-arms-up": [(RP + "player.js", [("const SWIM_ARMS_ON = true,", "const SWIM_ARMS_ON = false,")])],
 }
 
 EQUIP_JS = r"""(wid) => { const W = window.__LC__.W, K = W.SIM, p = W.player, inv = p.inventory;
@@ -286,8 +292,8 @@ RELOAD_JS = r"""([n, pre]) => { const W = window.__LC__.W, THREE = W.THREE, p = 
 WATER_JS = r"""() => { const W = window.__LC__.W, p = W.player, M = W.map; const wy = M.waterY; if (wy == null || wy < -100) return { err: 'no water', wy };
   let best = null; for (let r = 20; r < M.half * 1.6 && !best; r += 15) for (let a = 0; a < 24; a++) { const x = p.pos.x + Math.cos(a / 24 * 6.283) * r, z = p.pos.z + Math.sin(a / 24 * 6.283) * r; if (Math.abs(x) > M.half - 30 || Math.abs(z) > M.half - 30) continue; if (M.heightAt(x, z) < wy - 2.5) { best = [x, z]; break; } }
   if (!best) return { err: 'no deep water found', wy }; p.pos.set(best[0], wy - 0.6, best[1]); p.vel.set(0, 0, 0); p.obj.position.copy(p.pos); if (p._pp) p._pp.copy(p.pos); return { at: best, wy }; }"""
-SWIM_JS = r"""(n) => { const W = window.__LC__.W, p = W.player, P = window.__H_PUMP__, wy = W.map.waterY; let S2 = null, HD = null;
-  p.obj.traverse((o) => { if (!o.isBone) return; const nm = o.name.replace(/^mixamorig:?/i, ''); if (nm === 'Spine2' || nm === 'Spine02') S2 = o; if (nm === 'Head') HD = o; });
+SWIM_JS = r"""(n) => { const W = window.__LC__.W, p = W.player, P = window.__H_PUMP__, wy = W.map.waterY; let S2 = null, HD = null, LH = null, RH = null;
+  p.obj.traverse((o) => { if (!o.isBone) return; const nm = o.name.replace(/^mixamorig:?/i, ''); if (nm === 'Spine2' || nm === 'Spine02') S2 = o; if (nm === 'Head') HD = o; if (nm === 'LeftHand') LH = o; if (nm === 'RightHand') RH = o; });
   const rows = []; const v = new W.THREE.Vector3();
   const shown = (o) => { if (!o || !o.visible) return false; for (let q = o.parent; q; q = q.parent) if (!q.visible) return false; return true; };
   // heights are taken against the DRAWN surface (the water mesh bobs +-0.12 m around map.waterY on a ~9 s swell; the camera clamp and the
@@ -295,6 +301,7 @@ SWIM_JS = r"""(n) => { const W = window.__LC__.W, p = W.player, P = window.__H_P
   for (let i = 0; i < n; i++) { P.step(1, 1 / 60, false); W.scene.updateMatrixWorld(true); const sy = W.map.water ? W.map.water.position.y : wy;
     rows.push({ sw: !!p.swimming, gun: shown(p.weaponMesh), sling: shown(p._sling), chest: S2 ? +(S2.getWorldPosition(v).y - sy).toFixed(3) : null, anim: p.anim,
       cam: W.camera ? +(W.camera.position.y - sy).toFixed(3) : null, uw: !!W._underwater, head: HD ? +(HD.getWorldPosition(v).y - sy).toFixed(3) : null,
+      lh: LH ? +(LH.getWorldPosition(v).y - sy).toFixed(3) : null, rh: RH ? +(RH.getWorldPosition(v).y - sy).toFixed(3) : null,
       swell: +(sy - wy).toFixed(3) }); }
   return { rows, wy }; }"""
 # the swap: barrel (holder +Z) vs the aim direction per frame after W.equipSlot to the other gun
@@ -830,6 +837,17 @@ def main():
                 v.check("swim-head: treading water, the Head bone >= 0.15 m above the surface on every settled swimming frame (still after 0.7 s, swimming on)",
                         hok, {"settledFrames": len(late), "headFrames": len(hv), "headMin": min(hv) if hv else None,
                               "headMax": max(hv) if hv else None}, ">= 0.15 m")
+                hrows = [x for x in late if x.get("lh") is not None and x.get("rh") is not None and x.get("head") is not None]
+                under = sum(1 for x in hrows if x["lh"] <= 0.0 and x["rh"] <= 0.0)
+                upf = sum(1 for x in hrows if max(x["lh"], x["rh"]) > x["head"])
+                share = under / len(hrows) if hrows else 0.0
+                aok = len(late) >= 240 and len(hrows) == len(late) and share >= 0.80 and upf == 0
+                v.check("swim-arms: both wrists at or below the surface on >= 80 % of the settled swimming frames; 0 frames a wrist above the Head bone",
+                        aok, {"settledFrames": len(late), "handFrames": len(hrows), "bothUnder": under, "share": round(share, 3),
+                              "aboveHead": upf, "lhMax": max(x["lh"] for x in hrows) if hrows else None,
+                              "rhMax": max(x["rh"] for x in hrows) if hrows else None,
+                              "lhMin": min(x["lh"] for x in hrows) if hrows else None,
+                              "rhMin": min(x["rh"] for x in hrows) if hrows else None}, ">= 80 % both <= 0; 0 above head")
         if "swap" in want:
             sw, bad = {}, []
             for skin in skins:

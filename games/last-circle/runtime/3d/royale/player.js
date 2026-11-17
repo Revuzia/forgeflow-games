@@ -3708,6 +3708,8 @@ const SWAP_S = 0.25, SWAP_DIP = 0.8;     // the swap: lower-and-raise over 0.25 
 const SWIM_CHEST = 0.14;                 // fallback (a rig without a Head bone): the swimmer's chest (Spine2) sits this far under the surface
 const SWIM_HEAD = 0.18;                  // the swimmer's Head bone sits this far ABOVE the surface (treading water: face and shoulders out)
 const SWIM_TILT_STILL = 0.10, SWIM_TILT_MOVE = 0.20;   // swimUpright: most lean (rad) left on each spine bone, still / swimming on
+const SWIM_ARMS_ON = true, SWIM_ARM_DROP = 0.25;   // swimUpright keeps the clip's arms (world) and lowers them this far (rad)
+const _swAQ = [new THREE.Quaternion(), new THREE.Quaternion()];
 const _swU = new THREE.Vector3(0, 1, 0), _swY = new THREE.Vector3(), _swX = new THREE.Vector3(), _swPQ = new THREE.Quaternion(), _swR = new THREE.Quaternion();
 const SWIM_TREAD_TS = 0.45, SWIM_CLIP_MS = 1.6;
 const SLING_CAP = 8;                     // slung second guns drawn on at most this many actors (the nearest to the camera)
@@ -3924,6 +3926,11 @@ function swimView(W, a, dt) {
  *  Pose correction on the Mixamo clip (owner question 1 default); desktop medium+ on-screen swimmers only (Low / touch keep the clip). */
 function swimUpright(a, maxTilt) {
   const B = a.armBones, chain = [B.hips, B.spine, B.spine1, B.spine2, B.neck, B.head];
+  // (verify3 finding) the arms hang off Spine2 and the clip posed them for its forward lean: straightening the torso swung them up to the
+  // face (both wrists 0.12-0.31 m ABOVE the water on 258 of 258 frames). Keep each upper arm's clip WORLD orientation (the stroke as the clip
+  // draws it, flat at the waterline) and drop it SWIM_ARM_DROP further, so the hands scull at or under the surface.
+  const arms = SWIM_ARMS_ON ? [B.lArm, B.rArm] : [];
+  for (let i = 0; i < arms.length; i++) if (arms[i] && arms[i].parent) arms[i].getWorldQuaternion(_swAQ[i]);
   let first = true;
   for (let i = 0; i < chain.length; i++) {
     const b = chain[i];
@@ -3938,6 +3945,18 @@ function swimUpright(a, maxTilt) {
     b.parent.getWorldQuaternion(_swPQ);
     b.quaternion.premultiply(_swPQ).premultiply(_swR).premultiply(_swPQ.invert());   // local' = P^-1 * R * P * local
     b.updateWorldMatrix(false, false);
+  }
+  for (let i = 0; i < arms.length; i++) {
+    const b = arms[i];
+    if (!b || !b.parent) continue;
+    // the drop: about the body's sideways axis (actor +X in world), lowering the arm's forward reach toward the legs
+    _swX.set(1, 0, 0).applyQuaternion(a.obj.quaternion).normalize();
+    _swR.setFromAxisAngle(_swX, SWIM_ARM_DROP);
+    _swAQ[i].premultiply(_swR);
+    b.parent.updateWorldMatrix(true, false);
+    b.parent.getWorldQuaternion(_swPQ);
+    b.quaternion.copy(_swPQ.invert().multiply(_swAQ[i]));               // local = P^-1 * world
+    b.updateWorldMatrix(false, true);
   }
 }
 
