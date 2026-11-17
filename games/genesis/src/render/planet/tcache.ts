@@ -44,7 +44,7 @@ const TC_BIAS = TCACHE ? perfNum('tcbias', 0)! : 0;
  * 160 m view measured 11 % less fine contrast than the full shader and +3 % green (bilinear resampling at ~1:1 softens
  * the albedo and the normal offset); memory goes with its square
  */
-const TC_DENS = TCACHE ? Math.min(2.5, Math.max(1, perfNum('tcdens', 1.4)!)) : 1.4;
+const TC_DENS = TCACHE ? Math.min(2.5, Math.max(1, perfNum('tcdens', 1.1)!)) : 1.1;
 
 /** layer edge (texels), slab edge, and the tile classes (edge in texels; SLAB / class tiles a side) */
 export const TC_SL = 1152;

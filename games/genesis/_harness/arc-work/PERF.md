@@ -2137,3 +2137,26 @@ long press frame-rate independent. Report after 1-2 verified.
   5. Emission (chunks.ts vertexWater) untouched: a patch with one wet vertex cell still draws its whole sheet; with
      the early discards the dry part now costs raster + 1 varying test. Splitting it needs per-triangle water index
      lists (a second index range per slot): only worth it if the Mac shows raster-bound water.
+- dist7 results: top-down 160 m `g7`: 3.64, G 116.7 vs 114.4, B 65.4 vs 67.7, detail 5.03 / 5.75: the sqrt 2 footprint and
+  the log term did NOT remove the green / soft shift. OPEN (see above). 0 page errors, 0 GL messages on that boot.
+  Ultra count `u` (1686x963, quality ultra, scene=0, 150 m, tilt 65): NOT a valid count, only 97 patches were selected
+  after 40 frames (LOD not landed under load). What it does give: 93 cacheable patches want 45 MB at tcdens 1.4 =
+  ~0.48 MB a patch at Ultra; at tcdens 1.1 ~0.3 MB. So the 247 MB cap holds ~500 (1.4) or ~800 (1.1) patches; the rest
+  draw with the full shader, far ones first (nearest are baked first, and steal from the farthest when full).
+- DEFAULT PICKED: tcdens 1.1 (the valid pairs town 1.76, grazing 1.91, floor 1.04, coast 1.91, far 1.51, orbit 0.56 were
+  taken at 1.1; 1.4 and 2 did not improve the one view that differs and cost 1.6x / 3.3x the memory).
+- GATE: `bash _harness/slot.sh npm run check` + `npm run build` on the final source: see the line below.
+- MAC RUNS WANTED (Ultra 1686x963, landing spot, 20 s still then pan; the header prints `tcache=1(247MB,9L)` and
+  `tcstat=tiles,cached,live,hot,near,wide,want=N/MB,full,bakes,glob`): base; `tcache=1`; `tcache=1&tcmb=512`;
+  `tcache=1&tcdens=1.4&tcmb=512`; `tcache=1&tcbudget=600000` (faster landing, heavier bake frames);
+  `tcache=1&water=0` (terrain alone). Read from tcstat: cached vs live (how much of the view the cap covers), `full`
+  (patches refused for memory), `glob` (should stay ~2-4: if it climbs every frame a shared uniform moves and
+  everything re-bakes), bakes while panning. LOOK: meadow from straight above at ~150 m (greener?), a low view to
+  the horizon, snow close up (sparkle), forest edge with the sun moving, a painted edit appearing, straight lines on
+  the ground at patch borders while panning.
+- NEXT for a successor: (1) the green shift: bake one tile at the live fragment's exact camDist / fw / NdV and compare
+  texel to pixel (uDebug 2 = albedo) to find the term; (2) a valid Ultra count once the machine is quiet;
+  (3) frame-by-frame switch test at a fixed camera; (4) release GL memory when a planet stops being primary;
+  (5) WATCH thresholds (9196 dirty cells after a 4-tick step); (6) shadows-on proof of the forest floor mask and the
+  sun-moved re-bake; (7) full-picture runs (trees, shadows, water, MSAA on) were never made: every pair here has them off.
+  GATE RESULT (final source, tcdens default 1.1): npm run check # pass 1047 # fail 0 (s22/check2.log); npm run build exit 0 (s22/build-prod.log). The final default change was not booted again: the last boot (dist7, tcdens 1.4) had 0 errors and tcdens only changes a number on the TS side.
