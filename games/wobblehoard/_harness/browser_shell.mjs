@@ -622,12 +622,20 @@ async function main() {
       check('after the let-go both sides spring back (not grabbed, volume 1 +- 0.03, no stray finger)', !rest1.metrics.grabbed && Math.abs(rest1.metrics.volume - 1) < 0.03 && rest1.metrics.fingers === 0, `volume ${rest1.metrics.volume.toFixed(3)}, stretch ${rest1.metrics.stretch.toFixed(2)}`);
 
       // ---- the same drag without Shift: a lone hand, it lifts the body (the toss), one grab, one snap
+      // RE-SPECIFIED (PG_SHELL round 4; reason: with PLAYGROUND the squishy moves by itself at Home (LIFE's FIRST_PLAY 6 s after the player first lets go, FN-01,
+      // and autonomy), so by now it may stand elsewhere: the same drag is made from the same spot ON THE SQUISHY where it stands now, not from the screen point
+      // where it stood at the section's start. The path, its length and every assertion are unchanged.)
+      const B2 = await body(page);
+      const px0 = B2.x * vp.width + 0.45 * B2.rPx, py0 = B2.y * vp.height - 0.04 * B2.rPx;
+      const reach2 = Math.min(1.6 * 1.79 * B2.rPx, (vp.width - 12 - px0) / Math.cos(ang));
+      const dragFrom2 = (i) => [px0 + (reach2 * Math.cos(ang) * i) / 14, py0 - (reach2 * Math.sin(ang) * i) / 14];
+      console.log(`   plain path: the squishy at (${(B.x * vp.width).toFixed(0)}, ${(B.y * vp.height).toFixed(0)}) then (${(B2.x * vp.width).toFixed(0)}, ${(B2.y * vp.height).toFixed(0)}); press (${px0.toFixed(0)}, ${py0.toFixed(0)})`);
       await page.evaluate(() => { window.__sh.carried = false; });
       seen = await evKeys(page);
-      await page.mouse.move(x0, y0);
+      await page.mouse.move(px0, py0);
       await page.mouse.down();
       await sleep(120);
-      for (let i = 1; i <= 14; i++) { await page.mouse.move(...dragFrom(i)); await sleep(50); }
+      for (let i = 1; i <= 14; i++) { await page.mouse.move(...dragFrom2(i)); await sleep(50); }
       await waitUntil(page, () => window.__sh.carried, null, 60000);
       const plainGrab1 = await waitEvent(page, seen, 'grab', { finger: 1, timeout: 1500 });
       const seenPlain = await evKeys(page);
@@ -4470,10 +4478,14 @@ async function main() {
       const stops = order.filter((o) => o !== 'BODY');
       // (RE-SPECIFIED because the owner changed the design on 2026-10-08, UI.md 9.1 / B4a: Full screen, Mute, Menu replace Mute, Settings)
       const fsOn = await page.evaluate(() => { const b = document.querySelector('.hud-actions button[aria-label="Full screen"]'); return !!b && b.offsetParent !== null; });
-      const want = [...(fsOn ? ['Full screen'] : []), 'Mute sound', 'Menu', 'Hoard', 'Hand', 'Squishy'];
+      // RE-SPECIFIED (PG_SHELL round 4; reason: PLAYGROUND adds the Journal, and Places once a second place is open, as Tab stops (D-77: "Tab stays the browser's:
+      // it reaches the Journal, Places, mute and gear"); they stand in the top-right column under the top row (QUESTS 15) and come just before Full screen, once
+      // the life chunk has landed. Every published stop keeps its place and order; no other stop is allowed.)
+      const life = await page.evaluate(() => ['Journal', 'Places'].filter((n) => { const b = document.querySelector(`.hud-life button[aria-label="${n}"]`); return !!b && !b.hidden && b.offsetParent !== null; }));
+      const want = [...life, ...(fsOn ? ['Full screen'] : []), 'Mute sound', 'Menu', 'Hoard', 'Hand', 'Squishy'];
       const k0 = stops.indexOf(want[0]);
       const cycleOk = k0 >= 0 && stops.length >= k0 + want.length && stops.every((o, i) => o === want[(((i - k0) % want.length) + want.length) % want.length]);
-      check('Tab order in play: Full screen (where drawn), Mute, Menu, the Hoard, the Tools toolbar (one stop, the Hand), the squishy (and no other stop)', cycleOk, order.join(' > '));
+      check('Tab order in play: (PLAYGROUND: the Journal, and Places when open), Full screen (where drawn), Mute, Menu, the Hoard, the Tools toolbar (one stop, the Hand), the squishy (and no other stop)', cycleOk, order.join(' > '));
       // shortcuts stay out of form controls
       await openSettings(page); await sleep(500);
       const g0 = (await state(page)).settings.gravity;
@@ -4837,6 +4849,23 @@ async function main() {
     };
     /** a held squeeze of the play body (CSS px of its centre), through the dev hook's pointer (a touch pointer of the real input path) */
     const pgSqueeze = (page, s) => page.evaluate(([sec]) => { const wh = window.__WH__, b = wh.bodyScreen(); wh.pointerDown(b.x, b.y, 0); wh.step(1 / 60, Math.round(sec * 60)); wh.pointerUp(0); wh.step(1 / 60, 30); }, [s]);
+    /** a screenshot of the PLAYGROUND sections: the dev stats overlay (`?dev=1` only, never in a build) hidden, so the shot is what a player sees */
+    const pgShot = async (page, name) => { await page.evaluate(() => { const d = document.querySelector('.dev'); if (d) d.style.visibility = 'hidden'; }); await shot(page, name); };
+    /** the AUTO chips on screen (D-95 revised: ui/thingAuto.ts), with the HUD boxes they overlap (none expected) */
+    const pgChips = (page) => page.evaluate(() => {
+      const hud = [...document.querySelectorAll('.hud-actions, .hint[data-show="true"], .hud-bottom > *, #wh-dock, .meter-cluster, .mat-chip:not([hidden])')].map((e) => e.getBoundingClientRect()).filter((q) => q.width > 0);
+      return [...document.querySelectorAll('.thing-auto')].filter((x) => !x.hidden && x.style.visibility !== 'hidden').map((x) => {
+        const r = x.getBoundingClientRect();
+        return { label: x.getAttribute('aria-label'), pressed: x.getAttribute('aria-pressed'), x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height, inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight,
+          overHud: hud.filter((q) => !(r.right <= q.left || q.right <= r.left || r.bottom <= q.top || q.bottom <= r.top)).length, tab: x.tabIndex };
+      });
+    });
+    /** the cabin's swing seat: how far it travels over `sec` of sim (the larger of its x and z ranges, m: the wide swing travels along x, the tall one along z) */
+    const pgSeatRange = async (page, sec) => {
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let i = 0; i < sec * 4; i++) { await pgStep(page, 0.25, 0.25); const t = (await pgLife(page)).things.find((x) => x.id === 'pillowswing'); if (t && t.x !== null) { x0 = Math.min(x0, t.x); x1 = Math.max(x1, t.x); z0 = Math.min(z0, t.z); z1 = Math.max(z1, t.z); } }
+      return Math.max(x1 - x0, z1 - z0);
+    };
     /** step the sim in slices (a task between them, so the life chunk's promises and the journal's timers run as they do live) */
     const pgStep = (page, seconds, slice = 0.5) => page.evaluate(async ([s, sl]) => { for (let t = 0; t < s - 1e-9; t += sl) { window.__WH__.step(1 / 60, Math.round(Math.min(sl, s - t) * 60)); await new Promise((r) => setTimeout(r, 0)); } }, [seconds, slice]);
 
@@ -4845,8 +4874,14 @@ async function main() {
       mainWatches.push(['pg-playthrough', w]);
       const t0 = Date.now();
       const landed = await pgBoot(page, false);
-      const dock0 = await page.evaluate(() => ({ journal: !document.querySelector('.dock-journal')?.hidden, places: !document.querySelector('.dock-places')?.hidden, life: !!window.__WH__.life() }));
-      check('PG: the life chunk lands after the first frame of play (game.life attached) and the Journal shows in the dock; Places waits for a second place', landed && dock0.journal && !dock0.places, JSON.stringify({ ...dock0, ms: Date.now() - t0 }));
+      const dock0 = await page.evaluate(() => {
+        const j = document.querySelector('.dock-journal'), r = j?.getBoundingClientRect(), top = document.querySelector('.hud-actions')?.getBoundingClientRect();
+        return { journal: !!j && !j.hidden, places: !document.querySelector('.dock-places')?.hidden, life: !!window.__WH__.life(), inDock: !!j?.closest('#wh-dock'),
+          box: r && [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)], underTop: !!r && !!top && r.top >= top.bottom && r.right <= innerWidth && r.width >= 44 && r.height >= 44 };
+      });
+      // (R4: the Journal stands in the top-right column, QUESTS 15, not in the dock: in the dock it pushed the published Table | Float pair behind More at 390 px)
+      check('PG: the life chunk lands after the first frame of play (game.life attached) and the Journal button shows in the top-right column (under the top row, 44 px, not in the dock); Places waits for a second place',
+        landed && dock0.journal && !dock0.places && !dock0.inDock && dock0.underTop, JSON.stringify({ ...dock0, ms: Date.now() - t0 }));
       // H1: a held squeeze (1.2 s)
       await pgSqueeze(page, 1.2);
       await pgStep(page, 1);
@@ -4860,7 +4895,7 @@ async function main() {
       const ballMoved = ball0 && ball1 && ball0.x !== null && Math.hypot(ball1.x - ball0.x, ball1.z - ball0.z);
       check('PG H2 (the first minute, FN-01): 6 s after the player lets go, Dollop plays by itself (FIRST_PLAY sent; a USE by SELF at Home completes "Watch it play"); the Felt Ball is shown with a collider (not parked)',
         l2.firstPlaySent && d2.includes('H2') && ball1?.shown && ball1?.parked === false, JSON.stringify({ firstPlay: l2.firstPlaySent, done: d2, ball0, ball1, moved: ballMoved, counts: l2.counts }));
-      await shot(page, 'pg_home_first_minute_desktop');
+      await pgShot(page, 'pg_home_first_minute_desktop');
       // the first capsule: the newcomer stays out beside Dollop (D-52); a third squishy comes out of the Hoard (the published Bring out)
       await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
       const dollop = (await pgLife(page)).chars.find((c) => c.species === 'dollop');
@@ -4891,6 +4926,10 @@ async function main() {
         l3b.chars.length === 2 && l3b.chars.some((c) => c.species === 'dollop') && l3b.chars.some((c) => c.itemId === idNow.itemId) && !l3b.chars.some((c) => c.itemId === first.itemId)
           && /Bring out/.test(btn ?? '') && l4.chars.length === 3 && l4.chars.some((c) => c.itemId === first.itemId) && (await page.evaluate(() => window.__WH__.shell.matInfo().count)) === 3,
         JSON.stringify({ after2: l3b.chars.map((c) => [c.slot, c.species]), play: idNow.species, btn, now: l4.chars.map((c) => [c.slot, c.species, c.x, c.z]) }));
+      // "Put back n" (R4 polish): a kit button (the PC's chip had no kit class and drew as the browser's grey box), 44 px high, the kit's rounded glass
+      const chip = await page.evaluate(() => { const c = document.querySelector('.mat-chip'); if (!c) return null; const cs = getComputedStyle(c), r = c.getBoundingClientRect(); return { kit: c.classList.contains('k-btn'), hidden: c.hidden, h: r.height, radius: parseFloat(cs.borderTopLeftRadius), bg: cs.backgroundColor, font: cs.fontFamily, text: c.textContent }; });
+      check('PG "Put back 2" is a kit button (k-btn: 44 px high, rounded, the kit\'s font and surface, not the browser\'s grey default)',
+        !!chip && chip.kit && !chip.hidden && chip.h >= 44 && chip.radius >= 8 && !/^rgb\(2[23]\d, 2[23]\d, 2[23]\d\)$/.test(chip.bg) && !/^(Arial|system-ui|-apple-system)/.test(chip.font) && /Put back\s*2/.test(chip.text), JSON.stringify(chip));
       // they greet and play by themselves: step 40 s of sim
       const c0 = l4.counts;
       await pgStep(page, 40);
@@ -4900,7 +4939,7 @@ async function main() {
       check('PG LIFE at Home: in 40 s of sim the three show bubbles, look around, voice and move by themselves through the host (emote, gaze, voice, scoot or hop > 0); Home\'s things arrived (ball, Music Box, rug)',
         dc.emote > 0 && dc.gaze > 0 && dc.voice > 0 && dc.scoot + dc.hop > 0 && ['feltball', 'musicbox', 'snoozerug'].every((id) => l5.things.find((t) => t.id === id)?.shown),
         JSON.stringify({ counts: dc, things: l5.things.filter((t) => t.shown).map((t) => t.id), units: l5.units }));
-      await shot(page, 'pg_home_party_desktop');
+      await pgShot(page, 'pg_home_party_desktop');
       // a click on the Music Box (a still press on a thing nobody stands in front of): its tune (8 bars); a second click stops it
       const mb = l5.things.find((t) => t.id === 'musicbox');
       if (mb?.sx !== null && mb?.sx !== undefined) await page.mouse.click(mb.sx, mb.sy);
@@ -4914,7 +4953,7 @@ async function main() {
       await page.evaluate(() => window.__WH__.resume());
       await hclick(page, '.dock-journal'); await settle(page);
       const jn = await page.evaluate(() => { const d = document.getElementById('wh-journal'); return d ? { open: true, title: d.querySelector('.jn-title')?.textContent, tabs: [...d.querySelectorAll('.jn-tab')].map((b) => b.textContent), quests: [...d.querySelectorAll('.jn-quest')].map((q) => `${q.dataset.quest}:${q.dataset.state}`), quiet: window.__WH__.life().quiet } : { open: false }; });
-      await shot(page, 'pg_journal_desktop');
+      await pgShot(page, 'pg_journal_desktop');
       await page.keyboard.press('Escape'); await settle(page);
       const jnClosed = await page.evaluate(() => ({ gone: !document.getElementById('wh-journal'), focus: document.activeElement?.classList.contains('dock-journal'), quiet: window.__WH__.life().quiet }));
       check('PG Journal: the dock\'s Journal opens its screen (4 tabs; Home\'s quests with H1 H2 H5 done); LIFE is quiet under it; Esc closes it and the focus returns to the Journal button',
@@ -4943,7 +4982,7 @@ async function main() {
       // Travel: the Places sheet lists Home (here), the cabin (Go), the eight unshipped ones as "coming later"; Go -> the cabin
       await hclick(page, '.dock-places'); await settle(page);
       const tv = await page.evaluate(() => { const d = document.getElementById('wh-travel'); return d ? { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place), later: d.querySelectorAll('.jn-later-row').length } : null; });
-      await shot(page, 'pg_travel_desktop');
+      await pgShot(page, 'pg_travel_desktop');
       check('PG Travel sheet: Home and Hearthlog Cabin as postcards (the cabin open with "Go to"), the other eight shown as coming later (their data says shipped: false)',
         !!tv && tv.cards.join() === 'home:true,hearthlog:true' && tv.go.join() === 'hearthlog' && tv.later === 8, JSON.stringify(tv));
       await page.evaluate(() => window.__WH__.pause());
@@ -4955,7 +4994,40 @@ async function main() {
         arrived >= 0 && l6.place === 1 && l6.chars.length === 3 && l6.things.length === 6 && d6.includes('H8') && d6.includes('C1') && (await page.evaluate(() => window.__liveLog.some((t) => /You are at Hearthlog Cabin\./.test(t)))),
         JSON.stringify({ arrived, place: l6.place, chars: l6.chars.map((c) => [c.species, c.x, c.z, c.asleep]), done: d6, sheet: await page.evaluate(() => !!document.getElementById('wh-travel')) }));
       await pgStep(page, 20);
-      await shot(page, 'pg_cabin_desktop');
+      await pgShot(page, 'pg_cabin_desktop');
+      // D-95 (revised): the Pillow Swing's and the Rocker Board's AUTO chips (off by default, in the Tab order, clear of the HUD); a real click on the swing's chip
+      // switches it on (the seat keeps a gentle arc by itself, the live line says so), a second click lets it die down
+      await page.evaluate(() => window.__WH__.resume()); await sleep(900); await page.evaluate(() => window.__WH__.pause());
+      const ch0 = await pgChips(page);
+      const swC = ch0.find((c) => /Pillow Swing/.test(c.label ?? '')), rkC = ch0.find((c) => /Rocker Board/.test(c.label ?? ''));
+      const rest = await pgSeatRange(page, 2);
+      if (swC) await page.mouse.click(swC.x, swC.y);
+      await sleep(300);
+      const on = await pgSeatRange(page, 8);
+      const ch1 = await pgChips(page);
+      await page.evaluate(() => window.__WH__.resume()); await sleep(600); await page.evaluate(() => window.__WH__.pause());
+      await pgShot(page, 'pg_cabin_auto_desktop');
+      const autoLive = await page.evaluate(() => window.__liveLog.some((t) => /Pillow Swing moves by itself/.test(t)));
+      check('PG D-95 AUTO: the cabin shows one small Auto chip each on the Pillow Swing and the Rocker Board, off by default, in the Tab order and clear of the HUD; a click on the swing\'s chip turns AUTO on (pressed, the live line) and the resting seat swings a steady arc by itself',
+        !!swC && !!rkC && swC.pressed === 'false' && rkC.pressed === 'false' && ch0.every((c) => c.inView && c.overHud === 0 && c.tab === 0 && c.h <= 40) && rest < 0.05 && on > 0.25
+          && ch1.find((c) => /Pillow Swing/.test(c.label ?? ''))?.pressed === 'true' && autoLive, JSON.stringify({ chips: ch0, rest, on }));
+      // the hand on the seat: a real mouse press on the seat takes it (not a camera turn), a drag pulls it, the release lets it swing on (and with AUTO on, back to its arc)
+      const seat = (await pgLife(page)).things.find((t) => t.id === 'pillowswing');
+      const camBefore = await page.evaluate(() => JSON.stringify(window.__WH__.shell.tools().cam ?? null));
+      if (seat?.sx !== null && seat?.sx !== undefined) {
+        await page.mouse.move(seat.sx, seat.sy); await page.mouse.down(); await pgStep(page, 0.05, 0.05);
+        for (let k = 1; k <= 8; k++) { await page.mouse.move(seat.sx + k * 15, seat.sy); await pgStep(page, 0.05, 0.05); }
+      }
+      const heldNow = await pgLife(page);
+      await page.mouse.up();
+      const after = await pgSeatRange(page, 3);
+      const camAfter = await page.evaluate(() => JSON.stringify(window.__WH__.shell.tools().cam ?? null));
+      check('PG D-95 the hand on the seat: a real mouse press on the Pillow Swing\'s seat is the hand\'s (the view does not turn), a drag pulls the seat after the pointer, and the release lets it swing on',
+        heldNow.tap === 'hand:pillowswing' && (heldNow.things.find((t) => t.id === 'pillowswing')?.x ?? 0) - (seat?.x ?? 0) > 0.08 && after > 0.25 && (() => { const a = JSON.parse(camBefore), c = JSON.parse(camAfter); return !!a && !!c && Math.hypot(a.x - c.x, a.y - c.y, a.z - c.z) < 0.01; })(),
+        JSON.stringify({ tap: heldNow.tap, seat0: seat && [seat.x, seat.sx, seat.sy], held: heldNow.things.find((t) => t.id === 'pillowswing'), after, camBefore, camAfter }));
+      const chOff = (await pgChips(page)).find((c) => /Pillow Swing/.test(c.label ?? ''));
+      if (chOff) await page.mouse.click(chOff.x, chOff.y);
+      await sleep(300);
       // a tap on the fireplace (a real mouse click, a still press on the thing): its switch and puff, one USE by PLAYER (C8's first clause)
       const hearth = (await pgLife(page)).things.find((t) => t.id === 'hearth');
       if (hearth?.sx !== null && hearth?.sx !== undefined) await page.mouse.click(hearth.sx, hearth.sy - 6);
@@ -4972,13 +5044,13 @@ async function main() {
       const l7 = await pgLife(page);
       check('PG home again (by the sheet): place 0, "You are at Home.", the three back at their mat slots, Home\'s things shown again', home >= 0 && l7.place === 0 && l7.chars.length === 3 && l7.things.find((t) => t.id === 'feltball')?.shown && (await page.evaluate(() => window.__liveLog.some((t) => /You are at Home\./.test(t)))),
         JSON.stringify({ home, chars: l7.chars.map((c) => [c.species, c.x, c.z]) }));
-      await shot(page, 'pg_home_back_desktop');
+      await pgShot(page, 'pg_home_back_desktop');
       // the gift (QUESTS 11): after the Home finale the Journal's Stamps page holds the gift card; a pick puts the new friend on the practice shelf
       await page.evaluate(() => window.__WH__.resume());
       await hclick(page, '.dock-journal'); await settle(page);
       const g0 = await page.evaluate(() => ({ card: !!document.querySelector('#wh-journal .jn-gift'), picks: [...document.querySelectorAll('#wh-journal .jn-gift-pick')].map((b) => b.textContent), wishes: document.querySelectorAll('#wh-journal .jn-wish').length }));
       const items0 = (await hstate(page)).items.length;
-      await shot(page, 'pg_journal_gift_desktop');
+      await pgShot(page, 'pg_journal_gift_desktop');
       if (g0.picks.length) { await hclick(page, '#wh-journal .jn-gift-pick'); await sleep(800); await settle(page); }
       const items1 = (await hstate(page)).items.length;
       const gl = await page.evaluate(() => window.__liveLog.slice(-2));
@@ -5013,20 +5085,50 @@ async function main() {
       const l1 = await pgLife(page);
       check('PG phone: the life chunk lands; the first capsule keeps both out (D-52), the second replaces the play squishy as published, the Hoard brings the first newcomer back: three LIFE characters at Home in the tall frame (layout 1)',
         landed && l1.chars.length === 3 && l1.layout === 1, JSON.stringify({ chars: l1.chars.map((c) => [c.species, c.x, c.z]), layout: l1.layout, scale: l1.bodyScale }));
-      await shot(page, 'pg_home_party_phone');
+      await pgShot(page, 'pg_home_party_phone');
       await page.evaluate(() => window.__WH__.resume());
       await hclick(page, '.dock-journal'); await settle(page);
       const jn = await page.evaluate(() => { const d = document.getElementById('wh-journal'); if (!d) return null; const r = d.getBoundingClientRect(); return { w: r.width, h: r.height, sw: document.documentElement.scrollWidth, iw: innerWidth }; });
-      await shot(page, 'pg_journal_phone');
+      await pgShot(page, 'pg_journal_phone');
       check('PG phone Journal: a bottom sheet inside the 390 px width (no sideways scroll)', !!jn && jn.w <= 390 && jn.sw <= jn.iw, JSON.stringify(jn));
-      await page.keyboard.press('Escape'); await settle(page);
+      // closed the way a phone closes it: a tap on its close button (R4: round 3 pressed Escape here, a KEY, so the focus that came back to the Journal button
+      // was :focus-visible and its tooltip stood over the name tag in the cabin shot; a touch never shows a tooltip, tooltip.ts)
+      { const cb = await page.locator('#wh-journal .jn-close').boundingBox(); if (cb) await page.touchscreen.tap(cb.x + cb.width / 2, cb.y + cb.height / 2); else await page.keyboard.press('Escape'); }
+      await settle(page);
+      const tip0 = await page.evaluate(() => { const t = document.querySelector('.k-tip'); return !!t && !t.hidden; });
+      check('PG phone: the Journal closes by a tap on its close button; no dock tooltip is left standing (a touch never shows one)', !tip0 && !(await page.evaluate(() => !!document.getElementById('wh-journal'))), JSON.stringify({ tip0 }));
       await page.evaluate(() => window.__WH__.pause());
       const opened = await stepUntil(page, `(wh) => (wh.quests()?.places & 2) !== 0`, 300, 2);
       const ok = await page.evaluate(() => window.__WH__.travel('hearthlog'));
       await pgStep(page, 8);
       const l2 = await pgLife(page);
       check('PG phone: the cabin in its TALL layout (aspect under 0.9): the party arrived (place 1, layout 1)', opened >= 0 && ok && l2.place === 1 && l2.layout === 1, JSON.stringify({ opened, ok, place: l2.place, layout: l2.layout, chars: l2.chars.map((c) => [c.species, c.x, c.z]) }));
-      await shot(page, 'pg_cabin_phone');
+      await page.evaluate(() => window.__WH__.resume()); await sleep(900); await page.evaluate(() => window.__WH__.pause());
+      await pgShot(page, 'pg_cabin_phone');
+      // D-95 (revised) on a phone: the two Auto chips inside the 390 px width and clear of the HUD; a TAP on the swing's chip turns AUTO on; a finger on the seat is the hand
+      const pc0 = await pgChips(page);
+      const pSw = pc0.find((c) => /Pillow Swing/.test(c.label ?? ''));
+      if (pSw) await page.touchscreen.tap(pSw.x, pSw.y);
+      await sleep(300);
+      const pOn = await pgSeatRange(page, 6);
+      const pc1 = await pgChips(page);
+      const tipN = await page.evaluate(() => { const t = document.querySelector('.k-tip'); return !!t && !t.hidden; });
+      check('PG phone D-95: the Pillow Swing\'s and the Rocker Board\'s Auto chips sit inside the 390 px frame, clear of the HUD; a tap on the swing\'s chip turns AUTO on and the seat swings by itself; no tooltip shows on touch',
+        pc0.length === 2 && pc0.every((c) => c.inView && c.overHud === 0) && pc1.find((c) => /Pillow Swing/.test(c.label ?? ''))?.pressed === 'true' && pOn > 0.25 && !tipN, JSON.stringify({ chips: pc0, on: pOn, tipN }));
+      {
+        const seatP = (await pgLife(page)).things.find((t) => t.id === 'pillowswing');
+        const cdp = await cdpFor(page);
+        if (seatP?.sx !== null && seatP?.sx !== undefined) {
+          await touchStart(cdp, [{ x: seatP.sx, y: seatP.sy }]); await pgStep(page, 0.05, 0.05);
+          for (let k = 1; k <= 6; k++) { await touchMove(cdp, [{ x: seatP.sx - k * 10, y: seatP.sy }]); await pgStep(page, 0.05, 0.05); }
+        }
+        const pHeld = await pgLife(page);
+        await touchEnd(cdp);
+        await pgStep(page, 0.5);
+        check('PG phone D-95: a finger on the swing seat is the hand (it takes the seat, not the view)', pHeld.tap === 'hand:pillowswing', JSON.stringify({ tap: pHeld.tap, seat: seatP && [seatP.sx, seatP.sy] }));
+      }
+      await page.evaluate(() => window.__WH__.resume()); await sleep(600); await page.evaluate(() => window.__WH__.pause());
+      await pgShot(page, 'pg_cabin_auto_phone');
       const noise = w.errors.filter((e) => !/Download the React DevTools/.test(e));
       check('PG phone: 0 console errors / warnings / page errors, 0 failed requests', noise.length === 0 && w.pageErrors.length === 0 && w.failed.length === 0 && w.bad.length === 0, [...noise, ...w.failed, ...w.bad].slice(0, 4).join(' | '));
       await context.close();

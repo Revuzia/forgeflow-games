@@ -549,7 +549,7 @@ export function createGame(deps: GameDeps): Game {
    *  Reconnect all or join animation ended lost its blade and cut nothing). The shell's own releases (tab hidden, a panel, a ceremony, a switch) clear them.
    *  `keepLocks`: LOCK.md locks are not fingers; only a pause (setPaused) keeps them, every other release lets them go. */
   function releaseEverything(keepSwipe = false, keepLocks = false): void {
-    try { gestures.cancelAll(clock.now()); } catch (e) { report(e); }
+    try { gestures.cancelAll(clock.now()); life?.dropAll?.(); } catch (e) { report(e); }
     // a swipe or a Snap drag cut short by this release (tab hidden, a panel, a ceremony) must not stay half-made: its pointerup may never come,
     // and a stale blade ignored the next swipe by another finger (SHELL-4 fix 1, VERIFY A-F4)
     if (!keepSwipe) {
@@ -715,6 +715,7 @@ export function createGame(deps: GameDeps): Game {
           return;
         }
       }
+      if (life !== null && (p.button ?? 0) === 0 && life.grabAt?.(p.id, p.x, p.y)) { emit('interaction'); return; }   // PLAYGROUND D-95: the hand takes a swing seat or a rocker board
       if (life !== null && (p.button ?? 0) === 0) life.pressAt(p.id, p.x, p.y);   // PLAYGROUND: a still tap may land on a thing (the host decides at the release)
       gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0, type: p.type, ...shiftOf(p) });
     },
@@ -736,6 +737,7 @@ export function createGame(deps: GameDeps): Game {
         return;
       }
       if (capsules.pointerMove(p.id, p.x, p.y)) return;
+      if (life !== null && life.dragAt?.(p.id, p.x, p.y)) return;
       gestures.pointerMove({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), ...shiftOf(p) });
     },
     pointerUp(p) {
@@ -753,25 +755,27 @@ export function createGame(deps: GameDeps): Game {
       }
       if (tool === 'snap') { snapDrag.delete(p.id); return; }
       if (capsules.pointerUp(p.id)) return;
+      if (life !== null && life.dropAt?.(p.id, p.x, p.y)) return;
       if (life !== null && inputLive()) { try { life.releaseAt(p.id, p.x, p.y); } catch (e) { report(e); } }
       gestures.pointerUp({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), ...shiftOf(p) });
     },
     pointerCancel(id) {
       if (blade && blade.id === id) { blade = null; emit('blade', null); return; }
       if (snapDrag.delete(id)) return;
+      if (life !== null && life.dropAt?.(id, NaN, NaN)) return;
       if (!capsules.pointerCancel(id)) gestures.pointerCancel(id, clock.now());
     },
     hover(x, y) { pointerNdc = ndcOf(x, y); },
     hoverEnd() { pointerNdc = null; },
     wheel(deltaPx) { if (inputLive()) gestures.wheel(deltaPx); },
-    cancelAll() { gestures.cancelAll(clock.now()); capsules.cancelHold(); },
+    cancelAll() { gestures.cancelAll(clock.now()); capsules.cancelHold(); life?.dropAll?.(); },
     orbitBy(dx, dy) { if (inputLive()) { emit('interaction'); driver.onAction({ type: 'orbit', dx, dy }); } },
     zoomBy(n) { if (inputLive()) { emit('interaction'); driver.onAction({ type: 'zoom', delta: n, source: 'wheel' }); } },
     screenCentre: () => host.screenCentre(),
     // every owner of a pressed pointer must answer here: src/input/pointer.ts forwards a pointermove only while isDown(id), else it is a hover.
     // The gesture machine owns the Hand's presses; the Cut tool's blade, Snap's drags and a held capsule take theirs before it (SHELL-4 fix 1: Snap's
     // drag-to-turn and pinch and the blade line did nothing with real events because only the gesture machine answered)
-    isDown: (id) => gestures.isActive(id) || snapDrag.has(id) || (blade !== null && blade.id === id) || capsules.holds(id),
+    isDown: (id) => gestures.isActive(id) || snapDrag.has(id) || (blade !== null && blade.id === id) || capsules.holds(id) || life?.holds?.(id) === true,
     skip: () => ceremonies.tapSkip(),
     get live() { return inputLive(); },
     lock() {

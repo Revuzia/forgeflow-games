@@ -8,8 +8,8 @@ import { SOCIAL_KIND, LIFE_EV, LIFE_FLAG, EMOTE, SOCIAL } from '../data/life.ts'
 import { MECH } from '../data/places.ts';
 import type { LifeWorld } from './world.ts';
 import { CAP, F, MAX_MOMENTS, MAX_MEMBERS, BEH, USES_FULL, pushEvent, pairIdx, rnd, U16, dmm, inBounds, shrinkMm, keepMm, clearOfThings, noLean, qT, freeSpot } from './world.ts';
-import { gateStart, gateFits, stopMove, travelTo, travelStep, emitHop, emitPose, clearPose, emitGaze, emitEmote, emitExpr, emitScoot, HELD_BITS, say } from './act.ts';
-import { MOVER_CAP, tierOf, UNIT, STYLE } from './attention.ts';
+import { gateStart, gateFits, stopMove, travelTo, travelStep, emitHop, emitPose, clearPose, emitGaze, emitEmote, emitExpr, emitScoot, emitSquash, HELD_BITS, say } from './act.ts';
+import { MOVER_CAP, tierOf, UNIT, WAKE, STYLE } from './attention.ts';
 import { emitVoice, PHRASE, toNextBarMs, BAR_S, voice } from './voice.ts';
 import { TRAIT } from './traits.ts';
 
@@ -18,6 +18,10 @@ const WISH_FRIEND = 4; // WISH_KIND.FRIEND
 /** Moment ids (S01..S18 = 1..18), as LIFE 6.1 numbers them; the SOCIAL event's sub is SOCIAL[id - 1].kind (S05 is COPY or PARADE). */
 export const MOM = { GREET: 1, CHAT: 2, BOOP: 3, NUZZLE: 4, COPY: 5, SING: 6, SNUGGLE: 7, PILE: 8, COMFORT: 9, TEETER: 10, PUSH: 11, PASS: 12,
   PEEK: 13, SQUIRT: 14, MIRROR: 15, ECHO: 16, DUET: 17, TWIRL: 18, PARADE: 19 } as const;
+/** (round 4, my reading of PLACES 4.2's finale "the fire swells and everyone sings with the music") S06's score at a tune: 0.95, above a
+ *  dozy nap's trigger or a favourite ball (round 2's 0.8 lost the fire's song to them about one time in four). The two chatty friends' song
+ *  stays 0.45. */
+const SONG_AT_TUNE = 0.95;
 /** Pair bits of the once-per-visit moments. */
 const PB = { GREET: 1, MIRROR: 2, DUET: 4, TWIRL: 8 } as const;
 
@@ -131,10 +135,14 @@ export function socialPick(w: LifeWorld, s: LifeSnapshot, i: number, canMove: bo
     const ungreeted = whole && w.ki[j] === 0 && (w.pG[p] & PB.GREET) === 0;
     // the friend wish (QUESTS 8): the wisher goes to greet the squishy it wished to see, from anywhere in the place; when this pair has
     // greeted already this visit, that greet comes once more (the grant greet: no friendship points, SOCIAL thing = -2 for the host)
+    // (round 4: a greet that needs a walk-up is a candidate only while a mover token is free: a joint moment reserves its tokens and units
+    // together or does not start (PG_LIFE brief 7); round 2's walk-up waited reserved for up to 6 s, and with moverCap 1 two such waits
+    // kept the walkers' partners in moments no one could join for half a minute: three set beside the kettle missed its whistle)
+    const walk = canMove && gateFits(w, s, i, 0, 0);
     const wished = whole && w.ki[j] === 0 && w.wK[i] === WISH_FRIEND && w.wT[i] === w.species[j];
-    if (wished && (canMove || d < 1.6)) { sc = 1.2; k = MOM.GREET; }
+    if (wished && (d < 1.6 || walk)) { sc = 1.2; k = MOM.GREET; }
     else if (ungreeted && d < 1.6 + (tb < w.sU[i] || tb < w.sU[j] ? 0.5 : 0)) { sc = early ? 1.15 : 0.85; k = MOM.GREET; }
-    else if (ungreeted && canMove && d < 1.2 + 1.0 * w.tr[tr + TRAIT.curious] + 2.6 && idle(w, j) && tb >= w.sU[i]) { sc = early ? 1.1 : 0.6; k = MOM.GREET; }
+    else if (ungreeted && walk && d < 1.2 + 1.0 * w.tr[tr + TRAIT.curious] + 2.6 && idle(w, j) && tb >= w.sU[i]) { sc = early ? 1.1 : 0.6; k = MOM.GREET; }
     // (my reading of S01: two wholes say hello before they play together, so an ungreeted pair starts no other pair moment; LF-09)
     if (!cool && !ungreeted && idle(w, i) && idle(w, j)) {
       // S15 twin dance
@@ -168,12 +176,24 @@ export function socialPick(w: LifeWorld, s: LifeSnapshot, i: number, canMove: bo
       (w.lo[j * 6] > 0.5 || w.lo[j * 6 + 2] > 0.5 || tb - w.hT[j] < 5) && 0.85 > sc) { sc = 0.85; k = MOM.COMFORT; }
     if (k !== 0 && sc > bs) { bs = sc; best = k; bp = j; }
   }
-  // S06 sing together: a tune plays (Music Box, the kettle) and 2+ idle within 2.5 m of it, or 2 chatty friends, once per 2 min per place
-  if (tb - w.f[F.SONG] >= 120 && idle(w, i) && nIdle >= 1) {
+  // S06 sing together: a tune plays (the Music Box, the kettle's whistle, a tapped chime row, the fire puff) and 2+ idle within 2.5 m of it,
+  // or 2 chatty friends, once per 2 min per place. (round 4) The singers are the idle ones within 2.5 m of the TUNE (LIFE 6.1; round 2
+  // gathered them around the first singer), and a squishy answering the tune (B18, a still, short behaviour) sings with them.
+  if (tb - w.f[F.SONG] >= 120 && idle(w, i)) {
     let v = 0;
-    if (s.musicBoxOn && tuneNear(w, s, i)) v = 0.8;
-    else if (w.tr[tr + TRAIT.chatty] > 0.6 && friendChattyNear(w, s, i)) v = 0.45;
+    const tk = tunePlaying(w, s);
+    if (tk !== -1 && tuneNear(w, s, i, tk) && singersNear(w, s, i, tk) >= 2) v = SONG_AT_TUNE;
+    else if (nIdle >= 1 && w.tr[tr + TRAIT.chatty] > 0.6 && friendChattyNear(w, s, i)) v = 0.45;
     if (v > bs) { bs = v; best = MOM.SING; bp = -1; }
+  }
+  // (round 4) a song that has not reached its first bar line yet takes a latecomer near its tune who just became free (its greet or chat
+  // ended while the kettle whistled): it joins the shared song (bp = -2 - the moment)
+  if (SONG_AT_TUNE > bs && canSing(w, s, i)) {
+    for (let m = 0; m < MAX_MOMENTS; m++) {
+      if (w.mK[m] !== MOM.SING || w.mP[m] !== 1 || w.mN[m] >= MAX_MEMBERS || tb >= w.mE[m] - 2 * BAR_S - 0.05) continue;
+      const tk = w.mTh[m], a = mem(w, m, 0);
+      if (w.home ? a >= 0 && dmm(s, i, a) < 4500 : tk >= 0 && tuneNear(w, s, i, tk)) { bs = SONG_AT_TUNE; best = MOM.SING; bp = -2 - m; break; }
+    }
   }
   // S07 snuggle: 3 or more idle (not napping) within 2.5 m, any one of them happy
   if (canMove && nIdle >= 2 && happy && idle(w, i) && 0.55 > bs && tb >= w.coo[i * 26 + BEH.MOMENT]) { bs = 0.55; best = MOM.SNUGGLE; bp = -1; }
@@ -211,11 +231,52 @@ export function tuneThing(w: LifeWorld, s: LifeSnapshot): number {
   for (let k = 0; k < w.nTD; k++) if (w.tSw[k] === 3 && (!w.home || w.rOL[k] >= 0)) return k;
   return -1;
 }
-function tuneNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
-  const k = tuneThing(w, s);
-  if (k < 0) return w.home; // Home: the Music Box is the tune wherever it stands in view
-  const r = w.rOL[k], tx = r >= 0 ? s.thingX[r] : w.tX[k], tz = r >= 0 ? s.thingZ[r] : w.tZ[k];
-  return (s.x[i] - tx) * (s.x[i] - tx) + (s.z[i] - tz) * (s.z[i] - tz) < 2.5 * 2.5 + (w.home ? 4 : 0);
+/** The tune playing now for S06: the snapshot's Music Box or kettle tune (its thing, or -2 at Home with no Music Box row: the tune is
+ *  wherever it stands in view), else a tapped thing's tune (lifeThingTap: the fire puff, a chime row) while it lasts; -1 none. */
+export function tunePlaying(w: LifeWorld, s: LifeSnapshot): number {
+  if (s.musicBoxOn) { const k = tuneThing(w, s); return k >= 0 ? k : w.home ? -2 : -1; }
+  if (w.tnK >= 0 && w.f[F.NOW] < w.f[F.TUNE_U]) return w.tnK;
+  return -1;
+}
+/** Is character j within 2.5 m of tune tk (Home: anywhere in view, 4.5 m of the first singer as before)? */
+function tuneNear(w: LifeWorld, s: LifeSnapshot, j: number, tk: number): boolean {
+  if (tk < 0) return w.home;
+  const r = w.rOL[tk], tx = r >= 0 ? s.thingX[r] : w.tX[tk], tz = r >= 0 ? s.thingZ[r] : w.tZ[tk];
+  return (s.x[j] - tx) * (s.x[j] - tx) + (s.z[j] - tz) * (s.z[j] - tz) < 2.5 * 2.5 + (w.home ? 4 : 0);
+}
+/** May character j sing in S06 now? (round 4, my reading of "idle" in S06 as S07 spells it out: "idle (not napping)") Any squishy that is
+ *  not napping, not using a thing, not walking somewhere on purpose, not in a moment, not held and not riding: idle, looking about, watching,
+ *  noticing, answering the tune (B18), still after a touch (B08), reacting to a zone (B15), loving its place (B10), arriving, cheering, or
+ *  basking in its warm pose (B05: "everyone sings with the music" by the fire, PLACES 4.2's finale), or about to use a thing but still waiting
+ *  for its mover token (B04's first phase). Not a chunk (its piece group sings
+ *  through its face piece). */
+function canSing(w: LifeWorld, s: LifeSnapshot, j: number): boolean {
+  if (j >= s.n || w.ac[j] !== 1 || w.ki[j] === 2 || w.moo[j] >= 0) return false;
+  if ((s.flags[j] & HELD_BITS) !== 0 || (s.flags[j] & LIFE_FLAG.RIDE) !== 0) return false;
+  const b = w.beh[j];
+  return b === BEH.NONE || b === BEH.IDLE || b === BEH.WANDER || b === BEH.NOTICE || (b === BEH.WATCH && w.ph[j] !== 1) || b === BEH.ANSWER ||
+    b === BEH.AFTERGLOW || b === BEH.ZONE || b === BEH.LOVE || b === BEH.ARRIVE || b === BEH.CHEER || (b === BEH.BASK && w.ph[j] >= 2) ||
+    (b === BEH.USE && w.ph[j] === 0 && !w.mo[j]); // a use still waiting for its mover token has not set off yet
+}
+/** Character j joins song m: its sway on the beat and its two bars from the song's first bar line (the first `voiced` singers voice it;
+ *  phone 2, desktop 3, D-59's voice cap); a basker sits up out of its warm pose to sing. */
+function joinSong(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, m: number, j: number): void {
+  const tb = w.f[F.NOW];
+  const wasBask = w.beh[j] === BEH.BASK;
+  if (!addMember(w, out, m, j)) return;
+  if (wasBask) emitSquash(w, s, out, j, 1000, 600);
+  sway(w, s, out, j, 30, 1100, 1);
+  const k = w.mN[m] - 1, waitMs = ((w.mE[m] - 2 * BAR_S - tb) * 1000) | 0;
+  if (k < (s.phone ? 2 : 3) && waitMs >= 0) {
+    emitVoice(w, s, out, j, PHRASE.SING, waitMs, -1, k, 2, 0);
+    emitVoice(w, s, out, j, PHRASE.SING, waitMs + ((BAR_S * 1000) | 0), -1, k + 16, 2, 0);
+  }
+}
+/** How many may sing with i at tune tk (i included): within 2.5 m of the tune (Home: within 4.5 m of i). */
+function singersNear(w: LifeWorld, s: LifeSnapshot, i: number, tk: number): number {
+  let n = 1;
+  for (let j = 0; j < s.n; j++) if (j !== i && canSing(w, s, j) && (w.home ? dmm(s, i, j) < 4500 : tuneNear(w, s, j, tk))) n++;
+  return n;
 }
 function friendChattyNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
   for (let j = 0; j < s.n; j++) {
@@ -230,16 +291,28 @@ export function beginPicked(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev:
   const tb = w.f[F.NOW];
   const p = w.f[F.B] | 0;
   let m = -1;
+  if (kind === MOM.SING && p <= -2) { // a latecomer joins a song before its first bar line
+    m = -2 - p;
+    if (m >= MAX_MOMENTS || w.mK[m] !== MOM.SING || w.mN[m] >= MAX_MEMBERS) return false;
+    joinSong(w, s, out, m, i);
+    return w.moo[i] === m;
+  }
   if (kind === MOM.SING || kind === MOM.SNUGGLE) {
     m = startMoment(w, s, out, kind, i, -1, -1);
     if (m < 0) return false;
-    const maxN = kind === MOM.SING ? 6 : 4;
+    const maxN = kind === MOM.SING ? 6 : 4, tp = tunePlaying(w, s), tk = kind === MOM.SING ? tp : -1;
     for (let j = 0; j < s.n && w.mN[m] < maxN; j++) {
-      if (j === i || !w.ac[j] || w.ki[j] === 2 || !isFree(w, s, j, false) || !idle(w, j)) continue;
-      if (dmm(s, i, j) < (kind === MOM.SING && w.home ? 4500 : 2500)) addMember(w, out, m, j);
+      if (j === i || (kind === MOM.SING ? !canSing(w, s, j) : (!w.ac[j] || w.ki[j] === 2 || !isFree(w, s, j, false) || !idle(w, j)))) continue;
+      // (round 4) a snuggle does not take one who would rather sing: a tune plays near it with another singer (its own best, 0.95 > 0.55)
+      if (kind === MOM.SNUGGLE && tp !== -1 && !w.home && tuneNear(w, s, j, tp) && singersNear(w, s, j, tp) >= 2) continue;
+      // a tune's singers stand within 2.5 m of the tune; two chatty friends' song gathers within 2.5 m of the first (Home: 4.5 m)
+      if (kind === MOM.SING && tk !== -1 && !w.home ? tuneNear(w, s, j, tk) : dmm(s, i, j) < (kind === MOM.SING && w.home ? 4500 : 2500)) {
+        const wasBask = w.beh[j] === BEH.BASK;
+        if (addMember(w, out, m, j) && wasBask) emitSquash(w, s, out, j, 1000, 600);
+      }
     }
     if (w.mN[m] < (kind === MOM.SNUGGLE ? 3 : 2)) { endMoment(w, s, out, ev, m, false); return false; }
-    if (kind === MOM.SING) { w.f[F.SONG] = tb; w.mTh[m] = tuneThing(w, s); }
+    if (kind === MOM.SING) { w.f[F.SONG] = tb; w.mTh[m] = tk >= 0 ? tk : -1; } // (round 4) two chatty friends' song names no thing
     return true;
   }
   if (p < 0) return false;
@@ -297,8 +370,9 @@ function besides(w: LifeWorld, s: LifeSnapshot, i: number, j: number, gapMm: num
     w.f[F.X] = s.x[j] + dx / d * r; w.f[F.Z] = s.z[j] + dz / d * r;
   }
 }
+const WAKE_WHOLE_MILLI = (WAKE.whole * 1000 + 0.5) | 0, WAKE_PIECE_MILLI = (WAKE.piece * 1000 + 0.5) | 0;
 function asleepUnitsMilli(w: LifeWorld, s: LifeSnapshot, j: number): number {
-  return (s.flags[j] & LIFE_FLAG.ASLEEP) !== 0 ? (w.ki[j] === 0 ? 970 : 190) : 0;
+  return (s.flags[j] & LIFE_FLAG.ASLEEP) !== 0 ? (w.ki[j] === 0 ? WAKE_WHOLE_MILLI : WAKE_PIECE_MILLI) : 0;
 }
 
 /** The ride allowance of moment m's riders (D-85: their units are added to unitCap while it runs), x 1000. */
@@ -326,8 +400,8 @@ export function updateMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev
         besides(w, s, a, b, 300);
         w.mT[m] = 0;
         if (travelTo(w, s, out, a, 0, 0)) { w.mS[m] = 1; w.mE[m] = tb + 15; return; }
-        // no mover token now (one mover at a time): wait for it a little, still and reserved, then give up
-        if (tb - w.mT0[m] > 6) endMoment(w, s, out, ev, m, false); else w.mNe[m] = tb + 0.3;
+        // no mover token after all (the candidate test saw one free): it does not start; the pair's bit comes back (endMoment)
+        endMoment(w, s, out, ev, m, false);
         return;
       }
       if (w.mP[m] === 0) {

@@ -1,0 +1,8 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>LF-02 in a browser tab (PG_LIFE)</title></head>
+<body><pre id="o">loading</pre>
+<script type="module">
+import { lf02Prepare, lf02Window, lf02Noop } from './lf02_work.ts';
+window.__LF02__ = { prepare: lf02Prepare, win: lf02Window, noop: lf02Noop, ready: true };
+document.getElementById('o').textContent = 'ready';
+</script></body></html>

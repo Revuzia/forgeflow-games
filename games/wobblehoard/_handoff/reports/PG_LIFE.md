@@ -358,3 +358,211 @@ The five rows of the scope: LF-09 x2 ok, LF-13 x2 ok (+1 new row), **LF-02 still
 - Not built from the S1/S2 list: SOAK by water (S2 rain/water look rows not probed), GLIDE (ice, S2: no producer), the squirt game's LIFE
   part beyond SQUIRTED, the snow cap from standing on snow, B19 gusts in a real place (S3), S05 copying a thing use by a whole (P04 copies a
   use; a whole's S05 copies hops), the 3-tosses "dizzy" beyond 5 s of grace, B17 comfort's "a greet from the other ends a huff".
+
+## Round 4 (engineer 4, started 2026-11-17 06:20 UTC, from HEAD 7e64f2018 + other lanes' uncommitted edits)
+Scope (orchestrator): (1) the three FAIL rows of `probe_pg_lifequests.ts` that are LIFE's: C8's song of three (QU-13 med, QU-08) and QC's
+FLOAT; (2) round 2's not-built list: SOAK by water, GLIDE, DRIFT, GAZE_SKY and PRINT producers, the snow cap, B19 in real places, probe
+rows for LIFT, RATTLE, GLOW, SHOWER, FIZZ; (3) PF-00's unit weights in attention.ts (F stays 4); (4) LF-02 measured once in a real browser
+tab (port 5369). Lane: src/life and my probes (`probe_life.ts`, `probe_life_imports.ts`). Scratch: `.../scratchpad/pg_life4/`.
+Baseline at 06:23: tsc clean (2.9 s); `node _harness/probe_life.ts` 95 ok / 1 FAIL (LF-02: max 104 928 B per 1000 ticks), 3.8 s;
+`probe_life_imports` all ok; `probe_chatter` 42/42; `probe_pg_lifequests` 10 ok / 3 FAIL (QU-13 med C8, QU-08 C8, QC: rainleaf REACT 1
+splashspots, lanternroof REACT 1 moondish).
+
+| R4 step | What | State |
+|---|---|---|
+| 0 | read report, SESSION3, brief (+ D-95 revised in PLAYGROUND_BUILD 1361: LIFE never switches AUTO; nothing else for LIFE), LIFE 4.2 / 6.1 / 5.3, PLACES 2 / 2.5 / 4.2, QUESTS C8, the probe | DONE 06:24 |
+| 1 | C8's song of three: S06 rebuilt around the tune; `lifeThingTap` (the fire puff, a chime row); walk-up greets without a token wait; LF-09 balance | DONE about 06:47 (LIFE side); the probe_pg_lifequests C8 rows still FAIL (below, plainly) |
+
+#### Step 1, C8 (engineer 4)
+**Why no song of three came (scratch `pg_life4/fin*.ts`, `sg*.ts`, `fire*.ts`, each a copy of the probe's kinematic host):**
+(a) S06 gathered its singers within 2.5 m of the *first singer*, not of the tune, and only from B01-like idle states, so a squishy that had just
+started B18 (answering the whistle) could neither start nor join the song; (b) a walk-up greet with no mover token waited reserved up to 6 s
+(round 2), and with moverCap 1 two such waits kept their partners in moments for 20 to 30 s: in the probe's finale the three set by the kettle
+at 30 s were all inside greets at its 40 s whistle; (c) LIFE could not hear the fire puff at all (no seam: the shell's tap toggles the fire
+zone and draws a puff; the snapshot's thingState never changes for a block), though LIFE 6.1 names "the fire puff" as a tune and PLACES 4.2's
+finale is "the fire swells and everyone sings"; (d) the probe's SG diagnostic window ends 12 s after the carry, 7 s after the whistle, before
+any song can end (a song ends at its next bar line + 2 bars, 7.3 to 10.9 s after it starts): its "0 SING" is partly its window.
+**Built (src/life):**
+- `lifeThingTap(w, thing)` (step.ts, additive LIFE value, no contract change): the player tapped or switched place-global thing `thing` now.
+  Every squishy within 1.5 m notices it at once (LIFE 5.3's switch row; B02's switch-tap path existed but nothing fed it for a block); a
+  fire switch's puff (`p.puffS`, 5 s) or a tapped chime row (one bar) is an S06 tune at that thing. **For PG_SHELL:** call it from
+  `tapThing` (and the keyboard's "Tap it yourself") after the tap's effect; for the Fireplace only when the fire comes on or grows.
+- S06: the singers are everyone who may sing within 2.5 m of the playing tune (Home: as before, 4.5 m of the first); "may sing" (my reading
+  of S06's "idle", which S07 spells "idle (not napping)") = not napping, not using a thing (a B04 still waiting for its token may), not walking
+  on purpose, not in a moment, not held, not riding: idle, looking, noticing, answering (B18), afterglow (B08), zone reaction (B15), love
+  (B10), arrive, cheer, or basking in its warm pose (it sits up to sing). A latecomer near the tune that becomes free before the song's first
+  bar line joins it. A noticing squishy whose notice is of the tune's own thing may start the song at once. A snuggle does not take a
+  squishy that would rather sing. The song's score at a tune is 0.95 (round 2: 0.8; it lost the fire's song to a dozy nap or a favourite
+  ball about one time in four); the two chatty friends' song stays 0.45 and now names no thing (-1; it named the kettle).
+- S01: a walk-up greet is a candidate only while a mover token is free (the brief's "joint moments reserve their tokens and units together
+  or do not start"); no reserved wait.
+- LF-09 levers found on the way (the greet change alone dropped the probe's seed 51 to 3/2/0/3): B04's walk to the ball has its own deadline
+  (3 s + 1.5 x the walk at the glide speed; round 2's 12 s from the start cut every walk of a slow family from across the room, with the token
+  spent: capnap made 8 B04 starts and 0 uses in seed 51); a B03 wander does not take the mover token while another squishy waits for it in
+  B04's first phase (`w.tw`; with moverCap 1 wanders held the token 35 to 73 s of a 5-minute visit while uses waited 78 to 168 s).
+**Numbers (scratch, 20 or 24 seeds each, the probe's host):**
+| scenario | HEAD 7e64f2018 | now |
+|---|---|---|
+| LF-09 over seeds 51..74 (every pair greets, each 2..3 uses) | 14 / 24 in; uses hist 0:2 1:10 2:52 3:31 4:1 | **19 / 24** in; 1:4 2:54 3:36 4:2 (seed 51: 3/2/3/2) |
+| SG staging (four set by the kettle 5 s before, high, 20 s windows; 45 whistles) | 21 songs: 18 of 2, 3 of 3 | 20 songs: 7 of 2, **9 of 3, 4 of 4** |
+| fire puff, three set by the Fireplace 3 s before the tap (lifeThingTap), 20 seeds | (no seam) | song of 3+: **med 16/20, low 17/20, high 12/20**; 1 s before: med 20/20 |
+| the probe's own finale staging (three by the kettle at 30 s, 330 s, 5 out; no fire seam), 20 seeds | med 1/20, low 1/20 | **med 0/20, low 15/20, high 0/20** |
+New probe rows (probe_life.ts, all ok): S06 at the kettle's whistle (one SING n2 3, thing the kettle); the fire puff by lifeThingTap (both
+within 1.5 m gaze at the Fireplace within 0.15 s; SING n2 3, thing the Fireplace, +10.5 s); no tap and no kettle, no song; a latecomer held
+when the fire puffed joins at +2.0 s, before the bar line at +3.1 s (n2 3). `node _harness/probe_life.ts`: **99 ok, 1 FAIL (LF-02)**;
+probe_life_imports all ok; probe_chatter 42/42; tsc clean.
+**probe_pg_lifequests, plainly:** QU-13 med and QU-08 still FAIL on C8, and **QU-13 low and QU-03 now FAIL too** (they passed at HEAD on a
+lucky seed: the session's low finale is seed 150, one of the 5 of 20 that miss; HEAD made a song of three in 1 of 20 low finales, this code in 15
+of 20). On med the probe's staging cannot give a song of three under LIFE's rules: the kettle sits in the Window Chill corner, so after the
+first whistle (40 s, while the three set there at 30 s are in the moments their afterglow giggle starts: a nuzzle and a snuggle) nobody is
+near it (the whole med session, about 36 minutes at the cabin with a whistle every 67 s, gives one SING, of 2). The designed finale tune is the fire puff, which the
+probe writes only as a ring record and never tells LIFE. **For PG_QUESTS:** in `session()` step 5 call `lifeThingTap(sim.w,
+THING_IDS.indexOf('hearth'))` where the probe writes the player's fireplace USE (the shell's host will do the same once PG_SHELL wires it),
+and carry the three to the Fireplace (not the kettle) before the tap, as a player following "Tap the fireplace. Then three sing" would;
+lengthen SG's window to 20 s. I did not edit their probe. **Not done:** a song's voices: the attention budget charges a phrase's syllables
+at its emission (all 6 bar phrases at once) and reserves its voice slot through its delay, so of three singers only one is voiced (the kettle
+row logs 1 voice intent for the song; LIFE 8.4 wants 3 on desktop, 2 on a phone). 3 singers x 4 notes a bar is 3.3 syllables a second, inside
+the desktop rate of 4 but not the burst of 6 charged at once: a budget that charges syllables at their start times is the fix (attention.ts,
+LF-07's storm rows must still hold); for PG_AUDIO / the designer to confirm before I change it.
+| 2 | FLOAT honest (QC): shallow water, the float table, the body's own 1 s | DONE about 06:51: QC ok (1020 LIFE events at the 8 S2 / S3 places, all inside PLACE_CAPS) |
+
+#### Step 2, FLOAT (engineer 4)
+Cause (PG_QUESTS round 3 had it right): FLOAT held for "in a water zone and not GROUNDED" and its 1 s was timed from the zone entry, so a
+squishy that stood a second in a splash spot and then hopped was "floating" on the hop's frames (Rainleaf's Splash Spots, Lanternroof's Moon
+Dish: surfaces 0.06 to 0.08 m). Fix (looks.ts): FLOAT needs water that is not shallow (surface 0.12 m or more: PLACES 2's water row, the line
+WADE and journal.ts PLACE_CAPS use), the body not grounded and not on a prop, and **the float table** (PLACES 2.5, LIFE 4.2's "it floats by
+the float table": the submerged share of its sphere at that surface, h^2 (3R - h) / (4R^3), more than its density, a foam's lerping to its
+soaked density by its soak look); FLOAT's and WADE's 1 s now time the body's own state without a break (`w.fT`, `w.wdT`). The host's
+IN_WATER flag with no zone geometry still counts (fixtures). **Re-specified fixture (written reason):** round 2's FLOAT row floated Dollop (a
+jelly gel, density 1.02, which sits in 0.28 m of water) by a host flag; the floater is now Cushlet (marshmallow 0.11); same checks and bars
+(FLOAT at 1.0 s, thing the Rock Pool; LF-18's floater exit at 30.0 s, out at 35.9 s). New row: no FLOAT from a hop in a shallow splash, a hop
+in the Rock Pool, a sitter the host marks not grounded, or a floater on a prop (0 / 0 / 0 / 0; the Surf Edge gives SPLASH, 2). Numbers:
+`probe_life` 100 ok, 1 FAIL (LF-02); `probe_pg_lifequests` QC ok (coverage info: ripple 3/7, fizzwell 3/8, others as before: the host's
+sitters marked to float no longer FLOAT).
+| 3 | the S2 / S3 producers: SOAK by water, GLIDE (+ the ice glide use), DRIFT, GAZE_SKY (+ the comet), PRINT, the snow cap, B19 by a gust clock; rows for LIFT, RATTLE, GLOW, SHOWER, FIZZ, DRY, LOVE | DONE 07:02: 15 new rows, all ok; probe_life **114 ok, 1 FAIL (LF-02)**; QC still ok (814 events) |
+
+#### Step 3, the producers (engineer 4)
+All in src/life; every row is LIFE's real output on PG_DATA's place, wide layout, on probe_life's kinematic host (which now coasts a GLIDE
+nudge at e^-0.5t, drifts a floater round a disc's flow, and can report a switchable zone off).
+- **SOAK by water** (the code was there; row): a marshmallow in the Rock Pool soaks to 0.5 at 8.3 s, thing the Rock Pool; in Rainleaf's rain,
+  thing -1.
+- **GLIDE**: looks.ts measures a glide on an ice patch (a patch with `ice`: its grip is the family's ice grip, under 0.5 for every family
+  but sticky stretch and slime goo) from the snapshot's speed x dt while LIFE is not driving it (a scoot), and fires GLIDE at 0.5 m (event, 10
+  s), thing the patch's (the Ice Pond). The producer: B04 now also uses an ice patch thing (Frostbell's Ice Pond; QUESTS I3) for a family
+  that glides: walk to the patch's edge (R + 0.1 inside it), then the glide of LIFE 5.1, one nudge of 0.6..1.0 m/s toward its middle (new
+  `emitGlide`, act.ts: a SETTLE first so the walk's scoot driver lets go, the mover token kept for the coast), USE with the thing's verb
+  (STEP). Row: a firm silicone glides (nudges 0.85 m/s), GLIDE thing the Ice Pond, 10 s apart, USE STEP; a slime goo never glides.
+  **For PG_PHYS / the designer:** with LIFE 5.1's 0.6..1.0 m/s nudge and PLACES 2.4's ice grip (firm silicone 2.25 x 0.08 = 0.18), a
+  Coulomb slide stops in v^2 / (2 mu g) = 0.1 to 0.28 m, under GLIDE's 0.5 m; whether a soft body's slide goes further is PH-08's to say.
+  If it does not, I3 can never complete from LIFE's own glides (a toss on the ice still can).
+- **DRIFT**: floating (FLOAT's condition) inside a current (a water zone's own flow, or a current zone the host reports on: Fizzwell's tap
+  swirl) and not driven by LIFE, carried 0.3 m, once a visit, thing the zone's. Row: 4.4 s in the Rock Pool (0.08 m/s), a wader none.
+- **PRINT**: its first print on a marking ground (PlaceDef.ground.mark) or patch (PatchDef.mark), moving or landing on it, grounded and not
+  in water; a patch without marks (the Ice Pond) covers the ground's. Thing the patch's owner, else -1; once a visit. Row: Ripple's sand
+  once, the cabin's floor none.
+- **GAZE_SKY**: at night, idle (B01) within 1.5 m (+ R) of a sky thing (ThingDef p.sky: the Moon Dish) for 3 s, once a visit, thing the dish;
+  **the comet**: `lifeThingTap` on a 'comet' switch (the Star Scope) gives every character on screen GAZE_SKY at once, every time, thing the
+  scope. Row: 10.2 s (it arrived, greeted and noticed first), the one 3 m away none, two comets 4 events.
+- **The snow cap**: on snowy ground (PlaceDef weather 'snow': Frostbell) the snow look rises 0.03 a s while still and grounded (not in water,
+  not in warmth) to its 0.3 cap (LIFE 3.1); it never crosses 0.5 by itself; the pine's puff and a snowball (lifeAddLook) do. Row: 0.031 a s,
+  0.30 cap, no SNOWCAP by itself, a snowball's +0.3 gives SNOWCAP with the snowball, falling 0.2 a s while moving.
+- **B19 in real places**: no lane had a gust schedule (physics has no gust force, the shell sets the wind bit whenever a body is in the wind
+  zone, audio runs its own WeatherClock), so round 2's B19 held on every 2.5 s, all the time, in the Night Breeze. LIFE now keeps a gust clock
+  on sim time for every wind zone with `gust` data (world.ts `gustStep`: everyS apart, forS long, from a hash of seed, visit, zone and time;
+  deterministic, no allocation) and B19 starts once per gust while grounded in the zone, lasting the gust (a wind zone without gust data
+  keeps round 2's wind-bit rule). **New `lifeGustOn(w, zoneIdx)`** (step.ts): **for PG_SHELL**, drive the wind's force on airborne bodies
+  (PG_PHYS) and the gust sound (PG_AUDIO's `weather`) from it, so the lean matches what the player sees and hears. Chunks hold on too (W F C);
+  an event kind's PIECES now counts the group's pieces that did it in the last 3 s (round 2 counted only the visit list: an event kind's
+  PIECES always said n = 1). Rows: 7 gusts in 60 s, HOLD_ON x7, holding on 96% of gust time; three pieces in the breeze: PIECES HOLD_ON n 3
+  (QUESTS L6).
+- **SHOWER fixed**: round 2 fired it for any wet zone, Rainleaf's whole-place rain included; now only the zone of a 'shower' switch thing (the
+  Drip Leaf) while the host's wet bit is on there (the rain's on-phase or the leaf tapped), thing the leaf. **FIZZ**: the Bubble Patch by its
+  THING_IDS index (round 2 typed 36). **A REACT's thing** is now the trigger zone's own owner when it has one, else the snapshot's zoneThing
+  (FIZZ inside Fizzwell's bath: both zones strength 1 and the snapshot named the bath; QUESTS T4 counts thing bubblepatch).
+- Rows for LIFT (Cloudloft's updraft: airborne 0.3 s, 5 s apart, thing the updraft), RATTLE (a bead squeeze 0.7 m from the switched-on
+  magnet, thing the magnet; a jelly gel none; the magnet off none), GLOW (the Glow Pool, 1 s after it is set in), SHOWER (the leaf, 20 s
+  apart; in the rain elsewhere none; the leaf dry none), FIZZ (1 s after it is set in, thing the patch), DRY (in the Fireside Warmth after a
+  soak, thing the Fireplace), LOVE (Dollop at the cabin, once).
+**Not built (plainly):** a cut on the ice giving PIECES GLIDE (QUESTS I6: the pieces would have to slide 0.5 m on their own; no rule for it);
+GAZE_SKY's pose and moon bubble (the event only); the S2 squirt game's LIFE part beyond SQUIRTED; S05 copying a whole's thing use;
+pads, chimes, pools and turntables as B04 uses (S2 / S3).
+| 4 | PF-00's unit weights in attention.ts (F stays 4) | DONE 07:03: LF-10 rows ok (re-specified, reason below) |
+
+#### Step 4, PF-00 (engineer 4)
+From PG_PHYS.md section 5 (a loaded machine; its own recommendation): **F = 3.71 measured, kept at 4** (same mover caps); `UNIT.piece` 0.22 ->
+**0.26**; pair 0.25 (same); sleeper 0.03 kept (the measured 0.0002 would lower D-85's floor, which follows it); `PROPS_MS` 0.20 -> **0.33 ms**;
+`C_WHOLE_MS` 0.87 kept (PF-00 read 1.11 on the loaded machine and asks for a quiet re-run first). social.ts' sleeping-body wake costs now
+derive from `WAKE` (round 2 typed 970 / 190 milli; a piece is now 230). Caps by the formula: **unitCap 1.060 / 1.345 / 2.494** (low / med / high;
+was 1.06 / 1.49 / 2.64), **moverCap 1 / 1 / 2 (unchanged)**; F = 3: 1.15 / 1.92 / 3.45, movers 1 / 1 / 3; F = 2: 1.92 / 3.07 / 5.37.
+**Re-specified rows (written reason, in the probe):** LF-10's two cap rows typed LIFE 10.3's table, which was computed with the provisional
+props 0.20 and says "PF-00 re-measures the weights"; they now check the same formula against PF-00's numbers typed in the probe, exactly as
+tight (0.001), and print round 2's table as info. Every other LF-10 row is unchanged and ok (all-asleep starts on low and med, one awake + two
+asleep at the cap, S11 and S10 on low and med, soft boop low and med, physics boop high, 0 movers over, 0 wakes over). LF-09 over 24 seeds:
+19 / 24 (the same: with 4 wholes on med a second awake whole is 2.06 against 1.345 or 1.49 alike). probe_life 114 ok, 1 FAIL (LF-02).
+**For PG_SHELL:** later-life.ts computes `LifeSnapshot.units` with its own literal 0.22 for an awake piece; use `UNIT.piece` (exported by
+src/life/step.ts) so the shell's units and LIFE's wake deltas agree (contracts.ts' comment on `units` also still says 0.22).
+| 5 | LF-02 measured in a real browser tab (port 5369, one heavy job; the bar and the node row unchanged) | DONE 07:06: numbers below |
+
+#### Step 5, LF-02 in Chromium (engineer 4)
+New harness (mine): `_harness/probe_life_browser.mjs` (vite on 5369 through pw.mjs, headless Chromium 153, nothing left running) loads
+`_harness/lifeview/lf02.html` + `lf02_work.ts`, which replay **the very same crowd** as probe_life's LF-02 row (16 characters in the cabin, high
+tier; the kinematic host moved unchanged into `_harness/life_host.ts`, which probe_life now imports: every row gives the same numbers). Each
+1000-tick window is read through CDP (`HeapProfiler.collectGarbage`, then `Runtime.getHeapUsage` before and after; performance.memory is
+bucketed in headless Chromium, so the first try read 0 everywhere and was void); an empty call's own growth (10.7 to 16.7 KB, CDP's) is the
+baseline, its smallest subtracted. Command: `node _harness/probe_life_browser.mjs --port 5369 --passes 3,30` (about 1 min), `--sample` adds
+an allocation-sampling profile (64 B interval) of 2000 more ticks.
+| warm-up before the measured world | Chromium (V8 with Maglev), B per 1000 ticks | node 22 (probe_life / round 2's isolated runs) |
+|---|---|---|
+| 3 replay passes (probe_life's default) | 28 712, 88 316, 53 580, 16 312, 23 424, 34 676 | 68 496 to 123 160 (this round's last run) |
+| 30 replay passes | 5 072, 22 116, 728, 6 696, 3 816, 16 472; a second run 7 432, 22 116, 740, 6 696, 3 824, 16 408 | 11 000 to 26 000 (round 2) |
+lifeStep costs 4.1 to 5.7 us a tick in the tab (16 characters, unthrottled; node about 8 us). The sampled allocation sites of 2000 more ticks
+after the 30 passes: **504 B in LIFE's code** (one site in wishFromEvents, wish.ts) and the rest V8's own (IDLE_EXTERNAL 1 600 B, the bytecode
+compiler 408 B, the V8 API 256 B). Reading: the residual is the JIT tiering up the rare paths (the windows fall from 16..88 KB to 0.7..22 KB
+with the warm-up, and what is left is mostly V8 compiling and feeding back, not LIFE's objects); Chromium's Maglev gets there sooner than
+node's TurboFan-only tier-up. **LF-02 still FAILS its 0 B bar** in node and would in the tab (the 30-pass windows are 0.7 to 22 KB, the
+baseline noise about 6 KB). The bar and the node measurement are unchanged; round 3's proposal (re-specify LF-02 as "no allocation once the
+measured path is optimized", or accept the residual) stays for the orchestrator.
+| 6 | regression probes, sizes, this stop state | DONE 07:10 |
+
+#### Step 6, regressions and sizes (engineer 4)
+Run at the stop, each once, with the other lanes' uncommitted edits in the tree: `npx tsc --noEmit -p tsconfig.json` **clean**; probe_app
+**187/187**; shellview/node_checks **162/162** (PG_SHELL's tree now has 162 rows; HEAD's brief said 156); probe_gestures **160/160**; probe_merge
+**22/22**; probe_trophies **31/31**; probe_collection **73/74** (C08 previewTouch allocation: the known open row, fails on HEAD too); probe_economy
+all pass; probe_catalog all pass; probe_chatter **42/42**; renderview/pg_node_checks **40 ok, 0 FAIL**; probe_quests all run checks pass (3 NOT
+RUN, others' code); probe_journal all pass; probe_pg_data 2 FAIL (DT-01 Home's camera, DT-11 a salt in PG_QUESTS' code): **the same 2 with
+HEAD's src/life restored** (checked by swapping my 7 files out and back), not LIFE's. audioview/life_checks.mjs (PG_AUDIO's, a browser job on
+5367) not run (not my port). probe_life **114 ok, 1 FAIL (LF-02)**; probe_life_imports all LF-12 rows ok; probe_pg_lifequests **9 ok, 4 FAIL**
+(QU-13 med, QU-08, QU-13 low, QU-03: all C8; QC now ok; the gate counters on low and med 0 / 0 / 0).
+**Sizes** (round 3's measure, `pg_life3/bytes.mjs`: each module bundled alone, minified): world 10 424, traits 1 138, attention 6 661, voice
+4 256, act 6 282, looks 10 316, social 18 987, wish 6 858, brain 31 091, step 9 499: **src/life 105 512 B min, 42 532 B gzip** (round 3 stop:
+97 864 / 39 820; +7.6 KB for this round's producers, the song, the gust clock and lifeThingTap / lifeGustOn).
+
+## STATE AT ENGINEER 4's STOP (2026-11-17 ~07:10 UTC). tsc CLEAN. Nothing of mine is running (port 5369 free).
+Files (all mine): src/life/{act,attention,brain,looks,social,step,world}.ts; _harness/probe_life.ts; NEW _harness/life_host.ts (the kinematic
+host, moved out of probe_life.ts unchanged), _harness/lifeview/{lf02.html,lf02_work.ts}, _harness/probe_life_browser.mjs; this report.
+**New LIFE API (additive values in src/life/step.ts, no contract change):** `lifeThingTap(w, thing)` (the player tapped or switched a thing:
+the switch-tap notice, the fire puff and a chime row as S06 tunes, the Star Scope's comet as GAZE_SKY for everyone on screen);
+`lifeGustOn(w, zoneIdx)` (LIFE's gust clock per wind zone with gust data). Exported weights changed: `UNIT.piece` 0.26, `PROPS_MS` 0.33.
+### Requests to other lanes
+- **PG_SHELL:** (1) call `lifeThingTap(w, thingGlobal[th])` in `tapThing` after a tap's effect (every switch, chime and the Star Scope; for the
+  Fireplace only when the fire comes on or grows) and for the keyboard's "Tap it yourself": without it the cabin's finale song (C8) and the
+  switch-tap notice cannot happen in the game; (2) drive the wind's gust (audio weather, PG_PHYS's force on airborne bodies) from
+  `lifeGustOn(w, k)` so the hold-on matches; (3) compute `LifeSnapshot.units` with `UNIT.piece` (0.26), not the literal 0.22.
+- **PG_QUESTS:** probe_pg_lifequests' finale (session step 5) should relay the player's fireplace tap to LIFE (`lifeThingTap(sim.w,
+  THING_IDS.indexOf('hearth'))`) as the shell will, and carry the three to the Fireplace rather than the kettle; SG's window (12 s) ends before
+  a whistle's song can end (20 s needed). With the fire relayed, three set by the Fireplace 3 s before the tap sang together in 16 / 17 / 12
+  of 20 runs (med / low / high) on this host, 20 / 20 with 1 s. I did not edit their probe.
+- **PG_AUDIO / the designer:** a song of three is voiced by one singer today: the syllable budget (burst 6 desktop, 4 phone) is charged per
+  phrase at its emission, and three singers' bar phrases (4 notes each) start on the same bar line, 12 syllables at one instant; LIFE 8.4 wants
+  3 voiced on desktop. Per-syllable charging (the phrase's note times) or counting a song's harmony as one group voice would fit; LIFE 10.1's
+  numbers decide.
+- **PG_PHYS / the designer:** GLIDE's 0.5 m vs LIFE 5.1's 0.6..1.0 m/s nudge on ice grip 0.18 (firm silicone) gives a Coulomb slide of 0.1 to
+  0.28 m; PH-08 should say how far a soft body really slides, or I3 (two families glide on the Ice Pond) depends on tosses.
+- **PG_DATA / the designer (from round 2, still open):** the Steam Pool inside Frostbell's whole-place cold (frost does not fall there).
+### Not done (plainly)
+- **C8 in probe_pg_lifequests** (QU-13 med, QU-08; and now QU-13 low and QU-03, which passed at HEAD on a lucky seed): the probe never tells
+  LIFE about the fireplace tap and stages the song at the kettle, where LIFE's rules make three free singers rare (step 1 for the numbers).
+- **LF-02** still FAILS its 0 B bar (node 68 to 123 KB per 1000 ticks after the 3-pass warm-up; Chromium 16 to 88 KB, 0.7 to 22 KB after 30
+  passes, almost all V8's own tiering: step 5).
+- A song's voices (one voiced, above); PIECES GLIDE at a cut on the ice (I6); GAZE_SKY's pose and bubble; S2 / S3 B04 uses of pads, chimes,
+  pools, turntables; the squirt game beyond SQUIRTED; S05 copying a whole's thing use; size 105.5 KB (the 75 KB target of round 2 not met).

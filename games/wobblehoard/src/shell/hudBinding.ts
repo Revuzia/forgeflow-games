@@ -223,16 +223,21 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   }, true);
   hud.slot.append(hoard.button, hoard.matChip);
   tb.adoptHoard(hoard.button);
-  // ---- PLAYGROUND (QUESTS 15): the Journal and Places entries in the dock's Collection group, beside the Hoard. Hidden until the life chunk lands (boot.ts calls
-  // lifeAttached); Places only once a second place is open. Each opens a later-* screen (ui/later-journal.ts) like the Trophies screen; LIFE goes quiet under it.
+  // ---- PLAYGROUND (QUESTS 15): the Journal and Places entries. R4: in the TOP-RIGHT COLUMN under Full screen / Sound / Menu (the brief: "the bottom-centre
+  // button row is full at 320 and 390 px: the Journal and Places buttons go in the top-right column"); round 3 had put them in the dock's Collection group,
+  // which pushed the published Table | Float pair behind More at 390 px and made them Tab stops between the Menu and the Hoard (browser rows toolbar-gravity,
+  // K04). Icon buttons with their names and tooltips, first in the HUD's DOM, so Tab reaches them just before Full screen. Hidden until the life chunk lands
+  // (boot.ts calls lifeAttached); Places only once a second place is open. Each opens a later-* screen (ui/later-journal.ts); LIFE goes quiet under it.
+  // (The classes dock-journal / dock-places stay: the harness and the screens find them by those.)
   const lifeBtn = (cls: string, ico: 'book' | 'map', label: string): HTMLButtonElement => {
-    const b = h('button', { class: `k-btn k-tool dock-tool ${cls}`, attrs: { type: 'button', 'aria-label': label, hidden: '' } }, icon(ico), h('span', { class: 'k-btn-label k-tool-label dock-tool-label', text: label }));
-    off.push(attachTooltip(b, label, { place: () => 'above' }).destroy);
+    const b = h('button', { class: `k-btn k-iconbtn hud-life-btn ${cls}`, attrs: { type: 'button', 'aria-label': label, hidden: '' } }, icon(ico));
+    off.push(attachTooltip(b, label, { place: 'below' }).destroy);
     return b;
   };
   const journalBtn = lifeBtn('dock-journal', 'book', 'Journal');
   const placesBtn = lifeBtn('dock-places', 'map', 'Places');
-  tb.group.append(journalBtn, placesBtn);
+  const lifeCol = h('div', { class: 'hud-life', attrs: { role: 'group', 'aria-label': 'Journal and places' } }, journalBtn, placesBtn);
+  hud.el.insertBefore(lifeCol, hud.el.firstChild);
   let screenBusy = false;
   const openLifeScreen = async (kind: 'journal' | 'travel', from?: HTMLElement): Promise<boolean> => {
     const host = g.life as LifeHostApi | null;
@@ -255,10 +260,10 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   const syncLifeButtons = (): void => {
     const host = g.life as LifeHostApi | null;
     if (!host || !lifeOn) return;
-    if (journalBtn.hidden) { journalBtn.hidden = false; tb.fit(); }
+    if (journalBtn.hidden) journalBtn.hidden = false;
     const more = (host.openPlaces() & ~1) !== 0;
     if (more !== placesShown) {
-      placesShown = more; placesBtn.hidden = !more; tb.fit();   // (the host says "Hearthlog Cabin is open. Find it in Places." when it opens)
+      placesShown = more; placesBtn.hidden = !more;   // (the host says "Hearthlog Cabin is open. Find it in Places." when it opens)
     }
   };
   const lifeTimer = window.setInterval(syncLifeButtons, 1000);

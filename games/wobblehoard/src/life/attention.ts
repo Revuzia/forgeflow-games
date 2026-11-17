@@ -7,16 +7,21 @@ import { INTENT, LIFE_FLAG } from '../data/life.ts';
 
 /* ───────────────────────────── the motion gate (10.3) ───────────────────────────── */
 
-/** The phone factor F (PF-00, T13). PF-00 has not reported: F = 4 as PLAYGROUND_BUILD 14.2 says until it does. Recompute, never type caps. */
+/** The phone factor F (PF-00, T13). PF-00 reported F = 3.71 (median of 8 rounds on a loaded machine, PG_PHYS.md section 5); its own
+ *  recommendation, and the orchestrator's (round 4): keep F = 4 (the same mover caps) until it is re-run on a quiet machine. Recompute, never
+ *  type caps. */
 export const PHONE_FACTOR = 4;
-/** The phone's physics budget per tier (ms a frame: low, med, high) and the props' share near an awake body (PLAYGROUND_BUILD 14.2). */
+/** The phone's physics budget per tier (ms a frame: low, med, high) and the props' share near an awake body: PF-00 measured +0.33 ms for 4
+ *  props in reach of a pressed whole (PG_PHYS.md section 5; PLAYGROUND_BUILD 14.2's provisional 0.20). */
 export const PHYS_BUDGET_MS = [4.0, 6.0, 10.0] as const;
-export const PROPS_MS = 0.2;
-/** An awake detail-3 whole, pressed (ms, this container; PHYS map 4). */
+export const PROPS_MS = 0.33;
+/** An awake detail-3 whole, pressed (ms, this container; PHYS map 4). PF-00 read 1.11 ms on a loaded machine and asks to measure it on a
+ *  quiet one before it changes: kept. */
 export const C_WHOLE_MS = 0.87;
-/** The unit weights (PF-00 replaces them): an awake whole, an awake piece, a sleeping body, a touching pair of awake bodies. */
-export const UNIT = { whole: 1.0, piece: 0.22, sleeper: 0.03, pair: 0.25 } as const;
-/** What a start adds for each sleeping body it wakes (LIFE 10.3: 0.97 a whole, 0.19 a piece). */
+/** The unit weights from PF-00 (PG_PHYS.md section 5, round 4): an awake whole 1.0, an awake piece 0.26 (was 0.22), a sleeping body 0.03 (kept:
+ *  the measured 0.0002 would lower D-85's floor, which follows it; PF-00's own advice), a touching pair of awake bodies 0.25 (the same). */
+export const UNIT = { whole: 1.0, piece: 0.26, sleeper: 0.03, pair: 0.25 } as const;
+/** What a start adds for each sleeping body it wakes (LIFE 10.3: 0.97 a whole; a piece 0.23 with PF-00's weight, 0.19 before). */
 export const WAKE = { whole: UNIT.whole - UNIT.sleeper, piece: UNIT.piece - UNIT.sleeper } as const;
 /** Every gate comparison's tolerance (D-85). */
 export const GATE_TOL = 0.001;

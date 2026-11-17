@@ -13,13 +13,19 @@ import { PLACE as HOME } from '../src/data/place_home.ts';
 import { PLACE as CABIN } from '../src/data/place_hearthlog.ts';
 import { PLACE as RIPPLE } from '../src/data/place_ripple.ts';
 import { PLACE as FROSTBELL } from '../src/data/place_frostbell.ts';
+import { PLACE as RAINLEAF } from '../src/data/place_rainleaf.ts';
+import { PLACE as FIZZWELL } from '../src/data/place_fizzwell.ts';
+import { PLACE as COGWHISTLE } from '../src/data/place_cogwhistle.ts';
+import { PLACE as LANTERNROOF } from '../src/data/place_lanternroof.ts';
+import { PLACE as ECHOHOLLOW } from '../src/data/place_echohollow.ts';
+import { PLACE as CLOUDLOFT } from '../src/data/place_cloudloft.ts';
 import { THING_IDS, ZONE, MECH } from '../src/data/places.ts';
 import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, LOOK, TRAIT_MEDIANS, EMOTE, THING_KIND, USE_VERB } from '../src/data/life.ts';
 import { WISH_STATE, PIECES_USE } from '../src/data/quests.ts';
 import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends, lifeSetHops, lifeLooks, lifeAddLook,
-  lifeWishOf, lifePhrase, lifeMotif, lifeAttention, createAttention, attentionFilter, motionGate, unitCapOf, moverCapOf, CAPS, traitsOf, HUFF_TRIGGERS,
-  PHRASE_BUBBLE, BEH, STYLE } from '../src/life/step.ts';
+  lifeWishOf, lifePhrase, lifeMotif, lifeAttention, lifeThingTap, lifeGustOn, createAttention, attentionFilter, motionGate, unitCapOf, moverCapOf, CAPS, traitsOf, HUFF_TRIGGERS,
+  PHRASE_BUBBLE, BEH, STYLE, UNIT } from '../src/life/step.ts';
 import type { LifeWorld } from '../src/life/step.ts';
 
 const HEAVY = process.argv.includes('--heavy'), VERBOSE = process.argv.includes('--verbose');
@@ -34,187 +40,9 @@ const info = (id: string, what: string): void => console.log(`info ${id} ${what}
 
 /* ───────────────────────────── fixtures ───────────────────────────── */
 
-function mkSnapshot(): LifeSnapshot {
-  const n = 16;
-  return { n: 0, t: 0, place: 0, tier: 1, phone: false, calm: false, reducedMotion: false, autonomy: true, quiet: false, units: 0, musicField: 0, musicOn: true,
-    musicBoxOn: false, beatPhase: 0, kind: new Uint8Array(n), group: new Int8Array(n), species: new Uint8Array(n), family: new Uint8Array(n),
-    frac: new Float32Array(n).fill(1), r: new Float32Array(n).fill(0.5), x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n),
-    vx: new Float32Array(n), vz: new Float32Array(n), sx: new Float32Array(n).fill(0.5), sy: new Float32Array(n).fill(0.5), flags: new Uint16Array(n),
-    zoneMask: new Uint16Array(n), submerged: new Float32Array(n), warmth: new Uint8Array(n), zoneThing: new Int16Array(n).fill(-1),
-    patchThing: new Int16Array(n).fill(-1), nThings: 0, thingId: new Int16Array(32), thingX: new Float32Array(32), thingZ: new Float32Array(32),
-    thingState: new Float32Array(32), thingBusy: new Uint8Array(32), nBumps: 0, bumpA: new Int8Array(32), bumpB: new Int8Array(32), touchKind: new Int8Array(n).fill(-1) };
-}
-function mkIntents(): LifeIntents {
-  const n = 64;
-  return { n: 0, kind: new Uint8Array(n), who: new Uint8Array(n), delayS: new Float32Array(n), a: new Float32Array(n), b: new Float32Array(n), c: new Float32Array(n),
-    d: new Float32Array(n), e: new Float32Array(n), icon: new Uint8Array(n), style: new Uint8Array(n), prio: new Float32Array(n), groupKey: new Int16Array(n), dots: new Uint8Array(n) };
-}
-function mkEvents(): LifeEvents {
-  const n = 32;
-  return { n: 0, kind: new Uint8Array(n), sub: new Uint8Array(n), a: new Uint8Array(n), b: new Uint8Array(n), n2: new Uint8Array(n), thing: new Int8Array(n) };
-}
-const G = (id: string, seed = 7): Genome => speciesBaseGenome(id as Genome['species'], seed);
-const SP = (id: string): number => SPECIES.indexOf(id as (typeof SPECIES)[number]);
-const TID = (id: string): number => THING_IDS.indexOf(id as (typeof THING_IDS)[number]);
-
-/** A tiny kinematic host: it applies SCOOT, HOP, SETTLE and CANCEL, rolls the ball, fills the snapshot (rows = slots), computes the units
- *  (awake whole 1.0, piece 0.22, sleeper 0.03), puts still bodies to sleep after 1.5 s, and logs every intent and event. */
-interface Body { on: boolean; x: number; z: number; vx: number; vz: number; r: number; tx: number; tz: number; sp: number; scoot: boolean; air: number;
-  still: number; asleep: boolean; kind: number; group: number; species: number; family: number; flags: number; frac: number; homeX: number; homeZ: number;
-  /** in a water zone this body floats (not grounded), as the physics' float table says for its family (S2) */
-  float: boolean }
-interface Log { t: number; kind: number; who: number; a: number; b: number; c: number; d: number; e: number; icon: number; style: number; delay: number }
-interface EvLog { t: number; kind: number; sub: number; a: number; b: number; n2: number; thing: number }
-class Sim {
-  w: LifeWorld; s = mkSnapshot(); out = mkIntents(); ev = mkEvents(); t = 0; frame = 0; fps: number;
-  bodies: Body[] = []; def: PlaceDef; layout: 0 | 1; scale: number;
-  ball = -1; ballX = 0; ballZ = 0; ballVX = 0; ballVZ = 0; ballMoved = 0; things: number[] = []; thingXY: number[][] = [];
-  log: Log[] = []; evs: EvLog[] = []; keepLog = true; sleep = true; physics = true;
-  kettle = false; hash = 0x811c9dc5; extraFlags: number[] = new Array(16).fill(0); touch: number[] = new Array(16).fill(-1);
-  constructor(seed: number, def: PlaceDef, layout: 0 | 1, fps = 60, scale = 1) {
-    this.w = createLifeWorld(seed, 16); this.def = def; this.layout = layout; this.fps = fps; this.scale = scale;
-    lifeSetPlace(this.w, def.idx, 1, def, layout, scale);
-    for (let i = 0; i < 16; i++) this.bodies.push({ on: false, x: 0, z: 0, vx: 0, vz: 0, r: 0.5, tx: 0, tz: 0, sp: 0, scoot: false, air: 0, still: 0, asleep: false, kind: 0,
-      group: i, species: 0, family: 0, flags: 0, frac: 1, homeX: NaN, homeZ: NaN, float: false });
-  }
-  add(slot: number, species: string, x: number, z: number, opts: { kind?: 0 | 1 | 2; group?: number; isNew?: boolean; seed?: number; r?: number; frac?: number; asleep?: boolean; float?: boolean } = {}): void {
-    const g = G(species, opts.seed ?? (7 + slot * 101));
-    const b = this.bodies[slot];
-    Object.assign(b, { on: true, x, z, vx: 0, vz: 0, r: opts.r ?? 0.5, tx: x, tz: z, scoot: false, air: 0, still: 0, asleep: opts.asleep ?? false, kind: opts.kind ?? 0,
-      group: opts.group ?? slot, species: SP(species), family: 0, frac: opts.frac ?? 1, homeX: NaN, homeZ: NaN, float: opts.float ?? false });
-    lifeAdd(this.w, slot, g, opts.kind ?? 0, opts.group ?? slot, 0, opts.isNew ?? false);
-  }
-  home(slot: number, x: number, z: number): void { this.bodies[slot].homeX = x; this.bodies[slot].homeZ = z; lifeSetHome(this.w, slot, x, z); }
-  addThing(id: string, x: number, z: number): void { this.things.push(TID(id)); this.thingXY.push([x, z]); if (id === 'feltball' || id === 'yarnball') { this.ball = this.things.length - 1; this.ballX = x; this.ballZ = z; } }
-  /** Fill the snapshot from the bodies (rows = slots). */
-  fill(): void {
-    const s = this.s, n = this.bodies.reduce((m, b, i) => (b.on ? i + 1 : m), 0);
-    s.n = n; s.t = this.t; s.beatPhase = (this.t * 66 / 60) % 1;
-    if (this.kettle) s.musicBoxOn = this.t % 67 >= 40 && this.t % 67 < 43.6;
-    let units = 0;
-    for (let i = 0; i < 16; i++) {
-      const b = this.bodies[i];
-      s.kind[i] = b.kind; s.group[i] = b.group; s.species[i] = b.species; s.r[i] = b.r; s.frac[i] = b.frac;
-      s.x[i] = b.x; s.z[i] = b.z; s.vx[i] = b.vx; s.vz[i] = b.vz; s.y[i] = b.air > 0 ? 0.03 : 0;
-      let f = this.extraFlags[i] | LIFE_FLAG.VISIBLE;
-      if (b.asleep) f |= LIFE_FLAG.ASLEEP;
-      if (b.air > 0) f |= LIFE_FLAG.AIRBORNE; else f |= LIFE_FLAG.GROUNDED;
-      s.flags[i] = b.on ? f : 0;
-      s.touchKind[i] = this.touch[i]; this.touch[i] = -1;
-      s.sx[i] = b.on ? 0.5 + b.x / 9 : NaN; s.sy[i] = 0.5 + b.z / 7;
-      // zones at the centre (the place's own geometry, the layout in use)
-      let mask = 0, zt = -1, best = 0;
-      const zones = this.def.zones;
-      for (let k = 0; k < zones.length; k++) {
-        const z = zones[k], a = this.layout === 1 ? this.def.tall.zones[k] : z, sc = this.def.unit === 'slot' ? this.scale : 1;
-        const dx = b.x - a.x * sc, dz = b.z - a.z * sc;
-        const inside = a.shape === 'disc' ? dx * dx + dz * dz <= (a.r ?? 0) ** 2 : Math.abs(dx) <= (a.hx ?? 0) && Math.abs(dz) <= (a.hz ?? 0);
-        if (!inside) continue;
-        mask |= 1 << z.kind;
-        if (z.strength > best) { best = z.strength; const ti = this.def.things.findIndex((t) => t.zone === z.id); zt = ti >= 0 ? TID(this.def.things[ti].id) : -1; }
-      }
-      s.zoneMask[i] = mask; s.zoneThing[i] = zt;
-      if (b.on && (mask & (1 << ZONE.water)) !== 0) { s.flags[i] |= LIFE_FLAG.IN_WATER; if (b.float && b.air <= 0) s.flags[i] &= ~LIFE_FLAG.GROUNDED; }
-      if (b.on) units += b.asleep ? 0.03 : b.kind === 0 ? 1 : 0.22;
-    }
-    s.units = units;
-    s.nThings = this.things.length;
-    for (let k = 0; k < this.things.length; k++) {
-      s.thingId[k] = this.things[k];
-      const isBall = k === this.ball;
-      s.thingX[k] = isBall ? this.ballX : this.thingXY[k][0]; s.thingZ[k] = isBall ? this.ballZ : this.thingXY[k][1];
-      s.thingState[k] = isBall ? Math.hypot(this.ballVX, this.ballVZ) : 0; s.thingBusy[k] = 0;
-    }
-  }
-  apply(dt: number): void {
-    const o = this.out;
-    for (let k = 0; k < o.n; k++) {
-      const b = this.bodies[o.who[k]], kd = o.kind[k];
-      if (this.keepLog) this.log.push({ t: this.t, kind: kd, who: o.who[k], a: o.a[k], b: o.b[k], c: o.c[k], d: o.d[k], e: o.e[k], icon: o.icon[k], style: o.style[k], delay: o.delayS[k] });
-      this.hash = Math.imul(this.hash ^ (kd * 131 + o.who[k] * 7 + Math.round(o.a[k] * 1000) + Math.round(o.b[k] * 977) + o.icon[k] * 13 + Math.round(o.delayS[k] * 100)), 0x01000193) >>> 0;
-      if (!this.physics) continue;
-      if (kd === INTENT.SCOOT) { b.tx = o.a[k]; b.tz = o.b[k]; b.sp = o.c[k]; b.scoot = true; b.asleep = false; b.still = 0; }
-      else if (kd === INTENT.HOP) { b.air = 2 * o.b[k] / 10; b.asleep = false; b.still = 0; b.vx = o.a[k]; b.vz = o.c[k]; }
-      else if (kd === INTENT.SETTLE || kd === INTENT.CANCEL) { b.scoot = false; }
-    }
-    for (let k = 0; k < this.ev.n; k++) {
-      const e = { t: this.t, kind: this.ev.kind[k], sub: this.ev.sub[k], a: this.ev.a[k], b: this.ev.b[k], n2: this.ev.n2[k], thing: this.ev.thing[k] };
-      this.evs.push(e);
-      this.hash = Math.imul(this.hash ^ (e.kind * 4099 + e.sub * 31 + e.a * 7 + e.n2 + e.thing * 3), 0x01000193) >>> 0;
-    }
-    if (!this.physics) return;
-    // kinematics
-    for (const b of this.bodies) {
-      if (!b.on) continue;
-      let vx = 0, vz = 0;
-      if (b.scoot && !(this.extraFlags[this.bodies.indexOf(b)] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.LOCKED))) {
-        const dx = b.tx - b.x, dz = b.tz - b.z, d = Math.hypot(dx, dz);
-        if (d < 1e-3) b.scoot = false;
-        else { const st = Math.min(d, b.sp * dt); vx = dx / d * b.sp; vz = dz / d * b.sp; b.x += dx / d * st; b.z += dz / d * st; }
-      }
-      if (b.air > 0) { b.x += b.vx * dt; b.z += b.vz * dt; b.air -= dt; if (b.air <= 0) { b.air = 0; b.vx = 0; b.vz = 0; } else { vx += b.vx; vz += b.vz; } }
-      b.vx = b.air > 0 ? b.vx : vx; b.vz = b.air > 0 ? b.vz : vz;
-      const moving = Math.hypot(vx, vz) > 0.01 || b.air > 0;
-      b.still = moving ? 0 : b.still + dt;
-      if (this.sleep && b.still > 1.5) b.asleep = true;
-      // the ball: a body moving into it pushes it on
-      if (this.ball >= 0) {
-        const dx = this.ballX - b.x, dz = this.ballZ - b.z, d = Math.hypot(dx, dz), br = this.def.things.find((t) => t.mech === MECH.ball)?.size[0] ?? 0.22;
-        if (d < b.r + br && moving && (vx * dx + vz * dz) > 0) {
-          const push = Math.max(0.3, Math.hypot(vx, vz)) * 1.6;
-          this.ballVX = dx / d * push; this.ballVZ = dz / d * push;
-          this.ballX = b.x + dx / d * (b.r + br + 0.001); this.ballZ = b.z + dz / d * (b.r + br + 0.001);
-        }
-      }
-    }
-    if (this.ball >= 0) {
-      const v = Math.hypot(this.ballVX, this.ballVZ);
-      if (v > 1e-4) { this.ballX += this.ballVX * dt; this.ballZ += this.ballVZ * dt; this.ballMoved += v * dt; const k = Math.exp(-0.6 * dt); this.ballVX *= k; this.ballVZ *= k; if (v < 0.01) { this.ballVX = 0; this.ballVZ = 0; } }
-      // in a place the ball stays inside the layout's rounded bounds: the walls and the rim bounce of 0.35 (PLACES P5 and P7, PH-05); at Home
-      // the host leaves it free (the corral rectangle is the shell's)
-      if (this.def.unit !== 'slot') {
-        const bd = this.layout === 1 ? this.def.tall.bounds : this.def.bounds, br = this.def.things.find((t) => t.mech === MECH.ball)?.size[0] ?? 0.22;
-        const hx = (bd.hx ?? 3.4) - br, hz = (bd.hz ?? 2.4) - br;
-        if (Math.abs(this.ballX - bd.x) > hx) { this.ballX = bd.x + Math.sign(this.ballX - bd.x) * hx; this.ballVX *= -0.35; }
-        if (Math.abs(this.ballZ - bd.z) > hz) { this.ballZ = bd.z + Math.sign(this.ballZ - bd.z) * hz; this.ballVZ *= -0.35; }
-      }
-    }
-  }
-  step(): void {
-    this.frame++;
-    this.t = this.frame / this.fps;
-    this.fill();
-    lifeStep(this.w, this.s, this.out, this.ev);
-    this.apply(1 / this.fps);
-  }
-  run(seconds: number): void { const end = this.frame + Math.round(seconds * this.fps); while (this.frame < end) this.step(); }
-  events(kind: number, sub = -1): EvLog[] { return this.evs.filter((e) => e.kind === kind && (sub < 0 || e.sub === sub)); }
-  intents(kind: number, who = -1): Log[] { return this.log.filter((l) => l.kind === kind && (who < 0 || l.who === who)); }
-}
-/** A cabin party: wide layout, spawn spots, the cabin's things out. */
-function cabin(seed: number, species: string[], tier = 1, fps = 60, layout: 0 | 1 = 0): Sim {
-  const sim = new Sim(seed, CABIN, layout, fps);
-  sim.s.place = 1; sim.s.tier = tier;
-  const lay = layout === 1 ? CABIN.tall : CABIN;
-  const spawn = lay.spawn as readonly (readonly [number, number])[];
-  species.forEach((sp, i) => sim.add(i, sp, spawn[i % spawn.length][0], spawn[i % spawn.length][1], { seed: seed * 1000 + i * 101 }));
-  CABIN.things.forEach((t, k) => { const p = layout === 1 ? CABIN.tall.things[k] : t; sim.addThing(t.id, p.x, p.z); });
-  sim.kettle = true;
-  return sim;
-}
-/** Home with n out at simple slot positions (a row), the Felt Ball and the things that show from n out. */
-function home(seed: number, species: string[], layout: 0 | 1 = 0, scale = 1, fps = 60): Sim {
-  const sim = new Sim(seed, HOME, layout, fps, scale);
-  sim.s.place = 0;
-  const n = species.length;
-  species.forEach((sp, i) => { const x = (i - (n - 1) / 2) * 1.3 * scale, z = 0.2 * scale; sim.add(i, sp, x, z); sim.home(i, x, z); });
-  HOME.things.forEach((t, k) => {
-    const sp = layout === 1 ? HOME.tall.things[k] : t, from = (layout === 1 ? HOME.tall.things[k].fromN : t.fromN) ?? 1;
-    if (t.id === 'bouncepad' || t.id === 'keepsakeshelf') return;
-    if (n >= from) sim.addThing(t.id, sp.x * scale, sp.z * scale);
-  });
-  return sim;
-}
+// the kinematic host (round 4: in _harness/life_host.ts, shared with the LF-02 browser page)
+import { mkSnapshot, mkIntents, mkEvents, G, SP, TID, Sim, cabin, home, crowd, cloneSnap } from './life_host.ts';
+import type { EvLog } from './life_host.ts';
 
 /* ───────────────────────────── 1. traits (LIFE 2) ───────────────────────────── */
 if (!LF02_CHILD) {
@@ -238,12 +66,20 @@ if (!LF02_CHILD) {
 
 /* ───────────────────────────── 2. the motion gate's caps (LF-10, 10.3) ───────────────────────────── */
 if (!LF02_CHILD) {
-  const caps = [0, 1, 2].map((t) => unitCapOf(t)), movers = [0, 1, 2].map((t) => moverCapOf(t));
-  check('LF-10', `unitCap at F = 4 by the formula with D-85's floor: ${caps.map((c) => c.toFixed(3)).join(' / ')} (1.06 / 1.49 / 2.64), moverCap ${movers.join(' / ')} (1 / 1 / 2)`,
-    Math.abs(caps[0] - 1.06) < 0.001 && Math.abs(caps[1] - 1.494) < 0.002 && Math.abs(caps[2] - 2.644) < 0.002 && movers.join() === '1,1,2');
+  // (round 4 re-specification, written reason: LIFE 10.3's table was computed with PLAYGROUND_BUILD 14.2's provisional props share 0.20 ms
+  // and says "PF-00 re-measures the weights"; PF-00 measured props 0.33 ms and a piece 0.26 (PG_PHYS.md section 5) and F = 3.71, kept at 4.
+  // The rows now check the same formula, unitCap = max((B / F - props) / c_whole, 1.0 + sleeper x (wholes cap - 1)), against PF-00's
+  // numbers typed here (props 0.33, c_whole 0.87, sleeper 0.03, B 4 / 6 / 10, wholes caps 3 / 4 / 5), exactly as tight as before. Round 2's
+  // values (props 0.20: 1.06 / 1.49 / 2.64; F = 3 1.30 / 2.07 / 3.60; F = 2 2.07 / 3.22 / 5.52) are printed as info.)
+  const B = [4, 6, 10], WH = [3, 4, 5], spec = (t: number, f: number, props: number): number => Math.max((B[t] / f - props) / 0.87, 1 + 0.03 * (WH[t] - 1));
+  const caps = [0, 1, 2].map((t) => unitCapOf(t)), movers = [0, 1, 2].map((t) => moverCapOf(t)), want4 = [0, 1, 2].map((t) => spec(t, 4, 0.33));
+  check('LF-10', `unitCap at F = 4 by the formula with D-85's floor and PF-00's props 0.33: ${caps.map((c) => c.toFixed(3)).join(' / ')} (${want4.map((c) => c.toFixed(3)).join(' / ')}), moverCap ${movers.join(' / ')} (1 / 1 / 2); UNIT piece ${UNIT.piece}, pair ${UNIT.pair}, sleeper ${UNIT.sleeper}`,
+    caps.every((c, t) => Math.abs(c - want4[t]) < 0.001) && Math.abs(caps[0] - 1.06) < 0.001 && movers.join() === '1,1,2' && UNIT.piece === 0.26 && UNIT.pair === 0.25 && UNIT.sleeper === 0.03);
   const f3 = [0, 1, 2].map((t) => unitCapOf(t, 3)), f2 = [0, 1, 2].map((t) => unitCapOf(t, 2));
-  check('LF-10', `the F = 3 and F = 2 rows of LIFE 10.3 (${f3.map((c) => c.toFixed(2)).join('/')}; ${f2.map((c) => c.toFixed(2)).join('/')})`,
-    f3.map((c) => c.toFixed(2)).join() === '1.30,2.07,3.60' && f2.map((c) => c.toFixed(2)).join() === '2.07,3.22,5.52' && [0, 1, 2].map((t) => moverCapOf(t, 3)).join() === '1,2,3');
+  const w3 = [0, 1, 2].map((t) => spec(t, 3, 0.33)), w2 = [0, 1, 2].map((t) => spec(t, 2, 0.33));
+  check('LF-10', `the F = 3 and F = 2 rows by the same formula (${f3.map((c) => c.toFixed(2)).join('/')}; ${f2.map((c) => c.toFixed(2)).join('/')}), moverCap at F = 3 ${[0, 1, 2].map((t) => moverCapOf(t, 3)).join('/')}`,
+    f3.every((c, t) => Math.abs(c - w3[t]) < 0.001) && f2.every((c, t) => Math.abs(c - w2[t]) < 0.001) && [0, 1, 2].map((t) => moverCapOf(t, 3)).join() === w3.map((c) => Math.max(1, Math.floor(c + 0.001))).join());
+  info('LF-10', `LIFE 10.3's table with the provisional props 0.20 (round 2's rows): F = 4 ${[0, 1, 2].map((t) => spec(t, 4, 0.2).toFixed(3)).join(' / ')}; F = 3 ${[0, 1, 2].map((t) => spec(t, 3, 0.2).toFixed(2)).join('/')}; F = 2 ${[0, 1, 2].map((t) => spec(t, 2, 0.2).toFixed(2)).join('/')}`);
 }
 
 
@@ -280,7 +116,7 @@ function runWatched(sim: Sim, seconds: number, rows: { movers: number; moment: n
     for (let i = 0; i < 16; i++) if (sim.bodies[i].on && asleep[i] && !sim.bodies[i].asleep && !(sim.extraFlags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED))) woke = true;
     if (woke) {
       let u = 0;
-      for (const b of sim.bodies) if (b.on) u += b.asleep ? 0.03 : b.kind === 0 ? 1 : 0.22;
+      for (const b of sim.bodies) if (b.on) u += b.asleep ? UNIT.sleeper : b.kind === 0 ? UNIT.whole : UNIT.piece;
       rows.maxUnits = Math.max(rows.maxUnits, u - sim.w.att.allowance - unitCapOf(sim.s.tier));
       if (u > unitCapOf(sim.s.tier) + sim.w.att.allowance + 0.001) rows.wake++;
     }
@@ -387,19 +223,6 @@ export type { EvLog };
 /* ───────────────────────────── the end (sections below are appended in order) ───────────────────────────── */
 
 /* ───────────────────────────── LF-02 zero allocation, LF-03 cost (16 characters: 6 wholes and a cut squishy's 10 pieces) ───────────────────────────── */
-function crowd(seed: number): Sim {
-  const sim = cabin(seed, ['dollop', 'crimpo', 'capnap', 'puddlo', 'pastrel', 'thumbly'], 2);
-  const spawnT = CABIN.spawn as readonly (readonly [number, number])[];
-  sim.add(6, 'glugbean', 0.6, 1.4, { kind: 1, group: 6, frac: 0.2, r: 0.3, seed: 99 });
-  for (let k = 7; k < 16; k++) sim.add(k, 'glugbean', 0.6 + ((k - 7) % 3) * 0.45 - 0.45, 1.6 + Math.floor((k - 7) / 3) * 0.4, { kind: 2, group: 6, frac: 0.09, r: 0.22, seed: 99 });
-  void spawnT;
-  return sim;
-}
-function cloneSnap(s: LifeSnapshot): LifeSnapshot {
-  const c = { ...s } as Record<string, unknown>;
-  for (const k of Object.keys(c)) { const v = c[k]; if (ArrayBuffer.isView(v)) c[k] = (v as Float32Array).slice(); }
-  return c as unknown as LifeSnapshot;
-}
 /** LF-02's measurement (in its own process): a live crowd (6 wholes and a cut squishy's 10 pieces in the cabin, high tier) is recorded for
  *  WARM + N ticks; the same snapshots are replayed into fresh worlds built the same way (identical decisions), `passes` times over the
  *  whole run to warm the JIT, then into one more fresh world: WARM ticks, then N ticks measured in windows of 1000 (new-space growth; a
@@ -935,6 +758,65 @@ if (!LF02_CHILD) {
   check('FW', `when the pair greeted already this visit, the grant greet comes once more with thing = -2 (no points: the host sets v = -1) (${again ? `thing ${again.thing}` : 'no greet'})`, !!again && again.thing === -2 && h.events(LIFE_EV.WISH, WISH_STATE.GRANTED).some((e) => e.a === 0 && e.t >= th));
 }
 
+/* ───────────────────────────── S06 sing together at a tune (round 4): the kettle, the fire puff (lifeThingTap), a latecomer ───────────────────────────── */
+// LIFE 6.1 S06: "2+ idle within 2.5 m of a tune (Music Box, the kettle's whistle, a tapped chime row, the fire puff)"; QUESTS C8 "Tap the
+// fireplace. Then three sing together." The scenes are staged calm: three wholes set within 2.5 m of the tune, every pair greeted already, the
+// pair moments and the other behaviours on cooldown, so the song is the only thing that can start (the way the huff and boop rows stage).
+if (!LF02_CHILD) {
+  const stage = (seed: number, at: 'kettle' | 'hearth', kettle: boolean): Sim => {
+    const sim = cabin(seed, ['dollop', 'crimpo', 'capnap'], 1);
+    sim.kettle = kettle;
+    const t = CABIN.things.find((q) => q.id === at)!;
+    const spots = at === 'kettle' ? [[-0.7, 0.5], [-0.2, 0.9], [-1.0, -0.1]] : [[0.6, 1.2], [-0.4, 1.3], [1.4, 0.9]];
+    spots.forEach(([dx, dz], i) => { const b = sim.bodies[i]; b.x = t.x + dx; b.z = t.z + dz; b.tx = b.x; b.tz = b.z; });
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) { sim.w.pG[i * 16 + j] |= 1; sim.w.pCo[i * 16 + j] = 1e9; }
+    for (let i = 0; i < 3; i++) for (const bh of [BEH.USE, BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT, BEH.ANSWER]) sim.w.coo[i * 26 + bh] = 1e9;
+    return sim;
+  };
+  // the kettle's whistle (the sim's kettle: 40 s into every 67 s): one song of all three, its thing the kettle
+  {
+    const sim = stage(181, 'kettle', true);
+    sim.run(52);
+    const sg = sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING);
+    const sv = sim.log.filter((l) => l.kind === INTENT.VOICE && l.t >= 40 && l.t < 52);
+    check('S06', `(round 4) three set within 2.5 m of the kettle sing together at its whistle: one SING with n2 = 3, its thing the kettle (${sg.map((e) => `${e.t.toFixed(1)} s n2 ${e.n2} thing ${e.thing}`).join(', ') || 'none'}; ${sv.length} voice intents from 40 s)`,
+      sg.length === 1 && sg[0].n2 === 3 && sg[0].thing === TID('kettle') && sg[0].t > 40 && sg[0].t < 40 + 3.7 + 2 * 3.64 + 0.2);
+  }
+  // the fire puff: lifeThingTap on the Fireplace (the shell's thing tap, D-93); those within 1.5 m notice it at once (LIFE 5.3: a switch tap is
+  // always noticed), then all three sing; the same scene without the tap (and no kettle) gives no song
+  {
+    const tap = 3.636 * 6 + 0.5;   // 3.1 s before a bar line of the 66 BPM grid
+    const sim = stage(183, 'hearth', false);
+    sim.run(tap);
+    const hearth = CABIN.things.find((q) => q.id === 'hearth')!, t0 = sim.t;
+    lifeThingTap(sim.w, TID('hearth'));
+    sim.run(0.15);
+    const near = [0, 1, 2].filter((i) => Math.hypot(sim.bodies[i].x - hearth.x, sim.bodies[i].z - hearth.z) <= 1.5);
+    const gazed = near.filter((i) => sim.log.some((l) => l.kind === INTENT.GAZE && l.who === i && l.t >= t0 && Math.hypot(l.a - hearth.x, l.c - hearth.z) < 0.05));
+    sim.run(12);
+    const sg = sim.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING);
+    check('S06', `(round 4) the fire puff (lifeThingTap on the Fireplace) is noticed within 0.15 s by each squishy within 1.5 m (${gazed.length} of ${near.length} gazed at it), then the three by the fire sing together: SING n2 = 3, its thing the Fireplace (${sg.map((e) => `+${(e.t - t0).toFixed(1)} s n2 ${e.n2} thing ${e.thing}`).join(', ') || 'none'})`,
+      near.length >= 1 && gazed.length === near.length && sg.length === 1 && sg[0].n2 === 3 && sg[0].thing === TID('hearth') && sg[0].t - t0 < 3.7 + 2 * 3.64 + 0.2);
+    const ctl = stage(183, 'hearth', false);
+    ctl.run(tap + 12.2);
+    check('S06', `(round 4) the same scene with no tap and no kettle gives no song (${ctl.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING).length} SING)`, ctl.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING).length === 0);
+    // a latecomer: the third is in the player's hand when the fire puffs and set down 0.5 s later; after its afterglow (1.5 s) it joins the
+    // song before the song's first bar line (3.1 s after the tap)
+    const late = stage(183, 'hearth', false);
+    late.run(tap);
+    late.extraFlags[2] = LIFE_FLAG.TOUCHED; late.touch[2] = TOUCH.POKE; late.run(0.1);
+    const lt0 = late.t;
+    lifeThingTap(late.w, TID('hearth'));
+    late.run(0.4); late.extraFlags[2] = 0;
+    let joinedAt = -1;
+    const end = late.frame + 12 * 60;
+    while (late.frame < end) { late.step(); if (joinedAt < 0 && late.w.moo[2] >= 0 && late.w.mK[late.w.moo[2]] === 6) joinedAt = late.t; }
+    const lsg = late.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SING);
+    check('S06', `(round 4) a latecomer joins a song before its first bar line: the third, held when the fire puffed, joins at +${(joinedAt - lt0).toFixed(1)} s (the bar line +3.1 s); SING n2 = 3 (${lsg.map((e) => `n2 ${e.n2}`).join(', ') || 'none'})`,
+      joinedAt > lt0 + 0.4 && joinedAt < lt0 + 3.1 && lsg.length === 1 && lsg[0].n2 === 3);
+  }
+}
+
 /* ───────────────────────────── LF-20 looks, LF-21 REACT from LIFE's real output ───────────────────────────── */
 if (!LF02_CHILD) {
   // the Window Chill (cold 0.3): frost rises at 0.015 a s and does not fall while the cause is present; FROST once per visit at 0.5
@@ -980,7 +862,11 @@ if (!LF02_CHILD) {
   const pool = RIPPLE.zones.find((zn) => zn.id === 'rockpool')!;
   for (const float of [false, true]) {
     const r = s2(RIPPLE, 131 + (float ? 1 : 0));
-    r.add(0, 'dollop', pool.x, pool.z, { float });
+    // (round 4 re-specification, written reason: LIFE's FLOAT now also asks PLACES 2.5's float table, as LIFE 4.2 says "it floats by the
+    // float table"; Dollop is a jelly gel, density 1.02, which SITS in 0.28 m of water, so round 2's floater fixture (a host flag on Dollop)
+    // was a body physics would never float. The floater is now Cushlet, a marshmallow (0.11: the share 0.191 at R 0.5 is more), the wader
+    // stays Dollop. Same checks, same bars.)
+    r.add(0, float ? 'cushlet' : 'dollop', pool.x, pool.z, { float });
     // alone, not playful (no wander), tired (it would nap if it could, never in water), its bask and use on cooldown for 30 s (the Sun is
     // a whole-place warm zone: a bask would walk it out first): it stays until its 30 s
     for (const bh of [BEH.BASK, BEH.USE, BEH.WANDER]) r.w.coo[0 * 26 + bh] = 30;
@@ -999,6 +885,21 @@ if (!LF02_CHILD) {
       exitScoot >= 30 && exitScoot <= 30.2 && out > 0 && out <= 40 && napWet === 0);
     check('LF-21', `(S2) ${float ? 'FLOAT: in the Rock Pool, not grounded' : 'WADE: in the Rock Pool (surface 0.28 m), grounded'} for 1 s, once per visit, its thing the Rock Pool (${fl.map((e) => `${e.t.toFixed(1)} s thing ${e.thing}`).join(', ') || 'none'})`,
       fl.length === 1 && fl[0].thing === TID('rockpool') && fl[0].t <= 1.4);
+  }
+  // (round 4) what is NOT a float: a hop after 2 s standing in a shallow splash (the Surf Edge, 0.06 m: PLACES 2's "drag, splash and wet
+  // only"; PG_QUESTS round 3's QC case), a hop in the Rock Pool (airborne 0.17 s, never 1 s), a sitter the host marks not grounded in the
+  // Rock Pool (Dollop, jelly gel 1.02: the float table says it sits), and a floater riding a prop (ON_PROP: a raft's rider is not floating)
+  {
+    const edge = RIPPLE.zones.find((zn) => zn.id === 'surfedge')!;
+    const a = s2(RIPPLE, 141); a.add(0, 'cushlet', 1.0, edge.z, { float: true }); a.run(2);
+    for (let k = 0; k < 4; k++) { a.bodies[0].air = 0.18; a.run(1.2); }
+    const b = s2(RIPPLE, 142); b.add(0, 'dollop', pool.x, pool.z); b.run(2);
+    for (let k = 0; k < 4; k++) { b.bodies[0].air = 0.18; b.run(1.2); }
+    const c = s2(RIPPLE, 143); c.add(0, 'dollop', pool.x, pool.z, { float: true }); c.run(4);
+    const d = s2(RIPPLE, 144); d.add(0, 'cushlet', pool.x, pool.z, { float: true }); d.extraFlags[0] = LIFE_FLAG.ON_PROP; d.run(4);
+    const nF = (q: Sim): number => q.events(LIFE_EV.REACT, REACT_KIND.FLOAT).length;
+    check('LF-21', `(S2, round 4) no FLOAT from a hop in a shallow splash (${nF(a)}), a hop in the Rock Pool (${nF(b)}), a sitter not grounded in the Rock Pool (jelly gel: ${nF(c)}) or a floater on a prop (${nF(d)}); the Surf Edge gives SPLASH instead (${a.events(LIFE_EV.REACT, REACT_KIND.SPLASH).length})`,
+      nF(a) === 0 && nF(b) === 0 && nF(c) === 0 && nF(d) === 0 && a.events(LIFE_EV.REACT, REACT_KIND.SPLASH).length >= 1);
   }
   // SPLASH: a hop that lands in the shallow Surf Edge (surface 0.06 m): an event, 5 s cooldown, its thing the zone's (none: -1, not the Rock Pool)
   {
@@ -1020,6 +921,131 @@ if (!LF02_CHILD) {
     check('LF-21', `(S2, Frostbell) SHIVER in the whole-place cold for 2 s, only for a family with shiver (${sh.map((e) => `slot ${e.a} ${e.t.toFixed(1)} s thing ${e.thing}`).join(', ')}), FROST at 0.5 (${fr.map((e) => `slot ${e.a} ${e.t.toFixed(1)} s`).join(', ')}; frost ${lo[0].toFixed(2)} at 25 s), both with thing -1`,
       sh.length === 1 && sh[0].a === 0 && sh[0].thing === -1 && sh[0].t <= 2.3 && fr.length === 2 && fr.every((e) => e.thing === -1 && Math.abs(e.t - 0.5 / 0.03) < 0.5));
   }
+  // (round 4) the S2 / S3 REACT producers on PG_DATA's places (wide), from LIFE's real output. A scene is kept calm by putting the squishy's
+  // uses, naps, basks, wanders and moments on cooldown (as the huff and boop rows stage); the host reports a switchable zone off by its id.
+  const calmS = (r: Sim, n: number): void => { for (let i = 0; i < n; i++) for (const bh of [BEH.USE, BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT]) r.w.coo[i * 26 + bh] = 1e9; };
+  const evs = (r: Sim, kind: number, who = 0): EvLog[] => r.events(LIFE_EV.REACT, kind).filter((e) => e.a === who);
+  const tl = (l: EvLog[]): string => l.map((e) => `${e.t.toFixed(1)} s thing ${e.thing}`).join(', ') || 'none';
+  {
+    // SOAK by water (a foam in the Rock Pool) and by the rain (Rainleaf, thing -1): soak crosses 0.5 (marshmallow 0.06 a s: about 8.3 s)
+    const a = s2(RIPPLE, 151); a.add(0, 'cushlet', pool.x, pool.z, { float: true }); calmS(a, 1); a.run(12);
+    const b = s2(RAINLEAF, 152); b.add(0, 'cushlet', 0.3, -0.2); calmS(b, 1); b.physics = false; b.run(12);
+    check('LF-21', `(S2, round 4) SOAK by water: a marshmallow in the Rock Pool soaks to 0.5 (${tl(evs(a, REACT_KIND.SOAK))}: the Rock Pool ${TID('rockpool')}) and in Rainleaf's rain (${tl(evs(b, REACT_KIND.SOAK))}: -1)`,
+      evs(a, REACT_KIND.SOAK).length === 1 && evs(a, REACT_KIND.SOAK)[0].thing === TID('rockpool') && Math.abs(evs(a, REACT_KIND.SOAK)[0].t - 0.5 / 0.06) < 0.6
+      && evs(b, REACT_KIND.SOAK).length === 1 && evs(b, REACT_KIND.SOAK)[0].thing === -1);
+    // DRIFT: a floater carried 0.3 m by the Rock Pool's current (0.08 m/s in this host); a wader is not
+    const c = s2(RIPPLE, 153); c.add(0, 'cushlet', pool.x + 0.7, pool.z, { float: true }); c.add(1, 'dollop', pool.x - 0.7, pool.z); calmS(c, 2); c.run(10);
+    check('LF-21', `(S2, round 4) DRIFT: a floater carried 0.3 m by the Rock Pool's current, once per visit, its thing the Rock Pool (${tl(evs(c, REACT_KIND.DRIFT))}; 0.3 / 0.08 = 3.75 s after it floats); a wader in the same pool gives none (${evs(c, REACT_KIND.DRIFT, 1).length})`,
+      evs(c, REACT_KIND.DRIFT).length === 1 && evs(c, REACT_KIND.DRIFT)[0].thing === TID('rockpool') && evs(c, REACT_KIND.DRIFT)[0].t > 3.5 && evs(c, REACT_KIND.DRIFT)[0].t < 6 && evs(c, REACT_KIND.DRIFT, 1).length === 0);
+    // PRINT: moving on Ripple's marking sand gives one PRINT a visit (-1: the ground); the cabin's floor marks nothing
+    const d = s2(RIPPLE, 154); d.add(0, 'dollop', -1.0, 0.8); d.run(1); d.bodies[0].tx = 0.2; d.bodies[0].tz = 0.8; d.bodies[0].sp = 0.25; d.bodies[0].scoot = true; d.run(6);
+    const e = new Sim(155, CABIN, 0); e.s.place = 1; CABIN.things.forEach((t) => e.addThing(t.id, t.x, t.z)); e.add(0, 'dollop', -1.0, 0.8); e.run(1); e.bodies[0].tx = 0.2; e.bodies[0].tz = 0.8; e.bodies[0].sp = 0.25; e.bodies[0].scoot = true; e.run(6);
+    check('LF-21', `(S2, round 4) PRINT: a squishy moving on Ripple Shore's marking sand makes its first print once a visit (${tl(evs(d, REACT_KIND.PRINT))}); the cabin's floor, which marks nothing, none (${evs(e, REACT_KIND.PRINT).length})`,
+      evs(d, REACT_KIND.PRINT).length === 1 && evs(d, REACT_KIND.PRINT)[0].thing === -1 && evs(e, REACT_KIND.PRINT).length === 0);
+  }
+  {
+    // GLIDE on Frostbell's Ice Pond: B04 walks a firm silicone (ice grip 0.08) to the pond's edge and nudges it across; the ice carries it
+    // 0.5 m or more (this host: the nudge coasts at the patch's drag): GLIDE with its thing the Ice Pond, USE STEP; a slime goo (0.8) never glides
+    const icePond = FROSTBELL.patches.find((pt) => pt.id === 'icepond')!;
+    const g = s2(FROSTBELL, 157); g.add(0, 'boingle', icePond.x - 2.2, icePond.z + 0.6); g.add(1, 'gloopsy', icePond.x - 2.4, icePond.z + 1.6);
+    for (let i = 0; i < 2; i++) for (const bh of [BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT]) g.w.coo[i * 26 + bh] = 1e9;
+    let maxGlide = 0;
+    for (let f = 0; f < 40 * 60; f++) { g.step(); g.w.pl[0] = Math.max(g.w.pl[0], 0.9); g.w.pl[1] = Math.max(g.w.pl[1], 0.9); }
+    for (const l of g.intents(INTENT.GLIDE, 0)) maxGlide = Math.max(maxGlide, Math.hypot(l.a, l.b));
+    const gl = evs(g, REACT_KIND.GLIDE), use = g.events(LIFE_EV.USE).filter((u) => u.a === 0 && u.thing === TID('icepond'));
+    check('LF-21', `(S2, round 4) GLIDE: a firm silicone glides on the Ice Pond (nudges ${g.intents(INTENT.GLIDE, 0).length}, fastest ${maxGlide.toFixed(2)} m/s, in 0.6..1.0), GLIDE ${tl(gl)} (event, 10 s apart, its thing the Ice Pond ${TID('icepond')}), USE STEP x${use.length}; a slime goo (ice grip 0.8) never glides (${g.intents(INTENT.GLIDE, 1).length} nudges, ${evs(g, REACT_KIND.GLIDE, 1).length} GLIDE)`,
+      gl.length >= 1 && gl.every((q) => q.thing === TID('icepond')) && gl.every((q, k) => k === 0 || q.t - gl[k - 1].t >= 10) && use.length >= 1 && maxGlide >= 0.6 - 1e-6 && maxGlide <= 1.0 + 1e-6
+      && g.intents(INTENT.GLIDE, 1).length === 0 && evs(g, REACT_KIND.GLIDE, 1).length === 0);
+    // the snow cap: still on Frostbell's snow the snow look rises 0.03 a s to its 0.3 cap (no SNOWCAP: it never crosses 0.5 by itself); a
+    // snowball's +0.3 (lifeAddLook, its source) then crosses it: SNOWCAP with the snowball; moving, it falls at 0.2 a s
+    const h = s2(FROSTBELL, 158); h.add(0, 'crimpo', -0.6, 0.6); h.physics = false; calmS(h, 1);
+    const lo = new Float32Array(6);
+    h.run(5); lifeLooks(h.w, 0, lo); const at5 = lo[4]; h.run(10); lifeLooks(h.w, 0, lo); const at15 = lo[4];
+    const capsBefore = evs(h, REACT_KIND.SNOWCAP).length;
+    lifeAddLook(h.w, 0, LOOK.snow, 0.3, TID('snowball')); h.run(0.3);
+    const sc = evs(h, REACT_KIND.SNOWCAP);
+    h.bodies[0].vx = 0.3; h.s.vx[0] = 0.3; h.physics = true; h.bodies[0].tx = 1.2; h.bodies[0].tz = 0.6; h.bodies[0].sp = 0.25; h.bodies[0].scoot = true; h.run(1);
+    lifeLooks(h.w, 0, lo); const afterMove = lo[4];
+    check('LF-20', `(S2, round 4) the snow cap: still on Frostbell's snow the look rises 0.03 a s (${(at5 / 5).toFixed(3)}) to its 0.3 cap (${at15.toFixed(2)} at 15 s, ${capsBefore} SNOWCAP by itself); a snowball's +0.3 gives SNOWCAP with the snowball (${tl(sc)}); moving it falls at 0.2 a s (${afterMove.toFixed(2)} after 1 s)`,
+      Math.abs(at5 / 5 - 0.03) < 0.003 && Math.abs(at15 - 0.3) < 1e-6 && capsBefore === 0 && sc.length === 1 && sc[0].thing === TID('snowball') && afterMove < 0.6 - 0.15);
+  }
+  {
+    // DRY: soaked (a squirt's +0.6 wet and soak through lifeAddLook) then in the cabin's Fireside Warmth: soak and wet fall at their warm rates
+    // and DRY fires once when one falls under 0.1, its thing the Fireplace; LOVE: B10 in its favourite place (Dollop at the cabin), once, -1
+    const dr = new Sim(165, CABIN, 0); dr.s.place = 1; CABIN.things.forEach((t) => dr.addThing(t.id, t.x, t.z));
+    dr.add(0, 'cushlet', 1.5, 1.0); dr.add(1, 'dollop', 0.5, 1.2); dr.physics = false; calmS(dr, 2);
+    lifeAddLook(dr.w, 0, LOOK.soak, 0.6, -1); lifeAddLook(dr.w, 0, LOOK.wet, 0.6, -1); dr.run(1);
+    dr.bodies[0].x = -2.4; dr.bodies[0].z = -1.25; dr.run(12);
+    const dry = evs(dr, REACT_KIND.DRY), love = evs(dr, REACT_KIND.LOVE, 1);
+    check('LF-21', `(round 4) DRY: soaked, then in the Fireside Warmth, once when its wet or soak falls under 0.1 (${tl(dry)}: the Fireplace ${TID('hearth')}); LOVE: Dollop's B10 at the cabin, its favourite place, once (${tl(love)})`,
+      dry.length === 1 && dry[0].thing === TID('hearth') && love.length === 1 && love[0].thing === -1);
+  }
+  {
+    // GAZE_SKY at Lanternroof (night): idle within 1.5 m of the Moon Dish for 3 s, once a visit (thing the dish); the Star Scope's comet
+    // (lifeThingTap) makes every squishy on screen gaze up, every time (thing the scope)
+    const dish = LANTERNROOF.things.find((t) => t.id === 'moondish')!;
+    const k = s2(LANTERNROOF, 161); k.add(0, 'dollop', dish.x, dish.z - 1.0); k.add(1, 'crimpo', -2.0, -1.5); k.physics = false; calmS(k, 2);
+    k.run(14);   // (its arrival, a greet with the other and two notices come first: idle from about 7 s)
+    const gz = evs(k, REACT_KIND.GAZE_SKY);
+    lifeThingTap(k.w, TID('starscope')); k.run(0.2); lifeThingTap(k.w, TID('starscope')); k.run(0.2);
+    const comet = k.events(LIFE_EV.REACT, REACT_KIND.GAZE_SKY).filter((q) => q.thing === TID('starscope'));
+    check('LF-21', `(S3, round 4) GAZE_SKY: idle by the Moon Dish at night for 3 s (${tl(gz)}: the dish ${TID('moondish')}; the one 3 m away none: ${evs(k, REACT_KIND.GAZE_SKY, 1).filter((q) => q.thing === TID('moondish')).length}); two comets give ${comet.length} (2 on screen x 2), thing the scope`,
+      gz.length === 1 && gz[0].thing === TID('moondish') && gz[0].t >= 3 && evs(k, REACT_KIND.GAZE_SKY, 1).filter((q) => q.thing === TID('moondish')).length === 0 && comet.length === 4);
+    // B19 hold on in a real place: the Night Breeze's gusts come from LIFE's own clock (every 6..10 s for 2.5 s, lifeGustOn); a grounded
+    // squishy in the breeze holds on once per gust (HOLD_ON, thing -1) for the gust's length, and not between gusts
+    const breeze = LANTERNROOF.zones.findIndex((z) => z.id === 'nightbreeze');
+    const b = s2(LANTERNROOF, 162); b.add(0, 'dollop', 2.3, 1.2); b.physics = false; calmS(b, 1);
+    let gusts = 0, was = false, offHold = 0, onTicks = 0, holdTicks = 0;
+    for (let f = 0; f < 60 * 60; f++) {
+      b.step();
+      const on = lifeGustOn(b.w, breeze);
+      if (on && !was) gusts++;
+      was = on;
+      if (on) { onTicks++; if (b.w.beh[0] === BEH.HOLDON) holdTicks++; } else if (b.w.beh[0] === BEH.HOLDON) offHold++;
+    }
+    const ho = evs(b, REACT_KIND.HOLD_ON);
+    check('LF-21', `(S3, round 4) B19 in the Night Breeze: ${gusts} gusts in 60 s by LIFE's clock (6..10 s apart), HOLD_ON x${ho.length} (one a gust, thing -1), holding on ${(100 * holdTicks / Math.max(1, onTicks)).toFixed(0)}% of the gust time, ${offHold} frames past the gusts' ends (at most one 0.1 s think a gust: ${6 * gusts})`,
+      gusts >= 6 && gusts <= 10 && ho.length === gusts && ho.every((q) => q.thing === -1) && holdTicks / onTicks > 0.9 && offHold <= 6 * gusts);
+    // pieces in the breeze hold on together: one PIECES HOLD_ON with n = 3 (QUESTS L6)
+    const pc = s2(LANTERNROOF, 163); pc.physics = false;
+    for (let q = 0; q < 3; q++) pc.add(q, 'dollop', 2.0 + q * 0.3, 1.2, { kind: q === 0 ? 1 : 2, group: 0, frac: 1 / 3, r: 0.32, seed: 7 });
+    for (let q = 0; q < 3; q++) for (const bh of [BEH.USE, BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT]) pc.w.coo[q * 26 + bh] = 1e9;
+    pc.run(20);
+    const ph = pc.events(LIFE_EV.PIECES, REACT_KIND.HOLD_ON);
+    check('LF-22', `(S3, round 4) three pieces in the Night Breeze hold on in a gust: PIECES HOLD_ON reaching n = 3 (${ph.map((q) => `${q.t.toFixed(1)} s n ${q.n2}`).join(', ') || 'none'})`, ph.some((q) => q.n2 === 3));
+  }
+  {
+    // LIFT (Cloudloft's updraft: airborne in it for 0.3 s; an event, 5 s apart; thing the updraft), RATTLE (a bead squeeze within 0.6 m of
+    // Cogwhistle's switched-on magnet: thing the magnet; off, none), GLOW (Echo Hollow's Glow Pool, 1 s), SHOWER (under Rainleaf's Drip Leaf
+    // while it drips: thing the leaf; in the rain elsewhere, none), FIZZ (Fizzwell's Bubble Patch, 1 s)
+    const up = CLOUDLOFT.zones.find((z) => z.id === 'updraft')!;
+    const l = s2(CLOUDLOFT, 171); l.add(0, 'cushlet', up.x, up.z); calmS(l, 1);
+    l.run(1); l.bodies[0].air = 0.6; l.run(2); l.bodies[0].air = 0.6; l.run(5); l.bodies[0].air = 0.6; l.run(1);
+    const lift = evs(l, REACT_KIND.LIFT);
+    check('LF-21', `(S3, round 4) LIFT: airborne in Cloudloft's updraft for 0.3 s, an event 5 s apart (${tl(lift)}: the updraft ${TID('updraft')})`,
+      lift.length === 2 && lift.every((q) => q.thing === TID('updraft')) && lift[1].t - lift[0].t >= 5);
+    const mg = COGWHISTLE.zones.find((z) => z.id === 'magnetfield')!;
+    const ra = s2(COGWHISTLE, 172); ra.add(0, 'rattlebead', mg.x, mg.z + 0.7); ra.add(1, 'dollop', mg.x - 0.7, mg.z); ra.physics = false; calmS(ra, 2); ra.run(3);
+    const rb = s2(COGWHISTLE, 173); rb.zoneOff.add('magnetfield'); rb.add(0, 'rattlebead', mg.x, mg.z + 0.7); rb.physics = false; calmS(rb, 1); rb.run(3);
+    check('LF-21', `(S3, round 4) RATTLE: a bead squeeze 0.7 m from the switched-on magnet (${tl(evs(ra, REACT_KIND.RATTLE))}: the magnet ${TID('magnet')}); a jelly gel beside it none (${evs(ra, REACT_KIND.RATTLE, 1).length}); the magnet off, none (${evs(rb, REACT_KIND.RATTLE).length})`,
+      evs(ra, REACT_KIND.RATTLE).length === 1 && evs(ra, REACT_KIND.RATTLE)[0].thing === TID('magnet') && evs(ra, REACT_KIND.RATTLE, 1).length === 0 && evs(rb, REACT_KIND.RATTLE).length === 0);
+    const gp = ECHOHOLLOW.zones.find((z) => z.id === 'glowpool')!;
+    // (a squishy that comes out inside a zone is in it at once, LIFE 3.1: these come out beside it and are set in at 1 s)
+    const setIn = (r: Sim, x: number, z: number): void => { r.run(1); r.bodies[0].x = x; r.bodies[0].z = z; r.bodies[0].tx = x; r.bodies[0].tz = z; };
+    const gw = s2(ECHOHOLLOW, 174); gw.add(0, 'dollop', gp.x - 2.0, gp.z + 1.2); gw.physics = false; calmS(gw, 1); setIn(gw, gp.x, gp.z); gw.run(3);
+    check('LF-21', `(S3, round 4) GLOW: in Echo Hollow's Glow Pool for 1 s, once a visit (${tl(evs(gw, REACT_KIND.GLOW))}: the pool ${TID('glowpool')}; set in at 1.0 s)`,
+      evs(gw, REACT_KIND.GLOW).length === 1 && evs(gw, REACT_KIND.GLOW)[0].thing === TID('glowpool') && evs(gw, REACT_KIND.GLOW)[0].t >= 2 && evs(gw, REACT_KIND.GLOW)[0].t < 2.3);
+    const dz = RAINLEAF.zones.find((z) => z.id === 'leafdrip')!;
+    const sh = s2(RAINLEAF, 175); sh.add(0, 'dollop', dz.x + 1.4, dz.z + 1.0); sh.add(1, 'crimpo', 1.0, 0.0); sh.physics = false; calmS(sh, 2); setIn(sh, dz.x, dz.z); sh.run(25);
+    const sd = s2(RAINLEAF, 176); sd.zoneOff.add('leafdrip'); sd.zoneOff.add('rain'); sd.add(0, 'dollop', dz.x, dz.z); sd.physics = false; calmS(sd, 1); sd.run(3);
+    check('LF-21', `(S3, round 4) SHOWER: under the Drip Leaf while it drips (${tl(evs(sh, REACT_KIND.SHOWER))}: the leaf ${TID('dripleaf')}; set in at 1.0 s; an event 20 s apart), in the rain elsewhere none (${evs(sh, REACT_KIND.SHOWER, 1).length}), the leaf dry none (${evs(sd, REACT_KIND.SHOWER).length})`,
+      evs(sh, REACT_KIND.SHOWER).length === 2 && evs(sh, REACT_KIND.SHOWER).every((q) => q.thing === TID('dripleaf')) && evs(sh, REACT_KIND.SHOWER)[0].t >= 2 && evs(sh, REACT_KIND.SHOWER)[1].t - evs(sh, REACT_KIND.SHOWER)[0].t >= 19.95
+      && evs(sh, REACT_KIND.SHOWER, 1).length === 0 && evs(sd, REACT_KIND.SHOWER).length === 0);
+    const bp = FIZZWELL.zones.find((z) => z.id === 'bubblepatch')!;
+    const fz = s2(FIZZWELL, 177); fz.add(0, 'dollop', bp.x + 1.6, bp.z + 1.4); fz.physics = false; calmS(fz, 1); setIn(fz, bp.x, bp.z); fz.run(3);
+    check('LF-21', `(S2, round 4) FIZZ: in Fizzwell's Bubble Patch for 1 s, once a visit (${tl(evs(fz, REACT_KIND.FIZZ))}: the patch ${TID('bubblepatch')}; set in at 1.0 s)`,
+      evs(fz, REACT_KIND.FIZZ).length === 1 && evs(fz, REACT_KIND.FIZZ)[0].thing === TID('bubblepatch') && evs(fz, REACT_KIND.FIZZ)[0].t >= 2 && evs(fz, REACT_KIND.FIZZ)[0].t < 2.3);
+  }
   // S2's raised hops (LIFE 5.2, D-07): lifeSetHops raises a family's hop to its vyS2 once PH-01 passed; pieces keep the S1 cap; 0 returns to S1
   {
     const hopRun = (mask: number, calm: boolean): { whole: number; other: number; piece: number } => {
@@ -1034,7 +1060,7 @@ if (!LF02_CHILD) {
     check('LIFE 5.2', `(S2) lifeSetHops raises the jelly gel whole's hop to vyS2 1.2 (max vy ${up.whole.toFixed(2)}); firm silicone not raised stays at the S1 cap (${up.other.toFixed(2)} <= 0.84); a piece keeps the S1 cap (${up.piece.toFixed(2)}); mask 0 back to S1 (${off.whole.toFixed(2)}); Calm x 0.6 (${calm.whole.toFixed(2)})`,
       up.whole > 0.84 && up.whole <= 1.2 + 1e-6 && up.other <= 0.84 + 1e-6 && up.piece <= 0.84 + 1e-6 && off.whole <= 0.84 + 1e-6 && calm.whole <= 1.2 * 0.6 + 1e-6);
   }
-  info('LF-21', 'not run yet (S2 / S3 producers): SOAK by water, GLIDE, DRIFT, LIFT, RATTLE, GLOW, GAZE_SKY, PRINT, SHOWER, FIZZ (the trigger code for LIFT, RATTLE, GLOW, SHOWER, FIZZ is in looks.ts, unchecked; GLIDE, DRIFT, GAZE_SKY, PRINT have no producer yet); FLOAT, WADE, SPLASH, SHIVER, FROST are checked above with S2 data');
+  info('LF-21', 'round 4: every REACT kind of QUESTS 4 now has a producer checked on its place above (FLOAT, WADE, SOAK, TOAST, RISE, OOZE, WARM, SHIVER, FROST, SNOWCAP, GLIDE, SPLASH, DRIFT, LIFT, RATTLE, GLOW, GAZE_SKY, PRINT, SHOWER, FIZZ, HOLD_ON; DRY, LOVE)');
   info('LF-15', "friendship's pace (20 a pair a day, levels at 12 and 40, 128 rows, eviction) is the reducer's (PG_QUESTS); LIFE's side: lifeSetPair levels gate chat (Met), duet and nuzzle-for-every-pair (Friends), twirl (Close)");
 }
 

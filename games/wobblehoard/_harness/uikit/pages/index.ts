@@ -8,6 +8,7 @@ import { b5Sections } from './b5.ts';
 import { b4aSections } from './b4a.ts';
 import { b4bSections } from './b4b.ts';
 import { b6bSections } from './b6b.ts';
+import { pgSections } from './pg.ts';
 
 export const BATCHES: ReadonlyArray<{ id: string; sections: () => KitSection[] }> = [
   { id: 'B0', sections: b0Sections },
@@ -17,6 +18,7 @@ export const BATCHES: ReadonlyArray<{ id: string; sections: () => KitSection[] }
   { id: 'B4b', sections: b4bSections },
   { id: 'B5', sections: b5Sections },
   { id: 'B6b', sections: b6bSections },
+  { id: 'PG', sections: pgSections },
 ];
 
 export function sectionsUpTo(batch: string): KitSection[] {

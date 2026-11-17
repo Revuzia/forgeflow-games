@@ -8,12 +8,12 @@ import { MECH, ZONE, PLACE_IDS } from '../data/places.ts';
 import { SPECIES } from '../data/species.ts';
 import type { LifeWorld } from './world.ts';
 import { CAP, BEH, F, MAX_ZONES, USES_FULL, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT } from './world.ts';
-import { gateStart, stopMove, travelTo, travelStep, emitHop, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, groupCount, say } from './act.ts';
+import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, groupCount, say } from './act.ts';
 import { emitVoice, PHRASE, voice } from './voice.ts';
 import { STYLE } from './attention.ts';
 import { TRAIT } from './traits.ts';
 import { WARMPOSE, TOAST, emitReact, leaderOf } from './looks.ts';
-import { socialPick, beginPicked, updateMoment, startMoment, tryTeeter, abortFor, isFree, MOM, mem, tuneThing } from './social.ts';
+import { socialPick, beginPicked, updateMoment, startMoment, tryTeeter, abortFor, isFree, MOM, mem, tuneThing, tunePlaying } from './social.ts';
 import { wishThink, wishCheck, firstWishThink } from './wish.ts';
 import { INTENT } from '../data/life.ts';
 import { PIECES_USE } from '../data/quests.ts';
@@ -24,7 +24,8 @@ const FAM_FIRM = 8, FAM_POP = 9;
 /** Per family: the mechanisms it likes (B04's family affinity, +0.15 each). */
 import { FAMILY_REACT } from '../data/life.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
-const PREFS = new Uint32Array(12);
+const PREFS = new Uint32Array(12), ICE_GRIP = new Float32Array(12);
+for (let f = 0; f < 12; f++) ICE_GRIP[f] = FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].iceGrip;
 for (let f = 0; f < 12; f++) for (const m of FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].mechPrefs) PREFS[f] |= 1 << m;
 
 const ONCE = { LOVE: 1 << 16, BASKED: 1 << 17, ARRIVED: 1 << 18, HELLO: 1 << 19, SIGNATURE: 1 << 20, TOASTED: 1 << 21 } as const;
@@ -41,7 +42,14 @@ function endBeh(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, cool
   const b = w.beh[i];
   if (coolS > 0) w.coo[i * 26 + b] = tb + coolS;
   if (w.mo[i]) stopMove(w, out, i);
-  w.beh[i] = BEH.IDLE; w.ph[i] = 0; w.bT[i] = tb; w.bSc[i] = 0.1; w.tT[i] = -1; w.tC[i] = -1; w.ch[i] = 0;
+  w.beh[i] = BEH.IDLE; w.ph[i] = 0; w.bT[i] = tb; w.bSc[i] = 0.1; w.tT[i] = -1; w.tC[i] = -1; w.ch[i] = 0; w.tw[i] = 0;
+}
+/** (round 4) Is another character waiting in B04's first phase for a mover token? A B03 wander (a filler) does not take the token from it
+ *  (my reading of LIFE 4's utility choice across characters: with moverCap 1 a wander held the one token 35 to 73 s of a 5-minute visit
+ *  while uses waited, LF-09). */
+function tokenWanted(w: LifeWorld, i: number): boolean {
+  for (let j = 0; j < CAP; j++) if (j !== i && w.tw[j] && w.ac[j] && w.beh[j] === BEH.USE && w.ph[j] === 0) return true;
+  return false;
 }
 function ready(w: LifeWorld, i: number, b: number): boolean {
   const tb = w.f[F.NOW]; return tb >= w.coo[i * 26 + b]; }
@@ -291,11 +299,29 @@ export function behave(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Life
   if (w.beh[i] === BEH.IDLE || w.beh[i] === BEH.NONE) idleLook(w, s, out, i);
 }
 
+/** (round 4) B19's gust: in a wind zone with gust data, a gust of LIFE's clock that this character has not held on in yet (HOLD_ON is "one per
+ *  gust"); a wind zone with no gust data keeps round 2's rule (the snapshot's wind bit at its centre). */
+function gustHere(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
+  const k = w.zWK2[i], tb = w.f[F.NOW];
+  if (k < 0) return false;
+  if (w.zGf[k] > 0) return tb >= w.zGe[k] - w.zGf[k] && tb < w.zGe[k] && w.gHo[i] !== w.zGe[k];
+  return (s.zoneMask[i] & (1 << ZONE.wind)) !== 0;
+}
+/** B19 starts: it lasts until the gust ends (2.5 s for a wind zone with no gust data). */
+function startHoldOn(w: LifeWorld, i: number): void {
+  const k = w.zWK2[i], tb = w.f[F.NOW];
+  const gust = k >= 0 && w.zGf[k] > 0;
+  setBeh(w, i, BEH.HOLDON, 800, gust ? ((w.zGe[k] - tb) * 1000) | 0 : 2500);
+  if (gust) w.gHo[i] = w.zGe[k];
+}
+
 /* ───────────────────────────── the choice ───────────────────────────── */
 
 function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, canMove: boolean): void {
   const tb = w.f[F.NOW];
-  const cur = w.beh[i], curScore = cur === BEH.IDLE || cur === BEH.NONE ? 0 : w.bSc[i] + BRAIN.keep;
+  const cur = w.beh[i];
+  // (round 4) noticing the thing whose tune plays now (the fire puff's switch tap) is the start of singing to it: S06 may follow at once
+  const curScore = cur === BEH.IDLE || cur === BEH.NONE || (cur === BEH.NOTICE && w.nTa[i] >= 0 && w.nTa[i] === tunePlaying(w, s)) ? 0 : w.bSc[i] + BRAIN.keep;
   const tr = i * 5;
   let best = 0, bs = 0.1 + (rnd(w, i) * NZ - BRAIN.noise), bArg = -1;
   // B13 watch
@@ -305,7 +331,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   // B15 zone reaction (first entry this visit)
   if (w.b1[i] > 0) { const v = 0.95 + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.ZONE; bArg = w.b1[i] - 1; } }
   // B19 hold on: a wind gust (the wind zone's flag at its centre) while it is on the ground
-  if (w.zWK2[i] >= 0 && (s.flags[i] & LIFE_FLAG.GROUNDED) !== 0 && w.beh[i] !== BEH.HOLDON && (s.zoneMask[i] & (1 << ZONE.wind)) !== 0) {
+  if (w.zWK2[i] >= 0 && (s.flags[i] & LIFE_FLAG.GROUNDED) !== 0 && w.beh[i] !== BEH.HOLDON && gustHere(w, s, i)) {
     const v = 0.8 + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.HOLDON; }
   }
   // B10 love its place (its first 10 s there, once per visit)
@@ -343,7 +369,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
       if (w.re[i] > 0.75 || (dozy > 0.6 && w.re[i] > 0.6 && w.uV[i] < USES_FULL && napSpotWithin(w, s, i, 2))) { const v = 0.8 + 0.4 * dozy + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.NAP; } }
     }
     // B03 wander (not with one squishy on a portrait phone at Home)
-    if (w.pl[i] > 0.3 && ready(w, i, BEH.WANDER) && !(w.home && w.layout === 1 && w.nO <= 1) && tb - w.tST[i] > 4 && !interestNear(w, s, i)) {
+    if (w.pl[i] > 0.3 && ready(w, i, BEH.WANDER) && !(w.home && w.layout === 1 && w.nO <= 1) && tb - w.tST[i] > 4 && !interestNear(w, s, i) && !tokenWanted(w, i)) {
       const v = 0.3 + 0.4 * w.pl[i] * w.tr[tr + TRAIT.bouncy] + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.WANDER; }
     }
   }
@@ -386,7 +412,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     case BEH.ZONE: startZone(w, s, out, ev, i, bArg); break;
     case BEH.LOVE: startLove(w, s, out, ev, i); break;
     case BEH.HOLDON: {
-      setBeh(w, i, BEH.HOLDON, 800, 2500);
+      startHoldOn(w, i);
       w.f[F.X2] = -0.08; w.f[F.Z2] = 0; w.f[F.A] = 0; w.f[F.B] = 0; emitPose(w, s, out, i, 0);
       emitExpr(w, out, i, EXPR.happy, 30);
       emitReact(w, s, ev, i, REACT_KIND.HOLD_ON, -1, 0);
@@ -510,7 +536,10 @@ function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
   let best = -1, bs = 0;
   const sp = w.species[i], fav = SPECIES_LIFE[SPECIES[sp]].thing;
   for (let k = 0; k < w.nTD; k++) {
-    if (w.tM[k] !== MECH.ball) continue; // the floor uses LIFE starts by itself in S0 / S1 (pads, chimes, pools, turntables: S2 / S3)
+    // the floor uses LIFE starts by itself: the ball (S0, S1) and, round 4, an ice patch to glide on (LIFE 5.1's glide; Frostbell's Ice Pond,
+    // QUESTS I3) for a family whose ice grip is under 0.5 (pads, chimes, pools, turntables: S2 / S3, not built)
+    const icy = w.tM[k] === 0 && w.tPa[k] >= 0 && w.pI[w.tPa[k]] === 1 && ICE_GRIP[w.fa[i]] < 0.5;
+    if (w.tM[k] !== MECH.ball && !icy) continue;
     if (!thingPos(w, s, k)) continue;
     const r = w.rOL[k];
     if (r >= 0 && s.thingBusy[r]) continue;
@@ -563,7 +592,7 @@ function startUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvent
     w.pW[i] = -1; w.nU[i] = -1;
     return;
   }
-  setBeh(w, i, BEH.USE, score, 12000); w.tT[i] = k; w.uS[i] = asked ? 2 : 1;
+  setBeh(w, i, BEH.USE, score, 12000); w.tT[i] = k; w.uS[i] = asked ? 2 : 1; w.tw[i] = 0;
   w.nU[i] = -1; w.pW[i] = -1;
   // notice it first (gaze and a question bubble), then go
   if (thingPos(w, s, k)) { w.f[F.X] = w.f[F.X2]; w.f[F.Z] = w.f[F.Z2]; emitGaze(w, out, i, 1); }
@@ -589,6 +618,21 @@ function ballUsePoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number, overl
   return w.home || inBounds(w, 0);
 }
 
+/** (round 4) An ice patch thing's glide start into w.f[F.X], w.f[F.Z]: on the patch, its edge nearest the squishy, R + 0.1 m inside it (a patch
+ *  has no keep-out; inside the bounds shrunk by R + 0.2 m). */
+function iceUsePoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean {
+  const pk = w.tPa[k];
+  if (pk < 0) return false;
+  let dx = s.x[i] - w.pX[pk], dz = s.z[i] - w.pZ[pk], d = Math.sqrt(dx * dx + dz * dz);
+  if (d < 0.01) { dx = 0; dz = 1; d = 1; }
+  const rad = (w.pS[pk] === 0 ? w.pR[pk] : Math.min(w.pH[pk], w.pHZ[pk])) - s.r[i] - 0.1;
+  if (rad <= 0.05) return false;
+  w.f[F.X] = w.pX[pk] + dx / d * rad; w.f[F.Z] = w.pZ[pk] + dz / d * rad;
+  qT(w);
+  if (w.home || inBounds(w, shrinkMm(s, i))) return true;
+  w.f[F.X] = w.pX[pk]; w.f[F.Z] = w.pZ[pk]; qT(w); // the patch's middle (the glide then goes nowhere much: the bounds won)
+  return inBounds(w, shrinkMm(s, i));
+}
 function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
   const tb = w.f[F.NOW];
   const k = w.tT[i], asked = w.uS[i] === 2;
@@ -603,19 +647,39 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   }
   if (w.ph[i] === 0) {
     if (tb < w.bN[i]) return;
-    if (!ballUsePoint(w, s, i, k, 0)) { endBeh(w, s, out, i, 15); return; }
+    if (w.tM[k] === 0 ? !iceUsePoint(w, s, i, k) : !ballUsePoint(w, s, i, k, 0)) { endBeh(w, s, out, i, 15); return; }
     if (!mayMove(w, s, i, asked)) { if (tb - w.bT[i] > 6) endBeh(w, s, out, i, 5); return; }
     qT(w);
-    if (d2p(w, s, i) < 36) { w.ph[i] = 2; w.bN[i] = tb; return; }
-    if (travelTo(w, s, out, i, 0, 0)) { w.ph[i] = 1; w.bN[i] = tb; }
+    const dc = d2p(w, s, i);
+    if (dc < 36) { w.ph[i] = 2; w.bN[i] = tb; return; }
+    // (round 4) the walk to the use spot has a deadline of its own: 3 s + 1.5 x the walk at its glide speed (B04's "3..12 s" is the use; a
+    // slow family 3.8 m from the ball needs 21 s to get there, and round 2's 12 s from the start cut every such walk short, the token spent)
+    if (travelTo(w, s, out, i, 0, 0)) { w.ph[i] = 1; w.tw[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04); }
     else if (tb - w.bT[i] > 8) endBeh(w, s, out, i, 5);
+    else w.tw[i] = 1; // waiting for a mover token (a wander gives way to it: choose)
     return;
   }
   if (w.ph[i] === 1) {
     const r = travelStep(w, s, out, i, 70);
     if (r === 2) { endBeh(w, s, out, i, 15); return; }
-    if (r === 1) { w.ph[i] = 2; w.bN[i] = tb; }
-    if (tb - w.bT[i] > 12) endBeh(w, s, out, i, 15);
+    if (r === 1) { w.ph[i] = 2; w.bN[i] = tb; return; }
+    if (tb > w.bN[i] && tb - w.bT[i] > 12) endBeh(w, s, out, i, 15);
+    return;
+  }
+  if (w.ph[i] === 2 && w.tM[k] === 0) {
+    // (round 4) the glide: one nudge across the ice toward the patch's middle at 0.6..1.0 m/s; the ice carries it (GLIDE comes from the
+    // distance it really travels, looks.ts)
+    if (!gateStart(w, s, i, 0, 0)) { if (tb - w.bT[i] > 12) endBeh(w, s, out, i, 5); return; }
+    const pk = w.tPa[k], dx = w.pX[pk] - s.x[i], dz = w.pZ[pk] - s.z[i], d = Math.sqrt(dx * dx + dz * dz) || 1;
+    w.f[F.X2] = dx / d; w.f[F.Z2] = dz / d;
+    if (!emitGlide(w, s, out, i, 600 + ((rnd(w, i) * 400) >>> 16))) { endBeh(w, s, out, i, 5); return; }
+    emitEmote(w, s, out, i, EMOTE.star, STYLE.SAY, 2, 0, 0, w.fP[i]);
+    voice(w, s, out, i, PHRASE.JOY, 200, 2);
+    pushEvent(ev, LIFE_EV.USE, w.tV[k] || USE_VERB.STEP, i, asked ? 254 : -1, 1, w.tG[k]);
+    w.tU[k] = i; w.tUT[k] = tb;
+    if (w.ki[i] !== 0) pieceUse(w, s, ev, i, k);
+    w.pl[i] = Math.max(0, w.pl[i] - 0.3); w.lJT[i] = tb; w.fP[i] = 0; w.uV[i]++;
+    w.ph[i] = 3; w.bN[i] = tb + 2.5;
     return;
   }
   if (w.ph[i] === 2) {
@@ -1136,6 +1200,14 @@ function chunkThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEve
   if (w.b1[i] > 0) { startZone(w, s, out, ev, i, w.b1[i] - 1); return; }
   if (w.beh[lead] === BEH.NAP && w.ph[lead] >= 2 && w.beh[i] !== BEH.NAP) { setBeh(w, i, BEH.NAP, 800, 1e9); w.ph[i] = 2; emitExpr(w, out, i, EXPR.sleepy, 100); return; }
   if (w.beh[i] === BEH.NAP) { if (w.beh[lead] !== BEH.NAP) endBeh(w, s, out, i, 0); return; }
+  // B19 (W F C, round 4): a chunk on the ground holds on in a gust too (a render lean; its HOLD_ON counts for the group's PIECES record)
+  if (w.beh[i] === BEH.HOLDON) { if (w.zWK2[i] < 0 || tb >= w.bE[i]) { clearPose(w, s, out, i); endBeh(w, s, out, i, 0); } return; }
+  if (w.zWK2[i] >= 0 && (s.flags[i] & LIFE_FLAG.GROUNDED) !== 0 && gustHere(w, s, i)) {
+    startHoldOn(w, i);
+    w.f[F.X2] = -0.08; w.f[F.Z2] = 0; w.f[F.A] = 0; w.f[F.B] = 0; emitPose(w, s, out, i, 0);
+    emitReact(w, s, ev, i, REACT_KIND.HOLD_ON, -1, 0);
+    return;
+  }
   if (!canMove) return;
   const d = Math.sqrt(d2c(s, i, lead) / CM2) - s.r[i] - s.r[lead];
   // P03 hop together: the face piece hopped; the chunks follow in a jiggle wave, staggered 0.12 s by rank

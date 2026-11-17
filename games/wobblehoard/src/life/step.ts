@@ -1,6 +1,6 @@
 // The LIFE step interface (LIFE.md 12; D-57, D-59, D-87, D-89): createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep,
 // lifeScript, lifeSetJournal, lifeSetPair, lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeMotif, createAttention, attentionFilter,
-// motionGate. Pure (L1, LF-12): sim time from the snapshot only (LF-26); zero allocation in lifeStep after createLifeWorld (LF-02).
+// motionGate; additive (rounds 2 to 4): lifeSetFriends, lifeSetHops, lifeThingTap, lifeAttention, lifeDebug. Pure (L1, LF-12): sim time from the snapshot only (LF-26); zero allocation in lifeStep after createLifeWorld (LF-02).
 // Every character thinks when sim time crosses its next 0.1 s boundary, offset by slot x 0.1 / 16, in boundary order (LF-16).
 //
 // For the host (PG_SHELL): the snapshot's per-character rows are indexed BY CHARACTER SLOT (row i = slot i; n = the highest slot + 1; a slot
@@ -13,12 +13,12 @@ import type { LifeSnapshot, LifeIntents, LifeEvents } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { pitchRatio } from '../core/genome.ts';
 import type { PlaceDef } from '../data/places.ts';
-import { THING_IDS } from '../data/places.ts';
-import { SCRIPT, LIFE_FLAG, SPECIES_LIFE } from '../data/life.ts';
+import { THING_IDS, MECH } from '../data/places.ts';
+import { SCRIPT, LIFE_FLAG, SPECIES_LIFE, REACT_KIND } from '../data/life.ts';
 import { speciesIdx, familyOf } from '../data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, BEH, F, THINK_S, STAGGER_S, MAX_ZONES, MAX_MOMENTS, MAX_MEMBERS, createLifeWorld, copyPlace, seedChar, pairIdx } from './world.ts';
+import { CAP, BEH, F, THINK_S, STAGGER_S, MAX_ZONES, MAX_MOMENTS, MAX_MEMBERS, SWITCH, createLifeWorld, copyPlace, seedChar, pairIdx, gustStep } from './world.ts';
 import { traitsOf, signatureCode } from './traits.ts';
 import { senseZones, integrate, reactZones, addLook, resetNeedsLooks, emitReact, cutReacts } from './looks.ts';
 import { touchPass, behave } from './brain.ts';
@@ -26,7 +26,7 @@ import { wishCheck, wishFromEvents, firstWishThink, wishOf, THING_ICON_KIND } fr
 import { attentionFilter, MOVER_CAP, UNIT_CAP, tierOf, WAKE } from './attention.ts';
 import type { Attention } from './attention.ts';
 import { emitEmote } from './act.ts';
-import { emitVoice, PHRASE as PH, voice } from './voice.ts';
+import { emitVoice, PHRASE as PH, voice, BAR_S } from './voice.ts';
 import { EMOTE } from '../data/life.ts';
 
 export { createLifeWorld };
@@ -55,7 +55,7 @@ export function lifeSetPlace(w: LifeWorld, placeIdx: number, visit: number, def:
   w.rOL.fill(-1); w.tPX1.fill(NaN); w.tPZ1.fill(NaN); w.tPS.fill(NaN); w.tMT.fill(-1e9);
   if (!newVisit) return;
   for (let m = 0; m < MAX_MOMENTS; m++) { w.mK[m] = 0; w.mN[m] = 0; }
-  w.gHK.fill(-1); w.gHN.fill(0);
+  w.gHK.fill(-1); w.gHN.fill(0); w.tnK = -1; w.f[F.TUNE_U] = -1e9; w.zGn.fill(1e9); w.zGe.fill(-1e9);
   w.pG.fill(0); w.pC.fill(0); w.pNe.fill(0);
   w.movers = 0; w.att.movers = 0; w.att.allowance = 0;
   for (let i = 0; i < CAP; i++) {
@@ -72,7 +72,7 @@ function visitReset(w: LifeWorld, i: number): void {
   w.rN[i] = 0; w.zSe[i] = 0; w.oV[i] = 0; w.eAO[i] = 1; w.b1[i] = 0;
   for (let k = 0; k < MAX_ZONES; k++) w.zIT[i * MAX_ZONES + k] = -1e9;
   for (let k = 0; k < 24; k++) w.rC[i * 24 + k] = -1e9;
-  w.beh[i] = BEH.NONE; w.ph[i] = 0; w.bSc[i] = 0; w.fPT[i] = -1e9; w.tT[i] = -1; w.tC[i] = -1; w.uV[i] = 0;
+  w.beh[i] = BEH.NONE; w.ph[i] = 0; w.bSc[i] = 0; w.fPT[i] = -1e9; w.tT[i] = -1; w.tC[i] = -1; w.uV[i] = 0; w.fT[i] = -1e9; w.wdT[i] = -1e9;
   seedChar(w, i);
 }
 
@@ -199,10 +199,12 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
   if (!anyRideMoment && a.allowance !== 0) a.allowance = 0;
   // every brain function reads the time from w.f[F.NOW] (LF-02): the per-call passes run at the snapshot's t, each think at its boundary
   w.f[F.NOW] = t;
-  // lifeAddLook's REACTs (every time, with the source thing)
+  gustStep(w, t);
+  // lifeAddLook's REACTs (every time, with the source thing); slot -2 = every character on screen (the Star Scope's comet, lifeThingTap)
   for (let p = 0; p < w.pN1; p++) {
     const i = w.pSl[p];
     if (i >= 0 && i < CAP && w.ac[i]) emitReact(w, s, ev, i, w.pKi[p], w.pTh[p], 1);
+    else if (i === -2) for (let j = 0; j < s.n && j < CAP; j++) if (w.ac[j] && w.ki[j] !== 2 && (s.flags[j] & LIFE_FLAG.VISIBLE) !== 0) emitReact(w, s, ev, j, w.pKi[p], w.pTh[p], 1);
   }
   w.pN1 = 0;
   // the player's touch (HELD in the same step), releases, touch kinds, landings
@@ -332,6 +334,34 @@ export function lifeLooks(w: LifeWorld, slot: number, out: Float32Array): void {
 
 /** A host event adds to a look and emits that look's REACT with `thing` at the next lifeStep, every time (3.1). Zero allocation. */
 export function lifeAddLook(w: LifeWorld, slot: number, look: number, amount: number, thing: number): void { addLook(w, slot, look, amount, thing); }
+
+/** (round 4) Is a gust blowing now in place-local zone `zoneIdx` (a wind zone with gust data) by LIFE's gust clock (world.ts gustStep)? For the
+ *  shell (PG_SHELL): drive the wind's force on airborne bodies (PG_PHYS) and the gust sound (PG_AUDIO's weather) from this, so B19's "hold
+ *  on" (a render lean, HOLD_ON) matches what the player sees and hears. Read it after lifeStep; allocates nothing. */
+export function lifeGustOn(w: LifeWorld, zoneIdx: number): boolean {
+  if (zoneIdx < 0 || zoneIdx >= w.nZ || !(w.zGf[zoneIdx] > 0)) return false;
+  const t = w.f[F.LAST_T];
+  return t >= w.zGe[zoneIdx] - w.zGf[zoneIdx] && t < w.zGe[zoneIdx];
+}
+
+/** (round 4) The player tapped or switched place-global thing `thing` (THING_IDS idx) just now: the shell's thing tap and the keyboard's
+ *  "Tap it yourself" (D-93). LIFE then (1) has every squishy within 1.5 m notice it, outside B02's once rule (LIFE 5.3's switch row: "a
+ *  switch tap is always noticed"; the snapshot's thingState does not change for a block such as the Fireplace), and (2) hears a fire's puff
+ *  (its ThingDef p.puffS, 5 s at the Fireplace) or a tapped chime row (one bar, 3.6 s) as a tune for S06 sing together (LIFE 6.1: "a tapped
+ *  chime row, the fire puff"; the Music Box and the kettle come by LifeSnapshot.musicBoxOn as before). For a fire switch call it only when
+ *  the fire comes on or grows (it puffs), not when it goes out. Never per frame; allocates nothing. */
+export function lifeThingTap(w: LifeWorld, thing: number): void {
+  const k = thing >= 0 && thing < w.gTL.length ? w.gTL[thing] : -1;
+  if (k < 0 || !w.def) return;
+  const t = w.f[F.LAST_T] === w.f[F.LAST_T] ? w.f[F.LAST_T] : 0;
+  w.tMT[k] = t;
+  // the Star Scope's comet: every character on screen gazes at the sky (GAZE_SKY, an event every time, its thing the scope; LIFE 4.2)
+  if (w.tSw[k] === SWITCH.comet && w.pN1 < 16) { const p = w.pN1++; w.pSl[p] = -2; w.pKi[p] = REACT_KIND.GAZE_SKY; w.pTh[p] = thing; }
+  const fire = w.tSw[k] === SWITCH.fire, chime = w.tM[k] === MECH.chime;
+  if (!fire && !chime) return;
+  const p = w.def.things[k].p as { puffS?: number };
+  w.tnK = k; w.f[F.TUNE_U] = t + (fire ? (p.puffS ?? 5) : BAR_S);
+}
 
 /** Its open wish: [WISH_KIND, target idx]. */
 export function lifeWishOf(w: LifeWorld, slot: number, out: Int32Array): boolean { return wishOf(w, slot, out); }

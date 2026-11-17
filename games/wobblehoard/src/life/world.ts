@@ -39,9 +39,9 @@ export const USES_FULL = 2;
  *  PX, PZ = the query point of the geometry tests below (inBounds, inKeepOut, inAreaAt, zoneStrengthAt, d2p). The world's scalar doubles
  *  live here too, never in object fields (a double stored to a tagged field is boxed every time): LAST_T the previous call's t (NaN before
  *  the first), T0 the session's first t, UNITS the units LIFE's own starts woke this call (not yet in the snapshot), MUSIC_ON the Music
- *  Box's last start, NEW_WISH the last new wish on screen, SONG the last S06 song. */
+ *  Box's last start, NEW_WISH the last new wish on screen, SONG the last S06 song, TUNE_U the end of a tapped thing's tune (lifeThingTap). */
 export const F = { X: 0, Z: 1, D: 2, X2: 3, Z2: 4, S: 5, T: 6, A: 7, B: 8, C: 9, E: 10, G: 11, NOW: 12, DT: 13, PX: 14, PZ: 15,
-  LAST_T: 16, T0: 17, UNITS: 18, MUSIC_ON: 19, NEW_WISH: 20, SONG: 21 } as const;
+  LAST_T: 16, T0: 17, UNITS: 18, MUSIC_ON: 19, NEW_WISH: 20, SONG: 21, TUNE_U: 22 } as const;
 
 export interface LifeWorld {
   seed: number; maxChars: number;
@@ -60,6 +60,11 @@ export interface LifeWorld {
   nZ: number; zK: Uint8Array; zS: Float32Array; zSh: Uint8Array; zX: Float32Array; zZ: Float32Array;
   zR: Float32Array; zH: Float32Array; zHZ: Float32Array; zY: Float32Array; zF0: Float32Array; zF1: Float32Array;
   zSu: Float32Array; zG: Uint8Array; zT: Int8Array; zSo: Uint8Array;
+  /** (round 4) a current in the zone (a water zone's flow, or a current zone: DRIFT); a wind zone's gusts (everyS min, max, forS) and LIFE's
+   *  gust clock on sim time (the next gust's start, the current gust's end: B19, HOLD_ON) */
+  zFl: Uint8Array; zGa: Float32Array; zGb: Float32Array; zGf: Float32Array; zGn: Float64Array; zGe: Float64Array;
+  /** a sky thing (ThingDef p.sky: the Moon Dish; GAZE_SKY), a marking patch (PatchDef.mark), the ground's mark and whether it is snow */
+  tSk: Uint8Array; pMk: Uint8Array; gMk: number; snG: number;
   nP: number; pS: Uint8Array; pX: Float32Array; pZ: Float32Array; pR: Float32Array; pH: Float32Array;
   pHZ: Float32Array; pY: Float32Array; pN: Uint8Array; pI: Uint8Array; pT: Int8Array; pSa: Uint8Array;
   /** Home's home slots (lifeSetHome, D-87): NaN = none */
@@ -86,6 +91,9 @@ export interface LifeWorld {
   zSe: Uint16Array; zIT: Float64Array;
   rK: Int16Array; rN: Uint8Array; rC: Float64Array;
   iWT: Float64Array; aT1: Float64Array; pT2: Float64Array; pA: Uint8Array;
+  /** (round 4) since when FLOAT's and WADE's own conditions have held without a break (LIFE 4.2's "for 1 s" is the body's state, not the
+   *  zone entry: a hop in a puddle is not a float) */
+  fT: Float64Array; wdT: Float64Array;
   lJT: Float64Array; lNT: Float64Array; fPT: Float64Array;
   ex: Uint8Array; eA: Float32Array; sqS: Float32Array; pK: Float32Array;
   gK: Uint8Array;
@@ -103,11 +111,16 @@ export interface LifeWorld {
    *  once" (it came out, arrived or was cut inside a zone: no crossing needed, 3.1) */
   zW: Float32Array; zC: Float32Array; zWe: Float32Array; zWK: Int8Array; zCK: Int8Array; zWK1: Int8Array; zWK2: Int8Array;
   zUK: Int8Array; b1: Int8Array; eAO: Uint8Array; oN: Int8Array; oS: Uint8Array;
+  /** (round 4) the ice patch and the marking patch under it (-1 none), the current zone at its centre (-1); a glide's and a drift's distance
+   *  so far (m), since when it has been idle by a sky thing, and the start of the last gust it held on in */
+  oI: Int8Array; oM: Int8Array; zDK: Int8Array; gDs: Float32Array; dDs: Float32Array; skT: Float64Array; gHo: Float64Array;
   /** the behaviour's score when it started (the running one keeps +0.15), the arrival due (B09), the shy arrival's end */
   bSc: Float32Array; aP: Uint8Array; sU: Float64Array; pWT: Float64Array;
   /** per-call bookkeeping of the player's touch and landings, and the pending one-shot behaviours */
   aD: Uint8Array; wD: Int8Array; cD: Uint8Array; hD: Uint8Array; lT1: Float64Array; aC: Uint8Array;
   aPe: Uint8Array; nTa: Int16Array; uS: Uint8Array; rP: Uint8Array; uV: Uint8Array;
+  /** (round 4) waiting in B04's first phase for a mover token (a B03 wander does not take the token from it) */
+  tw: Uint8Array;
   /** per place-local thing: the last squishy that used it and when (B16's "another squishy took the ball") */
   tU: Int8Array; tUT: Float64Array;
   /** lifeAddLook's REACT events wait here for the next lifeStep (it has no event list): slot, REACT kind, thing */
@@ -130,6 +143,8 @@ export interface LifeWorld {
   cC: number; sD: Uint8Array;
   /* per-call */
   mPr: number;
+  /** lifeThingTap (round 4): the place-local thing whose tapped tune plays until w.f[F.TUNE_U] (the fire puff, a chime row); -1 none */
+  tnK: number;
   rOL: Int8Array; tPX1: Float32Array; tPZ1: Float32Array; tPS: Float32Array; tMT: Float64Array;
   bT1: Float64Array; bW: Int8Array; movers: number; nO: number;
   /* intents bookkeeping */
@@ -154,6 +169,8 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     nZ: 0, zK: u8(MAX_ZONES), zS: f32(MAX_ZONES), zSh: u8(MAX_ZONES), zX: f32(MAX_ZONES), zZ: f32(MAX_ZONES),
     zR: f32(MAX_ZONES), zH: f32(MAX_ZONES), zHZ: f32(MAX_ZONES), zY: f32(MAX_ZONES), zF0: f32(MAX_ZONES), zF1: f32(MAX_ZONES),
     zSu: f32(MAX_ZONES), zG: u8(MAX_ZONES), zT: i8(MAX_ZONES), zSo: u8(MAX_ZONES),
+    zFl: u8(MAX_ZONES), zGa: f32(MAX_ZONES), zGb: f32(MAX_ZONES), zGf: f32(MAX_ZONES), zGn: new Float64Array(MAX_ZONES).fill(1e9), zGe: new Float64Array(MAX_ZONES).fill(-1e9),
+    tSk: u8(T), pMk: u8(MAX_PATCHES), gMk: 0, snG: 0,
     nP: 0, pS: u8(MAX_PATCHES), pX: f32(MAX_PATCHES), pZ: f32(MAX_PATCHES), pR: f32(MAX_PATCHES), pH: f32(MAX_PATCHES),
     pHZ: f32(MAX_PATCHES), pY: f32(MAX_PATCHES), pN: u8(MAX_PATCHES), pI: u8(MAX_PATCHES), pT: i8(MAX_PATCHES), pSa: u8(MAX_PATCHES),
     hX: f32(n).fill(NaN), hZ: f32(n).fill(NaN),
@@ -170,7 +187,7 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     sT: new Uint32Array(n * 2), sC: new Uint16Array(n), nT: nanF64(n * 48), 
     zSe: new Uint16Array(n), zIT: nanF64(n * MAX_ZONES),
     rK: new Int16Array(n * 48).fill(-1), rN: u8(n), rC: nanF64(n * 24),
-    iWT: nanF64(n), aT1: nanF64(n), pT2: nanF64(n), pA: u8(n),
+    iWT: nanF64(n), aT1: nanF64(n), pT2: nanF64(n), pA: u8(n), fT: nanF64(n), wdT: nanF64(n),
     lJT: nanF64(n), lNT: nanF64(n), fPT: nanF64(n),
     ex: u8(n), eA: f32(n), sqS: f32(n).fill(1), pK: f32(n * 4), gK: u8(n),
     lET: nanF64(n), lEI: u8(n), iT: nanF64(n * 25),
@@ -182,9 +199,10 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     moo: i8(n).fill(-1),
     zW: f32(n), zC: f32(n), zWe: f32(n), zWK: i8(n).fill(-1), zCK: i8(n).fill(-1), zWK1: i8(n).fill(-1), zWK2: i8(n).fill(-1),
     zUK: i8(n).fill(-1), b1: i8(n), eAO: u8(n), oN: i8(n).fill(-1), oS: u8(n),
+    oI: i8(n).fill(-1), oM: i8(n).fill(-1), zDK: i8(n).fill(-1), gDs: f32(n), dDs: f32(n), skT: nanF64(n), gHo: nanF64(n),
     bSc: f32(n), aP: u8(n), sU: nanF64(n), pWT: nanF64(n),
     aD: u8(n), wD: i8(n).fill(-1), cD: u8(n), hD: u8(n), lT1: nanF64(n), aC: u8(n),
-    aPe: u8(n), nTa: new Int16Array(n).fill(-1), uS: u8(n), rP: u8(n), uV: u8(n),
+    aPe: u8(n), nTa: new Int16Array(n).fill(-1), uS: u8(n), rP: u8(n), uV: u8(n), tw: u8(n),
     tU: i8(MAX_THINGS).fill(-1), tUT: nanF64(MAX_THINGS),
     pN1: 0, pSl: i8(16), pKi: u8(16), pTh: new Int16Array(16),
     mK: u8(MAX_MOMENTS), mN: u8(MAX_MOMENTS), mM: i8(MAX_MOMENTS * MAX_MEMBERS).fill(-1), mT0: f64(MAX_MOMENTS), mE: f64(MAX_MOMENTS),
@@ -194,14 +212,14 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     pUT: nanF64(n), 
     ow: new Uint32Array(2), oP: 1, fK: new Uint32Array(4), tKi: 0, fr: new Uint32Array(128), hR: 0,
     fPD: 0, fWD: 0, fWP: 0, fWS: -1, fWDe: 0, pO: 0,
-    cC: -1, sD: u8(n), mPr: 0,
+    cC: -1, sD: u8(n), mPr: 0, tnK: -1,
     rOL: i8(T).fill(-1), tPX1: f32(T).fill(NaN), tPZ1: f32(T).fill(NaN), tPS: f32(T).fill(NaN), tMT: nanF64(T),
     bT1: nanF64(n), bW: i8(n).fill(-1), movers: 0, nO: 0,
     pCh: u8(n), phh: f32(PHRASE_CAP * 16), pN2: u8(PHRASE_CAP), pHe: 0,
     f: f64(24),
     att: createAttention(),
   };
-  w.f[F.LAST_T] = NaN; w.f[F.T0] = NaN; w.f[F.MUSIC_ON] = -1e9; w.f[F.NEW_WISH] = -1e9; w.f[F.SONG] = -1e9;
+  w.f[F.LAST_T] = NaN; w.f[F.T0] = NaN; w.f[F.MUSIC_ON] = -1e9; w.f[F.NEW_WISH] = -1e9; w.f[F.SONG] = -1e9; w.f[F.TUNE_U] = -1e9;
   return w;
 }
 
@@ -240,6 +258,7 @@ export function copyPlace(w: LifeWorld, def: PlaceDef, layout: number): void {
     } else { w.tWX[k] = NaN; w.tWZ[k] = NaN; }
     w.tR[k] = t.p.rider ?? 0; w.tRi[k] = t.ride ? 1 : 0;
     w.tSw[k] = t.switch ? SWITCH[t.switch] : 0;
+    w.tSk[k] = (t.p as { sky?: number }).sky ? 1 : 0;
     w.tI[k] = t.icon; w.tV[k] = t.verb; w.tK[k] = KIND_OF_ICON[t.icon] ?? 0;
     w.tFN[k] = (sp ? sp.fromN : undefined) ?? t.fromN ?? 0;
     w.tZo[k] = -1; w.tPa[k] = -1;
@@ -251,15 +270,18 @@ export function copyPlace(w: LifeWorld, def: PlaceDef, layout: number): void {
     w.zX[k] = a.x * sc; w.zZ[k] = a.z * sc; w.zR[k] = a.r ?? 0; w.zH[k] = a.hx ?? 0; w.zHZ[k] = a.hz ?? 0; w.zY[k] = a.yaw ?? 0;
     w.zF0[k] = z.falloff ? z.falloff[0] : -1; w.zF1[k] = z.falloff ? z.falloff[1] : 1;
     w.zSu[k] = z.surfaceY ?? 0; w.zG[k] = z.glow ? 1 : 0; w.zSo[k] = z.shower ? 1 : 0;
+    w.zFl[k] = z.flow && (z.flow[0] !== 0 || z.flow[1] !== 0) ? 1 : 0;
+    w.zGa[k] = z.gust ? z.gust.everyS[0] : 0; w.zGb[k] = z.gust ? z.gust.everyS[1] : 0; w.zGf[k] = z.gust ? z.gust.forS : 0;
     w.zT[k] = -1;
     for (let t = 0; t < nt; t++) if (ownsArea(def.things[t].zone, z.id)) { w.zT[k] = t; if (w.tZo[t] < 0) w.tZo[t] = k; break; }
   }
+  w.gMk = def.ground.mark ? 1 : 0; w.snG = def.weather === 'snow' ? 1 : 0; // (round 4) Frostbell's snowy ground: the snow look rises on it while still
   const np = Math.min(MAX_PATCHES, def.patches.length); w.nP = np;
   for (let k = 0; k < np; k++) {
     const p = def.patches[k], a = tall ? tall.patches[k] : p;
     w.pS[k] = a.shape === 'disc' ? 0 : 1; w.pX[k] = a.x * sc; w.pZ[k] = a.z * sc; w.pR[k] = (a.r ?? 0) * (def.unit === 'slot' ? 1 : 1);
     w.pH[k] = a.hx ?? 0; w.pHZ[k] = a.hz ?? 0; w.pY[k] = a.yaw ?? 0;
-    w.pN[k] = p.nap ? 1 : 0; w.pI[k] = p.ice ? 1 : 0; w.pSa[k] = p.id.indexOf('sand') >= 0 ? 1 : 0;
+    w.pN[k] = p.nap ? 1 : 0; w.pI[k] = p.ice ? 1 : 0; w.pSa[k] = p.id.indexOf('sand') >= 0 ? 1 : 0; w.pMk[k] = p.mark ? 1 : 0;
     w.pT[k] = -1;
     for (let t = 0; t < nt; t++) if (ownsArea(def.things[t].patch, p.id)) { w.pT[k] = t; if (w.tPa[t] < 0) w.tPa[t] = k; break; }
   }
@@ -342,6 +364,26 @@ export function freeSpot(w: LifeWorld, s: LifeSnapshot, i: number): boolean { re
 export function keepMm(s: LifeSnapshot, i: number): number { return s.r[i] + 0.05 > 0.4 ? ((s.r[i] + 0.05) * 1000) | 0 : 400; }
 /** The shrink R + 0.2 m of a free target for character i (mm). */
 export function shrinkMm(s: LifeSnapshot, i: number): number { return ((s.r[i] + 0.2) * 1000) | 0; }
+
+/* ───────────────────────────── the gust clock (round 4: B19 and HOLD_ON in real places) ───────────────────────────── */
+
+/** LIFE's own gust clock on sim time for every wind zone with gust data (PLACES 2.2: "gusts by data", e.g. the Night Breeze every 6..10 s
+ *  for 2.5 s): deterministic from the world's seed, the visit and the zone (no host clock exists for it: the shell, physics and audio each
+ *  had none or their own; they can follow this one through lifeGustOn). Advanced once per lifeStep; allocates nothing. */
+export function gustStep(w: LifeWorld, t: number): void {
+  for (let k = 0; k < w.nZ; k++) {
+    if (!(w.zGf[k] > 0)) continue;
+    if (w.zGn[k] >= 1e8) gustNext(w, k, t);
+    for (let n = 0; n < 8 && t >= w.zGn[k]; n++) { w.zGe[k] = w.zGn[k] + w.zGf[k]; gustNext(w, k, w.zGn[k]); }
+  }
+}
+/** Zone k's next gust start after `from`: from + a draw in its everyS range (at least its gust length), from a hash of seed, visit, zone, time. */
+function gustNext(w: LifeWorld, k: number, from: number): void {
+  let h = (w.seed ^ Math.imul(w.visit + 1, 0x9e3779b1) ^ Math.imul(k + 1, 0x85ebca6b) ^ ((from * 1000) | 0)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d); h = Math.imul(h ^ (h >>> 15), 0x846ca68b); h = (h ^ (h >>> 16)) >>> 0;
+  const gap = w.zGa[k] + (w.zGb[k] - w.zGa[k]) * (h / 4294967296);
+  w.zGn[k] = from + (gap > w.zGf[k] ? gap : w.zGf[k]);
+}
 
 /* ───────────────────────────── randomness (LIFE 11: one stream per character, in a Uint32Array) ───────────────────────────── */
 

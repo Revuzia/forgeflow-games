@@ -50,6 +50,8 @@ export interface ShellDevApi {
   paused(): boolean;
   /** the render lane's dev readout when the stage offers one (createStageDev().info): bodies, capsule, calm, ceremony, ... */
   stageInfo(): Record<string, unknown> | null;
+  /** PLAYGROUND (PG_SHELL round 4, dev only): the stage object itself (its dev members: scene, homeKit), for a harness's look at what is drawn */
+  stageObj(): unknown;
   /** SHELL-2b: the practice shelf as the harness checks it */
   hoardState(): { owned: number; items: Array<{ id: string; species: string; name: string; tier: string; seen: boolean; fav: boolean; locked: boolean; origin: string }>; restockClaimed: boolean; tasks: Array<{ id: string; text: string; progress: number; target: number; done: boolean; claimed: boolean }>; mergesToday: number; credits: number; tidyPairs: number; tidyPairsAll: number };
   /** the toy tray and the Cut tool: the tool in hand, whether the physics can cut, the pieces and their shares of the whole */
@@ -244,6 +246,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     },
     pauseReasons: () => [...game.pauseReasons],
     paused: () => game.paused,
+    stageObj: () => game.stage,
     stageInfo() {
       try { const i = (game.stage as unknown as { info?: Record<string, unknown> }).info; return i ? JSON.parse(JSON.stringify(i)) as Record<string, unknown> : null; } catch { return null; }
     },
@@ -495,7 +498,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     // PLAYGROUND (contracts.ts DebugHook; dev only): the LIFE host's state, the journal, a trip by the Travel sheet's own path
     life: () => (game.life ? game.life.debug() : null),
     quests: () => { const h = game.life as LifeHostApi | null; const v = h ? h.journal() : null; return v ? { stamps: v.stamps, places: v.places, firstWish: v.firstWish, wisher: v.wisher, keepsakes: v.keepsakes, quests: v.quests.filter((q) => q.shown).map((q) => ({ id: q.id, done: q.done, open: q.open, have: q.have, need: q.need })), wishes: v.wishes, gifts: v.gifts } : null; },
-    travel: (place) => { const h = game.life as LifeHostApi | null; return h ? h.travel(String(place)) : Promise.resolve(false); },
+    travel: (place, any) => { const h = game.life as LifeHostApi | null; return h ? h.travel(String(place), any === true) : Promise.resolve(false); },
     bodyScreen() {
       const d = game.host.bodyScreen();
       return d ? { x: d.x / vp().w, y: d.y / vp().h, rPx: d.r } : null;

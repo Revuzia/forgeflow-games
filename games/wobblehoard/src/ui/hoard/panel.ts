@@ -69,7 +69,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
   const button = h('button', { class: 'hoard-btn', attrs: { type: 'button', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' } },
     kit.glyph('hoard', 'icon hoard-glyph'), h('span', { class: 'hoard-btn-text' }, h('span', { class: 'hoard-btn-word', text: 'Hoard' }), btnCount), btnDot);
   button.addEventListener('click', () => ui.toggle());
-  const matChip = h('button', { class: 'mat-chip', attrs: { type: 'button', hidden: '' } });
+  const matChip = h('button', { class: 'mat-chip k-btn k-btn--sm', attrs: { type: 'button', hidden: '' } });   // (a kit button: the PC line's chip had no kit class and drew as the browser's grey box, PG_SHELL R4)
   matChip.addEventListener('click', () => { const n = env.mat.count - 1; env.mat.clear(); env.announce(n === 1 ? 'Put back on the shelf.' : `${n} put back on the shelf.`); });
 
   /* ─────────────── the panel ─────────────── */
@@ -161,7 +161,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     const out = env.mat.count - 1;
     matChip.hidden = out < 1;
     matChip.textContent = '';
-    matChip.append(h('span', { text: 'Put back' }), h('span', { class: 'mat-chip-n', text: String(out) }));
+    matChip.append(h('span', { class: 'k-btn-label', text: 'Put back' }), h('span', { class: 'mat-chip-n', text: String(out) }));
     matChip.setAttribute('aria-label', `Put the ${out === 1 ? 'squishy' : `${out} squishies`} you brought out back on the shelf`);
   }
 
@@ -380,7 +380,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
       copies.forEach((it, i) => {
         const now = env.now();
         const locked = it.lockedUntil !== null && it.lockedUntil > now;
-        const tags = [it.id === s.keeper ? 'Keeper' : '', it.fav ? 'Hearted' : '', locked ? hoursLeft((it.lockedUntil ?? 0) - now) : '', originCopy(it.origin), !it.seen ? 'New' : '', env.mat.has(it.id) ? 'On the mat' : ''].filter(Boolean);
+        const tags = [it.id === s.keeper ? 'Keeper' : '', it.fav ? 'Hearted' : '', locked ? hoursLeft((it.lockedUntil ?? 0) - now) : '', originCopy(it.origin, it.id), !it.seen ? 'New' : '', env.mat.has(it.id) ? 'On the mat' : ''].filter(Boolean);
         const on = it.id === card!.selected;
         const pills = h('span', { class: 'copy-tags' });
         for (const t of tags) pills.append(h('span', { class: t === 'Keeper' ? 'copy-tag keeper' : 'copy-tag', text: t }));

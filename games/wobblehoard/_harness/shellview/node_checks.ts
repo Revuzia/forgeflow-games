@@ -1774,6 +1774,17 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   await stepA(720);
   check('PLAYGROUND FN-01 (real body): a held squeeze is H1; 6 s after the player lets go Dollop plays by itself (FIRST_PLAY, a USE by SELF at Home: H2); the Felt Ball is shown with its collider',
     done().includes('H1') && done().includes('H2') && dbg().firstPlaySent && dbg().things[0].shown && dbg().things[0].parked === false, JSON.stringify({ done: done(), ball: dbg().things[0] }));
+  // R4: with the host attached, a drag by ANY pointer id still reaches the gesture machine (the dev hook's pointers are NEGATIVE, -1 for its pointer 0; round 4's
+  // first hand-slot version used -1 as "free" and swallowed that pointer's moves: no squishy could be lifted through the dev hook)
+  {
+    let lifted = false;
+    const p0 = app.input.screenCentre()!;
+    app.input.pointerDown({ id: -1, x: p0.x + 40, y: p0.y, type: 'touch' }); step(7);
+    for (let i = 1; i <= 24; i++) { app.input.pointerMove({ id: -1, x: p0.x + 40 + i * 4, y: p0.y - i * 16, type: 'touch' }); step(2); if (app.body.metrics.carried) lifted = true; }
+    const owned = (host as { holds?(id: number): boolean }).holds?.(-1) === true;
+    app.input.pointerUp({ id: -1, x: p0.x + 136, y: p0.y - 384, type: 'touch' }); await stepA(180);
+    check('PLAYGROUND the host never takes a pointer it does not hold: a drag by pointer id -1 (the dev hook\'s pointer 0) far up out of the squishy lifts it (metrics.carried), as without the host', lifted && !owned, `carried ${lifted}, host holds -1: ${owned}`);
+  }
   // the player's taps on the Felt Ball (one squishy out: nothing in front of it): three flicks roll it (H9)
   const b0 = { ...dbg().things[0] };
   for (let k = 0; k < 3; k++) { await tap(thingPt(0)); await stepA(120); }
@@ -1810,6 +1821,13 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check('PLAYGROUND travel: the first wish opens Hearthlog ("Hearthlog Cabin is open. Find it in Places."); the trip arrives ("You are at Hearthlog Cabin.": VISIT -> H8, C1) with the kettle armed 45..90 s ahead',
     okC && dc.place === 1 && said.includes('Hearthlog Cabin is open. Find it in Places.') && said.includes('You are at Hearthlog Cabin.') && done().includes('H8') && done().includes('C1')
       && dc.tune.kettle >= 0 && dc.tune.kettleNext !== null && dc.tune.kettleNext - app.simTime >= 40 && dc.tune.kettleNext - app.simTime <= 91, JSON.stringify({ tune: dc.tune, done: done() }));
+  {
+    // R4: Home's things leave with Home (the stage draws a shown Home thing at the bound prop of ITS index: in a place it followed the place's things 0..2)
+    const last = new Map<number, boolean>(); for (const c of log.of('setHomeThing')) last.set(c.args[0] as number, c.args[1] as boolean);
+    const shownBefore = [...last.keys()];
+    check('PLAYGROUND Home\'s things leave with Home: in the cabin every Home thing the stage was showing is parked (setHomeThing false), none follows the cabin\'s props',
+      shownBefore.length >= 3 && [...last.values()].every((v) => v === false), JSON.stringify([...last.entries()]));
+  }
   check('PLAYGROUND stamp moments outside Home carry their titles (journal_text, loaded lazily): "New stamp: Come in from the snow" (C1)', said.some((t) => t === 'MOMENT New stamp: Come in from the snow'), JSON.stringify(said.filter((t) => t.startsWith('MOMENT')).slice(-3)));
   await stepA(Math.ceil(((dc.tune.kettleNext ?? 0) - app.simTime + 1) * 60));
   check('PLAYGROUND the kettle whistles by itself (audio.musicBox tune 1 for its one bar, the steam puff thingFx)', log.of('a.musicBox').some((c) => (c.args[0] as { on: boolean; tune?: number }).on && (c.args[0] as { tune?: number }).tune === 1) && log.of('thingFx').length > 0,
@@ -1817,6 +1835,63 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   const fx0 = log.of('thingFx').length;
   await tap(thingPt(0, 0.2));
   check('PLAYGROUND thing taps: a click on the cabin\'s fireplace switches it (its puff; a USE SWITCH by PLAYER, C8\'s first clause)', dbg().tap === 'hearth' && log.of('thingFx').length > fx0, dbg().tap);
+  // D-95 (revised, PG_SHELL round 4): the AUTO control's host side (ui/thingAuto.ts places one chip per hinge ride from autoThings) and the hand on the seat
+  {
+    const SWING = 3;   // the cabin's things: hearth 0, rockerboard 1, yarnball 2, pillowswing 3, snugbasket 4, kettle 5
+    const seatX = (): number => { if (!bound.poses || !bound.thing) return NaN; for (let p = 0; p < bound.count; p++) if (bound.thing[p] === SWING) return bound.poses[p * 8]; return NaN; };
+    const range = async (sec: number): Promise<number> => { let lo = Infinity, hi = -Infinity; for (let i = 0; i < sec * 6; i++) { await stepA(10); const x = seatX(); lo = Math.min(lo, x); hi = Math.max(hi, x); } return hi - lo; };
+    const rows = host.autoThings();
+    const api = (host.debug() as { auto: { api: boolean } }).auto.api;
+    const sw = rows.find((r) => r.id === 'pillowswing'), rk = rows.find((r) => r.id === 'rockerboard');
+    const propCalls: Array<{ kind: number; key?: number; held?: number }> = [];   // (copies: the host reuses one object per call kind)
+    const prop0 = audio.prop; audio.prop = (q: { kind: number; key?: number; held?: number }) => { propCalls.push({ ...q }); };
+    if (!api) check('PLAYGROUND D-95 FALLBACK (physics without setAuto / grabProp): no AUTO control is offered and the seat keeps round 3\'s tap', rows.length === 0, JSON.stringify(rows));
+    else {
+      await stepA(600);   // (whatever the arrival stirred dies down first)
+      const r0 = await range(3);
+      const okOn = !!sw && host.setThingAuto(sw.k, true);
+      await stepA(120);
+      const r1 = await range(10);
+      const onRow = host.autoThings().find((r) => r.id === 'pillowswing');
+      const okOff = !!sw && host.setThingAuto(sw.k, false);
+      await stepA(1800);
+      const r2 = await range(3);
+      check('PLAYGROUND D-95 AUTO (the player\'s toggle): the cabin offers one control each for the Pillow Swing and the Rocker Board, both OFF by default and on screen; AUTO on keeps the resting seat swinging a steady arc by itself; AUTO off lets it die down by its own damping',
+        !!sw && !!rk && !sw.on && !rk.on && sw.x > 0 && sw.x < W && sw.y > 0 && sw.y < H && okOn && onRow?.on === true && r0 < 0.02 && r1 > 0.25 && okOff && r2 < 0.25 * r1,
+        `seat x range at rest ${r0.toFixed(3)} m, AUTO on ${r1.toFixed(3)} m, 30 s after off ${r2.toFixed(3)} m; chips ${JSON.stringify(rows.map((r) => [r.id, r.on, Math.round(r.x), Math.round(r.y)]))}`);
+      // the hand: a mouse press on the seat takes it (the gesture machine never sees the press), a drag pulls it, the release lets it swing on (AUTO off: it dies down)
+      const pt = thingPt(SWING);
+      const x0 = seatX();
+      if (pt) app.input.pointerDown({ id: 9, x: pt.x, y: pt.y, type: 'mouse', button: 0 });
+      await stepA(2);
+      const took = dbg().tap, owned = app.input.isDown(9);
+      for (let k = 1; k <= 8 && pt; k++) { app.input.pointerMove({ id: 9, x: pt.x + k * 14, y: pt.y, type: 'mouse' }); await stepA(4); }
+      const x1 = seatX();
+      if (pt) app.input.pointerUp({ id: 9, x: pt.x + 112, y: pt.y, type: 'mouse', button: 0 });
+      const r3 = await range(2);
+      check('PLAYGROUND D-95 the hand on the seat: a mouse press on the Pillow Swing\'s seat is the host\'s (not a camera drag), a drag to the right pulls the seat that way, and on release it swings on from the hand',
+        took === 'hand:pillowswing' && owned && x1 - x0 > 0.08 && r3 > 0.05 && !app.input.isDown(9), `took ${took}, owned ${owned}, seat ${x0.toFixed(3)} -> ${x1.toFixed(3)} m, then a ${r3.toFixed(3)} m range in 2 s`);
+      // its creak is a held voice (key = the prop, held = speed) while it moves
+      const creaks = propCalls.filter((c) => c.kind === 2 && typeof c.held === 'number' && typeof c.key === 'number');
+      check('PLAYGROUND held voices (PG_AUDIO): a moving hinge creaks as a held voice (prop kind creak with key and held 0..1) and stops with held 0', creaks.some((c) => (c.held ?? 0) > 0.05) && creaks.some((c) => c.held === 0),
+        `${creaks.length} creak calls, largest held ${Math.max(0, ...creaks.map((c) => c.held ?? 0)).toFixed(2)}`);
+    }
+    audio.prop = prop0;
+  }
+  // R4 (5): the S2 places through the dev path only (data/places.ts says shipped: false, so the Travel sheet's path refuses them): each place's data loads,
+  // the party arrives in it, its things that physics builds are bound with colliders, and the next trip leaves it
+  {
+    const rows: Array<Record<string, unknown>> = [];
+    for (const id of ['ripple', 'frostbell', 'rainleaf']) {
+      const shut = await host.travel(id);
+      const ok = await host.travel(id, true);
+      await stepA(60);
+      const d = dbg();
+      rows.push({ id, shut, ok, place: d.place, chars: d.chars.length, things: d.things.length, bound: d.things.filter((t) => t.parked === false).length, noProp: d.things.filter((t) => t.parked === null).map((t) => t.id) });
+    }
+    check('PLAYGROUND S2 by the dev path (not shipped: the sheet\'s path refuses each): Ripple Shore, Frostbell Ridge and Rainleaf Garden load, the party arrives in each, the things physics builds are bound (the ones it does not build are listed)',
+      rows.every((r) => r.shut === false && r.ok === true && r.chars === app.mat.count && (r.bound as number) >= 3), JSON.stringify(rows));
+  }
   const okH = await host.travel('home');
   await stepA(60);
   const L = (st.matLayout as (n: number) => V3[])(app.mat.count), xs = app.bodies.extras.filter((x) => !x.piece);

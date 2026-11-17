@@ -233,7 +233,11 @@ export async function boot(): Promise<(() => void) | null> {
         reducedMotion: () => prefersReducedMotion(),
       });
       // (a tapped wish reads its card's line, from the screens chunk on demand: QUESTS 8 / 15)
-      if (host) { const taps = m.attachBubbleTaps(root, canvas, host, (t) => ui.announcer.say(t), (sp, k, t) => import('../ui/later-journal.ts').then((j) => j.wishLine(sp, k, t))); lifeUiOff = () => taps.destroy(); }
+      if (host) {
+        const taps = m.attachBubbleTaps(root, canvas, host, (t) => ui.announcer.say(t), (sp, k, t) => import('../ui/later-journal.ts').then((j) => j.wishLine(sp, k, t)));
+        const auto = m.attachThingAuto(root, canvas, host, (t) => ui.announcer.say(t));   // (D-95 revised: the swing's and the rocker's AUTO chips)
+        lifeUiOff = () => { taps.destroy(); auto.destroy(); };
+      }
       ui.lifeAttached();
     }).catch((e: unknown) => {
       console.error(e);

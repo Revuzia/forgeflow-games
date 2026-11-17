@@ -111,6 +111,19 @@ export function emitScoot(w: LifeWorld, out: LifeIntents, i: number, speedMilli:
   return true;
 }
 
+/** (round 4) A glide (LIFE 5.1): one nudge of speedMilli / 1000 m/s (0.6..1.0) toward the direction (w.f[F.X2], w.f[F.Z2]) on a patch with
+ *  grip under 0.5; friction and the place's drag carry it (physics). The caller holds a mover token. False when motion is not allowed. */
+export function emitGlide(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, speedMilli: number): boolean {
+  if (!motionAllowed(w, s, i)) return false;
+  // the walk's scoot driver lets go first (a SETTLE; the mover token stays with the glide), or it would pull the body back to its target
+  const st = pushIntent(w, out, INTENT.SETTLE, i);
+  if (st >= 0) out.a[st] = 0;
+  const k = pushIntent(w, out, INTENT.GLIDE, i);
+  if (k < 0) return false;
+  out.a[k] = w.f[F.X2] * speedMilli * 0.001; out.b[k] = w.f[F.Z2] * speedMilli * 0.001;
+  return true;
+}
+
 /** A hop of character i toward the direction (w.f[F.X2], w.f[F.Z2]) (unit or zero) at horizontal speed hMilli / 1000 m/s; vy from its gait,
  *  x scaleMilli / 1000 (pieces x 0.8, Calm x 0.6). False (no intent) when its family never hops, its memory is busy, or within its hop gap. */
 export function emitHop(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, hMilli: number, scaleMilli: number): boolean {

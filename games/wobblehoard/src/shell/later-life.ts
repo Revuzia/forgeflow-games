@@ -36,10 +36,10 @@ import type { LifeWorld } from '../life/step.ts';
 import { buildPropWorld } from '../physics/props.ts';
 import type { PropWorld } from '../physics/props.ts';
 import { PLACE as HOME } from '../data/place_home.ts';
-import { PLACE_INFO, THING_IDS, THING_KINDS, loadPlaceDef, MECH } from '../data/places.ts';
+import { PLACE_INFO, THING_IDS, THING_KINDS, loadPlaceDef, MECH, PROP_SOUND, ZONE } from '../data/places.ts';
 import type { PlaceDef, PlaceId, ThingDef } from '../data/places.ts';
 import { INTENT, LIFE_FLAG, LIFE_EV, LOOK, SCRIPT, TOUCH, USE_VERB, WISH_KIND, SPECIES_LIFE } from '../data/life.ts';
-import { EV, BY, WISH_STATE, UI_KIND, EV_FLAG, QUESTS } from '../data/quests.ts';
+import { EV, BY, WISH_STATE, UI_KIND, EV_FLAG, QUESTS, CHAPTERS } from '../data/quests.ts';
 import { CATALOG, speciesIdx, familyOf } from '../data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 import { attachJournal } from '../collection/journal_store.ts';
@@ -155,6 +155,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const creatureP = { phrase: phraseBuf, n: 0, flavour: 0, register: 0, pitch: 1, pan: 0, level: 1, group: 1, echo: false, at: 0, sing: false };
   const thudP = { kind: 0, intensity: 0, pitch: 1, pan: 0 };
   const propP = { kind: 0, intensity: 0, note: 0, pan: 0, auto: true, size: 0.22 };
+  // a held voice (PG_AUDIO: a creaking rocker or swing, a rolling ball): every frame while it moves, then once at 0 (its own object: `key` + `held` mark it held)
+  const heldP = { kind: 0, intensity: 0, pan: 0, auto: true, key: 0, held: 0, size: 0.22 };
+  const heldWas = new Float32Array(64);
+  const ballV = new Float64Array(3);
+  let coldPitch = 1;          // a cold place's voices sound a semitone lower (PG_AUDIO: x 2^(-1/12); Frostbell's whole-place cold)
+  let finaleOff = -1;         // sim time the place's finale light eases back (thingFx(-1, 2, 0)), -1 none
+  let playerTouchT = -1e9;    // the player's last tap or hand on a thing (a held voice by the player is not `auto`)
   const scr = new Float32Array(4);
   const looks = new Float32Array(6);
   const vis = new Float32Array(4);
@@ -289,9 +296,12 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   /** the party is inside a ceremony or coming back from one (11.3): the registry waits, so nobody is lifeRemoved / lifeAdded for it */
   const partyHeld = (): boolean => ceremonyOn || game.ceremonies.active || game.ceremonies.pending || restoreQ.length > 0;
   /** bring the registry in line with the bodies on the mat (allocates only when something changed: a squishy out or back, a cut, a join) */
+  let partySynced = false;       // the first sync (the party the host found at attach) is done: later wholes are brought out by the player
+  let cutSignalled = -1;         // the whole that got its CUT touch frame (LIFE 9: the touch comes before the whole is removed)
   function syncParty(): void {
     if (partyHeld() || !partyChanged()) return;
     const cutNow = game.cut.pieces > 1;
+    if (!cutNow) cutSignalled = -1;
     const playId = game.identity.itemId;
     // the bodies now (the play body first)
     const list: Array<{ b: SoftBodyLike; g: Genome; id: string | null; off: V3; piece: boolean }> = [{ b: bodies.body, g: game.identity.genome, id: playId, off: { x: 0, y: 0, z: 0 }, piece: cutNow }];
@@ -306,10 +316,15 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         const e = list.find((x) => !x.piece && x.id === c.itemId && slotOfBody(x.b) < 0);
         if (e) { rebind(i, e); continue; }
       }
-      if (cutNow && c.kind === 0 && c.itemId !== null && c.itemId === playId) wholeCut = i;   // the whole that was cut: its slot is its pieces' group key
+      if (cutNow && c.kind === 0 && c.itemId !== null && c.itemId === playId) {
+        // the whole that was cut: its slot is its pieces' group key. PG_LIFE (step.ts, LIFE 9): the whole first gets one frame with the CUT touch (the most
+        // curious other whole walks over to look), then it is removed and its pieces join (the registry waits that one frame)
+        if (cutSignalled !== i) { cutSignalled = i; c.touchKind = TOUCH.CUT; return; }
+        wholeCut = i;
+      }
       removeChar(i);
     }
-    if (wholeCut >= 0) cutGroup = wholeCut;
+    if (wholeCut >= 0) { cutGroup = wholeCut; cutSignalled = -1; }
     if (!cutNow && cutGroup >= 0) {
       // whole again: the pieces are gone (removed above); the fresh whole takes the group's slot back
       const g = cutGroup;
@@ -322,11 +337,15 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (e.piece && cutGroup >= 0) addChar(e.b, e.g, e.id, e.off, e.b === bodies.body ? 1 : 2, cutGroup);
       else {
         // a capsule's newcomer arrives NEW (B09: the shy arrival, and its hello within 5 s); in a place a squishy who joins stands at a free spawn spot
-        const i = addChar(e.b, e.g, e.id, e.off, 0, -1, e.id !== null && e.id === newcomerId);
+        const isNew = e.id !== null && e.id === newcomerId;
+        const i = addChar(e.b, e.g, e.id, e.off, 0, -1, isNew);
         if (i >= 0 && placeIdx !== 0 && !travelling) settleInPlace(i);
+        // QUESTS 4: one BRING per squishy the player brings out (the Hoard, a switch; the attach's own party and a capsule's newcomer, which CAPSULE records, are not)
+        if (i >= 0 && partySynced && !isNew) write(EV.BRING, 0, -1, chars[i].species, 255, 1, BY.PLAYER);
       }
     }
     newcomerId = null;
+    partySynced = true;
     afterPartyChange();
   }
   /** in a place: a squishy who came out (the Hoard, back from a ceremony) stands at the layout's spawn spot farthest from everyone else, at rest
@@ -342,6 +361,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (d > bd) { bd = d; best = k; }
     }
     place(chars[i], spawn[best][0], spawn[best][1]);
+    const c = chars[i], b = lay.bounds;
+    try { c.body!.setBounds?.(b.shape === 'disc' ? 0 : 1, b.x - c.offX, b.z - c.offZ, b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), b.shape === 'disc' ? 0 : (b.hz ?? 2.4), b.round ?? 0); } catch (e) { report(e); }
   }
   function addCharAt(slot: number, e: { b: SoftBodyLike; g: Genome; id: string | null; off: V3 }): void {
     // a fresh whole in a given (free) slot: take the lowest free one, then move it if needed (slots are LIFE keys only)
@@ -545,7 +566,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const n = lifePhrase(w, handle, phraseBuf);
     if (n <= 0) return;
     const sx = s.sx[i];
-    creatureP.n = n; creatureP.flavour = c.flavour; creatureP.register = register > 0 ? 1 : 0; creatureP.pitch = c.pitch;
+    creatureP.n = n; creatureP.flavour = c.flavour; creatureP.register = register > 0 ? 1 : 0; creatureP.pitch = c.pitch * coldPitch;
     creatureP.pan = sx === sx ? Math.max(-1, Math.min(1, (sx * 2 - 1) * 0.7)) : 0;
     creatureP.level = sx === sx ? Math.max(0.4, 1 - Math.hypot(sx - 0.5, s.sy[i] - 0.5)) : 0.5;
     creatureP.group = Math.max(1, Math.min(3, group | 0)); creatureP.at = 0;
@@ -585,8 +606,10 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         audio.autoThud(thudP);
       }
     } catch (x) { report(x); }
-    if (e.kind === 'bump' && i >= 0 && s.nBumps < 32) {
-      // FALLBACK for SoftEvent.other: the partner is the nearest other character to the contact point
+    if (e.kind === 'bump' && i >= 0 && s.nBumps < 32 && ((e as { prop?: number }).prop ?? -1) < 0) {
+      // the partner: physics' SoftEvent.other (its contactSlot = our slot) when it gives one; FALLBACK: the nearest other character to the contact point
+      const other = (e as { other?: number }).other;
+      if (typeof other === 'number' && other >= 0 && other < CAP && other !== i && chars[other].on) { s.bumpA[s.nBumps] = i; s.bumpB[s.nBumps] = other; s.nBumps++; return true; }
       let best = -1, bd = 1e9;
       for (let k = 0; k < CAP; k++) {
         if (k === i || !chars[k].on) continue;
@@ -686,10 +709,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // a scoot that has arrived: release the driver and re-home the corral there (FALLBACK setHome)
       if (c.scooting && Math.hypot(x - c.scootX, z - c.scootZ) < 0.05 && Math.hypot(c.vx, c.vz) < 0.02) endScoot(i);
     }
-    // FALLBACK for metrics.contacts: a touching pair of awake bodies adds 0.25 (LIFE 10.3)
+    // a touching pair of awake bodies adds 0.25 (LIFE 10.3): physics' metrics.contacts (a bit per contactSlot = our slot) when it gives them;
+    // FALLBACK: centres closer than r1 + r2 + 0.02 m
     for (let i = 0; i < CAP; i++) for (let j = i + 1; j < CAP; j++) {
       const a = chars[i], b = chars[j];
-      if (!a.on || !b.on || (s.flags[i] & LIFE_FLAG.ASLEEP) || (s.flags[j] & LIFE_FLAG.ASLEEP)) continue;
+      if (!a.on || !b.on || !a.body || !b.body || (s.flags[i] & LIFE_FLAG.ASLEEP) || (s.flags[j] & LIFE_FLAG.ASLEEP)) continue;
+      const ca = a.body.metrics.contacts, cb = b.body.metrics.contacts;
+      if (typeof ca === 'number' && typeof cb === 'number') { if (((ca >>> j) & 1) !== 0 || ((cb >>> i) & 1) !== 0) units += 0.25; continue; }
       const dx = a.lastX - b.lastX, dz = a.lastZ - b.lastZ, rr = a.r + b.r + 0.02;
       if (dx * dx + dz * dz < rr * rr) units += 0.25;
     }
@@ -795,6 +821,29 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       }
       if (cause === 2) continue;   // a weather strike is a sound only (QUESTS 4)
       if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.chime) write(EV.USE, td.verb, thingGlobal[th], chars[slot].species, 255, 1, BY.SELF, world.propPart[prop]);
+    }
+  }
+
+  /** the held voices of the place's moving things (PG_AUDIO): a hinge's creak (the rocker, the swing) and a ball's roll, `held` = speed 0..1 every frame
+   *  while it moves and once 0 when it stops; `auto` unless the player's hand holds it or the player tapped a thing in the last 2 s */
+  function heldVoices(): void {
+    if (!world || !audio.prop) return;
+    const W = world as PropWorld & { omega?(p: number): number };
+    let byPlayer = game.simTime - playerTouchT < 2;
+    for (let j = 0; j < 4; j++) if (handOn[j] === 1) byPlayer = true;
+    for (let k = 0; k < def.things.length; k++) {
+      const td = def.things[k], p = thingFirst[k];
+      if (p < 0 || p >= heldWas.length || (td.sound !== PROP_SOUND.creak && td.sound !== PROP_SOUND.ball)) continue;
+      if (placeIdx === 0 && homeShown[k] !== 1) continue;
+      let v = 0;
+      if (td.mech === MECH.ball) { if (W.ballVelocity(p, ballV)) v = Math.min(1, Math.hypot(ballV[0], ballV[2]) / 1.5); }
+      else if (typeof W.omega === 'function') { const o = W.omega(p); v = o === o ? Math.min(1, Math.abs(o) / 1.5) : 0; }
+      if (v < 0.03) v = 0;
+      if (v === 0 && heldWas[p] === 0) continue;
+      heldWas[p] = v;
+      heldP.kind = td.sound; heldP.intensity = v; heldP.held = v; heldP.key = p; heldP.size = td.mech === MECH.ball ? td.size[0] : 0.22;
+      heldP.auto = !byPlayer; heldP.pan = 0;
+      try { audio.prop(heldP); } catch (x) { report(x); }
     }
   }
 
@@ -937,6 +986,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (hit && hit.t < tThing) { tapWhy = 'body'; return false; }
     }
     tapWhy = def.things[th].id;
+    playerTouchT = game.simTime;
     const td = def.things[th], g = thingGlobal[th];
     const actor = nearestTo(pr[p * 8], pr[p * 8 + 2]);
     const sp = actor >= 0 ? chars[actor].species : 255;
@@ -952,6 +1002,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const zi = td.zone ? def.zones.findIndex((z) => z.id === td.zone) : -1;
       if (zi >= 0) world.setZoneOn(zi, world.zoneOn[zi] === 0);
       try { stage.thingFx?.(th, 1, 1); } catch { /* none */ }
+      // the fire's crackle puffs the bed (PG_AUDIO: prop({ kind: crackle }) for 5 s), only when the fire comes on
+      if (td.sound === PROP_SOUND.crackle && zi >= 0 && world.zoneOn[zi] !== 0 && audio.prop) { propP.kind = td.sound; propP.intensity = 1; propP.note = 0; propP.auto = false; propP.size = 0.22; propP.pan = 0; try { audio.prop(propP); } catch (x) { report(x); } }
       write(EV.USE, USE_VERB.SWITCH, g, sp, 255, 1, BY.PLAYER, 0);
       return true;
     }
@@ -976,6 +1028,83 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     return best;
   }
 
+  // ---- D-95 (revised, the owner 2026-11-17): a hinge ride (the swing, the rocker) dies down by itself after a push (unchanged); AUTO is the PLAYER'S
+  // toggle (a small control on the thing, ui/thingAuto.ts; off by default, never LIFE's or autonomy's) that keeps a gentle steady arc; a hand always
+  // wins: the player grabs the seat or board (here: grabAt / dragAt / dropAt, physics grabProp / dragPropRay / releaseProp) or the rider (the
+  // gesture machine's grab, as any squishy). FALLBACK (physics without setAuto / grabProp: PG_PHYS round 4 builds them): no AUTO control is shown and
+  // a press on the seat stays round 3's tap (a poke) or the camera's drag.
+  type HingeWorld = PropWorld & { setAuto?(thing: number, on: boolean): boolean; grabProp?(prop: number, x: number, y: number, z: number): boolean;
+    dragPropRay?(prop: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): boolean; releaseProp?(prop: number): void };
+  const autoWanted = new Set<string>();   // the rides the player set to AUTO this session (a trip rebuilds the world: re-applied on arrival)
+  const hingeRide = (td: ThingDef | undefined): boolean => !!td && (td.mech === MECH.swing || td.mech === MECH.seesaw);
+  const hasAuto = (): boolean => !!world && typeof (world as HingeWorld).setAuto === 'function';
+  function applyAuto(): void {
+    if (!hasAuto()) return;
+    for (let k = 0; k < def.things.length; k++) if (hingeRide(def.things[k])) { try { (world as HingeWorld).setAuto!(k, autoWanted.has(def.things[k].id)); } catch (e) { report(e); } }
+  }
+  // (a slot is in use by its own flag, never by a sentinel id: the dev hook's pointers have NEGATIVE ids, -1 for its pointer 0, and round 4's first
+  //  version kept -1 as "free", so it took every move of the dev hook's pointer 0 and no squishy could be lifted through it: snap-mat / cut-real / shift-pull)
+  const handOn = new Uint8Array(4), handId = new Int32Array(4), handProp = new Int16Array(4), handX = new Float32Array(4), handY = new Float32Array(4), handT = new Float64Array(4), handMoved = new Uint8Array(4);
+  const handSlot = (id: number): number => { for (let j = 0; j < 4; j++) if (handOn[j] === 1 && handId[j] === id) return j; return -1; };
+  const handFree = (): number => { for (let j = 0; j < 4; j++) if (handOn[j] === 0) return j; return -1; };
+  function dropAll(): boolean {
+    let any = false;
+    for (let j = 0; j < 4; j++) if (handOn[j] === 1) { any = true; handOn[j] = 0; try { (world as HingeWorld | null)?.releaseProp?.(handProp[j]); } catch { /* gone */ } }
+    return any;
+  }
+  function grabAt(id: number, x: number, y: number): boolean {
+    const W = world as HingeWorld | null;
+    if (!W || typeof W.grabProp !== 'function' || floatParked || s.quiet || game.tool !== 'hand' || handSlot(id) >= 0) return false;
+    const j = handFree();
+    if (j < 0) return false;
+    const cam = stage.camera;
+    if (!cam) return false;
+    try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
+    const n = pxToNdc(x, y, game.viewport), ray = cameraRay(cam, n.x, n.y);
+    const p = W.raycast(ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    const th = p >= 0 ? W.propThing[p] : -1;
+    if (th < 0 || !hingeRide(def.things[th]) || W.isParked(p)) return false;
+    // a squishy in front of the seat (the rider) takes the press: the gesture machine grabs it, as any squishy
+    const pr = W.poses, tThing = (pr[p * 8] - ray.origin.x) * ray.dir.x + (pr[p * 8 + 1] - ray.origin.y) * ray.dir.y + (pr[p * 8 + 2] - ray.origin.z) * ray.dir.z;
+    for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || !c.body) continue;
+      const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ });
+      if (hit && hit.t < tThing) return false;
+    }
+    if (!W.grabProp(p, NaN, NaN, NaN)) return false;   // (NaN: the raycast's own hit on it)
+    handOn[j] = 1; handId[j] = id; handProp[j] = p; handX[j] = x; handY[j] = y; handT[j] = game.clock.now(); handMoved[j] = 0; playerTouchT = game.simTime;
+    tapWhy = `hand:${def.things[th].id}`;
+    return true;
+  }
+  function dragAt(id: number, x: number, y: number): boolean {
+    const j = handSlot(id);
+    if (j < 0) return false;
+    const W = world as HingeWorld | null, cam = stage.camera;
+    if (Math.hypot(x - handX[j], y - handY[j]) > TAP_PX) handMoved[j] = 1;
+    if (W && cam && typeof W.dragPropRay === 'function') {
+      try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
+      const n = pxToNdc(x, y, game.viewport), ray = cameraRay(cam, n.x, n.y);
+      W.dragPropRay(handProp[j], ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    }
+    return true;
+  }
+  function dropAt(id: number, x: number, y: number): boolean {
+    const W = world as HingeWorld | null;
+    const j = handSlot(id);
+    if (j < 0) return false;
+    handOn[j] = 0;
+    const p = handProp[j];
+    try { W?.releaseProp?.(p); } catch (e) { report(e); }
+    if (!W || x !== x) return true;   // a cancel
+    const th = p >= 0 && p < W.count ? W.propThing[p] : -1;
+    if (th < 0) return true;
+    if (!handMoved[j] && game.clock.now() - handT[j] <= TAP_MS) { tapThing(x, y); return true; }   // a still tap: round 3's poke and its USE record
+    if (handMoved[j]) { const td = def.things[th], a = nearestTo(W.poses[p * 8], W.poses[p * 8 + 2]); write(EV.USE, td.verb, thingGlobal[th], a >= 0 ? chars[a].species : 255, 255, 1, BY.PLAYER, W.propPart[p]); }
+    return true;
+  }
+  const autoAt = { x: 0, y: 0, z: 0 };
+
   // ---- the collection's journal events: moments, the unlock line, friendships back into LIFE ----
   const offEvents = game.hoard.onEvent((e: CollectionEvent) => {
     try {
@@ -989,6 +1118,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
             void import('../data/journal_text.ts').then((m) => { const t = m.QUEST_TEXT[q]?.[0]; deps.moment?.(t ? `New stamp: ${t}` : 'New stamp'); }, () => { deps.moment?.('New stamp'); });
           }
           if (e.byPlayer) deps.stampHaptic?.();
+          // a chapter's finale done in its own place: the place's finale light (PG_RENDER: Ripple's sunset, Frostbell's evening and stars), eased back after 20 s
+          { const q = QUESTS[e.quest]; if (q && q.kind === 'finale' && q.chapter > 0 && CHAPTERS[q.chapter]?.place === placeIdx && placeIdx !== 0) { try { stage.thingFx?.(-1, 2, 1); finaleOff = game.simTime + 20; } catch { /* none */ } } }
           pushJournal();
           if (placeIdx === 0) homeThings();
           break;
@@ -997,6 +1128,12 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
           const p = PLACE_INFO.find((x) => x.idx === e.place);
           if (p && p.shipped) deps.say?.(`${p.name} is open. Find it in Places.`);
           pushJournal();
+          // 11.7 / PG_AUDIO: the place's data, look and sound are fetched in the background once it opens (the trip then waits for nothing new); a failure is
+          // harmless (the trip loads them again and says so if they still fail)
+          if (p && p.shipped && p.idx !== 0) {
+            const id = p.id as PlaceId;
+            setTimeout(() => { void loadPlaceDef(id).catch(() => undefined); void Promise.resolve(stage.loadPlace?.(id)).catch(() => undefined); void Promise.resolve(audio.loadAmbience?.(id)).catch(() => undefined); }, 1500);
+          }
           break;
         }
         case 'friend': {
@@ -1086,12 +1223,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const offSettings = game.on('settings', () => { floatRule(); });
 
   // ---- travel (S1): the place picker's path (QUESTS 15, 11.7) ----
-  async function travel(id: string): Promise<boolean> {
+  async function travel(id: string, devAny = false): Promise<boolean> {
     if (travelling || partyHeld()) return false;   // (whenIdle: never during a ceremony or while its party is coming back)
     const target = PLACE_INFO.find((p) => p.id === id);
     if (!target) return false;
     if (target.idx === placeIdx) return true;
-    if (target.idx !== 0 && (!target.shipped || (openPlacesMask & (1 << target.idx)) === 0)) return false;
+    // (devAny: the dev hook's check of a place that has not shipped or opened yet, PG_SHELL R4's S2 visits; the Travel sheet never passes it)
+    if (target.idx !== 0 && !devAny && (!target.shipped || (openPlacesMask & (1 << target.idx)) === 0)) return false;
     travelling = true;
     try {
       // leaving: a cut squishy goes back together, the locks let go, the fingers lift
@@ -1108,16 +1246,21 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (target.idx !== 0 && !shown) { deps.say?.(`${target.name} did not load. Try again.`); return false; }
       enterPlace(nextDef);
       write(EV.VISIT, 0, -1, chars.find((c) => c.on && c.kind === 0)?.species ?? 255, 255, wholesOut(), BY.PLAYER);
+      for (const c of chars) if (c.on && c.kind === 0) write(EV.BRING, 0, -1, c.species, 255, 1, BY.PLAYER);   // QUESTS 4: one BRING per member who came along
       deps.say?.(target.idx === 0 ? 'You are at Home.' : `You are at ${target.name}.`);
       return true;
     } catch (e) { report(e); deps.say?.(`${target.name} did not load. Try again.`); return false; }
     finally { travelling = false; }
   }
   function enterPlace(next: PlaceDef): void {
+    dropAll();
     for (let i = 0; i < CAP; i++) if (chars[i].on) { clearBubbles(i); endScoot(i); }
     if (musicBoxOnUntil > game.simTime) stopTune();   // a tune does not follow the party to another place
     visit++;
     def = next; placeIdx = next.idx;
+    coldPitch = next.zones.some((z) => z.kind === ZONE.cold && z.strength >= 0.5) ? Math.pow(2, -1 / 12) : 1;
+    heldWas.fill(0);
+    if (finaleOff >= 0) { finaleOff = -1; try { stage.thingFx?.(-1, 2, 0); } catch { /* none */ } }
     kettleK = placeIdx === 0 ? -1 : next.things.findIndex((t) => t.switch === 'tune' && t.id === 'kettle');
     if (placeIdx === 0) {
       // home again: every body back at its mat slot (the play body at slot 0, the k-th squishy out at slot k: mat.ts builds them there),
@@ -1137,17 +1280,24 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         place(chars[i], spot.x, spot.z);   // (place-space: place() takes the body's own draw offset off)
       }
       homeShown.fill(0);
+      // Home keeps the published corral about each body's own spot (setBounds -1; D-87's rectangle is not sent: one squishy alone stays the published toy)
+      for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.body) { try { c.body.setBounds?.(-1, 0, 0, 0, 0, 0); } catch (e) { report(e); } } }
       buildHome();
       try { stage.setAutonomyFraming?.(true); } catch { /* ignore */ }
       kettleNext = Infinity;
       return;
     }
     try { stage.setAutonomyFraming?.(false); } catch { /* ignore */ }
+    // Home's things leave with Home (R4 fix): the stage draws a shown Home thing at the bound prop whose propThing is ITS index, so in a place
+    // the Felt Ball, the Music Box and the Snooze Rug followed the place's things 0, 1 and 2 (the rug under the cabin's Yarn Ball: the "jagged
+    // black shape" of the round-3 phone shot) or stood at their Home spots (the stray ball and box in the S2 shots)
+    for (let k = 0; k < homeShown.length; k++) { if (homeShown[k] === 1) { homeShown[k] = 0; try { stage.setHomeThing?.(k, false, 0, 0, 0); } catch (e) { report(e); } } }
     layout = frameTall() ? 1 : 0;
     const lay = layout === 1 ? next.tall : next;
     world = buildPropWorld(next, layout === 1 ? 'tall' : 'wide', 1);
     mapThings();
     for (let k = 0; k < next.things.length; k++) { try { parkThing(world, k, false); } catch { /* none */ } }
+    applyAuto();   // (D-95: the rides the player set to AUTO keep it across trips)
     try { stage.bindProps?.(world.poses, world.count, world.propThing); } catch (e) { report(e); }
     const b = lay.bounds;
     try { stage.setPlayBounds?.(b.x, b.z, b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4)); } catch (e) { report(e); }
@@ -1169,6 +1319,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       k++;
       place(c, sp[0], sp[1]);
       try { c.body.setPropWorld?.(world); } catch (e) { report(e); }
+      // the place's area replaces the home corral (PG_PHYS setBounds, in the body's own frame); FALLBACK without it: the corral re-homed by place() and the walls
+      try { c.body.setBounds?.(b.shape === 'disc' ? 0 : 1, b.x - c.offX, b.z - c.offZ, b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), b.shape === 'disc' ? 0 : (b.hz ?? 2.4), b.round ?? 0); } catch (e) { report(e); }
     }
     lifeSetPlace(w, placeIdx, visit, next, layout, 1);
     // spawned at rest: every member but the first moverCap sleeps at once (11.3)
@@ -1251,8 +1403,42 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     noteEvent,
     pressAt,
     releaseAt,
+    grabAt,
+    dragAt,
+    dropAt,
+    dropAll,
+    holds: (id) => handSlot(id) >= 0,
+    autoThings() {
+      const rows: Array<{ k: number; id: string; on: boolean; x: number; y: number }> = [];
+      if (!hasAuto() || placeIdx === 0 || s.quiet || floatParked) return rows;
+      const cam = stage.camera;
+      if (!cam) return rows;
+      for (let k = 0; k < def.things.length; k++) {
+        const td = def.things[k];
+        if (!hingeRide(td)) continue;
+        // the anchor stands still and clear of the squishies: a swing's beam (the ropes' top, PLACES p.pivotY); above a rocker's pivot, over its riders' heads
+        const sp = thingSpot(k);
+        autoAt.x = sp[0]; autoAt.z = sp[1];
+        autoAt.y = td.mech === MECH.swing ? (td.p.pivotY ?? 1.6) - 0.05 : (td.p.pivot ?? 0.25) + 0.65;
+        let nd: { x: number; y: number } | null = null;
+        try { nd = projectToNdc(cam, autoAt); } catch { nd = null; }
+        if (!nd || !(Math.abs(nd.x) <= 1.05 && Math.abs(nd.y) <= 1.05)) continue;
+        rows.push({ k, id: td.id, on: autoWanted.has(td.id), x: (nd.x + 1) * 0.5 * game.viewport.w, y: (1 - nd.y) * 0.5 * game.viewport.h });
+      }
+      return rows;
+    },
+    setThingAuto(k, on) {
+      const td = def.things[k];
+      if (!hasAuto() || !hingeRide(td)) return false;
+      let ok = false;
+      try { ok = (world as HingeWorld).setAuto!(k, on); } catch (e) { report(e); }
+      if (!ok) return false;
+      if (on) autoWanted.add(td.id); else autoWanted.delete(td.id);
+      return true;
+    },
     sense(dt) {
-      if (dt > 0 && world && !floatParked) { world.endFrame(dt); drainProps(); }
+      if (dt > 0 && world && !floatParked) { world.endFrame(dt); drainProps(); heldVoices(); }
+      if (finaleOff >= 0 && game.simTime >= finaleOff) { finaleOff = -1; try { stage.thingFx?.(-1, 2, 0); } catch { /* none */ } }
       fillSnapshot(dt);
       scripts();
       lifeStep(w, s, out, ev);
@@ -1303,11 +1489,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         ring: { dropped: ring.dropped }, firstPlaySent, firstWishSent, freshProfile,
         party: { held: partyHeld(), restoring: [...restoreQ], newcomer: newcomerId },
         tap: tapWhy,
+        auto: { api: hasAuto(), on: [...autoWanted], hands: [...handOn].filter((x) => x === 1).length },
         tune: { on: musicBoxOnUntil > game.simTime, kind: tuneKind, kettle: kettleK, kettleNext: Number.isFinite(kettleNext) ? +kettleNext.toFixed(2) : null },
         journal: v ? { stamps: v.stamps, places: v.places, firstWish: v.firstWish, done: v.quests.filter((q) => q.done).map((q) => q.id), keepsakes: v.keepsakes } : null,
       };
     },
     dispose() {
+      dropAll();
       offEvents(); offCeremony(); offSettings();
       for (let i = 0; i < CAP; i++) if (chars[i].on) { clearBubbles(i); try { chars[i].body?.setPropWorld?.(null); } catch { /* ignore */ } }
       try { stage.bindProps?.(null, 0, null); stage.setAutonomyFraming?.(false); } catch { /* ignore */ }
@@ -1319,6 +1507,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
 
 /** the bubbles' DOM hit areas ship in this chunk (D-92): boot.ts attaches them once the host is attached */
 export { attachBubbleTaps } from '../ui/wishes.ts';
+/** the AUTO controls of the hinge rides (D-95 revised) ship in this chunk too: boot.ts attaches them with the bubble taps */
+export { attachThingAuto } from '../ui/thingAuto.ts';
 
 /** the life chunk's entry: build the host and attach it (boot.ts and the dev hook call this after the first frame of play) */
 export function attachLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi | null {

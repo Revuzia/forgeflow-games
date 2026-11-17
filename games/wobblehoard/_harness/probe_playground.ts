@@ -16,6 +16,10 @@ import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
 import { GRAVITY } from '../src/physics/params.ts';
 import { PLACE as CABIN } from '../src/data/place_hearthlog.ts';
 import { PLACE as HOME } from '../src/data/place_home.ts';
+import { PLACE as RIPPLE } from '../src/data/place_ripple.ts';
+import { PLACE as FROSTBELL } from '../src/data/place_frostbell.ts';
+import { PLACE as RAINLEAF } from '../src/data/place_rainleaf.ts';
+import { FAMILY_REACT } from '../src/data/life.ts';
 import { MECH } from '../src/data/places.ts';
 import type { PlaceDef, ThingDef } from '../src/data/places.ts';
 import type { SoftEvent, V3 } from '../src/contracts.ts';
@@ -23,7 +27,8 @@ import type { SoftEvent, V3 } from '../src/contracts.ts';
 const argv = process.argv.slice(2);
 const FULL = argv.includes('--full');
 const only = (argv.find((a) => a.startsWith('--only=')) ?? '').slice(7).split(',').filter(Boolean);
-const run = (s: string): boolean => only.length === 0 || only.includes(s);
+const secT: [string, number][] = [];   // (PGTIME=1: each section's start, printed at the end: the quick set's budget)
+const run = (s: string): boolean => { if (process.env.PGTIME && !secT.some((x) => x[0] === s)) secT.push([s, performance.now()]); return only.length === 0 || only.includes(s); };
 const QUICK = !FULL && only.length === 0;   // the default run (run_probes.ts): under 20 s
 const LONG = (s: string): boolean => FULL || only.includes(s);   // rows that run only with --full or --only
 const DT = 1 / 60;
@@ -518,7 +523,540 @@ if (run('hinge')) {
       `pushes ${pushes}; seat max ${f(seatV, 2)} m/s; half-swing amplitudes (deg) ${amp.slice(0, 10).map((x) => f((x * 180) / Math.PI, 1)).join(' ')}; growths after the pushes ${grows}; on the seat ${onSeat}/${samples}; fold ${f(rfo, 0)}`,
       'seat <= 2.0; 0 growths; on >= 90%; fold <= 120', seatV <= 2.0 + 1e-6 && grows === 0 && onSeat >= 0.9 * samples && rfo <= 120 && finite(r));
   }
-  info('PH-04 "a rider is never corralled" (D-91): the corral is off while onProp names a moving prop (softbody.ts substep); place bounds (setBounds) are NOT BUILT, so the bounds\' edge row is not run', '');
+  info('PH-04 "a rider is never corralled" (D-91): the corral is off while onProp names a moving prop (softbody.ts substep); with place bounds (setBounds, round 4) the PH-18 / PH-24 row checks a rider on the AUTO swing past the bounds\' edge', '');
+}
+
+/* ───────────── D-95 (revised, the owner 2026-11-17): the swing and the rocker die down by default; AUTO keeps a steady arc; a hand on the seat or the rider swings it ───────────── */
+if (run('d95')) {
+  const DEG = 180 / Math.PI;
+  const kSw = (w: PropWorld): number => w.propThing.indexOf(3), kRk = (w: PropWorld): number => w.propThing.indexOf(1);
+  /** half-swing amplitudes (rad, those over 0.2 deg), the rider-on samples, the fold, the largest frame-to-frame change of the angular velocity */
+  const swingTrack = (w: PropWorld, k: number, bs: SoftBody[], frames: number, each?: (i: number) => void): { amps: number[]; on: number; n: number; fold: number; dw: number; share: number } => {
+    const amps: number[] = []; let prev = w.angle(k), mx = 0, on = 0, n = 0, fold = 0, dw = 0, pw = w.omega(k), share = 0;
+    for (let i = 0; i < frames; i++) {
+      each?.(i);
+      frameW(w, bs, bs.length >= 2 ? new ContactPlanner() : null);
+      const th = w.angle(k), om = w.omega(k);
+      dw = Math.max(dw, Math.abs(om - pw)); pw = om; share = Math.max(share, w.autoShare(k));
+      if (Math.sign(th) !== Math.sign(prev) && i > 0) { amps.push(mx); mx = 0; }
+      mx = Math.max(mx, Math.abs(th)); prev = th;
+      if (bs.length && i % 10 === 0) { n++; if (bs.every((b) => b.metrics.onProp === k)) on++; if (i % 30 === 0) for (const b of bs) fold = Math.max(fold, foldDeg(b)); }
+    }
+    return { amps: amps.filter((a) => a > 0.2 / DEG), on, n, fold, dw, share };
+  };
+  const swingRider = (fam: string, layout: 'wide' | 'tall' = 'wide'): { w: PropWorld; k: number; r: SoftBody } => {
+    const w = buildPropWorld(CABIN, layout, 1), k = kSw(w), p = w.poses;
+    const r = mk(NEUTRAL, fam, { piece: { frac: 1, chunk: false, at: v3(p[k * 8], p[k * 8 + 1] + 0.6, p[k * 8 + 2]) } }); r.setPropWorld(w);
+    for (let i = 0; i < 90; i++) frameW(w, [r], null);
+    return { w, k, r };
+  };
+  const am = (a: number[]): string => a.slice(0, 12).map((x) => f(x * DEG, 1)).join(' ');
+  const arc = PROPS.AUTO_SWING_DEG / DEG, rarc = PROPS.AUTO_ROCK_DEG / DEG;
+  // (1) THE DEFAULT IS UNCHANGED: no motor; a pushed swing dies down by its own damping (the rider's in 1 to 3 half swings, as round 3 measured)
+  {
+    const { w, k, r } = swingRider('jellygel');
+    w.raycast(w.poses[k * 8], w.poses[k * 8 + 1], w.poses[k * 8 + 2] + 3, 0, 0, -1); w.poke(k, 1.6, 0, 0);
+    // (the motion is the angular velocity: a rider sitting a little off the seat's middle leaves it at rest a degree or two off the vertical)
+    let first = 0, late = 0, firstA = 0;
+    const t = swingTrack(w, k, [r], 60 * 6, (i) => { const o = Math.abs(w.omega(k)); if (i < 120) { first = Math.max(first, o); firstA = Math.max(firstA, Math.abs(w.angle(k))); } else if (i >= 180) late = Math.max(late, o); });
+    const e = buildPropWorld(CABIN, 'wide', 1), ke = kSw(e);
+    e.raycast(e.poses[ke * 8], e.poses[ke * 8 + 1], e.poses[ke * 8 + 2] + 3, 0, 0, -1); e.poke(ke, 1.6, 0, 0);
+    const te = swingTrack(e, ke, [], 60 * 8);
+    let growE = 0; for (let i = 1; i < te.amps.length; i++) if (te.amps[i] > te.amps[i - 1] + 1e-6) growE++;
+    const dead = (t.amps.length <= 3 || t.amps[3] < 0.25 * t.amps[0]) && late <= 0.25 * first && first > 0.05;
+    add('D-95 default (AUTO off, the owner\'s "dies after 2 to 3 swings"): a rider on the seat, one 1.6 m/s push: at most 3 half swings over 0.2 deg (or the 4th under a quarter of the first), and from 3 s on the seat\'s angular speed under a quarter of its first 2 s; the empty seat pushed alike only decays; no motor (AUTO\'s share 0)',
+      `rider: up to ${f(firstA * DEG, 2)} deg and ${f(first, 3)} rad/s in the first 2 s, ${f(late, 3)} rad/s after 3 s, half swings across the bottom: ${am(t.amps) || 'none'} (on ${t.on}/${t.n}); empty: ${am(te.amps)} deg, growths ${growE}; AUTO share max ${f(Math.max(t.share, te.share), 2)}`, 'dies down; 0 growths; share 0', dead && growE === 0 && t.share === 0 && te.share === 0 && t.on >= 0.9 * t.n);
+  }
+  // (2) AUTO: a gentle steady arc, empty and with a rider (the rider holds on), eased in from rest, eased out to the natural die-down when turned off
+  {
+    const fams = QUICK ? ['jellygel'] : FULL ? FAMS.filter((x) => x !== 'putty') : ['jellygel', 'firmsilicone', 'slimegoo', 'marshmallow', 'gummy'];
+    const T = FULL ? 20 : QUICK ? 8 : 14;
+    const res: string[] = []; let bad = 0;
+    for (const fam of ['-', ...fams]) {
+      const rider = fam !== '-';
+      const s = rider ? swingRider(fam) : (() => { const w = buildPropWorld(CABIN, 'wide', 1); return { w, k: kSw(w), r: null as SoftBody | null }; })();
+      const bs = s.r ? [s.r] : [];
+      const okOn = s.w.setAuto(3, true);
+      const t = swingTrack(s.w, s.k, bs, 60 * (rider && QUICK ? 6 : T));   // (a rider's pace is quicker: 6 s holds the 3 ease-in and 3 steady half swings)
+      const steady = t.amps.slice(3);   // after the ease-in (the first three half swings grow from rest)
+      const inBand = steady.length >= (QUICK ? 3 : 6) && steady.every((a) => Math.abs(a - arc) <= 0.1 * arc);
+      const grew = t.amps.length >= 2 && t.amps[0] < 0.75 * arc;   // eased in: the first half swing is small
+      s.w.setAuto(3, false);
+      // AUTO off: the natural die-down. With a rider: within 10 s (about 3 swings of the rider-and-seat's own ~3 s rocking) the seat's angular speed under a quarter
+      // of its speed in the first second, and never past the arc; empty: the seat's own damping (0.25 /s, the data's) only decays it. (The first half swing after
+      // the switch is a partial one: the tracking starts mid-swing)
+      let w1 = 0, w10 = 0, overArc = false;
+      const off = swingTrack(s.w, s.k, bs, 60 * (rider ? 10 : 6), (i) => { const o = Math.abs(s.w.omega(s.k)); if (i < 60) w1 = Math.max(w1, o); else if (i >= 540) w10 = Math.max(w10, o); if (Math.abs(s.w.angle(s.k)) > 1.1 * arc) overArc = true; });
+      const dies = rider ? w10 <= 0.25 * w1 && !overArc : off.amps.length >= 3 && off.amps.every((a, i) => i < 2 || a <= off.amps[i - 1] + 1e-6);
+      const ok = okOn && inBand && grew && dies && (!rider || (t.on >= 0.95 * t.n && t.fold <= 120 && finite(s.r!))) && t.dw <= 0.05;
+      if (!ok) bad++;
+      res.push(`${rider ? fam : 'empty'}: ${am(t.amps)} deg${rider ? `, on ${t.on}/${t.n}, fold ${f(t.fold, 0)}` : ''}, max dw ${f(t.dw, 3)} rad/s a frame; off: ${am(off.amps)}${rider ? ` (seat ${f(w1, 3)} rad/s in the first s, ${f(w10, 3)} at 9..10 s)` : ''}`);
+    }
+    add(`D-95 AUTO on the swing (setAuto): empty and with a rider (${fams.length} famil${fams.length > 1 ? 'ies' : 'y'}), ${T} s: eased in from rest (the first half swing under 3/4 of the arc), then every half swing within +-10% of ${PROPS.AUTO_SWING_DEG} deg; the rider keeps its seat; no jerk (dw <= 0.05 rad/s a frame); AUTO off: it dies down (with a rider: the seat's speed at 9..10 s under a quarter of the first second's, never past the arc; empty: only decays)`,
+      res.join('; '), 'all', bad === 0);
+  }
+  {
+    const res: string[] = []; let bad = 0;
+    for (const nr of QUICK ? [0, 2] : [0, 1, 2]) {
+      const w = buildPropWorld(CABIN, 'wide', 1), k = kRk(w), rx = w.poses[k * 8], rz = w.poses[k * 8 + 2];
+      const bs: SoftBody[] = [];
+      if (nr >= 1) { const a = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(rx + 0.75, 0.9, rz) } }); a.setPropWorld(w); bs.push(a); }
+      if (nr >= 2) { const b = mk(NEUTRAL, 'gummy', { piece: { frac: 1, chunk: false, at: v3(rx - 0.75, 0.9, rz) } }); b.setPropWorld(w); bs.push(b); }
+      for (let i = 0; i < 120; i++) frameW(w, bs, bs.length >= 2 ? new ContactPlanner() : null);
+      w.setAuto(1, true);
+      const t = swingTrack(w, k, bs, 60 * (QUICK ? 8 : 12));
+      const steady = t.amps.slice(2), ok = steady.length >= 3 && steady.every((a) => Math.abs(a - rarc) <= 0.1 * rarc) && (nr === 0 || (t.on >= 0.95 * t.n && t.fold <= 120)) && t.dw <= 0.05;
+      if (!ok) bad++;
+      res.push(`${nr} rider(s): ${am(t.amps)} deg${nr ? `, on ${t.on}/${t.n}, fold ${f(t.fold, 0)}` : ''}, max dw ${f(t.dw, 3)}`);
+    }
+    add(`D-95 AUTO on the rocker: with 0 and 2 riders${QUICK ? '' : ' (and 1)'}: after the ease-in every half swing within +-10% of ${PROPS.AUTO_ROCK_DEG} deg, the riders stay on, no jerk`, res.join('; '), 'all', bad === 0);
+  }
+  // (3) BY HAND: the seat grabbed and pulled 0.5 m along its travel (AUTO off and on), the rider grabbed and pulled 0.35 m; the rocker board's end pulled down 0.12 m
+  {
+    const res: string[] = []; let ok = true;
+    // (the quick set runs the AUTO-on cases: the hand wins over AUTO, then AUTO takes the motion back; --only=d95 adds AUTO off)
+    for (const auto of QUICK ? [true] : [false, true]) {
+      const { w, k, r } = swingRider('jellygel');
+      if (auto) { w.setAuto(3, true); for (let i = 0; i < 300; i++) frameW(w, [r], null); }
+      const th0 = w.angle(k), sx = w.poses[k * 8], sy = w.poses[k * 8 + 1], sz = w.poses[k * 8 + 2];
+      const got = w.grabProp(k, sx, sy, sz);
+      let shareHeld = 0;
+      for (let i = 0; i < 90; i++) { w.dragProp(k, sx + Math.min(1, i / 30) * 0.5, sy + 0.05, sz); frameW(w, [r], null); if (i >= 10) shareHeld = Math.max(shareHeld, w.autoShare(k)); }
+      // the hand's angle: the grabbed spot (the seat's centre) turned about the pivot until it points at the hand (angles from straight down, + toward +x)
+      const pvx = CABIN.things[3].x, pvy = CABIN.things[3].p.pivotY ?? 1.62;
+      const want = th0 + Math.atan2(sx + 0.5 - pvx, pvy - (sy + 0.05)) - Math.atan2(sx - pvx, pvy - sy);
+      const held = w.angle(k);
+      w.releaseProp(k);
+      const t = swingTrack(w, k, [r], 60 * 6);
+      const backToArc = auto ? t.amps.slice(-3).every((a) => Math.abs(a - arc) <= 0.1 * arc) : t.amps.length <= 4 || t.amps[4] < 0.25 * t.amps[0];
+      const swung = t.amps.length > 0 && t.amps[0] >= 0.8 * Math.abs(held);
+      const rowOk = got && Math.abs(held - want) <= 2 / DEG && shareHeld === 0 && swung && backToArc && t.on >= 0.9 * t.n;
+      ok = ok && rowOk;
+      res.push(`seat, AUTO ${auto ? 'on' : 'off'}: held at ${f(held * DEG, 1)} deg (the hand's ${f(want * DEG, 1)}), AUTO share while held ${f(shareHeld, 2)}; released: ${am(t.amps)} deg, rider on ${t.on}/${t.n}`);
+    }
+    for (const auto of QUICK ? [true] : [false, true]) {
+      const { w, k, r } = swingRider('jellygel');
+      if (auto) { w.setAuto(3, true); for (let i = 0; i < 300; i++) frameW(w, [r], null); }
+      const th0 = w.angle(k);
+      const h = r.raycast(v3(r.center.x, r.center.y + 3, r.center.z + 0.02), v3(0, -1, 0));
+      let maxTh = 0, shareHeld = 0, onHeld = 0, nH = 0;
+      if (h) {
+        r.grab(0, h.vertex, h.point);
+        for (let i = 0; i < 60; i++) {
+          r.grabMove(0, v3(h.point.x + Math.min(1, i / 30) * 0.35, h.point.y, h.point.z)); frameW(w, [r], null);
+          maxTh = Math.max(maxTh, w.angle(k) - th0); if (i >= 10) shareHeld = Math.max(shareHeld, w.autoShare(k));
+          if (i % 10 === 0) { nH++; if (r.metrics.onProp === k) onHeld++; }
+        }
+        r.grabRelease(0);
+      }
+      const t = swingTrack(w, k, [r], 60 * 6);
+      const back = auto ? t.amps.slice(-3).every((a) => Math.abs(a - arc) <= 0.1 * arc) : true;
+      const rowOk = !!h && maxTh >= 8 / DEG && shareHeld === 0 && onHeld === nH && back && t.on >= 0.9 * t.n;
+      ok = ok && rowOk;
+      res.push(`rider, AUTO ${auto ? 'on' : 'off'}: the seat swung ${f(maxTh * DEG, 1)} deg toward the pull, AUTO share while held ${f(shareHeld, 2)}, rider on ${onHeld}/${nH} while held; released: ${am(t.amps)} deg, on ${t.on}/${t.n}`);
+    }
+    {
+      const w = buildPropWorld(CABIN, 'wide', 1), k = kRk(w), rx = w.poses[k * 8], ry = w.poses[k * 8 + 1], rz = w.poses[k * 8 + 2];
+      w.setAuto(1, true);
+      const got = w.grabProp(k, rx + 1.0, ry + 0.08, rz);
+      for (let i = 0; i < 60; i++) { w.dragProp(k, rx + 1.0, ry + 0.08 - Math.min(1, i / 20) * 0.12, rz); frameW(w, [], null); }
+      const held = w.angle(k), want = Math.atan2(-0.04, 1.0) - Math.atan2(0.08, 1.0);
+      w.releaseProp(k);
+      const rowOk = got && Math.abs(held - want) <= 1 / DEG && w.autoShare(k) === 0;
+      ok = ok && rowOk;
+      res.push(`rocker board's end pulled down 0.12 m (AUTO on): held at ${f(held * DEG, 2)} deg (the hand's ${f(want * DEG, 2)}), AUTO share ${f(w.autoShare(k), 2)}`);
+    }
+    add('D-95 by hand: the seat grabbed (grabProp / dragProp) and pulled 0.5 m along its travel follows the hand within 2 deg, AUTO yields while it holds (share 0), released it swings on (AUTO off: dies down; AUTO on: back to its arc); the RIDER grabbed and pulled 0.35 m swings the seat at least 8 deg with it and keeps its seat, AUTO yields; the rocker board pulled down by its end follows within 1 deg',
+      res.join('; '), 'all', ok);
+  }
+  // (4) determinism and the inert default: two runs with AUTO, a rider, a hand and a grabbed rider are equal; a world where AUTO was never touched steps as round 3's
+  {
+    const once = (): string => {
+      const { w, k, r } = swingRider('jellygel');
+      const hs: number[] = [];
+      w.setAuto(3, true); w.setAuto(1, true);
+      for (let i = 0; i < 240; i++) {
+        if (i === 60) w.grabProp(k, NaN, NaN, NaN);
+        if (i > 60 && i < 100) w.dragProp(k, 0.4, 0.3, -1.7);
+        if (i === 100) w.releaseProp(k);
+        frameW(w, [r], null);
+        if (i % 20 === 0) hs.push(w.stateHash(), r.stateHash());
+      }
+      return hs.join(',');
+    };
+    const h1 = once(), h2 = once();
+    add('D-95 determinism: AUTO on the swing and the rocker, a rider, a hand that grabs, drags and lets go: two runs give equal prop and body hashes at every sample', h1 === h2 ? 'equal' : 'DIFFERENT', 'equal', h1 === h2);
+  }
+}
+
+/* ───────────── PH-14: SoftEvent.auto / prop / other (8.8) ───────────── */
+if (run('events')) {
+  const evs = (b: SoftBody, out: SoftEvent[]): void => { const e: SoftEvent[] = []; b.drainEvents(e); out.push(...e); };
+  const fw = (w: PropWorld | null, bs: SoftBody[], log: SoftEvent[][], manual?: () => void): void => {
+    if (w) w.beginFrame();
+    if (manual) manual(); else if (bs.length >= 2) new ContactPlanner().run(bs);
+    bs.forEach((b, i) => { b.step(DT); evs(b, log[i]); });
+    if (w) w.endFrame(DT);
+  };
+  const res: string[] = []; let ok = true;
+  const chk = (name: string, pass: boolean, detail: string): void => { res.push(`${name}: ${pass ? 'ok' : 'WRONG'} (${detail})`); ok = ok && pass; };
+  const kinds = (l: SoftEvent[], k: string): SoftEvent[] => l.filter((e) => e.kind === k);
+  // (a) a fall nobody threw: its 'land' is auto; (b) a toss (picked up, carried, let go with speed): its 'land' is not
+  {
+    const b = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(0, 0.9, 0) } }), log: SoftEvent[][] = [[]];
+    for (let i = 0; i < 90; i++) fw(null, [b], log);
+    const l = kinds(log[0], 'land');
+    chk('a fall from 0.4 m nobody threw: land auto', l.length > 0 && l.every((e) => e.auto === true && e.prop === -1 && e.other === -1), `${l.length} land, auto ${l.map((e) => e.auto).join(',')}`);
+    const c = mk(NEUTRAL, 'jellygel'); settle(c, 0.5);
+    const h = c.raycast(v3(c.center.x, 3, c.center.z + 0.02), v3(0, -1, 0));
+    const lt: SoftEvent[][] = [[]];
+    if (h) { c.grab(0, h.vertex, h.point); for (let i = 0; i < 50; i++) { c.grabMove(0, v3(h.point.x + i * 0.01, h.point.y + Math.min(1, i / 20) * 1.3, h.point.z)); fw(null, [c], lt); } }
+    const carried = c.metrics.carried === true;
+    c.grabRelease(0);
+    for (let i = 0; i < 120; i++) fw(null, [c], lt);
+    const tl = kinds(lt[0], 'land');
+    chk('a toss (carried, let go): its land is not auto', carried && tl.length > 0 && tl.every((e) => e.auto === false), `carried ${carried}, ${tl.length} land, auto ${tl.map((e) => e.auto).join(',')}`);
+    // a poke (the player's): auto false, prop -1, other -1
+    const pk = kinds(lt[0], 'grab').concat(kinds(lt[0], 'snap'));
+    chk("the player's own events (grab, snap) carry auto false, prop -1, other -1", pk.length > 0 && pk.every((e) => e.auto === false && e.prop === -1 && e.other === -1), `${pk.length} events`);
+  }
+  // (c) body to body: a body launched (from 0.5 m up at 2 m/s, as a pad or a fall would: nobody threw it) into a resting body: auto, other = the partner's contactSlot;
+  // a finger on the partner: not auto; a lock alone on it: auto (D-86). (A LIFE scoot glides by a rigid translation: it closes at no speed a bump counts, and a nudge
+  // from rest is stopped by the table in a few cm, so neither makes a bump)
+  const boop = (partnerHold: 'none' | 'finger' | 'lock'): SoftEvent[] => {
+    const ax = partnerHold === 'lock' ? -0.75 : -1.6;   // (the locked granulo is pulled 0.4 m toward +x by its lock; a launched body lands and stops within 0.35 s, so it starts close)
+    const b = partnerHold === 'lock' ? new SoftBody(quantizeGenome({ ...makeStarterGenome(), species: 'granulo' } as Genome), { piece: { frac: 1, chunk: false, at: v3(0.3, 0, 0) } } as never) : mk(NEUTRAL, 'gummy', { piece: { frac: 1, chunk: false, at: v3(0, 0, 0) } });
+    b.contactSlot = 9;
+    const log: SoftEvent[][] = [[], []];
+    for (let i = 0; i < 30; i++) fw(null, [b], [log[1]]);
+    if (partnerHold === 'finger') topPress(b, 0, 0.3);
+    if (partnerHold === 'lock') {
+      const hit = b.raycast(v3(b.center.x + 3, b.center.y + 0.1, b.center.z), v3(-1, 0, 0));
+      if (hit) { b.grab(0, hit.vertex, hit.point); for (let i = 0; i < 40; i++) { b.grabMove(0, v3(hit.point.x + (i + 1) * 0.05, hit.point.y, hit.point.z)); fw(null, [b], [log[1]]); } b.lockGrab(0); }
+      for (let i = 0; i < 30; i++) fw(null, [b], [log[1]]);   // (the lock's own snap and the grab's release are the player's: past them, a calm 0.5 s)
+    }
+    const a = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(ax, 0.95, 0), vel: v3(2, 0, 0) } });
+    a.contactSlot = 4;
+    log[0].length = 0; log[1].length = 0;
+    for (let i = 0; i < 90; i++) fw(null, [a, b], log);
+    return [...kinds(log[0], 'bump'), ...kinds(log[1], 'bump')];
+  };
+  {
+    const free = boop('none'), fing = boop('finger'), lock = boop('lock');
+    const bodyB = (l: SoftEvent[]): SoftEvent[] => l.filter((e) => e.prop === -1);
+    const fb = bodyB(free), gb = bodyB(fing), lb = bodyB(lock);
+    chk('a body launched (2 m/s, nobody threw it) into a resting one, nobody touching: the body bump is auto and names the partner (other = its contactSlot)', fb.length > 0 && fb.every((e) => e.auto === true && (e.other === 9 || e.other === 4)), `${fb.length} bump(s): auto ${fb.map((e) => e.auto).join(',')} other ${fb.map((e) => e.other).join(',')}`);
+    chk('... with a finger on the partner: not auto', gb.length > 0 && gb.every((e) => e.auto === false), `${gb.length} bump(s): auto ${gb.map((e) => e.auto).join(',')}`);
+    chk('... with only a LOCK on the partner (D-86): auto', lb.length > 0 && lb.every((e) => e.auto === true), `${lb.length} bump(s): auto ${lb.map((e) => e.auto).join(',')}`);
+  }
+  // (d) prop bumps: the Yarn Ball poked into a resting body (auto, prop = the ball); a body scooting into a block at 0.5 m/s (auto, prop = the block); thrown into a wall (not auto)
+  {
+    const w = buildPropWorld(testPlace([thing(MECH.ball, -1.0, 0, [0.24, 0, 0], { mass: 0.2, rollDamp: 0.5 }), thing(MECH.block, 1.3, 0, [0.3, 0.3, 0.6])], true), 'wide', 1);
+    const b = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(0, 0, 0) } }); b.setPropWorld(w);
+    const log: SoftEvent[][] = [[]];
+    for (let i = 0; i < 30; i++) fw(w, [b], log);
+    log[0].length = 0;
+    w.poke(0, 1.6, 0, 0);
+    for (let i = 0; i < 60; i++) fw(w, [b], log);
+    const bb = kinds(log[0], 'bump').filter((e) => e.prop === 0);
+    chk('the ball rolled (1.6 m/s) into a resting body: a prop bump, auto, prop = the ball (0), other -1', bb.length > 0 && bb.every((e) => e.auto === true && e.other === -1), `${bb.length} bump(s) prop 0, auto ${bb.map((e) => e.auto).join(',')}, intensity ${bb.map((e) => f(e.intensity, 2)).join(',')}`);
+    const wd = buildPropWorld(testPlace([thing(MECH.block, 1.3, 0, [0.3, 0.3, 0.6])]), 'wide', 1);
+    const d = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(0.25, 0.95, 0), vel: v3(2, 0, 0) } }); d.setPropWorld(wd);
+    const ld: SoftEvent[][] = [[]];
+    for (let i = 0; i < 90; i++) fw(wd, [d], ld);
+    const kb = kinds(ld[0], 'bump').filter((e) => e.prop === 0);
+    chk('a body launched (2 m/s from 0.5 m up, nobody threw it) into a block: a prop bump, auto, prop = the block', kb.length > 0 && kb.every((e) => e.auto === true), `${kb.length} bump(s) prop 0 (its world's only prop), auto ${kb.map((e) => e.auto).join(',')}`);
+    // a body tossed at the back wall (carried up, let go toward -z at speed)
+    const c = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(0, 0, -0.8) } }); c.setPropWorld(w);
+    const lc: SoftEvent[][] = [[]];
+    for (let i = 0; i < 30; i++) fw(w, [c], lc);
+    const h = c.raycast(v3(c.center.x, 3, c.center.z + 0.02), v3(0, -1, 0));
+    if (h) { c.grab(0, h.vertex, h.point); for (let i = 0; i < 40; i++) { c.grabMove(0, v3(h.point.x, h.point.y + Math.min(1, i / 20) * 1.2, h.point.z - Math.max(0, i - 25) * 0.08)); fw(w, [c], lc); } c.grabRelease(0); }
+    for (let i = 0; i < 120; i++) fw(w, [c], lc);
+    const wb = kinds(lc[0], 'bump').filter((e) => e.prop === 2);
+    chk('a body tossed into the back wall: a prop bump with the wall\'s index (2), not auto', wb.length > 0 && wb.every((e) => e.auto === false), `${wb.length} bump(s) prop 2, auto ${wb.map((e) => e.auto).join(',')}`);
+  }
+  add('PH-14 SoftEvent.auto / prop / other: a fall nobody threw lands auto, a toss does not; the player\'s own events are never auto; a launch nobody threw is an auto body bump naming the partner\'s contactSlot, not auto with a finger on the partner, auto with only a lock on it (D-86); prop bumps carry the prop index (the ball into a body, a launch into a block: auto; a toss into a wall: not)',
+    res.join('; '), 'all ok', ok);
+}
+
+/* ───────────── PH-19: the contact-slot bump memory and metrics.contacts ───────────── */
+if (run('contacts')) {
+  // B and C are built 16 bodies apart (bodyId & 15 the same: the bump memory's old key aliases them): both bump A within 0.2 s; with contact slots A keeps one entry each
+  const trial = (slots: boolean): { bumps: number; cA: number; cB: number } => {
+    // (A is a whole at the origin, never asleep; B and C are launched at it from both sides at 2 m/s from 0.5 m up, C 0.1 s after B (past the 0.05 s event gap, inside
+    // the 0.2 s bump memory); A's collide meets both)
+    const a = mk(NEUTRAL, 'jellygel');
+    const bb = mk(NEUTRAL, 'gummy', { piece: { frac: 1, chunk: false, at: v3(-1.6, 0.95, 0), vel: v3(2, 0, 0) } });
+    for (let i = 0; i < 15; i++) mk(NEUTRAL, 'jellygel', { detail: 2 } as never);
+    if (slots) { a.contactSlot = 0; bb.contactSlot = 17; }
+    const la: SoftEvent[] = [];
+    for (let i = 0; i < 6; i++) { a.collide([bb]); a.step(DT); bb.step(DT); const e: SoftEvent[] = []; a.drainEvents(e); la.push(...e); bb.drainEvents([]); }
+    const cc = mk(NEUTRAL, 'gummy', { piece: { frac: 1, chunk: false, at: v3(1.6, 0.95, 0), vel: v3(-2, 0, 0) } });
+    if (slots) cc.contactSlot = 30;
+    const bs = [a, bb, cc];
+    let cA = 0, cB = 0;
+    for (let i = 0; i < 90; i++) { a.collide([bb, cc]); for (const b of bs) b.step(DT); const e: SoftEvent[] = []; a.drainEvents(e); la.push(...e); bb.drainEvents([]); cc.drainEvents([]); cA |= a.metrics.contacts ?? 0; cB |= bb.metrics.contacts ?? 0; }
+    return { bumps: la.filter((e) => e.kind === 'bump').length, cA, cB };
+  };
+  const with_ = trial(true), without = trial(false);
+  const bit = (k: number): number => 1 << k;
+  add('PH-19 the bump memory is keyed by contactSlot (32 entries): two partners whose bodyIds alias (bodyId & 15 equal) both bump A within 0.2 s: two bumps with contact slots (one without: the old key, kept for bodies with none); metrics.contacts has a bit per partner slot (A: 17 and 30; B: A\'s 0)',
+    `with slots: ${with_.bumps} bump(s) on A, A.contacts 0x${(with_.cA >>> 0).toString(16)}, B.contacts 0x${(with_.cB >>> 0).toString(16)}; without: ${without.bumps} bump(s), A.contacts ${without.cA}`,
+    '2 / 1; 0x40020000; 0x1; 0', with_.bumps === 2 && without.bumps === 1 && (with_.cA >>> 0) === ((bit(17) | bit(30)) >>> 0) && with_.cB === bit(0) && without.cA === 0);
+}
+
+/* ───────────── PH-18 / PH-24: setBounds and setHome ───────────── */
+if (run('bounds')) {
+  const res: string[] = []; let ok = true;
+  // (a) a rectangle (Home: visibleTable + the slots, round 0): a body resting at any spot inside is never moved; a body shoved out glides back to the edge and stops there
+  {
+    const spots = [[-1.2, -0.6], [0, -0.35], [1.2, -0.6], [-0.6, 0.6], [0.9, 0.5]];
+    let worst = 0;
+    for (const [x, z] of QUICK ? spots.slice(0, 2) : spots) {
+      const b = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(x, 0, z) } });
+      b.setBounds(1, 0, 0, 1.75, 1.2, 0);
+      settle(b, 0.3); const x0 = b.center.x, z0 = b.center.z; settle(b, 3);
+      worst = Math.max(worst, Math.hypot(b.center.x - x0, b.center.z - z0));
+    }
+    // a body tossed out (from 0.9 m up at 2.5 m/s toward +x, from x 1.5): it lands past the edge, is braked and glides back to the edge and stops there
+    const s = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(1.5, 0.95, 0), vel: v3(2.5, 0, 0) } });
+    s.setBounds(1, 0, 0, 1.75, 1.2, 0);
+    let maxX = 0; for (let i = 0; i < 420; i++) { s.step(DT); drain(s); maxX = Math.max(maxX, s.center.x); }
+    const endX = s.center.x;
+    const pass = worst <= 0.002 && maxX > 1.85 && maxX < 1.75 + PG.boundsRim + 0.5 && endX <= 1.75 + 0.02 && endX > 1.6;
+    ok = ok && pass; res.push(`rectangle 3.5 x 2.4 m: resting bodies moved at most ${f(worst * 1000, 2)} mm in 3 s; a body tossed out at 2.5 m/s from x 1.5 went to ${f(maxX, 3)} and came back to ${f(endX, 3)} (the edge 1.75)`);
+  }
+  // (b) a disc (a place): the same, about the edge; shape -1 restores the home corral (the body glides back toward its home spot)
+  {
+    // (built at x 2.0: inside a disc of 2.6 it is never touched; then a disc of 1.6 puts it 0.4 m outside: it is woken and glides back to the edge; shape -1 and setHome(0, 0)
+    // hand it back to the home corral, which glides it into its 0.6 m dead zone)
+    const b = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(2.0, 0, 0) } });
+    b.setBounds(0, 0, 0, 2.6, 0, 0); settle(b, 0.3);
+    const x0 = b.center.x; settle(b, 2);
+    const inside = Math.abs(b.center.x - x0), slept = b.sleeping;
+    b.setBounds(0, 0, 0, 1.6, 0, 0); settle(b, 7);
+    const endD = Math.hypot(b.center.x, b.center.z);
+    b.setBounds(-1, 0, 0, 0, 0, 0); b.setHome(0, 0); settle(b, 10);
+    const homeD = Math.hypot(b.center.x, b.center.z);
+    const pass = inside <= 0.002 && endD <= 1.62 && endD > 1.5 && homeD <= b.params.matR0 + 0.02;
+    ok = ok && pass; res.push(`disc r 2.6: a body inside at 2.0 m drifted ${f(inside * 1000, 2)} mm (asleep ${slept}); the disc shrunk to r 1.6: back to ${f(endD, 3)} m from the centre in 7 s (the corral's glide: at least 10% of 0.35 m/s near the edge); shape -1 + setHome(0, 0): ${f(homeD, 3)} m from home after 10 s (the dead zone ${b.params.matR0})`);
+  }
+  // (c) setHome: a body LIFE brought 1.6 m from its spawn (scootTo) stays there once re-homed; without it the home corral glides it back
+  {
+    const run2 = (home: boolean): number => {
+      const b = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(0, 0, 0) } });
+      settle(b, 0.3); b.scootTo(1.6, 0, 0.4);
+      for (let i = 0; i < 360 && (priv(b).scootOn as boolean); i++) { b.step(DT); drain(b); }
+      if (home) b.setHome(b.center.x, b.center.z);
+      settle(b, 4);
+      return b.center.x;
+    };
+    const kept = run2(true), back = run2(false);
+    const pass = kept > 1.55 && back < 1.0;
+    ok = ok && pass; res.push(`setHome: scooted to x 1.6, re-homed: at ${f(kept, 3)} after 4 s; not re-homed: glided back to ${f(back, 3)}`);
+  }
+  // (d) a rider on the swing is never corralled (D-91), with bounds that the swing's arc leaves (the seat's path reaches 0.7 m past them)
+  {
+    const w = buildPropWorld(CABIN, 'wide', 1), k = w.propThing.indexOf(3), p = w.poses;
+    const r = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(p[k * 8], p[k * 8 + 1] + 0.6, p[k * 8 + 2]) } }); r.setPropWorld(w);
+    r.setBounds(1, 0, -1.7, 0.1, 1.0, 0);
+    for (let i = 0; i < 90; i++) frameW(w, [r], null);
+    w.setAuto(3, true);
+    let on = 0, n = 0, maxOut = 0;
+    for (let i = 0; i < 60 * (QUICK ? 4 : 8); i++) { frameW(w, [r], null); if (i % 10 === 0) { n++; if (r.metrics.onProp === k) on++; } maxOut = Math.max(maxOut, Math.abs(r.center.x) - 0.1); }
+    const pass = on >= 0.95 * n && maxOut > 0.1;
+    ok = ok && pass; res.push(`a rider on the AUTO swing with bounds 0.1 m wide around the pivot: on the seat ${on}/${n}, up to ${f(maxOut, 2)} m past the bounds (never corralled off it)`);
+  }
+  add('PH-18 / PH-24 setBounds and setHome: a rectangle never moves a body resting inside it and brings a shoved one back to its edge; a disc likewise; shape -1 restores the home corral; setHome keeps a body where LIFE brought it; a rider on a moving prop is never corralled (D-91)',
+    res.join('; '), 'all', ok);
+}
+
+/* ───────────── PH-20: carryTo ───────────── */
+if (run('carry')) {
+  const res: string[] = []; let ok = true;
+  // from the floor onto a box top (0.4 m) 1.2 m away in 1.2 s: arrives, at rest (no velocity), no event at all, its weight held on the way (no sag), a touch ends it
+  const w = buildPropWorld(testPlace([thing(MECH.block, 1.2, 0, [0.6, 0.2, 0.6])]), 'wide', 1);
+  const b = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(0, 0, 0) } }); b.setPropWorld(w);
+  for (let i = 0; i < 30; i++) frameW(w, [b], null);
+  const ok1 = b.carryTo(1.2, 0.4, 0, 1.2);
+  const log: SoftEvent[] = [];
+  let apex = 0, fold = 0, i0 = 0;
+  for (let i = 0; i < 90; i++) { w.beginFrame(); b.step(DT); const e: SoftEvent[] = []; b.drainEvents(e); log.push(...e); w.endFrame(DT); apex = Math.max(apex, lowest(b)); if (i % 5 === 0) fold = Math.max(fold, foldDeg(b)); if (b.carryingTo) i0 = i; }
+  let vEnd = 0;
+  for (let i = 0; i < 60; i++) { const cx0 = b.center.x, cy0 = b.center.y, cz0 = b.center.z; w.beginFrame(); b.step(DT); const e: SoftEvent[] = []; b.drainEvents(e); log.push(...e); w.endFrame(DT); if (i < 3) vEnd = Math.max(vEnd, Math.hypot(b.center.x - cx0, b.center.y - cy0, b.center.z - cz0) / DT); }
+  const atX = b.center.x, onTop = b.metrics.onProp === 0, low = lowest(b);
+  const pass1 = ok1 && log.length === 0 && Math.abs(atX - 1.2) < 0.05 && onTop && low > 0.38 && apex > 0.5 && fold <= 120 && vEnd < 0.1;
+  ok = ok && pass1;
+  res.push(`floor -> box top (0.4 m, 1.2 m away, 1.2 s): ${ok1 ? 'started' : 'REFUSED'}, carried for ${f((i0 + 1) * DT, 2)} s, the lowest point rose to ${f(apex, 3)} m, then on the box (onProp ${b.metrics.onProp}) at x ${f(atX, 3)}, lowest ${f(low, 3)}, centre speed just after ${f(vEnd, 3)} m/s; events ${log.length} (${log.map((e) => e.kind).join(',') || 'none'}); fold ${f(fold, 0)}`);
+  // refusals: held (a finger down), a ceremony driver (moveTo); a finger during it ends it where the body is
+  const c = mk(NEUTRAL, 'jellygel'); settle(c, 0.4);
+  topPress(c, 0, 0.3); c.step(DT); const refHeld = !c.carryTo(1, 0, 0, 1); c.fingerUp(0); settle(c, 0.6);
+  c.moveTo(v3(-0.5, 0, 0), 1); const refCer = !c.carryTo(1, 0, 0, 1); c.moveTo(null); settle(c, 0.6);
+  const started = c.carryTo(1.5, 0, 0, 1.5); for (let i = 0; i < 20; i++) { c.step(DT); drain(c); }
+  topPress(c, 1, 0.3); c.step(DT); c.step(DT); const stopped = !c.carryingTo; c.fingerUp(1); settle(c, 1);
+  const pass2 = refHeld && refCer && started && stopped && c.center.x < 1.2 && finite(c);
+  ok = ok && pass2;
+  res.push(`refused while held ${refHeld}, while moveTo drives ${refCer}; a finger during it ends it ${stopped} (stopped at x ${f(c.center.x, 2)} of 1.5)`);
+  add('PH-20 carryTo: a scripted lift along an arc onto a box top 0.4 m high, set down at rest on it (onProp), no event of any kind, no fold over 120; refused while held or under a ceremony driver; a touch ends it', res.join('; '), 'all', ok);
+}
+
+/* ───────────── PH-15: water (S2: float or wade, the current, scootTo on a floater, clean exits) ───────────── */
+if (run('water')) {
+  const share = (hh: number, R: number): number => (hh * hh * (3 * R - hh)) / (4 * R * R * R);
+  const poolPlace = (flow: [number, number]): PlaceDef => {
+    const pool = { id: 'pool', kind: 1, strength: 1, shape: 'disc' as const, x: 0, z: 0, r: 1.8, surfaceY: 0.28, ramp: 0.4, flow };
+    return { ...CABIN, things: [], walls: [], zones: [pool], patches: [], tall: { ...CABIN.tall, things: [], walls: [], zones: [pool], patches: [] } } as unknown as PlaceDef;
+  };
+  // (a) the generated table (PLACES 2.5): float iff share(0.28, R) > density, families x 3 radius bands (genome size 0.1 / 0.5 / 0.9: R about 0.42 / 0.51 / 0.60);
+  // (b) drift only when floating (a 0.08 m/s swirl); each at rest 3 s at 0.6 m from the pool's centre
+  const fams = FULL ? FAMS : QUICK ? ['marshmallow', 'popdome', 'jellygel'] : ['marshmallow', 'popdome', 'slowrise', 'jellygel', 'firmsilicone', 'beadsqueeze', 'putty'];
+  const sizes = QUICK ? [0.1, 0.9] : [0.1, 0.5, 0.9];
+  let bad = 0, n = 0; const out: string[] = [];
+  for (const fam of fams) for (const size of sizes) {
+    const g = quantizeGenome({ ...makeStarterGenome(), firmness: 0.5, bounce: 0.5, stretch: 0.5, size });
+    const w = buildPropWorld(poolPlace([0.08, 0]), 'wide', 1);
+    const b = mk(g, fam, { piece: { frac: 1, chunk: false, at: v3(0.6, 0, 0) } }); b.setPropWorld(w);
+    let x0 = 0, z0 = 0;
+    for (let i = 0; i < 180; i++) { frameW(w, [b], null); if (i === 89) { x0 = b.center.x; z0 = b.center.z; } }
+    const R = b.restRadius, rho = (FAMILY_REACT as Record<string, { density: number }>)[fam].density, want = share(0.28, R) > rho;
+    const lo = lowest(b), floats = lo > 0.02, drift = Math.hypot(b.center.x - x0, b.center.z - z0), sub = b.metrics.submerged ?? 0;
+    const ok = floats === want && finite(b) && (want ? drift > 0.03 && Math.abs(sub - rho) < 0.02 : drift < 0.005);
+    n++; if (!ok) bad++;
+    out.push(`${fam} R${f(R, 2)} ${want ? 'F' : 's'}${ok ? '' : ` WRONG(lowest ${f(lo, 3)}, drift ${f(drift, 3)}, sub ${f(sub, 3)})`}`);
+  }
+  add(`PH-15 water (S2): a body at rest in 0.28 m of water floats exactly when the generated table says (share(0.28, R) > its density: PLACES 2.5), ${fams.length} families x ${sizes.length} radius bands; a floater rides at submerged = density and drifts with a 0.08 m/s swirl, a sitter does not move`,
+    `${n - bad}/${n} as the table (F floats, s sits): ${out.join(', ')}`, 'all', bad === 0);
+  // (c) scootTo on a floater: a horizontal glide with the water holding its height; scooted to a dry spot it leaves the water and becomes a sitter
+  {
+    const w = buildPropWorld(poolPlace([0, 0]), 'wide', 1);
+    const b = mk(NEUTRAL, 'marshmallow', { piece: { frac: 1, chunk: false, at: v3(-0.9, 0, 0) } }); b.setPropWorld(w);
+    for (let i = 0; i < 150; i++) frameW(w, [b], null);
+    const y0 = b.center.y, lo0 = lowest(b);
+    b.scootTo(0.9, 0, 0.3);
+    let dy = 0;
+    for (let i = 0; i < 420 && (priv(b).scootOn as boolean); i++) { frameW(w, [b], null); if (Math.abs(b.center.x) < 1.0) dy = Math.max(dy, Math.abs(b.center.y - y0)); }
+    const glided = b.center.x > 0.85;
+    b.scootTo(3.2, 0, 0.3);
+    for (let i = 0; i < 600 && (priv(b).scootOn as boolean); i++) frameW(w, [b], null);
+    b.setHome(b.center.x, b.center.z);   // (as the life host re-homes a body where LIFE brought it: else the home corral glides it back past its rim, 4 m from home)
+    for (let i = 0; i < 120; i++) frameW(w, [b], null);
+    const out2 = lowest(b), sub2 = b.metrics.submerged ?? 0;
+    add('PH-15 scootTo glides a FLOATING body (marshmallow) 1.8 m across the pool with the water holding its height (centre within 3 cm while in full depth); scooted on to a dry spot it leaves the water and sits on the floor (submerged 0), no NaN',
+      `afloat (lowest ${f(lo0, 3)} m); glided to x ${f(b.center.x, 2)}: height kept within ${f(dy * 100, 2)} cm in the pool (arrived ${glided}); out of the water: lowest ${f(out2, 3)} m, submerged ${f(sub2, 3)}`,
+      'afloat, <= 3 cm, arrived; lowest < 0.005, submerged 0', lo0 > 0.02 && dy <= 0.03 && glided && out2 < 0.005 && sub2 === 0 && finite(b));
+  }
+  // (d) clean entries: bodies launched into the pool (a floater and a sitter): no NaN, no fold over 120, the floater bobs up and settles, the sitter sits (--only / --full)
+  if (!QUICK) {
+    let fo = 0; const res: string[] = []; let ok = true;
+    for (const fam of ['marshmallow', 'jellygel']) {
+      const w = buildPropWorld(poolPlace([0, 0]), 'wide', 1);
+      const b = mk(NEUTRAL, fam, { piece: { frac: 1, chunk: false, at: v3(-2.0, 0.95, 0), vel: v3(2, 0, 0) } }); b.setPropWorld(w);
+      for (let i = 0; i < 240; i++) { frameW(w, [b], null); if (i % 6 === 0) fo = Math.max(fo, foldDeg(b)); }
+      const lo = lowest(b), want = fam === 'marshmallow';
+      const pass = finite(b) && (want ? lo > 0.02 : lo < 0.005);
+      ok = ok && pass; res.push(`${fam}: lowest ${f(lo, 3)} m, submerged ${f(b.metrics.submerged ?? 0, 3)}`);
+    }
+    add('PH-15 clean entries: a floater and a sitter launched into the pool (2 m/s from 0.5 m up): no NaN, fold <= 120, the floater floats, the sitter wades', `${res.join('; ')}; fold ${f(fo, 0)}`, 'all', ok && fo <= 120);
+  }
+  // (e) the real places: Ripple's Rock Pool (marshmallow floats, jelly gel wades); Frostbell's Steam Pool; Rainleaf's splash spots are shallow (0.06..0.08 m): wade only
+  {
+    const res: string[] = []; let ok = true;
+    const at = (pl: PlaceDef, zi: number, dx: number): V3 => { const z = pl.zones[zi]; return v3(z.x + dx, 0, z.z); };
+    for (const [pl, zi, dx, fam, want] of [[RIPPLE, 0, 0.75, 'marshmallow', true], [RIPPLE, 0, 0.75, 'jellygel', false], [FROSTBELL, 1, 0.45, 'popdome', true], [RAINLEAF, 1, 0, 'marshmallow', false]] as const) {
+      const w = buildPropWorld(pl, 'wide', 1);
+      const b = mk(NEUTRAL, fam, { piece: { frac: 1, chunk: false, at: at(pl, zi, dx) } }); b.setPropWorld(w);
+      for (let i = 0; i < 150; i++) frameW(w, [b], null);
+      const fl = lowest(b) > 0.02;
+      ok = ok && fl === want && finite(b); res.push(`${pl.id} ${pl.zones[zi].id} ${fam}: ${fl ? 'floats' : 'wades'} (submerged ${f(b.metrics.submerged ?? 0, 3)})`);
+    }
+    add('PH-15 the S2 places\' own water: Ripple\'s Rock Pool floats a marshmallow and wades a jelly gel; Frostbell\'s Steam Pool floats a pop dome; Rainleaf\'s shallow splash spot (0.07 m) only wets a marshmallow (it wades)', res.join('; '), 'as the table', ok);
+  }
+  info('PH-15 not built: soaking (a slow-rise or marshmallow soaking to its soaked density: SoftBody.mods[4], the shell writes it; physics reads mods[4] when present), the bulge slosh in water, waves (Ripple\'s surf edge), the current zone kind (only a water zone\'s own flow acts)', '');
+}
+
+/* ───────────── PH-16: the flush pad (S2: Rainleaf's Moss Bouncer) ───────────── */
+if (run('pad')) {
+  const padT = RAINLEAF.things.find((t) => t.mech === MECH.pad)!;
+  const place = { ...RAINLEAF, things: [{ ...padT, x: 0, z: 0 }], walls: [], zones: [], patches: [], tall: { ...RAINLEAF.tall, things: [{ x: 0, z: 0, yaw: 0 }], walls: [], zones: [], patches: [] } } as unknown as PlaceDef;
+  const cap = padT.p.apex ?? 0.3;
+  const fams = FULL ? FAMS : QUICK ? ['jellygel', 'firmsilicone', 'stickystretch', 'slimegoo'] : ['jellygel', 'firmsilicone', 'stickystretch', 'slimegoo', 'marshmallow', 'putty', 'gummy', 'popdome'];
+  const res: string[] = []; let bad = 0;
+  const out = new Float32Array(32);
+  for (const fam of fams) {
+    const w = buildPropWorld(place, 'wide', 1);
+    const b = mk(NEUTRAL, fam, { piece: { frac: 1, chunk: false, at: v3(0, 0.75, 0) } }); b.setPropWorld(w);
+    let apex = 0, t = 0, landT = -1, lands = 0, autoLands = 0; const kicks: number[] = [];
+    for (let i = 0; i < 60 * (QUICK ? 3 : 5); i++) {
+      w.beginFrame(); b.step(DT); const e: SoftEvent[] = []; b.drainEvents(e); w.endFrame(DT); t += DT;
+      for (const x of e) if (x.kind === 'land') { lands++; if (x.auto) autoLands++; if (landT < 0) landT = t; }
+      const m = w.drainStrikes(out); for (let k = 0; k < m; k++) kicks.push(t);
+      if (i > 30) apex = Math.max(apex, lowest(b));
+    }
+    const hold = (FAMILY_REACT as Record<string, { padHoldS: number }>)[fam].padHoldS, firstKick = kicks.length ? kicks[0] - landT : NaN;
+    const ok = kicks.length >= 1 && kicks.length <= 5 && apex <= cap + 1e-6 && Math.abs(firstKick - hold) <= 0.1 + DT && finite(b) && autoLands === lands;
+    if (!ok) bad++;
+    res.push(`${fam}: ${kicks.length} kick(s), apex ${f(apex * 100, 1)} cm, first kick ${f(firstKick, 2)} s after landing (hold ${hold})`);
+  }
+  add(`PH-16 the flush pad (Rainleaf's Moss Bouncer, gain ${padT.p.gain}, apex cap ${cap} m): a body dropped on it from 0.35 m, ${fams.length} families: 1 to 5 kicks, the lowest point never over the cap, the first kick after the family's sticky hold +-0.1 s (0.4 s sticky stretch, 0.6 s slime, else at once), its landings auto (nobody threw it)`,
+    res.join('; '), 'all', bad === 0);
+  // LIFE's "walks on, one small hop, and the pad does the rest": a hop at the S1 cap from the pad grows into bounces
+  {
+    const w = buildPropWorld(place, 'wide', 1);
+    const b = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(0, 0, 0) } }); b.setPropWorld(w);
+    for (let i = 0; i < 40; i++) frameW(w, [b], null);
+    const hopOk = b.hop(0, PG.hopVyCap, 0);
+    let apex = 0, kicks = 0;
+    for (let i = 0; i < 240; i++) { frameW(w, [b], null); kicks += w.drainStrikes(out); apex = Math.max(apex, lowest(b)); }
+    add('PH-16 one small hop on the pad (vy 0.84, apex 3.5 cm alone) and the pad does the rest: the bounces grow (several kicks, the apex well over the hop\'s), at most 5', `hop ${hopOk}, ${kicks} kick(s), apex ${f(apex * 100, 1)} cm`, '>= 2 kicks, <= 5, apex > 6 cm', hopOk && kicks >= 2 && kicks <= 5 && apex > 0.06);
+  }
+}
+
+/* ───────────── S2 ramp and floater (Frostbell's Glide Ramp, Ripple's Bob Ring) ───────────── */
+if (run('ramp')) {
+  // the Glide Ramp: a body set at its top (carryTo) slides down past its foot between the rails; its colliders are the slab and two rails
+  const w = buildPropWorld(FROSTBELL, 'wide', 1), kr = w.propThing.indexOf(1), rd = FROSTBELL.things[1];
+  const hl = rd.size[0], ang = ((rd.p.angle ?? 14) * Math.PI) / 180, yaw = rd.yaw, ox = Math.cos(yaw), oz = Math.sin(yaw);
+  const parts = Array.from(w.propThing).filter((t) => t === 1).length;
+  const topX = rd.x - ox * (hl - 0.35), topZ = rd.z - oz * (hl - 0.35), topY = (rd.p.top ?? 0.5) - 0.35 * Math.sin(ang) - 0.02;
+  const res: string[] = []; let ok = parts === 3;
+  for (const fam of QUICK ? ['firmsilicone'] : ['firmsilicone', 'jellygel', 'gummy']) {
+    const b = mk(NEUTRAL, fam, { piece: { frac: 1, chunk: false, at: v3(rd.x + ox * 2.2, 0, rd.z + oz * 2.2) } }); b.setPropWorld(w);
+    for (let i = 0; i < 20; i++) frameW(w, [b], null);
+    const started = b.carryTo(topX, topY, topZ, 1.0);
+    for (let i = 0; i < 70; i++) frameW(w, [b], null);
+    const onTop = b.metrics.onProp === kr, along0 = (b.center.x - rd.x) * ox + (b.center.z - rd.z) * oz;
+    let fo = 0, side = 0;
+    for (let i = 0; i < 60 * 4; i++) { frameW(w, [b], null); if (i % 6 === 0) fo = Math.max(fo, foldDeg(b)); side = Math.max(side, Math.abs(-(b.center.x - rd.x) * oz + (b.center.z - rd.z) * ox)); }
+    const along1 = (b.center.x - rd.x) * ox + (b.center.z - rd.z) * oz;
+    const pass = started && onTop && along1 - along0 > 1.0 && fo <= 120 && finite(b);
+    ok = ok && pass; res.push(`${fam}: set at the top (onProp ${onTop}), slid ${f(along1 - along0, 2)} m down the slope in 4 s, off the centre line at most ${f(side, 2)} m, fold ${f(fo, 0)}`);
+  }
+  add(`S2 ramp (Frostbell's Glide Ramp, ${rd.p.angle} deg, mu ${rd.mu}): 3 colliders (slab + 2 rails); a body set at its top by carryTo slides down past its middle (> 1 m along the slope in 4 s), no fold over 120`, `${parts} colliders; ${res.join('; ')}`, 'all', ok);
+  // the Shake Pine: its trunk and its branch (part 1, where the render draws it); a body scooted into the trunk faster than its bump speed (0.3 m/s) shakes the branch
+  // (a strike with the body's slot), a slower one does not
+  {
+    const pine = FROSTBELL.things[6], res2: string[] = []; let okP = true;
+    for (const sp of [0.2, 0.45]) {
+      const wp = buildPropWorld(FROSTBELL, 'wide', 1), kT = wp.propThing.indexOf(6), kBr = kT + 1;
+      const b = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(pine.x + 1.6, 0, pine.z + 0.3) } }); b.contactSlot = 3; b.setPropWorld(wp);
+      for (let i = 0; i < 20; i++) frameW(wp, [b], null);
+      b.scootTo(pine.x - 1, pine.z + 0.3, sp);
+      const so = new Float32Array(32); let strikes = 0, slot = -1, maxA = 0;
+      for (let i = 0; i < 360; i++) { frameW(wp, [b], null); const m = wp.drainStrikes(so); for (let k = 0; k < m; k++) if (so[k * 4] === kBr) { strikes++; slot = so[k * 4 + 3]; } maxA = Math.max(maxA, Math.abs(wp.angle(kBr))); }
+      const bx = wp.poses[kBr * 8], want = pine.x + pine.size[0] + (pine.p.branchL ?? 0.5) / 2;
+      const pass = wp.propPart[kBr] === 1 && Math.abs(bx - want) < 1e-4 && (sp > (pine.p.bumpSpeed ?? 0.3) ? strikes >= 1 && slot === 3 && maxA > 0.02 : strikes === 0);
+      okP = okP && pass; res2.push(`scoot ${sp} m/s: ${strikes} strike(s) (slot ${slot}), branch up to ${f((maxA * 180) / Math.PI, 1)} deg`);
+    }
+    add('S2 the Shake Pine (Frostbell): the branch is part 1 at the render\'s place; a body scooted into the trunk at 0.45 m/s (over the pine\'s 0.3 m/s) shakes it (a strike with its contact slot), at 0.2 m/s it does not', res2.join('; '), 'as described', okP);
+  }
+  // the Bob Ring floats on the Rock Pool's surface and bobs within its amplitude
+  const wr = buildPropWorld(RIPPLE, 'wide', 1), kb = wr.propThing.indexOf(1), bobD = RIPPLE.things[1];
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < 60 * 4; i++) { wr.beginFrame(); wr.endFrame(DT); const y = wr.poses[kb * 8 + 1]; lo = Math.min(lo, y); hi = Math.max(hi, y); }
+  const segs = Array.from(wr.propThing).filter((t) => t === 1).length, surf = RIPPLE.zones[0].surfaceY ?? 0, amp = bobD.p.bob ?? 0;
+  add('S2 floater (Ripple\'s Bob Ring): a ring of capsules at the Rock Pool\'s surface (0.28 m), bobbing within its amplitude (0.03 m) at 0.3 Hz',
+    `${segs} segments; centre y ${f(lo, 3)} .. ${f(hi, 3)} m`, `6; ${f(surf - amp, 3)} .. ${f(surf + amp, 3)}`, segs === (bobD.p.segments ?? 6) && lo >= surf - amp - 1e-6 && hi <= surf + amp + 1e-6 && hi - lo > amp);
 }
 
 /* ───────────── PH-05: the ball ───────────── */
@@ -594,6 +1132,28 @@ if (run('order')) {
     `count ${w.count}; propThing ${gotT.join(',')}; propPart ${gotP.join(',')}`, `count 15; ${expT.join(',')} / ${expP.join(',')}`, okOrder);
   const h = buildPropWorld(HOME, 'wide', 1);
   add('PH-23 Home: its things are built parked (no collider until the shell shows them: setParked(thing, false)); the Snooze Rug has no prop', `count ${h.count}; propThing ${Array.from(h.propThing).join(',')}; parked ${Array.from({ length: h.count }, (_, k) => (h.isParked(k) ? 1 : 0)).join('')}`, 'every prop parked; no prop of thing 2', Array.from({ length: h.count }, (_, k) => h.isParked(k)).every(Boolean) && !Array.from(h.propThing).includes(2));
+  // R4: setParked shows and parks EVERY prop of a thing (round 3 counted a thing's props from -1, so a one-part thing never changed: PG_SHELL's parkThing FALLBACK)
+  {
+    const hw = buildPropWorld(HOME, 'wide', 1), nT = HOME.things.length, kBall = hw.propThing.indexOf(0);
+    for (let t = 0; t < nT; t++) hw.setParked(t, false);
+    const shown = Array.from({ length: hw.count }, (_, k) => (hw.isParked(k) ? 1 : 0)).join('');
+    const hit = hw.raycast(hw.poses[kBall * 8], 2, hw.poses[kBall * 8 + 2], 0, -1, 0);
+    hw.poke(kBall, 1.2, 0, 0); const bx0 = hw.poses[kBall * 8];
+    for (let i = 0; i < 30; i++) { hw.beginFrame(); hw.endFrame(DT); }
+    const rolled = hw.poses[kBall * 8] - bx0;
+    for (let t = 0; t < nT; t++) hw.setParked(t, true);
+    const parkedAgain = Array.from({ length: hw.count }, (_, k) => (hw.isParked(k) ? 1 : 0)).join(''), missAgain = hw.raycast(hw.poses[kBall * 8], 2, hw.poses[kBall * 8 + 2], 0, -1, 0);
+    // a thing of several parts (the cabin's basket: 6 segments; the kettle: a block and a sphere) parks and shows whole
+    const cw2 = buildPropWorld(CABIN, 'wide', 1);
+    cw2.setParked(4, true); cw2.setParked(5, true);
+    const multi = Array.from({ length: cw2.count }, (_, k) => (cw2.isParked(k) ? 1 : 0)).join('');
+    cw2.setParked(4, false); cw2.setParked(5, false);
+    const multiBack = Array.from({ length: cw2.count }, (_, k) => (cw2.isParked(k) ? 1 : 0)).join('');
+    const okMulti = multi === '000011111111000' && multiBack === '000000000000000';
+    add('PH-23 setParked shows and parks every prop of a thing (R4 fix: round 3 counted from -1 and a ONE-part thing never changed): Home\'s things all shown, the Felt Ball raycasts and rolls on a poke, all parked again (no raycast); the cabin\'s basket (6 parts) and kettle (2 parts) park and show whole',
+      `Home shown ${shown}, ball hit ${hit === kBall}, rolled ${f(rolled, 3)} m in 0.5 s; parked again ${parkedAgain}, raycast ${missAgain}; cabin parked ${multi}, shown ${multiBack}`,
+      'all 0, hit, > 0.1 m; all 1, -1; 000011111111000, all 0', /^0+$/.test(shown) && hit === kBall && rolled > 0.1 && /^1+$/.test(parkedAgain) && missAgain === -1 && okMulti);
+  }
   // strikes: a chime poked (cause 0, slot -1), a body walking into it (cause 1, its contactSlot)
   const cw = buildPropWorld(testPlace([thing(MECH.chime, 0, 0, [0.08, 0.2, 0], { n: 1, hang: 0.5, limit: 25, damping: 0.8 })]), 'wide', 1);
   const out = new Float32Array(32);
@@ -675,6 +1235,28 @@ if (run('alloc') && LONG('alloc')) {
     `${win.join(' ; ')} (the scoot gliding at the end of ${gliding}/4 windows); an identical setSquash re-sent: ${f(callB, 1)} B a call (its caller's tier)`, '0 B', best <= 0);
 }
 
+/* ───────────── PH-11 (round 4 paths): AUTO with a rider holding on, and a floater in water ───────────── */
+if (run('alloc') && LONG('alloc')) {
+  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+  const wc = buildPropWorld(CABIN, 'wide', 1), kS = wc.propThing.indexOf(3), p = wc.poses;
+  const r = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(p[kS * 8], p[kS * 8 + 1] + 0.6, p[kS * 8 + 2]) } }); r.setPropWorld(wc);
+  const pool = { id: 'pool', kind: 1, strength: 1, shape: 'disc' as const, x: 0, z: 0, r: 1.8, surfaceY: 0.28, ramp: 0.4, flow: [0.08, 0] };
+  const wp = buildPropWorld({ ...CABIN, things: [], walls: [], zones: [pool], patches: [], tall: { ...CABIN.tall, things: [], walls: [], zones: [pool], patches: [] } } as unknown as PlaceDef, 'wide', 1);
+  const fl = mk(NEUTRAL, 'marshmallow', { piece: { frac: 1, chunk: false, at: v3(0.6, 0, 0) } }); fl.setPropWorld(wp);
+  wc.setAuto(3, true); wc.setAuto(1, true);
+  const evs: SoftEvent[] = [];
+  let events = 0;
+  const frame = (): void => { wc.beginFrame(); wp.beginFrame(); r.step(DT); fl.step(DT); evs.length = 0; r.drainEvents(evs); fl.drainEvents(evs); events += evs.length; wc.endFrame(DT); wp.endFrame(DT); };
+  for (let i = 0; i < 6000; i++) frame();
+  const empty: number[] = [];
+  for (let i = 0; i < 6; i++) { const u0 = newUsed(); empty.push(newUsed() - u0); }
+  const base = empty[empty.length - 1], win: string[] = [];
+  let best = Infinity;
+  for (let wd = 0; wd < 4; wd++) { events = 0; const u0 = newUsed(); for (let i = 0; i < 120; i++) frame(); const d = newUsed() - u0; win.push(`${d - base} B / ${events} ev`); if (d >= 0 && events === 0) best = Math.min(best, d - base); }
+  add('PH-11 allocation, round 4 paths: the cabin\'s swing on AUTO with a rider holding on (and the rocker on AUTO), a marshmallow afloat in a pool with a current (the world\'s zone step and its nudges): new-space growth per 120 frames with no SoftEvent (best of 4 windows, after a 100 s warm-up)',
+    `${win.join(' ; ')} (AUTO share ${f(wc.autoShare(kS), 2)}, rider on ${r.metrics.onProp === kS}, floater submerged ${f(fl.metrics.submerged ?? 0, 3)})`, '0 B', best <= 0);
+}
+
 /* ───────────── PH-12: cost with 4 props in reach ───────────── */
 if (run('cost')) {
   // one awake detail-3 body pressed by a finger, beside and on 4 props (a box under it, two capsules and a sphere against its sides), against the same body alone
@@ -724,5 +1306,6 @@ if (run('pf05') && LONG('pf05')) {
 
 let failed = 0;
 for (const r of rows) { if (!r.pass) failed++; console.log(`${r.pass ? 'PASS' : 'FAIL'}  ${r.what}\n          measured: ${r.value}    threshold: ${r.limit}`); }
+if (process.env.PGTIME) console.log(secT.map((x, i) => `${x[0]} ${(((secT[i + 1]?.[1] ?? performance.now()) - x[1]) / 1000).toFixed(2)} s`).join(', '));
 console.log(`${rows.length - failed}/${rows.length} playground physics checks passed in ${((performance.now() - t0) / 1000).toFixed(1)} s${FULL ? ' (--full)' : ' (quick set)'}`);
 process.exit(failed ? 1 : 0);

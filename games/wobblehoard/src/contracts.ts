@@ -961,8 +961,9 @@ export interface DebugHook {
   life?(): unknown;
   /** PLAYGROUND (dev only): the journal state, open quests with their counters, the event ring's last 64 records, as plain JSON. */
   quests?(): unknown;
-  /** PLAYGROUND (dev only): travel to a place id at once (the same path as the Travel sheet, without the sheet); true on arrival. */
-  travel?(place: string): Promise<boolean>;
+  /** PLAYGROUND (dev only): travel to a place id at once (the same path as the Travel sheet, without the sheet); true on arrival. `any` (PG_SHELL round 4,
+   *  additive): also a place that has not shipped or opened yet (the check of a slice before it ships). */
+  travel?(place: string, any?: boolean): Promise<boolean>;
 }
 
 /* ── PLAYGROUND LIFE seam (src/life is pure: no DOM, no three, no physics, no clock, no Math.random; LIFE.md 12) ──

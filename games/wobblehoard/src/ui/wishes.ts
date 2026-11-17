@@ -34,15 +34,25 @@ export function attachBubbleTaps(root: HTMLElement, canvas: HTMLCanvasElement, h
     layer.append(b);
   }
   root.append(layer);
+  /** (R4) the HUD's boxes: a bubble under the top buttons, the hint, the info row, the dock or a toast keeps no hit area there (it could not keep its 44 x 44
+   *  px: the K02 rows found a 45 x 42 and a covered one at 358 x 201 and 632 x 355); the bubble itself still shows, and Enter on the squishy reads it */
+  const CHROME = '.hud-actions, .hud-life, .hint[data-show="true"], .hud-bottom > *, #wh-dock, .meter-cluster, .qswitch:not([hidden]), .mat-chip:not([hidden]), .toast, .opts:not([hidden])';
   const place = (): void => {
     const c = canvas.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth || window.innerWidth, vh = window.innerHeight;
+    let boxes: DOMRect[] | null = null;
+    const handTool = (document.body.dataset.tool ?? 'hand') === 'hand';   // (a bubble is tapped with the Hand only: a Cut swipe or a Snap drag over it is theirs)
     for (let k = 0; k < 8; k++) {
       const b = btns[k];
-      const info = host.bubble(k, xyr);
+      const info = handTool ? host.bubble(k, xyr) : null;
       if (!info) { if (!b.hidden) b.hidden = true; continue; }
+      const x = c.left + xyr[0], y = c.top + xyr[1], x0 = x - HIT / 2, y0 = y - HIT / 2;
+      boxes ??= [...document.querySelectorAll(CHROME)].map((e) => e.getBoundingClientRect()).filter((q) => q.width > 0 && q.height > 0);
+      const clear = x0 >= 0 && y0 >= 0 && x0 + HIT <= vw && y0 + HIT <= vh && !boxes.some((q) => !(x0 + HIT <= q.left || q.right <= x0 || y0 + HIT <= q.top || q.bottom <= y0));
+      if (!clear) { if (!b.hidden) b.hidden = true; continue; }
       const meaning = BUBBLE_MEANINGS[info.icon] ?? 'A bubble';
       if (b.getAttribute('aria-label') !== meaning) b.setAttribute('aria-label', info.wish ? `A wish: ${meaning}` : meaning);
-      b.style.left = `${(c.left + xyr[0]).toFixed(1)}px`; b.style.top = `${(c.top + xyr[1]).toFixed(1)}px`;
+      b.style.left = `${x.toFixed(1)}px`; b.style.top = `${y.toFixed(1)}px`;
       if (b.hidden) b.hidden = false;
     }
   };

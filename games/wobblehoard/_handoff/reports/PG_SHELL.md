@@ -138,3 +138,199 @@ probe_app 183/183. The scratch FN-01 run (`scratchpad/pg_shell/fn01.ts`) still p
   "coming later"); the trip by the sheet arrives in 1.75 s of sim (H8, C1, C10 "Who loves the cabin?"); a real click on the fireplace is a thing tap; home again by the sheet in mat order.
   Screenshots (looked at): `_shots/shell/pg_home_party_desktop.png` (three out, the lamp, the Music Box, the rug, Journal in the dock), `pg_journal_desktop.png`, `pg_travel_desktop.png`,
   `pg_cabin_desktop.png` (the fireplace lit, swing, kettle, yarn ball, rocker, Dollop napping in the snug basket by the fire), `pg_home_first_minute_desktop.png`, `pg_home_back_desktop.png`.
+
+# Round 4 (2026-11-17 from 05:05 UTC; HEAD 7e64f2018; the container had just restarted: nothing of anyone running)
+Scope (orchestrator): (1) finish step 8: the pg-phone section, ONE browser run of the published-feature sections (trophies, dock, cut, photo, lock,
+screens) on this tree, compare each failing row with the PC's own numbers (STATUS, its reports), fix what PLAYGROUND caused; (2) polish from the
+screenshots: "Put back 2" an unstyled grey box (both layouts); phone cabin: a jagged black shape beside the ball's mat, the low table over the bottom of
+the play area, the dock tooltip over the name tag; the dev stats overlay never in production; (3) D-95 revised: the swing and rocker AUTO toggle (a small
+kit control on the thing, keyboard reachable, off by default) and grabbing the seat or rider by hand (PG_PHYS's API if it lands this round, else a marked
+FALLBACK); (4) the trophies' gift sweep and every other open request to PG_SHELL in the PG_*.md reports (each listed done / not); (5) S2 places
+(Ripple Shore, Frostbell Ridge, Rainleaf Garden) opened in Travel only if their data, render and sound chunks load and a visit works end to end.
+No git write command. Port 5366 only (5367 only when free).
+
+## R4.0 Baseline (05:10, HEAD 7e64f2018, clean tree, one probe at a time: `scratchpad/pg_shell/baseline.sh r4/base`)
+| check | result |
+|---|---|
+| tsc | exit 0 (1.7 s) |
+| probe_app | 187/187 |
+| probe_gestures | 160/160 |
+| probe_merge | 22/22 |
+| probe_trophies | 31/31 |
+| probe_collection | 73/74 (C08 previewTouch allocation 160 000 B / 20 000 calls: the known flaky row, PC STATUS and PG_QUESTS) |
+| shellview/node_checks | 156/156 (36 s) |
+| probe_economy, probe_catalog | all passed |
+| probe_life | 95 ok, 1 fail (LF-02, PG_LIFE's) |
+| probe_chatter | 42/42 |
+| renderview/pg_node_checks | 40 ok, 0 FAIL |
+| probe_screens | 43/43 |
+
+## R4 steps (updated after every finished step)
+| step | what | state |
+|---|---|---|
+| R4.0 | read the report, SESSION3, the brief with D-95 revised, STATUS, MERGE_PC, every PG_* request to PG_SHELL; baseline | DONE 05:12 |
+| R4.1 | polish, first part: (a) "Put back n" is a kit button now (`src/ui/hoard/panel.ts`: `mat-chip k-btn k-btn--sm`, its word a `k-btn-label`); the cause is the PC's own published code: hud.css says "a kit button (hudBinding adds `k-btn`)" but neither hudBinding nor panel.ts ever added it (same at 9211d66ba), so the chip drew as the browser's default grey button in every layout; (b) the Journal and Places dock tooltips follow every other dock button (toolbar.ts): only while the dock draws no labels (`when: form !== 'full'`) and on the dock's side (`tipSide`); (c) the dev stats overlay: `boot.ts` 282 creates it only under `import.meta.env.DEV && cfg.dev` (vite drops it from a build; the prod-build section greps and boots the build with `?dev=1&lab=1`); my pg screenshots hide it | DONE 05:20 (tsc 0); the build grep in the browser run |
+| R4.2 | requests: the Hoard swatch's "Gift" (`originCopy(it.origin, it.id)`, PG_QUESTS request 4) DONE; the trophies' gift sweep NOT DONE, see the note below | 05:25 |
+
+### R4.2 note: the trophies' gift sweep (PG_QUESTS R3 step 1) is NOT in, on purpose
+The one line (`g.hoard.onEvent`: a `gift` event with `state === 'granted'` -> `sweepSpecies(false)`) was written and run: it turns PG_QUESTS's own
+passing row RED: probe_journal **CO-12 "trophy behaviour is unchanged by the Journal: the trophies' save (nine counters, the earned set) with a Journal
+attached, a ring fed and a gift granted equals the save without one"** (A species 1, B species 2: the gifted species is counted, which is exactly what
+the sweep is for). The two asks contradict each other, and the row is PG_QUESTS's file, so I reverted the line (probe_journal all ok again).
+**Request to PG_QUESTS (or the orchestrator):** re-specify CO-12 row 3 with the written reason "the trophies count a gifted species at once (the
+sweep PG_QUESTS asked for)": compare the save with `species` left out, and assert B's `species` equals the species owned after the grant. Then the line
+goes in as written above (achievementsBinding.ts `attach()`, one condition), no other change.
+| R4.3 | D-95 revised: the AUTO chips and the hand on the seat (on PG_PHYS round 4's `setAuto` / `grabProp` / `dragPropRay` / `releaseProp`, in its working tree since 05:10) | DONE 05:40: tsc 0; node_checks **160/160** (4 new rows below); scratch browser run on 5366 (below) |
+| R4.4 | the round-3 phone shot's "jagged black shape" found and fixed: **Home's things never left Home** | DONE 05:38 (node row) |
+| R4.5 | other requests: the held creak / roll voices, the fire's crackle, the place finale light, a cold place's voice pitch, LIFE's CUT touch before the cut whole leaves | DONE 05:45 (tsc 0, node_checks 160/160) |
+
+### R4.3 notes: D-95 revised as built
+- **The control** (`src/ui/thingAuto.ts`, NEW, life chunk: later-life.ts re-exports it, boot.ts attaches it with the bubble taps): one small kit toggle chip per hinge ride in
+  the place shown (the Pillow Swing and the Rocker Board at the cabin; Rainleaf's Leaf Teeter once Rainleaf ships), `k-chip` with `aria-pressed` (32 px to see,
+  44 px to hit), the word "Auto" and the `reset` icon, named "Auto: the Pillow Swing moves by itself". OFF by default; only the player switches it (LIFE and
+  autonomy never call it; the autonomy setting does not touch it: the revised D-95 makes it the player's choice). It is a real button in the page's Tab order
+  (Tab stays the browser's, D-77); Space / Enter toggle it; the live region says "The Pillow Swing moves by itself." / "... slows down by itself.".
+  Anchors stand still: a swing's beam (the ropes' top, `p.pivotY`), 0.65 m above a rocker's pivot (over its riders' heads); placed every 250 ms (never per frame),
+  hidden while LIFE is quiet (a sheet, a ceremony, travel, any tool but the Hand), moved up past any HUD box it would cover (top buttons, hint, info row, dock,
+  ring, Put back, toasts), else hidden for that round. A ride's AUTO is kept for the session across trips (re-applied on arrival).
+- **The hand** (later-life.ts `grabAt` / `dragAt` / `dropAt` / `holds`; game.ts: 6 lines in the input port): a Hand press on a swing seat or rocker board with no squishy
+  in front is the host's (the gesture machine never sees it, so the view does not turn); a drag pulls it (`dragPropRay` from the pointer ray), the release lets it swing
+  on (AUTO off: it dies down; on: physics eases it back to the arc); a still tap (< 350 ms, < 12 px) stays round 3's poke + USE by PLAYER; a moved release writes one
+  USE by PLAYER. The rider is grabbed as any squishy (the gesture machine; physics' held-rider rule makes the hand win). `releaseEverything`, `cancelAll`, a
+  pointer cancel, a trip and dispose let go.
+- **FALLBACK** (marked in later-life.ts): physics without `setAuto` / `grabProp` (the round-3 props.ts): no chip is offered and a press on the seat stays round 3's tap or
+  the camera's drag. The node row reports which branch ran.
+- node_checks rows (section 13, REAL SoftBody + REAL PropWorld): AUTO (two chips, both off; seat x range at rest 0.000 m, AUTO on **0.486 m** (+-0.24 m = the 10 deg arc on
+  the 1.4 m rope), 30 s after off 0.010 m); the hand (the press is the host's, a 112 px drag pulls the seat 0.003 -> 0.597 m, then a 1.08 m range in 2 s); the held
+  creak (1 722 calls, held up to 0.73, then 0); Home's things leave with Home.
+- Scratch browser run (`scratchpad/pg_shell/r4/explore.mjs`, 1280x800 and 390x844, the REAL game): AUTO by a real click on the chip: the resting seat (x 0.000)
+  swings +-0.243 m steadily for 12 s; a real mouse drag on the seat: `hand:pillowswing`, the seat swung +-0.52 m after release and settled back to the AUTO arc.
+  0 console errors on both pages.
+
+### R4.4 notes: "a jagged black shape beside the ball's mat" (round-3 phone cabin shot)
+The stage draws a SHOWN Home thing at the bound prop whose `propThing` equals ITS index (contracts: "a bound prop's pose moves it after that"). The host never hid
+Home's things on a trip, so in a place the Felt Ball, the Music Box and the Snooze Rug followed the place's things 0, 1 and 2: at the cabin (tall) the dark Snooze Rug
+lay under the Yarn Ball (thing 2) and z-fought the cabin's rug and floor (the jagged black edge); at Ripple, Frostbell and Rainleaf the ball and the box stood at
+their Home spots (a stray pink ball and a red box in every S2 shot, the box under Rainleaf's Leaf Teeter, thing 1). Fix: `enterPlace` parks every shown Home thing
+(`setHomeThing(k, false)`); home again shows them by the same rule as before. **Request to PG_RENDER (defensive):** the home kit could ignore bound poses while a place
+is shown.
+
+### R4.5 notes
+- PG_AUDIO: a hinge's creak and a ball's roll are HELD voices now (`prop({ kind, key: prop, held: speed 0..1, size })` every frame while it moves, once 0 when it stops;
+  `auto` unless the player's hand holds it or the player tapped a thing in the last 2 s); the fireplace's crackle puffs the bed when a tap lights it; a place with a
+  whole-place cold zone (strength >= 0.5: Frostbell) sings a semitone lower (x 2^(-1/12)).
+- PG_RENDER: a chapter's finale completed in its own place draws the place's finale light (`thingFx(-1, 2, 1)`), eased back after 20 s of sim (`thingFx(-1, 2, 0)`).
+- PG_LIFE (LIFE 9): when a cut replaces the whole, the whole gets ONE more frame with touch kind CUT (the curious one walks over to look), then it leaves and its pieces
+  join (node row "a cut with LIFE" still ok).
+- Hoard: a Journal gift's swatch reads "Gift" (`originCopy(it.origin, it.id)`, PG_QUESTS request 4).
+- The phone's hint pill stands one row higher while "Put back n" shows (stack layout, 381 px and wider; hud.css): the two shared a band and the chip covered the pill's
+  end ("Tap to poke · hold to squish · drag..." under "Put back 1" in my first 390x844 shot).
+- The dev hook: `travel(place, any)` (dev only: a place that has not shipped or opened yet, for the S2 checks; contract DebugHook: an optional second argument,
+  additive) and `shell.stageObj()` (dev only).
+
+### R4.6 Every request to PG_SHELL in the PG_*.md reports (state at R4; "r3" = done in round 3 and verified in its rows)
+| from | request | state |
+|---|---|---|
+| PG_QUESTS 1 | attachJournal through the trophies wrapper; feedPlay once a frame; setJournalParty on each party change; journal() for the screens | DONE r3 |
+| PG_QUESTS 2 | quest `byPlayer` gates the haptic; unlock place 1 line; gift ready / pending / granted | DONE r3 (the gift card's claim path: the Journal shows it; QUESTS 11's card copy as built in round 3) |
+| PG_QUESTS 3 | ring conventions (WISH thing / v, the 5:00 backstop a = 255, VISIT by PLAYER, SOCIAL v -1, BRING per member, PIECES sub, TOUCH v) | DONE r3; BRING was missing (the reducer's MET fact and the favourite-place warmth read it): DONE R4 (one per squishy the player brings out of the Hoard or switches to, and one per member arriving with a trip; not for the attach's party or a capsule's newcomer, whom CAPSULE records) |
+| PG_QUESTS 4 | Hoard swatch "Gift" (`originCopy(it.origin, it.id)`) | DONE R4 |
+| PG_QUESTS 5 | the gift card through `claimGift`, its refusal messages, no Yes button for a signed-in ledger | DONE r3 (later-journal.ts) |
+| PG_QUESTS 6 | the Friendship Frame thumbnail (`JOURNAL_FRAME_KEY`) at the X8 photo | NOT DONE: needs the Snap shutter (11.15), not built |
+| PG_QUESTS R3 step 1 | the trophies' gift sweep (one line in achievementsBinding.ts) | NOT DONE: contradicts PG_QUESTS's own CO-12 row 3 (R4.2 note); the line and the re-spec are written there |
+| PG_QUESTS R3 step 2 | lifeSetFriends for every owned species after lifeSetJournal; on FRIEND >= 2 and F3 | DONE r3 |
+| PG_LIFE | snapshot by slot, no extra attention filter, no lifeRemove / lifeAdd for a ceremony, a cut = remove + add pieces with the group, USE by PLAYER b 254, the backstop WISH, HOP's anticipation, GAZE NaN = camera, EMOTE bits | DONE r3 |
+| PG_LIFE | SOCIAL GREET thing -2 -> v -1, FRIEND wish granted by PLAYER, lifeSetHops(w, 0) in S1 | DONE r3 |
+| PG_LIFE | the CUT touch kind on the whole before it is removed (the curious one's walk-over) | DONE R4 |
+| PG_LIFE | lifeSetHops(w, mask) in S2 (families PH-01 passed with `auto` landings) | NOT DONE: S2 not open; physics has no `auto` landings yet |
+| PG_AUDIO | setTouching on change; `auto` lands / bumps -> autoThud; prop strikes with `auto = cause !== 0`; ball `size`; chime `note`; sing for SING / DUET; a piece's pitch x popSize; the kettle `musicBox({ tune: 1 })`; setAmbience / setMusicStyle on arrival, `{ place: null }` and 'home' at Home | DONE r3 |
+| PG_AUDIO | held voices: the rocker's / swing's creak and a rolling ball every frame while it moves (key, held) | DONE R4 |
+| PG_AUDIO | the fire's crackle puff `prop({ kind: crackle })` | DONE R4 (when a tap lights it) |
+| PG_AUDIO | a cold place's voice pitch x 2^(-1/12) | DONE R4 |
+| PG_AUDIO | `loadAmbience` prefetched when the place OPENS (not at the trip) | DONE R4: on the `unlock` event of a shipped place, 1.5 s later, `loadPlaceDef`, `stage.loadPlace` and `audio.loadAmbience` in the background (11.7); the trip still awaits all three (cached by then) |
+| PG_AUDIO | `sing: true` on finale phrases | NOT DONE: LIFE's phrase ids carry no "finale"; SING / DUET are sung |
+| PG_AUDIO | held rustle (Shake Pine) / whoosh (slides, rides), a splash on water entry, a snow-print crunch, cog ticks, `weather`, `echo` / `echoes` | NOT DONE: S2 / S3 places are not open, and physics has no water entry, slides, gusts or waves to forward |
+| PG_RENDER | setAutonomyFraming, setHomeThing, setKeepsakes, bindProps with propThing, setBodyAsleep, emote flags bit 1 (still dot), loadPlace / setPlace / setPlayBounds, setBodyLook (frost, wet, sand, toast, snow), thingFx for the kettle and the hearth | DONE r3 |
+| PG_RENDER | `thingFx(-1, 2, 1)` at a finale, `0` to end it | DONE R4 (a finale done in its own place; 20 s of sim) |
+| PG_RENDER | setBodyBreath for a basking firm silicone / pop dome | NOT DONE: LIFE gives the host no "basking" state |
+| PG_RENDER | setEmotesInPhoto with the Snap bar's switch | NOT DONE: the Snap shutter and its "Bubbles in photo" switch (11.15) are not built; the stage's default (bubbles drawn) stands |
+| PG_RENDER | reactFx for a reaction cell's PARTICLE channel (1, 2, 4, 5, 6, 8, 9) | NOT DONE: no LIFE output names a reaction cell's particle; a host-side cell interpreter would duplicate LIFE's reaction rules. **Request to PG_LIFE:** an event or intent per PARTICLE cell (kind = the preset, the character) |
+| PG_RENDER | thingFx on a Shake Pine shake, a Drip Leaf tap | NOT DONE: Frostbell and Rainleaf are not open |
+| PG_PHYS | call the PG members on the SoftBody itself; one beginFrame / endFrame; drainStrikes; Home built parked + setParked / setBallBounds | DONE r3; the `parkThing` FALLBACK stays (harmless: with PG_PHYS's round-4 count fix in its working tree, `setParked` does it and the fallback's loop finds nothing to do) |
+| PG_DATA | a ramp rider at its top spot; block rows; the Drip Leaf's use spot | NOT DONE: S2 not open (and physics has no ramp) |
+| PG_DATA | the kettle's steam r 1.2 m | DONE r3 (from the data, `p.steamR`) |
+| R4.7 | PG_PHYS round 4's other members, used where present (guarded, the FALLBACKS stay for an older physics): `SoftEvent.other` (a bump's partner slot), `metrics.contacts` (the touching pairs of `units`), `setBounds` (a place's area on arrival and for a squishy who joins there; `-1` at Home, where the published corral about each body's spot stays: D-87's rectangle is NOT sent, so one squishy alone stays the published toy); `SoftEvent.auto` and `setHome` were already read when present. BRING records (QUESTS 4) added | DONE 05:55: tsc 0; node_checks 160/160 on the working tree's physics (PG_PHYS's uncommitted round-4 softbody.ts / props.ts) |
+
+### Sizes (14.3's one-file method, rolldown, imports external, minified; `scratchpad/pg_shell/size.mjs`, HEAD 7e64f2018 vs now)
+| module | chunk | HEAD | now | delta |
+|---|---|---|---|---|
+| shell/game.ts | first load | 16 521 | 16 779 | +258 (the hand's 6 input-port lines) |
+| shell/boot.ts | first load | 8 370 | 8 433 | +63 (attach the AUTO chips) |
+| shell/hudBinding.ts | first load | 16 831 | 16 937 | +106 (the dock tips' `when` and side) |
+| ui/hoard/panel.ts | first load | 24 669 | 24 710 | +41 (kit classes, the gift's origin) |
+| **shell first-load share** | | | | **+468 B this round; about 4.0 KB of the 12 KB cap with round 3's 3.5 KB** |
+| shell/later-life.ts | life chunk | 35 711 | 41 056 | +5 345 (D-95's hand and AUTO rows, held voices, finale, BRING, the physics members) |
+| ui/thingAuto.ts (new) | life chunk | - | 2 349 | new |
+The life chunk was already OVER its 150 KB cap at round 3 (168.15 KB); this round adds 7.7 KB (one-file bytes) to it. D-92's overflow moves (pack the big tables; a `play` chunk for the play-time UI) are still not done.
+| R4.8 | (5) the S2 places: visited end to end through the dev path, both layouts; **NOT opened** (they stay "coming later": reasons below) | DONE 05:40 (decision; re-checked at the end of the round) |
+| R4.9 | `_harness/uikit/pages/pg.ts` (NEW, batch PG): the Auto chip off / on on the four backdrops, "Put back n", the Journal and Places dock entries, built as the game builds them | DONE 05:58 (tsc 0; the kit page was not shot this run) |
+
+### R4.8 notes: why Ripple Shore, Frostbell Ridge and Rainleaf Garden stay "coming later"
+The visits themselves work: `scratchpad/pg_shell/r4/explore.mjs` (the REAL game, 1280x800 and 390x844, the dev hook's `travel(id, true)` that skips the shipped and
+open checks; screenshots kept as `_shots/shell/pg_r4_explore_<place>_<desktop|phone>.png`): each place's data, look and sound chunks load, the party arrives in
+the right layout (wide 0 / tall 1), stands at the place's spawn spots, the things that have props are bound, Rainleaf's Leaf Teeter gets its Auto chip, home
+again works; **0 console errors, 0 failed requests on both pages**. They do not hold up as places yet:
+1. **Physics has no ramp, pad or floater** (PG_PHYS round 3 "NOT BUILT"; round 4's working tree adds none): Frostbell's Glide Ramp, Rainleaf's Moss Bouncer and
+   Ripple's Bob Ring are drawn with NO collider (`life().things` shows no prop for them): a squishy walks through the ramp and the ring, nothing slides, bounces
+   or floats.
+2. **No water physics** (the zones are flags only): the Rock Pool, the Steam Pool and the Splash Spots leave `submerged` at 0, so FLOAT / WADE / SOAK never happen
+   and the chapters' quests that need them cannot complete (a stall, D-78's "only completable quests" would hide them, but then the chapters are half empty).
+3. In the tall layouts the front-band things (Ripple's Sand Mound, Frostbell's Snowdrift Nest) lie under the HUD rows, as the cabin's Rocker Board does (below).
+4. Flipping `shipped` is the orchestrator's (data/places.ts PLACE_INFO and each PlaceDef, PG_DATA brief); the shell needs NO change then: Travel, the journal's
+   compiled rules and LIFE's thing kinds all follow PLACE_INFO.shipped, and `travel(id, true)` stays the dev check path.
+Found and FIXED on the way (R4.4): Home's Felt Ball and Music Box stood in every S2 place.
+
+### The cabin's "low table" on a phone (round-3 shot): the Rocker Board, a layout matter (request)
+The "low table" is the 2.2 m Rocker Board: the cabin's TALL layout puts it at (0.03, 3.0), the very front edge of the play bounds (hz 3), so on a 390x844 phone it
+fills the bottom band behind the hint, "Put back" and the name tag and hides whoever is behind it. The shell frames the layout's bounds as specified (`setPlayBounds`,
+`setSafeInsets` from the info row). **Request to PG_DATA:** move the tall Rocker Board out of the front band (e.g. beside the rug at z ~ 1.6, or along a side wall);
+the same holds for Ripple's Sand Mound and Frostbell's Snowdrift Nest in their tall layouts. **Request to PG_RENDER (optional):** frame a place's things' footprints,
+not only its bounds, above the HUD rows. The hint pill no longer runs under "Put back" (R4.5).
+
+### R4 browser runs: method (one heavy job at a time, port 5366 only)
+- Run 1 (05:29, on the WORKING tree) was STOPPED at 05:40: other lanes edit in parallel and PG_PHYS's `softbody.ts` was caught mid-edit by the dev server
+  (`hoard-loop`: "TypeError: this.playerHas is not a function at SoftBody.postSubstep"), so every page after that point ran on a broken physics. Its one earlier
+  FAIL (shift-pull "the same drag WITHOUT Shift ... one snap": snap none) is re-measured below on the snapshots.
+- From run 2 the browser runs use SNAPSHOT trees in the scratch folder: `tree_mine` = `git archive HEAD` + only MY lane's working files (`sync_mine.sh`), for the
+  published sections (HEAD's physics: the AUTO chip is in its FALLBACK there); `tree_full` = tree_mine + PG_PHYS's working `src/physics` taken at a moment it
+  typechecks and node_checks pass, for the PG sections (AUTO and the hand need PG_PHYS round 4); `tree_head` (HEAD) and `tree_pc` (the PC's published 9211d66ba)
+  for A/B of any failing row.
+| R4.10 | node_checks section 13 gains the S2 dev-path row (each S2 place refused by the sheet's path, then visited by `travel(id, true)`: data loads, the party arrives, the things physics builds are bound; the ones it does not: Ripple rockpool + bobring, Frostbell icepond + glideramp + steampool, Rainleaf splashspots + mossbouncer + steppingstones) | DONE 05:47: node_checks **161/161**, probe_app 187/187, probe_gestures 160/160, tsc 0 |
+| R4.11 | **a bug of mine found by run 2 and fixed**: the hand slots (R4.3) used the id -1 as "free", and the dev hook's pointers have NEGATIVE ids (-1 for its pointer 0), so `dragAt` took every move of that pointer and no squishy could be lifted through the dev hook (run 2: shift-pull's plain drag, snap-mat's carry, cut-real's carry rows: `carried false`, events grab but no lift). A slot is in use by its own flag now, `dropAll()` replaces the `-1` "every hand" call (game.ts cancelAll / releaseEverything). New node row: a drag by pointer id -1 far out of the squishy lifts it with the host attached and the host does not hold it. A node A/B (`scratchpad/pg_shell/r4/carry_ab.ts`, a mouse id 1) lifted the squishy on the PC tree, HEAD and mine alike, which is how the cause was narrowed to the id | DONE 06:25: node_checks **162/162**, tsc 0 |
+- Run 2 (`r4/pub2`, tree_mine before R4.11) stopped after cut-real: the -1 bug (R4.11) turned every dev-hook carry into a FAIL (snap-mat carry, cut-real drag to
+  reconnect and toss, and the "4 pieces by presses" row after them: 5 pieces because the reconnect never happened). It also showed hoard-loop green (the kit
+  "Put back 2" chip included: `{"hidden":false,"text":"Put back2",...}`), shift-hint-reflow, shift-touch, settings-panel-desktop, toolbar green.
+- **A/B on the PC's own published tree** (`r4/ab_pc`, 9211d66ba, same machine, same port, `--only=desktop-boot,mouse-gestures,shift-pull,snap-mat,cut-real`): 65/67.
+  Its two FAILs are cut-real's "leaving: a quick switch reconnects at once" (`k1 pieces 2, tsw {p:2, x:1}`) and "leaving: hidden 30 s keeps the pieces; hidden
+  over 60 s comes back whole" (`short 3, long 1`): **identical numbers to run 2 on our tree, so they are the PC's own on this machine, not PLAYGROUND's**.
+  The PC tree passes shift-pull here; ours failed its plain-drag row in runs 1 and 2: the squishy stood elsewhere by then (the PC pressed at x 734, ours at
+  551 and 535 for the Shift pull, from the body's place at the section's start: LIFE had moved Dollop, FIRST_PLAY and autonomy, D-37 / FN-01). Re-specified
+  with the reason in the code: the plain drag starts from the same spot on the squishy where it stands NOW (path, length and assertions unchanged).
+| R4.12 | **run 3 (`r4/pub3`, tree_mine with R4.11) found three PLAYGROUND regressions of the published UI; fixed:** (a) the Journal (and Places) in the dock's Collection group pushed the published Table / Float pair behind More at 390x844 and kept the Hoard's count (toolbar-gravity: "the pair is in the tray" shown [null, null]; "the Hoard gives its count away" form full; the section then stopped: the Float button had no box), and made the Journal a Tab stop between Menu and Hoard (K04 at 1280 and 390, both walks). Fix (the brief: "the Journal and Places buttons go in the top-right column"): a `.hud-life` column under the top row's right end (icon buttons with names and tooltips; a row on tiny; under the 320 px hint), first in the HUD's DOM so Tab reaches them just before Full screen; the dock is the PC's again. (b) K02 at 358x201 and 632x355: a bubble's 44 px hit area ("Ooh, wow!") clipped at the window edge (45x42) or covered (0x0): a hit area now shows only when its whole 44 x 44 box is inside the window and clear of the HUD. (c) cut-touch: a real finger swipe on a phone drew no blade (the swipe starts above the squishy, where a bubble's hit area took the press): the hit areas are the Hand's only (hidden at once by CSS with Cut or Snap in hand, and by the placement) | DONE 07:15: tsc 0; probe_app 187/187, probe_overlays 21/21, probe_uikit 62/62, node_checks 162/162; the browser re-run of these sections below |
+- Run 3 other rows so far: shift-pull ALL ok with the re-specified plain drag (the log: "the squishy at (482, 432) then (580, 375)": LIFE had moved it); hoard-loop, snap-mat
+  (the carry into the neighbour: ok), shift-*, settings green; cut-real: only the PC's own two "leaving" rows (identical numbers again); toolbar: "Enter on Cut ...
+  the live region says how it works ... the 1.4 s caption chip" FAILED (live "", caption shown false) where run 2 passed it on the same code path (a 1.4 s
+  window read late at load 7: classified a load-timing flake, re-run below).
+- **Run 3 result (`r4/pub3`, tree_mine with R4.11, 06:34-07:41): 410/432.** The 22 FAILs, classified:
+  - PLAYGROUND's, FIXED in R4.12 (re-run 4 below): toolbar-gravity x3 (the Journal in the dock at 390), K02 x9 (a bubble's hit area at the window edge or under the
+    HUD; at 568x320 Snap also "Mute sound 41x44", the Journal crowding the strip's top tray), K04 x4 (the Journal stop), cut-touch x1 (a bubble's hit area took the
+    swipe), keyboard-only "Tab order in play ... and no other stop" (the Journal stop: RE-SPECIFIED with its reason, D-77: the Journal and Places come first, just
+    before Full screen, every published stop in its place), fix2-dock "small landscape 568x320: the Cut strip ... covers under 5 %" (cutWhole 0.218, cut2 0.342:
+    to be re-measured without the Journal in the strip's tray).
+  - The PC's own on this machine (A/B above, identical numbers): cut-real "leaving: a quick switch ..." and "leaving: hidden 30 s ... 60 s".
+  - Load timing: toolbar "Enter on Cut ... the 1.4 s caption chip" (passed in run 2 on the same path; re-run 4).
+  - Green on our tree: desktop-boot, mouse-gestures, shift-pull (re-specified plain drag), shift-hint-reflow, shift-touch, settings-panel-desktop, hoard-loop (the kit
+    "Put back" chip), snap-mat (photo: Snap, Save, the carry into a neighbour), toolbar-phone, toolbar-sweep, cut-x (the whole cut suite), cut-swell, cut-low,
+    hoard-phone, menu-pause, fullscreen-gate, toasts, modal-layers, ui-sounds, **prod-build** (G0 2373 KB of 3072, G0b 459 KB gzip of 600; "no DebugHook, no sound
+    lab, no dev CSS" grep of 50 files; strict CSP 0 violations; **`?dev=1&lab=1` on the build: no `window.__WH__`, NO STATS OVERLAY, no sound lab**: the dev
+    overlay is harness-only, confirmed), console-and-network 40/40.
