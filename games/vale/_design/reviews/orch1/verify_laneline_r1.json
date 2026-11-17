@@ -1,0 +1,78 @@
+{
+  "lane": "LANELINE",
+  "round": 1,
+  "verifier": "independent verifier, 2026-11-17",
+  "commit_verified": "6139a1de5",
+  "pass": false,
+  "score": 7.2,
+  "safeToShip": true,
+  "method": {
+    "ab_copies": "Two scratch copies of 6139a1de5 (games/vale only, _design and audio left out, own node_modules dir). BASE = HEAD with src/sim/units/minions.ts from c0367ea2f^ (the last version before any carrot code). NEW = HEAD. diff -rq: only units/minions.ts differs. Note: the implementer's pace A/B base (8e58556fa) already had the carrot code (laneCarrot is in 8e58556fa:minions.ts), so that A/B only tested the march watch. The A/B below is the real before/after.",
+    "independent_measure": "_harness/_tmp_vfy_laneline_meas.ts. Free = no ATTACK order, not chasing, not stepping out, no attackable enemy in aggro. Clear = more than 3 m from any structure rim and from any live body except Wicks of its own team, more than 16 m of arc from its spawn end and more than 6 m from the far end. off = d - slot. Fewer exclusions than the lane's probe: no settling window, no 'own held Wick' or 'other wave pressed' exclusion, no forced-movement exclusion. --strict 1 also requires the Wick to have walked at least 0.8x its speed over the last 0.5 s, so a Wick queued behind its wave does not count.",
+    "live": "_harness/_tmp_vfy_laneline_live.mjs. Own headless Chrome with two frozen vite servers of its own (:5391 base, :5392 new), render bench with every seat played, fog off. Each frame pumped at 1/30 s from 1:30 to 8:00 (11728 frames). Records all Wicks in 4 boxes: top road from base to the 2nd tower for team 0 (30,27) and team 1 (140,27), and the bottom road for both teams (30,83) and (140,83). Seeds 3 and 11, both arms."
+  },
+  "bars": {
+    "centroid_median_le_0.20": {
+      "probe": "pass (worst 0.17, rift bots road_seat t1 s48; idle 0.12)",
+      "independent_strict": "pass. Worst median per road and team: idle RIFT 0.018-0.078, idle BRIDGE 0.002-0.005, bots RIFT 0.001-0.111 except road_low t0 s120 at 0.589, bots BRIDGE 0.041-0.054",
+      "independent_nonstrict_idle": "RIFT worst 0.239 (road_high t0 s84, midfield), the rest 0.061-0.099. BRIDGE t1 1.289 at s16, a pile-up at the team-0 end (base 0.964 there)",
+      "base_for_comparison": "idle RIFT 0.47-0.59 at the bends (road_high t0 s28 0.481, road_high t1 s128 0.472, road_low t0 s32 0.474, road_low t1 s132 0.499)"
+    },
+    "centroid_max_le_0.30": {
+      "probe": "pass (worst 0.29)",
+      "independent_strict_idle": "exceeded in 1 bin: RIFT road_high t0 s84 is 0.375 (midfield). The rest are at or under 0.257 (road_low t1 0.255, road_seat t0 0.257). BRIDGE at or under 0.178",
+      "independent_strict_bots": "exceeded in fight-zone bins: 1.0-11 m (road_low t0 s104 11.06). These are rejoins after fights, which the probe takes out as 'settling'. Base in the same measure: 2.2-12.7 m"
+    },
+    "single_p95_le_0.6": {
+      "probe": "pass (worst 0.56)",
+      "independent_strict_idle": "RIFT pass (worst 0.497). BRIDGE t1 1.429 at s16 (the team-0-end pile-up; base 2.07)",
+      "independent_strict_bots": "RIFT road_low t0 1.325 and road_low t1 0.920 (fight-zone rejoins). The rest are at or under 0.547"
+    },
+    "single_max_le_1.2": {
+      "probe": "pass (worst 0.67)",
+      "independent_strict_idle": "RIFT road_high t1 s80 1.406 (24 samples over 1.2 m, out of 1.4 M). The other roads are at or under 1.052. BRIDGE t1 2.485 (pile-up)",
+      "independent_strict_bots": "up to 16 m (rejoins and fights); base up to 24 m"
+    },
+    "reversals_gt_90deg_0": {
+      "probe": "pass (0 in every map and scenario)",
+      "independent": "idle 0. RIFT bots: 55 sample-windows (strict), base 41. The first one traced (#8240, seed 7, 556.6-557.3 s) is under CC_FEAR (ccMask 32), which is forced movement. With forced movement excluded the bar holds as far as traced"
+    },
+    "tower_arrival_pm_0.5s": "pass. Probe B5: 56 arrivals and contacts, worst +0.10 s. Changed and reported, not gated: RIFT road_high and road_low wave 2 contact +1.67 / +1.64 s; BRIDGE wave 3 contact_any -1.23 s",
+    "lane_line_probe_overall": "PASS, 35 s. Reproduces the implementer's numbers exactly. B4 rejoin p95 2.2-3.8 m, max 9.5 m (above the diagnosis's 9 m max, which is reported, not gated). B7 lantern detours: 6 / 26 / 72 / 132 (reported)"
+  },
+  "wobble_sim_sweep_new": "_tmp_wobble_sim.ts sweep (RIFT, 6 seeds, 14 min, idle and bots, towers alive and killed). Share of free samples more than 1 m off the road centre, before (wobble_sim_cur.txt) -> after: road_high t0 2.03% -> 0.80%, road_high t1 3.29 -> 1.68, road_seat t0 5.84 -> 0.89, road_seat t1 1.52 -> 0.79, road_low t0 3.63 -> 1.63, road_low t1 n/a -> 0.75. |d| p50 is now 0.87-0.89 because the outer columns ride at +/-0.9 m slots, by design.",
+  "live": {
+    "numbers": "Marching samples per box: ~34.7k after, ~35.3k before. |d - slot| after: p50 0.01, p95 0.28-0.30, max 0.87-0.89 m in all 4 boxes and both seeds. Before (no slots): |d| p50 0.38-0.39, p95 0.92-1.00, max 1.29-1.34 m. Rendered actor vs sim: 0.11 m constant in both arms.",
+    "look": "Before: a braid of trails that crosses the yellow centre line at v2 and v3 and bows to the inside of each bend, between the lantern and a_high_needle_inner. After: three clean parallel columns, the middle one on the yellow line, following the drawn road through every bend by the 2nd tower with no dip. It looks the same on the bottom road and for team 1. One small visible jog remains: at the lantern, the outer column squeezes onto the centre line and back out (by design, 'squeeze where the road narrows'). It is near the base, not the 2nd tower.",
+    "files": "_design/reviews/orch1/evidence/wobble_after/{before,after}_s{3,11}_{top,bot}_team{0,1}_base_to_2nd.jpg + *_stats.txt",
+    "caveat": "Seeds 3 and 11 gave near-identical trails in this window: no fighter fought in these boxes between 1:30 and 8:00, so the live shots show marching only, not post-fight rejoins."
+  },
+  "pace_ab": {
+    "setup": "probe_sim_bot_soak --full --suites rift --diffs adept --seeds 200 --seed0 1001 in each copy, paired by seed (n=200). The seeds are disjoint from the implementer's 1-300.",
+    "mean_length_min": "base 27.601, new 27.704, paired d +0.103 +/- 0.459 SE (z +0.22)",
+    "first_outer_tower_min": "base 10.449, new 10.567, paired d +0.118 +/- 0.200 SE (z +0.59)",
+    "median_p90": "base 26.68 / 34.65, new 26.89 / 34.48. The p90 <= 32 gate fails on both arms (pre-existing)",
+    "verdict": "no pace shift beyond noise"
+  },
+  "probe_suite_new": "66 PASS, 10 FAIL of 76, run in the NEW copy. Green: lane_line, minion_flow (0 stuck, 0 idle), wick_still, hold_tower, determinism 6/6 (seed 99 5edfad52, seed 100 09bac942), attack_at, input_pick_truth. Five failures come from the copy itself (it has no audio, dist or deploy files): cdn_headers, content_build, content_ids, deploy_gate, schema_negotiation. Five sim failures were re-run on BASE: bot_soak FAILs on both arms (laners in lane: adept 66.5 base vs 66.1 new, veteran 63.9 vs 64.0). bot_tactics FAILs on both. click_waves FAILs on both, with different failing lines. core_orders and sim_waves FAIL ON NEW ONLY.",
+  "blockers": [
+    "probe_sim_waves FAILs on 6139a1de5 and passes on base (HEAD with the pre-carrot minions.ts). Failing check: 'wave 3 adds the everyNth: 3 siege minion'. At 65.5 s only 4 of wave 3's 5 Wicks are alive (2 melee expected, 1 remaining), so a wave-3 Wick now dies before 65 s on the fixture map. Wave contact timing changed and this registered probe was not re-checked or re-baselined. Not reported by the implementer.",
+    "probe_sim_core_orders FAILs on 6139a1de5 and passes on base. Failing check: 'BRIDGE 0 moves through packed lane fights' (base samples 18 such moves). The packed-fight scenario this ruling-41/43 guard samples no longer occurs, so the check has zero coverage and fails. Either the probe's scenario finder needs re-tuning to the new formation, or a real lost behaviour has to be ruled out. Not reported by the implementer."
+  ],
+  "problems": [
+    "The implementer's pace A/B (and ruling 47's 'Pace' line) used 8e58556fa as base, which already contains the carrot/slot code (laneCarrot is in 8e58556fa:src/sim/units/minions.ts). That A/B measured only the march watch, not the lane-line change. Ruling 47's 'same commit with only units/minions.ts differing' is true but misleading. My independent 200-game A/B against the true pre-carrot minions.ts shows no shift (length +0.10 +/- 0.46, first outer tower +0.12 +/- 0.20 min), so the conclusion holds and ruling 47's pace line should cite it.",
+    "Under fewer exclusions than the lane probe, two idle RIFT midfield bins exceed the max bars. road_high t0 s84 centroid max 0.375 m (bar 0.30). road_high t1 s80 single max 1.406 m (bar 1.2; 24 of 1.4 M samples). These are midfield bins, not the 2nd-tower bends, and are probably post-fight settling, which the probe excludes. Reported as plausible, not a blocker.",
+    "BRIDGE idle team 1 at s12-16 (team 0's end): single |off| p95 1.43 m and max 2.49 m (strict). It is a pile-up of a pushing wave and better than base (2.07 / 3.32), but the probe's 'own held Wick' exclusion hides it.",
+    "Lantern disc: the outer column still squeezes in and out visibly at the lantern (live shots), and B7 nav detours in the first 20 m are 6 / 26 / 72 / 132 (RIFT idle, RIFT played, BRIDGE idle, BRIDGE played). Reported by the lane as not done.",
+    "Wave 2 meeting on RIFT side roads is +1.6 s later and BRIDGE wave 3 contact_any is -1.2 s. No re-tune was done. This probably also explains the probe_sim_waves fixture failure.",
+    "B4 rejoin max is 9.5 m (rift bots s11 #6959), above the diagnosis's suggested max of 9 m. Reported only.",
+    "Side effect to note: the first vite runs from the scratch copies used a symlink to the main node_modules, so they wrote node_modules/.vite/deps in the main checkout (around 12:23-12:38 CST). Any other lane's running dev server may have reloaded once with 'outdated optimize dep'. After that, the copies got their own node_modules dirs."
+  ],
+  "evidence_files": [
+    "_harness/_tmp_vfy_laneline_meas.ts",
+    "_harness/_tmp_vfy_laneline_live.mjs",
+    "_harness/_tmp_vfy_laneline_trace.ts",
+    "_design/reviews/orch1/evidence/wobble_after/",
+    "scratch logs: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vfyll_*.log"
+  ]
+}
