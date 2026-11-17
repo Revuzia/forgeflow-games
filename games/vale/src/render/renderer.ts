@@ -1099,6 +1099,13 @@ class ValeRenderer implements Renderer {
     this.buildTelegraphs();
   }
 
+  /** orch1 W2-A (ruling 46): the re-keyed ground (lanes L* 38 -> 51) sits closer in value to the HARM orange, so an
+   *  enemy telegraph carries a dark ink band just inside its edge and a stronger outer keyline: the shape is cut out of
+   *  the pale stone by value, the way a stylised MOBA keeps a danger zone readable on light ground. Same program, one
+   *  extra instance per enemy shape. Harness seam: teleInk.on = false is the wave-1 telegraph. */
+  readonly teleInk = { on: true, key: 0.6, band: 0.45, bandPx: 6 };
+  private readonly inkBlack = new Color(0, 0, 0);
+
   private buildTelegraphs(): void {
     const p = this.palette;
     const t = this.teles;
@@ -1131,9 +1138,20 @@ class ValeRenderer implements Renderer {
           spec.fill = 0.2; spec.ringFlash = 0.5;
           spec.ringDepth = flashContourDepth(spec.shape, spec.radius, spec.inner, spec.halfAngle, spec.width);
         }
+        const ink = this.teleInk;
+        if (ink.on) {
+          // the ink band first, so the relationship edge draws over its outer part and the band shows inside it
+          const col = spec.color, fill = spec.fill, edge = spec.edge, px = spec.edgePx, rf = spec.ringFlash, tick = spec.tick;
+          spec.color = this.inkBlack; spec.fill = 0; spec.edge = ink.band; spec.edgePx = ink.bandPx; spec.ringFlash = 0; spec.tick = null; spec.key = 0;
+          t.push(spec);
+          spec.color = col; spec.fill = fill; spec.edge = edge; spec.edgePx = px; spec.ringFlash = rf; spec.tick = tick;
+          spec.key = ink.key;
+        } else spec.key = undefined;
       } else if (rel === 'neutral') {
+        spec.key = undefined;
         spec.color = p.relationColor('neutral'); spec.fill = 0.12; spec.edge = 0.8; spec.edgePx = 2;
       } else {
+        spec.key = undefined;
         spec.color = tg.heal ? p.get('#63D88B') : p.relationColor(rel === 'self' ? 'self' : 'ally');
         spec.fill = rel === 'self' ? 0.08 : 0; spec.edge = tg.heal ? 0.5 : rel === 'self' ? 0.6 : 0.45; spec.edgePx = 2;
         if (flash) spec.fill = Math.max(spec.fill, 0.12);

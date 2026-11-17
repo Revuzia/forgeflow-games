@@ -13,7 +13,7 @@
 //   * otherwise the best target within aggroRange by `priority` is chased with an attack order;
 //   * with nothing to fight it attack-moves along its lane: it steers at a carrot LANE_LOOK m ahead of
 //     its projection on the lane line (the carrot always ahead of where it stands, so a minion pulled
-//     off the lane rejoins it ahead, not behind), held at its column's slot off the line (ruling 46);
+//     off the lane rejoins it ahead, not behind), held at its column's slot off the line (ruling 47);
 //     past the last waypoint it holds the lane end and attacks what comes in range (the enemy core).
 //   * a chase that has not closed in for CHASE_STALL_TICKS (a melee Wick behind the front row, a tower ringed by its
 //     wave: owner 2026-11-15 "minions get stuck ... at the first tower", ruling 39) steps out to an open attack spot on
@@ -37,7 +37,7 @@ export const MINION_THINK_TICKS = 6;
 export const WAYPOINT_REACH = 2.5;
 /** spacing of a wave's rows / columns at spawn */
 const ROW_GAP = 1.3, COL_GAP = 1.1;
-/** lane line (ruling 46, owner 2026-11-15 "they dont follow the straight path"): a marching Wick steers at a carrot
+/** lane line (ruling 47, owner 2026-11-15 "they dont follow the straight path"): a marching Wick steers at a carrot
  *  LANE_LOOK m ahead of its projection on the lane polyline (LANE_REJOIN × its distance off its column line when further
  *  out: a rejoin after a fight comes in at under ~34°), offset by its column slot (SLOT_GAP between columns, a partial
  *  last row centred; on the line itself where the road narrows); the attack-move is re-sent once the carrot moved
@@ -77,7 +77,7 @@ interface MinionState {
   creepSeq: number; creepX: number; creepY: number; creepAt: number;
   /** passing its own wave to reach its target (e.passOwn) until this tick */
   passUntil: number;
-  /** its column's lateral offset from the lane line (m, left of travel +), kept the whole walk (ruling 46) */
+  /** its column's lateral offset from the lane line (m, left of travel +), kept the whole walk (ruling 47) */
   slot: number;
 }
 interface WaveState { n: number; nextAt: number; paths: V2T[][][] }
@@ -154,14 +154,22 @@ function laneCarrot(e: Entity, m: MinionState): boolean {
   const p = m.path, last = p.length - 1;
   // the segment it last reached and the one before it (a Wick pulled back past a vertex measures its way back from where
   // it stands: the carrot is still ahead of it, never behind)
-  let k = Math.max(1, m.wp - 1), t = 0, bestD = Infinity, side = 0;
-  for (let j = k; j <= last; j++) {
+  const j0 = Math.max(1, m.wp - 1);
+  let k = j0, t = 0, bestD = Infinity, side = 0;
+  const seg = (j: number): boolean => {
     const ax = p[j - 1][0], ay = p[j - 1][1], dx = p[j][0] - ax, dy = p[j][1] - ay, l2 = dx * dx + dy * dy;
     let u = l2 > 1e-12 ? ((e.x - ax) * dx + (e.y - ay) * dy) / l2 : 0;
     if (u < 0) u = 0; else if (u > 1) u = 1;
     const qx = e.x - ax - dx * u, qy = e.y - ay - dy * u, d2 = qx * qx + qy * qy;
-    if (d2 < bestD - 1e-9) { bestD = d2; k = j; t = u; side = dx * qy - dy * qx; }
-  }
+    if (d2 >= bestD - 1e-9) return false;
+    bestD = d2; k = j; t = u; side = dx * qy - dy * qx;
+    return true;
+  };
+  for (let j = j0; j <= last; j++) seg(j);
+  // a Wick a fight or a step-out carried back more than a segment (a step-out round a tower ring walks 10 m back): the
+  // segments behind are measured while they come closer, so its projection is where it stands, not the start of a
+  // segment far ahead (a carrot there is a long shallow chord: 13 m of road to rejoin from 3 m off)
+  for (let j = j0 - 1; j >= 1 && seg(j); j--);
   m.wp = Math.max(m.wp, k);
   // signed offset (left of travel +) and the distance from its own column line
   const off = Math.sqrt(bestD) * (side < 0 ? -1 : 1) - m.slot;
@@ -194,7 +202,7 @@ function along(p: readonly V2T[], k: number, t: number, d: number): boolean {
   return false;
 }
 
-/** steer at a carrot on the lane line (ruling 46: never at the far vertex, so no corner is cut and the columns never
+/** steer at a carrot on the lane line (ruling 47: never at the far vertex, so no corner is cut and the columns never
  *  pinch at a shared point), as an attack-move; past the last waypoint it holds the lane end */
 function followLane(w: World, e: Entity, m: MinionState): void {
   const p = m.path;

@@ -1,0 +1,165 @@
+{
+ "t": 481,
+ "seed": 7,
+ "metric": "p90 |dL|/max(L,16), clutter teleEdge (bar 0.45)",
+ "inkDefault": {
+  "on": true,
+  "key": 0.6,
+  "band": 0.45,
+  "bandPx": 6
+ },
+ "spots": {
+  "lane_mid": {
+   "wave1": {
+    "px": 15635,
+    "p50": 0.181,
+    "p90": 0.418,
+    "groundLumaP50": 56
+   },
+   "rekey_noink": {
+    "px": 15128,
+    "p50": 0.082,
+    "p90": 0.22,
+    "groundLumaP50": 93
+   },
+   "rekey_ink": {
+    "px": 16811,
+    "p50": 0.085,
+    "p90": 0.258,
+    "groundLumaP50": 94
+   },
+   "rekey_ink_k8": {
+    "px": 17182,
+    "p50": 0.087,
+    "p90": 0.26,
+    "groundLumaP50": 93
+   },
+   "rekey_ink_b6": {
+    "px": 17273,
+    "p50": 0.088,
+    "p90": 0.306,
+    "groundLumaP50": 94
+   },
+   "rekey_ink_w9": {
+    "px": 18303,
+    "p50": 0.093,
+    "p90": 0.256,
+    "groundLumaP50": 94
+   }
+  },
+  "lane_high": {
+   "wave1": {
+    "px": 13905,
+    "p50": 0.207,
+    "p90": 0.436,
+    "groundLumaP50": 55
+   },
+   "rekey_noink": {
+    "px": 13683,
+    "p50": 0.094,
+    "p90": 0.252,
+    "groundLumaP50": 89
+   },
+   "rekey_ink": {
+    "px": 14748,
+    "p50": 0.098,
+    "p90": 0.27,
+    "groundLumaP50": 89
+   },
+   "rekey_ink_k8": {
+    "px": 14818,
+    "p50": 0.099,
+    "p90": 0.279,
+    "groundLumaP50": 90
+   },
+   "rekey_ink_b6": {
+    "px": 14960,
+    "p50": 0.099,
+    "p90": 0.33,
+    "groundLumaP50": 89
+   },
+   "rekey_ink_w9": {
+    "px": 15773,
+    "p50": 0.102,
+    "p90": 0.267,
+    "groundLumaP50": 89
+   }
+  },
+  "jungle": {
+   "wave1": {
+    "px": 15858,
+    "p50": 0.227,
+    "p90": 0.449,
+    "groundLumaP50": 45
+   },
+   "rekey_noink": {
+    "px": 15632,
+    "p50": 0.105,
+    "p90": 0.259,
+    "groundLumaP50": 78
+   },
+   "rekey_ink": {
+    "px": 16838,
+    "p50": 0.109,
+    "p90": 0.277,
+    "groundLumaP50": 78
+   },
+   "rekey_ink_k8": {
+    "px": 16883,
+    "p50": 0.109,
+    "p90": 0.284,
+    "groundLumaP50": 78
+   },
+   "rekey_ink_b6": {
+    "px": 17094,
+    "p50": 0.11,
+    "p90": 0.347,
+    "groundLumaP50": 78
+   },
+   "rekey_ink_w9": {
+    "px": 17992,
+    "p50": 0.119,
+    "p90": 0.274,
+    "groundLumaP50": 78
+   }
+  },
+  "river": {
+   "wave1": {
+    "px": 16642,
+    "p50": 0.549,
+    "p90": 0.753,
+    "groundLumaP50": 40
+   },
+   "rekey_noink": {
+    "px": 16378,
+    "p50": 0.292,
+    "p90": 0.544,
+    "groundLumaP50": 71
+   },
+   "rekey_ink": {
+    "px": 17921,
+    "p50": 0.289,
+    "p90": 0.533,
+    "groundLumaP50": 72
+   },
+   "rekey_ink_k8": {
+    "px": 17975,
+    "p50": 0.287,
+    "p90": 0.519,
+    "groundLumaP50": 75
+   },
+   "rekey_ink_b6": {
+    "px": 17935,
+    "p50": 0.292,
+    "p90": 0.506,
+    "groundLumaP50": 75
+   },
+   "rekey_ink_w9": {
+    "px": 19716,
+    "p50": 0.277,
+    "p90": 0.495,
+    "groundLumaP50": 75
+   }
+  }
+ }
+}

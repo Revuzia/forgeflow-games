@@ -1,4 +1,4 @@
-// probe (lane SIM, Wicks, ruling 46): marching Wicks walk the drawn lane line, not chords between its vertices.
+// probe (lane SIM, Wicks, ruling 47): marching Wicks walk the drawn lane line, not chords between its vertices.
 // Owner 2026-11-15: "they dont follow the traight path and move slightly under the path and come back around ... at
 // the top lane closer to the 2nd tower". Diagnosis _design/reviews/orch1/wobble_diagnosis.md: followLane aimed at the
 // vertex ~9 m ahead (corner cut 0.5-0.7 m at the 12-20 deg bends by the inner needle), every column aimed at the same
@@ -25,8 +25,8 @@
 //                     overshoots past the line reported; episodes cut short by a new fight are dropped)
 //   B5 timing         idle, waves 1-3: the first tick a Wick of the wave is within rim + 8 m of each of its own towers
 //                     on its road (the march), and the first damage between Wicks of wave n of both sides per road (first
-//                     contact, the meeting): within ±0.5 s of BASE (the values at HEAD c0d09e682 with units/minions.ts at
-//                     271560c8f, before ruling 46). A wave's first hit on any enemy Wick (a leftover of the wave before:
+//                     contact, the meeting): within ±0.5 s of BASE (the values at HEAD dd6fc5267 with units/minions.ts at
+//                     271560c8f, before the lane-line change). A wave's first hit on any enemy Wick (a leftover of the wave before:
 //                     the fight before, not the walk) is reported as contact_any. --record prints the table instead.
 //   B7 lantern        (reported) free Wicks walking a nav detour (e.path) in their first 20 m of arc, no enemy in aggro
 //   B6 determinism    RIFT idle seed 7 twice (3 min): identical x,y trace hash.
@@ -57,24 +57,25 @@ const built = buildContent(defaultOptions({ check: true, allowMissingAssets: tru
 if (!built.catalog) { console.log('SKIP content build failed'); process.exit(77); }
 const catalog: CatalogT = built.catalog;
 
-// B5 baseline (idle, the 6-seed means at c20d06630, before ruling 46): `map|road|t<team>|w<wave>|<own tower>` the wave
-// reaching the tower, `map|road|w<wave>|contact` its first Wick-on-Wick damage (seconds)
+// B5 baseline (idle, the 6-seed means at dd6fc5267 with units/minions.ts at 271560c8f, before the lane-line change):
+// `map|road|t<team>|w<wave>|<own tower>` the wave reaching the tower, `map|road|w<wave>|contact` its first Wick-on-Wick
+// damage (seconds)
 const BASE: Record<string, number> = {
   'bridge|road_span|t0|w1|a_span_needle_inner': 24.67, 'bridge|road_span|t0|w1|a_span_needle_outer': 29.63, 'bridge|road_span|t0|w2|a_span_needle_inner': 49.67,
   'bridge|road_span|t0|w2|a_span_needle_outer': 54.63, 'bridge|road_span|t0|w3|a_span_needle_inner': 74.67, 'bridge|road_span|t0|w3|a_span_needle_outer': 79.63,
   'bridge|road_span|t1|w1|s_span_needle_inner': 24.67, 'bridge|road_span|t1|w1|s_span_needle_outer': 29.63, 'bridge|road_span|t1|w2|s_span_needle_inner': 49.67,
   'bridge|road_span|t1|w2|s_span_needle_outer': 54.63, 'bridge|road_span|t1|w3|s_span_needle_inner': 74.67, 'bridge|road_span|t1|w3|s_span_needle_outer': 79.63,
-  'bridge|road_span|w1|contact': 38.8, 'bridge|road_span|w2|contact': 64.23, 'bridge|road_span|w3|contact': 89,
+  'bridge|road_span|w1|contact': 38.8, 'bridge|road_span|w2|contact': 65.5, 'bridge|road_span|w3|contact': 89,
   'rift|road_high|t0|w1|a_high_needle_inner': 37.3, 'rift|road_high|t0|w1|a_high_needle_outer': 44.47, 'rift|road_high|t0|w2|a_high_needle_inner': 67.3,
   'rift|road_high|t0|w2|a_high_needle_outer': 74.47, 'rift|road_high|t0|w3|a_high_needle_inner': 97.3, 'rift|road_high|t0|w3|a_high_needle_outer': 104.47,
   'rift|road_high|t1|w1|s_high_needle_inner': 37.3, 'rift|road_high|t1|w1|s_high_needle_outer': 44.47, 'rift|road_high|t1|w2|s_high_needle_inner': 67.3,
   'rift|road_high|t1|w2|s_high_needle_outer': 74.47, 'rift|road_high|t1|w3|s_high_needle_inner': 97.3, 'rift|road_high|t1|w3|s_high_needle_outer': 104.47,
-  'rift|road_high|w1|contact': 55.2, 'rift|road_high|w2|contact': 85.37, 'rift|road_high|w3|contact': 115.7,
+  'rift|road_high|w1|contact': 55.2, 'rift|road_high|w2|contact': 85.6, 'rift|road_high|w3|contact': 115.7,
   'rift|road_low|t0|w1|a_low_needle_inner': 37.3, 'rift|road_low|t0|w1|a_low_needle_outer': 44.47, 'rift|road_low|t0|w2|a_low_needle_inner': 67.3,
   'rift|road_low|t0|w2|a_low_needle_outer': 74.47, 'rift|road_low|t0|w3|a_low_needle_inner': 97.3, 'rift|road_low|t0|w3|a_low_needle_outer': 104.47,
   'rift|road_low|t1|w1|s_low_needle_inner': 37.3, 'rift|road_low|t1|w1|s_low_needle_outer': 44.47, 'rift|road_low|t1|w2|s_low_needle_inner': 67.3,
   'rift|road_low|t1|w2|s_low_needle_outer': 74.47, 'rift|road_low|t1|w3|s_low_needle_inner': 97.3, 'rift|road_low|t1|w3|s_low_needle_outer': 104.47,
-  'rift|road_low|w1|contact': 55.2, 'rift|road_low|w2|contact': 85.5, 'rift|road_low|w3|contact': 115.57,
+  'rift|road_low|w1|contact': 55.2, 'rift|road_low|w2|contact': 85.63, 'rift|road_low|w3|contact': 115.57,
   'rift|road_seat|t0|w1|a_seat_needle_inner': 34.67, 'rift|road_seat|t0|w1|a_seat_needle_outer': 39.67, 'rift|road_seat|t0|w2|a_seat_needle_inner': 64.67,
   'rift|road_seat|t0|w2|a_seat_needle_outer': 69.67, 'rift|road_seat|t0|w3|a_seat_needle_inner': 94.67, 'rift|road_seat|t0|w3|a_seat_needle_outer': 99.67,
   'rift|road_seat|t1|w1|s_seat_needle_inner': 34.67, 'rift|road_seat|t1|w1|s_seat_needle_outer': 39.63, 'rift|road_seat|t1|w2|s_seat_needle_inner': 64.67,
@@ -353,7 +354,7 @@ else if (SCENS.includes('idle') && SEEDS.join() === '3,7,11,19,23,31') {
     if (Math.abs(dlt) > Math.abs(worst)) { worst = dlt; wk = k; }
     if (Math.abs(dlt) > 0.5) bad(`B5 ${k}: ${v.toFixed(2)} s vs base ${b.toFixed(2)} (${dlt >= 0 ? '+' : ''}${dlt.toFixed(2)})${VERBOSE ? ` per seed ${timing.get(k)!.map((x) => x.toFixed(2)).join(' ')}` : ''}`);
   }
-  out.push(`B5 timing: ${n} arrivals and first contacts (6-seed means) vs before ruling 46, worst ${worst >= 0 ? '+' : ''}${worst.toFixed(2)} s (${wk})`);
+  out.push(`B5 timing: ${n} arrivals and first contacts (6-seed means) vs before ruling 47, worst ${worst >= 0 ? '+' : ''}${worst.toFixed(2)} s (${wk})`);
 } else out.push('B5 timing: skipped (needs the idle scenario on the default seeds)');
 // B6 determinism
 if (MAPS.includes('rift')) {
