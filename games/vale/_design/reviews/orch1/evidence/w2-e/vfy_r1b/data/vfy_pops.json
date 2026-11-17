@@ -1,0 +1,534 @@
+{
+ "phase": "vfy_pops",
+ "finishedAt": "2026-11-17T19:48:52.884Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 2.98,
+  "node": "v22.23.3",
+  "base": "http://localhost:5793",
+  "wallMs": 49518
+ },
+ "steps": [
+  {
+   "file": "1920x1080/vfy_pops_001_pop_full.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_pops",
+   "step": "boot",
+   "name": "pop_full",
+   "desc": "damage number visible at 1920x1080, sim paused",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2714722,
+   "tMs": 37192,
+   "load1": 3.08,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_pops_002_pop_crop.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_pops",
+   "step": "boot",
+   "name": "pop_crop",
+   "desc": "crop around a damage number at 1920x1080",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 535,
+    "y": 341,
+    "w": 480,
+    "h": 300
+   },
+   "bytes": 209754,
+   "tMs": 37329,
+   "load1": 3.08,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_pops_003_pop_full.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_pops",
+   "step": "boot",
+   "name": "pop_full",
+   "desc": "damage number visible at 1920x1080, sim paused",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2713410,
+   "tMs": 45203,
+   "load1": 3.16,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_pops_004_pop_crop.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_pops",
+   "step": "boot",
+   "name": "pop_crop",
+   "desc": "crop around a damage number at 1920x1080",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 861,
+    "y": 313,
+    "w": 480,
+    "h": 300
+   },
+   "bytes": 226442,
+   "tMs": 45324,
+   "load1": 3.16,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_pops_005_pop_full.png",
+   "viewport": "1366x768",
+   "phase": "vfy_pops",
+   "step": "boot",
+   "name": "pop_full",
+   "desc": "damage number visible at 1366x768, sim paused",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1467160,
+   "tMs": 47175,
+   "load1": 2.98,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_pops_006_pop_crop.png",
+   "viewport": "1366x768",
+   "phase": "vfy_pops",
+   "step": "boot",
+   "name": "pop_crop",
+   "desc": "crop around a damage number at 1366x768",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 402,
+    "y": 179,
+    "w": 480,
+    "h": 300
+   },
+   "bytes": 217167,
+   "tMs": 47274,
+   "load1": 2.98,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_pops_007_pop_full.png",
+   "viewport": "1366x768",
+   "phase": "vfy_pops",
+   "step": "boot",
+   "name": "pop_full",
+   "desc": "damage number visible at 1366x768, sim paused",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1471792,
+   "tMs": 48876,
+   "load1": 2.98,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_pops_008_pop_crop.png",
+   "viewport": "1366x768",
+   "phase": "vfy_pops",
+   "step": "boot",
+   "name": "pop_crop",
+   "desc": "crop around a damage number at 1366x768",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 553,
+    "y": 170,
+    "w": 480,
+    "h": 300
+   },
+   "bytes": 223381,
+   "tMs": 49008,
+   "load1": 2.98,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 54,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5793/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/vfy_pops_001_pop_full.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_pops_002_pop_crop.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_pops_003_pop_full.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_pops_004_pop_crop.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_pops_005_pop_full.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/vfy_pops_006_pop_crop.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/vfy_pops_007_pop_full.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/vfy_pops_008_pop_crop.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "boot",
+   "tMs": 49517,
+   "load1": 2.98,
+   "text": "pop facts",
+   "data": [
+    {
+     "vp": "1920x1080",
+     "f": [
+      {
+       "t": "61",
+       "cls": "wpop wpop--magic num ",
+       "op": 1,
+       "fs": "19.6px",
+       "color": "rgb(255, 123, 213)",
+       "r": [
+        763,
+        481,
+        787,
+        501
+       ],
+       "hit": null
+      },
+      {
+       "t": "61",
+       "cls": "wpop wpop--magic num ",
+       "op": 1,
+       "fs": "19.6px",
+       "color": "rgb(255, 123, 213)",
+       "r": [
+        763,
+        481,
+        787,
+        501
+       ],
+       "hit": null
+      },
+      {
+       "t": "61",
+       "cls": "wpop wpop--magic num ",
+       "op": 1,
+       "fs": "19.6px",
+       "color": "rgb(255, 123, 213)",
+       "r": [
+        769,
+        376,
+        793,
+        395
+       ],
+       "hit": null
+      }
+     ]
+    },
+    {
+     "vp": "1920x1080",
+     "f": [
+      {
+       "t": "46",
+       "cls": "wpop wpop--phys num ",
+       "op": 1,
+       "fs": "19px",
+       "color": "rgb(241, 226, 198)",
+       "r": [
+        1086,
+        451,
+        1116,
+        475
+       ],
+       "hit": null
+      }
+     ]
+    },
+    {
+     "vp": "1366x768",
+     "f": [
+      {
+       "t": "46",
+       "cls": "wpop wpop--phys num ",
+       "op": 1,
+       "fs": "15.2px",
+       "color": "rgb(241, 226, 198)",
+       "r": [
+        630,
+        319,
+        654,
+        338
+       ],
+       "hit": null
+      }
+     ]
+    },
+    {
+     "vp": "1366x768",
+     "f": [
+      {
+       "t": "46",
+       "cls": "wpop wpop--phys num ",
+       "op": 1,
+       "fs": "15.2px",
+       "color": "rgb(241, 226, 198)",
+       "r": [
+        783,
+        312,
+        803,
+        327
+       ],
+       "hit": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "step": "boot",
+   "tMs": 49517,
+   "load1": 2.98,
+   "text": "last poll",
+   "data": {
+    "time": 71.8,
+    "dead": false,
+    "near": 4,
+    "enemyNear": 2,
+    "ended": false
+   }
+  }
+ ],
+ "timings": {}
+}

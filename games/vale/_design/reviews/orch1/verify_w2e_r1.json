@@ -1,0 +1,47 @@
+{
+  "lane": "W2-E",
+  "round": 1,
+  "verifier": "independent adversarial verifier (UX art director, HUD lens)",
+  "date": "2026-11-17",
+  "pass": false,
+  "score": 7.2,
+  "safeToShip": true,
+  "blockers": [],
+  "problems": [
+    "RECAP-OVER-ALLIES (1366x768, must fix): the death recap plate [91,108,363,510] covers the ally frames [13,269,147,455] by 56 x 186 px in the settled frame (40 x 186 px in the first frame). The ally names are cut to 'quillor', 'sorrel_', 'lowtid', 'stillwa' and their HP bars are hidden while dead. The goal says nothing overlaps at 1366. The implementer's own after3/1366x768/w2e_dead_002_dead_recap.png shows the same overlap, and the hand-off did not report it. At 1920 the recap [220,151,560,620] clears the allies. Frames: vfy_r1b/1366x768/vfy_dead_001_dead_first.png, vfy_dead_004_dead_settled.png, vfy_dead_006_dead_expanded.png. Fix: clamp the recap's left edge to the right of .allies plus a gap, or narrow it at 1366.",
+    "HP REGEN TEXT ILLEGIBLE: the '+3.4' regen label at the right end of the HP bar sits on the hatched shield or missing segment and the tick lines. At 1366 the 11.3 px bar (overflow hidden) clips its top. It reads as noise at both viewports. Frames: vfy_r1b/1366x768/vfy_rift_015_teamfight.png and 1920x1080/vfy_rift_014_teamfight.png (bottom-right of the HP bar). This was already true before the lane, so it is not a regression.",
+    "TOP BAR SEE-THROUGH: the sky plate behind the clock is translucent. WebGL nameplates and structure bars show through it, and in FRAY at 1366 the name 'tilda_rimwalk' runs straight through the '10:57' clock (vfy_r1b/1366x768/vfy_fray_004_idle.png). An ally structure bar bleeds under the right side of the top bar in vfy_r1b/1366x768/vfy_misc_004_ping_wheel.png. The plate was not changed by this lane, but top.tsx and hud.css are this lane's files.",
+    "SHOP vs HOUR BOARD (1366): the shop modal (right edge 1131) overlaps the Hour Board (left edge 1117) by 14 px (vfy_r1b/1366x768/vfy_fray_008_shop.png). The W3-C onboarding hint box also overlaps the shop's left edge, but that box belongs to W3-C.",
+    "CLICK MARKER SMALL: the .wmark move ring measured 34 x 27 px at 1366. It is bold and ink-keylined and reads on stone, but it is small for target 20 (vfy_r1b/1366x768/vfy_misc_006_click_marker.png). At 1920 the marker was already gone or not in the DOM when sampled right after the click, though the ring is visible in vfy_r1b/1366x768/vfy_rift_006_click.png. This is shared with W2-D.",
+    "DAMAGE NUMBERS MODEST: they are colour-coded (physical cream rgb(241,226,198), magic pink rgb(255,123,213)), but there is almost no size range (19.0 vs 19.6 px at 1080, 15.2 px at 1366) and they are faint by mid-life. In two of my four paused captures the number had already faded to near invisible (vfy_r1b/1920x1080/vfy_pops_004_pop_crop.png shows a faint '46'). Two '61' pops shared exactly the same rect [763,481,787,501] (two targets at one spot, so they stacked rather than offset).",
+    "TYPE NITS: the item-slot key digits (islot__key 1-6) are not tabular-nums (6 nodes), and the Menu 'Esc' key cap is 10 px, below the 11 px floor everything else respects. A Wick or structure source in the recap shows an empty dark disc where a face would be. It is not a sensitivity issue, but it reads as missing art.",
+    "A previous verifier attempt left vfy_r1/ (blank 4.8-8.5 kB frames: vite dep re-optimisation 504, renderer never loaded). Those frames are invalid; this verdict uses vfy_r1b/ only."
+  ],
+  "doneWhen": [
+    {
+      "line": "ux DOM scan at 1366x768 and 1920x1080: 0 outside-viewport plates, 0 truncation findings for the listed strings, recap fully visible in first and settled frames",
+      "holds": true,
+      "numbers": "Across 49 verifier shots (RIFT 17, dead 6, FRAY 8, pops 8, misc 6, post 8, both viewports): outside-viewport 0, outside-viewport-plate 0, ellipsis-truncated 0, clipped-x 0, clipped-y 0, recap-over-dialbar 0. The only kind found is outside-scroll-ancestor x1 per shot, the hidden skip link. The listed strings were all checked visually with no truncation: hour board (vfy_fray_004/008), draft helper (vfy_fray_002), postgame enemy table (vfy_post_006), shop names (vfy_fray_008). The recap was fully in the viewport at 1366 [107,108,379,510] first and [91,108,363,510] settled, at 1920 [220,151,560,620], and expanded to 5 sources at 1920 [220,151,560,736]. It is visible, but see RECAP-OVER-ALLIES."
+    },
+    {
+      "line": "hud_fight re-shoots: 0 damage numbers drawn over an HP bar at full alpha; <= 4 numbers per target",
+      "holds": true,
+      "numbers": "Seed 23 RIFT at x1, 6 windows, 1560 frames: 21 numbers seen, 0 over a published HP-bar plate at full alpha, 43 frame-hits at reduced alpha (all in the teamfight window), max per target 2. Seed 41 paused captures: 6 numbers, 0 hitting a plate."
+    },
+    {
+      "line": "copy_lint passes; 0 console errors; frame_layout F.res fits",
+      "holds": true,
+      "numbers": "content:check: 0 warnings. probe_copy_no_bots: ok. probe_frame_guard: 18/0. Console and network errors: 0 on all 6 verifier runs after the private-cache vite. F.res fit: .dbars 26 px slot holds HP 14 + resource 12 px at 1080 (res bottom 1068 = dbars bottom 1068, overflow 0, HP/res overlap 0) and 11.3 + 9.5 px at 1366 (overflow 0). Resource bar 12 px at 1080 with '330 / 330'; rank pips 8.1 x 3 px at 1080 (7 px plus skew), 6.7 x 3 at 1366, ink keyline. Effects slider copy reads 'Hits, abilities, structures and creatures.' with no footsteps. typecheck: 1 error, only in another lane's _harness/_tmp_vfy_ai42_fog.ts."
+    },
+    {
+      "line": "Opus UX verifier: score >= 7.5 for the HUD lens",
+      "holds": false,
+      "numbers": "7.2. A clear step up from before: the recap no longer covers the dial bar or runs off screen, the resource bar has numbers, and damage numbers are off the bars. The 1366 recap-over-allies overlap and the minor legibility nits keep it under the bar."
+    }
+  ],
+  "referenceTargets": "see the referenceTargets string in the structured return; same table",
+  "budgets": "perf_1080 dev, High, RIFT t=600, 6 s: draws 101 (<= 450), programs 35 (<= 40), triangles 121k (<= 500k), 60.1 fps, p95 16.8 ms, renderer CPU 2.15 ms (machine busy, so the timing is advisory). The lane adds DOM/CSS plus one uniform in bars.ts; no draw added.",
+  "originality": "VALE's own design: a sundial medallion and gnomon dial bar, a chalk-on-ink palette with keylines, Atkinson Hyperlegible Mono for numbers with Instrument Sans for labels, the 'Sky' top bar with an hour-ring score, VALE ping vocabulary ('Lamp wanted', 'Trouble here', 'Pull back', 'Claim it'), and the Hour Board for FRAY. No League of Legends icons, layouts, names or art were seen in any frame, and no reference images are stored.",
+  "method": "Own vite on :5793 with a private dep cache (_harness/_tmp_vfy_w2e_vite.config.ts) because the shared node_modules/.vite cache was being re-optimised by other lanes' vites (504 Outdated Optimize Dep). Own probe _harness/_tmp_vfy_w2e_r1.mjs (parts rift, dead, fray, pops, misc, post), every run under heavy.py. Seeds 23, 31 and 41, none of them the implementer's 7 or 11. Vite was stopped afterwards.",
+  "evidence": "_design/reviews/orch1/evidence/w2-e/vfy_r1b/ (27 frames kept, data/*.json)"
+}

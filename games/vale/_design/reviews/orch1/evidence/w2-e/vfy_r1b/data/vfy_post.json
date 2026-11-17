@@ -1,0 +1,541 @@
+{
+ "phase": "vfy_post",
+ "finishedAt": "2026-11-17T19:53:38.280Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 3.8,
+  "node": "v22.23.3",
+  "base": "http://localhost:5793",
+  "wallMs": 165665
+ },
+ "steps": [
+  {
+   "file": "1920x1080/vfy_post_001_postgame.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_post",
+   "step": "post",
+   "name": "postgame",
+   "desc": "postgame default tab",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1850495,
+   "tMs": 157172,
+   "load1": 4.04,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.muted \"Burdam\""
+    },
+    "textNodes": 59,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_post_002_postgame.png",
+   "viewport": "1366x768",
+   "phase": "vfy_post",
+   "step": "post",
+   "name": "postgame",
+   "desc": "postgame default tab",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1003591,
+   "tMs": 157957,
+   "load1": 4.04,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 52,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_post_003_post_summary.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_post",
+   "step": "post",
+   "name": "post_summary",
+   "desc": "postgame tab SUMMARY",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1846469,
+   "tMs": 159613,
+   "load1": 3.96,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "span.t-caption.muted \"Burdam\""
+    },
+    "textNodes": 59,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_post_004_post_summary.png",
+   "viewport": "1366x768",
+   "phase": "vfy_post",
+   "step": "post",
+   "name": "post_summary",
+   "desc": "postgame tab SUMMARY",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1003132,
+   "tMs": 160370,
+   "load1": 3.96,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 52,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_post",
+   "step": "post",
+   "name": "post_scoreboard",
+   "desc": "postgame tab SCOREBOARD",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1906208,
+   "tMs": 162048,
+   "load1": 3.96,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--line \"DEFEATED\""
+    },
+    "textNodes": 128,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 8,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_post_006_post_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "vfy_post",
+   "step": "post",
+   "name": "post_scoreboard",
+   "desc": "postgame tab SCOREBOARD",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1075227,
+   "tMs": 162805,
+   "load1": 3.96,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 127,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_post_007_post_gleam-lead.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_post",
+   "step": "post",
+   "name": "post_gleam-lead",
+   "desc": "postgame tab GLEAM LEAD",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 1751110,
+   "tMs": 164432,
+   "load1": 3.8,
+   "layout": {
+    "minFont": {
+     "px": 13,
+     "el": "text \"0\""
+    },
+    "textNodes": 23,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_post_008_post_gleam-lead.png",
+   "viewport": "1366x768",
+   "phase": "vfy_post",
+   "step": "post",
+   "name": "post_gleam-lead",
+   "desc": "postgame tab GLEAM LEAD",
+   "route": "scr--postgame",
+   "hud": false,
+   "crop": null,
+   "bytes": 921391,
+   "tMs": 165172,
+   "load1": 3.8,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 23,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1,
+     "scrollable": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5793/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/vfy_post_001_postgame.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_post_002_postgame.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/vfy_post_002_postgame.png",
+   "step": "post",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 672,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/vfy_post_003_post_summary.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_post_004_post_summary.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/vfy_post_004_post_summary.png",
+   "step": "post",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 672,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 1005,
+   "clientH": 896,
+   "scrollW": 1738,
+   "clientW": 1738,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "16",
+   "rect": [
+    580,
+    1033,
+    666,
+    1084
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "7 / 7 / 4",
+   "rect": [
+    666,
+    1033,
+    839,
+    1084
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "93",
+   "rect": [
+    839,
+    1033,
+    960,
+    1084
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "12,523",
+   "rect": [
+    960,
+    1033,
+    1098,
+    1084
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "26,542",
+   "rect": [
+    1098,
+    1033,
+    1236,
+    1084
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "1,899",
+   "rect": [
+    1236,
+    1033,
+    1375,
+    1084
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_post_005_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "td.num.pgrow__num",
+   "text": "2,076",
+   "rect": [
+    1375,
+    1033,
+    1530,
+    1084
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_post_006_post_scoreboard.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_post_007_post_gleam-lead.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_post_008_post_gleam-lead.png",
+   "step": "post",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/vfy_post_008_post_gleam-lead.png",
+   "step": "post",
+   "kind": "scrollable",
+   "el": "div.scr__body.sfade.is-more-b",
+   "scrollH": 628,
+   "clientH": 616,
+   "scrollW": 1239,
+   "clientW": 1239,
+   "top": 0
+  }
+ ],
+ "notes": [],
+ "timings": {}
+}
