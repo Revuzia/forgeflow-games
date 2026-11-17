@@ -175,6 +175,8 @@ export const RNG_LEAK = false;             // (the homes gate's rng-leak plant: 
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
 const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
 /** (W10 R1A) a catalog entry's filler-cap class (0 none, 1 clock, 2 floor lamp, 3 potted plant), cached on the entry */
+let catKeyN = 0;
+const catKey = (c) => c._mk || (c._mk = ++catKeyN);   // (W10 R1A, CPU: a catalog entry's identity for the furnisher's failure memo - a number, the entry itself never changes)
 const capKind = (c) => { if (c._capK === undefined) { const t = c.type || ""; c._capK = /clock/.test(t) ? 1 : /lamp(Round|Square)Floor/.test(t) ? 2 : /pottedPlant/.test(t) ? 3 : 0; } return c._capK; };
 const QUOTA_KINDS = new Set(["living", "bedroom", "kitchen"]);
 // the substantive pieces a lived room's quota draws from, in order (kit where the kit has it; authored stand-ins where the budget asks)
@@ -3034,6 +3036,10 @@ export function generate(parcel, opts) {
       if (ok) for (let i = 0; i < pend.length; i++) { const p = pend[i], lg = [], pbs = pieceBoxes(p); for (let j = 0; j < pbs.length; j++) { const pb = pbs[j]; blockLog(RW.free, sfl, pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], pm, lg); } RW.inc.add(p); RW.log.push(p, lg); }
       return ok;
     };
+    // (W10 R1A pass 8, CPU) footprints whose ports' walk FAILED (flat [u0, v0, u1, v1, ...]): a floor piece over 0.2 m blocks the capsule over its whole
+    // footprint (pieceBoxes), so a footprint that COVERS a failed one blocks every sample that one did and fails too - while the room only gains pieces
+    // and the pass margin stands (the searches below keep one list per search and clear it where a kept piece leaves). The same answer, no put / walk.
+    const covFail = (L, r) => { for (let i = 0; i < L.length; i += 4) if (r[0] <= L[i] + 1e-9 && r[1] <= L[i + 1] + 1e-9 && r[2] >= L[i + 2] - 1e-9 && r[3] >= L[i + 3] - 1e-9) return true; return false; };
     const roomOK0 = (fr, bst) => {
       const blk = roomBlk, pk = [];
       for (const list of portWin) { let best = -1; for (const k of list) if (fr[k] && blk[k] !== bst) { best = k; break; } if (best < 0) return false; if (!pk.includes(best)) pk.push(best); }
@@ -3054,6 +3060,7 @@ export function generate(parcel, opts) {
       return got >= np && n >= 16;
     };
     const unput = (p) => { R._tall = null; R._pv = (R._pv || 0) + 1;
+      if (R._twm && p._g <= R._twmG) { for (const [k, g] of R._twm) if (g >= p._g) R._twm.delete(k); }     // (a piece that stood when a failure was memoised leaves: those failures may pass now)
       if (RW.inc && RW.inc.has(p)) {                      // (the piece the cache took in last: its cells back as they were; any other: the cache is rebuilt)
         const L = RW.log;
         if (!RW.stale && L && L.length && L[L.length - 2] === p) { const lg = L.pop(); L.pop(); for (let i = lg.length - 2; i >= 0; i -= 2) RW.free[lg[i]] = lg[i + 1]; RW.inc.delete(p); }
@@ -3063,7 +3070,7 @@ export function generate(parcel, opts) {
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
       const rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
       const p = Object.assign({ cat, room: R, f, u, v, fq, rect, tint: tint || 0, order: furn.length, y0: 0 }, extra || {});
-      furn.push(p); placed.push(p); R.spent += cat.tris; R._tall = null; R._pv = (R._pv || 0) + 1;
+      furn.push(p); placed.push(p); R.spent += cat.tris; R._tall = null; R._pv = (R._pv || 0) + 1; p._g = R._gen = (R._gen || 0) + 1;
       tris[f] += cat.tris;
       if (p.host) p.host.tops = (p.host.tops || 0) + 1;
       return p;
@@ -3143,6 +3150,13 @@ export function generate(parcel, opts) {
       const want = !opts.noView && cat.h >= 0.25 && (opts.seen || opts.want || bestView(R).n < VIEW_WANT) ? (opts.want || target()) : 0, spare = [];   // (noView: the area quota's pieces go where they fit)
       // until the room's best entrance sees VIEW_WANT pieces, its extras (phase 1) go only where it sees them
       const mustSee = opts.seen || (phase === 1 && want && bestView(R).n < VIEW_WANT);
+      // (W10 R1A, CPU) THE FAILURE MEMO: a wall piece that found no spot in this room fails again while the room only GAINS pieces - every test of a spot
+      // (inside the room and clear of its pieces, the window rule, the ports' walk, the clutter staircase, the sight lines past its tall pieces) only gets
+      // harder when a piece is added - for the same piece, spots (corner or not), height band, sideways, wanted entrance(s), must-see, view model and
+      // pass margin. Not memoised: a call that keeps up to 4 unseen spares (a later piece can change WHICH spots are the first spares) or has an `also` test.
+      // A piece that stood when a failure was memoised leaves (unput, not a spot's own try) -> those entries go. The rng is drawn as before: the same houses.
+      const mk = !opts.also && (mustSee || !want) ? catKey(cat) + "|" + (pref === "corner" ? 1 : 0) + (opts.sideways ? 1 : 0) + (opts.seen ? 1 : 0) + (mustSee ? 1 : 0) + "|" + y0p + "|" + yTop + "|" + want + "|" + (R._acc ? R._accMask : -1) + "|" + (R._pm != null ? R._pm : "d") : null;
+      if (mk !== null && R._twm && R._twm.has(mk)) return null;
       const attempt = (run, t, g, side, m) => {
         const p = put(cat, g.u, g.v, side ? (g.fq + 1) % 4 : g.fq, opts.tint, { y0: y0p });      // (m tested only the wanted entrance: its full mask is counted lazily)
         if (!roomOK()) { unput(p); return null; }
@@ -3169,6 +3183,7 @@ export function generate(parcel, opts) {
       // (phase 3, the accurate model found no spot the game's camera sees: a spot the first-person eye sees still reads to a player who steps in -
       // a narrow room seen from its long side hides its far wall behind the body)
       if (!p && R._acc && opts.seen) { R._acc = false; p = scan(cat, false); R._acc = true; if (p) p.vis = null; }
+      if (!p && mk !== null) { (R._twm || (R._twm = new Map())).set(mk, R._gen || 0); R._twmG = Math.max(R._twmG || 0, R._gen || 0); }
       return p;
     };
     const tryAt = (id, u, v, fq, tint, touch) => {        // a piece centred at (u, v) facing fq
@@ -3342,12 +3357,15 @@ export function generate(parcel, opts) {
         const ids = [];
         for (const id of (VIEWPOOL[kind] || VIEWPOOL.hall).concat(RESCUE, FREEPOOL[kind] || FREEPOOL.hall, ["trash", "plant", "sideTable", "box", "chairMod"])) if (!ids.includes(id)) ids.push(id);
         const cat5 = (id) => { let c = CATALOG[id] || CATALOG[ALIAS[id]]; while (c && !budget5(c) && c.alt) c = c.alt; return c && budget5(c) && capOK(c) && !c.deco && !c.wall && c.mount !== "top" && c.h >= 0.3 ? c : null; };
+        const bf5 = [], flat5 = (cat, y0) => !y0 && cat.h > 0.2;          // (covFail: this search's failed floor footprints)
         const tryPiece = (cat, g, y0, want, ei) => {
           if (!valid(g.rect, y0, y0 + cat.h)) return false;
+          if (flat5(cat, y0) && covFail(bf5, g.rect)) return false;
           if (!(visMask(R, g.rect, FL + y0, FL + y0 + cat.h, null, want) & want)) return false;
           const n0 = cnt()[ei];
           const p = put(cat, g.u, g.v, g.fq, tintW, { y0, rescue5: true });
-          if (!roomOK() || cnt()[ei] <= n0) { unput(p); return false; }
+          if (!roomOK()) { if (flat5(cat, y0) && stairsOK()) bf5.push(g.rect[0], g.rect[1], g.rect[2], g.rect[3]); unput(p); return false; }
+          if (cnt()[ei] <= n0) { unput(p); return false; }
           return true;
         };
         const search = (ei) => {
@@ -3363,7 +3381,7 @@ export function generate(parcel, opts) {
               const y0 = cat.mount === "wall" ? cat.y0 : 0;
               for (const run of merged) { if (done) break; for (let t = run.t0 + cat.w / 2; t <= run.t1 - cat.w / 2 + 1e-6 && !done; t += 0.1) done = tryPiece(cat, wallRectInto(run, cat, Math.round(t * 1000) / 1000, WR_G5), y0, want, ei); }   // (a scratch spot: tryPiece keeps none)
             } else {
-              for (const fq of [fqTo, (fqTo + 1) % 4, (fqTo + 3) % 4]) {
+              for (const fq of [fqTo, (fqTo + 1) % 4]) {        // (W10 R1A pass 8, CPU: was also (fqTo + 3) % 4 - the same footprint as (fqTo + 1) % 4 at the same lattice spots, and every test here reads the footprint, not the facing: it could never pass where (fqTo + 1) % 4 had failed)
                 const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
                 // (W10 R1A, CPU: a 0.5 m lattice, was 0.25 - the free spots were ~2/3 of the searches' sight-line checks; the guarantee's outcome per room kind measured
                 // the same over 1,080 houses, ruins 8 short of 4 in 797 rooms vs 4)
@@ -3384,7 +3402,7 @@ export function generate(parcel, opts) {
         const slot = placed.find((q) => q.slot);
         if (!slot) return;
         const sc = slot.cat;
-        unput(slot);
+        unput(slot); bf5.length = 0;
         let ok = false;
         for (const ei of entOrder) if (search(ei)) { ok = true; break; }
         if (!ok) { const b = put(sc, slot.u, slot.v, slot.fq, 0, { slot: true }); b.vis = null; if (!roomOK()) unput(b); return; }
@@ -3400,9 +3418,9 @@ export function generate(parcel, opts) {
         };
         run5();
         if (bestView(R).n >= NEED5) return;
+        // (W10 R1A pass 8, CPU: the accurate search is not run a second time with the plain capsule - over 1,350 selftest houses it rescued 10 of 380 rooms
+        // for 2.7 % of the generator's time; those rooms take the eye-only fallback below, which searches with the plain capsule as before)
         R._pm = 0; RW.stale = true;
-        run5();
-        if (bestView(R).n >= NEED5) return;
         model5(false);                                    // (the fallback: the eye-only model, as before Wave 9)
         if (bestView(R).n >= NEED5) return;
         run5();
@@ -3456,19 +3474,21 @@ export function generate(parcel, opts) {
           const ids = [];
           for (const id of (QUOTAPOOL[kind] || []).concat(VIEWPOOL[kind] || [], FREEPOOL[kind] || [])) { const c = catOf(id); if (c && !ids.includes(id) && !isFiller(c.type || "")) ids.push(id); }
           for (let pass = 0, more = true; pass < 3 && more && cnt() < LIVED_SEE; pass++) { more = false; for (const id of ids) { if (cnt() >= LIVED_SEE) break; if (tryWall(id, "view", { seen: true, tint: tintW, want })) more = true; } }
-          const fqTo = Math.abs(e.fu) > 0.5 ? (e.fu > 0 ? 3 : 1) : (e.fv > 0 ? 2 : 0);
+          const fqTo = Math.abs(e.fu) > 0.5 ? (e.fu > 0 ? 3 : 1) : (e.fv > 0 ? 2 : 0), BF8 = [];      // (covFail: the search's failed floor footprints)
           for (const id of ids) {
             if (cnt() >= LIVED_SEE) break;
             const cat = catOf(id);
             if (!cat || cat.mount === "wall" || cat.mount === "top" || cat.wall || tris[f] + cat.tris > TB || !capOK(cat)) continue;
             let done = false;
-            for (const fq of [fqTo, (fqTo + 1) % 4, (fqTo + 3) % 4]) {
+            const bf8 = BF8;
+            for (const fq of [fqTo, (fqTo + 1) % 4]) {        // (W10 R1A pass 8, CPU: was also (fqTo + 3) % 4 - the same footprint as (fqTo + 1) % 4 at the same lattice spots, and every test here reads the footprint, not the facing: it could never pass where (fqTo + 1) % 4 had failed)
               const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
               for (let pu = inner[0] + w / 2; pu <= inner[2] - w / 2 + 1e-6 && !done; pu += FREE5_STEP) for (let pv = inner[1] + d / 2; pv <= inner[3] - d / 2 + 1e-6 && !done; pv += FREE5_STEP) {
                 const u = Math.round(pu * 1000) / 1000, v = Math.round(pv * 1000) / 1000, rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
-                if (!valid(rect, 0, cat.h) || !(visMask(R, rect, FL, FL + cat.h, null, want) & want)) continue;
+                if (!valid(rect, 0, cat.h) || (cat.h > 0.2 && covFail(bf8, rect)) || !(visMask(R, rect, FL, FL + cat.h, null, want) & want)) continue;
                 const n0 = cnt(), p = put(cat, u, v, fq, tintW, {});
-                if (!roomOK() || cnt() <= n0) { unput(p); continue; }
+                if (!roomOK()) { if (cat.h > 0.2 && stairsOK()) bf8.push(rect[0], rect[1], rect[2], rect[3]); unput(p); continue; }
+                if (cnt() <= n0) { unput(p); continue; }
                 done = true;
               }
               if (done) break;
