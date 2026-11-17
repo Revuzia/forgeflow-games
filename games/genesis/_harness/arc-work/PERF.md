@@ -2020,3 +2020,18 @@ long press frame-rate independent. Report after 1-2 verified.
 - BAKE RATE seen: the first `rock` run starved (one class-576 tile a frame, 539 queued): fixed by the credit budget
   (a tile that does not fit waits, smaller ones behind it use half of what is left).
 - NEXT: finish run w (far orbit peak rock) -> build s22/dist3 -> `--edits=1`, `--pan=8`, Ultra 1686x963 count, gate.
+- STEP 2 more (build s22/dist3 = classes 48 / 72 + downgrade + tight distance range + `wide` -> full shader; run `--tag=x`):
+  peak 500 m (rock + snow + far hills): run w showed the far vegetated hill LESS golden in the cache (mean |d| 2.87,
+  5.4 % of pixels > 16). Cause: the patch's distance range came from its bounding sphere, brackets were 4+ rungs wide
+  and the LINEAR blend put a 120-500 m fade at ~22 % where it is 90 %. With the LOD's shell-sector distance + the
+  patch's extent, and patches spanning > 2 rungs sent to the full shader: peak 2.00, RGB 104.2 123.8 143.8 / 104.3
+  123.9 144.0, detail 10.73 / 10.61. top-down 160 m: 2.62 (was 3.42). far 2600 m 1.51, orbit 0.56, coast 120 m 1.91
+  (run w, sheet s22/sheet-w3.png LOOKED AT: all four read the same; no lines).
+  BUT `wide` was 104 of 258 patches in the top-down view (K = 3 at 320x180): too many on the full shader. So, in source
+  (NOT YET BUILT): the two anchors are blended along ONE monotone curve, tcFade(d) = the sum of evalTerrain's distance
+  fades (14-45, 120-500, 0.5 x 400-1300, shrub and canopy hand-over), instead of linearly in distance: a fade alone in
+  a bracket is then exact at any width. With it the bracket is taken one rung wider each way (camera moves of ~40 %
+  re-bake nothing) and only > 5 rungs counts as wide.
+  PAN pairs: 2 frames after a camera jump the SKY still converges (grey -> blue between the two shots), so a pan
+  pair's whole-image number is the sky's: measure the ground rows only.
+- NEXT: build s22/dist4, run `--views=graze,peak --pan=4` again (ground crop), edits result of run x, Ultra count, gate.
