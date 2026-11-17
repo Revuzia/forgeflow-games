@@ -1,0 +1,95 @@
+{
+ "map": "fray",
+ "t": 481,
+ "seed": 7,
+ "fog": true,
+ "programs": 29,
+ "telegraph": {
+  "before": {
+   "px": 68084,
+   "p10": 4.3,
+   "p50": 14.8,
+   "edgeCR90": 6.17,
+   "edgeCR95": 9.23
+  },
+  "after": {
+   "px": 73656,
+   "p10": 4.3,
+   "p50": 13.8,
+   "edgeCR90": 4.83,
+   "edgeCR95": 7.39
+  }
+ },
+ "gfx5": null,
+ "spots": [
+  {
+   "spot": "plate_centre",
+   "world": [
+    32,
+    32
+   ],
+   "before": {
+    "file": "fray_plate_centre_before.png",
+    "p5": 6.4,
+    "p50": 20.1,
+    "p95": 62.3,
+    "meanC": 11.3,
+    "lod2": 0
+   },
+   "after": {
+    "file": "fray_plate_centre_after.png",
+    "p5": 12.1,
+    "p50": 28.1,
+    "p95": 63.1,
+    "meanC": 10.9,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "plate_rim_w",
+   "world": [
+    8,
+    32
+   ],
+   "before": {
+    "file": "fray_plate_rim_w_before.png",
+    "p5": 5.9,
+    "p50": 17.5,
+    "p95": 24,
+    "meanC": 0,
+    "lod2": 0
+   },
+   "after": {
+    "file": "fray_plate_rim_w_after.png",
+    "p5": 12.7,
+    "p50": 25.3,
+    "p95": 30.2,
+    "meanC": 0,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "fight",
+   "world": [
+    27.384377538508563,
+    14.07269250060619
+   ],
+   "before": {
+    "file": "fray_fight_before.png",
+    "p5": 3.6,
+    "p50": 18,
+    "p95": 54.8,
+    "meanC": 1.4,
+    "lod2": 0
+   },
+   "after": {
+    "file": "fray_fight_after.png",
+    "p5": 8.8,
+    "p50": 25.3,
+    "p95": 55.5,
+    "meanC": 1.4,
+    "lod2": 0
+   }
+  }
+ ]
+}

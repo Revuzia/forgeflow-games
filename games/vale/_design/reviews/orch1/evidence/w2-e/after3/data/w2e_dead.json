@@ -1,49 +1,204 @@
 {
  "phase": "w2e_dead",
- "finishedAt": "2026-11-17T07:20:08.046Z",
+ "finishedAt": "2026-11-17T07:41:52.537Z",
  "env": {
   "chrome": "157.0.8103.79",
-  "load1End": 6.76,
+  "load1End": 10.43,
   "node": "v22.23.3",
   "base": "http://localhost:5611",
-  "wallMs": 498064
+  "wallMs": 56942
  },
- "steps": [],
+ "steps": [
+  {
+   "file": "1920x1080/w2e_dead_001_dead_recap.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_dead",
+   "step": "dead",
+   "name": "dead_recap",
+   "desc": "dead, respawn in 6.0 s, 1.7 s after the death (x1; t=83)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1721344,
+   "tMs": 47912,
+   "load1": 10.5,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 77,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_dead_002_dead_recap.png",
+   "viewport": "1366x768",
+   "phase": "w2e_dead",
+   "step": "dead",
+   "name": "dead_recap",
+   "desc": "dead, respawn in 6.0 s, 1.7 s after the death (x1; t=83)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 915995,
+   "tMs": 48931,
+   "load1": 10.3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 74,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_dead_003_dead_later.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_dead",
+   "step": "dead",
+   "name": "dead_later",
+   "desc": "dead, 3 s after the death",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2219138,
+   "tMs": 52054,
+   "load1": 10.3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 50,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_dead_004_dead_later.png",
+   "viewport": "1366x768",
+   "phase": "w2e_dead",
+   "step": "dead",
+   "name": "dead_later",
+   "desc": "dead, 3 s after the death",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1249765,
+   "tMs": 53041,
+   "load1": 10.3,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 50,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "viewport": "1920x1080",
+   "phase": "w2e_dead",
+   "step": "dead",
+   "name": "dead_shop",
+   "desc": "shop opened while dead",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1962831,
+   "tMs": 55426,
+   "load1": 10.43,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 151,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 13,
+     "scrollable": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "viewport": "1366x768",
+   "phase": "w2e_dead",
+   "step": "dead",
+   "name": "dead_shop",
+   "desc": "shop opened while dead",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 987020,
+   "tMs": 56311,
+   "load1": 10.43,
+   "layout": {
+    "minFont": {
+     "px": 10,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 148,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 24,
+     "scrollable": 1
+    }
+   }
+  }
+ ],
  "console": [
   {
    "step": "boot",
-   "type": "http504",
-   "text": "/node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=4ff88bcc",
-   "at": "",
-   "tMs": 5210
-  },
-  {
-   "step": "boot",
-   "type": "error",
-   "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)",
-   "at": "/node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=4ff88bcc",
-   "tMs": 5210
-  },
-  {
-   "step": "boot",
-   "type": "requestfailed",
-   "text": "GET /node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=4ff88bcc net::ERR_ABORTED",
-   "at": "",
-   "tMs": 5210
-  },
-  {
-   "step": "boot",
    "type": "warning",
-   "text": "[vale] renderer unavailable TypeError: Failed to fetch dynamically imported module: http://localhost:5611/src/render/index.ts",
+   "text": "THREE.WARNING: Multiple instances of Three.js being imported.",
    "at": "/@vite/client:356",
-   "tMs": 5210
-  },
-  {
-   "step": "boot",
-   "type": "pageerror",
-   "text": "Cannot read properties of undefined (reading '__H')",
-   "at": "",
-   "tMs": 29468
+   "tMs": 1551
   }
  ],
  "consoleCounts": {
@@ -53,41 +208,753 @@
  },
  "infoSample": [
   "[vite] connecting...",
-  "[vale] catalog 2026.11.7 (schema 1) from http://localhost:5611/catalog/manifest.json",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5611/catalog/manifest.json",
   "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
  ],
- "layout": [],
+ "layout": [
+  {
+   "file": "1920x1080/w2e_dead_001_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_dead_002_dead_recap.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_dead_003_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_dead_004_dead_later.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 1144,
+   "clientH": 643,
+   "scrollW": 650,
+   "clientW": 650,
+   "top": 0
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    564,
+    1075,
+    1186,
+    1095
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    571,
+    1153,
+    613,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    635,
+    1153,
+    677,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    699,
+    1153,
+    741,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    763,
+    1153,
+    805,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    827,
+    1153,
+    869,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    891,
+    1153,
+    933,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    955,
+    1153,
+    997,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    1019,
+    1153,
+    1061,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    1083,
+    1153,
+    1125,
+    1173
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    571,
+    1233,
+    613,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/w2e_dead_005_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    635,
+    1233,
+    677,
+    1253
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "scrollable",
+   "el": "div.lshop__grid",
+   "scrollH": 915,
+   "clientH": 514,
+   "scrollW": 520,
+   "clientW": 520,
+   "top": 0
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,750",
+   "rect": [
+    370,
+    767,
+    408,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,800",
+   "rect": [
+    421,
+    767,
+    459,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,800",
+   "rect": [
+    472,
+    767,
+    510,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,800",
+   "rect": [
+    523,
+    767,
+    561,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,800",
+   "rect": [
+    574,
+    767,
+    612,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,900",
+   "rect": [
+    626,
+    767,
+    663,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,900",
+   "rect": [
+    677,
+    767,
+    715,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,900",
+   "rect": [
+    728,
+    767,
+    766,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,900",
+   "rect": [
+    779,
+    767,
+    817,
+    785
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,900",
+   "rect": [
+    370,
+    831,
+    408,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "1,950",
+   "rect": [
+    421,
+    831,
+    459,
+    849
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "h3.lshop__sech.t-label",
+   "text": "APEX",
+   "rect": [
+    366,
+    861,
+    864,
+    877
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,300",
+   "rect": [
+    370,
+    921,
+    408,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,400",
+   "rect": [
+    421,
+    921,
+    459,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    472,
+    921,
+    510,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,500",
+   "rect": [
+    523,
+    921,
+    561,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    574,
+    921,
+    612,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    626,
+    921,
+    663,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    677,
+    921,
+    715,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,650",
+   "rect": [
+    728,
+    921,
+    766,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    779,
+    921,
+    817,
+    939
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,700",
+   "rect": [
+    370,
+    985,
+    408,
+    1003
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1366x768/w2e_dead_006_dead_shop.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "span.istile__price.num",
+   "text": "2,800",
+   "rect": [
+    421,
+    985,
+    459,
+    1003
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
  "notes": [
   {
-   "step": "boot",
-   "tMs": 498063,
-   "load1": 6.76,
+   "step": "dead",
+   "tMs": 56941,
+   "load1": 10.43,
+   "text": "death",
+   "data": {
+    "time": 83,
+    "respawnIn": 6
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 56941,
+   "load1": 10.43,
    "text": "last poll",
    "data": {
-    "phase": "ended",
-    "time": 1764.3,
-    "dead": false,
-    "respawnIn": 0,
-    "near": 4,
-    "ended": true,
+    "phase": "live",
+    "time": 83,
+    "dead": true,
+    "respawnIn": 6,
+    "near": 2,
+    "ended": false,
     "evs": [
      {
       "e": "dmg",
-      "t": 1763.1333333333332,
-      "other": "fighter",
-      "dir": "out"
+      "t": 81.16666666666667,
+      "other": "minion",
+      "dir": "in"
      },
      {
       "e": "dmg",
-      "t": 1763.2333333333333,
+      "t": 81.33333333333333,
       "other": "fighter",
       "dir": "in"
      },
      {
       "e": "dmg",
-      "t": 1763.2333333333333,
+      "t": 81.56666666666666,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 81.96666666666667,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.03333333333333,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.3,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.33333333333333,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.5,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.53333333333333,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.6,
+      "other": "structure",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.89999999999999,
       "other": "fighter",
       "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.89999999999999,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 82.96666666666667,
+      "other": "minion",
+      "dir": "in"
+     },
+     {
+      "e": "died",
+      "t": 82.96666666666667
      }
     ]
    }

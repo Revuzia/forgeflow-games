@@ -1,0 +1,118 @@
+{
+ "map": "bridge",
+ "t": 481,
+ "seed": 7,
+ "fog": true,
+ "programs": 36,
+ "telegraph": {
+  "before": {
+   "px": 21088,
+   "p10": 4.9,
+   "p50": 25,
+   "edgeCR90": 4.44,
+   "edgeCR95": 5.61
+  },
+  "after": {
+   "px": 20892,
+   "p10": 5.5,
+   "p50": 20.3,
+   "edgeCR90": 3.05,
+   "edgeCR95": 3.75
+  }
+ },
+ "gfx5": null,
+ "spots": [
+  {
+   "spot": "span_west_base",
+   "world": [
+    13,
+    22
+   ],
+   "before": {
+    "file": "bridge_span_west_base_before.png",
+    "p5": 5.9,
+    "p50": 36.1,
+    "p95": 45.2,
+    "meanC": 0.2,
+    "lod2": 0
+   },
+   "after": {
+    "file": "bridge_span_west_base_after.png",
+    "p5": 11.3,
+    "p50": 48,
+    "p95": 53.6,
+    "meanC": 0.2,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "span_west",
+   "world": [
+    40,
+    22
+   ],
+   "before": {
+    "file": "bridge_span_west_before.png",
+    "p5": 4.7,
+    "p50": 26.7,
+    "p95": 43.2,
+    "meanC": 0.2,
+    "lod2": 0
+   },
+   "after": {
+    "file": "bridge_span_west_after.png",
+    "p5": 8.2,
+    "p50": 39.9,
+    "p95": 53.2,
+    "meanC": 0.2,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "span_centre",
+   "world": [
+    78,
+    22
+   ],
+   "before": {
+    "file": "bridge_span_centre_before.png",
+    "p5": 4.4,
+    "p50": 20.8,
+    "p95": 62.6,
+    "meanC": 16.1,
+    "lod2": 0
+   },
+   "after": {
+    "file": "bridge_span_centre_after.png",
+    "p5": 9.5,
+    "p50": 33,
+    "p95": 64.1,
+    "meanC": 15.2,
+    "lod2": 2
+   }
+  },
+  {
+   "spot": "fight",
+   "world": [
+    74.35643100092987,
+    20.773140617699543
+   ],
+   "before": {
+    "file": "bridge_fight_before.png",
+    "p5": 5,
+    "p50": 20.1,
+    "p95": 57.5,
+    "meanC": 9.7,
+    "lod2": 0
+   },
+   "after": {
+    "file": "bridge_fight_after.png",
+    "p5": 10.2,
+    "p50": 31.9,
+    "p95": 61.3,
+    "meanC": 9.8,
+    "lod2": 3
+   }
+  }
+ ]
+}
