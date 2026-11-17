@@ -57,12 +57,6 @@ export const BAR_SIZE = {
 } as const;
 
 const MAX = 320;
-const PLATE_MAX = 320;
-/** W2-E CUX-8: last frame's bar plates, published for the HUD's world layer (which does not import render/): per plate
- *  x, height, sim y, left, right, up, down (1080p ref px around the anchor) and kind */
-const plates: { n: number; d: Float32Array } = { n: 0, d: new Float32Array(PLATE_MAX * 8) };
-(globalThis as unknown as { __valeBarPlates?: typeof plates }).__valeBarPlates = plates;
-const reducedMotion = (): boolean => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 const NAME_ROWS = 24;
 const ATLAS_W = 1024, ATLAS_H = 1024;
 const ROW_H = 36;          // atlas px per name row (2× of 14 + outline room)
@@ -116,7 +110,6 @@ void main() {
 
 export const BAR_FRAG = /* glsl */`
 uniform float uPxScale;
-uniform float uPulse;         // W2-E VFX-O11: 0..1 beat of the low-health warning on enemy bars
 varying vec2 vP;
 varying vec4 vBox; varying vec4 vHp; varying vec4 vRes; varying vec4 vCol; varying vec4 vResCol; varying vec4 vSeat; varying vec4 vMisc;
 const vec3 INK1 = vec3( 0.005605, 0.006995, 0.010330 );   // #11141A linear
@@ -181,14 +174,7 @@ void main() {
   float fHp = 1.0 - smoothstep( hp - aa, hp + aa, u );
   float fTrail = ( 1.0 - smoothstep( trail - aa, trail + aa, u ) ) * ( 1.0 - fHp );
   float fShield = ( 1.0 - smoothstep( shEnd - aa, shEnd + aa, u ) ) * smoothstep( hp - aa, hp + aa, u );
-  // W2-E VFX-O11: an ENEMY bar under 25 % health beats: the fill warms toward Noonwhite and a thin HARM keyline rings the plate
-  float low = ( sh > 1.5 && sh < 2.5 && hp > 0.001 ) ? ( 1.0 - smoothstep( 0.22, 0.25, hp ) ) : 0.0;
-  vec3 fillC = sh < 0.5 ? SAP : mix( vCol.rgb, vec3( 1.0, 0.93, 0.82 ), low * uPulse * 0.55 );
-  over( acc, fillC, inRow * fHp );
-  if ( low > 0.001 ) {
-    float dRing = sdBox( vP - plateC, plateHB + vec2( 1.5 ) );
-    over( acc, vec3( 1.0, 0.36, 0.30 ), cover( abs( dRing + 0.5 ) - 0.5 ) * low * ( 0.35 + 0.65 * uPulse ) );
-  }
+  over( acc, sh < 0.5 ? SAP : vCol.rgb, inRow * fHp );
   // lost HP: a white flash that stands 1 px proud for ~4 frames, then the Noonwhite trail
   float fl = clamp( vMisc.z, 0.0, 1.0 );
   float inPop = fl > 0.001 ? cover( sdBox( vP - hpC, hpHB + vec2( 0.0, 1.0 ) ) ) : inRow;
@@ -322,7 +308,7 @@ export class BarLayer {
   private readonly ccText: string[] = [];
   private readonly ccKind: string[] = [];
   private fontsReady = false;
-  readonly uniforms = { uPxScale: { value: 1 }, uPulse: { value: 1 }, uResolution: overlayUniforms.uResolution };
+  readonly uniforms = { uPxScale: { value: 1 }, uResolution: overlayUniforms.uResolution };
 
   constructor() {
     const quad = new PlaneGeometry(1, 1);
@@ -491,9 +477,6 @@ export class BarLayer {
   begin(pxScale: number): void {
     this.count = 0; this.lcount = 0;
     this.uniforms.uPxScale.value = pxScale;
-    // the low-health beat: ~1.1 s period; Reduce motion holds it steady at full
-    this.uniforms.uPulse.value = reducedMotion() ? 1 : 0.5 + 0.5 * Math.sin((performance.now() / 1000) * 5.6);
-    plates.n = 0;
   }
 
   push(b: BarSpec): void {
@@ -512,21 +495,6 @@ export class BarLayer {
     A.aResCol.setXYZW(i, b.resColor.r, b.resColor.g, b.resColor.b, b.alpha);
     if (b.seatLine) A.aSeat.setXYZW(i, b.seatLine.r, b.seatLine.g, b.seatLine.b, 1); else A.aSeat.setXYZW(i, 0, 0, 0, 0);
     A.aMisc.setXYZW(i, b.glyph, b.keyline, b.flash ?? 0, 0);
-    // W2-E CUX-8: this plate's footprint (ref px around its anchor) for the HUD's damage numbers, which keep off every bar
-    {
-      const hpH = isF ? BAR_SIZE.fighter.hp : b.kind === BAR_KIND.minion ? BAR_SIZE.minion.hp : b.kind === BAR_KIND.structure ? BAR_SIZE.structure.hp : BAR_SIZE.monster.hp;
-      const body = hpH + (isF && b.showRes ? BAR_SIZE.fighter.res + 1 : 0);
-      const k = plates.n++;
-      if (k < PLATE_MAX) {
-        const o = k * 8, d = plates.d;
-        d[o] = b.x; d[o + 1] = b.y; d[o + 2] = b.z;
-        d[o + 3] = barW / 2 + (isF ? 2 + 3 + BAR_SIZE.levelChip + 2 : 4);          // left (the level chip rides the left end)
-        d[o + 4] = barW / 2 + 4;                                                   // right
-        d[o + 5] = body / 2 + 2 + (isF ? BAR_SIZE.nameLinePx + 2 : 0);              // up (fighters: the name line above)
-        d[o + 6] = body / 2 + 2;                                                   // down
-        d[o + 7] = b.kind;
-      } else plates.n = PLATE_MAX;
-    }
     if (isF) {
       const bodyH = BAR_SIZE.fighter.hp + (b.showRes ? BAR_SIZE.fighter.res + 1 : 0);
       const plateTop = bodyH / 2 + 2 + (b.shape === SHAPE.self ? 2 : 0);

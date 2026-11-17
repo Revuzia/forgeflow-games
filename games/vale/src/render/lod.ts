@@ -56,11 +56,6 @@ export const LOD = {
    *  Burdam's front pauldron roundel whole at the gameplay camera, the chars lane's _lod1.mjs --uv-weight), the locked
    *  bone and weight */
   body: { ratio: 0.4, errorM: 0.012, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5 },
-  /** orch1 W2-A (GFX-4 LOD, FU-15, TECH-14): a match fighter's face-locked LOD2, simplified from its LOD1 (half of it,
-   *  ~0.2 of the full body), held within 30 mm (under 2 px at the default zoom on a far fighter), the same face lock.
-   *  renderer.ts draws it for a non-local fighter farther than `farM` from the camera's ground centre (back to LOD1
-   *  under `nearM`) or past the `keep` nearest fighters on screen */
-  body2: { ratio: 0.5, errorM: 0.03, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5, farM: 22, nearM: 20, keep: 6 },
   /** a match fighter's ink copies (rest outline, victim flash, x-ray) over its LOD1 hull: a bound in metres */
   ink: { ratio: 0.4, errorM: 0.008, weld: true },
   /** meshes under this many triangles keep their index (the saving would not pay for a second buffer) */
@@ -237,9 +232,9 @@ export function dequantUnit(mesh: SkinnedMesh): number {
  * art/blender/fighters/_lod1_three.mjs checks at its own 0.5 / 10 mm). Returns the index (Uint16 under 65,536 vertices)
  * and both triangle counts.
  */
-interface FaceLockCfg { ratio: number; errorM: number; normalW: number; uvW: number; lockBone: string; lockW: number }
-export function faceLockedLod(mesh: SkinnedMesh, cfg: FaceLockCfg = LOD.body): { index: BufferAttribute; tris: number; lodTris: number } | null {
+export function faceLockedLod(mesh: SkinnedMesh): { index: BufferAttribute; tris: number; lodTris: number } | null {
   if (!ready) return null;
+  const cfg = LOD.body;
   const g = mesh.geometry;
   const P = g.getAttribute('position'), N = g.getAttribute('normal');
   const SI = g.getAttribute('skinIndex'), SW = g.getAttribute('skinWeight');
@@ -313,27 +308,4 @@ export function composeIndex(g: BufferGeometry, members: readonly { mesh: number
   const attr = new BufferAttribute(I, 1);
   attr.name = 'vale_lod_composed';
   return attr;
-}
-
-// ── the fighter body's face-locked LOD2 (orch1 W2-A) ──────────────────────────────────────────────
-const body2Cache = new WeakMap<BufferGeometry, BufferGeometry | null>();
-/**
- * The face-locked LOD2 view of a match fighter's body: `mesh` draws its LOD1 view (lod1, 'vale_body_lod1'); the result
- * draws LOD.body2 of it over the same attributes (cached per LOD1 view, so every clone of a fighter shares it), with its
- * own shadow LOD; null when nothing is gained or the simplifier is not ready. The dequantization is read from `mesh`'s
- * skeleton (bone rotations and translations do not change it; bones carry no scale).
- */
-export function bodyLod2Of(mesh: SkinnedMesh, lod1: BufferGeometry): BufferGeometry | null {
-  if (!ready) return null;
-  if (body2Cache.has(lod1)) return body2Cache.get(lod1) ?? null;
-  body2Cache.set(lod1, null);
-  const was = mesh.geometry;
-  mesh.geometry = lod1;
-  const r = faceLockedLod(mesh, LOD.body2);
-  mesh.geometry = was;
-  if (!r || r.lodTris > r.tris * 0.8) return null;
-  const v = indexView(lod1, r.index, 'vale_body_lod2');
-  prepareShadowLod(v);
-  body2Cache.set(lod1, v);
-  return v;
 }

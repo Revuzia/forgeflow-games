@@ -39,8 +39,8 @@
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
 import {
-  ClampToEdgeWrapping, Color, DataTexture, DataUtils, HalfFloatType, LinearFilter, type Material, Material as MaterialBase, NoBlending, NormalBlending, RGBAFormat,
-  ShaderChunk, SRGBColorSpace, Texture, UnsignedByteType, Vector2, Vector3, Vector4, type WebGLProgramParametersWithUniforms,
+  ClampToEdgeWrapping, Color, DataTexture, DataUtils, HalfFloatType, LinearFilter, type Material, NoBlending, NormalBlending, RGBAFormat,
+  ShaderChunk, Texture, Vector2, Vector3, Vector4, type WebGLProgramParametersWithUniforms,
 } from 'three';
 
 /** knots of the grade response table (valeFogGrade): the LUT's own grid (33³) */
@@ -146,27 +146,10 @@ export const worldUniforms = {
   // art.skins.never: no reserved hue above 40 % saturation), z = the share of the luma pulled out of very pale texels
   // (above display luma w) so their hue can show, w = that knee
   valeCharChroma: { value: new Vector4(2.4, 0.38, 0.06, 0.72) },
-  // orch1 W2-A GFX-2 / FU-5 (fighters only): x = the weight of the baked AO (aoMap) on a fighter's body, y / z = the
-  // knee and the ceiling of the hue-preserving value roll-off on its diffuse light (the brightest channel eases from y
-  // toward z; every channel scales by the same factor, so a pale kit keeps its hue instead of the tone map's shoulder
-  // bleaching it to cream), w unused. lighting.ts CHAR_LIGHT.tone sets it; (1, 0, 0) = off
-  valeCharAo: { value: new Vector4(1, 0, 0, 0) },
   // max env ENV-10: drifting cloud shadow on the sun term of world (non-character) materials: x = its amplitude (0 =
   // off; setCloudShadow: the map's art.terrain.cloudShadow × the tier's switch), y = 1 / the cloud scale (m),
   // zw = drift (m/s)
   valeCloud: { value: new Vector4(0, 1 / 24, 0.46, 0.38) },
-  // orch1 W2-A GFX-1 (ruling 46), the environment value re-key (lighting.ts ENV_KEY; valeRekey below): x = the exponent
-  // on display L* (1 = off), y = the environment's chroma multiplier, zw = the display L* over which the curve eases
-  // back to the identity (lamps and highlights keep their value)
-  valeEnvKey: { value: new Vector4(1, 1, 60, 88) },
-  // x = the chroma multiplier of a keep-colour surface (the Standing Shadow: GFX-5, its violet must not read as fog),
-  // y = the height tint's strength (GFX-13), z / w = the world y where the low / high tint is full
-  valeEnvKey2: { value: new Vector4(1, 0, -1.5, 1.5) },
-  // the re-key's gain: L*' = 100 gain (L* / 100)^valeEnvKey.x below the ease (1 = off)
-  valeEnvGain: { value: 1 },
-  // GFX-13: the per-map height tint (linear rgb multipliers; low ground cooler, high ground warmer)
-  valeHeightLo: { value: new Color(1, 1, 1) },
-  valeHeightHi: { value: new Color(1, 1, 1) },
 };
 
 /** GLSL: the fog-of-war + edge haze functions (shared with custom ShaderMaterials) */
@@ -237,58 +220,7 @@ vec3 valeFogShade( vec3 c, float mul, float sat, float ta ) {
   // never brighter than lit
   return ( 1.0 - ta ) * clamp( k, 0.0, 1.0 ) * g + ta * valeFogTint;
 }
-uniform vec4 valeEnvKey;
-uniform vec4 valeEnvKey2;
-uniform float valeEnvGain;
-uniform vec3 valeHeightLo;
-uniform vec3 valeHeightHi;
-// a character material (fighter, wick, monster) sets 0 before the fog runs: the re-key is the environment's only
-float valeEnvRekey = 1.0;
-float valeLstarOf( float y ) { return y > 0.008856 ? 116.0 * pow( y, 1.0 / 3.0 ) - 16.0 : 903.3 * y; }
-float valeYOfLstar( float l ) { return l > 8.0 ? pow( ( l + 16.0 ) / 116.0, 3.0 ) : l / 903.3; }
-float valeToLin( float e ) { return e <= 0.04045 ? e / 12.92 : pow( ( e + 0.055 ) / 1.055, 2.4 ); }
-float valeToDisp( float y ) { return y <= 0.0031308 ? y * 12.92 : 1.055 * pow( y, 1.0 / 2.4 ) - 0.055; }
-// orch1 W2-A GFX-1 (ruling 46): the environment value re-key. The lit colour's DISPLAY L* (through the post chain's tone
-// map, sRGB and the map's LUT grey response, mirrored as the fog does) goes through L*' = 100 gain (L* / 100)^x, easing back
-// to the identity over valeEnvKey.zw; its chroma about its own luminance x valeEnvKey.y (a keep-colour surface:
-// valeEnvKey2.x); the scale that shows L*' is solved through the Neutral toe exactly as valeFogShade solves its own.
-// One curve lands every old r12 B5 band on the new one (x 0.562, gain 0.879; measured RIFT lanes 38 -> ~51, jungle floor
-// 14 -> ~29, wall faces 13 -> ~28): lanes sit at the foot of the 50-58 band so the HARM telegraph edge keeps its
-// contrast on the lane. No define, no texture: no program is added.
-vec3 valeRekey( vec3 c ) {
-  #ifdef VALE_KEEP_COLOR
-  float cm = valeEnvKey2.x;
-  #else
-  float cm = valeEnvKey.y;
-  #endif
-  if ( valeEnvKey.x >= 0.999 && abs( valeEnvGain - 1.0 ) < 0.001 && abs( cm - 1.0 ) < 0.001 ) return c;
-  const vec3 W = vec3( 0.2126, 0.7152, 0.0722 );
-  c = max( c, vec3( 0.0 ) );
-  float lum = dot( c, W );
-  if ( lum < 1e-6 ) return c;
-  vec3 g = max( mix( vec3( lum ), c, cm ), vec3( 0.0 ) );
-  vec3 t = clamp( valeToneNeutral( c ), 0.0, 1.0 );
-  vec3 e = mix( t * 12.92, 1.055 * pow( t, vec3( 1.0 / 2.4 ) ) - 0.055, step( 0.0031308, t ) );
-  float dC = dot( vec3( valeGradeAt( e.r ).r, valeGradeAt( e.g ).g, valeGradeAt( e.b ).b ), W );
-  float L = valeLstarOf( valeToLin( dC ) );
-  float Lc = 100.0 * valeEnvGain * pow( max( L, 0.0 ) / 100.0, valeEnvKey.x );
-  float Lo = mix( Lc, L, smoothstep( valeEnvKey.z, valeEnvKey.w, L ) );
-  float ef = valeGradeAt( valeToDisp( valeYOfLstar( Lo ) ) ).a;
-  float Lf = valeToLin( ef );
-  int j = g.r <= g.g && g.r <= g.b ? 0 : ( g.g <= g.b ? 1 : 2 );
-  float k = valeFogSolve( dot( g, W ), g[ j ], 0.0, 0.0, 0.0, Lf );
-  return g * clamp( k, 0.0, 8.0 );
-}
 vec3 valeApplyWorldFog( vec3 c, vec3 wp ) {
-  if ( valeEnvRekey > 0.5 ) {
-    // GFX-13: low ground a little cooler and darker, high ground a little warmer (before the re-key and the fog solve)
-    if ( valeEnvKey2.y > 0.0 ) {
-      float hl = clamp( wp.y / valeEnvKey2.z, 0.0, 1.0 ), hh = clamp( wp.y / valeEnvKey2.w, 0.0, 1.0 );
-      hl = hl * hl * ( 3.0 - 2.0 * hl ); hh = hh * hh * ( 3.0 - 2.0 * hh );
-      c *= mix( vec3( 1.0 ), valeHeightLo, hl * valeEnvKey2.y ) * mix( vec3( 1.0 ), valeHeightHi, hh * valeEnvKey2.y );
-    }
-    c = valeRekey( c );
-  }
   float vis = valeVision( wp.xz );
   if ( vis < 0.999 ) {
     float mul = valeFogLocal >= 0.0 ? valeFogLocal : valeFogValue;
@@ -338,7 +270,6 @@ uniform vec4 valeCharShape;
 uniform float valeCharMonster;
 uniform float valeCharMat;
 uniform vec4 valeCharChroma;
-uniform vec4 valeCharAo;
 // MAX U1 fix round: the albedo hue lift (header of worldUniforms.valeCharChroma). The bakes paint fighters at CIELAB
 // chroma 5-18 (mean), so at 28.5 m under the grade they read as hue-less clay; this lifts the display-space chroma about
 // the texel's own Rec.709 luma, never past valeCharChroma.y HSV saturation and never below black, and pulls the palest
@@ -423,33 +354,6 @@ const CHAR_LIGHT = /* glsl */`
 }
 #endif
 `;
-/** orch1 W2-A GFX-2 / FU-5: three's aomap_fragment with the baked AO weighted on fighters (valeCharAo.x), then the
- *  hue-preserving value roll-off of a fighter's diffuse light (valeCharAo.yz; the header of worldUniforms.valeCharAo) */
-const CHAR_AO = /* glsl */`
-#ifdef USE_AOMAP
-	float ambientOcclusion = ( texture2D( aoMap, vAoMapUv ).r - 1.0 ) * aoMapIntensity * ( valeCharMode > 1.5 ? valeCharAo.x : 1.0 ) + 1.0;
-	reflectedLight.indirectDiffuse *= ambientOcclusion;
-	#if defined( USE_CLEARCOAT )
-		clearcoatSpecularIndirect *= ambientOcclusion;
-	#endif
-	#if defined( USE_SHEEN )
-		sheenSpecularIndirect *= ambientOcclusion;
-	#endif
-	#if defined( USE_ENVMAP ) && defined( STANDARD )
-		float dotNV = saturate( dot( geometryNormal, geometryViewDir ) );
-		reflectedLight.indirectSpecular *= computeSpecularOcclusion( dotNV, ambientOcclusion, material.roughness );
-	#endif
-#endif
-if ( valeCharMode > 1.5 && valeCharAo.z > valeCharAo.y ) {
-	vec3 valeD = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
-	float valePk = max( valeD.r, max( valeD.g, valeD.b ) );
-	if ( valePk > valeCharAo.y ) {
-		float valeOver = valePk - valeCharAo.y, valeSpan = valeCharAo.z - valeCharAo.y;
-		float valeS = ( valeCharAo.y + valeOver / ( 1.0 + valeOver / valeSpan ) ) / valePk;
-		reflectedLight.directDiffuse *= valeS; reflectedLight.indirectDiffuse *= valeS;
-	}
-}
-`;
 
 export interface WorldPatchOptions {
   /** fog of war + edge haze (default true) */
@@ -530,49 +434,6 @@ export function veilOff(m: Material): void {
   m.transparent = false; m.opacity = 1; m.depthWrite = true;
 }
 
-/** orch1 W2-A GFX-4 / TECH-05 programs: 1 × 1 neutral stand-ins for the maps a material lacks. three keys a
- *  MeshStandardMaterial's program by WHICH maps it has (USE_MAP, USE_AOMAP, ... and their uv channels), so a fighter's
- *  mapless team accent, its textured body and a monster's dawnglass (an emissive map) were three programs running the
- *  same shading. Each stand-in is the identity of its slot (map / emissive / ao / ORM white: × 1; the normal map the
- *  flat tangent-space normal, exact in half float), so the look is unchanged and every character material keys one
- *  program; a structure's mapless accent joins its textured stone the same way (white map). */
-const neutralTex = (() => {
-  const make = (name: string, data: Uint8Array | Uint16Array, half: boolean, srgb: boolean): DataTexture => {
-    const t = new DataTexture(data, 1, 1, RGBAFormat, half ? HalfFloatType : UnsignedByteType);
-    t.name = name; t.needsUpdate = true; t.generateMipmaps = false;
-    t.magFilter = LinearFilter; t.minFilter = LinearFilter;
-    if (srgb) t.colorSpace = SRGBColorSpace;
-    return t;
-  };
-  const h = DataUtils.toHalfFloat;
-  return {
-    white: make('vale_neutral_white', new Uint8Array([255, 255, 255, 255]), false, true),
-    linear: make('vale_neutral_orm', new Uint8Array([255, 255, 255, 255]), false, false),
-    normal: make('vale_neutral_normal', new Uint16Array([h(0.5), h(0.5), h(1), h(1)]), true, false),
-  };
-})();
-type MapSlots = { map: Texture | null; aoMap: Texture | null; normalMap: Texture | null; metalnessMap: Texture | null; roughnessMap: Texture | null; emissiveMap: Texture | null; vertexColors: boolean; isMeshStandardMaterial?: boolean; isMeshPhysicalMaterial?: boolean };
-/** harness seam (_harness/_tmp_w2a_progs.mjs A/B): false leaves materials' maps as authored */
-export const neutralMapSwitch = { on: true };
-function fillNeutralMaps(material: Material, character: boolean): void {
-  const s = material as Material & MapSlots;
-  if (!neutralMapSwitch.on || !s.isMeshStandardMaterial || s.isMeshPhysicalMaterial) return;
-  if (!character) {
-    // environment: only a plain (no shader of its own), mapless, vertex-colourless material takes a white map (a
-    // structure's accent joins its stone); the terrain's own shaders are left alone
-    const plain = material.onBeforeCompile === MaterialBase.prototype.onBeforeCompile
-      && material.customProgramCacheKey === MaterialBase.prototype.customProgramCacheKey;
-    if (plain && !s.map && !s.vertexColors) s.map = neutralTex.white;
-    return;
-  }
-  s.map ??= neutralTex.white;
-  s.emissiveMap ??= neutralTex.white;
-  s.aoMap ??= neutralTex.linear;
-  s.metalnessMap ??= neutralTex.linear;
-  s.roughnessMap ??= neutralTex.linear;
-  s.normalMap ??= neutralTex.normal;
-}
-
 /** Patch a material in place (idempotent). Keeps any existing onBeforeCompile. */
 export function patchWorldMaterial(material: Material, opts: WorldPatchOptions = {}): void {
   const m = material as Material & { [PATCHED]?: string };
@@ -585,7 +446,6 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
   if (m[PATCHED] === key) return;
   m[PATCHED] = key;
   if (!fog && !fighter && !unit) return;
-  if (fog) fillNeutralMaps(material, fighter || unit);
   // fighters and wicks / monsters share one program: which light they take is a uniform (r12 B4 programs)
   const charMode = { value: fighter ? 2 : monster ? 1.25 : unit ? 1 : 0 };
   const prev = material.onBeforeCompile;
@@ -599,7 +459,7 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
         .replace('#include <project_vertex>', `#include <project_vertex>\n${VERT_MAIN}`);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${keep ? '#define VALE_KEEP_COLOR\n' : ''}varying vec3 vValeWorld;\n${WORLD_FOG_PARS}`)
-        .replace('#include <opaque_fragment>', `${fighter || unit ? 'valeEnvRekey = 0.0;\n' : ''}outgoingLight = valeApplyWorldFog( outgoingLight, vValeWorld );\n#include <opaque_fragment>`);
+        .replace('#include <opaque_fragment>', `outgoingLight = valeApplyWorldFog( outgoingLight, vValeWorld );\n#include <opaque_fragment>`);
       if (!fighter && !unit) {
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <common>', `#include <common>\n${CLOUD_PARS}`)
@@ -613,8 +473,7 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
         .replace('#include <common>', `#include <common>\n${CHAR_PARS}`)
         .replace('#include <lights_fragment_begin>', CHAR_LIGHTS_BEGIN)
         .replace('#include <color_fragment>', '#include <color_fragment>\nif ( valeCharMode > 1.5 ) diffuseColor.rgb = valeCharHue( diffuseColor.rgb );')
-        .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${CHAR_LIGHT}`)
-        .replace('#include <aomap_fragment>', CHAR_AO);
+        .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${CHAR_LIGHT}`);
     }
   };
   const prevKey = material.customProgramCacheKey;

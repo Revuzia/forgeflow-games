@@ -20,7 +20,6 @@ import { Router, type Route, type Transition } from './router.ts';
 import { AppState, type RendererPort } from './state.ts';
 import { TOKENS } from './tokens.ts';
 import { SCREENS, type ScreenDef } from './screens/index.ts';
-import { maybeWelcomeName } from './screens/profile.tsx';
 import { BackButton } from './components/Button.tsx';
 import { Currency } from './components/Currency.tsx';
 import { Icon } from './components/Glyphs.tsx';
@@ -66,7 +65,6 @@ export function mount(root: HTMLElement, o: MountOptions): MountedApp {
   const stopLoop = startFrameLoop(state, o);
   bindRenderer(state, router, o.renderer ?? null);
   firstRunCalibrate(ctx, o.renderer ?? null);
-  maybeWelcomeName(ctx);        // W2-E CUX-13: the one-time name prompt, after Home and the calibration window
   // the audio engine follows the live match (spatial combat cues) and the audio settings
   if (o.audio) {
     const a = o.audio;

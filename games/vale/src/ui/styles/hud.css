@@ -154,11 +154,10 @@
 .who--self .who__name { color: var(--team-self); }
 .whodot { width: calc(16 * var(--px)); height: calc(16 * var(--px)); border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 1.5px var(--c); }
 
-/* W2-E CUX-14: the Hour Board grows to fit a 16-character name beside its seat, lives and score (it was a fixed 220 px) */
-.hboard { width: max-content; min-width: calc(220 * var(--px)); padding: calc(8 * var(--px)) calc(10 * var(--px)); }
+.hboard { width: calc(220 * var(--px)); padding: calc(8 * var(--px)) calc(10 * var(--px)); }
 .hboard__head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: calc(4 * var(--px)); }
 .hboard__rows { display: flex; flex-direction: column; gap: 1px; }
-.frow { font-size: 12px; display: grid; grid-template-columns: calc(16 * var(--px)) calc(18 * var(--px)) minmax(16ch, 1fr) auto calc(30 * var(--px)); align-items: center; gap: calc(6 * var(--px)); height: calc(19 * var(--px)); }
+.frow { display: grid; grid-template-columns: calc(16 * var(--px)) calc(18 * var(--px)) 1fr auto calc(26 * var(--px)); align-items: center; gap: calc(6 * var(--px)); height: calc(19 * var(--px)); }
 .frow.is-you { background: rgba(244, 239, 226, 0.08); box-shadow: inset 2px 0 0 var(--team-self); }
 .frow.is-out { opacity: 0.5; }
 .frow__place { color: var(--text-2); font-size: max(12px, calc(13 * var(--px))); text-align: right; }
@@ -276,7 +275,7 @@
 .dport__flash { position: absolute; left: calc(19 * var(--px)); top: calc(19 * var(--px)); width: calc(94 * var(--px)); height: calc(94 * var(--px)); border-radius: 50%; box-shadow: 0 0 0 3px var(--chalk-hi), 0 0 18px rgba(255, 248, 234, 0.6); opacity: 0; pointer-events: none; }
 .dport__respawn { position: absolute; left: calc(19 * var(--px)); top: calc(19 * var(--px)); width: calc(94 * var(--px)); height: calc(94 * var(--px)); display: grid; place-items: center;
   font-size: calc(34 * var(--px)); font-weight: 700; color: var(--chalk-hi); text-shadow: 0 2px 6px var(--ink-0); }
-.dport__level { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); min-width: calc(30 * var(--px)); height: calc(24 * var(--px)); padding: 0 calc(6 * var(--px));
+.dport__level { position: absolute; left: 50%; bottom: calc(-4 * var(--px)); transform: translateX(-50%); min-width: calc(30 * var(--px)); height: calc(24 * var(--px)); padding: 0 calc(6 * var(--px));
   display: grid; place-items: center; font-size: calc(16 * var(--px)); font-weight: 700; color: var(--chalk-hi);
   background: linear-gradient(180deg, #2A2F38, #14171D); border-radius: 3px; box-shadow: 0 0 0 1px #6E6A62, 0 0 0 2px var(--ink-0), 0 3px 6px rgba(0, 0, 0, 0.5); }
 .dport__sp { position: absolute; right: calc(10 * var(--px)); top: calc(8 * var(--px)); width: calc(14 * var(--px)); height: calc(14 * var(--px)); border-radius: 50%;
@@ -331,10 +330,9 @@
 .aslot__cost.is-short { color: var(--team-enemy); }
 .aslot__charges { position: absolute; right: 4px; top: 3px; z-index: 3; font-size: 12px; font-weight: 700; color: var(--chalk-hi); text-shadow: 0 1px 2px var(--ink-0); }
 .aslot__recast { position: absolute; inset: 2px; z-index: 3; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--dawnglass-inlay), inset 0 0 12px rgba(191, 211, 230, 0.4); pointer-events: none; }
-.aslot__pips { position: absolute; left: 50%; bottom: calc(-6 * var(--px)); transform: translateX(-50%); z-index: 3; display: flex; gap: 3px; height: max(3px, calc(3 * var(--px))); }
-/* W2-E CUX-12: 7 x 3 px hour-ticks (5 x 3 at 1366), a 1 px ink keyline, Noonwhite when owned and 25 % Noonwhite when not, under the slot's edge */
-.aslot__pips i { display: block; width: max(5px, calc(7 * var(--px))); height: 100%; background: rgba(244, 239, 226, 0.25); box-shadow: 0 0 0 1px #07090C; transform: skewX(-20deg); }
-.aslot__pips i.is-on { background: #F4EFE2; box-shadow: 0 0 0 1px #07090C, 0 0 4px rgba(255, 248, 234, 0.4); }
+.aslot__pips { position: absolute; left: 50%; bottom: calc(-11 * var(--px)); transform: translateX(-50%); z-index: 3; display: flex; gap: 3px; height: calc(5 * var(--px)); }
+.aslot__pips i { display: block; width: calc(7 * var(--px)); height: 100%; background: #23272F; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7); transform: skewX(-20deg); }
+.aslot__pips i.is-on { background: linear-gradient(180deg, var(--chalk-hi), #BDB4A2); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 5px rgba(255, 248, 234, 0.45); }
 .aslot__lvl { position: absolute; top: calc(-30 * var(--px)); left: 50%; transform: translateX(-50%); z-index: 4; width: calc(26 * var(--px)); height: calc(24 * var(--px)); display: grid; place-items: center;
   background: linear-gradient(180deg, var(--chalk-hi), #C8BFAC); color: var(--on-chalk); clip-path: polygon(0 0, 100% 0, 100% 66%, 50% 100%, 0 66%);
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); animation: lvl-bob 1200ms var(--ease-std) infinite alternate; }
@@ -342,7 +340,7 @@
 @keyframes lvl-bob { from { transform: translate(-50%, 0); } to { transform: translate(-50%, -3px); } }
 
 .dbars { display: flex; flex-direction: column; justify-content: space-between; }
-.hpbar { position: relative; height: max(13px, calc(14 * var(--px))); background: #07090C; border-radius: 2px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8); }
+.hpbar { position: relative; height: max(13px, calc(16 * var(--px))); background: #07090C; border-radius: 2px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8); }
 .hpbar__trail { position: absolute; left: 0; top: 0; bottom: 0; background: var(--dmg-trail); opacity: 0.9; }
 .hpbar__fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, #8CF0B2 0%, #63D88B 38%, #3EA867 62%, #2E8A52 100%); }
 .hpbar__fill::after { content: ''; position: absolute; left: 0; right: 0; top: 1px; height: 35%; background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0)); }
@@ -351,19 +349,17 @@
   background: repeating-linear-gradient(90deg, transparent 0 calc(var(--t1) - 1px), rgba(7, 9, 12, calc(0.55 * var(--show1))) calc(var(--t1) - 1px) var(--t1)),
               repeating-linear-gradient(90deg, transparent 0 calc(var(--t2) - 2px), rgba(7, 9, 12, 0.85) calc(var(--t2) - 2px) var(--t2)); }
 /* the numbers ride above the carved frame (z 2), whose inner lip shades the bar's top edge */
-.hpbar__num { position: absolute; z-index: 3; inset: 0; display: block; text-align: center; white-space: nowrap; line-height: max(13px, calc(14 * var(--px))); font-size: max(12px, calc(13 * var(--px))); font-weight: 700; color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.hpbar__num { position: absolute; z-index: 3; inset: 0; display: block; text-align: center; white-space: nowrap; line-height: max(13px, calc(16 * var(--px))); font-size: max(12px, calc(13 * var(--px))); font-weight: 700; color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
 .hpbar__num .quiet { color: rgba(255, 255, 255, 0.72); font-weight: 500; }
 /* quiet regeneration readouts at the bars' right ends (r12 m1) */
 .hpbar__regen { position: absolute; z-index: 3; right: calc(6 * var(--px)); top: 0; bottom: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.74); text-shadow: 0 1px 2px #000, 0 0 3px #000; }
-.resbar { position: relative; height: max(11px, calc(12 * var(--px))); background: #07090C; border-radius: 1px; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(237, 230, 214, 0.1); }
-/* W2-E CUX-7: the resource bar is 12 px (11 minimum) and says its number like health does; the regeneration rides inside its right end */
-.resbar__num { position: absolute; z-index: 3; inset: 0; display: block; text-align: center; white-space: nowrap; line-height: max(11px, calc(12 * var(--px))); font-size: max(11px, calc(11 * var(--px))); font-weight: 700; letter-spacing: 0.01em;
-  color: #FFFFFF; text-shadow: 0 1px 2px #000, 0 0 3px #000, 0 0 1px #000; }
-.resbar__regen { position: absolute; right: calc(5 * var(--px)); top: 0; bottom: 0; z-index: 3; display: grid; place-items: center; font-size: 11px; line-height: 1; font-weight: 600; color: rgba(255, 255, 255, 0.78); text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.resbar { position: relative; height: calc(6 * var(--px)); background: #07090C; border-radius: 1px; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8); }
+.resbar__regen { position: absolute; right: 0; top: calc(23 * var(--px)); transform: translateY(-50%); z-index: 3; padding: 0 calc(4 * var(--px)); font-size: 12px; line-height: 13px; font-weight: 600; border-radius: 2px;
+  background: rgba(7, 9, 12, 0.94); color: color-mix(in srgb, var(--res) 55%, white); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.resbar__regen:empty, .hpbar__regen:empty { display: none; }
 .resbar__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 1px; background: linear-gradient(180deg, color-mix(in srgb, var(--res) 60%, white), var(--res) 50%, color-mix(in srgb, var(--res) 70%, black)); transition: width var(--dur-fast) linear; }
 .resbar--heat .resbar__fill { background: repeating-linear-gradient(45deg, var(--res) 0 4px, color-mix(in srgb, var(--res) 70%, var(--ink-0)) 4px 8px); }
 .resbar--none { visibility: hidden; }
-.resbar__regen:empty, .hpbar__regen:empty { display: none; }
 
 .islot { position: relative; width: calc(36 * var(--px)); height: calc(36 * var(--px)); border-radius: 3px; background: #0E1116; box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.75); overflow: hidden; }
 .dbar .islot { position: absolute; z-index: 1; }
@@ -496,25 +492,18 @@
 .hscore__spell { position: relative; width: calc(24 * var(--px)); height: calc(24 * var(--px)); border-radius: 3px; overflow: hidden; background: var(--ink-1); box-shadow: inset 0 0 0 1px var(--line-1); }
 .hscore__names { display: flex; flex-direction: column; line-height: 1.2; }
 .hscore__names .chip { margin-left: 6px; }
-.hscore__nm { display: inline-flex; align-items: center; white-space: nowrap; }
-.hscore__you { height: calc(18 * var(--px)); min-height: 16px; padding: 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--chalk-hi); box-shadow: inset 0 0 0 1px var(--team-self); }
 .hscore__items { display: inline-flex; gap: 2px; }
 .hscore__item { position: relative; width: calc(24 * var(--px)); height: calc(24 * var(--px)); border-radius: 2px; background: var(--ink-1); overflow: hidden; }
 .hscore__down { color: var(--text-2); }
 .hscore__seat { display: inline-flex; align-items: center; gap: 4px; }
 
-/* W2-E CUX-4: the recap sits LEFT of the Dial Bar (never over its D/F slots), top-anchored at 14 vh, capped so its bottom stays
-   above the screen edge margin; the source list scrolls (3 rows by default, "+N more"), the totals and the advice stay pinned */
-.recap { position: absolute; right: calc(50% + (388 + 12) * var(--px)); top: 14vh; width: calc(340 * var(--px)); max-height: calc(100vh - 14vh - var(--edge)); padding: calc(14 * var(--px)); z-index: 4;
-  display: flex; flex-direction: column; gap: calc(8 * var(--px)); animation: krow-in var(--dur-panel) var(--ease-dawn) both; overflow: hidden; }
-.recap > * { flex: none; }
-.recap__list { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: calc(6 * var(--px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
-.recap__more { align-self: flex-start; }
+.recap { position: absolute; left: calc(50% - 560 * var(--px)); top: 50%; transform: translateY(-50%); width: calc(360 * var(--px)); padding: calc(14 * var(--px)); z-index: 4;
+  display: flex; flex-direction: column; gap: calc(10 * var(--px)); animation: krow-in var(--dur-panel) var(--ease-dawn) both; }
 .recap__head { display: flex; align-items: center; gap: calc(10 * var(--px)); }
 .recap__face { width: calc(48 * var(--px)); height: calc(48 * var(--px)); border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 2px var(--team-enemy); flex: none; }
 .recap__unit { display: block; width: 100%; height: 100%; background: var(--ink-3); }
 .recap__titles { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.recap__rows { display: flex; flex-direction: column; gap: calc(8 * var(--px)); margin: 0; padding: 0; list-style: none; }
+.recap__rows { display: flex; flex-direction: column; gap: calc(8 * var(--px)); }
 .rrow { display: flex; gap: calc(8 * var(--px)); align-items: center; }
 .rrow__face { width: calc(30 * var(--px)); height: calc(30 * var(--px)); border-radius: 50%; overflow: hidden; flex: none; }
 .rrow__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -525,12 +514,10 @@
 .rrow__seg--magic { background: var(--dmg-magic); }
 .rrow__seg--true { background: var(--dmg-true); box-shadow: inset 0 0 0 1px var(--dmg-true-halo); }
 .recap__foot { display: flex; flex-wrap: wrap; align-items: center; gap: calc(8 * var(--px)); border-top: 1px solid var(--line-1); padding-top: calc(8 * var(--px)); }
-.recap__types { display: flex; gap: 6px; flex-wrap: wrap; }
-/* W2-E CUX-4: each damage type is a small column (label over its number): nothing prints inside a bar */
-.dchip { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0; height: auto; padding: 2px 7px; border-radius: 3px; line-height: 1.15; }
+.recap__types { display: flex; gap: 4px; }
 .recap__tip { width: 100%; color: var(--text-2); }
 .recap__held { width: 100%; color: var(--text-1); margin: 0; }
-.dchip { background: var(--ink-1); }
+.dchip { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--ink-1); }
 .dchip--phys { color: var(--dmg-physical); }
 .dchip--magic { color: var(--dmg-magic); box-shadow: inset 0 0 0 1px var(--dmg-magic); }
 .dchip--true { color: var(--dmg-true); background: var(--dmg-true-halo); }
@@ -642,9 +629,9 @@
 
 /* ── world layer ──────────────────────────────────────────────────────────────────────────────── */
 .hudworld { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
-.wpop { position: absolute; left: 0; top: 0; font-weight: 700; font-size: max(14px, calc(var(--ps, 18) * 1px * var(--k))); line-height: 1; white-space: nowrap; will-change: transform, opacity;
+.wpop { position: absolute; left: 0; top: 0; font-weight: 700; font-size: max(16px, calc(22 * var(--k))); line-height: 1; white-space: nowrap; will-change: transform, opacity;
   text-shadow: 0 1px 0 var(--ink-0), 0 0 3px var(--ink-0), 0 0 1px var(--ink-0); }
-.wpop.is-crit { text-shadow: 0 1px 0 var(--ink-0), 0 0 3px var(--ink-0), 0 0 8px rgba(255, 248, 234, 0.35); }
+.wpop.is-crit { font-size: max(22px, calc(32 * var(--k))); }
 .wpop--phys { color: var(--dmg-physical); }
 .wpop--magic { color: var(--dmg-magic); font-style: italic; }
 .wpop--true { color: var(--dmg-true); text-shadow: 0 0 0 var(--dmg-true-halo), 1px 1px 0 var(--dmg-true-halo), -1px -1px 0 var(--dmg-true-halo), 1px -1px 0 var(--dmg-true-halo), -1px 1px 0 var(--dmg-true-halo), 0 0 4px var(--dmg-true-halo); }
@@ -652,13 +639,9 @@
 .wpop--gold { color: var(--chalk-hi); font-size: max(14px, calc(17 * var(--k))); font-weight: 500; }
 .wpop--gold::before { content: ''; display: inline-block; width: 0.7em; height: 0.7em; margin-right: 3px; vertical-align: 0; background: currentColor;
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
-/* W2-E ref target 20: the click marker is a bold ring (ink keyline both sides) closing on a centre dot, over a soft chalk wash: it reads on grass, stone and water */
-.wmark { position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 50%; box-shadow: 0 0 0 2px var(--ink-0), inset 0 0 0 2px var(--ink-0), 0 0 14px rgba(255, 248, 234, 0.55); border: 3px solid var(--chalk-hi);
-  background: radial-gradient(circle, rgba(255, 248, 234, 0.34) 0 45%, rgba(255, 248, 234, 0.08) 70%, transparent 72%); will-change: transform, opacity; }
-.wmark::after { content: ''; position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--chalk-hi); box-shadow: 0 0 0 2px var(--ink-0); }
+.wmark { position: absolute; left: 0; top: 0; width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 0 2px var(--ink-0), inset 0 0 0 2px var(--ink-0); border: 2px solid var(--chalk); will-change: transform, opacity; }
 .wmark--attackMove { border-color: var(--team-enemy); border-style: dashed; }
-.wmark--attackMove::after, .wmark--attack::after { background: var(--team-enemy); }
-.wmark--attack { width: 60px; height: 60px; border-color: var(--team-enemy); background: radial-gradient(circle, rgba(255, 120, 96, 0.30) 0 45%, rgba(255, 120, 96, 0.08) 70%, transparent 72%); }
+.wmark--attack { width: 52px; height: 52px; border-color: var(--team-enemy); }
 .wping { position: absolute; left: 0; top: 0; width: 0; height: 0; color: var(--team-ally); will-change: transform, opacity; }
 .wping.is-harm { color: var(--team-enemy); }
 /* HUD-11: a world ping reads on any ground — two rings in the ping's colour open outward on the ground (each with an
@@ -678,22 +661,14 @@
 
 .pwheel { position: fixed; z-index: 9; width: 0; height: 0; pointer-events: none !important; }
 .pwheel__dial { position: absolute; left: -120px; top: -120px; width: 240px; height: 240px; overflow: visible; }
-.pwheel__rim { fill: rgba(17, 20, 26, 0.85); stroke: var(--chalk); stroke-opacity: 0.55; stroke-width: 1.5; }   /* W2-E CUX-15: ink-1 at 85 % */
-.pwheel__hub { fill: rgba(7, 9, 12, 0.92); stroke: var(--line-2); }
-.pwheel__wedge { fill: rgba(23, 27, 34, 0.0); stroke: rgba(120, 130, 148, 0.5); stroke-width: 1; }
+.pwheel__rim { fill: rgba(11, 13, 17, 0.55); stroke: var(--line-2); stroke-width: 1; }
+.pwheel__hub { fill: rgba(11, 13, 17, 0.85); stroke: var(--line-2); }
+.pwheel__wedge { fill: rgba(23, 27, 34, 0.0); stroke: rgba(61, 70, 86, 0.6); stroke-width: 1; }
 .pwheel__wedge.is-on { fill: rgba(237, 230, 214, 0.16); stroke: var(--chalk); }
 .pwheel__item { position: absolute; left: 0; top: 0; width: 34px; height: 34px; display: grid; place-items: center; color: var(--team-ally); }
 .pwheel__item.is-harm { color: var(--team-enemy); }
 .pwheel__item.is-on { color: var(--chalk-hi); }
-.pwheel__item .pglyph g { stroke-width: 2.2px; }
-.pwheel__item .pglyph { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9)); }
-.pwheel__tag { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; line-height: 1; padding: 3px 6px; border-radius: 3px; color: var(--text-1);
-  background: rgba(17, 20, 26, 0.85); box-shadow: inset 0 0 0 1px rgba(237, 230, 214, 0.18); animation: pw-tag 140ms 200ms var(--ease-std) both; }
-.pwheel__tag.is-harm { color: color-mix(in srgb, var(--team-enemy) 70%, white); }
-.pwheel__tag.is-on { color: var(--on-chalk); background: var(--chalk-hi); box-shadow: none; }
-@keyframes pw-tag { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .pwheel__tag { animation-duration: 1ms; } }
-.pwheel__label { position: absolute; left: 0; top: 178px; transform: translateX(-50%); white-space: nowrap; padding: 2px 10px; background: rgba(11, 13, 17, 0.85); border-radius: var(--radius); }
+.pwheel__label { position: absolute; left: 0; top: 136px; transform: translateX(-50%); white-space: nowrap; padding: 2px 10px; background: rgba(11, 13, 17, 0.85); border-radius: var(--radius); }
 
 /* optional screen-edge marks (r12 M4 §5, Settings.access.locFlash / damageFlash): behind every widget */
 .hud > .hedge { position: absolute; inset: 0; z-index: 0; opacity: 0; pointer-events: none !important; }
@@ -719,24 +694,3 @@
 .hud .afr.plate { background: none; box-shadow: none; border-style: solid; border-width: 0; border-color: transparent;
   border-image-source: url('../art/hud/plate.webp'); border-image-slice: 56 fill; border-image-width: calc(16 * var(--px)); border-image-outset: calc(3 * var(--px)); border-image-repeat: stretch; }
 .hud .krow.plate { background: linear-gradient(90deg, rgba(14, 17, 22, 0.94), rgba(22, 26, 33, 0.9)); box-shadow: inset 0 1px 0 rgba(237, 230, 214, 0.08), 0 2px 8px rgba(0, 0, 0, 0.4); border-radius: 3px; }
-
-/* ── W2-E CUX-14: 1366 x 768 layout fixes outside the HUD proper (screens.css is another lane's file, so the overrides live here) ──
-   Postgame Scoreboard: at heights up to 800 px both teams fit one screen (compact banner, 1-line player cells, tight rows).
-   Draft: the "What you hover…" helper line gets its own row above the filter row. */
-@media (max-height: 800px) {
-  .pg:has(.score) .pg__banner { padding: 2px 0 4px; gap: 2px; }
-  .pg:has(.score) .pg__title { font-size: 44px; line-height: 1; }
-  .pg:has(.score) .pg__sub { display: none; }
-  .pg:has(.score) .pg__body { padding-top: 6px; }
-  .score { gap: 8px; }
-  .score__cap { padding: 4px 12px 3px; }
-  .score__table th { padding: 2px 8px; }
-  .score__table td { padding: 1px 8px; }
-  .pgrow__names { flex-direction: row; align-items: baseline; gap: 8px; }
-  .pgrow__names > .t-caption { overflow: hidden; text-overflow: ellipsis; }
-  .pgrow__who .portrait { width: 26px; height: 26px; }
-  .itemslot { width: 22px; height: 22px; }
-}
-.phase__text { padding-bottom: 6px; }
-.phase__text > p.muted { white-space: normal; max-width: 48ch; }
-.draft__top { padding-bottom: 6px; }

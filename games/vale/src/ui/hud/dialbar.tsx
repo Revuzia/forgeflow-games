@@ -333,7 +333,7 @@ function Bars(): JSX.Element | null {
   const ticks = state.settings.value.gameplay.healthBarTicks;
   const trail = useRef<HTMLSpanElement>(null), fill = useRef<HTMLSpanElement>(null), shield = useRef<HTMLSpanElement>(null), tickEl = useRef<HTMLSpanElement>(null);
   const num = useRef<HTMLSpanElement>(null), max = useRef<HTMLSpanElement>(null), regen = useRef<HTMLSpanElement>(null);
-  const resFill = useRef<HTMLSpanElement>(null), resRegen = useRef<HTMLSpanElement>(null), resBar = useRef<HTMLDivElement>(null), resNum = useRef<HTMLSpanElement>(null);
+  const resFill = useRef<HTMLSpanElement>(null), resRegen = useRef<HTMLSpanElement>(null), resBar = useRef<HTMLDivElement>(null);
   const last = useRef(1);
   useWriter(() => {
     const b = model.body, me = model.me;
@@ -356,7 +356,6 @@ function Bars(): JSX.Element | null {
     put(regen.current, alive && hp < maxHp - 0.5 ? regenText(me?.stats.hpRegen) : '');
     if (b && b.maxRes > 0) {
       setW(resFill.current, b.res / b.maxRes);
-      put(resNum.current, `${fmtInt(b.res)} / ${fmtInt(b.maxRes)}`);       // W2-E CUX-7: the resource says its number, as health does
       put(resRegen.current, alive && b.res < b.maxRes - 0.5 ? regenText(me?.stats.resRegen) : '');
     }
   });
@@ -381,10 +380,9 @@ function Bars(): JSX.Element | null {
       {showRes ? (
         <div ref={resBar} class={`resbar resbar--${res!.model}`} style={{ '--res': res!.color } as CSSProperties} {...resTip}>
           <span class="resbar__fill" ref={resFill} />
-          <span class="resbar__num num" ref={resNum} />
-          <span class="resbar__regen num" ref={resRegen} />
         </div>
       ) : <div class="resbar resbar--none" />}
+      {showRes ? <span class="resbar__regen num" ref={resRegen} style={{ '--res': res!.color } as CSSProperties} /> : null}
     </div>
   );
 }

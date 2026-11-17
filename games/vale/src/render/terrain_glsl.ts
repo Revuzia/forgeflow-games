@@ -207,12 +207,6 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   col = mix( col, mossC * 0.9, foot * 0.75 );
   h = mix( h, ( tM.a - 0.6 ) * 0.06, foot );
   col = mix( col, valeOrganic( tM.rgb, valeTexMean( uTexMoss ), uThicketFloor, 0.5 ), brush * 0.9 );
-  // orch1 W2-A GFX-13: soft light pools where the canopy opens (a few 5-9 m pools a quadrant, ~22 m apart, warm and up to
-  // +24 % value, never on brush or the moss banks): the Dialwood floor stops reading as one dark plane
-  {
-    float pool = smoothstep( 0.6, 0.84, valeNoise( p * 0.045 + 31.0 ) * 0.8 + valeNoise( p * 0.21 + 5.0 ) * 0.2 );
-    col *= mix( vec3( 1.0 ), vec3( 1.3, 1.22, 1.02 ), pool * ( 1.0 - brush ) * ( 1.0 - foot * 0.7 ) );
-  }
   // the hour-line groove along every Dialwood path (a chalky 0.3 m channel, ≤ 6 L*)
   float gr = 1.0 - smoothstep( -aa, aa, inl.g );
   float grCore = 1.0 - smoothstep( -aa, aa, inl.g + 0.1 );
@@ -841,11 +835,6 @@ export const WALL_MAIN_GLSL = /* glsl */`
     float mossAmt = max( foot * smoothstep( 0.3, 0.6, nm ), jt * smoothstep( 0.5, 0.75, nm ) ) * 0.85 * ( 1.0 - stoneK );
     float streak = smoothstep( 0.6, 0.85, valeNoise( vec2( u * 1.9, P.y * 0.12 ) + seed ) ) * smoothstep( wallH - 1.8, wallH - 0.4, P.y ) * ( 1.0 - stoneK );
     c = mix( c, mossC * 0.8, max( mossAmt, streak * 0.55 ) );
-    // orch1 W2-A (ruling 46): the Noonplate's carved faces stand under a sun 4 degrees off the zenith, so they take
-    // almost no key and sat at display L* ~17 after the value re-key (band 24-30); its clean stone (stoneK) is lifted
-    // x2.2 linear (x1.6 measured L* 21.5), still well under the block's lit top (L* ~49), so a blocker keeps a dark
-    // side and a light top
-    c *= 1.0 + 1.2 * stoneK;
     rough = 0.88;
   } else if ( kind <= 5 ) {
     // the carved lip: dressed cap stones with joints, a painted edge light on the chamfer; clean stone, so the

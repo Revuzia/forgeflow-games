@@ -34,43 +34,7 @@ export const CHAR_LIGHT = {
    *  (value_probe, r12 B5); at this share they sit at or just under the fighters, so a camp never outshines the
    *  fighters fighting in it (the value scales whole: the monster's painted contrast is kept) */
   monsterLight: 0.8,
-  /** orch1 W2-A GFX-2 / FU-5 (fighters only, world_material.ts CHAR_AO): the baked AO's weight on a fighter's body, and
-   *  the hue-preserving roll-off of its diffuse light: the brightest channel eases from `knee` toward `ceiling` (linear),
-   *  every channel scaled alike, so a pale top keeps its hue under the tone map's shoulder and the top-25 % L* stays
-   *  at or under 80 */
-  tone: { aoWeight: 0.6, knee: 0.5, ceiling: 0.72 },
 } as const;
-/** harness seam (W2-A A/B): false puts fighters back on the r12 B5 character light (full AO, no roll-off) */
-export const charToneSwitch = { on: true };
-export function applyCharTone(): void {
-  const t = CHAR_LIGHT.tone, on = charToneSwitch.on;
-  worldUniforms.valeCharAo.value.set(on ? t.aoWeight : 1, on ? t.knee : 0, on ? t.ceiling : 0, 0);
-}
-/** orch1 W2-A GFX-1 (owner ruling 46): the environment value re-key (world_material.ts valeRekey), the same on every map.
- *  The world's display L* goes through L*' = 100 gain (L* / 100)^lstarExp, easing back to the identity over easeL (lamps
- *  and highlights keep their value), its chroma × chroma (a keep-colour surface, the Standing Shadow: × shadowChroma, GFX-5).
- *  Fitted on the measured RIFT r12 B5 key (value_probe): lanes 37.9 → ~51 (band 50-58, its foot, so the HARM telegraph
- *  edge keeps >= 2:1 on the lane), jungle floor 14.3 → ~29.5 (28-34), wall faces 13.1 → ~28 (24-30). The power alone
- *  (0.645, gain 1) put lanes at 53.5 and the HARM edge at ~1.9:1. height (GFX-13): low ground (y ≤ lowY) cooler and darker, high ground (y ≥ highY)
- *  warmer, before the re-key. Characters never take any of it (world_material.ts valeEnvRekey). */
-export const ENV_KEY = {
-  lstarExp: 0.562,
-  gain: 0.879,
-  chroma: 0.75,
-  easeL: [60, 88] as const,
-  shadowChroma: 1.35,
-  height: { strength: 1, lowY: -2, highY: 2, low: [0.9, 0.95, 1.05] as const, high: [1.05, 1.01, 0.94] as const },
-} as const;
-/** harness seam (_harness value A/B): false puts the environment back on the r12 B5 key */
-export const envKeySwitch = { on: true };
-export function applyEnvKey(): void {
-  const W = worldUniforms, K = ENV_KEY, on = envKeySwitch.on;
-  W.valeEnvKey.value.set(on ? K.lstarExp : 1, on ? K.chroma : 1, K.easeL[0], K.easeL[1]);
-  W.valeEnvGain.value = on ? K.gain : 1;
-  W.valeEnvKey2.value.set(on ? K.shadowChroma : 1, on ? K.height.strength : 0, K.height.lowY, K.height.highY);
-  W.valeHeightLo.value.setRGB(K.height.low[0], K.height.low[1], K.height.low[2]);
-  W.valeHeightHi.value.setRGB(K.height.high[0], K.height.high[1], K.height.high[2]);
-}
 const NOONWHITE = new Color().setStyle('#F4EFE2');
 const _crown = new Color();
 const _sunHue = new Color();
@@ -122,8 +86,6 @@ export class Sun {
     W.valeCharFill.value.copy(NOONWHITE).multiplyScalar(C.fill.luminance / lum(NOONWHITE));
     W.valeCharShape.value.set(C.crown.albedoFloor, C.unitShare, C.knee[0], C.knee[1]);
     W.valeCharMonster.value = C.monsterLight;
-    applyEnvKey();
-    applyCharTone();
   }
 
   /** round 4 MEM-1: the shadow map's GPU storage goes (its depth texture and the colour target three allocates with it:
