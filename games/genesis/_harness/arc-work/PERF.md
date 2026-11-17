@@ -2079,3 +2079,61 @@ long press frame-rate independent. Report after 1-2 verified.
   stays different by design: at grazing angles the full shader uses the long footprint axis and fades more.
   pxPerRad is now part of the global key (a resize re-bakes).
 - NEXT: run `--views=peak,graze,town` on dist6 (peak first = the landing view), then the Ultra count, check again, build.
+- dist6 run `--tag=z` (machine load 8-11, the run was cut at 40 min; sheet s22/sheet-z.png LOOKED AT): peak 2.24 (RGB equal,
+  detail 10.64 / 9.93: the snow dome's grain). top-down 160 m 4.09: detail now 5.73 / 6.06 but STILL GREENER, G 117.0 vs
+  114.1, B 66.8 vs 68.1. town pair INVALID (7.78): the cache shot shows the pond as a coarse polygon = the LOD had not
+  landed when it was taken (worker builds lag under load; the probe counts frames, not time). The same holds for the
+  d1.4 / d2 town numbers. A valid town pair is run y's 1.76.
+- dist7 (source now): anchor footprint = sqrt 2 x distance / pxPerRad (the shader's fw is length(fwidth(P)), both pixel
+  axes), anchor A at min(knot, nearest point); tcFade's tiny tie-break term replaced by 0.05 * log2(d) so the blend also
+  moves between the two footprints where no fade runs. `stats.wantN / wantMB` = what the frame's cacheable patches
+  would take at their classes. RUNNING: Ultra 1686x963 count (`--tag=u`, s22/pu.log), top-down again (`--tag=g7`).
+- OPEN, stated plainly: the top-down 160 m meadow reads ~2.5 % greener through the cache. Not explained yet (not the
+  density; the footprint floor changed the detail, not the tone). Candidates not yet tested: the graze correction's
+  weight (ts.sward is not the grass tone's true share), the sRGB mip blits, anchor B's share at t ~ 0.05.
+- SESSION 21 RESULTS (2026-11-17; SwiftShader, babel 307987276, high 480x270, the s20 fast set-up with water ON; all in
+  _harness/scratch/arc/perf/s21/; every run 0 page errors, 0 shader / GL messages):
+  * waterland, as finally built: (1) `vDepth < max(-0.6, -0.08 - 1.5 fwidth(vDepth))` discard first; (2) then ONE tap
+    of the linear scene depth: if the opaque scene is in front by 5 cm + 0.4 %, 4 more taps (the neighbours) and discard
+    if all agree (a 1-px rim round occluders is left to the per-sample depth test); (3) shore `edge` fades over the
+    6 cm above the cut. (An earlier cut without the -0.6 floor let steep far slopes through: fixed.)
+  * COUNT at the landing view (`wdebug=class,nodepth` = every rasterised water fragment that survives the discards;
+    k0 / k1, sheet-waterland.png LOOKED): of 129 600 px, water over ground standing > 8 cm above it: 903 -> 506
+    (what stays is the 1-px rim / footprint margin), 0-8 cm: 1192 -> 1221, real water 87 194 -> 87 038. With the depth
+    test on (z1): 93 018 water px = 72 % of the frame, 0 over land. SO AT THE LANDING SPOT THE WATER PASS IS AN OPEN
+    SEA FILLING ~70 % OF THE SCREEN; the under-land band is ~1.6 % of the frame along the beach. The ~100 ms is the
+    shader on legitimately visible sea, not hidden sheets: `wfast` is the cost lever, waterland is the visual guard.
+  * NOT REPRODUCED: no water sheet over a hill in any SwiftShader shot (d0 / d1 normal, sheet-wl-land.png LOOKED: land
+    pixels identical, sea differs by its animation only — uTime is wall clock, so no water A/B is pixel-exact).
+    waterland=1 vs 0 at the pond by the town (sheet-wl-lake.png LOOKED): a faint difference on the pond's rim (486 px
+    over 8/255, incl. animation). CAUTION for whoever reads the nodepth sheets: with depthTest off GL also stops the
+    water's depth WRITES, so the atmosphere composite hazes those pixels by the opaque depth behind — the blue
+    "hills" above the horizon and the sky in the valley in sheet-nodepth-*.png / sheet-waterland.png are THAT, not
+    sheets on hills. The nodepth look is therefore not a faithful picture of a failing depth test.
+  * THE DECISIVE MAC ASK (30 s): at the landing spot with the sheet in view, `?wdebug=class` and a screenshot. The
+    sheet over the hills then shows its class: BLUE = the water level really is above the ground there (geometry /
+    field levels: look at fieldpack levels for that patch), RED / YELLOW = sheet under ground that the M5's depth test
+    lets through (then waterland=1 already removes red; and ask `?invalidate=0`, `?msaa=0`), NO COLOUR on the hills =
+    it is not the water pass at all (terrain wetness / SSR). Then default vs `?waterland=0`.
+  * wfast=1 LOOK (b-* base vs f-*; sheet-wfast-a.png, sheet-wfast-b.png LOOKED): compiles and draws, 0 errors. pond:
+    mean|d| 2.1, mean RGB equal within 1; night sea: mean RGB 14.4 24.2 39.3 / 15.5 25.9 42.4, but local detail of the
+    lower half 6.49 -> 3.40 and the beach tip's outline differs (the shore's noise bite is another realisation of the
+    noise: the waterline moves by metres when toggling). NOT PROVEN EQUAL: the `river` pair landed on different places
+    (poi('river') is not stable between runs), `shore` barely shows water, the day open-sea shot of f was taken after
+    `night` (hour sticks) so there is no day sea pair, no storm, no orbit. wfast stays default OFF.
+- GATE: `bash _harness/slot.sh npm run check` 1047 pass 0 fail (s21/check1.log); `npm run build` exit 0 (s21/build-prod.log).
+- NEXT, in order:
+  1. Mac: `?wdebug=class` at the landing spot (above), then default vs `?waterland=0`; `?wfast=1` frame time vs default
+     (expect most of the gap to wshade=nonoise: ~100 -> ~45-55 ms) and its look.
+  2. wfast proof properly: probe-s21 needs a pinned water clock (find where uTime is set in planetview / renderer and
+     add a test-surface or URL pin — shared file, ask the lead), one camera per run or explicit `hour` per view, views
+     by lat / lon instead of poi (sea 17.9 / -35.6, landing 17.876 / -35.0), --full (clouds + shadows on) for the
+     mirrored deck. Check the night-sea detail drop first: compare ripple normals (the 14-wavelet const arrays vs
+     the reference loop with the SAME noise: set WFAST arrays on, taps off) to tell arrays from taps.
+  3. If the waterline shift matters: keep the 3 `edgeN` shore-bite noises arithmetic under wfast (they then cost 3 s).
+  4. Further wfast stages, none started: cloud shadow + sky irradiance + sun transmittance per VERTEX (low frequency);
+     SSR march 28 -> fewer steps with a hierarchical start, or skipped where F * confidence cannot show; three
+     Water.js-style scrolling normal-map taps for the capillary octaves (0.17-1 m) instead of 5 of the 14 wavelets.
+  5. Emission (chunks.ts vertexWater) untouched: a patch with one wet vertex cell still draws its whole sheet; with
+     the early discards the dry part now costs raster + 1 varying test. Splitting it needs per-triangle water index
+     lists (a second index range per slot): only worth it if the Mac shows raster-bound water.

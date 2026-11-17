@@ -143,7 +143,10 @@ export const TC_FRAG_FETCH = /* glsl */ `
 // alone inside a bracket is reproduced exactly however wide the bracket (the linear blend put a 120-500 m fade at 22 %
 // where it is 90 %); where two overlap they are close cousins (120-500, 150-550, 220-520)
 float tcFade(float d) {
-  float f = smoothstep(14.0, 45.0, d) + smoothstep(120.0, 500.0, d) + 0.5 * smoothstep(400.0, 1300.0, d) + 1e-3 * d / (d + 100.0);
+  float f = smoothstep(14.0, 45.0, d) + smoothstep(120.0, 500.0, d) + 0.5 * smoothstep(400.0, 1300.0, d)
+    // (carries the blend where no fade runs: each anchor is baked for the pixel footprint of its distance, which
+    // grows evenly with log distance)
+    + 0.05 * log2(max(d, 1.0));
   if (uVegFade.x < 1e8) f += smoothstep(uVegFade.y * 0.3, uVegFade.y * 0.44, d);
   if (uCanopyFade.x < 1e8) f += smoothstep(uCanopyFade.x, uCanopyFade.y, d);
   return f;
@@ -226,12 +229,12 @@ const WATCH: Record<string, [number, number, number, number]> = {
 };
 
 export interface TcStats {
-  on: boolean; mb: number; layers: number; float: boolean; tiles: number; cached: number; live: number; hot: number; near: number; wide: number; full: number;
+  on: boolean; mb: number; layers: number; float: boolean; tiles: number; cached: number; live: number; hot: number; near: number; wide: number; wantN: number; wantMB: number; full: number;
   queued: number; bakes: number; bakesTotal: number; texels: number; rebakeDirty: number; rebakeKnot: number; rebakeClass: number; rebakeSlow: number; globals: number; dirtyCells: number;
 }
 
 export class TerrainCache {
-  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0 };
+  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, wantN: 0, wantMB: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0 };
   /** `false` = every patch draws with the full shader (in-page A/B: frame-adjacent pairs) */
   enabled = true;
   private readonly tex: DataArrayTexture[] = [];
@@ -415,7 +418,8 @@ export class TerrainCache {
     const iMax = Math.ceil(2 * Math.log2(kMax / KNOT0));
     const up = _d;
     this.queue.length = 0;
-    st.cached = 0; st.live = 0; st.hot = 0; st.near = 0; st.wide = 0;
+    st.cached = 0; st.live = 0; st.hot = 0; st.near = 0; st.wide = 0; st.wantN = 0;
+    let wantTexels = 0;
     for (const p of this.lod.selected) {
       const mesh = this.lod.tcMesh(p);
       if (!mesh) continue;
@@ -473,14 +477,17 @@ export class TerrainCache {
       if (t.hot) { st.hot++; continue; }
       if (wide) { st.wide++; if (t.slab) this.release(t); continue; }
       if (need * TC_DENS > CLASSES[CLASSES.length - 1] - PAD) { st.near++; if (!valid && t.slab) this.release(t); continue; }
+      { let c = 0; while (c < CLASSES.length - 1 && CLASSES[c] - PAD < need * TC_DENS) c++; wantTexels += CLASSES[c] * CLASSES[c]; st.wantN++; }
       if (!valid || t.stale) this.queue.push(p);
     }
     st.queued = this.queue.length;
+    // what this frame's cacheable patches would take at their classes (MB, tiles + mips; slab rounding not counted)
+    st.wantMB = Math.round(wantTexels * (this.stats.float ? 16 : 12) * 1.3125 / 1048576);
     // patches that left the chunk cache give their tiles back
     if ((frame & 31) === 0) for (const [p, t] of this.tiles) if (!p.built) { this.release(t); this.tiles.delete(p); }
     st.tiles = 0;
     for (const s of this.slabs) st.tiles += s.used;
-    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `tiles=${st.tiles},cached=${st.cached},live=${st.live},hot=${st.hot},near=${st.near},wide=${st.wide},full=${st.full},bakes=${st.bakesTotal},glob=${st.globals}`);
+    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `tiles=${st.tiles},cached=${st.cached},live=${st.live},hot=${st.hot},near=${st.near},wide=${st.wide},want=${st.wantN}/${st.wantMB}MB,full=${st.full},bakes=${st.bakesTotal},glob=${st.globals}`);
     // (the bake wants these again: kept on the instance)
     this.sunNow.copy(sunBody); this.yearNow = yearFrac; this.iMax = iMax;
   }
@@ -560,7 +567,8 @@ export class TerrainCache {
         // by distance and not mean-preserving (sward tips tint the meadow yellow-green only while resolved), so a tile
         // baked at its texel's footprint read greener and softer from 160 m than the full shader
         const da = anchor ? t.kB : Math.min(t.kA, Math.max(t.dn, 0.5));
-        bu.uTcBakeF.value.set(anchor ? t.kB : t.kA, t.g, da / this.pxPerRad, 0);
+        // (x sqrt 2: the shader's footprint is length(fwidth(P)), the sum of the two pixel axes)
+        bu.uTcBakeF.value.set(anchor ? t.kB : t.kA, t.g, 1.41421 * da / this.pxPerRad, 0);
         r.render(this.scene, camera);
       }
       geo.setDrawRange(0, Infinity);
