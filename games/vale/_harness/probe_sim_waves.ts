@@ -32,10 +32,13 @@ section('schedule + composition + levels', () => {
   check('team 1 walks the path reversed', s0.path[0][0] === 15 && s1.path[0][0] === 105 && s1.path[s1.path.length - 1][0] === 15);
   check('wave units are level 1 before the first upgrade', t0.every((m) => m.level === 1));
   const all: string[] = [];
-  const evs = run(sim, 60.5); // through wave 4 (65 s)
+  // wave 3's make-up is read as it spawns (45 s): by 65 s its front may already have lost a Wick to the last wave's
+  // leftovers, and which side keeps leftovers is a coin the lane fight tosses (orch1 LANELINE r1)
+  const evs = run(sim, 40.2); // through wave 3 (45 s)
+  for (const m of sim.world.entities) if (m.kind === 'minion' && m.spawnTime > 44 && m.spawnTime < 46 && m.team === 0) all.push(m.def);
+  evs.push(...run(sim, 20.3)); // through wave 4 (65 s)
   const waves = ofType(evs, 'wave');
   check('waves every 20 s', waves.map((x) => x.n).join() === '2,3,4' && near(waves[2].t, 65, 0.05), waves.map((x) => [x.n, x.t]));
-  for (const m of sim.world.entities) if (m.kind === 'minion' && m.spawnTime > 44 && m.spawnTime < 46 && m.team === 0) all.push(m.def);
   check('wave 3 adds the everyNth: 3 siege minion', all.filter((d) => d === 'fx_siege_minion').length === 1 && all.length === 5, all);
   const w4 = sim.world.entities.filter((m) => m.kind === 'minion' && m.spawnTime > 64 && m.team === 0);
   check('upgradeEvery 60: wave 4 (65 s) is level 2 with growth applied', w4.length === 4 && w4.every((m) => m.level === 2) &&

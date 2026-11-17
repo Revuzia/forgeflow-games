@@ -625,11 +625,11 @@ async function live38(): Promise<void> {
   if (!r.catalog) { console.log('SKIP ruling 38 section: content build failed'); return; }
   const rc = r.catalog;
   const fs = rc.fighters.map((f) => f.id).sort();
-  const fresh = (modeId: string, first: string, seed: number) => {
+  const fresh = (modeId: string, first: string, seed: number, side = 0) => {
     const mode = rc.modes.find((m) => m.id === modeId)!, queue = rc.queues.find((q) => q.mode === modeId)!;
     const seats = Array.from({ length: 10 }, (_, i) => {
       const fighter = i === 0 ? first : fs[(i * 3) % fs.length];
-      return { player: i, team: i < 5 ? 0 : 1, name: `p${i}`, fighter, skin: rc.skins.find((s) => s.fighter === fighter)?.id ?? '', controller: 'human' as const,
+      return { player: i, team: (i < 5 ? 0 : 1) ^ side, name: `p${i}`, fighter, skin: rc.skins.find((s) => s.fighter === fighter)?.id ?? '', controller: 'human' as const,
         loadout: pickLoadout(rc, fighter, mode.rules.itemPool ?? '', undefined as never), colorIndex: i };
     });
     const sim = createSim(rc, { matchId: 'probe_orders_38', seed, queue: queue.id, mode: modeId, map: mode.map, seats, catalogVersion: rc.version } as never, { pregameSeconds: 0 });
@@ -710,13 +710,15 @@ async function live38(): Promise<void> {
 
   // 2. packed lane fights after 3:55 (verifier r4 live probe: ~20 allied minions between the hero and an enemy wave; a
   //    plain move or a held right-click gave up after ~2 s 4–10 m short). A held button re-sends its point every 500 ms
-  //    (input/controller.ts HOLD_RETRY_MS): modelled as the same move every 15 ticks.
+  //    (input/controller.ts HOLD_RETRY_MS): modelled as the same move every 15 ticks. With every seat idle and the
+  //    towers disarmed one side's waves snowball, and which side is a coin the lane fights toss (orch1 LANELINE r1:
+  //    BRIDGE's team 0 piled up before ruling 47, team 1 after): the hero plays team 1 when team 0 never packs.
   for (const modeId of ['rift', 'bridge']) {
     let n = 0, heldShort = 0, clickShortLane = 0;
     const bad: string[] = [];
     for (const who of ['ulkro', 'tunlan', 'lisvel'].filter(has)) {
-      for (const hold of [false, true]) {
-        const { sim, me } = fresh(modeId, who, 11);
+      for (const hold of [false, true]) for (let side = 0, k0 = -1; side < 2 && k0 <= 0; side++) {
+        const { sim, me } = fresh(modeId, who, 11, side);
         const w = sim.world, nav = w.nav;
         const main = nav.componentAt(me.x, me.y);
         let k = 0;
@@ -751,6 +753,7 @@ async function live38(): Promise<void> {
           if (hold && dEnd > 2 && crowd === 0) { heldShort++; bad.push(`held ${who} t${t} ${f2(dEnd)} m short`); }
           if (!hold && dEnd > 2 && crowd === 0 && lane <= straight * 1.3) { clickShortLane++; bad.push(`click ${who} t${t} ${f2(dEnd)} m short, lane ${f2(lane / straight)}×`); }
         }
+        k0 = k;
       }
     }
     check(`${modeId.toUpperCase()} ${n} moves through packed lane fights: a held button never ends > 2 m short of an uncrowded point (${heldShort}), a click never where a lane ≤ 1.3 × existed (${clickShortLane})`,
