@@ -221,3 +221,14 @@ The owner decided: "the swing can work automatically, or a user can swing it usi
    that arc, then it eases back to the automatic arc. A hand always wins over the motor (the touch gate).
 3. Empty swing: sways a little if pushed; no motor.
 The same two-way rule applies to the rocker where it makes sense. Autonomy off: the motor is off, the hand still works.
+
+## OWNER CLARIFICATION 2026-11-17 (D-95, revised: this replaces the text above where they differ)
+The owner: "i agree the swing should die after 2-3 swings, or we can choose AUTO or we can run it by hand - thats what i meant."
+1. **Default (natural):** a pushed swing dies down after about 2 to 3 swings, as PG_PHYS round 3 measured. That behaviour is CORRECT:
+   do not add a motor by default and do not lower the damping.
+2. **AUTO (the player chooses it):** a small AUTO toggle on the swing (tap the swing or its little control; keyboard reachable). While AUTO
+   is on, the swing keeps a gentle steady arc by itself, with or without a rider. AUTO is off by default and is the player's choice, not
+   something squishies or autonomy switch on. Turning it off lets the swing die down naturally.
+3. **By hand:** the player can always grab the seat or the rider with mouse or finger and push or pull; a hand wins over AUTO while it
+   holds, and on release the swing either dies down (AUTO off) or eases back to the AUTO arc (AUTO on).
+The rocker follows the same three rules.
