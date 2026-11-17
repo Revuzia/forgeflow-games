@@ -175,7 +175,7 @@ export function createActor(W, opts) {
     hitReactT: 0, _hitReactAt: -9, _portalT: 0, _portalBoost: false, _ovReload: false,
     // (W10 R3B) swap dip, reload layer, surface swim and the slung second gun (created here: no hidden-class change mid-match)
     _swapAt: -9, _eqWid: null, _swapK: 0, _rlOn: false, _rlW: 0, _rlAnim: null, _aimHL: new THREE.Vector3(), _hasAimHL: false,
-    _swimOff: 0, _swimObjY: -1e9, _sling: null, _slingId: null, _slingOn: false, _rlKey: null,
+    _swimOff: 0, _swimObjY: -1e9, _swTilt: null, _sling: null, _slingId: null, _slingOn: false, _rlKey: null,
     // rim light (P1.8): 0 = not applied yet, 1 = the faint cool rim, 2 = SQUAD UP ally rim.
     // _sinkT: corpse timeline on SIM time (killActor / corpseStep), -1 = not a corpse;
     // _sinkFall: a corpse that died in the air drops to its floor first (_sinkVy, _sinkFloor).
@@ -3343,6 +3343,19 @@ function animate(W, a, dt) {
         else if (a._slideT >= 0 && !(a.clips && a.clips.slide)) { lm = "slide"; lw = Math.min(1, a._slideT / 0.12); }
         if (lm && lw > 0.01) applyLegPose(a.obj, a.armBones, lm, lw);
       }
+      // (W10 R3B, verify2 finding) treading upright on the surface: the swim clip's forward lean straightened (swimUpright)
+      if (layers && a.swimming && a.armBones && a.alive && deskHi(W)) {
+        const sw = Math.hypot(a.vel.x, a.vel.z) > 0.7 ? SWIM_TILT_MOVE : SWIM_TILT_STILL;
+        a._swTilt = a._swTilt == null ? sw : a._swTilt + (sw - a._swTilt) * Math.min(1, dt * 4);
+        swimUpright(a, a._swTilt);
+        // the eased sink (swimView) works off last frame's pose, so the stroke bobbed the head +-3 cm: settle it on THIS frame's posed head
+        // (the camera subtracts _swimOff, so it does not move with this)
+        const hd = a.armBones.head;
+        if (hd && hd.parent) {
+          const err = K.clamp((W.map.water ? W.map.water.position.y : W.map.waterY) + SWIM_HEAD - hd.matrixWorld.elements[13], -0.1, 0.1);
+          a.obj.position.y += err; a._swimOff += err; a._swimObjY = a.obj.position.y;
+        }
+      }
       const wantW = mode ? 1 : 0;
       a._armW = (!a._hasArmW ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));
       a._hasArmW = true;
@@ -3692,7 +3705,10 @@ const RL_FALLBACK = [[0.05, "rl_rifle_out"], [0.55, "rl_rifle_in"], [0.86, "rl_r
 const RL_MAG = { rl_rifle_out: 1, rl_rifle_in: 1, rl_pistol_in: 1, rl_shell: 1, rl_ln_shell: 1 };
 const RL_KEYS = new Map();               // set name -> [[fraction, target kind], ...] (built once per set)
 const SWAP_S = 0.25, SWAP_DIP = 0.8;     // the swap: lower-and-raise over 0.25 s, muzzle down 0.8 rad (46 deg) at mid-swap
-const SWIM_CHEST = 0.14;                 // the swimmer's chest (Spine2) sits this far under the surface
+const SWIM_CHEST = 0.14;                 // fallback (a rig without a Head bone): the swimmer's chest (Spine2) sits this far under the surface
+const SWIM_HEAD = 0.18;                  // the swimmer's Head bone sits this far ABOVE the surface (treading water: face and shoulders out)
+const SWIM_TILT_STILL = 0.10, SWIM_TILT_MOVE = 0.20;   // swimUpright: most lean (rad) left on each spine bone, still / swimming on
+const _swU = new THREE.Vector3(0, 1, 0), _swY = new THREE.Vector3(), _swX = new THREE.Vector3(), _swPQ = new THREE.Quaternion(), _swR = new THREE.Quaternion();
 const SWIM_TREAD_TS = 0.45, SWIM_CLIP_MS = 1.6;
 const SLING_CAP = 8;                     // slung second guns drawn on at most this many actors (the nearest to the camera)
 const SLING_M = 35, SLING_M2 = SLING_M * SLING_M;
@@ -3887,15 +3903,42 @@ function reloadEnd(a) {
  *  _swimOff, so the camera keeps the un-sunk height (a surface swimmer never sees the underwater look). */
 function swimView(W, a, dt) {
   let want = 0;
-  const b = a.armBones && (a.armBones.spine2 || a.armBones.spine1);
+  // (verify2 finding) the sink keys off the HEAD: keyed off the chest, the clip's 31 deg forward lean left only the crown of the hair out
+  const hd = a.armBones && a.armBones.head, b = hd || (a.armBones && (a.armBones.spine2 || a.armBones.spine1));
   if (a.swimming && b) {
-    const rel = a._swimObjY > -1e8 ? b.matrixWorld.elements[13] - a._swimObjY : 1.3;   // last frame's chest above last frame's body
-    want = K.clamp((W.map.waterY - SWIM_CHEST) - (a.obj.position.y + rel), -1.5, 0);
+    const rel = a._swimObjY > -1e8 ? b.matrixWorld.elements[13] - a._swimObjY : (hd ? 1.55 : 1.3);   // last frame's head (chest) above last frame's body
+    // against the DRAWN surface (maps.js bobs the water mesh +-0.12 m on a ~9 s swell; the camera clamp and the underwater test use it too):
+    // keyed off the static waterY the swimmer stood still while the sea rose over its chin and fell below its chest
+    const sy = W.map.water ? W.map.water.position.y : W.map.waterY;
+    want = K.clamp((hd ? sy + SWIM_HEAD : sy - SWIM_CHEST) - (a.obj.position.y + rel), -1.5, 0);
   }
   a._swimOff += (want - a._swimOff) * Math.min(1, dt * 6);
   if (!a.swimming && Math.abs(a._swimOff) < 1e-3) a._swimOff = 0;
   a.obj.position.y += a._swimOff;
   a._swimObjY = a.swimming ? a.obj.position.y : -1e9;
+}
+
+/** (W10 R3B, verify2 finding) SURFACE SWIM upright: W9's swim clip leans the whole body ~31 deg forward (the Head bone only ~0.13 m
+ *  above the chest), so no sink depth put the head out AND the chest under. Each spine bone (Hips .. Head; Mixamo bones point +Y down the
+ *  chain) is turned the least way that leaves its +Y axis at most maxTilt off vertical: a treading column, legs under the body, face level.
+ *  Pose correction on the Mixamo clip (owner question 1 default); desktop medium+ on-screen swimmers only (Low / touch keep the clip). */
+function swimUpright(a, maxTilt) {
+  const B = a.armBones, chain = [B.hips, B.spine, B.spine1, B.spine2, B.neck, B.head];
+  let first = true;
+  for (let i = 0; i < chain.length; i++) {
+    const b = chain[i];
+    if (!b || !b.parent) continue;
+    b.updateWorldMatrix(first, false); first = false;
+    _swY.setFromMatrixColumn(b.matrixWorld, 1).normalize();
+    const ang = Math.acos(K.clamp(_swY.dot(_swU), -1, 1));
+    if (ang <= maxTilt) continue;
+    _swX.crossVectors(_swY, _swU);
+    if (_swX.lengthSq() < 1e-10) continue;
+    _swR.setFromAxisAngle(_swX.normalize(), ang - maxTilt);            // world-space correction
+    b.parent.getWorldQuaternion(_swPQ);
+    b.quaternion.premultiply(_swPQ).premultiply(_swR).premultiply(_swPQ.invert());   // local' = P^-1 * R * P * local
+    b.updateWorldMatrix(false, false);
+  }
 }
 
 /** the gun a slung actor carries on its back: the first OTHER weapon slot */

@@ -18,6 +18,8 @@ into bar rows.
     python _harness/p23/gunhold.py --disk --plant gun-in-water    # the held gun not put away on the surface   - MUST FAIL swim
     python _harness/p23/gunhold.py --disk --plant sling-all       # the slung-gun cap removed                  - MUST FAIL swap
     python _harness/p23/gunhold.py --disk --plant swim-cam-under  # the camera follows the sunk swim body      - MUST FAIL swim-view
+    python _harness/p23/gunhold.py --disk --plant swim-sunk       # the sink keyed off the chest, clip lean kept - MUST FAIL swim-head
+    python _harness/p23/gunhold.py --disk --plant swim-lean       # the upright correction off (clip lean kept) - MUST FAIL swim
     python _harness/p23/gunhold.py --rev 361c5ec3                 # the W10 base (W9 R1 live): every bar row MUST FAIL
 
 Rows (PLAN.md "Lane R1B" acceptance bars; the audit value each replaces in brackets):
@@ -48,9 +50,13 @@ Wave 10 round 3 lane R3B rows (parts reload, swim, swap):
   pistol-reload  the pistol reloads in its own pose (player._rlAnim 'pistol_reload' on >= 80 % of the reload frames) with the left hand on
                  its mag well in the mag-in window (<= 0.08 m) ["idle"]
   swim           on the surface (deep water, still then swimming forward): 0 frames with the held or a slung gun visible; Spine2 (chest)
-                 below the water surface on every frame after a 0.7 s settle [crouch on water, gun out]
+                 below the water surface on every frame after a 0.7 s settle [crouch on water, gun out]. "The surface" in the swim
+                 rows is the DRAWN water (the mesh's +-0.12 m swell, as the camera clamp and the underwater test read it)
   swim-view      on every swimming frame of the same run the player's camera stays >= 0.10 m above the water surface and the
                  game's underwater state (W._underwater: fog / blur / audio low-pass) is off [the camera follows the sunk body]
+  swim-head      treading water, head out: on every settled swimming frame of the same run (still after 0.7 s, and swimming on) the
+                 Head bone >= 0.15 m above the water surface (with the swim row's chest below it: head and shoulders out)
+                 [verify2: Head -0.05..+0.01 m, only the crown of the hair out]
   swap           a gun swap lowers the barrel >= 25 deg off the aim mid-swap (max over 0.08-0.20 s after the swap); with >= 9 armed
                  two-gun bots on screen within 35 m, 1 <= actors drawing a slung gun <= 8 and = min(8, eligible) [none]
 plus: 0 new programs over the run, 0 page / console errors, 0 failed requests, 0 shader errors, 0 [rig] lines.
@@ -112,6 +118,11 @@ PLANTS = {
     # verify1 finding: the camera followed the sunk body (obj.position.y += _swimOff) under the surface
     "swim-cam-under": [(RP + "player.js", [("const eye = fp.y - (fp === focus.obj.position ? focus._swimOff || 0 : 0) + focus._eyeY;",
                                             "const eye = fp.y + focus._eyeY;")])],
+    # verify2 finding: the sink keyed off the chest (Spine2 0.14 m under) and the swim clip's 31 deg lean kept: only the hair out
+    "swim-sunk": [(RP + "player.js", [("const hd = a.armBones && a.armBones.head, b = hd || ", "const hd = null, b = hd || "),
+                                      ("if (layers && a.swimming && a.armBones && a.alive && deskHi(W)) {", "if (false) {")])],
+    # the upright correction off, the head-keyed sink kept: the leaning clip lifts the chest out of the water
+    "swim-lean": [(RP + "player.js", [("swimUpright(a, a._swTilt);", "")])],
 }
 
 EQUIP_JS = r"""(wid) => { const W = window.__LC__.W, K = W.SIM, p = W.player, inv = p.inventory;
@@ -275,13 +286,16 @@ RELOAD_JS = r"""([n, pre]) => { const W = window.__LC__.W, THREE = W.THREE, p = 
 WATER_JS = r"""() => { const W = window.__LC__.W, p = W.player, M = W.map; const wy = M.waterY; if (wy == null || wy < -100) return { err: 'no water', wy };
   let best = null; for (let r = 20; r < M.half * 1.6 && !best; r += 15) for (let a = 0; a < 24; a++) { const x = p.pos.x + Math.cos(a / 24 * 6.283) * r, z = p.pos.z + Math.sin(a / 24 * 6.283) * r; if (Math.abs(x) > M.half - 30 || Math.abs(z) > M.half - 30) continue; if (M.heightAt(x, z) < wy - 2.5) { best = [x, z]; break; } }
   if (!best) return { err: 'no deep water found', wy }; p.pos.set(best[0], wy - 0.6, best[1]); p.vel.set(0, 0, 0); p.obj.position.copy(p.pos); if (p._pp) p._pp.copy(p.pos); return { at: best, wy }; }"""
-SWIM_JS = r"""(n) => { const W = window.__LC__.W, p = W.player, P = window.__H_PUMP__, wy = W.map.waterY; let S2 = null;
-  p.obj.traverse((o) => { if (!o.isBone) return; const nm = o.name.replace(/^mixamorig:?/i, ''); if (nm === 'Spine2' || nm === 'Spine02') S2 = o; });
+SWIM_JS = r"""(n) => { const W = window.__LC__.W, p = W.player, P = window.__H_PUMP__, wy = W.map.waterY; let S2 = null, HD = null;
+  p.obj.traverse((o) => { if (!o.isBone) return; const nm = o.name.replace(/^mixamorig:?/i, ''); if (nm === 'Spine2' || nm === 'Spine02') S2 = o; if (nm === 'Head') HD = o; });
   const rows = []; const v = new W.THREE.Vector3();
   const shown = (o) => { if (!o || !o.visible) return false; for (let q = o.parent; q; q = q.parent) if (!q.visible) return false; return true; };
-  for (let i = 0; i < n; i++) { P.step(1, 1 / 60, false); W.scene.updateMatrixWorld(true);
-    rows.push({ sw: !!p.swimming, gun: shown(p.weaponMesh), sling: shown(p._sling), chest: S2 ? +(S2.getWorldPosition(v).y - wy).toFixed(3) : null, anim: p.anim,
-      cam: W.camera ? +(W.camera.position.y - wy).toFixed(3) : null, uw: !!W._underwater }); }
+  // heights are taken against the DRAWN surface (the water mesh bobs +-0.12 m around map.waterY on a ~9 s swell; the camera clamp and the
+  // underwater test use the mesh too): against the static level a row read the swell's phase, not the swimmer (swim-view flipped run to run)
+  for (let i = 0; i < n; i++) { P.step(1, 1 / 60, false); W.scene.updateMatrixWorld(true); const sy = W.map.water ? W.map.water.position.y : wy;
+    rows.push({ sw: !!p.swimming, gun: shown(p.weaponMesh), sling: shown(p._sling), chest: S2 ? +(S2.getWorldPosition(v).y - sy).toFixed(3) : null, anim: p.anim,
+      cam: W.camera ? +(W.camera.position.y - sy).toFixed(3) : null, uw: !!W._underwater, head: HD ? +(HD.getWorldPosition(v).y - sy).toFixed(3) : null,
+      swell: +(sy - wy).toFixed(3) }); }
   return { rows, wy }; }"""
 # the swap: barrel (holder +Z) vs the aim direction per frame after W.equipSlot to the other gun
 SWAP_JS = r"""([slot, n]) => { const W = window.__LC__.W, THREE = W.THREE, p = W.player, P = window.__H_PUMP__; const out = [];
@@ -798,13 +812,20 @@ def main():
                 ok = len(swr) >= 240 and gunf == 0 and bool(chest) and max(chest) < 0.0
                 v.check("swim: 0 frames with a weapon visible while swimming; the chest (Spine2) below the surface after a 0.7 s settle",
                         ok, {"swimFrames": len(swr), "of": len(still + fwd), "gunFrames": gunf, "chestMax": max(chest) if chest else None,
-                             "chestMin": min(chest) if chest else None, "anims": sorted(set(str(x["anim"]) for x in swr))}, "0 frames; chest < 0")
+                             "chestMin": min(chest) if chest else None, "anims": sorted(set(str(x["anim"]) for x in swr)),
+                             "swell": [min(x.get("swell", 0) for x in swr), max(x.get("swell", 0) for x in swr)] if swr else None}, "0 frames; chest < 0")
                 cams = [x.get("cam") for x in swr if x.get("cam") is not None]
                 uwf = sum(1 for x in swr if x.get("uw"))
                 vok = len(swr) >= 240 and len(cams) == len(swr) and min(cams) >= 0.10 and uwf == 0
                 v.check("swim-view: on every swimming frame the camera >= 0.10 m above the water surface and the underwater look off",
                         vok, {"swimFrames": len(swr), "camFrames": len(cams), "camMin": min(cams) if cams else None,
                               "camMax": max(cams) if cams else None, "underwaterFrames": uwf}, "cam >= 0.10 m; 0 underwater frames")
+                heads = [x.get("head") for x in late]
+                hv = [h for h in heads if h is not None]
+                hok = len(late) >= 240 and len(hv) == len(late) and min(hv) >= 0.15
+                v.check("swim-head: treading water, the Head bone >= 0.15 m above the surface on every settled swimming frame (still after 0.7 s, swimming on)",
+                        hok, {"settledFrames": len(late), "headFrames": len(hv), "headMin": min(hv) if hv else None,
+                              "headMax": max(hv) if hv else None}, ">= 0.15 m")
         if "swap" in want:
             sw, bad = {}, []
             for skin in skins:
