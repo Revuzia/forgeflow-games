@@ -162,6 +162,8 @@ export const worldUniforms = {
   // x = the chroma multiplier of a keep-colour surface (the Standing Shadow: GFX-5, its violet must not read as fog),
   // y = the height tint's strength (GFX-13), z / w = the world y where the low / high tint is full
   valeEnvKey2: { value: new Vector4(1, 0, -1.5, 1.5) },
+  // the re-key's gain: L*' = 100 gain (L* / 100)^valeEnvKey.x below the ease (1 = off)
+  valeEnvGain: { value: 1 },
   // GFX-13: the per-map height tint (linear rgb multipliers; low ground cooler, high ground warmer)
   valeHeightLo: { value: new Color(1, 1, 1) },
   valeHeightHi: { value: new Color(1, 1, 1) },
@@ -237,6 +239,7 @@ vec3 valeFogShade( vec3 c, float mul, float sat, float ta ) {
 }
 uniform vec4 valeEnvKey;
 uniform vec4 valeEnvKey2;
+uniform float valeEnvGain;
 uniform vec3 valeHeightLo;
 uniform vec3 valeHeightHi;
 // a character material (fighter, wick, monster) sets 0 before the fog runs: the re-key is the environment's only
@@ -246,18 +249,19 @@ float valeYOfLstar( float l ) { return l > 8.0 ? pow( ( l + 16.0 ) / 116.0, 3.0 
 float valeToLin( float e ) { return e <= 0.04045 ? e / 12.92 : pow( ( e + 0.055 ) / 1.055, 2.4 ); }
 float valeToDisp( float y ) { return y <= 0.0031308 ? y * 12.92 : 1.055 * pow( y, 1.0 / 2.4 ) - 0.055; }
 // orch1 W2-A GFX-1 (ruling 46): the environment value re-key. The lit colour's DISPLAY L* (through the post chain's tone
-// map, sRGB and the map's LUT grey response, mirrored as the fog does) goes through L*' = 100 (L* / 100)^x, easing back
+// map, sRGB and the map's LUT grey response, mirrored as the fog does) goes through L*' = 100 gain (L* / 100)^x, easing back
 // to the identity over valeEnvKey.zw; its chroma about its own luminance x valeEnvKey.y (a keep-colour surface:
 // valeEnvKey2.x); the scale that shows L*' is solved through the Neutral toe exactly as valeFogShade solves its own.
-// One curve lands every old r12 B5 band on the new one: lanes 36-41 -> 51-56, jungle floor 12-20 -> 26-35, wall faces
-// 12-16 -> 26-31 (x 0.645). No define, no texture: no program is added.
+// One curve lands every old r12 B5 band on the new one (x 0.562, gain 0.879; measured RIFT lanes 38 -> ~51, jungle floor
+// 14 -> ~29, wall faces 13 -> ~28): lanes sit at the foot of the 50-58 band so the HARM telegraph edge keeps its
+// contrast on the lane. No define, no texture: no program is added.
 vec3 valeRekey( vec3 c ) {
   #ifdef VALE_KEEP_COLOR
   float cm = valeEnvKey2.x;
   #else
   float cm = valeEnvKey.y;
   #endif
-  if ( valeEnvKey.x >= 0.999 && abs( cm - 1.0 ) < 0.001 ) return c;
+  if ( valeEnvKey.x >= 0.999 && abs( valeEnvGain - 1.0 ) < 0.001 && abs( cm - 1.0 ) < 0.001 ) return c;
   const vec3 W = vec3( 0.2126, 0.7152, 0.0722 );
   c = max( c, vec3( 0.0 ) );
   float lum = dot( c, W );
@@ -267,7 +271,7 @@ vec3 valeRekey( vec3 c ) {
   vec3 e = mix( t * 12.92, 1.055 * pow( t, vec3( 1.0 / 2.4 ) ) - 0.055, step( 0.0031308, t ) );
   float dC = dot( vec3( valeGradeAt( e.r ).r, valeGradeAt( e.g ).g, valeGradeAt( e.b ).b ), W );
   float L = valeLstarOf( valeToLin( dC ) );
-  float Lc = 100.0 * pow( max( L, 0.0 ) / 100.0, valeEnvKey.x );
+  float Lc = 100.0 * valeEnvGain * pow( max( L, 0.0 ) / 100.0, valeEnvKey.x );
   float Lo = mix( Lc, L, smoothstep( valeEnvKey.z, valeEnvKey.w, L ) );
   float ef = valeGradeAt( valeToDisp( valeYOfLstar( Lo ) ) ).a;
   float Lf = valeToLin( ef );

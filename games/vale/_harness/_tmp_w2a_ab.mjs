@@ -93,10 +93,15 @@ const teleDE = () => B(page, (b) => {
   b.frames(2, 1 / 60);
   const bb = read();
   R.director.telegraphs.length = 0;
-  const de = [];
-  for (let i = 0; i < a.length; i += 16) { const p = lab(a, i), q = lab(bb, i); const d = Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); if (d > 3) de.push(d); }
-  de.sort((m, n) => m - n);
-  return { px: de.length * 4, p10: +(de[Math.floor(de.length * 0.1)] ?? 0).toFixed(1), p50: +(de[Math.floor(de.length * 0.5)] ?? 0).toFixed(1) };
+  const de = [], cr = [];
+  const Y = (d, i) => 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]);
+  for (let i = 0; i < a.length; i += 16) {
+    const p = lab(a, i), q = lab(bb, i); const d = Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+    if (d > 3) { de.push(d); const ya = Y(a, i), yb = Y(bb, i); cr.push((Math.max(ya, yb) + 0.05) / (Math.min(ya, yb) + 0.05)); }
+  }
+  de.sort((m, n) => m - n); cr.sort((m, n) => m - n);
+  // the HARM edge: the telegraph pixels standing furthest from their own bare ground (WCAG ratio, p90 / p95)
+  return { px: de.length * 4, p10: +(de[Math.floor(de.length * 0.1)] ?? 0).toFixed(1), p50: +(de[Math.floor(de.length * 0.5)] ?? 0).toFixed(1), edgeCR90: +(cr[Math.floor(cr.length * 0.9)] ?? 0).toFixed(2), edgeCR95: +(cr[Math.floor(cr.length * 0.95)] ?? 0).toFixed(2) };
 });
 const lane0 = S[0][1];
 await B(page, (b, p) => { b.focus(p[0], p[1]); b.frames(10, 1 / 30); b.focus(p[0], p[1]); }, lane0);

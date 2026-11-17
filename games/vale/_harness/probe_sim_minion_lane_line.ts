@@ -24,8 +24,10 @@
 //   B4 rejoin         a Wick turning free with |off| > 1 m: arc walked until |off| ≤ 0.5 m, p95 ≤ 6 m (max and
 //                     overshoots past the line reported; episodes cut short by a new fight are dropped)
 //   B5 timing         idle, waves 1-3: the first tick a Wick of the wave is within rim + 8 m of each of its own towers
-//                     on its road (the march), and the wave's first Wick-on-Wick damage per road (first contact): within ±0.5 s of BASE (the
-//                     values at c20d06630, before ruling 46). --record prints the table instead.
+//                     on its road (the march), and the first damage between Wicks of wave n of both sides per road (first
+//                     contact, the meeting): within ±0.5 s of BASE (the values at HEAD c0d09e682 with units/minions.ts at
+//                     271560c8f, before ruling 46). A wave's first hit on any enemy Wick (a leftover of the wave before:
+//                     the fight before, not the walk) is reported as contact_any. --record prints the table instead.
 //   B7 lantern        (reported) free Wicks walking a nav detour (e.path) in their first 20 m of arc, no enemy in aggro
 //   B6 determinism    RIFT idle seed 7 twice (3 min): identical x,y trace hash.
 //   node _harness/probe_sim_minion_lane_line.ts [--seeds 3,7,11,19,23,31] [--maps rift,bridge] [--scen idle,bots]
@@ -188,9 +190,13 @@ function runOne(map: string, scen: string, seed: number, acc: Acc, minutes: numb
       if (ev.e !== 'damage') continue;
       const a = w.entity(ev.src), b = w.entity(ev.dst);
       if (!a || !b || a.kind !== 'minion' || b.kind !== 'minion' || a.team === b.team) continue;
-      const ta = tr.get(a.id); if (!ta || ta.wave > 3) continue;
-      const k = `${map}|${roads[ta.road].id}|w${ta.wave}|contact`;
-      if (!firstT.has(k)) firstT.set(k, w.time);
+      const ta = tr.get(a.id), tb = tr.get(b.id); if (!ta || ta.wave > 3) continue;
+      // the meeting: a Wick of wave n hitting a Wick of the enemy's wave n (the march; gated). A wave n Wick's first hit on
+      // any enemy Wick (a leftover of wave n − 1 that won its fight further up the road) is reported beside it: it
+      // follows the fight before, not the walk
+      const k = `${map}|${roads[ta.road].id}|w${ta.wave}|contact`, ka = `${k}_any`;
+      if (!firstT.has(ka)) firstT.set(ka, w.time);
+      if (tb && tb.wave === ta.wave && !firstT.has(k)) firstT.set(k, w.time);
     }
     for (const e of w.entities) {
       if (e.kind !== 'minion' || !e.alive || !e.unit) continue;
@@ -337,12 +343,13 @@ else if (SCENS.includes('idle') && SEEDS.join() === '3,7,11,19,23,31') {
     if (!MAPS.includes(k.split('|')[0])) continue;
     const v = rec[k];
     if (v === undefined) { bad(`B5 ${k}: no arrival (base ${b} s)`); continue; }
-    n++;
     const dlt = v - b;
+    if (k.endsWith('_any')) { if (Math.abs(dlt) > 0.5) out.push(`  B5 (reported) ${k}: ${v.toFixed(2)} s vs base ${b.toFixed(2)} (${dlt >= 0 ? '+' : ''}${dlt.toFixed(2)})`); continue; }
+    n++;
     if (Math.abs(dlt) > Math.abs(worst)) { worst = dlt; wk = k; }
     if (Math.abs(dlt) > 0.5) bad(`B5 ${k}: ${v.toFixed(2)} s vs base ${b.toFixed(2)} (${dlt >= 0 ? '+' : ''}${dlt.toFixed(2)})${VERBOSE ? ` per seed ${timing.get(k)!.map((x) => x.toFixed(2)).join(' ')}` : ''}`);
   }
-  out.push(`B5 timing: ${n} arrivals and first contacts (6-seed means) vs c20d06630, worst ${worst >= 0 ? '+' : ''}${worst.toFixed(2)} s (${wk})`);
+  out.push(`B5 timing: ${n} arrivals and first contacts (6-seed means) vs before ruling 46, worst ${worst >= 0 ? '+' : ''}${worst.toFixed(2)} s (${wk})`);
 } else out.push('B5 timing: skipped (needs the idle scenario on the default seeds)');
 // B6 determinism
 if (MAPS.includes('rift')) {

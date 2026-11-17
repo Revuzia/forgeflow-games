@@ -46,9 +46,8 @@ import { fighterPower, memoryWeight } from './perception.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
 const MODE_TICKS = 6;
-/** owner_rulings 46: the plans a calm fighter does not swap back and forth (macro), and the ones whose walk point is held */
-const MACRO: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return', 'lane']);
-const WALKS: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return']);
+/** owner_rulings 46: the plans whose walk a calm fighter does not turn round on more than once in 8 s */
+const WALKS: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return', 'lane']);
 const MIN_MODE_TIME = 1.5;
 /** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
  *  — until this time, unless its team starts the endgame push sooner */
@@ -77,15 +76,17 @@ export class Bot extends BotBase implements BotController {
   readonly stagger: number;
   modeSince = -1e9;
   /** owner_rulings 46 (no pacing): the macro mode last left, when, and the walk point a calm fighter is committed to */
-  private prevMacro: Mode | null = null;
-  private prevMacroLeftAt = -1e9;
   private latchX = 0;
   private latchY = 0;
   private latchAt = -1e9;
-  private latchMode: Mode = 'lane';
   private fleeX = 0;
   private fleeY = 0;
   private fleeAt = -1e9;
+  /** owner_rulings 46 (FRAY chase discipline): the chase under way — its target, since when, the gap then — and targets given up */
+  private chaseId = -1;
+  private chaseAt = 0;
+  private chaseGap = 0;
+  private readonly chaseDrop = new Map<number, number>();
   lane = -1;
   jungle = false;
   support = false;
@@ -318,6 +319,7 @@ export class Bot extends BotBase implements BotController {
     const hold = rift && this.ccReady();
     for (const f of tp.enemyFighters) {
       if (!this.isNoticed(f) || this.dist2(f, e.x, e.y) > 10 * 10) continue;
+      if (this.k.ffa && this.chaseDropped(f)) continue;
       // (CW3 CL-1: a ready hold — stun, root, sleep — keeps the target in reach for the whole combo: a kill window)
       let dmg = this.burstOn(f) * (hold ? 1.2 : 1) * (rift ? this.ultBoost() : 1);
       for (const a of tp.allyFighters) {
@@ -770,15 +772,6 @@ export class Bot extends BotBase implements BotController {
     if (best === 'allin' && this.killTarget && (best !== this.mode || this.allinTarget < 0)) this.allinTarget = this.killTarget.id;
     if (best !== this.mode) {
       if (now - this.modeSince < MIN_MODE_TIME && bestS < 0.8) return;
-      // (owner_rulings 46: no pacing — a calm fighter (fit, nothing hitting it, no enemy fighter in 25 m) does not swap one plan
-      // for another every few seconds as the team's calls flicker: a switch between plans waits 5 s in the current one, a
-      // switch back to the plan it just left 9 s; an urgent call (a post at an inner or base structure, the rush) is not held.
-      // The flicker walked a full-health fighter back and forth 3-5 times a game — push to a defend call to an objective)
-      if (kind === 'rift' && bestS < 0.83 && MACRO.has(best) && MACRO.has(this.mode) && this.calm()) {
-        const back = best === this.prevMacro && now - this.prevMacroLeftAt < 12;
-        if (now - this.modeSince < (back ? 9 : 5)) return;
-      }
-      if (MACRO.has(this.mode)) { this.prevMacro = this.mode; this.prevMacroLeftAt = now; }
       if (this.mode === 'allin') this.allinTarget = -1;
       if (this.mode === 'roam') this.roamTarget = -1;
       if (best === 'allin' && this.killTarget) this.allinTarget = this.killTarget.id;
@@ -794,22 +787,27 @@ export class Bot extends BotBase implements BotController {
     return this.hpF >= 0.85 && this.recentDps <= 0 && this.nearestEnemyFighter(25) === null;
   }
 
-  /** owner_rulings 46 (no pacing): a calm fighter on a plan (not fighting, sieging, clearing or farming a camp) keeps walking
-   *  to the point it set out for when the plan's point flips behind it, for up to 4 s or until it gets there — two calls,
-   *  two roads or two camps traded places as their values crossed, and the walk turned round with them */
+  /**
+   * owner_rulings 46 (no pacing): a calm fighter (fit, nothing hitting it, no enemy fighter noticed within 25 m) walking a
+   * plan does not turn round more than once in 8 s. When the plan's point flips behind it again within 8 s of its last
+   * turn — two calls, two roads or two camps trading places as their values cross, the team's call flickering — it keeps
+   * walking to the point it set out for until it gets there or the 8 s are up. Never for a fight, a retreat, a recall, a
+   * peel, the rush, a post at a base structure or the core, or the base under attack: those turn at once. The flicker
+   * walked full-health fighters back and forth 2-5 times a game (veteran, whose calls carry no delay, most).
+   */
   private holdWalk(): void {
     if (this.k.kind !== 'rift' || !this.pMove) return;
-    const e = this.e, now = this.now;
+    const e = this.e, now = this.now, b = this.brain;
+    const post = b ? b.guard.get(this.player) : undefined;
+    const urgent = !WALKS.has(this.mode) || this.pFight !== null || this.pSiege !== null || this.pClear || this.pMonsters || !this.calm() ||
+      (!!b && (b.rush || b.baseThreat >= 0.7)) || (this.mode === 'defend' && !!post && post.cls >= 2);
     const nx = this.pMoveX - e.x, ny = this.pMoveY - e.y;
-    const busy = this.pFight !== null || this.pSiege !== null || this.pClear || this.pMonsters || !WALKS.has(this.mode) || this.mode !== this.latchMode ||
-      (this.mode === 'defend' && !!this.brain && this.brain.guard.has(this.player)) || !this.calm();
-    this.latchMode = this.mode;
-    if (!busy && now - this.latchAt < 4) {
-      const lx = this.latchX - e.x, ly = this.latchY - e.y;
-      if (lx * lx + ly * ly > 9 && nx * nx + ny * ny > 36 && nx * lx + ny * ly < 0) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; return; }
-    }
-    const lx = this.pMoveX - this.latchX, ly = this.pMoveY - this.latchY;
-    if (busy || lx * lx + ly * ly > 16 || now - this.latchAt >= 4) { this.latchX = this.pMoveX; this.latchY = this.pMoveY; this.latchAt = now; }
+    const hx = this.latchX - e.x, hy = this.latchY - e.y;
+    const far = nx * nx + ny * ny > 6 * 6, going = hx * hx + hy * hy > 3 * 3;
+    const turn = far && going && nx * hx + ny * hy < 0;
+    if (turn && !urgent && now - this.latchAt < 8) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; return; }
+    if (turn || !going) this.latchAt = now;
+    this.latchX = this.pMoveX; this.latchY = this.pMoveY;
   }
 
   // ── executors ─────────────────────────────────────────────────────────────────────────────────
@@ -1056,7 +1054,7 @@ export class Bot extends BotBase implements BotController {
 
   private execAllin(): void {
     const t = this.killTarget ?? this.pickFightTarget(12);
-    if (!t) { this.execLaneOrPush(); return; }
+    if (!t || (this.k.ffa && !this.chaseOn(t))) { if (this.k.ffa) { this.execHunt(); return; } this.execLaneOrPush(); return; }
     this.pFight = t; this.pAggro = 1;
     this.pLhFight = this.lanePhase();
     this.pDive = t.hp < t.maxHp * 0.25 && this.hpF > 0.5;
@@ -1374,7 +1372,16 @@ export class Bot extends BotBase implements BotController {
     // (owner_rulings 44: no fighter to fight — the Wicks at the structure are the post's work: walk into reach of the one
     // nearest the structure, inside its cover; standing at the post while the wave took the structure was the commonest
     // "fell to Wicks beside two fit defenders")
-    if (!t) {
+    // (owner_rulings 46: and with an enemy fighter waiting off the post, not under it, the Wicks already hitting the structure are
+    // still the post's work — two fit defenders stood at the stand point, held by a fighter 13 m off, while the wave took the
+    // Needle: 167 of the veteran falls to Wicks beside fit defenders had them in defend mode)
+    let wave = !t;
+    if (t) for (const u of this.perc.enemyUnits) {
+      if (!u.alive || u.kind !== 'minion' || u.atkTarget < 0) continue;
+      const a = this.w.entity(u.atkTarget);
+      if (a && a.kind === 'structure' && a.team === this.team && this.dist2(a, g.x, g.y) <= 4) { wave = true; break; }
+    }
+    if (wave) {
       const sr = Math.max(9, g.reach + 3);
       let wk: Entity | null = null, wd = sr * sr;
       for (const u of this.perc.enemyUnits) {
@@ -1794,7 +1801,7 @@ export class Bot extends BotBase implements BotController {
 
   private execHunt(): void {
     const t = this.huntTarget;
-    if (t && t.alive) {
+    if (t && t.alive && !(this.isNoticed(t) && !this.chaseOn(t))) {
       this.m.ffaTarget.set(this.player, t.player ? t.player.player : -1);
       if (this.isNoticed(t) && this.thirdParty(t)) return;
       if (this.isNoticed(t)) {
@@ -1813,6 +1820,33 @@ export class Bot extends BotBase implements BotController {
     const f = this.nearestEnemyFighter(this.prof.attackRange + 4);
     if (f && this.recentDps > 0) { this.pFight = f; this.pAggro = 0.6; }
     void e;
+  }
+
+  /** owner_rulings 46 (FRAY chase discipline): has this target been given up on */
+  private chaseDropped(f: Entity): boolean {
+    return (this.chaseDrop.get(f.id) ?? -1e9) > this.now;
+  }
+
+  /**
+   * owner_rulings 46 (FRAY chase discipline, adept and veteran): a chase that has not closed the gap by a metre in chaseQuit
+   * seconds, with the target out of my reach and no gap-closer or engage ready to reach it, is given up — the target is
+   * left alone for 6 s. A fleeing fighter as fast as its chaser keeps the gap for ever; the chaser walked 10-15 m behind a
+   * fighter at 20 % for 4 s and more, out of the fight, while a third seat lined up on both. False when given up now.
+   */
+  private chaseOn(t: Entity): boolean {
+    const q = this.diff.chaseQuit;
+    if (!this.k.ffa || !(q < Infinity)) return true;
+    const e = this.e, now = this.now;
+    const d = Math.sqrt(this.dist2(t, e.x, e.y));
+    // (only a wounded target's run counts — under 40 %: the one that breaks off; a third party's wait beside a fight is not a chase)
+    if (t.hp >= t.maxHp * 0.4 || inAttackRange(e, t) || this.strikeReach() >= d - t.radius) { this.chaseId = -1; return true; }
+    if (this.chaseId !== t.id) { this.chaseId = t.id; this.chaseAt = now; this.chaseGap = d; return true; }
+    if (now - this.chaseAt < q) return true;
+    if (d < this.chaseGap - 1) { this.chaseAt = now; this.chaseGap = d; return true; }
+    this.chaseDrop.set(t.id, now + 6); this.chaseId = -1;
+    if (this.huntTarget === t) this.huntTarget = null;
+    if (this.killTarget === t) this.killTarget = null;
+    return false;
   }
 
   private execPickup(): void {
@@ -1889,7 +1923,7 @@ export class Bot extends BotBase implements BotController {
       if (sc > leaderScore) { second = leaderScore; leaderScore = sc; leader = p.player; } else if (sc > second) second = sc;
     }
     for (const f of this.perc.enemyFighters) {
-      if (!this.isNoticed(f) || !f.player) continue;
+      if (!this.isNoticed(f) || !f.player || this.chaseDropped(f)) continue;
       const d = Math.sqrt(this.dist2(f, e.x, e.y));
       if (d > (f.revealAllUntil > this.w.tick ? 80 : 30)) continue;
       const tp = f.player;

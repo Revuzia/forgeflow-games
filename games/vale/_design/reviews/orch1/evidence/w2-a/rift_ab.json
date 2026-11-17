@@ -1,0 +1,310 @@
+{
+ "map": "rift",
+ "t": 481,
+ "seed": 7,
+ "fog": true,
+ "programs": 35,
+ "telegraph": {
+  "before": {
+   "px": 23168,
+   "p10": 3.9,
+   "p50": 19.2
+  },
+  "after": {
+   "px": 27552,
+   "p10": 3.8,
+   "p50": 12.2
+  }
+ },
+ "gfx5": {
+  "before": {
+   "lit": {
+    "shadow": [
+     12.7,
+     3.3,
+     -9.4
+    ],
+    "side": [
+     11.6,
+     -9.4,
+     -0.8
+    ],
+    "below": [
+     0,
+     0,
+     0
+    ]
+   },
+   "fog": {
+    "shadow": [
+     10.9,
+     3.4,
+     -9.4
+    ],
+    "side": [
+     4.7,
+     -1.9,
+     -3.4
+    ],
+    "below": [
+     0,
+     0,
+     0
+    ]
+   },
+   "dE_shadowLit_vs_fogSide": 11.3,
+   "dE_shadowLit_vs_fogBelow": 16.1,
+   "dE_shadowFog_vs_fogSide": 10.1,
+   "dE_shadowFog_vs_fogBelow": 14.8
+  },
+  "after": {
+   "lit": {
+    "shadow": [
+     26.2,
+     4.6,
+     -12.4
+    ],
+    "side": [
+     23.1,
+     -10.1,
+     2.2
+    ],
+    "below": [
+     0,
+     0,
+     0
+    ]
+   },
+   "fog": {
+    "shadow": [
+     23.3,
+     4.9,
+     -12.9
+    ],
+    "side": [
+     10.8,
+     -3.2,
+     -2.3
+    ],
+    "below": [
+     0,
+     0,
+     0
+    ]
+   },
+   "dE_shadowLit_vs_fogSide": 20,
+   "dE_shadowLit_vs_fogBelow": 29.3,
+   "dE_shadowFog_vs_fogSide": 18.3,
+   "dE_shadowFog_vs_fogBelow": 27.1
+  }
+ },
+ "spots": [
+  {
+   "spot": "lane_high",
+   "world": [
+    57.6,
+    13.5
+   ],
+   "before": {
+    "file": "rift_lane_high_before.png",
+    "p5": 4,
+    "p50": 21.9,
+    "p95": 41.2,
+    "meanC": 10.6,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_lane_high_after.png",
+    "p5": 10.3,
+    "p50": 36.9,
+    "p95": 56.2,
+    "meanC": 10.5,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "lane_seat",
+   "world": [
+    55,
+    55
+   ],
+   "before": {
+    "file": "rift_lane_seat_before.png",
+    "p5": 6.7,
+    "p50": 25.8,
+    "p95": 46.4,
+    "meanC": 12.1,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_lane_seat_after.png",
+    "p5": 15.8,
+    "p50": 40.8,
+    "p95": 59.6,
+    "meanC": 12.1,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "lane_low",
+   "world": [
+    57.6,
+    96.5
+   ],
+   "before": {
+    "file": "rift_lane_low_before.png",
+    "p5": 4.5,
+    "p50": 22.5,
+    "p95": 42,
+    "meanC": 10.1,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_lane_low_after.png",
+    "p5": 10.7,
+    "p50": 37.3,
+    "p95": 57,
+    "meanC": 10.4,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "base_aubade",
+   "world": [
+    14.5,
+    55
+   ],
+   "before": {
+    "file": "rift_base_aubade_before.png",
+    "p5": 11.8,
+    "p50": 37.4,
+    "p95": 53.1,
+    "meanC": 11.1,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_base_aubade_after.png",
+    "p5": 23.7,
+    "p50": 52.8,
+    "p95": 63.4,
+    "meanC": 11.5,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "jungle_a_glasshorn",
+   "world": [
+    61.6,
+    41.5
+   ],
+   "before": {
+    "file": "rift_jungle_a_glasshorn_before.png",
+    "p5": 2.9,
+    "p50": 13.1,
+    "p95": 36.2,
+    "meanC": 8.6,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_jungle_a_glasshorn_after.png",
+    "p5": 6.7,
+    "p50": 23.8,
+    "p95": 51.3,
+    "meanC": 8.3,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "jungle_s_gloamoths",
+   "world": [
+    105.7,
+    24.9
+   ],
+   "before": {
+    "file": "rift_jungle_s_gloamoths_before.png",
+    "p5": 2.1,
+    "p50": 9.9,
+    "p95": 20.9,
+    "meanC": 4.1,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_jungle_s_gloamoths_after.png",
+    "p5": 4.8,
+    "p50": 18.8,
+    "p95": 30.1,
+    "meanC": 4,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "river_north",
+   "world": [
+    85,
+    43
+   ],
+   "before": {
+    "file": "rift_river_north_before.png",
+    "p5": 3.2,
+    "p50": 13.6,
+    "p95": 39.3,
+    "meanC": 9.2,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_river_north_after.png",
+    "p5": 7.4,
+    "p50": 26,
+    "p95": 54.6,
+    "meanC": 10.3,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "pit_longshade",
+   "world": [
+    85,
+    31
+   ],
+   "before": {
+    "file": "rift_pit_longshade_before.png",
+    "p5": 2.5,
+    "p50": 11.5,
+    "p95": 17.5,
+    "meanC": 8,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_pit_longshade_after.png",
+    "p5": 5.7,
+    "p50": 22.1,
+    "p95": 30.8,
+    "meanC": 9.8,
+    "lod2": 0
+   }
+  },
+  {
+   "spot": "fight",
+   "world": [
+    94.22213352213518,
+    11.672617347676239
+   ],
+   "before": {
+    "file": "rift_fight_before.png",
+    "p5": 4.3,
+    "p50": 19.2,
+    "p95": 41.5,
+    "meanC": 10,
+    "lod2": 0
+   },
+   "after": {
+    "file": "rift_fight_after.png",
+    "p5": 10.8,
+    "p50": 31.4,
+    "p95": 56.1,
+    "meanC": 10,
+    "lod2": 0
+   }
+  }
+ ]
+}

@@ -75,8 +75,8 @@ async function rift() {
     await rec.snap2('minimap_crop', 'minimap crop', { clipSel: '.hud__map' });
     await p.mouse.move(980, 520);
     await rec.snap2('ping_wheel', 'ping wheel (G held 0.5 s)', { before: async (pg) => { await pg.mouse.move(980, 520); await pg.keyboard.down('KeyG'); await pg.waitForTimeout(600); }, after: async (pg) => { await pg.keyboard.up('KeyG'); } });
-    await p.mouse.click(1250, 420, { button: 'right' }); await wait(p, 120);
-    await rec.snap1('click_marker', 'right-click move marker 120 ms after the click');
+    await p.mouse.click(1250, 420, { button: 'right' });
+    await rec.snap1('click_marker', 'right-click move marker, shot as soon as the click returns');
     await setScale(rec, 4);
     const got = new Set(); const t0 = Date.now(); let st;
     while (Date.now() - t0 < 12 * 60 * 1000) {
@@ -143,7 +143,33 @@ async function post() {
   await rec.finish();
 }
 
-const parts = { rift, fray, post };
+/** the death recap in its first and settled frames (seed 11 reaches a death; same route as ux_run dead) */
+async function dead() {
+  const rec = new Rec('w2e_dead'); await rec.open('/?dev=1&autopilot=match&speed=1&seed=11', { base: DEV });
+  const p = rec.page; await homeReady(rec);
+  try {
+    await toMatch(rec, 'rift', 'Lantern Drill', 'rift');
+    await setScale(rec, 8);
+    const t0 = Date.now(); let st;
+    while (Date.now() - t0 < 14 * 60 * 1000) {
+      await wait(p, 200); st = await poll(rec); if (!st || st.ended) break;
+      if (st.dead) {
+        await setScale(rec, 1); rec.step('dead'); await wait(p, 1700);
+        await rec.snap2('dead_recap', `dead, respawn in ${st.respawnIn?.toFixed?.(1)} s, 1.7 s after the death (x1; t=${st.time})`);
+        await wait(p, 1500); await rec.snap2('dead_later', 'dead, 3 s after the death');
+        const hasMore = await p.evaluate(() => !!document.querySelector('.recap__more'));
+        if (hasMore) { await p.locator('.recap__more').click().catch(() => {}); await wait(p, 300); await rec.snap2('dead_recap_expanded', 'recap with all sources shown'); }
+        await p.keyboard.press('KeyP'); await wait(p, 800); await rec.snap2('dead_shop', 'shop opened while dead'); await p.keyboard.press('KeyP');
+        rec.obs('death', { time: st.time, respawnIn: st.respawnIn });
+        break;
+      }
+    }
+    rec.obs('last poll', st);
+  } catch (e) { rec.obs('dead failed: ' + String(e).slice(0, 240)); await rec.snap1('FAILED', 'state at failure').catch(() => {}); }
+  await rec.finish();
+}
+
+const parts = { rift, fray, post, dead };
 if (!parts[part]) { console.error('part? ' + Object.keys(parts).join(' | ')); process.exit(2); }
 await deadline(part, 40 * 60 * 1000, parts[part]);
 process.exit(0);

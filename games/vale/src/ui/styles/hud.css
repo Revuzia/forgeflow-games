@@ -331,7 +331,7 @@
 .aslot__cost.is-short { color: var(--team-enemy); }
 .aslot__charges { position: absolute; right: 4px; top: 3px; z-index: 3; font-size: 12px; font-weight: 700; color: var(--chalk-hi); text-shadow: 0 1px 2px var(--ink-0); }
 .aslot__recast { position: absolute; inset: 2px; z-index: 3; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--dawnglass-inlay), inset 0 0 12px rgba(191, 211, 230, 0.4); pointer-events: none; }
-.aslot__pips { position: absolute; left: 50%; bottom: calc(-12 * var(--px)); transform: translateX(-50%); z-index: 3; display: flex; gap: 3px; height: max(3px, calc(3 * var(--px))); }
+.aslot__pips { position: absolute; left: 50%; bottom: calc(-6 * var(--px)); transform: translateX(-50%); z-index: 3; display: flex; gap: 3px; height: max(3px, calc(3 * var(--px))); }
 /* W2-E CUX-12: 7 x 3 px hour-ticks (5 x 3 at 1366), a 1 px ink keyline, Noonwhite when owned and 25 % Noonwhite when not, under the slot's edge */
 .aslot__pips i { display: block; width: max(5px, calc(7 * var(--px))); height: 100%; background: rgba(244, 239, 226, 0.25); box-shadow: 0 0 0 1px #07090C; transform: skewX(-20deg); }
 .aslot__pips i.is-on { background: #F4EFE2; box-shadow: 0 0 0 1px #07090C, 0 0 4px rgba(255, 248, 234, 0.4); }

@@ -35,7 +35,7 @@ const MAX_PER_TARGET = 4;
 /** damage numbers by amount: 15 px (a graze) to 26 px (350+), a crit a third larger (1080p reference px) */
 const popPx = (amount: number, crit: boolean): number => (15 + 11 * Math.min(1, Math.sqrt(Math.max(0, amount) / 350))) * (crit ? 1.3 : 1);
 const POP_MS = { damage: 900, heal: 1100, gold: 1100 } as const;
-const MARKER_MS = 700;
+const MARKER_MS = 900;
 const PING_MS = 4000;
 /** overhead anchor for numbers (metres above the ground) */
 const HEAD_M = 2.3;
@@ -179,9 +179,9 @@ export function WorldLayer(p: { marks: WorldMarks }): JSX.Element {
         if (t >= 1) { mk.el.remove(); marks.delete(id); continue; }
         const e = mk.m.target !== undefined ? v.entity(mk.m.target) : undefined;
         const s = toScreen(e ? e.x : mk.m.x, e ? e.y : mk.m.y, 0);
-        const k = mk.m.kind === 'attack' ? 1.25 - 0.35 * easeOut(t) : 1 - 0.55 * easeOut(t);
+        const k = mk.m.kind === 'attack' ? 1.25 - 0.3 * easeOut(t) : 1.15 - 0.4 * easeOut(t);
         mk.el.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) translate(-50%, -50%) scale(${k.toFixed(3)}, ${(k * GROUND_SQUASH).toFixed(3)})`;
-        mk.el.style.opacity = String(t < 0.45 ? 1 : 1 - ((t - 0.45) / 0.55) ** 2);
+        mk.el.style.opacity = String(t < 0.55 ? 1 : 1 - ((t - 0.55) / 0.45) ** 2);
       }
       // team pings
       const live = model.pings.peek();

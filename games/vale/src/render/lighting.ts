@@ -47,13 +47,15 @@ export function applyCharTone(): void {
   worldUniforms.valeCharAo.value.set(on ? t.aoWeight : 1, on ? t.knee : 0, on ? t.ceiling : 0, 0);
 }
 /** orch1 W2-A GFX-1 (owner ruling 46): the environment value re-key (world_material.ts valeRekey), the same on every map.
- *  The world's display L* goes through L*' = 100 (L* / 100)^lstarExp, easing back to the identity over easeL (lamps and
- *  highlights keep their value), its chroma × chroma (a keep-colour surface, the Standing Shadow: × shadowChroma, GFX-5).
- *  0.645 lands the r12 B5 bands on the ruling's: lanes 36-41 → 51-56 (50-58), jungle floor 12-20 → 26-35 (28-34), wall
- *  faces 12-16 → 26-31 (24-30). height (GFX-13): low ground (y ≤ lowY) cooler and darker, high ground (y ≥ highY)
+ *  The world's display L* goes through L*' = 100 gain (L* / 100)^lstarExp, easing back to the identity over easeL (lamps
+ *  and highlights keep their value), its chroma × chroma (a keep-colour surface, the Standing Shadow: × shadowChroma, GFX-5).
+ *  Fitted on the measured RIFT r12 B5 key (value_probe): lanes 37.9 → ~51 (band 50-58, its foot, so the HARM telegraph
+ *  edge keeps >= 2:1 on the lane), jungle floor 14.3 → ~29.5 (28-34), wall faces 13.1 → ~28 (24-30). The power alone
+ *  (0.645, gain 1) put lanes at 53.5 and the HARM edge at ~1.9:1. height (GFX-13): low ground (y ≤ lowY) cooler and darker, high ground (y ≥ highY)
  *  warmer, before the re-key. Characters never take any of it (world_material.ts valeEnvRekey). */
 export const ENV_KEY = {
-  lstarExp: 0.645,
+  lstarExp: 0.562,
+  gain: 0.879,
   chroma: 0.75,
   easeL: [60, 88] as const,
   shadowChroma: 1.35,
@@ -64,6 +66,7 @@ export const envKeySwitch = { on: true };
 export function applyEnvKey(): void {
   const W = worldUniforms, K = ENV_KEY, on = envKeySwitch.on;
   W.valeEnvKey.value.set(on ? K.lstarExp : 1, on ? K.chroma : 1, K.easeL[0], K.easeL[1]);
+  W.valeEnvGain.value = on ? K.gain : 1;
   W.valeEnvKey2.value.set(on ? K.shadowChroma : 1, on ? K.height.strength : 0, K.height.lowY, K.height.highY);
   W.valeHeightLo.value.setRGB(K.height.low[0], K.height.low[1], K.height.low[2]);
   W.valeHeightHi.value.setRGB(K.height.high[0], K.height.high[1], K.height.high[2]);
