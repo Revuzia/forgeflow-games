@@ -1,0 +1,107 @@
+{
+  "verifier": "orch1 adversarial verifier, controls round 3, SIM lens (headless deterministic sim; real src/sim movement, bodypath, nav, attack, projectiles, minions and real src/render/pick.ts; no browser)",
+  "target": "commit 4c0a3e365, rulings 39 / 41 / 43 (attack in place, allied-Wick pass-through, stuck-click snap rescue, passOwn Wicks, fighters-only ground shots, no strip seal)",
+  "owner_complaint": "vale has path finding issues as far as clicking. it starts to run around on its own almost. also its hard to target specific minions/targets; allow me to hold shift and click left to SHOOT, even if its in any direction",
+  "at": "2026-11-17T09:12:00-06:00",
+  "build": "Clean detached worktree of 4c0a3e365 (sparse: games/vale only; node_modules symlinked). OFF arm for paired A/B: a second clean worktree of 4c0a3e365 with this lane's sim files (attack, bodypath, core, entity, movement, nav, projectiles, units/minions, world) checked out at 526f88325^ (before ruling 39); the bots code is identical in both arms. No edits to src/, content/, art/ or audio/. Every run went through art/blender/common/heavy.py.",
+  "harness": "verify_controls_sim_orch.ts copied as _vfy5_orch.ts with seed env only (WALLS_SEED/WALLS_RS, WAVES_SEEDS, HELD_SEEDS, PICK_SEED, DET_SEED/DET_WHO/DET_RS) plus a 'stuck' tag on wall clicks (straight walk gains < 1 m); _tmp_vfy_ctl_r4_wallclick.ts (the r3 wallclick sweep + SIMSEED/RSEED) with a BODYFREE=1 switch that kills Wicks and monsters every tick; new _vfy5_attackat_real.ts (attackAt fuzz on the real RIFT/BRIDGE maps with live waves); the r3/r4 attackAt fuzzes with a seed offset (S0). Scratch copies only, not committed.",
+  "pass": true,
+  "score": 8.0,
+  "safeToShip": true,
+  "verdict": "Rulings 39, 41 and 43 hold in the sim on fresh seeds. There are no blockers. Stuck wall clicks: 0 gate-A fails body-free on 10,240 + 800 clicks. The same body-free sweep on the pre-ruling-39 lane files gives 28 gate-A fails, 13 near-dead and 2 dead clicks. Wave clicks: 2,176 a map (seeds 41, 57, 61, 77, 83, 97, 111, 123) with 0 dither, 0 detours, 0 walks away from the goal and 1 RIFT short end (2.44 m: an enemy wave walked into the path and stopped). Held moves: 0 unforced regressions, early or late. Pick truth: 0 wrong of 3.21 M pair clicks and 217,673 clump clicks. attackAt: the hero never walks unshoved in 1,920 real-map presses, 0 shots past reach, 0 Z presses that damage a non-fighter. Determinism: identical twice on RIFT and BRIDGE for 2 streams each. Strict still-Wick sweep: 0 / 0 on fresh seeds 411-416 (36 games). The full soak reproduces ruling 43's failing gates value for value. None of them is this lane's except the BRIDGE median length. In a paired A/B over 280 games the lane shortens BRIDGE by 0.57 min (s.e. 0.29), which contradicts ruling 43's 'BRIDGE is not shortened'. The pooled median is still in band (15.3 vs 15.85 min) and the RIFT adept pace is better with the lane. Every player-visible movement measure is better than the pre-ruling-39 controls on the same seeds. Minors: a Z re-press during a plain targeted windup on a Wick still lands on the Wick; 5 of 794 ground shots clip a wall corner by <= 0.26 m.",
+  "blockers": [],
+  "majors": [],
+  "minors": [
+    {
+      "id": "BRIDGE-SHORTER",
+      "summary": "This lane shortens BRIDGE bot games by 0.57 min (s.e. 0.29, 280 paired games, same bots code, seeds 1-140 adept + veteran). Pooled median is 15.32 with the lane vs 15.85 without (gate 15-18 min). Adept 14.39 vs 15.39 (-0.63 +- 0.38); veteran 15.88 vs 16.55 (-0.50 +- 0.43). The seeds 1-20 set fails the gate at 14.8 (OFF 16.3); seeds 21-40 pass at 15.8 (OFF 15.3); seeds 41-140 pass at 15.2 (OFF 15.8). Ruling 43 measured only passOwn in isolation (+0.21); the whole lane against pre-ruling-39 is about 2 s.e. shorter. Reported, not relaxed. It is a pace gate, not a control the player feels."
+    },
+    {
+      "id": "Z-REPRESS-WINDUP",
+      "summary": "A plain Shift+left on a Wick (targeted windup), then within the 0.27 s windup a Z+Shift+left elsewhere: the windup still lands on the Wick (r4 verifier's _tmp_vfy_ctl_r4_attackat 'after a Z re-press the Wick windup does not land' FAILS: wick hits 1, fighter hits 0; _tmp_vfy_ctl_r4_reaim r4_archer first=attackAt newPress z=true -> Wick hits 1). The re-press re-aims without restarting the windup (ruling 41), but its fighters-only flag does not drop a non-fighter windup target. That is one attack in a 0.27 s window, against ruling 43's 'a swing / shot under Z hits only a fighter'."
+    },
+    {
+      "id": "SHOT-CORNER-CLIP",
+      "summary": "On the real maps, 5 of 794 aimed ground shots crossed non-wall-free ground for 0.02-0.26 m (RIFT dunsom x2, odrum x2, vashil; speeds 18-20 m/s, cell 0.5 m). projectiles.ts tests walls only at each tick's step end (0.6-0.67 m steps), so a shot can cut a wall corner. None crossed more than 0.26 m. No hit through a wall was observed, and the r3 fuzz 'no hit through the wall' passes. This step-end test is the projectile system's, older than ruling 39; ground shots inherit it."
+    },
+    {
+      "id": "WAVE-ENEMY-WALL-SHORT",
+      "summary": "Waves sampler, fresh seeds 61/77/97: RIFT 1 / 816 single clicks ended 2.44 m short of an uncrowded goal with a 1.26x lane at the start (ilsheta s61 t1998). WDIAG trace: from q6 to q12 four enemy Wicks walked into the line and stood (v 0) across it at y ~ 14, between a structure disc and the goal. The hero pressed through them at 0.05-0.1 m a tick and the no-progress windows ended the move. This is an enemy body block that formed after the click (ruling 43 reads such cases as body blocks). The same seeds under the pre-ruling-39 files gave 1 short move at 6.96 m on RIFT. Fresh seeds 41/57/83/111/123 (1,360 a map) gave 0 on every waves gate."
+    },
+    {
+      "id": "STUCK-CLICK-WAY-ROUND",
+      "summary": "Walls sweep (fresh WALLS_SEED 23, 2,200 clicks a map, 5 radii): far 0 / 0, but long 3 / 4 and away 0 / 2 (RIFT / BRIDGE). Every one is a stuck click: ruling 43's rescue walks round to the nearest open point. The worst walks were 30.8 m against 15.4 m net (RIFT ilsheta deep) and 1.76 m away from the click (BRIDGE ervet). Non-stuck: 0 / 0 / 0. The pre-ruling-39 files give 0 / 0 / 0 on this sweep, but their stuck clicks are the dead / near-dead clicks in the snap sweep (28 gate-A fails). A rescue walk of up to 2x straight + 2 m round an obstacle can read as 'runs around on its own' to a player. That cap is by design (ruling 41)."
+    },
+    {
+      "id": "LATE-HELD-REVERSALS-FORCED",
+      "summary": "Held after 8:00 with all seats played (seeds 31 / 43, 384 a map): 3+ reversals 1 / 7, 5+ reversals 0 / 1 (BRIDGE sukri s43 k9, 5). All of them are tagged forced (an enemy's CC or a shove faster than the walk). Unforced regress > 1 m: 0 / 0. Same seeds pre-ruling-39: 3+ reversals 8 / 9, 5+ 1 / 2, revMax 7 / 8, unforced regress 0 / 2, uncrowded short 0 / 2."
+    },
+    {
+      "id": "PROBE-SUITE-2-FAILS-NOT-THIS-LANE",
+      "summary": "Probe suite in the clean worktree: 73 / 75. probe_cdn_headers fails only because the sparse worktree has no workers/ tree (ERR_MODULE_NOT_FOUND games-cdn/src/index.js), which is an environment artifact. probe_sim_bot_tactics fails veteran 'inner+base falls to Wicks alone beside two fit defenders' at 1.31 a game (bar 1.1). Paired: pre-ruling-39 files give 1.50 on the same gate seeds; fresh RIFT seeds 201-248 give 1.08 ON vs 1.13 OFF. So it is the bots lane's, and this lane slightly lowers it. Every control probe passes: attack_at, click_waves, wall_click_snap, wall_click_stuck, wick_still, minion_flow, hold_tower, core_orders, core_nav, input_pick_truth, input_shoot, input_clicks."
+    }
+  ],
+  "measured": {
+    "wall_clicks_orch_walls": {
+      "seed": "WALLS_SEED 23, WALLS_RS 91711 (verifier default was 5 / 31337); 320 shallow + 120 deep per radius per map, radii 0.68 / 0.62 / 0.60 / 0.55 / 0.50",
+      "ON_4c0a3e365": {"rift": {"n": 2200, "far": 0, "long": 3, "away": 0, "notStuck_far_long_away": [0, 0, 0], "open": 0, "worstFar_m": 0.58, "worstAway_m": 0.68}, "bridge": {"n": 2200, "far": 0, "long": 4, "away": 2, "notStuck_far_long_away": [0, 0, 0], "open": 0, "worstFar_m": 0.82, "worstAway_m": 1.76}},
+      "OFF_pre_r39": {"rift": {"n": 2200, "far": 0, "long": 0, "away": 0, "open": 0}, "bridge": {"n": 2200, "far": 0, "long": 0, "away": 0, "open": 0}}
+    },
+    "stuck_click_snap_sweep_r3_r4_verifier": {
+      "gate": "a stuck click (straight walk gains < 1 m), with an open point within 2.5 m reachable at <= 2x straight + 2 m, must end within that point's distance + 1.2 m (A); never end further from the click than it started (B)",
+      "ON_bodyfree_SIMSEED71_RSEED99173": {"clicks": 10240, "gated": 824, "A": 0, "B": 0, "nearDead": 0, "dead": 0, "A_with_body": 1, "note": "the one body case is an enemy fighter parked at its BRIDGE spawn (dunsom, 146.47,24.65)"},
+      "ON_bodyfree_SIMSEED63_RSEED8117": {"clicks": 800, "gated": 72, "A": 0, "B": 0, "nearDead": 0, "dead": 0},
+      "ON_live_waves_SIMSEED71": {"clicks": 10240, "gated": 843, "A": 0, "B": 0, "nearDead": 0, "dead": 0, "A_with_body": 5},
+      "ON_live_waves_SIMSEED63": {"clicks": 800, "A": 0, "B": 0, "A_with_body": 1},
+      "OFF_pre_r39_bodyfree_SIMSEED71": {"clicks": 10240, "gated": 824, "A": 28, "B": 0, "nearDead": 13, "dead": 2},
+      "info_not_gated": "clicks whose straight walk gained >= 1 m and ended > 1.2 m past such an open point: 34 body-free and 89 live of 10,240 (not covered by ruling 41 / 43)"
+    },
+    "waves_single_clicks": {
+      "seeds_61_77_97_ON": {"rift": {"n": 816, "dither": 0, "shortOfOpenGoalWithLane": 1, "endedOver2mShortUncrowded": 1, "reversals": 6, "revMax": 1, "awayFromGoal": 0, "detourOverLane1_3p1": 0, "orderRestartedAfterEnd": 0, "ratioP95": 1.21, "vsLaneMax": 1.29}, "bridge": {"n": 816, "dither": 0, "shortOfOpenGoalWithLane": 0, "endedOver2mShortUncrowded": 0, "reversals": 9, "revMax": 1, "awayFromGoal": 0, "detourOverLane1_3p1": 0, "ratioP95": 1.18, "vsLaneMax": 1.21}},
+      "seeds_61_77_97_OFF_pre_r39": {"rift": {"n": 816, "shortOfOpenGoalWithLane": 1, "endedOver2mShortUncrowded": 1, "reversals": 33, "revMax": 3, "awayFromGoal": 1, "detourOverLane1_3p1": 2, "ratioP95": 1.33, "vsLaneMax": 1.92}, "bridge": {"n": 816, "shortOfOpenGoalWithLane": 0, "endedOver2mShortUncrowded": 0, "reversals": 50, "revMax": 2, "awayFromGoal": 1, "detourOverLane1_3p1": 9, "ratioP95": 1.36, "vsLaneMax": 1.76}},
+      "seeds_41_57_83_111_123_ON": {"rift": {"n": 1360, "dither": 0, "shortOfOpenGoalWithLane": 0, "endedOver2mShortUncrowded": 0, "reversals": 21, "revMax": 2, "awayFromGoal": 0, "detourOverLane1_3p1": 0, "orderRestartedAfterEnd": 0, "ratioP95": 1.22, "vsLaneMax": 1.28}, "bridge": {"n": 1360, "dither": 0, "shortOfOpenGoalWithLane": 0, "endedOver2mShortUncrowded": 0, "reversals": 11, "revMax": 2, "awayFromGoal": 0, "detourOverLane1_3p1": 0, "ratioP95": 1.17, "vsLaneMax": 1.35}}
+    },
+    "held_sweeps": {
+      "early_4_00_idle_seats_seeds_31_43_ON": {"rift": {"n": 384, "rev3": 0, "regress1": 0, "worstRegress": 0.37, "shortUncrowded": 0, "boxedIn": 0, "arriveP50_s": 2.33, "arriveP95_s": 3.27}, "bridge": {"n": 384, "rev3": 0, "revMax": 1, "regress1": 0, "worstRegress": 0.7, "shortUncrowded": 0, "arriveP50_s": 2.47, "arriveP95_s": 3.33}},
+      "late_8_00_bots_seeds_31_43_ON": {"rift": {"n": 384, "rev3": 1, "rev5": 0, "revMax": 3, "regress1_all": 18, "forcedMoves": 87, "regress1_unforced": 0, "shortUncrowded": 0, "boxedInShort": 1, "arriveP50_s": 2.57}, "bridge": {"n": 384, "rev3": 7, "rev5": 1, "revMax": 5, "regress1_all": 34, "forcedMoves": 108, "regress1_unforced": 0, "shortUncrowded": 0, "boxedInShort": 0, "arriveP50_s": 2.87}},
+      "late_8_00_bots_seeds_31_43_OFF_pre_r39": {"rift": {"rev3": 8, "rev5": 1, "revMax": 7, "regress1_all": 21, "regress1_unforced": 0, "shortUncrowded": 0, "arriveP50_s": 2.77}, "bridge": {"rev3": 9, "rev5": 2, "revMax": 8, "regress1_all": 42, "regress1_unforced": 2, "shortUncrowded": 2, "worstShortUncrowded_m": 5.71, "arriveP50_s": 3.07}}
+    },
+    "pick_truth": {"PICK_SEED": 8821, "pairs": {"clicks": 3211006, "wrong": 0}, "clumps": {"clicks": 217673, "wrong": 0}},
+    "attackAt": {
+      "real_maps_fuzz_seed_4401": {"presses": 1920, "fighters_only_presses": 977, "ground_shots": 794, "melee_swings": 960, "moved_over_5cm_with_no_body_touching": 0, "moved_while_a_body_touched": 108, "worstMove_m": 0.59, "shots_past_reach": 0, "worst_shot_minus_reach_m": -0.2, "shots_crossing_non_wall_free_ground": 5, "worst_crossing_m": 0.26, "fighters_only_press_damaged_a_non_fighter": 0, "more_than_one_attack_per_press": 0},
+      "probe_sim_attack_at": "56 / 56",
+      "r3_verifier_fuzz_seeds_9001_9400": "25 / 25 (reach, wall, one attack per press, attack speed, digest twice)",
+      "r4_verifier_fuzz_seeds_7001_7300": "28 / 29: the Z re-press mid-windup case fails (minor Z-REPRESS-WINDUP); fighters-only shot and swing pass Wicks, fog / invisible / ally pass, timing, statuses, facing, 0 invariant violations, digest identical"
+    },
+    "wicks": {
+      "strict_still_sweep_probe_sim_wick_still_seeds_411_416": {"games": 36, "maps": "rift, bridge", "scenarios": "bots, idle, mixed", "still6": 0, "long12": 0},
+      "probe_sim_minion_flow": {"stuck": 0, "idle": 0, "frozen_in_attack_order": 0}
+    },
+    "determinism": {
+      "DET_SEED_53_lisvel": {"rift": "6ca87da3 / a526b03d identical twice", "bridge": "1d64947f / 1f4ae8fc identical twice"},
+      "DET_SEED_17_ulkro": {"rift": "dbf54927 / 1f8eb718 identical twice", "bridge": "2599a1ec / 6fc2bce9 identical twice"}
+    },
+    "probe_suite": "73 / 75 in the clean worktree (943 s): probe_cdn_headers (sparse worktree has no workers/ tree) and probe_sim_bot_tactics veteran Wick-falls 1.31 vs 1.1 (bots lane; OFF 1.50)",
+    "full_soak": {
+      "runs": "--full --lineup shuffle, seeds 1-20 and 21-40, 360 matches each, bot faults 0 in all four runs (ON and OFF)",
+      "ON_4c0a3e365_failing": {"s1": ["[early] RIFT veteran death-free stretch 3.2 min (<= 3)", "[bridge] BRIDGE median 14.8 min (15-18)", "[fray] placement nurrow 3.08"], "s21": ["[laning] laners in lane veteran 65.0 % (>= 65)", "[early] RIFT adept death-free stretch 3.0 min", "[fray] placement nurrow 3.08, burdam 3.48"]},
+      "ON_matches_ruling_43_report": "yes, value for value (deterministic)",
+      "OFF_pre_r39_same_bots_failing": {"s1": ["[fray] nurrow 3.21"], "s21": ["[early] RIFT adept stretch 3.1 min", "[pace] RIFT adept p90 35.0 min", "[fray] nurrow 3.21"]},
+      "pre_r39_baseline_reports_orch1vsim_098ac7436_era_bots": {"s1": ["[early] RIFT veteran stretch 3.4 min", "[fray] ulkro 3.27, nurrow 3.48"], "s21": ["[fray] ulkro 3.29"]},
+      "attribution": {
+        "fray_placement": "pre-existing (fails in every arm and the 098ac7436 baseline): kit balance, not this lane",
+        "RIFT_veteran_stretch_s1": "noise: ON 3.2 vs OFF 2.8 on 1-20, but ON 2.6 vs OFF 2.9 on 21-40 and ON 3.0 vs OFF 2.9 on 41-60 (both pass); the 098ac7436 baseline failed it at 3.4",
+        "RIFT_adept_stretch_s21": "pre-existing: ON 3.0, OFF 3.1 (both fail); seeds 41-60 ON 2.7 / OFF 2.8 pass",
+        "laners_in_lane_veteran_s21": "no shift: ON / OFF 65.4 / 65.5 (1-20), 65.0 / 65.2 (21-40), 65.3 / 65.2 (41-60); bots lane",
+        "BRIDGE_median_s1": "this lane, partly: paired A/B over 280 games: -0.57 min (s.e. 0.29), pooled median 15.32 vs 15.85 (minor BRIDGE-SHORTER)",
+        "RIFT_adept_pace": "this lane helps: ON passes 29.3 / 30.0 / 30.3 on seeds 1-20 / 21-40 / 41-60, OFF 30.0 / 35.0 FAIL / 32.8 FAIL; paired over 80 adept games -1.22 min (s.e. 0.67)"
+      },
+      "other_gates_ON_vs_OFF": "veteran beats novice 37 + 38 / 80 vs 39 + 37; veteran beats adept 28 + 30 vs 32 + 26; BRIDGE sudden death 6 + 6 / 80 vs 8 + 4, 26 / 200 vs 34 / 200; Wicks last-hit by fighters before 14:00 46-47 % vs 44-46 %"
+    }
+  },
+  "safe_to_ship_basis": "Compared with the pre-ruling-39 controls (the live 098ac7436-era lane files) on the same seeds and the same bots code. Stuck wall clicks: 28 gate-A / 13 near-dead / 2 dead -> 0 / 0 / 0. Wave clicks: detours 2 / 9 -> 0 / 0, walked away 1 / 1 -> 0 / 0, reversals 33 / 50 -> 6 / 9, short 1 / 0 -> 1 / 0 (2.44 m vs 6.96 m). Late held: 3+ reversals 8 / 9 -> 1 / 7, unforced regress 0 / 2 -> 0 / 0, uncrowded short 0 / 2 -> 0 / 0. Pick truth: 0 wrong (098ac7436 had 216 / 15). Attack in place is new and works. Two things are not strictly better. First, wall clicks that are stuck now walk round (long / away on 9 of 4,400 clicks, worst 1.76 m away), where before they ended short or did nothing. Second, BRIDGE bot games run 0.57 min shorter, which is a pace gate rather than a control.",
+  "evidence_files": [
+    "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vfy5/ (every log and json named in this verdict; scratch, not durable)",
+    "soak reports in the scratch worktrees: wt_r3sim/games/vale/_harness/_reports/fw_W4_soak_vfy5_s1|_s21|ab_br_on|ab_rift_on.json and wt_r3simoff/.../fw_W4_soak_vfy5off_s1|_s21|ab_br_off|ab_rift_off.json"
+  ]
+}
