@@ -1,0 +1,43 @@
+{
+ "verifier": "orch1 adversarial verifier, LIVE lens, controls round 3 (headless Chrome 1920x1080, real CDP mouse and keys, practice with a sparring partner, structures ON, waves ON, harness heal)",
+ "target": "commit 4c0a3e365 (rulings 39, 41, 43), served from a clean worktree of 4c0a3e365 (own vite :5397); baseline = 098ac7436 (live-game era controls, before ruling 39) from a clean worktree (own vite :5398). Both servers stopped after the runs.",
+ "at": "2026-11-17T07:35-06:00",
+ "pass": false,
+ "score": 6.9,
+ "safeToShip": true,
+ "harness": {
+  "main": "_vfy_ctl_r3L.mjs <fighter> <rift|bridge> (in the worktree, not committed): RIFT phases 1:00-9:00, BRIDGE phases 1:00-3:30 (BRIDGE practice ends ~3:45-4:15 when our waves take the enemy core against one sparring fighter, so each BRIDGE run stops there)",
+  "extra": "_vfy_ctl_r3L_bind.mjs (settings rebind + help text), _vfy_ctl_r3L_farpick.mjs and _vfy_ctl_r3L_ghostpick.mjs (empty-ground clicks that pick an off-screen enemy)",
+  "raw": "scratchpad r3L/final (10 runs head), r3L/out_base (3 runs base), r3L/out_head3/r3L_farpick.json, r3L/ghost2 (head + base grid probe)",
+  "shots": "_harness/_shots/orch1_ctl_r3_live/ (gitignored)"
+ },
+ "blockers": [
+  {
+   "id": "FAR-PICK",
+   "severity": "blocker (pre-existing, also in 098ac7436)",
+   "what": "A right-click on open ground can pick an enemy Wick that is 45-70 m away and far off the screen, so the hero runs off to attack it. This is the owner's complaint that the hero 'runs around on its own'.",
+   "evidence": [
+    "farpick probe, RIFT, ground click by the outer Needle at (61.38,51.58): sent attack target 2567, a greatwick at (67.1,96.8), 45.6 m away, whose feet project to screen (34869,256891) px; at (63.32,47.27) sent attack 5633, a shieldwick at (111.2,96.5), 68.7 m away. 10 of 70 samples picked an off-screen Wick at y ~96 (bottom lane).",
+    "wall sweep, head: 5 of 45 RIFT wall clicks by needle_outer picked an off-screen minion and chased it 2.7-33.7 m (ulkro 33.7 m, ervet 32.8, tunlan 28.1, dunsom 17.9, lisvel 2.7)",
+    "wall sweep, base 098ac7436: 6 of 27 did the same (lisvel 32.3 and 31.8 m, tunlan 32.4 and 15.9, ervet 20.5 and 6.3). Same 3 fighters at head: 3 of 27.",
+    "grid probe (1010 points every ~7 s, 1:00-9:00, hero beside each allied structure): an earlier head run hit 154 of 1010 points at 3:39 (needle_bell spot, greatwick 846 at (77.9,99.9)); the reruns found 0 of 66 samples (head) and 0 of 65 (base). It is intermittent and depends on where Wicks stand relative to the camera."
+   ],
+   "likelyCause": "render/pick.ts pickUnit culls a unit only when its feet project behind the camera (_p.z > 1). A unit just in front of the camera plane but far outside the frustum projects to huge screen values, and its head and ring points can flip, so its pick box covers much of the screen. Not changed by 4c0a3e365: the pick.ts diff against 098ac7436 is the 4 px head trim only."
+  }
+ ],
+ "problems": [
+  "Shift+left on an enemy in range: 21 of 26 ok. 2 sent the neighbour in a clump (dunsom 3710->3711, tunlan 845->844). 3 started the first swing on a different unit than the one sent (lisvel 849->851, tunlan 841->842, ervet 291->806), 0.94-1.16 s after the command. Drift was 0 every time. 4 trials skipped with no foe in range.",
+  "BRIDGE: no wall clicks were measured and holds were only 14 (the match ends ~3:45-4:15 against one sparring fighter).",
+  "One plain RIFT click (ervet 1:20, inside a crowd of 4 enemies) ended 1.98 m short, with a 1.97 crawl. Base has the same case: 1.93 m short at 1:21."
+ ],
+ "measures": {
+  "rightClickMove": {"head": "74 clicks (RIFT 49, BRIDGE 25), >2 m short 0, max end 1.98 m, reversals >=3: 0, mean path ratio 1.034 (max 1.37), max regress 0.62 m", "base_3_fighters": "25 clicks, >2 m 0, max 1.93, mean ratio 1.05", "head_same_3": "30 clicks, >2 m 0, max 1.98, mean ratio 1.013"},
+  "heldRightThroughFights": {"head": "49 holds (23 touching enemies), >2 m short 0, max end 0.56 m, reversals >=3: 0 (HOLD-DITHER gone; no hold with even 2), crawl >1.5: 0, max ratio 1.5, max regress 0.96 m", "base_3_fighters": "20 holds, max end 0.11 m, rev>=1 6, max regress 1.04", "head_same_3": "20 holds, max end 0.56 m, rev>=1 8, max regress 0.93"},
+  "uncommandedMovement": {"head": "0 idle-drift episodes; 0 of 79 idle windows moved >0.3 m; 0 uncommanded order starts over 1963 commands", "base": "2 idle-drift episodes (ervet 2:06, tunlan 4:20, 0.5 m each), 4 of 36 idle windows moved 0.31-0.78 m"},
+  "wallClicks": {"head": "45 RIFT clicks on and just inside walls by towers: stuck 0, short 0, wrong-way 0, max past the open point 0.45 m when no enemy was under the cursor; the 5 others were FAR-PICK", "ervetRepro": "RIFT (64.01,50.92) -> (56.82,44.87), 5 of 5 fighters at 4:19-4:47: a move order every time, ending at (57.75,44.75), 0.94 m from the click and 0.24 m past the open point; walked 10.0-10.4 m round the wall"},
+  "clumpTargeting": {"head": "plain right-click 31/31, Shift+right 26/26, A-click 21/21 on the meant minion; Z 11/11 never sent a minion target (26 trials skipped: no clump)", "base": "12/12, 13/13, 10/10, Z 6/6"},
+  "shiftLeftAttackInPlace": {"inRange": "21/26 ok (see problems), drift <=0.005 m", "noEnemyInRange": "50/50 sent attackAt and threw toward the cursor without moving, drift 0, never a move order", "held": "20/20 ok: repeated aimed attacks with drift 0, aim line drawn while Shift is held, no attack owed after release", "release": "letting go of Shift ends it with no extra shot", "fighters": "lisvel, ulkro, tunlan, dunsom, ervet on RIFT and BRIDGE", "base": "the feature does not exist at 098ac7436 (0 attackAt sent; Shift+left only selects)"},
+  "rebind": "The Settings row 'Attack in place (hold, then left-click)' shows L Shift; it arms, rebinds to V with a toast, then to L Ctrl and back to V. The settings help lists the row. In the match, the hint reads 'Hold V and left-click to shoot in place toward the cursor without moving'. V+left sent attackAt, and Shift+left after the rebind sent nothing."
+ },
+ "verdict": "Round 3 controls work live. HOLD-DITHER does not reproduce: 0 of 49 held moves through packed fights had 3 or more reversals, and the worst ended 0.56 m short. Right-click moves end within 2 m (74/74). The ervet wall repro walks round to 0.94 m from the click. Plain, Shift+right and A-click picked the meant minion in a clump 78/78, and Z never targets a minion. Shift+left attacks in place in every direction with 0 drift on all 5 fighters, and the rebind row and help text work. It still fails on FAR-PICK: an empty-ground right-click near the RIFT outer Needle can pick a Wick 45-70 m off screen and send the hero running 17-34 m. This is the owner's 'runs around on its own'. It is pre-existing (base 6/27 wall clicks, head 5/45), so the round is safe to ship: no player-visible measure is worse than 098ac7436, and idle drift, Shift+left and clump picks are better."
+}
