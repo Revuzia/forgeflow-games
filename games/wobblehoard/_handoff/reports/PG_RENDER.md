@@ -512,3 +512,11 @@ Chunk hashes (git hash-object, first 10): see "Files" at the end of this round.
 | `render/places/ripple.ts` | Ripple's chunk | 7 551 | 7 992 | +441 (12.7 KB of 45) |
 | `render/places/rainleaf.ts` | Rainleaf's chunk | 8 055 | 8 068 | +13 (12.6 KB of 45) |
 (The places' audio and data bytes are round 2's numbers; this run did not re-measure other lanes' modules.)
+
+## Round 3, engineer 2 (started 2026-11-17 00:06 UTC from HEAD bf06cff67; the first round-3 engineer was cut off at R3-11)
+Its render edits are committed in bf06cff67 (`git status` clean for the lane). Its R3-11 run (`r3_pc.log`) ended inside `many` (83 min,
+no summary line): 437 ok, 3 FAIL, 9 KNWN up to "CUT3 A / B minis 24". This part finishes R3-11 (an A/B against the PC's own tree for the three
+FAIL rows), re-runs the PG sections on the committed tree, judges the S2 shots, and writes the missing "Files" list.
+| # | Step | State | Evidence |
+|---|---|---|---|
+| E0 | baseline at bf06cff67: tsc exit 0; `pg_node_checks` **40 ok / 0 FAIL** (35 + N7a..e); no job of mine running | done 00:08 | |
