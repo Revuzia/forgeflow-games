@@ -17,6 +17,7 @@ into bar rows.
     python _harness/p23/gunhold.py --disk --plant reload-off      # the R3B reload layer off (the W9 clip)        - MUST FAIL reload-hand + pistol-reload
     python _harness/p23/gunhold.py --disk --plant gun-in-water    # the held gun not put away on the surface   - MUST FAIL swim
     python _harness/p23/gunhold.py --disk --plant sling-all       # the slung-gun cap removed                  - MUST FAIL swap
+    python _harness/p23/gunhold.py --disk --plant swim-cam-under  # the camera follows the sunk swim body      - MUST FAIL swim-view
     python _harness/p23/gunhold.py --rev 361c5ec3                 # the W10 base (W9 R1 live): every bar row MUST FAIL
 
 Rows (PLAN.md "Lane R1B" acceptance bars; the audit value each replaces in brackets):
@@ -48,6 +49,8 @@ Wave 10 round 3 lane R3B rows (parts reload, swim, swap):
                  its mag well in the mag-in window (<= 0.08 m) ["idle"]
   swim           on the surface (deep water, still then swimming forward): 0 frames with the held or a slung gun visible; Spine2 (chest)
                  below the water surface on every frame after a 0.7 s settle [crouch on water, gun out]
+  swim-view      on every swimming frame of the same run the player's camera stays >= 0.10 m above the water surface and the
+                 game's underwater state (W._underwater: fog / blur / audio low-pass) is off [the camera follows the sunk body]
   swap           a gun swap lowers the barrel >= 25 deg off the aim mid-swap (max over 0.08-0.20 s after the swap); with >= 9 armed
                  two-gun bots on screen within 35 m, 1 <= actors drawing a slung gun <= 8 and = min(8, eligible) [none]
 plus: 0 new programs over the run, 0 page / console errors, 0 failed requests, 0 shader errors, 0 [rig] lines.
@@ -106,6 +109,9 @@ PLANTS = {
     "reload-off": [(RP + "player.js", [("if (rlOn) reloadLayer(W, a, ", "if (false) reloadLayer(W, a, ")])],
     "gun-in-water": [(RP + "player.js", [("&& !a.gliding && !a.swimming && a.alive;", "&& !a.gliding && a.alive;")])],
     "sling-all": [(RP + "player.js", [("const SLING_CAP = 8;", "const SLING_CAP = 999;")])],
+    # verify1 finding: the camera followed the sunk body (obj.position.y += _swimOff) under the surface
+    "swim-cam-under": [(RP + "player.js", [("const eye = fp.y - (fp === focus.obj.position ? focus._swimOff || 0 : 0) + focus._eyeY;",
+                                            "const eye = fp.y + focus._eyeY;")])],
 }
 
 EQUIP_JS = r"""(wid) => { const W = window.__LC__.W, K = W.SIM, p = W.player, inv = p.inventory;
@@ -274,7 +280,8 @@ SWIM_JS = r"""(n) => { const W = window.__LC__.W, p = W.player, P = window.__H_P
   const rows = []; const v = new W.THREE.Vector3();
   const shown = (o) => { if (!o || !o.visible) return false; for (let q = o.parent; q; q = q.parent) if (!q.visible) return false; return true; };
   for (let i = 0; i < n; i++) { P.step(1, 1 / 60, false); W.scene.updateMatrixWorld(true);
-    rows.push({ sw: !!p.swimming, gun: shown(p.weaponMesh), sling: shown(p._sling), chest: S2 ? +(S2.getWorldPosition(v).y - wy).toFixed(3) : null, anim: p.anim }); }
+    rows.push({ sw: !!p.swimming, gun: shown(p.weaponMesh), sling: shown(p._sling), chest: S2 ? +(S2.getWorldPosition(v).y - wy).toFixed(3) : null, anim: p.anim,
+      cam: W.camera ? +(W.camera.position.y - wy).toFixed(3) : null, uw: !!W._underwater }); }
   return { rows, wy }; }"""
 # the swap: barrel (holder +Z) vs the aim direction per frame after W.equipSlot to the other gun
 SWAP_JS = r"""([slot, n]) => { const W = window.__LC__.W, THREE = W.THREE, p = W.player, P = window.__H_PUMP__; const out = [];
@@ -792,6 +799,12 @@ def main():
                 v.check("swim: 0 frames with a weapon visible while swimming; the chest (Spine2) below the surface after a 0.7 s settle",
                         ok, {"swimFrames": len(swr), "of": len(still + fwd), "gunFrames": gunf, "chestMax": max(chest) if chest else None,
                              "chestMin": min(chest) if chest else None, "anims": sorted(set(str(x["anim"]) for x in swr))}, "0 frames; chest < 0")
+                cams = [x.get("cam") for x in swr if x.get("cam") is not None]
+                uwf = sum(1 for x in swr if x.get("uw"))
+                vok = len(swr) >= 240 and len(cams) == len(swr) and min(cams) >= 0.10 and uwf == 0
+                v.check("swim-view: on every swimming frame the camera >= 0.10 m above the water surface and the underwater look off",
+                        vok, {"swimFrames": len(swr), "camFrames": len(cams), "camMin": min(cams) if cams else None,
+                              "camMax": max(cams) if cams else None, "underwaterFrames": uwf}, "cam >= 0.10 m; 0 underwater frames")
         if "swap" in want:
             sw, bad = {}, []
             for skin in skins:

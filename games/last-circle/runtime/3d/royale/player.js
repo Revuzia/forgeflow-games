@@ -3883,7 +3883,8 @@ function reloadEnd(a) {
 }
 
 /** (W10 R3B, combat finding 8) SURFACE SWIM view: the body sinks until its chest is SWIM_CHEST under the surface (treading water:
- *  head and shoulders out), eased in and out; the sim position is untouched (camera, hits, collisions). */
+ *  head and shoulders out), eased in and out; the sim position is untouched (hits, collisions) and updateCamera subtracts
+ *  _swimOff, so the camera keeps the un-sunk height (a surface swimmer never sees the underwater look). */
 function swimView(W, a, dt) {
   let want = 0;
   const b = a.armBones && (a.armBones.spine2 || a.armBones.spine1);
@@ -4594,7 +4595,9 @@ function updateCamera(W, dt, alpha) {
   // (applied every frame, never held until the next tick); anyone spectated
   // turns smoothly between its last two ticks.
   const fp = (focus.alive && focus._vmode) ? focus.obj.position : focus.pos;
-  const eye = fp.y + focus._eyeY;
+  // (W10 R3B) swimView sinks the DRAWN body (obj.position.y += _swimOff) to tread water; the camera keeps the un-sunk
+  // height, so a surface swimmer's view stays above the water exactly as before the sink (verify1: the eye went under)
+  const eye = fp.y - (fp === focus.obj.position ? focus._swimOff || 0 : 0) + focus._eyeY;
   camTarget.set(fp.x, eye, fp.z);
   const liveLook = focus === W.player && focus.alive && !focus.netRemote;
   const fYaw = liveLook ? focus.input.yaw : (focus._ppT === _tickN ? lerpAngle(focus._pyaw, focus.yaw, k) : focus.yaw);
