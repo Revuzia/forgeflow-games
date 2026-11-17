@@ -332,8 +332,8 @@ vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
   vec3 w = pow(abs(up), vec3(6.0));
   w /= w.x + w.y + w.z;
   // capillaries depend most on the wind; both swell and fade in patches with the long waves' group noise
-  float kA = 0.7 * uWind * mix(gSea, gSea * gSea, 0.6) * clamp(0.6 + 0.5 * gNG.y, 0.2, 1.3);
-  float kB = 0.7 * uWind * gSea * clamp(0.6 + 0.5 * gNG.x, 0.2, 1.3);
+  float kA = 1.15 * uWind * mix(gSea, gSea * gSea, 0.6) * clamp(0.6 + 0.5 * gNG.y, 0.2, 1.3);
+  float kB = 1.15 * uWind * gSea * clamp(0.6 + 0.5 * gNG.x, 0.2, 1.3);
   // the slope variance the mips filtered away (the glint and the mirror widen by it), by the footprint the anisotropic
   // filter works with
   float lx = length(gdPx), ly = length(gdPy);

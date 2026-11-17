@@ -2160,3 +2160,31 @@ long press frame-rate independent. Report after 1-2 verified.
   (5) WATCH thresholds (9196 dirty cells after a 4-tick step); (6) shadows-on proof of the forest floor mask and the
   sun-moved re-bake; (7) full-picture runs (trees, shadows, water, MSAA on) were never made: every pair here has them off.
   GATE RESULT (final source, tcdens default 1.1): npm run check # pass 1047 # fail 0 (s22/check2.log); npm run build exit 0 (s22/build-prod.log). The final default change was not booted again: the last boot (dist7, tcdens 1.4) had 0 errors and tcdens only changes a number on the TS side.
+
+### SESSION 21b (2026-11-17) — lead after the Mac: tnoise=tex made the terrain SLOWER (500 vs 350 ms), so volume taps are no win -> `?wfast=2` (the sibling games' method), `wshade` bisect cuts, `?wclock=`
+- BUILT, all in ocean.ts (no shared file touched; wfast=1 kept as it was):
+  * `?wshade=` new cuts (raw list, so `all` means what it meant in rounds 12-13): `nossr` (ssr() returns nothing),
+    `nopcf` (sunShadow = 1), `noripple` (ripples() = 0: no 14-wavelet loop, none of its 4 simplex), `nofoam` (the 8
+    foam simplex + lace off), `norefr` (no scene depth / colour taps: fixed 5 m of water over a dark floor);
+    `nonoise` as before (all simplex = 0).
+  * `?wclock=<s>` pins the WATER's uTime (the ocean material gets its own uniform), `?wwind=<x>` pins uWind (2.2 = gale).
+    With wclock two runs' water is pixel-comparable.
+  * `?wfast=2` (default off): ripples() = taps of ONE 256^2 RGBA8 tiling normal map (rippleMap(): RG = gradient of 16
+    tiling wavelets, 4-24 waves a tile, each slope 0.03 — the reference's steepness law amp = 0.012 L; mips,
+    anisotropy 8, made once on the CPU, 0.35 MB), 4 taps = 2 tile sizes (5.3 / 3.9 m, 37 / 29 m) x 2 scroll directions
+    (the second turned 90 deg), textureGrad with the projected derivatives; projected along the body axes with weights
+    |up|^6 (1 projection over most of the planet, 2-3 near the cube diagonals: 4-12 taps). Amplitude = uWind x sea
+    state (capillaries by gSea^2) x the long waves' group noise (gwG, already there) = gusts / cat's paws for free;
+    the slope variance the mips remove goes to gUnresolved (glint + mirror widen), the rest to gResolved (LEAN).
+    Rivers: the same two-phase flow offsets. Kept: 4 Gerstner + 3 swell normals, depth colour, glint + glitter, foam,
+    ice, silt, clouds' mirror. SSR: 8 steps x1.9 (reach ~340 m; was 28 x1.35), 8 refine, thickness 0.66 t, start
+    jitter = 2 sines (was 1 simplex). The foam's 8 simplex and the shore bite's 3 stay ARITHMETIC (waterline does
+    not move) but run only where their term can be non-zero (W_*_ON gates: near a shore / surge slope > 0 / wind
+    over 3.5 m/s on deep salt water / gale): exact, not an approximation.
+    COUNT, open calm sea fragment: simplex 20 -> 4 (the Gerstner warp / group); ripple loop 14 x ~110 ops -> 4 2D taps
+    (+ ~60 ops); SSR depth taps <= 28 -> <= 8. Windy sea: +2-3 simplex (whitecaps). Shore pixels: +3 +3.
+  * first look (A = default, B = wfast=2, both wclock=100; shots2/, sheet-wfast2-a.png LOOKED): day open sea at the
+    landing spot: same colour (mean RGB 86.3 120.5 130.7 / 86.4 120.7 131.2), wave fronts and shoreline in the same
+    place; B a little smoother near the camera with fewer glitter specks (detail 3.88 / 3.26) -> ripple amplitude was
+    ~1.7x low (the group mean counted twice): K 0.7 -> 1.15, re-shot below. pond: identical look (detail 4.87 / 4.86).
+    `shore` poi view shows almost no water (useless view).
