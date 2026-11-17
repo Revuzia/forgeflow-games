@@ -473,7 +473,10 @@ export function createGame(deps: GameDeps): Game {
     calm: () => S().calm, gravity: () => S().gravity, simTime: () => simTime, viewport: () => viewport,
     activeBody, touching: () => driver.touch.contact(), drag: (out) => driver.touch.dragOf(out),
     beforeChange: () => { releaseEverything(true); active = null; },   // (a piece is replaced or removed: the fingers on the bodies let go, the swipe in hand does not)
-    clearMat: () => { const n = mat.count - 1; try { mat.clear(); } catch (e) { report(e); } return n; },
+    // PLAYGROUND (11.4, D-16, SH-03; round 5, VERDICT_PG B2): with the LIFE host attached the party STAYS out when the play squishy is cut (its
+    // pieces join it as one group); the published toy (no host: the life chunk not landed, or one squishy out) clears the mat as before
+    clearMat: () => { if (life?.beforeCut) { try { return life.beforeCut(); } catch (e) { report(e); return 0; } } const n = mat.count - 1; try { mat.clear(); } catch (e) { report(e); } return n; },
+    pieceCap: () => { try { return life?.pieceCap?.() ?? null; } catch (e) { report(e); return null; } },
     panOf: (p) => panOfPoint(p),
     say: (t) => emit('notice', t),
     report,
@@ -804,8 +807,13 @@ export function createGame(deps: GameDeps): Game {
     if (!it) return 'missing';
     if (focused) { const f = focused; focused = null; void f; }   // a card was open: the switch replaces whatever it previewed
     leaving();
+    // PLAYGROUND (round 5, VERDICT_PG B8): with the LIFE host attached, switching to a squishy that is OUT swaps the two within the party: the squishy that
+    // was in play stays out (it takes the freed spot) instead of going back to the shelf. Without the host (the published toy) the switch is unchanged.
+    const was = bodies.identity, wasItem = life !== null && mat.has(itemId) && was.itemId && was.itemId !== itemId ? hoard.item(was.itemId) : null;
     try { mat.remove(itemId); } catch (e) { report(e); }
-    return bodies.swapTo(it.genome, { itemId: it.id, nickname: null }) ? 'done' : 'failed';
+    const ok = bodies.swapTo(it.genome, { itemId: it.id, nickname: null });
+    if (ok && wasItem) { try { mat.add({ genome: wasItem.genome, itemId: wasItem.id, tier: wasItem.tier as TierName, name: wasItem.name }, { restore: true }); } catch (e) { report(e); } }
+    return ok ? 'done' : 'failed';
   }
   function applyPendingSwitch(): void {
     if (!pendingSwitch || ceremonies.active || ceremonies.pending) return;

@@ -14,7 +14,7 @@ import { icon } from './icons.ts';
 import { speciesIcon } from './speciesIcon.ts';
 import { attachTooltip } from './tooltip.ts';
 
-export interface SwitchChoice { id: string; species: string; name: string; tier: TierName }
+export interface SwitchChoice { id: string; species: string; name: string; tier: TierName; /** PLAYGROUND (round 5): out on the mat now (a party member) */ out?: boolean }
 
 export interface QuickSwitch {
   readonly el: HTMLElement;
@@ -51,7 +51,7 @@ export function createQuickSwitch(parent: HTMLElement, onPick: (id: string) => v
     el,
     set(choices) {
       list = choices.slice(0, QUICK_MAX);
-      const k = list.map((c) => c.id).join(',');
+      const k = list.map((c) => `${c.id}${c.out ? '*' : ''}`).join(',');
       document.body.dataset.switch = String(list.length > 0);
       if (k === key) return;
       key = k;
@@ -60,7 +60,7 @@ export function createQuickSwitch(parent: HTMLElement, onPick: (id: string) => v
       count.textContent = `1/${list.length + 1}`;
       el.setAttribute('aria-label', `Switch squishy, ${list.length} other${list.length === 1 ? '' : 's'}`);
       for (const c of list) {
-        const b = h('button', { class: 'k-btn qs-btn', attrs: { type: 'button', 'data-tier': c.tier, 'data-id': c.id, 'aria-label': `Play with ${c.name}, ${tierLabel(c.tier)}` } },
+        const b = h('button', { class: 'k-btn qs-btn', attrs: { type: 'button', 'data-tier': c.tier, 'data-id': c.id, 'data-out': c.out ? 'true' : 'false', 'aria-label': `Play with ${c.name}, ${tierLabel(c.tier)}` } },
           speciesIcon(c.species, { cls: 'sp-icon qs-icon' }));
         attachTooltip(b, c.name);   // (a fine pointer only; the name is the accessible name already, with the tier word)
         b.addEventListener('click', () => onPick(c.id));

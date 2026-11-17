@@ -30,6 +30,9 @@ type TipSphere = { x: number; y: number; z: number; r: number; depth: number };
 const CALM_SEAM = 0.45;
 /** CUT3 small-piece look (lod 1): the share of the ember a piece must hold to draw the ember's blob (a sliver draws none; the jelly's own glow still carries it). */
 const LOD_MIN_KEPT = 0.06;
+/** Round 5 (B1): a sleeping view whose drawn centre moved more than this (m, per axis) since its last fine-mesh evaluation is evaluated again. A
+ *  frozen sleeper's centre does not move at all, so RD-05's "a sleeper does 0 fine updates" holds; half a millimetre is far under a pixel. */
+const FINE_MOVE_M = 5e-4;
 
 export class BodyView {
   readonly id: number;
@@ -136,6 +139,11 @@ export class BodyView {
   readonly lite: boolean;
   /** Fine-mesh evaluations so far (the harness counts them: a sleeper does none, RD-05). */
   fineUpdates = 0;
+  /** The drawn centre at the last fine-mesh evaluation (round 5, VERDICT_PG B1). A sleeping body is frozen, so its fine mesh is skipped; but a
+   *  sleeper can be MOVED without waking for the stage (the shell's trip puts it at its spawn spot with placeAt, which wakes it in physics,
+   *  then sleeps it again in the same moment; a ceremony slide; a render offset): the jelly then stayed at the old spot while the eyes and the
+   *  ember, which follow the centre every frame, stood at the new one. Any move of the drawn centre re-evaluates the mesh once. */
+  private fineCx = NaN; private fineCy = NaN; private fineCz = NaN;
   /** Calm effects or reduced motion (the stage's own reading): the pose's sway is held to 2 Hz. */
   quiet = false;
   /** Seconds the body has been still (centre speed under 0.05 m/s) since it was last touched: the stage's "player-caused motion" latch (RD-14). */
@@ -256,8 +264,13 @@ export class BodyView {
     this.proxy.sync(dt, time);
     const body = this.proxy, m = body.metrics, j = this.jelly;
     // PLAYGROUND: a sleeping body is frozen, so its fine mesh (the bulk of a view's CPU) keeps last frame's evaluation (RD-05); a touch wakes it
-    // first in physics, and the shell clears the flag (a finger on a body flagged asleep re-evaluates anyway)
-    if (!this.asleep || m.fingers > 0 || m.grabbed || this.fineUpdates === 0) { j.update(); this.fineUpdates++; }
+    // first in physics, and the shell clears the flag (a finger on a body flagged asleep re-evaluates anyway). Round 5 (B1): a sleeper whose drawn
+    // centre moved since the last evaluation (placed elsewhere, slid, re-offset) is evaluated again, so it is never drawn in two places.
+    {
+      const c = body.center;
+      const moved = !(Math.abs(c.x - this.fineCx) <= FINE_MOVE_M && Math.abs(c.y - this.fineCy) <= FINE_MOVE_M && Math.abs(c.z - this.fineCz) <= FINE_MOVE_M);
+      if (!this.asleep || moved || m.fingers > 0 || m.grabbed || this.fineUpdates === 0) { j.update(); this.fineUpdates++; this.fineCx = c.x; this.fineCy = c.y; this.fineCz = c.z; }
+    }
     if (this.isPiece && body.piece !== this.facePiece) this.rebuildFace();   // a merge published a NEW PieceInfo: which eyes and how much ember this piece holds changed
     // the player-caused-motion latch (RD-14, D-37): a finger or a grab sets it; it clears once the body has been still for 0.4 s
     {

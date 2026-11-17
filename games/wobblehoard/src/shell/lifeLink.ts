@@ -39,6 +39,12 @@ export interface LifeHostLike {
   dropAll?(): boolean;
   /** the host holds pointer `id` (a seat or board in the hand) */
   holds?(id: number): boolean;
+  /** round 5 (11.4, D-16, SH-03; VERDICT_PG B2): the first cut of the play squishy with the host attached: the party STAYS out (no mat clear);
+   *  every untouched whole but the play squishy is put to sleep first. Returns how many squishies went back to the shelf (always 0). */
+  beforeCut?(): number;
+  /** the most pieces the play squishy may be cut into now: min(the tier's pieces cap, the characters cap - (wholes - 1)) while 2 or more wholes
+   *  are out; null with one squishy out (the published safety ceiling alone, unchanged) */
+  pieceCap?(): number | null;
   /** the dev hook's view (allocates: dev only) */
   debug(): unknown;
   dispose(): void;
@@ -76,6 +82,11 @@ export interface LifeHostApi extends LifeHostLike {
   /** "Go play with..." (11.8; the name tag popover's entry, the dev hook until it is built): the squishy with this item id plays with place-local thing k
    *  next (LIFE's PLAY_WITH, which works with autonomy off; a ride is reached by physics' carryTo, never paid); false when no such squishy or thing */
   playWith?(itemId: string, k: number): boolean;
+  /** round 5 (B3): the things of the place shown that a squishy can be asked to play with now (place-local index, thing id, a ride or not);
+   *  allocates (the name tag popover only) */
+  thingsNow?(): Array<{ k: number; id: string; ride: boolean }>;
+  /** round 5 (B3): the wholes out now (item id, species idx; `play` = the play squishy), in LIFE slot order; allocates (UI only) */
+  partyNow?(): Array<{ itemId: string; species: number; play: boolean }>;
 }
 
 /** Raw early events (before the host attached): what the host needs to write TOUCH and CAPSULE records for them. At most EARLY_CAP; the rest

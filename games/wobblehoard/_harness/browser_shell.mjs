@@ -4483,11 +4483,14 @@ async function main() {
       // RE-SPECIFIED (PG_SHELL round 4; reason: PLAYGROUND adds the Journal, and Places once a second place is open, as Tab stops (D-77: "Tab stays the browser's:
       // it reaches the Journal, Places, mute and gear"); they stand in the top-right column under the top row (QUESTS 15) and come just before Full screen, once
       // the life chunk has landed. Every published stop keeps its place and order; no other stop is allowed.)
-      const life = await page.evaluate(() => ['Journal', 'Places'].filter((n) => { const b = document.querySelector(`.hud-life button[aria-label="${n}"]`); return !!b && !b.hidden && b.offsetParent !== null; }));
+      // RE-SPECIFIED again in round 5 (written reason: VERDICT_PG B3 asks for the play-time UI: the tracker pill ("Next stamp: ...", and its "Hide the next stamp"
+      // x) in the top-left slot and "Your squishies" (the party popover) in the same column; they are Tab stops of the same group, before Full screen, in DOM
+      // order). Every published stop keeps its place and order; no other stop is allowed.
+      const life = await page.evaluate(() => [...document.querySelectorAll('.pl-slot button, .hud-life button')].filter((b) => !b.hidden && b.offsetParent !== null && !b.closest('[hidden]')).map((b) => (b.getAttribute('aria-label') ?? '').split(/[:,]/)[0]));
       const want = [...life, ...(fsOn ? ['Full screen'] : []), 'Mute sound', 'Menu', 'Hoard', 'Hand', 'Squishy'];
       const k0 = stops.indexOf(want[0]);
       const cycleOk = k0 >= 0 && stops.length >= k0 + want.length && stops.every((o, i) => o === want[(((i - k0) % want.length) + want.length) % want.length]);
-      check('Tab order in play: (PLAYGROUND: the Journal, and Places when open), Full screen (where drawn), Mute, Menu, the Hoard, the Tools toolbar (one stop, the Hand), the squishy (and no other stop)', cycleOk, order.join(' > '));
+      check('Tab order in play: (PLAYGROUND: the tracker pill and its x when shown, the Journal, Places when open, Your squishies), Full screen (where drawn), Mute, Menu, the Hoard, the Tools toolbar (one stop, the Hand), the squishy (and no other stop)', cycleOk, `${order.join(' > ')} (life stops: ${life.join(', ')})`);
       // shortcuts stay out of form controls
       await openSettings(page); await sleep(500);
       const g0 = (await state(page)).settings.gravity;
@@ -4782,6 +4785,10 @@ async function main() {
       check('dist stays under the 3 MB budget (G0, raw)', total < 3 * 1024 * 1024, `${(total / 1024).toFixed(0)} KB`);
       const first = files.filter((f) => /\.(html|js|css)$/.test(f) && !/(^|[\\/])later-[^\\/]*$/.test(f)).reduce((n, f) => n + gzipSync(readFileSync(f), { level: 9 }).length, 0);
       check('the first-play files stay under 600 KB gzip (G0b)', first < 600 * 1024, `${(first / 1024).toFixed(0)} KB gzip`);
+      // round 5 (VERDICT_PG C1; PLAYGROUND_BUILD 14.3 SZ-02, D-92): the life chunk at most 150 KB raw (the quest reducer + journal store and the prop world are
+      // later-quests / later-props chunks of their own, requested in parallel with it); every later-* chunk is lazy (the build's own honesty check)
+      const lifeChunks = files.filter((f) => /(^|[\\/])later-life-[^\\/]*\.js$/.test(f)).map((f) => statSync(f).size);
+      check('SZ-02 (round 5, C1): the life chunk (later-life) is at most 150 KB raw', lifeChunks.length === 1 && lifeChunks[0] <= 150 * 1024, `${lifeChunks.map((n) => (n / 1024).toFixed(1) + ' KB').join(', ')}; later-quests ${files.filter((f) => /later-quests-/.test(f)).map((f) => (statSync(f).size / 1024).toFixed(1)).join()} KB, later-props ${files.filter((f) => /later-props-/.test(f)).map((f) => (statSync(f).size / 1024).toFixed(1)).join()} KB`);
       const text = files.filter((f) => /\.(js|css|html)$/.test(f)).map((f) => [f, readFileSync(f, 'utf8')]);
       const FORBIDDEN = ['__WH__', '__shot', '__report', 'Sound lab', 'squish (hold)', 'playSound', 'createDebugTools', 'capsuleScreen', 'lab-btn', 'stageInfo'];
       const hits = FORBIDDEN.flatMap((s) => text.filter(([, t]) => t.includes(s)).map(([f]) => `${s} in ${f.slice(out.length + 1)}`));
@@ -4838,7 +4845,8 @@ async function main() {
         const el = document.getElementById('wh-live'), ui = document.getElementById('ui');
         if (!el || !ui) { setTimeout(rec, 30); return; }
         new MutationObserver(() => { if (el.textContent) window.__liveLog.push(el.textContent); }).observe(el, { childList: true, characterData: true, subtree: true });
-        new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('toast')) window.__toastLog.push(n.textContent ?? ''); }).observe(ui, { childList: true, subtree: true });
+        // (round 5, VERDICT_PG B3 / B8: a stamp moment shows in the play UI's slot, ui/later-play.ts `.pl-moment`, once that chunk has landed; a toast before it)
+        new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('toast') || n.classList?.contains('pl-moment-text')) window.__toastLog.push(n.textContent ?? ''); }).observe(ui, { childList: true, subtree: true });
       };
       rec();
     };
@@ -4888,10 +4896,19 @@ async function main() {
       await pgSqueeze(page, 1.2);
       await pgStep(page, 1);
       const d1 = await pgDone(page);
+      // (RE-SPECIFIED in round 5, written reason: VERDICT_PG B8 asks the "New stamp" moments out of the toast stack, which covered the Journal and Places
+      // buttons and open sheets' titles, into a free spot one at a time: the toast log now also records the moments slot; the row's words are unchanged)
       check('PG H1: a held squeeze is the first stamp ("New stamp: A gentle squeeze")', d1.includes('H1') && (await page.evaluate(() => window.__toastLog.some((t) => /New stamp: A gentle squeeze/.test(t)))), JSON.stringify({ done: d1, toasts: await page.evaluate(() => window.__toastLog.slice(-3)) }));
       // the first minute: the player lets go for 6 s, Dollop goes to play with the Felt Ball by itself (FIRST_PLAY -> a USE by SELF: H2)
       const ball0 = (await pgLife(page)).things.find((t) => t.id === 'feltball');
-      await pgStep(page, 14);
+      // round 5 (VERDICT_PG B6, FN-01): the first LABELLED bubble (a bubble with its word under it: the first three of a session) within 10 s of the first 6 s release;
+      // sampled each second of sim (a real-time pause between steps lets the 250 ms placement run)
+      let firstWord = null, firstWordAt = -1;
+      for (let k = 1; k <= 14; k++) {
+        await pgStep(page, 1); await sleep(320);
+        if (firstWord === null) { const wv = await page.evaluate(() => { const e = [...document.querySelectorAll('.bubble-word')].find((x) => !x.hidden && x.textContent); return e ? e.textContent : null; }); if (wv) { firstWord = wv; firstWordAt = k; } }
+      }
+      check('B6 (round 5, FN-01) the first labelled bubble (its word under it) shows within 10 s of the first 6 s release (desktop)', firstWordAt > 0 && firstWordAt <= 16, JSON.stringify({ firstWord, at: firstWordAt }));
       const l2 = await pgLife(page), d2 = await pgDone(page);
       const ball1 = l2.things.find((t) => t.id === 'feltball');
       const ballMoved = ball0 && ball1 && ball0.x !== null && Math.hypot(ball1.x - ball0.x, ball1.z - ball0.z);
@@ -4980,13 +4997,59 @@ async function main() {
       const wl = await page.evaluate(() => window.__liveLog.filter((t) => /wishes|wants/.test(t)).slice(-1)[0] ?? null);
       check('PG H7: the wish bubble has a 44 px hit area; a click reads the wish\'s line in the live region ("... wishes for a warm place: Hearthlog Cabin.") and "A first wish" (H7) is done',
         !!wishBtn && wishBtn.w >= 44 && !!wl && (await pgDone(page)).includes('H7'), JSON.stringify({ wishBtn, wl, done: await pgDone(page) }));
+      // ---- round 5 (VERDICT_PG B3): the play-time UI that makes purpose visible (ui/later-play.ts) ----
+      const wc = await page.evaluate(() => { const over = (r) => { const L = document.querySelector('.hud-life')?.getBoundingClientRect(); return !!L && L.width > 0 && !(r.right <= L.left || L.right <= r.left || r.bottom <= L.top || L.bottom <= r.top); }; const c = document.querySelector('.pl-wish'); if (!c) return null; const r = c.getBoundingClientRect(), go = c.querySelector('.pl-wish-go');
+        return { shown: !c.hidden && r.width > 0, text: c.querySelector('.pl-wish-text')?.textContent ?? null, go: !!go && !go.hidden, w: Math.round(r.width), h: Math.round(r.height), inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, overLife: over(r) }; });
+      check('B3 (round 5) the wish card: the tapped wish bubble opens a visible card with the wish\'s line ("... wishes for a warm place: Hearthlog Cabin.") and "Let\'s go" (the cabin is open); at most 358 px wide and 140 px tall, inside the window, clear of the Journal column',
+        !!wc && wc.shown && /wishes for a warm place: Hearthlog Cabin\./.test(wc.text ?? '') && wc.go && wc.w <= 358 && wc.h <= 140 && wc.inView && !wc.overLife, JSON.stringify(wc));
+      await pgShot(page, 'pg_wishcard_desktop');
+      await pclick(page, '.pl-wish-no'); await sleep(400);
+      const wcGone = await page.evaluate(() => document.querySelector('.pl-wish')?.hidden === true);
+      // the tracker pill: "Next: ..." under the top row, left of the Journal column; a tap opens the Journal at that quest; J opens the Journal; its x hides it
+      // (it steps aside while a stamp moment uses its slot: wait for the moments to pass, at most 10 s)
+      for (let k = 0; k < 20; k++) { await sleep(500); if (await page.evaluate(() => document.querySelector('.pl-pill')?.hidden === false)) break; }
+      const pill = await page.evaluate(() => { const over = (r) => { const L = document.querySelector('.hud-life')?.getBoundingClientRect(); return !!L && L.width > 0 && !(r.right <= L.left || L.right <= r.left || r.bottom <= L.top || L.bottom <= r.top); }; const p = document.querySelector('.pl-pill'), go = p?.querySelector('.pl-pill-go'); if (!p || !go) return null; const r = p.getBoundingClientRect(), g = go.getBoundingClientRect(), top = document.querySelector('.hud-top')?.getBoundingClientRect();
+        return { shown: !p.hidden && r.width > 0, text: p.querySelector('.pl-pill-text')?.textContent ?? null, h: Math.round(g.height), under: !!top && r.top >= top.bottom - 1, inView: r.left >= 0 && r.right <= innerWidth, overLife: over(r), oneLine: g.height < 60 }; });
+      check('B3 (round 5) the tracker pill: "Next: <the first unfinished main quest that can be done now>" in one line under the top row, 44 px to hit, clear of the Journal column; "Not now" closed the wish card first',
+        wcGone && !!pill && pill.shown && /^Next: \S/.test(pill.text ?? '') && pill.h >= 44 && pill.under && pill.inView && !pill.overLife && pill.oneLine, JSON.stringify({ wcGone, pill }));
+      await pclick(page, '.pl-pill-go'); await settle(page);
+      const jat = await page.evaluate(() => { const d = document.getElementById('wh-journal'); return d ? { open: true, at: d.querySelector('.jn-quest[data-at="true"]')?.dataset.quest ?? null } : { open: false, at: null }; });
+      await page.keyboard.press('Escape'); await settle(page);
+      await page.evaluate(() => { document.activeElement?.blur?.(); });
+      await page.keyboard.press('j'); await settle(page);
+      const jk = await page.evaluate(() => !!document.getElementById('wh-journal'));
+      await page.keyboard.press('Escape'); await settle(page);
+      const jkGone = await page.evaluate(() => !document.getElementById('wh-journal'));
+      check('B3 (round 5) a tap on the pill opens the Journal at that quest (its row marked); the J key opens the Journal, Esc closes it',
+        jat.open && !!jat.at && jk && jkGone, JSON.stringify({ jat, jk, jkGone }));
+      await pclick(page, '.pl-pill-x'); await sleep(500);
+      const pillX = await page.evaluate(() => document.querySelector('.pl-pill')?.hidden === true);
+      check('B3 (round 5) the pill\'s x hides it (until the next stamp)', pillX, String(pillX));
+      // the party popover ("Your squishies": the name tag's popover): a chip per squishy out, "Go play with..." the things here; the keyboard addresses each squishy
+      await pclick(page, '.dock-party'); await sleep(500);
+      const pp = await page.evaluate(() => { const p = document.querySelector('.pl-pop'); if (!p || p.hidden) return null; const r = p.getBoundingClientRect();
+        return { chips: [...p.querySelectorAll('.pl-pop-chip')].map((c) => `${c.textContent}:${c.getAttribute('aria-pressed')}`), things: [...p.querySelectorAll('.pl-pop-thing')].map((b) => b.dataset.thing), focusIn: p.contains(document.activeElement), inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight }; });
+      const partyN = (await pgLife(page)).chars.filter((c) => c.kind === 0).length;
+      check('B3 (round 5) the party popover ("Your squishies", from the Journal column\'s button or a tap on the name tag): one chip per squishy out (the play squishy pressed), "Go play with..." the things shown here, the focus inside it, inside the window',
+        !!pp && pp.chips.length === partyN && pp.chips.filter((c) => c.endsWith(':true')).length === 1 && pp.things.length >= 2 && pp.focusIn && pp.inView, JSON.stringify({ pp, partyN }));
+      const other = await page.evaluate(() => { const c = [...document.querySelectorAll('.pl-pop-chip')].find((x) => x.getAttribute('aria-pressed') !== 'true'); if (!c) return null; c.focus(); return c.textContent; });
+      await page.keyboard.press('Enter'); await sleep(300);
+      const sel = await page.evaluate(() => document.querySelector('.pl-pop-chip[aria-pressed="true"]')?.textContent ?? null);
+      await page.evaluate(() => document.querySelector('.pl-pop-thing[data-thing="feltball"]')?.focus());
+      await page.keyboard.press('Enter'); await sleep(500);
+      const pw = await page.evaluate(() => ({ gone: document.querySelector('.pl-pop')?.hidden === true, live: window.__liveLog.filter((t) => /goes to play with|can't play with/.test(t)).slice(-1)[0] ?? null }));
+      check('B3 (round 5) by keyboard in the popover: Enter on another squishy\'s chip addresses it; Enter on "Felt Ball" asks THAT squishy to go and play (the host\'s playWith: "<name> goes to play with the Felt Ball."), and the popover closes',
+        !!other && sel === other && pw.gone && new RegExp(`^${other} goes to play with the Felt Ball\\.$`).test(pw.live ?? ''), JSON.stringify({ other, sel, pw }));
       await page.evaluate(() => window.__WH__.resume());
-      // Travel: the Places sheet lists Home (here), the cabin (Go), the eight unshipped ones as "coming later"; Go -> the cabin
+      // Travel: the Places sheet lists Home (here) and the cabin (Go), nothing else; Go -> the cabin
       await hclick(page, '.dock-places'); await settle(page);
-      const tv = await page.evaluate(() => { const d = document.getElementById('wh-travel'); return d ? { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place), later: d.querySelectorAll('.jn-later-row').length } : null; });
+      const tv = await page.evaluate(() => { const d = document.getElementById('wh-travel'); return d ? { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place), later: d.querySelectorAll('.jn-later-row').length, laterText: /coming later/i.test(d.textContent || ''), stamps: [...d.querySelectorAll('.jn-card')].map((c) => c.querySelector('.jn-card-stamps')?.textContent ?? null) } : null; });
       await pgShot(page, 'pg_travel_desktop');
-      check('PG Travel sheet: Home and Hearthlog Cabin as postcards (the cabin open with "Go to"), the other eight shown as coming later (their data says shipped: false)',
-        !!tv && tv.cards.join() === 'home:true,hearthlog:true' && tv.go.join() === 'hearthlog' && tv.later === 8, JSON.stringify(tv));
+      // RE-SPECIFIED in round 5 (written reason: VERDICT_PG B4; QUESTS 15 "a place with shipped: false is not shown at all (no 'coming soon' card)" and
+      // QUESTS 7 / PG_VERIFY 7.6 "no line names a place that has not shipped"): round 3's row asked for the eight unshipped places as "coming later" rows,
+      // which those rules forbid. It now asks for none, and for each open postcard's "N of M stamps" line (QUESTS 15).
+      check('PG Travel sheet: Home and Hearthlog Cabin as postcards (the cabin open with "Go to"), each with its chapter\'s "N of M stamps" line; no unshipped place is listed or named (QUESTS 15)',
+        !!tv && tv.cards.join() === 'home:true,hearthlog:true' && tv.go.join() === 'hearthlog' && tv.later === 0 && !tv.laterText && tv.stamps.every((s) => /^\d+ of \d+ stamps$/.test(s ?? '')), JSON.stringify(tv));
       await page.evaluate(() => window.__WH__.pause());
       await pclick(page, '.jn-go[data-place="hearthlog"]');
       const arrived = await stepUntil(page, `(wh) => wh.life()?.place === 1 && !wh.life()?.travelling`, 30, 0.25);
@@ -5002,6 +5065,13 @@ async function main() {
       await page.evaluate(() => window.__WH__.resume()); await sleep(900); await page.evaluate(() => window.__WH__.pause());
       const ch0 = await pgChips(page);
       const swC = ch0.find((c) => /Pillow Swing/.test(c.label ?? '')), rkC = ch0.find((c) => /Rocker Board/.test(c.label ?? ''));
+      // round 5 (VERDICT_PG B8): a toast showing does not move the chips (they stood under the toast's box and jumped to the top edge, y 90 -> 15)
+      await page.evaluate(() => window.__WH_UI__.toast('info', 'A passing toast for the chips row', { ms: 4000, sound: false }));
+      await sleep(900);
+      const chT = await pgChips(page);
+      const jump = Math.max(0, ...ch0.map((c) => { const t = chT.find((x) => x.label === c.label); return t ? Math.hypot(t.x - c.x, t.y - c.y) : 999; }));
+      check('B8 (round 5) the AUTO chips stand still while a toast shows (no jump to the top edge)', ch0.length === 2 && chT.length === 2 && jump <= 2, JSON.stringify({ before: ch0.map((c) => [Math.round(c.x), Math.round(c.y)]), toast: chT.map((c) => [Math.round(c.x), Math.round(c.y)]), jump }));
+      await sleep(3500);
       const rest = await pgSeatRange(page, 2);
       if (swC) await page.mouse.click(swC.x, swC.y);
       await sleep(300);

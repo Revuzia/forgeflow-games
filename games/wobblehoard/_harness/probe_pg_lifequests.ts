@@ -8,6 +8,9 @@
 // QC (round 3, R3b): QU-14's LIFE half, the real lifeStep at the 8 S2 / S3 places against journal.ts PLACE_CAPS and THING_PLACE.
 // Run: node _harness/probe_pg_lifequests.ts   (exit 1 on any failure; about 9 s)
 import v8 from 'node:v8';
+import { spawnSync } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { LifeSnapshot, LifeIntents, LifeEvents, PlayEventRing } from '../src/contracts.ts';
 import type { Genome } from '../src/core/genome.ts';
 import { speciesBaseGenome, CATALOG } from '../src/data/catalog.ts';
@@ -418,6 +421,31 @@ const has = (m: Uint32Array, sp: number): boolean => (m[sp >>> 5] & (1 << (sp & 
   for (let w = 0; w < 6; w++) { const u = newUsed(); runM(10000); const dd = newUsed() - u - base[5]; if (dd >= 0 && dd < best) best = dd; }
   check('FM', `friendMaskOf allocates 0 B over 10 000 calls after warm-up (QU-01's new-space method)`, best === 0, `${best} B`);
   h.c.dispose();
+}
+/* FM, round 5 (FIX5_DATA): the same 0 B bar BEFORE V8 optimizes the call. The row above passes only once TurboFan has compiled friendMaskOf; on a loaded
+ * machine its windows can still run the unoptimized code (VERDICT_PG measured 32 B), where every non-integer Float32Array read (a best pair's 4.5 points) and
+ * every 32-bit mask word of 2^30 or more is boxed into a HeapNumber. A child node process with TurboFan off (--no-opt: Ignition and Sparkplug only) runs
+ * 10 000 calls over all 64 species against rows at 13, 4.5, 12.5, 40.25 and 11.99 points, two of them on the mask's 2^30 / 2^31 bits and one in the high
+ * word, and checks the masks too. (HEAD f271a93b1's friendMaskOf: 814 976 B there.) */
+{
+  const code = `const v8 = await import('node:v8'), R = process.argv[1];
+const Q = await import(R + 'src/core/quests.ts'), J = await import(R + 'src/collection/journal.ts');
+const d = J.journalDefs(), st = Q.createQuestState(d), m = new Uint32Array(2);
+const rows = [[3, 21, 13], [0, 10, 4.5], [30, 31, 12.5], [47, 63, 40.25], [5, 31, 11.99]];
+rows.forEach(([lo, hi, p], r) => { st.frLo[r] = lo; st.frHi[r] = hi; st.frPts[r] = p; }); st.sc[Q.SC.FRN] = rows.length;
+const newUsed = () => { for (const s of v8.getHeapSpaceStatistics()) if (s.space_name === 'new_space') return s.space_used_size; return NaN; };
+const runM = (n) => { for (let k = 0; k < n; k++) Q.friendMaskOf(st, d, k % 64, m); };
+runM(2000);
+const base = []; for (let k = 0; k < 6; k++) { const u = newUsed(); base.push(newUsed() - u); }
+let best = Infinity; for (let w = 0; w < 6; w++) { const u = newUsed(); runM(10000); const dd = newUsed() - u - base[5]; if (dd >= 0 && dd < best) best = dd; }
+const mk = (sp) => { Q.friendMaskOf(st, d, sp, m); return (m[0] >>> 0) + ',' + (m[1] >>> 0); };
+console.log(JSON.stringify({ best, masks: [3, 30, 31, 63, 5, 0].map(mk).join(' ') }));`;
+  const r = spawnSync(process.execPath, ['--no-opt', '--input-type=module', '-e', code, pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), '..') + '/').href], { encoding: 'utf8', timeout: 120_000 });
+  let got: { best?: number; masks?: string } = {};
+  try { got = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}'); } catch { got = {}; }
+  const want = '2097152,0 2147483648,0 1073741824,0 0,32768 0,0 0,0';
+  check('FM', 'friendMaskOf allocates 0 B over 10 000 calls with V8\'s optimizing tier off (a child node --no-opt; mask words on bits 30, 31 and the high word; the masks right)',
+    got.best === 0 && got.masks === want, `${got.best ?? 'no result: ' + (r.stderr || '').slice(0, 200)} B; masks ${got.masks === want ? 'right' : got.masks}`);
 }
 
 /* ═══════════════ FW: the friend wish end to end (the reducer's mask -> LIFE -> the host's ring -> the reducer) ═══════════════ */

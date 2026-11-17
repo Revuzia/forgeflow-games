@@ -726,19 +726,38 @@ export function friendLevel(x: number): number {
  *  gives the riddle away). LIFE adds "owned" and "not out" itself. Zero allocation; call on a journal change (a FRIEND event of level 2+, an F3
  *  fact, a load), never per frame. Returns whether the mask is not empty. */
 export function friendMaskOf(st: QuestState, d: QuestDefs, sp: number, out: Uint32Array): boolean {
-  out[0] = 0; out[1] = 0;
-  if (!(sp >= 0 && sp < SPECIES_BITS)) return false;
-  const n = st.sc[SC.FRN];
-  for (let r = 0; r < n; r++) {
-    if (st.frPts[r] < FRIENDSHIP.friends) continue;
-    const lo = st.frLo[r], hi = st.frHi[r];
-    const o = lo === sp ? hi : hi === sp ? lo : NO;
-    if (o < SPECIES_BITS && o !== sp) out[o >>> 5] |= 1 << (o & 31);
+  // (FIX5, FM: zero allocation in EVERY V8 tier, not only once optimized: before TurboFan a Float32Array read that is not an integer (a best pair's
+  // 4.5 points) and any 32-bit value of 2^30 or more are boxed into a HeapNumber, 32 B a call. So the points are compared through 16-bit halves of
+  // their float32 bits (non-negative floats order as their bits do), the mask is built in 16-bit halves, and copied out by TypedArray.set: every value
+  // a JS register sees is a Smi.)
+  FM16[0] = 0; FM16[1] = 0; FM16[2] = 0; FM16[3] = 0;
+  if (sp >= 0 && sp < SPECIES_BITS) {
+    const n = st.sc[SC.FRN], P = ptsHalves(st.frPts);
+    for (let r = 0; r < n; r++) {
+      const h = P[2 * r + F32_HI];   // points >= FRIENDSHIP.friends <=> (high, low) >= (FR_H, FR_L); a negative or zero row is never friends
+      if (h >= 0x8000 || h < FR_H || (h === FR_H && P[2 * r + 1 - F32_HI] < FR_L)) continue;
+      const lo = st.frLo[r], hi = st.frHi[r];
+      const o = lo === sp ? hi : hi === sp ? lo : NO;
+      if (o < SPECIES_BITS && o !== sp) FM16[(o >>> 4) ^ U16_SWAP] |= 1 << (o & 15);
+    }
+    const bf = d.spFriend[sp];
+    if (bf < SPECIES_BITS && (st.fx[sp] & (1 << FACT.FRIEND)) !== 0) FM16[(bf >>> 4) ^ U16_SWAP] |= 1 << (bf & 15);
   }
-  const bf = d.spFriend[sp];
-  if (bf < SPECIES_BITS && (st.fx[sp] & (1 << FACT.FRIEND)) !== 0) out[bf >>> 5] |= 1 << (bf & 31);
-  out[0] >>>= 0; out[1] >>>= 0;
-  return (out[0] | out[1]) !== 0;
+  if (out.length >= 2) out.set(FM32); else if (out.length === 1) out[0] = 0;
+  return (FM16[0] | FM16[1] | FM16[2] | FM16[3]) !== 0;
+}
+/** friendMaskOf's scratch: the 64-bit mask as four 16-bit halves (FM16) over the two words it is copied out as (FM32). */
+const FM16 = new Uint16Array(4), FM32 = new Uint32Array(FM16.buffer);
+/** On a big-endian machine the two 16-bit halves of a 32-bit word lie the other way round. */
+const U16_SWAP = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? 0 : 1;
+/** The index of a float32's high 16 bits among its two halves (1 on a little-endian machine), and FRIENDSHIP.friends' own halves. */
+const F32_HI = new Uint16Array(new Float32Array([2]).buffer)[1] === 0x4000 ? 1 : 0;
+const FR_BITS = new Uint16Array(new Float32Array([FRIENDSHIP.friends]).buffer), FR_H = FR_BITS[F32_HI], FR_L = FR_BITS[1 - F32_HI];
+/** A 16-bit view of a state's points (made once per QuestState's array; the same array every call after that). */
+let ptsSrc: Float32Array | null = null, ptsView: Uint16Array = new Uint16Array(0);
+function ptsHalves(p: Float32Array): Uint16Array {
+  if (p !== ptsSrc) { ptsSrc = p; ptsView = new Uint16Array(p.buffer, p.byteOffset, p.length * 2); }
+  return ptsView;
 }
 
 /* ── warmth (LIFE 6.3): per item, never falls; gains capped per day ── */

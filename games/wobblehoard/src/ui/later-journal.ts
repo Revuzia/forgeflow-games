@@ -6,8 +6,8 @@
 //
 //   Journal  four tabs (Stamps, Squishies, Friends, Keepsakes): the shown quests of each open chapter with "2 of 3" and "Needs: Squishies move on their own",
 //            the facts of each owned species with its family's name (D-82), the friendships, the 20 keepsakes; "Wishes now" and the gift card on Stamps.
-//   Travel   the postcards of the places: open ones go there (the host's travel path: the crossfade, the party at rest), a shut shipped one says how many
-//            stamps open it, an unshipped one is "Coming later" (only because its data says shipped: false).
+//   Travel   the postcards of the SHIPPED places (QUESTS 15: an unshipped one is not shown at all): an open one says "N of M stamps" of its chapter and
+//            goes there (the host's travel path: the crossfade, the party at rest); a shut one says how many stamps open it.
 import { h } from './dom.ts';
 import { icon } from './icons.ts';
 import { jelly } from './jelly/jelly.ts';
@@ -34,6 +34,8 @@ export interface LifeScreenOpts {
   say(text: string): void;
   from?: HTMLElement | null;
   onClose?(why: string): void;
+  /** round 5: the Journal opens at this quest id (the tracker pill's tap): its row is scrolled into view and marked for a moment */
+  at?: string;
 }
 export interface LifeScreen { readonly el: HTMLElement; readonly open: boolean; close(why?: string): boolean; refresh(): void }
 
@@ -220,6 +222,10 @@ export function openJournal(o: LifeScreenOpts): LifeScreen {
   });
   cue('open');
   render();
+  if (o.at) {
+    const row = f.scroll.querySelector<HTMLElement>(`[data-quest="${CSS.escape(o.at)}"]`);
+    if (row) { row.dataset.at = 'true'; try { row.scrollIntoView({ block: 'center' }); } catch { /* an old browser */ } window.setTimeout(() => { delete row.dataset.at; }, 2400); }
+  }
   const api: LifeScreen = { el: f.scrim, get open() { return layer.open; }, close: (why = 'code') => layer.close(why), refresh: render };
   return api;
 }
@@ -234,15 +240,21 @@ export function openTravel(o: LifeScreenOpts): LifeScreen {
     const open = o.host.openPlaces();
     const here = o.host.place;
     const grid = h('ul', { class: 'jn-cards', attrs: { role: 'list' } });
-    const later = h('ul', { class: 'jn-later', attrs: { role: 'list', 'aria-label': 'Coming later' } });
     for (const p of PLACE_INFO) {
-      if (!p.shipped) {   // shown as "coming later" only because the data says shipped: false
-        later.append(h('li', { class: 'jn-later-row', attrs: { 'data-place': p.id } }, icon('lock'), h('span', { text: `${p.name}: coming later` })));
-        continue;
-      }
+      // QUESTS 15 (round 5, VERDICT_PG B4): a place with `shipped: false` is not shown at all (no "coming soon" card, no line names it)
+      if (!p.shipped) continue;
       const isOpen = (open & (1 << p.idx)) !== 0;
       const card = h('li', { class: 'jn-card k-card', attrs: { 'data-place': p.id, 'data-open': String(isOpen), 'data-sky': p.sky } });
       card.append(h('span', { class: 'jn-sky', attrs: { 'aria-hidden': 'true' } }), h('b', { class: 'jn-card-name', text: p.name }));
+      // its chapter's stamps ("6 of 10 stamps": the shown quests of the place's own chapter, done of shown), once the place is open
+      if (v && isOpen) {
+        const ch = CHAPTERS.find((c) => c.place === p.idx);
+        if (ch) {
+          let shown = 0, done = 0;
+          for (const q of v.quests) if (q.chapter === ch.idx && q.shown) { shown++; if (q.done) done++; }
+          if (shown > 0) card.append(h('span', { class: 'jn-card-stamps', attrs: { 'data-stamps': `${done}/${shown}` }, text: fill(UI_TEXT.stampsOf, { a: String(done), b: String(shown) }) }));
+        }
+      }
       if (p.idx === here) card.append(h('span', { class: 'jn-q-hint', text: UI_TEXT.here }));
       else if (isOpen) {
         const go = h('button', { class: 'k-btn k-btn--gel jn-go', attrs: { type: 'button', 'data-place': p.id } }, icon('arrowRight'), h('span', { text: fill(UI_TEXT.goTo, { place: p.name }) }));
@@ -257,7 +269,6 @@ export function openTravel(o: LifeScreenOpts): LifeScreen {
       grid.append(card);
     }
     const kids: HTMLElement[] = [grid];
-    if (later.childElementCount) kids.push(h('section', { class: 'jn-group', attrs: { 'aria-label': 'Coming later' } }, h('h3', { class: 'k-group-title', text: 'Coming later' }), later));
     if (v) kids.unshift(h('p', { class: 'jn-lead', text: fill(UI_TEXT.stampsOf, { a: String(v.stamps), b: String(v.quests.filter((q) => q.shown).length) }) }));
     f.scroll.replaceChildren(...kids);
   }

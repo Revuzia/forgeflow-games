@@ -85,6 +85,7 @@ export const GUIDE_KEYS: readonly KeyRow[] = [
   { keys: ['2', 'C'], does: 'Cut' },
   { keys: ['3', 'S'], does: 'Snap' },
   { keys: ['H'], does: 'Hoard' },
+  { keys: ['J'], does: 'Journal' },   // (PLAYGROUND round 5: the J key, once the Journal has come)
   { keys: ['[', ']'], does: 'Switch squishy' },
   { keys: ['G'], does: 'Gravity: table or float' },
   { keys: ['M'], does: 'Sound on or off' },

@@ -1623,6 +1623,8 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 /* ───────────────────────── 12. PLAYGROUND: the LIFE host (PG_SHELL round 3; PLAYGROUND_BUILD.md 11.1, 11.2, 11.5, 11.14; SH-05 / SH-06 / EC-03 on mock bodies) ───────────────────────── */
 {
   const { attachLifeHost } = await import('../../src/shell/later-life.ts');
+  // (round 5, C1: the host takes the journal store and the prop world builder from their own lazy chunks, as boot.ts hands them in)
+  const lifeParts = { attachJournal: (await import('../../src/shell/later-quests.ts')).attachJournal, buildPropWorld: (await import('../../src/shell/later-props.ts')).buildPropWorld };
   const mem = memoryStorage();
   const r = rig({ storage: mem });
   const before = r.app.life === null && r.app.earlyLog.n === 0;
@@ -1635,7 +1637,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   const early = r.app.earlyLog.n;
   check('LIFE host: before the life chunk lands the game is today\'s toy (no host) and the early log keeps the player\'s squeeze (11.14: "the ring keeps the player\'s events")',
     before && r.app.life === null && early >= 1 && r.app.earlyLog.kind[0] === 1 && r.app.earlyLog.v[0] >= 1, `early ${early}`);
-  const host = attachLifeHost(r.app, { storage: mem, setTimer: () => 0, clearTimer: () => {} })!;
+  const host = attachLifeHost(r.app, { parts: lifeParts, storage: mem, setTimer: () => 0, clearTimer: () => {} })!;
   run(r, 100);
   const dbg0 = host.debug() as { chars: Array<{ slot: number }>; journal: { done: string[] } | null };
   check('LIFE host: attachLifeHost attaches it (game.life), the early squeeze becomes a TOUCH record the journal counts (H1 "A gentle squeeze" done) and the log is emptied',
@@ -1694,6 +1696,8 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   const THREE = await import('three');
   const { SoftBody } = await import('../../src/physics/softbody.ts');
   const { attachLifeHost } = await import('../../src/shell/later-life.ts');
+  // (round 5, C1: the host takes the journal store and the prop world builder from their own lazy chunks, as boot.ts hands them in)
+  const lifeParts = { attachJournal: (await import('../../src/shell/later-quests.ts')).attachJournal, buildPropWorld: (await import('../../src/shell/later-props.ts')).buildPropWorld };
   const { buildPropWorld } = await import('../../src/physics/props.ts');
   const { PLACE: HOME } = await import('../../src/data/place_home.ts');
   const { createMockStage, createMockAudio, createMockHaptics } = await import('../mocks.ts');
@@ -1769,7 +1773,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   });
   app.resize(W, H, 1); app.setPhase('play');
   const said: string[] = [];
-  const host = attachLifeHost(app, { storage: mem, say: (t) => said.push(t), moment: (t) => said.push('MOMENT ' + t), setTimer: () => 0, clearTimer: () => {} })!;
+  const host = attachLifeHost(app, { parts: lifeParts, storage: mem, say: (t) => said.push(t), moment: (t) => said.push('MOMENT ' + t), setTimer: () => 0, clearTimer: () => {} })!;
   const step = (n: number): void => { for (let i = 0; i < n; i++) { clockT += 1000 / 60; app.clock.advance?.(1000 / 60); app.stepOnce(1 / 60); } };
   const stepA = async (n: number): Promise<void> => { for (let i = 0; i < n; i += 10) { step(10); await tick(); } };
   type Dbg = { chars: Array<{ slot: number; species: string; itemId: string }>; party: { held: boolean }; tune: { on: boolean; kind: number; kettle: number; kettleNext: number | null }; place: number; tap: string; firstPlaySent: boolean; things: Array<{ id: string; shown: boolean; parked: boolean | null; x: number | null; z: number | null }> };
@@ -1939,18 +1943,47 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     okH && dbg().place === 0 && said.includes('You are at Home.') && Math.hypot(app.body.center.x - L[0].x, app.body.center.z - L[0].z) < 0.35 && xs.every((x, j) => Math.hypot(x.body.center.x - L[j + 1].x, x.body.center.z - L[j + 1].z) < 0.35),
     `play ${app.body.center.x.toFixed(2)},${app.body.center.z.toFixed(2)}; extras ${xs.map((x) => `${x.body.center.x.toFixed(2)},${x.body.center.z.toFixed(2)}`).join(' ')}`);
   // a cut (LIFE.md 9, step.ts: lifeRemove the whole, lifeAdd each piece with group = the whole's old slot): Split in two makes a face piece and a chunk of ONE group; Reconnect all, one whole again
-  type CDbg = { chars: Array<{ slot: number; kind: number; group: number; species: string; itemId: string | null }> };
+  type CDbg = { chars: Array<{ slot: number; kind: number; group: number; species: string; itemId: string | null; asleep?: boolean }> };
   const before = (host.debug() as CDbg).chars.find((c) => c.itemId === app.identity.itemId)!;
+  // round 5 (VERDICT_PG B2; PLAYGROUND_BUILD 11.4, D-16, SH-03): the party is out (2 here) when the play squishy is cut
+  const notes: string[] = [];
+  const offNote = app.on('notice', (t: string) => { notes.push(t); });
+  const matB = app.mat.count, idsB = [...app.mat.itemIds].join(), capB = app.cut.maxPieces;
+  const wholesB = (host.debug() as CDbg).chars.filter((c) => c.kind === 0).map((c) => c.itemId).sort().join();
   const sr = app.cut.splitInTwo();
   for (let k = 0; k < 120 && app.cut.busy; k++) await stepA(10);
   await stepA(30);
   const cutC = (host.debug() as CDbg).chars.filter((c) => c.kind !== 0);
+  const othersCut = (host.debug() as CDbg).chars.filter((c) => c.kind === 0 && c.itemId !== app.identity.itemId);
+  const matCut = app.mat.count, idsCut = [...app.mat.itemIds].join();
   app.cut.reconnectAll(false);
   await stepA(30);
   const after = (host.debug() as CDbg).chars.filter((c) => c.itemId === app.identity.itemId);
+  const wholesA = (host.debug() as CDbg).chars.filter((c) => c.kind === 0).map((c) => c.itemId).sort().join();
+  offNote();
   check('PLAYGROUND a cut with LIFE: Split in two gives the squishy\'s pieces as LIFE characters of ONE group (the face piece kind 1 and a chunk kind 2, group = the whole\'s old slot); Reconnect all makes it one whole character again',
     sr === 'cut' && app.cut.pieces === 1 && cutC.length === 2 && cutC.every((c) => c.group === before.slot) && cutC.some((c) => c.kind === 1) && cutC.some((c) => c.kind === 2) && after.length === 1 && after[0].kind === 0,
     JSON.stringify({ sr, before: [before.slot, before.kind], pieces: cutC.map((c) => [c.slot, c.kind, c.group]), after: after.map((c) => [c.slot, c.kind]) }));
+  check('PLAYGROUND (round 5, B2; 11.4, D-16, SH-03) a cut with a party keeps the party out: the squishy brought out stays on the mat and stays a LIFE character while the play squishy is in pieces (no "went back on the shelf" line); the pieces join as ONE group; Reconnect all gives one whole among the others (the same wholes as before the cut)',
+    matB === 2 && sr === 'cut' && matCut === matB && idsCut === idsB && othersCut.length === matB - 1 && !notes.some((t) => /went back on the shelf/.test(t)) && cutC.length === 2 && new Set(cutC.map((c) => c.group)).size === 1
+      && app.mat.count === matB && wholesA === wholesB && after.length === 1,
+    JSON.stringify({ mat: [matB, matCut, app.mat.count], ids: [idsB, idsCut], others: othersCut.map((c) => [c.slot, c.species, c.asleep]), notes, wholes: [wholesB, wholesA] }));
+  check('PLAYGROUND (round 5, B2; SH-03) the piece limit with a party: min(the tier\'s pieces cap, the characters cap - (wholes - 1)) = min(6, 10 - 1) = 6 on high with 2 out (one squishy out keeps the published safety ceiling, 64)',
+    capB === 6, `maxPieces with 2 out on high: ${capB}`);
+  // round 5 (VERDICT_PG B7; SH-22, D-61, D-85): 5 out on high, nobody touching: the over-budget rule brings the awake units back under unitCap (sleeping untouched
+  // wholes, farthest first) and keeps them there; the verifier saw 3.06 to 4.28 units against 2.494 for 20 s
+  {
+    const { speciesBaseGenome } = await import('../../src/data/catalog.ts');
+    for (const sp of ['crimpo', 'wisplet', 'thudge', 'capnap']) { if (app.mat.count >= 5) break; try { app.mat.add({ genome: speciesBaseGenome(sp as never, 7), itemId: null }, { restore: true }); } catch { /* none */ } await stepA(10); }
+    await stepA(120);
+    type UDbg = { units: number; life: { unitCap: number; allowance: number }; chars: Array<{ kind: number; asleep: boolean }> };
+    const samples: Array<[number, number, number]> = [];
+    for (let k = 0; k < 30; k++) { await stepA(60); const d = host.debug() as UDbg; samples.push([+d.units.toFixed(2), +(d.life.unitCap + d.life.allowance).toFixed(3), d.chars.filter((c) => c.kind === 0 && c.asleep).length]); }
+    const late = samples.slice(6), over = late.filter(([u, c]) => u > c + 0.001).length;
+    let run = 0, maxRun = 0; for (const [u, c] of late) { run = u > c + 0.001 ? run + 1 : 0; maxRun = Math.max(maxRun, run); }
+    check('PLAYGROUND (round 5, B7; SH-22) 5 out on high and no touch: after 6 s the awake units stay at or under unitCap (+ the ride allowance) in at least 22 of the next 24 one-second samples and never over it 3 s in a row (untouched wholes put to sleep, farthest first)',
+      app.mat.count === 5 && over <= 2 && maxRun < 3, `${app.mat.count} out; over the cap in ${over} of ${late.length}, longest run ${maxRun} s; [units, cap, asleep] ${JSON.stringify(samples)}`);
+  }
   app.dispose();
 }
 

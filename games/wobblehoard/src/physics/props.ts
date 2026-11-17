@@ -55,7 +55,7 @@ export const PROPS = {
   STRIKE_MIN: 0.004,    // a body's impulse on a strikable prop (body-mass m/s) that strikes it
   STRIKE_NORM: 0.08,    // ... and the impulse that maps to intensity 1
   STRIKE_GAP: 0.15,     // ... at most one strike per prop in this many seconds
-  // D-95 (revised, the owner 2026-11-17): by default a pushed swing or rocker dies down by its own damping (unchanged). AUTO is the PLAYER'S toggle (setAuto): while
+  // D-95 (revised, the owner 2026-11-17): by default a pushed swing or rocker dies down by its own damping (round 5: a swing, empty or ridden, in about 2 to 3 swings: the data's 0.6 /s and RIDER_DRAG_BACK below). AUTO is the PLAYER'S toggle (setAuto): while
   // it is on the hinge keeps a gentle steady arc by itself, with or without riders; a hand on the prop (grabProp) or a held rider always wins
   AUTO_SWING_DEG: 10,   // the AUTO arc of a pendulum hinge (the swing), at its own pendulum frequency sqrt(m g l / I) (the seat's: sqrt(g / rope))
   AUTO_ROCK_DEG: 5,     // ... of a seesaw (no gravity of its own), at AUTO_ROCK_PERIOD
@@ -66,6 +66,17 @@ export const PROPS = {
   AUTO_AMP_RATE: 6,     // deg/s: the arc grows (from rest) or shrinks (after a big push) to its size at this rate: AUTO's ease in (10 deg from rest in 1.7 s)
   AUTO_RIDER_S: 0.5,    // s: AUTO's pace follows the riders' pendulum smoothed over this
   AUTO_SEAT_W: 0.1,     // the empty seat's own pendulum weighs in at this share beside the riders' (so the pace is continuous as a rider gets on or off)
+  // D-95 (revised, round 5: "a pushed swing, EMPTY OR RIDDEN, dies down in about 2 to 3 swings"). The empty seat does that by the data's damping (the
+  // Pillow Swing's 0.6 /s; a pendulum seat's damping is a torque on its OWN inertia, so riders dilute it). A rider drained a FREE swing much faster: a soft
+  // body's drag (params.ts `drag`, lerp(2.0, 1.0, bounce) /s on its WHOLE velocity, the damper of a body bobbing on its glued foot) brakes it in world space,
+  // so 27 deg fell to 12 in one half swing and the swing was dead in one. While a pendulum seat swings free with riders (AUTO off, no hand, no held rider) it
+  // gives back the drag of the least-damped body (1.0 /s, bounce 1) for the riders' share of its inertia: every rider keeps a net drag of 0 to 1 /s of its own
+  // (never a gain), and the riders hold on (the ropes, S[34]) meanwhile.
+  RIDER_DRAG_BACK: 1.0, // 1/s x (the riders' inertia / the whole inertia)
+  // ... the riders' hold on the ropes fades with the swing: its share is (the seat's recent top angular speed - W0) / WR, clamped to 0..1, the top speed held with
+  // a TAU s decay (the hold acts on the rider alone, so a hold kept on in a dying swing fed energy back into it: a jelly rider's seat rocked on at 5.5 deg for 7 s, another
+  // still at 0.13 rad/s 9 s after AUTO went off; at 0.15 / 0.25 one jelly still plateaued; 0.25 / 0.15 keeps every family on its seat, scratch sw/score.sh)
+  RIDER_HOLD_W0: 0.25, RIDER_HOLD_WR: 0.15, RIDER_HOLD_TAU: 1.5,   // rad/s, rad/s, s: full hold from about 8 deg of arc, none under about 5
   HAND_TAU: 0.08,       // s: a hand on a hinge prop (grabProp) turns it toward the hand's angle with this time constant
   HAND_SMOOTH: 0.05,    // s: ... and its angular velocity follows that wish over this (a heavy rider does not make the hand jerk)
   RIDER_TAU: 0.1,       // s: a seat or board a HELD rider sits on turns with the rider (its centre's angular velocity about the axis) with this time constant
@@ -121,6 +132,8 @@ export class PropWorld implements PropWorldLike {
   private readonly au: Float64Array;        // per prop 5: the AUTO drive's share now (0..1), its arc's amplitude (rad) and phase (rad), the riders' sum m d and sum m d^2 (smoothed)
   private readonly hand: Uint8Array;        // per prop: 1 while a hand holds it (grabProp .. releaseProp; hinges only)
   private readonly heldT: Float64Array;     // per prop: seconds left in which a held body touched it (AUTO yields meanwhile)
+  private readonly freeRide: Float64Array;  // per prop: a pendulum seat swinging free with riders: its recent top angular speed (RIDER_HOLD_*; 0 = not free and ridden)
+  private readonly rideHold: Float64Array;  // per prop: ... and its riders' hold share now (S[34])
   private readonly handP: Float64Array;     // per prop 6: the grabbed spot relative to the pivot at hinge angle 0, and the hand's point (world)
   // the ball's bounds: shape 0 disc (cx, cz, r), 1 rounded rectangle (cx, cz, hx, hz, round), shrunk by each ball's radius when used
   private readonly bounds = new Float64Array(6);
@@ -148,7 +161,7 @@ export class PropWorld implements PropWorldLike {
     this.solve = { count: n, S: new Float64Array(n * PS), A: new Float64Array(n * PA) };
     this.kind = new Uint8Array(n); this.joint = new Uint8Array(n); this.parked = new Uint8Array(n); this.strikable = new Uint8Array(n);
     this.base = new Float64Array(n * 16); this.jp = new Float64Array(n * 8); this.st = new Float64Array(n * 12); this.motorOn = new Uint8Array(n); this.strikeT = new Float64Array(n); this.riderI = new Float64Array(n);
-    this.autoOn = new Uint8Array(n); this.au = new Float64Array(n * 5); this.hand = new Uint8Array(n); this.heldT = new Float64Array(n); this.handP = new Float64Array(n * 6);
+    this.autoOn = new Uint8Array(n); this.au = new Float64Array(n * 5); this.hand = new Uint8Array(n); this.heldT = new Float64Array(n); this.handP = new Float64Array(n * 6); this.freeRide = new Float64Array(n); this.rideHold = new Float64Array(n);
     this.things = new Int16Array(nThings * 2);   // [first prop, prop count] per thing: first -1 until it has one, count from 0
     for (let t = 0; t < nThings; t++) this.things[t * 2] = -1;   // (round 3 filled BOTH with -1 and counted from -1: setParked missed a thing's last prop, so a one-part thing never changed)
     this.boundsShape = bounds.shape; for (let i = 0; i < bounds.v.length && i < 6; i++) this.bounds[i] = bounds.v[i];
@@ -623,12 +636,18 @@ export class PropWorld implements PropWorldLike {
     const th0 = this.st[T], w0 = this.st[T + 1], lim = this.jp[J + 2];
     let w = w0 + (A[a + 3] * ax + A[a + 4] * ay + A[a + 5] * az) / I;
     w += (-this.jp[J + 3] * Math.sin(th0) / I) * h;                         // own gravity (a pendulum: the swing seat, a chime)
-    w *= Math.exp(-this.jp[J + 1] * h);
+    w *= Math.exp(-this.jp[J + 1] * h * (this.jp[J + 3] > 0 ? this.jp[J] / I : 1));   // (a pendulum seat's damping acts on its own inertia: round 5, D-95)
     // D-95: a hand on the prop wins over its riders and over AUTO: its angular velocity follows the wish to point the grabbed spot at the hand
     const handOn = this.hand[k] === 1;
     if (handOn) { this.handAngle(k, th0); const wt = (this.sc[2] - th0) / PROPS.HAND_TAU; w += (wt - w) * Math.min(1, h / PROPS.HAND_SMOOTH); }
     // D-95: a HELD rider wins too: the seat or board turns with the rider the player pulls or pushes (its centre's angular velocity about the axis, mass-weighted)
     else if (A[a + 14] > 0) w += (A[a + 13] / A[a + 14] - w) * Math.min(1, h / PROPS.RIDER_TAU);
+    // D-95 (round 5): a FREE pendulum seat with riders gives back the least drag a rider has (PROPS.RIDER_DRAG_BACK); its riders hold on while it swings (RIDER_HOLD_*, S[34])
+    if (this.jp[J + 3] > 0 && this.strikable[k] === 0 && !handOn && !(A[a + 14] > 0) && this.autoOn[k] === 0 && this.au[k * 5] === 0 && this.riderI[k] > 0) {
+      w *= Math.exp(PROPS.RIDER_DRAG_BACK * (this.riderI[k] / I) * h);
+      const aw = w < 0 ? -w : w, pk = this.freeRide[k] * Math.exp(-h / PROPS.RIDER_HOLD_TAU), sh = ((aw > pk ? aw : pk) - PROPS.RIDER_HOLD_W0) / PROPS.RIDER_HOLD_WR;
+      this.freeRide[k] = aw > pk ? aw : pk; this.rideHold[k] = sh < 0 ? 0 : sh > 1 ? 1 : sh;
+    } else { this.freeRide[k] = 0; this.rideHold[k] = 0; }
     const wmax = PROPS.MOVE_VMAX / Math.max(0.05, this.jp[J + 4]);
     if (w > wmax) w = wmax; else if (w < -wmax) w = -wmax;
     let th = th0 + w * h;
@@ -761,7 +780,7 @@ export class PropWorld implements PropWorldLike {
       wx = ax * w; wy = ay * w; wz = az * w; state = th;
       S[o + 25] = px; S[o + 26] = py; S[o + 27] = pz; S[o + 31] = ax; S[o + 32] = ay; S[o + 33] = az;
       S[o + 29] = w !== 0 ? 1 : 0;
-      S[o + 34] = this.jp[k * 8 + 3] > 0 && this.strikable[k] === 0 ? (this.hand[k] === 1 ? 1 : this.au[k * 5]) : 0;   // D-95: a pendulum seat AUTO or a hand drives: its rider holds on
+      S[o + 34] = this.jp[k * 8 + 3] > 0 && this.strikable[k] === 0 ? (this.hand[k] === 1 ? 1 : this.rideHold[k] > this.au[k * 5] ? this.rideHold[k] : this.au[k * 5]) : 0;   // D-95: a pendulum seat AUTO or a hand drives, or it swings free with riders (round 5): its riders hold on
     } else if (j === JOINT_BALL) {
       cx = st[T]; cy = st[T + 1]; cz = st[T + 2];
       vx = st[T + 3]; vy = st[T + 4]; vz = st[T + 5];

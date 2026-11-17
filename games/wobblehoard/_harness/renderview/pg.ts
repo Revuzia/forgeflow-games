@@ -375,6 +375,35 @@ export function makePg(E: PgEnv) {
       for (const id of ids) S.setBodyAsleep!(id, false);
       return { awakeMs: awake, asleepMs: asleep, ratio: asleep / awake, fineWhileAsleep: f1 - f0 };
     },
+    /**
+     * Round 5 (VERDICT_PG B1): a SLEEPING body that is moved (the shell's trip: `placeAt` at the spawn spot, which wakes it in physics, then
+     * `sleep()` at once, so the stage's asleep flag never drops) is drawn at its new spot: the jelly's footprint centre against the drawn centre
+     * (where the eyes and the ember are) 1 and 5 frames later, before the move as a control; the two still sleepers do 0 fine-mesh updates
+     * meanwhile (RD-05 kept). HEAD drew the jelly at the old spot (the fine mesh is skipped while asleep).
+     */
+    sleepMove(species: string[]): { real: boolean; before: number; after1: number; after5: number; moved: number; stillFine: number } {
+      pg.party(species, 3, 120);
+      const views = ids.map((id) => S.views.find((x) => x.id === id)!);
+      type Mover = SoftBodyLike & { placeAt?: (at: { x: number; y: number; z: number }, vel: { x: number; y: number; z: number }) => void; sleep?: () => boolean; sleepEnabled?: boolean };
+      for (const b of bodies as Mover[]) { try { b.sleepEnabled = true; b.sleep?.(); } catch { /* a stub */ } }
+      for (const id of ids) S.setBodyAsleep!(id, true);
+      E.tick(bodies, 5, 1 / 60, false);
+      const v = views[1], b = bodies[1] as Mover;
+      const off = (): number => { const j = v.jelly, c = v.proxy.center; return Math.hypot((j.minX + j.maxX) / 2 - c.x, (j.minZ + j.maxZ) / 2 - c.z); };
+      const before = off();
+      const c0 = { x: v.proxy.center.x, z: v.proxy.center.z };
+      const real = typeof b.placeAt === 'function';
+      if (real) { const c = b.center; b.placeAt!({ x: c.x + 1.2, y: c.y, z: c.z + 0.6 }, { x: 0, y: 0, z: 0 }); try { b.sleep?.(); } catch { /* ignore */ } }
+      const f0 = views[0].fineUpdates + views[2].fineUpdates;
+      E.tick(bodies, 1, 1 / 60, false);
+      const after1 = off();
+      E.tick(bodies, 4, 1 / 60, false);
+      const after5 = off();
+      const stillFine = views[0].fineUpdates + views[2].fineUpdates - f0;
+      const moved = Math.hypot(v.proxy.center.x - c0.x, v.proxy.center.z - c0.z);
+      for (const id of ids) S.setBodyAsleep!(id, false);
+      return { real, before, after1, after5, moved, stillFine };
+    },
     /** RD-06: 6 pieces (chunks lite) against 2 wholes, frame ms; and the same with the chunks NOT lite (today's x1.32..1.45). */
     liteCost(rounds = 3): { two: number[]; sixLite: number[]; sixFull: number[]; liteVerts: number; fullVerts: number; simVerts: number; tierFreq: number; calls: number[] } {
       const g = speciesBaseGenome(CATALOG[0].id, 1);

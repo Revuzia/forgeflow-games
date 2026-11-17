@@ -531,18 +531,21 @@ if (run('d95')) {
   const DEG = 180 / Math.PI;
   const kSw = (w: PropWorld): number => w.propThing.indexOf(3), kRk = (w: PropWorld): number => w.propThing.indexOf(1);
   /** half-swing amplitudes (rad, those over 0.2 deg), the rider-on samples, the fold, the largest frame-to-frame change of the angular velocity */
-  const swingTrack = (w: PropWorld, k: number, bs: SoftBody[], frames: number, each?: (i: number) => void): { amps: number[]; on: number; n: number; fold: number; dw: number; share: number } => {
-    const amps: number[] = []; let prev = w.angle(k), mx = 0, on = 0, n = 0, fold = 0, dw = 0, pw = w.omega(k), share = 0;
+  /** ... and (round 5) `tamps`: the half swings measured between turning points (half the angle swept; a rider sitting off the middle does not bias them) */
+  const swingTrack = (w: PropWorld, k: number, bs: SoftBody[], frames: number, each?: (i: number) => void): { amps: number[]; tamps: number[]; on: number; n: number; fold: number; dw: number; share: number } => {
+    const amps: number[] = [], tamps: number[] = []; let prev = w.angle(k), mx = 0, on = 0, n = 0, fold = 0, dw = 0, pw = w.omega(k), share = 0, turn = w.angle(k), sw = w.omega(k);
     for (let i = 0; i < frames; i++) {
       each?.(i);
       frameW(w, bs, bs.length >= 2 ? new ContactPlanner() : null);
       const th = w.angle(k), om = w.omega(k);
+      if (om * sw < 0) { tamps.push(Math.abs(th - turn) / 2); turn = th; }
+      if (om !== 0) sw = om;
       dw = Math.max(dw, Math.abs(om - pw)); pw = om; share = Math.max(share, w.autoShare(k));
       if (Math.sign(th) !== Math.sign(prev) && i > 0) { amps.push(mx); mx = 0; }
       mx = Math.max(mx, Math.abs(th)); prev = th;
       if (bs.length && i % 10 === 0) { n++; if (bs.every((b) => b.metrics.onProp === k)) on++; if (i % 30 === 0) for (const b of bs) fold = Math.max(fold, foldDeg(b)); }
     }
-    return { amps: amps.filter((a) => a > 0.2 / DEG), on, n, fold, dw, share };
+    return { amps: amps.filter((a) => a > 0.2 / DEG), tamps: tamps.filter((a) => a > 0.2 / DEG), on, n, fold, dw, share };
   };
   const swingRider = (fam: string, layout: 'wide' | 'tall' = 'wide'): { w: PropWorld; k: number; r: SoftBody } => {
     const w = buildPropWorld(CABIN, layout, 1), k = kSw(w), p = w.poses;
@@ -552,7 +555,48 @@ if (run('d95')) {
   };
   const am = (a: number[]): string => a.slice(0, 12).map((x) => f(x * DEG, 1)).join(' ');
   const arc = PROPS.AUTO_SWING_DEG / DEG, rarc = PROPS.AUTO_ROCK_DEG / DEG;
-  // (1) THE DEFAULT IS UNCHANGED: no motor; a pushed swing dies down by its own damping (the rider's in 1 to 3 half swings, as round 3 measured)
+  // (1) THE DEFAULT, re-specified in round 5 (FIX5_DATA) by the owner's D-95 revision "a pushed swing, EMPTY OR RIDDEN, dies down in about 2 to 3 swings" (VERDICT_PG
+  // B9: at the data's old 0.25 /s the empty seat took 5 to 6 swings; a rider's drag killed the ridden one in 1). The row this replaces (kept below as its
+  // no-motor half) read "the owner's 2 to 3 swings" as 1 to 3 HALF swings of a rider after a 1.6 m/s poke (about 4 deg). Now: a hand pushes the seat to 28 deg
+  // along its travel (the verifier's natural-swing test) and lets go; the half swings are measured between turning points (half the angle swept, so a rider
+  // sitting off the middle does not bias them); "dies down in ABOUT 2 to 3 swings" = 3 to 6 half swings over 5 deg (1.5 to 3 swings: "about" admits the half
+  // swing below 2; a firm-silicone rider's 4th half swing measures 4.9 deg), i.e. the first half swing under 5 deg is the 4th to the 7th. HEAD f271a93b1: the
+  // empty seat 11 and more (5 to 6 swings), most riders the 3rd (one swing), two riders off the seat.
+  {
+    const pushed = (fam: string): { amps: number[]; on: number; n: number; share: number; held: number } => {
+      const s = fam === '-' ? { w: buildPropWorld(CABIN, 'wide', 1), r: null as SoftBody | null } : swingRider(fam);
+      const w = s.w, k = kSw(w), bs = s.r ? [s.r] : [];
+      for (let i = 0; i < 60; i++) frameW(w, bs, null);
+      const sx = w.poses[k * 8], sy = w.poses[k * 8 + 1], sz = w.poses[k * 8 + 2], pvy = CABIN.things[3].p.pivotY ?? 1.62, L = pvy - sy, a28 = 28 / DEG, th0 = w.angle(k);
+      w.grabProp(k, sx, sy, sz);
+      for (let i = 0; i < 90; i++) { const q = Math.min(1, i / 40); w.dragProp(k, sx + L * Math.sin(a28) * q, sy + (L - L * Math.cos(a28)) * q, sz); frameW(w, bs, null); }
+      const held = w.angle(k) - th0;
+      w.releaseProp(k);
+      const turns: number[] = [w.angle(k)], amps: number[] = []; let pw = w.omega(k), on = 0, n = 0, share = 0;
+      for (let i = 0; i < 60 * 14; i++) {
+        frameW(w, bs, null);
+        const om = w.omega(k); share = Math.max(share, w.autoShare(k));
+        if (om * pw < 0) { const th = w.angle(k); amps.push(Math.abs(th - turns[turns.length - 1]) / 2); turns.push(th); }
+        if (om !== 0) pw = om;
+        if (bs.length && i % 10 === 0) { n++; if (bs.every((b) => b.metrics.onProp === k)) on++; }
+      }
+      return { amps: amps.filter((x) => x > 0.2 / DEG), on, n, share, held };
+    };
+    const fams = ['-', ...(QUICK ? ['jellygel', 'marshmallow'] : FULL ? FAMS : ['jellygel', 'firmsilicone', 'slimegoo', 'marshmallow', 'gummy', 'putty', 'waterfill'])];
+    const res: string[] = []; let bad = 0;
+    for (const fam of fams) {
+      const t = pushed(fam), first5 = t.amps.findIndex((x) => x < 5 / DEG) + 1;
+      // (no growth while it dies down: up to the first half swing under 5 deg none is bigger than the one before by 0.5 deg, and after it none comes back over 5 deg;
+      // under 5 deg a soft rider settling on the seat may bump it a degree or two, as without the drag-back)
+      let grow = 0; for (let i = 1; i < t.amps.length; i++) if (i < first5 ? t.amps[i] > t.amps[i - 1] + 0.5 / DEG : first5 > 0 && t.amps[i] >= 5 / DEG) grow++;
+      const ok = first5 >= 4 && first5 <= 7 && grow === 0 && t.share === 0 && Math.abs(t.held) > 25 / DEG && (fam === '-' || t.on >= 0.9 * t.n);
+      if (!ok) bad++;
+      res.push(`${fam === '-' ? 'empty' : fam}: ${am(t.amps)} deg, first under 5 deg: half swing ${first5 || '>' + t.amps.length}${grow ? `, ${grow} growths` : ''}${fam === '-' ? '' : `, on ${t.on}/${t.n}`}`);
+    }
+    add('D-95 default (AUTO off; the owner\'s revision: a pushed swing, EMPTY OR RIDDEN, dies down in about 2 to 3 swings): pushed by a hand to 28 deg and let go, the half swings (between turning points) fall under 5 deg at the 4th to the 7th, empty and with each rider; no growth over 0.5 deg until then, none back over 5 deg after; the rider keeps its seat (90%); no motor (AUTO\'s share 0)',
+      res.join('; '), 'all', bad === 0);
+  }
+  // (1b) no motor: a rider on the seat, one 1.6 m/s poke, AUTO never touched: AUTO's share stays 0, the seat's speed falls, the empty seat pushed alike only decays
   {
     const { w, k, r } = swingRider('jellygel');
     w.raycast(w.poses[k * 8], w.poses[k * 8 + 1], w.poses[k * 8 + 2] + 3, 0, 0, -1); w.poke(k, 1.6, 0, 0);
@@ -564,7 +608,7 @@ if (run('d95')) {
     const te = swingTrack(e, ke, [], 60 * 8);
     let growE = 0; for (let i = 1; i < te.amps.length; i++) if (te.amps[i] > te.amps[i - 1] + 1e-6) growE++;
     const dead = (t.amps.length <= 3 || t.amps[3] < 0.25 * t.amps[0]) && late <= 0.25 * first && first > 0.05;
-    add('D-95 default (AUTO off, the owner\'s "dies after 2 to 3 swings"): a rider on the seat, one 1.6 m/s push: at most 3 half swings over 0.2 deg (or the 4th under a quarter of the first), and from 3 s on the seat\'s angular speed under a quarter of its first 2 s; the empty seat pushed alike only decays; no motor (AUTO\'s share 0)',
+    add('D-95 default, no motor (AUTO never touched): a rider on the seat, one 1.6 m/s poke (about 4 deg, under the 5 deg line from the start): at most 3 half swings over 0.2 deg (or the 4th under a quarter of the first), and from 3 s on the seat\'s angular speed under a quarter of its first 2 s; the empty seat poked alike only decays; AUTO\'s share 0',
       `rider: up to ${f(firstA * DEG, 2)} deg and ${f(first, 3)} rad/s in the first 2 s, ${f(late, 3)} rad/s after 3 s, half swings across the bottom: ${am(t.amps) || 'none'} (on ${t.on}/${t.n}); empty: ${am(te.amps)} deg, growths ${growE}; AUTO share max ${f(Math.max(t.share, te.share), 2)}`, 'dies down; 0 growths; share 0', dead && growE === 0 && t.share === 0 && te.share === 0 && t.on >= 0.9 * t.n);
   }
   // (2) AUTO: a gentle steady arc, empty and with a rider (the rider holds on), eased in from rest, eased out to the natural die-down when turned off
@@ -576,6 +620,9 @@ if (run('d95')) {
       const rider = fam !== '-';
       const s = rider ? swingRider(fam) : (() => { const w = buildPropWorld(CABIN, 'wide', 1); return { w, k: kSw(w), r: null as SoftBody | null }; })();
       const bs = s.r ? [s.r] : [];
+      // (round 5: "from rest" made explicit: the rider's landing swings the seat, and since the owner's 2 to 3 swings that takes some seconds to die down, not one;
+      // the seat is let come to rest first, |w| under 0.02 rad/s for half a second, at most 12 s)
+      for (let i = 0, still = 0; i < 720 && still < 30; i++) { frameW(s.w, bs, null); still = Math.abs(s.w.omega(s.k)) < 0.02 ? still + 1 : 0; }
       const okOn = s.w.setAuto(3, true);
       const t = swingTrack(s.w, s.k, bs, 60 * (rider && QUICK ? 6 : T));   // (a rider's pace is quicker: 6 s holds the 3 ease-in and 3 steady half swings)
       const steady = t.amps.slice(3);   // after the ease-in (the first three half swings grow from rest)
@@ -583,7 +630,7 @@ if (run('d95')) {
       const grew = t.amps.length >= 2 && t.amps[0] < 0.75 * arc;   // eased in: the first half swing is small
       s.w.setAuto(3, false);
       // AUTO off: the natural die-down. With a rider: within 10 s (about 3 swings of the rider-and-seat's own ~3 s rocking) the seat's angular speed under a quarter
-      // of its speed in the first second, and never past the arc; empty: the seat's own damping (0.25 /s, the data's) only decays it. (The first half swing after
+      // of its speed in the first second, and never past the arc; empty: the seat's own damping (the data's: 0.6 /s since round 5) only decays it. (The first half swing after
       // the switch is a partial one: the tracking starts mid-swing)
       let w1 = 0, w10 = 0, overArc = false;
       const off = swingTrack(s.w, s.k, bs, 60 * (rider ? 10 : 6), (i) => { const o = Math.abs(s.w.omega(s.k)); if (i < 60) w1 = Math.max(w1, o); else if (i >= 540) w10 = Math.max(w10, o); if (Math.abs(s.w.angle(s.k)) > 1.1 * arc) overArc = true; });
@@ -628,11 +675,14 @@ if (run('d95')) {
       const held = w.angle(k);
       w.releaseProp(k);
       const t = swingTrack(w, k, [r], 60 * 6);
-      const backToArc = auto ? t.amps.slice(-3).every((a) => Math.abs(a - arc) <= 0.1 * arc) : t.amps.length <= 4 || t.amps[4] < 0.25 * t.amps[0];
+      // (AUTO off, round 5: "dies down" = in about 2 to 3 swings, the owner's D-95 revision, as row (1): the half swings between turning points under 5 deg by the
+      // 7th. The row this replaces asked for the 5th peak under a quarter of the first, which the old one-swing rider drain met and the owner's 2 to 3 swings do not)
+      const t5i = t.tamps.findIndex((a) => a < 5 / DEG), t5 = t5i >= 0 ? t5i + 1 : t.tamps.length + 1;   // (stopped without another turn: the next one)
+      const backToArc = auto ? t.amps.slice(-3).every((a) => Math.abs(a - arc) <= 0.1 * arc) : t5 <= 7;
       const swung = t.amps.length > 0 && t.amps[0] >= 0.8 * Math.abs(held);
       const rowOk = got && Math.abs(held - want) <= 2 / DEG && shareHeld === 0 && swung && backToArc && t.on >= 0.9 * t.n;
       ok = ok && rowOk;
-      res.push(`seat, AUTO ${auto ? 'on' : 'off'}: held at ${f(held * DEG, 1)} deg (the hand's ${f(want * DEG, 1)}), AUTO share while held ${f(shareHeld, 2)}; released: ${am(t.amps)} deg, rider on ${t.on}/${t.n}`);
+      res.push(`seat, AUTO ${auto ? 'on' : 'off'}: held at ${f(held * DEG, 1)} deg (the hand's ${f(want * DEG, 1)}), AUTO share while held ${f(shareHeld, 2)}; released: ${am(t.amps)} deg${auto ? '' : ` (between turning points ${am(t.tamps)}: under 5 deg at the ${t5})`}, rider on ${t.on}/${t.n}`);
     }
     for (const auto of QUICK ? [true] : [false, true]) {
       const { w, k, r } = swingRider('jellygel');

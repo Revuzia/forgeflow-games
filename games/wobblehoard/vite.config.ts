@@ -52,7 +52,7 @@ const LATER_FACADES: ReadonlyArray<readonly [RegExp, (m: RegExpMatchArray) => st
 /** modules that only lazy code imports (the LIFE chunk, the Journal, the away and place chunks, the stage's lazy bubbles) */
 const LAZY_ONLY: readonly RegExp[] = [
   /[\\/]src[\\/]life[\\/]/, /[\\/]src[\\/]data[\\/](life|places|quests|journal_text|place_[a-z]+)\.ts$/, /[\\/]src[\\/]core[\\/]quests\.ts$/,
-  /[\\/]src[\\/]collection[\\/]journal(_store)?\.ts$/, /[\\/]src[\\/]physics[\\/]props\.ts$/, /[\\/]src[\\/](shell|ui)[\\/]later-/, /[\\/]src[\\/]ui[\\/](wishes\.ts|journal\.css)$/,
+  /[\\/]src[\\/]collection[\\/]journal(_store)?\.ts$/, /[\\/]src[\\/]physics[\\/]props\.ts$/, /[\\/]src[\\/](shell|ui)[\\/]later-/, /[\\/]src[\\/]ui[\\/](wishes\.ts|journal\.css|play\.css)$/,
   /[\\/]src[\\/]render[\\/](place|placeview|lifelook|homekit|emotes)\.ts$/, /[\\/]src[\\/]render[\\/]places[\\/]/, /[\\/]src[\\/]audio[\\/](ambience|props|things)\.ts$/, /[\\/]src[\\/]audio[\\/]places[\\/]/,
 ];
 export function laterChunkName(facade: string | null, moduleIds: readonly string[]): string | null {

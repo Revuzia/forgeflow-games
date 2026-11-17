@@ -1744,6 +1744,12 @@ try {
         PG.sleep = s;
         check(s.fineWhileAsleep === 0 && s.ratio <= 0.3, 'RD-05: sleeping bodies do 0 fine-mesh updates; 4 asleep cost at most 0.3x the CPU update of 4 awake',
           `awake ${s.awakeMs.toFixed(2)} ms, asleep ${s.asleepMs.toFixed(2)} ms, x${s.ratio.toFixed(3)}, fine updates while asleep ${s.fineWhileAsleep}`);
+        // round 5 (VERDICT_PG B1): a sleeper moved by placeAt (the shell's trip) is drawn where it is, not in two places
+        const sm = await gp.evaluate((sp) => window.__RV__.pg.sleepMove(sp), SPECIES);
+        PG.sleepMove = sm;
+        check(sm.real && sm.moved > 1 && sm.before <= 0.05 && sm.after1 <= 0.05 && sm.after5 <= 0.05 && sm.stillFine === 0,
+          'B1 (round 5): a sleeping body moved 1.3 m by placeAt and put back to sleep is drawn at its new spot 1 and 5 frames later (the jelly\'s footprint centre within 5 cm of the centre the eyes follow); the still sleepers do 0 fine updates (RD-05)',
+          `real body ${sm.real}, moved ${sm.moved.toFixed(3)} m; jelly vs centre before ${sm.before.toFixed(3)} m, +1 frame ${sm.after1.toFixed(3)} m, +5 frames ${sm.after5.toFixed(3)} m; still sleepers' fine updates ${sm.stillFine}`);
         const l = await gp.evaluate(() => window.__RV__.pg.liteCost(3));
         const best = (a) => [...a].sort((x, y) => x - y)[0];
         const rLite = best(l.sixLite) / best(l.two), rFull = best(l.sixFull) / best(l.two);

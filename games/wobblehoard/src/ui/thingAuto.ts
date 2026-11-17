@@ -14,6 +14,8 @@ export interface ThingAutoUi { readonly el: HTMLElement; destroy(): void }
 
 const MAX = 4;
 const EDGE = 8;
+/** round 5 (B8): the spots a chip tries around its anchor, in chip widths (x) and chip heights (y): the anchor, then down toward the ride, up, the sides */
+const NEAR: ReadonlyArray<readonly [number, number]> = [[0, 0], [0, 1], [0, -1], [0, 2], [-1, 0], [1, 0], [-1, 1], [1, 1], [0, -2]];
 
 /** the rides' names (the screens' words: journal_text's THING_TEXT, a lazy chunk of its own); the id until it answers */
 let names: Readonly<Record<string, readonly [string, string]>> | null = null;
@@ -43,8 +45,10 @@ export function attachThingAuto(root: HTMLElement, canvas: HTMLCanvasElement, ho
     layer.append(b);
   }
   root.append(layer);
-  /** the HUD's boxes a chip must not cover (measured each placement: 4 Hz) */
-  const CHROME = '.hud-actions, .hud-life, .hint[data-show="true"], .hud-bottom > *, #wh-dock, .meter-cluster, .qswitch:not([hidden]), .mat-chip:not([hidden]), .toast, .opts:not([hidden])';
+  /** the HUD's boxes a chip must not cover (measured each placement: 4 Hz). Round 5 (VERDICT_PG B8): a toast is NOT one of them any more (a passing toast made
+   *  every chip jump to the top edge, y 90 -> 15, a moving target; the stamp moments no longer use the toast stack either); the play UI's slot (the tracker
+   *  pill, a moment, a wish card) is */
+  const CHROME = '.hud-actions, .hud-life, .hint[data-show="true"], .hud-bottom > *, #wh-dock, .meter-cluster, .qswitch:not([hidden]), .mat-chip:not([hidden]), .pl-slot > :not([hidden]), .opts:not([hidden])';
   const chrome = (): DOMRect[] => [...document.querySelectorAll(CHROME)].map((e) => e.getBoundingClientRect()).filter((q) => q.width > 0 && q.height > 0);
   const place = (): void => {
     const rows = host.autoThings();
@@ -60,17 +64,17 @@ export function attachThingAuto(root: HTMLElement, canvas: HTMLCanvasElement, ho
       const pressed = r.on ? 'true' : 'false';
       if (b.getAttribute('aria-pressed') !== pressed) b.setAttribute('aria-pressed', pressed);
       if (b.hidden) b.hidden = false;
-      // centred just under its anchor, inside the window, and never over the HUD (the top buttons, the hint, the dock, the bottom row): moved up past
-      // whatever it would cover, else hidden this round
+      // centred just under its anchor, inside the window, and never over the HUD (the top buttons, the hint, the dock, the bottom row). Round 5 (B8): when the
+      // anchor's spot is covered the chip tries the nearest free spots AROUND its anchor (down toward the ride first, then up, then to either side, at most two
+      // chip heights away), so it stays by its thing instead of climbing to the top edge; none free: hidden this round
       const w = b.offsetWidth || 72, hgt = b.offsetHeight || 32;
-      const x = Math.max(EDGE, Math.min(vw - w - EDGE, c.left + r.x - w / 2));
-      let y = Math.max(EDGE, Math.min(vh - hgt - EDGE, c.top + r.y + 6));
-      for (let t = 0; t < 6; t++) {
-        let hit: DOMRect | null = null;
-        for (const q of boxes) if (!(x + w <= q.left || q.right <= x || y + hgt <= q.top || q.bottom <= y)) { hit = q; break; }
-        if (!hit) break;
-        y = hit.top - hgt - EDGE;
-        if (y < EDGE) { y = -1; break; }
+      const x0 = c.left + r.x - w / 2, y0 = c.top + r.y + 6, step = hgt + EDGE;
+      let x = -1, y = -1;
+      for (const [dx, dy] of NEAR) {
+        const cx = Math.max(EDGE, Math.min(vw - w - EDGE, x0 + dx * (w + EDGE))), cy = Math.max(EDGE, Math.min(vh - hgt - EDGE, y0 + dy * step));
+        let hit = false;
+        for (const q of boxes) if (!(cx + w <= q.left || q.right <= cx || cy + hgt <= q.top || q.bottom <= cy)) { hit = true; break; }
+        if (!hit) { x = cx; y = cy; break; }
       }
       if (y < 0) { if (document.activeElement !== b) b.style.visibility = 'hidden'; continue; }
       b.style.visibility = '';

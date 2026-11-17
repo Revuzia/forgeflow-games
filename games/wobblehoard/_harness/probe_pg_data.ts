@@ -572,7 +572,10 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
 
 /* ═══════════════════════════════ DT-11: salts ═══════════════════════════════ */
 {
-  const KNOWN = [0x9e3779b9, 0x51ed270b, 0x5bd1e995, 0x6c696e65, 0x6e616d65, 0xeee1e5, 0xf0f0f0, 0x6117e7, 0x5f3759df, 0xce2e, 0x57a45, 0x0c070c07, 0x2f6b3c1d, 0x6d757369, 0x5eed1e55, 0x57155];
+  // (FIX5_DATA, round 5: + 0x2c1b3c6d, src/audio/music.ts's play-time thinning of a sparse style's mallet notes. A distinct stream on purpose: the
+  // mallet draws its own timbre from mulberry32(note seed), so a thin decision taken from that same stream would keep only the notes whose first timbre
+  // draw is high (a biased sound); hashing seed ^ this salt keeps the two independent, and it touches neither the composer's stream nor LIFE's SALTS.)
+  const KNOWN = [0x9e3779b9, 0x51ed270b, 0x5bd1e995, 0x6c696e65, 0x6e616d65, 0xeee1e5, 0xf0f0f0, 0x6117e7, 0x5f3759df, 0xce2e, 0x57a45, 0x0c070c07, 0x2f6b3c1d, 0x6d757369, 0x5eed1e55, 0x57155, 0x2c1b3c6d];
   const BASE = [0x57a15b00, 0x0d011009], ours = Object.values(SALTS) as number[], p: string[] = [];
   if (new Set(ours).size !== ours.length) p.push('two salts are equal');
   for (const s of ours) if (KNOWN.includes(s) || BASE.includes(s)) p.push(`salt 0x${s.toString(16)} collides`);
@@ -582,7 +585,7 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
   const unknown = [...found].filter((v) => !KNOWN.includes(v) && !ours.includes(v) && !BASE.includes(v));
   if (unknown.length) p.push(`new salt(s) in src: ${unknown.map((v) => '0x' + v.toString(16)).join(' ')} (add them to this row's list and re-check)`);
   const missing = KNOWN.filter((v) => !found.has(v)); if (missing.length) note('DT-11', `listed salts no longer in src: ${missing.map((v) => '0x' + v.toString(16)).join(' ')}`);
-  row('DT-11', p.length === 0, `the ${ours.length} SALTS differ from each other, the 16 in src and the 2 base seeds; src re-grepped (${found.size} XOR / mulberry32 constants)`, p.join(' | '));
+  row('DT-11', p.length === 0, `the ${ours.length} SALTS differ from each other, the ${KNOWN.length} in src and the 2 base seeds; src re-grepped (${found.size} XOR / mulberry32 constants)`, p.join(' | '));
 }
 
 /* ═══════════════════════════════ DT-12, DT-13 ═══════════════════════════════ */

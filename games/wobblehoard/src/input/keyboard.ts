@@ -1,5 +1,5 @@
 // Keyboard glue. Space = poke the centre (hold it to squish: it is a synthetic pointer at the body's centre, so it runs the SAME gesture
-// code as a finger), G = gravity <-> float, M = mute, H = the Hoard, 1 2 3 = the tools (Hand, Cut, Snap), C = Cut, S = Snap, F = full screen, P = the Menu, ? = How to play,
+// code as a finger), G = gravity <-> float, M = mute, H = the Hoard, J = the Journal (PLAYGROUND), 1 2 3 = the tools (Hand, Cut, Snap), C = Cut, S = Snap, F = full screen, P = the Menu, ? = How to play,
 // [ ] = switch, Escape = close what is open (hudBinding.ts escape(): the order of UI.md 4.5). Extras for people who cannot drag: arrow keys orbit, + / - zoom. During a ceremony Space, Enter and Escape skip it (after the 350 ms gate).
 // LOCK (_spec/LOCK.md): a Shift keydown (not on key repeat, not in a form control; a focused button of the dock does not count as one) calls app.input.lock(): the pulls held right now
 // that are fully stretched stay where they are. Shift alone is NOT "a key used" (the hint keeps its wording). Escape lets every lock go FIRST, but only when a lock exists and no panel
@@ -42,6 +42,8 @@ export interface KeyboardOptions {
   onMenu?(): void;
   /** ?: How to play; same rules as G and M */
   onHelp?(): void;
+  /** J: the Journal (PLAYGROUND, QUESTS 15; round 5); same rules as G and M; nothing until the life chunk has landed */
+  onJournal?(): void;
 }
 
 interface KeyEventLike extends Event {
@@ -132,6 +134,11 @@ export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phas
     if (key === '?' && opts.onHelp) {
       if (e.repeat || !shortcuts()) return;
       opts.onHelp();
+      return;
+    }
+    if ((key === 'j' || key === 'J') && opts.onJournal) {
+      if (e.repeat || !shortcuts()) return;
+      opts.onJournal();
       return;
     }
     if ((key === 'h' || key === 'H') && opts.onHoard) {

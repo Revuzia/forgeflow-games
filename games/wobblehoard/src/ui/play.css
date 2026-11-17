@@ -1,0 +1,51 @@
+/* PLAYGROUND round 5 (VERDICT_PG B3, B8): the play-time UI of ui/later-play.ts (its own later-play chunk). Kit components (k-btn, k-chip, k-card, k-glass) do
+   the skinning; this file only places things. The slot: the top left, under the top row, LEFT of the Journal column (it never covers the Journal and Places
+   buttons), one thing at a time: the tracker pill, a stamp moment or a wish card. The party popover stands over the name tag. */
+.pl-slot {
+  position: absolute; z-index: 1; left: calc(var(--safe-l) + var(--gutter)); top: calc(var(--safe-t) + 12px + var(--tap) + var(--wh-s2));
+  /* the room left of the Journal column: the column is one 44 px button wide, with a gap either side */
+  width: min(360px, calc(100vw - var(--safe-l) - var(--safe-r) - 2 * var(--gutter) - var(--tap) - 2 * var(--wh-s2)));
+  display: grid; gap: var(--wh-s2); justify-items: start; pointer-events: none;
+}
+body[data-layout="strip"] .pl-slot { top: calc(var(--safe-t) + 8px + var(--tap) + var(--wh-s2)); }
+body[data-layout="tiny"] .pl-slot { top: calc(var(--safe-t) + 54px); left: calc(var(--safe-l) + 12px); width: min(300px, calc(100vw - var(--safe-l) - var(--safe-r) - 24px - 4 * var(--tap) - 4 * 8px)); }
+body[data-ceremony] .pl-slot, body[data-tool="snap"] :is(.pl-slot, .pl-pop) { visibility: hidden; }
+.pl-pill, .pl-moment, .pl-wish { pointer-events: auto; max-width: 100%; animation: ov-fade var(--k-fd-2) linear backwards; }
+.pl-pill[hidden], .pl-moment[hidden], .pl-wish[hidden], .pl-pop[hidden] { display: none; }
+
+/* the tracker pill: [book "Next: ..."] [x], one line, an ellipsis, never wrapped */
+.pl-pill { display: flex; align-items: center; gap: var(--wh-s1); min-width: 0; }
+.k-btn.pl-pill-go { min-width: 0; max-width: 100%; gap: var(--wh-s2); justify-content: flex-start; font: var(--wh-w-bold) var(--wh-fs-small)/1.2 var(--wh-font-ui); }
+.pl-pill-go .k-icon { flex: none; width: 18px; height: 18px; }
+.pl-pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-btn.pl-pill-x { flex: none; }
+.pl-pill-x .k-icon { width: 16px; height: 16px; }
+
+/* a stamp moment: one at a time, 2.4 s; the stamp springs in (Calm / reduced motion: the fade alone) */
+.pl-moment { display: flex; align-items: center; gap: var(--wh-s2); padding: var(--wh-s2) var(--wh-s3); max-width: min(320px, 100%); pointer-events: none;
+  font: var(--wh-w-bold) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg); }
+.pl-moment-icon { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--k-sel-fill); color: var(--k-fg);
+  animation: pl-stamp var(--k-mv-3) var(--wh-ease-spring) backwards; }
+.pl-moment-icon .k-icon { width: 18px; height: 18px; }
+.pl-moment-text { min-width: 0; overflow-wrap: anywhere; }
+@keyframes pl-stamp { from { transform: scale(.6); } }
+
+/* the wish card: one or two lines and two 44 px buttons, at most min(358px, 100vw - 32px) wide */
+.pl-wish { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: var(--wh-s2) var(--wh-s3); padding: var(--wh-s3); width: min(358px, 100%); }
+.pl-wish-icon { display: grid; place-items: center; width: 28px; height: 28px; color: var(--k-fg); }
+.pl-wish-icon .k-icon { width: 22px; height: 22px; }
+.pl-wish-text { margin: 0; font: var(--wh-w-bold) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg); overflow-wrap: anywhere; }
+.pl-wish-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--wh-s2); justify-content: flex-end; }
+
+/* the party popover ("Your squishies"): over the name tag; a chip per squishy out, then "Go play with..." the things here */
+.pl-pop { position: fixed; z-index: var(--wh-z-panel); display: grid; gap: var(--wh-s2); padding: var(--wh-s3); max-height: min(60vh, 420px); overflow: auto; pointer-events: auto;
+  animation: ov-fade var(--k-fd-2) linear backwards; }
+.pl-pop-head { display: flex; align-items: center; justify-content: space-between; gap: var(--wh-s2); }
+.pl-pop-title { margin: 0; font: var(--wh-w-bold) var(--wh-fs-body)/1.25 var(--wh-font-ui); color: var(--k-fg); }
+.pl-pop-label { margin: var(--wh-s1) 0 0; font: var(--wh-w-mid) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg-dim); }
+.pl-pop-things { display: flex; flex-wrap: wrap; gap: var(--wh-s2); }
+.pl-pop-none { margin: 0; font: var(--wh-w-mid) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg-dim); }
+.nametag[data-party="true"] { pointer-events: auto; cursor: pointer; }
+/* B8: on a narrow screen the published toast stack (top centre) keeps clear of the Journal column at the right */
+@media (max-width: 640px) { body:has(.hud-life > button:not([hidden])) .toasts { padding-right: calc(var(--safe-r) + var(--k-gutter) + var(--tap) + var(--wh-s2)); } }
+@media (forced-colors: active) { .pl-moment-icon { border: 1px solid CanvasText; } }

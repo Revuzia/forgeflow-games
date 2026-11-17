@@ -212,6 +212,7 @@ export async function boot(): Promise<(() => void) | null> {
     onFullscreen: () => { if (g.phase === 'play') void ui.toggleFullscreen(); },
     onMenu: () => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.openMenu(); },
     onHelp: () => { ui.openHelp(); },   // ? : How to play (B4b; in play with nothing else open)
+    onJournal: () => { if (g.phase === 'play') void ui.openJournal(); },   // round 5 (VERDICT_PG B10 / QUESTS 15): J opens the Journal (once the life chunk has landed)
   });
   const detachLife = attachLifecycle(g);
 
@@ -219,24 +220,34 @@ export async function boot(): Promise<(() => void) | null> {
   // the first-play download; until it lands Home is today's toy (one squishy, no brain, no things) and game.ts's early log keeps the player's events.
   // A load that fails retries at the next idle moment and never breaks play.
   let lifeTries = 0, lifeTimer = 0, lifeGone = false, lifeUiOff: () => void = () => { /* nothing yet */ };
+  // round 5 (VERDICT_PG B3, B8): the play-time UI (ui/later-play.ts, its own later chunk): the tracker pill, the stamp moments in a free spot one at a time,
+  // the wish card, the party popover. Until it lands a moment is the published toast.
+  let playUi: { moment(t: string): void; showWish(sp: number, k: number, t: number, byKey?: boolean): void; destroy(): void } | null = null;
   const loadLife = (): void => {
     if (lifeGone || g.life || g.phase !== 'play') return;
     lifeTries++;
-    import('./later-life.ts').then((m) => {
+    // (round 5, VERDICT_PG C1: the quest reducer + journal store and the prop world builder are lazy chunks of their own, requested in parallel)
+    Promise.all([import('./later-life.ts'), import('./later-quests.ts'), import('./later-props.ts')]).then(([m, mq, mp]) => {
       if (lifeGone || g.life) return;
       const host = m.attachLifeHost(g, {
+        parts: { attachJournal: mq.attachJournal, buildPropWorld: mp.buildPropWorld },
         storage, subscribe,
         say: (t) => ui.announcer.say(t),
-        moment: (t) => { ui.toasts.show('success', t, { ms: 3200 }); },
+        moment: (t) => { if (playUi) playUi.moment(t); else ui.toasts.show('success', t, { ms: 3200 }); },
         stampHaptic: () => { try { g.haptics.uiTap?.('ready'); } catch { /* none */ } },
         phone: () => isCoarsePointer() || Math.min(window.innerWidth, window.innerHeight) < 600,
         reducedMotion: () => prefersReducedMotion(),
       });
-      // (a tapped wish reads its card's line, from the screens chunk on demand: QUESTS 8 / 15)
+      // (a tapped wish opens its card once the play UI has landed, else reads its card's line, from the screens chunk on demand: QUESTS 8 / 15)
       if (host) {
-        const taps = m.attachBubbleTaps(root, canvas, host, (t) => ui.announcer.say(t), (sp, k, t) => import('../ui/later-journal.ts').then((j) => j.wishLine(sp, k, t)));
+        const taps = m.attachBubbleTaps(root, canvas, host, (t) => ui.announcer.say(t), (sp, k, t) => import('../ui/later-journal.ts').then((j) => j.wishLine(sp, k, t)),
+          (sp, k, t) => { if (!playUi) return false; playUi.showWish(sp, k, t); return true; });
         const auto = m.attachThingAuto(root, canvas, host, (t) => ui.announcer.say(t));   // (D-95 revised: the swing's and the rocker's AUTO chips)
-        lifeUiOff = () => { taps.destroy(); auto.destroy(); };
+        lifeUiOff = () => { taps.destroy(); auto.destroy(); playUi?.destroy(); playUi = null; };
+        import('../ui/later-play.ts').then((pm) => {
+          if (lifeGone || g.life !== host) return;
+          playUi = pm.attachPlayUi({ root, host, game: g, say: (t) => ui.announcer.say(t), openJournal: (from, at) => { void ui.openJournal(from, at); } });
+        }).catch((e: unknown) => { console.error(e); });
       }
       ui.lifeAttached();
     }).catch((e: unknown) => {

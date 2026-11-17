@@ -30,9 +30,8 @@ import { pitchRatio } from '../core/genome.ts';
 import type { StorageLike } from '../core/settings.ts';
 import type { StorageSubscribe } from '../core/save.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends,
-  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, attentionSound, PHRASE, UNIT } from '../life/step.ts';
+  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, attentionSound, PHRASE, UNIT, CHAR_CAP } from '../life/step.ts';
 import type { LifeWorld } from '../life/step.ts';
-import { buildPropWorld } from '../physics/props.ts';
 import type { PropWorld } from '../physics/props.ts';
 import { PLACE as HOME } from '../data/place_home.ts';
 import { PLACE_INFO, THING_IDS, THING_KINDS, loadPlaceDef, MECH, PROP_SOUND, ZONE } from '../data/places.ts';
@@ -41,7 +40,6 @@ import { INTENT, LIFE_FLAG, LIFE_EV, LOOK, SCRIPT, TOUCH, USE_VERB, WISH_KIND, S
 import { EV, BY, WISH_STATE, UI_KIND, EV_FLAG, QUESTS, CHAPTERS } from '../data/quests.ts';
 import { CATALOG, speciesIdx, familyOf } from '../data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
-import { attachJournal } from '../collection/journal_store.ts';
 import type { JournalRuntime } from '../collection/journal_store.ts';
 import type { CollectionEvent, JournalView } from '../collection/types.ts';
 import { HOME_TEXT } from '../data/quests.ts';
@@ -58,12 +56,20 @@ const FLICK_MS = 1.2;    // a tapped ball rolls away from the camera at this spe
 const SHOWER_S = 4;      // a tapped Drip Leaf tips its shower this long (PLACES 2.1 M14: "tap it: the leaf tips a shower")
 const SET_S = 6;         // a ride the body lands on within this many seconds of the player letting go of it (or lifting it there) is a ride the player SET UP
 const PAD_USE_GAP_S = 2; // one USE BOUNCE per body per this many seconds of pad kicks (a landing's kicks in a row are one bounce)
+const HUSH_S = 4;        // round 5 (B7): a body the over-budget rule must put to sleep takes no new LIFE motion for this long (it comes to rest, then sleeps)
 /** Home's things by THING_IDS index: what each one arrives after (PLACES 4.1) */
 const THING_FELT = 0, THING_MUSIC = 1, THING_RUG = 2, THING_LAMP = 3, THING_SHELF = 4, THING_PAD = 5;
 /** the cut flavour index (audio/cut.ts CUT_FLAVOURS: gel, sticky, foam, beads, dough, firm) of each material family (MATERIAL_FAMILY_IDS order) */
 const FLAVOUR_OF: Readonly<Record<string, number>> = { jellygel: 0, gummy: 0, waterfill: 0, stickystretch: 1, slimegoo: 1, slowrise: 2, marshmallow: 2, beadsqueeze: 3, putty: 4, mochidough: 4, firmsilicone: 5, popdome: 5 };
 
+/** Round 5 (VERDICT_PG C1, D-92): the parts that ship in their own lazy chunks (shell/later-quests.ts, shell/later-props.ts), requested in parallel with this
+ *  one and handed in here, so the life chunk stays under its 150 KB cap. */
+export interface LifeHostParts {
+  attachJournal: typeof import('../collection/journal_store.ts').attachJournal;
+  buildPropWorld: typeof import('../physics/props.ts').buildPropWorld;
+}
 export interface LifeHostDeps {
+  parts: LifeHostParts;
   storage: StorageLike | null;
   subscribe?: StorageSubscribe;
   /** say a polite live line (the announcer) */
@@ -93,10 +99,11 @@ interface Char {
   rideUntil: number;      // RIDE (D-74)
   setT: number;           // sim time the player let go of it (a carry ended) or lifted it onto a ride (useRide): QUESTS 4's "rides the player set up"
   padT: number;           // sim time of its last USE BOUNCE from a pad kick
+  hushT: number;          // round 5 (B7): until this sim time LIFE's motion intents for it are dropped (the over-budget rule is putting it to sleep)
 }
 const mkChar = (): Char => ({ on: false, body: null, genome: null, itemId: null, view: -1, kind: 0, group: -1, species: 255, family: 0, flavour: 0, pitch: 1, frac: 1, r: 0.5,
   offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, scooting: false, scootX: 0, scootZ: 0,
-  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9 });
+  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, hushT: -1e9 });
 
 function mkSnapshot(): LifeSnapshot {
   const n = CAP;
@@ -193,6 +200,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
 
   // ---- the journal, the ring and the moments ----
   let journal: JournalRuntime | null = null;
+  const { attachJournal, buildPropWorld } = deps.parts;
   try { journal = attachJournal(game.hoard, { storage: deps.storage, subscribe: deps.subscribe, setTimer: deps.setTimer, clearTimer: deps.clearTimer }); } catch (e) { report(e); }
   const owned = new Uint32Array(2), favKnown = new Uint32Array(4), friendMask = new Uint32Array(2);
   let openPlacesMask = 1;
@@ -268,7 +276,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const ce = b.center;
     c.lastX = ce.x + off.x; c.lastZ = ce.z + off.z; c.vx = 0; c.vz = 0;
     c.homeX = c.lastX; c.homeZ = c.lastZ;
-    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9;
+    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.hushT = -1e9;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
     if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
@@ -391,7 +399,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (!c.on || !c.body) continue;
       // sleep only with a party (one squishy alone behaves exactly as the published toy); pieces keep CUT3's own rule
       if (c.kind === 0) { try { const want = n >= 2; if (c.body.sleepEnabled !== want) { if (!want) c.body.wake?.(); c.body.sleepEnabled = want; } } catch { /* a mock */ } }
-      c.view = bodies.viewIdOf(c.body) ?? c.view;
+      // a view re-added under a new id (the mat's re-layout, a swap) starts awake: the mirror follows, so the next snapshot tells it the truth
+      const nv = bodies.viewIdOf(c.body) ?? c.view;
+      if (nv !== c.view) { c.view = nv; c.asleepShown = false; }
     }
     // friendship levels of every pair out (LIFE 6.2), from the journal
     const view = safeView();
@@ -509,6 +519,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const c = chars[i];
     if (!c.on || !c.body) return;
     const body = c.body;
+    // round 5 (B7, D-61): a body the over-budget rule is putting to sleep takes no new LIFE motion until it sleeps (or the hush ends): physics' sleep() needs it still
+    if (c.hushT > game.simTime && (kind === INTENT.SCOOT || kind === INTENT.HOP || kind === HOP_GO || kind === INTENT.GLIDE || kind === INTENT.SQUASH)) return;
     switch (kind) {
       case INTENT.SCOOT:
         if (floatParked) return;
@@ -864,11 +876,16 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     }
   }
 
-  // ---- the awake budget (D-61, D-85): over the cap, the farthest untouched LIFE mover stops and untouched still wholes sleep ----
+  // ---- the awake budget (D-61, D-85, SH-22): over the cap, the farthest untouched LIFE mover stops and untouched still wholes sleep ----
+  // Round 5 (VERDICT_PG B7: 5 out on high stayed at 3 to 4.3 units against 2.5 for 20 s): physics' sleep() refuses a body that is not at rest, and LIFE kept
+  // every one of them moving, so the rule asked the same farthest body every frame and nobody ever slept. Now the rule takes as many wholes as the excess needs,
+  // farthest first: each that physics puts to sleep counts; each it refuses is HUSHED (its scoot ends, its squash eases out, LIFE's new motion intents for it are
+  // dropped for HUSH_S), so it comes to rest and sleeps a moment later. The touched, carried, tossed and riding bodies are never forced.
+  const tried = new Uint8Array(CAP);
   function overBudget(): void {
     const cap = att.unitCap + att.allowance + 0.001;
     if (!(s.units > cap)) return;
-    const cx = 0, cz = 0;
+    const cx = 0, cz = 0, t = game.simTime;
     let far = -1, fd = -1;
     for (let i = 0; i < CAP; i++) {
       const c = chars[i];
@@ -876,15 +893,29 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
       if (d > fd) { fd = d; far = i; }
     }
-    if (far >= 0) { endScoot(far); return; }
-    let sl = -1, sd = -1;
-    for (let i = 0; i < CAP; i++) {
-      const c = chars[i];
-      if (!c.on || c.kind !== 0 || !c.body || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP | LIFE_FLAG.ON_PROP)) !== 0 || c.tossed) continue;
-      const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
-      if (d > sd) { sd = d; sl = i; }
+    if (far >= 0) endScoot(far);
+    let need = Math.ceil((s.units - cap) / (UNIT.whole - UNIT.sleeper) - 1e-6);
+    tried.fill(0);
+    while (need > 0) {
+      let sl = -1, sd = -1;
+      for (let i = 0; i < CAP; i++) {
+        const c = chars[i];
+        if (tried[i] || !c.on || c.kind !== 0 || !c.body || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) !== 0 || c.tossed) continue;
+        const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
+        if (d > sd) { sd = d; sl = i; }
+      }
+      if (sl < 0) break;
+      tried[sl] = 1; need--;
+      const c = chars[sl];
+      let slept = false;
+      try { slept = c.body!.sleep?.() === true; } catch { slept = false; }
+      if (!slept) {
+        // not at rest yet: it is hushed (no new LIFE motion), its scoot ends and its squash eases out, so a later frame's sleep() takes
+        if (c.hushT <= t) { c.hushT = t + HUSH_S; for (let k = 0; k < qLen; k++) if (qWho[k] === sl && (qKind[k] === HOP_GO || qKind[k] === INTENT.HOP || qKind[k] === INTENT.SCOOT)) qKind[k] = 0; }
+        endScoot(sl);
+        try { c.body!.setSquash?.(1, 0.12); } catch { /* ignore */ }
+      } else c.hushT = -1e9;
     }
-    if (sl >= 0) { try { chars[sl].body!.sleep?.(); } catch { /* ignore */ } }
   }
 
   // ---- scripts (LIFE 4.1): FIRST_PLAY on a fresh profile 6 s after the player lets go; FIRST_WISH 60 s after the first reveal (5:00 at the latest) ----
@@ -1489,6 +1520,42 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (i < 0 || !def.things[k] || floatParked || travelling) return false;
       lifeScript(w, i, SCRIPT.PLAY_WITH, k);
       return true;
+    },
+    thingsNow() {
+      const rows: Array<{ k: number; id: string; ride: boolean }> = [];
+      if (!world || floatParked || travelling) return rows;
+      for (let k = 0; k < def.things.length; k++) {
+        const td = def.things[k];
+        if (placeIdx === 0 && homeShown[k] !== 1) continue;
+        rows.push({ k, id: td.id, ride: !!td.ride });
+      }
+      return rows;
+    },
+    partyNow() {
+      const rows: Array<{ itemId: string; species: number; play: boolean }> = [];
+      for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.kind === 0 && c.itemId) rows.push({ itemId: c.itemId, species: c.species, play: c.body === bodies.body }); }
+      return rows;
+    },
+    beforeCut() {
+      // 11.4 (D-16, SH-03; round 5, VERDICT_PG B2): the party stays when the play squishy is cut; first every untouched whole but the play squishy
+      // sleeps (its units make room for the pieces: med 5 pieces 1.10 + 3 sleepers 0.09 = 1.19 against 1.49). Nobody goes back to the shelf.
+      for (let i = 0; i < CAP; i++) {
+        const c = chars[i];
+        if (!c.on || c.kind !== 0 || !c.body || c.body === bodies.body) continue;
+        const m = c.body.metrics;
+        if (m.fingers > 0 || m.grabbed || m.carried === true || c.tossed) continue;
+        try { c.body.sleep?.(); } catch { /* a mock */ }
+      }
+      return 0;
+    },
+    pieceCap() {
+      // pieces = min(the tier's pieces cap, the characters cap - (wholes - 1)) while 2 or more wholes are out (the cut squishy counts as its whole);
+      // one squishy out keeps the published safety ceiling (null)
+      const wholes = wholesOut() + (cutGroup >= 0 ? 1 : 0);
+      if (wholes < 2) return null;
+      let t = 1;
+      try { t = TIER_IDX[stage.stats().tier] ?? 1; } catch { t = 1; }
+      return Math.max(2, Math.min(CHAR_CAP.pieces[t], CHAR_CAP.chars[t] - (wholes - 1)));
     },
     sense(dt) {
       if (dt > 0 && world && !floatParked) { world.endFrame(dt); drainProps(); heldVoices(); }

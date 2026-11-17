@@ -100,7 +100,8 @@ export interface UiBinding {
   /** PLAYGROUND: the life chunk has landed (boot.ts): the Journal entry shows in the dock, Places once a second place is open */
   lifeAttached(): void;
   /** PLAYGROUND: open the Journal / the Travel sheet (later-* chunk); resolves true when it is open */
-  openJournal(from?: HTMLElement): Promise<boolean>;
+  /** the Journal; `at`: a quest id to show (the tracker pill's tap, round 5) */
+  openJournal(from?: HTMLElement, at?: string): Promise<boolean>;
   openTravel(from?: HTMLElement): Promise<boolean>;
   destroy(): void;
 }
@@ -229,17 +230,18 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   // K04). Icon buttons with their names and tooltips, first in the HUD's DOM, so Tab reaches them just before Full screen. Hidden until the life chunk lands
   // (boot.ts calls lifeAttached); Places only once a second place is open. Each opens a later-* screen (ui/later-journal.ts); LIFE goes quiet under it.
   // (The classes dock-journal / dock-places stay: the harness and the screens find them by those.)
-  const lifeBtn = (cls: string, ico: 'book' | 'map', label: string): HTMLButtonElement => {
+  const lifeBtn = (cls: string, ico: 'book' | 'map', label: string, tip = label): HTMLButtonElement => {
     const b = h('button', { class: `k-btn k-iconbtn hud-life-btn ${cls}`, attrs: { type: 'button', 'aria-label': label, hidden: '' } }, icon(ico));
-    off.push(attachTooltip(b, label, { place: 'below' }).destroy);
+    off.push(attachTooltip(b, tip, { place: 'below' }).destroy);
     return b;
   };
-  const journalBtn = lifeBtn('dock-journal', 'book', 'Journal');
+  const journalBtn = lifeBtn('dock-journal', 'book', 'Journal', 'Journal (J)');   // (round 5: the J key, QUESTS 15's "Journal (J)" label)
+  journalBtn.setAttribute('aria-keyshortcuts', 'J');
   const placesBtn = lifeBtn('dock-places', 'map', 'Places');
   const lifeCol = h('div', { class: 'hud-life', attrs: { role: 'group', 'aria-label': 'Journal and places' } }, journalBtn, placesBtn);
   hud.el.insertBefore(lifeCol, hud.el.firstChild);
   let screenBusy = false;
-  const openLifeScreen = async (kind: 'journal' | 'travel', from?: HTMLElement): Promise<boolean> => {
+  const openLifeScreen = async (kind: 'journal' | 'travel', from?: HTMLElement, at?: string): Promise<boolean> => {
     const host = g.life as LifeHostApi | null;
     if (!host || screenBusy || g.phase !== 'play') return false;
     screenBusy = true;
@@ -250,7 +252,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     try { m = await import('../ui/later-journal.ts'); } catch (e) { console.error(e); screenBusy = false; screenFailed(); return false; }
     host.setSheet(kind, true);
     const onClose = (): void => { host.setSheet(kind, false); screenBusy = false; syncLifeButtons(); };
-    const o = { root, host, game: g, say: (t: string) => announcer.say(t), from: opener, onClose };
+    const o = { root, host, game: g, say: (t: string) => announcer.say(t), from: opener, onClose, at };
     if (kind === 'journal') m.openJournal(o); else m.openTravel(o);
     return true;
   };
@@ -363,12 +365,17 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     const cur = g.identity.itemId;
     const out: SwitchChoice[] = [];
     const add = (id: string): void => {
-      if (id === cur || out.some((c) => c.id === id)) return;
+      if (!id || id === cur || out.some((c) => c.id === id)) return;
       const it = g.hoard.item(id);
       if (it) out.push({ id: it.id, species: it.species, name: it.name, tier: it.tier as TierName });
     };
+    // PLAYGROUND (round 5, VERDICT_PG B8): in a party (the LIFE host attached, others out) the squishies OUT come first, marked as out, so the row is the
+    // party's own chips (a tap swaps the two within the party: game.ts switchNow); then the ones played lately and the hearted ones, as published
+    if (g.life !== null) for (const id of g.mat.itemIds) add(id);
+    const outN = out.length;
     for (const id of g.history.recent()) add(id);
     for (const it of g.hoard.items()) if (it.fav) add(it.id);
+    for (let i = 0; i < outN; i++) out[i].out = true;
     return out;
   };
   // the HUD rows the 3D capsule must not land under (render lane's optional setSafeInsets): the top bar and the bottom row (the quick
@@ -419,7 +426,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     off.push(() => { tb.el.removeEventListener('transitionend', soon); tb.el.removeEventListener('animationend', soon); });
     if (att && typeof ResizeObserver === 'function') { const ro = new ResizeObserver(soon); ro.observe(att); off.push(() => ro.disconnect()); }
   }
-  off.push(g.on('identity', () => refreshSwitch()), g.hoard.onChange(() => refreshSwitch()), () => qs.destroy());
+  off.push(g.on('identity', () => refreshSwitch()), g.hoard.onChange(() => refreshSwitch()), g.mat.onChange(() => refreshSwitch()), () => qs.destroy());
 
   // ---- offline (COLLECTION 9.9, signed in): the sticky offline toast (`.net-banner`) while the connection is gone, the ring keeps previewing; "Reconnected" once
   let offline = false;
@@ -661,7 +668,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     },
     keyUsed() { document.body.dataset.kbd = '1'; if (!isCoarsePointer()) hud.setHintMode('keyboard'); },
     lifeAttached() { lifeOn = true; syncLifeButtons(); },
-    openJournal: (from) => openLifeScreen('journal', from),
+    openJournal: (from, at) => openLifeScreen('journal', from, at),
     openTravel: (from) => openLifeScreen('travel', from),
     switchBy(dir) {
       const list = choices().slice(0, QUICK_MAX);

@@ -158,8 +158,11 @@ export interface CutDeps {
   drag(out: V3): boolean;
   /** fingers off every body (a piece is about to be replaced or removed) */
   beforeChange(): void;
-  /** put the squishies brought out of the Hoard back (a cut makes room for its pieces) */
+  /** put the squishies brought out of the Hoard back (a cut makes room for its pieces); returns how many went back (0: the party stays, PLAYGROUND 11.4) */
   clearMat(): number;
+  /** PLAYGROUND (11.4, SH-03): the most pieces while a party is out (min(the pieces cap, the characters cap - (wholes - 1))); null or absent = the
+   *  safety ceiling alone (the published toy) */
+  pieceCap?(): number | null;
   panOf(p: V3): number;
   say(text: string): void;
   report(e: unknown): void;
@@ -389,7 +392,11 @@ export function createCutter(d: CutDeps): Cutter {
   /** is the squishy (cut now, or about to be) on the true cut engine? */
   const isTrue = (): boolean => (locked !== null ? locked === 'true' : style === 'clean' && trueCutOffered(d.bodies.body));
   let ceilingOverride: number | null = null;   // tests and the dev hook only (a browser row reaches the kind line at 6 pieces instead of 64)
-  const maxN = (): number => ceilingOverride ?? d.ceiling ?? PIECE_CEILING;
+  const maxN = (): number => {
+    if (ceilingOverride !== null) return ceilingOverride;
+    const base = d.ceiling ?? PIECE_CEILING, cap = d.pieceCap?.() ?? null;   // (PLAYGROUND: a party's piece cap only ever lowers the safety ceiling)
+    return cap !== null && Number.isFinite(cap) && cap >= 1 ? Math.min(base, Math.floor(cap)) : base;
+  };
   const list = (): Piece[] => {
     if (pieces.length) return pieces;
     whole0.body = d.bodies.body; whole0.leaf = tree.root; whole0.frac = 1; whole0.built = 1;

@@ -143,7 +143,9 @@ export const MECH_RANGES: Readonly<Record<number, Readonly<Record<string, readon
   [MECH.ramp]: { angle: [0, 16], top: [0, 0.55], mu: [0.05, 0.6] },
   [MECH.pool]: { surface: [0.04, 0.3] },
   [MECH.seesaw]: { length: [1.6, 2.4], thickness: [0.16, 0.4], pivot: [0.12, 0.3], limit: [0, 14], inertia: [0.3, 0.8], damping: [0.6, 1.5] },
-  [MECH.swing]: { rope: [1.2, 1.5], limit: [0, 30], seatR: [0.08, 0.1], seatY: [0.15, 0.22], seatLength: [0.5, 0.9], damping: [0.15, 0.4] },
+  // (damping: PLACES 2.1 M8 wrote 0.15..0.4; round 5 re-specified the top to 0.7 for the owner's D-95 revision "a pushed swing, empty or ridden, dies down in
+  // about 2 to 3 swings": at 0.25 the empty Pillow Swing took 5 to 6 swings (VERDICT_PG B9); 0.6 takes 2.5 (FIX5_DATA.md))
+  [MECH.swing]: { rope: [1.2, 1.5], limit: [0, 30], seatR: [0.08, 0.1], seatY: [0.15, 0.22], seatLength: [0.5, 0.9], damping: [0.15, 0.7] },
   [MECH.turntable]: { r: [0.5, 0.8], motor: [0, 0.4] },
   [MECH.chime]: { note: [62, 83], limit: [0, 25], damping: [0.8, 0.8], hang: [0.3, 0.7] },
   [MECH.pad]: { r: [0.35, 0.6], travel: [0, 0.1], gain: [1.0, 1.25], apex: [0, 0.35], maxBounces: [0, 5] },
