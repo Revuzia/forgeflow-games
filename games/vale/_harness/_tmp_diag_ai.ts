@@ -75,6 +75,7 @@ for (let seed = seed0; seed < seed0 + seeds; seed++) {
   const sim = createSim(catalog, setup, { bots: (seat, host) => { const c = factory(seat, host); ctrls[seat.player] = c; return c; }, pregameSeconds: 0 });
   const ctl = (p: number) => ctrls[p] as unknown as { mode?: string; brain?: { guard: Map<number, { sid: string }> } } | null;
   const fHit = new Map<number, number>();
+  const wtr = new Map<number, { t: number; sid: number; tag: string }[]>();
   const hist = new Map<number, string[]>();
   const trail: string[][] = [], swung: number[] = [], dcd: number[] = [];
   while (sim.view.phase !== 'ended') {
@@ -96,6 +97,9 @@ for (let seed = seed0; seed < seed0 + seeds; seed++) {
       console.log(`seed ${seed} ${t} ${s.def.id} fell: enemy Wicks in 12 m ${em}, ours ${om}, fighters last hit it ${(now - (fHit.get(st.id) ?? -1e9)).toFixed(0)} s ago`);
       for (const f of fit) {
         const p = w.players.findIndex((x) => x.entity === f.id); const c = ctl(p);
+        { const r = (wtr.get(p) ?? []).filter((x) => x.sid === st.id); const n = r.length || 1;
+          const cnt = (k: string) => r.filter((x) => x.tag.includes(k)).length;
+          console.log(`   p${p} last 15 s (${r.length} samples): atkWick ${cnt('W')} atkFighter ${cnt('F')} atkOther ${cnt('O')} idle ${cnt('I')} pClear ${cnt('c')} pFight ${cnt('f')} backoff ${cnt('b')} cast ${cnt('k')} | ${r.filter((_, i) => i % 5 === 0).map((x) => x.tag).join(' ')} n${n}`); }
         const at = f.atkTarget >= 0 ? w.entity(f.atkTarget) : null;
         const post = c?.brain?.guard.get(p)?.sid ?? '-';
         console.log(`   p${p} ${setup.seats[p].fighter} mode ${c?.mode} post ${post} d ${Math.hypot(f.x - st.x, f.y - st.y).toFixed(1)} hp ${(f.hp / f.maxHp * 100).toFixed(0)}% atk ${at ? at.kind : '-'} modes(6s) ${(hist.get(p) ?? []).join(',')}`);
@@ -160,6 +164,23 @@ for (let seed = seed0; seed < seed0 + seeds; seed++) {
         const modes = setup.seats.filter((x) => x.team === team).map((x) => { const f = w.players[x.player].ent; const c = ctrls[x.player] as unknown as { mode?: string }; return f && f.alive ? `${String(c.mode).slice(0, 4)}${Math.round(f.hp / f.maxHp * 100)}` : `dead${Math.round(w.players[x.player].respawnIn)}`; }).join(' ');
         const standing = structuresOf(w).filter((x) => x.def.team !== team && x.ent.alive).map((x) => x.def.id.replace(/^[as]_/, '').replace('needle_', 'n').replace('lantern', 'L')).join(',');
         console.log(`seed ${seed} t ${(now / 60).toFixed(1)} T${team} siege ${sid} rush ${b.rush ? 1 : 0} stage ${b.stage ? 1 : 0} group ${b.group ? 1 : 0} win ${b.window ? 1 : 0} press ${b.press ? 1 : 0} lead ${b.gleamLead} alive ${b.aliveAllies}v${b.aliveEnemies} posts ${b.guard.size} | ${modes} | enemy up: ${standing}`);
+      }
+    }
+    // (wof) per fit fighter beside an own inner/base structure with enemy Wicks on it: what it does, every 0.5 s, last 15 s
+    if (WHAT === 'wof' && w.tick % 15 === 0) for (let p = 0; p < w.players.length; p++) {
+      const f = w.players[p].ent; const arr = (wtr.get(p) ?? []); wtr.set(p, arr);
+      while (arr.length && now - arr[0].t > 15) arr.shift();
+      if (!f || !f.alive || f.hp < f.maxHp * 0.6) continue;
+      for (const s of structuresOf(w)) {
+        const st = s.ent; if (!st.alive || st.team !== f.team || (st.x - f.x) ** 2 + (st.y - f.y) ** 2 > 256) continue;
+        const c = ctrls[p] as unknown as { mode?: string; pClear?: boolean; pFight?: Entity | null; pMoveX?: number; pMoveY?: number };
+        const at = f.atkTarget >= 0 ? w.entity(f.atkTarget) : null;
+        let tag = at ? (at.kind === 'minion' ? 'W' : at.kind === 'fighter' ? 'F' : 'O') : f.cast ? 'k' : 'I';
+        if (c.pClear) tag += 'c'; if (c.pFight) tag += 'f';
+        const mvd = Math.hypot((c.pMoveX ?? f.x) - st.x, (c.pMoveY ?? f.y) - st.y), fd = Math.hypot(f.x - st.x, f.y - st.y);
+        if (mvd > fd + 2) tag += 'b';
+        tag += `/${String(c.mode).slice(0, 3)}${fd.toFixed(0)}`;
+        arr.push({ t: now, sid: st.id, tag }); break;
       }
     }
     if (w.tick % 30 === 0) for (let p = 0; p < w.players.length; p++) { const h = hist.get(p) ?? []; h.push(String(ctl(p)?.mode ?? '?').slice(0, 4)); if (h.length > 6) h.shift(); hist.set(p, h); }

@@ -400,7 +400,7 @@ export class TeamBrain {
       else if (now - (this.structHitAt.get(st.id) ?? -1e9) <= 2) hurt.add(st);
       this.structHp.set(st.id, st.hp);
     }
-    const threats: { st: Entity; info: StructInfo; cls: StructClass; value: number; need: number; n: number }[] = [];
+    const threats: { st: Entity; info: StructInfo; cls: StructClass; value: number; need: number; n: number; ttl: number }[] = [];
     // (owner_rulings 44: each enemy fighter threatens the one own structure it is hitting, else the nearest one it can hurt — a
     // push on the Bell Needles is theirs, not a "coming" threat on the untouched Lantern beside them, which held a full-health
     // veteran posted 3 m from it, idle, while all five enemies took both Bell Needles and the Hourbell 14-21 m away)
@@ -433,7 +433,9 @@ export class TeamBrain {
         if (d2 <= reach * reach) { if (mineF || d2 <= 9 * 9) n++; }
         else if (front && d2 <= 28 * 28 && mineF) coming++;
       }
-      for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) minions++;
+      // (owner_rulings 47: what the Wicks on it deal — a wave-only call goes to a defender that can be there before it falls)
+      let wdps = 0;
+      for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) { minions++; if (u.atkTarget === st.id) wdps += u.stats.ad * u.stats.attackSpeed * 0.7; }
       for (const u of tp.allyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) mine++;
       let need = 0;
       if (n > 0) {
@@ -455,7 +457,8 @@ export class TeamBrain {
       if (coreHit && d.coreAll) need = Math.max(need, 5);
       const delay = cls === 0 ? d.macroDelay : coreHit ? Math.min(d.macroDelay, 1) : Math.min(d.macroDelay, 5);
       if (!this.held(`g:${info.id}`, need > 0, now, delay)) need = 0;
-      if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming });
+      const ttl = n + coming === 0 && !coreHit && wdps > 0 ? (st.hp + st.shield) / wdps : Infinity;
+      if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming, ttl });
     }
     // (owner_rulings 44: the most valuable structure first — the Hourbell, then its Bell Needles, the Lanterns, the inner and the
     // outer Needles — then the bigger push; map order breaks ties: deterministic)
@@ -501,6 +504,10 @@ export class TeamBrain {
           }
           // (a defender already posted is taken only when it is close: the lesser post keeps one farther off)
           if (eta > (cur ? Math.min(cap, 20) : cap) || eta >= bt) continue;
+          // (owner_rulings 47: a wave-only call is not answered by a defender that would arrive to watch it fall — the Wicks'
+          // structure falls before the walk ends: two fit defenders arriving as a 21-Wick stack finished a Lantern were the
+          // commonest 'fell to Wicks beside fit defenders' left)
+          if (eta + 2 > th.ttl) continue;
           bt = eta; best = p.player; bRecall = rec;
         }
         if (best < 0) break;
