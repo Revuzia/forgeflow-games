@@ -2047,3 +2047,24 @@ long press frame-rate independent. Report after 1-2 verified.
   between cached and live patches (sheet s22/sheet-xpan.png LOOKED AT). Steps 0-1 are not usable as pairs: the LOD was
   still landing between the two shots (the pond is a coarse polygon in the first). A true frame-by-frame switch test
   (fixed camera, tiles landing one by one) is NOT done.
+- STEP 2 on dist4 (tcFade blend, bracket one rung wider, wide only > 5 rungs; run `--tag=y`, sheet s22/sheet-y.png LOOKED AT):
+  `wide` is 0 in top-down and peak (was 104 and 33): every patch cached. town 1.76 (RGB 101.4 116.5 82.5 / 100.5 115.6
+  81.6, detail 7.87 / 7.85); peak 2.40 (104.3 123.9 143.9 / 104.2 123.8 143.9; the far hill is equal, what is left is a
+  fine yellow grain on the snow dome); the far ridge's red band of e0 is gone.
+  top-down 160 m: 3.73, cache GREENER (G 118.7 vs 115.2) and SOFTER (detail 4.95 vs 5.58). Reading: at 320x180 these
+  tiles are class 48, ~1.1 texels a pixel; bilinear resampling at ~1:1 softens the albedo and the normal offset (a
+  flatter micro normal lights the sward brighter from above). Runs with denser tiles had detail equal or higher.
+  -> `?tcdens=` (default 1.4, 1..2.5): texels per pixel a new tile gets; smaller tile only past 2.2x that. Build
+  s22/dist5. RUNNING: town + top-down at tcdens 1.4 and 2 (`--tag=d1.4`, `d2`), and `npm run check` (s22/check1.log).
+  (`custom` 220 m in run y is not a valid pair: first view after boot, the LOD still landing between the two shots.)
+- STATIC COUNT per terrain fragment with the cache on, a patch with a valid tile (s = simplex, V = voronoi3):
+  surface: 0 s, 0 V. 6 textureGrad taps on 2D arrays (3 targets x 2 anchors; trilinear, up to 16x anisotropic at
+  grazing angles), 2 dFdx/dFdy pairs, 12 smoothsteps (tcFade x 3), ~60 ALU ops. Before: ~95-100 s + 1-2 V near
+  meadow, ~125 s + 2-3 V forest floor, ~60 s rock, ~40 s far land.
+  still per fragment as before: lighting taps 14-15 (5 shadow PCF, cloud-shadow cube, transmittance, 4 irradiance SH,
+  2 sky LUT, city cube); caustics 6 s only in 0.15-3 m of water within 24 m; city `districts` 2 s only at night
+  beyond 900 m. Vertex: + 2 texelFetch of the slot table and the closed-form lattice.
+  A patch WITHOUT a valid tile runs the full old fragment (one flat-varying branch): lava / fire patches, patches
+  nearer than class 576 resolves, patches spanning > 5 rungs, everything unbaked or past the memory cap.
+- NEXT: read d1.4 / d2, pick the default; Ultra 1686x963 tile count (`scene=0&msaa=0`, quality ultra, `--nolive=1`,
+  stats only) for the measured coverage at 247 MB; `npm run build`; hand back.
