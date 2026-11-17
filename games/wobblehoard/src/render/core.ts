@@ -15,6 +15,7 @@ const WARM: Rgb = [1.0, 0.45, 0.12];
 import type { TierStyle } from './rarity.ts';
 import { ADD_KEEP_ALPHA, HaloQuad } from './halo.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
+import type { RenderPose } from './pose.ts';
 
 // (CUT2: the blob carries two clip planes, inert for a whole, so a piece's ember never pokes out of the cut face and wholes and pieces share one program)
 const BLOB_VERT = /* glsl */`
@@ -91,6 +92,11 @@ export class Core {
   private clipCaps: number[] = [];
   private readonly clipPlanes: THREE.Plane[] = [inertPlane(), inertPlane()];
   private readonly vOff = new THREE.Vector3();
+  /** PLAYGROUND (round 3): the body's render pose (BodyView's): the ember, its halo, the jelly's glow centre and a piece's ember clip ride it
+   *  as the skin does (the vertex stage poses the skin: an unposed ember hung off a leaning piece). Null or inactive = the PC's path exactly. */
+  pose: RenderPose | null = null;
+  private readonly vPose = new THREE.Vector3();
+  private readonly p4 = new Float64Array(4);
   private readonly qOff = new THREE.Quaternion();
   /** The multiplier of the jelly's analytic halo: 1 at birth (a piece born at the swap lights its jelly exactly as the whole did: no step), eased to max(kept, 0.35) (CUT2 8.3) with a 0.25 s time constant. */
   private amtK = 1;
@@ -213,6 +219,16 @@ export class Core {
       }
       this.blob.visible = !this.lite && this.kept > this.minKept && !this.manyFaces;
       this.amtK += (Math.max(this.kept, CORE_TUNING.pieceFloor) - this.amtK) * (1 - Math.exp(-dt / 0.25));
+    }
+    const ps = this.pose;
+    if (ps && ps.active) {
+      const o = this.p4;
+      if (this.cut && caps) for (let j = 0; j < 2; j++) {
+        const kk = j < this.clipCaps.length ? this.clipCaps[j] : -1, cap = kk >= 0 ? caps[kk] : undefined;
+        if (cap && cap.live) { ps.applyPlane(cap.nx, cap.ny, cap.nz, cap.d, c.x, c.y, c.z, o); this.clipPlanes[j].normal.set(-o[0], -o[1], -o[2]); this.clipPlanes[j].constant = o[3]; }
+      }
+      ps.apply(c.x, c.y, c.z, o, 0);
+      c = this.vPose.set(o[0], o[1], o[2]);
     }
     this.center.set(c.x, c.y, c.z);
     this.comp += (squeeze - this.comp) * (1 - Math.exp(-dt * 12));

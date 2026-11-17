@@ -278,9 +278,15 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   /** setPlayBounds (a place): the bounds of the layout in use and the framing fitted to them for this frame (null = Home's framing). */
   const playB = new Float64Array(4);
   let play: PlayFrame | null = null;
+  /** Round 3 (MERGE_PC doubt 4): a place keeps clear what Home's band framing keeps clear: the HUD rows the shell reported, scaled down
+   *  together under minBand, plus Home's margin (placeview.ts placeBand, applied by the away chunk's PlaceHost.fit); a change of the rows (the Cut bar while the Cut tool is in hand)
+   *  refits it, and the camera eases onto the new fit (pEase). */
+  let pFov = 35, pDist = 0, pEase = false, pTilt = false;
   function refitPlay(): void {
-    play = placeHost && Number.isFinite(playB[2]) && playB[2] > 0 ? placeHost.fit(playB[0], playB[1], playB[2], playB[3], cssW, cssH, safe.top, safe.right, safe.bottom, safe.left) : null;
-    if (play) { tYaw = 0; tPitch = play.pitch; tZoom = 1; }
+    const was = play, I = framer.ins;
+    play = placeHost && Number.isFinite(playB[2]) && playB[2] > 0 ? placeHost.fit(playB[0], playB[1], playB[2], playB[3], cssW, cssH, I.top, I.right, I.bottom, I.left) : null;
+    pEase = !!was && !!play; pTilt = pEase;
+    if (play) { tYaw = 0; tZoom = 1; if (!pEase) tPitch = play.pitch; }
   }
   // ---- PLAYGROUND places (the away chunk src/render/place.ts, which swaps, poses and frames a place; one look chunk per place) ----
   let placeHost: PlaceHost | null = null;
@@ -389,20 +395,38 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
    * rest framing whatever the player does (visibleTable). Writes slotXZ; false = leave this body out of the framing.
    */
   const slotXZ = { x: 0, z: 0 };
-  function framePoint(v: BodyView, k: number, rest: boolean): boolean {
-    const live = !(rest || autoFraming) || (!rest && v.playerMoving);
-    if (live) { slotXZ.x = v.proxy.center.x; slotXZ.z = v.proxy.center.z; return true; }
+  /**
+   * Round 3 (MERGE_PC doubt 3): which mat slot each visible view counts at (BodyView.slotK): the k-th visible whole body (or Minis copy) out
+   * takes slot k, and the true PIECES of one squishy (the same whole) share ONE slot, the first piece's: a cut squishy counts as the one
+   * squishy it was (LIFE 9: one group under one brain), so its pieces never take the slots of the party. Chunks take none. No allocation.
+   */
+  function assignSlots(): void {
+    let k = 0, gKey: unknown = null, gK = 0;
+    for (const v of views) {
+      if (!v.visible) continue;
+      if (v.chunk) { v.slotK = Math.max(0, k - 1); continue; }
+      const pc = v.isPiece ? v.proxy.piece : undefined;
+      if (pc) { if (pc.whole.restLocal === gKey) { v.slotK = gK; continue; } gKey = pc.whole.restLocal; gK = k; }
+      v.slotK = k++;
+    }
+  }
+  /** True when this view counts at its slot (autonomy framing or the rest framing), not at its live centre. */
+  const atSlot = (v: BodyView, rest: boolean): boolean => (rest || autoFraming) && (rest || !v.playerMoving);
+  function framePoint(v: BodyView, rest: boolean): boolean {
+    if (!atSlot(v, rest)) { slotXZ.x = v.proxy.center.x; slotXZ.z = v.proxy.center.z; return true; }
     if (v.chunk) return false;
-    const sl = camera.aspect < 0.9 ? MAT_SLOTS_TALL : MAT_SLOTS_WIDE, i = Math.min(k, sl.length - 1);
+    const sl = camera.aspect < 0.9 ? MAT_SLOTS_TALL : MAT_SLOTS_WIDE, i = Math.min(v.slotK, sl.length - 1);
     slotXZ.x = sl[i][0] * bodyScale; slotXZ.z = sl[i][1] * bodyScale;
     return true;
   }
+
   function framingFor(withCap: boolean, cx: number, cz: number, cs: number, rest = false): typeof frameOut {
+    assignSlots();
     const pv = primary();
     let want = framing ?? bodyScale * (pv ? pv.growth : 1), n = 0, bcx = 0;   // (a piece that grew since it was built: setFrac)
     // CUT2 8.6: the visible bodies are all PIECES of one squishy (no capsule beside them): the group is framed and aimed at as that one squishy, by its extents about its own centre of mass,
     // so flush halves frame exactly like the whole did and the camera does not move at the swap (the old mat framing zoomed out and aimed between two bodies)
-    let grp = false, gcx = 0, gcy = 0, gcz = 0;
+    let grp = false, gcx = 0, gcy = 0, gcz = 0, grpAtSlot = false;
     if (!withCap) {
       let whole: Float32Array | null = null, cnt = 0, same = true, wsum = 0;
       for (const v of views) {
@@ -413,17 +437,28 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
         const w = typeof v.proxy.frac === 'number' && v.proxy.frac > 0 ? v.proxy.frac : 1, c = v.proxy.center;
         gcx += c.x * w; gcy += c.y * w; gcz += c.z * w; wsum += w;
       }
-      if (same && cnt >= 2 && wsum > 0) { grp = true; gcx /= wsum; gcy /= wsum; gcz /= wsum; }
+      if (same && cnt >= 2 && wsum > 0) {
+        grp = true; gcx /= wsum; gcy /= wsum; gcz /= wsum;
+        // PLAYGROUND (D-37, round 3): with the autonomy framing on (or the rest framing) and no piece in the player's hands, the group is the
+        // one squishy at its slot (P01 follow, P02 huddle and P03 hop together move the pieces by themselves: they must not move the camera)
+        let moved = false, rcy = 0, v0: BodyView | null = null;
+        for (const v of views) if (v.visible) { v0 ??= v; if (!atSlot(v, rest)) moved = true; }
+        if (!moved && v0) { framePoint(v0, rest); gcx = slotXZ.x; gcz = slotXZ.z; gcy = v0.wholeCy; grpAtSlot = true; }
+      }
     }
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;          // a mat of bodies: generous reach
     let tx0 = Infinity, tx1 = -Infinity, tz0 = Infinity, tz1 = -Infinity;      // one body and a capsule: its silhouette's reach
-    let k = 0;
+    let lastGrp = -1;
     for (const v of views) {
       if (!v.visible) continue;
-      const kk = k; if (!v.chunk) k++;
-      if (!framePoint(v, kk, rest)) continue;
+      const slot = atSlot(v, rest);
+      if (!framePoint(v, rest)) continue;
+      // (round 3: the pieces of one squishy counted at their shared slot are ONE body there, with the whole's rest reach)
+      const asWhole = slot && v.wholeR > 0;
+      if (asWhole) { if (v.slotK === lastGrp) continue; lastGrp = v.slotK; }
       n++;
-      const gk = v.growth, c = slotXZ, r = Math.max(v.proxy.restRadius * 1.25, v.restHalfW * 1.12) * gk, t = (v.restHalfW * 1.06 + 0.05 * v.scale) * gk;
+      const gk = v.growth, c = slotXZ, rr = asWhole ? v.wholeR : v.proxy.restRadius, hw = asWhole ? v.wholeHalfW : v.restHalfW;
+      const r = Math.max(rr * 1.25, hw * 1.12) * gk, t = (hw * 1.06 + 0.05 * v.scale) * gk;
       bcx = c.x;
       if (c.x - r < x0) x0 = c.x - r; if (c.x + r > x1) x1 = c.x + r; if (c.z - r < z0) z0 = c.z - r; if (c.z + r > z1) z1 = c.z + r;
       if (c.x - t < tx0) tx0 = c.x - t; if (c.x + t > tx1) tx1 = c.x + t; if (c.z - t < tz0) tz0 = c.z - t; if (c.z + t > tz1) tz1 = c.z + t;
@@ -456,7 +491,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       for (const v of views) {
         if (!v.visible) continue;
         const c = v.proxy.center;
-        reach = Math.max(reach, Math.hypot(c.x - gcx, c.z - gcz) + (v.restHalfW * (v.style.dome > 0 ? 1.34 : 1.06) + 0.05 * v.scale) * v.growth);
+        // (round 3: a group at its slot reaches as far as the whole it was, whatever its pieces do by themselves)
+        reach = Math.max(reach, grpAtSlot ? (v.wholeHalfW * (v.style.dome > 0 ? 1.34 : 1.06) + 0.05 * v.scale) * v.growth
+          : Math.hypot(c.x - gcx, c.z - gcz) + (v.restHalfW * (v.style.dome > 0 ? 1.34 : 1.06) + 0.05 * v.scale) * v.growth);
       }
       want = Math.max(want, reach / hwPerNow());
     }
@@ -679,9 +716,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   /** The camera's aim for ONE body at its slot and rest height (updateCamera's one-body follow with the live centre replaced). */
   const aimOut = { x: 0, y: 0, z: 0 };
   function restAim(p: BodyView, scale: number): void {
-    let k = 0;
-    for (const v of views) { if (v === p) break; if (v.visible && !v.chunk) k++; }
-    framePoint(p, k, true);
+    assignSlots();
+    framePoint(p, true);
     aimOut.x = slotXZ.x * 0.6; aimOut.z = slotXZ.z * 0.6;
     aimOut.y = TARGET_Y * scale + Math.max(0, p.restCy * p.growth - TARGET_Y * scale) * 0.7;
   }
@@ -692,12 +728,20 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     zoomF += (tZoom - zoomF) * k;
     // PLAYGROUND (a place, P8): the camera frames the play bounds of the layout in use, fitted once (setPlayBounds) with its lens (placeview.ts:
     // the widest that meets RD-17); it never follows a body. Home keeps the 35 degree lens.
-    const fv = play ? play.fov : 35;
+    // (round 3: a refit while in the place (the HUD rows changed, a resize) eases its lens, distance, pitch and aim at Home's band-framing
+    // rate (4 / s, as camScale); entering a place takes them at once, under the crossfade)
+    const kt = 1 - Math.exp(-dt * 6), kr = pEase ? 1 - Math.exp(-dt * 4) : 1;
+    if (play) {
+      pFov += (play.fov - pFov) * kr; pDist += (play.dist - pDist) * kr;
+      // (the fit's pitch is eased in only until it arrives: from then on the pitch is the player's own orbit again, P8)
+      if (pTilt) { tPitch += (play.pitch - tPitch) * kr; if (Math.abs(play.pitch - tPitch) < 1e-4) pTilt = false; }
+    }
+    const fv = play ? pFov : 35;
     if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); }
     if (play) {
-      const kt = 1 - Math.exp(-dt * 6);
-      tgt.x += (play.aimX - tgt.x) * kt; tgt.y += (play.aimY - tgt.y) * kt; tgt.z += (play.aimZ - tgt.z) * kt;
-      const d = play.dist * zoomF * cameraFx.dist;
+      const ka = pEase ? kr : kt;
+      tgt.x += (play.aimX - tgt.x) * ka; tgt.y += (play.aimY - tgt.y) * ka; tgt.z += (play.aimZ - tgt.z) * ka;
+      const d = pDist * zoomF * cameraFx.dist;
       const yw = yaw + cameraFx.yaw, pt = clamp(pitch + cameraFx.pitch, 0.06, 1.38), cp = Math.cos(pt);
       camera.position.set(tgt.x + d * Math.sin(yw) * cp, tgt.y + d * Math.sin(pt), tgt.z + d * Math.cos(yw) * cp);
       camera.lookAt(tgt);
@@ -707,6 +751,17 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       return;
     }
     // SR2: the squishy and its pieces stand between the HUD rows the shell reported (framing.ts); measured first, framingFor reads its demand
+    // (round 3, D-37: with the autonomy framing on, a body the player is not moving is measured at its REST column on its slot, so LIFE's own
+    // motion never moves the band framing either; a chunk then not at all. Off: every view is measured live, exactly as before.)
+    if (autoFraming) assignSlots();
+    for (const v of views) {
+      if (!autoFraming || !atSlot(v, false)) { v.frameMode = 0; continue; }
+      if (v.chunk) { v.frameMode = 2; continue; }
+      framePoint(v, false);
+      const pw = v.wholeR > 0, g = v.growth, fs = v.frameSlot;   // (a piece: the whole's rest column)
+      fs[0] = slotXZ.x; fs[1] = slotXZ.z; fs[2] = (pw ? v.wholeH : v.restH) * g; fs[3] = (pw ? v.wholeCy : v.restCy) * g; fs[4] = (pw ? v.wholeHalfW : v.restHalfW) * 1.06 * g;
+      v.frameMode = 1;
+    }
     if (framer.on && sized && !director.active && framerS > 0) { fcam.p0 = camera.projectionMatrix.elements[0]; fcam.p5 = camera.projectionMatrix.elements[5]; const t0 = import.meta.env.DEV ? performance.now() : 0; framer.measure(views, fcam, cssW, cssH, framerS, dt); if (import.meta.env.DEV) devFramerMs += (performance.now() - t0 - devFramerMs) * 0.1; }
     else framer.clear();
     // stage B1: with 2..5 bodies out on the mat, frame them all (their table extents, plus a margin) and aim at their middle
@@ -741,7 +796,6 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
         wy = TARGET_Y * camScale + Math.max(0, c.y - TARGET_Y * camScale) * 0.7;
       }
     }
-    const kt = 1 - Math.exp(-dt * 6);
     tgt.x += (wx - tgt.x) * kt; tgt.y += (wy - tgt.y) * kt; tgt.z += (wz - tgt.z) * kt;
     const d = fitDistance() * zoomF * cameraFx.dist;
     const yw = yaw + cameraFx.yaw, pt = clamp(pitch + cameraFx.pitch, 0.06, 1.38);
@@ -929,6 +983,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       for (const k of ['top', 'right', 'bottom', 'left'] as const) { const v = insets[k]; if (typeof v === 'number' && Number.isFinite(v) && Math.max(0, v) !== safe[k]) { safe[k] = Math.max(0, v); changed = true; } }
       framer.setInsets(insets);
       if (changed) markCapSpot();   // (a waiting capsule that now stands under the HUD glides out from under it)
+      if (changed && play) refitPlay();   // (round 3: a place follows the band as Home does)
     },
 
     matLayout(n) {
@@ -1222,7 +1277,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (f.multi) { ax = f.mx; az = f.mz * 0.8; ay = TARGET_Y * bodyScale; }
       else { const p = primary(); if (p) { restAim(p, f.want); ax = aimOut.x; ay = aimOut.y; az = aimOut.z; } else { ax = 0; az = 0; ay = TARGET_Y * f.want; } }
       const dist = f.want * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
-      return visibleTableAt(ax, ay, az, dist, REST_PITCH, camera.fov, cssW, cssH, safe.top, safe.right, safe.bottom, safe.left, out);
+      // (round 3: the PC's SR2 band framing slides the picture by a lens shift, content up by lensY and right by lensX in NDC: an inset line of
+      // the shown frame is the unshifted row / column moved by it. With the autonomy framing on, its goal comes from the bodies' REST columns.)
+      const lx = framer.on ? framer.goalX : 0, ly = framer.on ? framer.goalY : 0;
+      return visibleTableAt(ax, ay, az, dist, REST_PITCH, camera.fov, cssW, cssH, safe.top + ly * cssH * 0.5, safe.right + lx * cssW * 0.5, safe.bottom - ly * cssH * 0.5, safe.left - lx * cssW * 0.5, out);
     },
     setAutonomyFraming(on) { autoFraming = !!on; if (autoFraming) needLife(); },
     async loadPlace(id) {

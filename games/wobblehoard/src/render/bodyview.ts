@@ -142,6 +142,14 @@ export class BodyView {
   stillS = 0;
   /** The player moved this body (a finger, a grab, a toss until it settles): the camera may follow it (D-37). */
   playerMoving = false;
+  /** PLAYGROUND (D-37, round 3): the mat slot this view counts at with the autonomy framing on (the stage's assignSlots: the pieces of one
+   *  squishy share ONE slot), and how the band framer measures it this frame (framing.ts FrameView.frameMode / frameSlot). */
+  slotK = 0;
+  frameMode = 0;
+  readonly frameSlot = new Float64Array(5);
+  /** A true piece: the WHOLE's rest radius, rest half width, rest height and rest centre height (from its rest mesh), so a piece group at its
+   *  slot is framed as the squishy it was; 0 for a body that is not a piece. */
+  readonly wholeR: number = 0; readonly wholeHalfW: number = 0; readonly wholeH: number = 0; readonly wholeCy: number = 0;
   /** setBodyLook targets (frost, wet, sand, toast, snow), each 0..1, and their eased values (about 0.4 s); all 0 = today's pixels. */
   readonly look = new Float32Array(5);
   private readonly lookNow = new Float32Array(5);
@@ -163,6 +171,14 @@ export class BodyView {
     { const P = inner.positions; let top = 0, low = Infinity; for (let i = 1; i < P.length; i += 3) { if (P[i] > top) top = P[i]; if (P[i] < low) low = P[i]; } this.restH = Math.max(0.1, top - (Number.isFinite(low) ? low : 0)); }
     // PLAYGROUND: the rest height of the centre above the table (the rest shape's centroid over its lowest point): the camera's rest aim (D-37)
     { const R = inner.restLocal; let lo = Infinity, sum = 0, n = 0; for (let i = 1; i < R.length; i += 3) { sum += R[i]; n++; if (R[i] < lo) lo = R[i]; } this.restCy = n ? sum / n - lo : inner.restRadius; }
+    if (this.isPiece) {   // (round 3: the whole's rest numbers, for a piece group framed at its slot)
+      const wh = (inner.piece as { whole: { restLocal: Float32Array; radius: number } }).whole, R = wh.restLocal, n = (R.length / 3) | 0;
+      let sx = 0, sy = 0, sz = 0, lo = Infinity, top = -Infinity;
+      for (let i = 0; i < R.length; i += 3) { sx += R[i]; sy += R[i + 1]; sz += R[i + 2]; if (R[i + 1] < lo) lo = R[i + 1]; if (R[i + 1] > top) top = R[i + 1]; }
+      const cx = n ? sx / n : 0, cz = n ? sz / n : 0;
+      let w = wh.radius; for (let i = 0; i < R.length; i += 3) { const d = Math.hypot(R[i] - cx, R[i + 2] - cz); if (d > w) w = d; }
+      this.wholeR = wh.radius; this.wholeHalfW = w; this.wholeH = n ? Math.max(0.1, top - lo) : 2 * wh.radius; this.wholeCy = n ? sy / n - lo : wh.radius;
+    }
     this.mats = new JellyMaterials(genome, this.palette, this.scale, hub, this.style);
     this.jelly = new JellyView(this.proxy, this.mats.get(spec.tier), this.fineFreqFor(spec));
     this.jelly.mesh.renderOrder = 10;
@@ -172,6 +188,7 @@ export class BodyView {
     this.hubRef = hub;
     this.face = this.makeFace(hub);   // (makeFace hands the face the render pose, PLAYGROUND)
     this.core.setPiece(this.proxy.piece);
+    this.core.pose = this.pose;   // (round 3: the ember rides the render pose too)
     this.fx = new Fx(genome, this.palette, this.jelly.mapper, spec, this.scale, this.style);
     this.decals = new Decals(quad);
     this.applyPoolColour();
@@ -212,10 +229,11 @@ export class BodyView {
     this.applyPoolColour();
   }
 
-  /** The fine mesh's geodesic frequency: the tier's, or for a lite body (AddBodyOpts.lite, RD-06) the low tier's 2562 vertices, and 1442
-   *  (frequency 12) for a piece of a quarter of the body or less (a small chunk is at most 0.63 of the whole's radius: the same vertex
-   *  spacing on screen as a whole's low mesh). */
-  private fineFreqFor(spec: TierSpec): number { return this.lite ? Math.min(spec.fineFreq, this.frac0 <= 0.25 ? 12 : TIERS.low.fineFreq) : spec.fineFreq; }
+  /** The TIER frequency the fine mesh is asked for: the tier's, or for a lite body (AddBodyOpts.lite, RD-06) at most the low tier's (2562
+   *  vertices for a whole). Round 3 (MERGE_PC doubt 2): this is a tier cap only, with no size term of its own. The ONE size reduction is the
+   *  share law the jelly applies after it (lod.ts fineFreqFor for a whole, a mini or a chunk; pieceBuild.ts pieceFineN for a true piece:
+   *  vertices ~ share^(2/3)); round 2's own "frequency 12 at a quarter or less" stacked a second size cut on top of it. */
+  private fineFreqFor(spec: TierSpec): number { return this.lite ? Math.min(spec.fineFreq, TIERS.low.fineFreq) : spec.fineFreq; }
 
   applyQuality(spec: TierSpec): void {
     this.spec = spec;
@@ -265,6 +283,8 @@ export class BodyView {
     const fr = this.proxy.inner.frac, fs = !this.isPiece && typeof fr === 'number' && Number.isFinite(fr) && fr > 0 ? Math.min(3, Math.max(0.3, Math.cbrt(fr / this.frac0))) : 1;   // (a true piece never scales with frac: a merge is a rest-shape morph)
     this.core.sizeMul = this.proxy.scale * fs;
     this.sizeK = fs * this.proxy.scale; this.fracK = fs;
+    // PLAYGROUND render pose: about the body's ground point, sized by its rest radius and height (the eye anchors and, round 3, the ember read the same numbers)
+    this.pose.update(dt, time, body.center.x, body.center.z, j.minY, this.restH * this.sizeK, body.restRadius * this.sizeK, this.quiet);
     this.core.update(body, dt, time, this.smComp, j.caps);
     const u = this.mats.uniforms;
     u.uTime.value = time;
@@ -288,8 +308,6 @@ export class BodyView {
     // the happy squint is the RELEASE expression: while a finger or a grab still holds the body, a wobble of the squeeze (negative rate)
     // must not trigger it, the eyes stay wide (CONTRACT 7: widen when squeezed, squint into happy arcs on release)
     const rate = Math.min(this.sqRate, m.compressionRate);
-    // PLAYGROUND render pose: about the body's ground point, sized by its rest radius and height (the eye anchors read the same numbers)
-    this.pose.update(dt, time, body.center.x, body.center.z, j.minY, this.restH * this.sizeK, body.restRadius * this.sizeK, this.quiet);
     u.uPose.value.copy(this.pose.u); u.uPoseC.value.copy(this.pose.c);
     // PLAYGROUND looks: eased toward their targets; exactly 0 once settled at 0 (the shader then skips the block)
     { const L = this.look, N = this.lookNow, k = 1 - Math.exp(-dt * 2.5);

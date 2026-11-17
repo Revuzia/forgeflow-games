@@ -13,7 +13,7 @@ import type { EnvHub, PanelDef } from './env.ts';
 import type { SkyLook } from './table.ts';
 import { linearToOklch, oklchToLinear, type Rgb } from './oklch.ts';
 import { Particles, type EmitSpec } from './particles.ts';
-import { fitPlace, type PlayFrame } from './placeview.ts';
+import { fitPlace, placeBand, type PlayFrame } from './placeview.ts';
 
 /** The eight theme tokens (src/ui/theme.ts PALETTE; table.ts's numbers, `ember` = coral). */
 export const TOKENS = { ink: 0x14102a, plum: 0x2a1744, dusk: 0x5b3a86, felt: 0x2a2150, amber: 0xffb347, lagoon: 0x59d6e6, coral: 0xff5a4d, cream: 0xfff1d6 } as const;
@@ -199,8 +199,9 @@ export class PropKit {
     m.customProgramCacheKey = () => 'wh-pl-' + key;
     return m;
   }
-  /** The place's ground: a 16 x 16 m plane, top at y = 0 (renderOrder -50). */
-  ground(m: THREE.Material): THREE.Mesh { const g = this.mesh(this.geo('ground', () => new THREE.PlaneGeometry(16, 16).rotateX(-Math.PI / 2)), m, 0, 0, 0, -50); return g; }
+  /** The place's ground: a 40 x 40 m plane, top at y = 0 (renderOrder -50). (Round 3: 16 m showed its near edge at the bottom of a tall
+   *  frame once the camera kept Home's band margin; the fog hides the far edge.) */
+  ground(m: THREE.Material): THREE.Mesh { const g = this.mesh(this.geo('ground', () => new THREE.PlaneGeometry(40, 40).rotateX(-Math.PI / 2)), m, 0, 0, 0, -50); return g; }
   /** A backdrop card (unlit, low poly; renderOrder -99..-51) drawn by `frag` (vUv, vWP, NOISE, uTime / uMotion and its uniforms). */
   card(frag: string, u: Record<string, { value: unknown }>, w: number, h: number, x: number, y: number, z: number, ry: number, order: number, transparent = false): THREE.Mesh {
     const decl = Object.keys(u).filter((k) => k !== 'uTime' && k !== 'uMotion').map((k) => `uniform ${(u[k].value as THREE.Color).isColor ? 'vec3' : 'float'} ${k};`).join('');
@@ -209,14 +210,19 @@ export class PropKit {
     const c = this.mesh(this.geo(`card${w},${h}`, () => new THREE.PlaneGeometry(w, h)), mat, x, y, z, order); c.rotation.y = ry;
     return c;
   }
-  /** A water surface at y = surfaceY over a disc (r) or a box (hx, hz): one translucent draw after the jellies (renderOrder 20). */
+  /** A water surface at y = surfaceY over a disc (r) or a box (hx, hz): one blended draw in the OPAQUE list (before the jellies) that writes depth.
+   *  Round 3: round 2 drew it after the jellies without depth, and since a jelly writes no depth a surface BEHIND a body on screen (the Surf
+   *  Edge behind the back row) was drawn over the body: a translucent bar across its eyes. Now a body's part under the surface is hidden by
+   *  the water itself (it reads as standing in murky water: the "tint below the line" of RD-15 at full strength) and nothing else is touched. */
   water(shape: 'disc' | 'box', x: number, z: number, r: number, hx: number, hz: number, surfaceY: number, deep: Rgb, shallow: Rgb, sky: Rgb, foamC: Rgb, foam: number, alpha = 0.55): { mesh: THREE.Mesh; u: Record<string, { value: number }> } {
     const u = { uTime: { value: 0 }, uMotion: { value: 1 }, uFoam: { value: foam }, uAlpha: { value: alpha }, uBox: { value: shape === 'box' ? 1 : 0 },
       uDeep: { value: col(deep) }, uShallow: { value: col(shallow) }, uSkyC: { value: col(sky) }, uFoamC: { value: col(foamC) } };
-    const mat = this.own(new THREE.ShaderMaterial({ vertexShader: UV_VERT, fragmentShader: WATER_FRAG, uniforms: u, transparent: true, depthWrite: false, depthTest: true, toneMapped: false,
+    // (transparent: false puts it in three's OPAQUE list, blended all the same: the jellies are drawn in the transmissive pass, which comes
+    // after the opaque list but BEFORE every transparent object whatever its renderOrder, so a transparent water was still drawn over them)
+    const mat = this.own(new THREE.ShaderMaterial({ vertexShader: UV_VERT, fragmentShader: WATER_FRAG, uniforms: u, transparent: false, depthWrite: true, depthTest: true, toneMapped: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendEquationAlpha: THREE.AddEquation, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor }));
     const g = shape === 'disc' ? this.geo(`wd${r}`, () => new THREE.CircleGeometry(r, 48).rotateX(-Math.PI / 2)) : this.geo(`wb${hx},${hz}`, () => new THREE.PlaneGeometry(2 * hx, 2 * hz).rotateX(-Math.PI / 2));
-    const m = this.mesh(g, mat, x, surfaceY, z, 20);
+    const m = this.mesh(g, mat, x, surfaceY, z, 9);
     return { mesh: m, u: u as unknown as Record<string, { value: number }> };
   }
   /** Something else the place made (a particle system, a shader material) to dispose with the kit. */
@@ -282,7 +288,10 @@ export interface JellyLight { keyDir: THREE.Vector3; rimDir: THREE.Vector3; keyC
 /**
  * The reaction-cell particle presets (D-80; PLACES 3; LIFE.md 10.1): src/data/life.ts PARTICLE ids 1 steam (a wisp rising off the skin, normal
  * blend: the weather twin), 2 embers (warm sparks rising, additive), 4 drips (drops running off and falling), 5 bubbles (a soft cling of small
- * bubbles that rise off the skin), 9 puff (a soft burst at the base: sand, snow or dust in the place's own tone). A preset follows its body
+ * bubbles that rise off the skin), 6 strands (round 3: thin sticky threads drawn out as a tacky body leaves: the cabin's Snug Basket, Frostbell's
+ * nest), 8 ripple (round 3: a ring of foam motes spreading at the body's top: "water rings on top" in Ripple's Rock Pool), 9 puff (a soft burst
+ * at the base: sand, snow or dust in the place's own tone). 3 sparkles and 7 glow are not particles here (no S1 / S2 cell uses them; glow is a
+ * look). A preset follows its body
  * (the stage's body lookup) for lifeS seconds. Every particle counts against LIFE 10.1's autonomy budget (24 a second on a phone, 48 on a
  * desktop; 8 / 16 in Calm), kept as a sliding one-second window (the times of the last 48 particles: in ANY second at most that many; a
  * puff's burst fits inside it); none with reduced motion. Zero allocation per frame.
@@ -301,7 +310,7 @@ export class ReactFx {
   private rnd = (): number => { this.seed = (this.seed + 0x6d2b79f5) | 0; let t = Math.imul(this.seed ^ (this.seed >>> 15), 1 | this.seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   /** Start a preset; false when it is not a preset kind or the 8 sources are busy. */
   start(kind: number, body: number, x: number, y: number, z: number, amount: number, lifeS: number): boolean {
-    if (!(kind === 1 || kind === 2 || kind === 4 || kind === 5 || kind === 9)) return false;
+    if (!(kind === 1 || kind === 2 || kind === 4 || kind === 5 || kind === 6 || kind === 8 || kind === 9)) return false;
     const S = this.src;
     for (let i = 0; i < 8; i++) {
       const o = i * 8;
@@ -326,9 +335,19 @@ export class ReactFx {
       const kind = S[o], amt = S[o + 5];
       let cx = S[o + 2], cy = S[o + 3], cz = S[o + 4], R = 0.4;
       if (S[o + 1] >= 0) { if (ctx && ctx.body(S[o + 1], a)) { cx = a[0]; cy = a[1]; cz = a[2]; R = a[3]; } else { S[o + 6] = 0; continue; } }
-      if (kind !== 9) S[o + 7] += dt * amt * (kind === 1 ? 9 : kind === 2 ? 7 : kind === 4 ? 7 : 6);
+      if (kind !== 9) S[o + 7] += dt * amt * (kind === 1 ? 9 : kind === 2 ? 7 : kind === 4 ? 7 : kind === 8 ? 0.9 : 6);
       while (S[o + 7] >= 1) {
         S[o + 7] -= 1;
+        if (kind === 8) {   // round 3: ripple (8): a ring of foam motes spreading on the water at the body's top, about one ring a second
+          const ph = r() * 6.2832;
+          for (let j = 0; j < 8; j++) {
+            if (reduced || this.clock - T[(this.head - rate + 48) % 48] < 1) continue;
+            T[this.head] = this.clock; this.head = (this.head + 1) % 48;
+            const t2 = ph + j * 0.7854, c2 = Math.cos(t2), s2 = Math.sin(t2);
+            this.soft.emit(sp(cx + c2 * R * 0.3, cy + R * 0.8, cz + s2 * R * 0.3, c2 * 0.42, 0, s2 * 0.42, 1.0, 0.034, FOAM_C, 0.95, 2.0));
+          }
+          continue;
+        }
         // over the autonomy budget (the rate-th most recent particle less than 1 s ago) or reduced motion: this particle is not drawn
         if (reduced || this.clock - T[(this.head - rate + 48) % 48] < 1) continue;
         T[this.head] = this.clock; this.head = (this.head + 1) % 48;
@@ -337,6 +356,8 @@ export class ReactFx {
         else if (kind === 2) this.glow.emit(sp(cx + ca * R * 0.5, cy + R * 0.3, cz + sa * R * 0.5, ca * 0.08, 0.4 + 0.3 * r(), sa * 0.08, 1.0 + 0.6 * r(), 0.014 + 0.008 * r(), [1.0, 0.5 + 0.2 * r(), 0.14], 0.9, 0.4));
         else if (kind === 4) this.soft.emit(sp(cx + ca * R * 0.8, cy - R * 0.1 * r(), cz + sa * R * 0.8, ca * 0.05, -0.1, sa * 0.05, 0.55, 0.026, DRIP_C, 0.95, 0, 7, 2, 2));
         else if (kind === 5) this.soft.emit(sp(cx + ca * R * 0.95, cy + R * (r() - 0.6), cz + sa * R * 0.95, ca * 0.03, 0.12 + 0.08 * r(), sa * 0.03, 1.1 + 0.5 * r(), 0.03 + 0.025 * r(), BUBBLE_C, 0.75, 0.8));
+        // round 3: strands (6): thin sticky threads drawn out of the skin as a tacky body leaves (a streak along its slow outward-down drift)
+        else if (kind === 6) this.soft.emit(sp(cx + ca * R * 0.92, cy + R * (0.1 - 0.5 * r()), cz + sa * R * 0.92, ca * 0.2, -0.05 - 0.06 * r(), sa * 0.2, 1.0 + 0.4 * r(), 0.08 + 0.04 * r(), STRAND_C, 0.8, 2.2, 0.4, 2, 2));
         else this.soft.emit(sp(cx + ca * R * 0.9, 0.04, cz + sa * R * 0.9, ca * (0.35 + 0.3 * r()), 0.12 + 0.12 * r(), sa * (0.35 + 0.3 * r()), 0.6 + 0.3 * r(), 0.05 + 0.04 * r(), this.puffC, 0.5, 3.5));
       }
       if (kind === 9) S[o + 7] = 0;
@@ -348,6 +369,8 @@ export class ReactFx {
 
 /** The presets' colours (linear): steam cream, drips and bubbles lagoon-cream mixes. */
 const STEAM_C = tok('cream', 'cream', 0, 0.97), DRIP_C = tok('lagoon', 'cream', 0.25), BUBBLE_C = tok('lagoon', 'cream', 0.15, 1.05);
+/** Round 3: the strands' pale coral-cream (a sticky thread) and the ripple ring's foam (lagoon-cream, lighter than a drip). */
+const STRAND_C = tok('cream', 'coral', 0.3, 0.92), FOAM_C = tok('cream', 'lagoon', 0.2);
 
 /** The host: loads place looks, swaps one in (sky, ground, light, environment, things) and out, poses its movers, frames its bounds. */
 export class PlaceHost {
@@ -367,9 +390,12 @@ export class PlaceHost {
   constructor(hub: EnvHub) { this.hub = hub; }
   get active(): string | null { return this.cur ? this.cur.id : null; }
   /** setPlayBounds' framing and lens (placeview.ts): the camera lives in the stage, the search here (it only runs in a place). */
+  /** setPlayBounds' framing, given the HUD rows the shell REPORTED (round 3: kept clear as Home's band keeps them, placeview.ts placeBand). */
   fit(cx: number, cz: number, hx: number, hz: number, w: number, h: number, top: number, right: number, bottom: number, left: number): PlayFrame | null {
-    return fitPlace(cx, cz, hx, hz, w, h, top, right, bottom, left);
+    const B = placeBand({ top, right, bottom, left }, w, h, this.band);
+    return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3]);
   }
+  private readonly band = new Float64Array(4);
   private applyLight(c: StageCtx, l: PlaceLight | null): void {
     const H = (this.homeL ??= { key: c.key.color.clone(), keyI: c.key.intensity, keyPos: c.key.position.clone(), keyAim: c.key.target.position.clone(), keyAngle: c.key.angle, rim: c.rim.color.clone(), rimI: c.rim.intensity,
       rimPos: c.rim.position.clone(), sky: c.fill.color.clone(), ground: c.fill.groundColor.clone(), fillI: c.fill.intensity });

@@ -152,7 +152,8 @@ const LOOK: PlaceLook = {
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <color_fragment>', BOARDS);
     };
     floorMat.customProgramCacheKey = () => 'wh-boards-v1';
-    const floor = kit.mesh(kit.geo('floor', () => new THREE.PlaneGeometry(16, 16).rotateX(-Math.PI / 2)), floorMat, 0, 0, 0, -50);
+    // (round 3: 40 m, like PropKit.ground: with Home's band margin a tall frame's camera stands further back and saw the 16 m floor end at the HUD line)
+    const floor = kit.mesh(kit.geo('floor', () => new THREE.PlaneGeometry(40, 40).rotateX(-Math.PI / 2)), floorMat, 0, 0, 0, -50);
     g.add(floor);
 
     // ---- the rug (a patch: no collider) ----

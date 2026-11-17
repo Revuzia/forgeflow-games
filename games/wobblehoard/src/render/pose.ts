@@ -82,6 +82,25 @@ export class RenderPose {
     out[o + 1] = y + (y - c.y) * u.z;
     out[o + 2] = z + u.y * h + (z - c.z) * (-0.5 * u.z);
   }
+
+  /**
+   * Round 3 (MERGE_PC doubt 1): the posed twin of a PLANE n . p = d (n unit), so a bead clipped at a cut face stays flush with the face the
+   * vertex stage poses. The pose is affine where 0 <= h <= 1.6 (a shear by (sx, sz) / H per metre of height and a scale about the ground
+   * point), so a plane maps to a plane: normal A^-T n, through the posed foot of `ref` on the plane (ref = the bead's unposed anchor: the
+   * clamp of h is taken at that point, so the plane is exact where it clips the bead). Writes (nx, ny, nz, d) of the posed plane into out[0..3].
+   */
+  applyPlane(nx: number, ny: number, nz: number, d: number, rx: number, ry: number, rz: number, out: { [i: number]: number }): void {
+    const u = this.u, c = this.c;
+    const k = rx * nx + ry * ny + rz * nz - d, px = rx - k * nx, py = ry - k * ny, pz = rz - k * nz;   // the foot of ref on the plane
+    const hh = (py - c.y) * c.w, inside = hh > 0 && hh < 1.6;
+    const a = 1 - 0.5 * u.z, cc = 1 + u.z, sp = inside ? u.x * c.w : 0, sq = inside ? u.y * c.w : 0;
+    let mx = nx / a, my = ny / cc - (sp * nx + sq * nz) / (a * cc), mz = nz / a;
+    const l = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
+    mx /= l; my /= l; mz /= l;
+    this.apply(px, py, pz, out, 0);
+    const d2 = mx * out[0] + my * out[1] + mz * out[2];
+    out[0] = mx; out[1] = my; out[2] = mz; out[3] = d2;
+  }
 }
 
 /** The vertex-stage twin of RenderPose.apply (inserted after three's begin_vertex: `transformed` is the world position, the mesh sits at the origin). */

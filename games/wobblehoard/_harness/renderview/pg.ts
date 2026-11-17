@@ -16,6 +16,9 @@ import RIPPLE from '../../src/data/place_ripple.ts';
 import FROST from '../../src/data/place_frostbell.ts';
 import RAIN from '../../src/data/place_rainleaf.ts';
 import type { PlaceDef } from '../../src/data/places.ts';
+import { physPieces, type PhysPieces } from './physPieces.ts';
+import { wholeRefFor } from '../../src/render/wholeRef.ts';
+import { placeBand } from '../../src/render/placeview.ts';
 /** The shipped and S2 places the render chunks draw (their data modules: both layouts). */
 const PLACES: Record<string, PlaceDef> = { hearthlog: CABIN, ripple: RIPPLE, frostbell: FROST, rainleaf: RAIN };
 
@@ -34,6 +37,7 @@ export const PG_INSETS = { phone: { top: 151, right: 60, bottom: 170, left: 16 }
 
 export function makePg(E: PgEnv) {
   const S = E.stage;
+  let PP: PhysPieces | null = null;   // (round 3: PHYS's pure piece builder, made on first use)
   let bodies: SoftBodyLike[] = [];
   let ids: number[] = [];
   const W = (): number => E.canvas.clientWidth || E.canvas.width, H = (): number => E.canvas.clientHeight || E.canvas.height;
@@ -71,24 +75,158 @@ export function makePg(E: PgEnv) {
       return ids.slice();
     },
     /** RD-14: with the autonomy framing on, a body that moves by itself (a slide with no finger) never moves the camera; off, it does. */
-    cameraAutonomy(species: string[], n = 3): { onMax: number; offMax: number } {
-      const run = (on: boolean): number => {
+    cameraAutonomy(species: string[], n = 3, kind?: 'phone' | 'desktop'): { onMax: number; offMax: number; onLens: number; onScale: number; offLens: number; offScale: number } {
+      // (round 3: with the shell's HUD rows reported the PC's SR2 band framer runs too; its lens shift and camera scale are part of "the camera")
+      if (kind) pg.insets(kind);
+      const run = (on: boolean): number[] => {
         pg.party(species, n, 60);
         S.setAutonomyFraming!(on);
         E.tick(bodies, 240, 1 / 60, false);
-        const p0 = S.camera.position.clone();
+        const p0 = S.camera.position.clone(), i0 = S.info, l0x = i0.lens.x, l0y = i0.lens.y, c0 = i0.camScale;
         const b = bodies[n > 1 ? 1 : 0];
-        let mx = 0;
+        let mx = 0, ml = 0, ms = 0;
         // the body slides and hops by itself (no finger, no grab: LIFE's kind of motion)
         for (let i = 0; i < 180; i++) {
           if (i % 30 === 0) b.nudge({ x: 0.9, y: i % 60 === 0 ? 0.8 : 0, z: 0.5 });
           E.tick(bodies, 1, 1 / 60, false);
-          mx = Math.max(mx, S.camera.position.distanceTo(p0));
+          const inf = S.info;
+          mx = Math.max(mx, S.camera.position.distanceTo(p0)); ml = Math.max(ml, Math.abs(inf.lens.x - l0x), Math.abs(inf.lens.y - l0y)); ms = Math.max(ms, Math.abs(inf.camScale - c0));
         }
         S.setAutonomyFraming!(false);
-        return mx;
+        return [mx, ml, ms];
       };
-      return { onMax: run(true), offMax: run(false) };
+      const on = run(true), off = run(false);
+      return { onMax: on[0], onLens: on[1], onScale: on[2], offMax: off[0], offLens: off[1], offScale: off[2] };
+    },
+    /**
+     * Round 3 (MERGE_PC doubt 3): a party of two wholes and a third squishy cut in two TRUE pieces (PHYS's builder through the stub), the
+     * autonomy framing on, the HUD rows of `kind`: (a) the slots the views count at (the two pieces share one), (b) visibleTable's box against
+     * the same party uncut (the group takes the place of the whole: the rest framing is the same), (c) a piece that moves by itself (no finger)
+     * moves neither the camera, the lens shift nor the camera scale; (d) a party of ONE cut squishy whose pieces move by themselves (the PC's
+     * piece-group framing at its slot). Pieces are added after the wholes, as the shell does at a cut (it removes the whole and adds them).
+     */
+    pieceSlots(kind: 'phone' | 'desktop'): { slots: number[]; boxUncut: number[]; boxCut: number[]; boxErr: number; move: number[]; solo: number[]; soloOff: number[]; png: string } {
+      pg.insets(kind);
+      PP ??= physPieces();
+      const sp = ['dollop', 'twangle', 'chunkle'];
+      const g2 = speciesBaseGenome(sp[2], 3);
+      const pos = S.matLayout(3);
+      const build = (cut: boolean, others: boolean): { ids: number[]; pieces: SoftBodyLike[] } => {
+        S.clearBodies(); bodies = [];
+        const out: number[] = [], pieces: SoftBodyLike[] = [];
+        if (others) for (let k = 0; k < 2; k++) { const g = speciesBaseGenome(sp[k], 1 + k), b = E.makeBody(g); out.push(S.addBody!(b, g, { tier: 'common', position: k ? pos[1] : undefined })); bodies.push(b); }
+        const at = others ? pos[2] : { x: 0, y: 0, z: 0 };
+        if (!cut) { const b = new StubBody(g2, { rest: PP!, piece: { frac: 1, chunk: false, at: { x: 0, y: 0, z: 0 } } }); out.push(S.addBody!(b, g2, { tier: 'common', position: at })); bodies.push(b); }
+        else {
+          const c = PP!.cut(g2, { x: 1, y: 0, z: 0 }, 0);
+          if ('refused' in c) throw new Error('cut refused: ' + c.refused);
+          for (const sd of [c.a, c.b]) { const b = new StubBody(g2, { rest: PP!, piece: { frac: sd.frac, region: sd.region, at: { x: sd.rest.offset.x, y: sd.rest.offset.y, z: sd.rest.offset.z } } }); out.push(S.addBody!(b, g2, { tier: 'common', position: at })); bodies.push(b); pieces.push(b); }
+        }
+        S.setAutonomyFraming!(true);
+        E.tick(bodies, 150, 1 / 60, false);
+        return { ids: out, pieces };
+      };
+      const box = new Float32Array(4);
+      build(false, true); S.visibleTable!(box); const boxUncut = Array.from(box);
+      const cut = build(true, true); S.visibleTable!(box); const boxCut = Array.from(box);
+      const slots = cut.ids.map((id) => S.views.find((v) => v.id === id)!.slotK);
+      const boxErr = Math.max(...boxCut.map((v, i) => Math.abs(v - boxUncut[i])));
+      const nudge = (ps: SoftBodyLike[]): number[] => {
+        const p0 = S.camera.position.clone(), i0 = S.info, lx = i0.lens.x, ly = i0.lens.y, c0 = i0.camScale;
+        let mx = 0, ml = 0, ms = 0;
+        for (let i = 0; i < 180; i++) {
+          if (i % 30 === 0) ps.forEach((b, k) => b.nudge({ x: k ? -0.9 : 0.9, y: i % 60 === 0 ? 0.8 : 0, z: 0.6 }));
+          E.tick(bodies, 1, 1 / 60, false);
+          const inf = S.info; mx = Math.max(mx, S.camera.position.distanceTo(p0)); ml = Math.max(ml, Math.abs(inf.lens.x - lx), Math.abs(inf.lens.y - ly)); ms = Math.max(ms, Math.abs(inf.camScale - c0));
+        }
+        return [mx, ml, ms];
+      };
+      const move = nudge(cut.pieces);
+      const png = E.snapshot();
+      const solo = build(true, false); const soloMove = nudge(solo.pieces);
+      S.setAutonomyFraming!(false);
+      const solo2 = build(true, false); S.setAutonomyFraming!(false); E.tick(bodies, 60, 1 / 60, false); const soloOff = nudge(solo2.pieces);
+      S.clearBodies(); bodies = [];
+      return { slots, boxUncut, boxCut, boxErr, move, solo: soloMove, soloOff, png };
+    },
+    /**
+     * Round 3 (MERGE_PC doubts 1 and 7): the merged jelly program (wh-jelly-v6: the render pose + the cut face) on a whole and on a TRUE piece
+     * whose eye straddles the cut (its bead clipped at the live cut face), both leaning and swaying. Measured on the piece: every cut-face vertex
+     * of the jelly, posed by the CPU twin of the vertex stage, against the clip plane the bead uses (eFix), against the unposed cut plane HEAD
+     * used (eOld), and the unposed vertices against the unposed plane (eUn: the face's own flatness). Screenshots of both.
+     */
+    posedPiece(species = 'dollop'): { eUn: number; eFix: number; eOld: number; eyes: number; clipped: number; pngWhole: string; pngPiece: string; pngPieceOff: string } {
+      PP ??= physPieces();
+      const g = speciesBaseGenome(species, 1), wh = PP.whole(g), ref = wholeRefFor({ vertexCount: (wh.restLocal.length / 3) | 0, indices: wh.indices, restLocal: wh.restLocal }, wh.radius, g);
+      const ec = ref.eyes[0].centre, n = { x: 1, y: 0, z: 0 }, d = ec.x;   // a plane through the left eye's centre: the bead straddles it
+      S.clearBodies(); bodies = [];
+      const w = new StubBody(g, { rest: PP, piece: { frac: 1, chunk: false, at: { x: 0, y: 0, z: 0 } } });
+      const iw = S.addBody!(w, g, { tier: 'common' }); bodies.push(w);
+      S.setBodyPose!(iw, 0.1, 0, 0.05, 1.5, 0); S.setBodyLook!(iw, 0, 0, 0, 0.5, 0);
+      E.tick(bodies, 90, 1 / 60, true);
+      const pngWhole = E.snapshot();
+      const c = PP.cut(g, n, d);
+      if ('refused' in c) throw new Error('cut refused: ' + c.refused);
+      S.clearBodies(); bodies = [];
+      const sd = c.a.frac >= c.b.frac ? c.a : c.b;
+      const b = new StubBody(g, { rest: PP, piece: { frac: sd.frac, region: sd.region, at: { x: sd.rest.offset.x, y: sd.rest.offset.y, z: sd.rest.offset.z } } });
+      const ip = S.addBody!(b, g, { tier: 'common' }); bodies.push(b);
+      E.tick(bodies, 60, 1 / 60, false);
+      const pngPieceOff = E.snapshot();
+      S.setBodyPose!(ip, 0.1, 0, 0, 0, 0);   // a full lean across the cut face (the largest tilt of its plane)
+      E.tick(bodies, 90, 1 / 60, true);
+      const pngPiece = E.snapshot();
+      const v = S.views.find((x) => x.id === ip)!;
+      const eyes = (v.face as unknown as { eyes: { clipCaps: number[]; clipPlanes: THREE.Plane[] }[] }).eyes;
+      const eye = eyes.find((e) => e.clipCaps.length > 0);
+      const geo = v.jelly.mesh.geometry, P = geo.getAttribute('position'), C = geo.getAttribute('aCap');
+      let eUn = 0, eFix = 0, eOld = 0;
+      const q = [0, 0, 0];
+      if (eye) {
+        const cap = v.jelly.caps[eye.clipCaps[0]], pl = eye.clipPlanes[0];
+        for (let i = 0; i < P.count; i++) {
+          if (C.getX(i) < 0.5) continue;
+          const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+          eUn = Math.max(eUn, Math.abs(cap.nx * x + cap.ny * y + cap.nz * z - cap.d));
+          v.pose.apply(x, y, z, q, 0);
+          eFix = Math.max(eFix, Math.abs(pl.normal.x * q[0] + pl.normal.y * q[1] + pl.normal.z * q[2] + pl.constant));
+          eOld = Math.max(eOld, Math.abs(cap.nx * q[0] + cap.ny * q[1] + cap.nz * q[2] - cap.d));
+        }
+      }
+      S.clearBodies(); bodies = [];
+      return { eUn, eFix, eOld, eyes: eyes.length, clipped: eye ? 1 : 0, pngWhole, pngPiece, pngPieceOff };
+    },
+    /**
+     * Round 3 (MERGE_PC doubt 4): a place respects Home's HUD band. In `id` with the rows of `kind`: every corner column (ground and 1.25 m top
+     * of a body centre at each corner of the bounds) inside the band (rows + Home's margin); then the Cut bar (+90 px on the bottom row, as the
+     * shell reports it while the Cut tool is in hand): the camera eases (largest per-frame move of the camera and of its lens), and after 2 s
+     * every corner column is inside the NEW band; the bar goes away and the framing comes back to the first one.
+     */
+    async placeBandRefit(kind: 'phone' | 'desktop', id = 'ripple'): Promise<{ before: number; after: number; back: number; fov: number[]; stepM: number; stepFov: number; png: string }> {
+      pg.insets(kind);
+      const D = PLACES[id];
+      await S.loadPlace!(id); S.setPlace!(id, 0.05);
+      const tall = S.camera.aspect < 0.9, b = (tall ? D.tall : D).bounds, hx = b.hx ?? 3, hz = b.hz ?? 2;
+      S.setPlayBounds!(b.x, b.z, hx, hz);
+      S.clearBodies(); bodies = [];
+      E.tick([], 150, 1 / 60, false);
+      const worst = (ins: { top: number; right: number; bottom: number; left: number }): number => {
+        const B = placeBand(ins, W(), H(), new Float64Array(4));
+        let m = Infinity;
+        for (const x of [b.x - hx, b.x + hx]) for (const z of [b.z - hz, b.z + hz]) for (const y of [0, 1.25]) { const p = toPx(x, y, z); m = Math.min(m, p[0] - B[3], W() - B[1] - p[0], p[1] - B[0], H() - B[2] - p[1]); }
+        return m;
+      };
+      const ins0 = PG_INSETS[kind], ins1 = { ...ins0, bottom: ins0.bottom + 90 };
+      const before = worst(ins0), fov0 = S.camera.fov;
+      S.setSafeInsets(ins1);
+      let stepM = 0, stepFov = 0, prev = S.camera.position.clone(), pf = S.camera.fov;
+      for (let i = 0; i < 120; i++) { E.tick([], 1, 1 / 60, false); stepM = Math.max(stepM, S.camera.position.distanceTo(prev)); stepFov = Math.max(stepFov, Math.abs(S.camera.fov - pf)); prev.copy(S.camera.position); pf = S.camera.fov; }
+      const after = worst(ins1), fov1 = S.camera.fov;
+      E.tick([], 1, 1 / 60, true);
+      const png = E.snapshot();
+      S.setSafeInsets(ins0); E.tick([], 150, 1 / 60, false);
+      const back = worst(ins0), fov2 = S.camera.fov;
+      return { before, after, back, fov: [fov0, fov1, fov2], stepM, stepFov, png };
     },
     /**
      * RD-16: Home in view, at this frame (the page's viewport) with n bodies of body scale `scale`, the autonomy framing on and the given
@@ -238,9 +376,9 @@ export function makePg(E: PgEnv) {
       return { awakeMs: awake, asleepMs: asleep, ratio: asleep / awake, fineWhileAsleep: f1 - f0 };
     },
     /** RD-06: 6 pieces (chunks lite) against 2 wholes, frame ms; and the same with the chunks NOT lite (today's x1.32..1.45). */
-    liteCost(rounds = 3): { two: number[]; sixLite: number[]; sixFull: number[]; liteVerts: number; calls: number[] } {
+    liteCost(rounds = 3): { two: number[]; sixLite: number[]; sixFull: number[]; liteVerts: number; fullVerts: number; simVerts: number; tierFreq: number; calls: number[] } {
       const g = speciesBaseGenome(CATALOG[0].id, 1);
-      const out = { two: [] as number[], sixLite: [] as number[], sixFull: [] as number[], liteVerts: 0, calls: [0, 0, 0] };
+      const out = { two: [] as number[], sixLite: [] as number[], sixFull: [] as number[], liteVerts: 0, fullVerts: 0, simVerts: 0, tierFreq: 0, calls: [0, 0, 0] };
       const build = (six: boolean, lite: boolean): void => {
         S.clearBodies();
         const bs: StubBody[] = [];
@@ -253,7 +391,8 @@ export function makePg(E: PgEnv) {
           bs.push(b);
         }
         E.tick(bs, 40, 1 / 60, false);
-        if (six && lite) out.liteVerts = S.views[1].jelly.fineCount;
+        if (six && lite) { out.liteVerts = S.views[1].jelly.fineCount; out.simVerts = S.views[1].proxy.vertexCount; out.tierFreq = S.views[0].jelly.freq; }
+        if (six && !lite) out.fullVerts = S.views[1].jelly.fineCount;
       };
       for (let r = 0; r < rounds; r++) for (const [six, lite] of [[false, false], [true, true], [true, false]] as const) {
         build(six, lite); S.render();
@@ -322,7 +461,7 @@ export function makePg(E: PgEnv) {
      * embers on the fourth, the kettle's steam puff and the hearth's fire puff; then the budget: 8 presets at full amount for 2 s, the
      * particles emitted per second against LIFE 10.1's cap (48 desktop, 16 in Calm). Screenshots of the presets in flight.
      */
-    async presets(): Promise<{ png: string; pngThings: string; started: boolean[]; perS: number; perSCalm: number; home: boolean }> {
+    async presets(): Promise<{ png: string; pngThings: string; started: boolean[]; perS: number; perSCalm: number; home: boolean; started2: boolean[]; png2: string; perS2: number; perS2Calm: number }> {
       pg.insets('desktop');
       pg.home(); E.tick([], 2, 1 / 60, false);
       const home = S.reactFx!(1, 0, 0, 0, 0, 1, 2);   // at Home: false (only in a place)
@@ -356,7 +495,24 @@ export function makePg(E: PgEnv) {
       };
       const perS = await rate(false), perSCalm = await rate(true);
       S.setCalmEffects(false); fx.clear();
-      return { png, pngThings, started, perS, perSCalm, home };
+      // round 3: the two presets the S1 / S2 cells still lacked: 6 strands (a tacky body leaving the Snug Basket) and 8 ripple (rings on a pop
+      // dome's top in the Rock Pool); then their own budget at full amount (8 sources), against the same caps
+      E.tick(bodies, 30, 1 / 60, false);
+      const started2 = [S.reactFx!(6, ids4[2], 0, 0, 0, 1, 6), S.reactFx!(8, ids4[1], 0, 0, 0, 1, 6), S.reactFx!(3, ids4[0], 0, 0, 0, 1, 2) === false, S.reactFx!(7, ids4[0], 0, 0, 0, 1, 2) === false];
+      E.tick(bodies, 50, 1 / 60, false);
+      const png2 = E.snapshot();
+      const rate2 = async (calm: boolean): Promise<number> => {
+        S.setCalmEffects(calm);
+        fx.clear(); E.tick(bodies, 60, 1 / 60, false);
+        for (let k = 0; k < 8; k++) S.reactFx!(k % 2 ? 8 : 6, ids4[k % 4], 0, 0, 0, 1, 10);
+        E.tick(bodies, 60, 1 / 60, false);
+        const e0 = fx.soft.emitted + fx.glow.emitted + fx.soft.dropped + fx.glow.dropped;
+        E.tick(bodies, 120, 1 / 60, false);
+        return (fx.soft.emitted + fx.glow.emitted + fx.soft.dropped + fx.glow.dropped - e0) / 2;
+      };
+      const perS2 = await rate2(false), perS2Calm = await rate2(true);
+      S.setCalmEffects(false); fx.clear();
+      return { png, pngThings, started, perS, perSCalm, home, started2, png2, perS2, perS2Calm };
     },
     /** RD-17's bubble clamp in a place (tall, phone): a say bubble over a body at the back-right corner of the bounds stays inside the safe
      *  frame; returns the bubble's circle, the safe frame and a screenshot. */

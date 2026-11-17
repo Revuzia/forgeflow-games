@@ -30,21 +30,21 @@ uniform vec3 uZenith; uniform vec3 uInk; uniform vec3 uPlum; uniform vec3 uHoriz
 uniform vec3 uGlowWarm; uniform vec3 uGlowCool;
 uniform vec3 uBase; uniform vec3 uWarm;
 uniform float uGroundY; uniform float uFogNear; uniform float uFogFar;
-// the dusk glow on the horizon, by azimuth (warm toward the key light's side, a cool hint opposite)
+${/* the dusk glow on the horizon, by azimuth (warm toward the key light's side, a cool hint opposite) */''}
 vec3 whGlow(vec3 d) {
   vec2 az = normalize(vec2(d.x, d.z) + vec2(1e-5));
   return uGlowWarm * pow(max(dot(az, normalize(vec2(0.3, -0.95))), 0.0), 7.0) + uGlowCool * pow(max(dot(az, normalize(vec2(-0.75, -0.6))), 0.0), 6.0);
 }
-// the sky WITHOUT the glow (the ground haze below the horizon fogs toward this at e = 0)
+${/* the sky WITHOUT the glow (the ground haze below the horizon fogs toward this at e = 0) */''}
 vec3 whSkyBase(float e) {
   vec3 c = mix(uHorizon, uPlum, smoothstep(0.0, 0.2, e));
   c = mix(c, uInk, smoothstep(0.12, 0.6, e));
   return mix(c, uZenith, smoothstep(0.55, 1.0, e));
 }
-// The glow PEAKS at the horizon and fades both ways: upward over ~26 degrees, downward into the ground haze over ~9 degrees, each with
-// zero slope at the horizon (C1). It used to RISE from 0 over the first 4 degrees above the horizon, and at the default pitch the frame
-// top cuts the sky right inside that rise: a lighter band across the top of the frame. Now the frame top is never lighter than the
-// horizon below it, at any pitch, zoom or aspect ratio.
+${/* The glow PEAKS at the horizon and fades both ways: upward over ~26 degrees, downward into the ground haze over ~9 degrees, each with */''}
+${/* zero slope at the horizon (C1). It used to RISE from 0 over the first 4 degrees above the horizon, and at the default pitch the frame */''}
+${/* top cuts the sky right inside that rise: a lighter band across the top of the frame. Now the frame top is never lighter than the */''}
+${/* horizon below it, at any pitch, zoom or aspect ratio. */''}
 vec3 whSky(vec3 d) {
   float e = max(d.y, 0.0);
   return whSkyBase(e) + whGlow(d) * (1.0 - smoothstep(0.0, 0.45, e));
@@ -60,13 +60,13 @@ void main() {
   vec3 col = sky;
   if (d.y < 0.004) {
     float h = max(cameraPosition.y - uGroundY, 0.05);
-    float t = h / max(-d.y, 1e-4);                       // distance along the ray to the ground plane
-    vec2 hp = cameraPosition.xz + d.xz * t;              // hit point
-    // grain fades with distance (no aliasing shimmer at grazing angles)
+    float t = h / max(-d.y, 1e-4);                       ${/* distance along the ray to the ground plane */''}
+    vec2 hp = cameraPosition.xz + d.xz * t;              ${/* hit point */''}
+    ${/* grain fades with distance (no aliasing shimmer at grazing angles) */''}
     vec3 ground = uBase * (0.8 + 0.4 * mix(whNoise2(hp * 1.7), 0.5, smoothstep(uFogNear, uFogFar, t))) + uWarm * exp(-length(hp) * 0.42);
-    // the haze is a smooth function of the depression ANGLE, not of distance: distance fog saturated a whole range of far rays to
-    // one constant colour, a flat band whose lower end read as a hard edge across the top of the frame. This one has no plateau and
-    // meets the sky at the horizon with zero slope on both sides (C1), at every aspect ratio, pitch and zoom.
+    ${/* the haze is a smooth function of the depression ANGLE, not of distance: distance fog saturated a whole range of far rays to */''}
+    ${/* one constant colour, a flat band whose lower end read as a hard edge across the top of the frame. This one has no plateau and */''}
+    ${/* meets the sky at the horizon with zero slope on both sides (C1), at every aspect ratio, pitch and zoom. */''}
     float dep = -d.y;
     float fog = 1.0 - smoothstep(0.0, 0.34, dep);
     fog *= 1.0 - 0.5 * smoothstep(0.0, 0.34, dep);
@@ -110,8 +110,8 @@ const FELT_COLOR = /* glsl */`
   vec2 fp = vWP.xz;
   float r = length(fp);
   float fw = max(length(fwidth(fp)), 1e-5);
-  // band-limited grain: each octave only contributes while its cells are ~1.5..9 px wide (no aliasing far away,
-  // no visible lattice blocks up close), so the felt always reads as fine fibre
+  ${/* band-limited grain: each octave only contributes while its cells are ~1.5..9 px wide (no aliasing far away, */''}
+  ${/* no visible lattice blocks up close), so the felt always reads as fine fibre */''}
   float fib = 0.0, wsum = 0.0;
   float ang = whHash21(floor(fp * 5.0)) * 6.2832;
   vec2 rp = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * fp;
@@ -129,15 +129,15 @@ const FELT_COLOR = /* glsl */`
   diffuseColor.rgb *= 0.64 + 0.72 * mix(0.5, fib, uFibre);
   diffuseColor.rgb *= 0.86 + 0.28 * whNoise2(fp * 2.1 + 3.0);
   diffuseColor.rgb *= mix(1.0, 0.3, smoothstep(uVigIn, uVigOut, r));
-  // stitched ring, anti-aliased against its own pixel footprint (at grazing angles near the far edge it used to alias into a
-  // dotted line along the horizon): the ring widens to >= ~1.5 px and loses coverage, the dash pattern relaxes to its mean
+  ${/* stitched ring, anti-aliased against its own pixel footprint (at grazing angles near the far edge it used to alias into a */''}
+  ${/* dotted line along the horizon): the ring widens to >= ~1.5 px and loses coverage, the dash pattern relaxes to its mean */''}
   float fr = max(fwidth(r), 1e-5);
   float arc = atan(fp.y, fp.x) * 64.0 / 6.2832;
   float dashes = mix(0.5, step(0.5, fract(arc)), 1.0 - smoothstep(0.25, 0.6, fwidth(arc)));
   float ring = 1.0 - smoothstep(max(0.004, fr * 0.5), max(0.011, fr * 1.5), abs(r - (uMatR - 0.16)));
   ring *= min(1.0, 0.012 / (fr * 1.5));
   vec3 toCam = cameraPosition - vWP;
-  ring *= smoothstep(0.17, 0.3, abs(toCam.y) / max(length(toCam), 1e-3));   // gone at grazing angles: the far rim must not read as a dotted line
+  ring *= smoothstep(0.17, 0.3, abs(toCam.y) / max(length(toCam), 1e-3));   ${/* gone at grazing angles: the far rim must not read as a dotted line */''}
   diffuseColor.rgb = mix(diffuseColor.rgb, uStitchCol, ring * dashes * uStitch);
 }
 `;

@@ -84,7 +84,7 @@
 import type { Genome } from '../core/genome.ts';
 import { clamp, mulberry32 } from '../core/rng.ts';
 import type {
-  CutPlan, CutPlane, FingerDownArgs, PieceInfo, PieceOpts, PieceRegion, Quat, RayHit, Slot, SoftBodyLike, SoftEvent, SoftEventKind, SoftMetrics, V3,
+  CutPlan, CutPlane, FingerDownArgs, PieceInfo, PieceOpts, PieceRegion, PropWorldLike, Quat, RayHit, Slot, SoftBodyLike, SoftEvent, SoftEventKind, SoftMetrics, V3,
 } from '../contracts.ts';
 import { buildIcosphere } from './mesh.ts';
 import { buildChunkRest, buildRest, flatPoints, meshVolume, physicsGenome, restRadiusOf } from './shape.ts';
@@ -254,6 +254,34 @@ export const NECK_OBL = { cap: 0.6 };
  *  (finger, grab, lock, carry, neck, ceremony driver, float mode), a memory-arm body with its memory shape still (`mem`: rest radii per frame). `hit`: a body touching a sleeper wakes it when the body itself has been calm (nothing drives it, its centre moves under `hitSpeed` m/s) for less than `hit` x `after` s
  *  (a body that is itself at rest leans on the sleeper as on a fixed support: two resting pieces never wake each other in turn). enabled false = nothing ever sleeps (the A/B control). */
 export const SLEEP = { enabled: true, after: 0.5, speed: 1, move: 0.004, moveMin: 1.5e-3, err: 0.3, mem: 1e-4, hit: 0.5, hitSpeed: 0.15 };
+/** PLAYGROUND (PG_PHYS; _spec/PLAYGROUND_BUILD.md 8.3, 8.6, 8.7). The LIFE drivers (setSquash, scootTo, hop), the touch gate, sleep for WHOLE bodies that opt in
+ *  (sleepEnabled), and the prop pass. Every one of them is inert until it is used: a body with no PropWorld bound, sleepEnabled false and no LIFE driver call steps
+ *  bit for bit as before (the hash rows of probe_softbody, probe_lock, probe_cut and probe_many). PROBES may read them; `hopVyCap` is the slice's hop cap (S1: 0.84 m/s,
+ *  apex 3.53 cm with GRAVITY 10; S2 raises it per family after PH-01, PLAYGROUND_BUILD D-07). */
+export const PG = {
+  hopVyCap: 0.84, hopGap: 0.8, hopSubs: 10, hopHMax: 1.0,
+  gateS: 0.12,                                   // the touch gate eases a LIFE driver out within this (s)
+  scootMin: 0.04, scootMax: 0.5, scootEase: 0.12, // scootTo: speed band (m/s) and its ease in / out (s)
+  squashMin: 0.75, squashMax: 1.12, squashTauMin: 0.08,
+  supportCos: 0.8191520442889918,                // cos 35 deg: a prop face this close to world up SUPPORTS a body (D-11)
+  tiltCos: 0.9993908270190958,                   // cos 2 deg: on a support tilted more, gravity's tangential part is kept (a ramp still slides)
+  restKin: 0.02, restSpeed: 0.01,                // the rest test of a sleeping WHOLE adds: metrics.kinetic and the centre's speed (m/s) under these (8.6)
+  wakeSpeed: 0.05, wakePush: 0.2,                // a contact wakes a sleeping whole only above this approach speed (m/s) or a push of this x mean edge in one frame
+  memBusy: 0.02,                                 // metrics.memoryBusy: max |MEM - Q| over this x restRadius (putty, mochi dough, bead squeeze)
+  workPen: 0.15, workSpeed: 0.3,                 // a prop contact joins the fold limit only while worked: penetration over this x mean edge, a body faster than this, or a moving prop
+};
+/** PLAYGROUND: the packed prop data a bound world hands every body (src/physics/props.ts fills it; physics VALUES, not contract members). Per prop PS floats in S:
+ *  [0] kind (0 none or parked, 1 sphere, 2 capsule, 3 box), [1] joint (0 static, 1 hinge, 2 free ball), [2] mu, [3] a capsule's segment axis (0 local x, 1 y, 2 z),
+ *  [4..6] centre at the frame start, [7..15] rotation (row-major; column j = local axis j in world), [16..18] half sizes (box hx hy hz; sphere r; capsule r and the
+ *  segment's HALF length), [19..21] linear velocity (a ball), [22..24] angular velocity (world; a hinge), [25..27] the hinge pivot, [28] bounding radius about the
+ *  centre, [29] 1 = it moves this frame (advance it per substep: pose(t0) + v x (k x H), the rotation by w x k x H), [30] 1 = a STATIC support (a body may sleep on it).
+ *  Per prop PA floats in A that the bodies add to (beginFrame clears them): [0..2] linear impulse, [3..5] angular impulse about the pivot (a hinge) or the centre,
+ *  [6] the riders' inertia x time (supported mass x r_perp^2 x H, so endFrame divides by dt), [7] the largest body impulse this frame, [8] that body's contactSlot,
+ *  [9] particle contacts this frame. Impulses are in BODY-MASS units (1 = a default whole: bodyMass = (restRadius / 0.5)^3 x frac). */
+export interface PropSolve { readonly count: number; readonly S: Float64Array; readonly A: Float64Array }
+/** (S also holds [31..33] a hinge's unit axis in world, [34..35] spare.) */
+export const PS = 36;
+export const PA = 12;
 /** GROUND FIX (LOCK.md section 4): a hand may push the grabbed patch INTO the body at most `inFrac` x the finger's safe press depth (SoftParams.squashDepth) x the body's thickness behind the patch (Infinity = no limit; PROBES may set it). */
 export const GRAB_TUNE = { inFrac: 0.5, zone: 0.8, band: 0.3, volK: 0.1, allFrom: 3, iters: 8, allEvery: 2, still: 1.5, calm: 0.012, cap: 8 };   // (.zone: the skin within this many rest radii of a pulled or locked patch is in the contact fold limit, 0 = off; .band: while a lobe is pulled or locked, and for TABLE_FOLD_AFTER after, the skin this many rest radii above the table is in it too; .allFrom: with this many lobes held, the whole skin is in it; .still: seconds after the last lock, release or grab after which a hold of locks alone looks every other substep only (metrics.kinetic cannot tell: it reads 1.0 for a locked body, the patches fight the shape all the time); .iters: fold passes per substep while .allFrom or more lobes are held; .allEvery: the whole skin joins the limit on every n-th substep; .calm / .cap: after several lobes were held the whole skin stays in the limit until the body is calm (metrics.kinetic under .calm), at most .cap seconds (a release of several lobes rippled into 140 to 175 degree folds when the tip wake ended); .volK: the volume constraint compliance x this while two or more lobes are held (grabs + locks): several lobes pulled out at once swelled the body to 1.2 .. 1.4 of its volume)
 const LIFT_OVER = 1.15;            // a pull asked past this x maxPull lifts the body off the mat (B3). LOCK FIX: unchanged on purpose; a Shift tap on a body that was lifted anyway puts it back and locks (putDownForLock). A longer line (1.3) plus a 0.3 s dwell was tried and withdrawn: it stops the owner's toss from starting for quick drags (browser_shell snap-mat's carry row, probe_gestures' 1.8 x drag at a 1.5 line)
@@ -288,6 +316,7 @@ const INT_FIELDS: ReadonlySet<string> = new Set([
   'vnStamp', 'hashStamp', 'bodyId', 'lastTipSub', 'tipFoldSubs',
   'count', 'anchor', 'slot', 'lockN', 'maxLocks',                                                                 // Grab, locks
   'fingers', 'substeps', 'safetyResets', 'contacts',                                                              // metrics, debug
+  'hopLeft', 'subK', 'propNear', 'onPropIdx', 'contactSlot', 'onProp',                                            // PLAYGROUND
 ]);
 
 /** A coordinate farther than this from the origin (m) is garbage, not a gesture: the toy lives within a few metres, and a value like
@@ -433,6 +462,7 @@ export class SoftBody implements SoftBodyLike {
   readonly metrics: SoftMetrics = {
     compression: 0, compressionRate: 0, stretch: 0, volume: 1, kinetic: 0, grounded: true, fingers: 0, grabbed: false, press: 0, reaction: 0, strands: 0, slosh: 0,
     pull: 0, carried: false, locked: 0,
+    asleep: false, onProp: -1, airborne: false, memoryBusy: false,   // PLAYGROUND (PG_PHYS)
   };
   restRadius!: number;
   /** Harness-only counters (not part of SoftBodyLike). `safetyResets` must stay 0: it counts emergency non-finite recoveries. */
@@ -485,12 +515,34 @@ export class SoftBody implements SoftBodyLike {
   private calmT = 0;                          // seconds it has been calm: restT's test without the 'stands on the table' bar (a calm body that leans on a sleeper does not wake it)
   private readonly canSleep: boolean;         // a piece (built with `piece`); a whole squishy never sleeps
   private bRvalid = false;                    // bR is current (a sleeper's does not change)
-  private readonly restRef: Float64Array;    // the pose the rest countdown started from (a piece's positions; empty for a whole)
+  private restRef: Float64Array;             // the pose the rest countdown started from (a piece's positions; empty for a whole until sleepEnabled)
   private restRefOn = false;
   private ow = 1;                             // collide's pair in hand: 1 = the other body takes its share of every push, 0 = it sleeps and is a fixed support
   private cpContacts = 0;                     // the contact count of the last contactPiece
   private restMem = 0;                        // memoryStep: the largest move of the memory shape in the last frame (rest frame, rest radii)
   private readonly sleepStats = { sleeps: 0, wakes: 0, asleepSteps: 0 };   // harness readout (not part of the state)
+  // ---- PLAYGROUND (PG_PHYS, PLAYGROUND_BUILD 8): sleep for wholes, the LIFE drivers and the touch gate, the prop pass. All inert until used (see PG).
+  private sleepOn = false;                    // sleepEnabled: a WHOLE body may sleep (the shell opts in place and party bodies)
+  /** PLAYGROUND (contracts.ts): the shell's contact slot 0..31 (-1 = none). Strikes carry it (PropWorldLike.drainStrikes). */
+  contactSlot = -1;
+  private scootOn = false; private stx = 0; private stz = 0; private sSpeed = 0; private sV = 0; private sGx = 0; private sGz = 0;   // scootTo: target, asked speed, the glide's speed and velocity now
+  private sqTarget = 1; private sqNow = 1; private sqTau = 0.12; private sqAskTau = 0;   // setSquash: the asked squash (1 = released), the eased one, its time constant, the call in force
+  private hopLeft = 0; private hopT = -10; private glueK = 1;   // hop: substeps left with the glue and peel suspended, its sim time, the tack factor (0 during them)
+  private heldF = false;                       // the touch gate this frame: a finger down, a grab, a carry or a lock
+  private suppEff = 0;                         // the share of the weight the supports carry this substep (supp x (1 - goal float) x glueK): the weight transfer
+  private subK = 0;                            // the substep's index inside this frame (moving props advance by it)
+  private pw: PropWorldLike | null = null; private ps: PropSolve | null = null;   // the bound prop world and its packed data
+  private pbcx = 0; private pbcy = 0; private pbcz = 0; private pbR = 0;           // the body's bounding sphere at the frame start, with a margin for the frame's motion
+  private propNear = 0; private propNearM = 0; private propMinY = 0;               // particles on up-facing prop faces this substep, their mass, the lowest support height
+  private pminRaw = 0; private tblNearM = 0; private propFoldT = 0; private scootBlock = false; private peelRef = 0;                                       // the lowest prop face this substep; the table's own supported mass
+  private supSx = 0; private supSy = 0; private supSz = 0;                         // their mass-weighted face normals (with the table's, the tilt of the support)
+  private tiltOn = false; private tnx = 0; private tny = 1; private tnz = 0;       // the support is tilted past PG.tiltCos: gravity keeps its tangential part along (tnx, tny, tnz)
+  private onMoving = false; private onPropIdx = -1; private fdl = 0;               // on a moving prop now; the prop carrying the most mass; the fingertips' downward push (the prop friction load)
+  private bodyMass = 1;                        // (restRadius / 0.5)^3 x frac: the body's mass in default wholes (prop impulses)
+  private memDev = 0; private readonly memBusyFam: boolean;                        // max |MEM - Q| / restRadius (memoryStep); the family reports memoryBusy
+  private readonly pk = new Float64Array(16);  // the prop's pose this substep: centre (3), rotation (9), spare
+  private readonly pq = new Float64Array(6);   // a particle's signed distance to the prop and the prop's outward normal there (and wakesWhole's arguments)
+  private propNM = new Float64Array(0);        // per prop this substep: supported mass and its mass-weighted centroid (x, y, z)
   // ---- B2 body-to-body contact (collide): this frame's vertex normals and particle hash (built once per frame on demand)
   private readonly VN: Float64Array;
   private vnStamp = -1;
@@ -849,6 +901,9 @@ export class SoftBody implements SoftBodyLike {
     this.tipFoldSubs = Math.round(TIP_FOLD_AFTER * (this.memOn ? Math.min(6, Math.max(1, mt0.memTau * (1 + mt0.memStiff) / 0.5)) : 1));
     this.sloshOn = mt0.sloshMass > 0.01;
     this.roundTau = this.memOn && mt0.memYield > 0 ? 1 + mt0.memStiff : ROUND_TAU;
+    // PLAYGROUND: the families whose plastic memory refuses LIFE's squash and hop while it heals (LIFE.md 5.4), and the body's mass in default wholes
+    this.memBusyFam = this.memOn && (this.family === 'putty' || this.family === 'mochidough' || this.family === 'beadsqueeze');
+    { const rw = restRadiusOf(genome) / 0.5; this.bodyMass = rw * rw * rw * pf; }
     this.VN = new Float64Array(n * 3);
     this.SDIST = new Float64Array(n);
     this.NSCR = new Float64Array(n * 3);
@@ -1115,13 +1170,20 @@ export class SoftBody implements SoftBodyLike {
     this.carried = false; this.liftOk = false; this.twoHanded = false; this.carrier = 0; this.carryOx = 0; this.carryOy = 0; this.carryOz = 0; this.hvx = 0; this.hvy = 0; this.hvz = 0; this.phx = 0; this.phy = 0; this.phz = 0;
     this.strain.fill(1);
     this.asleep = false; this.restT = 0; this.calmT = 0; this.restRefOn = false; this.bRvalid = false; this.restMem = 1;
+    // PLAYGROUND: the LIFE drivers released, the prop contact state cleared (the bound world, sleepEnabled and contactSlot are configuration and stay)
+    this.scootOn = false; this.stx = 0; this.stz = 0; this.sSpeed = 0; this.sV = 0; this.sGx = 0; this.sGz = 0;
+    this.sqTarget = 1; this.sqNow = 1; this.sqTau = 0.12; this.sqAskTau = 0; this.hopLeft = 0; this.hopT = -10; this.glueK = 1; this.heldF = false; this.suppEff = 0; this.subK = 0;
+    this.propNear = 0; this.propNearM = 0; this.propMinY = 0; this.supSx = 0; this.supSy = 0; this.supSz = 0; this.tiltOn = false; this.tnx = 0; this.tny = 1; this.tnz = 0;
+    this.onMoving = false; this.onPropIdx = -1; this.fdl = 0; this.memDev = 0; this.pminRaw = 0; this.tblNearM = 0; this.propFoldT = 0; this.scootBlock = false; this.peelRef = 0;
+    m.asleep = false; m.onProp = -1; m.airborne = false; m.memoryBusy = false;
     this.syncOutputs();
   }
 
   step(dt: number): void {
     if (this.asleep) {
       // CUT3 SLEEP: a sleeping piece takes no solver step (it is drawn at its pose, positions / center / frame / metrics stay as they were); a touch or any driver wakes it
-      if (!this.mustWake()) { this.sleepStats.asleepSteps++; return; }
+      // (PLAYGROUND: a sleeping whole too, and a moving prop that reaches it wakes it: propTouch)
+      if (!this.mustWake() && !(this.ps !== null && this.propTouch())) { this.sleepStats.asleepSteps++; return; }
       this.wake();
     }
     let d = Number.isFinite(dt) ? dt : (dt > 0 ? MAX_DT : 0);
@@ -1134,17 +1196,22 @@ export class SoftBody implements SoftBodyLike {
     if (this.acc < 0) this.acc = 0;
     if (nsub === 0) return;
     this.keAcc = 0; this.keSubs = 0; this.reactAcc = 0;
+    // PLAYGROUND: the touch gate of this frame (the LIFE drivers ease out under it), and the body's bounding sphere for the prop pass
+    this.heldF = this.isHeld();
+    if (this.heldF && this.sqTarget !== 1) { this.sqTarget = 1; this.sqAskTau = 0; }   // a touch ends the squash pose (the call in force is released; LIFE asks again)
+    if (this.ps !== null) this.propBound(nsub);
     // once per frame: memory arm, ceremony easing, goal shape (an int argument: no boxing). Only called when something is active: a body
     // that never needs it (the gel at rest, pressed or pulled) must not run a function the warm-up left without type feedback every frame
     // (it was deoptimised and ran unoptimised: 144 B of boxed doubles per frame)
-    if (this.memOn || this.goalOn || this.edgesBent || this.fold !== this.foldTarget || this.burstO > 0 || this.trembleAmp > 0 || this.flatK > 0 || this.neckOn || this.fracDur > 0 || this.fracNow !== this.fracBuilt) this.frameUpdate(nsub);
+    if (this.memOn || this.goalOn || this.edgesBent || this.fold !== this.foldTarget || this.burstO > 0 || this.trembleAmp > 0 || this.flatK > 0 || this.neckOn || this.fracDur > 0 || this.fracNow !== this.fracBuilt || this.sqNow !== this.sqTarget || this.sqNow !== 1) this.frameUpdate(nsub);
     for (let s = 0; s < nsub; s++) {
+      this.subK = s;
       this.substep();
       this.simTime += H;
       this.postSubstep();
     }
     this.finalize(nsub);   // an integer: a double argument to a function this size is boxed (a HeapNumber per step)
-    if (this.canSleep) this.restCheck(nsub);   // (a whole squishy runs not one instruction more than before CUT3: its calm timer stays 0, so it counts as restless for a sleeper it touches)
+    if (this.canSleep || this.sleepOn) this.restCheck(nsub);   // (a whole squishy without sleepEnabled runs not one instruction more than before CUT3: its calm timer stays 0, so it counts as restless for a sleeper it touches)
   }
 
   // ---- CUT3 SLEEP / WAKE (acceptance U06). A PIECE that has been at rest for SLEEP.after seconds stops stepping until it is touched, hit, joined or the gravity mode changes; its positions,
@@ -1161,23 +1228,347 @@ export class SoftBody implements SoftBodyLike {
     this.restT = 0; this.calmT = 0;
     if (!this.asleep) return;
     this.asleep = false; this.acc = 0; this.bRvalid = false; this.vnStamp = -1; this.hashStamp = -1; this.sleepStats.wakes++;
+    this.metrics.asleep = false;
   }
-  /** Something other than a call to wake() asks a sleeping piece to run: a finger or a grab on it, a lock, a carry, a ceremony driver, the neck, a change of size, float mode. */
+  /** Something other than a call to wake() asks a sleeping piece to run: a finger or a grab on it, a lock, a carry, a ceremony driver, the neck, a change of size, float mode
+   *  (PLAYGROUND: or a LIFE driver: a scoot, a squash pose still easing). */
   private mustWake(): boolean {
     if (this.lockN > 0 || this.carried || this.moveOn || this.neckOn || this.trembleAmp > 0 || this.burstO > 0 || this.fold !== this.foldTarget || this.fracDur > 0 || this.fracNow !== this.fracBuilt || this.flatK > 0 || !this.gravityOn) return true;
+    if (this.scootOn || this.sqNow !== this.sqTarget || this.hopLeft > 0) return true;
     for (let k = 0; k < NSLOT; k++) { const f = this.fingers[k]; if (f.down || f.retracting || this.grabs[k].active) return true; }
     return false;
+  }
+
+  // ---- PLAYGROUND (PG_PHYS; contracts.ts PLAYGROUND, PLAYGROUND_BUILD 8.6, 8.7): sleep for wholes, the LIFE drivers and the touch gate
+
+  /** Opt in to sleep (contracts.ts): a WHOLE body may then sleep by the rest test of restCheck plus PLAYGROUND_BUILD 8.6's (kinetic, centre speed, a static support,
+   *  no LIFE driver, memory converged). Off (the default) = every existing row unchanged. A piece sleeps either way (CUT3). Turning it off wakes the body. */
+  get sleepEnabled(): boolean { return this.sleepOn; }
+  set sleepEnabled(v: boolean) {
+    const on = !!v;
+    if (on === this.sleepOn) return;
+    if (on && this.restRef.length !== this.n * 3) this.restRef = new Float64Array(this.n * 3);   // (allocated once, at the opt-in, never per frame)
+    this.sleepOn = on;
+    if (!on && !this.canSleep) this.wake();
+    this.restT = 0; this.calmT = 0; this.restRefOn = false;
+  }
+  /** HELD (LIFE.md 5.5): a finger down, a grab, a carry or a lock. The touch gate of the LIFE drivers reads it (a lock counts here; it never counts for SoftEvent.auto, D-86). */
+  private isHeld(): boolean {
+    if (this.lockN > 0 || this.carried) return true;
+    for (let k = 0; k < NSLOT; k++) if (this.fingers[k].down || this.grabs[k].active) return true;
+    return false;
+  }
+  /** A ceremony or cut driver owns the body (moveTo, fold, tremble, burst, the neck, a size change): the LIFE drivers stand aside. */
+  private ceremonyOn(): boolean {
+    return this.moveOn || this.fold !== 0 || this.foldTarget !== 0 || this.trembleAmp > 0 || this.burstO > 0 || this.neckOn || this.fracDur > 0;
+  }
+  /** The goal differs from the rest shape ONLY by a converged squash pose (a fixed goal: a posed body may sleep, PLAYGROUND_BUILD 8.6; LIFE 5.1 "Pose"). */
+  private poseOnly(): boolean {
+    return this.sqNow !== 1 && this.sqNow === this.sqTarget && this.fold === 0 && this.foldTarget === 0 && this.burstO === 0 && this.fracNow === this.fracBuilt && this.fracDur === 0 && this.flatK === 0 && !this.neckOn && this.trembleAmp === 0;
+  }
+  /** max |MEM - Q| over PG.memBusy x restRadius on putty, mochi dough or bead squeeze (LIFE.md 5.4; SoftMetrics.memoryBusy). */
+  private memBusy(): boolean { return this.memBusyFam && this.memDev > PG.memBusy; }
+  /** PLAYGROUND (contracts.ts): sleep now if the body passes the rest test's bounds this instant (sleepEnabled or a piece; gravity on; not held; no driver, timer or easing;
+   *  metrics.kinetic < PG.restKin and the centre slower than PG.restSpeed; on the table or a STATIC prop face, never a moving one; memory converged). False and nothing
+   *  changes otherwise. Zero position change. */
+  sleep(): boolean {
+    if (this.asleep) return true;
+    if (!(this.sleepOn || this.canSleep) || !this.restBounds()) return false;
+    this.fallAsleep();
+    return true;
+  }
+  /** The instant part of the rest test (sleep() and restCheck share it). */
+  private restBounds(): boolean {
+    if (this.mustWake() || this.pinCount !== 0 || this.pinHold > 0 || this.tableFoldT > 0 || this.gripT > 0 || this.gripAll || this.strandsT !== 0 || this.pendingLand >= 0) return false;
+    if (this.edgesBent && !this.memOn && !this.poseOnly()) return false;
+    if (this.onMoving || this.memBusy() || this.metrics.kinetic >= PG.restKin) return false;
+    if (this.vcx * this.vcx + this.vcy * this.vcy + this.vcz * this.vcz >= PG.restSpeed * PG.restSpeed) return false;
+    if (this.memOn && this.restMem >= SLEEP.mem) return false;
+    if (this.sloshOn && !(this.slx * this.slx + this.sly * this.sly + this.slz * this.slz < 4e-4 * this.restRadius * this.restRadius && this.slvx * this.slvx + this.slvy * this.slvy + this.slvz * this.slvz < SLEEP.speed * SLEEP.speed)) return false;
+    return this.nearCount > 0 || this.cpContacts > 0;   // on the table or a static prop face (propNear counts in nearCount), or leaning on other bodies
+  }
+  private fallAsleep(): void {
+    this.asleep = true; this.restRefOn = false; this.sleepStats.sleeps++;
+    this.V.fill(0); this.vcx = 0; this.vcy = 0; this.vcz = 0; this.pvcx = 0; this.pvcy = 0; this.pvcz = 0; this.acc = 0;
+    this.metrics.kinetic = 0; this.metrics.compressionRate = 0; this.metrics.asleep = true;
+    this.bRvalid = false;   // (the bound radius is measured once more for the sleeper)
+  }
+
+  /** PLAYGROUND LIFE driver (contracts.ts): a volume-preserving goal squash, y x s and x, z x 1 / sqrt(s) in the body's rest frame, eased with time constant tauS (>= 0.08 s);
+   *  s 0.75..1.12, 1 releases it. Under the touch gate it eases out within PG.gateS. Refused while HELD, while a ceremony driver owns the body and, for putty, mochi dough and
+   *  bead squeeze, while their memory has not converged. A call identical to the one in force is a no-op and never wakes a sleeper. */
+  setSquash(s: number, tauS: number): void {
+    if (typeof s !== 'number' || !Number.isFinite(s) || typeof tauS !== 'number' || !Number.isFinite(tauS)) return;
+    const sv = s < PG.squashMin ? PG.squashMin : s > PG.squashMax ? PG.squashMax : s;
+    const tv = tauS < PG.squashTauMin ? PG.squashTauMin : tauS > 10 ? 10 : tauS;
+    if (sv === this.sqTarget && (sv === 1 || tv === this.sqAskTau)) return;   // the call in force: nothing (a converged pose sent again at 10 Hz lets the body sleep)
+    if (sv !== 1 && (this.isHeld() || this.ceremonyOn() || this.memBusy())) return;
+    this.sqTarget = sv; this.sqTau = tv; this.sqAskTau = tv;
+    this.wake();
+  }
+  /** PLAYGROUND LIFE driver (contracts.ts), LIFE's only travel: a horizontal rigid glide of the centre toward (x, z) at `speed` (PG.scootMin..scootMax m/s), eased in and out
+   *  over PG.scootEase s; the corral is off while it acts; it yields to moveTo; NaN x releases it. False (nothing changes) while HELD or a ceremony driver is on. */
+  scootTo(x: number, z: number, speed: number): boolean {
+    if (typeof x !== 'number' || Number.isNaN(x)) { this.scootOn = false; this.sV = 0; this.sGx = 0; this.sGz = 0; return true; }
+    if (!Number.isFinite(x) || typeof z !== 'number' || !Number.isFinite(z) || !inWorld(x, 0, z) || typeof speed !== 'number' || !Number.isFinite(speed)) return false;
+    if (this.isHeld() || this.ceremonyOn()) return false;
+    this.stx = x; this.stz = z;
+    this.sSpeed = speed < PG.scootMin ? PG.scootMin : speed > PG.scootMax ? PG.scootMax : speed;
+    if (!this.scootOn) { this.scootOn = true; this.sV = 0; }
+    this.wake();
+    return true;
+  }
+  /** PLAYGROUND LIFE driver (contracts.ts): a hop: (vx, vy, vz) added to every particle with the glue and the peel damping suspended (and the support's fade of gravity off)
+   *  for PG.hopSubs substeps, so the same impulse leaves the ground at the same height in every family. vy is clamped to 0..PG.hopVyCap, the horizontal speed to
+   *  PG.hopHMax (on a moving prop it adds to the prop's surface velocity the body already has). False when HELD, airborne, inside PG.hopGap s of its last hop, a ceremony
+   *  driver is on, or its memory is busy. */
+  hop(vx: number, vy: number, vz: number): boolean {
+    if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz)) return false;
+    if (this.isHeld() || this.ceremonyOn() || this.memBusy() || !this.gravityOn || this.nearCount === 0 || this.simTime - this.hopT < PG.hopGap) return false;
+    const y = vy < 0 ? 0 : vy > PG.hopVyCap ? PG.hopVyCap : vy;
+    let x = vx, z = vz;
+    const hl = Math.sqrt(x * x + z * z);
+    if (hl > PG.hopHMax) { x *= PG.hopHMax / hl; z *= PG.hopHMax / hl; }
+    this.wake();
+    const V = this.V;
+    for (let i = 0; i < this.n * 3; i += 3) { V[i] += x; V[i + 1] += y; V[i + 2] += z; }
+    this.vcx += x; this.vcy += y; this.vcz += z;
+    this.hopLeft = PG.hopSubs; this.hopT = this.simTime; this.glueK = 0;
+    return true;
+  }
+
+  /** PLAYGROUND (contracts.ts): bind a place's props (null = none: today's table only). A world that is not a props.ts world (no packed `solve`) is ignored. */
+  setPropWorld(w: PropWorldLike | null): void {
+    const s = w ? (w as unknown as { solve?: PropSolve }).solve : undefined;
+    if (!w || !s || !(s.S instanceof Float64Array) || !(s.A instanceof Float64Array)) {
+      this.pw = null; this.ps = null; this.propNear = 0; this.propNearM = 0; this.onMoving = false; this.onPropIdx = -1; this.tiltOn = false; this.metrics.onProp = -1;
+      return;
+    }
+    this.pw = w; this.ps = s;
+    if (this.propNM.length < s.count * 4) this.propNM = new Float64Array(s.count * 4);   // (once per binding)
+    this.wake();
+  }
+  /** The bound world, if any (harness readout). */
+  get propWorld(): PropWorldLike | null { return this.pw; }
+  /** Once per frame with a world bound: the body's bounding sphere (its largest particle distance from the centre, plus the frame's travel and a margin). */
+  private propBound(nsub: number): void {
+    const X = this.X, n = this.n, cx = this.center.x, cy = this.center.y, cz = this.center.z;
+    let r2 = 0;
+    for (let i = 0; i < n * 3; i += 3) { const dx = X[i] - cx, dy = X[i + 1] - cy, dz = X[i + 2] - cz, d2 = dx * dx + dy * dy + dz * dz; if (d2 > r2) r2 = d2; }
+    const v = Math.sqrt(this.vcx * this.vcx + this.vcy * this.vcy + this.vcz * this.vcz) + this.sSpeed;
+    this.pbcx = cx; this.pbcy = cy; this.pbcz = cz; this.pbR = Math.sqrt(r2) + v * nsub * H + NEAR + 0.02;
+  }
+  /** A sleeping body with a world bound: does a MOVING prop's bounding sphere reach it? (a ball rolled into it, a swing coming back): then it wakes. */
+  private propTouch(): boolean {
+    const P = this.ps;
+    if (P === null) return false;
+    const S = P.S, cx = this.center.x, cy = this.center.y, cz = this.center.z;
+    if (!this.bRvalid) { this.boundRadius(); this.bRvalid = true; }
+    for (let p = 0; p < P.count; p++) {
+      const o = p * PS;
+      if (S[o] === 0 || S[o + 29] === 0) continue;
+      const dx = S[o + 4] - cx, dy = S[o + 5] - cy, dz = S[o + 6] - cz, rr = S[o + 28] + this.bR + NEAR;
+      if (dx * dx + dy * dy + dz * dz < rr * rr) return true;
+    }
+    return false;
+  }
+  /** scootTo's glide, once per substep while it acts: a rigid horizontal translation of X (like moveTo: no momentum, the table carries the height, friction never
+   *  sees it), at a speed that ramps up and down at sSpeed / PG.scootEase (full speed in PG.scootEase s, and to rest within it under the touch gate) and slows to a stop
+   *  at the target. Under the touch gate or a ceremony driver it eases out and lets go (LIFE asks again after its grace). */
+  private scootStep(): void {
+    const dx = this.stx - this.cx, dz = this.stz - this.cz, d = Math.sqrt(dx * dx + dz * dz);
+    const acc = this.sSpeed / PG.scootEase, dv = acc * H, gate = this.heldF || this.moveOn || this.scootBlock;
+    const want = Math.min(this.sSpeed, Math.sqrt(2 * acc * d)) * (gate ? 0 : 1);
+    const v0 = this.sV, v = v0 < want ? Math.min(want, v0 + dv) : Math.max(want, v0 - (gate ? dv / 0.9 : dv));   // (under the gate: at rest inside 0.9 x PG.scootEase, so within it at frame granularity)
+    this.sV = v;
+    if (gate && v <= 0) { this.scootOn = false; this.sGx = 0; this.sGz = 0; return; }
+    if (d < 1e-4) { if (v <= dv) { this.scootOn = false; this.sV = 0; } this.sGx = 0; this.sGz = 0; return; }
+    const s = Math.min(v * H, d), ux = dx / d, uz = dz / d, mx = ux * s, mz = uz * s, X = this.X;
+    this.sGx = ux * v; this.sGz = uz * v;
+    for (let i = 0; i < this.n * 3; i += 3) { X[i] += mx; X[i + 2] += mz; }
+    this.cx += mx; this.cz += mz;
+  }
+  /**
+   * THE PROP PASS (PLAYGROUND_BUILD 8.3, E4), once per substep with a world bound, between the fingertips and the table. Each prop's pose for this substep is its pose at
+   * the frame start advanced by its velocity (a ball) or its angular velocity about the pivot (a hinge) over (k + 1) H, as the fingertips advance; a prop whose bounding
+   * sphere misses the body's costs one sphere test. A particle inside a shape is projected to its surface (the shape's outward normal); a particle within NEAR of an
+   * UP-FACING face (normal within 35 degrees of world up) is SUPPORTED: it counts for the supported gravity, the friction load, grounded and the land event (D-11).
+   * Coulomb friction against the surface's own velocity (prop mu; its load is the penetration, plus the supported weight and a fingertip's push on an up-facing face).
+   * The correction a particle gets goes to the prop as the opposite impulse, scaled to body-mass units (x bodyMass / Mtot, F#3), about the hinge's pivot. Contacts
+   * join the contact fold limit only while worked (a moving prop, a fast body, or a penetration over PG.workPen mean edges: F#4). No tack and no strands on props.
+   */
+  private propPass(): void {
+    const P = this.ps!, S = P.S, A = P.A, np = P.count, X = this.X, XP = this.XP, M = this.M, n = this.n, pk = this.pk, pq = this.pq, NM = this.propNM;
+    const t1 = (this.subK + 1) * H, me = this.meanEdge;
+    const load = this.supp * GRAVITY * H * H * Math.min(LOAD_CONC, this.Mtot / Math.max(1, this.nearMass));
+    const fload = this.fdl / Math.max(1, this.nearMass);
+    const imp = this.bodyMass / (this.Mtot * H);
+    const stamp = this.touchStamp, now = this.subIdx, near = this.nearList;
+    const ws2 = PG.workSpeed * PG.workSpeed * H * H, hold = this.propFoldT > 0;   // a contact is worked when its particle moves faster than PG.workSpeed relative to the surface
+    let worked = false, gb = 0, gbM = 0, svs = 0;
+    const gl = Math.sqrt(this.sGx * this.sGx + this.sGz * this.sGz), gx = gl > 1e-9 ? this.sGx / gl : 0, gz = gl > 1e-9 ? this.sGz / gl : 0;   // the scoot's direction (blocked by static props)
+    let pnear = 0, pnearM = 0, minY = 1e9, ssx = 0, ssy = 0, ssz = 0, best = -1, bestM = 0, moving = false;
+    for (let p = 0; p < np; p++) {
+      const o = p * PS, kind = S[o];
+      NM[p * 4] = 0;
+      if (kind === 0) continue;
+      const joint = S[o + 1], mv = S[o + 29] !== 0;
+      // ---- the pose this substep (pk: centre 0..2, rotation 3..11 row-major)
+      if (mv && joint === 1) {
+        // a hinge: rotate the frame-start pose about the pivot by |w| t1 (Rodrigues)
+        const wx = S[o + 22], wy = S[o + 23], wz = S[o + 24], wl = Math.sqrt(wx * wx + wy * wy + wz * wz), ang = wl * t1;
+        const iw = 1 / Math.max(wl, 1e-12), ax = wx * iw, ay = wy * iw, az = wz * iw;   // (mv: w is not zero) (no integer / double ternaries in this function: V8 boxes them)
+        const cs = Math.cos(ang), sn = Math.sin(ang), oc = 1 - cs;
+        const m00 = cs + ax * ax * oc, m01 = ax * ay * oc - az * sn, m02 = ax * az * oc + ay * sn;
+        const m10 = ay * ax * oc + az * sn, m11 = cs + ay * ay * oc, m12 = ay * az * oc - ax * sn;
+        const m20 = az * ax * oc - ay * sn, m21 = az * ay * oc + ax * sn, m22 = cs + az * az * oc;
+        const qx = S[o + 25], qy = S[o + 26], qz = S[o + 27], rx = S[o + 4] - qx, ry = S[o + 5] - qy, rz = S[o + 6] - qz;
+        pk[0] = qx + m00 * rx + m01 * ry + m02 * rz; pk[1] = qy + m10 * rx + m11 * ry + m12 * rz; pk[2] = qz + m20 * rx + m21 * ry + m22 * rz;
+        for (let c = 0; c < 3; c++) {
+          const r0 = S[o + 7 + c], r1 = S[o + 10 + c], r2 = S[o + 13 + c];
+          pk[3 + c] = m00 * r0 + m01 * r1 + m02 * r2; pk[6 + c] = m10 * r0 + m11 * r1 + m12 * r2; pk[9 + c] = m20 * r0 + m21 * r1 + m22 * r2;
+        }
+      } else {
+        const tb = t1 * (mv ? 1 : 0);
+        pk[0] = S[o + 4] + S[o + 19] * tb; pk[1] = S[o + 5] + S[o + 20] * tb; pk[2] = S[o + 6] + S[o + 21] * tb;
+        for (let c = 0; c < 9; c++) pk[3 + c] = S[o + 7 + c];
+      }
+      // ---- broad phase: the prop's bounding sphere against the body's
+      {
+        const bx = pk[0] - this.pbcx, by = pk[1] - this.pbcy, bz = pk[2] - this.pbcz, rr = S[o + 28] + this.pbR;
+        if (bx * bx + by * by + bz * bz > rr * rr) continue;
+      }
+      const mu = S[o + 2], hinge = joint === 1, dyn = joint !== 0, statSup = S[o + 30] !== 0;
+      // (the world writes a zero angular velocity for every prop but a hinge, a zero velocity for every prop but a ball, and the pivot (a hinge) or the frame-start
+      // centre (a ball) at 25..27: torques about the pivot; a ball's and a static prop's are never used)
+      const wx = S[o + 22], wy = S[o + 23], wz = S[o + 24], vbx = S[o + 19], vby = S[o + 20], vbz = S[o + 21], qx = S[o + 25], qy = S[o + 26], qz = S[o + 27];
+      const h0 = S[o + 16], h1 = S[o + 17], h2 = S[o + 18], cax = S[o + 3] | 0;
+      const ux = pk[3 + cax], uy = pk[6 + cax], uz = pk[9 + cax];   // a capsule's segment axis (a column of the rotation)
+      let jx = 0, jy = 0, jz = 0, lx = 0, ly = 0, lz = 0, nm = 0, ncx = 0, ncy = 0, ncz = 0, cnt = 0;
+      for (let i = 0; i < n; i++) {
+        const i3 = i * 3, x = XP[i3], y = XP[i3 + 1], z = XP[i3 + 2];
+        const dx = x - pk[0], dy = y - pk[1], dz = z - pk[2];
+        // ---- signed distance to the surface and its outward normal there (into pq)
+        if (kind === 1) {
+          const d2 = dx * dx + dy * dy + dz * dz, rn = h0 + NEAR;
+          if (d2 >= rn * rn) continue;
+          const d = Math.sqrt(d2);
+          if (d > 1e-9) { pq[0] = d - h0; pq[1] = dx / d; pq[2] = dy / d; pq[3] = dz / d; } else { pq[0] = -h0; pq[1] = 0; pq[2] = 1; pq[3] = 0; }
+        } else if (kind === 2) {
+          const t0 = dx * ux + dy * uy + dz * uz, tc = t0 < -h1 ? -h1 : t0 > h1 ? h1 : t0;
+          const ex = dx - ux * tc, ey = dy - uy * tc, ez = dz - uz * tc, d2 = ex * ex + ey * ey + ez * ez, rn = h0 + NEAR;
+          if (d2 >= rn * rn) continue;
+          const d = Math.sqrt(d2);
+          if (d > 1e-9) { pq[0] = d - h0; pq[1] = ex / d; pq[2] = ey / d; pq[3] = ez / d; } else { pq[0] = -h0; pq[1] = 0; pq[2] = 1; pq[3] = 0; }
+        } else {
+          const lxp = dx * pk[3] + dy * pk[6] + dz * pk[9], lyp = dx * pk[4] + dy * pk[7] + dz * pk[10], lzp = dx * pk[5] + dy * pk[8] + dz * pk[11];
+          const ex = Math.abs(lxp) - h0, ey = Math.abs(lyp) - h1, ez = Math.abs(lzp) - h2;
+          if (ex >= NEAR || ey >= NEAR || ez >= NEAR) continue;
+          if ((ex > 0 ? 1 : 0) + (ey > 0 ? 1 : 0) + (ez > 0 ? 1 : 0) > 1) continue;   // an edge or corner zone: no face contact
+          // the face: the axis of the largest excess (inside: the shallowest face)
+          const ax = ex >= ey && ex >= ez ? 0 : ey >= ez ? 1 : 2;
+          const e = ax === 0 ? ex : ax === 1 ? ey : ez, sg = (ax === 0 ? lxp : ax === 1 ? lyp : lzp) < 0 ? -1 : 1;
+          pq[0] = e; pq[1] = sg * pk[3 + ax]; pq[2] = sg * pk[6 + ax]; pq[3] = sg * pk[9 + ax];
+        }
+        const sd = pq[0], nx = pq[1], ny = pq[2], nz = pq[3], up = ny >= PG.supportCos;
+        if (sd < 0) { XP[i3] = x - nx * sd; XP[i3 + 1] = y - ny * sd; XP[i3 + 2] = z - nz * sd; }
+        const pen = Math.max(0, -sd);
+        // ---- Coulomb friction against the surface's velocity at the particle (a hinge: w x r; a ball: its velocity)
+        const rx = XP[i3] - qx, ry = XP[i3 + 1] - qy, rz = XP[i3 + 2] - qz;
+        const svx = vbx + wy * rz - wz * ry, svy = vby + wz * rx - wx * rz, svz = vbz + wx * ry - wy * rx;
+        const fp = up ? pen + load + fload : pen;
+        if (fp > 0) {
+          const tux = XP[i3] - X[i3] - svx * H, tuy = XP[i3 + 1] - X[i3 + 1] - svy * H, tuz = XP[i3 + 2] - X[i3 + 2] - svz * H;
+          const un = tux * nx + tuy * ny + tuz * nz, tx = tux - un * nx, ty = tuy - un * ny, tz = tuz - un * nz, tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+          if (tl > 1e-12) { const k2 = Math.min(1, (mu * fp) / tl); XP[i3] -= tx * k2; XP[i3 + 1] -= ty * k2; XP[i3 + 2] -= tz * k2; }
+        }
+        cnt++;
+        if (dyn) {
+          // the correction this particle got: the prop takes the opposite impulse (and its moment about the pivot)
+          const m = M[i], cx = (XP[i3] - x) * m, cy = (XP[i3 + 1] - y) * m, cz = (XP[i3 + 2] - z) * m;
+          jx -= cx; jy -= cy; jz -= cz;
+          lx -= ry * cz - rz * cy; ly -= rz * cx - rx * cz; lz -= rx * cy - ry * cx;
+        }
+        if (up) {
+          const m = M[i];
+          nm += m; ncx += m * XP[i3]; ncy += m * XP[i3 + 1]; ncz += m * XP[i3 + 2];
+          ssx += m * nx; ssy += m * ny; ssz += m * nz; svs += m * svy;
+          if (XP[i3 + 1] < minY) minY = XP[i3 + 1];
+          pnear++;
+        }
+        const wx2 = x - X[i3] - svx * H, wy2 = y - X[i3 + 1] - svy * H, wz2 = z - X[i3 + 2] - svz * H;
+        const wk = mv || pen > PG.workPen * me || wx2 * wx2 + wy2 * wy2 + wz2 * wz2 > ws2;
+        if (wk) worked = true;
+        if ((wk || hold) && stamp[i] !== now) { stamp[i] = now; near[this.tipNearN++] = i; }
+        if (statSup) { const bk = (XP[i3] - x) * gx + (XP[i3 + 2] - z) * gz; if (bk < 0) { gb += M[i] * bk; gbM += M[i]; } }   // a static prop pushing the body back against its glide
+      }
+      if (cnt === 0) continue;
+      const a = p * PA;
+      A[a + 9] += cnt;
+      if (dyn) {
+        A[a] += jx * imp; A[a + 1] += jy * imp; A[a + 2] += jz * imp; A[a + 3] += lx * imp; A[a + 4] += ly * imp; A[a + 5] += lz * imp;
+        const jm = Math.sqrt(jx * jx + jy * jy + jz * jz) * imp;
+        if (jm > A[a + 7]) { A[a + 7] = jm; A[a + 8] = this.contactSlot; }
+      }
+      if (nm > 0) {
+        NM[p * 4] = nm; NM[p * 4 + 1] = ncx; NM[p * 4 + 2] = ncy; NM[p * 4 + 3] = ncz;
+        pnearM += nm;
+        if (!statSup) moving = true;
+        if (nm > bestM) { bestM = nm; best = p; }
+      }
+    }
+    this.propNear = pnear; this.propNearM = pnearM; this.pminRaw = minY; this.supSx = ssx; this.supSy = ssy; this.supSz = ssz;
+    this.onMoving = moving; this.onPropIdx = best;
+    this.peelRef = 0; if (pnearM > 0) this.peelRef = svs / pnearM;   // the supporting surface's mean vertical speed (the peel damping's reference)
+    // the contact fold limit keeps a prop contact for TABLE_FOLD_AFTER after it was last worked (the mirror of the table's tableFoldT: a slime draped on a bar after the
+    // impact creased 145 degrees once the impact's speed was gone); and a scoot that a static prop holds back (more than a third of its glide step) is blocked
+    this.propFoldT = worked ? TABLE_FOLD_AFTER : Math.max(0, this.propFoldT - H);
+    this.scootBlock = this.scootOn && gbM >= 3 && gb < -0.33 * this.sV * H * gbM;   // (the particles a static prop touches are pushed back by a third of the glide step or more: head-on)
+  }
+  /** After the table pass's own count (tblNearM): the lowest support (the table at 0 when anything rests on it, else the lowest prop face) and the support's tilt. */
+  private propSupport(): void {
+    const tm = this.tblNearM;
+    this.propMinY = 0;
+    if (tm <= 0 && this.propNear > 0) this.propMinY = this.pminRaw;
+    this.tiltOn = false;
+    if (this.propNearM > 0) {
+      const sx = this.supSx, sy = this.supSy + tm, sz = this.supSz, l = Math.sqrt(sx * sx + sy * sy + sz * sz);
+      if (l > 1e-12 && sy / l < PG.tiltCos) { this.tiltOn = true; this.tnx = sx / l; this.tny = sy / l; this.tnz = sz / l; }
+    }
+  }
+  /** WEIGHT TRANSFER (D-12): supported gravity fades a resting body's weight to zero, so a body resting on a MOVING prop adds bodyMass x g x its supported share to that
+   *  prop at its contact centroid every substep (and its inertia about the hinge, so a seesaw or a swing carrying a rider swings at the rider's pace, not faster). */
+  private propWeight(): void {
+    const P = this.ps!, S = P.S, A = P.A, NM = this.propNM, np = P.count, nmT = Math.max(1e-9, this.nearMass);
+    const w = this.bodyMass * GRAVITY * this.suppEff * H / nmT, mb = this.bodyMass / nmT;
+    for (let p = 0; p < np; p++) {
+      const nm = NM[p * 4];
+      if (nm <= 0) continue;
+      const o = p * PS;
+      if (S[o + 1] !== 1) continue;   // only a hinge takes the weight (a static prop carries it; a free ball under a body is the floor's)
+      const a = p * PA, inv = 1 / nm, rx = NM[p * 4 + 1] * inv - S[o + 25], ry = NM[p * 4 + 2] * inv - S[o + 26], rz = NM[p * 4 + 3] * inv - S[o + 27];
+      const jy = -w * nm;
+      A[a + 1] += jy; A[a + 3] += -rz * jy; A[a + 5] += rx * jy;
+      const kx = S[o + 31], ky = S[o + 32], kz = S[o + 33], ra = rx * kx + ry * ky + rz * kz;
+      A[a + 6] += mb * nm * (rx * rx + ry * ry + rz * rz - ra * ra) * H;
+    }
   }
   /** Once per step (after finalize): is the body at rest? It is when nothing drives it, it stands on the table, no particle moves faster than SLEEP.speed and none is farther than SLEEP.err rest radii from
    *  its goal; a body with a memory arm also needs the memory shape to have stopped flowing. restT counts the seconds this has held on every step; a piece asleep after SLEEP.after. */
   private restCheck(nsub: number): void {
+    // PLAYGROUND: a body a MOVING prop carries never rests (8.6) and is never calm: out before any double is read (this once-a-frame function may run unoptimised,
+    // where every double field read is a new HeapNumber: 350 B a frame for a rider on the rocker)
+    if (this.onMoving) { this.calmT = 0; this.restT = 0; this.restRefOn = false; return; }
     let calm = !this.mustWake() && this.pinCount === 0 && this.pinHold <= 0 && this.tableFoldT <= 0 && this.gripT <= 0 && !this.gripAll && this.strandsT === 0
-      && this.pendingLand < 0 && !(this.edgesBent && !this.memOn) && (!this.memOn || this.restMem < SLEEP.mem);
+      && this.pendingLand < 0 && !(this.edgesBent && !this.memOn && !this.poseOnly()) && (!this.memOn || this.restMem < SLEEP.mem);
     if (calm && this.sloshOn) calm = this.slx * this.slx + this.sly * this.sly + this.slz * this.slz < 4e-4 * this.restRadius * this.restRadius && this.slvx * this.slvx + this.slvy * this.slvy + this.slvz * this.slvz < SLEEP.speed * SLEEP.speed;
     if (!calm) { this.calmT = 0; this.restT = 0; this.restRefOn = false; return; }
     // calmT: nothing drives the body and its centre is (nearly) still. A calm body that touches a sleeper leans on it; only a restless one wakes it (collide)
     if (this.vcx * this.vcx + this.vcy * this.vcy + this.vcz * this.vcz < SLEEP.hitSpeed * SLEEP.hitSpeed) this.calmT += nsub * H; else this.calmT = 0;
-    if (!this.canSleep) return;
+    if (!this.canSleep && !this.sleepOn) return;
+    // PLAYGROUND (8.6): never on a moving prop; a WHOLE that opted in also needs PLAYGROUND_BUILD's bounds (metrics.kinetic, the centre's speed, memory converged)
+    if ((this.sleepOn && (this.metrics.kinetic >= PG.restKin || this.memBusy()
+      || this.vcx * this.vcx + this.vcy * this.vcy + this.vcz * this.vcz >= PG.restSpeed * PG.restSpeed))) { this.restT = 0; this.restRefOn = false; return; }
     const ref = this.restRef, n3 = this.n * 3, X = this.X, V = this.V, G = this.GOAL, v2 = SLEEP.speed * SLEEP.speed, e2 = SLEEP.err * SLEEP.err * this.restRadius * this.restRadius;
     let ymin = 1e9, still = true;
     for (let i = 0; i < n3; i += 3) {
@@ -1188,7 +1579,7 @@ export class SoftBody implements SoftBodyLike {
     }
     // on the table: its lowest particle is at it, OR it lies on other pieces (cpContacts: it touched one at its last collide). CUT3 (verifier m3): a heap of shards never slept, so 24 pieces kept 21 awake and 64 kept 41 (3,192 particles).
     // Nothing is left hanging: a support that is moved, joined, touched or woken is restless, and a restless body in contact wakes the sleeper on it (collide: calmT), a change of gravity wakes every sleeper.
-    if (!still || (ymin > 0.01 + 0.05 * this.restRadius && this.cpContacts === 0)) { this.restT = 0; this.restRefOn = false; return; }
+    if (!still || (ymin > 0.01 + 0.05 * this.restRadius && this.cpContacts === 0 && this.propNear === 0)) { this.restT = 0; this.restRefOn = false; return; }   // (PLAYGROUND: or on a static prop face)
     // REST = NO VISIBLE MOTION: no particle has left the pose it had when the countdown started by more than SLEEP.move rest radii (at least SLEEP.moveMin m). A jelly piece buzzes for ever (a piece
     // resting on another is shoved back and forth by the contact, up to a millimetre a frame: speeds of 0.2 to 0.4 m/s that go nowhere), which a speed bar cannot tell from a slow roll; the
     // displacement over the half second can.
@@ -1199,12 +1590,7 @@ export class SoftBody implements SoftBodyLike {
       if (dx * dx + dy * dy + dz * dz > t2) { ref.set(X); this.restT = 0; return; }   // moved: the countdown starts again from here
     }
     this.restT += nsub * H;
-    if (SLEEP.enabled && this.restT >= SLEEP.after) {
-      this.asleep = true; this.restRefOn = false; this.sleepStats.sleeps++;
-      this.V.fill(0); this.vcx = 0; this.vcy = 0; this.vcz = 0; this.pvcx = 0; this.pvcy = 0; this.pvcz = 0; this.acc = 0;
-      this.metrics.kinetic = 0; this.metrics.compressionRate = 0;
-      this.bRvalid = false;   // (the bound radius is measured once more for the sleeper)
-    }
+    if (SLEEP.enabled && this.restT >= SLEEP.after) this.fallAsleep();
   }
 
   /** Ray vs the current surface, front faces only. `t` is in units of `dir` (point = origin + dir * t). */
@@ -1530,6 +1916,12 @@ export class SoftBody implements SoftBodyLike {
     w.fingerPressure(1, 1); frame(); frame(); w.fingerUp(1); frame();                               // ... with a finger down that touches nothing
     w.setFold(1); w.tremble(0.5); w.moveTo({ x: 0.3, y: 0.5, z: 0 }, 1); frame(); frame();            // ceremony drivers
     w.burstOpen(0.8); frame(); w.setFold(0); w.tremble(0); w.moveTo(null); frame(); frame();
+    // PLAYGROUND: the LIFE drivers are first run here, not on LIFE's first step (a first scoot deoptimised the substep: unoptimised frames, 2 KB of numbers each):
+    // a squash pose with a scoot, the touch gate (a finger lands while it glides), a hop
+    for (let i = 0; i < 6; i++) frame();
+    w.setSquash(0.85, 0.12); w.scootTo(w.center.x + 0.4, w.center.z, 0.3); for (let i = 0; i < 4; i++) frame();
+    top(0, 0.1); frame(); frame(); w.fingerUp(0); for (let i = 0; i < 3; i++) frame();
+    w.setSquash(1, 0.12); w.scootTo(NaN, 0, 0); w.hopT = -10; w.hop(0.1, 0.6, 0); for (let i = 0; i < 8; i++) frame();
     // 2) a mixed workout until the optimiser has compiled it all
     for (let k = 0; k < 4; k++) {
       top(0, k & 1 ? -0.3 : 0.2); for (let i = 0; i < F; i++) frame();
@@ -2036,7 +2428,7 @@ export class SoftBody implements SoftBodyLike {
       }
       const OX = o.X, OV = o.V, VN = o.VN, head = o.hashHead, next = o.hashNext, cell = o.hashCell, deep = 0.6 * o.restRadius;
       const ocx = o.center.x, ocy = o.center.y, ocz = o.center.z, reach2 = reach * reach, search2 = 4 * cell * cell;
-      let contacts = 0, appr = 0, sx = 0, sy = 0, sz = 0, snx = 0, sny = 0, snz = 0, spen = 0;
+      let contacts = 0, appr = 0, sx = 0, sy = 0, sz = 0, snx = 0, sny = 0, snz = 0, spen = 0, pmax = 0, rnC = 0;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3, px = X[i3], py = X[i3 + 1], pz = X[i3 + 2];
         const ex = px - ocx, ey = py - ocy, ez = pz - ocz;
@@ -2057,6 +2449,7 @@ export class SoftBody implements SoftBodyLike {
         const d = (px - OX[b3]) * nx + (py - OX[b3 + 1]) * ny + (pz - OX[b3 + 2]) * nz;
         if (d >= skin || d < -deep) continue;   // clear of it, or deeper than a frame can carry a particle (no direction to trust)
         const push = 0.5 * (skin - d), pT = push * mT, pO = push * ow;
+        if (push > pmax) pmax = push;
         X[i3] += nx * pT; X[i3 + 1] += ny * pT; X[i3 + 2] += nz * pT;
         if (X[i3 + 1] < 0) X[i3 + 1] = 0;
         OX[b3] -= nx * pO; OX[b3 + 1] -= ny * pO; OX[b3 + 2] -= nz * pO;
@@ -2079,6 +2472,7 @@ export class SoftBody implements SoftBodyLike {
         if (nl > 1e-9) {
           const mx = snx / nl, my = sny / nl, mz = snz / nl;
           const rvx = this.vcx - o.vcx, rvy = this.vcy - o.vcy, rvz = this.vcz - o.vcz, rn = rvx * mx + rvy * my + rvz * mz;
+          rnC = rn;   // (PLAYGROUND: the bodies' approach before this contact takes it out: wakesWhole)
           // ... and their approach along it (a body resting on another is not driven into it by its own weight: the contact particles' share
           // alone let the stack sink 5 cm a second into the body below)
           const an = rn < 0 ? 0.5 * rn : 0;
@@ -2101,10 +2495,25 @@ export class SoftBody implements SoftBodyLike {
           const ic = 1 / contacts;
           this.emit('bump', sx * ic, sy * ic, sz * ic, snx, sny, snz, appr / BUMP_NORM, 0, -1);   // normal: out of the other body
         }
-        if (ow === 0 && this.calmT < SLEEP.hit * SLEEP.after) o.wake();
+        if (ow === 0) {
+          if (o.canSleep && !o.sleepOn) { if (this.calmT < SLEEP.hit * SLEEP.after) o.wake(); }   // CUT3: a restless body wakes the sleeping piece it reaches (a body that opted in to sleepEnabled: PLAYGROUND's rule)
+          else { const wk = this.pq; wk[0] = snx; wk[1] = sny; wk[2] = snz; wk[3] = pmax; wk[4] = skin; wk[5] = rnC; if (this.wakesWhole(o)) o.wake(); }   // PLAYGROUND (8.6): a sleeping WHOLE, only by a real knock
+        }
       }
     }
     this.syncOutputs();
+  }
+  /** PLAYGROUND (PLAYGROUND_BUILD 8.6, F#5): a contact wakes a sleeping WHOLE only when this body closes on it faster than PG.wakeSpeed (its centre's velocity along
+   *  the mean contact normal, plus its scootTo glide, which is not in V; a particle's own jiggle does not count) or drives a particle more than PG.wakePush x its
+   *  mean edge INSIDE the sleeper (past the contact skin, which a resting contact keeps); otherwise the sleeper stays a fixed support for this pair (a nuzzle at
+   *  0.04 m/s never wakes its partner, nor does a calm body resting against it). The contact's numbers come in pq: [the summed normal (3, out of the sleeper),
+   *  the deepest half push, the skin, the centres' relative normal speed] (no doubles across the call). */
+  private wakesWhole(o: SoftBody): boolean {
+    const wk = this.pq, snx = wk[0], sny = wk[1], snz = wk[2], pmax = wk[3], skin = wk[4], l = Math.sqrt(snx * snx + sny * sny + snz * snz);
+    if (!(l > 1e-9)) return false;
+    const nx = snx / l, ny = sny / l, nz = snz / l;
+    const appr = -(wk[5] + this.sGx * nx + this.sGz * nz);   // (the centres' approach along the normal before the contact took it out, and the glide)
+    return appr > PG.wakeSpeed || 2 * pmax > skin + PG.wakePush * o.meanEdge;
   }
 
   /**
@@ -2994,7 +3403,11 @@ export class SoftBody implements SoftBodyLike {
     // something HOLDS the body (a grab, the pinned feet, a fingertip touching it); while a finger is down but its tip touches nothing (the
     // body was shoved out from under it) only the rim acts, so a nudge cannot carry the body off the mat past a finger that is merely down
     const hdx = this.cx - this.homeX, hdz = this.cz - this.homeZ;   // (about the body's home: see matCorral)
-    if (this.gravityOn && !grabbing && !this.moveOn && this.pinCount === 0 && hdx * hdx + hdz * hdz > this.p.matR0 * this.p.matR0 * 0.81) {
+    // (PLAYGROUND: off while scootTo glides the body, as for moveTo, and while a moving prop carries it: a rider is never corralled, D-91)
+    // (a hop's glue and peel stay suspended for PG.hopSubs substeps AND until the body is back on a support: at 0.84 m/s ten substeps lift the foot ~2 cm, inside
+    // the jelly's 2.5 cm tack layer, which pulled it back to the table: the jelly gel, water fill, firm silicone and pop dome hopped 1.2 cm instead of 3.2)
+    if (this.hopLeft > 0) { if (this.hopLeft > 1 || this.nearCount > 0) this.hopLeft--; if (this.hopLeft === 0) this.glueK = 1; }
+    if (this.gravityOn && !grabbing && !this.moveOn && !this.scootOn && !this.onMoving && this.pinCount === 0 && hdx * hdx + hdz * hdz > this.p.matR0 * this.p.matR0 * 0.81) {
       const a0 = f0.down || f0.retracting, a1 = f1.down || f1.retracting;
       if (!(a0 && f0.touching) && !(a1 && f1.touching) && !(extra && this.extraTouch())) this.matCorral(a0 || a1 || extra);
     }
@@ -3010,6 +3423,8 @@ export class SoftBody implements SoftBodyLike {
       for (let i = 0; i < n * 3; i += 3) { X[i] += mx; X[i + 1] += my; X[i + 2] += mz; }
       this.cx += mx; this.cy += my; this.cz += mz;
     }
+    // ---- PLAYGROUND scootTo (LIFE's travel): the same kind of rigid horizontal glide, eased, touch-gated, yielding to moveTo (scootStep)
+    if (this.scootOn) this.scootStep();
 
     // ---- B3 carry: the centre follows the hand (a rigid, critically damped translation of X before the prediction, like moveTo: the body
     // keeps its shape and gains no momentum from it; the throw sets the velocity at the release)
@@ -3048,8 +3463,13 @@ export class SoftBody implements SoftBodyLike {
       // energy out of every cycle and killed the starter's wobble: n_osc 1). It is what stops a squeezed MEMORY body (its goal is still the
       // squashed shape, which no longer reaches the table) from springing its centre up and hovering off the table (crumbit, beads, 28-36 mm).
       // (Physics round-2 fix round, MAJOR-3; the peel damping in the tack pass is the other half.)
-      const gu = this.goalBottom / (GOAL_FLOAT * this.restRadius), gf = gu <= 0 ? 0 : gu >= 1 ? 1 : gu * gu * (3 - 2 * gu);
-      ay = this.carried ? 0 : -GRAVITY * (1 - this.supp * (1 - gf));   // a carried body: the hand holds its weight
+      // (PLAYGROUND: the goal's float is measured from the lowest support, the table at 0 or a prop face (propMinY is 0 with no world); a hop's first substeps
+      // feel their whole weight (glueK 0); on a support tilted past PG.tiltCos only gravity's part along the support's normal is carried, the rest pulls it downhill)
+      const gu = (this.goalBottom - this.propMinY) / (GOAL_FLOAT * this.restRadius), gf = gu <= 0 ? 0 : gu >= 1 ? 1 : gu * gu * (3 - 2 * gu);
+      const se = this.supp * (1 - gf) * this.glueK;
+      this.suppEff = se;
+      ay = this.carried ? 0 : -GRAVITY * (1 - se);   // a carried body: the hand holds its weight
+      if (this.tiltOn && !this.carried) { const k = GRAVITY * se * this.tny; ax = k * this.tnx; ay = -GRAVITY + k * this.tny; az = k * this.tnz; }
     } else {
       // float mode: weak hover spring on the centre of mass (stiffer while a finger or a lobe holds it) + slow bob
       const boost = 1 + 2.5 * nFingers + (grabbing ? 3 : 0);
@@ -3354,8 +3774,10 @@ export class SoftBody implements SoftBodyLike {
       const stamp = this.touchStamp, now = this.subIdx, near = this.nearList, tst = this.tipStamp, hold = this.tipFoldSubs;
       for (let i = 0; i < n; i++) if (now - tst[i] <= hold && stamp[i] !== now) { stamp[i] = now; near[this.tipNearN++] = i; }
     }
+    // ---- PLAYGROUND prop pass (PLAYGROUND_BUILD 8.3): the bound world's shapes, between the fingertips and the table (the table always wins)
+    if (this.ps !== null) { this.fdl = fingerDown; this.propPass(); }
     {
-      const mu = this.p.tableMu, glue = this.p.glue * (this.restRadius / 0.5) * (1 - this.fold), H0 = this.H0;   // the tack layer scales with the body (and lets go of a folding one)
+      const mu = this.p.tableMu, glue = this.p.glue * (this.restRadius / 0.5) * (1 - this.fold) * this.glueK, H0 = this.H0;   // the tack layer scales with the body (and lets go of a folding one; and of a hop: glueK)
       // normal-load proxy for Coulomb friction: this substep's penetration plus the supported weight (g h^2 per
       // particle, concentrated on the particles that are actually touching)
       const load = this.supp * GRAVITY * H * H * Math.min(LOAD_CONC, this.Mtot / Math.max(1, this.nearMass));
@@ -3414,6 +3836,10 @@ export class SoftBody implements SoftBodyLike {
       {
         const pu = held > 0 && glue > 1e-9 && !grabbing && this.pinCount === 0 ? (peel / glue - PEEL_LO) / (PEEL_HI - PEEL_LO) : 0;
         this.peelK = this.p.groundDamp * (pu <= 0 ? 0 : pu >= 1 ? 1 : pu * pu * (3 - 2 * pu));
+        // PLAYGROUND: a body resting on a STATIC prop face has no tack there (D-54), so nothing absorbed the spring of its own foot: it bobbed 3 cm for seconds on a
+        // box top (the table's tack and peel damping are what make rest there exact). On static prop support the peel damping acts in full (a hop suspends it: glueK)
+        // (on a MOVING prop it damps the speed relative to the surface under the body, peelRef: a rider bobbed on the rocker and loaded it 7 % over its weight)
+        if (this.propNearM > 0 && !grabbing && this.pinCount === 0) { const pk2 = this.p.groundDamp * this.glueK; if (pk2 > this.peelK) this.peelK = pk2; }
         if (this.landT > 0) { this.landT -= H; if (this.peelK < PIECE_LAND.k) this.peelK = PIECE_LAND.k; }
       }
       // glued feet (a lobe is being pulled, or was just let go): hold them exactly where they were
@@ -3422,6 +3848,9 @@ export class SoftBody implements SoftBodyLike {
         const pn = this.pinned;
         if (this.pinCount > 0) for (let i = 0; i < n; i++) if (pn[i]) { XP[i * 3] = X[i * 3]; XP[i * 3 + 1] = 0; XP[i * 3 + 2] = X[i * 3 + 2]; }
       }
+      // PLAYGROUND (D-11): particles resting on up-facing prop faces count as support (supported gravity, the friction load, grounded, the land event)
+      if (this.ps !== null) { this.tblNearM = nearM; this.propSupport(); }
+      near += this.propNear; nearM += this.propNearM;
       // land detection: first contact after being airborne, speed = centre-of-mass fall speed
       if (near > 0) {
         if (this.airSub >= 8 && -this.vcy > LAND_MIN_SPEED) this.pendingLand = Math.max(this.pendingLand, -this.vcy);
@@ -3432,6 +3861,7 @@ export class SoftBody implements SoftBodyLike {
       this.nearCount = near; this.nearMass = nearM;
       this.supp = smooth01((near - 1) / 4);
     }
+    if (this.ps !== null && this.propNearM > 0) this.propWeight();   // PLAYGROUND (D-12): a body resting on a moving prop puts its weight on it
 
     this.reactAcc += react;
     // ---- contact fold limit: near a fingertip, no two neighbouring triangles may fold past FINGER.foldMaxDeg (see foldLimit)
@@ -3514,6 +3944,12 @@ export class SoftBody implements SoftBodyLike {
       if (u >= 1) { this.fracNow = this.fracTo; this.fracDur = 0; }
     }
     if (this.flatK > 0) { this.flatK *= Math.exp(-h / this.roundTau); if (this.flatK < 1e-3) this.flatK = 0; }
+    // PLAYGROUND setSquash: the pose eases toward its target (under the touch gate it is released and eases out within PG.gateS)
+    if (this.sqNow !== this.sqTarget) {
+      const tau = this.heldF ? Math.min(this.sqTau, PG.gateS / 3) : this.sqTau;
+      this.sqNow += (this.sqTarget - this.sqNow) * (1 - Math.exp(-h / tau));
+      if (Math.abs(this.sqTarget - this.sqNow) < 1e-3) this.sqNow = this.sqTarget;   // (0.1 % of the height: unseen; the pose is then a fixed goal and may sleep)
+    }
     if (this.neckT !== this.neckTarget) {
       this.neckT += (this.neckTarget - this.neckT) * (1 - Math.exp(-h / NECK_TAU));
       if (Math.abs(this.neckTarget - this.neckT) < 1e-4) this.neckT = this.neckTarget;
@@ -3523,20 +3959,22 @@ export class SoftBody implements SoftBodyLike {
     const fs = Math.cbrt(this.fracNow / this.fracBuilt), fk = this.flatK, nk = this.neckT * (this.neckOn ? 1 : 0);
     this.volScale = fs * fs * fs;
     this.volNeck = nk;   // the volume constraint stiffens with the neck (substep; a field: the substep's own int / double mix was boxed)
-    const fd = this.fold, bo = this.burstO, ta = this.trembleAmp * TREMBLE_AMP * this.restRadius;
-    const shaped = fd !== 0 || bo !== 0 || fs !== 1 || fk !== 0 || nk !== 0;
+    const fd = this.fold, bo = this.burstO, ta = this.trembleAmp * TREMBLE_AMP * this.restRadius, sq = this.sqNow;
+    const shaped = fd !== 0 || bo !== 0 || fs !== 1 || fk !== 0 || nk !== 0 || sq !== 1;
     if (!this.memOn && !shaped && ta === 0) {
       if (this.goalOn) { this.QG.set(Q); this.LQG.set(this.LQ); this.goalOn = false; }
       if (this.edgesBent) this.restoreEdges();
       return;
     }
     // GB = the goal without the memory arm: (Q + fold (QS - Q) + flat face (FLAT - Q)) x (1 + burst) x cbrt(frac / built), then the neck
+    // (PLAYGROUND: x the squash pose, y x sq and x, z x 1 / sqrt(sq) in the rest frame: volume-preserving; exactly 1 when released)
     const QG = this.QG, QGN = this.QGN, GB = this.GB, QS = this.QS, FL = this.FLAT, MEM = this.MEM, NRM = this.NRM, wm = this.wm, sc = (1 + bo) * fs, TPH = this.TPH;
+    const sqx = 1 / Math.sqrt(sq);
     for (let i = 0; i < n; i++) {
       const i3 = i * 3, qx = Q[i3], qy = Q[i3 + 1], qz = Q[i3 + 2];
-      GB[i3] = (qx + fd * (QS[i3] - qx) + fk * (FL[i3] - qx)) * sc;
-      GB[i3 + 1] = (qy + fd * (QS[i3 + 1] - qy) + fk * (FL[i3 + 1] - qy)) * sc;
-      GB[i3 + 2] = (qz + fd * (QS[i3 + 2] - qz) + fk * (FL[i3 + 2] - qz)) * sc;
+      GB[i3] = (qx + fd * (QS[i3] - qx) + fk * (FL[i3] - qx)) * sc * sqx;
+      GB[i3 + 1] = (qy + fd * (QS[i3 + 1] - qy) + fk * (FL[i3 + 1] - qy)) * sc * sq;
+      GB[i3 + 2] = (qz + fd * (QS[i3 + 2] - qz) + fk * (FL[i3 + 2] - qz)) * sc * sqx;
     }
     this.fracScale = fs;
     if (nk > 0) { this.neckGoal(); if (SoftBody.centreGoal) this.centreGB(); }   // (no arguments: doubles passed to a call this large are boxed; it reads neckT and fracScale)
@@ -3718,7 +4156,7 @@ export class SoftBody implements SoftBodyLike {
     const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qw * qz), r02 = 2 * (qx * qz + qw * qy);
     const r10 = 2 * (qx * qy + qw * qz), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qw * qx);
     const r20 = 2 * (qx * qz - qw * qy), r21 = 2 * (qy * qz + qw * qx), r22 = 1 - 2 * (qx * qx + qy * qy);
-    let ox = 0, oy = 0, oz = 0, mvMax = 0;
+    let ox = 0, oy = 0, oz = 0, mvMax = 0, devMax = 0;
     for (let i = 0; i < n; i++) {
       const i3 = i * 3, dx = X[i3] - cx, dy = X[i3 + 1] - cy, dz = X[i3 + 2] - cz;
       const gx = GB[i3] - Q[i3], gy = GB[i3 + 1] - Q[i3 + 1], gz = GB[i3 + 2] - Q[i3 + 2];
@@ -3731,12 +4169,14 @@ export class SoftBody implements SoftBodyLike {
       let fx = mx - Q[i3], fy = my - Q[i3 + 1], fz = mz - Q[i3 + 2];
       const fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
       if (fl > maxD) { const r = maxD / fl; fx *= r; fy *= r; fz *= r; }
+      if (fl > devMax) devMax = fl;   // (PLAYGROUND memoryBusy: the memory shape's largest departure from the rest shape)
       MEM[i3] = Q[i3] + fx; MEM[i3 + 1] = Q[i3 + 1] + fy; MEM[i3 + 2] = Q[i3 + 2] + fz;
       const md = (MEM[i3] - mx0) * (MEM[i3] - mx0) + (MEM[i3 + 1] - my0) * (MEM[i3 + 1] - my0) + (MEM[i3 + 2] - mz0) * (MEM[i3 + 2] - mz0);
       if (md > mvMax) mvMax = md;
       ox += M[i] * fx; oy += M[i] * fy; oz += M[i] * fz;
     }
     this.restMem = Math.sqrt(mvMax) / R0;   // (CUT3 sleep: has the memory shape stopped flowing?)
+    this.memDev = Math.min(devMax, maxD) / R0;
     ox /= this.Mtot; oy /= this.Mtot; oz /= this.Mtot;
     for (let i = 0; i < n; i++) { MEM[i * 3] -= ox; MEM[i * 3 + 1] -= oy; MEM[i * 3 + 2] -= oz; }
   }
@@ -3786,7 +4226,7 @@ export class SoftBody implements SoftBodyLike {
       }
     }
     // peel damping (see the tack pass): the table pulls the body back through a peeling tacky foot, uniformly (no deformation)
-    const gdv = vcy > 0 ? vcy * this.peelK : 0;
+    const rvy = vcy - this.peelRef, gdv = rvy > 0 ? rvy * this.peelK : 0;   // (PLAYGROUND: relative to a moving prop's surface under the body; peelRef is 0 without one)
     // CUT3 (verifier m5): a piece in its landing window (PIECE_LAND) also sheds a share of its horizontal centre speed, uniformly (no deformation); landT is raised for cut pieces only, so whole squishies are untouched
     const gdx = this.landT > 0 ? vcx * PIECE_LAND.kh : 0, gdz = this.landT > 0 ? vcz * PIECE_LAND.kh : 0;
     this.vcx = vcx - gdx; this.vcy = vcy - gdv; this.vcz = vcz - gdz;
@@ -3952,6 +4392,7 @@ export class SoftBody implements SoftBodyLike {
 
     m.kinetic = clamp((this.keAcc / Math.max(1, this.keSubs)) / 0.08, 0, 1);
     m.grounded = this.nearCount >= 3;
+    m.airborne = this.nearCount === 0; m.onProp = this.onPropIdx; m.memoryBusy = this.memBusy();   // PLAYGROUND
     m.fingers = nf;
     m.grabbed = this.anyGrab();
     m.locked = this.lockN;

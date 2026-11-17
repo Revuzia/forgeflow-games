@@ -4,7 +4,9 @@
 // spec's projection numbers; N2 bubble colours (RD-04: ink and every accent at 3:1 or better on the cream fill); N3 bubble layout and motion
 // (RD-04 size and insets, RD-09 Calm / reduced motion fades only, never a grow, nothing bobs); N4 the render pose (limits, identity at 0,
 // Calm <= 2 Hz, RD-11's CPU twin); N5 Home's things (arrival scale-in, quiet fade, parked = not drawn, keepsakes); N6 the place framing (RD-17,
-// re-stated in round 2 to the orchestrator's model: body CENTRES plus radius inside the insets, the bubble clamped on screen, the lens rule).
+// re-stated in round 2 to the orchestrator's model: body CENTRES plus radius inside the insets, the bubble clamped on screen, the lens rule);
+// N7 round 3 (MERGE_PC doubts): the posed clip plane (doubt 1), the ONE fine-mesh reduction of a lite body (doubt 2), a place inside Home's
+// HUD band (doubt 4: Home's band rows, Home's margin, the Cut bar refit, the lens walk equal to the full scan).
 import * as THREE from 'three';
 import { visibleTableAt } from '../../src/render/homeview.ts';
 import { Emotes, EMOTE_COLOURS, EMOTE_ACCENT, type EmoteFrame } from '../../src/render/emotes.ts';
@@ -12,6 +14,10 @@ import { RenderPose } from '../../src/render/pose.ts';
 import { HomeKit, HOME_BALL, HOME_MUSICBOX, HOME_SHELF } from '../../src/render/homekit.ts';
 import type { EnvHub } from '../../src/render/env.ts';
 import { fitPlayBounds, fitPlace, PLACE_FOVS } from '../../src/render/placeview.ts';
+import { Framer, bandRows, FRAME_TUNING } from '../../src/render/framing.ts';
+import { placeBand } from '../../src/render/placeview.ts';
+import { fineFreqFor } from '../../src/render/lod.ts';
+import { TIERS } from '../../src/render/quality.ts';
 
 let pass = 0, fail = 0;
 const row = (id: string, ok: boolean, msg: string): void => { if (ok) pass++; else fail++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${id} ${msg}`); };
@@ -224,6 +230,95 @@ const row = (id: string, ok: boolean, msg: string): void => { if (ok) pass++; el
   // the lens rule: the tall frame keeps the stage's 35 degrees; the wide frame takes the widest lens that meets the bar, and no wider lens does
   const wider = wide ? PLACE_FOVS.filter((v) => v > wide.fov).map((v) => fitPlayBounds(0, 0, 3.4, 2.4, v, 1280, 800, ...INS.desk)!) : [];
   row('N6f', !!tall && tall.fov === 35 && !!wide && wider.every((q) => !q.meets), `the lens: tall ${tall?.fov} deg (the stage's own); wide ${wide?.fov} deg, every wider lens misses the bar with the fit's 1% margin (${wider.map((q) => q.fov + ': ' + q.midPx.toFixed(1)).join(', ')})`);
+}
+
+/* ── N7 (round 3): the MERGE_PC doubts that node can decide ── */
+{
+  // N7a (doubt 1): the posed twin of a plane. Points ON a cut plane, posed by the CPU twin of the vertex stage, lie on RenderPose.applyPlane's
+  // plane (the pose is affine where 0 <= h <= 1.6): the eye bead's clip plane is the posed cut face. With the pose off, the plane is unchanged.
+  const P = new RenderPose();
+  P.set(0.08, -0.05, 0.04, 2.5, 0.3, 0); P.asleep = true; P.deep = 1;
+  for (let i = 0; i < 60; i++) P.update(1 / 60, 3 + i / 60, 0.2, -0.1, 0.0, 0.9, 0.5, false);
+  let worst = 0, tilt = 0;
+  const o = [0, 0, 0, 0], q = [0, 0, 0];
+  for (const [nx, ny, nz] of [[1, 0, 0], [0.6, 0.3, -0.74], [0, 1, 0], [-0.2, -0.4, 0.89]]) {
+    const l = Math.hypot(nx, ny, nz), n = [nx / l, ny / l, nz / l], d = n[0] * 0.25 + n[1] * 0.4 + n[2] * -0.1;
+    // the bead's anchor (unposed), then points on the plane around its foot
+    P.applyPlane(n[0], n[1], n[2], d, 0.3, 0.45, 0.05, o);
+    tilt = Math.max(tilt, Math.acos(Math.min(1, Math.abs(o[0] * n[0] + o[1] * n[1] + o[2] * n[2]))));
+    const t1 = Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0], u = [n[1] * t1[2] - n[2] * t1[1], n[2] * t1[0] - n[0] * t1[2], n[0] * t1[1] - n[1] * t1[0]];
+    const ul = Math.hypot(u[0], u[1], u[2]); u[0] /= ul; u[1] /= ul; u[2] /= ul;
+    const v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+    const k = 0.3 * n[0] + 0.45 * n[1] + 0.05 * n[2] - d, f = [0.3 - k * n[0], 0.45 - k * n[1], 0.05 - k * n[2]];
+    for (const a of [-0.12, 0, 0.12]) for (const b of [-0.12, 0, 0.12]) {
+      const x = f[0] + a * u[0] + b * v[0], y = f[1] + a * u[1] + b * v[1], z = f[2] + a * u[2] + b * v[2];
+      if (y < 0.0 || y > 0.9 * 1.6) continue;
+      P.apply(x, y, z, q, 0);
+      worst = Math.max(worst, Math.abs(o[0] * q[0] + o[1] * q[1] + o[2] * q[2] - o[3]));
+    }
+  }
+  const Z = new RenderPose(); Z.update(1 / 60, 1, 0, 0, 0, 1, 0.5, false); Z.applyPlane(0.6, 0.8, 0, 0.3, 0.1, 0.2, 0.3, o);
+  row('N7a', P.active && worst < 1e-6 && tilt > 0.01 && Math.abs(o[0] - 0.6) < 1e-12 && Math.abs(o[1] - 0.8) < 1e-12 && Math.abs(o[3] - 0.3) < 1e-12,
+    `doubt 1: posed points of a cut plane lie on the posed clip plane (worst ${worst.toExponential(2)} m over 4 planes, the pose tilts them up to ${(tilt * 180 / Math.PI).toFixed(2)} deg); pose off = the plane unchanged`);
+
+  // N7b (doubt 2): ONE size reduction. A lite body asks for the low tier's frequency (16) as a tier cap; the share law (lod.ts) is applied once
+  // after it. Round 2's second cut (frequency 12 at a quarter or less, then the law again) is gone: a lite sixth on a detail-2 stub (162 sim
+  // vertices) at med is 10 x 8^2 + 2 = 642 vertices; the double cut gave frequency 6 (362).
+  const cap = Math.min(TIERS.med.fineFreq, TIERS.low.fineFreq), one = fineFreqFor(cap, 162, 1 / 6), dbl = fineFreqFor(12, 162, 1 / 6);
+  row('N7b', cap === 16 && one === 8 && dbl === 6 && fineFreqFor(cap, 642, 1) === 16, `doubt 2: a lite body = tier cap 16, then the share law once: sixth on 162 sim vertices -> frequency ${one} (${10 * one * one + 2} vertices; the round-2 double cut gave ${dbl}); a lite whole keeps 16 (2562)`);
+
+  // N7c (doubt 4): the place band IS Home's band: bandRows equals the rows Home's Framer fits into (its private band() in NDC) at four frames,
+  // the minBand scaling included; placeBand adds Home's margin; no rows reported = no band
+  const F = new Framer() as unknown as { setInsets(i: object): void; band(W: number, H: number): Float64Array };
+  let bandErr = 0;
+  const R = new Float64Array(4);
+  for (const [W, H, ins] of [[390, 844, { top: 151, right: 60, bottom: 170, left: 16 }], [1280, 800, { top: 120, right: 24, bottom: 150, left: 24 }], [358, 201, { top: 60, right: 0, bottom: 90, left: 0 }], [960, 600, { top: 56, right: 0, bottom: 78, left: 0 }]] as const) {
+    F.setInsets(ins); const B = F.band(W, H); bandRows(ins, W, H, R);
+    bandErr = Math.max(bandErr, Math.abs(B[0] - (1 - 2 * R[0] / H)), Math.abs(B[1] - (-1 + 2 * R[2] / H)), Math.abs(B[2] - (-1 + 2 * R[3] / W)), Math.abs(B[3] - (1 - 2 * R[1] / W)));
+  }
+  const pb = placeBand({ top: 151, right: 60, bottom: 170, left: 16 }, 390, 844, new Float64Array(4)), my = Math.max(FRAME_TUNING.marginMin, FRAME_TUNING.marginFrac * 844), mx = Math.max(FRAME_TUNING.marginMin, FRAME_TUNING.marginFrac * 390);
+  const none = placeBand({ top: 0, right: 0, bottom: 0, left: 0 }, 390, 844, new Float64Array(4));
+  row('N7c', bandErr < 1e-12 && Math.abs(pb[0] - 151 - my) < 1e-9 && Math.abs(pb[2] - 170 - my) < 1e-9 && Math.abs(pb[1] - 60 - mx) < 1e-9 && none.every((v) => v === 0),
+    `doubt 4: a place's band is Home's (bandRows = the Framer's band, max diff ${bandErr.toExponential(1)} NDC, minBand scaling at 358x201 included) plus Home's margin (390x844: ${Array.from(pb, (v) => v.toFixed(1)).join(' / ')} px); no rows = no band`);
+
+  // N7d (doubt 4, RD-17 on Home's band): both layouts meet the bars inside the band with its margin, every corner column inside it
+  const BAND = { phone: Array.from(placeBand({ top: 151, right: 60, bottom: 170, left: 16 }, 390, 844, new Float64Array(4))), desk: Array.from(placeBand({ top: 120, right: 24, bottom: 150, left: 24 }, 1280, 800, new Float64Array(4))) };
+  const tb = fitPlace(0, 0, 1.25, 3.0, 390, 844, BAND.phone[0], BAND.phone[1], BAND.phone[2], BAND.phone[3]);
+  const wb = fitPlace(0, 0, 3.4, 2.4, 1280, 800, BAND.desk[0], BAND.desk[1], BAND.desk[2], BAND.desk[3]);
+  let wst = Infinity;
+  for (const [fr, w, h, ins, b] of [[tb, 390, 844, BAND.phone, [1.25, 3.0]], [wb, 1280, 800, BAND.desk, [3.4, 2.4]]] as const) {
+    if (!fr) { wst = -Infinity; continue; }
+    const cam = new THREE.PerspectiveCamera(fr.fov, w / h, 0.1, 200);
+    cam.position.set(fr.aimX, fr.aimY + fr.dist * Math.sin(fr.pitch), fr.aimZ + fr.dist * Math.cos(fr.pitch)); cam.lookAt(fr.aimX, fr.aimY, fr.aimZ); cam.updateMatrixWorld();
+    for (const x of [-b[0], b[0]]) for (const z of [-b[1], b[1]]) for (const y of [0, 1.25]) {
+      const v = new THREE.Vector3(x, y, z).project(cam), sx = (v.x * 0.5 + 0.5) * w, sy = (1 - (v.y * 0.5 + 0.5)) * h;
+      wst = Math.min(wst, sx - ins[3], w - ins[1] - sx, sy - ins[0], h - ins[2] - sy);
+    }
+  }
+  console.log(`     Home's band: tall ${tb ? `${tb.fov} deg, front ${tb.frontPx.toFixed(1)} / mid ${tb.midPx.toFixed(1)} px` : 'no fit'}; wide ${wb ? `${wb.fov} deg, front ${wb.frontPx.toFixed(1)} / mid ${wb.midPx.toFixed(1)} px` : 'no fit'}`);
+  row('N7d', !!tb && tb.frontPx >= 100 && tb.midPx >= 80 && !!wb && wb.midPx >= 150 && wst >= -0.01,
+    `doubt 4 + RD-17 inside Home's band (rows + margin): tall ${tb?.fov} deg ${tb?.frontPx.toFixed(1)} / ${tb?.midPx.toFixed(1)} px (bars 100 / 80), wide ${wb?.fov} deg mid ${wb?.midPx.toFixed(1)} px (bar 150); every corner column inside the band (worst ${wst.toFixed(2)} px)`);
+
+  // N7e (doubt 4): the Cut bar in a place (the shell adds it to the bottom row while the Cut tool is in hand: +90 px) refits inside the new band,
+  // and the lens walk from the last pick equals a scan from 35 degrees for every frame / row set in a mixed order (the hint never changes a pick)
+  const scan = (w: number, h: number, hx: number, hz: number, i4: number[]): number => { for (const fov of PLACE_FOVS) { const f = fitPlayBounds(0, 0, hx, hz, fov, w, h, i4[0], i4[1], i4[2], i4[3]); if (f?.meets) return fov; } return 35; };
+  const seq: [number, number, number, number, number[]][] = [
+    [1280, 800, 3.4, 2.4, BAND.desk], [390, 844, 1.25, 3.0, BAND.phone], [1280, 800, 3.4, 2.4, [BAND.desk[0], BAND.desk[1], BAND.desk[2] + 90, BAND.desk[3]]],
+    [390, 844, 1.25, 3.0, [BAND.phone[0], BAND.phone[1], BAND.phone[2] + 90, BAND.phone[3]]], [1280, 800, 3.4, 2.4, [0, 0, 0, 0]], [1280, 800, 3.4, 2.4, [BAND.desk[0] + 60, BAND.desk[1], BAND.desk[2] + 90, BAND.desk[3]]],
+  ];
+  let same = 0, cutIn = Infinity; const picks: string[] = [];
+  for (const [w, h, hx, hz, i4] of seq) {
+    const f = fitPlace(0, 0, hx, hz, w, h, i4[0], i4[1], i4[2], i4[3]), sc = scan(w, h, hx, hz, i4);
+    if (f && f.fov === sc) same++;
+    picks.push(`${w}x${h} rows ${i4.map((v) => Math.round(v)).join('/')}: ${f?.fov} (scan ${sc})`);
+    if (f && i4[2] > 200) {
+      const cam = new THREE.PerspectiveCamera(f.fov, w / h, 0.1, 200);
+      cam.position.set(f.aimX, f.aimY + f.dist * Math.sin(f.pitch), f.aimZ + f.dist * Math.cos(f.pitch)); cam.lookAt(f.aimX, f.aimY, f.aimZ); cam.updateMatrixWorld();
+      for (const x of [-hx, hx]) for (const z of [-hz, hz]) for (const y of [0, 1.25]) { const v = new THREE.Vector3(x, y, z).project(cam); cutIn = Math.min(cutIn, h - i4[2] - (1 - (v.y * 0.5 + 0.5)) * h); }
+    }
+  }
+  console.log(`     lens picks: ${picks.join('; ')}`);
+  row('N7e', same === seq.length && cutIn >= -0.01, `doubt 4: with the Cut bar's +90 px the refit keeps every corner column above it (worst ${cutIn.toFixed(2)} px); the lens walk equals the full scan in ${same} of ${seq.length} mixed refits`);
 }
 
 console.log(`\npg_node_checks: ${pass} ok, ${fail} FAIL`);

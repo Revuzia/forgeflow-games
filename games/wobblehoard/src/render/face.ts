@@ -134,6 +134,9 @@ export class Face {
   private readonly qs = new THREE.Quaternion();
   private readonly vR = new THREE.Vector3();
   private readonly vA = new THREE.Vector3();
+  /** Round 3: the bead's anchor BEFORE the render pose (the posed clip plane is taken at it) and the posed plane's scratch (n, d). */
+  private readonly vU = new THREE.Vector3();
+  private readonly pl4 = new Float64Array(4);
   private readonly vX = new THREE.Vector3();
   private readonly vY = new THREE.Vector3();
   private readonly vZ = new THREE.Vector3();
@@ -384,6 +387,7 @@ export class Face {
       if (sleepy > 0) this.vA.addScaledVector(this.vY, -rr * 0.12 * sleepy);
       if (proud > 0) this.vA.addScaledVector(this.vY, rr * 0.08 * proud);
       const pose = this.pose;
+      this.vU.copy(this.vA);
       if (pose && pose.active) {
         const q3 = this.sp;
         pose.apply(this.vA.x, this.vA.y, this.vA.z, q3, 0);
@@ -474,7 +478,14 @@ export class Face {
     const caps = this.view.caps;
     for (let j = 0; j < 2; j++) {
       const pl = eye.clipPlanes[j], k = j < eye.clipCaps.length ? eye.clipCaps[j] : -1, cap = k >= 0 ? caps[k] : undefined;
-      if (cap && cap.live) { pl.normal.set(-cap.nx, -cap.ny, -cap.nz); pl.constant = cap.d; } else { pl.normal.set(0, 0, 0); pl.constant = 1e6; }
+      if (cap && cap.live) {
+        const pose = this.pose;
+        if (pose && pose.active) {   // round 3 (MERGE_PC doubt 1): the vertex stage poses the cut face, so the clip plane takes the same pose
+          const u = this.vU, o = this.pl4;
+          pose.applyPlane(cap.nx, cap.ny, cap.nz, cap.d, u.x, u.y, u.z, o);
+          pl.normal.set(-o[0], -o[1], -o[2]); pl.constant = o[3];
+        } else { pl.normal.set(-cap.nx, -cap.ny, -cap.nz); pl.constant = cap.d; }
+      } else { pl.normal.set(0, 0, 0); pl.constant = 1e6; }
     }
   }
 

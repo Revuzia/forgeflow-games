@@ -17,12 +17,28 @@
 // that fits is found, and the framing whose smaller of (front px / 100, mid px / 80) is largest wins (RD-17's two bars; on a wide frame the
 // mid-depth size alone, bar 150). Autonomy never moves the camera: these numbers depend on the bounds, the frame and the insets only.
 
+import { bandRows, FRAME_TUNING } from './framing.ts';
+
+/** PLAYGROUND (round 3, MERGE_PC doubt 4: "a place respects the HUD band exactly as Home does"): the CSS px a place's framing keeps clear,
+ *  [top, right, bottom, left]: Home's band (bandRows) plus Home's margin (max(marginMin, marginFrac x the frame's size)) on the rows that
+ *  bound it (top and bottom; the sides when side rows were reported). No rows reported = no band: the frame's own edges, as Home. */
+export function placeBand(ins: { top: number; right: number; bottom: number; left: number }, W: number, H: number, out: Float64Array): Float64Array {
+  if (!FRAME_TUNING.enabled || !(ins.top + ins.right + ins.bottom + ins.left > 0)) { out.fill(0); return out; }
+  bandRows(ins, W, H, out);
+  const my = Math.max(FRAME_TUNING.marginMin, FRAME_TUNING.marginFrac * H), mx = Math.max(FRAME_TUNING.marginMin, FRAME_TUNING.marginFrac * W);
+  out[0] += my; out[2] += my;
+  if (ins.left + ins.right > 0) { out[1] += mx; out[3] += mx; }
+  return out;
+}
+
 /** The largest body's rest radius (shape.ts 68): a body's centre stands at this height, its top at twice it. */
 const R_MAX = 0.625;
 /** A framing "meets" the bars with a 1% margin (the live camera eases onto the fit and the browser measures it). */
 const MEET = 1.01;
-/** The lenses a place may use, widest first (vertical fov, degrees); 35 is the stage's own. */
-export const PLACE_FOVS = [35, 30, 26, 23, 21, 19] as const;
+/** The lenses a place may use, widest first (vertical fov, degrees); 35 is the stage's own. Round 3: 17 and 15 added, because a place now
+ *  keeps Home's band margin (max(3 px, 2% of the frame) inside the HUD rows, placeBand above: "a place respects the HUD band exactly as
+ *  Home does"), and with it the wide layout on 1280 x 800 meets RD-17's 150 px at mid-depth first at 15 degrees (19: 147.1, 17: 149.5). */
+export const PLACE_FOVS = [35, 30, 26, 23, 21, 19, 17, 15] as const;
 
 export interface PlayFrame {
   pitch: number; aimX: number; aimY: number; aimZ: number; dist: number;
@@ -95,18 +111,24 @@ export function fitPlayBounds(cx: number, cz: number, hx: number, hz: number, fo
 /** setPlayBounds' framing: the widest lens of PLACE_FOVS whose best framing meets RD-17's bars, else the stage's own 35 degree lens. The last
  *  few answers are kept (a resize or a rotation back asks again; the search takes tens of ms per lens). */
 const memo: [string, PlayFrame | null][] = [];
+/** Round 3: the index of the lens picked last (a refit after the HUD rows changed, e.g. the Cut bar in a place, starts its walk there). */
+let lastPick = 0;
 export function fitPlace(cx: number, cz: number, hx: number, hz: number, cssW: number, cssH: number,
   top: number, right: number, bottom: number, left: number): PlayFrame | null {
   const key = [cx, cz, hx, hz, cssW, cssH, top, right, bottom, left].join();
   for (const m of memo) if (m[0] === key) return m[1];
-  let first: PlayFrame | null = null, pick: PlayFrame | null = null;
-  for (const fov of PLACE_FOVS) {
-    const f = fitPlayBounds(cx, cz, hx, hz, fov, cssW, cssH, top, right, bottom, left);
-    if (!f) break;
-    first ??= f;
-    if (f.meets) { pick = f; break; }
+  // the widest lens that meets the bars, else the stage's own (index 0). A narrower lens never frames smaller (the size grows as the depth
+  // flattens), so the walk from the last pick (wider while the wider one meets, narrower while this one misses) lands where a scan from 35
+  // degrees would, in two or three fits instead of up to eight (about 30 ms each).
+  const n = PLACE_FOVS.length, got: (PlayFrame | null | undefined)[] = new Array(n);
+  const at = (i: number): PlayFrame | null => (got[i] === undefined ? (got[i] = fitPlayBounds(cx, cz, hx, hz, PLACE_FOVS[i], cssW, cssH, top, right, bottom, left)) : got[i]!);
+  let i = Math.max(0, Math.min(n - 1, lastPick)), pick: PlayFrame | null = null;
+  const fi = at(i);
+  if (fi) {
+    if (fi.meets) { while (i > 0 && at(i - 1)?.meets) i--; pick = at(i); }
+    else { while (i < n - 1 && !at(i)?.meets) i++; if (at(i)?.meets) pick = at(i); else { i = 0; pick = at(0); } }
+    lastPick = i;
   }
-  pick ??= first;
   memo.unshift([key, pick]); if (memo.length > 4) memo.pop();
   return pick;
 }

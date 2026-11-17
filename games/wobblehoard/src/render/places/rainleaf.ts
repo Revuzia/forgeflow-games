@@ -97,7 +97,8 @@ const LOOK: PlaceLook = {
     // ---- materials ----
     const loamU = { uLoam: { value: col(tok('coral', 'amber', 0.45, 0.33)) }, uDamp: { value: col(tok('plum', 'ink', 0.4, 0.95)) }, uFleck: { value: col(tok('coral', 'plum', 0.35, 0.72)) } };
     const loam = kit.surface('loam', [1, 1, 1], 0.55, LOAM, loamU, 0.55);
-    const stone = kit.mat('stone', tok('dusk', 'ink', 0.5, 1.3), 0.7, 0.4), pebble = kit.mat('pebble', tok('ink', 'cream', 0.45, 0.85), 0.6, 0.35);
+    // (round 3: the stones a low-chroma grey-mauve; the dusk-ink ones read as violet spots)
+    const stone = kit.mat('stone', tok('ink', 'cream', 0.38, 0.95), 0.7, 0.4), pebble = kit.mat('pebble', tok('ink', 'cream', 0.45, 0.85), 0.6, 0.35);
     const moss = kit.surface('moss', [1, 1, 1], 0.95, '  float n = pFbm(vWP.xz * 9.0); diffuseColor.rgb = mix(uM1, uM2, n);', { uM1: { value: col(tok('lagoon', 'amber', 0.4, 0.5)) }, uM2: { value: col(tok('lagoon', 'amber', 0.45, 0.68)) } }, 0.15);
     const stalkM = kit.mat('stalk', tok('lagoon', 'ink', 0.5, 1.05), 0.7, 0.3), pod = kit.mat('pod', tok('coral', 'amber', 0.45, 0.82), 0.55, 0.35), podRib = kit.mat('podRib', tok('amber', 'cream', 0.4, 0.62), 0.6, 0.3);
     const leafU = { uRib: { value: col(tok('lagoon', 'cream', 0.4, 0.95)) } };
@@ -128,7 +129,8 @@ const LOOK: PlaceLook = {
     const puddles: { u: Record<string, { value: number }> }[] = [];
     for (let k = 1; k <= 3; k++) {
       const z = zn(k), sy = PLACE.zones[k].surfaceY ?? 0.07;
-      const w = kit.water('disc', z.x, z.z, z.r ?? 0.6, 0, 0, sy, tok('plum', 'ink', 0.5), tok('plum', 'ink', 0.35), tok('plum', 'dusk', 0.5, 1.15), tok('lagoon', 'cream', 0.4), 0, 0.5);
+      // (round 3: the puddles mirror the canopy's blue-green light, not the dark plum: round 2's read as holes in the ground)
+      const w = kit.water('disc', z.x, z.z, z.r ?? 0.6, 0, 0, sy, tok('plum', 'dusk', 0.35), tok('dusk', 'lagoon', 0.25, 0.9), tok('dusk', 'lagoon', 0.45, 1.25), tok('lagoon', 'cream', 0.4), 0, 0.5);
       g.add(w.mesh); puddles.push(w);
     }
 

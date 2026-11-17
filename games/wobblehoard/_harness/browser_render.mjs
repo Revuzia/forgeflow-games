@@ -33,6 +33,7 @@ import { CATALOG, speciesBaseGenome } from '../src/data/catalog.ts';
 import { translucencyMaxOf } from '../src/data/materials.ts';
 import { StubBody } from '../src/render/stubBody.ts';
 import { BodyProxy } from '../src/render/bodyproxy.ts';
+import { fineFreqFor } from '../src/render/lod.ts';
 
 process.env.WH_FROZEN ??= '1'; // no HMR / watcher: another lane's edit must not reload the page mid-run
 const args = process.argv.slice(2);
@@ -1747,16 +1748,40 @@ try {
         const best = (a) => [...a].sort((x, y) => x - y)[0];
         const rLite = best(l.sixLite) / best(l.two), rFull = best(l.sixFull) / best(l.two);
         PG.lite = { ...l, rLite, rFull };
-        // (round 2, the orchestrator's RD-06 option a: a lite piece of a quarter of the body or less draws 1442 vertices, a bigger one 2562;
-        // the six test pieces are sixths. The bar is unchanged.)
-        check(l.liteVerts === 1442 && rLite <= 1.2, 'RD-06: 6 pieces (sixths: chunks on the lite 1442-vertex mesh, no halo quad) vs 2 wholes frame ratio at most 1.2 (SwiftShader, best of 3)',
-          `lite x${rLite.toFixed(3)} (chunks not lite x${rFull.toFixed(3)}), chunk vertices ${l.liteVerts}, draw calls two ${l.calls[0]} / six lite ${l.calls[1]} / six full ${l.calls[2]}; ms two ${l.two.map((v) => v.toFixed(1))}, six lite ${l.sixLite.map((v) => v.toFixed(1))}`);
+        // RE-SPECIFIED in round 3 (written reason, MERGE_PC doubt 2): the PC's CUT3 share law (lod.ts: vertices ~ share^(2/3) and the sim mesh)
+        // now sizes every non-piece body's fine mesh, so round 2's own size cut ("1442 vertices at a quarter or less") stacked a SECOND reduction
+        // on it. A lite body is now a tier cap only (the low tier's frequency 16) and the share law is applied ONCE after it: the expected count is
+        // computed from lod.ts here (a sixth on the stub's detail-2 mesh: 642). Fewer vertices than round 2's row asked for; the 1.2 bar is unchanged.
+        const fOne = fineFreqFor(Math.min(l.tierFreq, 16), l.simVerts, 1 / 6), want = 10 * fOne * fOne + 2;
+        check(l.liteVerts === want && rLite <= 1.2, 'RD-06: 6 pieces (sixths: lite chunks = the low tier cap, then the share law ONCE; no halo quad) vs 2 wholes frame ratio at most 1.2 (SwiftShader, best of 3)',
+          `lite x${rLite.toFixed(3)} (chunks not lite x${rFull.toFixed(3)}), chunk vertices lite ${l.liteVerts} (want ${want}: tier ${l.tierFreq} capped to 16, sim ${l.simVerts}) / not lite ${l.fullVerts}, draw calls two ${l.calls[0]} / six lite ${l.calls[1]} / six full ${l.calls[2]}; ms two ${l.two.map((v) => v.toFixed(1))}, six lite ${l.sixLite.map((v) => v.toFixed(1))}`);
+        // round 3 (MERGE_PC doubts 1 and 7): the merged program (wh-jelly-v6) on a posed whole with a look and on a posed TRUE piece whose eye
+        // straddles the cut: the bead's clip plane is the POSED cut face
+        const pp = await gp.evaluate(() => window.__RV__.pg.posedPiece('dollop'));
+        writeFileSync(resolve(PGOUT, 'v6_posed_whole.png'), b64(pp.pngWhole)); writeFileSync(resolve(PGOUT, 'v6_piece_rest.png'), b64(pp.pngPieceOff)); writeFileSync(resolve(PGOUT, 'v6_piece_posed.png'), b64(pp.pngPiece));
+        PG.posedPiece = { eUn: pp.eUn, eFix: pp.eFix, eOld: pp.eOld, eyes: pp.eyes, clipped: pp.clipped };
+        check(pp.clipped === 1 && pp.eFix <= pp.eUn * 1.1 + 5e-4 && pp.eOld > 2 * pp.eFix, 'MERGE_PC doubt 1: a leaning TRUE piece\'s straddled eye is clipped at the POSED cut face (every posed cut-face vertex on the bead\'s clip plane as flat as the face itself)',
+          `posed face vs the clip plane ${(pp.eFix * 1000).toFixed(2)} mm (the face's own flatness ${(pp.eUn * 1000).toFixed(2)} mm); HEAD's unposed plane would be ${(pp.eOld * 1000).toFixed(1)} mm off; eyes on the piece ${pp.eyes}`);
       }
       if (ON('homeview')) {
         const cam = await gp.evaluate((sp) => window.__RV__.pg.cameraAutonomy(sp), SPECIES);
         PG[`camera:${label}`] = cam;
         check(cam.onMax <= 1e-3 && cam.offMax > 0.01, `RD-14 ${label}: with the autonomy framing on, a body that slides and hops by itself moves the camera 0 m (off: it follows)`,
           `on ${cam.onMax.toExponential(2)} m, off ${cam.offMax.toFixed(3)} m`);
+        // round 3: the same with the shell's HUD rows reported, so the PC's SR2 band framer runs: the camera, its lens shift and its scale all hold
+        const camB = await gp.evaluate(([sp, k]) => window.__RV__.pg.cameraAutonomy(sp, 3, k), [SPECIES, kind]);
+        PG[`cameraBand:${label}`] = camB;
+        check(camB.onMax <= 1e-3 && camB.onLens <= 1e-4 && camB.onScale <= 1e-4, `RD-14 ${label} (round 3, HUD rows reported: the SR2 band framer runs): autonomy moves neither the camera, its lens shift nor its scale`,
+          `on: ${camB.onMax.toExponential(2)} m, lens ${camB.onLens.toExponential(2)} NDC, scale ${camB.onScale.toExponential(2)}; off: ${camB.offMax.toFixed(3)} m, lens ${camB.offLens.toFixed(4)}, scale ${camB.offScale.toFixed(4)}`);
+        // round 3 (MERGE_PC doubt 3): the pieces of one cut squishy share ONE slot, and moving by themselves they move nothing
+        const ps = await gp.evaluate((k) => window.__RV__.pg.pieceSlots(k), kind);
+        writeFileSync(resolve(PGOUT, `pieces_slots_${label}.png`), b64(ps.png));
+        PG[`pieceSlots:${label}`] = { slots: ps.slots, boxErr: ps.boxErr, move: ps.move, solo: ps.solo, soloOff: ps.soloOff };
+        check(ps.slots.join() === '0,1,2,2' && ps.boxErr <= 0.01, `MERGE_PC doubt 3 ${label}: two wholes and a squishy cut in two true pieces count at 3 slots (the pieces share one); the rest framing (visibleTable) is the uncut party's within 1 cm (the whole's reach from its rest mesh vs its settled skin)`,
+          `slots ${ps.slots.join(', ')}; box uncut ${ps.boxUncut.map((v) => v.toFixed(3)).join(' ')} / cut ${ps.boxCut.map((v) => v.toFixed(3)).join(' ')} (max diff ${ps.boxErr.toExponential(1)} m)`);
+        check(ps.move[0] <= 1e-3 && ps.move[1] <= 1e-4 && ps.move[2] <= 1e-4 && ps.solo[0] <= 1e-3 && ps.solo[1] <= 1e-4 && ps.solo[2] <= 1e-4 && ps.soloOff[0] > 0.01,
+          `MERGE_PC doubt 3 ${label}: pieces moving by themselves (in a party, and a lone cut squishy framed as its piece group) move neither the camera, its lens shift nor its scale (off: they do)`,
+          `party ${ps.move.map((v) => v.toExponential(1)).join(' / ')}; alone ${ps.solo.map((v) => v.toExponential(1)).join(' / ')} (m / NDC / scale); alone, framing off: ${ps.soloOff.map((v) => v.toFixed(3)).join(' / ')}`);
         let worstBox = 0, thingsBad = [], slotsBad = 0, cases = 0;
         for (const scale of [0.8, 1.0, 1.25]) for (const n of [1, 2, 3, 4, 5]) {
           const shotIt = scale === 1.0 && (n === 1 || n === 3 || n === 5);
@@ -1804,6 +1829,14 @@ try {
         check(bar, `RD-17 ${id} ${label}: a 1 m squishy on screen (${r.layout}: ${r.layout === 'tall' ? '100 px front, 80 px mid' : '150 px mid'})`, `front ${r.frontPx.toFixed(1)} px, mid ${r.midPx.toFixed(1)} px, lens ${r.fov} deg`);
         check(r.margin >= -1, `RD-17 ${id} ${label}: the round-2 model on the live camera: every corner centre's ground point and top (1.25 m) inside the insets`, `worst margin ${r.margin.toFixed(1)} px`);
       }
+      {   // round 3 (MERGE_PC doubt 4): the place inside Home's HUD band, and the Cut bar's refit
+        const rf = await lp.evaluate((k) => window.__RV__.pg.placeBandRefit(k, 'ripple'), kind);
+        writeFileSync(resolve(PGOUT, `band_cutbar_${label}.png`), b64(rf.png));
+        PL[`band:${label}`] = rf;
+        check(rf.before >= -1 && rf.after >= -1 && rf.back >= -1 && Math.abs(rf.fov[2] - rf.fov[0]) < 0.05, `MERGE_PC doubt 4 ${label}: a place keeps every corner column inside Home's HUD band (rows + Home's margin), with the Cut bar's +90 px too, and comes back when it goes`,
+          `worst ${rf.before.toFixed(1)} px, with the bar ${rf.after.toFixed(1)} px, after ${rf.back.toFixed(1)} px; lens ${rf.fov.map((v) => v.toFixed(1)).join(' -> ')} deg`);
+        check(rf.stepM <= 0.25 && rf.stepFov <= 1.0, `MERGE_PC doubt 4 ${label}: the refit eases (no jump: the camera moves at most 0.25 m and its lens 1 deg in one frame)`, `largest step ${rf.stepM.toFixed(3)} m, ${rf.stepFov.toFixed(2)} deg`);
+      }
       if (label === 'phone') {
         const bc = await lp.evaluate(() => window.__RV__.pg.bubbleClamp('ripple'));
         writeFileSync(resolve(PGOUT, `bubble_clamp_phone.png`), b64(bc.png));
@@ -1818,6 +1851,10 @@ try {
         check(pr.started.every(Boolean) && pr.home === false, "D-80: the reaction presets start in a place (steam, drips, bubbles, embers on four bodies; the kettle's puff, the hearth's fire puff) and not at Home",
           `started ${pr.started.join(', ')}; at Home ${pr.home}`);
         check(pr.perS <= 48 + 1 && pr.perS >= 20 && pr.perSCalm <= 16 + 1, 'LIFE 10.1: reaction particles per second at most 48 on a desktop, 16 in Calm (8 presets at full amount)', `${pr.perS.toFixed(1)} / s, Calm ${pr.perSCalm.toFixed(1)} / s`);
+        writeFileSync(resolve(PGOUT, `presets_strands_ripple.png`), b64(pr.png2));
+        PL.presets2 = { started: pr.started2, perS: pr.perS2, perSCalm: pr.perS2Calm };
+        check(pr.started2.every(Boolean), 'D-80 (round 3): the strands (6) and ripple (8) presets start in a place; 3 sparkles and 7 glow are not particle presets (false)', `${pr.started2.join(', ')}`);
+        check(pr.perS2 <= 48 + 1 && pr.perS2 >= 10 && pr.perS2Calm <= 16 + 1, 'LIFE 10.1 (round 3): strands and ripple rings at full amount (8 sources) stay inside the budget: at most 48 / s on a desktop, 16 in Calm', `${pr.perS2.toFixed(1)} / s, Calm ${pr.perS2Calm.toFixed(1)} / s`);
         const sw = await lp.evaluate(() => window.__RV__.pg.placeSwaps(12));
         PL.swaps = sw;
         check(sw.after.every((v, i) => Math.abs(v - sw.base[i]) <= 2), 'RD-07: 12 place swaps (Home -> each place in turn -> Home): programs, textures and geometries back to Home\'s baseline +-2',

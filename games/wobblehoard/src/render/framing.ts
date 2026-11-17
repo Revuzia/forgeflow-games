@@ -31,6 +31,17 @@ export const FRAME_TUNING = {
   scanFrom: 8, scanEvery: 6,
 };
 
+/** The rows of the band in CSS px for a W x H frame, [top, right, bottom, left]: the reported insets, scaled down together where they would
+ *  leave less than `minBand` of the frame (the band Home's framer fits its bodies into). */
+export function bandRows(ins: { top: number; right: number; bottom: number; left: number }, W: number, H: number, out: Float64Array): Float64Array {
+  let t = ins.top, b = ins.bottom, l = ins.left, r = ins.right;
+  const kv = (t + b) > (1 - FRAME_TUNING.minBand) * H ? (1 - FRAME_TUNING.minBand) * H / (t + b) : 1;
+  const kh = (l + r) > (1 - FRAME_TUNING.minBand) * W ? (1 - FRAME_TUNING.minBand) * W / (l + r) : 1;
+  t *= kv; b *= kv; l *= kh; r *= kh;
+  out[0] = t; out[1] = r; out[2] = b; out[3] = l;
+  return out;
+}
+
 /** The held extent of one body: world points (top, bottom, left, right = the skin vertices that were extreme on screen, then the disc centre). */
 export class FrameHold {
   readonly p = new Float64Array(15);
@@ -64,6 +75,10 @@ export interface FrameView {
     readonly frac?: number; readonly piece?: { readonly whole: { readonly restLocal: unknown; readonly radius: number } };
     readonly metrics: { readonly fingers?: number; readonly carried?: boolean };
   };
+  /** PLAYGROUND (D-37, round 3): how the stage wants this view measured this frame: 0 (or absent) its live skin, as always; 1 at its REST
+   *  column `frameSlot` = [x, z, top y, centre y, half width] (LIFE at Home: autonomy never moves the band framing); 2 not at all. */
+  readonly frameMode?: number;
+  readonly frameSlot?: ArrayLike<number>;
 }
 
 /** The camera numbers the framer needs: the view matrix (matrixWorldInverse.elements) and the projection's x / y scales (elements [0] and [5]; a lens shift does not touch them). */
@@ -108,14 +123,12 @@ export class Framer {
 
   /** The band's NDC edges for a frame of W x H CSS px (insets scaled down together when they would leave less than `minBand`): [top, bottom, left, right]. */
   private band(W: number, H: number): Float64Array {
-    let t = this.ins.top, b = this.ins.bottom, l = this.ins.left, r = this.ins.right;
-    const kv = (t + b) > (1 - FRAME_TUNING.minBand) * H ? (1 - FRAME_TUNING.minBand) * H / (t + b) : 1;
-    const kh = (l + r) > (1 - FRAME_TUNING.minBand) * W ? (1 - FRAME_TUNING.minBand) * W / (l + r) : 1;
-    t *= kv; b *= kv; l *= kh; r *= kh;
+    const R = bandRows(this.ins, W, H, this.R4), t = R[0], r = R[1], b = R[2], l = R[3];
     const B = this.B;
     B[0] = 1 - 2 * t / H; B[1] = -1 + 2 * b / H; B[2] = -1 + 2 * l / W; B[3] = 1 - 2 * r / W;
     return B;
   }
+  private readonly R4 = new Float64Array(4);
 
   /** No demand, lens goal at the middle (a ceremony runs, nothing to frame, rows withdrawn). */
   clear(): void { this.wantScale = 0; this.goalX = 0; this.goalY = 0; this.bodies = 0; this.fitX = 0; this.fitY = 0; }
@@ -167,7 +180,7 @@ export class Framer {
     // the pieces of ONE squishy (same whole, at least two): their union is framed with the whole's own disc about their mass centre
     let grpWhole: unknown = null, grpN = 0, grpR = 0, same = true;
     for (const v of views) {
-      if (!v.visible) continue;
+      if (!v.visible || v.frameMode === 2) continue;
       const pc = v.proxy.piece;
       if (!v.isPiece || !pc || (grpWhole !== null && pc.whole.restLocal !== grpWhole)) { same = false; break; }
       grpWhole = pc.whole.restLocal; grpR = pc.whole.radius; grpN++;
@@ -176,34 +189,42 @@ export class Framer {
     // the weighted mass centre of the group in w[7..] is kept in `gc` (reused)
     const gc = this.gc; gc[0] = 0; gc[1] = 0; gc[2] = 0; gc[3] = 0;
     for (const v of views) {
-      if (!v.visible) continue;
+      if (!v.visible || v.frameMode === 2) continue;
       const h = v.hold, p = h.p, P = v.proxy.positions, cnt = v.proxy.vertexCount * 3, c = v.proxy.center, m = v.proxy.metrics;
       n++;
       if (snap) h.ready = false;
-      h.gate(c, cfg, (m.fingers ?? 0) > 0 || m.carried === true);
-      if (h.ready && h.calm && h.skip > 0 && views.length >= FRAME_TUNING.scanFrom) h.skip--;
-      else if (!h.ready || h.calm) {
-        h.skip = views.length >= FRAME_TUNING.scanFrom ? FRAME_TUNING.scanEvery - 1 - (h.ready ? 0 : n % FRAME_TUNING.scanEvery) : 0;
-        // the live extremes of the skin on screen
-        const e = this.cam, k0 = cfg[0], k5 = cfg[1];
-        let iT = -1, iB = -1, iL = -1, iR = -1, mT = -Infinity, mB = Infinity, mL = Infinity, mR = -Infinity;
-        for (let i = 0; i < cnt; i += 3) {
-          const x = P[i], y = P[i + 1], z = P[i + 2];
-          const ze = e[2] * x + e[6] * y + e[10] * z + e[14];
-          if (!(ze < -0.01)) continue;
-          const iw = 1 / -ze, ny = k5 * (e[1] * x + e[5] * y + e[9] * z + e[13]) * iw, nx = k0 * (e[0] * x + e[4] * y + e[8] * z + e[12]) * iw;
-          if (ny > mT) { mT = ny; iT = i; } if (ny < mB) { mB = ny; iB = i; }
-          if (nx < mL) { mL = nx; iL = i; } if (nx > mR) { mR = nx; iR = i; }
+      const fs = v.frameMode === 1 ? v.frameSlot : undefined;
+      if (fs) {   // PLAYGROUND (D-37): the rest column at the body's slot (the held points ARE it; held state is re-taken from the skin when it leaves this mode)
+        p[0] = fs[0]; p[1] = fs[2]; p[2] = fs[1]; p[3] = fs[0]; p[4] = 0; p[5] = fs[1];
+        for (let j = 6; j < 15; j += 3) { p[j] = fs[0]; p[j + 1] = fs[3]; p[j + 2] = fs[1]; }
+        h.ready = false;
+        w[0] = fs[0]; w[1] = fs[3]; w[2] = fs[1]; w[6] = fs[4]; this.addDisc();
+      } else {
+        h.gate(c, cfg, (m.fingers ?? 0) > 0 || m.carried === true);
+        if (h.ready && h.calm && h.skip > 0 && views.length >= FRAME_TUNING.scanFrom) h.skip--;
+        else if (!h.ready || h.calm) {
+          h.skip = views.length >= FRAME_TUNING.scanFrom ? FRAME_TUNING.scanEvery - 1 - (h.ready ? 0 : n % FRAME_TUNING.scanEvery) : 0;
+          // the live extremes of the skin on screen
+          const e = this.cam, k0 = cfg[0], k5 = cfg[1];
+          let iT = -1, iB = -1, iL = -1, iR = -1, mT = -Infinity, mB = Infinity, mL = Infinity, mR = -Infinity;
+          for (let i = 0; i < cnt; i += 3) {
+            const x = P[i], y = P[i + 1], z = P[i + 2];
+            const ze = e[2] * x + e[6] * y + e[10] * z + e[14];
+            if (!(ze < -0.01)) continue;
+            const iw = 1 / -ze, ny = k5 * (e[1] * x + e[5] * y + e[9] * z + e[13]) * iw, nx = k0 * (e[0] * x + e[4] * y + e[8] * z + e[12]) * iw;
+            if (ny > mT) { mT = ny; iT = i; } if (ny < mB) { mB = ny; iB = i; }
+            if (nx < mL) { mL = nx; iL = i; } if (nx > mR) { mR = nx; iR = i; }
+          }
+          const fresh = !h.ready;
+          if (iT >= 0) {
+            // (the NDC of the held point is compared on the same axis as the extreme: top / right = larger is further out, bottom / left = smaller)
+            this.hp = p; this.vp = P;
+            this.pull(iT, 0, 1, 1, fresh); this.pull(iB, 1, -1, 1, fresh); this.pull(iL, 2, -1, 0, fresh); this.pull(iR, 3, 1, 0, fresh);
+          }
+          const kd = fresh ? 1 : cfg[2];
+          p[12] += (c.x - p[12]) * kd; p[13] += (c.y - p[13]) * kd; p[14] += (c.z - p[14]) * kd;
+          h.ready = true;
         }
-        const fresh = !h.ready;
-        if (iT >= 0) {
-          // (the NDC of the held point is compared on the same axis as the extreme: top / right = larger is further out, bottom / left = smaller)
-          this.hp = p; this.vp = P;
-          this.pull(iT, 0, 1, 1, fresh); this.pull(iB, 1, -1, 1, fresh); this.pull(iL, 2, -1, 0, fresh); this.pull(iR, 3, 1, 0, fresh);
-        }
-        const kd = fresh ? 1 : cfg[2];
-        p[12] += (c.x - p[12]) * kd; p[13] += (c.y - p[13]) * kd; p[14] += (c.z - p[14]) * kd;
-        h.ready = true;
       }
       // the held extremes now
       w[0] = p[0]; w[1] = p[1]; w[2] = p[2]; if (this.ndc() && w[4] > acc[0]) acc[0] = w[4];

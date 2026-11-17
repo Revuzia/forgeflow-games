@@ -373,3 +373,142 @@ subtle at this framing (the kettle's steam and the embers read; drips and bubble
 - **Frostbell's look** still shows faint warm mottling in the snow under its cream key; its mountains show only as a strip on the tall frame.
   Ripple's tall Driftwood Log reads as a stump (its data yaw). Both are look issues, not check failures.
 - No full render sweep (the 52-minute run): only the sections named in "Final run" below and `place` ran on this tree.
+
+## Round 3 (2026-11-16, from HEAD 5ac76e503 = the merge of the PC's published game into PLAYGROUND)
+Scope (orchestrator): (1) MERGE_PC.md doubts in the browser: the merged `wh-jelly-v6` program on a whole body and on cut pieces (the eyes
+clipped at a cut face must follow the render pose), the double fine-mesh reduction on lite chunks (BodyView.fineFreqFor + the PC's lod.ts: make
+it ONE), cut pieces and autonomy framing slots, the place camera against the PC's HUD-band framing (decision: a place respects the band exactly
+as Home does); (2) the existing render sections (gallery, ceremony, flash, cut, the PC's UI-related rows) once on the merged tree, against the
+PC's last numbers; (3) finish and check the S2 places (shots judged, budgets, RD rows); (4) reaction presets and EMOTE style 3 if missing.
+Files: src/render and the render harness only. Port 5364. Scratch `scratchpad/pg_render/r3_*`.
+
+| # | Step | State | Evidence |
+|---|---|---|---|
+| R3-0 | baseline at HEAD: tsc exit 0; `pg_node_checks` 35 ok / 0 FAIL; no job of mine running | done 19:21 | |
+| R3-1 | the MERGE_PC doubts, code (render only; the PC's paths are unchanged with the autonomy framing off and no pose): **(1)** `face.ts` `updateClip`: with a render pose on, a straddled bead's clip plane is the POSED cut face (`pose.ts` `RenderPose.applyPlane`: the pose is affine for 0 <= h <= 1.6, so the plane maps to a plane: normal A^-T n through the posed foot of the bead's unposed anchor); **(2)** `bodyview.ts` `fineFreqFor`: lite = a TIER cap (the low tier's 16) only; the one size reduction is the PC's share law (lod.ts for a whole / mini / chunk, pieceFineN for a true piece); round 2's "12 at a quarter or less" is gone; **(3)** `stage.ts` `assignSlots`: the true pieces of one squishy share ONE mat slot (the first piece's), counted once with the whole's reach; a piece group at its slot is framed and aimed as the whole was while no piece is in the player's hands; the PC's SR2 band framer measures a body the player is not moving at its REST column on its slot (`framing.ts` FrameView.frameMode / frameSlot) when the autonomy framing is on, so LIFE's motion moves neither the camera nor the lens shift (off: every view live, exactly as before); **(4)** a place keeps clear Home's band: `framing.ts` `bandRows` (now also what the Framer's own band() uses, bit for bit) and `placeBand` (+ Home's margin max(3 px, 2%)); `setSafeInsets` refits a place (the Cut bar), the place camera eases its lens and distance on a refit; `PLACE_FOVS` gains 17 and 15 degrees (with Home's margin the wide layout first meets 150 px at 15 deg; 19: 147.1); `fitPlace` walks from the last pick (equal to the full scan, node N7e) | done 19:33: tsc clean for every render / harness file (3 errors in `src/physics/softbody.ts`, PG_PHYS's file being edited right now: not mine); **node 40 ok / 0 FAIL** (the 35 old rows + N7a..e) | node N7 below |
+
+N7 numbers (`node _harness/renderview/pg_node_checks.ts`, 3.6 s): N7a posed points of a cut plane lie on the posed clip plane within 5.6e-17 m (the
+pose tilts the plane up to 2.66 deg; pose off = unchanged); N7b a lite sixth on a detail-2 stub at med = frequency 8 (642 vertices; the round-2
+double cut gave 6 = 362), a lite whole 2562; N7c the place band is the Framer's band to 0 NDC (minBand scaling at 358 x 201 included), 390 x 844
+with the assumed rows 167.9 / 67.8 / 186.9 / 23.8 px; **N7d RD-17 inside Home's band: tall 35 deg 115.2 front / 91.8 mid px, wide 15 deg 152.1
+mid px**, every corner column inside the band; N7e the Cut bar (+90 px) refit keeps every corner column 23.75 px above it; the lens walk = the
+full scan in 6 of 6 mixed refits.
+| R3-2 | browser, the doubts (run 1: `node _harness/browser_render.mjs --only=pose,homeview --port=5364`, log `scratch/pg_render/r3_run1.log`, real soft body with PG_PHYS's uncommitted edits, med, SwiftShader) | done 19:40: every doubt row ok, 0 console problems; **RD-16 FAIL x2** (found by this run, a merge regression, fix below) | table below |
+
+Run 1 rows (new in round 3 unless named):
+| Row | Phone 390 x 844 | Desktop 1280 x 800 |
+|---|---|---|
+| doubt 1 + v6 program: a leaning TRUE piece (dollop, plane through the left eye), every posed cut-face vertex vs the bead's clip plane | | **0.00 mm** (the face's own flatness 0.00 mm; HEAD's unposed plane: 64.1 mm off); `v6_posed_whole.png`, `v6_piece_rest.png`, `v6_piece_posed.png` |
+| doubt 2 / RD-06 (re-specified: one reduction) 6 lite sixths vs 2 wholes | | **x1.009** (not lite x1.003); lite 642 vertices = the law's 642 (tier 24 capped to 16, sim 162); not lite 1442; draw calls 32 / 56 / 66 |
+| RD-14 (no insets, round 1's row) | on 1.5e-8 m, off 0.600 m | on 3.0e-9 m, off 0.246 m |
+| RD-14 with the HUD rows (the PC's SR2 framer runs): camera / lens shift / scale | on 7.6e-15 m / 1.7e-11 / 0; off 0.600 m / 0.0110 / 0.114 | on 8.0e-15 m / 4.4e-11 / 0; off 0.246 m / 0.0082 / 0.066 |
+| doubt 3: 2 wholes + a squishy cut in 2 true pieces: slots; visibleTable vs the uncut party | 0, 1, 2, 2; max diff 0 m | 0, 1, 2, 2; max diff 0 m |
+| doubt 3: pieces moving by themselves (party / a lone cut squishy): camera m / lens / scale | 7.6e-15 / 2.8e-13 / 0; alone 2.2e-7 / 1.6e-7 / 7.4e-8 (framing off: 5.404 m / 0.078 / 0.967) | 8.0e-15 / 2.4e-13 / 0; alone 3.2e-6 / 7.5e-6 / 9.9e-7 |
+| RD-05 / RD-11 | | x0.019, 0 fine updates asleep / 0.000 px |
+| **RD-16 visibleTable vs the rendered frame** | **FAIL 0.339 m** | **FAIL 0.323 m** |
+| RD-16 slots in the corral / Home's things in view | ok / ok | ok / ok |
+**RD-16's cause (a merge regression, not from my round-3 edits):** with the HUD rows reported the PC's SR2 framer shifts the picture (a lens shift
+via `camera.setViewOffset`), which `visibleTable` (round 1, written before the PC code) did not know. Fix (`stage.ts visibleTable`): the inset lines
+are moved by the framer's lens goal (content up by lensY, right by lensX); with the autonomy framing on that goal comes from the rest columns, so
+it is deterministic. Re-run below (run 2).
+| R3-3 | run 2 (`--only=homeview`, log `r3_run2.log`): RD-16 with the lens-shift fix | done 19:43: **ALL RENDER CHECKS PASSED**; RD-16 visibleTable vs the rendered frame **0.0000 m phone / 0.0003 m desktop** (bar 0.05); slots in the corral and Home's things in view ok; every round-3 homeview row ok again | |
+| R3-4 | the ember rides the render pose (`core.ts`: the blob, its halo, the jelly's glow centre `uCoreWorld` and a piece's ember clip planes take the pose; BodyView updates the pose before the core). Found in `v6_piece_posed.png`: a leaning piece's ember halo hung off its cut face | code done 19:44 (browser check in the next pose run) | |
+| R3-5 | (4) reaction presets: **6 strands** (thin sticky threads drawn out as a tacky body leaves: the cabin's Snug Basket and Frostbell's nest cells) and **8 ripple** (a ring of 8 foam motes spreading at the body's top, about one a second, each mote counted in LIFE 10.1's window: Ripple's Rock Pool cell) in `place.ts ReactFx`; 3 sparkles and 7 glow stay non-particles (no S1 / S2 cell uses them). EMOTE style 3 was already done in round 2 (node N3j) | code done 19:43; browser rows added to `presets()` | |
+| R3-6 | first-load bytes: round 3's fixes add +3 138 B to the stage chunk (stage +979, framing +659, bodyview +522, core +419, pose +318, face +241; 14.3's one-file method against HEAD copies, `scratch/pg_render/size3.mjs`). Paid back: the GLSL comments still shipped as text inside `table.ts` (17) and `decals.ts` (8) shader strings moved into `${/* */''}` (the minifier folds them): table 9 100 -> 7 467, decals 5 820 -> 5 099 B, **-2 354 B**; the shader code is unchanged (`scratch/pg_render/cmp3.mjs`: 6 + 3 templates, 0 differ once comments are set aside). `placeBand` moved to the away chunk (`placeview.ts`; PlaceHost.fit applies it to the raw rows) | done 19:46: net **+784 B** -> render first-load share about **14.8 KB of 16** (round 2: 13.99 KB) | |
+| R3-7 | run 3 (`--only=place,pose`, log `r3_run3.log`) | done 19:48, **its RD-17 rows are void**: I moved `placeBand` into the away chunk while it ran, so the stage page (loaded before the edit) and the lazily fetched `place.ts` (after it) BOTH applied Home's margin (twice: tall 108 / 87 px, wide fell back to 35 deg, 126 px mid = 4 FAIL). Lesson for the next engineer: under `WH_FROZEN` vite still serves a lazy chunk as it is on disk when the page first asks for it. Valid rows of run 3: RD-06 x1.023 (not lite x1.154); doubt 1 0.00 mm; D-80 presets 29.0 / s, Calm 16.0; **strands + ripple start, 28.0 / s, Calm 14.0** (caps 48 / 16); RD-07 programs 20 -> 20, textures 4 -> 4, geometries 24 -> 24; 0 console problems. What it SHOWED (judged): see "Look round 3" below | | |
+
+### Look round 3: what the shots showed and what changed (judged as a product designer; the shots are `_shots/render/pg/`)
+- **Water drew over bodies (a real round-2 bug, not a look):** the Surf Edge behind the back row drew a translucent bar across the bodies'
+  eyes (jellies write no depth, and the water came after them). Now the water is drawn before the jellies and writes depth (`place.ts water`):
+  a body's part under the surface is hidden by the water (murky water), a body in front of or behind the water is untouched.
+- **The ground ended inside the tall frame:** the 16 m ground showed its near edge as a flat blue band at the bottom of a tall frame once the
+  camera kept Home's margin. The place ground is 40 m now (`PropKit.ground`).
+- **Frostbell:** round 2's mountains filled the tall frame's sky like giant cyan icicles (peaks up to 0.9 of a 14 m card, caps lagoon-cream
+  = cyan) and the snow read as dirty olive concrete (fine 0.6 m mottle; cream lit by a cyan fill: cream-lagoon OKLCH mixes pass through
+  green). Now: low ranges on the horizon (near dusk-plum, far dusk-lagoon haze, cream caps only on the tallest), a clear sky from lagoon-dusk to
+  a cream-amber horizon, snow in broad wind drifts with blue hollows, the fill and the sky band in lagoon-dusk blues, and every snowy part
+  (bank, wedge, ball, pine caps, the nest) in the ground's own snow; the nest is low overlapping mounds (top at the collider's 0.2 m).
+- **Ripple:** the surf lines were unbroken cream stripes across the whole width; each crest now breaks along its length, varies in width and
+  trails a lace of foam.
+- **Rainleaf:** puddles read as dark holes (they mirrored the plum sky): now they mirror the canopy's blue-green light; the violet
+  dusk-ink stepping stones read as purple spots: now a low-chroma ink-cream grey-mauve.
+- **Presets:** the first strands / ripple were too faint at a place's framing: strands 0.08..0.12 m streaks at 0.8 alpha, ripple motes 0.034 m at 0.95.
+| R3-8 | run 4 (`--only=place`, 19:50 to 19:53, log `r3_run4.log`): consistent code | 1 FAIL: RD-13 Ripple tall 0.428 (a tall frame shows a third of bright sky); everything else ok. **RD-17 with Home's band: tall 115.2 front / 91.8 mid px at 35 deg (margin 7.8 px = Home's side margin), wide 172.5 / 152.1 px at 15 deg (margin 25.6 px)**, the same numbers as node N7d in all four places; doubt 4 phone: the Cut bar (+90 px) leaves the tall fit as it was (its bottom had room), desktop: refit inside the new band, largest step 0.012 m / 0 deg a frame; RD-13 cabin 0.184 / 0.173, Frostbell 0.319 tall, Rainleaf 0.115 tall | |
+Seen in run 4 and changed before run 5: the water STILL drew over bodies: three draws a transmissive material (every jelly) after the opaque
+list and before EVERY transparent object, whatever its renderOrder, so a transparent water came after the jellies anyway; the water is now in
+the opaque list (`transparent: false`, blended, depth written). Ripple's mid sky, band and sea haze were lagoon-cream (they read green): now
+lagoon-dusk blues, the horizon lower (k 0.8), the headlands dusk-plum. Frostbell's caps were soft vertical fades that read as light beams: now
+a crisp jagged snow line under the tallest peaks only.
+| R3-9 | run 5 (`--only=place,pose`, 19:54 to 19:58, log `r3_run5.log`) | 1 FAIL: RD-13 Ripple tall 0.361 (was 0.428); the water no longer crosses any body; RD-06 x1.116 (not lite x1.181); doubt 1 ok; `v6_piece_posed.png`: the ember's halo now keeps its place at the cut face on a leaning piece (R3-4 works). RD-13: cabin 0.184 / 0.173, Ripple 0.361 / 0.287, Frostbell 0.318 / 0.288, Rainleaf 0.115 / 0.130 | |
+Changed after run 5: Ripple's sand x0.92, its horizon k 0.74 and mid sky 0.8, its sky fill lagoon-dusk (a lagoon-cream fill turned the shade
+olive); Frostbell's mountains: on the wide frame the 15 deg lens magnified the tall far peaks past the top of the frame, so their cream caps
+hung from it like icicles: the heights above the horizon now scale per layout (`uH`: tall 1, wide 0.45).
+| R3-10 | run 6 (19:59 to 20:02): Ripple's ground failed to compile (my edit put a `//` comment mid-line in its uniform object and commented out `uWetC`: the console row caught it); fixed. **Run 7 (`--only=place`, 20:02 to 20:05, log `r3_run7.log`): ALL RENDER CHECKS PASSED, 0 console problems** | done 20:05 | table below |
+| R3-11 | the PC's render sections, once on the merged tree: `--only=main,r2,cer,chains,gallery,cut,cut2,frame,capspot,many` (log `r3_pc.log`), started 20:06 | running: 126 ok, 0 FAIL at 20:17 (main, r2, cer done) | |
+
+### Place run 7 (= the round-3 place sweep, 20:02 to 20:05; real soft body with PG_PHYS's uncommitted edits, med, SwiftShader)
+Chunk hashes (git hash-object, first 10): see "Files" at the end of this round.
+| Place | Layout / frame | RD-01 | RD-08 calls | RD-13 (bar 0.35) | RD-17 1 m squishy (lens) | model margin vs the assumed rows |
+|---|---|---|---|---|---|---|
+| Hearthlog Cabin | tall 390 x 844 | ok | 30 | 0.184 | 115.2 / 91.8 px (35 deg) | 7.8 px (= Home's side margin) |
+| Hearthlog Cabin | wide 1280 x 800 | ok | 30 | 0.173 | 172.5 / 152.1 px (15 deg) | 25.6 px |
+| Ripple Shore | tall | ok | 28 | 0.294 | 115.2 / 91.8 (35) | 7.8 |
+| Ripple Shore | wide | ok | 28 | 0.249 | 172.5 / 152.1 (15) | 25.6 |
+| Frostbell Ridge | tall | ok | 29 | 0.318 | 115.2 / 91.8 (35) | 7.8 |
+| Frostbell Ridge | wide | ok | 29 | 0.324 | 172.5 / 152.1 (15) | 25.6 |
+| Rainleaf Garden | tall | ok | 22 | 0.115 | 115.2 / 91.8 (35) | 7.8 |
+| Rainleaf Garden | wide | ok | 22 | 0.130 | 172.5 / 152.1 (15) | 25.6 |
+- doubt 4 (Home's band, the Cut bar +90 px, back): phone worst 0.0 px inside the band each time (the bar leaves the tall fit unchanged: its
+  bottom had room), desktop worst 0.0 px, largest step 0.012 m / 0 deg a frame (bar 0.25 m / 1 deg).
+- D-80 presets 29.0 / s, Calm 16.0 / s; **strands + ripple start (3 and 7 are no presets: false), 28.0 / s, Calm 14.0 / s**; RD-07 12 swaps:
+  programs 20 -> 20, textures 4 -> 4, geometries 24 -> 24; bubble clamp in a place ok.
+
+### Decisions of round 3 a reader should know (each is also in the code's comments)
+- **Doubt 1:** a render pose is affine where it acts, so a cut plane maps to a plane: a straddled bead's clip plane (face.ts) and the ember's
+  clip planes, blob, halo and glow centre (core.ts) take the pose; with no pose every number is the PC's.
+- **Doubt 2:** `AddBodyOpts.lite` = "at most the low tier's frequency" (a tier cap); the size law is the PC's lod.ts / pieceFineN, applied once.
+  RD-06's vertex sub-condition is re-specified from round 2's `=== 1442` to the law's own count (642 for a sixth on the stub's detail-2 mesh),
+  computed from lod.ts in the harness. Fewer vertices than before; the 1.2 bar is unchanged.
+- **Doubt 3:** the true pieces of one squishy share ONE mat slot (the first piece's index among the visible views, pieces counted once), framed
+  with the WHOLE's rest reach (BodyView.wholeR / wholeHalfW / wholeH / wholeCy from `piece.whole.restLocal`). With the autonomy framing on, the
+  PC's band framer measures every body the player is not moving at its rest column on its slot (FrameView.frameMode 1), a chunk not at all
+  (mode 2); a body the player moves is measured live. With the autonomy framing off nothing differs from the PC's code path.
+- **Doubt 4 (the orchestrator's decision "a place respects the HUD band exactly as Home does"):** a place's fit keeps clear Home's band: the
+  reported rows scaled down together under minBand (the very `bandRows` the Framer now uses) plus Home's margin max(3 px, 2% of the frame) on
+  top / bottom (and the sides when side rows are reported); a row change refits; the camera eases a refit at Home's band rate (4 / s), the
+  fit's pitch only until it arrives (then the orbit is the player's again, P8). **Consequence the orchestrator must accept or refuse: the wide
+  layout on 1280 x 800 with the assumed rows meets RD-17's 150 px mid first at a 15 degree lens** (19: 147.1, 17: 149.5); `PLACE_FOVS` gains 17
+  and 15. The tall layout keeps 35 degrees (115.2 / 91.8 px). With the PC shell's real rows (it reports only top and bottom, e.g. 56 / 78 px
+  at 960 x 600) the band is much wider and a wider lens would meet the bars; only the assumed PLAYGROUND rows (PG_INSETS) need 15 degrees.
+- **RD-16 (merge regression):** `visibleTable` moves the inset lines by the band framer's lens goal.
+- **Water:** in the opaque list, blended, writing depth (three draws transmissive jellies before any transparent object); a body's part under the
+  surface is hidden by the water.
+- **Presets 6 and 8** exist; 3 sparkles and 7 glow stay non-particles (no S1 / S2 cell uses them; S3's Lanternroof / Echo Hollow cells use 7
+  glow: that is a look for S3).
+
+### Requests to other lanes (round 3)
+- **Orchestrator:** accept or refuse the 15 degree wide lens that "a place respects Home's band" brings with the assumed rows (above); the
+  render first-load share is now about 14.2 KB of 16 (bytes table below).
+- **PG_SHELL** (when the shell is wired): `stage.reactFx(6, id, ...)` for a STRANDS cell and `stage.reactFx(8, id, ...)` for a RIPPLE cell (life.ts
+  PARTICLE 6 / 8); the contract's comment still lists 1, 2, 4, 5, 9 only (src/contracts.ts is not in this run's scope: the PG_RENDER
+  additions block should name 6 and 8 too). Nothing else changed for the shell: setPlayBounds, setSafeInsets and setAutonomyFraming are
+  called as before; the place now follows setSafeInsets by itself.
+- **PG_PHYS:** none new.
+
+### Bytes at the end of round 3 (14.3's one-file method against HEAD 5ac76e503's copies; `scratch/pg_render/size3.mjs`, measured 20:08)
+| Module | Chunk | HEAD | now | delta |
+|---|---|---|---|---|
+| `render/stage.ts` | first load | 26 284 | 27 295 | +1 011 (slots, the framer's rest columns, the place refit easing, visibleTable's lens) |
+| `render/bodyview.ts` | first load | 11 030 | 11 552 | +522 (the whole's rest numbers of a piece, the frame fields, the lite cap) |
+| `render/core.ts` | first load | 6 141 | 6 560 | +419 (the ember rides the pose) |
+| `render/framing.ts` | first load | 5 436 | 5 837 | +401 (bandRows, frameMode) |
+| `render/pose.ts` | first load | 1 823 | 2 141 | +318 (applyPlane) |
+| `render/face.ts` | first load | 12 453 | 12 694 | +241 (the posed clip plane) |
+| `render/table.ts` | first load | 9 100 | 7 467 | **-1 633** (GLSL comments out of the shipped text) |
+| `render/decals.ts` | first load | 5 820 | 5 099 | **-721** (the same) |
+| **render first-load share** (round 2's 13 991 + this round) | | 13 991 | **14 549** | **+558: 14.2 KB of 16 (1.8 KB left)** |
+| `render/place.ts` + `placeview.ts` | the away chunk | 14 569 + 1 577 | 15 164 + 2 047 | +1 065: 16.8 KB of 90 (PG_AUDIO's bed not counted by me) |
+| `render/places/frostbell.ts` | Frostbell's chunk | 7 938 | 8 462 | +524 (with round 2's audio 1 200 + data 4 134: 13.8 KB of 45) |
+| `render/places/ripple.ts` | Ripple's chunk | 7 551 | 7 992 | +441 (12.7 KB of 45) |
+| `render/places/rainleaf.ts` | Rainleaf's chunk | 8 055 | 8 068 | +13 (12.6 KB of 45) |
+(The places' audio and data bytes are round 2's numbers; this run did not re-measure other lanes' modules.)

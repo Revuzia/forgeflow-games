@@ -14,12 +14,12 @@ void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(
 const SHADOW_FRAG = /* glsl */`
 varying vec2 vUv;
 uniform float uStrength;
-uniform float uSoft;   // 1 = tight contact shadow, 0 = very soft
+uniform float uSoft;   ${/* 1 = tight contact shadow, 0 = very soft */''}
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
   float r2 = dot(p, p);
   float rr = sqrt(r2);
-  float tight = exp(-pow(rr / mix(0.55, 0.8, uSoft), 4.0)) * 0.85;     // dense contact shadow that ends just outside the body
+  float tight = exp(-pow(rr / mix(0.55, 0.8, uSoft), 4.0)) * 0.85;     ${/* dense contact shadow that ends just outside the body */''}
   float wide = exp(-r2 * mix(1.6, 3.2, uSoft)) * 0.3;
   float edge = 1.0 - smoothstep(0.7, 1.0, rr);
   float a = clamp((tight + wide) * uStrength * edge, 0.0, 0.92);
@@ -29,11 +29,11 @@ void main() {
 const POOL_FRAG = /* glsl */`
 varying vec2 vUv;
 uniform vec3 uColor;
-uniform vec3 uRingCol;     // the caustic ring takes the TIER colour (it is part of the tell), not the body's pool colour
+uniform vec3 uRingCol;     ${/* the caustic ring takes the TIER colour (it is part of the tell), not the body's pool colour */''}
 uniform float uStrength;
 uniform float uTime;
-uniform float uRing;       // soft caustic fringe just outside the shadow edge
-uniform float uRing2;      // thin bright caustic ring (Epic and up)
+uniform float uRing;       ${/* soft caustic fringe just outside the shadow edge */''}
+uniform float uRing2;      ${/* thin bright caustic ring (Epic and up) */''}
 ${NOISE_GLSL}
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
@@ -42,11 +42,11 @@ void main() {
   float fringe = exp(-pow((r - 0.62) * 4.2, 2.0)) * uRing;
   float cau = 0.8 + 0.4 * whNoise2(p * 7.0 + vec2(uTime * 0.25, -uTime * 0.18));
   float edge = 1.0 - smoothstep(0.78, 1.0, r);
-  // caustic ring (Epic and up): a broken, beaded band of focused light, two thin crossing filaments that slowly crawl, not a neon hoop
+  ${/* caustic ring (Epic and up): a broken, beaded band of focused light, two thin crossing filaments that slowly crawl, not a neon hoop */''}
   float ring2 = 0.0;
   if (uRing2 > 0.001) {
-    // the beads' noise runs around the ring on a CIRCLE in noise space (the unit direction, turned a little by the time), not on the polar angle: atan() jumps by 2 pi
-    // where it wraps (the -x axis), and noise of a non-multiple of that jump is a hard straight line across the ring there (VERIFY_RENDER_A R-A6)
+    ${/* the beads' noise runs around the ring on a CIRCLE in noise space (the unit direction, turned a little by the time), not on the polar angle: atan() jumps by 2 pi */''}
+    ${/* where it wraps (the -x axis), and noise of a non-multiple of that jump is a hard straight line across the ring there (VERIFY_RENDER_A R-A6) */''}
     vec2 dir = p / max(r, 1e-3);
     float a1 = uTime * 0.022, a2 = -uTime * 0.0078;
     vec2 d1 = vec2(cos(a1) * dir.x - sin(a1) * dir.y, sin(a1) * dir.x + cos(a1) * dir.y);

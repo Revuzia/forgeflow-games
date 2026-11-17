@@ -32,9 +32,13 @@ const SEA = /* glsl */`
 void main() {
   float d = max(0.0, uShore - vWP.z);
   vec3 c = mix(uShallow, uDeep, smoothstep(0.0, 7.0, d));
-  float w = fract(d * 0.33 + uTime * uMotion * 0.09 + pN(vec2(vWP.x * 0.12, d * 0.15)) * 0.7);
-  float line = smoothstep(0.0, 0.04, w) * (1.0 - smoothstep(0.04, 0.12, w)) * (1.0 - smoothstep(3.0, 12.0, d));
-  c = mix(c, uFoam, line * 0.6);
+  float ph = d * 0.33 + uTime * uMotion * 0.09 + pN(vec2(vWP.x * 0.12, d * 0.15)) * 0.7, w = fract(ph), k = floor(ph);
+  float near = 1.0 - smoothstep(3.0, 12.0, d);
+  // (round 3: each crest breaks along its length and varies in width, with a lace of foam behind it; round 2's were unbroken stripes)
+  float brk = smoothstep(0.32, 0.62, pN(vec2(vWP.x * 0.42 + k * 3.7, k * 1.3))), wid = 0.06 + 0.07 * pN(vec2(vWP.x * 0.9, k * 2.1));
+  float line = smoothstep(0.0, 0.03, w) * (1.0 - smoothstep(0.03, 0.03 + wid, w)) * near * brk;
+  float lace = (1.0 - smoothstep(0.05, 0.3, w)) * smoothstep(0.58, 0.82, pN(vWP.xz * vec2(1.6, 3.2) + k)) * near * 0.35;
+  c = mix(c, uFoam, line * 0.6 + lace);
   c += uGlint * pow(pN(vec2(vWP.x * 1.3, d * 0.9) + uTime * uMotion * 0.05), 6.0) * smoothstep(3.0, 20.0, d);
   c = mix(c, uHaze, smoothstep(12.0, 38.0, d));
   gl_FragColor = vec4(c, 1.0);
@@ -53,9 +57,10 @@ void main() {
 const LOOK: PlaceLook = {
   id: 'ripple',
   ceremonyDim: PLACE.ceremonyDim,
-  skyBand: tok('lagoon', 'cream', 0.35, 0.85),
+  // (round 3: the lagoon-cream mid sky and band read green (OKLCH passes through it) and a tall frame shows a third of sky: blue mids, a lower horizon)
+  skyBand: tok('lagoon', 'dusk', 0.2, 0.85),
   sky: {
-    uZenith: tok('lagoon', 'dusk', 0.45, 0.7), uInk: tok('lagoon', 'dusk', 0.3, 0.82), uPlum: tok('lagoon', 'cream', 0.4, 0.92), uHorizon: tok('cream', 'amber', 0.3, 0.95),
+    uZenith: tok('lagoon', 'dusk', 0.45, 0.7), uInk: tok('lagoon', 'dusk', 0.3, 0.82), uPlum: tok('lagoon', 'dusk', 0.15, 0.8), uHorizon: tok('cream', 'amber', 0.3, 0.74),
     uGlowWarm: tok('amber', 'cream', 0.25, 0.55), uGlowCool: tok('lagoon', 'lagoon', 0, 0.25), uBase: tok('lagoon', 'dusk', 0.3, 0.7), uWarm: tok('amber', 'amber', 0, 0.06),
     uFogNear: 10, uFogFar: 40,
   },
@@ -65,7 +70,7 @@ const LOOK: PlaceLook = {
       // the low gold sun from the front right, a wide soft cone over the whole cove
       key: tok('cream', 'amber', 0.45), keyI: 640, keyPos: [5.5, 5.0, 6.5], keyAim: [0, 0, -0.5], keyAngle: 1.2,
       rim: tok('lagoon', 'cream', 0.2), rimI: 2.4, rimDir: [-0.35, 0.45, -0.82],
-      fillSky: tok('lagoon', 'cream', 0.45), fillGround: tok('amber', 'cream', 0.5, 0.8), fillI: 2.6,
+      fillSky: tok('amber', 'cream', 0.55, 0.85), fillGround: tok('amber', 'cream', 0.5, 0.8), fillI: 2.6,   // (round 3: a warm sky fill: a lagoon one turned the sand outside the key's cone olive or green)
       keyTint: [1.0, 0.86, 0.62],
     };
   },
@@ -85,7 +90,8 @@ const LOOK: PlaceLook = {
     const pool = zn(0), surf = zn(1), wet = tall ? T.patches[0] : PLACE.patches[0];
     const shore = surf.z - (surf.hz ?? 0.25);
     // ---- materials ----
-    const sandU = { uSand: { value: col(tok('amber', 'cream', 0.55, 0.63)) }, uWetC: { value: col(tok('amber', 'cream', 0.45, 0.5)) },
+    // (round 3: the sand x0.92 again: a tall frame's mean was 0.36, bar 0.35)
+    const sandU = { uSand: { value: col(tok('amber', 'cream', 0.55, 0.58)) }, uWetC: { value: col(tok('amber', 'cream', 0.45, 0.5)) },
       uWet: { value: new THREE.Vector4(wet.x, wet.z, wet.hx ?? 3.4, wet.hz ?? 0.35) }, uPool: { value: new THREE.Vector4(pool.x, pool.z, pool.r ?? 1.3, 0) } };
     const sand = kit.surface('sand', [1, 1, 1], 0.95, SAND, sandU, 0.25);
     const rock = kit.mat('rock', tok('ink', 'dusk', 0.35, 1.05), 0.9, 0.25), drift = kit.mat('drift', tok('amber', 'cream', 0.7, 0.66), 0.9, 0.2);
@@ -98,11 +104,11 @@ const LOOK: PlaceLook = {
     // ---- the ground (sand), the sea, the far headlands ----
     g.add(kit.ground(sand));
     const seaU = { uShore: { value: shore }, uShallow: { value: col(tok('lagoon', 'cream', 0.25, 0.85)) }, uDeep: { value: col(tok('lagoon', 'dusk', 0.45, 0.62)) },
-      uFoam: { value: col(tok('cream')) }, uGlint: { value: col(tok('amber', 'cream', 0.5, 0.5)) }, uHaze: { value: col(tok('cream', 'lagoon', 0.35, 0.9)) } };
+      uFoam: { value: col(tok('cream')) }, uGlint: { value: col(tok('amber', 'cream', 0.5, 0.5)) }, uHaze: { value: col(tok('lagoon', 'dusk', 0.2, 0.92)) } };   // (round 3: cream-lagoon haze read as a pale green band at the horizon)
     const sea = kit.card(SEA, seaU, 120, 60, 0, 0.01, shore - 30, 0, -60);
     sea.rotation.x = -Math.PI / 2; g.add(sea);
     const seaM = sea.material as THREE.ShaderMaterial;
-    const headU = { uLand: { value: col(tok('dusk', 'lagoon', 0.3, 0.75)) }, uHaze: { value: col(tok('cream', 'lagoon', 0.35, 0.9)) } };
+    const headU = { uLand: { value: col(tok('dusk', 'plum', 0.3, 0.9)) }, uHaze: { value: col(tok('lagoon', 'dusk', 0.2, 0.92)) } };
     g.add(kit.card(HEADLAND, headU, 90, 7, 0, 3.2, shore - 46, 0, -70));
 
     // ---- the Surf Edge (shallow water at the back; its surface rises 0.06 -> 0.12 on a wave every 7 to 10 s) ----
