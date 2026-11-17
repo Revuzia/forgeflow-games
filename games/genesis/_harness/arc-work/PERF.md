@@ -2188,3 +2188,32 @@ long press frame-rate independent. Report after 1-2 verified.
     place; B a little smoother near the camera with fewer glitter specks (detail 3.88 / 3.26) -> ripple amplitude was
     ~1.7x low (the group mean counted twice): K 0.7 -> 1.15, re-shot below. pond: identical look (detail 4.87 / 4.86).
     `shore` poi view shows almost no water (useless view).
+- wfast=2 PROOF after K = 1.15 (A = default, B = wfast=2; both `wclock=100`, SwiftShader high 480x270, the fast set-up
+  = clouds / shadows / trees OFF; shots2/; sheets sheet-wfast2-a / -b / -c.png, ALL LOOKED; every run 0 page errors,
+  0 shader / GL messages):
+  view (what)                      mean|d|  mean RGB A / B                         detail A / B
+  land  (day open sea, landing)     2.42    86.3 120.5 130.7 / 86.1 120.4 130.5    3.88 / 4.15
+  storm (land, wwind=2.2)           9.75    141.2 140.3 134.6 / 137.5 138.9 135.4  9.70 / 10.21
+  night (land, 23.5 h)              2.31    14.7 25.0 41.2 / 14.9 25.7 42.1        6.38 / 7.71
+  lake  (the pond by the town)      1.61    93.8 119.2 101.9 / 93.6 119.2 101.9    4.87 / 4.86   (K 0.7 build)
+  river (poi: a narrow grey channel) 1.54   equal                                  6.19 / 6.16
+  orbit                             0.58    equal                                  8.62 / 8.61
+  shore (poi: almost no water in view) 1.45 equal                                  (K 0.7 build)
+  Reading: colour, wave fronts, foam (the storm's lace and whitecaps), the waterline and the pond are the same. B
+  shows MORE fine ripple texture toward the horizon by day and at night (a faint regular grain at mid distance by day,
+  blotchier at night): for the owner's eye — if it reads as a pattern, lower K or widen the two tiles' ratio.
+  NOT SHOWN: with clouds / shadows / trees on (the mirrored deck, SSR of a treeline with 8 steps: the likeliest place
+  for a visible loss), a real river with flow (two-phase path compiled, not looked at), motion (scrolling), a
+  cube-diagonal region (2-3 projections blended), Mac speed.
+  cuts: `wshade=nossr,nopcf,noripple,nofoam,norefr,nonoise` together compiles and draws flat water (sheet-wfast2-b row 3).
+- GATE 21b: `bash _harness/slot.sh npm run check` 1047 pass 0 fail (s21/check2.log; run on the committed wfast=2 code,
+  before the one-constant K change, typecheck re-run after it); `npm run build` exit 0 (s21/build-prod2.log).
+- MAC ROUND ASK (P = `scene=0&shadows=0`, Ultra, the landing spot, as round 13):
+  1. P (base) | P&water=0 (floor)
+  2. P&wshade=nonoise | P&wshade=noripple | P&wshade=nossr | P&wshade=nopcf | P&wshade=nofoam | P&wshade=norefr
+     (each alone: frame time base - cut = that block's cost), and all six together.
+  3. P&wfast=2 (time), then normal `?wfast=2` vs default for the LOOK (open sea by day, a lake with trees on its
+     bank = reflections, night, a storm). Also P&wfast=1 once, to close the volume-tap question for water.
+  4. `?wdebug=class` screenshot at the landing spot with the sheet over the hills in view (see SESSION 21).
+- NEXT: by the round's numbers — if SSR is the rest, SSR at half rate / fewer refine; if PCF, 1-2 taps for water; if
+  wfast=2 is still far from the floor, the Gerstner group's 4 simplex -> varyings near, cloud shadow + sky light per vertex.
