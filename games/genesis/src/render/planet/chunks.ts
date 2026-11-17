@@ -1410,6 +1410,8 @@ export class ChunkLOD {
     if (!p.built || p.tSlot < 0) return null;
     return this.tBatch[p.level]?.slotRange(p.tSlot) ?? null;
   }
+  /** the LOD's own distance from the camera to the patch (the one the split test uses) */
+  tcDist(p: Patch, cam: Vector3): number { return this.boundDistance(p, cam, cam.length()); }
   /** unit directions of the patch's lattice corners (0,0), (R,0), (0,R) */
   tcCorners(p: Patch, a: Vector3, b: Vector3, c: Vector3): void {
     this.flatDir(p.face, p.a[0], p.a[1], a);

@@ -43,7 +43,7 @@ const TC_BIAS = TCACHE ? perfNum('tcbias', 0)! : 0;
 /** layer edge (texels), slab edge, and the tile classes (edge in texels; SLAB / class tiles a side) */
 export const TC_SL = 1152;
 const SLAB = 576;
-const CLASSES = [96, 144, 192, 288, 576];
+const CLASSES = [48, 72, 96, 144, 192, 288, 576];
 const BORDER = 2;
 const PAD = BORDER * (2 + Math.SQRT2);
 const MIPS = 3;
@@ -196,7 +196,7 @@ interface Tile {
   kA: number; kB: number; g: number;
   sun: Vector3; year: number; gkey: string;
   baked: boolean; dirty: boolean; stale: boolean; hot: boolean; hotEpoch: number;
-  lastUsed: number; dn: number;
+  lastUsed: number; dn: number; need: number;
 }
 
 const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3();
@@ -243,6 +243,8 @@ export class TerrainCache {
   private pxPerRad = 0;
   private readonly cam = new Vector3();
   private selfBlit = true;
+  /** bake texels in hand (the budget accrues per frame, so a large tile's turn comes within a few frames) */
+  private credit = 0;
   private checked = false;
   private levelMorph: (level: number) => IUniform<Vector4>;
 
@@ -405,7 +407,7 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { cls: -1, slab: null, sub: 0, kA: 0, kB: 0, g: 0, sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0 };
+        t = { cls: -1, slab: null, sub: 0, kA: 0, kB: 0, g: 0, sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0 };
         this.tiles.set(p, t);
       }
       t.lastUsed = frame;
@@ -413,7 +415,10 @@ export class TerrainCache {
       const dc0 = _c.copy(sc).sub(camBody).length();
       const dn = Math.max(0, dc0 - sr), df = dc0 + sr;
       t.dn = dn;
-      const need = this.lod.size(p.level) * pxPerRad / Math.max(dn, 0.5);
+      // (the patch's edge in pixels at its nearest point, by the LOD's own shell-sector distance: the sphere's is too
+      // short on steep ground and asked for classes no pixel needs)
+      const need = this.lod.size(p.level) * pxPerRad / Math.max(this.lod.tcDist(p, camBody), 0.5);
+      t.need = need;
       // graze^2 of the eye at the patch centre (groundfloor.ts swardDetail)
       up.copy(sc).normalize();
       const ndv = dc0 > 1e-3 ? Math.min(1, Math.max(0, -_c.dot(up) / dc0)) : 1;
@@ -424,6 +429,8 @@ export class TerrainCache {
       if (valid && (dn < t.kA * 0.98 && t.kA > KNOT0 * 1.01 || df > t.kB * 1.02 && t.kB < knotAt(iMax) * 0.99)) { valid = false; st.rebakeKnot++; }
       if (valid && Math.abs(g - t.g) > 0.2) { valid = false; st.rebakeKnot++; }
       if (valid && !t.stale && (t.sun.dot(sunBody) < 0.9976 || Math.abs(yearFrac - t.year) > 0.004)) { t.stale = true; st.rebakeSlow++; }
+      // far denser than its pixels now (past the mip the borders allow): a smaller tile, at low priority
+      if (valid && !t.stale && t.cls > 0 && need * 2.6 < CLASSES[t.cls] - PAD) { t.stale = true; st.rebakeClass++; }
       // the slot table (two texels): written when it differs (a compacted or re-used slot is caught here too)
       const k = p.tSlot & 15, d = tab.image.data as unknown as Float32Array, o = k * 8;
       let l = -1, ox = 0, oy = 0, sz = 0;
@@ -466,16 +473,18 @@ export class TerrainCache {
     const gl = r.getContext() as WebGL2RenderingContext;
     const prevRT = r.getRenderTarget(), prevAuto = r.autoClear;
     r.autoClear = false;
-    let spent = 0;
+    let spent = 0, held = false;
+    const credit0 = this.credit = Math.min(this.credit + TC_BUDGET, Math.max(2 * TC_BUDGET, CLASSES[CLASSES.length - 1] ** 2 * 1.5));
+    let credit = credit0;
     const failed: boolean[] = [];
     const bu = this.bakeMat.userData as { uTcBake: IUniform<Vector4>; uTcBakeF: IUniform<Vector4>; uTcEi: IUniform<Vector3>; uTcEj: IUniform<Vector3>; uMorph: IUniform<Vector4> };
     for (const p of q) {
       const t = this.tiles.get(p)!;
-      const need = this.lod.size(p.level) * this.pxPerRad / Math.max(t.dn, 0.5);
+      const need = t.need;
       let cls = 0;
       while (cls < CLASSES.length - 1 && CLASSES[cls] - PAD < need * 1.1) cls++;
       const S = CLASSES[cls];
-      if (spent > 0 && spent + S * S > TC_BUDGET) break;
+      if (S * S > credit) { if (!held) { held = true; credit *= 0.5; } continue; }
       const range = this.lod.tcRange(p);
       if (!range) continue;
       if (t.slab && t.cls !== cls) this.release(t);
@@ -556,10 +565,11 @@ export class TerrainCache {
       r.state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
       r.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
       t.baked = true; t.dirty = false; t.stale = false;
-      spent += S * S;
+      spent += S * S; credit -= S * S;
       st.bakes++; st.bakesTotal++;
     }
     st.texels = spent;
+    this.credit = credit0 - spent;
     this.mesh.geometry = undefined as unknown as Mesh['geometry'];
     r.setRenderTarget(prevRT);
     r.autoClear = prevAuto;

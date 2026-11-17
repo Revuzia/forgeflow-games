@@ -56,7 +56,7 @@ const G = (fn, a) => page.evaluate(fn, a);
 const stats = () => G(() => { const t = globalThis.__TCACHE__; return t ? JSON.stringify(t.stats) : 'no cache'; });
 // settle: frames until the bake queue is empty (or `max`), then one screenshot with the cache (c-) and, one frame
 // later with every patch on the full shader (l-): the in-page A/B
-async function pair(name, max = 400) {
+async function pair(name, max = Number(opts.max ?? 160)) {
   for (let f = 0; f < settle; f += 4) await G(() => window.__GENESIS__.frames(4));
   for (let f = 0; f < max; f += 4) { const q = await G(() => globalThis.__TCACHE__?.stats.queued ?? 0); if (!q) break; await G(() => window.__GENESIS__.frames(4)); }
   await G(() => window.__GENESIS__.frames(2));
