@@ -145,7 +145,7 @@ async function post() {
 
 /** the death recap in its first and settled frames (seed 11 reaches a death; same route as ux_run dead) */
 async function dead() {
-  const rec = new Rec('w2e_dead'); await rec.open('/?dev=1&autopilot=match&speed=1&seed=11', { base: DEV });
+  const rec = new Rec('w2e_dead'); await rec.open(`/?dev=1&autopilot=match&speed=1&seed=${process.env.W2E_SEED ?? '11'}`, { base: DEV });
   const p = rec.page; await homeReady(rec);
   try {
     await toMatch(rec, 'rift', 'Lantern Drill', 'rift');

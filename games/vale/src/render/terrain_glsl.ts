@@ -841,6 +841,10 @@ export const WALL_MAIN_GLSL = /* glsl */`
     float mossAmt = max( foot * smoothstep( 0.3, 0.6, nm ), jt * smoothstep( 0.5, 0.75, nm ) ) * 0.85 * ( 1.0 - stoneK );
     float streak = smoothstep( 0.6, 0.85, valeNoise( vec2( u * 1.9, P.y * 0.12 ) + seed ) ) * smoothstep( wallH - 1.8, wallH - 0.4, P.y ) * ( 1.0 - stoneK );
     c = mix( c, mossC * 0.8, max( mossAmt, streak * 0.55 ) );
+    // orch1 W2-A (ruling 46): the Noonplate's carved faces stand under a sun 4 degrees off the zenith, so they take
+    // almost no key and sat at display L* ~17 after the value re-key (band 24-30); its clean stone (stoneK) is lifted
+    // a step, still well under the block's lit top (L* ~49), so a blocker keeps a dark side and a light top
+    c *= 1.0 + 1.2 * stoneK;
     rough = 0.88;
   } else if ( kind <= 5 ) {
     // the carved lip: dressed cap stones with joints, a painted edge light on the chamfer; clean stone, so the

@@ -205,7 +205,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
     punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: true, frayBreak: 0.2,
-    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 3.5,
+    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -218,7 +218,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
     punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: true, frayBreak: 0.25,
-    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 2.5,
+    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2,
   },
 };
 

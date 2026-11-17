@@ -79,6 +79,8 @@ export class Bot extends BotBase implements BotController {
   private latchX = 0;
   private latchY = 0;
   private latchAt = -1e9;
+  private headX = 0;
+  private headY = 0;
   private fleeX = 0;
   private fleeY = 0;
   private fleeAt = -1e9;
@@ -183,6 +185,7 @@ export class Bot extends BotBase implements BotController {
     if ((w.tick + this.stagger) % MODE_TICKS === 0) this.selectMode();
     this.clearPlan();
     this.execute();
+    this.clearOwn();
     this.holdWalk();
     this.act();
     // publish the focus target for teammates
@@ -796,18 +799,70 @@ export class Bot extends BotBase implements BotController {
    * walked full-health fighters back and forth 2-5 times a game (veteran, whose calls carry no delay, most).
    */
   private holdWalk(): void {
-    if (this.k.kind !== 'rift' || !this.pMove) return;
+    if (this.k.kind === 'fray' || !this.pMove) return;
     const e = this.e, now = this.now, b = this.brain;
     const post = b ? b.guard.get(this.player) : undefined;
+    // (owner_rulings 47: a post at a base structure is urgent only while that structure or the base is being hit — a quiet
+    // post handed between two Lanterns walked a full-health defender back and forth)
     const urgent = !WALKS.has(this.mode) || this.pFight !== null || this.pSiege !== null || this.pClear || this.pMonsters || !this.calm() ||
-      (!!b && (b.rush || b.baseThreat >= 0.7)) || (this.mode === 'defend' && !!post && post.cls >= 2);
-    const nx = this.pMoveX - e.x, ny = this.pMoveY - e.y;
-    const hx = this.latchX - e.x, hy = this.latchY - e.y;
-    const far = nx * nx + ny * ny > 6 * 6, going = hx * hx + hy * hy > 3 * 3;
-    const turn = far && going && nx * hx + ny * hy < 0;
-    if (turn && !urgent && now - this.latchAt < 8) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; return; }
-    if (turn || !going) this.latchAt = now;
+      (!!b && (b.rush || b.stage || b.baseThreat >= 0.7)) || (this.mode === 'defend' && !!post && post.cls >= 2 && !!b && b.hitRecently(post.sid, this.now, 4));
+    const nx = this.pMoveX - e.x, ny = this.pMoveY - e.y, n2 = nx * nx + ny * ny;
+    if (n2 < 4 * 4) return;
+    const nd = Math.sqrt(n2), dx = nx / nd, dy = ny / nd;
+    // (owner_rulings 47: a turn is a walk that reverses the last one — heading against heading, not point against point: the
+    // round-3 latch let a fighter that reached one point walk straight back to the other, and pace on)
+    const turn = this.headX * dx + this.headY * dy < -0.2;
+    if (turn && !urgent && now - this.latchAt < 8) {
+      if (sq(this.latchX - e.x) + sq(this.latchY - e.y) > 1.5 * 1.5) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; }
+      else { this.pMoveX = e.x; this.pMoveY = e.y; }
+      return;
+    }
+    if (turn) this.latchAt = now;
+    this.headX = dx; this.headY = dy;
     this.latchX = this.pMoveX; this.latchY = this.pMoveY;
+  }
+
+  /**
+   * owner_rulings 47 (base defence): a fit fighter (60 % or more) beside a structure of mine — an inner Needle or the base —
+   * that enemy Wicks are hitting, with no enemy fighter noticed at it, clears the wave: into reach of the Wick nearest the
+   * structure, every swing and its wave spells on the Wicks hitting it, holding against the wave until the Wicks on me would
+   * finish me within 4 s. Not in a fight, a retreat, a recall or a peel. Fighters in any other plan who stood beside the
+   * structure while a wave took it — pushing past it, walking to a call, waiting at the group point — were half of the
+   * 'falls to Wicks beside fit defenders' left after ruling 44.
+   */
+  private clearOwn(): void {
+    if (this.k.kind !== 'rift' || this.pClear || this.pFight || this.pSiege || this.hpF < 0.6) return;
+    const m = this.mode;
+    if (m === 'retreat' || m === 'recall' || m === 'allin' || m === 'teamfight' || m === 'protect' || m === 'trade') return;
+    const e = this.e, b = this.brain;
+    if (!b) return;
+    let st: Entity | null = null, sd = 14 * 14;
+    for (const s of this.perc.allyStructs) {
+      if (!s.alive || !s.targetable) continue;
+      const d2 = this.dist2(s, e.x, e.y);
+      if (d2 > sd) continue;
+      const info = this.m.structInfo(s);
+      if (!info || b.classOf(info) < 1) continue;
+      st = s; sd = d2;
+    }
+    if (!st) return;
+    let wk: Entity | null = null, wd = Infinity;
+    for (const u of this.perc.enemyUnits) {
+      if (!u.alive || u.kind !== 'minion' || !u.targetable || u.atkTarget !== st.id) continue;
+      const d2 = this.dist2(u, st.x, st.y);
+      if (d2 < wd) { wd = d2; wk = u; }
+    }
+    if (!wk) return;
+    for (const f of this.perc.enemyFighters) if (this.isNoticed(f) && this.dist2(f, st.x, st.y) <= 12 * 12) return;
+    this.pClear = true; this.pFarm = 2; this.pMonsters = false;
+    const r = e.stats.range + e.radius + wk.radius;
+    this.pMove = true;
+    if (this.dist2(wk, e.x, e.y) > sq(r + 0.5)) {
+      // (from the structure's side of the Wick, inside its cover)
+      const dx = st.x - wk.x, dy = st.y - wk.y, dd = dhypot(dx, dy) || 1;
+      this.pMoveX = wk.x + (dx / dd) * Math.max(0.5, r - 0.6); this.pMoveY = wk.y + (dy / dd) * Math.max(0.5, r - 0.6);
+    } else { this.pMoveX = e.x; this.pMoveY = e.y; }
+    this.waveGuard(true);
   }
 
   // ── executors ─────────────────────────────────────────────────────────────────────────────────

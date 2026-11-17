@@ -1,0 +1,97 @@
+{
+ "phase": "w2e_dead",
+ "finishedAt": "2026-11-17T07:20:08.046Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 6.76,
+  "node": "v22.23.3",
+  "base": "http://localhost:5611",
+  "wallMs": 498064
+ },
+ "steps": [],
+ "console": [
+  {
+   "step": "boot",
+   "type": "http504",
+   "text": "/node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=4ff88bcc",
+   "at": "",
+   "tMs": 5210
+  },
+  {
+   "step": "boot",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)",
+   "at": "/node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=4ff88bcc",
+   "tMs": 5210
+  },
+  {
+   "step": "boot",
+   "type": "requestfailed",
+   "text": "GET /node_modules/.vite/deps/three_addons_geometries_ConvexGeometry__js.js?v=4ff88bcc net::ERR_ABORTED",
+   "at": "",
+   "tMs": 5210
+  },
+  {
+   "step": "boot",
+   "type": "warning",
+   "text": "[vale] renderer unavailable TypeError: Failed to fetch dynamically imported module: http://localhost:5611/src/render/index.ts",
+   "at": "/@vite/client:356",
+   "tMs": 5210
+  },
+  {
+   "step": "boot",
+   "type": "pageerror",
+   "text": "Cannot read properties of undefined (reading '__H')",
+   "at": "",
+   "tMs": 29468
+  }
+ ],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.7 (schema 1) from http://localhost:5611/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [],
+ "notes": [
+  {
+   "step": "boot",
+   "tMs": 498063,
+   "load1": 6.76,
+   "text": "last poll",
+   "data": {
+    "phase": "ended",
+    "time": 1764.3,
+    "dead": false,
+    "respawnIn": 0,
+    "near": 4,
+    "ended": true,
+    "evs": [
+     {
+      "e": "dmg",
+      "t": 1763.1333333333332,
+      "other": "fighter",
+      "dir": "out"
+     },
+     {
+      "e": "dmg",
+      "t": 1763.2333333333333,
+      "other": "fighter",
+      "dir": "in"
+     },
+     {
+      "e": "dmg",
+      "t": 1763.2333333333333,
+      "other": "fighter",
+      "dir": "in"
+     }
+    ]
+   }
+  }
+ ],
+ "timings": {}
+}

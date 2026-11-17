@@ -264,6 +264,11 @@ export class TeamBrain {
   }
   /** a structure's class (outer 0, inner 1, base 2) */
   classOf(info: StructInfo): StructClass { return this.classes.get(info.id) ?? 0; }
+  /** owner_rulings 47: was this own structure (by its map id) hit within the last `s` seconds */
+  hitRecently(sid: string, now: number, s: number): boolean {
+    const st = this.perc.allyStructs.find((x) => this.structInfoOf(x)?.id === sid);
+    return !!st && now - (this.structHitAt.get(st.id) ?? -1e9) <= s;
+  }
   /** how many of this team's laners hold `lane` */
   lanersOn(lane: number): number { return lane >= 0 && lane < this.laners.length ? this.laners[lane] : 0; }
 
@@ -990,6 +995,10 @@ export class TeamBrain {
           if (early && ttk <= 30 && aa >= ae) desire = Math.max(desire, 0.75);
           // (a won fight with a structure to take: a short camp is worth it only on the way — the structure first)
           if (!early && this.window && this.siege && !long && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
+          // (owner_rulings 47, closing: from 20:00 a tier that closes out turns a won fight — two or more up — into structures,
+          // the long objective too unless it is on the way: an adept team five up at 24:00 walked to Longshade, then lost its
+          // lead's game to the team behind on a base race)
+          if (d.closeOut && now >= 1200 && this.window && this.siege && aa >= ae + 2 && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
           if (d.contests && aa >= ae && this.pitOdds(c) >= 0) {
             for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
           }
