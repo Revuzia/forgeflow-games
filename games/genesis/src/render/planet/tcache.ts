@@ -133,6 +133,15 @@ float tcGlintK = 1.0;
 /** the display fetch: declared after TSurf; dx / dy are the screen derivatives of anchor A's uv (taken outside the branch) */
 export const TC_FRAG_FETCH = /* glsl */ `
 #ifndef TC_BAKE
+// the distance fades of evalTerrain as one monotone curve: the two anchors are blended along IT, so a fade that runs
+// alone inside a bracket is reproduced exactly however wide the bracket (the linear blend put a 120-500 m fade at 22 %
+// where it is 90 %); where two overlap they are close cousins (120-500, 150-550, 220-520)
+float tcFade(float d) {
+  float f = smoothstep(14.0, 45.0, d) + smoothstep(120.0, 500.0, d) + 0.5 * smoothstep(400.0, 1300.0, d) + 1e-3 * d / (d + 100.0);
+  if (uVegFade.x < 1e8) f += smoothstep(uVegFade.y * 0.3, uVegFade.y * 0.44, d);
+  if (uCanopyFade.x < 1e8) f += smoothstep(uCanopyFade.x, uCanopyFade.y, d);
+  return f;
+}
 TSurf tcFetch(vec2 dx, vec2 dy, float camDist, float graze, out vec3 D) {
   // the footprint, held to the mip the tile borders allow (2 texels at mip 0: mip 1.5 with 16x anisotropy)
   vec2 gx = dx * ${f1(TC_SL)}, gy = dy * ${f1(TC_SL)};
@@ -141,7 +150,8 @@ TSurf tcFetch(vec2 dx, vec2 dy, float camDist, float graze, out vec3 D) {
   float sc = uTcK.x * min(1.0, 2.83 / max(eff, 1e-6));
   dx *= sc; dy *= sc;
   vec3 pa = vec3(vTcUV.xy, vTc0.x), pb = vec3(vTcUV.zw, vTc0.x);
-  float t = clamp((camDist - vTc1.x) / max(vTc1.y - vTc1.x, 1e-3), 0.0, 1.0);
+  float fa = tcFade(vTc1.x);
+  float t = clamp((tcFade(camDist) - fa) / max(tcFade(vTc1.y) - fa, 1e-7), 0.0, 1.0);
   vec4 c0 = mix(textureGrad(uTc0, pa, dx, dy), textureGrad(uTc0, pb, dx, dy), t);
   vec4 c1 = mix(textureGrad(uTc1, pa, dx, dy), textureGrad(uTc1, pb, dx, dy), t);
   vec4 c2 = mix(textureGrad(uTc2, pa, dx, dy), textureGrad(uTc2, pb, dx, dy), t);
@@ -196,7 +206,7 @@ interface Tile {
   kA: number; kB: number; g: number;
   sun: Vector3; year: number; gkey: string;
   baked: boolean; dirty: boolean; stale: boolean; hot: boolean; hotEpoch: number;
-  lastUsed: number; dn: number; need: number;
+  lastUsed: number; dn: number; df: number; need: number; ia: number; ib: number;
 }
 
 const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3();
@@ -210,12 +220,12 @@ const WATCH: Record<string, [number, number, number, number]> = {
 };
 
 export interface TcStats {
-  on: boolean; mb: number; layers: number; float: boolean; tiles: number; cached: number; live: number; hot: number; near: number; full: number;
+  on: boolean; mb: number; layers: number; float: boolean; tiles: number; cached: number; live: number; hot: number; near: number; wide: number; full: number;
   queued: number; bakes: number; bakesTotal: number; texels: number; rebakeDirty: number; rebakeKnot: number; rebakeClass: number; rebakeSlow: number; globals: number; dirtyCells: number;
 }
 
 export class TerrainCache {
-  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0 };
+  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0 };
   /** `false` = every patch draws with the full shader (in-page A/B: frame-adjacent pairs) */
   enabled = true;
   private readonly tex: DataArrayTexture[] = [];
@@ -399,7 +409,7 @@ export class TerrainCache {
     const iMax = Math.ceil(2 * Math.log2(kMax / KNOT0));
     const up = _d;
     this.queue.length = 0;
-    st.cached = 0; st.live = 0; st.hot = 0; st.near = 0;
+    st.cached = 0; st.live = 0; st.hot = 0; st.near = 0; st.wide = 0;
     for (const p of this.lod.selected) {
       const mesh = this.lod.tcMesh(p);
       if (!mesh) continue;
@@ -407,24 +417,34 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { cls: -1, slab: null, sub: 0, kA: 0, kB: 0, g: 0, sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0 };
+        t = { cls: -1, slab: null, sub: 0, kA: 0, kB: 0, g: 0, sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, df: 0, need: 0, ia: 0, ib: 0 };
         this.tiles.set(p, t);
       }
       t.lastUsed = frame;
       const sc = p.sphere.center, sr = p.sphere.radius;
       const dc0 = _c.copy(sc).sub(camBody).length();
-      const dn = Math.max(0, dc0 - sr), df = dc0 + sr;
-      t.dn = dn;
+      // the patch's distance range: the LOD's shell-sector distance to its nearest point, plus its extent (the
+      // bounding sphere's range is far too wide on steep ground: brackets of 4+ rungs, fades visibly off)
+      const dn = Math.max(this.lod.tcDist(p, camBody), Math.max(0, dc0 - sr));
+      const df = Math.min(dc0 + sr, dn + this.lod.size(p.level) * 1.05 + (p.hMax - p.hMin));
+      t.dn = dn; t.df = df;
+      const ia = Math.min(iMax, Math.max(0, Math.floor(2 * Math.log2(Math.max(dn, KNOT0) / KNOT0) + 1e-6)));
+      const ib = Math.min(iMax, Math.max(ia, Math.ceil(2 * Math.log2(Math.max(df, KNOT0) / KNOT0) - 1e-6)));
+      // (a patch spanning most of the ladder — a coarse one seen along its length — keeps the full shader: the blend
+      // follows one curve, tcFade, and so many rungs hold several different fades)
+      const wide = ib - ia > 5;
+      // the bracket a bake would take: one rung wider each way, so moving the camera by up to ~40 % re-bakes nothing
+      t.ia = Math.max(0, ia - 1); t.ib = Math.min(iMax, ib + 1);
       // (the patch's edge in pixels at its nearest point, by the LOD's own shell-sector distance: the sphere's is too
       // short on steep ground and asked for classes no pixel needs)
-      const need = this.lod.size(p.level) * pxPerRad / Math.max(this.lod.tcDist(p, camBody), 0.5);
+      const need = this.lod.size(p.level) * pxPerRad / Math.max(dn, 0.5);
       t.need = need;
       // graze^2 of the eye at the patch centre (groundfloor.ts swardDetail)
       up.copy(sc).normalize();
       const ndv = dc0 > 1e-3 ? Math.min(1, Math.max(0, -_c.dot(up) / dc0)) : 1;
       const g = (1 - ndv) * (1 - ndv);
       if (t.hotEpoch !== this.fieldEpoch) { t.hotEpoch = this.fieldEpoch; t.hot = this.isHot(p); }
-      let valid = this.enabled && primary && t.baked && !t.dirty && !t.hot && t.gkey === gkey;
+      let valid = this.enabled && primary && t.baked && !t.dirty && !t.hot && !wide && t.gkey === gkey;
       if (valid && need > CLASSES[t.cls] - PAD + 2) { valid = false; st.rebakeClass++; }
       if (valid && (dn < t.kA * 0.98 && t.kA > KNOT0 * 1.01 || df > t.kB * 1.02 && t.kB < knotAt(iMax) * 0.99)) { valid = false; st.rebakeKnot++; }
       if (valid && Math.abs(g - t.g) > 0.2) { valid = false; st.rebakeKnot++; }
@@ -445,6 +465,7 @@ export class TerrainCache {
       }
       if (!this.enabled || !primary) continue;
       if (t.hot) { st.hot++; continue; }
+      if (wide) { st.wide++; if (t.slab) this.release(t); continue; }
       if (need * 1.1 > CLASSES[CLASSES.length - 1] - PAD) { st.near++; if (!valid && t.slab) this.release(t); continue; }
       if (!valid || t.stale) this.queue.push(p);
     }
@@ -453,7 +474,7 @@ export class TerrainCache {
     if ((frame & 31) === 0) for (const [p, t] of this.tiles) if (!p.built) { this.release(t); this.tiles.delete(p); }
     st.tiles = 0;
     for (const s of this.slabs) st.tiles += s.used;
-    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `tiles=${st.tiles},cached=${st.cached},live=${st.live},hot=${st.hot},near=${st.near},full=${st.full},bakes=${st.bakesTotal},glob=${st.globals}`);
+    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `tiles=${st.tiles},cached=${st.cached},live=${st.live},hot=${st.hot},near=${st.near},wide=${st.wide},full=${st.full},bakes=${st.bakesTotal},glob=${st.globals}`);
     // (the bake wants these again: kept on the instance)
     this.sunNow.copy(sunBody); this.yearNow = yearFrac; this.iMax = iMax;
   }
@@ -507,11 +528,8 @@ export class TerrainCache {
         t.slab = a.slab; t.sub = a.sub; t.cls = cls;
       }
       // the bracket of the distance ladder, the eye's graze (quantised), the slow inputs
-      const sr = p.sphere.radius, dc0 = _c.copy(p.sphere.center).sub(this.cam).length();
-      const dn = Math.max(0, dc0 - sr), df = dc0 + sr;
-      const ia = Math.min(this.iMax, Math.max(0, Math.floor(2 * Math.log2(Math.max(dn, KNOT0) / KNOT0) + 1e-6)));
-      const ib = Math.min(this.iMax, Math.max(ia, Math.ceil(2 * Math.log2(Math.max(df, KNOT0) / KNOT0) - 1e-6)));
-      t.kA = Math.fround(knotAt(ia)); t.kB = Math.fround(knotAt(ib));
+      const dc0 = _c.copy(p.sphere.center).sub(this.cam).length();
+      t.kA = Math.fround(knotAt(t.ia)); t.kB = Math.fround(knotAt(t.ib));
       _d.copy(p.sphere.center).normalize();
       const ndv = dc0 > 1e-3 ? Math.min(1, Math.max(0, -_c.dot(_d) / dc0)) : 1;
       t.g = Math.round((1 - ndv) * (1 - ndv) * 8) / 8;

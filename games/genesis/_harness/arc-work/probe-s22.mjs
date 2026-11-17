@@ -77,11 +77,17 @@ for (const v of String(opts.views ?? 'town').split(',').filter(Boolean)) {
 }
 if (opts.pan) {
   // a pan: the camera slides in steps; a shot every step WITHOUT waiting for the bakes (patches switch mid-sequence)
+  // each step: 2 frames after the move (some patches cached, the new ones still on the full shader), a shot; then
+  // everything on the full shader, a shot: the pair must sit at the floor whatever the mix
   for (let i = 0; i < Number(opts.pan); i++) {
-    await G((c) => window.__GENESIS__.camera(c), { mode: 'orbit', target: S1, dist: 110, tilt: 35, yaw: i * 6, hour, blend: 0 });
+    await G((c) => window.__GENESIS__.camera(c), { mode: 'orbit', target: S1, dist: 110, tilt: 62, turn: i * 9, hour, blend: 0 });
     await G(() => window.__GENESIS__.frames(2));
-    await page.screenshot({ path: join(OUT, `${tag}-pan${i}.png`) });
+    await page.screenshot({ path: join(OUT, `${tag}-pan${i}-c.png`) });
     console.log('pan', i, await stats());
+    await G(() => { globalThis.__TCACHE__.enabled = false; });
+    await G(() => window.__GENESIS__.frames(2));
+    await page.screenshot({ path: join(OUT, `${tag}-pan${i}-l.png`) });
+    await G(() => { globalThis.__TCACHE__.enabled = true; });
   }
 }
 if (opts.edits) {
