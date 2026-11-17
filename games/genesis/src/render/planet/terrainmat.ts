@@ -1924,6 +1924,11 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
       .replace('#include <begin_vertex>', 'vec3 transformed = tPos;');
     if (ZPRE) shader.vertexShader = shader.vertexShader.replace('void main() {', ZPRE_INVARIANT);
     if (TCACHE) shader.vertexShader = shader.vertexShader.replace('#include <fog_vertex>', '#include <fog_vertex>\n#ifdef TC_BAKE\n  gl_Position = vec4(tcClip, 0.0, 1.0);\n#endif');
+    // (the page's slot table rides three's batch-colour texture: it is no colour, the terrain takes none from it)
+    if (TCACHE) {
+      shader.vertexShader = shader.vertexShader.replace('#include <color_vertex>', '');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '');
+    }
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\nuniform float uRadius;\n${TERRAIN_FRAG_PARS}`)
       .replace('#include <map_fragment>', FRAG_SURFACE)

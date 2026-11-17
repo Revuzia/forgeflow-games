@@ -397,7 +397,7 @@ export class TerrainCache {
     const iMax = Math.ceil(2 * Math.log2(kMax / KNOT0));
     const up = _d;
     this.queue.length = 0;
-    st.cached = 0; st.live = 0; st.hot = 0; st.near = 0; st.full = 0;
+    st.cached = 0; st.live = 0; st.hot = 0; st.near = 0;
     for (const p of this.lod.selected) {
       const mesh = this.lod.tcMesh(p);
       if (!mesh) continue;
@@ -457,7 +457,7 @@ export class TerrainCache {
   /** the frame's bakes (after the shadow pass: the forest floor reads this frame's shadow maps), nearest first */
   bake(r: WebGLRenderer, camera: Camera): void {
     const st = this.stats;
-    st.bakes = 0; st.texels = 0;
+    st.bakes = 0; st.texels = 0; st.full = 0;
     if (!this.enabled || !this.queue.length) return;
     this.ensureGL(r);
     const q = this.queue;
@@ -467,6 +467,7 @@ export class TerrainCache {
     const prevRT = r.getRenderTarget(), prevAuto = r.autoClear;
     r.autoClear = false;
     let spent = 0;
+    const failed: boolean[] = [];
     const bu = this.bakeMat.userData as { uTcBake: IUniform<Vector4>; uTcBakeF: IUniform<Vector4>; uTcEi: IUniform<Vector3>; uTcEj: IUniform<Vector3>; uMorph: IUniform<Vector4> };
     for (const p of q) {
       const t = this.tiles.get(p)!;
@@ -482,10 +483,18 @@ export class TerrainCache {
         let a = this.alloc(cls);
         if (!a) {
           // least recently drawn tiles first (never one drawn this frame)
-          const old = [...this.tiles].filter(([, x]) => x.slab && x.lastUsed < this.frame).sort((x, y) => x[1].lastUsed - y[1].lastUsed);
-          for (const [, x] of old) { this.release(x); a = this.alloc(cls); if (a) break; }
+          if (!failed[cls]) {
+            const old = [...this.tiles].filter(([, x]) => x.slab && x.lastUsed < this.frame).sort((x, y) => x[1].lastUsed - y[1].lastUsed);
+            for (const [, x] of old) { this.release(x); a = this.alloc(cls); if (a) break; }
+          }
         }
-        if (!a) { st.full++; continue; }
+        if (!a && !failed[cls]) {
+          // full, nothing idle: a near patch takes the tile of the farthest drawn one (at least 1.5x as far)
+          const far = [...this.tiles].filter(([, x]) => x.slab && x.dn > t.dn * 1.5).sort((x, y) => y[1].dn - x[1].dn);
+          for (let i = 0; i < far.length && i < 12 && !a; i++) { this.release(far[i][1]); a = this.alloc(cls); }
+        }
+        // (the queue is nearest first: once a class finds no room, the farther ones of that class do not look again)
+        if (!a) { failed[cls] = true; st.full++; continue; }
         t.slab = a.slab; t.sub = a.sub; t.cls = cls;
       }
       // the bracket of the distance ladder, the eye's graze (quantised), the slow inputs

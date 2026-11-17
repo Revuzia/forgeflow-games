@@ -1981,3 +1981,14 @@ long press frame-rate independent. Report after 1-2 verified.
   that stops being primary keeps its GL memory; TS_NOSURF with tcache does not compile (debug combination).
 - NEXT (exact): `npm run build`, then a 320x180 probe `?tcache=1` on the town view: 0 shader errors, `__TCACHE__.stats`
   shows bakes, screenshot pair with `__TCACHE__.enabled` false/true one frame apart -> imgdiff. Then views, edits, pan.
+- STEP 1 DONE (booted, SwiftShader, babel 307987276, high 320x180, speed 0, trees/shadows/water off; probe
+  `_harness/arc-work/probe-s22.mjs` = in-page A/B: shot with the cache, `__TCACHE__.enabled = false`, 2 frames, shot live):
+  0 page errors, 0 shader / GL messages, the level-to-level mip blit raised no GL error. 247 MB, 9 layers, RGBA16F.
+  town 90 m: mean |d| 2.17/255, mean RGB live 102.3 116.8 79.4 / cache 102.3 116.9 80.2, detail 6.87 / 7.51;
+  meadow 14 m: mean |d| 1.85, RGB 101.4 117.8 69.1 / 101.1 117.4 68.7, detail 4.88 / 5.00 (floor ~3 on s19's pairs).
+  Sheet LOOKED AT (s22/sheet-t5.png): same ground, same bump lighting; the x4 diff is fine grain plus small blue /
+  violet dots in the town view (wildflowers: the cache keeps a few the live footprint fade removes). No patch lines.
+  BUG FOUND AND FIXED on the way: with a batch colour texture three defines USE_COLOR in the fragment and multiplied
+  the albedo by the slot table (ground white / black): `color_vertex` / `color_fragment` are removed from the terrain
+  program when tcache is on. Also `__TCACHE__` now names the PRIMARY planet's cache.
+- NEXT: views forest floor / rock / sand / snow / far / orbit / a true grazing camera; then edits + time; then the pan.
