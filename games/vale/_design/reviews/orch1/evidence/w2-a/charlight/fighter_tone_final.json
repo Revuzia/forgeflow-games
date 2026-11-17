@@ -1,0 +1,369 @@
+{
+ "seed": 7,
+ "variants": [
+  {
+   "name": "head",
+   "crownAbs": 1,
+   "pow": 2.5,
+   "floor": 0,
+   "fill": 0.7142857
+  },
+  {
+   "name": "now"
+  }
+ ],
+ "summary": {
+  "head": {
+   "n": 16,
+   "top25Min": 60.5,
+   "top25Max": 78.9,
+   "under70": [
+    "burdam",
+    "dunsom",
+    "ervet",
+    "hesmi",
+    "odrum"
+   ],
+   "over80": [],
+   "ratioMin": 1.07,
+   "zoneCMin": 18
+  },
+  "now": {
+   "n": 16,
+   "top25Min": 67.2,
+   "top25Max": 81.2,
+   "under70": [
+    "burdam",
+    "ervet",
+    "odrum"
+   ],
+   "over80": [
+    "ardit"
+   ],
+   "ratioMin": 1.09,
+   "zoneCMin": 21.8
+  }
+ },
+ "fighters": [
+  {
+   "id": 1,
+   "def": "ardit",
+   "head": {
+    "px": 13559,
+    "zoneC": 18,
+    "ratio": 1.16,
+    "top25L": 78.9,
+    "meanC": 10.9,
+    "p50L": 44.9
+   },
+   "now": {
+    "px": 13559,
+    "zoneC": 26.2,
+    "ratio": 1.69,
+    "top25L": 81.2,
+    "meanC": 13.4,
+    "p50L": 55.1
+   }
+  },
+  {
+   "id": 2,
+   "def": "burdam",
+   "head": {
+    "px": 15639,
+    "zoneC": 31.8,
+    "ratio": 1.31,
+    "top25L": 60.5,
+    "meanC": 19,
+    "p50L": 34.2
+   },
+   "now": {
+    "px": 15639,
+    "zoneC": 47.6,
+    "ratio": 1.96,
+    "top25L": 67.2,
+    "meanC": 27.3,
+    "p50L": 52.9
+   }
+  },
+  {
+   "id": 3,
+   "def": "dunsom",
+   "head": {
+    "px": 12292,
+    "zoneC": 40.4,
+    "ratio": 1.59,
+    "top25L": 67.5,
+    "meanC": 17,
+    "p50L": 37.4
+   },
+   "now": {
+    "px": 12292,
+    "zoneC": 39.4,
+    "ratio": 1.55,
+    "top25L": 70.3,
+    "meanC": 18.6,
+    "p50L": 52.9
+   }
+  },
+  {
+   "id": 4,
+   "def": "ervet",
+   "head": {
+    "px": 11155,
+    "zoneC": 36.4,
+    "ratio": 2.16,
+    "top25L": 67.4,
+    "meanC": 14.2,
+    "p50L": 36.7
+   },
+   "now": {
+    "px": 11155,
+    "zoneC": 37.8,
+    "ratio": 2.25,
+    "top25L": 69.5,
+    "meanC": 15.6,
+    "p50L": 48.8
+   }
+  },
+  {
+   "id": 5,
+   "def": "hesmi",
+   "head": {
+    "px": 15001,
+    "zoneC": 29.8,
+    "ratio": 1.41,
+    "top25L": 68.4,
+    "meanC": 20.5,
+    "p50L": 35.2
+   },
+   "now": {
+    "px": 15001,
+    "zoneC": 47.7,
+    "ratio": 2.25,
+    "top25L": 70.4,
+    "meanC": 26,
+    "p50L": 50.8
+   }
+  },
+  {
+   "id": 6,
+   "def": "ilsheta",
+   "head": {
+    "px": 10490,
+    "zoneC": 25.1,
+    "ratio": 2.42,
+    "top25L": 77.4,
+    "meanC": 16.4,
+    "p50L": 49.9
+   },
+   "now": {
+    "px": 10490,
+    "zoneC": 27.1,
+    "ratio": 2.61,
+    "top25L": 79.3,
+    "meanC": 16.1,
+    "p50L": 63.1
+   }
+  },
+  {
+   "id": 7,
+   "def": "kemdo",
+   "head": {
+    "px": 9571,
+    "zoneC": 34.2,
+    "ratio": 1.47,
+    "top25L": 71.8,
+    "meanC": 22.9,
+    "p50L": 41
+   },
+   "now": {
+    "px": 9571,
+    "zoneC": 36.1,
+    "ratio": 1.55,
+    "top25L": 72.9,
+    "meanC": 27,
+    "p50L": 56.9
+   }
+  },
+  {
+   "id": 8,
+   "def": "lisvel",
+   "head": {
+    "px": 7204,
+    "zoneC": 21.2,
+    "ratio": 2.09,
+    "top25L": 73.9,
+    "meanC": 14.6,
+    "p50L": 38.5
+   },
+   "now": {
+    "px": 7204,
+    "zoneC": 21.8,
+    "ratio": 2.15,
+    "top25L": 75.8,
+    "meanC": 17.1,
+    "p50L": 52.6
+   }
+  },
+  {
+   "id": 9,
+   "def": "marund",
+   "head": {
+    "px": 15214,
+    "zoneC": 34.3,
+    "ratio": 2.4,
+    "top25L": 77.8,
+    "meanC": 24,
+    "p50L": 45.7
+   },
+   "now": {
+    "px": 15214,
+    "zoneC": 36.9,
+    "ratio": 2.59,
+    "top25L": 79.1,
+    "meanC": 29.2,
+    "p50L": 57.8
+   }
+  },
+  {
+   "id": 10,
+   "def": "nurrow",
+   "head": {
+    "px": 10563,
+    "zoneC": 33.5,
+    "ratio": 1.07,
+    "top25L": 75.4,
+    "meanC": 20.3,
+    "p50L": 34.8
+   },
+   "now": {
+    "px": 10563,
+    "zoneC": 34.3,
+    "ratio": 1.09,
+    "top25L": 75.8,
+    "meanC": 24.2,
+    "p50L": 48.9
+   }
+  },
+  {
+   "id": 5,
+   "def": "odrum",
+   "head": {
+    "px": 9069,
+    "zoneC": 25.3,
+    "ratio": 1.54,
+    "top25L": 67,
+    "meanC": 18.6,
+    "p50L": 40
+   },
+   "now": {
+    "px": 9069,
+    "zoneC": 32.5,
+    "ratio": 1.97,
+    "top25L": 69.7,
+    "meanC": 22.9,
+    "p50L": 50.7
+   }
+  },
+  {
+   "id": 6,
+   "def": "rishal",
+   "head": {
+    "px": 7306,
+    "zoneC": 33.7,
+    "ratio": 1.59,
+    "top25L": 71.7,
+    "meanC": 15.6,
+    "p50L": 38.6
+   },
+   "now": {
+    "px": 7306,
+    "zoneC": 39.3,
+    "ratio": 1.85,
+    "top25L": 73.6,
+    "meanC": 17.3,
+    "p50L": 47.9
+   }
+  },
+  {
+   "id": 7,
+   "def": "sukri",
+   "head": {
+    "px": 9591,
+    "zoneC": 39.3,
+    "ratio": 1.67,
+    "top25L": 78.1,
+    "meanC": 26.1,
+    "p50L": 48.9
+   },
+   "now": {
+    "px": 9591,
+    "zoneC": 39.9,
+    "ratio": 1.7,
+    "top25L": 79.7,
+    "meanC": 29.4,
+    "p50L": 57.7
+   }
+  },
+  {
+   "id": 8,
+   "def": "tunlan",
+   "head": {
+    "px": 14216,
+    "zoneC": 31.9,
+    "ratio": 1.7,
+    "top25L": 75.7,
+    "meanC": 21.4,
+    "p50L": 36.6
+   },
+   "now": {
+    "px": 14216,
+    "zoneC": 38.5,
+    "ratio": 2.06,
+    "top25L": 75.9,
+    "meanC": 23.6,
+    "p50L": 54.3
+   }
+  },
+  {
+   "id": 9,
+   "def": "ulkro",
+   "head": {
+    "px": 6296,
+    "zoneC": 27.7,
+    "ratio": 1.74,
+    "top25L": 72.9,
+    "meanC": 21.2,
+    "p50L": 34.3
+   },
+   "now": {
+    "px": 6296,
+    "zoneC": 36.5,
+    "ratio": 2.29,
+    "top25L": 75.1,
+    "meanC": 27.4,
+    "p50L": 54.5
+   }
+  },
+  {
+   "id": 10,
+   "def": "vashil",
+   "head": {
+    "px": 10769,
+    "zoneC": 32.3,
+    "ratio": 2.54,
+    "top25L": 70.2,
+    "meanC": 20.6,
+    "p50L": 40.8
+   },
+   "now": {
+    "px": 10769,
+    "zoneC": 31.4,
+    "ratio": 2.46,
+    "top25L": 71.8,
+    "meanC": 21.2,
+    "p50L": 51.2
+   }
+  }
+ ]
+}
