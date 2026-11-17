@@ -1,0 +1,38 @@
+{
+  "lane": "LANELINE",
+  "round": 2,
+  "verifier": "independent verifier, 2026-11-17",
+  "commit_verified": "c7a70a223",
+  "pass": true,
+  "score": 7.8,
+  "safeToShip": true,
+  "method": "Clean git worktree of c7a70a223 under the scratchpad (all tracked files, so the r1 copy-only failures are gone). Every run went through heavy.py. src/ and content/ are byte-identical between 6139a1de5 (verified in r1) and c7a70a223 (git diff --stat empty). This round changed only two probes and the ruling. So the r1 pace A/B and r1 live capture measured the same sim and render code as HEAD. The sim is deterministic: re-running them would give identical output, so they were not repeated (this saves usage, as the owner asked).",
+  "r1_blockers": {
+    "probe_sim_waves": "RESOLVED. PASS on HEAD. The edit moves the wave-3 make-up count from 65.5 s to 45.3 s (run 4.9+0.2+40.2 s; pregameSeconds 0), the moment wave 3 spawns. The check still requires exactly 5 team-0 Wicks spawned 44-46 s, with exactly 1 fx_siege_minion. That is the same composition assertion, read before the fight can kill one. It is not weakened. The 'waves every 20 s' and wave-4 level-2 checks still run at 65 s (40.2 + 20.3 = 60.5 s, the same as before).",
+    "probe_sim_core_orders": "RESOLVED. PASS on HEAD (14.8 s). The edit adds a side parameter (team ^ side) and retries with the hero on team 1 only when team 0 sampled 0 moves (k0 <= 0). The pass condition is unchanged: n >= 6, heldShort 0, clickShortLane 0. The edit restores coverage and loosens nothing. The 'coin toss' explanation (idle seats with towers disarmed, so one side snowballs) is a probe-scenario artifact, not a player-visible behaviour. It agrees with r1's win-share A/B: team 1 won 55.5 % -> 57.0 %, +1.5 +/- 5 pp.",
+    "probe_edits_outside_file_list": "Acceptable. Both edits are test-scenario fixes that keep each assertion as strict as before. The lead should still note them for the probes' owner."
+  },
+  "probe_suite_HEAD": "73 PASS, 0 SKIP, 3 FAIL of 76 (687.8 s). The 3 failures are probe_sim_bot_soak, probe_sim_bot_tactics and probe_sim_click_waves (19/20: 2 detours over 1.3x on RIFT, marund s41 and nurrow s83). r1 showed all three failing on BOTH arms, the pre-carrot base included, so none is caused by this lane. Lane-required probes all PASS: minion_flow 36.9 s, wick_still 44.9 s, hold_tower, determinism 6/6, minion_lane_line 36.2 s, waves, core_orders.",
+  "determinism": "6/6. Seed 99 -> 5edfad52 (4250 ticks), seed 100 -> 09bac942 (4442 ticks). Both are identical to r1, so the sim is unchanged.",
+  "bars_own_measure": {
+    "tool": "_harness/_tmp_vfy_laneline_meas.ts --strict 1 (no settling window), RIFT all 3 roads both teams + BRIDGE, seeds 3,7,11,19,23,31, idle 8 min and bots 14 min. Output identical to r1.",
+    "centroid_median_le_0.20": "idle: PASS everywhere. RIFT worst 0.078, BRIDGE worst 0.005. bots: PASS except road_low t0 s120 at 0.589 (fight-zone rejoin; the probe, which excludes settling, gives worst 0.17)",
+    "centroid_max_le_0.30": "idle RIFT: one bin over, road_high t0 s84 0.375 (midfield, where the waves meet). The rest are at or under 0.257. BRIDGE at or under 0.178. bots: 1.0-11 m in fight-zone rejoin bins (base 2.2-12.7 m). Probe measure: PASS, worst 0.29",
+    "single_p95_le_0.6": "idle RIFT PASS (worst 0.497). idle BRIDGE t1 s16 1.429 (pile-up at the team-0 end; base 2.07). Probe: PASS, worst 0.56",
+    "single_max_le_1.2": "idle RIFT road_high t1 s80 1.406 (24 of 1.40 M samples). The others are at or under 1.052. BRIDGE t1 2.485 (the pile-up). Probe: PASS, worst 0.67",
+    "reversals_gt_90": "idle 0 (RIFT and BRIDGE). bots BRIDGE 0. bots RIFT 55 sample-windows (base 41). The traced case (#8240, seed 7, 557 s) is CC_FEAR, which is forced movement and excluded by the bar",
+    "tower_arrival_pm_0.5s": "PASS. Probe B5 worst +0.10 s over 56 arrivals and contacts. Wave 1 first contact is unchanged (18.87 s). RIFT side-road wave-2 contact +1.6 s is reported and is a downstream leftover effect",
+    "judgement": "Under the bar's own definition (the registered probe, settling excluded) every bar holds. My stricter no-settling measure leaves 2 idle RIFT midfield bins and the BRIDGE idle team-1 pile-up over the max bars. All are in wave-meeting or pile-up zones, not at the 2nd-tower bends the owner reported, and all are better than base. Not blocking."
+  },
+  "wobble_sim_sweep": "_tmp_wobble_sim.ts sweep re-run on HEAD (881 lines, scratchpad vfy_ll_r2_wobble.txt). Identical to r1: off-road >1 m share before -> after is road_high t0 2.03 -> 0.80 %, t1 3.29 -> 1.68; road_seat t0 5.84 -> 0.89, t1 1.52 -> 0.79; road_low t0 3.63 -> 1.63, t1 n/a -> 0.75.",
+  "live": "Not re-captured: render and sim code are byte-identical to r1. I re-inspected r1's evidence (_design/reviews/orch1/evidence/wobble_after/after_s3_top_team0_base_to_2nd.jpg and others, 8 before + 8 after, seeds 3 and 11, top/bottom, both teams, 1:30-8:00). It shows three clean parallel columns, the centre one on the yellow line, following the drawn road through both bends by a_high_needle_inner with no dip. The only jog left is the outer column squeezing at the lantern, near the base. r1 live numbers: |d - slot| p95 0.28-0.30 m, max 0.87-0.89 m in every box (before: |d| p95 0.92-1.00, max 1.29-1.34).",
+  "pace_ab": "Taken from r1 (same sim code, paired n=200, seeds 1001-1200, RIFT adept, base = HEAD with c0367ea2f^ minions.ts). Mean length 27.601 -> 27.704 min, d +0.103 +/- 0.459 SE. First outer tower 10.449 -> 10.567 min, d +0.118 +/- 0.200 SE. No shift beyond noise. p90 34.65 / 34.48: the <= 32 gate fails on both arms (pre-existing). Ruling 47 now cites this A/B.",
+  "blockers": [],
+  "problems": [
+    "The lantern squeeze is not fixed: the outer column jogs onto the centre line and back near the base (probe B7 counts 6/26/72/132 detours). The task asked for this only 'if cheap'.",
+    "The stricter no-settling measure finds idle RIFT road_high t0 s84 centroid max 0.375 m and road_high t1 s80 single max 1.406 m (24 samples), both midfield. BRIDGE idle team-1 pile-up: p95 1.43 m (base 2.07).",
+    "B4 rejoin max is 9.5 m, against the diagnosis's 9 m (not gated).",
+    "RIFT side-road wave-2 contact is +1.6 s later (not re-tuned). Tower arrival and wave-1 contact are within bars.",
+    "Two probes outside the lane's file list were edited (probe_sim_waves.ts, probe_sim_core_orders.ts). The edits are sound and no stricter or looser, but they should be routed past the probes' owner."
+  ]
+}
