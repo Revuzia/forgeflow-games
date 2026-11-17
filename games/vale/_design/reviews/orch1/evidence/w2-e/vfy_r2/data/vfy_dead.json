@@ -1,0 +1,1800 @@
+{
+ "phase": "vfy_dead",
+ "finishedAt": "2026-11-17T20:39:04.529Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 2.72,
+  "node": "v22.23.3",
+  "base": "http://localhost:5823",
+  "wallMs": 56231
+ },
+ "steps": [
+  {
+   "file": "1366x768/vfy_dead_001_dead_first.png",
+   "viewport": "1366x768",
+   "phase": "vfy_dead",
+   "step": "dead",
+   "name": "dead_first",
+   "desc": "recap first frames t=154.6",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 982780,
+   "tMs": 48260,
+   "load1": 2.6,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_dead_002_dead_first.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_dead",
+   "step": "dead",
+   "name": "dead_first",
+   "desc": "recap first frames",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1726876,
+   "tMs": 49077,
+   "load1": 2.6,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 88,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_dead_003_dead_settled.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_dead",
+   "step": "dead",
+   "name": "dead_settled",
+   "desc": "recap settled ~2.7 s after",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1700084,
+   "tMs": 51619,
+   "load1": 2.6,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 81,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_dead_004_dead_settled.png",
+   "viewport": "1366x768",
+   "phase": "vfy_dead",
+   "step": "dead",
+   "name": "dead_settled",
+   "desc": "recap settled ~2.7 s after",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 952748,
+   "tMs": 52341,
+   "load1": 2.72,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 79,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_dead_005_dead_expanded.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_dead",
+   "step": "dead",
+   "name": "dead_expanded",
+   "desc": "recap +N more expanded",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1654174,
+   "tMs": 54515,
+   "load1": 2.72,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 84,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_dead_006_dead_expanded.png",
+   "viewport": "1366x768",
+   "phase": "vfy_dead",
+   "step": "dead",
+   "name": "dead_expanded",
+   "desc": "recap +N more expanded",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 940898,
+   "tMs": 55221,
+   "load1": 2.72,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 84,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5823/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1366x768/vfy_dead_001_dead_first.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_dead_002_dead_first.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_dead_003_dead_settled.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_dead_004_dead_settled.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_dead_005_dead_expanded.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_dead_006_dead_expanded.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "dead",
+   "tMs": 48265,
+   "load1": 2.6,
+   "text": "hudfacts dead_first 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       145
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       13,
+       607,
+       349,
+       648
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       13,
+       607,
+       349,
+       648
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       13,
+       10,
+       105,
+       30
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       145
+      ]
+     },
+     {
+      "c": "hud__tr",
+      "r": [
+       1148,
+       10,
+       1353,
+       67
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       13,
+       607,
+       349,
+       648
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 7,
+     "Atkinson Hyperlegible Mono": 46,
+     "Vale Prose Figures": 10,
+     "Gloock": 1
+    },
+    "sizes": {
+     "11": 3,
+     "12": 50,
+     "13": 1,
+     "14": 2,
+     "16": 1,
+     "19": 5,
+     "27": 1,
+     "32": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     373,
+     640,
+     993,
+     768
+    ],
+    "dbarAreaPct": 7.57,
+    "bottomAreaPct": 7.57,
+    "resH": 9.5,
+    "hpH": 11.3,
+    "resText": "136 / 426",
+    "hpText": "0 / 1,256",
+    "pip": [
+     6.7,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      737.6,
+      758.4
+     ],
+     "hp": [
+      737.6,
+      748.9
+     ],
+     "res": [
+      748.9,
+      758.4
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 768
+    },
+    "recap": null,
+    "allies": [
+     13,
+     269,
+     147,
+     455
+    ],
+    "recapAlliesGap": null,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 49083,
+   "load1": 2.6,
+   "text": "hudfacts dead_first 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       180
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".recap",
+      "r": [
+       220,
+       151,
+       560,
+       620
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       16,
+       882,
+       436,
+       930
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       16,
+       882,
+       436,
+       930
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       16,
+       12,
+       121,
+       38
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       180
+      ]
+     },
+     {
+      "c": "hud__tr",
+      "r": [
+       1664,
+       12,
+       1904,
+       84
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       16,
+       882,
+       436,
+       930
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "c": "recap plate plate--raised",
+      "r": [
+       220,
+       151,
+       560,
+       620
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 9,
+     "Atkinson Hyperlegible Mono": 57,
+     "Vale Prose Figures": 20,
+     "Gloock": 1
+    },
+    "sizes": {
+     "11": 2,
+     "12": 23,
+     "13": 34,
+     "14": 9,
+     "15": 7,
+     "16": 1,
+     "18": 3,
+     "20": 1,
+     "24": 5,
+     "34": 1,
+     "40": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     572,
+     920,
+     1348,
+     1080
+    ],
+    "dbarAreaPct": 5.99,
+    "bottomAreaPct": 5.99,
+    "resH": 12,
+    "hpH": 14,
+    "resText": "136 / 426",
+    "hpText": "0 / 1,256",
+    "pip": [
+     8.1,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      1042,
+      1068
+     ],
+     "hp": [
+      1042,
+      1056
+     ],
+     "res": [
+      1056,
+      1068
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 1080
+    },
+    "recap": [
+     220,
+     151,
+     560,
+     620
+    ],
+    "allies": [
+     16,
+     396,
+     184,
+     628
+    ],
+    "recapAlliesGap": 36,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 52849,
+   "load1": 2.72,
+   "text": "hudfacts dead_settled 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       64
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".recap",
+      "r": [
+       220,
+       151,
+       560,
+       620
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       16,
+       12,
+       121,
+       38
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       64
+      ]
+     },
+     {
+      "c": "hud__tr",
+      "r": [
+       1664,
+       12,
+       1904,
+       46
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "c": "recap plate plate--raised",
+      "r": [
+       220,
+       151,
+       560,
+       620
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 8,
+     "Atkinson Hyperlegible Mono": 54,
+     "Vale Prose Figures": 16
+    },
+    "sizes": {
+     "11": 2,
+     "12": 21,
+     "13": 31,
+     "14": 8,
+     "15": 6,
+     "16": 1,
+     "18": 3,
+     "20": 1,
+     "24": 4,
+     "34": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     572,
+     920,
+     1348,
+     1080
+    ],
+    "dbarAreaPct": 5.99,
+    "bottomAreaPct": 5.99,
+    "resH": 12,
+    "hpH": 14,
+    "resText": "136 / 426",
+    "hpText": "0 / 1,256",
+    "pip": [
+     8.1,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      1042,
+      1068
+     ],
+     "hp": [
+      1042,
+      1056
+     ],
+     "res": [
+      1056,
+      1068
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 1080
+    },
+    "recap": [
+     220,
+     151,
+     560,
+     620
+    ],
+    "allies": [
+     16,
+     396,
+     184,
+     628
+    ],
+    "recapAlliesGap": 36,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 53347,
+   "load1": 2.72,
+   "text": "hudfacts dead_settled 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       51
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".recap",
+      "r": [
+       160,
+       108,
+       363,
+       600
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       13,
+       10,
+       105,
+       30
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       51
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "c": "recap plate plate--raised",
+      "r": [
+       160,
+       108,
+       363,
+       600
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 8,
+     "Atkinson Hyperlegible Mono": 54,
+     "Vale Prose Figures": 14
+    },
+    "sizes": {
+     "11": 3,
+     "12": 63,
+     "13": 1,
+     "14": 3,
+     "16": 1,
+     "19": 4,
+     "27": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     373,
+     640,
+     993,
+     768
+    ],
+    "dbarAreaPct": 7.57,
+    "bottomAreaPct": 7.57,
+    "resH": 9.5,
+    "hpH": 11.3,
+    "resText": "136 / 426",
+    "hpText": "0 / 1,256",
+    "pip": [
+     6.7,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      737.6,
+      758.4
+     ],
+     "hp": [
+      737.6,
+      748.9
+     ],
+     "res": [
+      748.9,
+      758.4
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 768
+    },
+    "recap": [
+     160,
+     108,
+     363,
+     600
+    ],
+    "allies": [
+     13,
+     269,
+     147,
+     455
+    ],
+    "recapAlliesGap": 13,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 55730,
+   "load1": 2.72,
+   "text": "hudfacts dead_expanded 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       64
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".recap",
+      "r": [
+       220,
+       151,
+       560,
+       736
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       16,
+       12,
+       121,
+       38
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       64
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "c": "recap plate plate--raised",
+      "r": [
+       220,
+       151,
+       560,
+       736
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 8,
+     "Atkinson Hyperlegible Mono": 54,
+     "Vale Prose Figures": 20
+    },
+    "sizes": {
+     "11": 2,
+     "12": 21,
+     "13": 31,
+     "14": 12,
+     "15": 8,
+     "16": 1,
+     "18": 3,
+     "20": 1,
+     "24": 2,
+     "34": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     572,
+     920,
+     1348,
+     1080
+    ],
+    "dbarAreaPct": 5.99,
+    "bottomAreaPct": 5.99,
+    "resH": 12,
+    "hpH": 14,
+    "resText": "136 / 426",
+    "hpText": "0 / 1,256",
+    "pip": [
+     8.1,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      1042,
+      1068
+     ],
+     "hp": [
+      1042,
+      1056
+     ],
+     "res": [
+      1056,
+      1068
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 1080
+    },
+    "recap": [
+     220,
+     151,
+     560,
+     736
+    ],
+    "allies": [
+     16,
+     396,
+     184,
+     628
+    ],
+    "recapAlliesGap": 36,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 56230,
+   "load1": 2.72,
+   "text": "hudfacts dead_expanded 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       51
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".recap",
+      "r": [
+       160,
+       108,
+       363,
+       702
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       13,
+       10,
+       105,
+       30
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       51
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "c": "recap plate plate--raised",
+      "r": [
+       160,
+       108,
+       363,
+       702
+      ]
+     }
+    ],
+    "overlaps": [
+     {
+      "a": "hud__bl",
+      "b": "recap plate plate--raised",
+      "ox": 189,
+      "oy": 24
+     }
+    ],
+    "fonts": {
+     "Instrument Sans Variable": 8,
+     "Atkinson Hyperlegible Mono": 54,
+     "Vale Prose Figures": 20
+    },
+    "sizes": {
+     "11": 3,
+     "12": 71,
+     "13": 1,
+     "14": 3,
+     "16": 1,
+     "19": 2,
+     "27": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     373,
+     640,
+     993,
+     768
+    ],
+    "dbarAreaPct": 7.57,
+    "bottomAreaPct": 7.57,
+    "resH": 9.5,
+    "hpH": 11.3,
+    "resText": "136 / 426",
+    "hpText": "0 / 1,256",
+    "pip": [
+     6.7,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      737.6,
+      758.4
+     ],
+     "hp": [
+      737.6,
+      748.9
+     ],
+     "res": [
+      748.9,
+      758.4
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 768
+    },
+    "recap": [
+     160,
+     108,
+     363,
+     702
+    ],
+    "allies": [
+     13,
+     269,
+     147,
+     455
+    ],
+    "recapAlliesGap": 13,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 56230,
+   "load1": 2.72,
+   "text": "last poll",
+   "data": {
+    "time": 154.6,
+    "dead": true,
+    "near": 3,
+    "enemyNear": 2,
+    "ended": false
+   }
+  }
+ ],
+ "timings": {}
+}

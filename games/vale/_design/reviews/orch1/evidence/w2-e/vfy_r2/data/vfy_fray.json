@@ -1,0 +1,890 @@
+{
+ "phase": "vfy_fray",
+ "finishedAt": "2026-11-17T20:43:21.674Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 3.7,
+  "node": "v22.23.3",
+  "base": "http://localhost:5823",
+  "wallMs": 39124
+ },
+ "steps": [
+  {
+   "file": "1920x1080/vfy_fray_001_draft.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_fray",
+   "step": "boot",
+   "name": "draft",
+   "desc": "FRAY draft",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 2069515,
+   "tMs": 13037,
+   "load1": 3.18,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.seatmark__num.num \"I\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_fray_002_draft.png",
+   "viewport": "1366x768",
+   "phase": "vfy_fray",
+   "step": "boot",
+   "name": "draft",
+   "desc": "FRAY draft",
+   "route": "scr--draft",
+   "hud": false,
+   "crop": null,
+   "bytes": 1147916,
+   "tMs": 13744,
+   "load1": 2.93,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 48,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_fray_003_idle.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_fray",
+   "step": "hour",
+   "name": "idle",
+   "desc": "FRAY HUD",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2166402,
+   "tMs": 30246,
+   "load1": 3.93,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_fray_004_idle.png",
+   "viewport": "1366x768",
+   "phase": "vfy_fray",
+   "step": "hour",
+   "name": "idle",
+   "desc": "FRAY HUD",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1185278,
+   "tMs": 31013,
+   "load1": 3.93,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 65,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_fray_005_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_fray",
+   "step": "hour",
+   "name": "scoreboard",
+   "desc": "FRAY scoreboard",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1870093,
+   "tMs": 33679,
+   "load1": 4.02,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 170,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_fray_006_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "vfy_fray",
+   "step": "hour",
+   "name": "scoreboard",
+   "desc": "FRAY scoreboard",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 953567,
+   "tMs": 35204,
+   "load1": 4.02,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 172,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_fray_007_shop.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_fray",
+   "step": "hour",
+   "name": "shop",
+   "desc": "shop open",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1670652,
+   "tMs": 36913,
+   "load1": 4.02,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 114,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_fray_008_shop.png",
+   "viewport": "1366x768",
+   "phase": "vfy_fray",
+   "step": "hour",
+   "name": "shop",
+   "desc": "shop open",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 883533,
+   "tMs": 37626,
+   "load1": 4.02,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 115,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5823/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/vfy_fray_001_draft.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_fray_002_draft.png",
+   "step": "boot",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_fray_003_idle.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_fray_004_idle.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_fray_005_scoreboard.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_fray_006_scoreboard.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_fray_007_shop.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_fray_008_shop.png",
+   "step": "hour",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "hour",
+   "tMs": 31525,
+   "load1": 3.93,
+   "text": "hudfacts fray 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       176
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1660,
+       820,
+       1892,
+       1052
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     },
+     {
+      "s": ".hboard",
+      "r": [
+       1642,
+       12,
+       1904,
+       251
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       16,
+       12,
+       121,
+       38
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       176
+      ]
+     },
+     {
+      "c": "hud__tr",
+      "r": [
+       1642,
+       12,
+       1904,
+       259
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1660,
+       820,
+       1892,
+       1052
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 2,
+     "Atkinson Hyperlegible Mono": 46,
+     "Vale Prose Figures": 15,
+     "Gloock": 1
+    },
+    "sizes": {
+     "11": 2,
+     "12": 18,
+     "13": 27,
+     "14": 12,
+     "15": 1,
+     "16": 1,
+     "18": 1,
+     "20": 1,
+     "40": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     572,
+     920,
+     1348,
+     1080
+    ],
+    "dbarAreaPct": 5.99,
+    "bottomAreaPct": 5.99,
+    "resH": 12,
+    "hpH": 14,
+    "resText": "570 / 570",
+    "hpText": "1,210 / 1,210",
+    "pip": [
+     8.1,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      1042,
+      1068
+     ],
+     "hp": [
+      1042,
+      1056
+     ],
+     "res": [
+      1056,
+      1068
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 1080
+    },
+    "recap": null,
+    "allies": null,
+    "recapAlliesGap": null,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "hour",
+   "tMs": 32025,
+   "load1": 3.93,
+   "text": "hudfacts fray 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       51
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1158,
+       560,
+       1344,
+       746
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "s": ".hboard",
+      "r": [
+       1117,
+       10,
+       1353,
+       203
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       13,
+       10,
+       105,
+       30
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       51
+      ]
+     },
+     {
+      "c": "hud__tr",
+      "r": [
+       1117,
+       10,
+       1353,
+       209
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1158,
+       560,
+       1344,
+       746
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 2,
+     "Atkinson Hyperlegible Mono": 46,
+     "Vale Prose Figures": 14
+    },
+    "sizes": {
+     "11": 3,
+     "12": 56,
+     "13": 1,
+     "14": 1,
+     "16": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     373,
+     640,
+     993,
+     768
+    ],
+    "dbarAreaPct": 7.57,
+    "bottomAreaPct": 7.57,
+    "resH": 9.5,
+    "hpH": 11.3,
+    "resText": "570 / 570",
+    "hpText": "1,210 / 1,210",
+    "pip": [
+     6.7,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      737.6,
+      758.4
+     ],
+     "hp": [
+      737.6,
+      748.9
+     ],
+     "res": [
+      748.9,
+      758.4
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 768
+    },
+    "recap": null,
+    "allies": null,
+    "recapAlliesGap": null,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "hour",
+   "tMs": 38122,
+   "load1": 4.02,
+   "text": "shop vs hourboard 1920x1080",
+   "data": {
+    "shop": [
+     400,
+     80,
+     1520,
+     780
+    ],
+    "hour": [
+     1642,
+     12,
+     1904,
+     251
+    ],
+    "dbar": [
+     572,
+     920,
+     1348,
+     1080
+    ],
+    "feed": [
+     16,
+     956,
+     436,
+     1064
+    ],
+    "feedLines": 2,
+    "recap": null
+   }
+  },
+  {
+   "step": "hour",
+   "tMs": 38622,
+   "load1": 3.7,
+   "text": "shop vs hourboard 1366x768",
+   "data": {
+    "shop": [
+     277,
+     64,
+     1089,
+     624
+    ],
+    "hour": [
+     1117,
+     10,
+     1353,
+     203
+    ],
+    "dbar": [
+     373,
+     640,
+     993,
+     768
+    ],
+    "feed": [
+     13,
+     663,
+     349,
+     755
+    ],
+    "feedLines": 2,
+    "recap": null
+   }
+  }
+ ],
+ "timings": {}
+}

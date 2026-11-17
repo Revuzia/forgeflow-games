@@ -1,0 +1,338 @@
+{
+ "phase": "vfy_misc",
+ "finishedAt": "2026-11-17T20:45:36.101Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 5.8,
+  "node": "v22.23.3",
+  "base": "http://localhost:5823",
+  "wallMs": 64313
+ },
+ "steps": [
+  {
+   "file": "1920x1080/vfy_misc_001_name_prompt.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_misc",
+   "step": "name",
+   "name": "name_prompt",
+   "desc": "one-time name prompt (?welcome=1, fresh profile)",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 1172460,
+   "tMs": 5982,
+   "load1": 4.05,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "span.chip.chip--line.num \"LV 1\""
+    },
+    "textNodes": 44,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_misc_002_name_prompt.png",
+   "viewport": "1366x768",
+   "phase": "vfy_misc",
+   "step": "name",
+   "name": "name_prompt",
+   "desc": "one-time name prompt (?welcome=1, fresh profile)",
+   "route": "scr--home",
+   "hud": false,
+   "crop": null,
+   "bytes": 652933,
+   "tMs": 6694,
+   "load1": 4.05,
+   "layout": {
+    "minFont": {
+     "px": 12,
+     "el": "a.skip.t-label \"SKIP TO CONTENT\""
+    },
+    "textNodes": 42,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_misc_003_ping_wheel.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_misc",
+   "step": "ping",
+   "name": "ping_wheel",
+   "desc": "ping wheel (G held 0.6 s)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2625957,
+   "tMs": 60626,
+   "load1": 6.05,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 57,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_misc_004_ping_wheel.png",
+   "viewport": "1366x768",
+   "phase": "vfy_misc",
+   "step": "ping",
+   "name": "ping_wheel",
+   "desc": "ping wheel (G held 0.6 s)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1470779,
+   "tMs": 62810,
+   "load1": 6.05,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 55,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_misc_005_click_marker.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_misc",
+   "step": "click",
+   "name": "click_marker",
+   "desc": "right-click marker at 1920x1080, shot as the click returns",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 1030,
+    "y": 344,
+    "w": 320,
+    "h": 220
+   },
+   "bytes": 103765,
+   "tMs": 63709,
+   "load1": 6.05,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_misc_006_click_marker.png",
+   "viewport": "1366x768",
+   "phase": "vfy_misc",
+   "step": "click",
+   "name": "click_marker",
+   "desc": "right-click marker at 1366x768, shot as the click returns",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 687,
+    "y": 213,
+    "w": 320,
+    "h": 220
+   },
+   "bytes": 112647,
+   "tMs": 64313,
+   "load1": 5.8,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 4,
+  "debug": 2
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5823/catalog/manifest.json",
+  "Autofocus processing was blocked because a document already has a focused element.",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/vfy_misc_001_name_prompt.png",
+   "step": "name",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_misc_002_name_prompt.png",
+   "step": "name",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_misc_003_ping_wheel.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_misc_004_ping_wheel.png",
+   "step": "ping",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_misc_005_click_marker.png",
+   "step": "click",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_misc_006_click_marker.png",
+   "step": "click",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "name",
+   "tMs": 5107,
+   "load1": 4.05,
+   "text": "name prompt appeared",
+   "data": true
+  },
+  {
+   "step": "click",
+   "tMs": 63620,
+   "load1": 6.05,
+   "text": "marker 1920x1080",
+   "data": []
+  },
+  {
+   "step": "click",
+   "tMs": 64220,
+   "load1": 6.05,
+   "text": "marker 1366x768",
+   "data": [
+    {
+     "c": "wmark wmark--move",
+     "w": 49,
+     "h": 39,
+     "op": 0.939399
+    }
+   ]
+  }
+ ],
+ "timings": {}
+}

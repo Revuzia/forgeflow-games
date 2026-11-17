@@ -1,0 +1,2517 @@
+{
+ "phase": "vfy_rift",
+ "finishedAt": "2026-11-17T20:42:21.103Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 2.72,
+  "node": "v22.23.3",
+  "base": "http://localhost:5823",
+  "wallMs": 170047
+ },
+ "steps": [
+  {
+   "file": "1920x1080/vfy_rift_001_idle.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2634442,
+   "tMs": 56073,
+   "load1": 2.41,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_002_idle.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "idle",
+   "name": "idle",
+   "desc": "HUD at the fountain",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1431428,
+   "tMs": 56813,
+   "load1": 2.41,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_003_dial.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "idle",
+   "name": "dial",
+   "desc": "dial bar crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 564,
+    "y": 912,
+    "w": 792,
+    "h": 168
+   },
+   "bytes": 153919,
+   "tMs": 57431,
+   "load1": 2.41,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_004_dial.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "idle",
+   "name": "dial",
+   "desc": "dial bar crop",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 365,
+    "y": 632,
+    "w": 637,
+    "h": 136
+   },
+   "bytes": 109032,
+   "tMs": 58042,
+   "load1": 2.41,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_005_click.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "click",
+   "name": "click",
+   "desc": "right-click marker ~60 ms after",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2753639,
+   "tMs": 59011,
+   "load1": 2.41,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_006_click.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "click",
+   "name": "click",
+   "desc": "right-click marker ~60 ms after",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1519481,
+   "tMs": 59829,
+   "load1": 2.3,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 45,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_007_cast_cd.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "click",
+   "name": "cast_cd",
+   "desc": "dial bar right after Q/W/E (1920)",
+   "route": "scr--match",
+   "hud": true,
+   "crop": {
+    "x": 564,
+    "y": 912,
+    "w": 792,
+    "h": 168
+   },
+   "bytes": 158307,
+   "tMs": 75771,
+   "load1": 2.32,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_008_fight.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first fight, paused t=66.9",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2739597,
+   "tMs": 76154,
+   "load1": 2.32,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 47,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_009_fight.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "fight",
+   "name": "fight",
+   "desc": "first fight, paused t=66.9",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1473896,
+   "tMs": 76894,
+   "load1": 2.32,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 48,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_010_teamfight.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "teamfight",
+   "name": "teamfight",
+   "desc": "4 fighters within 10 m, paused t=128",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2778735,
+   "tMs": 103068,
+   "load1": 2.49,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 53,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_011_teamfight.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "teamfight",
+   "name": "teamfight",
+   "desc": "4 fighters within 10 m, paused t=128",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1501409,
+   "tMs": 103806,
+   "load1": 2.49,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 50,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_012_teamfight_live.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "teamfight",
+   "name": "teamfight_live",
+   "desc": "teamfight live x1",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2782836,
+   "tMs": 105036,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 50,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_013_teamfight_live.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "teamfight",
+   "name": "teamfight_live",
+   "desc": "teamfight live x1",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1499169,
+   "tMs": 105767,
+   "load1": 2.85,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 50,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_014_late.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "late",
+   "name": "late",
+   "desc": "HUD at 420.2s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2710749,
+   "tMs": 154184,
+   "load1": 2.24,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 57,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_015_late.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "late",
+   "name": "late",
+   "desc": "HUD at 420.2s",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1466324,
+   "tMs": 154934,
+   "load1": 2.62,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 53,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_016_scoreboard.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "late",
+   "name": "scoreboard",
+   "desc": "Tab",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2181125,
+   "tMs": 156576,
+   "load1": 2.62,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 152,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_017_scoreboard.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "late",
+   "name": "scoreboard",
+   "desc": "Tab",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1082452,
+   "tMs": 158092,
+   "load1": 2.62,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 152,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_018_dead_first.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "dead",
+   "name": "dead_first",
+   "desc": "recap first frames",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1872616,
+   "tMs": 164289,
+   "load1": 2.65,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 69,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_019_dead_first.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "dead",
+   "name": "dead_first",
+   "desc": "recap first frames",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1109724,
+   "tMs": 165020,
+   "load1": 2.52,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 90,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_rift_020_dead_settled.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_rift",
+   "step": "dead",
+   "name": "dead_settled",
+   "desc": "recap settled",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1809292,
+   "tMs": 167834,
+   "load1": 2.52,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 88,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1366x768/vfy_rift_021_dead_settled.png",
+   "viewport": "1366x768",
+   "phase": "vfy_rift",
+   "step": "dead",
+   "name": "dead_settled",
+   "desc": "recap settled",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 1019759,
+   "tMs": 168541,
+   "load1": 2.52,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__label \"MENU\""
+    },
+    "textNodes": 88,
+    "docScroll": {
+     "w": 1366,
+     "h": 768,
+     "vw": 1366,
+     "vh": 768
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5823/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/vfy_rift_001_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_002_idle.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_003_dial.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_004_dial.png",
+   "step": "idle",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_005_click.png",
+   "step": "click",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_006_click.png",
+   "step": "click",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_007_cast_cd.png",
+   "step": "click",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_rift_008_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_009_fight.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_010_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_011_teamfight.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_012_teamfight_live.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_013_teamfight_live.png",
+   "step": "teamfight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_014_late.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_015_late.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_016_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_017_scoreboard.png",
+   "step": "late",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_018_dead_first.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_019_dead_first.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  },
+  {
+   "file": "1920x1080/vfy_rift_020_dead_settled.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1366x768/vfy_rift_021_dead_settled.png",
+   "step": "dead",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    68,
+    -200,
+    198,
+    -171
+   ],
+   "vw": 1366,
+   "vh": 768
+  }
+ ],
+ "notes": [
+  {
+   "step": "idle",
+   "tMs": 54672,
+   "load1": 2.44,
+   "text": "hudfacts idle 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       176
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       16,
+       12,
+       121,
+       38
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       176
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 5,
+     "Atkinson Hyperlegible Mono": 36,
+     "Vale Prose Figures": 3,
+     "Gloock": 1
+    },
+    "sizes": {
+     "11": 2,
+     "12": 19,
+     "13": 15,
+     "14": 1,
+     "15": 2,
+     "16": 1,
+     "18": 1,
+     "20": 1,
+     "24": 2,
+     "40": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     572,
+     920,
+     1348,
+     1080
+    ],
+    "dbarAreaPct": 5.99,
+    "bottomAreaPct": 5.99,
+    "resH": 12,
+    "hpH": 14,
+    "resText": "330 / 330",
+    "hpText": "870 / 870",
+    "pip": [
+     8.1,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      1042,
+      1068
+     ],
+     "hp": [
+      1042,
+      1056
+     ],
+     "res": [
+      1056,
+      1068
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 1080
+    },
+    "recap": null,
+    "allies": [
+     16,
+     396,
+     184,
+     628
+    ],
+    "recapAlliesGap": null,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "idle",
+   "tMs": 55171,
+   "load1": 2.41,
+   "text": "hudfacts idle 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       142
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       13,
+       10,
+       105,
+       30
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       142
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 5,
+     "Atkinson Hyperlegible Mono": 36,
+     "Vale Prose Figures": 4,
+     "Gloock": 1
+    },
+    "sizes": {
+     "11": 3,
+     "12": 37,
+     "13": 1,
+     "14": 1,
+     "16": 1,
+     "19": 2,
+     "32": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     373,
+     640,
+     993,
+     768
+    ],
+    "dbarAreaPct": 7.57,
+    "bottomAreaPct": 7.57,
+    "resH": 9.5,
+    "hpH": 11.3,
+    "resText": "330 / 330",
+    "hpText": "870 / 870",
+    "pip": [
+     6.7,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      737.6,
+      758.4
+     ],
+     "hp": [
+      737.6,
+      748.9
+     ],
+     "res": [
+      748.9,
+      758.4
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 768
+    },
+    "recap": null,
+    "allies": [
+     13,
+     269,
+     147,
+     455
+    ],
+    "recapAlliesGap": null,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "click",
+   "tMs": 60335,
+   "load1": 2.3,
+   "text": "marker elements",
+   "data": [
+    {
+     "c": "wmark wmark--move",
+     "w": 48,
+     "h": 38,
+     "op": 0.392755
+    }
+   ]
+  },
+  {
+   "step": "click",
+   "tMs": 75667,
+   "load1": 2.32,
+   "text": "cooldown slots after Q/W/E",
+   "data": [
+    {
+     "c": "aslot aslot--basic is-ready  is-unlearned    ",
+     "txt": "Q",
+     "sweep": false
+    },
+    {
+     "c": "aslot aslot--basic is-cd   is-aiming   ",
+     "txt": "12 W 60",
+     "sweep": true
+    },
+    {
+     "c": "aslot aslot--basic is-ready  is-unlearned    ",
+     "txt": "E",
+     "sweep": false
+    },
+    {
+     "c": "aslot aslot--ult is-ready  is-unlearned    ",
+     "txt": "R",
+     "sweep": false
+    },
+    {
+     "c": "aslot aslot--spell is-ready      ",
+     "txt": "D",
+     "sweep": false
+    },
+    {
+     "c": "aslot aslot--spell is-ready      ",
+     "txt": "F",
+     "sweep": false
+    }
+   ]
+  },
+  {
+   "step": "fight",
+   "tMs": 77402,
+   "load1": 2.32,
+   "text": "hudfacts fight 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       64
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       16,
+       12,
+       121,
+       38
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       64
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       16,
+       902,
+       436,
+       930
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 5,
+     "Atkinson Hyperlegible Mono": 39,
+     "Vale Prose Figures": 3
+    },
+    "sizes": {
+     "11": 4,
+     "12": 19,
+     "13": 15,
+     "14": 1,
+     "15": 2,
+     "16": 1,
+     "18": 1,
+     "20": 1,
+     "24": 3
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     572,
+     920,
+     1348,
+     1080
+    ],
+    "dbarAreaPct": 5.99,
+    "bottomAreaPct": 5.99,
+    "resH": 12,
+    "hpH": 14,
+    "resText": "272 / 330",
+    "hpText": "815 / 870",
+    "pip": [
+     8.1,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      1042,
+      1068
+     ],
+     "hp": [
+      1042,
+      1056
+     ],
+     "res": [
+      1056,
+      1068
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 1080
+    },
+    "recap": null,
+    "allies": [
+     16,
+     396,
+     184,
+     628
+    ],
+    "recapAlliesGap": null,
+    "regen": [
+     {
+      "t": "+2.6",
+      "fs": "11px",
+      "r": [
+       1137.2,
+       1042,
+       1176,
+       1056
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "+1.6",
+      "fs": "11px",
+      "r": [
+       1137.2,
+       1056,
+       1176,
+       1068
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "fight",
+   "tMs": 77901,
+   "load1": 2.32,
+   "text": "hudfacts fight 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       51
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "s": ".hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "s": ".feed",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       13,
+       10,
+       105,
+       30
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       51
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "c": "hud__bl",
+      "r": [
+       13,
+       624,
+       349,
+       648
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 5,
+     "Atkinson Hyperlegible Mono": 39,
+     "Vale Prose Figures": 3
+    },
+    "sizes": {
+     "11": 5,
+     "12": 36,
+     "13": 1,
+     "14": 1,
+     "16": 1,
+     "19": 3
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     373,
+     640,
+     993,
+     768
+    ],
+    "dbarAreaPct": 7.57,
+    "bottomAreaPct": 7.57,
+    "resH": 9.5,
+    "hpH": 11.3,
+    "resText": "272 / 330",
+    "hpText": "815 / 870",
+    "pip": [
+     6.7,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      737.6,
+      758.4
+     ],
+     "hp": [
+      737.6,
+      748.9
+     ],
+     "res": [
+      748.9,
+      758.4
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 768
+    },
+    "recap": null,
+    "allies": [
+     13,
+     269,
+     147,
+     455
+    ],
+    "recapAlliesGap": null,
+    "regen": [
+     {
+      "t": "+2.6",
+      "fs": "11px",
+      "r": [
+       819.2,
+       737.6,
+       855.8,
+       748.9
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "+1.6",
+      "fs": "11px",
+      "r": [
+       819.2,
+       748.9,
+       855.8,
+       758.4
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 169049,
+   "load1": 2.52,
+   "text": "hudfacts dead 1920x1080",
+   "data": {
+    "vw": 1920,
+    "vh": 1080,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       164
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "s": ".recap",
+      "r": [
+       220,
+       151,
+       560,
+       628
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       16,
+       12,
+       121,
+       38
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       580,
+       8,
+       1340,
+       164
+      ]
+     },
+     {
+      "c": "hud__tr",
+      "r": [
+       1613,
+       12,
+       1904,
+       84
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       16,
+       396,
+       184,
+       628
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       572,
+       920,
+       1348,
+       1080
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1540,
+       824,
+       1892,
+       1052
+      ]
+     },
+     {
+      "c": "recap plate plate--raised",
+      "r": [
+       220,
+       151,
+       560,
+       628
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 10,
+     "Atkinson Hyperlegible Mono": 59,
+     "Vale Prose Figures": 18
+    },
+    "sizes": {
+     "11": 2,
+     "12": 24,
+     "13": 34,
+     "14": 9,
+     "15": 5,
+     "16": 1,
+     "18": 4,
+     "20": 1,
+     "24": 6,
+     "34": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     572,
+     920,
+     1348,
+     1080
+    ],
+    "dbarAreaPct": 5.99,
+    "bottomAreaPct": 5.99,
+    "resH": 12,
+    "hpH": 14,
+    "resText": "82 / 618",
+    "hpText": "0 / 1,648",
+    "pip": [
+     8.1,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      1042,
+      1068
+     ],
+     "hp": [
+      1042,
+      1056
+     ],
+     "res": [
+      1056,
+      1068
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 1080
+    },
+    "recap": [
+     220,
+     151,
+     560,
+     628
+    ],
+    "allies": [
+     16,
+     396,
+     184,
+     628
+    ],
+    "recapAlliesGap": 36,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 169548,
+   "load1": 2.52,
+   "text": "hudfacts dead 1366x768",
+   "data": {
+    "vw": 1366,
+    "vh": 768,
+    "plates": [
+     {
+      "s": ".hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       132
+      ]
+     },
+     {
+      "s": ".hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "s": ".dbar",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "s": ".recap",
+      "r": [
+       160,
+       108,
+       363,
+       657
+      ]
+     },
+     {
+      "s": ".allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     }
+    ],
+    "kids": [
+     {
+      "c": "hmenu",
+      "r": [
+       13,
+       10,
+       105,
+       30
+      ]
+     },
+     {
+      "c": "hud__top",
+      "r": [
+       379,
+       6,
+       987,
+       132
+      ]
+     },
+     {
+      "c": "hud__tr",
+      "r": [
+       1101,
+       10,
+       1353,
+       67
+      ]
+     },
+     {
+      "c": "allies",
+      "r": [
+       13,
+       269,
+       147,
+       455
+      ]
+     },
+     {
+      "c": "hud__bottom",
+      "r": [
+       373,
+       640,
+       993,
+       768
+      ]
+     },
+     {
+      "c": "hud__map",
+      "r": [
+       1062,
+       563,
+       1344,
+       746
+      ]
+     },
+     {
+      "c": "recap plate plate--raised",
+      "r": [
+       160,
+       108,
+       363,
+       657
+      ]
+     }
+    ],
+    "overlaps": [],
+    "fonts": {
+     "Instrument Sans Variable": 10,
+     "Atkinson Hyperlegible Mono": 59,
+     "Vale Prose Figures": 18
+    },
+    "sizes": {
+     "11": 3,
+     "12": 71,
+     "13": 1,
+     "14": 4,
+     "16": 1,
+     "19": 6,
+     "27": 1
+    },
+    "nonTabular": [],
+    "nonTabularN": 0,
+    "smallText": [],
+    "smallN": 0,
+    "dbar": [
+     373,
+     640,
+     993,
+     768
+    ],
+    "dbarAreaPct": 7.57,
+    "bottomAreaPct": 7.57,
+    "resH": 9.5,
+    "hpH": 11.3,
+    "resText": "82 / 618",
+    "hpText": "0 / 1,648",
+    "pip": [
+     6.7,
+     3,
+     "aslot__pips i"
+    ],
+    "fit": {
+     "dbars": [
+      737.6,
+      758.4
+     ],
+     "hp": [
+      737.6,
+      748.9
+     ],
+     "res": [
+      748.9,
+      758.4
+     ],
+     "resOverflowPx": 0,
+     "hpResOverlapPx": 0,
+     "dbarBottom": 768
+    },
+    "recap": [
+     160,
+     108,
+     363,
+     657
+    ],
+    "allies": [
+     13,
+     269,
+     147,
+     455
+    ],
+    "recapAlliesGap": 13,
+    "regen": [
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     },
+     {
+      "t": "",
+      "fs": "11px",
+      "r": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "bg": "linear-gradient(90deg, rgba(7, 9, 12, 0)"
+     }
+    ],
+    "skyBefore": "rgba(11, 13, 17, 0.94)",
+    "fontVariants": [
+     "normal",
+     "tabular-nums"
+    ]
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 170046,
+   "load1": 2.72,
+   "text": "meters",
+   "data": [
+    {
+     "fsMin": 16.5,
+     "fsMax": 16.5,
+     "fsList": [
+      [
+       "55",
+       16.5
+      ]
+     ],
+     "frames": 300,
+     "popsSeen": 1,
+     "overBarFull": 0,
+     "overBarSoft": 0,
+     "maxPerTarget": 1,
+     "plates": "object",
+     "overFullSamples": []
+    },
+    {
+     "fsMin": 15.7,
+     "fsMax": 16.5,
+     "fsList": [
+      [
+       "55",
+       16.5
+      ],
+      [
+       "42",
+       15.7
+      ],
+      [
+       "46",
+       15.9
+      ],
+      [
+       "46",
+       15.9
+      ]
+     ],
+     "frames": 240,
+     "popsSeen": 4,
+     "overBarFull": 0,
+     "overBarSoft": 37,
+     "maxPerTarget": 1,
+     "plates": "object",
+     "overFullSamples": []
+    },
+    {
+     "fsMin": 999,
+     "fsMax": 0,
+     "fsList": [],
+     "frames": 240,
+     "popsSeen": 0,
+     "overBarFull": 0,
+     "overBarSoft": 0,
+     "maxPerTarget": 0,
+     "plates": "object",
+     "overFullSamples": []
+    },
+    {
+     "fsMin": 16.5,
+     "fsMax": 16.8,
+     "fsList": [
+      [
+       "54",
+       16.5
+      ],
+      [
+       "55",
+       16.5
+      ],
+      [
+       "54",
+       16.5
+      ],
+      [
+       "54",
+       16.5
+      ],
+      [
+       "60",
+       16.8
+      ]
+     ],
+     "frames": 240,
+     "popsSeen": 5,
+     "overBarFull": 0,
+     "overBarSoft": 0,
+     "maxPerTarget": 2,
+     "plates": "object",
+     "overFullSamples": []
+    },
+    {
+     "fsMin": 16.7,
+     "fsMax": 17,
+     "fsList": [
+      [
+       "59",
+       16.7
+      ],
+      [
+       "64",
+       17
+      ]
+     ],
+     "frames": 300,
+     "popsSeen": 2,
+     "overBarFull": 0,
+     "overBarSoft": 0,
+     "maxPerTarget": 1,
+     "plates": "object",
+     "overFullSamples": []
+    }
+   ]
+  },
+  {
+   "step": "dead",
+   "tMs": 170046,
+   "load1": 2.72,
+   "text": "meter totals",
+   "data": {
+    "frames": 1320,
+    "pops": 12,
+    "full": 0,
+    "soft": 37,
+    "maxPer": 2
+   }
+  },
+  {
+   "step": "dead",
+   "tMs": 170046,
+   "load1": 2.72,
+   "text": "captured",
+   "data": [
+    "fight",
+    "teamfight",
+    "late",
+    "dead"
+   ]
+  },
+  {
+   "step": "dead",
+   "tMs": 170046,
+   "load1": 2.72,
+   "text": "last poll",
+   "data": {
+    "time": 450.6,
+    "dead": true,
+    "near": 4,
+    "enemyNear": 3,
+    "ended": false
+   }
+  }
+ ],
+ "timings": {}
+}
