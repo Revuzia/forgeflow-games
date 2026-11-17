@@ -1871,7 +1871,13 @@ export function generate(parcel, opts) {
       const cells = r.cells.map((c) => [c % nx, Math.floor(c / nx)]);
       let i0 = Infinity, j0 = Infinity, i1 = -Infinity, j1 = -Infinity;
       for (const [i, j] of cells) { i0 = Math.min(i0, i); j0 = Math.min(j0, j); i1 = Math.max(i1, i + 1); j1 = Math.max(j1, j + 1); }
-      const rec = { id: P.id + ".f" + F.f + "r" + ri, floor: F.f, kind: r.kind, reg: r, ri, cells, bounds: [i0, j0, i1, j1], doors: [], stairs: [] };
+      // (W10 R1A pass 9, CPU) every field the furnisher gives a room later is declared here, undefined (a read of it is the same undefined as before): one
+      // object shape for every room - the fields were added lazily in a different order per room, the room records ran through dozens of shapes and every
+      // read of them was a megamorphic lookup, and the optimized code that read them was thrown away and rebuilt (nothing lists a room record's keys)
+      const rec = { id: P.id + ".f" + F.f + "r" + ri, floor: F.f, kind: r.kind, reg: r, ri, cells, bounds: [i0, j0, i1, j1], doors: [], stairs: [],
+        share: undefined, spent: undefined, chest: undefined, tintW: undefined, walk: undefined, sofa: undefined, noDining: undefined, dining: undefined, bed: undefined, row: undefined,
+        _acc: undefined, _accMask: undefined, _tall: undefined, _vcm: undefined, _pm: undefined, _ext: undefined, _pv: undefined, _view: undefined, _twm: undefined, _twmG: undefined,
+        _tsfail: undefined, _subst: undefined, _st: undefined, _sofaSet: undefined, _rw: undefined, _qpts: undefined, _qfail: undefined, _ps: undefined, _gen: undefined, _decor: undefined };
       roomRecs.push(rec);
       roomOfReg.set(F.f + ":" + ri, rec);
     });
@@ -3069,7 +3075,9 @@ export function generate(parcel, opts) {
     const put = (cat, u, v, fq, tint, extra) => {
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
       const rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
-      const p = Object.assign({ cat, room: R, f, u, v, fq, rect, tint: tint || 0, order: furn.length, y0: 0 }, extra || {});
+      // (W10 R1A pass 9, CPU) the fields a piece gets from `extra` or later declared up front (undefined: the same reads): one shape for every piece
+      const p = Object.assign({ cat, room: R, f, u, v, fq, rect, tint: tint || 0, order: furn.length, y0: 0, host: undefined, slot: undefined, run: undefined, t: undefined, sideways: undefined,
+        rescue5: undefined, vis: undefined, _g: undefined, tops: undefined, _pb: undefined, _pbR: undefined, _pbC: undefined, _pbY: undefined, _rid: undefined }, extra || {});
       furn.push(p); placed.push(p); R.spent += cat.tris; R._tall = null; R._pv = (R._pv || 0) + 1; p._g = R._gen = (R._gen || 0) + 1;
       tris[f] += cat.tris;
       if (p.host) p.host.tops = (p.host.tops || 0) + 1;
