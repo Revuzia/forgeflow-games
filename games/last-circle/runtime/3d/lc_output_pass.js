@@ -45,6 +45,7 @@ import {
   SRGBTransfer,
   Vector2,
   Vector3,
+  Vector4,
   Matrix3,
 } from "three";
 import { Pass, FullScreenQuad } from "three/addons/postprocessing/Pass.js";
@@ -71,6 +72,10 @@ export const LCOutputShader = {
     // three's own additive blend pass put it. 0 = no bloom this frame (skipped: bit-identical to the stock pass)
     bloomOn: { value: 0 },
     tBloom: { value: null },
+    // W10 R2A (driven per frame by maps.js on desktop medium+ only; 0 = skipped = bit-identical): x = a gentle contrast S-curve, y = under the water
+    // (0..1: a soft 9-tap blur, a darker blue-green grade with less contrast)
+    lcGrade: { value: new Vector4(0, 0, 0, 0) },
+    lcUwTint: { value: new Vector3(0.42, 0.78, 0.82) },
   },
 
   vertexShader: /* glsl */`
@@ -107,6 +112,8 @@ export const LCOutputShader = {
     uniform vec2 aaTexel;
     uniform float bloomOn;
     uniform sampler2D tBloom;
+    uniform vec4 lcGrade;
+    uniform vec3 lcUwTint;
 
     #include <tonemapping_pars_fragment>
     #include <colorspace_pars_fragment>
@@ -214,6 +221,34 @@ export const LCOutputShader = {
 
       // folded FXAA (LC-03): uniform-coherent like the grade below; off it is skipped entirely
       if ( aaOn > 0.5 ) gl_FragColor.rgb = lcFxaa( lcIn, gl_FragColor.rgb );
+
+      // W10 R2A: under the water (uniform-coherent; 0 = skipped). A soft 9-tap blur (3.5 px), then pulled toward a darker blue-green
+      // version of its own luminance: the sky, the islands and anything far read as murk, not as a sharp picture through a tint
+      if ( lcGrade.y > 0.0 ) {
+        vec2 o = aaTexel * 3.5, d = o * 0.7071;
+        vec3 bl = gl_FragColor.rgb * 0.2 + 0.1 * ( lcToneMap( lcSrc( vUv + vec2( o.x, 0.0 ) ) ) + lcToneMap( lcSrc( vUv - vec2( o.x, 0.0 ) ) ) +
+                                                   lcToneMap( lcSrc( vUv + vec2( 0.0, o.y ) ) ) + lcToneMap( lcSrc( vUv - vec2( 0.0, o.y ) ) ) +
+                                                   lcToneMap( lcSrc( vUv + d ) ) + lcToneMap( lcSrc( vUv - d ) ) +
+                                                   lcToneMap( lcSrc( vUv + vec2( d.x, -d.y ) ) ) + lcToneMap( lcSrc( vUv - vec2( d.x, -d.y ) ) ) );
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, bl, lcGrade.y );
+        float lu = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, ( 0.12 + 0.62 * lu ) * lcUwTint, 0.65 * lcGrade.y );
+      }
+
+      // W10 R2A: a gentle contrast S-curve in a perceptual (square-root) space, after tone mapping (uniform-coherent; 0 = skipped)
+      if ( lcGrade.x > 0.0 ) {
+        vec3 lp = sqrt( clamp( gl_FragColor.rgb, 0.0, 1.0 ) );
+        lp = mix( lp, lp * lp * ( 3.0 - 2.0 * lp ), lcGrade.x );
+        // (W10 R2A fix5) the toe is kept: the smoothstep's slope is 0 at black, so at full strength a shadow at 50 / 255 went to 11 / 255 (the Savanna street
+        // shadow read black, furnished rooms' dark share 0.36-0.48). The curve fades in over the deep shadows (sqrt-space 0.05-0.25 = about 4-70 / 255):
+        // below it a shadow keeps its uncurved tone and detail; from the lower mid-tones up (the ground's own shade and light) it is the full curve
+        vec3 l0 = sqrt( clamp( gl_FragColor.rgb, 0.0, 1.0 ) );
+        lp = mix( l0, lp, smoothstep( vec3( 0.05 ), vec3( 0.25 ), l0 ) );
+        // and the deepest shadows are lifted a little (x1.18 in this space below ~4 / 255, fading out by ~40 / 255): the lower fill left a shaded red-brick
+        // wall at 12-20 / 255 (interiorcheck: a doorway view 36 % under 16 / 255); the ground's spread and the drop view's mean move < 0.001
+        lp *= 1.0 + 0.18 * ( 1.0 - smoothstep( vec3( 0.05 ), vec3( 0.2 ), l0 ) );
+        gl_FragColor.rgb = lp * lp;
+      }
 
       // storm grade: after tone mapping (display-referred linear), before the OETF.
       // Desaturate toward the pixel's own luminance, then pull the result toward a

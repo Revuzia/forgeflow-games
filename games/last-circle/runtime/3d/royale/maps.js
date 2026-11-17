@@ -48,14 +48,22 @@ const _V = (() => { try { return new URL(import.meta.url).search || ""; } catch 
 export const MAPS = {
   isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#9ed0e3", zenith: "#5c8dc1", cloud: 0.66, fog: 0.0018, themeColor: "#22d3a0", water: true,
     sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 },
-    grade: { exposure: 0.72, ground: 0.6, water: 0.6 } },
+    grade: { exposure: 0.72, ground: 0.6, water: 0.6 }, w10Indoor: 1.32 },
   ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
     sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 },
-    grade: { exposure: 0.80, ground: 0.6, water: 0.6 } },
+    grade: { exposure: 0.80, ground: 0.6, water: 0.6 }, w10Light: { hemi: 0.6, sun: 1.26, contrast: 1.0 }, w10Indoor: 1.8, w10Grass: 1.7 },   // (W10 R2A: the flattest map - its open ground got the least of the hemisphere cut and the full contrast curve)
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
-    grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
+    grade: { exposure: 1.14, ground: 0.6, water: 0.6 }, w10Grass: 1.15 },   // (fix5: with the curve's toe kept, Deepwood's dark forest blades read less against its ground - a little taller)
 };
+// W10 R2A (visuals 5): the desktop medium+ light balance - hemisphere fill x0.72, sun x1.12 (a map may override with its own `w10Light`) - and the
+// gentle contrast S-curve the output pass lays over it (lcGrade.x; 0 = off = bit-identical). Low and touch keep the W10 R1 numbers exactly.
+const W10_LIGHT = { hemi: 0.72, sun: 1.12 };
+const W10_CONTRAST = 0.4;
+const W10_CLOUD_SHADOW = 0.62;          // (was 0.5: a cloud's shadow takes this share of the sun - with more sun it reads as a patch of shade again)
+const W10_INDOOR = 1.22;                // the furnished rooms' albedo lift (HG_INDOOR x this) against the lower fill
+                                        // (per map K.w10Indoor: Isla Viva 1.32, Savanna 1.8 - its fill is cut most (x0.6) and its contrast curve is the full one, so its rooms
+                                        //  lost the most: 0.68x the W10 R1 rooms at 1.22; gate w10_waterlook interiors, every map >= 0.9x)
 // LC-04 / owner decision OD-2 (2026-10-20, grade "G2 Balanced" from the P1-G A/B sheets): the drop view was 2-2.5x the reference's luminance (0.67-0.81 vs
 // 0.32). G2 darkens the GROUND and the WATER (terrain, city ground and tufts x `ground`, water x `water`) and cuts the exposure a little, leaving the sun, the
 // sky fill and the environment as they were, so a room keeps its light (the other grades took Isla Viva's interiors to 0.07-0.08). Target: the drop view's
@@ -351,6 +359,14 @@ const LCU = {
   uLcWear: { value: new THREE.Vector3(0.30, 0.85, 1.15) },              // x = how much darker ON SCREEN the base of a wall is at the ground, y = the band's height (m), z = the tone-map exposure
   uLcWater: { value: new THREE.Vector4(0, 0, 7, 0) },                  // x = water y, z = the depth that reads fully deep (m)
   uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
+  // W10 R2A water / shore (desktop medium and up only: LC_WATER2, LC_WATER_HI, LC_WET). The two textures are SHARED (_texCache), never per match.
+  uLcWN: { value: null },                                               // the water normal map (three.js examples waternormals.jpg, MIT; 512 px)
+  uLcFoam: { value: null },                                             // the foam pattern (in house, CC0: _harness/p23/make_water_foam.py; 512 px, grey)
+  uLcWaterK: { value: new THREE.Vector4(0.55, 1, 6, 1.5) },              // x = wave normal strength, y = foam gain, z = sun glint gain, w = sky fresnel gain
+  uLcSun: { value: new THREE.Vector3(0, 1, 0) },                       // the sun's direction (the glint)
+  uLcSkyH: { value: new THREE.Color() }, uLcSkyZ: { value: new THREE.Color() },   // the dome's horizon / zenith colours (what the water reflects)
+  uLcSkyCl: { value: new THREE.Vector4(0, 0, 0.5, 0) },                // high / ultra: the reflected cloud deck (xy = the dome's cloud offset, z = threshold, w = strength)
+  uLcWetK: { value: new THREE.Vector4(0.48, 1.1, 0, 0) },              // x = wet-sand darkening within ~1 m above the waterline, y = seabed caustic strength
 };
 const GRIME_FILE = { url: "assets/tex/wall_grime.jpg", avg: [0.6339, 0.4989, 0.3582] };   // Poly Haven "Concrete Wall 003" (CC0), 1k diffuse JPG (265 KB); avg = its LINEAR mean (numpy over the decoded sRGB pixels)
 let _grimeLoad = null;
@@ -370,6 +386,31 @@ async function loadGrimeTexture(W) {
     return _texCache.grime || null;
   })();
   return _grimeLoad;
+}
+// W10 R2A: the water normal map + the foam pattern (desktop medium and up). Linear data (NoColorSpace), repeating, mipmapped; cached for the page session
+// in _texCache (SHARED: the per-match teardown never frees them). A failed load leaves the slot null: the water then has flat normals and no foam pattern.
+const WATER_FILES = { normal: "assets/tex/water_normal.jpg", foam: "assets/tex/water_foam.png" };
+let _waterLoad = null;
+async function loadWaterTextures(W) {
+  if (_texCache.waterN2 && _texCache.waterFoam) return { normal: _texCache.waterN2, foam: _texCache.waterFoam };
+  const r = W.kernel && W.kernel.renderer;
+  if (!r || typeof THREE.TextureLoader !== "function") return null;
+  if (!_waterLoad) _waterLoad = (async () => {
+    await Promise.all(Object.entries({ waterN2: WATER_FILES.normal, waterFoam: WATER_FILES.foam }).map(async ([k, url]) => {
+      if (_texCache[k]) return;
+      let to = 0;
+      try {
+        const t = await Promise.race([new THREE.TextureLoader().loadAsync((W.assetBase || "") + url), new Promise((_, rej) => { to = setTimeout(() => rej(new Error("timeout")), 25000); })]);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.anisotropy = Math.min(r.capabilities && r.capabilities.getMaxAnisotropy ? r.capabilities.getMaxAnisotropy() : 4, Math.max(2, W._texAniso || 4));
+        _texCache[k] = t;
+      } catch (err) { console.warn("[maps] water texture " + url + " unavailable:", err && err.message || err); }
+      finally { if (to) clearTimeout(to); }
+    }));
+    _waterLoad = null;
+    return _texCache.waterN2 && _texCache.waterFoam ? { normal: _texCache.waterN2, foam: _texCache.waterFoam } : null;
+  })();
+  return _waterLoad;
 }
 const LC_VERT_HEAD = `
 varying vec3 vLcW;
@@ -443,6 +484,28 @@ float lcWB = 0.0;                    // the wear band's on-screen darkening at t
 #endif
 #ifdef LC_WATER
 uniform vec4 uLcWater; uniform vec3 uLcShallow; uniform vec3 uLcDeep;
+#endif
+#if defined( LC_WET ) && !defined( LC_WATER )
+uniform vec4 uLcWater;
+#endif
+#if defined( LC_WATER2 ) || defined( LC_WET )
+uniform sampler2D uLcFoam;
+#endif
+#ifdef LC_WET
+uniform vec4 uLcWetK;
+#endif
+#if defined( LC_WET_HI ) && !defined( LC_WATER2 )
+uniform vec3 uLcSkyH; uniform vec3 uLcSkyZ;
+#endif
+#ifdef LC_WATER2
+uniform sampler2D uLcWN; uniform vec4 uLcWaterK; uniform vec3 uLcSun; uniform vec3 uLcSkyH; uniform vec3 uLcSkyZ;
+vec3 lcWN = vec3( 0.0, 1.0, 0.0 ); float lcFoamA = 0.0;
+#endif
+#ifdef LC_WATER_HI
+#ifndef LC_CLOUD
+uniform sampler2D uLcCloud;
+#endif
+uniform vec4 uLcSkyCl;
 #endif`;
 // albedo terms (after map_fragment): the wall-base wear band (a vertical face within uLcWear.y m of the ground under it, darker by up to uLcWear.x) and the
 // grime photograph (its light / dark only, divided by its own mean so a wall still averages its colour)
@@ -471,6 +534,49 @@ const LC_FRAG_ALBEDO = `
   float ldep = uLcWater.x - lcGround( vLcW.xz );
   float lk = smoothstep( 0.0, uLcWater.z, ldep );                // (the depth that reads as deep: 7 m on the sea, 3.2 m in Deepwood's rivers and lakes)
   diffuseColor.rgb = mix( uLcShallow, uLcDeep, lk );
+#ifdef LC_WATER2
+  {
+    // W10 R2A (desktop medium+): two counter-scrolling normal layers at unrelated scales and turns (~9.5 m and ~24 m tiles; the high / ultra tiers add a
+    // third, finer one), calmer with distance so the far sea does not alias; the result is the shading normal (LC_FRAG_NORMAL) and the fresnel / glint
+    // normal (LC_FRAG_OUT)
+    float lt = uLcWater.y, ldc = length( vLcW.xz - cameraPosition.xz );
+    vec2 lp = vLcW.xz;
+    vec2 ln1 = texture2D( uLcWN, lp * 0.105 + lt * vec2( 0.018, 0.011 ) ).rg * 2.0 - 1.0;
+    vec2 ln2 = texture2D( uLcWN, mat2( 0.8, -0.6, 0.6, 0.8 ) * lp * 0.041 - lt * vec2( 0.007, 0.013 ) ).rg * 2.0 - 1.0;
+    vec2 lsl = ln1 * 0.55 + ln2 * 0.45;
+#ifdef LC_WATER_HI
+    lsl = lsl * 0.8 + ( texture2D( uLcWN, mat2( 0.6, 0.8, -0.8, 0.6 ) * lp * 0.29 + lt * vec2( -0.031, 0.024 ) ).rg * 2.0 - 1.0 ) * 0.45;
+#endif
+    lsl *= uLcWaterK.x * mix( 1.0, 0.45, smoothstep( 30.0, 500.0, ldc ) ) * ( cameraPosition.y < vLcW.y ? 0.35 : 1.0 );   // (from below: a calmer ceiling)
+    lcWN = normalize( vec3( lsl.x, 1.0, -lsl.y ) );
+    // SHORE (visuals 11): the foam band is measured in METRES from the waterline (the depth over the ground's slope, the slope from the screen
+    // derivatives of the depth and of the world position: no extra texture read), washing in and out, broken by the foam pattern; the old rolling surf
+    // lines stay further out, broken by the same pattern
+    vec2 lgx = vec2( dFdx( vLcW.x ), dFdx( vLcW.z ) ), lgy = vec2( dFdy( vLcW.x ), dFdy( vLcW.z ) );
+    float ldx = dFdx( ldep ), ldy = dFdy( ldep ), ldet = lgx.x * lgy.y - lgx.y * lgy.x;
+    vec2 lgr = abs( ldet ) > 1e-7 ? vec2( lgy.y * ldx - lgx.y * ldy, -lgy.x * ldx + lgx.x * ldy ) / ldet : vec2( 0.0 );
+    float lsd = ldep / clamp( length( lgr ), 0.04, 2.0 );
+    float lsw = lsd + 0.4 * sin( lt * 0.85 + dot( lp, vec2( 0.11, 0.07 ) ) );
+    float lpat = texture2D( uLcFoam, lp * 0.19 + lt * vec2( 0.011, -0.008 ) ).r;
+    float lcore = ( 1.0 - smoothstep( 0.6, 1.6, lsw ) ) * step( 0.0, ldep );
+    float lfo = max( ( 1.0 - smoothstep( 0.4, 0.85, lsw ) ) * step( 0.0, ldep ), lcore * smoothstep( 0.12, 0.5, lpat + lcore * 0.3 ) * ( 0.75 + 0.25 * lcore ) );   // a solid lip at the waterline, broken foam beyond
+    float lph = ldep * 11.0 - lt * 1.6;
+    float law = clamp( fwidth( lph ) - 0.6, 0.0, 1.0 );
+#ifdef LC_WATER_HI
+    float lline = ( 1.0 - smoothstep( 0.0, 1.4, ldep ) ) * mix( 0.5 + 0.5 * sin( lph ), 0.5, law ) * smoothstep( 0.25, 0.7, lpat ) * 0.7;   // (high / ultra: surf further out)
+#else
+    float lline = ( 1.0 - smoothstep( 0.0, 0.7, ldep ) ) * mix( 0.5 + 0.5 * sin( lph ), 0.5, law ) * smoothstep( 0.3, 0.75, lpat ) * 0.55;
+#endif
+    lcFoamA = clamp( max( lfo, lline ) * uLcWaterK.y, 0.0, 1.0 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), lcFoamA );
+    diffuseColor.a = max( mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) ), lcFoamA );
+    // FAR SEA: the sea plane is 3.5x the map, the ground (seabed) only 1x - past the map edge the translucent water had only the sky dome under it,
+    // a hard straight colour step along the edge in every wide view. The water turns opaque over the last 240 m before the edge
+    vec2 lmu = abs( vLcW.xz * uLcHgtK.x + uLcHgtK.y - 0.5 );
+    float lout = ( max( lmu.x, lmu.y ) - 0.5 ) / uLcHgtK.x;        // metres past the drawn ground's edge (< 0 inside the map)
+    diffuseColor.a = mix( diffuseColor.a, 1.0, smoothstep( -240.0, -20.0, lout ) );
+  }
+#else
   // surf lines follow the depth contours (so they run along the shore and roll in), broken into ~12 m patches; once a band is under ~2 px (the drop
   // view) its sine is replaced by its mean, so the plane sees a soft white rim, not stripes (was one world-space diagonal sine: zebra bands from the air)
   float lph = ldep * 11.0 - uLcWater.y * 1.6;
@@ -479,7 +585,32 @@ const LC_FRAG_ALBEDO = `
   float lfoam = ( 1.0 - smoothstep( 0.0, 0.55, ldep ) ) * mix( 0.55 + 0.45 * sin( lph ), 0.5, law ) * lbr;
   diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), clamp( lfoam, 0.0, 1.0 ) * 0.75 );
   diffuseColor.a = mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) );
+#endif
 }
+#endif
+#ifdef LC_WET
+{
+  // W10 R2A shore: the ground within ~1 m above the waterline is wet (darker), from the ground's own height (the baked surface IS the drawn one)
+  // fix3: AND within ~3-7 m of slope distance from the live waterline (screen derivatives, as the foam band: no texture read) - a swash band, so a low
+  // flat islet 0.3-1 m over the sea stays dry sand from the air (it was darkened whole: a muddy brown islet in the drop view)
+  float lhw = vLcW.y - uLcWater.x;
+  vec2 lgx = vec2( dFdx( vLcW.x ), dFdx( vLcW.z ) ), lgy = vec2( dFdy( vLcW.x ), dFdy( vLcW.z ) );
+  float ldx = dFdx( lhw ), ldy = dFdy( lhw ), ldet = lgx.x * lgy.y - lgx.y * lgy.x;
+  vec2 lgr = abs( ldet ) > 1e-7 ? vec2( lgy.y * ldx - lgx.y * ldy, -lgy.x * ldx + lgx.x * ldy ) / ldet : vec2( 0.0 );
+  float lwd = max( lhw, 0.0 ) / clamp( length( lgr ), 0.02, 2.0 );   // metres of slope from the waterline
+  // fix4: from the air the seabed under the water is NOT darkened past the first ~0.4 m - the water's depth tint shades it, and darkening it as well gave
+  // every coast a thick dark halo in the drop view and turned a submerged neck muddy. Close up (<= ~180 m, gone by ~300 m: the drop view is >= 330 m up) the shallow seabed keeps its
+  // darker wet tone (it carries the in-water / looking-down detail). The swash band on land is 3-7 m of slope close up (it carries the shore's wet look
+  // there) and narrows to 2-4 m from the air (a thin line, not a wide dark rim round every islet).
+  float lnear = 1.0 - smoothstep( 180.0, 300.0, length( cameraPosition - vLcW ) );
+  float lsub = max( smoothstep( -0.12, -0.02, lhw ), lnear * step( -8.0, lhw ) );
+  diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( mix( 0.05, 0.3, lnear ), mix( 0.35, 1.1, lnear ), lhw ) ) * ( 1.0 - smoothstep( mix( 2.0, 3.0, lnear ), mix( 4.0, 7.0, lnear ), lwd ) ) * lsub;
+}
+#endif`;
+// W10 R2A: the water's shading normal is the two-layer wave normal (after three's normal chunk; faceDirection keeps the plane lit from below)
+const LC_FRAG_NORMAL = `
+#ifdef LC_WATER2
+normal = normalize( ( viewMatrix * vec4( lcWN, 0.0 ) ).xyz ) * faceDirection;
 #endif`;
 // light terms (after lights_fragment_end): a cloud's shadow takes a share of the SUN only (the sky fill stays: a shadowed field reads as overcast, not night),
 // contact AO darkens the sky fill most and the sun a little
@@ -496,6 +627,17 @@ const LC_FRAG_LIGHT = `
 {
   float lao = texture2D( uLcAO, vLcW.xz * uLcAOK.x + uLcAOK.y ).r;
   reflectedLight.indirectDiffuse *= 1.0 - uLcAOK.z * lao; reflectedLight.directDiffuse *= 1.0 - uLcAOK.w * lao;
+}
+#endif
+#ifdef LC_WET
+if ( vLcW.y < uLcWater.x - 0.05 ) {
+  // W10 R2A seabed caustics: two scrolling samples of the foam pattern, their minimum = a moving web of light, on the sun only, fading in under the first
+  // ~0.6 m of water and out by ~9 m
+  float lhw = uLcWater.x - vLcW.y, lt = uLcWater.y;
+  float lc1 = texture2D( uLcFoam, vLcW.xz * 0.21 + lt * vec2( 0.021, 0.014 ) ).r;
+  float lc2 = texture2D( uLcFoam, mat2( 0.8, 0.6, -0.6, 0.8 ) * vLcW.xz * 0.16 - lt * vec2( 0.017, 0.023 ) ).r;
+  float lcs = smoothstep( 0.3, 0.7, min( lc1, lc2 ) * 1.7 ) * smoothstep( 0.05, 0.6, lhw ) * ( 1.0 - smoothstep( 3.0, 9.0, lhw ) );
+  reflectedLight.directDiffuse *= 1.0 + uLcWetK.y * lcs;
 }
 #endif`;
 // P23-fix / LC-17 wall base: the wear band darkens the LIT colour by a share of its ON-SCREEN brightness (uLcWear.x x the band), not the albedo by a fixed
@@ -515,9 +657,47 @@ if ( lcWB > 0.0 ) {
   lx += lm < 0.04 ? sqrt( max( lm, 0.0 ) * 0.16 ) - lm : 0.04;                   // (its inverse)
   outgoingLight = lx / uLcWear.z;
 }
+#endif
+#ifdef LC_WET_HI
+{
+  // W10 R2A high / ultra: the wet band (within ~1 m above the waterline) is glossy - it reflects the sky at grazing angles
+  float lhw = vLcW.y - uLcWater.x;
+  float lwet = ( 1.0 - smoothstep( 0.3, 1.1, lhw ) ) * step( -0.05, lhw );
+  if ( lwet > 0.0 ) {
+    vec3 lv = normalize( cameraPosition - vLcW );
+    float lfr = 0.04 + 0.96 * pow( 1.0 - clamp( lv.y, 0.0, 1.0 ), 5.0 );
+    outgoingLight = mix( outgoingLight, mix( uLcSkyH, uLcSkyZ, 0.25 ), clamp( lfr * lwet * 1.2, 0.0, 0.85 ) );
+  }
+}
+#endif
+#ifdef LC_WATER2
+{
+  // W10 R2A water seen from above: a fresnel mix toward the sky the wave normal reflects (the dome's own horizon -> zenith ramp; high / ultra add the cloud
+  // deck), a clamped sun glint, the water more opaque at grazing angles. Foam is neither reflective nor glinting. From below: unchanged.
+  vec3 lv = normalize( cameraPosition - vLcW );
+  if ( lv.y > 0.0 ) {
+    float lfr = 0.02 + 0.98 * pow( 1.0 - clamp( dot( lcWN, lv ), 0.0, 1.0 ), 5.0 );
+    lfr = clamp( lfr * uLcWaterK.w, 0.0, 0.92 ) * ( 1.0 - lcFoamA );
+    vec3 lr = reflect( -lv, lcWN ); lr.y = abs( lr.y );
+    vec3 lsky = mix( uLcSkyH, uLcSkyZ, pow( lr.y, 0.62 ) );
+#ifdef LC_WATER_HI
+    {
+      vec2 luv = lr.xz / ( lr.y + 0.12 ) * 0.5 + uLcSkyCl.xy;
+      float lcn = texture2D( uLcCloud, luv ).r;
+      float lcm = smoothstep( uLcSkyCl.z, uLcSkyCl.z + 0.4, lcn ) * smoothstep( 0.0, 0.1, lr.y );
+      lsky = mix( lsky, mix( uLcSkyH, vec3( 1.0 ), 0.9 ) * 1.1, lcm * uLcSkyCl.w );
+    }
+#endif
+    outgoingLight = mix( outgoingLight, lsky, lfr );
+    float lg = pow( max( dot( lr, uLcSun ), 0.0 ), 700.0 ) * uLcWaterK.z * ( 1.0 - lcFoamA );
+    outgoingLight += vec3( 1.0, 0.95, 0.86 ) * min( lg, 9.0 );
+    diffuseColor.a = max( diffuseColor.a, min( 1.0, lfr + lg ) );
+  }
+}
 #endif`;
 const LC_UNIFORMS = { LC_WIND: ["uLcT", "uLcWind"], LC_CLOUD: ["uLcCloud", "uLcCloudK", "uLcCloudOff"], LC_HGT: ["uLcHgt", "uLcHgtK"], LC_AO: ["uLcAO", "uLcAOK"],
-  LC_GRIME: ["uLcGrime", "uLcGrimeK"], LC_WEAR: ["uLcWear"], LC_WATER: ["uLcWater", "uLcShallow", "uLcDeep"] };
+  LC_GRIME: ["uLcGrime", "uLcGrimeK"], LC_WEAR: ["uLcWear"], LC_WATER: ["uLcWater", "uLcShallow", "uLcDeep"],
+  LC_WATER2: ["uLcWN", "uLcFoam", "uLcWaterK", "uLcSun", "uLcSkyH", "uLcSkyZ"], LC_WATER_HI: ["uLcCloud", "uLcSkyCl"], LC_WET: ["uLcWater", "uLcFoam", "uLcWetK"], LC_WET_HI: ["uLcSkyH", "uLcSkyZ"] };
 /** Patch a MeshStandardMaterial (or a MeshDepthMaterial for the wind) with the world-shader layer. `defs` = { LC_CLOUD: "", LC_WEAR: "", LC_WIND_H: "6.5", ... }
  *  (LC_WEAR and LC_WATER need LC_HGT, which is added). Chains any onBeforeCompile the material already had (the terrain photo, the struct mix); the program
  *  cache key carries the previous key and the define set, so every match reuses the same programs. Idempotent per material. */
@@ -544,6 +724,7 @@ function lcPatch(mat, defs) {
       sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n" + LC_VERT_WORLD);
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + LC_FRAG_HEAD)
         .replace("#include <map_fragment>", "#include <map_fragment>\n" + LC_FRAG_ALBEDO)
+        .replace("#include <normal_fragment_maps>", "#include <normal_fragment_maps>\n" + LC_FRAG_NORMAL)
         .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + LC_FRAG_LIGHT)
         .replace("#include <opaque_fragment>", LC_FRAG_OUT + "\n#include <opaque_fragment>");
     }
@@ -1058,6 +1239,21 @@ function colorAt(mapId, h, x, z, seed, out) {
   return rgb(o, 0.5 + n * 0.1, 0.62, 0.42);
 }
 function rgb(o, r, g, b) { o[0] = r; o[1] = g; o[2] = b; return o; }
+// W10 R2A repair: how much of the ground at (x, z) is GRASS (0..1) - the dense blade layer grows only here, never on a beach, a dry wash, desert sand,
+// river mud, snow or bare rock (colorAt's own bands and zones, ramped over ~0.8 m of height so the edge of a lawn thins out instead of stopping)
+function grassAt(mapId, h, x, z, seed) {
+  const sm = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+  if (mapId === "isla_viva") return sm(2.2, 3.0, h) * (1 - sm(32.5, 34, h));                     // (sand < 2.2 m, volcano rock > 34 m)
+  if (mapId === "ashgrid") {
+    const edge = fbm(x / 260, z / 260, seed + 61, 2, 2, 0.5) * 120, desert = Math.max(0, Math.min(1, (x - 40 + edge) / 320));
+    return sm(0.5, 1.3, h) * (1 - sm(26.5, 28, h)) * (1 - sm(0.8, 0.97, desert));               // (dry wash < 0.5 m, bluffs > 28 m, the open dunes of the desert east: its savanna-to-desert blend keeps dry grass)
+  }
+  if (mapId === "deepwood") {
+    const edge = fbm(x / 240, z / 240, seed + 91, 2, 2, 0.5) * 90, snow = Math.max(0, Math.min(1, (-z - 100 + edge) / 260));
+    return sm(0.6, 1.4, h) * (1 - sm(42.5, 44, h)) * (1 - sm(0.02, 0.25, snow));                // (river mud < 0.6 m, rocky tops > 44 m, the snow north)
+  }
+  return 1;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 /** Release the GPU resources the LAST map allocated.
@@ -1085,6 +1281,7 @@ export function disposeMapResources(W) {
   // C-SKY handles belong to the map being torn down: never leave a consumer (STORMFX's storm tint)
   // holding the uniforms of a disposed dome between matches. Done before the idempotence guard.
   W.skyUniforms = null; W.skyDome = null;
+  { const op = W.kernel && W.kernel.outputPass; if (op && op.uniforms && op.uniforms.lcGrade) op.uniforms.lcGrade.value.set(0, 0, 0, 0); }   // W10 R2A: the menu is untouched
   if (W._lcOwned) { for (const t of W._lcOwned) { try { t.dispose(); } catch (e) { /* gone */ } } W._lcOwned = null; LCU.uLcHgt.value = null; LCU.uLcAO.value = null; }
   const g = W._groups && W._groups.map;
   if (W._cityKit) { try { W._cityKit.dispose(); } catch (e) { /* already gone */ } W._cityKit = null; }   // WAVE 7: the instanced districts' matrix buffers, palette textures and proxies (a group traverse frees none of them)
@@ -1275,12 +1472,19 @@ export async function buildMap(W, mapId) {
   // C-GFX: the tier this map is BUILT for (fixed for the match: the in-match ladder only moves bloom / DPR). LCFX = the world-shader layer (LCU) and the photo
   // wall detail: off on low. ULTRA (lane boot) = the longest draw / foliage / grass / furniture distances and the 5 x 5 near terrain ring (see TIER_Q).
   const TIER = gfxTierOf(W), LCFX = TIER !== "low";
+  // W10 R2A: the Wave 10 look (water, shore, light, dense grass, underwater, sky islands, storm horizon) is DESKTOP medium and up. Low and touch devices
+  // build exactly the W10 R1 world and render it pixel-identically (gate w10_waterlook low-identical).
+  const W10V = LCFX && !(W._gfx && W._gfx.touch);
+  // grassR / grassC (W10 R2A, desktop only): the dense blade layer's ring radius and cell (one 2-blade card per cell); waterHi: the third wave layer + the
+  // reflected clouds. High / ULTRA on a desktop: tree (prop) range +25 % (1000 -> 1250, 1650 -> 2063; a phone's high is untouched), blades to 45 / 60 m.
   const TIER_Q = {
-    low:    { propD: 600, nearR: 110, nearN: 64, clR: 55, clN: 1400, distD: 1100, furnD: 60, ring: 1, lamps: 0 },
-    medium: { propD: 780, nearR: 110, nearN: 64, clR: 55, clN: 1400, distD: 1100, furnD: 60, ring: 1, lamps: 4 },
-    high:   { propD: 1000, nearR: 125, nearN: 72, clR: 60, clN: 1700, distD: 1300, furnD: 70, ring: 1, lamps: 4 },
-    ultra:  { propD: 1650, nearR: 165, nearN: 112, clR: 78, clN: 2900, distD: 1750, furnD: 95, ring: 2, lamps: 6 },
+    low:    { propD: 600, nearR: 110, nearN: 64, clR: 55, clN: 1400, distD: 1100, furnD: 60, ring: 1, lamps: 0, grassR: 0, grassC: 1, waterHi: false },
+    medium: { propD: 780, nearR: 110, nearN: 64, clR: 55, clN: 1400, distD: 1100, furnD: 60, ring: 1, lamps: 4, grassR: 30, grassC: 0.56, waterHi: false },
+    high:   { propD: 1000, nearR: 125, nearN: 72, clR: 60, clN: 1700, distD: 1300, furnD: 70, ring: 1, lamps: 4, grassR: 45, grassC: 0.6, waterHi: true },
+    ultra:  { propD: 1650, nearR: 165, nearN: 112, clR: 78, clN: 2900, distD: 1750, furnD: 95, ring: 2, lamps: 6, grassR: 60, grassC: 0.62, waterHi: true },
   }[TIER];
+  if (W10V && (TIER === "high" || TIER === "ultra")) TIER_Q.propD = Math.round(TIER_Q.propD * 1.25);
+  const waterTexPromise = W10V ? loadWaterTextures(W).catch(() => null) : Promise.resolve(null);
   const GRADE = K.grade || { exposure: 1.15, ground: 1, water: 1 };   // LC-04 / OD-2 (see MAPS)
   const grimePromise = LCFX ? loadGrimeTexture(W).catch(() => null) : Promise.resolve(null);   // LC-17: the CC0 wall photograph (medium and up)
   // the world-shader layer's per-match textures (the ground lattice, the contact-AO mask): no material slot holds them (they are uniforms), so the map
@@ -1392,10 +1596,13 @@ export async function buildMap(W, mapId) {
     kn.renderer.toneMappingExposure = K.grade ? K.grade.exposure : 1.15;
     LCU.uLcWear.value.z = kn.renderer.toneMappingExposure;           // (the wear band's on-screen darkening: LC_FRAG_OUT)
     const sunK = K.sun || MAPS.isla_viva.sun, hemiK = K.hemi || MAPS.isla_viva.hemi;
-    kn.sun.intensity = sunK.intensity; kn.sun.color.setHex(sunK.color);
+    // W10 R2A (visuals 5, desktop medium+): less flat fill, more sun - shadowed sides and hills read again (per map: K.w10Light)
+    const lw = W10V ? (K.w10Light || W10_LIGHT) : null;
+    kn.sun.intensity = sunK.intensity * (lw ? lw.sun : 1); kn.sun.color.setHex(sunK.color);
+    W._w10Sun = lw ? lw.sun : 1; W._w10Con = lw ? (K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST) : 0;        // (fix5) player.js holds the characters' direct specular at the W10 R1 sun's (zSpK = 1 / this): the world's sun boost is not a glossier skin
     kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
     let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; });
-    if (hemi) { hemi.intensity = hemiK.intensity; hemi.color.setHex(hemiK.sky); hemi.groundColor.setHex(hemiK.ground); }
+    if (hemi) { hemi.intensity = hemiK.intensity * (lw ? lw.hemi : 1); hemi.color.setHex(hemiK.sky); hemi.groundColor.setHex(hemiK.ground); }
     if (kn.bloom) kn.bloom.strength = 0.14;   // crisp match — minimal bloom haze
   }
 
@@ -1470,7 +1677,7 @@ export async function buildMap(W, mapId) {
   }
   function buildTerrain() {
     if (photo && terrMat.map) patchTerrainPhoto(terrMat, photo); else photo = null;     // the splat attribute only exists with the patched program
-    if (LCFX) lcPatch(terrMat, { LC_CLOUD: "", LC_AO: "" });                              // LC-74 cloud shadows + LC-41 contact AO (medium and up)
+    if (LCFX) lcPatch(terrMat, Object.assign({ LC_CLOUD: "", LC_AO: "" }, W10V && K.water ? Object.assign({ LC_WET: "" }, TIER_Q.waterHi ? { LC_WET_HI: "" } : {}) : {}));   // LC-74 cloud shadows + LC-41 contact AO (medium and up); W10 R2A: wet sand + seabed caustics (desktop)
     terrain = new THREE.Group();
     terrain.name = "terrain";
     const tChunks = [];
@@ -1541,14 +1748,25 @@ export async function buildMap(W, mapId) {
     if (LCFX) {
       LCU.uLcShallow.value.copy(wmat.color).lerp(new THREE.Color(mapId === "isla_viva" ? 0x9fe0d2 : 0x7fa89a), 0.55);
       LCU.uLcDeep.value.copy(wmat.color).multiplyScalar(mapId === "isla_viva" ? 0.55 : 0.62);
-      lcPatch(wmat, { LC_WATER: "" });
+      // W10 R2A (visuals 3 / 11, desktop medium+): LC_WATER2 = the two-layer wave normal, fresnel sky, sun glint, the metre-wide foam band from the
+      // pattern; LC_WATER_HI (high / ultra) = a third wave layer and the reflected cloud deck. Their normal REPLACES the procedural ripple map (no read)
+      lcPatch(wmat, W10V ? Object.assign({ LC_WATER: "", LC_WATER2: "" }, TIER_Q.waterHi ? { LC_WATER_HI: "" } : {}) : { LC_WATER: "" });
     }
     let wN = null;
     try {
-      wN = waterNormalTex(aniso);
-      wN.repeat.set(90 * WATER_W / (SIZE * 1.6), 90 * WATER_W / (SIZE * 1.6));
-      wmat.normalMap = wN; wmat.normalScale = new THREE.Vector2(0.35, 0.35);
+      if (!(LCFX && W10V)) {
+        wN = waterNormalTex(aniso);
+        wN.repeat.set(90 * WATER_W / (SIZE * 1.6), 90 * WATER_W / (SIZE * 1.6));
+        wmat.normalMap = wN; wmat.normalScale = new THREE.Vector2(0.35, 0.35);
+      }
     } catch (e) { /* no canvas → flat water */ }
+    if (W10V) {
+      const spw = (K.sun || MAPS.isla_viva.sun).pos;
+      LCU.uLcSun.value.set(spw[0], spw[1], spw[2]).normalize();
+      LCU.uLcSkyH.value.set(K.sky); LCU.uLcSkyZ.value.set(K.zenith || MAPS.isla_viva.zenith);
+      LCU.uLcSkyCl.value.set(0, 0, 1 - (K.cloud != null ? K.cloud : 0.45), TIER_Q.waterHi ? 1.0 : 0);
+      LCU.uLcWaterK.value.set(0, 1, 6, 1.5);                          // (flat until the normal map is in: set when it loads, below)
+    }
     const water = new THREE.Mesh(wgeo, wmat);
     water.position.y = waterY;
     water.name = "water";
@@ -1556,6 +1774,9 @@ export async function buildMap(W, mapId) {
     mapWater = water;
     trackUpdater((dt, t) => {
       water.position.y = waterY + Math.sin(t * 0.7) * 0.12;
+      // W10 R2A repair: the depth / foam / wet-sand terms follow the LIVE (bobbing) surface, so the foam lip stays on the drawn waterline at crest and
+      // trough (was the static level: +-0.12 m of bob slid the lip off the shore for part of every ~9 s cycle). Desktop medium+ only: low / touch keep it static
+      if (W10V && LCFX) LCU.uLcWater.value.x = water.position.y;
       if (wN) { wN.offset.x = t * 0.015; wN.offset.y = t * 0.011; }   // drifting ripples
     });
   }
@@ -1648,11 +1869,13 @@ export async function buildMap(W, mapId) {
         top: new THREE.Uniform(zenith), bot: new THREE.Uniform(horizon), sunDir: new THREE.Uniform(sunDir),
         tNoise: new THREE.Uniform(bakeCloudNoise(W._texAniso)), cloudT: new THREE.Uniform(0),
         cloudOff: new THREE.Uniform(cloudOff), cloudCov: new THREE.Uniform(K.cloud != null ? K.cloud : 0.45),
+        uUw: new THREE.Uniform(0), uUwCol: new THREE.Uniform(new THREE.Color(0x2c6f7a)),   // W10 R2A: the dome seen from under the water (0 = off: skipped)
       },
       vertexShader: "varying vec3 vp; void main(){ vp = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
       fragmentShader: `varying vec3 vp;
         uniform vec3 top; uniform vec3 bot; uniform vec3 sunDir;
         uniform sampler2D tNoise; uniform float cloudT; uniform vec2 cloudOff; uniform float cloudCov;
+        uniform float uUw; uniform vec3 uUwCol;
         void main(){
           vec3 d = normalize(vp);
           float h = clamp(d.y, 0.0, 1.0);
@@ -1681,6 +1904,8 @@ export async function buildMap(W, mapId) {
             float a = (1.0 - exp(-depth * 5.0)) * m;
             col = mix(col, cc, clamp(a * 1.6, 0.0, 0.92));
           }
+          // W10 R2A (desktop medium+): under the water the sky is lost in the water's own colour (uniform-coherent; 0 = skipped, bit-identical)
+          if (uUw > 0.0) col = mix(col, uUwCol * (0.55 + 0.45 * clamp(d.y, 0.0, 1.0)), uUw * 0.94);
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
@@ -1691,7 +1916,7 @@ export async function buildMap(W, mapId) {
       const wr = W.SIM.mulberry32(seed ^ 0x77d1a5), wa = wr() * Math.PI * 2;
       LCU.uLcWind.value.set(Math.cos(wa), Math.sin(wa), LCFX ? 1 : 0, 0);
       LCU.uLcCloud.value = skyMat.uniforms.tNoise.value;
-      LCU.uLcCloudK.value.set(sunDir.x / Math.max(0.2, sunDir.y), sunDir.z / Math.max(0.2, sunDir.y), 1.02 - (K.cloud != null ? K.cloud : 0.5) * 0.62, LCFX ? 0.5 : 0);
+      LCU.uLcCloudK.value.set(sunDir.x / Math.max(0.2, sunDir.y), sunDir.z / Math.max(0.2, sunDir.y), 1.02 - (K.cloud != null ? K.cloud : 0.5) * 0.62, LCFX ? (W10V ? W10_CLOUD_SHADOW : 0.5) : 0);   // (W10 R2A desktop: a cloud takes 62 % of the sun)
       LCU.uLcCloudOff.value.copy(cloudOff);
     }
     const sky = new THREE.Mesh(skyGeo, skyMat);
@@ -1737,6 +1962,15 @@ export async function buildMap(W, mapId) {
       // else it parallaxes as you move and its far shell clips the 2000m far-plane at map corners
       if (W.camera) sky.position.copy(W.camera.position);
       skyMat.uniforms.cloudT.value = t;    // scrolls both baked cloud layers (replaces the sprite drift)
+      if (W10V) {
+        // W10 R2A: the water reflects the dome's cloud deck where it is (high / ultra); under the water the dome and the output pass go murky (W._uw is
+        // player.js's 0..1 submersion ramp); the output pass's contrast curve. Low / touch: none of it (every term 0 = skipped)
+        LCU.uLcSkyCl.value.x = cloudOff.x + t * 0.0035; LCU.uLcSkyCl.value.y = cloudOff.y + t * 0.0014;
+        const uw = W._uw > 0.001 && W.phase !== "menu" ? Math.min(1, W._uw) : 0;
+        skyMat.uniforms.uUw.value = uw;
+        const op = W.kernel && W.kernel.outputPass;
+        if (op && op.uniforms && op.uniforms.lcGrade) op.uniforms.lcGrade.value.set(K.w10Light && K.w10Light.contrast != null ? K.w10Light.contrast : W10_CONTRAST, uw, 0, 0);
+      }
       LCU.uLcT.value = t; LCU.uLcWater.value.y = t;
       LCU.uLcCloudOff.value.set(cloudOff.x + t * 0.0072 * LCU.uLcWind.value.x, cloudOff.y + t * 0.0072 * LCU.uLcWind.value.y);   // ~7 m/s of drift
       let bi = 0;
@@ -4133,7 +4367,8 @@ export async function buildMap(W, mapId) {
     plaster: "stucco", stucco: "stucco", fabric: "stucco", ceramic: "stucco", plank: "plank", plank_in: "plank", floor_wood: "plank", wood: "plank" };
   // the indoor ambient term: interior faces and furniture take this share of their colour (lamp panels keep theirs). Deepwood's forest light is darker than the
   // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
-  const HG_INDOOR = mapId === "deepwood" ? 0.95 : 0.8;
+  // W10 R2A (desktop medium+): the hemisphere fill is x0.75 outside, and indoors that fill is most of the light - the rooms are lifted back (gate: interiors >= 0.9x)
+  const HG_INDOOR = (mapId === "deepwood" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);   // (per map: K.w10Indoor)
   const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
   const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
   const _hgc = new THREE.Color(), hgColCache = new Map();
@@ -5919,6 +6154,13 @@ export async function buildMap(W, mapId) {
     LCU.uLcWater.value.z = mapId === "deepwood" ? 3.2 : 7.0;   // LC-39: Deepwood's water is 3.7 m at its deepest (p90 2.9 m): on the sea's 7 m scale it never read deep
   }
   photo = await photoPromise;
+  {
+    // W10 R2A: the water textures (desktop medium+), in before the first frame; a failed load = flat water, no foam pattern, no caustics
+    const wt = await waterTexPromise;
+    LCU.uLcWN.value = wt ? wt.normal : null; LCU.uLcFoam.value = wt ? wt.foam : null;
+    if (W10V) { LCU.uLcWaterK.value.x = wt ? (TIER_Q.waterHi ? 0.7 : 0.55) : 0;   // (high / ultra: a choppier, more sparkling sea)
+                LCU.uLcWaterK.value.y = 1; LCU.uLcWaterK.value.w = TIER_Q.waterHi ? 2.2 : 1.5; LCU.uLcWetK.value.y = wt ? 1.1 : 0; }   // (w: high / ultra reflect the sky more mirror-like)
+  }
   buildTerrain();
   emitRoads();
   if (city) buildCityGround();
@@ -5995,10 +6237,14 @@ export async function buildMap(W, mapId) {
     // free it as non-shared, killing the GPU upload the NEXT match still needs.
     let _islTex = null;
     try { _islTex = groundTex(aniso); } catch (e) { _islTex = null; }
+    // W10 R2A (visuals 17, desktop medium+): the islands wear the terrain's grass-and-rock PHOTOGRAPH (mossy rock) instead of the procedural grain, and
+    // the rock mass carries a per-vertex shade: darker on the faces turned down and toward the tip, with faint strata (islShade) - it read as a grey
+    // untextured rock hanging in every wide shot. Same meshes, same draws.
+    const islPhoto = W10V && photo && photo.grass ? photo.grass : null;
     const islMat = (color, rough, geo, span) => {
       const m = new THREE.MeshStandardMaterial({ color, roughness: rough });
       if (_islTex) {
-        m.map = _islTex.map; m.normalMap = _islTex.normal;
+        m.map = islPhoto || _islTex.map; m.normalMap = _islTex.normal;
         m.normalScale = new THREE.Vector2(0.5, 0.5);
         const uv = geo.attributes.uv;
         if (uv) { for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * span, uv.getY(i) * span); uv.needsUpdate = true; }
@@ -6062,6 +6308,17 @@ export async function buildMap(W, mapId) {
       m.computeVertexNormals();
       return m;
     };
+    const islShade = (geo, topY, H, flip) => {
+      if (!islPhoto) return;
+      const P = geo.attributes.position, N = geo.attributes.normal, col = new Float32Array(P.count * 3);
+      for (let v = 0; v < P.count; v++) {
+        const ny = N.getY(v) * (flip ? -1 : 1), y = flip ? -P.getY(v) : P.getY(v), dd = Math.min(1, Math.max(0, (topY - y) / H));
+        const k = (0.62 + 0.38 * (0.5 + 0.5 * Math.max(-1, Math.min(1, ny * 1.3)))) * (1 - 0.25 * dd) * (0.9 + 0.1 * Math.sin(y * 2.3 + P.getX(v) * 0.37));
+        col[v * 3] = k; col[v * 3 + 1] = k * 0.98; col[v * 3 + 2] = k * 0.95;
+      }
+      geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    };
+    const rockC2 = islPhoto ? "#ddd4c6" : rockC;
     const islScaleUV = (geo, span) => { if (!_islTex) return; const uv = geo.attributes.uv; if (uv) { for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * span, uv.getY(i) * span); uv.needsUpdate = true; } };
     for (let i = 0; i < nIsl; i++) {
       const ang = rng() * Math.PI * 2;
@@ -6085,9 +6342,10 @@ export async function buildMap(W, mapId) {
       }
       // hanging rock cone underneath
       const rockGeo = islandRockGeo(rad, i);                              // LC-73: a jagged stratified mass with hanging spurs (was a 14-gon cone: a paper dart from below)
-      if (isl) { islScaleUV(rockGeo, (rad * 2) / TILE); rockGeo.rotateX(Math.PI); rockGeo.translate(ix, topY - 1.4 - rad * 0.75, iz); isl.rocks.push(rockGeo); }
+      if (isl) { islScaleUV(rockGeo, (rad * 2) / TILE); rockGeo.rotateX(Math.PI); rockGeo.translate(ix, topY - 1.4 - rad * 0.75, iz); islShade(rockGeo, topY, rad * 1.8, false); isl.rocks.push(rockGeo); }
       else {
-      const rock = new THREE.Mesh(rockGeo, islMat(rockC, 1, rockGeo, (rad * 2) / TILE));
+      islShade(rockGeo, rad * 0.75, rad * 1.8, true);                       // (unbaked: the mesh is flipped by its rotation, its origin rad x 0.75 under the top)
+      const rock = new THREE.Mesh(rockGeo, Object.assign(islMat(rockC2, 1, rockGeo, (rad * 2) / TILE), { vertexColors: !!islPhoto }));
       // A fixed skylight term at ~6% of the map's horizon colour lifts the fully
       // downward-facing underside without touching the rest of the scene's lighting,
       // and costs no extra light in the shader.
@@ -6180,7 +6438,7 @@ export async function buildMap(W, mapId) {
       const nullGeo = { attributes: {} };                                           // (islMat only scales a UV it finds: the baked geometries carry their own)
       const topM = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(isl.tops, false), Object.assign(islMat(islWhite, 0.95, nullGeo, 1), { vertexColors: true }));
       topM.name = "island:tops"; topM.castShadow = false; topM.receiveShadow = true; g.add(topM);
-      const rockMat = islMat(rockC, 1, nullGeo, 1);
+      const rockMat = Object.assign(islMat(rockC2, 1, nullGeo, 1), { vertexColors: !!islPhoto });
       rockMat.emissive.set(K.sky); rockMat.emissiveIntensity = 0.12;
       const rockM = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(isl.rocks, false), rockMat);
       rockM.name = "island:rocks"; rockM.castShadow = false; rockM.receiveShadow = true; g.add(rockM);
@@ -6974,6 +7232,98 @@ export async function buildMap(W, mapId) {
       clutter.count = n;
       clutter.instanceMatrix.needsUpdate = true;
       clutter.instanceColor.needsUpdate = true;
+    });
+  }
+
+  // ── W10 R2A dense near grass (visuals 2; desktop medium and up) ─────────────
+  // The tufts above are ~0.15 per m2: from eye height the ground between them is a flat green carpet. This is a BLADE layer: one 2-blade card (2
+  // triangles) per GRASS_C m cell of a square around the camera, ONE draw, placed entirely in the vertex shader: the cell grid is WORLD-anchored (the
+  // uniform is the camera's integer cell, a cell's jitter / yaw / size are a hash of its world cell), its height is the baked ground lattice (LCU.uLcHgt),
+  // its colour the ground's own tint (a 200 x 200 bake of colorAt, x the tufts' grade), shrunk to nothing by the ring's edge, never on a street / under a
+  // building (the city mask), in water or off the map. No per-frame CPU work but two uniforms; no shadow pass. Low and touch: not built at all.
+  // GRASS_PLACE (below) is the same placement in JS - the gate's density count reads it; the shader is the drawn truth (the gate also A/Bs the pixels).
+  if (W10V && TIER_Q.grassR > 0 && LCU.uLcHgt.value) {
+    const GR = TIER_Q.grassR, GC = TIER_Q.grassC, GN = Math.ceil((2 * GR) / GC), NI = GN * GN;
+    const gGeo = new THREE.InstancedBufferGeometry();
+    // two blades crossing at ~70 deg, each one triangle: 4.8 cm at the root (was 6: a blade, not a spike), 0.40 / 0.31 m tall (x the cell and clump
+    // scales), the tips leaning apart
+    const bl = (ang, lean, off, ht) => { const c = Math.cos(ang), s = Math.sin(ang); return [-0.024 * c + off, 0, -0.024 * s, 0.024 * c + off, 0, 0.024 * s, lean * -s + off, ht, lean * c]; };
+    const gp = new Float32Array([...bl(0, 0.13, -0.04, 0.4), ...bl(1.22, -0.11, 0.04, 0.31)]);
+    gGeo.setAttribute("position", new THREE.BufferAttribute(gp, 3));
+    gGeo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(18).fill(0).map((v, i) => (i % 3 === 1 ? 1 : 0)), 3));   // lit like the ground under them
+    const cells = new Float32Array(NI * 2);
+    for (let j = 0, k = 0; j < GN; j++) for (let i = 0; i < GN; i++, k += 2) { cells[k] = i - (GN >> 1); cells[k + 1] = j - (GN >> 1); }
+    gGeo.setAttribute("aCell", new THREE.InstancedBufferAttribute(cells, 2));
+    gGeo.instanceCount = NI;
+    // the ground tint (linear, x the tufts' grade) and the no-grass mask (streets, sidewalks, plazas, under buildings), map-wide
+    const TN = 200, tcs = SIZE / TN, tpx = new Uint8Array(TN * TN * 4), _gc = [0, 0, 0], GK = 0.82 * GRADE.ground;
+    for (let j = 0; j < TN; j++) for (let i = 0; i < TN; i++) {
+      const x = -HALF + (i + 0.5) * tcs, z = -HALF + (j + 0.5) * tcs, h0 = heightAt0(x, z), c = colorAt(mapId, h0, x, z, seed, _gc), o = (j * TN + i) * 4;
+      tpx[o] = Math.min(255, Math.round(c[0] * GK * 255)); tpx[o + 1] = Math.min(255, Math.round(c[1] * GK * 255)); tpx[o + 2] = Math.min(255, Math.round(c[2] * GK * 255));
+      tpx[o + 3] = Math.round(grassAt(mapId, h0, x, z, seed) * 255);   // (alpha: grass-ness - sand, mud, snow and rock grow no blades)
+    }
+    const tintTex = lcOwn(new THREE.DataTexture(tpx, TN, TN, THREE.RGBAFormat, THREE.UnsignedByteType));
+    tintTex.magFilter = THREE.LinearFilter; tintTex.minFilter = THREE.LinearFilter; tintTex.needsUpdate = true;
+    const cm = city ? buildCityMask() : null, MN = 400, mpx = new Uint8Array(MN * MN);
+    if (cm) for (let i = 0; i < MN * MN; i++) mpx[i] = cm[i] ? 255 : 0;
+    const maskTex = lcOwn(new THREE.DataTexture(mpx, MN, MN, THREE.RedFormat, THREE.UnsignedByteType));
+    maskTex.magFilter = THREE.NearestFilter; maskTex.minFilter = THREE.NearestFilter; maskTex.needsUpdate = true;
+    const GU = { uGrCam: { value: new THREE.Vector2() }, uGrEye: { value: new THREE.Vector3() }, uGrK: { value: new THREE.Vector4(GR, GC, waterY + 0.35, HALF - 4) },
+      uGrTint: { value: tintTex }, uGrMask: { value: maskTex }, uGrH: { value: K.w10Grass || 1 } };   // (uGrH: the map's blade height - Savanna's dry grass stands taller)
+    const gMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, side: THREE.DoubleSide });
+    gMat.name = "grass-blades";
+    gMat.customProgramCacheKey = () => "lc-grass-v3";
+    gMat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, GU, { uLcHgt: LCU.uLcHgt, uLcHgtK: LCU.uLcHgtK, uGrT: LCU.uLcT, uGrWind: LCU.uLcWind });
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
+attribute vec2 aCell;
+uniform vec2 uGrCam; uniform vec3 uGrEye; uniform vec4 uGrK; uniform sampler2D uGrTint; uniform sampler2D uGrMask; uniform float uGrH;
+uniform sampler2D uLcHgt; uniform vec4 uLcHgtK; uniform float uGrT; uniform vec4 uGrWind;
+varying vec3 vGrC;
+float grH( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.x + p3.y ) * p3.z ); }`)
+        .replace("#include <begin_vertex>", `vec2 gc = uGrCam + aCell;
+float gh1 = grH( gc ), gh2 = grH( gc + 17.3 ), gh3 = grH( gc - 41.7 ), gh4 = grH( gc + 93.1 );
+vec2 wp = ( gc + 0.5 + ( vec2( gh1, gh2 ) - 0.5 ) * 0.9 ) * uGrK.y;
+// clumps (W10 R2A repair; fix3 tighter): ~2.4 m world cells, each with a jittered centre; a card is pulled 50 % toward its clump's centre and stands tallest there,
+// shortest at the clump's rim - tufts with gaps between them, not an even field of spikes
+vec2 gk = floor( wp / 2.4 );
+vec2 gkc = ( gk + 0.5 + ( vec2( grH( gk + 211.0 ), grH( gk + 307.0 ) ) - 0.5 ) * 0.7 ) * 2.4;
+float gcl = mix( 1.5, 0.4, clamp( length( wp - gkc ) / 1.7, 0.0, 1.0 ) );
+wp = mix( wp, gkc, 0.5 );
+float gy = texture2D( uLcHgt, wp * uLcHgtK.x + uLcHgtK.y ).r;
+vec2 guv = ( wp + ${HALF.toFixed(1)} ) / ${SIZE.toFixed(1)};
+vec4 gt = texture2D( uGrTint, guv );
+float gs = ( 1.0 - smoothstep( uGrK.x * 0.72, uGrK.x, length( wp - uGrEye.xz ) ) ) * step( uGrK.z, gy ) * step( texture2D( uGrMask, guv ).r, 0.5 )
+         * step( max( abs( wp.x ), abs( wp.y ) ), uGrK.w ) * ( 0.6 + 0.7 * gh3 ) * gcl
+         * step( gh3 * 0.9 + 0.05, gt.a );   // (grass ground only: the tint's alpha is grassAt - a lawn's edge thins out, small cards last)
+float gca = cos( gh4 * 6.2832 ), gsa = sin( gh4 * 6.2832 ), gtip = position.y;
+// fix3: a blade near the eye is thin (roots x0.75 within ~1 m, full width from ~6 m - the width that keeps a far lawn covered): close up it reads as
+// a blade, not a wide spike; the two roots of a card close up together into a tuft
+vec3 gpo = position; gpo.xz *= gtip < 0.001 ? mix( 0.75, 1.0, smoothstep( 1.0, 6.0, length( wp - uGrEye.xz ) ) ) : 1.0;
+vec3 transformed = vec3( gpo.x * gca - gpo.z * gsa, gpo.y * uGrH, gpo.x * gsa + gpo.z * gca ) * gs;
+transformed.xz += uGrWind.xy * uGrWind.z * ( 0.6 * sin( uGrT * 1.7 + dot( wp, vec2( 0.31, 0.23 ) ) ) + 0.45 ) * gtip * gtip * 0.6 * gs;
+transformed += vec3( wp.x, gy, wp.y );
+vGrC = gt.rgb * mix( 0.36, 1.36, clamp( gtip / 0.4, 0.0, 1.0 ) ) * ( 0.8 + 0.4 * gh2 ) * mix( vec3( 1.0 ), vec3( 1.12, 1.08, 0.82 ), step( 0.78, gh1 ) );   // shaded root, sunlit tip; every 5th blade drier`);
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vGrC;")
+        .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= vGrC;")
+        // both faces lit as the ground under them (a DoubleSide back face flips its normal down: it read as a black spike)
+        .replace("#include <normal_fragment_begin>", "#include <normal_fragment_begin>\nnormal = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );");
+    };
+    lcPatch(gMat, { LC_CLOUD: "", LC_AO: "" });                       // shaded like the ground under them (cloud shadows, contact AO)
+    const blades = new THREE.Mesh(gGeo, gMat);
+    blades.name = "grass-blades"; blades.frustumCulled = false; blades.castShadow = false; blades.receiveShadow = false;
+    blades.userData.grass = { R: GR, C: GC, N: GN, instances: NI };
+    blades.userData.gMask = mpx;                                        // (the gate's density count reads the same mask the shader samples)
+    blades.userData.gTint = { px: tpx, n: TN };                         // (and the same grass-ness alpha)
+    // the ring follows the camera that DRAWS it (set just before the draw: a camera moved after the frame's updaters - a cut, a spectate switch, the
+    // gate's pinned views - never draws blades around a stale point)
+    blades.onBeforeRender = (r, sc, cam) => { const p = cam.position; GU.uGrCam.value.set(Math.floor(p.x / GC), Math.floor(p.z / GC)); GU.uGrEye.value.copy(p); };
+    g.add(blades);
+    W._grassBlades = blades;
+    trackUpdater(() => {
+      const cam = W.camera; if (!cam) return;
+      const p = cam.position;
+      blades.visible = p.y - Math.max(heightAt0(p.x, p.z), waterY) < 80;          // (the drop / glide: a 30 m ring under a camera 300 m up is invisible)
     });
   }
 
