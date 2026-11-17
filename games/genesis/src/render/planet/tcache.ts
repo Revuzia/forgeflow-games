@@ -39,6 +39,12 @@ const TC_MB = TCACHE ? perfNum('tcmb', 256)! : 256;
 const TC_BUDGET = TCACHE ? perfNum('tcbudget', 200000)! : 0;
 /** mip bias of the display taps (0 = the footprint's own mip); `?tcbias=` */
 const TC_BIAS = TCACHE ? perfNum('tcbias', 0)! : 0;
+/**
+ * texels per pixel (along the patch edge, at its nearest point) a new tile is given; `?tcdens=`. At 1.1 the top-down
+ * 160 m view measured 11 % less fine contrast than the full shader and +3 % green (bilinear resampling at ~1:1 softens
+ * the albedo and the normal offset); memory goes with its square
+ */
+const TC_DENS = TCACHE ? Math.min(2.5, Math.max(1, perfNum('tcdens', 1.4)!)) : 1.4;
 
 /** layer edge (texels), slab edge, and the tile classes (edge in texels; SLAB / class tiles a side) */
 export const TC_SL = 1152;
@@ -450,7 +456,7 @@ export class TerrainCache {
       if (valid && Math.abs(g - t.g) > 0.2) { valid = false; st.rebakeKnot++; }
       if (valid && !t.stale && (t.sun.dot(sunBody) < 0.9976 || Math.abs(yearFrac - t.year) > 0.004)) { t.stale = true; st.rebakeSlow++; }
       // far denser than its pixels now (past the mip the borders allow): a smaller tile, at low priority
-      if (valid && !t.stale && t.cls > 0 && need * 2.6 < CLASSES[t.cls] - PAD) { t.stale = true; st.rebakeClass++; }
+      if (valid && !t.stale && t.cls > 0 && need * (TC_DENS * 2.2) < CLASSES[t.cls] - PAD) { t.stale = true; st.rebakeClass++; }
       // the slot table (two texels): written when it differs (a compacted or re-used slot is caught here too)
       const k = p.tSlot & 15, d = tab.image.data as unknown as Float32Array, o = k * 8;
       let l = -1, ox = 0, oy = 0, sz = 0;
@@ -466,7 +472,7 @@ export class TerrainCache {
       if (!this.enabled || !primary) continue;
       if (t.hot) { st.hot++; continue; }
       if (wide) { st.wide++; if (t.slab) this.release(t); continue; }
-      if (need * 1.1 > CLASSES[CLASSES.length - 1] - PAD) { st.near++; if (!valid && t.slab) this.release(t); continue; }
+      if (need * TC_DENS > CLASSES[CLASSES.length - 1] - PAD) { st.near++; if (!valid && t.slab) this.release(t); continue; }
       if (!valid || t.stale) this.queue.push(p);
     }
     st.queued = this.queue.length;
@@ -503,7 +509,7 @@ export class TerrainCache {
       const t = this.tiles.get(p)!;
       const need = t.need;
       let cls = 0;
-      while (cls < CLASSES.length - 1 && CLASSES[cls] - PAD < need * 1.1) cls++;
+      while (cls < CLASSES.length - 1 && CLASSES[cls] - PAD < need * TC_DENS) cls++;
       const S = CLASSES[cls];
       if (S * S > credit) { if (!held) { held = true; credit *= 0.5; } continue; }
       const range = this.lod.tcRange(p);

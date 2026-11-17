@@ -2035,3 +2035,15 @@ long press frame-rate independent. Report after 1-2 verified.
   PAN pairs: 2 frames after a camera jump the SKY still converges (grey -> blue between the two shots), so a pan
   pair's whole-image number is the sky's: measure the ground rows only.
 - NEXT: build s22/dist4, run `--views=graze,peak --pan=4` again (ground crop), edits result of run x, Ultra count, gate.
+- STEP 3 EDITS / TIME (run x on dist3, orbit 220 m over the town, sheet s22/sheet-xe.png LOOKED AT; 0 errors):
+  paint snow 60 m -> the snow sheet is in the cache shot (pair 3.65); crater -> new ground in the cache shot (1.75);
+  paint lava -> 22 patches `hot` (full shader), the pair's 31 is the blast's dust and smoke moving between the two
+  shots, not the ground; +600 ticks (night) 1.91, RGB 24.0 20.7 16.2 / 22.1 18.9 14.9, 95 hot (the fire spread).
+  dirtyCells after the snow step: 9196 (the sim's own drift past the WATCH thresholds, not only the 7 painted cells):
+  the thresholds may be tighter than needed; every dirty tile was re-baked within the settle (queued 0).
+  e0 / e1 pairs (5.04 / 3.65): a red band on the far ridge = the linear-blend bracket error again -> dist4 (tcFade).
+- PAN (run x, 5 steps of 9 degrees at 110 m, low view to the horizon, shots 2 frames after each jump, ground rows only):
+  step 2 1.99, step 3 1.80 with 387-400 patches cached and 156-164 on the full shader in the same frame: no line
+  between cached and live patches (sheet s22/sheet-xpan.png LOOKED AT). Steps 0-1 are not usable as pairs: the LOD was
+  still landing between the two shots (the pond is a coarse polygon in the first). A true frame-by-frame switch test
+  (fixed camera, tiles landing one by one) is NOT done.
