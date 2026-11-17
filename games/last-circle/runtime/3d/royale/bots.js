@@ -4534,7 +4534,10 @@ function moveTowardQ(W, b, dt, sprint, ty) {
     // jump at most once every 0.9s — the old EVERY-FRAME jump while stuck
     // read as a bot pogo-ing in place inside a house for a minute straight
     // (owner witnessed it). One hop per second is a real "try to get over it".
-    if (!hopIndoors && (bb.nextJumpT || 0) <= W.t) { inp.jump = true; bb.nextJumpT = W.t + 0.9; }
+    // (W10 R1A fix7) a stuck hop only from the ground: a jump pressed in mid-air is player.js stepActor's rare air-jump branch (it re-opens the canopy over 12 m),
+    // and a bot reaching it for the first time mid-match threw stepActor out of optimized code (V8 deopt at player.js:2434 'insufficient type feedback',
+    // p23_tierprof kb [ashgrid low] 84-86 KB a frame, stepActor 9.6 of them; with the guard 77.9-81.4, stepActor 4.6-5.1). A hop pressed in the air did nothing.)
+    if (!hopIndoors && a.onGround && (bb.nextJumpT || 0) <= W.t) { inp.jump = true; bb.nextJumpT = W.t + 0.9; }
     // COMMIT to one detour side — the old per-frame random ±1 jittered the bot
     // left-right against the same wall face forever
     if (!bb.detourDir) bb.detourDir = b.rng() < 0.5 ? -1 : 1;
@@ -4647,7 +4650,7 @@ function offFurniture(W, b, dt) {
   nav.st.offFurn++;
   SYQ[0] = bb.offFurnYaw; steerYawQ(a, dt, 20);
   // a pocket on the FLOOR is often closed by low pieces (a side table, a chair): pinned there, hop (a 0.85 m table is in reach: then this walks off it)
-  if (dy < 0.3 && (bb.stuckT > 0.7 || bb.pinN >= 1) && bb.nextJumpT <= W.t) { a.input.jump = true; bb.nextJumpT = W.t + 0.9; }
+  if (dy < 0.3 && a.onGround && (bb.stuckT > 0.7 || bb.pinN >= 1) && bb.nextJumpT <= W.t) { a.input.jump = true; bb.nextJumpT = W.t + 0.9; }
   const B = basisOf(a.input, _mb0), wdx = -Math.sin(bb.offFurnYaw), wdz = -Math.cos(bb.offFurnYaw);
   a.input.mz = wdx * B.fx + wdz * B.fz; a.input.mx = wdx * B.rx + wdz * B.rz; a.input.sprint = false;
   return true;
