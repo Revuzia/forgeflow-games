@@ -1091,12 +1091,20 @@ class ValeRenderer implements Renderer {
     this.buildTelegraphs();
   }
 
-  /** orch1 W2-A (ruling 46): the re-keyed ground (lanes L* 38 -> 51) sits closer in value to the HARM orange, so an
-   *  enemy telegraph carries a dark ink band just inside its edge and a stronger outer keyline: the shape is cut out of
-   *  the pale stone by value, the way a stylised MOBA keeps a danger zone readable on light ground. Same program, one
-   *  extra instance per enemy shape. Harness seam: teleInk.on = false is the wave-1 telegraph. */
-  readonly teleInk = { on: true, key: 0.6, band: 0.45, bandPx: 6 };
+  /** orch1 W2-A (ruling 48): the re-keyed ground (lanes L* 38 -> 51) sits close in value to the HARM marigold (L* ~73),
+   *  so an orange edge alone reads ~2:1 on the lane. An enemy telegraph therefore wears a dark ink band OUTSIDE its edge
+   *  (`bandPx` screen px at `band` alpha, the shape grown by that width in metres at its own distance, so no fill lies
+   *  under it) and a wider edge (`edgePx`): marigold over ink over stone, the danger zone cut out of the ground by value
+   *  on pale and dark ground alike (WCAG 1.4.11's 3:1 for a UI boundary). Same program, one extra instance per enemy
+   *  shape. Harness seam: teleInk.on = false is the wave-1 telegraph. */
+  readonly teleInk = { on: true, key: 0.6, band: 1, bandPx: 4, edge: 1, edgePx: 4 };
   private readonly inkBlack = new Color(0, 0, 0);
+  /** world metres per drawing-buffer pixel at ground point (x, z) (the telegraph target's resolution) */
+  private metresPerPx(x: number, z: number): number {
+    const cam = this.rig.camera, h = overlayUniforms.uResolution.value.y > 4 ? overlayUniforms.uResolution.value.y : this.gl.domElement.height;
+    const d = Math.hypot(cam.position.x - x, cam.position.y, cam.position.z - z);
+    return (2 * d * Math.tan((cam.fov * Math.PI) / 360)) / Math.max(1, h * (cam.zoom || 1));
+  }
 
   private buildTelegraphs(): void {
     const p = this.palette;
@@ -1132,11 +1140,23 @@ class ValeRenderer implements Renderer {
         }
         const ink = this.teleInk;
         if (ink.on) {
-          // the ink band first, so the relationship edge draws over its outer part and the band shows inside it
-          const col = spec.color, fill = spec.fill, edge = spec.edge, px = spec.edgePx, rf = spec.ringFlash, tick = spec.tick;
-          spec.color = this.inkBlack; spec.fill = 0; spec.edge = ink.band; spec.edgePx = ink.bandPx; spec.ringFlash = 0; spec.tick = null; spec.key = 0;
+          // the ink band: the same shape grown by the band's width, its edge band (drawn inside ITS boundary) lying just
+          // outside the real edge, where no fill is. MAX blending: where the two overlap (the grow is sized by the
+          // smallest pixel footprint, so a foreshortened side overlaps inward) the marigold edge wins, never a gap.
+          const col = spec.color, fill = spec.fill, edge = spec.edge, rf = spec.ringFlash, tick = spec.tick;
+          const x = spec.x, z = spec.z, radius = spec.radius, inner = spec.inner, length = spec.length, width = spec.width;
+          const g = ink.bandPx * this.metresPerPx(tg.x, tg.y), fx = Math.cos(spec.dir), fz = Math.sin(spec.dir);
+          if (spec.shape === TELE_SHAPE.circle) spec.radius += g;
+          else if (spec.shape === TELE_SHAPE.ring) { spec.radius += g; spec.inner = Math.max(0, spec.inner - g); }
+          else if (spec.shape === TELE_SHAPE.cone) {
+            // the sides offset by g: the apex steps back g / sin(half angle) along the axis (a wide cone just steps back g)
+            const back = spec.halfAngle < 1.45 ? g / Math.max(0.2, Math.sin(spec.halfAngle)) : g;
+            spec.x -= fx * back; spec.z -= fz * back; spec.radius += back + g;
+          } else { spec.x -= fx * g; spec.z -= fz * g; spec.length += 2 * g; spec.width += 2 * g; }
+          spec.color = this.inkBlack; spec.fill = 0; spec.edge = ink.band; spec.edgePx = ink.bandPx; spec.ringFlash = 0; spec.tick = null; spec.key = ink.key;
           t.push(spec);
-          spec.color = col; spec.fill = fill; spec.edge = edge; spec.edgePx = px; spec.ringFlash = rf; spec.tick = tick;
+          spec.x = x; spec.z = z; spec.radius = radius; spec.inner = inner; spec.length = length; spec.width = width;
+          spec.color = col; spec.fill = fill; spec.edge = Math.max(edge, ink.edge); spec.edgePx = ink.edgePx; spec.ringFlash = rf; spec.tick = tick;
           spec.key = ink.key;
         } else spec.key = undefined;
       } else if (rel === 'neutral') {

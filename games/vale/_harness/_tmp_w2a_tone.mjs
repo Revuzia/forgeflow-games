@@ -26,12 +26,13 @@ const measure = (b, a) => {
   const read = (x0, y0, w, h) => { const o = document.createElement('canvas'); o.width = w; o.height = h; const c = o.getContext('2d', { willReadFrequently: true }); c.drawImage(canvas, x0, y0, w, h, 0, 0, w, h); return c.getImageData(0, 0, w, h).data; };
   const med = (v) => { const s = [...v].sort((p, q) => p - q); return s.length ? s[s.length >> 1] : NaN; };
   R.w2a.apply();
-  const base = { ao: U.valeCharAo.value.clone(), fill: U.valeCharFill.value.clone(), crown: U.valeCharCrown.value.clone() };
+  const base = { ao: U.valeCharAo.value.clone(), fill: U.valeCharFill.value.clone(), crown: U.valeCharCrown.value.clone(), spec: U.valeCharSpecRoll?.value ?? 0 };
   const setV = (v) => {
     R.w2a.apply();
     U.valeCharAo.value.set(v.ao ?? base.ao.x, v.knee ?? base.ao.y, v.ceil ?? base.ao.z, v.floor ?? base.ao.w);
     U.valeCharFill.value.copy(base.fill).multiplyScalar(v.fill ?? 1);
     U.valeCharCrown.value.set(v.crownAbs ?? base.crown.x * (v.crown ?? 1), v.pow ?? base.crown.y);
+    if (U.valeCharSpecRoll) U.valeCharSpecRoll.value = v.spec ?? base.spec;
   };
   const out = [];
   for (const id of a.ids) {

@@ -154,6 +154,10 @@ export const worldUniforms = {
   // bleaching it to cream), w = the eye fill's albedo value floor (linear luminance; CHAR_LIGHT.tone.fillFloor). lighting.ts
   // CHAR_LIGHT.tone sets it; (1, 0, 0, 0) = off
   valeCharAo: { value: new Vector4(1, 0, 0, 0) },
+  // orch1 W2-A fix 1: the share of a fighter's direct and indirect SPECULAR that joins its diffuse in the value roll-off
+  // above (0 = diffuse only). A polished pale kit's top quarter is specular (Ardit's chalk plate), which the diffuse
+  // roll-off never reached; at 1 the whole reflected light eases under the ceiling, its hue and the glint's shape kept
+  valeCharSpecRoll: { value: 0 },
   // max env ENV-10: drifting cloud shadow on the sun term of world (non-character) materials: x = its amplitude (0 =
   // off; setCloudShadow: the map's art.terrain.cloudShadow × the tier's switch), y = 1 / the cloud scale (m),
   // zw = drift (m/s)
@@ -343,6 +347,7 @@ uniform float valeCharMonster;
 uniform float valeCharMat;
 uniform vec4 valeCharChroma;
 uniform vec4 valeCharAo;
+uniform float valeCharSpecRoll;
 // MAX U1 fix round: the albedo hue lift (header of worldUniforms.valeCharChroma). The bakes paint fighters at CIELAB
 // chroma 5-18 (mean), so at 28.5 m under the grade they read as hue-less clay; this lifts the display-space chroma about
 // the texel's own Rec.709 luma, never past valeCharChroma.y HSV saturation and never below black, and pulls the palest
@@ -450,12 +455,14 @@ const CHAR_AO = /* glsl */`
 	#endif
 #endif
 if ( valeCharMode > 1.5 && valeCharAo.z > valeCharAo.y ) {
-	vec3 valeD = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
+	vec3 valeD = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + valeCharSpecRoll * ( reflectedLight.directSpecular + reflectedLight.indirectSpecular );
 	float valePk = max( valeD.r, max( valeD.g, valeD.b ) );
 	if ( valePk > valeCharAo.y ) {
 		float valeOver = valePk - valeCharAo.y, valeSpan = valeCharAo.z - valeCharAo.y;
 		float valeS = ( valeCharAo.y + valeOver / ( 1.0 + valeOver / valeSpan ) ) / valePk;
 		reflectedLight.directDiffuse *= valeS; reflectedLight.indirectDiffuse *= valeS;
+		float valeSs = mix( 1.0, valeS, valeCharSpecRoll );
+		reflectedLight.directSpecular *= valeSs; reflectedLight.indirectSpecular *= valeSs;
 	}
 }
 `;
