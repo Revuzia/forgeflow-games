@@ -2003,3 +2003,20 @@ long press frame-rate independent. Report after 1-2 verified.
   far, at most 12 a try); a class that found no room is not retried in that frame.
 - NEXT: rebuild into s22/dist2, re-run graze + the views that differ, then a REAL grazing camera (tilt ~85), then
   edits (`--edits=1`), the pan (`--pan=8`), then the Ultra 1686x963 tile count (`scene=0`), then check + build.
+- STEP 2 RESULTS so far (build s22/dist2 = uwFar split + steal + credit budget + LOD distance for the class; run
+  `--tag=w`, log s22/pw.log, high 320x180; in-page A/B; sheet tool `_harness/arc-work/sheet-s22.py out.png name..`):
+  view                        mean |d|   mean RGB live / cache                 detail live / cache
+  town 90 m (dist, step 1)      2.17     102.3 116.8 79.4 / 102.3 116.9 80.2     6.87 / 7.51
+  meadow 14 m (step 1)          1.85     101.4 117.8 69.1 / 101.1 117.4 68.7     4.88 / 5.00
+  forest floor 18 m (run v)     1.04     29.7 22.8 13.8 / 29.7 22.8 13.8         3.66 / 3.75
+  top-down 160 m (`graze`)      3.42     100.6 113.9 67.2 / 101.9 116.2 67.8     5.74 / 6.19   lake bed now equal
+  TRUE GRAZING (tilt 84, 120 m) 1.91     94.9 120.6 131.2 / 94.9 120.4 130.9     5.80 / 5.74   LOOKED AT: no lines
+  0 page errors, 0 GL messages in every run. Sheets looked at: t5 (town, meadow), v2 (floor), w1 (top-down), w2 (grazing).
+  The top-down view's +2 % green and higher detail: at 320x180 the LOD's K is clamped to 3, patches are 16-64 px, and a
+  class-96 tile is up to 5x denser than its pixels: past the mip-1.5 clamp it is undersampled. Not the Mac's case
+  (need 64-128 there), but fixed in source for both: classes 48 and 72 added, and a tile > 2.6x denser than its pixels
+  re-bakes smaller at low priority. NOT YET BUILT / RUN.
+  The white ring in some cache shots is the hand cursor (it is in s19's diffs too), not the cache.
+- BAKE RATE seen: the first `rock` run starved (one class-576 tile a frame, 539 queued): fixed by the credit budget
+  (a tile that does not fit waits, smaller ones behind it use half of what is left).
+- NEXT: finish run w (far orbit peak rock) -> build s22/dist3 -> `--edits=1`, `--pan=8`, Ultra 1686x963 count, gate.
