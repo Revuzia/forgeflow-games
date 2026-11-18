@@ -42,7 +42,45 @@
    "variant": 2
   },
   "figure_median": 1,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "hand": {
+   "bone": "head",
+   "variant": 3,
+   "why": "orch1 W2-C fix (verify_r2_g1b: dark eye bars): face-only repaint (whole-mask crop): two calm carved lidded eyes with a lash line under the brow shelf; by eye at full / 128 / 64",
+   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a pale carved wooden mask with flat carved planes under a wide flat lampshade hat with a small caged lantern: under the brow shelf two clearly carved calm closed almond eyes, each a pale lit upper lid with a dark lash line beneath it and a lit lower lid, the same calm shape on both sides, small and stylised; no dark bar, black wedge or shadow band where the eyes are; keep the nose, the faint calm half-smile, the hat, the lantern and every colour as in the crop; no lines or streaks on the cheeks. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_tunlan_portrait_head__v3.png",
+   "raw_sha256": "4a1e7a65e1a217741de9400af5d102a4222e56d98def8d14d2d9f1bf2f135660",
+   "gate": {
+    "variant": 3,
+    "free": 0,
+    "struct": 0.994,
+    "pal_mean": 2.1,
+    "sclera": 0.023,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-18"
+  },
+  "hands": [
+   {
+    "bone": "head",
+    "variant": 3,
+    "why": "orch1 W2-C fix (verify_r2_g1b: dark eye bars): face-only repaint (whole-mask crop): two calm carved lidded eyes with a lash line under the brow shelf; by eye at full / 128 / 64",
+    "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a pale carved wooden mask with flat carved planes under a wide flat lampshade hat with a small caged lantern: under the brow shelf two clearly carved calm closed almond eyes, each a pale lit upper lid with a dark lash line beneath it and a lit lower lid, the same calm shape on both sides, small and stylised; no dark bar, black wedge or shadow band where the eyes are; keep the nose, the faint calm half-smile, the hat, the lantern and every colour as in the crop; no lines or streaks on the cheeks. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_tunlan_portrait_head__v3.png",
+    "raw_sha256": "4a1e7a65e1a217741de9400af5d102a4222e56d98def8d14d2d9f1bf2f135660",
+    "gate": {
+     "variant": 3,
+     "free": 0,
+     "struct": 0.994,
+     "pal_mean": 2.1,
+     "sclera": 0.023,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-18"
+   }
+  ]
  },
  "tunlan:splash": {
   "shipped": "painted",

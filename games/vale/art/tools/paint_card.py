@@ -689,8 +689,12 @@ def sheet(fid: str, rev: str) -> None:
 
 
 # ── hands: a hand-only repaint through the same edit path (cards third pass, verify 2 item 6) ───────────────────────
-HAND_BOX = {"nurrow_noon_fair:splash:hand.L": 0.24, "nurrow_shadeprint:splash:hand.L": 0.24}      # (max2 g2 fix) "<sid>:<kind>:<bone>" -> the crop's side as a share of the card height (default 0.16 /
-                    # 0.30 head / 0.32 portrait): Nurrow's splayed hip hand reached past the 0.16 crop's disc
+HAND_BOX = {"nurrow_noon_fair:splash:hand.L": 0.24, "nurrow_shadeprint:splash:hand.L": 0.24,
+            "tunlan:portrait:head": 0.62, "vashil_chalkline:portrait:head": 0.5, "vashil_first_bell:portrait:head": 0.5,
+            "marund_gorgewalk:portrait:head": 0.5}
+# (max2 g2 fix) "<sid>:<kind>:<bone>" -> the crop's side as a share of the card height (default 0.16 / 0.30 head /
+# 0.32 portrait): Nurrow's splayed hip hand reached past the 0.16 crop's disc. (orch1 W2-C fix) a portrait's face-only
+# repaint needs the whole mask in the crop (Tunlan's 0.32 crop held only the nose and one eye)
 
 
 def hand_box(sid: str, kind: str, bone: str) -> tuple[int, int, int]:

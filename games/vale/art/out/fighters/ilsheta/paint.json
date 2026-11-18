@@ -155,47 +155,47 @@
  },
  "ilsheta_first_bell:splash": {
   "shipped": "painted",
-  "variant": 3,
-  "why": "max2 g1 (verify roll2: red-rimmed pinhole eyes, under-eye shading, nostril hollows; white dots on the hem): the 3D finish deepens the glass eyes to dark amber (plates.retouch hue per eye); second paint round, v3: smooth carved plate, lidded dark-brown eyes with pupils, no nostrils, hem carries only the render's ticks; passes every gate incl. blockers. Watch: the chest hand's dark fingers are the model's",
+  "variant": 2,
+  "why": "orch1 W2-C fix (verify_r2_g1b: blank pale oval): painted v2 (prompt v8): carved brow, nose ridge and a closed mouth line on the face-plate",
   "model": "grok-imagine-image",
-  "prompt_version": 6,
-  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A wide 16:9 splash card. The character: a small, round lamp-bearer in a soft, low, rounded warm bell-bronze felt hood and scarf, a pale dial-stone mantle over a warm bronze-grey lower mantle and a dark hem with small pale hour-mark ticks, a tall honey-amber glass lamp-chimney visor on the crown of the hood, under it a carved pale face-plate with two warm amber glass eyes with dark pupils, dark leggings and boots, holding a hook-staff with a glass lamp that holds a small glass bell in front of its blue flame core. The face-plate behind the glass is carved and alive, never a blank white oval, a doll or a mannequin: keep its carved brow, nose and eyes exactly as rendered, with no marks, lines, cracks or streaks under the eyes. The nose is a smooth carved ridge with no nostril holes; no sunken cheeks, no deep round eye sockets, no cracked or aged surface: never a skull. Light: a low warm golden sun from the right, a warm rim light along the character's right edges, cooler shadow on the far side, a soft shadow cast from the feet onto the ground they stand on. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow, no bright or saturated ring round the iris; the irises exactly as muted and dark as in the reference, never more saturated or brighter. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-  "raw": "tools/imagegen/raw/card_ilsheta_first_bell_splash__v3.png",
-  "raw_sha256": "a3e69f770d377a33df3a729db3d484f234e90bef50e257da937655ad3992e91a",
+  "prompt_version": 8,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A wide 16:9 splash card. The character: a small, round lamp-bearer in a soft, low, rounded warm bell-bronze felt hood and scarf, a pale dial-stone mantle over a warm bronze-grey lower mantle and a dark hem with small pale hour-mark ticks, a tall honey-amber glass lamp-chimney visor on the crown of the hood, under it a carved pale face-plate with two warm amber glass eyes with dark pupils, dark leggings and boots, holding a hook-staff with a glass lamp that holds a small glass bell in front of its blue flame core. The face-plate behind the glass is carved and alive, never a blank white oval, a doll or a mannequin: keep its carved brow, nose and eyes exactly as rendered, with no marks, lines, cracks or streaks under the eyes. The nose is a smooth carved ridge with no nostril holes; no sunken cheeks, no deep round eye sockets, no cracked or aged surface: never a skull. Light: a low warm golden sun from the right, a warm rim light along the character's right edges, cooler shadow on the far side, a soft shadow cast from the feet onto the ground they stand on. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow, no bright or saturated ring round the iris; the irises exactly as muted and dark as in the reference, never more saturated or brighter. The face-plate is carved and shaded: a soft shadowed brow ridge over the two eyes, a carved nose ridge with a shadow on its far side, a small calm closed mouth line and soft shading on the far cheek and under the chin; no streak or line on the forehead. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "raw": "tools/imagegen/raw/card_ilsheta_first_bell_splash__v2.png",
+  "raw_sha256": "7684e49616de08497262063c9a369adf90c064bce218d59e9ae4a6c47e26c743",
   "gate": {
    "aspect_err": 0.0,
-   "struct": 0.999,
+   "struct": 0.996,
    "iou": 0.847,
-   "pal_mean": 2.7,
-   "pal_max": 3.0,
-   "face_range": 1.15,
-   "face_dark": 1.12,
-   "face_corr": 0.99,
+   "pal_mean": 3.0,
+   "pal_max": 3.4,
+   "face_range": 1.19,
+   "face_dark": 1.05,
+   "face_corr": 0.98,
    "new_colour": 0.0,
-   "eye_ds": 2.9,
-   "eye_dv": 11.0,
+   "eye_ds": 2.3,
+   "eye_dv": 9.0,
    "prop_out": 0.0,
    "prop_out_fill": 0.0,
    "prop_in": 0.0,
    "prop_in_fill": 0.0,
    "blockers": {
-    "hollow": 11.378,
-    "blank": 0.424,
+    "hollow": 4.517,
+    "blank": 0.391,
     "glow": 0.0,
-    "streak": 0.0045,
-    "cracked": 0.0156,
-    "dots": 205,
+    "streak": 0.0112,
+    "cracked": 0.038,
+    "dots": 264,
     "hits": []
    },
    "blockers_3d": [],
-   "menu_p50": 109,
+   "menu_p50": 107,
    "menu_over200": 1.0,
    "fails": [],
    "pass": true,
-   "variant": 3
+   "variant": 2
   },
   "figure_median": 1,
-  "date": "2026-11-12"
+  "date": "2026-11-18"
  },
  "ilsheta_stillwater:portrait": {
   "shipped": "painted",
@@ -319,6 +319,48 @@
    }
   ],
   "prompt_version": 4,
-  "date": "2026-11-11"
+  "date": "2026-11-11",
+  "hand": {
+   "bone": "head",
+   "variant": 1,
+   "why": "orch1 W2-C fix (verify_r2_g1b, card_qa blank 0.65: flat pale disc): face-only repaint: carved brow, nose ridge, closed mouth line, amber eyes with pupils and lids, far cheek shaded; the sclera tripwire reads the amber glass eyes' pale lid rims",
+   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a carved pale stone face-plate inside a soft low rounded wet-stone grey hood under a tall clear glass lamp-chimney: a soft shadowed carved brow ridge over two warm amber glass eyes, each with a dark pupil and a lid edge, a carved nose ridge with a shadow on its far side, a small calm closed mouth line, soft shading on the far cheek and under the chin; the plate carved and alive, never a blank oval; no streak or line on the forehead; keep the hood, the glass chimney and every colour as in the crop. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_ilsheta_stillwater_splash_head__v1.png",
+   "raw_sha256": "c7f5695f90ef13374de5f27ec19bce14e7289d1d8e90b6d21bf65d23f81b8748",
+   "gate": {
+    "variant": 1,
+    "free": 0,
+    "struct": 0.982,
+    "pal_mean": 3.0,
+    "sclera": 0.202,
+    "fails": [
+     "sclera"
+    ],
+    "pass": false
+   },
+   "date": "2026-11-18"
+  },
+  "hands": [
+   {
+    "bone": "head",
+    "variant": 1,
+    "why": "orch1 W2-C fix (verify_r2_g1b, card_qa blank 0.65: flat pale disc): face-only repaint: carved brow, nose ridge, closed mouth line, amber eyes with pupils and lids, far cheek shaded; the sclera tripwire reads the amber glass eyes' pale lid rims",
+    "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a carved pale stone face-plate inside a soft low rounded wet-stone grey hood under a tall clear glass lamp-chimney: a soft shadowed carved brow ridge over two warm amber glass eyes, each with a dark pupil and a lid edge, a carved nose ridge with a shadow on its far side, a small calm closed mouth line, soft shading on the far cheek and under the chin; the plate carved and alive, never a blank oval; no streak or line on the forehead; keep the hood, the glass chimney and every colour as in the crop. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_ilsheta_stillwater_splash_head__v1.png",
+    "raw_sha256": "c7f5695f90ef13374de5f27ec19bce14e7289d1d8e90b6d21bf65d23f81b8748",
+    "gate": {
+     "variant": 1,
+     "free": 0,
+     "struct": 0.982,
+     "pal_mean": 3.0,
+     "sclera": 0.202,
+     "fails": [
+      "sclera"
+     ],
+     "pass": false
+    },
+    "date": "2026-11-18"
+   }
+  ]
  }
 }
