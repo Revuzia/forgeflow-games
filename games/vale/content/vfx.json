@@ -41249,7 +41249,7 @@
       {
         "type": "feel",
         "at": "ground",
-        "hitFlash": 0.3
+        "hitFlash": 0.12
       }
     ]
   },
@@ -41546,9 +41546,9 @@
         "life": 0.55,
         "color": "#4A463F",
         "alpha": [
-          0.85,
-          0.6,
-          0
+          0.45,
+          0.318,
+          0.0
         ],
         "emissive": 0,
         "sharp": 1.6,
@@ -41783,7 +41783,7 @@
         "type": "feel",
         "at": "ground",
         "squash": 0.14,
-        "hitFlash": 0.3
+        "hitFlash": 0.12
       }
     ]
   },
@@ -58780,7 +58780,7 @@
             0
           ]
         ],
-        "emissive": 8,
+        "emissive": 4,
         "rim": "signature",
         "rimPow": 1.5,
         "rimEmissive": 6,
@@ -58891,9 +58891,9 @@
         "life": 0.65,
         "color": "#2B2433",
         "alpha": [
-          0.9,
-          0.7,
-          0
+          0.45,
+          0.35,
+          0.0
         ],
         "emissive": 0,
         "sharp": 1.2,
@@ -58998,10 +58998,10 @@
           "#3E3440"
         ],
         "alpha": [
-          0,
-          0.9,
-          0.75,
-          0
+          0.0,
+          0.45,
+          0.375,
+          0.0
         ],
         "gravity": 0.2,
         "drag": 2.6,
@@ -59193,7 +59193,7 @@
         "type": "feel",
         "at": "target",
         "squash": 0.14,
-        "hitFlash": 0.3
+        "hitFlash": 0.12
       }
     ]
   },
@@ -67716,43 +67716,6 @@
         "type": "feel",
         "at": "origin",
         "squash": 0.14
-      },
-      {
-        "type": "decal",
-        "at": "ground",
-        "style": "ink",
-        "shape": "circle",
-        "color": "#4A1426",
-        "alpha": [
-          [
-            0,
-            0.8
-          ],
-          [
-            0.5,
-            0.65
-          ],
-          [
-            1,
-            0
-          ]
-        ],
-        "radius": [
-          [
-            0,
-            0.6
-          ],
-          [
-            0.1,
-            1.1
-          ],
-          [
-            1,
-            1.15
-          ]
-        ],
-        "rim": "signature",
-        "life": 0.8
       }
     ]
   },
@@ -85271,44 +85234,7 @@
       {
         "type": "feel",
         "at": "target",
-        "hitFlash": 0.3
-      },
-      {
-        "type": "decal",
-        "at": "ground",
-        "style": "ink",
-        "shape": "circle",
-        "color": "#33204D",
-        "alpha": [
-          [
-            0,
-            0.8
-          ],
-          [
-            0.5,
-            0.65
-          ],
-          [
-            1,
-            0
-          ]
-        ],
-        "radius": [
-          [
-            0,
-            0.6
-          ],
-          [
-            0.1,
-            1.1
-          ],
-          [
-            1,
-            1.15
-          ]
-        ],
-        "rim": "signature",
-        "life": 0.8
+        "hitFlash": 0.12
       }
     ]
   },

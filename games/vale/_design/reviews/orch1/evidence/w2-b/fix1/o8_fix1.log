@@ -1,0 +1,14 @@
+         hesmi ult max lift 1.4, detail per frame (lost 1, min 0.46): f35 0.46 [noVfx 0.83 noFlash 1.04 flash k 0.09] (mean 204/134) · f36 0.57 [noVfx 0.85 noFlash 0.99 flash k 0.06] (mean 195/130)
+         box white per beat (VFX off): f35 0.15 (0.658) · f36 0.138 (0.653)
+ult hesmi   ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.129 (lift 0.132, + hit flash 0.138, full frame 0.109) · box 0.15 (box base 0.012)  core ×1.75 ground ×1.68, faded core 123.5 ground 130.3 (samples 123.5 123.9 123.6 123 122.8; before the cast 122.3; waited 90 frames, left none)
+FAIL hesmi: the lift whites 0.129 more of the victim's body at a beat (> 0.10)
+FAIL hesmi: core luma 216 < the clip 218 on the first beat (x1.75; faded core 123.5: x2.0 would be 247, past the clip, ruling 51)
+lineup lisvel,ardit,burdam,dunsom,ervet,nurrow,vashil,hesmi,ilsheta,kemdo
+         nurrow ult max lift 1.4, detail per frame (lost 0, min 0.53): f14 0.53 [noVfx 0.86 noFlash 0.93 flash k 0.07] (mean 199/140) · f15 0.53 [noVfx 0.88 noFlash 0.93 flash k 0.05] (mean 197/138)
+         box white per beat (VFX off): f14 0.014 (0.529) · f15 0.013 (0.588)
+ult nurrow  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.046 (lift 0.065, + hit flash 0.069, full frame 0.021) · box 0.014 (box base 0.012)  core ×1.68 ground ×1.64, faded core 124.8 ground 126.3 (samples 124.6 124.7 125 124.9 124.8; before the cast 124.6; waited 0 frames, left none)
+FAIL nurrow: core luma 209.4 < the clip 218 on the first beat (x1.68; faded core 124.8: x2.0 would be 249.6, past the clip, ruling 51)
+         vashil ult max lift 1.4, detail per frame (lost 0, min 0.51): f28 0.51 [noVfx 0.87 noFlash 0.96 flash k 0.07] (mean 202/137) · f29 0.76 [noVfx 0.94 noFlash 1 flash k 0.05] (mean 189/130)
+         box white per beat (VFX off): f28 0.322 (0.692) · f29 0.262 (0.686)
+ult vashil  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.073 (lift 0.078, + hit flash 0.081, full frame 0.072) · box 0.322 (box base 0.011)  core ×1.85 ground ×1.86, faded core 124.7 ground 126.3 (samples 124.9 124.8 124.7 124.7 124.7; before the cast 124.8; waited 0 frames, left none)
+combat_polish: FAIL (3) → /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_W1_combat_polish_w2bfix_o8.json

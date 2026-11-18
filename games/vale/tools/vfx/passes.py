@@ -442,15 +442,30 @@ def post(d: dict) -> dict:
 NURROW_DOME_ALPHA = 0.3
 
 
+# The first beat's core (ruling 51: luma >= the 218 clip) read 209 / 216 on Nurrow / Hesmi under their dark landing layers at
+# t 0-0.1 s: Nurrow's plum smoke burst (22 puffs of #2B2433 up to 1.8 m at alpha 0.9: a near-black cloud on the victim, the
+# blot the ink rule removes elsewhere) is held to the dust alpha (0.45) and its ink ring to 0.45; Hesmi's ink ring to 0.45.
+ULT_INK_RING_MAX = 0.45
+
+
+def _cap_alpha(l: dict, cap: float) -> None:
+    m = _alpha_max(l.get("alpha", 1))
+    if m > cap:
+        l["alpha"] = _scale_alpha(l.get("alpha", 1), cap / m)
+
+
 def ult_pool_pass(d: dict) -> dict:
-    if d["id"] != "nurrow_ult_lull":
+    if d["id"] not in ("nurrow_ult_lull", "hesmi_ult_shard"):
         return d
     d = copy.deepcopy(d)
     for l in d["layers"]:
-        if l["type"] == "mesh" and l.get("blend") == "ink" and l.get("shape") == "dome":
-            m = _alpha_max(l.get("alpha", 1))
-            if m > NURROW_DOME_ALPHA:
-                l["alpha"] = _scale_alpha(l.get("alpha", 1), NURROW_DOME_ALPHA / m)
+        if d["id"] == "nurrow_ult_lull" and l["type"] == "mesh" and l.get("blend") == "ink" and l.get("shape") == "dome":
+            _cap_alpha(l, NURROW_DOME_ALPHA)
+        elif d["id"] == "nurrow_ult_lull" and l["type"] == "emitter" and l.get("blend") not in ("add", "chip") \
+                and any(isinstance(c, str) and c.upper() == "#2B2433" for c in _refs(l.get("color"))):
+            _cap_alpha(l, DUST_ALPHA_MAX)
+        elif l["type"] == "shockwave" and l.get("blend") == "ink":
+            _cap_alpha(l, ULT_INK_RING_MAX)
     return d
 
 
@@ -459,7 +474,10 @@ def ult_pool_pass(d: dict) -> dict:
 # victim flash (hitFlash 0.55-0.7) is what flattened it. The beat keeps its envelope, core and squash; the body flash is held to
 # ULT_DETAIL_FLASH of it. Idempotent (a value already at or under it stays).
 ULT_DETAIL_DEFS = {"hesmi_ult_shard", "hesmi_ult_shadow", "nurrow_ult_lull", "vashil_ult_toll"}
-ULT_DETAIL_FLASH = 0.3
+# fix 1 (verifier r1: lost 2 / 2 / 1; a boosted flash of k 0.19-0.23 alone cost the body 0.25-0.35 of its detail): 0.12
+ULT_DETAIL_FLASH = 0.12
+# fix 1: Nurrow's pillar of light on the struck unit (additive, emissive 8) bloomed back over the silhouette at the beat
+ULT_DETAIL_PILLAR_EMISSIVE = 4
 
 
 def ult_detail_pass(d: dict) -> dict:
@@ -469,6 +487,9 @@ def ult_detail_pass(d: dict) -> dict:
     for l in d["layers"]:
         if l["type"] == "feel" and (l.get("hitFlash") or 0) > ULT_DETAIL_FLASH:
             l["hitFlash"] = ULT_DETAIL_FLASH
+        if d["id"] == "nurrow_ult_lull" and l["type"] == "mesh" and l.get("shape") == "pillar" and isinstance(l.get("emissive"), (int, float)) \
+                and l["emissive"] > ULT_DETAIL_PILLAR_EMISSIVE:
+            l["emissive"] = ULT_DETAIL_PILLAR_EMISSIVE
     return d
 
 
