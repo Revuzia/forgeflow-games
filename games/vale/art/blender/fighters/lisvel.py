@@ -2159,7 +2159,8 @@ def paint_mask(p, n):
     # (orch1 W3-B, ruling 56) the eyes, open on the plate under the circlet: a soft socket, a muted white, a warm
     # hazel iris with a dark pupil, the calm upper lid over the iris's top, an ink lash line, a crease and brows
     ax = np.abs(x)
-    EL, EH, EX = 0.0160, 0.0080, 0.031
+    # (ruling 57: the first build's eyes read half-closed on the face sheet: taller, the lid higher, more iris)
+    EL, EH, EX = 0.0165, 0.0094, 0.031
     u = (ax - EX) / EL
     v = (z - (VIS_Z + 0.06 * (ax - EX))) / EH
     qq = np.clip(1.0 - u * u, 0.0, 1.0)
@@ -2168,10 +2169,10 @@ def paint_mask(p, n):
     col = col * (1.0 - 0.22 * np.exp(-((u / 1.45) ** 2 + ((v - 0.2) / 2.1) ** 2) * 2.0) * front)[:, None]
     col = _mix(col, _hl("#DAD3C6"), 0.95 * ins)
     di = np.hypot(u * EL, (v - 0.05) * EH)
-    ir = 0.70 * EH
+    ir = 0.78 * EH
     col = _mix(col, _hl("#6B5A3A"), 0.97 * _ss(ir, ir - 0.0007, di) * ins)
     col = _mix(col, _hl("#16140F"), 0.96 * _ss(0.42 * ir, 0.42 * ir - 0.0006, di) * ins)
-    edge = top - 0.36 * (top - bot)
+    edge = top - 0.27 * (top - bot)
     col = _mix(col, C("mask") * k[:, None] * 0.96, 0.97 * ins * _ss(edge, edge + 0.10, v))
     lash = _ss(0.16, 0.08, np.abs(v - edge)) * _ss(1.08, 1.0, np.abs(u)) * front
     col = _mix(col, _hl("#1B1A1C"), 0.92 * lash)
@@ -2786,6 +2787,12 @@ def _install_paint() -> None:
     def paint_object(obj, size, cfg, names, part_attr="vale_part", log=print, return_maps=False):
         maps = project.rasterize(obj, size, part_attr)
         img = _undo_ao(post_paint(maps, names, log=log), maps, names, size, log)
+        if project.PARTMAP_DUMP:
+            # (ruling 57) the part map beside the bake, as project.paint_object writes it: the U7 zone grade (the
+            # wrap's morning cyan, zone_grades.json) reads it, and a stale map from an older UV layout skips the grade
+            os.makedirs(os.path.dirname(project.PARTMAP_DUMP), exist_ok=True)
+            np.savez_compressed(project.PARTMAP_DUMP, part=np.ascontiguousarray(maps["part"]), names=np.array(names))
+            log(f"[vale-art] part map -> {project.PARTMAP_DUMP}")
         return (img, maps) if return_maps else img
     paint_object._lisvel = True
     project.paint_object = paint_object

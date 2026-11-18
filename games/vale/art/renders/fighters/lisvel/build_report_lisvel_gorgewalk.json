@@ -49,7 +49,7 @@
     },
     "tris_boots": 898,
     "tris_wrap": 1300,
-    "tris_mask": 1098,
+    "tris_mask": 1100,
     "tris_visor": 732,
     "tris_neck": 238,
     "tris_body": 518,
@@ -80,42 +80,55 @@
     "tris_fan_fletch": 300,
     "tris_fan_heads": 120,
     "tris_rope_bind": 900,
-    "validate_lisvel": "21852->21849"
+    "validate_lisvel": "21854->21847"
   },
-  "uv_coverage": 0.609,
+  "uv_coverage": 0.62,
   "bake": {
-    "base": 5.14,
-    "rough_metal": 3.85,
-    "normal": 3.04,
-    "ao": 4.25,
-    "normal_fixed_px": 85279,
-    "projection": 13.52,
-    "pack_save": 13.9,
-    "total": 30.4
+    "base": 3.07,
+    "rough_metal": 2.76,
+    "normal": 1.97,
+    "ao": 2.33,
+    "normal_fixed_px": 86480,
+    "projection": 7.66,
+    "pack_save": 7.91,
+    "total": 18.17
   },
-  "tris": 23631,
+  "tris": 23629,
   "mesh_top_m": 1.885,
-  "glb_bytes_raw": 2483392,
+  "glb_bytes_raw": 2499812,
   "optimize": {
     "ok": true,
-    "before": 2483392,
-    "after": 978656,
+    "before": 2499812,
+    "after": 983528,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 978656,
+  "zone_grade": {
+    "ok": true
+  },
+  "glb_bytes": 983548,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_gorgewalk.glb (956 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: lisvel_gorgewalk_base 2048x2048 174K, lisvel_gorgewalk_normal 512x512 40K, lisvel_gorgewalk_orm 256x256 11K",
-      "  skinned meshes: lisvel_accent(214v), lisvel_gorgewalk(24425v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_gorgewalk.glb (960 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: lisvel_gorgewalk_base 2048x2048 175K, lisvel_gorgewalk_normal 512x512 42K, lisvel_gorgewalk_orm 256x256 11K",
+      "  skinned meshes: lisvel_accent(214v), lisvel_gorgewalk(24467v)",
       "  bones: 38 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver x_tabard_bl_1 x_tabard_bl_2 x_tabard_br_1 x_tabard_br_2 x_tabard_fl_1 x_tabard_fl_2 x_tabard_fr_1 x_tabard_fr_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 23631; bind-pose bounds (three units, Y up): 1.86 x 1.88 x 0.46; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
+      "  tris: 23629; bind-pose bounds (three units, Y up): 1.86 x 1.88 x 0.46; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/lisvel/lisvel_gorgewalk_splash.png",
+      "portrait": "art/out/fighters/lisvel/lisvel_gorgewalk_portrait.png"
+    },
+    "seconds": {
+      "splash": 51.48,
+      "portrait": 10.24
+    }
   },
   "three_qa": {
     "ok": true,
@@ -146,23 +159,27 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_gorgewalk.png",
-    "seconds": 14.8,
+    "seconds": 8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.04,
-      "materials": 2.5,
-      "model": 12.12,
-      "lows_bind": 5.06,
-      "uv": 5.73,
-      "bake": 34.22,
-      "export": 0.2,
-      "optimize": 1.06,
-      "load_test": 0.26,
-      "three_qa": 15.15
+      "rig": 0.01,
+      "materials": 0.35,
+      "model": 6.06,
+      "lows_bind": 2.47,
+      "uv": 3.26,
+      "bake": 20.34,
+      "export": 0.13,
+      "optimize": 0.72,
+      "zone_grade": 0.34,
+      "wrist_weights": 0.19,
+      "zero_metal": 0.04,
+      "load_test": 0.16,
+      "render": 62.18,
+      "three_qa": 8.27
     },
-    "total_s": 76.65
+    "total_s": 104.56
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

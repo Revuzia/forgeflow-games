@@ -49,7 +49,7 @@
     },
     "tris_boots": 898,
     "tris_wrap": 1300,
-    "tris_mask": 1098,
+    "tris_mask": 1100,
     "tris_visor": 732,
     "tris_neck": 238,
     "tris_body": 518,
@@ -79,42 +79,55 @@
     "tris_fan_shafts": 220,
     "tris_fan_fletch": 72,
     "tris_fan_heads": 120,
-    "validate_lisvel": "20160->20157"
+    "validate_lisvel": "20162->20155"
   },
-  "uv_coverage": 0.611,
+  "uv_coverage": 0.617,
   "bake": {
-    "base": 4.72,
-    "rough_metal": 3.45,
-    "normal": 2.67,
-    "ao": 3.53,
-    "normal_fixed_px": 84856,
-    "projection": 12.18,
-    "pack_save": 12.5,
-    "total": 27.09
+    "base": 2.65,
+    "rough_metal": 2.26,
+    "normal": 1.59,
+    "ao": 2.17,
+    "normal_fixed_px": 83926,
+    "projection": 6.3,
+    "pack_save": 6.52,
+    "total": 15.32
   },
-  "tris": 22047,
+  "tris": 22045,
   "mesh_top_m": 1.885,
-  "glb_bytes_raw": 2462744,
+  "glb_bytes_raw": 2455480,
   "optimize": {
     "ok": true,
-    "before": 2462744,
-    "after": 956324,
+    "before": 2455480,
+    "after": 953468,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 956324,
+  "zone_grade": {
+    "ok": true
+  },
+  "glb_bytes": 953492,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (934 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: lisvel_almanac_base 2048x2048 198K, lisvel_almanac_normal 512x512 40K, lisvel_almanac_orm 256x256 12K",
-      "  skinned meshes: lisvel_accent(214v), lisvel_almanac(22836v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (931 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: lisvel_almanac_base 2048x2048 196K, lisvel_almanac_normal 512x512 39K, lisvel_almanac_orm 256x256 11K",
+      "  skinned meshes: lisvel_accent(214v), lisvel_almanac(22882v)",
       "  bones: 38 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver x_tabard_bl_1 x_tabard_bl_2 x_tabard_br_1 x_tabard_br_2 x_tabard_fl_1 x_tabard_fl_2 x_tabard_fr_1 x_tabard_fr_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 22047; bind-pose bounds (three units, Y up): 1.86 x 1.88 x 0.46; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
+      "  tris: 22045; bind-pose bounds (three units, Y up): 1.86 x 1.88 x 0.46; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/lisvel/lisvel_almanac_splash.png",
+      "portrait": "art/out/fighters/lisvel/lisvel_almanac_portrait.png"
+    },
+    "seconds": {
+      "splash": 57.97,
+      "portrait": 10.37
+    }
   },
   "three_qa": {
     "ok": true,
@@ -145,23 +158,27 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_almanac.png",
-    "seconds": 23.2,
+    "seconds": 7.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.4,
-      "model": 6.76,
-      "lows_bind": 3.2,
-      "uv": 8.36,
-      "bake": 30.42,
-      "export": 0.17,
-      "optimize": 1.55,
-      "load_test": 0.4,
-      "three_qa": 23.54
+      "materials": 0.32,
+      "model": 5.38,
+      "lows_bind": 2.14,
+      "uv": 2.44,
+      "bake": 17.07,
+      "export": 0.11,
+      "optimize": 0.68,
+      "zone_grade": 0.34,
+      "wrist_weights": 0.18,
+      "zero_metal": 0.04,
+      "load_test": 0.21,
+      "render": 68.89,
+      "three_qa": 8.08
     },
-    "total_s": 74.87
+    "total_s": 105.94
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86
