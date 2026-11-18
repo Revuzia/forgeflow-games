@@ -1,0 +1,47 @@
+{
+  "lane": "W2-C",
+  "round": 2,
+  "role": "independent verifier (by-eye cards, gates re-run, live Chrome screens)",
+  "date": "2026-11-18",
+  "head": "df3c62b80",
+  "pass": false,
+  "score": 4.5,
+  "safeToShip": true,
+  "doneWhen": {
+    "handIntegrity": { "met": true, "evidence": "no GLB, rig or skin-step file changed since round 1 (git diff c169db383..df3c62b80 touches cards, paint.json, card staging in burdam.py / dunsom.py and paint tools only), so the round-1 clip_probe_hands PASS (48 GLBs, 0 hand edges outside 0.4-1.6x) stands" },
+    "cardQa96": { "met": true, "evidence": "re-ran art/tools/card_qa.py over all 16 fighters (heavy slot, repo .venv python): 96 cards, 0 gate misses. The 5 blank misses from round 1 are cleared" },
+    "byEyeNoTripwire": { "met": false, "evidence": "of the 8 repainted cards, 3 still trip the face rules by eye: ilsheta_first_bell_splash (dark ringed eye sockets on a pale plate, reads hollow / doll), ilsheta_stillwater_splash (gaunt grey-skinned human face with dark under-eye hollows, ghostly; off the model's smooth mask plate), odrum_shadeprint_portrait (pale blue-grey eye crescents with no iris or pupil: solid eyes). 29 untouched failing cards remain (Hesmi notched eye band, Rishal visor, Odrum Shadeprint splash dark eye slits, etc.)" },
+    "everySetAtPar": { "met": false, "evidence": "no fighter set is complete or at 7.5: Burdam 4/6, Dunsom 4/6, Tunlan 6/6 now passes every card but the set reads as 3D renders with painted faces (accepted bar), Ilsheta 3/6, Odrum 2/6, Hesmi 0/6, Rishal 0/6" },
+    "burdamGlb": { "met": true, "evidence": "burdam.glb 1,197,936 B = 1169.9 KiB (<= 1172), unchanged since round 1" },
+    "unitsGate": { "met": "not re-measured", "evidence": "no GLB changed since round 1, so the units gate inputs are unchanged; not re-run" }
+  },
+  "cards": [
+    { "card": "burdam_splash", "verdict": "fail", "why": "face fixed (umber brows, lidded eyes with pupils, carved beard; off the right edge now, face ~13 % of height) and card_qa blank cleared, but the fist on the cleaver hilt is a fingerless rounded mitten (same defect that failed burdam_stillwater_splash in round 1) and the bare dome above the brow is blown to white glare; better than the previous card, no regression" },
+    { "card": "dunsom_splash", "verdict": "fail", "why": "face is safe (lidded eyes with lash line, shaded far cheek; low wide brim, no tall hood) and hands are clean, but the crook's lantern is framed off the top-left so the weapon reads as a taped spear, and the cream robe sits on a warm cream city with well under 2 stops of separation" },
+    { "card": "dunsom_almanac_splash", "verdict": "pass", "why": "lilac robe, ledger-plate brim, lantern on the crook with paper tags match the Almanac model; lidded eyes with pupils, no tripwire; both hands have fingers (raised fist is a clenched gesture, not a mitten); hat and face read at 128 and 64 px; original" },
+    { "card": "dunsom_highrim_splash", "verdict": "fail", "why": "face safe (lidded eyes with pupils, hand tipping the low brim with fingers), but the lantern head is cut by the top edge (only its base shows in the Collection 1920 crop under the caption plate) and the cream figure dissolves into the cream canyon at 128 px (figure-ground well under 2 stops)" },
+    { "card": "tunlan_portrait", "verdict": "pass", "why": "calm carved lidded eyes with pupils and a small smile replace the dark bars; wide hat, wooden head, segmented wooden hand and lantern match the model and the live Tunlan splash; no text, no tripwire; reads at 128 and 64 px (draft grid tile checked live)" },
+    { "card": "ilsheta_first_bell_splash", "verdict": "fail", "why": "brow, nose ridge and mouth line added (no longer a blank oval), but the eyes are large dark-ringed sockets with a tiny pupil on a pale plate: reads as hollow / porcelain-doll at full size and in the Collection 1920 view; the accepted First Bell portrait has amber eyes with whites, so the set is also inconsistent" },
+    { "card": "ilsheta_stillwater_splash", "verdict": "fail", "why": "repaint gives a gaunt human face in grey-teal skin with dark under-eye hollows and a downturned mouth: reads ghostly / corpse-like, and is off the model's smooth mask plate (the accepted Stillwater portrait shows the plate); teal figure on a teal snow plate is low contrast. Lateral versus the previous near-blank plate, not counted as a ship regression" },
+    { "card": "odrum_shadeprint_portrait", "verdict": "fail", "why": "salmon smear gone, amber lacquer per ruling 2, cracks mostly out, but both eyes are pale blue-grey crescents with no iris or pupil (solid eyes) under the lid line; the accepted base Odrum portrait has dark pupils. Improvement over the previous card, no regression" }
+  ],
+  "liveChrome": {
+    "how": "real Chrome (playwright channel chrome, headless, frozen vite dev server on :5833, stopped after), 1920x1080 and 1366x768",
+    "collection": "all 8 cards' fighter / skin detail views: every img complete with naturalWidth > 0 at both viewports; at 1920 the stage shows the new splash webp (852x960, object-position keeps faces in frame; Dunsom Highrim loses the lantern head at the top as noted); at 1366 the stage is the 3D model and the skin strip shows the portraits, all loading",
+    "fighterSelect": "reached this round via Practice -> draft pick phase at both viewports: Burdam, Dunsom, Tunlan, Ilsheta, Odrum hovered; grid portraits (incl. the new Tunlan portrait) and the base splash panel load and crop the faces correctly; skins are not previewed in the draft",
+    "console": "1 error at 1920 boot: a 504 'Outdated Optimize Dep' from vite dependency re-optimisation (dev server only, not a game error)"
+  },
+  "content": "npm run content: first run 'OK: 1 warning' while it encoded 8 new webp files, immediate re-run 'OK: 0 warnings' (all 96 cached, catalog 2026.11.10 unchanged). The transient warning was not captured; worth a look if it recurs",
+  "criticUpdate": "cardsPass += dunsom_almanac_splash, tunlan_portrait (removed from cardsFail). 61 pass / 35 fail",
+  "blockers": [
+    "byEye tripwires remain on repainted cards: ilsheta_first_bell_splash (dark hollow-reading eye sockets), ilsheta_stillwater_splash (gaunt ghostly face, off-model), odrum_shadeprint_portrait (pupil-less solid pale eyes)",
+    "35 cards still failing (29 untouched model-level defects: Rishal x6, Hesmi x6, Ulkro x5, Lisvel x3, Odrum x3 splashes, Marund Gorgewalk x2, Vashil x2, Ardit First Bell portrait, Burdam Stillwater splash); no fighter set at par 7.5"
+  ],
+  "problems": [
+    "burdam_splash and burdam_stillwater_splash share the mitten-fist hand: needs a finger pass in the Burdam hand mesh or a hand-only repaint box, not more face work",
+    "Dunsom base and Highrim splash staging: frame the crook lantern inside the card and add a cool rim or darker ground behind the cream robe",
+    "Ilsheta First Bell / Stillwater splashes need the portrait's eye treatment (amber iris with whites on the smooth plate), not a human face",
+    "odrum_shadeprint_splash (not in this round's 8) shows dark slit eyes on a salmon mask in the Collection 1920 view",
+    "npm run content transient warning on the encode run (0 on re-run)"
+  ]
+}
