@@ -655,3 +655,76 @@ Lane W2-D (controls feel; review_controls_ux CUX-2, CUX-3, CUX-6, CUX-11). Genre
   - 0 console errors.
 - Full probe run: 74/78 pass. The 4 fails are all-bot probes: probe_sim_bot_tactics, probe_sim_click_waves, probe_sim_minion_lane_line, plus probe_sim_edge before the fix noted below. The buffer is inert for bot seats. As a check, probe_sim_minion_lane_line gives identical output with and without this lane's sim files. probe_sim_edge then failed on NaN seat state from the buffer's empty aim. It was fixed (0 plus a flag) and now passes 94/94. `npm run typecheck` fails only on another lane's `_harness/_tmp_vfy_ai42_fog.ts`.
 - The bot soak (seeds 1-40) was not re-run. The buffer is gated to human seats, so all-bot games are unchanged by construction.
+
+## 55. Defence reads the structure's own loss: a post that would arrive after the Wicks finish it is handed back; a team that has won its fight sends one to a wave and presses; no tier holds a stacked wave from a post (lead, by delegation, 2026-11-18)
+
+Lane AI, round 3 (orch1 W1-A opponents / W3-A). The owner asked for opponents that "defend their base, sneak attack, defend their partners". Round 1 was verified at live 6.0 and sim 5.5 (`orch1/verify_ai_r1.json`). This ruling covers the round-3 bot code on the branch (already labelled "ruling 55" in `src/sim/bots`) plus this pass. Genre-standard practice in VALE's own terms. League of Legends was a gauge only.
+
+**Decisions (src/sim/bots; tier knobs in difficulty.ts):**
+- **Inherited round-3 code, kept.** These pieces were measured by the previous implementer and are not re-argued here:
+  - Laning-phase guards: an outer post only for that road's laners, an inner post only for that road and the grovehunter, no defend or answer stand-on before 14:00, the hunt leaves a road only for an invader 7 s off.
+  - Laning peel: only a partner under 25 %, or one held under 50 %.
+  - Calm-walk hysteresis (`holdWalk`): one turn in 12 s for a fit fighter with nothing on it.
+  - `clearOwn`: a fit fighter beside its own inner or base structure being hit by Wicks clears them.
+  - A wave-only post goes only to a defender that can arrive before the structure falls.
+  - `anticipates`: a beginner answers only a structure being hit.
+  - FRAY early break, flee point and chase discipline (`chaseQuit`).
+  - closeOut not before 14:00.
+- **New: the structure's own loss rate.** Each own structure's health loss per second is smoothed over the team's thinks. Its own health is the owner's to know, so this is not fog cheating. Time-to-fall for a structure with Wicks alone on it is health / max(Wick estimate, observed loss).
+- **New: a doomed post is handed back.** A posted defender still outside the structure's reach + 4 m, whose walk would end after that time-to-fall, drops the post. It meets the push at the next structure or carries on with the plan. Walking up to watch a structure fall was the commonest veteran "fell to Wicks beside fit defenders" case.
+- **New: a won fight presses.** With the team's `window` open (two up, or the enemy's long respawn clocks), a wave-only threat gets at most one posted defender. Wicks alone at the base no longer call the whole team home (`baseFighters`).
+- **New: no wave-only holds at veteran.** Veteran `holdWave` is now false, as adept's already was. No tier holds a stacked wave from a post or posts defenders for a wave alone at inner Needles. Veteran wave posts walked fit defenders to inner Needles the stack took anyway.
+
+**Tried and dropped (measured, paired, RIFT seeds 501-564 unless stated):**
+- **Siege dive.** A group outnumbering a structure's defenders by two hits it without a wave and fights under it. Pace unchanged (+1.3 / +1.9 / +1.8 min vs pre). Wicks falls rose at every tier.
+- **Rush focus.** Push 0.95 beside a rush target. Pace unchanged.
+- **Wider 18 m team fight join.** Four bodies, adv 0.42. Pace worse (novice +1.9, adept +2.4), with more deaths.
+- **FRAY chase quit.** Adept 1.0 s, veteran 0.6 s, a 9 s drop and an early break at +0.25. Stays moved by only -2.3 / -0.7 points, while veteran FRAY deaths fell from 31 to 23 a game, an unmeasured placement risk.
+- **Pace ablations, each 32 paired seeds.** No single ruling-40/44/55 feature explains the extra 1.2-2.6 min:
+  - removing all posts, coreAll, anticipation, the closing commit rule, closeOut, the peel/protect mode, G5 exposure caution, the defend stick, clearOwn, or late even objectives;
+  - and removing the 18 m team fight, which lengthened games.
+  - A bisect puts the whole pace loss in the first ruling-40 drop (c85476cb6, 1,059 lines). 8ad227d24 already reads +2.1 / +1.6 / +1.5 min.
+
+**Measured.** Final code against the pre-lane bots (src/sim/bots from 0aeac587b), both on this tree. Probe: `probe_sim_bot_tactics`, cut at 30:00. Values are paired means ± SE; z in brackets. The HEAD column is before this pass. Pace columns are new − pre, in minutes.
+
+| RIFT | Falls to Wicks beside fit defenders, s501-564: pre / HEAD / new | Same, s565-628: pre / new | Pace, s501 (new − pre) | Pace, s565 (new − pre) |
+|---|---|---|---|---|
+| novice | 0.70 / 0.50 / 0.48 | 0.38 / 0.58 (z +1.6, worse) | +1.19 ± 0.57 | +2.72 ± 0.48 |
+| adept | 0.94 / 0.70 / 0.70 | 0.95 / 0.80 | +1.48 ± 0.46 | +1.83 ± 0.58 |
+| veteran | 0.86 / 1.20 / 0.83 | 0.92 / 0.86 | +1.86 ± 0.60 | +2.63 ± 0.56 |
+
+- **Veteran inner falls to Wicks beside fit defenders.** Still worse than pre: 0.17 → 0.38 and 0.22 → 0.42 (z +2.1). Base falls of that kind improved: 0.69 → 0.45 and 0.70 → 0.44.
+- **Unanswered base intrusions.**
+  - Adept 0.89 → 0.47 and 1.00 → 0.56.
+  - Veteran 1.25 → 0.41 and 1.52 → 0.47.
+  - Novice is worse: 1.48 → 1.72 and 1.81 → 2.34 (z +2.1).
+- **Fit-idle beside a siege, s a game:** 11.4 / 6.7 / 6.9 → 5.5 / 4.8 / 3.1.
+- **Dither (bars 3 / 1.5 / 1):** 2.38 / 0.95 / 1.84 on s501 and 2.91 / 1.02 / 2.28 on s565. Veteran fails.
+- **Peel.**
+  - The designated peeler turns on the diver: adept 96-97 %, veteran 93 %.
+  - Lands within reach: adept 82.8 % in 2.5 s (pass).
+  - Veteran 70.8 % / 72.3 % in 1.5 s (bar 75, fail).
+- **Sneak (veteran).**
+  - Lone enemy collapse: 71.4 % / 72.5 % (bar 60).
+  - Collapses that arrive from fog: novice 34-35 %, adept 52-57 %, veteran 52-56 %. That orders the tiers, but adept and veteran are level.
+  - Fog honesty: 0 hidden casts.
+- **FRAY low-health stays.** Unchanged from HEAD, since the FRAY code was not kept: adept 63-64 %, veteran 59-60 % (bars 60 / 50; pre 71-72 / 70-71). Both fail.
+- **Soak** (`probe_sim_bot_soak --full --suites rift --diffs adept,veteran --lineup shuffle`; pre re-run on this tree):
+
+| Soak gate | Seeds 1-20: pre → new | Seeds 21-40: pre → new |
+|---|---|---|
+| Adept pace p90 (bar ≤ 32 min) | 28.1 → 29.2 | 27.4 → 31.9 |
+| Adept median (min) | 23.3 → 25.9 | 23.9 → 25.0 |
+| Laners in lane, adept / veteran | 67.9 / 66.6 → 67.5 / 66.6 % | 68.6 / 66.9 → 68.3 / 65.7 % |
+| Adept shadehold takedowns before 14:00 | 1.60 → 1.50 | 1.30 → 1.50 |
+| Veteran shaftlight level 6 median (min) | 8.0 → 7.5 | 7.8 → 7.6 |
+
+- **Soak enforced fails:** the early quiet-stretch bar. Seeds 1-20: veteran 3.3 min (pre 2.8). Seeds 21-40: adept 3.0 min.
+- **Soak quick:** PASS.
+- **Default tactics gate** (48 + 24 a tier): 5 fails. FRAY stays at adept and veteran, veteran dither 1.85, veteran peel 71.6 %, and veteran Wick-falls 1.10 against the 1.1 bar.
+
+**Open, not met (bars kept, not relaxed):**
+- **Pace.** Games still run 1.2-2.7 min longer than pre-lane at every tier. The cause is spread through the ruling-40 package, not one behaviour.
+- **Novice on seeds 565-628.** Falls to Wicks are worse than pre (0.38 → 0.58), and unanswered intrusions are worse. So item 1 holds at adept and veteran only.
+- **Veteran.** Dither, peel landing within 1.5 s, and inner falls to Wicks.
+- **FRAY self-preservation** at adept and veteran.
