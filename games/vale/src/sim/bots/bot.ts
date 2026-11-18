@@ -830,8 +830,9 @@ export class Bot extends BotBase implements BotController {
     // round-3 latch let a fighter that reached one point walk straight back to the other, and pace on)
     // (ruling 55: a right-angle turn or more — two calls a quarter-circle apart zigzag a fighter as surely as two opposite)
     const turn = this.headX * dx + this.headY * dy < 0.1;
-    // (ruling 55: one turn in 12 s, not 8 — two turns 8 s apart are three legs inside a 12 s window, the pacing itself)
-    if (turn && !urgent && now - this.latchAt < 12) {
+    // (ruling 55: one turn in 12 s, not 8 — two turns 8 s apart are three legs inside a 12 s window, the pacing itself;
+    // ruling 58: veteran 20 s — its free turns 12 s apart still made 2.1 back-and-forth episodes a game against a bar of 1)
+    if (turn && !urgent && now - this.latchAt < this.diff.turnLatch) {
       if (sq(this.latchX - e.x) + sq(this.latchY - e.y) > 1.5 * 1.5) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; }
       else { this.pMoveX = e.x; this.pMoveY = e.y; }
       return;

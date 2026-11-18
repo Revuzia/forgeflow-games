@@ -34,7 +34,8 @@
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import type { CatalogT } from '../src/contracts/catalog.ts';
 import type { MatchSetup, SeatSetup, SimEvent } from '../src/contracts/sim.ts';
-import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
+// VALE_BOTS=<dir under src/sim> swaps the bots for a paired A/B on the same tree (e.g. a copy of an older src/sim/bots)
+const { createBots, pickLoadout } = (await import(`../src/sim/${process.env.VALE_BOTS || 'bots'}/index.ts`)) as typeof import('../src/sim/bots/index.ts');
 import type { Entity } from '../src/sim/entity.ts';
 import { ORDER_MOVE, ORDER_ATTACK_MOVE, ORDER_ATTACK } from '../src/sim/entity.ts';
 import { createSim, type BotController } from '../src/sim/sim.ts';
@@ -426,7 +427,11 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
               // (the stack that took it: enemy Wicks within 12 m, bucketed — a wave nobody could hold, or one left alone)
               { let wk = 0; for (const u of w.entities) if (u.alive && u.kind === 'minion' && u.team !== st.team && (u.x - st.x) ** 2 + (u.y - st.y) ** 2 <= 12 * 12) wk++;
                 add(H('fall.wicksOverFit.stack'), wk < 6 ? '<6' : wk < 12 ? '6-11' : wk < 20 ? '12-19' : '20+'); add(H('fall.wicksOverFit.when'), now < 840 ? 'lane' : now < 1500 ? 'mid' : 'late'); }
-              for (const pl of w.players) { const f = pl.ent; if (f && f.alive && f.team === st.team && (f.x - st.x) ** 2 + (f.y - st.y) ** 2 <= 16 * 16 && f.hp > f.maxHp * 0.6) add(H('fall.wicksOverFit.mode'), modeOf(pl.player)); }
+              for (const pl of w.players) { const f = pl.ent; if (!(f && f.alive && f.team === st.team && (f.x - st.x) ** 2 + (f.y - st.y) ** 2 <= 16 * 16 && f.hp > f.maxHp * 0.6)) continue;
+                add(H('fall.wicksOverFit.mode'), modeOf(pl.player));
+                // (who stood there: the fall's class and phase, mode, clearing the wave or set on a siege, near (≤ 9 m) or far)
+                const cc = ctl(pl.player) as unknown as { pClear?: boolean; pSiege?: unknown } | null; const dd = Math.sqrt((f.x - st.x) ** 2 + (f.y - st.y) ** 2);
+                add(H('fall.wicksOverFit.fit'), `${c}/${now < 1500 ? 'mid' : 'late'} ${modeOf(pl.player)}${cc?.pClear ? '+clear' : ''}${cc?.pSiege ? '+siege' : ''} ${dd <= 9 ? 'near' : 'far'}`); }
             }
           }
           break;
@@ -990,6 +995,7 @@ function gates(runs: TierRun[]): string[] {
       const rle = sum(R, 'rift.low.episodes'), rls = share(sum(R, 'rift.low.stayed'), rle);
       { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['rift.low.stayMode'] ?? {})) add(hs, k2, v); rpt(`${diff} RIFT low and stayed: mode at the start`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
       { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['fall.wicksOverFit.mode'] ?? {})) add(hs, k2, v); rpt(`${diff} falls to Wicks beside fit defenders: the fit defenders' modes`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
+      { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['fall.wicksOverFit.fit'] ?? {})) add(hs, k2, v); rpt(`${diff} falls to Wicks beside fit defenders: class/phase, mode, clearing, distance`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
       { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['resp.noneMode'] ?? {})) add(hs, k2, v); rpt(`${diff} designated peeler that did not answer: its mode`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v}`).join(', ')); }
       { const hs: Acc = {}; for (const g of R) for (const [k2, v] of Object.entries(g.h['base.fitAwayMode'] ?? {})) add(hs, k2, v); rpt(`${diff} fit and away while the base is hit: mode (s)`, Object.entries(hs).sort((a, b) => b[1] - a[1]).map(([k2, v]) => `${k2} ${v.toFixed(0)}`).join(', ')); }
       rpt(`${diff} self-preservation: under 25 % with a foe in 10 m, still beside one 4 s later (RIFT)`, `${pct(rls)} of ${rle} (clear ${pct(share(sum(R, 'rift.low.clear'), rle))}, died ${pct(share(sum(R, 'rift.low.died'), rle))})`);

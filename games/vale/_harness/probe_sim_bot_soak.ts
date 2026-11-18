@@ -73,7 +73,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CatalogT } from '../src/contracts/catalog.ts';
 import type { MatchSetup, SeatSetup, SimEvent, WorldView, PlayerView } from '../src/contracts/sim.ts';
-import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
+// VALE_BOTS=<dir under src/sim> swaps the bots for a paired A/B on the same tree (e.g. a copy of an older src/sim/bots)
+const { createBots, pickLoadout } = (await import(`../src/sim/${process.env.VALE_BOTS || 'bots'}/index.ts`)) as typeof import('../src/sim/bots/index.ts');
 import type { BotTelemetry } from '../src/sim/bots/micro.ts';
 import { inTelegraph, telegraphFromEvent } from '../src/sim/bots/perception.ts';
 import { abilityInfo, fighterProfile, itemRole, laneProject, proj, U_DAMAGE, U_VISION } from '../src/sim/bots/knowledge.ts';

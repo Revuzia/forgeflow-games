@@ -759,3 +759,65 @@ Lane AI, round 3 (orch1 W1-A opponents / W3-A). The owner asked for opponents th
 **Burdam (done, hand only; the head stays as 2c2beb31f shipped it):** the cleaver fist (fist_R) gains each finger's middle segment curling round the fist's side into the palm, the creases between the four finger rolls deepened (5.5 -> 7.5 mm) and carried round the curled segments, and a valley between each pair of knuckles, so the fingers read from the front, the side and above (three_snapshot `--face --bone hand.R`); fist_R 950 -> 1050 tris. GLB budget: the rebuild came out at 1237 KiB after the zone grade; as FU-17 did, the skirt and cowl chains and the recall clip are thinned to every 2nd key with ORM q40 / normal q80, and here also the 4 s idle_lobby and the victory hold (slow clips, linear over 2 frames): 1171.5 KiB (budget 1172), 20,548 tris, three load test OK. Skins: Almanac 21,268 tris 1000 KiB, Stillwater 23,188 / 1108 KiB. Cards: the base splash ships the fresh render (card_qa blank 0.76, the live 3D one 0.78); the base portrait and all four skin cards keep their live painted versions (they pass every card_qa gate and trip no sensitivity rule; the fresh skin splashes missed blank 0.68 / 0.69). So the painted Stillwater splash still shows the old rounded fist; the model is fixed and a later card pass can re-paint over it (reported, no paid call made). Hand integrity 0 edges out on all three. Tool: three_snapshot `--face` takes `--bone`, `--clip` and `--t`.
 
 **Rishal (confirmed in game, not reworked):** at the face sheet the brow band sits clear of the eyes, no beak, no cheek incisions; the lidded steel-blue eyes are small for the pale plate at 128 px and read narrow (reported for a later pass, not touched under this ruling).
+
+## 58. A veteran's calm walk turns back at most once in 20 s; the pace cost of the round-1 package is not in any one tier knob; FRAY's low-health stays are a chase problem, not a break threshold (lead, by delegation, 2026-11-18)
+
+Lane AI, round 4 (orch1 W1-A opponents / W3-A), continuing ruling 55 from HEAD 0fee857ba. Genre-standard practice in VALE's own terms. League of Legends was a gauge only.
+
+**Method.** The probes take `VALE_BOTS=<dir under src/sim>` (`probe_sim_bot_tactics`, `probe_sim_bot_soak`). A copy of the pre-lane bots (src/sim/bots from 0aeac587b) or of a one-knob variant is then run on the same tree and seeds, with no second worktree. All numbers are paired means ± SE over the same RIFT seeds, cut at 30:00.
+
+**Kept (src/sim/bots):**
+- **`turnLatch`** (difficulty.ts): novice 12 s, adept 12 s, veteran 20 s. A calm full-health fighter on a walking plan turns back at most once in that time. A fight, a threat, a rush or a target at hand still turns it at once. A diagnostic count of veteran turns at full health with no enemy within 30 m was led by turns the 12 s latch let through: push 872, return 649, objective 422, lane 344 and defend 322 in 16 games. Only 3 % of those turns came from an urgent reason.
+- **Veteran, s565-628, n = 64, HEAD → new:**
+  - Dither: 2.28 → 1.20 (−1.08 ± 0.24).
+  - Inner+base falls to Wicks beside fit defenders: 0.86 → 0.66 (−0.20 ± 0.14). Inner only: 0.42 → 0.30.
+  - Unanswered base intrusions: 0.47 → 0.34.
+  - Pace: −0.40 ± 0.49 min. Laners in lane: −0.6 ± 0.4 points.
+- **Veteran, s501-532, n = 32, HEAD → new:**
+  - Dither: 2.09 → 1.38.
+  - Falls to Wicks beside fit defenders: 0.84 → 0.63.
+  - Pace: +0.55 ± 0.74 min.
+- **Adept with a 20 s latch** (s501-532) was worse: dither 0.75 → 1.19, pace +2.35 ± 0.75 min. Adept and novice therefore keep 12 s.
+
+**Measured and dropped (veteran, s501-532, n = 32, one knob each against HEAD; pace in min):**
+
+| Knob removed | Pace | Falls to Wicks beside fit defenders |
+|---|---|---|
+| recallDefend 'none' | −0.46 ± 0.41 | −0.13 |
+| burstRetreat and riskCap | −0.35 ± 0.90 | +0.16 |
+| aheadCaution 0 | −0.12 ± 0.55 | +0.09 |
+| adaptiveBuild | −0.61 ± 0.77 | +0.13 |
+| splitPush and crossTrade | +0.24 ± 0.69 | +0.03 |
+| punishInvade and collapseRoads | +0.07 ± 0.77 | 0.00 |
+| peelDive 'none' | −0.57 ± 0.55 | +0.22 |
+
+- **No knob explains pace.** None moved pace beyond 1 SE. With ruling 55's ablations, the extra 1.2-2.6 min is not one behaviour. Where it sits:
+  - Veteran: the first inner Needle falls 1.4 min later than pre (17.3 → 18.7) and the first base structure 2.2 min later.
+  - Veteran fighter siege time on inner structures fell from 18.1 to 6.9 s a game.
+  - Veteran roams nearly doubled (44 → 80 a game).
+  - Novice defend entries doubled (16 → 36). Adept rose 88 → 120.
+  - Better defence and more roaming lengthen the mid game. These are the behaviours the owner asked for, so they are not removed.
+- **FRAY break at 0.30 / 0.35** (adept / veteran, was 0.20 / 0.25), FRAY s501-548, n = 48:
+  - Low-health stays: adept 59.8 → 61.1, veteran 58.6 → 55.8 (−2.9 ± 1.6).
+  - About 80 % of FRAY deaths already come from retreat mode, so fighters do break. The chaser stays within 12 m on an equal-speed walk.
+  - The bar needs a chase-side or escape-tool fix, not an earlier break. Dropped.
+
+**Where the falls to Wicks beside fit defenders come from (veteran, after the step of the fall).** Most fit fighters within 16 m were within 9 m in push or defend mode. One second before the fall, `clearOwn` was clearing the wave. These are falls the defenders arrived too late to stop, not fighters standing idle.
+
+**Gates on the final code:**
+- **Default tactics gate** (48 RIFT + 24 FRAY a tier): 4 fails, was 5. The veteran Wick-falls fail is gone (1.10 → 0.77, bar 1.1). Still failing:
+  - Veteran dither: 1.56 (bar 1).
+  - Veteran peel within 1.5 s: 72.7 % (bar 75).
+  - FRAY stays: adept 62.9 % (bar 60), veteran 61.3 % (bar 50).
+- **`probe_sim_bot_soak` quick:** PASS.
+- **Adept soak pace p90:** unchanged from ruling 55, since adept code is unchanged: 29.2 / 31.9 min (bar 32).
+
+**Open, not met (bars kept):**
+- **Pace.** Games still run +1.2 to +2.6 min longer than pre:
+  - Veteran against pre, s565: +2.23 ± 0.59.
+  - Veteran against pre, s501: +2.57 ± 0.90 on 32 seeds.
+- **Veteran inner falls to Wicks beside fit defenders** against pre: 0.22 → 0.30 on s565 (z +0.7) and 0.22 → 0.34 on s501.
+- **Novice on s565-628** (ruling 55) is untouched.
+- **Veteran dither:** 1.20 / 1.38 / 1.56 across seed sets (bar 1).
+- **Veteran peel** within 1.5 s.
+- **FRAY stays.**
