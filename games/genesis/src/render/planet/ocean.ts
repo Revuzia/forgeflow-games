@@ -566,6 +566,10 @@ void main() {
     }
   ${NOSCENE ? '*/' : '}'}` : 'if (vDepth < -0.6) discard;'}
   ${!WFRAG ? 'gl_FragColor = vec4(0.02, 0.05, 0.07, 1.0); return;' : ''}
+  ${WDEBUG.has('hgt') ? `{
+    // (PERF s23 probe) R = sheet height above the datum / 250 m, G = vDepth / 25 m (+0.5), B = vSimD / 25 m (+0.5)
+    gl_FragColor = vec4(clamp(vec3((length(vBodyPos) - uRadius) / 250.0, 0.5 + vDepth / 25.0, 0.5 + vSimD / 25.0), 0.0, 1.0), 1.0); return;
+  }` : ''}
   ${WDEBUG.has('wet') ? `{
     vec3 dc = vWet < 0.01 ? vec3(1.0, 0.0, 1.0) : vWetD < 0.1 ? vec3(1.0, 0.5, 0.0) : vec3(0.0, 0.0, 1.0);
     if (vDepth < 0.0) dc *= 0.35;
