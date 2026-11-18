@@ -1,0 +1,88 @@
+{
+ "lane": "W2-B",
+ "round": 1,
+ "verifier": "Opus 5.5 adversarial (VFX / combat feel)",
+ "at": "2026-11-17 22:58 CST",
+ "head": "04a48ce6e (src/render, content, tools/vfx unchanged through 79c7c6e14)",
+ "pass": false,
+ "score": 6.8,
+ "safeToShip": true,
+ "blockers": [],
+ "gates": {
+  "clutter (RIFT High s7/11/23, 30 peak 5v5 frames each, verifier run _harness/_tmp_vfy_w2b_clutter.json)": {
+   "medianOcclusion": [
+    0.104,
+    "<=0.25",
+    "PASS"
+   ],
+   "worstRunAbove60pctMs": [
+    100,
+    "<=300",
+    "PASS"
+   ],
+   "hotBodyMax_Lstar85": [
+    0.355,
+    "<=0.30",
+    "FAIL (rishal s7; s11 0.153, s23 0.225)"
+   ],
+   "enemyTelegraphEdge": [
+    0.394,
+    ">=0.45",
+    "FAIL (no-VFX 0.302-0.374, overlay-owned)"
+   ],
+   "selfRing": [
+    "90/90",
+    "100%",
+    "PASS"
+   ],
+   "vfxTrisPeak": [
+    23862,
+    "<=35000",
+    "PASS"
+   ],
+   "drawsPeak": [
+    229,
+    "<=450",
+    "PASS"
+   ],
+   "programsPeak": [
+    37,
+    "<= W2-A 37",
+    "PASS"
+   ],
+   "particlesPeak": "1096/2000",
+   "note": "all 90 peak frames are scripted moves (0 natural)"
+  },
+  "combat_polish ult,cc,flash,hold": "FAIL (6): first-beat core x1.76-1.88 < 2.0 (kemdo, rishal, tunlan, hesmi); rishal victim box 0.647 white > 0.35; hesmi lift whitening 0.159 > 0.10. cc PASS, flash PASS, hold PASS (kemdo 233, rishal 200, tunlan 200 ms)",
+  "VFX-O8 hesmi/nurrow/vashil": "FAIL: detailLost 2/2/1, body min 0.45/0.35/0.40 (bar <=1 and >=0.45); noFlash detail 0.93-1.06",
+  "death (real kill via sim attack path, ervet kills kemdo)": "PASS: lib_death_shatter and role death on the death frame; head drop 0.2/0.3/0.5 s = 0.18/0.34/0.38",
+  "grep #17181B emitters outside Shade": "PASS: 0 emitter layers outside lib_*shade/lib_hit_true; ink colour still in 55 mesh, 10 decal, 9 ribbon, 4 sprite layers outside the Shade (shaped ink, allowed by the line as written)",
+  "dust A/B": "PASS for lib_wick_death (black blot -> faint dust) and lib_summon_rise specks; lib_hit_phys_heavy row shows nothing in A or B, so VFX-O7 chalk crack is not visually evidenced"
+ },
+ "referenceTargets": {
+  "10 shaped effects": [
+   "partly",
+   "_harness/_tmp_vfy_w2b_shots/clutter/clutter_s11_look25_t8736.png (line, circle, cone read with hard edges); _harness/_tmp_vfy_w2b_shots/clutter/clutter_s7_look15_t8726.png (stacked casts merge into a white glare over stillwater_jo/lowtide_ines/ostler_k)"
+  ],
+  "11 effects short": [
+   "partly",
+   "hold section 200-233 ms; _harness/_tmp_vfy_w2b_shots/clutter/clutter_s23_look05_t8716.png large enemy orange zone fills at 0.18 sit over half the plaza"
+  ],
+  "12 caster colour, white-hot cores": [
+   "partly",
+   "_harness/_tmp_vfy_w2b_shots/clutter/clutter_s23_look05_t8716.png team orange/blue dominates caster hues; ult first-beat core x1.76-1.88 < x2.0"
+  ],
+  "13 ground indicators thin and flat": [
+   "partly",
+   "enemy telegraph edge 0.394 < 0.45 (overlay-owned); rims thin and flat in _harness/_tmp_vfy_w2b_shots/clutter/clutter_s11_look25_t8736.png"
+  ],
+  "14 hit feedback on target": [
+   "partly",
+   "hit flash and burst visible in _harness/_tmp_vfy_w2b_shots/death/death_kemdo_02.png; chalk crack not visible in evidence/w2-b/dust_ab.jpg; damage numbers not in probe frames (W2-E)"
+  ],
+  "15 kill lands": [
+   "partly",
+   "_harness/_tmp_vfy_w2b_shots/death/death_kemdo_02.png and _05.png: T3 ring + collapse on the death tick; no top-centre banner in probe frames (HUD hidden by probe; banner is W2-E)"
+  ]
+ }
+}
