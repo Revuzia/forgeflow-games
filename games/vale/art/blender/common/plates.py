@@ -1444,7 +1444,21 @@ def paint_eyes(comp: np.ndarray, af: np.ndarray, meta: dict | None, op: dict) ->
             inb = _sst(np.minimum.reduce([(qb ** 0.7 - vb_) * eh * kh, (vb_ + 0.75 * qb ** 0.9) * eh * kh,
                                           (1.0 - np.abs(ub)) * ew * kw]) / (2.0 * soft))
             rgb = rgb + (lidc * float(op.get("bed_val", 0.82)) - rgb) * (kb * inb)[..., None]
-        if op.get("mode", "open") == "open":
+        if op.get("mode", "open") == "open" and op.get("white"):
+            # (orch1 W3-B, ruling 55) a full eye: a muted white almond, an iris DISC (radius "iris_r" x the almond's
+            # half height, lifted "iris_y") and a pupil ("pupil" x the iris radius) in the ink colour; opt-in only
+            rgb = rgb + (_hex(op["white"])[None, None].astype(np.float64) - rgb) * (0.95 * ins)[..., None]
+            ir = float(op.get("iris_r", 0.66)) * eh
+            di = np.hypot(ua, vb - float(op.get("tilt", 0.0)) * ua - float(op.get("iris_y", 0.05)) * eh)
+            irr = _sst((ir - di) / soft) * ins
+            rgb = rgb + (iris[None, None] - rgb) * (0.97 * irr)[..., None]
+            pup = _sst((float(op.get("pupil", 0.42)) * ir - di) / soft) * ins
+            rgb = rgb + (ink[None, None] - rgb) * (0.95 * pup)[..., None]
+            edge = top - float(op.get("lid_k", 0.5)) * (top - bot)
+            lid = ins * _sst((v - edge) * eh / soft)
+            rgb = rgb + (lidc - rgb) * lid[..., None]
+            lash = _sst((ln - np.abs((v - edge) * eh)) / (0.5 * ln)) * _sst((1.06 - np.abs(u)) * ew / soft)
+        elif op.get("mode", "open") == "open":
             rgb = rgb + (iris[None, None] - rgb) * (0.96 * ins)[..., None]
             edge = top - float(op.get("lid_k", 0.5)) * (top - bot)
             lid = ins * _sst((v - edge) * eh / soft)

@@ -133,17 +133,8 @@ CARDS = {
                               "size": 0.25}]},
         "portrait": {"yaw": 26.0, "clip": "victory", "t": 0.96},
         "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46,
-                  # (max2 g1 fix, verify_r2_g1a, the victory three-quarter): the eyes' pale blue-grey centres taken to a
-                  # dark brown iris (as round 2 did on the stab), and the face wrap under the eye-band a warm sand step
-                  # darker than the hood, so the band and its eyes read framed rather than one bandaged ball
-                  "retouch": {"splash": [{"op": "hue", "at": [-0.015, -0.027], "r": [0.017, 0.008], "h": [0.0, 360.0],
-                                          "s_min": 0.0, "s_max": 0.30, "v_min": 0.50, "val": 0.32, "to": "#3B2A22", "mix": 0.9},
-                                         {"op": "hue", "at": [-0.0345, -0.0285], "r": [0.012, 0.0075], "h": [0.0, 360.0],
-                                          "s_min": 0.0, "s_max": 0.30, "v_min": 0.66, "val": 0.45, "to": "#5A6278", "mix": 0.8},
-                                         {"op": "hue", "at": [-0.095, -0.027], "r": [0.018, 0.010], "h": [180.0, 270.0],
-                                          "s_min": 0.03, "v_min": 0.35, "val": 0.40, "to": "#3B2A22", "mix": 0.9},
-                                         {"op": "hue", "at": [-0.030, 0.045], "r": [0.075, 0.040], "h": [5.0, 60.0],
-                                          "s_min": 0.05, "s_max": 0.55, "v_min": 0.45, "val": 0.88, "to": "#B07E5C", "mix": 0.5}]}},   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
+                  # (ruling 55: the eye and wrap retouches of the old eye-band went with it)
+                  },   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
     },
     "hesmi_gorgewalk": {
         # (max2 g1 fix, verify_r2_g1a: from her right the eye openings read as jagged torn holes in the pale band): the
@@ -178,20 +169,9 @@ CARDS = {
                   # (max2 cards g1, verify roll1: saturated violet slit eyes read as glowing; the feet washed into the
                   # snow): the eye inlays and lid line taken to a dark muted ink, a firmer contact and cast shadow
                   "contact": 2.2, "shadow_real": 0.8,
-                  "retouch": {"splash": [{"op": "hue", "at": [0.002, 0.020], "r": [0.065, 0.022], "h": [225.0, 295.0],
-                                          "s_min": 0.33, "val": 0.5, "sat": 0.4, "to": "#3A3450", "mix": 0.6},
-                                         {"op": "hue", "at": [0.0, -0.017], "r": [0.06, 0.012], "h": [225.0, 295.0],
-                                          "s_min": 0.33, "val": 0.7, "sat": 0.45, "to": "#4A4460", "mix": 0.5},
-                                         # (max2 g1 fix, verify_r2_g1a: the all-pale lilac bundle read as a ghost): the
-                                         # mantle, wraps and legs under the hood a value step down toward the skin's ink,
-                                         # the hood and face wrap left pale, so the face reads framed
-                                         {"op": "hue", "at": [0.0, 0.31], "r": [0.20, 0.23], "h": [215.0, 335.0],
-                                          "s_min": 0.0, "s_max": 0.45, "v_max": 0.80, "val": 0.62},
-                                         # (the notched left eye and the ink tick on the band's left: the tick closed,
-                                         # the eye's notch softened into its almond)
-                                         {"op": "close", "at": [-0.029, 0.004], "r": [0.012, 0.011], "px": 4},
-                                         {"op": "blur", "at": [-0.029, 0.004], "r": [0.012, 0.011], "px": 1.2},
-                                         {"op": "blur", "at": [-0.020, 0.027], "r": [0.018, 0.009], "px": 0.8}]}},
+                  # (ruling 55: the slit-eye retouches went with the eye-band; the mantle value step stays)
+                  "retouch": {"splash": [{"op": "hue", "at": [0.0, 0.31], "r": [0.20, 0.23], "h": [215.0, 335.0],
+                                          "s_min": 0.0, "s_max": 0.45, "v_max": 0.80, "val": 0.62}]}},
     },
 }
 SKINS: list = [
@@ -391,6 +371,13 @@ class Cyl(sdf.Prim):
 # (3.5-36 deg each side of a narrow bridge, 3 cm tall at their widest) and NO joint or crack crosses them: the block
 # joints sit outside the eye span (BAND_JOINTS), the bridge between the eyes is plain stone
 BAND_C = (0.0, 0.005)
+# (ruling 55) the carved face in the hood's opening: its centre height, the eyes' height, centre x, half length,
+# half height and outer-corner lift (m per m); the mouth's height
+FACE_C = 2.062
+FACE_EYE_Z, FACE_EYE_X, FACE_EYE_L, FACE_EYE_H, FACE_EYE_TILT = 2.092, 0.040, 0.0195, 0.0095, 0.05
+FACE_MOUTH_Z = 1.996
+FACE_COL = {"white": "#D9D3C6", "iris": "#6E5236", "iris_dk": "#45321F", "pupil": "#16130F", "lash": "#221C19",
+            "brow": "#5A4A40", "crease": "#8E8478", "lip": "#7A6458", "shade": "#A49A90"}
 EYE_Z, EYE_H, EYE_A = 2.113, 0.0150, (3.5, 36.0)     # the openings' centre height, half-height, angle span (deg)
 
 
@@ -552,38 +539,27 @@ def sculpts() -> list:
     hood.sub(Ellipsoid((0, -0.215, 2.04), (0.150, 0.165, 0.178)), k=0.02)
     part("hood", hood, "cloth2", "bone:head", 1550)
 
-    # FACE: the carved honed eye-band (brief §3: 0.20 x 0.06 m face, 3 cm bevels, an ink slit, a forward keel), set
-    # proud of the face opening so the 52 degree camera sees it under the hood's brow; the slit is a real slot with
-    # an ink plate at its back; the layered face wrap under it (all rigid on the head)
+    # FACE (orch1 W3-B, ruling 55: "the notched eye band and the wrap's mummy lean", all 6 cards fail): the carved
+    # honed eye-band with its slit openings and the bandaged lower face are gone. The face opening holds a calm carved
+    # stone FACE (part "eyeband", the honed stone role kept): a broad brow ridge, a straight nose, soft cheek swells and
+    # a chin, the lidded eyes, brows and closed mouth painted on it (hesmi_paint, FACE_*); a smooth linen scarf
+    # (facewrap) wraps the throat under the chin, never the face (all rigid on the head)
     band = Sculpt("eyeband")
-    band.add(Cyl(BAND_C[0], BAND_C[1], band_fn, 0.26, 2.04, 2.18), k=0.0)
-    band.inter(HalfSpace((0, -0.12, 2.1), (0, 1, 0), 0.5), k=0.03)          # the band's ends round off into the cowl
-    band.inter(Ellipsoid((0, -0.215, 2.04), (0.158, 0.20, 0.19)), k=0.012)  # ...and stay inside the face opening (the
-                                                                             # ends poked through the cowl's sides)
-    # the two eye openings, 1 cm deep: their ink floor (eyeslit) 6 mm under the face
-    band.sub(Cyl(BAND_C[0], BAND_C[1], eye_fn, 0.27, 2.08, 2.14), k=0.002)
-    # (CW6: the three chisel cracks over / through the eye openings are gone: with the joints they read as tooth gaps)
-    # fix pass 3: the concept's band is carved in BLOCKS (painted dark too, hesmi_paint). CW6: the full-height joints
-    # sit OUTSIDE the eye span; the brow joint over the bridge runs from the band's top edge down to the slit's top
-    for a, z0, z1 in BAND_JOINTS_CUT:
-        r = math.radians(a)
-        tang = (math.cos(r), math.sin(r), 0.0)
-        cj = (0.252 * math.sin(r), 0.005 - 0.252 * math.cos(r), 0.5 * (z0 + z1))
-        band.sub(RoundBox(cj, (0.0028, 0.014, 0.5 * (z1 - z0)), 0.001, axes=sdf.frame((0, 0, 1), tang)), k=0.0015)
-    part("eyeband", band, "stone", "bone:head", 520, 0.55)
-    slit = Sculpt("eyeslit")
-    # CW6 (hesmi-M1): the slit's floor is two dark cool GLASS lenses (glossy dawnglass, never emissive: the cut-top
-    # inlays stay the only accent), painted with a cool catch-light each (hesmi_paint), so the eye line reads alive
-    slit.add(sdf.Blend([("add", sdf.Lathe((0, 0.005, 0), lambda r, z: np.maximum(np.maximum(0.226 - r, r - 0.240),
-                                                                              np.abs(z - 2.111) - 0.0190), 0.25, 2.085, 2.135), 0.0),
-                        ("inter", HalfSpace((0, -0.10, 2.1), (0, 1, 0), 0.5), 0.0),
-                        ("inter", Sphere((0, -0.2, 2.112), 0.165), 0.0)]), k=0.0)
-    part("eyeslit", slit, "dawnglass", "bone:head", 60, 0.6)
+    band.add(Ellipsoid((0, -0.100, FACE_C), (0.108, 0.140, 0.165)), k=0.0)
+    band.inter(HalfSpace((0, -0.226, FACE_C), (0, -1, 0), 0.5), k=0.035)         # the broad front plane
+    band.add(RoundBox((0, -0.214, FACE_EYE_Z + 0.030), (0.066, 0.012, 0.008), 0.007, axes=sdf.rot_x(-6)), k=0.016)
+    band.add(RoundBox((0, -0.229, FACE_EYE_Z - 0.032), (0.0085, 0.010, 0.028), 0.0045, axes=sdf.rot_x(8)), k=0.010)
+    for sx in (-1, 1):
+        band.add(Ellipsoid((sx * 0.048, -0.200, FACE_EYE_Z - 0.050), (0.030, 0.020, 0.026)), k=0.022)
+    band.add(Ellipsoid((0, -0.196, FACE_C - 0.118), (0.040, 0.026, 0.024)), k=0.03)   # the chin
+    band.inter(Ellipsoid((0, -0.215, 2.04), (0.158, 0.20, 0.19)), k=0.012)  # inside the face opening
+    band.inter(HalfSpace((0, -0.04, 2.1), (0, 1, 0), 0.5), k=0.02)
+    part("eyeband", band, "stone", "bone:head", 700, 0.5)
     wrap = Sculpt("facewrap")
-    wrap.add(Ellipsoid((0, -0.085, 1.99), (0.150, 0.130, 0.105)).displaced(wraps(0.006, 85.0), 0.006), k=0.0)
-    wrap.add(Capsule((0, -0.02, 1.86), (0, -0.04, 1.97), 0.13), k=0.05)
-    wrap.inter(HalfSpace((0, 0, 2.082), (0, 0, 1), 0.6), k=0.01)
-    part("facewrap", wrap, "cloth2", "bone:head", 650, 0.8)
+    wrap.add(Ellipsoid((0, -0.075, 1.925), (0.150, 0.140, 0.080)).displaced(folds(0.0035, 9.0, dirv=(0.5, 0.0, 0.86)), 0.004), k=0.0)
+    wrap.add(Capsule((0, -0.02, 1.86), (0, -0.04, 1.93), 0.12), k=0.05)
+    wrap.inter(HalfSpace((0, 0, 1.968), (0, 0, 1), 0.6), k=0.012)
+    part("facewrap", wrap, "cloth2", "bone:head", 520, 0.8)
 
     # MANTLE (heat weights): the rolled shawl round the hood base, over both shoulders, hanging in a U at the
     # front; the brown cape over the shoulders behind
@@ -1258,6 +1234,57 @@ LINEN_PARTS = ("hood", "facewrap", "mantle")
 GAUNTLET_PARTS = ("gauntlet_R", "gauntlet_L", "knuckle_R", "knuckle_L")
 
 
+def paint_face(p, n, med):
+    """(orch1 W3-B, ruling 55) Hesmi's carved stone face: the honed stone tone `med` shaded by its planes, soft brows,
+    two calm lidded eyes (a muted white, an amber-brown iris with a dark pupil, the upper lid over the iris's top, an
+    ink lash line, a crease), a shade under the nose and a closed level mouth. sRGB (N, 3)"""
+    from common import scene
+    hx = lambda h: np.asarray(scene.hex_srgb(h), dtype=np.float64)    # noqa: E731
+    E = {kk: hx(h) for kk, h in FACE_COL.items()}
+    mix = lambda a, b, t: a + (b - a) * np.clip(t, 0, 1)[:, None]      # noqa: E731
+    ss = lambda x: np.clip(x, 0, 1) ** 2 * (3 - 2 * np.clip(x, 0, 1))  # noqa: E731
+    val = (1.0 + 0.08 * np.clip(n[:, 2], 0, 1) - 0.10 * np.clip(-n[:, 2], 0, 1) - 0.06 * np.clip(np.abs(n[:, 0]) - 0.4, 0, 1)
+           + 0.02 * NOISE(p, 30.0, (2.0, 7.0, 1.0)))
+    col = np.clip(np.asarray(med, dtype=np.float64)[None] * val[:, None], 0, 1)
+    front = ss((-n[:, 1] + 0.10) / 0.40)
+    ax, z = np.abs(p[:, 0]), p[:, 2]
+    EX, EL, EH = FACE_EYE_X, FACE_EYE_L, FACE_EYE_H
+    u = (ax - EX) / EL
+    v = (z - (FACE_EYE_Z + FACE_EYE_TILT * (ax - EX))) / EH
+    q = np.clip(1.0 - u * u, 0.0, 1.0)
+    top, bot = q ** 0.7, -0.80 * q ** 0.9
+    ins = ss(np.minimum.reduce([top - v, v - bot, 1.0 - np.abs(u)]) / 0.10) * front
+    sock = np.exp(-((u / 1.45) ** 2 + ((v - 0.2) / 2.2) ** 2) * 2.0) * front
+    col = mix(col, E["shade"][None].repeat(len(p), 0), sock * 0.40)
+    col = mix(col, E["white"][None].repeat(len(p), 0), ins * 0.95)
+    di = np.hypot(u * EL, (v - 0.05) * EH)
+    ir = 0.68 * EH
+    irc = mix(E["iris"][None].repeat(len(p), 0), E["iris_dk"][None], ss((di - 0.45 * ir) / (0.5 * ir)))
+    col = mix(col, irc, ss((ir - di) / 0.0008) * ins * 0.97)
+    col = mix(col, E["pupil"][None].repeat(len(p), 0), ss((0.42 * ir - di) / 0.0007) * ins * 0.96)
+    edge = top - 0.36 * (top - bot)
+    lid = ins * ss((v - edge) / 0.10)
+    col = mix(col, np.clip(np.asarray(med)[None] * 0.97, 0, 1).repeat(len(p), 0), lid * 0.97)
+    lash = ss((0.16 - np.abs(v - edge)) / 0.08) * ss((1.08 - np.abs(u)) / 0.08) * front
+    col = mix(col, E["lash"][None].repeat(len(p), 0), lash * 0.92)
+    crease = ss((0.12 - np.abs(v - (top + 0.60))) / 0.07) * ss((0.85 - np.abs(u)) / 0.15) * front
+    col = mix(col, E["crease"][None].repeat(len(p), 0), crease * 0.50)
+    # the brows: a soft level stroke over each eye on the brow ridge
+    bu = (ax - EX - 0.002) / (EL * 1.15)
+    bv = z - (FACE_EYE_Z + 0.024 + 0.004 * (1 - bu * bu))
+    brow = ss((0.0035 - np.abs(bv)) / 0.0025) * ss((1.0 - np.abs(bu)) / 0.2) * front
+    col = mix(col, E["brow"][None].repeat(len(p), 0), brow * 0.75)
+    # a soft shade under the nose's tip and the closed, level mouth with a lit lower lip
+    nose = ss((0.010 - ax) / 0.006) * ss((0.005 - np.abs(z - (FACE_EYE_Z - 0.064))) / 0.004) * front
+    col = mix(col, E["shade"][None].repeat(len(p), 0), nose * 0.45)
+    mw = ss((0.022 - ax) / 0.008)
+    mouth = ss((0.0022 - np.abs(z - (FACE_MOUTH_Z + 0.004 * (ax / 0.022) ** 2))) / 0.0016) * mw * front
+    col = mix(col, E["lip"][None].repeat(len(p), 0), mouth * 0.80)
+    low = ss((0.0035 - np.abs(z - (FACE_MOUTH_Z - 0.006))) / 0.003) * ss((0.016 - ax) / 0.006) * front
+    col = mix(col, np.clip(col * 1.06, 0, 1), low)
+    return np.clip(col, 0, 1)
+
+
 def paint_lens(p):
     """the eye slit's two glass lenses at texels p (N, 3): sRGB (N, 3)"""
     from common import scene
@@ -1594,36 +1621,16 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         wt = np.clip((n[sel, 2] - 0.55) / 0.30, 0, 1)
         wt = (wt * wt * (3 - 2 * wt))[:, None]
         col[sel] = col[sel] * (1 - wt) + tcol * wt
-    if "eyeband" in names:                            # the honed band: the concept's pale stone, carved in blocks
+    if "eyeband" in names:                            # (ruling 55) the carved stone face
         sel = k == names.index("eyeband")
         stone = np.asarray(scene.hex_srgb(PALETTE["stone"]), dtype=np.float32)
-        a = np.degrees(np.arctan2(p[sel, 0], -(p[sel, 1] - 0.005)))
-        zz = p[sel, 2]
-        # CW6 (closing hesmi-M1): the band is painted CLEAN from the painting's own band tone (its median on the
-        # front faces): the concept's painted crack strokes (one ran down through an eye's inner corner) projected
-        # onto the carved band read as tooth gaps; the carved forms (bevels, keel) shade it, a soft mottling
         cb = col[sel]
-        fr = (n[sel, 1] < -0.6) & (np.abs(a) < 30)
+        fr = n[sel, 1] < -0.6
         Lb = _lum(cb[fr]) if fr.sum() > 20 else _lum(cb)
         src = cb[fr] if fr.sum() > 20 else cb
         med = np.median(src[(Lb >= np.percentile(Lb, 40)) & (Lb <= np.percentile(Lb, 80))], axis=0)
         med = med * (1 - BAND_LIFT) + stone * BAND_LIFT
-        nz_ = n[sel, 2]
-        val = (1.0 + 0.07 * np.clip(nz_, 0, 1) - 0.08 * np.clip(-nz_, 0, 1)
-               + 0.03 * NOISE(p[sel].astype(np.float64), 30.0, (2.0, 7.0, 1.0)))
-        col[sel] = (med[None] * val[:, None]).astype(np.float32)
-        col[sel] = 1.0 - (1.0 - col[sel]) * 0.94
-        joint = np.zeros(int(sel.sum()), dtype=np.float32)
-        for ja, z0, z1 in BAND_JOINTS_CUT:            # CW6: each joint only over its own cut's height
-            jd = np.abs(a - ja)
-            inz = np.clip((zz - z0) / 0.003, 0, 1) * np.clip((z1 - zz) / 0.003, 0, 1)
-            joint = np.maximum(joint, np.clip(1.0 - (jd - 0.5) / 0.8, 0, 1) * inz)
-        col[sel] = col[sel] * (1 - 0.6 * joint[:, None])
-        # CW6 (hesmi-M1): a brow. The band's upper rail is lit (the key from above), its lower rail and the slit's
-        # lips shaded, so the band reads as a stern brow over two eyes, not a row of teeth
-        upper = np.clip((zz - (EYE_Z + EYE_H)) / 0.03, 0, 1)
-        lower = np.clip(((EYE_Z - EYE_H) - zz) / 0.03, 0, 1)
-        col[sel] = col[sel] * (1.0 + 0.06 * upper - 0.10 * lower)[:, None]
+        col[sel] = paint_face(p[sel].astype(np.float64), n[sel].astype(np.float64), med).astype(np.float32)
     # CW6 (hesmi-M1): the hood's face cavity round the band lifted ~9 L* (the near-black void made the pale band a
     # floating grin); the carved-away inner surface of the cowl only
     if "hood" in names:

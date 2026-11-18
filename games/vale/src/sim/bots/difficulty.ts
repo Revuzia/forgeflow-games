@@ -222,7 +222,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     defendMatch: 1, recallDefend: 'inner', defendHold: 6, peelChance: 1, peelBodyBlock: true, peelLaneHp: 0.65, aheadCaution: 0.05, lurkMax: 8, avoidVision: true,
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
-    punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: true, frayBreak: 0.25,
+    punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: false, frayBreak: 0.25,
     coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true,
   },
 };

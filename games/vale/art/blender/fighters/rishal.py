@@ -81,7 +81,8 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 
           # (max2 g2 fix) the ink almonds' centres on the face-plate (EYE_ALMOND, EYE_Z; rest, m) for plates.paint_eyes
           # (max2 g2 fix 2: x was EX + EL, the almonds' outer corners (0.041): the decal landed 1.5 cm out, the left one
           # off the head beside the hook; the centres are EYE_ALMOND's EX 0.026)
-          "eyes3d": [[-0.026, -0.130, 1.661], [0.026, -0.130, 1.661]]}
+          # (ruling 55: the eyes open on the face under the brow visor, centres x 0.0193 at 1.650 on the front plane)
+          "eyes3d": [[-0.0198, -0.088, 1.650], [0.0198, -0.088, 1.650]]}
 # (FIX ROUND 2, verify: at 36 degrees the portrait saw the hook side-on, a tall glass slab with the mask a sliver
 # behind it): the brief's yaw 28, so the near cheek, the jaw, the mouth line's end and the chin show beside the hook
 # and under the band, as in the concept's three-quarter
@@ -131,7 +132,7 @@ CARDS = {
                                 "power": 8.0, "size": 0.15}]},
         # (max2 g2 fix: "floating feet": a firmer contact and cast shadow)
         "plate": {"glow": [0.15, 0.60, 0.42, 0.10], "cx": 0.44, "contact": 1.6, "cast": 0.8,
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.9, "h": 0.85, "tilt": 0.10, "lid_k": 0.42, "iris": "#22252F", "ink": "#121318", "lid_val": 1.0, "socket": 0.30, "smoke": [3.0, 1.7, 0.35], "line": 0.11, "crease": 0.30}], "portrait": [{"op": "eyes", "w": 1.9, "h": 0.85, "tilt": 0.10, "lid_k": 0.42, "iris": "#22252F", "ink": "#121318", "lid_val": 1.0, "socket": 0.30, "smoke": [3.0, 1.7, 0.35], "line": 0.11, "crease": 0.30}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.30, "h": 0.66, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}], "portrait": [{"op": "eyes", "w": 1.30, "h": 0.66, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}]}},
     },
     "rishal_chalkline": {
         # (card engineer 2: the dash at t 0.40 had the rear foot in the air: its crouch, knives dragged back, feet down)
@@ -155,7 +156,7 @@ CARDS = {
         # 30): the chalk-dusk plate's median 0.24 -> 0.18, a deeper dusk behind the pale plate)
         "plate": {"src": "seat_center", "tint": "#6C7890", "sat": 0.70, "median": 0.18, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
                   "glow_color": "#C8D4EC",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.9, "h": 0.85, "tilt": 0.10, "lid_k": 0.42, "iris": "#22252F", "ink": "#121318", "lid_val": 1.0, "socket": 0.30, "smoke": [3.0, 1.7, 0.35], "line": 0.11, "crease": 0.30}], "portrait": [{"op": "eyes", "w": 1.9, "h": 0.85, "tilt": 0.10, "lid_k": 0.42, "iris": "#22252F", "ink": "#121318", "lid_val": 1.0, "socket": 0.30, "smoke": [3.0, 1.7, 0.35], "line": 0.11, "crease": 0.30}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.30, "h": 0.66, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}], "portrait": [{"op": "eyes", "w": 1.30, "h": 0.66, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}]}},
     },
     "rishal_lamplit": {
         # (closing round 2: the lamps ride his right side, so the card turns that side to camera; the old key blew the
@@ -175,7 +176,7 @@ CARDS = {
                                 "size": 0.12}]},
         "plate": {"tint": "#C4A08A", "sat": 0.85, "median": 0.26, "cx": 0.60, "glow": [0.25, 0.55, 0.35, 0.12],
                   "glow_color": "#FFB067",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.9, "h": 0.85, "tilt": 0.10, "lid_k": 0.42, "iris": "#22252F", "ink": "#121318", "lid_val": 1.0, "socket": 0.30, "smoke": [3.0, 1.7, 0.35], "line": 0.11, "crease": 0.30}], "portrait": [{"op": "eyes", "w": 1.9, "h": 0.85, "tilt": 0.10, "lid_k": 0.42, "iris": "#22252F", "ink": "#121318", "lid_val": 1.0, "socket": 0.30, "smoke": [3.0, 1.7, 0.35], "line": 0.11, "crease": 0.30}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.30, "h": 0.66, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}], "portrait": [{"op": "eyes", "w": 1.30, "h": 0.66, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}]}},
     },
 }
 SKINS: list = [
@@ -609,23 +610,26 @@ SKULL = {"c": (0.0, 0.014, 1.668), "r": (0.074, 0.096, 0.122)}
 # (fix pass 4, review: the band stood ~7 cm off the narrow skull at the temples, a dark void between the visor and the
 # helm in every three-quarter view: the two lens ellipsoids are narrower and closer, the band hugs the temples ~1 cm off)
 LENS = {"d": 0.018, "c": (0.0, 0.004, 1.620), "r": (0.080, 0.150, 0.260), "thick": 0.010}
+# (orch1 W3-B, ruling 55: "the visor hangs like a beak", all 6 cards fail): the visor is a raised BROW VISOR now, a
+# dawnglass band over the brow from horn to horn with the face's eyes open under it; the beak is gone. The lens is
+# rounder (d 0.018 -> 0.008: no keel prow) and hugs the forehead (2.5 cm off the brow, 1.7 cm at the temples, ry
+# 0.150 -> 0.115), so its lower edge casts no band of shade across the eyes
+LENS = {"d": 0.008, "c": (0.0, 0.004, 1.620), "r": (0.080, 0.115, 0.260), "thick": 0.010}
 # (POLISH, review 3: the visor read as one big opaque shield from the brow to below the chin, the mask never showed):
 # the concept's SICKLE, side by side with the painting: a band across the eyes that sweeps UP and back to a horn over
 # each temple (its back end at crown height, the ring boss inside it), and only at the front, the narrow beak (the
 # hook) hanging on down past the chin. Under the band the slim carved mask shows at the cheeks, the mouth line and
 # the jaw either side of the beak.
-VISOR_PROF = np.array([(-0.200, 1.704), (-0.130, 1.708), (-0.090, 1.720), (-0.050, 1.738), (-0.015, 1.758),
-                       (0.020, 1.778), (0.046, 1.798), (0.052, 1.786), (0.042, 1.752), (0.026, 1.718),
-                       (0.004, 1.692), (-0.024, 1.670), (-0.056, 1.652), (-0.084, 1.640), (-0.100, 1.614),
-                       (-0.110, 1.574), (-0.117, 1.532), (-0.122, 1.496), (-0.125, 1.474), (-0.200, 1.468)])
-# the front outline: the band's top edge over the brow, its lower edge level under the eyes out to the beak, then the
-# beak itself ~5 cm wide at the cheekbones narrowing to its point 2 cm under the chin
-VISOR_FRONT = np.array([(-0.140, 1.820), (-0.084, 1.800), (-0.068, 1.762), (-0.050, 1.736), (-0.028, 1.720),
-                        (0.000, 1.714), (0.028, 1.720), (0.050, 1.736), (0.068, 1.762), (0.084, 1.800), (0.140, 1.820),
-                        (0.140, 1.646), (0.070, 1.645), (0.038, 1.641), (0.021, 1.630), (0.0130, 1.606),
-                        (0.0092, 1.572), (0.0062, 1.536), (0.0034, 1.508), (0.0, 1.494), (-0.0034, 1.508),
-                        (-0.0062, 1.536), (-0.0092, 1.572), (-0.0130, 1.606), (-0.021, 1.630), (-0.038, 1.641),
-                        (-0.070, 1.645), (-0.140, 1.646)])
+VISOR_PROF = np.array([(-0.200, 1.724), (-0.130, 1.726), (-0.090, 1.732), (-0.050, 1.744), (-0.015, 1.760),
+                       (0.020, 1.778), (0.046, 1.798), (0.052, 1.786), (0.042, 1.756), (0.026, 1.728),
+                       (0.004, 1.708), (-0.024, 1.698), (-0.056, 1.693), (-0.084, 1.690), (-0.110, 1.688),
+                       (-0.200, 1.686)])
+# (ruling 55) the front outline: the band's top edge over the brow, its lower edge a gentle arc ABOVE the eyes (1.690
+# at the centre, rising to the temples); no beak
+VISOR_FRONT = np.array([(-0.140, 1.830), (-0.084, 1.806), (-0.068, 1.772), (-0.050, 1.746), (-0.028, 1.730),
+                        (0.000, 1.724), (0.028, 1.730), (0.050, 1.746), (0.068, 1.772), (0.084, 1.806), (0.140, 1.830),
+                        (0.140, 1.716), (0.080, 1.704), (0.050, 1.696), (0.025, 1.691), (0.0, 1.690),
+                        (-0.025, 1.691), (-0.050, 1.696), (-0.080, 1.704), (-0.140, 1.716)])
 # (W5b: the hook a step narrower again under the band; with VISOR_RIM it is all frame)
 # (FIX ROUND 2, verify: the hook still read as a tall slab over the mask in the portrait): the hook ~25 % narrower
 # below the band, so the mouth line's end and the chin show beside it
@@ -974,18 +978,12 @@ HELM_BACK_ARCS = (1.722,)   # their seams (z at the back's centre, curving up to
 # a short mouth line, the chin's crease and the jaw's edge; cut in warm chalk (FACE_COL carve / lip), not ink.
 # (u, z) centre lines for his left side (mirrored), half-width (m)
 FACE_WRAP_C, FACE_WRAP_R = -0.030, 0.050
-FACE_LINES = [([(0.008, 1.645), (0.026, 1.647), (0.048, 1.652), (0.066, 1.657)], 0.0013),
-              ([(0.012, 1.636), (0.030, 1.629), (0.050, 1.623), (0.067, 1.609), (0.076, 1.588)], 0.0015),
-              ([(0.012, 1.612), (0.018, 1.588), (0.023, 1.564), (0.021, 1.549)], 0.0012),
-              ([(0.000, 1.539), (0.010, 1.540), (0.018, 1.536)], 0.0012),
-              # (W5b: the chin's crease short and straight, well under the mouth: curving up into the mouth's ends it
-              # closed an open-lips outline)
-              ([(0.000, 1.5185), (0.009, 1.5190)], 0.0009),
-              ([(0.074, 1.580), (0.062, 1.553), (0.044, 1.529), (0.026, 1.513)], 0.0013),
-              # (W5b) the nostril's wing (a nasal-flank line down from the brow read with the cheek's line as
-              # parallel claw marks in the portrait: the nose is carved in the geometry instead)
-              ([(0.0125, 1.581), (0.0060, 1.578)], 0.0010)]
-FACE_LINE_GAIN = 1.45          # (W5b) every carved line this much wider than authored above
+# (orch1 W3-B, ruling 55: "incised cheek lines", every card): the cheek arc, the cheek-plane line, the jaw edge, the
+# nostril wing and the brow line are gone (the forms are carved in the geometry); only the calm closed mouth and the
+# chin's short crease stay, softer
+FACE_LINES = [([(0.000, 1.539), (0.010, 1.540), (0.018, 1.536)], 0.0011),
+              ([(0.000, 1.5185), (0.009, 1.5190)], 0.0008)]
+FACE_LINE_GAIN = 1.0           # (W5b 1.45; ruling 55: the two lines left are drawn, not gouged)
 
 
 class BladeMesh:
@@ -1317,7 +1315,8 @@ def sculpts() -> list:
     face.add(Ellipsoid((0, -0.030, 1.598), (0.056, 0.064, 0.092)), k=0.0)
     face.inter(HalfSpace((0, -0.086, 1.6), (0, -1, 0), 0.5), k=0.012)                             # the flat front
     # the brow (FIX ROUND 2: 2 cm narrower: its square ends stood out under the band's lower edge as two pegs)
-    face.add(RoundBox((0, -0.082, 1.652), (0.034, 0.010, 0.009), 0.006, axes=sdf.rot_x(-8)), k=0.010)
+    # (ruling 55: the brow up over the open eyes, under the brow visor's lower edge; a soft ridge, not a shelf)
+    face.add(RoundBox((0, -0.080, 1.674), (0.036, 0.009, 0.007), 0.006, axes=sdf.rot_x(-8)), k=0.012)
     # the cheekbones: soft carved swells under the eyes (FIX ROUND 2: the boxed cheek planes stood off the mask's
     # sides as a stub in the portrait)
     for sx in (-1, 1):
@@ -1326,7 +1325,8 @@ def sculpts() -> list:
     # concept's cut stone mask - each cheek a flat plane turned ~53 deg off the front, meeting it in a crisp edge down
     # the cheekbone, and under it a jaw plane turning down and out to the chin (the chin re-added below)
     for sx in (-1, 1):
-        face.inter(HalfSpace((sx * 0.025, -0.086, 1.60), unit((sx * 0.80, -0.60, 0.0)), 0.5), k=0.003)
+        # (ruling 55: the front plane 0.025 -> 0.032 wide, so each eye sits on it, not across the plane's edge)
+        face.inter(HalfSpace((sx * 0.032, -0.086, 1.60), unit((sx * 0.80, -0.60, 0.0)), 0.5), k=0.004)
         face.inter(HalfSpace((sx * 0.021, -0.084, 1.540), unit((sx * 0.62, -0.40, -0.68)), 0.5), k=0.004)
     # the nasal ridge: a narrow carved wedge from under the brow to the nose's tip (a step prouder and longer)
     face.add(RoundBox((0, -0.0915, 1.611), (0.0055, 0.0080, 0.031), 0.003), k=0.006)
@@ -1974,10 +1974,15 @@ FACE_COL = {"lit": "#E4E3DE", "mid": "#D8D6D0", "shade": "#AFAEAA", "cool": "#A2
 # (W5b, final parity review: the warm ivory oval with faint tan lines read as a mannequin or an egg): WHITE chalk
 # (#D8D6D0, no ivory), the planes parted by the light (the cheek planes a step into the shade), the carving cut in
 # INK with a lit lip beside each cut, bolder and wider
-EYE_Z, INK_EYE = 1.661, "#1E2027"     # the ink almond recesses (brief §3) behind the glass
+EYE_Z, INK_EYE = 1.650, "#1E2027"     # (ruling 55: 1.661 -> 1.650, open under the brow visor)
 # (W5b: "the ink eye recesses can't be read in any shipped render"): larger, sharper almonds (half length, half height,
 # the inner corner's x), and the visor lets them through (visor_paint EYE_SHOW)
-EYE_ALMOND = (0.0150, 0.0064, 0.026)
+EYE_ALMOND = (0.0130, 0.0066, 0.0068)     # (ruling 55: half length, half height, inner corner x; centres x 0.0198)
+# (ruling 55) the eye: a muted ivory white, a steel-blue iris with a dark pupil, a heavy calm upper lid in the mask's
+# own chalk with an ink lash line, a soft crease above and a lit lower lid
+EYE_COL = {"white": "#DCD8CE", "iris": "#45698F", "iris_dk": "#2C4562", "pupil": "#15171C", "lash": "#1E2027",
+           "crease": "#9C9893", "socket": "#A9A49C", "low": "#6E6A66"}
+EYE_LID_K = 0.36            # the share of the almond the upper lid covers (a calm, level gaze)
 EYE_SHOW = 0.62
 # (FIX ROUND 2: the turned-away tones a step lighter - the back facing's top band sees the helm's shaded side)
 HELM_COL = {"lit": "#E2DFDA", "mid": "#CFCBC5", "shade": "#ABA6A0", "cool": "#A1A9B2", "ink": "#5E5650",
@@ -1999,7 +2004,7 @@ VISOR_COL = {"top": "#98AADA", "core": "#7184BE", "low": "#9CC0E2", "streak": "#
 # thin rim, not the concept's thick-rimmed curved sickle"): the concept's THICK pale-blue frame (VISOR_RIM m wide,
 # was 0.8 cm) along every cut edge with a dark outline outside and a fine dark line inside, so the band reads as a
 # framed sickle and the narrow hook below it is all frame (a pale-blue beak, not a glass sheet)
-VISOR_RIM = 0.0165
+VISOR_RIM = 0.0070            # (ruling 55: 1.65 -> 0.7 cm on the slim brow band)
 # (build 1: the hero light washed the 0.62 tint into a pale grey shield that merged with the white helm and mask):
 # the glass a clear lavender-blue a step under the chalk (L* ~66), the face seen faintly through it, the thick pale
 # rim (the concept's) setting it off the helm
@@ -2328,23 +2333,48 @@ def face_paint(p, n):
     col = _mix(col, C["lip"][None], up * 0.30)
     lo = _ss((0.0030 - np.abs(p[:, 2] - 1.5340)) / 0.002) * _ss((0.013 - ax) / 0.004) * front
     col = _mix(col, C["shade"][None], lo * 0.25)
-    # (POLISH: the brief's ink almond recesses, behind the glass): two slanted almonds, the inner corners low, cut
-    # deep into the mask with a lit lower lid; seen through the visor they read as eyes in shadow, not an alien face
-    a = eye_almond(p) * front
-    col = _mix(col, _hexrgb(INK_EYE)[None], a * 0.95)
+    # (orch1 W3-B, ruling 55) the eyes, open under the brow visor: a soft socket shade, a muted ivory almond, a
+    # steel-blue iris disc with a dark pupil (a calm level gaze), the upper lid in the mask's own chalk over the top of
+    # the iris with an ink lash line on its edge, a soft crease above and a lit lower lid; never a dark void
+    E = {k: _hexrgb(h) for k, h in EYE_COL.items()}
     EL, EH, EX = EYE_ALMOND
-    u = np.abs(p[:, 0]) - EX - EL
-    v = p[:, 2] - (EYE_Z + 0.10 * (np.abs(p[:, 0]) - EX - EL))
-    lid = _ss((0.0012 - np.abs(v + EH + 0.0013)) / 0.0010) * _ss((EL - np.abs(u)) / 0.004) * front
-    col = _mix(col, C["lip"][None], lid * 0.50)
+    u = (np.abs(p[:, 0]) - EX - EL) / EL                      # -1 inner corner .. +1 outer corner
+    v = (p[:, 2] - (EYE_Z + EYE_TILT * (np.abs(p[:, 0]) - EX - EL))) / EH
+    q = np.clip(1.0 - u * u, 0.0, 1.0)
+    top, bot = q ** 0.7, -0.80 * q ** 0.9
+    soft = 0.10
+    ins = _ss(np.minimum.reduce([top - v, v - bot, 1.0 - np.abs(u)]) / soft) * front
+    sock = np.exp(-((u / 1.45) ** 2 + ((v - 0.15) / 2.1) ** 2) * 2.0) * front
+    col = _mix(col, E["socket"][None], sock * 0.60)
+    lowl = _ss((0.10 - np.abs(v - bot)) / 0.06) * _ss((0.95 - np.abs(u)) / 0.12) * front   # a fine lower lid line
+    col = _mix(col, E["low"][None], lowl * 0.55)
+    col = _mix(col, E["white"][None], ins * 0.95)
+    di = np.hypot(u * EL, (v - 0.05) * EH)                    # m from the iris centre (a disc on the face)
+    ir = 0.66 * EH
+    iris = _ss((ir - di) / 0.0006) * ins
+    col = _mix(col, _mix(E["iris"][None].repeat(len(p), 0), E["iris_dk"][None], _ss((di - 0.45 * ir) / (0.5 * ir))), iris * 0.97)
+    pup = _ss((0.42 * ir - di) / 0.0005) * ins
+    col = _mix(col, E["pupil"][None], pup * 0.96)
+    edge = top - EYE_LID_K * (top - bot)
+    lidm = ins * _ss((v - edge) / soft)
+    col = _mix(col, C["mid"][None], lidm * 0.97)                # the heavy calm upper lid
+    lash = _ss((0.16 - np.abs(v - edge)) / 0.08) * _ss((1.08 - np.abs(u)) / 0.08) * front
+    col = _mix(col, E["lash"][None], lash * 0.92)
+    crease = _ss((0.12 - np.abs(v - (top + 0.55))) / 0.07) * _ss((0.85 - np.abs(u)) / 0.15) * front
+    col = _mix(col, E["crease"][None], crease * 0.55)
+    low_lid = _ss((0.14 - np.abs(v - (bot - 0.22))) / 0.08) * _ss((0.9 - np.abs(u)) / 0.15) * front
+    col = _mix(col, C["lip"][None], low_lid * 0.55)
     return col
+
+
+EYE_TILT = 0.06               # the outer corner's lift (m per m): calm, a touch upswept
 
 
 def eye_almond(p):
     """0..1 inside the two slanted ink almonds (the inner corners low), sharp-edged (W5b: larger and crisper)"""
     EL, EH, EX = EYE_ALMOND
     u = np.abs(p[:, 0]) - EX - EL
-    v = p[:, 2] - (EYE_Z + 0.10 * (np.abs(p[:, 0]) - EX - EL))
+    v = p[:, 2] - (EYE_Z + EYE_TILT * (np.abs(p[:, 0]) - EX - EL))
     q = np.sqrt((u / EL) ** 2 + (v / EH) ** 2)
     return _ss((1.0 - q) / 0.15)
 
@@ -2523,27 +2553,18 @@ def visor_paint(p, n):
     nf = np.repeat(np.array([[0.0, -0.94, 0.33]]), len(p), 0)
     nf[:, 0] = np.clip(p[:, 0] / 0.06, -1, 1) * 0.5
     nf = nf / np.linalg.norm(nf, axis=1, keepdims=True)
-    behind = face_paint(pf, nf)
-    behind = _mix(behind, helm_paint(pf, nf), _ss((p[:, 2] - 1.700) / 0.02))
+    behind = helm_paint(pf, nf)          # (ruling 55: only the brow is behind the band now, never the eyes)
     side_w = _ss((np.abs(p[:, 0]) - 0.050) / 0.025)                # the side band: the dark gap to the skull behind
     behind = _mix(behind, C["inner"][None] * 0.9, side_w * 0.55)
-    eye = _ss((p[:, 2] - 1.630) / 0.012) * _ss((1.700 - p[:, 2]) / 0.012)   # the deep band across the eyes
-    almond = eye_almond(p)                                          # the ink recesses read through the glass
-    beak = _ss((1.625 - p[:, 2]) / 0.03)                            # the hook below the band: lighter, cooler glass
-    k = 0.76 + 0.12 * eye + 0.08 * side_w
+    # (ruling 55: the band sits over the brow; no eye band, no ink almonds and no beak in the glass)
+    k = 0.80 + 0.08 * side_w
     col = behind * (1 - k[:, None]) + C["tint"][None] * k[:, None]
-    col = _mix(col, C["core"][None], eye * 0.28)
-    col = _mix(col, C["top"][None], _ss((p[:, 2] - 1.700) / 0.03) * 0.5)
-    col = _mix(col, C["low"][None], beak * 0.55)
-    col = _mix(col, C["eye"][None], almond * EYE_SHOW * outer)
-    band = 0.40 * p[:, 0] + (p[:, 2] - 1.668)
+    col = _mix(col, C["top"][None], _ss((p[:, 2] - 1.712) / 0.02) * 0.5)
+    col = _mix(col, C["low"][None], _ss((1.704 - p[:, 2]) / 0.012) * 0.35)
+    band = 0.40 * p[:, 0] + (p[:, 2] - 1.704)
     col = _mix(col, C["sheen"][None], np.clip(1 - np.abs(band) / 0.022, 0, 1) ** 1.5 * np.clip(-n[:, 1] + 0.2, 0, 1) * 0.45)
-    streak = np.clip(1 - np.abs(0.52 * p[:, 0] + (p[:, 2] - 1.690)) / 0.0040, 0, 1) * np.clip(-n[:, 1], 0, 1)
+    streak = np.clip(1 - np.abs(0.52 * p[:, 0] + (p[:, 2] - 1.712)) / 0.0035, 0, 1) * np.clip(-n[:, 1], 0, 1)
     col = _mix(col, C["streak"][None], streak * 0.65)
-    streak2 = np.clip(1 - np.abs(0.52 * p[:, 0] + (p[:, 2] - 1.562)) / 0.0030, 0, 1) * np.clip(-n[:, 1], 0, 1)
-    col = _mix(col, C["streak"][None], streak2 * 0.45)
-    keel = np.clip(1 - np.abs(p[:, 0]) / 0.0040, 0, 1) * np.clip((1.69 - p[:, 2]) / 0.03, 0, 1)
-    col = _mix(col, C["keel"][None], keel * 0.55)
     side = np.clip((np.abs(n[:, 0]) - 0.55) / 0.25, 0, 1) * outer
     dr = np.hypot(p[:, 1] - 0.012, p[:, 2] - 1.738)
     col = _mix(col, C["ring_in"][None], np.clip((0.0120 - dr) / 0.003, 0, 1) * side * 0.35)
