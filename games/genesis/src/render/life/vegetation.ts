@@ -819,6 +819,14 @@ function plantInstance(pv: PlanetView, rec: Float32Array, i: number, env: PlantE
 /** the far layer on by default; `?fartrees=0` = the old hand-over (whole trees shrink into the canopy shading) */
 const FAR_DEFAULT = perfSwitch('fartrees');
 /**
+ * PERF s23 `?kelpfit=0` = old. Kelp's height was a share of the CELLS' linear water depth, but it stands on the curved
+ * ground (groundHeight: curvature + detail relief), which over a submarine rise lies metres above the cells' chord:
+ * the fronds stood out of the sea as dark 'trunks' (the owner's "trunks standing through the sheet" at the landing
+ * coast, rounds 2-16; `hide=veg` removes them). Now the share is of the depth over the drawn ground, (cells' surface +
+ * water, linear: the sheet's level) - groundHeight, so a frond never reaches the surface, as designed (<= 0.95 depth).
+ */
+const KELP_FIT = perfSwitch('kelpfit');
+/**
  * PERF s15 (GPU-MEMORY-PLAN cut #8): the near trees' instance pools (one per kind x variant x LOD) were made at their
  * full capacity up front — 1,200 / 3,000 / 6,000 instances x 100 B (matrix, colour, extra, distance) whether a world
  * has that species or not: ~65 MB of CPU arrays and their GL buffers. They start at NEAR_START and double, on demand
@@ -1061,6 +1069,7 @@ export class Vegetation {
     // kelp forests on the sea floor (the cell's dominant "tree" species is kelp, under a few metres of water)
     if (water && water[c] > 2.5 && treeSp && treeSp[c] >= 0) {
       const lk = SPECIES[Math.round(treeSp[c])];
+      const kelpSurf = KELP_FIT ? pv.fields.get('surface') : null;
       if (lk && lk.layer === 'sea') {
         const area = g.area[c] * R * R;
         const n = Math.ceil((area / 140) * this.density * Math.min(1, tc + 0.3));
@@ -1073,10 +1082,12 @@ export class Vegetation {
           const nx = dy * ez, ny = dz * ex - dx * ez, nz = -dy * ex;
           dx += (ex * Math.cos(a) + nx * Math.sin(a)) * rr; dy += ny * Math.sin(a) * rr; dz += (ez * Math.cos(a) + nz * Math.sin(a)) * rr;
           const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
-          const depth = g.sample(water, dx, dy, dz);
+          let depth = g.sample(water, dx, dy, dz);
+          const gh = groundHeight(pv.ground, dx, dy, dz);
+          if (kelpSurf) depth = Math.min(depth, g.sample(kelpSurf, dx, dy, dz) + depth - gh);
           if (depth < 2) continue;
           const h = Math.min(lk.hMax, depth * (0.6 + 0.35 * hashFloat(c, i, 503)));
-          out.push(dx, dy, dz, groundHeight(pv.ground, dx, dy, dz), hashFloat(c, i, 504) * 6.28, h, K('kelp'), hash32(c, i, 505) % VARIANTS, Math.round(treeSp[c]), hashFloat(c, i, 506));
+          out.push(dx, dy, dz, gh, hashFloat(c, i, 504) * 6.28, h, K('kelp'), hash32(c, i, 505) % VARIANTS, Math.round(treeSp[c]), hashFloat(c, i, 506));
         }
       }
     }
