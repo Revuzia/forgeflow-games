@@ -501,6 +501,9 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
       modeHist[p].push(md); if (modeHist[p].length > 12) modeHist[p].shift();
       if (ultAt6[p] < 0 && f.level >= 6) ultAt6[p] = now;
       add(H('mode.time'), md, dt);
+      // (where the defend time goes: a post's structure class and what called it, while in defend mode)
+      if (md === 'defend') { const gd = (ctl(p)?.brain as unknown as { guard?: Map<number, { cls: number; why?: string }> } | undefined)?.guard?.get(p);
+        add(H('defend.why'), gd ? `${['outer', 'inner', 'base'][gd.cls]}:${gd.why ?? '?'}${now < 840 ? ':lane' : ''}` : now < 840 ? 'call:lane' : 'call', dt); }
       // (lane AI round 3: the soak's laners-in-lane read — non-grovehunter RIFT seats, 1:00-14:00, lane / trade / push / allin)
       if (modeId === 'rift' && now >= 60 && now < 840 && !ctl(p)?.jungle) { add(C, 'lane.all', dt); if (md === 'lane' || md === 'trade' || md === 'push' || md === 'allin') add(C, 'lane.in', dt); else add(H('lane.outMode'), md, dt); }
       if (f.hp < f.maxHp * 0.3 && md !== 'retreat' && md !== 'recall') lowFor[p] += dt; else if (f.hp >= f.maxHp * 0.3) lowFor[p] = 0;

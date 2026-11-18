@@ -56,6 +56,8 @@ export interface Guard {
   until: number;
   /** when the post was given (a defender that has not turned to it 2 s later, away from it, hands it on) */
   readonly since: number;
+  /** what called the post: enemy fighters at it, fighters coming at the road's front, a wave alone, or the core hit */
+  readonly why: 'fight' | 'coming' | 'wave' | 'core';
 }
 
 /** a place a ganker can wait out of sight beside a road: a thicket whose centre is 4–22 m off the road (lane AI G3) */
@@ -406,7 +408,7 @@ export class TeamBrain {
       else if (now - (this.structHitAt.get(st.id) ?? -1e9) <= 2) hurt.add(st);
       this.structHp.set(st.id, st.hp);
     }
-    const threats: { st: Entity; info: StructInfo; cls: StructClass; value: number; need: number; n: number; ttl: number }[] = [];
+    const threats: { st: Entity; info: StructInfo; cls: StructClass; value: number; need: number; n: number; ttl: number; why: Guard['why'] }[] = [];
     // (owner_rulings 44: each enemy fighter threatens the one own structure it is hitting, else the nearest one it can hurt — a
     // push on the Bell Needles is theirs, not a "coming" threat on the untouched Lantern beside them, which held a full-health
     // veteran posted 3 m from it, idle, while all five enemies took both Bell Needles and the Hourbell 14-21 m away)
@@ -482,7 +484,7 @@ export class TeamBrain {
         for (const f of tp.enemyFighters) if (f.alive && f.atkTarget === st.id) fd += f.stats.ad * f.stats.attackSpeed;
         if (fd > 0) ttl = (st.hp + st.shield) / fd + 4;
       }
-      if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming, ttl });
+      if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming, ttl, why: coreHit && d.coreAll ? 'core' : n > 0 ? 'fight' : coming > 0 ? 'coming' : 'wave' });
     }
     // (owner_rulings 44: the most valuable structure first — the Hourbell, then its Bell Needles, the Lanterns, the inner and the
     // outer Needles — then the bigger push; map order breaks ties: deterministic)
@@ -550,7 +552,7 @@ export class TeamBrain {
           bt = el.eta; best = p.player; bRecall = el.rec;
         }
         if (best < 0) break;
-        this.guard.set(best, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach, cls, recall: bRecall, until: now + d.defendHold, since: now });
+        this.guard.set(best, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach, cls, recall: bRecall, until: now + d.defendHold, since: now, why: th.why });
         have++;
       }
     }
