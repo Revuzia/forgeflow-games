@@ -31,7 +31,7 @@
 //       channels, std matched to snoise), 1-3 taps where foam can be, none elsewhere; the shore bite = 1 tap;
 //     * glint (GGX), glitter (3 hashes), moon (2 LUT taps + GGX), sun shadow 1 tap (5 in the nearest cascade);
 //     * ice and silt streaks keep their arithmetic noise (rare, gated as before).
-// Sub-cuts for a Mac bisect: `?wshade3=nodetail,noreflect,nossr,norefract,nofoam,nosky,pcf5` (+ `foamdbg`: R shore, G whitecap / gale, B crest / surge / rapids).
+// Sub-cuts for a Mac bisect: `?wshade3=nodetail,noreflect,nossr,norefract,nofoam,nosky,pcf5` (+ `spdbg`: R tile-B amplitude, G / B the short / long Gerstner shares the lattice keeps; `foamdbg`: R shore, G whitecap / gale, B crest / surge / rapids).
 // STATIC COUNT (open calm sea, day, one projection): see PERF.md SESSION 25.
 import { DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, RepeatWrapping, UnsignedByteType, type IUniform, type Vector4 } from 'three';
 import { perfList, perfNum } from '../perfswitch.ts';
@@ -421,6 +421,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float fB = 1.0 - smoothstep(0.04, 0.13, fwE / 13.0);
   float fS = 1.0 - smoothstep(0.025, 0.07, fwE / 34.0);
   vec3 gradLong = vF3A.xyz * fA + vF3B.xyz * fB + vF3S.xyz * fS;
+  ${CUT.has('spdbg') ? 'gl_FragColor = vec4(clamp(vF3Cld.w / 3.0, 0.0, 1.0), clamp(vF3A.w * 40.0, 0.0, 1.0), clamp(vF3B.w * 40.0, 0.0, 1.0), 1.0); return;' : ''}
   float unres = vF3A.w * (1.0 - fA) + vF3B.w * (1.0 - fB) + vF3S.w * (1.0 - fS) + vF3Sun.w;
   float res = 0.0;
   vec3 grad = gradLong;
