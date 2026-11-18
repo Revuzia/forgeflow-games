@@ -423,6 +423,9 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
               if (f.team !== st.team && d2 <= 15 * 15) foes++; else if (f.team === st.team && d2 <= 16 * 16 && f.hp > f.maxHp * 0.6) fit++; }
             if (foes === 0 && fit >= 2) {
               add(C, `fall.${c}.wicksOverFit`);
+              // (the stack that took it: enemy Wicks within 12 m, bucketed — a wave nobody could hold, or one left alone)
+              { let wk = 0; for (const u of w.entities) if (u.alive && u.kind === 'minion' && u.team !== st.team && (u.x - st.x) ** 2 + (u.y - st.y) ** 2 <= 12 * 12) wk++;
+                add(H('fall.wicksOverFit.stack'), wk < 6 ? '<6' : wk < 12 ? '6-11' : wk < 20 ? '12-19' : '20+'); add(H('fall.wicksOverFit.when'), now < 840 ? 'lane' : now < 1500 ? 'mid' : 'late'); }
               for (const pl of w.players) { const f = pl.ent; if (f && f.alive && f.team === st.team && (f.x - st.x) ** 2 + (f.y - st.y) ** 2 <= 16 * 16 && f.hp > f.maxHp * 0.6) add(H('fall.wicksOverFit.mode'), modeOf(pl.player)); }
             }
           }
@@ -499,7 +502,7 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
       if (ultAt6[p] < 0 && f.level >= 6) ultAt6[p] = now;
       add(H('mode.time'), md, dt);
       // (lane AI round 3: the soak's laners-in-lane read — non-grovehunter RIFT seats, 1:00-14:00, lane / trade / push / allin)
-      if (modeId === 'rift' && now >= 60 && now < 840 && !ctl(p)?.jungle) { add(C, 'lane.all', dt); if (md === 'lane' || md === 'trade' || md === 'push' || md === 'allin') add(C, 'lane.in', dt); }
+      if (modeId === 'rift' && now >= 60 && now < 840 && !ctl(p)?.jungle) { add(C, 'lane.all', dt); if (md === 'lane' || md === 'trade' || md === 'push' || md === 'allin') add(C, 'lane.in', dt); else add(H('lane.outMode'), md, dt); }
       if (f.hp < f.maxHp * 0.3 && md !== 'retreat' && md !== 'recall') lowFor[p] += dt; else if (f.hp >= f.maxHp * 0.3) lowFor[p] = 0;
       // bush waits
       if (thicketAt(f.x, f.y) >= 0) { add(C, 'bush.time', dt); if (Math.abs(f.vx) + Math.abs(f.vy) < 0.1) add(C, 'bush.stillTime', dt); }
