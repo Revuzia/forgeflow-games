@@ -186,7 +186,7 @@ export const SHOP_PITCH = 2.5;             // m from one aisle row to the next (
 export const WORK_COVER = true;
 export const PITCHED_HOMES = true;
 export const ROOF_FLAT_ALL = false;
-export const AO = Object.freeze({ k: 0.32, r: 0.35, minH: 0.25, minA: 0.08, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
+export const AO = Object.freeze({ k: 0.32, m: 0.06, r: 0.35, minH: 0.25, minA: 0.08, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
 export const RNG_LEAK = false;            // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
 const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
@@ -578,7 +578,7 @@ const AUTH = {
     cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8]] },     // (W10 R3A, budget: one pallet of stock a level, was 5 blocks)
   // (W10 R3A) a stock pack: one sealed box (~10 triangles) - the cheap stock a shop / store room / warehouse stacks on its cartons and crates
   pack: { w: 0.5, d: 0.4, parts: [[-0.25, 0, -0.2, 0.25, 0.34, 0.2, "fabric", 0xa89a80]], cols: [[0]], surface: 0.34 },
-  carton: { w: 0.52, d: 0.44, parts: [[-0.26, 0, -0.22, 0.26, 0.42, 0.22, "fabric", 0xb2875a], [-0.05, 0.42, -0.22, 0.05, 0.424, 0.22, "fabric", 0xd8c8a0]], cols: [[0, 1]], surface: 0.424 },
+  carton: { w: 0.52, d: 0.44, parts: [[-0.26, 0, -0.22, 0.26, 0.424, 0.22, "fabric", 0xb2875a]], cols: [[0]], surface: 0.424 },     // (W10 R3A fix2: one box, 10 triangles - the 4 mm tape strip was a second box)
   cartonOpen: { w: 0.6, d: 0.46, parts: [[-0.3, 0, -0.23, 0.3, 0.36, 0.23, "fabric", 0xc49a62], [-0.3, 0.36, -0.23, 0.3, 0.5, -0.2, "fabric", 0xc49a62], [-0.3, 0.36, 0.2, 0.3, 0.5, 0.23, "fabric", 0xc49a62]],
     cols: [[0], [1], [2]] },
   boxStack: { w: 0.7, d: 0.6, parts: [[-0.35, 0, -0.3, 0.35, 0.46, 0.3, "fabric", 0xb2875a], [-0.3, 0.46, -0.26, 0.24, 0.86, 0.22, "fabric", 0xc49a62], [-0.2, 0.86, -0.2, 0.16, 1.14, 0.14, "fabric", 0xa87a4a]],
@@ -2566,7 +2566,7 @@ export function generate(parcel, opts) {
           const hw = strip ? 0.6 : 0.28, hd = strip ? 0.12 : 0.28, pl = strip ? P_LAMPW : P_LAMP, fc = [pl, pl, pl, pl, pl, pl];
           const li = addBox("skin", u - hw, u + hw, ceil - SKIN, ceil, v - hd, v + hd, fc, 0, f);
           if (li >= 0) boxes[li].hp = 63 & ~8;                // (it hangs under the slab: only its underside is drawn)
-          if (FINISH && !TH.ruined) finPools.push({ f, u, v, r: strip ? 1.5 : 1.2, warm: strip ? 0 : 1, fpal: rc.floor });     // (W10 R3A: the light's pool on the floor)
+          if (FINISH && !TH.ruined && !strip && u === pickL[0][0] && v === pickL[0][1]) finPools.push({ f, u, v, r: strip ? 1.5 : 1.2, warm: strip ? 0 : 1, fpal: rc.floor });     // (W10 R3A: the light's pool on the floor - fix2: a warm panel's, the room's first light only)
         }
         // curtains beside the windows of the lived-in rooms (on the piers' inner faces)
         if (LIVED.has(kind)) {
@@ -3720,9 +3720,9 @@ export function generate(parcel, opts) {
         return null;
       };
       for (let k = 0; k < Math.round(area / 3); k++) X.push(() => {
-        const id = (kind === "shop" ? ["boxStack", "cartonOpen", "crate", "pack"] : ["boxStack", "crate", "cartonOpen", "drum", "pack"])[k % (kind === "shop" ? 4 : 5)];
+        const id = (kind === "shop" ? ["boxStack", "cartonOpen", "crate", "carton"] : ["boxStack", "crate", "cartonOpen", "drum", "carton"])[k % (kind === "shop" ? 4 : 5)];
         const tint = id === "drum" ? 0x4a6a7a : id === "crate" ? 0x8a6e50 : [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][k % 4];
-        const p = tryWall(id, "corner", { tint }) || (k % 2 === 0 ? freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50) : null);
+        const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50) : null);
         if (p && (id === "crate" || p.cat.id === "palletLoad")) stackOn(p, "box", { force: true });
         else if (p && p.cat.surface && !p.tops) { const q = stackOn(p, "pack", { force: true, tint }); if (q && q.y0 + q.cat.h < 1.6) stackOn(q, "pack", { force: true, tint }); }     // (sealed packs on the carton / pack: stock piled up, never over 1.6 m)
       });
@@ -5260,16 +5260,10 @@ function finishGeo(H, acc, colOf, split) {
     for (const c of r.rects) if (c[0] < I[2] && c[2] > I[0] && c[1] < I[3] && c[3] > I[1]) { bx0 = Math.min(bx0, c[0]); bz0 = Math.min(bz0, c[1]); bx1 = Math.max(bx1, c[2]); bz1 = Math.max(bz1, c[3]); }
     if (!(bx1 > bx0)) return;
     bx0 += JAMB; bz0 += JAMB; bx1 -= JAMB; bz1 -= JAMB;
-    const O = [Math.max(bx0, I[0] - AO.r), Math.max(bz0, I[1] - AO.r), Math.min(bx1, I[2] + AO.r), Math.min(bz1, I[3] + AO.r)];
-    const i0 = [Math.max(O[0], I[0]), Math.max(O[1], I[1]), Math.min(O[2], I[2]), Math.min(O[3], I[3])];
-    if (!(i0[2] > i0[0] && i0[3] > i0[1])) return;
-    const iv = [[i0[0], y, i0[1]], [i0[2], y, i0[1]], [i0[2], y, i0[3]], [i0[0], y, i0[3]]], ov = [[O[0], y, O[1]], [O[2], y, O[1]], [O[2], y, O[3]], [O[0], y, O[3]]];
-    quad(pe.mat, iv, UP, [c0, c0, c0, c0]);
-    for (let e = 0; e < 4; e++) {
-      const e2 = (e + 1) % 4;
-      if (Math.abs(ov[e][0] - iv[e][0]) + Math.abs(ov[e][2] - iv[e][2]) + Math.abs(ov[e2][0] - iv[e2][0]) + Math.abs(ov[e2][2] - iv[e2][2]) < 0.02) continue;
-      quad(pe.mat, [ov[e], ov[e2], iv[e2], iv[e]], UP, [c1, c1, c0, c0]);
-    }
+    // (fix2, plan budget +2 a piece) ONE quad: the footprint + AO.m, clipped to the room's cells inside the walls, at AO.k - no fading ring
+    const q = [Math.max(bx0, I[0] - AO.m), Math.max(bz0, I[1] - AO.m), Math.min(bx1, I[2] + AO.m), Math.min(bz1, I[3] + AO.m)];
+    if (!(q[2] > q[0] && q[3] > q[1])) return;
+    quad(pe.mat, [[q[0], y, q[1]], [q[2], y, q[1]], [q[2], y, q[3]], [q[0], y, q[3]]], UP, [c0, c0, c0, c0]);
   });
   // wall runs: feet, the floor along them, corners, tile bands
   for (const q of fin.runs) {
@@ -5281,11 +5275,10 @@ function finishGeo(H, acc, colOf, split) {
       quad("floor_tile", [P(0, ya, 0.009), P(L, ya, 0.009), P(L, yb, 0.009), P(0, yb, 0.009)], n, [tc, tc, tc, tc]);
       continue;
     }
-    const cf = mul(cw, kk(AO.foot));
-    quad(pw.mat, [P(0, q.y + 0.1, o), P(L, q.y + 0.1, o), P(L, q.y + 0.1 + AO.footH, o), P(0, q.y + 0.1 + AO.footH, o)], n, [cf, cf, cw, cw]);
-    const cc = mul(cw, kk(AO.corner)), wC = Math.min(AO.cornerW, L / 2), o2 = o + 0.001;
-    if (q.c0) quad(pw.mat, [P(0, q.y + 0.1, o2), P(wC, q.y + 0.1, o2), P(wC, q.h, o2), P(0, q.h, o2)], n, [cc, cw, cw, cc]);
-    if (q.c1) quad(pw.mat, [P(L - wC, q.y + 0.1, o2), P(L, q.y + 0.1, o2), P(L, q.h, o2), P(L - wC, q.h, o2)], n, [cw, cc, cc, cw]);
+    if (L < 1.0) continue;
+    // (fix2, plan budget +40 a room) one quad a run: the foot AO.foot, a corner end (another run of the room meets it) AO.corner x that, top fading to the wall
+    const cf = mul(cw, kk(AO.foot)), cc = mul(cw, kk(AO.foot * AO.corner)), ct = mul(cw, kk(AO.corner + (1 - AO.corner) * 0.5));
+    quad(pw.mat, [P(0, q.y + 0.1, o), P(L, q.y + 0.1, o), P(L, q.y + 0.1 + AO.footH, o), P(0, q.y + 0.1 + AO.footH, o)], n, [q.c0 ? cc : cf, q.c1 ? cc : cf, q.c1 ? ct : cw, q.c0 ? ct : cw]);
   }
   // light pools: a diamond fan (4 triangles), the floor colour lifted at the middle
   for (const q of fin.pools) {
@@ -5304,10 +5297,17 @@ function finishGeo(H, acc, colOf, split) {
     quad(trimMat, [P(-half, y1), P(half, y1), P(half, y1 + CW), P(-half, y1 + CW)], n, TT);
   };
   for (const d of H.doors) {
-    const sides = d.kind === "interior" ? [1, -1] : [-1];             // (a street door's normal points out: its inside face is -n)
+    const sides = d.kind === "interior" ? [1] : [-1];                 // (a street door's normal points out: its inside face is -n; fix2: an interior door one face)
     for (const sg of sides) casing(d.x, d.z, d.axis, d.nx * sg, d.nz * sg, d.y, d.y + DOOR_H, DOOR_CLEAR / 2);
   }
-  for (const w of H.windows) casing(w.x, w.z, w.axis, -w.nx, -w.nz, w.sill, w.head, w.width / 2);
+  const curW = new Set(CURTAIN_FOLDS ? fin.cur.map((c) => c[0]) : []);
+  // (fix2, budget) a window without curtains: its sill board (8 cm, the trim colour, 2 triangles) - a curtained window's jambs are behind its panels
+  H.windows.forEach((w, wk) => {
+    if (curW.has(wk)) return;
+    const tx = w.axis === "x" ? 1 : 0, tz = w.axis === "x" ? 0 : 1, nx = -w.nx, nz = -w.nz, off = T / 2 + 0.008, h = w.width / 2 + CW;
+    const P = (t, y) => [w.x + tx * t + nx * off, y, w.z + tz * t + nz * off];
+    quad(trimMat, [P(-h, w.sill - CW), P(h, w.sill - CW), P(h, w.sill), P(-h, w.sill)], [nx, 0, nz], TT);
+  });
   // curtains: a rod and two pleated panels per window of a lived room
   if (CURTAIN_FOLDS) for (const [wk, pi, long] of fin.cur) {
     const w = H.windows[wk], pe = H.palette[pi]; if (!w || !pe) continue;
@@ -5317,7 +5317,7 @@ function finishGeo(H, acc, colOf, split) {
     const yTop = w.head + 0.16, yBot = long ? fy + 0.04 : w.sill - 0.22, half = w.width / 2, rod = colOf(0x3a3632);
     quad("metal", [P(-half - 0.52, yTop, 0.13), P(half + 0.52, yTop, 0.13), P(half + 0.52, yTop + 0.035, 0.13), P(-half - 0.52, yTop + 0.035, 0.13)], n, [rod, rod, rod, rod]);
     for (const sd of [-1, 1]) {
-      const t0 = sd < 0 ? -half - 0.46 : half - 0.02, t1 = sd < 0 ? -half + 0.02 : half + 0.46, NF = 4;
+      const t0 = sd < 0 ? -half - 0.46 : half - 0.02, t1 = sd < 0 ? -half + 0.02 : half + 0.46, NF = 2;      // (fix2: two folds a panel - a crest and a trough)
       for (let k = 0; k < NF; k++) {
         const ta = t0 + (t1 - t0) * k / NF, tb = t0 + (t1 - t0) * (k + 1) / NF, da = k % 2 ? 0.115 : 0.04, db = k % 2 ? 0.04 : 0.115;
         const ca = k % 2 ? c : cD, cb = k % 2 ? cD : c;
@@ -5326,15 +5326,15 @@ function finishGeo(H, acc, colOf, split) {
     }
   }
   // pictures: a 4 x 3 cell print (5 x 4 vertex colours), a framed one on a dark frame plate 5 cm wider each side
-  const hexLerp = (A, B, t) => { const a = colOf(A), b = colOf(B); return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; };
   for (const q of fin.pics) {
     const n = [q.nx, 0, q.nz], tx = -q.nz, tz = q.nx, half = q.w / 2, G = PICS[q.pic % PICS.length];
     const P = (t, y, off) => [q.x + tx * t + q.nx * off, y, q.z + tz * t + q.nz * off];
     if (q.frame) { const fc = colOf(0x2e2620); quad("wood", [P(-half - 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y1 + 0.05, 0), P(-half - 0.05, q.y1 + 0.05, 0)], n, [fc, fc, fc, fc]); }
-    const off = q.frame ? 0.004 : 0, col = (i, j) => hexLerp(G[3 - j][0], G[3 - j][1], i / 4);      // (vertex row j = 0 at the bottom: the spec's last row)
-    for (let j = 0; j < 3; j++) for (let i = 0; i < 4; i++) {
-      const ta = -half + q.w * i / 4, tb = -half + q.w * (i + 1) / 4, ya = q.y0 + (q.y1 - q.y0) * j / 3, yb = q.y0 + (q.y1 - q.y0) * (j + 1) / 3;
-      quad("fabric", [P(ta, ya, off), P(tb, ya, off), P(tb, yb, off), P(ta, yb, off)], n, [col(i, j), col(i + 1, j), col(i + 1, j + 1), col(i, j + 1)]);
+    // (fix2) 2 x 2 flat colour blocks, split at the print's own proportions (crisp blocks, not vertex gradients; 8 triangles): the spec's rows 1 and 2
+    const off = q.frame ? 0.004 : 0, sx = 0.38 + 0.24 * ((q.pic * 7) % 5) / 4, sy = 0.4 + 0.2 * ((q.pic * 3) % 4) / 3;
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+      const ta = -half + q.w * (i ? sx : 0), tb = -half + q.w * (i ? 1 : sx), ya = q.y0 + (q.y1 - q.y0) * (j ? sy : 0), yb = q.y0 + (q.y1 - q.y0) * (j ? 1 : sy), c = colOf(G[2 - j][i]);
+      quad("fabric", [P(ta, ya, off), P(tb, ya, off), P(tb, yb, off), P(ta, yb, off)], n, [c, c, c, c]);
     }
   }
 }

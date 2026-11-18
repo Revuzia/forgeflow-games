@@ -1154,7 +1154,8 @@ else if (require.main === module) (async () => {
     // (W10 R3A) the finish (opts.finish): drawn ONLY inside (every finish key "<mat>|in" or a ceiling's "plaster||ceil" when split), never on low (wear "low"), the
     // structure's own faces untouched (the split's triangles are still all there), and a home draws some (curtains, casings, wall feet)
     {
-      let finBad = [], finTris = 0, homes = 0;
+      let finBad = [], finTris = 0, homes = 0, finBudget = 0, aoPieces = 0, finWorst = 0;
+      const AOc = HGmod.AO || { minH: 0.25, minA: 0.08 };
       for (let k = 0; k < 36 && finBad.length < 4; k++) {
         const par = Object.assign({}, PS[(k * 13) % PS.length], { theme: THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 });
         const H = HGmod.generate(par), tri = (md) => { let n = 0; for (const g of Object.values(md.groups)) for (const a of g.values()) n += a.idx.length / 3; return n; };
@@ -1166,7 +1167,15 @@ else if (require.main === module) (async () => {
         for (const [key] of mF.groups.walls) if (!m1.groups.walls.has(key) && !mW.groups.walls.has(key) && !/^[a-z_]+\|(in|ceil)$/.test(key)) finBad.push(H.id + " finish key " + key);
         if (H.use === "house" && !(HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined)) { homes++; if (add <= 0) finBad.push(H.id + " a home with no finish"); }
         finTris += add;
+        // (fix2) the plan's finish budget: +2 a shadowed piece, +40 a room
+        const aoN = H.furniture.filter((p) => !(p.deco || p.mount === "wall" || p.mount === "top" || p.max[1] - p.min[1] < AOc.minH || (p.max[0] - p.min[0]) * (p.max[2] - p.min[2]) < AOc.minA)).length;
+        const b = 2 * aoN + 40 * H.rooms.length;
+        aoPieces += aoN; finBudget += b; finWorst = Math.max(finWorst, b ? add / b : 0);
       }
+      // (W10 R3A fix2) the finish's drawn-only triangles, all 36 houses: <= the plan's budget (2 a shadowed piece + 40 a room); its control: the round-1 shadow
+      // (a 10-triangle ring, +8 a piece) on the same houses must read over it
+      okP(finTris <= finBudget, "finish budget (W10 R3A): drawn-only finish " + finTris + " triangles <= plan 2 a shadowed piece + 40 a room = " + finBudget + " (36 houses; worst house x" + finWorst.toFixed(2) + " its own, info)", "over by " + (finTris - finBudget));
+      okP(finTris + 8 * aoPieces > finBudget, "negative control [finish budget]: the 10-triangle shadow ring (+8 a piece, " + aoPieces + " pieces) is caught", "not caught: " + (finTris + 8 * aoPieces) + " <= " + finBudget);
       okP(finBad.length === 0 && homes > 0, "meshData finish (W10 R3A): inside keys only, none on low, a home draws it (" + homes + " homes of 36 houses, +" + finTris + " drawn-only triangles, not in house.tris)", finBad.slice(0, 3).join(" | "));
     }
   }
