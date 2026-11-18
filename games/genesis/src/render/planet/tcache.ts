@@ -6,7 +6,7 @@
 // the old cost).
 //
 // s26 "lean" layout (SESSION 26 in PERF.md: why s22's tiles came to ~2 MB each at the landing view):
-// STORE (3 targets, 16 B a texel + 1 mip): T0 sRGB8_A8 albedo / 1.5, roughness; T1 RGBA16F D (body frame; the shading
+// STORE (3 targets, 16 B a texel, no mips: the content is pre-filtered for the pixel, one bilinear tap): T0 sRGB8_A8 albedo / 1.5, roughness; T1 RGBA16F D (body frame; the shading
 // normal is normalize(N - D): the bump height's surface gradient + the micro normal, folded exactly as the live path
 // nests them), ao; T2 RGBA8 sky, sward, glint (the share of sparkling facets), 1.
 // ONE BAKE PER PATCH, AT THE CAMERA OF THE BAKE: every texel is evaluated with the camera distance, the eye direction
@@ -17,11 +17,11 @@
 // more than 15 % of its distance the patch goes back to the full shader until re-baked. The graze term is also
 // corrected per fragment to first order from the bake camera (stored per tile).
 // TILES: a patch's triangular lattice fills HALF a square (lower-left, or rotated 180 degrees: upper-right), so two
-// patches share a square; each half has a 2-texel border on its legs and a 4.24-texel one on the hypotenuse, so the
-// display's taps (mip <= 1) never reach the partner's half. Squares of one size class fill a 288 slab (four by four
+// patches share a square; each half has a 1-texel border on its legs and 3 (in x + y) on the hypotenuse, so the
+// display's bilinear tap never reaches the partner's half. Squares of one size class fill a 288 slab (four by four
 // slabs a layer; classes 192 and 576 take a 576 block).
 // SIZE: by the patch's real on-screen AREA: edge in texels = tcdens x (patch edge in pixels at its nearest point) x
-// sqrt(|n.v| + relief), i.e. texels ~ pixels over the patch (far grazing patches get tiny tiles); the bake's footprint
+// sqrt(mean |n.v| over its cells' normals + 0.05), only its on-screen part counted, i.e. texels ~ pixels (far grazing patches get tiny tiles); the bake's footprint
 // is never under the texel's own. PRIORITY: the patches with the most screen pixels first.
 // LIVE (full shader): patches with lava or fire (uTime), patches nearer than the largest class resolves, patches
 // whose tile is not baked yet / moved out of its bracket / changed by the sim, and what does not fit the memory cap.
@@ -52,16 +52,16 @@ const TC_DENS = TCACHE ? Math.min(2.5, Math.max(0.8, perfNum('tcdens', 1.3)!)) :
 export const TC_SL = 1152;
 const SLAB = 288;
 const BLOCK = 576;
-const CLASSES = [24, 32, 48, 72, 96, 144, 192, 288, 576];
+const CLASSES = [16, 20, 24, 28, 32, 40, 48, 56, 72, 96, 144, 192, 288, 576];
 /** the span a class's squares fill: a slab, or a 2x2 block of slabs */
-const span = (c: number): number => (SLAB % CLASSES[c] === 0 ? SLAB : BLOCK);
+const span = (c: number): number => (CLASSES[c] <= 144 || CLASSES[c] === SLAB ? SLAB : BLOCK);
 /** border on the legs (texels), border on the hypotenuse (in x + y: 6 = 4.24 texels across) */
-const BORDER = 2;
-const HYP = 6;
+const BORDER = 1;
+const HYP = 3;
 /** usable leg of a class: S - 2 BORDER - HYP */
 const PAD = 2 * BORDER + HYP;
-const MIPS = 2;
-const BPT = 16 * (1 + 1 / 4);
+const MIPS = 1;
+const BPT = 16;
 
 const R = PATCH_RES;
 const f1 = (x: number): string => x.toFixed(4);
@@ -166,16 +166,13 @@ float tcFwLive(vec3 P) {
 }
 #else
 TSurf tcFetch(vec2 dx, vec2 dy, float graze, out vec3 D) {
-  // the footprint, held to mip 1 (the tile borders: 2 texels on the legs, 4.24 on the hypotenuse, at mip 0)
-  vec2 gx = dx * ${f1(TC_SL)}, gy = dy * ${f1(TC_SL)};
-  float lx = length(gx), ly = length(gy);
-  float eff = max(min(lx, ly), max(lx, ly) * 0.0625) * uTcK.x;
-  float sc = uTcK.x * min(1.0, 2.0 / max(eff, 1e-6));
-  dx *= sc; dy *= sc;
+  // ONE bilinear tap of mip 0: every texel was evaluated for this pixel footprint (the full shader's own fw, long axis
+  // included), so the content is already filtered for the pixel and needs no mip or anisotropic filter; a bilinear
+  // tap reaches 1 texel, inside the borders (1 on the legs, 3 in x + y on the hypotenuse: never the partner half)
   vec3 pa = vec3(vTcUV, vTc0.x);
-  vec4 c0 = textureGrad(uTc0, pa, dx, dy);
-  vec4 c1 = textureGrad(uTc1, pa, dx, dy);
-  vec4 c2 = textureGrad(uTc2, pa, dx, dy);
+  vec4 c0 = textureLod(uTc0, pa, 0.0);
+  vec4 c1 = textureLod(uTc1, pa, 0.0);
+  vec4 c2 = textureLod(uTc2, pa, 0.0);
   TSurf s;
   s.albedo = c0.rgb * 1.5;
   s.rough = clamp(c0.a, 0.04, 1.0);
@@ -231,6 +228,8 @@ interface Tile {
   lastUsed: number; dn: number; need: number; area: number; areaW: number;
   /** the lattice corners' unit directions (0,0), (R,0), (0,R) */
   dirs: Float32Array;
+  /** up to 16 of its cells' ground normals (field N), and how many */
+  nrm: Float32Array; nN: number;
 }
 
 const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3(), _f = new Vector3();
@@ -312,7 +311,7 @@ export class TerrainCache {
     const gl = r.getContext() as WebGL2RenderingContext;
     const float = r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
     this.stats.float = float;
-    const bpt = (4 + (float ? 8 : 4) + 4) * (1 + 1 / 4);
+    const bpt = 4 + (float ? 8 : 4) + 4;
     const scratchMB = CLASSES.reduce((s, c) => s + c * c, 0) * (4 + (float ? 8 : 4) + 4) / 1048576;
     const layerMB = TC_SL * TC_SL * bpt / 1048576;
     const maxLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
@@ -320,17 +319,15 @@ export class TerrainCache {
     this.stats.layers = this.layers;
     this.stats.mb = Math.round((this.layers * layerMB + scratchMB) * 10) / 10;
     const fmts = [gl.SRGB8_ALPHA8, float ? gl.RGBA16F : gl.RGBA8, gl.RGBA8];
-    const aniso = r.extensions.get('EXT_texture_filter_anisotropic') as { TEXTURE_MAX_ANISOTROPY_EXT: number } | null;
     for (let i = 0; i < 3; i++) {
       const t = gl.createTexture()!;
       r.state.bindTexture(gl.TEXTURE_2D_ARRAY, t);
       gl.texStorage3D(gl.TEXTURE_2D_ARRAY, MIPS, fmts[i], TC_SL, TC_SL, this.layers);
-      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, MIPS - 1);
-      if (aniso) gl.texParameterf(gl.TEXTURE_2D_ARRAY, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(16, r.capabilities.getMaxAnisotropy()));
       r.state.unbindTexture();
       this.glTex.push(t);
       // (three binds this GL texture for the sampler: version 0 = it never uploads)
@@ -375,7 +372,7 @@ export class TerrainCache {
       }
     }
     if (!head) return null;
-    const n = sp / S;
+    const n = Math.floor(sp / S);
     head.cls = cls; head.head = null; head.free = []; head.owner = [];
     for (let i = 2 * n * n - 1; i >= 0; i--) head.free.push(i);
     const sub = head.free.pop()!;
@@ -398,7 +395,7 @@ export class TerrainCache {
 
   /** the tile's square: texel origin in its layer, and which half */
   private place(t: Tile): { x: number; y: number; half: number; S: number } {
-    const S = CLASSES[t.cls], n = span(t.cls) / S, q = t.sub >> 1;
+    const S = CLASSES[t.cls], n = Math.floor(span(t.cls) / S), q = t.sub >> 1;
     return { x: t.slab!.x + (q % n) * S, y: t.slab!.y + Math.floor(q / n) * S, half: t.sub & 1, S };
   }
 
@@ -424,6 +421,22 @@ export class TerrainCache {
       }
     }
     return any;
+  }
+
+  /** the ground normals of up to 16 distinct cells of the patch (field N: per-cell normal, body frame) */
+  private cellNormals(p: Patch, t: Tile): void {
+    const cells = p.vcells, nf = this.fieldTex.N?.image.data as unknown as Float32Array | undefined;
+    t.nN = 0;
+    if (!cells || !nf) { this.lod.tcCorners(p, _a, _b, _f); t.nrm.set([_a.x, _a.y, _a.z]); t.nN = 1; return; }
+    const seen = new Set<number>();
+    for (let i = 0; i < cells.length && seen.size < 64; i++) seen.add(cells[i]);
+    const list = [...seen], step = Math.max(1, list.length / 16);
+    for (let k = 0; k < list.length && t.nN < 16; k += step) {
+      const o = list[Math.floor(k)] * 4;
+      const l = Math.hypot(nf[o], nf[o + 1], nf[o + 2]) || 1;
+      t.nrm[t.nN * 3] = nf[o] / l; t.nrm[t.nN * 3 + 1] = nf[o + 1] / l; t.nrm[t.nN * 3 + 2] = nf[o + 2] / l;
+      t.nN++;
+    }
   }
 
   private isHot(p: Patch): boolean {
@@ -472,7 +485,7 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { dirs: new Float32Array(9), cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
+        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
         // the patch's flat triangle (m^2)
         this.lod.tcCorners(p, _a, _b, _f);
         _a.toArray(t.dirs, 0); _b.toArray(t.dirs, 3); _f.toArray(t.dirs, 6);
@@ -486,11 +499,14 @@ export class TerrainCache {
       // the LOD's shell-sector distance to the patch's nearest point
       const dn = Math.max(this.lod.tcDist(p, camBody), Math.max(0, dc0 - sr), 0.5);
       t.dn = dn;
-      // how squarely the patch faces the eye (its relief: slopes face the eye even when the patch's plane does not)
-      up.copy(sc).normalize();
-      const ndv = dc0 > 1e-3 ? Math.min(1, Math.max(0, -_c.dot(up) / dc0)) : 1;
+      // how squarely the ground faces the eye: the mean |n.v| over (up to 16 of) its sim cells' normals (field N), + 0.05
+      // for the relief inside a cell (hMin / hMax are no measure: they carry the water level and the cells' margin)
+      if (t.hotEpoch !== this.fieldEpoch || !t.nN) this.cellNormals(p, t);
+      let cEff = 0;
+      if (dc0 > 1e-3) { const nn = t.nrm, iv = 1 / dc0; for (let i = 0; i < t.nN; i++) cEff += Math.abs(nn[i * 3] * _c.x + nn[i * 3 + 1] * _c.y + nn[i * 3 + 2] * _c.z) * iv; cEff /= Math.max(1, t.nN); }
+      else cEff = 1;
+      cEff = Math.min(1, Math.max(0.05, cEff + 0.05));
       const size = this.lod.size(p.level);
-      const cEff = Math.min(1, Math.max(0.02, ndv + (p.hMax - p.hMin) / size));
       // the edge (texels) for texels ~ pixels by AREA, at the patch's nearest point (the near end is the densest)
       // what of it is ON SCREEN: 15 points of the triangle (at its mid height) projected; a patch selected because its
       // bounding sphere touches the frustum (the ground under / beside the camera) is sized by its visible part only
@@ -560,7 +576,7 @@ export class TerrainCache {
     st.pixAll = Math.round(pixAll);
     st.pixPct = pixAll > 0 ? Math.round(1000 * pixC / pixAll) / 10 : 0;
     // what this frame's cacheable patches would take at their classes (MB, half squares + mips; slab rounding not counted)
-    st.wantMB = Math.round(wantTexels * (this.stats.float ? 16 : 12) * 1.25 / 1048576);
+    st.wantMB = Math.round(wantTexels * (this.stats.float ? 16 : 12) / 1048576);
     // patches that left the chunk cache give their tiles back
     if ((frame & 31) === 0) for (const [p, t] of this.tiles) if (!p.built) { this.release(t); this.tiles.delete(p); }
     st.tiles = 0;
@@ -606,9 +622,6 @@ export class TerrainCache {
           gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sTex, 0);
           gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 0, L);
           gl.blitFramebuffer(0, 0, S, S, x, y, x + S, y + S, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-          // mip 1 (2:1 linear = a box filter)
-          gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 1, L);
-          gl.blitFramebuffer(0, 0, S, S, x / 2, y / 2, (x + S) / 2, (y + S) / 2, gl.COLOR_BUFFER_BIT, gl.LINEAR);
         } else {
           gl.framebufferTextureLayer(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 0, L);
           gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sTex, 0);

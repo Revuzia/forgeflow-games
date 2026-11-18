@@ -2564,3 +2564,22 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   river (poi 'river': the camera sits in a tree canopy, both)  4.50  equal, NOT INFORMATIVE: no river looked at.
   NOT SHOWN: a real river with flow (two-phase path compiles and runs, not looked at), a surge / tsunami face, ice,
   silt, the moon path at real night (the probe's hour handling), motion (scrolling), Mac speed.
+### 3. FIRST RUNS (SwiftShader high 480x274, fast set-up = trees / clouds / shadows / water off; in-page A/B; 0 page errors,
+  0 GL errors in every run; shots + sheets in _harness/scratch/arc/perf/s26/)
+- a (first lean build): landing y0 519 patches all cached, pix 100 %, 69.9 MB used; pair mean |d| 1.23 (fog), sheet LOOKED.
+- FOUND 1: a 288 <-> 576 re-bake loop (the downgrade test fired while classFor still chose 576): fixed (downgrade only
+  when a smaller class fits). FOUND 2: copy-in before three made the scratch's GL texture: fixed.
+- FOUND 3 (frustum): patches are selected when their SPHERE touches the frustum (the ground under the camera): sized
+  now by 15 points of the triangle projected (visible ones only: nearest visible distance for the class, mean 1/d^2 for
+  the area). y0 want 59 -> 35 MB at 480x274.
+- c: town 90 m mean |d| 1.96, RGB 102.2 117.1 81.2 / 102.3 117.2 81.3 (EQUAL), detail 6.18 / 5.85; diff = wildflower
+  dots (both signs, 0.8 % of px) + a 1-px line on the pond's sharp wet rim (bilinear). No patch lines (zoom LOOKED).
+  y0 equal. BUT 612 patches want 62 MB at 480x274 = ~24 texels a terrain pixel -> ~750 MB at the Mac's 1686x963.
+- FOUND 4 (dump, arc-work/s26-tiles.js via --eval): per-patch hMax - hMin is NO relief (level-8 patches 13 m across
+  report 150 m: it carries the water level, the 1.6-cell margin and the curvature bulge) -> |n.v| was saturated at 1
+  for every patch. Now: mean |n.v| over up to 16 of the patch's cells' ground normals (field N) + 0.05.
+- FOUND 5: at the LOD's pixel error the average patch is ~200 screen px (a ~20 px triangle): a 10-texel PAD and 1.5x
+  class steps cost 3-5x. Since every texel is pre-filtered for the live pixel footprint (long axis included), the
+  display needs NO mips and NO anisotropy: ONE bilinear tap of mip 0 (cheaper too). Borders 1 (legs) / 3 (x + y,
+  hypotenuse) = PAD 5 suffice for a bilinear tap; classes 16 20 24 28 32 40 48 56 72 96 144 | 192 576 blocks | 288;
+  16 B a texel flat (was x1.25-1.31 with mips); 11 layers at tcmb 256.
