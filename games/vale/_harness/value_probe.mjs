@@ -34,6 +34,20 @@
 //              and the default impact envelope) at your fighter: the mean luma of the 3.5 m impact disc on
 //              screen, before vs the brightest frame of the next 0.8 s (sim held, VFX on, UI hidden)
 //
+//   tele       (ruling 48, --tele 0 drops it) the enemy telegraph on this ground: at every fixed spot an enemy circle
+//              (r 3 m, HARM, the spectator's caster-side treatment) injected at the screen centre, the frame frozen
+//              (render(0), no sim pump, VFX hidden, UI as shipped) and read with and without it; over the pixels it
+//              changes (dE76 > 3, inside its screen box + 24 px, every 4th pixel): dE76 p50 (info), WCAG contrast p90
+//              (gate >= 3.0 at every spot: WCAG 2.1 1.4.11, a UI boundary against what is next to it) and the clutter
+//              probe's teleEdge p90 = |dL| / max(L, 16) (gate >= 0.45, W2-B's bar)
+//
+//   Bands (owner ruling 46, superseding the r12 B5 luma bands and their derived gates): display L* p50 by class mask,
+//   lanes 50-58 (FRAY: the plate), jungle floor 28-34 (where the map has one), wall faces 24-30 (BRIDGE: the gorge,
+//   a drop and not a wall, 14-22), fighters top-25 L* <= 80; unchanged: environment p99 <= 160, frame p99 <= 180,
+//   env > 180 off-lamp <= 0.05 %, fighters above L* 90 < 2 %, T4 flash >= 2.0x, ground saturation 0.17-0.40, spreads
+//   <= 45. The retired r12 B5 gates (lane luma p50 85-100, frame p50 55-75 / FRAY <= 90, frame p95 <= 130, fighters
+//   >= 30 L* over the lane, fighter top-25 >= 70 as a world gate) are printed as info, never as FAIL.
+//
 //   node _harness/value_probe.mjs [--maps rift,bridge,fray] [--tiers high,low] [--tag before] [--t 75]
 //                                 [--seed 7] [--shots 1] [--flash 1] [--masks 0] [--you burdam] [--fshots 0] [--fog 0|1|only]
 //
@@ -95,6 +109,7 @@ const T = Number(opt('t', 75));
 const SEED = Number(opt('seed', 7));
 const SHOTS = opt('shots', '1') === '1';
 const FLASH = opt('flash', '1') === '1';
+const TELE = opt('tele', '1') === '1';
 const MASKS = opt('masks', '0') === '1';
 const YOU = opt('you', '');
 const FSHOTS = opt('fshots', '0') === '1';
@@ -619,6 +634,45 @@ function install() {
     },
     /** the fog A/B leaves the frame unseen (for its screenshot): back to lit */
     fogOff: () => { R.fog.enabled = false; forceUnseen = false; settle(4); },
+    /** ruling 48: an enemy telegraph (circle r 3 m) at the ground point (x, y), frozen frame, VFX hidden, UI drawn */
+    tele: (x, y) => {
+      b.focus(x, y); b.zoom(b.catalog.maps.find((q) => q.id === b.host.setup.map)?.camera?.distance ?? 31);
+      R.overlay.draw = overlayDraw;
+      const was = R.palette.viewer.team; R.palette.viewer.team = -1;
+      try {
+        settle(4);
+        const c = gl.domElement;
+        const read = () => { const g = document.createElement('canvas'); g.width = c.width; g.height = c.height; const k = g.getContext('2d'); k.drawImage(c, 0, 0); return k.getImageData(0, 0, c.width, c.height).data; };
+        const lin = (q) => { q /= 255; return q <= 0.04045 ? q / 12.92 : ((q + 0.055) / 1.055) ** 2.4; };
+        const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+        const lab = (d, i) => { const r = lin(d[i]), g2 = lin(d[i + 1]), bb = lin(d[i + 2]); const X = (0.4124 * r + 0.3576 * g2 + 0.1805 * bb) / 0.95047, Y = 0.2126 * r + 0.7152 * g2 + 0.0722 * bb, Z = (0.0193 * r + 0.1192 * g2 + 0.9505 * bb) / 1.08883; return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))]; };
+        const Yl = (d, i) => 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]);
+        const luma = (d, i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        const v = b.host.view;
+        const foe = v.entities.find((e) => e.kind === 'fighter' && e.team === 1) ?? v.entities.find((e) => e.kind === 'fighter');
+        R.director.telegraphs.length = 0; for (let i = 0; i < 3; i++) R.render(0);
+        const A = read();
+        R.injectEvents([{ e: 'area', t: v.time, src: foe.id, ability: 'vp_tele', x, y, shape: { kind: 'circle', radius: 3 }, delay: 0.6, telegraph: 'everyone' }]);
+        for (let i = 0; i < 3; i++) R.render(0);
+        if (!R.teles.size) R.render(1 / 60);
+        const Q = read();
+        R.director.telegraphs.length = 0; for (let i = 0; i < 3; i++) R.render(0);
+        const pts = [[x - 4, y - 4], [x + 4, y - 4], [x - 4, y + 4], [x + 4, y + 4]].map(([px, py]) => b.screen(px, py, 0));
+        const dpr = c.width / c.clientWidth;
+        const box = [Math.min(...pts.map((p) => p.x)) * dpr - 24, Math.min(...pts.map((p) => p.y)) * dpr - 24, Math.max(...pts.map((p) => p.x)) * dpr + 24, Math.max(...pts.map((p) => p.y)) * dpr + 24];
+        const de = [], cr = [], dl = [];
+        for (let i = 0; i < A.length; i += 16) {
+          const px = (i >> 2) % c.width, py = Math.floor((i >> 2) / c.width);
+          if (px < box[0] || px > box[2] || py < box[1] || py > box[3]) continue;
+          const p = lab(A, i), r = lab(Q, i), d = Math.hypot(p[0] - r[0], p[1] - r[1], p[2] - r[2]);
+          if (d <= 3) continue;
+          de.push(d); const ya = Yl(A, i), yb = Yl(Q, i); cr.push((Math.max(ya, yb) + 0.05) / (Math.min(ya, yb) + 0.05));
+          const la = luma(A, i), lb = luma(Q, i); dl.push(Math.abs(lb - la) / Math.max(la, 16));
+        }
+        const pc = (arr, q) => { arr.sort((m, n) => m - n); return +(arr[Math.floor(arr.length * q)] ?? 0).toFixed(2); };
+        return { at: [x, y], px: de.length, deP50: pc(de, 0.5), edgeCR90: pc(cr, 0.9), teleEdgeP90: pc(dl, 0.9) };
+      } finally { R.palette.viewer.team = was; R.overlay.draw = () => {}; }
+    },
     /** a T4 ultimate landing at your fighter: mean luma of the impact disc, before and over 0.8 s */
     flash: (ability, vfx, radius) => {
       const me = b.you();
@@ -815,32 +869,43 @@ function baseVerdict(bases) {
   return v;
 }
 
-function verdict(s, flash, map) {
+function verdict(s, flash, map, tele) {
   const ok = (c) => (c ? 'PASS' : 'FAIL');
+  const inB = (x, [a, b2]) => x != null && x >= a && x <= b2;
   const v = {};
-  if (s.masks.lane) v.laneP50 = `${s.masks.lane.p50} ${ok(s.masks.lane.p50 >= 85 && s.masks.lane.p50 <= 100)} (85-100)`;
+  // owner ruling 46: display L* p50 bands by class mask (fog off)
+  const L = (k) => s.masks[k]?.lstarP50 ?? null, share = (k) => s.masks[k]?.share ?? 0;
+  if (s.masks.lane) v.laneLstar = `${L('lane')} ${ok(inB(L('lane'), BANDS.lane))} (${BANDS.lane.join('-')}, ruling 46)`;
+  if (s.masks.jungle && share('jungle') >= 0.01) v.jungleLstar = `${L('jungle')} ${ok(inB(L('jungle'), BANDS.jungle))} (${BANDS.jungle.join('-')}, ruling 46)`;
+  const wb = map === 'bridge' ? BANDS.gorge : BANDS.wallFace;
+  if (s.masks.wallFace && share('wallFace') >= 0.005) v.wallFaceLstar = `${L('wallFace')} ${ok(inB(L('wallFace'), wb))} (${wb.join('-')}${map === 'bridge' ? ', BRIDGE: the gorge' : ''}, ruling 46)`;
   if (s.masks.walkable) v.walkableSpread = `${s.masks.walkable.spread} ${ok(s.masks.walkable.spread <= 45)} (<= 45)`;
   if (s.masks.lane) v.laneSpread = `${s.masks.lane.spread} ${ok(s.masks.lane.spread <= 45)} (<= 45)`;
-  // FRAY: the plate is the lane and fills ~86 % of the frame, so its median follows the plate (tokens grade.maps.fray.frameLuma)
-  v.frameP50 = map === 'fray' ? `${s.frame.p50} ${ok(s.frame.p50 <= 90)} (<= 90, FRAY: follows the plate)` : `${s.frame.p50} ${ok(s.frame.p50 >= 55 && s.frame.p50 <= 75)} (55-75)`;
-  v.frameP95 = `${s.frame.p95} ${ok(s.frame.p95 <= 130)} (<= 130)`;
   // owner_rulings 14: the world answers for p99 <= 160; the whole frame, fighters and all, keeps a ceiling so bright actors cannot drift
   v.frameP99 = `${s.frame.p99} ${ok(s.frame.p99 <= 180)} (<= 180, whole frame: ruling 14)`;
   if (s.envFrame) v.frameP99Env = `${s.envFrame.p99} ${ok(s.envFrame.p99 <= 160)} (<= 160, environment pixels only: ruling 14)`;
   v.env180 = `other ${(s.env180.otherShare * 100).toFixed(3)} % of env, lamps ${(s.env180.lampShareOfFrame * 100).toFixed(3)} % of frame ${ok(s.env180.otherShare <= 0.0005 && s.env180.lampShareOfFrame <= 0.02)}`;
   if (s.masks.ground) v.groundSat = `${s.masks.ground.sat} ${ok(s.masks.ground.sat >= 0.17 && s.masks.ground.sat <= 0.40)} (0.17-0.40; spec 0.22-0.35)`;
-  if (s.fighters) v.fighterTop25 = `${s.fighters.top25} ${ok(s.fighters.top25 >= 70 && s.fighters.top25 <= 85)} (70-85), over lane ${s.fighters.overLane} ${ok((s.fighters.overLane ?? 99) >= 30)} (>= 30)`;
+  if (s.fighters) v.fighterTop25 = `${s.fighters.top25} ${ok(s.fighters.top25 <= 80)} (<= 80, ruling 46)`;
   if (s.fighters) v.fighterBlowout = `above L* 90: ${(s.fighters.gt90 * 100).toFixed(2)} % of fighter pixels ${ok(s.fighters.gt90 < 0.02)} (< 2 %), worst fighter ${(s.fighters.maxGt90 * 100).toFixed(1)} %, p99 ${s.fighters.p99}`;
   if (s.wicks) v.wickTop25 = `${s.wicks.top25} (info: <= 65, WICK lane)`;
   if (s.monsters) v.monsterTop25 = `${s.monsters.top25} (info)`;
   if (flash) v.flash = `${flash.ratio}x ${ok(flash.ratio >= 2.0)} (>= 2.0x)`;
+  if (tele) for (const [k, t] of Object.entries(tele)) {
+    if (!t.error && t.px < 200) { v[`tele_${k}`] = `info: ${t.px} px drawn (the spot's ground is under canopy or a wall top: the telegraph is depth-tested out)`; continue; }
+    v[`tele_${k}`] = t.error ? `FAIL (${t.error})` : `edge contrast p90 ${t.edgeCR90} ${ok(t.edgeCR90 >= 3)} (>= 3.0, WCAG 1.4.11), teleEdge p90 ${t.teleEdgeP90} ${ok(t.teleEdgeP90 >= 0.45)} (>= 0.45), dE p50 ${t.deP50} (info), ${t.px} px`;
+  }
+  // retired r12 B5 luma gates (ruling 46): info only
+  v.retiredB5 = `info (ruling 46 retired): lane luma p50 ${s.masks.lane?.p50 ?? '-'} (was 85-100), frame p50 ${s.frame.p50} (was ${map === 'fray' ? '<= 90' : '55-75'}), frame p95 ${s.frame.p95} (was <= 130)${s.fighters ? `, fighters over lane ${s.fighters.overLane} L* (was >= 30), fighter top-25 floor ${s.fighters.top25} (was >= 70)` : ''}`;
   return v;
 }
+/** owner ruling 46 bands (display L* p50 by class mask, fog off) */
+const BANDS = { lane: [50, 58], jungle: [28, 34], wallFace: [24, 30], gorge: [14, 22] };
 
 // ── run ──────────────────────────────────────────────────────────────────────────────────────────────
 const REPORT = opt('report', '') ? join(HERE, '_reports', opt('report', '')) : join(HERE, '_reports', 'value_probe.json');
 mkdirSync(dirname(REPORT), { recursive: true });
-const report = existsSync(REPORT) ? JSON.parse(readFileSync(REPORT, 'utf8')) : { note: 'r12 B5 environment value probe (_harness/value_probe.mjs)', runs: {} };
+const report = existsSync(REPORT) ? JSON.parse(readFileSync(REPORT, 'utf8')) : { note: 'environment value probe (_harness/value_probe.mjs; ruling 46 bands)', runs: {} };
 report.runs[TAG] ??= {};
 for (const map of MAPS) for (const tier of TIERS) {
   const [w, h] = RES[tier] ?? RES.high;
@@ -1010,6 +1075,14 @@ for (const map of MAPS) for (const tier of TIERS) {
       if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_${k}`);
       bres[k] = { at: at.map((x) => +x.toFixed(1)), hist: m.hist, figs: m.figs };
     }
+    let tele = null;
+    if (TELE) {
+      tele = {};
+      for (const [k, at] of Object.entries(spots)) {
+        try { tele[k] = await V((v, a) => v.tele(a[0], a[1]), at); } catch (e) { tele[k] = { error: String(e).slice(0, 120) }; }
+        if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_${k}_tele`);
+      }
+    }
     let flash = null;
     if (FLASH) flash = await V((v) => v.flash('marund_domefall', 'marund_ult_domefall', 3.5));
     if (FLASH && VFX_CAPS.length) {
@@ -1028,7 +1101,7 @@ for (const map of MAPS) for (const tier of TIERS) {
     }
     const s = summarise(res, C, fres);
     const bases = summariseBases(bres, C, s.fighters);
-    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, bases, flash, fog, landmarks, verdict: { ...verdict(s, flash, map), ...baseVerdict(bases), ...(fog ? fogVerdict(fog) : {}),
+    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, bases, flash, fog, landmarks, tele, verdict: { ...verdict(s, flash, map, tele), ...baseVerdict(bases), ...(fog ? fogVerdict(fog) : {}),
       ...(landmarks ? Object.fromEntries(Object.entries(landmarks).filter(([k]) => k !== '__refs').map(([k, e]) => [`landmark_${k}`, e.verdict])) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
     report.runs[TAG][`${map}_${tier}`] = out;
     report.generated = new Date().toISOString();

@@ -846,6 +846,10 @@ export const WALL_MAIN_GLSL = /* glsl */`
     // x2.2 linear (x1.6 measured L* 21.5), still well under the block's lit top (L* ~49), so a blocker keeps a dark
     // side and a light top
     c *= 1.0 + 1.2 * stoneK;
+    // orch1 W2-A fix 1 (owner reference target 4, ruling 48): on RIFT (uStoneTop 0) the faces sat 5.5 L* under the tops
+    // (28 vs 33.5); the cut-stone faces take x0.8 and the block tops x1.15 (below), so a wall reads as a block with a
+    // lighter top, not a slab of one value (faces stay in the 24-30 band; BRIDGE's gorge and FRAY's plate untouched)
+    c *= 1.0 - 0.2 * ( 1.0 - step( 0.5, uStoneTop ) );
     rough = 0.88;
   } else if ( kind <= 5 ) {
     // the carved lip: dressed cap stones with joints, a painted edge light on the chamfer; clean stone, so the
@@ -947,6 +951,8 @@ export const WALL_MAIN_GLSL = /* glsl */`
     // just inside the lip a little more light reaches the floor (still darker than the walkable floor)
     float rimZ = 1.0 - smoothstep( 0.05, 1.4, wi + ( n2 - 0.5 ) * 0.4 );
     c *= 1.0 + 0.15 * rimZ;
+    // orch1 W2-A fix 1 (target 4): the block top a step over its x0.8 face (above), still a forest floor in shade
+    c *= 1.15;
     h = mix( tL.a, tM.a, m ) * 0.05;
     rough = 0.9;
   } else if ( kind == 7 ) {

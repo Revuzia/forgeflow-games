@@ -30,7 +30,7 @@ export const CHAR_LIGHT = {
   // fighters' edges lift off the mid-value ground and dark kits come up toward the value band while pale kits stay under
   // top-25 L* ~80 (the roll-off below). Wicks and monsters keep the crown as it was (power 2.5, their share of 3.4).
   crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 3.4, sunHue: 0.5, albedoFloor: 0.3, fighterGain: 1.6, fighterPower: 2.0 },
-  fill: { luminance: 0.98 },
+  fill: { luminance: 1.39 },
   knee: [0.25, 0.75] as const,
   unitShare: 0.35,
   /** a jungle monster's share of the world's light (sun, sky, its crown share) and of its own glow (wicks keep 1).
@@ -42,13 +42,17 @@ export const CHAR_LIGHT = {
    *  the hue-preserving roll-off of its diffuse light: the brightest channel eases from `knee` toward `ceiling` (linear),
    *  every channel scaled alike, so a pale top keeps its hue under the tone map's shoulder and the top-25 % L* stays
    *  at or under ~80; `fillFloor`: the linear albedo luminance the eye fill lights a darker texel as (hue kept) */
-  tone: { aoWeight: 0.6, knee: 0.5, ceiling: 0.72, fillFloor: 0.25 },
+  // fix 1 (16-fighter sweep, tone harness with no measured fighter in your seat, overlay off): the fill 0.98 -> 1.39 through
+  // a floor 0.25 -> 0.42, the ceiling 0.72 -> 0.70 and the roll-off now over the specular too (specRoll 1): top-25 L*
+  // 66.7-79.6 (5 under 70) -> 70.2-79.9, so the roster sits inside units_gate P3's floor and ruling 46's <= 80 at once
+  tone: { aoWeight: 0.6, knee: 0.5, ceiling: 0.7, fillFloor: 0.42, specRoll: 1 },
 } as const;
 /** harness seam (W2-A A/B): false puts fighters back on the r12 B5 character light (full AO, no roll-off) */
 export const charToneSwitch = { on: true };
 export function applyCharTone(): void {
   const t = CHAR_LIGHT.tone, on = charToneSwitch.on;
   worldUniforms.valeCharAo.value.set(on ? t.aoWeight : 1, on ? t.knee : 0, on ? t.ceiling : 0, on ? t.fillFloor : 0);
+  worldUniforms.valeCharSpecRoll.value = on ? t.specRoll : 0;
 }
 /** orch1 W2-A GFX-1 (owner ruling 46): the environment value re-key (world_material.ts valeRekey), the same on every map.
  *  The world's display L* goes through L*' = 100 gain (L* / 100)^lstarExp, easing back to the identity over easeL (lamps
@@ -56,10 +60,13 @@ export function applyCharTone(): void {
  *  Fitted on the measured RIFT r12 B5 key (value_probe): lanes 37.9 → ~51 (band 50-58, its foot, so the HARM telegraph
  *  edge keeps >= 2:1 on the lane), jungle floor 14.3 → ~29.5 (28-34), wall faces 13.1 → ~28 (24-30). The power alone
  *  (0.645, gain 1) put lanes at 53.5 and the HARM edge at ~1.9:1. height (GFX-13): low ground (y ≤ lowY) cooler and darker, high ground (y ≥ highY)
- *  warmer, before the re-key. Characters never take any of it (world_material.ts valeEnvRekey). */
+ *  warmer, before the re-key. Characters never take any of it (world_material.ts valeEnvRekey).
+ *  Fix 1 (ruling 48): the enemy telegraph now carries its own ink band (renderer.ts teleInk), so the lane no longer has
+ *  to sit at the band's foot for it: gain 0.879 -> 0.905 lifts every class ~1.5 L* (lanes 51 / 50.5 / 50 -> ~52.5)
+ *  for margin inside 50-58 on other seeds and spots. */
 export const ENV_KEY = {
   lstarExp: 0.562,
-  gain: 0.879,
+  gain: 0.905,
   chroma: 0.75,
   easeL: [60, 88] as const,
   shadowChroma: 1.35,
@@ -80,6 +87,11 @@ const _crown = new Color();
 const _sunHue = new Color();
 const lum = (c: Color): number => Math.max(1e-4, 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b);
 
+/** orch1 W2-A fix 1 (ruling 48, owner reference target 3: flat readable light, no dark pools): the share of the sun a cast
+ *  shadow takes away from the world (three's shadow.intensity, a uniform: no program). At 1 a tall tree's or a wall's
+ *  shadow cut a hard dark band across the re-keyed lane (lane stone L* ~51 -> ~33 in the band); at 0.75 the band reads
+ *  as a shadow, a step down, not a pool. Fighters keep their own floor on top (world_material.ts: x 0.25 of this) */
+const SUN_SHADOW_INTENSITY = 0.75;
 const CEILING = 6;
 const QUANT = 2;
 const PAD = 3;
@@ -104,6 +116,7 @@ export class Sun {
     this.light.shadow.bias = -0.0004;
     this.light.shadow.normalBias = 0.035;
     this.light.shadow.radius = 2;
+    this.light.shadow.intensity = SUN_SHADOW_INTENSITY;
   }
 
   configure(spec: SunSpec): void {

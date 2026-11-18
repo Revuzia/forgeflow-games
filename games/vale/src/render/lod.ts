@@ -61,12 +61,12 @@ export const LOD = {
    *  never changes, so it reaches 0.55-0.80 of the LOD1 (30 mm reached 0.63-0.84; _harness/_tmp_w2a_lodsweep.mjs).
    *  renderer.ts draws it for a non-local fighter farther than `farM` from the camera's ground centre (back to LOD1
    *  under `nearM`: the outer ring of the screen at the default zoom) or past the `keep` nearest fighters on screen */
-  body2: { ratio: 0.5, errorM: 0.045, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5, farM: 16, nearM: 14, keep: 5 },
+  body2: { ratio: 0.5, errorM: 0.045, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5, farM: 16, nearM: 14, keep: 3 },
   /** a match fighter's ink copies (rest outline, victim flash, x-ray) over its LOD1 hull: a bound in metres */
-  ink: { ratio: 0.3, errorM: 0.01, weld: true },
+  ink: { ratio: 0.22, errorM: 0.014, weld: true },
   /** orch1 W2-A: the same copies over a LOD2 fighter's hull (actors.ts bodyLod2Parts): within 20 mm, under the flash's
    *  25 mm slide toward the camera, so the coarser shell still covers the body it lights */
-  ink2: { ratio: 0.3, errorM: 0.02, weld: true },
+  ink2: { ratio: 0.22, errorM: 0.02, weld: true },
   /** meshes under this many triangles keep their index (the saving would not pay for a second buffer) */
   minTris: 600,
   /** an instanced caster (scatter: trees, rocks) draws its mesh once per instance: a LOD pays from this size */

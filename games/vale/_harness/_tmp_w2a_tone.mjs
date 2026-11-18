@@ -26,6 +26,10 @@ const measure = (b, a) => {
   const read = (x0, y0, w, h) => { const o = document.createElement('canvas'); o.width = w; o.height = h; const c = o.getContext('2d', { willReadFrequently: true }); c.drawImage(canvas, x0, y0, w, h, 0, 0, w, h); return c.getImageData(0, 0, w, h).data; };
   const med = (v) => { const s = [...v].sort((p, q) => p - q); return s.length ? s[s.length >> 1] : NaN; };
   R.w2a.apply();
+  // fix 1: the overlay pass (your own ground ring and its halo, overhead bars, hover rim) is HUD, not the body: with it
+  // drawn, the first pick (Ardit, 'you') measured its self ring's white pixels into his top quarter (81.1 vs 7x.x)
+  const overlayDraw = R.overlay.draw;
+  if (!a.overlay) R.overlay.draw = () => {};
   const base = { ao: U.valeCharAo.value.clone(), fill: U.valeCharFill.value.clone(), crown: U.valeCharCrown.value.clone(), spec: U.valeCharSpecRoll?.value ?? 0 };
   const setV = (v) => {
     R.w2a.apply();
@@ -99,20 +103,23 @@ const measure = (b, a) => {
     out.push(rec);
   }
   setV({});
+  R.overlay.draw = overlayDraw;
   return out;
 };
 
 const all = [];
 for (const half of [0, 1]) {
-  const seats = half === 0 ? FIGHTERS.slice(0, 10) : FIGHTERS.slice(6, 16);
-  const want = half === 0 ? FIGHTERS.slice(0, 10) : FIGHTERS.slice(10, 16);
+  // fix 1: seat 0 is YOUR fighter, whose accent lights Noonwhite (the self cue, 0.8 emissive): no measured fighter sits
+  // in seat 0 (Ardit was, and read 80.6-81.4 on that cue), each half's seat 0 is a fighter the other half measures
+  const seats = half === 0 ? ['lisvel', ...FIGHTERS.slice(0, 7), 'marund', 'nurrow'] : ['ardit', ...FIGHTERS.slice(7, 16)];
+  const want = half === 0 ? FIGHTERS.slice(0, 7) : FIGHTERS.slice(7, 16);
   const { browser, page } = await openBench({ q: 'high', t: 4, mode: 'rift', seed: SEED, extra: `&picks=${seats.join(',')}`, land: 1500 });
   try {
     for (let i = 0; i < 120; i++) { if ((await B(page, (b) => b.renderer.lib?.pending ?? 0)) === 0) break; await page.waitForTimeout(1000); }
     await B(page, (b) => { b.frames(30, 1 / 30); const R = b.renderer; R.palette.viewer.team = -1; R.fog.enabled = false; R.rig.spectator = true; b.frames(6, 1 / 30); });
     const ents = await B(page, (b) => b.entities('fighter'));
     const ids = want.map((f) => ents.find((e) => e.def === f)?.id).filter((x) => x !== undefined);
-    all.push(...await page.evaluate(([src, a]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, a), [measure.toString(), { ids, variants: VARIANTS, mask: opt('mask', 'raw') }]));
+    all.push(...await page.evaluate(([src, a]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, a), [measure.toString(), { ids, variants: VARIANTS, mask: opt('mask', 'raw'), overlay: opt('overlay', '0') === '1' }]));
   } finally { await browser.close(); }
 }
 const sum = {};
