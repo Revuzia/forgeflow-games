@@ -2020,6 +2020,48 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     check('PLAYGROUND (round 5, B7; SH-22) the budget\'s wake gate: in the same window LIFE\'s motion for a sleeping squishy is held while waking it would pass unitCap, and the awake units are over the cap in at most 10 % of 6-a-second samples',
       held > 0 && fineOver <= 0.1 * fineN, `${held} motion intents held; over the cap in ${fineOver} of ${fineN} samples (${(100 * fineOver / Math.max(1, fineN)).toFixed(1)} %)`);
   }
+  // round 6 (VERDICT_PG2 N1; LIFE PLAY_WITH, D-79, SH-22): "Go play with..." on the MED tier (unitCap 1.48, one mover token) with 3 out: the squishy the player asked
+  // (not the play squishy) must go to the thing and use it (a USE BY PLAYER), never be put to sleep by the over-budget rule on the way (another sleeps instead).
+  // The verifier saw it asleep where it stood for the Music Box and the Warm Lamp at Home (works on high and in the cabin); the same at Home and in the cabin here.
+  {
+    const stats0 = st.stats;
+    for (const id of [...app.mat.itemIds]) { if (app.mat.count <= 3) break; if (id !== app.identity.itemId) app.mat.remove(id); }
+    st.stats = () => ({ ...stats0(), tier: 'med' as const });
+    await stepA(300);
+    type GDbg = { units: number; life: { unitCap: number }; counts: { askedUse: number }; chars: Array<{ slot: number; kind: number; itemId: string | null; asleep: boolean; x: number; z: number }>; things: Array<{ id: string; x: number | null; z: number | null }> };
+    const gd = (): GDbg => host.debug() as GDbg;
+    const trial = async (where: string): Promise<Array<Record<string, unknown>>> => {
+      const rows: Array<Record<string, unknown>> = [];
+      const others = (host.partyNow?.() ?? []).filter((r) => !r.play);
+      const things = (host.thingsNow?.() ?? []).filter((r) => !r.ride);
+      for (let j = 0; j < things.length; j++) {
+        const who = others[j % Math.max(1, others.length)]?.itemId ?? '';
+        const me0 = gd().chars.find((c) => c.kind === 0 && c.itemId === who);
+        const u0 = gd().counts.askedUse;
+        const asked = host.playWith?.(who, things[j].k) === true;
+        let usedAt = -1, sleptBefore = false, moved = 0;
+        for (let f = 0; f < 150 && usedAt < 0; f++) {
+          await stepA(10);
+          const d = gd(), me = d.chars.find((c) => c.kind === 0 && c.itemId === who);
+          if (me && me0) moved = Math.max(moved, Math.hypot(me.x - me0.x, me.z - me0.z));
+          if (d.counts.askedUse > u0) usedAt = (f + 1) * 10;
+          else if (f >= 6 && me?.asleep) sleptBefore = true;
+        }
+        rows.push({ where, thing: things[j].id, asked, usedAt, sleptBefore, moved: +moved.toFixed(2), units: +gd().units.toFixed(2) });
+        await stepA(180);
+      }
+      return rows;
+    };
+    const home = await trial('home');
+    const okC = await host.travel('hearthlog');
+    await stepA(120);
+    const cabin = okC ? await trial('hearthlog') : [];
+    const all = [...home, ...cabin];
+    check('PLAYGROUND (round 6, VERDICT_PG2 N1; PLAY_WITH, SH-22) "Go play with..." on the MED tier with 3 out, at Home and in the cabin: every thing asked of a squishy that is not the play squishy is reached and used (a USE BY PLAYER within 25 s), and the asked squishy is never asleep on the way (the over-budget rule sleeps another)',
+      app.mat.count === 3 && okC && home.length >= 3 && cabin.length >= 3 && all.every((r) => r.asked === true && (r.usedAt as number) > 0 && r.sleptBefore === false), JSON.stringify(all));
+    st.stats = stats0;
+    await host.travel('home'); await stepA(60);
+  }
   app.dispose();
 }
 

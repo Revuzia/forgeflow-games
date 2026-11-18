@@ -187,7 +187,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const vis = new Float32Array(4);
   const wishOut = new Int32Array(2);
   const strikes = new Float32Array(32 * 4);
-  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0, held: 0 };   // what LIFE did through the host (the dev view; held: motion the budget's wake gate dropped)
+  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0, held: 0, askedUse: 0 };   // what LIFE did through the host (the dev view; held: motion the budget's wake gate dropped; askedUse: uses BY PLAYER)
   let wakeClaim = 0;                       // round 5 (B7): the units this frame's allowed wakes add (the snapshot shows them next frame)
 
   // ---- the place: Home's world now, a place's world after a trip ----
@@ -866,7 +866,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
           else write(EV.SOCIAL, sub, thing, a, b, n2, BY.SELF, 0, piece);
           if (placeIdx === 0) homeThingsSoon = true;   // the first hello brings the rug
           break;
-        case LIFE_EV.USE: write(EV.USE, sub, thing, a, 255, n2, eb === 254 ? BY.PLAYER : BY.SELF, 0, piece); break;
+        case LIFE_EV.USE: write(EV.USE, sub, thing, a, 255, n2, eb === 254 ? BY.PLAYER : BY.SELF, 0, piece); if (eb === 254) counts.askedUse++; break;
         case LIFE_EV.REACT: write(EV.REACT, sub, thing, a, 255, n2, BY.SELF, 0, piece); break;
         case LIFE_EV.PIECES: write(EV.PIECES, sub, thing, a, 255, n2, BY.SELF, 0, EV_FLAG.PIECE); break;
         case LIFE_EV.SIGNATURE: write(EV.SIGNATURE, sub, thing, a, 255, n2, BY.SELF, 0, piece); break;
