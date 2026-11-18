@@ -110,8 +110,9 @@ for (let seed = seed0; seed < seed0 + seeds; seed++) {
       const f = w.players[p].ent; const tr = (trail[p] ??= []);
       if (!f || !f.alive) { tr.length = 0; swung[p] = now; continue; }
       if (f.atkTarget >= 0 || f.cast) swung[p] = now;
-      const c = ctrls[p] as unknown as { mode?: string; pMoveX?: number; pMoveY?: number; brain?: { guard: Map<number, { sid: string }> } };
-      tr.push(`${f.x.toFixed(0)},${f.y.toFixed(0)} ${String(c.mode).slice(0, 4)} ${c.brain?.guard.get(p)?.sid ?? '-'} ->${(c.pMoveX ?? 0).toFixed(0)},${(c.pMoveY ?? 0).toFixed(0)}`);
+      const c = ctrls[p] as unknown as { mode?: string; pMoveX?: number; pMoveY?: number; pFight?: unknown; pSiege?: unknown; pClear?: boolean; pMonsters?: boolean; brain?: { guard: Map<number, { sid: string }>; rush: boolean; stage: boolean; baseThreat: number } };
+      const fl = `${c.pFight ? 'f' : ''}${c.pSiege ? 's' : ''}${c.pClear ? 'c' : ''}${c.pMonsters ? 'm' : ''}${c.brain?.rush ? 'R' : ''}${c.brain?.stage ? 'S' : ''}${(c.brain?.baseThreat ?? 0) >= 0.7 ? 'B' : ''}`;
+      tr.push(`${f.x.toFixed(0)},${f.y.toFixed(0)} ${String(c.mode).slice(0, 4)}${fl ? ':' + fl : ''} ${c.brain?.guard.get(p)?.sid ?? '-'} ->${(c.pMoveX ?? 0).toFixed(0)},${(c.pMoveY ?? 0).toFixed(0)}`);
       if (tr.length > 36) tr.shift();
       const ph = tr.map((x) => x.split(' ')[0].split(',').map(Number));
       if (f.hp < f.maxHp * 0.9 || now < (dcd[p] ?? 0) || now - (swung[p] ?? 0) < 12 || ph.length < 36) continue;

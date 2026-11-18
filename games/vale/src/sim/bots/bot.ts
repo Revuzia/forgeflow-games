@@ -49,8 +49,8 @@ const MODE_TICKS = 6;
 /** owner_rulings 46: the plans whose walk a calm fighter does not turn round on more than once in 8 s */
 const WALKS: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return', 'lane']);
 const MIN_MODE_TIME = 1.5;
-/** owner_rulings 47: how far above frayBreak a losing FRAY fighter starts to leave (env VALE_FRAY_EARLY for the A/B only) */
-const FRAY_EARLY = Number((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VALE_FRAY_EARLY ?? '0.2');
+/** owner_rulings 47: how far above frayBreak a losing FRAY fighter starts to leave (a constant: the sim reads no environment) */
+const FRAY_EARLY = 0.2;
 /** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
  *  — until this time, unless its team starts the endgame push sooner */
 const LANE_PHASE_END = 840;
@@ -811,15 +811,20 @@ export class Bot extends BotBase implements BotController {
     const post = b ? b.guard.get(this.player) : undefined;
     // (owner_rulings 47: a post at a base structure is urgent only while that structure or the base is being hit — a quiet
     // post handed between two Lanterns walked a full-health defender back and forth)
-    const urgent = !WALKS.has(this.mode) || this.pFight !== null || this.pSiege !== null || this.pClear || this.pMonsters || !this.calm() ||
-      (!!b && (b.rush || b.stage || b.baseThreat >= 0.7)) || (this.mode === 'defend' && !!post && post.cls >= 2 && !!b && b.hitRecently(post.sid, this.now, 4));
     const nx = this.pMoveX - e.x, ny = this.pMoveY - e.y, n2 = nx * nx + ny * ny;
+    // (owner_rulings 51: a wave to clear, a camp or a structure to hit is urgent only once it is at hand — 10 m; the flags are
+    // set the whole walk there, and a full-health veteran walking to a camp, a post's wave or a siege turned on every flicker
+    // of the team's call: 2.6-3.3 back-and-forth episodes a game against a bar of 1)
+    const atHand = n2 <= 10 * 10;
+    const urgent = !WALKS.has(this.mode) || this.pFight !== null || ((this.pSiege !== null || this.pClear || this.pMonsters) && atHand) || !this.calm() ||
+      (!!b && (b.rush || b.baseThreat >= 0.7)) || (this.mode === 'defend' && !!post && post.cls >= 2 && !!b && b.hitRecently(post.sid, this.now, 4));
     if (n2 < 4 * 4) return;
     const nd = Math.sqrt(n2), dx = nx / nd, dy = ny / nd;
     // (owner_rulings 47: a turn is a walk that reverses the last one — heading against heading, not point against point: the
     // round-3 latch let a fighter that reached one point walk straight back to the other, and pace on)
     const turn = this.headX * dx + this.headY * dy < -0.2;
-    if (turn && !urgent && now - this.latchAt < 8) {
+    // (owner_rulings 51: one turn in 12 s, not 8 — two turns 8 s apart are three legs inside a 12 s window, the pacing itself)
+    if (turn && !urgent && now - this.latchAt < 12) {
       if (sq(this.latchX - e.x) + sq(this.latchY - e.y) > 1.5 * 1.5) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; }
       else { this.pMoveX = e.x; this.pMoveY = e.y; }
       return;
@@ -1282,7 +1287,10 @@ export class Bot extends BotBase implements BotController {
       // 12 m — always answers at a tier with peelFirst: no roll, and in the laning phase too; the others as before)
       const des = this.diff.peelFirst && this.designatedPeeler(a) === e;
       // (a road's laning phase: a duo's trades are laning — only a partner held, or one taken under half, is a dive)
-      if (!des && lp && !held && a.hp > a.maxHp * this.diff.peelLaneHp) continue;
+      // (owner_rulings 51: the designated peeler too — in the laning phase a burst on a fit road partner is the duo's trade, played
+      // from the lane: the round-2 support answered every such trade in protect mode, 5.5 % of its laning time, the whole drop of
+      // the laners' in-lane share against the pre-lane bots, 67.4 / 66.4 → 66.0 / 64.7 %)
+      if (lp && !held && a.hp > a.maxHp * this.diff.peelLaneHp) continue;
       // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's —
       // the grovehunter answers a dive on any road it stands beside, the genre's counter-gank)
       if (!des && lp && !this.jungle && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;

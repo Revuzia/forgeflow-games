@@ -152,16 +152,20 @@ const SHELL_RIM_POW = 3;
 const SHELL_BODY_MIN = 0.9;
 /** a round additive mesh on the ground this large (m) or larger covers an area: an area shell */
 const AREA_SHELL_MIN = 2.0;
-const ZONE_FILL_ALLY = 0.10;
-const ZONE_FILL_ENEMY = 0.18;
+/** orch1 W2-B fix 1 (verifier r1: enemy zone fills at 0.18 covered half the plaza; the overlay already lays its own 0.16
+ *  marigold fill and edge under an enemy zone, so the effect's fill is the caster's hue at a whisper): ruling 51 */
+const ZONE_FILL_ALLY = 0.07;
+const ZONE_FILL_ENEMY = 0.08;
 const ROUND_SHELLS = new Set([shapeIndex('orb'), shapeIndex('dome')]);
 const DECAL_SHAPE_RING = 1;
 /** orch1 W2-B: an ultimate's body exemption from the character-protection rule (s) and its fade back (s) */
 const T4_EXEMPT_S = 0.15;
 const T4_EXEMPT_FADE_S = 0.1;
 /** orch1 W2-B (VFX-O8): the body protection an ultimate's beat still keeps in its exempt window: the impact reads whole
- *  around the body and at this share over it (whole over the body flattened Nurrow's and Vashil's victims: detail 0.33) */
-const T4_EXEMPT_KEEP = 0.5;
+ *  around the body and at this share over it (whole over the body flattened Nurrow's and Vashil's victims: detail 0.33;
+ *  fix 1, verifier r1: at 0.5 Hesmi / Nurrow / Vashil still lost 2 / 2 / 1 frames, so the beat keeps the full rule over
+ *  the struck body: ruling 51) */
+const T4_EXEMPT_KEEP = 1;
 /** orch1 W2-B: a fighter's body column round its body centre (m): down over the legs (not the ground at the feet), up over
  *  the head and a raised weapon, its radius */
 const BODY_LOW = 0.95;
@@ -942,7 +946,10 @@ export class VfxSystem {
       case 'decal': {
         // T1: no decals, except a projectile's ground light (max VFX-2: where a shot is, read from the ground plane)
         const pathLight = at === 'path' && l.follow && l.style === DECAL_STYLES.light;
-        if (it.tier <= 1 && !pathLight) return;
+        // orch1 W2-B fix 1 (VFX-O7): the heavy basic attack's crack mark is its hit feedback on the ground (fired at T1 by the
+        // director, so the T1 rule hid it in every match)
+        const crackT1 = it.tier === 1 && l.style === DECAL_STYLES.crack && at === 'target';
+        if (it.tier <= 1 && !pathLight && !crackT1) return;
         if (pathLight) {
           let free = 0;
           for (const x of this.decals) if (!x.on && ++free > DECAL_PATH_RESERVE) break;

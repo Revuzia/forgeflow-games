@@ -14,9 +14,9 @@ export const MAX_BODIES = 12;
  *  fighter's body (the body's own pixels, found from the scene depth, never the air around it) */
 export const BODY_DIM = 0.45;
 /** orch1 W2-B: what an effect keeps of its LIGHT over a body (its colour; coverage keeps BODY_DIM) */
-export const BODY_LIGHT = 0.35;
+export const BODY_LIGHT = 0.25;
 /** orch1 W2-B: the most premultiplied light (linear HDR) one effect fragment adds over a body */
-export const BODY_HDR_CAP = 0.35;
+export const BODY_HDR_CAP = 0.22;
 
 /** uniforms shared by reference by every VFX material (updated once per frame) */
 export const vfxUniforms = {
@@ -582,6 +582,9 @@ void main() {
     off = -dir * sin( d * 3.14159 ) * ( 1.0 - d ) * k * 2.0;
   }
   off *= vfxSoft( 0.0 );
+  // orch1 W2-B fix 1 (VFX-O8): heat haze never bends a fighter's own body (a landing's distort smeared the struck body's
+  // inner detail flat at the beat); around the silhouette the air still bends
+  off *= 1.0 - vfxBodyK();
   gl_FragColor = vec4( off, 0.0, 0.0 );
 }`;
 

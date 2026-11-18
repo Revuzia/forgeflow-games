@@ -189,7 +189,19 @@ async function clutterMain() {
               const e = [];
               for (let o = 0; o < W * H * 4; o += 4 * 2) { const a = luma(eOn.px, o), c = luma(eOff.px, o); const dd = Math.abs(a - c) / Math.max(c, a, 16); if (dd > 0.04) e.push(dd); }
               e.sort((x, y) => x - y);
-              teleEdge.enemy = { px: e.length, p90: e.length ? +e[Math.floor(e.length * 0.9)].toFixed(3) : 0, n: foe.length, p90NoFx: x.length ? +x[Math.floor(x.length * 0.9)].toFixed(3) : 0 };
+              // W2-B fix 1 (info, not a bar): the same contrast over the shapes' BOUNDARY alone (changed pixels within 6 px of an
+              // unchanged one, VFX on): what the edge and its ink band read once the interior fill (renderer.ts: 0.16 for a
+              // zone) is left out, so the gate's p90 can be told apart into edge vs fill
+              const cm = new Uint8Array(W * H), dv2 = new Float32Array(W * H);
+              for (let i = 0, o = 0; i < W * H; i++, o += 4) { const a = luma(eOn.px, o), c = luma(eOff.px, o); const dd = Math.abs(a - c) / Math.max(c, a, 16); if (dd > 0.04) { cm[i] = 1; dv2[i] = dd; } }
+              const eb = [], R6 = 6;
+              for (let yy = R6; yy < H - R6; yy += 2) for (let xx = R6; xx < W - R6; xx += 2) {
+                const i = yy * W + xx; if (!cm[i]) continue;
+                if (!cm[i - R6] || !cm[i + R6] || !cm[i - R6 * W] || !cm[i + R6 * W]) eb.push(dv2[i]);
+              }
+              eb.sort((p, q) => p - q);
+              teleEdge.enemy = { px: e.length, p90: e.length ? +e[Math.floor(e.length * 0.9)].toFixed(3) : 0, n: foe.length, p90NoFx: x.length ? +x[Math.floor(x.length * 0.9)].toFixed(3) : 0,
+                boundaryPx: eb.length, p90Boundary: eb.length ? +eb[Math.floor(eb.length * 0.9)].toFixed(3) : 0, medBoundary: eb.length ? +eb[Math.floor(eb.length * 0.5)].toFixed(3) : 0 };
             }
             R.render(0);
           }
@@ -260,14 +272,14 @@ async function clutterMain() {
         looksWithSides: { minA: Math.min(...out.looks.map((l) => l.a)), minC: Math.min(...out.looks.map((l) => l.c)) },
         medianOcclusion: med(occ), p90Occlusion: occ.length ? [...occ].sort((x, y) => x - y)[Math.floor(occ.length * 0.9)] : null, fighterSamples: occ.length,
         worstFighterRun: worst, selfRing: { frames: rings.length, found: rings.filter((r) => r.found).length, rate: rings.length ? +(rings.filter((r) => r.found).length / rings.length).toFixed(3) : null },
-        teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)), enemyFrames: teles.filter((t) => t.enemy).length, enemyMedianP90: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90)), enemyMedianP90NoFx: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90NoFx)) },
+        teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)), enemyFrames: teles.filter((t) => t.enemy).length, enemyMedianP90: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90)), enemyMedianP90NoFx: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90NoFx)), enemyMedianP90Boundary: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90Boundary)) },
         particles: { peak: Math.max(0, ...peaks), median: med(peaks), budget: out.looks[0]?.particleBudget ?? null, overBudgetFrames: out.looks.filter((l) => l.particles > l.particleBudget).length },
         hotBody: { max: hots[0]?.hot ?? null, worst: hots[0] ?? null, median: med(hots.map((h) => h.hot)), over30: hots.filter((h) => h.hot > 0.3).length },
         frame: { vfxTrisPeak: Math.max(0, ...num('vfxTris')), vfxTrisMedian: med(num('vfxTris')), trisPeak: Math.max(0, ...num('tris')), drawsPeak: Math.max(0, ...num('draws')), programsPeak: Math.max(0, ...num('programs')) },
         consoleErrors: logs.filter((l) => !/favicon/.test(l)).slice(0, 5), looks: out.looks,
       };
       res.seeds.push(s);
-      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90} (enemy ${s.teleEdge.enemyMedianP90} over ${s.teleEdge.enemyFrames}, with no VFX ${s.teleEdge.enemyMedianP90NoFx}), particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
+      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90} (enemy ${s.teleEdge.enemyMedianP90} over ${s.teleEdge.enemyFrames}, with no VFX ${s.teleEdge.enemyMedianP90NoFx}, boundary only ${s.teleEdge.enemyMedianP90Boundary}), particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
     } finally { await browser.close(); }
   }
   const okSeeds = res.seeds.filter((s) => s.peakFrames4v4 >= WANT).length;
@@ -378,7 +390,7 @@ async function deathMain() {
 //           node _harness/probe_combat_polish.mjs dust --before <old vfx.json> [--out <png>] [--ids a,b,c]
 async function dustMain() {
   const sharp = (await import('sharp')).default;
-  const IDS = opt('ids', 'lib_wick_death,lib_hit_phys_light,lib_hit_phys_heavy,lib_hit_magic,lib_silence,lib_summon_rise,hesmi_ult_shadow,lib_status_stun').split(',');
+  const IDS = opt('ids', 'lib_wick_death,lib_hit_phys_light,lib_hit_phys_heavy,lib_hit_magic,lib_silence,lib_summon_rise,hesmi_ult_shadow,lib_status_stun,lib_status_root,lib_status_fear').split(',');
   const TIMES = [0.1, 0.25, 0.45], CW = 360, CH = 300;
   const after = strip(JSON.parse(readFileSync(join(HERE, '../content/vfx.json'), 'utf8')));
   const { browser, page } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=1&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
@@ -392,7 +404,10 @@ async function dustMain() {
       await B(async (b, d) => { const { VfxDef } = await import('/src/contracts/catalog.ts'); b.renderer.vfx.redefine(d.map((x) => VfxDef.parse(x))); }, set);
       for (const id of IDS) {
         await B((b, s) => { b.renderer.vfx.clear(); b.focus(s.x, s.y); b.zoom(b.catalog.maps.find((q) => q.id === b.host.setup.map).camera.distance); b.frames(10, 1 / 30); }, spot);
-        await B((b, a) => b.renderer.vfxTest(a.id, a.x, a.y, { tier: a.id.includes('_ult_') ? 4 : 2, anchor: 'target' }), { id, ...spot });
+        // fix 1 (verifier r1: the hit rows were empty): vfxTest puts its target 6 m along `dir` unless `to` is given, so a
+        // 'target' def fired off the tile; the target is the spot itself. A basic attack's hit fires as the director does: T1,
+        // game scale (1)
+        await B((b, a) => b.renderer.vfxTest(a.id, a.x, a.y, { to: [a.x, a.y], tier: a.id.includes('_ult_') ? 4 : a.id.startsWith('lib_hit_phys') ? 1 : 2, scale: a.id.startsWith('lib_hit_') ? 1 : undefined, anchor: 'target' }), { id, ...spot });
         let el = 0;
         for (const t of TIMES) {
           const n = Math.max(1, Math.round((t - el) * 30)); el = t;
@@ -545,7 +560,7 @@ try {
       const k = (w) => +(w / Math.max(1, n)).toFixed(3);
       const dev = (s1, s2) => (n ? Math.sqrt(Math.max(0, s2 / n - (s1 / n) ** 2)) : 0);
       const stdBase = dev(sb, sb2), stdFull = dev(sf, sf2);
-      return { n, baseWhite: k(wb), liftWhite: k(wl), flashWhite: k(wh), fullWhite: k(wf), boxWhite: b.__white(full, box0), boxNoVfx: b.__white(flash, box0), stdBase: +stdBase.toFixed(1), stdFull: +stdFull.toFixed(1), detail: +(stdFull / Math.max(1, stdBase)).toFixed(2), detailFlash: +(dev(sh, sh2) / Math.max(1, stdBase)).toFixed(2), detailLift: +(dev(sl, sl2) / Math.max(1, stdBase)).toFixed(2), meanFull: +(sf / Math.max(1, n)).toFixed(0), meanBase: +(sb / Math.max(1, n)).toFixed(0) };
+      return { flashK: +(a.flashLevel ?? 0).toFixed(2), n, baseWhite: k(wb), liftWhite: k(wl), flashWhite: k(wh), fullWhite: k(wf), boxWhite: b.__white(full, box0), boxNoVfx: b.__white(flash, box0), stdBase: +stdBase.toFixed(1), stdFull: +stdFull.toFixed(1), detail: +(stdFull / Math.max(1, stdBase)).toFixed(2), detailFlash: +(dev(sh, sh2) / Math.max(1, stdBase)).toFixed(2), detailLift: +(dev(sl, sl2) / Math.max(1, stdBase)).toFixed(2), meanFull: +(sf / Math.max(1, n)).toFixed(0), meanBase: +(sb / Math.max(1, n)).toFixed(0) };
     };
     // only these VFX ids spawn while set (the impact-hold window measures the hit's own look)
     b.__onlyIds = null;
@@ -694,7 +709,7 @@ try {
         def, caster: [Math.round(geo.c.gx), Math.round(geo.c.gy)], victim: [Math.round(geo.v.gx), Math.round(geo.v.gy)], firstCtr: first?.ctr ?? null,
         ctrToCaster: dC && Math.round(dC), ctrToVictim: dV && Math.round(dV), baseWhite: base, baseCore,
         beats: beats.map((r) => ({ f: r.f, w: r.w, bodyPx: r.white.n, bodyWhiteBase: r.white.baseWhite, bodyWhiteLift: r.white.liftWhite, bodyWhiteFlash: r.white.flashWhite, bodyWhiteFull: r.white.fullWhite, boxWhite: r.white.boxWhite.white,
-          boxWhiteNoVfx: r.white.boxNoVfx.white, live: r.live, detail: r.white.detail, detailFlash: r.white.detailFlash, detailLift: r.white.detailLift, stdBase: r.white.stdBase, stdFull: r.white.stdFull, meanBase: r.white.meanBase, meanFull: r.white.meanFull,
+          boxWhiteNoVfx: r.white.boxNoVfx.white, flashK: r.white.flashK, live: r.live, detail: r.white.detail, detailFlash: r.white.detailFlash, detailLift: r.white.detailLift, stdBase: r.white.stdBase, stdFull: r.white.stdFull, meanBase: r.white.meanBase, meanFull: r.white.meanFull,
           core: r.core, ratio: baseCore ? +(r.core / baseCore.all).toFixed(2) : null, ratioGround: baseCore ? +(r.coreGround / baseCore.ground).toFixed(2) : null })),
       };
       res.maxWhite = beats.length ? Math.max(...res.beats.map((r) => r.bodyWhiteLift)) : null;
@@ -709,7 +724,7 @@ try {
       res.detailLost = res.beats.filter((r) => r.bodyPx >= 200 && r.detail < 0.5).length;
       res.minDetail = res.beats.length ? Math.min(...res.beats.map((r) => r.detail)) : null;
       report.ult.push(res);
-      console.log(`         ${def} ${SLOT} max lift ${res.maxLift}, detail per frame (lost ${res.detailLost}, min ${res.minDetail}): ${res.beats.filter((r) => r.detail < 0.8).map((r) => `f${r.f} ${r.detail} [noVfx ${r.detailFlash} noFlash ${r.detailLift}] (mean ${r.meanFull}/${r.meanBase})`).join(' · ')}`);
+      console.log(`         ${def} ${SLOT} max lift ${res.maxLift}, detail per frame (lost ${res.detailLost}, min ${res.minDetail}): ${res.beats.filter((r) => r.detail < 0.8).map((r) => `f${r.f} ${r.detail} [noVfx ${r.detailFlash} noFlash ${r.detailLift} flash k ${r.flashK}] (mean ${r.meanFull}/${r.meanBase})`).join(' · ')}`);
       if (res.detailLost > 2) fail(`${def} ${SLOT}: the struck body stays flat for ${res.detailLost} frames (detail < 0.5; at most 2)`);
       console.log(`         box white per beat (VFX off): ${res.beats.map((r) => `f${r.f} ${r.boxWhite} (${r.boxWhiteNoVfx})`).join(' · ')}`);
       console.log(`ult ${def.padEnd(7)} ctr ${JSON.stringify(res.firstCtr)} caster ${JSON.stringify(res.caster)} victim ${JSON.stringify(res.victim)} (to caster ${res.ctrToCaster}, to victim ${res.ctrToVictim})  body white: lift adds ${res.maxLiftAdds} (lift ${res.maxWhite}, + hit flash ${res.maxWhiteFlash}, full frame ${res.maxWhiteFull}) · box ${res.maxBoxWhite} (box base ${base.white})  core ×${res.firstRatio} ground ×${res.firstRatioGround}, faded core ${baseCore?.all} ground ${baseCore?.ground} (samples ${baseCore?.samples.map((x) => x.all).join(' ')}; before the cast ${baseCore?.pre.all}; waited ${baseCore?.waited} frames, left ${baseCore?.left.join(',') || 'none'})`);
@@ -735,7 +750,13 @@ try {
         res.groundClipped = res.liftP90 !== null && res.baseP90 > 0 && res.liftP90 < res.baseP90 * 2.3 - 3;
         res.clipBound = !!b0 && (b0.core >= CORE_CLIP || (baseCore?.all ?? 0) * 2.3 >= CORE_CLIP || res.groundClipped);
         res.coreTarget = res.clipBound ? 2.0 : 2.3;
-        if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < res.coreTarget) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}, luma ${res.firstCore}, faded core ${baseCore?.all} ground ${baseCore?.ground}, lifted ground p90 ${res.liftP90} vs faded ${res.baseP90}) < ${res.coreTarget} on the first beat`);
+        // ruling 51 (W2-B fix 1): on the ruling-46 ground the faded core sits at luma ~123, so x2.0 of it (~246) lies past the
+        // ~218 clip itself: a x2.0 core there IS the near-white ruling 10 forbids, and it cannot coexist with the body and box
+        // white gates (ruling 48 measured the landing's peak at display luma ~222-230 whatever the solve). Where x2.0 of the
+        // faded core passes the clip, the target is the clip: the first beat's core luma >= CORE_CLIP
+        res.clipTarget = !!baseCore && baseCore.all * 2.0 >= CORE_CLIP;
+        if (res.clipTarget) { if (res.firstCore !== null && res.firstCore < CORE_CLIP) fail(`${def}: core luma ${res.firstCore} < the clip ${CORE_CLIP} on the first beat (x${res.firstRatio}; faded core ${baseCore?.all}: x2.0 would be ${+(baseCore.all * 2).toFixed(1)}, past the clip, ruling 51)`); }
+        else if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < res.coreTarget) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}, luma ${res.firstCore}, faded core ${baseCore?.all} ground ${baseCore?.ground}, lifted ground p90 ${res.liftP90} vs faded ${res.baseP90}) < ${res.coreTarget} on the first beat`);
       }
       await B((b) => { b.__park(); b.__step(40); });
     }

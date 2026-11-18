@@ -432,7 +432,26 @@ def ground_light_pass(d: dict) -> dict:
 
 def post(d: dict) -> dict:
     """passes applied to every def after its source (and its bespoke/tuned.json hand tuning) is chosen"""
-    return ult_detail_pass(heavy_crack_pass(dust_pass(ult_feel_pass(ground_light_pass(d)))))
+    return ult_pool_pass(ult_detail_pass(heavy_crack_pass(ink_form_pass(dust_pass(ult_feel_pass(ground_light_pass(d)))))))
+
+
+# orch1 W2-B fix 1: Nurrow's lull dome (#2B2433 ink at 0.5 over a 2 m dome) laid a near-black bowl over the struck unit and
+# held the first beat's core at luma 208; its ground ink peaks at 0.3 (the dome's form and the decal's print stay). A tried
+# caster-hue print under Rishal's / Vashil's beat did not move their victim-box white (0.635 / 0.425): that white is the
+# post chain's ground top (post.ts GROUND_TOP_REKEYED 0.97), ruling 51. Idempotent.
+NURROW_DOME_ALPHA = 0.3
+
+
+def ult_pool_pass(d: dict) -> dict:
+    if d["id"] != "nurrow_ult_lull":
+        return d
+    d = copy.deepcopy(d)
+    for l in d["layers"]:
+        if l["type"] == "mesh" and l.get("blend") == "ink" and l.get("shape") == "dome":
+            m = _alpha_max(l.get("alpha", 1))
+            if m > NURROW_DOME_ALPHA:
+                l["alpha"] = _scale_alpha(l.get("alpha", 1), NURROW_DOME_ALPHA / m)
+    return d
 
 
 # orch1 W2-B (VFX-O8): Hesmi's, Nurrow's and Vashil's ultimate landings left the struck body flat for two beats (probe
@@ -504,10 +523,43 @@ def dust_pass(d: dict) -> dict:
     return d
 
 
-# orch1 W2-B (VFX-O7): the heavy physical hit's mark is a chalk crack star in the settle range (L* 45-55, no reserved hue, a
-# pale chalk glint in the lines), not a dark navy ellipse with a team rune: it read as a hole under the target on every
-# heavy auto. Idempotent.
-CRACK_CHALK = "#7D776C"
+# orch1 W2-B fix 1 (verifier r1: black shaped-ink stars under rooted, feared and summoned units): the dust pass left ink on
+# the shaped layers (decals, sprites, meshes, ribbons, shockwaves). Outside the Shade family:
+#   a ground MARK (an ink- or plain-styled decal, a sprite) becomes the same warm-grey dust as the particles, alpha <= 0.45:
+#     a status star under a unit is a soft dust print, not a black hole in the stone;
+#   a FORM (mesh, ribbon, shockwave, a crack / scorch decal's lines) keeps its shape in a deep warm slate (#3A3731 / #4A463F,
+#     L* ~23 / ~30), a value step under the ruling-46 lane (L* ~51) instead of #17181B (L* ~9).
+# Rule: tokens.json vfx.rules.inkParticles (ruling 51). Idempotent.
+INK_FORM_HEX = {"#17181B": "#3A3731", "#2A2C33": "#4A463F"}
+INK_MARK_STYLES = {"ink", "plain", None}
+
+
+def ink_form_pass(d: dict) -> dict:
+    if shade_own(d["id"]):
+        return d
+    hit = [i for i, l in enumerate(d["layers"]) if l["type"] in ("decal", "sprite", "mesh", "ribbon", "shockwave")
+           and any(isinstance(c, str) and c.upper() in INK_HEX for c in _refs(l.get("color")))]
+    if not hit:
+        return d
+    d = copy.deepcopy(d)
+    for i in hit:
+        l = d["layers"][i]
+        mark = l["type"] == "sprite" or (l["type"] == "decal" and l.get("style") in INK_MARK_STYLES)
+        table = INK_HEX if mark else INK_FORM_HEX
+        l["color"] = _map_colors(l["color"], lambda c: table.get(c.upper(), c) if isinstance(c, str) else c)
+        if mark:
+            m = _alpha_max(l.get("alpha", 1))
+            if m > DUST_ALPHA_MAX:
+                l["alpha"] = _scale_alpha(l.get("alpha", 1), DUST_ALPHA_MAX / m)
+    return d
+
+
+# orch1 W2-B (VFX-O7): the heavy physical hit's mark is a chalk crack star, not a dark navy ellipse with a team rune (it
+# read as a hole under the target on every heavy auto). Fix 1 (verifier r1: the crack showed in no capture): at L* ~50 the
+# lines sat at the ruling-46 lane's own value (L* ~51) and vanished, so the fracture lines are a deep warm grey (#4A453D,
+# L* ~29: thin lines, never a disc) and the chalk glint in them is pale and lit (#F1E2C6, emissive 0.9, cooling over the
+# life); system.ts lets a crack mark draw for a T1 basic attack. Idempotent.
+CRACK_CHALK = "#4A453D"
 
 
 def heavy_crack_pass(d: dict) -> dict:
@@ -518,8 +570,8 @@ def heavy_crack_pass(d: dict) -> dict:
         if l["type"] == "decal" and l.get("style") == "crack":
             l["color"] = CRACK_CHALK
             l["rim"] = "#F1E2C6"
-            l["emissive"] = 0.25
-            l["alpha"] = [0.75, 0.6, 0]
+            l["emissive"] = 0.9
+            l["alpha"] = [0.9, 0.75, 0]
     return d
 
 
