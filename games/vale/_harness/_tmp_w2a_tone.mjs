@@ -96,9 +96,10 @@ const measure = (b, a) => {
       if (px.length < 200) { rec[v.name] = { px: px.length, error: 'too few pixels' }; continue; }
       const byA = [...px].sort((p, q) => q.aC - p.aC).slice(0, Math.max(1, px.length >> 2));
       const Ls = px.map((p) => p.L).sort((p, q) => p - q);
-      const top = Ls.slice(Math.floor(Ls.length * 0.75));
+      const top = Ls.slice(Math.floor(Ls.length * 0.75)), bot = Ls.slice(0, Math.max(1, Math.floor(Ls.length * 0.25)));
+      const bot25L = bot.reduce((s, x) => s + x, 0) / bot.length;
       const zoneC = med(byA.map((p) => p.C)), zoneA = med(byA.map((p) => p.aC));
-      rec[v.name] = { px: px.length, zoneC: +zoneC.toFixed(1), ratio: +(zoneC / zoneA).toFixed(2), top25L: +(top.reduce((s, x) => s + x, 0) / top.length).toFixed(1), meanC: +(px.reduce((s, p) => s + p.C, 0) / px.length).toFixed(1), p50L: +Ls[Ls.length >> 1].toFixed(1) };
+      rec[v.name] = { px: px.length, zoneC: +zoneC.toFixed(1), ratio: +(zoneC / zoneA).toFixed(2), top25L: +(top.reduce((s, x) => s + x, 0) / top.length).toFixed(1), bot25L: +bot25L.toFixed(1), mid50L: +(Ls.slice(Math.floor(Ls.length * 0.25), Math.floor(Ls.length * 0.75)).reduce((s, x) => s + x, 0) / Math.max(1, Math.floor(Ls.length * 0.75) - Math.floor(Ls.length * 0.25))).toFixed(1), spread: +((top.reduce((s, x) => s + x, 0) / top.length) - bot25L).toFixed(1), meanC: +(px.reduce((s, p) => s + p.C, 0) / px.length).toFixed(1), p50L: +Ls[Ls.length >> 1].toFixed(1) };
     }
     out.push(rec);
   }
@@ -126,8 +127,8 @@ const sum = {};
 for (const v of VARIANTS) {
   const r = all.map((f) => f[v.name]).filter((x) => x && !x.error);
   const t = r.map((x) => x.top25L);
-  sum[v.name] = { n: r.length, top25Min: Math.min(...t), top25Max: Math.max(...t), under70: all.filter((f) => f[v.name]?.top25L < 70).map((f) => f.def), over80: all.filter((f) => f[v.name]?.top25L > 80).map((f) => f.def), ratioMin: Math.min(...r.map((x) => x.ratio)), zoneCMin: Math.min(...r.map((x) => x.zoneC)) };
+  sum[v.name] = { n: r.length, top25Min: Math.min(...t), top25Max: Math.max(...t), under70: all.filter((f) => f[v.name]?.top25L < 70).map((f) => f.def), over80: all.filter((f) => f[v.name]?.top25L > 80).map((f) => f.def), ratioMin: Math.min(...r.map((x) => x.ratio)), zoneCMin: Math.min(...r.map((x) => x.zoneC)), botMax: Math.max(...r.map((x) => x.bot25L)), spreadMin: Math.min(...r.map((x) => x.spread)), spreadMed: [...r.map((x) => x.spread)].sort((p, q) => p - q)[r.length >> 1] };
 }
-for (const f of all) console.log(f.def.padEnd(8), VARIANTS.map((v) => `${v.name}:${f[v.name]?.top25L}/${f[v.name]?.ratio}`).join('  '));
+for (const f of all) console.log(f.def.padEnd(8), VARIANTS.map((v) => `${v.name}:${f[v.name]?.top25L}/${f[v.name]?.bot25L}/${f[v.name]?.ratio}`).join('  '));
 console.log(JSON.stringify(sum, null, 1));
 if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, variants: VARIANTS, summary: sum, fighters: all }, null, 1));
