@@ -566,6 +566,13 @@ void main() {
     }
   ${NOSCENE ? '*/' : '}'}` : 'if (vDepth < -0.6) discard;'}
   ${!WFRAG ? 'gl_FragColor = vec4(0.02, 0.05, 0.07, 1.0); return;' : ''}
+  ${WDEBUG.has('hb') ? `{
+    // (PERF s23 probe) the ground under the sheet in bands: red < -10 m, orange -10..-2, yellow -2..0, green 0..5, cyan 5..20,
+    // blue > 20 m above the datum; full brightness where the sheet is at sea level (|level| < 1.5 m), 40 % elsewhere
+    float lev = length(vBodyPos) - uRadius, gr = lev - vDepth;
+    vec3 dc = gr < -10.0 ? vec3(1.0, 0.0, 0.0) : gr < -2.0 ? vec3(1.0, 0.5, 0.0) : gr < 0.0 ? vec3(1.0, 1.0, 0.0) : gr < 5.0 ? vec3(0.0, 1.0, 0.0) : gr < 20.0 ? vec3(0.0, 1.0, 1.0) : vec3(0.0, 0.0, 1.0);
+    gl_FragColor = vec4(dc * (abs(lev) < 1.5 ? 1.0 : 0.4), 1.0); return;
+  }` : ''}
   ${WDEBUG.has('hgt') ? `{
     // (PERF s23 probe) R = sheet height above the datum / 250 m, G = vDepth / 25 m (+0.5), B = vSimD / 25 m (+0.5)
     gl_FragColor = vec4(clamp(vec3((length(vBodyPos) - uRadius) / 250.0, 0.5 + vDepth / 25.0, 0.5 + vSimD / 25.0), 0.0, 1.0), 1.0); return;
