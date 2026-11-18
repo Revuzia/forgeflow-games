@@ -2217,3 +2217,20 @@ long press frame-rate independent. Report after 1-2 verified.
   4. `?wdebug=class` screenshot at the landing spot with the sheet over the hills in view (see SESSION 21).
 - NEXT: by the round's numbers — if SSR is the rest, SSR at half rate / fewer refine; if PCF, 1-2 taps for water; if
   wfast=2 is still far from the floor, the Gerstner group's 4 simplex -> varyings near, cloud shadow + sky light per vertex.
+
+## LEAD NOTE after MAC ROUND 16 (build 5ee51b2d on genesis-water, quiet Mac, Ultra 1686x963) — three open problems
+P = scene=0&shadows=0. P repeats: 167 / 84 / 217 / 133 ms (very noisy on a quiet machine). P + water=0: 17 ms.
+1. WATER COST IS NOT THE FRAGMENT MATH: P + all six wshade cuts (flat water) 117 ms; wfast=2 134; wfast=1 234; single cuts
+   150-300 (inside the noise). So ~100 ms of the water pass survives a trivial fragment shader. Round 13: P + msaa=0 83 ms,
+   P + rscale=0.5 49 ms -> it scales with pixels and samples. Suspects: what the water pass does around the draw (scene
+   colour / depth copy, MSAA resolve and re-entry of the 4x hdr target, the depth-texture taps of the waterland guard + discard,
+   gl_FragDepth + discard under MSAA on a sheet that covers 70 % of the screen), or the vertex stage of the water sheets.
+2. REGRESSION: N (full game) 784-950 ms here vs 333-383 ms on build e50830af (round 14). Default-on changes between the two:
+   the waterland guard (1 + 4 scene-depth taps and a discard before everything in the water fragment), the tcache hooks in
+   the terrain material / chunks (tcache itself off), wfast plumbing. Must be found and removed.
+3. tcache=1 GAVE NOTHING on the Mac (run 17: 800 ms with wfast=2&tcache=1 after a 30 s wait). The tcstat header line of that
+   run is needed: are patches cached or live at the landing view on the real GPU?
+Also: `wdebug=class` paints the sheet over the hills the SAME blue as the open sea, and waterland=0 does not remove it: it is
+   ocean-class water whose level the shader believes is above the ground, yet it draws over visibly higher terrain while tree
+   trunks draw over it. So either the terrain's depth is wrong for the water pass on Metal (water passes the depth test over
+   terrain but not over trees), or the water surface there really is above the terrain mesh (level / height mismatch).
