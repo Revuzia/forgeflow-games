@@ -383,6 +383,20 @@ def build(spec, args, skin=None) -> dict:
         # keeps the signature-hue zones; a fighter without a recipe is untouched
         with T.step("zone_grade"):
             report["zone_grade"] = zone_grade(sid, glb, T0)
+        # orch1 W2-C FU-10: the wrist weights (art/tools/hand_weights.mjs): the hand share of every forearm + hand vertex
+        # remapped to smoothstep(0.1, 0.5, h), so the palm is rigid and the wrist blend spreads below it (bone heat split
+        # the palm of five fighters; _harness/clip_probe_hands.mjs gates it). Run once, on the exported GLB, so a rebuild
+        # matches the shipped files the tool patched.
+        if getattr(spec, "KIND", "fighter") == "fighter":
+            with T.step("wrist_weights"):
+                import subprocess
+                node = export.node_exe()
+                if node:
+                    r = subprocess.run([node, os.path.join(scene.TOOLS_DIR, "hand_weights.mjs"), glb], cwd=scene.GAME_DIR,
+                                       capture_output=True, text=True, encoding="utf-8")
+                    scene.log(r.stdout.strip()[-300:] or r.stderr.strip()[-300:])
+                    if r.returncode:
+                        raise SystemExit(f"{sid}: hand_weights failed: {r.stderr.strip()[-600:]}")
         # MAX2: VALE characters ship metalness 0 (content:check checkZeroMetal); a fresh export carries the Principled
         # BSDF's metallic, so every rebuild failed the content build until art/tools/glb_zero_metal.py was run by hand
         with T.step("zero_metal"):
