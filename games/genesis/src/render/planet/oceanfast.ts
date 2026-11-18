@@ -31,7 +31,7 @@
 //       channels, std matched to snoise), 1-3 taps where foam can be, none elsewhere; the shore bite = 1 tap;
 //     * glint (GGX), glitter (3 hashes), moon (2 LUT taps + GGX), sun shadow 1 tap (5 in the nearest cascade);
 //     * ice and silt streaks keep their arithmetic noise (rare, gated as before).
-// Sub-cuts for a Mac bisect: `?wshade3=nodetail,noreflect,nossr,norefract,nofoam,nosky,pcf5`.
+// Sub-cuts for a Mac bisect: `?wshade3=nodetail,noreflect,nossr,norefract,nofoam,nosky,pcf5` (+ `foamdbg`: R shore, G whitecap / gale, B crest / surge / rapids).
 // STATIC COUNT (open calm sea, day, one projection): see PERF.md SESSION 25.
 import { DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, RepeatWrapping, UnsignedByteType, type IUniform } from 'three';
 import { perfList, perfNum } from '../perfswitch.ts';
@@ -215,7 +215,7 @@ varying vec4 vF3Cld;
 vec3 gF3W = vec3(0.0, 1.0, 0.0);
 vec3 gF3Px = vec3(0.0), gF3Py = vec3(0.0);
 // a tiling map tapped along the body axes: Q in metres, inv = 1 / tile size, drift in tiles
-vec4 f3Tri(sampler2D m, vec3 Q, float inv, vec2 drift) {
+vec4 f3Tri(sampler2D m, vec3 Q, vec3 inv, vec2 drift) {
   vec4 n = vec4(0.0);
   vec3 q = Q * inv, dx = gF3Px * inv, dy = gF3Py * inv;
   if (gF3W.x > 0.0) n += gF3W.x * textureGrad(m, q.yz + drift, dx.yz, dy.yz);
@@ -224,7 +224,9 @@ vec4 f3Tri(sampler2D m, vec3 Q, float inv, vec2 drift) {
   return n;
 }
 // the foam noise: 4 octaves (lattice tile/4, /8, /16, /32), each ~snoise
-vec4 f3N(vec3 Q, float tile, vec2 drift) { return f3Tri(uF3Noise, Q, 1.0 / tile, drift) * 2.0 - 1.0; }
+// (S: a stretch of the body frame, so the taps' derivatives follow it: whitecaps and gale streaks are anisotropic)
+vec4 f3N(vec3 P, vec3 S, float tile, vec2 drift) { return f3Tri(uF3Noise, P, S / tile, drift) * 2.0 - 1.0; }
+vec4 f3N(vec3 P, float tile, vec2 drift) { return f3N(P, vec3(1.0), tile, drift); }
 // the ripple map in one projection (wfast=2's ripTap): q, its derivatives, the tiles' amplitudes (0 = skipped)
 vec2 f3RipP(vec2 q, vec2 dx, vec2 dy, float t, float kA, float kB) {
   vec2 g = vec2(0.0), r;
@@ -527,16 +529,24 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float cover = clamp(0.0012 * pow(max(windSpd * uWind - 3.5, 0.0), 2.2), 0.0, 0.35);
   float whitecap = 0.0;
   if (${f.foam ? 'true' : 'false'} && cover > 0.001 && vSalt > 0.3 && vDepth > 2.0 && calm > 0.0) {
-    vec4 nW = f3N(vec3(P.x * 0.38, P.y, P.z * 0.38), 24.0, vec2(-uTime * 0.03, uTime * 0.02) / 24.0 * 6.0);
+    vec4 nW = f3N(P, vec3(0.38, 1.0, 0.38), 48.0, vec2(-0.19, 0.125) * uTime / 48.0);
     float wcN = nW.y * 0.55 + nW.w * 0.3 + (vCrest - 0.6) * 0.35;
-    whitecap = smoothstep(1.0 - cover * 4.0, 1.0 - cover * 2.0 + 0.02, wcN * 0.5 + 0.5) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
+    // (a thresholded noise read through its mips: the filtered value drifts to the mean, so far out every pixel would be
+    // all-white or all-clear. The share of the noise's spread the mips removed (mip level of the 48 m tile: G octave
+    // 32 texels, A octave 8) widens the ramp instead: the pixel gets the expected coverage, what the point-sampled
+    // original showed as a speckle of the same mean)
+    float wl = log2(max(fw * 0.7 * 256.0 / 48.0, 1e-3));
+    float wsd = 0.116 * sqrt(0.77 * smoothstep(3.0, 5.5, wl) + 0.23 * smoothstep(1.0, 3.5, wl)) * 1.7;
+    whitecap = smoothstep(1.0 - cover * 4.0 - wsd, 1.0 - cover * 2.0 + 0.02 + wsd, wcN * 0.5 + 0.5) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
   }
   if (${f.foam ? 'true' : 'false'} && windSpd * uWind > 9.0 && vSalt > 0.3 && calm > 0.0) {
     // a gale's long thin streaks along the wind (the original's 47:1 stretched noise: 1 tap of a stretched frame)
-    float gN = f3N(vec3(P.x * 0.03, P.y * 1.4, P.z * 0.03) + 3.1, 8.0, vec2(0.0)).y;
-    whitecap = max(whitecap, smoothstep(0.75, 0.95, gN * 0.5 + 0.5) * smoothstep(9.0, 16.0, windSpd * uWind) * 0.5 * calm * smoothstep(0.3, 0.8, vSalt));
+    float gN = f3N(P + vec3(103.3, 2.2, 103.3), vec3(0.03, 1.4, 0.03), 8.0, vec2(0.0)).y;
+    float gsd = 0.185 * smoothstep(3.0, 5.5, log2(max(fw * 1.4 * 256.0 / 8.0, 1e-3))) * 1.7;
+    whitecap = max(whitecap, smoothstep(0.75 - gsd, 0.95 + gsd, gN * 0.5 + 0.5) * smoothstep(9.0, 16.0, windSpd * uWind) * 0.5 * calm * smoothstep(0.3, 0.8, vSalt));
   }
   float foamAmt = ${f.foam ? '' : '0.0 * '}clamp(max(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), surge * 0.95), 0.0, 1.0);
+  ${CUT.has('foamdbg') ? 'gl_FragColor = vec4(shore, whitecap, max(max(crest, surge), rapids), 1.0); return;' : ''}
   if (foamAmt > 0.01) {
     // LACE: ridged noise at two scales drifting with the flow (tile 8 m: lattice 2 / 1 / 0.5 / 0.25 m), thinning out
     vec4 nLc = f3N(P - vFlow * uTime, 8.0, vec2(0.0, uTime * 0.07 / 8.0));
