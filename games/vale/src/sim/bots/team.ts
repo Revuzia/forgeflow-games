@@ -492,6 +492,16 @@ export class TeamBrain {
         for (const f of tp.enemyFighters) if (f.alive && f.atkTarget === st.id) fd += f.stats.ad * f.stats.attackSpeed;
         if (fd > 0) ttl = (st.hp + st.shield) / fd + 4;
       }
+      if (ab('g_ttl2') && !coreHit) {
+        let fd = wdps;
+        for (const f of tp.enemyFighters) if (f.alive && f.atkTarget === st.id) fd += f.stats.ad * f.stats.attackSpeed;
+        if (fd > 0) ttl = (st.hp + st.shield) / fd;
+        // (a structure that falls within 3 s is lost: posts more than 8 m off it are freed — they would arrive to watch it fall)
+        if (ttl < 3) for (const [p, g] of [...this.guard]) {
+          const e = w.players[p]?.ent;
+          if (g.sid === info.id && e && dhypot(e.x - st.x, e.y - st.y) > 8) this.guard.delete(p);
+        }
+      }
       if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming, ttl, why: coreHit && d.coreAll ? 'core' : n > 0 ? 'fight' : coming > 0 ? 'coming' : 'wave' });
     }
     // (owner_rulings 44: the most valuable structure first — the Hourbell, then its Bell Needles, the Lanterns, the inner and the
@@ -953,7 +963,7 @@ export class TeamBrain {
       // (owner_rulings 44, round 2: a tier that closes out goes into a held base only with a fighter more, or two of theirs left,
       // or a Lantern's clock running at even numbers — a defended base won every even dive, and the fights lost at its door
       // were the long games' back-and-forth)
-      const commit = d.closeOut && k.kind === 'rift' ? aliveDiff >= 1 || this.aliveEnemies <= 2 || (clock && aliveDiff >= 0) : aliveDiff >= -1 || this.aliveEnemies <= 2;
+      const commit = d.closeOut && k.kind === 'rift' && !ab('commit') ? aliveDiff >= 1 || this.aliveEnemies <= 2 || (clock && aliveDiff >= 0) : aliveDiff >= -1 || this.aliveEnemies <= 2;
       if ((clock || ready >= need || this.aliveEnemies <= 2 || (closeOut && ready >= Math.min(3, need))) && commit) this.rush = true;
       else this.stage = true;
     }
