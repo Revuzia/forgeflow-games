@@ -10,7 +10,7 @@ import type { LifeWorld } from './world.ts';
 import { CAP, BEH, F, MAX_ZONES, USES_FULL, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT } from './world.ts';
 import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, groupCount, say } from './act.ts';
 import { emitVoice, PHRASE, voice } from './voice.ts';
-import { STYLE } from './attention.ts';
+import { STYLE, MOVER_CAP, tierOf } from './attention.ts';
 import { TRAIT } from './traits.ts';
 import { WARMPOSE, TOAST, emitReact, leaderOf } from './looks.ts';
 import { socialPick, beginPicked, updateMoment, startMoment, tryTeeter, abortFor, isFree, MOM, mem, tuneThing, tunePlaying } from './social.ts';
@@ -602,6 +602,20 @@ function startUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvent
   w.ph[i] = 0; w.bN[i] = tb + 0.6;
 }
 
+/** round 6 (N1): how long an asked use waits for the shell to make room for its wake, then the allowance it goes with (one whole's wake). */
+const ASK_WAIT_S = 4, ASK_ALLOW_MILLI = 1000;
+/** round 6 (N1): the asked use at `i` takes a token: the farthest-from-done by-itself whole mover gives its behaviour up (a wander first). */
+function yieldToken(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): void {
+  let pick = -1, best = -1;
+  for (let j = 0; j < CAP; j++) {
+    if (j === i || !w.ac[j] || !w.mo[j] || w.ki[j] !== 0 || w.moo[j] >= 0 || (s.flags[j] & LIFE_FLAG.RIDE) !== 0) continue;
+    if (w.beh[j] === BEH.USE && w.uS[j] === 2) continue;
+    const v = w.beh[j] === BEH.WANDER ? 2 : 1;
+    if (v > best) { best = v; pick = j; }
+  }
+  if (pick >= 0) endBeh(w, s, out, pick, 2);
+}
+
 /** The ball's use point (behind the ball, toward where it should roll) into w.f[F.X], w.f[F.Z]; the roll direction into w.f[F.A], w.f[F.B]. */
 function ballUsePoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number, overlapMm: number): boolean {
   if (!thingPos(w, s, k)) return false;
@@ -654,7 +668,12 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     if (dc < 36) { w.ph[i] = 2; w.bN[i] = tb; return; }
     // (round 4) the walk to the use spot has a deadline of its own: 3 s + 1.5 x the walk at its glide speed (B04's "3..12 s" is the use; a
     // slow family 3.8 m from the ball needs 21 s to get there, and round 2's 12 s from the start cut every such walk short, the token spent)
-    if (travelTo(w, s, out, i, 0, 0)) { w.ph[i] = 1; w.tw[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04); }
+    // round 6 (VERDICT_PG2 N1; PLAY_WITH, D-79: the player's request wins over the budget): the use the player asked for takes the mover token from a
+    // by-itself mover (one not in a moment, not riding, not on an asked use of its own) instead of waiting for it (movers stays within moverCap, LF-10).
+    // Its wake waits for room under unitCap, which the shell's over-budget rule makes by sleeping another squishy; if none of them can sleep yet (a
+    // napper's pose, a memory still settling) it goes after ASK_WAIT_S anyway, with one whole's wake as its allowance, and the rule catches up after.
+    if (asked && !w.mo[i] && w.movers >= MOVER_CAP[tierOf(s)]) yieldToken(w, s, out, i);
+    if (travelTo(w, s, out, i, 0, asked && tb - w.bT[i] > ASK_WAIT_S ? ASK_ALLOW_MILLI : 0)) { w.ph[i] = 1; w.tw[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04); }
     else if (tb - w.bT[i] > 8) endBeh(w, s, out, i, 5);
     else w.tw[i] = 1; // waiting for a mover token (a wander gives way to it: choose)
     return;

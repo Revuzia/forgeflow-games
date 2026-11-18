@@ -946,12 +946,18 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   // dropped for HUSH_S), so it comes to rest and sleeps a moment later. The touched, carried, tossed and riding bodies are never forced.
   // Round 6 (VERDICT_PG2 N1: on med, unitCap 1.48, a squishy asked to "Go play with..." stayed asleep or was put to sleep on its way): an ASKED squishy is
   // never taken (not stopped, hushed or slept), and while it is still asleep its wake counts against the cap, so the rule sleeps another (the play squishy too,
-  // if untouched) until LIFE's own gate (units + its wake <= unitCap) lets its walk start.
+  // if untouched) until LIFE's own gate (units + its wake <= unitCap) lets its walk start (after 4 s LIFE starts it anyway: brain.ts ASK_WAIT_S). The bodies an
+  // awake asked squishy touches are not slept either (a sleeper is a wall it cannot push past: the med-tier walk stalled against the sleeping play squishy).
   const tried = new Uint8Array(CAP);
   function overBudget(): void {
     const cap = att.unitCap + att.allowance + 0.001;
-    let pend = 0;
-    for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.body && c.body.metrics.asleep === true && asked(c)) pend += c.kind === 0 ? UNIT.whole - UNIT.sleeper : UNIT.piece - UNIT.sleeper; }
+    let pend = 0, near = 0;
+    for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || !c.body || !asked(c)) continue;
+      if (c.body.metrics.asleep === true) pend += c.kind === 0 ? UNIT.whole - UNIT.sleeper : UNIT.piece - UNIT.sleeper;
+      else near |= c.body.metrics.contacts ?? 0;   // the bodies it is pushing past: a sleeper is a wall it cannot move (it stays awake while touched)
+    }
     if (!(s.units + pend > cap)) return;
     const cx = 0, cz = 0, t = game.simTime;
     let far = -1, fd = -1;
@@ -968,7 +974,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       let sl = -1, sd = -1;
       for (let i = 0; i < CAP; i++) {
         const c = chars[i];
-        if (tried[i] || !c.on || c.kind !== 0 || !c.body || asked(c) || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) !== 0 || c.tossed) continue;
+        if (tried[i] || !c.on || c.kind !== 0 || !c.body || asked(c) || ((near >>> i) & 1) !== 0 || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) !== 0 || c.tossed) continue;
         const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
         if (d > sd) { sd = d; sl = i; }
       }
@@ -1671,7 +1677,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const v = safeView();
       return {
         life: lifeDebug(w), place: placeIdx, visit, layout, bodyScale, units: s.units, quiet: s.quiet, autonomy: s.autonomy, floatParked,
-        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1, scoot: c.scooting ? [+c.scootX.toFixed(2), +c.scootZ.toFixed(2)] : null, hush: c.hushT > game.simTime } : null)).filter(Boolean),
+        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1 } : null)).filter(Boolean),
         things: def.things.map((t, k) => {
           const p = thingFirst[k] ?? -1, at = !!world && p >= 0;
           // (its centre on screen in CSS px, for the harness's taps: the stage camera's projection, dev view only)

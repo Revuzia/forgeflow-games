@@ -5173,6 +5173,41 @@ async function main() {
       check('PG phone "Put back 2" is the kit button in the stack layout too (k-btn, 44 px high, rounded, the kit surface and font, inside the 390 px frame, clear of the hint pill)',
         !!pchip && pchip.kit && !pchip.hidden && pchip.h >= 44 && pchip.radius >= 8 && !/^rgb\(2[23]\d, 2[23]\d, 2[23]\d\)$/.test(pchip.bg) && !/^(Arial|system-ui|-apple-system)/.test(pchip.font)
           && /Put back\s*2/.test(pchip.text) && pchip.x >= 0 && pchip.right <= 390 && !pchip.overHint, JSON.stringify(pchip));
+      // round 6 (VERDICT_PG2 N2: "Next: Cozy by the fire · 0 of 2" measured clipped in a 298 px pill at 390 x 844): on a phone the tracker pill's whole line is
+      // readable at 390 and 320 px wide (it wraps instead of ending in an ellipsis), inside the slot left of the Journal column, clear of the Journal / Places
+      // buttons, the name tag and the dock. The verifier's line is put in the pill (the game paused) so that line is measured whatever is next here.
+      {
+        await page.evaluate(() => window.__WH__.resume());
+        for (let k = 0; k < 20; k++) { if (await page.evaluate(() => document.querySelector('.pl-pill')?.hidden === false)) break; await sleep(500); }
+        await page.evaluate(() => window.__WH__.pause());
+        const LINE = 'Next: Cozy by the fire · 0 of 2';
+        const rows = [];
+        for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+          await page.setViewportSize(vp);
+          await page.evaluate((line) => { const t = document.querySelector('.pl-pill .pl-pill-text'); if (t) { t.dataset.was = t.textContent; t.textContent = line; } }, LINE);
+          await settle(page);
+          const m = await page.evaluate(() => {
+            const p = document.querySelector('.pl-pill'), t = p?.querySelector('.pl-pill-text'); if (!p || !t || p.hidden) return null;
+            const R = (e) => { if (!e) return null; const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return null; const q = e.getBoundingClientRect(); return q.width > 0 && q.height > 0 ? { x: q.left, y: q.top, r: q.right, b: q.bottom } : null; };
+            const pr = R(p), go = R(p.querySelector('.pl-pill-go')), tr = R(t);
+            const lh = parseFloat(getComputedStyle(t).lineHeight) || 16;
+            // (for the record: the same line under round 5's one-line rule, nowrap and an ellipsis, as the verifier measured it)
+            const st = document.createElement('style'); st.textContent = '.pl-pill-text { white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }'; document.head.append(st);
+            const oneLineClipped = t.scrollWidth > t.clientWidth + 1; st.remove();
+            return { oneLineClipped, text: t.textContent, clipped: t.scrollWidth > t.clientWidth + 1 || t.scrollHeight > t.clientHeight + 1 || (!!tr && !!go && (tr.r > go.r + 0.5 || tr.b > go.b + 0.5)), lines: tr ? Math.round((tr.b - tr.y) / lh) : 0,
+              font: parseFloat(getComputedStyle(t).fontSize), pill: pr, h: go ? Math.round(go.b - go.y) : 0, life: [...document.querySelectorAll('.hud-life > button')].map(R).filter(Boolean),
+              name: R(document.querySelector('.nametag')), dock: R(document.querySelector('#wh-dock')), iw: innerWidth, sw: document.documentElement.scrollWidth };
+          });
+          if (m) await pgShot(page, `pg_pill_phone_${vp.width}x${vp.height}`);
+          await page.evaluate(() => { const t = document.querySelector('.pl-pill .pl-pill-text'); if (t && t.dataset.was !== undefined) { t.textContent = t.dataset.was; delete t.dataset.was; } });
+          rows.push({ vp: `${vp.width}x${vp.height}`, ...m });
+        }
+        await page.setViewportSize(PHONE.viewport); await settle(page);
+        const good = (m) => !!m.text && !m.clipped && m.lines >= 1 && m.lines <= 2 && m.font >= 12 && m.h >= 44 && !!m.pill && m.pill.x >= 0 && m.pill.r <= m.iw && m.sw <= m.iw
+          && m.life.length >= 1 && m.life.every((b) => !overlap(m.pill, b)) && !overlap(m.pill, m.name) && !overlap(m.pill, m.dock);
+        check('PG phone (round 6, VERDICT_PG2 N2) the tracker pill\'s whole line "Next: Cozy by the fire · 0 of 2" is readable at 390 x 844 and 320 x 568: not clipped (it wraps, at most two lines, >= 12 px, 44 px to hit), inside the screen, clear of the Journal / Places buttons, the name tag and the dock',
+          rows.length === 2 && rows.every(good), JSON.stringify(rows));
+      }
       await page.evaluate(() => window.__WH__.resume());
       await hclick(page, '.dock-journal'); await settle(page);
       const jn = await page.evaluate(() => { const d = document.getElementById('wh-journal'); if (!d) return null; const r = d.getBoundingClientRect(); return { w: r.width, h: r.height, sw: document.documentElement.scrollWidth, iw: innerWidth }; });

@@ -13,13 +13,19 @@ body[data-ceremony] .pl-slot, body[data-tool="snap"] :is(.pl-slot, .pl-pop) { vi
 .pl-pill, .pl-moment, .pl-wish { pointer-events: auto; max-width: 100%; animation: ov-fade var(--k-fd-2) linear backwards; }
 .pl-pill[hidden], .pl-moment[hidden], .pl-wish[hidden], .pl-pop[hidden] { display: none; }
 
-/* the tracker pill: [book "Next: ..."] [x], one line, an ellipsis, never wrapped */
+/* the tracker pill: [book "Next: ..."] [x], one line, an ellipsis, never wrapped (on a narrow screen it wraps: round 6, below) */
 .pl-pill { display: flex; align-items: center; gap: var(--wh-s1); min-width: 0; }
 .k-btn.pl-pill-go { min-width: 0; max-width: 100%; gap: var(--wh-s2); justify-content: flex-start; font: var(--wh-w-bold) var(--wh-fs-small)/1.2 var(--wh-font-ui); }
 .pl-pill-go .k-icon { flex: none; width: 18px; height: 18px; }
 .pl-pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .k-btn.pl-pill-x { flex: none; }
 .pl-pill-x .k-icon { width: 16px; height: 16px; }
+/* round 6 (VERDICT_PG2 N2: "Next: Cozy by the fire · 0 of 2" was cut off in the 298 px slot of a 390 px phone): on a narrow screen the line wraps (two lines at
+   390 and 320 px wide) instead of ending in an ellipsis; the slot's width is unchanged, so it stays left of the Journal column. The desktop look is unchanged. */
+@media (max-width: 640px) {
+  .k-btn.pl-pill-go { padding-block: var(--wh-s1); text-align: start; }
+  .pl-pill-text { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+}
 
 /* a stamp moment: one at a time, 2.4 s; the stamp springs in (Calm / reduced motion: the fade alone) */
 .pl-moment { display: flex; align-items: center; gap: var(--wh-s2); padding: var(--wh-s2) var(--wh-s3); max-width: min(320px, 100%); pointer-events: none;

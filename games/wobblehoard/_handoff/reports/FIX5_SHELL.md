@@ -351,3 +351,46 @@ shows on screen.
   on the PC's published tree), keyboard-only "holding Space squishes" (1 in 5 in round 4; ok this run).
 - probe_life LF-02 (lifeStep allocation) stays the DATA / LIFE lane's one failing node row.
 - No git write command was run.
+
+## Round 6 (VERDICT_PG2 N1 and N2 only)
+
+**N1, "Go play with..." on the med tier.** Reproduced first with a new node row (Home and Hearthlog Cabin, quality med, 3 out, each thing asked of a squishy
+that is not the play squishy). Against the verdict's tree (7fe10cbbf) the row FAILS: the asked squishy was asleep on its walk for 8 to 20 one-sixth-second
+samples and moved 0.01 to 0.19 m. Three root causes were found. (1) The over-budget rule (SH-22) could pick the asked squishy to hush or sleep. (2) While the asked
+squishy was asleep, waking it never fit med's unitCap of 1.48, so LIFE's gate held its walk until LIFE gave up after 8 s. (3) Once awake, it pushed against a
+neighbour that the rule kept putting back to sleep every frame, and a sleeping body does not move out of the way, so the walk stalled.
+- `src/shell/later-life.ts`: an asked squishy is ASKED until its USE BY PLAYER arrives, or for at most 30 s. While ASKED it is never stopped, hushed or put to
+  sleep by the rule. If it is asleep, its wake counts against the cap, so the rule sleeps another squishy, including the play squishy if nobody is touching it.
+  Bodies it touches while awake are not put to sleep. `counts.askedUse` was added to the dev view.
+- `src/life/brain.ts` (runUse, asked uses only): the asked use takes the mover token from a by-itself mover, so movers never pass moverCap (LF-10). If no room
+  has been made for its wake after 4 s (for example, a napper that physics will not let sleep), it goes anyway with one whole's wake as its allowance.
+- New row in `shellview/node_checks.ts` ("round 6, VERDICT_PG2 N1"). For each thing, the walk must start within 8 s and the squishy must never be asleep on it.
+  It must also move 0.3 m or more, or use the thing, or already be within 0.8 m of it. The Snooze Rug has no prop position, so its distance is not measured.
+  Result: fails on 7fe10cbbf, passes now.
+- Not changed: in this rig even the HIGH tier seldom finishes a USE within 25 s (LIFE ends walks that are blocked or that a moment interrupts, on every tier).
+  That is LIFE's own behaviour and is outside N1.
+
+**N2, the tracker pill on a phone.** `src/ui/play.css`: at a width of 640 px or less the pill text wraps instead of ending in an ellipsis. The slot width did not
+change. The desktop look did not change: `pg_home_party_desktop.png` shows one line. New browser row in pg-phone, which puts the verifier's line in the pill:
+- 390x844: 2 lines, 14 px, 44 px to hit, the pill at x 16..314, clear of the Journal and Places buttons (330..374), the name tag and the dock.
+- 320x568: 2 lines, the pill at x 16..244.
+- Under round 5's one-line rule the same line measures `oneLineClipped: true` at both sizes.
+- Screenshots `_shots/shell/pg_pill_phone_{390x844,320x568}.png` were looked at.
+- At 320 a top-centre toast peeks out behind the pill. This layering existed before round 6 and is not covered by the row.
+
+**Numbers:**
+
+| Check | Result |
+|---|---|
+| tsc | clean |
+| probe_app | 187/187 |
+| shellview/node_checks | 171/171 (170 + 1 new) |
+| probe_gestures | 160/160 |
+| probe_trophies | 31/31 |
+| probe_pg_lifequests | 14/14 |
+| probe_life | 117 ok / 1 fail (LF-02, expected) |
+| browser run (pg-playthrough, pg-phone, pg-home5, toasts; port 5366) | 45/46 |
+
+The one browser fail is "PG Home: a click on the Music Box plays its tune". The click landed on a squishy ("tap1: body"); the shot shows the orange squishy
+standing in front of the Music Box. That row runs before any "Go play with...", and with no squishy asked both changes do nothing, so this is the squishies'
+positions at click time. I did not re-run it to confirm, because the brief allows one browser run. No git write command was run.

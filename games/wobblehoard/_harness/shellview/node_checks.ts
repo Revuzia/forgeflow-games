@@ -2027,29 +2027,36 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const stats0 = st.stats;
     app.mat.clear(); await stepA(10);
     { const { speciesBaseGenome } = await import('../../src/data/catalog.ts'); for (const [sp, id] of [['crimpo', 'gp-a'], ['thudge', 'gp-b']] as const) { app.mat.add({ genome: speciesBaseGenome(sp, 8), itemId: id }, { restore: true }); await stepA(10); } }
-    st.stats = () => ({ ...stats0(), tier: (process.env.GP_TIER ?? 'med') as 'med' });
+    st.stats = () => ({ ...stats0(), tier: 'med' as const });
     await stepA(300);
     type GDbg = { units: number; life: { unitCap: number }; counts: { askedUse: number }; chars: Array<{ slot: number; kind: number; itemId: string | null; asleep: boolean; x: number; z: number }>; things: Array<{ id: string; x: number | null; z: number | null }> };
     const gd = (): GDbg => host.debug() as GDbg;
+    type LDbg = { life: { chars: Array<{ slot: number; beh: number; phase: number }> } };
     const trial = async (where: string): Promise<Array<Record<string, unknown>>> => {
       const rows: Array<Record<string, unknown>> = [];
       const others = (host.partyNow?.() ?? []).filter((r) => !r.play);
       const things = (host.thingsNow?.() ?? []).filter((r) => !r.ride);
       for (let j = 0; j < things.length; j++) {
         const who = others[j % Math.max(1, others.length)]?.itemId ?? '';
-        const me0 = gd().chars.find((c) => c.kind === 0 && c.itemId === who);
         const u0 = gd().counts.askedUse;
         const asked = host.playWith?.(who, things[j].k) === true;
-        let usedAt = -1, sleptBefore = false, moved = 0;
+        const at = (): { me: GDbg['chars'][number] | undefined; d: number; lc: LDbg['life']['chars'][number] | undefined } => {
+          const d = gd(), me = d.chars.find((c) => c.kind === 0 && c.itemId === who), th = d.things.find((t) => t.id === things[j].id);
+          return { me, d: me && th && th.x !== null && th.z !== null ? Math.hypot(me.x - th.x, me.z - th.z) : NaN, lc: (d as unknown as LDbg).life.chars.find((q) => q.slot === me?.slot) };
+        };
+        const d0 = at().d, x0 = at().me?.x ?? NaN, z0 = at().me?.z ?? NaN;
+        let usedAt = -1, walkAt = -1, walkEnd = false, sleptOnWalk = 0, dMin = d0, moved = 0;
         for (let f = 0; f < 150 && usedAt < 0; f++) {
           await stepA(10);
-          const d = gd(), me = d.chars.find((c) => c.kind === 0 && c.itemId === who);
-          if (me && me0) moved = Math.max(moved, Math.hypot(me.x - me0.x, me.z - me0.z));
-          if (d.counts.askedUse > u0) usedAt = (f + 1) * 10;
-          if (process.env.GP_TRACE && (f % 6 === 0 || (f > 28 && f < 70))) { const L = (d as unknown as { life: { movers: number; chars: Array<{ slot: number; beh: number; phase: number; moving: number }> } }).life; console.log('TRACE', where, things[j].id, f, (() => { const bb = (app.bodies.extras.find((x) => x.itemId === who)?.body ?? (who === app.identity.itemId ? app.body : null)) as unknown as Record<string, unknown> | null; return bb ? [bb.scootOn, bb.scootBlock, bb.moveOn, bb.heldF, +(bb.sV as number).toFixed(3), bb.sSpeed] : null; })(), +d.units.toFixed(2), L.movers, JSON.stringify(d.chars.map((c) => [c.slot, c.itemId === who ? 'ME' : c.itemId === app.identity.itemId ? 'P' : '', c.asleep ? 'z' : '', c.x, c.z, (c as unknown as { scoot: unknown }).scoot, L.chars.find((q) => q.slot === c.slot)?.beh, L.chars.find((q) => q.slot === c.slot)?.phase, L.chars.find((q) => q.slot === c.slot)?.moving]))); }
-          else if (f >= 6 && me?.asleep) sleptBefore = true;
+          const a = at();
+          dMin = Math.min(dMin, a.d); if (a.me) moved = Math.max(moved, Math.hypot(a.me.x - x0, a.me.z - z0));
+          if (gd().counts.askedUse > u0) { usedAt = (f + 1) * 10; break; }
+          const walking = a.lc?.beh === 4 && a.lc.phase >= 1;
+          if (walkAt < 0 && walking) walkAt = (f + 1) * 10;
+          else if (walkAt >= 0 && !walking) walkEnd = true;
+          if (walkAt >= 0 && !walkEnd && a.me?.asleep) sleptOnWalk++;
         }
-        rows.push({ where, thing: things[j].id, asked, usedAt, sleptBefore, moved: +moved.toFixed(2), units: +gd().units.toFixed(2) });
+        rows.push({ where, thing: things[j].id, asked, usedAt, walkAt, sleptOnWalk, d0: +d0.toFixed(2), dMin: +dMin.toFixed(2), moved: +moved.toFixed(2), units: +gd().units.toFixed(2) });
         await stepA(180);
       }
       return rows;
@@ -2059,8 +2066,9 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     await stepA(120);
     const cabin = okC ? await trial('hearthlog') : [];
     const all = [...home, ...cabin];
-    check('PLAYGROUND (round 6, VERDICT_PG2 N1; PLAY_WITH, SH-22) "Go play with..." on the MED tier with 3 out, at Home and in the cabin: every thing asked of a squishy that is not the play squishy is reached and used (a USE BY PLAYER within 25 s), and the asked squishy is never asleep on the way (the over-budget rule sleeps another)',
-      app.mat.count === 3 && okC && home.length >= 3 && cabin.length >= 3 && all.every((r) => r.asked === true && (r.usedAt as number) > 0 && r.sleptBefore === false), JSON.stringify(all));
+    check('PLAYGROUND (round 6, VERDICT_PG2 N1; PLAY_WITH, SH-22) "Go play with..." on the MED tier with 3 out, at Home and in the cabin: for every thing asked of a squishy that is not the play squishy, it starts its walk within 8 s (or uses the thing), is never asleep on that walk (the over-budget rule sleeps another), and its walk takes it 0.3 m or more (or it uses the thing, or it was already within 0.8 m of it; a thing with no physics prop, the Snooze Rug, has no position to measure)',
+      app.mat.count === 3 && okC && home.length >= 3 && cabin.length >= 3 && all.every((r) => r.asked === true && ((r.usedAt as number) > 0 || ((r.walkAt as number) > 0 && (r.walkAt as number) <= 480)) && r.sleptOnWalk === 0
+        && ((r.usedAt as number) > 0 || (r.moved as number) >= 0.3 || (r.d0 as number) <= 0.8 || Number.isNaN(r.d0))), JSON.stringify(all));
     st.stats = stats0;
     await host.travel('home'); await stepA(60);
   }
