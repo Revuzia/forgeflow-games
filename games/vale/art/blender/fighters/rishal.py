@@ -82,7 +82,7 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 
           # (max2 g2 fix 2: x was EX + EL, the almonds' outer corners (0.041): the decal landed 1.5 cm out, the left one
           # off the head beside the hook; the centres are EYE_ALMOND's EX 0.026)
           # (ruling 56: the eyes open on the face under the brow visor, centres x 0.0193 at 1.650 on the front plane)
-          "eyes3d": [[-0.0220, -0.088, 1.650], [0.0220, -0.088, 1.650]]}
+          "eyes3d": [[-0.0220, -0.088, 1.646], [0.0220, -0.088, 1.646]]}
 # (FIX ROUND 2, verify: at 36 degrees the portrait saw the hook side-on, a tall glass slab with the mask a sliver
 # behind it): the brief's yaw 28, so the near cheek, the jaw, the mouth line's end and the chin show beside the hook
 # and under the band, as in the concept's three-quarter
@@ -1326,7 +1326,9 @@ def sculpts() -> list:
     # the cheekbone, and under it a jaw plane turning down and out to the chin (the chin re-added below)
     for sx in (-1, 1):
         # (ruling 56: the front plane 0.025 -> 0.032 wide, so each eye sits on it, not across the plane's edge)
-        face.inter(HalfSpace((sx * 0.032, -0.086, 1.60), unit((sx * 0.80, -0.60, 0.0)), 0.5), k=0.004)
+        # (verify_models_r1: the crisp edge ran down from each eye's outer corner as a dark line at the 3/4 view, a
+        # tear-streak read once the eyes opened: the cheek plane's edge softened, k 0.004 -> 0.010)
+        face.inter(HalfSpace((sx * 0.032, -0.086, 1.60), unit((sx * 0.80, -0.60, 0.0)), 0.5), k=0.010)
         face.inter(HalfSpace((sx * 0.021, -0.084, 1.540), unit((sx * 0.62, -0.40, -0.68)), 0.5), k=0.004)
     # the nasal ridge: a narrow carved wedge from under the brow to the nose's tip (a step prouder and longer)
     face.add(RoundBox((0, -0.0905, 1.618), (0.0060, 0.0075, 0.020), 0.003), k=0.008)
@@ -1977,15 +1979,17 @@ FACE_COL = {"lit": "#E4E3DE", "mid": "#D8D6D0", "shade": "#9A9894", "cool": "#8E
 # (W5b, final parity review: the warm ivory oval with faint tan lines read as a mannequin or an egg): WHITE chalk
 # (#D8D6D0, no ivory), the planes parted by the light (the cheek planes a step into the shade), the carving cut in
 # INK with a lit lip beside each cut, bolder and wider
-EYE_Z, INK_EYE = 1.650, "#1E2027"     # (ruling 56: 1.661 -> 1.650, open under the brow visor)
+EYE_Z, INK_EYE = 1.646, "#1E2027"     # (ruling 56: 1.661 -> 1.650, open under the brow visor; verify_models_r1: 1.646,
+# off the brow ridge's down-facing underside, where the paint faded and only the lower half of each eye showed)
 # (W5b: "the ink eye recesses can't be read in any shipped render"): larger, sharper almonds (half length, half height,
 # the inner corner's x), and the visor lets them through (visor_paint EYE_SHOW)
-EYE_ALMOND = (0.0165, 0.0086, 0.0055)     # (ruling 56: half length, half height, inner corner x; centres x 0.0198)
+EYE_ALMOND = (0.0175, 0.0105, 0.0045)     # (ruling 56: half length, half height, inner corner x; centres x 0.022)
+# (verify_models_r1, "tiny low-contrast grey marks in the game renderer"): a fifth taller, the centres unchanged
 # (ruling 56) the eye: a muted ivory white, a steel-blue iris with a dark pupil, a heavy calm upper lid in the mask's
 # own chalk with an ink lash line, a soft crease above and a lit lower lid
-EYE_COL = {"white": "#DCD8CE", "iris": "#45698F", "iris_dk": "#2C4562", "pupil": "#15171C", "lash": "#1E2027",
+EYE_COL = {"white": "#E4E1D9", "iris": "#2E5C92", "iris_dk": "#1A3354", "pupil": "#101217", "lash": "#16181E",
            "crease": "#9C9893", "socket": "#A9A49C", "low": "#6E6A66"}
-EYE_LID_K = 0.36            # the share of the almond the upper lid covers (a calm, level gaze)
+EYE_LID_K = 0.24            # the share of the almond the upper lid covers (a calm, level gaze; r1: 0.36 hid the iris)
 EYE_SHOW = 0.62
 # (FIX ROUND 2: the turned-away tones a step lighter - the back facing's top band sees the helm's shaded side)
 HELM_COL = {"lit": "#E2DFDA", "mid": "#CFCBC5", "shade": "#ABA6A0", "cool": "#A1A9B2", "ink": "#5E5650",
@@ -2348,12 +2352,12 @@ def face_paint(p, n):
     soft = 0.10
     ins = _ss(np.minimum.reduce([top - v, v - bot, 1.0 - np.abs(u)]) / soft) * front
     sock = np.exp(-((u / 1.45) ** 2 + ((v - 0.15) / 2.1) ** 2) * 2.0) * front
-    col = _mix(col, E["socket"][None], sock * 0.60)
+    col = _mix(col, E["socket"][None], sock * 0.35)
     lowl = _ss((0.10 - np.abs(v - bot)) / 0.06) * _ss((0.95 - np.abs(u)) / 0.12) * front   # a fine lower lid line
-    col = _mix(col, E["low"][None], lowl * 0.55)
+    col = _mix(col, E["low"][None], lowl * 0.75)
     col = _mix(col, E["white"][None], ins * 0.95)
     di = np.hypot(u * EL, (v - 0.05) * EH)                    # m from the iris centre (a disc on the face)
-    ir = 0.66 * EH
+    ir = 0.80 * EH                                            # (r1: 0.66 -> 0.80, the iris colour reads in three)
     iris = _ss((ir - di) / 0.0006) * ins
     col = _mix(col, _mix(E["iris"][None].repeat(len(p), 0), E["iris_dk"][None], _ss((di - 0.45 * ir) / (0.5 * ir))), iris * 0.97)
     pup = _ss((0.42 * ir - di) / 0.0005) * ins
@@ -2361,7 +2365,7 @@ def face_paint(p, n):
     edge = top - EYE_LID_K * (top - bot)
     lidm = ins * _ss((v - edge) / soft)
     col = _mix(col, C["mid"][None], lidm * 0.97)                # the heavy calm upper lid
-    lash = _ss((0.16 - np.abs(v - edge)) / 0.08) * _ss((1.08 - np.abs(u)) / 0.08) * front
+    lash = _ss((0.24 - np.abs(v - edge)) / 0.08) * _ss((1.08 - np.abs(u)) / 0.08) * front
     col = _mix(col, E["lash"][None], lash * 0.92)
     crease = _ss((0.12 - np.abs(v - (top + 0.55))) / 0.07) * _ss((0.85 - np.abs(u)) / 0.15) * front
     col = _mix(col, E["crease"][None], crease * 0.55)

@@ -558,7 +558,10 @@ def sculpts() -> list:
     band.add(Ellipsoid((0, -0.196, FACE_C - 0.118), (0.040, 0.026, 0.024)), k=0.03)   # the chin
     band.inter(Ellipsoid((0, -0.215, 2.04), (0.158, 0.20, 0.19)), k=0.012)  # inside the face opening
     band.inter(HalfSpace((0, -0.04, 2.1), (0, 1, 0), 0.5), k=0.02)
-    part("eyeband", band, "stone", "bone:head", 700, 0.5)
+    # (verify_models_r1: "a black dot/dash on the forehead in every skin": the two crowns met in a pinched sliver at
+    # the top of the face that meshed as a dark crease; the crown trimmed under the hood's hem, a soft round top)
+    band.inter(HalfSpace((0, 0, 2.205), (0, 0, 1), 0.5), k=0.020)
+    part("eyeband", band, "stone", "bone:head", 900, 0.5)   # (r1: 700 -> 900, the decimated lip / nose facets shaded as dark slivers)
     wrap = Sculpt("facewrap")
     wrap.add(Ellipsoid((0, -0.075, 1.925), (0.150, 0.140, 0.080)).displaced(folds(0.0035, 9.0, dirv=(0.5, 0.0, 0.86)), 0.004), k=0.0)
     wrap.add(Capsule((0, -0.02, 1.86), (0, -0.04, 1.93), 0.12), k=0.05)

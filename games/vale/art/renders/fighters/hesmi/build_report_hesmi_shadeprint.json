@@ -4,7 +4,7 @@
   "skin": true,
   "parts": {
     "tris_hood": 1550,
-    "tris_eyeband": 698,
+    "tris_eyeband": 900,
     "tris_facewrap": 520,
     "tris_mantle": 1850,
     "tris_pauldron_R": 438,
@@ -18,7 +18,7 @@
     "tris_shinguard_L": 380,
     "tris_straps_R": 684,
     "tris_straps_L": 680,
-    "tris_boots": 950,
+    "tris_boots": 948,
     "tris_forearms": 560,
     "tris_gauntlet_R": 480,
     "tris_gauntlet_L": 480,
@@ -33,41 +33,41 @@
     "tris_shard_lo_R": 400,
     "tris_brace": 380,
     "tris_inlays": 60,
-    "validate_hesmi": "19820->19814"
+    "validate_hesmi": "20020->20016"
   },
-  "uv_coverage": 0.593,
+  "uv_coverage": 0.611,
   "bake": {
-    "base": 3.29,
-    "rough_metal": 2.81,
-    "normal": 1.63,
-    "ao": 1.96,
-    "normal_fixed_px": 32910,
-    "projection": 12.58,
-    "pack_save": 12.72,
-    "total": 22.63
+    "base": 4.52,
+    "rough_metal": 3.47,
+    "normal": 2.59,
+    "ao": 3.32,
+    "normal_fixed_px": 33355,
+    "projection": 23.19,
+    "pack_save": 23.45,
+    "total": 37.77
   },
-  "tris": 19874,
+  "tris": 20076,
   "mesh_top_m": 2.301,
-  "glb_bytes_raw": 2432580,
+  "glb_bytes_raw": 2431344,
   "optimize": {
     "ok": true,
-    "before": 2432580,
-    "after": 1026876
+    "before": 2431344,
+    "after": 1023476
   },
   "zone_grade": {
     "ok": true
   },
-  "glb_bytes": 1026944,
+  "glb_bytes": 1023544,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_shadeprint.glb (1003 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: hesmi_shadeprint_base 2048x2048 286K, hesmi_shadeprint_normal 512x512 39K, hesmi_shadeprint_orm 512x512 71K",
-      "  skinned meshes: hesmi_accent(120v), hesmi_shadeprint(17366v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_shadeprint.glb (1000 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_shadeprint_base 2048x2048 278K, hesmi_shadeprint_normal 512x512 40K, hesmi_shadeprint_orm 512x512 71K",
+      "  skinned meshes: hesmi_accent(120v), hesmi_shadeprint(17442v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19874; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
+      "  tris: 20076; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -77,8 +77,8 @@
       "portrait": "art/out/fighters/hesmi/hesmi_shadeprint_portrait.png"
     },
     "seconds": {
-      "splash": 35.45,
-      "portrait": 7.28
+      "splash": 69.85,
+      "portrait": 13.41
     }
   },
   "three_qa": {
@@ -110,27 +110,27 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/hesmi/three_hesmi_shadeprint.png",
-    "seconds": 4.5,
+    "seconds": 9.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.17,
-      "model": 5.41,
-      "lows_bind": 4.25,
-      "uv": 4.48,
-      "bake": 22.63,
-      "export": 0.08,
-      "optimize": 0.53,
-      "zone_grade": 0.25,
-      "wrist_weights": 0.13,
-      "zero_metal": 0.03,
-      "load_test": 0.11,
-      "render": 42.95,
-      "three_qa": 4.59
+      "rig": 0.01,
+      "materials": 0.32,
+      "model": 10.24,
+      "lows_bind": 7.87,
+      "uv": 7.99,
+      "bake": 37.77,
+      "export": 0.12,
+      "optimize": 1.1,
+      "zone_grade": 0.48,
+      "wrist_weights": 0.25,
+      "zero_metal": 0.06,
+      "load_test": 0.21,
+      "render": 83.67,
+      "three_qa": 10.07
     },
-    "total_s": 85.65
+    "total_s": 160.4
   },
   "run_ref_speed": 3.35,
   "height_m": 2.22
