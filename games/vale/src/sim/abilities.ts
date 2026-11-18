@@ -408,12 +408,12 @@ export const CAST_BUFFER_S = 0.4;
 
 /** hold a busy-refused cast for `p` (a human seat) */
 export function bufferCast(w: World, p: Player, slotIndex: number, x: number | undefined, y: number | undefined, target: EntityId | undefined): void {
-  p.bufSlot = slotIndex; p.bufX = x ?? NaN; p.bufY = y ?? NaN; p.bufTarget = target ?? -1;
+  p.bufSlot = slotIndex; p.bufPoint = x !== undefined && y !== undefined; p.bufX = p.bufPoint ? x! : 0; p.bufY = p.bufPoint ? y! : 0; p.bufTarget = target ?? -1;
   p.bufUntil = w.time + CAST_BUFFER_S;
 }
 export function clearCastBuffer(p: Player | null | undefined): void {
   if (!p || p.bufSlot < 0) return;
-  p.bufSlot = -1; p.bufTarget = -1; p.bufX = NaN; p.bufY = NaN;
+  p.bufSlot = -1; p.bufTarget = -1; p.bufX = 0; p.bufY = 0; p.bufPoint = false;
 }
 /** the 'casts' phase step for a held cast: lapse, clear on CC / death, or fire on the first free tick */
 function stepCastBuffer(w: World, e: Entity): void {
@@ -422,9 +422,9 @@ function stepCastBuffer(w: World, e: Entity): void {
   const s = e.slots[p.bufSlot];
   if (!e.alive || !s || w.time > p.bufUntil + 1e-9 || !canCast(e, s.kind)) { clearCastBuffer(p); return; }
   if (e.cast || e.dash) return;
-  const slot = p.bufSlot, x = p.bufX, y = p.bufY, t = p.bufTarget;
+  const slot = p.bufSlot, pt = p.bufPoint, x = p.bufX, y = p.bufY, t = p.bufTarget;
   clearCastBuffer(p);
-  tryCast(w, e, slot, Number.isNaN(x) ? undefined : x, Number.isNaN(y) ? undefined : y, t >= 0 ? t : undefined);
+  tryCast(w, e, slot, pt ? x : undefined, pt ? y : undefined, t >= 0 ? t : undefined);
 }
 
 /** the 'casts' phase: windups, channels, casts waiting for range */

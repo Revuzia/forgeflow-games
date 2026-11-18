@@ -506,8 +506,8 @@ export class Player implements PlayerView {
   /** the fighter entity (kept across deaths; respawn reuses it) */
   ent: Entity | null = null;
   /** the cast buffer (ruling 54, abilities.ts bufferCast): one cast a human seat pressed while busy, its slot index (-1
-   *  none), aim, target and the sim time it lapses at */
-  bufSlot = -1; bufX = NaN; bufY = NaN; bufTarget: EntityId = -1; bufUntil = 0;
+   *  none), aim point (bufPoint: one was given), target and the sim time it lapses at (never NaN: seat state stays finite) */
+  bufSlot = -1; bufX = 0; bufY = 0; bufPoint = false; bufTarget: EntityId = -1; bufUntil = 0;
   get pendingCast(): SlotT | null { return this.bufSlot >= 0 ? SLOT_NAMES[this.bufSlot] : null; }
 
   constructor(seat: SeatSetup) {

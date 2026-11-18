@@ -648,8 +648,10 @@ Lane W2-D (controls feel; review_controls_ux CUX-2, CUX-3, CUX-6, CUX-11). Genre
 - Live (`verify_w2d_live.mjs`, real Chrome 1920x1080, Ardit, real keys): 13/13.
   - Migration: quickCast=true loads as quick ×7.
   - Q held 300 ms: the aim shows and 0 casts are sent. On release the cast is sent in the keyup's own animation frame, 5 of 5 trials.
-  - Lancing Run (433 ms dash): E pressed 233 ms before the end, then 4 times at 167 ms before the end. The sim held it (pendingCast a3) and cast it **1 tick** after the dash end, 5 of 5.
+  - Lancing Run (433 ms dash): E pressed 233 ms before the end, then 4 more times at 167-200 ms before the end. The sim held it (pendingCast a3) and cast it **1 tick** after the dash end, 5 of 5.
   - Ring radius 2.580 = 1.9 + 0.68.
   - Programs 38 -> 38 -> 38.
   - Ctrl + W levels up.
   - 0 console errors.
+- Full probe run: 74/78 pass. The 4 fails are all-bot probes: probe_sim_bot_tactics, probe_sim_click_waves, probe_sim_minion_lane_line, plus probe_sim_edge before the fix noted below. The buffer is inert for bot seats. As a check, probe_sim_minion_lane_line gives identical output with and without this lane's sim files. probe_sim_edge then failed on NaN seat state from the buffer's empty aim. It was fixed (0 plus a flag) and now passes 94/94. `npm run typecheck` fails only on another lane's `_harness/_tmp_vfy_ai42_fog.ts`.
+- The bot soak (seeds 1-40) was not re-run. The buffer is gated to human seats, so all-bot games are unchanged by construction.
