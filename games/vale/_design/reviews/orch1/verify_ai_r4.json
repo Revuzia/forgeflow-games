@@ -1,0 +1,99 @@
+{
+  "verifier": "lane AI (opponents, W1-A / W3-A), independent verifier round 2 after ruling 59, at HEAD 1b548f8d0",
+  "date": "2026-11-18 17:27 CST",
+  "pass": false,
+  "score": 6.5,
+  "safeToShip": false,
+  "blockers": [],
+  "method": {
+    "change_under_test": "Since round 3 (17c1227ad) the only change under src is one line in src/sim/bots/bot.ts: the calm-walk turn latch (holdWalk) now runs on RIFT only instead of 'not FRAY'. The probes and the rest of src/sim are unchanged, so RIFT and FRAY must replay identically to round 3, and only BRIDGE can move.",
+    "arms": "One tree, no worktree. The probes take VALE_BOTS. src/sim/_vfy_pre (bots at 0aeac587b, pre-lane) and src/sim/_vfy_e2c (bots at e2c4925e5, live ship) were real copies of the old bot folders beside HEAD's src/sim/bots, and were deleted after the runs. Every arm used the HEAD probe and HEAD sim.",
+    "sim": "probe_sim_bot_tactics on seeds 701-764: HEAD and pre, 64 RIFT (cut at 30:00) and 24 FRAY a tier. BRIDGE seeds 701-724 (24 a tier) for HEAD, pre and e2c. probe_sim_bot_tactics at default seeds. probe_sim_bot_soak quick. HEAD full soak (--full --lineup shuffle) on seeds 1 and 21, labels vai59_s1 and vai59_s21. All of these ran under heavy.py. Pairs are matched per seed and given as mean +- SE of the paired difference.",
+    "live": "Real Chrome (pw.mjs) on my own frozen vite :5347 (HEAD tree) with the round-1 scripted seat-0 player (_tmp_vfy_ai_brain.js). Runs: RIFT veteran s5, FRAY veteran s9, and BRIDGE novice s5 and adept s5. For a BRIDGE baseline I also ran BRIDGE novice and adept s5 on a throwaway copy of src with the e2c bot folder (scratchpad only, vite :5348). That copy was about 5 MB of src with symlinks, not a worktree, and it was deleted afterwards.",
+    "determinism_check": "The HEAD RIFT/FRAY tables on 701-764 match round 3 to the last digit. Some examples: dither 2.98 / 1.36 / 1.30, length +1.19 / +2.04 / +2.26 against pre, FRAY stays 65.5 / 63.0 %, veteran peel 70.4 %. The live RIFT veteran s5 and FRAY veteran s9 reports are field-for-field identical to round 3's (scenarios, sieges, dither, deaths, idle). The soak RIFT sections for s1 and s21 are identical to vai58; only the BRIDGE lines differ. So every RIFT and FRAY finding from verify_ai_r3 still applies at HEAD.",
+    "cleanup": "Both _vfy bot folders were removed, both vite servers were stopped, and the e2c live copy was deleted. No probe or live processes are left and no worktree was created. Soak reports stay in _harness/_reports/fw_W4_soak_vai59_s1 and _s21 (gitignored)."
+  },
+  "blocker_r3_bridge_dither": {
+    "verdict": "FIXED",
+    "facts": [
+      "BRIDGE back-and-forth at full health with no enemy within 30 m, per game, s701-724, n 24 a tier. HEAD novice/adept/veteran 0.00 / 0.04 / 0.00, pre 0.00 / 0.00 / 0.12, e2c (live) 0.00 / 0.04 / 0.08. Round 3 HEAD had 5.58 / 3.25 / 0.08. Paired HEAD minus e2c: 0.00 / 0.00 / -0.08+-0.06.",
+      "BRIDGE length, HEAD minus pre (min): novice -0.36+-0.85, adept +1.12+-0.93, veteran -0.65+-0.73. HEAD minus e2c: -1.09+-1.06, -0.26+-0.92, -0.31+-0.93. Neither is significant. BRIDGE inner+base falls, HEAD minus pre: -0.33+-0.26 / +0.12+-0.26 / +0.12+-0.40.",
+      "Soak BRIDGE (40 games each set): sudden-death endings 4/40 (s1) and 9/40 (s21). vai58 had 5 and 11, so the s21 gate fail at 27.5 % now passes at 22.5 %. Median length 15.6 and 17.2 min, inside the 15-18 band.",
+      "Live BRIDGE s5, round-1 script, using the live monitor's looser back-and-forth (10 s window, 14 m path ending within 3 m, nothing within 12 m, any health), with overlapping windows merged. HEAD: novice 10 episodes in 15.2 min, adept 12 in 16.4 min (6.6 and 7.3 per 10 min). e2c live bots, same seed and script: novice 10 in 22.0 min, adept 13 in 11.2 min (4.5 and 11.6 per 10 min). That is the same level as the live bots, with no repeated 5-a-game pattern. These are single games and this is not the gate metric.",
+      "The implementer's BRIDGE table (0.00/0.04/0.00 new, 0.00/0.00/0.12 pre, 0.00/0.04/0.08 live; lengths -0.36+-0.85 / +1.12+-0.93 / -0.65+-0.73) reproduces exactly."
+    ]
+  },
+  "items": {
+    "1_base_defence": {
+      "verdict": "NOT MET (unchanged from round 3)",
+      "facts": [
+        "Inner+base falls to Wicks alone beside fit defenders, per game, pre -> HEAD, paired n 64 (s701-764). Novice 0.56 -> 0.70 (+0.14+-0.13). Adept 1.09 -> 0.83 (-0.27+-0.20). Veteran 0.84 -> 0.88 (+0.03+-0.16). Veteran inner went 0.19 -> 0.50 (+0.31+-0.09, z +3.3) and veteran base 0.66 -> 0.38 (-0.28+-0.12). The bar is better than pre at every tier. That holds at adept only, and veteran inner is significantly worse.",
+        "Threat-driven answering is strong. Unanswered base intrusions per game, pre -> HEAD: novice 2.09 -> 1.84 (-0.25+-0.26), adept 0.94 -> 0.56 (-0.38+-0.14), veteran 1.77 -> 0.45 (-1.31+-0.20). Fit fighters idle beside a sieged structure (s per game): 10.0 -> 5.6, 6.6 -> 4.6, 5.9 -> 4.7. Veteran inner+base falls overall: 10.64 -> 9.25 (-1.39+-0.40).",
+        "Deterministic seed-5 window: live RIFT veteran s5 replays round 3 exactly. Nothing idles at t 1365-1398, and the core falls at 27:50 to team 0. In the final base siege (Needle Bells and Hourbell, 26:57-27:50) every siege had at least 1 defender at its start and up to 5 at most. Fit defenders more than 25 m from a hit base structure: 3 fighter-seconds in the whole match."
+      ]
+    },
+    "2_self_preservation": {
+      "verdict": "NOT MET (unchanged)",
+      "facts": [
+        "FRAY: under 25 % health with a foe within 10 m and still beside one 4 s later. s701: adept 65.5 %, veteran 63.0 %. Default seeds: 62.9 % and 61.3 %. Bars are 60 / 50 %.",
+        "Live FRAY veteran s9 (11:00 cap): 190 low-health episodes, 96 stayed (50.5 %), 65 retreated, 28 died. Identical to round 3.",
+        "RIFT full-HP dither per game (s701): 2.98 / 1.36 / 1.30. Default seeds, veteran: 1.56. Bars are 3 / 1.5 / 1, so veteran fails. All tiers are far better than pre (4.95 / 2.39 / 5.30; paired -1.97+-0.39, -1.03+-0.23, -4.00+-0.43). BRIDGE is now at live level (see blocker_r3_bridge_dither).",
+        "RIFT low-health stays, pre -> HEAD: novice +4.30+-1.26, adept +3.73+-1.20, veteran +0.61+-1.15. Worse at novice and adept.",
+        "1-against-3 objective takes per game: 0.23 / 0.48 / 0.31 (pre 0.20 / 0.45 / 0.41). The requirement is none."
+      ]
+    },
+    "3_pace": {
+      "verdict": "NOT MET (unchanged)",
+      "facts": [
+        "RIFT adept p90 from the soak: 29.2 min (seeds 1-20) and 31.9 min (seeds 21-40). Both are within the 32 bar, the second by 0.1. Seeds 21-40 have long games: adept max 41.3 min, veteran max 45.7 min.",
+        "Paired RIFT length, pre -> HEAD, s701-764, cut at 30:00 (the cut makes these understate the gap): novice +1.19+-0.52, adept +2.04+-0.58, veteran +2.26+-0.57 min. Games reaching 30:00: novice 2 vs 6, adept 14 vs 2, veteran 12 vs 4.",
+        "Live: RIFT veteran s5 ended by core at 27:50, 10 s before the 28:00 cap (same as round 3). Round 3's RIFT s11 veteran and adept both reached the cap, and the RIFT code has not changed since.",
+        "The implementer's diagnosis fits the data. The extra length is in games that stall after one team has broken a base. That is open work, not something this round claimed to fix."
+      ]
+    },
+    "4_laning": {
+      "verdict": "MOSTLY MET (unchanged; two reads just under pre)",
+      "facts": [
+        "Laners in lane, 1:00-14:00: adept 67.5 % (s1) and 68.3 % (s21) against a pre bar of 68.4 %; veteran 66.0 % and 66.6 % against 66.6 %. The gate (65 %) passes.",
+        "Adept shadehold takedowns before 14:00: 1.50 on both sets, against pre's 1.60.",
+        "Veteran duo-road level-6 median: 6.8 and 7.5 min (bar 7.6). Met."
+      ]
+    },
+    "5_peel": {
+      "verdict": "NOT MET at veteran; met at adept (unchanged)",
+      "facts": [
+        "Adept, within 2.5 s: 80.1 %, a pass. Veteran, within 1.5 s: 70.4 % +- 1.3 (s701) and 72.7 % +- 1.4 (default), against a bar of 75 %. Pre 64.1 %, e2c 66.1 %.",
+        "Veteran peel no-response with an ally within 12 m: 22.5 % (bar 22). Fails at s701; at default seeds it passes at 21.2 %.",
+        "Live RIFT veteran s5: on the dive at 10:38 the support's first hit came at 3.9 s and the diver escaped (same as round 3)."
+      ]
+    },
+    "6_sneak": {
+      "verdict": "MEASURED, non-zero (unchanged)",
+      "facts": [
+        "RIFT and FRAY are identical to round 3. Collapses (2+ within 15 s) on a lone enemy in our half: novice 58.7 %, adept 74.5 %, veteran 74.5 %. Share of those arriving from the fog: 38 / 52 / 54 %. Adept and veteran are not separated.",
+        "The default-seed gate 'adept + veteran sneak: ganks struck from a lurk' passes (> 0)."
+      ]
+    },
+    "7_gates": {
+      "verdict": "NOT MET",
+      "facts": [
+        "probe_sim_bot_tactics at default seeds: FAIL 4. Adept FRAY stays 62.9 %, veteran FRAY stays 61.3 %, veteran dither 1.56, veteran peel 72.7 %.",
+        "At fresh seeds 701-764 (RIFT 64 + FRAY 24): FAIL 5. The same four plus veteran peel no-response 22.5 %.",
+        "BRIDGE-only tactics runs (24 a tier) pass every gate for HEAD, pre and e2c.",
+        "probe_sim_bot_soak quick: PASS.",
+        "Full soak: s1 has 1 enforced fail, s21 has 2. Both have the FRAY per-fighter placement band (ulkro 2.50-2.59, nurrow 3.25-3.29, ilsheta 7.56-7.61). That is fighter balance, it is unchanged from vai58, and it is not this lane's code. s21 also has the adept longest no-death stretch at 3.0 min against a bar of 3 or less (unchanged). The s21 BRIDGE sudden-death fail from vai58 now passes."
+      ]
+    }
+  },
+  "head_vs_live_e2c": "HEAD is now at or above the live bots on every measure where round 3 found it worse except veteran peel no-response. BRIDGE back-and-forth is back to live level, at 0.00 / 0.04 / 0.00 against 0.00 / 0.04 / 0.08. The round-3 advantages stand unchanged. RIFT dither is down 2.1 / 0.8 / 3.0 a game. Idle beside a hit structure is down 7-10 s a game. Veteran base falls to Wicks beside fit defenders drop from 0.95 to 0.38. Veteran and adept peel landing are up, and FRAY stays are 4-7 points lower. On BRIDGE, novice games are 1.1 min shorter than live, which is not significant. Fog honesty holds.",
+  "problems": [
+    "Item 1: inner+base falls to Wicks beside fit defenders beat pre only at adept. Novice 0.56 -> 0.70; veteran inner 0.19 -> 0.50 (z +3.3).",
+    "Item 2: FRAY low-health stays are 62.9-65.5 % adept and 61.3-63.0 % veteran, against 60 / 50 %. Veteran RIFT dither is 1.30-1.56 against 1. RIFT low-health stays are worse than pre at novice and adept. 1-against-3 objective takes run 0.23-0.48 a game.",
+    "Item 3: RIFT games run +1.2 / +2.0 / +2.3 min longer than pre, and 14/64 adept and 12/64 veteran games reach 30:00 against 2 and 4. Live RIFT matches end at or near the 28:00 cap. Soak s21 has 41-46 min games.",
+    "Item 4: adept laners-in-lane (67.5-68.3 %) and adept shadehold early takedowns (1.50) are just under pre (68.4 %, 1.60).",
+    "Item 5: veteran peel landing within 1.5 s is 70.4-72.7 % against 75 %.",
+    "Item 6: adept and veteran collapse rates are identical (74.5 %), so tier gating is weak.",
+    "Item 7: the tactics gate fails 4 at default seeds and 5 at fresh seeds."
+  ],
+  "summary": "Ruling 59's one-line fix does exactly what it claims. The BRIDGE back-and-forth blocker from round 3 is gone: 5.58 / 3.25 back-and-forth episodes a game at novice and adept are now 0.00 / 0.04, the same as the live and pre-lane bots. BRIDGE length and structure falls do not move against pre or live, the soak s21 BRIDGE sudden-death gate now passes, and a live BRIDGE check sits at live-bot level. RIFT and FRAY replay round 3 to the last digit in sim and in Chrome, so none of round 3's open items moved. Base defence beats pre only at adept, with veteran inner worse. FRAY stays are 61-66 %, veteran dither is 1.3-1.6, and veteran peel is 70-73 %. RIFT games are 1.2-2.3 min longer than pre, with many more reaching 30:00, and the tactics gate fails 4 or 5 bars. There is no blocker any more and the lane is clearly smarter than the live bots for a player. It does not pass, because items 1, 2, 3, 5 and 7 are unmet. It is not safe to ship under this lane's rule, because pace still regresses against pre. Score 6.5, up from 6.0 because the blocker is cleared."
+}
