@@ -444,9 +444,11 @@ export class TeamBrain {
       for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) { minions++; if (u.atkTarget === st.id) wdps += u.stats.ad * u.stats.attackSpeed * 0.7; }
       for (const u of tp.allyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) mine++;
       let need = 0;
+      const real = hitting > 0 || hurt.has(st) || minions - mine >= 2;
+      if (ab('g_real') && !real) { n = 0; if (cls < 2) coming = 0; }
       if (n > 0) {
         // (one more than the divers at an inner or base structure — not in the laning phase, where the roads hold first)
-        if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing ? 1 : 0)) * d.defendMatch - 1e-9));
+        if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing && !ab('g_noplus') ? 1 : 0)) * d.defendMatch - 1e-9));
       } else if (coming > 0) need = Math.max(1, Math.ceil(coming * d.defendMatch - 1e-9));
       // (owner_rulings 44: a big wave — eight or more over ours — is two defenders' work, as is a wave on a structure under half)
       // (round 2: a stacked wave of fourteen or more over ours is three — the late game's 18-33 Wick stacks took Lanterns from
@@ -456,7 +458,17 @@ export class TeamBrain {
       // (owner_rulings 46: a wave alone calls a defender only where the tier's defender holds against the wave (holdWave, and
       // from 25:00 the base only) — a beginner, or a late inner post, backed off the wave it was sent to and stood fit beside
       // the structure while the Wicks took it: novice falls to Wicks beside two fit defenders 0.61 → 0.91 a game)
-      else if (d.holdWave && cls > (laning ? 1 : closing ? 1 : 0) && minions - mine >= 4) need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
+      else if (d.holdWave && cls > (laning ? 1 : closing ? 1 : 0) && minions - mine >= 4) {
+        need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
+        if (ab('w_win') && (this.rush || this.window || this.aliveEnemies <= this.aliveAllies - 2)) need = 0;
+        if (ab('w_futile') && need > 0 && wdps > 0) {
+          let whp = 0, fd = 0, fn = 0;
+          for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) whp += u.hp;
+          for (const f of tp.allyFighters) if (f.alive) { fd += f.stats.ad * f.stats.attackSpeed + f.stats.ap * 0.5; fn++; }
+          const clear = whp / Math.max(1, (fd / Math.max(1, fn)) * need + (info.attacks ? st.stats.ad * st.stats.attackSpeed : 0));
+          if (clear > (st.hp + st.shield) / wdps) need = 0;
+        }
+      }
       // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
       // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
       const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));

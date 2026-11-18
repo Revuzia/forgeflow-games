@@ -107,22 +107,22 @@ const U = screenUniforms;
  *  0.7-LIFT_GROUND_TOP), so the top of the beat is the ground's own warm tint, never a white-out, and bodies keep
  *  LIFT_BODY_CAP and their 0.86 stop */
 const GROUND_TOP_REKEYED = 0.97;
-/** orch1 W2 close (ruling 53): the top of the beat on a NEAR-NEUTRAL ground point (pale stone) is warm light, not white.
- *  Through the LUT, the 0.97 top reads display luma ~226-235 and the pale stone keeps chroma < 30: ruling 10's white
- *  (combat_polish's box measure, 8-bit luma > 225 and chroma < 30; Rishal's box 0.635, Hesmi's body +0.124). A cap on its
- *  luma could not hold both gates (0.925: box 0.08 but core 212; 0.955: box 0.62, core 216; the core and the box are
- *  the same stone). So the stone keeps its luma and takes GROUND_WARM's tint as it nears the top: the stopped sun
- *  pours warm light on it (ruling 48: "the top of the beat is the ground's own warm tint, never a white-out"). The tint
- *  is luma-neutral (Rec. 709 luma of GROUND_WARM is 1), eases in over display 0.80-0.90 and only where the ground's own
- *  display saturation is under 0.12-0.20 (a coloured stone is already tinted) */
-const GROUND_WARM: readonly [number, number, number] = [1.233, 0.978, 0.528];
-const GROUND_WARM_FROM = 0.75, GROUND_WARM_TO = 0.88;
-const GROUND_TOP_NEUTRAL = 0.94;
-const GROUND_NEUTRAL_SAT: readonly [number, number] = [0.15, 0.3];
+/** orch1 W2 close (ruling 53): inside an ultimate's lift the top of the beat is WARM light, never white. Through the
+ *  tone map and the map's LUT the ground's 0.97 top lands on the LUT's clipped white (8-bit ~254,243,225: chroma 29,
+ *  ruling 10's white by combat_polish's measure, luma > 225 and chroma < 30): Rishal's victim box 0.635, Hesmi's body
+ *  +0.124. A cap on the ground's luma could not hold both gates (0.925: box 0.08, core 212; 0.955: box 0.62, core 216:
+ *  the core and the box are the same pale stone), and a tint before the tone map clips back to the same white. So the
+ *  grade, AFTER the LUT, gives a near-white pixel inside a lift (display luma over LIFT_WARM_L[0..1], chroma under
+ *  LIFT_WARM_C[0..1]) a warm top: its blue and green stop LIFT_WARM_B / LIFT_WARM_G under its red (the stopped sun's
+ *  warm light; ruling 48: "the top of the beat is the ground's own warm tint, never a white-out"). Luma drops <= ~3 /
+ *  255 (blue carries 0.07 of it). Outside a lift nothing changes. */
+const LIFT_WARM_L: readonly [number, number] = [0.84, 0.87];
+const LIFT_WARM_C: readonly [number, number] = [0.13, 0.17];
+const LIFT_WARM_B = 0.13, LIFT_WARM_G = 0.03;
 /** orch1 W2-A fix 2 (verifier r2: BRIDGE x1.93 on seed 7): on the ruling-46 ground the envelope's GROUND ratio gains
  *  this much more lift under the same top, so the beat's falloff ring rises with its core (the core already sits near the
  *  top): bodies, effects and the white gate are untouched */
-const GROUND_LIFT_REKEYED = 1.3;
+const GROUND_LIFT_REKEYED = 1.45;
 /** CW1 r2 refix 1: what an ultimate's envelope gains when the chain has no bloom: its local lift, and the light effects add */
 const NO_BLOOM_LIFT_GAIN = 1.2;
 const NO_BLOOM_FX_GAIN = 2;
@@ -207,14 +207,7 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
   // ×(1 + lift), stopping short of white (display ${LIFT_GROUND_TOP}); bodies keep the capped multiplier above.
   if ( lift > 0.05 && body < 0.5 ) {
     float d0 = liftDispLuma( c );
-    // ruling 53: a near-neutral ground point (pale stone: display saturation under GROUND_NEUTRAL_SAT) tops out at
-    // GROUND_TOP_NEUTRAL in the WARM light (the tint fixed before the solve, so the solve reads the tinted colour)
-    float hiC = max( c.r, max( c.g, c.b ) ), loC = min( c.r, min( c.g, c.b ) );
-    float neutral = 1.0 - smoothstep( ${GROUND_NEUTRAL_SAT[0].toFixed(3)}, ${GROUND_NEUTRAL_SAT[1].toFixed(3)}, 1.0 - pow( max( loC, 1e-6 ) / max( hiC, 1e-6 ), 1.0 / 2.2 ) );
-    float top = mix( ${GROUND_TOP_REKEYED.toFixed(3)}, ${GROUND_TOP_NEUTRAL.toFixed(3)}, neutral );
-    float target = min( d0 * ( 1.0 + lift * ${GROUND_LIFT_REKEYED.toFixed(3)} ), top );
-    float warm = smoothstep( ${GROUND_WARM_FROM.toFixed(3)}, ${GROUND_WARM_TO.toFixed(3)}, target ) * neutral * ( 1.0 - body * 2.0 );
-    c *= mix( vec3( 1.0 ), vec3( ${GROUND_WARM.map((x) => x.toFixed(3)).join(', ')} ), warm );
+    float target = min( d0 * ( 1.0 + lift * ${GROUND_LIFT_REKEYED.toFixed(3)} ), ${GROUND_TOP_REKEYED.toFixed(3)} );
     // ruling 53: the solve runs both ways from the plain multiplier (a pale point it overshot comes back to the top);
     // 11 halvings over [1, 64 m] (was 9 over [m, 64 m]: up to ~1 luma under the target)
     {
@@ -255,14 +248,33 @@ class GradeEffect extends Effect {
     super('ValeGrade', /* glsl */`
 uniform float uSat;
 uniform float uVal;
+uniform vec4 uGradeLiftA[${MAX_LIFTS}];
+uniform float uGradeAspect;
 void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor ) {
   vec3 c = inputColor.rgb;
+  // ruling 53: inside an ultimate's lift a near-white pixel takes a warm top (see LIFT_WARM_L)
+  float k = 0.0;
+  for ( int i = 0; i < ${MAX_LIFTS}; i ++ ) {
+    vec4 a = uGradeLiftA[ i ];
+    if ( a.w <= 0.0 ) continue;
+    k = max( k, 1.0 - smoothstep( a.z * 0.55, a.z * 1.6, length( ( uv - a.xy ) * vec2( uGradeAspect, 1.0 ) ) ) );
+  }
+  if ( k > 0.0 ) {
+    vec3 d = pow( max( c, vec3( 0.0 ) ), vec3( 1.0 / 2.2 ) );
+    float hi = max( d.r, max( d.g, d.b ) );
+    float ch = hi - min( d.r, min( d.g, d.b ) );
+    float w = k * smoothstep( ${LIFT_WARM_L[0].toFixed(3)}, ${LIFT_WARM_L[1].toFixed(3)}, dot( d, vec3( 0.2126, 0.7152, 0.0722 ) ) ) * ( 1.0 - smoothstep( ${LIFT_WARM_C[0].toFixed(3)}, ${LIFT_WARM_C[1].toFixed(3)}, ch ) );
+    if ( w > 0.0 ) {
+      vec3 warm = vec3( hi, min( d.g, hi - ${LIFT_WARM_G.toFixed(3)} ), min( d.b, hi - ${LIFT_WARM_B.toFixed(3)} ) );
+      c = pow( mix( d, warm, w ), vec3( 2.2 ) );
+    }
+  }
   if ( uSat < 0.999 || uVal < 0.999 ) {
     float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
     c = mix( vec3( l ), c, uSat ) * uVal;
   }
   outputColor = vec4( c, inputColor.a );
-}`, { blendFunction: BlendFunction.SET, uniforms: uniformsOf({ uSat: U.uSat, uVal: U.uVal }) });
+}`, { blendFunction: BlendFunction.SET, uniforms: uniformsOf({ uSat: U.uSat, uVal: U.uVal, uGradeLiftA: U.uLiftA, uGradeAspect: U.uAspect }) });
   }
 }
 
