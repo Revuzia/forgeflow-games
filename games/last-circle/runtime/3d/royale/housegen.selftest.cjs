@@ -90,7 +90,7 @@ function loadManifest() {
 const THREE_JS = path.join(ROOT, "assets", "vendor", "three", "build", "three.module.js");
 const N_PARCELS = Number(process.env.HG_PARCELS || 500);
 const PLANT_SLOW_MS = Number(process.env.HG_PLANT_SLOW_MS) || 0;
-const PLANT_REGEN = process.env.HG_PLANT_REGEN === "1";                // (W10 R1A fix12, ruling R-d) planted fault of the paired CPU row (_harness/p23/hg_cpu.py --plant slow-gen): every house generated a second time (the result dropped) = a generator >= 40 % slower
+const PLANT_REGEN = process.env.HG_PLANT_REGEN === "1";                // (W10 R1A fix12, ruling R-d) planted fault of the paired CPU row (_harness/p23/hg_cpu.py --plant slow-gen): every house generated two more times (the results dropped; fix15, was once more) = a generator ~80 % slower
 const CPU_ROW_WRAPPED = process.env.HG_CPU_ROW === "wrapper";      // (ruling R-d) the CPU row is judged by _harness/p23/hg_cpu.py (absolute <= 36 ms, else paired with the reference build 04e82d802): here it prints the same reading as info
 const HG_CPU_MS_PER_HOUSE = 36;                                    // (P23-fix timing bar: CPU ms of the JS threads (workers + main) per generated + checked house; 25.8-27.3 ms measured 2026-10-27 on the shared 16-core box with 3 other lanes running (wall 21-25 s); x1.3-1.4 headroom; HG_PLANT_SLOW_MS=15 (+11 ms a house, x1.4) reads 37.6 and FAILS)
 const THEMES = ["city", "resort", "lodge"];                        // the town themes (the fixed rows below)
@@ -820,7 +820,7 @@ async function runJobs(jobs) {
     const p = Object.assign({}, j.parcel, { theme: j.theme, storeys: j.storeys });
     const t = Date.now();
     const H = HGmod.generate(p, j.opts);
-    if (PLANT_REGEN) HGmod.generate(p, j.opts);                     // (the paired CPU row's plant: the generator's work done twice)
+    if (PLANT_REGEN) { HGmod.generate(p, j.opts); HGmod.generate(p, j.opts); }   // (the paired CPU row's plant: the generator's work done three times - fix15: was twice, ratio 1.406 vs the 1.319 limit, too thin a margin)
     if (PLANT_SLOW_MS > 0) { const t1 = performance.now(); while (performance.now() - t1 < PLANT_SLOW_MS); }   // (negative control for the timing row: HG_PLANT_SLOW_MS=15 must FAIL it)
     const ms = Date.now() - t;                                     // (wall ms: the p50 / p99 info only - Windows counts thread CPU in 15.6 ms ticks, fine summed, too coarse per house)
     // (the JSON is only needed where it is compared: a house generated twice, and the sampled houses whose hash the main thread / a fresh process check)

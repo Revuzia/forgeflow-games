@@ -3,7 +3,7 @@
 NODE ONLY: no browser, no server, no file of the tree edited.
 
     python _harness/p23/hg_cpu.py                      # the working copy vs the reference 04e82d802: 3 rounds of ref, head, ref (9 selftest runs, ~15 min)
-    python _harness/p23/hg_cpu.py --plant slow-gen     # planted fault: the head's selftest generates every house twice (HG_PLANT_REGEN=1): exit 1 = caught
+    python _harness/p23/hg_cpu.py --plant slow-gen     # planted fault: the head's selftest generates every house three times (HG_PLANT_REGEN=1): exit 1 = caught
 
 Why: the selftest's CPU row (<= 36 ms of JS-thread CPU a generated + checked house, 4,860 houses, one worker per physical core) was set when the
 reference build read 25.8-27.3 ms. On today's box (8 workers on 8 cores, memory-bound, other lanes running) that same reference reads 38+ ms, so the
@@ -22,7 +22,7 @@ Rows:
   control   the reference against itself, in the same window: median of each round's ref run after the head / median of the one before it,
             inside 0.93-1.07 (the pairing is fair), else the cpu row is COULD-NOT-JUDGE when it needs the paired branch.
   checks    every head run's other selftest checks pass (0 failed).
-Plant slow-gen (gate.py NEGATIVE, MUST exit 1): the head generates every house twice (>= 40 % more CPU) -> the cpu row must fail through BOTH the
+Plant slow-gen (gate.py NEGATIVE, MUST exit 1): the head generates every house three times (fix15: was twice, ~40 % more CPU, ratio 1.406 vs 1.319 - too thin; now ~80 % more) -> the cpu row must fail through BOTH the
 absolute branch and the ratio branch (b) (the row passes, = plant NOT caught, if either branch passes); under the plant only the cpu row counts.
 Every reading prints with the box load before / after it (Win32_Processor LoadPercentage), the ratio and the branch that decided.
 """
@@ -52,7 +52,7 @@ RATIO_MAX = BAR_MS / REF_AT_BAR_MS   # 1.3187
 CTRL_LO, CTRL_HI = 0.93, 1.07
 SHARE_MIN = 75
 SELFTEST = os.path.join("runtime", "3d", "royale", "housegen.selftest.cjs")
-PLANTS = {"slow-gen": "the head's selftest generates every house twice (HG_PLANT_REGEN=1): the cpu row must FAIL through the absolute AND the ratio branch"}
+PLANTS = {"slow-gen": "the head's selftest generates every house three times (HG_PLANT_REGEN=1): the cpu row must FAIL through the absolute AND the ratio branch"}
 RUN_TIMEOUT = 1500
 
 
