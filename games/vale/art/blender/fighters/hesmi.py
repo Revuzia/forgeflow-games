@@ -133,7 +133,7 @@ CARDS = {
                               "size": 0.25}]},
         "portrait": {"yaw": 26.0, "clip": "victory", "t": 0.96},
         "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46,
-                  # (ruling 55: the eye and wrap retouches of the old eye-band went with it)
+                  # (ruling 56: the eye and wrap retouches of the old eye-band went with it)
                   },   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
     },
     "hesmi_gorgewalk": {
@@ -169,7 +169,7 @@ CARDS = {
                   # (max2 cards g1, verify roll1: saturated violet slit eyes read as glowing; the feet washed into the
                   # snow): the eye inlays and lid line taken to a dark muted ink, a firmer contact and cast shadow
                   "contact": 2.2, "shadow_real": 0.8,
-                  # (ruling 55: the slit-eye retouches went with the eye-band; the mantle value step stays)
+                  # (ruling 56: the slit-eye retouches went with the eye-band; the mantle value step stays)
                   "retouch": {"splash": [{"op": "hue", "at": [0.0, 0.31], "r": [0.20, 0.23], "h": [215.0, 335.0],
                                           "s_min": 0.0, "s_max": 0.45, "v_max": 0.80, "val": 0.62}]}},
     },
@@ -371,7 +371,7 @@ class Cyl(sdf.Prim):
 # (3.5-36 deg each side of a narrow bridge, 3 cm tall at their widest) and NO joint or crack crosses them: the block
 # joints sit outside the eye span (BAND_JOINTS), the bridge between the eyes is plain stone
 BAND_C = (0.0, 0.005)
-# (ruling 55) the carved face in the hood's opening: its centre height, the eyes' height, centre x, half length,
+# (ruling 56) the carved face in the hood's opening: its centre height, the eyes' height, centre x, half length,
 # half height and outer-corner lift (m per m); the mouth's height
 FACE_C = 2.062
 FACE_EYE_Z, FACE_EYE_X, FACE_EYE_L, FACE_EYE_H, FACE_EYE_TILT = 2.092, 0.040, 0.0195, 0.0095, 0.05
@@ -539,7 +539,7 @@ def sculpts() -> list:
     hood.sub(Ellipsoid((0, -0.215, 2.04), (0.150, 0.165, 0.178)), k=0.02)
     part("hood", hood, "cloth2", "bone:head", 1550)
 
-    # FACE (orch1 W3-B, ruling 55: "the notched eye band and the wrap's mummy lean", all 6 cards fail): the carved
+    # FACE (orch1 W3-B, ruling 56: "the notched eye band and the wrap's mummy lean", all 6 cards fail): the carved
     # honed eye-band with its slit openings and the bandaged lower face are gone. The face opening holds a calm carved
     # stone FACE (part "eyeband", the honed stone role kept): a broad brow ridge, a straight nose, soft cheek swells and
     # a chin, the lidded eyes, brows and closed mouth painted on it (hesmi_paint, FACE_*); a smooth linen scarf
@@ -1235,7 +1235,7 @@ GAUNTLET_PARTS = ("gauntlet_R", "gauntlet_L", "knuckle_R", "knuckle_L")
 
 
 def paint_face(p, n, med):
-    """(orch1 W3-B, ruling 55) Hesmi's carved stone face: the honed stone tone `med` shaded by its planes, soft brows,
+    """(orch1 W3-B, ruling 56) Hesmi's carved stone face: the honed stone tone `med` shaded by its planes, soft brows,
     two calm lidded eyes (a muted white, an amber-brown iris with a dark pupil, the upper lid over the iris's top, an
     ink lash line, a crease), a shade under the nose and a closed level mouth. sRGB (N, 3)"""
     from common import scene
@@ -1621,7 +1621,7 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         wt = np.clip((n[sel, 2] - 0.55) / 0.30, 0, 1)
         wt = (wt * wt * (3 - 2 * wt))[:, None]
         col[sel] = col[sel] * (1 - wt) + tcol * wt
-    if "eyeband" in names:                            # (ruling 55) the carved stone face
+    if "eyeband" in names:                            # (ruling 56) the carved stone face
         sel = k == names.index("eyeband")
         stone = np.asarray(scene.hex_srgb(PALETTE["stone"]), dtype=np.float32)
         cb = col[sel]

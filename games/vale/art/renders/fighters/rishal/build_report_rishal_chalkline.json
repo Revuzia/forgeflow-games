@@ -48,28 +48,28 @@
   },
   "uv_coverage": 0.6,
   "bake": {
-    "base": 4.77,
-    "rough_metal": 3.48,
-    "normal": 2.79,
+    "base": 4.72,
+    "rough_metal": 3.65,
+    "normal": 3.0,
     "ao": 3.63,
     "normal_fixed_px": 92274,
-    "projection": 98.43,
-    "pack_save": 98.64,
-    "total": 113.55
+    "projection": 104.59,
+    "pack_save": 104.79,
+    "total": 120.05
   },
   "tris": 20356,
   "mesh_top_m": 1.879,
-  "glb_bytes_raw": 2367204,
+  "glb_bytes_raw": 2367484,
   "optimize": {
     "ok": true,
-    "before": 2367204,
-    "after": 953924,
+    "before": 2367484,
+    "after": 953900,
     "q_base": 74
   },
   "zone_grade": {
     "ok": true
   },
-  "glb_bytes": 953984,
+  "glb_bytes": 953960,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -89,8 +89,8 @@
       "portrait": "art/out/fighters/rishal/rishal_chalkline_portrait.png"
     },
     "seconds": {
-      "splash": 101.92,
-      "portrait": 20.71
+      "splash": 93.63,
+      "portrait": 19.99
     }
   },
   "three_qa": {
@@ -127,22 +127,22 @@
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.25,
-      "model": 25.59,
-      "lows_bind": 2.55,
-      "uv": 10.09,
-      "bake": 113.55,
+      "rig": 0.01,
+      "materials": 0.29,
+      "model": 26.17,
+      "lows_bind": 2.53,
+      "uv": 10.16,
+      "bake": 120.05,
       "export": 0.17,
-      "optimize": 1.02,
-      "zone_grade": 0.52,
-      "wrist_weights": 0.29,
-      "zero_metal": 0.06,
+      "optimize": 1.01,
+      "zone_grade": 0.5,
+      "wrist_weights": 0.28,
+      "zero_metal": 0.05,
       "load_test": 0.23,
-      "render": 123.23,
-      "three_qa": 13.05
+      "render": 114.11,
+      "three_qa": 13.09
     },
-    "total_s": 290.67
+    "total_s": 288.81
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

@@ -1445,7 +1445,7 @@ def paint_eyes(comp: np.ndarray, af: np.ndarray, meta: dict | None, op: dict) ->
                                           (1.0 - np.abs(ub)) * ew * kw]) / (2.0 * soft))
             rgb = rgb + (lidc * float(op.get("bed_val", 0.82)) - rgb) * (kb * inb)[..., None]
         if op.get("mode", "open") == "open" and op.get("white"):
-            # (orch1 W3-B, ruling 55) a full eye: a muted white almond, an iris DISC (radius "iris_r" x the almond's
+            # (orch1 W3-B, ruling 56) a full eye: a muted white almond, an iris DISC (radius "iris_r" x the almond's
             # half height, lifted "iris_y") and a pupil ("pupil" x the iris radius) in the ink colour; opt-in only
             rgb = rgb + (_hex(op["white"])[None, None].astype(np.float64) - rgb) * (0.95 * ins)[..., None]
             ir = float(op.get("iris_r", 0.66)) * eh

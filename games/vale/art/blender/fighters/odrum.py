@@ -522,14 +522,14 @@ MX, FY = -0.005, -0.168             # the painted face's centre line and the mas
 # the almond eye voids: (centre x, centre z, half length, half height, slant deg): the inner corners lower (the
 # concept's angry slant), deep enough to read as black voids, not painted lids
 EYES_PAINTED = {-1: (MX - 0.075, 1.654, 0.045, 0.0230, 4.0), 1: (MX + 0.073, 1.655, 0.043, 0.0225, 4.0)}
-# (orch1 W3-B, ruling 55: "slit eyes on a salmon mask", the scowl and the black voids): the eyes are calm, level,
+# (orch1 W3-B, ruling 56: "slit eyes on a salmon mask", the scowl and the black voids): the eyes are calm, level,
 # shallow almond recesses (slant 16 -> 4 deg, a third taller, 1.2 cm deep, the brow cut no longer flattening them)
 # with a painted open eye on the floor: a muted white, a dark-brown iris and pupil, the upper lid over the iris's top
 # the carved slits: narrower than the painted eyes, slanted harder and their tops cut straight under the brows (a
 # scowl, not round ovals): the lens keeps EYE_TOP of its half height above its long axis
 EYES = {-1: (MX - 0.074, 1.651, 0.044, 0.0215, 4.0), 1: (MX + 0.072, 1.652, 0.042, 0.0210, 4.0)}
 EYE_TOP = 0.85
-EYE_FLOOR = FY + 0.012              # the recesses' flat floor (ruling 55: 1.2 cm into the face, was 3)
+EYE_FLOOR = FY + 0.012              # the recesses' flat floor (ruling 56: 1.2 cm into the face, was 3)
 BROW_Z = (1.706, 1.790)             # the brow band (the mask's top slab across the cap's front)
 BAND_FY = -0.201                    # its front plane: 3.3 cm proud of the face, overhanging the brows (a stone block)
 MASK_SIDE = 0.148                   # half-width of the face at the eye line (the head block continues it)
@@ -568,7 +568,7 @@ EYE_PAINT = {"white": "#D6C9B2", "iris": "#5C3F27", "iris_dk": "#3E2A1A", "pupil
 
 
 def eye_floor_paint(P, base, hexf):
-    """(ruling 55) colours for eye-recess texels P (n, 3): on the floor an open eye (a muted white almond, an iris disc
+    """(ruling 56) colours for eye-recess texels P (n, 3): on the floor an open eye (a muted white almond, an iris disc
     with a pupil, the calm upper lid over the iris's top with an ink lash line), the walls keep `base`. `hexf` maps a
     hex to the caller's colour space."""
     P = np.asarray(P, dtype=np.float64)
@@ -668,7 +668,7 @@ def fist(name, C, b, e1, e2, R, wrist=None, solid=False) -> Sculpt:
     S.add(RoundBox(body_c, (0.049, 0.037, 0.026), 0.015, axes=np.stack([b, e1, e2])), k=0.0)
     # the curled fingers close on the palm (or on the bar): no hole through the fist
     S.add(Capsule(C - b * 0.036 + e1 * 0.004, C + b * 0.036 + e1 * 0.004, max(0.012, R - 0.012)), k=0.006)
-    if solid:   # (orch1 W3-B, ruling 55: "holed hands") an empty fist is closed right through: no channel to see into
+    if solid:   # (orch1 W3-B, ruling 56: "holed hands") an empty fist is closed right through: no channel to see into
         S.add(Capsule(C - b * 0.040, C + b * 0.040, R + 0.002), k=0.010)
     if wrist is not None:
         S.add(Capsule(body_c + e1 * 0.02, np.asarray(wrist, dtype=np.float64), 0.026), k=0.012)
@@ -2056,7 +2056,7 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
                 near = np.abs(p[ev, 0] - cx) < 0.06
                 low = np.where(near, np.clip((cz - p[ev, 2]) / 0.012, 0.0, 1.0), low)
             c[ev] = _hex("#5A4130")[None, :] * ((1.0 - 0.28 * dep) * (1.0 + 0.30 * low))[:, None]
-            # (ruling 55) the recess floor carries an open, calm eye; the walls keep the umber glaze
+            # (ruling 56) the recess floor carries an open, calm eye; the walls keep the umber glaze
             c[ev] = eye_floor_paint(p[ev], c[ev], _hex)
             out[m] = c
     # procedural props
@@ -2261,7 +2261,7 @@ def _recolour_value(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
                 a0 = project._lin(scene.hex_srgb(lac["inlay_deep"]))
                 a1 = project._lin(scene.hex_srgb(lac["inlay"]))
                 col[ev] = a0[None, :] * (1.0 - dep) + a1[None, :] * dep
-                # (ruling 55: the solid amber slits read as solid eyes) an open eye with a pupil on the floor
+                # (ruling 56: the solid amber slits read as solid eyes) an open eye with a pupil on the floor
                 col[ev] = eye_floor_paint(p[ev], col[ev], lambda h: project._lin(scene.hex_srgb(h)))
             out[m] = np.clip(col, 0.0, 0.92)
             log(f"  shadeprint: lacquer mask {lac['col']} at L* {lac['L']}, {int(ev.sum())} inlay texels")

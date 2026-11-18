@@ -75,7 +75,7 @@ SOCKETS = {"weapon": "prop.R", "dart_tip": "x_dart_tip", "quiver": "x_quiver"}
 # (final parity client F3: fill 0.88 -> 0.94, the figure at 0.81 of the splash's height, 0.68 of W2's loading card)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.94, "yaw": 22.0, "rim_cool": 0.35, "rim_warm": 0.45,
           # (max2 g2 fix) two eyes in the carved band's slit (rest, m: BAND_Z - BAND_H + 6 mm), for plates.paint_eyes
-          "eyes3d": [[-0.030, -0.140, 1.7115], [0.030, -0.140, 1.7115]]}   # (ruling 55: the eye window)
+          "eyes3d": [[-0.030, -0.140, 1.7115], [0.030, -0.140, 1.7115]]}   # (ruling 56: the eye window)
 # PER-SKIN CARDS (closing review ULK-M1; schema: art/blender/portraits.py header). Each card is its own moment, the crest
 # of darts fanning to screen-right (the camera on her right side): base: the Hurl's draw on the high rim at dusk, low
 # stride, the thrower drawn back, the laid dart's dawnglass catching the low sun as the key; Highrim: Bound's leap
@@ -362,7 +362,7 @@ def fist(name, grip, axis, wrist, knuckle, shaft_r, scale=1.0, index_fwd=1.0):
     bk = _n(toward_w - u * (toward_w @ u))             # from the shaft toward the back of the hand / wrist
     kn = _n(np.asarray(knuckle, float) - u * (u @ knuckle))
     q = _n(np.cross(u, kn))
-    fr = 0.0130 * scale        # (ruling 55: "fragmented gloves": fingers a step fuller, fused into one glove below)
+    fr = 0.0130 * scale        # (ruling 56: "fragmented gloves": fingers a step fuller, fused into one glove below)
     rf = shaft_r + fr * 0.95
     # palm + back of the hand: between the shaft and the wrist, knuckle side up
     S.add(Ellipsoid(g + bk * 0.046 * scale + kn * 0.006, (0.048 * scale, 0.034 * scale, 0.027 * scale),
@@ -1747,7 +1747,7 @@ def paint_eyeband(p, n):
     v = (0.92 + 0.05 * NOISE(p, 40.0)) * (1 - 0.40 * np.clip(carve, 0, 1)) * (1 + 0.12 * _ss(0.010, 0.019, z))
     v = v * (0.85 + 0.20 * np.clip(-n[:, 1], 0, 1))
     col = _hl("#4A382B") * v[:, None]
-    # (orch1 W3-B, ruling 55: "eye slits too thin", 5 cards fail): the band's front is an open eye WINDOW in her own
+    # (orch1 W3-B, ruling 56: "eye slits too thin", 5 cards fail): the band's front is an open eye WINDOW in her own
     # skin between the carved wood's rims, with two calm lidded eyes (a muted white, a dark-brown iris and pupil, the
     # upper lid over the iris's top, an ink lash line); the thin ink slit is gone
     ax = np.abs(p[:, 0])

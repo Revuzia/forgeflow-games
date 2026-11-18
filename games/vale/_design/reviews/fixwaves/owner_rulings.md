@@ -728,3 +728,16 @@ Lane AI, round 3 (orch1 W1-A opponents / W3-A). The owner asked for opponents th
 - **Novice on seeds 565-628.** Falls to Wicks are worse than pre (0.38 → 0.58), and unanswered intrusions are worse. So item 1 holds at adept and veteran only.
 - **Veteran.** Dither, peel landing within 1.5 s, and inner falls to Wicks.
 - **FRAY self-preservation** at adept and veteran.
+
+## 56. A fighter's face is a calm designed face with open lidded eyes; no band, slit, beak or wrap crosses the eyes; the fix lives in the model, the card follows it (lead, by delegation, 2026-11-18)
+
+**Question (orch1 W3-B, fighter-art leftovers of W2-C and ruling 49):** 35 cards fail on model-level face defects the paint-over cannot reach (Rishal's visor beak and cheek incisions, Hesmi's notched eye band and mummy wrap, Ulkro's thin slits, Lisvel's blindfold band, Odrum's scowl slits). What may change in a fighter's head?
+
+**Ruling:** industry practice for a stylised MOBA roster is a readable, friendly-or-stoic face at the select screen and on key art: eyes the player can meet (lid, iris, pupil), nothing crossing them. So:
+- Every face shows two open lidded eyes (a muted white, an iris, a pupil, the upper lid over the iris's top, an ink lash line) at full size, 128 and 64 px. Eye bands, visors and wraps move off the eyes: a visor becomes a brow band, a wrap becomes a scarf under the chin or a hood framing the face; a slit becomes an eye window.
+- No incised lines on the cheeks (they read as scars or tear streaks); the face's planes come from the geometry and soft paint.
+- Silhouette, weapon, colour plan (W1-B / ruling 45) and stats are unchanged; GLBs stay inside 1172 KiB and the triangle budget.
+- The card eye retouch (plates.paint_eyes) gains an opt-in full eye (`white`, `iris_r`, `pupil`); old ops are unchanged.
+- A painted card ships only when it passes every paint gate; otherwise the 3D render of the fixed model ships. card_qa misses that remain are reported, not relaxed.
+
+**Rishal (done):** the visor is a dawnglass brow band (lens rounder, d 0.018 -> 0.008, ry 0.150 -> 0.115, lower edge 1.690 m above the eyes; no beak, no keel); the face 2.4 cm shorter, a nose tip, the brow ridge softened; steel-blue lidded eyes painted on the face-plate (EYE_ALMOND 1.65 x 0.86 cm half sizes); the cheek arc, cheek-plane, jaw, nostril and brow incisions removed (mouth and chin crease kept, drawn not gouged); turned face planes a step deeper. GLBs: base 1163.9 KiB, Chalkline 932 KiB, Lamplit 1049 KiB; 20,356 / 20,356 / 22,704 tris. Cards: Lamplit splash painted v1 (all gates pass), the other five ship the 3D render (18 painted variants over three rounds failed silhouette / palette / colour gates). card_qa: 3 of 6 pass; blank misses remain on the base splash (0.68), base portrait (0.65, at the bar) and Chalkline splash (0.79): at splash scale the pale chalk plate is large against the eyes (reported, not relaxed). Hand integrity 0 edges out on all three GLBs. Chalkline's painted chalk sketches on the helm and pauldron still read glyph-like at portrait size (skin pattern, not touched).
