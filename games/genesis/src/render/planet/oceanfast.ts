@@ -33,7 +33,7 @@
 //     * ice and silt streaks keep their arithmetic noise (rare, gated as before).
 // Sub-cuts for a Mac bisect: `?wshade3=nodetail,noreflect,nossr,norefract,nofoam,nosky,pcf5` (+ `foamdbg`: R shore, G whitecap / gale, B crest / surge / rapids).
 // STATIC COUNT (open calm sea, day, one projection): see PERF.md SESSION 25.
-import { DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, RepeatWrapping, UnsignedByteType, type IUniform } from 'three';
+import { DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, RepeatWrapping, UnsignedByteType, type IUniform, type Vector4 } from 'three';
 import { perfList, perfNum } from '../perfswitch.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
@@ -41,6 +41,22 @@ import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 /** `?wfast=3`: the restructured water (this file) */
 export const WFAST3 = perfNum('wfast', 0) === 3;
 const CUT = perfList('wshade3');
+/** (s26) `wshade3=seamold`: the per-level lattice spacing of s25 (the Mac's seam), for A/B */
+const SEAMOLD = CUT.has('seamold');
+/** (s26) `wshade3=foamold`: s25's surf octaves and 48 m whitecap tile */
+const FOAMOLD = CUT.has('foamold');
+/** (s26) `wshade3=ssrold`: s25's SSR loop (texture() taps, hit handling inside the loop), for A/B */
+const SSROLD = CUT.has('ssrold');
+const WCT = FOAMOLD ? '48.0' : '24.0';
+// (s26) every water level's uMorph (x = K x size(level - 1) = 2 K R spacing(level), z = max(1.5, 1.5 spacing)): 1 / (K R)
+// from any level whose z is not clamped; a getter, so three reads it fresh at every upload
+const morphs: IUniform<Vector4>[] = [];
+const krUniform = {
+  get value(): number {
+    for (const m of morphs) { const v = m.value; if (v.x < 1e20 && v.z > 1.5 * 1.001) return (2 * v.z / 1.5) / v.x; }
+    return 0;
+  },
+} as IUniform<number>;
 
 let noiseMap: DataTexture | null = null;
 /**
@@ -98,6 +114,7 @@ uniform vec2 uCloudShell;
 uniform float uCloudOn;
 uniform vec4 uSilt[4];
 uniform float uSiltK[4];
+uniform float uF3KR;  // 1 / (K R): the LOD's lattice spacing per metre of selection distance (s26; 0 = unknown)
 // (wfast=3) xyz = a wave group's surface gradient (body frame), w = its slope variance: short Gerstner, long, swell
 varying vec4 vF3A;
 varying vec4 vF3B;
@@ -129,7 +146,18 @@ const VERT_MAIN = /* glsl */ `
     float fSea = uWind * fG;
     float fCalm = smoothstep(0.3, 4.0, vDepth) * (1.0 - smoothstep(0.05, 0.4, vIce));
     // the lattice spacing here (an upper bound: ChunkLOD.skirtDepth = max(1.5, 1.5 x spacing); doubled while morphing)
-    float fSp = uMorph.z / 1.5 * (1.0 + tMorph);
+    // (s26: CONTINUOUS across patch borders: the old per-level uMorph.z / 1.5 x (1 + tMorph) clamps at 1 m for every
+    // level finer than 1 m (skirtDepth = max(1.5, 1.5 spacing)), so two fine levels disagreed 2 m / 1 m along their
+    // border: the waves' kept share, the roughness, the glitter and the mirrored clouds stepped there — the Mac's
+    // straight diagonal seam. Now the selection distance / (K R), the spacing the LOD gives that distance once
+    // morphed (= 2 x spacing at the full-morph distance, the old bound), the same function on both sides of a border)
+    float fSp;
+    ${SEAMOLD ? 'if (false) {' : 'if (uF3KR > 0.0) {'}
+      vec3 fTv = tPos - uCamBody;
+      float fDd = length(fTv);
+      float fGr = 1.0 - abs(dot(position, fTv / max(fDd, 1e-3)));
+      fSp = fDd / (1.0 + uMorph.w * fGr * fGr * fGr) * uF3KR;
+    } else fSp = uMorph.z / 1.5 * (1.0 + tMorph);
     float fLost = 0.0, fLostS = 0.0;
     for (int i = 0; i < 4; i++) {
       float L = GW_D[i].w;
@@ -301,6 +329,7 @@ vec4 f3Ssr(vec3 posV, vec3 rV, vec3 nV) {
   if (length((S1 - s0) * uResolution) < 3.0) return vec4(0.0);
   float jit = 0.5 + 0.2 * (sin(vBodyPos.x * 0.9 + vBodyPos.y * 0.4) + sin(vBodyPos.z * 0.8 + vBodyPos.y * 0.7));
   float prz = -posV.z, uPrev = 0.0;
+  ${SSROLD ? `/* s25 loop */
   for (int i = 1; i <= ${n}; i++) {
     float u = (float(i) - 1.0 + jit) / ${n}.0;
     u = pow(u, 1.8);
@@ -327,6 +356,44 @@ vec4 f3Ssr(vec3 posV, vec3 rV, vec3 nV) {
     prz = rz; uPrev = u;
   }
   return vec4(0.0);
+  /* end s25 loop */` : `// (s26) the same samples and tests, restructured for the GPU: the depth copy is NEAREST-filtered, so texelFetch
+  // reads exactly what texture() did, without implicit derivatives inside this data-dependent loop; the samples are
+  // fetched four at a time (their places depend only on the index: the loads overlap) and tested in order; the
+  // bisection and the reprojection run once, after the loop
+  ivec2 dsz = textureSize(tSceneDepth, 0);
+  vec2 dszf = vec2(dsz);
+  float uHit = -1.0;
+  for (int g = 0; g < ${n / 4}; g++) {
+    vec4 u = pow((vec4(float(g * 4)) + vec4(0.0, 1.0, 2.0, 3.0) + jit) / ${n}.0, vec4(1.8));
+    vec4 rz = -mix(vec4(Q0.z), vec4(Q1.z), u) / mix(vec4(k0), vec4(K1), u);
+    vec4 sz = vec4(
+      texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.x) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r,
+      texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.y) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r,
+      texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.z) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r,
+      texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.w) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r);
+    for (int j = 0; j < 4; j++) {
+      float r = rz[j], d = sz[j];
+      if (d < 1e8 && r > d && d > prz - (0.5 + 0.02 * d) && r < d + max(1.0, abs(r - prz) * 1.5 + 0.01 * r)) { uHit = u[j]; break; }
+      prz = r; uPrev = u[j];
+    }
+    if (uHit >= 0.0) break;
+  }
+  if (uHit < 0.0) return vec4(0.0);
+  float u0 = uPrev, u1 = uHit;
+  for (int j = 0; j < 4; j++) {
+    float um = 0.5 * (u0 + u1);
+    float dm = texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, um) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r;
+    if (-mix(Q0.z, Q1.z, um) / mix(k0, K1, um) > dm) u1 = um; else u0 = um;
+  }
+  vec3 qh = mix(Q0, Q1, u1) / mix(k0, K1, u1);
+  vec4 pc = uViewToPrevClip * vec4(qh, 1.0);
+  if (pc.w <= 0.0) return vec4(0.0);
+  vec2 puv = pc.xy / pc.w * 0.5 + 0.5;
+  vec2 e = smoothstep(vec2(0.0), vec2(0.08), puv) * smoothstep(vec2(1.0), vec2(0.92), puv);
+  vec2 sp = nV.xy / uResolution * 6.0;
+  vec3 rc = (prevTap(puv) * 2.0 + prevTap(puv + sp) + prevTap(puv - sp)) * 0.25;
+  float far = 1.0 - smoothstep(0.3, 0.8, length(qh - posV) / 400.0);
+  return vec4(rc, e.x * e.y * facing * far);`}
 }
 `;
 
@@ -505,13 +572,15 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float shore = 0.0;
   if (shoreOn) {
     // the surf's streaks run up and down the beach (tile 32 m: 8 / 4 / 2 / 1 m), the band's edge drifts slowly
+    // (s26: one octave finer than s25 — 2 m streaks, a 1 m band edge: a Perlin cell reads ~2x a simplex one of the same
+    // lattice, and the s25 line ran long and even where the original breaks into short bright dashes; 'wshade3=foamold')
     vec4 nS = f3N(P, 32.0, vec2(0.0, -uTime * 0.25 / 32.0 * 0.6));
     float pulse = 0.5 + 0.5 * sin(uTime * 0.9 - vertThick * 2.4 + nE.x * 3.0);
-    float tN = vertThick + nS.z * 0.25;
+    float tN = vertThick + nS.${FOAMOLD ? 'z' : 'w'} * 0.25;
     float band = mix(0.35, 1.1, pulse);
     shore = smoothstep(0.02, 0.15, tN) * (1.0 - smoothstep(band * 0.5, band, tN)) * level * waveE;
     shore *= 1.0 - smoothstep(0.35, 2.0, fw);
-    shore *= mix(0.15, 1.0, smoothstep(-0.2, 0.6, nS.y));
+    shore *= mix(0.15, 1.0, smoothstep(-0.2, 0.6, nS.${FOAMOLD ? 'y' : 'z'}));
   }
   float crest = smoothstep(0.75, 1.15, vCrest) * calm;
   float rapids = max(smoothstep(3.5, 5.0, flowSpd) * smoothstep(0.4, 1.2, vDepth), smoothstep(0.06, 0.25, lean) * smoothstep(0.15, 0.8, vDepth) * smoothstep(0.3, 1.0, flowSpd));
@@ -529,13 +598,13 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float cover = clamp(0.0012 * pow(max(windSpd * uWind - 3.5, 0.0), 2.2), 0.0, 0.35);
   float whitecap = 0.0;
   if (${f.foam ? 'true' : 'false'} && cover > 0.001 && vSalt > 0.3 && vDepth > 2.0 && calm > 0.0) {
-    vec4 nW = f3N(P, vec3(0.38, 1.0, 0.38), 48.0, vec2(-0.19, 0.125) * uTime / 48.0);
+    vec4 nW = f3N(P, vec3(0.38, 1.0, 0.38), ${WCT}, vec2(-0.19, 0.125) * uTime / ${WCT});
     float wcN = nW.y * 0.55 + nW.w * 0.3 + (vCrest - 0.6) * 0.35;
     // (a thresholded noise read through its mips: the filtered value drifts to the mean, so far out every pixel would be
     // all-white or all-clear. The share of the noise's spread the mips removed (mip level of the 48 m tile: G octave
     // 32 texels, A octave 8) widens the ramp instead: the pixel gets the expected coverage, what the point-sampled
     // original showed as a speckle of the same mean)
-    float wl = log2(max(fw * 0.7 * 256.0 / 48.0, 1e-3));
+    float wl = log2(max(fw * 0.7 * 256.0 / ${WCT}, 1e-3));
     float wsd = 0.116 * sqrt(0.77 * smoothstep(3.0, 5.5, wl) + 0.23 * smoothstep(1.0, 3.5, wl)) * 1.7;
     whitecap = smoothstep(1.0 - cover * 4.0 - wsd, 1.0 - cover * 2.0 + 0.02 + wsd, wcN * 0.5 + 0.5) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
   }
@@ -613,7 +682,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
  * fragment's main are kept verbatim, so changes made there carry over). Returns null (and the caller keeps the
  * default water) if an anchor is not found.
  */
-export function fastOceanShaders(vert: string, frag: string, rippleMap: () => DataTexture): { vert: string; frag: string; uniforms: Record<string, IUniform> } | null {
+export function fastOceanShaders(vert: string, frag: string, rippleMap: () => DataTexture, morph?: IUniform<Vector4>): { vert: string; frag: string; uniforms: Record<string, IUniform> } | null {
   const vMain = vert.indexOf('void main() {');
   const vEnd = vert.lastIndexOf('#include <logdepthbuf_vertex>');
   const fMain = frag.indexOf('void main() {');
@@ -622,6 +691,7 @@ export function fastOceanShaders(vert: string, frag: string, rippleMap: () => Da
     console.warn('wfast=3: ocean shader anchors not found, default water kept');
     return null;
   }
+  if (morph && !morphs.includes(morph)) morphs.push(morph);
   const f: F3Flags = {
     detail: !CUT.has('nodetail'), reflect: !CUT.has('noreflect'), ssr: !CUT.has('nossr'), refract: !CUT.has('norefract'),
     foam: !CUT.has('nofoam'), sky: !CUT.has('nosky'), landCut: frag.slice(fMain, fBody).includes('float landCut'),
@@ -629,6 +699,6 @@ export function fastOceanShaders(vert: string, frag: string, rippleMap: () => Da
   return {
     vert: vert.slice(0, vMain) + VERT_DECL + vert.slice(vMain, vEnd) + VERT_MAIN + vert.slice(vEnd),
     frag: frag.slice(0, fMain) + fragDecl(20) + frag.slice(fMain, fBody) + fragMain(f),
-    uniforms: { uRipMap: { value: rippleMap() }, uF3Noise: { value: foamNoiseMap() } },
+    uniforms: { uRipMap: { value: rippleMap() }, uF3Noise: { value: foamNoiseMap() }, uF3KR: krUniform },
   };
 }

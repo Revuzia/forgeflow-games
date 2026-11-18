@@ -1070,7 +1070,7 @@ export function makeOceanMaterial(shared: Record<string, IUniform>, morph: IUnif
   if (WWIND != null) uniforms.uWind = { value: WWIND };
   uniforms.uMorph = morph;
   // ── PERF s25 hook (water agent): `?wfast=3` = oceanfast.ts's restructured shaders built from these; default off ──
-  const f3 = WFAST3 ? fastOceanShaders(OCEAN_VERT, OCEAN_FRAG, rippleMap) : null;
+  const f3 = WFAST3 ? fastOceanShaders(OCEAN_VERT, OCEAN_FRAG, rippleMap, morph) : null;
   if (f3) Object.assign(uniforms, f3.uniforms);
   // ── end PERF s25 hook ──
   const m = new ShaderMaterial({
