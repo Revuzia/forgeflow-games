@@ -1,0 +1,43 @@
+{
+  "lane": "W2-D",
+  "round": 1,
+  "verifier": "independent adversarial verifier (input feel, sim + live lens)",
+  "date": "2026-11-18",
+  "commitVerified": "c113c0832 (with wip syncs eb5364af5 and 3f232bd66); the later wip sync 64cdb7990 touches only src/sim (bots lane)",
+  "pass": true,
+  "score": 8.0,
+  "safeToShip": true,
+  "blockers": [],
+  "doneWhen": {
+    "probe_sim_cast_buffer": "met. Rerun: 21/21, digests 9330197a / 9330197a. Independent sweep over the real catalog (a scratch probe, since deleted): 16 fighters, 97 (busy ability, follow-up ability) pairs, with the follow-up pressed on every tick of the busy span (windups, dashes and channels of up to 367 ms). Every press fired 0-1 ticks after the busy span ended, plus the follow-up's own walk-in delay. 0 of 97 pairs failed. A bot seat never set pendingCast.",
+    "live probe (quickIndicator release frame, migration)": "met. I reran the implementer's verify_w2d_live.mjs on my own dev server (port 5192): 13/13. Release cast in the keyup's own animation frame 5/5 (-0.4 to -1 ms). Migration quickCast=true gives quick on all 7 entries. E pressed 267 ms and 133 ms (4x) before the 433 ms Lancing Run dash end cast 1 tick after it.",
+    "range ring = stats.range + body radius; programs unchanged": "met. The ring is 2.580 = 1.9 + 0.68 at both viewports, and programs stay 38 -> 38 -> 38. In screenshots the ring is a thin, flat, dashed ground ring drawn under the units and structures (1920 ring_crowd, 1366 ring_V).",
+    "soak seeds 1-40": "not rerun (heavy slots were taken by the bots lane). Accepted by construction: I read the diff. Every buffer path is gated on controller === 'human'. The bot command path calls tryCast exactly as before, and stepCastBuffer returns at once when bufSlot < 0. My sweep confirmed a bot seat never buffers.",
+    "opus input-feel score >= 7.5": "8.0"
+  },
+  "liveIndependent": {
+    "setup": "real Chrome (Playwright, channel chrome), my own Vite dev server on 5192, stopped afterwards. Run at 1920x1080 and 1366x768, practice match as Ardit. The local dist-catalog (2026.11.8) predates this lane's strings, so I served a scratch copy with content/strings.en.json merged in (assets symlinked, since deleted) to see the shipped labels.",
+    "results_both_viewports": [
+      "Fresh profile: every cast mode normal, rangeOnAttackMove on, showRange C, levelUpMod L Ctrl, viewAlly F2-F5.",
+      "Settings > Controls via clicks: Ability 1 set to Quick with indicator and Ability 2 to Quick, showRange rebound to V with the capture button. All three persisted across a reload.",
+      "Quick (W, Glare): the cast is sent on keydown.",
+      "Normal (W): the press shows the cone aim with its range ring and sends nothing. Left-click casts. Right-click cancels: a move, no cast.",
+      "Quick with indicator (Q): holding shows the aim. Right-click while held cancels, and the release sends no cast. Esc while held cancels without opening the menu. A plain release casts.",
+      "The rebound V shows the ring at range + radius; C no longer does anything. Arming attack-move shows the ring, and Stop hides it.",
+      "Buffer, Q dash then W (quick): W pressed 200 ms before the dash end was held (pendingCast a2) and cast 1 tick after the end. W pressed 533-567 ms before the end (during the windup plus the dash) lapsed at 0.4 s as designed.",
+      "HUD: .aslot.is-queued is set on the waiting slot.",
+      "Ctrl+Q sends levelUp a1 and no cast. F5 (viewAlly4) in a match does not reload the page.",
+      "Right-click still moves or attacks. Shift+left-click sends attackAt with no move after it. 0 console errors."
+    ]
+  },
+  "regressions": "none found. npm run probe: 75/78; the only fails are the known three (probe_sim_bot_tactics, probe_sim_click_waves 19/20, probe_sim_minion_lane_line). probe_input_castmode 47/47, probe_input_shoot 31/31, probe_input_clicks 62/62, probe_input_pick_truth 2/2 (0 wrong of 3,211,006 pair clicks and 217,370 clump clicks), probe_sim_click_waves 19/20 (known). src/render/pick.ts is untouched.",
+  "problems": [
+    "Hovering an ability slot on the Dial Bar draws no range in the world (renderer aim null, ring null at both viewports); the range shows only once you aim. The genre shows the ability's range on hover. This is outside the plan's Done-when, so it is not a blocker.",
+    "Settings > Controls cast-mode rows: the three-way Segmented wraps, with 'Quick with indicator' falling to a second line in 7 of 8 rows at 1920 and all 8 at 1366. Row labels such as 'All abilities', 'Ability 2' and 'Hour spell 1' also break over two lines. It is usable but ragged; a vertical stack or shorter option labels would fix it.",
+    "The queued-slot outline (1 px dashed chalk at -4 px offset) is barely visible on the bright W icon at 1920 (dial_queued). It is a weak cue for the 'your press was kept' signal.",
+    "Shipping needs a catalog rebuild: with the 2026.11.8 local catalog the new rows read as raw ids ('showRange', 'levelUpMod', 'quickIndicator'), because cv.t falls back to the key, not English. The usual content build at release fixes this. The release must not ship the client without the content step.",
+    "A press made during a long windup plus dash (more than 400 ms before the hero is free, e.g. W tapped right after Q on Ardit) lapses silently. This is per spec (0.4 s), but it is the one case where the input is still 'eaten'.",
+    "New players default to normal cast on every slot (unchanged from live). Not a defect."
+  ],
+  "cleanup": "Removed my scratch _harness/_tmp_vfy_w2d_kits.ts and _tmp_vfy_w2d_live.mjs, deleted the scratch catalog copy, and stopped the dev server on 5192. My npm run probe's own probe_sim_bot_tactics (a known fail) was stopped after 654 s to free a heavy slot. No src edits."
+}
