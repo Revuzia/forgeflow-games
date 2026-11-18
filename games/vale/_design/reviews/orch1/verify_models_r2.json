@@ -1,0 +1,138 @@
+{
+ "lane": "W3-B fighter models (ruling 57: Rishal confirm, Hesmi, Ulkro, Lisvel, Odrum, Burdam hand)",
+ "round": 2,
+ "role": "independent verifier (in-game models first, cards second, gates re-run)",
+ "date": "2026-11-18",
+ "head": "edfbe3d67",
+ "pass": true,
+ "modelScore": 7.5,
+ "score": 7.5,
+ "safeToShip": true,
+ "how": {
+  "inGame": "own vite dev server :5873 (started and stopped by me), real Chrome (playwright channel chrome, GPU) on the render bench, RIFT, seat 0 = Rishal / Hesmi: _harness/shot_fighter.mjs at t 25 and t 8, plus a temp script sampling 10 moments at the gameplay zoom and the closest zoom, cropped on the fighter (script deleted)",
+  "close": "art/tools/three_snapshot.mjs --face (the game renderer) on all 6 Rishal/Hesmi GLBs at --cell 400: 4 head close-ups at 0.9 m and 4 at the 52 deg in-match pitch; base GLBs of Ulkro/Lisvel/Odrum/Burdam (unchanged since r1) re-checked with --face and --bone hand.R (Burdam, Ulkro) / hand.L (Odrum)",
+  "cards": "the 11 re-shot cards (Rishal 5, Hesmi 6) plus the kept painted rishal_lamplit_splash at full size, 128 and 64 px beside the r1 image (git c4f28a9a2)"
+ },
+ "scope": {
+  "met": true,
+  "evidence": "git diff c4f28a9a2..edfbe3d67 touches only rishal.py, hesmi.py, their GLBs/cards/renders, units evidence and owner_rulings.md. Whole lane b77d761f6..HEAD (excluding src/sim/bots, the other lane): fighter scripts and art/out only for the six listed fighters; plates.py opt-in eye branch; no recolour of anyone else. No paid image call (no paint.json/run_xai change this round)."
+ },
+ "models": [
+  {
+   "fighter": "rishal",
+   "verdict": "pass",
+   "score": 7.5,
+   "why": "r1 blocker fixed. In three at 0.9 m: blue almond eyes with white, iris, pupil and an upper lid line, under a brow band that sits above them; nose and a closed mouth (stern-stoic). At the 52 deg pitch the blue eyes show as two marks under the band in all three skins. No tear line from the eye corners (cheek edge softened). With the eyes reading, the pale plate reads as a designed mask-like face, not blank or mannequin. In match: crest, blades, red/white plan unchanged and recognisable."
+  },
+  {
+   "fighter": "hesmi",
+   "verdict": "pass",
+   "score": 7.5,
+   "why": "forehead dash gone in all skins (close-up and every card). Calm carved face, brows, lidded brown eyes with iris and pupil, nose, small mouth; low rounded hood, no peak; scarf under the chin (no mummy wrap). Reads at the match pitch under the hood rim. In match she mostly walks up-lane (back to camera): green hood and back slabs read. Not tripwires: a 1-2 px dark tick at the top of the nose bridge, cream islands in the green base hood beside the face, stair-stepped lining stripes left of the face (base, Gorgewalk, Shadeprint)."
+  },
+  {
+   "fighter": "ulkro",
+   "verdict": "pass",
+   "score": 7.5,
+   "why": "unchanged since r1 (re-checked): lidded eyes in the eye window above the wrap, rounded hood; both gloves one closed shape round the staff (fused fingers). Hand probe min 0.404."
+  },
+  {
+   "fighter": "lisvel",
+   "verdict": "pass",
+   "score": 8.0,
+   "why": "unchanged since r1: circlet above open eyes, headscarf wrap, friendly face; best of the six."
+  },
+  {
+   "fighter": "odrum",
+   "verdict": "pass",
+   "score": 7.5,
+   "why": "unchanged since r1: level mask recesses with open lidded eyes (white, iris, pupil), stoic; left fist closed (small, pale, reads as a fist)."
+  },
+  {
+   "fighter": "burdam",
+   "verdict": "pass",
+   "score": 7.0,
+   "why": "unchanged since r1: cleaver fist has finger rolls and knuckles round the hilt from every angle; soft and lumpy but no longer a mitten. Head untouched."
+  }
+ ],
+ "gameplayZoom": "Rishal (crest, blue band, blades, red/white) and Hesmi (green hood, three back slabs, purple legs) read at the default and closest bench zoom across 10 sampled moments; faces are a few px and trip nothing; nothing outside the six changed",
+ "sensitivity": "no tall/pointed/conical hood, no horror/skull/mummy/mannequin face, no blank face, no glowing, solid or hollow eyes, no tear streaks on any of the six models or any shipped card. Originality: nothing resembles a League of Legends character.",
+ "cards": [
+  {
+   "card": "rishal_splash",
+   "verdict": "fail",
+   "why": "fresh render, lidded eyes visible at full size; face a small pale oval at 128/64 (card_qa miss). No tripwire; ship (better than r1/live)"
+  },
+  {
+   "card": "rishal_portrait",
+   "verdict": "pass",
+   "why": "larger blue lidded eyes, brow band above, calm; passes card_qa now"
+  },
+  {
+   "card": "rishal_chalkline_splash",
+   "verdict": "fail",
+   "why": "small figure, eyes do not read at 128 (card_qa miss); no tripwire; ship"
+  },
+  {
+   "card": "rishal_chalkline_portrait",
+   "verdict": "pass",
+   "why": "lidded blue eyes clearer than r1"
+  },
+  {
+   "card": "rishal_lamplit_splash",
+   "verdict": "pass",
+   "why": "painted splash kept (unchanged)"
+  },
+  {
+   "card": "rishal_lamplit_portrait",
+   "verdict": "pass",
+   "why": "blue lidded eyes, warm light, calm"
+  },
+  {
+   "card": "hesmi_splash",
+   "verdict": "pass",
+   "why": "forehead dot gone; calm face under the hood; lining stripes beside the face are small at 128 (card_qa flags figure placement only)"
+  },
+  {
+   "card": "hesmi_portrait",
+   "verdict": "pass",
+   "why": "forehead dot gone, calm lidded eyes"
+  },
+  {
+   "card": "hesmi_gorgewalk_splash",
+   "verdict": "pass",
+   "why": "face reads, no mark"
+  },
+  {
+   "card": "hesmi_gorgewalk_portrait",
+   "verdict": "pass",
+   "why": "forehead dot gone (was visible in r1)"
+  },
+  {
+   "card": "hesmi_shadeprint_splash",
+   "verdict": "fail",
+   "why": "face washed by purple rim light, reads near-plain at 128 (card_qa miss); eyes are not glowing; no tripwire; ship"
+  },
+  {
+   "card": "hesmi_shadeprint_portrait",
+   "verdict": "pass",
+   "why": "by eye lidded eyes and mouth read at 128 (card_qa blank miss is the purple key light); forehead dot gone"
+  }
+ ],
+ "gates": {
+  "cardQa": "art/tools/card_qa.py (repo .venv) on the six fighters: 36 cards, 14 misses (r1: 15). Rishal+Hesmi 5: rishal splash, rishal_chalkline splash, hesmi splash, hesmi_shadeprint splash, hesmi_shadeprint portrait. Others as r1: ulkro_long_evening splash (highlight), lisvel splash/portrait/gorgewalk splash/almanac splash (blank), odrum splash (hollow 16.3), odrum_noon_fair portrait, odrum_shadeprint splash, burdam splash (blank).",
+  "handIntegrity": "_harness/clip_probe_hands.mjs: 48 GLBs, 0 hand edges outside 0.4-1.6x -> PASS",
+  "unitsGate": "seeds 7/11/23 x 3 seatings on my server: FAIL 28, the identical set to verify_models_r1 and the implementer's units_gate_w3b_r2 (set diff empty). Against pre-lane (27) the one extra is ardit-odrum near-neutral dE 19.1. I checked the implementer's same-tree A/B (w3b_r2_odrum_pre/cur): the captured frames are visually identical, Odrum's measured heightPx drops 128 -> 88 because the gate keeps the largest connected silhouette piece and the HP bar/name label splits off his yoke pole. It is a gate measurement artifact, not a colour change on the model, so I do not count it as a regression. Fix belongs in _harness/units_gate.mjs (not this lane). Evidence: _design/reviews/orch1/evidence/units/units_gate_vfy_models_r2.json",
+  "content": "npm run content: OK, 0 warnings, catalog 2026.11.10 unchanged",
+  "glbBudget": "Rishal 1164/932/1047 KiB, Hesmi 1117/1109/1000 KiB; all lane GLBs within 1172 KiB"
+ },
+ "criticUpdate": "critic.json cardsPass unchanged at 81 (every card I pass this round was already listed; rishal_splash, rishal_chalkline_splash and hesmi_shadeprint_splash stay failing); note updated",
+ "safeToShipNote": "every rebuilt model and shipped card is at least as good as live and trips no sensitivity rule. burdam_stillwater_splash stays on its live painted image (as r1). No other card needs to go back to an old image.",
+ "blockers": [],
+ "problems": [
+  "units_gate count is 28 vs 27 pre-lane: the extra ardit-odrum fail is a capture split (HP bar/label cuts Odrum's silhouette); needs a units_gate.mjs fix (hide labels and bars for both shown and hidden frames) by its owner",
+  "Hesmi: 1-2 px dark tick at the top of the nose bridge; cream islands in the base green hood; stair-stepped lining stripes left of the face (base, Gorgewalk, Shadeprint)",
+  "Burdam fist reads but is soft and lumpy (7.0)",
+  "Cards still below the bar by eye (no tripwire, not to iterate): rishal_splash, rishal_chalkline_splash, hesmi_shadeprint_splash, lisvel_gorgewalk_splash, lisvel_almanac_portrait, burdam_stillwater_splash"
+ ]
+}
