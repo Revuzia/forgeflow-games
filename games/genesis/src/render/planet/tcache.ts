@@ -43,6 +43,17 @@ const TC_MB = TCACHE ? perfNum('tcmb', 256)! : 256;
  * (~0.2 us on the M5 by the round-14 numbers: 64 k texels ~ 13 ms), so this caps the bake's GPU time a frame
  */
 const TC_BUDGET = TCACHE ? perfNum('tcbudget', 64000)! : 0;
+/**
+ * the bake's share of the frame while patches are uncached (s26b: a per-frame texel cap starved a 2-3 fps frame);
+ * `?tcshare=` of the last frame's wall time, at `?tccost=` ms of GPU a texel (M5: ~0.2 us, a full-shader pixel)
+ */
+const TC_SHARE = TCACHE ? perfNum('tcshare', 0.25)! : 0;
+const TC_COST = TCACHE ? perfNum('tccost', 0.0002)! : 1;
+/** `?tclive=<m>`: patches whose nearest visible point is nearer stay on the full shader (the near ground's own grain) */
+const TC_LIVE = TCACHE ? perfNum('tclive', 0)! : 0;
+/** `?tcnearx=<k>` (with `?tcnearm=<m>`, default 150): texel density x k for patches nearer than m */
+const TC_NEARX = TCACHE ? Math.max(1, perfNum('tcnearx', 1)!) : 1;
+const TC_NEARM = TCACHE ? perfNum('tcnearm', 150)! : 150;
 /** mip bias of the display taps (0 = the footprint's own mip); `?tcbias=` */
 const TC_BIAS = TCACHE ? perfNum('tcbias', 0)! : 0;
 /** texels per pixel (by area, along the patch's edge) a new tile is given; `?tcdens=` (1.3: Nyquist for the footprint fades) */
@@ -234,6 +245,8 @@ interface Tile {
   nrm: Float32Array; nN: number;
   /** every cell >= DEEP m under water: the bed shows through the sea at <= 5 % (it may take a coarser tile) */
   deep: boolean;
+  /** this patch's own density factor (tcnearx) */
+  dens: number;
 }
 
 const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3(), _f = new Vector3();
@@ -255,10 +268,13 @@ export interface TcStats {
   byClass: string;
   /** main-thread ms of this frame's bake call, per tile (running mean), the worst frame so far */
   bakeMs: number; bakeMsPer: number; bakeMsMax: number;
+  /** s26b: why tiles were re-baked (cumulative): camera moved / turned, sun / season, sim drift (shown meanwhile), an edit (full shader meanwhile), class, evicted */
+  why: { cam: number; sun: number; field: number; edit: number; cls: number; evict: number };
+  budget: number;
 }
 
 export class TerrainCache {
-  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, wantN: 0, wantMB: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0, pixAll: 0, pixPct: 0, usedMB: 0, stale: 0, byClass: '', bakeMs: 0, bakeMsPer: 0, bakeMsMax: 0 };
+  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, wantN: 0, wantMB: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0, pixAll: 0, pixPct: 0, usedMB: 0, stale: 0, byClass: '', bakeMs: 0, bakeMsPer: 0, bakeMsMax: 0, why: { cam: 0, sun: 0, field: 0, edit: 0, cls: 0, evict: 0 }, budget: 0 };
   /** `false` = every patch draws with the full shader (in-page A/B: frame-adjacent pairs) */
   enabled = true;
   private readonly tex: DataArrayTexture[] = [];
@@ -288,7 +304,6 @@ export class TerrainCache {
   private readonly fwd = new Vector3();
   /** bake texels in hand (the budget accrues per frame, so a large tile's turn comes within a few frames) */
   private credit = 0;
-  private checked = false;
   private levelMorph: (level: number) => IUniform<Vector4>;
 
   constructor(lod: ChunkLOD, shared: Record<string, IUniform>, fieldTex: Record<string, DataTexture>, cellCount: number, bakeMat: Material, levelMorph: (level: number) => IUniform<Vector4>) {
@@ -418,8 +433,11 @@ export class TerrainCache {
       const th = WATCH[name], n = this.cellCount, dc = this.dirtyCell;
       for (let c = 0, o = 0; c < n; c++, o += 4) {
         if (Math.abs(cur[o] - ref[o]) > th[0] || Math.abs(cur[o + 1] - ref[o + 1]) > th[1] || Math.abs(cur[o + 2] - ref[o + 2]) > th[2] || Math.abs(cur[o + 3] - ref[o + 3]) > th[3]) {
+          // (2 = an edit-sized change, 5x the threshold: the full shader until re-baked; 1 = sim drift: shown, re-baked)
+          const big = Math.abs(cur[o] - ref[o]) > 5 * th[0] || Math.abs(cur[o + 1] - ref[o + 1]) > 5 * th[1] || Math.abs(cur[o + 2] - ref[o + 2]) > 5 * th[2] || Math.abs(cur[o + 3] - ref[o + 3]) > 5 * th[3];
+          if (!dc[c]) this.stats.dirtyCells++;
+          dc[c] = Math.max(dc[c], big ? 2 : 1);
           ref[o] = cur[o]; ref[o + 1] = cur[o + 1]; ref[o + 2] = cur[o + 2]; ref[o + 3] = cur[o + 3];
-          if (!dc[c]) { dc[c] = 1; this.stats.dirtyCells++; }
           any = true;
         }
       }
@@ -462,6 +480,7 @@ export class TerrainCache {
   update(camBody: Vector3, pxPerRad: number, frame: number, sunBody: Vector3, yearFrac: number, primary = true, halfH = 0, halfW = 0): void {
     const st = this.stats, u = this.shared;
     this.frame = frame; this.pxPerRad = pxPerRad; this.cam.copy(camBody);
+    { const now = performance.now(); if (this.lastT) this.frameMs = 0.8 * this.frameMs + 0.2 * Math.min(2000, now - this.lastT); this.lastT = now; }
     // the view direction in the body frame (row 2 of body -> view, negated)
     const m = (u.uBodyToView.value as Matrix3).elements;
     this.fwd.set(-m[2], -m[5], -m[8]);
@@ -478,7 +497,10 @@ export class TerrainCache {
       for (const [p, t] of this.tiles) {
         const cells = p.vcells;
         if (!cells) continue;
-        for (let i = 0; i < cells.length; i++) if (dc[cells[i]]) { if (t.baked && !t.dirty) st.rebakeDirty++; t.dirty = true; break; }
+        let lv = 0;
+        for (let i = 0; i < cells.length && lv < 2; i++) lv = Math.max(lv, dc[cells[i]]);
+        if (lv === 2) { if (t.baked && !t.dirty) { st.rebakeDirty++; st.why.edit++; } t.dirty = true; }
+        else if (lv === 1 && t.baked && !t.dirty && !t.stale) { t.stale = true; st.why.field++; }
       }
       dc.fill(0);
     }
@@ -493,7 +515,7 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, deep: false, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
+        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, deep: false, dens: 1, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
         // the patch's flat triangle (m^2)
         this.lod.tcCorners(p, _a, _b, _f);
         _a.toArray(t.dirs, 0); _b.toArray(t.dirs, 3); _f.toArray(t.dirs, 6);
@@ -542,25 +564,27 @@ export class TerrainCache {
       // (a deep sea-bed patch — the LOD keeps it coarse, 830 m across at the landing view — that no class resolves takes
       // the largest: under >= 15 m of water the bed reaches the screen at <= exp(-0.2 x 15) = 5 %, and with
       // ?deepbed=1 its fragments under ~48 m are not shaded at all, cached or not)
-      const need = Math.min(size * pxPerRad / dVis * Math.sqrt(cEff), t.deep ? (CLASSES[CLASSES.length - 1] - PAD) / TC_DENS : 1e9);
+      t.dens = TC_NEARX > 1 && dVis < TC_NEARM ? TC_NEARX : 1;
+      const need = Math.min(size * pxPerRad / dVis * Math.sqrt(cEff) * t.dens, t.deep ? (CLASSES[CLASSES.length - 1] - PAD) / TC_DENS : 1e9);
+      const nearLive = TC_LIVE > 0 && vis > 0 && dVis < TC_LIVE;
       t.need = need;
       // its screen pixels (the triangle's area x |n.v| x mean of 1 / d^2 over the points, the hidden ones as 0)
       t.area = vis ? Math.min(4 * f2, t.areaW * cEff * f2 * inv2 / 15) : t.areaW * cEff * f2 / Math.max(dc0 * dc0, 0.25) / 15;
       pixAll += t.area;
       if (t.hotEpoch !== this.fieldEpoch) { t.hotEpoch = this.fieldEpoch; t.hot = this.isHot(p); }
-      let valid = this.enabled && primary && t.baked && !t.dirty && !t.hot && t.gkey === gkey;
+      let valid = this.enabled && primary && t.baked && !t.dirty && !t.hot && !nearLive && t.gkey === gkey;
       const moved = valid ? t.cam.distanceTo(camBody) / dn : 0;
       const usable = t.cls >= 0 ? CLASSES[t.cls] - PAD : 0;
       // moved far (the distance fades, the footprint): the full shader until re-baked
-      if (valid && moved > 0.15) { valid = false; st.rebakeKnot++; }
+      if (valid && moved > 0.15) { valid = false; st.rebakeKnot++; st.why.cam++; }
       // the patch came nearer than its tile resolves (by more than a quarter): the full shader until re-baked
-      if (valid && need * TC_DENS > usable * 1.25) { valid = false; st.rebakeClass++; }
+      if (valid && need * TC_DENS > usable * 1.25) { valid = false; st.rebakeClass++; st.why.cls++; }
       if (valid && !t.stale) {
         // slow-stale: shown, re-baked behind the uncached patches (camera moved / turned, sun, season, class)
-        if (moved > 0.03 || t.fwd.dot(this.fwd) < 0.966) { t.stale = true; st.rebakeKnot++; }
-        else if (t.sun.dot(sunBody) < 0.9976 || Math.abs(yearFrac - t.year) > 0.004) { t.stale = true; st.rebakeSlow++; }
+        if (moved > 0.03 || t.fwd.dot(this.fwd) < 0.966) { t.stale = true; st.rebakeKnot++; st.why.cam++; }
+        else if (t.sun.dot(sunBody) < 0.9976 || Math.abs(yearFrac - t.year) > 0.004) { t.stale = true; st.rebakeSlow++; st.why.sun++; }
         // (smaller only when a smaller class fits: 288 -> 576 is a 2x step, a test on the usable edge alone looped)
-        else if (need * TC_DENS > usable || (classFor(need * TC_DENS) < t.cls && need * TC_DENS * 1.9 < usable)) { t.stale = true; st.rebakeClass++; }
+        else if (need * TC_DENS > usable || (classFor(need * TC_DENS) < t.cls && need * TC_DENS * 1.9 < usable)) { t.stale = true; st.rebakeClass++; st.why.cls++; }
       }
       // the slot table (two texels): written when it differs (a compacted or re-used slot is caught here too)
       const k = p.tSlot & 15, d = tab.image.data as unknown as Float32Array, o = k * 8;
@@ -579,6 +603,7 @@ export class TerrainCache {
       }
       if (!this.enabled || !primary) continue;
       if (t.hot) { st.hot++; continue; }
+      if (nearLive) { st.near++; continue; }
       if (need * TC_DENS > CLASSES[CLASSES.length - 1] - PAD) { st.near++; if (!valid && t.slab) this.release(t); continue; }
       { const c = CLASSES[classFor(need * TC_DENS)]; wantTexels += c * c / 2; st.wantN++; }
       if (!valid || t.stale) this.queue.push(p);
@@ -589,18 +614,22 @@ export class TerrainCache {
     // what this frame's cacheable patches would take at their classes (MB, half squares + mips; slab rounding not counted)
     st.wantMB = Math.round(wantTexels * (this.stats.float ? 16 : 12) / 1048576);
     // patches that left the chunk cache give their tiles back
-    if ((frame & 31) === 0) for (const [p, t] of this.tiles) if (!p.built) { this.release(t); this.tiles.delete(p); }
+    if ((frame & 31) === 0) for (const [p, t] of this.tiles) if (!p.built) { if (t.baked) st.why.evict++; this.release(t); this.tiles.delete(p); }
     st.tiles = 0;
     let usedT = 0;
     const by = new Array<number>(CLASSES.length).fill(0);
     for (const s of this.slabs) if (!s.head && s.cls >= 0) { st.tiles += s.used; by[s.cls] += s.used; usedT += s.used * CLASSES[s.cls] ** 2 / 2; }
     st.usedMB = Math.round(usedT * BPT / 104857.6) / 10;
     st.byClass = CLASSES.map((c, i) => (by[i] ? `${c}:${by[i]}` : '')).filter(Boolean).join('/');
-    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `pix=${st.pixPct}%,used=${st.usedMB}MB,tiles=${st.tiles},cached=${st.cached},live=${st.live},stale=${st.stale},hot=${st.hot},near=${st.near},want=${st.wantN}/${st.wantMB}MB,full=${st.full},bakes=${st.bakesTotal},bakeMs=${st.bakeMsPer.toFixed(2)}/${st.bakeMsMax.toFixed(1)},glob=${st.globals},cls=${st.byClass}`);
+    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `pix=${st.pixPct}%,used=${st.usedMB}MB,tiles=${st.tiles},cached=${st.cached},live=${st.live},stale=${st.stale},hot=${st.hot},near=${st.near},want=${st.wantN}/${st.wantMB}MB,full=${st.full},bakes=${st.bakesTotal},why=cam:${st.why.cam}/sun:${st.why.sun}/field:${st.why.field}/edit:${st.why.edit}/cls:${st.why.cls}/evict:${st.why.evict},budget=${Math.round(st.budget / 1000)}k,bakeMs=${st.bakeMsPer.toFixed(2)}/${st.bakeMsMax.toFixed(1)},glob=${st.globals},cls=${st.byClass}`);
     // (the bake wants these again: kept on the instance)
     this.sunNow.copy(sunBody); this.yearNow = yearFrac;
   }
   private sunNow = new Vector3();
+  private lastT = 0;
+  private frameMs = 16;
+  private compiled = false;
+  private compiling = false;
   private yearNow = 0;
 
   /**
@@ -614,13 +643,31 @@ export class TerrainCache {
     const t0 = performance.now();
     this.ensureGL(r);
     const q = this.queue;
+    // the bake program compiles off the main thread first (KHR_parallel_shader_compile; a synchronous first compile
+    // was the 3.5 s main-thread bake on the Mac)
+    if (!this.compiled) {
+      if (!this.compiling) {
+        const range = this.lod.tcRange(q[0]);
+        if (range) {
+          this.compiling = true;
+          this.mesh.geometry = range.mesh.geometry;
+          r.compileAsync(this.scene, camera).then(() => { this.compiled = true; }, () => { this.compiled = true; });
+        }
+      }
+      st.bakeMs = 0;
+      return;
+    }
     // not-yet-cached before merely slow-stale, then the most screen pixels first
     q.sort((a, b) => { const ta = this.tiles.get(a)!, tb = this.tiles.get(b)!; const sa = ta.stale && ta.baked && !ta.dirty ? 1 : 0, sb = tb.stale && tb.baked && !tb.dirty ? 1 : 0; return sa - sb || tb.area - ta.area; });
     const gl = r.getContext() as WebGL2RenderingContext;
     const prevRT = r.getRenderTarget(), prevAuto = r.autoClear;
     r.autoClear = false;
     let spent = 0, held = false;
-    const credit0 = this.credit = Math.min(this.credit + TC_BUDGET, Math.max(2 * TC_BUDGET, CLASSES[CLASSES.length - 1] ** 2 * 0.75));
+    // the frame's texels: a share of the frame's wall time while patches are uncached (at least TC_BUDGET; a live patch
+    // costs about its texels in full-shader pixels EVERY frame, a bake once), TC_BUDGET when only re-bakes are left
+    const uncached = q.some((p) => { const x = this.tiles.get(p)!; return !(x.baked && !x.dirty && x.stale); });
+    const budget = st.budget = Math.min(3e6, Math.max(TC_BUDGET, uncached ? TC_SHARE * this.frameMs / TC_COST : 0));
+    const credit0 = this.credit = Math.min(this.credit + budget, Math.max(2 * budget, CLASSES[CLASSES.length - 1] ** 2 * 0.75));
     let credit = credit0;
     const failed: boolean[] = [];
     const bu = this.bakeMat.userData as { uTcBake: IUniform<Vector4>; uTcBakeF: IUniform<Vector4>; uTcEi: IUniform<Vector3>; uTcEj: IUniform<Vector3>; uMorph: IUniform<Vector4> };
@@ -658,18 +705,18 @@ export class TerrainCache {
       if (S * S / 2 > credit) { if (!held) { held = true; credit *= 0.5; } continue; }
       const range = this.lod.tcRange(p);
       if (!range) continue;
-      if (t.slab && t.cls !== cls) this.release(t);
+      if (t.slab && t.cls !== cls) { if (t.baked) st.why.cls++; this.release(t); }
       if (!t.slab) {
         let a = failed[cls] ? null : this.alloc(cls, t);
         if (!a && !failed[cls]) {
           // tiles not drawn this frame first (least recently drawn first)
           const old = [...this.tiles.values()].filter((x) => x.slab && x.lastUsed < this.frame).sort((x, y) => x.lastUsed - y.lastUsed);
-          for (const x of old) { this.release(x); a = this.alloc(cls, t); if (a) break; }
+          for (const x of old) { if (x.baked) st.why.evict++; this.release(x); a = this.alloc(cls, t); if (a) break; }
         }
         if (!a && !failed[cls]) {
           // full, nothing idle: take the half of a drawn patch of this class with less than half the screen pixels
           const small = [...this.tiles.values()].filter((x) => x.slab && x.cls === cls && x.area < t.area * 0.5).sort((x, y) => x.area - y.area);
-          for (let i = 0; i < small.length && i < 12 && !a; i++) { this.release(small[i]); a = this.alloc(cls, t); }
+          for (let i = 0; i < small.length && i < 12 && !a; i++) { st.why.evict++; this.release(small[i]); a = this.alloc(cls, t); }
         }
         // (the queue is largest first: once a class finds no room, the smaller ones of that class do not look again)
         if (!a) { failed[cls] = true; st.full++; continue; }
@@ -701,11 +748,6 @@ export class TerrainCache {
       geo.setDrawRange(0, Infinity);
       bind();
       blit(pl.x, pl.y, S, L, true);
-      if (!this.checked) {
-        const e = gl.getError();
-        if (e !== gl.NO_ERROR) console.warn('[genesis] tcache: blit error', e);
-        this.checked = true;
-      }
       unbind();
       t.baked = true; t.dirty = false; t.stale = false;
       spent += S * S / 2; credit -= S * S / 2;
