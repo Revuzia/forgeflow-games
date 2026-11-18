@@ -1,3 +1,16 @@
+# SESSION 3 STATE (2026-11-18): read this first; everything below it is the PC session's ledger from October
+
+- **LIVE:** commit `23c684a60` of branch `claude/exciting-faraday-2dakqx` was deployed to the R2 bucket `forgeflow-games/squish-keeper/` on 2026-11-18
+  (57 files, assets first, index.html last, by the Cloudflare R2 API). Verified: the CDN serves the build byte for byte; it boots and plays with 0 errors.
+  It is the PC's published build (merged from `squish-keeper-pc`) plus PLAYGROUND: life at Home, a party of up to 5, the Journal, wishes, Travel to
+  Hearthlog Cabin, the swing (natural / AUTO / by hand). Verdict: `_handoff/reports/VERDICT_PG2.md`.
+- **Rollback:** `_live_snapshot/2026-11-16/` is the exact previous live build.
+- **Owner decisions:** D-95 revised (swing), D-96 (seven places: Home, Hearthlog, Ripple Shore, Frostbell Ridge, Rainleaf Garden, Lanternroof, Cloudloft;
+  Fizzwell Tub, Cogwhistle Bench and Echo Hollow are DROPPED). See the end of `_spec/PLAYGROUND_BUILD.md`.
+- **Next:** open Ripple, Frostbell, Rainleaf (built, not shippable yet: reasons in `_handoff/reports/PG_SHELL.md` R4b); then Lanternroof and Cloudloft
+  (no visuals yet); remove the three dropped places from data, sound, quests and chunks. Nobody has listened to any sound.
+- Reports of this session: `_handoff/reports/PG_*.md`, `FIX5_*.md`, `MERGE_PC.md`, `VERDICT_PG.md`, `VERDICT_PG2.md`.
+
 # STATUS LEDGER: read this first, then COMMON.md and RESUME.md. Do not redo anything marked DONE.
 
 Last updated 2026-10-07 23:30 CDT, branch `claude/exciting-faraday-2dakqx`. **PUSHED to GitHub (only that branch, no PR, no tags) at 1e5a1159 with the owner's yes; the repo's pre-push CI hook was bypassed ONCE with the owner's explicit yes because 2 of 12 monorepo suites (test_engine_authoring, test_no_primitives) fail only on the missing 3d-models library on this PC (unrelated to this game). Every later push hits the same hook: ask again.** A local tag `cdn-2026-10-07-2683d349` marks the deployed commit (not pushed).
