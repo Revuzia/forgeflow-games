@@ -223,6 +223,7 @@ const VERT_MAIN = /* glsl */ `
     vF3Ext.rgb = (sA + sS) * 1.25;
     vF3Alb.rgb = sS / (sA + sS) * mix(0.5, 1.0, max(max(max(saltK, riverK), smoothstep(2.0, 8.0, vDepth)), silt)) * (1.0 + 6.0 * silt) / 3.14159;
     vF3Sky.w = silt;
+    ${CUT.has('spdbg2') ? 'vF3Ext.w = fSp; vF3Sky.w = 1.0 - smoothstep(5.3 * 0.2, 5.3 * 0.4, fSp);' : ''}
   }
 `;
 
@@ -421,6 +422,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float fB = 1.0 - smoothstep(0.04, 0.13, fwE / 13.0);
   float fS = 1.0 - smoothstep(0.025, 0.07, fwE / 34.0);
   vec3 gradLong = vF3A.xyz * fA + vF3B.xyz * fB + vF3S.xyz * fS;
+  ${CUT.has('spdbg2') ? 'gl_FragColor = vec4(fract(vF3Ext.w), vF3Sky.w, clamp(vF3Alb.w / 3.0, 0.0, 1.0), 1.0); return;' : ''}
   ${CUT.has('spdbg') ? 'gl_FragColor = vec4(clamp(vF3Cld.w / 3.0, 0.0, 1.0), clamp(vF3A.w * 40.0, 0.0, 1.0), clamp(vF3B.w * 40.0, 0.0, 1.0), 1.0); return;' : ''}
   float unres = vF3A.w * (1.0 - fA) + vF3B.w * (1.0 - fB) + vF3S.w * (1.0 - fS) + vF3Sun.w;
   float res = 0.0;
