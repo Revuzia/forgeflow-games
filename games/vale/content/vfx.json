@@ -41249,7 +41249,7 @@
       {
         "type": "feel",
         "at": "ground",
-        "hitFlash": 0.7
+        "hitFlash": 0.3
       }
     ]
   },
@@ -41783,7 +41783,7 @@
         "type": "feel",
         "at": "ground",
         "squash": 0.14,
-        "hitFlash": 0.7
+        "hitFlash": 0.3
       }
     ]
   },
@@ -59193,7 +59193,7 @@
         "type": "feel",
         "at": "target",
         "squash": 0.14,
-        "hitFlash": 0.7
+        "hitFlash": 0.3
       }
     ]
   },
@@ -85234,7 +85234,7 @@
       {
         "type": "feel",
         "at": "target",
-        "hitFlash": 0.55
+        "hitFlash": 0.3
       }
     ]
   },

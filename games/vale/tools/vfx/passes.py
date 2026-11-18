@@ -432,7 +432,25 @@ def ground_light_pass(d: dict) -> dict:
 
 def post(d: dict) -> dict:
     """passes applied to every def after its source (and its bespoke/tuned.json hand tuning) is chosen"""
-    return heavy_crack_pass(dust_pass(ult_feel_pass(ground_light_pass(d))))
+    return ult_detail_pass(heavy_crack_pass(dust_pass(ult_feel_pass(ground_light_pass(d)))))
+
+
+# orch1 W2-B (VFX-O8): Hesmi's, Nurrow's and Vashil's ultimate landings left the struck body flat for two beats (probe
+# combat_polish ult: detail 0.33-0.38, 2 frames lost; with the victim flash hidden 0.93-0.99): the landing's feel boost of the
+# victim flash (hitFlash 0.55-0.7) is what flattened it. The beat keeps its envelope, core and squash; the body flash is held to
+# ULT_DETAIL_FLASH of it. Idempotent (a value already at or under it stays).
+ULT_DETAIL_DEFS = {"hesmi_ult_shard", "hesmi_ult_shadow", "nurrow_ult_lull", "vashil_ult_toll"}
+ULT_DETAIL_FLASH = 0.3
+
+
+def ult_detail_pass(d: dict) -> dict:
+    if d["id"] not in ULT_DETAIL_DEFS:
+        return d
+    d = copy.deepcopy(d)
+    for l in d["layers"]:
+        if l["type"] == "feel" and (l.get("hitFlash") or 0) > ULT_DETAIL_FLASH:
+            l["hitFlash"] = ULT_DETAIL_FLASH
+    return d
 
 
 # orch1 W2-B (VFX-O6): the near-black ink puffs (#17181B / #2A2C33 particles) read as black blots on the lifted ground at the

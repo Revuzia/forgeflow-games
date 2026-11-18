@@ -371,6 +371,48 @@ async function deathMain() {
   console.log(`death: ${res.setup?.meDef} kills ${res.setup?.foeDef}; fired ${JSON.stringify(res.fired?.map((f) => f.id))}; frames ${JSON.stringify(res.frames?.map((f) => [f.at, f.role, f.clipT, f.head, f.drop]))}; done ${JSON.stringify(res.done)} -> ${out}`);
   process.exit(0);
 }
+// ---------------------------------------------------------------------------------------------- dust (orch1 VFX-O6 / O7, W2-B)
+//   dust    an A/B sheet of the defs that lost their ink puffs (Wick death, hit backings, silence / summon specks, Hesmi's shadow, the
+//           heavy hit's crack): each def fired by renderer.vfxTest at a lane spot on RIFT/High at the game camera with the --before defs
+//           (row A) and the defs on disk (row B), cropped at 0.1 / 0.25 / 0.45 s.
+//           node _harness/probe_combat_polish.mjs dust --before <old vfx.json> [--out <png>] [--ids a,b,c]
+async function dustMain() {
+  const sharp = (await import('sharp')).default;
+  const IDS = opt('ids', 'lib_wick_death,lib_hit_phys_light,lib_hit_phys_heavy,lib_hit_magic,lib_silence,lib_summon_rise,hesmi_ult_shadow,lib_status_stun').split(',');
+  const TIMES = [0.1, 0.25, 0.45], CW = 360, CH = 300;
+  const after = strip(JSON.parse(readFileSync(join(HERE, '../content/vfx.json'), 'utf8')));
+  const { browser, page } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=1&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
+  const tiles = [];
+  try {
+    await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
+    const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
+    await B((b) => b.frames(30, 1 / 30));
+    const spot = { x: 60, y: 55 };
+    for (const [row, set] of [['A', defs], ['B', after]]) {
+      await B(async (b, d) => { const { VfxDef } = await import('/src/contracts/catalog.ts'); b.renderer.vfx.redefine(d.map((x) => VfxDef.parse(x))); }, set);
+      for (const id of IDS) {
+        await B((b, s) => { b.renderer.vfx.clear(); b.focus(s.x, s.y); b.zoom(b.catalog.maps.find((q) => q.id === b.host.setup.map).camera.distance); b.frames(10, 1 / 30); }, spot);
+        await B((b, a) => b.renderer.vfxTest(a.id, a.x, a.y, { tier: a.id.includes('_ult_') ? 4 : 2, anchor: 'target' }), { id, ...spot });
+        let el = 0;
+        for (const t of TIMES) {
+          const n = Math.max(1, Math.round((t - el) * 30)); el = t;
+          const png = await B((b, a) => { b.frames(a.n, 1 / 30); b.renderer.render(0); const c = document.getElementById('c'); const sc = b.screen(a.x, a.y, 0.8);
+            const o = document.createElement('canvas'); o.width = a.cw; o.height = a.ch; o.getContext('2d').drawImage(c, sc.x - a.cw / 2, sc.y - a.ch / 2, a.cw, a.ch, 0, 0, a.cw, a.ch); return o.toDataURL('image/png').split(',')[1]; }, { n, ...spot, cw: CW, ch: CH });
+          tiles.push({ row, id, t, buf: Buffer.from(png, 'base64') });
+        }
+      }
+    }
+  } finally { await browser.close(); }
+  const W = CW * TIMES.length * 2, H = CH * IDS.length, comp = [];
+  for (const tl of tiles) comp.push({ input: tl.buf, left: (tl.row === 'A' ? 0 : CW * TIMES.length) + TIMES.indexOf(tl.t) * CW, top: IDS.indexOf(tl.id) * CH });
+  const labels = IDS.map((id, i) => `<text x="8" y="${i * CH + 22}" font-family="Helvetica" font-size="18" fill="#EDE6D6" stroke="#0B0D11" stroke-width="3" paint-order="stroke">${id}  A (before) | B (after) at ${TIMES.join(' / ')} s</text>`).join('');
+  comp.push({ input: Buffer.from(`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">${labels}<line x1="${CW * TIMES.length}" y1="0" x2="${CW * TIMES.length}" y2="${H}" stroke="#F4EFE2" stroke-width="3"/></svg>`), left: 0, top: 0 });
+  const out = opt('out', join(SHOTS, 'w2b_dust_ab.png'));
+  await sharp({ create: { width: W, height: H, channels: 3, background: '#0B0D11' } }).composite(comp).jpeg({ quality: 90 }).toFile(out);
+  console.log('dust A/B ->', out);
+  process.exit(0);
+}
+if (ONLY.includes('dust')) await dustMain();
 if (ONLY.includes('death')) await deathMain();
 if (ONLY.includes('clutter')) await clutterMain();
 
@@ -385,6 +427,8 @@ try {
   const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
   await B(async (b, d) => { const { VfxDef } = await import('/src/contracts/catalog.ts'); b.renderer.vfx.redefine(d.map((x) => VfxDef.parse(x))); }, defs);
   if (opt('vfxcap', '')) await B((b, c) => { b.renderer.vfx.liftCap = c === 'off' ? null : Number(c); }, opt('vfxcap', ''));
+  // W2-B A/B: --noprotect turns the character-protection rule off (with --before <old vfx.json>: the pre-W2-B look)
+  if (args.includes('--noprotect')) await B((b) => { b.renderer.vfx.bodyProtect = false; });
   // the match host for a lineup (seat 0 the viewer, seats 5-9 its enemies); re-run for another lineup (--ults beyond them)
   const SETUP = async (b, picks) => {
     const { LocalMatchHost } = await import('/src/session/match_host.ts');

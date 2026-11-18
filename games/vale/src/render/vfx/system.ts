@@ -159,6 +159,9 @@ const DECAL_SHAPE_RING = 1;
 /** orch1 W2-B: an ultimate's body exemption from the character-protection rule (s) and its fade back (s) */
 const T4_EXEMPT_S = 0.15;
 const T4_EXEMPT_FADE_S = 0.1;
+/** orch1 W2-B (VFX-O8): the body protection an ultimate's beat still keeps in its exempt window: the impact reads whole
+ *  around the body and at this share over it (whole over the body flattened Nurrow's and Vashil's victims: detail 0.33) */
+const T4_EXEMPT_KEEP = 0.5;
 /** orch1 W2-B: a fighter's body column round its body centre (m): down over the legs (not the ground at the feet), up over
  *  the head and a raised weapon, its radius */
 const BODY_LOW = 0.95;
@@ -549,7 +552,7 @@ export class VfxSystem {
       let k = 1;
       for (const m of this.t4Marks) {
         if (Math.hypot(p.x - m.x, p.z - m.z) > m.r) continue;
-        k = Math.min(k, Math.max(0, (now - m.t - T4_EXEMPT_S) / T4_EXEMPT_FADE_S));
+        k = Math.min(k, Math.max(T4_EXEMPT_KEEP, (now - m.t - T4_EXEMPT_S) / T4_EXEMPT_FADE_S));
       }
       A[n].set(p.x, p.z, p.y - BODY_LOW, p.y + BODY_HIGH);
       Bq[n].set(BODY_R, k, 0, 0);
