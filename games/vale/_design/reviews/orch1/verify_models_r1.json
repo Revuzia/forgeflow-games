@@ -1,0 +1,90 @@
+{
+  "lane": "W3-B fighter models (ruling 57: Rishal confirm, Hesmi, Ulkro, Lisvel, Odrum, Burdam hand)",
+  "round": 1,
+  "role": "independent verifier (in-game models first, cards second, gates re-run)",
+  "date": "2026-11-18",
+  "head": "595addfc3",
+  "pass": false,
+  "modelScore": 7.0,
+  "score": 7.0,
+  "safeToShip": true,
+  "how": {
+    "inGame": "own vite dev server :5861 (started and stopped by me), real Chrome (playwright channel chrome, headless, GPU) on the render bench: RIFT, seat 0 = each fighter, gameplay zoom and the closest bench zoom, at spawn and mid-lane (t 25 s, _harness/shot_fighter.mjs + a temp spawn script in scratchpad)",
+    "close": "art/tools/three_snapshot.mjs --face on all 18 GLBs (three r186, the game renderer): 4 head close-ups at 0.9 m and 4 at the 52 deg in-match pitch, 3.5 m; plus --bone hand.R (Burdam, Ulkro), hand.L (Odrum, Ulkro); Rishal again at --cell 600",
+    "cards": "all 36 cards of the six fighters at full size, 128 px and 64 px, next to the pre-lane image (git b77d761f6 / c853fdb3e^), face crops at 2-3x"
+  },
+  "scope": {
+    "met": true,
+    "evidence": "git diff b77d761f6..HEAD (excluding src/sim/bots and its probes, the other lane): art/out changes only under rishal, hesmi, ulkro, lisvel, odrum, burdam; fighter scripts only those six; art/blender/common/plates.py adds an opt-in eye branch (op key 'white') that no other fighter's GLB was rebuilt with; paint_prompts.json only Rishal/Hesmi entries; no recolour of any other fighter. No paid image call found in this lane (the only paint.json change is Rishal's ruling-56 Lamplit splash)."
+  },
+  "models": [
+    { "fighter": "rishal", "verdict": "fail", "score": 5.5, "why": "confirm-only item. Brow band now sits above the eyes, no beak, no cheek incisions (better than live). But in the game renderer the painted eyes do not read: at the 0.9 m close-up (300 and 600 px cells) they are tiny low-contrast grey marks with no visible blue iris (the Cycles card shows blue lidded eyes; three does not), and at the in-match pitch only the brow band, nose and mouth show. With the pale smooth plate on the ribbed wooden dowel neck the head reads near-blank / mannequin-like at close. Needs larger, darker iris and lid line on the plate (the implementer flagged the same in ruling 57). Hands fine; silhouette, crest, blades and colour plan unchanged." },
+    { "fighter": "hesmi", "verdict": "pass", "score": 7.5, "why": "notched eye band and mouth wrap gone: a calm carved face with brows, lidded brown eyes with iris and pupil, nose and a closed mouth, scarf under the chin, all three skins; low rounded hood (no peak). Reads at the in-match pitch (eyes, nose under the hood rim). Problems, not tripwires: a small black dot/dash on the forehead in every skin (texture artifact), cream islands in the green zone-graded hood beside the face (base), stair-stepped dark stripes on the hood lining at the left of the face (Shadeprint, base cards) that read like scratches at 128 px; the smooth egg face is plain. In game the base hood is green while every card shows it cream (pre-existing card/model mismatch)." },
+    { "fighter": "ulkro", "verdict": "pass", "score": 7.5, "why": "eye window in her skin with two lidded eyes (white, brown iris, pupil) in all three skins; hood rounded and low; wrap below the eyes kept. Gloves: one closed shape round the staff on both hands, no fragments; fingers are fused into a block (reads as a glove, not finger-by-finger). At the 52 deg match pitch the hood brim hides the eyes (only the wrap shows), which is geometry, unchanged. Hand probe min ratio 0.401 (band floor 0.4)." },
+    { "fighter": "lisvel", "verdict": "pass", "score": 8.0, "why": "the glass band over the eyes is a slim circlet over the brow; open lidded hazel eyes, small smile, headscarf wrap framing the face, cyan wrap kept (base). From the 52 deg pitch the circlet sits above the eyes, not across them (no blindfold read). Friendly, the best of the six. Minor: Gorgewalk face is two-tone (orange lower face vs grey upper) on its portrait." },
+    { "fighter": "odrum", "verdict": "pass", "score": 7.5, "why": "slanted black slits replaced by level shallow recesses with open painted eyes (white, brown iris, pupil, upper lid) in all three skins; stoic, not a void. Left fist closed through (no hole) in the hand close-up; it is a small lumpy pale fist but reads as a fist. Mask cracks, stitches, cap and colours unchanged (design). At the match pitch the brim box hides the eyes." },
+    { "fighter": "burdam", "verdict": "pass", "score": 7.0, "why": "hand only, head untouched (same face, tally marks and brow in all skins). The cleaver fist now shows finger rolls and knuckle lumps wrapped round the hilt from front, side and above; no longer a fingerless mitten, though the segments are soft and lumpy rather than crisp. GLB 1171.5 KiB (budget 1172); the thinned keyframes and texture quality do not show at the face or fist." }
+  ],
+  "gameplayZoom": "at the default gameplay camera every one of the six reads with its silhouette, weapon and colour plan (Rishal crest and blades, Hesmi green hood and back-slabs, Ulkro green hood and staff, Lisvel cyan wrap and bow, Odrum yoke and jars, Burdam cleaver); faces are a few pixels and trip nothing",
+  "cards": [
+    { "card": "rishal_splash", "verdict": "fail", "why": "lidded eyes visible at full size, but the face is a small pale oval at 128/64 px (card_qa blank 0.68); no tripwire; ship (better than live visor card)" },
+    { "card": "rishal_portrait", "verdict": "pass", "why": "blue lidded eyes, brow band above, calm; card_qa blank at the bar, by eye clear" },
+    { "card": "rishal_chalkline_splash", "verdict": "fail", "why": "small figure, pale plate, eyes do not read at 128 px (card_qa blank 0.79); no tripwire; ship" },
+    { "card": "rishal_chalkline_portrait", "verdict": "pass", "why": "lidded eyes visible; Chalkline glyph-like sketches on the pauldron remain (skin pattern)" },
+    { "card": "rishal_lamplit_splash", "verdict": "pass", "why": "painted v1, blue lidded eyes, lamp cage, all card gates pass" },
+    { "card": "rishal_lamplit_portrait", "verdict": "pass", "why": "eyes visible, on-model" },
+    { "card": "hesmi_splash", "verdict": "pass", "why": "calm face, lidded eyes; hood-lining stripes left of the face noted; card_qa blank 0.77 (face small); cream hood vs green in game (pre-existing)" },
+    { "card": "hesmi_portrait", "verdict": "pass", "why": "brows, lidded brown eyes with iris, nose, mouth; forehead dot artifact noted" },
+    { "card": "hesmi_gorgewalk_splash", "verdict": "pass", "why": "face with lidded eyes reads at 128 px" },
+    { "card": "hesmi_gorgewalk_portrait", "verdict": "pass", "why": "clean calm face, slate hood" },
+    { "card": "hesmi_shadeprint_splash", "verdict": "fail", "why": "violet key washes the small egg face pale; eyes tiny at 128/64 (card_qa blank 0.79); no tripwire; ship (live had the eye band)" },
+    { "card": "hesmi_shadeprint_portrait", "verdict": "pass", "why": "lidded eyes with iris; lining stripes and forehead dot noted" },
+    { "card": "ulkro_splash", "verdict": "pass", "why": "eye window with lidded eyes, fist reads" },
+    { "card": "ulkro_portrait", "verdict": "pass", "why": "eyes smaller and paler than the skins but iris visible; glove one closed shape" },
+    { "card": "ulkro_highrim_splash", "verdict": "pass", "why": "small figure, eye window visible" },
+    { "card": "ulkro_highrim_portrait", "verdict": "pass", "why": "clear lidded eyes" },
+    { "card": "ulkro_long_evening_splash", "verdict": "pass", "why": "clear eyes; card_qa highlight p99.9 218 < 230 is polish only" },
+    { "card": "ulkro_long_evening_portrait", "verdict": "pass", "why": "clear eyes, closed glove" },
+    { "card": "lisvel_splash", "verdict": "pass", "why": "small but face and eyes read; cyan wrap matches the model" },
+    { "card": "lisvel_portrait", "verdict": "pass", "why": "friendly face, hazel lidded eyes, circlet over the brow" },
+    { "card": "lisvel_gorgewalk_splash", "verdict": "fail", "why": "tiny pale figure on a pale plaza, face unreadable at 128 px (card_qa blank 0.82); no tripwire; ship (live had the eye band)" },
+    { "card": "lisvel_gorgewalk_portrait", "verdict": "pass", "why": "eyes and smile; two-tone face noted" },
+    { "card": "lisvel_almanac_splash", "verdict": "pass", "why": "face, circlet and eyes read" },
+    { "card": "lisvel_almanac_portrait", "verdict": "fail", "why": "bow limb crosses half the face (staging); visible half has a lidded eye; no tripwire; ship (live had the eye band)" },
+    { "card": "odrum_splash", "verdict": "pass", "why": "open outlined eyes with iris and pupil; card_qa hollow 16.3 is the recess rim, not hollow eyes" },
+    { "card": "odrum_portrait", "verdict": "pass", "why": "open eyes, stoic heavy lid" },
+    { "card": "odrum_noon_fair_splash", "verdict": "pass", "why": "open eyes on the mask" },
+    { "card": "odrum_noon_fair_portrait", "verdict": "pass", "why": "open eyes, sly heavy lid, on-model" },
+    { "card": "odrum_shadeprint_splash", "verdict": "pass", "why": "amber irises visible at full size; small at 64 px" },
+    { "card": "odrum_shadeprint_portrait", "verdict": "pass", "why": "amber iris with lid, no solid eyes (the r2 tripwire is gone)" },
+    { "card": "burdam_splash", "verdict": "pass", "why": "fresh render: fist on the hilt with fingers; face unchanged" },
+    { "card": "burdam_portrait", "verdict": "pass", "why": "live painted, unchanged" },
+    { "card": "burdam_almanac_splash", "verdict": "pass", "why": "live painted, unchanged" },
+    { "card": "burdam_almanac_portrait", "verdict": "pass", "why": "live painted, unchanged" },
+    { "card": "burdam_stillwater_splash", "verdict": "fail", "why": "live painted card still shows the old rounded mitten fist (model fixed); stays on the live image, no regression" },
+    { "card": "burdam_stillwater_portrait", "verdict": "pass", "why": "live painted, unchanged" }
+  ],
+  "sensitivity": "no tall/pointed/conical hood, no horror/skull/mummy face, no glowing, solid or hollow eyes, no tear streaks on any shipped card or model. Closest: Rishal's in-game head reads near-blank / mannequin-like at close (eyes too faint in three.js), and Hesmi's hood-lining stripes beside the face read like scratches at 128 px. Originality: nothing resembles a League of Legends character.",
+  "gates": {
+    "cardQa": "art/tools/card_qa.py on the six fighters: 36 cards, 15 misses (13 blank: Rishal splash/portrait/Chalkline splash, Hesmi splash/Shadeprint splash+portrait, Lisvel splash/portrait/Gorgewalk splash/Almanac splash, Odrum Noon Fair portrait/Shadeprint splash, Burdam splash; 1 hollow: Odrum splash 16.3; 1 highlight: Ulkro Long Evening splash p99.9 218). Matches ruling 57's report.",
+    "handIntegrity": "_harness/clip_probe_hands.mjs: 48 GLBs, 0 hand edges outside 0.4-1.6x -> PASS (Ulkro min 0.401)",
+    "unitsGate": "seeds 7/11/23 x 3 seatings, 238 s, own server: FAIL 28 fails, the same 28 as units_gate_w3b_r57. Against the pre-lane vfy_w2a_r3 set (27) it is one worse: new P1 near-neutral pair ardit-odrum dE 19.1 (< 20; Odrum's top cluster moved with the open eyes). Odrum-Ulkro stays a fail but improved (15.9 -> 24.0). Evidence: _design/reviews/orch1/evidence/units/units_gate_vfy_models_r1.json",
+    "content": "npm run content: OK, 0 warnings, 96 webp cached, catalog 2026.11.10 unchanged",
+    "glbBudget": "all 18 GLBs <= 1172 KiB (largest Burdam 1171.5, Lisvel 1168.0)"
+  },
+  "criticUpdate": "critic.json: cardsPass 61 -> 81 (+20: rishal_portrait, rishal_chalkline_portrait, rishal_lamplit_splash, rishal_lamplit_portrait, hesmi_splash, hesmi_portrait, hesmi_gorgewalk_splash, hesmi_gorgewalk_portrait, hesmi_shadeprint_portrait, ulkro_splash, ulkro_highrim_splash, ulkro_highrim_portrait, ulkro_long_evening_splash, ulkro_long_evening_portrait, lisvel_almanac_splash, odrum_splash, odrum_noon_fair_splash, odrum_shadeprint_splash, odrum_shadeprint_portrait, burdam_splash); 15 fail",
+  "safeToShipNote": "every rebuilt model and every shipped card is at least as good as the live one (live had the eye bands, slits, visor and mitten fist) and none trips a sensitivity rule by its card; no card needs to go back to an old image. burdam_stillwater_splash stays on its live painted image (old mitten fist, already so). Rishal ships as an improvement but its in-game eyes still need a pass.",
+  "blockers": [
+    "Rishal in-game face: the painted eyes are near-invisible in the game renderer (no iris colour, tiny grey marks at 0.9 m), so the pale plate on the dowel neck reads blank / mannequin-like at close; the listed item asks for real lidded eyes on the character",
+    "units_gate one worse than before the lane: new P1 near-neutral fail ardit-odrum dE 19.1 (bar 20), caused by Odrum's open eyes changing his top cluster"
+  ],
+  "problems": [
+    "Hesmi: black dot/dash on the forehead in all skins; cream islands in the green hood near the face (base); stair-stepped dark stripes on the hood lining left of the face (base, Shadeprint) read as scratches on cards",
+    "Hesmi and Ulkro base cards show cream hoods while the in-game base hoods are green (pre-existing card/model mismatch, zone grade not applied to the card renders)",
+    "Ulkro fused glove has no finger read; hand probe min ratio 0.401 sits at the 0.4 floor",
+    "Burdam fist fingers are soft lumps rather than distinct segments",
+    "Lisvel Gorgewalk face is two-tone (orange lower face, grey upper)",
+    "card polish: 5 new-render cards fail by eye only on small/pale faces or staging (rishal_splash, rishal_chalkline_splash, hesmi_shadeprint_splash, lisvel_gorgewalk_splash, lisvel_almanac_portrait); no paid call warranted (no tripwire)"
+  ],
+  "cleanup": "dev server :5861 stopped; scratch renders kept only in the session scratchpad; no _harness/_tmp_* files written by this verifier"
+}
