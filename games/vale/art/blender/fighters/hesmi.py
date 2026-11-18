@@ -374,10 +374,11 @@ BAND_C = (0.0, 0.005)
 # (ruling 56) the carved face in the hood's opening: its centre height, the eyes' height, centre x, half length,
 # half height and outer-corner lift (m per m); the mouth's height
 FACE_C = 2.062
-FACE_EYE_Z, FACE_EYE_X, FACE_EYE_L, FACE_EYE_H, FACE_EYE_TILT = 2.092, 0.040, 0.0195, 0.0095, 0.05
+FACE_EYE_Z, FACE_EYE_X, FACE_EYE_L, FACE_EYE_H, FACE_EYE_TILT = 2.092, 0.041, 0.0215, 0.0110, 0.05
 FACE_MOUTH_Z = 1.996
-FACE_COL = {"white": "#D9D3C6", "iris": "#6E5236", "iris_dk": "#45321F", "pupil": "#16130F", "lash": "#221C19",
-            "brow": "#5A4A40", "crease": "#8E8478", "lip": "#7A6458", "shade": "#A49A90"}
+FACE_UV_WEIGHT = 3.0
+FACE_COL = {"white": "#CFC6B6", "iris": "#5E4129", "iris_dk": "#3A2716", "pupil": "#120F0C", "lash": "#1A1513",
+            "brow": "#4E3F36", "crease": "#7E7468", "lip": "#6E564A", "shade": "#8E8478"}
 EYE_Z, EYE_H, EYE_A = 2.113, 0.0150, (3.5, 36.0)     # the openings' centre height, half-height, angle span (deg)
 
 
@@ -823,7 +824,8 @@ def model(ctx) -> list:
         if name == "inlays":
             ob.data.polygons.foreach_set("use_smooth", np.zeros(len(ob.data.polygons), dtype=bool))
         ob.data.materials.append(ctx.mats[role])
-        P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
+        # (ruling 56) the carved face takes 3x its share of the atlas, so the painted eyes hold an iris and a pupil
+        P.append(fighter.Part(name, high=ob, tris=tris, bind=bind, uv_weight=FACE_UV_WEIGHT if name == "eyeband" else 1.0))
     return P
 
 
@@ -1255,17 +1257,17 @@ def paint_face(p, n, med):
     top, bot = q ** 0.7, -0.80 * q ** 0.9
     ins = ss(np.minimum.reduce([top - v, v - bot, 1.0 - np.abs(u)]) / 0.10) * front
     sock = np.exp(-((u / 1.45) ** 2 + ((v - 0.2) / 2.2) ** 2) * 2.0) * front
-    col = mix(col, E["shade"][None].repeat(len(p), 0), sock * 0.40)
+    col = mix(col, E["shade"][None].repeat(len(p), 0), sock * 0.60)
     col = mix(col, E["white"][None].repeat(len(p), 0), ins * 0.95)
     di = np.hypot(u * EL, (v - 0.05) * EH)
-    ir = 0.68 * EH
+    ir = 0.80 * EH
     irc = mix(E["iris"][None].repeat(len(p), 0), E["iris_dk"][None], ss((di - 0.45 * ir) / (0.5 * ir)))
     col = mix(col, irc, ss((ir - di) / 0.0008) * ins * 0.97)
     col = mix(col, E["pupil"][None].repeat(len(p), 0), ss((0.42 * ir - di) / 0.0007) * ins * 0.96)
     edge = top - 0.36 * (top - bot)
     lid = ins * ss((v - edge) / 0.10)
     col = mix(col, np.clip(np.asarray(med)[None] * 0.97, 0, 1).repeat(len(p), 0), lid * 0.97)
-    lash = ss((0.16 - np.abs(v - edge)) / 0.08) * ss((1.08 - np.abs(u)) / 0.08) * front
+    lash = ss((0.22 - np.abs(v - edge)) / 0.10) * ss((1.10 - np.abs(u)) / 0.08) * front
     col = mix(col, E["lash"][None].repeat(len(p), 0), lash * 0.92)
     crease = ss((0.12 - np.abs(v - (top + 0.60))) / 0.07) * ss((0.85 - np.abs(u)) / 0.15) * front
     col = mix(col, E["crease"][None].repeat(len(p), 0), crease * 0.50)
