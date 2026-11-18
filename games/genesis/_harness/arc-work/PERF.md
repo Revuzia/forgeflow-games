@@ -2709,3 +2709,17 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
 - graze (top-down meadow) on the s26b build (run h): pix 100 %, used 35 MB; pair mean |d| 1.89, RGB 102.2 116.3 68.5 both
   (EQUAL), detail 5.05 / 4.75 — same as the previous build. why after the view change: cam 115 / cls 95 / evict 328
   (the probe jumped the camera between views: expected).
+
+## LEAD NOTE after Mac round 18 parts 1-2 (water), 2026-11-18 21:59 UTC — build 58e2b027, genesis-water
+Full report: `MAC-ROUND18-water.txt`; shots `mac-shots/r18w-22..26.jpg`. P = scene=0&shadows=0. Ultra 1686x963, 59.7 m.
+- Water only: P 7.0 / 2.8 / 4.3 fps (noisy); P+wfast=3 11.6 / 6.4 (paired 1.7x and 2.3x); P+wfrag=0 17.2.
+- wfast=3 sub-cuts: wvert=0 6.7 (vertex is nothing); noreflect ALONE 11.9 (from 6.4: reflection = about half of the
+  wfast=3 water cost); all six off 16.7 = wfrag=0. So the next water gain is the reflection path (deck + SSR).
+- Full game: N 1.5/1.0/1.7, N+wfast=3 1.4/1.7, +deepbed 2.2. Water gain is hidden behind terrain (as expected);
+  it only shows once tcache is on.
+- LOOK: wfast=3 equal or slightly better by day/night/orbit (clearer waves, bolder palm reflections, warm sunset
+  streaks). WORSE: (1) weaker white foam at the beach edge; (2) a straight diagonal SEAM on the sea at the lower
+  right in every wfast=3 frame (brightness + speckle change across a hard line), not on N. Must fix both before
+  wfast=3 can be default.
+- fogwater=0 brings back the pale hill + kelp trunks: fogwater fix confirmed again.
+- Not covered: river, storm (none in view); pond pair not clean (clock differed).
