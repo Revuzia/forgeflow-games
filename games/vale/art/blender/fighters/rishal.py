@@ -82,7 +82,7 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 
           # (max2 g2 fix 2: x was EX + EL, the almonds' outer corners (0.041): the decal landed 1.5 cm out, the left one
           # off the head beside the hook; the centres are EYE_ALMOND's EX 0.026)
           # (ruling 55: the eyes open on the face under the brow visor, centres x 0.0193 at 1.650 on the front plane)
-          "eyes3d": [[-0.0210, -0.088, 1.650], [0.0210, -0.088, 1.650]]}
+          "eyes3d": [[-0.0220, -0.088, 1.650], [0.0220, -0.088, 1.650]]}
 # (FIX ROUND 2, verify: at 36 degrees the portrait saw the hook side-on, a tall glass slab with the mask a sliver
 # behind it): the brief's yaw 28, so the near cheek, the jaw, the mouth line's end and the chin show beside the hook
 # and under the band, as in the concept's three-quarter
@@ -132,7 +132,7 @@ CARDS = {
                                 "power": 8.0, "size": 0.15}]},
         # (max2 g2 fix: "floating feet": a firmer contact and cast shadow)
         "plate": {"glow": [0.15, 0.60, 0.42, 0.10], "cx": 0.44, "contact": 1.6, "cast": 0.8,
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.50, "h": 0.78, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}], "portrait": [{"op": "eyes", "w": 1.50, "h": 0.78, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.80, "h": 0.95, "tilt": 0.06, "lid_k": 0.34, "white": "#D2CEC4", "iris": "#2F4C70", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.45, "ink": "#121318", "lid_val": 0.88, "socket": 0.55, "line": 0.13, "crease": 0.55}], "portrait": [{"op": "eyes", "w": 1.80, "h": 0.95, "tilt": 0.06, "lid_k": 0.34, "white": "#D2CEC4", "iris": "#2F4C70", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.45, "ink": "#121318", "lid_val": 0.88, "socket": 0.55, "line": 0.13, "crease": 0.55}]}},
     },
     "rishal_chalkline": {
         # (card engineer 2: the dash at t 0.40 had the rear foot in the air: its crouch, knives dragged back, feet down)
@@ -156,7 +156,7 @@ CARDS = {
         # 30): the chalk-dusk plate's median 0.24 -> 0.18, a deeper dusk behind the pale plate)
         "plate": {"src": "seat_center", "tint": "#6C7890", "sat": 0.70, "median": 0.18, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
                   "glow_color": "#C8D4EC",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.50, "h": 0.78, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}], "portrait": [{"op": "eyes", "w": 1.50, "h": 0.78, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.80, "h": 0.95, "tilt": 0.06, "lid_k": 0.34, "white": "#D2CEC4", "iris": "#2F4C70", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.45, "ink": "#121318", "lid_val": 0.88, "socket": 0.55, "line": 0.13, "crease": 0.55}], "portrait": [{"op": "eyes", "w": 1.80, "h": 0.95, "tilt": 0.06, "lid_k": 0.34, "white": "#D2CEC4", "iris": "#2F4C70", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.45, "ink": "#121318", "lid_val": 0.88, "socket": 0.55, "line": 0.13, "crease": 0.55}]}},
     },
     "rishal_lamplit": {
         # (closing round 2: the lamps ride his right side, so the card turns that side to camera; the old key blew the
@@ -176,7 +176,7 @@ CARDS = {
                                 "size": 0.12}]},
         "plate": {"tint": "#C4A08A", "sat": 0.85, "median": 0.26, "cx": 0.60, "glow": [0.25, 0.55, 0.35, 0.12],
                   "glow_color": "#FFB067",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.50, "h": 0.78, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}], "portrait": [{"op": "eyes", "w": 1.50, "h": 0.78, "tilt": 0.06, "lid_k": 0.36, "white": "#DCD8CE", "iris": "#45698F", "iris_r": 0.66, "iris_y": 0.05, "pupil": 0.42, "ink": "#15171C", "lid_val": 0.97, "socket": 0.18, "line": 0.07, "crease": 0.25}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.80, "h": 0.95, "tilt": 0.06, "lid_k": 0.34, "white": "#D2CEC4", "iris": "#2F4C70", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.45, "ink": "#121318", "lid_val": 0.88, "socket": 0.55, "line": 0.13, "crease": 0.55}], "portrait": [{"op": "eyes", "w": 1.80, "h": 0.95, "tilt": 0.06, "lid_k": 0.34, "white": "#D2CEC4", "iris": "#2F4C70", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.45, "ink": "#121318", "lid_val": 0.88, "socket": 0.55, "line": 0.13, "crease": 0.55}]}},
     },
 }
 SKINS: list = [
@@ -1969,16 +1969,18 @@ CONCEPT_POSE = {
 PAINTED = ("knife_blade_R", "knife_blade_L", "knife_grip_R", "knife_grip_L", "knife_guard_R", "knife_guard_L", "boots",
            "bracer_R", "bracer_L")
 PROC_HIDDEN = {"face"}          # parts whose texels the painting hides take procedural paint, not the nearest pixel
-FACE_COL = {"lit": "#E4E3DE", "mid": "#D8D6D0", "shade": "#AFAEAA", "cool": "#A2A6AC", "ink": "#3A3634",
+FACE_COL = {"lit": "#E4E3DE", "mid": "#D8D6D0", "shade": "#9A9894", "cool": "#8E939A", "ink": "#3A3634",
             "carve": "#4C4744", "lip": "#F1F0EB"}   # (FIX ROUND 2: warm chalk, the concept's ivory mask with tan
 # carving; the cool grey shade read as a grey speckled sliver in the portrait's shadow side)
+# (ruling 55: the turned planes a step deeper, #AFAEAA -> #9A9894, so the open face models at splash size instead of
+# reading as one pale plate: card_qa's blank measure 0.67-0.85 on the three splashes)
 # (W5b, final parity review: the warm ivory oval with faint tan lines read as a mannequin or an egg): WHITE chalk
 # (#D8D6D0, no ivory), the planes parted by the light (the cheek planes a step into the shade), the carving cut in
 # INK with a lit lip beside each cut, bolder and wider
 EYE_Z, INK_EYE = 1.650, "#1E2027"     # (ruling 55: 1.661 -> 1.650, open under the brow visor)
 # (W5b: "the ink eye recesses can't be read in any shipped render"): larger, sharper almonds (half length, half height,
 # the inner corner's x), and the visor lets them through (visor_paint EYE_SHOW)
-EYE_ALMOND = (0.0150, 0.0078, 0.0060)     # (ruling 55: half length, half height, inner corner x; centres x 0.0198)
+EYE_ALMOND = (0.0165, 0.0086, 0.0055)     # (ruling 55: half length, half height, inner corner x; centres x 0.0198)
 # (ruling 55) the eye: a muted ivory white, a steel-blue iris with a dark pupil, a heavy calm upper lid in the mask's
 # own chalk with an ink lash line, a soft crease above and a lit lower lid
 EYE_COL = {"white": "#DCD8CE", "iris": "#45698F", "iris_dk": "#2C4562", "pupil": "#15171C", "lash": "#1E2027",

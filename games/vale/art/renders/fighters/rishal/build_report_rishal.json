@@ -48,14 +48,14 @@
   },
   "uv_coverage": 0.6,
   "bake": {
-    "base": 2.92,
-    "rough_metal": 2.11,
-    "normal": 1.85,
-    "ao": 2.71,
+    "base": 5.4,
+    "rough_metal": 3.82,
+    "normal": 3.11,
+    "ao": 3.81,
     "normal_fixed_px": 92274,
-    "projection": 89.52,
-    "pack_save": 89.73,
-    "total": 99.42
+    "projection": 78.6,
+    "pack_save": 78.81,
+    "total": 95.21
   },
   "tris": 20356,
   "mesh_top_m": 1.879,
@@ -166,17 +166,17 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2913612,
+  "glb_bytes_raw": 2914072,
   "optimize": {
     "ok": true,
-    "before": 2913612,
-    "after": 1175780,
+    "before": 2914072,
+    "after": 1175908,
     "q_base": 74
   },
   "zone_grade": {
     "ok": true
   },
-  "glb_bytes": 1191844,
+  "glb_bytes": 1191772,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -199,10 +199,10 @@
       "turntable": "art/renders/fighters/rishal/turntable.png"
     },
     "seconds": {
-      "splash": 97.35,
-      "portrait": 18.47,
-      "icon": 6.64,
-      "turntable": 9.42
+      "splash": 91.9,
+      "portrait": 17.42,
+      "icon": 7.48,
+      "turntable": 7.57
     }
   },
   "three_qa": {
@@ -234,29 +234,29 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/rishal/three_rishal.png",
-    "seconds": 12.4,
+    "seconds": 14.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.11,
-      "model": 12.01,
-      "lows_bind": 0.91,
-      "uv": 4.11,
-      "bake": 99.42,
-      "clips": 0.3,
-      "export": 2.59,
+      "materials": 0.25,
+      "model": 23.08,
+      "lows_bind": 2.28,
+      "uv": 10.28,
+      "bake": 95.21,
+      "clips": 0.29,
+      "export": 2.52,
       "optimize": 1.17,
-      "zone_grade": 35.59,
-      "wrist_weights": 0.29,
-      "zero_metal": 0.08,
-      "load_test": 0.3,
-      "render": 132.65,
-      "three_qa": 12.69,
+      "zone_grade": 36.78,
+      "wrist_weights": 0.28,
+      "zero_metal": 0.07,
+      "load_test": 0.31,
+      "render": 125.1,
+      "three_qa": 14.91,
       "cache": 0.12
     },
-    "total_s": 302.39
+    "total_s": 312.72
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79
