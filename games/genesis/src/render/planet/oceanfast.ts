@@ -622,8 +622,8 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
     if (!(edgeOn || shoreOn || surgeOn)) nE = f3N(P, 64.0, vec2(0.0));
     // LACE: ridged noise at two scales drifting with the flow (tile 8 m: lattice 2 / 1 / 0.5 / 0.25 m), thinning out
     vec4 nLc = f3N(P - vFlow * uTime, 8.0, vec2(0.0, uTime * 0.07 / 8.0));
-    float l1 = 1.0 - abs(nLc.y);
-    float l2 = 1.0 - abs(nLc.z);
+    float l1 = 1.0 - abs(nLc.${FOAMOLD ? 'y' : 'z'});   // (s26: 0.5 / 0.25 m lattice, the simplex's 1.25 / 0.48 m look)
+    float l2 = 1.0 - abs(nLc.${FOAMOLD ? 'z' : 'w'});
     float kL = 1.0 - smoothstep(0.15, 0.9, fw * 2.6);
     float l0 = 1.0 - abs(nE.w);   // (2 m lattice: Perlin cells read ~2x the simplex's of the same lattice)
     float fineK = 1.0 - smoothstep(0.03, 0.1, fw);
