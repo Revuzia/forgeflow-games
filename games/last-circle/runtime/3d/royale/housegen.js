@@ -5233,7 +5233,7 @@ function wearBands(H, groups, acc, faceIn, colOf) {
 // (W10 R3A, audits 6 + 7) THE FINISH, drawn only (no collider, not in house.tris - like the wear strips; maps.js: desktop medium and up). Every quad is a plate a few mm
 // in front of the face it dresses, in that face's material (the same world-aligned UVs: a darker wall foot is the wall's own texture, darker), vertex colours baked:
 //  - under every standing piece (>= AO.minH tall, on its room's floor): a soft dark ring, AO.k at the footprint (+ 2 cm) fading to the floor's colour AO.r out
-//    (clipped to the cells it stands on, inside the walls; a piece >= AO.minA m2 of footprint, >= AO.minH tall; the ring only - 8 triangles) - BAKED_AO;
+//    (clipped to the cells it stands on, inside the walls; a piece >= AO.minA m2 of footprint, >= AO.minH tall; the footprint AO.k too - 10 triangles) - BAKED_AO;
 //  - each wall run of a room: the foot (AO.foot at the skirting's top fading to the wall colour AO.footH higher), a corner
 //    colour AO.floorW out), a corner where another run of the room meets (AO.corner at the corner, AO.cornerW along the wall, floor to ceiling); a kitchen's tile
 //    splash (0.9 - 1.5 m) and a bath's wainscot (0.1 - 1.25 m) on the solid runs;
@@ -5269,6 +5269,7 @@ function finishGeo(H, acc, colOf, split) {
     const i0 = [Math.max(O[0], I[0]), Math.max(O[1], I[1]), Math.min(O[2], I[2]), Math.min(O[3], I[3])];
     if (!(i0[2] > i0[0] && i0[3] > i0[1])) return;
     const iv = [[i0[0], y, i0[1]], [i0[2], y, i0[1]], [i0[2], y, i0[3]], [i0[0], y, i0[3]]], ov = [[O[0], y, O[1]], [O[2], y, O[1]], [O[2], y, O[3]], [O[0], y, O[3]]];
+    quad(pe.mat, iv, UP, [c0, c0, c0, c0]);
     for (let e = 0; e < 4; e++) {
       const e2 = (e + 1) % 4;
       if (Math.abs(ov[e][0] - iv[e][0]) + Math.abs(ov[e][2] - iv[e][2]) + Math.abs(ov[e2][0] - iv[e2][0]) + Math.abs(ov[e2][2] - iv[e2][2]) < 0.02) continue;
