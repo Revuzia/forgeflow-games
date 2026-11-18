@@ -1,0 +1,46 @@
+{
+  "lane": "W2-C",
+  "round": 1,
+  "role": "independent verifier (by-eye cards, gates re-run)",
+  "date": "2026-11-18",
+  "head": "c169db383",
+  "pass": false,
+  "score": 4.0,
+  "safeToShip": true,
+  "doneWhen": {
+    "handIntegrity": { "met": true, "evidence": "re-ran _harness/clip_probe_hands.mjs (heavy slot): 48 GLBs, 0 hand edges outside 0.4-1.6x rest -> PASS" },
+    "cardQa96": { "met": false, "evidence": "re-ran art/tools/card_qa.py over all 16 fighters: 96 cards, 5 gate misses, all 'blank': burdam splash, dunsom splash, dunsom_highrim splash, dunsom_almanac splash, ilsheta_stillwater splash" },
+    "byEyeNoTripwire": { "met": false, "evidence": "the 6 regenerated cards carry no tripwire, but 37 cards are still on the failing list (critic.json cardsFail), incl. Hesmi's wrap eye slot (implementer's own note: reads hollow / mummy) and blank-flagged Dunsom splashes" },
+    "everySetAtPar": { "met": false, "evidence": "no fighter's 6-card set is complete: Burdam 5/6 (splash still a 3D render, blank 0.78; stillwater splash fails on hands), Dunsom 3/6; Tunlan, Marund, Ardit, Hesmi, Ilsheta, Lisvel, Odrum, Rishal, Ulkro and Vashil failing cards untouched" },
+    "burdamGlb": { "met": true, "evidence": "burdam.glb 1169.9 KiB (<= 1172); almanac 993.8, stillwater 1081.9" },
+    "unitsGate": { "met": "not re-measured", "evidence": "units_gate needs the :5190 frozen server and a heavy slot; not re-run in this round. Burdam changes are head-only plus glb_zero_metal, which only lowers metalness" }
+  },
+  "cards": [
+    { "card": "burdam_portrait", "verdict": "pass", "why": "v3 over the new head: umber brows, lidded eyes with irises, carved beard; cream scarf, orange skin, blue-gem blade at the left edge match the base model; no text, no tripwire; reads at 128 and 64 px; original (no LoL resemblance)" },
+    { "card": "burdam_almanac_portrait", "verdict": "pass", "why": "violet scarf, ledger-paper pauldrons with red rules, tally marks on the scalp match the Almanac skin; lidded eyes with pupils; crop safe at 128 / 64" },
+    { "card": "burdam_almanac_splash", "verdict": "pass", "why": "painted key art, figure clearly off the pale canyon (warm head on cool sky), serrated blade with blue diamonds matches the model; right hand has fingers, left fist on the hilt reads as a gloved grip; face ~12 % of height; Collection 1920 / 1366 crop keeps the face and blade" },
+    { "card": "burdam_stillwater_portrait", "verdict": "pass", "why": "teal scarf and pale steel plate, green-teal cleaver with blue gems match the skin; clean lidded face with brows and beard; no tripwire; reads at 64 px" },
+    { "card": "burdam_stillwater_splash", "verdict": "fail", "why": "raised fist on the cleaver is a fingerless sack-shaped mitten (model defect carried by the paint), and the pommel juts sideways out of it; otherwise better than live (painted, same likeness), so not a regression" },
+    { "card": "dunsom_highrim_portrait", "verdict": "pass", "why": "v2 removes the invented rod beside the raised hand; low round brim (not tall or pointed), ochre carved mask with two lidded eyes with irises (not blank or hollow), crook and lantern are the model's own props; reads at 128 / 64" },
+    { "card": "burdam_splash", "verdict": "fail", "why": "still the 3D render (new head), face pushed to the right edge under glare, card_qa blank tripwire; equal to live, no regression" },
+    { "card": "burdam_icon", "verdict": "pass", "why": "re-render with the new head; reads at 64 px; not a gated card" }
+  ],
+  "liveChrome": {
+    "collection": "real Chrome (playwright channel chrome, headless) at 1920x1080 and 1366x768: Burdam base / Almanac / Stillwater and Dunsom Highrim detail views load the new webp cards (all img complete, 0 console errors); splash crops keep the faces in frame; skin strip portraits correct",
+    "fighterSelect": "not reached: the rift_coop queue never entered the pick phase in 120 s with WebSockets stubbed; the draft uses the same Portrait component and catalog webp, so the risk is low but it is unmeasured"
+  },
+  "content": "npm run content: OK, 0 warnings (catalog 2026.11.10)",
+  "criticUpdate": "cardsPass += burdam_almanac_splash, burdam_stillwater_portrait, dunsom_highrim_portrait (and removed from cardsFail); burdam_portrait and burdam_almanac_portrait stay in cardsPass after re-check. 59 pass / 37 fail",
+  "blockers": [
+    "card_qa 91/96 (5 blank-gate misses), Done-when needs 96/96",
+    "FU-11: 37 cards still failing; 10 fighters' failing cards not attempted",
+    "no fighter's card set reaches par (7.5): Burdam 5/6, Dunsom 3/6, Hesmi 0/6"
+  ],
+  "problems": [
+    "burdam_stillwater_splash: fingerless mitten fist in the model; needs a hand fix in the Stillwater mesh before repaint",
+    "burdam_splash: painter strips the orange key light; the 3D card stays with a blank-gate miss",
+    "Hesmi wrap eye slot reads hollow at card size (model eye fix needed, per implementer)",
+    "units_gate not re-run this round; fighter-select (draft) screen not verified live",
+    "FU-10 side effect: elbow band edges outside range rose 132.3k -> 137.6k (not gated)"
+  ]
+}
