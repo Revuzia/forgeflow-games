@@ -18,6 +18,22 @@ import { CustomBlending, DstColorFactor, HalfFloatType, LinearFilter, Matrix4, O
 import { passMaterial, type FullscreenQuad } from '../post/fsquad.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { DEPTH_DECODE } from '../shaders/revz.ts';
+import { perfSwitch } from '../perfswitch.ts';
+
+/**
+ * PERF s24 `?fogwater=1` (default ON; `fogwater=0` = the old behaviour). The owner's "hill sheet" (Mac rounds 2-16, the
+ * babel landing view): the weather's height fog took each pixel's distance from the OPAQUE scene's linear depth copy
+ * (post.linDepth, made BEFORE the water pass for the water's refraction), so over the sea it fogged the distance to the
+ * SEA BED (100-125 m down there) and, where no sea bed lies behind the water (the line of sight passes over a submarine
+ * rise's crest into nothing: the depth copy is sky), the full 6 km of a sky pixel. The level, opaque sea surface was
+ * veiled by the silhouette of the sea floor: two pale "hills" (the submarine rises, under less fog) and a white V
+ * between them (sky behind: white-out), the kelp dark inside them. Measured (SESSION 24): the water sheet is level at
+ * 0.0 m over the whole view, the bed under it -7..-150 m, no wet cell above sea level within 800 m on days 0-30.
+ * ON: the fog and the ground / sky tint read the RESOLVED scene depth (post.depthTexture: the water's own depth is in
+ * it), decoded like the atmosphere does, and the fog's ground under the camera is never below sea level (over the sea
+ * the haze thinned with the 120 m of water under the camera as if it were air).
+ */
+export const FOG_WATER = perfSwitch('fogwater', true);
 
 const COMMON = /* glsl */ `
 uniform sampler2D tSceneDepth;
@@ -27,7 +43,13 @@ uniform mat4 uInvProj;
 uniform mat3 uViewToBody;
 uniform vec3 uCamBody;
 uniform float uGroundR;
+uniform float uFar;
 varying vec2 vUv;
+// linear view depth (m) of the pixel: the resolved depth (water included) with fogwater, else the opaque copy
+float sceneZ(vec2 uv) {
+${FOG_WATER ? `  float dz = texture(tSceneDepth, uv).r;
+  return depthIsSky(dz) ? 1e30 : viewZFromLogDepth(dz, uFar);` : '  return texture(tSceneDepth, uv).r;'}
+}
 vec3 viewRay(vec2 uv) { vec4 r = uInvProj * vec4(uv * 2.0 - 1.0, GENESIS_NDC_NEAR, 1.0); return r.xyz / r.w; }
 `;
 
@@ -46,7 +68,7 @@ uniform float uTime;
 uniform float uTotal;
 uniform vec3 uHorizonCol;
 void main() {
-  float sz = texture(tSceneDepth, vUv).r;
+  float sz = sceneZ(vUv);
   bool sky = sz > 1e6;
   vec3 rd = viewRay(vUv);
   float rl = length(rd);
@@ -115,7 +137,7 @@ ${COMMON}
 uniform vec3 uTintSky;
 uniform vec3 uTintGround;
 void main() {
-  float sz = texture(tSceneDepth, vUv).r;
+  float sz = sceneZ(vUv);
   vec3 t = sz > 1e6 ? uTintSky : uTintGround;
   gl_FragColor = vec4(t, 1.0);
 }
@@ -229,7 +251,7 @@ export class ScreenFx {
   constructor() {
     this.shared = {
       tSceneDepth: { value: null }, uResolution: { value: new Vector2(1, 1) }, uInvProj: { value: new Matrix4() },
-      uViewToBody: { value: null }, uCamBody: { value: new Vector3() }, uGroundR: { value: 3000 },
+      uViewToBody: { value: null }, uCamBody: { value: new Vector3() }, uGroundR: { value: 3000 }, uFar: { value: 2e7 },
     };
     this.over = passMaterial(OVER, {
       ...this.shared, uFogCol: { value: new Vector3() }, uFogDensity: { value: 0 }, uFogScale: { value: 120 }, uSunUV: { value: new Vector2() },
@@ -247,7 +269,7 @@ export class ScreenFx {
     this.lens.transparent = true; this.lens.depthTest = false; this.lens.depthWrite = false;
   }
 
-  render(r: WebGLRenderer, fsq: FullscreenQuad, target: WebGLRenderTarget | null, s: ScreenState, depth: unknown, w: number, h: number, invProj: Matrix4, viewToBody: unknown, camBody: Vector3, groundR: number, time: number): void {
+  render(r: WebGLRenderer, fsq: FullscreenQuad, target: WebGLRenderTarget | null, s: ScreenState, depth: unknown, w: number, h: number, invProj: Matrix4, viewToBody: unknown, camBody: Vector3, groundR: number, time: number, far = 2e7): void {
     const any = s.fogDensity > 1e-6 || s.eclipse > 0.001 || s.flash.lengthSq() > 1e-8;
     const tint = Math.abs(s.tintSky.x - 1) + Math.abs(s.tintSky.y - 1) + Math.abs(s.tintSky.z - 1) + Math.abs(s.tintGround.x - 1) + Math.abs(s.tintGround.y - 1) + Math.abs(s.tintGround.z - 1) > 0.003;
     const wet = s.lens > 0.02 && !!target;
@@ -259,6 +281,7 @@ export class ScreenFx {
     sh.uViewToBody.value = viewToBody;
     (sh.uCamBody.value as Vector3).copy(camBody);
     sh.uGroundR.value = groundR;
+    sh.uFar.value = far;
     const prevAuto = r.autoClear;
     r.autoClear = false;
     if (any) {

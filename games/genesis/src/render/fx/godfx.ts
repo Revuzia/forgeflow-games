@@ -44,7 +44,7 @@ import { WeatherFx } from './weatherfx.ts';
 import { MiracleFx } from './miracles.ts';
 import { Flights } from './flights.ts';
 import { ThrowFx } from './throwfx.ts';
-import { ScreenFx, newScreenState } from './screenfx.ts';
+import { FOG_WATER, ScreenFx, newScreenState } from './screenfx.ts';
 import { swapPropDepth } from './propmat.ts';
 import { Rainbow } from './rainbow.ts';
 import { siltLensClear } from '../planet/silt.ts';
@@ -618,7 +618,10 @@ export class GodFx {
     if (fsq) {
       const c = vis.camBody;
       const l = c.length() || 1;
-      this.screen.render(r, fsq, target, S, post.linDepth.texture, post.w, post.h, cam.projectionMatrixInverse, viewToBody(vis), c, groundHeight(vis.pv.ground, c.x / l, c.y / l, c.z / l), this.clock);
+      // (fogwater, screenfx.ts: the resolved depth with the water in it; the fog's ground never under the sea surface)
+      const gR = groundHeight(vis.pv.ground, c.x / l, c.y / l, c.z / l);
+      if (FOG_WATER) this.screen.render(r, fsq, target, S, post.depthTexture, post.w, post.h, cam.projectionMatrixInverse, viewToBody(vis), c, Math.max(gR, vis.pv.params.radius + vis.pv.params.seaLevel), this.clock, cam.far);
+      else this.screen.render(r, fsq, target, S, post.linDepth.texture, post.w, post.h, cam.projectionMatrixInverse, viewToBody(vis), c, gR, this.clock);
     }
     const prevAuto = r.autoClear;
     const prevMask = cam.layers.mask;
