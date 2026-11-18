@@ -647,9 +647,10 @@ class CrowdSet {
     b.commit();
     // the governor's second step takes the set's ink off altogether
     for (const g of b.geos) if (g.userData.flashOnly) g.instanceCount = nf; else if (g.userData.outlineOnly) g.instanceCount = hard ? 0 : nf + kept;
-    // a crowded frame (the governor's cap): the team-colour accents throw no shadow of their own (a stripe or band on
-    // the body, inside the body's shadow; ~0.4k triangles a unit in the shadow pass)
-    const accentShadow = cap >= CROWD_OUTLINE_MAX;
+    // the team-colour accents throw no shadow of their own (a stripe or band on the body, inside the body's shadow; ~0.4k
+    // triangles a unit in the shadow pass). orch1 W2-A fix 1: always, not only in a crowded frame (BRIDGE's 262 s peak
+    // spent 8.3k of its actor triangles on them; the shadow on the ground is the body's either way)
+    const accentShadow = false;
     for (const m of this.accentMeshes) m.castShadow = accentShadow;
     for (const m of this.bodyMeshes) m.mesh.castShadow = !hard;
     if (hard !== this.hardNow) {

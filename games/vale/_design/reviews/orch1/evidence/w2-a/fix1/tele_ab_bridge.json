@@ -15,18 +15,6 @@
  "variants": [
   {
    "name": "head"
-  },
-  {
-   "name": "e5",
-   "edgePx": 5
-  },
-  {
-   "name": "b3",
-   "bandPx": 3
-  },
-  {
-   "name": "e9",
-   "edge": 0.9
   }
  ],
  "spots": {
@@ -37,58 +25,34 @@
     "edgeCR90": 3.74,
     "teleEdgeP90": 1.185,
     "vfy": {
-     "px": 50221,
-     "deP50": 9.834,
-     "edgeCR90": 2.784,
+     "px": 49546,
+     "deP50": 10.016,
+     "edgeCR90": 2.781,
+     "teleEdgeP90": 0.803
+    },
+    "vfyNoTele": {
+     "px": 35697,
+     "deP50": 11.734,
+     "edgeCR90": 2.861,
      "teleEdgeP90": 0.806
     }
    },
    "head": {
     "px": 3907,
-    "deP50": 48.947,
+    "deP50": 49.02,
     "edgeCR90": 4.059,
     "teleEdgeP90": 1,
     "vfy": {
-     "px": 39062,
-     "deP50": 12.079,
-     "edgeCR90": 2.665,
-     "teleEdgeP90": 0.68
-    }
-   },
-   "e5": {
-    "px": 4290,
-    "deP50": 54.318,
-    "edgeCR90": 3.999,
-    "teleEdgeP90": 1,
-    "vfy": {
-     "px": 35659,
-     "deP50": 13.946,
-     "edgeCR90": 2.756,
-     "teleEdgeP90": 0.693
-    }
-   },
-   "b3": {
-    "px": 3607,
-    "deP50": 51.711,
-    "edgeCR90": 3.657,
-    "teleEdgeP90": 0.902,
-    "vfy": {
-     "px": 35986,
-     "deP50": 8.182,
-     "edgeCR90": 2.33,
-     "teleEdgeP90": 0.617
-    }
-   },
-   "e9": {
-    "px": 3902,
-    "deP50": 48.441,
-    "edgeCR90": 4.059,
-    "teleEdgeP90": 1,
-    "vfy": {
-     "px": 42544,
-     "deP50": 9.495,
-     "edgeCR90": 2.358,
-     "teleEdgeP90": 0.663
+     "px": 34839,
+     "deP50": 13.789,
+     "edgeCR90": 2.723,
+     "teleEdgeP90": 0.685
+    },
+    "vfyNoTele": {
+     "px": 32055,
+     "deP50": 6.487,
+     "edgeCR90": 2.198,
+     "teleEdgeP90": 0.588
     }
    }
   },
@@ -99,10 +63,16 @@
     "edgeCR90": 3.887,
     "teleEdgeP90": 1.249,
     "vfy": {
-     "px": 28380,
-     "deP50": 10.217,
-     "edgeCR90": 2.107,
-     "teleEdgeP90": 0.554
+     "px": 29664,
+     "deP50": 10.492,
+     "edgeCR90": 2.122,
+     "teleEdgeP90": 0.541
+    },
+    "vfyNoTele": {
+     "px": 25704,
+     "deP50": 9.438,
+     "edgeCR90": 2.03,
+     "teleEdgeP90": 0.478
     }
    },
    "head": {
@@ -111,46 +81,16 @@
     "edgeCR90": 4.059,
     "teleEdgeP90": 1,
     "vfy": {
-     "px": 26480,
-     "deP50": 10.235,
+     "px": 26623,
+     "deP50": 10.367,
      "edgeCR90": 2.074,
-     "teleEdgeP90": 0.471
-    }
-   },
-   "e5": {
-    "px": 4295,
-    "deP50": 54.728,
-    "edgeCR90": 3.999,
-    "teleEdgeP90": 1,
-    "vfy": {
-     "px": 26958,
-     "deP50": 10.279,
-     "edgeCR90": 2.125,
-     "teleEdgeP90": 0.487
-    }
-   },
-   "b3": {
-    "px": 3612,
-    "deP50": 52.407,
-    "edgeCR90": 3.569,
-    "teleEdgeP90": 0.899,
-    "vfy": {
-     "px": 24090,
-     "deP50": 9.916,
-     "edgeCR90": 2.031,
-     "teleEdgeP90": 0.455
-    }
-   },
-   "e9": {
-    "px": 3904,
-    "deP50": 49.239,
-    "edgeCR90": 4.059,
-    "teleEdgeP90": 1,
-    "vfy": {
-     "px": 22680,
-     "deP50": 9.971,
-     "edgeCR90": 2.072,
-     "teleEdgeP90": 0.481
+     "teleEdgeP90": 0.474
+    },
+    "vfyNoTele": {
+     "px": 20737,
+     "deP50": 8.119,
+     "edgeCR90": 1.805,
+     "teleEdgeP90": 0.336
     }
    }
   }
