@@ -85,11 +85,41 @@ function lootHi(W) {
   const t = W.gfxTier || (W._gfx && W._gfx.tier) || (W.settings && W.settings.graphics) || "medium";
   return t !== "low";
 }
+/** (W10 R3B fix5) no zero-length normal on any drawn triangle. Four ammo models (light, medium, shells, grenades) each carry 8 zero-area
+ *  triangles whose 24 vertices have the normal (0,0,0): rounding in the instance / view transforms rasterises such a sliver now and
+ *  then, normalize(0) lights its pixel NaN, and the bloom mips spread that one pixel over the whole frame (a fully black frame: the
+ *  interiorcheck light row, 1 of 1019 views; 20-33 of 400 random poses of each model). Zero-area triangles draw nothing intended:
+ *  they are dropped; a zero normal on a real triangle re-derives the normals from the faces. Returns the triangles dropped. */
+function lootNormalsSafe(g) {
+  const n = g.attributes.normal, p = g.attributes.position, ix = g.index;
+  if (!n || !p) return 0;
+  const zero = (i) => n.getX(i) * n.getX(i) + n.getY(i) * n.getY(i) + n.getZ(i) * n.getZ(i) < 1e-12;
+  let any = false;
+  for (let i = 0; i < n.count && !any; i++) any = zero(i);
+  if (!any) return 0;
+  if (!ix) { g.computeVertexNormals(); return 0; }
+  const keep = [];
+  let drop = 0, real = false;
+  for (let t = 0; t + 2 < ix.count; t += 3) {
+    const a = ix.getX(t), b = ix.getX(t + 1), c = ix.getX(t + 2);
+    if (zero(a) || zero(b) || zero(c)) {
+      const ux = p.getX(b) - p.getX(a), uy = p.getY(b) - p.getY(a), uz = p.getZ(b) - p.getZ(a);
+      const vx = p.getX(c) - p.getX(a), vy = p.getY(c) - p.getY(a), vz = p.getZ(c) - p.getZ(a);
+      const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+      if (cx * cx + cy * cy + cz * cz < 1e-16) { drop++; continue; }
+      real = true;
+    }
+    keep.push(a, b, c);
+  }
+  g.setIndex(keep);
+  if (real) g.computeVertexNormals();
+  return drop;
+}
 function ensureLootModels(W) {
   if (lootLoad) return lootLoad;
   if (!lootMat) lootMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.18 });
   lootLoad = Promise.all(Object.keys(LOOT_FILES).map((k) => W.kernel.loadGLTF(W.assetBase + "assets/props/loot/" + LOOT_FILES[k] + ".glb").then((m) => {
-    m.traverse((o) => { if (o.isMesh) { o.material = lootMat; o.castShadow = false; if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals(); } });   // (no normals = NaN lighting)
+    m.traverse((o) => { if (o.isMesh) { o.material = lootMat; o.castShadow = false; if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals(); lootNormalsSafe(o.geometry); } });   // (no normals = NaN lighting)
     const g = new THREE.Group(); g.add(m); lootModels[k] = g;
   }, () => { lootModels[k] = null; })));
   return lootLoad;
