@@ -11,6 +11,10 @@ Rows (PLAN.md "Lane R3B" acceptance bar loot-shapes; the audit value in brackets
                cylinder primitive (BufferGeometry type BoxGeometry / CylinderGeometry) nor under 100 triangles: 0 primitive pickups
                [496 of 943]; AND the frag and smoke models' silhouettes differ: IoU of the filled side (X-Y) and front (Z-Y) projections at
                a common scale <= 0.7 on both views [the same teal cylinder: IoU 1]
+  loot-nan     (fix5, the interiorcheck light row's black view) no loot model can black out the frame: 0 triangles of any loot kind's drawn
+               geometry touch a zero-length vertex normal, AND each of the 7 kinds' own pool drawn as 20 instances at 200 seeded random
+               poses 0.8-10.8 m in front of the camera, through the composer, gives 0 fully black frames (mean luma < 2 / 255) [before the
+               fix: 20-33 of 400 for each of the 4 ammo models with zero-normal slivers]
 plus: a view of each loot kind on its ring renders (< 30 % near-black pixels); the 7 loot kinds each drawn by ONE pool (<= 7 new batches), triangles per loot model 200-700; 0 new programs after the warm-up
 (census through rendered frames); 0 page / console errors, 0 failed requests, 0 shader errors.
 The look sheet (every loot kind on its rarity ring from 3 m, what the player sees) goes to --shots.
@@ -37,6 +41,8 @@ RP = "runtime/3d/royale/"
 PLANTS = {
     "box-ammo": [(RP + "loot.js", [('const k = d.kind === "ammo" ? "ammo:" + d.id : "c:" + d.id;', 'const k = d.kind === "ammo" ? "none" : "c:" + d.id;')])],
     "same-grenade": [(RP + "loot.js", [('"c:smoke": "smoke" };', '"c:smoke": "frag" };')])],
+    # (fix5) the loot models' zero-normal slivers back (the sanitiser off): MUST FAIL loot-nan
+    "zero-normal": [(RP + "loot.js", [("o.geometry.computeVertexNormals(); lootNormalsSafe(o.geometry); } });", "o.geometry.computeVertexNormals(); } });")])],
 }
 LOOT_KEYS = ["ammo:light", "ammo:medium", "ammo:heavy", "ammo:shells", "ammo:grenades", "c:frag", "c:smoke"]
 
@@ -111,6 +117,47 @@ def silhouettes(G):
         out[name] = round(iou(ma, mb), 3)
     return out
 
+# (fix5) loot-nan: per loot kind, (a) the drawn geometry's triangles that touch a zero-length normal; (b) the kind's own pool (its real
+# material and instancing) drawn as n instances at seeded random poses in front of the camera through the composer, the fully black
+# frames counted. The loot per-render hook (it rewrites the instance matrices from the items) is paused for the draws; every buffer,
+# count and the hook are restored after.
+NAN_JS = r"""([keys, trials, n]) => { const W = window.__LC__.W, k = W.kernel, R = k.renderer, gl = R.getContext(), cam = k.camera, THREE = W.THREE;
+  const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, buf = new Uint8Array(w * h * 4);
+  const luma = () => { gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf); let s = 0, c = 0; for (let q = 0; q < buf.length; q += 16) { s += 0.2126 * buf[q] + 0.7152 * buf[q + 1] + 0.0722 * buf[q + 2]; c++; } return s / c; };
+  const draw = () => { if (k.composer) k.composer.render(1 / 60); else R.render(k.scene, cam); return luma(); };
+  const pools = {}; for (const it of W.debugItems()) { const P = it.vp; if (P && P.parts && P.parts.length && keys.indexOf(P.key) >= 0) pools[P.key] = P; }
+  const out = {}; const sc = k.scene, hook = sc.onBeforeRender;
+  cam.updateMatrixWorld(true); const fwd = new THREE.Vector3(); cam.getWorldDirection(fwd);
+  const right = new THREE.Vector3().crossVectors(fwd, cam.up).normalize(), up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  try {
+    sc.onBeforeRender = function () {};
+    for (const key of keys) {
+      const P = pools[key]; if (!P) { out[key] = { err: 'no pool of this kind in the match' }; continue; }
+      let zt = 0, tris = 0;
+      for (const M of P.parts) { const g = M.geometry, nn = g.attributes.normal, ix = g.index; const cnt = ix ? ix.count : g.attributes.position.count;
+        const z = (i) => !nn || (nn.getX(i) * nn.getX(i) + nn.getY(i) * nn.getY(i) + nn.getZ(i) * nn.getZ(i) < 1e-12);
+        for (let t = 0; t + 2 < cnt; t += 3) { tris++; const a = ix ? ix.getX(t) : t, b = ix ? ix.getX(t + 1) : t + 1, c = ix ? ix.getX(t + 2) : t + 2; if (z(a) || z(b) || z(c)) zt++; } }
+      const M = P.parts[0], arr = M.instanceMatrix.array, keep = arr.slice(), sv = P.parts.map((x) => [x.count, x.visible, x.frustumCulled]);
+      M.updateMatrixWorld(true); const inv = M.matrixWorld.clone().invert();
+      const N = Math.min(n, M.instanceMatrix.count);
+      let seed = 11, black = 0, minL = 1e9; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+      const others = []; for (const Q of Object.values(pools)) if (Q !== P) for (const x of Q.parts) { others.push([x, x.visible]); x.visible = false; }
+      for (const x of P.parts) { x.count = N; x.visible = true; x.frustumCulled = false; }
+      for (let t = 0; t < trials; t++) {
+        for (let i = 0; i < N; i++) { const d = 0.8 + rnd() * 10, sx = (rnd() - 0.5) * d * 0.9, sy = (rnd() - 0.5) * d * 0.5;
+          p.copy(cam.position).addScaledVector(fwd, d).addScaledVector(right, sx).addScaledVector(up, sy);
+          e.set((rnd() - 0.5) * 6.28, rnd() * 6.28, (rnd() - 0.5) * 6.28); q.setFromEuler(e); m4.compose(p, q, one).premultiply(inv); m4.toArray(arr, i * 16); }
+        M.instanceMatrix.needsUpdate = true;
+        const L = draw(); if (L < minL) minL = L; if (L < 2) black++;
+      }
+      arr.set(keep); M.instanceMatrix.needsUpdate = true; P.parts.forEach((x, j) => { x.count = sv[j][0]; x.visible = sv[j][1]; x.frustumCulled = sv[j][2]; });
+      for (const [x, v0] of others) x.visible = v0;
+      out[key] = { tris, zeroNormalTris: zt, trials, instances: N, black, minLuma: +minL.toFixed(2) };
+    }
+  } finally { sc.onBeforeRender = hook; }
+  return out; }"""
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -118,6 +165,7 @@ def main():
     ap.add_argument("--seed", type=int, default=5)
     ap.add_argument("--map", default="ashgrid")
     ap.add_argument("--shots", default=None)
+    ap.add_argument("--nan-trials", type=int, default=200, help="loot-nan: random poses per loot kind (the bar is 0 black frames at >= this many)")
     args = L.parse(ap)
     tag = args.plant or ("rev-" + args.rev if getattr(args, "rev", None) else "disk")
     shots = args.shots or os.path.join(C.SHOTS, "lootlook_" + tag)
@@ -156,6 +204,8 @@ def main():
                     R["shots"][key] = {"at": r_["at"], "d": g_.get("d"), "mean": round(float(im.mean()), 1), "black": round(float((im.sum(2) < 12).mean()), 3)}
             s.step_frames(30, 1 / 60, render=True)
             p1 = L.programs(s)
+            R["nan"] = s.js(NAN_JS, [LOOT_KEYS, args.nan_trials, 20])
+            s.step_frames(5, 1 / 60, render=True)
             sh = R["shots"]
             v.check("look: a view of every loot kind on its ring renders (< 30 % near-black pixels: a NaN-lit model blacks out the post chain)",
                     len(sh) == len(LOOT_KEYS) and all(x["black"] < 0.3 for x in sh.values()), sh)
@@ -172,6 +222,11 @@ def main():
                 "0 primitive; IoU <= 0.7")
         okp = all(x is not None and x["parts"] == 1 and 200 <= x["tris"] <= 700 for x in lp.values())
         v.check("loot models: each of the 7 kinds one pool of one part (one batch), 200-700 triangles", okp, lp)
+        nan = R.get("nan") or {}
+        okn = len(nan) == len(LOOT_KEYS) and all(x.get("err") is None and x.get("zeroNormalTris") == 0 and x.get("trials", 0) >= args.nan_trials and x.get("black") == 0
+                                                 for x in nan.values())
+        v.check("loot-nan: 0 loot-model triangles on a zero-length normal; each of the 7 kinds as 20 instances at %d random poses through the composer: 0 fully black frames (mean luma < 2)" % args.nan_trials,
+                okn, nan, "0 zero-normal tris; 0 black frames")
         v.info("census by kind", cen.get("byKind"))
     return C.run_gate("lootlook", body, args)
 
