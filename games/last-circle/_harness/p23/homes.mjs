@@ -73,6 +73,52 @@ const SOFA = /[sS]ofa(?!Ottoman)/, COFFEE = /tableCoffee|coffee/, TVU = /cabinet
 const SINKB = /bathroomSink|box\/basin/, MIRROR = /bathroomMirror|box\/mirror/, WASH = /shower|bathtub/;
 const FLOORLAMP = /lamp(Round|Square)Floor|box\/lampFloor/, PLANT = /pottedPlant/, CLOCK = /clock/;
 
+// (W10 R3A) the interiors-II census: work rooms (shop / storage / warehouse; office / meeting / lobby / corridor = a hall of a non-home building), cover pieces, the
+// finish of the homes' lived rooms (wall decor, real curtains, ceilings), roofs and porches. A COVER piece: standing on its room's floor (not wall-hung, not on a top,
+// not decor), >= 0.9 m tall, >= 0.7 m wide (its wider side)
+const WORK = new Set(["shop", "storage", "warehouse", "office", "meeting", "lobby", "hall"]);
+const DECOR = /^box\/(art|artWide|poster|clock|mirror|mirrorHi|whiteboard)$/;
+const isCover = (q, r) => !q.deco && !q.mount && Math.abs(q.min[1] - r.y) <= 0.02 && q.max[1] - q.min[1] >= 0.9 - 1e-6 && Math.max(q.max[0] - q.min[0], q.max[2] - q.min[2]) >= 0.7 - 1e-6;
+const lumOf = (hex) => (0.2126 * ((hex >> 16) & 255) + 0.7152 * ((hex >> 8) & 255) + 0.0722 * (hex & 255)) / 255;
+function interiorRows(M) {
+  const out = { work: [], lived: [], ceil: { n: 0, white: 0, min: 1 }, roofs: [], finTris: [] };
+  for (const H of M.houses) {
+    const home = H.use === "house" && H.theme !== "ruin";
+    out.roofs.push({ id: H.id, use: H.use, theme: H.theme, roof: H.roof, home: home ? 1 : 0, core: H.core ? 1 : 0, porch: H.porch ? 1 : 0 });
+    if (H.theme === "ruin") continue;
+    const pics = (H.fin && H.fin.pics) || [], cur = new Set(((H.fin && H.fin.cur) || []).map((c) => c[0]));
+    for (const r of H.rooms) {
+      const f = H.furniture.filter((q) => q.room === r.id);
+      if (!home && WORK.has(r.kind) && H.use !== "barn") {
+        out.work.push({ h: H.id, use: H.use, kind: r.kind === "hall" ? "corridor" : r.kind, area: r.area, n: f.length, cover: f.filter((q) => isCover(q, r)).length });
+      }
+      if (home && (r.kind === "living" || r.kind === "bedroom" || r.kind === "kitchen" || r.kind === "dining")) {
+        const wins = H.windows.map((w, k) => [w, k]).filter(([w]) => w.room === r.id);
+        out.lived.push({ h: H.id, kind: r.kind, decor: f.some((q) => DECOR.test(q.type)) || pics.some((p) => p.room === r.id) ? 1 : 0, pics: pics.filter((p) => p.room === r.id).length,
+          wins: wins.length, cur: wins.filter(([, k]) => cur.has(k)).length });
+      }
+    }
+    if (home) for (const b of H.boxes) {
+      if (!(b.p === "slab" || b.p === "roof" || b.p === "shell") || (b.h & 8) || b.min[1] < H.floors[0].y + 1) continue;
+      // a CEILING: its underside lies over a room of the house (a room whose ceiling height is this face, a sample point of the face inside one of its cells) -
+      // the eaves, ridge caps and soffits outside are not ceilings
+      let over = false;
+      for (const r of H.rooms) {
+        if (Math.abs(r.ceil - b.min[1]) > 0.05) continue;
+        for (const [fx, fz] of [[0.5, 0.5], [0.25, 0.25], [0.75, 0.75], [0.25, 0.75], [0.75, 0.25]]) {
+          const x = b.min[0] + (b.max[0] - b.min[0]) * fx, z = b.min[2] + (b.max[2] - b.min[2]) * fz;
+          if (r.rects.some((c) => x > c[0] + 0.15 && x < c[2] - 0.15 && z > c[1] + 0.15 && z < c[3] - 0.15)) { over = true; break; }
+        }
+        if (over) break;
+      }
+      if (!over) continue;
+      const pe = H.palette[b.f[3]], L = lumOf(pe.color);
+      out.ceil.n++; if (L >= 0.85) out.ceil.white++; out.ceil.min = Math.min(out.ceil.min, Math.round(L * 1000) / 1000);
+    }
+  }
+  return out;
+}
+
 function homeRows(M, KD) {
   const out = { buildings: [], rooms: [], kit: { n: 0, drawn: 0, boxes: 0, bad: 0, worst: 0, worstId: null, ks: {} }, loot: { points: M.lootPoints ? M.lootPoints.length : 0, house: 0, chests: 0 }, homeLoot: 0, homeArea: 0 };
   for (const H of M.houses) {
@@ -139,6 +185,7 @@ for (const m of MAPS) for (const s of SEEDS) {
   res.genVersion = M.genVersion;
   const R = homeRows(M, globalThis.__LC_KITDRAWN);
   globalThis.__LC_KITDRAWN = null;
+  R.inter = interiorRows(M);
   R.map = m; R.seed = s; R.ms = Date.now() - t0; R.hash = hashOf([R.buildings, R.rooms]);
   res.builds.push(R);
   process.stderr.write(`${m} ${s}: ${M.houses.length} buildings ${R.ms} ms hash ${R.hash}\n`);

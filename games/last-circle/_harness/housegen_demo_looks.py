@@ -31,6 +31,9 @@ Plant (Wave 9, lane R1A; only the designated row counts, exit 1 = the fault was 
                             where it starts) -> view-pixels must FAIL (lodge_tower.f1r1, the Wave-8 storage room whose boxes hide behind the rack from the camera)
   --plant sparse            (W10 R1A) housegen.js served with plan item 5 undone (VIEW_WANT top-up, no centre groups, home budget 4000: the audit's furnishing) ->
                             view-lived and view-lived-cover must FAIL
+  --plant no-ao             (W10 R3A) housegen.js served with BAKED_AO false (no contact shadow baked under the pieces) -> contact-shadow must FAIL
+W10 R3A row: contact-shadow (per standing piece of the 12 judged buildings and side (toward the best entrance, square to it), the floor 0.07 m outside its footprint vs 0.5 m
+further out, both seen from the third-person camera there, clear of other pieces, walls and light pools: luminance ratio <= 0.75 in >= 80 % of >= 40 samples).
 W10 R1A rows: view-lived (every lived room - living, bedroom, kitchen, dining - of the homes shows >= 5 of its own substantive (non-filler) pieces from its best doorway, the third-person camera) and
 view-lived-cover (>= 20 % of the frame below the horizon is furniture: every piece hidden at once, the changed pixels under the horizon row).
 Screenshots (LOOK at them): per use a contact sheet (street, the front from the third-person camera, stepping in through the front door, the biggest room
@@ -53,9 +56,12 @@ GATE = "housegen_demo_looks"
 # --plant (Wave 9, lane R1A): the row that must FAIL, and the in-memory edit of the served housegen.js
 PLANTS = {"eye-only-phase5": {"view-pixels"},
           # (W10 R1A) the homes furnished as the audit found them: no area quota, no centre-of-room groups (the VIEW_WANT top-up alone)
-          "sparse": {"view-lived", "view-lived-cover"}}
+          "sparse": {"view-lived", "view-lived-cover"},
+          # (W10 R3A) the baked contact shadows off (housegen BAKED_AO false: no ring under any piece)
+          "no-ao": {"contact-shadow"}}
 HG_REL = "runtime/3d/royale/housegen.js"
 PLANT_EDIT = {"eye-only-phase5": ("        model5(true);\n        if (bestView(R).n >= 3) return;\n        const run5", "        model5(false);\n        if (bestView(R).n >= 3) return;\n        const run5")}
+PLANT_EDIT["no-ao"] = ("export const BAKED_AO = true;", "export const BAKED_AO = false;")
 PLANT_EDIT["sparse"] = [("export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"), ("export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;"),
                         ("export const TRI_BUDGET_HOME = 6000;", "export const TRI_BUDGET_HOME = 4000;")]      # (pass 3: plan item 5 undone as a unit, homes.py's sparse)
 
@@ -103,6 +109,7 @@ VIEW_MIN = 3
 LIVED = {"living", "bedroom", "kitchen", "dining"}      # (W10 R1A) a home's lived rooms
 LIVED_MIN = 5                                          # pieces the camera sees from the best doorway of a lived room
 COVER_MIN = 0.20                                       # share of the frame below the horizon that is furniture
+CS_MAX, CS_SHARE, CS_MIN_N = 0.75, 0.80, 40            # (W10 R3A) contact-shadow: foot / 0.5 m out <= 0.75 in >= 80 % of >= 40 sampled pieces
 
 PROBE = r"""
 () => {
@@ -332,6 +339,59 @@ PROBE = r"""
     sc.body.visible = false;
     return out;
   }
+  // (W10 R3A, plan R3A row contact-shadow) per standing piece of the 12 judged buildings (>= 0.3 m tall, on its room's floor, not decor / wall-hung / on a top) and per
+  // side of it - the side that faces its room's best entrance, the two sides square to that - two floor points: A 0.07 m outside its footprint, B 0.5 m further out. Both inside the room (>= 0.4 m from its walls:
+  // the wall-foot shading), clear of every other piece's footprint + 0.4 m and of every ceiling light's pool, and both SEEN from the game's third-person camera at
+  // that entrance (a ray to each meets nothing else first). Luminance (5 x 5 px mean, sRGB) at A over B; the sun casts no shadow here (viewPixels' rule)
+  function contactShadow() {
+    const gl = R.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, buf = new Uint8Array(w * h * 4);
+    const sc = scene(), shadow = sc.sun.castShadow; sc.sun.castShadow = false;
+    const rc = new THREE.Raycaster(), out = [], meshes = [];
+    sc.scene.traverse((o) => { if ((o.isMesh || o.isInstancedMesh) && o !== sc.ground && !(o.parent && o.parent.name === "glass")) meshes.push(o); });
+    const inRoom = (r, x, z, m) => r.rects.some((c) => x > c[0] + m && x < c[2] - m && z > c[1] + m && z < c[3] - m);
+    for (const q of houses) {
+      if (!q.core) continue;
+      const pools = ((q.H.fin && q.H.fin.pools) || []);
+      for (const r of q.H.rooms) {
+        const e = entrance(r); if (!e) continue;
+        const all = q.H.furniture.filter((p) => p.room === r.id && !p.deco);
+        const pieces = all.filter((p) => !p.mount && Math.abs(p.min[1] - r.y) <= 0.02 && p.max[1] - p.min[1] >= 0.3);
+        if (!pieces.length) continue;
+        tp(e.x, e.y, e.z, e.fx, e.fz); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+        const cam = sc.cam.position.clone();
+        const lum = (P) => {
+          const v = new THREE.Vector3(P[0], P[1], P[2]).project(sc.cam);
+          if (v.z > 1 || Math.abs(v.x) > 0.95 || Math.abs(v.y) > 0.95) return null;
+          const px = Math.round((v.x + 1) / 2 * w), py = Math.round((v.y + 1) / 2 * h);
+          let t = 0, n = 0;
+          for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const k = ((py + dy) * w + (px + dx)) * 4; t += 0.2126 * buf[k] + 0.7152 * buf[k + 1] + 0.0722 * buf[k + 2]; n++; }
+          return t / n;
+        };
+        const seen = (P) => {
+          const d = new THREE.Vector3(P[0] - cam.x, P[1] - cam.y, P[2] - cam.z), L = d.length();
+          rc.set(cam, d.normalize()); rc.near = 0; rc.far = L + 0.05;
+          const hit = rc.intersectObjects(meshes, false)[0];
+          return !hit || hit.distance >= L - 0.06;
+        };
+        for (const p of pieces) for (const turn of [0, 1, -1]) {     // (the side facing the camera, then the two sides square to it)
+          const cx = (p.min[0] + p.max[0]) / 2, cz = (p.min[2] + p.max[2]) / 2, hx = (p.max[0] - p.min[0]) / 2, hz = (p.max[2] - p.min[2]) / 2;
+          let dx = cam.x - cx, dz = cam.z - cz; const dl = Math.hypot(dx, dz); if (dl < 0.5) continue; dx /= dl; dz /= dl;
+          if (turn) { const t = dx; dx = -dz * turn; dz = t * turn; }
+          const te = Math.min(Math.abs(dx) > 1e-6 ? hx / Math.abs(dx) : 1e9, Math.abs(dz) > 1e-6 ? hz / Math.abs(dz) : 1e9);
+          const y = r.y + 0.012, A = [cx + dx * (te + 0.07), y, cz + dz * (te + 0.07)], B = [cx + dx * (te + 0.57), y, cz + dz * (te + 0.57)];
+          if (!inRoom(r, A[0], A[2], 0.4 + 0.12) || !inRoom(r, B[0], B[2], 0.4 + 0.12)) continue;
+          const clear = (P) => all.every((o) => o === p || P[0] < o.min[0] - 0.4 || P[0] > o.max[0] + 0.4 || P[2] < o.min[2] - 0.4 || P[2] > o.max[2] + 0.4) &&
+            pools.every((o) => Math.abs(o.y - r.y) > 0.05 || Math.hypot(P[0] - o.x, P[2] - o.z) > o.r + 0.05);
+          if (!clear(A) || !clear(B) || !seen(A) || !seen(B)) continue;
+          const la = lum(A), lb = lum(B);
+          if (la == null || lb == null || lb < 8) continue;
+          out.push({ house: q.H.id, room: r.id, kind: r.kind, piece: p.cat, side: turn, ratio: +(la / lb).toFixed(3), a: +la.toFixed(1), b: +lb.toFixed(1) });
+        }
+      }
+    }
+    sc.sun.castShadow = shadow; sc.body.visible = false;
+    return out;
+  }
   // R4: a RUIN (housegen THEMES[theme].ruined, Wave 8 K1 788eb418: "a ruin's panes are mostly gone", one kept in four from its own stream)
   // is judged apart - its windows may lack panes (never more panes than windows); every intact building still needs one pane per window
   function glass() {
@@ -364,7 +424,7 @@ PROBE = r"""
     return cv.toDataURL("image/png");
   }
   function data() { return houses.map((q) => Object.assign({ core: q.core }, q.H)); }
-  return { build, kitExtents, look, tp, setClip, viewPixels, glass, sheet, data };
+  return { build, kitExtents, look, tp, setClip, viewPixels, contactShadow, glass, sheet, data };
 }
 """
 
@@ -430,6 +490,15 @@ def main_fn(v, args):
             ownp = [r for r in vp if r["own"] < VIEW_MIN]
             v.info(label + "-own", "%d of %d rooms show >= %d of their OWN pieces from that view; mean pieces in view %.1f; %s" % (
                 len(vp) - len(ownp), len(vp), VIEW_MIN, sum(r["inView"] for r in vp) / max(1, len(vp)), [(r["room"], r["kind"], r["own"], r["inView"]) for r in ownp[:12]]))
+        # (W10 R3A) contact-shadow: luminance at a standing piece's foot <= 0.75 x the floor 0.5 m further out in >= 80 % of the sampled pieces (>= 40 samples)
+        cs = s.js("() => window.__HGL__.contactShadow()")
+        v.data["contact-shadow"] = cs
+        dark = [x for x in cs if x["ratio"] <= CS_MAX]
+        rs = sorted(x["ratio"] for x in cs)
+        v.check("contact-shadow", len(cs) >= CS_MIN_N and len(dark) >= CS_SHARE * len(cs),
+                "%d sampled pieces (bar >= %d): luminance at the foot / 0.5 m out <= %.2f in %d = %.1f %% (bar >= %.0f %%); ratio p10 %.3f p50 %.3f p90 %.3f; lightest %s" % (
+                    len(cs), CS_MIN_N, CS_MAX, len(dark), 100.0 * len(dark) / max(1, len(cs)), CS_SHARE * 100, rs[len(rs) // 10] if rs else 0, rs[len(rs) // 2] if rs else 0,
+                    rs[min(len(rs) - 1, len(rs) * 9 // 10)] if rs else 0, [(x["house"], x["piece"], x["ratio"]) for x in sorted(cs, key=lambda x: -x["ratio"])[:4]]))
         gl = s.js("() => window.__HGL__.glass()")
         ruins = gl.get("ruins") or []
         v.check("glass", gl["windows"] > 0 and gl["panes"] == gl["windows"] and gl["ruinPanes"] <= gl["ruinWindows"] and gl["colliding"] == 0 and gl["glassTris"] > 0,

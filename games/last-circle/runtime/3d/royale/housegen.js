@@ -114,7 +114,7 @@
  * max abs sqrt; quarter turns from exact tables (no sin / cos / atan).
  */
 
-export const VERSION = 7;                  // 7: Wave 10 round 1 (lane R1A) - homes: room programme (living + kitchen + bedroom + bath), rooms >= 2 cells wide, furniture x FURN_K 1.15, the area quota (>= 6 pieces a lived room), centre groups, one closed kitchen run with wall units and a hood, bath sets, filler caps, loot by room area; 6: Wave 9 round 1 (lane R1A, LC-91 + W9) - door leaves (H.doorLeaves: a closed and an open slab collider per leaf, swing discs kept clear of furniture / floor loot, the swing side's door zone 1.2 m), phase 5 judged and searched with the accurate (third-person camera + eye) model, the eye-only search its fallback; 5: Wave 8 fix round (lane K1) - phase 5 (every room shows >= 3 of its own pieces to the doorway eye), the outline door keeps off straight-across / thin-opposite edges, P.near + DOOR_OUT (no street / back door onto an alley), a ruin's wreckage (remnants, rubble, scorch, cracks, moss, weeds, broken panes) from its own stream; 4: stage B (lane I1) - meshData / translateY exports, the machine's exact colliders, no clutter staircase, a room reads from its own pieces; 3: round 3 (lane H6) - themes, pitched roofs (house.roofs / gables, roof ramps), relief, dense layouts; 2: round 2 (lane H4) - uses, storey heights, shells, dressing, rooms[].walk / anchor / views, furniture mount / on
+export const VERSION = 8;                  // 8: Wave 10 round 3 (lane R3A) - interiors II: shops' aisle rows scale with the room (2.5 m pitch) + a checkout line, storage racks / pallet rows by area, cubicle partitions, sized conference tables, cover in every office / meeting room / lobby / corridor, pitched roofs on the homes outside a downtown core + porches, the finish records (H.fin: curtains, pictures, wall runs, light pools) meshData draws; 7: Wave 10 round 1 (lane R1A) - homes: room programme (living + kitchen + bedroom + bath), rooms >= 2 cells wide, furniture x FURN_K 1.15, the area quota (>= 6 pieces a lived room), centre groups, one closed kitchen run with wall units and a hood, bath sets, filler caps, loot by room area; 6: Wave 9 round 1 (lane R1A, LC-91 + W9) - door leaves (H.doorLeaves: a closed and an open slab collider per leaf, swing discs kept clear of furniture / floor loot, the swing side's door zone 1.2 m), phase 5 judged and searched with the accurate (third-person camera + eye) model, the eye-only search its fallback; 5: Wave 8 fix round (lane K1) - phase 5 (every room shows >= 3 of its own pieces to the doorway eye), the outline door keeps off straight-across / thin-opposite edges, P.near + DOOR_OUT (no street / back door onto an alley), a ruin's wreckage (remnants, rubble, scorch, cracks, moss, weeds, broken panes) from its own stream; 4: stage B (lane I1) - meshData / translateY exports, the machine's exact colliders, no clutter staircase, a room reads from its own pieces; 3: round 3 (lane H6) - themes, pitched roofs (house.roofs / gables, roof ramps), relief, dense layouts; 2: round 2 (lane H4) - uses, storey heights, shells, dressing, rooms[].walk / anchor / views, furniture mount / on
 
 // ── constants ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const U = 2.5;                      // grid module (towngen CELL)
@@ -144,6 +144,16 @@ export const CAPSULE = Object.freeze({ r: 0.45, h: 1.8, step: 0.55 });   // play
 const CROUCH_H = 1.54;                                     // (W10 R1A) the crouched capsule (royale.js: 1.36 + 0.18 m) - nothing lower over a floor fits under it
 export const MAX_FLOORS = 3;               // O3
 export const TRI_BUDGET = 4000;            // per furnished storey
+// (W10 R3A, plan R3A budget: shops +2-4k a large shop, offices ~+1k a storey) a work building's furnished storey: a shop / hall (stores, warehouses, offices) 6000, a
+// mid-rise / tower (offices, meeting rooms, lobbies) 5000 - WORK_FIT; every other non-home storey TRI_BUDGET. triBudgetOf(H) is the selftest's recount bar
+// and a big one more, by its footprint: TRI_WORK_M2 a m2, up to TRI_WORK_MAX (a 30 x 22.5 m mall storey held 7 gondolas in a 219 m2 store at 6000)
+export const TRI_BUDGET_WORK = Object.freeze({ shop: 6000, hall: 6000, midrise: 5000, tower: 5000 });
+export const TRI_WORK_M2 = 18, TRI_WORK_MAX = 9000;
+const workBudget = (use, W, D) => (TRI_BUDGET_WORK[use] ? Math.max(TRI_BUDGET_WORK[use], Math.min(TRI_WORK_MAX, Math.round(TRI_WORK_M2 * W * D))) : 0);
+export function triBudgetOf(H) {
+  const ruined = !!(THEMES[H.theme] && THEMES[H.theme].ruined), home = H.use === "house" && !ruined;
+  return home ? TRI_BUDGET_HOME : (WORK_FIT && !ruined && workBudget(H.use, H.W, H.D)) || TRI_BUDGET;
+}
 // ---- Wave 10 round 1 (lane R1A, the houses audit): homes (use house, not a ruin) - each switch below is ON in the game; the homes gate (_harness/p23/homes.py) plants turn one off
 export const MIN_ROOM_W = 2;               // a home's rooms are >= 2 cells (5.0 m) on the narrow side (audit 11: 19.7 % were 2.5 m wide); one 1 x 2-cell bath nook per floor is the exception
 export const FURN_K = 1.15;                // every piece of furniture (kit and authored) x FURN_K, drawn AND collided (audit 3: 2.26 m doors, 3.4 m storeys and 2.5 m cells
@@ -171,7 +181,23 @@ export const HOME_LOOT_M2 = 0.074;        // (W10 R1A) a home room's loot points
 export const HOME_LOOT_THEME = Object.freeze({ city: 1.25, lodge: 0.98, mill: 0.98 });
 export const LOOT_K_LODGE = 0.5;           // (W10 R1A) a lodge / mill building (Deepwood) that is not a home keeps x this of its points on top of LOOT_K (there homes hold ~85 % of the loot)
 export const LOOT_K = Object.freeze({ home: 1, house: 0.6, shop: 0.85, midrise: 0.95, tower: 1, hall: 0.8, shed: 0.7, barn: 1 });
-export const RNG_LEAK = false;             // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
+// (W10 R3A) interiors II. FINISH: the drawn-only finish meshData builds on medium and up (like the wear strips: opts.finish / opts.wear, never on low, no collider,
+// not in house.tris): pictures, tile bands in kitchens and baths, inside door / window casings, light pools, darker wall feet and corners. CURTAIN_FOLDS: the
+// lived rooms' windows get a rod and two pleated panels (the homes gate's plank-curtain plant: the flat 1.5 cm plank skins of round 3 instead). BAKED_AO: a soft
+// dark ring baked under every standing piece (vertex colour; the looks gate's no-ao plant: none). WORK_FIT: shop aisles / storage rows sized to the room at
+// SHOP_PITCH, a checkout line. WORK_COVER: cubicle partitions, sized conference tables, a cover piece (>= 0.9 m tall, >= 0.7 m wide) in every office, meeting
+// room, lobby and corridor (the bare-office plant: off). PITCHED_HOMES: a home outside a downtown core (P.core) never has a flat roof; ROOF_FLAT_ALL: the
+// flat-everywhere plant (every roof flat).
+export const FINISH = true;
+export const CURTAIN_FOLDS = true;
+export const BAKED_AO = true;
+export const WORK_FIT = true;
+export const SHOP_PITCH = 2.5;             // m from one aisle row to the next (plan scope cut 1: 3.0)
+export const WORK_COVER = true;
+export const PITCHED_HOMES = true;
+export const ROOF_FLAT_ALL = false;
+export const AO = Object.freeze({ k: 0.32, r: 0.35, minH: 0.25, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
+export const RNG_LEAK = false;            // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
 const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
 /** (W10 R1A) a catalog entry's filler-cap class (0 none, 1 clock, 2 floor lamp, 3 potted plant), cached on the entry */
@@ -494,8 +520,8 @@ const AUTH = {
     cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]], surface: 1.05 },
   gondola: { w: 1.8, d: 0.9, parts: [[-0.9, 0, -0.45, 0.9, 0.12, 0.45, "metal", 0xd8dadc], [-0.88, 0.12, -0.03, 0.88, 1.35, 0.03, "metal", 0xc8cacc], [-0.9, 0.12, -0.45, -0.86, 1.35, 0.45, "metal", 0x9aa1a6], [0.86, 0.12, -0.45, 0.9, 1.35, 0.45, "metal", 0x9aa1a6],
     [-0.86, 0.6, -0.45, 0.86, 0.63, 0.45, "metal", 0xd8dadc], [-0.86, 1.1, -0.45, 0.86, 1.13, 0.45, "metal", 0xd8dadc],
-    [-0.8, 0.12, 0.05, -0.15, 0.45, 0.4, "fabric", 0xd9534f], [-0.05, 0.12, 0.05, 0.8, 0.5, 0.42, "fabric", 0x428bca], [-0.8, 0.63, 0.05, 0.1, 0.95, 0.4, "fabric", 0xf0ad4e], [0.2, 0.63, 0.05, 0.8, 1.0, 0.4, "fabric", 0x5cb85c],
-    [-0.8, 0.12, -0.42, 0.0, 0.48, -0.05, "fabric", 0x5bc0de], [0.1, 0.12, -0.4, 0.8, 0.42, -0.05, "fabric", 0xe8e1c8], [-0.8, 0.63, -0.4, -0.2, 0.92, -0.05, "fabric", 0xd9534f], [-0.1, 0.63, -0.42, 0.8, 1.02, -0.05, "fabric", 0xf0ad4e]],
+    [-0.8, 0.12, 0.05, -0.15, 0.45, 0.4, "fabric", 0xa8675c], [-0.05, 0.12, 0.05, 0.8, 0.5, 0.42, "fabric", 0x5f7f9c], [-0.8, 0.63, 0.05, 0.1, 0.95, 0.4, "fabric", 0xc4a26a], [0.2, 0.63, 0.05, 0.8, 1.0, 0.4, "fabric", 0x7a9472],
+    [-0.8, 0.12, -0.42, 0.0, 0.48, -0.05, "fabric", 0x86a4ae], [0.1, 0.12, -0.4, 0.8, 0.42, -0.05, "fabric", 0xd8d0b8], [-0.8, 0.63, -0.4, -0.2, 0.92, -0.05, "fabric", 0xa8675c], [-0.1, 0.63, -0.42, 0.8, 1.02, -0.05, "fabric", 0xc4a26a]],   // (W10 R3A: muted stock colours)
     cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]], surface: 1.13 },
   shopCounter: { w: 2.0, d: 0.7, parts: [[-1.0, 0, -0.35, 1.0, 1.0, 0.33, "wood", 0], [-1.02, 1.0, -0.36, 1.02, 1.05, 0.35, "wood", WOODD], [-0.95, 0.15, 0.33, 0.95, 0.9, 0.35, "wood", WOOD],
     [0.3, 1.05, -0.25, 0.7, 1.3, 0.05, "metal", 0x3a3f44]], cols: [[0, 1, 2], [3]], surface: 1.05 },
@@ -520,6 +546,12 @@ const AUTH = {
   // ── round 3 (lane H6): the cheap pieces that make rooms DENSE inside the 4k-per-storey budget. A kit piece costs 60-600 triangles; these cost
   // ~10 per box (a box resting on the floor or a host top does not draw its bottom; a plate draws one face). Original art, CC0 by construction.
   // offices: a desk (top + two side panels + a modesty panel), a swivel chair, a monitor (stands on a desk), filing cabinets, lockers, a whiteboard
+  // (W10 R3A) a cubicle partition (1.4 m: soft cover between back-to-back desks), a sized conference table (2.6 / 3.6 m: a meeting room's 6 / 8 seats)
+  partition: { w: 1.4, d: 0.08, parts: [[-0.7, 0, -0.04, 0.7, 1.4, 0.04, "fabric", 0x8a96a0], [-0.7, 1.4, -0.045, 0.7, 1.43, 0.045, "metal", 0x5a5e64]], cols: [[0, 1]] },
+  confTable: { w: 2.6, d: 1.2, parts: [[-1.3, 0.71, -0.6, 1.3, 0.76, 0.6, "wood", 0], [-1.0, 0, -0.32, -0.88, 0.71, 0.32, "metal", 0x3a3e44], [0.88, 0, -0.32, 1.0, 0.71, 0.32, "metal", 0x3a3e44]],
+    cols: [[0], [1], [2]], surface: 0.76 },
+  confTableL: { w: 3.6, d: 1.3, parts: [[-1.8, 0.71, -0.65, 1.8, 0.76, 0.65, "wood", 0], [-1.45, 0, -0.35, -1.33, 0.71, 0.35, "metal", 0x3a3e44], [1.33, 0, -0.35, 1.45, 0.71, 0.35, "metal", 0x3a3e44],
+    [-0.06, 0, -0.3, 0.06, 0.71, 0.3, "metal", 0x3a3e44]], cols: [[0], [1], [2], [3]], surface: 0.76 },
   deskA: { w: 1.4, d: 0.7, parts: [[-0.7, 0.72, -0.35, 0.7, 0.76, 0.35, "wood", 0], [-0.68, 0, -0.33, -0.63, 0.72, 0.33, "metal", 0x4a4e54], [0.63, 0, -0.33, 0.68, 0.72, 0.33, "metal", 0x4a4e54],
     [-0.63, 0.32, -0.33, 0.63, 0.7, -0.3, "metal", 0x4a4e54]], cols: [[0], [1], [2], [3]], surface: 0.76 },
   officeChair: { w: 0.56, d: 0.56, parts: [[-0.28, 0, -0.28, 0.28, 0.06, 0.28, "metal", 0x26282c], [-0.04, 0.06, -0.04, 0.04, 0.42, 0.04, "metal", 0x6a6e74],
@@ -528,6 +560,8 @@ const AUTH = {
     [-0.28, 0.13, -0.1, 0.28, 0.45, -0.07, "metal", 0x1a1c20], [-0.26, 0.15, -0.07, 0.26, 0.43, -0.066, "ceramic", 0x2a4a6a]], cols: [[0, 1], [2, 3]], top: true },
   filingCab: { w: 0.48, d: 0.6, parts: [[-0.24, 0, -0.3, 0.24, 1.32, 0.29, "metal", 0x8a9296], [-0.21, 0.06, 0.29, 0.21, 0.46, 0.3, "metal", 0xb0b6ba], [-0.21, 0.5, 0.29, 0.21, 0.9, 0.3, "metal", 0xb0b6ba],
     [-0.21, 0.94, 0.29, 0.21, 1.28, 0.3, "metal", 0xb0b6ba]], cols: [[0, 1, 2, 3]], surface: 1.32 },
+  // (W10 R3A) a two-door locker (0.8 m): the cover a narrow corridor's end wall takes beside a door zone
+  lockers2: { w: 0.8, d: 0.5, parts: [[-0.4, 0, -0.25, 0.4, 1.9, 0.24, "metal", 0x6f8a9a], [-0.37, 0.08, 0.24, -0.02, 1.86, 0.25, "metal", 0x86a2b2], [0.02, 0.08, 0.24, 0.37, 1.86, 0.25, "metal", 0x86a2b2]], cols: [[0, 1, 2]] },
   lockers: { w: 1.2, d: 0.5, parts: [[-0.6, 0, -0.25, 0.6, 1.9, 0.24, "metal", 0x6f8a9a], [-0.57, 0.08, 0.24, -0.21, 1.86, 0.25, "metal", 0x86a2b2], [-0.18, 0.08, 0.24, 0.18, 1.86, 0.25, "metal", 0x86a2b2],
     [0.21, 0.08, 0.24, 0.57, 1.86, 0.25, "metal", 0x86a2b2]], cols: [[0, 1, 2, 3]] },
   whiteboard: { w: 1.8, d: 0.02, parts: [[-0.9, 1.0, -0.01, 0.9, 2.0, 0.0, "metal", 0xb8bcc0], [-0.86, 1.04, 0.0, 0.86, 1.96, 0.008, "ceramic", 0xf6f8f8]], cols: [], deco: true, wall: true, plate: "z" },
@@ -723,9 +757,9 @@ export const CATALOG = CATALOGS[DEFAULT_KIT];
 export const THEMES = {
   city: { facadeMat: ["brick", "brick", "plaster"], facade: { brick: [0xa4553f, 0x8e4a3a, 0xb86f52, 0x9a5a48, 0x7e3f33, 0xb5644a], plaster: [0xd8cdb8, 0xbfc6c9, 0xc9b79a, 0xd6d0c4, 0xc4b2a0, 0xa9b4b8] },
     trim: [0xede6d6, 0xdcd6c8, 0xc9c2b4], roofs: { flat: 0.7, gable: 0.3 }, pitch: 30, roofC: [0x6b6e70, 0x5f6366, 0x7a4a3a, 0x4f5559], shop: 0.35, L: 0.3, win: 0.62, backDoor: 0.6,
-    interiorMat: "plaster", base: { p: 0.55, mat: ["plaster", "stone"], color: [0xcfc6b4, 0xa8a196, 0x8f8a82, 0xd8d2c4] }, porch: 0, canopy: 0.8, balcony: 0.25, belts: 0.85, pilasters: 0.6, chimney: 0.5, shutters: 0, awning: 0.9 },
+    interiorMat: "plaster", base: { p: 0.55, mat: ["plaster", "stone"], color: [0xcfc6b4, 0xa8a196, 0x8f8a82, 0xd8d2c4] }, porch: 0.3, canopy: 0.8, balcony: 0.25, belts: 0.85, pilasters: 0.6, chimney: 0.5, shutters: 0, awning: 0.9 },
   resort: { facadeMat: ["stucco"], facade: { stucco: [0xf2a48f, 0xa8dcc8, 0x8ccbd9, 0xf4d27a, 0xf0e4d0, 0xe9a8b8, 0xd9c7f0, 0xf7e9c4] },
-    trim: [0xffffff, 0xf7f3ea], roofs: { flat: 0.45, gable: 0.55 }, pitch: 22, roofC: [0xc0623b, 0xb5573a, 0xa94e32, 0xd07a4a], shop: 0.15, L: 0.5, win: 0.72, backDoor: 0.7,
+    trim: [0xffffff, 0xf7f3ea], roofs: { flat: 0.2, gable: 0.8 }, pitch: 22, roofC: [0xc0623b, 0xb5573a, 0xa94e32, 0xd07a4a], shop: 0.15, L: 0.5, win: 0.72, backDoor: 0.7,
     interiorMat: "plaster", base: { p: 0.3, mat: ["stucco"], color: [0xffffff, 0xf3ece0] }, porch: 0.35, canopy: 0.5, balcony: 0.6, belts: 0.5, pilasters: 0.3, chimney: 0.1, shutters: 0.75, awning: 0.9 },
   lodge: { facadeMat: ["plank"], facade: { plank: [0x7a5234, 0x8e5e3b, 0x6e7b4f, 0x9c8b70, 0x5e6b4a, 0x8b3a2e, 0x6a4a36, 0x857a66] },
     trim: [0xe8e0cc, 0x3a2e24], roofs: { gable: 0.9, flat: 0.1 }, pitch: 38, roofC: [0x4a3f38, 0x3e4a3a, 0x5a3a2c, 0x34383c], shop: 0.1, L: 0.4, win: 0.55, backDoor: 0.5,
@@ -756,6 +790,21 @@ const ROOMSTYLE = {
   ruin: { wall: [0x8a857a, 0x7a766c, 0x9a9282], floor: "floor_concrete", fc: [0x6f6a60, 0x7d776c] },
 };
 const LODGE_INNER = [0xc79a6a, 0xb98d5f, 0xd2a878];
+// (W10 R3A, audit 6) 16 prints the finish draws on the art pieces' canvases and the framed pictures (meshData: a 4 x 3 cell grid, 5 x 4 vertex colours = each row's
+// left .. right colour). Original procedural prints (landscapes, abstracts), no texture: the insides' material has no free sampler (0 programs, 0 draw calls, 0 KB)
+export const PICS = [
+  [[0xc6dcec, 0xa9cbe4], [0x7fa9cc, 0x6f9cc4], [0x2f5f86, 0x3a6f9a], [0xd8c8a0, 0xc9b48a]], [[0xf2c27a, 0xe8a060], [0xe07a4a, 0xf3d08a], [0x7a3a4a, 0x5a2e44], [0x2e2a3a, 0x3a3046]],
+  [[0xcfe0d8, 0xb8d4cc], [0x5e8a5a, 0x4a7a4e], [0x2f5a36, 0x3a6a40], [0x6a5a3a, 0x5a4a30]], [[0xe8d8b8, 0xf0e0c0], [0xd8a868, 0xc89458], [0xb87a48, 0xa86a3a], [0x8a5a34, 0x9a6a3e]],
+  [[0x9ab8d8, 0xa8c4e0], [0xf4f4f6, 0xd8dde4], [0x6a7488, 0x5a6478], [0x4a6a4a, 0x3e5e40]], [[0xc0453a, 0xc0453a], [0xc0453a, 0x2f5f8a], [0xe8e0cc, 0x2f5f8a], [0xe8e0cc, 0xd9b44a]],
+  [[0xd9b44a, 0xe0a040], [0xd9b44a, 0xb05a3a], [0x8a3b3b, 0xb05a3a], [0x8a3b3b, 0x3a2e24]], [[0xf0ece2, 0xc0302a], [0xf0ece2, 0xf0ece2], [0x2a4a8a, 0xf0ece2], [0x2a4a8a, 0xe8c040]],
+  [[0xeee6d2, 0xeee6d2], [0xe6dcc0, 0x6a8a4a], [0x6a8a4a, 0x4a6a3a], [0xeee6d2, 0xe6dcc0]], [[0x1a2238, 0x22304a], [0x2e3a5a, 0x3a4a6a], [0x5a5a6a, 0xd8b060], [0x2a2a34, 0x3a3a44]],
+  [[0x2f6f6a, 0x3a8a7a], [0xe8e2d0, 0x3a8a7a], [0xe8e2d0, 0xd07a4a], [0x2f6f6a, 0xd07a4a]], [[0xc8d4ec, 0xd8c8e8], [0x9a8ac8, 0x8a7ab8], [0x6a5a9a, 0x7a6aa8], [0x4a6a3a, 0x5a7a44]],
+  [[0xe8d8b0, 0xd8c8a0], [0xc87a3a, 0xb85a2a], [0x9a4a2a, 0xc8902a], [0x5a4a30, 0x4a3a28]], [[0xe8e6e2, 0xd8d6d2], [0xb8b6b2, 0x8a8884], [0x5a5854, 0x8a8884], [0xe8e6e2, 0xc8c6c2]],
+  [[0xd8e4ec, 0xc8d8e4], [0x6a8a6a, 0x5a7a5e], [0x6f93a6, 0x5f839a], [0x4a6a7a, 0x3e5e6e]], [[0xe85a7a, 0xf0c040], [0xf0c040, 0x3ab0c0], [0x3ab0c0, 0x6a4ac0], [0x6a4ac0, 0xe85a7a]],
+];
+const COVER_IDS = { office: ["lockers", "bookcase", "shelf", "bookcaseOpen", "shelfLow", "partition"], meeting: ["bookcase", "shelfLow", "bookcaseOpen", "lockers", "shelf"],
+  lobby: ["shopCounter", "shelfLow", "bookcase", "lockers"], hall: ["lockers", "lockers2", "shelfLow", "bookcase", "partition"] };     // (W10 R3A: the cover pieces each work room tries, in order)
+const PIC_KINDS = new Set(["living", "bedroom", "kitchen", "dining", "office", "lobby", "meeting", "hall"]);
 const RUG = [0x8a3b3b, 0x3b5a8a, 0x6a8a3b, 0xb07a3a, 0x5a3b6a, 0x2f6f6a];
 const TINT_WOOD = [0x9a6b43, 0x7d5435, 0xb2875a, 0x5e4430];
 const ART = [0x2f5f8a, 0xc0563a, 0x6a8a3b, 0xd9b44a, 0x7a4a8a, 0x3a8a7a, 0xe0d6c0, 0x8a3b3b];
@@ -783,6 +832,8 @@ function normParcel(p) {
     // (Wave 8 fix round, lane K1) the caller's other buildings round this one, world rects [x0, z0, x1, z1]: no street / back door opens onto one of them closer
     // than DOOR_OUT (an alley narrower than a doorway's approach; verify_b: 11 Savanna downtown back doors faced a tower wall 1-3 m away)
     near: Array.isArray(p.near) ? p.near.filter((q) => Array.isArray(q) && q.length === 4 && q.every((v) => isFinite(+v))).map((q) => q.map(Number)) : null,
+    // (W10 R3A) the building stands in a downtown core (maps.js: towngen's core town kind): its homes keep the flat roofs of a city block, no porch
+    core: !!p.core,
   };
 }
 export const DOOR_OUT = 4.0;               // m of open ground in front of a street / back door (the approach a walker starts from 3.5 m out + a capsule)
@@ -800,6 +851,7 @@ export function generate(parcel, opts) {
   const { nx, nz } = P;
   const W = nx * U, D = nz * U;
   const notes = [];
+  let hasPorch = false;                                   // (W10 R3A: a front porch was built - the homes census's porch share)
   if (P.themeAsked != null && P.themeAsked !== P.theme) notes.push("theme " + P.themeAsked + " unknown -> city");
   const uL = (i) => -W / 2 + i * U, vL = (j) => -D / 2 + j * U;
   const cIdx = (i, j) => j * nx + i;
@@ -885,6 +937,9 @@ export function generate(parcel, opts) {
     if (roofKind === "gable" && cut) roofKind = "hip";
     if (roofKind === "gable" && use === "barn" && (P.theme === "farm" || P.theme === "lodge")) roofKind = "gambrel";
     else if (roofKind === "gable" && use === "shed" && rng() < 0.6) roofKind = "lean";
+    // (W10 R3A, audit 13) a home outside a downtown core is never flat-roofed: a gable, a stepped hip on an L plan (no stream drawn: the house's draws stay)
+    if (PITCHED_HOMES && home && !P.core && roofKind === "flat") roofKind = cut ? "hip" : "gable";
+    if (ROOF_FLAT_ALL) roofKind = "flat";
   }
   const pitched = roofKind === "gable" || roofKind === "gambrel" || roofKind === "lean";
   const palette = [], palKey = new Map();
@@ -2140,7 +2195,7 @@ export function generate(parcel, opts) {
     // (stage B, lane I1) a porch / canopy ceiling is painted light (a porch's beadboard, a canopy's soffit): in the shade under it the roof colour read near black from
     // the doorway (interiorcheck light: a lodge porch's dark roof underside was a third of the entrance view)
     const P_CEIL = pal("wood", P.theme === "lodge" || P.theme === "farm" ? 0xc9b48e : 0xe6dfd0), undersideOf = (pi) => [pi, pi, pi, P_CEIL, pi, pi];
-    const porchOn = use === "house" && rng() < TH.porch, awnOn = use === "shop" && rng() < TH.awning, canopyOn = rng() < TH.canopy;
+    const porchOn = use === "house" && rng() < (P.core ? 0 : TH.porch), awnOn = use === "shop" && rng() < TH.awning, canopyOn = rng() < TH.canopy;
     for (const d of doors) {
       if (d.kind === "interior") continue;
       const g = doorGeo(d), F = floors[0], cPlus = cellAt(d.i, d.j), plusIn = cPlus >= 0 && F.type[cPlus] !== 0, n = plusIn ? -1 : 1;     // n: outward along the door's normal
@@ -2152,6 +2207,7 @@ export function generate(parcel, opts) {
         box(t0, t1, y0p - BASE0, s[0], 0, dep, P_DECK);                                                           // the deck (floor level: one 5 cm step)
         box(t0 + 0.02, t0 + 0.18, s[0], s[0] + 2.62, dep - 0.18, dep - 0.02, P_POST); box(t1 - 0.18, t1 - 0.02, s[0], s[0] + 2.62, dep - 0.18, dep - 0.02, P_POST);
         box(t0 - 0.1, t1 + 0.1, s[0] + 2.62, s[0] + 2.78, 0, dep + 0.15, undersideOf(P_ROOF));                   // its roof (a light ceiling under it)
+        hasPorch = true;
         continue;
       }
       if (front && awnOn) {
@@ -2447,11 +2503,12 @@ export function generate(parcel, opts) {
     }
   }
 
+  const finRuns = [], finPools = [], finCur = [];          // (W10 R3A) the finish records (local), see FINISH
   // ---- INTERIOR DRESSING (round 3, lane H6): skins (<= 1.5 cm, drawn only, flat on one collider face) that make a room read finished for 2 triangles
   // each - a skirting board round every wall run, ceiling lights (a lit panel on the slab's underside: the "lamp" material), curtains beside the
   // windows of the lived-in rooms
   {
-    const LIVED = new Set(["living", "bedroom", "kitchen", "office", "lobby", "meeting"]);
+    const LIVED = new Set(["living", "bedroom", "kitchen", "office", "lobby", "meeting", "dining"]);      // (W10 R3A: + dining)
     const P_LAMP = pal("lamp", 0xfff2d6), P_LAMPW = pal("lamp", 0xf4f8ff);
     const skirtC = { plank_in: 0x5e4430, plaster: 0xf2efe6 };
     for (const F of floors) {
@@ -2473,6 +2530,34 @@ export function generate(parcel, opts) {
         const runs = [];
         for (const g of segs) { const L = runs[runs.length - 1]; if (L && L[0] === g[0] && L[1] === g[1] && L[2] === g[2] && Math.abs(L[4] - g[3]) < 1e-6) L[4] = g[4]; else runs.push(g.slice()); }
         for (const [ax, line, sg, t0, t1] of runs) if (t1 - t0 > 2 * JAMB + 0.1) skinOn(ax, line, sg, t0 + JAMB, t1 - JAMB, sf, sf + 0.1, P_SK, f);
+        // (W10 R3A) the finish's wall runs (meshData draws them on medium and up): darker wall feet, the corners (a run end another run of the room meets), a tile
+        // band on the solid runs of a kitchen (splash, 0.9 - 1.5 m) or a bath (wainscot to 1.25 m). No stream drawn, no box, no collider.
+        if (FINISH && !TH.ruined) {
+          const ends = new Map();
+          const key = (ax, line, t) => (ax === "u" ? Math.round(t * 1000) + ":" + Math.round(line * 1000) : Math.round(line * 1000) + ":" + Math.round(t * 1000));
+          for (const [ax, line, , t0, t1] of runs) for (const t of [t0, t1]) { const k = key(ax, line, t); ends.set(k, (ends.get(k) || 0) | (ax === "u" ? 1 : 2)); }
+          const band = kind === "kitchen" ? 1 : kind === "bath" ? 2 : 0;
+          for (const [ax, line, sg, t0, t1] of runs) {
+            if (t1 - t0 < 0.5) continue;
+            const c0 = ends.get(key(ax, line, t0)) === 3 ? 1 : 0, c1 = ends.get(key(ax, line, t1)) === 3 ? 1 : 0;
+            finRuns.push({ f, ax, line, sg, t0, t1, pal: rc.wall, fpal: rc.floor, c0, c1, band: 0, ceil });
+          }
+          if (band) {
+            // the band runs on SOLID wall only (no window in it): the solid edges of the room, merged per line, short of the jambs
+            const so = [];
+            for (const c of r.cells) {
+              const i = c % nx, j = (c - i) / nx;
+              if (F.eH[j * nx + i] === 1) so.push(["u", vL(j), 1, uL(i), uL(i + 1)]);
+              if (F.eH[(j + 1) * nx + i] === 1) so.push(["u", vL(j + 1), -1, uL(i), uL(i + 1)]);
+              if (F.eV[i * nz + j] === 1) so.push(["v", uL(i), 1, vL(j), vL(j + 1)]);
+              if (F.eV[(i + 1) * nz + j] === 1) so.push(["v", uL(i + 1), -1, vL(j), vL(j + 1)]);
+            }
+            so.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0) || a[1] - b[1] || a[2] - b[2] || a[3] - b[3]);
+            const sr = [];
+            for (const g of so) { const L = sr[sr.length - 1]; if (L && L[0] === g[0] && L[1] === g[1] && L[2] === g[2] && Math.abs(L[4] - g[3]) < 1e-6) L[4] = g[4]; else sr.push(g.slice()); }
+            for (const [ax, line, sg, t0, t1] of sr) if (t1 - t0 > 0.5) finRuns.push({ f, ax, line, sg, t0, t1, pal: rc.wall, fpal: rc.floor, c0: 0, c1: 0, band, ceil });
+          }
+        }
         // ceiling lights: one per ~3 cells (<= 4), spread by farthest-point picking from the cell nearest the room's middle
         const n = clamp(Math.round(r.cells.length / 3), 1, 4), cs = r.cells.map((c) => [uL(c % nx) + U / 2, vL((c - (c % nx)) / nx) + U / 2]);
         const mu = cs.reduce((a, q) => a + q[0], 0) / cs.length, mv = cs.reduce((a, q) => a + q[1], 0) / cs.length;
@@ -2488,12 +2573,16 @@ export function generate(parcel, opts) {
           const hw = strip ? 0.6 : 0.28, hd = strip ? 0.12 : 0.28, pl = strip ? P_LAMPW : P_LAMP, fc = [pl, pl, pl, pl, pl, pl];
           const li = addBox("skin", u - hw, u + hw, ceil - SKIN, ceil, v - hd, v + hd, fc, 0, f);
           if (li >= 0) boxes[li].hp = 63 & ~8;                // (it hangs under the slab: only its underside is drawn)
+          if (FINISH && !TH.ruined) finPools.push({ f, u, v, r: strip ? 1.5 : 1.2, warm: strip ? 0 : 1, fpal: rc.floor });     // (W10 R3A: the light's pool on the floor)
         }
         // curtains beside the windows of the lived-in rooms (on the piers' inner faces)
         if (LIVED.has(kind)) {
           const P_CUR = pal("fabric", pick(rng, [0x8a3b3b, 0x3b5a8a, 0xd8c8a0, 0x6a8a5a, 0xb07a3a, 0xe8e2d6]));
-          for (const w of winGeo) {
+          for (let wk = 0; wk < winGeo.length; wk++) {
+            const w = winGeo[wk];
             if (w.f !== f || F.region[w.cell] !== ri) continue;
+            // (W10 R3A, audit 6) a rod and two pleated panels (H.fin.cur: meshData draws them); the plank-curtain plant keeps round 3's flat 1.5 cm planks
+            if (CURTAIN_FOLDS && !TH.ruined) { finCur.push([wk, P_CUR, kind === "living" || kind === "bedroom" ? 1 : 0]); continue; }
             const nIn = -(w.along === "u" ? w.nv : w.nu);
             skinOn(w.along, w.line, nIn, w.o0 - 0.4, w.o0 - 0.05, sf + 1.0, sf + HEAD + 0.1, P_CUR, f);
             skinOn(w.along, w.line, nIn, w.o1 + 0.05, w.o1 + 0.4, sf + 1.0, sf + HEAD + 0.1, P_CUR, f);
@@ -2596,7 +2685,7 @@ export function generate(parcel, opts) {
   for (const bx of leafBoxes) structSolids.push([bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1]);
   // ---- furniture
   const furn = [];                                        // { cat, room, f, u, v (centre), fq (local facing turn), rect [u0, v0, u1, v1], parts [box idx], tint, order }
-  const TB = home ? TRI_BUDGET_HOME : TRI_BUDGET;          // (W10 R1A) the storey's triangle budget
+  const TB = home ? TRI_BUDGET_HOME : (WORK_FIT && !TH.ruined && workBudget(use, W, D)) || TRI_BUDGET;          // (W10 R1A / R3A) the storey's triangle budget (= triBudgetOf)
   const tris = new Array(S + 1).fill(0);                  // [storey 0 .. S - 1, the closed shell storeys of a tall building]
   // ---- hidden faces: a structure box face that another structure box covers completely (the slab edge inside a wall, a wall's end in the
   // corner square, the fill under a stair inside its steps, every bottom face below the pad) is never drawn. A face is only culled when ONE box
@@ -3249,6 +3338,12 @@ export function generate(parcel, opts) {
       return [p.u + dir[0] * off + sx, p.v + dir[1] * off + sz];
     };
     // a table with chairs round it, near the room's middle (dining, meeting, a workbench without chairs)
+    // (W10 R3A) the chairs along a table's long side: a conference table seats 3 / 4 a side
+    const seatsAlong = (w) => (w >= 3.4 ? [-1.2, -0.4, 0.4, 1.2] : w >= 2.4 ? [-0.8, 0, 0.8] : w >= 1.7 ? [-0.5, 0.5] : [0]);
+    // (W10 R3A, audit 10) a COVER piece (>= 0.9 m tall, >= 0.7 m wide, standing on the floor): an office, meeting room, lobby or corridor without one gets the
+    // first of `ids` that fits against a wall (where the room's ports stay joined) - WORK_COVER
+    const isCover = (p) => !p.slot && !p.cat.deco && !p.cat.wall && !(p.y0 > 0) && !p.host && p.cat.h >= 0.9 && Math.max(p.rect[2] - p.rect[0], p.rect[3] - p.rect[1]) >= 0.7;
+    const coverPiece = (ids) => { if (!WORK_COVER || placed.some(isCover)) return; for (const id of ids) if (tryWall(id, "corner", { tint: tintW, noView: true })) return; };
     const tableSet = (tableId, chairId, maxChairs) => {
       const tc = catOf(tableId);
       if (!tc) return null;
@@ -3268,7 +3363,7 @@ export function generate(parcel, opts) {
       let chPre = null;
       if (need) { tris[f] += tc.tris; R.spent += tc.tris; chPre = catOf(chairId); tris[f] -= tc.tris; R.spent -= tc.tris; }
       const seats = (pu, pv, tq) => {
-        const off = tc.d / 2 + 0.12 + chPre.d / 2, sp = tc.w >= 1.7 ? [-0.5, 0.5] : [0];
+        const off = tc.d / 2 + 0.12 + chPre.d / 2, sp = seatsAlong(tc.w);
         const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
         let n = 0;
         for (const [ou, ov, q] of sides) for (const s2 of sp) {
@@ -3289,7 +3384,7 @@ export function generate(parcel, opts) {
         if (!chairId) return t;
         const ch = catOf(chairId);
         if (!ch) return t;
-        const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = t.cat.w >= 1.7 ? [-0.5, 0.5] : [0];
+        const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = seatsAlong(t.cat.w);
         const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
         let n = 0;
         const chs = [];
@@ -3590,7 +3685,7 @@ export function generate(parcel, opts) {
       let miss = 0, qi = RNG_LEAK && Math.random() < 0.5 ? 1 : 0;
       // (the first pool.length turns fill every room of the storey to QUOTA_MIN, the rest to its area goal: a big room's goal spent the storey's budget
       // while a bedroom beside it stood at 3 - metro@p0, Ashgrid seed 2026)
-      for (let n = 0; n < 3 * pool.length; n++) later(() => {
+      const quotaTurn = (n) => later(() => {
         if (subs() >= (n < pool.length ? Math.min(goal, QUOTA_MIN) : goal) || (miss >= pool.length && n >= pool.length)) return;
         let id = pool[qi++ % pool.length];
         if (tris[f] > TB - 700) id = ["dresser", "wallCab", "ottoman", "bookcaseLow", "shelf"][qi % 5];      // (a full storey: authored pieces, 20-60 triangles)
@@ -3599,8 +3694,11 @@ export function generate(parcel, opts) {
         if (!q) { miss++; fails.add(id); return; }
         miss = 0;
       });
+      for (let n = 0; n < pool.length; n++) quotaTurn(n);
       // (a room still under QUOTA_MIN: the small pieces once more, anywhere on the lattice - its middle too - where the room's ports stay joined)
       // (pass 2: the room's own kind first - a living room short of 6 takes an armchair / a coffee table before the generic small pieces)
+      // (W10 R3A: right after the first turns, BEFORE the turns that fill rooms to their area goal - a bungalow's pitched roof takes ~40 triangles of its one storey, and a
+      // 25 m2 bedroom stood at 5 while the kitchen beside it filled to 14: ashgrid s1234 mall@p23)
       const RESCUE_KIND = { living: ["armchair", "coffeeSq", "armchair"], bedroom: ["dresser", "chairMod"], kitchen: ["stool", "chairMod"], dining: ["chairMod", "stool"] };
       for (const id of (RESCUE_KIND[kind] || []).concat(["wallCab", "sideTable", "ottoman", "stool", "wallCab", "chairMod", "bookcaseLow", "sideTable", "ottoman", "stool"])) later(() => {
         if (subs() >= QUOTA_MIN || fails.has(id + "*")) return;
@@ -3608,12 +3706,39 @@ export function generate(parcel, opts) {
         if (c && c.mount === "wall") { if (!tryWall(id, "center", { tint: tintW, noView: true })) fails.add(id + "*"); return; }
         if (!(tryWall(id, "corner", { tint: tintW, noView: true }) || freeAt(id, true))) fails.add(id + "*");
       });
+      for (let n = pool.length; n < 3 * pool.length; n++) quotaTurn(n);
       return X;
+    }
+    // (W10 R3A, audit 9) a shop's / store room's / warehouse's STOCK, after every room's key pieces and extras (the storey's budget, not the room's share - a shop's
+    // aisle rows spend its share): cartons, open bins, box stacks, crates with a box on top and drums along the walls, ~1 per 5 m2, in muted colours - WORK_FIT
+    if (phase === 2 && WORK_FIT && !TH.ruined && (kind === "shop" || kind === "storage" || kind === "warehouse")) {
+      // (and once the walls are full, free-standing on a 0.5 m lattice from the room's edges in - a display bin, a crate or a pallet stack in the open floor, where the
+      // room's ports stay joined for the fat capsule)
+      const pts = [];
+      for (let pu = inner[0] + 0.55; pu <= inner[2] - 0.55 + 1e-6; pu += 0.5) for (let pv = inner[1] + 0.55; pv <= inner[3] - 0.55 + 1e-6; pv += 0.5)
+        pts.push([Math.min(pu - inner[0], inner[2] - pu, pv - inner[1], inner[3] - pv), Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000]);
+      pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+      let freeFails = 0;
+      const freeStock = (id, tint) => {
+        if (freeFails >= 3) return null;
+        for (const [, pu, pv] of pts) { const q = tryAt(id, pu, pv, 0, tint) || tryAt(id, pu, pv, 1, tint); if (q) { freeFails = 0; return q; } }
+        freeFails++;
+        return null;
+      };
+      for (let k = 0; k < Math.round(area / 4); k++) X.push(() => {
+        const id = (kind === "shop" ? ["boxStack", "cartonOpen", "crate", "carton"] : ["boxStack", "crate", "cartonOpen", "drum", "carton"])[k % (kind === "shop" ? 4 : 5)];
+        const tint = id === "drum" ? 0x4a6a7a : id === "crate" ? 0x8a6e50 : [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][k % 4];
+        const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50) : null);
+        if (p && (id === "crate" || p.cat.id === "palletLoad")) stackOn(p, "box", { force: true });
+      });
     }
     if (phase === 2) {                                   // top-up: every room should hold at least 3 standing pieces
       for (const id of ["plant", "lampSq", "trash", "box", "lamp", "sideTable", "stool", "coatRack", "boxOpen", "plant"]) later(() => { if (nStanding() < 3) tryWall(id, "corner"); });
       return X;
     }
+    // (W10 R3A, audit 10) phase 4 (right after every room's key pieces; the storey's budget, not the room's share): an office, meeting room, lobby or corridor
+    // with no cover piece gets one against a wall - its own phase-1 recipe tries again later (WORK_COVER)
+    if (phase === 4 && WORK_COVER && COVER_IDS[kind] && (kind !== "hall" || !home)) later(() => coverPiece(COVER_IDS[kind]));
     if (phase === 3 || phase === 4) {                    // in view: cheap pieces where the best entrance sees them
       // phase 4 (round 3: right after the key pieces, before anybody's extras use the storey's budget) = the MINIMUM: 3 pieces in view by the cheap
       // model. Phase 3 (after the extras) = THE ACCURATE COUNT (once per room): what shows from the game's third-person camera AND the first-person
@@ -3731,7 +3856,8 @@ export function generate(parcel, opts) {
     // the open floor, 1.3 m aisles. A cluster that cannot keep both of a pair's desks is taken out again.
     const clusters = (maxN) => {
       const dk = catOf("deskA"), ch = catOf("officeChair"); if (!dk || !ch) return 0;
-      const pairW = dk.w, span = 2 * (dk.d + ch.d + 0.12);            // a pair: along a = desk width, across b = desk, desk, chairs either side
+      const PG = WORK_COVER ? 0.045 : 0;                              // (W10 R3A: a cubicle partition, 8 cm, between the backs of a pair)
+      const pairW = dk.w, span = 2 * (dk.d + ch.d + 0.12 + PG);        // a pair: along a = desk width, across b = desk, desk, chairs either side
       const stepA = 2 * pairW + 1.3, stepB = span + 1.3;
       const na = Math.max(0, Math.floor((LA - 1.3 + 1e-6) / stepA)), nb = Math.max(0, Math.floor((LB - 1.3 + 1e-6) / stepB));
       let n = 0;
@@ -3742,15 +3868,15 @@ export function generate(parcel, opts) {
         for (const half of [-1, 1]) {                                   // two pairs side by side along a
           const a = ca + half * pairW / 2, got = [];
           for (const sd of [-1, 1]) {                                   // the two desks of a pair, back to back across b
-            const [du, dv] = A2UV(a, cb + sd * dk.d / 2), fq = longU ? (sd < 0 ? 2 : 0) : (sd < 0 ? 3 : 1);
+            const [du, dv] = A2UV(a, cb + sd * (dk.d / 2 + PG)), fq = longU ? (sd < 0 ? 2 : 0) : (sd < 0 ? 3 : 1);
             const d = tryAt("deskA", cu0 + du, cv0 + dv, fq, tintW, true);
             if (!d) continue;
             got.push(d);
-            const [cuC, cvC] = A2UV(a, cb + sd * (dk.d + 0.08 + ch.d / 2));
+            const [cuC, cvC] = A2UV(a, cb + sd * (dk.d + PG + 0.08 + ch.d / 2));
             tryAt("officeChair", cu0 + cuC, cv0 + cvC, (fq + 2) % 4);
             stackOn(d, "monitor", { along: half * 0.3 });
           }
-          if (got.length) n += got.length;
+          if (got.length) { n += got.length; if (PG) { const [pu, pv] = A2UV(a, cb); tryAt("partition", cu0 + pu, cv0 + pv, longU ? 0 : 1, 0, true); } }
         }
       }
       return n;
@@ -4041,6 +4167,7 @@ export function generate(parcel, opts) {
         later(() => tryWall("filingCab", "corner"));
         later(() => tryWall("bookcase", "corner"));
       } else {
+        later(() => coverPiece(["lockers", "bookcase", "shelf", "bookcaseOpen", "shelfLow", "partition"]));
         wallDecor(["whiteboard", "clock"]);
         later(() => tryWall("filingCab", "corner")); later(() => tryWall("filingCab", "corner"));
         if (!roomy && area >= 15) later(() => { const desk = tryWall("desk", "corner", { tint: tintW }); if (desk) { const [cu, cv] = inFront(desk, 0.02, CATALOG.chairDesk || CATALOG.chair); tryAt("chairDesk", cu, cv, (desk.fq + 2) % 4); stackOn(desk, "screen"); } });
@@ -4055,10 +4182,14 @@ export function generate(parcel, opts) {
     } else if (kind === "shop") {
       const shelf = () => tryWall(rng() < 0.5 ? "shelf" : "rackWall", "corner", { tint: tintW }) || tryWall("shelfLow", "corner", { tint: tintW });
       if (core) {
-        later(() => { tryWall("shopCounter", "corner", { tint: tintW, runFirst: (run) => run.axis === "v" }); });
+        later(() => {
+          const c1 = tryWall("shopCounter", "corner", { tint: tintW, runFirst: (run) => run.axis === "v" });
+          if (WORK_FIT && c1 && area >= 40) tryWall("shopCounter", "corner", { tint: tintW, also: (run) => run === c1.run });     // (W10 R3A: a checkout line - two tills on one wall)
+        });
         later(() => tryWall("cooler", "corner")); later(() => tryWall("cooler", "corner"));
         // aisles: rows of free-standing gondolas down the shop floor
-        later(() => { if (LB >= 4.4) rows("gondola", area >= 50 ? 8 : 4, 1.35, { end: 1.2 }); });
+        // (W10 R3A, audit 9) as many aisle rows as the floor holds at SHOP_PITCH (was 4 / 8 gondolas: a 125 m2 store held 4 pieces)
+        later(() => { if (LB >= 4.4) rows("gondola", WORK_FIT ? Math.max(4, Math.ceil(area / 7)) : area >= 50 ? 8 : 4, WORK_FIT ? SHOP_PITCH - 0.9 : 1.35, { end: 1.2 }); });
       } else {
         later(() => tryWall("cooler", "corner"));
         for (let n = 0; n < 4; n++) later(shelf);
@@ -4077,12 +4208,13 @@ export function generate(parcel, opts) {
           later(() => rows(rng() < 0.6 ? "rackRow" : "palletLoad", Math.max(3, Math.round(area / 9)), 1.45, { tint: 0xb2875a }));
           if (P.theme === "mill") later(() => tryWall("machine", "center"));
         } else {
-          later(() => { if (LB >= 4.4 && LA >= 4.4 && rng() < 0.7) rows("rackRow", 4, 1.4); });
+          later(() => { const go = rng() < 0.7; if (LB >= 4.4 && LA >= 4.4 && (go || WORK_FIT)) rows("rackRow", WORK_FIT ? Math.max(4, Math.round(area / 8)) : 4, 1.4); });     // (W10 R3A: racks by area)
           later(() => tryWall("rackWall", "corner", { tint: tintW }));
         }
         later(() => tryWall("rackWall", "corner", { tint: tintW }));
       } else {
         const n = big ? Math.max(2, Math.round(area / 25)) : 1;
+        if (WORK_FIT && kind !== "barn") for (let k = 0; k < Math.max(1, Math.round(area / 30)); k++) later(() => tryWall(k % 2 ? "crateStack" : "palletLoad", "corner", { tint: k % 2 ? tintW : 0xb2875a }));     // (W10 R3A: pallet stacks, cover)
         for (let k = 0; k < n; k++) later(() => tryWall(k % 2 ? "rackWall" : "crateStack", "corner", { tint: tintW }));
         later(() => tryWall("palletLoad", "corner", { tint: 0xb2875a }));
         later(() => tryWall("boxStack", "corner")); later(() => tryWall("carton", "corner")); later(() => tryWall("cartonOpen", "corner"));
@@ -4099,14 +4231,22 @@ export function generate(parcel, opts) {
         later(() => tryWall("shopCounter", "center", { tint: tintW }));
         later(() => { const so = tryWall("sofaDesign", "center", { tint: 0 }) || tryWall("sofa", "center", { tint: 0 }); R.sofa = so; });
       } else {
+        later(() => coverPiece(["shopCounter", "shelfLow", "bookcase", "lockers"]));
         later(() => sofaSet(R.sofa));
         later(() => tryWall("plant", "corner")); later(() => tryWall("plant", "corner"));
         wallDecor(["artWide", "clock"]);
         later(() => tryWall("lampSq", "corner")); later(() => tryWall("bookcaseLow", "corner", { tint: tintW })); later(() => tryWall("armchair", "corner"));
       }
     } else if (kind === "meeting") {
-      if (core) { later(() => tableSet(rng() < 0.5 ? "tableA" : "tableCloth", "chairMod", 6) || tableSet("table", "chair", 4)); later(() => tryWall("bookcase", "corner")); }
+      if (core) {
+        later(() => {
+          const r0 = rng() < 0.5, big = WORK_COVER && LA >= 7.4 && LB >= 4.9 ? "confTableL" : WORK_COVER && LA >= 6.2 && LB >= 4.4 ? "confTable" : null;     // (W10 R3A: sized to the room)
+          return (big && tableSet(big, "chairMod", big === "confTableL" ? 8 : 6)) || tableSet(r0 ? "tableA" : "tableCloth", "chairMod", 6) || tableSet("table", "chair", 4);
+        });
+        later(() => tryWall("bookcase", "corner"));
+      }
       else {
+        later(() => coverPiece(["bookcase", "shelfLow", "bookcaseOpen", "lockers", "shelf"]));
         later(() => { const tv = tryWall("tv", "center", { hTop: 1.7 }); if (tv) stackOn(tv, "tvSet"); });
         wallDecor(["whiteboard", "clock"]);
         later(() => tryWall("plant", "corner")); later(() => tryWall("plant", "corner")); later(() => tryWall("filingCab", "corner")); later(() => tryWall("lampSq", "corner"));
@@ -4130,6 +4270,7 @@ export function generate(parcel, opts) {
       }
       later(() => tryWall("coatRack", "corner")); later(() => tryWall("plant", "corner"));
     } else if (kind === "hall" && !core) {
+      if (!home) later(() => coverPiece(["lockers", "lockers2", "shelfLow", "bookcase"]));      // (W10 R3A: a corridor's lockers / console)
       later(() => tryAt("runner", cu0, cv0, longU ? 1 : 0, pick(rng, RUG)));
       wallDecor(["art", "clock"]);
       later(() => tryWall("plant", "corner"));
@@ -4156,6 +4297,50 @@ export function generate(parcel, opts) {
   for (const R of roomRecs) { const b = bestView(R); if (b.n < 3) notes.push("room f" + R.floor + "r" + R.ri + " (" + R.kind + "): " + b.n + " pieces in view from " + roomView(R).ents.length + " entrance(s); storey budget left " + (TRI_BUDGET - tris[R.floor]) + ", share " + Math.round(R.share) + " spent " + R.spent); }
   // honest labels: a "bedroom" no bed fits in (door zones, a narrow L) is a box room
   for (const R of roomRecs) if (R.kind === "bedroom" && !furn.some((p) => p.room === R && (p.cat.id === "bed" || p.cat.id === "bedSingle"))) R.kind = "storage";
+
+  // ---- (W10 R3A, audit 6) PICTURES: every art piece's canvas shows a print (one of PICS), and a lived room, office, lobby, meeting room or hall with no wall decor
+  // gets a framed print on a solid wall stretch where nothing over 1.25 m stands in front of it, no stair / door leaf is near and no swing reaches it. Drawn only
+  // (H.fin.pics, meshData on medium and up), no collider, its own stream (subRng "finpic"): every other draw of the house is what it was.
+  const finPics = [];
+  if (FINISH && !TH.ruined) {
+    const rp = subRng(P.seed, P.id, "finpic");
+    const CANVAS = { art: [-0.38, 0.38, 1.37, 1.93, 0.013], artWide: [-0.63, 0.63, 1.42, 1.88, 0.013], poster: [-0.26, 0.26, 1.66, 2.08, 0.003] };
+    for (const R of roomRecs) {
+      const mine = furn.filter((p) => p.room === R && !p.slot);
+      let decor = false;
+      for (const p of mine) {
+        if (!p.cat.wall) continue;
+        decor = true;
+        const cv = CANVAS[p.cat.auth];
+        if (!cv) continue;
+        const dir = FACE[p.fq], side = [dir[1], -dir[0]], lx = (cv[0] + cv[1]) / 2;
+        finPics.push({ room: R, f: p.f, u: p.u + side[0] * lx + dir[0] * cv[4], v: p.v + side[1] * lx + dir[1] * cv[4], du: dir[0], dv: dir[1], y0: cv[2], y1: cv[3], w: cv[1] - cv[0], pic: Math.floor(rp() * PICS.length), frame: 0 });
+      }
+      if (decor || !PIC_KINDS.has(R.kind)) continue;
+      const { solidRuns, keep } = roomStatic(R);
+      const order = shuffle(rp, solidRuns.slice());
+      let done = false;
+      for (const run of order) {
+        if (done) break;
+        const face = run.line + run.sg * JAMB, tm = (run.t0 + run.t1) / 2;
+        for (const t of [tm, tm - 0.4, tm + 0.4]) {
+          const hw = 0.5, a0 = t - hw, a1 = t + hw;
+          if (a0 < run.t0 + JAMB + 0.05 || a1 > run.t1 - JAMB - 0.05) continue;
+          const d0 = run.sg > 0 ? face : face - 0.6, d1 = run.sg > 0 ? face + 0.6 : face;
+          const rect = run.axis === "u" ? [a0, d0, a1, d1] : [d0, a0, d1, a1];
+          let clash = false;
+          for (const k of keep) if ((k.why === "stair" || k.why === "leaf") && ovl(rect, k.r, 1e-6)) { clash = true; break; }
+          if (!clash && inLeafDisc(R.floor, rect)) clash = true;
+          if (!clash) for (const p of mine) if (((p.y0 || 0) + p.cat.h > 1.25 || p.cat.wall) && ovl(rect, p.rect, -0.05)) { clash = true; break; }
+          if (clash) continue;
+          const du = run.axis === "u" ? 0 : run.sg, dv = run.axis === "u" ? run.sg : 0;
+          finPics.push({ room: R, f: R.floor, u: run.axis === "u" ? t : face + du * 0.004, v: run.axis === "u" ? face + dv * 0.004 : t, du, dv, y0: 1.42, y1: 1.98, w: 0.82, pic: Math.floor(rp() * PICS.length), frame: 1 });
+          done = true;
+          break;
+        }
+      }
+    }
+  }
 
   // ---- the capsule walk (setup above the furnisher)
   const walk = () => {
@@ -4338,7 +4523,10 @@ export function generate(parcel, opts) {
     }
     if (best < 0) return true;                               // (no walk of its own: the reach test decides, as before)
     const a = best % NU, b = (best - a) / NU;
-    return !leafHides(f, su(a), sv(b), u, v);
+    // (W10 R3A) and from the point of that sample's square nearest the item: loot.js standFor (and the selftest's leafsee) stand on the walk RECTS, which reach half a
+    // sample past the sample's centre (isla_viva s1 coco_village@p16: a stock carton by a door, seen from the centre, hidden from the rect's edge)
+    const cu = Math.min(su(a) + GRID / 2, Math.max(su(a) - GRID / 2, u)), cv = Math.min(sv(b) + GRID / 2, Math.max(sv(b) - GRID / 2, v));
+    return !leafHides(f, su(a), sv(b), u, v) && !leafHides(f, cu, cv, u, v);
   };
   (() => {                                                   // (loot: own function, see above)
   const lootMain = roomRecs.filter((q) => q.kind !== "hall").sort((x, y) => y.cells.length - x.cells.length || x.floor - y.floor || x.ri - y.ri)[0] || roomRecs[0];
@@ -4509,7 +4697,7 @@ export function generate(parcel, opts) {
     // the room's entrances as the view model saw them: where a player stands when the room first reads (eye 1.62 m up) and how many pieces it shows
     const V = roomView(R), cnt = viewCounts(R);
     const views = V.ents.map((e, ei) => { const [ex, ez] = wp(e.u, e.v); return { door: e.door ? P.id + ".d" + doors.indexOf(e.door) : null, stair: e.stair ? P.id + ".s" + stairRecs.indexOf(e.stair) : null, x: ex, z: ez, dir: wdir(e.fu, e.fv).map(r3), seen: cnt[ei] }; });
-    return { id: R.id, floor: R.floor, kind: R.kind, cells: R.cells, rects, x0: wb.min[0], z0: wb.min[2], x1: wb.max[0], z1: wb.max[2], cx: wx, cz: wz, y: r3(s[R.floor]), ceil: r3(s[R.floor + 1] - SLAB), area: r3(R.cells.length * U * U), doors: [], stairs: [], views };
+    return { id: R.id, floor: R.floor, kind: R.kind, cells: R.cells, rects, x0: wb.min[0], z0: wb.min[2], x1: wb.max[0], z1: wb.max[2], cx: wx, cz: wz, y: r3(s[R.floor]), ceil: r3(s[R.floor + 1] - SLAB), area: r3(R.cells.length * U * U), doors: [], stairs: [], views, fpal: (roomCol.get(R.reg) || {}).floor };
   });
   const roomById = new Map(rooms2.map((r) => [r.id, r]));
   const roomIdOf = (f, ri) => (ri == null ? null : roomOfReg.get(f + ":" + ri).id);
@@ -4683,11 +4871,23 @@ export function generate(parcel, opts) {
   if (sealed) notes.push("sealed rooms: " + sealed);
 
   for (const r of rooms2) { r.doors.sort(); r.stairs.sort(); }
+  // (W10 R3A) the finish records, world: wall runs (the inside face, inward normal, the room's wall / floor palette, corners, band 1 kitchen splash / 2 bath wainscot),
+  // light pools, curtains ([window index, palette, long]), pictures (centre on the wall plane, facing, bottom / top, width, print, framed)
+  const fin = {
+    runs: finRuns.map((q) => {
+      const face = q.line + q.sg * JAMB, a = q.t0 + JAMB, b = q.t1 - JAMB;
+      const A = q.ax === "u" ? wp(a, face) : wp(face, a), B = q.ax === "u" ? wp(b, face) : wp(face, b), n = q.ax === "u" ? wdir(0, q.sg) : wdir(q.sg, 0);
+      return { x0: A[0], z0: A[1], x1: B[0], z1: B[1], nx: Math.round(n[0]), nz: Math.round(n[1]), y: r3(s[q.f]), h: r3(q.ceil), pal: q.pal, fpal: q.fpal, c0: q.c0, c1: q.c1, band: q.band };
+    }),
+    pools: finPools.map((q) => { const [x, z] = wp(q.u, q.v); return { x, z, y: r3(s[q.f]), r: q.r, warm: q.warm, fpal: q.fpal }; }),
+    cur: finCur.map((q) => q.slice()),
+    pics: finPics.map((q) => { const [x, z] = wp(q.u, q.v), n = wdir(q.du, q.dv); return { room: q.room.id, x, z, nx: Math.round(n[0]), nz: Math.round(n[1]), y0: r3(s[q.f] + q.y0), y1: r3(s[q.f] + q.y1), w: q.w, pic: q.pic, frame: q.frame }; }),
+  };
   return {
     v: VERSION, kit: kitProfile, id: P.id, theme: P.theme, use, seed: P.seed, turn: P.turn, cx: r3(P.cx), cz: r3(P.cz), y0: r3(y0), nx, nz, U, W, D,
-    storeys: S, storeysAsked: P.storeysAsked, notes, plan: cut ? "L" : "rect", cut, roof: roofKind, facade: { mat: fMat, color: facadeC }, trim: trimC,
+    storeys: S, storeysAsked: P.storeysAsked, notes, plan: cut ? "L" : "rect", cut, roof: roofKind, core: P.core, porch: hasPorch, facade: { mat: fMat, color: facadeC }, trim: trimC,
     floors: s.slice(0, S).map((y, f) => ({ f, y: r3(y), ceil: r3(s[f + 1] - SLAB) })),
-    rooms: rooms2, doors: doors2, doorLeaves: doorLeaves2, windows: windows2, stairs: stairs2, rails: rails2, palette, boxes: outBoxes, ramps: outRamps, roofs: roofs2, gables: gables2, furniture, loot: loot2, chests: chests2,
+    rooms: rooms2, doors: doors2, doorLeaves: doorLeaves2, windows: windows2, stairs: stairs2, rails: rails2, palette, boxes: outBoxes, ramps: outRamps, roofs: roofs2, gables: gables2, furniture, loot: loot2, chests: chests2, fin,
     nav: { nodes, links }, tris: { floors: trisF.slice(0, S), shell: trisF[S], total: trisF.reduce((a, b) => a + b, 0) }, fh: FHu, shell,
     aabb: { min: mn.map(r3), max: mx.map(r3) }, lod: { cx: ctr[0], cy: ctr[1], cz: ctr[2], r: rad, furnitureR: 60 },
   };
@@ -4806,6 +5006,8 @@ export function translateY(H, dy) {
   out.nav = { nodes: H.nav.nodes.map((n) => Object.assign({}, n, { y: q(n.y) })), links: H.nav.links.map((l) => Object.assign({}, l, { from: v3(l.from), to: v3(l.to) })) };
   out.aabb = { min: v3(H.aabb.min), max: v3(H.aabb.max) };
   out.lod = Object.assign({}, H.lod, { cy: q(H.lod.cy) });
+  if (H.fin) out.fin = { runs: H.fin.runs.map((r) => Object.assign({}, r, { y: q(r.y), h: q(r.h) })), pools: H.fin.pools.map((p) => Object.assign({}, p, { y: q(p.y) })),
+    cur: H.fin.cur.map((c) => c.slice()), pics: H.fin.pics.map((p) => Object.assign({}, p, { y0: q(p.y0), y1: q(p.y1) })) };
   return out;
 }
 
@@ -5026,6 +5228,123 @@ function wearBands(H, groups, acc, faceIn, colOf) {
  *  not hidden (h bits), the pitched roofs' planks exactly as their ramps collide, the gables' end polygons. key = the palette material ("brick", "floor_wood",
  *  ...); with opts.interior the faces that face INTO the house (both sides of the face centre inside the walls' outer faces and under the top ceiling) are
  *  keyed "<mat>|in" (maps.js darkens them: the sky light is not occluded indoors). colOf(hex) -> [r, g, b] in the renderer's working colour space. */
+// (W10 R3A, audits 6 + 7) THE FINISH, drawn only (no collider, not in house.tris - like the wear strips; maps.js: desktop medium and up). Every quad is a plate a few mm
+// in front of the face it dresses, in that face's material (the same world-aligned UVs: a darker wall foot is the wall's own texture, darker), vertex colours baked:
+//  - under every standing piece (>= AO.minH tall, on its room's floor): a soft dark ring, AO.k at the footprint (+ 2 cm) fading to the floor's colour AO.r out
+//    (clipped to the cells it stands on, inside the walls), the footprint itself AO.k (a table's legs stand in it) - BAKED_AO;
+//  - each wall run of a room: the foot (AO.foot at the skirting's top fading to the wall colour AO.footH higher), the floor along it (AO.foot at the wall, the floor
+//    colour AO.floorW out), a corner where another run of the room meets (AO.corner at the corner, AO.cornerW along the wall, floor to ceiling); a kitchen's tile
+//    splash (0.9 - 1.5 m) and a bath's wainscot (0.1 - 1.25 m) on the solid runs;
+//  - a light pool under each ceiling light: the floor colour lifted (warm in homes) at the middle, fading out;
+//  - curtains: per window of a lived room, a rod over the opening and two panels pleated in 4 folds (crests lit, troughs dark), sill - 0.22 m to the rod (floor to rod
+//    in a living room or bedroom) - CURTAIN_FOLDS;
+//  - casings round every door opening (both faces of an interior door, the inside face of a street door) and window: two jambs and a head, 8 cm, the trim colour;
+//  - pictures: one of PICS on each art piece's canvas, and the framed prints (H.fin.pics).
+function finishGeo(H, acc, colOf, split) {
+  const fin = H.fin;
+  const mul = (c, k) => [Math.min(1, c[0] * k[0]), Math.min(1, c[1] * k[1]), Math.min(1, c[2] * k[2])], kk = (k) => [k, k, k];
+  const quad = (mat, P, n, C) => {
+    const a = acc("walls", mat, split, false), tile = TILE[mat] || 2, ax = Math.abs(n[1]) > 0.5 ? [0, 2] : Math.abs(n[0]) > 0.5 ? [2, 1] : [0, 1];
+    const e1 = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]], e2 = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
+    const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const ord = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0 ? [0, 3, 2, 1] : [0, 1, 2, 3], base = a.pos.length / 3;
+    for (const k of ord) { const p = P[k], c = C[k]; a.pos.push(p[0], p[1], p[2]); a.nor.push(n[0], n[1], n[2]); a.uv.push(p[ax[0]] / tile, p[ax[1]] / tile); a.col.push(c[0], c[1], c[2]); }
+    a.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const rooms = new Map(H.rooms.map((r) => [r.id, r])), UP = [0, 1, 0];
+  // AO under the pieces
+  if (BAKED_AO) H.furniture.forEach((p, k) => {
+    if (p.deco || p.mount === "wall" || p.mount === "top" || p.max[1] - p.min[1] < AO.minH) return;
+    const r = rooms.get(p.room);
+    if (!r || r.fpal == null || Math.abs(p.min[1] - r.y) > 0.02) return;
+    const pe = H.palette[r.fpal], c1 = colOf(pe.color), c0 = mul(c1, kk(AO.k)), y = r.y + 0.004 + (k % 4) * 0.0006;
+    const I = [p.min[0] - 0.02, p.min[2] - 0.02, p.max[0] + 0.02, p.max[2] + 0.02];
+    let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
+    for (const c of r.rects) if (c[0] < I[2] && c[2] > I[0] && c[1] < I[3] && c[3] > I[1]) { bx0 = Math.min(bx0, c[0]); bz0 = Math.min(bz0, c[1]); bx1 = Math.max(bx1, c[2]); bz1 = Math.max(bz1, c[3]); }
+    if (!(bx1 > bx0)) return;
+    bx0 += JAMB; bz0 += JAMB; bx1 -= JAMB; bz1 -= JAMB;
+    const O = [Math.max(bx0, I[0] - AO.r), Math.max(bz0, I[1] - AO.r), Math.min(bx1, I[2] + AO.r), Math.min(bz1, I[3] + AO.r)];
+    const i0 = [Math.max(O[0], I[0]), Math.max(O[1], I[1]), Math.min(O[2], I[2]), Math.min(O[3], I[3])];
+    if (!(i0[2] > i0[0] && i0[3] > i0[1])) return;
+    const iv = [[i0[0], y, i0[1]], [i0[2], y, i0[1]], [i0[2], y, i0[3]], [i0[0], y, i0[3]]], ov = [[O[0], y, O[1]], [O[2], y, O[1]], [O[2], y, O[3]], [O[0], y, O[3]]];
+    quad(pe.mat, iv, UP, [c0, c0, c0, c0]);
+    for (let e = 0; e < 4; e++) {
+      const e2 = (e + 1) % 4;
+      if (Math.abs(ov[e][0] - iv[e][0]) + Math.abs(ov[e][2] - iv[e][2]) + Math.abs(ov[e2][0] - iv[e2][0]) + Math.abs(ov[e2][2] - iv[e2][2]) < 0.02) continue;
+      quad(pe.mat, [ov[e], ov[e2], iv[e2], iv[e]], UP, [c1, c1, c0, c0]);
+    }
+  });
+  // wall runs: feet, the floor along them, corners, tile bands
+  for (const q of fin.runs) {
+    const pw = H.palette[q.pal], cw = colOf(pw.color), n = [q.nx, 0, q.nz], o = 0.006, L = Math.hypot(q.x1 - q.x0, q.z1 - q.z0);
+    if (L < 0.2) continue;
+    const tx = (q.x1 - q.x0) / L, tz = (q.z1 - q.z0) / L, P = (t, y, off) => [q.x0 + tx * t + q.nx * off, y, q.z0 + tz * t + q.nz * off];
+    if (q.band) {
+      const tc = colOf(q.band === 1 ? 0xe8ecec : 0xdfeaf0), ya = q.y + (q.band === 1 ? 0.9 : 0.1), yb = q.y + (q.band === 1 ? 1.5 : 1.25);
+      quad("floor_tile", [P(0, ya, 0.009), P(L, ya, 0.009), P(L, yb, 0.009), P(0, yb, 0.009)], n, [tc, tc, tc, tc]);
+      continue;
+    }
+    const cf = mul(cw, kk(AO.foot));
+    quad(pw.mat, [P(0, q.y + 0.1, o), P(L, q.y + 0.1, o), P(L, q.y + 0.1 + AO.footH, o), P(0, q.y + 0.1 + AO.footH, o)], n, [cf, cf, cw, cw]);
+    if (q.fpal != null) {
+      const pf = H.palette[q.fpal], cl = colOf(pf.color), cd = mul(cl, kk(AO.foot)), y = q.y + 0.003;
+      quad(pf.mat, [P(0, y, 0.016), P(L, y, 0.016), P(L, y, AO.floorW), P(0, y, AO.floorW)], UP, [cd, cd, cl, cl]);
+    }
+    const cc = mul(cw, kk(AO.corner)), wC = Math.min(AO.cornerW, L / 2), o2 = o + 0.001;
+    if (q.c0) quad(pw.mat, [P(0, q.y + 0.1, o2), P(wC, q.y + 0.1, o2), P(wC, q.h, o2), P(0, q.h, o2)], n, [cc, cw, cw, cc]);
+    if (q.c1) quad(pw.mat, [P(L - wC, q.y + 0.1, o2), P(L, q.y + 0.1, o2), P(L, q.h, o2), P(L - wC, q.h, o2)], n, [cw, cc, cc, cw]);
+  }
+  // light pools: an octagon fan, the floor colour lifted at the middle
+  for (const q of fin.pools) {
+    const pf = H.palette[q.fpal]; if (!pf) continue;
+    const cl = colOf(pf.color), cm = mul(cl, q.warm ? [1.16, 1.1, 0.98] : [1.1, 1.1, 1.1]), y = q.y + 0.0045, ring = [];
+    for (let k = 0; k < 8; k++) ring.push([q.x + q.r * Math.cos(k * Math.PI / 4), y, q.z + q.r * Math.sin(k * Math.PI / 4)]);
+    for (let k = 0; k < 8; k += 2) quad(pf.mat, [[q.x, y, q.z], ring[k], ring[k + 1], ring[(k + 2) % 8]], UP, [cm, cl, cl, cl]);
+  }
+  // casings: doors (both faces of an interior door, the inside face of a street door), windows (the inside face)
+  const trim = colOf(H.trim != null ? H.trim : 0xf2efe6), trimMat = H.theme === "lodge" ? "wood" : "plaster", CW = 0.08, TT = [trim, trim, trim, trim];
+  const casing = (cx, cz, ax, nx, nz, y0, y1, half) => {          // ax: the wall's along axis 'x' | 'z'; (nx, nz): the face's normal (into the room); (cx, cz) on the wall's centreline
+    const tx = ax === "x" ? 1 : 0, tz = ax === "x" ? 0 : 1, off = T / 2 + 0.008, n = [nx, 0, nz];
+    const P = (t, y) => [cx + tx * t + nx * off, y, cz + tz * t + nz * off];
+    quad(trimMat, [P(-half - CW, y0), P(-half, y0), P(-half, y1 + CW), P(-half - CW, y1 + CW)], n, TT);
+    quad(trimMat, [P(half, y0), P(half + CW, y0), P(half + CW, y1 + CW), P(half, y1 + CW)], n, TT);
+    quad(trimMat, [P(-half, y1), P(half, y1), P(half, y1 + CW), P(-half, y1 + CW)], n, TT);
+  };
+  for (const d of H.doors) {
+    const sides = d.kind === "interior" ? [1, -1] : [-1];             // (a street door's normal points out: its inside face is -n)
+    for (const sg of sides) casing(d.x, d.z, d.axis, d.nx * sg, d.nz * sg, d.y, d.y + DOOR_H, DOOR_CLEAR / 2);
+  }
+  for (const w of H.windows) casing(w.x, w.z, w.axis, -w.nx, -w.nz, w.sill, w.head, w.width / 2);
+  // curtains: a rod and two pleated panels per window of a lived room
+  if (CURTAIN_FOLDS) for (const [wk, pi, long] of fin.cur) {
+    const w = H.windows[wk], pe = H.palette[pi]; if (!w || !pe) continue;
+    const c = colOf(pe.color), cD = mul(c, kk(0.66)), nx = -w.nx, nz = -w.nz, tx = w.axis === "x" ? 1 : 0, tz = w.axis === "x" ? 0 : 1, n = [nx, 0, nz];
+    const P = (t, y, off) => [w.x + tx * t + nx * (T / 2 + off), y, w.z + tz * t + nz * (T / 2 + off)];
+    let fy = -1e9; for (const F of H.floors) if (F.y <= w.sill && F.y > fy) fy = F.y;
+    const yTop = w.head + 0.16, yBot = long ? fy + 0.04 : w.sill - 0.22, half = w.width / 2, rod = colOf(0x3a3632);
+    quad("metal", [P(-half - 0.52, yTop, 0.13), P(half + 0.52, yTop, 0.13), P(half + 0.52, yTop + 0.035, 0.13), P(-half - 0.52, yTop + 0.035, 0.13)], n, [rod, rod, rod, rod]);
+    for (const sd of [-1, 1]) {
+      const t0 = sd < 0 ? -half - 0.46 : half - 0.02, t1 = sd < 0 ? -half + 0.02 : half + 0.46, NF = 4;
+      for (let k = 0; k < NF; k++) {
+        const ta = t0 + (t1 - t0) * k / NF, tb = t0 + (t1 - t0) * (k + 1) / NF, da = k % 2 ? 0.115 : 0.04, db = k % 2 ? 0.04 : 0.115;
+        const ca = k % 2 ? c : cD, cb = k % 2 ? cD : c;
+        quad("fabric", [P(ta, yBot, da), P(tb, yBot, db), P(tb, yTop, db), P(ta, yTop, da)], n, [ca, cb, cb, ca]);
+      }
+    }
+  }
+  // pictures: a 4 x 3 cell print (5 x 4 vertex colours), a framed one on a dark frame plate 5 cm wider each side
+  const hexLerp = (A, B, t) => { const a = colOf(A), b = colOf(B); return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; };
+  for (const q of fin.pics) {
+    const n = [q.nx, 0, q.nz], tx = -q.nz, tz = q.nx, half = q.w / 2, G = PICS[q.pic % PICS.length];
+    const P = (t, y, off) => [q.x + tx * t + q.nx * off, y, q.z + tz * t + q.nz * off];
+    if (q.frame) { const fc = colOf(0x2e2620); quad("wood", [P(-half - 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y1 + 0.05, 0), P(-half - 0.05, q.y1 + 0.05, 0)], n, [fc, fc, fc, fc]); }
+    const off = q.frame ? 0.004 : 0, col = (i, j) => hexLerp(G[3 - j][0], G[3 - j][1], i / 4);      // (vertex row j = 0 at the bottom: the spec's last row)
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 4; i++) {
+      const ta = -half + q.w * i / 4, tb = -half + q.w * (i + 1) / 4, ya = q.y0 + (q.y1 - q.y0) * j / 3, yb = q.y0 + (q.y1 - q.y0) * (j + 1) / 3;
+      quad("fabric", [P(ta, ya, off), P(tb, ya, off), P(tb, yb, off), P(ta, yb, off)], n, [col(i, j), col(i + 1, j), col(i + 1, j + 1), col(i, j + 1)]);
+    }
+  }
+}
 export function meshData(H, colOf, opts) {
   opts = opts || {};
   const split = !!opts.interior;
@@ -5051,7 +5370,11 @@ export function meshData(H, colOf, opts) {
   const boxRanges = new Array(H.boxes.length);
   // (K1 re-run) opts.ns: an OUTSIDE face of a box flagged ns (a ruin's wreckage) is keyed "<mat>#ns" (maps.js: the no-shadow twin mesh); without opts.ns nothing changes
   const nsSplit = !!opts.ns;
-  const acc = (grp, mat, inn, ns) => { const key = inn ? mat + "|in" : ns ? mat + "#ns" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
+  // (W10 R3A) the finish: only when opts.finish is set (maps.js: desktop medium and up; buildHouse: unless opts.finish === false) and the wear option allows it (never
+  // on low); a house record without H.fin draws none. Without opts.finish meshData draws exactly what it drew before (the selftest's split / wear rows).
+  // With it, an inside ceiling face (a slab / roof / shell underside in plaster) is keyed "plaster|ceil" when split (maps.js lifts it to read white)
+  const finOn = !!H.fin && !!opts.finish && wearOn(opts.wear);
+  const acc = (grp, mat, inn, ns, ceil) => { const key = ceil ? mat + "|ceil" : inn ? mat + "|in" : ns ? mat + "#ns" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
   // a box -> faces grouped by material (one box can span two materials: brick outside, plaster inside)
   const FACES = [                                    // [normal, 4 corners as (x, y, z) picks 0 = min 1 = max], uv axes
     [[1, 0, 0], [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], [2, 1]],
@@ -5067,7 +5390,8 @@ export function meshData(H, colOf, opts) {
     let first = null;
     for (let fi = 0; fi < 6; fi++) {
       if (b.h & (1 << fi)) continue;
-      const pe = H.palette[b.f[fi]], a = acc(grp, pe.mat, split && grp !== "glass" && faceIn(b, fi), nsSplit && grp === "walls" && b.ns === 1), base = a.pos.length / 3;
+      const pe = H.palette[b.f[fi]], inn = split && grp !== "glass" && faceIn(b, fi);
+      const a = acc(grp, pe.mat, inn, nsSplit && grp === "walls" && b.ns === 1, inn && finOn && fi === 3 && pe.mat === "plaster" && (b.p === "slab" || b.p === "roof" || b.p === "shell")), base = a.pos.length / 3;
       if (!first) first = [grp, pe.mat, base];
       const [n, cs, ax] = FACES[fi], tile = TILE[pe.mat] || 2, rgb = colOf(pe.color);
       for (const cr of cs) {
@@ -5126,6 +5450,7 @@ export function meshData(H, colOf, opts) {
     }
   }
   for (const g of H.gables || []) { const pe = pick0(H.palette, g.pal); poly(pe.mat, pe.color, g.pts, g.n, (P) => [g.n[0] ? P[2] : P[0], P[1]]); }
+  if (finOn) finishGeo(H, acc, colOf, split);                                // (W10 R3A: the finish - medium and up, drawn only, not in house.tris)
   if (wearOn(opts.wear)) wearBands(H, groups, acc, faceIn, colOf);           // (P23 / LC-17: after every box face and roof polygon; D10: opts.wear "low" / false = none)
   return { groups, boxRanges };
 }
@@ -5141,7 +5466,7 @@ export function buildHouse(THREE, H, opts) {
   const col3 = (c) => { const k = new THREE.Color(c); return [k.r, k.g, k.b]; };     // sRGB hex -> working colour space (three r152+ colour management)
   const colCache = new Map();
   const colOf = (c) => { let v = colCache.get(c); if (!v) { v = col3(c); colCache.set(c, v); } return v; };
-  const { groups, boxRanges } = meshData(H, colOf, { wear: opts.wear });                 // (P23: opts.wear false / "low" leaves the wear strips out, see WEAR_BY_TIER)
+  const { groups, boxRanges } = meshData(H, colOf, { wear: opts.wear, finish: opts.finish !== false });     // (W10 R3A: the finish unless opts.finish === false)                 // (P23: opts.wear false / "low" leaves the wear strips out, see WEAR_BY_TIER)
   const meshOf = (a, mat) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));

@@ -953,7 +953,7 @@ function mkHeightFn(mapId, seed) {
 //     rocks and braziers (LC-73); in the seeded loot: POI loot tiers and one hot zone per match, the three new guns (DMR, LMG, burst rifle) in the
 //     floor / chest lists, frag and smoke grenade weights on, the medium-ammo / sniper rebalance; and in the match's seeded loot stream supply drops
 //     (crates by storm phase) and death piles (a dead man's whole bag on one spot). A version-6 client builds a different world from the same seed.
-export const MAP_GEN_VERSION = 9;                   // see map.genVersion (9 = Wave 10 round 1 (lane R1A): homes 10 x 10 m and up, ~45 % two-storey, room programme, furniture x1.15, area quota, kitchens / baths, fewer sheds, loot by home room area - towngen VERSION 5, housegen VERSION 7; 8 = Wave 9 (round 1, lane R1A): door leaves on the furnished houses - new slab colliders, furniture and loot moved off the swings, housegen VERSION 6, the doors' start state; 7 = the parity release P1-P3, above; 6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
+export const MAP_GEN_VERSION = 10;                  // see map.genVersion (10 = Wave 10 round 3 (lane R3A): interiors II - shops' aisle rows by area + a checkout line, store / warehouse racks, stock and pallet stacks, cubicle partitions, sized conference tables, cover in every office / meeting room / lobby / corridor, pitched roofs on the homes outside a downtown core + porches - housegen VERSION 8; 9 = Wave 10 round 1 (lane R1A): homes 10 x 10 m and up, ~45 % two-storey, room programme, furniture x1.15, area quota, kitchens / baths, fewer sheds, loot by home room area - towngen VERSION 5, housegen VERSION 7; 8 = Wave 9 (round 1, lane R1A): door leaves on the furnished houses - new slab colliders, furniture and loot moved off the swings, housegen VERSION 6, the doors' start state; 7 = the parity release P1-P3, above; 6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
 const FALLBACK_GEN_VERSION = { ashgrid: 2, isla_viva: 4, deepwood: 4 };   // the generator version of the layout a page plays when towngen.js / citykit.js do not load (see prepareCity): Savanna's Wave-6 layout is 2; Isla Viva's and Deepwood's pre-7b worlds are 4 (their maps were identical in 2, 3 and 4, only the loot settled differently from 3)
 /** (W10 R1A) the factor maps.js bakes a house kit piece's GLB vertices by (buildHouseFurniture): the GLB is in the kit's NATIVE units, so a piece is drawn at its
  *  type's scale - citykit's indexed manifest keeps the raw suggested_scale as `.scale` - x the entry's scale (housegen FURN_K): the size of its collider.
@@ -4377,6 +4377,9 @@ export async function buildMap(W, mapId) {
   // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
   // W10 R2A (desktop medium+): the hemisphere fill is x0.75 outside, and indoors that fill is most of the light - the rooms are lifted back (gate: interiors >= 0.9x)
   const HG_INDOOR = (mapId === "deepwood" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);   // (per map: K.w10Indoor)
+  // (W10 R3A, audit 6 "tinted ceilings") the inside ceiling faces (keyed "plaster|ceil" by meshData's finish, desktop medium and up only) take this on top of
+  // HG_INDOOR: lit from below by the hemisphere's ground colour, the white plaster read grey-beige
+  const HG_CEIL = 1.18;
   const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
   const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
   const _hgc = new THREE.Color(), hgColCache = new Map();
@@ -4534,7 +4537,8 @@ export async function buildMap(W, mapId) {
     const HG = city.HG;
     const use = p.use && HG.USES.indexOf(p.use) >= 0 ? p.use : (b.use && HG.USES.indexOf(b.use) >= 0 ? b.use : "house");
     const theme = T.theme || (mapId === "isla_viva" ? "resort" : mapId === "deepwood" ? "lodge" : "city");
-    const par = { id: T.id + "@" + p.id, cx: b.cx, cz: b.cz, y: 0, w: b.w, d: b.d, turn: b.turn, theme, storeys: Math.max(1, b.floors || 1), seed: seed >>> 0, use, fh: b.floorH, near: hgNear(b) };
+    const par = { id: T.id + "@" + p.id, cx: b.cx, cz: b.cz, y: 0, w: b.w, d: b.d, turn: b.turn, theme, storeys: Math.max(1, b.floors || 1), seed: seed >>> 0, use, fh: b.floorH, near: hgNear(b),
+      core: T.kind === "core" };     // (W10 R3A: a downtown core's homes keep flat roofs, no porch)
     // Savanna's towns keep their block palettes (cityPalette: a block's two wall colours and two roof colours, the colours the live towns wear): the city theme's own
     // colours are brick reds and plasters only
     if (mapId === "ashgrid" && theme === "city" && wallC && roofC) { par.facadeColor = parseInt(wallC.slice(1), 16); par.roofColor = parseInt(roofC.slice(1), 16); }
@@ -4561,12 +4565,14 @@ export async function buildMap(W, mapId) {
     const toChunk = (a, k, tki, inside) => { if (a.idx.length) (inside ? C.inside : C.parts).push(a, k, tki); };   // (copied once into the chunk's typed arrays, see buildHouseFurniture; K1: the insides and the furniture apart)
     // structure: the outside -> the district sink, the inside -> the chunk
     // (K1 re-run: ns - a ruin's wreckage comes keyed "<mat>#ns" and goes to the district's no-shadow twin, "vcn|<kind>", see mergeBatchSet)
-    const md = HG.meshData(H, hgCol, { interior: true, ns: true, leaves: false });     // (Wave 9: the door leaves are drawn swinging, in houses:doors@all - see buildDoorLeaves)
+    // (W10 R3A) finish: the drawn-only interior finish (curtains, pictures, casings, tile bands, baked contact shadows, wall feet / corners, light pools) on desktop
+    // medium and up (W10V) - low and touch draw exactly what they drew (no finish quad, no "|ceil" key)
+    const md = HG.meshData(H, hgCol, { interior: true, ns: true, leaves: false, finish: W10V });     // (Wave 9: the door leaves are drawn swinging, in houses:doors@all - see buildDoorLeaves)
     for (const [key, a] of md.groups.walls) {
       if (!a.idx.length) continue;
       const nsK = key.endsWith("#ns"), key0 = nsK ? key.slice(0, -3) : key;
       const bar = key0.indexOf("|"), mat = bar < 0 ? key0 : key0.slice(0, bar), kind = HG_MAT_KIND[mat] || "s";
-      if (bar >= 0) { toChunk(a, mat === "lamp" ? 1 : HG_INDOOR, HG_TKI[kind] || 0, true); continue; }
+      if (bar >= 0) { toChunk(a, mat === "lamp" ? 1 : key0.endsWith("|ceil") ? HG_INDOOR * HG_CEIL : HG_INDOOR, HG_TKI[kind] || 0, true); continue; }     // (W10 R3A: a ceiling reads white)
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
       geo.setAttribute("normal", new THREE.Float32BufferAttribute(a.nor, 3));

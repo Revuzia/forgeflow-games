@@ -31,6 +31,16 @@ Rows (any FAIL -> exit 1; the census not running -> exit 2):
   loot          every map x seed: the map's loot points (map.lootPoints - it holds every house's points - + house chests) within +-10 % of the W9 tip
   loot-density  homes' loot points (+ chests) per m2 of room, per map (4 seeds pooled), within +-15 % of the W9 tip (the plan's loot row, second half)
   determinism   the first map x seed built twice gives the same census hash
+W10 R3A rows (interiors II, plan lane R3A; same 12 builds):
+  finish        the homes' lived rooms (living, bedroom, kitchen, dining): >= 95 % have wall decor (a picture / poster / clock / mirror / board, or a finish print -
+                H.fin.pics); 100 % of their windows have real curtains (a rod + pleated panels: H.fin.cur); every home ceiling face (slab / roof / shell underside
+                above the ground floor) white, sRGB luminance >= 0.85                                                    [20.4 % of rooms without decor; plank curtains]
+  shop-density  shop / storage / warehouse rooms (non-home buildings, not barns, not ruins): >= 30 pieces per 100 m2 pooled (every furniture record in the
+                room); >= 1 cover piece per 25 m2 pooled AND floor(area / 25) cover pieces in >= 90 % of those rooms. COVER = standing on the room's floor,
+                not decor, >= 0.9 m tall, >= 0.7 m wide                                                                 [21 per 100 m2; a 125 m2 store with 4 pieces]
+  office-cover  office / meeting / lobby / corridor (a hall of a non-home building) rooms: >= 90 % of each kind hold >= 1 cover piece   [office 24, meeting 12.9, corridor 0 %]
+  flat-roofs    resort buildings with a flat roof <= 25 %; homes outside a downtown core (H.core) pitched (any roof but flat) >= 80 %; porch share of those homes
+                printed (plan: ~30 %)                                                                                     [resort 51 %, city 76 % flat]
 Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each must exit 1 on its rows):
   tiny-homes (7.5 x 7.5 back in towngen ARCH house_s, one floor) -> home-size, storeys     sparse (plan item 5 undone: VIEW_WANT top-up, no groups, budget 4000) -> coverage, density
   bare (the quota and the centre groups off, furniture x1: the audit's furnishing) -> coverage, density
@@ -39,6 +49,8 @@ Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each mus
   no-sets (the centre groups off) -> sets       tri-flood (TRI_BUDGET 6000 -> 60000 and the quota 1 per 1.5 m2) -> tris     loot-drop (house loot halved) -> loot
   rng-leak (Math.random in the furnisher) -> determinism     no-bath-set (no mirror / shower) -> bath-set     (loot-drop also -> loot-density)
   draw-scale-drop (maps.js reads suggested_scale off citykit's indexed manifest: the pass-1 bug, pieces baked at native size x k) -> scale
+  (W10 R3A) plank-curtain (CURTAIN_FOLDS off: round 3's flat plank skins) -> finish     bare-office (WORK_COVER off: no partitions / sized tables / cover pass) -> office-cover
+  flat-everywhere (ROOF_FLAT_ALL: every roof flat) -> flat-roofs     sparse-shop (WORK_FIT off: the round-3 shop / store furnishing) -> shop-density
 """
 from __future__ import annotations
 
@@ -99,6 +111,11 @@ PLANTS = {
     "loot-drop": ({"loot", "loot-density"}, [(HG, r"export const LOOT_KEEP = 1;", "export const LOOT_KEEP = 0.5;")]),
     "rng-leak": ({"determinism"}, [(HG, r"export const RNG_LEAK = false;", "export const RNG_LEAK = true;")]),
     "no-bath-set": ({"bath-set"}, [(HG, r"export const BATH_SET = true;", "export const BATH_SET = false;")]),
+    # (W10 R3A) interiors II
+    "plank-curtain": ({"finish"}, [(HG, r"export const CURTAIN_FOLDS = true;", "export const CURTAIN_FOLDS = false;")]),
+    "bare-office": ({"office-cover"}, [(HG, r"export const WORK_COVER = true;", "export const WORK_COVER = false;")]),
+    "flat-everywhere": ({"flat-roofs"}, [(HG, r"export const ROOF_FLAT_ALL = false;", "export const ROOF_FLAT_ALL = true;")]),
+    "sparse-shop": ({"shop-density"}, [(HG, r"export const WORK_FIT = true;", "export const WORK_FIT = false;")]),
 }
 
 
@@ -280,12 +297,81 @@ def judge(v, d, base):
         bad_den = [b for b in bad if b not in bad_map]
         v.check("loot", not bad_map and bool(parts), "vs %s: map loot %s%s" % (W9_TIP, "; ".join(parts), (" | OUT: " + "; ".join(bad_map)) if bad_map else ""), "+-10 % per map x seed")
         v.check("loot-density", not bad_den and bool(dens), "vs %s: home loot per m2 %s%s" % (W9_TIP, "; ".join(dens), (" | OUT: " + "; ".join(bad_den)) if bad_den else ""), "+-15 % per map")
+    judge_interiors(v, B)
     # determinism
     dt = d.get("determinism")
     if not dt:
         v.cnj("determinism", "no re-build")
     else:
         v.check("determinism", dt["a"] == dt["b"], "%s seed %d built twice: %s vs %s" % (dt["map"], dt["seed"], dt["a"], dt["b"]), "identical hashes")
+
+
+def judge_interiors(v, B):
+    """(W10 R3A) the interiors-II rows: finish, shop-density, office-cover, flat-roofs"""
+    I = [R.get("inter") for R in B]
+    if not all(I):
+        for row in ("finish", "shop-density", "office-cover", "flat-roofs"):
+            v.cnj(row, "the census has no interiors record (homes.mjs too old for this tree)")
+        return
+    lived = [r for x in I for r in x["lived"]]
+    dec = pct(sum(r["decor"] for r in lived), len(lived))
+    wins = sum(r["wins"] for r in lived)
+    cur = sum(r["cur"] for r in lived)
+    cn = sum(x["ceil"]["n"] for x in I)
+    cw = sum(x["ceil"]["white"] for x in I)
+    cmin = min(x["ceil"]["min"] for x in I)
+    by = {}
+    for r in lived:
+        by.setdefault(r["kind"], [0, 0])
+        by[r["kind"]][0] += r["decor"]
+        by[r["kind"]][1] += 1
+    v.check("finish", bool(lived) and dec >= 95 and wins > 0 and cur == wins and cn > 0 and cw == cn,
+            "lived rooms %d: wall decor %.1f %% (bar >= 95; %s); their windows %d: real curtains %d = %.1f %% (bar 100); home ceiling faces %d: white (L >= 0.85) %d, darkest L %.3f (bar all)" % (
+                len(lived), dec, ", ".join("%s %.1f %%" % (k, pct(a, n)) for k, (a, n) in sorted(by.items())), wins, cur, pct(cur, wins), cn, cw, cmin), ">= 95 %, 100 %, all white")
+    work = [r for x in I for r in x["work"]]
+    sw = [r for r in work if r["kind"] in ("shop", "storage", "warehouse")]
+    if not sw:
+        v.cnj("shop-density", "no shop / storage / warehouse rooms")
+    else:
+        area = sum(r["area"] for r in sw)
+        per = 100.0 * sum(r["n"] for r in sw) / area
+        cov = sum(r["cover"] for r in sw) / area * 25.0
+        okr = pct(sum(1 for r in sw if r["cover"] >= int(r["area"] // 25)), len(sw))
+        kinds = {}
+        for r in sw:
+            kinds.setdefault(r["kind"], [0, 0, 0, 0])
+            kinds[r["kind"]][0] += r["n"]
+            kinds[r["kind"]][1] += r["area"]
+            kinds[r["kind"]][2] += r["cover"]
+            kinds[r["kind"]][3] += 1
+        worst = min(sw, key=lambda r: (r["cover"] - r["area"] / 25.0, r["n"] / r["area"]))
+        v.check("shop-density", per >= 30 and cov >= 1 and okr >= 90,
+                "%d rooms, %.0f m2: %.1f pieces per 100 m2 pooled (bar >= 30); cover %.2f per 25 m2 pooled (bar >= 1); rooms with floor(area / 25) cover pieces %.1f %% (bar >= 90); by kind %s; e.g. %s %s %.1f m2 %d pieces %d cover" % (
+                    len(sw), area, per, cov, okr, "; ".join("%s %d rooms %.1f / 100 m2, cover %.2f / 25 m2" % (k, q[3], 100.0 * q[0] / q[1], 25.0 * q[2] / q[1]) for k, q in sorted(kinds.items())),
+                    worst["h"], worst["kind"], worst["area"], worst["n"], worst["cover"]), ">= 30 / 100 m2, >= 1 cover / 25 m2, >= 90 % of rooms")
+    oc = {}
+    for r in work:
+        if r["kind"] in ("office", "meeting", "lobby", "corridor"):
+            oc.setdefault(r["kind"], [0, 0])
+            oc[r["kind"]][0] += 1 if r["cover"] >= 1 else 0
+            oc[r["kind"]][1] += 1
+    if len(oc) < 4:
+        v.cnj("office-cover", "kinds found: %s (need office, meeting, lobby, corridor)" % sorted(oc))
+    else:
+        v.check("office-cover", all(pct(a, n) >= 90 for a, n in oc.values()), "rooms with >= 1 cover piece: %s (bar >= 90 %% each)" % (
+            ", ".join("%s %d of %d = %.1f %%" % (k, a, n, pct(a, n)) for k, (a, n) in sorted(oc.items()))), ">= 90 % each kind")
+    roofs = [r for x in I for r in x["roofs"]]
+    res = [r for r in roofs if r["theme"] == "resort"]
+    homes = [r for r in roofs if r["home"] and not r["core"]]
+    rf = pct(sum(1 for r in res if r["roof"] == "flat"), len(res))
+    hp = pct(sum(1 for r in homes if r["roof"] != "flat"), len(homes))
+    kinds = {}
+    for r in homes:
+        kinds[r["roof"]] = kinds.get(r["roof"], 0) + 1
+    porch = pct(sum(r["porch"] for r in homes), len(homes))
+    v.check("flat-roofs", bool(res) and bool(homes) and rf <= 25 and hp >= 80,
+            "resort buildings %d: flat %.1f %% (bar <= 25); homes outside a downtown core %d: pitched %.1f %% (bar >= 80; %s); porches %.1f %% of them (plan ~30, info); downtown-core homes %d" % (
+                len(res), rf, len(homes), hp, ", ".join("%s %d" % kv for kv in sorted(kinds.items())), porch, sum(1 for r in roofs if r["home"] and r["core"])), "<= 25 %, >= 80 %")
 
 
 def main_fn(v, args):
