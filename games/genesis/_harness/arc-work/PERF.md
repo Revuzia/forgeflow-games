@@ -2458,3 +2458,39 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
 - SLOT TABLE writes compare float32 values (s22 compared doubles to float32 = a texture upload per page per frame).
 - tcstat now: `pix=<% of the drawn patches' estimated screen pixels on a valid tile>,used=<MB of tiles>,tiles,cached,
   live,stale,hot,near,want=N/MB,full,bakes,bakeMs=<main-thread ms per tile>/<worst frame>,glob,cls=<edge:n/...>`.
+
+## SESSION 27 (memory) — what the "js heap" is, by owner (MEMORY agent)
+### 1. THE FINDING: `performance.memory.usedJSHeapSize` COUNTS ArrayBuffer backing stores; the JS objects are ~35 MB
+- Heap snapshot (CDP, after collectGarbage) of the full scene on SwiftShader at the owner's landing camera
+  (probe-s21 --views=y0 --full=1 --heapsnap=FILE; node s27-heap.mjs FILE; node s27-ab.mjs FILE): `Runtime.getHeapUsage`
+  = usedSize 33.7 MB (objects) + backingStorageSize 329 MB (ArrayBuffers); performance.memory said 386 MB. By type:
+  native JSArrayBufferData 311 MB, strings 4.7, code 10, objects/arrays ~10. So there is NO big JS-object holder
+  (no WorldView / chronicle / event / history / strings problem: chronicle capped 4000, pendingEvents 512, no rewind or
+  autosave copy on the client). The Mac's 0.8-1.4 GB is TYPED ARRAYS: heap = cpu retained (scene arrays) + other
+  ArrayBuffers + dead ArrayBuffers not yet collected. Mac run 1: heap 782 vs cpu retained 579 = 200 MB of other live
+  buffers (matches the 170 MB "other" measured here); runs 2-17 1260-1400 MB = the same + 500-700 MB of buffers that are dead
+  but not yet freed (run 18 fell to 970 with nothing changed: GC reclaimed). water=0 does not change it: the pages' CPU
+  arrays exist whether drawn or not.
+- Owners, MB, this scene (47-70 pages; the Mac has ~270): terrain pages 134 (the BatchedMesh attribute arrays, one copy,
+  `normal` already aliased) | city lights 68 -> 31.5 (acc 6 x 9 MB float + 6 x 2.4 MB bytes; NOT in cpu retained before) |
+  vegetation 26 | patch worker recycle sets 22 (cap MAX_INFLIGHT 192 sets) | life 10.5 + 8.8 tex | field textures 8.6 |
+  view fields 7.7 | grid 4.3 | groundcover 4.3 | rest. 8-frame sampling profile and an allocation trace
+  (s27-abtrace.js, --abtrace=1) of the whole run: only 111 MB of >= 16 kB typed-array allocations on the main thread,
+  none per frame: there is no per-frame typed-array churn at a static view.
+- NEW PERF REPORT LINE `js heap by owner (MB; usedJSHeapSize counts ArrayBuffers): attributed A of used U | unattributed X |
+  terrain pages .. · city lights (cpu) .. · patch recycle sets .. · view fields ..` (gpumem.ts heapProbe, renderer.ts
+  heapByOwner; ChunkLOD.heldBytes, CityLights.heldBytes). unattributed = dead-not-yet-collected buffers + unlisted holders.
+### 2. CUT (default ON): `?lazyacc=0` = old. citylights.ts: a face's Float32 accumulator (s*s*4 floats = 9 MB at 768) is
+  allocated when the first light lands on that face and given back when a rebuild leaves the face unlit (it is all zeros
+  then, its last box was cleared). Bit-identical (tests/render-citylights.test.ts incl. the GPU-copy-equals-CPU test; new
+  test for the lazy hold / release). Saved 36 MB here (4 of 6 faces unlit at the landing); worlds with towns on all six faces save nothing.
+### 3. WHAT REMAINS, and why (not cut)
+- terrain page CPU arrays (the 485 MB on the Mac): three's BatchedMesh.setGeometryAt writes into attribute.array and
+  WebGLAttributes uploads ranges from it, a 0-length array throws (GPU-MEMORY-PLAN). The lever that exists is the page
+  COUNT: landings may open pages up to need + max(6, 75 % of need) (FRESH_LAND, chunks.ts) = up to 1.75x the pages the
+  live patches need (Mac: ~270 pages for ~2000 selected patches = 125-155 needed). That allowance exists to avoid ANGLE
+  whole-buffer copies (s16): lowering it (`FRESH_EXTRA` / 0.75) trades ~150 MB heap + GPU for copy stalls: a PERF call, not changed.
+- dead buffers: V8 frees an ArrayBuffer's store only when its object is collected, and a scavenge-only heap that
+  looks small never runs a major GC for external memory. Candidate (not built): release big buffers eagerly via
+  transfer (`structuredClone(buf, {transfer})` / postMessage transfer to detach) when a page is disposed.
+- city lights acc (9 MB x lit faces) could be a Float16 / sparse tile map; recycle sets could be capped lower (96).
