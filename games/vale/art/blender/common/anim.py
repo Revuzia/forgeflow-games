@@ -1338,8 +1338,54 @@ def floor_lift(skel: Skeleton, p: dict, floor: float = 0.004, rings: dict | None
     return p
 
 
+WRIST_TWIST_SHARE = 0.5      # share of the hand's turn about the forearm axis that the forearm takes (orch1 FU-10)
+
+
+def spread_wrist_twist(skel: Skeleton, pose: dict, prev: dict | None = None, k: float = WRIST_TWIST_SHARE) -> dict:
+    """Move a share `k` of each hand's twist about the forearm's long axis onto the forearm (orch1 W2-C, FU-10).
+
+    The rig has no twist bones and the game skins linearly, so a hand turned ~180 degrees about the arm axis pinched the
+    50/50 wrist band to a point (the candy wrapper; _harness/clip_probe_hands.mjs: hand edges down to 0.06x rest).
+    The forearm does that turning in life (pronation / supination). D = R_h B_h R_h^-1 is the hand's turn from rest in
+    the forearm frame; its twist t about the forearm's +Y gives Q = t^k; then B_f' = B_f Q and B_h' = R_h^-1 Q^-1 R_h B_h.
+    Q turns about the forearm's own +Y and the wrist (the hand's head) sits on +Y, so the hand's world frame, its prop and
+    everything under it are unchanged. art/tools/wrist_twist.mjs applies the same move to an already shipped GLB."""
+    if k <= 0:
+        return pose
+    out = dict(pose)
+    for s in ("L", "R"):
+        f, h = f"forearm.{s}", f"hand.{s}"
+        if f not in skel.local or h not in skel.local or skel.parent.get(h) != f:
+            continue
+        Lh = skel.local[h]
+        tr = Lh.translation
+        if abs(tr.x) + abs(tr.z) > 0.01 * max(abs(tr.y), 1e-3):
+            continue                                            # the wrist is off the forearm axis: Q would move the hand
+        Rh = Lh.to_quaternion()
+        Bh = Euler([math.radians(a) for a in pose.get(h, (0, 0, 0))], "XYZ").to_quaternion()
+        D = Rh @ Bh @ Rh.inverted()
+        n = math.hypot(D.y, D.w)
+        if n < 1e-9:
+            continue
+        sg = 1.0 if D.w >= 0 else -1.0                          # the short way round
+        t = Quaternion((sg * D.w / n, 0.0, sg * D.y / n, 0.0))
+        if abs(t.angle) < 1e-4:
+            continue
+        Q = Quaternion().slerp(t, k)
+        Bf = Euler([math.radians(a) for a in pose.get(f, (0, 0, 0))], "XYZ").to_quaternion()
+        pf = (prev or {}).get(f)
+        ph = (prev or {}).get(h)
+        out[f] = Skeleton.euler_of((Bf @ Q).to_matrix(), pf)
+        out[h] = Skeleton.euler_of((Rh.inverted() @ Q.inverted() @ Rh @ Bh).to_matrix(), ph)
+    return out
+
+
 def sample_clip(skel: Skeleton, clip: Clip, chains: list | None = None) -> list:
     poses = [resolve(skel, clip.sample(f / clip.frames)) for f in range(clip.frames + 1)]
+    spread = []
+    for p in poses:
+        spread.append(spread_wrist_twist(skel, p, spread[-1] if spread else None))
+    poses = spread
     if clip.loop:
         poses[-1] = poses[0]
     if chains and clip.secondary:
