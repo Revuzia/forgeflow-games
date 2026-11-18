@@ -1936,14 +1936,24 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   }
   // R4 (5): the S2 places through the dev path only (data/places.ts says shipped: false, so the Travel sheet's path refuses them): each place's data loads,
   // the party arrives in it, its things that physics builds are bound with colliders, and the next trip leaves it
+  // RE-SPECIFIED in round 8 (R8_SHELL 0; R7_LIFE section 5's request; written reason): the row asserted `shut === false` (the sheet's path refuses each),
+  // true while the S1 build shipped only Home and the cabin. From round 7 Ripple, Frostbell and Rainleaf ship (R6_SHELL_open_s2.patch) and from round 8
+  // all seven places do (R7_SHELL_open_s3.patch), so the sheet's path takes a place exactly when it ships AND its stamps opened it (QUESTS 7, 15:
+  // later-life.ts travel); how many stamps the party has earned by this row depends on LIFE's trajectory. So: the sheet's path's answer equals
+  // "shipped and open by stamps" (read from PLACE_INFO and the host's own open mask just before), the dev path loads each, the rest unchanged.
   {
     const rows: Array<Record<string, unknown>> = [];
+    const { PLACE_INFO: PI8 } = await import('../../src/data/places.ts');
     for (const id of ['ripple', 'frostbell', 'rainleaf']) {
+      const info = PI8.find((p) => p.id === id)!;
+      const openMask = (host as unknown as { openPlaces(): number }).openPlaces();
+      const want = info.shipped && (openMask & (1 << info.idx)) !== 0;
       const shut = await host.travel(id);
+      const wantOk = shut === want;
       const ok = await host.travel(id, true);
       await stepA(60);
       const d = dbg();
-      rows.push({ id, shut, ok, place: d.place, chars: d.chars.length, things: d.things.length, bound: d.things.filter((t) => t.parked === false).length, noProp: d.things.filter((t) => t.parked === null).map((t) => t.id) });
+      rows.push({ id, shut, want, wantOk, ok, place: d.place, chars: d.chars.length, things: d.things.length, bound: d.things.filter((t) => t.parked === false).length, noProp: d.things.filter((t) => t.parked === null).map((t) => t.id) });
       if (id === 'rainleaf') {
         // R4b: the Drip Leaf (a 'shower' switch, PLACES 2.1 M14): its Leaf Drip zone is dry on arrival; a click tips a shower (the zone on, a USE SWITCH by PLAYER);
         // SHOWER_S (4 s) later it is dry again
@@ -1957,8 +1967,8 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
           z0 === 0 && tapD === 'dripleaf' && z1 === 1 && rec1 > rec0 && z2 === 0, JSON.stringify({ z0, tap: tapD, z1, records: [rec0, rec1], z2 }));
       }
     }
-    check('PLAYGROUND S2 by the dev path (not shipped: the sheet\'s path refuses each): Ripple Shore, Frostbell Ridge and Rainleaf Garden load, the party arrives in each, the things physics builds are bound (the ones it does not build are listed)',
-      rows.every((r) => r.shut === false && r.ok === true && r.chars === app.mat.count && (r.bound as number) >= 3), JSON.stringify(rows));
+    check('PLAYGROUND S2 by the dev path (the sheet\'s path takes a place only when it ships and its stamps opened it): Ripple Shore, Frostbell Ridge and Rainleaf Garden load, the party arrives in each, the things physics builds are bound (the ones it does not build are listed)',
+      rows.every((r) => r.wantOk === true && r.ok === true && r.chars === app.mat.count && (r.bound as number) >= 3), JSON.stringify(rows));
   }
   const okH = await host.travel('home');
   await stepA(60);
@@ -2123,6 +2133,23 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const gW = weathers(a2);
     check('PLAYGROUND (round 6) Rainleaf Garden: the Rain\'s shower envelope reaches the bed: on at the arrival (setAmbience weather 1), off 40 s later (weather 0)',
       okG && gW[0] === 1 && gW.includes(0) && gW.indexOf(0) > 0, JSON.stringify({ okG, weathers: gW }));
+    // (round 8, R8_SHELL; later-life.ts leafTap) the Drip Leaf's DRAWN leaf takes a tap: with a squishy set under it (G7), a still click on the middle of the big leaf
+    // (render/places/rainleaf.ts: from the stalk's top toward the drip zone, tipped 0.32 rad down; it has no prop, the stalk is the thing's prop) tips the shower.
+    // R7's final1b2 G7 tap went to the stalk's middle behind the squishy and never reached the leaf; a player taps the leaf (a click there was a miss before round 8)
+    {
+      const { PLACE: RL } = await import('../../src/data/place_rainleaf.ts');
+      const dk = RL.things.findIndex((t) => t.id === 'dripleaf'), dzn = RL.zones.find((z) => z.id === 'leafdrip')!, s0 = RL.things[dk];
+      app.body.placeAt?.({ x: dzn.x, y: app.body.center.y, z: dzn.z }, { x: 0, y: 0, z: 0 });
+      await stepA(60);
+      const ux = dzn.x - s0.x, uz = dzn.z - s0.z, dl = Math.hypot(ux, uz) || 1, half = 0.5 * (Math.max(0.3, dl) + 0.35);
+      const lp = proj(s0.x + (ux / dl) * Math.cos(0.32) * half, 1.58 - Math.sin(0.32) * half, s0.z + (uz / dl) * Math.cos(0.32) * half);
+      const zOn = (): number => ((dbg() as unknown as { zones: Array<[string, number]> }).zones.find((z) => z[0] === 'leafdrip')?.[1] ?? -1);
+      const z0 = zOn();
+      await tap(lp);
+      const tapL = dbg().tap, z1 = zOn();
+      check('PLAYGROUND (round 8) the Drip Leaf\'s drawn leaf takes a tap: with a squishy set under it, a still click on the middle of the big leaf (no prop of its own) tips the shower: a thing tap "dripleaf", its Leaf Drip zone on',
+        okG && dk >= 0 && !!lp && z0 === 0 && tapL === 'dripleaf' && z1 === 1, JSON.stringify({ lp, z0, tap: tapL, z1, at: [+app.body.center.x.toFixed(2), +app.body.center.z.toFixed(2)] }));
+    }
     // round 7 (R7_SHELL 2): Lanternroof and Cloudloft, the same way (the dev path, the REAL physics; with or without the data flip that ships them)
     type R7Dbg = { zones: Array<[string, number, number]> | null; tap: string; comet: boolean; selfUsed: string[]; selfReacted: string[]; counts: { records: number };
       vane: { turning: boolean; riders: number; poked: boolean } | null; chars: Array<{ slot: number; itemId: string | null; x: number; z: number }> };
@@ -2180,8 +2207,45 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     check('PLAYGROUND (round 7) Cloudloft: the Breeze\'s gusts are heard (setAmbience weather 0.4, at least 1 in 26 s); a squishy dropped onto a Puff Pad bounces (USE BOUNCE by itself) and one let go 1.3 m up in the Updraft floats down (LIFE\'s LIFT naming the Updraft)',
       okU && uW.filter((v) => v === 0.4).length >= 1 && r7().selfUsed.includes('puffpads') && r7().selfReacted.includes('updraft'),
       JSON.stringify({ okU, weathers: uW, used: r7().selfUsed, reacted: r7().selfReacted }));
+    // (round 8, R8_SHELL 3) a squishy set on top of the Sunbow Arch (a STATIC bar: its top bar 1.3 m up, wide layout (-1.75, -1.95)) is set down on the floor beside it,
+    // toward the middle, within 5 s: perchDown now covers every static bar's top (round 7's covered blocks only; R7_SHELL's list: one left up there stayed above the frame)
+    meSet(-1.75, 2.0, -1.95);
+    let onArch = 0;
+    for (let i = 0; i < 30; i++) { await stepA(10); if (app.body.center.y > 1.3 && (app.body.metrics.onProp ?? -1) >= 0) onArch++; }
+    const aY = app.body.center.y, aX = app.body.center.x, aZ = app.body.center.z;
+    check('PLAYGROUND (round 8) Cloudloft: a squishy set on top of the Sunbow Arch (its top bar 1.3 m up) rests on it, then is set down on the floor beside it, toward the middle, within 5 s (perchDown covers static bars)',
+      okU && onArch >= 3 && aY < 0.9 && Math.hypot(aX + 1.75, aZ + 1.95) > 0.3 && aZ > -1.95, JSON.stringify({ onArch, y: +aY.toFixed(3), x: +aX.toFixed(3), z: +aZ.toFixed(3) }));
+    // (round 8, R8_SHELL 3) in a place a CARRIED squishy moves over the ground (later-life.ts carryPoint): lifted by a pull from its upper part, then a drag straight up
+    // the frame (120 px) takes it BACK, at about the height it was picked up at. Round 7's carries to things at the back ran out of frame (the camera-facing plane: a
+    // drag up lifted more than it took back). At Home the same drag keeps the published plane (below, after the trip home): it rises more than it goes back.
+    const carryUp = async (): Promise<Record<string, number | boolean>> => {
+      meSet(0, app.body.center.y, 0.6);
+      for (let i = 0; i < 3; i++) await stepA(60);
+      const d0 = app.host.bodyScreen();
+      if (!d0) return { carried: false, dz: 0, dy: 0 };
+      const x0 = d0.x, y0 = d0.y - 0.55 * d0.r;
+      app.input.pointerDown({ id: 31, x: x0, y: y0, type: 'touch' });
+      step(6);
+      let k = 0, carried = false;
+      for (; k < 48 && !carried; k++) { app.input.pointerMove({ id: 31, x: x0, y: y0 - 6 * (k + 1), type: 'touch' }); step(2); carried = app.body.metrics.carried === true; }
+      step(20);
+      const ya = app.body.center.y, za = app.body.center.z, yp = y0 - 6 * k;
+      for (let j = 1; j <= 20; j++) { app.input.pointerMove({ id: 31, x: x0, y: yp - 6 * j, type: 'touch' }); step(2); }
+      step(40);
+      const held = app.body.metrics.carried === true, yb = app.body.center.y, zb = app.body.center.z;
+      app.input.pointerUp({ id: 31, x: x0, y: yp - 120, type: 'touch' });
+      for (let i = 0; i < 3; i++) await stepA(60);
+      return { carried, held, liftPx: 6 * k, dz: +(za - zb).toFixed(3), dy: +(yb - ya).toFixed(3) };
+    };
+    const cuP = await carryUp();
+    check('PLAYGROUND (round 8) Cloudloft: a squishy carried in a place moves over the ground: picked up by a pull, a drag straight up the frame (120 px) takes it back 0.8 m or more at about the height it was picked up at (within 0.25 m)',
+      okU && cuP.carried === true && cuP.held === true && (cuP.dz as number) >= 0.8 && Math.abs(cuP.dy as number) <= 0.25, JSON.stringify(cuP));
     audio.setAmbience = amb0;
     await host.travel('home'); await stepA(60);
+    // (round 8) ... and at Home the published carry is unchanged: the same pick-up and drag up the frame lifts the squishy more than it takes it back (camera-facing plane)
+    const cuH = await carryUp();
+    check('PLAYGROUND (round 8) Home keeps the published carry: the same pick-up and 120 px drag up the frame lifts the squishy more than it takes it back (the camera-facing plane through the press)',
+      cuH.carried === true && (cuH.dy as number) > 0.15 && (cuH.dy as number) > (cuH.dz as number), JSON.stringify(cuH));
   }
   app.dispose();
   // round 6 (D-96, the brief's rule "a save that already holds a stamp, wish or fact of a dropped place must still load without error"): the HOST on such a save

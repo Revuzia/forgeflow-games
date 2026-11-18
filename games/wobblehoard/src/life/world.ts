@@ -138,6 +138,8 @@ export interface LifeWorld {
   oI: Int8Array; oM: Int8Array; zDK: Int8Array; gDs: Float32Array; dDs: Float32Array; skT: Float64Array; gHo: Float64Array;
   /** the behaviour's score when it started (the running one keeps +0.15), the arrival due (B09), the shy arrival's end */
   bSc: Float32Array; aP: Uint8Array; sU: Float64Array; pWT: Float64Array;
+  /** (round 8) set in water by the player (data/life.ts SET_IN_WATER): this hold was a carry (1), the landing window's end, the stay's end */
+  cR: Uint8Array; sWA: Float64Array; sWS: Float64Array;
   /** per-call bookkeeping of the player's touch and landings, and the pending one-shot behaviours */
   aD: Uint8Array; wD: Int8Array; cD: Uint8Array; hD: Uint8Array; lT1: Float64Array; aC: Uint8Array;
   aPe: Uint8Array; nTa: Int16Array; uS: Uint8Array; rP: Uint8Array; uV: Uint8Array;
@@ -224,7 +226,7 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     zW: f32(n), zC: f32(n), zWe: f32(n), zWK: i8(n).fill(-1), zCK: i8(n).fill(-1), zWK1: i8(n).fill(-1), zWK2: i8(n).fill(-1),
     zUK: i8(n).fill(-1), b1: i8(n), eAO: u8(n), oN: i8(n).fill(-1), oS: u8(n),
     oI: i8(n).fill(-1), oM: i8(n).fill(-1), zDK: i8(n).fill(-1), gDs: f32(n), dDs: f32(n), skT: nanF64(n), gHo: nanF64(n),
-    bSc: f32(n), aP: u8(n), sU: nanF64(n), pWT: nanF64(n),
+    bSc: f32(n), aP: u8(n), sU: nanF64(n), pWT: nanF64(n), cR: u8(n), sWA: nanF64(n), sWS: nanF64(n),
     aD: u8(n), wD: i8(n).fill(-1), cD: u8(n), hD: u8(n), lT1: nanF64(n), aC: u8(n),
     aPe: u8(n), nTa: new Int16Array(n).fill(-1), uS: u8(n), rP: u8(n), uV: u8(n), tw: u8(n),
     tU: i8(MAX_THINGS).fill(-1), tUT: nanF64(MAX_THINGS),
@@ -328,8 +330,9 @@ export function copyPlace(w: LifeWorld, def: PlaceDef, layout: number): void {
   // (round 7) how each thing is used by itself (data/life.ts SELF_USE): from its mechanism, its zone, patch and switch
   for (let k = 0; k < nt; k++) w.tH[k] = selfUseOf(w, def, k);
 }
-/** (round 7) The self-use kind of place-local thing k (SELF_USE; 0 = none: a switch other than a shower or a comet, a nap patch (B06 naps there), the
- *  turntable (not built in physics: it would not turn), a floater, a wall block). A sky switch (the Star Scope's comet) is a sky thing too (GAZE_SKY). */
+/** (round 7) The self-use kind of place-local thing k (SELF_USE; 0 = none: a switch other than a shower or a comet, a nap patch (B06 naps there), a
+ *  floater, a wall block). A sky switch (the Star Scope's comet) is a sky thing too (GAZE_SKY). (round 8) A turntable (the Vane Disc) standing in a wind zone
+ *  with gusts is SPIN: the host turns it in the gusts (physics builds no turntable, D-96; the host's turn is the ride); one in no gusting wind, none. */
 function selfUseOf(w: LifeWorld, def: PlaceDef, k: number): number {
   const t = def.things[k], m = t.mech;
   if (m === MECH.ball) return SELF_USE.BALL;
@@ -353,7 +356,17 @@ function selfUseOf(w: LifeWorld, def: PlaceDef, k: number): number {
   if (m === MECH.seesaw || m === MECH.swing) return SELF_USE.RIDE;
   if (m === MECH.block && t.switch === 'shower') return SELF_USE.SHOWER;
   if (m === MECH.block && t.switch === 'comet') { w.tSk[k] = 1; return SELF_USE.GAZE; }
+  if (m === MECH.turntable) return gustZoneAt(w, w.tX[k], w.tZ[k]) >= 0 ? SELF_USE.SPIN : 0;
   return 0;
+}
+/** (round 8) The wind zone with gust data that (x, z) stands in (-1 none). Zero allocation (the query point is w.f[F.PX], w.f[F.PZ]). */
+export function gustZoneAt(w: LifeWorld, x: number, z: number): number {
+  for (let q = 0; q < w.nZ; q++) {
+    if (w.zK[q] !== ZONE.wind || !(w.zGf[q] > 0)) continue;
+    w.f[F.PX] = x; w.f[F.PZ] = z;
+    if (inAreaAt(w, 0, q, 0)) return q;
+  }
+  return -1;
 }
 
 /* ───────────────────────────── geometry (LF-02: no double crosses a call; results in w.f or as integers) ───────────────────────────── */

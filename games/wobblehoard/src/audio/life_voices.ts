@@ -94,6 +94,21 @@ export function createLifeVoices(h: LifeVoiceHost): LifeVoices {
   const gate = new TuneGate();
   const tunes: (TuneVoice | null)[] = [null, null];
   const held = new Map<number, HeldProp>();
+  /** A held voice (keyed): updated to `lv`; (re)started when none lives under the key and lv is at least `min`. */
+  const hold = (key: number, lv: number, min: number, kind: string, t: number, pan: number, make: (a: { c: AudioContext; t0: number }) => HeldProp): void => {
+    if (h.muted()) return;
+    let v = held.get(key);
+    if (!v || !v.alive || v.dying) {
+      held.delete(key);
+      if (lv < min) return;
+      const a = h.accept(kind, '');
+      if (!a) return;
+      v = make(a);
+      h.register(v);
+      held.set(key, v);
+    }
+    v.update(lv, t, pan);
+  };
   const now = (): number => h.ctx()?.currentTime ?? 0;
   const touchingAt = (t: number): boolean => touching || t < touchOffT + DUCK_AFTER_S;
   const duck = new Line(), norm = new Line();
@@ -213,57 +228,15 @@ export function createLifeVoices(h: LifeVoiceHost): LifeVoices {
       const kind = Math.floor(fin(p.kind, 0)), auto = p.auto === true, pan = clamp(fin(p.pan, 0), -1, 1);
       const c = h.ctx(), ch = h.chain();
       if (!c || !ch) { h.drop(); return; }
-      if (kind === PROP.ball && p.key !== undefined && p.held !== undefined) {
-        // the ball's held roll, keyed by prop: quiet and continuous, it never makes room
-        if (h.muted()) return;
-        const key = Math.floor(fin(p.key, 0)), lv = c01(p.held, 0);
-        let v = held.get(key);
-        if (!v || !v.alive || v.dying) {
-          held.delete(key);
-          if (lv < 0.02) return;
-          const a = h.accept('roll', '');
-          if (!a) return;
-          v = ballRoll(a.c, ch.plain, a.t0, h.rng, pan);
-          h.register(v);
-          held.set(key, v);
-        }
-        v.update(lv, c.currentTime, pan);
-        return;
-      }
+      // the held voices, keyed by prop, each with its own dead-man switch: the ball's roll (quiet and continuous, it never makes room), a hinged thing's
+      // creak (the rocker, the swing), a shaking branch or a ride (rustle, whoosh; round 2)
+      if (kind === PROP.ball && p.key !== undefined && p.held !== undefined) { hold(Math.floor(fin(p.key, 0)), c01(p.held, 0), 0.02, 'roll', c.currentTime, pan, (a) => ballRoll(a.c, ch.plain, a.t0, h.rng, pan)); return; }
       const aw = h.away();
-      if (kind === PROP.creak && aw && p.key !== undefined) {
-        // a hinged thing's held creak (the rocker, the swing), keyed by prop, with its own dead-man switch
-        if (h.muted()) return;
-        const key = 1000 + Math.floor(fin(p.key, 0)), lv = c01(p.held ?? p.intensity, 0);
-        let v = held.get(key);
-        if (!v || !v.alive || v.dying) {
-          held.delete(key);
-          if (lv < 0.05) return;
-          const a = h.accept('creak', '');
-          if (!a) return;
-          v = aw.creak(a.c, ch.plain, a.t0, h.rng, pan, key);
-          h.register(v);
-          held.set(key, v);
-        }
-        v.update(lv, c.currentTime, pan);
-        return;
-      }
+      if (kind === PROP.creak && aw && p.key !== undefined) { const key = 1000 + Math.floor(fin(p.key, 0)); hold(key, c01(p.held ?? p.intensity, 0), 0.05, 'creak', c.currentTime, pan, (a) => aw.creak(a.c, ch.plain, a.t0, h.rng, pan, key)); return; }
       if (kind === PROP.crackle && aw) { h.started('puff'); aw.puff(c.currentTime); return; }   // the fire puffs up: a swell of the bed
       if ((kind === PROP.rustle || kind === PROP.whoosh) && aw && p.key !== undefined && p.held !== undefined) {
-        // a shaking branch or a ride, held while it moves (round 2), with the same dead-man switch
-        if (h.muted()) return;
-        const key = (kind === PROP.rustle ? 2000 : 3000) + Math.floor(fin(p.key, 0)), lv = c01(p.held, 0);
-        let v = held.get(key);
-        if (!v || !v.alive || v.dying) {
-          held.delete(key);
-          if (lv < 0.05) return;
-          const a = h.accept(kind === PROP.rustle ? 'rustle' : 'whoosh', '');
-          if (!a) return;
-          v = aw.held(a.c, ch.plain, a.t0, h.rng, pan, kind === PROP.rustle ? 'rustle' : 'whoosh') as unknown as HeldProp;
-          h.register(v);
-          held.set(key, v);
-        }
-        v.update(lv, c.currentTime, pan);
+        const nm = kind === PROP.rustle ? 'rustle' : 'whoosh';
+        hold((kind === PROP.rustle ? 2000 : 3000) + Math.floor(fin(p.key, 0)), c01(p.held, 0), 0.05, nm, c.currentTime, pan, (a) => aw.held(a.c, ch.plain, a.t0, h.rng, pan, nm) as unknown as HeldProp);
         return;
       }
       const sv = kind === PROP.ball ? null : aw ? aw.strike[kind] : undefined;

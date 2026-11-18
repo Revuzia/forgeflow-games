@@ -1061,6 +1061,53 @@ if (run('pad')) {
     let apex = 0, kicks = 0;
     for (let i = 0; i < 240; i++) { frameW(w, [b], null); kicks += w.drainStrikes(out); apex = Math.max(apex, lowest(b)); }
     add('PH-16 one small hop on the pad (vy 0.84, apex 3.5 cm alone) and the pad does the rest: the bounces grow (several kicks, the apex well over the hop\'s), at most 5', `hop ${hopOk}, ${kicks} kick(s), apex ${f(apex * 100, 1)} cm`, '>= 2 kicks, <= 5, apex > 6 cm', hopOk && kicks >= 2 && kicks <= 5 && apex > 0.06);
+  }  // (round 8, R8_LIFE; R7_SHELL's request 9: on a phone, 0 of 3 drops on Rainleaf's Moss Bouncer bounced, the desktop 3 of 3) EVERY pad of EVERY layout, tall and wide
+  // (Home's Bounce Pad, Rainleaf's Moss Bouncer, Cloudloft's three Puff Pads): the player's carry from 1 m in front of the pad (toward the layout's middle) at the LOWEST
+  // height the hand can hold it (the hand target at the floor: a phone's drag plane meets the floor when the carry comes toward the camera), let go over the pad's
+  // centre: the pad kicks it (>= 1 kick in 3 s). Before round 8 the carry's floor was the body's rest height and its foot stayed in the table's tack layer: no fall,
+  // no kick, on every pad (physics CARRY_LIFT_K, the carried body's glue off).
+  {
+    const fams = QUICK ? ['jellygel'] : ['jellygel', 'marshmallow', 'stickystretch'];
+    const res: string[] = []; let bad = 0, n = 0;
+    const out = new Float32Array(32);
+    for (const def of [HOME, RAINLEAF, CLOUD]) for (const lay of ['tall', 'wide'] as const) {
+      const B = lay === 'tall' ? def.tall.bounds : def.bounds;
+      const pads: Array<[number, number, string, number]> = [];
+      def.things.forEach((t, k) => {
+        if (t.mech !== MECH.pad) return;
+        const L = lay === 'tall' ? def.tall.things[k] : t;
+        pads.push([L.x, L.z, t.id, k]);
+        const pp = t.p as Record<string, number>;
+        for (let j = 1; j < (pp.n ?? 1); j++) { const x = lay === 'tall' ? pp[`tx${j}`] ?? pp[`x${j}`] : pp[`x${j}`], z = lay === 'tall' ? pp[`tz${j}`] ?? pp[`z${j}`] : pp[`z${j}`]; if (x !== undefined) pads.push([x, z, `${t.id}#${j}`, k]); }
+      });
+      for (const [px, pz, id, k] of pads) for (const fam of fams) {
+        n++;
+        const w = buildPropWorld(def, lay, 1);
+        if (def.idx === 0) for (let q = 0; q < def.things.length; q++) w.setParked(q, q !== k);   // (Home: the pad is out, the other things parked)
+        const dl = Math.hypot(px, pz) || 1, sx = px - (px / dl) * 1.0, sz = pz - (pz / dl) * 1.0;
+        const b = mk(NEUTRAL, fam, { piece: { frac: 1, chunk: false, at: v3(sx, 0, sz) } }); b.setPropWorld(w);
+        if (def.idx !== 0) b.setBounds(B.shape === 'disc' ? 0 : 1, B.x, B.z, B.shape === 'disc' ? (B.r ?? 3) : (B.hx ?? 3), B.shape === 'disc' ? 0 : (B.hz ?? 2.4), B.round ?? 0);
+        let kicks = 0;
+        const fr = (m: number): void => { for (let i = 0; i < m; i++) { frameW(w, [b], null); kicks += w.drainStrikes(out); } };
+        fr(40);
+        const h = b.raycast(v3(b.center.x, b.center.y + 3, b.center.z), v3(0, -1, 0));
+        if (!h) { bad++; res.push(`${def.id} ${lay} ${id} ${fam}: no hit`); continue; }
+        b.grab(0, h.vertex, h.point); const p0 = { ...h.point };
+        let up = 0;   // (lifted until physics carries it: a stretchy family needs a longer pull, as a player's hand gives it; at most 3 m)
+        for (let i = 1; i <= 75 && !b.metrics.carried; i++) { up = 0.04 * i; b.grabMove(0, v3(p0.x, p0.y + up, p0.z)); fr(1); }
+        for (let i = 0; i < 10; i++) { b.grabMove(0, v3(p0.x, p0.y + up, p0.z)); fr(1); }
+        const carried = b.metrics.carried;
+        for (let i = 1; i <= 60; i++) { const fq = i / 60; b.grabMove(0, v3(p0.x + (px - p0.x) * fq, (p0.y + up) * (1 - fq), p0.z + (pz - p0.z) * fq)); fr(1); }
+        fr(20);
+        const off = Math.hypot(b.center.x - px, b.center.z - pz), y0 = b.center.y, still = b.metrics.carried;
+        kicks = 0; b.grabRelease(0); fr(180);
+        const ok = carried && still && kicks >= 1 && finite(b);
+        if (!ok) bad++;
+        if (!ok || fam === 'jellygel') res.push(`${def.id} ${lay} ${id}${fams.length > 1 ? ' ' + fam : ''}: ${kicks} kick(s) (let go ${f(off, 2)} m off its centre, centre ${f(y0, 3)} m${still ? '' : ', NOT carried at the let go'})`);
+      }
+    }
+    add(`PH-16 (round 8) every pad of every layout, tall and wide (Home's Bounce Pad, the Moss Bouncer, the three Puff Pads; ${fams.join(', ')}): carried from 1 m in front at the lowest height the hand can hold it (the hand target at the floor) and let go over the pad: the pad kicks it`,
+      res.join('; '), `all ${n}`, bad === 0);
   }
 }
 

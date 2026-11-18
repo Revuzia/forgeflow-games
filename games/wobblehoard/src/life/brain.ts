@@ -3,11 +3,11 @@
 // segment between two framed points), HELD and the afterglow (5.5), quiet and autonomy off (5.6), and the pieces' group moves P01..P04 (9).
 // Owned by PG_LIFE.
 import type { LifeSnapshot, LifeIntents, LifeEvents } from '../contracts.ts';
-import { LIFE_FLAG, LIFE_EV, EMOTE, EXPR, REACT_KIND, TOUCH, USE_VERB, BRAIN, SPECIES_LIFE, SQUIRT, LOOK, LOOK_ADD, SOCIAL_KIND } from '../data/life.ts';
+import { LIFE_FLAG, LIFE_EV, EMOTE, EXPR, REACT_KIND, TOUCH, USE_VERB, BRAIN, SPECIES_LIFE, SQUIRT, SET_IN_WATER, LOOK, LOOK_ADD, SOCIAL_KIND } from '../data/life.ts';
 import { MECH, ZONE, PLACE_IDS } from '../data/places.ts';
 import { SPECIES } from '../data/species.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, BEH, F, MAX_ZONES, usesFull, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT } from './world.ts';
+import { CAP, BEH, F, MAX_ZONES, usesFull, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT, gustZoneAt } from './world.ts';
 import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, G_GAP, groupCount, say } from './act.ts';
 import { emitVoice, PHRASE, voice } from './voice.ts';
 import { STYLE, MOVER_CAP, UNIT_CAP, tierOf } from './attention.ts';
@@ -24,8 +24,8 @@ const FAM_FIRM = 8, FAM_POP = 9;
 /** Per family: the mechanisms it likes (B04's family affinity, +0.15 each). */
 import { FAMILY_REACT, FAMILY_SELF, SELF_USE } from '../data/life.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
-const PREFS = new Uint32Array(12), ICE_GRIP = new Float32Array(12);
-for (let f = 0; f < 12; f++) ICE_GRIP[f] = FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].iceGrip;
+const PREFS = new Uint32Array(12), ICE_GRIP = new Float32Array(12), SOAK_RATE = new Float32Array(12);
+for (let f = 0; f < 12; f++) { ICE_GRIP[f] = FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].iceGrip; SOAK_RATE[f] = FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].soakRate; }
 for (let f = 0; f < 12; f++) for (const m of FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].mechPrefs) PREFS[f] |= 1 << m;
 /** (round 7) Per family: the self-use kinds it likes and never starts (data/life.ts FAMILY_SELF), as bits; its wind and updraft catch. */
 const SELF_LIKE = new Uint32Array(12), SELF_NEVER = new Uint32Array(12), CATCH = new Float32Array(12);
@@ -84,6 +84,7 @@ export function mayMove(w: LifeWorld, s: LifeSnapshot, i: number, asked: boolean
   if (!s.autonomy && !asked) return false;
   if (tb < w.gU[i] && !asked) return false;
   if (tb < w.pWT[i]) return false;
+  if (tb < w.sWS[i] && !asked) return false;   // (round 8) set in water by the player: it stays to soak (SET_IN_WATER)
   return true;
 }
 
@@ -193,6 +194,7 @@ export function touchPass(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
     const fl = s.flags[i], held = (fl & HELD_BITS) !== 0;
     if (held && !w.he[i]) {
       w.he[i] = 1; w.tST[i] = t;
+      w.cR[i] = 0; w.sWA[i] = -1e9; w.sWS[i] = -1e9;   // (round 8) picked up again: a stay in water ends
       emitCancel(w, out, i);
       emitGaze(w, out, i, 0); // the eyes go to the pointer
       if (w.mo[i]) { w.mo[i] = 0; w.movers = w.movers > 0 ? w.movers - 1 : 0; w.att.movers = w.movers; }
@@ -211,8 +213,20 @@ export function touchPass(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
       }
     } else if (!held && w.he[i]) {
       w.he[i] = 0; w.rT[i] = t;
+      if (w.cR[i]) w.sWA[i] = t + SET_IN_WATER.armS;   // (round 8) a carry let go: a landing in water soon starts a stay (SET_IN_WATER)
+      w.cR[i] = 0;
       w.gU[i] = t + 1.5 + BRAIN.graceS; // the 1.5 s afterglow, then 1.5 s of grace before any new LIFE motion
       if ((fl & LIFE_FLAG.RIDE) === 0) w.aD[i] = 1;
+    }
+    if (held && (fl & LIFE_FLAG.CARRIED) !== 0) w.cR[i] = 1;
+    // (round 8, SET_IN_WATER) the carry's body is down in water (not in the air): it stays to soak
+    if (!held && w.sWA[i] > t && (fl & LIFE_FLAG.AIRBORNE) === 0 && (w.zWK1[i] >= 0 || (fl & LIFE_FLAG.IN_WATER) !== 0)) {
+      w.sWA[i] = -1e9;
+      const rate = SOAK_RATE[w.fa[i]];
+      let stay: number = SET_IN_WATER.minS;
+      if (rate > 0) { const need = (1 - w.lo[i * 6 + LOOK.soak]) / rate + SET_IN_WATER.extraS; stay = need < SET_IN_WATER.minS ? SET_IN_WATER.minS : need > SET_IN_WATER.maxS ? SET_IN_WATER.maxS : need; }
+      w.sWS[i] = t + stay;
+      if (w.mo[i]) stopMove(w, out, i);
     }
     const tk = s.touchKind[i];
     if (tk >= 0) {
@@ -628,6 +642,9 @@ function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
  *  way it is carried back to the rim and stays). Until PHYS fixes it (request in R7_LIFE.md section 5) LIFE starts no pad use by itself; one flag. The
  *  updraft's use stands in the column off its pad. */
 const PADS_OK = false;
+/** (round 8) SPIN: a squishy starts toward the Vane Disc when its wind zone's next gust is at most this many seconds away (or one blows now), and stays on
+ *  it until that gust has ended (at most SPIN_MAX_S). */
+const SPIN_LEAD_S = 7, SPIN_MAX_S = 16;
 /** (round 7) May character i start a by-itself use of thing k of kind `how` now? Its family can (FAMILY_SELF.never; a hop it cannot make; the ice grip),
  *  and the kind's moment is there (the rain for the drip leaf, the night for a sky thing, a light body for the updraft, the host's lift for a ride). */
 function selfOk(w: LifeWorld, s: LifeSnapshot, i: number, k: number, how: number): boolean {
@@ -644,6 +661,12 @@ function selfOk(w: LifeWorld, s: LifeSnapshot, i: number, k: number, how: number
     case SELF_USE.SHOWER: return w.tZo[k] >= 0 && (s.zoneMask[i] & (1 << ZONE.wet)) !== 0;
     case SELF_USE.RIDE: return w.sR === 1 && w.ki[i] === 0;
     case SELF_USE.ARCH: case SELF_USE.LEAN: case SELF_USE.BUMP: case SELF_USE.CLIMB: return w.ki[i] === 0;
+    case SELF_USE.SPIN: {
+      // (round 8) the Vane Disc: a whole, while a gust of its wind zone blows or starts within SPIN_LEAD_S (so it does not stand there between gusts)
+      if (w.ki[i] !== 0) return false;
+      const q = gustZoneAt(w, w.tX[k], w.tZ[k]), tb = w.f[F.NOW];
+      return q >= 0 && ((tb >= w.zGe[q] - w.zGf[q] && tb < w.zGe[q] - 0.8) || w.zGn[q] - tb <= SPIN_LEAD_S);
+    }
     default: return true;   // RING, STONES
   }
 }
@@ -980,6 +1003,11 @@ function selfPoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean
       }
       return false;
     }
+    case SELF_USE.SPIN: {
+      // (round 8) the Vane Disc's middle (the host's rider test: the body's centre within the disc's radius)
+      w.f[F.X] = tx; w.f[F.Z] = tz; qT(w);
+      return inBounds(w, ((R * 0.5) * 1000) | 0);
+    }
     case SELF_USE.ARCH: {
       // under the arch (between its posts), else a little toward the front until the body stands within the bounds
       for (let n = 0; n < 5; n++) {
@@ -1153,6 +1181,17 @@ function runSelf(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents
         say(w, s, out, i, EMOTE.wow, 2, w.fP[i]);
         selfDone(w, i, k);
         w.ph[i] = 3; w.bN[i] = tb + STAY.bump;
+        return;
+      }
+      case SELF_USE.SPIN: {
+        // (round 8) on the Vane Disc: it stays through the next gust (the host turns the disc and writes the rider's USE SPIN by SELF: LIFE writes no record)
+        if (w.mo[i]) stopMove(w, out, i);
+        say(w, s, out, i, EMOTE.swirl, 2, w.fP[i]);
+        selfDone(w, i, k);
+        const q = gustZoneAt(w, w.tX[k], w.tZ[k]);
+        let end = tb + 3;
+        if (q >= 0) end = tb >= w.zGe[q] - w.zGf[q] && tb < w.zGe[q] ? w.zGe[q] + 0.5 : w.zGn[q] + w.zGf[q] + 0.5;
+        w.ph[i] = 3; w.bN[i] = end < tb + SPIN_MAX_S ? end : tb + SPIN_MAX_S;
         return;
       }
       case SELF_USE.RIDE: {

@@ -11,7 +11,7 @@ import { MECH, ZONE, MARK, PROP_SOUND as S, SIGNATURE, FINALE, cells } from './p
 import { USE_VERB as V, EMOTE as E } from './life.ts';
 
 export const PLACE: PlaceDef = {
-  id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true,
+  id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: true, night: true,
   ground: { grip: 1.1, glue: 1, peel: 1, drag: 1, mark: 0, markLifeS: 0 },
   patches: [
     { id: 'chimneycorner', shape: 'disc', x: -2.3, z: 0.6, r: 0.9, mods: {  }, nap: true },

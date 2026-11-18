@@ -788,8 +788,9 @@ export interface StageLike {
   /** PLAYGROUND: frame the camera on the whole play bounds of the place layout in use (the wide layout, or the tall one on a frame with
    *  aspect under 0.9, PLACES.md P7) so that a body anywhere inside them, its bubble included, stays inside the HUD safe insets
    *  (setSafeInsets). Not used at Home (Home frames the mat slots in use, as today). Autonomy never moves the camera: framing uses these
-   *  bounds, never live LIFE positions; the player still orbits and zooms. */
-  setPlayBounds?(cx: number, cz: number, hx: number, hz: number): void;
+   *  bounds, never live LIFE positions; the player still orbits and zooms. Round 8 (additive): pitchMin / pitchMax, the layout's pitch range
+   *  in radians for the fit (P8: the place's camera.pitch, or a layout's own); left out, 0.15 to 0.9 as before. */
+  setPlayBounds?(cx: number, cz: number, hx: number, hz: number, pitchMin?: number, pitchMax?: number): void;
   /** PLAYGROUND (Home): the table area visible inside the frame and outside the HUD safe insets at the REST framing (yaw 0, zoom 1, no
    *  ceremony push) of the mat slots in use, as ONE ground box inside it, [xMin, zMin, xMax, zMax] in metres into out[0..3]: its z range
    *  runs from the ground row under the top inset line to the ground row under the bottom inset line, and its x range is the near row's (the

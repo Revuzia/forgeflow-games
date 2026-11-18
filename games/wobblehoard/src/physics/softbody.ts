@@ -294,6 +294,11 @@ export const PA = 16;
 export const GRAB_TUNE = { inFrac: 0.5, zone: 0.8, band: 0.3, volK: 0.1, allFrom: 3, iters: 8, allEvery: 2, still: 1.5, calm: 0.012, cap: 8 };   // (.zone: the skin within this many rest radii of a pulled or locked patch is in the contact fold limit, 0 = off; .band: while a lobe is pulled or locked, and for TABLE_FOLD_AFTER after, the skin this many rest radii above the table is in it too; .allFrom: with this many lobes held, the whole skin is in it; .still: seconds after the last lock, release or grab after which a hold of locks alone looks every other substep only (metrics.kinetic cannot tell: it reads 1.0 for a locked body, the patches fight the shape all the time); .iters: fold passes per substep while .allFrom or more lobes are held; .allEvery: the whole skin joins the limit on every n-th substep; .calm / .cap: after several lobes were held the whole skin stays in the limit until the body is calm (metrics.kinetic under .calm), at most .cap seconds (a release of several lobes rippled into 140 to 175 degree folds when the tip wake ended); .volK: the volume constraint compliance x this while two or more lobes are held (grabs + locks): several lobes pulled out at once swelled the body to 1.2 .. 1.4 of its volume)
 const LIFT_OVER = 1.15;            // a pull asked past this x maxPull lifts the body off the mat (B3). LOCK FIX: unchanged on purpose; a Shift tap on a body that was lifted anyway puts it back and locks (putDownForLock). A longer line (1.3) plus a 0.3 s dwell was tried and withdrawn: it stops the owner's toss from starting for quick drags (browser_shell snap-mat's carry row, probe_gestures' 1.8 x drag at a 1.5 line)
 const CARRY_OMEGA = 18;           // rad/s: how tightly a carried body follows the hand (critically damped, kinematic)
+/** (round 8, R8_LIFE; R7_SHELL's request 9) a carried body is held at least this x its rest radius above its rest height (its lowest point clears the support):
+ *  a hand target at or under the floor (a phone's drag plane meets the floor short of a pad at the back of a TALL layout) held it AT its rest height, so the let go
+ *  set it down with no fall and a pad never kicked it (Rainleaf's Moss Bouncer on a phone, 0 of 3 in the browser; every pad, wide or tall, 0 kicks in node).
+ *  0.2 R (8 cm for a whole of R 0.4) is a fall of about 1.25 m/s at the let go, over the pad's PAD_LAND 0.3 m/s. */
+const CARRY_LIFT_K = 0.2;
 const TOSS_MAX = 6;                // m/s: the fastest throw
 // ---- LOCK (_spec/LOCK.md): up to 5 concurrent finger / grab slots (touch fingers) and up to 6 locked lobes
 const NSLOT = 5;                   // finger and grab slots
@@ -3290,7 +3295,7 @@ export class SoftBody implements SoftBodyLike {
         // fast target, or one under the table, stretched the grabbed patch metres out of the body and inverted it; the hostile fuzz)
         // GROUND FIX: ... and the hand never goes lower than where the carried body's centre sits at its rest height (a hand under that drags the grabbed patch through the body: it
         // squashed against the table, creased to 180 degrees and inverted twangle)
-        const hfloor = this.restCenterY - this.carryOy;
+        const hfloor = this.restCenterY + CARRY_LIFT_K * this.restRadius - this.carryOy;   // (round 8: the carry's lift, CARRY_LIFT_K)
         if (g.ey < hfloor) g.ey = hfloor;
         if (g.ey < GRAB_FLOOR_Y) g.ey = GRAB_FLOOR_Y;
         const hx = this.cx - this.carryOx, hy = this.cy - this.carryOy, hz = this.cz - this.carryOz;
@@ -3339,7 +3344,10 @@ export class SoftBody implements SoftBodyLike {
   private reach(g: Grab): void {
     const r = this.rch;
     let x = g.rx, y = g.ry, z = g.rz;
-    if (g.cap >= 0) {
+    // (round 8: not for the hand that CARRIES the body: the cap is measured from where the grab began (t0), which a carry leaves behind; a carry toward a low
+    // target (a phone's drag plane near the floor) was pushed back along the grab's tilted normal and ended up to 0.8 m short of it. The carry keeps its own
+    // limits: the hand at most maxPull ahead of the body and never under its lifted rest height, CARRY_LIFT_K)
+    if (g.cap >= 0 && !(this.carried && g === this.grabs[this.carrier])) {
       const dn = (x - g.t0x) * g.nx + (y - g.t0y) * g.ny + (z - g.t0z) * g.nz;
       if (dn < -g.cap) { const s = -g.cap - dn; x += g.nx * s; y += g.ny * s; z += g.nz * s; }
     }
@@ -3612,7 +3620,8 @@ export class SoftBody implements SoftBodyLike {
       if (g.active) {
         // (never below its rest height: a hand target under the table carried the body INTO it, the table squashed it flat every substep
         // and it inverted; the hostile fuzz's far grabs, physics round 3)
-        const a = 1 - Math.exp(-CARRY_OMEGA * H), ty = g.ey + this.carryOy, tyc = ty > this.restCenterY ? ty : this.restCenterY;
+        const yMin = this.restCenterY + CARRY_LIFT_K * this.restRadius;   // (round 8: held off the support, CARRY_LIFT_K)
+        const a = 1 - Math.exp(-CARRY_OMEGA * H), ty = g.ey + this.carryOy, tyc = ty > yMin ? ty : yMin;
         let mx = (g.ex + this.carryOx - this.cx) * a, my = (tyc - this.cy) * a, mz = (g.ez + this.carryOz - this.cz) * a;
         const vmax = TOSS_MAX * 2 * H, ml = Math.sqrt(mx * mx + my * my + mz * mz);
         if (ml > vmax) { const r = vmax / ml; mx *= r; my *= r; mz *= r; }
@@ -3957,7 +3966,8 @@ export class SoftBody implements SoftBodyLike {
     // ---- PLAYGROUND prop pass (PLAYGROUND_BUILD 8.3): the bound world's shapes, between the fingertips and the table (the table always wins)
     if (this.ps !== null) { this.fdl = fingerDown; this.propPass(); }
     {
-      const mu = this.p.tableMu, glue = this.p.glue * (this.restRadius / 0.5) * (1 - this.fold) * this.glueK, H0 = this.H0;   // the tack layer scales with the body (and lets go of a folding one; and of a hop: glueK)
+      // (round 8: and of a carried body: it is in the hand, held CARRY_LIFT_K R up; the tack layer kept its foot on the table and the carry dragged it along the floor)
+      const mu = this.p.tableMu, glue = this.p.glue * (this.restRadius / 0.5) * (1 - this.fold) * (this.carried ? 0 : this.glueK), H0 = this.H0;   // the tack layer scales with the body (and lets go of a folding one; and of a hop: glueK)
       // normal-load proxy for Coulomb friction: this substep's penetration plus the supported weight (g h^2 per
       // particle, concentrated on the particles that are actually touching)
       const load = this.supp * GRAVITY * H * H * Math.min(LOAD_CONC, this.Mtot / Math.max(1, this.nearMass));

@@ -794,6 +794,76 @@ export function makePg(E: PgEnv) {
       S.clearBodies(); bodies = [];
       return { live, afterMove, afterFade };
     },
+    /**
+     * Round 8 (R8_SHELL 2): how clearly each squishy's OUTLINE reads against the floor right around it, in a place (Cloudloft's near-white cloud tops: R7_SHELL
+     * measured Wisplet's top edge at 1.36 : 1). One squishy at a time at the same spot (the middle of the bounds, 0.4 m back), settled, rendered; its silhouette is
+     * its own simulation mesh's triangles projected through the camera (exact, whatever the shading), its edge every mask pixel with an unmasked neighbour; at each
+     * edge pixel the WCAG contrast ratio between the frame 2 px inside (toward the silhouette's centre) and 2 px outside, in the SAME frame (what the player sees:
+     * the floor, its dent and any shadow). Per squishy: the median, the 20th percentile and the TOP edge's median (the upper third of the silhouette: the edge seen
+     * against the floor behind it). Plus a PNG of the last one.
+     */
+    async outlineContrast(kind: 'phone' | 'desktop', species: string[] = [], id = 'cloudloft', spot: [number, number] | null = null): Promise<{
+      rows: Array<{ sp: string; fam: string; n: number; med: number; p20: number; top: number }>; png: string; at: number[];
+    }> {
+      pg.insets(kind);
+      const D = PLACES[id];
+      await S.loadPlace!(id); S.setPlace!(id, 0.05);
+      const tall = S.camera.aspect < 0.9, L = tall ? D.tall : D, b = L.bounds;
+      S.setPlayBounds!(b.x, b.z, b.hx ?? 3, b.hz ?? 2);
+      S.clearBodies(); bodies = [];
+      E.tick([], 90, 1 / 60, false);
+      const fams = [...new Set(CATALOG.map((d) => d.family))];
+      const list = species.length ? species : fams.map((f) => familyOf(f));
+      const at = spot ?? [b.x, b.z - 0.4];
+      const cw = E.canvas.width, ch = E.canvas.height, sx = cw / W(), sy = ch / H();
+      const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+      const cx = cv.getContext('2d', { willReadFrequently: true })!;
+      const lum = (d: Uint8ClampedArray, i: number): number => { const f = (c: number): number => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(d[i]) + 0.7152 * f(d[i + 1]) + 0.0722 * f(d[i + 2]); };
+      const rows: Array<{ sp: string; fam: string; n: number; med: number; p20: number; top: number }> = [];
+      let png = '';
+      for (const sp of list) {
+        S.clearBodies(); bodies = [];
+        const g = speciesBaseGenome(sp, 1), bb = E.makeBody(g);
+        S.addBody!(bb, g, { tier: 'common', position: { x: at[0], y: 0, z: at[1] } }); bodies.push(bb);
+        E.tick(bodies, 150, 1 / 60, false);
+        png = E.snapshot();
+        cx.clearRect(0, 0, cw, ch); cx.drawImage(E.canvas, 0, 0);
+        const px = cx.getImageData(0, 0, cw, ch).data;
+        // the silhouette: the sim mesh's triangles, projected (the body is drawn at `at`: its positions are its own, offset by the stage)
+        const mask = new Uint8Array(cw * ch), P = bb.positions, I = bb.indices, n = bb.vertexCount, q = new Float32Array(n * 2);
+        for (let v = 0; v < n; v++) { const p = toPx(P[v * 3] + at[0], P[v * 3 + 1], P[v * 3 + 2] + at[1]); q[v * 2] = p[0] * sx; q[v * 2 + 1] = p[1] * sy; }
+        for (let t = 0; t < I.length; t += 3) {
+          const a = I[t], c = I[t + 1], e = I[t + 2];
+          const x0 = q[a * 2], y0 = q[a * 2 + 1], x1 = q[c * 2], y1 = q[c * 2 + 1], x2 = q[e * 2], y2 = q[e * 2 + 1];
+          const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2))), maxX = Math.min(cw - 1, Math.ceil(Math.max(x0, x1, x2))), minY = Math.max(0, Math.floor(Math.min(y0, y1, y2))), maxY = Math.min(ch - 1, Math.ceil(Math.max(y0, y1, y2)));
+          const area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+          if (Math.abs(area) < 1e-6) continue;
+          for (let yy = minY; yy <= maxY; yy++) for (let xx = minX; xx <= maxX; xx++) {
+            const X = xx + 0.5, Y = yy + 0.5;
+            const w0 = ((x1 - X) * (y2 - Y) - (x2 - X) * (y1 - Y)) / area, w1 = ((x2 - X) * (y0 - Y) - (x0 - X) * (y2 - Y)) / area, w2 = 1 - w0 - w1;
+            if (w0 >= 0 && w1 >= 0 && w2 >= 0) mask[yy * cw + xx] = 1;
+          }
+        }
+        let mx = 0, my = 0, mn = 0, top = Infinity, bot = -Infinity;
+        for (let i = 0; i < mask.length; i++) if (mask[i]) { const yy = (i / cw) | 0; mx += i % cw; my += yy; mn++; top = Math.min(top, yy); bot = Math.max(bot, yy); }
+        if (!mn) { rows.push({ sp, fam: CATALOG.find((d) => d.id === sp)?.family ?? '', n: 0, med: 0, p20: 0, top: 0 }); continue; }
+        mx /= mn; my /= mn;
+        const all: number[] = [], tops: number[] = [], topLine = top + (bot - top) / 3;
+        for (let yy = 1; yy < ch - 1; yy++) for (let xx = 1; xx < cw - 1; xx++) {
+          const i = yy * cw + xx;
+          if (!mask[i] || (mask[i - 1] && mask[i + 1] && mask[i - cw] && mask[i + cw])) continue;
+          const dx = xx - mx, dy = yy - my, dl = Math.hypot(dx, dy) || 1, ux = dx / dl, uy = dy / dl;
+          const ix = Math.round(xx - ux * 2), iy = Math.round(yy - uy * 2), ox = Math.round(xx + ux * 2), oy = Math.round(yy + uy * 2);
+          if (ox < 0 || oy < 0 || ox >= cw || oy >= ch || mask[oy * cw + ox] || !mask[iy * cw + ix]) continue;
+          const l1 = lum(px, (iy * cw + ix) * 4), l2 = lum(px, (oy * cw + ox) * 4), r = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+          all.push(r); if (yy <= topLine) tops.push(r);
+        }
+        const pct = (a: number[], p: number): number => { if (!a.length) return 0; const s = [...a].sort((u, v) => u - v); return +s[Math.min(s.length - 1, Math.floor(p * s.length))].toFixed(2); };
+        rows.push({ sp, fam: CATALOG.find((d) => d.id === sp)?.family ?? '', n: all.length, med: pct(all, 0.5), p20: pct(all, 0.2), top: pct(tops, 0.5) });
+      }
+      S.clearBodies(); bodies = [];
+      return { rows, png, at };
+    },
   };
   return pg;
 }

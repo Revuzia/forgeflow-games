@@ -277,6 +277,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const anchorV = new THREE.Vector3(), anchorR = new THREE.Vector3();
   /** setPlayBounds (a place): the bounds of the layout in use and the framing fitted to them for this frame (null = Home's framing). */
   const playB = new Float64Array(4);
+  /** (round 8, R8_LIFE's request 11) the layout's pitch range for the fit (setPlayBounds' 5th and 6th arguments, as given: placeview.ts fitPlace takes P8's 0.15
+   *  to 0.9 for a missing or insane range) */
+  let playP0: number | undefined, playP1: number | undefined;
   let play: PlayFrame | null = null;
   /** Round 3 (MERGE_PC doubt 4): a place keeps clear what Home's band framing keeps clear: the HUD rows the shell reported, scaled down
    *  together under minBand, plus Home's margin (placeview.ts placeBand, applied by the away chunk's PlaceHost.fit); a change of the rows (the Cut bar while the Cut tool is in hand)
@@ -284,7 +287,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   let pFov = 35, pDist = 0, pEase = false, pTilt = false;
   function refitPlay(): void {
     const was = play, I = framer.ins;
-    play = placeHost && Number.isFinite(playB[2]) && playB[2] > 0 ? placeHost.fit(playB[0], playB[1], playB[2], playB[3], cssW, cssH, I.top, I.right, I.bottom, I.left) : null;
+    play = placeHost && Number.isFinite(playB[2]) && playB[2] > 0 ? placeHost.fit(playB[0], playB[1], playB[2], playB[3], cssW, cssH, I.top, I.right, I.bottom, I.left, playP0, playP1) : null;
     pEase = !!was && !!play; pTilt = pEase;
     if (play) { tYaw = 0; tZoom = 1; if (!pEase) tPitch = play.pitch; }
   }
@@ -1329,9 +1332,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     reactFx(kind, bodyId, x, y, z, amount, lifeS) { return !!placeHost?.react(kind, bodyId, x, y, z, amount, lifeS); },
     thingFx(thing, kind, amount) { return !!placeHost?.thingFx(thing, kind, amount); },
     squirtFx(from, to, drops, dirX, dirZ) { return !!placeHost?.squirt(from, to, drops, dirX ?? NaN, dirZ ?? NaN); },
-    setPlayBounds(cx, cz, hx, hz) {
+    setPlayBounds(cx, cz, hx, hz, pitchMin, pitchMax) {
       // (a non-finite or empty bounds clears it: Home's framing again)
       if ([cx, cz, hx, hz].every(Number.isFinite) && hx > 0 && hz > 0) playB.set([cx, cz, hx, hz]); else playB.set([0, 0, NaN, NaN]);
+      playP0 = pitchMin; playP1 = pitchMax;
       refitPlay();
     },
     bindProps(poses, count, pThing) {

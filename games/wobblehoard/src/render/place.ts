@@ -89,6 +89,16 @@ const LOADERS: Record<string, () => Promise<{ default: PlaceLook }>> = {
 };
 /** Round 6: the most bodies the feed of PlaceBuilt.update carries (a party of 5 and a few pieces). */
 export const BODY_FEED = 12;
+/** (round 8) the play UI's slot under the top row on a tall frame (ui/play.css .pl-slot: 8 px under the row, then the tracker pill wrapped to two lines or a
+ *  stamp moment, about 44 px): a place's framing keeps it clear as one more top row (PlaceHost.fit). probe_pg_data's place camera model reads this. */
+export const PLAY_SLOT_PX = 52;
+/** (round 8) ... and on a tall frame wider than 380 px, the top-right column beside that slot as well (ui/hud.css .hud-life: Journal, Places and the party's
+ *  button, 3 x 44 px + 2 x 8 px from 64 px, so down to 212 px: 156 px under the 56 px top row). Measured in round 8's place run (390 x 844): with only the slot
+ *  kept clear, the back of a tall layout stood behind the column (Ripple's Shell Chimes at 313..366 x 150..175 px, one tap in the column's gap was the HUD's;
+ *  R7's cabin: the hearth's right edge). Same lens and squishy size (the tall fit is width-bound: 390 x 844 cabin 151 / 113 px, Ripple 135 / 106 px), the
+ *  floor's depth on screen a quarter flatter (cabin 313 px for 6.4 m, pitch 0.40). At 380 px and under hud.css hangs the column lower (124..272 px) and
+ *  keeping it clear would leave the layout about 160 px of a 640 px frame: there only the slot is kept clear (the column may cover the back-right corner). */
+export const PLACE_COL_PX = 156;
 export const PLACE_LOOKS = Object.keys(LOADERS);
 
 const SHADOW_FRAG = 'varying vec2 vP; varying float vA; void main(){ float r = length(vP); float a = (1.0 - smoothstep(0.35, 1.0, r)) * vA; gl_FragColor = vec4(0.0, 0.0, 0.0, a); }';
@@ -437,9 +447,14 @@ export class PlaceHost {
   get active(): string | null { return this.cur ? this.cur.id : null; }
   /** setPlayBounds' framing and lens (placeview.ts): the camera lives in the stage, the search here (it only runs in a place). */
   /** setPlayBounds' framing, given the HUD rows the shell REPORTED (round 3: kept clear as Home's band keeps them, placeview.ts placeBand). */
-  fit(cx: number, cz: number, hx: number, hz: number, w: number, h: number, top: number, right: number, bottom: number, left: number): PlayFrame | null {
+  fit(cx: number, cz: number, hx: number, hz: number, w: number, h: number, top: number, right: number, bottom: number, left: number, pitchMin = 0.15, pitchMax = 0.9): PlayFrame | null {
+    // (round 8, R8_SHELL 3; R6_SHELL's phone leftover) on a TALL frame the play UI's slot under the top row (ui/play.css .pl-slot: the tracker pill and the stamp
+    // moments, most of the frame's width) is one more top row for a place: the back of a tall layout (the cabin's kettle and hearth) stood under the pill. A wide
+    // frame keeps it a corner (not a row). Home's framing never comes here.
+    if (top > 0 && w < 0.9 * h) top += w > 380 ? PLACE_COL_PX : PLAY_SLOT_PX;   // (and fitPlace keeps such a frame's pitch at TALL_PITCH_MIN or more)
     const B = placeBand({ top, right, bottom, left }, w, h, this.band);
-    return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3]);
+    // (round 8, R8_LIFE's request 11: the layout's own pitch range, setPlayBounds' 5th and 6th arguments; placeview.ts fitPlace says why)
+    return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3], pitchMin, pitchMax);
   }
   private readonly band = new Float64Array(4);
   private applyLight(c: StageCtx, l: PlaceLight | null): void {

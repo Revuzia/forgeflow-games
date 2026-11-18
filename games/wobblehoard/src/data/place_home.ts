@@ -24,7 +24,7 @@ export const PLACE: PlaceDef = {
   things: [
     { id: 'feltball', place: 'home', mech: MECH.ball, x: 0.7, z: -0.65, yaw: 0, size: [0.22, 0, 0], mu: 0.6, p: { mass: 0.2, rollDamp: 0.6 }, ride: false, fromN: 1, verb: V.ROLL, icon: E.ball, look: 'felt', sound: S.ball, arrives: { after: 'start' } },
     { id: 'musicbox', place: 'home', mech: MECH.block, x: 2.25, z: -1.05, yaw: 0, size: [0.2, 0.15, 0.15], mu: 0.8, p: { tuneS: 29.1, gapS: 40 }, ride: false, switch: 'tune', fromN: 2, verb: V.LISTEN, icon: E.note, look: 'musicbox', sound: S.bell, arrives: { after: 'start' } },
-    { id: 'snoozerug', place: 'home', mech: 0, x: 0, z: -0.36, yaw: 0, size: [0.7, 0, 0], mu: 1, p: {  }, ride: false, patch: 'snoozerug', useSpot: [-0.25, -1], fromN: 2, verb: V.NAP, icon: E.zzz, look: 'rug', sound: 0, arrives: { after: 'firstHello' } },
+    { id: 'snoozerug', place: 'home', mech: 0, x: 0, z: -0.36, yaw: 0, size: [0.7, 0, 0], mu: 1, p: {  }, ride: false, patch: 'snoozerug', useSpot: [-0.42, -0.91], fromN: 2, verb: V.NAP, icon: E.zzz, look: 'rug', sound: 0, arrives: { after: 'firstHello' } },
     { id: 'warmlamp', place: 'home', mech: MECH.block, x: -0.6, z: -2.35, yaw: 0, size: [0.18, 0.1, 0.18], mu: 0.8, p: { shadeH: 0.6, toastCap: 0.3 }, ride: false, zone: 'lampwarmth', switch: 'zone', useSpot: [0.16, -2.2], fromN: 3, verb: V.SWITCH, icon: E.sun, look: 'lamp', sound: 0, arrives: { after: 'firstCapsule' } },
     { id: 'keepsakeshelf', place: 'home', mech: MECH.block, x: 0.9, z: -1.6, yaw: 0, size: [0.6, 0.225, 0.15], mu: 0.8, p: { rows: 2, perRow: 10 }, ride: false, fromN: 1, verb: V.RING, icon: E.sparkle, look: 'shelf', sound: S.bell, arrives: { after: 'finale:home' } },
     { id: 'bouncepad', place: 'home', mech: MECH.pad, x: -0.79, z: -1.25, yaw: 0, size: [0.4, 0.05, 0], mu: 1, p: { gain: 1.1, apex: 0.3, travel: 0.1, maxBounces: 5 }, ride: false, useSpot: [-0.69, -1.45], fromN: 3, verb: V.BOUNCE, icon: E.star, look: 'feltpad', sound: S.boing, arrives: { after: 'finale:hearthlog' } },
@@ -35,7 +35,7 @@ export const PLACE: PlaceDef = {
     bounds: { shape: 'disc', x: 0, z: 0, r: 3.4, round: 0 }, walls: [],
     spawn: 'matLayout',
     things: [
-      { x: 0.76, z: 1.06, yaw: 0, fromN: 1 },
+      { x: 0.75, z: 1.2, yaw: 0, fromN: 1 },
       { x: 1.25, z: 0, yaw: 0, fromN: 2 },
       { x: 0.3, z: 0, yaw: 0, use: [0.25, -1], fromN: 2 },
       { x: -1.05, z: 0.45, yaw: 0, use: [-0.76, 1.2], fromN: 3 },

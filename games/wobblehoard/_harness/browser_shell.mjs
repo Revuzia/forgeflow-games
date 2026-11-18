@@ -5381,14 +5381,27 @@ async function main() {
       // outwardPull commits a press to a pull only when the press is off the body's centre and the drag leaves it outward; a press on the centre became a rub,
       // so R6's lift from the centre never carried in s2run1 (R9, R7, I7: "carried": false), except when the screen centre happened to differ)
       const near = wh.shell.matInfo().bodies.reduce((a, b) => (!a || Math.hypot(b.x - f.x, b.y - f.y) < Math.hypot(a.x - f.x, a.y - f.y) ? b : a), null);
-      py = f.y - 0.55 * (near?.r ?? 40);
+      const rr = near?.r ?? 40;
+      // (round 8, R8_SHELL: a squishy HIGH in the frame has no room above it for the lift: R7's friend, Dollop resting on the Sand Mound at the back of Ripple, sat
+      // 147 px under the frame's top, so the up-drag stopped at the edge and never picked it up ({"carried": false, "lifted": 32}). A player pulls it sideways then,
+      // toward where it should go: the press on that side of the body (an OUTWARD drag, gestures.ts outwardPull) and the lift across the frame. Measured on the real
+      // physics (S/mound): a body on the mound lifts after 216 px up, right or down-right, never straight down (the pull goes into the floor). Every carrying row's
+      // assertion is unchanged; a body with room above lifts exactly as before)
+      let ux = 0, uy = -1;
+      if (f.y - 0.55 * rr - 8 < 0.5 * lf) {
+        const tp = wh.shell.project(t.x, 0, t.z);
+        ux = (tp ? tp.x : vw * 0.5) >= f.x ? 1 : -1;
+        if ((ux > 0 ? vw - f.x : f.x) < 0.8 * lf) ux = -ux;
+        uy = 0;
+      }
+      px = f.x + 0.55 * rr * ux; py = f.y + 0.55 * rr * uy;
       wh.pointerDown(px / vw, py / vh, 0); wh.step(1 / 60, 8);
       // the lift: up (and 60 px toward the middle of the screen, as the published carry) only until physics carries it, so the pointer keeps room above it to take
       // the body back (a lift to the top of the frame left none: a thing at the back of the place was out of reach)
-      const side = f.x > vw * 0.5 ? -60 : 60;
+      const side = uy < 0 ? (f.x > vw * 0.5 ? -60 : 60) : 0;
       let lifted = 0;
-      const y0 = py;
-      for (let i = 1; i <= 32 && !held(); i++) { mv(f.x + side * Math.min(1, i / 24), Math.max(8, y0 - lf * i / 24), 2); lifted = i; }
+      const x0 = px, y0 = py;
+      for (let i = 1; i <= 32 && !held(); i++) { mv(x0 + ux * lf * i / 24 + side * Math.min(1, i / 24), Math.max(8, y0 + uy * lf * i / 24), 2); lifted = i; }
       if (!held()) { wh.pointerUp(0); wh.step(1 / 60, 30); return { carried: false, lifted }; }
       for (let k = 0; k < 10; k++) mv(px, py, 2);
       const w0 = held()?.w; mv(px + 40, py, 20); const w1 = held()?.w ?? w0; mv(px, py + 40, 20); const w2 = held()?.w ?? w1;
@@ -5451,13 +5464,16 @@ async function main() {
       const sheet = await page.evaluate(() => { const d = document.getElementById('wh-travel'); if (!d) return null;
         return { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place),
           stamps: [...d.querySelectorAll('.jn-card[data-open="true"] .jn-card-stamps')].map((s) => s.textContent), drawn: [...d.querySelectorAll('canvas.jn-sky')].filter((c) => c.dataset.drawn === 'true').length,
-          cardsN: d.querySelectorAll('.jn-card').length, text: d.textContent }; });
+          cardsN: d.querySelectorAll('.jn-card').length, text: d.textContent, cardText: d.querySelector('.jn-cards')?.textContent ?? '' }; });
       await pgShot(page, `pg_places_sheet_${tag}`);
+      // (round 8, R8_SHELL: RE-SPECIFIED, written reason: "no 'coming soon' card" (QUESTS 15) is checked on the postcards' grid; the sheet's own new section under it
+      //  is QUESTS 15's "Who's coming?" (the party's chips, R8 item 4), whose title the whole-sheet pattern took for a coming-soon card. The dropped places' names
+      //  are still checked on the whole sheet)
       // (round 7, R7_SHELL: re-specified because a build may ship Lanternroof and Cloudloft as well: every SHIPPED place is listed in PLACE_INFO's order, open
       // when its stamps are reached (28 here: Home, Ripple, Frostbell, Rainleaf; the cabin opens by the first wish; Lanternroof 36 and Cloudloft 45 stay shut))
       check(`${label}: the Places sheet lists the shipped places (Home, the cabin, ${three.join(', ')}, and any later place the build ships, shut at 28 stamps; D-96: nothing of Fizzwell Tub, Cogwhistle Bench or Echo Hollow named), "Go to" on each open one, "N of 10 stamps" on each open postcard, each postcard's picture drawn (render/postcard.ts)`,
         !!sheet && sheet.cards.join() === sheetWant(28).join() && S2.every((id) => sheet.go.includes(id)) && sheet.stamps.length === 1 + S2.length && sheet.stamps.every((s) => /^\d+ of 10 stamps$/.test(s ?? ''))
-          && sheet.drawn === sheet.cardsN && !/Fizzwell|Cogwhistle|Echo Hollow|coming/i.test(sheet.text), JSON.stringify(sheet && { ...sheet, text: sheet.text.slice(0, 220) }));
+          && sheet.drawn === sheet.cardsN && !/Fizzwell|Cogwhistle|Echo Hollow/i.test(sheet.text) && !/coming/i.test(sheet.cardText), JSON.stringify(sheet && { ...sheet, text: sheet.text.slice(0, 220) }));
       await page.keyboard.press('Escape'); await settle(page);
       // three out: the first capsule's Wisplet stays out beside Dollop (D-52), the second's Chunkle replaces it in play; Wisplet back out through the Hoard
       await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
@@ -5526,7 +5542,10 @@ async function main() {
           check(`${label} Ripple Shore: R3 "Ring the shells" by the player: three different Shell Chimes tapped (a USE RING by PLAYER each, distinct parts)`, !!r3?.done, JSON.stringify({ r3, taps: r3hit }));
           // R9 "Slide off the mound": two squishies set on the Sand Mound by the player (a carry let go over it: the ride it lands on is one the player set up)
           const mound = T('sandmound'), r9log = [], r9used = [];
-          for (let n = 0; n < 2; n++) { const cs = await chars(); const c = mound ? nearest(cs, mound.x, mound.z, r9used) : null; if (c) { r9used.push(c.species); r9log.push(...(await carryOn(c, { x: mound.x, z: mound.z }))); } await pgStep(page, 4); }
+          // (round 8, R8_SHELL: the second squishy goes on once the top is free, as a player's would: the first one set there is held on its ride (the host's RIDE, D-74)
+          //  and the final run's desktop second carry landed ON it (have 1 of 2, both carries on target). Up to 24 s; the assertion is unchanged)
+          const topFree = async (x, z) => { for (let k = 0; k < 12; k++) { const cs = await chars(); if (!cs.some((c) => Math.hypot(c.x - x, c.z - z) < 0.55)) return true; await pgStep(page, 2, 1); } return false; };
+          for (let n = 0; n < 2; n++) { if (n > 0 && mound) await topFree(mound.x, mound.z); const cs = await chars(); const c = mound ? nearest(cs, mound.x, mound.z, r9used) : null; if (c) { r9used.push(c.species); r9log.push(...(await carryOn(c, { x: mound.x, z: mound.z }))); } await pgStep(page, 4); }
           const r9 = await pgQuest(page, 'R9');
           check(`${label} Ripple Shore: R9 "Slide off the mound" by the player: two squishies carried onto the Sand Mound and let go there (each a USE SLIDE by PLAYER)`, !!r9?.done, JSON.stringify({ r9, r9log }));
           // R7 "A squirt for a friend": Wisplet (a marshmallow) carried into the Rock Pool soaks; a friend set beside it; a held squeeze of Wisplet squirts at the friend
@@ -5559,7 +5578,9 @@ async function main() {
           check(`${label} Frostbell Ridge: I9 "Ring the icicles" by the player: the Icicle Bells tapped five times (a USE RING by PLAYER each)`, !!i9?.done, JSON.stringify({ i9, bells }));
           // I7 "Down the glide ramp": a squishy set at the top of the Glide Ramp two times (it slides down onto the ice)
           const ramp = T('glideramp'), i7log = [];
-          for (let n = 0; n < 2; n++) { const cs = await chars(); const c = ramp?.setW ? nearest(cs, ramp.setW[0], ramp.setW[1]) : null; if (c) i7log.push(...(await carryOn(c, { x: ramp.setW[0], z: ramp.setW[1] }))); await pgStep(page, 4); }
+          // (round 8, R8_SHELL: as R9's: the second set waits until the ramp's top is free (up to 24 s); the assertion is unchanged)
+          const rampFree = async (x, z) => { for (let k = 0; k < 12; k++) { const cs = await chars(); if (!cs.some((c) => Math.hypot(c.x - x, c.z - z) < 0.55)) return true; await pgStep(page, 2, 1); } return false; };
+          for (let n = 0; n < 2; n++) { if (n > 0 && ramp?.setW) await rampFree(ramp.setW[0], ramp.setW[1]); const cs = await chars(); const c = ramp?.setW ? nearest(cs, ramp.setW[0], ramp.setW[1]) : null; if (c) i7log.push(...(await carryOn(c, { x: ramp.setW[0], z: ramp.setW[1] }))); await pgStep(page, 4); }
           const i7 = await pgQuest(page, 'I7');
           check(`${label} Frostbell Ridge: I7 "Down the glide ramp" by the player: a squishy set at the top of the Glide Ramp two times (each a USE SLIDE by PLAYER)`, !!i7?.done, JSON.stringify({ i7, i7log }));
           // I4 "Snow from the pine" (PLACES 4.4): a squishy under the Shake Pine's branch, the player taps the pine: the snow puff falls on it
@@ -5582,11 +5603,20 @@ async function main() {
           if (c7) await carryOn(c7, { x: drip.setW[0], z: drip.setW[1] });
           await pgStep(page, 1.5);
           const dt = (await pgLife(page)).things.find((t) => t.id === 'dripleaf');
-          if (dt?.sx !== null) await pgTap(page, phone, dt.sx, dt.sy);
+          // (round 8, R8_SHELL: the tap goes to the middle of the drawn big leaf, where a player taps it (render/places/rainleaf.ts: from the stalk's top, 1.58 m, toward
+          // the drip zone, tipped 0.32 rad down), not the stalk's middle, which is behind the squishy the row has just set under the leaf: R7's final1b2 G7 tap never
+          // reached the leaf ("tap": the Frostbell pine's, stale). The host takes a press on the drawn leaf since round 8 (later-life.ts leafTap); assertion unchanged)
+          let leafPt = null;
+          if (dt?.setW && dt.x !== null) {
+            const ux0 = dt.setW[0] - dt.x, uz0 = dt.setW[1] - dt.z, dl = Math.hypot(ux0, uz0) || 1, L = Math.max(0.3, dl) + 0.35, half = 0.5 * L;
+            leafPt = await page.evaluate(([x, y, z]) => window.__WH__.shell.project(x, y, z), [dt.x + (ux0 / dl) * Math.cos(0.32) * half, 1.58 - Math.sin(0.32) * half, dt.z + (uz0 / dl) * Math.cos(0.32) * half]);
+          }
+          if (leafPt) await pgTap(page, phone, leafPt.x, leafPt.y);
+          else if (dt?.sx !== null && dt?.sx !== undefined) await pgTap(page, phone, dt.sx, dt.sy);
           await pgStep(page, 2.5);
           const g7 = await pgQuest(page, 'G7'), L7 = await pgLife(page);
           check(`${label} Rainleaf Garden: G7 "A shower from the leaf" by the player: a squishy set under the Drip Leaf, a tap tips its shower onto it (a REACT SHOWER naming the leaf)`,
-            L7.tap === 'dripleaf' && !!g7?.done, JSON.stringify({ g7, tap: L7.tap, wet: L7.chars.map((c) => [c.species, c.looks?.[1], c.x, c.z]) }));
+            L7.tap === 'dripleaf' && !!g7?.done, JSON.stringify({ g7, tap: L7.tap, leafPt, wet: L7.chars.map((c) => [c.species, c.looks?.[1], c.x, c.z]) }));
           // G4 "Boing on the moss": squishies dropped onto the Moss Bouncer three times (its kicks: one USE BOUNCE per landing)
           const moss = T('mossbouncer'), g4log = [];
           // (round 7, R7_SHELL: as the S3 Puff Pads: set down 0.8 m in front of the pad first, then carried back onto it, so it FALLS onto it: the final run's phone
@@ -5695,12 +5725,12 @@ async function main() {
         const r = d.querySelector('.jn')?.getBoundingClientRect();
         return { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place),
           stamps: Object.fromEntries([...d.querySelectorAll('.jn-card[data-open="true"]')].map((c) => [c.dataset.place, c.querySelector('.jn-card-stamps')?.textContent ?? null])),
-          drawn: [...d.querySelectorAll('canvas.jn-sky')].filter((c) => c.dataset.drawn === 'true').length, cardsN: d.querySelectorAll('.jn-card').length, text: d.textContent,
+          drawn: [...d.querySelectorAll('canvas.jn-sky')].filter((c) => c.dataset.drawn === 'true').length, cardsN: d.querySelectorAll('.jn-card').length, text: d.textContent, cardText: d.querySelector('.jn-cards')?.textContent ?? '',
           panel: r ? [Math.round(r.top), Math.round(r.bottom), innerHeight] : null }; });
       await pgShot(page, `pg_s3_sheet_${tag}`);
       check(`${label}: the Places sheet lists every shipped place in order (${S3.join(', ')} among them, open: "Go to", "0 of 10 stamps"), each postcard's picture drawn, no dropped place named`,
-        !!sheet && sheet.cards.join() === sheetWant(45).join() && S3.every((id) => sheet.go.includes(id) && /^\d+ of 10 stamps$/.test(sheet.stamps[id] ?? '')) && sheet.drawn === sheet.cardsN && !/Fizzwell|Cogwhistle|Echo Hollow|coming/i.test(sheet.text),
-        JSON.stringify(sheet && { ...sheet, text: sheet.text.slice(0, 200) }));
+        !!sheet && sheet.cards.join() === sheetWant(45).join() && S3.every((id) => sheet.go.includes(id) && /^\d+ of 10 stamps$/.test(sheet.stamps[id] ?? '')) && sheet.drawn === sheet.cardsN && !/Fizzwell|Cogwhistle|Echo Hollow/i.test(sheet.text) && !/coming/i.test(sheet.cardText),
+        JSON.stringify(sheet && { ...sheet, text: sheet.text.slice(0, 200), cardText: undefined }));   // (round 8: "coming" checked on the postcards' grid, as the S2 sheet row says why)
       await page.keyboard.press('Escape'); await settle(page);
       // three out (as pg-places: the first capsule's Wisplet beside Dollop, the second's Chunkle in play, Wisplet out again through the Hoard if it went back)
       await page.evaluate(() => window.__WH__.resume());
@@ -5736,6 +5766,15 @@ async function main() {
             await pgStep(page, 0.5, 0.5);
             const Lg = await pgLife(page), z0 = Lg.zones?.find((z) => z[0] === 'nightbreeze');
             if (z0 && z0[2] > 0.6) gustSeen = { at: k * 0.5, level: z0[2], look: await look(), vane: Lg.vane };
+          }
+          // (round 8, R8_SHELL: the first sample above 0.6 is the gust's RISING edge, where the look's spin is still easing in: the phone's run read vaneW 0.158 at
+          //  level 0.611 with the vane turning. The look is read again while the same gust blows (up to 1.5 s, level still over 0.4): its fastest spin counts)
+          for (let k = 0; k < 3 && gustSeen; k++) {
+            await pgStep(page, 0.5, 0.5);
+            const Lg = await pgLife(page), z0 = Lg.zones?.find((z) => z[0] === 'nightbreeze');
+            if (!z0 || z0[2] <= 0.4) break;
+            const lk = await look();
+            if ((lk.vaneW ?? 0) > (gustSeen.look.vaneW ?? 0)) gustSeen = { ...gustSeen, look: lk, vane: Lg.vane, later: (k + 1) * 0.5 };
           }
           await pgShot(page, `pg_lanternroof_gust_${tag}`);
           check(`${label} Lanternroof: the Night Breeze gusts on LIFE's clock (within 30 s), the look is driven by physics' gust level (its lanterns sway and streaks drift: driven, gust over 0.4) and the Vane Disc turns while it blows (the host's turn and the look's spin)`,
@@ -5891,6 +5930,135 @@ async function main() {
     }
     await section('pg-places-s3', async () => { if (!S3.length) { notRun.push('pg-places-s3 (this build ships neither Lanternroof nor Cloudloft: data/places.ts PLACE_INFO.shipped)'); return; } await pgPlacesS3(false); });
     await section('pg-places-s3-phone', async () => { if (!S3.length) { notRun.push('pg-places-s3-phone (this build ships neither Lanternroof nor Cloudloft)'); return; } await pgPlacesS3(true); });
+
+    // ================================================================================================
+    // ROUND 8 (R8_SHELL 4): the three designed features built in round 8, each checked on 1280x800 and on 390x844 (touch), on a save whose stamps open Ripple Shore
+    // (28), whose chapter-1 gift waits with Puddlo picked (QUESTS 11: state 1, the pick fixed) and whose Friendship Frame keepsake is found (QUESTS 10 bit 10):
+    //   (1) a Journal gift is counted by the trophies at once (the Trophies screen's "Small Shelf" progress goes up with the grant, not at the next capsule or merge);
+    //   (2) the Friendship Frame's photo: a real photo's thumbnail (ui/later-frame.ts in this browser: createImageBitmap, a JPEG under 12 000 characters, written once)
+    //       shows in the Friendship Frame tile of the Journal's Keepsakes page (the host's X8 wiring itself is probe_r8_features FR-04's);
+    //   (3) "Who's coming?" under the Places grid: a 56 px chip per squishy out, all pressed (the squishy in hand aria-disabled); one unpressed stays at Home: the trip
+    //       takes the other two (it is back on the shelf), and the sheet's "Go to" is the published path.
+    // ================================================================================================
+    const { CATALOG: R8_CAT } = await import('../src/data/catalog.ts');
+    const r8Init = () => {
+      try {
+        const want = JSON.parse(sessionStorage.getItem('r8seed') || 'null');
+        if (want) { const k = 'wobblehoard:v2:journal', j = JSON.parse(localStorage.getItem(k) || 'null'); if (j) { j.st = Math.max(j.st | 0, want.st); j.ks = (j.ks | 0) | want.ks;
+          // (the done bits, base64 of little-endian words: Home's finale H8 (quest 7) and the cabin's C8 (quest 17) make chapter 1's gift READY: the card offers its three)
+          if (want.qd) { const raw = atob(j.qd || ''), b = []; for (let i = 0; i < raw.length; i++) b.push(raw.charCodeAt(i)); while (b.length < 16) b.push(0); for (const q of want.qd) b[q >> 3] |= 1 << (q & 7); j.qd = btoa(String.fromCharCode(...b)); }
+          localStorage.setItem(k, JSON.stringify(j)); } sessionStorage.removeItem('r8seed'); }
+      } catch (e) { console.info('r8seed: ' + e); }
+    };
+    /** the Trophies screen's "Small Shelf" progress line ("N of 10 species"), opened from the Menu and closed again */
+    const r8Shelf = async (page) => {
+      await page.evaluate(() => window.__WH__.resume());
+      await hclick(page, 'button[aria-label="Menu"]'); await page.waitForSelector('#wh-menu', { timeout: 15000 }); await sleep(300);
+      await hclick(page, '#wh-menu [data-key="trophies"]'); await page.waitForSelector('.tro', { timeout: 20000 }); await sleep(600);
+      const t = await page.evaluate(() => document.querySelector('.tro-card[data-slug="species_10"] .tro-prog-n')?.textContent ?? null);
+      await page.keyboard.press('Escape'); await settle(page);
+      if (await page.evaluate(() => !!document.querySelector('#wh-menu'))) { await page.keyboard.press('Escape'); await settle(page); }
+      // (the Escape gives focus back to the Menu button, whose tooltip (shown on keyboard focus, UI.md 3.3) hangs below it OVER the Journal button until focus
+      //  moves: a player's next press elsewhere moves it; here the focus is let go. Pre-existing, reported in R8_SHELL known issues)
+      await page.evaluate(() => { const a = document.activeElement; if (a && a instanceof HTMLElement) a.blur(); });
+      if (!(await page.evaluate(() => matchMedia('(pointer: coarse)').matches))) await page.mouse.move(8, Math.round((await page.evaluate(() => innerHeight)) / 2));
+      await sleep(400);
+      await page.evaluate(() => window.__WH__.pause());
+      return t;
+    };
+    async function r8Features(phone) {
+      const tag = phone ? 'phone' : 'desktop', label = `R8 features (${tag})`;
+      const { page, context, w } = await open({ query: '?dev=1&rseed=59', ctx: phone ? PHONE : DESKTOP, init: r8Init });
+      mainWatches.push([`r8-features ${tag}`, w]);
+      await pgBoot(page, phone);
+      await pgStep(page, 2); await sleep(1500);
+      const pud = R8_CAT.findIndex((c) => c.id === 'puddlo'), day = Math.floor(Date.now() / 86400000);
+      void pud; void day;
+      await page.evaluate(() => sessionStorage.setItem('r8seed', JSON.stringify({ st: 28, ks: 1 << 10, qd: [7, 17] })));
+      await page.reload({ waitUntil: 'load', timeout: 180000 });
+      await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
+      await pgBoot(page, phone);
+      await pgStep(page, 2); await sleep(1500);
+      // (1) the gift: the trophies' count before, the grant from the Journal's gift card, the count after
+      const shelf0 = await r8Shelf(page);
+      await page.evaluate(() => window.__WH__.resume());
+      await hclick(page, '.dock-journal'); await page.waitForSelector('#wh-journal', { timeout: 20000 }); await sleep(600);
+      const picked = await page.evaluate(() => { const b = [...document.querySelectorAll('#wh-journal .jn-gift-pick')].find((x) => /Puddlo/.test(x.textContent ?? '')); if (!b) return false; b.click(); return true; });
+      await sleep(900);
+      const gifted = await page.evaluate(() => ({ card: !!document.querySelector('#wh-journal .jn-gift'), shelf: window.__WH__.shell.hoardState().items.filter((i) => i.species === 'puddlo').length }));
+      await page.keyboard.press('Escape'); await settle(page);
+      await page.evaluate(() => window.__WH__.pause());
+      const shelf1 = await r8Shelf(page);
+      const n0 = Number(/^(\d+) of 10/.exec(shelf0 ?? '')?.[1] ?? NaN), n1 = Number(/^(\d+) of 10/.exec(shelf1 ?? '')?.[1] ?? NaN);
+      check(`${label}: a Journal gift is counted by the trophies at once: the Journal's gift card grants Puddlo, and the Trophies screen's "Small Shelf" progress goes up by one right away ("N of 10 species")`,
+        picked && !gifted.card && n1 === n0 + 1, JSON.stringify({ picked, gifted, shelf0, shelf1 }));
+      // (2) the Friendship Frame's photo: a picture of the scene made into the thumbnail by the real module, written once; the Keepsakes page shows it in the frame
+      const fr = await page.evaluate(async () => {
+        const cv = document.createElement('canvas'); cv.width = 640; cv.height = 400;
+        const x = cv.getContext('2d'); const g = x.createLinearGradient(0, 0, 640, 400); g.addColorStop(0, '#ff5a4d'); g.addColorStop(1, '#59d6e6'); x.fillStyle = g; x.fillRect(0, 0, 640, 400);
+        x.fillStyle = '#fff1d6'; x.beginPath(); x.arc(320, 220, 120, 0, Math.PI * 2); x.fill();
+        const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+        const m = await import('/src/ui/later-frame.ts');
+        const ok1 = await m.storeFrame(localStorage, blob), ok2 = await m.storeFrame(localStorage, blob);
+        const u = localStorage.getItem('wobblehoard:v2:journal.frame') ?? '';
+        return { ok1, ok2, len: u.length, jpeg: u.startsWith('data:image/jpeg;base64,') };
+      });
+      await page.evaluate(() => window.__WH__.resume());
+      await hclick(page, '.dock-journal'); await page.waitForSelector('#wh-journal', { timeout: 20000 }); await sleep(500);
+      await hclick(page, '#wh-journal .jn-tab[data-tab="keepsakes"]'); await sleep(700);
+      const fv = await page.evaluate(async () => {
+        const img = document.querySelector('#wh-journal .jn-tile[data-keepsake="10"] img.jn-frame');
+        if (!img) return { img: false };
+        img.scrollIntoView({ block: 'center' }); await new Promise((r) => setTimeout(r, 300));
+        if (!img.complete) await new Promise((r) => { img.onload = r; img.onerror = r; setTimeout(r, 2000); });
+        const b = img.getBoundingClientRect();
+        return { img: true, nw: img.naturalWidth, nh: img.naturalHeight, w: Math.round(b.width), h: Math.round(b.height), inView: b.top >= 0 && b.bottom <= innerHeight && b.left >= 0 && b.right <= innerWidth, alt: img.getAttribute('alt'),
+          name: img.closest('.jn-tile')?.querySelector('.jn-tile-name')?.textContent ?? null };
+      });
+      await pgShot(page, `r8_frame_${tag}`);
+      await page.keyboard.press('Escape'); await settle(page);
+      check(`${label}: the Friendship Frame's photo: a real photo's thumbnail (160 x 120 JPEG, under 12 000 characters) is written once under its own key, and the Journal's Keepsakes page shows it in the Friendship Frame (an image of it, 4:3, in view)`,
+        fr.ok1 && !fr.ok2 && fr.jpeg && fr.len > 100 && fr.len <= 12000 && fv.img && fv.nw === 160 && fv.nh === 120 && fv.inView && fv.w >= 100 && Math.abs(fv.w / Math.max(1, fv.h) - 4 / 3) < 0.05 && fv.name === 'Friendship Frame',
+        JSON.stringify({ fr, fv }));
+      // (3) "Who's coming?": three out (the first capsule's Wisplet stays out beside Dollop, D-52; the second's Chunkle replaces it in play; Wisplet back out through the Hoard)
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 1); await pgStep(page, 1);
+      await openCapsules(page, 1); await pgStep(page, 1);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', false));
+      if (!(await pgLife(page)).chars.some((c) => c.species === 'wisplet')) await bringOut(page, 'wisplet');
+      await page.evaluate(() => window.__WH__.resume());
+      await hclick(page, '.dock-places'); await page.waitForSelector('#wh-travel', { timeout: 20000 }); await sleep(600);
+      const who = await page.evaluate(() => {
+        const s = document.querySelector('#wh-travel .jn-who'); if (!s) return null;
+        s.scrollIntoView({ block: 'center' });
+        const cards = document.querySelector('#wh-travel .jn-cards');
+        return { after: !!cards && !!(cards.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING), title: s.querySelector('.k-group-title')?.textContent ?? '',
+          // (the chip's own CSS size, offsetHeight: the sheet's opening scale on a desktop made the bounding box 54 of 56 px while it eased in)
+          chips: [...s.querySelectorAll('.jn-who-chip')].map((b) => ({ sp: b.dataset.species, item: b.dataset.item, pressed: b.getAttribute('aria-pressed'), dis: b.getAttribute('aria-disabled'), h: b.offsetHeight, w: b.offsetWidth, gem: !!b.querySelector('svg'), sw: !!b.querySelector('.swatch'), name: b.querySelector('.jn-who-name')?.textContent ?? '' })),
+          change: !!s.querySelector('.jn-who-change') };
+      });
+      const party0 = (await pgLife(page)).chars.filter((c) => c.kind === 0).map((c) => c.species);
+      check(`${label}: "Who's coming?" follows the postcards: a chip per squishy out (${party0.length}), 56 px or taller, each with its gem, its colour and its name; all pressed; the squishy in hand aria-disabled; "Change" there`,
+        !!who && who.after && who.title === "Who's coming?" && who.chips.length === party0.length && party0.length === 3 && who.chips.every((c) => c.h >= 56 && c.gem && c.sw && c.name.length > 0 && c.pressed === 'true')
+          && who.chips.filter((c) => c.dis === 'true').length === 1 && who.change, JSON.stringify({ who, party0 }));
+      // leave Wisplet at Home (a tap on its chip), then the trip by Ripple Shore's "Go to"
+      const wl = who?.chips.find((c) => c.sp === 'wisplet' && c.dis !== 'true');
+      if (wl) await hclick(page, `#wh-travel .jn-who-chip[data-item="${wl.item}"]`);
+      await sleep(400);
+      const un = await page.evaluate((id) => document.querySelector(`#wh-travel .jn-who-chip[data-item="${id}"]`)?.getAttribute('aria-pressed') ?? null, wl?.item ?? '');
+      await pgShot(page, `r8_who_${tag}`);
+      await page.evaluate(() => window.__WH__.pause());
+      await pclick(page, '.jn-go[data-place="ripple"]');
+      const arrived = await stepUntil(page, `(wh) => wh.life()?.place === 2 && !wh.life()?.travelling`, 30, 0.25);
+      await pgStep(page, 2);
+      const L = await pgLife(page), mat = await page.evaluate(() => window.__WH__.shell.matInfo().bodies.length);
+      check(`${label}: a squishy whose chip was unpressed stays at Home: the trip by "Go to Ripple Shore" takes the other two (it is back on the shelf), the sheet's path otherwise as published`,
+        !!wl && un === 'false' && arrived >= 0 && L.place === 2 && L.chars.filter((c) => c.kind === 0).length === 2 && !L.chars.some((c) => c.species === 'wisplet'),
+        JSON.stringify({ wl: wl?.sp, un, arrived, place: L.place, party: L.chars.filter((c) => c.kind === 0).map((c) => c.species), mat }));
+      await pgShot(page, `r8_who_ripple_${tag}`);
+      await context.close();
+    }
+    await section('r8-features', async () => { await r8Features(false); await r8Features(true); });
 
     // ------------------------------------------------------------------------------------------------
     // G3: zero console errors / warnings / failed requests across the main flows

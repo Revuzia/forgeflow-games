@@ -75,6 +75,7 @@ function visitReset(w: LifeWorld, i: number): void {
   for (let k = 0; k < 24; k++) w.rC[i * 24 + k] = -1e9;
   w.beh[i] = BEH.NONE; w.ph[i] = 0; w.bSc[i] = 0; w.fPT[i] = -1e9; w.tT[i] = -1; w.tC[i] = -1; w.uV[i] = 0; w.fT[i] = -1e9; w.wdT[i] = -1e9;
   w.uM[i] = 0; w.uQ[i] = 0;   // (round 7) the things it used by itself this visit
+  w.cR[i] = 0; w.sWA[i] = -1e9; w.sWS[i] = -1e9;   // (round 8) no stay in water carried over from another visit
   seedChar(w, i);
 }
 
@@ -292,7 +293,7 @@ export function lifeScript(w: LifeWorld, slot: number, script: number, arg: numb
       if (slot < 0 || slot >= CAP) return;
       let k = arg;
       if (k >= w.nTD && k < w.gTL.length) k = w.gTL[k];
-      if (k >= 0 && k < w.nTD) { w.pW[slot] = k; w.gU[slot] = -1e9; }
+      if (k >= 0 && k < w.nTD) { w.pW[slot] = k; w.gU[slot] = -1e9; w.sWS[slot] = -1e9; w.sWA[slot] = -1e9; }   // (round 8: the ask ends a stay in water)
       return;
     }
     case SCRIPT.POSE: w.pO = arg ? 1 : 0; return;

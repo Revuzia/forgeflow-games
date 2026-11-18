@@ -24,7 +24,9 @@ body[data-layout="tiny"] .hud { padding-top: calc(var(--safe-t) + 6px); padding-
 
 /* PLAYGROUND (PG_SHELL R4): the Journal and Places buttons, a column under the top row's right end (hudBinding.ts; QUESTS 15 "the top-right column"). y 64.. wide and
    stack, under the 320 px hint (which stands under the top row there), 60.. strip; on tiny (201 px high) a row left of the top row's buttons */
-.hud-life { position: absolute; top: calc(var(--safe-t) + 12px + var(--tap) + var(--wh-s2)); right: calc(var(--safe-r) + var(--gutter)); display: flex; flex-direction: column; gap: var(--wh-s2); pointer-events: auto; }
+.hud-life { position: absolute; top: calc(var(--safe-t) + 12px + var(--tap) + var(--wh-s2)); right: calc(var(--safe-r) + var(--gutter)); display: flex; flex-direction: column; gap: var(--wh-s2); pointer-events: none; }
+/* (round 8) the buttons take presses, the gaps between them do not: a tap in the 8 px gap went to the column, not to the thing drawn behind it (R8 place run, phone) */
+.hud-life > * { pointer-events: auto; }
 @media (max-width: 380px) { body[data-layout="stack"] .hud-life { top: calc(var(--safe-t) + 64px + 52px + var(--wh-s2)); } }
 body[data-layout="strip"] .hud-life { top: calc(var(--safe-t) + 8px + var(--tap) + var(--wh-s2)); }
 body[data-layout="tiny"] .hud-life { top: calc(var(--safe-t) + 6px); right: calc(var(--safe-r) + 12px + 3 * var(--tap) + 3 * 8px); flex-direction: row; }

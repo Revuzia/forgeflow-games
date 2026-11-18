@@ -755,7 +755,6 @@ export function createCutter(d: CutDeps): Cutter {
             else front = Math.max(front, along + supportAlong(b, { x: away!.x, y: 0, z: away!.z }));
           });
         } catch (e) { d.report(e); }
-        if ((globalThis as { __WH_TOSS_DBG?: boolean }).__WH_TOSS_DBG) console.log('TOSSDBG', JSON.stringify({ away, front, rear, G, wholeR, lightSide, hx, hz, sideFrac, bodies: bodies.map((b, i) => ({ side: parts[i].side, c: b.center, fr: b.frac })) }));
         // (only a light side that is in the AIR is carried clear: one that stands on the table slides with the ordinary script, whatever the body's width elsewhere)
         if (Number.isFinite(front) && Number.isFinite(rear) && airborne > TOSS_AIR * sc) {
           const over = front - rear > TOSS_HOLD_MIN * sc;   // the light side is over the body (a tip off the top): carried clear at its birth height, then dropped. A tip that stands outside already asks for a hair of room only

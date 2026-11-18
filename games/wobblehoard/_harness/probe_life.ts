@@ -17,7 +17,7 @@ import { PLACE as RAINLEAF } from '../src/data/place_rainleaf.ts';
 import { PLACE as LANTERNROOF } from '../src/data/place_lanternroof.ts';
 import { PLACE as CLOUDLOFT } from '../src/data/place_cloudloft.ts';
 import { THING_IDS, ZONE, MECH } from '../src/data/places.ts';
-import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, LOOK, TRAIT_MEDIANS, EMOTE, THING_KIND, USE_VERB, REACT_TRIGGERS } from '../src/data/life.ts';
+import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, LOOK, TRAIT_MEDIANS, EMOTE, THING_KIND, USE_VERB, REACT_TRIGGERS, SET_IN_WATER, SELF_USE } from '../src/data/life.ts';
 import { WISH_STATE, PIECES_USE } from '../src/data/quests.ts';
 import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends, lifeSetHops, lifeLooks, lifeAddLook,
@@ -1147,6 +1147,54 @@ if (!LF02_CHILD) {
       && calm.arc.length === 1 && calm.arc[0].sub === 4 && calm.soc.length === 1);
     const twice = sq({ soak: 0.6, hold: 0.6, gap: 0.3 }); twice.r.extraFlags[0] = LIFE_FLAG.TOUCHED; twice.r.run(0.6); twice.r.extraFlags[0] = 0; twice.r.touch[0] = TOUCH.SQUEEZE; twice.r.run(0.5);
     check('S14', `(round 6) a squirt squeezes the water out (soak ${twice.soak0.toFixed(2)} after the first): a second squeeze at once squirts nothing (arcs ${twice.r.events(LIFE_EV.SQUIRT).length})`, twice.r.events(LIFE_EV.SQUIRT).length === 1);
+    // LF-29 (round 8, R8_LIFE; R7_SHELL's request 8, data/life.ts SET_IN_WATER): a squishy the PLAYER set in water stays to soak. The kinematic host:
+    // carried (TOUCHED | CARRIED) 1 s from the sand to the point, let go there; autonomy on, no calmS (every by-itself choice open).
+    {
+      const MOVES = [INTENT.SCOOT, INTENT.HOP, INTENT.GLIDE, INTENT.USE];
+      const setDown = (sp: string, x: number, z: number, seed: number, float: boolean): { r: Sim; tRel: number; stay: number; moved: number[] } => {
+        const r = s2(RIPPLE, seed); r.add(0, sp, pool.x - 0.4, pool.z + 2.4, { float }); r.add(1, 'dollop', -1.5, 0.6); r.run(6);
+        r.extraFlags[0] = LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED; r.run(0.5);
+        const b = r.bodies[0]; b.x = x; b.z = z; b.tx = x; b.tz = z; b.scoot = false; r.run(0.5);
+        r.extraFlags[0] = 0; const tRel = r.t; r.run(0.5);
+        const stay = r.w.sWS[0] - tRel;
+        r.run(30);
+        return { r, tRel, stay, moved: MOVES.flatMap((k) => r.intents(k, 0)).filter((l) => l.t > tRel + 0.01).map((l) => +(l.t - tRel).toFixed(1)).sort((a, b2) => a - b2) };
+      };
+      const px = pool.x, pz = pool.z + 0.9;
+      const m = setDown('wisplet', px, pz, 187, true), g = setDown('chunkle', px, pz, 188, false), sand = setDown('wisplet', pool.x - 0.4, pool.z + 2.4, 189, true);
+      const soakAt10 = ((): number => { const q = setDown('wisplet', px, pz, 187, true); return q.r.w.lo[LOOK.soak]; })();
+      const fm = m.moved.filter((t) => t < m.stay), fg = g.moved.filter((t) => t < g.stay);
+      check('LF-29', `(round 8) set in water by the player, it stays to soak: a marshmallow (Wisplet) carried into the Rock Pool stays ${m.stay.toFixed(1)} s (its soak to 1 + ${SET_IN_WATER.extraS} s; ${SET_IN_WATER.minS}..${SET_IN_WATER.maxS}) and makes no motion of its own in it (${fm.length}: ${fm.slice(0, 4).join(' ')}; first after: ${m.moved.find((t) => t >= m.stay) ?? 'none in 30 s'}); a gummy (no soak) ${g.stay.toFixed(1)} s (${fg.length} own motions)`,
+        m.stay >= 20 && m.stay <= SET_IN_WATER.maxS + 0.1 && fm.length === 0 && Math.abs(g.stay - SET_IN_WATER.minS) < 0.2 && fg.length === 0);
+      // the stay ends: a new touch, the player's ask; none when set down on the sand or after walking in by itself
+      const t1 = setDown('wisplet', px, pz, 190, true);
+      const touchEnd = ((): number => { const r = s2(RIPPLE, 191); r.add(0, 'wisplet', pool.x - 0.4, pool.z + 2.4, { float: true }); r.run(6); r.extraFlags[0] = LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED; r.run(0.5); const b = r.bodies[0]; b.x = px; b.z = pz; b.tx = px; b.tz = pz; r.run(0.5); r.extraFlags[0] = 0; r.run(2); r.extraFlags[0] = LIFE_FLAG.TOUCHED; r.run(0.3); r.extraFlags[0] = 0; r.run(0.2); return r.w.sWS[0]; })();
+      const askEnd = ((): number => { const r = s2(RIPPLE, 192); r.add(0, 'wisplet', pool.x - 0.4, pool.z + 2.4, { float: true }); r.run(6); r.extraFlags[0] = LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED; r.run(0.5); const b = r.bodies[0]; b.x = px; b.z = pz; b.tx = px; b.tz = pz; r.run(0.5); r.extraFlags[0] = 0; r.run(2); lifeScript(r.w, 0, SCRIPT.PLAY_WITH, r.w.gTL[TID('pebbleball')]); r.run(0.2); return r.w.sWS[0]; })();
+      const walkIn = ((): number => { const r = s2(RIPPLE, 193); r.add(0, 'wisplet', px, pz, { float: true }); r.run(20); return r.w.sWS[0]; })();
+      check('LF-29', `(round 8) the stay ends on a new touch (${touchEnd < -1e8 ? 'ended' : 'still ' + touchEnd.toFixed(1)}) and on the player's ask "Go play with..." (${askEnd < -1e8 ? 'ended' : 'still'}); there is none for a carry let go on the sand (${sand.stay < -1e8 ? 'none' : sand.stay.toFixed(1) + ' s'}) or for one in the water by itself (${walkIn < -1e8 ? 'none' : 'set'}); the soaked one (soak ${soakAt10.toFixed(2)} at 31 s) is free to go after it (first own motion ${t1.moved.find((t) => t >= t1.stay) ?? 'none'} s)`,
+        touchEnd < -1e8 && askEnd < -1e8 && sand.stay < -1e8 && walkIn < -1e8);
+    }
+    // LF-30 (round 8, R8_LIFE; R7_SHELL's request 3: the Vane Disc turns now, the host's turn in the Night Breeze's gusts): a squishy stands on it by itself.
+    // Lanternroof, two wholes, everything but B04 calm for the first (a pop dome: it likes SPIN), 120 s: it walks onto the disc's middle shortly before a
+    // gust (LIFE's gust clock: the host turns the disc on the same one) and is on it (centre within the disc's radius) while that gust blows; a piece never
+    // starts it; in no gusting wind (the breeze's gusts off in a copy of the place) the disc is no by-itself thing.
+    {
+      const vane = LANTERNROOF.things.find((t) => t.id === 'vanedisc')!, vk = LANTERNROOF.things.indexOf(vane);
+      const r = s2(LANTERNROOF, 201); r.add(0, 'dimpla', vane.x - 1.6, vane.z + 0.8); r.add(1, 'dollop', -2.2, 1.0);
+      for (const bh of [BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT]) { r.w.coo[0 * 26 + bh] = 1e9; r.w.coo[1 * 26 + bh] = 1e9; }
+      r.w.coo[1 * 26 + BEH.USE] = 1e9;
+      const gq = LANTERNROOF.zones.findIndex((z) => z.kind === ZONE.wind && !!z.gust);
+      let onInGust = 0, gustSamples = 0, startedSpin = 0;
+      for (let k = 0; k < 1200; k++) { r.run(0.1);
+        const b = r.bodies[0], on = Math.hypot(b.x - vane.x, b.z - vane.z) <= vane.size[0], tb = r.w.f[0];
+        if (r.w.beh[0] === BEH.USE && r.w.tT[0] === vk) startedSpin = 1;
+        if (gq >= 0 && r.t >= r.w.zGe[gq] - r.w.zGf[gq] && r.t < r.w.zGe[gq]) { gustSamples++; if (on) onInGust++; } void tb; }
+      const tH = r.w.tH[vk];
+      const calmD = { ...LANTERNROOF, zones: LANTERNROOF.zones.map((z) => (z.kind === ZONE.wind ? { ...z, gust: undefined } : z)) } as typeof LANTERNROOF;
+      const r2 = s2(calmD, 202); r2.add(0, 'dimpla', vane.x - 1.6, vane.z + 0.8); r2.physics = false; r2.run(1);
+      check('LF-30', `(round 8) the Vane Disc by itself: it is a SPIN thing in the Night Breeze (kind ${tH}, SELF_USE.SPIN ${SELF_USE.SPIN}; with no gusts: ${r2.w.tH[vk]}); a pop dome in 120 s at Lanternroof starts it (${startedSpin}) and stands on the disc's middle during a gust (${onInGust} of ${gustSamples} gust samples on it)`,
+        tH === SELF_USE.SPIN && r2.w.tH[vk] === 0 && startedSpin === 1 && onInGust >= 10);
+    }
     // (a squishy that comes out inside a zone is in it at once, LIFE 3.1: these come out beside it and are set in at 1 s)
     const setIn = (r: Sim, x: number, z: number): void => { r.run(1); r.bodies[0].x = x; r.bodies[0].z = z; r.bodies[0].tx = x; r.bodies[0].tz = z; };
     const dz = RAINLEAF.zones.find((z) => z.id === 'leafdrip')!;

@@ -694,6 +694,8 @@ skip('QU-13', 'every quest of a shipped chapter completes from a scripted run of
   const WANT: Record<string, string[]> = {
     'home hearthlog': [...chap('H'), ...chap('C'), 'X1', 'X2', 'X3', 'X6', 'X10'],
     'home hearthlog ripple frostbell rainleaf': [...chap('H'), ...chap('C'), ...chap('R'), ...chap('I'), ...chap('G'), ...chap('X')],
+    // (round 8, R8_LIFE: R8_SHELL applied R7_SHELL_open_s3.patch, so Lanternroof and Cloudloft ship too: their chapters L and U join; X stays all ten)
+    'home hearthlog ripple frostbell rainleaf lanternroof cloudloft': [...chap('H'), ...chap('C'), ...chap('R'), ...chap('I'), ...chap('G'), ...chap('L'), ...chap('U'), ...chap('X')],
   };
   const want = WANT[shipIds] ?? [];
   row('QU-14', `this build (shipped: ${shipIds}) shows exactly the shipped places' chapters and Friends Everywhere's quests their places can complete`, want.length > 0 && shown.join() === want.join(), shown.join(' '));
@@ -719,10 +721,15 @@ skip('QU-13', 'every quest of a shipped chapter completes from a scripted run of
   // (RE-SPECIFIED in round 7, R7_LIFE: the hidden quest whose own events must not complete it was X8, hidden in the S1 build; with Ripple, Frostbell and
   // Rainleaf shipped X8 is shown, so the row takes this build's first hidden quest with a script: X8 in the S1 build, a quest of an unshipped place's
   // chapter (Lanternroof's) once the three ship; the tracker half is unchanged)
-  const hid = isShown(dS1, qIdx('X8')) ? QUESTS.find((q) => !isShown(dS1, q.idx) && !q.dropped && scriptFor(dAll, DERIVED_CAPS, q.idx).length > 0)?.idx ?? -1 : qIdx('X8');
-  const s8 = hid >= 0 ? stateFor(dS1, hid) : null;
-  if (s8) for (const r of scriptFor(dAll, DERIVED_CAPS, hid)) apply(s8.st, dS1, s8.out, r);
-  row('QU-14', `the tracker never shows a hidden quest (30 passes over both places, key and pointer, autonomy on and off), and hidden ${hid >= 0 ? QUESTS[hid].id : '(none)'} does not complete from its own events`, hiddenSeen.length === 0 && !!s8 && !isDone(s8.st, hid) && seen.size > 0,
+  // (RE-SPECIFIED again in round 8, R8_LIFE: with all seven places shipped no kept quest is hidden in this build, so the "hidden quest does not complete from
+  // its own events" half runs on the S1 build's definitions (Home and Hearthlog shipped, built here) with X8, its hidden finale there: the property is the
+  // quest engine's, not this build's; the tracker half is unchanged and still runs on this build)
+  const anyHidden = QUESTS.some((q) => !isShown(dS1, q.idx) && !q.dropped && scriptFor(dAll, DERIVED_CAPS, q.idx).length > 0);
+  const dHid = anyHidden ? dS1 : defsFor(PLACE_IDS.map((_, i) => i <= 1));
+  const hid = isShown(dHid, qIdx('X8')) ? QUESTS.find((q) => !isShown(dHid, q.idx) && !q.dropped && scriptFor(dAll, DERIVED_CAPS, q.idx).length > 0)?.idx ?? -1 : qIdx('X8');
+  const s8 = hid >= 0 ? stateFor(dHid, hid) : null;
+  if (s8) for (const r of scriptFor(dAll, DERIVED_CAPS, hid)) apply(s8.st, dHid, s8.out, r);
+  row('QU-14', `the tracker never shows a hidden quest (30 passes over both places, key and pointer, autonomy on and off), and hidden ${hid >= 0 ? QUESTS[hid].id : '(none)'}${anyHidden ? '' : ' (of the S1 build: this build hides no kept quest)'} does not complete from its own events`, hiddenSeen.length === 0 && !!s8 && !isShown(dHid, hid) && !isDone(s8.st, hid) && seen.size > 0,
     hiddenSeen.join(', ') || `${seen.size} quests offered: ${[...seen].map((q) => QUESTS[q].id).join(' ')}`);
 }
 

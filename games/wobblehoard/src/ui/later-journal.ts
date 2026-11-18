@@ -17,7 +17,11 @@ import { cue } from './uiSound.ts';
 import { interactiveTarget } from '../input/keyboard.ts';
 import type { LifeHostApi } from '../shell/lifeLink.ts';
 import type { Game } from '../shell/game.ts';
-import type { JournalView } from '../collection/types.ts';
+import type { HoardItem, JournalView } from '../collection/types.ts';
+import type { TierName } from '../contracts.ts';
+import { genomePalette, linearToSrgb } from '../render/oklch.ts';
+import type { Rgb } from '../render/oklch.ts';
+import { gemSvg } from './gem.ts';
 import { CATALOG } from '../data/catalog.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import { MATERIAL_FAMILIES } from '../data/materials.ts';
@@ -199,11 +203,15 @@ export function openJournal(o: LifeScreenOpts): LifeScreen {
   function keepsakesPane(v: JournalView): HTMLElement {
     const pane = h('div', { class: 'jn-pane' });
     const list = h('ul', { class: 'jn-tiles', attrs: { role: 'list' } });
+    // (round 8, R8_SHELL 4) the Friendship Frame (QUESTS 10 bit 10) shows the X8 photo's thumbnail in it once found (the host's frameThumb, ui/later-frame.ts)
+    const frameBit = KEEPSAKE_TEXT.findIndex((k) => k?.[0] === 'Friendship Frame'),   // (findIndex visits the retired bits' holes too: no destructuring)
+       photo = frameBit >= 0 && (v.keepsakes & (1 << frameBit)) !== 0 ? o.host.frameThumb?.() ?? null : null;
     KEEPSAKE_TEXT.forEach(([name, how, from], bit) => {
       const got = (v.keepsakes & (1 << bit)) !== 0;
-      list.append(h('li', { class: 'jn-tile k-card', attrs: { 'data-got': String(got) } }, h('span', { class: 'jn-stamp', attrs: { 'aria-hidden': 'true' } }, got ? icon('sparkle') : icon('lock')),
+      const pic = got && bit === frameBit && photo ? h('img', { class: 'jn-frame', attrs: { src: photo, alt: 'Your photo of friends, in the Friendship Frame', width: '160', height: '120', 'data-frame': 'true' } }) : null;
+      list.append(h('li', { class: 'jn-tile k-card', attrs: { 'data-got': String(got), 'data-keepsake': String(bit) } }, h('span', { class: 'jn-stamp', attrs: { 'aria-hidden': 'true' } }, got ? icon('sparkle') : icon('lock')),
         // (round 6, R6_DATA: a finale keepsake's line names its own place outright; "placeName(bit + 1)" named the NEXT place: "Ember Pinecone ... From Ripple Shore.")
-        h('b', { class: 'jn-tile-name', text: got ? name : '???' }), h('span', { class: 'jn-q-hint', text: got ? from : how })));
+        h('b', { class: 'jn-tile-name', text: got ? name : '???' }), pic, h('span', { class: 'jn-q-hint', text: got ? from : how })));
     });
     pane.append(list);
     return pane;
@@ -233,10 +241,49 @@ export function openJournal(o: LifeScreenOpts): LifeScreen {
 }
 
 /* ═══════════════════════════════════════ the Travel sheet ═══════════════════════════════════════ */
+/** (round 8) "Who's coming?" (QUESTS 15, built in round 8; the simplest reading of the spec, R8_SHELL 4): the words, a chip's colour from its genome (the Hoard's swatch) */
+const WHO = "Who's coming?", WHO_CHANGE = 'Change';
+const hexOf = (c: Rgb): string => '#' + c.map((v) => Math.round(Math.max(0, Math.min(1, linearToSrgb(Math.max(0, v)))) * 255).toString(16).padStart(2, '0')).join('');
 export function openTravel(o: LifeScreenOpts): LifeScreen {
   const f = frame(o, UI_TEXT.places, 'wh-travel', null);
   f.close.addEventListener('click', () => api.close('button'));
   const offs: Array<() => void> = [guardKeys()];
+  // the squishies out that the player leaves at Home this trip (their chips unpressed): put back on the shelf as the trip starts. The squishy in hand always comes.
+  const staying = new Set<string>();
+  /** "Who's coming?" under the postcards: a 56 px chip per squishy out now (its tier's gem, its colour, its name under; QUESTS 15), every one preselected (the
+   *  party that is out comes, as before), a tap leaves one at Home; "Change" opens the Hoard (its shelf brings others out, up to the tier's cap: the shelf picker) */
+  function whoSection(): HTMLElement | null {
+    const party = o.host.partyNow?.() ?? [];
+    if (!party.length) return null;
+    const byId = new Map<string, HoardItem>();
+    try { for (const it of o.game.hoard.items()) byId.set(it.id, it); } catch { /* no shelf: the chips without gem and colour */ }
+    for (const id of [...staying]) if (!party.some((p) => p.itemId === id && !p.play)) staying.delete(id);
+    const chips = h('div', { class: 'jn-who-chips', attrs: { role: 'group', 'aria-label': WHO } });
+    for (const p of party) {
+      const it = byId.get(p.itemId), name = spName(p.species), on = p.play || !staying.has(p.itemId);
+      const sw = h('span', { class: 'swatch jn-who-sw', attrs: { 'aria-hidden': 'true' } });
+      if (it) { try { const pal = genomePalette(it.genome); sw.style.setProperty('--sw-a', hexOf(pal.glow)); sw.style.setProperty('--sw-b', hexOf(pal.body)); sw.style.setProperty('--sw-c', hexOf(pal.attenuation)); } catch { /* the swatch's own colours */ } }
+      const b = h('button', { class: 'k-btn jn-who-chip', attrs: { type: 'button', 'aria-pressed': String(on), 'data-item': p.itemId, 'data-species': CATALOG[p.species]?.id ?? '',
+        'aria-label': p.play ? `${name}: in your hand, always comes` : `${name}: ${on ? 'comes along' : 'stays at Home'}` } },
+        it ? gemSvg(it.tier as TierName, 'gem jn-who-gem') : null, sw, h('span', { class: 'jn-who-name', text: name }));
+      if (p.play) b.setAttribute('aria-disabled', 'true');
+      else b.addEventListener('click', () => {
+        if (staying.has(p.itemId)) staying.delete(p.itemId); else staying.add(p.itemId);
+        o.say(`${name} ${staying.has(p.itemId) ? 'stays at Home' : 'comes along'}.`);
+        render();
+        (f.scroll.querySelector(`.jn-who-chip[data-item="${CSS.escape(p.itemId)}"]`) as HTMLElement | null)?.focus();
+      });
+      chips.append(b);
+    }
+    const change = h('button', { class: 'k-btn k-btn--sm jn-who-change', attrs: { type: 'button', 'aria-label': `${WHO_CHANGE}: open the Hoard to bring others out` } }, h('span', { text: WHO_CHANGE }));
+    change.addEventListener('click', () => { api.close('code'); window.setTimeout(() => document.querySelector<HTMLElement>('.dock-hoard')?.click(), 0); });
+    return h('section', { class: 'jn-group jn-who', attrs: { 'aria-label': WHO } }, h('h3', { class: 'k-group-title', text: WHO }), chips, change);
+  }
+  /** the trip: the ones left at Home go back on the shelf first (mat.remove: the squishy in hand is never one), then the host's travel path */
+  function leaveBehind(): void {
+    for (const id of staying) { try { o.game.mat.remove(id); } catch { /* gone already */ } }
+    staying.clear();
+  }
   function render(): void {
     const v = o.host.journal();
     const open = o.host.openPlaces();
@@ -272,6 +319,7 @@ export function openTravel(o: LifeScreenOpts): LifeScreen {
         const go = h('button', { class: 'k-btn k-btn--gel jn-go', attrs: { type: 'button', 'data-place': p.id } }, icon('arrowRight'), h('span', { text: fill(UI_TEXT.goTo, { place: p.name }) }));
         go.addEventListener('click', () => {
           go.disabled = true;
+          leaveBehind();
           const slow = window.setTimeout(() => o.say(UI_TEXT.packing), 300);
           void o.host.travel(p.id).then((ok) => { window.clearTimeout(slow); if (ok) api.close('code'); else { go.disabled = false; } });
         });
@@ -282,6 +330,8 @@ export function openTravel(o: LifeScreenOpts): LifeScreen {
     }
     const kids: HTMLElement[] = [grid];
     if (v) kids.unshift(h('p', { class: 'jn-lead', text: fill(UI_TEXT.stampsOf, { a: String(v.stamps), b: String(v.quests.filter((q) => q.shown).length) }) }));
+    const who = whoSection();
+    if (who) kids.push(who);
     f.scroll.replaceChildren(...kids);
     // the postcards' pictures (a lazy module of its own, `later-postcard`: a 2D canvas each, nothing else); a failed load keeps the gradients
     void import('../render/postcard.ts').then(({ drawPostcard }) => {

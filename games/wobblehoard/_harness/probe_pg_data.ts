@@ -136,7 +136,9 @@ function fullDepth(x: number, z: number, a: Area, ramp: number, walls: Shape[]):
 }
 /** The ramps whose foot PLACES puts somewhere: the Glide Ramp ends at the ice (4.4), the Soap Slide down in the water (4.6). */
 const RAMP_FOOT: Readonly<Record<string, 'ice' | 'water'>> = { glideramp: 'ice', soapslide: 'water' };
-function checkPlace(P: PlaceDef, tall: boolean): string[] {
+/** (dev tools) the valid spawn grid points of the last checkPlace given a spawnOut */
+let spawnGrid = 0;
+function checkPlace(P: PlaceDef, tall: boolean, spawnOut?: [number, number][]): string[] {
   const probs: string[] = [], L = tall ? P.tall : P;
   const pos = P.things.map((t, i) => tall ? P.tall.things[i] : { x: t.x, z: t.z, yaw: t.yaw, use: t.useSpot, peek: t.peek, push: t.push });
   if (tall && P.tall.things.length !== P.things.length) probs.push('tall.things does not have one Spot per ThingDef');
@@ -273,6 +275,18 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
       const c = clearOf(x, z, -1); if (c < 0.9 - 1e-9) probs.push(`spawn (${x}, ${z}) ${f2(c)} m from a thing (at least 0.9)`); }
     for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++) { const d = Math.hypot(sp[i][0] - sp[j][0], sp[i][1] - sp[j][1]); if (d < gap - 1e-9) probs.push(`spawn pair ${f2(d)} m apart (at least ${gap})`); }
   }
+  // (round 8, dev tool) SPAWNMAP=<place id>:<tall|wide>: every point of a 0.05 m grid that is a valid spawn spot by the rules above, and the most spots 1.0 / 1.25 m
+  // apart a greedy pass over them finds (from each start point), printed; the row itself is unchanged
+  if (spawnOut || process.env.SPAWNMAP === `${P.id}:${tall ? 'tall' : 'wide'}`) {
+    const gap = tall ? 1.0 : 1.25, hx = (b.hx ?? b.r ?? 0) - 0.825, hz = (b.hz ?? b.r ?? 0) - 0.825, ok: [number, number][] = [];
+    const gx = Math.floor(hx * 20 + 1e-9), gz = Math.floor(hz * 20 + 1e-9);   // (a 0.05 m grid of round numbers inside the shrunk bounds)
+    for (let i = -gx; i <= gx; i++) for (let k = -gz; k <= gz; k++) { const x = i / 20, z = k / 20; if (clearOf(x, z, -1) >= 0.9) ok.push([x, z]); }
+    let best: [number, number][] = [];
+    for (const s0 of ok) { const pick: [number, number][] = [s0]; for (const q of ok) if (pick.every((r) => Math.hypot(r[0] - q[0], r[1] - q[1]) >= gap - 1e-9)) pick.push(q); if (pick.length > best.length) best = pick; }
+    if (spawnOut) { spawnOut.push(...best); spawnGrid = ok.length; }
+    else { console.log(`SPAWNMAP ${P.id} ${tall ? 'tall' : 'wide'}: ${ok.length} valid grid points; best ${best.length}: ${JSON.stringify(best)}`);
+      const zs = [...new Set(ok.map((q) => q[1]))].sort((a, c) => a - c); for (const z of zs) console.log(`  z ${z.toFixed(2)}: x ${ok.filter((q) => q[1] === z).map((q) => q[0]).join(' ')}`); }
+  }
   if (moving > 8) probs.push(`${moving} moving props (at most 8)`);
   const balls = P.things.filter((t) => t.mech === MECH.ball).length; if (balls > 1) probs.push(`${balls} free props (balls; at most one, P5)`);
   if (prims > 20) probs.push(`${prims} collider primitives (at most 20)`);
@@ -310,26 +324,36 @@ function frontReachOf(d: PlaceDef, tall: boolean): number {
   }
   return front;
 }
+/** (round 8) The play UI's slot on a tall place frame (src/render/place.ts PLAY_SLOT_PX, pinned in placeCam); on a tall frame wider than 380 px, the top-right
+ *  column beside it (PLACE_COL_PX, R8_SHELL's LIFE (6)). */
+const PLAY_SLOT = 52, PLACE_COL = 156;
 /** The camera a place ships with, rebuilt from its pure parts (render/placeview.ts fitPlace and placeBand: imported; the shell's setPlayBounds call
  *  and frontReach: pinned by text, so a change fails the row): a projection of world points to CSS px. */
-function placeCam(P: PlaceDef, tall: boolean): { ok: boolean; why: string; proj: (x: number, y: number, z: number) => [number, number] } {
+function placeCam(P: PlaceDef, tall: boolean): { ok: boolean; why: string; proj: (x: number, y: number, z: number) => [number, number]; f?: ReturnType<typeof fitPlace> } {
   const sh = readFileSync(resolve(ROOT, 'src/shell/later-life.ts'), 'utf8'), st = readFileSync(resolve(ROOT, 'src/render/place.ts'), 'utf8');
-  const pins = ['const z0 = b.z - hz, z1 = Math.max(b.z + hz, frontReach(next, layout) + 0.1);', 'stage.setPlayBounds?.(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2)',
+  // (round 8, R8_SHELL's answer to request 11: the layout's own pitch range, `camPitch` (else the place's camera.pitch), is setPlayBounds' 5th and 6th arguments
+  // and PlaceHost.fit's last two; the model passes the same range, and the lines are pinned)
+  const pins = ['const z0 = b.z - hz, z1 = Math.max(b.z + hz, frontReach(next, layout) + 0.1);', 'stage.setPlayBounds?.(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2, pr[0], pr[1])',
+    'const pr = (lay as { readonly camPitch?: readonly [number, number] }).camPitch ?? next.camera.pitch;',
     "const hx = b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), hz = b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4);",
     'case MECH.block: case MECH.seesaw: hx = s[0]; hz = s[2] ?? s[0]; break;', 'case MECH.ring: hx = hz = s[0] + (s[1] ?? 0); break;', 'case MECH.swing: hx = s[0]; hz = (s[1] ?? 0) / 2; break;',
     'default: hx = s[0]; hz = s[2] || s[0];', 'front = Math.max(front, sp.z + sn * hx + c * hz);'];
-  const pinsR = ['const B = placeBand({ top, right, bottom, left }, w, h, this.band);', 'return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3]);'];
+  // (round 8, R8_SHELL's request 3: place.ts PlaceHost.fit counts the play UI's slot (PLAY_SLOT_PX, the tracker pill and stamp moments) as one more top row on a
+  // TALL frame when a top row is reported; the model follows it, and the line is pinned)
+  const pinsR = ['const B = placeBand({ top, right, bottom, left }, w, h, this.band);', 'return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3], pitchMin, pitchMax);',
+    'if (top > 0 && w < 0.9 * h) top += w > 380 ? PLACE_COL_PX : PLAY_SLOT_PX;', `export const PLAY_SLOT_PX = ${PLAY_SLOT};`, `export const PLACE_COL_PX = ${PLACE_COL};`];
   const missing = [...pins.filter((x) => !sh.includes(x)).map((x) => `later-life.ts: ${x}`), ...pinsR.filter((x) => !st.includes(x)).map((x) => `place.ts: ${x}`)];
   const none = (): [number, number] => [NaN, NaN];
   if (missing.length) return { ok: false, why: `the place camera's code changed (missing: ${missing.join(' | ')})`, proj: none };
   const L = tall ? P.tall : P, b = L.bounds, I = STAGE_INSETS[tall ? 'phone' : 'desktop'], W = tall ? 390 : 1280, H = tall ? 844 : 800;
   const hx = b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), hz = b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4);
   const z0 = b.z - hz, z1 = Math.max(b.z + hz, frontReachOf(P, tall) + 0.1);
-  const B = placeBand({ top: I.t, right: 0, bottom: I.b, left: 0 }, W, H, new Float64Array(4));
-  const f = fitPlace(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2, W, H, B[0], B[1], B[2], B[3]);
+  const B = placeBand({ top: I.t > 0 && W < 0.9 * H ? I.t + (W > 380 ? PLACE_COL : PLAY_SLOT) : I.t, right: 0, bottom: I.b, left: 0 }, W, H, new Float64Array(4));
+  const pr = (tall ? P.tall.camPitch : undefined) ?? P.camera.pitch;
+  const f = fitPlace(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2, W, H, B[0], B[1], B[2], B[3], pr[0], pr[1]);
   if (!f) return { ok: false, why: 'no place camera fits', proj: none };
   const ty = Math.tan(f.fov * Math.PI / 360), tx = ty * W / H, sn = Math.sin(f.pitch), cs = Math.cos(f.pitch), C = [f.aimX, f.aimY + f.dist * sn, f.aimZ + f.dist * cs];
-  return { ok: true, why: '', proj: (x, y, z) => { const rx = x - C[0], ry = y - C[1], rz = z - C[2], dep = -ry * sn - rz * cs; return [((rx / (dep * tx)) * 0.5 + 0.5) * W, (1 - ((ry * cs - rz * sn) / (dep * ty) * 0.5 + 0.5)) * H]; } };
+  return { ok: true, why: '', f, proj: (x, y, z) => { const rx = x - C[0], ry = y - C[1], rz = z - C[2], dep = -ry * sn - rz * cs; return [((rx / (dep * tx)) * 0.5 + 0.5) * W, (1 - ((ry * cs - rz * sn) / (dep * ty) * 0.5 + 0.5)) * H]; } };
 }
 
 /** B8 (round 5, VERDICT_PG: "the cabin's tall layout: the Rocker Board under the hint pill and the quick-switch row, the kettle cut by the left
@@ -381,7 +405,9 @@ const HUD_INSETS = { phone: { W: 390, H: 844, t: 151, b: 174, l: 8, r: 8, colX: 
  *  no side rows), measured in the browser at HEAD 16f6ba6fc (stage.info.insets, the dev build at 390 x 844 touch and 1280 x 800, 1 and 3 out):
  *  they drive SR2's band framing (framing.ts: the lens shift, its scale demand) and the visible table the corral and the ball's bounds come from. */
 // (round 7, R7_LIFE: the phone's reported bottom row is the hint pill's top since round 6, 844 - 670 = 174 px, R6_SHELL section 3's measurement)
-const STAGE_INSETS = { phone: { t: 56, b: 174 }, desktop: { t: 56, b: 78 } } as const;
+// (round 8, R8_LIFE: the desktop's reported bottom row 78 -> 130 px, R7_SHELL 5A' measured it in the browser on the round-7 tree: 1280 x 800, the hint pill at
+// 670..706 counted (hudBinding.ts reportInsets, round 6), at Home 1.5 s and 9.5 s after the first play and at the cabin; top 56. The model had the round-5 value)
+const STAGE_INSETS = { phone: { t: 56, b: 174 }, desktop: { t: 56, b: 130 } } as const;
 /** The rest columns the band framing measures each body at (framing.ts frameMode 1: top = restH, centre restCy, half width restHalfW; the disc
  *  about the centre of restHalfW x 1.06 and of restRadius): a ball (2R, R, R), a squat dome (1.4R, 0.7R, 1.1R) and a flat cake (1.0R, 0.5R, 1.25R),
  *  which bracket the lens measured in the browser (390 x 844 one Dollop 0.096 against 0.074 / 0.129 / 0.176; 1280 x 800 three out 0.153 against
@@ -417,7 +443,10 @@ function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: numbe
     'if (framer.wantScale > 0) want = Math.max(want, framer.wantScale);',
     'fs[0] = slotXZ.x; fs[1] = slotXZ.z; fs[2] = (pw ? v.wholeH : v.restH) * g; fs[3] = (pw ? v.wholeCy : v.restCy) * g; fs[4] = (pw ? v.wholeHalfW : v.restHalfW) * 1.06 * g;',
     'camera.setViewOffset(cssW, cssH, -lx * cssW * 0.5, ly * cssH * 0.5, cssW, cssH)',
-    'safe.top + ly * cssH * 0.5, safe.right + lx * cssW * 0.5, safe.bottom - ly * cssH * 0.5, safe.left - lx * cssW * 0.5'];
+    'safe.top + ly * cssH * 0.5, safe.right + lx * cssW * 0.5, safe.bottom - ly * cssH * 0.5, safe.left - lx * cssW * 0.5',
+    // round 8: R7_SHELL's ballFrames (the Felt Ball's spot in the one-body portrait framing), which the model now carries
+    'const BALL_FRAME_R = 0.3;', 'if (ballAt[0] !== 1 || !(camera.aspect < 0.9) || placeHost?.active) return false;', 'const solo = n === 1 && (withCap || ex);',
+    'const fits = solo && Math.max(bcx - ax0, ax1 - bcx) + 0.06 <= want * hwPer;', 'if (f.multi) { ax = f.mx; az = f.mz * 0.8; ay = TARGET_Y * bodyScale; }'];
   const needF = ['enabled: true', 'marginMin: 3, marginFrac: 0.02', 'maxScale: 3.2', 'minBand: 0.35', 'sideFitFrom: 6',
     'p[0] = fs[0]; p[1] = fs[2]; p[2] = fs[1]; p[3] = fs[0]; p[4] = 0; p[5] = fs[1];', 'w[0] = fs[0]; w[1] = fs[3]; w[2] = fs[1]; w[6] = fs[4]; this.addDisc();',
     'w[6] = v.proxy.restRadius * v.growth; this.addDisc();', 'this.fitY = (top - bot) / Math.max(0.05, B[0] - B[1] - 2 * my);',
@@ -437,7 +466,7 @@ const TF = Math.tan((SM.fov || 35) * D2R / 2);
  *  the one-body reach / the mat's extents, then SR2's demand), the aim (restAim for one body, the mat's middle for more), and SR2's lens goal
  *  (framing.ts measure + ease: the rest columns' extent in unshifted NDC centred in the band between the reported rows). The demand and the
  *  one-body aim depend on the scale they are measured at, so the three are iterated to their fixed point (as the eased camera settles). */
-function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number): Cam {
+function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number, ballSpot?: { x: number; z: number }): Cam {
   const I = HUD_INSETS[fr], SI = STAGE_INSETS[fr], A = I.W / I.H, base = Math.max(3.0, 2.4 / Math.max(0.2, A)), hwPer = base * TF * A, P = SM.pitch;
   const slots = (A < 0.9 ? SM.TALL : SM.WIDE).slice(0, n).map(([x, z]) => [x * s, z * s]);
   const R = 0.5 * s, S = SHAPES[sh], hw = S.hw * R, restH = S.h * R, restCy = S.cy * R;
@@ -450,9 +479,17 @@ function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number): Cam {
     base0 = Math.max(s, ((x1 - x0) / 2 + 0.1 + (A < 0.9 ? 0.12 : 0.35) * (z1 - z0) / 2) / hwPer); mx = (x1 + x0) / 2; mz = (z0 + z1) / 2; }
   // the band (framing.ts bandRows, band): the reported rows, scaled down together under minBand 0.35; the margin max(3, 0.02 H) px
   const kv = (SI.t + SI.b) > 0.65 * I.H ? 0.65 * I.H / (SI.t + SI.b) : 1, B0 = 1 - 2 * SI.t * kv / I.H, B1 = -1 + 2 * SI.b * kv / I.H, my = 2 * Math.max(3, 0.02 * I.H) / I.H;
-  let want = base0, ly = 0, aim = [0, 0, 0], C = [0, 0, 0];
+  // (round 8, R8_LIFE; R7_SHELL's request 1) stage.ts ballFrames: on a portrait frame with ONE whole body at Home and the Felt Ball out, the ball's SPOT (x the body
+  // scale; BALL_FRAME_R 0.3 m) counts in framingFor like a waiting capsule (solo: the silhouette reach t = hw x 1.06 + 0.05 x scale of the body and the ball's
+  // box; unless it already fits at the current want (+0.06), the camera pulls back to ((ax1 - ax0) / 2 + 0.06 + 0.12 x (az1 - az0) / 2) / hwPer and aims at the
+  // middle of the two (multi: mx, TARGET_Y x scale, mz x 0.8)); visibleTable follows that aim (stage.ts uses the same frameOut)
+  const fb = A < 0.9 && n === 1 ? ballSpot ?? DEFS.find((d) => d.id === 'home')?.tall.things[0] : undefined;
+  let bx0 = 0, bx1 = 0, bz0 = 0, bz1 = 0, bmx = 0, bmz = 0;
+  if (fb) { const t = hw * 1.06 + 0.05 * s, sx0 = slots[0][0], sz0 = slots[0][1], fx = fb.x * s, fz = fb.z * s, r = 0.3;
+    bx0 = Math.min(sx0 - t, fx - r); bx1 = Math.max(sx0 + t, fx + r); bz0 = Math.min(sz0 - t, fz - r); bz1 = Math.max(sz0 + t, fz + r); bmx = (bx0 + bx1) / 2; bmz = (bz0 + bz1) / 2; }
+  let want = base0, ly = 0, aim = [0, 0, 0], C = [0, 0, 0], multiB = false;
   for (let it = 0; it < 40; it++) {
-    aim = n === 1 ? [slots[0][0] * 0.6, SM.ty * want + Math.max(0, restCy - SM.ty * want) * 0.7, slots[0][1] * 0.6] : [mx, SM.ty * s, mz * 0.8];
+    aim = multiB ? [bmx, SM.ty * s, bmz * 0.8] : n === 1 ? [slots[0][0] * 0.6, SM.ty * want + Math.max(0, restCy - SM.ty * want) * 0.7, slots[0][1] * 0.6] : [mx, SM.ty * s, mz * 0.8];
     const d = want * base; C = [aim[0], aim[1] + d * Math.sin(P), aim[2] + d * Math.cos(P)];
     const ndcY = (x: number, y: number, z: number): [number, number] => { const vy = y - C[1], vz = z - C[2], dep = vy * f[1] + vz * f[2]; return [(vy * u[1] + vz * u[2]) / (dep * TF), dep]; };
     let top = -Infinity, bot = Infinity;
@@ -462,9 +499,11 @@ function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number): Cam {
     }
     const fitY = (top - bot) / Math.max(0.05, B0 - B1 - 2 * my), demand = fitY > 1 ? Math.min(3.2, fitY * want) : 0;
     ly = Math.max(-0.7, Math.min(0.7, (B0 + B1) / 2 - (top + bot) / 2));
-    const w2 = Math.max(base0, demand);
-    if (Math.abs(w2 - want) < 1e-10) break;
-    want = w2;
+    let w2 = Math.max(base0, demand), mb = false;
+    if (fb) { const fits = Math.max(slots[0][0] - bx0, bx1 - slots[0][0]) + 0.06 <= w2 * hwPer;
+      if (!fits) { mb = true; w2 = Math.max(w2, ((bx1 - bx0) / 2 + 0.06 + 0.12 * (bz1 - bz0) / 2) / hwPer); } }
+    if (Math.abs(w2 - want) < 1e-10 && mb === multiB) break;
+    want = w2; multiB = mb;
   }
   return { W: I.W, H: I.H, A, ins: I, si: SI, slots, s, C, f, u, aim, d: want * base, ly, want, sh };
 }
@@ -623,6 +662,79 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
   }
   return { probs, lines };
 }
+/** DT-18 (round 8, R8_LIFE; R7_SHELL's request 7: with three out on a 1280 x 800 desktop Dollop at its party slot covered the whole Music Box, and the
+ *  published "a click on the Music Box plays its tune" row failed twice): no Home thing hides behind a party slot. For every party of 1 to 5 (from the thing's
+ *  fromN), both frames, every scale and rest shape: the share of the thing's on-screen silhouette (the box of its projected footprint corners at the floor and at
+ *  its top) covered by NEARER slot bodies (bodyEll, nearer by depth) is at most HIDE_MAX, and its tap point (the silhouette's centre) is under none. (The Felt
+ *  Ball where it stands, ballAt; the Snooze Rug is a floor patch with no collider, not checked.) `only` limits it to one thing and frame (the spot search). */
+const HIDE_MAX = 0.5;
+function hideRow(P: PlaceDef, only?: { id: string; fr: 'phone' | 'desktop' }): { bad: string[]; worst: string[]; most: number; tapN: number } {
+  const worst: string[] = [], bad: string[] = []; let mostAll = 0, tapN = 0;
+  for (const fr of ['phone', 'desktop'] as const) { const TALLF = fr === 'phone';
+    if (only && only.fr !== fr) continue;
+    P.things.forEach((t, i) => { if (t.mech === 0 || (only && only.id !== t.id)) return;
+      const sp = TALLF ? P.tall.things[i] : { x: t.x, z: t.z, fromN: t.fromN }, from = Math.max(1, sp.fromN ?? 1);
+      const box = t.mech === MECH.block, hx = t.size[0], hz = box ? t.size[2] : t.size[0], h = box ? (t.p.shadeH ?? 2 * t.size[1]) : t.mech === MECH.pad ? 0.06 : 2 * t.size[0];
+      let most = 0, mostAt = '', tapHid = ''; const perN = [0, 0, 0, 0, 0, 0];
+      for (let n = from; n <= 5; n++) for (const sc of SCALES) for (const c of camsOf(fr, n, sc)) {
+        let x = sp.x * sc, z = sp.z * sc; if (t.mech === MECH.ball) [x, z] = ballAt(c, x, z, hx);
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (const dx of [-hx, hx]) for (const dz of [-hz, hz]) for (const y of [0, h]) { const [qx, qy] = proj(c, x + dx, y, z + dz); x0 = Math.min(x0, qx); x1 = Math.max(x1, qx); y0 = Math.min(y0, qy); y1 = Math.max(y1, qy); }
+        const depth = discOf(c, x, h / 2, z, 0)[3], near = c.slots.map(([bx, bz]) => bodyEll(c, bx, bz)).filter((e) => e[4] < depth);
+        if (!near.length) continue;
+        let cov = 0, tot = 0;
+        for (let a = 0; a < 16; a++) for (let b = 0; b < 16; b++) { const px = x0 + (x1 - x0) * (a + 0.5) / 16, py = y0 + (y1 - y0) * (b + 0.5) / 16; tot++;
+          if (near.some(([cx, cy, ea, eb]) => ((px - cx) / ea) ** 2 + ((py - cy) / eb) ** 2 < 1)) cov++; }
+        const f18 = cov / tot, tx = (x0 + x1) / 2, ty = (y0 + y1) / 2;
+        if (f18 > most) { most = f18; mostAt = `n${n} s${sc}`; }
+        perN[n] = Math.max(perN[n], f18);
+        if (near.some(([cx, cy, ea, eb]) => ((tx - cx) / ea) ** 2 + ((ty - cy) / eb) ** 2 < 1)) { tapN++; if (!tapHid) tapHid = `n${n} s${sc}`; }
+      }
+      mostAll = Math.max(mostAll, most);
+      worst.push(`${TALLF ? 'TALL' : 'WIDE'} ${t.id} ${(most * 100).toFixed(0)}%${most > 0 ? ' (' + mostAt + ')' : ''}`);
+      if (VERBOSE && !only) console.log(`     DT-18 ${TALLF ? 'TALL' : 'WIDE'} ${t.id} (${sp.x}, ${sp.z}) from ${from}: hidden by n ${perN.slice(1).map((v, k) => k + 1 < from ? '-' : (v * 100).toFixed(0) + '%').join(' ')}`);
+      if (most > HIDE_MAX || tapHid) bad.push(`${TALLF ? 'TALL' : 'WIDE'} ${t.id}: ${(most * 100).toFixed(0)}% hidden at ${mostAt}${tapHid ? `, its centre behind a body at ${tapHid}` : ''}`);
+    });
+  }
+  return { bad, worst, most: mostAll, tapN };
+}
+// (round 8) the spot search (DT18SEARCH=<thing id>:<phone|desktop>[:x0,x1,z0,z1]): every spot of a 0.05 slot-unit grid where DT-18 and the Home row both pass
+// for that thing; printed nearest its current spot first. A tool for re-laying Home, not a row.
+const REASONS = new Map<string, number>();
+// (round 8) the rug's use spot search (RUGSEARCH=1): the second napper lies against slot 0 (2R from it); every angle, the WIDE Home row's problems for the rug
+if (process.env.RUGSEARCH) {
+  const H0 = DEFS.find((d) => d.id === 'home')!, k = H0.things.findIndex((t) => t.id === 'snoozerug');
+  for (let a = 0; a < 360; a += 5) { const r = a * D2R, ux = +(Math.sin(r) * 1.0).toFixed(3), uz = +(-Math.cos(r) * 1.0).toFixed(3);
+    const H1 = { ...H0, things: H0.things.map((t, q) => (q === k ? { ...t, useSpot: [ux, uz] as [number, number] } : t)) } as PlaceDef;
+    const pr = homeRow(H1).probs.filter((p) => p.startsWith('WIDE')); console.log(`rug use (${ux}, ${uz}) a ${a}: ${pr.length ? pr.join(' | ') : 'ok'}`); }
+  process.exit(0);
+}
+if (process.env.DT18SEARCH) {
+  const [id, fr, box] = process.env.DT18SEARCH.split(':') as [string, 'phone' | 'desktop', string | undefined];
+  const H0 = DEFS.find((d) => d.id === 'home')!, k = H0.things.findIndex((t) => t.id === id), TALLF = fr === 'phone';
+  const [gx0, gx1, gz0, gz1] = (box ?? '-3.2,3.2,-3.2,2.4').split(',').map(Number);
+  const cur = TALLF ? H0.tall.things[k] : H0.things[k], found: [number, number, number][] = [];
+  for (let gz = gz0; gz <= gz1 + 1e-9; gz += 0.05) for (let gx = gx0; gx <= gx1 + 1e-9; gx += 0.05) {
+    if (Math.hypot(gx, gz) > 3.3) continue;
+    const x = +gx.toFixed(2), z = +gz.toFixed(2);
+    const fN = process.env.DT18FROMN ? +process.env.DT18FROMN : undefined;
+    const things = H0.things.map((t, q) => (q === k && !TALLF ? { ...t, x, z, ...(fN ? { fromN: fN } : {}) } : t));
+    const tall = { ...H0.tall, things: H0.tall.things.map((t, q) => (q === k && TALLF ? { ...t, x, z, ...(fN ? { fromN: fN } : {}) } : t)) };
+    const zones = H0.zones;
+    const H1 = { ...H0, things, tall, zones } as PlaceDef;
+    const h18 = hideRow(H1, { id, fr }), hb = h18.bad;
+    const hp = homeRow(H1).probs.filter((p) => p.startsWith(TALLF ? 'TALL' : 'WIDE') && (p.includes(` ${id}:`) || p.includes(`from ${id}`)));
+    if (process.env.DT18WHY && Math.abs(x - +process.env.DT18WHY.split(',')[0]) < 0.01 && Math.abs(z - +process.env.DT18WHY.split(',')[1]) < 0.01) console.log('why', x, z, JSON.stringify(hb), JSON.stringify(hp));
+    if (process.env.DT18REASONS) for (const r of hp) { const key = r.replace(/[-0-9.]+ m/g, '# m').replace(/n\d/, 'nK').replace(/ s[0-9.]+/, ''); REASONS.set(key, (REASONS.get(key) ?? 0) + 1); }
+    if (hp.length) continue;
+    if (hb.length) { if (process.env.DT18BEST) found.push([x, z, h18.most * 1000 + h18.tapN]); continue; }
+    found.push([x, z, Math.hypot(x - cur.x, z - cur.z)]);
+  }
+  found.sort((a, b) => a[2] - b[2]);
+  if (process.env.DT18REASONS) console.log([...REASONS.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${v} ${k}`).join('\n'));
+  console.log(`DT18SEARCH ${id} ${fr}: ${found.length} spots pass; nearest: ${found.slice(0, 12).map(([x, z, d]) => `(${x}, ${z}) ${d.toFixed(2)} m`).join('; ')}`);
+  process.exit(0);
+}
 for (const P of DEFS) {
   const strict = STRICT_PLACES.includes(P.id);
   if (P.id === 'home') {
@@ -640,16 +752,21 @@ for (const P of DEFS) {
     { const o = b5one[0], ok = !!o && o.cover <= 0 && o.hide <= 0 && o.room >= 0.25 - 1e-9;
       // the proof that no spot can: every spot of a 0.05 slot-unit grid over the one-out bounds (x +-0.8, z -3.2 to 2.2), at every scale and shape,
       // where the ball would stand (pushed into its bounds), against the same rules plus 0.05 m from the body and in view
-      let tried = 0, found = '';
-      if (!ok) for (let gz = -3.2; gz <= 2.2 + 1e-9 && !found; gz += 0.05) for (let gx = -0.8; gx <= 0.8 + 1e-9 && !found; gx += 0.05) { tried++;
+      // (round 8: each candidate with its own framing, cam(..., spot): ballFrames moves the camera with the ball's spot; the spot nearest the current one is named)
+      let tried = 0, found = '', fd = 9;
+      const cur0 = P.tall.things[0];
+      if (!ok) for (let gz = -3.2; gz <= 2.2 + 1e-9; gz += 0.05) for (let gx = -0.8; gx <= 0.8 + 1e-9; gx += 0.05) { tried++;
         let good = true;
-        for (const s of SCALES) { for (const c of camsOf('phone', 1, s)) { const rb = P.things[0].size[0], [x, z] = ballAt(c, gx * s, gz * s, rb), [bx, by, br, bd] = discOf(c, x, rb, z, rb), [cx, cy, ea, eb, cd] = bodyEll(c, 0, 0);
+        for (const s of SCALES) { for (const c of SHAPES.map((_, kk) => cam('phone', 1, s, kk, { x: gx, z: gz }))) { const rb = P.things[0].size[0], [x, z] = ballAt(c, gx * s, gz * s, rb), [bx, by, br, bd] = discOf(c, x, rb, z, rb), [cx, cy, ea, eb, cd] = bodyEll(c, 0, 0);
           const ov = ellReach(bx, by, br, cx, cy, ea, eb), dl = Math.hypot(x, z) || 1;
           if (ov > 0 || Math.hypot(x, z) - 0.5 * s - rb < 0.05 || rollRoom(c, x, z, x / dl, z / dl, rb) < 0.25 || !inIns(c, [bx - br, by]) || !inIns(c, [bx + br, by]) || !inIns(c, [bx, by - br]) || !inIns(c, [bx, by + br])) { good = false; break; } void cd; void bd; }
           if (!good) break; }
-        if (good) found = `${gx.toFixed(2)}, ${gz.toFixed(2)}`; }
+        if (good && Math.hypot(gx - cur0.x, gz - cur0.z) < fd) { fd = Math.hypot(gx - cur0.x, gz - cur0.z); found = `${gx.toFixed(2)}, ${gz.toFixed(2)}`; } }
       row('DT-01', ok, 'Home B5, one squishy out on a phone (TALL n = 1): the Felt Ball where it stands covers no part of the squishy and hides behind none, with 0.25 m of first-play roll',
         o ? `${ok ? '' : found ? `the spot (${found}) would pass: re-lay it; ` : `no spot can with the shipped camera (${tried} spots tried; needs RENDER: PLAYGROUND_BUILD 24.1 (a), the one-out portrait framing makes room for the ball); `}it covers ${o.cover.toFixed(1)} px of the body (${(o.frac * 100).toFixed(1)}% of it, ${o.sq > 0 ? `${o.sq.toFixed(1)} px into` : 'clear of'} its squeeze area), ${(o.hide * 100).toFixed(0)}% hidden, ${f2(o.gap)} m from it, ${f2(o.room)} m of roll room (worst scale and shape)` : 'no ball'); }
+    { const r18 = hideRow(P);
+      row('DT-18', r18.bad.length === 0, `(round 8) no Home thing hides behind a party slot: parties of 1 to 5 (from each thing's fromN), phone and desktop, ${SCALES.length} scales x ${SHAPES.length} rest shapes: at most ${HIDE_MAX * 100}% of its silhouette behind nearer squishies at their slots and its centre (the tap point) behind none`,
+        r18.bad.length ? r18.bad.slice(0, 6).join(' | ') : `worst: ${r18.worst.join('; ')}`); }
     continue;
   }
   for (const tall of [false, true]) {
@@ -662,6 +779,77 @@ for (const P of DEFS) {
     if (!strict) { note('DT-01', `${label}: PENDING its slice (${P.id === 'ripple' || P.id === 'frostbell' || P.id === 'rainleaf' ? 'S2' : 'S3'}): ${probs.length} problems${probs.length && !VERBOSE ? ' (--verbose lists them)' : ''}`);
       if (VERBOSE) for (const p of probs) console.log('       ' + p); }
   }
+}
+
+// (round 8, dev tool) LAYOUTSEARCH=cloudloft:<steps>[:seed]: a local search over Cloudloft's TALL things (the Puff Pads with the Updraft on the first, the Kite Swing
+// and its push spot, the Sunbow Arch, the Cloud Nest, the Cloud Ball) from the shipped layout: one thing moved at a time (inside P7's frame by the rules), a move
+// kept when the score (10 x checkPlace's problems but the spawn's + 3 x the spawn spots short of 5 - the valid spawn grid points / 1000) is no worse; a layout
+// with 0 problems, 5 spots and 0 shipped-camera problems (camProblems) is printed (with a few rules of its own: see score). LAYOUTSTART=<json> starts elsewhere.
+// The rows are unchanged.
+if (process.env.LAYOUTSEARCH) {
+  const [id, nTry, seed0] = process.env.LAYOUTSEARCH.split(':');
+  const P0 = DEFS.find((d) => d.id === id) as PlaceDef;
+  let sd = Number(seed0 ?? 1) >>> 0; const rnd = (): number => { sd = (sd * 1664525 + 1013904223) >>> 0; return sd / 4294967296; };
+  const gauss = (): number => Math.sqrt(-2 * Math.log(rnd() + 1e-12)) * Math.cos(2 * Math.PI * rnd());
+  const r2 = (v: number): number => +v.toFixed(2);
+  const T = P0.tall, idx = (k: string): number => P0.things.findIndex((t) => t.id === k);
+  const iPad = idx('puffpads'), iUp = idx('updraft'), iSw = idx('kiteswing'), iArch = idx('sunbowarch'), iNest = idx('cloudnest'), iBall = idx('cloudball');
+  const zUp = P0.zones.findIndex((z) => z.id === 'updraft');
+  const swp = 1.4 * Math.sin(30 * D2R);
+  type St = { pad: [number, number]; p1: [number, number]; p2: [number, number]; sw: [number, number, number, number]; arch: [number, number, number]; nest: [number, number, number]; ball: [number, number] };
+  const pp = P0.things[iPad].p;
+  let cur: St = { pad: [T.things[iPad].x, T.things[iPad].z], p1: [pp.tx1 ?? 0, pp.tz1 ?? 0], p2: [pp.tx2 ?? 0, pp.tz2 ?? 0],
+    sw: [T.things[iSw].x, T.things[iSw].z, T.things[iSw].yaw, (T.things[iSw].push?.[0] ?? 0) < T.things[iSw].x ? -1 : 1], arch: [T.things[iArch].x, T.things[iArch].z, T.things[iArch].yaw],
+    nest: [T.things[iNest].x, T.things[iNest].z, T.things[iNest].yaw], ball: [T.things[iBall].x, T.things[iBall].z] };
+  const build = (st: St, spawn?: [number, number][]): PlaceDef => {
+    const things = T.things.map((t) => ({ ...t })) as { x: number; z: number; yaw: number; push?: readonly [number, number]; use?: readonly [number, number] }[];
+    things[iPad] = { x: st.pad[0], z: st.pad[1], yaw: 0 }; things[iUp] = { x: st.pad[0], z: r2(st.pad[1] - 0.1), yaw: 0 };
+    const [sx, sz, sy, side] = st.sw;
+    things[iSw] = { x: sx, z: sz, yaw: sy, push: sy ? [sx, r2(sz + side * (swp + 1.3))] : [r2(sx + side * (swp + 1.3)), sz] };
+    things[iArch] = { x: st.arch[0], z: st.arch[1], yaw: st.arch[2] };
+    things[iNest] = { x: st.nest[0], z: st.nest[1], yaw: st.nest[2], use: [st.nest[0], st.nest[1]] };
+    things[iBall] = { x: st.ball[0], z: st.ball[1], yaw: 0 };
+    const zones = T.zones.map((z) => ({ ...z })); zones[zUp] = { ...zones[zUp], x: st.pad[0], z: r2(st.pad[1] - 0.1) };
+    const pd = { ...pp, tx1: st.p1[0], tz1: st.p1[1], tx2: st.p2[0], tz2: st.p2[1] };
+    return { ...P0, things: P0.things.map((t, k) => (k === iPad ? { ...t, p: pd } : t)), tall: { ...T, things, zones, ...(spawn ? { spawn } : {}) } } as PlaceDef;
+  };
+  const score = (st: St): [number, [number, number][], number] => {
+    const sp: [number, number][] = []; spawnGrid = 0;
+    const probs = checkPlace(build(st), true, sp).filter((q) => !q.startsWith('spawn') && !q.includes('spawn spots'));
+    // (beyond checkPlace) the three pads 1.0 m apart and their centres 0.2 m inside the bounds (a body can be set on each), every thing's front at most 2.9 m (the
+    // framing's bounds stay 3.0 deep in front, as R8_SHELL's table measured them) and RD-17's bars met by the shipped place camera
+    const pads: [number, number][] = [st.pad, st.p1, st.p2];
+    let extra = 0;
+    for (let i = 0; i < 3; i++) { if (Math.abs(pads[i][0]) > 1.6 || Math.abs(pads[i][1]) > 2.8) extra++; for (let j = i + 1; j < 3; j++) if (Math.hypot(pads[i][0] - pads[j][0], pads[i][1] - pads[j][1]) < 1.0) extra++; }
+    // ... and the arch's middle where a squishy can use it (brain.ts selfPoint ARCH: under it, or up to 0.48 m toward the front, inside the bounds by its
+    // radius + 0.05: a middle at most 1.2 m to a side and 2.9 m back)
+    if (Math.abs(st.arch[0]) > 1.2 || st.arch[1] < -2.9 || st.arch[1] > 2.4) extra++;
+    const P3 = build(st); if (frontReachOf(P3, true) > 2.9 + 1e-9) extra++;
+    const pc = placeCam(P3, true); if (!pc.f || !pc.f.meets) extra++;
+    return [10 * (probs.length + extra) + 3 * Math.max(0, 5 - sp.length) - spawnGrid / 1000, sp, probs.length + extra];
+  };
+  if (process.env.LAYOUTSTART) cur = JSON.parse(process.env.LAYOUTSTART) as St;
+  let [sc] = score(cur), found = 0, best = cur, bestSc = Infinity, since = 0;
+  { const sp0: [number, number][] = []; const P3 = build(cur); console.log('START', checkPlace(P3, true, sp0).join(' | '), 'spawn', JSON.stringify(sp0), 'with them:', checkPlace(build(cur, sp0.slice(0, 5)), true).join(' | '), 'cam:', camProblems(build(cur, sp0.slice(0, 5)), true).join(' | '), 'front', frontReachOf(P3, true).toFixed(2), 'meets', placeCam(P3, true).f?.meets, placeCam(P3, true).f?.frontPx.toFixed(1), placeCam(P3, true).f?.midPx.toFixed(1)); }
+  for (let n = 0; n < Number(nTry ?? 2000) && found < 6; n++) {
+    const nx: St = JSON.parse(JSON.stringify(cur)) as St, k = Math.floor(rnd() * 7), st = 0.25 * (0.3 + rnd());
+    const mv = (v: number[], lo: [number, number], hi: [number, number]): void => { v[0] = r2(Math.max(lo[0], Math.min(hi[0], v[0] + st * gauss()))); v[1] = r2(Math.max(lo[1], Math.min(hi[1], v[1] + st * gauss()))); };
+    if (k === 0) mv(nx.pad, [-1.6, -2.8], [1.6, 2.8]); else if (k === 1) mv(nx.p1, [-1.6, -2.8], [1.6, 2.8]); else if (k === 2) mv(nx.p2, [-1.6, -2.8], [1.6, 2.8]);
+    else if (k === 3) { mv(nx.sw, [-1.7, -3.2], [1.7, 1.3]); if (rnd() < 0.1) nx.sw[2] = nx.sw[2] ? 0 : 1.571; if (rnd() < 0.1) nx.sw[3] = -nx.sw[3]; }
+    else if (k === 4) { mv(nx.arch, [-1.2, -2.9], [1.2, 2.4]); if (rnd() < 0.1) nx.arch[2] = nx.arch[2] ? 0 : 1.571; }
+    else if (k === 5) { mv(nx.nest, [-0.9, 0.6], [0.9, 2.1]); if (rnd() < 0.3) nx.nest[2] = r2(Math.max(-2.6, Math.min(-0.55, nx.nest[2] + 0.3 * gauss()))); }
+    else mv(nx.ball, [-1.6, -2.0], [1.6, 2.6]);
+    const [s2, sp, np] = score(nx);
+    if (s2 <= sc || rnd() < Math.exp(-(s2 - sc) / 0.7)) { cur = nx; sc = s2; }
+    if (sc < bestSc - 1e-9) { bestSc = sc; best = cur; since = 0; } else if (++since > 1500) { cur = best; sc = bestSc; since = 0; }
+    if (np === 0 && sp.length >= 5) {
+      const P2 = build(nx, sp.slice(0, 5));
+      if (checkPlace(P2, true).length === 0 && camProblems(P2, true).length === 0) { found++; const f = placeCam(P2, true).f;
+        console.log(`LAYOUT ${found} (step ${n}): ${JSON.stringify(nx)} spawn ${JSON.stringify(sp.slice(0, 5))} camera pitch ${f?.pitch.toFixed(2)} lens ${f?.fov} front ${f?.frontPx.toFixed(1)} mid ${f?.midPx.toFixed(1)} px`); }
+    }
+    if (n % 500 === 0) console.log(`  step ${n}: score ${sc.toFixed(3)}`);
+  }
+  console.log(`LAYOUTSEARCH ${id}: ${found} layouts; best ${JSON.stringify(best)} score ${bestSc.toFixed(3)}`);
 }
 
 /* ═══════════════════════════════ DT-02: the name gate split, the copy words, P15, CS-05 on names ═══════════════════════════════ */

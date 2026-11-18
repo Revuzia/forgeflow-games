@@ -52,6 +52,9 @@ function groupMoving(w: LifeWorld, i: number): boolean {
  *  allowance, D-85; `extraMilli` = more units the start wakes, x 1000, e.g. a boop target 970 + its pair 250). True = it may move now. */
 export function gateStart(w: LifeWorld, s: LifeSnapshot, i: number, extraMilli: number, allowanceMilli: number): boolean {
   if (w.mo[i]) return true;
+  // (round 8) set in water by the player: no new motion of its own until the stay ends (data/life.ts SET_IN_WATER; an ask clears the stay first),
+  // so a moment's walk that would take it out of the water (a partner's) does not start either
+  if (w.f[F.NOW] < w.sWS[i]) return false;
   const inGroup = groupMoving(w, i);
   const moverCap = MOVER_CAP[tierOf(s)];
   if (!inGroup && w.movers + 1 > moverCap) return false;

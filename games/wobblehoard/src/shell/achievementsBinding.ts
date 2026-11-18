@@ -184,7 +184,9 @@ export function createAchievements(deps: AchDeps): Achievements {
         evaluator.pieces(g.cut.pieces, g.cut.busy);
         if (pendingToasts.length) drainToasts();
       });
-      const offEvents = g.hoard.onEvent((e) => { if (e.type === 'external') { store.sync(); sweepSpecies(false); } });
+      // (round 8: a Journal gift that lands on the shelf is counted at once, as a restock is: PG_QUESTS round 3's "trophies' gift sweep"; a pending gift's sweep
+      //  finds nothing new)
+      const offEvents = g.hoard.onEvent((e) => { if (e.type === 'external') { store.sync(); sweepSpecies(false); } else if (e.type === 'gift') sweepSpecies(false); });
       sweepSpecies(true);   // what the player already had when counting started
       const onHide = (): void => { guard(() => store.flush()); };
       const hasWin = typeof window !== 'undefined' && typeof window.addEventListener === 'function';

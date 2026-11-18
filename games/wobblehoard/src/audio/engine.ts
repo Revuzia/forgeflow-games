@@ -26,6 +26,9 @@ import { CutLimiter, cutFrac, cutPop, cutSlice, neckLen, rejoin as rejoinVoice }
 import type { LifeVoices, LifeVoiceHost } from './life_voices.ts';
 import type { Ambience } from './ambience.ts';
 import { UI_CEREMONY_GRACE_S, UI_KINDS, UI_PRIORITY, UI_PROTECT_S, UI_STEAL_FADE_S, UiLimiter, isUiKind, uiVoice } from './ui.ts';
+/** (round 8) PROP_SOUND.ball (data/places.ts; props.ts PROP.ball): the one thing voice in the boot code. A strike that waits for the away chunk longer than
+ *  AWAY_LATE_S (s) is dropped rather than played late. */
+const PROP_BALL = 1, AWAY_LATE_S = 0.35;
 
 export const MAX_VOICES = 24;
 /** Hard ceiling including voices that are fading out after being stolen. */
@@ -405,6 +408,23 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   function syncAmb(): void {
     if (!amb) return;
     try { if (settings.muted || paused || settings.ambience <= 0.001) amb.halt(); else amb.sync(); } catch { /* closed */ }
+  }
+
+  /** (round 8) The away chunk (ambience.ts: the place beds' engine and every place thing's strike voice) and its Ambience (once); for loadAmbience (a trip) and
+   *  the first thing strike at Home (prop). A second import of the module is the browser's cached one. */
+  function ensureAway(): Promise<typeof import('./ambience.ts')> {
+    return import('./ambience.ts').then((m) => {
+      away = m;
+      if (!amb) {
+        amb = m.createAmbience({
+          ctx: () => (ready() ? ctx : null), now: () => (ctx && !disposed ? ctx.currentTime : null), out: () => (chain ? chain.ambience : null),
+          ok: () => !settings.muted && !paused && settings.ambience > 0.001, rng: makeRng((pgRng() * 4294967296) >>> 0),
+          barAt: (t) => (musicInst ? musicInst.barAt(t) : null),
+        });
+        amb.set(ambWant);
+      }
+      return m;
+    });
   }
 
   /** Load the PLAYGROUND voices (once). Until they are here a PLAYGROUND call is dropped (counted), never queued. */
@@ -861,6 +881,14 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     prop(p) {
       if (!p || typeof p !== 'object') { dropped++; return; }
       if (!lv) { loadLv(); dropped++; return; }
+      // (round 8, R8_LIFE's sound survey: every thing strike but the ball's lives in the away chunk, which only a trip loaded, so Home's own things (the Keepsake
+      // Shelf's bell, the Bounce Pad's boing) were SILENT until the player had travelled: the first such strike loads it now (never at boot or at the unlock)
+      // and is played when it arrives within AWAY_LATE_S, else dropped)
+      if (!amb && p.kind !== PROP_BALL) {
+        const at = perfS(), q = { ...p };
+        void ensureAway().then(() => { if (perfS() - at > AWAY_LATE_S) throw 0; lv!.prop(q); }).catch(() => { dropped++; });
+        return;
+      }
       try { lv.prop(p); } catch { dropped++; }
     },
 
@@ -872,18 +900,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
 
     loadAmbience(place) {
       if (typeof place !== 'string' || disposed) return Promise.resolve(false);
-      return import('./ambience.ts').then((m) => {
-        away = m;
-        if (!amb) {
-          amb = m.createAmbience({
-            ctx: () => (ready() ? ctx : null), now: () => (ctx && !disposed ? ctx.currentTime : null), out: () => (chain ? chain.ambience : null),
-            ok: () => !settings.muted && !paused && settings.ambience > 0.001, rng: makeRng((pgRng() * 4294967296) >>> 0),
-            barAt: (t) => (musicInst ? musicInst.barAt(t) : null),
-          });
-          amb.set(ambWant);
-        }
-        return m.loadRecipe(place).then((ok) => { syncAmb(); return ok; });
-      }, () => false);
+      return ensureAway().then((m) => m.loadRecipe(place).then((ok) => { syncAmb(); return ok; }), () => false);
     },
 
     setAmbience(p) {

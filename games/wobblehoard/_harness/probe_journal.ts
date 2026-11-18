@@ -562,10 +562,13 @@ function worstJournal(): Journal {
     g1.ok && giftRows(B.m, dev) === 1 && !!giftItem && itemOriginCopy(giftItem) === 'Gift' && B.rt!.store.journal.st.giftState[1] === 2 && !giftSets.includes(ACH_KEY) && giftSets.includes(HOARD_KEY) && giftSets.includes(JOURNAL_KEY),
     `keys written: ${[...new Set(giftSets)].join(' ')}`);
   B.c.flush(); A.c.flush(); B.ach.store.flush(); A.ach.store.flush();
-  const strip = (s: string | null): string => { const o = JSON.parse(s ?? '{}') as { counters?: Record<string, number>; earned?: Record<string, number> }; return JSON.stringify({ c: o.counters, e: Object.keys(o.earned ?? {}).sort() }); };
-  row('CO-12', 'trophy behaviour is unchanged by the Journal: after the same touches, the trophies\' save (nine counters, the earned set) with a Journal attached, a ring fed and a gift granted equals the save without one',
-    strip(A.m.getItem(ACH_KEY)) === strip(B.m.getItem(ACH_KEY)) && B.ach.save.counters.squeezes === 6 && B.ach.save.counters.capsules === 0 && B.ach.save.counters.tasks === 0,
-    `A ${strip(A.m.getItem(ACH_KEY))} | B ${strip(B.m.getItem(ACH_KEY))}`);
+  // (RE-SPECIFIED in round 8, R8_LIFE, R8_SHELL's request 4: the trophies' gift sweep PG_QUESTS round 3 asked for is in achievementsBinding.ts attach() now, so a
+  // gifted species is counted at once: the saves are compared with `species` left out, and B's `species` must equal the species owned after the grant)
+  const strip = (s: string | null): string => { const o = JSON.parse(s ?? '{}') as { counters?: Record<string, number>; earned?: Record<string, number> }; const c = { ...(o.counters ?? {}) }; delete c.species; return JSON.stringify({ c, e: Object.keys(o.earned ?? {}).sort() }); };
+  const ownedB = B.hoard.stacks().filter((st) => st.copies > 0).length;
+  row('CO-12', 'trophy behaviour is unchanged by the Journal: after the same touches, the trophies\' save (the counters but species, the earned set) with a Journal attached, a ring fed and a gift granted equals the save without one; the trophies count the gifted species at once (species = the species owned)',
+    strip(A.m.getItem(ACH_KEY)) === strip(B.m.getItem(ACH_KEY)) && B.ach.save.counters.squeezes === 6 && B.ach.save.counters.capsules === 0 && B.ach.save.counters.tasks === 0 && B.ach.save.counters.species === ownedB,
+    `A ${strip(A.m.getItem(ACH_KEY))} | B ${strip(B.m.getItem(ACH_KEY))}; B species ${B.ach.save.counters.species}, owned ${ownedB}`);
   row('CO-12', 'the Journal never writes or names the trophies\' key, and the trophies never write the journal\'s keys (one shared storage)',
     !['src/collection/journal.ts', 'src/collection/journal_store.ts', 'src/core/quests.ts'].some((f) => /v1:ach|ACH_KEY|achStore/.test(readFileSync(resolve(ROOT, f), 'utf8')))
       && !A.m.sets.some((k) => k.startsWith('wobblehoard:v2:journal')) && (JOURNAL_KEY as string) !== ACH_KEY && !JOURNAL_KEY.startsWith('wobblehoard:v1:') && stampsB >= 0,

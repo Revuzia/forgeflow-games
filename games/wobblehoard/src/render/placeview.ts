@@ -109,19 +109,31 @@ export function fitPlayBounds(cx: number, cz: number, hx: number, hz: number, fo
 }
 
 /** setPlayBounds' framing: the widest lens of PLACE_FOVS whose best framing meets RD-17's bars, else the stage's own 35 degree lens. The last
- *  few answers are kept (a resize or a rotation back asks again; the search takes tens of ms per lens). */
+ *  few answers are kept (a resize or a rotation back asks again; the search takes tens of ms per lens).
+ *  Round 8 (R8_LIFE's request 11): the pitch range is the layout's own (P8: a place's camera.pitch, or a layout's camPitch), default 0.15 to 0.9 as
+ *  before. Why: the search scores a framing by a 1 m squishy's size only, and once a tall layout is wide enough for its width to bind (hx 1.7 and
+ *  more on 390 x 844) that size barely changes with the pitch, so the flattest pitch wins and the layout's 6 m of depth collapse into about 100 px
+ *  (hx 1.8: 110 px at 0.15 rad; 313 px at 0.6 rad, with 104.7 / 87.7 px for the bars). A layout that needs the room says how low its camera may go. */
+/** (round 8) A tall frame wider than 380 px, where the shell keeps the play slot AND the top-right column clear as a top row (place.ts PLACE_COL_PX: 156 px of
+ *  the frame's top), never looks flatter than the tall framings did before that row (0.60 rad): with that much of the top given to the HUD the size-only search
+ *  went to 0.40..0.45 rad, the floor's depth on screen fell to 303..313 px and the party hid what stands behind it (R8's final run, phone: the cabin's Pillow Swing
+ *  seat behind Dollop, "a finger on the swing seat" took the squishy). At 0.60 a 1 m squishy is 108..111 px at the front and 89..92 mid on 390 x 844 (RD-17's
+ *  bars 100 / 80 met), the depth 326..336 px. Inside fitPlace so every caller (the stage, probe_pg_data's model, pg_node_checks) frames alike. */
+export const TALL_PITCH_MIN = 0.6;
 const memo: [string, PlayFrame | null][] = [];
 /** Round 3: the index of the lens picked last (a refit after the HUD rows changed, e.g. the Cut bar in a place, starts its walk there). */
 let lastPick = 0;
 export function fitPlace(cx: number, cz: number, hx: number, hz: number, cssW: number, cssH: number,
-  top: number, right: number, bottom: number, left: number): PlayFrame | null {
-  const key = [cx, cz, hx, hz, cssW, cssH, top, right, bottom, left].join();
+  top: number, right: number, bottom: number, left: number, pitchMin = 0.15, pitchMax = 0.9): PlayFrame | null {
+  if (!(pitchMin >= 0.05 && pitchMax <= 1.4 && pitchMax >= pitchMin)) { pitchMin = 0.15; pitchMax = 0.9; }
+  if (cssW < 0.9 * cssH && cssW > 380) pitchMin = Math.min(pitchMax, Math.max(pitchMin, TALL_PITCH_MIN));
+  const key = [cx, cz, hx, hz, cssW, cssH, top, right, bottom, left, pitchMin, pitchMax].join();
   for (const m of memo) if (m[0] === key) return m[1];
   // the widest lens that meets the bars, else the stage's own (index 0). A narrower lens never frames smaller (the size grows as the depth
   // flattens), so the walk from the last pick (wider while the wider one meets, narrower while this one misses) lands where a scan from 35
   // degrees would, in two or three fits instead of up to eight (about 30 ms each).
   const n = PLACE_FOVS.length, got: (PlayFrame | null | undefined)[] = new Array(n);
-  const at = (i: number): PlayFrame | null => (got[i] === undefined ? (got[i] = fitPlayBounds(cx, cz, hx, hz, PLACE_FOVS[i], cssW, cssH, top, right, bottom, left)) : got[i]!);
+  const at = (i: number): PlayFrame | null => (got[i] === undefined ? (got[i] = fitPlayBounds(cx, cz, hx, hz, PLACE_FOVS[i], cssW, cssH, top, right, bottom, left, pitchMin, pitchMax)) : got[i]!);
   let i = Math.max(0, Math.min(n - 1, lastPick)), pick: PlayFrame | null = null;
   const fi = at(i);
   if (fi) {

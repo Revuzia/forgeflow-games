@@ -134,7 +134,10 @@ export const GAITS = {
  *  NEST curl up in a nest or a basket (B06's ring nap, offered to B04 by a sleepy-enough cuddly or dozy one); RIDE get on a seesaw or a swing (the host
  *  lifts it there only once it says LIFE's own get-on is not the player's: lifeSetSelfRides). Append-only. */
 export const SELF_USE = { BALL: 1, ICE: 2, WADE: 3, SPLASH: 4, GAZE: 5, RING: 6, PAD: 7, CLIMB: 8, LEAN: 9, ARCH: 10, BUMP: 11, STONES: 12, SHOWER: 13, UPDRAFT: 14,
-  NEST: 15, RIDE: 16 } as const;
+  NEST: 15, RIDE: 16,
+  /** (round 8, R8_LIFE; R7_SHELL's request 3) the Vane Disc: the host turns it with the Night Breeze's gusts (and after a poke) and writes USE SPIN for whoever stands
+   *  on it then; LIFE walks onto its middle shortly before a gust of the wind zone it stands in and stays through that gust */
+  SPIN: 17 } as const;
 /** Per family: the self-use kinds it likes (+0.2 in B04's score) and those it never starts, from PLACES 3 and 4's family cells (a B cell, or a P cell that
  *  says it does it best: "best boing", "floats highest", "glides far"; never: what its body cannot do: putty and slime goo never hop, so no splash jump, pad
  *  or updraft hop; a heavy family "falls straight" in the updraft; the sticky ones barely glide). */
@@ -148,7 +151,7 @@ export const FAMILY_SELF: Readonly<Record<MaterialFamilyId, { readonly likes: re
   stickystretch: { likes: [SELF_USE.BALL, SELF_USE.RIDE, SELF_USE.ARCH], never: [SELF_USE.ICE, SELF_USE.UPDRAFT] },
   slimegoo: { likes: [SELF_USE.WADE, SELF_USE.LEAN, SELF_USE.NEST], never: [SELF_USE.ICE, SELF_USE.PAD, SELF_USE.SPLASH, SELF_USE.UPDRAFT, SELF_USE.STONES] },
   firmsilicone: { likes: [SELF_USE.PAD, SELF_USE.ICE, SELF_USE.CLIMB, SELF_USE.RING, SELF_USE.BUMP], never: [SELF_USE.UPDRAFT] },
-  popdome: { likes: [SELF_USE.PAD, SELF_USE.UPDRAFT, SELF_USE.WADE, SELF_USE.ARCH], never: [] },
+  popdome: { likes: [SELF_USE.PAD, SELF_USE.UPDRAFT, SELF_USE.WADE, SELF_USE.ARCH, SELF_USE.SPIN], never: [] },
   gummy: { likes: [SELF_USE.BALL, SELF_USE.PAD, SELF_USE.SPLASH, SELF_USE.STONES], never: [SELF_USE.UPDRAFT] },
   beadsqueeze: { likes: [SELF_USE.RING, SELF_USE.BALL, SELF_USE.STONES, SELF_USE.BUMP], never: [SELF_USE.UPDRAFT] },
 };
@@ -189,6 +192,12 @@ export const LOOK_ADD = {
  *  soak -0.4 (LOOK_ADD.squirtFoam: the water is squeezed out, so the next squirt needs another soak). `drops` / `dropsCalm` and `arcS` are the
  *  render's spray (12 drops over 0.4 s; 4 in Calm or reduced motion). */
 export const SQUIRT = { soakMin: 0.5, holdS: 0.4, reach: 1.2, drops: 12, dropsCalm: 4, arcS: 0.4 } as const;
+/** (round 8, R8_LIFE; R7_SHELL's request 8: R7 "A squirt for a friend" could not complete by ordinary play) a squishy the PLAYER set in water stays
+ *  there long enough to soak. A carry that ends (the hand lets go) and lands in water within `armS` s starts a stay: no self-started motion
+ *  (no use, wander, bask, come-back, moment walk or hop) until its end. A foam (soakRate > 0) stays until its soak would reach 1 plus `extraS`
+ *  (a marshmallow, 0.06 a second: about 17 + 6 s), at least `minS`, at most `maxS`; any other family `minS`. A new touch, or the player's ask
+ *  ("Go play with..."), ends it at once; LF-18's "out after 30 s in water" (BRAIN.waterMaxS) is later than `maxS`. */
+export const SET_IN_WATER = { armS: 4, minS: 12, extraS: 6, maxS: 25 } as const;
 /** Needs (LIFE 3): start levels each time a squishy comes out, rise and fall per s of sim time (x (0.5 + the trait)), the thresholds. */
 export const NEEDS = {
   start: { play: 0.3, company: 0.3, rest: 0.2 },

@@ -22,7 +22,7 @@ export interface LifeHostLike {
   /** (7) drain the play-event ring into the journal (collection.feedPlay); after the ceremonies */
   quest(): void;
   /** the shell's own moments the host turns into records (a capsule opened, a ceremony ended, the Snap shutter) */
-  note(kind: LifeNote, arg?: string | number): void;
+  note(kind: LifeNote, arg?: string | number | Blob): void;
   /** a Hand press (CSS px over the canvas) and its release: a short still press that hits no squishy and lands on a shown thing taps it (a ball
    *  rolls, the Music Box plays, the fireplace switches; one USE record by PLAYER). The press still goes to the gesture machine as before. */
   pressAt(id: number, x: number, y: number): void;
@@ -67,6 +67,8 @@ export interface LifeHostApi extends LifeHostLike {
   journal(): import('../collection/types.ts').JournalView | null;
   /** the Journal or Travel sheet is open (LIFE goes quiet) */
   setSheet(kind: 'journal' | 'travel', open: boolean): void;
+  /** (round 8) the Friendship Frame's photo: the X8 photo's thumbnail (a JPEG data URL, ui/later-frame.ts), or null while none is stored */
+  frameThumb?(): string | null;
   /** the open wishes of the characters out now: [species idx, wish kind, target] per row (allocates: screens only) */
   wishesNow(): Array<{ species: number; kind: number; target: number }>;
   /** the bubble in stage slot k (0..7): its centre and radius in CSS px into out[0..2], its icon, whether it is a wish; null when empty (the 44 px hit areas, 250 ms) */

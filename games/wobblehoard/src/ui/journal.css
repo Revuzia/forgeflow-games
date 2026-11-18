@@ -59,3 +59,15 @@ body[data-layout="tiny"] .jn-scrim { padding: 0; }
 body[data-layout="tiny"] .jn { width: 100%; height: 100%; }
 body[data-layout="tiny"] .jn-head { grid-template: "title close" "tabs tabs" / minmax(0, 1fr) auto; min-height: 0; padding: var(--wh-s1) var(--wh-s2); }
 body[data-layout="tiny"] .jn-scroll { padding: var(--wh-s1) var(--wh-s3) var(--wh-s3); }
+/* round 8 (QUESTS 15, R8_SHELL 4): "Who's coming?" under the postcards: a 56 px chip per squishy out (its gem, its colour, its name under), pressed = comes along */
+.jn-who-chips { display: flex; flex-wrap: wrap; gap: var(--wh-s2); }
+.k-btn.jn-who-chip { display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 72px; min-height: 56px; padding: var(--wh-s1) var(--wh-s2); position: relative; }
+.jn-who-chip .jn-who-sw { width: 26px; height: 26px; }
+.jn-who-chip .jn-who-gem { position: absolute; top: 3px; right: 4px; width: 14px; height: 14px; }
+.jn-who-name { font: var(--wh-w-bold) var(--wh-fs-small)/1.15 var(--wh-font-ui); }
+.jn-who-chip[aria-pressed="false"] { opacity: 0.62; }
+.jn-who-chip[aria-pressed="false"] .jn-who-sw { filter: grayscale(0.8); }
+.jn-who-chip[aria-disabled="true"] { cursor: default; }
+.k-btn.jn-who-change { justify-self: start; min-height: var(--wh-hit); }
+/* round 8 (QUESTS 6.10 / 10, PLAYGROUND_BUILD 11.15, R8_SHELL 4): the Friendship Frame's keepsake shows the X8 photo's thumbnail (160 x 120) in a frame */
+.jn-frame { display: block; width: 100%; max-width: 160px; aspect-ratio: 4 / 3; object-fit: cover; border: 4px solid var(--k-accent, #e9906a); border-radius: 6px; box-shadow: 0 0 0 2px var(--k-ink, #14102a); }

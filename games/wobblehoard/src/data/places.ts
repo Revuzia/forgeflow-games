@@ -94,7 +94,10 @@ export interface Spot { readonly x: number; readonly z: number; readonly yaw: nu
 /** A layout: one Spot per ThingDef and one Area per ZoneDef and PatchDef, in the same order. */
 export interface LayoutDef { readonly bounds: Area & { readonly round: number }; readonly walls: readonly Area[];
   readonly spawn: readonly (readonly [number, number])[] | 'matLayout';
-  readonly things: readonly Spot[]; readonly zones: readonly Area[]; readonly patches: readonly Area[] }
+  readonly things: readonly Spot[]; readonly zones: readonly Area[]; readonly patches: readonly Area[];
+  /** (round 8, optional) this layout's own camera pitch range in radians (P8's camera.pitch otherwise): the shell passes it to setPlayBounds, so a layout
+   *  wider than P7's frame is seen from higher up (render/placeview.ts fitPlace says why the flattest pitch wins once the width binds). */
+  readonly camPitch?: readonly [number, number] }
 export interface PlaceDef { readonly id: PlaceId; readonly idx: number; readonly name: string; readonly coined?: readonly string[];
   readonly stampsToOpen: number | 'firstWish'; readonly shipped: boolean; readonly night: boolean;
   readonly ground: GroundMods & { readonly mark: number; readonly markLifeS: number }; readonly patches: readonly PatchDef[]; readonly zones: readonly ZoneDef[];
@@ -140,8 +143,8 @@ export const PLACE_INFO: readonly Pick<PlaceDef, 'id' | 'idx' | 'name' | 'coined
   { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: true, night: false, sky: 'shore' },
   { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false, sky: 'ridge' },
   { id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: true, night: false, sky: 'garden' },
-  { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true, sky: 'roof' },
-  { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: false, night: false, sky: 'cloud' },
+  { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: true, night: true, sky: 'roof' },
+  { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: true, night: false, sky: 'cloud' },
 ];
 /** A place's PLACE_INFO row by idx (undefined for a dropped or unknown idx). */
 export const placeInfo = (idx: number): (typeof PLACE_INFO)[number] | undefined => PLACE_INFO.find((p) => p.idx === idx);

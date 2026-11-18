@@ -22,7 +22,7 @@
 //   carryTo                        LIFE's USE intent (a ride the player asked for): the body is lifted onto the seat or the board's free end
 //   setParked / setAuto / grabProp / dragPropRay / releaseProp   Home's things shown and parked; D-95's AUTO and the hand on a hinge ride
 import type { LifeEvents, LifeIntents, LifeSnapshot, PlayEventRing, SoftBodyLike, SoftEvent, TierName, V3 } from '../contracts.ts';
-import { cameraRay, projectToNdc, pxToNdc, raycastAt } from '../input/camera.ts';
+import { cameraForward, cameraRay, projectToNdc, pxToNdc, raycastAt, rayPlane } from '../input/camera.ts';
 import type { Game } from './game.ts';
 import type { LifeHostApi, LifeNote } from './lifeLink.ts';
 import type { Genome } from '../core/genome.ts';
@@ -42,6 +42,7 @@ import { EV, BY, WISH_STATE, UI_KIND, EV_FLAG, QUESTS, CHAPTERS } from '../data/
 import { CATALOG, speciesIdx, familyOf } from '../data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 import type { JournalRuntime } from '../collection/journal_store.ts';
+import { JOURNAL_FRAME_KEY, JOURNAL_FRAME_MAX_CHARS } from '../collection/journal.ts';
 import type { CollectionEvent, JournalView } from '../collection/types.ts';
 import { JOURNAL_KEY } from '../collection/constants.ts';
 import { HOME_TEXT } from '../data/quests.ts';
@@ -650,13 +651,76 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   /** (round 7) a squishy resting on top of a block thing at least PERCH_TOP tall for PERCH_S hops down (sense: Char.perchT) to the floor beside it, on the side
    *  toward the play area's middle, set down at rest (carryTo: no event on the way, never paid). Home's blocks are all lower. */
   const PERCH_S = 1.5, PERCH_TOP = 0.6;
+  /** (round 8) the height of the top a squishy could be set on: a block's top face; a STATIC bar's (physics props.ts MECH.bar: an arch's top bar at p.height, a standing
+   *  bar's top, a lying bar's top 2 r); 0 for every other thing (rides, movers, pads, water: never a perch). Round 7 lifted down from blocks only; R7_SHELL's list: a
+   *  squishy set on Cloudloft's Sunbow Arch (its top bar 1.3 m up) stayed up there */
+  function perchTop(td: ThingDef): number {
+    if (td.ride) return 0;
+    if (td.mech === MECH.block) return 2 * td.size[1];
+    if (td.mech !== MECH.bar) return 0;
+    const pp = td.p as { arch?: number; height?: number; standing?: number };
+    return pp.arch ? (pp.height ?? td.size[2]) : pp.standing ? td.size[1] : 2 * td.size[0];
+  }
   function perchDown(c: Char, p: number, td: ThingDef): void {
     if (!world || !c.body) return;
     const P = world.poses, bx = P[p * 8], bz = P[p * 8 + 2], bd = layout === 1 && placeIdx !== 0 ? def.tall.bounds : def.bounds;
     let dx = bd.x - bx, dz = bd.z - bz;
-    const dl = Math.hypot(dx, dz) || 1, out = Math.max(td.size[0], td.size[2]) + c.r + 0.15;
+    // (how far out: a block's half footprint; a bar's own radius (an arch is walked under, so the floor in front of its top bar is free))
+    const dl = Math.hypot(dx, dz) || 1, out = (td.mech === MECH.bar ? td.size[0] : Math.max(td.size[0], td.size[2])) + c.r + 0.15;
     dx /= dl; dz /= dl;
     try { c.body.carryTo?.(bx + dx * out - c.offX, -c.offY, bz + dz * out - c.offZ, 0.9); } catch (e) { report(e); }
+  }
+  // ---- (round 8) a CARRIED squishy in a place moves over the ground (game.ts asks this before the published camera-facing plane). The published pull holds the hand
+  // on the camera-facing plane through the press, so a drag up the frame lifted the squishy more than it took it back: things at the back of a place (the Sand Mound,
+  // the ramp's top, the tall layouts' Vane Disc and Puff Pads) were out of a straight carry's reach (R7_SHELL 5B, the phone's L4 / U2). In a place, once physics
+  // carries the body, the hand's target is the pointer's ray on the LEVEL plane at the height the hand had when it picked the squishy up (so the hand does not jump),
+  // kept inside the place's reach (its bounds, their front reach, + CARRY_RIM): a drag up the frame takes it back over the floor, a drag down brings it forward, a
+  // flick tosses it along the ground. Home (and every pull that is not a carry) keeps the published plane: null.
+  const CARRY_RIM = 0.3, CARRY_LEAD = 0.9;   // (the lead under physics' maxPull, at least 1.0 x the rest radius: its own clamp never acts on a carry in a place)
+  let carryB: SoftBodyLike | null = null, carryY = 0;
+  // (the seam lives in this chunk, not in the first-play download: the gesture machine asks game.host.planePoint at every move, so while the host is attached it
+  //  asks carryPoint first for the squishy being carried (the pull's own body: `through` and the answer are in its space) and the published plane otherwise;
+  //  dispose gives the published one back)
+  const gHost = game.host as { planePoint(x: number, y: number, through: V3): V3 | null };
+  const planeAt = gHost.planePoint;
+  gHost.planePoint = (x: number, y: number, through: V3): V3 | null => {
+    let q: V3 | null = null;
+    if (placeIdx !== 0) for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (c.on && c.body && c.body.metrics.carried === true) { q = carryPoint(x, y, through, c.body, { x: c.offX, y: c.offY, z: c.offZ }); break; }
+    }
+    if (!q) carryB = null;   // (no carry now: the next carry takes its height afresh at its own pick-up)
+    return q ?? planeAt(x, y, through);
+  };
+  function carryPoint(x: number, y: number, through: V3, body: SoftBodyLike, off: V3): V3 | null {
+    if (placeIdx === 0 || !world || body.metrics.carried !== true) { carryB = null; return null; }
+    const cam = stage.camera;
+    if (!cam) return null;
+    try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
+    const n = pxToNdc(x, y, game.viewport), r = cameraRay(cam, n.x, n.y);
+    if (carryB !== body) {
+      // the first move of this carry: the hand's height now, on the published plane (through the press point, in world space)
+      const h = rayPlane(r.origin, r.dir, { x: through.x + off.x, y: through.y + off.y, z: through.z + off.z }, cameraForward(cam));
+      carryB = body; carryY = h ? h.y : body.center.y + off.y;
+    }
+    let px: number, pz: number;
+    const t = r.dir.y < -1e-4 ? (carryY - r.origin.y) / r.dir.y : -1;
+    if (t > 0) { px = r.origin.x + r.dir.x * t; pz = r.origin.z + r.dir.z * t; }
+    else { const l = Math.hypot(r.dir.x, r.dir.z) || 1; px = r.origin.x + (r.dir.x / l) * 60; pz = r.origin.z + (r.dir.z / l) * 60; }   // (at or above the horizon: far along it, clamped below)
+    const b = (layout === 1 ? def.tall : def).bounds;
+    if (b.shape === 'disc') {
+      const R = (b.r ?? 3) + CARRY_RIM, dx = px - b.x, dz = pz - b.z, d = Math.hypot(dx, dz);
+      if (d > R) { px = b.x + (dx * R) / d; pz = b.z + (dz * R) / d; }
+    } else {
+      const hx = (b.hx ?? 3) + CARRY_RIM, hz = b.hz ?? 2.4, z1 = Math.max(b.z + hz, frontReach(def, layout)) + CARRY_RIM;
+      px = Math.min(b.x + hx, Math.max(b.x - hx, px)); pz = Math.min(z1, Math.max(b.z - hz - CARRY_RIM, pz));
+    }
+    // the hand leads the body by at most CARRY_LEAD x its rest radius across the floor (every move asks again from where the body is now, so a drag reaches the
+    // spot under the pointer as it goes): a target metres ahead (the level plane near the horizon) put physics' own lead clamp and follow speed limit to work,
+    // which left the height unheld (measured: a 120 px drag up the frame lifted the squishy 1.2 to 1.4 m at every place)
+    const cx = body.center.x + off.x, cz = body.center.z + off.z, ex = px - cx, ez = pz - cz, el = Math.hypot(ex, ez), lead = CARRY_LEAD * body.restRadius;
+    if (el > lead) { px = cx + (ex * lead) / el; pz = cz + (ez * lead) / el; }
+    return { x: px - off.x, y: carryY - off.y, z: pz - off.z };
   }
   // ---- the steadying hand of a "Go play with..." lift onto a swing (useRide; its state is declared with the place's, a world rebuild clears it) ----
   function endSteady(): void {
@@ -794,7 +858,10 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       s.x[i] = x; s.y[i] = ce.y + c.offY; s.z[i] = z; s.vx[i] = c.vx; s.vz[i] = c.vz;
       if (c.view >= 0 && stage.bodyScreenPoint?.(c.view, scr)) { s.sx[i] = scr[0] / vw; s.sy[i] = scr[1] / vh; } else { s.sx[i] = NaN; s.sy[i] = NaN; }
       const carried = m.carried === true;
-      if (c.wasCarried && !carried) { c.tossed = true; c.setT = t; }   // a carry let go: a toss until it lands (and a ride it lands on is one the player set up)
+      // a carry let go: a toss until it lands (and a ride it lands on is one the player set up). (round 8) One let go while it already rests ON something (a ride's
+      // top, the floor: the carry over the ground sets a squishy down there) never "lands" (no fall, no land event) and stayed a toss: R8's phone run set a squishy at
+      // the Glide Ramp's top twice and the second (picked up from the ramp and set back) was no USE. Supported at the let go = set down, not tossed.
+      if (c.wasCarried && !carried) { c.tossed = !((m.onProp ?? -1) >= 0 || m.grounded === true); c.setT = t; }
       if (!c.wasCarried && carried) c.touchKind = TOUCH.CARRY;
       c.wasCarried = carried;
       let f = 0;
@@ -807,6 +874,10 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const onProp = m.onProp ?? -1;
       if (onProp >= 0) f |= LIFE_FLAG.ON_PROP;
       if (m.airborne === true || (!m.grounded && onProp < 0)) f |= LIFE_FLAG.AIRBORNE;
+      // (round 8) a toss that never lands is no toss: a squishy let go while it already rested on something (the carry over the ground sets one down there) gets no
+      // land event, and the carry's snap event can come a frame after the let go and mark it tossed again; resting = supported and nearly still across the floor.
+      // R8's final run: the second squishy set on the Sand Mound's top (on target) stayed "tossed" and its ride (R9) was never the player's
+      if (c.tossed && !carried && (onProp >= 0 || m.grounded === true) && c.vx * c.vx + c.vz * c.vz < 0.09) c.tossed = false;
       if (c.tossed) f |= LIFE_FLAG.TOSSED;
       if (s.sx[i] === s.sx[i]) f |= LIFE_FLAG.VISIBLE;
       if (m.memoryBusy === true) f |= LIFE_FLAG.MEMORY_BUSY;
@@ -825,9 +896,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // (round 7) a squishy set down on top of a TALL block (Lanternroof's Chimney Corner, 1.4 m; the cabin's hearth, 0.9 m) hops down beside it after PERCH_S:
       // up there it stood above the place camera's frame (s3run2's phone shot: on the chimney, half out of the top edge, behind the HUD's buttons)
       if (dt > 0 && onProp >= 0 && world && onProp < world.count && !c.tossed && (f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) === 0) {
-        const th = world.propThing[onProp], td = th >= 0 ? def.things[th] : null;
-        // (ON its top: the centre above the block's top face; one leaning on its side, as at the chimney's warm nap foot, stays where it is)
-        if (td && td.mech === MECH.block && 2 * td.size[1] >= PERCH_TOP && ce.y + c.offY > 2 * td.size[1]) { c.perchT += dt; if (c.perchT >= PERCH_S) { c.perchT = 0; perchDown(c, onProp, td); } } else c.perchT = 0;
+        const th = world.propThing[onProp], td = th >= 0 ? def.things[th] : null, top = td ? perchTop(td) : 0;
+        // (ON its top: the centre above the thing's top; one leaning on its side, as at the chimney's warm nap foot, or standing under the arch, stays where it is)
+        if (td && top >= PERCH_TOP && ce.y + c.offY > top) { c.perchT += dt; if (c.perchT >= PERCH_S) { c.perchT = 0; perchDown(c, onProp, td); } } else c.perchT = 0;
       } else c.perchT = 0;
       s.flags[i] = f;
       if ((f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) !== 0) touching = true;
@@ -1057,7 +1128,33 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     cometGazing = on;
   }
   const vaneRode = new Uint8Array(CAP);
+  /** (round 8) Rainleaf's Drip Leaf: its big leaf as render/places/rainleaf.ts draws it (the stalk 2 x size[1] tall at the thing's spot; the leaf from the stalk's top
+   *  toward its drip zone, dLen + 0.35 m long and 0.95 m wide, tipped 0.32 rad down toward its tip), in the layout in use. -1: none here. Set with the vane (vaneSetup). */
+  let leafK = -1;
+  const LEAF_TIP = 0.32;
+  function leafTap(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number {
+    if (leafK < 0) return -1;
+    const td = def.things[leafK], zi = td.zone ? def.zones.findIndex((z) => z.id === td.zone) : -1;
+    const za = zi >= 0 ? (layout === 1 ? def.tall.zones[zi] ?? def.zones[zi] : def.zones[zi]) : null;
+    if (!za) return -1;
+    const sp = thingSpot(leafK), sx = sp[0], sz = sp[1], H = 2 * td.size[1] - 0.02;
+    let ux = za.x - sx, uz = za.z - sz;
+    const dl = Math.hypot(ux, uz);
+    if (dl > 1e-6) { ux /= dl; uz /= dl; } else { ux = 1; uz = 0; }
+    const L = Math.max(0.3, dl) + 0.35, W = 0.95, c = Math.cos(LEAF_TIP), sn = Math.sin(LEAF_TIP);
+    // the leaf: S + a A + b B (a in 0..1, b in -0.5..0.5), A = (ux c, -sn, uz c) L along it, B = (-uz, 0, ux) W across it (A and B are at right angles)
+    const ax = ux * c * L, ay = -sn * L, az = uz * c * L, bx = -uz * W, bz = ux * W;
+    const nx = ay * bz, ny = az * bx - ax * bz, nz = -ay * bx;   // A x B (B has no y)
+    const den = dx * nx + dy * ny + dz * nz;
+    if (Math.abs(den) < 1e-9) return -1;
+    const t = ((sx - ox) * nx + (H - oy) * ny + (sz - oz) * nz) / den;
+    if (!(t > 0)) return -1;
+    const qx = ox + dx * t - sx, qy = oy + dy * t - H, qz = oz + dz * t - sz;
+    const a = (qx * ax + qy * ay + qz * az) / (L * L), b = (qx * bx + qz * bz) / (W * W);
+    return a >= -0.05 && a <= 1.05 && b >= -0.55 && b <= 0.55 ? t : -1;
+  }
   function vaneSetup(): void {
+    leafK = placeIdx === 0 ? -1 : def.things.findIndex((t) => t.look === 'dripleaf' && t.switch === 'shower');
     vaneK = -1; vaneZone = -1; vanePokeT = -1e9; vaneTurning = false; vaneRode.fill(0);
     for (let k = 0; k < def.things.length; k++) if (def.things[k].mech === MECH.turntable && thingFirst[k] < 0) { vaneK = k; break; }
     if (vaneK < 0) return;
@@ -1385,9 +1482,21 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
     const n = pxToNdc(x, y, game.viewport);
     const ray = cameraRay(cam, n.x, n.y);
-    const p = propOnRay(world, ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    let p = propOnRay(world, ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    // (round 8) the Drip Leaf's big leaf has no prop (the stalk is its prop): a press that reaches the drawn leaf before any prop taps the Drip Leaf. A player taps the
+    // leaf, not its 2 cm stalk; with a squishy set under it (G7) the stalk's middle is behind the squishy and the press was "body" or nothing (R7's final1b2 G7 row)
+    let leafHit = false;
+    if (leafK >= 0) {
+      const tl = leafTap(ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z), q = world.poses;
+      const tP = p >= 0 ? (q[p * 8] - ray.origin.x) * ray.dir.x + (q[p * 8 + 1] - ray.origin.y) * ray.dir.y + (q[p * 8 + 2] - ray.origin.z) * ray.dir.z : Infinity;
+      if (tl >= 0 && tl < tP) {
+        for (let i = 0; i < CAP; i++) { const c = chars[i]; if (!c.on || !c.body) continue; const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ }); if (hit && hit.t < tl) { tapWhy = 'body'; return false; } }
+        const lp = thingFirst[leafK] ?? -1;
+        if (lp >= 0) { p = lp; leafHit = true; }
+      }
+    }
     // (round 7) the Vane Disc has no prop for the ray: its painted disc on the floor takes the press when no prop stands nearer (a prop's centre along the ray)
-    if (vaneK >= 0) {
+    if (vaneK >= 0 && !leafHit) {
       let tP = Infinity;
       if (p >= 0) { const q = world.poses; tP = (q[p * 8] - ray.origin.x) * ray.dir.x + (q[p * 8 + 1] - ray.origin.y) * ray.dir.y + (q[p * 8 + 2] - ray.origin.z) * ray.dir.z; }
       const tv = vaneTap(ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z, tP);
@@ -1408,7 +1517,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     // a squishy in front of the thing takes the press (the gesture machine has it already)
     const pr = world.poses, px = pr[p * 8] - ray.origin.x, py = pr[p * 8 + 1] - ray.origin.y, pz = pr[p * 8 + 2] - ray.origin.z;
     const tThing = px * ray.dir.x + py * ray.dir.y + pz * ray.dir.z;
-    for (let i = 0; i < CAP; i++) {
+    if (!leafHit) for (let i = 0; i < CAP; i++) {   // (the leaf's own check above measured to the drawn leaf)
       const c = chars[i];
       if (!c.on || !c.body) continue;
       const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ });
@@ -1576,6 +1685,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const autoAt = { x: 0, y: 0, z: 0 };
 
   // ---- the collection's journal events: moments, the unlock line, friendships back into LIFE ----
+  const frame = createFrameWatch(deps.storage, () => pushJournal());
   const offEvents = game.hoard.onEvent((e: CollectionEvent) => {
     try {
       switch (e.type) {
@@ -1588,6 +1698,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
             void import('../data/journal_text.ts').then((m) => { const t = m.QUEST_TEXT[q]?.[0]; deps.moment?.(t ? `New stamp: ${t}` : 'New stamp'); }, () => { deps.moment?.('New stamp'); });
           }
           if (e.byPlayer) deps.stampHaptic?.();
+          void frame.quest(e.quest);   // (round 8: the Friendship Frame at X8)
           // a chapter's finale done in its own place: the place's finale light (PG_RENDER: Ripple's sunset, Frostbell's evening and stars), eased back after 20 s
           { const q = QUESTS[e.quest]; if (q && q.kind === 'finale' && q.chapter > 0 && CHAPTERS[q.chapter]?.place === placeIdx && placeIdx !== 0) { try { stage.thingFx?.(-1, 2, 1); finaleOff = game.simTime + 20; } catch { /* none */ } } }
           pushJournal();
@@ -1795,7 +1906,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // the front edge stands above the HUD's bottom rows (R4b: the cabin's tall Rocker Board at z 3.0 lay under the hint, "Put back" and the name tag)
       const hx = b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), hz = b.shape === 'disc' ? (b.r ?? 3) : (b.hz ?? 2.4);
       const z0 = b.z - hz, z1 = Math.max(b.z + hz, frontReach(next, layout) + 0.1);
-      try { stage.setPlayBounds?.(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2); } catch (e) { report(e); }
+      // (round 8, R8_LIFE's request 11) the camera's pitch range: the layout's own (`camPitch`, e.g. a tall layout wider than P7's) or the place's (P8 camera.pitch)
+      const pr = (lay as { readonly camPitch?: readonly [number, number] }).camPitch ?? next.camera.pitch;
+      try { stage.setPlayBounds?.(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2, pr[0], pr[1]); } catch (e) { report(e); }
     }
     // the capsule lands clear of the things (x, z, r triples)
     try {
@@ -2003,6 +2116,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       }
       return 0;
     },
+    frameThumb: () => frame.read(),
     pieceCap() {
       // pieces = min(the tier's pieces cap, the characters cap - (wholes - 1)) while 2 or more wholes are out (the cut squishy counts as its whole);
       // one squishy out keeps the published safety ceiling (null)
@@ -2043,9 +2157,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         ring.n = 0;
       }
     },
-    note(kind: LifeNote, arg?: string | number) {
+    note(kind: LifeNote, arg?: string | number | Blob) {
       switch (kind) {
-        case 'photo': write(EV.PHOTO, 0, -1, chars.find((c) => c.on)?.species ?? 255, 255, wholesOut(), BY.PLAYER); break;
+        case 'photo': write(EV.PHOTO, 0, -1, chars.find((c) => c.on)?.species ?? 255, 255, wholesOut(), BY.PLAYER); frame.photo(arg); break;
         case 'emoteTap': write(EV.UI, UI_KIND.EMOTE_TAP, -1, typeof arg === 'number' ? arg : 255, 255, 0, BY.PLAYER); break;
         case 'wishSeen': write(EV.WISH, WISH_STATE.SEEN, typeof arg === 'number' ? arg : 1, chars.find((c) => c.on)?.species ?? 255, 255, 1, BY.PLAYER, WISH_KIND.PLACE); break;
         default: break;
@@ -2096,6 +2210,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     },
     dispose() {
       dropAll();
+      gHost.planePoint = planeAt;
       offEvents(); offCeremony(); offSettings();
       for (let i = 0; i < CAP; i++) if (chars[i].on) { clearBubbles(i); try { chars[i].body?.setPropWorld?.(null); } catch { /* ignore */ } }
       try { stage.bindProps?.(null, 0, null); stage.setAutonomyFraming?.(false); } catch { /* ignore */ }
@@ -2103,6 +2218,31 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     },
   };
   return host;
+}
+
+/** (round 8, R8_SHELL 4) the Friendship Frame's wiring (QUESTS 6.10 / 10, PLAYGROUND_BUILD 11.15): the photo that completes X8 ("Picture of friends") is the last one
+ *  the player took (Snap > Save writes the PHOTO record X8 counts: the host's note('photo', blob)); at X8's stamp its 160 x 120 JPEG thumbnail is written ONCE under
+ *  its own key (ui/later-frame.ts: a lazy module of its own, imported only then); the Journal's Keepsakes page shows it in the Friendship Frame (read). `store`:
+ *  node checks pass their own. */
+export function createFrameWatch(storage: StorageLike | null, onStored?: () => void,
+  store: (s: StorageLike | null, b: Blob) => Promise<boolean> = (s, b) => import('../ui/later-frame.ts').then((m) => m.storeFrame(s, b))): {
+  photo(b: unknown): void; quest(questIdx: number): Promise<boolean>; read(): string | null;
+} {
+  let photo: Blob | null = null;
+  const read = (): string | null => {
+    try { const u = storage?.getItem(JOURNAL_FRAME_KEY) ?? null; return u && u.startsWith('data:image/jpeg;base64,') && u.length <= JOURNAL_FRAME_MAX_CHARS ? u : null; } catch { return null; }
+  };
+  return {
+    photo(b) { photo = typeof Blob !== 'undefined' && b instanceof Blob ? b : null; },
+    quest(q) {
+      if (QUESTS[q]?.id !== 'X8') return Promise.resolve(false);
+      const b = photo;
+      photo = null;
+      if (!b || read()) return Promise.resolve(false);
+      return store(storage, b).then((ok) => { if (ok) onStored?.(); return ok; }, () => false);
+    },
+    read,
+  };
 }
 
 /** the bubbles' DOM hit areas ship in this chunk (D-92): boot.ts attaches them once the host is attached */
