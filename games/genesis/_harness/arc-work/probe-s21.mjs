@@ -63,6 +63,8 @@ const CAM = {
   orbit: { mode: 'orbit', lat: 18, lon: -35, dist: 7800, hour: 16.25, blend: 0 },
 };
 const settle = Number(opts.settle ?? 12);
+// (PERF s23) --cams='{"name":{spec},...}' adds camera specs (views by these names)
+if (opts.cams) Object.assign(CAM, JSON.parse(opts.cams));
 const G = (fn, a) => page.evaluate(fn, a);
 async function shot(name) {
   for (let f = 0; f < settle; f += 4) await G(() => window.__GENESIS__.frames(4));
