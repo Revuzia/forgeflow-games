@@ -46,32 +46,32 @@
  },
  "dunsom:splash": {
   "shipped": "3d",
-  "why": "max2 r3: reframed as a three-quarter hero shot (box_lo / box_w / box_top; head ~3x larger, a raking head key); by eye the face reads (lidded eyes with pupils, brows, nose) at full and card size, but card_qa's blank tripwire still trips (0.70-0.92) and no painted variant passes (blank on all; silhouette / palette / prop / streak on some): gate miss, ship the live card unless the verifier clears it",
+  "why": "orch1 W2-C fix: fresh 3D render (FU-10 hands: no spikes), base for the face repaint",
   "gates": [
    {
     "aspect_err": 0.0,
-    "struct": 0.976,
-    "iou": 0.99,
-    "pal_mean": 3.2,
-    "pal_max": 4.2,
-    "face_range": 1.17,
+    "struct": 0.977,
+    "iou": 0.948,
+    "pal_mean": 5.4,
+    "pal_max": 22.0,
+    "face_range": 1.16,
     "face_dark": null,
-    "face_corr": 0.99,
+    "face_corr": 0.98,
     "new_colour": 0.0,
-    "eye_ds": 0.2,
-    "eye_dv": -7.0,
+    "eye_ds": -1.7,
+    "eye_dv": -9.0,
     "streak_cols": 0.0,
-    "prop_out": 0.0056,
-    "prop_out_fill": 0.44,
-    "prop_in": 0.0002,
-    "prop_in_fill": 0.78,
+    "prop_out": 0.0108,
+    "prop_out_fill": 0.54,
+    "prop_in": 0.0026,
+    "prop_in_fill": 0.34,
     "blockers": {
-     "hollow": 2.848,
-     "blank": 0.861,
+     "hollow": 2.764,
+     "blank": 0.855,
      "glow": 0.0,
-     "streak": 0.0019,
-     "cracked": 0.0112,
-     "dots": 134,
+     "streak": 0.001,
+     "cracked": 0.0108,
+     "dots": 149,
      "hits": [
       "blank"
      ]
@@ -79,9 +79,10 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 98,
+    "menu_p50": 111,
     "menu_over200": 0.7,
     "fails": [
+     "menu_luma",
      "prop",
      "blocker:blank"
     ],
@@ -90,28 +91,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.982,
-    "iou": 0.996,
-    "pal_mean": 2.7,
-    "pal_max": 3.5,
+    "struct": 0.978,
+    "iou": 0.956,
+    "pal_mean": 4.6,
+    "pal_max": 19.7,
     "face_range": 1.14,
     "face_dark": null,
-    "face_corr": 0.97,
+    "face_corr": 0.99,
     "new_colour": 0.0,
-    "eye_ds": 0.2,
-    "eye_dv": -9.6,
-    "streak_cols": 0.022,
-    "prop_out": 0.0109,
-    "prop_out_fill": 0.52,
-    "prop_in": 0.0,
-    "prop_in_fill": 0.0,
+    "eye_ds": -1.8,
+    "eye_dv": -6.8,
+    "streak_cols": 0.0,
+    "prop_out": 0.01,
+    "prop_out_fill": 0.5,
+    "prop_in": 0.0026,
+    "prop_in_fill": 0.4,
     "blockers": {
-     "hollow": 2.638,
-     "blank": 0.867,
+     "hollow": 2.231,
+     "blank": 0.864,
      "glow": 0.0,
-     "streak": 0.0012,
-     "cracked": 0.0104,
-     "dots": 137,
+     "streak": 0.0014,
+     "cracked": 0.01,
+     "dots": 147,
      "hits": [
       "blank"
      ]
@@ -119,8 +120,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 97,
-    "menu_over200": 0.6,
+    "menu_p50": 109,
+    "menu_over200": 0.5,
     "fails": [
      "prop",
      "blocker:blank"
@@ -130,28 +131,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.974,
-    "iou": 0.996,
-    "pal_mean": 2.4,
-    "pal_max": 3.3,
-    "face_range": 1.15,
+    "struct": 0.985,
+    "iou": 0.995,
+    "pal_mean": 2.6,
+    "pal_max": 3.9,
+    "face_range": 1.11,
     "face_dark": null,
-    "face_corr": 0.97,
+    "face_corr": 0.99,
     "new_colour": 0.0,
-    "eye_ds": -0.3,
-    "eye_dv": -11.8,
-    "streak_cols": 0.0,
-    "prop_out": 0.0108,
-    "prop_out_fill": 0.52,
-    "prop_in": 0.0001,
-    "prop_in_fill": 0.75,
+    "eye_ds": 0.8,
+    "eye_dv": -5.6,
+    "streak_cols": 0.022,
+    "prop_out": 0.012,
+    "prop_out_fill": 0.59,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
     "blockers": {
-     "hollow": 2.659,
-     "blank": 0.861,
+     "hollow": 2.429,
+     "blank": 0.864,
      "glow": 0.0,
-     "streak": 0.001,
-     "cracked": 0.0115,
-     "dots": 93,
+     "streak": 0.0014,
+     "cracked": 0.0064,
+     "dots": 108,
      "hits": [
       "blank"
      ]
@@ -159,7 +160,7 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 95,
+    "menu_p50": 105,
     "menu_over200": 0.5,
     "fails": [
      "prop",
@@ -169,8 +170,50 @@
     "variant": 3
    }
   ],
-  "prompt_version": 5,
-  "date": "2026-11-12"
+  "prompt_version": 8,
+  "date": "2026-11-18",
+  "hand": {
+   "bone": "head",
+   "variant": 3,
+   "why": "orch1 W2-C fix: face-only repaint over the fresh 3D (FU-10 hands): heavy lids with a dark lash line, shadowed crease; by eye the sclera tripwire reads the model's own small eye white (the 3D carries it), not a photo-real eye",
+   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a smooth carved ochre-wood mask under the hood; keep the mask's outline and its small short rounded bill exactly as in the crop (no new or larger nose, no beak, no mouth, no frown); paint the two calm half-closed carved eyes as a heavy upper lid with a dark lash line and a dark brown iris below it, no white of the eye, with a deep soft shadow in the carved crease above each eye and under the brow line; the far side of the mask and the far cheek in a clear cool shadow so the face has strong light and shade; the mask is one smooth surface with no crack, line, wood grain or streak. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_dunsom_splash_head__v3.png",
+   "raw_sha256": "74b589072a3ce1f17e17066cf9c2119bdaaad1aaed1b401c7a584e71f69c7858",
+   "gate": {
+    "variant": 3,
+    "free": 0,
+    "struct": 0.983,
+    "pal_mean": 3.2,
+    "sclera": 0.381,
+    "fails": [
+     "sclera"
+    ],
+    "pass": false
+   },
+   "date": "2026-11-18"
+  },
+  "hands": [
+   {
+    "bone": "head",
+    "variant": 3,
+    "why": "orch1 W2-C fix: face-only repaint over the fresh 3D (FU-10 hands): heavy lids with a dark lash line, shadowed crease; by eye the sclera tripwire reads the model's own small eye white (the 3D carries it), not a photo-real eye",
+    "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a smooth carved ochre-wood mask under the hood; keep the mask's outline and its small short rounded bill exactly as in the crop (no new or larger nose, no beak, no mouth, no frown); paint the two calm half-closed carved eyes as a heavy upper lid with a dark lash line and a dark brown iris below it, no white of the eye, with a deep soft shadow in the carved crease above each eye and under the brow line; the far side of the mask and the far cheek in a clear cool shadow so the face has strong light and shade; the mask is one smooth surface with no crack, line, wood grain or streak. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_dunsom_splash_head__v3.png",
+    "raw_sha256": "74b589072a3ce1f17e17066cf9c2119bdaaad1aaed1b401c7a584e71f69c7858",
+    "gate": {
+     "variant": 3,
+     "free": 0,
+     "struct": 0.983,
+     "pal_mean": 3.2,
+     "sclera": 0.381,
+     "fails": [
+      "sclera"
+     ],
+     "pass": false
+    },
+    "date": "2026-11-18"
+   }
+  ]
  },
  "dunsom_almanac:portrait": {
   "shipped": "painted",
@@ -221,32 +264,32 @@
  },
  "dunsom_almanac:splash": {
   "shipped": "3d",
-  "why": "max2 r3: reframed as a three-quarter hero shot (box_lo / box_w / box_top; head ~3x larger, a raking head key); by eye the face reads (lidded eyes with pupils, brows, nose) at full and card size, but card_qa's blank tripwire still trips (0.70-0.92) and no painted variant passes (blank on all; silhouette / palette / prop / streak on some): gate miss, ship the live card unless the verifier clears it",
+  "why": "orch1 W2-C fix: fresh 3D render (FU-10 hands: no spikes), base for the face repaint",
   "gates": [
    {
     "aspect_err": 0.0,
-    "struct": 0.897,
-    "iou": 0.678,
-    "pal_mean": 16.0,
-    "pal_max": 20.3,
-    "face_range": 1.07,
+    "struct": 0.909,
+    "iou": 0.627,
+    "pal_mean": 18.2,
+    "pal_max": 30.2,
+    "face_range": 1.01,
     "face_dark": null,
-    "face_corr": 0.99,
+    "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": -3.7,
-    "eye_dv": -18.5,
+    "eye_ds": -7.2,
+    "eye_dv": -20.6,
     "streak_cols": 0.0,
     "prop_out": 0.0,
-    "prop_out_fill": 1.0,
-    "prop_in": 0.0021,
-    "prop_in_fill": 0.67,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0048,
+    "prop_in_fill": 0.32,
     "blockers": {
-     "hollow": 2.82,
-     "blank": 0.811,
+     "hollow": 2.889,
+     "blank": 0.808,
      "glow": 0.0,
      "streak": 0.0,
-     "cracked": 0.0066,
-     "dots": 354,
+     "cracked": 0.0065,
+     "dots": 218,
      "hits": [
       "blank"
      ]
@@ -254,8 +297,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 99,
-    "menu_over200": 0.9,
+    "menu_p50": 97,
+    "menu_over200": 1.0,
     "fails": [
      "silhouette",
      "palette",
@@ -267,28 +310,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.832,
-    "iou": 0.516,
-    "pal_mean": 22.4,
-    "pal_max": 29.1,
-    "face_range": 0.97,
+    "struct": 0.856,
+    "iou": 0.604,
+    "pal_mean": 17.6,
+    "pal_max": 28.0,
+    "face_range": 1.0,
     "face_dark": null,
-    "face_corr": 0.99,
+    "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": -2.6,
-    "eye_dv": -26.2,
+    "eye_ds": -4.5,
+    "eye_dv": -21.5,
     "streak_cols": 0.0,
-    "prop_out": 0.0001,
-    "prop_out_fill": 0.75,
-    "prop_in": 0.0036,
-    "prop_in_fill": 0.39,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0024,
+    "prop_in_fill": 0.25,
     "blockers": {
-     "hollow": 2.924,
-     "blank": 0.81,
+     "hollow": 2.855,
+     "blank": 0.805,
      "glow": 0.0,
      "streak": 0.0,
-     "cracked": 0.0064,
-     "dots": 341,
+     "cracked": 0.0069,
+     "dots": 227,
      "hits": [
       "blank"
      ]
@@ -296,8 +339,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 95,
-    "menu_over200": 0.8,
+    "menu_p50": 100,
+    "menu_over200": 1.1,
     "fails": [
      "silhouette",
      "palette",
@@ -309,28 +352,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.871,
-    "iou": 0.644,
-    "pal_mean": 19.1,
-    "pal_max": 28.0,
-    "face_range": 0.98,
+    "struct": 0.89,
+    "iou": 0.609,
+    "pal_mean": 18.7,
+    "pal_max": 30.3,
+    "face_range": 1.0,
     "face_dark": null,
-    "face_corr": 0.99,
+    "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": -2.9,
-    "eye_dv": -25.1,
-    "streak_cols": 0.022,
+    "eye_ds": -6.0,
+    "eye_dv": -19.6,
+    "streak_cols": 0.0,
     "prop_out": 0.0,
     "prop_out_fill": 0.0,
-    "prop_in": 0.0023,
-    "prop_in_fill": 0.31,
+    "prop_in": 0.0044,
+    "prop_in_fill": 0.3,
     "blockers": {
-     "hollow": 2.868,
-     "blank": 0.798,
+     "hollow": 2.634,
+     "blank": 0.796,
      "glow": 0.0,
      "streak": 0.0,
-     "cracked": 0.0066,
-     "dots": 369,
+     "cracked": 0.0072,
+     "dots": 229,
      "hits": [
       "blank"
      ]
@@ -338,7 +381,7 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 91,
+    "menu_p50": 93,
     "menu_over200": 0.9,
     "fails": [
      "silhouette",
@@ -350,8 +393,46 @@
     "variant": 3
    }
   ],
-  "prompt_version": 5,
-  "date": "2026-11-12"
+  "prompt_version": 8,
+  "date": "2026-11-18",
+  "hand": {
+   "bone": "head",
+   "variant": 2,
+   "why": "orch1 W2-C fix: face-only repaint over the fresh 3D (hands fixed by FU-10): lidded carved eyes with a shadowed crease, far side of the mask in shade",
+   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a smooth carved ochre-wood mask with a short rounded bill, under the hood: two calm half-closed lidded carved eyes, each with a dark brown iris and pupil, a deep soft shadow in the carved crease above each eye and under the brow line, the far side of the mask, the bill's underside and the far cheek in a clear cool shadow so the face reads with strong light and shade; the mask is one smooth surface with no crack, line or streak. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_dunsom_almanac_splash_head__v2.png",
+   "raw_sha256": "123bad4d76a288a8c11782e313eebb5e34915a4053a1e1f4bb5b9a5d55aa2fed",
+   "gate": {
+    "variant": 2,
+    "free": 0,
+    "struct": 0.991,
+    "pal_mean": 3.0,
+    "sclera": 0.024,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-18"
+  },
+  "hands": [
+   {
+    "bone": "head",
+    "variant": 2,
+    "why": "orch1 W2-C fix: face-only repaint over the fresh 3D (hands fixed by FU-10): lidded carved eyes with a shadowed crease, far side of the mask in shade",
+    "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a smooth carved ochre-wood mask with a short rounded bill, under the hood: two calm half-closed lidded carved eyes, each with a dark brown iris and pupil, a deep soft shadow in the carved crease above each eye and under the brow line, the far side of the mask, the bill's underside and the far cheek in a clear cool shadow so the face reads with strong light and shade; the mask is one smooth surface with no crack, line or streak. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_dunsom_almanac_splash_head__v2.png",
+    "raw_sha256": "123bad4d76a288a8c11782e313eebb5e34915a4053a1e1f4bb5b9a5d55aa2fed",
+    "gate": {
+     "variant": 2,
+     "free": 0,
+     "struct": 0.991,
+     "pal_mean": 3.0,
+     "sclera": 0.024,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-18"
+   }
+  ]
  },
  "dunsom_highrim:portrait": {
   "shipped": "painted",
@@ -402,32 +483,32 @@
  },
  "dunsom_highrim:splash": {
   "shipped": "3d",
-  "why": "max2 r3: reframed as a three-quarter hero shot (box_lo / box_w / box_top; head ~3x larger, a raking head key); by eye the face reads (lidded eyes with pupils, brows, nose) at full and card size, but card_qa's blank tripwire still trips (0.70-0.92) and no painted variant passes (blank on all; silhouette / palette / prop / streak on some): gate miss, ship the live card unless the verifier clears it",
+  "why": "orch1 W2-C fix: fresh 3D render (FU-10 hands: no spikes), base for the face repaint",
   "gates": [
    {
     "aspect_err": 0.0,
-    "struct": 0.995,
-    "iou": 0.996,
-    "pal_mean": 3.7,
-    "pal_max": 6.9,
-    "face_range": 0.99,
+    "struct": 0.994,
+    "iou": 0.991,
+    "pal_mean": 5.0,
+    "pal_max": 7.9,
+    "face_range": 1.0,
     "face_dark": null,
     "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": 1.2,
-    "eye_dv": -3.1,
+    "eye_ds": 0.7,
+    "eye_dv": -4.8,
     "streak_cols": 0.022,
-    "prop_out": 0.0,
-    "prop_out_fill": 0.0,
-    "prop_in": 0.0005,
-    "prop_in_fill": 0.45,
+    "prop_out": 0.0001,
+    "prop_out_fill": 0.75,
+    "prop_in": 0.0006,
+    "prop_in_fill": 0.56,
     "blockers": {
-     "hollow": 1.994,
-     "blank": 0.914,
+     "hollow": 2.114,
+     "blank": 0.918,
      "glow": 0.0,
      "streak": 0.0031,
-     "cracked": 0.0069,
-     "dots": 259,
+     "cracked": 0.0075,
+     "dots": 212,
      "hits": [
       "blank"
      ]
@@ -435,8 +516,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 102,
-    "menu_over200": 2.9,
+    "menu_p50": 100,
+    "menu_over200": 2.1,
     "fails": [
      "blocker:blank"
     ],
@@ -445,28 +526,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.992,
-    "iou": 0.979,
-    "pal_mean": 6.5,
-    "pal_max": 10.5,
-    "face_range": 1.03,
+    "struct": 0.995,
+    "iou": 0.994,
+    "pal_mean": 4.7,
+    "pal_max": 7.3,
+    "face_range": 1.01,
     "face_dark": null,
     "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": 0.6,
-    "eye_dv": -5.9,
+    "eye_ds": 1.6,
+    "eye_dv": -4.2,
     "streak_cols": 0.0,
-    "prop_out": 0.0,
-    "prop_out_fill": 0.67,
-    "prop_in": 0.0,
-    "prop_in_fill": 0.0,
+    "prop_out": 0.0001,
+    "prop_out_fill": 0.89,
+    "prop_in": 0.0006,
+    "prop_in_fill": 0.61,
     "blockers": {
-     "hollow": 1.815,
-     "blank": 0.91,
+     "hollow": 2.194,
+     "blank": 0.913,
      "glow": 0.0,
-     "streak": 0.0029,
-     "cracked": 0.0073,
-     "dots": 267,
+     "streak": 0.0033,
+     "cracked": 0.0076,
+     "dots": 207,
      "hits": [
       "blank"
      ]
@@ -474,8 +555,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 97,
-    "menu_over200": 3.0,
+    "menu_p50": 100,
+    "menu_over200": 1.9,
     "fails": [
      "blocker:blank"
     ],
@@ -484,28 +565,28 @@
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.994,
-    "iou": 0.994,
-    "pal_mean": 4.9,
-    "pal_max": 8.6,
+    "struct": 0.992,
+    "iou": 0.973,
+    "pal_mean": 7.5,
+    "pal_max": 10.7,
     "face_range": 1.0,
     "face_dark": null,
     "face_corr": 1.0,
     "new_colour": 0.0,
-    "eye_ds": 1.4,
-    "eye_dv": -4.6,
+    "eye_ds": 0.5,
+    "eye_dv": -7.0,
     "streak_cols": 0.0,
-    "prop_out": 0.0001,
-    "prop_out_fill": 0.69,
-    "prop_in": 0.0006,
-    "prop_in_fill": 0.52,
+    "prop_out": 0.0003,
+    "prop_out_fill": 0.3,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
     "blockers": {
-     "hollow": 2.105,
+     "hollow": 2.599,
      "blank": 0.916,
      "glow": 0.0,
-     "streak": 0.0021,
-     "cracked": 0.0072,
-     "dots": 280,
+     "streak": 0.0033,
+     "cracked": 0.0073,
+     "dots": 234,
      "hits": [
       "blank"
      ]
@@ -513,8 +594,8 @@
     "blockers_3d": [
      "blank"
     ],
-    "menu_p50": 99,
-    "menu_over200": 2.6,
+    "menu_p50": 97,
+    "menu_over200": 1.6,
     "fails": [
      "blocker:blank"
     ],
@@ -522,7 +603,49 @@
     "variant": 3
    }
   ],
-  "prompt_version": 5,
-  "date": "2026-11-12"
+  "prompt_version": 8,
+  "date": "2026-11-18",
+  "hand": {
+   "bone": "head",
+   "variant": 3,
+   "why": "orch1 W2-C fix: face-only repaint (2nd pass) over the fresh 3D (FU-10 hands): brim shadow over the brow, heavy lids with a dark lash line, far half of the mask in shade; by eye calm lidded eyes at full / card size; the sclera tripwire reads the model's own small eye white",
+   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a smooth carved ochre-wood mask framed by a cream hood under a wide round felt brim; keep the mask's outline and its small short rounded bill exactly as in the crop (no new or larger nose, no beak, no mouth, no frown); the brim casts a soft warm shadow across the top of the mask over the brow and the eyes, and the far half of the mask turns into a clear cool shade, so the face has strong light and shade; the two calm half-closed carved eyes are a heavy upper lid with a dark lash line and a dark brown iris below it, no white of the eye, with a deep soft shadow in the carved crease above each eye; the mask is one smooth surface with no crack, line, wood grain or streak. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_dunsom_highrim_splash_head__v3.png",
+   "raw_sha256": "bc06a9a992cc37abb996bf3e717da994d7e674a5e5f043e66d6108931252b846",
+   "gate": {
+    "variant": 3,
+    "free": 0,
+    "struct": 0.998,
+    "pal_mean": 1.4,
+    "sclera": 0.306,
+    "fails": [
+     "sclera"
+    ],
+    "pass": false
+   },
+   "date": "2026-11-18"
+  },
+  "hands": [
+   {
+    "bone": "head",
+    "variant": 3,
+    "why": "orch1 W2-C fix: face-only repaint (2nd pass) over the fresh 3D (FU-10 hands): brim shadow over the brow, heavy lids with a dark lash line, far half of the mask in shade; by eye calm lidded eyes at full / card size; the sclera tripwire reads the model's own small eye white",
+    "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: a smooth carved ochre-wood mask framed by a cream hood under a wide round felt brim; keep the mask's outline and its small short rounded bill exactly as in the crop (no new or larger nose, no beak, no mouth, no frown); the brim casts a soft warm shadow across the top of the mask over the brow and the eyes, and the far half of the mask turns into a clear cool shade, so the face has strong light and shade; the two calm half-closed carved eyes are a heavy upper lid with a dark lash line and a dark brown iris below it, no white of the eye, with a deep soft shadow in the carved crease above each eye; the mask is one smooth surface with no crack, line, wood grain or streak. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_dunsom_highrim_splash_head__v3.png",
+    "raw_sha256": "bc06a9a992cc37abb996bf3e717da994d7e674a5e5f043e66d6108931252b846",
+    "gate": {
+     "variant": 3,
+     "free": 0,
+     "struct": 0.998,
+     "pal_mean": 1.4,
+     "sclera": 0.306,
+     "fails": [
+      "sclera"
+     ],
+     "pass": false
+    },
+    "date": "2026-11-18"
+   }
+  ]
  }
 }

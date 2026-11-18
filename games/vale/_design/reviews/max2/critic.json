@@ -188,17 +188,17 @@
   "kemdo_highrim_splash",
   "kemdo_highrim_portrait",
   "kemdo_long_evening_splash",
-  "kemdo_long_evening_portrait"
+  "kemdo_long_evening_portrait",
+  "burdam_almanac_splash",
+  "burdam_stillwater_portrait",
+  "dunsom_highrim_portrait"
  ],
  "cardsFail": [
   "burdam_splash",
-  "burdam_almanac_splash",
   "burdam_stillwater_splash",
-  "burdam_stillwater_portrait",
   "dunsom_splash",
   "dunsom_almanac_splash",
   "dunsom_highrim_splash",
-  "dunsom_highrim_portrait",
   "tunlan_portrait",
   "marund_gorgewalk_splash",
   "marund_gorgewalk_portrait",

@@ -166,7 +166,10 @@ def prompt_of(sid: str, kind: str) -> tuple[str, int]:
     frame = "A wide 16:9 splash card." if kind == "splash" else "A square head-and-shoulders portrait card."
     subj = (pr.get("cards_portrait") or {}).get(sid) if kind == "portrait" else None
     eyes = (pr.get("eyes_cards") or {}).get(sid) or (pr.get("eyes_cards") or {}).get(plates.fighter_of(sid)) or pr["eyes"]
-    text = " ".join([pr["style"], frame, subj or pr["cards"][sid], light, eyes] + ([pr["hands"]] if "hands" in pr else [])
+    # (prompt v8, orch1 W2-C fix round) a failing card's own fix line: the verifier's defect named and the fixed form asked for
+    fix = (pr.get("cards_fix") or {}).get(f"{sid}:{kind}") or (pr.get("cards_fix") or {}).get(sid)
+    text = " ".join([pr["style"], frame, subj or pr["cards"][sid], light, eyes] + ([fix] if fix else [])
+                    + ([pr["hands"]] if "hands" in pr else [])
                     + [pr["rules"], SENSITIVITY])
     return text, int(pr["version"])
 

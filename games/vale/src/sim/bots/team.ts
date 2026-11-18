@@ -131,6 +131,8 @@ export class TeamBrain {
   private readonly laners: Int32Array;
   /** an own structure off the lanes (core) under attack */
   baseThreat = 0; baseX = 0; baseY = 0;
+  /** ruling 56: enemy fighters seen at a base structure this think (0: the base threat is Wicks alone) */
+  baseFighters = 0;
   phase: 'early' | 'mid' | 'late' = 'early';
   group = false;
   /** endgame push: gates/core are open; commit everyone */
@@ -203,6 +205,9 @@ export class TeamBrain {
   private readonly answerUntil = new Map<PlayerId, { lane: number; until: number }>();
   private readonly structHp = new Map<number, number>();
   private readonly structHitAt = new Map<number, number>();
+  /** ruling 56: each own structure's health loss per second, smoothed over the team's thinks (its own health is ours to know) */
+  private readonly structLoss = new Map<number, number>();
+  private lastGuardAt = -1e9;
 
 
   /** shared with the match: map structure id → when it fell */
@@ -400,14 +405,20 @@ export class TeamBrain {
     const rt = k.rules.recall ? recallTime(w) : Infinity;
     // (owner_rulings 44: own structures' health is the owner's to know — a drop since the last think is a hit, seen or not)
     const hurt = new Set<Entity>();
+    const dt = now - this.lastGuardAt;
+    this.lastGuardAt = now;
     for (const st of tp.allyStructs) {
       if (!st.alive) continue;
       const prev = this.structHp.get(st.id);
       if (prev !== undefined && st.hp < prev - 1) { hurt.add(st); this.structHitAt.set(st.id, now); }
       else if (now - (this.structHitAt.get(st.id) ?? -1e9) <= 2) hurt.add(st);
+      // (ruling 56: the loss rate — half the last think's drop, half the history; a structure regaining health reads 0)
+      if (prev !== undefined && dt > 0 && dt < 3) this.structLoss.set(st.id, (this.structLoss.get(st.id) ?? 0) * 0.5 + Math.max(0, prev - st.hp) / dt * 0.5);
       this.structHp.set(st.id, st.hp);
     }
     const threats: { st: Entity; info: StructInfo; cls: StructClass; value: number; need: number; n: number; ttl: number; why: Guard['why'] }[] = [];
+    /** ruling 56: structures with Wicks alone on them, by map id: seconds until they fall at the present loss */
+    const doomTtl = new Map<string, number>();
     // (owner_rulings 44: each enemy fighter threatens the one own structure it is hitting, else the nearest one it can hurt — a
     // push on the Bell Needles is theirs, not a "coming" threat on the untouched Lantern beside them, which held a full-health
     // veteran posted 3 m from it, idle, while all five enemies took both Bell Needles and the Hourbell 14-21 m away)
@@ -473,8 +484,24 @@ export class TeamBrain {
       if (coreHit && d.coreAll) need = Math.max(need, 5);
       const delay = cls === 0 ? d.macroDelay : coreHit ? Math.min(d.macroDelay, 1) : Math.min(d.macroDelay, 5);
       if (!this.held(`g:${info.id}`, need > 0, now, delay)) need = 0;
-      const ttl = n + coming === 0 && !coreHit && wdps > 0 ? (st.hp + st.shield) / wdps : Infinity;
+      // (ruling 56: what the structure is losing, seen on its own health, when that is more than the Wicks' estimate)
+      const loss = Math.max(wdps, this.structLoss.get(st.id) ?? 0);
+      const ttl = n + coming === 0 && !coreHit && loss > 0 ? (st.hp + st.shield) / loss : Infinity;
+      if (ttl < Infinity) doomTtl.set(info.id, ttl);
+      // (ruling 56: a team that has just won its fight — two up, or the enemy's long respawn clocks — sends one defender to a
+      // wave alone and presses with the rest: the whole team walking home to clear Wicks gave the beaten team its minute back)
+      if (this.window && n + coming === 0 && !coreHit) need = Math.min(need, 1);
       if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming, ttl, why: coreHit && d.coreAll ? 'core' : n > 0 ? 'fight' : coming > 0 ? 'coming' : 'wave' });
+    }
+    // (ruling 56: a post at a structure the Wicks alone will take before its defender is there is handed back — walking up to
+    // watch it fall was most of the 'falls to Wicks beside fit defenders' left at veteran: defenders 15 m off when it had
+    // seconds left. The defender meets the push at the next structure, or goes on with the plan)
+    for (const [p, g] of [...this.guard]) {
+      const t = doomTtl.get(g.sid), e = w.players[p]?.ent;
+      if (t === undefined || !e) continue;
+      const dist = dhypot(e.x - g.x, e.y - g.y);
+      if (dist <= g.reach + 4) continue;
+      if ((dist - g.reach - 2) * 1.15 / Math.max(1, e.stats.moveSpeed) + 1 > t) this.guard.delete(p);
     }
     // (owner_rulings 44: the most valuable structure first — the Hourbell, then its Bell Needles, the Lanterns, the inner and the
     // outer Needles — then the bigger push; map order breaks ties: deterministic)
@@ -753,6 +780,7 @@ export class TeamBrain {
     this.defend.fill(0);
     this.defendFighters.fill(0);
     this.baseThreat = 0;
+    this.baseFighters = 0;
     for (const st of tp.allyStructs) {
       if (!st.alive) continue;
       const reach = Math.max(8, st.stats.range + st.radius + 5);
@@ -767,6 +795,7 @@ export class TeamBrain {
       const threat = Math.min(1, (fighters * 0.45 + Math.max(0, minions - mine) * 0.08) * hurt * weight);
       if (threat <= 0.05) continue;
       const lane = info ? info.lane : -1;
+      if (lane < 0) this.baseFighters = Math.max(this.baseFighters, fighters);
       if (lane >= 0) {
         if (threat > this.defend[lane]) { this.defend[lane] = threat; this.defendX[lane] = st.x; this.defendY[lane] = st.y; this.defendFighters[lane] = fighters; }
       } else if (threat > this.baseThreat) { this.baseThreat = threat; this.baseX = st.x; this.baseY = st.y; }

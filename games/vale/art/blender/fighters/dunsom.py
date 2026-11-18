@@ -275,7 +275,10 @@ CARDS = {
                              {"at": "x_lantern", "az": 170.0, "el": 10.0, "dist": 0.35, "color": "#FFD9A0",
                               "power": 25.0, "size": 0.10}]},
         "portrait": {"yaw": 24.0, "clip": "idle_lobby", "t": 0.0},
-        "plate": {"glow": [0.82, 0.50, 0.30, 0.07], "median": 0.27},
+        # (orch1 W2-C fix, verify_w2c_r1: the blocker detector's disc sat on one eye of the three-quarter splash's ~3x
+        # head, as Marund's and Odrum's did before max2 g2): the face point on the mask's centre, the disc on the whole mask
+        "plate": {"glow": [0.82, 0.50, 0.30, 0.07], "median": 0.27,
+                  "face_off": {"splash": [-0.019, 0.0]}, "face_r": {"splash": 1.6}},
     },
     "dunsom_highrim": {
         "splash": {"clip": "cast_a3", "t": 0.42, "yaw": -24.0, "pitch": -2.0, "lens": 55.0, "fill": 0.86, "x": 0.71,
@@ -286,7 +289,8 @@ CARDS = {
                               "size": 0.25}]},
         "portrait": {"yaw": -30.0},
         "plate": {"src": "needle_gorge", "tint": "#C8A88C", "sat": 0.85, "median": 0.32, "cx": 0.38,
-                  "glow": [0.90, 0.56, 0.40, 0.12], "glow_color": "#FFC08A"},
+                  "glow": [0.90, 0.56, 0.40, 0.12], "glow_color": "#FFC08A",
+                  "face_off": {"splash": [0.003, -0.022]}, "face_r": {"splash": 1.5}},
     },
     "dunsom_almanac": {
         "splash": {"clip": "recall", "t": 0.45, "yaw": 28.0, "pitch": 0.0, "lens": 60.0, "fill": 0.84, "x": 0.72,
@@ -306,7 +310,8 @@ CARDS = {
                                {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",
                                 "power": 20.0, "size": 0.08}]},
         "plate": {"src": "dialwood", "tint": "#8C98C0", "sat": 0.70, "median": 0.22, "cx": 0.62,
-                  "glow": [0.20, 0.35, 0.30, 0.05], "glow_color": "#C8D4F0"},
+                  "glow": [0.20, 0.35, 0.30, 0.05], "glow_color": "#C8D4F0",
+                  "face_off": {"splash": [-0.009, 0.006]}, "face_r": {"splash": 1.6}},
     },
 }
 SKINS: list = [

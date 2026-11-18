@@ -81,7 +81,8 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92,
 # leave the frame), the head ~3x larger
 CARDS = {
     "burdam": {
-        "splash": {"clip": "cast_ult", "t": 0.45, "yaw": 30.0, "pitch": -7.0, "lens": 46.0, "fill": 0.88, "x": 0.70,
+        # (orch1 W2-C fix, verify_w2c_r1: the face sat squeezed against the right edge) the figure a step left and smaller
+        "splash": {"clip": "cast_ult", "t": 0.45, "yaw": 30.0, "pitch": -7.0, "lens": 46.0, "fill": 0.84, "x": 0.62,
                    "box_lo": 0.95, "box_w": 0.55, "box_top": 2.35,
                    "key_az": 215.0, "key_el": 28.0, "key_color": "#FFE6CC", "sun": 2.6, "rim_cool": 0.7,
                    "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#EDB27A", "accent": 2.2,
@@ -90,7 +91,9 @@ CARDS = {
                              {"at": "head", "az": 245.0, "el": 35.0, "dist": 0.8, "color": "#FFE2C0", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"yaw": 30.0},
-        "plate": {"glow": [0.75, 0.55, 0.42, 0.16], "glow_color": "#F2A666"},
+        # (orch1 W2-C fix) the blocker detector's disc on the three-quarter splash's whole mask (it sat on the cheek)
+        "plate": {"glow": [0.75, 0.55, 0.42, 0.16], "glow_color": "#F2A666",
+                  "face_off": {"splash": [-0.016, -0.022]}, "face_r": {"splash": 1.5}},
     },
     "burdam_stillwater": {
         "splash": {"clip": "idle_lobby", "t": 0.0, "yaw": -12.0, "pitch": -4.0, "lens": 58.0, "fill": 0.86, "x": 0.71,

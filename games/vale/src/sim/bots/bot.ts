@@ -716,7 +716,8 @@ export class Bot extends BotBase implements BotController {
       // (a tier that reads waves sends answers to a threatened road; the whole team turns for a push of three or more
       // fighters, or the base — not for every Wick at a Needle, which pulls it off its own siege; W4 G3 refix)
       for (let i = 0; i < b.defend.length; i++) if (!this.diff.readsWaves || b.defendFighters[i] >= 3) global = Math.max(global, b.defend[i]);
-      global = Math.max(global, b.baseThreat);
+      // (ruling 56: Wicks alone at the base do not turn a team that has just won its fight — its posts send one to clear them)
+      if (!(b.window && b.baseFighters === 0 && kind === 'rift')) global = Math.max(global, b.baseThreat);
       if (lp) {
         // laning: a wave or my lane opponent at my own tower is laning (lane mode clears it under the
         // tower); I defend only a dive — more enemy fighters at my tower than my lane has laners —
