@@ -192,6 +192,15 @@ chip" (`live ""`, caption shown false): the same row round 4 classified as load 
 Picked up from the report above (engineer 1 was cut off during THE run). Scratch `S/r2/` (`S` = `.../scratchpad/fix5_shell`). Same method: every probe and browser
 run on a snapshot tree (`git archive HEAD` + only my lane's working files). No git write command.
 
+**Result (22:30).** node_checks 167/168 at HEAD -> **170/170** ("Go play with... a ride": the cause was the shell's own aim at a moving seat, fixed with a steadying
+hand; the round-4 pass was a false pass; + the budget's wake gate that keeps B7 under its cap). B1 re-proved in the browser (10 trips, 0.039 m). B8 measured: 5 out on
+a desktop hide nobody once the budget holds (new browser row); depth rows and the phone's party framing NOT changed (reasons R2.3). **THE run: browser_shell 497/509**
+(round 4: 494/497) + trophies 15/15, lock 17/17, photo 23/23, b4b 78/78; its 12 FAILs: 3 known (the caption timing row, the PC's two cut-real rows) and 9 PLAYGROUND
+round-5 rows (a bubble's hit area under the new tracker pill x6: fixed in wishes.ts; two Tab walks too short for the new stops x3: re-specified, assertions unchanged).
+**Re-run** on the newest HEAD (a8fa3de13, with the DATA lane's latest) + those fixes: 185/186 (the caption timing sibling, measured as load timing in R2.11).
+Files of mine this round: `src/shell/later-life.ts`, `_harness/shellview/node_checks.ts` (both committed in a8fa3de13), `_harness/browser_shell.mjs` (pg-home5
+committed; the two walks not yet), `src/ui/wishes.ts` (not yet committed), this report.
+
 ## R2.0 Baseline at HEAD 16f6ba6fc (`S/r2/tree_head`, `S/probes.sh`, logs `S/r2/base_head/`, one probe at a time, 19:36 to 19:46)
 | check | HEAD 16f6ba6fc |
 |---|---|
@@ -217,7 +226,37 @@ run on a snapshot tree (`git archive HEAD` + only my lane's working files). No g
 | R2.3 | B8 Home with 5 out on a desktop (measured: no hiding once the budget holds; a browser row `pg-home5`) and the phone's party of 3 (measured; NOT changed: reasons below) | DONE 20:15 (row ok alone) |
 | R2.4 | every node probe on the final tree (`S/r2/tree_final` = HEAD + my 3 files: later-life.ts, node_checks.ts, browser_shell.mjs; logs `S/r2/probes_final/`) | DONE 20:28 (table R2.4) |
 | R2.5 | B1 re-proved in the browser on the final tree (the verifier's repro, `S/scripts/b1ghost.mjs`: 5 trips x 2 layouts, every body asleep before each trip) | DONE 20:32: 10/10 arrived, a sleeper at every arrival, jelly vs centre at most **0.039 m** at +1 s and +5 s (HEAD before round 5: 3.656 m), 0 errors |
-| R2.6 | THE browser run (`S/r2/run_final.sh final1`, from 20:33) | running |
+| R2.6 | THE browser run (`S/r2/run_final.sh final1`, 20:33 to 21:47 for browser_shell; then trophies, lock, photo, b4b) | browser_shell **497/509** (round 4: 494/497); the extras below |
+| R2.7 | THE run's PLAYGROUND FAILs fixed: K11 (a bubble's hit area under the tracker pill) in wishes.ts; K04 and keyboard-only "Tab order" walks too short for B3's new stops (re-specified: longer walks, assertions unchanged) | code DONE 21:30; re-run below |
+| R2.8 | THE run's extras (same tree) | DONE 22:01: trophies_check (game) **15/15**, lock_browser **17/17**, photo_check (dev, phone, standalone) **23/23**, b4b_checks **78/78** (round 4: 15, 17, 23, 78) |
+| R2.9 | the orchestrator committed a8fa3de13 at 20:55 (my R2.1 to R2.3 files + the DATA lane's newest: the ball spot on phones, the cabin re-laid, ballPin): node probes on `S/r2/tree_rerun` = a8fa3de13 + my 2 later files (wishes.ts, browser_shell.mjs) | DONE 22:03: node_checks **170/170**, probe_app 187/187, gestures 160/160, merge 22/22, trophies 31/31, playground 56/56 (the DATA lane's new row), pg_lifequests 14/14, probe_life 117 ok / 1 FAIL (LF-02), chatter 42/42, pg_node_checks 40 ok, journal and quests all, screens 43/43, overlays 21/21, uikit 62/62; tsc 0 |
+| R2.10 | the browser re-run on `S/r2/tree_rerun`: toolbar, toolbar-grid, toolbar-sweep, toolbar-k04, keyboard-only (my R2.7 fixes and the timing row), pg-playthrough, pg-phone, pg-home5 (with the DATA lane's newest), console-and-network | DONE 22:26: **185/186** (`S/r2/rerun1/`): every R2.7 row ok (K11 x6 `small []`, K04 x2, "Tab order in play" the whole cycle `... > Hoard > Hand > Squishy > BODY > Next stamp`), toolbar-grid 48/48, pg-playthrough 27/27, pg-phone 9/9, pg-home5 1/1 (worst 2.9 %), console 0 errors; the 1 FAIL is the toolbar caption timing row's sibling ("... the 1.4 s caption chip names it": shown false when read) |
+| R2.11 | the caption timing rows measured (`S/r2/scripts/caption.mjs`, three fresh loads of `S/r2/tree_rerun`, Enter on Cut 4 s after Wake, `data-show` watched by a MutationObserver, the page's frame gaps by requestAnimationFrame) | DONE 22:29: the chip shows 110 to 127 ms after Enter and hides at **1437, 3203 and 2693 ms**; the longest frame gap in each load was 1583, 3184 and 2384 ms (SwiftShader, the life chunk and Home's things still compiling). The 1.4 s `setTimeout` (toolbar.ts, unchanged since 2026-10-09) fires on time when the page is free: **load timing**, as round 4 classified it; the toolbar section alone gave 12/13 (the "goes after 1.4 s" row) |
+
+### R2.6 THE run: browser_shell (`S/r2/final1/browser_shell.log`, tree `S/r2/tree_final` = HEAD 16f6ba6fc + later-life.ts, node_checks.ts, browser_shell.mjs)
+Per section (ok / FAIL): desktop-boot 18/0, mouse-gestures 19/0, shift-pull 9/0, shift-hint-reflow 3/0, shift-touch 2/0, settings-panel-desktop 15/0, hoard-loop 34/0,
+toolbar 12/1, snap-mat 9/0, cut-real 10/2, toolbar-phone 6/0, toolbar-gravity 41/0, toolbar-grid 48/0, toolbar-sweep 26/6, toolbar-k04 4/2, cut-touch 4/0, cut-x 15/0,
+fix2-dock 6/0, cut-swell 3/0, cut-low 2/0, hoard-phone 8/0, menu-pause 20/0, fullscreen-gate 3/0, toasts 8/0, modal-layers 4/0, ui-sounds 7/0, keyboard-only 11/1,
+prod-build 9/0, **pg-playthrough 27/0, pg-phone 9/0, pg-home5 1/0**, console-and-network 104/0. **497/509** (round 4: 494/497; 12 rows more: the round-5 B rows).
+The 12 FAILs, each classified:
+- (1) toolbar "the caption chip goes after about 1.4 s": **load timing**, exactly round 4's final-run FAIL (a 1.4 s page timer read after 1.7 s of real time while
+  SwiftShader frames take up to 0.5 s); its sibling "Enter on Cut ... caption chip names it" passed this time. Re-run below.
+- (2, 3) cut-real "leaving: a quick switch reconnects at once" (`tsw {p:2, x:1}`) and "leaving: hidden 30 s ... over 60 s comes back whole" (`short 3, long 1`):
+  **the PC's own on this machine**, identical numbers to round 4 and to the PC's published tree 9211d66ba (round 4's A/B). The same 2 in my cut-real-alone run at 20:10.
+- (4 to 9) toolbar-sweep K11 at 390x640, 390x568, 390x460, each with and without the 34 px inset, Hand: `small: ["Ooh, wow! 0x0"]`: **PLAYGROUND's (round 5)**.
+  The shot `sweep_fail_390x640_hand.png` shows the bubble over Dollop's head at the top left, its 44 px hit area under the new tracker pill, which took the
+  press (the hit-test found the pill: 0x0). wishes.ts's list of HUD boxes a hit area keeps clear of (`CHROME`, R4.12 b) had no play UI. **Fixed**: the play
+  UI's slot children and the party popover joined it.
+- (10, 11) toolbar-k04 "K04 1280x800 / 390x844: the Tab-only walk at rest is Full screen, Mute, Menu, Hoard, Hand, the squishy": **the walk was too short** (8 Tabs)
+  for B3's new stops (pill, its x, "Your squishies" before Full screen: `BODY > Next stamp > Hide the next stamp > Journal > Your squishies > Full screen > Mute
+  sound > Menu`). **Re-specified with its written reason**: 12 Tabs; the assertion (from Full screen, exactly the published stops in order, each ring >= 3 px) unchanged.
+- (12) keyboard-only "Tab order in play": engineer 1 re-specified its wanted list for B3 but kept 9 Tabs, which end at the Hoard. **Re-specified**: 13 Tabs, the
+  assertion (the whole cycle, exactly these stops in order, no other stop) unchanged.
+Rows of note: **B6** the first labelled bubble "What's that?" 5 s into the sampling (inside FN-01's window); **B3** wish card, tracker pill (one line, 44 px, clear of the
+Journal column), a tap on the pill opens the Journal at H3, the J key, the pill's x, the party popover (one chip per squishy out), the keyboard addressing ("Dollop goes to
+play with the Felt Ball."): all ok; **B4** the Travel sheet: Home and the cabin only, each with its "N of M stamps", nothing unshipped listed or named; **B8** the AUTO
+chips stand still while a toast shows (jump 0 px); Home with 5 out on desktop (worst 22.7 %, 0/40 over half); **C1** prod-build "SZ-02 (round 5, C1): later-life at
+most 150 KB raw: **142.0 KB**" (later-quests 35.3, later-props 25.6), G0b 462 KB gzip of 600; pg-playthrough, pg-phone, pg-home5: 0 console errors, 0 failed requests.
 
 ### R2.4 Node probes on the final tree (20:26 to 20:28)
 | check | HEAD 16f6ba6fc | final tree |
@@ -294,14 +333,21 @@ shows on screen.
   silhouettes (`t`) instead of the generous `r` (+25 %); not done here.
 - **For the DATA lane**: with 5 out on a desktop the Music Box (2.25, -1.05) stands behind the right-most squishy (slot 2.6): Home's spots for 4 and 5 out.
 
-## 4. NOT done / known issues (honest list, updated at the end)
-- B8: Home with 5 out on desktop in depth rows (NOT done: see the B8 notes; the hiding comes from LIFE moving bodies along their segments; a two-row slot list puts
-  the back row behind the front one at the camera's 0.27 rad pitch, VERIFY_RENDER_B B-M1, which is why the PC chose a row) and the phone's party-of-3 framing (render
-  framing of the published mat on every phone; not changed).
-- B2: no browser row was added (the node rows on the REAL SoftBody prove it, fail before / pass after); the kind "It's busy here..." refusal (11.4) is not built: at
-  F = 4 it never triggers once the others sleep (11.4's own arithmetic), and `beforeCut` asks physics to sleep them (physics refuses a moving one; the over-budget
-  rule then takes it).
-- B3: not built this round: "Tap it yourself" (D-93), the party toolbar of focus proxies with [ ] inside it (11.8: the popover's chips address each squishy
-  instead), Enter on the focused squishy opening its card, "Who's coming?" on the Places sheet, the Snap shutter / preview, the Friendship Frame.
-- B6: the word labels are built; whether a bubble shows within 10 s of the first release on desktop is LIFE's (FIRST_PLAY's forced use emits no bubble of its
-  own): the final run's B6 row reports it.
+## 4. NOT done / known issues (honest list, updated at the end of round 5 by the second engineer)
+- **B8, the phone's party of 3: NOT changed** (R2.3: measured 70 % of the width, centred in the band, the back-right squishy 47 % behind the play squishy). Bigger
+  bodies or clear faces need a new TALL chevron and Home's tall thing spots re-laid together (render + DATA; it moves the published phone mat, B-M1); a proposal is in R2.3.
+- **B8, depth rows on a desktop: NOT built, on purpose** (R2.3): measured, with the awake budget nobody hides behind anyone (a browser row now checks it, ok);
+  a back row would stand on Home's thing spots (D-88) and put bodies behind bodies (B-M1). With 5 out the Music Box stands behind the right-most squishy
+  (DATA: Home's spots for 4 and 5 out).
+- **B2**: no browser row with a party at the cut (the node rows on the REAL SoftBody prove it, fail before / pass after; the published cut sections start with one
+  squishy out, and cut-real alone on my tree gave round 4's exact rows); the kind "It's busy here..." refusal (11.4) is not built (at F = 4 it never triggers once the
+  others sleep).
+- **B3 parts not built**: "Tap it yourself" (D-93), the party toolbar of focus proxies (11.8: the popover's chips address each squishy instead), Enter on the focused
+  squishy opening its card, "Who's coming?" on the Places sheet, the Snap shutter / preview, the Friendship Frame.
+- **"Go play with..." latency seen once in scratch**: after a scripted (physics-only) carry off the seat the squishy kept the shell's 20 s RIDE flag (it ends on a
+  touch, LIFE_FLAG.RIDE's contract), so LIFE stayed in RIDE and the next PLAY_WITH waited about 10 s; a player's carry is a touch, so this is a harness path, but a
+  squishy that FALLS off a ride also keeps RIDE for up to 20 s (contract unchanged; a note for whoever owns D-74).
+- **Known flakes / the PC's own** (unchanged from round 4): toolbar "the caption chip goes after about 1.4 s" (load timing), cut-real's two "leaving" rows (identical
+  on the PC's published tree), keyboard-only "holding Space squishes" (1 in 5 in round 4; ok this run).
+- probe_life LF-02 (lifeStep allocation) stays the DATA / LIFE lane's one failing node row.
+- No git write command was run.

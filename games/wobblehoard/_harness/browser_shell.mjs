@@ -2340,7 +2340,10 @@ async function main() {
           }
           return out;
         };
-        const hand = await walk(8);
+        // (RE-SPECIFIED in round 5, written reason: B3's play UI adds the tracker pill, its x and "Your squishies" as Tab stops of the top-right group, before Full
+        //  screen (D-77: Tab reaches every DOM control; the same re-specification as keyboard-only's "Tab order in play"), so 8 Tabs no longer reach the squishy.
+        //  The walk is longer; the assertion is unchanged: from Full screen, exactly the published stops in their order, each with its ring)
+        const hand = await walk(12);
         // (RE-SPECIFIED because the owner changed the design on 2026-10-08, UI.md 9.1 / B4a: the top row is [Full screen, Sound, Menu], the gear is the Menu; Full screen only where the page may use it and the layout draws it: not on a strip under 700 px wide)
         const fsOn = await page.evaluate(() => { const b = document.querySelector('.hud-actions button[aria-label="Full screen"]'); return !!b && b.offsetParent !== null; });
         const want5 = [...(fsOn ? ['Full screen'] : []), 'Mute sound', 'Menu', 'Hoard', 'Hand', 'Squishy'];
@@ -4476,7 +4479,9 @@ async function main() {
       await page.evaluate(() => document.activeElement.blur());
       const order = [];
       // a stop's name up to its first ':' or ',' (the Hoard button's name goes on with the count: "Hoard, 3 of 50 species, ..."); a tool's name is its label
-      for (let i = 0; i < 9; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => { const a = document.activeElement; return a?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? (a?.classList.contains('dock-tool') ? a.querySelector('.dock-tool-label')?.textContent : null) ?? a?.tagName; })); }
+      // (round 5, second engineer: 13 Tabs, was 9. The round-5 re-specification below added the pill, its x and "Your squishies" but kept 9 Tabs, which end at the
+      //  Hoard (THE run: "BODY > Next stamp > ... > Menu > Hoard"); the assertion is unchanged: the whole cycle, exactly these stops in this order)
+      for (let i = 0; i < 13; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => { const a = document.activeElement; return a?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? (a?.classList.contains('dock-tool') ? a.querySelector('.dock-tool-label')?.textContent : null) ?? a?.tagName; })); }
       const stops = order.filter((o) => o !== 'BODY');
       // (RE-SPECIFIED because the owner changed the design on 2026-10-08, UI.md 9.1 / B4a: Full screen, Mute, Menu replace Mute, Settings)
       const fsOn = await page.evaluate(() => { const b = document.querySelector('.hud-actions button[aria-label="Full screen"]'); return !!b && b.offsetParent !== null; });

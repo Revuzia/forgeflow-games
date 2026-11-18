@@ -49,7 +49,9 @@ export function attachBubbleTaps(root: HTMLElement, canvas: HTMLCanvasElement, h
   root.append(layer);
   /** (R4) the HUD's boxes: a bubble under the top buttons, the hint, the info row, the dock or a toast keeps no hit area there (it could not keep its 44 x 44
    *  px: the K02 rows found a 45 x 42 and a covered one at 358 x 201 and 632 x 355); the bubble itself still shows, and Enter on the squishy reads it */
-  const CHROME = '.hud-actions, .hud-life, .hint[data-show="true"], .hud-bottom > *, #wh-dock, .meter-cluster, .qswitch:not([hidden]), .mat-chip:not([hidden]), .toast, .opts:not([hidden])';
+  // (round 5, second engineer: the play UI's slot (the tracker pill, a stamp moment, the wish card) and the party popover are HUD too: a hit area under the
+  //  pill could not be pressed there (THE run's K11 sweep at 390 x 640 / 568 / 460: "Ooh, wow!" 0x0, the pill took the press))
+  const CHROME = '.hud-actions, .hud-life, .hint[data-show="true"], .hud-bottom > *, #wh-dock, .meter-cluster, .qswitch:not([hidden]), .mat-chip:not([hidden]), .toast, .opts:not([hidden]), .pl-slot > :not([hidden]), .pl-pop:not([hidden])';
   const place = (): void => {
     const c = canvas.getBoundingClientRect();
     const vw = document.documentElement.clientWidth || window.innerWidth, vh = window.innerHeight;
