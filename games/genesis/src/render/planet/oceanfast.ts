@@ -41,14 +41,14 @@ import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 /** `?wfast=3`: the restructured water (this file) */
 export const WFAST3 = perfNum('wfast', 0) === 3;
 const CUT = perfList('wshade3');
-/** (s26) `wshade3=seamold`: the per-level lattice spacing of s25 (the Mac's seam), for A/B */
+/** (s25b) `wshade3=seamold`: the per-level lattice spacing of s25 (the Mac's seam), for A/B */
 const SEAMOLD = CUT.has('seamold');
-/** (s26) `wshade3=foamold`: s25's surf octaves and 48 m whitecap tile */
+/** (s25b) `wshade3=foamold`: s25's surf octaves and 48 m whitecap tile */
 const FOAMOLD = CUT.has('foamold');
-/** (s26) `wshade3=ssrold`: s25's SSR loop (texture() taps, hit handling inside the loop), for A/B */
+/** (s25b) `wshade3=ssrold`: s25's SSR loop (texture() taps, hit handling inside the loop), for A/B */
 const SSROLD = CUT.has('ssrold');
 const WCT = FOAMOLD ? '48.0' : '24.0';
-// (s26) every water level's uMorph (x = K x size(level - 1) = 2 K R spacing(level), z = max(1.5, 1.5 spacing)): 1 / (K R)
+// (s25b) every water level's uMorph (x = K x size(level - 1) = 2 K R spacing(level), z = max(1.5, 1.5 spacing)): 1 / (K R)
 // from any level whose z is not clamped; a getter, so three reads it fresh at every upload
 const morphs: IUniform<Vector4>[] = [];
 const krUniform = {
@@ -114,7 +114,7 @@ uniform vec2 uCloudShell;
 uniform float uCloudOn;
 uniform vec4 uSilt[4];
 uniform float uSiltK[4];
-uniform float uF3KR;  // 1 / (K R): the LOD's lattice spacing per metre of selection distance (s26; 0 = unknown)
+uniform float uF3KR;  // 1 / (K R): the LOD's lattice spacing per metre of selection distance (s25b; 0 = unknown)
 // (wfast=3) xyz = a wave group's surface gradient (body frame), w = its slope variance: short Gerstner, long, swell
 varying vec4 vF3A;
 varying vec4 vF3B;
@@ -146,7 +146,7 @@ const VERT_MAIN = /* glsl */ `
     float fSea = uWind * fG;
     float fCalm = smoothstep(0.3, 4.0, vDepth) * (1.0 - smoothstep(0.05, 0.4, vIce));
     // the lattice spacing here (an upper bound: ChunkLOD.skirtDepth = max(1.5, 1.5 x spacing); doubled while morphing)
-    // (s26: CONTINUOUS across patch borders: the old per-level uMorph.z / 1.5 x (1 + tMorph) clamps at 1 m for every
+    // (s25b: CONTINUOUS across patch borders: the old per-level uMorph.z / 1.5 x (1 + tMorph) clamps at 1 m for every
     // level finer than 1 m (skirtDepth = max(1.5, 1.5 spacing)), so two fine levels disagreed 2 m / 1 m along their
     // border: the waves' kept share, the roughness, the glitter and the mirrored clouds stepped there — the Mac's
     // straight diagonal seam. Now the selection distance / (K R), the spacing the LOD gives that distance once
@@ -159,13 +159,19 @@ const VERT_MAIN = /* glsl */ `
       fSp = fDd / (1.0 + uMorph.w * fGr * fGr * fGr) * uF3KR;
     } else fSp = uMorph.z / 1.5 * (1.0 + tMorph);
     float fLost = 0.0, fLostS = 0.0;
+    // (s25b: the long waves' group noise — snoise of P x 0.035 and x 0.09, blobs of ~14 m and ~5 m — sampled at vertices
+    // tens of metres apart is aliased: a coarse patch interpolated a few random samples of it while the fine patch next
+    // to it drew the blobs, so the waves' amplitude, the roughness, the glitter and the mirrored clouds changed across
+    // the patch border — the Mac's straight seam. Each term fades to its mean where the lattice cannot carry it, the
+    // same on both sides of a border; 'wshade3=seamold' = s25)
+    vec2 fGw = ${SEAMOLD ? 'gwG' : 'gwG * vec2(1.0 - smoothstep(3.0, 6.0, fSp), 1.0 - smoothstep(1.2, 2.5, fSp))'};
     for (int i = 0; i < 4; i++) {
       float L = GW_D[i].w;
       vec3 D = normalize(GW_D[i].xyz);
       vec3 d = waveTan(D, fUp);
       float k = 6.2831853 / L;
-      float a = GW_A[i] * fSea * fCalm * windFeed(d, wT, i < 2 ? 1.0 : 0.5) * smoothstep(0.15, 0.45, length(d)) * gwGroup(gwG, i) * k;
-      float fv = 1.0 - smoothstep(L * 0.2, L * 0.4, fSp);
+      float a = GW_A[i] * fSea * fCalm * windFeed(d, wT, i < 2 ? 1.0 : 0.5) * smoothstep(0.15, 0.45, length(d)) * gwGroup(fGw, i) * k;
+      float fv = 1.0 - smoothstep(L * ${SEAMOLD ? '0.2' : '0.12'}, L * ${SEAMOLD ? '0.4' : '0.25'}, fSp);
       vec4 g = vec4(d * (a * fv * cos(k * dot(fP, D) - sqrt(9.8 * k) * uTime + gwPhase(gwW, i))), 0.5 * a * a * fv);
       if (i < 2) vF3B += g; else vF3A += g;
       fLost += 0.5 * a * a * (1.0 - fv);
@@ -177,15 +183,15 @@ const VERT_MAIN = /* glsl */ `
       vec3 d = waveTan(D, fUp);
       float k = 6.2831853 / L;
       float a = L * 0.011 * fSea * fCalm * smoothstep(1.5, 8.0, vDepth) * windFeed(d, wT, 1.0) * smoothstep(0.15, 0.45, length(d)) * k;
-      float fv = 1.0 - smoothstep(L * 0.2, L * 0.4, fSp);
+      float fv = 1.0 - smoothstep(L * ${SEAMOLD ? '0.2' : '0.12'}, L * ${SEAMOLD ? '0.4' : '0.25'}, fSp);
       vF3S += vec4(d * (a * fv * cos(k * dot(fP, D) - sqrt(9.8 * k) * uTime + fi * 2.1)), 0.5 * a * a * fv);
       fLostS += 0.5 * a * a * (1.0 - fv);
     }
     vF3Sun.w = fLostS;
     // the ripple map's amplitudes (wfast=2's calibration), swelling and fading with the long waves' group noise; tile B
     // also carries the Gerstner waves the lattice cannot (the same 1-9 m band; 0.0145 = the map's slope variance)
-    float kA = 1.15 * uWind * mix(fG, fG * fG, 0.6) * clamp(0.6 + 0.5 * gwG.y, 0.2, 1.3);
-    float kB = 1.15 * uWind * fG * clamp(0.6 + 0.5 * gwG.x, 0.2, 1.3);
+    float kA = 1.15 * uWind * mix(fG, fG * fG, 0.6) * clamp(0.6 + 0.5 * fGw.y, 0.2, 1.3);
+    float kB = 1.15 * uWind * fG * clamp(0.6 + 0.5 * fGw.x, 0.2, 1.3);
     vF3Alb.w = kA;
     vF3Cld.w = sqrt(kB * kB + fLost / 0.0145);
     // light
@@ -357,7 +363,7 @@ vec4 f3Ssr(vec3 posV, vec3 rV, vec3 nV) {
     prz = rz; uPrev = u;
   }
   return vec4(0.0);
-  /* end s25 loop */` : `// (s26) the same samples and tests, restructured for the GPU: the depth copy is NEAREST-filtered, so texelFetch
+  /* end s25 loop */` : `// (s25b) the same samples and tests, restructured for the GPU: the depth copy is NEAREST-filtered, so texelFetch
   // reads exactly what texture() did, without implicit derivatives inside this data-dependent loop; the samples are
   // fetched four at a time (their places depend only on the index: the loads overlap) and tested in order; the
   // bisection and the reprojection run once, after the loop
@@ -575,7 +581,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float shore = 0.0;
   if (shoreOn) {
     // the surf's streaks run up and down the beach (tile 32 m: 8 / 4 / 2 / 1 m), the band's edge drifts slowly
-    // (s26: one octave finer than s25 — 2 m streaks, a 1 m band edge: a Perlin cell reads ~2x a simplex one of the same
+    // (s25b: one octave finer than s25 — 2 m streaks, a 1 m band edge: a Perlin cell reads ~2x a simplex one of the same
     // lattice, and the s25 line ran long and even where the original breaks into short bright dashes; 'wshade3=foamold')
     vec4 nS = f3N(P, 32.0, vec2(0.0, -uTime * 0.25 / 32.0 * 0.6));
     float pulse = 0.5 + 0.5 * sin(uTime * 0.9 - vertThick * 2.4 + nE.x * 3.0);
@@ -624,7 +630,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
     if (!(edgeOn || shoreOn || surgeOn)) nE = f3N(P, 64.0, vec2(0.0));
     // LACE: ridged noise at two scales drifting with the flow (tile 8 m: lattice 2 / 1 / 0.5 / 0.25 m), thinning out
     vec4 nLc = f3N(P - vFlow * uTime, 8.0, vec2(0.0, uTime * 0.07 / 8.0));
-    float l1 = 1.0 - abs(nLc.${FOAMOLD ? 'y' : 'z'});   // (s26: 0.5 / 0.25 m lattice, the simplex's 1.25 / 0.48 m look)
+    float l1 = 1.0 - abs(nLc.${FOAMOLD ? 'y' : 'z'});   // (s25b: 0.5 / 0.25 m lattice, the simplex's 1.25 / 0.48 m look)
     float l2 = 1.0 - abs(nLc.${FOAMOLD ? 'z' : 'w'});
     float kL = 1.0 - smoothstep(0.15, 0.9, fw * 2.6);
     float l0 = 1.0 - abs(nE.w);   // (2 m lattice: Perlin cells read ~2x the simplex's of the same lattice)
