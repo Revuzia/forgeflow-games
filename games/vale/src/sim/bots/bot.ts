@@ -82,6 +82,8 @@ export class Bot extends BotBase implements BotController {
   readonly eco: Economy;
   readonly stagger: number;
   modeSince = -1e9;
+  /** ruling 56: this tick's siege outnumbers the structure's defenders by two (execPush) */
+  private siegeDive = false;
   /** ruling 55 (no pacing): the macro mode last left, when, and the walk point a calm fighter is committed to */
   private latchX = 0;
   private latchY = 0;
@@ -1599,7 +1601,12 @@ export class Bot extends BotBase implements BotController {
       const alliesNear = this.alliesNear(siege.x, siege.y, 12);
       const enemiesNear = this.enemiesNear(siege.x, siege.y, 12);
       const window = !!b && b.window;
-      const canHit = !attacks || this.minionsTanking(siege) >= 2 || (enemiesNear === 0 && (alliesNear >= 3 || (window && alliesNear >= 2)) && this.hpF > 0.45);
+      // (ruling 56: a grouped siege that outnumbers the structure's defenders by two goes in without waiting for a wave — the
+      // defenders now clear every wave off their structure, and a group waiting at the door for Wicks stood there for minutes,
+      // ahead in numbers and Gleam; a beginner's team takes the dive too, as beginners do)
+      const outnum = grouped && this.hpF > 0.5 && this.alliesNear(siege.x, siege.y, 20) >= Math.max(3, this.enemiesNear(siege.x, siege.y, 20) + 2);
+      this.siegeDive = outnum;
+      const canHit = !attacks || this.minionsTanking(siege) >= 2 || outnum || (enemiesNear === 0 && (alliesNear >= 3 || (window && alliesNear >= 2)) && this.hpF > 0.45);
       if (canHit) { this.pSiege = siege; mx = siege.x; my = siege.y; }
       else if (grouped && b) {
         // wait for the wave on our side of it
@@ -1616,7 +1623,9 @@ export class Bot extends BotBase implements BotController {
     }
     this.pMoveX = mx; this.pMoveY = my;
     const f = this.pickFightTarget(9);
-    if (f && this.adv >= 0.45 && this.hpF > 0.4 && this.towerSafe(f.x, f.y, 0)) { this.pFight = f; this.pAggro = 0.7; }
+    // (ruling 56: and the outnumbered defenders under it are the fight — the tower takes one of us, not all)
+    if (f && this.adv >= 0.45 && this.hpF > 0.4 && (this.towerSafe(f.x, f.y, 0) || this.siegeDive)) { this.pFight = f; this.pAggro = 0.7; }
+    this.siegeDive = false;
     // laning: shoving my own lane is not worth tanking its Wicks
     if (!grouped && this.lanePhase() && !this.pSiege) this.shedWicks();
     else if (!(b && b.rush)) this.waveGuard();
