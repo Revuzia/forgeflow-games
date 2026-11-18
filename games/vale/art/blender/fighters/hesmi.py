@@ -374,11 +374,14 @@ BAND_C = (0.0, 0.005)
 # (ruling 56) the carved face in the hood's opening: its centre height, the eyes' height, centre x, half length,
 # half height and outer-corner lift (m per m); the mouth's height
 FACE_C = 2.062
-FACE_EYE_Z, FACE_EYE_X, FACE_EYE_L, FACE_EYE_H, FACE_EYE_TILT = 2.092, 0.041, 0.0215, 0.0110, 0.05
+FACE_EYE_Z, FACE_EYE_X, FACE_EYE_L, FACE_EYE_H, FACE_EYE_TILT = 2.092, 0.043, 0.0250, 0.0130, 0.05
+# (ruling 57) the face's own tone: a warm honed sandstone, mid value (L* ~62), so the face never reads as a pale
+# blank egg (three.js face sheet: the old pale stone face read as a mannequin at the in-match pitch); every skin keeps it
+FACE_TONE, FACE_TONE_MIX = "#AC8F76", 0.85
 FACE_MOUTH_Z = 1.996
 FACE_UV_WEIGHT = 3.0
-FACE_COL = {"white": "#CFC6B6", "iris": "#5E4129", "iris_dk": "#3A2716", "pupil": "#120F0C", "lash": "#1A1513",
-            "brow": "#4E3F36", "crease": "#7E7468", "lip": "#6E564A", "shade": "#8E8478"}
+FACE_COL = {"white": "#D6CEC0", "iris": "#5E4129", "iris_dk": "#3A2716", "pupil": "#120F0C", "lash": "#1A1513",
+            "brow": "#3E3029", "crease": "#735E4E", "lip": "#6A4A3E", "shade": "#86705E"}
 EYE_Z, EYE_H, EYE_A = 2.113, 0.0150, (3.5, 36.0)     # the openings' centre height, half-height, angle span (deg)
 
 
@@ -1231,7 +1234,10 @@ CROWN_TONE = np.array([0.95, 0.925, 0.875], dtype=np.float32)   # the hood crown
 CAVITY_LIFT = 0.85                  # the hood's face cavity: linear gain (x1.85 ~ +9 L* at L* 30)
 # roughness written into the baked ORM (texels of these parts / zones; everything else keeps its material's bake):
 # the honed cut bands take a crisp sheen against the matte linen (closing hesmi-M2: band ~0.35, linen ~0.85)
-ROUGH = {"band": 0.34, "eyeband": 0.42, "lens": 0.12, "linen": 0.88, "gauntlet": 0.50, "arris": 0.30}
+# (ruling 57) the carved face is matte (0.74): at 0.42 the lit eye caught the sky and its iris read grey, the other
+# brown; kept under 0.80, the floor of the hood's zone-grade roughness band (zone_grades.json), else the forehead above
+# the hood zone's face notBox (z > 2.14) was graded teal with the hood
+ROUGH = {"band": 0.34, "eyeband": 0.74, "lens": 0.12, "linen": 0.88, "gauntlet": 0.50, "arris": 0.30}
 LINEN_PARTS = ("hood", "facewrap", "mantle")
 GAUNTLET_PARTS = ("gauntlet_R", "gauntlet_L", "knuckle_R", "knuckle_L")
 
@@ -1273,9 +1279,9 @@ def paint_face(p, n, med):
     col = mix(col, E["crease"][None].repeat(len(p), 0), crease * 0.50)
     # the brows: a soft level stroke over each eye on the brow ridge
     bu = (ax - EX - 0.002) / (EL * 1.15)
-    bv = z - (FACE_EYE_Z + 0.024 + 0.004 * (1 - bu * bu))
-    brow = ss((0.0035 - np.abs(bv)) / 0.0025) * ss((1.0 - np.abs(bu)) / 0.2) * front
-    col = mix(col, E["brow"][None].repeat(len(p), 0), brow * 0.75)
+    bv = z - (FACE_EYE_Z + 0.027 + 0.004 * (1 - bu * bu))
+    brow = ss((0.0045 - np.abs(bv)) / 0.0025) * ss((1.0 - np.abs(bu)) / 0.2) * front
+    col = mix(col, E["brow"][None].repeat(len(p), 0), brow * 0.85)
     # a soft shade under the nose's tip and the closed, level mouth with a lit lower lip
     nose = ss((0.010 - ax) / 0.006) * ss((0.005 - np.abs(z - (FACE_EYE_Z - 0.064))) / 0.004) * front
     col = mix(col, E["shade"][None].repeat(len(p), 0), nose * 0.45)
@@ -1632,6 +1638,8 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         src = cb[fr] if fr.sum() > 20 else cb
         med = np.median(src[(Lb >= np.percentile(Lb, 40)) & (Lb <= np.percentile(Lb, 80))], axis=0)
         med = med * (1 - BAND_LIFT) + stone * BAND_LIFT
+        tone = np.asarray(scene.hex_srgb(FACE_TONE), dtype=np.float32)
+        med = med * (1 - FACE_TONE_MIX) + tone * FACE_TONE_MIX
         col[sel] = paint_face(p[sel].astype(np.float64), n[sel].astype(np.float64), med).astype(np.float32)
     # CW6 (hesmi-M1): the hood's face cavity round the band lifted ~9 L* (the near-black void made the pale band a
     # floating grin); the carved-away inner surface of the cowl only
@@ -1694,6 +1702,8 @@ def hesmi_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=p
         r = roles.get(nm)
         if nm in skip or not r or r == "accent":
             continue
+        if nm == "eyeband":     # (ruling 57) the carved face keeps its warm sandstone and brown eyes in every skin
+            continue            # (the stone swap turned it a pale grey egg on Gorgewalk and Shadeprint)
         lo_r, hi_r = DUAL_ROLES.get(nm, (r, r))
         # a skin may re-assign a part's roles (Gorgewalk: the chest wraps and the tunic are its slate mid-band wraps)
         lo_s, hi_s = (_SKIN.get("roles") or {}).get(nm, (lo_r, hi_r))
