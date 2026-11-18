@@ -103,4 +103,16 @@ console.log('state', JSON.stringify(await G(() => window.__GENESIS__.state())).s
 console.log('switches', await G(() => { try { return (window.__GENESIS__.perfSwitches?.() ?? '') ; } catch { return ''; } }));
 console.log('page errors', errors.length, errors.slice(0, 5));
 console.log('gl messages', glmsgs.length, glmsgs.slice(0, 8));
+// (PERF s27) --heapsnap=FILE: a V8 heap snapshot of the page after the views (node s27-heap.mjs FILE sums it by owner)
+if (opts.heapsnap) {
+  const cdp = await page.context().newCDPSession(page);
+  const { writeFileSync } = await import('node:fs');
+  const chunks = [];
+  cdp.on('HeapProfiler.addHeapSnapshotChunk', (e) => chunks.push(e.chunk));
+  await cdp.send('HeapProfiler.collectGarbage');
+  console.log('heap usage', JSON.stringify(await cdp.send('Runtime.getHeapUsage')));
+  await cdp.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false });
+  writeFileSync(opts.heapsnap, chunks.join(''));
+  console.log('heapsnap written', opts.heapsnap);
+}
 await browser.close(); server.close();

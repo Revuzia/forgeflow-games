@@ -574,6 +574,9 @@ export class Renderer {
     if (PRE_UPLOAD) flushTextureUploads(r);
     // ROADMAP step 4 (`?upsched=0` off): every buffer / texture / owner upload scheduled this frame, before any pass
     flushUploads(r);
+    // PERF s22/s26 `?tcache=1`: the frame's terrain tile bakes, here in the uploads slot before any pass (the forest
+    // floor mask reads the previous frame's shadow maps with their matrices, a consistent pair; a no-op when off)
+    primaryVis?.bakeTerrainCache(r, cam);
     perfmon.end('uploads');
     perfmon.begin('shadows');
     triStats.pass = 'shadow';
@@ -595,8 +598,6 @@ export class Renderer {
     } else {
       this.shadows.uniforms.uShadowOn.value = 0;
     }
-    // PERF s22 `?tcache=1`: this frame's terrain tile bakes (they read this frame's shadow maps; a no-op when off)
-    primaryVis?.bakeTerrainCache(r, cam);
     const callsShadow = r.info.render.calls, trisShadow = r.info.render.triangles;
     perfmon.end('shadows');
     perfmon.begin('scene');

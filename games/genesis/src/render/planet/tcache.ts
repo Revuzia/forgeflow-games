@@ -1,31 +1,34 @@
-// GENESIS — PERF s22 `?tcache=1` (default OFF): the terrain MATERIAL CACHE — texture-space shading of the ground.
+// GENESIS — PERF s22 / s26 `?tcache=1` (default OFF): the terrain MATERIAL CACHE — texture-space shading of the ground.
 //
 // The surface function (terrainmat.ts evalTerrain: ~40-125 simplex evaluations a fragment) is evaluated ONCE per texel
-// into per-patch tiles, and again only when its inputs change; the per-frame terrain fragment then takes 6 texture
-// taps (two distance anchors x three targets) and runs the unchanged lighting. A patch without a valid tile draws with
-// the full shader (the same picture at the old cost), so nothing is ever shown stale except the two slow inputs named
-// below (sun direction, season).
+// into per-patch tiles, and again only when its inputs change; the per-frame terrain fragment then takes 3 texture
+// taps and runs the unchanged lighting. A patch without a valid tile draws with the full shader (the same picture at
+// the old cost).
 //
-// STORE (3 targets, 16 B a texel + 2 mips): T0 sRGB8_A8 albedo / 1.5, roughness; T1 RGBA16F D (body frame; the
-// shading normal is normalize(N - D): the bump height's surface gradient + the micro normal, folded exactly as the
-// live path nests them), ao; T2 RGBA8 sky, sward, glint (the share of sparkling facets), 1.
-// TILES: one square per patch in a 2D array texture (TC_SL^2 layers cut in slabs of one size class each). The patch's
-// triangular lattice fills the lower-left half (anchor A) and, rotated by 180 degrees, the upper-right half (anchor B),
-// each with a BORDER-texel margin filled by the patch's own skirt, pushed outward in tile space and EXTRAPOLATED in
-// the body frame (so the border texels hold the function just outside the patch, as the neighbour's tile does).
-// DISTANCE: evalTerrain's camera-distance fades (crop under-storey, mid-distance breakup, gullies, canopy / shrub
-// hand-over) are baked at two fixed distances, the knots of a global ladder 14 * 2^(i/2) m that bracket the patch's
-// distance range; the fragment blends the two by its own live camera distance. No re-bake while the patch stays in
-// its bracket. EYE: the sward's grazing term is baked at one value per tile (quantised) and corrected per fragment to
-// first order. FOOTPRINT: the bake's footprint is the texel's; the tile's size class keeps texels at least as dense
-// as the patch's pixels (required = patch edge in pixels at its nearest point); minification goes through mips +
-// anisotropic filtering, clamped to the mip the tile borders allow.
+// s26 "lean" layout (SESSION 26 in PERF.md: why s22's tiles came to ~2 MB each at the landing view):
+// STORE (3 targets, 16 B a texel + 1 mip): T0 sRGB8_A8 albedo / 1.5, roughness; T1 RGBA16F D (body frame; the shading
+// normal is normalize(N - D): the bump height's surface gradient + the micro normal, folded exactly as the live path
+// nests them), ao; T2 RGBA8 sky, sward, glint (the share of sparkling facets), 1.
+// ONE BAKE PER PATCH, AT THE CAMERA OF THE BAKE: every texel is evaluated with the camera distance, the eye direction
+// and the pixel footprint the full shader would give that point from the camera of the bake frame (the footprint is
+// the full shader's own length(fwidth(P)), built from the screen axes and the surface plane). So the distance fades,
+// the sward's grazing term and every footprint fade are the live ones, texel by texel, and neighbouring patches meet
+// without a step. The camera moving or turning makes a tile slow-stale (shown, re-baked at low priority); moved by
+// more than 15 % of its distance the patch goes back to the full shader until re-baked. The graze term is also
+// corrected per fragment to first order from the bake camera (stored per tile).
+// TILES: a patch's triangular lattice fills HALF a square (lower-left, or rotated 180 degrees: upper-right), so two
+// patches share a square; each half has a 2-texel border on its legs and a 4.24-texel one on the hypotenuse, so the
+// display's taps (mip <= 1) never reach the partner's half. Squares of one size class fill a 288 slab (four by four
+// slabs a layer; classes 192 and 576 take a 576 block).
+// SIZE: by the patch's real on-screen AREA: edge in texels = tcdens x (patch edge in pixels at its nearest point) x
+// sqrt(|n.v| + relief), i.e. texels ~ pixels over the patch (far grazing patches get tiny tiles); the bake's footprint
+// is never under the texel's own. PRIORITY: the patches with the most screen pixels first.
 // LIVE (full shader): patches with lava or fire (uTime), patches nearer than the largest class resolves, patches
-// whose tile is not baked yet / out of its bracket / changed by the sim, and everything once the memory cap is full.
+// whose tile is not baked yet / moved out of its bracket / changed by the sim, and what does not fit the memory cap.
 import {
   DataArrayTexture, DataTexture, DoubleSide, FloatType, HalfFloatType, LinearFilter, Mesh, RGBAFormat, Scene, SRGBColorSpace,
   UnsignedByteType, Vector3, Vector4, WebGLRenderTarget, NearestFilter,
-  type BatchedMesh, type Camera, type IUniform, type Material, type Texture, type WebGLRenderer,
+  type BatchedMesh, type Camera, type IUniform, type Material, type Matrix3, type Texture, type WebGLRenderer,
 } from 'three';
 import { perfNum, perfSwitch, perfSwitchNote } from '../perfswitch.ts';
 import { texUpload } from '../uploadsched.ts';
@@ -35,25 +38,30 @@ import type { ChunkLOD, Patch } from './chunks.ts';
 export const TCACHE = perfSwitch('tcache', false);
 /** memory cap (MB) for the tiles + the bake scratch; `?tcmb=` */
 const TC_MB = TCACHE ? perfNum('tcmb', 256)! : 256;
-/** texels evaluated per frame at most (two anchors count twice); `?tcbudget=` */
-const TC_BUDGET = TCACHE ? perfNum('tcbudget', 200000)! : 0;
+/**
+ * texels evaluated per frame at most; `?tcbudget=`. A texel costs about one full-shader terrain pixel on the GPU
+ * (~0.2 us on the M5 by the round-14 numbers: 64 k texels ~ 13 ms), so this caps the bake's GPU time a frame
+ */
+const TC_BUDGET = TCACHE ? perfNum('tcbudget', 64000)! : 0;
 /** mip bias of the display taps (0 = the footprint's own mip); `?tcbias=` */
 const TC_BIAS = TCACHE ? perfNum('tcbias', 0)! : 0;
-/**
- * texels per pixel (along the patch edge, at its nearest point) a new tile is given; `?tcdens=`. At 1.1 the top-down
- * 160 m view measured 11 % less fine contrast than the full shader and +3 % green (bilinear resampling at ~1:1 softens
- * the albedo and the normal offset); memory goes with its square
- */
-const TC_DENS = TCACHE ? Math.min(2.5, Math.max(1, perfNum('tcdens', 1.1)!)) : 1.1;
+/** texels per pixel (by area, along the patch's edge) a new tile is given; `?tcdens=` (1.3: Nyquist for the footprint fades) */
+const TC_DENS = TCACHE ? Math.min(2.5, Math.max(0.8, perfNum('tcdens', 1.3)!)) : 1.3;
 
-/** layer edge (texels), slab edge, and the tile classes (edge in texels; SLAB / class tiles a side) */
+/** layer edge (texels), slab edge, block edge (texels), the tile classes (square edge in texels) */
 export const TC_SL = 1152;
-const SLAB = 576;
-const CLASSES = [48, 72, 96, 144, 192, 288, 576];
+const SLAB = 288;
+const BLOCK = 576;
+const CLASSES = [24, 32, 48, 72, 96, 144, 192, 288, 576];
+/** the span a class's squares fill: a slab, or a 2x2 block of slabs */
+const span = (c: number): number => (SLAB % CLASSES[c] === 0 ? SLAB : BLOCK);
+/** border on the legs (texels), border on the hypotenuse (in x + y: 6 = 4.24 texels across) */
 const BORDER = 2;
-const PAD = BORDER * (2 + Math.SQRT2);
-const MIPS = 3;
-const KNOT0 = 14;
+const HYP = 6;
+/** usable leg of a class: S - 2 BORDER - HYP */
+const PAD = 2 * BORDER + HYP;
+const MIPS = 2;
+const BPT = 16 * (1 + 1 / 4);
 
 const R = PATCH_RES;
 const f1 = (x: number): string => x.toFixed(4);
@@ -61,15 +69,16 @@ const f1 = (x: number): string => x.toFixed(4);
 /** shared by the display and the bake programs (vertex): the lattice position of a patch vertex from its index */
 export const TC_VERT_PARS = /* glsl */ `
 #ifdef TC_BAKE
-uniform vec4 uTcBake;    // tile edge (texels), anchor (0 A, 1 B), the slot's first vertex, 0
+uniform vec4 uTcBake;    // tile edge (texels), half (0 lower-left, 1 upper-right), the slot's first vertex, 0
 uniform vec3 uTcEi;      // the patch's lattice steps in the body frame (m): the skirt extrapolates the border with them
 uniform vec3 uTcEj;
 vec2 tcClip;
 #else
 flat varying vec4 vTc0;  // layer (-1: no tile, full shader), tile origin (uv), tile edge (uv)
-flat varying vec4 vTc1;  // knot A (m), knot B (m), baked graze, 0
-varying vec4 vTcUV;      // anchor A uv, anchor B uv
+flat varying vec4 vTc1;  // the bake camera (body frame, m), half
+varying vec2 vTcUV;
 #endif
+// lattice (0..1) and the skirt's push (texels, outward in tile space) of a patch vertex
 void tcLattice(int lv, out vec2 lat, out vec2 push) {
   push = vec2(0.0);
   if (lv < ${NPTS}) {
@@ -78,9 +87,9 @@ void tcLattice(int lv, out vec2 lat, out vec2 push) {
     lat = vec2(l - j * (${f1(2 * R + 3)} - j) * 0.5, j);
   } else {
     int k = lv - ${NPTS};
-    if (k < ${R}) { lat = vec2(float(k), 0.0); push = k == 0 ? vec2(-1.0, -1.0) : vec2(0.0, -1.0); }
-    else if (k < ${2 * R}) { int j = k - ${R}; lat = vec2(float(${R} - j), float(j)); push = j == 0 ? vec2(2.41421, -1.0) : vec2(0.70711, 0.70711); }
-    else { int m = k - ${2 * R}; lat = vec2(0.0, float(${R} - m)); push = m == 0 ? vec2(-1.0, 2.41421) : vec2(-1.0, 0.0); }
+    if (k < ${R}) { lat = vec2(float(k), 0.0); push = k == 0 ? vec2(${-BORDER}.0, ${-BORDER}.0) : vec2(0.0, ${-BORDER}.0); }
+    else if (k < ${2 * R}) { int j = k - ${R}; lat = vec2(float(${R} - j), float(j)); push = j == 0 ? vec2(${HYP + BORDER}.0, ${-BORDER}.0) : vec2(${f1(HYP / 2)}, ${f1(HYP / 2)}); }
+    else { int m = k - ${2 * R}; lat = vec2(0.0, float(${R} - m)); push = m == 0 ? vec2(${-BORDER}.0, ${HYP + BORDER}.0) : vec2(${-BORDER}.0, 0.0); }
   }
   lat *= ${f1(1 / R)};
 }
@@ -94,11 +103,11 @@ export const TC_VERT_MAIN = /* glsl */ `
     vec2 tcLat, tcPush;
     tcLattice(tcLv, tcLat, tcPush);
     float tcL = uTcBake.x - ${f1(PAD)};
-    vec2 tcQ = (${f1(BORDER)} + tcL * tcLat + tcPush * ${f1(BORDER)}) / uTcBake.x;
+    vec2 tcQ = (${f1(BORDER)} + tcL * tcLat + tcPush) / uTcBake.x;
     if (uTcBake.y > 0.5) tcQ = 1.0 - tcQ;
     tcClip = tcQ * 2.0 - 1.0;
     // the border: the function just outside the patch (the fields and the normal stay the edge's)
-    vBodyPos += (uTcEi * tcPush.x + uTcEj * tcPush.y) * (${f1(BORDER * R)} / tcL);
+    vBodyPos += (uTcEi * tcPush.x + uTcEj * tcPush.y) * (${f1(R)} / tcL);
 #else
     int tcSlot = gl_VertexID / ${NVERT};
     int tcLv = gl_VertexID - tcSlot * ${NVERT};
@@ -112,14 +121,14 @@ export const TC_VERT_MAIN = /* glsl */ `
     vTc1 = vec4(0.0);
 #endif
     vec2 tcA = (${f1(BORDER)} + (vTc0.w * ${f1(TC_SL)} - ${f1(PAD)}) * tcLat) * ${(1 / TC_SL).toFixed(8)};
-    vTcUV = vec4(vTc0.yz + tcA, vTc0.yz + vTc0.w - tcA);
+    vTcUV = vTc1.w > 0.5 ? vTc0.yz + vTc0.w - tcA : vTc0.yz + tcA;
 #endif
   }
 `;
 
 export const TC_FRAG_PARS = /* glsl */ `
 #ifdef TC_BAKE
-uniform vec4 uTcBakeF;   // anchor distance (m), baked graze, the anchor's pixel footprint (m), 0
+uniform vec4 uTcBakeF;   // the bake camera (body frame, m), pixels per radian
 uniform vec4 uTcBakeK;   // D scale, D offset (8-bit fallback)
 #define tcGlintK 1.0
 layout(location = 1) out highp vec4 tcOut1;
@@ -127,7 +136,7 @@ layout(location = 2) out highp vec4 tcOut2;
 #else
 flat varying vec4 vTc0;
 flat varying vec4 vTc1;
-varying vec4 vTcUV;
+varying vec2 vTcUV;
 uniform highp sampler2DArray uTc0;
 uniform highp sampler2DArray uTc1;
 uniform highp sampler2DArray uTc2;
@@ -136,34 +145,37 @@ float tcGlintK = 1.0;
 #endif
 `;
 
-/** the display fetch: declared after TSurf; dx / dy are the screen derivatives of anchor A's uv (taken outside the branch) */
+/** the display fetch (and the bake's footprint): declared after TSurf and uBodyToView */
 export const TC_FRAG_FETCH = /* glsl */ `
-#ifndef TC_BAKE
-// the distance fades of evalTerrain as one monotone curve: the two anchors are blended along IT, so a fade that runs
-// alone inside a bracket is reproduced exactly however wide the bracket (the linear blend put a 120-500 m fade at 22 %
-// where it is 90 %); where two overlap they are close cousins (120-500, 150-550, 220-520)
-float tcFade(float d) {
-  float f = smoothstep(14.0, 45.0, d) + smoothstep(120.0, 500.0, d) + 0.5 * smoothstep(400.0, 1300.0, d)
-    // (carries the blend where no fade runs: each anchor is baked for the pixel footprint of its distance, which
-    // grows evenly with log distance)
-    + 0.05 * log2(max(d, 1.0));
-  if (uVegFade.x < 1e8) f += smoothstep(uVegFade.y * 0.3, uVegFade.y * 0.44, d);
-  if (uCanopyFade.x < 1e8) f += smoothstep(uCanopyFade.x, uCanopyFade.y, d);
-  return f;
+#ifdef TC_BAKE
+// the full shader's footprint length(fwidth(P)) at this point, seen from the bake camera: the screen-space derivatives
+// of a point on the surface plane, d/dx = (depth / f) (R - p (n.R) / (n.p)) in view space (p = the point, R / U the
+// screen axes), taken back to the body frame (fwidth is per body component)
+float tcFwLive(vec3 P) {
+  vec3 pv = uBodyToView * (P - uTcBakeF.xyz);
+  vec3 nb = cross(dFdx(P), dFdy(P));
+  float nl = length(nb);
+  vec3 nv = uBodyToView * (nl > 1e-20 ? nb / nl : normalize(P));
+  float lp = length(pv);
+  float np = dot(nv, pv);
+  np = np < 0.0 ? min(np, -1e-3 * lp) : max(np, 1e-3 * lp);
+  mat3 vb = transpose(uBodyToView);
+  vec3 ex = vb * (vec3(1.0, 0.0, 0.0) - pv * (nv.x / np));
+  vec3 ey = vb * (vec3(0.0, 1.0, 0.0) - pv * (nv.y / np));
+  return max(-pv.z, 1e-3 * lp) / uTcBakeF.w * length(abs(ex) + abs(ey));
 }
-TSurf tcFetch(vec2 dx, vec2 dy, float camDist, float graze, out vec3 D) {
-  // the footprint, held to the mip the tile borders allow (2 texels at mip 0: mip 1.5 with 16x anisotropy)
+#else
+TSurf tcFetch(vec2 dx, vec2 dy, float graze, out vec3 D) {
+  // the footprint, held to mip 1 (the tile borders: 2 texels on the legs, 4.24 on the hypotenuse, at mip 0)
   vec2 gx = dx * ${f1(TC_SL)}, gy = dy * ${f1(TC_SL)};
   float lx = length(gx), ly = length(gy);
   float eff = max(min(lx, ly), max(lx, ly) * 0.0625) * uTcK.x;
-  float sc = uTcK.x * min(1.0, 2.83 / max(eff, 1e-6));
+  float sc = uTcK.x * min(1.0, 2.0 / max(eff, 1e-6));
   dx *= sc; dy *= sc;
-  vec3 pa = vec3(vTcUV.xy, vTc0.x), pb = vec3(vTcUV.zw, vTc0.x);
-  float fa = tcFade(vTc1.x);
-  float t = clamp((tcFade(camDist) - fa) / max(tcFade(vTc1.y) - fa, 1e-7), 0.0, 1.0);
-  vec4 c0 = mix(textureGrad(uTc0, pa, dx, dy), textureGrad(uTc0, pb, dx, dy), t);
-  vec4 c1 = mix(textureGrad(uTc1, pa, dx, dy), textureGrad(uTc1, pb, dx, dy), t);
-  vec4 c2 = mix(textureGrad(uTc2, pa, dx, dy), textureGrad(uTc2, pb, dx, dy), t);
+  vec3 pa = vec3(vTcUV, vTc0.x);
+  vec4 c0 = textureGrad(uTc0, pa, dx, dy);
+  vec4 c1 = textureGrad(uTc1, pa, dx, dy);
+  vec4 c2 = textureGrad(uTc2, pa, dx, dy);
   TSurf s;
   s.albedo = c0.rgb * 1.5;
   s.rough = clamp(c0.a, 0.04, 1.0);
@@ -174,8 +186,9 @@ TSurf tcFetch(vec2 dx, vec2 dy, float camDist, float graze, out vec3 D) {
   tcGlintK = c2.z;
   s.glint = c2.z > 0.004 ? 1.0 : 0.0;
   s.bump = 0.0; s.emis = vec3(0.0); s.microG = vec3(0.0);
-  // the sward's grazing tone (groundfloor.ts swardDetail) was baked at vTc1.z: first-order correction to this eye
-  s.albedo *= 1.0 + s.sward * (mix(0.94, 1.07, graze) / mix(0.94, 1.07, vTc1.z) - 1.0);
+  // the sward's grazing tone (groundfloor.ts swardDetail) was baked for the eye at vTc1.xyz: first-order correction
+  float gb = 1.0 - clamp(dot(normalize(vBodyPos), normalize(vTc1.xyz - vBodyPos)), 0.0, 1.0);
+  s.albedo *= 1.0 + s.sward * (mix(0.94, 1.07, graze) / mix(0.94, 1.07, gb * gb) - 1.0);
   return s;
 }
 #endif
@@ -209,17 +222,17 @@ export function tcInitPage(mesh: BatchedMesh): void {
   (mesh as unknown as { _colorsTexture: DataTexture })._colorsTexture = t;
 }
 
-interface Slab { layer: number; x: number; y: number; cls: number; free: number[]; used: number }
+/** a 288 slab; a class that spans a 576 block keeps its list on the block's first slab (the other three point at it) */
+interface Slab { layer: number; x: number; y: number; cls: number; free: number[]; used: number; owner: (Tile | null)[]; head: Slab | null }
 interface Tile {
   cls: number; slab: Slab | null; sub: number;
-  kA: number; kB: number; g: number;
-  sun: Vector3; year: number; gkey: string;
+  cam: Vector3; fwd: Vector3; sun: Vector3; year: number; gkey: string;
   baked: boolean; dirty: boolean; stale: boolean; hot: boolean; hotEpoch: number;
-  lastUsed: number; dn: number; df: number; need: number; ia: number; ib: number;
+  lastUsed: number; dn: number; need: number; area: number; areaW: number;
 }
 
-const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3();
-const knotAt = (i: number): number => KNOT0 * Math.pow(2, i / 2);
+const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3(), _f = new Vector3();
+const classFor = (n: number): number => { let c = 0; while (c < CLASSES.length - 1 && CLASSES[c] - PAD < n) c++; return c; };
 
 /** per-channel change (since the value a tile may have been baked with) that re-bakes the tiles of a cell */
 const WATCH: Record<string, [number, number, number, number]> = {
@@ -231,10 +244,16 @@ const WATCH: Record<string, [number, number, number, number]> = {
 export interface TcStats {
   on: boolean; mb: number; layers: number; float: boolean; tiles: number; cached: number; live: number; hot: number; near: number; wide: number; wantN: number; wantMB: number; full: number;
   queued: number; bakes: number; bakesTotal: number; texels: number; rebakeDirty: number; rebakeKnot: number; rebakeClass: number; rebakeSlow: number; globals: number; dirtyCells: number;
+  /** s26: estimated terrain screen pixels of the drawn patches, the share of them on a valid tile (%), MB of tiles in use */
+  pixAll: number; pixPct: number; usedMB: number; stale: number;
+  /** tiles in use by class edge ("24:n/32:n/...") */
+  byClass: string;
+  /** main-thread ms of this frame's bake call, per tile (running mean), the worst frame so far */
+  bakeMs: number; bakeMsPer: number; bakeMsMax: number;
 }
 
 export class TerrainCache {
-  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, wantN: 0, wantMB: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0 };
+  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, wantN: 0, wantMB: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0, pixAll: 0, pixPct: 0, usedMB: 0, stale: 0, byClass: '', bakeMs: 0, bakeMsPer: 0, bakeMsMax: 0 };
   /** `false` = every patch draws with the full shader (in-page A/B: frame-adjacent pairs) */
   enabled = true;
   private readonly tex: DataArrayTexture[] = [];
@@ -261,7 +280,7 @@ export class TerrainCache {
   private frame = 0;
   private pxPerRad = 0;
   private readonly cam = new Vector3();
-  private selfBlit = true;
+  private readonly fwd = new Vector3();
   /** bake texels in hand (the budget accrues per frame, so a large tile's turn comes within a few frames) */
   private credit = 0;
   private checked = false;
@@ -291,7 +310,7 @@ export class TerrainCache {
     const gl = r.getContext() as WebGL2RenderingContext;
     const float = r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
     this.stats.float = float;
-    const bpt = (4 + (float ? 8 : 4) + 4) * (1 + 1 / 4 + 1 / 16);
+    const bpt = (4 + (float ? 8 : 4) + 4) * (1 + 1 / 4);
     const scratchMB = CLASSES.reduce((s, c) => s + c * c, 0) * (4 + (float ? 8 : 4) + 4) / 1048576;
     const layerMB = TC_SL * TC_SL * bpt / 1048576;
     const maxLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
@@ -321,7 +340,7 @@ export class TerrainCache {
     const k = this.shared.uTcK.value as Vector4;
     const bk = (this.bakeMat.userData.uTcBakeK as IUniform<Vector4>).value;
     if (float) { k.y = 1; k.z = 0; bk.set(1, 0, 0, 0); } else { k.y = 4; k.z = -2; bk.set(0.25, 0.5, 0, 0); console.warn('[genesis] tcache: no float render targets, 8-bit normals'); }
-    for (let l = 0; l < this.layers; l++) for (let y = 0; y < TC_SL; y += SLAB) for (let x = 0; x < TC_SL; x += SLAB) this.slabs.push({ layer: l, x, y, cls: -1, free: [], used: 0 });
+    for (let l = 0; l < this.layers; l++) for (let y = 0; y < TC_SL; y += SLAB) for (let x = 0; x < TC_SL; x += SLAB) this.slabs.push({ layer: l, x, y, cls: -1, free: [], used: 0, owner: [], head: null });
     for (const c of CLASSES) {
       const rt = new WebGLRenderTarget(c, c, { count: 3, depthBuffer: false, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
       rt.textures[0].colorSpace = SRGBColorSpace;
@@ -334,28 +353,51 @@ export class TerrainCache {
     return true;
   }
 
-  private alloc(cls: number): { slab: Slab; sub: number } | null {
-    const n = SLAB / CLASSES[cls];
-    let empty: Slab | null = null;
-    for (const s of this.slabs) {
-      if (s.cls === cls && s.free.length) { s.used++; return { slab: s, sub: s.free.pop()! }; }
-      if (s.cls < 0 && !empty) empty = s;
+  /** slab index of (layer, x, y) */
+  private slabAt(l: number, x: number, y: number): Slab { const n = TC_SL / SLAB; return this.slabs[(l * n + y / SLAB) * n + x / SLAB]; }
+
+  /** a half square of class cls: the first slab of that class with room, else an empty slab (or 576 block) */
+  private alloc(cls: number, t: Tile): { slab: Slab; sub: number } | null {
+    const S = CLASSES[cls], sp = span(cls);
+    for (const s of this.slabs) if (s.cls === cls && !s.head && s.free.length) { const sub = s.free.pop()!; s.used++; s.owner[sub] = t; return { slab: s, sub }; }
+    let head: Slab | null = null;
+    if (sp === SLAB) head = this.slabs.find((s) => s.cls < 0) ?? null;
+    else {
+      for (const s of this.slabs) {
+        if (s.x % BLOCK || s.y % BLOCK || s.cls >= 0) continue;
+        const o = [this.slabAt(s.layer, s.x + SLAB, s.y), this.slabAt(s.layer, s.x, s.y + SLAB), this.slabAt(s.layer, s.x + SLAB, s.y + SLAB)];
+        if (o.some((x) => x.cls >= 0)) continue;
+        for (const x of o) { x.cls = cls; x.head = s; }
+        head = s;
+        break;
+      }
     }
-    if (!empty) return null;
-    empty.cls = cls;
-    empty.free = [];
-    for (let i = n * n - 1; i >= 0; i--) empty.free.push(i);
-    empty.used = 1;
-    return { slab: empty, sub: empty.free.pop()! };
+    if (!head) return null;
+    const n = sp / S;
+    head.cls = cls; head.head = null; head.free = []; head.owner = [];
+    for (let i = 2 * n * n - 1; i >= 0; i--) head.free.push(i);
+    const sub = head.free.pop()!;
+    head.used = 1; head.owner[sub] = t;
+    return { slab: head, sub };
   }
 
   private release(t: Tile): void {
     const s = t.slab;
     if (!s) return;
     s.free.push(t.sub);
-    if (--s.used <= 0) { s.cls = -1; s.free = []; s.used = 0; }
+    s.owner[t.sub] = null;
+    if (--s.used <= 0) {
+      if (span(s.cls) === BLOCK) for (const x of [this.slabAt(s.layer, s.x + SLAB, s.y), this.slabAt(s.layer, s.x, s.y + SLAB), this.slabAt(s.layer, s.x + SLAB, s.y + SLAB)]) { x.cls = -1; x.head = null; }
+      s.cls = -1; s.free = []; s.used = 0; s.owner = [];
+    }
     t.slab = null;
     t.baked = false;
+  }
+
+  /** the tile's square: texel origin in its layer, and which half */
+  private place(t: Tile): { x: number; y: number; half: number; S: number } {
+    const S = CLASSES[t.cls], n = span(t.cls) / S, q = t.sub >> 1;
+    return { x: t.slab!.x + (q % n) * S, y: t.slab!.y + Math.floor(q / n) * S, half: t.sub & 1, S };
   }
 
   /** the sim's fields: cells that moved past WATCH since their reference value (the reference follows them) */
@@ -397,6 +439,9 @@ export class TerrainCache {
   update(camBody: Vector3, pxPerRad: number, frame: number, sunBody: Vector3, yearFrac: number, primary = true): void {
     const st = this.stats, u = this.shared;
     this.frame = frame; this.pxPerRad = pxPerRad; this.cam.copy(camBody);
+    // the view direction in the body frame (row 2 of body -> view, negated)
+    const m = (u.uBodyToView.value as Matrix3).elements;
+    this.fwd.set(-m[2], -m[5], -m[8]);
     // (probes: the primary planet's cache)
     if (primary) (globalThis as unknown as { __TCACHE__?: TerrainCache }).__TCACHE__ = this;
     // inputs that are the same for every tile: a change re-bakes everything (full shader meanwhile)
@@ -414,12 +459,10 @@ export class TerrainCache {
       }
       dc.fill(0);
     }
-    const kMax = Math.max(1300, cf.x < 1e8 ? cf.y : 0, vf.x < 1e8 ? vf.y * 0.44 : 0);
-    const iMax = Math.ceil(2 * Math.log2(kMax / KNOT0));
-    const up = _d;
+    const up = _d, f2 = pxPerRad * pxPerRad, rad = this.lod.radius;
     this.queue.length = 0;
-    st.cached = 0; st.live = 0; st.hot = 0; st.near = 0; st.wide = 0; st.wantN = 0;
-    let wantTexels = 0;
+    st.cached = 0; st.live = 0; st.hot = 0; st.near = 0; st.wide = 0; st.wantN = 0; st.stale = 0;
+    let wantTexels = 0, pixAll = 0, pixC = 0;
     for (const p of this.lod.selected) {
       const mesh = this.lod.tcMesh(p);
       if (!mesh) continue;
@@ -427,125 +470,165 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { cls: -1, slab: null, sub: 0, kA: 0, kB: 0, g: 0, sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, df: 0, need: 0, ia: 0, ib: 0 };
+        t = { cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
+        // the patch's flat triangle (m^2)
+        this.lod.tcCorners(p, _a, _b, _f);
+        _b.sub(_a); _f.sub(_a);
+        t.areaW = 0.5 * _b.cross(_f).length() * rad * rad;
         this.tiles.set(p, t);
       }
       t.lastUsed = frame;
       const sc = p.sphere.center, sr = p.sphere.radius;
       const dc0 = _c.copy(sc).sub(camBody).length();
-      // the patch's distance range: the LOD's shell-sector distance to its nearest point, plus its extent (the
-      // bounding sphere's range is far too wide on steep ground: brackets of 4+ rungs, fades visibly off)
-      const dn = Math.max(this.lod.tcDist(p, camBody), Math.max(0, dc0 - sr));
-      const df = Math.min(dc0 + sr, dn + this.lod.size(p.level) * 1.05 + (p.hMax - p.hMin));
-      t.dn = dn; t.df = df;
-      const ia = Math.min(iMax, Math.max(0, Math.floor(2 * Math.log2(Math.max(dn, KNOT0) / KNOT0) + 1e-6)));
-      const ib = Math.min(iMax, Math.max(ia, Math.ceil(2 * Math.log2(Math.max(df, KNOT0) / KNOT0) - 1e-6)));
-      // (a patch spanning most of the ladder — a coarse one seen along its length — keeps the full shader: the blend
-      // follows one curve, tcFade, and so many rungs hold several different fades)
-      const wide = ib - ia > 5;
-      // the bracket a bake would take: one rung wider each way, so moving the camera by up to ~40 % re-bakes nothing
-      t.ia = Math.max(0, ia - 1); t.ib = Math.min(iMax, ib + 1);
-      // (the patch's edge in pixels at its nearest point, by the LOD's own shell-sector distance: the sphere's is too
-      // short on steep ground and asked for classes no pixel needs)
-      const need = this.lod.size(p.level) * pxPerRad / Math.max(dn, 0.5);
-      t.need = need;
-      // graze^2 of the eye at the patch centre (groundfloor.ts swardDetail)
+      // the LOD's shell-sector distance to the patch's nearest point
+      const dn = Math.max(this.lod.tcDist(p, camBody), Math.max(0, dc0 - sr), 0.5);
+      t.dn = dn;
+      // how squarely the patch faces the eye (its relief: slopes face the eye even when the patch's plane does not)
       up.copy(sc).normalize();
       const ndv = dc0 > 1e-3 ? Math.min(1, Math.max(0, -_c.dot(up) / dc0)) : 1;
-      const g = (1 - ndv) * (1 - ndv);
+      const size = this.lod.size(p.level);
+      const cEff = Math.min(1, Math.max(0.02, ndv + (p.hMax - p.hMin) / size));
+      // the edge (texels) for texels ~ pixels by AREA, at the patch's nearest point (the near end is the densest)
+      const need = size * pxPerRad / dn * Math.sqrt(cEff);
+      t.need = need;
+      // its screen pixels (the triangle's area x |n.v| / d^2, d^2 between its nearest point and its centre)
+      t.area = Math.min(4 * f2, t.areaW * cEff * f2 / Math.max(dn * Math.max(dc0, dn), 0.25));
+      pixAll += t.area;
       if (t.hotEpoch !== this.fieldEpoch) { t.hotEpoch = this.fieldEpoch; t.hot = this.isHot(p); }
-      let valid = this.enabled && primary && t.baked && !t.dirty && !t.hot && !wide && t.gkey === gkey;
-      if (valid && need > CLASSES[t.cls] - PAD + 2) { valid = false; st.rebakeClass++; }
-      if (valid && (dn < t.kA * 0.98 && t.kA > KNOT0 * 1.01 || df > t.kB * 1.02 && t.kB < knotAt(iMax) * 0.99)) { valid = false; st.rebakeKnot++; }
-      if (valid && Math.abs(g - t.g) > 0.2) { valid = false; st.rebakeKnot++; }
-      if (valid && !t.stale && (t.sun.dot(sunBody) < 0.9976 || Math.abs(yearFrac - t.year) > 0.004)) { t.stale = true; st.rebakeSlow++; }
-      // far denser than its pixels now (past the mip the borders allow): a smaller tile, at low priority
-      if (valid && !t.stale && t.cls > 0 && need * (TC_DENS * 2.2) < CLASSES[t.cls] - PAD) { t.stale = true; st.rebakeClass++; }
+      let valid = this.enabled && primary && t.baked && !t.dirty && !t.hot && t.gkey === gkey;
+      const moved = valid ? t.cam.distanceTo(camBody) / dn : 0;
+      const usable = t.cls >= 0 ? CLASSES[t.cls] - PAD : 0;
+      // moved far (the distance fades, the footprint): the full shader until re-baked
+      if (valid && moved > 0.15) { valid = false; st.rebakeKnot++; }
+      // the patch came nearer than its tile resolves (by more than a quarter): the full shader until re-baked
+      if (valid && need * TC_DENS > usable * 1.25) { valid = false; st.rebakeClass++; }
+      if (valid && !t.stale) {
+        // slow-stale: shown, re-baked behind the uncached patches (camera moved / turned, sun, season, class)
+        if (moved > 0.03 || t.fwd.dot(this.fwd) < 0.966) { t.stale = true; st.rebakeKnot++; }
+        else if (t.sun.dot(sunBody) < 0.9976 || Math.abs(yearFrac - t.year) > 0.004) { t.stale = true; st.rebakeSlow++; }
+        else if (need * TC_DENS > usable || (t.cls > 0 && need * TC_DENS * 1.9 < usable)) { t.stale = true; st.rebakeClass++; }
+      }
       // the slot table (two texels): written when it differs (a compacted or re-used slot is caught here too)
       const k = p.tSlot & 15, d = tab.image.data as unknown as Float32Array, o = k * 8;
-      let l = -1, ox = 0, oy = 0, sz = 0;
+      let l = -1, ox = 0, oy = 0, sz = 0, hf = 0;
       if (valid && t.slab) {
-        const S = CLASSES[t.cls], n = SLAB / S;
-        l = t.slab.layer; ox = (t.slab.x + (t.sub % n) * S) / TC_SL; oy = (t.slab.y + Math.floor(t.sub / n) * S) / TC_SL; sz = S / TC_SL;
-        st.cached++;
+        const pl = this.place(t);
+        l = t.slab.layer; ox = pl.x / TC_SL; oy = pl.y / TC_SL; sz = pl.S / TC_SL; hf = pl.half;
+        st.cached++; pixC += t.area;
+        if (t.stale) st.stale++;
       } else st.live++;
-      if (d[o] !== l || d[o + 1] !== ox || d[o + 2] !== oy || d[o + 3] !== sz || d[o + 4] !== t.kA || d[o + 5] !== t.kB || d[o + 6] !== t.g) {
-        d[o] = l; d[o + 1] = ox; d[o + 2] = oy; d[o + 3] = sz; d[o + 4] = t.kA; d[o + 5] = t.kB; d[o + 6] = t.g;
+      // (compared as stored: float32)
+      const fr = Math.fround;
+      if (d[o] !== l || d[o + 1] !== fr(ox) || d[o + 2] !== fr(oy) || d[o + 3] !== fr(sz) || d[o + 4] !== fr(t.cam.x) || d[o + 5] !== fr(t.cam.y) || d[o + 6] !== fr(t.cam.z) || d[o + 7] !== hf) {
+        d[o] = l; d[o + 1] = ox; d[o + 2] = oy; d[o + 3] = sz; d[o + 4] = t.cam.x; d[o + 5] = t.cam.y; d[o + 6] = t.cam.z; d[o + 7] = hf;
         texUpload(tab);
       }
       if (!this.enabled || !primary) continue;
       if (t.hot) { st.hot++; continue; }
-      if (wide) { st.wide++; if (t.slab) this.release(t); continue; }
       if (need * TC_DENS > CLASSES[CLASSES.length - 1] - PAD) { st.near++; if (!valid && t.slab) this.release(t); continue; }
-      { let c = 0; while (c < CLASSES.length - 1 && CLASSES[c] - PAD < need * TC_DENS) c++; wantTexels += CLASSES[c] * CLASSES[c]; st.wantN++; }
+      { const c = CLASSES[classFor(need * TC_DENS)]; wantTexels += c * c / 2; st.wantN++; }
       if (!valid || t.stale) this.queue.push(p);
     }
     st.queued = this.queue.length;
-    // what this frame's cacheable patches would take at their classes (MB, tiles + mips; slab rounding not counted)
-    st.wantMB = Math.round(wantTexels * (this.stats.float ? 16 : 12) * 1.3125 / 1048576);
+    st.pixAll = Math.round(pixAll);
+    st.pixPct = pixAll > 0 ? Math.round(1000 * pixC / pixAll) / 10 : 0;
+    // what this frame's cacheable patches would take at their classes (MB, half squares + mips; slab rounding not counted)
+    st.wantMB = Math.round(wantTexels * (this.stats.float ? 16 : 12) * 1.25 / 1048576);
     // patches that left the chunk cache give their tiles back
     if ((frame & 31) === 0) for (const [p, t] of this.tiles) if (!p.built) { this.release(t); this.tiles.delete(p); }
     st.tiles = 0;
-    for (const s of this.slabs) st.tiles += s.used;
-    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `tiles=${st.tiles},cached=${st.cached},live=${st.live},hot=${st.hot},near=${st.near},wide=${st.wide},want=${st.wantN}/${st.wantMB}MB,full=${st.full},bakes=${st.bakesTotal},glob=${st.globals}`);
+    let usedT = 0;
+    const by = new Array<number>(CLASSES.length).fill(0);
+    for (const s of this.slabs) if (!s.head && s.cls >= 0) { st.tiles += s.used; by[s.cls] += s.used; usedT += s.used * CLASSES[s.cls] ** 2 / 2; }
+    st.usedMB = Math.round(usedT * BPT / 104857.6) / 10;
+    st.byClass = CLASSES.map((c, i) => (by[i] ? `${c}:${by[i]}` : '')).filter(Boolean).join('/');
+    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `pix=${st.pixPct}%,used=${st.usedMB}MB,tiles=${st.tiles},cached=${st.cached},live=${st.live},stale=${st.stale},hot=${st.hot},near=${st.near},want=${st.wantN}/${st.wantMB}MB,full=${st.full},bakes=${st.bakesTotal},bakeMs=${st.bakeMsPer.toFixed(2)}/${st.bakeMsMax.toFixed(1)},glob=${st.globals},cls=${st.byClass}`);
     // (the bake wants these again: kept on the instance)
-    this.sunNow.copy(sunBody); this.yearNow = yearFrac; this.iMax = iMax;
+    this.sunNow.copy(sunBody); this.yearNow = yearFrac;
   }
   private sunNow = new Vector3();
   private yearNow = 0;
-  private iMax = 0;
 
-  /** the frame's bakes (after the shadow pass: the forest floor reads this frame's shadow maps), nearest first */
+  /**
+   * the frame's bakes, largest screen area first (Renderer: in the frame's uploads slot, before any pass; the forest
+   * floor mask reads the shadow maps with their matrices, both still the previous frame's: a consistent pair)
+   */
   bake(r: WebGLRenderer, camera: Camera): void {
     const st = this.stats;
     st.bakes = 0; st.texels = 0; st.full = 0;
-    if (!this.enabled || !this.queue.length) return;
+    if (!this.enabled || !this.queue.length) { st.bakeMs = 0; return; }
+    const t0 = performance.now();
     this.ensureGL(r);
     const q = this.queue;
-    // not-yet-cached before merely slow-stale, nearest first
-    q.sort((a, b) => { const ta = this.tiles.get(a)!, tb = this.tiles.get(b)!; const sa = ta.stale && ta.baked && !ta.dirty ? 1 : 0, sb = tb.stale && tb.baked && !tb.dirty ? 1 : 0; return sa - sb || ta.dn - tb.dn; });
+    // not-yet-cached before merely slow-stale, then the most screen pixels first
+    q.sort((a, b) => { const ta = this.tiles.get(a)!, tb = this.tiles.get(b)!; const sa = ta.stale && ta.baked && !ta.dirty ? 1 : 0, sb = tb.stale && tb.baked && !tb.dirty ? 1 : 0; return sa - sb || tb.area - ta.area; });
     const gl = r.getContext() as WebGL2RenderingContext;
     const prevRT = r.getRenderTarget(), prevAuto = r.autoClear;
     r.autoClear = false;
     let spent = 0, held = false;
-    const credit0 = this.credit = Math.min(this.credit + TC_BUDGET, Math.max(2 * TC_BUDGET, CLASSES[CLASSES.length - 1] ** 2 * 1.5));
+    const credit0 = this.credit = Math.min(this.credit + TC_BUDGET, Math.max(2 * TC_BUDGET, CLASSES[CLASSES.length - 1] ** 2 * 0.75));
     let credit = credit0;
     const failed: boolean[] = [];
     const bu = this.bakeMat.userData as { uTcBake: IUniform<Vector4>; uTcBakeF: IUniform<Vector4>; uTcEi: IUniform<Vector3>; uTcEj: IUniform<Vector3>; uMorph: IUniform<Vector4> };
+    const blit = (x: number, y: number, S: number, L: number, toTile: boolean): void => {
+      // level-0 copy of a square between the class's scratch and the tile (all three targets)
+      const rt = this.scratch.get(S)!;
+      for (let i = 0; i < 3; i++) {
+        const sTex = (r.properties.get(rt.textures[i]) as { __webglTexture: WebGLTexture }).__webglTexture;
+        if (toTile) {
+          gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sTex, 0);
+          gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 0, L);
+          gl.blitFramebuffer(0, 0, S, S, x, y, x + S, y + S, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+          // mip 1 (2:1 linear = a box filter)
+          gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 1, L);
+          gl.blitFramebuffer(0, 0, S, S, x / 2, y / 2, (x + S) / 2, (y + S) / 2, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+        } else {
+          gl.framebufferTextureLayer(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 0, L);
+          gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sTex, 0);
+          gl.blitFramebuffer(x, y, x + S, y + S, 0, 0, S, S, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        }
+      }
+      gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
+      gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
+    };
+    const bind = (): void => {
+      r.state.setScissorTest(false);
+      r.state.bindFramebuffer(gl.READ_FRAMEBUFFER, this.fbR);
+      r.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbD);
+    };
+    const unbind = (): void => {
+      r.state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+      r.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+    };
     for (const p of q) {
       const t = this.tiles.get(p)!;
-      const need = t.need;
-      let cls = 0;
-      while (cls < CLASSES.length - 1 && CLASSES[cls] - PAD < need * TC_DENS) cls++;
+      const cls = classFor(t.need * TC_DENS);
       const S = CLASSES[cls];
-      if (S * S > credit) { if (!held) { held = true; credit *= 0.5; } continue; }
+      if (S * S / 2 > credit) { if (!held) { held = true; credit *= 0.5; } continue; }
       const range = this.lod.tcRange(p);
       if (!range) continue;
       if (t.slab && t.cls !== cls) this.release(t);
       if (!t.slab) {
-        let a = this.alloc(cls);
-        if (!a) {
-          // least recently drawn tiles first (never one drawn this frame)
-          if (!failed[cls]) {
-            const old = [...this.tiles].filter(([, x]) => x.slab && x.lastUsed < this.frame).sort((x, y) => x[1].lastUsed - y[1].lastUsed);
-            for (const [, x] of old) { this.release(x); a = this.alloc(cls); if (a) break; }
-          }
+        let a = failed[cls] ? null : this.alloc(cls, t);
+        if (!a && !failed[cls]) {
+          // tiles not drawn this frame first (least recently drawn first)
+          const old = [...this.tiles.values()].filter((x) => x.slab && x.lastUsed < this.frame).sort((x, y) => x.lastUsed - y.lastUsed);
+          for (const x of old) { this.release(x); a = this.alloc(cls, t); if (a) break; }
         }
         if (!a && !failed[cls]) {
-          // full, nothing idle: a near patch takes the tile of the farthest drawn one (at least 1.5x as far)
-          const far = [...this.tiles].filter(([, x]) => x.slab && x.dn > t.dn * 1.5).sort((x, y) => y[1].dn - x[1].dn);
-          for (let i = 0; i < far.length && i < 12 && !a; i++) { this.release(far[i][1]); a = this.alloc(cls); }
+          // full, nothing idle: take the half of a drawn patch of this class with less than half the screen pixels
+          const small = [...this.tiles.values()].filter((x) => x.slab && x.cls === cls && x.area < t.area * 0.5).sort((x, y) => x.area - y.area);
+          for (let i = 0; i < small.length && i < 12 && !a; i++) { this.release(small[i]); a = this.alloc(cls, t); }
         }
-        // (the queue is nearest first: once a class finds no room, the farther ones of that class do not look again)
+        // (the queue is largest first: once a class finds no room, the smaller ones of that class do not look again)
         if (!a) { failed[cls] = true; st.full++; continue; }
         t.slab = a.slab; t.sub = a.sub; t.cls = cls;
       }
-      // the bracket of the distance ladder, the eye's graze (quantised), the slow inputs
-      const dc0 = _c.copy(p.sphere.center).sub(this.cam).length();
-      t.kA = Math.fround(knotAt(t.ia)); t.kB = Math.fround(knotAt(t.ib));
-      _d.copy(p.sphere.center).normalize();
-      const ndv = dc0 > 1e-3 ? Math.min(1, Math.max(0, -_c.dot(_d) / dc0)) : 1;
-      t.g = Math.round((1 - ndv) * (1 - ndv) * 8) / 8;
+      const pl = this.place(t), L = t.slab.layer;
+      // the partner half's texels go into the scratch first (the bake draws one half; the square is copied back whole)
+      const partner = t.slab.owner[t.sub ^ 1];
+      if (partner && partner.baked) { bind(); blit(pl.x, pl.y, S, L, false); unbind(); }
+      t.cam.copy(this.cam); t.fwd.copy(this.fwd);
       t.sun.copy(this.sunNow); t.year = this.yearNow; t.gkey = this.gkey;
       // the draw: the page's geometry, this slot's index range, into the class's scratch target
       const rt = this.scratch.get(S)!;
@@ -560,49 +643,20 @@ export class TerrainCache {
       bu.uTcEi.value.copy(_b).sub(_a).multiplyScalar(rad / R);
       bu.uTcEj.value.copy(_d).sub(_a).multiplyScalar(rad / R);
       r.setRenderTarget(rt);
-      for (let anchor = 0; anchor < 2; anchor++) {
-        bu.uTcBake.value.set(S, anchor, range.vertexStart, 0);
-        // the footprint the surface is evaluated for: a pixel's, face on, at the anchor's distance (never under the
-        // texel's own, never over the patch's nearest point for anchor A): evalTerrain's footprint fades are art-directed
-        // by distance and not mean-preserving (sward tips tint the meadow yellow-green only while resolved), so a tile
-        // baked at its texel's footprint read greener and softer from 160 m than the full shader
-        const da = anchor ? t.kB : Math.min(t.kA, Math.max(t.dn, 0.5));
-        // (x sqrt 2: the shader's footprint is length(fwidth(P)), the sum of the two pixel axes)
-        bu.uTcBakeF.value.set(anchor ? t.kB : t.kA, t.g, 1.41421 * da / this.pxPerRad, 0);
-        r.render(this.scene, camera);
-      }
+      bu.uTcBake.value.set(S, pl.half, range.vertexStart, 0);
+      bu.uTcBakeF.value.set(this.cam.x, this.cam.y, this.cam.z, this.pxPerRad);
+      r.render(this.scene, camera);
       geo.setDrawRange(0, Infinity);
-      // scratch -> the tile (mip 0), then its two mips (box filter: 2:1 linear blits)
-      const n = SLAB / S, x = t.slab.x + (t.sub % n) * S, y = t.slab.y + Math.floor(t.sub / n) * S, L = t.slab.layer;
-      r.state.setScissorTest(false);
-      r.state.bindFramebuffer(gl.READ_FRAMEBUFFER, this.fbR);
-      r.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbD);
-      for (let i = 0; i < 3; i++) {
-        const src = (r.properties.get(rt.textures[i]) as { __webglTexture: WebGLTexture }).__webglTexture;
-        gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, src, 0);
-        gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 0, L);
-        gl.blitFramebuffer(0, 0, S, S, x, y, x + S, y + S, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-        gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 1, L);
-        gl.blitFramebuffer(0, 0, S, S, x / 2, y / 2, (x + S) / 2, (y + S) / 2, gl.COLOR_BUFFER_BIT, gl.LINEAR);
-        gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 2, L);
-        if (this.selfBlit) {
-          gl.framebufferTextureLayer(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 1, L);
-          gl.blitFramebuffer(x / 2, y / 2, (x + S) / 2, (y + S) / 2, x / 4, y / 4, (x + S) / 4, (y + S) / 4, gl.COLOR_BUFFER_BIT, gl.LINEAR);
-          gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
-          gl.framebufferTextureLayer(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, null, 0, 0);
-        } else gl.blitFramebuffer(0, 0, S, S, x / 4, y / 4, (x + S) / 4, (y + S) / 4, gl.COLOR_BUFFER_BIT, gl.LINEAR);
-        if (!this.checked) {
-          // (once: a level-to-level blit inside one texture is legal GL ES 3; if this driver refuses it, mip 2 comes
-          // straight from the scratch)
-          const e = gl.getError();
-          if (e !== gl.NO_ERROR) { this.selfBlit = false; console.warn('[genesis] tcache: mip blit error', e, '-> direct'); gl.blitFramebuffer(0, 0, S, S, x / 4, y / 4, (x + S) / 4, (y + S) / 4, gl.COLOR_BUFFER_BIT, gl.LINEAR); }
-        }
+      bind();
+      blit(pl.x, pl.y, S, L, true);
+      if (!this.checked) {
+        const e = gl.getError();
+        if (e !== gl.NO_ERROR) console.warn('[genesis] tcache: blit error', e);
+        this.checked = true;
       }
-      this.checked = true;
-      r.state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-      r.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+      unbind();
       t.baked = true; t.dirty = false; t.stale = false;
-      spent += S * S; credit -= S * S;
+      spent += S * S / 2; credit -= S * S / 2;
       st.bakes++; st.bakesTotal++;
     }
     st.texels = spent;
@@ -610,6 +664,9 @@ export class TerrainCache {
     this.mesh.geometry = undefined as unknown as Mesh['geometry'];
     r.setRenderTarget(prevRT);
     r.autoClear = prevAuto;
+    const ms = performance.now() - t0;
+    st.bakeMs = ms;
+    if (st.bakes) { st.bakeMsPer = st.bakeMsPer ? st.bakeMsPer * 0.9 + 0.1 * ms / st.bakes : ms / st.bakes; st.bakeMsMax = Math.max(st.bakeMsMax, ms); }
   }
 
   dispose(r?: WebGLRenderer): void {

@@ -707,8 +707,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     }
     // tufts, tips and gaps (groundfloor.ts swardDetail): the sward's own texture at 3–60 m
 #ifdef TC_BAKE
-    // (tcache.ts: the eye's grazing term is one value per tile, corrected per fragment at display)
-    vec4 swd = swardDetail(P, fw, 1.0 - sqrt(uTcBakeF.y));
+    // (tcache.ts: the eye of the bake camera, texel by texel; corrected per fragment at display)
+    vec4 swd = swardDetail(P, fw, dot(up, normalize(uTcBakeF.xyz - P)));
 #else
     vec3 vEye = normalize(transpose(uBodyToView) * normalize(vViewPosition));
     vec4 swd = swardDetail(P, fw, dot(up, vEye));
@@ -1664,8 +1664,9 @@ const FRAG_SURFACE = /* glsl */ `
 ${DEEPBED ? DEEPBED_GLSL : ''}#ifdef TS_NOSURF
   TSurf ts; ts.albedo = vec3(0.3, 0.34, 0.2); ts.rough = 0.85; ts.bump = 0.0; ts.ao = 1.0; ts.emis = vec3(0.0); ts.glint = 0.0; ts.microG = vec3(0.0); ts.sky = 1.0; ts.sward = 0.0;
 #elif defined(TC_BAKE)
-  // (tcache.ts) the bake: the surface at this texel for the anchor's distance, written to the tile's three targets
-  TSurf ts = evalTerrain(vBodyPos, normalize(vBodyN), max(tFw, uTcBakeF.z), uTcBakeF.x);
+  // (tcache.ts) the bake: the surface at this texel seen from the bake camera (its distance and the full shader's
+  // footprint there, never under the texel's own), written to the tile's three targets
+  TSurf ts = evalTerrain(vBodyPos, normalize(vBodyN), max(tFw, tcFwLive(vBodyPos)), length(vBodyPos - uTcBakeF.xyz));
 ${TCACHE ? TC_FRAG_BAKE_OUT : ''}
 #elif defined(TC_ON)
   // (tcache.ts) a patch with a valid tile reads its surface; any other runs the surface function as before. The
@@ -1677,7 +1678,7 @@ ${TCACHE ? TC_FRAG_BAKE_OUT : ''}
   if (tcLive) ts = evalTerrain(vBodyPos, normalize(vBodyN), tFw, length(vViewPosition));
   else {
     float tcG = 1.0 - clamp(dot(normalize(vBodyPos), normalize(transpose(uBodyToView) * normalize(vViewPosition))), 0.0, 1.0);
-    ts = tcFetch(tcDx, tcDy, length(vViewPosition), tcG * tcG, tcD);
+    ts = tcFetch(tcDx, tcDy, tcG * tcG, tcD);
     // open water seen from afar (evalTerrain's uwFar block): by this pixel's footprint, on the tile's surface
     uwFar = smoothstep(0.6, 2.5, tFw) * smoothstep(0.3, 1.5, vF4.y - vF4.w);
     if (uwFar > 0.0) {

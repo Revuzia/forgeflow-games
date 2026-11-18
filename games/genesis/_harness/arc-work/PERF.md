@@ -2371,3 +2371,44 @@ Also: `wdebug=class` paints the sheet over the hills the SAME blue as the open s
   wsingle=1 reads no scene copies, so it also lost reflections and depth colour (expected for the switch).
 - kelpfit: confirmed on the Mac (spires gone; kelpfit=0 brings them back).
 - deepbed=1: looks the same; one faint thin dark diagonal streak on the water at the lower right (check).
+
+## SESSION 24 (verify hill sheet) — the "hills" are the SEA FLOOR's silhouette printed on a level sea by the weather fog
+Camera: the brief's / s23 y0 (surface 17.87588 / -35.0, alt 60, yaw 0, pitch -12, 07:45), babel 307987276, SwiftShader
+480x274, full scene. Helpers: arc-work/s24-run.sh (one boot at y0: tag, switches, [step], [eval]), s24-sheet.js (eval),
+s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
+### 1. Geometry, measured (s24-sheet.js: every drawn patch's vertices re-evaluated on the CPU with terrainvert's tGround
+  formula from the live field textures, projected with the live camera, z-buffered into a 48x27 screen grid)
+- WATER sheet in view: 470 of 519 drawn patches wet; every visible water bin at height 0.0 m above sea (min = max = 0.0),
+  from the shore to the horizon (rows 13-26, distance 87-429 m). A level sea: (a) false.
+- TERRAIN under it: rows 15-17 (the "humps") -141..-7 m, median -69; rows 18-26 median -115..-119 m; the islands at the
+  horizon (rows 11-13) +40..+84 m. The mesh's own level there (A.z) 0.0 everywhere; no terrain bin above sea level is
+  covered by water and no sea-flagged cell stands above sea level. (b) false.
+- SIM cells under the humps (e.g. 3354 / 3385 / 3413 / 3441 / 3468 / 3494, 3321 / 3349 / 3376, 3099 / 3140 / 3142): ground
+  -125..-50 m, water = -ground, level 0.00, ocean = 1, salinity 1. Headless (s24-simcells.ts) at day 0 / 2 / 10 / 30: the
+  same, levels 0.00 to -0.03 m; of the 690 cells within 800 m of the camera, wet cells with level > 1 m above sea: 0 on
+  every day. Nothing to drain. (c) false.
+### 2. What draws the "hills": screenfx.ts height fog read the OPAQUE depth copy (post.linDepth, taken BEFORE the water)
+- `wdebug=hb` (water fragments flat red): the red sheet is drawn to the horizon everywhere, but a pale veil lies over it in
+  the shape of two humps and a V: unchanged with `nodepth`, `waterland=0`, `clouds=0`, `atmo=0`. So it is laid on AFTER.
+- The weather's height fog (weatherfx -> screenfx OVER pass; fogDensity 0.00087-0.00091, scale 140 m at this view: the
+  overcast haze) takes each pixel's distance from post.linDepth = the opaque scene WITHOUT the water: over the sea that is
+  the distance to the SEA BED, and where no bed lies behind the water (the sight line passes over a submarine rise's crest)
+  the "sky" 6000 m. Straight-ray integral exp(-h/140): bed 400-700 m away -> fog ~0.15-0.25; sky -> fog 1.0 (white). So
+  the image shows the sea floor's silhouette: the rises under less fog ("hills", the kelp dark inside them), the white V
+  where the line of sight clears the rise. Also its ground under the camera was the sea bed (fog thinned as if the 120 m
+  of water were air). That is also why `wsingle=1` cured it on the Mac (r17-13): the water is then in the opaque pass, so
+  linDepth holds the water's depth. And why `water=0` kept the domes (s23): the bed still makes the fog's silhouette.
+- The colleague (s23 §6) was right that the sheet is the sea and the domes are submarine rises, wrong that they are seen
+  through / under the water: the water is opaque there (path >= 400 m capped, Tw ~ 0); it is the fog's depth.
+### 3. FIX `fogwater` (screenfx.ts + godfx.ts, default ON; `?fogwater=0` = old)
+- The fog and the ground / sky tint read the RESOLVED scene depth (post.depthTexture, water included; decoded with
+  DEPTH_DECODE like the atmosphere, log or revz) instead of linDepth; the fog's ground under the camera is
+  max(ground, radius + seaLevel). Cost: none (same one tap).
+- PROOF (s24/shots): before-after.png (top fw0 = fogwater=0: humps + V; bottom fw1 = default: a flat sea to the horizon,
+  the islands on it), fw1hb-y0.png (wdebug=hb: red to the horizon, no V) vs hb-y0.png (old: V). ws0 / ws1 = wsingle=1 with
+  fogwater 0 / 1 (flat both: the Mac's control reproduced).
+- Mac round: default vs `fogwater=0` at the landing (the hill must be gone, reflections and depth colour unchanged — the
+  water shader is untouched), and `wsingle=1` should now look the same as default apart from the lost refraction / SSR.
+- deepbed's thin dark diagonal streak (r17 lower right; thin dark diagonals show in r17-14 without deepbed too): not
+  investigated this session. Suspect: a hairline crack in the water sheet at a patch LOD border (the water has no skirts),
+  through which the bed shows (black under deepbed). Check with `wdebug=hb` on a dark background (`deepbed=2`) at that view.

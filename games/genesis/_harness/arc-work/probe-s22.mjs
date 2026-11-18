@@ -52,6 +52,8 @@ const CAM = {
   orbit: { mode: 'orbit', lat: 18, lon: -35, dist: 7800, hour: 16.25, blend: 0 },
 };
 const settle = Number(opts.settle ?? 12);
+// (PERF s26) --cams='{"name":{spec},...}' adds camera specs (views by these names)
+if (opts.cams) Object.assign(CAM, JSON.parse(opts.cams));
 const G = (fn, a) => page.evaluate(fn, a);
 const stats = () => G(() => { const t = globalThis.__TCACHE__; return t ? JSON.stringify(t.stats) : 'no cache'; });
 // settle: frames until the bake queue is empty (or `max`), then one screenshot with the cache (c-) and, one frame
