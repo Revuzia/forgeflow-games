@@ -432,7 +432,77 @@ def ground_light_pass(d: dict) -> dict:
 
 def post(d: dict) -> dict:
     """passes applied to every def after its source (and its bespoke/tuned.json hand tuning) is chosen"""
-    return ult_feel_pass(ground_light_pass(d))
+    return heavy_crack_pass(dust_pass(ult_feel_pass(ground_light_pass(d))))
+
+
+# orch1 W2-B (VFX-O6): the near-black ink puffs (#17181B / #2A2C33 particles) read as black blots on the lifted ground at the
+# game camera (Wick deaths, hit backings, status specks, wind-up smoke). Outside the Shade family's own defs (the true-damage
+# hit, the Shade bolts / bursts / orbs / zone / ultimate, the Longshade) a particle never emits ink: it becomes warm-grey dust
+# (#57544E / #6E6A62, L* 36-46) at alpha <= 0.45 with a faint rim. Shaped ink (meshes, decals, ribbons) keeps its colour: a
+# dial or a hand is a form, not a blot. Rule: tokens.json vfx.rules.inkParticles. Idempotent.
+INK_HEX = {"#17181B": "#57544E", "#2A2C33": "#6E6A62"}
+SHADE_OWN = {"lib_bolt_shade", "lib_burst_shade", "lib_orb_shade", "lib_ult_shade", "lib_zone_shade", "lib_hit_true"}
+DUST_ALPHA_MAX = 0.45
+DUST_RIM_MAX = 0.3
+
+
+def shade_own(def_id: str) -> bool:
+    return def_id in SHADE_OWN or def_id.startswith("lib_longshade_")
+
+
+def _scale_alpha(a, k: float):
+    if isinstance(a, (int, float)):
+        return round(a * k, 3)
+    if isinstance(a, list):
+        return [[x[0], round(x[1] * k, 3)] if isinstance(x, list) else round(x * k, 3) if isinstance(x, (int, float)) else x for x in a]
+    return a
+
+
+def _alpha_max(a) -> float:
+    if isinstance(a, (int, float)):
+        return float(a)
+    if isinstance(a, list):
+        vals = [x[1] if isinstance(x, list) else x for x in a if isinstance(x, (int, float, list))]
+        return float(max(vals)) if vals else 1.0
+    return 1.0
+
+
+def dust_pass(d: dict) -> dict:
+    if shade_own(d["id"]):
+        return d
+    hit = [i for i, l in enumerate(d["layers"]) if l["type"] == "emitter" and l.get("blend") != "chip"
+           and any(isinstance(c, str) and c.upper() in INK_HEX for c in _refs(l.get("color")))]
+    if not hit:
+        return d
+    d = copy.deepcopy(d)
+    for i in hit:
+        l = d["layers"][i]
+        l["color"] = _map_colors(l["color"], lambda c: INK_HEX.get(c.upper(), c) if isinstance(c, str) else c)
+        m = _alpha_max(l.get("alpha", 1))
+        if m > DUST_ALPHA_MAX:
+            l["alpha"] = _scale_alpha(l.get("alpha", 1), DUST_ALPHA_MAX / m)
+        if (l.get("rimAlpha") or 0) > DUST_RIM_MAX:
+            l["rimAlpha"] = DUST_RIM_MAX
+    return d
+
+
+# orch1 W2-B (VFX-O7): the heavy physical hit's mark is a chalk crack star in the settle range (L* 45-55, no reserved hue, a
+# pale chalk glint in the lines), not a dark navy ellipse with a team rune: it read as a hole under the target on every
+# heavy auto. Idempotent.
+CRACK_CHALK = "#7D776C"
+
+
+def heavy_crack_pass(d: dict) -> dict:
+    if d["id"] != "lib_hit_phys_heavy":
+        return d
+    d = copy.deepcopy(d)
+    for l in d["layers"]:
+        if l["type"] == "decal" and l.get("style") == "crack":
+            l["color"] = CRACK_CHALK
+            l["rim"] = "#F1E2C6"
+            l["emissive"] = 0.25
+            l["alpha"] = [0.75, 0.6, 0]
+    return d
 
 
 def ult_feel_pass(d: dict) -> dict:

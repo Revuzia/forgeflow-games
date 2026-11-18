@@ -81,8 +81,10 @@ const QUALITY = opt('q', 'high');
 // ---------------------------------------------------------------------------------------------- clutter (orch1 VFX-O1, W1-D)
 async function clutterMain() {
   const SEEDS = opt('seeds', '7,11,23').split(',').map(Number), WANT = Number(opt('frames', 30)), T0 = Number(opt('t0', 720)), SCAN = Number(opt('scan', 4500));
+  // W2-B: --shots <dir> saves the full frame (and the same frame with the VFX pass off) of the looks listed by --shot-at (default 0,10,20)
+  const SHOTS = opt('shots', ''), SHOT_AT = opt('shot-at', '0,10,20').split(',').map(Number);
   const outDir = join(HERE, '..', '_design', 'reviews', 'orch1', 'evidence', 'clutter'); mkdirSync(outDir, { recursive: true });
-  const res = { gate: 'clutter', at: new Date().toISOString(), quality: QUALITY, t0: T0, scan: SCAN, bars: { medianOcclusion: 0.25, worstRunMs: 300, worstRunOcclusion: 0.6, teleEdge: 0.45, selfRing: 1 }, seeds: [] };
+  const res = { gate: 'clutter', at: new Date().toISOString(), quality: QUALITY, t0: T0, scan: SCAN, bars: { medianOcclusion: 0.25, worstRunMs: 300, worstRunOcclusion: 0.6, teleEdge: 0.45, selfRing: 1, hotBody: 0.3, vfxTris: 35000, draws: 450 }, seeds: [] };
   for (const seed of SEEDS) {
     const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=${QUALITY}&t=${T0}&seed=${seed}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
     try {
@@ -91,13 +93,24 @@ async function clutterMain() {
       await page.waitForTimeout(6000);                                                  // models, textures, shader warm-up
       const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
       for (let i = 0; i < 60 && (await B((b) => b.renderer.lib?.pending ?? 0)) > 0; i++) await page.waitForTimeout(1000);
+      // W2-B: measure the defs on disk (content/vfx.json; --before <file> for an A/B), as every other section does
+      await B(async (b, d) => { const { VfxDef } = await import('/src/contracts/catalog.ts'); b.renderer.vfx.redefine(d.map((x) => VfxDef.parse(x))); }, defs);
       await B((b) => { b.frames(30, 1 / 30); b.follow(); });
-      const out = await page.evaluate(async ([want, scan, q]) => {
+      const out = await page.evaluate(async ([want, scan, q, shots]) => {
         const b = window.__VALE_BENCH__, R = b.renderer, host = b.host, canvas = document.getElementById('c');
+        window.__clutterShots = [];
         const gl = R.gl.getContext();
         const budget = { low: 700, medium: 900, high: 2000, ultra: 2500 }[q] ?? 2000;
         const luma = (px, o) => 0.2126 * px[o] + 0.7152 * px[o + 1] + 0.0722 * px[o + 2];
         const chroma = (px, o) => Math.max(px[o], px[o + 1], px[o + 2]) - Math.min(px[o], px[o + 1], px[o + 2]);
+        // display L* from the sRGB frame: relative luminance Y over the linearised channels; L* 85 <=> Y 0.660
+        const LIN = new Float32Array(256); for (let i = 0; i < 256; i++) { const c = i / 255; LIN[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }
+        const Y = (px, o) => 0.2126 * LIN[px[o]] + 0.7152 * LIN[px[o + 1]] + 0.0722 * LIN[px[o + 2]];
+        const HOT_Y = ((85 + 16) / 116) ** 3;
+        // --shots: the look's full frame as a PNG (the read-back pixels, flipped to screen order)
+        const png = (fr) => { const c = document.createElement('canvas'); c.width = fr.W; c.height = fr.H; const x = c.getContext('2d'), im = x.createImageData(fr.W, fr.H);
+          for (let y = 0; y < fr.H; y++) im.data.set(fr.px.subarray((fr.H - 1 - y) * fr.W * 4, (fr.H - y) * fr.W * 4), y * fr.W * 4);
+          for (let i = 3; i < im.data.length; i += 4) im.data[i] = 255; x.putImageData(im, 0, 0); return c.toDataURL('image/png').split(',')[1]; };
         const grab = () => { R.render(0); const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px); return { px, W, H }; };
         const bodyMask = (a, W, H) => {
           const skip = []; a.root.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { skip.push([o, o.layers.mask]); o.layers.disableAll(); } });
@@ -108,8 +121,10 @@ async function clutterMain() {
           finally { g.setRenderTarget(null); g.setClearColor(cc, ca); g.autoClear = ac; for (const [o, m] of skip) o.layers.mask = m; RT.dispose(); }
           return mask;
         };
-        const measure = () => {
+        const measure = async () => {
           const v = host.view, W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, st = R.stats();
+          // W2-B (VFX-O10): this frame's VFX triangles and the whole frame's draws / triangles (the renderer's profile hook)
+          let prof = null; if (b.profile) { const pp = b.profile(); R.render(0); prof = await pp; }
           const full = grab();
           const dv = R.vfx.draw, tv = R.overlay.teleScene.visible;
           R.vfx.draw = () => {}; R.overlay.teleScene.visible = false;
@@ -126,12 +141,14 @@ async function clutterMain() {
             const a = R.actors.get(f.id); if (!a || !a.model || !a.root.visible) continue;
             const sc = b.screen(f.x, f.y, 1.0); if (sc.x < 0 || sc.x > 1920 || sc.y < 0 || sc.y > 1080) continue;
             const mask = bodyMask(a, W, H);
-            let n = 0, ch = 0;
+            let n = 0, ch = 0, hot = 0;
             for (let o = 0; o < W * H * 4; o += 4) {
               if (mask[o + 3] < 128) continue; n++;
               if (Math.abs(luma(full.px, o) - luma(noFx.px, o)) > 24 || Math.abs(chroma(full.px, o) - chroma(noFx.px, o)) > 40) ch++;
+              // W2-B (GFX-3): VFX at display L* > 85 over the body (the pixel is that bright with the VFX and was not without)
+              if (Y(full.px, o) > HOT_Y && Y(noFx.px, o) <= HOT_Y) hot++;
             }
-            if (n >= 200) fighters.push({ id: f.id, def: f.def, team: f.team, bodyPx: n, occlusion: +(ch / n).toFixed(3), me: f.id === meE?.id });
+            if (n >= 200) fighters.push({ id: f.id, def: f.def, team: f.team, bodyPx: n, occlusion: +(ch / n).toFixed(3), hot: +(hot / n).toFixed(3), me: f.id === meE?.id });
           }
           // self ring: pixels the ring mesh changes around the local fighter's feet
           let selfRing = null;
@@ -151,8 +168,9 @@ async function clutterMain() {
             d.sort((x, y) => x - y);
             teleEdge = { px: d.length, p90: d.length ? +d[Math.floor(d.length * 0.9)].toFixed(3) : 0, n: st.telegraphs };
           }
-          return { fighters, selfRing, teleEdge, particles: st.particles, vfx: st.vfx, telegraphs: st.telegraphs, particleBudget: budget };
+          return { fighters, selfRing, teleEdge, particles: st.particles, vfx: st.vfx, telegraphs: st.telegraphs, particleBudget: budget, tris: prof?.total?.tris ?? st.triangles, vfxTris: prof?.groups?.vfx?.tris ?? null, vfxCalls: prof?.groups?.vfx?.calls ?? null, draws: prof?.total?.calls ?? st.calls, programs: st.programs, $png: shotNow ? png(full) : null, $pngNoFx: shotNow ? png(noFx) : null };
         };
+        let shotNow = false;
         const looks = []; let step = 0;
         const consider = () => {
           const v = host.view, fs = v.entities.filter((e) => e.kind === 'fighter' && e.alive);
@@ -177,15 +195,25 @@ async function clutterMain() {
           if (scripted && i % 900 === 0) placeArena();
           b.frames(3, 1 / 30);
           const c = consider(); if (!c) continue;
-          const m = measure();
+          shotNow = shots.includes(looks.length);
+          const m = await measure();
           const t = +host.view.time.toFixed(2);
+          if (m.$png) window.__clutterShots.push({ i: looks.length, t, png: m.$png, noFx: m.$pngNoFx });
+          delete m.$png; delete m.$pngNoFx;
           looks.push({ t, a: c.a, c: c.c, scripted, ...m });
           if (!scripted) natural++;
           b.focus(c.x, c.y);
           if (performance.now() - t0 > 900000) break;
         }
         return { looks, natural, scripted, secs: Math.round((performance.now() - t0) / 1000) };
-      }, [WANT, SCAN, QUALITY]);
+      }, [WANT, SCAN, QUALITY, SHOTS ? SHOT_AT : []]);
+      if (SHOTS) {
+        mkdirSync(SHOTS, { recursive: true });
+        for (const sh of await page.evaluate(() => window.__clutterShots)) {
+          writeFileSync(join(SHOTS, `clutter_s${seed}_look${String(sh.i).padStart(2, '0')}_t${Math.round(sh.t * 10)}.png`), Buffer.from(sh.png, 'base64'));
+          writeFileSync(join(SHOTS, `clutter_s${seed}_look${String(sh.i).padStart(2, '0')}_t${Math.round(sh.t * 10)}_nofx.png`), Buffer.from(sh.noFx, 'base64'));
+        }
+      }
       // aggregate
       const med = (v) => { const a = [...v].sort((x, y) => x - y); return a.length ? a[a.length >> 1] : null; };
       const occ = out.looks.flatMap((l) => l.fighters.map((f) => f.occlusion));
@@ -199,6 +227,8 @@ async function clutterMain() {
         }
       }
       const rings = out.looks.map((l) => l.selfRing).filter(Boolean), teles = out.looks.map((l) => l.teleEdge).filter(Boolean);
+      const hots = out.looks.flatMap((l) => l.fighters.map((f) => ({ hot: f.hot ?? 0, def: f.def, t: l.t }))).sort((x, y) => y.hot - x.hot);
+      const num = (k) => out.looks.map((l) => l[k]).filter((x) => typeof x === 'number');
       const peaks = out.looks.map((l) => l.particles);
       const s = {
         seed, peakFrames4v4: out.looks.length, naturalPeakFrames: out.natural, scriptedPeakFrames: out.looks.length - out.natural, scanSeconds: out.secs,
@@ -207,17 +237,22 @@ async function clutterMain() {
         worstFighterRun: worst, selfRing: { frames: rings.length, found: rings.filter((r) => r.found).length, rate: rings.length ? +(rings.filter((r) => r.found).length / rings.length).toFixed(3) : null },
         teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)) },
         particles: { peak: Math.max(0, ...peaks), median: med(peaks), budget: out.looks[0]?.particleBudget ?? null, overBudgetFrames: out.looks.filter((l) => l.particles > l.particleBudget).length },
+        hotBody: { max: hots[0]?.hot ?? null, worst: hots[0] ?? null, median: med(hots.map((h) => h.hot)), over30: hots.filter((h) => h.hot > 0.3).length },
+        frame: { vfxTrisPeak: Math.max(0, ...num('vfxTris')), vfxTrisMedian: med(num('vfxTris')), trisPeak: Math.max(0, ...num('tris')), drawsPeak: Math.max(0, ...num('draws')), programsPeak: Math.max(0, ...num('programs')) },
         consoleErrors: logs.filter((l) => !/favicon/.test(l)).slice(0, 5), looks: out.looks,
       };
       res.seeds.push(s);
-      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90}, particles peak ${s.particles.peak}/${s.particles.budget}`);
+      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90}, particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
     } finally { await browser.close(); }
   }
   const okSeeds = res.seeds.filter((s) => s.peakFrames4v4 >= WANT).length;
   const all = (k) => res.seeds.map((s) => k(s)).filter((v) => v !== null && v !== undefined);
-  res.summary = { seedsWith30PeakFrames: okSeeds, medianOcclusion: all((s) => s.medianOcclusion).length ? Math.max(...all((s) => s.medianOcclusion)) : null, worstRunMs: Math.max(0, ...res.seeds.map((s) => s.worstFighterRun.ms)), teleEdge: all((s) => s.teleEdge.medianP90).length ? Math.min(...all((s) => s.teleEdge.medianP90)) : null, selfRingRate: all((s) => s.selfRing.rate).length ? Math.min(...all((s) => s.selfRing.rate)) : null, particlesPeak: Math.max(0, ...res.seeds.map((s) => s.particles.peak)) };
-  res.bars.pass = { scan: okSeeds >= 2, medianOcclusion: res.summary.medianOcclusion !== null && res.summary.medianOcclusion <= res.bars.medianOcclusion, worstRun: res.summary.worstRunMs <= res.bars.worstRunMs, teleEdge: res.summary.teleEdge !== null && res.summary.teleEdge >= res.bars.teleEdge, selfRing: res.summary.selfRingRate === 1 };
-  res.bars.enforcedBy = 'W2-B (measured here only)';
+  res.summary = { seedsWith30PeakFrames: okSeeds, medianOcclusion: all((s) => s.medianOcclusion).length ? Math.max(...all((s) => s.medianOcclusion)) : null, worstRunMs: Math.max(0, ...res.seeds.map((s) => s.worstFighterRun.ms)), teleEdge: all((s) => s.teleEdge.medianP90).length ? Math.min(...all((s) => s.teleEdge.medianP90)) : null, selfRingRate: all((s) => s.selfRing.rate).length ? Math.min(...all((s) => s.selfRing.rate)) : null, particlesPeak: Math.max(0, ...res.seeds.map((s) => s.particles.peak)),
+    hotBodyMax: Math.max(0, ...res.seeds.map((s) => s.hotBody.max ?? 0)), vfxTrisPeak: Math.max(0, ...res.seeds.map((s) => s.frame.vfxTrisPeak)), trisPeak: Math.max(0, ...res.seeds.map((s) => s.frame.trisPeak)),
+    drawsPeak: Math.max(0, ...res.seeds.map((s) => s.frame.drawsPeak)), programsPeak: Math.max(0, ...res.seeds.map((s) => s.frame.programsPeak)) };
+  res.bars.pass = { scan: okSeeds >= 2, medianOcclusion: res.summary.medianOcclusion !== null && res.summary.medianOcclusion <= res.bars.medianOcclusion, worstRun: res.summary.worstRunMs <= res.bars.worstRunMs, teleEdge: res.summary.teleEdge !== null && res.summary.teleEdge >= res.bars.teleEdge, selfRing: res.summary.selfRingRate === 1,
+    hotBody: res.summary.hotBodyMax <= res.bars.hotBody, vfxTris: res.summary.vfxTrisPeak <= res.bars.vfxTris, draws: res.summary.drawsPeak <= res.bars.draws };
+  res.bars.enforcedBy = 'W2-B';
   res.load1 = (await import('node:os')).loadavg()[0];
   const tag = opt('tag', '');
   const outFile = opt('out', join(outDir, `clutter${tag ? '_' + tag : ''}.json`));
