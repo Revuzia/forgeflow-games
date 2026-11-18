@@ -2406,7 +2406,12 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   max(ground, radius + seaLevel). Cost: none (same one tap).
 - PROOF (s24/shots): before-after.png (top fw0 = fogwater=0: humps + V; bottom fw1 = default: a flat sea to the horizon,
   the islands on it), fw1hb-y0.png (wdebug=hb: red to the horizon, no V) vs hb-y0.png (old: V). ws0 / ws1 = wsingle=1 with
-  fogwater 0 / 1 (flat both: the Mac's control reproduced).
+  fogwater 0 / 1 (flat both: the Mac's control reproduced; shots/wsingle.png). All 0 page errors. Built from HEAD
+  39eb7eb0 in a clean export: the live tree's ocean.ts holds the water agent's half-done `WFAST3` / fastOceanShaders hook
+  (tsc errors, ReferenceError at material build), not mine.
+- GATE: on the HEAD export detban clean, typecheck clean, tests 389 ok / 0 not ok when the 40-min background limit killed
+  the run (load ~14; s24/check-head.log): the suite did NOT finish. `npm run build` (live tree) exit 0. The live-tree
+  `npm run check` fails at typecheck on the water agent's ocean.ts only (WFAST3, fastOceanShaders).
 - Mac round: default vs `fogwater=0` at the landing (the hill must be gone, reflections and depth colour unchanged — the
   water shader is untouched), and `wsingle=1` should now look the same as default apart from the lost refraction / SSR.
 - deepbed's thin dark diagonal streak (r17 lower right; thin dark diagonals show in r17-14 without deepbed too): not
