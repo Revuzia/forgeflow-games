@@ -168,6 +168,10 @@ export interface DifficultyProfile {
   /** FRAY: a chase that has not closed on its target for this long (s), out of reach and with no gap-closer ready, is given
    *  up and the target left alone for 6 s (Infinity: never) */
   readonly chaseQuit: number;
+  // ── ruling 54 ──
+  /** structure defence reads a threat before the structure is hit — enemy fighters beside it, a push coming at the road's
+   *  front (a beginner answers only a structure being hit) */
+  readonly anticipates: boolean;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -192,7 +196,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: false, riskCap: Infinity, burstRetreat: false, splitPush: false, groupFollowFloor: 0, visionSetup: false,
     longshadeTtk: 0, crossTrade: false, objectiveEvenLate: 0.35, ccChain: 0, threatCc: false, adaptiveBuild: false, thirdParty: 0,
     punishInvade: 0, punishFrom: Infinity, punishDelay: 99, peelDive: 'none', holdWave: false, frayBreak: 0,
-    coreAll: false, peelFirst: false, collapseRoads: false, closeOut: false, chaseQuit: Infinity,
+    coreAll: false, peelFirst: false, collapseRoads: false, closeOut: false, chaseQuit: Infinity, anticipates: false,
   },
   // (CW3s r3, CL-1: adept's longest quiet stretch fell at 3:00-12:00 with the laners 9 m apart at 75 % health; deaths a minute run under veteran's from 5:00 to 13:00. It now contests an enemy start at a camp, the fight veteran's team takes there, and reads a kill as veteran does. A flat +0.08 on the trade edge was tried and dropped: stretch 3.2 min, takedowns by 10:00 7.15 -> 6.70. team.ts thinkGank and bot.ts's roam read widen for every tier: gaps at 8:00-12:00. Laning retreat bias -0.04: takedowns by 10:00 5.95 -> 6.50 on seeds 8101-8120. Untuned seeds 8501-8520 / 8701-8720: stretch 2.7 / 2.8 min, was 3.4 / 3.6)
   adept: {
@@ -206,7 +210,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
     punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: false, frayBreak: 0.2,
-    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8,
+    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -219,7 +223,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
     punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: true, frayBreak: 0.25,
-    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2,
+    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true,
   },
 };
 

@@ -448,7 +448,10 @@ export class TeamBrain {
       let need = 0;
       const real = hitting > 0 || hurt.has(st) || minions - mine >= 2;
       if (ab('g_real') && !real) { n = 0; if (cls < 2) coming = 0; }
-      if ((ab('g_real2') || (ab('n_real') && d.defendMatch < 1)) && !(hitting > 0 || hurt.has(st))) { n = 0; if (cls < 2) coming = 0; }
+      if (ab('g_real2') && !(hitting > 0 || hurt.has(st))) { n = 0; if (cls < 2) coming = 0; }
+      // (ruling 54: a beginner answers a structure only once it is being hit — it does not read a push coming or a fighter beside
+      // the tower as a threat; posting on every sighting kept novice games 2.7 min longer than the pre-lane bots')
+      else if (!d.anticipates && !ab('n_real_old') && !(hitting > 0 || hurt.has(st))) { n = 0; if (cls < 2) coming = 0; }
       // (ruling 54: a lone enemy fighter near the front structure with no wave over ours is not a push — farming its wave, walking by,
       // or waiting in the fog; posting against it held a defender off its road for nothing: 'coming' posts were the biggest single
       // share of the defend time, 14-38 s a fighter a game)
