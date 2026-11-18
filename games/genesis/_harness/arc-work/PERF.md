@@ -2643,3 +2643,10 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   => s22's "top-down meadow 2.5 % greener" was the bake's footprint (sqrt2 d/f vs the live length(fwidth) ~1.83 d/f):
   CLOSED by tcFwLive. The -6 % fine contrast is the bilinear reconstruction of a pre-filtered tile (texels ~ 1.3 per
   pixel by edge); `tcdens=1.6` would buy it back at ~1.5x memory (not measured).
+- GATE (gap-1 source): `bash _harness/slot.sh npm run check` 1048 pass 0 fail (s26/check2.log); `npm run build` exit 0.
+- STILL OPEN: run d's town pair (settle 60) is running; then `s26-queue.sh` (full picture e, edits + sun f, Ultra u
+  with the deep clamp: expect pix ~100 % at the landing); the far-ridge silhouette line (suspect: tcFwLive's |n.p|
+  clamp 1e-3 at the crest, where adjacent mesh triangles' normals differ and the bilinear tap blends their footprints).
+- TOWN PAIR VALID (run d, settle 60): 621 patches all cached, want 20 MB, used 34.5 MB, pix 100 %; mean |d| 1.95, RGB
+  102.3 117.2 81.2 both (EQUAL), detail 6.18 / 5.98; diff = flower dots + the pond's wet-rim line (sheet-d1 LOOKED).
+  (rebakeKnot 703 = stale marks while the probe moved the camera between views: expected.)
