@@ -5581,10 +5581,8 @@ async function main() {
           const drip = T('dripleaf'), cs = await chars(), c7 = drip?.setW ? nearest(cs, drip.setW[0], drip.setW[1]) : null;
           if (c7) await carryOn(c7, { x: drip.setW[0], z: drip.setW[1] });
           await pgStep(page, 1.5);
-          // (round 7, R7_SHELL: as the pine's: a part of the leaf no squishy stands in front of)
-          const [di, dq] = await pgClearPart(page, 'dripleaf', []);
-          const dt = di >= 0 ? { sx: dq[0], sy: dq[1] } : (await pgLife(page)).things.find((t) => t.id === 'dripleaf');
-          if (dt && dt.sx !== null && dt.sx !== undefined) await pgTap(page, phone, dt.sx, dt.sy);
+          const dt = (await pgLife(page)).things.find((t) => t.id === 'dripleaf');
+          if (dt?.sx !== null) await pgTap(page, phone, dt.sx, dt.sy);
           await pgStep(page, 2.5);
           const g7 = await pgQuest(page, 'G7'), L7 = await pgLife(page);
           check(`${label} Rainleaf Garden: G7 "A shower from the leaf" by the player: a squishy set under the Drip Leaf, a tap tips its shower onto it (a REACT SHOWER naming the leaf)`,
@@ -5779,8 +5777,17 @@ async function main() {
           let l4log = null;
           // (the tall layout's Chimney Corner (1.42, -0.9) stands between the party and the disc (1, -2.34): the carry passes left of and behind it first)
           if (vd?.setW && rider) l4log = await carryOnto(page, { x: rider.sx, y: rider.sy }, { x: vd.setW[0], z: vd.setW[1] }, 0.5, 340, phone ? { x: vd.setW[0] - 0.5, z: vd.setW[1] + 0.5 } : null);
+          // (round 7, the final run's phone: the carry ended 0.99 m short of the disc, 2.2 m back from where the rider was picked up (the drag plane faces the camera:
+          // the pointer ran out of frame): as a player does, it is picked up again where it landed and carried on, at most twice; each carry logged)
+          for (let k = 0; k < 2 && vd?.setW && l4log?.carried && l4log.err > 0.3; k++) {
+            await pgStep(page, 0.5);
+            const cur = (await chars()).find((q) => q.species === rider.species);
+            if (!cur) break;
+            l4log = { ...(await carryOnto(page, { x: cur.sx, y: cur.sy }, { x: vd.setW[0], z: vd.setW[1] }, 0.5, 340)), again: k + 1 };
+          }
           let l4 = null, rode = 0;
-          for (let k = 0; k < 30 && !l4?.done; k++) { await pgStep(page, 0.5, 0.5); l4 = await pgQuest(page, 'L4'); rode = Math.max(rode, (await pgLife(page)).vane?.riders ?? 0); }
+          // (sampled every 0.1 s, round 7: the re-run's desktop had L4 done but `rode` 0: a short gust's turn began and ended between two 0.5 s samples)
+          for (let k = 0; k < 150 && !(l4?.done && rode >= 1); k++) { await pgStep(page, 0.1, 0.1); if (!l4?.done) l4 = await pgQuest(page, 'L4'); rode = Math.max(rode, (await pgLife(page)).vane?.riders ?? 0); }
           await pgShot(page, `pg_lanternroof_vane_${tag}`);
           const Lv = await pgLife(page);
           check(`${label} Lanternroof: L4 "Ride the vane" by the player: a squishy carried onto the Vane Disc rides it round when the Night Breeze turns it (a USE SPIN; its eyes follow the turn)`,
@@ -5843,18 +5850,26 @@ async function main() {
         if (chip2?.pressed === 'true') await pgTap(page, phone, chip2.x, chip2.y);
         // a toss toward the side never leaves the play area (R6_PHYS 2.4: Lanternroof's parapets, Cloudloft's open sides and the guard)
         const D = S3_DEF[pl], B = phone ? D.tall.bounds : D.bounds, hx = B.hx ?? 3, hz = B.hz ?? 2.4;
-        const cs2 = await chars(), tc = cs2.reduce((a, c) => (Math.abs(c.x) > Math.abs(a?.x ?? -1) ? c : a), null);
+        // (the squishy farthest out to a side; round 7 fix: the first comparison was against |-1|, so with every squishy within 1 m of the middle (the phone's
+        //  Cloudloft, its tall bounds hx 1.4) none was picked and the toss never ran: "carried": false, n 0)
+        const cs2 = await chars(), tc = cs2.reduce((a, c) => (!a || Math.abs(c.x) > Math.abs(a.x) ? c : a), null);
         const dir = tc && tc.x < 0 ? -1 : 1;
         const ts = tc ? await tossOut(page, { x: tc.sx, y: tc.sy }, dir, tc.species) : { carried: false, out: [] };
-        const worst = ts.out.reduce((m, q) => Math.max(m, Math.abs(q[0] - B.x) - hx, Math.abs(q[1] - B.z) - hz), -9), last = ts.out[ts.out.length - 1];
+        // (the guard's limit past the bounds' edge, side by side, R6_PHYS 2.4: a wall's INNER FACE where a wall stands on that side, else the open side's corral
+        //  rim, 0.6 + 0.05 m. Round 7's first version took a walled side's face to be the bounds' edge, true of the wide layouts only: Lanternroof's tall
+        //  layout has its side parapets 0.9 m past its bounds (x 2.45 - 0.15 against hx 1.4), so the final run's phone toss "failed" at 0.35 m past the edge,
+        //  well inside the parapet. `worst` is now the excursion past THAT limit (<= 0.1 m: one frame of a 6 m/s throw before the reflection))
+        const Wb = (phone ? D.tall.walls : D.walls).filter((w) => w.shape === 'box');
+        const past = (sg, ax) => { const ws = Wb.filter((w) => (ax === 0 ? sg * (w.x - B.x) > hx - 1e-6 && (w.hz ?? 0) > 0.5 : sg * (w.z - B.z) > hz - 1e-6 && (w.hx ?? 0) > 0.5)); return ws.length ? Math.min(...ws.map((w) => (ax === 0 ? sg * (w.x - B.x) - (w.hx ?? 0.15) - hx : sg * (w.z - B.z) - (w.hz ?? 0.15) - hz))) : 0.65; };
+        const worst = ts.out.reduce((m, q) => Math.max(m, Math.abs(q[0] - B.x) - hx - past(Math.sign(q[0] - B.x) || 1, 0), Math.abs(q[1] - B.z) - hz - past(Math.sign(q[1] - B.z) || 1, 1)), -9), last = ts.out[ts.out.length - 1];
         const lastIn = !!last && Math.abs(last[0] - B.x) <= hx + 0.05 && Math.abs(last[1] - B.z) <= hz + 0.05 && last[2] !== null && last[2] >= 0 && last[2] <= (phone ? 390 : 1280) && last[3] >= 0 && last[3] <= (phone ? 844 : 800);
-        // (the play area's limit is the physics guard's, R6_PHYS 2.4: a walled side (Lanternroof's parapets, inner face = the bounds' edge) stops a centre at the
-        //  edge; an OPEN side (Cloudloft) at the edge + the corral's rim (PG.boundsRim 0.6) + 0.05 m. Plus 0.1 m: one frame of a 6 m/s throw before the reflection.
+        // (the play area's limit is the physics guard's, R6_PHYS 2.4: a walled side (Lanternroof's parapets) stops a centre at the wall's inner face (the bounds'
+        //  edge in the wide layout, 0.9 m past it on the tall one's sides: `past` above); an OPEN side (Cloudloft) at the edge + the corral's rim (PG.boundsRim 0.6) + 0.05 m. Plus 0.1 m: one frame of a 6 m/s throw before the reflection.
         //  s3run2 measured 0.42 m at Cloudloft against round 7's first bar of 0.15, which was the walled side's)
-        const open = (phone ? D.tall.walls : D.walls).length === 0, lim = (open ? 0.65 : 0) + 0.1;
+        const open = Wb.length === 0, lim = 0.1, sideLim = +past(dir, 0).toFixed(3);
         await pgShot(page, `pg_${pl}_toss_${tag}`);
-        check(`${label} ${name}: a hard toss toward the ${dir > 0 ? 'right' : 'left'} side never leaves the play area (its centre never past the guard's limit in flight: ${open ? 'open sides, the edge + the corral rim 0.65 m' : 'the parapets\' inner face'}, + 0.1 m; inside the bounds and in the frame 6 s later)`,
-          ts.carried && worst <= lim && lastIn, JSON.stringify({ species: tc?.species, carried: ts.carried, worst: +worst.toFixed(3), lim, last, bounds: [B.x, B.z, hx, hz], n: ts.out.length }));
+        check(`${label} ${name}: a hard toss toward the ${dir > 0 ? 'right' : 'left'} side never leaves the play area (its centre never past the guard's limit in flight: ${open ? 'open sides, the edge + the corral rim 0.65 m' : 'the parapets\' inner face'} (${sideLim} m past the bounds' edge on that side), + 0.1 m; inside the bounds and in the frame 6 s later)`,
+          ts.carried && worst <= lim && lastIn, JSON.stringify({ species: tc?.species, carried: ts.carried, worst: +worst.toFixed(3), lim, sideLim, last, bounds: [B.x, B.z, hx, hz], n: ts.out.length }));
         // what they did on their own meanwhile (information: LIFE's by-itself uses are the LIFE lane's, R6_SHELL 2)
         const Lself = await pgLife(page);
         console.log(`   info ${label} ${name}: on their own: used ${JSON.stringify(Lself.selfUsed)}, reacted ${JSON.stringify(Lself.selfReacted)}, social ${JSON.stringify(Lself.selfSocial)}; done ${JSON.stringify((await page.evaluate(() => (window.__WH__.quests()?.quests ?? []).filter((q) => q.done).map((q) => q.id))).filter((id) => id.startsWith(L)))}`);

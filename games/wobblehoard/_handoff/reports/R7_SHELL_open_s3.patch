@@ -1,5 +1,5 @@
---- a/games/wobblehoard/src/data/places.ts	2026-11-18 09:50:14.296984435 +0000
-+++ b/games/wobblehoard/src/data/places.ts	2026-11-18 09:50:14.316164030 +0000
+--- a/games/wobblehoard/src/data/places.ts	2026-11-18 14:01:10.741097356 +0000
++++ b/games/wobblehoard/src/data/places.ts	2026-11-18 14:01:10.780854701 +0000
 @@ -140,8 +140,8 @@
    { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: true, night: false, sky: 'shore' },
    { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false, sky: 'ridge' },
@@ -11,8 +11,8 @@
  ];
  /** A place's PLACE_INFO row by idx (undefined for a dropped or unknown idx). */
  export const placeInfo = (idx: number): (typeof PLACE_INFO)[number] | undefined => PLACE_INFO.find((p) => p.idx === idx);
---- a/games/wobblehoard/src/data/place_lanternroof.ts	2026-11-18 09:50:14.299282478 +0000
-+++ b/games/wobblehoard/src/data/place_lanternroof.ts	2026-11-18 09:50:14.316319234 +0000
+--- a/games/wobblehoard/src/data/place_lanternroof.ts	2026-11-18 14:01:10.744041514 +0000
++++ b/games/wobblehoard/src/data/place_lanternroof.ts	2026-11-18 14:01:10.781047488 +0000
 @@ -11,7 +11,7 @@
  import { USE_VERB as V, EMOTE as E } from './life.ts';
  
@@ -22,8 +22,8 @@
    ground: { grip: 1.1, glue: 1, peel: 1, drag: 1, mark: 0, markLifeS: 0 },
    patches: [
      { id: 'chimneycorner', shape: 'disc', x: -2.3, z: 0.6, r: 0.9, mods: {  }, nap: true },
---- a/games/wobblehoard/src/data/place_cloudloft.ts	2026-11-18 09:50:14.301510474 +0000
-+++ b/games/wobblehoard/src/data/place_cloudloft.ts	2026-11-18 09:50:14.316391688 +0000
+--- a/games/wobblehoard/src/data/place_cloudloft.ts	2026-11-18 14:01:10.747653753 +0000
++++ b/games/wobblehoard/src/data/place_cloudloft.ts	2026-11-18 14:01:10.781127630 +0000
 @@ -11,7 +11,7 @@
  import { USE_VERB as V, EMOTE as E } from './life.ts';
  

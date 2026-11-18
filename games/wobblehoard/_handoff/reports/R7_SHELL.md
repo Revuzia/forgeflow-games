@@ -295,6 +295,51 @@ Auto chip, home again x3, 0 console errors; R3 and I9 on the desktop; R9, I7 and
   likely the drop height (a carried body is held at about its rest height over a pad toward the camera in the tall frame). Not fixed (request below).
 The fixed harness runs both S2 sections again after part C (`S/final1b2`, 5B').
 
+**pg-places-s3 (desktop, 14 min) 21/1, pg-places-s3-phone (17 min) 18/4, console-and-network 8/0. Part B: 79/94.**
+Desktop: **every Lanternroof row** (the 45-stamp opening and the sheet; arrival, three in the frame; the Night Breeze driving the look and the vane; L3; L7 + L2
+with the comet; the Vane Disc poke; L4 ridden; the chimney's puff; the hammock's Auto chip, clear of every other thing; the toss inside the parapets; home)
+and every Cloudloft row but one (arrival; U3 two kinds; the Cloud Ball; the Kite Swing's chip, clear of every thing; the toss inside the open sides' limit,
+worst 0.41 m; home); 0 console errors. Phone: the same rows pass but four:
+- U2 (desktop 2 of 3, phone 1 of 3): on the desktop all three carries ended over a pad (err 0.01 to 0.07 m) yet one did not bounce; on the phone the carries
+  to the front pad (z -2.1) ended 0.28 to 0.92 m short. Cause (the gesture geometry, as 5B's carries): the hand's drag plane faces the camera, so a carry
+  toward the camera holds the squishy at about its rest height (set down on the pad without a fall: no kick) and a carry far back runs out of frame.
+  **Harness, fixed** as a player does it: set it down 0.8 m in front of the pad, pick it up again and carry it back onto it (the plane rises on the way back:
+  it falls onto the pad); the same for G4's Moss Bouncer (5B: phone 0 of 3).
+- L4 (phone): the carry ended 0.99 m short of the disc, 2.2 m back: **harness, fixed** (picked up again where it landed and carried on, as R9).
+- the Lanternroof toss (phone): `worst 0.35` past the bounds' edge against my row's 0.1: **my row's geometry was wrong**: it took a walled side's inner face to
+  be the bounds' edge (true of the wide layout), but the tall layout's side parapets stand 0.9 m past its bounds (x 2.45 - 0.15 against hx 1.4): the toss
+  stayed well inside the parapet. Fixed: the limit is each side's own (a wall's inner face where one stands, else the open rim 0.65 m), + 0.1 m as before.
+- the Cloudloft toss (phone) never ran (`carried: false, n 0`): my pick of "the squishy farthest out" compared the first one against |-1| m, and on the
+  phone all three stood within 1 m of the middle: **fixed** (the shot `pg_cloudloft_toss_phone.png` shows the three bunched by the Sunbow Arch after U3's
+  two drops over the Updraft).
+Re-run of both S3 sections with these fixes: 5B' (`S/final1b3`).
+
+### 5B'. The place sections again with the harness fixes (the final tree; S3 `S/final1b3` 13:23 to 14:00, S2 `S/final1b2` from 14:00)
+**pg-places-s3 (desktop) 21/1, pg-places-s3-phone 20/2: 41/44** (part B: 39/44). Fixed by the harness changes: **U2 on the desktop** (3 of 3: each drop set
+down in front of its pad, then carried back onto it and let fall), **both tosses on the phone** (Lanternroof: worst -0.55 m inside its side parapets' limit;
+Cloudloft: the toss ran, inside the open sides' limit), and every row that passed before passes. Left:
+- L4 on the desktop: L4 itself DONE (the USE SPIN), but my row's second clause, `rode` (the host's riders read every 0.5 s), was 0: the gust's turn began and
+  ended between two samples. Harness: the riders are now read every 0.1 s until both hold (not run again: the machine time went to the S2 re-run).
+- L4 on the phone: the carry ended short and the picking up again could not lift the rider (`carried: false`, the pointer at the frame's top before the pull
+  became a carry: the rider stood at y 217 of 844, under the top HUD row). **The Vane Disc at the back of the TALL roof (z -2.34) is out of a straight
+  carry's reach on a phone**: a gesture limit (the hand's drag plane), not the disc's wiring (L4 rides on the desktop, and the gust, the poke and the
+  rider's USE SPIN are node rows). A request for the next round (below), not loosened.
+- U2 on the phone: 2 of 3 (part B: 1): the third drop's second carry could not lift from in front of the pad (`carried: false`, the same top-of-frame
+  limit: the tall layout's front Puff Pad is at z -2.1).
+trophies_check (game) **14/15** (FIX5 15/15), lock_browser **17/17**, photo_check (dev, phone, standalone) **22/23** (FIX5 23/23), b4b_checks **78/78**. The two FAILs:
+- trophies [game] "the live region said it ONCE ("Bronze trophy: Hello, Squishy.")": it was said once, but in ONE announcement with the first stamp:
+  `"Bronze trophy: Hello, Squishy. New stamp: A gentle squeeze"` (ui/announcer.ts merges what comes within 250 ms; H1's stamp and the trophy come from
+  the same first held squeeze). In FIX5's run the life chunk (which stamps H1) had not landed by that squeeze; the row's text match is exact. A/B below.
+- photo [standalone] "a top-level page keeps the download ... and shows the toast "Photo saved."": the PNG (`squish-keeper-dollop-2026-11-18.png`) and the
+  toast "Photo saved." are there; the live region read `""` at that moment. A/B below.
+
+### 6b. Node probes on the INTEGRATED tree (`S/tree_int` = HEAD 99d081c14 + the LIFE lane's 16 working files of 11:09 + my lane; 13:21 to 13:23; file by file the same as the orchestrator's commit a78879b0d of 12:52, but my later harness)
+probe_app **188/188**, probe_gestures **160/160**, probe_screens **43/43**, probe_overlays **21/21**, probe_uikit **62/62**, shellview/node_checks **179/180**:
+the one FAIL is FIX5's B7 row "SH-22 the budget's wake gate ... the awake units are over the cap in at most 10 % of 6-a-second samples": **11.8 %**
+(17 of 144; 4 motion intents held). The row before it (at most 2 of 24 one-second samples over, never 3 s running) passes. On HEAD + my lane alone the same
+probe is 180/180 (section 6), and with five out at Home none of my round-7 host code acts (no ride, vane, comet, chime or tall block there), so the extra
+over-cap time comes with the LIFE lane's files (B04's own uses, the asked-use allowance of 10:04). **Request LIFE (10)** below; not loosened.
+
 ## 3-old. (notes written before the measurement)
 probe_pg_data's DT-01 "Home B5 one out" proves no data spot can work with the shipped camera ("3597 spots tried"), so the render option: `stage.ts ballFrames()`: on a
 portrait frame, at Home, with exactly ONE whole body shown and the ball shown (`setHomeThing(0)` now remembers its spot), the ball's SPOT (never its live position) counts in
@@ -335,6 +380,9 @@ on a phone with the ball out). To be measured in the browser before it is kept.
   enough to soak (a marshmallow needs about 10 s), e.g. no new B04 use for some seconds after a player's carry (`setT` is the host's; LIFE sees CARRIED end).
   (9) **G4 on the phone: drops onto the Moss Bouncer did not bounce** (0 of 3; the desktop 3 of 3): with PADS_OK off this is the pad's kick from the player's
   drop alone; worth a node row with the tall layout's pad and a drop from the carry's height.
+  (10) **shellview/node_checks on the integrated tree: 179/180** (6b): SH-22's wake gate has the awake units over unitCap in 11.8 % of the fine samples
+  (5 out on high, no touch; the bar is 10 %); 180/180 without your files. Please run node_checks on HEAD + your files and bring it back under the bar (or
+  tell the orchestrator which of your changes it is: B04's own uses at Home, or `askAllow`).
   (5) For information: src/life/** is its own lazy chunk `later-brain` now (vite.config.ts, 2b), loaded with the life chunk; nothing to do on your side. Your
   application of `R6_SHELL_open_s2.patch` to the working files is noted: my `R7_SHELL_open_s3.patch` is made against the working files (S2 shipped) and is
   checked with `git apply --check` there.
