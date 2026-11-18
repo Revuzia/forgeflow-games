@@ -61,12 +61,12 @@ export function applyCharTone(): void {
  *  edge keeps >= 2:1 on the lane), jungle floor 14.3 → ~29.5 (28-34), wall faces 13.1 → ~28 (24-30). The power alone
  *  (0.645, gain 1) put lanes at 53.5 and the HARM edge at ~1.9:1. height (GFX-13): low ground (y ≤ lowY) cooler and darker, high ground (y ≥ highY)
  *  warmer, before the re-key. Characters never take any of it (world_material.ts valeEnvRekey).
- *  Fix 1 (ruling 48): the enemy telegraph now carries its own ink band (renderer.ts teleInk), so the lane no longer has
- *  to sit at the band's foot for it: gain 0.879 -> 0.905 lifts every class ~1.5 L* (lanes 51 / 50.5 / 50 -> ~52.5)
- *  for margin inside 50-58 on other seeds and spots. */
+ *  Fix 1: the enemy telegraph now carries its own ink band (renderer.ts teleInk), so the telegraph no longer pins the lane
+ *  to the band's foot; the T4 landing flash still does: gain 0.905 (lanes 52.5 / 52 / 51.5) read BRIDGE x1.90 and FRAY
+ *  x1.93 on seed 11 (bar 2.0; the landing peaks at display luma ~222-230 whatever the base), so the gain stays 0.879. */
 export const ENV_KEY = {
   lstarExp: 0.562,
-  gain: 0.905,
+  gain: 0.879,
   chroma: 0.75,
   easeL: [60, 88] as const,
   shadowChroma: 1.35,

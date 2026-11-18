@@ -102,7 +102,8 @@ const U = screenUniforms;
 /** orch1 W2-A fix 1 (ruling 48): the display value the envelope lifts the GROUND toward at most. vfx/screen.ts
  *  LIFT_GROUND_TOP (0.9) was set over the r12 B5 ground (lane display luma ~0.37); on the ruling-46 ground (lane ~0.47)
  *  0.9 held a T4 landing to x1.89 on BRIDGE's lane (bar x2.0, owner ruling 10). 0.95: RIFT 2.09 -> 2.14, FRAY 2.0 -> 2.06,
- *  BRIDGE 1.89 -> 1.94 (0.98 read 1.96 and x1.1 more ground lift 1.95: the disc's body and edge pixels hold it there); above display 0.9 the saturation drop is already off (the smoothstep below still eases over
+ *  BRIDGE 1.89 -> 1.94 (0.98 read 1.96, x1.1 more ground lift 1.95, a 0.75 R core 1.92-1.94: the landing's peak sits at
+ *  display luma ~222-230 whatever the ground solve does, so a lane base of luma ~114 cannot read x2.0); above display 0.9 the saturation drop is already off (the smoothstep below still eases over
  *  0.7-LIFT_GROUND_TOP), so the top of the beat is the ground's own warm tint, never a white-out, and bodies keep
  *  LIFT_BODY_CAP and their 0.86 stop */
 const GROUND_TOP_REKEYED = 0.95;

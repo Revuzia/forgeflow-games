@@ -1,0 +1,580 @@
+{
+ "t": 1787,
+ "seed": 23,
+ "mode": "rift",
+ "views": [
+  {
+   "view": "fight",
+   "zoom": null,
+   "fighters": 8,
+   "off": {
+    "drawn": 0,
+    "total": 423707,
+    "calls": 252,
+    "actors": 210589,
+    "vfx": 20876,
+    "canopy": 37184,
+    "det": {
+     "actors:fighter": [
+      19,
+      102683,
+      null,
+      null
+     ],
+     "actors:crowd": [
+      5,
+      18010,
+      null,
+      null
+     ],
+     "actors:fighter.outline": [
+      9,
+      20992,
+      null,
+      null
+     ],
+     "actors:structure": [
+      19,
+      12847,
+      null,
+      null
+     ],
+     "actors:fighter.xray": [
+      6,
+      15754,
+      null,
+      null
+     ],
+     "actors:fighter.veil": [
+      1,
+      12558,
+      null,
+      null
+     ],
+     "actors:crowd.outline": [
+      5,
+      10269,
+      null,
+      null
+     ],
+     "actors:crowd.accent": [
+      16,
+      4562,
+      null,
+      null
+     ],
+     "actors:monster": [
+      1,
+      6820,
+      null,
+      null
+     ],
+     "actors:monster.outline": [
+      1,
+      3410,
+      null,
+      null
+     ],
+     "actors:fighter.flash": [
+      1,
+      2684,
+      null,
+      null
+     ]
+    }
+   },
+   "on": {
+    "drawn": 6,
+    "total": 383426,
+    "calls": 252,
+    "actors": 174114,
+    "vfx": 20876,
+    "canopy": 37184,
+    "det": {
+     "actors:fighter": [
+      19,
+      79392,
+      null,
+      null
+     ],
+     "actors:crowd": [
+      5,
+      18010,
+      null,
+      null
+     ],
+     "actors:structure": [
+      19,
+      12847,
+      null,
+      null
+     ],
+     "actors:fighter.outline": [
+      9,
+      16077,
+      null,
+      null
+     ],
+     "actors:fighter.xray": [
+      6,
+      11772,
+      null,
+      null
+     ],
+     "actors:crowd.outline": [
+      5,
+      10269,
+      null,
+      null
+     ],
+     "actors:crowd.accent": [
+      16,
+      4562,
+      null,
+      null
+     ],
+     "actors:fighter.veil": [
+      1,
+      8271,
+      null,
+      null
+     ],
+     "actors:monster": [
+      1,
+      6820,
+      null,
+      null
+     ],
+     "actors:monster.outline": [
+      1,
+      3410,
+      null,
+      null
+     ],
+     "actors:fighter.flash": [
+      1,
+      2684,
+      null,
+      null
+     ]
+    }
+   }
+  },
+  {
+   "view": "you",
+   "zoom": null,
+   "fighters": 8,
+   "off": {
+    "drawn": 0,
+    "total": 426584,
+    "calls": 252,
+    "actors": 211498,
+    "vfx": 17830,
+    "canopy": 40380,
+    "det": {
+     "actors:fighter": [
+      19,
+      102683,
+      null,
+      null
+     ],
+     "actors:structure": [
+      22,
+      19519,
+      null,
+      null
+     ],
+     "actors:crowd": [
+      5,
+      18010,
+      null,
+      null
+     ],
+     "actors:fighter.outline": [
+      9,
+      20992,
+      null,
+      null
+     ],
+     "actors:fighter.veil": [
+      1,
+      12558,
+      null,
+      null
+     ],
+     "actors:crowd.outline": [
+      5,
+      10269,
+      null,
+      null
+     ],
+     "actors:crowd.accent": [
+      16,
+      4562,
+      null,
+      null
+     ],
+     "actors:monster": [
+      1,
+      6820,
+      null,
+      null
+     ],
+     "actors:fighter.xray": [
+      3,
+      8105,
+      null,
+      null
+     ],
+     "actors:monster.outline": [
+      1,
+      3410,
+      null,
+      null
+     ],
+     "actors:fighter.flash": [
+      2,
+      2489,
+      null,
+      null
+     ],
+     "actors:crowd.flash": [
+      1,
+      2081,
+      null,
+      null
+     ]
+    }
+   },
+   "on": {
+    "drawn": 6,
+    "total": 385577,
+    "calls": 252,
+    "actors": 174536,
+    "vfx": 17830,
+    "canopy": 40380,
+    "det": {
+     "actors:fighter": [
+      19,
+      78091,
+      null,
+      null
+     ],
+     "actors:structure": [
+      22,
+      19519,
+      null,
+      null
+     ],
+     "actors:crowd": [
+      5,
+      18010,
+      null,
+      null
+     ],
+     "actors:fighter.outline": [
+      9,
+      16015,
+      null,
+      null
+     ],
+     "actors:crowd.outline": [
+      5,
+      10269,
+      null,
+      null
+     ],
+     "actors:crowd.accent": [
+      16,
+      4562,
+      null,
+      null
+     ],
+     "actors:fighter.veil": [
+      1,
+      8271,
+      null,
+      null
+     ],
+     "actors:monster": [
+      1,
+      6820,
+      null,
+      null
+     ],
+     "actors:fighter.xray": [
+      3,
+      4999,
+      null,
+      null
+     ],
+     "actors:monster.outline": [
+      1,
+      3410,
+      null,
+      null
+     ],
+     "actors:fighter.flash": [
+      2,
+      2489,
+      null,
+      null
+     ],
+     "actors:crowd.flash": [
+      1,
+      2081,
+      null,
+      null
+     ]
+    }
+   }
+  },
+  {
+   "view": "fight45",
+   "zoom": null,
+   "fighters": 8,
+   "off": {
+    "drawn": 0,
+    "total": 439465,
+    "calls": 217,
+    "actors": 195645,
+    "vfx": 18292,
+    "canopy": 54876,
+    "det": {
+     "actors:fighter": [
+      19,
+      102683,
+      null,
+      null
+     ],
+     "actors:crowd": [
+      5,
+      18010,
+      null,
+      null
+     ],
+     "actors:fighter.outline": [
+      9,
+      20992,
+      null,
+      null
+     ],
+     "actors:fighter.xray": [
+      5,
+      13070,
+      null,
+      null
+     ],
+     "actors:fighter.veil": [
+      1,
+      12558,
+      null,
+      null
+     ],
+     "actors:structure": [
+      5,
+      4483,
+      null,
+      null
+     ],
+     "actors:monster": [
+      1,
+      6820,
+      null,
+      null
+     ],
+     "actors:crowd.outline": [
+      5,
+      6007,
+      null,
+      null
+     ],
+     "actors:crowd.accent": [
+      16,
+      4562,
+      null,
+      null
+     ],
+     "actors:monster.outline": [
+      1,
+      3410,
+      null,
+      null
+     ],
+     "actors:fighter.flash": [
+      1,
+      3050,
+      null,
+      null
+     ]
+    }
+   },
+   "on": {
+    "drawn": 6,
+    "total": 397752,
+    "calls": 217,
+    "actors": 157738,
+    "vfx": 18292,
+    "canopy": 54876,
+    "det": {
+     "actors:fighter": [
+      19,
+      79392,
+      null,
+      null
+     ],
+     "actors:crowd": [
+      5,
+      18010,
+      null,
+      null
+     ],
+     "actors:fighter.outline": [
+      9,
+      16077,
+      null,
+      null
+     ],
+     "actors:fighter.xray": [
+      5,
+      9088,
+      null,
+      null
+     ],
+     "actors:structure": [
+      5,
+      4483,
+      null,
+      null
+     ],
+     "actors:fighter.veil": [
+      1,
+      8271,
+      null,
+      null
+     ],
+     "actors:monster": [
+      1,
+      6820,
+      null,
+      null
+     ],
+     "actors:crowd.outline": [
+      5,
+      6007,
+      null,
+      null
+     ],
+     "actors:crowd.accent": [
+      16,
+      4562,
+      null,
+      null
+     ],
+     "actors:monster.outline": [
+      1,
+      3410,
+      null,
+      null
+     ],
+     "actors:fighter.flash": [
+      1,
+      1618,
+      null,
+      null
+     ]
+    }
+   }
+  }
+ ],
+ "fighters": [
+  {
+   "def": "ervet",
+   "level": 1,
+   "parts": {
+    "vale_body_lod1": 9437,
+    "vale_outline": 2489,
+    "ervet_accent": 980,
+    "form_base": 200
+   }
+  },
+  {
+   "def": "odrum",
+   "level": 2,
+   "parts": {
+    "vale_body_lod2": 7890,
+    "vale_outline": 1856,
+    "vale_xray": 1856,
+    "odrum_accent": 600
+   }
+  },
+  {
+   "def": "burdam",
+   "level": 1,
+   "parts": {
+    "vale_body_lod1": 11677,
+    "vale_outline": 2745,
+    "vale_xray": 2745,
+    "burdam_accent": 640
+   }
+  },
+  {
+   "def": "marund",
+   "level": 2,
+   "parts": {
+    "vale_body_lod2": 6478,
+    "vale_outline": 1577,
+    "vale_xray": 1577,
+    "marund_accent": 236
+   }
+  },
+  {
+   "def": "vashil",
+   "level": 2,
+   "parts": {
+    "vale_body_lod2": 7784,
+    "vale_outline": 1816,
+    "vale_veil_depth": 8271,
+    "vashil_accent": 487
+   }
+  },
+  {
+   "def": "kemdo",
+   "level": 1,
+   "parts": {
+    "vale_body_lod1": 11928,
+    "vale_outline": 2684,
+    "kemdo_accent": 300
+   }
+  },
+  {
+   "def": "tunlan",
+   "level": 2,
+   "parts": {
+    "vale_body_lod2": 5638,
+    "vale_outline": 1292,
+    "vale_xray": 1292,
+    "tunlan_accent": 298
+   }
+  },
+  {
+   "def": "hesmi",
+   "level": 2,
+   "parts": {
+    "vale_body_lod2": 7186,
+    "vale_outline": 1618,
+    "vale_flash": 1618,
+    "vale_xray": 1618,
+    "hesmi_accent": 60
+   }
+  },
+  {
+   "def": "dunsom",
+   "level": 2,
+   "parts": {
+    "vale_body_lod2": 6893,
+    "dunsom_accent": 680
+   }
+  }
+ ]
+}
