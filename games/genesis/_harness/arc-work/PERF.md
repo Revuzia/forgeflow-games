@@ -2583,3 +2583,8 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   display needs NO mips and NO anisotropy: ONE bilinear tap of mip 0 (cheaper too). Borders 1 (legs) / 3 (x + y,
   hypotenuse) = PAD 5 suffice for a bilinear tap; classes 16 20 24 28 32 40 48 56 72 96 144 | 192 576 blocks | 288;
   16 B a texel flat (was x1.25-1.31 with mips); 11 layers at tcmb 256.
+- g (build with FOUND 4 + 5): town want 62 -> 20 MB, landing y0 want 35 -> 8 MB at 480x274, area estimate 96 k px (sane
+  for a 131 k px canvas with sky). y0 pair (this boot rendered it at night): mean |d| 1.81, RGB 18.0 26.7 39.5 / 17.6
+  26.5 38.9, detail 3.69 / 3.85; diff = a moving object lower left + a faint line on the far ridge's silhouette (sheet
+  s26/sheet-g1.png LOOKED). town pair INVALID (the cache shot has the coarse pond polygon: the LOD had not landed at
+  --max=60 under load 13; same failure s22 recorded) -> town needs --settle >= 60.
