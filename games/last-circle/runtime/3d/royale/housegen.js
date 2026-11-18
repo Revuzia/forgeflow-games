@@ -196,7 +196,7 @@ export const SHOP_PITCH = 2.5;             // m from one aisle row to the next (
 export const WORK_COVER = true;
 export const PITCHED_HOMES = true;
 export const ROOF_FLAT_ALL = false;
-export const AO = Object.freeze({ k: 0.32, r: 0.35, minH: 0.4, minA: 0.15, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
+export const AO = Object.freeze({ k: 0.32, r: 0.35, minH: 0.25, minA: 0.08, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
 export const RNG_LEAK = false;            // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
 const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
@@ -5233,7 +5233,7 @@ function wearBands(H, groups, acc, faceIn, colOf) {
 // (W10 R3A, audits 6 + 7) THE FINISH, drawn only (no collider, not in house.tris - like the wear strips; maps.js: desktop medium and up). Every quad is a plate a few mm
 // in front of the face it dresses, in that face's material (the same world-aligned UVs: a darker wall foot is the wall's own texture, darker), vertex colours baked:
 //  - under every standing piece (>= AO.minH tall, on its room's floor): a soft dark ring, AO.k at the footprint (+ 2 cm) fading to the floor's colour AO.r out
-//    (clipped to the cells it stands on, inside the walls; a piece >= AO.minA m2 of footprint; the ring only - 8 triangles) - BAKED_AO;
+//    (clipped to the cells it stands on, inside the walls; a piece >= AO.minA m2 of footprint, >= AO.minH tall; the ring only - 8 triangles) - BAKED_AO;
 //  - each wall run of a room: the foot (AO.foot at the skirting's top fading to the wall colour AO.footH higher), a corner
 //    colour AO.floorW out), a corner where another run of the room meets (AO.corner at the corner, AO.cornerW along the wall, floor to ceiling); a kitchen's tile
 //    splash (0.9 - 1.5 m) and a bath's wainscot (0.1 - 1.25 m) on the solid runs;
@@ -5258,7 +5258,7 @@ function finishGeo(H, acc, colOf, split) {
   if (BAKED_AO) H.furniture.forEach((p, k) => {
     if (p.deco || p.mount === "wall" || p.mount === "top" || p.max[1] - p.min[1] < AO.minH || (p.max[0] - p.min[0]) * (p.max[2] - p.min[2]) < AO.minA) return;
     const r = rooms.get(p.room);
-    if (!r || r.fpal == null || Math.abs(p.min[1] - r.y) > 0.02 || r.kind === "storage" || r.kind === "warehouse") return;     // (a store room's packed stock and racks: no ring - triangles where they read least)
+    if (!r || r.fpal == null || Math.abs(p.min[1] - r.y) > 0.02) return;
     const pe = H.palette[r.fpal], c1 = colOf(pe.color), c0 = mul(c1, kk(AO.k)), y = r.y + 0.004 + (k % 4) * 0.0006;
     const I = [p.min[0] - 0.02, p.min[2] - 0.02, p.max[0] + 0.02, p.max[2] + 0.02];
     let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
