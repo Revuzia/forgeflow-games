@@ -106,7 +106,11 @@ const U = screenUniforms;
  *  display luma ~222-230 whatever the ground solve does, so a lane base of luma ~114 cannot read x2.0); above display 0.9 the saturation drop is already off (the smoothstep below still eases over
  *  0.7-LIFT_GROUND_TOP), so the top of the beat is the ground's own warm tint, never a white-out, and bodies keep
  *  LIFT_BODY_CAP and their 0.86 stop */
-const GROUND_TOP_REKEYED = 0.95;
+const GROUND_TOP_REKEYED = 0.97;
+/** orch1 W2-A fix 2 (verifier r2: BRIDGE x1.93 on seed 7): on the ruling-46 ground the envelope's GROUND ratio gains
+ *  this much more lift under the same top, so the beat's falloff ring rises with its core (the core already sits near the
+ *  top): bodies, effects and the white gate are untouched */
+const GROUND_LIFT_REKEYED = 1.3;
 /** CW1 r2 refix 1: what an ultimate's envelope gains when the chain has no bloom: its local lift, and the light effects add */
 const NO_BLOOM_LIFT_GAIN = 1.2;
 const NO_BLOOM_FX_GAIN = 2;
@@ -191,7 +195,7 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
   // ×(1 + lift), stopping short of white (display ${LIFT_GROUND_TOP}); bodies keep the capped multiplier above.
   if ( lift > 0.05 && body < 0.5 ) {
     float d0 = liftDispLuma( c );
-    float target = min( d0 * ( 1.0 + lift ), ${GROUND_TOP_REKEYED.toFixed(3)} );
+    float target = min( d0 * ( 1.0 + lift * ${GROUND_LIFT_REKEYED.toFixed(3)} ), ${GROUND_TOP_REKEYED.toFixed(3)} );
     if ( liftDispLuma( c * m ) < target ) {
       float lo = log2( m ), hi = log2( m ) + 6.0;
       for ( int j = 0; j < 9; j ++ ) {

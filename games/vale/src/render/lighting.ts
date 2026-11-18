@@ -29,11 +29,11 @@ export const CHAR_LIGHT = {
   // 2.5) and brighter (x `fighterGain` 1.6), and the eye fill 0.7 -> 0.98 lights through a value floor (tone.fillFloor):
   // fighters' edges lift off the mid-value ground and dark kits come up toward the value band while pale kits stay under
   // top-25 L* ~80 (the roll-off below). Wicks and monsters keep the crown as it was (power 2.5, their share of 3.4).
-  // fix 2 (verifier r2 blocker, value structure): the fill no longer lights through a value floor (it lifted every dark
-  // texel toward L* ~70 and pinned a fighter's darkest quarter at the lane's own ~52: median top-minus-bottom spread 62 ->
-  // 24 L*, kits read as one pastel mass). The fill now scales the albedo as painted (dark masses stay dark, the ratio
-  // between a kit's colour masses is kept) and is stronger (1.39 -> 1.95), the fighter crown x1.3 (1.6 -> 2.08) carries
-  // the edge lift, the AO weight 0.6 -> 0.9 and the roll-off ceiling 0.70 -> 0.68. Measured in units_gate (fix 2 notes).
+  // fix 2 (verifier r2 blocker, value structure; ruling 49): the value floor is gone. Lifting every dark texel through
+  // it (fill 1.39, floor 0.42) put a fighter's darkest quarter at the lane's own L* ~52 (units_gate median top-minus-
+  // bottom spread 62 -> 24, kits one pastel mass) and the roll-off flattened their crowns. Now the fill scales the
+  // albedo as painted (0.7 -> 0.8), the fighter crown is a step over the wicks' (x1.3, power 2.25), and a kit's value
+  // RANGE moves into the band by its own exposure (below), never by compressing its tops or lifting its darks.
   crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 3.4, sunHue: 0.5, albedoFloor: 0.3, fighterGain: 1.3, fighterPower: 2.25 },
   fill: { luminance: 0.8 },
   knee: [0.25, 0.75] as const,
@@ -47,16 +47,17 @@ export const CHAR_LIGHT = {
    *  the hue-preserving roll-off of its diffuse light: the brightest channel eases from `knee` toward `ceiling` (linear),
    *  every channel scaled alike, so a pale top keeps its hue under the tone map's shoulder and the top-25 % L* stays
    *  at or under ~80; `fillFloor`: the linear albedo luminance the eye fill lights a darker texel as (hue kept) */
-  // fix 1 (16-fighter sweep, tone harness with no measured fighter in your seat, overlay off): the fill 0.98 -> 1.39 through
-  // a floor 0.25 -> 0.42, the ceiling 0.72 -> 0.70 and the roll-off now over the specular too (specRoll 1): top-25 L*
-  // 66.7-79.6 (5 under 70) -> 70.2-79.9, so the roster sits inside units_gate P3's floor and ruling 46's <= 80 at once
+  // fix 2: AO 0.85 (a little lighter than the bake, its dark masses kept), no roll-off (ceiling 0 = off: it flattened
+  // pale kits' crowns, units_gate P4 8 -> 11), no fill floor
   tone: { aoWeight: 0.85, knee: 0.5, ceiling: 0, fillFloor: 0, specRoll: 1 },
   /** fix 2: each fighter's own exposure (world_material.ts valeCharExpo: its whole reflected light x this, emissive
    *  untouched), so a kit's value range sits in the band (top-25 L* 70-80) with its painted structure kept: a pale kit
    *  comes down whole instead of its tops being rolled flat, a dark kit comes up whole instead of its darks being
-   *  lifted to the lane. Fitted on units_gate (fix 2 notes): e = Y(target) / Y(measured top-25), target = the measured
-   *  value clamped into [71, 78.5]. A fighter not listed keeps 1. */
-  /** fix 2: the share of diffuse saturation per unit of (1 - exposure) a kit brought down loses (world_material.ts) */
+   *  lifted to the lane. Fitted on units_gate (seeds 7/11/23 x 3 seatings, two passes): e = Y(target) / Y(measured
+   *  top-25), Y = CIE luminance of L*, target = the measured value clamped into [71, 78.5]. A fighter not listed keeps 1.
+   *  `exposureSat`: the share of DIFFUSE saturation per unit of (1 - e) a kit brought down loses: the tone map's shoulder
+   *  had been desaturating its pale top, and lower on the curve the same paint read more saturated (Nurrow's and
+   *  Sukri's tops crossed into the enemy marigold band, units_gate P2, at 0) */
   exposureSat: 0.45,
   exposure: { burdam: 1.087, ilsheta: 0.827, kemdo: 0.832, lisvel: 0.861, marund: 0.818, nurrow: 0.836, rishal: 0.848, sukri: 0.715, tunlan: 0.753, vashil: 0.891 } as Readonly<Record<string, number>>,
 } as const;
