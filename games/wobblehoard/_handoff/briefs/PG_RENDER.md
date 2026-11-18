@@ -138,3 +138,12 @@ DESIGN 6.6 (at most 2 flashes a second, RD-03).
 ## Never
 A camera move caused by autonomy; a flash; a mouth or a blush; a heart icon; a texture, model, font or image file; a colour outside the token mixes;
 a grow or pulse in Calm or with reduced motion.
+
+## OWNER DECISION 2026-11-18 (D-96): the place list is seven, not ten
+The owner saw concept sketches of the five undrawn places and decided: "lantern roof and cloudloft ONLY."
+- **Kept (7):** Home, Hearthlog Cabin (open), Ripple Shore, Frostbell Ridge, Rainleaf Garden ("for sure must work"), Lanternroof, Cloudloft.
+- **Dropped (3):** Fizzwell Tub, Cogwhistle Bench, Echo Hollow. Do not build their visuals, physics (magnet, turntable) or shell wiring.
+  Their data, sound and quest rows must not ship in the build or show anywhere to the player (remove them from the chunks and from the
+  quest, wish, fact and keepsake totals: no stamp, wish or count may name or depend on a dropped place). The Float setting stays as it is.
+- Order: beach, mountain, garden first; then Lanternroof and Cloudloft (wind gusts and the updraft are the only new physics).
+- The owner also said two open 3D places "is NOT enough": opening places is the priority after the first deploy.

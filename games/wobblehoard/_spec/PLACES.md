@@ -831,3 +831,12 @@ them), the tall swing's pivot and both layouts' spawn spots by search (`tallsear
 floor rule by hand (0.235 m needed). **Not checked:** the Home spots against the UI overhaul's real HUD insets (they are not built yet); Home with the
 player's orbit or zoom (the spots are for the rest framing); any S2 or S3 ride or push spot (the Leaf Teeter, the Clothesline Hammock and the Kite
 Swing get the ride rows when their slice is laid); the tall framing's px numbers after the swing's move (the bounds did not change).
+
+## OWNER DECISION 2026-11-18 (D-96): the place list is seven, not ten
+The owner saw concept sketches of the five undrawn places and decided: "lantern roof and cloudloft ONLY."
+- **Kept (7):** Home, Hearthlog Cabin (open), Ripple Shore, Frostbell Ridge, Rainleaf Garden ("for sure must work"), Lanternroof, Cloudloft.
+- **Dropped (3):** Fizzwell Tub, Cogwhistle Bench, Echo Hollow. Do not build their visuals, physics (magnet, turntable) or shell wiring.
+  Their data, sound and quest rows must not ship in the build or show anywhere to the player (remove them from the chunks and from the
+  quest, wish, fact and keepsake totals: no stamp, wish or count may name or depend on a dropped place). The Float setting stays as it is.
+- Order: beach, mountain, garden first; then Lanternroof and Cloudloft (wind gusts and the updraft are the only new physics).
+- The owner also said two open 3D places "is NOT enough": opening places is the priority after the first deploy.

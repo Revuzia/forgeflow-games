@@ -179,3 +179,12 @@ files in; `npx tsc --noEmit -p tsconfig.json` clean after every step.
 ## Done means
 All DT rows pass with the numbers in your report; every move listed; Home's five spots listed with their checks; the byte counts listed; what
 you did not check said plainly.
+
+## OWNER DECISION 2026-11-18 (D-96): the place list is seven, not ten
+The owner saw concept sketches of the five undrawn places and decided: "lantern roof and cloudloft ONLY."
+- **Kept (7):** Home, Hearthlog Cabin (open), Ripple Shore, Frostbell Ridge, Rainleaf Garden ("for sure must work"), Lanternroof, Cloudloft.
+- **Dropped (3):** Fizzwell Tub, Cogwhistle Bench, Echo Hollow. Do not build their visuals, physics (magnet, turntable) or shell wiring.
+  Their data, sound and quest rows must not ship in the build or show anywhere to the player (remove them from the chunks and from the
+  quest, wish, fact and keepsake totals: no stamp, wish or count may name or depend on a dropped place). The Float setting stays as it is.
+- Order: beach, mountain, garden first; then Lanternroof and Cloudloft (wind gusts and the updraft are the only new physics).
+- The owner also said two open 3D places "is NOT enough": opening places is the priority after the first deploy.
