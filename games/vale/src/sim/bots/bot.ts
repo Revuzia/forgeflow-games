@@ -1296,7 +1296,7 @@ export class Bot extends BotBase implements BotController {
       // the laners' in-lane share against the pre-lane bots, 67.4 / 66.4 → 66.0 / 64.7 %)
       // (and a fit partner's trade is not a dive below the tier's peelLaneHp alone: in the laning phase a partner over 40 % is
       // trading, not dying — the veteran support's peel at 65 % still took 5-6 % of its laning time)
-      if (lp && !held && a.hp > a.maxHp * Math.min(0.4, this.diff.peelLaneHp)) continue;
+      if (lp && !held && a.hp > a.maxHp * (ab('l_peel') ? 0.25 : Math.min(0.4, this.diff.peelLaneHp))) continue;
       // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's —
       // the grovehunter answers a dive on any road it stands beside, the genre's counter-gank)
       if (!des && lp && !this.jungle && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;
@@ -1323,7 +1323,7 @@ export class Bot extends BotBase implements BotController {
     }
     if (this.peelRolls.size > 12) for (const [id, r] of [...this.peelRolls]) if (now - r.last > 6) this.peelRolls.delete(id);
     if (best > 0 && this.protectAlly && this.protectDiver) {
-      this.protectUntil = now + 3; this.protectAllyId = this.protectAlly.id; this.protectDiverId = this.protectDiver.id;
+      this.protectUntil = now + (ab('l_peel') && lp ? 1 : 3); this.protectAllyId = this.protectAlly.id; this.protectDiverId = this.protectDiver.id;
     } else if (now < this.protectUntil && this.mode === 'protect') {
       // (the burst paused: keep on the same diver while it is still in sight near my partner)
       const a = this.w.entity(this.protectAllyId), d = this.w.entity(this.protectDiverId);
@@ -1916,7 +1916,7 @@ export class Bot extends BotBase implements BotController {
    * fighter at 20 % for 4 s and more, out of the fight, while a third seat lined up on both. False when given up now.
    */
   private chaseOn(t: Entity): boolean {
-    const q = this.diff.chaseQuit;
+    const q = this.diff.chaseQuit * (ab('f_quit') ? 0.5 : 1);
     if (!this.k.ffa || !(q < Infinity)) return true;
     const e = this.e, now = this.now;
     const d = Math.sqrt(this.dist2(t, e.x, e.y));

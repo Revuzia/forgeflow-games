@@ -446,6 +446,7 @@ export class TeamBrain {
       let need = 0;
       const real = hitting > 0 || hurt.has(st) || minions - mine >= 2;
       if (ab('g_real') && !real) { n = 0; if (cls < 2) coming = 0; }
+      if (ab('g_real2') && !(hitting > 0 || hurt.has(st))) { n = 0; if (cls < 2) coming = 0; }
       if (n > 0) {
         // (one more than the divers at an inner or base structure — not in the laning phase, where the roads hold first)
         if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing && !ab('g_noplus') ? 1 : 0)) * d.defendMatch - 1e-9));
@@ -475,7 +476,12 @@ export class TeamBrain {
       if (coreHit && d.coreAll) need = Math.max(need, 5);
       const delay = cls === 0 ? d.macroDelay : coreHit ? Math.min(d.macroDelay, 1) : Math.min(d.macroDelay, 5);
       if (!this.held(`g:${info.id}`, need > 0, now, delay)) need = 0;
-      const ttl = n + coming === 0 && !coreHit && wdps > 0 ? (st.hp + st.shield) / wdps : Infinity;
+      let ttl = n + coming === 0 && !coreHit && wdps > 0 ? (st.hp + st.shield) / wdps : Infinity;
+      if (ab('g_ttl') && !coreHit && n > 0) {
+        let fd = wdps;
+        for (const f of tp.enemyFighters) if (f.alive && f.atkTarget === st.id) fd += f.stats.ad * f.stats.attackSpeed;
+        if (fd > 0) ttl = (st.hp + st.shield) / fd + 4;
+      }
       if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming, ttl });
     }
     // (owner_rulings 44: the most valuable structure first — the Hourbell, then its Bell Needles, the Lanterns, the inner and the
@@ -498,40 +504,50 @@ export class TeamBrain {
       }
       const recallOk = !!base && rt < Infinity && (d.recallDefend === 'inner' ? cls >= 1 : d.recallDefend === 'base' ? cls >= 2 : false);
       // (owner_rulings 51: in the laning phase an inner Needle's post is for a defender 15 s off at most — the roads come first)
-      const cap = cls === 2 ? 45 : cls === 1 ? (laning ? 15 : 30) : 20;
+      const cap = ab('g_cap') && !(th.value >= 4.5) ? (cls === 2 ? 30 : cls === 1 ? (laning ? 15 : 20) : 15) : cls === 2 ? 45 : cls === 1 ? (laning ? 15 : 30) : 20;
+      const elig = (p: (typeof w.players)[number]): { eta: number; rec: boolean } | null => {
+        if (!p || p.team !== this.team) return null;
+        const cur = this.guard.get(p.player);
+        // (owner_rulings 44: a post is dropped the moment a more valuable structure in reach is threatened — a defender
+        // posted to a lesser threat, or to a quiet structure, is taken for this one)
+        if (cur && (cur.sid === info.id || (valueOfPost.get(cur.sid) ?? 0) >= th.value)) return null;
+        if (!cur && (this.guardDeclined.get(p.player) ?? -1) > now && th.value < 4) return null;
+        const e = p.ent;
+        if (!e || !e.alive || e.hp < e.maxHp * 0.35) return null;
+        // (the laning phase's grovehunter keeps its clear and its ganks at the outer Needles: an inner or base call
+        // takes it — kept off the inner Needles too, a fighter siege there went unanswered 22 % of the time, veteran)
+        if (laning && cls < 1 && this.assign.get(p.player)?.jungle) return null;
+        // (owner_rulings 51: and an outer Needle in the laning phase is its own road's to hold — a dive there does not post the
+        // other roads' laners across the map: the solo laners spent 2.8-3.9 % of the laning phase in defend mode, against 1.0-1.3 %
+        // for the pre-lane bots, most of the laners' in-lane share lost)
+        if (laning && cls < 1 && this.assign.get(p.player)?.lane !== info.lane) return null;
+        const ms = Math.max(1, e.stats.moveSpeed);
+        const dist = dhypot(e.x - st.x, e.y - st.y);
+        const walk = dist < 14 ? 0 : dist * 1.25 / ms;
+        let eta = walk, rec = false;
+        if (recallOk && base && dist > 45) {
+          const r = rt + dhypot(base.fx - st.x, base.fy - st.y) * 1.15 / ms;
+          if (r + 8 <= walk) { eta = r; rec = true; }
+        }
+        // (a defender already posted is taken only when it is close: the lesser post keeps one farther off)
+        if (eta > (cur ? Math.min(cap, 20) : cap)) return null;
+        // (owner_rulings 47: a wave-only call is not answered by a defender that would arrive to watch it fall — the Wicks'
+        // structure falls before the walk ends: two fit defenders arriving as a 21-Wick stack finished a Lantern were the
+        // commonest 'fell to Wicks beside fit defenders' left)
+        if (eta + 2 > th.ttl) return null;
+        return { eta, rec };
+      };
+      if (ab('g_match') && th.n > 0 && th.value < 4 && have < th.need) {
+        let c = have;
+        for (const p of w.players) if (elig(p)) c++;
+        if (c < Math.min(th.need, th.n)) continue;
+      }
       while (have < th.need) {
         let best: PlayerId = -1, bt = Infinity, bRecall = false;
         for (const p of w.players) {
-          if (!p || p.team !== this.team) continue;
-          const cur = this.guard.get(p.player);
-          // (owner_rulings 44: a post is dropped the moment a more valuable structure in reach is threatened — a defender
-          // posted to a lesser threat, or to a quiet structure, is taken for this one)
-          if (cur && (cur.sid === info.id || (valueOfPost.get(cur.sid) ?? 0) >= th.value)) continue;
-          if (!cur && (this.guardDeclined.get(p.player) ?? -1) > now && th.value < 4) continue;
-          const e = p.ent;
-          if (!e || !e.alive || e.hp < e.maxHp * 0.35) continue;
-          // (the laning phase's grovehunter keeps its clear and its ganks at the outer Needles: an inner or base call
-          // takes it — kept off the inner Needles too, a fighter siege there went unanswered 22 % of the time, veteran)
-          if (laning && cls < 1 && this.assign.get(p.player)?.jungle) continue;
-          // (owner_rulings 51: and an outer Needle in the laning phase is its own road's to hold — a dive there does not post the
-          // other roads' laners across the map: the solo laners spent 2.8-3.9 % of the laning phase in defend mode, against 1.0-1.3 %
-          // for the pre-lane bots, most of the laners' in-lane share lost)
-          if (laning && cls < 1 && this.assign.get(p.player)?.lane !== info.lane) continue;
-          const ms = Math.max(1, e.stats.moveSpeed);
-          const dist = dhypot(e.x - st.x, e.y - st.y);
-          const walk = dist < 14 ? 0 : dist * 1.25 / ms;
-          let eta = walk, rec = false;
-          if (recallOk && base && dist > 45) {
-            const r = rt + dhypot(base.fx - st.x, base.fy - st.y) * 1.15 / ms;
-            if (r + 8 <= walk) { eta = r; rec = true; }
-          }
-          // (a defender already posted is taken only when it is close: the lesser post keeps one farther off)
-          if (eta > (cur ? Math.min(cap, 20) : cap) || eta >= bt) continue;
-          // (owner_rulings 47: a wave-only call is not answered by a defender that would arrive to watch it fall — the Wicks'
-          // structure falls before the walk ends: two fit defenders arriving as a 21-Wick stack finished a Lantern were the
-          // commonest 'fell to Wicks beside fit defenders' left)
-          if (eta + 2 > th.ttl) continue;
-          bt = eta; best = p.player; bRecall = rec;
+          const el = elig(p);
+          if (!el || el.eta >= bt) continue;
+          bt = el.eta; best = p.player; bRecall = el.rec;
         }
         if (best < 0) break;
         this.guard.set(best, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach, cls, recall: bRecall, until: now + d.defendHold, since: now });

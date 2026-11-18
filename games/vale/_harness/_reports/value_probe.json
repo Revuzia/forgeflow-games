@@ -131409,9 +131409,3188 @@
     },
     "logs": []
    }
+  },
+  "vfy_lc_s7": {
+   "rift_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 39,
+     "p50": 97,
+     "p95": 130,
+     "p99": 136,
+     "mean": 92.84,
+     "spread": 91,
+     "lstarP50": 41,
+     "sat": 0.23,
+     "satP50": 0.2
+    },
+    "envFrame": {
+     "share": 0.9379,
+     "p5": 40,
+     "p50": 98,
+     "p95": 129,
+     "p99": 134,
+     "mean": 93.24,
+     "spread": 89,
+     "lstarP50": 41.5,
+     "sat": 0.23,
+     "satP50": 0.2
+    },
+    "bright160": {
+     "frame": 43377,
+     "byClass": {
+      "jungle": 1,
+      "seat": 316,
+      "wallTop": 13,
+      "canopy": 111,
+      "landmark": 18,
+      "fighter": 4503,
+      "wick": 3234,
+      "monster": 904,
+      "structure": 31746
+     },
+     "env": 459
+    },
+    "masks": {
+     "lane": {
+      "share": 0.2482,
+      "p5": 99,
+      "p50": 121,
+      "p95": 132,
+      "p99": 136,
+      "mean": 119,
+      "spread": 33,
+      "lstarP50": 51,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.3484,
+      "p5": 97,
+      "p50": 122,
+      "p95": 132,
+      "p99": 136,
+      "mean": 119.16,
+      "spread": 35,
+      "lstarP50": 51.5,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.0427,
+      "p5": 34,
+      "p50": 78,
+      "p95": 115,
+      "p99": 126,
+      "mean": 76.02,
+      "spread": 81,
+      "lstarP50": 33,
+      "sat": 0.17,
+      "satP50": 0.2
+     },
+     "jungle": {
+      "share": 0.0305,
+      "p5": 40,
+      "p50": 70,
+      "p95": 112,
+      "p99": 122,
+      "mean": 73.54,
+      "spread": 72,
+      "lstarP50": 30,
+      "sat": 0.18,
+      "satP50": 0.2
+     },
+     "camp": {
+      "share": 0.0415,
+      "p5": 58,
+      "p50": 107,
+      "p95": 123,
+      "p99": 127,
+      "mean": 100.67,
+      "spread": 65,
+      "lstarP50": 45.5,
+      "sat": 0.17,
+      "satP50": 0.2
+     },
+     "seat": {
+      "share": 0.1002,
+      "p5": 91,
+      "p50": 123,
+      "p95": 132,
+      "p99": 136,
+      "mean": 119.54,
+      "spread": 41,
+      "lstarP50": 52,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "shadow": {
+      "share": 0.0062,
+      "p5": 38,
+      "p50": 70,
+      "p95": 81,
+      "p99": 94,
+      "mean": 66.29,
+      "spread": 43,
+      "lstarP50": 30,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0102,
+      "p5": 25,
+      "p50": 54,
+      "p95": 105,
+      "p99": 113,
+      "mean": 58.8,
+      "spread": 80,
+      "lstarP50": 22.5,
+      "sat": 0.25,
+      "satP50": 0.2
+     },
+     "grass": {
+      "share": 0.0239,
+      "p5": 33,
+      "p50": 69,
+      "p95": 112,
+      "p99": 124,
+      "mean": 70.69,
+      "spread": 79,
+      "lstarP50": 29.5,
+      "sat": 0.23,
+      "satP50": 0.2
+     },
+     "clutter": {
+      "share": 0.0022,
+      "p5": 36,
+      "p50": 81,
+      "p95": 100,
+      "p99": 104,
+      "mean": 75.76,
+      "spread": 64,
+      "lstarP50": 34.5,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.1143,
+      "p5": 30,
+      "p50": 60,
+      "p95": 81,
+      "p99": 88,
+      "mean": 57.56,
+      "spread": 51,
+      "lstarP50": 25,
+      "sat": 0.1,
+      "satP50": 0.1
+     },
+     "wallLip": {
+      "share": 0.0686,
+      "p5": 57,
+      "p50": 86,
+      "p95": 112,
+      "p99": 127,
+      "mean": 85.31,
+      "spread": 55,
+      "lstarP50": 36.5,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.1006,
+      "p5": 51,
+      "p50": 84,
+      "p95": 114,
+      "p99": 125,
+      "mean": 83.15,
+      "spread": 63,
+      "lstarP50": 36,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "walls": {
+      "share": 0.1829,
+      "p5": 33,
+      "p50": 69,
+      "p95": 99,
+      "p99": 120,
+      "mean": 67.97,
+      "spread": 66,
+      "lstarP50": 29.5,
+      "sat": 0.1,
+      "satP50": 0.1
+     },
+     "edge": {
+      "share": 0.0068,
+      "p5": 76,
+      "p50": 109,
+      "p95": 129,
+      "p99": 133,
+      "mean": 106.79,
+      "spread": 53,
+      "lstarP50": 46.5,
+      "sat": 0.13,
+      "satP50": 0.1
+     },
+     "canopy": {
+      "share": 0.1267,
+      "p5": 32,
+      "p50": 83,
+      "p95": 124,
+      "p99": 133,
+      "mean": 80.49,
+      "spread": 92,
+      "lstarP50": 35.5,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "rock": {
+      "share": 0.0017,
+      "p5": 35,
+      "p50": 75,
+      "p95": 102,
+      "p99": 122,
+      "mean": 73.05,
+      "spread": 67,
+      "lstarP50": 32,
+      "sat": 0.18,
+      "satP50": 0.2
+     },
+     "landmark": {
+      "share": 0.0225,
+      "p5": 40,
+      "p50": 82,
+      "p95": 120,
+      "p99": 133,
+      "mean": 80.78,
+      "spread": 80,
+      "lstarP50": 35,
+      "sat": 0.17,
+      "satP50": 0.2
+     },
+     "water": {
+      "share": 0.0009,
+      "p5": 56,
+      "p50": 88,
+      "p95": 109,
+      "p99": 115,
+      "mean": 86.57,
+      "spread": 53,
+      "lstarP50": 37.5,
+      "sat": 0.14,
+      "satP50": 0.1
+     },
+     "ground": {
+      "share": 0.4631,
+      "p5": 58,
+      "p50": 118,
+      "p95": 131,
+      "p99": 135,
+      "mean": 110.52,
+      "spread": 73,
+      "lstarP50": 50,
+      "sat": 0.24,
+      "satP50": 0.3
+     }
+    },
+    "maskSpots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre"
+    ],
+    "env180": {
+     "env": 11634854,
+     "other": 114,
+     "lamp": 0,
+     "otherShare": 0.00001,
+     "lampShareOfFrame": 0,
+     "byClass": {
+      "9": 114
+     }
+    },
+    "fighters": {
+     "px": 183364,
+     "top25": 76.2,
+     "p75": 67.5,
+     "p50": 45,
+     "p25": 29.5,
+     "p95": 79.5,
+     "p99": 86.5,
+     "gt90": 0.0035,
+     "lumaP95": 196,
+     "overLane": 25.2,
+     "per": {
+      "hesmi": {
+       "px": 37170,
+       "top25": 73.1,
+       "p75": 56,
+       "p50": 34.5,
+       "p25": 21,
+       "gt90": 0.0065
+      },
+      "burdam": {
+       "px": 27876,
+       "top25": 64.6,
+       "p75": 57,
+       "p50": 42.5,
+       "p25": 36.5,
+       "gt90": 0
+      },
+      "ervet": {
+       "px": 12099,
+       "top25": 74,
+       "p75": 67,
+       "p50": 50,
+       "p25": 37.5,
+       "gt90": 0.0089
+      },
+      "kemdo": {
+       "px": 10612,
+       "top25": 73.7,
+       "p75": 62,
+       "p50": 44.5,
+       "p25": 30.5,
+       "gt90": 0.0043
+      },
+      "odrum": {
+       "px": 5179,
+       "top25": 79.6,
+       "p75": 68,
+       "p50": 44.5,
+       "p25": 29,
+       "gt90": 0.0089
+      },
+      "vashil": {
+       "px": 17759,
+       "top25": 78.7,
+       "p75": 72.5,
+       "p50": 51,
+       "p25": 35.5,
+       "gt90": 0.004
+      },
+      "marund": {
+       "px": 42183,
+       "top25": 78.3,
+       "p75": 75.5,
+       "p50": 46,
+       "p25": 22.5,
+       "gt90": 0.0025
+      },
+      "dunsom": {
+       "px": 18373,
+       "top25": 76.3,
+       "p75": 71,
+       "p50": 58,
+       "p25": 38.5,
+       "gt90": 0.0002
+      },
+      "rishal": {
+       "px": 12113,
+       "top25": 78.7,
+       "p75": 76,
+       "p50": 56.5,
+       "p25": 34.5,
+       "gt90": 0.0016
+      }
+     },
+     "maxGt90": 0.0089,
+     "medianTop25": 76.3
+    },
+    "wicks": {
+     "px": 63420,
+     "top25": 62.3,
+     "p95": 68,
+     "lumaP95": 161
+    },
+    "monsters": {
+     "px": 5170,
+     "top25": 71.9,
+     "p95": 78
+    },
+    "structures": {
+     "px": 151965,
+     "top25": 75.2,
+     "p95": 83.5
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       52.3,
+       14.7
+      ],
+      "frameP50": 95,
+      "frameP95": 128,
+      "frameP99": 137,
+      "laneP50": 120,
+      "walkableP5": 101,
+      "walkableP95": 130,
+      "inMasks": true
+     },
+     "lane1": {
+      "at": [
+       59.8,
+       55
+      ],
+      "frameP50": 94,
+      "frameP95": 131,
+      "frameP99": 138,
+      "laneP50": 124,
+      "walkableP5": 105,
+      "walkableP95": 133,
+      "inMasks": true
+     },
+     "lane2": {
+      "at": [
+       52.3,
+       95.3
+      ],
+      "frameP50": 102,
+      "frameP95": 130,
+      "frameP99": 139,
+      "laneP50": 120,
+      "walkableP5": 89,
+      "walkableP95": 131,
+      "inMasks": true
+     },
+     "jungle": {
+      "at": [
+       56.1,
+       30.8
+      ],
+      "frameP50": 80,
+      "frameP95": 120,
+      "frameP99": 127,
+      "laneP50": null,
+      "walkableP5": null,
+      "walkableP95": null,
+      "inMasks": true
+     },
+     "centre": {
+      "at": [
+       85,
+       55
+      ],
+      "frameP50": 114,
+      "frameP95": 131,
+      "frameP99": 135,
+      "laneP50": 119,
+      "walkableP5": 92,
+      "walkableP95": 132,
+      "inMasks": true
+     },
+     "fight": {
+      "at": [
+       73,
+       55.4
+      ],
+      "frameP50": 102,
+      "frameP95": 130,
+      "frameP99": 138,
+      "laneP50": 122,
+      "walkableP5": 100,
+      "walkableP95": 132,
+      "inMasks": false
+     }
+    },
+    "bases": {
+     "base0": {
+      "at": [
+       11.8,
+       55
+      ],
+      "plaza": {
+       "px": 1692976,
+       "satP50": 0.2,
+       "sat": 0.21,
+       "lumaP50": 120,
+       "lstarP50": 50.5
+      },
+      "ground": {
+       "px": 1708270,
+       "satP50": 0.2,
+       "sat": 0.21
+      },
+      "structures": {
+       "px": 233619,
+       "lstarP95": 77.5,
+       "lumaP95": 191,
+       "above180": 0.0974,
+       "top25": 72.5
+      },
+      "fighterLumaP95": 196
+     },
+     "base1": {
+      "at": [
+       158.3,
+       55
+      ],
+      "plaza": {
+       "px": 1661614,
+       "satP50": 0.3,
+       "sat": 0.29,
+       "lumaP50": 118,
+       "lstarP50": 50
+      },
+      "ground": {
+       "px": 1677357,
+       "satP50": 0.3,
+       "sat": 0.29
+      },
+      "structures": {
+       "px": 265887,
+       "lstarP95": 67.5,
+       "lumaP95": 163,
+       "above180": 0.017,
+       "top25": 63
+      },
+      "fighterLumaP95": 196
+     }
+    },
+    "flash": {
+     "at": [
+      84.39322372990105,
+      13.097777336459892
+     ],
+     "radius": 3.5,
+     "ability": "marund_domefall",
+     "vfx": "marund_ult_domefall",
+     "base": 105.1,
+     "peak": 229.3,
+     "ratio": 2.18,
+     "px": 204684,
+     "series": [
+      137.2,
+      137.3,
+      137.3,
+      229.3,
+      228.3,
+      225.5,
+      225.3,
+      222.3,
+      210.7,
+      191.2,
+      185.3,
+      185,
+      186.2,
+      186.6,
+      187.9,
+      190,
+      192.1,
+      192.5,
+      192.6,
+      192.4,
+      192.4,
+      192.3,
+      191.9,
+      190.8,
+      189,
+      186.9,
+      184.9,
+      182.1,
+      178.9,
+      175.6,
+      172.5,
+      169.2,
+      165.8,
+      162.7,
+      159.8,
+      157,
+      153.8,
+      150.8,
+      148.1,
+      145.6,
+      142.5,
+      139.2,
+      136.1,
+      132.9,
+      129.7,
+      126.5,
+      123.2,
+      120
+     ]
+    },
+    "fog": null,
+    "landmarks": null,
+    "tele": {
+     "lane0": {
+      "at": [
+       52.332111077489635,
+       14.683795263485475
+      ],
+      "px": 3738,
+      "deP50": 49.68,
+      "edgeCR90": 4.55,
+      "teleEdgeP90": 1
+     },
+     "lane1": {
+      "at": [
+       59.8,
+       55
+      ],
+      "px": 3640,
+      "deP50": 49.84,
+      "edgeCR90": 4.71,
+      "teleEdgeP90": 1
+     },
+     "lane2": {
+      "at": [
+       52.33211107748965,
+       95.31620473651452
+      ],
+      "px": 3903,
+      "deP50": 50.94,
+      "edgeCR90": 4.6,
+      "teleEdgeP90": 1
+     },
+     "jungle": {
+      "at": [
+       56.1,
+       30.800000000000004
+      ],
+      "px": 2797,
+      "deP50": 32.75,
+      "edgeCR90": 5.03,
+      "teleEdgeP90": 1.96
+     },
+     "centre": {
+      "at": [
+       85,
+       55
+      ],
+      "px": 3897,
+      "deP50": 49.49,
+      "edgeCR90": 4.34,
+      "teleEdgeP90": 1
+     },
+     "fight": {
+      "at": [
+       72.97714718727453,
+       55.35582184458817
+      ],
+      "px": 3499,
+      "deP50": 49.83,
+      "edgeCR90": 4.33,
+      "teleEdgeP90": 1
+     }
+    },
+    "verdict": {
+     "laneLstar": "51 PASS (50-58, ruling 46)",
+     "jungleLstar": "30 PASS (28-34, ruling 46)",
+     "wallFaceLstar": "25 PASS (24-30, ruling 46)",
+     "walkableSpread": "35 PASS (<= 45)",
+     "laneSpread": "33 PASS (<= 45)",
+     "frameP99": "136 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "134 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.001 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.24 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "76.2 PASS (<= 80, ruling 46)",
+     "fighterBlowout": "above L* 90: 0.35 % of fighter pixels PASS (< 2 %), worst fighter 0.9 %, p99 86.5",
+     "wickTop25": "62.3 (info: <= 65, WICK lane)",
+     "monsterTop25": "71.9 (info)",
+     "flash": "2.18x PASS (>= 2.0x)",
+     "tele_lane0": "edge contrast p90 4.55 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.68 (info), 3738 px",
+     "tele_lane1": "edge contrast p90 4.71 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.84 (info), 3640 px",
+     "tele_lane2": "edge contrast p90 4.6 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.94 (info), 3903 px",
+     "tele_jungle": "edge contrast p90 5.03 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1.96 PASS (>= 0.45), dE p50 32.75 (info), 2797 px",
+     "tele_centre": "edge contrast p90 4.34 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.49 (info), 3897 px",
+     "tele_fight": "edge contrast p90 4.33 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.83 (info), 3499 px",
+     "retiredB5": "info (ruling 46 retired): lane luma p50 121 (was 85-100), frame p50 97 (was 55-75), frame p95 130 (was <= 130), fighters over lane 25.2 L* (was >= 30), fighter top-25 floor 76.2 (was >= 70)",
+     "base0_plaza": "saturation 0.21 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 77.5 PASS (<= 80); luma p95 191 vs fighters 196 PASS; above 180: 9.7 %",
+     "base1_plaza": "saturation 0.29 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 67.5 PASS (<= 80); luma p95 163 vs fighters 196 PASS; above 180: 1.7 %"
+    },
+    "logs": []
+   },
+   "bridge_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "lane0",
+     "lane_mid",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 36,
+     "p50": 102,
+     "p95": 130,
+     "p99": 152,
+     "mean": 94.11,
+     "spread": 94,
+     "lstarP50": 43.5,
+     "sat": 0.27,
+     "satP50": 0.3
+    },
+    "envFrame": {
+     "share": 0.9371,
+     "p5": 37,
+     "p50": 103,
+     "p95": 129,
+     "p99": 135,
+     "mean": 94.48,
+     "spread": 92,
+     "lstarP50": 44,
+     "sat": 0.26,
+     "satP50": 0.3
+    },
+    "bright160": {
+     "frame": 69928,
+     "byClass": {
+      "lane": 15131,
+      "verge": 286,
+      "landmark": 1,
+      "fighter": 40303,
+      "wick": 3791,
+      "structure": 7230,
+      "actor": 118
+     },
+     "env": 15418
+    },
+    "masks": {
+     "lane": {
+      "share": 0.4165,
+      "p5": 101,
+      "p50": 120,
+      "p95": 131,
+      "p99": 135,
+      "mean": 118.78,
+      "spread": 30,
+      "lstarP50": 51,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.4165,
+      "p5": 101,
+      "p50": 120,
+      "p95": 131,
+      "p99": 135,
+      "mean": 118.78,
+      "spread": 30,
+      "lstarP50": 51,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.3428,
+      "p5": 51,
+      "p50": 79,
+      "p95": 113,
+      "p99": 133,
+      "mean": 81.07,
+      "spread": 62,
+      "lstarP50": 34,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "brush": {
+      "share": 0.0102,
+      "p5": 23,
+      "p50": 39,
+      "p95": 71,
+      "p99": 83,
+      "mean": 42.21,
+      "spread": 48,
+      "lstarP50": 15.5,
+      "sat": 0.25,
+      "satP50": 0.2
+     },
+     "grass": {
+      "share": 0.0418,
+      "p5": 33,
+      "p50": 72,
+      "p95": 110,
+      "p99": 122,
+      "mean": 70.73,
+      "spread": 77,
+      "lstarP50": 30.5,
+      "sat": 0.3,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.064,
+      "p5": 26,
+      "p50": 38,
+      "p95": 50,
+      "p99": 72,
+      "mean": 38.36,
+      "spread": 24,
+      "lstarP50": 15.5,
+      "sat": 0.34,
+      "satP50": 0.4
+     },
+     "wallLip": {
+      "share": 0.0305,
+      "p5": 44,
+      "p50": 81,
+      "p95": 108,
+      "p99": 120,
+      "mean": 80.11,
+      "spread": 64,
+      "lstarP50": 34.5,
+      "sat": 0.2,
+      "satP50": 0.2
+     },
+     "walls": {
+      "share": 0.0945,
+      "p5": 28,
+      "p50": 42,
+      "p95": 100,
+      "p99": 111,
+      "mean": 51.82,
+      "spread": 72,
+      "lstarP50": 17,
+      "sat": 0.29,
+      "satP50": 0.3
+     },
+     "edge": {
+      "share": 0.0024,
+      "p5": 71,
+      "p50": 99,
+      "p95": 120,
+      "p99": 123,
+      "mean": 97.24,
+      "spread": 49,
+      "lstarP50": 42,
+      "sat": 0.23,
+      "satP50": 0.3
+     },
+     "rock": {
+      "share": 0.0018,
+      "p5": 32,
+      "p50": 111,
+      "p95": 134,
+      "p99": 143,
+      "mean": 96.92,
+      "spread": 102,
+      "lstarP50": 47,
+      "sat": 0.21,
+      "satP50": 0.2
+     },
+     "landmark": {
+      "share": 0.0303,
+      "p5": 37,
+      "p50": 112,
+      "p95": 130,
+      "p99": 139,
+      "mean": 104.07,
+      "spread": 93,
+      "lstarP50": 47.5,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "ground": {
+      "share": 0.7593,
+      "p5": 61,
+      "p50": 110,
+      "p95": 129,
+      "p99": 134,
+      "mean": 101.75,
+      "spread": 68,
+      "lstarP50": 46.5,
+      "sat": 0.25,
+      "satP50": 0.3
+     }
+    },
+    "maskSpots": [
+     "lane0",
+     "lane_mid",
+     "centre"
+    ],
+    "env180": {
+     "env": 7750239,
+     "other": 0,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {}
+    },
+    "fighters": {
+     "px": 541885,
+     "top25": 78,
+     "p75": 71.5,
+     "p50": 50,
+     "p25": 27.5,
+     "p95": 82,
+     "p99": 87.5,
+     "gt90": 0.0036,
+     "lumaP95": 202,
+     "overLane": 27,
+     "per": {
+      "burdam": {
+       "px": 97700,
+       "top25": 76.3,
+       "p75": 65,
+       "p50": 48,
+       "p25": 30.5,
+       "gt90": 0.0008
+      },
+      "hesmi": {
+       "px": 77055,
+       "top25": 72.2,
+       "p75": 55,
+       "p50": 32.5,
+       "p25": 20,
+       "gt90": 0.0031
+      },
+      "marund": {
+       "px": 123308,
+       "top25": 77.8,
+       "p75": 75.5,
+       "p50": 58.5,
+       "p25": 24.5,
+       "gt90": 0.0024
+      },
+      "ervet": {
+       "px": 62030,
+       "top25": 77.9,
+       "p75": 71.5,
+       "p50": 54.5,
+       "p25": 32,
+       "gt90": 0.0117
+      },
+      "kemdo": {
+       "px": 52058,
+       "top25": 74.2,
+       "p75": 66,
+       "p50": 49,
+       "p25": 27.5,
+       "gt90": 0.0044
+      },
+      "odrum": {
+       "px": 45452,
+       "top25": 84.3,
+       "p75": 80,
+       "p50": 52,
+       "p25": 31,
+       "gt90": 0.0008
+      },
+      "dunsom": {
+       "px": 50616,
+       "top25": 77.6,
+       "p75": 72.5,
+       "p50": 58,
+       "p25": 36.5,
+       "gt90": 0.0024
+      },
+      "rishal": {
+       "px": 28759,
+       "top25": 78,
+       "p75": 74.5,
+       "p50": 66.5,
+       "p25": 40.5,
+       "gt90": 0.0077
+      },
+      "vashil": {
+       "px": 4907,
+       "top25": 79.9,
+       "p75": 74,
+       "p50": 48,
+       "p25": 27,
+       "gt90": 0.0008
+      }
+     },
+     "maxGt90": 0.0117,
+     "medianTop25": 77.8
+    },
+    "wicks": {
+     "px": 84316,
+     "top25": 60,
+     "p95": 65.5,
+     "lumaP95": 157
+    },
+    "monsters": null,
+    "structures": {
+     "px": 36488,
+     "top25": 73,
+     "p95": 80
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       53.6,
+       22
+      ],
+      "frameP50": 102,
+      "frameP95": 129,
+      "frameP99": 137,
+      "laneP50": 120,
+      "walkableP5": 104,
+      "walkableP95": 130,
+      "inMasks": true
+     },
+     "lane_mid": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 100,
+      "frameP95": 129,
+      "frameP99": 153,
+      "laneP50": 121,
+      "walkableP5": 99,
+      "walkableP95": 131,
+      "inMasks": true
+     },
+     "centre": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 100,
+      "frameP95": 129,
+      "frameP99": 153,
+      "laneP50": 121,
+      "walkableP5": 99,
+      "walkableP95": 131,
+      "inMasks": true
+     },
+     "fight": {
+      "at": [
+       85.7,
+       19.2
+      ],
+      "frameP50": 106,
+      "frameP95": 131,
+      "frameP99": 167,
+      "laneP50": 120,
+      "walkableP5": 98,
+      "walkableP95": 131,
+      "inMasks": false
+     }
+    },
+    "bases": {
+     "base0": {
+      "at": [
+       9.8,
+       22
+      ],
+      "plaza": {
+       "px": 1658687,
+       "satP50": 0.3,
+       "sat": 0.26,
+       "lumaP50": 124,
+       "lstarP50": 52
+      },
+      "ground": {
+       "px": 1668408,
+       "satP50": 0.3,
+       "sat": 0.26
+      },
+      "structures": {
+       "px": 157806,
+       "lstarP95": 75,
+       "lumaP95": 185,
+       "above180": 0.0784,
+       "top25": 71.6
+      },
+      "fighterLumaP95": 202
+     },
+     "base1": {
+      "at": [
+       146.3,
+       22
+      ],
+      "plaza": {
+       "px": 1646288,
+       "satP50": 0.3,
+       "sat": 0.3,
+       "lumaP50": 115,
+       "lstarP50": 48.5
+      },
+      "ground": {
+       "px": 1656020,
+       "satP50": 0.3,
+       "sat": 0.3
+      },
+      "structures": {
+       "px": 173763,
+       "lstarP95": 68.5,
+       "lumaP95": 165,
+       "above180": 0.0102,
+       "top25": 62.9
+      },
+      "fighterLumaP95": 202
+     }
+    },
+    "flash": {
+     "at": [
+      89.23296454232094,
+      19.136926985817766
+     ],
+     "radius": 3.5,
+     "ability": "marund_domefall",
+     "vfx": "marund_ult_domefall",
+     "base": 104.8,
+     "peak": 217.9,
+     "ratio": 2.08,
+     "px": 204684,
+     "series": [
+      136.1,
+      135.9,
+      135.5,
+      217.9,
+      217.5,
+      215.8,
+      215.7,
+      210.9,
+      195.5,
+      181.1,
+      175.6,
+      175.9,
+      178.3,
+      179.3,
+      180.6,
+      182,
+      183.8,
+      184.7,
+      185.5,
+      185.8,
+      185.9,
+      185.6,
+      185,
+      183.6,
+      181.5,
+      179.3,
+      177.3,
+      174.7,
+      171.9,
+      169.1,
+      166.3,
+      163.2,
+      160.1,
+      157.2,
+      154.3,
+      151.7,
+      148.8,
+      146,
+      143.5,
+      141.2,
+      138.4,
+      135.5,
+      132.7,
+      130,
+      127.2,
+      124.4,
+      121.6,
+      118.9
+     ]
+    },
+    "fog": null,
+    "landmarks": null,
+    "tele": {
+     "lane0": {
+      "at": [
+       53.6,
+       22
+      ],
+      "px": 3902,
+      "deP50": 50.78,
+      "edgeCR90": 4.71,
+      "teleEdgeP90": 1
+     },
+     "lane_mid": {
+      "at": [
+       78,
+       22
+      ],
+      "px": 3892,
+      "deP50": 50.3,
+      "edgeCR90": 4.47,
+      "teleEdgeP90": 1
+     },
+     "centre": {
+      "at": [
+       78,
+       22
+      ],
+      "px": 3892,
+      "deP50": 50.3,
+      "edgeCR90": 4.47,
+      "teleEdgeP90": 1
+     },
+     "fight": {
+      "at": [
+       85.67319468755306,
+       19.249492032255755
+      ],
+      "px": 3522,
+      "deP50": 46.85,
+      "edgeCR90": 4.73,
+      "teleEdgeP90": 1.22
+     }
+    },
+    "verdict": {
+     "laneLstar": "51 PASS (50-58, ruling 46)",
+     "wallFaceLstar": "15.5 PASS (14-22, BRIDGE: the gorge, ruling 46)",
+     "walkableSpread": "30 PASS (<= 45)",
+     "laneSpread": "30 PASS (<= 45)",
+     "frameP99": "152 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "135 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.25 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "78 PASS (<= 80, ruling 46)",
+     "fighterBlowout": "above L* 90: 0.36 % of fighter pixels PASS (< 2 %), worst fighter 1.2 %, p99 87.5",
+     "wickTop25": "60 (info: <= 65, WICK lane)",
+     "flash": "2.08x PASS (>= 2.0x)",
+     "tele_lane0": "edge contrast p90 4.71 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.78 (info), 3902 px",
+     "tele_lane_mid": "edge contrast p90 4.47 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.3 (info), 3892 px",
+     "tele_centre": "edge contrast p90 4.47 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.3 (info), 3892 px",
+     "tele_fight": "edge contrast p90 4.73 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1.22 PASS (>= 0.45), dE p50 46.85 (info), 3522 px",
+     "retiredB5": "info (ruling 46 retired): lane luma p50 120 (was 85-100), frame p50 102 (was 55-75), frame p95 130 (was <= 130), fighters over lane 27 L* (was >= 30), fighter top-25 floor 78 (was >= 70)",
+     "base0_plaza": "saturation 0.26 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 75 PASS (<= 80); luma p95 185 vs fighters 202 PASS; above 180: 7.8 %",
+     "base1_plaza": "saturation 0.3 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 68.5 PASS (<= 80); luma p95 165 vs fighters 202 PASS; above 180: 1.0 %"
+    },
+    "logs": []
+   },
+   "fray_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 7,
+    "spots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 59,
+     "p50": 117,
+     "p95": 131,
+     "p99": 142,
+     "mean": 109.72,
+     "spread": 72,
+     "lstarP50": 49.5,
+     "sat": 0.22,
+     "satP50": 0.2
+    },
+    "envFrame": {
+     "share": 0.9879,
+     "p5": 61,
+     "p50": 117,
+     "p95": 131,
+     "p99": 142,
+     "mean": 110.11,
+     "spread": 70,
+     "lstarP50": 49.5,
+     "sat": 0.22,
+     "satP50": 0.2
+    },
+    "bright160": {
+     "frame": 21689,
+     "byClass": {
+      "lane": 15542,
+      "landmark": 696,
+      "lamp": 194,
+      "fighter": 4729
+     },
+     "env": 16432
+    },
+    "masks": {
+     "lane": {
+      "share": 0.6423,
+      "p5": 87,
+      "p50": 119,
+      "p95": 127,
+      "p99": 133,
+      "mean": 115.44,
+      "spread": 40,
+      "lstarP50": 50,
+      "sat": 0.24,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.6423,
+      "p5": 87,
+      "p50": 119,
+      "p95": 127,
+      "p99": 133,
+      "mean": 115.44,
+      "spread": 40,
+      "lstarP50": 50,
+      "sat": 0.24,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0035,
+      "p5": 40,
+      "p50": 72,
+      "p95": 106,
+      "p99": 113,
+      "mean": 72.47,
+      "spread": 66,
+      "lstarP50": 30.5,
+      "sat": 0.15,
+      "satP50": 0.1
+     },
+     "grass": {
+      "share": 0.0054,
+      "p5": 27,
+      "p50": 71,
+      "p95": 121,
+      "p99": 130,
+      "mean": 71.85,
+      "spread": 94,
+      "lstarP50": 30,
+      "sat": 0.3,
+      "satP50": 0.2
+     },
+     "wallFace": {
+      "share": 0.0338,
+      "p5": 29,
+      "p50": 59,
+      "p95": 83,
+      "p99": 100,
+      "mean": 56.29,
+      "spread": 54,
+      "lstarP50": 25,
+      "sat": 0.38,
+      "satP50": 0.4
+     },
+     "wallLip": {
+      "share": 0.0305,
+      "p5": 44,
+      "p50": 93,
+      "p95": 106,
+      "p99": 110,
+      "mean": 85.62,
+      "spread": 62,
+      "lstarP50": 39.5,
+      "sat": 0.11,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.185,
+      "p5": 101,
+      "p50": 116,
+      "p95": 139,
+      "p99": 143,
+      "mean": 117.83,
+      "spread": 38,
+      "lstarP50": 49,
+      "sat": 0.15,
+      "satP50": 0.1
+     },
+     "walls": {
+      "share": 0.0643,
+      "p5": 31,
+      "p50": 70,
+      "p95": 104,
+      "p99": 109,
+      "mean": 70.19,
+      "spread": 73,
+      "lstarP50": 30,
+      "sat": 0.25,
+      "satP50": 0.3
+     },
+     "edge": {
+      "share": 0.0031,
+      "p5": 66,
+      "p50": 93,
+      "p95": 103,
+      "p99": 105,
+      "mean": 89.75,
+      "spread": 37,
+      "lstarP50": 39.5,
+      "sat": 0.05,
+      "satP50": 0.1
+     },
+     "landmark": {
+      "share": 0.0877,
+      "p5": 25,
+      "p50": 87,
+      "p95": 145,
+      "p99": 151,
+      "mean": 86.96,
+      "spread": 120,
+      "lstarP50": 37,
+      "sat": 0.17,
+      "satP50": 0.1
+     },
+     "lamp": {
+      "share": 0,
+      "p5": 159,
+      "p50": 162,
+      "p95": 164,
+      "p99": 164,
+      "mean": 162.04,
+      "spread": 5,
+      "lstarP50": 68.5,
+      "sat": 0.59,
+      "satP50": 0.6
+     },
+     "ground": {
+      "share": 0.6423,
+      "p5": 87,
+      "p50": 119,
+      "p95": 127,
+      "p99": 133,
+      "mean": 115.44,
+      "spread": 40,
+      "lstarP50": 50,
+      "sat": 0.24,
+      "satP50": 0.3
+     }
+    },
+    "maskSpots": [
+     "centre",
+     "north",
+     "seatI",
+     "seatII",
+     "seatIII",
+     "seatIV",
+     "seatV",
+     "seatVI",
+     "seatVII",
+     "seatVIII",
+     "seatIX",
+     "seatX"
+    ],
+    "env180": {
+     "env": 26554272,
+     "other": 0,
+     "lamp": 8006,
+     "otherShare": 0,
+     "lampShareOfFrame": 0.0003,
+     "byClass": {
+      "1L": 8006
+     }
+    },
+    "fighters": {
+     "px": 40910,
+     "top25": 76.8,
+     "p75": 65,
+     "p50": 43,
+     "p25": 29.5,
+     "p95": 85,
+     "p99": 90,
+     "gt90": 0.0094,
+     "lumaP95": 212,
+     "overLane": 26.8,
+     "per": {
+      "ervet": {
+       "px": 20561,
+       "top25": 75.8,
+       "p75": 64.5,
+       "p50": 44,
+       "p25": 32,
+       "gt90": 0.0176
+      },
+      "odrum": {
+       "px": 20349,
+       "top25": 77.8,
+       "p75": 65,
+       "p50": 42,
+       "p25": 25.5,
+       "gt90": 0.001
+      }
+     },
+     "maxGt90": 0.0176,
+     "medianTop25": 77.8
+    },
+    "wicks": null,
+    "monsters": null,
+    "structures": null,
+    "perSpot": {
+     "centre": {
+      "at": [
+       32,
+       32
+      ],
+      "frameP50": 119,
+      "frameP95": 127,
+      "frameP99": 132,
+      "laneP50": 120,
+      "walkableP5": 98,
+      "walkableP95": 127,
+      "inMasks": true
+     },
+     "north": {
+      "at": [
+       32,
+       19.2
+      ],
+      "frameP50": 118,
+      "frameP95": 127,
+      "frameP99": 132,
+      "laneP50": 120,
+      "walkableP5": 95,
+      "walkableP95": 127,
+      "inMasks": true
+     },
+     "seatI": {
+      "at": [
+       32,
+       6
+      ],
+      "frameP50": 116,
+      "frameP95": 127,
+      "frameP99": 134,
+      "laneP50": 120,
+      "walkableP5": 80,
+      "walkableP95": 128,
+      "inMasks": true
+     },
+     "seatII": {
+      "at": [
+       47.3,
+       11
+      ],
+      "frameP50": 116,
+      "frameP95": 128,
+      "frameP99": 134,
+      "laneP50": 120,
+      "walkableP5": 80,
+      "walkableP95": 128,
+      "inMasks": true
+     },
+     "seatIII": {
+      "at": [
+       56.7,
+       24
+      ],
+      "frameP50": 117,
+      "frameP95": 139,
+      "frameP99": 151,
+      "laneP50": 119,
+      "walkableP5": 87,
+      "walkableP95": 128,
+      "inMasks": true
+     },
+     "seatIV": {
+      "at": [
+       56.7,
+       40
+      ],
+      "frameP50": 118,
+      "frameP95": 138,
+      "frameP99": 142,
+      "laneP50": 119,
+      "walkableP5": 89,
+      "walkableP95": 126,
+      "inMasks": true
+     },
+     "seatV": {
+      "at": [
+       47.3,
+       53
+      ],
+      "frameP50": 117,
+      "frameP95": 134,
+      "frameP99": 143,
+      "laneP50": 118,
+      "walkableP5": 91,
+      "walkableP95": 126,
+      "inMasks": true
+     },
+     "seatVI": {
+      "at": [
+       32,
+       58
+      ],
+      "frameP50": 116,
+      "frameP95": 125,
+      "frameP99": 131,
+      "laneP50": 118,
+      "walkableP5": 90,
+      "walkableP95": 125,
+      "inMasks": true
+     },
+     "seatVII": {
+      "at": [
+       16.7,
+       53
+      ],
+      "frameP50": 117,
+      "frameP95": 132,
+      "frameP99": 141,
+      "laneP50": 119,
+      "walkableP5": 90,
+      "walkableP95": 126,
+      "inMasks": true
+     },
+     "seatVIII": {
+      "at": [
+       7.3,
+       40
+      ],
+      "frameP50": 118,
+      "frameP95": 137,
+      "frameP99": 143,
+      "laneP50": 118,
+      "walkableP5": 87,
+      "walkableP95": 127,
+      "inMasks": true
+     },
+     "seatIX": {
+      "at": [
+       7.3,
+       24
+      ],
+      "frameP50": 117,
+      "frameP95": 140,
+      "frameP99": 149,
+      "laneP50": 118,
+      "walkableP5": 84,
+      "walkableP95": 126,
+      "inMasks": true
+     },
+     "seatX": {
+      "at": [
+       16.7,
+       11
+      ],
+      "frameP50": 116,
+      "frameP95": 128,
+      "frameP99": 133,
+      "laneP50": 119,
+      "walkableP5": 77,
+      "walkableP95": 128,
+      "inMasks": true
+     },
+     "fight": {
+      "at": [
+       14,
+       34.2
+      ],
+      "frameP50": 118,
+      "frameP95": 126,
+      "frameP99": 130,
+      "laneP50": 119,
+      "walkableP5": 90,
+      "walkableP95": 126,
+      "inMasks": false
+     }
+    },
+    "bases": {},
+    "flash": {
+     "at": [
+      50.892518692731166,
+      18.789845625853154
+     ],
+     "radius": 3.5,
+     "ability": "marund_domefall",
+     "vfx": "marund_ult_domefall",
+     "base": 109.4,
+     "peak": 224.3,
+     "ratio": 2.05,
+     "px": 204684,
+     "series": [
+      138.7,
+      139,
+      138.1,
+      224.1,
+      224.3,
+      224.3,
+      224.2,
+      222.9,
+      214.8,
+      196.2,
+      189.9,
+      189.7,
+      191.6,
+      192.5,
+      193.4,
+      194.6,
+      195.7,
+      195.7,
+      195.3,
+      194.9,
+      194.6,
+      194.3,
+      193.7,
+      192.7,
+      191.3,
+      189.5,
+      188,
+      185.4,
+      182.2,
+      179,
+      175.8,
+      172.6,
+      169.4,
+      166.3,
+      163.5,
+      160.7,
+      157.6,
+      154.5,
+      151.8,
+      149.2,
+      146.2,
+      142.9,
+      139.9,
+      136.8,
+      133.7,
+      130.6,
+      127.4,
+      124.3
+     ]
+    },
+    "fog": null,
+    "landmarks": null,
+    "tele": {
+     "centre": {
+      "at": [
+       32,
+       32
+      ],
+      "px": 3300,
+      "deP50": 39.2,
+      "edgeCR90": 4.74,
+      "teleEdgeP90": 1
+     },
+     "north": {
+      "at": [
+       32,
+       19.2
+      ],
+      "px": 3831,
+      "deP50": 39.03,
+      "edgeCR90": 4.81,
+      "teleEdgeP90": 1
+     },
+     "seatI": {
+      "at": [
+       32,
+       6
+      ],
+      "px": 3731,
+      "deP50": 39.5,
+      "edgeCR90": 4.71,
+      "teleEdgeP90": 1
+     },
+     "seatII": {
+      "at": [
+       47.2824165596043,
+       10.965558146251368
+      ],
+      "px": 3940,
+      "deP50": 38.53,
+      "edgeCR90": 4.71,
+      "teleEdgeP90": 1
+     },
+     "seatIII": {
+      "at": [
+       56.727469423673995,
+       23.965558146251368
+      ],
+      "px": 3807,
+      "deP50": 38.37,
+      "edgeCR90": 4.72,
+      "teleEdgeP90": 1
+     },
+     "seatIV": {
+      "at": [
+       56.727469423673995,
+       40.03444185374863
+      ],
+      "px": 3810,
+      "deP50": 40.25,
+      "edgeCR90": 4.56,
+      "teleEdgeP90": 1
+     },
+     "seatV": {
+      "at": [
+       47.2824165596043,
+       53.03444185374863
+      ],
+      "px": 3217,
+      "deP50": 39.59,
+      "edgeCR90": 4.66,
+      "teleEdgeP90": 1
+     },
+     "seatVI": {
+      "at": [
+       32,
+       58
+      ],
+      "px": 2929,
+      "deP50": 38.8,
+      "edgeCR90": 4.72,
+      "teleEdgeP90": 1
+     },
+     "seatVII": {
+      "at": [
+       16.7175834403957,
+       53.03444185374863
+      ],
+      "px": 3223,
+      "deP50": 39.12,
+      "edgeCR90": 4.65,
+      "teleEdgeP90": 1
+     },
+     "seatVIII": {
+      "at": [
+       7.272530576326009,
+       40.03444185374864
+      ],
+      "px": 3817,
+      "deP50": 39.81,
+      "edgeCR90": 4.59,
+      "teleEdgeP90": 1
+     },
+     "seatIX": {
+      "at": [
+       7.272530576326005,
+       23.96555814625137
+      ],
+      "px": 3810,
+      "deP50": 39.82,
+      "edgeCR90": 4.49,
+      "teleEdgeP90": 1
+     },
+     "seatX": {
+      "at": [
+       16.717583440395693,
+       10.965558146251368
+      ],
+      "px": 3822,
+      "deP50": 39.72,
+      "edgeCR90": 4.67,
+      "teleEdgeP90": 1
+     },
+     "fight": {
+      "at": [
+       13.974771881601155,
+       34.183551215316925
+      ],
+      "px": 3295,
+      "deP50": 36.98,
+      "edgeCR90": 4.31,
+      "teleEdgeP90": 1
+     }
+    },
+    "verdict": {
+     "laneLstar": "50 PASS (50-58, ruling 46)",
+     "wallFaceLstar": "25 PASS (24-30, ruling 46)",
+     "walkableSpread": "40 PASS (<= 45)",
+     "laneSpread": "40 PASS (<= 45)",
+     "frameP99": "142 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "142 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.030 % of frame PASS",
+     "groundSat": "0.24 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "76.8 PASS (<= 80, ruling 46)",
+     "fighterBlowout": "above L* 90: 0.94 % of fighter pixels PASS (< 2 %), worst fighter 1.8 %, p99 90",
+     "flash": "2.05x PASS (>= 2.0x)",
+     "tele_centre": "edge contrast p90 4.74 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.2 (info), 3300 px",
+     "tele_north": "edge contrast p90 4.81 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.03 (info), 3831 px",
+     "tele_seatI": "edge contrast p90 4.71 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.5 (info), 3731 px",
+     "tele_seatII": "edge contrast p90 4.71 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 38.53 (info), 3940 px",
+     "tele_seatIII": "edge contrast p90 4.72 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 38.37 (info), 3807 px",
+     "tele_seatIV": "edge contrast p90 4.56 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 40.25 (info), 3810 px",
+     "tele_seatV": "edge contrast p90 4.66 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.59 (info), 3217 px",
+     "tele_seatVI": "edge contrast p90 4.72 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 38.8 (info), 2929 px",
+     "tele_seatVII": "edge contrast p90 4.65 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.12 (info), 3223 px",
+     "tele_seatVIII": "edge contrast p90 4.59 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.81 (info), 3817 px",
+     "tele_seatIX": "edge contrast p90 4.49 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.82 (info), 3810 px",
+     "tele_seatX": "edge contrast p90 4.67 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.72 (info), 3822 px",
+     "tele_fight": "edge contrast p90 4.31 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 36.98 (info), 3295 px",
+     "retiredB5": "info (ruling 46 retired): lane luma p50 119 (was 85-100), frame p50 117 (was <= 90), frame p95 131 (was <= 130), fighters over lane 26.8 L* (was >= 30), fighter top-25 floor 76.8 (was >= 70)"
+    },
+    "logs": []
+   }
+  },
+  "vfy_lc_s11": {
+   "rift_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 11,
+    "spots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 39,
+     "p50": 98,
+     "p95": 130,
+     "p99": 136,
+     "mean": 93.1,
+     "spread": 91,
+     "lstarP50": 41.5,
+     "sat": 0.23,
+     "satP50": 0.2
+    },
+    "envFrame": {
+     "share": 0.9389,
+     "p5": 40,
+     "p50": 99,
+     "p95": 129,
+     "p99": 134,
+     "mean": 93.64,
+     "spread": 89,
+     "lstarP50": 42,
+     "sat": 0.23,
+     "satP50": 0.2
+    },
+    "bright160": {
+     "frame": 41154,
+     "byClass": {
+      "jungle": 1,
+      "seat": 521,
+      "wallTop": 13,
+      "canopy": 111,
+      "landmark": 18,
+      "fighter": 6497,
+      "wick": 3742,
+      "monster": 904,
+      "structure": 26742
+     },
+     "env": 664
+    },
+    "masks": {
+     "lane": {
+      "share": 0.2506,
+      "p5": 100,
+      "p50": 122,
+      "p95": 132,
+      "p99": 136,
+      "mean": 119.39,
+      "spread": 32,
+      "lstarP50": 51.5,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.3448,
+      "p5": 96,
+      "p50": 122,
+      "p95": 132,
+      "p99": 136,
+      "mean": 118.74,
+      "spread": 36,
+      "lstarP50": 51,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.0427,
+      "p5": 34,
+      "p50": 78,
+      "p95": 115,
+      "p99": 126,
+      "mean": 76.02,
+      "spread": 81,
+      "lstarP50": 33,
+      "sat": 0.17,
+      "satP50": 0.2
+     },
+     "jungle": {
+      "share": 0.0305,
+      "p5": 40,
+      "p50": 71,
+      "p95": 112,
+      "p99": 122,
+      "mean": 73.55,
+      "spread": 72,
+      "lstarP50": 30,
+      "sat": 0.18,
+      "satP50": 0.2
+     },
+     "camp": {
+      "share": 0.0415,
+      "p5": 58,
+      "p50": 107,
+      "p95": 123,
+      "p99": 127,
+      "mean": 100.67,
+      "spread": 65,
+      "lstarP50": 45.5,
+      "sat": 0.17,
+      "satP50": 0.2
+     },
+     "seat": {
+      "share": 0.0943,
+      "p5": 86,
+      "p50": 121,
+      "p95": 132,
+      "p99": 136,
+      "mean": 117.04,
+      "spread": 46,
+      "lstarP50": 51,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "shadow": {
+      "share": 0.0061,
+      "p5": 38,
+      "p50": 70,
+      "p95": 81,
+      "p99": 94,
+      "mean": 66.11,
+      "spread": 43,
+      "lstarP50": 30,
+      "sat": 0.32,
+      "satP50": 0.3
+     },
+     "brush": {
+      "share": 0.0102,
+      "p5": 25,
+      "p50": 54,
+      "p95": 105,
+      "p99": 113,
+      "mean": 58.79,
+      "spread": 80,
+      "lstarP50": 22.5,
+      "sat": 0.25,
+      "satP50": 0.2
+     },
+     "grass": {
+      "share": 0.0239,
+      "p5": 33,
+      "p50": 69,
+      "p95": 112,
+      "p99": 124,
+      "mean": 70.69,
+      "spread": 79,
+      "lstarP50": 29.5,
+      "sat": 0.23,
+      "satP50": 0.2
+     },
+     "clutter": {
+      "share": 0.0022,
+      "p5": 36,
+      "p50": 81,
+      "p95": 100,
+      "p99": 104,
+      "mean": 75.76,
+      "spread": 64,
+      "lstarP50": 34.5,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.1143,
+      "p5": 30,
+      "p50": 60,
+      "p95": 81,
+      "p99": 88,
+      "mean": 57.56,
+      "spread": 51,
+      "lstarP50": 25,
+      "sat": 0.1,
+      "satP50": 0.1
+     },
+     "wallLip": {
+      "share": 0.0686,
+      "p5": 57,
+      "p50": 86,
+      "p95": 112,
+      "p99": 127,
+      "mean": 85.3,
+      "spread": 55,
+      "lstarP50": 36.5,
+      "sat": 0.12,
+      "satP50": 0.1
+     },
+     "wallTop": {
+      "share": 0.1006,
+      "p5": 51,
+      "p50": 84,
+      "p95": 114,
+      "p99": 125,
+      "mean": 83.15,
+      "spread": 63,
+      "lstarP50": 36,
+      "sat": 0.26,
+      "satP50": 0.3
+     },
+     "walls": {
+      "share": 0.1829,
+      "p5": 33,
+      "p50": 69,
+      "p95": 99,
+      "p99": 120,
+      "mean": 67.97,
+      "spread": 66,
+      "lstarP50": 29.5,
+      "sat": 0.1,
+      "satP50": 0.1
+     },
+     "edge": {
+      "share": 0.0068,
+      "p5": 76,
+      "p50": 109,
+      "p95": 129,
+      "p99": 133,
+      "mean": 106.77,
+      "spread": 53,
+      "lstarP50": 46.5,
+      "sat": 0.13,
+      "satP50": 0.1
+     },
+     "canopy": {
+      "share": 0.1267,
+      "p5": 32,
+      "p50": 83,
+      "p95": 124,
+      "p99": 133,
+      "mean": 80.49,
+      "spread": 92,
+      "lstarP50": 35.5,
+      "sat": 0.37,
+      "satP50": 0.4
+     },
+     "rock": {
+      "share": 0.0017,
+      "p5": 35,
+      "p50": 75,
+      "p95": 102,
+      "p99": 122,
+      "mean": 73.05,
+      "spread": 67,
+      "lstarP50": 32,
+      "sat": 0.18,
+      "satP50": 0.2
+     },
+     "landmark": {
+      "share": 0.0225,
+      "p5": 40,
+      "p50": 82,
+      "p95": 120,
+      "p99": 133,
+      "mean": 80.78,
+      "spread": 80,
+      "lstarP50": 35,
+      "sat": 0.17,
+      "satP50": 0.2
+     },
+     "water": {
+      "share": 0.0009,
+      "p5": 56,
+      "p50": 88,
+      "p95": 109,
+      "p99": 115,
+      "mean": 86.57,
+      "spread": 53,
+      "lstarP50": 37.5,
+      "sat": 0.14,
+      "satP50": 0.1
+     },
+     "ground": {
+      "share": 0.4596,
+      "p5": 58,
+      "p50": 118,
+      "p95": 131,
+      "p99": 135,
+      "mean": 110.14,
+      "spread": 73,
+      "lstarP50": 50,
+      "sat": 0.24,
+      "satP50": 0.3
+     }
+    },
+    "maskSpots": [
+     "lane0",
+     "lane1",
+     "lane2",
+     "jungle",
+     "centre"
+    ],
+    "env180": {
+     "env": 11647669,
+     "other": 183,
+     "lamp": 0,
+     "otherShare": 0.00002,
+     "lampShareOfFrame": 0,
+     "byClass": {
+      "9": 183
+     }
+    },
+    "fighters": {
+     "px": 196519,
+     "top25": 78.4,
+     "p75": 72,
+     "p50": 49.5,
+     "p25": 28,
+     "p95": 81,
+     "p99": 87.5,
+     "gt90": 0.0042,
+     "lumaP95": 201,
+     "overLane": 26.9,
+     "per": {
+      "hesmi": {
+       "px": 33420,
+       "top25": 75.8,
+       "p75": 62,
+       "p50": 36.5,
+       "p25": 22.5,
+       "gt90": 0.0069
+      },
+      "burdam": {
+       "px": 30047,
+       "top25": 77.7,
+       "p75": 64.5,
+       "p50": 47.5,
+       "p25": 28.5,
+       "gt90": 0.001
+      },
+      "ervet": {
+       "px": 12099,
+       "top25": 74,
+       "p75": 67,
+       "p50": 50,
+       "p25": 37.5,
+       "gt90": 0.0089
+      },
+      "kemdo": {
+       "px": 10612,
+       "top25": 73.7,
+       "p75": 62,
+       "p50": 44.5,
+       "p25": 30.5,
+       "gt90": 0.0043
+      },
+      "odrum": {
+       "px": 5179,
+       "top25": 79.7,
+       "p75": 68,
+       "p50": 44.5,
+       "p25": 29,
+       "gt90": 0.0089
+      },
+      "marund": {
+       "px": 55798,
+       "top25": 78.9,
+       "p75": 76.5,
+       "p50": 55,
+       "p25": 26,
+       "gt90": 0.0036
+      },
+      "rishal": {
+       "px": 15456,
+       "top25": 77.6,
+       "p75": 71,
+       "p50": 54.5,
+       "p25": 31.5,
+       "gt90": 0.0056
+      },
+      "vashil": {
+       "px": 11149,
+       "top25": 79,
+       "p75": 75.5,
+       "p50": 63.5,
+       "p25": 32,
+       "gt90": 0.0046
+      },
+      "dunsom": {
+       "px": 22759,
+       "top25": 77.5,
+       "p75": 72,
+       "p50": 59,
+       "p25": 37.5,
+       "gt90": 0.0013
+      }
+     },
+     "maxGt90": 0.0089,
+     "medianTop25": 77.6
+    },
+    "wicks": {
+     "px": 112359,
+     "top25": 59.5,
+     "p95": 63.5,
+     "lumaP95": 150
+    },
+    "monsters": {
+     "px": 5170,
+     "top25": 71.9,
+     "p95": 78
+    },
+    "structures": {
+     "px": 114518,
+     "top25": 77.2,
+     "p95": 85
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       52.3,
+       14.7
+      ],
+      "frameP50": 95,
+      "frameP95": 128,
+      "frameP99": 137,
+      "laneP50": 120,
+      "walkableP5": 101,
+      "walkableP95": 130,
+      "inMasks": true
+     },
+     "lane1": {
+      "at": [
+       59.8,
+       55
+      ],
+      "frameP50": 95,
+      "frameP95": 131,
+      "frameP99": 138,
+      "laneP50": 125,
+      "walkableP5": 106,
+      "walkableP95": 133,
+      "inMasks": true
+     },
+     "lane2": {
+      "at": [
+       52.3,
+       95.3
+      ],
+      "frameP50": 103,
+      "frameP95": 130,
+      "frameP99": 139,
+      "laneP50": 120,
+      "walkableP5": 89,
+      "walkableP95": 131,
+      "inMasks": true
+     },
+     "jungle": {
+      "at": [
+       56.1,
+       30.8
+      ],
+      "frameP50": 80,
+      "frameP95": 120,
+      "frameP99": 127,
+      "laneP50": null,
+      "walkableP5": null,
+      "walkableP95": null,
+      "inMasks": true
+     },
+     "centre": {
+      "at": [
+       85,
+       55
+      ],
+      "frameP50": 112,
+      "frameP95": 131,
+      "frameP99": 136,
+      "laneP50": 121,
+      "walkableP5": 89,
+      "walkableP95": 132,
+      "inMasks": true
+     },
+     "fight": {
+      "at": [
+       84.5,
+       54.1
+      ],
+      "frameP50": 111,
+      "frameP95": 131,
+      "frameP99": 136,
+      "laneP50": 121,
+      "walkableP5": 90,
+      "walkableP95": 132,
+      "inMasks": false
+     }
+    },
+    "bases": {
+     "base0": {
+      "at": [
+       11.8,
+       55
+      ],
+      "plaza": {
+       "px": 1692981,
+       "satP50": 0.2,
+       "sat": 0.21,
+       "lumaP50": 120,
+       "lstarP50": 50.5
+      },
+      "ground": {
+       "px": 1708275,
+       "satP50": 0.2,
+       "sat": 0.21
+      },
+      "structures": {
+       "px": 233619,
+       "lstarP95": 77.5,
+       "lumaP95": 191,
+       "above180": 0.0968,
+       "top25": 72.5
+      },
+      "fighterLumaP95": 201
+     },
+     "base1": {
+      "at": [
+       158.3,
+       55
+      ],
+      "plaza": {
+       "px": 1661576,
+       "satP50": 0.3,
+       "sat": 0.29,
+       "lumaP50": 118,
+       "lstarP50": 50
+      },
+      "ground": {
+       "px": 1677319,
+       "satP50": 0.3,
+       "sat": 0.29
+      },
+      "structures": {
+       "px": 265887,
+       "lstarP95": 67.5,
+       "lumaP95": 163,
+       "above180": 0.017,
+       "top25": 63
+      },
+      "fighterLumaP95": 201
+     }
+    },
+    "flash": {
+     "at": [
+      84.39322372990105,
+      13.097777336459892
+     ],
+     "radius": 3.5,
+     "ability": "marund_domefall",
+     "vfx": "marund_ult_domefall",
+     "base": 105.2,
+     "peak": 229.3,
+     "ratio": 2.18,
+     "px": 204684,
+     "series": [
+      137.2,
+      137.3,
+      137.3,
+      229.3,
+      228.3,
+      225.5,
+      225.3,
+      222.3,
+      210.7,
+      191.2,
+      185.6,
+      185.1,
+      186.3,
+      186.8,
+      188.3,
+      190.1,
+      192.2,
+      192.6,
+      192.7,
+      192.6,
+      192.5,
+      192.2,
+      191.5,
+      190.1,
+      188,
+      185.6,
+      183.4,
+      180.4,
+      177.3,
+      174.3,
+      171.4,
+      168.4,
+      165.4,
+      162.5,
+      159.6,
+      156.9,
+      153.8,
+      150.8,
+      148.1,
+      145.6,
+      142.5,
+      139.2,
+      136.1,
+      133,
+      129.7,
+      126.5,
+      123.2,
+      120
+     ]
+    },
+    "fog": null,
+    "landmarks": null,
+    "tele": {
+     "lane0": {
+      "at": [
+       52.332111077489635,
+       14.683795263485475
+      ],
+      "px": 3730,
+      "deP50": 49.69,
+      "edgeCR90": 4.56,
+      "teleEdgeP90": 1
+     },
+     "lane1": {
+      "at": [
+       59.8,
+       55
+      ],
+      "px": 3640,
+      "deP50": 49.78,
+      "edgeCR90": 4.71,
+      "teleEdgeP90": 1
+     },
+     "lane2": {
+      "at": [
+       52.33211107748965,
+       95.31620473651452
+      ],
+      "px": 3902,
+      "deP50": 50.95,
+      "edgeCR90": 4.6,
+      "teleEdgeP90": 1
+     },
+     "jungle": {
+      "at": [
+       56.1,
+       30.800000000000004
+      ],
+      "px": 2804,
+      "deP50": 32.67,
+      "edgeCR90": 5.05,
+      "teleEdgeP90": 1.98
+     },
+     "centre": {
+      "at": [
+       85,
+       55
+      ],
+      "px": 3460,
+      "deP50": 50.34,
+      "edgeCR90": 4.4,
+      "teleEdgeP90": 1
+     },
+     "fight": {
+      "at": [
+       84.48804489740247,
+       54.12742025026567
+      ],
+      "px": 3733,
+      "deP50": 51.09,
+      "edgeCR90": 4.94,
+      "teleEdgeP90": 1
+     }
+    },
+    "verdict": {
+     "laneLstar": "51.5 PASS (50-58, ruling 46)",
+     "jungleLstar": "30 PASS (28-34, ruling 46)",
+     "wallFaceLstar": "25 PASS (24-30, ruling 46)",
+     "walkableSpread": "36 PASS (<= 45)",
+     "laneSpread": "32 PASS (<= 45)",
+     "frameP99": "136 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "134 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.002 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.24 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "78.4 PASS (<= 80, ruling 46)",
+     "fighterBlowout": "above L* 90: 0.42 % of fighter pixels PASS (< 2 %), worst fighter 0.9 %, p99 87.5",
+     "wickTop25": "59.5 (info: <= 65, WICK lane)",
+     "monsterTop25": "71.9 (info)",
+     "flash": "2.18x PASS (>= 2.0x)",
+     "tele_lane0": "edge contrast p90 4.56 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.69 (info), 3730 px",
+     "tele_lane1": "edge contrast p90 4.71 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.78 (info), 3640 px",
+     "tele_lane2": "edge contrast p90 4.6 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.95 (info), 3902 px",
+     "tele_jungle": "edge contrast p90 5.05 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1.98 PASS (>= 0.45), dE p50 32.67 (info), 2804 px",
+     "tele_centre": "edge contrast p90 4.4 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.34 (info), 3460 px",
+     "tele_fight": "edge contrast p90 4.94 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 51.09 (info), 3733 px",
+     "retiredB5": "info (ruling 46 retired): lane luma p50 122 (was 85-100), frame p50 98 (was 55-75), frame p95 130 (was <= 130), fighters over lane 26.9 L* (was >= 30), fighter top-25 floor 78.4 (was >= 70)",
+     "base0_plaza": "saturation 0.21 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 77.5 PASS (<= 80); luma p95 191 vs fighters 201 PASS; above 180: 9.7 %",
+     "base1_plaza": "saturation 0.29 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 67.5 PASS (<= 80); luma p95 163 vs fighters 201 PASS; above 180: 1.7 %"
+    },
+    "logs": []
+   },
+   "bridge_high": {
+    "tier": "high",
+    "viewport": [
+     1920,
+     1080
+    ],
+    "t": 75,
+    "seed": 11,
+    "spots": [
+     "lane0",
+     "lane_mid",
+     "centre",
+     "fight"
+    ],
+    "frame": {
+     "share": 1,
+     "p5": 37,
+     "p50": 102,
+     "p95": 129,
+     "p99": 149,
+     "mean": 94.63,
+     "spread": 92,
+     "lstarP50": 43.5,
+     "sat": 0.26,
+     "satP50": 0.3
+    },
+    "envFrame": {
+     "share": 0.9389,
+     "p5": 38,
+     "p50": 103,
+     "p95": 129,
+     "p99": 134,
+     "mean": 94.97,
+     "spread": 91,
+     "lstarP50": 44,
+     "sat": 0.26,
+     "satP50": 0.3
+    },
+    "bright160": {
+     "frame": 63093,
+     "byClass": {
+      "lane": 9617,
+      "verge": 208,
+      "fighter": 39299,
+      "wick": 2827,
+      "structure": 7318,
+      "actor": 118
+     },
+     "env": 9825
+    },
+    "masks": {
+     "lane": {
+      "share": 0.4166,
+      "p5": 101,
+      "p50": 120,
+      "p95": 130,
+      "p99": 135,
+      "mean": 118.65,
+      "spread": 29,
+      "lstarP50": 50.5,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "walkable": {
+      "share": 0.4166,
+      "p5": 101,
+      "p50": 120,
+      "p95": 130,
+      "p99": 135,
+      "mean": 118.65,
+      "spread": 29,
+      "lstarP50": 50.5,
+      "sat": 0.28,
+      "satP50": 0.3
+     },
+     "verge": {
+      "share": 0.345,
+      "p5": 51,
+      "p50": 80,
+      "p95": 114,
+      "p99": 133,
+      "mean": 81.51,
+      "spread": 63,
+      "lstarP50": 34,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "brush": {
+      "share": 0.0097,
+      "p5": 23,
+      "p50": 38,
+      "p95": 69,
+      "p99": 80,
+      "mean": 41.11,
+      "spread": 46,
+      "lstarP50": 15.5,
+      "sat": 0.26,
+      "satP50": 0.2
+     },
+     "grass": {
+      "share": 0.0416,
+      "p5": 34,
+      "p50": 72,
+      "p95": 110,
+      "p99": 122,
+      "mean": 71.01,
+      "spread": 76,
+      "lstarP50": 30.5,
+      "sat": 0.3,
+      "satP50": 0.3
+     },
+     "wallFace": {
+      "share": 0.065,
+      "p5": 26,
+      "p50": 38,
+      "p95": 50,
+      "p99": 72,
+      "mean": 38.48,
+      "spread": 24,
+      "lstarP50": 15.5,
+      "sat": 0.34,
+      "satP50": 0.4
+     },
+     "wallLip": {
+      "share": 0.03,
+      "p5": 44,
+      "p50": 81,
+      "p95": 108,
+      "p99": 120,
+      "mean": 80.07,
+      "spread": 64,
+      "lstarP50": 34.5,
+      "sat": 0.2,
+      "satP50": 0.2
+     },
+     "walls": {
+      "share": 0.095,
+      "p5": 28,
+      "p50": 42,
+      "p95": 100,
+      "p99": 111,
+      "mean": 51.62,
+      "spread": 72,
+      "lstarP50": 17,
+      "sat": 0.29,
+      "satP50": 0.3
+     },
+     "edge": {
+      "share": 0.0023,
+      "p5": 71,
+      "p50": 98,
+      "p95": 120,
+      "p99": 123,
+      "mean": 96.97,
+      "spread": 49,
+      "lstarP50": 42,
+      "sat": 0.22,
+      "satP50": 0.3
+     },
+     "rock": {
+      "share": 0.0018,
+      "p5": 32,
+      "p50": 111,
+      "p95": 134,
+      "p99": 143,
+      "mean": 97.08,
+      "spread": 102,
+      "lstarP50": 47,
+      "sat": 0.2,
+      "satP50": 0.2
+     },
+     "landmark": {
+      "share": 0.0303,
+      "p5": 37,
+      "p50": 112,
+      "p95": 130,
+      "p99": 139,
+      "mean": 104.05,
+      "spread": 93,
+      "lstarP50": 47.5,
+      "sat": 0.22,
+      "satP50": 0.2
+     },
+     "ground": {
+      "share": 0.7615,
+      "p5": 61,
+      "p50": 110,
+      "p95": 129,
+      "p99": 134,
+      "mean": 101.83,
+      "spread": 68,
+      "lstarP50": 46.5,
+      "sat": 0.25,
+      "satP50": 0.3
+     }
+    },
+    "maskSpots": [
+     "lane0",
+     "lane_mid",
+     "centre"
+    ],
+    "env180": {
+     "env": 7765190,
+     "other": 0,
+     "lamp": 0,
+     "otherShare": 0,
+     "lampShareOfFrame": 0,
+     "byClass": {}
+    },
+    "fighters": {
+     "px": 535152,
+     "top25": 78.5,
+     "p75": 72.5,
+     "p50": 50,
+     "p25": 30,
+     "p95": 81.5,
+     "p99": 87,
+     "gt90": 0.0041,
+     "lumaP95": 201,
+     "overLane": 28,
+     "per": {
+      "burdam": {
+       "px": 16543,
+       "top25": 73.4,
+       "p75": 61.5,
+       "p50": 44,
+       "p25": 25.5,
+       "gt90": 0.0004
+      },
+      "hesmi": {
+       "px": 94037,
+       "top25": 74,
+       "p75": 59.5,
+       "p50": 35,
+       "p25": 21,
+       "gt90": 0.004
+      },
+      "ervet": {
+       "px": 72228,
+       "top25": 75.4,
+       "p75": 65,
+       "p50": 47,
+       "p25": 36,
+       "gt90": 0.009
+      },
+      "vashil": {
+       "px": 57279,
+       "top25": 80.4,
+       "p75": 76.5,
+       "p50": 56.5,
+       "p25": 40,
+       "gt90": 0.0059
+      },
+      "odrum": {
+       "px": 49856,
+       "top25": 81.3,
+       "p75": 71,
+       "p50": 48,
+       "p25": 34,
+       "gt90": 0.0005
+      },
+      "marund": {
+       "px": 117246,
+       "top25": 78.3,
+       "p75": 75.5,
+       "p50": 53,
+       "p25": 24.5,
+       "gt90": 0.0044
+      },
+      "dunsom": {
+       "px": 55260,
+       "top25": 77.5,
+       "p75": 71,
+       "p50": 57.5,
+       "p25": 37.5,
+       "gt90": 0.0018
+      },
+      "tunlan": {
+       "px": 46248,
+       "top25": 77.5,
+       "p75": 76.5,
+       "p50": 71,
+       "p25": 31.5,
+       "gt90": 0
+      },
+      "rishal": {
+       "px": 26455,
+       "top25": 78.1,
+       "p75": 74,
+       "p50": 58.5,
+       "p25": 33.5,
+       "gt90": 0.0059
+      }
+     },
+     "maxGt90": 0.009,
+     "medianTop25": 77.5
+    },
+    "wicks": {
+     "px": 76253,
+     "top25": 58.3,
+     "p95": 63.5,
+     "lumaP95": 151
+    },
+    "monsters": null,
+    "structures": {
+     "px": 36493,
+     "top25": 73.1,
+     "p95": 80
+    },
+    "perSpot": {
+     "lane0": {
+      "at": [
+       53.6,
+       22
+      ],
+      "frameP50": 102,
+      "frameP95": 129,
+      "frameP99": 138,
+      "laneP50": 120,
+      "walkableP5": 103,
+      "walkableP95": 130,
+      "inMasks": true
+     },
+     "lane_mid": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 101,
+      "frameP95": 129,
+      "frameP99": 148,
+      "laneP50": 120,
+      "walkableP5": 100,
+      "walkableP95": 130,
+      "inMasks": true
+     },
+     "centre": {
+      "at": [
+       78,
+       22
+      ],
+      "frameP50": 101,
+      "frameP95": 129,
+      "frameP99": 148,
+      "laneP50": 120,
+      "walkableP5": 100,
+      "walkableP95": 130,
+      "inMasks": true
+     },
+     "fight": {
+      "at": [
+       84.7,
+       20.2
+      ],
+      "frameP50": 104,
+      "frameP95": 131,
+      "frameP99": 166,
+      "laneP50": 120,
+      "walkableP5": 98,
+      "walkableP95": 131,
+      "inMasks": false
+     }
+    },
+    "bases": {
+     "base0": {
+      "at": [
+       9.8,
+       22
+      ],
+      "plaza": {
+       "px": 1664519,
+       "satP50": 0.3,
+       "sat": 0.26,
+       "lumaP50": 124,
+       "lstarP50": 52
+      },
+      "ground": {
+       "px": 1674240,
+       "satP50": 0.3,
+       "sat": 0.26
+      },
+      "structures": {
+       "px": 157806,
+       "lstarP95": 75,
+       "lumaP95": 185,
+       "above180": 0.0783,
+       "top25": 71.6
+      },
+      "fighterLumaP95": 201
+     },
+     "base1": {
+      "at": [
+       146.3,
+       22
+      ],
+      "plaza": {
+       "px": 1646288,
+       "satP50": 0.3,
+       "sat": 0.3,
+       "lumaP50": 115,
+       "lstarP50": 48.5
+      },
+      "ground": {
+       "px": 1656020,
+       "satP50": 0.3,
+       "sat": 0.3
+      },
+      "structures": {
+       "px": 173763,
+       "lstarP95": 68.5,
+       "lumaP95": 165,
+       "above180": 0.0102,
+       "top25": 62.9
+      },
+      "fighterLumaP95": 201
+     }
+    },
+    "flash": {
+     "at": [
+      90.01043243742429,
+      19.49092445846807
+     ],
+     "radius": 3.5,
+     "ability": "marund_domefall",
+     "vfx": "marund_ult_domefall",
+     "base": 110.3,
+     "peak": 230.2,
+     "ratio": 2.09,
+     "px": 204684,
+     "series": [
+      142.1,
+      142.2,
+      141.3,
+      230.2,
+      230.1,
+      230,
+      229.8,
+      225.9,
+      211.8,
+      193.2,
+      188.1,
+      187.7,
+      189.1,
+      189.4,
+      190.1,
+      191.2,
+      192.9,
+      194.6,
+      195.1,
+      195,
+      194.7,
+      194.2,
+      193.5,
+      192.3,
+      190.4,
+      188.4,
+      186.7,
+      184,
+      180.9,
+      177.9,
+      174.9,
+      171.9,
+      168.7,
+      165.6,
+      162.7,
+      160,
+      157.1,
+      154.3,
+      151.7,
+      149.3,
+      146.4,
+      143.2,
+      140.1,
+      137,
+      133.8,
+      130.6,
+      127.4,
+      124.3
+     ]
+    },
+    "fog": null,
+    "landmarks": null,
+    "tele": {
+     "lane0": {
+      "at": [
+       53.6,
+       22
+      ],
+      "px": 3867,
+      "deP50": 50.25,
+      "edgeCR90": 4.58,
+      "teleEdgeP90": 1
+     },
+     "lane_mid": {
+      "at": [
+       78,
+       22
+      ],
+      "px": 3906,
+      "deP50": 49.95,
+      "edgeCR90": 4.4,
+      "teleEdgeP90": 1
+     },
+     "centre": {
+      "at": [
+       78,
+       22
+      ],
+      "px": 3906,
+      "deP50": 49.94,
+      "edgeCR90": 4.4,
+      "teleEdgeP90": 1
+     },
+     "fight": {
+      "at": [
+       84.70550496321076,
+       20.23703301823877
+      ],
+      "px": 3465,
+      "deP50": 50.69,
+      "edgeCR90": 4.78,
+      "teleEdgeP90": 1
+     }
+    },
+    "verdict": {
+     "laneLstar": "50.5 PASS (50-58, ruling 46)",
+     "wallFaceLstar": "15.5 PASS (14-22, BRIDGE: the gorge, ruling 46)",
+     "walkableSpread": "29 PASS (<= 45)",
+     "laneSpread": "29 PASS (<= 45)",
+     "frameP99": "149 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "134 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.25 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "78.5 PASS (<= 80, ruling 46)",
+     "fighterBlowout": "above L* 90: 0.41 % of fighter pixels PASS (< 2 %), worst fighter 0.9 %, p99 87",
+     "wickTop25": "58.3 (info: <= 65, WICK lane)",
+     "flash": "2.09x PASS (>= 2.0x)",
+     "tele_lane0": "edge contrast p90 4.58 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.25 (info), 3867 px",
+     "tele_lane_mid": "edge contrast p90 4.4 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.95 (info), 3906 px",
+     "tele_centre": "edge contrast p90 4.4 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.94 (info), 3906 px",
+     "tele_fight": "edge contrast p90 4.78 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.69 (info), 3465 px",
+     "retiredB5": "info (ruling 46 retired): lane luma p50 120 (was 85-100), frame p50 102 (was 55-75), frame p95 129 (was <= 130), fighters over lane 28 L* (was >= 30), fighter top-25 floor 78.5 (was >= 70)",
+     "base0_plaza": "saturation 0.26 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 75 PASS (<= 80); luma p95 185 vs fighters 201 PASS; above 180: 7.8 %",
+     "base1_plaza": "saturation 0.3 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 68.5 PASS (<= 80); luma p95 165 vs fighters 201 PASS; above 180: 1.0 %"
+    },
+    "logs": []
+   }
   }
  },
- "generated": "2026-11-18T07:28:14.419Z",
+ "generated": "2026-11-18T07:57:33.121Z",
  "caveats": [
   "FRAY: the honed plate is ~86 % of every FRAY frame, so the frame median follows the plate band (L* 34-40 = luma 80-95); frame p50 55-75 cannot hold together with the plate band there.",
   "fighters: top-25 % L* is the fighter art and light rig (unchanged by this rebase, +0.5 L* from the LUT pivot); it measures 59-67, under tokens fighter.valueLstar.top25 70-85, so the >= 30 L* gap over the lane holds only where the fighter art is bright enough.",

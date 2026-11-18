@@ -203,7 +203,7 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
   // (owner_rulings 44, round 2) the designated peeler: a dive (enemy fighters took 20 % of a fighter's health in 2 s) is
   // answered by the support of its team within 8 m, else the nearest teammate within 12 m above 35 % health (not recalling)
   // — damage on a diver, a hold on a diver it cast, or a heal or shield on the partner; the latency is kept
-  const respEp = new Map<number, { start: number; resp: number; divers: Set<number>; lat: number; com: number; lane: boolean }>();
+  const respEp = new Map<number, { start: number; resp: number; divers: Set<number>; lat: number; com: number; lane: boolean; reach: boolean }>();
   const respCd = new Map<number, number>();
   // (owner_rulings 44, round 2) the collapse: a lone enemy fighter seen in a team's half (in its Dialwood, or on a road),
   // outside its towers' cover, with two or more of the team free — 2+ of the team within 12 m of it (or it dead) within 15 s
@@ -269,7 +269,11 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
                   if (d2 < bd) { bd = d2; best = a; }
                 }
                 const r = sup ?? best;
-                if (r) respEp.set(dst.id, { start: now, resp: r.id, divers: dv, lat: -1, com: -1, lane: now < 840 });
+                // (round 3: the peeler stood within reach of a diver as the dive began — its attack reach + 1 m, or 6 m for the
+                // ability ranges every kit's peel reaches)
+                let reach = false;
+                if (r) for (const id of dv) { const dvr = w.entity(id); if (dvr && dvr.alive && Math.hypot(dvr.x - r.x, dvr.y - r.y) <= Math.max(6, r.stats.range + r.radius + dvr.radius + 1)) reach = true; }
+                if (r) respEp.set(dst.id, { start: now, resp: r.id, divers: dv, lat: -1, com: -1, lane: now < 840, reach });
                 else { add(C, 'resp.noneNear'); respCd.set(dst.id, now + 4); }
               }
             }
@@ -491,6 +495,8 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
       modeHist[p].push(md); if (modeHist[p].length > 12) modeHist[p].shift();
       if (ultAt6[p] < 0 && f.level >= 6) ultAt6[p] = now;
       add(H('mode.time'), md, dt);
+      // (lane AI round 3: the soak's laners-in-lane read — non-grovehunter RIFT seats, 1:00-14:00, lane / trade / push / allin)
+      if (modeId === 'rift' && now >= 60 && now < 840 && !ctl(p)?.jungle) { add(C, 'lane.all', dt); if (md === 'lane' || md === 'trade' || md === 'push' || md === 'allin') add(C, 'lane.in', dt); }
       if (f.hp < f.maxHp * 0.3 && md !== 'retreat' && md !== 'recall') lowFor[p] += dt; else if (f.hp >= f.maxHp * 0.3) lowFor[p] = 0;
       // bush waits
       if (thicketAt(f.x, f.y) >= 0) { add(C, 'bush.time', dt); if (Math.abs(f.vx) + Math.abs(f.vy) < 0.1) add(C, 'bush.stillTime', dt); }
@@ -679,6 +685,7 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
         if (now - re.start < 4) continue;
         add(C, re.lane ? 'resp.lane.episodes' : 'resp.episodes');
         if (re.lat >= 0) R(re.lane ? 'resp.lane.lat' : 'resp.lat', re.lat);
+        if (!re.lane && re.reach) { add(C, 'resp.reach.episodes'); if (re.lat >= 0) R('resp.reach.lat', re.lat); }
         const cm = re.lat >= 0 && re.com >= 0 ? Math.min(re.lat, re.com) : Math.max(re.lat, re.com);
         if (cm >= 0) R(re.lane ? 'resp.lane.com' : 'resp.com', cm);
         else { add(C, re.lane ? 'resp.lane.none' : 'resp.none'); const rp = ent2p(re.resp); if (rp >= 0) add(H('resp.noneMode'), modeOf(rp)); }
@@ -945,6 +952,12 @@ function gates(runs: TierRun[]): string[] {
       const lats = R.flatMap((g) => g.resp['resp.com'] ?? []), rEp = sum(R, 'resp.episodes');
       const lim = T.respLat[diff], inT = lats.filter((x) => x <= lim).length, rs = share(inT, rEp);
       { const ld = R.flatMap((g) => g.resp['resp.lat'] ?? []); rpt(`${diff} designated peeler lands a blow, hold, heal or shield within ${lim} s (from 14:00)`, `${pct(share(ld.filter((x) => x <= lim).length, rEp))} of ${rEp}; within 3 s ${pct(share(ld.filter((x) => x <= 3).length, rEp))}`); }
+      // (round 3: the item-5 read — a dived ally whose designated peeler stood within reach of the diver gets a blow, hold, heal or
+      // shield from it within 1.5 s at veteran, 2.5 s at adept)
+      { const lr = R.flatMap((g) => g.resp['resp.reach.lat'] ?? []), re2 = sum(R, 'resp.reach.episodes'), rr = share(lr.filter((x) => x <= lim).length, re2);
+        const rrSe = Math.sqrt(rr * (1 - rr) / Math.max(1, re2));
+        if (diff !== 'novice' && re2 >= 30) line(rr >= 0.75, `${diff} peel: a dived ally whose designated peeler stood within reach of the diver gets its blow, hold, heal or shield within ${lim} s (from 14:00)`, `${pct(rr)} ± ${pct(rrSe)} of ${re2}`, '≥ 75 %');
+        else rpt(`${diff} peeler within reach lands within ${lim} s (from 14:00)`, `${pct(rr)} of ${re2}`); }
       const rSe = Math.sqrt(rs * (1 - rs) / Math.max(1, rEp));
       if (diff !== 'novice' && rEp >= 30) line(rs >= T.resp[diff], `${diff} peel: the designated peeler (support within 8 m, else the nearest teammate within 12 m above half health) turns on the diver (attack or attack order on it, hold, heal or shield) within ${lim} s (from 14:00)`, `${pct(rs)} ± ${pct(rSe)} of ${rEp}`, `≥ ${pct(T.resp[diff])}`);
       else rpt(`${diff} designated peeler answers within ${lim} s (from 14:00)`, `${pct(rs)} ± ${pct(rSe)} of ${rEp}`);

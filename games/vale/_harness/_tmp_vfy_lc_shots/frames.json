@@ -1,0 +1,541 @@
+[
+ {
+  "file": "lc_rift_laning.png",
+  "calls": 151,
+  "tris": 221048,
+  "vfx": 29,
+  "particles": 166,
+  "tele": 2,
+  "t": 113.3,
+  "at": {
+   "x": 85.31495563900059,
+   "y": 11.150086873034116,
+   "n": 33
+  }
+ },
+ {
+  "file": "lc_rift_fight5v5.png",
+  "calls": 216,
+  "tris": 330649,
+  "vfx": 95,
+  "particles": 918,
+  "tele": 12,
+  "t": 793.8,
+  "best": {
+   "sc": 25,
+   "a": 3,
+   "c": 2,
+   "x": 75.04082789573884,
+   "y": 94.57298778606892,
+   "scripted": true
+  }
+ },
+ {
+  "file": "lc_rift_fight5v5_b.png",
+  "calls": 216,
+  "tris": 334834,
+  "vfx": 104,
+  "particles": 651,
+  "tele": 12,
+  "t": 794.2
+ },
+ {
+  "file": "lc_rift_ult_020.png",
+  "calls": 227,
+  "tris": 341091,
+  "vfx": 110,
+  "particles": 728,
+  "tele": 14,
+  "t": 794.4,
+  "cast": {
+   "def": "hesmi",
+   "foe": "vashil",
+   "r": "ok",
+   "x": 72.65139250586535,
+   "y": 94.4132880992091,
+   "tried": [
+    "hesmi:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_rift_ult_045.png",
+  "calls": 224,
+  "tris": 330813,
+  "vfx": 93,
+  "particles": 645,
+  "tele": 16,
+  "t": 794.7,
+  "cast": {
+   "def": "hesmi",
+   "foe": "vashil",
+   "r": "ok",
+   "x": 72.65139250586535,
+   "y": 94.4132880992091,
+   "tried": [
+    "hesmi:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_rift_ult_080.png",
+  "calls": 221,
+  "tris": 320166,
+  "vfx": 80,
+  "particles": 353,
+  "tele": 14,
+  "t": 795.1,
+  "cast": {
+   "def": "hesmi",
+   "foe": "vashil",
+   "r": "ok",
+   "x": 72.65139250586535,
+   "y": 94.4132880992091,
+   "tried": [
+    "hesmi:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_rift_ult_160.png",
+  "calls": 228,
+  "tris": 334857,
+  "vfx": 90,
+  "particles": 793,
+  "tele": 10,
+  "t": 795.9,
+  "cast": {
+   "def": "hesmi",
+   "foe": "vashil",
+   "r": "ok",
+   "x": 72.65139250586535,
+   "y": 94.4132880992091,
+   "tried": [
+    "hesmi:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_rift_kill_005.png",
+  "calls": 222,
+  "tris": 335228,
+  "vfx": 92,
+  "particles": 851,
+  "tele": 10,
+  "t": 795.9,
+  "kill": {
+   "victim": "hesmi",
+   "killer": "vashil",
+   "x": 74.84944717664894,
+   "y": 94.1764120405993,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_rift_kill_030.png",
+  "calls": 221,
+  "tris": 331826,
+  "vfx": 91,
+  "particles": 588,
+  "tele": 8,
+  "t": 796.2,
+  "kill": {
+   "victim": "hesmi",
+   "killer": "vashil",
+   "x": 74.84944717664894,
+   "y": 94.1764120405993,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_rift_kill_070.png",
+  "calls": 220,
+  "tris": 330122,
+  "vfx": 80,
+  "particles": 608,
+  "tele": 6,
+  "t": 796.6,
+  "kill": {
+   "victim": "hesmi",
+   "killer": "vashil",
+   "x": 74.84944717664894,
+   "y": 94.1764120405993,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_rift_kill_140.png",
+  "calls": 218,
+  "tris": 327981,
+  "vfx": 80,
+  "particles": 418,
+  "tele": 2,
+  "t": 797.3,
+  "kill": {
+   "victim": "hesmi",
+   "killer": "vashil",
+   "x": 74.84944717664894,
+   "y": 94.1764120405993,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_bridge_laning.png",
+  "calls": 202,
+  "tris": 265800,
+  "vfx": 25,
+  "particles": 168,
+  "tele": 0,
+  "t": 97.3,
+  "at": {
+   "x": 73.89052890280504,
+   "y": 19.330795065591822,
+   "n": 40
+  }
+ },
+ {
+  "file": "lc_bridge_fight5v5.png",
+  "calls": 196,
+  "tris": 253521,
+  "vfx": 32,
+  "particles": 257,
+  "tele": 4,
+  "t": 572.3,
+  "best": {
+   "sc": 48,
+   "a": 4,
+   "c": 4,
+   "x": 46.27567879630179,
+   "y": 21.706780141801904
+  }
+ },
+ {
+  "file": "lc_bridge_fight5v5_b.png",
+  "calls": 200,
+  "tris": 260752,
+  "vfx": 30,
+  "particles": 307,
+  "tele": 2,
+  "t": 572.7
+ },
+ {
+  "file": "lc_bridge_ult_020.png",
+  "calls": 202,
+  "tris": 259977,
+  "vfx": 27,
+  "particles": 252,
+  "tele": 2,
+  "t": 572.9,
+  "cast": {
+   "def": "marund",
+   "foe": "hesmi",
+   "r": "ok",
+   "x": 46.22901363879956,
+   "y": 19.8358589695751,
+   "tried": [
+    "marund:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_bridge_ult_045.png",
+  "calls": 208,
+  "tris": 274315,
+  "vfx": 47,
+  "particles": 375,
+  "tele": 4,
+  "t": 573.2,
+  "cast": {
+   "def": "marund",
+   "foe": "hesmi",
+   "r": "ok",
+   "x": 46.22901363879956,
+   "y": 19.8358589695751,
+   "tried": [
+    "marund:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_bridge_ult_080.png",
+  "calls": 203,
+  "tris": 264289,
+  "vfx": 47,
+  "particles": 361,
+  "tele": 6,
+  "t": 573.6,
+  "cast": {
+   "def": "marund",
+   "foe": "hesmi",
+   "r": "ok",
+   "x": 46.22901363879956,
+   "y": 19.8358589695751,
+   "tried": [
+    "marund:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_bridge_ult_160.png",
+  "calls": 205,
+  "tris": 277660,
+  "vfx": 61,
+  "particles": 365,
+  "tele": 6,
+  "t": 574.4,
+  "cast": {
+   "def": "marund",
+   "foe": "hesmi",
+   "r": "ok",
+   "x": 46.22901363879956,
+   "y": 19.8358589695751,
+   "tried": [
+    "marund:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_bridge_kill_005.png",
+  "calls": 202,
+  "tris": 262755,
+  "vfx": 60,
+  "particles": 361,
+  "tele": 6,
+  "t": 574.4,
+  "kill": {
+   "victim": "marund",
+   "killer": "kemdo",
+   "x": 46.78473115426661,
+   "y": 18.74845760457059,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_bridge_kill_030.png",
+  "calls": 203,
+  "tris": 264994,
+  "vfx": 49,
+  "particles": 269,
+  "tele": 10,
+  "t": 574.7,
+  "kill": {
+   "victim": "marund",
+   "killer": "kemdo",
+   "x": 46.78473115426661,
+   "y": 18.74845760457059,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_bridge_kill_070.png",
+  "calls": 213,
+  "tris": 277921,
+  "vfx": 43,
+  "particles": 240,
+  "tele": 10,
+  "t": 575.1,
+  "kill": {
+   "victim": "marund",
+   "killer": "kemdo",
+   "x": 46.78473115426661,
+   "y": 18.74845760457059,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_bridge_kill_140.png",
+  "calls": 211,
+  "tris": 276044,
+  "vfx": 59,
+  "particles": 356,
+  "tele": 10,
+  "t": 575.8,
+  "kill": {
+   "victim": "marund",
+   "killer": "kemdo",
+   "x": 46.78473115426661,
+   "y": 18.74845760457059,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_fray_laning.png",
+  "calls": 98,
+  "tris": 91132,
+  "vfx": 8,
+  "particles": 61,
+  "tele": 0,
+  "t": 49.3,
+  "at": {
+   "x": 15.781308122775721,
+   "y": 30.57264045780464,
+   "n": 23
+  }
+ },
+ {
+  "file": "lc_fray_fight5v5.png",
+  "calls": 141,
+  "tris": 162584,
+  "vfx": 53,
+  "particles": 546,
+  "tele": 10,
+  "t": 293.8,
+  "best": {
+   "sc": 15,
+   "a": 1,
+   "c": 4,
+   "x": 41.00691657306981,
+   "y": 28.269253171890217,
+   "scripted": true
+  }
+ },
+ {
+  "file": "lc_fray_fight5v5_b.png",
+  "calls": 136,
+  "tris": 155158,
+  "vfx": 42,
+  "particles": 263,
+  "tele": 8,
+  "t": 294.2
+ },
+ {
+  "file": "lc_fray_ult_020.png",
+  "calls": 130,
+  "tris": 163479,
+  "vfx": 30,
+  "particles": 234,
+  "tele": 8,
+  "t": 294.4,
+  "cast": {
+   "def": "burdam",
+   "foe": "dunsom",
+   "r": "ok",
+   "x": 41.33371604556399,
+   "y": 29.137759598839565,
+   "tried": [
+    "burdam:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_fray_ult_045.png",
+  "calls": 135,
+  "tris": 172253,
+  "vfx": 32,
+  "particles": 418,
+  "tele": 8,
+  "t": 294.7,
+  "cast": {
+   "def": "burdam",
+   "foe": "dunsom",
+   "r": "ok",
+   "x": 41.33371604556399,
+   "y": 29.137759598839565,
+   "tried": [
+    "burdam:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_fray_ult_080.png",
+  "calls": 139,
+  "tris": 175483,
+  "vfx": 28,
+  "particles": 327,
+  "tele": 6,
+  "t": 295.1,
+  "cast": {
+   "def": "burdam",
+   "foe": "dunsom",
+   "r": "ok",
+   "x": 41.33371604556399,
+   "y": 29.137759598839565,
+   "tried": [
+    "burdam:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_fray_ult_160.png",
+  "calls": 128,
+  "tris": 156981,
+  "vfx": 25,
+  "particles": 124,
+  "tele": 2,
+  "t": 295.9,
+  "cast": {
+   "def": "burdam",
+   "foe": "dunsom",
+   "r": "ok",
+   "x": 41.33371604556399,
+   "y": 29.137759598839565,
+   "tried": [
+    "burdam:ok"
+   ]
+  }
+ },
+ {
+  "file": "lc_fray_kill_005.png",
+  "calls": 123,
+  "tris": 128246,
+  "vfx": 25,
+  "particles": 95,
+  "tele": 2,
+  "t": 295.9,
+  "kill": {
+   "victim": "burdam",
+   "killer": "vashil",
+   "x": 43.10207243871433,
+   "y": 27.33381029638304,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_fray_kill_030.png",
+  "calls": 124,
+  "tris": 128810,
+  "vfx": 19,
+  "particles": 104,
+  "tele": 2,
+  "t": 296.2,
+  "kill": {
+   "victim": "burdam",
+   "killer": "vashil",
+   "x": 43.10207243871433,
+   "y": 27.33381029638304,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_fray_kill_070.png",
+  "calls": 127,
+  "tris": 129432,
+  "vfx": 11,
+  "particles": 72,
+  "tele": 2,
+  "t": 296.6,
+  "kill": {
+   "victim": "burdam",
+   "killer": "vashil",
+   "x": 43.10207243871433,
+   "y": 27.33381029638304,
+   "dead": true
+  }
+ },
+ {
+  "file": "lc_fray_kill_140.png",
+  "calls": 122,
+  "tris": 140712,
+  "vfx": 7,
+  "particles": 72,
+  "tele": 2,
+  "t": 297.3,
+  "kill": {
+   "victim": "burdam",
+   "killer": "vashil",
+   "x": 43.10207243871433,
+   "y": 27.33381029638304,
+   "dead": true
+  }
+ }
+]
