@@ -2706,3 +2706,6 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   crispness vs frame time). (d) sim speed 1 for 60 s still: why.sun / why.field growth = the steady re-bake load.
 - NEXT: graze re-run on this build (run h, in progress); s26-queue.sh (full picture, edits + sun, Ultra count); the
   far-ridge line (not seen on the Mac: owner item k says no line along the far ridge -> lower priority).
+- graze (top-down meadow) on the s26b build (run h): pix 100 %, used 35 MB; pair mean |d| 1.89, RGB 102.2 116.3 68.5 both
+  (EQUAL), detail 5.05 / 4.75 — same as the previous build. why after the view change: cam 115 / cls 95 / evict 328
+  (the probe jumped the camera between views: expected).
