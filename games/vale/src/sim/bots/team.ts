@@ -28,7 +28,6 @@
 import type { EntityId, PlayerId, SeatSetup } from '../../contracts/sim.ts';
 import type { Entity } from '../entity.ts';
 import type { World } from '../world.ts';
-import { ab } from './ab.ts';
 import { lanePoint, progress, fromProgress, proj, type CampInfo, type Knowledge, type StructInfo } from './knowledge.ts';
 import type { TeamPerc } from './perception.ts';
 import { dhypot, sq } from '../dmath.ts';
@@ -56,16 +55,12 @@ export interface Guard {
   until: number;
   /** when the post was given (a defender that has not turned to it 2 s later, away from it, hands it on) */
   readonly since: number;
-  /** what called the post: enemy fighters at it, fighters coming at the road's front, a wave alone, or the core hit */
-  readonly why: 'fight' | 'coming' | 'wave' | 'core';
 }
 
 /** a place a ganker can wait out of sight beside a road: a thicket whose centre is 4–22 m off the road (lane AI G3) */
 export interface Entry { readonly x: number; readonly y: number; readonly lane: number; readonly thicket: number }
 
 export const TEAM_THINK_TICKS = 15;
-/** owner_rulings 44, round 2: seconds a defend call or an answer stands after its threat last showed */
-const DEFEND_STICK = 4;
 
 function roleOf(k: Knowledge, s: SeatSetup): string {
   if (s.role) return s.role;
@@ -189,21 +184,6 @@ export class TeamBrain {
   private tradeX = 0; private tradeY = 0;
   /** lane AI G7: an objective to light up before it spawns (lamps round the pit), and enemy lamps there to clear */
   visionPit: CampInfo | null = null;
-  /** owner_rulings 44: an enemy fighter in sight alone in our half of the Dialwood, and the fighters sent to punish it */
-  invader: Entity | null = null;
-  readonly hunters = new Set<PlayerId>();
-  private invaderUntil = -1e9;
-  /** owner_rulings 44: the core's own guards (the structures the core requires), own structures' health at the last think
-   *  and when each was last hurt */
-  private readonly coreGuards = new Set<string>();
-  private readonly enemyCorePath = new Set<string>();
-  /** round 2: the sticky defend calls (until, value, point, fighters per lane; the base's) and the sticky answers */
-  private readonly stickDef: Float64Array; private readonly stickVal: Float64Array;
-  private readonly stickX: Float64Array; private readonly stickY: Float64Array; private readonly stickF: Int32Array;
-  private stickBase = -1e9; private stickBaseV = 0; private stickBaseX = 0; private stickBaseY = 0;
-  private readonly answerUntil = new Map<PlayerId, { lane: number; until: number }>();
-  private readonly structHp = new Map<number, number>();
-  private readonly structHitAt = new Map<number, number>();
 
 
   /** shared with the match: map structure id → when it fell */
@@ -218,7 +198,6 @@ export class TeamBrain {
     this.defendX = new Float64Array(n); this.defendY = new Float64Array(n);
     this.defendFighters = new Int32Array(n); this.laners = new Int32Array(n);
     this.answerX = new Float64Array(n); this.answerY = new Float64Array(n);
-    this.stickDef = new Float64Array(n).fill(-1e9); this.stickVal = new Float64Array(n); this.stickX = new Float64Array(n); this.stickY = new Float64Array(n); this.stickF = new Int32Array(n);
     this.campReady = new Float64Array(k.camps.length);
     this.campBlock = new Float64Array(k.camps.length);
     this.campOn = new Float64Array(k.camps.length).fill(-1);
@@ -232,10 +211,6 @@ export class TeamBrain {
       return d;
     };
     for (const st of k.structs) this.classes.set(st.id, st.isCore || st.lane < 0 ? 2 : Math.min(2, depth(st.id, 0)) as StructClass);
-    for (const st of k.structs) if (st.isCore && st.team === team) for (const r of st.requires) this.coreGuards.add(r);
-    // (the enemy core's requires-closure: the structures standing between a push and its core)
-    const walk = (id: string, g: number): void => { if (g > 12 || this.enemyCorePath.has(id)) return; this.enemyCorePath.add(id); const st = k.structs.find((x) => x.id === id); if (st) for (const r of st.requires) walk(r, g + 1); };
-    for (const st of k.structs) if (st.isCore && st.team !== team) for (const r of st.requires) walk(r, 0);
     // gank entries and ambush spots
     const th = k.map.thickets;
     for (let i = 0; i < th.length; i++) {
@@ -267,11 +242,6 @@ export class TeamBrain {
   }
   /** a structure's class (outer 0, inner 1, base 2) */
   classOf(info: StructInfo): StructClass { return this.classes.get(info.id) ?? 0; }
-  /** owner_rulings 47: was this own structure (by its map id) hit within the last `s` seconds */
-  hitRecently(sid: string, now: number, s: number): boolean {
-    const st = this.perc.allyStructs.find((x) => this.structInfoOf(x)?.id === sid);
-    return !!st && now - (this.structHitAt.get(st.id) ?? -1e9) <= s;
-  }
   /** how many of this team's laners hold `lane` */
   lanersOn(lane: number): number { return lane >= 0 && lane < this.laners.length ? this.laners[lane] : 0; }
 
@@ -308,71 +278,8 @@ export class TeamBrain {
     this.thinkObjective(w, aa, ae);
     this.thinkGank(w);
     this.thinkAnswers(w);
-    if (ab('guard')) this.guard.clear(); else this.thinkGuard(w);
+    this.thinkGuard(w);
     this.thinkSplit(w);
-    if (!ab('invader')) this.thinkInvader(w);
-  }
-
-  /**
-   * owner_rulings 44 — punish an invader (RIFT, tiers with punishInvade, from punishFrom): an enemy fighter in our sight in
-   * our own half of the Dialwood (off every road by 9 m, nearer our fountain than theirs, outside its own towers' cover) with
-   * no other enemy fighter seen within 14 m, in sight for punishDelay s, is hunted by up to punishInvade fighters above 60 %
-   * health that can be on it within 14 s (the grovehunter first) — together at least as strong as it. The hunt holds while it
-   * stays in our half and is seen (3 s grace), at most 20 s; it ends at once when a second enemy fighter turns up beside it.
-   * The genre's veteran: an invader caught in your jungle at 8:00 is a free kill for the two nearest players, not a sight to
-   * ignore while it takes your camps for a minute.
-   */
-  private thinkInvader(w: World): void {
-    const k = this.k, d = this.diff, now = w.time, tp = this.perc;
-    const prev = this.invader;
-    this.invader = null;
-    if (k.kind !== 'rift' || d.punishInvade <= 0 || now < d.punishFrom || this.rush || this.stage) { this.hunters.clear(); return; }
-    const own = k.bases.find((b) => b.team === this.team), foe = k.bases.find((b) => b.team !== this.team);
-    if (!own || !foe) { this.hunters.clear(); return; }
-    let best: Entity | null = null, bs = -Infinity;
-    for (const f of tp.enemyFighters) {
-      if (!f.alive || (f.visibleMask & tp.bit) === 0) continue;
-      const mine = sq(f.x - own.fx) + sq(f.y - own.fy) < sq(f.x - foe.fx) + sq(f.y - foe.fy);
-      let offRoad = true;
-      for (const l of k.lanes) if (this.projectTo(l.index, f.x, f.y).d2 < 9 * 9) { offRoad = false; break; }
-      let alone = true;
-      for (const g of tp.enemyFighters) if (g !== f && g.alive && sq(g.x - f.x) + sq(g.y - f.y) <= 14 * 14) { alone = false; break; }
-      let covered = false;
-      for (const st of tp.enemyStructs) if (st.alive && st.attackDef && sq(st.x - f.x) + sq(st.y - f.y) <= sq(st.stats.range + st.radius + 4)) { covered = true; break; }
-      // (owner_rulings 44, collapseRoads: from 14:00 a lone enemy on a road in our half, out of its towers' cover, too)
-      const ok = mine && (offRoad || (d.collapseRoads && now >= 840)) && alone && !covered;
-      if (!this.held(`inv${f.id}`, ok, now, prev === f ? 0 : d.punishDelay)) continue;
-      const sc = (prev === f ? 1 : 0) - f.hp / Math.max(1, f.maxHp);
-      if (sc > bs) { bs = sc; best = f; }
-    }
-    if (best !== prev) { this.hunters.clear(); if (best) this.invaderUntil = now + 20; }
-    if (!best || now > this.invaderUntil) { this.hunters.clear(); return; }
-    this.invader = best;
-    // keep the hunters that still can; fill up by arrival time
-    const tgt = best;
-    for (const p of [...this.hunters]) { const e = w.players[p]?.ent; if (!e || !e.alive || e.hp < e.maxHp * 0.4) this.hunters.delete(p); }
-    const powerOf = (e: Entity): number => (e.hp + e.shield) * Math.max(1, e.stats.ad * e.stats.attackSpeed + e.stats.ap * 0.6 + e.level * 12);
-    let pw = 0;
-    for (const p of this.hunters) { const e = w.players[p]?.ent; if (e) pw += powerOf(e); }
-    while (this.hunters.size < d.punishInvade) {
-      let bp: PlayerId = -1, bt = Infinity;
-      for (const p of w.players) {
-        if (!p || p.team !== this.team || this.hunters.has(p.player) || this.guard.has(p.player) || this.answer.has(p.player)) continue;
-        const e = p.ent;
-        if (!e || !e.alive || e.hp < e.maxHp * 0.6 || e.stateOverride === 'recall') continue;
-        const jg = this.assign.get(p.player)?.jungle ?? false;
-        const eta = dhypot(e.x - tgt.x, e.y - tgt.y) * 1.2 / Math.max(1, e.stats.moveSpeed) - (jg ? 4 : 0);
-        // (owner_rulings 46: in the laning phase a laner leaves its road for the hunt only when the invader is at hand — 7 s;
-        // the grovehunter answers from 14 s — the road's wave and level come first)
-        if (eta > (!jg && now < 840 ? 7 : 14) || eta >= bt) continue;
-        bt = eta; bp = p.player;
-      }
-      if (bp < 0) break;
-      this.hunters.add(bp);
-      const e = w.players[bp]?.ent; if (e) pw += powerOf(e);
-    }
-    // (never a fair fight called a punish: the hunters together at least as strong as the invader, else nobody goes)
-    if (pw < powerOf(tgt) * 0.9) { this.hunters.clear(); this.invader = null; }
   }
 
   /**
@@ -389,9 +296,7 @@ export class TeamBrain {
     if (k.kind !== 'rift') { this.guard.clear(); return; }
     for (const [p, g] of this.guard) {
       const e = w.players[p]?.ent;
-      // (a post whose structure has fallen is over at once: its defenders stood at the rubble while the next structure
-      // of the base fell 20 m away — owner_rulings 42)
-      if (!e || !e.alive || e.hp < e.maxHp * 0.25 || now > g.until || !this.ownStanding(g.sid)) this.guard.delete(p);
+      if (!e || !e.alive || e.hp < e.maxHp * 0.25 || now > g.until) this.guard.delete(p);
     }
     const laning = now < 840 && !this.rush && !this.stage && this.phase !== 'late';
     // (from 25:00 the game is closing: a structure gets as many defenders as it has divers, not one more — long death timers
@@ -399,104 +304,36 @@ export class TeamBrain {
     const closing = now >= 1500;
     const base = k.bases.find((b) => b.team === this.team);
     const rt = k.rules.recall ? recallTime(w) : Infinity;
-    // (owner_rulings 44: own structures' health is the owner's to know — a drop since the last think is a hit, seen or not)
-    const hurt = new Set<Entity>();
+    const threats: { st: Entity; info: StructInfo; cls: StructClass; need: number; n: number }[] = [];
     for (const st of tp.allyStructs) {
       if (!st.alive) continue;
-      const prev = this.structHp.get(st.id);
-      if (prev !== undefined && st.hp < prev - 1) { hurt.add(st); this.structHitAt.set(st.id, now); }
-      else if (now - (this.structHitAt.get(st.id) ?? -1e9) <= 2) hurt.add(st);
-      this.structHp.set(st.id, st.hp);
-    }
-    const threats: { st: Entity; info: StructInfo; cls: StructClass; value: number; need: number; n: number; ttl: number; why: Guard['why'] }[] = [];
-    // (owner_rulings 44: each enemy fighter threatens the one own structure it is hitting, else the nearest one it can hurt — a
-    // push on the Bell Needles is theirs, not a "coming" threat on the untouched Lantern beside them, which held a full-health
-    // veteran posted 3 m from it, idle, while all five enemies took both Bell Needles and the Hourbell 14-21 m away)
-    const nearestOwn = new Map<Entity, Entity>();
-    for (const f of tp.enemyFighters) {
-      if (!f.alive) continue;
-      let bs: Entity | null = null, bd = Infinity;
-      const at = f.atkTarget >= 0 ? w.entity(f.atkTarget) : undefined;
-      if (at && at.kind === 'structure' && at.team === this.team && at.alive) bs = at;
-      else for (const st of tp.allyStructs) { if (!st.alive || !st.targetable) continue; const d2 = sq(f.x - st.x) + sq(f.y - st.y); if (d2 < bd) { bd = d2; bs = st; } }
-      if (bs) nearestOwn.set(f, bs);
-    }
-    for (const st of tp.allyStructs) {
-      // (a structure its guards still shield cannot be hurt: no threat — the Bell Needles behind a standing Lantern)
-      if (!st.alive || !st.targetable) continue;
       const info = this.structInfoOf(st);
       if (!info) continue;
       const cls = this.classOf(info);
-      const value = this.valueOf(info);
       const reach = Math.max(9, info.range + info.radius + 6);
-      let n = 0, minions = 0, mine = 0, coming = 0, hitting = 0;
+      let n = 0, minions = 0, mine = 0, coming = 0;
       // (an inner or base structure that is the front of its road — everything in front of it has fallen — is defended
       // before the push reaches it: enemy fighters within 28 m count, as a player holds the next tower)
       const front = cls > 0 && !laning && info.requires.every((r) => !this.ownStanding(r));
       for (const f of tp.enemyFighters) {
         if (!f.alive) continue;
         const d2 = sq(f.x - st.x) + sq(f.y - st.y);
-        const mineF = nearestOwn.get(f) === st;
-        if (f.atkTarget === st.id) hitting++;
-        if (d2 <= reach * reach) { if (mineF || d2 <= 9 * 9) n++; }
-        else if (front && d2 <= 28 * 28 && mineF) coming++;
+        if (d2 <= reach * reach) n++; else if (front && d2 <= 28 * 28) coming++;
       }
-      // (owner_rulings 47: what the Wicks on it deal — a wave-only call goes to a defender that can be there before it falls)
-      let wdps = 0;
-      for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) { minions++; if (u.atkTarget === st.id) wdps += u.stats.ad * u.stats.attackSpeed * 0.7; }
+      for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) minions++;
       for (const u of tp.allyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) mine++;
       let need = 0;
-      const real = hitting > 0 || hurt.has(st) || minions - mine >= 2;
-      if (ab('g_real') && !real) { n = 0; if (cls < 2) coming = 0; }
-      if ((ab('g_real2') || (ab('n_real') && d.defendMatch < 1)) && !(hitting > 0 || hurt.has(st))) { n = 0; if (cls < 2) coming = 0; }
-      // (ruling 54: a lone enemy fighter near the front structure with no wave over ours is not a push — farming its wave, walking by,
-      // or waiting in the fog; posting against it held a defender off its road for nothing: 'coming' posts were the biggest single
-      // share of the defend time, 14-38 s a fighter a game)
-      if (!ab('g_coming_old') && coming > 0 && coming < 2 && minions - mine < 2) coming = 0;
-      if (ab('g_coming2') && coming > 0 && minions - mine < 2) coming = 0;
       if (n > 0) {
         // (one more than the divers at an inner or base structure — not in the laning phase, where the roads hold first)
-        if (!(cls <= (ab('l_inner_old') ? 0 : 1) && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing && !ab('g_noplus') ? 1 : 0)) * d.defendMatch - 1e-9));
+        if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing ? 1 : 0)) * d.defendMatch - 1e-9));
       } else if (coming > 0) need = Math.max(1, Math.ceil(coming * d.defendMatch - 1e-9));
-      // (owner_rulings 44: a big wave — eight or more over ours — is two defenders' work, as is a wave on a structure under half)
-      // (round 2: a stacked wave of fourteen or more over ours is three — the late game's 18-33 Wick stacks took Lanterns from
-      // two defenders; scaled by the tier's defendMatch)
-      // (owner_rulings 46: in the laning phase a wave at an inner Needle is its road's to clear — only the base takes a defender
-      // off a road for Wicks; the round-2 bots' solo laners spent 2-4 % of the laning phase posted to waves, against 1 %)
-      // (owner_rulings 46: a wave alone calls a defender only where the tier's defender holds against the wave (holdWave, and
-      // from 25:00 the base only) — a beginner, or a late inner post, backed off the wave it was sent to and stood fit beside
-      // the structure while the Wicks took it: novice falls to Wicks beside two fit defenders 0.61 → 0.91 a game)
-      else if (d.holdWave && !ab('nohold') && cls > (laning || ab('v_inner') ? 1 : closing ? 1 : 0) && minions - mine >= 4) {
-        need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
-        if (ab('w_win') && (this.rush || this.window || this.aliveEnemies <= this.aliveAllies - 2)) need = 0;
-        if (ab('w_futile') && need > 0 && wdps > 0) {
-          let whp = 0, fd = 0, fn = 0;
-          for (const u of tp.enemyUnits) if (u.alive && u.kind === 'minion' && sq(u.x - st.x) + sq(u.y - st.y) <= reach * reach) whp += u.hp;
-          for (const f of tp.allyFighters) if (f.alive) { fd += f.stats.ad * f.stats.attackSpeed + f.stats.ap * 0.5; fn++; }
-          const clear = whp / Math.max(1, (fd / Math.max(1, fn)) * need + (info.attacks ? st.stats.ad * st.stats.attackSpeed : 0));
-          if (clear > (st.hp + st.shield) / wdps) need = 0;
-        }
-      }
-      // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
-      // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
-      const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));
-      if (coreHit && d.coreAll && !ab('nocore')) need = Math.max(need, 5);
-      const delay = cls === 0 ? d.macroDelay : coreHit ? Math.min(d.macroDelay, 1) : Math.min(d.macroDelay, 5);
+      else if (cls > 0 && minions - mine >= 4) need = 1;
+      const delay = cls === 0 ? d.macroDelay : Math.min(d.macroDelay, 5);
       if (!this.held(`g:${info.id}`, need > 0, now, delay)) need = 0;
-      let ttl = n + coming === 0 && !coreHit && wdps > 0 ? (st.hp + st.shield) / wdps : Infinity;
-      if (ab('g_ttl') && !coreHit && n > 0) {
-        let fd = wdps;
-        for (const f of tp.enemyFighters) if (f.alive && f.atkTarget === st.id) fd += f.stats.ad * f.stats.attackSpeed;
-        if (fd > 0) ttl = (st.hp + st.shield) / fd + 4;
-      }
-      if (need > 0) threats.push({ st, info, cls, value: value + (coreHit ? 0.5 : 0), need, n: n + coming, ttl, why: coreHit && d.coreAll ? 'core' : n > 0 ? 'fight' : coming > 0 ? 'coming' : 'wave' });
+      if (need > 0) threats.push({ st, info, cls, need, n: n + coming });
     }
-    // (owner_rulings 44: the most valuable structure first — the Hourbell, then its Bell Needles, the Lanterns, the inner and the
-    // outer Needles — then the bigger push; map order breaks ties: deterministic)
-    threats.sort((a, b) => b.value - a.value || b.n - a.n);
-    const valueOfPost = new Map<string, number>();
-    for (const th of threats) if (!valueOfPost.has(th.info.id)) valueOfPost.set(th.info.id, th.value);
-    // (a post on a structure that is no longer threatened is worth nothing while another is: handed on below)
+    // the deepest structure first, then the bigger push (map order breaks ties: deterministic)
+    threats.sort((a, b) => b.cls - a.cls || b.n - a.n);
     for (const th of threats) {
       const { st, info, cls } = th;
       let have = 0;
@@ -510,76 +347,32 @@ export class TeamBrain {
         sx = st.x + (dx / dd) * off; sy = st.y + (dy / dd) * off;
       }
       const recallOk = !!base && rt < Infinity && (d.recallDefend === 'inner' ? cls >= 1 : d.recallDefend === 'base' ? cls >= 2 : false);
-      // (owner_rulings 51: in the laning phase an inner Needle's post is for a defender 15 s off at most — the roads come first)
-      const cap = ab('g_cap') && !(th.value >= 4.5) ? (cls === 2 ? 30 : cls === 1 ? (laning ? 15 : 20) : 15) : cls === 2 ? 45 : cls === 1 ? (laning ? 15 : 30) : 20;
-      const elig = (p: (typeof w.players)[number]): { eta: number; rec: boolean } | null => {
-        if (!p || p.team !== this.team) return null;
-        const cur = this.guard.get(p.player);
-        // (owner_rulings 44: a post is dropped the moment a more valuable structure in reach is threatened — a defender
-        // posted to a lesser threat, or to a quiet structure, is taken for this one)
-        if (cur && (cur.sid === info.id || (valueOfPost.get(cur.sid) ?? 0) >= th.value)) return null;
-        if (!cur && (this.guardDeclined.get(p.player) ?? -1) > now && th.value < 4) return null;
-        const e = p.ent;
-        if (!e || !e.alive || e.hp < e.maxHp * 0.35) return null;
-        // (the laning phase's grovehunter keeps its clear and its ganks at the outer Needles: an inner or base call
-        // takes it — kept off the inner Needles too, a fighter siege there went unanswered 22 % of the time, veteran)
-        if (laning && cls < 1 && this.assign.get(p.player)?.jungle) return null;
-        // (owner_rulings 51: and an outer Needle in the laning phase is its own road's to hold — a dive there does not post the
-        // other roads' laners across the map: the solo laners spent 2.8-3.9 % of the laning phase in defend mode, against 1.0-1.3 %
-        // for the pre-lane bots, most of the laners' in-lane share lost)
-        if (laning && cls < 1 && this.assign.get(p.player)?.lane !== info.lane) return null;
-        // (ruling 54: an inner Needle in the laning phase is its road's laners' and the grovehunter's — the other roads hold theirs)
-        if (laning && cls === 1 && !ab('l_inner_old') && !this.assign.get(p.player)?.jungle && this.assign.get(p.player)?.lane !== info.lane) return null;
-        const ms = Math.max(1, e.stats.moveSpeed);
-        const dist = dhypot(e.x - st.x, e.y - st.y);
-        const walk = dist < 14 ? 0 : dist * 1.25 / ms;
-        let eta = walk, rec = false;
-        if (recallOk && base && dist > 45) {
-          const r = rt + dhypot(base.fx - st.x, base.fy - st.y) * 1.15 / ms;
-          if (r + 8 <= walk) { eta = r; rec = true; }
-        }
-        // (a defender already posted is taken only when it is close: the lesser post keeps one farther off)
-        if (eta > (cur ? Math.min(cap, 20) : cap)) return null;
-        // (owner_rulings 47: a wave-only call is not answered by a defender that would arrive to watch it fall — the Wicks'
-        // structure falls before the walk ends: two fit defenders arriving as a 21-Wick stack finished a Lantern were the
-        // commonest 'fell to Wicks beside fit defenders' left)
-        if (eta + 2 > th.ttl) return null;
-        return { eta, rec };
-      };
-      if (ab('g_match') && th.n > 0 && th.value < 4 && have < th.need) {
-        let c = have;
-        for (const p of w.players) if (elig(p)) c++;
-        if (c < Math.min(th.need, th.n)) continue;
-      }
+      const cap = cls === 2 ? 45 : cls === 1 ? 30 : 20;
       while (have < th.need) {
         let best: PlayerId = -1, bt = Infinity, bRecall = false;
         for (const p of w.players) {
-          const el = elig(p);
-          if (!el || el.eta >= bt) continue;
-          bt = el.eta; best = p.player; bRecall = el.rec;
+          if (!p || p.team !== this.team || this.guard.has(p.player) || (this.guardDeclined.get(p.player) ?? -1) > now) continue;
+          const e = p.ent;
+          if (!e || !e.alive || e.hp < e.maxHp * 0.35) continue;
+          // (the laning phase's grovehunter keeps its clear and its ganks at the outer Needles: an inner or base call
+          // takes it — kept off the inner Needles too, a fighter siege there went unanswered 22 % of the time, veteran)
+          if (laning && cls < 1 && this.assign.get(p.player)?.jungle) continue;
+          const ms = Math.max(1, e.stats.moveSpeed);
+          const dist = dhypot(e.x - st.x, e.y - st.y);
+          const walk = dist < 14 ? 0 : dist * 1.25 / ms;
+          let eta = walk, rec = false;
+          if (recallOk && base && dist > 45) {
+            const r = rt + dhypot(base.fx - st.x, base.fy - st.y) * 1.15 / ms;
+            if (r + 8 <= walk) { eta = r; rec = true; }
+          }
+          if (eta > cap || eta >= bt) continue;
+          bt = eta; best = p.player; bRecall = rec;
         }
         if (best < 0) break;
-        this.guard.set(best, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach, cls, recall: bRecall, until: now + d.defendHold, since: now, why: th.why });
+        this.guard.set(best, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach, cls, recall: bRecall, until: now + d.defendHold, since: now });
         have++;
       }
     }
-    // (a post at a structure nobody threatens any more is ended while another structure is short of defenders)
-    let short = false;
-    for (const th of threats) {
-      let have = 0;
-      for (const g of this.guard.values()) if (g.sid === th.info.id) have++;
-      if (have < th.need) { short = true; break; }
-    }
-    if (short) for (const [p, g] of [...this.guard]) if (!valueOfPost.has(g.sid)) this.guard.delete(p);
-  }
-
-  /** owner_rulings 44: what a structure is worth defending — the Hourbell 5, its Bell Needles 4, a Lantern or other base
-   *  structure 3, an inner Needle 2, an outer one 1 */
-  valueOf(info: StructInfo): number {
-    if (info.isCore) return 5;
-    if (this.coreGuards.has(info.id)) return 4;
-    const c = this.classOf(info);
-    return c === 2 ? 3 : c === 1 ? 2 : 1;
   }
 
   /**
@@ -633,21 +426,8 @@ export class TeamBrain {
    */
   private thinkAnswers(w: World): void {
     this.answer.clear();
-    const k = this.k, now = w.time;
-    if (k.kind !== 'rift' || this.phase === 'early' || this.rush || !this.diff.readsWaves) { this.answerUntil.clear(); return; }
-    this.answerFill(w);
-    // (round 2: an answer stands DEFEND_STICK s after it was last given, while its fighter is fit — see delayDefend)
-    // (owner_rulings 51: no stand-on in the laning phase, as for the defend calls)
-    if (now >= 840) for (const [p, lane] of this.answer) this.answerUntil.set(p, { lane, until: now + DEFEND_STICK });
-    for (const [p, a] of [...this.answerUntil]) {
-      const e = w.players[p]?.ent;
-      if (now > a.until || !e || !e.alive || e.hp < e.maxHp * 0.5) { this.answerUntil.delete(p); continue; }
-      if (!this.answer.has(p)) this.answer.set(p, a.lane);
-    }
-  }
-
-  private answerFill(w: World): void {
     const k = this.k, tp = this.perc, now = w.time;
+    if (k.kind !== 'rift' || this.phase === 'early' || this.rush || !this.diff.readsWaves) return;
     for (const l of k.lanes) {
       const i = l.index;
       let need = 0, x = 0, y = 0;
@@ -796,25 +576,11 @@ export class TeamBrain {
 
   /** macroDelay on defend calls: a threat is answered once it has held the tier's delay */
   private delayDefend(now: number): void {
-    if (this.diff.macroDelay > 0) {
-      for (let i = 0; i < this.defend.length; i++) {
-        if (!this.held(`def${i}`, this.defend[i] > 0.05, now)) { this.defend[i] = 0; this.defendFighters[i] = 0; }
-      }
-      if (!this.held('base', this.baseThreat > 0.05, now)) this.baseThreat = 0;
-    }
-    // (owner_rulings 44, round 2: a defend call stands DEFEND_STICK s after its threat last showed — an attacker flickering in
-    // and out of sight turned the call on and off every think, and the fighters it named paced between the road and the
-    // structure: most of veteran's full-health back-and-forth walks)
-    // (owner_rulings 51: not in the laning phase — a road's dive call there is its laners' moment, and the 4 s it stood after the
-    // dive ended kept the solo laners in defend mode 2.4-3.9 % of the laning phase, against 1.0-1.3 % for the pre-lane bots)
-    const laning = now < 840 && this.phase !== 'late';
+    if (this.diff.macroDelay <= 0) return;
     for (let i = 0; i < this.defend.length; i++) {
-      if (laning || ab('stick')) continue;
-      if (this.defend[i] > 0.05) { this.stickDef[i] = now + DEFEND_STICK; this.stickVal[i] = this.defend[i]; this.stickX[i] = this.defendX[i]; this.stickY[i] = this.defendY[i]; this.stickF[i] = this.defendFighters[i]; }
-      else if (now < this.stickDef[i]) { this.defend[i] = this.stickVal[i]; this.defendX[i] = this.stickX[i]; this.defendY[i] = this.stickY[i]; this.defendFighters[i] = this.stickF[i]; }
+      if (!this.held(`def${i}`, this.defend[i] > 0.05, now)) { this.defend[i] = 0; this.defendFighters[i] = 0; }
     }
-    if (this.baseThreat > 0.05) { this.stickBase = now + DEFEND_STICK; this.stickBaseV = this.baseThreat; this.stickBaseX = this.baseX; this.stickBaseY = this.baseY; }
-    else if (now < this.stickBase) { this.baseThreat = this.stickBaseV; this.baseX = this.stickBaseX; this.baseY = this.stickBaseY; }
+    if (!this.held('base', this.baseThreat > 0.05, now)) this.baseThreat = 0;
   }
 
   structInfoOf(e: Entity): StructInfo | undefined {
@@ -857,10 +623,6 @@ export class TeamBrain {
     for (const p of w.players) if (p && p.team === this.team && p.ent && p.ent.alive && p.ent.hp >= p.ent.maxHp * 0.45) fit++;
     this.press = this.held('press', d.convertsLeads && w.teams.length === 2 && lead >= d.leadGleam && aliveDiff >= 0 && (single || this.phase !== 'early') &&
       (!d.objectiveSense || k.kind !== 'rift' || fit >= Math.min(this.aliveEnemies, 3)), now0);
-    // (owner_rulings 44, round 2 — closeOut: in the late game a lead of 3,000 Gleam is pressed by a tier that closes out even
-    // if it does not convert early leads: adept teams 5,000-15,000 ahead from 20:00 lost their own Needles to the team behind
-    // and ended at 34-39 minutes)
-    if (!this.press && d.closeOut && k.kind === 'rift' && this.phase === 'late' && lead >= 3000 && aliveDiff >= 0 && fit >= Math.min(this.aliveEnemies, 3)) this.press = true;
     if (this.window || this.press) group = true;
     if (k.kind === 'rift') {
       if (this.phase === 'late') group = true;
@@ -881,23 +643,13 @@ export class TeamBrain {
     let cx = 0, cy = 0, cn = 0;
     for (const f of tp.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }
     if (cn > 0) { cx /= cn; cy /= cn; } else { cx = this.groupX; cy = this.groupY; }
-    // (owner_rulings 44, closeOut: ahead — a fighter up, or 1,500 Gleam with nobody of ours down more than theirs — with the
-    // enemy core open, the team goes for the core's guards and the core, not the next outer Needle: the late game's long
-    // stalls were won teams walking back to the roads with the Bell Needles open)
-    // (owner_rulings 46: not in the laning phase — before 14:00 the roads hold, as CW3 CL-1 tuned them)
-    const closeOut = !ab('closeout') && d.closeOut && k.kind === 'rift' && this.phase !== 'early' && now0 >= 840 && this.aliveAllies >= 3 && (aliveDiff >= 1 || (lead >= 1500 && aliveDiff >= 0));
     for (const e of tp.enemyStructs) {
       if (!e.alive || !e.targetable) continue;
       const info = this.structInfoOf(e);
       if (!info) continue;
       let score: number;
       if (info.isCore) score = 1000;
-      else if (closeOut && info.lane < 0 && !info.respawns) score = 900 - dhypot(e.x - cx, e.y - cy) * 0.5;
-      // (closeOut: the way to the core — the middle road's Needles and its Lantern — before the other roads' towers)
-      else if (closeOut && this.enemyCorePath.has(info.id)) score = (this.respawning(info) ? 600 : 300) - (e.hp / Math.max(1, e.maxHp)) * 10;
-      // (round 2: with every tower down, the Lantern on the way to the core before the side roads' — a side Lantern relights to
-      // be taken again, the middle one opens the Bell Needles)
-      else if (this.respawning(info)) score = towersLeft === 0 ? 500 - dhypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 + (this.enemyCorePath.has(info.id) ? 60 : 0) : -1;
+      else if (this.respawning(info)) score = towersLeft === 0 ? 500 - dhypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 : -1;
       else {
         // the least-pushed lane first: towers nearer our side score higher
         const l = info.lane >= 0 ? k.lanes[info.lane] : null;
@@ -926,8 +678,7 @@ export class TeamBrain {
         if (g && g.respawns && this.downAt.has(g.id) && !this.structAliveInfo(g)) { opened = true; break; }
       }
     }
-    const endgame = !!this.siege && !!bestInfo && (bestInfo.isCore || (bestInfo.respawns && towersLeft === 0) || opened ||
-      (closeOut && (bestInfo.lane < 0 || bestInfo.respawns)));
+    const endgame = !!this.siege && !!bestInfo && (bestInfo.isCore || (bestInfo.respawns && towersLeft === 0) || opened);
     if (endgame) {
       group = true;
       let gatesTotal = 0, gatesUp = 0;
@@ -947,11 +698,7 @@ export class TeamBrain {
       let ready = 0;
       for (const f of tp.allyFighters) if (f.alive && f.hp > f.maxHp * 0.5 && sq(f.x - this.groupX) + sq(f.y - this.groupY) < 18 * 18) ready++;
       const need = Math.min(4, Math.max(1, this.aliveAllies));
-      // (owner_rulings 44, round 2: a tier that closes out goes into a held base only with a fighter more, or two of theirs left,
-      // or a Lantern's clock running at even numbers — a defended base won every even dive, and the fights lost at its door
-      // were the long games' back-and-forth)
-      const commit = d.closeOut && k.kind === 'rift' ? aliveDiff >= 1 || this.aliveEnemies <= 2 || (clock && aliveDiff >= 0) : aliveDiff >= -1 || this.aliveEnemies <= 2;
-      if ((clock || ready >= need || this.aliveEnemies <= 2 || (closeOut && ready >= Math.min(3, need))) && commit) this.rush = true;
+      if (clock || ready >= need || this.aliveEnemies <= 2) this.rush = aliveDiff >= -1 || this.aliveEnemies <= 2;
       else this.stage = true;
     }
     // (lane AI G7: a cross-map trade — the enemy is on an objective we cannot contest: press the structure farthest from
@@ -972,7 +719,7 @@ export class TeamBrain {
     if (k.kind === 'rift' && (this.window || this.press) && !this.rush && this.group) {
       let fitAt = 0;
       for (const f of tp.allyFighters) if (f.alive && f.hp >= f.maxHp * 0.45 && sq(f.x - this.groupX) + sq(f.y - this.groupY) <= 18 * 18) fitAt++;
-      this.gathered = ab('gathered') || now0 >= 1500 || fitAt >= Math.min(3, this.aliveAllies);
+      this.gathered = now0 >= 1500 || fitAt >= Math.min(3, this.aliveAllies);
     }
     if (this.siege) {
       const s = this.siege;
@@ -1043,15 +790,9 @@ export class TeamBrain {
           if (early && ttk <= 30 && aa >= ae) desire = Math.max(desire, 0.75);
           // (a won fight with a structure to take: a short camp is worth it only on the way — the structure first)
           if (!early && this.window && this.siege && !long && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
-          // (owner_rulings 47, closing: from 20:00 a tier that closes out turns a won fight — two or more up — into structures,
-          // the long objective too unless it is on the way: an adept team five up at 24:00 walked to Longshade, then lost its
-          // lead's game to the team behind on a base race)
-          if (d.closeOut && now >= 1200 && this.window && this.siege && aa >= ae + 2 && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
-          if (d.contests && aa >= ae && this.pitOdds(c) >= 0) {
+          if (d.contests && aa >= ae) {
             for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
           }
-          // (owner_rulings 44: two or more of theirs more at the pit than ours within 45 m — not a call; the cross-map trade is)
-          if (this.pitOdds(c) <= -2) desire = 0;
           // on it and it is not falling: give up for a while (the roads matter more than a door that will not open)
           let at = 0;
           for (const f of this.perc.allyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 14 * 14) at++;
@@ -1065,7 +806,7 @@ export class TeamBrain {
         if (desire > 0 && prev === c) desire = Math.max(desire, Math.min(0.8, desire + 0.06));
       } else if (alive) {
         // (lane AI G7: a beginner's macro still takes an even objective late, as a beginner does — never zero takes)
-        const even = d.objectiveEven > 0 ? d.objectiveEven : now >= 720 && !ab('objlate') ? d.objectiveEvenLate : 0;
+        const even = d.objectiveEven > 0 ? d.objectiveEven : now >= 720 ? d.objectiveEvenLate : 0;
         desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? even : 0;
         // (lane AI G7: the long objective needs the time to kill and an enemy that cannot answer, as above)
         if (desire > 0 && aa < ae + 1 && d.longshadeTtk > 0) {
@@ -1076,24 +817,14 @@ export class TeamBrain {
         // (a beginner, objectiveEven 0, takes it only with a fighter more: three Splinters at even numbers kept novice in games)
         if (early && aa >= ae && d.objectiveEven > 0) desire = Math.max(desire, 0.75);
         // (contest: the enemy is at it and we are not short of bodies)
-        if (d.contests && aa >= ae && this.pitOdds(c) >= 0) {
+        if (d.contests && aa >= ae) {
           for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
         }
-        if (this.pitOdds(c) <= -2) desire = 0;
       } else desire = aa >= ae ? 0.4 : 0;
       // (macroDelay: the call goes out once it has held)
       if (!this.held(`obj${c.index}`, desire > 0, now)) desire = 0;
       if (desire > (this.objective?.desire ?? 0)) this.objective = { camp: c, desire, alive };
     }
-  }
-
-  /** owner_rulings 44: our fighters within 45 m of the pit (they can be at it within seconds) minus the enemy fighters seen at it
-   *  (16 m) — a contest is called only at even odds or better, and none at all two down */
-  private pitOdds(c: CampInfo): number {
-    let ours = 0, theirs = 0;
-    for (const f of this.perc.allyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 45 * 45) ours++;
-    for (const f of this.perc.enemyFighters) if (f.alive && (f.visibleMask & this.perc.bit) !== 0 && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) theirs++;
-    return ours - theirs;
   }
 
   /** the long objective is worth it at even numbers: time to kill within the tier's longshadeTtk, four fit fighters, and
