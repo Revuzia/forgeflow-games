@@ -1755,7 +1755,8 @@ def paint_eyeband(p, n):
     win = _ss(0.064, 0.050, ax) * _ss(-BAND_H + 0.0035, -BAND_H + 0.0075, z) * _ss(BAND_H - 0.004, BAND_H - 0.008, z) * front
     skin = _hl("#8E6248") * (0.95 + 0.10 * np.clip(-n[:, 1], 0, 1))[:, None]
     col = col * (1 - win[:, None]) + skin * win[:, None]
-    EL, EH, EX, EZ = 0.0150, 0.0074, 0.0300, BAND_Z - 0.0005
+    # (ruling 57: the first build's eyes read sleepy at the face sheet: a fifth taller, the lid higher, more iris)
+    EL, EH, EX, EZ = 0.0155, 0.0089, 0.0300, BAND_Z - 0.0005
     u = (ax - EX) / EL
     v = (p[:, 2] - (EZ + 0.05 * (ax - EX))) / EH
     q = np.clip(1.0 - u * u, 0.0, 1.0)
@@ -1769,7 +1770,7 @@ def paint_eyeband(p, n):
     ir = 0.82 * EH
     col = mix(col, "#6A4A30", _ss(ir, ir - 0.0007, di) * ins * 0.97)
     col = mix(col, "#15110E", _ss(0.42 * ir, 0.42 * ir - 0.0006, di) * ins * 0.96)
-    edge = top - 0.36 * (top - bot)
+    edge = top - 0.28 * (top - bot)
     col = mix(col, "#7E5640", ins * _ss(edge, edge + 0.10, v) * 0.97)
     lash = _ss(0.16, 0.08, np.abs(v - edge)) * _ss(1.08, 1.0, np.abs(u)) * win
     col = mix(col, "#17120F", lash * 0.92)

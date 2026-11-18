@@ -212,8 +212,8 @@
     "tris_plate_R2": 420,
     "tris_plate_L1": 640,
     "tris_plate_L2": 420,
-    "tris_hand_R": 700,
-    "tris_hand_L": 650,
+    "tris_hand_R": 820,
+    "tris_hand_L": 780,
     "tris_skirt": 1700,
     "tris_quiver": 650,
     "tris_quiver_bands": 360,
@@ -225,42 +225,55 @@
     "tris_dart_head": 180,
     "tris_dart_inlay": 70,
     "tris_lacquer_fan": 700,
-    "validate_ulkro": "22954->22950",
+    "validate_ulkro": "23204->23200",
     "validate_ulkro_accent": "452->450"
   },
-  "uv_coverage": 0.545,
+  "uv_coverage": 0.549,
   "bake": {
-    "base": 6.0,
-    "rough_metal": 3.8,
-    "normal": 2.68,
-    "ao": 2.81,
-    "normal_fixed_px": 32071,
-    "projection": 73.17,
-    "pack_save": 73.6,
-    "total": 89.31
+    "base": 2.06,
+    "rough_metal": 1.59,
+    "normal": 1.45,
+    "ao": 1.86,
+    "normal_fixed_px": 29478,
+    "projection": 32.03,
+    "pack_save": 32.17,
+    "total": 39.23
   },
-  "tris": 23400,
+  "tris": 23650,
   "mesh_top_m": 2.023,
-  "glb_bytes_raw": 2893156,
+  "glb_bytes_raw": 2879608,
   "optimize": {
     "ok": true,
-    "before": 2893156,
-    "after": 1180436,
+    "before": 2879608,
+    "after": 1176852,
     "q_base": 62
   },
-  "glb_bytes": 1180436,
+  "zone_grade": {
+    "ok": true
+  },
+  "glb_bytes": 1176932,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_long_evening.glb (1153 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ulkro_long_evening_base 2048x2048 204K, ulkro_long_evening_normal 512x512 56K, ulkro_long_evening_orm 256x256 32K",
-      "  skinned meshes: ulkro_accent(179v), ulkro_long_evening(25934v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_long_evening.glb (1149 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ulkro_long_evening_base 2048x2048 200K, ulkro_long_evening_normal 512x512 55K, ulkro_long_evening_orm 256x256 32K",
+      "  skinned meshes: ulkro_accent(179v), ulkro_long_evening(25951v)",
       "  bones: 42 (root hips spine chest neck head x_tail_1 x_tail_2 shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart x_dart_tip x_crest0 x_crest1 x_crest2 x_crest3 x_crest4 x_quiver thighL shinL footL toeL thighR shinR footR toeR x_skirt_b_1 x_skirt_b_2 x_skirt_f_1 x_skirt_f_2 x_skirt_l_1 x_skirt_l_2 x_skirt_r_1 x_skirt_r_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 22220; bind-pose bounds (three units, Y up): 1.37 x 2.02 x 0.61; facing (-0.00, 1.00); head bone y 1.61; runRefSpeed 3.5",
+      "  tris: 22458; bind-pose bounds (three units, Y up): 1.37 x 2.02 x 0.61; facing (-0.00, 1.00); head bone y 1.61; runRefSpeed 3.5",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ulkro/ulkro_long_evening_splash.png",
+      "portrait": "art/out/fighters/ulkro/ulkro_long_evening_portrait.png"
+    },
+    "seconds": {
+      "splash": 40.34,
+      "portrait": 8.15
+    }
   },
   "three_qa": {
     "ok": true,
@@ -291,23 +304,27 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ulkro/three_ulkro_long_evening.png",
-    "seconds": 21.4,
+    "seconds": 5.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.46,
-      "model": 7.87,
-      "lows_bind": 4.37,
-      "uv": 3.96,
-      "bake": 89.31,
-      "export": 0.21,
-      "optimize": 1.57,
-      "load_test": 0.25,
-      "three_qa": 21.76
+      "materials": 0.24,
+      "model": 2.73,
+      "lows_bind": 1.77,
+      "uv": 2.04,
+      "bake": 39.23,
+      "export": 0.09,
+      "optimize": 0.72,
+      "zone_grade": 0.26,
+      "wrist_weights": 0.14,
+      "zero_metal": 0.03,
+      "load_test": 0.11,
+      "render": 48.73,
+      "three_qa": 5.56
     },
-    "total_s": 129.86
+    "total_s": 101.7
   },
   "run_ref_speed": 3.5,
   "height_m": 1.83
