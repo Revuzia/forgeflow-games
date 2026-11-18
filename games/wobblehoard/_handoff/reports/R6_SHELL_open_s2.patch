@@ -1,0 +1,48 @@
+--- a/games/wobblehoard/src/data/places.ts
++++ b/games/wobblehoard/src/data/places.ts
+@@ -137,9 +137,9 @@
+ export const PLACE_INFO: readonly Pick<PlaceDef, 'id' | 'idx' | 'name' | 'coined' | 'stampsToOpen' | 'shipped' | 'night' | 'sky'>[] = [
+   { id: 'home', idx: 0, name: 'Home', stampsToOpen: 0, shipped: true, night: false, sky: 'home' },
+   { id: 'hearthlog', idx: 1, name: 'Hearthlog Cabin', coined: ['Hearthlog'], stampsToOpen: 'firstWish', shipped: true, night: false, sky: 'cabin' },
+-  { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: false, night: false, sky: 'shore' },
+-  { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: false, night: false, sky: 'ridge' },
+-  { id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: false, night: false, sky: 'garden' },
++  { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: true, night: false, sky: 'shore' },
++  { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false, sky: 'ridge' },
++  { id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: true, night: false, sky: 'garden' },
+   { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true, sky: 'roof' },
+   { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: false, night: false, sky: 'cloud' },
+ ];
+--- a/games/wobblehoard/src/data/place_ripple.ts
++++ b/games/wobblehoard/src/data/place_ripple.ts
+@@ -13,7 +13,7 @@
+ import { USE_VERB as V, EMOTE as E } from './life.ts';
+ 
+ export const PLACE: PlaceDef = {
+-  id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: false, night: false,
++  id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: true, night: false,
+   ground: { grip: 1.35, glue: 0.8, peel: 0.9, drag: 1.1, mark: MARK.print, markLifeS: 40 },
+   patches: [
+     { id: 'wetsand', shape: 'box', x: 0, z: -1.75, hx: 3.4, hz: 0.35, mods: { grip: 1.1 }, mark: MARK.print, markLifeS: 60 },
+--- a/games/wobblehoard/src/data/place_frostbell.ts
++++ b/games/wobblehoard/src/data/place_frostbell.ts
+@@ -11,7 +11,7 @@
+ import { USE_VERB as V, EMOTE as E } from './life.ts';
+ 
+ export const PLACE: PlaceDef = {
+-  id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: false, night: false,
++  id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false,
+   ground: { grip: 1, glue: 0.9, peel: 1, drag: 1.05, mark: MARK.print, markLifeS: 90 },
+   patches: [
+     { id: 'icepond', shape: 'disc', x: 1.9, z: -0.9, r: 1.4, mods: { drag: 0.25 }, ice: true },
+--- a/games/wobblehoard/src/data/place_rainleaf.ts
++++ b/games/wobblehoard/src/data/place_rainleaf.ts
+@@ -12,7 +12,7 @@
+ import { USE_VERB as V, EMOTE as E } from './life.ts';
+ 
+ export const PLACE: PlaceDef = {
+-  id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: false, night: false,
++  id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: true, night: false,
+   ground: { grip: 0.85, glue: 1, peel: 1, drag: 1, mark: MARK.trail, markLifeS: 20 },
+   patches: [
+     { id: 'steppingstones', shape: 'box', x: -1.6, z: 1.65, hx: 0.9, hz: 0.3, mods: { grip: 1.1 } },

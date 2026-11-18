@@ -12,6 +12,8 @@ import { ADD_KEEP_ALPHA } from './halo.ts';
 import { linearToOklch, oklchToLinear, type Rgb } from './oklch.ts';
 import { PALETTE } from './table.ts';
 
+/** D-96 (round 6): keepsake bits retired with the dropped places (5, 6, 8; data/quests.ts KEEPSAKE_MASK keeps the rest). */
+const RETIRED_KEEPSAKES = (1 << 5) | (1 << 6) | (1 << 8);
 /** Home's THING_IDS indices (src/data/places.ts; copied so the stage chunk never imports the data module). */
 export const HOME_BALL = 0, HOME_MUSICBOX = 1, HOME_RUG = 2, HOME_LAMP = 3, HOME_SHELF = 4, HOME_PAD = 5;
 export const HOME_THINGS = 6;
@@ -170,7 +172,9 @@ export class HomeKit {
   }
   /** The keepsakes on the shelf: a 20-bit set (QUESTS 10); a newly set bit drops into its place (Calm or reduced motion: a fade). */
   setKeepsakes(mask: number): void {
-    const m = (mask >>> 0) & 0xfffff;
+    // (round 6, D-96: bits 5 Bubble Ring, 6 Little Brass Cog and 8 Glow Crystal are retired with their dropped places (R6_DATA 1); an old save
+    // that holds one shows nothing in its slot: those three slots stay empty)
+    const m = (mask >>> 0) & 0xfffff & ~RETIRED_KEEPSAKES;
     for (let i = 0; i < 20; i++) {
       const on = (m >> i) & 1, was = (this.keepMask >> i) & 1;
       if (on && !was) this.keepAge[i] = 0;

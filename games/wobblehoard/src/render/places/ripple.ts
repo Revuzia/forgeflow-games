@@ -55,6 +55,29 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
+// round 6: fair-weather clouds in the sky (each a few round puffs of different sizes on a flat base, the low sun on their tops, a soft
+// lavender base; nothing under the horizon), drawn by direction from the camera like a sky, drifting very slowly
+const SKY_CLOUDS = /* glsl */`
+void main() {
+  vec3 d = normalize(vWP - cameraPosition);
+  float el = asin(clamp(d.y, -1.0, 1.0)), az = atan(d.x, -d.z);
+  float a = 0.0, top = 0.0;
+  for (int k = 0; k < 3; k++) {
+    float fk = float(k), row = 0.004 + fk * 0.024, sc = 9.0 - fk * 2.0;
+    float x = az * sc + uTime * uMotion * 0.004 * (1.0 + fk) + fk * 7.3, i = floor(x), f = fract(x) - 0.5;
+    if (pH(vec2(i, fk)) < 0.45 || a > 0.5) continue;
+    float y = (el - row) * sc * 1.6, h = 0.0;
+    for (int j = 0; j < 4; j++) {
+      float fj = float(j), o = (fj - 1.5) * 0.11 + (pH(vec2(i, fk + fj)) - 0.5) * 0.05, r = (0.07 + 0.06 * pH(vec2(i + fj, fk + 9.0))) * (1.0 - abs(fj - 1.5) * 0.18);
+      h = max(h, sqrt(max(0.0, r * r - (f - o) * (f - o))) * 1.4);
+    }
+    if (y >= 0.0 && y < h) { a = 1.0; top = y / max(h, 1e-3); }
+  }
+  if (a < 0.5) discard;
+  gl_FragColor = vec4(mix(uBase, uTop, smoothstep(0.0, 0.85, top)), 0.92);
+  #include <colorspace_fragment>
+}`;
+
 const LOOK: PlaceLook = {
   id: 'ripple',
   ceremonyDim: PLACE.ceremonyDim,
@@ -103,7 +126,7 @@ const LOOK: PlaceLook = {
     const sand = kit.surface('sand', [1, 1, 1], 0.95, SAND, sandU, 0.25);
     const rock = kit.mat('rock', tok('ink', 'dusk', 0.35, 1.05), 0.9, 0.25), drift = kit.mat('drift', tok('amber', 'cream', 0.7, 0.66), 0.9, 0.2);
     const coral = kit.mat('ring', tok('coral', 'amber', 0.15), 0.6, 0.35), cream = kit.mat('cream', tok('cream', 'amber', 0.15, 0.95), 0.6, 0.35);
-    const shellM = kit.mat('shell', tok('coral', 'cream', 0.4), 0.45, 0.45), stringM = kit.mat('string', tok('cream', 'amber', 0.2, 0.8), 0.9, 0.1);
+    const stringM = kit.mat('string', tok('cream', 'amber', 0.2, 0.8), 0.9, 0.1);
     const pebble = kit.mat('pebble', tok('ink', 'cream', 0.5, 0.9), 0.55, 0.35);
     const unitIco = kit.geo('ico', () => new THREE.IcosahedronGeometry(1, 1)), unitCyl = kit.cyl(1, 1, 1, 12);
     const unitCylX = kit.geo('cylX', () => new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2));
@@ -117,6 +140,11 @@ const LOOK: PlaceLook = {
     const seaM = sea.material as THREE.ShaderMaterial;
     const headU = { uLand: { value: col(tok('dusk', 'plum', 0.3, 0.9)) }, uHaze: { value: col(tok('lagoon', 'dusk', 0.2, 0.92)) } };
     g.add(kit.card(HEADLAND, headU, 90, 7, 0, 3.2, shore - 46, 0, -70));
+    // (round 6: the tall frame's sky was a flat peach block between the HUD and the sea: a few soft fair-weather clouds drift in it, their
+    // undersides in the sea's blue haze, their tops in the low sun; drawn by direction from the camera like a sky: they stay put when it orbits)
+    const cloudU = { uTop: { value: col(tok('cream', 'amber', 0.2, 0.98)) }, uBase: { value: col(tok('dusk', 'cream', 0.62, 0.92)) } };
+    const skyClouds = kit.card(SKY_CLOUDS, cloudU, 260, 70, 0, 22, shore - 95, 0, -71, true);
+    g.add(skyClouds);
 
     // ---- the Surf Edge (shallow water at the back; its surface rises 0.06 -> 0.12 on a wave every 7 to 10 s) ----
     const surfW = kit.water('box', surf.x, surf.z, 0, (surf.hx ?? 3.4) + 4, (surf.hz ?? 0.25) + 0.1, 0.06, tok('lagoon', 'dusk', 0.25, 0.8), tok('lagoon', 'cream', 0.3), tok('lagoon', 'cream', 0.4, 0.95), tok('cream'), 1, 0.45);
@@ -162,11 +190,18 @@ const LOOK: PlaceLook = {
     B.add('drift', unitCylX, drift, sc.x, BAR_Y + 0.04, sc.z, 2 * half + 0.12, 0.05, 0.05, yawQ(-sc.yaw));
     kit.shadow(sc.x, sc.z, Math.abs(cx) * half + 0.2, Math.abs(cz) * half + 0.2, 0.3);
     const shells: THREE.Object3D[] = [];
+    // (round 6: the row lies along z on the wide layout (data yaw), so five alike coral fans stacked into one blob from the camera: each shell
+    // now has its own tone (coral, cream, lagoon, amber, dusk-coral), a ribbed fan, and is turned a little its own way, so a stack reads as five)
+    const SHELL_TONES: [Parameters<typeof tok>[0], Parameters<typeof tok>[1], number, number][] = [['coral', 'cream', 0.35, 1], ['cream', 'amber', 0.2, 0.95], ['lagoon', 'cream', 0.45, 0.95], ['amber', 'cream', 0.3, 0.95], ['coral', 'plum', 0.25, 1.05]];
+    const shellRib = /* glsl */`float a = atan(vLP.x, vLP.y + 0.6 * uL); diffuseColor.rgb *= 0.82 + 0.18 * smoothstep(0.2, 0.9, abs(sin(a * 9.0)));`;
     for (let k = 0; k < n; k++) {
       const o = (n > 1 ? k / (n - 1) - 0.5 : 0) * span, sg = new THREE.Group();
       sg.position.set(sc.x + cx * o, BAR_Y - hang, sc.z + cz * o);
       // (round 3: each shell a flat coral fan seen face-on, as wide as its collider is long; round 2's thin cream spikes read as the rungs of a ladder)
-      const shell = kit.mesh(kit.geo('shell', () => new THREE.SphereGeometry(1, 12, 8).scale(shR * 1.7, shL / 2 + shR, shR * 0.5)), shellM, 0, 0, 0, 3); sg.add(shell);
+      const [ta, tb, tt, tk] = SHELL_TONES[k % SHELL_TONES.length];
+      const shellK = kit.local(`shell${k}`, tok(ta, tb, tt, tk), 0.45, shellRib, { uL: { value: shL } }, 0.45);
+      const shell = kit.mesh(kit.geo('shell', () => new THREE.SphereGeometry(1, 12, 8).scale(shR * 1.7, shL / 2 + shR, shR * 0.5)), shellK, 0, 0, 0, 3); sg.add(shell);
+      shell.rotation.y = (k - (n - 1) / 2) * 0.35; shell.scale.setScalar(0.9 + 0.08 * ((k * 3) % 4));
       sg.add(kit.mesh(kit.cyl(0.006, 0.006, hang - shL / 2, 4), stringM, 0, (hang + shL / 2) / 2, 0, 3));
       g.add(sg); shells.push(sg);
     }
@@ -205,6 +240,7 @@ const LOOK: PlaceLook = {
         t += dt;
         const m = reduced ? 0 : quiet ? 0.3 : 1;
         seaM.uniforms.uTime.value = t; seaM.uniforms.uMotion.value = m;
+        { const u = (skyClouds.material as THREE.ShaderMaterial).uniforms; u.uTime.value = t; u.uMotion.value = m; }
         if (finale !== finWas) {
           finWas = finale;
           SU.uDeep.value.lerpColors(seaDay[0], seaSun[0], finale); SU.uHaze.value.lerpColors(seaDay[1], seaSun[1], finale);

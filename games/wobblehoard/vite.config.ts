@@ -45,6 +45,8 @@ const LATER_FACADES: ReadonlyArray<readonly [RegExp, (m: RegExpMatchArray) => st
   [/[\\/]src[\\/]audio[\\/]places[\\/]([a-z]+)\.ts$/, (m) => `later-place-${m[1]}-sound`],
   [/[\\/]src[\\/]data[\\/]place_([a-z]+)\.ts$/, (m) => `later-place-${m[1]}-data`],
   [/[\\/]src[\\/]render[\\/]lifelook\.ts$/, () => 'later-lifelook'],
+  // (round 6) the Places sheet's postcard pictures (R6_RENDER 4), imported by the Journal / Travel chunk once a sheet opens
+  [/[\\/]src[\\/]render[\\/]postcard\.ts$/, () => 'later-postcard'],
   // the Journal's words (the screens chunk imports them; the life chunk imports them lazily for a stamp's title outside Home): when the split makes them a
   // chunk of their own, it is lazy-only (LAZY_ONLY below) and named so
   [/[\\/]src[\\/]data[\\/]journal_text\.ts$/, () => 'later-journal-text'],
@@ -53,13 +55,41 @@ const LATER_FACADES: ReadonlyArray<readonly [RegExp, (m: RegExpMatchArray) => st
 const LAZY_ONLY: readonly RegExp[] = [
   /[\\/]src[\\/]life[\\/]/, /[\\/]src[\\/]data[\\/](life|places|quests|journal_text|place_[a-z]+)\.ts$/, /[\\/]src[\\/]core[\\/]quests\.ts$/,
   /[\\/]src[\\/]collection[\\/]journal(_store)?\.ts$/, /[\\/]src[\\/]physics[\\/]props\.ts$/, /[\\/]src[\\/](shell|ui)[\\/]later-/, /[\\/]src[\\/]ui[\\/](wishes\.ts|journal\.css|play\.css)$/,
-  /[\\/]src[\\/]render[\\/](place|placeview|lifelook|homekit|emotes)\.ts$/, /[\\/]src[\\/]render[\\/]places[\\/]/, /[\\/]src[\\/]audio[\\/](ambience|props|things)\.ts$/, /[\\/]src[\\/]audio[\\/]places[\\/]/,
+  /[\\/]src[\\/]render[\\/](place|placeview|lifelook|homekit|emotes|postcard)\.ts$/, /[\\/]src[\\/]render[\\/]places[\\/]/, /[\\/]src[\\/]audio[\\/](ambience|props|things)\.ts$/, /[\\/]src[\\/]audio[\\/]places[\\/]/,
 ];
 export function laterChunkName(facade: string | null, moduleIds: readonly string[]): string | null {
   const f = facade ?? '';
   for (const [re, nm] of LATER_FACADES) { const m = f.match(re); if (m) return nm(m); }
   if (!facade && moduleIds.length > 0 && moduleIds.every((id) => LAZY_ONLY.some((re) => re.test(id)))) return 'later-shared';
   return null;
+}
+
+// D-96 (owner, 2026-11-18: seven places): Fizzwell Tub, Cogwhistle Bench and Echo Hollow are DROPPED. Their place modules are gone (data, sound; they never had a
+// look), so no `later-place-<id>*` chunk is emitted for them; this guard keeps it so: a build FAILS when an emitted chunk is named for a dropped place, holds a
+// module of one (src/data/place_<id>.ts, src/audio/places/<id>.ts, src/render/places/<id>.ts), or carries a dropped place's PLAYER-VISIBLE name (its capitalised
+// name: "Fizzwell", "Cogwhistle", "Echo Hollow"). The lower-case ids stay as append-only tombstones in src/data/places.ts (a place, thing, quest and keepsake index
+// is saved: R6_DATA.md 1), so an id alone is not a leak.
+export const DROPPED_PLACE_IDS = ['fizzwell', 'cogwhistle', 'echohollow'] as const;
+const DROPPED_RE = DROPPED_PLACE_IDS.join('|');
+const DROPPED_CHUNK = new RegExp(`(^|/)later-place-(${DROPPED_RE})(-|$)`);
+const DROPPED_MODULE = new RegExp(`[\\\\/]src[\\\\/](data[\\\\/]place_|audio[\\\\/]places[\\\\/]|render[\\\\/]places[\\\\/])(${DROPPED_RE})\\.ts$`);
+const DROPPED_NAME = /Fizzwell|Cogwhistle|Echo Hollow/;
+/** What of a dropped place an emitted bundle would ship (file -> why), empty when none: the D-96 guard of sizeBudget's generateBundle (probe_app tests it). */
+export function droppedPlaceLeaks(bundle: Readonly<Record<string, { type: string; fileName?: string; moduleIds?: readonly string[]; code?: string; source?: unknown }>>): string[] {
+  const out: string[] = [];
+  for (const [f, c] of Object.entries(bundle)) {
+    if (DROPPED_CHUNK.test(f)) out.push(`${f}: a chunk named for a dropped place`);
+    if (c.type === 'chunk') {
+      for (const m of c.moduleIds ?? []) if (DROPPED_MODULE.test(m)) out.push(`${f}: holds ${m}`);
+      const hit = typeof c.code === 'string' ? DROPPED_NAME.exec(c.code) : null;
+      if (hit) out.push(`${f}: names "${hit[0]}"`);
+    } else if (/\.(html|css|js|json|txt)$/.test(f) && (typeof c.source === 'string' || c.source instanceof Uint8Array)) {
+      const text = typeof c.source === 'string' ? c.source : Buffer.from(c.source).toString('utf8');
+      const hit = DROPPED_NAME.exec(text);
+      if (hit) out.push(`${f}: names "${hit[0]}"`);
+    }
+  }
+  return out;
 }
 
 type Next = (err?: unknown) => void;
@@ -234,6 +264,9 @@ export function sizeBudget(limit: number, firstPlayLimit: number): Plugin {
         for (const imp of c.imports) if (later(imp)) bad.push(`${f} -> ${imp}`);
       }
       if (bad.length) throw new Error(`[G0b] a first-play chunk statically imports a later-* chunk, so its later-* name would hide first-play bytes: ${bad.join(', ')}`);
+      // D-96: nothing of the three dropped places ships (droppedPlaceLeaks above)
+      const leaks = droppedPlaceLeaks(bundle as unknown as Parameters<typeof droppedPlaceLeaks>[0]);
+      if (leaks.length) throw new Error(`[D-96] the build would ship a dropped place (Fizzwell Tub, Cogwhistle Bench, Echo Hollow): ${leaks.join('; ')}`);
     },
     closeBundle() {
       const total = dirBytes(outDir);

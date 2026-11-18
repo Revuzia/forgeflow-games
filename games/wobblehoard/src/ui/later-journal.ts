@@ -22,9 +22,9 @@ import { CATALOG } from '../data/catalog.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import { MATERIAL_FAMILIES } from '../data/materials.ts';
 import { PLACE_INFO } from '../data/places.ts';
-import { CHAPTERS, GIFT_LISTS, QUESTS } from '../data/quests.ts';
+import { CHAPTERS, FACT, GIFT_LISTS, QUESTS } from '../data/quests.ts';
 import { CHAPTER_TEXT, FACT_LINES, GIFT_LINES, KEEPSAKE_TEXT, QUEST_TEXT, UI_TEXT, WISH_LINES, fill } from '../data/journal_text.ts';
-import { WISH_KIND } from '../data/life.ts';
+import { WISH_KIND, SPECIES_LIFE } from '../data/life.ts';
 import './journal.css';
 
 export interface LifeScreenOpts {
@@ -127,7 +127,8 @@ export function openJournal(o: LifeScreenOpts): LifeScreen {
       const list = GIFT_LISTS[gft.chapter] ?? [];
       const card = h('section', { class: 'jn-gift k-card', attrs: { 'aria-label': 'A gift' } }, h('h3', { class: 'k-group-title', text: 'A gift' }));
       const ch = CHAPTERS[gft.chapter];
-      const placeIdx = ch && ch.place >= 0 ? ch.place + 1 : -1;
+      // (round 6, D-96: the place the gift's three love is the chapter's `giftPlace`, the next KEPT place; "place + 1" named the dropped Fizzwell Tub (5) after Rainleaf)
+      const placeIdx = ch && typeof ch.giftPlace === 'number' ? ch.giftPlace : -1;
       const nextShipped = PLACE_INFO.find((p) => p.idx === placeIdx)?.shipped === true;
       card.append(h('p', { class: 'jn-gift-line', text: nextShipped ? fill(GIFT_LINES.loves, { place: placeName(placeIdx) }) : GIFT_LINES.unshipped }));
       if (!v.giftsAllowed) card.append(h('p', { class: 'jn-gift-line', text: GIFT_LINES.later }));
@@ -201,7 +202,8 @@ export function openJournal(o: LifeScreenOpts): LifeScreen {
     KEEPSAKE_TEXT.forEach(([name, how, from], bit) => {
       const got = (v.keepsakes & (1 << bit)) !== 0;
       list.append(h('li', { class: 'jn-tile k-card', attrs: { 'data-got': String(got) } }, h('span', { class: 'jn-stamp', attrs: { 'aria-hidden': 'true' } }, got ? icon('sparkle') : icon('lock')),
-        h('b', { class: 'jn-tile-name', text: got ? name : '???' }), h('span', { class: 'jn-q-hint', text: got ? fill(from, { place: placeName(bit + 1) }) : how })));
+        // (round 6, R6_DATA: a finale keepsake's line names its own place outright; "placeName(bit + 1)" named the NEXT place: "Ember Pinecone ... From Ripple Shore.")
+        h('b', { class: 'jn-tile-name', text: got ? name : '???' }), h('span', { class: 'jn-q-hint', text: got ? from : how })));
     });
     pane.append(list);
     return pane;
@@ -240,12 +242,22 @@ export function openTravel(o: LifeScreenOpts): LifeScreen {
     const open = o.host.openPlaces();
     const here = o.host.place;
     const grid = h('ul', { class: 'jn-cards', attrs: { role: 'list' } });
+    // round 6 (QUESTS 15, VERDICT_PG B10): "3 of yours love it": the owned species whose favourite place (F1) the player has FOUND and that is this place
+    // (an unfound favourite is never given away)
+    const fans = new Map<string, number>();
+    if (v) { try { for (const sp of new Set([...o.game.hoard.items()].map((it) => it.speciesIdx))) {
+      const id = CATALOG[sp]?.id, fav = id ? (SPECIES_LIFE as Readonly<Record<string, { place: string } | undefined>>)[id]?.place : undefined;
+      if (fav && ((v.facts[sp] ?? 0) & (1 << FACT.PLACE)) !== 0) fans.set(fav, (fans.get(fav) ?? 0) + 1);
+    } } catch { /* no shelf */ } }
     for (const p of PLACE_INFO) {
       // QUESTS 15 (round 5, VERDICT_PG B4): a place with `shipped: false` is not shown at all (no "coming soon" card, no line names it)
       if (!p.shipped) continue;
       const isOpen = (open & (1 << p.idx)) !== 0;
       const card = h('li', { class: 'jn-card k-card', attrs: { 'data-place': p.id, 'data-open': String(isOpen), 'data-sky': p.sky } });
-      card.append(h('span', { class: 'jn-sky', attrs: { 'aria-hidden': 'true' } }), h('b', { class: 'jn-card-name', text: p.name }));
+      // (round 6, R6_RENDER 4: the postcard's picture, drawn by render/postcard.ts into this canvas once the sheet is in the DOM; the CSS sky gradient behind it is the fallback)
+      card.append(h('canvas', { class: 'jn-sky', attrs: { 'aria-hidden': 'true', 'data-place': p.id } }), h('b', { class: 'jn-card-name', text: p.name }));
+      const nf = fans.get(p.id) ?? 0;
+      if (nf > 0) card.append(h('span', { class: 'jn-card-fans', attrs: { 'data-fans': String(nf) }, text: fill(UI_TEXT.fans, { n: String(nf) }) }));
       // its chapter's stamps ("6 of 10 stamps": the shown quests of the place's own chapter, done of shown), once the place is open
       if (v && isOpen) {
         const ch = CHAPTERS.find((c) => c.place === p.idx);
@@ -271,6 +283,10 @@ export function openTravel(o: LifeScreenOpts): LifeScreen {
     const kids: HTMLElement[] = [grid];
     if (v) kids.unshift(h('p', { class: 'jn-lead', text: fill(UI_TEXT.stampsOf, { a: String(v.stamps), b: String(v.quests.filter((q) => q.shown).length) }) }));
     f.scroll.replaceChildren(...kids);
+    // the postcards' pictures (a lazy module of its own, `later-postcard`: a 2D canvas each, nothing else); a failed load keeps the gradients
+    void import('../render/postcard.ts').then(({ drawPostcard }) => {
+      for (const cv of f.scroll.querySelectorAll<HTMLCanvasElement>('canvas.jn-sky')) { try { if (drawPostcard(cv, cv.dataset.place ?? '')) cv.dataset.drawn = 'true'; } catch { /* the gradient stays */ } }
+    }, () => { /* the gradients stay */ });
   }
   const layer: Layer = openLayer({
     el: f.scrim, parent: o.root,

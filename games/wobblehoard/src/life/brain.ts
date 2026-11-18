@@ -3,7 +3,7 @@
 // segment between two framed points), HELD and the afterglow (5.5), quiet and autonomy off (5.6), and the pieces' group moves P01..P04 (9).
 // Owned by PG_LIFE.
 import type { LifeSnapshot, LifeIntents, LifeEvents } from '../contracts.ts';
-import { LIFE_FLAG, LIFE_EV, EMOTE, EXPR, REACT_KIND, TOUCH, USE_VERB, BRAIN, SPECIES_LIFE } from '../data/life.ts';
+import { LIFE_FLAG, LIFE_EV, EMOTE, EXPR, REACT_KIND, TOUCH, USE_VERB, BRAIN, SPECIES_LIFE, SQUIRT, LOOK, LOOK_ADD, SOCIAL_KIND } from '../data/life.ts';
 import { MECH, ZONE, PLACE_IDS } from '../data/places.ts';
 import { SPECIES } from '../data/species.ts';
 import type { LifeWorld } from './world.ts';
@@ -12,7 +12,7 @@ import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSqua
 import { emitVoice, PHRASE, voice } from './voice.ts';
 import { STYLE, MOVER_CAP, tierOf } from './attention.ts';
 import { TRAIT } from './traits.ts';
-import { WARMPOSE, TOAST, emitReact, leaderOf } from './looks.ts';
+import { WARMPOSE, TOAST, emitReact, leaderOf, addLook } from './looks.ts';
 import { socialPick, beginPicked, updateMoment, startMoment, tryTeeter, abortFor, isFree, MOM, mem, tuneThing, tunePlaying } from './social.ts';
 import { wishThink, wishCheck, firstWishThink } from './wish.ts';
 import { INTENT } from '../data/life.ts';
@@ -202,6 +202,7 @@ export function touchPass(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
         for (let j = 0; j < s.n; j++) if (j !== i && w.ac[j] && w.ki[j] === 0) { say(w, s, out, j, EMOTE.wow, 2, 1); break; }
       }
       if ((tk === TOUCH.SQUEEZE_1S || tk === TOUCH.STRETCH_06)) wishCheck(w, s, out, ev, i);
+      if (tk === TOUCH.SQUEEZE || tk === TOUCH.SQUEEZE_1S) squirtCheck(w, s, ev, i);
     }
     // landings (B02 notices a land within 1.5 m; a nap wakes on a toss landing within 1 m)
     const air = (fl & LIFE_FLAG.AIRBORNE) !== 0 ? 1 : 0;
@@ -210,6 +211,26 @@ export function touchPass(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: L
     if (w.aC[i] && !air && t - w.lHT[i] > 0.6) w.lT1[i] = t;
     w.aC[i] = air;
   }
+}
+
+/** (round 6, R6_DATA) The squirt game (data/life.ts SQUIRT, LIFE 6.1 S14): the player's squeeze of a soaked whole foam, held SQUIRT.holdS or
+ *  more, squirts a little arc at the nearest character within reach. Allocation-free (scalars and the world's arrays only). */
+function squirtCheck(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number): void {
+  if (w.ki[i] !== 0 || w.lo[i * 6 + LOOK.soak] < SQUIRT.soakMin) return;
+  const held = w.rT[i] - w.tST[i];
+  if (!(held >= SQUIRT.holdS)) return;
+  let tgt = -1, best = 1e9;
+  for (let j = 0; j < s.n && j < CAP; j++) {
+    if (j === i || !w.ac[j]) continue;
+    const dx = s.x[j] - s.x[i], dz = s.z[j] - s.z[i], gap = Math.sqrt(dx * dx + dz * dz) - s.r[i] - s.r[j];
+    if (gap <= SQUIRT.reach && gap < best) { best = gap; tgt = j; }
+  }
+  addLook(w, i, LOOK.soak, LOOK_ADD.squirtFoam.amount, -1);
+  pushEvent(ev, LIFE_EV.SQUIRT, s.calm || s.reducedMotion ? SQUIRT.dropsCalm : SQUIRT.drops, i, tgt < 0 ? 255 : tgt, 0, -1);
+  if (tgt < 0) return;
+  addLook(w, tgt, LOOK.wet, LOOK_ADD.squirtTarget.amount, -1);
+  w.sD[tgt] = 1;   // the target's wow, then its giggle (step.ts: SCRIPT.SQUIRTED's reaction, in this same step)
+  pushEvent(ev, LIFE_EV.SOCIAL, SOCIAL_KIND.SQUIRT, i, tgt, 2, -1);
 }
 
 /* ───────────────────────────── one character's think ───────────────────────────── */

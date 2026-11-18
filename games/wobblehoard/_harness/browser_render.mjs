@@ -1819,7 +1819,8 @@ try {
     mkdirSync(PGOUT, { recursive: true });
     const bodyQ = BODY === 'auto' ? '' : BODY;
     const PL = (report.place = {});
-    const PLACE_IDS = typeof flag('places', '') === 'string' && flag('places', '') ? String(flag('places', '')).split(',') : ['hearthlog', 'ripple', 'frostbell', 'rainleaf'];
+    // (round 6: D-96's seven places: Lanternroof and Cloudloft added; the three dropped places never had a look)
+    const PLACE_IDS = typeof flag('places', '') === 'string' && flag('places', '') ? String(flag('places', '')).split(',') : ['hearthlog', 'ripple', 'frostbell', 'rainleaf', 'lanternroof', 'cloudloft'];
     for (const [label, vp, kind] of [['phone', { width: 390, height: 844 }, 'phone'], ['desktop', { width: 1280, height: 800 }, 'desktop']]) {
       const pctx2 = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
       const { page: lp, bad: lbad } = await openView(pctx2, `quality=med&body=${bodyQ}`, `place-${label}`, [/GPU stall due to ReadPixels/i]);
@@ -1887,7 +1888,7 @@ try {
           const fz = await lp.evaluate(([pid]) => window.__RV__.pg.placeFinale(pid, false), [id]);
           const name = id === 'hearthlog' ? 'cabin' : id;
           writeFileSync(resolve(PGOUT, `finale_${name}_before.png`), b64(fz.pngA)); writeFileSync(resolve(PGOUT, `finale_${name}_after.png`), b64(fz.pngB));
-          const hosted = id === 'ripple' || id === 'frostbell';
+          const hosted = id === 'ripple' || id === 'frostbell' || id === 'cloudloft';   // (round 6: Cloudloft's sunrise is host-eased too)
           let calmS = NaN;
           if (hosted) calmS = (await lp.evaluate(([pid]) => window.__RV__.pg.placeFinale(pid, true), [id])).toOneS;
           PL[`finale:${id}`] = { took: fz.took, toOneS: fz.toOneS, calmS, backS: fz.backS, lumaA: fz.lumaA, lumaB: fz.lumaB, reversal: fz.reversal };
@@ -1895,6 +1896,35 @@ try {
             `P13 ${id}: the finale spectacle starts (thingFx(-1, 2)), fades one way without a flicker${hosted ? ', over 3 s (Calm 6 s) and back over 3 s' : ' (its own effect: the place chunk)'}`,
             `took ${fz.took}${hosted ? `, to full ${fz.toOneS.toFixed(2)} s, Calm ${calmS.toFixed(2)} s, back ${fz.backS.toFixed(2)} s` : ''}; frame luminance ${fz.lumaA.toFixed(3)} -> ${fz.lumaB.toFixed(3)}, largest reversal ${fz.reversal.toFixed(4)}`);
         }
+        // round 6 (R6_DATA 3's seam): the squirt arc: 12 drops (+ a splash) along a 0.4 s arc from one body's top to the other, mid-flight
+        // between them and above both; Calm 4 and no splash; a squirt at nobody; false at Home and for an unknown squirter
+        const sq = await lp.evaluate(() => window.__RV__.pg.squirt());
+        writeFileSync(resolve(PGOUT, `squirt_ripple.png`), b64(sq.png));
+        PL.squirt = { ...sq, png: undefined };
+        const between = sq.midX > Math.min(sq.ax, sq.bx) && sq.midX < Math.max(sq.ax, sq.bx) && sq.midY > sq.topY;
+        check(sq.ok && !sq.home && sq.drops === 12 + 7 && between && sq.calmDrops === 4 && sq.nobody && sq.nobodyDrops >= 12 && sq.unknown,
+          'R6 squirt (LIFE_EV.SQUIRT, R6_DATA 3): stage.squirtFx draws the drops along the arc (12 + a 7-mote splash; mid-flight between the two bodies and above both), Calm 4 drops and no splash, a squirt at nobody, false at Home and for an unknown squirter',
+          `ok ${sq.ok}, home ${sq.home}, drops ${sq.drops}, mid (${sq.midX.toFixed(2)}, ${sq.midY.toFixed(2)}) between x ${sq.ax.toFixed(2)} and ${sq.bx.toFixed(2)}, top ${sq.topY.toFixed(2)}; Calm ${sq.calmDrops}; at nobody ${sq.nobody} (${sq.nobodyDrops}); unknown refused ${sq.unknown}`);
+        // round 6: a postcard picture for each of D-96's seven places (src/render/postcard.ts), none for a dropped place
+        const pc = await lp.evaluate(() => window.__RV__.pg.postcards());
+        writeFileSync(resolve(PGOUT, `postcards.png`), b64(pc.png));
+        PL.postcards = { ...pc, png: undefined };
+        check(pc.ids.length === 7 && pc.drawn.every(Boolean) && pc.spread.every((v) => v >= 60) && pc.same && pc.refused,
+          'R6 postcards: each of the seven places draws its own picture (not a flat band: luminance spread at least 60 of 255), the same picture every time; the three dropped places and an unknown id draw none',
+          `${pc.ids.map((id, i) => `${id} ${pc.spread[i].toFixed(0)}`).join(', ')}; same ${pc.same}; refused ${pc.refused}`);
+        // round 6: Cloudloft's floor dents under a resting body, leaves a fading one when it moves, all gone after 7 s
+        const dn = await lp.evaluate(() => window.__RV__.pg.cloudDents());
+        PL.dents = dn;
+        check(dn.live === 1 && dn.afterMove >= 2 && dn.afterFade === 1, "R6 Cloudloft: the cloud floor dents under a resting squishy and keeps a fading dent where it was (gone within 7 s: markLifeS 6)",
+          `live ${dn.live}, after a 1 m move ${dn.afterMove}, 7 s later ${dn.afterFade} (the live one under it)`);
+        await lp.evaluate(() => window.__RV__.pg.home());
+      }
+      {   // round 6: the Ice Pond reads as ice: glide streaks and a sheen behind and under a sliding body; none from a still one; they fade
+        const gl = await lp.evaluate((k) => window.__RV__.pg.iceGlide(k), kind);
+        writeFileSync(resolve(PGOUT, `ice_glide_${label}.png`), b64(gl.png));
+        PL[`glide:${label}`] = { ...gl, png: undefined };
+        check(gl.real && gl.still === 0 && gl.streaks >= 6 && gl.sheens >= 1 && gl.after === 0, `R6 Frostbell ${label}: a squishy sliding across the Ice Pond leaves glide streaks and a sheen; a still one none; they fade within 3 s`,
+          `still ${gl.still}, streaks ${gl.streaks}, sheens ${gl.sheens}, 3 s after ${gl.after}${gl.real ? '' : ' (STUB body: no placeAt)'}`);
         await lp.evaluate(() => window.__RV__.pg.home());
       }
       report.problems.push(...lbad);

@@ -397,6 +397,13 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
       if (r.height > 0) bottomTop = Math.min(bottomTop, r.top);
     }
     if (!trayOnTop && tray.height > 0) bottomTop = Math.min(bottomTop, tray.top);
+    // round 6 (VERDICT_PG2 B8, the orchestrator: "count the hint pill in the HUD insets"): the hint pill is one of the bottom rows wherever it hangs at the bottom
+    // (wide, stack, strip; not where it hangs under the top row at 380 px and under, not in tiny): a place's front things (the cabin's tall Rocker Board) and the
+    // squishy no longer stand under it. Its LAYOUT box (offsetTop: no transform), so its 8 px show / hide slide never moves the framing.
+    {
+      const hint = hud.el.querySelector<HTMLElement>('.hint'), par = hint?.offsetParent as HTMLElement | null;
+      if (hint && par && hint.offsetHeight > 0) { const ht = par.getBoundingClientRect().top + hint.offsetTop; if (ht > ih * 0.5) bottomTop = Math.min(bottomTop, ht); }
+    }
     // ... except the CUT bar: it floats above the tray (UI.md 4.2) over the lowest 80 to 100 px of the frame, where the pieces of a cut squishy lie (two tips of a star and the foot of a pile were under it at 960x600,
     // CUT_C_VERIFY M2; "every piece stays in frame between the safe insets", CUT3.md 3). Only while the Cut tool is in hand and its bar stands above the tray; the capsule's spot moves with the tool then, which is the point.
     if (!trayOnTop && g.tool === 'cut' && tb.attached && tb.el.dataset.attach === 'above') {
@@ -425,6 +432,9 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     tb.el.addEventListener('transitionend', soon); tb.el.addEventListener('animationend', soon);
     off.push(() => { tb.el.removeEventListener('transitionend', soon); tb.el.removeEventListener('animationend', soon); });
     if (att && typeof ResizeObserver === 'function') { const ro = new ResizeObserver(soon); ro.observe(att); off.push(() => ro.disconnect()); }
+    // (round 6: the hint pill's height follows its text, one or two lines: the inset follows it)
+    const hintEl = hud.el.querySelector<HTMLElement>('.hint');
+    if (hintEl && typeof ResizeObserver === 'function') { const ro = new ResizeObserver(soon); ro.observe(hintEl); off.push(() => ro.disconnect()); }
   }
   off.push(g.on('identity', () => refreshSwitch()), g.hoard.onChange(() => refreshSwitch()), g.mat.onChange(() => refreshSwitch()), () => qs.destroy());
 

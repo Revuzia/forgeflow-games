@@ -30,18 +30,19 @@ import { pitchRatio } from '../core/genome.ts';
 import type { StorageLike } from '../core/settings.ts';
 import type { StorageSubscribe } from '../core/save.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends,
-  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, attentionSound, PHRASE, UNIT, CHAR_CAP } from '../life/step.ts';
+  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, lifeGustOn, attentionSound, PHRASE, UNIT, CHAR_CAP } from '../life/step.ts';
 import type { LifeWorld } from '../life/step.ts';
 import type { PropWorld } from '../physics/props.ts';
 import { PLACE as HOME } from '../data/place_home.ts';
-import { PLACE_INFO, THING_IDS, THING_KINDS, loadPlaceDef, MECH, PROP_SOUND, ZONE } from '../data/places.ts';
+import { PLACE_INFO, THING_IDS, THING_KINDS, loadPlaceDef, MECH, PROP_SOUND, ZONE, ownsArea } from '../data/places.ts';
 import type { PlaceDef, PlaceId, ThingDef } from '../data/places.ts';
-import { INTENT, LIFE_FLAG, LIFE_EV, LOOK, SCRIPT, TOUCH, USE_VERB, WISH_KIND, SPECIES_LIFE } from '../data/life.ts';
+import { INTENT, LIFE_FLAG, LIFE_EV, LOOK, SCRIPT, TOUCH, USE_VERB, WISH_KIND, SPECIES_LIFE, FAMILY_REACT, LOOK_ADD } from '../data/life.ts';
 import { EV, BY, WISH_STATE, UI_KIND, EV_FLAG, QUESTS, CHAPTERS } from '../data/quests.ts';
 import { CATALOG, speciesIdx, familyOf } from '../data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 import type { JournalRuntime } from '../collection/journal_store.ts';
 import type { CollectionEvent, JournalView } from '../collection/types.ts';
+import { JOURNAL_KEY } from '../collection/constants.ts';
 import { HOME_TEXT } from '../data/quests.ts';
 
 const CAP = 16;          // characters (LIFE's world)
@@ -76,8 +77,8 @@ export interface LifeHostDeps {
   subscribe?: StorageSubscribe;
   /** say a polite live line (the announcer) */
   say?(text: string): void;
-  /** a small toast for a moment (a new stamp, a place open) */
-  moment?(text: string): void;
+  /** a small toast for a moment (a new stamp, a place open); `said`: the line was already said in the live region (the moment only shows it) */
+  moment?(text: string, said?: boolean): void;
   /** the quest-complete haptic (only when the player completed it: D-84) */
   stampHaptic?(): void;
   /** a phone: a coarse pointer or the short side under 600 CSS px (LifeSnapshot.phone) */
@@ -188,7 +189,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const vis = new Float32Array(4);
   const wishOut = new Int32Array(2);
   const strikes = new Float32Array(32 * 4);
-  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0, held: 0, askedUse: 0 };   // what LIFE did through the host (the dev view; held: motion the budget's wake gate dropped; askedUse: uses BY PLAYER)
+  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0, held: 0, askedUse: 0, squirt: 0 };   // what LIFE did through the host (the dev view; held: motion the budget's wake gate dropped; askedUse: uses BY PLAYER)
   let wakeClaim = 0;                       // round 5 (B7): the units this frame's allowed wakes add (the snapshot shows them next frame)
 
   // ---- the place: Home's world now, a place's world after a trip ----
@@ -208,6 +209,11 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   // ---- the journal, the ring and the moments ----
   let journal: JournalRuntime | null = null;
   const { attachJournal, buildPropWorld } = deps.parts;
+  // (round 6: a place the save's stamps already reach opens QUIETLY while the journal attaches ("places that shipped since the last load": a player who passed
+  // 12 stamps before Ripple Shore shipped; journal_store drops its load-time events on purpose). The open places of the save as it was before the attach are
+  // read here, so the host can show those that opened at this load once it is up)
+  let placesBefore = -1;
+  try { const raw = deps.storage?.getItem(JOURNAL_KEY); const o = raw ? JSON.parse(raw) as { pl?: unknown } : null; if (o && typeof o.pl === 'number') placesBefore = o.pl; } catch { placesBefore = -1; }
   try { journal = attachJournal(game.hoard, { storage: deps.storage, subscribe: deps.subscribe, setTimer: deps.setTimer, clearTimer: deps.clearTimer }); } catch (e) { report(e); }
   const owned = new Uint32Array(2), favKnown = new Uint32Array(4), friendMask = new Uint32Array(2);
   let openPlacesMask = 1;
@@ -226,7 +232,16 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   let newcomerId: string | null = null;    // the capsule's newcomer: added NEW (B09's shy arrival and hello)
   let firstCapsule = false;                // this capsule is the player's first (the Journal's H4 not done when it started): D-52 keeps both out
 
+  // (round 6, the dev view: the things the squishies USED by themselves in this place since the arrival, the things their own REACTs named (a wade in the
+  // Rock Pool, a glide on the Ice Pond, a shower under the Drip Leaf) and the things their own social moments were played around (a peek round the Driftwood
+  // Log, a teeter on the Leaf Teeter, a pile in a nest), THING_IDS index)
+  const selfUsed = new Set<number>(), selfReacted = new Set<number>(), selfSocial = new Set<number>();
   const write = (kind: number, sub: number, thing: number, a: number, b: number, n2: number, by: number, v = 0, flag = 0): void => {
+    if (by === BY.SELF && thing >= 0) {
+      if (kind === EV.USE && selfUsed.size < 64) selfUsed.add(thing);
+      else if (kind === EV.REACT && selfReacted.size < 64) selfReacted.add(thing);
+      else if (kind === EV.SOCIAL && selfSocial.size < 64) selfSocial.add(thing);
+    }
     if (ring.n >= ring.kind.length) { ring.dropped++; return; }
     counts.records++;
     const i = ring.n++;
@@ -874,6 +889,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         case LIFE_EV.PIECES: write(EV.PIECES, sub, thing, a, 255, n2, BY.SELF, 0, EV_FLAG.PIECE); break;
         case LIFE_EV.SIGNATURE: write(EV.SIGNATURE, sub, thing, a, 255, n2, BY.SELF, 0, piece); break;
         case LIFE_EV.DISCOVER: write(EV.DISCOVER, sub, thing, a, 255, n2, BY.SELF, 0, piece); break;
+        // round 6 (R6_DATA 3, LIFE 6.1 S14): the squirt game's arc. Not a ring record (the quest counts the SOCIAL SQUIRT LIFE emits beside it, above): a short
+        // squirt sound at the squirter and the drops handed to the render (sub = the drop count, 4 with Calm or reduced motion; b = the target slot, 255 nobody)
+        case LIFE_EV.SQUIRT: squirt(ea, eb, sub); break;
         case LIFE_EV.WISH:
           if (sub === WISH_STATE.SHOWN) {
             let wk = 0, target = thing;
@@ -892,6 +910,101 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   }
   let homeThingsSoon = false;
 
+  // ---- round 6: what the S2 places need from the host (Ripple Shore, Frostbell Ridge, Rainleaf Garden) ----
+  /** the squirt (LIFE_EV.SQUIRT, R6_DATA 3): a short, quiet splash at the squirter and its drops along an arc to the target (the render's squirtFx, R6_RENDER;
+   *  absent in an older stage: the sound alone). The target's wet look and its wow are LIFE's; the quest counts the SOCIAL SQUIRT. */
+  const squirtP = { kind: PROP_SOUND.splash, intensity: 0.3, note: 0, pan: 0, auto: false, size: 0.12 };
+  function squirt(i: number, j: number, drops: number): void {
+    if (i < 0 || i >= CAP || !chars[i].on) return;
+    const c = chars[i];
+    counts.squirt++;
+    const sx = s.sx[i];
+    if (audio.prop) { squirtP.pan = sx === sx ? Math.max(-1, Math.min(1, (sx * 2 - 1) * 0.7)) : 0; try { audio.prop(squirtP); } catch (x) { report(x); } }
+    const fx = (stage as { squirtFx?: (from: number, to: number, drops: number, dirX?: number, dirZ?: number) => boolean }).squirtFx;
+    if (!fx || c.view < 0) return;
+    const to = j >= 0 && j < CAP && chars[j].on && chars[j].view >= 0 ? chars[j].view : 255;
+    // (no target: ahead along its facing, which is toward the player: the camera's side of the floor)
+    let dx = 0, dz = 1;
+    try { const p = stage.camera.position, ax = p.x - c.lastX, az = p.z - c.lastZ, l = Math.hypot(ax, az); if (l > 1e-6) { dx = ax / l; dz = az / l; } } catch { /* a mock camera */ }
+    try { fx.call(stage, c.view, to, drops, dx, dz); } catch (x) { report(x); }
+  }
+  /** a soaking or drying foam's density (R6_PHYS 2.1, SoftBodyLike.mods[4] served as PropWorld.mods(body)): its family's dry density lerped to its soaked density
+   *  by LIFE's soak look, at 10 Hz, only for the families whose two densities differ (slow rise, marshmallow): a soaked slow rise sinks in the Steam Pool, a
+   *  drying one floats up again. Not at Home (no water there; Home stays bit for bit). */
+  let modsT = 0;
+  function modsStep(): void {
+    if (!world || placeIdx === 0 || floatParked || game.simTime - modsT < 0.1) return;
+    modsT = game.simTime;
+    for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || !c.body) continue;
+      const fr = (FAMILY_REACT as Readonly<Record<string, { density: number; soakedDensity: number } | undefined>>)[MATERIAL_FAMILY_IDS[c.family] ?? ''];
+      if (!fr || !(fr.soakedDensity !== fr.density)) continue;
+      const m = world.mods(c.body);
+      if (!m) continue;
+      lifeLooks(w, i, looks);
+      const rho = fr.density + (fr.soakedDensity - fr.density) * Math.min(1, Math.max(0, looks[LOOK.soak]));
+      if (Math.abs(m[4] - rho) > 0.004) m[4] = rho;
+    }
+  }
+  /** the weather of the place (R6_PHYS 2.2 / 2.3, PG_AUDIO round 2): each wind zone's gust follows LIFE's gust clock (lifeGustOn: the push, LIFE's HOLD_ON and the
+   *  gust sound agree), and the bed hears each weather event as it starts: a gust (its strength), a wave on a surf edge, a shower envelope turning on or off */
+  const gustOn = new Uint8Array(16), waveHi = new Uint8Array(16), showerWas = new Int8Array(16);
+  const ambP = { weather: 0 };
+  function weatherStep(): void {
+    if (!world || placeIdx === 0 || travelling) return;
+    const zones = def.zones, n = Math.min(16, zones.length, world.zoneCount);
+    for (let k = 0; k < n; k++) {
+      const zd = zones[k];
+      let ev = -1;
+      if (zd.kind === ZONE.wind && zd.gust) {
+        const on = lifeGustOn(w, k);
+        try { world.setGust(k, on); } catch (x) { report(x); }
+        if (on && !gustOn[k]) ev = zd.strength;
+        gustOn[k] = on ? 1 : 0;
+      } else if (zd.wave) {
+        const lv = world.waveLevel(k), hi = lv > 0.15 ? 1 : lv < 0.05 ? 0 : waveHi[k];
+        if (hi && !waveHi[k]) ev = 0.8;
+        waveHi[k] = hi;
+      } else if (zd.shower) {
+        const on = showerPhaseOn(zd.shower) ? 1 : 0;
+        if (showerWas[k] !== on) ev = on;
+        showerWas[k] = on;
+      }
+      if (ev >= 0 && audio.setAmbience) { ambP.weather = ev; try { audio.setAmbience(ambP); } catch (x) { report(x); } }
+    }
+  }
+  /** the Shake Pine (PLACES 4.4): its branch struck (a body's bump on the trunk at 0.3 m/s or more, a brush, or the player's tap: physics strikes the branch) drops
+   *  a snow puff on anyone within p.puffR (0.7 m) of the branch: snow +p.puffSnow (0.5) with the pine as its source (LIFE's SNOWCAP REACT names it: I4 "Snow from
+   *  the pine", whoever shook it), the stage's snow puff; at most one puff a second */
+  let pineT = -1e9;
+  function pinePuff(th: number, prop: number): void {
+    const t = game.simTime;
+    if (!world || t - pineT < 1) return;
+    pineT = t;
+    const td = def.things[th], P = world.poses;
+    const bx = P[prop * 8], bz = P[prop * 8 + 2], r = td.p.puffR ?? LOOK_ADD.pinePuff.r, amt = td.p.puffSnow ?? LOOK_ADD.pinePuff.amount;
+    for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && Math.hypot(c.lastX - bx, c.lastZ - bz) <= r + c.r) lifeAddLook(w, i, LOOK.snow, amt, thingGlobal[th]); }
+    try { stage.thingFx?.(th, 1, 1); } catch { /* no puff drawn */ }
+  }
+  const isPine = (td: ThingDef | undefined): boolean => !!td && td.mech === MECH.bar && (td.p.branchL ?? 0) > 0;
+  /** the Snowball (PLACES 4.4: "push it to a friend: it rolls into them and leaves them snowy (+0.3)"): a rolling ball with p.snowLook that meets a body */
+  const snowT = new Float64Array(CAP);
+  function snowballStep(): void {
+    if (!world || placeIdx === 0 || floatParked) return;
+    for (let k = 0; k < def.things.length; k++) {
+      const td = def.things[k], p = thingFirst[k];
+      if (td.mech !== MECH.ball || !(td.p.snowLook > 0) || p < 0 || !world.ballVelocity(p, ballV) || Math.hypot(ballV[0], ballV[2]) < 0.25) continue;
+      const P = world.poses, bx = P[p * 8], bz = P[p * 8 + 2], t = game.simTime;
+      for (let i = 0; i < CAP; i++) {
+        const c = chars[i];
+        if (!c.on || t - snowT[i] < 1.5 || Math.hypot(c.lastX - bx, c.lastZ - bz) > td.size[0] + c.r + 0.06) continue;
+        snowT[i] = t;
+        lifeAddLook(w, i, LOOK.snow, td.p.snowLook ?? LOOK_ADD.snowball.amount, thingGlobal[k]);
+      }
+    }
+  }
+
   // ---- the prop world's strikes: sounds for every cause, USE records for the player's and a body's (never the weather's) ----
   function drainProps(): void {
     if (!world) return;
@@ -907,6 +1020,12 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         try { audio.prop(propP); } catch (x) { report(x); }
       }
       if (cause === 2) continue;   // a weather strike is a sound only (QUESTS 4)
+      // (round 6) the Shake Pine's branch: a body's bump (cause 1) or the player's tap (cause 0, the poke of tapThing) drops its snow puff; a body's shake is its USE
+      if (isPine(td) && world.propPart[prop] === 1) {
+        pinePuff(th, prop);
+        if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on) write(EV.USE, td.verb, thingGlobal[th], chars[slot].species, 255, 1, BY.SELF, 0);
+        continue;
+      }
       if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.chime) write(EV.USE, td.verb, thingGlobal[th], chars[slot].species, 255, 1, BY.SELF, world.propPart[prop]);
       // a pad's kick (physics strikes the pad, cause 1, the body's slot): one USE BOUNCE by the body per landing's run of kicks (G4 "Bounce on the Moss Bouncer")
       else if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.pad && game.simTime - chars[slot].padT >= PAD_USE_GAP_S) {
@@ -1151,6 +1270,15 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (td.switch !== 'fire' || (zi >= 0 && world.zoneOn[zi] !== 0)) lifeThingTap(w, g);
       return true;
     }
+    if (isPine(td)) {
+      // (round 6, PLACES 4.4) "tap it: it shakes": the same poke on the branch (part 1, whether the press found the trunk or the branch); physics strikes the
+      // branch (cause 0) and drainProps drops the snow puff on whoever stands under it
+      const br = thingFirst[th] + 1;
+      world.poke(br > 0 && br < world.count && world.propThing[br] === th ? br : p, ray.dir.x * 0.8, -0.3, ray.dir.z * 0.8);
+      write(EV.USE, td.verb, g, sp, 255, 1, BY.PLAYER, 0);
+      lifeThingTap(w, g);
+      return true;
+    }
     if (td.mech === MECH.ball) {
       // a flick: the ball rolls away from the camera
       const hx = ray.dir.x, hz = ray.dir.z, hl = Math.hypot(hx, hz) || 1;
@@ -1270,7 +1398,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         }
         case 'unlock': {
           const p = PLACE_INFO.find((x) => x.idx === e.place);
-          if (p && p.shipped) deps.say?.(`${p.name} is open. Find it in Places.`);
+          // (round 6: the line is said at once, as before, and the play UI also SHOWS it in the moments slot: a sighted player saw nothing when a place opened by
+          // stamps, the Places button being there already; the tracker pill then points the way, ui/later-play.ts)
+          if (p && p.shipped) { const line = `${p.name} is open. Find it in Places.`; deps.say?.(line); deps.moment?.(line, true); }
           pushJournal();
           // 11.7 / PG_AUDIO: the place's data, look and sound are fetched in the background once it opens (the trip then waits for nothing new); a failure is
           // harmless (the trip loads them again and says so if they still fail)
@@ -1359,6 +1489,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   }
   pushJournal();
   { const v0 = safeView(); freshProfile = !!v0 && v0.stamps === 0; }   // a fresh profile (FIRST_PLAY), latched at attach: the first stamp lands during it
+  {
+    // the places this load opened (open now, not in the save before the attach): the open line, said once and shown in the moments slot (the play UI lands a
+    // moment after the host, so the lines wait for it); then the tracker pill points the way (ui/later-play.ts)
+    const v0 = safeView();
+    const lines = v0 && placesBefore >= 0 ? PLACE_INFO.filter((p) => p.shipped && p.idx > 1 && (v0.places & (1 << p.idx)) !== 0 && (placesBefore & (1 << p.idx)) === 0).map((p) => `${p.name} is open. Find it in Places.`) : [];
+    if (lines.length) setTimeout(() => { for (const l of lines) { deps.say?.(l); deps.moment?.(l, true); } }, 1500);
+  }
   syncParty();
   buildHome();
   try { stage.setAutonomyFraming?.(true); } catch (e) { report(e); }
@@ -1402,6 +1539,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (musicBoxOnUntil > game.simTime) stopTune();   // a tune does not follow the party to another place
     visit++;
     showerOff = -1; showerZone = -1; showerThing = -1;   // (a shower in progress stays behind)
+    gustOn.fill(0); waveHi.fill(0); showerWas.fill(-1); pineT = -1e9; snowT.fill(-1e9); modsT = -1e9;   // (round 6: the new place's weather starts afresh)
+    selfUsed.clear(); selfReacted.clear(); selfSocial.clear();
     def = next; placeIdx = next.idx;
     coldPitch = next.zones.some((z) => z.kind === ZONE.cold && z.strength >= 0.5) ? Math.pow(2, -1 / 12) : 1;
     heldWas.fill(0);
@@ -1533,6 +1672,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       return rows;
     },
     act(dt) {
+      if (dt > 0) weatherStep();   // (round 6: the gusts follow LIFE's clock before the props step; the bed hears each weather event)
       if (dt > 0 && world && !floatParked) world.beginFrame();
       steadyStep();
       pumpRestore();
@@ -1658,6 +1798,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         try { stage.setBodyLook?.(c.view, looks[0], looks[1], looks[3], looks[5], looks[4]); } catch { /* ignore */ }
       }
       if (homeThingsSoon) { homeThingsSoon = false; }
+      if (dt > 0) { modsStep(); snowballStep(); }   // (round 6: a soaking foam's density for the water; the Snowball's snow on whoever it rolls into)
     },
     quest() {
       if (ring.n > 0 && journal) {
@@ -1677,19 +1818,37 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const v = safeView();
       return {
         life: lifeDebug(w), place: placeIdx, visit, layout, bodyScale, units: s.units, quiet: s.quiet, autonomy: s.autonomy, floatParked,
-        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1 } : null)).filter(Boolean),
+        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1, rho: (() => { const m = world && c.body ? world.mods(c.body) : null; return m ? +m[4].toFixed(3) : null; })(), sx: s.sx[i] === s.sx[i] ? +(s.sx[i] * game.viewport.w).toFixed(1) : null, sy: s.sy[i] === s.sy[i] ? +(s.sy[i] * game.viewport.h).toFixed(1) : null, looks: (() => { lifeLooks(w, i, looks); return Array.from(looks, (x) => +x.toFixed(2)); })() } : null)).filter(Boolean),
         things: def.things.map((t, k) => {
           const p = thingFirst[k] ?? -1, at = !!world && p >= 0;
           // (its centre on screen in CSS px, for the harness's taps: the stage camera's projection, dev view only)
           let sx: number | null = null, sy: number | null = null;
           if (at) { try { const n = projectToNdc(stage.camera, { x: world!.poses[p * 8], y: world!.poses[p * 8 + 1], z: world!.poses[p * 8 + 2] }); if (n) { sx = +((n.x + 1) * 0.5 * game.viewport.w).toFixed(1); sy = +((1 - n.y) * 0.5 * game.viewport.h).toFixed(1); } } catch { /* a mock camera */ } }
-          return { id: t.id, shown: placeIdx === 0 ? homeShown[k] === 1 : true, parked: at ? world!.isParked(p) : null, x: at ? +world!.poses[p * 8].toFixed(3) : null, z: at ? +world!.poses[p * 8 + 2].toFixed(3) : null, sx, sy };
+          // (round 6, dev view: every part's centre on screen too: the harness taps three different shells or bells)
+          const parts: Array<[number, number, number, number]> = [];   // [sx, sy, x, z]
+          if (world) for (let q = 0; q < world.count; q++) { if (world.propThing[q] !== k) continue; try { const n = projectToNdc(stage.camera, { x: world.poses[q * 8], y: world.poses[q * 8 + 1], z: world.poses[q * 8 + 2] }); if (n) parts.push([+((n.x + 1) * 0.5 * game.viewport.w).toFixed(1), +((1 - n.y) * 0.5 * game.viewport.h).toFixed(1), +world.poses[q * 8].toFixed(3), +world.poses[q * 8 + 2].toFixed(3)]); } catch { /* a mock camera */ } }
+          // (and the floor spot a player sets a squishy on: its use spot, a ramp's top end, a zone's or patch's centre, else under its first prop; in the layout in use)
+          let set: [number, number] | null = null, setW: [number, number] | null = null;
+          try {
+            const sp = layout === 1 && placeIdx !== 0 ? def.tall.things[k] : null, sc = def.unit === 'slot' ? bodyScale : 1, yaw = sp ? sp.yaw : t.yaw;
+            let fx = (sp ? sp.x : t.x) * sc, fz = (sp ? sp.z : t.z) * sc;
+            const use = sp ? sp.use : t.useSpot;
+            const zi = t.zone ? def.zones.findIndex((z) => ownsArea(t.zone, z.id)) : -1, za = zi >= 0 ? (layout === 1 && placeIdx !== 0 ? def.tall.zones[zi] ?? def.zones[zi] : def.zones[zi]) : null;
+            if (za) { fx = za.x * sc; fz = za.z * sc; }   // (its zone in the layout in use: the Rock Pool's water, the Drip Leaf's drip)
+            else if (use) { fx = use[0] * sc; fz = use[1] * sc; }
+            else if (t.mech === MECH.ramp) { fx -= Math.cos(yaw) * t.size[0] * 0.7; fz -= Math.sin(yaw) * t.size[0] * 0.7; }
+            const n = projectToNdc(stage.camera, { x: fx, y: t.mech === MECH.ramp ? (t.p.top ?? 0.3) : 0, z: fz });
+            setW = [+fx.toFixed(3), +fz.toFixed(3)];
+            if (n) set = [+((n.x + 1) * 0.5 * game.viewport.w).toFixed(1), +((1 - n.y) * 0.5 * game.viewport.h).toFixed(1)];
+          } catch { set = null; }
+          return { id: t.id, shown: placeIdx === 0 ? homeShown[k] === 1 : true, parked: at ? world!.isParked(p) : null, x: at ? +world!.poses[p * 8].toFixed(3) : null, z: at ? +world!.poses[p * 8 + 2].toFixed(3) : null, sx, sy, parts, set, setW };
         }),
         counts: { ...counts },
+        selfUsed: [...selfUsed].map((t) => THING_IDS[t] ?? t), selfReacted: [...selfReacted].map((t) => THING_IDS[t] ?? t), selfSocial: [...selfSocial].map((t) => THING_IDS[t] ?? t),
         ring: { dropped: ring.dropped }, firstPlaySent, firstWishSent, freshProfile,
         party: { held: partyHeld(), restoring: [...restoreQ], newcomer: newcomerId },
         tap: tapWhy,
-        zones: world ? def.zones.map((z, k) => [z.id, world!.zoneOn[k] ?? 1]) : null,
+        zones: world ? def.zones.map((z, k) => [z.id, world!.zoneOn[k] ?? 1, +(z.kind === ZONE.wind ? world!.gustLevel(k) : z.wave ? world!.waveLevel(k) : 0).toFixed(3)]) : null,   // (round 6: a gust's or a wave's level now)
         auto: { api: hasAuto(), on: [...autoWanted], hands: [...handOn].filter((x) => x === 1).length },
         tune: { on: musicBoxOnUntil > game.simTime, kind: tuneKind, kettle: kettleK, kettleNext: Number.isFinite(kettleNext) ? +kettleNext.toFixed(2) : null },
         journal: v ? { stamps: v.stamps, places: v.places, firstWish: v.firstWish, done: v.quests.filter((q) => q.done).map((q) => q.id), keepsakes: v.keepsakes } : null,

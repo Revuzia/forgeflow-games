@@ -20,7 +20,13 @@ const SNOW = /* glsl */`
   float fw = max(length(fwidth(p)), 1e-5);
   // (round 3: broad wind-shaped drifts with blue hollows, then a little fine texture: the round-2 fine mottle (0.6 m) read as dirty concrete)
   float big = pFbm(p * 0.42), n = pFbm(p * 2.2);
+  ${/* (round 6: the tall frame's near snow read as one plain blue-teal field: wind ridges (sastrugi, long along x) and the drifts are a
+     height now, lit by the low sun through the bump; and the far snow takes the horizon's haze itself, so the fog never mixes cream into
+     blue (the olive band at the wide frame's horizon)) */ ''}
+  float sas = pN(vec2(p.x * 0.9, p.y * 3.6) + vec2(pN(p * 0.5) * 2.0, 0.0));
+  pBH = big * 0.5 + sas * 0.12 * (1.0 - smoothstep(0.02, 0.06, fw));
   vec3 c = mix(uShade, uSnow, 0.6 + 0.32 * smoothstep(0.2, 0.8, big) + 0.08 * n) * (0.985 + 0.03 * pN(p * vec2(0.7, 2.4)));
+  c = mix(c, uHaze, smoothstep(24.0, 36.0, length(vWP - cameraPosition)) * 0.75);
   vec2 q = p * 34.0;
   float s = step(0.982, pH(floor(q))) * (1.0 - smoothstep(0.2, 0.42, length(fract(q) - 0.5))) * (1.0 - smoothstep(0.004, 0.014, fw));
   diffuseColor.rgb = c + uSpark * s;
@@ -32,6 +38,26 @@ const ICE = /* glsl */`
   float fw = max(length(fwidth(vWP.xz)), 1e-5);
   float st = smoothstep(0.55, 1.0, sin((p.x + p.y * 0.6) * 2.4 + pN(p * 1.5) * 2.0)) * 0.3;
   vec3 c = mix(uDeep, uPale, 0.12 * pFbm(p * 3.0) + st);
+  ${/* (round 6) it reads as ice: the sky's sheen at grazing angles, faint old scratches, and where a body slides, a bright glide streak behind
+     it (uS: x, z, heading, life 1 -> 0 over 2.5 s) and a moving sheen under it (uB: x, z, radius, speed share) */ ''}
+  vec3 V = normalize(cameraPosition - vWP);
+  c = mix(c, uPale, pow(1.0 - clamp(V.y, 0.0, 1.0), 4.0) * 0.35);
+  float scr = 0.0;
+  for (int i = 0; i < 20; i++) {
+    vec4 S = uS[i];
+    if (S.w <= 0.0) continue;
+    vec2 q = vWP.xz - S.xy, dir = vec2(cos(S.z), sin(S.z));
+    float a = dot(q, dir), b = dot(q, vec2(-dir.y, dir.x));
+    scr = max(scr, S.w * (1.0 - smoothstep(0.0, 0.16, abs(a))) * (1.0 - smoothstep(0.006, 0.02 + 0.8 * fw, abs(b) - 0.03 * step(0.5, fract(float(i) * 0.5)))));
+  }
+  float sh = 0.0;
+  for (int i = 0; i < 6; i++) {
+    vec4 Bd = uB[i];
+    if (Bd.w <= 0.0) continue;
+    vec2 q = (vWP.xz - Bd.xy) / max(Bd.z, 0.05);
+    sh = max(sh, Bd.w * exp(-dot(q, q) * 1.6));
+  }
+  c += uGlint * (scr * 0.85 + sh * 0.5);
   diffuseColor.rgb = mix(c, uPale, smoothstep(0.82, 1.0, r) * 0.8);
 `;
 // the mountains: three ranges of plum and dusk peaks, the far ones hazier, snow on their tops
@@ -91,7 +117,9 @@ const LOOK: PlaceLook = {
       // the low cream sun from the left, long light across the snow
       key: tok('cream'), keyI: 470, keyPos: [-7.5, 3.6, 4.0], keyAim: [0.5, 0, -0.5], keyAngle: 1.1,
       rim: tok('lagoon', 'cream', 0.3), rimI: 2.2, rimDir: [0.45, 0.5, -0.75],
-      fillSky: tok('lagoon', 'dusk', 0.35), fillGround: tok('lagoon', 'dusk', 0.2, 0.9), fillI: 2.0,
+      // (round 6: a lagoon fill on cream snow is olive wherever the low sun does not reach (the far snow, the frame's foot): a periwinkle sky fill
+      // and a lavender bounce keep the shade blue)
+      fillSky: tok('dusk', 'lagoon', 0.45, 1.05), fillGround: tok('dusk', 'cream', 0.4, 0.9), fillI: 2.0,
       keyTint: [1.0, 0.97, 0.9],
     };
   },
@@ -115,9 +143,10 @@ const LOOK: PlaceLook = {
     const th = (i: number): { x: number; z: number; yaw: number } => (tall ? T.things[i] : PLACE.things[i]);
     const pond = tall ? T.patches[0] : PLACE.patches[0], steamZ = tall ? T.zones[1] : PLACE.zones[1];
     // ---- materials ----
-    const snowU = { uSnow: { value: col(tok('cream', 'cream', 0, 0.66)) }, uShade: { value: col(tok('lagoon', 'dusk', 0.45, 1.08)) }, uSpark: { value: col(tok('cream', 'cream', 0, 0.7)) } };
-    const snow = kit.surface('snow', [1, 1, 1], 0.9, SNOW, snowU, 0.3);
-    const snowPlain = snow;   // (round 3: every snowy part in the ground's own snow: the plain cream bank, wedge and ball read beige against it)
+    const snowU = { uSnow: { value: col(tok('cream', 'dusk', 0.08, 0.68)) }, uShade: { value: col(tok('lagoon', 'dusk', 0.45, 1.08)) }, uSpark: { value: col(tok('cream', 'cream', 0, 0.7)) }, uHaze: { value: col(tok('dusk', 'cream', 0.5, 0.95)) } };   // (round 6, shots: the far snow is lit by the lagoon fill alone, and cream under lagoon light is the olive band; a lagoon haze read as a teal lake; a periwinkle albedo under that fill reads as far blue snow)
+    const snow = kit.surface('snow', [1, 1, 1], 0.9, SNOW, snowU, 0.3, 0.9);
+    const snowProp = kit.surface('snowProp', [1, 1, 1], 0.9, SNOW, snowU, 0.3);
+    const snowPlain = snowProp;   // (round 3: every snowy part in the ground's own snow: the plain cream bank, wedge and ball read beige against it; round 6: without the ground's bump)
     // (round 3: the ramp's ice a deeper glossy lagoon-dusk: the pale cyan slab read as a sheet of card)
     const ice = kit.mat('iceProp', tok('lagoon', 'dusk', 0.22, 1.02), 0.08, 0.95), wood = kit.mat('wood', tok('amber', 'cream', 0.45, 0.42), 0.85, 0.2);
     const pine = kit.mat('pine', tok('lagoon', 'ink', 0.62), 0.9, 0.2), stringM = kit.mat('string', tok('cream', 'dusk', 0.3, 0.8), 0.9, 0.1);
@@ -135,7 +164,9 @@ const LOOK: PlaceLook = {
     (stars.material as THREE.ShaderMaterial).blending = THREE.AdditiveBlending; stars.visible = false; g.add(stars);
 
     // ---- the Ice Pond: dark gloss with cracks and a frosted rim (flush: no collider, y 0.004) ----
-    const iceU = { uC: { value: new THREE.Vector4(pond.x, pond.z, pond.r ?? 1.4, 0) }, uDeep: { value: col(tok('dusk', 'lagoon', 0.45, 0.62)) }, uPale: { value: col(tok('cream', 'lagoon', 0.3, 0.85)) } };
+    const streak = Array.from({ length: 20 }, () => new THREE.Vector4(0, 0, 0, 0)), sheen = Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 1, 0));
+    const iceU = { uC: { value: new THREE.Vector4(pond.x, pond.z, pond.r ?? 1.4, 0) }, uDeep: { value: col(tok('dusk', 'lagoon', 0.45, 0.62)) }, uPale: { value: col(tok('cream', 'lagoon', 0.3, 0.85)) },
+      uGlint: { value: col(tok('cream', 'lagoon', 0.25, 0.95)) }, uS: { value: streak }, uB: { value: sheen } };
     const pondM = kit.surface('icepond', [1, 1, 1], 0.08, ICE, iceU, 0.95);
     const pr = pond.r ?? 1.4;
     g.add(kit.mesh(kit.geo(`pond${pr}`, () => new THREE.CircleGeometry(pr, 56).rotateX(-Math.PI / 2)), pondM, pond.x, 0.004, pond.z, -48));
@@ -186,9 +217,17 @@ const LOOK: PlaceLook = {
     for (let i = 0; i < nSeg; i++) {
       const a = gap / 2 + segArc * (i + 0.5) + sn.yaw, len = 2 * ringR * Math.sin(segArc / 2) + segR * 1.6;
       // (round 3: low overlapping mounds in the ground's own snow (top at the collider's 2 x segR), so the nest reads as drifts, not separate sausages)
-      B.add('drift', kit.sphere(1, 18, 10), snow, sn.x + Math.cos(a) * ringR, segR * 0.3, sn.z + Math.sin(a) * ringR, len * 0.72, segR * 1.7, segR * 2.2, yawQ(-a + Math.PI / 2));
+      B.add('drift', kit.sphere(1, 18, 10), snowProp, sn.x + Math.cos(a) * ringR, segR * 0.3, sn.z + Math.sin(a) * ringR, len * 0.72, segR * 1.7, segR * 2.2, yawQ(-a + Math.PI / 2));
     }
     kit.shadow(sn.x, sn.z, ringR * 0.9, ringR * 0.9, 0.22);
+
+    // ---- (round 6) a few snow-capped rocks outside the bounds: the tall frame's front corners and the wide frame's sides ----
+    const rockM = kit.mat('rock', tok('dusk', 'ink', 0.35, 1.0), 0.9, 0.2);
+    for (const [x, z, r] of tall ? [[-1.5, 4.0, 0.28], [1.62, 4.7, 0.32], [-2.2, -1.0, 0.28]] : [[-4.2, 1.6, 0.34], [4.3, 2.3, 0.3], [-4.0, -1.2, 0.26]]) {
+      B.add('rock', kit.geo('rico', () => new THREE.IcosahedronGeometry(1, 1)), rockM, x, r * 0.35, z, r * 1.3, r * 0.8, r * 1.1, yawQ(x * 2.3));
+      B.add('snowp', kit.sphere(1, 14, 8), snowPlain, x + 0.03, r * 0.82, z, r * 1.0, r * 0.3, r * 0.85, yawQ(x * 2.3));
+      kit.shadow(x, z, r * 1.3, r * 1.1, 0.35);
+    }
 
     // ---- the Snowball (a mover) ----
     const sb = th(5), bR = PLACE.things[5].size[0];
@@ -229,11 +268,37 @@ const LOOK: PlaceLook = {
     let q = false, rm = false, tr = 1;
 
     const movers: (THREE.Object3D | readonly THREE.Object3D[] | null)[] = [null, null, null, bells, null, ball, [trunkPart, branch]];
+    // (round 6) the glide streaks: a body on the ice (its centre over the pond, resting on it) moving faster than 0.12 m/s leaves a streak
+    // every 0.07 m it travels; each fades over 2.5 s (Calm the same; reduced motion: no streak, the sheen only)
+    const lastX = new Float32Array(64).fill(NaN), lastZ = new Float32Array(64), lastS = new Float32Array(64), pr2 = (pond.r ?? 1.4) - 0.05;
+    let sHead = 0;
+    const glide = (dt: number, reduced: boolean, Bf: Float32Array | undefined, nB: number): void => {
+      for (const v of streak) if (v.w > 0) v.w = Math.max(0, v.w - dt / 2.5);
+      for (const v of sheen) v.w = 0;
+      let k = 0;
+      for (let b = 0; b < nB && Bf && dt > 0; b++) {
+        const o = b * 5, x = Bf[o], y = Bf[o + 1], z = Bf[o + 2], R = Bf[o + 3], id = Bf[o + 4] & 63;
+        const px = lastX[id], pz = lastZ[id];
+        lastX[id] = x; lastZ[id] = z;
+        if (Number.isNaN(px) || Math.hypot(x - pond.x, z - pond.z) > pr2 || y > R * 1.35) { lastS[id] = 0; continue; }
+        const mv = Math.hypot(x - px, z - pz), v = mv / dt;
+        if (v < 0.12 || v > 8) continue;
+        if (k < 6) sheen[k++].set(x, z, R * 1.1, Math.min(1, v / 0.7));
+        lastS[id] += mv;
+        if (lastS[id] >= 0.07 && !reduced) {
+          lastS[id] = 0;
+          const hd = Math.atan2(z - pz, x - px), back = R * 0.55;
+          streak[sHead].set(x - Math.cos(hd) * back, z - Math.sin(hd) * back, hd, Math.min(1, 0.45 + v / 1.2)); sHead = (sHead + 1) % streak.length;
+        }
+      }
+    };
     let t = 0;
     return {
-      group: g, movers, moverKind: [0, 0, 0, 1, 0, 1, 1], heat: null,
-      update(dt, time, quiet, reduced, tier, finale = 0) {
+      group: g, movers, moverKind: [0, 0, 0, 1, 0, 1, 1], heat: null, bodies: true,
+      stats: () => ({ streaks: streak.filter((v) => v.w > 0).length, sheens: sheen.filter((v) => v.w > 0).length }),
+      update(dt, time, quiet, reduced, tier, finale = 0, Bf, nB = 0) {
         t += dt;
+        glide(dt, reduced, Bf, nB);
         const m = reduced ? 0 : quiet ? 0.3 : 1;
         pool.u.uTime.value = t; pool.u.uMotion.value = m;
         starU.uAmt.value = finale; stars.visible = finale > 0.001;

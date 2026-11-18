@@ -4,6 +4,8 @@
    takes its columns from the width (320 px: one column). */
 .jn-scrim { grid-template: minmax(0, 1fr) / minmax(0, 1fr); animation: ov-fade var(--k-fd-3) linear backwards; }
 .jn { width: min(760px, 100%); height: min(100%, 720px); max-height: 100%; overflow: hidden; display: flex; flex-direction: column; animation: ov-move-up var(--k-mv-3) var(--wh-ease-spring) backwards; }
+body[data-layout="wide"] #wh-travel.jn { width: min(880px, 100%); height: auto; max-height: min(100%, 720px); }   /* (round 6: the desktop Places panel fits its postcards; the phone's sheet stays full height, QUESTS 15) */
+body[data-layout="wide"] #wh-travel .jn-go { padding: 0 var(--wh-s3); font-size: var(--wh-fs-small); }   /* (round 6: "Go to Rainleaf Garden" on one line in a three-column postcard, not two) */
 .jn :where(h2, h3, p, ul) { margin: 0; }
 .jn-head { flex: none; display: grid; grid-template: "title tabs close" / auto minmax(0, 1fr) auto; align-items: center; gap: var(--wh-s3); min-height: 68px; padding: var(--wh-s3) var(--wh-s3) var(--wh-s2) var(--wh-s5); }
 .jn-title { grid-area: title; min-width: 0; }
@@ -40,10 +42,11 @@
 .jn-gift-row { display: flex; flex-wrap: wrap; gap: var(--wh-s2); }
 .jn-gift-pick, .jn-go { min-height: var(--wh-hit); }
 .jn-sky { display: block; height: 56px; border-radius: var(--wh-r-card, 12px); background: linear-gradient(160deg, var(--k-accent-2, #f6c89a), var(--k-accent, #e9906a)); }
+canvas.jn-sky { width: 100%; height: 64px; }   /* (round 6: the postcard's picture, render/postcard.ts; the gradient shows until it is drawn) */
 .jn-card[data-sky="home"] .jn-sky { background: linear-gradient(160deg, var(--k-surface-2, #f3e3cf), var(--k-accent-2, #f6c89a)); }
 .jn-card[data-open="false"] { opacity: 0.86; }
 /* round 5 (B4): an open postcard's chapter stamps, "6 of 10 stamps" */
-.jn-card-stamps { font: var(--wh-w-mid) var(--wh-fs-small)/1.35 var(--wh-font-ui); color: var(--k-fg-dim); font-variant-numeric: tabular-nums; }
+.jn-card-stamps, .jn-card-fans { font: var(--wh-w-mid) var(--wh-fs-small)/1.35 var(--wh-font-ui); color: var(--k-fg-dim); font-variant-numeric: tabular-nums; }
 body[data-layout="stack"] .jn-scrim { align-items: end; padding: 0; }   /* stack: a bottom sheet */
 body[data-layout="stack"] .jn { width: min(560px, 100%); height: min(100%, 94dvh); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; border-bottom: 0; animation: ov-sheet var(--k-mv-4) var(--wh-ease) backwards; }
 body[data-layout="stack"] .jn .k-panel-grip { display: block; }

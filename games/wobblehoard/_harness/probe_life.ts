@@ -1,4 +1,4 @@
-// PG_LIFE's node probe: LF-01..LF-26 (except LF-12, in probe_life_imports.ts) and LIFE's part of FN-01, against scripted snapshots and a tiny
+// PG_LIFE's node probe: LF-01..LF-27 (except LF-12, in probe_life_imports.ts) and LIFE's part of FN-01, against scripted snapshots and a tiny
 // kinematic host (scoots glide, hops lift for their airtime, a ball rolls when a body pushes into it). No physics, no browser.
 // Run: node _harness/probe_life.ts [--heavy] [--verbose]   (exit 1 on any failure; the default run stays a few seconds)
 import v8 from 'node:v8';
@@ -1088,6 +1088,30 @@ if (!LF02_CHILD) {
     const lift = evs(l, REACT_KIND.LIFT);
     check('LF-21', `(S3, round 4) LIFT: airborne in Cloudloft's updraft for 0.3 s, an event 5 s apart (${tl(lift)}: the updraft ${TID('updraft')})`,
       lift.length === 2 && lift.every((q) => q.thing === TID('updraft')) && lift[1].t - lift[0].t >= 5);
+    // (round 6, R6_DATA items 2, 4 and 5) the place REACTs on the TALL layouts as re-laid for the phone's shipped camera (each zone and patch at its
+    // tall spot and radius: LIFE's copyPlace reads them): DRIFT in Ripple's Rock Pool (r 0.835 here), GLIDE on Frostbell's Ice Pond (r 0.75 here),
+    // GAZE_SKY by Lanternroof's Moon Dish and HOLD_ON in its Night Breeze, LIFT in Cloudloft's Updraft (QUESTS R / I / L5 / L2 / U3)
+    {
+      const t2 = (def: PlaceDef, seed: number): Sim => { const sim = new Sim(seed, def, 1); sim.s.place = def.idx; sim.s.tier = 1; def.things.forEach((t, k) => sim.addThing(t.id, def.tall.things[k].x, def.tall.things[k].z)); sim.kettle = false; return sim; };
+      const tz = (def: PlaceDef, id: string): { x: number; z: number; r?: number } => def.tall.zones[def.zones.findIndex((z) => z.id === id)];
+      const pT = tz(RIPPLE, 'rockpool');
+      const d = t2(RIPPLE, 181); d.add(0, 'cushlet', pT.x + 0.45, pT.z, { float: true }); d.add(1, 'dollop', pT.x - 0.45, pT.z); calmS(d, 2); d.run(10);
+      const ice = FROSTBELL.tall.patches[FROSTBELL.patches.findIndex((pt) => pt.id === 'icepond')];
+      const g = t2(FROSTBELL, 182); g.add(0, 'boingle', ice.x - 1.5, ice.z + 0.9);
+      for (const bh of [BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT]) g.w.coo[bh] = 1e9;
+      for (let f = 0; f < 40 * 60; f++) { g.step(); g.w.pl[0] = Math.max(g.w.pl[0], 0.9); }
+      const dishT = LANTERNROOF.tall.things[LANTERNROOF.things.findIndex((t) => t.id === 'moondish')];
+      const k = t2(LANTERNROOF, 183); k.add(0, 'dollop', dishT.x + 0.3, dishT.z + 1.0); k.add(1, 'crimpo', 0.5, 1.5); k.physics = false; calmS(k, 2); k.run(14);
+      const bz = tz(LANTERNROOF, 'nightbreeze');
+      const h = t2(LANTERNROOF, 184); h.add(0, 'dollop', bz.x + 0.4, bz.z + 0.6); h.physics = false; calmS(h, 1); h.run(40);
+      const up = tz(CLOUDLOFT, 'updraft');
+      const l = t2(CLOUDLOFT, 185); l.add(0, 'cushlet', up.x, up.z); calmS(l, 1);
+      l.run(1); l.bodies[0].air = 0.6; l.run(2); l.bodies[0].air = 0.6; l.run(5); l.bodies[0].air = 0.6; l.run(1);
+      const dr = evs(d, REACT_KIND.DRIFT), gl = evs(g, REACT_KIND.GLIDE), gz = evs(k, REACT_KIND.GAZE_SKY), ho = evs(h, REACT_KIND.HOLD_ON), lf = evs(l, REACT_KIND.LIFT);
+      check('LF-27', `(round 6) the place REACTs on the re-laid TALL layouts: DRIFT in Ripple's Rock Pool ${tl(dr)} (a wader ${evs(d, REACT_KIND.DRIFT, 1).length}), GLIDE on Frostbell's Ice Pond ${tl(gl)}, GAZE_SKY by Lanternroof's Moon Dish ${tl(gz)}, HOLD_ON in its Night Breeze x${ho.length}, LIFT in Cloudloft's Updraft ${tl(lf)}`,
+        dr.length === 1 && dr[0].thing === TID('rockpool') && evs(d, REACT_KIND.DRIFT, 1).length === 0 && gl.length >= 1 && gl.every((q) => q.thing === TID('icepond'))
+        && gz.length === 1 && gz[0].thing === TID('moondish') && ho.length >= 2 && lf.length === 2 && lf.every((q) => q.thing === TID('updraft')));
+    }
     // (re-specified in round 6 for D-96: RATTLE was Cogwhistle Bench's magnet, GLOW Echo Hollow's Glow Pool, FIZZ Fizzwell Tub's Bubble Patch; the owner
     // dropped those places, so the three kinds have no trigger row and no producer. The rows now check that no kept place makes one: a bead squeeze
     // and a gel set in each kept place's water and zones for 3 s.)
@@ -1101,6 +1125,28 @@ if (!LF02_CHILD) {
     for (const [k, name] of [[REACT_KIND.RATTLE, 'RATTLE'], [REACT_KIND.GLOW, 'GLOW'], [REACT_KIND.FIZZ, 'FIZZ']] as const)
       check('LF-21', `(round 6, D-96) ${name} (a dropped place's REACT) has no trigger and no kept place makes it (a bead squeeze and a gel 3 s in each of the seven places' zones: ${retiredIn[k].length})`,
         !REACT_TRIGGERS.some((t) => t.kind === k) && retiredIn[k].length === 0, retiredIn[k].slice(0, 4).join(' '));
+    // (round 6, R6_DATA item 3) the squirt game (LIFE 6.1 S14; data/life.ts SQUIRT): the player's squeeze of a soaked whole foam squirts an arc
+    // at the nearest character within reach: LIFE_EV.SQUIRT (the arc: a foam, b target, sub the drops) and a SOCIAL SQUIRT (R7's record)
+    const sq = (o: { soak: number; hold: number; gap: number | null; calm?: boolean; foam?: string; kind?: 0 | 1 }): { r: Sim; arc: EvLog[]; soc: EvLog[]; soak0: number; wet1: number; wow: number } => {
+      const r = s2(RIPPLE, 181); r.add(0, o.foam ?? 'wisplet', 0, 0, { kind: o.kind ?? 0 }); if (o.gap !== null) r.add(1, 'dollop', 1.0 + o.gap, 0);   // (Wisplet: a marshmallow)
+      r.physics = false; r.s.calm = !!o.calm; calmS(r, o.gap !== null ? 2 : 1); r.run(1);
+      r.w.lo[0 * 6 + LOOK.soak] = o.soak; const wet0 = r.w.lo[1 * 6 + LOOK.wet];
+      r.extraFlags[0] = LIFE_FLAG.TOUCHED; r.run(o.hold); r.extraFlags[0] = 0; r.touch[0] = o.hold >= 1 ? TOUCH.SQUEEZE_1S : TOUCH.SQUEEZE; r.run(0.05);
+      const wet1 = r.w.lo[1 * 6 + LOOK.wet] - wet0, soak0 = r.w.lo[0 * 6 + LOOK.soak]; r.run(0.45);   // (read at once: Ripple's Sun dries both)
+      const arc = r.events(LIFE_EV.SQUIRT), soc = r.events(LIFE_EV.SOCIAL, SOCIAL_KIND.SQUIRT);
+      const wow = r.intents(INTENT.EMOTE, 1).filter((l) => l.icon === EMOTE.wow).length;
+      return { r, arc, soc, soak0, wet1, wow };
+    };
+    const ok1 = sq({ soak: 0.6, hold: 0.6, gap: 0.3 });
+    check('S14', `(round 6) the squirt: a soaked marshmallow (Wisplet, soak 0.6) squeezed 0.6 s with Dollop 0.3 m away: one arc at Dollop (${ok1.arc.map((e) => `a ${e.a} b ${e.b} drops ${e.sub}`).join(', ') || 'none'}), one SOCIAL SQUIRT (${ok1.soc.length}), Dollop wet +${ok1.wet1.toFixed(2)}, its wow (${ok1.wow}), the foam's soak ${ok1.soak0.toFixed(2)}`,
+      ok1.arc.length === 1 && ok1.arc[0].a === 0 && ok1.arc[0].b === 1 && ok1.arc[0].sub === 12 && ok1.soc.length === 1 && ok1.soc[0].a === 0 && ok1.soc[0].b === 1 && ok1.wet1 >= 0.25 && ok1.wow >= 1 && ok1.soak0 <= 0.2);   // (+0.3 wet less a frame of the Sun's drying; soak 0.54 at the squeeze less 0.4)
+    const tap = sq({ soak: 0.6, hold: 0.2, gap: 0.3 }), dry = sq({ soak: 0.45, hold: 0.6, gap: 0.3 }), far = sq({ soak: 0.6, hold: 0.6, gap: 1.5 }), alone = sq({ soak: 0.6, hold: 0.6, gap: null }), calm = sq({ soak: 0.7, hold: 1.2, gap: 0.3, calm: true });   // (Ripple's Sun dries a foam at 0.1 / s while it is held)
+    const piece = sq({ soak: 0.6, hold: 0.6, gap: 0.3, kind: 1 });
+    check('S14', `(round 6) no squirt from a tap (0.2 s: ${tap.arc.length}), a foam not soaked enough (0.45: ${dry.arc.length}) or a piece (${piece.arc.length}); a friend 1.5 m off gets none: the arc lands on the ground (b ${far.arc[0]?.b}, SOCIAL ${far.soc.length}); alone the same (b ${alone.arc[0]?.b}); in Calm 4 drops (${calm.arc[0]?.sub}) and the SOCIAL still counts (${calm.soc.length})`,
+      tap.arc.length === 0 && tap.soc.length === 0 && dry.arc.length === 0 && piece.arc.length === 0 && far.arc.length === 1 && far.arc[0].b === 255 && far.soc.length === 0 && alone.arc.length === 1 && alone.arc[0].b === 255 && alone.soc.length === 0
+      && calm.arc.length === 1 && calm.arc[0].sub === 4 && calm.soc.length === 1);
+    const twice = sq({ soak: 0.6, hold: 0.6, gap: 0.3 }); twice.r.extraFlags[0] = LIFE_FLAG.TOUCHED; twice.r.run(0.6); twice.r.extraFlags[0] = 0; twice.r.touch[0] = TOUCH.SQUEEZE; twice.r.run(0.5);
+    check('S14', `(round 6) a squirt squeezes the water out (soak ${twice.soak0.toFixed(2)} after the first): a second squeeze at once squirts nothing (arcs ${twice.r.events(LIFE_EV.SQUIRT).length})`, twice.r.events(LIFE_EV.SQUIRT).length === 1);
     // (a squishy that comes out inside a zone is in it at once, LIFE 3.1: these come out beside it and are set in at 1 s)
     const setIn = (r: Sim, x: number, z: number): void => { r.run(1); r.bodies[0].x = x; r.bodies[0].z = z; r.bodies[0].tx = x; r.bodies[0].tz = z; };
     const dz = RAINLEAF.zones.find((z) => z.id === 'leafdrip')!;

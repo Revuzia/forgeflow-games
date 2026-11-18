@@ -840,6 +840,19 @@ function press(r: Rig, x: number, y: number, ms: number): number {
   check('PLAYGROUND chunk names: the away, place (look, sound, data), lifelook and journal-text facades are later-*; a facade-less chunk is later-shared only when EVERY module in it is lazy-only; boot and the voices the engine loads at the first unlock stay first-play (null: G0b counts them)',
     names.away === 'later-away' && names.awaySound === 'later-away-sound' && names.cabin === 'later-place-hearthlog' && names.cabinSound === 'later-place-hearthlog-sound' && names.cabinData === 'later-place-hearthlog-data'
       && names.lifelook === 'later-lifelook' && names.text === 'later-journal-text' && names.shared === 'later-shared' && names.mixed === null && names.first === null && names.voices === null, JSON.stringify(names));
+  // round 6 (D-96): the build guard against the three dropped places (vite.config.ts droppedPlaceLeaks, run by every `vite build`): a clean bundle of the kept places
+  // (its tombstone ids in lower case are not a leak) passes; a chunk named for a dropped place, a module of one, or its player-visible name fails
+  const { droppedPlaceLeaks } = await import('../vite.config.ts');
+  const ok0 = droppedPlaceLeaks({
+    'assets/later-place-ripple-data-x.js': { type: 'chunk', moduleIds: [id('data/place_ripple.ts')], code: 'const t=["home","hearthlog","ripple","frostbell","rainleaf","fizzwell","cogwhistle","lanternroof","echohollow","cloudloft"];' },
+    'assets/later-place-frostbell-sound-x.js': { type: 'chunk', moduleIds: [id('audio/places/frostbell.ts')], code: 'x' },
+    'assets/index-x.css': { type: 'asset', source: '.jn-card[data-sky=shore]{}' },
+  });
+  const bad1 = droppedPlaceLeaks({ 'assets/later-place-fizzwell-data-x.js': { type: 'chunk', moduleIds: [id('data/place_fizzwell.ts')], code: 'x' } });
+  const bad2 = droppedPlaceLeaks({ 'assets/later-shared-x.js': { type: 'chunk', moduleIds: [id('life/brain.ts'), id('audio/places/echohollow.ts')], code: 'x' } });
+  const bad3 = droppedPlaceLeaks({ 'assets/later-journal-text-x.js': { type: 'chunk', moduleIds: [id('data/journal_text.ts')], code: 'n=`Bath Time at Fizzwell Tub`' }, 'index.html': { type: 'asset', source: '<p>Echo Hollow</p>' } });
+  check('D-96 (round 6) the build guard: nothing of Fizzwell Tub, Cogwhistle Bench or Echo Hollow ships: a bundle of the kept places (the tombstone ids in lower case included) passes; a chunk named for a dropped place, a module of one or its player-visible name in a chunk or the page fails the build',
+    ok0.length === 0 && bad1.length === 2 && bad2.length === 1 && bad3.length === 2, JSON.stringify({ ok0, bad1, bad2, bad3 }));
 }
 
 console.error = realError;

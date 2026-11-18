@@ -19,7 +19,15 @@ import type { PlaceDef } from '../src/data/places.ts';
 import { PLACE as HOME } from '../src/data/place_home.ts';
 import { PLACE as CABIN } from '../src/data/place_hearthlog.ts';
 import { THING_IDS, ZONE, MECH, PLACE_IDS, placeDropped } from '../src/data/places.ts';
-import { PLACE_CAPS, THING_PLACE } from '../src/collection/journal.ts';
+import { PLACE_CAPS, THING_PLACE, PLACE_OPENS_AT } from '../src/collection/journal.ts';
+import { PLACE as RIPPLE } from '../src/data/place_ripple.ts';
+import { Sim as LSim } from './life_host.ts';
+import { buildQuestDefs, createQuestState } from '../src/core/quests.ts';
+import { LOOK, REACT_TRIGGERS, SOCIAL as SOCIAL_TABLE } from '../src/data/life.ts';
+import { PIECES_USE } from '../src/data/quests.ts';
+import { THING_KINDS, DROPPED_PLACE_MASK } from '../src/data/places.ts';
+import { PLACE as LANTERNROOF_D } from '../src/data/place_lanternroof.ts';
+import { PLACE as CLOUDLOFT_D } from '../src/data/place_cloudloft.ts';
 import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, THING_KIND, USE_VERB, SPECIES_LIFE as SPECIES_LIFE_T } from '../src/data/life.ts';
 import { WISH_STATE, EV, BY, QUESTS, FACT, UI_KIND, EV_FLAG, CHAPTERS } from '../src/data/quests.ts';
 import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
@@ -803,6 +811,68 @@ for (const tier of [1, 0]) {
   check('QC', `(QU-14's LIFE half) at the 5 S2 / S3 places (round 6, D-96: was 8) the real lifeStep (2 seeds x 4 min each, five out, set down zone by zone) emits only REACT / SOCIAL / USE kinds inside journal.ts PLACE_CAPS, and names only that place's things (THING_PLACE)`,
     outside.length === 0 && totalEv > 0, outside.length ? [...new Set(outside)].join(', ') : `${totalEv} LIFE events`);
   console.log(`info QC the chapters' REACT / SOCIAL / USE clauses LIFE produced on this host: ${cover.join('; ')}`);
+}
+
+/* ── (round 6, R6_DATA item 3) R7 "A squirt for a friend" by ordinary play: the real lifeStep at Ripple Shore, an S2 build's rules ──
+ * The player sets a marshmallow (Wisplet) in the Rock Pool and a friend (Dollop) on the sand beside it, autonomy off so neither walks away (the
+ * same with it on, only slower to stage); the foam soaks in the water (LIFE's soak look, 0.06 / s for a marshmallow); once soaked (0.5, the
+ * SOAK record) the player squeezes it 0.6 s (a squeeze, not a tap: QUESTS Q3). LIFE's events go to the reducer as the host's ring writer
+ * writes them (src/shell/later-life.ts pumpEvents: a SOCIAL event -> EV.SOCIAL at the current place). R7 is SOCIAL{SQUIRT, place ripple} x1. */
+{
+  const dS2 = buildQuestDefs({ placeIds: PLACE_IDS, thingIds: THING_IDS, shipped: PLACE_IDS.map((_, i) => i <= 4), opensAt: PLACE_OPENS_AT, thingPlace: THING_PLACE, caps: PLACE_CAPS });
+  const st = createQuestState(dS2), out = createQuestOut(64); st.sc[SC.FW] = 1; st.sc[SC.PL] = 0b11111;
+  const r = new LSim(191, RIPPLE, 0); r.s.place = 2; r.s.tier = 1; r.s.autonomy = false; RIPPLE.things.forEach((t) => r.addThing(t.id, t.x, t.z));
+  const pool = RIPPLE.zones[0];
+  r.add(0, 'wisplet', pool.x - 0.3, pool.z + 0.2, { float: true }); r.add(1, 'dollop', pool.x - (pool.r ?? 1.3) - 0.45, pool.z + 0.2); r.physics = false;
+  let soakT = -1; for (let k = 0; k < 60 && soakT < 0; k++) { r.run(0.5); if (r.w.lo[LOOK.soak] >= 0.5) soakT = r.t; }
+  const soakRec = r.events(LIFE_EV.REACT, REACT_KIND.SOAK).filter((e) => e.a === 0).length;
+  r.extraFlags[0] = LIFE_FLAG.TOUCHED; r.run(0.6); r.extraFlags[0] = 0; r.touch[0] = TOUCH.SQUEEZE; r.run(1.0);
+  const R7 = QUESTS.findIndex((q) => q.id === 'R7'), shown = isShown(dS2, R7);
+  for (const e of r.evs) if (e.kind === LIFE_EV.SOCIAL) {
+    const a = r.bodies[e.a]?.species ?? 255, b = e.b < 16 ? r.bodies[e.b].species : 255;
+    applyEventFields(st, dS2, out, EV.SOCIAL, e.sub, 2, e.thing, a, b, a < CATALOG.length ? MATERIAL_FAMILY_IDS.indexOf(CATALOG[a].family) : 255, e.n2, BY.SELF, 0, 0);
+  }
+  const arcs = r.events(LIFE_EV.SQUIRT);
+  check('R7', `(round 6) "A squirt for a friend" by ordinary play (an S2 build, the real lifeStep at Ripple Shore): the marshmallow soaks in the Rock Pool (0.5 at ${soakT.toFixed(1)} s, SOAK ${soakRec}), the player's 0.6 s squeeze squirts at Dollop (arc ${arcs.map((e) => `b ${e.b}`).join(',') || 'none'}), R7 shown ${shown}, done ${isDone(st, R7)}`,
+    shown && soakT > 0 && soakT < 20 && arcs.length === 1 && arcs[0].b === 1 && isDone(st, R7));
+}
+
+/* ── (round 6, R6_DATA item 5) Lanternroof and Cloudloft complete: every clause of their chapters has a producer in the data LIFE and the shell read ──
+ * REACT: a REACT_TRIGGERS row for the kind and the place's caps; SOCIAL: a SOCIAL table row and the caps, its named thing at the place with the
+ * mechanism the moment needs (PUSH a swing, COPY pads, PASS a ball, PARADE an arch, PILE a ring); USE: the named thing at the place with that verb
+ * (a "distinct part" count no larger than its parts); PIECES: the kind's trigger or a thing of the verb there; DISCOVER F1: fans of the place
+ * (SPECIES_LIFE); VISIT: an opening count. Wishes: the place takes a THING wish (THING_KINDS) and is never masked from LIFE's wish places (D-96).
+ * The LIFE producers themselves are probe_life's LF-21 / LF-22 rows (wide) and LF-24 (the re-laid tall layouts). */
+{
+  const MECH_OF: Record<number, number> = { [SOCIAL_KIND.PUSH]: MECH.swing, [SOCIAL_KIND.COPY]: MECH.pad, [SOCIAL_KIND.PASS]: MECH.ball, [SOCIAL_KIND.PARADE]: MECH.bar, [SOCIAL_KIND.PILE]: MECH.ring };
+  const bad: string[] = [], seen: string[] = [];
+  for (const def of [LANTERNROOF_D, CLOUDLOFT_D]) {
+    const p = def.idx, caps = PLACE_CAPS[p], ch = CHAPTERS.findIndex((c) => c.place === p);
+    const fans = Object.values(SPECIES_LIFE_T as Record<string, { place: string }>).filter((l) => l.place === def.id).length;
+    let n = 0;
+    for (const q of QUESTS) {
+      if (q.chapter !== ch || q.dropped) continue;
+      for (const c of q.clauses) {
+        n++;
+        const subs: readonly number[] = c.sub ?? [], th = c.thing ?? -1, tk = th >= 0 ? def.things.findIndex((t) => t.id === THING_IDS[th]) : -1, tdef = tk >= 0 ? def.things[tk] : null;
+        const why = (w: string): void => { bad.push(`${q.id}: ${w}`); };
+        if (th >= 0 && (THING_PLACE[th] !== p || !tdef)) why(`its thing ${THING_IDS[th]} is not ${def.id}'s`);
+        if (c.ev === EV.VISIT) { if (!(PLACE_OPENS_AT[p] > 0)) why('no opening count'); }
+        else if (c.ev === EV.REACT) { for (const k of subs) { if (!REACT_TRIGGERS.some((t) => t.kind === k)) why(`REACT ${k} has no trigger`); if (!(caps.reacts & (1 << k))) why(`REACT ${k} outside the caps`); } }
+        else if (c.ev === EV.SOCIAL) { for (const k of subs) { if (!SOCIAL_TABLE.some((r) => r.kind === (k === SOCIAL_KIND.PARADE ? SOCIAL_KIND.COPY : k))) why(`SOCIAL ${k} has no row`);   // PARADE is S05 COPY with 3 or more (LIFE 6.1) if (!(caps.socials & (1 << k))) why(`SOCIAL ${k} outside the caps`);
+          if (tdef && MECH_OF[k] !== undefined && tdef.mech !== MECH_OF[k]) why(`SOCIAL ${k} at ${tdef.id} (mech ${tdef.mech}, wants ${MECH_OF[k]})`); if (tdef && k === SOCIAL_KIND.PARADE && !tdef.p.arch) why('PARADE under no arch'); } }
+        else if (c.ev === EV.USE) { if (!tdef) why('USE names no thing'); else { if (!subs.includes(tdef.verb)) why(`${tdef.id}'s verb ${tdef.verb} is not ${subs.join('/')}`); if (!(caps.verbs & (1 << tdef.verb))) why('USE outside the caps');
+          if (c.distinct === 'part' && (tdef.p.n ?? 1) < c.count) why(`${c.count} distinct parts of ${tdef.p.n ?? 1}`); } }
+        else if (c.ev === EV.PIECES) { for (const k of subs) { if (k >= PIECES_USE ? !def.things.some((t) => t.verb === k - PIECES_USE) : !REACT_TRIGGERS.some((t) => t.kind === k)) why(`PIECES ${k} has no producer here`); } }
+        else if (c.ev === EV.DISCOVER) { if (fans < 1) why('no fan of the place (F1)'); }
+        else why(`clause ev ${c.ev} not covered by this row`);
+      }
+    }
+    if (!(THING_KINDS[def.id as keyof typeof THING_KINDS] > 0)) bad.push(`${def.id}: no THING wish kind`);
+    if (DROPPED_PLACE_MASK & (1 << p)) bad.push(`${def.id}: masked from LIFE's wish places`);
+    seen.push(`${def.id} ${n} clauses, ${fans} fans, THING_KINDS ${THING_KINDS[def.id as keyof typeof THING_KINDS]}`);
+  }
+  check('QL', `(round 6) Lanternroof and Cloudloft complete: every clause of L1..L10 and U1..U10 has its producer in the data (${seen.join('; ')})`, bad.length === 0, bad.join(' | '));
 }
 
 console.log(`\n${fails === 0 ? `all ${oks} checks passed` : `${fails} FAILED, ${oks} ok`}`);

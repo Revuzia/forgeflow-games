@@ -15,12 +15,15 @@ import CABIN from '../../src/data/place_hearthlog.ts';
 import RIPPLE from '../../src/data/place_ripple.ts';
 import FROST from '../../src/data/place_frostbell.ts';
 import RAIN from '../../src/data/place_rainleaf.ts';
+import LANTERN from '../../src/data/place_lanternroof.ts';
+import CLOUD from '../../src/data/place_cloudloft.ts';
 import type { PlaceDef } from '../../src/data/places.ts';
 import { physPieces, type PhysPieces } from './physPieces.ts';
 import { wholeRefFor } from '../../src/render/wholeRef.ts';
 import { placeBand } from '../../src/render/placeview.ts';
-/** The shipped and S2 places the render chunks draw (their data modules: both layouts). */
-const PLACES: Record<string, PlaceDef> = { hearthlog: CABIN, ripple: RIPPLE, frostbell: FROST, rainleaf: RAIN };
+import { drawPostcard, POSTCARDS } from '../../src/render/postcard.ts';
+/** The places the render chunks draw (their data modules: both layouts): D-96's seven but Home (round 6: Lanternroof and Cloudloft). */
+const PLACES: Record<string, PlaceDef> = { hearthlog: CABIN, ripple: RIPPLE, frostbell: FROST, rainleaf: RAIN, lanternroof: LANTERN, cloudloft: CLOUD };
 
 export interface PgEnv {
   stage: StageDev;
@@ -462,6 +465,7 @@ export function makePg(E: PgEnv) {
       if (id === 'ripple') { S.setBodyLook!(pid[1], 0, 0, 0.85, 0, 0); S.setBodyLook!(pid[2], 0, 0.7, 0, 0, 0); }
       if (id === 'frostbell') { S.setBodyLook!(pid[1], 0, 0, 0, 0, 0.85); S.setBodyLook!(pid[2], 0.6, 0, 0, 0, 0); }
       if (id === 'rainleaf') S.setBodyLook!(pid[1], 0, 0.8, 0, 0, 0);
+      if (id === 'lanternroof') S.setBodyLook!(pid[2], 0, 0, 0, 0.4, 0);   // (round 6: a little toast by the chimney)
       E.tick(bodies, 120, 1 / 60, false);
       // measured size of a 1 m squishy (1 m across, at half a metre up) at the front edge and the middle of the bounds
       const w1 = (z: number): number => { const a = toPx(b.x - 0.5, 0.5, z), c = toPx(b.x + 0.5, 0.5, z); return c[0] - a[0]; };
@@ -689,6 +693,107 @@ export function makePg(E: PgEnv) {
       return ok;
     },
     home(): void { S.setPlace!(null, 0.05); S.setPlayBounds!(NaN, NaN, NaN, NaN); },
+    /** Round 6: the seven postcards (src/render/postcard.ts) at 240 x 56 CSS px, dpr 2: each drawn, its pixels not one flat colour (the luminance
+     *  spread), the same picture twice, the three dropped places and an unknown id refused; a sheet of all seven as a PNG. */
+    postcards(): { ids: string[]; drawn: boolean[]; spread: number[]; same: boolean; refused: boolean; png: string } {
+      const sheet = document.createElement('canvas'); sheet.width = 480; sheet.height = 7 * 120;
+      const sx = sheet.getContext('2d')!;
+      const ids = [...POSTCARDS], drawn: boolean[] = [], spread: number[] = [];
+      const lum = (cv: HTMLCanvasElement): Float64Array => { const d = cv.getContext('2d')!.getImageData(0, 0, cv.width, cv.height).data, L = new Float64Array(d.length / 4); for (let i = 0; i < L.length; i++) L[i] = 0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]; return L; };
+      ids.forEach((id, k) => {
+        const cv = document.createElement('canvas');
+        drawn.push(drawPostcard(cv, id, { width: 240, height: 56, dpr: 2 }));
+        const L = lum(cv); let mn = 255, mx = 0; for (const v of L) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
+        spread.push(mx - mn);
+        sx.drawImage(cv, 0, k * 120);
+      });
+      const a = document.createElement('canvas'), b = document.createElement('canvas');
+      drawPostcard(a, 'lanternroof', { width: 240, height: 56, dpr: 1 }); drawPostcard(b, 'lanternroof', { width: 240, height: 56, dpr: 1 });
+      const same = a.toDataURL() === b.toDataURL();
+      const refused = ['fizzwell', 'cogwhistle', 'echohollow', 'nowhere'].every((id) => !drawPostcard(document.createElement('canvas'), id, { width: 240, height: 56 }));
+      return { ids, drawn, spread, same, refused, png: sheet.toDataURL('image/png') };
+    },
+    /**
+     * Round 6 (R6_DATA 3's seam): the squirt arc in Ripple Shore (wide, desktop insets): two bodies 1.0 m apart; squirtFx(a, b, 12): the drops
+     * the host emits (12 and the 7 splash motes), where they are mid-flight (0.2 s: between the two, above both) and a shot; then Calm with 4
+     * drops (no splash); a squirt at nobody (b 255: 1.2 m ahead); at Home: false.
+     */
+    async squirt(): Promise<{ home: boolean; ok: boolean; drops: number; midX: number; midY: number; ax: number; bx: number; topY: number; png: string; calmDrops: number; nobody: boolean; nobodyDrops: number; unknown: boolean }> {
+      pg.insets('desktop');
+      pg.home(); E.tick([], 2, 1 / 60, false);
+      const home = !!S.squirtFx!(0, 1, 12);
+      await pg.enterPlace('ripple');
+      S.clearBodies(); bodies = [];
+      const ids2: number[] = [];
+      for (const [k, x] of [[0, -0.6], [1, 0.4]] as const) { const g = speciesBaseGenome(['wisplet', 'dollop'][k], 1 + k), bb = E.makeBody(g); ids2.push(S.addBody!(bb, g, { tier: 'common', position: { x, y: 0, z: 0.6 } })); bodies.push(bb); }
+      E.tick(bodies, 60, 1 / 60, false);
+      // the two drawn centres (the stage's own views), read as numbers before the squirt
+      const vc = ids2.map((id) => { const v = S.views.find((x) => x.id === id)!; return { x: v.proxy.center.x, y: v.proxy.center.y }; });
+      const ph = S.placeHost!, D = ph.drops;
+      const e0 = D.emitted;
+      const ok = !!S.squirtFx!(ids2[0], ids2[1], 12);
+      E.tick(bodies, 12, 1 / 60, false);   // 0.2 s
+      // the drops' mean position mid-flight (read back from the pool's attribute)
+      const P = (D.mesh.geometry as THREE.InstancedBufferGeometry).getAttribute('aPos') as THREE.InstancedBufferAttribute;
+      let mx = 0, my = 0, n = 0; for (let i = 0; i < D.count; i++) { mx += P.getX(i); my += P.getY(i); n++; }
+      const png = E.snapshot();
+      E.tick(bodies, 30, 1 / 60, false);
+      const drops = D.emitted - e0;
+      S.setCalmEffects(true); E.tick(bodies, 60, 1 / 60, false);
+      const e1 = D.emitted; S.squirtFx!(ids2[0], ids2[1], 4); E.tick(bodies, 45, 1 / 60, false);
+      const calmDrops = D.emitted - e1;
+      S.setCalmEffects(false); E.tick(bodies, 30, 1 / 60, false);
+      const e2 = D.emitted, nobody = !!S.squirtFx!(ids2[0], 255, 12); E.tick(bodies, 45, 1 / 60, false);
+      const nobodyDrops = D.emitted - e2, unknown = !S.squirtFx!(9999, 0, 12);
+      S.clearBodies(); bodies = [];
+      return { home, ok, drops, midX: n ? mx / n : NaN, midY: n ? my / n : NaN, ax: vc[0].x, bx: vc[1].x, topY: Math.max(vc[0].y, vc[1].y), png, calmDrops, nobody, nobodyDrops, unknown };
+    },
+    /**
+     * Round 6: the Ice Pond reads as ice: a body moved across Frostbell's pond (layout of this frame) at 0.7 m/s for 1.2 s leaves glide
+     * streaks behind it and a sheen under it while it slides (the place's own counts), they fade within 3 s after; a body standing still on
+     * the ice leaves none. Returns the counts and a shot mid-glide.
+     */
+    async iceGlide(kind: 'phone' | 'desktop'): Promise<{ still: number; streaks: number; sheens: number; after: number; png: string; real: boolean }> {
+      pg.insets(kind);
+      await pg.enterPlace('frostbell');
+      const D = PLACES.frostbell, L = S.camera.aspect < 0.9 ? D.tall : D, pond = L.patches[0], r = pond.r ?? 1.4;
+      S.clearBodies(); bodies = [];
+      const g = speciesBaseGenome('dollop', 4), bb = E.makeBody(g) as SoftBodyLike & { placeAt?: (at: { x: number; y: number; z: number }, vel: { x: number; y: number; z: number }) => void };
+      S.addBody!(bb, g, { tier: 'common', position: { x: pond.x - r * 0.55, y: 0, z: pond.z } }); bodies.push(bb);
+      E.tick(bodies, 90, 1 / 60, false);
+      const host = S.placeHost!;
+      const still = host.stats().streaks ?? 0;
+      const real = typeof bb.placeAt === 'function';
+      let png = '', streaks = 0, sheens = 0;
+      for (let f = 0; f < 72; f++) {
+        const c = bb.center;
+        if (real) bb.placeAt!({ x: c.x + 0.7 / 60, y: c.y, z: c.z }, { x: 0.7, y: 0, z: 0 });
+        E.tick(bodies, 1, 1 / 60, false);
+        const st = host.stats(); streaks = Math.max(streaks, st.streaks ?? 0); sheens = Math.max(sheens, st.sheens ?? 0);
+        if (f === 50) png = E.snapshot();
+      }
+      E.tick(bodies, 180, 1 / 60, false);
+      const after = host.stats().streaks ?? 0;
+      S.clearBodies(); bodies = [];
+      return { still, streaks, sheens, after, png, real };
+    },
+    /** Round 6: Cloudloft's floor dents under a resting body and keeps a fading one where it was (the place's own counts). */
+    async cloudDents(): Promise<{ live: number; afterMove: number; afterFade: number }> {
+      pg.insets('desktop');
+      await pg.enterPlace('cloudloft');
+      S.clearBodies(); bodies = [];
+      const g = speciesBaseGenome('chunkle', 2), bb = E.makeBody(g) as SoftBodyLike & { placeAt?: (at: { x: number; y: number; z: number }, vel: { x: number; y: number; z: number }) => void };
+      S.addBody!(bb, g, { tier: 'common', position: { x: 0, y: 0, z: 0.5 } }); bodies.push(bb);
+      E.tick(bodies, 90, 1 / 60, false);
+      const host = S.placeHost!, live = host.stats().live ?? 0;
+      if (typeof bb.placeAt === 'function') { const c = bb.center; bb.placeAt({ x: c.x + 1.0, y: c.y, z: c.z }, { x: 0, y: 0, z: 0 }); }
+      E.tick(bodies, 30, 1 / 60, false);
+      const afterMove = host.stats().dents ?? 0;
+      E.tick(bodies, 60 * 7, 1 / 60, false);
+      const afterFade = host.stats().dents ?? 0;
+      S.clearBodies(); bodies = [];
+      return { live, afterMove, afterFade };
+    },
   };
   return pg;
 }

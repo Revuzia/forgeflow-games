@@ -9,10 +9,10 @@ Scratch: `/tmp/claude-0/-home-user-forgeflow-games/2d4e12a5-0f4d-5239-bdda-16316
 |---|---|---|
 | 0 | baseline | DONE |
 | 1 | D-96: drop Fizzwell Tub, Cogwhistle Bench, Echo Hollow | DONE (data, reducer, save, text, sound, probes; node rows below) |
-| 2 | Ripple / Frostbell (and Rainleaf, Lanternroof, Cloudloft) TALL layouts in the phone frame, clear of the HUD; DT-01 0 problems both layouts | not started |
-| 3 | Ripple R7 SQUIRT: event + rule, seam for PG_SHELL / PG_RENDER | not started |
-| 4 | Frostbell I3 GLIDE and the ice: what LIFE and the quest need from physics | not started |
-| 5 | Lanternroof and Cloudloft: quests, wishes, facts, LIFE producers complete with probe rows | not started |
+| 2 | Ripple / Frostbell (and Rainleaf, Lanternroof, Cloudloft) TALL layouts in the phone frame, clear of the HUD; DT-01 0 problems both layouts | MOSTLY DONE: Ripple, Frostbell, Rainleaf, Lanternroof 0 problems in all four rows (frame + shipped camera, wide + tall); Cloudloft wide 0 / 0, tall camera 0, **tall layout 3 problems (spawn spots only): NOT DONE** |
+| 3 | Ripple R7 SQUIRT: event + rule, seam for PG_SHELL / PG_RENDER | DONE (LIFE rule + event, probe_life 3 rows, pg_lifequests R7 by ordinary play; seam below) |
+| 4 | Frostbell I3 GLIDE and the ice: what LIFE and the quest need from physics | DONE (below; PG_PHYS built the ice this round; one LIFE reach rule found and met in the tall layout) |
+| 5 | Lanternroof and Cloudloft: quests, wishes, facts, LIFE producers complete with probe rows | DONE (QL row; LF-27 tall producers) |
 
 ## 0. Baseline (HEAD 4225da645)
 - `npx tsc --noEmit -p tsconfig.json` clean (2.0 s).
@@ -74,4 +74,131 @@ Probe rows (re-specified rows carry "re-specified in round 6 for D-96" and the r
 | probe_life | 117 ok / 1 (LF-02) | **117 ok / 1 (LF-02)** | LF-21 RATTLE / GLOW / FIZZ rows re-specified: no trigger, and a bead squeeze and a gel 3 s in every zone of the seven places make none |
 | probe_chatter | 42/42 | **42/42** | re-specified: 7 places, 6 aliases, 7 styles, at least 9 tuned notes (was 15: the crystals and the little bell went) |
 | probe_pg_lifequests | 14/14 | **14/14** | the QC sweep over the 5 S2 / S3 places (was 8) |
-| audioview/life_checks.mjs (browser, not run yet) | | | BEDS / STYLES2 the five kept places; the tick's grid check on the Lanternroof bed (was Cogwhistle's) |
+| audioview/life_checks.mjs (browser, port 5367) | | **80/80** | BEDS / STYLES2 the five kept places; the tick's grid check on the Lanternroof bed (was Cogwhistle's) |
+
+## 3. Ripple R7 SQUIRT (DONE)
+**The rule** (LIFE 6.1 S14, `src/data/life.ts SQUIRT`, `src/life/brain.ts squirtCheck`, run from `touchPass` on the player's squeeze release):
+a squishy SQUIRTS when the player squeezes it (TOUCH.SQUEEZE or SQUEEZE_1S, never a tap: QUESTS Q3) and
+- it is whole (not a piece: `w.ki[i] === 0`),
+- it is soaked: its soak look >= `SQUIRT.soakMin` **0.5** (the same 0.5 the SOAK reaction record fires at; LIFE's water soaks a marshmallow foam
+  0.06 / s, so about 8 s in the Rock Pool, measured 8.5 s in the row below),
+- the squeeze was held >= `SQUIRT.holdS` **0.4 s** (a squeeze, not a brush).
+Then, in the same step: the foam loses `LOOK_ADD.squirtFoam` soak (it squeezed its water out; a second squeeze right after is dry and squirts
+nothing); **`LIFE_EV.SQUIRT`** is emitted (always, with or without a target); the nearest OTHER awake squishy whose body gap is <= `SQUIRT.reach`
+**1.2 m** (the social table's S14 r) is the target: its wet look +`LOOK_ADD.squirtTarget`, its wow then giggle (SCRIPT.SQUIRTED, deferred),
+and a **SOCIAL SQUIRT** event (sub `SOCIAL_KIND.SQUIRT`, a the squirter, b the target, n2 2) which is what the quest counts.
+**The quest**: R7 "A squirt for a friend" is SOCIAL{SQUIRT, place ripple} x1 (unchanged); the host's ring writer (`src/shell/later-life.ts`
+pumpEvents) already maps LIFE_EV.SOCIAL to EV.SOCIAL at the current place, BY.SELF; nothing new is needed there for the quest.
+Reachable by ordinary play: set a marshmallow in the Rock Pool, wait for it to soak, squeeze it beside a friend.
+
+**Seam for PG_SHELL** (requests, nothing of theirs changed): `LIFE_EV.SQUIRT = 8` (append-only; NOT a ring record: the ring writer's
+`default: break` already ignores it, verified by reading pumpEvents). Fields: `a` = the squirting slot, `b` = the target slot or 255 (a squirt
+at nobody), `sub` = the drop count to draw (**12**, or **4** with Calm or reduced motion), `n2` 0, `thing` -1. Arc length `SQUIRT.arcS` 0.4 s.
+Ask: on LIFE_EV.SQUIRT play a short squirt sound at the squirter (place-sound bus; the splash family, quieter) and hand the arc to the render
+(from the foam's top toward the target's body, or forward along its facing when b = 255).
+**Seam for PG_RENDER**: draw `sub` drops along a ballistic arc of `SQUIRT.arcS` 0.4 s from the squirter's top to the target (or 1.2 m ahead);
+the target's wet look is LIFE's (the look channel already drawn), so the render draws only the drops. Calm / reduced motion: the 4-drop
+count is already in `sub`; no splash rings.
+
+Probe rows:
+| probe | row | result |
+|---|---|---|
+| probe_life | S14 squirt: a Wisplet soaked 0.6, a 0.6 s squeeze, a friend 0.3 m away: one SQUIRT (a 0, b 1, 12 drops), one SOCIAL SQUIRT, target wet +0.29, its wow, foam soak down to 0.14 | ok |
+| probe_life | S14 no squirt: a tap, a dry foam, a piece; a squirt at nobody (b 255, no SOCIAL); Calm 4 drops; a second squeeze right after: none | ok (3 rows) |
+| probe_pg_lifequests | NEW R7 (ordinary play, the real lifeStep at Ripple Shore, an S2 build): the Wisplet soaks in the Rock Pool (0.5 at 8.5 s, one SOAK record), the 0.6 s squeeze squirts at Dollop, R7 shown and DONE | ok (15/15) |
+probe_life is 120 ok / 1 FAIL (LF-02, known, unchanged).
+
+## 2. The tall (phone) layouts in the shipped camera (MOSTLY DONE)
+**What the camera does** (measured with the probe's model of the shipped camera, render/placeview.ts fitPlace + placeBand, the phone's 618 px hint
+pill): the fit is WIDTH-bound on a phone, so many vertical aims score alike and the line on the floor that lands at 618 px jumps between about
+z 2.3 and z 3.8 when the framed front moves by a few cm. A layout that passes at one framed depth can fail at the next. So every layout below was
+checked at the shipped fit AND with the framed front moved -0.1, -0.05, +0.05, +0.1, +0.15, +0.2 m (all 0 problems), with every floor (pools
+and patches included) at most 2.7 m deep and the framed front at most 2.95 m. Request to PG_RENDER below (a tie-break in fitPlace).
+
+**Tall bounds 1.4 x 3.0 m for the five S2 / S3 places** (P7 says 1.25 x 3.0: DEVIATION, with the reason): at hx 1.25 the worst fit puts the pill
+line at z 2.32 (no front band left); at 1.4 at z 2.77. A 1 m squishy is then about 133 px tall at the front instead of 147. Home and Hearthlog
+are untouched (live).
+
+New DT-01 rules (stricter, round 6; none loosened): peek spots left and right of the thing's footprint within its depth; the tall layout's pool /
+patch areas inside the tall frame; standing bars count in the front-band height rule; no fixed collider in a pool's water (floaters, balls,
+pools, swings and a ramp's foot in water excepted); the shipped-camera row for every strict place, its pools, patches and zone things counted
+by their own areas; the Puff Pads' parts at physics' tall spots (p.tx<i>, p.tz<i>, R6_PHYS) when given.
+
+| place | wide (frame / camera) | tall (frame / camera) | what moved (rule ids: PLACES 4.x positions, P7) |
+|---|---|---|---|
+| Ripple Shore | 0 / 0 | 0 / 0 | tall re-laid (pool r 0.835 here); SHARED sizes: Driftwood Log 2.0 -> 1.45 m, Shell Chimes hang 0.5 -> 0.4 (both inside M2 / M10's ranges). The Sand Mound r 0.9 -> 0.78 was tried and REVERTED: it broke PG_PHYS's new surf row (the mini marshmallow on its slope) |
+| Frostbell Ridge | 0 / 0 | 0 / 0 | tall re-laid: Ice Pond r 0.75 at (0.65, -1.95) (its middle inside the bodies' bounds: item 4), Glide Ramp (1.05, -2.35) foot on the ice, Steam Pool r 0.7, nest front edge 2.66 m |
+| Rainleaf Garden | 0 / 0 | 0 / 0 | WIDE: Splash Spot 1 (1.6, 1.4) r 0.6, Splash Spot 2 moved to the back middle (0.55, -1.75) (it stood in front of the pad, under the party row), Stepping Stones 0.1 m back. TALL re-laid: two spots front, one back with the stones across it; every spot r 0.6 (PLACES 4.5's lower end) |
+| Lanternroof | 0 / 0 | 0 / 0 | WIDE: Moon Dish (1.1, 1.45) (was under the party row). TALL: Chimney Corner (1.42, -0.9) (was cut by the right edge), Star Scope 0.4 m in from the front |
+| Cloudloft | 0 / 0 | **3** / 0 | TALL laid for the first time (was a first draft with 44 problems): pads across the back (tall part spots p.tx1/tz1, p.tx2/tz2), Updraft back with the first pad in it, Kite Swing right strip, Sunbow Arch left strip, Cloud Nest front. **Left: 3 spawn spots too near a thing** (DT-01 asks 5 spots, 1.0 m apart, 0.9 m clear; the 2.1 m nest in front and the swing, arch and pads behind leave room for 2). Not solved by hand or by a search (three seeds). Needs an owner's call: a smaller tall Cloud Nest (ring R 0.85..0.87 with a wider gap, inside M5's ranges) or the Kite Swing out of the tall layout's back, or a shorter tall swing |
+
+## 4. Frostbell I3 GLIDE and the ice (DONE: what LIFE and the quest need from physics)
+I3 "Zoom on the ice" is REACT{GLIDE, thing icepond} x2 distinct family; I6 is PIECES{GLIDE, place frostbell, minN 3}.
+LIFE's side (unchanged code, read and measured): the GLIDE behaviour (brain.ts, B04 USE of the Ice Pond) walks a squishy to a use point on
+the ice (`iceUsePoint`: the pond's middle side, inside the bodies' bounds) and gives it one nudge across, 0.6..1.0 m/s (INTENT.GLIDE); the REACT
+(looks.ts reactMotion) counts the distance the body REALLY travels while its centre is on an ice patch, grounded, not walking, faster than
+0.05 m/s, for a family whose ice grip is under 0.5 (10 of 12 families: not sticky stretch 0.7, not slime 0.8); at 0.5 m it fires (10 s apart).
+**What physics must give** (PG_PHYS built it this round, R6_PHYS 1): (1) the Ice Pond patch's grip read per body as the family's ice grip x
+`ICE_MU` 0.3 (absolute) and its drag x 0.25, eased in 0.1 s, in BOTH layouts from the layout's own patch spot and radius; (2) with that, a
+nudge of 0.8 m/s carries firm silicone 0.69 m, pop dome 0.68, gummy 0.66, jelly 0.61, water fill 0.60, bead squeeze 0.50 (their numbers):
+six families reach LIFE's 0.5 m, so two kinds can glide (I3 is reachable); slower foams and putty glide less than 0.5 at 0.8 m/s and more
+at 1.0 (about v squared); (3) the body stops dead off the ice (their 0.005 m), so the glide must happen ON the ice: the tall Ice Pond is
+1.5 m across with its use point inside the bounds; (4) I6: pieces glide like their family (the pieces count needs nothing new).
+**Found and fixed on the data side**: in my first tall Frostbell layout the pond's middle stood at x 1.1, outside the bodies' bounds shrunk
+by a body, so `iceUsePoint` failed and no squishy ever went to glide (measured: 0 glide intents in 40 s). The pond now stands at x 0.65:
+2 glides in 40 s from four starting spots (LIFE host). Row LF-27 below checks it.
+Not done: a glide row on the REAL physics world (PG_PHYS's PH-08 / glide rows are theirs; the LIFE host coasts a glide kinematically).
+
+## 5. Lanternroof and Cloudloft complete (DONE)
+| What | Lanternroof (L1..L10) | Cloudloft (U1..U10) |
+|---|---|---|
+| quests | 10 clauses, every one with a producer in the data (QL row) | 10 clauses, every one with a producer (QL) |
+| LIFE REACT producers | GAZE_SKY (L2: idle by the Moon Dish at night 3 s), HOLD_ON (L5, L6 pieces: the Night Breeze's gusts) | LIFT (U3: airborne in the Updraft 0.3 s) |
+| SOCIAL | SING minN 3 (L8), PUSH hammock (L9: a swing) | PUSH kiteswing (a swing), COPY puffpads (pads), PASS cloudball (a ball), PARADE sunbowarch (S05 COPY with 3, an arch), PILE cloudnest (a ring) |
+| USE | lanternline RING x3 distinct part (5 lanterns), vanedisc SPIN, starscope SWITCH by PLAYER | puffpads BOUNCE x3; PIECES BOUNCE (PIECES_USE + BOUNCE: the pads' verb) |
+| facts (F1) | 9 fans | 9 fans |
+| wishes | THING wish kinds 18 (bell, flame); never masked (DROPPED_PLACE_MASK is 5, 6, 8) | THING wish kinds 1 (ball) |
+| shipped-on-host coverage (QC info, wide, kinematic host) | 2 of 6 LIFE clauses on this host (not: L3 L4 L8 L9: lantern strikes, the vane's spin and the hammock need contacts and torque; SING of three needs time) | 4 of 7 (not: U2 U4 U8: the pads' kick, the swing, a parade of three) |
+
+Probe rows: probe_pg_lifequests NEW **QL** (every clause of L1..L10, U1..U10 has its producer in the data: REACT trigger + caps, SOCIAL row +
+caps + the thing's mechanism, USE thing + verb + parts, PIECES, F1 fans, VISIT opening; THING_KINDS > 0; not masked) ok. It caught one wrong
+assumption of mine (PARADE has no SOCIAL row: it is S05 COPY with three, LIFE 6.1), fixed in the row with the reason. probe_life NEW **LF-27**
+(the place REACTs on the re-laid TALL layouts: DRIFT in Ripple's Rock Pool 4.4 s, GLIDE on Frostbell's Ice Pond 7.0 s and 28.1 s, GAZE_SKY by
+the Moon Dish 10.2 s, HOLD_ON x4 in the Night Breeze, LIFT x2 in the Updraft) ok. The LIFE host (`_harness/life_host.ts`) now drifts a floater
+by the zone of the layout in use (it used the wide zone's centre on the tall layout too).
+
+## Requests to other lanes
+- **PG_RENDER**: (1) `render/placeview.ts fitPlace`: when width-bound on a phone the vertical aims tie and the pill line jumps 2.3..3.8 m with
+  a few cm of framed depth; a tie-break toward the lowest aim (most floor in front) would make every layout's floor rule stable (my layouts
+  are checked robust to it either way). (2) draw a pool / puddle from the layout's ZONE (spot and radius): the tall Splash Spots, Rock Pool,
+  Steam Pool and Ice Pond differ from the thing's shared size. (3) the Puff Pads: three parts at p.x1/z1, p.x2/z2 (wide) and p.tx1/tz1,
+  p.tx2/tz2 (tall), as physics builds them. (4) SQUIRT: item 3's seam (drops along an arc). (5) Home kit shelf: 17 keepsakes now (was 20).
+- **PG_SHELL**: (1) LIFE_EV.SQUIRT sound + hand-off to the render (item 3). (2) gift card: use `CHAPTERS[c].giftPlace` for "loves the next
+  place". (3) Keepsakes pane: the finale lines now name their own place (the old `placeName(bit + 1)` named the next one).
+- **PG_PHYS**: (1) the Ripple shared sizes (Driftwood Log 1.45 m, Shell Chimes hang 0.4) change your builds; your 73 rows pass with them. (2)
+  the Puff Pads' tall spots are now given (p.tx1/tz1 = 0.2, -3.2; p.tx2/tz2 = -1, -3.15). (3) your surf row (a mini marshmallow on the Sand
+  Mound's slope must drift 0.03 m shoreward; it drifts 0.031 at HEAD) is on a knife edge: a 0.12 m smaller mound sends it seaward.
+- **Orchestrator / owner**: Cloudloft's tall spawn spots (item 2 table): pick one of the three options.
+
+## Final numbers (end of round 6, one probe at a time, `scratchpad/r6_data/probes.sh`)
+`npx tsc --noEmit -p tsconfig.json`: **0 errors** (the whole tree, PG_PHYS's props.ts included at the end).
+| probe | HEAD 4225da645 | now | note |
+|---|---|---|---|
+| probe_app | 187/187 | **187/187** | |
+| shellview/node_checks | 171/171 | **171/171** (103 s) | reads Ripple / Frostbell / Rainleaf |
+| probe_gestures | 160/160 | **160/160** | |
+| probe_trophies | 31/31 | **31/31** | |
+| probe_merge | 22/22 | **22/22** | |
+| probe_playground (quick set) | 55/55 (now 73 rows with PG_PHYS's) | **73/73** | after the Sand Mound revert (72/73 with r 0.78: the surf row) |
+| probe_pg_lifequests | 14/14 | **16/16** | + R7, + QL |
+| probe_life | 117 ok / 1 (LF-02) | **121 ok / 1 (LF-02, known)** | + 3 S14 squirt rows, + LF-27 |
+| probe_chatter | 42/42 | **42/42** | |
+| renderview/pg_node_checks | 40 ok | **40 ok, 0 FAIL** | |
+| probe_journal | 28 ok | **29 ok** | + CO-13 |
+| probe_quests | 45 ok, 3 NOT RUN | **46 ok**, 3 NOT RUN | + QU-14 tombstone row |
+| probe_pg_data | 32 ok, 2 FAIL (known) | **40 ok, 3 FAIL** | the 2 known (Home B5 needs RENDER; Hearthlog tall rocker under the pill, live cabin not changed) + Cloudloft tall (3 spawn problems: newly strict this round) |
+| probe_genome / probe_life_imports | 25 / 5 | **25 / 5** | |
+| audioview/life_checks.mjs (browser, 5367) | | **80/80** | the one heavy job; vite and the browser it started exit with it |
+
+Not done: Cloudloft's tall spawn spots (owner's call, item 2); a glide row on the real physics world (PG_PHYS's); the QC sweep on the tall
+layouts (it runs wide; LF-27 covers the place REACTs on tall); the Hearthlog tall rocker (live cabin, unchanged by this lane).

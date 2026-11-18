@@ -141,10 +141,12 @@ export class Sim {
       if (b.air > 0) { b.x += b.vx * dt; b.z += b.vz * dt; b.air -= dt; if (b.air <= 0) { b.air = 0; b.vx = 0; b.vz = 0; } else { vx += b.vx; vz += b.vz; } }
       // (round 4) a glide coasts and slows (the ice's drag); a floater in a water zone with a flow drifts round its centre at the flow
       if (Math.abs(b.gx) + Math.abs(b.gz) > 0.02) { b.x += b.gx * dt; b.z += b.gz * dt; vx += b.gx; vz += b.gz; const kk = Math.exp(-0.5 * dt); b.gx *= kk; b.gz *= kk; } else { b.gx = 0; b.gz = 0; }
-      if (b.float && b.air <= 0) for (const z of this.def.zones) {
+      // (round 6, R6_DATA) the zone's area in the layout in use (the tall layout's own spot and radius on a phone), as the snapshot's zones above
+      if (b.float && b.air <= 0) for (let zk = 0; zk < this.def.zones.length; zk++) {
+        const z = this.def.zones[zk], za = this.layout === 1 ? this.def.tall.zones[zk] : z;
         if (z.kind !== ZONE.water || !z.flow || this.zoneOff.has(z.id) || z.shape !== 'disc') continue;
-        const dx = b.x - z.x, dz = b.z - z.z, d = Math.hypot(dx, dz);
-        if (d > (z.r ?? 0) || d < 0.05) continue;
+        const dx = b.x - za.x, dz = b.z - za.z, d = Math.hypot(dx, dz);
+        if (d > (za.r ?? 0) || d < 0.05) continue;
         const ux = -dz / d * z.flow[0], uz = dx / d * z.flow[0]; b.x += ux * dt; b.z += uz * dt; vx += ux; vz += uz;
       }
       b.vx = b.air > 0 ? b.vx : vx; b.vz = b.air > 0 ? b.vz : vz;

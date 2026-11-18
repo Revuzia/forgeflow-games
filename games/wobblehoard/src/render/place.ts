@@ -48,8 +48,14 @@ export interface PlaceBuilt {
   /** The heat point (the fire): toast browns the side facing it (StageLike.setHeatPoint). */
   readonly heat: readonly [number, number, number] | null;
   /** Draw calls the set and props use (RD-08 counts them in the browser; this is the kit's own count). */
-  /** One frame; `finale` = the host's eased finale amount 0..1 (PlaceLook.finale; 0 when the place has none). */
-  update(dt: number, time: number, quiet: boolean, reduced: boolean, tier: number, finale?: number): void;
+  /** One frame; `finale` = the host's eased finale amount 0..1 (PlaceLook.finale; 0 when the place has none). Round 6: with `bodies` set, `B`
+   *  holds the visible bodies this frame, stride 5 (centre x, y, z, live radius, view id), `nB` of them (at most BODY_FEED; the Ice Pond's
+   *  glide streaks, Cloudloft's dents). */
+  update(dt: number, time: number, quiet: boolean, reduced: boolean, tier: number, finale?: number, B?: Float32Array, nB?: number): void;
+  /** Round 6: the place reads the bodies feed in update() (the host fills it only then). */
+  readonly bodies?: boolean;
+  /** Round 6 (the harness): counts of the place's live marks (Frostbell: glide streaks and sheens; Cloudloft: dents). */
+  stats?(): Record<string, number>;
   /** StageLike.thingFx: a thing's own effect (kind 1 a puff: the kettle's steam, the hearth's fire, the pine's snow, the drip leaf's shower;
    *  thing -1 kind 2: the finale spectacle, amount 0..1 eased by the place). False when the place has no such effect. */
   thingFx?(thing: number, kind: number, amount: number): boolean;
@@ -71,13 +77,18 @@ export interface PlaceLook {
   build(kit: PropKit, layout: 0 | 1): PlaceBuilt;
 }
 
-/** The lazy place look chunks (one per shipped place; T1 names each by this module). */
+/** The lazy place look chunks (one per place of D-96's seven but Home; T1 names each by this module). Round 6: Lanternroof and Cloudloft;
+ *  the three dropped places (Fizzwell Tub, Cogwhistle Bench, Echo Hollow) never had a look and get none (D-96). */
 const LOADERS: Record<string, () => Promise<{ default: PlaceLook }>> = {
   hearthlog: () => import('./places/hearthlog.ts'),
   ripple: () => import('./places/ripple.ts'),
   frostbell: () => import('./places/frostbell.ts'),
   rainleaf: () => import('./places/rainleaf.ts'),
+  lanternroof: () => import('./places/lanternroof.ts'),
+  cloudloft: () => import('./places/cloudloft.ts'),
 };
+/** Round 6: the most bodies the feed of PlaceBuilt.update carries (a party of 5 and a few pieces). */
+export const BODY_FEED = 12;
 export const PLACE_LOOKS = Object.keys(LOADERS);
 
 const SHADOW_FRAG = 'varying vec2 vP; varying float vA; void main(){ float r = length(vP); float a = (1.0 - smoothstep(0.35, 1.0, r)) * vA; gl_FragColor = vec4(0.0, 0.0, 0.0, a); }';
@@ -87,6 +98,8 @@ const SHADOW_VERT = 'attribute float aAmt; varying vec2 vP; varying float vA; vo
 export const UV_VERT = 'varying vec2 vUv; varying vec3 vWP; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vWP = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }';
 /** Band-limited value noise for place grounds and cards (pN in 0..1; pFbm two octaves). */
 export const NOISE = 'float pH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); } float pN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(pH(i), pH(i + vec2(1.0, 0.0)), f.x), mix(pH(i + vec2(0.0, 1.0)), pH(i + vec2(1.0, 1.0)), f.x), f.y); } float pFbm(vec2 p){ return 0.65 * pN(p) + 0.35 * pN(p * 2.13 + 7.1); }';
+/** Round 6: a height's screen derivatives tilt the view-space normal (three's bump-map arithmetic, inline: no texture). */
+const BUMP = 'vec3 pBump(vec3 sp, vec3 sn, vec2 dh, float fd){ vec3 sx = normalize(dFdx(sp)), sy = normalize(dFdy(sp)); vec3 r1 = cross(sy, sn), r2 = cross(sn, sx); float det = dot(sx, r1) * fd; vec3 gr = sign(det) * (dh.x * r1 + dh.y * r2); return normalize(abs(det) * sn - gr); }';
 /** The water surface (one translucent draw per water zone, after the jellies: depth test on, depth write off): deep toward the middle, a
  *  sky mirror at grazing angles, slow ripples (uMotion: 1, 0.3 in Calm, 0 with reduced motion), a foam band at the edge (uFoam). */
 const WATER_FRAG = `varying vec2 vUv; varying vec3 vWP; uniform float uTime, uMotion, uFoam, uAlpha, uBox; uniform vec3 uDeep, uShallow, uSkyC, uFoamC; ${NOISE}
@@ -193,15 +206,32 @@ export class PropKit {
   }
   /** A ground (or any surface) material: MeshStandardMaterial with the world position and `glsl` in place of the colour stage (it may read
    *  vWP, the NOISE functions and its own uniforms `u`), cached by `key`. */
-  surface(key: string, c: Rgb, rough: number, glsl: string, u: Record<string, { value: unknown }> = {}, env = 0.3): THREE.MeshStandardMaterial {
+  surface(key: string, c: Rgb, rough: number, glsl: string, u: Record<string, { value: unknown }> = {}, env = 0.3, bump = 0): THREE.MeshStandardMaterial {
     const m = this.mat(key, c, rough, env);
-    const decl = Object.keys(u).map((k) => `uniform ${(u[k].value as THREE.Color).isColor ? 'vec3' : typeof u[k].value === 'number' ? 'float' : 'vec4'} ${k};`).join('');
+    // (round 6: an array of Vector4 declares a vec4 array: the Ice Pond's streaks, Cloudloft's dents)
+    const decl = Object.keys(u).map((k) => { const v = u[k].value; return Array.isArray(v) ? `uniform vec4 ${k}[${v.length}];` : `uniform ${(v as THREE.Color).isColor ? 'vec3' : typeof v === 'number' ? 'float' : 'vec4'} ${k};`; }).join('');
     m.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, u);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vWP;${decl}${NOISE}`).replace('#include <color_fragment>', `#include <color_fragment>\n{${glsl}}`);
+      // (round 6: an instanced part's world position includes its instance matrix; it was the part's local position before)
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <begin_vertex>', '#include <begin_vertex>\n#ifdef USE_INSTANCING\nvWP = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;\n#else\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#endif');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vWP; float pBH = 0.0;${decl}${NOISE}${bump > 0 ? BUMP : ''}`).replace('#include <color_fragment>', `#include <color_fragment>\n{${glsl}}`);
+      // (round 6) `bump` > 0: the glsl's height pBH (m) tilts the normal (lit billows and drifts: Cloudloft's cloud, Frostbell's snow)
+      if (bump > 0) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\nnormal = pBump(-vViewPosition, normal, vec2(dFdx(pBH), dFdy(pBH)) * ${bump.toFixed(3)}, faceDirection);`);
     };
     m.customProgramCacheKey = () => 'wh-pl-' + key;
+    return m;
+  }
+  /** Round 6: a standard material whose colour stage is `glsl` over the part's LOCAL position vLP (its own pattern: the Vane Disc's wind
+   *  rose, the hammock's stripes, the Sunbow's bands; it may read vLP, vLN (the local normal), the NOISE functions and `u`), cached by key. */
+  local(key: string, c: Rgb, rough: number, glsl: string, u: Record<string, { value: unknown }> = {}, env = 0.3): THREE.MeshStandardMaterial {
+    const m = this.mat(key, c, rough, env);
+    const decl = Object.keys(u).map((k) => `uniform ${(u[k].value as THREE.Color).isColor ? 'vec3' : 'float'} ${k};`).join('');
+    m.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLP; varying vec3 vLN;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvLP = position; vLN = normal;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vLP; varying vec3 vLN;${decl}${NOISE}`).replace('#include <color_fragment>', `#include <color_fragment>\n{${glsl}}`);
+    };
+    m.customProgramCacheKey = () => 'wh-pll-' + key;
     return m;
   }
   /** The place's ground: a 40 x 40 m plane, top at y = 0 (renderOrder -50). (Round 3: 16 m showed its near edge at the bottom of a tall
@@ -209,7 +239,8 @@ export class PropKit {
   ground(m: THREE.Material): THREE.Mesh { const g = this.mesh(this.geo('ground', () => new THREE.PlaneGeometry(40, 40).rotateX(-Math.PI / 2)), m, 0, 0, 0, -50); return g; }
   /** A backdrop card (unlit, low poly; renderOrder -99..-51) drawn by `frag` (vUv, vWP, NOISE, uTime / uMotion and its uniforms). */
   card(frag: string, u: Record<string, { value: unknown }>, w: number, h: number, x: number, y: number, z: number, ry: number, order: number, transparent = false): THREE.Mesh {
-    const decl = Object.keys(u).filter((k) => k !== 'uTime' && k !== 'uMotion').map((k) => `uniform ${(u[k].value as THREE.Color).isColor ? 'vec3' : 'float'} ${k};`).join('');
+    // (round 6: a Vector3 or Vector4 uniform declares a vec3 / vec4: Lanternroof's moon, its tile insets)
+    const decl = Object.keys(u).filter((k) => k !== 'uTime' && k !== 'uMotion').map((k) => { const v = u[k].value as { isColor?: boolean; isVector3?: boolean; isVector4?: boolean }; return `uniform ${v.isColor || v.isVector3 ? 'vec3' : v.isVector4 ? 'vec4' : 'float'} ${k};`; }).join('');
     const mat = this.own(new THREE.ShaderMaterial({ vertexShader: UV_VERT, fragmentShader: `varying vec2 vUv; varying vec3 vWP; uniform float uTime, uMotion; ${decl} ${NOISE}\n${frag}`, uniforms: { uTime: { value: 0 }, uMotion: { value: 1 }, ...u },
       toneMapped: false, transparent, depthWrite: !transparent }));
     const c = this.mesh(this.geo(`card${w},${h}`, () => new THREE.PlaneGeometry(w, h)), mat, x, y, z, order); c.rotation.y = ry;
@@ -279,7 +310,7 @@ export interface StageCtx {
   readonly scene: THREE.Scene;
   readonly table: { setSky(p: SkyLook | null): void; setFelt(on: boolean): void };
   readonly key: THREE.SpotLight; readonly rim: THREE.DirectionalLight; readonly fill: THREE.HemisphereLight;
-  views(): readonly { mats: { setLight(l: JellyLight | null): void } }[];
+  views(): readonly BodyFeedView[];
   readonly heat: THREE.Vector4;
   setSkyBand(r: number, g: number, b: number): void;
   /** A body's centre (xyz) and rest radius into out[0..3]; false when unknown or hidden (the reaction presets follow it). */
@@ -287,6 +318,8 @@ export interface StageCtx {
   /** A phone frame (a coarse pointer or a short side under 600 CSS px): LIFE 10.1's phone particle budget. */
   phone(): boolean;
 }
+/** What the host reads of a stage body view (bodyview.ts BodyView): its light, and (round 6) its centre and size for the bodies feed. */
+export interface BodyFeedView { readonly mats: { setLight(l: JellyLight | null): void }; readonly id: number; readonly visible: boolean; readonly liveRadius: number; readonly proxy: { readonly center: { readonly x: number; readonly y: number; readonly z: number } } }
 /** The jellies' own light terms in a place (material.ts JellyMaterials.setLight). */
 export interface JellyLight { keyDir: THREE.Vector3; rimDir: THREE.Vector3; keyCol: THREE.Color; rimCol: THREE.Color; keyTint: Rgb }
 
@@ -376,6 +409,8 @@ export class ReactFx {
 const STEAM_C = tok('cream', 'cream', 0, 0.97), DRIP_C = tok('lagoon', 'cream', 0.25), BUBBLE_C = tok('lagoon', 'cream', 0.15, 1.05);
 /** Round 3: the strands' pale coral-cream (a sticky thread) and the ripple ring's foam (lagoon-cream, lighter than a drip). */
 const STRAND_C = tok('cream', 'coral', 0.3, 0.92), FOAM_C = tok('cream', 'lagoon', 0.2);
+/** Round 6: the squirt's flight time (src/data/life.ts SQUIRT.arcS), its gravity and its drops' colour (a little lighter than a drip). */
+const SQUIRT_S = 0.4, SQUIRT_G = 9.8, DROP_C = tok('lagoon', 'cream', 0.4, 1.05);
 
 /** The host: loads place looks, swaps one in (sky, ground, light, environment, things) and out, poses its movers, frames its bounds. */
 export class PlaceHost {
@@ -448,16 +483,17 @@ export class PlaceHost {
     const was = !!this.cur;
     this.ctx = c;
     if (this.cur) { this.cur.built.dispose(); this.cur.kit.dispose(); this.cur = null; }
-    this.fx.clear();
+    this.fx.clear(); this.drops.clear(); this.sq.fill(0);
     if (!id) {
       if (was) { c.table.setSky(null); c.table.setFelt(true); this.applyLight(c, null); this.hub.setPanels(c.renderer, null); c.heat.set(0, 0, 0, 0); }
-      this.fx.soft.mesh.removeFromParent(); this.fx.glow.mesh.removeFromParent();
+      this.fx.soft.mesh.removeFromParent(); this.fx.glow.mesh.removeFromParent(); this.drops.mesh.removeFromParent();
       return true;
     }
     const look = this.looks.get(id)!, kit = new PropKit(this.hub), built = look.build(kit, layout);
     this.cur = { id, layout, look, built, kit };
     c.scene.add(built.group);
     if (!this.fx.soft.mesh.parent) c.scene.add(this.fx.soft.mesh, this.fx.glow.mesh);
+    if (!this.drops.mesh.parent) c.scene.add(this.drops.mesh);
     c.table.setSky(look.sky); c.table.setFelt(false);
     this.applyLight(c, look.light(layout));
     this.hub.setPanels(c.renderer, look.panels);
@@ -514,7 +550,80 @@ export class PlaceHost {
     }
     if (relight && this.ctx) this.mixLight(this.ctx, c.look);
     this.fx.update(dt, time, quiet, reduced, this.ctx ? this.ctx.phone() : true, this.ctx);
-    c.built.update(dt, time, quiet, reduced, tier, this.finNow);
+    this.squirtStep(dt, quiet, reduced);
+    // (round 6) the bodies feed, only for a place that reads it: visible bodies' centres and sizes (zero allocation)
+    let nB = 0;
+    if (c.built.bodies && this.ctx) {
+      const F = this.feed;
+      for (const v of this.ctx.views()) {
+        if (nB >= BODY_FEED) break;
+        if (!v.visible) continue;
+        const o = nB * 5, p = v.proxy.center;
+        F[o] = p.x; F[o + 1] = p.y; F[o + 2] = p.z; F[o + 3] = v.liveRadius; F[o + 4] = v.id; nB++;
+      }
+    }
+    c.built.update(dt, time, quiet, reduced, tier, this.finNow, this.feed, nB);
+  }
+  private readonly feed = new Float32Array(BODY_FEED * 5);
+  /**
+   * Round 6 (R6_DATA 3, LIFE_EV.SQUIRT): a squeezed, soaked squishy squirts: `drops` small water drops along a ballistic arc of SQUIRT_S
+   * (0.4 s) from the top of body `from` to body `to` (its upper half), or, with no target (to < 0, 255 or unknown), 1.2 m ahead along
+   * (dirX, dirZ) (default: sideways toward the frame's middle). The drops leave over 0.12 s (a little stream, not a burst), streaked along
+   * their flight, lagoon-cream, normal blend; then a small splash of motes where they land, except in Calm or with reduced motion (LIFE's
+   * `sub` already holds the 4-drop count for those). Only in a place; false at Home or for an unknown squirter. Zero allocation.
+   */
+  squirt(from: number, to: number, drops: number, dirX: number, dirZ: number): boolean {
+    const c = this.ctx, a = this.at;
+    if (!this.cur || !c || !c.body(Math.floor(from), a)) return false;
+    const n = Math.max(1, Math.min(16, Math.round(Number.isFinite(drops) ? drops : 12)));
+    const x0 = a[0], y0 = a[1] + a[3] * 0.8, z0 = a[2], R0 = a[3];
+    let x1: number, y1: number, z1: number;
+    const tid = Math.floor(to);
+    if (tid >= 0 && tid !== 255 && tid !== Math.floor(from) && c.body(tid, a)) { x1 = a[0]; y1 = a[1] + a[3] * 0.25; z1 = a[2]; }
+    else {
+      let dx = Number.isFinite(dirX) ? dirX : 0, dz = Number.isFinite(dirZ) ? dirZ : 0;
+      if (Math.hypot(dx, dz) < 1e-3) { dx = x0 > 0 ? -1 : 1; dz = 0.25; }
+      const L = Math.hypot(dx, dz), reach = 1.2 + R0;
+      x1 = x0 + (dx / L) * reach; y1 = 0.05; z1 = z0 + (dz / L) * reach;
+    }
+    const S = this.sq, T = SQUIRT_S;
+    S[0] = x0; S[1] = y0; S[2] = z0;
+    S[3] = (x1 - x0) / T; S[4] = (y1 - y0) / T + 0.5 * SQUIRT_G * T; S[5] = (z1 - z0) / T;
+    S[6] = n; S[7] = 1; S[8] = 0; S[9] = x1; S[10] = Math.max(0.02, y1); S[11] = z1; S[12] = 1; S[13] = n / 0.12;
+    // start the stream a hair outside the skin, toward the target
+    const h = Math.hypot(S[3], S[5]) || 1; S[0] += (S[3] / h) * R0 * 0.35; S[2] += (S[5] / h) * R0 * 0.35;
+    this.squirts++;
+    return true;
+  }
+  /** The squirt in flight: [x0, y0, z0, vx, vy, vz, drops left, emit accumulator, time since launch, landing x, y, z, splash pending, drops a second]. */
+  private readonly sq = new Float32Array(14);
+  /** How many squirts started (the harness counts them). */
+  squirts = 0;
+  private readonly at = new Float32Array(4);
+  /** The drops (a small normal-blend pool of their own: the presets' budget never starves a squirt the player made). */
+  readonly drops = new Particles(40, 35, true);
+  private squirtStep(dt: number, quiet: boolean, reduced: boolean): void {
+    const S = this.sq, D = this.drops;
+    if (S[6] > 0 || S[12] > 0) {
+      S[8] += dt;
+      if (S[6] > 0) {
+        S[7] += dt * S[13];
+        while (S[7] >= 1 && S[6] > 0) {
+          S[7] -= 1; S[6]--;
+          const k = S[6], j = 0.93 + 0.1 * ((k * 0.618) % 1), up = (((k * 0.382) % 1) - 0.5) * 0.25;
+          // (round 6, the place run's shot: 2 cm drops were specks at the place camera's 20 m; 4 to 5 cm read as water)
+          D.emit(sp(S[0], S[1], S[2], S[3] * j, S[4] * j + up, S[5] * j, SQUIRT_S / j + 0.3, 0.04 + 0.012 * ((k * 0.73) % 1), DROP_C, 1, 0, SQUIRT_G, 2, 2));
+        }
+      }
+      if (S[12] > 0 && S[8] >= SQUIRT_S) {
+        S[12] = 0;
+        if (!quiet && !reduced) for (let k = 0; k < 7; k++) {
+          const t = k * 0.8976, cc = Math.cos(t), ss = Math.sin(t);
+          D.emit(sp(S[9] + cc * 0.04, S[10], S[11] + ss * 0.04, cc * 0.45, 0.55 + 0.25 * ((k * 0.618) % 1), ss * 0.45, 0.45, 0.028, FOAM_C, 0.9, 0.5, 6, 0, 1));
+        }
+      }
+    }
+    D.update(dt, 0);
   }
   async load(id: string): Promise<boolean> {
     if (this.looks.has(id)) return true;
@@ -523,4 +632,6 @@ export class PlaceHost {
     try { const m = await ld(); this.looks.set(id, m.default); return true; } catch { return false; }
   }
   look(id: string): PlaceLook | null { return this.looks.get(id) ?? null; }
+  /** Round 6 (the harness): the place in use's own counts (PlaceBuilt.stats), {} when it has none. */
+  stats(): Record<string, number> { return this.cur?.built.stats?.() ?? {}; }
 }

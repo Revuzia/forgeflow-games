@@ -222,7 +222,7 @@ export async function boot(): Promise<(() => void) | null> {
   let lifeTries = 0, lifeTimer = 0, lifeGone = false, lifeUiOff: () => void = () => { /* nothing yet */ };
   // round 5 (VERDICT_PG B3, B8): the play-time UI (ui/later-play.ts, its own later chunk): the tracker pill, the stamp moments in a free spot one at a time,
   // the wish card, the party popover. Until it lands a moment is the published toast.
-  let playUi: { moment(t: string): void; showWish(sp: number, k: number, t: number, byKey?: boolean): void; destroy(): void } | null = null;
+  let playUi: { moment(t: string, said?: boolean): void; showWish(sp: number, k: number, t: number, byKey?: boolean): void; destroy(): void } | null = null;
   const loadLife = (): void => {
     if (lifeGone || g.life || g.phase !== 'play') return;
     lifeTries++;
@@ -233,7 +233,7 @@ export async function boot(): Promise<(() => void) | null> {
         parts: { attachJournal: mq.attachJournal, buildPropWorld: mp.buildPropWorld },
         storage, subscribe,
         say: (t) => ui.announcer.say(t),
-        moment: (t) => { if (playUi) playUi.moment(t); else ui.toasts.show('success', t, { ms: 3200 }); },
+        moment: (t, said) => { if (playUi) playUi.moment(t, said); else ui.toasts.show('success', t, { ms: 3200 }); },
         stampHaptic: () => { try { g.haptics.uiTap?.('ready'); } catch { /* none */ } },
         phone: () => isCoarsePointer() || Math.min(window.innerWidth, window.innerHeight) < 600,
         reducedMotion: () => prefersReducedMotion(),
@@ -246,7 +246,7 @@ export async function boot(): Promise<(() => void) | null> {
         lifeUiOff = () => { taps.destroy(); auto.destroy(); playUi?.destroy(); playUi = null; };
         import('../ui/later-play.ts').then((pm) => {
           if (lifeGone || g.life !== host) return;
-          playUi = pm.attachPlayUi({ root, host, game: g, say: (t) => ui.announcer.say(t), openJournal: (from, at) => { void ui.openJournal(from, at); } });
+          playUi = pm.attachPlayUi({ root, host, game: g, say: (t) => ui.announcer.say(t), openJournal: (from, at) => { void ui.openJournal(from, at); }, openTravel: (from) => { void ui.openTravel(from); } });
         }).catch((e: unknown) => { console.error(e); });
       }
       ui.lifeAttached();

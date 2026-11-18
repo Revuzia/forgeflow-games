@@ -7,6 +7,7 @@
 // thingFx: the shower when it is tapped) and the Seed Pod. BOTH layouts from the same kit, every position the data module's. Token colours.
 import * as THREE from 'three';
 import { type PlaceLook, type PlaceBuilt, type PropKit, type PlaceLight, Emitter, Batch, tok, col, sp, yawQ } from '../place.ts';
+import { Particles } from '../particles.ts';
 import type { PanelDef } from '../env.ts';
 import PLACE from '../../data/place_rainleaf.ts';
 
@@ -18,6 +19,11 @@ const LOAM = /* glsl */`
   float crumb = pN(p * 23.0) * (1.0 - smoothstep(0.01, 0.04, fw));
   vec3 c = uLoam * (0.8 + 0.3 * n + 0.12 * crumb);
   c = mix(c, uDamp, smoothstep(0.45, 0.7, d) * 0.6);
+  ${/* (round 6: the tall frame's near ground read as a plain umber-to-teal gradient: clods and furrows are a height now (lit through the bump),
+     and low moss grows in patches, darker and greener in their hearts) */ ''}
+  pBH = n * 0.05 + pN(p * 6.0) * 0.012 * (1.0 - smoothstep(0.01, 0.05, fw));
+  float mo = smoothstep(0.66, 0.8, pFbm(p * 1.5 + 11.0)) * smoothstep(0.35, 0.6, pN(p * 0.4 + 3.0));
+  c = mix(c, uMoss * (0.8 + 0.35 * pN(p * 14.0) * (1.0 - smoothstep(0.01, 0.04, fw))), mo * 0.6);
   ${/* (round 3: fewer, darker fallen-leaf flecks, each a small leaf shape; round 2's round coral dots read as a polka-dot print) */ ''}
   vec2 fq = fract(p * 4.0) - 0.5; float fa = 6.2832 * pH(floor(p * 4.0) + 7.0);
   fq = mat2(cos(fa), sin(fa), -sin(fa), cos(fa)) * fq;
@@ -107,8 +113,8 @@ const LOOK: PlaceLook = {
     const zn = (i: number): { x: number; z: number; r?: number } => (tall ? T.zones[i] : PLACE.zones[i]);
     const stonesP = tall ? T.patches[0] : PLACE.patches[0];
     // ---- materials ----
-    const loamU = { uLoam: { value: col(tok('coral', 'amber', 0.45, 0.33)) }, uDamp: { value: col(tok('plum', 'ink', 0.4, 0.95)) }, uFleck: { value: col(tok('lagoon', 'amber', 0.55, 0.42)) } };
-    const loam = kit.surface('loam', [1, 1, 1], 0.55, LOAM, loamU, 0.55);
+    const loamU = { uLoam: { value: col(tok('coral', 'amber', 0.45, 0.33)) }, uDamp: { value: col(tok('plum', 'ink', 0.4, 0.95)) }, uFleck: { value: col(tok('lagoon', 'amber', 0.55, 0.42)) }, uMoss: { value: col(tok('lagoon', 'ink', 0.5, 0.62)) } };   // (round 6, shots: a bright moss read as camouflage: a dark teal moss, smaller patches)
+    const loam = kit.surface('loam', [1, 1, 1], 0.55, LOAM, loamU, 0.55, 1.0);
     // (round 3: the stones a wet blue-grey slate; the dusk-ink ones read as violet spots, the ink-cream ones as pink coins)
     const stone = kit.mat('stone', tok('ink', 'lagoon', 0.32, 1.2), 0.45, 0.4), pebble = kit.mat('pebble', tok('ink', 'cream', 0.45, 0.85), 0.6, 0.35);
     const moss = kit.surface('moss', [1, 1, 1], 0.95, '  float n = pFbm(vWP.xz * 9.0); diffuseColor.rgb = mix(uM1, uM2, n);', { uM1: { value: col(tok('lagoon', 'amber', 0.4, 0.5)) }, uM2: { value: col(tok('lagoon', 'amber', 0.45, 0.68)) } }, 0.15);
@@ -203,7 +209,9 @@ const LOOK: PlaceLook = {
       p.emit(sp((r() - 0.5) * 2 * W, 2.8 + r() * 0.8, (r() - 0.5) * 2 * D, 0.25, -5.5 - r(), 0.1, 0.62, 0.009, RAIN, 0.5, 0, 0, 2, 2));
     }, 120);
     g.add(rain.particles.mesh); kit.own(rain);
-    let t = 0, shower = 1, shK = 0, finale = 0, q = false, rm = false, tr = 1;
+    let t = 0, shower = 1, shK = 0, finale = 0, q = false, rm = false, tr = 1, fiveAt = -1, fiveDone = -1;
+    const five = kit.own(new Particles(8, 34, true)), FIVE: [number, number, number] = [0.78, 0.95, 1.0];
+    g.add(five.mesh);
     const movers: (THREE.Object3D | readonly THREE.Object3D[] | null)[] = [null, board, pad, null, null, podG];
     return {
       group: g, movers, moverKind: [0, 1, 0, 0, 0, 1], heat: null,
@@ -216,6 +224,15 @@ const LOOK: PlaceLook = {
         rain.update(dt, time, quiet, reduced, tier, shower);
         shK = Math.max(0, shK - dt);
         drips.update(dt, time, quiet, reduced, tier, shK > 0 ? 6 : 0.4 + shower);
+        // (round 6) the finale's five drips in key: once the rain has stopped, five bright drops fall from the leaf's tip one by one, 0.75 s
+        // apart (none with reduced motion; the rain still stops)
+        if (finale > 0.5 && fiveAt < 0) fiveAt = t;
+        if (finale < 0.05) { fiveAt = -1; fiveDone = -1; }
+        if (fiveAt >= 0 && !reduced) {
+          const k = Math.floor((t - fiveAt - 2.0) / 0.75);
+          if (k >= 0 && k < 5 && k !== fiveDone) { fiveDone = k; five.emit(sp(drip.x, tipY, drip.z, 0, -0.2, 0, 0.9, 0.03, FIVE, 1, 0, 6, 2, 2)); }
+        }
+        five.update(dt, time);
       },
       thingFx(thing, kind, amount) {
         if (kind === 2 && thing === -1) { finale = amount; return true; }   // the rain stops (the drips stay)

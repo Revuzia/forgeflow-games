@@ -868,6 +868,12 @@ export interface StageLike {
    *  kind 2 with thing -1 = the place's finale spectacle at `amount` 0..1 (0 ends it; the cabin's fire swells and its embers rise; Calm or
    *  reduced motion: a slow glow). False when the place draws no such effect. */
   thingFx?(thing: number, kind: number, amount: number): boolean;
+  /** PLAYGROUND (PG_RENDER round 6, additive; R6_DATA 3's seam): LIFE_EV.SQUIRT drawn: `drops` small water drops (the event's `sub`: 12, or 4
+   *  with Calm or reduced motion) along a 0.4 s ballistic arc (src/data/life.ts SQUIRT.arcS) from the top of body `fromId` (the event's `a`) to
+   *  body `toId` (its `b`), or, when toId is 255, negative or not a body, 1.2 m ahead along (dirX, dirZ) (the squirter's facing; omitted:
+   *  sideways toward the frame's middle); a small splash where they land (none in Calm or with reduced motion). The target's wet look is
+   *  LIFE's own (setBodyLook). Only in a place (false at Home or for an unknown squirter). Zero allocation. */
+  squirtFx?(fromId: number, toId: number, drops: number, dirX?: number, dirZ?: number): boolean;
 }
 
 /* ── PLAYGROUND audio (src/audio; PLAYGROUND_BUILD.md 10) ── */

@@ -2072,7 +2072,103 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     st.stats = stats0;
     await host.travel('home'); await stepA(60);
   }
+  // round 6 (R6_SHELL 2): what the S2 places need from the host, on the REAL physics, through the dev path (they hold with or without the data flip that ships them).
+  // (After every published row, so none of them starts from the state these trips leave: the N1 row above asks for uses in the cabin.)
+  {
+    type ZDbg = { zones: Array<[string, number, number]> | null; chars: Array<{ slot: number; itemId: string | null; x: number; z: number; looks: number[] }> };
+    const zd = (): ZDbg => host.debug() as unknown as ZDbg;
+    // (the host hands the bed ONE reused params object, zero allocation per frame: the weather is read at each call, not from the recorded reference)
+    const wLog: number[] = [];
+    const amb0 = audio.setAmbience as (...a: unknown[]) => unknown;
+    audio.setAmbience = (...a: unknown[]) => { const o = a[0] as { weather?: number } | undefined; if (o && typeof o.weather === 'number') wLog.push(o.weather); return amb0(...a); };
+    const weathers = (from: number): number[] => wLog.slice(from);
+    // Ripple Shore: the Surf Edge's waves (physics' own clock, 7 to 10 s apart) are heard by the bed: one weather event per wave as it rises
+    const a0 = wLog.length;
+    const okR = await host.travel('ripple', true);
+    let waveMax = 0;
+    for (let i = 0; i < 24; i++) { await stepA(60); const z = zd().zones?.find((q) => q[0] === 'surfedge'); if (z) waveMax = Math.max(waveMax, z[2]); }
+    const rW = weathers(a0);
+    check('PLAYGROUND (round 6) Ripple Shore: each wave of the Surf Edge (physics, 7 to 10 s apart) reaches the bed as it rises (setAmbience weather 0.8): 24 s, at least 2 waves heard, the wave level read from the world',
+      okR && rW.filter((v) => v === 0.8).length >= 2 && waveMax > 0.5, JSON.stringify({ okR, weathers: rW, waveMax }));
+    // Frostbell Ridge: the Wind Gap's gusts follow LIFE's gust clock (world.setGust from lifeGustOn: the push, LIFE's HOLD_ON and the sound agree) and each gust's start
+    // is heard (weather = its strength 0.6); the Shake Pine tapped (a still press on its trunk) shakes its branch: the snow puff falls on a squishy under it
+    const a1 = wLog.length;
+    const okF = await host.travel('frostbell', true);
+    let gustMax = 0, gustOnSamples = 0;
+    for (let i = 0; i < 30; i++) { await stepA(60); const z = zd().zones?.find((q) => q[0] === 'windgap'); if (z) { gustMax = Math.max(gustMax, z[2]); if (z[2] > 0.5) gustOnSamples++; } }
+    const fW = weathers(a1);
+    check('PLAYGROUND (round 6) Frostbell Ridge: the Wind Gap\'s gusts are driven from LIFE\'s gust clock (world.setGust: its level rises to 1 while one blows) and each gust\'s start is heard (setAmbience weather 0.6); 30 s: at least 2 gusts',
+      okF && fW.filter((v) => v === 0.6).length >= 2 && gustMax > 0.9 && gustOnSamples >= 2, JSON.stringify({ okF, weathers: fW, gustMax, gustOnSamples }));
+    const pineK = 6;   // (Frostbell's things: icepond, glideramp, steampool, iciclebells, snowdriftnest, snowball, shakepine)
+    let branch = -1, seen = 0;
+    if (bound.thing) for (let p = 0; p < bound.count; p++) if (bound.thing[p] === pineK && seen++ === 1) branch = p;
+    // (the play body set 0.45 m in front of the branch's centre: inside the puff's reach, clear of the trunk and the branch; 1.5 s for any bump's puff and the
+    // one-a-second limit to pass; then the snow of THAT body)
+    let bx = NaN, bz = NaN;
+    if (branch >= 0 && bound.poses) { bx = bound.poses[branch * 8]; bz = bound.poses[branch * 8 + 2] + 0.45; try { app.body.placeAt?.({ x: bx, y: app.body.center.y, z: bz }, { x: 0, y: 0, z: 0 }); } catch { /* none */ } }
+    await stepA(90);
+    const me = zd().chars.filter((c) => c.itemId === app.identity.itemId)[0];
+    const rec0 = (host.debug() as { counts: { records: number } }).counts.records, fx0 = log.of('thingFx').filter((x) => x.args[0] === pineK && x.args[1] === 1).length;
+    const snow0 = me?.looks?.[4] ?? 0;
+    await tap(thingPt(pineK, 0));
+    await stepA(10);
+    const after = zd().chars.find((c) => c.slot === me?.slot), tapP = dbg().tap;
+    const fx1 = log.of('thingFx').filter((x) => x.args[0] === pineK && x.args[1] === 1).length, rec1 = (host.debug() as { counts: { records: number } }).counts.records;
+    check('PLAYGROUND (round 6) the Shake Pine (PLACES 4.4 "tap it: it shakes"): a still click on its trunk is a thing tap (one more record: USE SHAKE by PLAYER) that pokes its branch; the branch\'s strike drops the snow puff (its puff drawn) on the squishy under it (snow +0.5, the pine as its source)',
+      branch >= 0 && tapP === 'shakepine' && rec1 > rec0 && fx1 > fx0 && (after?.looks?.[4] ?? 0) - snow0 >= 0.4, JSON.stringify({ branch, set: [+bx.toFixed(2), +bz.toFixed(2)], tap: tapP, records: [rec0, rec1], puff: [fx0, fx1], snow: [snow0, after?.looks?.[4] ?? null], at: after && [after.x, after.z] }));
+    // Rainleaf Garden: the Rain's shower envelope (40 s on, 30 s off, from the arrival) is heard by the bed as it turns on (1) and off (0)
+    const a2 = wLog.length;
+    const okG = await host.travel('rainleaf', true);
+    for (let i = 0; i < 44; i++) await stepA(60);
+    const gW = weathers(a2);
+    check('PLAYGROUND (round 6) Rainleaf Garden: the Rain\'s shower envelope reaches the bed: on at the arrival (setAmbience weather 1), off 40 s later (weather 0)',
+      okG && gW[0] === 1 && gW.includes(0) && gW.indexOf(0) > 0, JSON.stringify({ okG, weathers: gW }));
+    audio.setAmbience = amb0;
+    await host.travel('home'); await stepA(60);
+  }
   app.dispose();
+  // round 6 (D-96, the brief's rule "a save that already holds a stamp, wish or fact of a dropped place must still load without error"): the HOST on such a save
+  // (probe_journal CO-13's blob: Fizzwell Tub 5, Cogwhistle Bench 6 and Echo Hollow 8 in its places, visits, keepsakes, song places, a wish for 5, a gift row,
+  // the current place 8, done tombstones T1 / W3 / E10): it attaches, nothing of the three reaches its view, no open line names them, no trip goes there
+  {
+    const { journalDefs, createJournal } = await import('../../src/collection/journal.ts');
+    const { JOURNAL_KEY } = await import('../../src/collection/constants.ts');
+    const { QUESTS } = await import('../../src/data/quests.ts');
+    const { CATALOG } = await import('../../src/data/catalog.ts');
+    const { WISH_KIND } = await import('../../src/data/life.ts');
+    const qIdx = (id: string): number => QUESTS.findIndex((q) => q.id === id), spI = (id: string): number => CATALOG.findIndex((c) => c.id === id);
+    const st0 = createJournal(journalDefs(), 'dev-r6').st;
+    for (const id of ['H1', 'C1', 'R1', 'T1', 'W3', 'E10']) { const q = qIdx(id); if (q >= 0) st0.done[q >>> 5] |= 1 << (q & 31); }
+    const qd = Buffer.from(new Uint8Array(new Uint32Array(Array.from(st0.done)).buffer)).toString('base64');
+    const blob = { v: 1, dev: 'dev-r6', bf: 1, st: 6, qd, qp: [[qIdx('T1') + 1, 0, 1], [qIdx('E2'), 0, 1, [3, 4]]], fx: [[0, 3]], fr: [], ids: [], real: [], wm: [], wday: 20407,
+      ks: (1 << 0) | (1 << 1) | (1 << 5) | (1 << 6) | (1 << 8), pl: 1 | 2 | 4 | (1 << 5) | (1 << 6) | (1 << 8), pv: [3, 2, 1, 0, 0, 4, 5, 0, 6, 0],
+      wi: [[spI('plumpet'), WISH_KIND.PLACE, 5, 20407], [spI('dollop'), WISH_KIND.PLACE, 2, 20407]],
+      gift: [[5, 1, spI('plumpet'), 20407]], gday: -1, fw: [2, 0], sg: 1 | 2 | (1 << 5) | (1 << 8), wg: 1, cur: { p: 8, party: [] }, day: 20407 };
+    const mem2 = memoryStorage({ [JOURNAL_KEY]: JSON.stringify(blob) });
+    const errs0 = errors.length;
+    const profile2 = createProfileStore(mem2);
+    const coll2 = createCollection({ storage: mem2, profile: profile2.profile, now: () => 1_700_000_000_000 + clockT, random: () => 0.4 });
+    const app2 = createApp({
+      createBody: (g) => new SoftBody(g), createStage: () => st as unknown as StageLike, createAudio: () => audio as unknown as ReturnType<typeof createMockAudio>, haptics: createMockHaptics(),
+      storage: mem2, collection: coll2, profile: profile2, devSkew: { ms: 0 }, env: { vibrate: false, reducedMotion: false }, now: () => clockT, epochNow: () => 1_700_000_000_000 + clockT, raf: () => 0, caf: () => {},
+    });
+    app2.resize(W, H, 1); app2.setPhase('play');
+    const said2: string[] = [];
+    let threw = '', host2: ReturnType<typeof attachLifeHost> | null = null;
+    try { host2 = attachLifeHost(app2, { parts: lifeParts, storage: mem2, say: (t) => said2.push(t), moment: (t) => said2.push('MOMENT ' + t), setTimer: () => 0, clearTimer: () => {} }); } catch (e) { threw = String(e); }
+    for (let i = 0; i < 120; i++) { clockT += 1000 / 60; app2.clock.advance?.(1000 / 60); app2.stepOnce(1 / 60); if (i % 10 === 9) await tick(); }
+    await new Promise((r) => setTimeout(r, 1700));   // (the load-time open lines wait 1.5 s for the play UI)
+    const drop = (1 << 5) | (1 << 6) | (1 << 8);
+    const open2 = host2?.openPlaces?.() ?? -1, j2 = host2?.journal?.() ?? null;
+    const tripRefused = host2 ? (await host2.travel('fizzwell', true)) === false && (await host2.travel('echohollow', true)) === false : false;
+    const named = said2.filter((t) => /Fizzwell|Cogwhistle|Echo Hollow/.test(t));
+    const d2 = host2?.debug() as { place?: number } | undefined;
+    check('PLAYGROUND (round 6, D-96) a save naming Fizzwell Tub, Cogwhistle Bench and Echo Hollow (its places, visits, keepsakes, song places, a wish, a gift row, the current place, done tombstones) loads in the host without an error: none of the three in its open places or the journal\'s view, no line names them, a trip there is refused, the party at Home',
+      !!host2 && !threw && open2 >= 0 && (open2 & drop) === 0 && !!j2 && (j2.places & drop) === 0 && (j2.keepsakes & drop) === 0 && named.length === 0 && tripRefused && d2?.place === 0 && errors.length === errs0,
+      JSON.stringify({ threw, open: open2, places: j2?.places, keepsakes: j2?.keepsakes, stamps: j2?.stamps, said: said2.slice(0, 4), named, tripRefused, place: d2?.place, errors: errors.slice(errs0).map((e) => String(e[0])).slice(0, 2) }));
+    try { host2?.dispose(); } catch { /* gone */ }
+    app2.dispose();
+  }
 }
 
 console.error = realError;

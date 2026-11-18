@@ -3,6 +3,8 @@
 // Positions (S2 re-lay, PG_DATA round 2; DT-01 0 problems in each layout): WIDE is PLACES 4.5 with no thing moved; the third Splash Spot is
 // r 0.6 (PLACES: r 0.6 to 0.9; the draft had 0.55), the Leaf Drip zone hangs 0.75 m in front of the stalk (under the leaf, so a body of R 0.625
 // stands in its middle clear of the stalk) with the Drip Leaf's use spot there, new spawn spots; TALL is laid under P7 (report: PG_DATA.md R2).
+// Round 6 (R6_DATA item 2, the shipped camera's party row at 664 px): WIDE moves the first Splash Spot 0.15 m back (r 0.6), the second to the
+// back middle (it stood in front of the pad, under the party row) and the Stepping Stones 0.1 m back; TALL re-laid (below).
 // The cells' words do not ship (D-69): `reactions` is packed [target, family, tag, chan, arg] (target: a thing index, or 100 + a zone index;
 // tag 0 P, 1 L, 2 S, 3 B; chan a CHANNEL id of life.ts), unpacked once at load by places.ts cells().
 import type { PlaceDef } from './places.ts';
@@ -13,40 +15,43 @@ export const PLACE: PlaceDef = {
   id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: false, night: false,
   ground: { grip: 0.85, glue: 1, peel: 1, drag: 1, mark: MARK.trail, markLifeS: 20 },
   patches: [
-    { id: 'steppingstones', shape: 'box', x: -1.6, z: 1.75, hx: 0.9, hz: 0.3, mods: { grip: 1.1 } },
+    { id: 'steppingstones', shape: 'box', x: -1.6, z: 1.65, hx: 0.9, hz: 0.3, mods: { grip: 1.1 } },
   ],
   zones: [
     { id: 'rain', kind: ZONE.wet, strength: 1, shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, shower: { onS: 40, offS: 30 } },
-    { id: 'splashspots.0', kind: ZONE.water, strength: 1, shape: 'disc', x: 1.6, z: 1.55, r: 0.65, surfaceY: 0.07 },
-    { id: 'splashspots.1', kind: ZONE.water, strength: 1, shape: 'disc', x: -0.2, z: 1.95, r: 0.6, surfaceY: 0.06 },
+    { id: 'splashspots.0', kind: ZONE.water, strength: 1, shape: 'disc', x: 1.6, z: 1.4, r: 0.6, surfaceY: 0.07 },
+    { id: 'splashspots.1', kind: ZONE.water, strength: 1, shape: 'disc', x: 0.55, z: -1.75, r: 0.6, surfaceY: 0.06 },
     { id: 'splashspots.2', kind: ZONE.water, strength: 1, shape: 'disc', x: 2.8, z: 0.5, r: 0.6, surfaceY: 0.08 },
     { id: 'leafdrip', kind: ZONE.wet, strength: 1, shape: 'disc', x: -1.6, z: -1.25, r: 0.6, switchable: true },
   ],
   things: [
-    { id: 'splashspots', place: 'rainleaf', mech: MECH.pool, x: 1.6, z: 1.55, yaw: 0, size: [0.65, 0.07, 0], mu: 1, p: { n: 3 }, ride: false, zone: 'splashspots', verb: V.WADE, icon: E.droplet, look: 'puddle', sound: S.splash },
+    { id: 'splashspots', place: 'rainleaf', mech: MECH.pool, x: 1.6, z: 1.4, yaw: 0, size: [0.65, 0.07, 0], mu: 1, p: { n: 3 }, ride: false, zone: 'splashspots', verb: V.WADE, icon: E.droplet, look: 'puddle', sound: S.splash },
     { id: 'leafteeter', place: 'rainleaf', mech: MECH.seesaw, x: 2.4, z: -0.9, yaw: 0, size: [0.9, 0.08, 0.4], mu: 0.9, p: { pivot: 0.24, limit: 10, inertia: 0.6, damping: 1, rider: 0.65 }, ride: true, verb: V.ROCK, icon: E.swirl, look: 'leaf', sound: S.creak },
     { id: 'mossbouncer', place: 'rainleaf', mech: MECH.pad, x: -2.4, z: -0.3, yaw: 0, size: [0.45, 0.05, 0], mu: 1, p: { gain: 1.2, apex: 0.3, travel: 0.1, maxBounces: 5 }, ride: false, verb: V.BOUNCE, icon: E.star, look: 'moss', sound: S.boing },
     { id: 'dripleaf', place: 'rainleaf', mech: MECH.block, x: -1.6, z: -2, yaw: 0, size: [0.1, 0.8, 0.1], mu: 0.8, p: {  }, ride: false, zone: 'leafdrip', switch: 'shower', useSpot: [-1.6, -1.25], verb: V.SWITCH, icon: E.droplet, look: 'dripleaf', sound: S.rustle },
-    { id: 'steppingstones', place: 'rainleaf', mech: 0, x: -1.6, z: 1.75, yaw: 0, size: [0.9, 0, 0.3], mu: 1, p: { n: 6 }, ride: false, patch: 'steppingstones', verb: V.STEP, icon: E.leaf, look: 'stones', sound: 0 },
+    { id: 'steppingstones', place: 'rainleaf', mech: 0, x: -1.6, z: 1.65, yaw: 0, size: [0.9, 0, 0.3], mu: 1, p: { n: 6 }, ride: false, patch: 'steppingstones', verb: V.STEP, icon: E.leaf, look: 'stones', sound: 0 },
     { id: 'seedpod', place: 'rainleaf', mech: MECH.ball, x: 0.8, z: 1.6, yaw: 0, size: [0.2, 0, 0], mu: 0.8, p: { mass: 0.15, rollDamp: 0.8, rattle: 1 }, ride: false, verb: V.ROLL, icon: E.ball, look: 'seedpod', sound: S.ball },
   ],
   bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
-  pad: [0, 0, 1.2], spawn: [[-1.025, -0.375], [2.575, 1.575], [-2.575, 1.575], [0.925, 0.325], [-0.625, 1.525], [0.525, -1.575]],
-  tall: { // laid under P7 (S2): the Leaf Teeter across the back (it rocks side to side as the camera sees it), the Drip Leaf back right with its
-    // drip in front of it, the Moss Bouncer in the left strip (its edge inside the bounds), the Stepping Stones between the teeter and the pad, the
-    // three Splash Spots across the front band, the Seed Pod front right
+  pad: [0, 0, 1.2], spawn: [[-1.025, -0.375], [2.575, 1.575], [-2.575, 1.575], [0.925, 0.325], [-0.625, 1.525], [-0.2, -1.55]],
+  tall: { // (round 6, R6_DATA item 2) re-laid for the shipped place camera (render/placeview.ts fitPlace, the phone's 618 px hint pill):
+    // the bounds 1.4 x 3.0 (P7's 1.25 widened: the fit is width-bound, report); the Leaf Teeter across the very back (it rocks side to side
+    // as the camera sees it), the third Splash Spot in front of it with the Stepping Stones across it, the Drip Leaf back right with its drip
+    // in front of it, the Moss Bouncer in the left strip, two Splash Spots in the front band (front edges 2.4 m, under every fit's pill line;
+    // every spot r 0.6, PLACES 4.5), the Seed Pod in the right strip. DT-01 0 in the frame and in the shipped camera, and still 0 with the
+    // framed front moved -0.1..+0.2 m (the fit's near-tie, report)
     bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
-    spawn: [[0.425, 0.325], [-0.275, 2.175], [-0.075, -1.525], [-0.425, -0.425], [-0.425, 1.075]],
+    spawn: [[0.488, -1.275], [-0.256, -0.575], [0.169, 0.375], [-0.575, 1.075], [0.169, 1.775]],
     things: [
-      { x: -0.9, z: 2.4, yaw: 0 },
-      { x: -0.432, z: -2.894, yaw: 0 },
-      { x: -1.493, z: -1.467, yaw: 0 },
-      { x: 1.121, z: -2.315, yaw: 0, use: [1.121, -1.565] },
-      { x: 0, z: -1.75, yaw: 0 },
-      { x: 1, z: 1.5, yaw: 0 },
+      { x: -0.9, z: 1.8, yaw: 0 },
+      { x: -0.14, z: -2.95, yaw: 0 },
+      { x: -1.45, z: -1.3, yaw: 0 },
+      { x: 1.165, z: -2.472, yaw: 0, use: [1.165, -1.722] },
+      { x: 0.05, z: -1.85, yaw: 0 },
+      { x: 1.15, z: 0.95, yaw: 0 },
     ],
-    zones: [{ shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }, { shape: 'disc', x: -0.9, z: 2.4, r: 0.65 }, { shape: 'disc', x: 0.9, z: 2.4, r: 0.6 }, { shape: 'disc', x: 0, z: 3, r: 0.6 }, { shape: 'disc', x: 1.121, z: -1.565, r: 0.6 }],
-    patches: [{ shape: 'box', x: 0, z: -1.75, hx: 0.9, hz: 0.3 }],
+    zones: [{ shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }, { shape: 'disc', x: -0.9, z: 1.8, r: 0.6 }, { shape: 'disc', x: 0.9, z: 1.8, r: 0.6 }, { shape: 'disc', x: 0.05, z: -1.85, r: 0.6 }, { shape: 'disc', x: 1.165, z: -1.722, r: 0.6 }],
+    patches: [{ shape: 'box', x: 0.05, z: -1.85, hx: 0.9, hz: 0.3 }],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },
   light: 'garden', sky: 'garden', weather: 'rain', ambience: 'garden', music: 'garden', ceremonyDim: 0,

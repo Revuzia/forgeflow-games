@@ -1,0 +1,22 @@
+--- a/games/wobblehoard/src/data/places.ts
++++ b/games/wobblehoard/src/data/places.ts
+@@ -138,7 +138,7 @@
+   { id: 'home', idx: 0, name: 'Home', stampsToOpen: 0, shipped: true, night: false, sky: 'home' },
+   { id: 'hearthlog', idx: 1, name: 'Hearthlog Cabin', coined: ['Hearthlog'], stampsToOpen: 'firstWish', shipped: true, night: false, sky: 'cabin' },
+   { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: false, night: false, sky: 'shore' },
+-  { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: false, night: false, sky: 'ridge' },
++  { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false, sky: 'ridge' },
+   { id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: false, night: false, sky: 'garden' },
+   { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true, sky: 'roof' },
+   { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: false, night: false, sky: 'cloud' },
+--- a/games/wobblehoard/src/data/place_frostbell.ts
++++ b/games/wobblehoard/src/data/place_frostbell.ts
+@@ -11,7 +11,7 @@
+ import { USE_VERB as V, EMOTE as E } from './life.ts';
+ 
+ export const PLACE: PlaceDef = {
+-  id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: false, night: false,
++  id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false,
+   ground: { grip: 1, glue: 0.9, peel: 1, drag: 1.05, mark: MARK.print, markLifeS: 90 },
+   patches: [
+     { id: 'icepond', shape: 'disc', x: 1.9, z: -0.9, r: 1.4, mods: { drag: 0.25 }, ice: true },

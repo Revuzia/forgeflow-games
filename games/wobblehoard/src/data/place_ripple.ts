@@ -3,6 +3,9 @@
 // Positions (S2 re-lay, PG_DATA round 2; DT-01 0 problems in each layout): WIDE is PLACES 4.3 with three moves (the log 0.05 m left and laid
 // along z, so both peek spots lie inside the bounds; the Shell Chimes 0.25 m forward; the Sand Mound 0.474 m forward-right, off the log and
 // inside the walls' rectangle) and new spawn spots; TALL is laid under P7 (report: _handoff/reports/PG_DATA.md, round 2).
+// Round 6 (R6_DATA.md item 2): TALL re-laid for the phone camera that ships; two shared sizes changed so it fits (within M2 / M10's
+// ranges): the Driftwood Log 2.0 -> 1.45 m long, the Shell Chimes' hang 0.5 -> 0.4 m (a frame of 0.4 m may stand in a front band, P7). (The
+// Sand Mound keeps r 0.9: at 0.78 PG_PHYS's surf row failed, the mini marshmallow on its slope by the water line no longer carried shoreward.)
 // The cells' words do not ship (D-69): `reactions` is packed [target, family, tag, chan, arg] (target: a thing index, or 100 + a zone index;
 // tag 0 P, 1 L, 2 S, 3 B; chan a CHANNEL id of life.ts), unpacked once at load by places.ts cells().
 import type { PlaceDef } from './places.ts';
@@ -23,26 +26,28 @@ export const PLACE: PlaceDef = {
   things: [
     { id: 'rockpool', place: 'ripple', mech: MECH.pool, x: 2.3, z: -1.1, yaw: 0, size: [1.3, 0.28, 0], mu: 1, p: {  }, ride: false, zone: 'rockpool', verb: V.WADE, icon: E.droplet, look: 'rockpool', sound: S.splash },
     { id: 'bobring', place: 'ripple', mech: MECH.floater, x: 2.3, z: -1.1, yaw: 0, size: [0.45, 0.08, 0], mu: 0.6, p: { segments: 6, bob: 0.03, bobHz: 0.3 }, ride: true, verb: V.FLOAT_ON, icon: E.bubbles, look: 'bobring', sound: S.splash },
-    { id: 'driftlog', place: 'ripple', mech: MECH.bar, x: -2.45, z: -1.4, yaw: 1.571, size: [0.18, 2, 0], mu: 0.9, p: {  }, ride: false, peek: [-3.33, -0.8, -1.57, -0.8], verb: V.LEAN, icon: E.question, look: 'driftwood', sound: 0 },
-    { id: 'shellchimes', place: 'ripple', mech: MECH.chime, x: -2.8, z: 0.85, yaw: 1.571, size: [0.08, 0.2, 0], mu: 0.6, p: { n: 5, span: 1.2, hang: 0.5, limit: 25, damping: 0.8, postR: 0.08 }, ride: false, notes: [74, 76, 78, 81, 83], verb: V.RING, icon: E.bell, look: 'shells', sound: S.chime },
+    { id: 'driftlog', place: 'ripple', mech: MECH.bar, x: -2.45, z: -1.4, yaw: 1.571, size: [0.18, 1.45, 0], mu: 0.9, p: {  }, ride: false, peek: [-3.33, -0.8, -1.57, -0.8], verb: V.LEAN, icon: E.question, look: 'driftwood', sound: 0 },
+    { id: 'shellchimes', place: 'ripple', mech: MECH.chime, x: -2.8, z: 0.85, yaw: 1.571, size: [0.08, 0.2, 0], mu: 0.6, p: { n: 5, span: 1.2, hang: 0.4, limit: 25, damping: 0.8, postR: 0.08 }, ride: false, notes: [74, 76, 78, 81, 83], verb: V.RING, icon: E.bell, look: 'shells', sound: S.chime },
     { id: 'pebbleball', place: 'ripple', mech: MECH.ball, x: 0.9, z: 1.6, yaw: 0, size: [0.22, 0, 0], mu: 0.8, p: { mass: 0.3, rollDamp: 1.2 }, ride: false, verb: V.ROLL, icon: E.ball, look: 'pebble', sound: S.ball },
     { id: 'sandmound', place: 'ripple', mech: MECH.mound, x: -0.75, z: -1.75, yaw: 0, size: [0.9, 0.25, 0], mu: 0.7, p: {  }, ride: true, verb: V.SLIDE, icon: E.swirl, look: 'sand', sound: S.crunch },
   ],
   bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
   pad: [0, 0, 1.2], spawn: [[-0.025, 0.825], [2.575, 1.575], [0.925, -1.575], [-1.375, -0.325], [-1.575, 1.575], [1.575, 0.175]],
-  tall: { // laid under P7 (S2): the log at the back of the middle (its peek spots at its back end), the pool and the Bob Ring back right (the
-    // ring at the pool's full depth, its rider inside the bounds), the chimes in the left strip, the mound and the ball in the front band
+  tall: { // round 6 (R6_DATA): re-laid for the camera that ships on a phone (DT-01's shipped-camera row): bounds 1.4 x 3.0 (the camera is then
+    // width-bound and frames the bounds' front above the hint pill), the Rock Pool back left (r 0.835 here) with the Bob Ring at its centre, the
+    // Shell Chimes across the very back right, the Pebble Ball back centre, the Sand Mound in the right strip, the Driftwood Log along z in the
+    // front left with its peek spots left and right of its front half (LIFE 6.1 S13: "left and right of it as the camera sees it")
     bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
-    spawn: [[0.375, 0.975], [-0.425, 0.375], [-0.425, 1.575], [0.425, -0.175], [-0.375, -0.775]],
+    spawn: [[-0.575, -1.175], [0.275, -0.625], [-0.575, -0.075], [0.381, 0.375], [0.488, 1.375]],
     things: [
-      { x: 1.403, z: -2.07, yaw: 0 },
-      { x: 1.2, z: -1.77, yaw: 0 },
-      { x: -0.3, z: -2.7, yaw: 1.571, peek: [-1.18, -2.76, 0.58, -2.76] },
-      { x: -1.62, z: -1.34, yaw: 1.571 },
-      { x: -1, z: 2.6, yaw: 0 },
-      { x: 0.8, z: 2.75, yaw: 0 },
+      { x: -1.088, z: -2.754, yaw: 0 },
+      { x: -1.088, z: -2.754, yaw: 0 },
+      { x: -0.6, z: 1.823, yaw: 1.571, peek: [-1.38, 2.53, 0.18, 2.53] },
+      { x: 1.026, z: -3.103, yaw: 0 },
+      { x: -0.123, z: -2.25, yaw: 0 },
+      { x: 1.329, z: -1.803, yaw: 0 },
     ],
-    zones: [{ shape: 'disc', x: 1.403, z: -2.07, r: 1.3 }, { shape: 'box', x: 0, z: -3.25, hx: 2.3, hz: 0.45 }, { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }],
+    zones: [{ shape: 'disc', x: -1.088, z: -2.754, r: 0.835 }, { shape: 'box', x: 0, z: -3.25, hx: 2.3, hz: 0.45 }, { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }],
     patches: [{ shape: 'box', x: 0, z: -2.45, hx: 2.3, hz: 0.35 }],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },

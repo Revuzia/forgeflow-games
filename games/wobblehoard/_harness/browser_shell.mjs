@@ -24,6 +24,9 @@ import { extname, resolve } from 'node:path';
 import { ROOT, launch, startVite } from './pw.mjs';
 import { HINT_LOCK, HINT_TEXT, HINT_TOOLS } from '../src/ui/hint.ts';   // the pill's wordings: the desktop hint row reads the Shift wording from the source
 import { PIECE_CEILING } from '../src/shell/cut.ts';   // CUT3 (2026-10-09): no piece limit; the safety ceiling is 64 (reached on mock bodies in shellview/cut_mock_checks.ts, not with the real physics)
+import { PLACE_INFO } from '../src/data/places.ts';   // (round 6: the pg-places sections play each of Ripple Shore, Frostbell Ridge and Rainleaf Garden the build ships)
+import { QUESTS as Q_DEFS } from '../src/data/quests.ts';
+import { QUEST_TEXT as Q_TEXT } from '../src/data/journal_text.ts';
 const NEST_N = 4;   // the pieces the cut rows make by presses and swipes: four, the most the real physics builds while it still clamps a share at its 1/8 floor (PHYS lifts it in CUT3); the rows no longer assert any limit
 
 process.env.WH_FROZEN = '1'; // no HMR / file watching while the harness runs
@@ -5299,6 +5302,240 @@ async function main() {
         landed && out === 5 && over === 0 && inFrame, `${out} out; worst pair overlap ${(100 * worst).toFixed(1)} % of the smaller disc; seconds over half ${over}/${n}; in frame ${inFrame}`);
       await context.close();
     });
+
+    // ================================================================================================
+    // ROUND 6 (R6_SHELL 2; D-96: the place list is seven): Ripple Shore, Frostbell Ridge and Rainleaf Garden OPEN, each played through on 1280x800
+    // (pg-places) and 390x844 (pg-places-phone). A save whose stamps reach them (QUESTS 7: 12 / 20 / 28; the reducer opens every shipped place its
+    // stamps reach when the journal loads: the init script sets the saved count before the app reads it, load 2), so: the open lines, the pill
+    // pointing the way; three out (rseed 59: Wisplet, a marshmallow, comes from the first capsule); then per place: the trip by the Places sheet,
+    // the party arrives, the squishies use things on their own, two of the place's quests done by the player's own input (taps, carries, a squeeze),
+    // home again by the sheet; screenshots of each; 0 console errors. Runs only on a build that ships the three (data/places.ts PLACE_INFO).
+    // ================================================================================================
+    // (each of the three the build ships is played; one the build keeps closed is not listed, named or played: its row says so)
+    const S2 = ['ripple', 'frostbell', 'rainleaf'].filter((id) => PLACE_INFO.find((p) => p.id === id)?.shipped === true);
+    const s2Shipped = S2.length > 0;
+    const S2_NAMES = { ripple: 'Ripple Shore', frostbell: 'Frostbell Ridge', rainleaf: 'Rainleaf Garden' };
+    /** the tracker pill's text for a place's VISIT quest (R1 / I1 / G1: "Next: Sand and sea") */
+    const visitPill = (id) => { const q = Q_DEFS.find((x) => x.id === `${{ ripple: 'R', frostbell: 'I', rainleaf: 'G' }[id]}1`); return q ? `Next: ${Q_TEXT[q.idx]?.[0] ?? ''}` : ''; };
+    /** pgInit's logs + load 2's seed: the saved journal's stamp count (once, on the load after `sessionStorage.r6seed` is set) */
+    const pgPlacesInit = () => {
+      window.__liveLog = []; window.__toastLog = [];
+      const rec = () => {
+        const el = document.getElementById('wh-live'), ui = document.getElementById('ui');
+        if (!el || !ui) { setTimeout(rec, 30); return; }
+        new MutationObserver(() => { if (el.textContent) window.__liveLog.push(el.textContent); }).observe(el, { childList: true, characterData: true, subtree: true });
+        new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('toast') || n.classList?.contains('pl-moment-text')) window.__toastLog.push(n.textContent ?? ''); }).observe(ui, { childList: true, subtree: true });
+      };
+      rec();
+      try {
+        const seed = Number(sessionStorage.getItem('r6seed'));
+        if (seed > 0) { const k = 'wobblehoard:v2:journal', j = JSON.parse(localStorage.getItem(k) || 'null'); if (j) { j.st = Math.max(j.st | 0, seed); localStorage.setItem(k, JSON.stringify(j)); } sessionStorage.removeItem('r6seed'); }
+      } catch (e) { console.info('seed: ' + e); }
+    };
+    /** grab the body at `from` (CSS px), lift it (a carry: physics B3; up and 60 px to the side, as the published carry), steer the carried body over the WORLD point
+     *  `to` by feedback on its own position (the carry plane is not the floor: a pointer over a floor spot holds the body in front of it), hold still, let go; the sim stepped */
+    const carryOnto = (page, from, to, holdS = 0.5, lift = 340) => page.evaluate(([f, t, hold, lf]) => {
+      const wh = window.__WH__; wh.pause();
+      const vw = innerWidth, vh = innerHeight;
+      let px = f.x, py = f.y;
+      const mv = (x, y, n) => { px = Math.min(vw - 2, Math.max(2, x)); py = Math.min(vh - 2, Math.max(2, y)); wh.pointerMove(px / vw, py / vh, 0); wh.step(1 / 60, n); };
+      const held = () => wh.shell.matInfo().bodies.find((b) => b.carried) ?? null;
+      wh.pointerDown(px / vw, py / vh, 0); wh.step(1 / 60, 8);
+      // the lift: up (and 60 px toward the middle of the screen, as the published carry) only until physics carries it, so the pointer keeps room above it to take
+      // the body back (a lift to the top of the frame left none: a thing at the back of the place was out of reach)
+      const side = f.x > vw * 0.5 ? -60 : 60;
+      let lifted = 0;
+      for (let i = 1; i <= 32 && !held(); i++) { mv(f.x + side * Math.min(1, i / 24), Math.max(8, f.y - lf * i / 24), 2); lifted = i; }
+      if (!held()) { wh.pointerUp(0); wh.step(1 / 60, 30); return { carried: false, lifted }; }
+      for (let k = 0; k < 10; k++) mv(px, py, 2);
+      const w0 = held()?.w; mv(px + 40, py, 20); const w1 = held()?.w ?? w0; mv(px, py + 40, 20); const w2 = held()?.w ?? w1;
+      let a = (w1[0] - w0[0]) / 40, c = (w1[2] - w0[2]) / 40, b = (w2[0] - w1[0]) / 40, d = (w2[2] - w1[2]) / 40, det = a * d - b * c;
+      if (!(Math.abs(det) > 1e-7)) { a = 0.004; d = 0.004; b = 0; c = 0; det = a * d; }
+      let err = 1e9;
+      for (let it = 0; it < 30; it++) {
+        const cur = held(); if (!cur) break;
+        const ex = t.x - cur.w[0], ez = t.z - cur.w[2];
+        err = Math.hypot(ex, ez); if (err < 0.06) break;
+        let dx = (d * ex - b * ez) / det, dy = (-c * ex + a * ez) / det; const l = Math.hypot(dx, dy); if (l > 90) { dx *= 90 / l; dy *= 90 / l; }
+        mv(px + dx, py + dy, 10);
+      }
+      for (let i = 0; i < Math.round(hold * 10); i++) wh.step(1 / 60, 6);
+      const end = held();
+      wh.pointerUp(0);
+      for (let i = 0; i < 8; i++) wh.step(1 / 60, 15);
+      return { carried: true, lifted, over: end ? [+end.w[0].toFixed(2), +end.w[2].toFixed(2)] : null, err: +err.toFixed(3) };
+    }, [from, to, holdS, lift]);
+    const pgQuest = async (page, id) => ((await page.evaluate(() => window.__WH__.quests()?.quests ?? [])).find((q) => q.id === id) ?? null);
+    const pgTap = async (page, phone, x, y) => { if (phone) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y); };
+    async function pgPlaces(phone) {
+      const tag = phone ? 'phone' : 'desktop', label = `R6 places (${tag})`;
+      const { page, context, w } = await open({ query: '?dev=1&rseed=59', ctx: phone ? PHONE : DESKTOP, init: pgPlacesInit });
+      mainWatches.push([`pg-places ${tag}`, w]);
+      // load 1: a fresh profile (the journal writes its save); load 2: the save's stamps at 28
+      await pgBoot(page, phone);
+      await pgStep(page, 2); await sleep(1500);
+      await page.evaluate(() => sessionStorage.setItem('r6seed', '28'));
+      await page.reload({ waitUntil: 'load', timeout: 180000 });   // (a loaded machine: the dev server serves every module again)
+      await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
+      const landed = await pgBoot(page, phone);
+      await page.evaluate(() => window.__WH__.resume());
+      let pill = null;
+      for (let k = 0; k < 30 && !pill; k++) { await sleep(500); pill = await page.evaluate(() => { const p = document.querySelector('.pl-pill'); return p && !p.hidden ? p.querySelector('.pl-pill-text')?.textContent ?? null : null; }); }
+      const opened = await page.evaluate(() => ({ live: window.__liveLog.join(' | '), shown: window.__toastLog.filter((t) => / is open\. Find it in Places\./.test(t)), places: window.__WH__.quests()?.places ?? 0 }));
+      const three = S2.map((id) => S2_NAMES[id]), bits = S2.reduce((m, id) => m | (1 << PLACE_INFO.find((p) => p.id === id).idx), 0), pillWant = visitPill(S2[0]);
+      await pgShot(page, `pg_places_open_${tag}`);
+      await pclick(page, '.pl-pill-go'); await sleep(900); await settle(page);
+      const pillSheet = await page.evaluate(() => !!document.getElementById('wh-travel'));
+      check(`${label}: a save of 28 stamps opens ${three.join(', ')} as it loads (QUESTS 7: 12 / 20 / 28); each "<place> is open. Find it in Places." is said and shown in the moments slot; the tracker pill points the way ("${pillWant}") and its tap opens the Places sheet`,
+        landed && (opened.places & bits) === bits && three.every((n) => opened.live.includes(`${n} is open. Find it in Places.`) && opened.shown.some((t) => t.startsWith(n))) && pill === pillWant && pillSheet,
+        JSON.stringify({ ...opened, pill, pillSheet }));
+      // the Places sheet: the shipped places only (D-96: no dropped place anywhere), each open one with its stamps line and its postcard picture
+      await sleep(600);
+      const sheet = await page.evaluate(() => { const d = document.getElementById('wh-travel'); if (!d) return null;
+        return { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place),
+          stamps: [...d.querySelectorAll('.jn-card[data-open="true"] .jn-card-stamps')].map((s) => s.textContent), drawn: [...d.querySelectorAll('canvas.jn-sky')].filter((c) => c.dataset.drawn === 'true').length,
+          cardsN: d.querySelectorAll('.jn-card').length, text: d.textContent }; });
+      await pgShot(page, `pg_places_sheet_${tag}`);
+      check(`${label}: the Places sheet lists the shipped places (Home, the cabin, ${three.join(', ')}; D-96: nothing of Fizzwell Tub, Cogwhistle Bench or Echo Hollow named), "Go to" on each of them, "N of 10 stamps" on each open postcard, each postcard's picture drawn (render/postcard.ts)`,
+        !!sheet && sheet.cards.join() === ['home:true', 'hearthlog:false', ...S2.map((id) => `${id}:true`)].join() && S2.every((id) => sheet.go.includes(id)) && sheet.stamps.length === 1 + S2.length && sheet.stamps.every((s) => /^\d+ of 10 stamps$/.test(s ?? ''))
+          && sheet.drawn === sheet.cardsN && !/Fizzwell|Cogwhistle|Echo Hollow|coming/i.test(sheet.text), JSON.stringify(sheet && { ...sheet, text: sheet.text.slice(0, 220) }));
+      await page.keyboard.press('Escape'); await settle(page);
+      // three out: the first capsule's Wisplet stays out beside Dollop (D-52), the second's Chunkle replaces it in play; Wisplet back out through the Hoard
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 1); await pgStep(page, 1);
+      await openCapsules(page, 1); await pgStep(page, 1);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', false));
+      if (!(await pgLife(page)).chars.some((c) => c.species === 'wisplet')) await bringOut(page, 'wisplet');
+      await page.evaluate(() => window.__WH__.pause());
+      await pgStep(page, 1);
+      const party = (await pgLife(page)).chars.filter((c) => c.kind === 0).map((c) => c.species);
+      const letters = { ripple: 'R', frostbell: 'I', rainleaf: 'G' }, names = S2_NAMES, idx = { ripple: 2, frostbell: 3, rainleaf: 4 };
+      for (const pl of S2) {
+        const L0 = await pgLife(page);
+        await page.evaluate(() => window.__WH__.resume());
+        await hclick(page, '.dock-places'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await pclick(page, `.jn-go[data-place="${pl}"]`);
+        const arrived = await stepUntil(page, `(wh) => wh.life()?.place === ${idx[pl]} && !wh.life()?.travelling`, 30, 0.25);
+        await pgStep(page, 3);
+        const L1 = await pgLife(page);
+        const v1 = await pgQuest(page, `${letters[pl]}1`);
+        check(`${label} ${names[pl]}: by the Places sheet the party of three arrives (the ${phone ? 'tall' : 'wide'} layout), "You are at ${names[pl]}.", its things bound, its VISIT stamp (${letters[pl]}1)`,
+          arrived >= 0 && L1.place === idx[pl] && L1.layout === (phone ? 1 : 0) && L1.chars.filter((c) => c.kind === 0).length === 3 && !!v1?.done && L1.things.filter((t) => t.parked === false).length >= 4
+            && (await page.evaluate((n) => window.__liveLog.some((t) => t.includes(`You are at ${n}.`)), names[pl])), JSON.stringify({ arrived, place: L1.place, layout: L1.layout, party, chars: L1.chars.map((c) => [c.species, c.x, c.z]), v1, things: L1.things.map((t) => [t.id, t.parked]) }));
+        await pgShot(page, `pg_${pl}_arrive_${tag}`);
+        // on their own: no input for up to a 5-minute visit (LF-09's visit: 2 to 3 thing uses a squishy), stepped 10 s at a time until three different things are used
+        // (2.5 s slices: the same simulation, a picture drawn every 2.5 s of it instead of every 0.5 s: SwiftShader's frames were most of the wall time)
+        let L2 = await pgLife(page), used = [], usedAt = -1;
+        for (let s = 10; s <= 300; s += 10) {
+          await pgStep(page, 10, 2.5);
+          L2 = await pgLife(page);
+          used = [...new Set([...L2.selfUsed, ...L2.selfReacted, ...(L2.selfSocial ?? [])])];
+          if (used.length >= 3) { usedAt = s; break; }
+        }
+        check(`${label} ${names[pl]}: on their own (no input, within a 5-minute visit) the squishies use at least three different things: their own USE, a REACT that names the thing (a wade in a pool, a glide on the ice, a shower under a leaf) or a social moment played around it (a peek round the log, a teeter)`,
+          used.length >= 3, JSON.stringify({ at: usedAt, used: L2.selfUsed, reacted: L2.selfReacted, social: L2.selfSocial, counts: L2.counts }));
+        await pgShot(page, `pg_${pl}_stay_${tag}`);
+        const T = (id) => L2.things.find((t) => t.id === id);
+        const chars = async () => (await pgLife(page)).chars.filter((c) => c.kind === 0 && c.sx !== null);
+        if (pl === 'ripple') {
+          // R3 "Ring the shells": three different shells by the player's taps (still presses on a shell)
+          for (const pt of (T('shellchimes')?.parts ?? []).slice(0, 3)) { await pgTap(page, phone, pt[0], pt[1]); await pgStep(page, 0.6); }
+          const r3 = await pgQuest(page, 'R3');
+          check(`${label} Ripple Shore: R3 "Ring the shells" by the player: three different Shell Chimes tapped (a USE RING by PLAYER each, distinct parts)`, !!r3?.done, JSON.stringify({ r3, parts: T('shellchimes')?.parts }));
+          // R9 "Slide off the mound": two squishies set on the Sand Mound by the player (a carry let go over it: the ride it lands on is one the player set up)
+          const mound = T('sandmound'), r9log = [];
+          for (let n = 0; n < 2; n++) { const cs = await chars(); const c = cs[n % cs.length]; if (c && mound) r9log.push(await carryOnto(page, { x: c.sx, y: c.sy }, { x: mound.x, z: mound.z })); await pgStep(page, 4); }
+          const r9 = await pgQuest(page, 'R9');
+          check(`${label} Ripple Shore: R9 "Slide off the mound" by the player: two squishies carried onto the Sand Mound and let go there (each a USE SLIDE by PLAYER)`, !!r9?.done, JSON.stringify({ r9, r9log }));
+          // R7 "A squirt for a friend": Wisplet (a marshmallow) carried into the Rock Pool soaks; a friend set beside it; a held squeeze of Wisplet squirts at the friend
+          const pool = T('rockpool');
+          let wl = (await chars()).find((c) => c.species === 'wisplet');
+          const soakLog = [];
+          // (into the water between the Bob Ring, which floats at the pool's centre, and the rim: 0.9 m from the centre toward the middle of the place, 0.6 m in the
+          // tall layout's smaller pool)
+          if (wl && pool?.setW) { const off = phone ? 0.6 : 0.9, l = Math.hypot(pool.setW[0], pool.setW[1]) || 1;
+            soakLog.push(await carryOnto(page, { x: wl.sx, y: wl.sy }, { x: pool.setW[0] - off * pool.setW[0] / l, z: pool.setW[1] - off * pool.setW[1] / l })); }
+          for (let k = 0; k < 24; k++) { await pgStep(page, 1); wl = (await pgLife(page)).chars.find((c) => c.species === 'wisplet'); if ((wl?.looks?.[2] ?? 0) >= 0.6) break; }
+          const fr = (await chars()).find((c) => c.species !== 'wisplet');
+          // (the friend 0.9 m from it toward the middle of the play area: inside both layouts' bounds)
+          if (fr && wl) { const l = Math.hypot(wl.x, wl.z) || 1; soakLog.push(await carryOnto(page, { x: fr.sx, y: fr.sy }, { x: wl.x - 0.9 * wl.x / l, z: wl.z - 0.9 * wl.z / l })); }
+          await pgStep(page, 1);
+          wl = (await chars()).find((c) => c.species === 'wisplet');
+          const sq0 = (await pgLife(page)).counts.squirt;
+          if (wl) await page.evaluate(([x, y]) => { const wh = window.__WH__; wh.pause(); wh.pointerDown(x / innerWidth, y / innerHeight, 0); wh.step(1 / 60, 42); wh.pointerUp(0); wh.step(1 / 60, 30); }, [wl.sx, wl.sy]);
+          await pgStep(page, 1);
+          const sq1 = (await pgLife(page)).counts.squirt, r7 = await pgQuest(page, 'R7');
+          await pgShot(page, `pg_ripple_squirt_${tag}`);
+          check(`${label} Ripple Shore: R7 "A squirt for a friend" by the player: Wisplet soaks in the Rock Pool (soak 0.5 or more), the player's held squeeze squirts (LIFE_EV.SQUIRT: the splash and the render's drops) at the friend beside it`,
+            sq1 > sq0 && !!r7?.done, JSON.stringify({ squirts: sq1 - sq0, r7, soak: wl?.looks?.[2], rho: wl?.rho, soakLog }));
+        } else if (pl === 'frostbell') {
+          // I9 "Ring the icicles": five rings of the Icicle Bells by the player's taps
+          const bells = T('iciclebells')?.parts ?? [];
+          for (let n = 0; n < 5 && bells.length; n++) { const pt = bells[n % bells.length]; await pgTap(page, phone, pt[0], pt[1]); await pgStep(page, 0.8); }
+          const i9 = await pgQuest(page, 'I9');
+          check(`${label} Frostbell Ridge: I9 "Ring the icicles" by the player: the Icicle Bells tapped five times (a USE RING by PLAYER each)`, !!i9?.done, JSON.stringify({ i9, bells }));
+          // I7 "Down the glide ramp": a squishy set at the top of the Glide Ramp two times (it slides down onto the ice)
+          const ramp = T('glideramp'), i7log = [];
+          for (let n = 0; n < 2; n++) { const cs = await chars(); const c = cs[n % cs.length]; if (c && ramp?.setW) i7log.push(await carryOnto(page, { x: c.sx, y: c.sy }, { x: ramp.setW[0], z: ramp.setW[1] })); await pgStep(page, 4); }
+          const i7 = await pgQuest(page, 'I7');
+          check(`${label} Frostbell Ridge: I7 "Down the glide ramp" by the player: a squishy set at the top of the Glide Ramp two times (each a USE SLIDE by PLAYER)`, !!i7?.done, JSON.stringify({ i7, i7log }));
+          // I4 "Snow from the pine" (PLACES 4.4): a squishy under the Shake Pine's branch, the player taps the pine: the snow puff falls on it
+          const pine = T('shakepine'), br = pine?.parts?.[1], cs = await chars();
+          if (br && cs[0]) await carryOnto(page, { x: cs[0].sx, y: cs[0].sy }, { x: br[2] + 0.2, z: br[3] + 0.3 });   // (under the branch: its centre, parts[1] = [sx, sy, x, z])
+          await pgStep(page, 1);
+          const pt = (await pgLife(page)).things.find((t) => t.id === 'shakepine');
+          if (pt?.sx !== null) await pgTap(page, phone, pt.sx, pt.sy);
+          await pgStep(page, 1.5);
+          const i4 = await pgQuest(page, 'I4'), L4 = await pgLife(page);
+          await pgShot(page, `pg_frostbell_play_${tag}`);
+          check(`${label} Frostbell Ridge: I4 "Snow from the pine" by the player: a tap on the Shake Pine shakes its branch and its snow puff falls on the squishy under it (snow +0.5, the pine as its source)`,
+            L4.tap === 'shakepine' && !!i4?.done, JSON.stringify({ i4, tap: L4.tap, branch: br, snow: L4.chars.map((c) => [c.species, c.looks?.[4], c.x, c.z]) }));
+        } else {
+          // G7 "A shower from the leaf": a squishy under the Drip Leaf, the player taps the leaf: its shower falls on it
+          const drip = T('dripleaf'), cs = await chars();
+          if (drip?.setW && cs[0]) await carryOnto(page, { x: cs[0].sx, y: cs[0].sy }, { x: drip.setW[0], z: drip.setW[1] });
+          await pgStep(page, 1.5);
+          const dt = (await pgLife(page)).things.find((t) => t.id === 'dripleaf');
+          if (dt?.sx !== null) await pgTap(page, phone, dt.sx, dt.sy);
+          await pgStep(page, 2.5);
+          const g7 = await pgQuest(page, 'G7'), L7 = await pgLife(page);
+          check(`${label} Rainleaf Garden: G7 "A shower from the leaf" by the player: a squishy set under the Drip Leaf, a tap tips its shower onto it (a REACT SHOWER naming the leaf)`,
+            L7.tap === 'dripleaf' && !!g7?.done, JSON.stringify({ g7, tap: L7.tap, wet: L7.chars.map((c) => [c.species, c.looks?.[1], c.x, c.z]) }));
+          // G4 "Boing on the moss": squishies dropped onto the Moss Bouncer three times (its kicks: one USE BOUNCE per landing)
+          const moss = T('mossbouncer'), g4log = [];
+          for (let n = 0; n < 3; n++) { const cs2 = await chars(); const c = cs2[(n + 1) % cs2.length]; if (c && moss) g4log.push(await carryOnto(page, { x: c.sx, y: c.sy }, { x: moss.x, z: moss.z }, 0.3, 360)); await pgStep(page, 3); }
+          const g4 = await pgQuest(page, 'G4');
+          check(`${label} Rainleaf Garden: G4 "Boing on the moss" by the player: three drops onto the Moss Bouncer bounce (three USE BOUNCE)`, !!g4?.done, JSON.stringify({ g4, g4log }));
+          // D-95 on the Leaf Teeter: its AUTO chip (off by default) turns it on, the board rocks by itself
+          const chip = (await pgChips(page)).find((c) => /Leaf Teeter/.test(c.label ?? ''));
+          if (chip) await pgTap(page, phone, chip.x, chip.y);
+          await sleep(400);
+          const chip2 = (await pgChips(page)).find((c) => /Leaf Teeter/.test(c.label ?? ''));
+          await pgShot(page, `pg_rainleaf_play_${tag}`);
+          check(`${label} Rainleaf Garden: the Leaf Teeter's Auto chip (D-95) shows off by default inside the frame and clear of the HUD; a ${phone ? 'tap' : 'click'} turns it on`,
+            !!chip && chip.pressed === 'false' && chip.inView && chip.overHud === 0 && chip2?.pressed === 'true', JSON.stringify({ chip, after: chip2?.pressed }));
+          if (chip2?.pressed === 'true') await pgTap(page, phone, chip2.x, chip2.y);
+        }
+        // home again by the sheet
+        await page.evaluate(() => window.__WH__.resume());
+        await hclick(page, '.dock-places'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await pclick(page, '.jn-go[data-place="home"]');
+        const home = await stepUntil(page, `(wh) => wh.life()?.place === 0 && !wh.life()?.travelling`, 30, 0.25);
+        await pgStep(page, 3);
+        const LH = await pgLife(page);
+        check(`${label} ${names[pl]}: home again by the Places sheet (the three back on the mat, Home's things shown)`,
+          home >= 0 && LH.place === 0 && LH.chars.filter((c) => c.kind === 0).length === 3 && !!LH.things.find((t) => t.id === 'feltball')?.shown, JSON.stringify({ home, chars: LH.chars.map((c) => [c.species, c.x, c.z]) }));
+        void L0;
+      }
+      const noise = w.errors.filter((e) => !/Download the React DevTools/.test(e));
+      check(`${label}: 0 console errors / warnings / page errors, 0 failed requests`, noise.length === 0 && w.pageErrors.length === 0 && w.failed.length === 0 && w.bad.length === 0, [...noise, ...w.failed, ...w.bad].slice(0, 4).join(' | '));
+      await context.close();
+    }
+    const s2Closed = ['ripple', 'frostbell', 'rainleaf'].filter((id) => !S2.includes(id)).map((id) => S2_NAMES[id]);
+    await section('pg-places', async () => { if (!s2Shipped) { notRun.push('pg-places (this build ships none of Ripple Shore, Frostbell Ridge and Rainleaf Garden: data/places.ts PLACE_INFO.shipped)'); return; } if (s2Closed.length) notRun.push(`pg-places: ${s2Closed.join(', ')} (not shipped by this build)`); await pgPlaces(false); });
+    await section('pg-places-phone', async () => { if (!s2Shipped) { notRun.push('pg-places-phone (this build ships none of the three: data/places.ts PLACE_INFO.shipped)'); return; } if (s2Closed.length) notRun.push(`pg-places-phone: ${s2Closed.join(', ')} (not shipped by this build)`); await pgPlaces(true); });
 
     // ------------------------------------------------------------------------------------------------
     // G3: zero console errors / warnings / failed requests across the main flows

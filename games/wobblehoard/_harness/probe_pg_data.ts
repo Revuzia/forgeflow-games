@@ -74,7 +74,7 @@ function outline(s: Shape): [number, number][] {
 const areaShape = (a: Area): Shape => a.shape === 'disc' ? { k: 'disc', x: a.x, z: a.z, r: a.r ?? 0 } : { k: 'box', x: a.x, z: a.z, hx: a.hx ?? 0, hz: a.hz ?? 0, yaw: a.yaw ?? 0 };
 const swingSweep = (t: ThingDef): number => (t.p.rope ?? 0) * Math.sin((t.p.limit ?? 0) * D2R);
 /** A thing's collider footprints (swept for moving props: a swing's arc, a chime's swing; a seesaw's board) at (x, z, yaw); [] for no collider. */
-function footprints(t: ThingDef, x: number, z: number, yaw: number): Shape[] {
+function footprints(t: ThingDef, x: number, z: number, yaw: number, tall = false): Shape[] {
   const c = Math.cos(yaw), s = Math.sin(yaw), at = (u: number, v = 0): [number, number] => [x + u * c - v * s, z + u * s + v * c];
   switch (t.mech) {
     case MECH.block: { // a row of p.n blocks (the Singing Crystals): spaced evenly over p.span along the yaw axis, bowed p.curve toward local +z at the middle
@@ -92,7 +92,10 @@ function footprints(t: ThingDef, x: number, z: number, yaw: number): Shape[] {
     case MECH.ring: return [{ k: 'ring', x, z, R: t.size[0], r: t.size[1], yaw, gap: t.size[2] }];
     case MECH.swing: return [{ k: 'box', x, z, hx: swingSweep(t) + t.size[0], hz: t.size[1] / 2, yaw }];
     case MECH.turntable: case MECH.ball: return [{ k: 'disc', x, z, r: t.size[0] }];
-    case MECH.pad: { const out: Shape[] = [{ k: 'disc', x, z, r: t.size[0] }]; for (let i = 1; i < (t.p.n ?? 1); i++) out.push({ k: 'disc', x: x + (t.p[`x${i}`] - t.x), z: z + (t.p[`z${i}`] - t.z), r: t.size[0] }); return out; }
+    // a thing of p.n pads (Cloudloft's Puff Pads): part i >= 1 where physics builds it (physics/props.ts addThing, R6_PHYS): in the tall layout at (p.tx<i>, p.tz<i>)
+    // when the data gives them (round 6, R6_DATA item 2), else at its wide offset from part 0
+    case MECH.pad: { const out: Shape[] = [{ k: 'disc', x, z, r: t.size[0] }]; for (let i = 1; i < (t.p.n ?? 1); i++) { const tx = t.p[`tx${i}`], tz = t.p[`tz${i}`];
+      out.push(tall && tx !== undefined && tz !== undefined ? { k: 'disc', x: tx, z: tz, r: t.size[0] } : { k: 'disc', x: x + (t.p[`x${i}`] - t.x), z: z + (t.p[`z${i}`] - t.z), r: t.size[0] }); } return out; }
     case MECH.floater: return t.size[2] ? [{ k: 'box', x, z, hx: t.size[0], hz: t.size[2], yaw }] : [{ k: 'disc', x, z, r: t.size[0] + t.size[1] }];
     case MECH.chime: { const n = t.p.n ?? 1, span = t.p.span ?? 0, sw = (t.p.hang ?? 0.5) * Math.sin(25 * D2R), out: Shape[] = [];
       for (let i = 0; i < n; i++) { const [px, pz] = at(n > 1 ? -span / 2 + span * i / (n - 1) : 0); out.push({ k: 'disc', x: px, z: pz, r: t.size[0] + sw }); } return out; }
@@ -138,7 +141,7 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
   const pos = P.things.map((t, i) => tall ? P.tall.things[i] : { x: t.x, z: t.z, yaw: t.yaw, use: t.useSpot, peek: t.peek, push: t.push });
   if (tall && P.tall.things.length !== P.things.length) probs.push('tall.things does not have one Spot per ThingDef');
   if ((tall ? P.tall.zones.length : P.zones.length) !== P.zones.length || P.tall.patches.length !== P.patches.length) probs.push('tall zones / patches do not match the PlaceDef');
-  const fp = P.things.map((t, i) => footprints(t, pos[i].x, pos[i].z, pos[i].yaw));
+  const fp = P.things.map((t, i) => footprints(t, pos[i].x, pos[i].z, pos[i].yaw, tall));
   const walls = L.walls.map(areaShape), b = L.bounds;
   const inFrame = (x: number, z: number): boolean => tall ? (Math.abs(x) <= 1.82 - 0.128 * z + 1e-9 && z >= -3.7 - 1e-9 && z <= 3.4 + 1e-9) : (Math.abs(x) <= 3.4 + 1e-9 && z >= -2.4 - 1e-9 && z <= 2.4 + 1e-9);
   const colliders = (except: number): Shape[] => fp.flatMap((s, i) => (i === except ? [] : s));
@@ -156,7 +159,14 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
       if (!inFrame(x, z)) { probs.push(`${t.id} outside the ${tall ? 'tall frame' : "walls' rectangle"} at (${f2(x)}, ${f2(z)})`); break; }
     }
     for (const s of fp[i]) { const d = dist(0, 0, s); if (d < 1.2 - 1e-9) probs.push(`${t.id} in the pad (${f2(d)} m from its centre)`); }
-    if (!isMoving(t) && fp[i].length && pos[i].z > 1.3 && heightOf(t) > 0.4 + 1e-9) probs.push(`${t.id} in the front band is ${f2(heightOf(t))} m tall (at most 0.4)`);
+    // (round 6, R6_DATA) a pool or a patch / zone thing has no collider, but it is a thing the player sees: in the TALL layout (the phone) its own
+    // areas stay inside the tall frame too (the wide layout's walls' rectangle is the bodies' bounds, and a wide pool may reach past it in view)
+    if (tall && (t.mech === MECH.pool || t.mech === 0)) for (const [k, zd] of P.zones.entries()) if (ownsArea(t.zone, zd.id)) { const a = tall ? P.tall.zones[k] : zd;
+      for (const [x, z] of outline(areaShape(a))) if (!inFrame(x, z)) { probs.push(`${t.id}'s ${zd.id} outside the ${tall ? 'tall frame' : "walls' rectangle"} at (${f2(x)}, ${f2(z)})`); break; } }
+    if (tall && (t.mech === MECH.pool || t.mech === 0)) for (const [k, pd] of P.patches.entries()) if (ownsArea(t.patch, pd.id)) { const a = tall ? P.tall.patches[k] : pd;
+      for (const [x, z] of outline(areaShape(a))) if (!inFrame(x, z)) { probs.push(`${t.id}'s ${pd.id} outside the ${tall ? 'tall frame' : "walls' rectangle"} at (${f2(x)}, ${f2(z)})`); break; } }
+    // (round 6, R6_DATA) a standing bar (a tree: the Shake Pine) is static where it stands, only its branch swings: P7's low front band holds it too
+    if ((!isMoving(t) || t.p.standing) && fp[i].length && pos[i].z > 1.3 && heightOf(t) > 0.4 + 1e-9) probs.push(`${t.id} in the front band is ${f2(heightOf(t))} m tall (at most 0.4)`);
     // a chime set's frame or rail is static and stands at least at its hang height (M10: 0.30..0.70 m), so P7's low front band holds none
     if (t.mech === MECH.chime && pos[i].z > 1.3 && (t.p.hang ?? 0.5) > 0.4 + 1e-9) probs.push(`${t.id} in the front band: its static frame stands ${f2(t.p.hang ?? 0.5)} m tall (at most 0.4)`);
     // likewise a swing hangs from a frame, beam or line at its pivot height (M8: 1.5 m and more), so none stands in the front band either
@@ -240,6 +250,11 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
       if (t.mech === MECH.chime) for (const n of t.notes ?? []) if (n < 62 || n > 83 || ![2, 4, 6, 9, 11].includes(n % 12)) probs.push(`${t.id} note ${n} is not D major pentatonic in 62..83`);
     }
   });
+  // (round 6, R6_DATA) no fixed collider stands in a pool's water (a tree in the Steam Pool, a ramp in the Rock Pool): only a floater rides in it,
+  // a free ball may roll into it; a ramp's foot that PLACES ends in water (RAMP_FOOT) excepted
+  const poolWater = P.zones.map((zd, k) => (zd.kind === ZONE.water && P.things.some((t) => t.mech === MECH.pool && ownsArea(t.zone, zd.id)) ? areaShape(tall ? P.tall.zones[k] : zd) : null)).filter((x): x is Shape => !!x);
+  P.things.forEach((t, i) => { if (t.mech === MECH.floater || t.mech === MECH.ball || t.mech === MECH.pool || t.mech === MECH.swing || RAMP_FOOT[t.id] === 'water') return;   // (a swing's seat sweeps above it)
+    for (const sh of fp[i]) if (outline(sh).some(([x, z]) => poolWater.some((w) => dist(x, z, w) < -0.02))) { probs.push(`${t.id} stands in a pool's water`); break; } });
   // thing-to-thing clearance (swept), walls excepted
   for (let i = 0; i < fp.length; i++) for (let j = i + 1; j < fp.length; j++) {
     if (!fp[i].length || !fp[j].length) continue;
@@ -328,7 +343,7 @@ function camProblems(P: PlaceDef, tall: boolean): string[] {
     // Updraft, the Stepping Stones) has no collider but is a thing the player sees and plays in: its own zones and patches in this layout
     // count as its outline (the water's surface as its top)
     const own = t.mech === MECH.pool || t.mech === 0 ? [...P.zones.map((z, k) => ownsArea(t.zone, z.id) ? (tall ? P.tall.zones[k] : z) : null), ...P.patches.map((pa, k) => ownsArea(t.patch, pa.id) ? (tall ? P.tall.patches[k] : pa) : null)].filter((x): x is Area => !!x) : [];
-    const fpi = [...footprints(t, sp.x, sp.z, sp.yaw), ...own.map(areaShape)];
+    const fpi = [...footprints(t, sp.x, sp.z, sp.yaw, tall), ...own.map(areaShape)];
     if (!fpi.length) return;
     const top = t.mech === MECH.pool ? t.size[1] : thingTop(t); let x0 = Infinity, x1 = -Infinity, yFloor = -Infinity;
     for (const sh of fpi) for (const [x, z] of outline(sh)) {

@@ -37,8 +37,12 @@ export const LIFE_FLAG = {
   TOUCHED: 1, CARRIED: 2, LOCKED: 4, ASLEEP: 8, GROUNDED: 16, ON_PROP: 32, IN_WATER: 64, AIRBORNE: 128, TOSSED: 256, NEW: 512, VISIBLE: 1024,
   MEMORY_BUSY: 2048, RIDE: 4096,
 } as const;
-/** LifeEvents.kind: what happened in LIFE this tick, for the play-event ring. SIGNATURE: B08 on its loved touch (QUESTS 4). 0 = none. */
-export const LIFE_EV = { SOCIAL: 1, USE: 2, REACT: 3, WISH: 4, DISCOVER: 5, PIECES: 6, SIGNATURE: 7 } as const;
+/** LifeEvents.kind: what happened in LIFE this tick, for the play-event ring. SIGNATURE: B08 on its loved touch (QUESTS 4). 0 = none.
+ *  SQUIRT (round 6, R6_DATA; append-only): a soaked foam the player squeezed squirts a little arc of water (the S14 squirt game, LIFE 6.1):
+ *  a = the foam's slot, b = the target's slot (255: nobody within reach, the arc lands on the ground), sub = the drops to draw (12, 4 in Calm),
+ *  thing = -1, n2 = 0. It is NOT a ring record: the host draws and sounds it (the render's spray arc, the audio's splash); the quest record of
+ *  a squirt at a friend is the SOCIAL SQUIRT event LIFE emits beside it (a, b). See SQUIRT below. */
+export const LIFE_EV = { SOCIAL: 1, USE: 2, REACT: 3, WISH: 4, DISCOVER: 5, PIECES: 6, SIGNATURE: 7, SQUIRT: 8 } as const;
 /** lifeScript ids (LIFE 4.1). */
 export const SCRIPT = { FIRST_PLAY: 1, FIRST_WISH: 2, PLAY_WITH: 3, POSE: 4, CHEER: 5, SQUIRTED: 6 } as const;
 /** Wish kinds (QUESTS 8; lifeWishOf out[0]; the WISH record's v). WARM = warm up or dry off. */
@@ -147,6 +151,16 @@ export const LOOK_ADD = {
   squirtTarget: { look: LOOK.wet, amount: 0.3, r: 0, thing: '' },
   squirtFoam: { look: LOOK.soak, amount: -0.4, r: 0, thing: '' },
 } as const satisfies Record<string, { look: number; amount: number; r: number; forS?: number; thing: ThingId | '' }>;
+/** The squirt game (LIFE 6.1 S14, PLACES 4.3 "soak a foam in the pool, then squeeze it to squirt a friend"; round 6, the orchestrator's decision:
+ *  "a squishy that has soaked in the Rock Pool and is then squeezed by the player squirts a little arc of water"). LIFE detects it in its touch
+ *  pass: the player's squeeze of a WHOLE whose soak look is at least `soakMin` (only foams soak: slow rise and marshmallow, in water or rain),
+ *  held at least `holdS` (a tap is never a squeeze, QUESTS Q3; the keyboard's Space squeeze is the same press). The target: the nearest other
+ *  character (whole or piece) whose body is within `reach` m of the foam's (the gap between the two surfaces; a keyboard squeeze uses the same
+ *  rule). Then: LIFE_EV.SQUIRT (the arc, always), and with a target a SOCIAL SQUIRT event (S14, 1 friendship point: R7 "A squirt for a friend"
+ *  counts it at Ripple Shore), the target's wet look +0.3 (LOOK_ADD.squirtTarget), its wow then giggle (SCRIPT.SQUIRTED's reaction); the foam's
+ *  soak -0.4 (LOOK_ADD.squirtFoam: the water is squeezed out, so the next squirt needs another soak). `drops` / `dropsCalm` and `arcS` are the
+ *  render's spray (12 drops over 0.4 s; 4 in Calm or reduced motion). */
+export const SQUIRT = { soakMin: 0.5, holdS: 0.4, reach: 1.2, drops: 12, dropsCalm: 4, arcS: 0.4 } as const;
 /** Needs (LIFE 3): start levels each time a squishy comes out, rise and fall per s of sim time (x (0.5 + the trait)), the thresholds. */
 export const NEEDS = {
   start: { play: 0.3, company: 0.3, rest: 0.2 },

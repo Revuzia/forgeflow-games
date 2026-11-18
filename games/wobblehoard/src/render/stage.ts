@@ -1304,6 +1304,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     },
     reactFx(kind, bodyId, x, y, z, amount, lifeS) { return !!placeHost?.react(kind, bodyId, x, y, z, amount, lifeS); },
     thingFx(thing, kind, amount) { return !!placeHost?.thingFx(thing, kind, amount); },
+    squirtFx(from, to, drops, dirX, dirZ) { return !!placeHost?.squirt(from, to, drops, dirX ?? NaN, dirZ ?? NaN); },
     setPlayBounds(cx, cz, hx, hz) {
       // (a non-finite or empty bounds clears it: Home's framing again)
       if ([cx, cz, hx, hz].every(Number.isFinite) && hx > 0 && hz > 0) playB.set([cx, cz, hx, hz]); else playB.set([0, 0, NaN, NaN]);

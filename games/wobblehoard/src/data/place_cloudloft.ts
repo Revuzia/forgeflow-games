@@ -22,7 +22,7 @@ export const PLACE: PlaceDef = {
     { id: 'sun', kind: ZONE.warm, strength: 0.4, shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4 },
   ],
   things: [
-    { id: 'puffpads', place: 'cloudloft', mech: MECH.pad, x: 2.61, z: -0.52, yaw: 0, size: [0.45, 0.05, 0], mu: 1, p: { n: 3, x1: -2.2, z1: -0.6, x2: 0, z2: -1.9, gain: 1.25, apex: 0.35, travel: 0.1, maxBounces: 5 }, ride: false, verb: V.BOUNCE, icon: E.star, look: 'puff', sound: S.boing },
+    { id: 'puffpads', place: 'cloudloft', mech: MECH.pad, x: 2.61, z: -0.52, yaw: 0, size: [0.45, 0.05, 0], mu: 1, p: { n: 3, x1: -2.2, z1: -0.6, x2: 0, z2: -1.9, tx1: 0.2, tz1: -3.2, tx2: -1, tz2: -3.15, gain: 1.25, apex: 0.35, travel: 0.1, maxBounces: 5 }, ride: false, verb: V.BOUNCE, icon: E.star, look: 'puff', sound: S.boing },
     { id: 'updraft', place: 'cloudloft', mech: 0, x: 2.2, z: -0.8, yaw: 0, size: [1, 0, 0], mu: 1, p: {  }, ride: false, zone: 'updraft', verb: V.STEP, icon: E.swirl, look: 'updraft', sound: S.whoosh },
     { id: 'kiteswing', place: 'cloudloft', mech: MECH.swing, x: -2.4, z: 1.1, yaw: 0, size: [0.09, 0.9, 0], mu: 0.9, p: { rope: 1.4, pivotY: 1.62, limit: 30, seatY: 0.22, damping: 0.25 }, ride: true, push: [-0.4, 1.1], verb: V.SWING, icon: E.star, look: 'kite', sound: S.creak },
     { id: 'sunbowarch', place: 'cloudloft', mech: MECH.bar, x: -1.75, z: -1.95, yaw: 0, size: [0.16, 1.6, 1.3], mu: 0.8, p: { arch: 1, width: 1.6, height: 1.3 }, ride: false, verb: V.STEP, icon: E.sparkle, look: 'sunbow', sound: 0 },
@@ -31,18 +31,24 @@ export const PLACE: PlaceDef = {
   ],
   bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
   pad: [0, 0, 1.2], spawn: [[-0.575, 0.525], [1.725, -1.575], [1.275, 0.725], [0.525, -0.625], [-0.825, -0.775], [0.225, 1.575]],
-  tall: { // FIRST DRAFT (S2 / S3 re-lay)
+  tall: { // (round 6, R6_DATA item 2; NOT FINISHED: DT-01 3 problems, all spawn spots, report) laid for P7 and the shipped place camera
+    // (render/placeview.ts fitPlace, the phone's 618 px hint pill; that row 0), the bounds 1.4 x 3.0 (P7's 1.25 widened: the fit is
+    // width-bound, report): the three Puff Pads across the back (parts 1 and 2 at p.tx1 / p.tz1, p.tx2 / p.tz2, where physics/props.ts builds
+    // them in this layout), the first in the Updraft, the Kite Swing in the right strip swinging along z (pushed from its front end), the
+    // Sunbow Arch in the left strip (walked through from the pad), the Cloud Nest in the front band with its gap toward the pad, the Cloud
+    // Ball front left; the Breeze over the back band. The 2.1 m nest in front and the swing, arch and pads behind leave room for 2 spawn spots
+    // of the 5 DT-01 asks (1.0 m apart, 0.9 m clear): an owner's call (report)
     bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
     spawn: [[-0.4, -0.6], [0.4, 0], [-0.4, 0.6], [0.4, 1.2], [-0.4, 1.8]],
     things: [
-      { x: 0.814, z: -1, yaw: 0 },
-      { x: 0.814, z: -1, yaw: 0 },
-      { x: -0.888, z: 1.375, yaw: 0, push: [1.112, 1.375] },
-      { x: -0.647, z: -2.437, yaw: 0 },
-      { x: 0.962, z: 1.625, yaw: -2.678, use: [0.962, 1.625] },
-      { x: -0.333, z: 2.125, yaw: 0 },
+      { x: -0.35, z: -2.1, yaw: 0 },
+      { x: -0.35, z: -2.2, yaw: 0 },
+      { x: 1.3, z: -2, yaw: 1.571, push: [1.3, 0] },
+      { x: -1.5, z: -1.4, yaw: 1.571 },
+      { x: 0.45, z: 1.6, yaw: -1.844, use: [0.45, 1.6] },
+      { x: -1.15, z: 1.2, yaw: 0 },
     ],
-    zones: [{ shape: 'disc', x: 0.814, z: -1, r: 1 }, { shape: 'box', x: 0, z: -2.281, hx: 1.4, hz: 0.719 }, { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }],
+    zones: [{ shape: 'disc', x: -0.35, z: -2.2, r: 1 }, { shape: 'box', x: 0, z: -2.281, hx: 1.4, hz: 0.719 }, { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }],
     patches: [],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },

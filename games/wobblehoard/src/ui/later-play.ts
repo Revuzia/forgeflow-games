@@ -24,7 +24,7 @@ import type { LifeHostApi } from '../shell/lifeLink.ts';
 import type { Game } from '../shell/game.ts';
 import { CATALOG } from '../data/catalog.ts';
 import { PLACE_INFO } from '../data/places.ts';
-import { QUESTS } from '../data/quests.ts';
+import { CHAPTERS, EV, QUESTS } from '../data/quests.ts';
 import { QUEST_TEXT, THING_TEXT, UI_TEXT, WISH_LINES, fill } from '../data/journal_text.ts';
 import { WISH_KIND } from '../data/life.ts';
 import './play.css';
@@ -37,10 +37,12 @@ export interface PlayUiOpts {
   say(text: string): void;
   /** open the Journal (at a quest id when given); the opener gets the focus back */
   openJournal(from?: HTMLElement, at?: string): void;
+  /** round 6: open the Places sheet (the pill's "go there" for a place that has just opened); the opener gets the focus back */
+  openTravel?(from?: HTMLElement): void;
 }
 export interface PlayUi {
-  /** a quest moment ("New stamp: ...") or another short moment line */
-  moment(text: string): void;
+  /** a quest moment ("New stamp: ...") or another short moment line; `said`: already said in the live region (the moment only shows it) */
+  moment(text: string, said?: boolean): void;
   /** a tapped wish bubble: the card (opened by a key: the focus goes into it) */
   showWish(species: number, kind: number, target: number, byKey?: boolean): void;
   /** the party popover (from the name tag or the column's button) */
@@ -88,10 +90,12 @@ export function attachPlayUi(o: PlayUiOpts): PlayUi {
 
   // ---- the moments queue ----
   const queue: string[] = [];
+  const quietQ = new Set<string>();   // (round 6: moments already said in the live region, a place that opened: shown, not said twice)
   let momentUntil = 0, extra = 0;
-  const moment = (text: string): void => {
+  const moment = (text: string, said = false): void => {
     if (queue.length >= MOMENT_MAX) { extra++; return; }
     queue.push(text);
+    if (said) quietQ.add(text);
     pump();
   };
   const pump = (): void => {
@@ -105,7 +109,7 @@ export function attachPlayUi(o: PlayUiOpts): PlayUi {
     momentEl.hidden = false;
     momentUntil = t + MOMENT_MS;
     try { cue('toast'); } catch { /* sound off */ }
-    o.say(text);
+    if (!quietQ.delete(text)) o.say(text);
     layoutSlot();
   };
 
@@ -115,21 +119,47 @@ export function attachPlayUi(o: PlayUiOpts): PlayUi {
   const onPtr = (): void => { lastKey = false; };
   window.addEventListener('keydown', onKey, true); window.addEventListener('pointerdown', onPtr, true);
   offs.push(() => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('pointerdown', onPtr, true); });
-  pillGo.addEventListener('click', () => { const q = QUESTS[trackIdx]; o.openJournal(pillGo, q?.id); });
+  // (round 6: while the pill points the way to a place that opened and was never visited, a tap opens the Places sheet, where its postcard says "Go to ...")
+  pillGo.addEventListener('click', () => { const q = QUESTS[trackIdx]; if (trackGo && o.openTravel) o.openTravel(pillGo); else o.openJournal(pillGo, q?.id); });
   pillX.addEventListener('click', () => { dismissed = trackIdx; pill.hidden = true; o.say('The next stamp is hidden until a new one comes.'); layoutSlot(); });
+  // round 6 (QUESTS 7 / 15, "how each place opens ... with the tracker pointing the way"): at Home (or where nothing of the place's own chapter is left to do now),
+  // a place that opened by stamps and was never visited comes first: its chapter's VISIT quest ("Next: Sand and sea", whose hint is "Go to Ripple Shore."), shown,
+  // open and not done; the journal's own tracker() only offers quests that can be done HERE, so a VISIT of another place never showed. Its tap opens the Places
+  // sheet. Once there (the VISIT done) that place's chapter takes over; in a place, its own chapter keeps the pill.
+  let trackGo = false;
+  const visitNext = (v: NonNullable<ReturnType<typeof host.journal>>): number => {
+    if (!o.openTravel) return -1;   // (a VISIT is keyboard-complete, K: the pill's Enter opens Places as a tap does)
+    const open = host.openPlaces();
+    for (const p of PLACE_INFO) {
+      // (a place that opens BY STAMPS: the cabin opens with the first wish, whose own card says "Let's go"; its pill stays the Journal's, as published)
+      if (!p.shipped || typeof p.stampsToOpen !== 'number' || p.stampsToOpen <= 0 || p.idx === host.place || (open & (1 << p.idx)) === 0) continue;
+      for (const qd of QUESTS) {
+        if (qd.dropped || qd.kind !== 'main' || CHAPTERS[qd.chapter]?.place !== p.idx || !qd.clauses.some((c) => c.ev === EV.VISIT && c.place === p.idx)) continue;
+        const qv = v.quests[qd.idx];
+        if (qv && qv.shown && qv.open && !qv.done) return qd.idx;
+      }
+    }
+    return -1;
+  };
   const refreshTracker = (): void => {
-    let idx = -1;
-    try { const v = host.journal(); idx = v ? v.tracker(host.place, lastKey, game.settings.autonomy) : -1; if (idx >= 0 && v) {
+    let idx = -1, go = false;
+    try { const v = host.journal(); if (v) {
+      const here = v.tracker(host.place, lastKey, game.settings.autonomy), hereOwn = here >= 0 && CHAPTERS[QUESTS[here]?.chapter ?? -1]?.place === host.place;
+      if (host.place === 0 || !hereOwn) { idx = visitNext(v); go = idx >= 0; }
+      if (!go) idx = here;
+    } if (idx >= 0 && v) {
       const qv = v.quests[idx], title = QUEST_TEXT[idx]?.[0] ?? '';
       const count = qv && qv.need > 1 && !qv.done ? ` · ${fill(UI_TEXT.ofN, { a: String(Math.min(qv.have, qv.need)), b: String(qv.need) })}` : '';
       const text = title ? `Next: ${title}${count}` : '';
-      if (text !== trackerText) { trackerText = text; pillText.textContent = text; pillGo.setAttribute('aria-label', `Next stamp: ${title}${count}. Open the Journal`); }
-    } } catch { idx = -1; }
+      if (text !== trackerText || go !== trackGo) { trackerText = text; pillText.textContent = text; pillGo.setAttribute('aria-label', `Next stamp: ${title}${count}. ${go ? 'Open Places' : 'Open the Journal'}`); }
+    } } catch { idx = -1; go = false; }
+    trackGo = go;
     if (idx !== trackIdx) { trackIdx = idx; if (dismissed !== idx) dismissed = -2; }
   };
   // (it also steps aside while a toast shows: the toast stack is the top centre, and on a phone it spans the slot)
   const toastUp = (): boolean => !!document.querySelector('.toasts > .k-toast:not([hidden])');
-  const showPill = (): boolean => trackIdx >= 0 && !!trackerText && dismissed !== trackIdx && handTool() && !covered() && momentEl.hidden && wishCard.hidden && document.body.dataset.layout !== 'tiny' && !toastUp();
+  // (round 6: not in the 200 ms gap between two queued moments either: it flashed there)
+  const showPill = (): boolean => trackIdx >= 0 && !!trackerText && dismissed !== trackIdx && handTool() && !covered() && momentEl.hidden && queue.length === 0 && wishCard.hidden && document.body.dataset.layout !== 'tiny' && !toastUp();
 
   // ---- the wish card ----
   let wishUntil = 0, wishPlace: string | null = null, wishFrom: Element | null = null;

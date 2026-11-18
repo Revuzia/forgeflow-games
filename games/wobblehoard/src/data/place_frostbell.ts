@@ -2,7 +2,8 @@
 // A LAZY module: loaded with its place through loadPlaceDef('frostbell') (D-69); never imported statically by boot, places.ts, life.ts or quests.ts.
 // Positions (S2 re-lay, PG_DATA round 2; DT-01 0 problems in each layout): WIDE is PLACES 4.4 with three moves (the Glide Ramp 0.49 m in from
 // the corner and turned to slide toward the camera onto the ice; the Icicle Bells 0.447 m; the Snowdrift Nest 0.424 m, inside the walls'
-// rectangle) and new spawn spots; TALL is laid under P7 (report: _handoff/reports/PG_DATA.md, round 2).
+// rectangle) and new spawn spots; TALL is laid under P7 (report: _handoff/reports/PG_DATA.md, round 2), re-laid in round 6 for the shipped
+// camera (_handoff/reports/R6_DATA.md item 2).
 // The cells' words do not ship (D-69): `reactions` is packed [target, family, tag, chan, arg] (target: a thing index, or 100 + a zone index;
 // tag 0 P, 1 L, 2 S, 3 B; chan a CHANNEL id of life.ts), unpacked once at load by places.ts cells().
 import type { PlaceDef } from './places.ts';
@@ -32,22 +33,26 @@ export const PLACE: PlaceDef = {
   ],
   bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
   pad: [0, 0, 1.2], spawn: [[0.375, -0.175], [2.575, 1.575], [-1.575, -0.475], [0.625, -1.575], [1.625, 0.525], [-0.775, 0.675]],
-  tall: { // laid under P7 (S2): the Ice Pond back right with the Glide Ramp sliding toward the camera onto it, the Steam Pool back left, the
-    // Icicle Bells across the very back (just behind the water's edge), the Shake Pine in the right strip, the low Snowdrift Nest in the front
-    // band with its gap toward the pad, the Snowball front left; the Wind Gap over the whole back band; spawn spots off the ice and the water
+  tall: { // (round 6, R6_DATA item 2) re-laid for the shipped place camera (render/placeview.ts fitPlace, the phone's 618 px hint pill): the
+    // bounds 1.4 x 3.0 (P7's 1.25 widened: the fit is width-bound, report); the Ice Pond (r 0.75 here) back right with the Glide Ramp
+    // sliding toward the camera onto it (its foot on the ice), the Steam Pool (r 0.7 here) back left, the Icicle Bells along the very back,
+    // the Shake Pine in the right strip, the low Snowdrift Nest in the front band with its gap toward the pad (its front edge 2.66 m, under
+    // every fit's pill line), the Snowball front left; the Wind Gap over the back band; spawn spots off the ice and the water. DT-01 0 in
+    // the frame and in the shipped camera, and still 0 with the framed front moved -0.1..+0.2 m (the fit's near-tie, report). The Ice Pond's
+    // middle is inside the bodies' bounds (LIFE's glide use point, brain.ts iceUsePoint, must be: at x 1.1 no squishy ever glided)
     bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
-    spawn: [[-0.425, -0.425], [0.425, 1.325], [0.425, 0.225], [-0.325, -1.475], [-0.425, 0.775]],
+    spawn: [[-0.362, -2.125], [-0.575, -1.125], [0.275, -0.525], [-0.575, 0.025], [0.381, 0.475]],
     things: [
-      { x: 1.083, z: -2.394, yaw: 0 },
-      { x: 1.082, z: -2.154, yaw: 1.571 },
-      { x: -1.2, z: -2, yaw: 0 },
-      { x: -1.4, z: -3.4, yaw: 0 },
-      { x: 0.433, z: 2.391, yaw: -1.571, use: [0.433, 2.391] },
-      { x: -1.22, z: 2.378, yaw: 0 },
-      { x: 1.673, z: -0.725, yaw: 0 },
+      { x: 0.65, z: -1.95, yaw: 0 },
+      { x: 1.05, z: -2.35, yaw: 1.571 },
+      { x: -1.2, z: -2.05, yaw: 0 },
+      { x: -1.1, z: -3.3, yaw: 0 },
+      { x: 0.4, z: 1.66, yaw: -1.571, use: [0.4, 1.66] },
+      { x: -1.14, z: 1.15, yaw: 0 },
+      { x: 1.55, z: -0.55, yaw: 0 },
     ],
-    zones: [{ shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }, { shape: 'disc', x: -1.2, z: -2, r: 1 }, { shape: 'disc', x: -1.2, z: -2, r: 1 }, { shape: 'box', x: 0, z: -2.5, hx: 2.3, hz: 1.2 }],
-    patches: [{ shape: 'disc', x: 1.083, z: -2.394, r: 1.4 }],
+    zones: [{ shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }, { shape: 'disc', x: -1.2, z: -2.05, r: 0.7 }, { shape: 'disc', x: -1.2, z: -2.05, r: 0.7 }, { shape: 'box', x: 0, z: -2.5, hx: 2.3, hz: 1.2 }],
+    patches: [{ shape: 'disc', x: 0.65, z: -1.95, r: 0.75 }],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },
   light: 'ridge', sky: 'ridge', weather: 'snow', ambience: 'ridge', music: 'ridge', ceremonyDim: 0.3,
