@@ -33,9 +33,11 @@ GATES (PLAN L6; pooled over DISTINCT (seed, map) runs unless stated):
   --swimcheck (W9 R1B): the scripted swimmer trap (natural swim traps: 0 in the 18-run sweep, base and lane alike) - see SWIMCHECK_JS
   --plant swim-exempt (needs --disk / --rev): bots.js served with swimmers exempt from the loop breaker again - MUST FAIL the scripted swim-trap row
   --pencheck (W9 R1B pass 3): ONLY the scripted terrace-corner pen (isla_viva seed 5, 3 setups, re-anchored W10 R1A fix10; no match runs) - see PENCHECK_JS; --plant no-pen-fix (EDGE_TURN off) MUST FAIL it
+    (W10 R1A fix15, ruling R-g) + the pen FIXTURE row: the W9 Volcano Rim setups on the pinned world e7a7426c6 / MAP_GEN 8 (see WORLD_FIXTURE)
   --sweep --plant stall-surge: every moving bot held 3.6 s of every 25 s - MUST FAIL the sweep's worst <= 4 row (its measure control)
   --pencheck --plant no-calm-lag (W9 R1 fix mergefix): a calm hold re-plans although the route does not go the held way - MUST FAIL the pen row (setup 3)
-  --cornercheck (W9 R1 fix mergefix): ONLY the scripted Coco Village corner (isla_viva seed 1, 3 setups; a grid corner 0.6 m from a face) - see cornercheck;
+  --cornercheck (W9 R1 fix mergefix): ONLY the scripted Coco Village corner (isla_viva seed 1, 3 setups; a grid corner 0.6 m from a face; on the pinned
+    world e7a7426c6 / MAP_GEN 8 since W10 R1A fix15, see WORLD_FIXTURE) - see cornercheck;
   --plant no-early-turn (EDGE_EARLY off) MUST FAIL it
 INFO: pacing (deaths before 60 s, match end), dry shares, sniper/launcher carried but pistol held.
 Exit 0 pass / 1 fail / 2 could not judge.
@@ -51,6 +53,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), "p23"))   # p23lib (the plants)
 import common as C  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -269,24 +272,130 @@ CORNER_GOAL, CORNER_C, CORNER_FOOT = (-0.7, -1.9), (-3.81, 1.71), (-3.81, -1.3)
 CORNER_SETUPS = ((-3.4, 4.7, 100), (-3.3, 5.0, 40), (-4.9, 9.4, 100))
 
 
-def cornercheck(s, v):
+def scripted_setups(s, seed, mp, setups, goal, corner, foot, T, tag):
+    """one quick match per setup, the free bot nearest the start placed there after the landings (PENCHECK_JS); r['gen'] = the world's MAP_GEN"""
     out = []
-    for (sx, sz, hp) in CORNER_SETUPS:
-        st = s.start_match("quick", CORNER_SEED, CORNER_MAP, enter=True)
+    for (sx, sz, hp) in setups:
+        st = s.start_match("quick", seed, mp, enter=True)
         s.freeze_loop()
+        gen = s.page.evaluate("() => window.__LC__.W.map.genVersion")
         s.page.evaluate("(t) => window.__LC__.fastForward(t, 1 / 30)", PEN_PRE_S)
-        r = s.page.evaluate(PENCHECK_JS, [sx, sz, hp, CORNER_GOAL[0], CORNER_GOAL[1], CORNER_C[0], CORNER_C[1], CORNER_FOOT[0], CORNER_FOOT[1], CORNER_T])
-        r["start"], r["load"] = [sx, sz], st
+        r = s.page.evaluate(PENCHECK_JS, [sx, sz, hp, goal[0], goal[1], corner[0], corner[1], foot[0], foot[1], T])
+        r["start"], r["load"], r["gen"] = [sx, sz], st, gen
         out.append(r)
-        print("  cornercheck start (%.1f, %.1f) hp %d: bot %s reach %s s, %s stuck episodes, corner %s m, geo %s" % (
-            sx, sz, hp, r.get("bot"), r.get("reachT"), r.get("episodes"), r.get("cornerD"), r.get("geo")), flush=True)
-    v.data["cornercheck"] = out
-    name = ("corner scripted (Coco Village terrace, %s seed %d: a calm bot on the terrace top, its grid route's corner 0.6 m from the south face, %d setups): "
-            "every setup reaches the goal in %.0f s with 0 stuck episodes on the way" % (CORNER_MAP, CORNER_SEED, len(CORNER_SETUPS), CORNER_T))
-    bad = [r for r in out if r.get("error") or not (49.0 <= r["geo"]["start"] <= 50.0 and r["geo"]["start"] - r["geo"]["foot"] >= 4.0) or r.get("cornerD", 1e9) > 1.5]
+        print("  %s start (%.1f, %.1f) hp %d: MAP_GEN %s, bot %s reach %s s, %s stuck episodes, corner %s m, geo %s" % (
+            tag, sx, sz, hp, gen, r.get("bot"), r.get("reachT"), r.get("episodes"), r.get("cornerD"), r.get("geo")), flush=True)
+    return out
+
+
+# (W10 R1A fix15, orchestrator ruling R-g 2026-11-18: FIXTURE ANCHOR) The pen / corner rows test the bots' steering code (EDGE_TURN, the calm-lag hold,
+# EDGE_EARLY), not the town layout, and the MAP_GEN 9 homes towns re-laid the terraces they were written against (passes 12-14: no natural spot in
+# 3 maps x seeds 1-8 where the head passes and those plants fail). They now run on a PINNED WORLD: the world generator of the released build
+# e7a7426c6 (MAP_GEN 8) - maps.js, housegen.js, towngen.js, citykit.js, loot.js and the three kit / collider data files, listed with their git blob ids
+# and sha256 in fixtures/probe_world_e7a7426c6.json - served in place of the head's by the harness (the plants' own mechanism: DiskServer overrides, in
+# a second browser session of THIS process, --pencheck / --cornercheck only). The bots and the nav grid (bots.js, sim/navgrid.js) and every other file
+# are the head's, untouched; a planted fault is served into the head's bots.js in that session exactly as in the first. GATING: nothing in the game
+# changes - no game file is edited, and nothing is served differently outside these two probe_match rows (a normal match, phones and cost are
+# untouched). The terrace corners are then EXACTLY the ones the rows were written against (terrain, houses with their rooms / doors, colliders, loot),
+# and the same anchors, setups, driver (PENCHECK_JS: the free bot nearest the start - s18 at the pen, s48 at the corner, as on e7a7426c6), bars and
+# SETUP tests apply. SETUP (else could-not-judge): every fixture file read from git matches its sha256, and every setup's world reports MAP_GEN 8.
+# Why the whole world and not a box: fix15 first overlaid the two boxes' lattice nodes + colliders (sampled from e7a7426c6) on the head's map; on
+# e7a7426c6 ITSELF that patch read setup 1 of the pen in 26.5 s with 1 stuck episode (natural: 11.5 s, 0) - the bot starts inside the hut
+# volcano_rim@p34 and walks for loot in volcano_rim@p33: room records and house loot a terrain + collider patch does not carry.
+# Measured (fix15, head d9e739f4d + this harness; e7a7426c6 natural in brackets): pen 11.5 / 8.5 / 11.5 s, 0 episodes [same]; --plant no-calm-lag setup 3
+# never reaches [never]; --plant no-pen-fix never x3 [never x3]; corner 1 / 1.5 / 2 s [same]; --plant no-early-turn never x3 [never x3].
+WORLD_FIXTURE = "probe_world_e7a7426c6.json"
+PENFX_GOAL, PENFX_CORNER, PENFX_FACE_FOOT = (-67.0, -44.5), (-71.6, -77.6), (-80.0, -78.0)     # the W9 anchors on e7a7426c6, verbatim
+PENFX_SETUPS = ((-63.4, -77.6, 17), (-66.0, -79.0, 17), (-63.4, -77.6, 40))                  # setup 3 (s18, 40 hp, the hut's west doorway): --plant no-calm-lag
+PENFX_START_Y = (26.0, 27.5)
+
+
+def world_fixture():
+    """the pinned world's files from git, each checked against its sha256 (a missing blob or a mismatch: EnvFailure = could-not-judge)"""
+    import hashlib
+    fx = json.load(open(os.path.join(HERE, "fixtures", WORLD_FIXTURE), encoding="utf-8"))
+    g, files = C.git_blobs(fx["build"]), {}
+    for rel, m in fx["files"].items():
+        body = g.read(rel)
+        if body is None or hashlib.sha256(body).hexdigest() != m["sha256"]:
+            raise C.EnvFailure("world fixture %s: %s at %s is missing or differs from its sha256" % (WORLD_FIXTURE, rel, fx["build"][:9]))
+        files[rel] = body
+    return fx, files
+
+
+def serve_world_fixture(s, files):
+    import urllib.parse
+    if not getattr(s, "disk", None):
+        raise C.EnvFailure("the world fixture needs --disk / --rev (it is served by the harness's DiskServer)")
+    for rel, body in files.items():
+        ct = "text/javascript; charset=utf-8" if rel.endswith(".js") else "application/json; charset=utf-8"
+        s.disk.overrides.append((lambda url, rel=rel: urllib.parse.urlparse(url).path.endswith("/" + rel),
+                                 lambda route, body=body, ct=ct: route.fulfill(status=200, body=body, headers={
+                                     "Content-Type": ct, "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})))
+
+
+def scripted_rows(args, v):
+    import p23lib  # noqa: E402
+
+    def page_errors(s, tag):
+        d = s.diagnostics()
+        v.check("no page errors / window errors during the runs (%s)" % tag, not (d["pageErrors"] or d["windowErrors"]),
+                {"pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3]})
+    if args.plant:
+        v.data["plant"] = {"name": args.plant, "edits": []}
+    if args.pencheck:                          # the natural pen (ruling R-a's re-anchor, seed 5 north-west terrace) on the head's own world
+        with C.Session(args, "probe_match", viewport={"width": 960, "height": 600}) as s:
+            if args.plant:
+                v.data["plant"]["edits"].append(p23lib.serve_patched(s, "runtime/3d/royale/bots.js", PLANTS[args.plant]))
+            s.boot()
+            s.freeze_loop()
+            pencheck(s, v)
+            page_errors(s, "head world")
+    fx, files = world_fixture()
+    v.data["worldFixture"] = {"file": WORLD_FIXTURE, "build": fx["build"], "files": sorted(files)}
+    with C.Session(args, "probe_match_fx", viewport={"width": 960, "height": 600}) as s:
+        serve_world_fixture(s, files)
+        if args.plant:
+            v.data["plant"]["edits"].append(p23lib.serve_patched(s, "runtime/3d/royale/bots.js", PLANTS[args.plant]))
+        s.boot()
+        s.freeze_loop()
+        if args.pencheck:
+            pencheck_fixture(s, v, fx)
+        if args.cornercheck:
+            cornercheck(s, v, fx)
+        page_errors(s, "world fixture")
+
+
+def pencheck_fixture(s, v, fx):
+    out = scripted_setups(s, PEN_SEED, PEN_MAP, PENFX_SETUPS, PENFX_GOAL, PENFX_CORNER, PENFX_FACE_FOOT, PEN_T, "pencheck fixture")
+    v.data["pencheck_fixture"] = out
+    name = ("pen fixture (Volcano Rim on the pinned world e7a7426c6 / MAP_GEN %d, %s seed %d - see WORLD_FIXTURE: an hp-limited calm bot on the terrace top, its "
+            "goal 33 m north along the top past a corner 1.5-2 m short of an 8.4 m face, %d setups): every setup reaches the goal in %.0f s with 0 stuck "
+            "episodes on the way" % (fx["genVersion"], PEN_MAP, PEN_SEED, len(PENFX_SETUPS), PEN_T))
+    bad = [r for r in out if r.get("error") or r.get("gen") != fx["genVersion"] or not (PENFX_START_Y[0] <= r["geo"]["start"] <= PENFX_START_Y[1]
+           and r["geo"]["start"] - r["geo"]["foot"] >= 7.0) or r.get("cornerD", 1e9) > 1.5]
     if bad:
-        v.cnj(name, "SETUP missed in %d of %d setups (geometry moved, no bot, or the route did not use the corner): %s" % (
-            len(bad), len(out), [{k: r.get(k) for k in ("start", "error", "geo", "cornerD")} for r in bad]))
+        v.cnj(name, "SETUP missed in %d of %d setups (not the pinned world, geometry moved, no bot, or the route did not use the corner): %s" % (
+            len(bad), len(out), [{k: r.get(k) for k in ("start", "error", "gen", "geo", "cornerD")} for r in bad]))
+        return
+    ok = all(r["reachT"] is not None and r["reachT"] <= PEN_T and r["episodes"] == 0 for r in out)
+    v.check(name, ok, [{k: r.get(k) for k in ("start", "hp", "bot", "reachT", "episodes", "eps", "cornerD", "minD", "end")} for r in out],
+            "reach <= %.0f s and 0 stuck episodes, every setup" % PEN_T)
+
+
+def cornercheck(s, v, fx):
+    # (W10 R1A fix15, ruling R-g) on the pinned world (WORLD_FIXTURE): the MAP_GEN 9 terrace pad covers the face (start 49.56, foot 47.63 - SETUP missed
+    # since fix10). Same anchors, setups, driver, bar and SETUP test as before, + the world must report MAP_GEN 8.
+    out = scripted_setups(s, CORNER_SEED, CORNER_MAP, CORNER_SETUPS, CORNER_GOAL, CORNER_C, CORNER_FOOT, CORNER_T, "cornercheck fixture")
+    v.data["cornercheck"] = out
+    name = ("corner fixture (Coco Village terrace on the pinned world e7a7426c6 / MAP_GEN %d, %s seed %d - see WORLD_FIXTURE: a calm bot on the terrace top, "
+            "its grid route's corner 0.6 m from the south face, %d setups): every setup reaches the goal in %.0f s with 0 stuck episodes on the way" % (
+                fx["genVersion"], CORNER_MAP, CORNER_SEED, len(CORNER_SETUPS), CORNER_T))
+    bad = [r for r in out if r.get("error") or r.get("gen") != fx["genVersion"] or not (49.0 <= r["geo"]["start"] <= 50.0 and r["geo"]["start"] - r["geo"]["foot"] >= 4.0)
+           or r.get("cornerD", 1e9) > 1.5]
+    if bad:
+        v.cnj(name, "SETUP missed in %d of %d setups (not the pinned world, geometry moved, no bot, or the route did not use the corner): %s" % (
+            len(bad), len(out), [{k: r.get(k) for k in ("start", "error", "gen", "geo", "cornerD")} for r in bad]))
         return
     ok = all(r["reachT"] is not None and r["reachT"] <= CORNER_T and r["episodes"] == 0 for r in out)
     v.check(name, ok, [{k: r.get(k) for k in ("start", "hp", "bot", "reachT", "episodes", "eps", "cornerD", "minD", "end")} for r in out],
@@ -351,6 +460,9 @@ def main():
 
     def body(v):
         results, paths, far = [], [], []
+        if args.pencheck or args.cornercheck:   # (W10 R1A fix15, ruling R-g) the scripted rows: the natural pen on the head's world, then the fixture rows
+            scripted_rows(args, v)              # in a second session on the pinned world (see WORLD_FIXTURE)
+            return
         with C.Session(args, "probe_match", viewport={"width": 960, "height": 600}) as s:
             if args.plant:
                 sys.path.insert(0, os.path.join(HERE, "p23"))
@@ -358,15 +470,6 @@ def main():
                 v.data["plant"] = {"name": args.plant, "edits": p23lib.serve_patched(s, "runtime/3d/royale/bots.js", PLANTS[args.plant])}
             s.boot()
             s.freeze_loop()
-            if args.pencheck or args.cornercheck:  # (W9 R1B pass 3) its own row: the scripted pen alone (no match runs, no paths); (fix mergefix) the corner
-                if args.pencheck:
-                    pencheck(s, v)
-                if args.cornercheck:
-                    cornercheck(s, v)
-                d = s.diagnostics()
-                v.check("no page errors / window errors during the runs", not (d["pageErrors"] or d["windowErrors"]),
-                        {"pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3]})
-                return
             for k, (seed, mp) in enumerate(runs):
                 t0 = time.time()
                 st = s.start_match("standard", seed, mp, enter=True)
