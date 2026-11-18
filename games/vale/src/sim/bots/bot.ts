@@ -822,7 +822,8 @@ export class Bot extends BotBase implements BotController {
     const nd = Math.sqrt(n2), dx = nx / nd, dy = ny / nd;
     // (owner_rulings 47: a turn is a walk that reverses the last one — heading against heading, not point against point: the
     // round-3 latch let a fighter that reached one point walk straight back to the other, and pace on)
-    const turn = this.headX * dx + this.headY * dy < -0.2;
+    // (owner_rulings 51: a right-angle turn or more — two calls a quarter-circle apart zigzag a fighter as surely as two opposite)
+    const turn = this.headX * dx + this.headY * dy < 0.1;
     // (owner_rulings 51: one turn in 12 s, not 8 — two turns 8 s apart are three legs inside a 12 s window, the pacing itself)
     if (turn && !urgent && now - this.latchAt < 12) {
       if (sq(this.latchX - e.x) + sq(this.latchY - e.y) > 1.5 * 1.5) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; }
@@ -1292,7 +1293,9 @@ export class Bot extends BotBase implements BotController {
       // (owner_rulings 51: the designated peeler too — in the laning phase a burst on a fit road partner is the duo's trade, played
       // from the lane: the round-2 support answered every such trade in protect mode, 5.5 % of its laning time, the whole drop of
       // the laners' in-lane share against the pre-lane bots, 67.4 / 66.4 → 66.0 / 64.7 %)
-      if (lp && !held && a.hp > a.maxHp * this.diff.peelLaneHp) continue;
+      // (and a fit partner's trade is not a dive below the tier's peelLaneHp alone: in the laning phase a partner over 40 % is
+      // trading, not dying — the veteran support's peel at 65 % still took 5-6 % of its laning time)
+      if (lp && !held && a.hp > a.maxHp * Math.min(0.4, this.diff.peelLaneHp)) continue;
       // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's —
       // the grovehunter answers a dive on any road it stands beside, the genre's counter-gank)
       if (!des && lp && !this.jungle && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;

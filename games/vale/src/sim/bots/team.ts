@@ -484,7 +484,8 @@ export class TeamBrain {
         sx = st.x + (dx / dd) * off; sy = st.y + (dy / dd) * off;
       }
       const recallOk = !!base && rt < Infinity && (d.recallDefend === 'inner' ? cls >= 1 : d.recallDefend === 'base' ? cls >= 2 : false);
-      const cap = cls === 2 ? 45 : cls === 1 ? 30 : 20;
+      // (owner_rulings 51: in the laning phase an inner Needle's post is for a defender 15 s off at most — the roads come first)
+      const cap = cls === 2 ? 45 : cls === 1 ? (laning ? 15 : 30) : 20;
       while (have < th.need) {
         let best: PlayerId = -1, bt = Infinity, bRecall = false;
         for (const p of w.players) {
@@ -598,7 +599,8 @@ export class TeamBrain {
     if (k.kind !== 'rift' || this.phase === 'early' || this.rush || !this.diff.readsWaves) { this.answerUntil.clear(); return; }
     this.answerFill(w);
     // (round 2: an answer stands DEFEND_STICK s after it was last given, while its fighter is fit — see delayDefend)
-    for (const [p, lane] of this.answer) this.answerUntil.set(p, { lane, until: now + DEFEND_STICK });
+    // (owner_rulings 51: no stand-on in the laning phase, as for the defend calls)
+    if (now >= 840) for (const [p, lane] of this.answer) this.answerUntil.set(p, { lane, until: now + DEFEND_STICK });
     for (const [p, a] of [...this.answerUntil]) {
       const e = w.players[p]?.ent;
       if (now > a.until || !e || !e.alive || e.hp < e.maxHp * 0.5) { this.answerUntil.delete(p); continue; }
@@ -765,7 +767,11 @@ export class TeamBrain {
     // (owner_rulings 44, round 2: a defend call stands DEFEND_STICK s after its threat last showed — an attacker flickering in
     // and out of sight turned the call on and off every think, and the fighters it named paced between the road and the
     // structure: most of veteran's full-health back-and-forth walks)
+    // (owner_rulings 51: not in the laning phase — a road's dive call there is its laners' moment, and the 4 s it stood after the
+    // dive ended kept the solo laners in defend mode 2.4-3.9 % of the laning phase, against 1.0-1.3 % for the pre-lane bots)
+    const laning = now < 840 && this.phase !== 'late';
     for (let i = 0; i < this.defend.length; i++) {
+      if (laning) continue;
       if (this.defend[i] > 0.05) { this.stickDef[i] = now + DEFEND_STICK; this.stickVal[i] = this.defend[i]; this.stickX[i] = this.defendX[i]; this.stickY[i] = this.defendY[i]; this.stickF[i] = this.defendFighters[i]; }
       else if (now < this.stickDef[i]) { this.defend[i] = this.stickVal[i]; this.defendX[i] = this.stickX[i]; this.defendY[i] = this.stickY[i]; this.defendFighters[i] = this.stickF[i]; }
     }
