@@ -144,16 +144,6 @@ export const CAPSULE = Object.freeze({ r: 0.45, h: 1.8, step: 0.55 });   // play
 const CROUCH_H = 1.54;                                     // (W10 R1A) the crouched capsule (royale.js: 1.36 + 0.18 m) - nothing lower over a floor fits under it
 export const MAX_FLOORS = 3;               // O3
 export const TRI_BUDGET = 4000;            // per furnished storey
-// (W10 R3A, plan R3A budget: shops +2-4k a large shop, offices ~+1k a storey) a work building's furnished storey: a shop / hall (stores, warehouses, offices) 5000, a
-// mid-rise / tower (offices, meeting rooms, lobbies) 4000 - WORK_FIT; every other non-home storey TRI_BUDGET. triBudgetOf(H) is the selftest's recount bar
-// and a big one more, by its footprint: TRI_WORK_M2 a m2, up to TRI_WORK_MAX 6000 (a 30 x 22.5 m mall storey held 7 gondolas in a 219 m2 store at 6000)
-export const TRI_BUDGET_WORK = Object.freeze({ shop: 5000, hall: 5000, midrise: 4000, tower: 4000 });
-export const TRI_WORK_M2 = 18, TRI_WORK_MAX = 6000;
-const workBudget = (use, W, D) => (TRI_BUDGET_WORK[use] ? Math.max(TRI_BUDGET_WORK[use], Math.min(TRI_WORK_MAX, Math.round(TRI_WORK_M2 * W * D))) : 0);
-export function triBudgetOf(H) {
-  const ruined = !!(THEMES[H.theme] && THEMES[H.theme].ruined), home = H.use === "house" && !ruined;
-  return home ? TRI_BUDGET_HOME : (WORK_FIT && !ruined && workBudget(H.use, H.W, H.D)) || TRI_BUDGET;
-}
 // ---- Wave 10 round 1 (lane R1A, the houses audit): homes (use house, not a ruin) - each switch below is ON in the game; the homes gate (_harness/p23/homes.py) plants turn one off
 export const MIN_ROOM_W = 2;               // a home's rooms are >= 2 cells (5.0 m) on the narrow side (audit 11: 19.7 % were 2.5 m wide); one 1 x 2-cell bath nook per floor is the exception
 export const FURN_K = 1.15;                // every piece of furniture (kit and authored) x FURN_K, drawn AND collided (audit 3: 2.26 m doors, 3.4 m storeys and 2.5 m cells
@@ -518,11 +508,12 @@ const AUTH = {
     [-0.76, 0, -0.185, 0.76, 0.1, 0.225, "wood", 0], [-0.76, 0.5, -0.185, 0.76, 0.54, 0.225, "wood", 0], [-0.76, 1.0, -0.185, 0.76, 1.05, 0.225, "wood", WOODD],
     [-0.7, 0.1, -0.15, -0.1, 0.42, 0.18, "fabric", 0xf0ad4e], [0.0, 0.1, -0.12, 0.7, 0.38, 0.2, "fabric", 0x5bc0de], [-0.7, 0.54, -0.15, 0.05, 0.86, 0.18, "fabric", 0xd9534f], [0.15, 0.54, -0.12, 0.7, 0.9, 0.2, "fabric", 0x5cb85c]],
     cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]], surface: 1.05 },
+  // (W10 R3A, budget: 166 -> ~110 triangles) the stock is one packed block per shelf level and side (was 8 small blocks), muted colours
   gondola: { w: 1.8, d: 0.9, parts: [[-0.9, 0, -0.45, 0.9, 0.12, 0.45, "metal", 0xd8dadc], [-0.88, 0.12, -0.03, 0.88, 1.35, 0.03, "metal", 0xc8cacc], [-0.9, 0.12, -0.45, -0.86, 1.35, 0.45, "metal", 0x9aa1a6], [0.86, 0.12, -0.45, 0.9, 1.35, 0.45, "metal", 0x9aa1a6],
     [-0.86, 0.6, -0.45, 0.86, 0.63, 0.45, "metal", 0xd8dadc], [-0.86, 1.1, -0.45, 0.86, 1.13, 0.45, "metal", 0xd8dadc],
-    [-0.8, 0.12, 0.05, -0.15, 0.45, 0.4, "fabric", 0xa8675c], [-0.05, 0.12, 0.05, 0.8, 0.5, 0.42, "fabric", 0x5f7f9c], [-0.8, 0.63, 0.05, 0.1, 0.95, 0.4, "fabric", 0xc4a26a], [0.2, 0.63, 0.05, 0.8, 1.0, 0.4, "fabric", 0x7a9472],
-    [-0.8, 0.12, -0.42, 0.0, 0.48, -0.05, "fabric", 0x86a4ae], [0.1, 0.12, -0.4, 0.8, 0.42, -0.05, "fabric", 0xd8d0b8], [-0.8, 0.63, -0.4, -0.2, 0.92, -0.05, "fabric", 0xa8675c], [-0.1, 0.63, -0.42, 0.8, 1.02, -0.05, "fabric", 0xc4a26a]],   // (W10 R3A: muted stock colours)
-    cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]], surface: 1.13 },
+    [-0.82, 0.12, 0.05, 0.82, 0.48, 0.41, "fabric", 0xa8675c], [-0.82, 0.63, 0.05, 0.82, 0.98, 0.4, "fabric", 0x5f7f9c],
+    [-0.82, 0.12, -0.41, 0.82, 0.46, -0.05, "fabric", 0xc4a26a], [-0.82, 0.63, -0.4, 0.82, 1.0, -0.05, "fabric", 0x7a9472]],
+    cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]], surface: 1.13 },
   shopCounter: { w: 2.0, d: 0.7, parts: [[-1.0, 0, -0.35, 1.0, 1.0, 0.33, "wood", 0], [-1.02, 1.0, -0.36, 1.02, 1.05, 0.35, "wood", WOODD], [-0.95, 0.15, 0.33, 0.95, 0.9, 0.35, "wood", WOOD],
     [0.3, 1.05, -0.25, 0.7, 1.3, 0.05, "metal", 0x3a3f44]], cols: [[0, 1, 2], [3]], surface: 1.05 },
   crate: { w: 0.9, d: 0.9, parts: [[-0.45, 0, -0.45, 0.45, 0.9, 0.45, "wood", 0], [-0.46, 0.38, -0.46, 0.46, 0.52, 0.46, "wood", WOODD]], cols: [[0, 1]], surface: 0.9 },
@@ -583,8 +574,10 @@ const AUTH = {
     [-0.82, 1.48, -0.26, 0.82, 1.96, 0.26, "fabric", 0x8a6a48]], cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]] },
   rackRow: { w: 2.2, d: 0.9, parts: [[-1.1, 0, -0.45, -1.05, 2.1, 0.45, "metal", 0x2f5a8a], [1.05, 0, -0.45, 1.1, 2.1, 0.45, "metal", 0x2f5a8a], [-1.05, 0.12, -0.45, 1.05, 0.16, 0.45, "metal", 0xc06a2a],
     [-1.05, 0.78, -0.45, 1.05, 0.82, 0.45, "metal", 0xc06a2a], [-1.05, 1.44, -0.45, 1.05, 1.48, 0.45, "metal", 0xc06a2a], [-1.05, 2.04, -0.45, 1.05, 2.08, 0.45, "metal", 0xc06a2a],
-    [-1.0, 0.16, -0.42, 0.0, 0.66, 0.4, "fabric", 0xb2875a], [0.1, 0.16, -0.4, 1.0, 0.6, 0.42, "fabric", 0x6a8a5a], [-0.95, 0.82, -0.4, 0.9, 1.32, 0.4, "fabric", 0xc49a62],
-    [-0.9, 1.48, -0.38, 0.4, 1.86, 0.42, "fabric", 0x8a6a48], [0.5, 1.48, -0.4, 1.0, 1.78, 0.38, "fabric", 0xb03a2e]], cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]] },
+    [-1.0, 0.16, -0.42, 1.0, 0.66, 0.4, "fabric", 0xb2875a], [-0.95, 0.82, -0.4, 0.9, 1.32, 0.4, "fabric", 0xc49a62], [-0.9, 1.48, -0.38, 0.95, 1.86, 0.42, "fabric", 0x8a6a48]],
+    cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8]] },     // (W10 R3A, budget: one pallet of stock a level, was 5 blocks)
+  // (W10 R3A) a stock pack: one sealed box (~10 triangles) - the cheap stock a shop / store room / warehouse stacks on its cartons and crates
+  pack: { w: 0.5, d: 0.4, parts: [[-0.25, 0, -0.2, 0.25, 0.34, 0.2, "fabric", 0xa89a80]], cols: [[0]], surface: 0.34 },
   carton: { w: 0.52, d: 0.44, parts: [[-0.26, 0, -0.22, 0.26, 0.42, 0.22, "fabric", 0xb2875a], [-0.05, 0.42, -0.22, 0.05, 0.424, 0.22, "fabric", 0xd8c8a0]], cols: [[0, 1]], surface: 0.424 },
   cartonOpen: { w: 0.6, d: 0.46, parts: [[-0.3, 0, -0.23, 0.3, 0.36, 0.23, "fabric", 0xc49a62], [-0.3, 0.36, -0.23, 0.3, 0.5, -0.2, "fabric", 0xc49a62], [-0.3, 0.36, 0.2, 0.3, 0.5, 0.23, "fabric", 0xc49a62]],
     cols: [[0], [1], [2]] },
@@ -2685,7 +2678,7 @@ export function generate(parcel, opts) {
   for (const bx of leafBoxes) structSolids.push([bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1]);
   // ---- furniture
   const furn = [];                                        // { cat, room, f, u, v (centre), fq (local facing turn), rect [u0, v0, u1, v1], parts [box idx], tint, order }
-  const TB = home ? TRI_BUDGET_HOME : (WORK_FIT && !TH.ruined && workBudget(use, W, D)) || TRI_BUDGET;          // (W10 R1A / R3A) the storey's triangle budget (= triBudgetOf)
+  const TB = home ? TRI_BUDGET_HOME : TRI_BUDGET;          // (W10 R1A) the storey's triangle budget
   const tris = new Array(S + 1).fill(0);                  // [storey 0 .. S - 1, the closed shell storeys of a tall building]
   // ---- hidden faces: a structure box face that another structure box covers completely (the slab edge inside a wall, a wall's end in the
   // corner square, the fill under a stair inside its steps, every bottom face below the pad) is never drawn. A face is only culled when ONE box
@@ -3718,18 +3711,20 @@ export function generate(parcel, opts) {
       for (let pu = inner[0] + 0.55; pu <= inner[2] - 0.55 + 1e-6; pu += 0.5) for (let pv = inner[1] + 0.55; pv <= inner[3] - 0.55 + 1e-6; pv += 0.5)
         pts.push([Math.min(pu - inner[0], inner[2] - pu, pv - inner[1], inner[3] - pv), Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000]);
       pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
-      let freeFails = 0;
+      // (at most one free-standing stock piece per 15 m2: the floor loot needs open floor - a 5 x 12.5 m shop filled with 9 crate stacks had no loot point left)
+      let freeFails = 0, freeN = Math.floor(area / 15);
       const freeStock = (id, tint) => {
-        if (freeFails >= 3) return null;
-        for (const [, pu, pv] of pts) { const q = tryAt(id, pu, pv, 0, tint) || tryAt(id, pu, pv, 1, tint); if (q) { freeFails = 0; return q; } }
+        if (freeFails >= 3 || freeN <= 0) return null;
+        for (const [, pu, pv] of pts) { const q = tryAt(id, pu, pv, 0, tint) || tryAt(id, pu, pv, 1, tint); if (q) { freeFails = 0; freeN--; return q; } }
         freeFails++;
         return null;
       };
-      for (let k = 0; k < Math.round(area / 4); k++) X.push(() => {
-        const id = (kind === "shop" ? ["boxStack", "cartonOpen", "crate", "carton"] : ["boxStack", "crate", "cartonOpen", "drum", "carton"])[k % (kind === "shop" ? 4 : 5)];
+      for (let k = 0; k < Math.round(area / 3); k++) X.push(() => {
+        const id = (kind === "shop" ? ["boxStack", "cartonOpen", "crate", "pack"] : ["boxStack", "crate", "cartonOpen", "drum", "pack"])[k % (kind === "shop" ? 4 : 5)];
         const tint = id === "drum" ? 0x4a6a7a : id === "crate" ? 0x8a6e50 : [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][k % 4];
-        const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50) : null);
+        const p = tryWall(id, "corner", { tint }) || (k % 2 === 0 ? freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50) : null);
         if (p && (id === "crate" || p.cat.id === "palletLoad")) stackOn(p, "box", { force: true });
+        else if (p && p.cat.surface && !p.tops) { const q = stackOn(p, "pack", { force: true, tint }); if (q && q.y0 + q.cat.h < 1.6) stackOn(q, "pack", { force: true, tint }); }     // (sealed packs on the carton / pack: stock piled up, never over 1.6 m)
       });
     }
     if (phase === 2) {                                   // top-up: every room should hold at least 3 standing pieces

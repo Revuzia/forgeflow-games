@@ -541,8 +541,7 @@ function checkHouse(H, HGmod, MAN) {
   for (const rf of H.roofs || []) triF[S - 1] += 2 + 4 + (rf.freeLow ? 2 : 0) + (rf.freeHigh ? 2 : 0) + 2 * rf.soffit.length;
   for (const g of H.gables || []) triF[S - 1] += g.pts.length - 2;
   // (W10 R1A: a home's storey - use house, not a ruin - draws up to TRI_BUDGET_HOME, itself held <= 6000 here; every other storey TRI_BUDGET)
-  // (W10 R3A: a work building's storey - housegen.triBudgetOf: shop / hall 5000, mid-rise / tower 4000, a big one 18 a m2 of footprint, itself held <= TRI_WORK_MAX here)
-  const TBH = HGmod.triBudgetOf ? Math.min(HGmod.TRI_WORK_MAX || 6000, HGmod.triBudgetOf(H)) : H.use === "house" && H.theme !== "ruin" && !(HGmod.THEMES && HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined) ? Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) : TRI_BUDGET;
+  const TBH = H.use === "house" && H.theme !== "ruin" && !(HGmod.THEMES && HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined) ? Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) : TRI_BUDGET;
   for (let f = 0; f < S; f++) if (triF[f] > TBH) E("budget", "floor " + f + " has " + triF[f] + " triangles (budget " + TBH + ")");
   })();
   // ---- reach: capsule walk on the colliders
@@ -1241,7 +1240,7 @@ else if (require.main === module) (async () => {
     for (const use of ["tower", "midrise"]) for (const theme of THEMES) for (const st of [4, 6, 9]) {
       const H = HGmod.generate({ id: "tall", w: 15, d: 15, theme, use, storeys: st, seed: 31 + st });
       if (H.floors.length > 3 || H.storeys + H.shell !== st || !H.boxes.some((b) => b.p === "shell" && b.c)) bad.push(use + " " + st + ": walkable " + H.floors.length + " shell " + H.shell);
-      if (Math.max(...H.tris.floors) > (HGmod.triBudgetOf ? Math.min(HGmod.TRI_WORK_MAX || 6000, HGmod.triBudgetOf(H)) : TRI_BUDGET) || H.tris.shell > TRI_BUDGET * Math.max(1, H.shell)) bad.push(use + " " + st + " budget " + H.tris.floors + " / " + H.tris.shell);
+      if (Math.max(...H.tris.floors) > TRI_BUDGET || H.tris.shell > TRI_BUDGET * Math.max(1, H.shell)) bad.push(use + " " + st + " budget " + H.tris.floors + " / " + H.tris.shell);
     }
     okP(bad.length === 0, "towers / mid-rises asked for 4-9 storeys: <= 3 walkable, the others one closed mass, height kept; budget (18 buildings)", bad.slice(0, 3).join(" | "));
   }
@@ -1325,7 +1324,7 @@ else if (require.main === module) (async () => {
   row("windows", "windows: empty aperture, sill 1.20 / header 2.30, shootable standing, cover crouched, no tall piece in front");
   row("vis-col", "colliders == visual extents (structure exact; kit vs manifest bbox, authored, steps vs ramp within 2 cm)");
   row("stairs", "stairs <= 45 deg, lip 0, top on the next floor, hole >= stairHeadroomRun");
-  row("budget", "<= " + TRI_BUDGET + " triangles per storey, a home's <= " + Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) + ", a work building's (shop / hall / mid-rise / tower) housegen.triBudgetOf <= TRI_WORK_MAX (recounted)");
+  row("budget", "<= " + TRI_BUDGET + " triangles per storey, a home's <= " + Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) + " (recounted)");
   row("roof", "pitched roofs: every plank IS its ramp (<= 45 deg, underside drawn only outside the walls); the attic sealed by layers under the plank; end walls on the layers");
   row("loot", "floor loot points on free floor (never inside / under a piece's collider)");
   row("staircase", "no furniture staircase: no low clutter (lowest top 0.2-0.55 m) within 0.9 m of a piece one step up");
