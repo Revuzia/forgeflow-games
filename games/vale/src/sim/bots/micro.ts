@@ -721,7 +721,7 @@ export abstract class BotBase {
         if (target.kind !== 'monster') return false;
       }
     }
-    // (owner_rulings 46: a defender clearing a wave off its own structure spends its damage on the wave — one Wick is enough
+    // (ruling 55: a defender clearing a wave off its own structure spends its damage on the wave — one Wick is enough
     // to aim at; held back for three, the spells stayed up while two fit defenders watched a Lantern fall to Wicks)
     const need = info.minTargets > 0 ? info.minTargets : monsters || this.pClear ? 1 : (u & U_WAVECLEAR) ? 2 : 3;
     const o = this.aimOut;
@@ -903,7 +903,7 @@ export abstract class BotBase {
       const d2 = this.dist2(u, e.x, e.y);
       if (d2 > sq(r + u.radius)) continue;
       let s = u.hp + Math.sqrt(d2) * 25;
-      // (owner_rulings 46: clearing a wave off a structure of mine, the Wicks hitting it go first)
+      // (ruling 55: clearing a wave off a structure of mine, the Wicks hitting it go first)
       if (this.pClear && u.atkTarget >= 0) { const a = this.w.entity(u.atkTarget); if (a && a.kind === 'structure' && a.team === e.team) s -= 400; }
       if (s < bs) { bs = s; best = u; }
     }

@@ -149,7 +149,7 @@ export interface DifficultyProfile {
    *  frontline or support for any partner, as ruling 42) */
   readonly peelDive: 'none' | 'low' | 'all';
   /** a posted or answering defender holds its structure against the stacked wave (ruling 42; a beginner backs off it; adept
-   *  too since owner_rulings 51 — its holds kept adept games 3 min longer than the pre-lane bots', p90 34-40 against the 32 bar) */
+   *  too since ruling 55 — its holds kept adept games 3 min longer than the pre-lane bots', p90 34-40 against the 32 bar) */
   readonly holdWave: boolean;
   /** FRAY: under this share of health with a foe within 10 m and no kill on, a fighter breaks off (toward a heal if one is
    *  near), whether or not it is being hit right now (0: only the old retreat) */
@@ -164,11 +164,11 @@ export interface DifficultyProfile {
   readonly collapseRoads: boolean;
   /** closing: ahead with the enemy core open (its middle Lantern down), the team groups and ends — no staging wait */
   readonly closeOut: boolean;
-  // ── lane AI round 3 (owner_rulings 46) ──
+  // ── lane AI round 3 (ruling 55) ──
   /** FRAY: a chase that has not closed on its target for this long (s), out of reach and with no gap-closer ready, is given
    *  up and the target left alone for 6 s (Infinity: never) */
   readonly chaseQuit: number;
-  // ── ruling 54 ──
+  // ── ruling 55 ──
   /** structure defence reads a threat before the structure is hit — enemy fighters beside it, a push coming at the road's
    *  front (a beginner answers only a structure being hit) */
   readonly anticipates: boolean;

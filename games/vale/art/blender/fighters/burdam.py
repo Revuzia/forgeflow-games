@@ -399,6 +399,7 @@ class Lens(sdf.Prim):
 # the mask's almond eye recesses (fix pass 5): the concept's open almonds, ~9.6 x 4 cm, inner corners at the nose's
 # root, tilted 14 degrees down toward it
 EYES = ((-1, -0.075), (1, 0.051))
+BEARD = True                  # orch1 FU-17: the carved brow and beard mass (mask sculpt + mask_paint)
 # max2 card blockers (round-1 card verify: "empty dark almond eye holes, no pupils, no lids": a hockey / horror mask
 # at card size): the almond is a SHALLOW carved recess (the lens 1.8 cm further forward: 2.6 -> 0.8 cm deep at its
 # centre), filled by a convex carved eyeball 2 mm behind the face plane and roofed by a carved upper lid that covers
@@ -611,7 +612,10 @@ def sculpts() -> list:
     # the nose, a triangular beak nose (narrow at the brow, broad at its base), raised cheekbone planes
     for sx in (-1.0, 1.0):
         bc = np.array([-0.012 + sx * 0.056, -0.163, 2.036])
-        mask.add(RoundBox(bc, (0.056, 0.014, 0.009), 0.008, axes=rot(ry=-sx * 13.0)), k=0.02)   # brow half (a ridge)
+        # orch1 FU-17 (bd2: at 128 and 64 px the dome read as a pale egg): a heavier carved brow mass, a step thicker
+        # and further forward, so the brow line breaks the face from the dome at card and game size
+        mask.add(RoundBox(bc + np.array([0.0, -0.004, 0.002]), (0.060, 0.019, 0.013), 0.010, axes=rot(ry=-sx * 13.0)),
+                 k=0.02)                                                                         # brow half (a ridge)
         mask.add(RoundBox((-0.012 + sx * 0.072, -0.166, 1.953), (0.040, 0.006, 0.017), 0.006,
                           axes=rot(rx=-22.0, ry=-sx * 8.0)), k=0.03)                        # cheekbone plane
     mask.add(Hull([(-0.012, -0.164, 2.034), (-0.012, -0.176, 2.026), (-0.040, -0.168, 1.904), (0.016, -0.168, 1.904),
@@ -624,6 +628,14 @@ def sculpts() -> list:
     mask.sub(Tube([(-0.083, -0.168, 1.853), (-0.045, -0.176, 1.874), (0.025, -0.176, 1.874), (0.062, -0.168, 1.853)],
                   [0.0065] * 4, k=0.004), k=0.004)                                     # the set frown
     mask.add(RoundBox((-0.012, 0.0, 1.80), (0.095, 0.10, 0.04), 0.03), k=0.02)          # neck plug under the cowl
+    if BEARD:
+        # orch1 FU-17: a carved lacquer beard under the set frown (a full chin block hanging over the felt roll) and
+        # jaw masses up each cheek to the ears: the lower head reads as a bearded face, not an egg, and the chin
+        # tallies' stitched-mouth read (bd1) has nowhere to sit
+        mask.add(Ellipsoid((-0.012, -0.142, 1.812), (0.088, 0.050, 0.062)), k=0.03)          # the chin beard
+        for sx in (-1.0, 1.0):
+            mask.add(Ellipsoid((-0.012 + sx * 0.086, -0.105, 1.858), (0.042, 0.060, 0.070), axes=rot(ry=sx * 10.0)),
+                     k=0.03)                                                                 # the jaw mass
     part("mask", mask, "sandstone", "bone:head", 1500, 0.6)
 
     # COWL: the bunched felt scarf, wider and lower over the right shoulder at the back
@@ -2684,12 +2696,13 @@ BLADE_GAIN = 0.72         # (polish: 0.62 -> 0.72, the value lift: the blade is 
 # walks him away from it) the top quarter is the cowl, the crown, both pauldrons and the blade, so those step up; the
 # coat, belt and legs stay dark (the brief's light-top / dark-feet gradient; the review: the coat, the belt, the cowl
 # and the plates sat in one taupe family)
-MASK_FACE = "#CFA262"         # max2 card blockers: a warmer, deeper honey lacquer (L* ~69, b* ~+40), never bone (round-1
+MASK_FACE = "#BC8A52"         # orch1 FU-17 (bd2: still the brightest part of the figure, a pale egg at 128 / 64 px):
+                              # a value step down toward the body's range (L* ~69 -> ~61), the warm honey kept; max2 card blockers: a warmer, deeper honey lacquer (L* ~69, b* ~+40), never bone (round-1
                               # card verify: "a pale bald egg mask", a skull read on the cards and from the game camera);
                               # was #D6BB7A. The lit face's mean: the concept's ochre-gold lacquer, L* ~77 (polish: was #C6A55E, L* 69;
                               # the review measured the splash mask L* 65 against the concept's 81; fix pass 5: pale ochre
                               # rendered bone-white in game and the crown read as a bald skull from the top-down camera)
-CROWN_DARK = 0.18             # max2: 0.10 -> 0.18 (the pale dome read as a bald skull on the cards); the crown's lacquer a step darker toward the back (polish: half the pass-5 0.20, the crown is
+CROWN_DARK = 0.34             # orch1 FU-17: 0.18 -> 0.34 (the dome a clear step under the face from the game camera); max2: 0.10 -> 0.18 (the pale dome read as a bald skull on the cards); the crown's lacquer a step darker toward the back (polish: half the pass-5 0.20, the crown is
                               # the top of the figure from the game camera)
 COWL_MEAN = "#8E7B66"         # polish: the concept's warm taupe felt (L* ~53, b* ~+14; was #6A5845, L* 39: from the RIFT
                               # probe's spot the cowl is 16 % of his pixels and 40 % of it sits in the top quarter); a
@@ -2708,6 +2721,8 @@ TROUSER_MEAN = "#504236"      # dark trousers (feet band); fix pass 8 a greyer t
 BOOT_MEAN = "#3F2D20"         # dark waxed-leather boots (warm brown: cooler browns read mauve outdoors; fix pass 4
                               # a step darker: the splash lit them tan)
 INK_TALLY = "#3A2915"         # the cut tallies' ink
+BEARD_MEAN = "#4E3321"        # orch1 FU-17: the carved beard and brows, a deep umber lacquer (L* ~24): the darkest mass on
+                              # the head, between the face's honey and the cowl's taupe, so the head carries three values
 COAT_MEAN = "#634D3A"         # fix pass 4: the felt coat a darker umber, the concept's warm brown (L* ~34, hue 29; the lifted
                               # painting read peach / salmon, L* 59 in the QA render, against the concept's dark felt)
 SKIRT_MEAN = "#5B4636"        # the coat's skirt a step darker toward the feet (L* ~31)
@@ -2809,6 +2824,34 @@ def tally_ink(a: np.ndarray, b: np.ndarray, groups, half_len=0.0145, gap=0.0068,
     return cov
 
 
+def _beard_paint(c: np.ndarray, x, y, z, ny, nz) -> np.ndarray:
+    """orch1 FU-17: the carved lacquer beard and the heavy brows in BEARD_MEAN. The beard covers the chin block below
+    the frown and rises along each jaw to the cheek's back (front-to-side faces only; the back of the head stays
+    lacquer); soft carved strand grooves (wide, low contrast, flowing down and in) keep it a carving, not a flat patch.
+    The brows: the brow ridges' faces above each eye a step under the beard's value."""
+    xs = x + 0.012
+    ax = np.abs(xs)
+    # the beard's top edge: under the frown at the centre (z 1.846), rising up the jaw (z 1.95 at |x| 0.13)
+    top = 1.846 + 0.9 * np.clip(ax - 0.05, 0.0, None) ** 1.15
+    front = (ny < 0.35) & (y < 0.02)
+    edge = _ss2(-0.006, 0.004, top - z)                       # 1 below the edge, feathered over 1 cm
+    side_back = 1.0 - _ss2(-0.02, 0.03, y)                    # fade out toward the ears
+    wb = edge * side_back * front * (z > 1.70)
+    # strands: grooves that run down and in toward the chin's point, ~9 mm apart, 18 % value modulation
+    ph = (xs * (1.0 + 2.5 * np.clip(1.86 - z, 0, None))) / 0.009
+    groove = 0.5 + 0.5 * np.cos(2.0 * np.pi * ph)
+    val = (0.90 + 0.18 * (groove - 0.5))[:, None]
+    beard = _hexlin(BEARD_MEAN)[None, :] * val
+    c = c * (1 - wb[:, None]) + beard * wb[:, None]
+    # brows: the brow ridges' forward faces (above the lids, z 2.022-2.054) in the beard's lacquer, a touch darker
+    for sx in (-1.0, 1.0):
+        bx = (xs - sx * 0.056) * np.cos(np.radians(13.0)) - (z - 2.038) * np.sin(np.radians(13.0)) * -sx
+        bz = (z - 2.038) * np.cos(np.radians(13.0)) + (xs - sx * 0.056) * np.sin(np.radians(13.0)) * -sx
+        wbr = (1.0 - _ss2(0.052, 0.064, np.abs(bx))) * (1.0 - _ss2(0.011, 0.016, np.abs(bz))) * (ny < -0.2)
+        c = c * (1 - 0.85 * wbr[:, None]) + (_hexlin(BEARD_MEAN) * 0.85)[None, :] * 0.85 * wbr[:, None]
+    return c
+
+
 def mask_paint(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarray:
     """the ledger mask: painted tallies lifted out (a grey closing in texture space removes thin dark
     strokes), the keel's light streak below the nose evened out, the lacquer graded to a pale ochre (the
@@ -2886,7 +2929,7 @@ def mask_paint(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarra
     # fix pass 8 (the review: the lower-face tallies and the frown blurred in the splash): the chin groups and the
     # frown cut bolder
     cov[fr] = tally_ink(xm[fr], zm[fr], TALLY_FRONT, half_len=0.0135, gap=0.0068, width=0.0021, seed=1)
-    if (_STATE.get("skin") or {}).get("id") not in TALLY_CHIN_OFF:
+    if not BEARD and (_STATE.get("skin") or {}).get("id") not in TALLY_CHIN_OFF:
         cov[fr] = np.maximum(cov[fr], tally_ink(xm[fr], zm[fr], TALLY_CHIN, half_len=0.0120, gap=0.0064, width=0.0024,
                                                 seed=4))
     cov[bk] = np.maximum(cov[bk], tally_ink(-xm[bk], zm[bk], TALLY_BACK, half_len=0.019, gap=0.0085, width=0.0023,
@@ -2943,7 +2986,12 @@ def mask_paint(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarra
         c[sel] = e * (1 - inside) + col * inside
     # 6. below the chin: the felt roll's shadow (the neck plug and the chin's underside); fix pass 5 a little lower,
     # so the chin (its two tally groups) shows under the frown
-    w = np.clip((1.840 - zm) / 0.012, 0.0, 1.0)[:, None]
+    if BEARD:
+        # orch1 FU-17: the beard takes the lower face and jaw (no felt shadow over it; the neck plug below it keeps it)
+        c = _beard_paint(c, xm, ym, zm, nym, nzm)
+        w = np.clip((1.760 - zm) / 0.012, 0.0, 1.0)[:, None]
+    else:
+        w = np.clip((1.840 - zm) / 0.012, 0.0, 1.0)[:, None]
     c = c * (1 - w) + _hexlin(FELT_SHADOW) * w
     out[m] = c
     log(f"burdam: mask paint: {int(lift.sum())} stroke texels lifted, face mean "

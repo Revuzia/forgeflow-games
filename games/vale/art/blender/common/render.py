@@ -304,11 +304,21 @@ def pose_tweak(arm, cfg: dict) -> None:
     bpy.context.view_layer.update()
 
 
+# (iterations, lambda, lambda_border, volume_preserve) of the card-only hand smooth. orch1 FU-10: was (8, 1.2, 0.05,
+# True); a Laplacian step over 1 overshoots and, with the volume preservation rescaling each small finger island, threw
+# the hands into spikes and torn lumps on the cards (bd2: Dunsom's three splashes, Burdam's carry fist);
+# _harness/clip_probe_card_hands.py measures it (hand edges outside 0.4-1.6x rest per staged card)
+HAND_SMOOTH = (4, 0.5, 0.0, False)
+
+
 def smooth_card_hands(objs, on: bool = True) -> list:
     """Card-only: a Laplacian smooth of the hands (after the armature, weighted by the hand bones' vertex groups), so
     low-poly finger prisms read as shaded forms in the focal area. The GLB is untouched; returns the modifiers to remove."""
     out = []
     if not on:
+        return out
+    it, lam, lam_b, vol = HAND_SMOOTH
+    if it <= 0:
         return out
     for o in objs:
         if o.type != "MESH":
@@ -317,10 +327,10 @@ def smooth_card_hands(objs, on: bool = True) -> list:
             if g in o.vertex_groups:
                 md = o.modifiers.new(f"card_hand_{g}", "LAPLACIANSMOOTH")
                 md.vertex_group = g
-                md.iterations = 8
-                md.lambda_factor = 1.2
-                md.lambda_border = 0.05
-                md.use_volume_preserve = True
+                md.iterations = it
+                md.lambda_factor = lam
+                md.lambda_border = lam_b
+                md.use_volume_preserve = vol
                 out.append((o, md))
     return out
 

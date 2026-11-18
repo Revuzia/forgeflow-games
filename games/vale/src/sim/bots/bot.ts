@@ -44,18 +44,17 @@ import { BotBase, gauss, holdLeft, type Mode } from './micro.ts';
 import type { Guard } from './team.ts';
 import { fighterPower, memoryWeight } from './perception.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
-import { ab } from './ab.ts';
 
 const MODE_TICKS = 6;
-/** owner_rulings 46: the plans whose walk a calm fighter does not turn round on more than once in 8 s */
+/** ruling 55: the plans whose walk a calm fighter does not turn round on more than once in 8 s */
 const WALKS: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return', 'lane']);
 const MIN_MODE_TIME = 1.5;
-/** (ruling 54) in a road's laning phase a partner is dived, for the peel, only when held or under this share of its health —
+/** (ruling 55) in a road's laning phase a partner is dived, for the peel, only when held or under this share of its health —
  *  above it the burst is the duo's trade, played from the lane */
 const LANE_PEEL_HP = 0.25;
-/** (ruling 54) … and a partner held by hard CC only under this share (a stun in a full-health trade is the trade) */
+/** (ruling 55) … and a partner held by hard CC only under this share (a stun in a full-health trade is the trade) */
 const LANE_PEEL_HELD_HP = 0.5;
-/** owner_rulings 47: how far above frayBreak a losing FRAY fighter starts to leave (a constant: the sim reads no environment) */
+/** ruling 55: how far above frayBreak a losing FRAY fighter starts to leave (a constant: the sim reads no environment) */
 const FRAY_EARLY = 0.2;
 /** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
  *  — until this time, unless its team starts the endgame push sooner */
@@ -83,7 +82,7 @@ export class Bot extends BotBase implements BotController {
   readonly eco: Economy;
   readonly stagger: number;
   modeSince = -1e9;
-  /** owner_rulings 46 (no pacing): the macro mode last left, when, and the walk point a calm fighter is committed to */
+  /** ruling 55 (no pacing): the macro mode last left, when, and the walk point a calm fighter is committed to */
   private latchX = 0;
   private latchY = 0;
   private latchAt = -1e9;
@@ -92,7 +91,7 @@ export class Bot extends BotBase implements BotController {
   private fleeX = 0;
   private fleeY = 0;
   private fleeAt = -1e9;
-  /** owner_rulings 46 (FRAY chase discipline): the chase under way — its target, since when, the gap then — and targets given up */
+  /** ruling 55 (FRAY chase discipline): the chase under way — its target, since when, the gap then — and targets given up */
   private chaseId = -1;
   private chaseAt = 0;
   private chaseGap = 0;
@@ -193,8 +192,8 @@ export class Bot extends BotBase implements BotController {
     if ((w.tick + this.stagger) % MODE_TICKS === 0) this.selectMode();
     this.clearPlan();
     this.execute();
-    if (!ab('clearown')) this.clearOwn();
-    if (!ab('holdwalk')) this.holdWalk();
+    this.clearOwn();
+    this.holdWalk();
     this.act();
     // publish the focus target for teammates
     if (this.brain) { if (this.pFight && this.pFight.kind === 'fighter') this.brain.focus.set(this.player, this.pFight.id); else this.brain.focus.delete(this.player); }
@@ -381,7 +380,7 @@ export class Bot extends BotBase implements BotController {
       if (this.brain && this.brain.aliveEnemies > known) risk += (this.brain.aliveEnemies - known) * 0.5;
     }
     this.fogRisk = risk;
-    this.exposed = !ab('exposed') && rift && risk >= this.diff.riskCap && this.alliesNear(e.x, e.y, 20) <= 1 && !this.lanePhase() && !!this.brain && this.brain.phase !== 'early' && !this.brain.rush;
+    this.exposed = rift && risk >= this.diff.riskCap && this.alliesNear(e.x, e.y, 20) <= 1 && !this.lanePhase() && !!this.brain && this.brain.phase !== 'early' && !this.brain.rush;
   }
 
   /** lane AI G5: the visible enemy fighters within 10 m can take most of my health before my side finishes one of them
@@ -542,15 +541,15 @@ export class Bot extends BotBase implements BotController {
     // is there to end the arena)
     if (kind === 'fray' && this.diff.frayBreak > 0 && hpF < this.diff.frayBreak + (lastLife ? 0.1 : 0) && !tolled && this.nearestEnemyFighter(10) !== null &&
       !(this.killTarget && this.killMargin >= 1.2)) retreat = Math.max(retreat, 0.9);
-    // (owner_rulings 47: FRAY early break — a skilled fighter whose health is going and whose fight is not won (blows landing on
+    // (ruling 55: FRAY early break — a skilled fighter whose health is going and whose fight is not won (blows landing on
     // me, the trade read against me, no kill of mine on) leaves while it still has the health to walk away on; breaking at the
     // last fifth left the chaser in reach for the whole walk: 70 % of the low moments still had a foe within 12 m 4 s later)
-    if (kind === 'fray' && this.diff.frayBreak > 0 && !tolled && hpF < this.diff.frayBreak + (ab('f_early3') ? 0.3 : FRAY_EARLY) && (this.recentDps > 0 || (ab('f_nodps') && this.nearestEnemyFighter(10) !== null)) && this.adv < 0.5 &&
+    if (kind === 'fray' && this.diff.frayBreak > 0 && !tolled && hpF < this.diff.frayBreak + FRAY_EARLY && this.recentDps > 0 && this.adv < 0.5 &&
       !(this.killTarget && this.killMargin >= 1)) retreat = Math.max(retreat, 0.88);
     // (lane AI G5: leave early when the visible enemies' burst would take most of my health before my side finishes one of
     // them — RIFT from the mid game: not in a road's laning phase, whose trades CL-1 tuned, never off a kill that is on, and
     // not in FRAY, where every seat turning from the hardest hitter handed it the placements, ulkro 2.7 against the 3.5 floor)
-    if (!ab('burst') && this.diff.burstRetreat && this.nearE > 0 && kind === 'rift' && !edgy && !!b && b.phase !== 'early' && hpF < (lastLife ? 0.85 : 0.75) &&
+    if (this.diff.burstRetreat && this.nearE > 0 && kind === 'rift' && !edgy && !!b && b.phase !== 'early' && hpF < (lastLife ? 0.85 : 0.75) &&
       !(this.killTarget && this.killMargin >= 1.2) && !tolled && this.burstDanger()) retreat = Math.max(retreat, 0.86);
     retreat = Math.max(retreat, this.outmatched());
     consider('retreat', retreat);
@@ -679,12 +678,12 @@ export class Bot extends BotBase implements BotController {
     // teamfight (laning: two against two is a lane, not a fight — join only one that has started)
     if (this.nearE >= 2 && this.nearA >= 2 && this.adv >= 0.42 && (!lp || this.nearE + this.nearA >= 5 || this.fightOn())) {
       consider('teamfight', 0.6 + (this.adv - 0.5) * 0.6);
-    } else if (!ab('tf18') && kind === 'rift' && b && b.phase !== 'early' && !lp && this.nE18 >= 2 && this.nE18 + this.nA18 >= 5 && this.adv >= 0.45) {
+    } else if (kind === 'rift' && b && b.phase !== 'early' && !lp && this.nE18 >= 2 && this.nE18 + this.nA18 >= 5 && this.adv >= 0.45) {
       // (lane AI G6: five or more bodies within 18 m in the mid game is a team fight — the team joins it as one)
       consider('teamfight', 0.62 + (this.adv - 0.5) * 0.6);
     }
     // (lane AI G2: a partner being dived or held — turn and protect it)
-    const pu = ab('protect') ? 0 : this.protectUtility();
+    const pu = this.protectUtility();
     if (pu > 0) consider('protect', pu);
     // push / group / defend / objective / roam (team intents)
     if (b) {
@@ -798,13 +797,13 @@ export class Bot extends BotBase implements BotController {
     }
   }
 
-  /** owner_rulings 46: fit, nothing hitting me, no enemy fighter noticed within 25 m */
+  /** ruling 55: fit, nothing hitting me, no enemy fighter noticed within 25 m */
   private calm(): boolean {
     return this.hpF >= 0.85 && this.recentDps <= 0 && this.nearestEnemyFighter(25) === null;
   }
 
   /**
-   * owner_rulings 46 (no pacing): a calm fighter (fit, nothing hitting it, no enemy fighter noticed within 25 m) walking a
+   * ruling 55 (no pacing): a calm fighter (fit, nothing hitting it, no enemy fighter noticed within 25 m) walking a
    * plan does not turn round more than once in 8 s. When the plan's point flips behind it again within 8 s of its last
    * turn — two calls, two roads or two camps trading places as their values cross, the team's call flickering — it keeps
    * walking to the point it set out for until it gets there or the 8 s are up. Never for a fight, a retreat, a recall, a
@@ -815,10 +814,10 @@ export class Bot extends BotBase implements BotController {
     if (this.k.kind === 'fray' || !this.pMove) return;
     const e = this.e, now = this.now, b = this.brain;
     const post = b ? b.guard.get(this.player) : undefined;
-    // (owner_rulings 47: a post at a base structure is urgent only while that structure or the base is being hit — a quiet
+    // (ruling 55: a post at a base structure is urgent only while that structure or the base is being hit — a quiet
     // post handed between two Lanterns walked a full-health defender back and forth)
     const nx = this.pMoveX - e.x, ny = this.pMoveY - e.y, n2 = nx * nx + ny * ny;
-    // (owner_rulings 51: a wave to clear, a camp or a structure to hit is urgent only once it is at hand — 10 m; the flags are
+    // (ruling 55: a wave to clear, a camp or a structure to hit is urgent only once it is at hand — 10 m; the flags are
     // set the whole walk there, and a full-health veteran walking to a camp, a post's wave or a siege turned on every flicker
     // of the team's call: 2.6-3.3 back-and-forth episodes a game against a bar of 1)
     const atHand = n2 <= 10 * 10;
@@ -826,11 +825,11 @@ export class Bot extends BotBase implements BotController {
       (!!b && (b.rush || b.baseThreat >= 0.7)) || (this.mode === 'defend' && !!post && post.cls >= 2 && !!b && b.hitRecently(post.sid, this.now, 4));
     if (n2 < 4 * 4) return;
     const nd = Math.sqrt(n2), dx = nx / nd, dy = ny / nd;
-    // (owner_rulings 47: a turn is a walk that reverses the last one — heading against heading, not point against point: the
+    // (ruling 55: a turn is a walk that reverses the last one — heading against heading, not point against point: the
     // round-3 latch let a fighter that reached one point walk straight back to the other, and pace on)
-    // (owner_rulings 51: a right-angle turn or more — two calls a quarter-circle apart zigzag a fighter as surely as two opposite)
+    // (ruling 55: a right-angle turn or more — two calls a quarter-circle apart zigzag a fighter as surely as two opposite)
     const turn = this.headX * dx + this.headY * dy < 0.1;
-    // (owner_rulings 51: one turn in 12 s, not 8 — two turns 8 s apart are three legs inside a 12 s window, the pacing itself)
+    // (ruling 55: one turn in 12 s, not 8 — two turns 8 s apart are three legs inside a 12 s window, the pacing itself)
     if (turn && !urgent && now - this.latchAt < 12) {
       if (sq(this.latchX - e.x) + sq(this.latchY - e.y) > 1.5 * 1.5) { this.pMoveX = this.latchX; this.pMoveY = this.latchY; }
       else { this.pMoveX = e.x; this.pMoveY = e.y; }
@@ -842,7 +841,7 @@ export class Bot extends BotBase implements BotController {
   }
 
   /**
-   * owner_rulings 47 (base defence): a fit fighter (60 % or more) beside a structure of mine — an inner Needle or the base —
+   * ruling 55 (base defence): a fit fighter (60 % or more) beside a structure of mine — an inner Needle or the base —
    * that enemy Wicks are hitting, with no enemy fighter noticed at it, clears the wave: into reach of the Wick nearest the
    * structure, every swing and its wave spells on the Wicks hitting it, holding against the wave until the Wicks on me would
    * finish me within 4 s. Not in a fight, a retreat, a recall or a peel. Fighters in any other plan who stood beside the
@@ -850,7 +849,7 @@ export class Bot extends BotBase implements BotController {
    * 'falls to Wicks beside fit defenders' left after ruling 44.
    */
   private clearOwn(): void {
-    // (owner_rulings 51: a fighter I am set on but cannot reach does not hold me off the wave — a defender walking at a fighter
+    // (ruling 55: a fighter I am set on but cannot reach does not hold me off the wave — a defender walking at a fighter
     // 13 m off the structure watched the Wicks finish it)
     if (this.k.kind !== 'rift' || this.pClear || (this.pFight && inAttackRange(this.e, this.pFight)) || this.pSiege || this.hpF < 0.6) return;
     const m = this.mode;
@@ -951,7 +950,7 @@ export class Bot extends BotBase implements BotController {
   }
 
   /**
-   * owner_rulings 46 (FRAY self-preservation): where a skilled fighter breaking off runs — the open point 8 or 15 m off (16
+   * ruling 55 (FRAY self-preservation): where a skilled fighter breaking off runs — the open point 8 or 15 m off (16
    * headings, walkable at its middle and end) that ends farthest from every foe it has seen within 30 m, not past one of them,
    * a thicket to break their sight worth 3 m and a heal on the ground worth 6 m. The old straight step away ran into walls
    * and back past a second foe: 70 % of the breaks still had a foe within 12 m 4 s later. False when nothing is in reach.
@@ -1296,11 +1295,12 @@ export class Bot extends BotBase implements BotController {
       // 12 m — always answers at a tier with peelFirst: no roll, and in the laning phase too; the others as before)
       const des = this.diff.peelFirst && this.designatedPeeler(a) === e;
       // (a road's laning phase: a duo's trades are laning — only a partner held, or one taken under half, is a dive)
-      // (owner_rulings 51: the designated peeler too — in the laning phase a burst on a fit road partner is the duo's trade, played
+      // (ruling 55: the designated peeler too — in the laning phase a burst on a fit road partner is the duo's trade, played
       // from the lane: the round-2 support answered every such trade in protect mode, 5.5 % of its laning time, the whole drop of
       // the laners' in-lane share against the pre-lane bots, 67.4 / 66.4 → 66.0 / 64.7 %)
-      // (and a fit partner's trade is not a dive below the tier's peelLaneHp alone: in the laning phase a partner over 40 % is
-      // trading, not dying — the veteran support's peel at 65 % still took 5-6 % of its laning time)
+      // (ruling 55: in the laning phase a partner is dived only under a quarter of its health, or held under half — the peel at
+      // 40 % and on every hold kept the duo in protect mode 1.6 % of the laning phase, the laners' in-lane share 66.4 / 65.1 %
+      // against the pre-lane bots' 68.3 / 67.3 %; and the laning-phase peel stands 1 s past the burst, not 3)
       if (lp && a.hp > a.maxHp * (held ? LANE_PEEL_HELD_HP : LANE_PEEL_HP)) continue;
       // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's —
       // the grovehunter answers a dive on any road it stands beside, the genre's counter-gank)
@@ -1429,10 +1429,10 @@ export class Bot extends BotBase implements BotController {
       }
     }
     const nA = this.alliesNear(g.x, g.y, 15);
-    // (ruling 54: Wicks hitting the structure while the enemy fighter waits off it, out of my reach, are the post's fight — the
+    // (ruling 55: Wicks hitting the structure while the enemy fighter waits off it, out of my reach, are the post's fight — the
     // defender that walked at a fighter standing off the post let the wave take the structure behind it)
     let waveOn = false;
-    if (t && !inside && !ab('g_waveon_old')) for (const u of this.perc.enemyUnits) {
+    if (t && !inside) for (const u of this.perc.enemyUnits) {
       if (!u.alive || u.kind !== 'minion' || u.atkTarget < 0) continue;
       const a = this.w.entity(u.atkTarget);
       if (a && a.kind === 'structure' && a.team === this.team && this.dist2(a, g.x, g.y) <= 4) { waveOn = true; break; }
@@ -1461,7 +1461,7 @@ export class Bot extends BotBase implements BotController {
     // (owner_rulings 44: no fighter to fight — the Wicks at the structure are the post's work: walk into reach of the one
     // nearest the structure, inside its cover; standing at the post while the wave took the structure was the commonest
     // "fell to Wicks beside two fit defenders")
-    // (owner_rulings 46: and with an enemy fighter waiting off the post, not under it, the Wicks already hitting the structure are
+    // (ruling 55: and with an enemy fighter waiting off the post, not under it, the Wicks already hitting the structure are
     // still the post's work — two fit defenders stood at the stand point, held by a fighter 13 m off, while the wave took the
     // Needle: 167 of the veteran falls to Wicks beside fit defenders had them in defend mode)
     let wave = !t;
@@ -1669,8 +1669,8 @@ export class Bot extends BotBase implements BotController {
    *  base (a late game's inner Needles fall to waves as death timers decide it; holding them too drew it out past the pace bar) */
   private holdsWave(cls: number): boolean {
     // (owner_rulings 44: a beginner backs off a stacked wave — the hold is a skilled tier's)
-    if (!this.diff.holdWave || ab('nohold')) return false;
-    if (this.now >= 1500 || ab('v_inner')) return cls >= 2;
+    if (!this.diff.holdWave) return false;
+    if (this.now >= 1500) return cls >= 2;
     return cls >= 1 || this.now >= LANE_PHASE_END;
   }
 
@@ -1911,30 +1911,30 @@ export class Bot extends BotBase implements BotController {
     void e;
   }
 
-  /** owner_rulings 46 (FRAY chase discipline): has this target been given up on */
+  /** ruling 55 (FRAY chase discipline): has this target been given up on */
   private chaseDropped(f: Entity): boolean {
     return (this.chaseDrop.get(f.id) ?? -1e9) > this.now;
   }
 
-  /** owner_rulings 51: a seen fighter moving away from me at 80 % or more of my speed (its motion is in plain sight) */
+  /** ruling 55: a seen fighter moving away from me at 80 % or more of my speed (its motion is in plain sight) */
   private fleeing(f: Entity): boolean {
     const e = this.e, dx = f.x - e.x, dy = f.y - e.y, d = dhypot(dx, dy) || 1;
     return (f.vx * dx + f.vy * dy) / d >= 0.8 * Math.max(1, e.stats.moveSpeed);
   }
 
   /**
-   * owner_rulings 46 (FRAY chase discipline, adept and veteran): a chase that has not closed the gap by a metre in chaseQuit
+   * ruling 55 (FRAY chase discipline, adept and veteran): a chase that has not closed the gap by a metre in chaseQuit
    * seconds, with the target out of my reach and no gap-closer or engage ready to reach it, is given up — the target is
    * left alone for 6 s. A fleeing fighter as fast as its chaser keeps the gap for ever; the chaser walked 10-15 m behind a
    * fighter at 20 % for 4 s and more, out of the fight, while a third seat lined up on both. False when given up now.
    */
   private chaseOn(t: Entity): boolean {
-    const q = this.diff.chaseQuit * (ab('f_quit') ? 0.5 : 1);
+    const q = this.diff.chaseQuit;
     if (!this.k.ffa || !(q < Infinity)) return true;
     const e = this.e, now = this.now;
     const d = Math.sqrt(this.dist2(t, e.x, e.y));
     // (only a wounded target's run counts — under 40 %: the one that breaks off; a third party's wait beside a fight is not a chase)
-    // (owner_rulings 51: or any target seen running from me at my speed)
+    // (ruling 55: or any target seen running from me at my speed)
     if ((t.hp >= t.maxHp * 0.4 && !this.fleeing(t)) || inAttackRange(e, t) || this.strikeReach() >= d - t.radius) { this.chaseId = -1; return true; }
     if (this.chaseId !== t.id) { this.chaseId = t.id; this.chaseAt = now; this.chaseGap = d; return true; }
     if (now - this.chaseAt < q) return true;
@@ -2041,7 +2041,7 @@ export class Bot extends BotBase implements BotController {
       if ((tp.lives ?? 2) <= 1) s += 0.08;
       // careful on the last life: an even fight is a worse pick, never no pick (a skip here froze whole endgames)
       if (lastLife && kill < 0.8 && f.hp > f.maxHp * 0.4) s -= 0.6;
-      // (owner_rulings 51, chase discipline: a seat running from me — moving away at most of my speed, out of my reach — is a chase
+      // (ruling 55, chase discipline: a seat running from me — moving away at most of my speed, out of my reach — is a chase
       // I cannot win at even speed; a skilled seat takes the fight in front of it instead. The whole arena hunting the one that
       // broke off kept a foe within 12 m of 61-67 % of the fighters under a quarter's health)
       if (this.diff.chaseQuit < Infinity && this.fleeing(f) && this.strikeReach() < d - f.radius) s -= 0.7;
