@@ -96,6 +96,8 @@ if (opts.edits) {
   await shot('e5-later');
 }
 if (opts.storm) { }
+// (PERF s23) --eval=FILE: the file's text is evaluated in the page (an expression), its JSON printed
+if (opts.eval) console.log('eval', JSON.stringify(await G((t) => (0, eval)(t), readFileSync(opts.eval, 'utf8'))));
 if (opts.stats) console.log('perf', JSON.stringify(await G(() => { const p = window.__GENESIS__.perf(); return p; })).slice(0, 1500));
 console.log('state', JSON.stringify(await G(() => window.__GENESIS__.state())).slice(0, 400));
 console.log('switches', await G(() => { try { return (window.__GENESIS__.perfSwitches?.() ?? '') ; } catch { return ''; } }));
