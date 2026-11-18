@@ -58,6 +58,10 @@ export function flashContourDepth(shape: number, radius: number, inner: number, 
 
 const MAX = 128;
 
+/** an occluder this high over the ground (m) or higher does not hide a telegraph (teleVisible): the tallest fighter's
+ *  head and a wall's lower face stay under it, a canopy over a jungle path stands well over it */
+export const TELE_THROUGH_M = 2.6;
+
 export const TELE_VERT = /* glsl */`
 attribute vec4 aA;      // x, z, dir, shape
 attribute vec4 aB;      // radius, inner, halfAngle, length
@@ -96,6 +100,19 @@ float sdSector( vec2 p, float r, float ha ) {
   float l = length( p ) - r;
   float m = length( p - c * clamp( dot( p, c ), 0.0, r ) );
   return max( l, m * sign( c.x * p.y - c.y * p.x ) );
+}
+// orch1 W2 close (ruling 53): the depth test of valeVisible( 0.2 ), except that an occluder standing high over the
+// ground (a jungle canopy, a crown, a tower's upper storey: TELE_THROUGH_M and up) does not hide a telegraph: danger on
+// the floor reads through foliage, as a ground indicator does in a top-down game. Bodies, walls' lower faces and props
+// under TELE_THROUGH_M still cover it. The occluder's height: the scene point on this pixel's ray, s / f of the way from
+// the camera to the telegraph (view depths), so y = mix( camera y, 0.04, s / f ).
+float teleVisible() {
+  if ( uHasDepth < 0.5 ) return 1.0;
+  float sd = texture( uSceneDepth, gl_FragCoord.xy / uResolution ).r;
+  float s = valeLinDepth( sd ), f = valeLinDepth( gl_FragCoord.z );
+  float hid = smoothstep( 0.2, 0.32, f - s );
+  float yOcc = mix( cameraPosition.y, 0.04, clamp( s / max( f, 1e-3 ), 0.0, 1.0 ) );
+  return 1.0 - hid * ( 1.0 - smoothstep( ${TELE_THROUGH_M.toFixed(2)}, ${(TELE_THROUGH_M + 0.6).toFixed(2)}, yOcc ) );
 }
 void main() {
   float shape = vA.w;
@@ -161,7 +178,7 @@ void main() {
     if ( t > 0.0 ) { col = mix( col, vTick.rgb, t ); a = max( a, t ); }
   }
   float k35 = key * vD.w;
-  float vis = valeVisible( 0.2 );
+  float vis = teleVisible();
   // premultiplied; the keyline is black (rgb 0)
   float outA = max( a, k35 ) * vis;
   if ( outA <= 0.002 ) discard;

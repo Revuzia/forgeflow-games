@@ -28,6 +28,7 @@
 import type { EntityId, PlayerId, SeatSetup } from '../../contracts/sim.ts';
 import type { Entity } from '../entity.ts';
 import type { World } from '../world.ts';
+import { ab } from './ab.ts';
 import { lanePoint, progress, fromProgress, proj, type CampInfo, type Knowledge, type StructInfo } from './knowledge.ts';
 import type { TeamPerc } from './perception.ts';
 import { dhypot, sq } from '../dmath.ts';
@@ -305,9 +306,9 @@ export class TeamBrain {
     this.thinkObjective(w, aa, ae);
     this.thinkGank(w);
     this.thinkAnswers(w);
-    this.thinkGuard(w);
+    if (ab('guard')) this.guard.clear(); else this.thinkGuard(w);
     this.thinkSplit(w);
-    this.thinkInvader(w);
+    if (!ab('invader')) this.thinkInvader(w);
   }
 
   /**
@@ -771,7 +772,7 @@ export class TeamBrain {
     // dive ended kept the solo laners in defend mode 2.4-3.9 % of the laning phase, against 1.0-1.3 % for the pre-lane bots)
     const laning = now < 840 && this.phase !== 'late';
     for (let i = 0; i < this.defend.length; i++) {
-      if (laning) continue;
+      if (laning || ab('stick')) continue;
       if (this.defend[i] > 0.05) { this.stickDef[i] = now + DEFEND_STICK; this.stickVal[i] = this.defend[i]; this.stickX[i] = this.defendX[i]; this.stickY[i] = this.defendY[i]; this.stickF[i] = this.defendFighters[i]; }
       else if (now < this.stickDef[i]) { this.defend[i] = this.stickVal[i]; this.defendX[i] = this.stickX[i]; this.defendY[i] = this.stickY[i]; this.defendFighters[i] = this.stickF[i]; }
     }
@@ -847,7 +848,7 @@ export class TeamBrain {
     // enemy core open, the team goes for the core's guards and the core, not the next outer Needle: the late game's long
     // stalls were won teams walking back to the roads with the Bell Needles open)
     // (owner_rulings 46: not in the laning phase — before 14:00 the roads hold, as CW3 CL-1 tuned them)
-    const closeOut = d.closeOut && k.kind === 'rift' && this.phase !== 'early' && now0 >= 840 && this.aliveAllies >= 3 && (aliveDiff >= 1 || (lead >= 1500 && aliveDiff >= 0));
+    const closeOut = !ab('closeout') && d.closeOut && k.kind === 'rift' && this.phase !== 'early' && now0 >= 840 && this.aliveAllies >= 3 && (aliveDiff >= 1 || (lead >= 1500 && aliveDiff >= 0));
     for (const e of tp.enemyStructs) {
       if (!e.alive || !e.targetable) continue;
       const info = this.structInfoOf(e);
@@ -934,7 +935,7 @@ export class TeamBrain {
     if (k.kind === 'rift' && (this.window || this.press) && !this.rush && this.group) {
       let fitAt = 0;
       for (const f of tp.allyFighters) if (f.alive && f.hp >= f.maxHp * 0.45 && sq(f.x - this.groupX) + sq(f.y - this.groupY) <= 18 * 18) fitAt++;
-      this.gathered = now0 >= 1500 || fitAt >= Math.min(3, this.aliveAllies);
+      this.gathered = ab('gathered') || now0 >= 1500 || fitAt >= Math.min(3, this.aliveAllies);
     }
     if (this.siege) {
       const s = this.siege;
@@ -1027,7 +1028,7 @@ export class TeamBrain {
         if (desire > 0 && prev === c) desire = Math.max(desire, Math.min(0.8, desire + 0.06));
       } else if (alive) {
         // (lane AI G7: a beginner's macro still takes an even objective late, as a beginner does — never zero takes)
-        const even = d.objectiveEven > 0 ? d.objectiveEven : now >= 720 ? d.objectiveEvenLate : 0;
+        const even = d.objectiveEven > 0 ? d.objectiveEven : now >= 720 && !ab('objlate') ? d.objectiveEvenLate : 0;
         desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? even : 0;
         // (lane AI G7: the long objective needs the time to kill and an enemy that cannot answer, as above)
         if (desire > 0 && aa < ae + 1 && d.longshadeTtk > 0) {

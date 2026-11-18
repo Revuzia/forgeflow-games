@@ -44,6 +44,7 @@ import { BotBase, gauss, holdLeft, type Mode } from './micro.ts';
 import type { Guard } from './team.ts';
 import { fighterPower, memoryWeight } from './perception.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
+import { ab } from './ab.ts';
 
 const MODE_TICKS = 6;
 /** owner_rulings 46: the plans whose walk a calm fighter does not turn round on more than once in 8 s */
@@ -187,8 +188,8 @@ export class Bot extends BotBase implements BotController {
     if ((w.tick + this.stagger) % MODE_TICKS === 0) this.selectMode();
     this.clearPlan();
     this.execute();
-    this.clearOwn();
-    this.holdWalk();
+    if (!ab('clearown')) this.clearOwn();
+    if (!ab('holdwalk')) this.holdWalk();
     this.act();
     // publish the focus target for teammates
     if (this.brain) { if (this.pFight && this.pFight.kind === 'fighter') this.brain.focus.set(this.player, this.pFight.id); else this.brain.focus.delete(this.player); }
@@ -375,7 +376,7 @@ export class Bot extends BotBase implements BotController {
       if (this.brain && this.brain.aliveEnemies > known) risk += (this.brain.aliveEnemies - known) * 0.5;
     }
     this.fogRisk = risk;
-    this.exposed = rift && risk >= this.diff.riskCap && this.alliesNear(e.x, e.y, 20) <= 1 && !this.lanePhase() && !!this.brain && this.brain.phase !== 'early' && !this.brain.rush;
+    this.exposed = !ab('exposed') && rift && risk >= this.diff.riskCap && this.alliesNear(e.x, e.y, 20) <= 1 && !this.lanePhase() && !!this.brain && this.brain.phase !== 'early' && !this.brain.rush;
   }
 
   /** lane AI G5: the visible enemy fighters within 10 m can take most of my health before my side finishes one of them
@@ -544,7 +545,7 @@ export class Bot extends BotBase implements BotController {
     // (lane AI G5: leave early when the visible enemies' burst would take most of my health before my side finishes one of
     // them — RIFT from the mid game: not in a road's laning phase, whose trades CL-1 tuned, never off a kill that is on, and
     // not in FRAY, where every seat turning from the hardest hitter handed it the placements, ulkro 2.7 against the 3.5 floor)
-    if (this.diff.burstRetreat && this.nearE > 0 && kind === 'rift' && !edgy && !!b && b.phase !== 'early' && hpF < (lastLife ? 0.85 : 0.75) &&
+    if (!ab('burst') && this.diff.burstRetreat && this.nearE > 0 && kind === 'rift' && !edgy && !!b && b.phase !== 'early' && hpF < (lastLife ? 0.85 : 0.75) &&
       !(this.killTarget && this.killMargin >= 1.2) && !tolled && this.burstDanger()) retreat = Math.max(retreat, 0.86);
     retreat = Math.max(retreat, this.outmatched());
     consider('retreat', retreat);
@@ -673,12 +674,12 @@ export class Bot extends BotBase implements BotController {
     // teamfight (laning: two against two is a lane, not a fight — join only one that has started)
     if (this.nearE >= 2 && this.nearA >= 2 && this.adv >= 0.42 && (!lp || this.nearE + this.nearA >= 5 || this.fightOn())) {
       consider('teamfight', 0.6 + (this.adv - 0.5) * 0.6);
-    } else if (kind === 'rift' && b && b.phase !== 'early' && !lp && this.nE18 >= 2 && this.nE18 + this.nA18 >= 5 && this.adv >= 0.45) {
+    } else if (!ab('tf18') && kind === 'rift' && b && b.phase !== 'early' && !lp && this.nE18 >= 2 && this.nE18 + this.nA18 >= 5 && this.adv >= 0.45) {
       // (lane AI G6: five or more bodies within 18 m in the mid game is a team fight — the team joins it as one)
       consider('teamfight', 0.62 + (this.adv - 0.5) * 0.6);
     }
     // (lane AI G2: a partner being dived or held — turn and protect it)
-    const pu = this.protectUtility();
+    const pu = ab('protect') ? 0 : this.protectUtility();
     if (pu > 0) consider('protect', pu);
     // push / group / defend / objective / roam (team intents)
     if (b) {

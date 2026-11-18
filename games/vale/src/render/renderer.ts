@@ -236,6 +236,10 @@ function veilOf(v: EntityView): 0 | 1 | 2 | 3 {
   return m;
 }
 
+/** orch1 W2 close (ruling 53): an enemy telegraph's interior fill: standing zone, and a landing's wind-up from its first
+ *  frame to its last (was 0.16 / 0.16-0.30, ruling 48 kept them; ruling 51 noted the overlay's fill under the VFX's) */
+const TELE_ENEMY_FILL = { zone: 0.07, windLo: 0.06, windHi: 0.16 };
+
 class ValeRenderer implements Renderer {
   readonly canvas: HTMLCanvasElement;
   readonly gl: WebGLRenderer;
@@ -250,7 +254,20 @@ class ValeRenderer implements Renderer {
   readonly lodSwitch = lodSwitch;
   /** harness seam (orch1 W2-A A/B in one page): the environment re-key and the fighter tone switches; call apply() after
    *  a change */
-  readonly w2a = { envKey: envKeySwitch, charTone: charToneSwitch, charExpo: charExpoSwitch, uniforms: worldUniforms, apply: (): void => { applyEnvKey(); applyCharTone(); } };
+  readonly w2a = { envKey: envKeySwitch, charTone: charToneSwitch, charExpo: charExpoSwitch, uniforms: worldUniforms, apply: (): void => { applyEnvKey(); applyCharTone(); this.applyCharExpo(); } };
+  /** orch1 W2 close: the fighter's own exposure (lighting.ts CHAR_LIGHT.exposure, world_material.ts valeCharExpo) on
+   *  every fighter's materials; on attach for one actor, and from w2a.apply() for every live one, so the A/B switch
+   *  reaches fighters already on screen (it was set once at attach) */
+  private applyCharExpo(only?: Actor): void {
+    for (const a of only ? [only] : this.actors.values()) {
+      if (a.kind !== 'fighter') continue;
+      const expo = charExposureOf(a.def);
+      a.root.traverse((o) => {
+        const ms = (o as Mesh).material; if (!ms) return;
+        for (const m of Array.isArray(ms) ? ms : [ms]) (m.userData as { valeCharExpo?: number }).valeCharExpo = expo;
+      });
+    }
+  }
   /** harness seam (W5a refix, _harness/probe_landmark_cull.mjs): the landmarks' and casters' box cull (terrain.ts) */
   readonly landmarkCull = landmarkCull;
   /** rebuilt on a restored context (its queries and extension belonged to the lost one) */
@@ -826,11 +843,7 @@ class ValeRenderer implements Renderer {
             this.lib.fighterTemplate(e.def, e.skin).then((t) => {
               actor.attach(t, def.art.scale, def.art.accentMaterial);
               // orch1 W2-A fix 2: the fighter's own exposure (lighting.ts CHAR_LIGHT.exposure; world_material.ts valeCharExpo)
-              const expo = charExposureOf(e.def);
-              actor.root.traverse((o) => {
-                const ms = (o as Mesh).material; if (!ms) return;
-                for (const m of Array.isArray(ms) ? ms : [ms]) (m.userData as { valeCharExpo?: number }).valeCharExpo = expo;
-              });
+              this.applyCharExpo(actor);
             });
           }
         } else {
@@ -1106,6 +1119,8 @@ class ValeRenderer implements Renderer {
    *  on pale and dark ground alike (WCAG 1.4.11's 3:1 for a UI boundary). Same program, one extra instance per enemy
    *  shape. Harness seam: teleInk.on = false is the wave-1 telegraph. */
   readonly teleInk = { on: true, key: 0.6, band: 1, bandPx: 4, edge: 1, edgePx: 4 };
+  /** harness seam (ruling 53 A/B): the enemy telegraph's interior fill (TELE_ENEMY_FILL) */
+  readonly teleFill = TELE_ENEMY_FILL;
   private readonly inkBlack = new Color(0, 0, 0);
   /** world metres per drawing-buffer pixel at ground point (x, z) (the telegraph target's resolution) */
   private metresPerPx(x: number, z: number): number {
@@ -1138,7 +1153,10 @@ class ValeRenderer implements Renderer {
       if (rel === 'enemy' || (p.viewer.team < 0)) {
         // spectators see the caster's side colour with the enemy treatment
         spec.color = p.get(p.viewer.team < 0 ? p.unitHex(tg.team, tg.owner, true) : p.relationHex('enemy'));
-        spec.fill = flash ? 0.4 : tg.zone >= 0 ? 0.16 : 0.16 + 0.14 * prog;
+        // orch1 W2 close (ruling 53): the interior whispers, the edge and its ink band carry the danger. A standing zone
+        // 0.16 -> 0.07 and a landing's wind-up 0.16-0.30 -> 0.06-0.16 (a stack of them over a cluster no longer washes
+        // the plaza orange; MAX blending never sums them); the landing's own flash stays the one bright frame
+        spec.fill = flash ? 0.34 : tg.zone >= 0 ? TELE_ENEMY_FILL.zone : TELE_ENEMY_FILL.windLo + (TELE_ENEMY_FILL.windHi - TELE_ENEMY_FILL.windLo) * prog;
         spec.edge = 0.9; spec.edgePx = 3;
         // combat m-3: a landing wider than 4 m flashes its edge band and an inner contour; the fill stays ≤ 22 %
         const ext = spec.shape === TELE_SHAPE.rect ? Math.max(spec.length, spec.width) * 0.5 : spec.radius;

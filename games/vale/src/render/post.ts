@@ -107,6 +107,18 @@ const U = screenUniforms;
  *  0.7-LIFT_GROUND_TOP), so the top of the beat is the ground's own warm tint, never a white-out, and bodies keep
  *  LIFT_BODY_CAP and their 0.86 stop */
 const GROUND_TOP_REKEYED = 0.97;
+/** orch1 W2 close (ruling 53): the top of the beat on a NEAR-NEUTRAL ground point (pale stone) is warm light, not white.
+ *  Through the LUT, the 0.97 top reads display luma ~226-235 and the pale stone keeps chroma < 30: ruling 10's white
+ *  (combat_polish's box measure, 8-bit luma > 225 and chroma < 30; Rishal's box 0.635, Hesmi's body +0.124). A cap on its
+ *  luma could not hold both gates (0.925: box 0.08 but core 212; 0.955: box 0.62, core 216; the core and the box are
+ *  the same stone). So the stone keeps its luma and takes GROUND_WARM's tint as it nears the top: the stopped sun
+ *  pours warm light on it (ruling 48: "the top of the beat is the ground's own warm tint, never a white-out"). The tint
+ *  is luma-neutral (Rec. 709 luma of GROUND_WARM is 1), eases in over display 0.80-0.90 and only where the ground's own
+ *  display saturation is under 0.12-0.20 (a coloured stone is already tinted) */
+const GROUND_WARM: readonly [number, number, number] = [1.233, 0.978, 0.528];
+const GROUND_WARM_FROM = 0.75, GROUND_WARM_TO = 0.88;
+const GROUND_TOP_NEUTRAL = 0.94;
+const GROUND_NEUTRAL_SAT: readonly [number, number] = [0.15, 0.3];
 /** orch1 W2-A fix 2 (verifier r2: BRIDGE x1.93 on seed 7): on the ruling-46 ground the envelope's GROUND ratio gains
  *  this much more lift under the same top, so the beat's falloff ring rises with its core (the core already sits near the
  *  top): bodies, effects and the white gate are untouched */
@@ -195,10 +207,19 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
   // ×(1 + lift), stopping short of white (display ${LIFT_GROUND_TOP}); bodies keep the capped multiplier above.
   if ( lift > 0.05 && body < 0.5 ) {
     float d0 = liftDispLuma( c );
-    float target = min( d0 * ( 1.0 + lift * ${GROUND_LIFT_REKEYED.toFixed(3)} ), ${GROUND_TOP_REKEYED.toFixed(3)} );
-    if ( liftDispLuma( c * m ) < target ) {
-      float lo = log2( m ), hi = log2( m ) + 6.0;
-      for ( int j = 0; j < 9; j ++ ) {
+    // ruling 53: a near-neutral ground point (pale stone: display saturation under GROUND_NEUTRAL_SAT) tops out at
+    // GROUND_TOP_NEUTRAL in the WARM light (the tint fixed before the solve, so the solve reads the tinted colour)
+    float hiC = max( c.r, max( c.g, c.b ) ), loC = min( c.r, min( c.g, c.b ) );
+    float neutral = 1.0 - smoothstep( ${GROUND_NEUTRAL_SAT[0].toFixed(3)}, ${GROUND_NEUTRAL_SAT[1].toFixed(3)}, 1.0 - pow( max( loC, 1e-6 ) / max( hiC, 1e-6 ), 1.0 / 2.2 ) );
+    float top = mix( ${GROUND_TOP_REKEYED.toFixed(3)}, ${GROUND_TOP_NEUTRAL.toFixed(3)}, neutral );
+    float target = min( d0 * ( 1.0 + lift * ${GROUND_LIFT_REKEYED.toFixed(3)} ), top );
+    float warm = smoothstep( ${GROUND_WARM_FROM.toFixed(3)}, ${GROUND_WARM_TO.toFixed(3)}, target ) * neutral * ( 1.0 - body * 2.0 );
+    c *= mix( vec3( 1.0 ), vec3( ${GROUND_WARM.map((x) => x.toFixed(3)).join(', ')} ), warm );
+    // ruling 53: the solve runs both ways from the plain multiplier (a pale point it overshot comes back to the top);
+    // 11 halvings over [1, 64 m] (was 9 over [m, 64 m]: up to ~1 luma under the target)
+    {
+      float lo = 0.0, hi = log2( m ) + 6.0;
+      for ( int j = 0; j < 11; j ++ ) {
         float mid = 0.5 * ( lo + hi );
         if ( liftDispLuma( c * exp2( mid ) ) < target ) lo = mid; else hi = mid;
       }
