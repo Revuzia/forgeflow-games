@@ -69,8 +69,10 @@ async function shot(name) {
   await page.screenshot({ path: join(OUT, `${tag}-${name}.png`) });
   console.log('shot', name, ((Date.now() - T0) / 1000).toFixed(0), 's');
 }
+// (PERF s23) --step=N advances the sim N ticks first; view 'boot' keeps the game's own landing camera
+if (opts.step) console.log('step', await G((n) => window.__GENESIS__.step(n), Number(opts.step)));
 for (const v of String(opts.views ?? 'town,meadow').split(',').filter(Boolean)) {
-  await G((c) => window.__GENESIS__.camera(c), CAM[v]);
+  if (v !== 'boot') await G((c) => window.__GENESIS__.camera(c), CAM[v]);
   await shot(v);
 }
 if (opts.edits) {
@@ -92,6 +94,8 @@ if (opts.edits) {
   await shot('e5-later');
 }
 if (opts.storm) { }
+if (opts.stats) console.log('perf', JSON.stringify(await G(() => { const p = window.__GENESIS__.perf(); return p; })).slice(0, 1500));
+console.log('state', JSON.stringify(await G(() => window.__GENESIS__.state())).slice(0, 400));
 console.log('switches', await G(() => { try { return (window.__GENESIS__.perfSwitches?.() ?? '') ; } catch { return ''; } }));
 console.log('page errors', errors.length, errors.slice(0, 5));
 console.log('gl messages', glmsgs.length, glmsgs.slice(0, 8));
