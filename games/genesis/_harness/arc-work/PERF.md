@@ -2588,3 +2588,31 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   26.5 38.9, detail 3.69 / 3.85; diff = a moving object lower left + a faint line on the far ridge's silhouette (sheet
   s26/sheet-g1.png LOOKED). town pair INVALID (the cache shot has the coarse pond polygon: the LOD had not landed at
   --max=60 under load 13; same failure s22 recorded) -> town needs --settle >= 60.
+  STORM (`wwind=2.2`, land view; st-A vs st5-B = final): mean RGB 111.6 114.2 111.0 / 109.7 113.2 111.6, detail 16.77 /
+  17.13 (mean|d| ~15: the B camera settled a few metres lower in the run's FIRST view, the island sits lower: framing,
+  not water). Found and FIXED on the way: (a) open-sea lace had no coarse octave (the 64 m tap was only taken near
+  shores: l0 constant -> soft blobs, no web; st-B detail 14.3); (b) Perlin cells read ~2x the simplex's of the same
+  lattice: l0 moved to the 2 m octave. Final: the foam web is there at A's cell size; B's web is a little more
+  uniform / rounder, A's more drawn out toward the horizon. Storm shore close-up (st-A vs st4-B): surf line equal;
+  the big streaky whitecap patches at the right edge are FEWER / smaller in B (a speckle instead) — WORSE, small,
+  open (try the whitecap tile 48 -> 24 m, the same Perlin-vs-simplex scale effect).
+- GATE (final source): `bash _harness/slot.sh npm run check` # pass 1048 # fail 0 (s25/check.log; run before the last two
+  GLSL-string-only edits in oceanfast.ts, tsc clean after them); `npm run build` exit 0 (s25/build-prod.log).
+  The live tree type-checks at every stopping point since the restart (the earlier tsc failure another agent saw was
+  the half-written hook between two edits, before the restart).
+### 4. MAC RUNS WANTED (Ultra 1686x963, the landing spot, P = `scene=0&shadows=0`, as round 17)
+  1. P | P&wfast=3 | P&wfrag=0 (the floor, 33 ms in round 17). Target: P&wfast=3 within ~15 ms of wfrag=0.
+  2. If wfast=3 is not there: P&wfast=3&wshade3= nossr | nodetail | noreflect | norefract | nofoam | nosky (each alone),
+     and all six together (= the frame of the discards + vertex block + light + glint: compare with wfrag=0).
+  3. Full game N vs N&wfast=3 (time), then LOOK, default vs `?wfast=3`: open sea by day at the landing, the palm bank's
+     reflection, the town pond, a storm (`wwind=2.2`), sunset glitter, night with moon, orbit, a river with flow.
+  4. Vertex check: P&wfast=3&wvert=0 vs P&wfast=3 (the wave terms; the new per-vertex block is NOT cut by wvert).
+### 5. NEXT (exact)
+  - Mac numbers first. If the per-vertex block shows (2.4 M water triangles in P): skip it for vertices whose
+    triangles cannot be wet (needs the patch's wet flag as an attribute) or move the deck light / sky irradiance to a
+    per-frame 32x32 LUT by (muS, view) — both noted, neither built.
+  - Storm whitecap patches near the shore (above). A real river with flow and the moon path at real night: the
+    probe's `hour` sticks between views and target-cameras ignore lon (lake renders at night): fix the views first
+    (use lat / lon cams, one view per run or explicit sunElevation).
+  - Files: src/render/planet/oceanfast.ts (all of it), ocean.ts (import line + the `PERF s25 hook` block),
+    _harness/arc-work/s25-one.sh (one full-scene probe run), s25-sheet.py (A | B | diff sheet + stats).
