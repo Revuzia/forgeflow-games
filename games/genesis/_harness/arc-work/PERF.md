@@ -2543,3 +2543,24 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
                                                                  foam 1-4 only there, moon 2 at night
   ALU (rough)            ~3000 noise + ~1500 loops + ~600 rest   ~350 + SSR ~250
   vertex (per wet vtx)   unchanged base                          + 7 wave terms (~200 ops) + ~12 taps (LUT / cube)
+### 3. LOOK PROOF (SwiftShader 480x270 high, FULL scene: trees, shadows, clouds ON; `wclock=100`; A = default, B = wfast=3;
+  _harness/scratch/arc/perf/s25/shots/, sheet-p.png = A | B | |A-B|x4; every run 0 page errors, 0 shader / GL messages)
+  view (A r1 / B r2 = SSR 20)       mean|d|  mean RGB A / B                        detail A / B   reading (LOOKED)
+  land  (owner's landing, day)       3.74    86.9 115.5 121.4 / 88.1 116.7 122.3   16.24 / 15.85  equal: colour, cloud
+        mirror, glitter, waves; bank palm reflections equal after SSR 16 -> 20 samples (with 16 they reached less far)
+  dusk  (palms reflected, low cam)   4.08    99.3 116.1 122.7 / 100.5 116.6 123.1  17.93 / 17.86  equal, B's tree
+        reflection a little crisper (no speckle)
+  shoreC (beach close-up, surf)      3.32    118.7 122.1 113.1 / 117.2 120.5 111.7  9.63 / 9.89   equal: surf line,
+        turquoise shallows (sampled pixels within 1-4 / 255)
+  lake  (town pond — renders at NIGHT whatever `hour`; the probe's target-camera hour bug)
+                                     1.23    equal                                 8.24 / 8.20   B BETTER: A draws the
+        pond with a straight-edged polygonal pale halo (sim triangles), B a natural ragged waterline (the 64 m bite tap)
+  night (hour 23.5 rendered as DAY: hour sticks in the probe) 4.28 equal          15.22 / 15.12
+  orbit                              5.58 (dist2) -> 0.72 (final)                  6.54 / 4.66 -> 6.51 / 6.59
+        dist2 = WORSE: a milky sea from orbit. Cause: whitecap / gale thresholds read through the foam map's MIPS
+        (filtered noise -> its mean -> every pixel all-white where the cover is high). FIXED: the share of the noise's
+        spread the mips removed widens the threshold ramp (the pixel gets the expected coverage the point-sampled
+        original showed as speckle), and the stretched frames now scale the taps' derivatives. Final = equal (o4 pair).
+  river (poi 'river': the camera sits in a tree canopy, both)  4.50  equal, NOT INFORMATIVE: no river looked at.
+  NOT SHOWN: a real river with flow (two-phase path compiles and runs, not looked at), a surge / tsunami face, ice,
+  silt, the moon path at real night (the probe's hour handling), motion (scrolling), Mac speed.
