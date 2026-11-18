@@ -432,7 +432,7 @@ def ground_light_pass(d: dict) -> dict:
 
 def post(d: dict) -> dict:
     """passes applied to every def after its source (and its bespoke/tuned.json hand tuning) is chosen"""
-    return ult_pool_pass(ult_detail_pass(heavy_crack_pass(ink_form_pass(dust_pass(ult_feel_pass(ground_light_pass(d)))))))
+    return ult_body_pass(ult_pool_pass(ult_detail_pass(heavy_crack_pass(ink_form_pass(dust_pass(ult_feel_pass(ground_light_pass(d))))))))
 
 
 # orch1 W2-B fix 1: Nurrow's lull dome (#2B2433 ink at 0.5 over a 2 m dome) laid a near-black bowl over the struck unit and
@@ -593,6 +593,26 @@ def heavy_crack_pass(d: dict) -> dict:
             l["rim"] = "#F1E2C6"
             l["emissive"] = 0.9
             l["alpha"] = [0.9, 0.75, 0]
+    return d
+
+
+# orch1 W2-B fix 2 (VFX-O8, verifier r2: Vashil's toll left the struck body flat on its first beat, detail 0.36 with the VFX
+# on vs 0.87 with them off): the toll's white flash is half as hot and smaller (10 -> 5, 1.6 -> 1.1 m), the glass bell's
+# first frames read by their rim (fill 0.55 -> 0.12, emissive 2 -> 1: the ruling-50 shell rule), its light 22 -> 14.
+# Measured: body min 0.36 -> 0.48, box white 0.418 -> 0.249, core 231.7 (clip 218). Ruling 52. Idempotent.
+def ult_body_pass(d: dict) -> dict:
+    if d["id"] != "vashil_ult_toll":
+        return d
+    d = copy.deepcopy(d)
+    for l in d["layers"]:
+        if l["type"] == "flash":
+            l["intensity"] = min(l.get("intensity", 5), 5)
+            l["radius"] = min(l.get("radius", 1.1), 1.1)
+        elif l["type"] == "mesh" and l.get("shape") == "dome":
+            l["alpha"] = [[0, 0.12], [0.12, 0.12], [0.3, 0.1], [0.5, 0.05], [0.872, 0.015], [1, 0]]
+            l["emissive"] = [[0, 1], [0.2, 0.8], [1, 0.7]]
+        elif l["type"] == "light":
+            l["intensity"] = min(l.get("intensity", 14), 14)
     return d
 
 

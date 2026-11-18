@@ -1,0 +1,6 @@
+         hesmi ult max lift 1.4, detail per frame (lost 1, min 0.41): f35 0.41 [noVfx 0.84 noFlash 1.04 flash k 0.09] (mean 207/134) · f36 0.54 [noVfx 0.85 noFlash 0.99 flash k 0.06] (mean 198/130)
+         box white per beat (VFX off): f35 0.148 (0.658) · f36 0.142 (0.653)
+ult hesmi   ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.13 (lift 0.132, + hit flash 0.139, full frame 0.108) · box 0.148 (box base 0.012)  core ×1.9 ground ×1.72, faded core 114.3 ground 127.7 (samples 116.9 116.6 114.3 113.8 113.6; before the cast 115.8; waited 90 frames, left none)
+FAIL hesmi: the lift whites 0.13 more of the victim's body at a beat (> 0.10)
+FAIL hesmi: core luma 217 < the clip 218 on the first beat (x1.9; faded core 114.3: x2.0 would be 228.6, past the clip, ruling 51)
+combat_polish: FAIL (2) → /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_W1_combat_polish_w2b_f2_v4.json

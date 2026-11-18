@@ -1,0 +1,29 @@
+         kemdo ult max lift 1.4, detail per frame (lost 0, min 0.79): f10 0.79 [noVfx 1.23 noFlash 0.99 flash k 0.39] (mean 178/131)
+         box white per beat (VFX off): f9 0.139 (0.695) · f10 0.145 (0.684)
+ult kemdo   ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.023 (lift 0.033, + hit flash 0.068, full frame 0.03) · box 0.145 (box base 0.012)  core ×1.82 ground ×1.8, faded core 122.7 ground 130.2 (samples 121.9 122.5 123.2 123.1 122.7; before the cast 122; waited 0 frames, left none)
+         rishal ult max lift 1.4, detail per frame (lost 0, min 0.71): f7 0.71 [noVfx 1 noFlash 1 flash k 0] (mean 192/125) · f8 0.79 [noVfx 1 noFlash 1 flash k 0] (mean 185/124)
+         box white per beat (VFX off): f7 0.635 (0.676) · f8 0.558 (0.676)
+ult rishal  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.021 (lift 0.036, + hit flash 0.036, full frame 0.061) · box 0.635 (box base 0.011)  core ×1.87 ground ×1.87, faded core 124.7 ground 126.3 (samples 124.7 124.7 124.6 124.7 124.5; before the cast 124.6; waited 15 frames, left none)
+FAIL rishal: the victim box goes 0.635 white at a beat (> 0.35)
+         tunlan ult max lift 1.4, detail per frame (lost 1, min 0.48): f28 0.48 [noVfx 0.67 noFlash 1.1 flash k 0.62] (mean 196/117) · f29 0.6 [noVfx 0.77 noFlash 1.05 flash k 0.39] (mean 190/116)
+         box white per beat (VFX off): f28 0.099 (0.6) · f29 0.095 (0.657)
+ult tunlan  ctr [1200,521] caster [790,540] victim [1130,540] (to caster 410, to victim 73)  body white: lift adds 0.08 (lift 0.086, + hit flash 0.088, full frame 0.068) · box 0.099 (box base 0.016)  core ×1.83 ground ×1.85, faded core 124.1 ground 125.5 (samples 124.1 124 124.1 124.1 124.3; before the cast 124.1; waited 0 frames, left none)
+         hesmi ult max lift 1.4, detail per frame (lost 1, min 0.45): f35 0.45 [noVfx 0.83 noFlash 1.04 flash k 0.09] (mean 205/134) · f36 0.58 [noVfx 0.86 noFlash 0.99 flash k 0.06] (mean 199/130)
+         box white per beat (VFX off): f35 0.151 (0.659) · f36 0.144 (0.652)
+ult hesmi   ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.124 (lift 0.126, + hit flash 0.132, full frame 0.113) · box 0.151 (box base 0.016)  core ×1.76 ground ×1.68, faded core 122.5 ground 130 (samples 123 123.1 122.5 122.4 122.5; before the cast 122.5; waited 90 frames, left none)
+FAIL hesmi: the lift whites 0.124 more of the victim's body at a beat (> 0.10)
+FAIL hesmi: core luma 215.8 (ground 217.9) < the clip 218 on the first beat (x1.76; faded core 122.5: x2.0 would be 245, past the clip, rulings 51 / 52)
+lineup lisvel,ardit,burdam,dunsom,ervet,nurrow,vashil,hesmi,ilsheta,kemdo
+         nurrow ult max lift 1.4, detail per frame (lost 0, min 0.54): f14 0.54 [noVfx 0.86 noFlash 0.93 flash k 0.07] (mean 198/140) · f15 0.57 [noVfx 0.89 noFlash 0.94 flash k 0.05] (mean 195/137)
+         box white per beat (VFX off): f14 0.015 (0.529) · f15 0.014 (0.589)
+ult nurrow  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.043 (lift 0.064, + hit flash 0.067, full frame 0.023) · box 0.015 (box base 0.012)  core ×1.76 ground ×1.75, faded core 124.3 ground 125.9 (samples 127 123.8 124.3 124.4 124.3; before the cast 124.6; waited 0 frames, left none)
+         vashil ult max lift 1.4, detail per frame (lost 0, min 0.5): f28 0.5 [noVfx 0.88 noFlash 0.96 flash k 0.07] (mean 202/137) · f29 0.69 [noVfx 0.92 noFlash 0.98 flash k 0.05] (mean 190/130)
+         box white per beat (VFX off): f28 0.252 (0.69) · f29 0.233 (0.682)
+ult vashil  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.068 (lift 0.071, + hit flash 0.071, full frame 0.061) · box 0.252 (box base 0.011)  core ×1.89 ground ×1.89, faded core 122.4 ground 123.9 (samples 122.6 122.4 122.4 122.4 122.4; before the cast 123.6; waited 0 frames, left none)
+cc plates: labels 14 → 21 (+7 for 7 CC'd fighters), fade 17ms 33ms 50ms 67ms 83ms
+flash tunlan  cone 9 m: middle ≤ 0.2  edge band ≥ 0.5  contour 0.5
+flash burdam  circle 7 m: middle ≤ 0.2  edge band ≥ 0.5  contour 0.5
+hold kemdo   px per frame from the hit 6039 4068 2859 3051 3092 2733 1983 1438 1027 830 274 188 101  reach/victim 1.1 1.1 1.21 1.22 1.21 1.2 1.22 1.26 1.27 1.29 1.29 1.22 1.2  ≥0.5 for 433 ms · disc/victim 0.86 0.71 0.59 0.61 0.62 0.58 0.49 0.42 0.36 0.32 0.18 0.15 0.11 ≥0.5 for 200 ms (count ≥25 % of peak 233 ms)
+hold rishal  px per frame from the hit 3896 3498 2979 2983 2800 2239 1250 343 22 4 0 0 0  reach/victim 1 0.97 0.95 0.94 0.88 0.76 0.64 0.55 1.27 0 0 0 0  ≥0.5 for 300 ms · disc/victim 0.69 0.66 0.6 0.61 0.59 0.52 0.39 0.21 0.05 0.02 0 0 0 ≥0.5 for 200 ms (count ≥25 % of peak 233 ms)
+hold tunlan  px per frame from the hit 3997 4201 3235 2688 2787 2247 2031 875 802 677 535 438 321  reach/victim 0.9 1.06 1.21 1.28 1.26 0.73 0.91 1.12 1.2 1.25 1.33 1.05 1.01  ≥0.5 for 433 ms · disc/victim 0.7 0.72 0.63 0.57 0.59 0.53 0.5 0.33 0.31 0.29 0.26 0.23 0.2 ≥0.5 for 233 ms (count ≥25 % of peak 233 ms)
+combat_polish: FAIL (3) → /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_W1_combat_polish_w2b_f2.json

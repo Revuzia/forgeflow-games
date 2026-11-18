@@ -1,0 +1,10 @@
+         hesmi ult max lift 1.4, detail per frame (lost 1, min 0.49): f35 0.49 [noVfx 0.84 noFlash 1.04 flash k 0.09] (mean 203/134) · f36 0.61 [noVfx 0.85 noFlash 0.99 flash k 0.06] (mean 194/130)
+         box white per beat (VFX off): f35 0.15 (0.658) · f36 0.141 (0.653)
+ult hesmi   ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.13 (lift 0.132, + hit flash 0.139, full frame 0.109) · box 0.15 (box base 0.012)  core ×1.89 ground ×1.71, faded core 113.9 ground 127.6 (samples 116.8 116.3 113.9 113.4 113.3; before the cast 116; waited 90 frames, left none)
+FAIL hesmi: the lift whites 0.13 more of the victim's body at a beat (> 0.10)
+FAIL hesmi: core luma 215.8 < the clip 218 on the first beat (x1.89; faded core 113.9: x2.0 would be 227.8, past the clip, ruling 51)
+lineup lisvel,ardit,burdam,dunsom,ervet,vashil,hesmi,ilsheta,kemdo,marund
+         vashil ult max lift 1.4, detail per frame (lost 1, min 0.48): f28 0.48 [noVfx 0.88 noFlash 0.97 flash k 0.07] (mean 203/137) · f29 0.7 [noVfx 0.95 noFlash 1.01 flash k 0.05] (mean 191/131)
+         box white per beat (VFX off): f28 0.249 (0.7) · f29 0.219 (0.695)
+ult vashil  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.071 (lift 0.078, + hit flash 0.08, full frame 0.063) · box 0.249 (box base 0.012)  core ×1.86 ground ×1.86, faded core 124.8 ground 126.3 (samples 124.6 124.7 124.9 124.9 124.8; before the cast 124.6; waited 0 frames, left none)
+combat_polish: FAIL (2) → /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_W1_combat_polish_w2b_f2_v1.json

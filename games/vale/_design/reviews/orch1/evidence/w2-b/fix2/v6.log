@@ -1,0 +1,5 @@
+         rishal ult max lift 1.4, detail per frame (lost 0, min 0.75): f7 0.75 [noVfx 1 noFlash 1 flash k 0] (mean 189/125)
+         box white per beat (VFX off): f7 0.626 (0.668) · f8 0.571 (0.67)
+ult rishal  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.015 (lift 0.029, + hit flash 0.029, full frame 0.057) · box 0.626 (box base 0.012)  core ×1.87 ground ×1.87, faded core 124.7 ground 126.3 (samples 125 124.8 124.7 124.7 124.7; before the cast 124.6; waited 15 frames, left none)
+FAIL rishal: the victim box goes 0.626 white at a beat (> 0.35)
+combat_polish: FAIL (1) → /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_W1_combat_polish_w2b_f2_v6.json

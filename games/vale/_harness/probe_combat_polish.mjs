@@ -738,7 +738,7 @@ try {
         ctrToCaster: dC && Math.round(dC), ctrToVictim: dV && Math.round(dV), baseWhite: base, baseCore,
         beats: beats.map((r) => ({ f: r.f, w: r.w, bodyPx: r.white.n, bodyWhiteBase: r.white.baseWhite, bodyWhiteLift: r.white.liftWhite, bodyWhiteFlash: r.white.flashWhite, bodyWhiteFull: r.white.fullWhite, boxWhite: r.white.boxWhite.white,
           boxWhiteNoVfx: r.white.boxNoVfx.white, flashK: r.white.flashK, live: r.live, detail: r.white.detail, detailFlash: r.white.detailFlash, detailLift: r.white.detailLift, stdBase: r.white.stdBase, stdFull: r.white.stdFull, meanBase: r.white.meanBase, meanFull: r.white.meanFull,
-          core: r.core, ratio: baseCore ? +(r.core / baseCore.all).toFixed(2) : null, ratioGround: baseCore ? +(r.coreGround / baseCore.ground).toFixed(2) : null })),
+          core: r.core, coreGround: r.coreGround, ratio: baseCore ? +(r.core / baseCore.all).toFixed(2) : null, ratioGround: baseCore ? +(r.coreGround / baseCore.ground).toFixed(2) : null })),
       };
       res.maxWhite = beats.length ? Math.max(...res.beats.map((r) => r.bodyWhiteLift)) : null;
       // what the envelope itself adds to the body (its own pale parts left out)
@@ -783,7 +783,12 @@ try {
         // white gates (ruling 48 measured the landing's peak at display luma ~222-230 whatever the solve). Where x2.0 of the
         // faded core passes the clip, the target is the clip: the first beat's core luma >= CORE_CLIP
         res.clipTarget = !!baseCore && baseCore.all * 2.0 >= CORE_CLIP;
-        if (res.clipTarget) { if (res.firstCore !== null && res.firstCore < CORE_CLIP) fail(`${def}: core luma ${res.firstCore} < the clip ${CORE_CLIP} on the first beat (x${res.firstRatio}; faded core ${baseCore?.all}: x2.0 would be ${+(baseCore.all * 2).toFixed(1)}, past the clip, ruling 51)`); }
+        // ruling 52 (W2-B fix 2): as the x2.0 / x2.3 branch below already does, the core may be read over the ground with the
+        // victim's box left out: the struck body inside the circle is held by the body rule (rulings 50 / 51: an effect keeps a
+        // quarter of its light over it, the envelope caps it), so it cannot share the clip; the all-pixel core stays in the report
+        res.firstCoreGround = b0?.coreGround ?? null;
+        res.firstCoreBest = res.firstCore === null ? null : Math.max(res.firstCore, res.firstCoreGround ?? 0);
+        if (res.clipTarget) { if (res.firstCoreBest !== null && res.firstCoreBest < CORE_CLIP) fail(`${def}: core luma ${res.firstCore} (ground ${res.firstCoreGround}) < the clip ${CORE_CLIP} on the first beat (x${res.firstRatio}; faded core ${baseCore?.all}: x2.0 would be ${+(baseCore.all * 2).toFixed(1)}, past the clip, rulings 51 / 52)`); }
         else if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < res.coreTarget) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}, luma ${res.firstCore}, faded core ${baseCore?.all} ground ${baseCore?.ground}, lifted ground p90 ${res.liftP90} vs faded ${res.baseP90}) < ${res.coreTarget} on the first beat`);
       }
       await B((b) => { b.__park(); b.__step(40); });
