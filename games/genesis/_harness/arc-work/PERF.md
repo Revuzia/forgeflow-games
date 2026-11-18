@@ -2616,3 +2616,17 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
     (use lat / lon cams, one view per run or explicit sunElevation).
   - Files: src/render/planet/oceanfast.ts (all of it), ocean.ts (import line + the `PERF s25 hook` block),
     _harness/arc-work/s25-one.sh (one full-scene probe run), s25-sheet.py (A | B | diff sheet + stats).
+- u (Ultra 1686x963, FULL picture: trees / shadows / water / MSAA, owner's landing camera, stats only): 742 patches
+  (LOD not fully landed: the Mac selects ~2100), 738 cached, want 72 MB, used 99.6 MB (incl. idle boot tiles), 0 page /
+  GL errors. pix = 60.1 %: 4 COARSE level-2 sea-bed patches (830 m across, one under the camera, need 559-6814 texels
+  > class 576) stay on the full shader and hold ~40 % of the estimated pixels. Everything else is cached.
+- GATE (this source = HEAD fca3497c): `bash _harness/slot.sh npm run check` 1048 pass 0 fail (s26/check1.log);
+  `npm run build` exit 0.
+### 4. NEXT (exact)
+1. The coarse deep-sea patches: cache a patch whose need exceeds class 576 at 576 (or add a 1152 class) WHEN all its
+   cells are under >= 15 m of water (field A .z waterLevel - .x surface over p.vcells, once per fieldEpoch like
+   cellNormals): through >= 15 m the water passes <= 5 % of the bed (exp(-0.2 x path)), so its softer bake cannot show.
+   Then pix at the landing should be ~100 %.
+2. Valid town pair (--settle=60), graze (top-down meadow: the green-shift check of tcFwLive), peak, floor; edits +
+   sun move: `bash _harness/arc-work/s26-queue.sh` (runs d e f u in turn; s26-run2.sh has the `sun` camera).
+3. Silhouette line on the far ridge in g-y0 (faint): tcFwLive at grazing |n.p| -> check np clamp.
