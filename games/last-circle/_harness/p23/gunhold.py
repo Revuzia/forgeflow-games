@@ -103,7 +103,7 @@ PLANTS = {
                                        ("return !!(C && C.rifle_run_g && C.rifle_idle_g && isPistol(a));", "return false;")]),
                    (RP + "weapons.js", [("const WPN_LEN = { pistol: 0.24,", "const WPN_LEN = { pistol: 0.34,")])],
     "gun-in-dead-hand": [(RP + "player.js", [("  if (victim.weaponMesh) victim.weaponMesh.visible = false;", "  /* planted: gun-in-dead-hand */"),
-                                             ("!a.emoting && !a.gliding && a.alive;", "!a.emoting && !a.gliding;")])],
+                                             ("!a.emoting && !a.gliding && !a.swimming && a.alive;", "!a.emoting && !a.gliding && !a.swimming;")])],
     "flinch-speed-gate": [(RP + "player.js", [("if (!res.dead && res.dealt > 0 && victim.alive) startJolt(W, victim, att);",
                                                "if (!res.dead && res.dealt > 0 && victim.alive && Math.hypot(victim.vel.x, victim.vel.z) < 4) startJolt(W, victim, att);")])],
     "short-guns": [(RP + "weapons.js", [("const WPN_LEN = { pistol: 0.24, smg: 0.62, ar: 0.80, shotgun: 0.95, sniper: 1.08, glauncher: 0.85 };",
@@ -264,6 +264,8 @@ GAME_JS = r"""() => { const P = window.__H_PUMP__; P.step(1, 1 / 60, true); retu
 # the reload sets straight from audio.js (the SAME module instance the game loaded: its resource URL, query and all)
 SETS_JS = r"""async () => { const e = performance.getEntriesByType('resource').map((x) => x.name).find((n) => /royale\/audio\.js(\?|$)/.test(n));
   if (!e) return { err: 'audio.js not loaded' }; const m = await import(e); const W = window.__LC__.W, K = W.SIM; const out = {};
+  // a build without the R2B / R3B reload data (e.g. the W9 tip 361c5ec3): the reload rows read FAIL with this message, never a page exception
+  const miss = ['RELOAD_SETS', 'RELOAD_SET_OF', 'gunSnd'].filter((k) => !m[k]); if (miss.length) return { err: 'audio.js has no ' + miss.join(' / ') + ' (a build without the reload sets)' };
   for (const id of Object.keys(K.WEAPONS)) { const set = m.RELOAD_SET_OF[m.gunSnd(id, K.WEAPONS[id])] || 'rifle'; out[id] = { set, beats: m.RELOAD_SETS[set], reloadS: K.WEAPONS[id].reloadS }; }
   return out; }"""
 # per frame through a reload (started here): reload fraction, tip height over the feet, left wrist to the mag well, the layer's names
@@ -540,6 +542,10 @@ def part_reload(s, v, R, skin, shots):
 
 def reload_eval(R, skins):
     sets = R.get("reloadSets") or {}
+    if sets.get("err"):
+        # no reload sets in the build: every reload row FAILS with the reason (the windows cannot be placed, so nothing can pass)
+        why = {"err": sets["err"]}
+        return (["reload sets: " + sets["err"]], why), (["reload sets: " + sets["err"]], why), (["reload sets: " + sets["err"]], why)
     hrows, hbad, wrows, wbad, prow, pbad = {}, [], {}, [], {}, []
     for skin in skins:
         G = R.get(skin, {}).get("reload", {})
