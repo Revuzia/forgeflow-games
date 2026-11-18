@@ -158,6 +158,9 @@ export const worldUniforms = {
   // above (0 = diffuse only). A polished pale kit's top quarter is specular (Ardit's chalk plate), which the diffuse
   // roll-off never reached; at 1 the whole reflected light eases under the ceiling, its hue and the glint's shape kept
   valeCharSpecRoll: { value: 0 },
+  // orch1 W2-A fix 2: the share of diffuse saturation a fighter brought down by its exposure loses, per unit of (1 - e)
+  // (lighting.ts CHAR_LIGHT.exposureSat)
+  valeCharExpoSat: { value: 0 },
   // max env ENV-10: drifting cloud shadow on the sun term of world (non-character) materials: x = its amplitude (0 =
   // off; setCloudShadow: the map's art.terrain.cloudShadow × the tier's switch), y = 1 / the cloud scale (m),
   // zw = drift (m/s)
@@ -348,6 +351,8 @@ uniform float valeCharMat;
 uniform vec4 valeCharChroma;
 uniform vec4 valeCharAo;
 uniform float valeCharSpecRoll;
+uniform float valeCharExpo;
+uniform float valeCharExpoSat;
 // MAX U1 fix round: the albedo hue lift (header of worldUniforms.valeCharChroma). The bakes paint fighters at CIELAB
 // chroma 5-18 (mean), so at 28.5 m under the grade they read as hue-less clay; this lifts the display-space chroma about
 // the texel's own Rec.709 luma, never past valeCharChroma.y HSV saturation and never below black, and pulls the palest
@@ -463,6 +468,21 @@ if ( valeCharMode > 1.5 && valeCharAo.z > valeCharAo.y ) {
 		reflectedLight.directDiffuse *= valeS; reflectedLight.indirectDiffuse *= valeS;
 		float valeSs = mix( 1.0, valeS, valeCharSpecRoll );
 		reflectedLight.directSpecular *= valeSs; reflectedLight.indirectSpecular *= valeSs;
+	}
+}
+// orch1 W2-A fix 2: the fighter's own exposure (per material, lighting.ts CHAR_LIGHT.exposure): its whole reflected light scales,
+// so the kit's painted value structure (its dark masses, its colour masses, its crown) is kept while its value range
+// moves into the band; emissive (the self accent, the warning glows) is not touched
+// (a kit brought DOWN also loses a share of its diffuse saturation, valeCharExpoSat x (1 - e): the tone map's shoulder had
+// been desaturating its pale top, and without this the same paint read more saturated once it sat lower on the curve)
+if ( valeCharMode > 1.5 ) {
+	reflectedLight.directDiffuse *= valeCharExpo; reflectedLight.indirectDiffuse *= valeCharExpo;
+	reflectedLight.directSpecular *= valeCharExpo; reflectedLight.indirectSpecular *= valeCharExpo;
+	float valeDs = valeCharExpoSat * max( 1.0 - valeCharExpo, 0.0 );
+	if ( valeDs > 0.0 ) {
+		vec3 valeW = vec3( 0.2126, 0.7152, 0.0722 );
+		reflectedLight.directDiffuse = mix( reflectedLight.directDiffuse, vec3( dot( reflectedLight.directDiffuse, valeW ) ), valeDs );
+		reflectedLight.indirectDiffuse = mix( reflectedLight.indirectDiffuse, vec3( dot( reflectedLight.indirectDiffuse, valeW ) ), valeDs );
 	}
 }
 `;
@@ -604,11 +624,15 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
   if (fog) fillNeutralMaps(material, fighter || unit);
   // fighters and wicks / monsters share one program: which light they take is a uniform (r12 B4 programs)
   const charMode = { value: fighter ? 2 : monster ? 1.25 : unit ? 1 : 0 };
+  // orch1 W2-A fix 2: the fighter's own exposure (lighting.ts CHAR_LIGHT.exposure; renderer.ts sets
+  // material.userData.valeCharExpo when the fighter's template attaches). A per-material uniform: no program added
+  const charExpo = { get value(): number { const e = (material.userData as { valeCharExpo?: number }).valeCharExpo; return typeof e === 'number' && e > 0 ? e : 1; } };
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer) => {
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, worldUniforms);
     shader.uniforms.valeCharMode = charMode;
+    shader.uniforms.valeCharExpo = charExpo as unknown as { value: number };
     if (fog) {
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', `#include <common>\n${VERT_PARS}`)

@@ -29,8 +29,13 @@ export const CHAR_LIGHT = {
   // 2.5) and brighter (x `fighterGain` 1.6), and the eye fill 0.7 -> 0.98 lights through a value floor (tone.fillFloor):
   // fighters' edges lift off the mid-value ground and dark kits come up toward the value band while pale kits stay under
   // top-25 L* ~80 (the roll-off below). Wicks and monsters keep the crown as it was (power 2.5, their share of 3.4).
-  crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 3.4, sunHue: 0.5, albedoFloor: 0.3, fighterGain: 1.6, fighterPower: 2.0 },
-  fill: { luminance: 1.39 },
+  // fix 2 (verifier r2 blocker, value structure): the fill no longer lights through a value floor (it lifted every dark
+  // texel toward L* ~70 and pinned a fighter's darkest quarter at the lane's own ~52: median top-minus-bottom spread 62 ->
+  // 24 L*, kits read as one pastel mass). The fill now scales the albedo as painted (dark masses stay dark, the ratio
+  // between a kit's colour masses is kept) and is stronger (1.39 -> 1.95), the fighter crown x1.3 (1.6 -> 2.08) carries
+  // the edge lift, the AO weight 0.6 -> 0.9 and the roll-off ceiling 0.70 -> 0.68. Measured in units_gate (fix 2 notes).
+  crown: { viewDir: [0, 0.8, -0.6] as const, power: 2.5, luminance: 3.4, sunHue: 0.5, albedoFloor: 0.3, fighterGain: 1.3, fighterPower: 2.25 },
+  fill: { luminance: 0.8 },
   knee: [0.25, 0.75] as const,
   unitShare: 0.35,
   /** a jungle monster's share of the world's light (sun, sky, its crown share) and of its own glow (wicks keep 1).
@@ -45,14 +50,29 @@ export const CHAR_LIGHT = {
   // fix 1 (16-fighter sweep, tone harness with no measured fighter in your seat, overlay off): the fill 0.98 -> 1.39 through
   // a floor 0.25 -> 0.42, the ceiling 0.72 -> 0.70 and the roll-off now over the specular too (specRoll 1): top-25 L*
   // 66.7-79.6 (5 under 70) -> 70.2-79.9, so the roster sits inside units_gate P3's floor and ruling 46's <= 80 at once
-  tone: { aoWeight: 0.6, knee: 0.5, ceiling: 0.7, fillFloor: 0.42, specRoll: 1 },
+  tone: { aoWeight: 0.85, knee: 0.5, ceiling: 0, fillFloor: 0, specRoll: 1 },
+  /** fix 2: each fighter's own exposure (world_material.ts valeCharExpo: its whole reflected light x this, emissive
+   *  untouched), so a kit's value range sits in the band (top-25 L* 70-80) with its painted structure kept: a pale kit
+   *  comes down whole instead of its tops being rolled flat, a dark kit comes up whole instead of its darks being
+   *  lifted to the lane. Fitted on units_gate (fix 2 notes): e = Y(target) / Y(measured top-25), target = the measured
+   *  value clamped into [71, 78.5]. A fighter not listed keeps 1. */
+  /** fix 2: the share of diffuse saturation per unit of (1 - exposure) a kit brought down loses (world_material.ts) */
+  exposureSat: 0.45,
+  exposure: { burdam: 1.087, ilsheta: 0.827, kemdo: 0.832, lisvel: 0.861, marund: 0.818, nurrow: 0.836, rishal: 0.848, sukri: 0.715, tunlan: 0.753, vashil: 0.891 } as Readonly<Record<string, number>>,
 } as const;
+export const charExpoSwitch = { on: true };
+/** the exposure of fighter `def` (1 when off or not listed) */
+export function charExposureOf(def: string): number {
+  const e = charExpoSwitch.on ? CHAR_LIGHT.exposure[def] : undefined;
+  return typeof e === 'number' && e > 0 ? e : 1;
+}
 /** harness seam (W2-A A/B): false puts fighters back on the r12 B5 character light (full AO, no roll-off) */
 export const charToneSwitch = { on: true };
 export function applyCharTone(): void {
   const t = CHAR_LIGHT.tone, on = charToneSwitch.on;
   worldUniforms.valeCharAo.value.set(on ? t.aoWeight : 1, on ? t.knee : 0, on ? t.ceiling : 0, on ? t.fillFloor : 0);
   worldUniforms.valeCharSpecRoll.value = on ? t.specRoll : 0;
+  worldUniforms.valeCharExpoSat.value = charExpoSwitch.on ? CHAR_LIGHT.exposureSat : 0;
 }
 /** orch1 W2-A GFX-1 (owner ruling 46): the environment value re-key (world_material.ts valeRekey), the same on every map.
  *  The world's display L* goes through L*' = 100 gain (L* / 100)^lstarExp, easing back to the identity over easeL (lamps

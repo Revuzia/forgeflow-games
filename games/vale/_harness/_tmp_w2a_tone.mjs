@@ -91,15 +91,17 @@ const measure = (b, a) => {
         if (fs < gs && dot / (nf * ng) > 0.997) continue;
         }
         const s = lab(F[k], F[k + 1], F[k + 2]), al = lab(A[k], A[k + 1], A[k + 2]);
-        px.push({ L: s[0], C: Math.hypot(s[1], s[2]), aC: Math.hypot(al[1], al[2]) });
+        px.push({ L: s[0], C: Math.hypot(s[1], s[2]), aC: Math.hypot(al[1], al[2]), y: (i / W) | 0 });
       }
-      if (px.length < 200) { rec[v.name] = { px: px.length, error: 'too few pixels' }; continue; }
+      if (px.length < 200) { rec[v.name] = { px: px.length, crownDL: +Math.abs(crA - crB).toFixed(1), error: 'too few pixels' }; continue; }
       const byA = [...px].sort((p, q) => q.aC - p.aC).slice(0, Math.max(1, px.length >> 2));
       const Ls = px.map((p) => p.L).sort((p, q) => p - q);
       const top = Ls.slice(Math.floor(Ls.length * 0.75)), bot = Ls.slice(0, Math.max(1, Math.floor(Ls.length * 0.25)));
       const bot25L = bot.reduce((s, x) => s + x, 0) / bot.length;
       const zoneC = med(byA.map((p) => p.C)), zoneA = med(byA.map((p) => p.aC));
-      rec[v.name] = { px: px.length, zoneC: +zoneC.toFixed(1), ratio: +(zoneC / zoneA).toFixed(2), top25L: +(top.reduce((s, x) => s + x, 0) / top.length).toFixed(1), bot25L: +bot25L.toFixed(1), mid50L: +(Ls.slice(Math.floor(Ls.length * 0.25), Math.floor(Ls.length * 0.75)).reduce((s, x) => s + x, 0) / Math.max(1, Math.floor(Ls.length * 0.75) - Math.floor(Ls.length * 0.25))).toFixed(1), spread: +((top.reduce((s, x) => s + x, 0) / top.length) - bot25L).toFixed(1), meanC: +(px.reduce((s, p) => s + p.C, 0) / px.length).toFixed(1), p50L: +Ls[Ls.length >> 1].toFixed(1) };
+      const ys = px.map((p) => p.y).sort((p, q) => p - q), y1 = ys[Math.floor(ys.length * 0.005)], y2 = ys[Math.floor(ys.length * 0.995)], hh = Math.max(1, y2 - y1);
+      const crA = med(px.filter((p) => p.y >= y1 && p.y < y1 + 0.12 * hh).map((p) => p.L)), crB = med(px.filter((p) => p.y >= y1 + 0.12 * hh && p.y < y1 + 0.24 * hh).map((p) => p.L));
+      rec[v.name] = { px: px.length, crownDL: +Math.abs(crA - crB).toFixed(1), zoneC: +zoneC.toFixed(1), ratio: +(zoneC / zoneA).toFixed(2), top25L: +(top.reduce((s, x) => s + x, 0) / top.length).toFixed(1), bot25L: +bot25L.toFixed(1), mid50L: +(Ls.slice(Math.floor(Ls.length * 0.25), Math.floor(Ls.length * 0.75)).reduce((s, x) => s + x, 0) / Math.max(1, Math.floor(Ls.length * 0.75) - Math.floor(Ls.length * 0.25))).toFixed(1), spread: +((top.reduce((s, x) => s + x, 0) / top.length) - bot25L).toFixed(1), meanC: +(px.reduce((s, p) => s + p.C, 0) / px.length).toFixed(1), p50L: +Ls[Ls.length >> 1].toFixed(1) };
     }
     out.push(rec);
   }
@@ -127,7 +129,7 @@ const sum = {};
 for (const v of VARIANTS) {
   const r = all.map((f) => f[v.name]).filter((x) => x && !x.error);
   const t = r.map((x) => x.top25L);
-  sum[v.name] = { n: r.length, top25Min: Math.min(...t), top25Max: Math.max(...t), under70: all.filter((f) => f[v.name]?.top25L < 70).map((f) => f.def), over80: all.filter((f) => f[v.name]?.top25L > 80).map((f) => f.def), ratioMin: Math.min(...r.map((x) => x.ratio)), zoneCMin: Math.min(...r.map((x) => x.zoneC)), botMax: Math.max(...r.map((x) => x.bot25L)), spreadMin: Math.min(...r.map((x) => x.spread)), spreadMed: [...r.map((x) => x.spread)].sort((p, q) => p - q)[r.length >> 1] };
+  sum[v.name] = { n: r.length, top25Min: Math.min(...t), top25Max: Math.max(...t), under70: all.filter((f) => f[v.name]?.top25L < 70).map((f) => f.def), over80: all.filter((f) => f[v.name]?.top25L > 80).map((f) => f.def), ratioMin: Math.min(...r.map((x) => x.ratio)), zoneCMin: Math.min(...r.map((x) => x.zoneC)), botMax: Math.max(...r.map((x) => x.bot25L)), spreadMin: Math.min(...r.map((x) => x.spread)), crown8: r.filter((x) => x.crownDL >= 8).length, spreadMed: [...r.map((x) => x.spread)].sort((p, q) => p - q)[r.length >> 1] };
 }
 for (const f of all) console.log(f.def.padEnd(8), VARIANTS.map((v) => `${v.name}:${f[v.name]?.top25L}/${f[v.name]?.bot25L}/${f[v.name]?.ratio}`).join('  '));
 console.log(JSON.stringify(sum, null, 1));

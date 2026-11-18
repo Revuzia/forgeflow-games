@@ -37,7 +37,7 @@
 // Neutral tone map → LUT → vignette → overlay → SMAA).
 
 import {
-  Color, Frustum, Matrix4, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, Sphere, SRGBColorSpace,
+  Color, Frustum, Matrix4, type Mesh, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, Sphere, SRGBColorSpace,
   Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import type { CatalogT, MapDefT } from '../contracts/catalog.ts';
@@ -49,7 +49,7 @@ import { Assets, type AssetUrlFn, collectGpu } from './assets.ts';
 import { CameraRig, type CameraMode } from './camera.ts';
 import { Director, type EventVfxMap, type StatusVfxMap } from './director.ts';
 import { FogOfWar } from './fog.ts';
-import { applyCharTone, applyEnvKey, charToneSwitch, envKeySwitch, Sun } from './lighting.ts';
+import { applyCharTone, applyEnvKey, charExpoSwitch, charExposureOf, charToneSwitch, envKeySwitch, Sun } from './lighting.ts';
 import { MenuWorld } from './menu.ts';
 import { BAR_KIND, BarLayer, type BarSpec, CC_PLATE, GLYPH, SHAPE } from './overlay/bars.ts';
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
@@ -250,7 +250,7 @@ class ValeRenderer implements Renderer {
   readonly lodSwitch = lodSwitch;
   /** harness seam (orch1 W2-A A/B in one page): the environment re-key and the fighter tone switches; call apply() after
    *  a change */
-  readonly w2a = { envKey: envKeySwitch, charTone: charToneSwitch, uniforms: worldUniforms, apply: (): void => { applyEnvKey(); applyCharTone(); } };
+  readonly w2a = { envKey: envKeySwitch, charTone: charToneSwitch, charExpo: charExpoSwitch, uniforms: worldUniforms, apply: (): void => { applyEnvKey(); applyCharTone(); } };
   /** harness seam (W5a refix, _harness/probe_landmark_cull.mjs): the landmarks' and casters' box cull (terrain.ts) */
   readonly landmarkCull = landmarkCull;
   /** rebuilt on a restored context (its queries and extension belonged to the lost one) */
@@ -823,7 +823,15 @@ class ValeRenderer implements Renderer {
           const def = this.lib.fighter(e.def);
           if (def) {
             a.configureFighter(def);
-            this.lib.fighterTemplate(e.def, e.skin).then((t) => { actor.attach(t, def.art.scale, def.art.accentMaterial); });
+            this.lib.fighterTemplate(e.def, e.skin).then((t) => {
+              actor.attach(t, def.art.scale, def.art.accentMaterial);
+              // orch1 W2-A fix 2: the fighter's own exposure (lighting.ts CHAR_LIGHT.exposure; world_material.ts valeCharExpo)
+              const expo = charExposureOf(e.def);
+              actor.root.traverse((o) => {
+                const ms = (o as Mesh).material; if (!ms) return;
+                for (const m of Array.isArray(ms) ? ms : [ms]) (m.userData as { valeCharExpo?: number }).valeCharExpo = expo;
+              });
+            });
           }
         } else {
           const def = this.lib.unit(e.def);
