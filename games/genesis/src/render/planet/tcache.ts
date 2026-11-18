@@ -229,6 +229,8 @@ interface Tile {
   cam: Vector3; fwd: Vector3; sun: Vector3; year: number; gkey: string;
   baked: boolean; dirty: boolean; stale: boolean; hot: boolean; hotEpoch: number;
   lastUsed: number; dn: number; need: number; area: number; areaW: number;
+  /** the lattice corners' unit directions (0,0), (R,0), (0,R) */
+  dirs: Float32Array;
 }
 
 const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3(), _f = new Vector3();
@@ -436,7 +438,7 @@ export class TerrainCache {
    * once a frame after the LOD selection and the frame's uniforms: decides each drawn patch (cached / full shader),
    * writes the slot tables, queues the bakes. `pxPerRad`: render pixels per radian.
    */
-  update(camBody: Vector3, pxPerRad: number, frame: number, sunBody: Vector3, yearFrac: number, primary = true): void {
+  update(camBody: Vector3, pxPerRad: number, frame: number, sunBody: Vector3, yearFrac: number, primary = true, halfH = 0, halfW = 0): void {
     const st = this.stats, u = this.shared;
     this.frame = frame; this.pxPerRad = pxPerRad; this.cam.copy(camBody);
     // the view direction in the body frame (row 2 of body -> view, negated)
@@ -470,9 +472,10 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
+        t = { dirs: new Float32Array(9), cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
         // the patch's flat triangle (m^2)
         this.lod.tcCorners(p, _a, _b, _f);
+        _a.toArray(t.dirs, 0); _b.toArray(t.dirs, 3); _f.toArray(t.dirs, 6);
         _b.sub(_a); _f.sub(_a);
         t.areaW = 0.5 * _b.cross(_f).length() * rad * rad;
         this.tiles.set(p, t);
@@ -489,10 +492,33 @@ export class TerrainCache {
       const size = this.lod.size(p.level);
       const cEff = Math.min(1, Math.max(0.02, ndv + (p.hMax - p.hMin) / size));
       // the edge (texels) for texels ~ pixels by AREA, at the patch's nearest point (the near end is the densest)
-      const need = size * pxPerRad / dn * Math.sqrt(cEff);
+      // what of it is ON SCREEN: 15 points of the triangle (at its mid height) projected; a patch selected because its
+      // bounding sphere touches the frustum (the ground under / beside the camera) is sized by its visible part only
+      let vis = 0, dMin = 1e30, inv2 = 0;
+      {
+        const D = t.dirs, hr = rad + 0.5 * (p.hMin + p.hMax), me = m;
+        for (let i = 0; i <= 4; i++) for (let j = 0; i + j <= 4; j++) {
+          const u1 = i / 4, v1 = j / 4, w1 = 1 - u1 - v1;
+          let x = D[0] * w1 + D[3] * u1 + D[6] * v1, y = D[1] * w1 + D[4] * u1 + D[7] * v1, z = D[2] * w1 + D[5] * u1 + D[8] * v1;
+          const k = hr / Math.hypot(x, y, z);
+          x = x * k - camBody.x; y = y * k - camBody.y; z = z * k - camBody.z;
+          const vz = -(me[2] * x + me[5] * y + me[8] * z);
+          if (vz < 0.05) continue;
+          if (halfH > 0) {
+            const sx = pxPerRad * (me[0] * x + me[3] * y + me[6] * z) / vz, sy = pxPerRad * (me[1] * x + me[4] * y + me[7] * z) / vz;
+            if (Math.abs(sx) > halfW || Math.abs(sy) > halfH) continue;
+          }
+          const d2 = x * x + y * y + z * z;
+          vis++; dMin = Math.min(dMin, Math.sqrt(d2)); inv2 += 1 / d2;
+        }
+      }
+      // (none of the 15 inside: a sliver at the screen's edge, sized as at its centre)
+      const dVis = vis ? Math.max(dn, dMin - 0.3 * size) : Math.max(dn, dc0);
+      // the edge (texels) for texels ~ pixels by AREA, at the patch's nearest visible point (the near end is the densest)
+      const need = size * pxPerRad / dVis * Math.sqrt(cEff);
       t.need = need;
-      // its screen pixels (the triangle's area x |n.v| / d^2, d^2 between its nearest point and its centre)
-      t.area = Math.min(4 * f2, t.areaW * cEff * f2 / Math.max(dn * Math.max(dc0, dn), 0.25));
+      // its screen pixels (the triangle's area x |n.v| x mean of 1 / d^2 over the points, the hidden ones as 0)
+      t.area = vis ? Math.min(4 * f2, t.areaW * cEff * f2 * inv2 / 15) : t.areaW * cEff * f2 / Math.max(dc0 * dc0, 0.25) / 15;
       pixAll += t.area;
       if (t.hotEpoch !== this.fieldEpoch) { t.hotEpoch = this.fieldEpoch; t.hot = this.isHot(p); }
       let valid = this.enabled && primary && t.baked && !t.dirty && !t.hot && t.gkey === gkey;

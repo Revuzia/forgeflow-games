@@ -59,6 +59,8 @@ export class GpuMemAudit {
   private total0 = 0;
   /** retained CPU copies by owner (bytes), set by the renderer (scene walk at report time) */
   cpuProbe: (() => Map<string, number>) | null = null;
+  /** (PERF s27) ArrayBuffer bytes by holder, set by the renderer: the `js heap by owner` line */
+  heapProbe: (() => Map<string, number>) | null = null;
   /**
    * (PERF s15) who owns what, set by the renderer (scene walk at report time): typed arrays' ArrayBuffers and three
    * textures -> owner name ('planet-0/vegetation' ...)
@@ -329,6 +331,15 @@ export class GpuMemAudit {
       }
       const pm = (globalThis.performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } }).memory;
       if (pm) L.push(`js heap: used ${mb(pm.usedJSHeapSize)} MB of ${mb(pm.totalJSHeapSize)} MB`);
+      // (PERF s27) Chrome's usedJSHeapSize INCLUDES the ArrayBuffer backing stores (heap snapshot: 34 MB of objects, 330 MB of
+      // buffers): the heap figure is mostly typed arrays. By holder; what no holder claims is dead buffers awaiting GC
+      // or holders not listed
+      const ho = this.heapProbe?.();
+      if (ho && ho.size) {
+        let t = 0; for (const v of ho.values()) t += v;
+        const used = pm?.usedJSHeapSize ?? 0;
+        L.push(`js heap by owner (MB; usedJSHeapSize counts ArrayBuffers): attributed ${mb(t)} of used ${mb(used)} | unattributed ${mb(Math.max(0, used - t))} | ${[...ho.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${mb(v)}`).join(' · ')}`);
+      }
     } catch { /* none */ }
     L.splice(1, 0, `gpu mem largest: ${big.join(' · ')}`);
     // (PERF s15) by owner, and the ANGLE-Metal transients (always counted)

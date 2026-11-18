@@ -11,6 +11,7 @@
 // Values are stored as sqrt(v / VMAX) in RGBA8 (a 100:1 range from a hamlet's hearths to a city core) with mipmaps;
 // the terrain shows s itself, compressed (terrainmat.ts FRAG_EMISSIVE), so mip filtering averages what is displayed.
 
+import { perfSwitch } from '../perfswitch.ts';
 import { CubeTexture, DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, UnsignedByteType, ClampToEdgeWrapping, type WebGLRenderer } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import { BuildingFlag } from '../../sim/types.ts';
@@ -30,12 +31,18 @@ const TILE = 32;
 let glRenderer: WebGLRenderer | null = null;
 export function setCityLightsRenderer(r: WebGLRenderer | null): void { glRenderer = r; }
 
+/** PERF s27: a face's float accumulator (9 MB at 768^2) exists only while something is lit on that face (`?lazyacc=0` = all six always) */
+const LAZY_ACC = perfSwitch('lazyacc');
+const NO_ACC = new Float32Array(0);
+
 export class CityLights {
   readonly size: number;
   readonly texture: CubeTexture;
   private faces: DataTexture[] = [];
   /** per face: 4 floats per texel */
   private acc: Float32Array[] = [];
+  /** (PERF s27) CPU bytes held: the float accumulators and the byte faces */
+  heldBytes(): number { let b = 0; for (const a of this.acc) b += a.byteLength; for (const f of this.faces) b += (f.image.data as Uint8Array | null)?.byteLength ?? 0; return b; }
   /** per face, the texel rectangle holding anything (x0, y0, x1, y1; empty when x1 < x0): only it is cleared and
    *  re-encoded (with last build's), so a rebuild costs the settlements' area, not six whole faces */
   private box = new Int32Array(24);
@@ -55,7 +62,7 @@ export class CityLights {
     for (let f = 0; f < 6; f++) {
       const dt = new DataTexture(new Uint8Array(s * s * 4), s, s, RGBAFormat, UnsignedByteType);
       this.faces.push(dt);
-      this.acc.push(new Float32Array(s * s * 4));
+      this.acc.push(LAZY_ACC ? NO_ACC : new Float32Array(s * s * 4));
     }
     this.texture = new CubeTexture(this.faces as unknown as HTMLImageElement[]);
     this.texture.format = RGBAFormat;
@@ -81,12 +88,14 @@ export class CityLights {
     return true;
   }
 
+  private accOf(f: number): Float32Array { return this.acc[f].length ? this.acc[f] : (this.acc[f] = new Float32Array(this.size * this.size * 4)); }
+
   private rebuild(pv: PlanetView, cellLight: Float32Array | null): void {
     const s = this.size;
     const was = this.box.slice();
     for (let f = 0; f < 6; f++) {
       const x0 = was[f * 4], y0 = was[f * 4 + 1], x1 = was[f * 4 + 2], y1 = was[f * 4 + 3];
-      if (x1 >= x0) for (let y = y0; y <= y1; y++) this.acc[f].fill(0, (y * s + x0) * 4, (y * s + x1 + 1) * 4);
+      if (x1 >= x0 && this.acc[f].length) for (let y = y0; y <= y1; y++) this.acc[f].fill(0, (y * s + x0) * 4, (y * s + x1 + 1) * 4);
       this.box[f * 4] = s; this.box[f * 4 + 1] = s; this.box[f * 4 + 2] = -1; this.box[f * 4 + 3] = -1;
     }
     const g = pv.grid;
@@ -173,7 +182,7 @@ export class CityLights {
       const x0 = Math.min(b[f * 4], was[f * 4]), y0 = Math.min(b[f * 4 + 1], was[f * 4 + 1]);
       const x1 = Math.max(b[f * 4 + 2], was[f * 4 + 2]), y1 = Math.max(b[f * 4 + 3], was[f * 4 + 3]);
       if (x1 < x0) continue;
-      const a = this.acc[f];
+      const a = this.accOf(f);
       const d = this.faces[f].image.data as Uint8Array;
       // PERF F2b: only the TILE x TILE tiles whose bytes really changed are uploaded (the union box of a face's
       // lights spans most of the face once a world has towns all over it: two whole faces, 4.6 MB, per rebuild)
@@ -204,6 +213,8 @@ export class CityLights {
         }
       }
     }
+    // (PERF s27) a face nothing is lit on any more holds all zeros (its last box was cleared above): give the 9 MB back
+    if (LAZY_ACC) for (let f = 0; f < 6; f++) if (this.box[f * 4 + 2] < this.box[f * 4]) this.acc[f] = NO_ACC;
     // (ROADMAP step 4) the boxes' texSubImage and the cube's generateMipmap run in the renderer's uploads slot, before
     // any pass, not wherever this update falls (uploadsched.ts)
     scheduleUpload(() => { if (!this.uploadDirty(dirty)) this.texture.needsUpdate = true; });
@@ -265,7 +276,7 @@ export class CityLights {
       const x0 = Math.max(0, Math.ceil(fx - r)), x1 = Math.min(s - 1, Math.floor(fx + r));
       const y0 = Math.max(0, Math.ceil(fy - r)), y1 = Math.min(s - 1, Math.floor(fy + r));
       if (x0 > x1 || y0 > y1) continue;
-      const a = this.acc[f];
+      const a = this.accOf(f);
       for (let y = y0; y <= y1; y++) {
         const dy = y - fy;
         for (let x = x0; x <= x1; x++) {

@@ -824,6 +824,13 @@ export class ChunkLOD {
   private recycle: ArrayBuffer[][] = [];
   /** patches landed from the worker (stats / tests) */
   landedTotal = 0;
+  /** (PERF s27) bytes of the worker's reply buffers this ChunkLOD still holds: replies waiting to land + the recycle sets */
+  heldBytes(): { ready: number; recycle: number } {
+    let ready = 0, recycle = 0;
+    for (const r of this.ready) { for (const a of r.attrs) ready += a.byteLength; ready += r.vcells.byteLength; }
+    for (const s of this.recycle) for (const b of s) recycle += b.byteLength;
+    return { ready, recycle };
+  }
 
   /** `opts.seed`: the planet's noise seed (lets a worker rebuild the same Noise3); `opts.port`: a worker port (null =
    * always this thread; default: the browser's shared one when a seed is given) */

@@ -31,6 +31,7 @@ const T0 = Date.now();
 const FAST = opts.full ? '' : '&hide=veg,cover,life&clouds=0&gtao=0&bloom=0&godrays=0&shadows=0&fartrees=0&water=' + (opts.water ?? '1');
 const url = `http://127.0.0.1:${server.address().port}/?scenario=babel&seed=307987276&quality=${opts.quality ?? 'high'}&intro=0&speed=0&ui=0${FAST}${opts.extra ? '&' + opts.extra : ''}`;
 console.log('url', url);
+if (opts.abtrace) await page.addInitScript({ path: resolve(ROOT, '_harness/arc-work/s27-abtrace.js') });
 await page.goto(url);
 await page.waitForFunction(() => !!window.__GENESIS__);
 await page.evaluate(() => window.__GENESIS__.ready);
@@ -103,6 +104,7 @@ console.log('state', JSON.stringify(await G(() => window.__GENESIS__.state())).s
 console.log('switches', await G(() => { try { return (window.__GENESIS__.perfSwitches?.() ?? '') ; } catch { return ''; } }));
 console.log('page errors', errors.length, errors.slice(0, 5));
 console.log('gl messages', glmsgs.length, glmsgs.slice(0, 8));
+if (opts.abtrace) console.log('abtrace', JSON.stringify(await G(() => window.__AB__()), null, 1));
 // (PERF s27) --alloc=N: V8 sampling heap profile over N rendered frames = who allocates (the garbage the heap fills with)
 if (opts.alloc) {
   const c2 = await page.context().newCDPSession(page);

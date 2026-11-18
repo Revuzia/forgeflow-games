@@ -57,3 +57,28 @@ test('city lights: incremental tile uploads keep the GPU copy identical', () => 
   }
   setCityLightsRenderer(null);
 });
+
+test('city lights: the float accumulator of a face nothing is lit on is not held (PERF s27 lazyacc)', () => {
+  const grid = getGrid(32);
+  const cl = new CityLights(3000);
+  const s = cl.size;
+  const eager = 6 * s * s * 20;
+  assert.ok(cl.heldBytes() <= 6 * s * s * 4 + 1, `before any build only the byte faces: ${cl.heldBytes()}`);
+  let type = 0;
+  while (['wall', 'gate', 'pen', 'dock', 'tower'].includes(buildingAt(type).kind)) type++;
+  const n = 1;
+  const B = {
+    count: n, type: new Uint16Array(n).fill(Math.max(0, type)), pos: new Float32Array([3000, 0, 0]), scale: new Float32Array(n).fill(1),
+    progress: new Float32Array(n).fill(1), flags: new Uint16Array(n).fill(BuildingFlag.lit), light: new Uint16Array(n).fill(256 + 200),
+    settlement: new Int32Array(n), id: new Int32Array(n),
+  };
+  const pv = { grid, params: { radius: 3000 }, buildings: B, settlements: [{ id: 0, nightLight: 1 }], fields: new Map(), fieldVersion: new Map() };
+  cl.update(pv as never, null, 1);
+  assert.ok(cl.heldBytes() < eager * 0.6, `one house lights one or two faces: ${cl.heldBytes()} of ${eager}`);
+  // the light goes out: the accumulators are given back and the faces are all zero
+  B.flags[0] = BuildingFlag.ruined;
+  (cl as unknown as { builtAt: number }).builtAt = -1e9;
+  cl.update(pv as never, null, 2);
+  assert.ok(cl.heldBytes() <= 6 * s * s * 4 + 1, `no light left: ${cl.heldBytes()}`);
+  for (const f of (cl as unknown as { faces: { image: { data: Uint8Array } }[] }).faces) assert.ok(f.image.data.every((v) => v === 0));
+});

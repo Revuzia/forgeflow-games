@@ -260,6 +260,7 @@ export class Renderer {
     setRingGL(this.three.getContext() as WebGL2RenderingContext);
     setUploadGL(this.three.getContext() as WebGL2RenderingContext);
     gpuMem.cpuProbe = () => cpuRetained(this.scene);
+    gpuMem.heapProbe = () => heapByOwner(this.scene, this.planets);
     // (PERF s15) GPU bytes by owner: three's texture lookups name each texture allocation, the scene walk each array
     try { gpuMem.attach(this.three); } catch { /* unattributed */ }
     gpuMem.ownerProbe = () => sceneOwners(this.scene);
@@ -1346,5 +1347,27 @@ function cpuRetained(scene: Scene): Map<string, number> {
       }
     }
   });
+  return out;
+}
+
+/**
+ * (PERF s27) ArrayBuffer bytes by holder for the `js heap by owner` line: the scene's typed arrays grouped by kind
+ * (terrain pages, vegetation ...), plus what cpuRetained cannot see: the patch worker's reply / recycle buffers, the
+ * city-lights accumulators, the field textures' data and the view's per-cell field arrays
+ */
+function heapByOwner(scene: Scene, planets: Map<number, PlanetVisual>): Map<string, number> {
+  const out = new Map<string, number>();
+  const add = (k: string, b: number) => { if (b > 0) out.set(k, (out.get(k) ?? 0) + b); };
+  for (const [k, v] of cpuRetained(scene)) add(k.replace(/^planet-\d+\//, '').replace(/^(terrain)-L\d+-p\d+(-water)?/, 'terrain pages').replace(/ \(textures\)$/, ' textures'), v);
+  const seen = new Set<ArrayBufferLike>();
+  const once = (a: { buffer: ArrayBufferLike; byteLength: number }) => { if (seen.has(a.buffer)) return 0; seen.add(a.buffer); return a.buffer.byteLength; };
+  for (const vis of planets.values()) {
+    const h = vis.lod.heldBytes();
+    add('patch replies waiting', h.ready); add('patch recycle sets', h.recycle);
+    add('city lights (cpu)', vis.fields.cityLights?.heldBytes() ?? 0);
+    for (const t of Object.values(vis.fields.tex)) { const d = t.image?.data as ArrayBufferView | undefined; if (d) add('field textures', once(d)); }
+    for (const a of vis.pv.fields.values()) add('view fields', once(a));
+    for (const a of [vis.pv.grid.pos, vis.pv.grid.tris, vis.pv.grid.nbr, vis.pv.grid.rev] as (ArrayBufferView | undefined)[]) if (a) add('grid', once(a));
+  }
   return out;
 }

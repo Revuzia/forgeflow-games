@@ -285,7 +285,8 @@ export class PlanetVisual {
       m.value.set(full, start, this.lod.skirtDepth(L), this.lod.silK);
     }
     // PERF s22 `?tcache=1`: which drawn patches read their tile this frame, and what is to bake (tcache.ts)
-    if (this.tcache && ctx.renderH) this.tcache.update(this.camBody, 0.5 * ctx.renderH * ctx.proj.elements[5], ctx.frame, u.uSunDirBody.value as Vector3, ctx.yearFrac, ctx.primary);
+    if (this.tcache && ctx.renderH) this.tcache.update(this.camBody, 0.5 * ctx.renderH * ctx.proj.elements[5], ctx.frame, u.uSunDirBody.value as Vector3, ctx.yearFrac, ctx.primary,
+      0.5 * ctx.renderH, 0.5 * ctx.renderH * ctx.proj.elements[5] / ctx.proj.elements[0]);
   }
 
   /** PERF s22 `?tcache=1`: this frame's tile bakes (Renderer: after the shadow pass, before the scene pass) */
