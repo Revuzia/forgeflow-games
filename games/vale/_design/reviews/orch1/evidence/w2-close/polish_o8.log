@@ -1,0 +1,11 @@
+         hesmi ult max lift 1.4, detail per frame (lost 1, min 0.45): f35 0.45 [noVfx 0.82 noFlash 1.05 flash k 0.09] (mean 205/134) · f36 0.52 [noVfx 0.85 noFlash 1 flash k 0.06] (mean 199/129)
+         box white per beat (VFX off): f35 0.038 (0.032) · f36 0.035 (0.031)
+ult hesmi   ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.013 (lift 0.015, + hit flash 0.017, full frame 0.009) · box 0.038 (box base 0.012)  core ×1.76 ground ×1.7, faded core 123.5 ground 130.3 (samples 123.5 123.9 123.6 123 122.8; before the cast 122; waited 90 frames, left none)
+lineup lisvel,ardit,burdam,dunsom,ervet,nurrow,vashil,hesmi,ilsheta,kemdo
+         nurrow ult max lift 1.4, detail per frame (lost 0, min 0.54): f14 0.54 [noVfx 0.86 noFlash 0.94 flash k 0.07] (mean 199/140) · f15 0.55 [noVfx 0.9 noFlash 0.95 flash k 0.05] (mean 196/137)
+         box white per beat (VFX off): f14 0.011 (0.014) · f15 0.01 (0.015)
+ult nurrow  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds -0.008 (lift 0.009, + hit flash 0.01, full frame 0.007) · box 0.011 (box base 0.012)  core ×1.75 ground ×1.73, faded core 124.7 ground 126.3 (samples 127.6 124.2 124.6 124.9 124.7; before the cast 124.6; waited 0 frames, left none)
+         vashil ult max lift 1.4, detail per frame (lost 0, min 0.65): f28 0.65 [noVfx 0.89 noFlash 0.97 flash k 0.07] (mean 195/135) · f29 0.75 [noVfx 0.94 noFlash 1 flash k 0.05] (mean 188/128)
+         box white per beat (VFX off): f28 0.019 (0.026) · f29 0.019 (0.026)
+ult vashil  ctr [1132,521] caster [790,540] victim [1130,540] (to caster 342, to victim 19)  body white: lift adds 0.01 (lift 0.013, + hit flash 0.014, full frame 0.008) · box 0.019 (box base 0.011)  core ×1.84 ground ×1.84, faded core 124.7 ground 126.3 (samples 124.9 124.8 124.7 124.7 124.7; before the cast 124.7; waited 0 frames, left none)
+combat_polish: PASS → /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_W1_combat_polish_w2close_o8.json

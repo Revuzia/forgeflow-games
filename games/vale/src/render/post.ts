@@ -114,14 +114,15 @@ const GROUND_TOP_REKEYED = 0.97;
  *  the core and the box are the same pale stone), and a tint before the tone map clips back to the same white. So the
  *  grade, AFTER the LUT, gives a near-white pixel inside a lift (display luma over LIFT_WARM_L[0..1], chroma under
  *  LIFT_WARM_C[0..1]) a warm top: its blue and green stop LIFT_WARM_B / LIFT_WARM_G under its red (the stopped sun's
- *  warm light; ruling 48: "the top of the beat is the ground's own warm tint, never a white-out"). Luma drops <= ~3 /
- *  255 (blue carries 0.07 of it). Outside a lift nothing changes. */
+ *  warm light; ruling 48: "the top of the beat is the ground's own warm tint, never a white-out"). Luma drops ~1 / 255
+ *  (blue carries 0.07 of it; green moves only where it sat within 0.03 of red). Outside a lift nothing changes. */
 const LIFT_WARM_L: readonly [number, number] = [0.84, 0.87];
 const LIFT_WARM_C: readonly [number, number] = [0.13, 0.17];
 const LIFT_WARM_B = 0.13, LIFT_WARM_G = 0.03;
 /** orch1 W2-A fix 2 (verifier r2: BRIDGE x1.93 on seed 7): on the ruling-46 ground the envelope's GROUND ratio gains
  *  this much more lift under the same top, so the beat's falloff ring rises with its core (the core already sits near the
- *  top): bodies, effects and the white gate are untouched */
+ *  top): bodies, effects and the white gate are untouched. Ruling 53: 1.3 -> 1.45 (the lift-bound ground under the core
+ *  rises ~0.5 luma: Nurrow's first-beat core 216.6 -> 217.9 with the warm top; T4 flash BRIDGE 1.94 -> 2.05-2.51) */
 const GROUND_LIFT_REKEYED = 1.45;
 /** CW1 r2 refix 1: what an ultimate's envelope gains when the chain has no bloom: its local lift, and the light effects add */
 const NO_BLOOM_LIFT_GAIN = 1.2;

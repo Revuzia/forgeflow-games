@@ -1,0 +1,139 @@
+
+rift high [w2close_s7]  frame p5/p50/p95/p99 39/95/129/136
+  lane      share  25.0 %  luma p5 100 p50 122 p95 132 p99 136  L* 51.5  sat 0.28
+  walkable  share  35.0 %  luma p5 98 p50 122 p95 132 p99 136  L* 51.5  sat 0.27
+  verge     share   4.3 %  luma p5 34 p50 78 p95 115 p99 126  L* 33  sat 0.17
+  jungle    share   3.1 %  luma p5 40 p50 70 p95 112 p99 122  L* 30  sat 0.18
+  camp      share   4.2 %  luma p5 58 p50 107 p95 123 p99 127  L* 45.5  sat 0.17
+  seat      share  10.0 %  luma p5 91 p50 123 p95 132 p99 136  L* 52  sat 0.22
+  shadow    share   0.6 %  luma p5 38 p50 70 p95 81 p99 94  L* 30  sat 0.32
+  brush     share   1.0 %  luma p5 25 p50 54 p95 105 p99 113  L* 22.5  sat 0.25
+  grass     share   2.4 %  luma p5 33 p50 69 p95 112 p99 124  L* 29.5  sat 0.23
+  clutter   share   0.2 %  luma p5 36 p50 81 p95 100 p99 104  L* 34.5  sat 0.28
+  wallFace  share  11.4 %  luma p5 30 p50 60 p95 81 p99 88  L* 25  sat 0.1
+  wallLip   share   6.9 %  luma p5 57 p50 86 p95 112 p99 127  L* 36.5  sat 0.12
+  wallTop   share  10.1 %  luma p5 51 p50 84 p95 114 p99 125  L* 36  sat 0.26
+  walls     share  18.3 %  luma p5 33 p50 69 p95 99 p99 120  L* 29.5  sat 0.1
+  edge      share   0.7 %  luma p5 75 p50 109 p95 129 p99 133  L* 46  sat 0.13
+  canopy    share  12.7 %  luma p5 32 p50 83 p95 124 p99 133  L* 35.5  sat 0.37
+  rock      share   0.2 %  luma p5 35 p50 75 p95 102 p99 122  L* 32  sat 0.18
+  landmark  share   2.3 %  luma p5 40 p50 82 p95 120 p99 133  L* 35  sat 0.17
+  water     share   0.1 %  luma p5 56 p50 88 p95 109 p99 115  L* 37.5  sat 0.14
+  ground    share  46.6 %  luma p5 58 p50 119 p95 131 p99 135  L* 50  sat 0.24
+  per spot walkable p5-p95 (* = not in the masks): lane0 101-130  lane1 106-133  lane2 89-131  jungle ---  centre 94-132  fight* 92-129
+  fighters {"px":282464,"top25":77.6,"p75":72,"p50":50,"p25":28.5,"p95":80.5,"p99":86.5,"gt90":0.0035,"lumaP95":198,"overLane":26.1,"per":{"ervet":{"px":16701,"top25":76.1,"p75":69,"p50":49,"p25":31,"gt90":0.0109},"kemdo":{"px":19115,"top25":76.6,"p75":69,"p50":50.5,"p25":32,"gt90":0.0025},"rishal":{"px":25869,"top25":78.6,"p75":72.5,"p50":55.5,"p25":28,"gt90":0.0095},"vashil":{"px":25599,"top25":79.3,"p75":76,"p50":52,"p25":34,"gt90":0.0042},"marund":{"px":78731,"top25":78.8,"p75":75.5,"p50":53.5,"p25":25,"gt90":0.0014},"odrum":{"px":13768,"top25":57.9,"p75":47.5,"p50":37.5,"p25":30,"gt90":0.0004},"burdam":{"px":16582,"top25":75.4,"p75":63,"p50":41,"p25":22.5,"gt90":0.0008},"hesmi":{"px":17798,"top25":77.5,"p75":63,"p50":37.5,"p25":23.5,"gt90":0.0079},"dunsom":{"px":33278,"top25":76.5,"p75":70.5,"p50":56.5,"p25":37,"gt90":0.0041},"tunlan":{"px":35023,"top25":75.4,"p75":73.5,"p50":59.5,"p25":28,"gt90":0}},"maxGt90":0.0109,"medianTop25":76.6}  wicks {"px":71092,"top25":61.6,"p95":66.5,"lumaP95":159}
+  env>180 {"env":11720656,"other":114,"lamp":0,"otherShare":0.00001,"lampShareOfFrame":0,"byClass":{"9":114}}
+  base0 at 11.8,55: plaza {"px":1692981,"satP50":0.2,"sat":0.21,"lumaP50":120,"lstarP50":50.5} structures {"px":233619,"lstarP95":77.5,"lumaP95":191,"above180":0.0968,"top25":72.5}
+  base1 at 158.3,55: plaza {"px":1661576,"satP50":0.3,"sat":0.29,"lumaP50":118,"lstarP50":50} structures {"px":265887,"lstarP95":67.5,"lumaP95":163,"above180":0.017,"top25":63}
+  flash 99.6 -> 223.7 2.25x
+  laneLstar: 51.5 PASS (50-58, ruling 46)
+  jungleLstar: 30 PASS (28-34, ruling 46)
+  wallFaceLstar: 25 PASS (24-30, ruling 46)
+  walkableSpread: 34 PASS (<= 45)
+  laneSpread: 32 PASS (<= 45)
+  frameP99: 136 PASS (<= 180, whole frame: ruling 14)
+  frameP99Env: 134 PASS (<= 160, environment pixels only: ruling 14)
+  env180: other 0.001 % of env, lamps 0.000 % of frame PASS
+  groundSat: 0.24 PASS (0.17-0.40; spec 0.22-0.35)
+  fighterTop25: 77.6 PASS (<= 80, ruling 46)
+  fighterBlowout: above L* 90: 0.35 % of fighter pixels PASS (< 2 %), worst fighter 1.1 %, p99 86.5
+  wickTop25: 61.6 (info: <= 65, WICK lane)
+  monsterTop25: 71.9 (info)
+  flash: 2.25x PASS (>= 2.0x)
+  tele_lane0: edge contrast p90 4.56 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.68 (info), 3730 px
+  tele_lane1: edge contrast p90 4.7 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.83 (info), 3641 px
+  tele_lane2: edge contrast p90 4.6 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.91 (info), 3902 px
+  tele_jungle: edge contrast p90 5.05 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1.98 PASS (>= 0.45), dE p50 32.61 (info), 2805 px
+  tele_centre: edge contrast p90 4.39 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 49.64 (info), 3893 px
+  tele_fight: edge contrast p90 4.26 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 48.34 (info), 3495 px
+  retiredB5: info (ruling 46 retired): lane luma p50 122 (was 85-100), frame p50 95 (was 55-75), frame p95 129 (was <= 130), fighters over lane 26.1 L* (was >= 30), fighter top-25 floor 77.6 (was >= 70)
+  base0_plaza: saturation 0.21 PASS (0.17-0.40; mean HSV, as groundSat)
+  base0_structure: L* p95 77.5 PASS (<= 80); luma p95 191 vs fighters 198 PASS; above 180: 9.7 %
+  base1_plaza: saturation 0.29 PASS (0.17-0.40; mean HSV, as groundSat)
+  base1_structure: L* p95 67.5 PASS (<= 80); luma p95 163 vs fighters 198 PASS; above 180: 1.7 %
+
+bridge high [w2close_s7]  frame p5/p50/p95/p99 35/102/129/138
+  lane      share  42.4 %  luma p5 102 p50 121 p95 131 p99 136  L* 51  sat 0.28
+  walkable  share  42.4 %  luma p5 102 p50 121 p95 131 p99 136  L* 51  sat 0.28
+  verge     share  34.6 %  luma p5 51 p50 80 p95 113 p99 133  L* 34  sat 0.22
+  brush     share   1.0 %  luma p5 23 p50 39 p95 71 p99 83  L* 15.5  sat 0.25
+  grass     share   4.2 %  luma p5 33 p50 71 p95 110 p99 122  L* 30.5  sat 0.3
+  wallFace  share   6.5 %  luma p5 26 p50 38 p95 50 p99 73  L* 15.5  sat 0.34
+  wallLip   share   3.0 %  luma p5 45 p50 81 p95 108 p99 119  L* 34.5  sat 0.2
+  walls     share   9.4 %  luma p5 28 p50 42 p95 100 p99 111  L* 17  sat 0.29
+  edge      share   0.2 %  luma p5 71 p50 99 p95 119 p99 122  L* 42  sat 0.23
+  rock      share   0.2 %  luma p5 32 p50 111 p95 134 p99 143  L* 47  sat 0.21
+  landmark  share   3.0 %  luma p5 37 p50 112 p95 130 p99 139  L* 47.5  sat 0.22
+  ground    share  77.0 %  luma p5 61 p50 110 p95 130 p99 135  L* 46.5  sat 0.25
+  per spot walkable p5-p95 (* = not in the masks): lane0 100-130  lane_mid 103-131  centre 103-131  fight* 98-129
+  fighters {"px":484410,"top25":77.5,"p75":71,"p50":47,"p25":26,"p95":79.5,"p99":86.5,"gt90":0.0021,"lumaP95":196,"overLane":26.5,"per":{"tunlan":{"px":67618,"top25":77.8,"p75":77.5,"p50":72.5,"p25":29,"gt90":0},"odrum":{"px":47681,"top25":79.4,"p75":68.5,"p50":44.5,"p25":28.5,"gt90":0.0093},"dunsom":{"px":50883,"top25":75.9,"p75":69.5,"p50":58,"p25":36.5,"gt90":0.0043},"vashil":{"px":27310,"top25":78.6,"p75":73,"p50":54,"p25":35,"gt90":0.0019},"marund":{"px":110696,"top25":76,"p75":72.5,"p50":49.5,"p25":22.5,"gt90":0},"burdam":{"px":61176,"top25":73.3,"p75":61,"p50":42,"p25":24,"gt90":0.0017},"kemdo":{"px":31209,"top25":73.7,"p75":67,"p50":52,"p25":32,"gt90":0.0027},"ervet":{"px":8836,"top25":70.6,"p75":61.5,"p50":42,"p25":31,"gt90":0.0071},"hesmi":{"px":79001,"top25":73.3,"p75":55,"p50":32.5,"p25":21.5,"gt90":0.0005}},"maxGt90":0.0093,"medianTop25":75.9}  wicks {"px":58837,"top25":57.4,"p95":62,"lumaP95":145}
+  env>180 {"env":7768069,"other":2,"lamp":0,"otherShare":0,"lampShareOfFrame":0,"byClass":{"2":2}}
+  base0 at 9.8,22: plaza {"px":1664519,"satP50":0.3,"sat":0.26,"lumaP50":124,"lstarP50":52} structures {"px":157806,"lstarP95":75,"lumaP95":185,"above180":0.0786,"top25":71.6}
+  base1 at 146.3,22: plaza {"px":1646288,"satP50":0.3,"sat":0.3,"lumaP50":115,"lstarP50":48.5} structures {"px":173763,"lstarP95":68.5,"lumaP95":165,"above180":0.0102,"top25":62.8}
+  flash 90.2 -> 226.3 2.51x
+  laneLstar: 51 PASS (50-58, ruling 46)
+  wallFaceLstar: 15.5 PASS (14-22, BRIDGE: the gorge, ruling 46)
+  walkableSpread: 29 PASS (<= 45)
+  laneSpread: 29 PASS (<= 45)
+  frameP99: 138 PASS (<= 180, whole frame: ruling 14)
+  frameP99Env: 134 PASS (<= 160, environment pixels only: ruling 14)
+  env180: other 0.000 % of env, lamps 0.000 % of frame PASS
+  groundSat: 0.25 PASS (0.17-0.40; spec 0.22-0.35)
+  fighterTop25: 77.5 PASS (<= 80, ruling 46)
+  fighterBlowout: above L* 90: 0.21 % of fighter pixels PASS (< 2 %), worst fighter 0.9 %, p99 86.5
+  wickTop25: 57.4 (info: <= 65, WICK lane)
+  flash: 2.51x PASS (>= 2.0x)
+  tele_lane0: edge contrast p90 4.65 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.53 (info), 3755 px
+  tele_lane_mid: edge contrast p90 4.42 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.12 (info), 3906 px
+  tele_centre: edge contrast p90 4.42 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 50.12 (info), 3906 px
+  tele_fight: edge contrast p90 4.67 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1.23 PASS (>= 0.45), dE p50 51.03 (info), 3026 px
+  retiredB5: info (ruling 46 retired): lane luma p50 121 (was 85-100), frame p50 102 (was 55-75), frame p95 129 (was <= 130), fighters over lane 26.5 L* (was >= 30), fighter top-25 floor 77.5 (was >= 70)
+  base0_plaza: saturation 0.26 PASS (0.17-0.40; mean HSV, as groundSat)
+  base0_structure: L* p95 75 PASS (<= 80); luma p95 185 vs fighters 196 PASS; above 180: 7.9 %
+  base1_plaza: saturation 0.3 PASS (0.17-0.40; mean HSV, as groundSat)
+  base1_structure: L* p95 68.5 PASS (<= 80); luma p95 165 vs fighters 196 PASS; above 180: 1.0 %
+
+fray high [w2close_s7]  frame p5/p50/p95/p99 57/117/131/143
+  lane      share  64.0 %  luma p5 87 p50 119 p95 127 p99 133  L* 50  sat 0.24
+  walkable  share  64.0 %  luma p5 87 p50 119 p95 127 p99 133  L* 50  sat 0.24
+  brush     share   0.4 %  luma p5 40 p50 72 p95 106 p99 113  L* 30.5  sat 0.15
+  grass     share   0.5 %  luma p5 27 p50 71 p95 121 p99 130  L* 30  sat 0.3
+  wallFace  share   3.4 %  luma p5 29 p50 59 p95 83 p99 100  L* 25  sat 0.38
+  wallLip   share   3.0 %  luma p5 44 p50 93 p95 106 p99 110  L* 39.5  sat 0.11
+  wallTop   share  18.5 %  luma p5 101 p50 116 p95 139 p99 143  L* 49  sat 0.15
+  walls     share   6.4 %  luma p5 31 p50 70 p95 104 p99 109  L* 30  sat 0.25
+  edge      share   0.3 %  luma p5 66 p50 93 p95 103 p99 105  L* 39.5  sat 0.05
+  landmark  share   8.8 %  luma p5 25 p50 87 p95 145 p99 151  L* 37  sat 0.17
+  lamp      share   0.0 %  luma p5 159 p50 162 p95 164 p99 164  L* 68.5  sat 0.59
+  ground    share  64.0 %  luma p5 87 p50 119 p95 127 p99 133  L* 50  sat 0.24
+  per spot walkable p5-p95 (* = not in the masks): centre 98-127  north 93-127  seatI 80-128  seatII 80-128  seatIII 87-128  seatIV 89-126  seatV 91-126  seatVI 90-125  seatVII 90-126  seatVIII 87-127  seatIX 82-126  seatX 76-128  fight* 85-126
+  fighters {"px":203715,"top25":78.5,"p75":73,"p50":45,"p25":24.5,"p95":79.5,"p99":89.5,"gt90":0.0089,"lumaP95":196,"overLane":28.5,"per":{"kemdo":{"px":41379,"top25":76.3,"p75":67,"p50":46,"p25":28,"gt90":0.0123},"tunlan":{"px":50837,"top25":78,"p75":77.5,"p50":51,"p25":26,"gt90":0},"burdam":{"px":33026,"top25":74.9,"p75":56,"p50":35,"p25":21,"gt90":0.0219},"marund":{"px":42874,"top25":78.4,"p75":75.5,"p50":49.5,"p25":21,"gt90":0.0035},"ervet":{"px":35599,"top25":75.3,"p75":67.5,"p50":46,"p25":28.5,"gt90":0.0119}},"maxGt90":0.0219,"medianTop25":76.3}  wicks null
+  env>180 {"env":26482986,"other":0,"lamp":8006,"otherShare":0,"lampShareOfFrame":0.0003,"byClass":{"1L":8006}}
+  flash 111.4 -> 224.6 2.02x
+  laneLstar: 50 PASS (50-58, ruling 46)
+  wallFaceLstar: 25 PASS (24-30, ruling 46)
+  walkableSpread: 40 PASS (<= 45)
+  laneSpread: 40 PASS (<= 45)
+  frameP99: 143 PASS (<= 180, whole frame: ruling 14)
+  frameP99Env: 142 PASS (<= 160, environment pixels only: ruling 14)
+  env180: other 0.000 % of env, lamps 0.030 % of frame PASS
+  groundSat: 0.24 PASS (0.17-0.40; spec 0.22-0.35)
+  fighterTop25: 78.5 PASS (<= 80, ruling 46)
+  fighterBlowout: above L* 90: 0.89 % of fighter pixels PASS (< 2 %), worst fighter 2.2 %, p99 89.5
+  flash: 2.02x PASS (>= 2.0x)
+  tele_centre: edge contrast p90 4.72 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.24 (info), 3425 px
+  tele_north: edge contrast p90 4.81 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.03 (info), 3826 px
+  tele_seatI: edge contrast p90 4.63 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.38 (info), 3703 px
+  tele_seatII: edge contrast p90 4.73 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.23 (info), 3819 px
+  tele_seatIII: edge contrast p90 4.72 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 38.37 (info), 3807 px
+  tele_seatIV: edge contrast p90 4.55 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 40.25 (info), 3812 px
+  tele_seatV: edge contrast p90 4.66 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.6 (info), 3216 px
+  tele_seatVI: edge contrast p90 4.72 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 38.8 (info), 2929 px
+  tele_seatVII: edge contrast p90 4.66 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.12 (info), 3223 px
+  tele_seatVIII: edge contrast p90 4.59 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.81 (info), 3817 px
+  tele_seatIX: edge contrast p90 4.49 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.81 (info), 3811 px
+  tele_seatX: edge contrast p90 4.67 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.7 (info), 3821 px
+  tele_fight: edge contrast p90 4.56 PASS (>= 3.0, WCAG 1.4.11), teleEdge p90 1 PASS (>= 0.45), dE p50 39.1 (info), 3244 px
+  retiredB5: info (ruling 46 retired): lane luma p50 119 (was 85-100), frame p50 117 (was <= 90), frame p95 131 (was <= 130), fighters over lane 28.5 L* (was >= 30), fighter top-25 floor 78.5 (was >= 70)
+
+report: /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/value_probe.json

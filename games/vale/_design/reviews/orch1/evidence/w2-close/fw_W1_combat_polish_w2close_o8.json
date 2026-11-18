@@ -1,0 +1,533 @@
+{
+ "at": "2026-11-18T07:37:30.453Z",
+ "defs": "content/vfx.json",
+ "ult": [
+  {
+   "def": "hesmi",
+   "caster": [
+    790,
+    540
+   ],
+   "victim": [
+    1130,
+    540
+   ],
+   "firstCtr": [
+    1132,
+    521
+   ],
+   "ctrToCaster": 342,
+   "ctrToVictim": 19,
+   "baseWhite": {
+    "white": 0.012,
+    "mean": 122.2
+   },
+   "baseCore": {
+    "all": 123.5,
+    "ground": 130.3,
+    "p90": 193.8,
+    "samples": [
+     {
+      "flash": 0,
+      "all": 123.5,
+      "ground": 130.2,
+      "p90": 192.4
+     },
+     {
+      "flash": 0,
+      "all": 123.9,
+      "ground": 130.4,
+      "p90": 193.8
+     },
+     {
+      "flash": 0,
+      "all": 123.6,
+      "ground": 130.3,
+      "p90": 194.8
+     },
+     {
+      "flash": 0,
+      "all": 123,
+      "ground": 130.2,
+      "p90": 193.7
+     },
+     {
+      "flash": 0,
+      "all": 122.8,
+      "ground": 130.3,
+      "p90": 194.2
+     }
+    ],
+    "pre": {
+     "flash": 0,
+     "all": 122,
+     "ground": 130,
+     "p90": 191.8
+    },
+    "waited": 90,
+    "left": []
+   },
+   "beats": [
+    {
+     "f": 35,
+     "w": 1.4,
+     "bodyPx": 3200,
+     "bodyWhiteBase": 0.002,
+     "bodyWhiteLift": 0.015,
+     "bodyWhiteFlash": 0.017,
+     "bodyWhiteFull": 0.009,
+     "boxWhite": 0.038,
+     "boxWhiteNoVfx": 0.032,
+     "flashK": 0.09,
+     "live": {
+      "lib_bolt_lumen": 3,
+      "lib_lob": 1,
+      "hesmi_ult_windup": 1,
+      "lib_ult_windup": 1,
+      "hesmi_ult_shadow": 1,
+      "lib_hit_phys_heavy": 2,
+      "lib_status_slow": 1,
+      "lib_shield_up": 1,
+      "hesmi_ult_shard": 1,
+      "lib_status_stun": 1
+     },
+     "detail": 0.45,
+     "detailFlash": 0.82,
+     "detailLift": 1.05,
+     "stdBase": 51.3,
+     "stdFull": 23.1,
+     "meanBase": 134,
+     "meanFull": 205,
+     "core": 217.9,
+     "coreGround": 221,
+     "ratio": 1.76,
+     "ratioGround": 1.7
+    },
+    {
+     "f": 36,
+     "w": 1.4,
+     "bodyPx": 3230,
+     "bodyWhiteBase": 0.001,
+     "bodyWhiteLift": 0.01,
+     "bodyWhiteFlash": 0.011,
+     "bodyWhiteFull": 0.009,
+     "boxWhite": 0.035,
+     "boxWhiteNoVfx": 0.031,
+     "flashK": 0.06,
+     "live": {
+      "lib_bolt_lumen": 3,
+      "lib_lob": 1,
+      "hesmi_ult_windup": 1,
+      "lib_ult_windup": 1,
+      "hesmi_ult_shadow": 1,
+      "lib_hit_phys_heavy": 2,
+      "lib_status_slow": 1,
+      "lib_shield_up": 1,
+      "hesmi_ult_shard": 1,
+      "lib_status_stun": 1
+     },
+     "detail": 0.52,
+     "detailFlash": 0.85,
+     "detailLift": 1,
+     "stdBase": 54.1,
+     "stdFull": 28.4,
+     "meanBase": 129,
+     "meanFull": 199,
+     "core": 214.1,
+     "coreGround": 215.7,
+     "ratio": 1.73,
+     "ratioGround": 1.66
+    }
+   ],
+   "maxWhite": 0.015,
+   "maxLiftAdds": 0.013,
+   "maxWhiteFlash": 0.017,
+   "maxWhiteFull": 0.009,
+   "maxBoxWhite": 0.038,
+   "firstRatio": 1.76,
+   "firstRatioGround": 1.7,
+   "maxLift": 1.4,
+   "detailLost": 1,
+   "minDetail": 0.45,
+   "firstCore": 217.9,
+   "liftP90": 225.7,
+   "baseP90": 193.8,
+   "groundClipped": true,
+   "clipBound": true,
+   "coreTarget": 2,
+   "clipTarget": true,
+   "firstCoreGround": 221,
+   "firstCoreBest": 221
+  },
+  {
+   "def": "nurrow",
+   "caster": [
+    790,
+    540
+   ],
+   "victim": [
+    1130,
+    540
+   ],
+   "firstCtr": [
+    1132,
+    521
+   ],
+   "ctrToCaster": 342,
+   "ctrToVictim": 19,
+   "baseWhite": {
+    "white": 0.012,
+    "mean": 122.5
+   },
+   "baseCore": {
+    "all": 124.7,
+    "ground": 126.3,
+    "p90": 131.8,
+    "samples": [
+     {
+      "flash": 0,
+      "all": 127.6,
+      "ground": 126.7,
+      "p90": 133.4
+     },
+     {
+      "flash": 0,
+      "all": 124.2,
+      "ground": 125.9,
+      "p90": 131.7
+     },
+     {
+      "flash": 0,
+      "all": 124.6,
+      "ground": 126.2,
+      "p90": 131.7
+     },
+     {
+      "flash": 0,
+      "all": 124.9,
+      "ground": 126.3,
+      "p90": 131.8
+     },
+     {
+      "flash": 0,
+      "all": 124.7,
+      "ground": 126.3,
+      "p90": 131.8
+     }
+    ],
+    "pre": {
+     "flash": 0,
+     "all": 124.6,
+     "ground": 126.2,
+     "p90": 131.7
+    },
+    "waited": 0,
+    "left": []
+   },
+   "beats": [
+    {
+     "f": 14,
+     "w": 1.4,
+     "bodyPx": 2650,
+     "bodyWhiteBase": 0.021,
+     "bodyWhiteLift": 0.009,
+     "bodyWhiteFlash": 0.01,
+     "bodyWhiteFull": 0.007,
+     "boxWhite": 0.011,
+     "boxWhiteNoVfx": 0.014,
+     "flashK": 0.07,
+     "live": {
+      "lib_bolt_lumen": 5,
+      "lib_lob": 3,
+      "nurrow_ult_windup": 1,
+      "lib_ult_windup": 1,
+      "nurrow_ult_lunge": 1,
+      "nurrow_ult_lull": 1,
+      "lib_hit_magic": 1
+     },
+     "detail": 0.54,
+     "detailFlash": 0.86,
+     "detailLift": 0.94,
+     "stdBase": 46.4,
+     "stdFull": 24.9,
+     "meanBase": 140,
+     "meanFull": 199,
+     "core": 217.7,
+     "coreGround": 219.1,
+     "ratio": 1.75,
+     "ratioGround": 1.73
+    },
+    {
+     "f": 15,
+     "w": 1.4,
+     "bodyPx": 2688,
+     "bodyWhiteBase": 0.017,
+     "bodyWhiteLift": 0.009,
+     "bodyWhiteFlash": 0.01,
+     "bodyWhiteFull": 0.004,
+     "boxWhite": 0.01,
+     "boxWhiteNoVfx": 0.015,
+     "flashK": 0.05,
+     "live": {
+      "lib_bolt_lumen": 5,
+      "lib_lob": 3,
+      "nurrow_ult_windup": 1,
+      "lib_ult_windup": 1,
+      "nurrow_ult_lunge": 1,
+      "nurrow_ult_lull": 1,
+      "lib_hit_magic": 1
+     },
+     "detail": 0.55,
+     "detailFlash": 0.9,
+     "detailLift": 0.95,
+     "stdBase": 48,
+     "stdFull": 26.3,
+     "meanBase": 137,
+     "meanFull": 196,
+     "core": 213.9,
+     "coreGround": 213.9,
+     "ratio": 1.72,
+     "ratioGround": 1.69
+    }
+   ],
+   "maxWhite": 0.009,
+   "maxLiftAdds": -0.008,
+   "maxWhiteFlash": 0.01,
+   "maxWhiteFull": 0.007,
+   "maxBoxWhite": 0.011,
+   "firstRatio": 1.75,
+   "firstRatioGround": 1.73,
+   "maxLift": 1.4,
+   "detailLost": 0,
+   "minDetail": 0.54,
+   "firstCore": 217.7,
+   "liftP90": 234.7,
+   "baseP90": 131.8,
+   "groundClipped": true,
+   "clipBound": true,
+   "coreTarget": 2,
+   "clipTarget": true,
+   "firstCoreGround": 219.1,
+   "firstCoreBest": 219.1
+  },
+  {
+   "def": "vashil",
+   "caster": [
+    790,
+    540
+   ],
+   "victim": [
+    1130,
+    540
+   ],
+   "firstCtr": [
+    1132,
+    521
+   ],
+   "ctrToCaster": 342,
+   "ctrToVictim": 19,
+   "baseWhite": {
+    "white": 0.011,
+    "mean": 122.8
+   },
+   "baseCore": {
+    "all": 124.7,
+    "ground": 126.3,
+    "p90": 131.8,
+    "samples": [
+     {
+      "flash": 0,
+      "all": 124.9,
+      "ground": 126.3,
+      "p90": 131.7
+     },
+     {
+      "flash": 0,
+      "all": 124.8,
+      "ground": 126.3,
+      "p90": 131.7
+     },
+     {
+      "flash": 0,
+      "all": 124.7,
+      "ground": 126.3,
+      "p90": 131.8
+     },
+     {
+      "flash": 0,
+      "all": 124.7,
+      "ground": 126.3,
+      "p90": 131.9
+     },
+     {
+      "flash": 0,
+      "all": 124.7,
+      "ground": 126.2,
+      "p90": 131.8
+     }
+    ],
+    "pre": {
+     "flash": 0,
+     "all": 124.7,
+     "ground": 126.3,
+     "p90": 131.7
+    },
+    "waited": 0,
+    "left": []
+   },
+   "beats": [
+    {
+     "f": 28,
+     "w": 1.4,
+     "bodyPx": 2888,
+     "bodyWhiteBase": 0.003,
+     "bodyWhiteLift": 0.013,
+     "bodyWhiteFlash": 0.014,
+     "bodyWhiteFull": 0.008,
+     "boxWhite": 0.019,
+     "boxWhiteNoVfx": 0.026,
+     "flashK": 0.07,
+     "live": {
+      "lib_lob": 3,
+      "vashil_ult_windup": 1,
+      "lib_ult_windup": 1,
+      "lib_hit_magic": 1,
+      "vashil_passive_hum": 1,
+      "vashil_ult_toll": 1
+     },
+     "detail": 0.65,
+     "detailFlash": 0.89,
+     "detailLift": 0.97,
+     "stdBase": 51.4,
+     "stdFull": 33.7,
+     "meanBase": 135,
+     "meanFull": 195,
+     "core": 229.6,
+     "coreGround": 233,
+     "ratio": 1.84,
+     "ratioGround": 1.84
+    },
+    {
+     "f": 29,
+     "w": 1.4,
+     "bodyPx": 2938,
+     "bodyWhiteBase": 0.007,
+     "bodyWhiteLift": 0.012,
+     "bodyWhiteFlash": 0.013,
+     "bodyWhiteFull": 0.007,
+     "boxWhite": 0.019,
+     "boxWhiteNoVfx": 0.026,
+     "flashK": 0.05,
+     "live": {
+      "lib_lob": 3,
+      "vashil_ult_windup": 1,
+      "lib_ult_windup": 1,
+      "lib_hit_magic": 1,
+      "vashil_passive_hum": 1,
+      "vashil_ult_toll": 1
+     },
+     "detail": 0.75,
+     "detailFlash": 0.94,
+     "detailLift": 1,
+     "stdBase": 52.5,
+     "stdFull": 39.4,
+     "meanBase": 128,
+     "meanFull": 188,
+     "core": 229.1,
+     "coreGround": 233,
+     "ratio": 1.84,
+     "ratioGround": 1.84
+    }
+   ],
+   "maxWhite": 0.013,
+   "maxLiftAdds": 0.01,
+   "maxWhiteFlash": 0.014,
+   "maxWhiteFull": 0.008,
+   "maxBoxWhite": 0.019,
+   "firstRatio": 1.84,
+   "firstRatioGround": 1.84,
+   "maxLift": 1.4,
+   "detailLost": 0,
+   "minDetail": 0.65,
+   "firstCore": 229.6,
+   "liftP90": 234.7,
+   "baseP90": 131.8,
+   "groundClipped": true,
+   "clipBound": true,
+   "coreTarget": 2,
+   "clipTarget": true,
+   "firstCoreGround": 233,
+   "firstCoreBest": 233
+  }
+ ],
+ "cc": null,
+ "flash": [],
+ "hold": [],
+ "pass": true,
+ "fails": [],
+ "quality": "high",
+ "slot": "ult",
+ "players": [
+  {
+   "seat": 0,
+   "def": "lisvel",
+   "team": 0,
+   "entity": 1
+  },
+  {
+   "seat": 1,
+   "def": "ardit",
+   "team": 0,
+   "entity": 2
+  },
+  {
+   "seat": 2,
+   "def": "dunsom",
+   "team": 0,
+   "entity": 3
+  },
+  {
+   "seat": 3,
+   "def": "ilsheta",
+   "team": 0,
+   "entity": 4
+  },
+  {
+   "seat": 4,
+   "def": "odrum",
+   "team": 0,
+   "entity": 5
+  },
+  {
+   "seat": 5,
+   "def": "kemdo",
+   "team": 1,
+   "entity": 6
+  },
+  {
+   "seat": 6,
+   "def": "tunlan",
+   "team": 1,
+   "entity": 7
+  },
+  {
+   "seat": 7,
+   "def": "hesmi",
+   "team": 1,
+   "entity": 8
+  },
+  {
+   "seat": 8,
+   "def": "rishal",
+   "team": 1,
+   "entity": 9
+  },
+  {
+   "seat": 9,
+   "def": "burdam",
+   "team": 1,
+   "entity": 10
+  }
+ ],
+ "logs": []
+}
