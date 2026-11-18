@@ -178,41 +178,54 @@
     "tris_window_L": 220,
     "tris_ribbons": 420,
     "tris_cap_ribbon": 340,
-    "validate_odrum": "18916->18904"
+    "validate_odrum": "18916->18910"
   },
-  "uv_coverage": 0.596,
+  "uv_coverage": 0.595,
   "bake": {
-    "base": 4.5,
-    "rough_metal": 3.39,
-    "normal": 2.56,
-    "ao": 2.84,
-    "normal_fixed_px": 44419,
-    "projection": 48.67,
-    "pack_save": 48.81,
-    "total": 62.35
+    "base": 2.82,
+    "rough_metal": 2.49,
+    "normal": 1.63,
+    "ao": 2.0,
+    "normal_fixed_px": 46238,
+    "projection": 35.64,
+    "pack_save": 35.79,
+    "total": 44.84
   },
-  "tris": 19344,
+  "tris": 19350,
   "mesh_top_m": 1.887,
-  "glb_bytes_raw": 2715048,
+  "glb_bytes_raw": 2725840,
   "optimize": {
     "ok": true,
-    "before": 2715048,
-    "after": 1008912,
+    "before": 2725840,
+    "after": 1013576,
     "q_base": 54
   },
-  "glb_bytes": 1008912,
+  "zone_grade": {
+    "ok": true
+  },
+  "glb_bytes": 1013652,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_noon_fair.glb (985 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: odrum_noon_fair_base 2048x2048 225K, odrum_noon_fair_normal 512x512 48K, odrum_noon_fair_orm 512x512 78K",
-      "  skinned meshes: odrum_accent(224v), odrum_noon_fair(18371v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_noon_fair.glb (990 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: odrum_noon_fair_base 2048x2048 230K, odrum_noon_fair_normal 512x512 49K, odrum_noon_fair_orm 512x512 78K",
+      "  skinned meshes: odrum_accent(224v), odrum_noon_fair(18289v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_hang_l x_pot_l x_hang_r x_pot_r x_pellet x_sling_pouch thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19344; bind-pose bounds (three units, Y up): 2.26 x 1.89 x 0.46; facing (0.00, 1.00); head bone y 1.54; runRefSpeed 3.35",
+      "  tris: 19350; bind-pose bounds (three units, Y up): 2.26 x 1.89 x 0.46; facing (0.00, 1.00); head bone y 1.54; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/odrum/odrum_noon_fair_splash.png",
+      "portrait": "art/out/fighters/odrum/odrum_noon_fair_portrait.png"
+    },
+    "seconds": {
+      "splash": 52.73,
+      "portrait": 8.69
+    }
   },
   "three_qa": {
     "ok": true,
@@ -243,23 +256,27 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/odrum/three_odrum_noon_fair.png",
-    "seconds": 6.7,
+    "seconds": 5.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.32,
-      "model": 4.8,
-      "lows_bind": 4.52,
-      "uv": 7.72,
-      "bake": 62.36,
-      "export": 0.06,
-      "optimize": 0.46,
-      "load_test": 0.1,
-      "three_qa": 6.93
+      "materials": 0.17,
+      "model": 2.69,
+      "lows_bind": 2.33,
+      "uv": 3.87,
+      "bake": 44.84,
+      "export": 0.09,
+      "optimize": 0.55,
+      "zone_grade": 0.26,
+      "wrist_weights": 0.13,
+      "zero_metal": 0.03,
+      "load_test": 0.11,
+      "render": 61.66,
+      "three_qa": 5.88
     },
-    "total_s": 87.33
+    "total_s": 122.66
   },
   "run_ref_speed": 3.35,
   "height_m": 1.82
