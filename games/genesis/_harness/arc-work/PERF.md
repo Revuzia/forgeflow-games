@@ -2494,3 +2494,10 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   looks small never runs a major GC for external memory. Candidate (not built): release big buffers eagerly via
   transfer (`structuredClone(buf, {transfer})` / postMessage transfer to detach) when a page is disposed.
 - city lights acc (9 MB x lit faces) could be a Float16 / sparse tile map; recycle sets could be capped lower (96).
+### 4. BEFORE / AFTER (same scene: babel 307987276, landing camera y0, 480x274 SwiftShader, `?lazyacc=0` vs default)
+- post-GC ArrayBuffer backing store (CDP getHeapUsage): 319.4 MB -> 286.8 MB (-32.6 MB); JS objects 32 MB both. by owner
+  line: city lights 67.5 -> 31.5 MB. (performance.memory 347 both: it is read before the collector frees the buffers.)
+- Gate: `npm run check` 1048 pass 0 fail (detban clean), `npm run build` exit 0 (s27/check.log, build3.log).
+- NEXT: Mac round: read `js heap by owner` (unattributed = dead buffers + unlisted). If unattributed is 500+ MB, add the
+  eager-release of disposed page buffers; if terrain pages dominate, decide the FRESH_EXTRA / 0.75 page allowance.
+- Probes: arc-work/probe-s21.mjs --heapsnap=F --alloc=N --abtrace=1 --eval=s27-mem.js; s27-heap.mjs, s27-ab.mjs, s27-ab.sh.
