@@ -1380,11 +1380,54 @@ def spread_wrist_twist(skel: Skeleton, pose: dict, prev: dict | None = None, k: 
     return out
 
 
+WRIST_SWING_MAX = 60.0      # degrees: the most a hand bends off the forearm axis (orch1 W2-C FU-10)
+# Lisvel's hands turn furthest about the arm (her clips read 130 deg after the 0.5 share): her forearm takes 0.65
+WRIST_TWIST_SHARE_FIGHTER = {"lisvel": 0.65}
+
+
+def clamp_wrist_swing(skel: Skeleton, pose: dict, prev: dict | None = None, max_deg: float = WRIST_SWING_MAX) -> dict:
+    """Clamp each hand's bend off the forearm axis (the swing part of its turn) to `max_deg` (orch1 W2-C, FU-10).
+
+    A linear-blend wrist folds once the hand bends far past a real wrist's range (Lisvel's clips bent 113-119 deg; the
+    hand-integrity probe read the wrist band at 0.10x rest). D = R_h B_h R_h^-1 = swing * twist (twist about the forearm's
+    +Y); the swing is slerped back to `max_deg`, the twist kept. The prop under the hand takes the difference, so a held
+    weapon keeps its world turn: B_p' = R_p^-1 (B_h'^-1 B_h) R_p B_p. art/tools/wrist_swing.mjs applies the same to a
+    shipped GLB."""
+    out = dict(pose)
+    lim = math.radians(max_deg)
+    for s in ("L", "R"):
+        f, h, pr = f"forearm.{s}", f"hand.{s}", f"prop.{s}"
+        if h not in skel.local or skel.parent.get(h) != f:
+            continue
+        Rh = skel.local[h].to_quaternion()
+        Bh = Euler([math.radians(a) for a in pose.get(h, (0, 0, 0))], "XYZ").to_quaternion()
+        D = Rh @ Bh @ Rh.inverted()
+        n = math.hypot(D.y, D.w)
+        t = Quaternion((D.w / n, 0.0, D.y / n, 0.0)) if n > 1e-9 else Quaternion()
+        sw = D @ t.inverted()
+        if sw.w < 0:
+            sw = Quaternion((-sw.w, -sw.x, -sw.y, -sw.z))
+        ang = sw.angle
+        if ang <= lim:
+            continue
+        sw2 = Quaternion().slerp(sw, lim / ang)
+        Bh2 = Rh.inverted() @ sw2 @ t @ Rh
+        out[h] = Skeleton.euler_of(Bh2.to_matrix(), (prev or {}).get(h))
+        if pr in skel.local and skel.parent.get(pr) == h:
+            Rp = skel.local[pr].to_quaternion()
+            Bp = Euler([math.radians(a) for a in pose.get(pr, (0, 0, 0))], "XYZ").to_quaternion()
+            Bp2 = Rp.inverted() @ (Bh2.inverted() @ Bh) @ Rp @ Bp
+            out[pr] = Skeleton.euler_of(Bp2.to_matrix(), (prev or {}).get(pr))
+    return out
+
+
 def sample_clip(skel: Skeleton, clip: Clip, chains: list | None = None) -> list:
     poses = [resolve(skel, clip.sample(f / clip.frames)) for f in range(clip.frames + 1)]
+    k = WRIST_TWIST_SHARE_FIGHTER.get(skel.arm.get("vale_fighter", ""), WRIST_TWIST_SHARE)
     spread = []
     for p in poses:
-        spread.append(spread_wrist_twist(skel, p, spread[-1] if spread else None))
+        q = spread_wrist_twist(skel, p, spread[-1] if spread else None, k)
+        spread.append(clamp_wrist_swing(skel, q, spread[-1] if spread else None))
     poses = spread
     if clip.loop:
         poses[-1] = poses[0]

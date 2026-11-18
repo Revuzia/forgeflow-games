@@ -384,9 +384,9 @@ def build(spec, args, skin=None) -> dict:
         with T.step("zone_grade"):
             report["zone_grade"] = zone_grade(sid, glb, T0)
         # orch1 W2-C FU-10: the wrist weights (art/tools/hand_weights.mjs): the hand share of every forearm + hand vertex
-        # remapped to smoothstep(0.1, 0.5, h), so the palm is rigid and the wrist blend spreads below it (bone heat split
-        # the palm of five fighters; _harness/clip_probe_hands.mjs gates it). Run once, on the exported GLB, so a rebuild
-        # matches the shipped files the tool patched.
+        # smoothed over the wrist band (bone heat left steps of up to 0.4 between neighbours on five fighters;
+        # _harness/clip_probe_hands.mjs gates it). Run once, on the exported GLB, so a rebuild matches the shipped files
+        # the tool patched; rigid hands (no share strictly between 0 and 1) are untouched.
         if getattr(spec, "KIND", "fighter") == "fighter":
             with T.step("wrist_weights"):
                 import subprocess
