@@ -1,0 +1,68 @@
+{
+  "lane": "W2-B",
+  "round": 2,
+  "verifier": "Opus 5.5 adversarial (VFX / combat feel), independent",
+  "at": "2026-11-17 23:48 CST",
+  "head": "7bfa4b44a (src/render, content/vfx.json, tools/vfx as committed in a435c5aa1 / 062161521; only src/sim/bots/bot.ts dirty in the tree, another lane's)",
+  "setup": "own vite on :5253 (_harness/_tmp_vfy_w2b_vite.config.ts, private dep cache, hmr off), stopped after; every run through art/blender/common/heavy.py",
+  "pass": false,
+  "score": 7.1,
+  "safeToShip": true,
+  "blockers": [],
+  "gates": {
+    "clutter (RIFT High s7/11/23, 30 peak 5v5 frames each, _harness/_tmp_vfy_w2b_r2_clutter.json)": {
+      "medianOcclusion": [0.111, "<=0.25", "PASS (per seed 0.064 / 0.111 / 0.100)"],
+      "worstRunAbove60pctMs": [100, "<=300", "PASS"],
+      "hotBodyMax_Lstar85": [0.262, "<=0.30", "PASS (ervet s11; s7 0.111, s23 0.182; over30 = 0 on every seed)"],
+      "enemyTelegraphEdge": [0.554, ">=0.45", "PASS on this run (per seed 0.554 / 0.579 / 0.571; boundary only 0.848 / 0.762 / 0.777) but VOLATILE: the implementer's run on the same render code read 0.552 / 0.412 / 0.382 and r1 0.426 / 0.394 / 0.417; the bot sim (other lane) changes which fights are scanned"],
+      "selfRing": ["90/90", "100%", "PASS"],
+      "vfxTrisPeak": [21952, "<=35000", "PASS"],
+      "trisPeak": [343467, "<=500000", "PASS"],
+      "drawsPeak": [219, "<=450", "PASS"],
+      "programsPeak": [37, "<= W2-A 37", "PASS"],
+      "particlesPeak": "1024/2000",
+      "consoleErrors": 0,
+      "note": "all 90 peak frames scripted (0 natural); plan allows scripted moves"
+    },
+    "combat_polish ult(6),cc,flash,hold (_harness/_reports/fw_W1_combat_polish_vfy_w2b_r2.json, log _harness/_tmp_vfy_w2b_r2_polish.log)": "FAIL (4): rishal victim box 0.632 white (>0.35); vashil victim box 0.418 (>0.35); hesmi lift whitens body +0.125 (>0.10); hesmi first-beat core luma 216.1 < clip 218 (ruling 51). Core per ruling 51 met by kemdo, rishal, tunlan, nurrow, vashil. cc PASS (7 plates, fade 17-83 ms), flash PASS (tunlan cone, burdam circle: middle <=0.2, edge 0.5), hold PASS (disc kemdo 233, rishal 200, tunlan 200 ms)",
+    "VFX-O8 hesmi/nurrow/vashil": "FAIL: detailLost 1 / 0 / 1 (bar <=1 PASS) but body min 0.45 / 0.54 / 0.36 (bar >=0.45): Vashil f28 0.36 (noVfx 0.87, noFlash 0.96) reproduces the implementer's final-run 0.36, so it is not noise",
+    "grep #17181B outside Shade": "PASS: content/vfx.json has 17 ink refs, all in lib_burst_shade, lib_longshade_slam, lib_ult_shade, lib_bolt_shade, lib_orb_shade, lib_zone_shade, lib_hit_true",
+    "dust A/B (own gallery, content/vfx.json redefined vs the dev catalog 2026.11.8)": "PASS: _harness/_tmp_vfy_w2b_r2_shots/dust/vfy_w2b_r2_dust_content_01.png vs vfy_w2b_r2_dust_01.png: root and fear stars black -> faint grey outline; lib_wick_death black blot -> faint warm dust; summon specks dust. Heavy-hit chalk crack star visible at 0.25 and 0.45 s, gone by 0.8 s (VFX-O7 now evidenced)",
+    "real-kill death": "CARRIED from r1 (PASS: death VFX and role death on the death frame, head drop 0.38 at 0.5 s): src/render/actors.ts, director.ts, ink.ts and the lib_death_shatter def are byte-identical since 104224815",
+    "budgets": "tris 343k <= 500k, draws 219 <= 450, programs 37 <= 40 and not above W2-A, no new program (shaders.ts change is uniform math only)"
+  },
+  "doneWhen": {
+    "clutter gate": "holds on this run (telegraph edge volatile across runs)",
+    "probe_combat_polish all sections pass; O8 detailLost <=1 and body min >=0.45": "NOT MET (4 fails; Vashil body min 0.36)",
+    "grep + dust A/B": "met",
+    "real-kill death on the death tick": "met (carried, code unchanged)",
+    "VFX tris / draws / programs": "met",
+    "verifier >= 7.5 no blocker": "not met (7.1)"
+  },
+  "referenceTargets": {
+    "10 shaped effects": ["partly", "_harness/_tmp_vfy_w2b_r2_shots/clutter/clutter_s7_look15_t8726.png (green dome, chain lines, rings read as clean shapes; the white glare from r1 is gone) vs clutter_s11_look25_t8736.png (5-6 stacked pink/orange rings over sundry_mae / stillwater_jo / dunmoor_ash merge into one wash)"],
+    "11 effects short": ["partly", "hold 200-233 ms; heavy hit and wick death clear by 0.8 s in _harness/_tmp_vfy_w2b_r2_shots/dust/vfy_w2b_r2_dust_content_01.png; lib_death_shatter still leaves dark brown chip smoke and a dark scorch disc at 0.8 s (same sheet, row 1)"],
+    "12 caster colour, white-hot cores": ["partly", "caster hues read (pink, green, violet) in clutter_s11_look20_t8731.png; Hesmi core 216.1 < 218; Rishal/Vashil victim box goes 0.63 / 0.42 white (lifted pale stone, not the core)"],
+    "13 ground indicators thin and flat": ["partly", "rings and dial ticks thin and flat (clutter_s23_look05_t8716.png), but the enemy overlay disc under tilda/sundry in that frame and under clowin_k in clutter_s11_look20_t8731.png is a heavy peach fill with a thick black outline (renderer.ts overlay, not this lane's file); edge 0.554 here, 0.382 on the implementer's run"],
+    "14 hit feedback on target": ["partly", "flash, burst and the chalk crack star in vfy_w2b_r2_dust_content_01.png row 2; damage numbers belong to W2-E and are not in probe frames"],
+    "15 kill lands": ["partly", "T3 death shatter + collapse on the death tick (r1 capture, code unchanged); no top-centre banner (W2-E)"],
+    "notMetCount": 0
+  },
+  "originality": "VALE's own vocabulary: dial-tick ground rings, chalk crack star with a lit glint, warm-grey dust, lantern/glass shells, slate ink forms; no reference characters, icons, layouts or abilities; no reference frames stored",
+  "sensitivity": "no hoods, skulls, eyes or tear streaks introduced. Watch item (pre-existing, not this lane's change): lib_summon_rise's dissolving pillar at 0.45 s has noise holes that can read as a face at gallery zoom (_harness/_tmp_vfy_w2b_r2_shots/dust/summon_045_zoom.png); same in the old catalog",
+  "problems": [
+    "combat_polish 4 fails: Rishal box 0.632, Vashil box 0.418, Hesmi lift body white +0.125, Hesmi core 216.1 < 218 (box and body white trace to post.ts ground top 0.97, ruling 48, outside this lane)",
+    "Vashil ult victim body min 0.36 < 0.45 on f28 (reproduced across two independent runs)",
+    "Enemy telegraph edge passes here (0.554) but failed on the implementer's run (0.382): gate result depends on bot behaviour; needs a fixed-scene or multi-run median before it is trusted, and the overlay interior fill (renderer.ts) is the lever",
+    "dist-catalog 2026.11.8 predates W2-B: the dev/served catalog still draws black root/fear stars and the black wick-death blot until npm run content rebuilds it (probes redefine from content/vfx.json, so their numbers reflect content, not the served catalog)",
+    "lib_death_shatter keeps dark #4A443D/#5B544B chip smoke at alpha 0.9 and a dark scorch at 0.8 s",
+    "Crack lines #4A453D (L* ~29) deviate from the plan's L* 45-55; accepted by ruling 51 with the chalk glint, and visible in capture"
+  ],
+  "safeToShipReason": "every player-visible measure is equal or better than r1/pre-lane: hot body 0.355 -> 0.262 (worst seen), O8 Hesmi/Nurrow detail better, Vashil 0.40 -> 0.36 is one frame within run noise at detailLost 1 in both; ink blots gone in content; budgets unchanged or lower",
+  "artefacts": [
+    "_harness/_tmp_vfy_w2b_r2_clutter.json, _harness/_tmp_vfy_w2b_r2_clutter.log",
+    "_harness/_tmp_vfy_w2b_r2_shots/clutter/*.png (18 looks + no-fx pairs)",
+    "_harness/_tmp_vfy_w2b_r2_polish.log, _harness/_reports/fw_W1_combat_polish_vfy_w2b_r2.json",
+    "_harness/_tmp_vfy_w2b_r2_gallery.mjs, _harness/_tmp_vfy_w2b_r2_shots/dust/"
+  ]
+}
