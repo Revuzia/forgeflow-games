@@ -821,3 +821,5 @@ Lane AI, round 4 (orch1 W1-A opponents / W3-A), continuing ruling 55 from HEAD 0
 - **Veteran dither:** 1.20 / 1.38 / 1.56 across seed sets (bar 1).
 - **Veteran peel** within 1.5 s.
 - **FRAY stays.**
+
+**Gates (all five fighters):** hand integrity 0 edges out on every rebuilt GLB; `npm run content` OK (0 warnings); units_gate (evidence/units/units_gate_w3b_r57.json, 3 seeds x 2 seatings, one cold-start run timed out) fails as the roster did before this lane: 27 of its 28 fails are the vfy_w2a_r3 set (colour leftovers outside this lane, ruling 49), Odrum-Ulkro improved (dE 15.9 -> 24.0), and one is new: Ardit-Odrum near-neutral dE 19.1 (< 20; Odrum's top cluster moved from HSV 46/0.49 to 47/0.42 with the open eyes on the mask). Reported, not recoloured (out of scope).
