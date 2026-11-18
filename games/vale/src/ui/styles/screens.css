@@ -656,6 +656,7 @@
 .bindgroup__title { margin-bottom: var(--u); }
 .bindgroup__rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--u) calc(3 * var(--u)); }
 .bindrow { display: flex; align-items: center; justify-content: space-between; gap: calc(2 * var(--u)); min-height: calc(5 * var(--u)); }
+.bindrow > span:first-child { white-space: nowrap; }
 .cvd { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--u); width: 100%; }
 .cvd__opt { display: flex; flex-direction: column; gap: var(--u); padding: calc(1.5 * var(--u)); text-align: left; }
 .cvd__opt:hover, .cvd__opt:focus-visible { background: var(--plate-bg-raised); box-shadow: var(--ring); }
