@@ -4512,21 +4512,23 @@ export function generate(parcel, opts) {
     for (const bx of leafBoxes) if (bx.fl === f && segHitsRect(au, av, bu, bv, bx.u0 - LEAF_SEE_M, bx.v0 - LEAF_SEE_M, bx.u1 + LEAF_SEE_M, bx.v1 + LEAF_SEE_M)) return true;
     return false;
   };
-  const standSees = (R, f, u, v) => {                        // the room's walk sample nearest (u, v) (no limit, like standFor) sees (u, v) past the open leaves
+  const standSees = (R, f, u, v) => {                        // the room's stand point for (u, v) sees it past the open leaves
     if (!leafBoxes.some((bx) => bx.fl === f)) return true;
-    const seenF = wk.seen[f], reg = floors[f].region;
-    let best = -1, bd = Infinity;
+    // (W10 R3A) the stand point is what loot.js standFor (and the selftest's leafsee) hand out: the nearest point of the room's walk RECTS - the union of its walk
+    // samples' squares (GRID wide) - so the nearest point over those squares; and the nearest sample's centre as before (isla_viva s1 coco_village@p16: a stock carton
+    // by a door, seen from the sample's centre, hidden from the rect's edge)
+    const seenF = wk.seen[f], reg = floors[f].region, h = GRID / 2;
+    let best = -1, bd = Infinity, pu = u, pv = v, cd = Infinity, ck = -1;
     for (let k = 0; k < NS; k++) {
       if (!seenF[k] || sCell[k] < 0 || reg[sCell[k]] !== R.ri) continue;
-      const a = k % NU, b = (k - a) / NU, dx = su(a) - u, dz = sv(b) - v, dd = dx * dx + dz * dz;
-      if (dd < bd - 1e-12) { bd = dd; best = k; }
+      const a = k % NU, b = (k - a) / NU, x = su(a), z = sv(b), dx = x - u, dz = z - v, dd = dx * dx + dz * dz;
+      if (dd < cd - 1e-12) { cd = dd; ck = k; }
+      const qx = Math.min(x + h, Math.max(x - h, u)), qz = Math.min(z + h, Math.max(z - h, v)), qd = (qx - u) * (qx - u) + (qz - v) * (qz - v);
+      if (qd < bd - 1e-12) { bd = qd; best = k; pu = qx; pv = qz; }
     }
     if (best < 0) return true;                               // (no walk of its own: the reach test decides, as before)
-    const a = best % NU, b = (best - a) / NU;
-    // (W10 R3A) and from the point of that sample's square nearest the item: loot.js standFor (and the selftest's leafsee) stand on the walk RECTS, which reach half a
-    // sample past the sample's centre (isla_viva s1 coco_village@p16: a stock carton by a door, seen from the centre, hidden from the rect's edge)
-    const cu = Math.min(su(a) + GRID / 2, Math.max(su(a) - GRID / 2, u)), cv = Math.min(sv(b) + GRID / 2, Math.max(sv(b) - GRID / 2, v));
-    return !leafHides(f, su(a), sv(b), u, v) && !leafHides(f, cu, cv, u, v);
+    const a = ck % NU, b = (ck - a) / NU;
+    return !leafHides(f, su(a), sv(b), u, v) && !leafHides(f, pu, pv, u, v);
   };
   (() => {                                                   // (loot: own function, see above)
   const lootMain = roomRecs.filter((q) => q.kind !== "hall").sort((x, y) => y.cells.length - x.cells.length || x.floor - y.floor || x.ri - y.ri)[0] || roomRecs[0];
