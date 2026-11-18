@@ -830,3 +830,70 @@ Lane AI, round 4 (orch1 W1-A opponents / W3-A), continuing ruling 55 from HEAD 0
 **Hesmi (verifier problem, face only):** the forehead's black dash was a pinched mesh sliver where the face's two crowns met (it shows with every map stripped): the crown is trimmed under the hood's hem (z 2.205), and the face part's budget 700 -> 900 tris so the decimated lip and nose facets no longer shade as dark slivers. GLBs: base 20,076 tris 1117 KiB, Gorgewalk 21,718 / 1109 KiB, Shadeprint 20,076 / 1000 KiB. Six cards re-rendered once and ship (forehead clean). The hood's cream islands and lining stripes are zone-grade / hood texture, not the named face defect: not touched.
 **units_gate (blocker 2):** the full gate (units_gate_w3b_r2.json) has the same 28 fails as verify_models_r1. Same-tree A/B on ardit + odrum (w3b_r2_odrum_pre / _cur.json, only Odrum's GLB swapped, pre-lane b77d761f6 vs now): the whole difference is ONE capture (seed 7, seating 0, half 1), where Odrum's silhouette is 128 px with the pre-lane GLB and 65 px with the new one. The rendered frames match pixel for pixel (no changed pixel > 20); the gate keeps the largest connected component of the silhouette, and there his raised yoke pole runs behind his own name label and health bar, which cut it into two pieces with one GLB and not the other. The 65 px piece is the cap and jars only, so its top cluster (b* 8.8) sits dE 19.1 from Ardit. The eyes are 2-3 px at that camera and not the cause. Not fixed in the model (a recolour or a pose change to move a measurement is out of scope); the fix belongs in the gate (hide name labels and bars for the shown/hidden captures), handed to the units lane. Ruling 49's exposure table is unchanged.
 **Not reworked (verifier passed them):** Ulkro's fused glove (probe min 0.401), Odrum's small fist, Burdam's soft finger rolls (GLB at 1171.5 of 1172 KiB), Lisvel (her Gorgewalk face is one tone on the model; the two tones are the portrait's lighting).
+
+## 59. The calm-walk latch is a RIFT rule; BRIDGE's one road walks as it did. The pace gap is games that reach 30:00, and no endgame, objective or defence knob tried here closes it (lead, by delegation, 2026-11-18)
+
+Lane AI, fix round 3 (orch1 W1-A opponents / W3-A), after `orch1/verify_ai_r3.json` (6.0, not safe to ship). This round continues from HEAD 4a18e5e5e (rulings 55 and 58). It is genre-standard practice in VALE's own terms. League of Legends was a gauge only.
+
+**Method.** Every arm ran on this one tree, swapped with `VALE_BOTS` on the same seeds. The arms were: pre (src/sim/bots at 0aeac587b), live (e2c4925e5), round 1 (3b44a0a56), and one-change variants. No worktree was made. Values are paired means ± SE; RIFT is cut at 30:00.
+
+**Kept: BRIDGE blocker fixed.** `holdWalk` (the calm-walk turn latch, rulings 55/58) now runs on RIFT only; it was fray-excluded and so also ran on BRIDGE. On one road the push and lane points sit on the same line. The latch sent a calm fighter back to the stale point and then forward again: a 4 m+ back-and-forth the dither probe counts.
+- **Bisect, BRIDGE s701-712, n = 12.** Round-1 bots read 0.00 / 0.00. HEAD read 5.17 / 3.08 (novice / adept). HEAD with the latch on RIFT only read 0.00 / 0.00.
+- **Final, BRIDGE s701-724, n = 24** (novice / adept / veteran):
+  - Dither: new 0.00 / 0.04 / 0.00. Pre: 0.00 / 0.00 / 0.12. Live: 0.00 / 0.04 / 0.08.
+  - Length, new − pre: −0.36 ± 0.85 / +1.12 ± 0.93 / −0.65 ± 0.73 min.
+  - Length, new − live: −1.09 / −0.26 / −0.31 min.
+- **RIFT and FRAY are unchanged** (deterministic; the RIFT 64-seed table below matches verify_ai_r3 to the digit).
+
+**Final RIFT table, s701-764, n = 64, pre → new** (novice / adept / veteran):
+
+| Measure | Pre | New | New − pre |
+|---|---|---|---|
+| Length (min) | 23.6 / 23.3 / 23.6 | 24.8 / 25.3 / 25.8 | +1.19 ± 0.52 / +2.04 ± 0.58 / +2.26 ± 0.57 |
+| Games reaching 30:00 | 6 / 2 / 4 | 2 / 14 / 12 | |
+| Inner+base falls to Wicks beside fit defenders | 0.56 / 1.09 / 0.84 | 0.70 / 0.83 / 0.88 | +0.14 ± 0.13 / −0.27 ± 0.20 / +0.03 ± 0.16 |
+| Inner only | 0.11 / 0.38 / 0.19 | 0.16 / 0.27 / 0.50 | veteran +0.31 ± 0.09 (worse) |
+| Base only | 0.45 / 0.72 / 0.66 | 0.55 / 0.56 / 0.38 | veteran −0.28 ± 0.12 (better) |
+| Unanswered base intrusions | 2.09 / 0.94 / 1.77 | 1.84 / 0.56 / 0.45 | −0.25 / −0.38 / −1.31 ± 0.20 |
+| Dither (bars 3 / 1.5 / 1) | 4.95 / 2.39 / 5.30 | 2.98 / 1.36 / 1.30 | veteran still over its bar |
+| Laner in-lane samples | | | +7 ± 22 / −13 ± 29 / −33 ± 18 |
+
+**Where the pace goes.** Median length is +1.5 / +1.6 / +2.4 min. Most of the mean gap is the tail: games that hit the 30:00 cut, 14 and 12 of 64 at adept and veteran against 2 and 4.
+- Traced stalls (adept s712 and s713, veteran s729) start at 17-20 min, when one team breaks into a base and cannot finish it:
+  - attackers on a rush arrive one at a time from the fountain into five defenders;
+  - the Lanterns relight and are retaken (adept s706: 10 base falls, against 6 for pre);
+  - a team that wins a fight 4-5 up walks to an objective instead of the open base.
+- None of the fixes for these closed the gap (below). Nor did turning the round-1 base defence off.
+
+**Tried and dropped (RIFT s701-732, n = 32, each one change against new; pace in min):**
+
+| Change | Pace | Other |
+|---|---|---|
+| Inner posts match the divers (no +1); a 'coming' post needs a 4-Wick wave | −0.11 ± 0.31 / +1.02 ± 0.81 / +0.10 ± 0.72 | Wick falls +0.12 / −0.38 / +0.12 |
+| A sieging team with a won fight or a lead sends at most one defender to a single diver at an inner or outer Needle | — / −0.05 ± 0.06 / −0.28 ± 0.32 | veteran Wick falls +0.16 ± 0.10 |
+| Rush stragglers, alone and outnumbered at the structure, meet 30 m out | — / −0.36 ± 0.41 / +0.24 ± 0.14 | veteran Wick falls +0.12 ± 0.06 |
+| A Lantern's relight clock starts a rush only with 2 gathered | — / −0.41 ± 0.47 / +0.69 ± 0.36 | |
+| From 20:00 a team pressing a lead skips objectives off its path | veteran +0.79 ± 0.39 | adept unaffected (not its branch) |
+| From 25:00 the core call is divers + 1, not 5; even numbers commit | −0.10 ± 0.11 / 0.00 | rarely reached: the stalls start earlier |
+| No objective with a won fight from 18:00 (veteran) | veteran +1.11 ± 0.44 | deaths +2.7: Longshade helps end games |
+| Veteran plan re-read the tick a partner is burst (peel) | +1.06 ± 0.73 | peel within 1.5 s 72.0 → 68.5 % (worse) |
+| Base defence off together: coreAll, recall-to-defend, anticipation (adept + veteran) | +0.21 ± 0.82 / +0.36 ± 0.80 | still +1.75 / +1.98 against pre |
+
+- The last row matters most. With the owner-requested base defence switched off, the pace gap against pre stays. Base defence is therefore not what costs the time. The cause sits in the rest of the ruling-40 package (ruling 55's bisect), spread thin. It was not found this round.
+
+**Gates on the final code:**
+- **Default tactics gate:** 4 fails, was 4.
+  - FRAY low-health stays: adept 62.9 % (bar 60), veteran 61.3 % (bar 50).
+  - Veteran dither: 1.56 (bar 1).
+  - Veteran peel within 1.5 s: 72.7 % (bar 75).
+- **`probe_sim_bot_soak` quick:** PASS.
+
+**Open, not met (bars kept, not relaxed):**
+- Item 3, pace: as in the table above.
+- Item 1: veteran inner falls to Wicks beside fit defenders (0.19 → 0.50); novice (0.56 → 0.70, inside noise).
+- Item 2: FRAY stays, and veteran RIFT dither.
+- Item 5: veteran peel within 1.5 s.
+- Item 6: adept and veteran collapse rates are level.
+- Item 7: tactics gate.
+
+**Next.** A per-feature bisect inside c85476cb6, on 64 paired seeds, with the 30:00-reach count as the primary read rather than the mean.

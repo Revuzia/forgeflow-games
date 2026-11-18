@@ -812,7 +812,9 @@ export class Bot extends BotBase implements BotController {
    * walked full-health fighters back and forth 2-5 times a game (veteran, whose calls carry no delay, most).
    */
   private holdWalk(): void {
-    if (this.k.kind === 'fray' || !this.pMove) return;
+    // (ruling 59: RIFT only — on BRIDGE's one road the latch walked novice and adept fighters back to a stale push or lane
+    // point and back again, 5.2 / 3.1 back-and-forth episodes a game against 0.00 for the round-1, live and pre-lane bots)
+    if (this.k.kind !== 'rift' || !this.pMove) return;
     const e = this.e, now = this.now, b = this.brain;
     const post = b ? b.guard.get(this.player) : undefined;
     // (ruling 55: a post at a base structure is urgent only while that structure or the base is being hit — a quiet
