@@ -3,6 +3,15 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-18 — Wave 10 round 3c: R3B fix5 re-merge (black interior view, gunhold controls)
+
+Wave 10 round 3c re-merges lane R3B (`w10-r3-characters`, head 6dcec08bb) onto `w10` after round 3b was held on three rows (interiorcheck light, controls w10_gunhold-plant-gun-in-dead-hand and w10_gunhold-rev-w9-tip). No world change: `MAP_GEN_VERSION` stays 8.
+
+- Wave 10 round 3b fix: about one interior view in a thousand rendered fully black. Four ammo loot models had invisible zero-area triangles with zero normals. A rare sliver of one lit a single pixel NaN, and the bloom spread it over the whole frame. loot.js now drops such triangles on load (lootNormalsSafe). interiorcheck light is back to 1019/1019 on 3 runs in a row.
+- w10_lootlook: new row loot-nan (0 loot-model triangles on a zero-length normal; 7 kinds x 200 random poses x 20 instances through the composer, 0 black frames) and plant zero-normal (MUST FAIL loot-nan), registered in gate.py as `w10_lootlook-plant-zero-normal`.
+- w10_gunhold: plant gun-in-dead-hand re-anchored to the R3B weaponMesh.visible line (same fault, a dead actor keeps the gun); the reload parts read FAIL with a message on a build without audio.js RELOAD_SETS / RELOAD_SET_OF, so the control rev-w9-tip FAILs again instead of going COULD-NOT-JUDGE.
+- Known follow-up (not in this release): the loot-model build script make_loot.py still bakes the zero-normal slivers into the 4 ammo GLBs; the game drops them on load and the loot-nan row guards it.
+
 ## 2026-11-17 — Wave 10 round 3b: characters (reload, surface swim, swap, ground loot)
 
 Wave 10 round 3b merges lane R3B (`w10-r3-characters`, head 17447f38b) onto `w10`. No world change: `MAP_GEN_VERSION` stays 8.

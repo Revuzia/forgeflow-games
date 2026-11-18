@@ -764,6 +764,7 @@ NEGATIVE = [
     ("w10_gunhold-plant-sling-all", "p23/gunhold.py", ["--skins", "soldier", "--plant", "sling-all", "--parts", "swap"], 1800),   # swap
     ("w10_lootlook-plant-box-ammo", "p23/lootlook.py", ["--plant", "box-ammo"], 3600),           # loot-shapes (primitive ammo)
     ("w10_lootlook-plant-same-grenade", "p23/lootlook.py", ["--plant", "same-grenade"], 3600),   # loot-shapes (frag vs smoke IoU)
+    ("w10_lootlook-plant-zero-normal", "p23/lootlook.py", ["--plant", "zero-normal"], 3600),   # (R3B fix5) loot-nan: the loot models' zero-normal slivers back (lootNormalsSafe off) -> black frames + zero-normal tris
     # (the w10_waterlook main row needs no change: the darkest-view row now also renders interiorcheck's own views of match isla_viva
     #  volcano_rim@p54, ashgrid downtown@p4/p27/p44, housegen s7h2 and the fixture house in 4 extra Chromes; full run ~7.5 min, well inside 7000 s)
     # stormfx_fx controls (run by the integrator from driver scripts, not registered: plant curve-at-0 FAILs the BIT-IDENTICAL row, plant meshopt
