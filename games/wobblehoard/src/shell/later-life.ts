@@ -1671,7 +1671,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const v = safeView();
       return {
         life: lifeDebug(w), place: placeIdx, visit, layout, bodyScale, units: s.units, quiet: s.quiet, autonomy: s.autonomy, floatParked,
-        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1 } : null)).filter(Boolean),
+        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1, scoot: c.scooting ? [+c.scootX.toFixed(2), +c.scootZ.toFixed(2)] : null, hush: c.hushT > game.simTime } : null)).filter(Boolean),
         things: def.things.map((t, k) => {
           const p = thingFirst[k] ?? -1, at = !!world && p >= 0;
           // (its centre on screen in CSS px, for the harness's taps: the stage camera's projection, dev view only)

@@ -2046,7 +2046,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
           const d = gd(), me = d.chars.find((c) => c.kind === 0 && c.itemId === who);
           if (me && me0) moved = Math.max(moved, Math.hypot(me.x - me0.x, me.z - me0.z));
           if (d.counts.askedUse > u0) usedAt = (f + 1) * 10;
-          if (process.env.GP_TRACE && (f % 6 === 0 || (f > 28 && f < 70))) { const L = (d as unknown as { life: { movers: number; chars: Array<{ slot: number; beh: number; phase: number; moving: number }> } }).life; console.log('TRACE', where, things[j].id, f, +d.units.toFixed(2), L.movers, JSON.stringify(d.chars.map((c) => [c.slot, c.itemId === who ? 'ME' : c.itemId === app.identity.itemId ? 'P' : '', c.asleep ? 'z' : '', c.x, c.z, L.chars.find((q) => q.slot === c.slot)?.beh, L.chars.find((q) => q.slot === c.slot)?.phase, L.chars.find((q) => q.slot === c.slot)?.moving]))); }
+          if (process.env.GP_TRACE && (f % 6 === 0 || (f > 28 && f < 70))) { const L = (d as unknown as { life: { movers: number; chars: Array<{ slot: number; beh: number; phase: number; moving: number }> } }).life; console.log('TRACE', where, things[j].id, f, +d.units.toFixed(2), L.movers, JSON.stringify(d.chars.map((c) => [c.slot, c.itemId === who ? 'ME' : c.itemId === app.identity.itemId ? 'P' : '', c.asleep ? 'z' : '', c.x, c.z, (c as unknown as { scoot: unknown }).scoot, L.chars.find((q) => q.slot === c.slot)?.beh, L.chars.find((q) => q.slot === c.slot)?.phase, L.chars.find((q) => q.slot === c.slot)?.moving]))); }
           else if (f >= 6 && me?.asleep) sleptBefore = true;
         }
         rows.push({ where, thing: things[j].id, asked, usedAt, sleptBefore, moved: +moved.toFixed(2), units: +gd().units.toFixed(2) });
