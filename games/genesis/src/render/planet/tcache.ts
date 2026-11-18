@@ -532,7 +532,8 @@ export class TerrainCache {
         // slow-stale: shown, re-baked behind the uncached patches (camera moved / turned, sun, season, class)
         if (moved > 0.03 || t.fwd.dot(this.fwd) < 0.966) { t.stale = true; st.rebakeKnot++; }
         else if (t.sun.dot(sunBody) < 0.9976 || Math.abs(yearFrac - t.year) > 0.004) { t.stale = true; st.rebakeSlow++; }
-        else if (need * TC_DENS > usable || (t.cls > 0 && need * TC_DENS * 1.9 < usable)) { t.stale = true; st.rebakeClass++; }
+        // (smaller only when a smaller class fits: 288 -> 576 is a 2x step, a test on the usable edge alone looped)
+        else if (need * TC_DENS > usable || (classFor(need * TC_DENS) < t.cls && need * TC_DENS * 1.9 < usable)) { t.stale = true; st.rebakeClass++; }
       }
       // the slot table (two texels): written when it differs (a compacted or re-used slot is caught here too)
       const k = p.tSlot & 15, d = tab.image.data as unknown as Float32Array, o = k * 8;

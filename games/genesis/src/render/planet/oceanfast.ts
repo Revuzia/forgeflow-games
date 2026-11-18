@@ -23,7 +23,7 @@
 //       has filtered them flat, the variance going to the glint / mirror roughness), triplanar by the up vector
 //       (1 projection over most of the planet); rivers: the two-phase flow map (taps x2);
 //     * sky mirror = skyRadiance (2 LUT taps); clouds mirrored = 1 cube tap (the deck's density) lit by the vertex;
-//     * scene mirror = a screen-space DDA (16 independent depth taps, perspective-correct, quadratic spacing: dense near
+//     * scene mirror = a screen-space DDA (20 independent depth taps, perspective-correct, spacing u^1.8: dense near
 //       the water pixel where the banks and trees stand) + 4 refine + 3 reprojected taps on a hit, run only where the
 //       Fresnel can show it;
 //     * refraction = 2 depth taps (the second guards the offset) + 1 colour tap, analytic extinction from the vertex;
@@ -274,7 +274,7 @@ float f3SunShadow(vec3 posView, vec3 nView) {
 }
 // Screen-space reflection, bounded: the reflected ray (up to 320 m, clipped to the near plane and the screen) marched in
 // SCREEN space, perspective-correct (McGuire-Mara DDA: 1/w and z/w are linear on screen), ${n} samples spaced
-// quadratically (dense next to the water pixel, where the bank and its trees stand), a smooth per-pixel offset of the
+// as u^1.8 (dense next to the water pixel, where the bank and its trees stand), a smooth per-pixel offset of the
 // start, the same crossing test as ocean.ts ssr(), 4 bisection steps, then the hit reprojected into last frame's
 // composited image (3 taps across the surface's tilt). Every sample's position depends only on the index: the taps
 // are independent of each other. Returns rgb + confidence.
@@ -301,7 +301,7 @@ vec4 f3Ssr(vec3 posV, vec3 rV, vec3 nV) {
   float prz = -posV.z, uPrev = 0.0;
   for (int i = 1; i <= ${n}; i++) {
     float u = (float(i) - 1.0 + jit) / ${n}.0;
-    u *= u;
+    u = pow(u, 1.8);
     float kk = mix(k0, K1, u);
     float rz = -mix(Q0.z, Q1.z, u) / kk;
     float sz = texture(tSceneDepth, mix(s0, S1, u) * 0.5 + 0.5).r;
@@ -616,7 +616,7 @@ export function fastOceanShaders(vert: string, frag: string, rippleMap: () => Da
   };
   return {
     vert: vert.slice(0, vMain) + VERT_DECL + vert.slice(vMain, vEnd) + VERT_MAIN + vert.slice(vEnd),
-    frag: frag.slice(0, fMain) + fragDecl(16) + frag.slice(fMain, fBody) + fragMain(f),
+    frag: frag.slice(0, fMain) + fragDecl(20) + frag.slice(fMain, fBody) + fragMain(f),
     uniforms: { uRipMap: { value: rippleMap() }, uF3Noise: { value: foamNoiseMap() } },
   };
 }
