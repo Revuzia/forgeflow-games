@@ -702,7 +702,18 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
         if (ce && !ce.done) {
           // resolved: two of the team within 12 m of it, or it died
           let at = 0; for (const q of players) { const g = q.ent; if (g && g.alive && g.team === team && (g.x - f.x) ** 2 + (g.y - f.y) ** 2 <= 12 * 12) at++; }
-          if (!f.alive || at >= 2) { ce.done = true; add(C, ce.jungle ? 'col.j.episodes' : now < 840 ? 'col.l.episodes' : 'col.r.episodes'); add(C, ce.jungle ? 'col.j.ok' : now < 840 ? 'col.l.ok' : 'col.r.ok'); R(ce.jungle ? 'col.j.lat' : 'col.r.lat', now - ce.start); colCd.set(key, now + 20); continue; }
+          if (!f.alive || at >= 2) {
+            ce.done = true; add(C, ce.jungle ? 'col.j.episodes' : now < 840 ? 'col.l.episodes' : 'col.r.episodes'); add(C, ce.jungle ? 'col.j.ok' : now < 840 ? 'col.l.ok' : 'col.r.ok'); R(ce.jungle ? 'col.j.lat' : 'col.r.lat', now - ce.start); colCd.set(key, now + 20);
+            // (round 3, sneak: a collapse from the fog — one of the arrivers came unseen by the target's team: in sight in at most
+            // 30 % of its last samples before the strike)
+            for (const q of players) {
+              const g = q.ent; if (!g || !g.alive || g.team !== team || (g.x - f.x) ** 2 + (g.y - f.y) ** 2 > 12 * 12) continue;
+              const vh = visHist.get(g.id); if (!vh || vh.length < 14) continue;
+              const pre = vh.slice(vh.length - 14, vh.length - 2);
+              if (pre.filter((x) => x).length <= pre.length * 0.3) { add(C, 'col.fog'); break; }
+            }
+            continue;
+          }
           if (ok) { ce.seen += dt; ce.last = now; }
           if (now - ce.start > 15 || now - ce.last > 3) {
             ce.done = true;
@@ -964,6 +975,7 @@ function gates(runs: TierRun[]): string[] {
       { const ll = R.flatMap((g) => g.resp['resp.lane.com'] ?? []), le2 = sum(R, 'resp.lane.episodes'); rpt(`${diff} designated peeler answers within ${lim} s (laning phase)`, `${pct(share(ll.filter((x) => x <= lim).length, le2))} of ${le2}`); }
       const cj = sum(R, 'col.j.episodes'), cr = sum(R, 'col.r.episodes'), cok = sum(R, 'col.j.ok') + sum(R, 'col.r.ok'), cs = share(cok, cj + cr);
       const cSe = Math.sqrt(cs * (1 - cs) / Math.max(1, cj + cr));
+      { const ce2 = sum(R, 'col.j.episodes') + sum(R, 'col.r.episodes'), cf = share(sum(R, 'col.fog'), ce2); rpt(`${diff} sneak: collapses from the fog on a lone enemy in our half (an arriver unseen by its team), share of the collapse episodes`, `${pct(cf)} of ${ce2}`); }
       if (diff === 'veteran' && cj + cr >= 20) line(cs >= T.collapse[diff], `${diff} sneak: a lone enemy seen 6 s in our Dialwood (3:00+) or on a road in our half (14:00+), out of its towers' cover, two of ours free: 2+ on it within 15 s`, `${pct(cs)} ± ${pct(cSe)} of ${cj + cr} (Dialwood ${pct(share(sum(R, 'col.j.ok'), cj))} of ${cj}, roads ${pct(share(sum(R, 'col.r.ok'), cr))} of ${cr})`, `≥ ${pct(T.collapse[diff])}`);
       else rpt(`${diff} collapse on a lone enemy in our half`, `${pct(cs)} ± ${pct(cSe)} of ${cj + cr} (Dialwood ${pct(share(sum(R, 'col.j.ok'), cj))} of ${cj}, roads ${pct(share(sum(R, 'col.r.ok'), cr))} of ${cr}; laning-phase roads ${pct(share(sum(R, 'col.l.ok'), sum(R, 'col.l.episodes')))} of ${sum(R, 'col.l.episodes')})`);
       const rle = sum(R, 'rift.low.episodes'), rls = share(sum(R, 'rift.low.stayed'), rle);

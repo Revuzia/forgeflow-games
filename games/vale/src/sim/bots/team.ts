@@ -459,7 +459,7 @@ export class TeamBrain {
       // (owner_rulings 46: a wave alone calls a defender only where the tier's defender holds against the wave (holdWave, and
       // from 25:00 the base only) — a beginner, or a late inner post, backed off the wave it was sent to and stood fit beside
       // the structure while the Wicks took it: novice falls to Wicks beside two fit defenders 0.61 → 0.91 a game)
-      else if (d.holdWave && cls > (laning ? 1 : closing ? 1 : 0) && minions - mine >= 4) {
+      else if (d.holdWave && !ab('nohold') && cls > (laning ? 1 : closing ? 1 : 0) && minions - mine >= 4) {
         need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
         if (ab('w_win') && (this.rush || this.window || this.aliveEnemies <= this.aliveAllies - 2)) need = 0;
         if (ab('w_futile') && need > 0 && wdps > 0) {

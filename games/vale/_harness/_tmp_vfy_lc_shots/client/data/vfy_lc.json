@@ -1,0 +1,198 @@
+{
+ "phase": "vfy_lc",
+ "finishedAt": "2026-11-18T08:17:56.226Z",
+ "env": {
+  "chrome": "157.0.8103.79",
+  "load1End": 13.91,
+  "node": "v22.23.3",
+  "base": "http://localhost:5263",
+  "wallMs": 103465
+ },
+ "steps": [
+  {
+   "file": "1920x1080/vfy_lc_001_kill_banner.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_lc",
+   "step": "kill",
+   "name": "kill_banner",
+   "desc": "first kill banner t=85.2",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2777680,
+   "tMs": 46297,
+   "load1": 9.4,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_lc_002_fight_numbers.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_lc",
+   "step": "fight",
+   "name": "fight_numbers",
+   "desc": "fight with damage numbers t=279.5",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2686450,
+   "tMs": 81821,
+   "load1": 11.18,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  },
+  {
+   "file": "1920x1080/vfy_lc_003_fight_numbers_late.png",
+   "viewport": "1920x1080",
+   "phase": "vfy_lc",
+   "step": "fight2",
+   "name": "fight_numbers_late",
+   "desc": "later fight t=394.7",
+   "route": "scr--match",
+   "hud": true,
+   "crop": null,
+   "bytes": 2777768,
+   "tMs": 103458,
+   "load1": 13.91,
+   "layout": {
+    "minFont": {
+     "px": 11,
+     "el": "span.hmenu__key \"Esc\""
+    },
+    "textNodes": 51,
+    "docScroll": {
+     "w": 1920,
+     "h": 1080,
+     "vw": 1920,
+     "vh": 1080
+    },
+    "counts": {
+     "outside-scroll-ancestor": 1
+    }
+   }
+  }
+ ],
+ "console": [],
+ "consoleCounts": {
+  "log": 0,
+  "info": 2,
+  "debug": 1
+ },
+ "infoSample": [
+  "[vite] connecting...",
+  "[vale] catalog 2026.11.8 (schema 1) from http://localhost:5263/catalog/manifest.json",
+  "[vale] dev autopilot: {\"autopilot\":\"match\",\"speed\":1,\"autoflow\":false}"
+ ],
+ "layout": [
+  {
+   "file": "1920x1080/vfy_lc_001_kill_banner.png",
+   "step": "kill",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_lc_002_fight_numbers.png",
+   "step": "fight",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  },
+  {
+   "file": "1920x1080/vfy_lc_003_fight_numbers_late.png",
+   "step": "fight2",
+   "kind": "outside-scroll-ancestor",
+   "el": "a.skip.t-label",
+   "text": "SKIP TO CONTENT",
+   "rect": [
+    96,
+    -200,
+    259,
+    -164
+   ],
+   "vw": 1920,
+   "vh": 1080
+  }
+ ],
+ "notes": [],
+ "timings": {},
+ "notes2": [
+  [
+   "kill",
+   {
+    "time": 85.2,
+    "dead": false,
+    "enemyNear": 0,
+    "ended": false,
+    "kill": true,
+    "pops": 4
+   }
+  ],
+  [
+   "fight",
+   {
+    "time": 281.4,
+    "dead": false,
+    "enemyNear": 1,
+    "ended": false,
+    "kill": false,
+    "pops": 0
+   }
+  ],
+  [
+   "fight2",
+   {
+    "time": 395.7,
+    "dead": false,
+    "enemyNear": 1,
+    "ended": false,
+    "kill": false,
+    "pops": 0
+   }
+  ]
+ ]
+}

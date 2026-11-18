@@ -1656,7 +1656,7 @@ export class Bot extends BotBase implements BotController {
    *  base (a late game's inner Needles fall to waves as death timers decide it; holding them too drew it out past the pace bar) */
   private holdsWave(cls: number): boolean {
     // (owner_rulings 44: a beginner backs off a stacked wave — the hold is a skilled tier's)
-    if (!this.diff.holdWave) return false;
+    if (!this.diff.holdWave || ab('nohold')) return false;
     if (this.now >= 1500) return cls >= 2;
     return cls >= 1 || this.now >= LANE_PHASE_END;
   }
