@@ -541,8 +541,7 @@ function checkHouse(H, HGmod, MAN) {
   for (const rf of H.roofs || []) triF[S - 1] += 2 + 4 + (rf.freeLow ? 2 : 0) + (rf.freeHigh ? 2 : 0) + 2 * rf.soffit.length;
   for (const g of H.gables || []) triF[S - 1] += g.pts.length - 2;
   // (W10 R1A: a home's storey - use house, not a ruin - draws up to TRI_BUDGET_HOME, itself held <= 6000 here; every other storey TRI_BUDGET)
-  // (W10 R3A: a work building's storey - housegen.triBudgetOf: shop / hall 5000, mid-rise / tower 4000, a big one 18 a m2 of footprint, itself held <= TRI_WORK_MAX here)
-  const TBH = HGmod.triBudgetOf ? Math.min(HGmod.TRI_WORK_MAX || 6000, HGmod.triBudgetOf(H)) : H.use === "house" && H.theme !== "ruin" && !(HGmod.THEMES && HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined) ? Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) : TRI_BUDGET;
+  const TBH = H.use === "house" && H.theme !== "ruin" && !(HGmod.THEMES && HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined) ? Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) : TRI_BUDGET;
   for (let f = 0; f < S; f++) if (triF[f] > TBH) E("budget", "floor " + f + " has " + triF[f] + " triangles (budget " + TBH + ")");
   })();
   // ---- reach: capsule walk on the colliders
@@ -1155,7 +1154,8 @@ else if (require.main === module) (async () => {
     // (W10 R3A) the finish (opts.finish): drawn ONLY inside (every finish key "<mat>|in" or a ceiling's "plaster||ceil" when split), never on low (wear "low"), the
     // structure's own faces untouched (the split's triangles are still all there), and a home draws some (curtains, casings, wall feet)
     {
-      let finBad = [], finTris = 0, homes = 0;
+      let finBad = [], finTris = 0, homes = 0, finBudget = 0, aoPieces = 0, finWorst = 0;
+      const AOc = HGmod.AO || { minH: 0.25, minA: 0.08 };
       for (let k = 0; k < 36 && finBad.length < 4; k++) {
         const par = Object.assign({}, PS[(k * 13) % PS.length], { theme: THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 });
         const H = HGmod.generate(par), tri = (md) => { let n = 0; for (const g of Object.values(md.groups)) for (const a of g.values()) n += a.idx.length / 3; return n; };
@@ -1167,7 +1167,15 @@ else if (require.main === module) (async () => {
         for (const [key] of mF.groups.walls) if (!m1.groups.walls.has(key) && !mW.groups.walls.has(key) && !/^[a-z_]+\|(in|ceil)$/.test(key)) finBad.push(H.id + " finish key " + key);
         if (H.use === "house" && !(HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined)) { homes++; if (add <= 0) finBad.push(H.id + " a home with no finish"); }
         finTris += add;
+        // (fix2) the plan's finish budget: +2 a shadowed piece, +40 a room
+        const aoN = H.furniture.filter((p) => !(p.deco || p.mount === "wall" || p.mount === "top" || p.max[1] - p.min[1] < AOc.minH || (p.max[0] - p.min[0]) * (p.max[2] - p.min[2]) < AOc.minA)).length;
+        const b = 2 * aoN + 40 * H.rooms.length;
+        aoPieces += aoN; finBudget += b; finWorst = Math.max(finWorst, b ? add / b : 0);
       }
+      // (W10 R3A fix2) the finish's drawn-only triangles, all 36 houses: <= the plan's budget (2 a shadowed piece + 40 a room); its control: the round-1 shadow
+      // (a 10-triangle ring, +8 a piece) on the same houses must read over it
+      okP(finTris <= finBudget, "finish budget (W10 R3A): drawn-only finish " + finTris + " triangles <= plan 2 a shadowed piece + 40 a room = " + finBudget + " (36 houses; worst house x" + finWorst.toFixed(2) + " its own, info)", "over by " + (finTris - finBudget));
+      okP(finTris + 8 * aoPieces > finBudget, "negative control [finish budget]: the 10-triangle shadow ring (+8 a piece, " + aoPieces + " pieces) is caught", "not caught: " + (finTris + 8 * aoPieces) + " <= " + finBudget);
       okP(finBad.length === 0 && homes > 0, "meshData finish (W10 R3A): inside keys only, none on low, a home draws it (" + homes + " homes of 36 houses, +" + finTris + " drawn-only triangles, not in house.tris)", finBad.slice(0, 3).join(" | "));
     }
   }
@@ -1241,7 +1249,7 @@ else if (require.main === module) (async () => {
     for (const use of ["tower", "midrise"]) for (const theme of THEMES) for (const st of [4, 6, 9]) {
       const H = HGmod.generate({ id: "tall", w: 15, d: 15, theme, use, storeys: st, seed: 31 + st });
       if (H.floors.length > 3 || H.storeys + H.shell !== st || !H.boxes.some((b) => b.p === "shell" && b.c)) bad.push(use + " " + st + ": walkable " + H.floors.length + " shell " + H.shell);
-      if (Math.max(...H.tris.floors) > (HGmod.triBudgetOf ? Math.min(HGmod.TRI_WORK_MAX || 6000, HGmod.triBudgetOf(H)) : TRI_BUDGET) || H.tris.shell > TRI_BUDGET * Math.max(1, H.shell)) bad.push(use + " " + st + " budget " + H.tris.floors + " / " + H.tris.shell);
+      if (Math.max(...H.tris.floors) > TRI_BUDGET || H.tris.shell > TRI_BUDGET * Math.max(1, H.shell)) bad.push(use + " " + st + " budget " + H.tris.floors + " / " + H.tris.shell);
     }
     okP(bad.length === 0, "towers / mid-rises asked for 4-9 storeys: <= 3 walkable, the others one closed mass, height kept; budget (18 buildings)", bad.slice(0, 3).join(" | "));
   }
@@ -1325,7 +1333,7 @@ else if (require.main === module) (async () => {
   row("windows", "windows: empty aperture, sill 1.20 / header 2.30, shootable standing, cover crouched, no tall piece in front");
   row("vis-col", "colliders == visual extents (structure exact; kit vs manifest bbox, authored, steps vs ramp within 2 cm)");
   row("stairs", "stairs <= 45 deg, lip 0, top on the next floor, hole >= stairHeadroomRun");
-  row("budget", "<= " + TRI_BUDGET + " triangles per storey, a home's <= " + Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) + ", a work building's (shop / hall / mid-rise / tower) housegen.triBudgetOf <= TRI_WORK_MAX (recounted)");
+  row("budget", "<= " + TRI_BUDGET + " triangles per storey, a home's <= " + Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) + " (recounted)");
   row("roof", "pitched roofs: every plank IS its ramp (<= 45 deg, underside drawn only outside the walls); the attic sealed by layers under the plank; end walls on the layers");
   row("loot", "floor loot points on free floor (never inside / under a piece's collider)");
   row("staircase", "no furniture staircase: no low clutter (lowest top 0.2-0.55 m) within 0.9 m of a piece one step up");
