@@ -10,7 +10,7 @@
     "tris_belt": 820,
     "tris_tally": 640,
     "tris_forearms": 900,
-    "tris_fist_R": 950,
+    "tris_fist_R": 1050,
     "tris_palm_L": 380,
     "tris_fingers_L": 640,
     "tris_vambrace": 450,
@@ -33,38 +33,41 @@
     "tris_almanac_wood": 420,
     "tris_almanac_face": 140,
     "tris_almanac_tabs": 160,
-    "validate_burdam": "20530->20528"
+    "validate_burdam": "20630->20628"
   },
-  "uv_coverage": 0.602,
+  "uv_coverage": 0.612,
   "bake": {
-    "base": 6.03,
-    "rough_metal": 5.97,
-    "normal": 4.18,
-    "ao": 3.55,
-    "normal_fixed_px": 38524,
-    "projection": 201.35,
-    "pack_save": 201.7,
-    "total": 221.79
+    "base": 7.42,
+    "rough_metal": 5.74,
+    "normal": 4.26,
+    "ao": 7.75,
+    "normal_fixed_px": 35775,
+    "projection": 190.78,
+    "pack_save": 191.08,
+    "total": 216.64
   },
-  "tris": 21168,
+  "tris": 21268,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2783176,
+  "glb_bytes_raw": 2686036,
   "optimize": {
     "ok": true,
-    "before": 2783176,
-    "after": 1065168
+    "before": 2686036,
+    "after": 1023592
   },
-  "glb_bytes": 1065168,
+  "zone_grade": {
+    "ok": true
+  },
+  "glb_bytes": 1023668,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (1040 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: burdam_almanac_base 2048x2048 236K, burdam_almanac_normal 512x512 45K, burdam_almanac_orm 512x512 69K",
-      "  skinned meshes: burdam_accent(332v), burdam_almanac(19907v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (1000 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_almanac_base 2048x2048 224K, burdam_almanac_normal 512x512 45K, burdam_almanac_orm 512x512 63K",
+      "  skinned meshes: burdam_accent(332v), burdam_almanac(19050v)",
       "  bones: 35 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid x_cowl_b_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b_1 x_skirt_b_2 x_skirt_f_1 x_skirt_f_2 x_skirt_l_1 x_skirt_l_2 x_skirt_r_1 x_skirt_r_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 21168; bind-pose bounds (three units, Y up): 1.44 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
+      "  tris: 21268; bind-pose bounds (three units, Y up): 1.44 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -74,8 +77,8 @@
       "portrait": "art/out/fighters/burdam/burdam_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 76.02,
-      "portrait": 15.82
+      "splash": 131.87,
+      "portrait": 24.09
     }
   },
   "three_qa": {
@@ -98,7 +101,7 @@
       1
     ],
     "headY": 1.849,
-    "accentPct": 1.48,
+    "accentPct": 1.47,
     "accentTopHalfPct": 30.5,
     "heightPx1080": 116,
     "size": [
@@ -107,24 +110,27 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_almanac.png",
-    "seconds": 11.5,
+    "seconds": 12.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.23,
-      "model": 5.66,
-      "lows_bind": 4.84,
-      "uv": 5.38,
-      "bake": 221.8,
-      "export": 0.13,
-      "optimize": 0.78,
-      "load_test": 0.15,
-      "render": 92.26,
-      "three_qa": 11.95
+      "rig": 0.01,
+      "materials": 0.35,
+      "model": 13.68,
+      "lows_bind": 9.22,
+      "uv": 8.8,
+      "bake": 216.64,
+      "export": 0.19,
+      "optimize": 1.05,
+      "zone_grade": 0.46,
+      "wrist_weights": 0.26,
+      "zero_metal": 0.06,
+      "load_test": 0.22,
+      "render": 156.51,
+      "three_qa": 12.71
     },
-    "total_s": 343.34
+    "total_s": 420.23
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

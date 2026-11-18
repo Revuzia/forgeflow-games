@@ -13,7 +13,8 @@
 //                    fitted to the model; facing from the head bone (or skipped when there is none)
 //        [--face]    face sheet instead (orch1 W3-B, ruling 56): one row of 8 head close-ups framed on the head
 //                    bone, idle t=0: front, 3/4 left / right, profile at 0.9 m, then the same at a 52 deg down
-//                    in-match pitch, 3.5 m (how the real face reads on the character, not on a card)
+//                    in-match pitch, 3.5 m (how the real face reads on the character, not on a card);
+//                    [--bone hand.R] [--clip cast_ult] [--t 0.45] frame another bone at another clip moment
 //   Report: facing (bind-pose toe direction, must be +Z), heightPx1080 at default zoom,
 //   accentPct (accent share of the silhouette at the game camera, 8 facings) and accentTopHalfPct.
 //
@@ -36,7 +37,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const GAME = resolve(HERE, '..', '..');
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--') && ['--sky', '--tint', '--chrome', '--cell', '--strip', '--cam'].includes(args[i - 1])));
+const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--') && ['--sky', '--tint', '--chrome', '--cell', '--strip', '--cam', '--bone', '--clip', '--t'].includes(args[i - 1])));
 if (!files.length) {
   console.error('usage: node art/tools/three_snapshot.mjs file.glb [out.png] [--sky x.hdr] [--tint #rrggbb] [--chrome exe]');
   process.exit(2);
@@ -47,7 +48,8 @@ const sky = opt('--sky') ? resolve(opt('--sky')) : null;
 const tint = opt('--tint', '#ff5a4f');
 const cell = Number(opt('--cell', 300));
 const strip = opt('--strip', '');   // debug: comma list of material maps to drop (aoMap,normalMap,map,roughnessMap)
-const camArg = opt('--cam', '');     // --unit: clip camera "yaw,pitch" in degrees (default 35,55: the high 3/4 view)
+const camArg = opt('--cam', '');
+const faceBone = opt('--bone', ''), faceClip = opt('--clip', ''), faceT = opt('--t', '');   // --face only     // --unit: clip camera "yaw,pitch" in degrees (default 35,55: the high 3/4 view)
 const mode = args.includes('--unit') ? 'unit' : args.includes('--clips') ? 'clips' : args.includes('--face') ? 'face' : 'sheet';
 
 function findChrome() {
@@ -245,13 +247,15 @@ try {
     });
     report.rows = ['facings', ...CLIPS];
   } else if (MODE === 'face') {
-    const o0 = instance('idle', 0);
-    const hb = bone(o0, 'head');
+    // --bone / --clip / --t (ruling 57): the same close-up ring on any bone at any clip moment (e.g. hand.R in cast_ult)
+    const fb = Q.get('bone') || 'head', fc = Q.get('clip') || 'idle', ft = +(Q.get('t') || 0);
+    const o0 = instance(fc, ft);
+    const hb = bone(o0, fb);
     const hp = hb ? wp(hb).add(new THREE.Vector3(0, 0.07, 0)) : new THREE.Vector3(0, box.max.y - 0.2, 0);
     const views = [[0, 0.06, 0.9, 30], [-0.6, 0.06, 0.9, 30], [0.6, 0.06, 0.9, 30], [-1.45, 0.06, 0.9, 30],
       [0, 52, 3.5, 14], [-0.6, 52, 3.5, 14], [0.6, 52, 3.5, 14], [Math.PI, 52, 3.5, 14]];
     views.forEach(([yaw, pd, d, fov], i) => {
-      const o = instance('idle', 0);
+      const o = instance(fc, ft);
       const pitch = (pd > 1 ? pd * Math.PI / 180 : pd);
       const c = new THREE.PerspectiveCamera(fov, 1, 0.05, 50);
       c.position.set(hp.x + Math.sin(yaw) * Math.cos(pitch) * d, hp.y + Math.sin(pitch) * d, hp.z + Math.cos(yaw) * Math.cos(pitch) * d);
@@ -310,7 +314,7 @@ await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const port = server.address().port;
 const rel = (p) => '/' + relative(GAME, p).split('\\').join('/');
 const url = `http://127.0.0.1:${port}/__snap.html?glb=${encodeURIComponent(rel(glb))}&cell=${cell}` +
-  `&tint=${encodeURIComponent(tint)}&mode=${mode}` + (sky ? `&sky=${encodeURIComponent(rel(sky))}` : '') + (strip ? `&strip=${encodeURIComponent(strip)}` : '') + (camArg ? `&cam=${encodeURIComponent(camArg)}` : '');
+  `&tint=${encodeURIComponent(tint)}&mode=${mode}` + (sky ? `&sky=${encodeURIComponent(rel(sky))}` : '') + (strip ? `&strip=${encodeURIComponent(strip)}` : '') + (camArg ? `&cam=${encodeURIComponent(camArg)}` : '') + (faceBone ? `&bone=${encodeURIComponent(faceBone)}` : '') + (faceClip ? `&clip=${encodeURIComponent(faceClip)}` : '') + (faceT ? `&t=${faceT}` : '');
 
 await holdHeavy('three_snapshot ' + relative(GAME, glb));   // queued with the other heavy processes (released at exit)
 const prof = mkdtempSync(join(tmpdir(), 'vale-snap-'));

@@ -723,16 +723,26 @@ def sculpts() -> list:
         fist.add(Capsule(c + np.array((0.060, -0.078, z)) * k_, c + np.array((-0.058, -0.078, z)) * k_,
                          0.0245 * k_), k=0.006)
         fist.add(Sphere(c + np.array((-0.066, -0.066, z + 0.004)) * k_, 0.027 * k_), k=0.008)     # knuckle
+    # (orch1 W3-B, ruling 57: "the fist is a fingerless mitten" at the game camera and on the cards): each finger's
+    # middle segment curls round the fist's side into the palm, so the fingers read from the side and above too
+    for i in range(4):
+        z = 0.054 - i * 0.036
+        fist.add(Capsule(c + np.array((0.058, -0.078, z)) * k_, c + np.array((0.084, -0.026, z - 0.004)) * k_,
+                         0.0215 * k_), k=0.005)
     for i in range(3):                                                 # the creases between the rolls
         z = 0.054 - (i + 0.5) * 0.036
+        # (ruling 57: deeper and carried round the curled segments: 5.5 -> 7.5 mm, 4 rolls clearly apart)
         fist.sub(Capsule(c + np.array((0.050, -0.104, z)) * k_, c + np.array((-0.080, -0.098, z)) * k_,
-                         0.0055 * k_), k=0.004)
+                         0.0075 * k_), k=0.003)
+        fist.sub(Capsule(c + np.array((0.066, -0.100, z)) * k_, c + np.array((0.106, -0.030, z - 0.004)) * k_,
+                         0.0070 * k_), k=0.003)
+        fist.sub(Sphere(c + np.array((-0.092, -0.064, z + 0.004)) * k_, 0.0085 * k_), k=0.004)   # knuckle valley
     fist.add(Capsule(c + np.array((0.086, -0.040, 0.072)) * k_, c + np.array((0.060, -0.098, 0.034)) * k_,
                      0.028 * k_), k=0.012)                             # thumb: the base on the palm's side
     fist.add(Capsule(c + np.array((0.060, -0.098, 0.034)) * k_, c + np.array((0.004, -0.108, 0.024)) * k_,
                      0.023 * k_), k=0.006)                             # its tip across the index and middle fingers
     fist.add(Torus(c + np.array((0.0, 0.0, 0.092)) * k_, 0.066 * k_, 0.010 * k_), k=0.006)       # the wrap cuff
-    part("fist_R", fist, "leather", "bone:hand.R", 950)
+    part("fist_R", fist, "leather", "bone:hand.R", 1050)            # (ruling 57: 950 -> 1050, the curled fingers)
     # the LEFT hand opens (the Settled Account reach, the victory's palm-up host): the back of the hand and
     # the thumb ride hand.L; the four fingers are one gloved slab on prop.L, modelled OPEN (hanging straight
     # from the palm) and curled into the fist by the clips (FIST_CURL on prop.L)
