@@ -149,7 +149,9 @@ export interface DifficultyProfile {
    *  frontline or support for any partner, as ruling 42) */
   readonly peelDive: 'none' | 'low' | 'all';
   /** a posted or answering defender holds its structure against the stacked wave (ruling 42; a beginner backs off it; adept
-   *  too since ruling 55 — its holds kept adept games 3 min longer than the pre-lane bots', p90 34-40 against the 32 bar) */
+   *  too since ruling 55 — its holds kept adept games 3 min longer than the pre-lane bots', p90 34-40 against the 32 bar;
+   *  veteran too since ruling 55 — its wave-only posts walked fit defenders up to inner Needles that the stacked wave took
+   *  anyway: falls to Wicks beside fit defenders 1.03 → 0.83 a game, the pre-lane bots 0.86) */
   readonly holdWave: boolean;
   /** FRAY: under this share of health with a foe within 10 m and no kill on, a fighter breaks off (toward a heal if one is
    *  near), whether or not it is being hit right now (0: only the old retreat) */
@@ -166,7 +168,7 @@ export interface DifficultyProfile {
   readonly closeOut: boolean;
   // ── lane AI round 3 (ruling 55) ──
   /** FRAY: a chase that has not closed on its target for this long (s), out of reach and with no gap-closer ready, is given
-   *  up and the target left alone for 6 s (Infinity: never) */
+   *  up and the target left alone for 9 s (Infinity: never; ruling 55: adept 1.0, veteran 0.6, was 1.8 / 1.2) */
   readonly chaseQuit: number;
   // ── ruling 55 ──
   /** structure defence reads a threat before the structure is hit — enemy fighters beside it, a push coming at the road's
@@ -210,7 +212,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
     punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: false, frayBreak: 0.2,
-    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true,
+    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.0, anticipates: true,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -223,7 +225,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
     punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: false, frayBreak: 0.25,
-    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true,
+    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 0.6, anticipates: true,
   },
 };
 

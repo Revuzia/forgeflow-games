@@ -88,7 +88,7 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.93, "yaw": 
           "rim_warm": 0.45,
           "portrait_clip": "idle_lobby", "portrait_t": 0.0, "portrait_yaw": 28.0,
           # (max2 g2 fix) the eyes behind the visor's front (rest, m): render.card_meta notes them for plates.paint_eyes
-          "eyes3d": [[-0.031, -0.128, 1.7335], [0.031, -0.128, 1.7335]]}
+          "eyes3d": [[-0.031, -0.104, 1.733], [0.031, -0.104, 1.733]]}   # (ruling 55: open on the plate)
 # (CW5 refix 2, lisvel-M1: the 512 px bust was half bow fist under a small pale face: every bust is framed tight
 # on the head, bust_lo 0.10 / bust_hi 0.30, render._portrait box)
 # PER-SKIN CARDS (closing review lisvel-M2 / m4; schema: art/blender/portraits.py header): each card its own beat,
@@ -128,7 +128,7 @@ CARDS = {
         # (max2 g2 fix, verify_r2_g2a "wrapped head with eye band (mummy/blindfold)": the brief's smoky glass band with
         # the eyes reading through it, painted at card size where the head carries them (plates.paint_eyes; SPLASH eyes3d)
         "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F4DAB4",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.6, "h": 0.80, "tilt": 0.06, "lid_k": 0.36, "white": "#DAD3C6", "iris": "#6B5A3A", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.42, "ink": "#16140F", "lid_val": 0.96, "socket": 0.18, "line": 0.08, "crease": 0.25}], "portrait": [{"op": "eyes", "w": 1.6, "h": 0.80, "tilt": 0.06, "lid_k": 0.36, "white": "#DAD3C6", "iris": "#6B5A3A", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.42, "ink": "#16140F", "lid_val": 0.96, "socket": 0.18, "line": 0.08, "crease": 0.25}]}},
     },
     "lisvel_gorgewalk": {
         # (card engineer 2, closing2: the Sun Corridor raise crossed the upper limb over the head: Dawn Line's draw from
@@ -150,7 +150,7 @@ CARDS = {
                                 "power": 40.0, "size": 0.25}]},
         "plate": {"tint": "#9AA6B2", "sat": 0.75, "median": 0.30, "glow": [0.12, 0.50, 0.40, 0.06],
                   "glow_color": "#C8D4DE",
-                  "retouch": {"splash": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.90, "to": "#9C7458", "mix": 0.75, "at": [0.005, 0.026], "r": [0.017, 0.030]}, {"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.90, "to": "#9C7458", "mix": 0.9, "at": [0.0, 0.128], "r": [0.085, 0.095]}, {"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
+                  "retouch": {"splash": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.90, "to": "#9C7458", "mix": 0.75, "at": [0.005, 0.026], "r": [0.017, 0.030]}, {"op": "eyes", "w": 1.6, "h": 0.80, "tilt": 0.06, "lid_k": 0.36, "white": "#DAD3C6", "iris": "#6B5A3A", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.42, "ink": "#16140F", "lid_val": 0.96, "socket": 0.18, "line": 0.08, "crease": 0.25}], "portrait": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.90, "to": "#9C7458", "mix": 0.9, "at": [0.0, 0.128], "r": [0.085, 0.095]}, {"op": "eyes", "w": 1.6, "h": 0.80, "tilt": 0.06, "lid_k": 0.36, "white": "#DAD3C6", "iris": "#6B5A3A", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.42, "ink": "#16140F", "lid_val": 0.96, "socket": 0.18, "line": 0.08, "crease": 0.25}]}},
     },
     "lisvel_almanac": {
         # (CW5 round 3 refix, finding:almanac-splash-face: from yaw 22 the head, turned 28 deg to her right, showed a pale
@@ -177,7 +177,7 @@ CARDS = {
                                 "size": 0.3}]},
         # (CW5 round 3, client:CL-1: the reading lamp's warm evening behind her, against the base's cold dawn)
         "plate": {"tint": "#D2AE86", "sat": 0.9, "median": 0.34, "glow": [0.35, 0.60, 0.45, 0.12], "glow_color": "#F0D2A0",
-                  "retouch": {"splash": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.82, "to": "#9C7458", "mix": 0.8, "at": [0.024, 0.04], "r": [0.02, 0.028]}, {"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.86, "to": "#9C7458", "mix": 0.9, "at": [-0.03, 0.115], "r": [0.09, 0.11]}, {"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
+                  "retouch": {"splash": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.82, "to": "#9C7458", "mix": 0.8, "at": [0.024, 0.04], "r": [0.02, 0.028]}, {"op": "eyes", "w": 1.6, "h": 0.80, "tilt": 0.06, "lid_k": 0.36, "white": "#DAD3C6", "iris": "#6B5A3A", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.42, "ink": "#16140F", "lid_val": 0.96, "socket": 0.18, "line": 0.08, "crease": 0.25}], "portrait": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.86, "to": "#9C7458", "mix": 0.9, "at": [-0.03, 0.115], "r": [0.09, 0.11]}, {"op": "eyes", "w": 1.6, "h": 0.80, "tilt": 0.06, "lid_k": 0.36, "white": "#DAD3C6", "iris": "#6B5A3A", "iris_r": 0.70, "iris_y": 0.05, "pupil": 0.42, "ink": "#16140F", "lid_val": 0.96, "socket": 0.18, "line": 0.08, "crease": 0.25}]}},
     },
 }
 TEXTURE_SIZE = 2048
@@ -340,7 +340,10 @@ ARROWS = [(-0.022, -0.012, 0.200, 4.0, 0.0), (0.012, -0.016, 0.215, -3.0, 40.0),
           (0.024, 0.012, 0.205, -6.0, 15.0), (-0.026, 0.016, 0.185, 7.0, 60.0), (0.006, -0.002, 0.225, -1.0, 100.0)]
 
 HEAD_C = np.array([0.0, 0.006, 1.735])
-VIS_Z = 1.733                                         # the visor band's centre height (the eyes)
+VIS_Z = 1.733                                         # the eyes' centre height (the visor band's until ruling 55)
+# (orch1 W3-B, ruling 55: "head wrap and face-plate design", the glass band across the eyes read as a blindfold): the
+# dawnglass band is a slim CIRCLET over the brow now, its centre 4 cm above the eyes, the eyes open on the face-plate
+VIS_BAND_Z = VIS_Z + 0.040
 
 
 # ── shaping helpers ────────────────────────────────────────────────────────────────────────────────────────────
@@ -569,14 +572,14 @@ class _VisorSlab(sdf.Prim):
     swept along the same path: a glass wall 7.2 mm thick and 5 cm tall, a flat front 3.2 cm ahead of the face"""
 
     def bounds(self):
-        return np.array([-0.11, -0.15, VIS_Z - 0.03]), np.array([0.11, -0.02, VIS_Z + 0.03])
+        return np.array([-0.11, -0.15, VIS_BAND_Z - 0.03]), np.array([0.11, -0.02, VIS_BAND_Z + 0.03])
 
     def d(self, P):
         x = np.clip(P[:, 0], -VIS_XE + 1e-4, VIS_XE - 1e-4)
         e = 1e-4
         sl = (visor_path(x + e) - visor_path(x - e)) / (2 * e)
         wall = np.abs(P[:, 1] - visor_path(x)) / np.sqrt(1.0 + sl * sl) - VIS_T
-        band = np.abs(P[:, 2] - VIS_Z) - VIS_H
+        band = np.abs(P[:, 2] - VIS_BAND_Z) - VIS_H
         ends = np.abs(P[:, 0]) - VIS_XE
         return np.maximum(np.maximum(wall, band), ends)
 
@@ -920,9 +923,11 @@ def sculpts() -> list:
     # its silhouette breaks from the top-down camera (rigid on the head; it ends above the roll)
     wrap.add(Ellipsoid((0.0, 0.110, 1.722), (0.042, 0.030, 0.034)), k=0.014)                          # the knot
     wrap.add(RoundCone((0.004, 0.124, 1.708), (0.016, 0.138, 1.652), 0.024, 0.015), k=0.012)          # its tail
-    wrap.sub(Ellipsoid((0.0, -0.118, 1.695), (0.070, 0.075, 0.098)), k=0.014)                        # the face opening
+    # (ruling 55: the wound bands a step flatter (displacement 9.5 -> 5.5 mm) and the face opening wider and taller,
+    # so the wrap frames a face as a headscarf, never a bandaged head)
+    wrap.sub(Ellipsoid((0.0, -0.118, 1.700), (0.078, 0.078, 0.106)), k=0.016)                        # the face opening
     wrap.inter(HalfSpace((0, 0, 1.585), (0, 0, -1), 1.0), k=0.02)
-    part("wrap", _with_disp(wrap, turban_layers, 0.0095), "wrap", "bone:head", 1300, vs=0.8, uvw=1.6)
+    part("wrap", _with_disp(wrap, turban_layers, 0.0055), "wrap", "bone:head", 1300, vs=0.8, uvw=1.6)
 
     # FACE-PLATE (rigid on the head): a smooth, calm chalk face (review item 3: the deep shell, the beak nose and the
     # parted lips read as an aged statue): a broad oval brow, a narrower jaw and a soft chin, a short soft nose, closed
@@ -933,7 +938,7 @@ def sculpts() -> list:
     mask.add(Ellipsoid((0.0, -0.044, 1.722), (0.069, 0.062, 0.088)), k=0.0)
     mask.add(Ellipsoid((0.0, -0.043, 1.668), (0.058, 0.0505, 0.062)), k=0.022)
     mask.inter(HalfSpace((0, -0.048, 1.7), (0, 1, 0), 1.0), k=0.012)
-    mask.sub(Ellipsoid((0.0, -0.112, VIS_Z + 0.001), (0.078, 0.020, 0.0185)), k=0.006)            # the eye recess
+    # (ruling 55: no eye recess: the eyes are painted open on the plate, paint_mask)
     # (W5b, final parity review originality F9: "Lisvel's wrapped, featureless head" - under the visor the face read as
     # a smooth blank egg in the portrait and the icon): a CARVED face plate, the concept's - each cheek a flat plane
     # turned ~49 deg off the front meeting the front in a crisp edge, a proud carved nose (12 mm off the face, was 6)
@@ -2136,11 +2141,10 @@ def paint_mask(p, n):
         # (W5b, the look check: inked dark, the near-vertical lines under the visor read as tear streaks - the
         # horror line): each line its own depth - the horizontal seams and the chin's outline cut clearly, the
         # nasolabial lines faint, the cheekbone-to-jaw line gone
-        for (x0, z0, x1, z1), wt in (((0.0, 1.760, 0.0, 1.800), 0.75), ((0.0, 1.775, 0.028, 1.792), 0.75),
-                                     ((0.028, 1.792, 0.050, 1.785), 0.75),
-                                     ((0.012, 1.700, 0.040, 1.708), 0.85), ((0.040, 1.708, 0.062, 1.712), 0.85),
-                                     ((0.014, 1.690, 0.022, 1.662), 0.38), ((0.022, 1.662, 0.030, 1.630), 0.38),
-                                     ((0.030, 1.630, 0.016, 1.616), 0.75), ((0.030, 1.630, 0.044, 1.632), 0.75)):
+        for (x0, z0, x1, z1), wt in (
+                                     # (ruling 55: the cheek seams and the nasolabial lines are gone; the open
+                                     # face keeps only the chin's outline; the brow lines went under the circlet)
+                                     ((0.030, 1.630, 0.016, 1.616), 0.60), ((0.030, 1.630, 0.044, 1.632), 0.60)):
             a, b = np.array([sx * x0, z0]), np.array([sx * x1, z1])
             t = np.clip(((q - a) @ (b - a)) / max((b - a) @ (b - a), 1e-9), 0, 1)
             d = np.linalg.norm(q - (a + np.outer(t, b - a)), axis=1)
@@ -2152,13 +2156,30 @@ def paint_mask(p, n):
     liplit = liplit * _ss(-0.072, -0.088, y)
     # (W5b: 0.42 -> 0.66, the ink cut: the carving read as faint scratches from the portrait's distance)
     col = col * (1.0 - 0.66 * fac)[:, None] * (1.0 + 0.16 * liplit)[:, None]
-    # the ink recess behind the glass
-    rec = _ss(0.0185, 0.0150, np.abs(z - VIS_Z)) * _ss(-0.101, -0.094, y) * _ss(0.082, 0.070, np.abs(x))
-    col = _mix(col, C("recess"), rec)
-    # (CW5 refix 2, lisvel-M1: the lid line under the visor) the visor's cast shade on the cheeks: a dark soft band
-    # right under the glass, so the eye line reads as a line across the face at card scale
-    ul = np.exp(-((z - (VIS_Z - 0.0215)) / 0.0042) ** 2) * _ss(0.072, 0.050, np.abs(x)) * _ss(-0.072, -0.086, y)
-    return col * (1.0 - 0.66 * ul)[:, None]
+    # (orch1 W3-B, ruling 55) the eyes, open on the plate under the circlet: a soft socket, a muted white, a warm
+    # hazel iris with a dark pupil, the calm upper lid over the iris's top, an ink lash line, a crease and brows
+    ax = np.abs(x)
+    EL, EH, EX = 0.0160, 0.0080, 0.031
+    u = (ax - EX) / EL
+    v = (z - (VIS_Z + 0.06 * (ax - EX))) / EH
+    qq = np.clip(1.0 - u * u, 0.0, 1.0)
+    top, bot = qq ** 0.7, -0.80 * qq ** 0.9
+    ins = _ss(0.0, 0.10, np.minimum(np.minimum(top - v, v - bot), 1.0 - np.abs(u))) * front
+    col = col * (1.0 - 0.22 * np.exp(-((u / 1.45) ** 2 + ((v - 0.2) / 2.1) ** 2) * 2.0) * front)[:, None]
+    col = _mix(col, _hl("#DAD3C6"), 0.95 * ins)
+    di = np.hypot(u * EL, (v - 0.05) * EH)
+    ir = 0.70 * EH
+    col = _mix(col, _hl("#6B5A3A"), 0.97 * _ss(ir, ir - 0.0007, di) * ins)
+    col = _mix(col, _hl("#16140F"), 0.96 * _ss(0.42 * ir, 0.42 * ir - 0.0006, di) * ins)
+    edge = top - 0.36 * (top - bot)
+    col = _mix(col, C("mask") * k[:, None] * 0.96, 0.97 * ins * _ss(edge, edge + 0.10, v))
+    lash = _ss(0.16, 0.08, np.abs(v - edge)) * _ss(1.08, 1.0, np.abs(u)) * front
+    col = _mix(col, _hl("#1B1A1C"), 0.92 * lash)
+    crease = _ss(0.12, 0.05, np.abs(v - (top + 0.55))) * _ss(0.85, 0.70, np.abs(u)) * front
+    col = col * (1.0 - 0.30 * crease)[:, None]
+    bu = (ax - EX) / (EL * 1.15)
+    brow = _ss(0.0035, 0.0012, np.abs(z - (VIS_Z + 0.019 + 0.003 * (1 - bu * bu)))) * _ss(1.0, 0.8, np.abs(bu)) * front
+    return _mix(col, _hl("#6A5546"), 0.70 * brow)
 
 
 def paint_visor(p, n):
@@ -2167,24 +2188,13 @@ def paint_visor(p, n):
     carved CLOSED eyelids reading through it (a calm lid curve, a soft lit lid above each), a painted sky streak
     along the top edge (the brightest texels on the figure, ~L* 95), a crisp highlight line under it and two slanted
     glints, the warm ground's reflection along the lower edge; the ends darker where they turn into the wrap"""
-    x, y, z = p[:, 0], p[:, 1], p[:, 2] - VIS_Z
+    x, y, z = p[:, 0], p[:, 1], (p[:, 2] - VIS_BAND_Z) * (0.025 / VIS_H)   # (ruling 55: the slim circlet)
     outv = np.stack([x / VIS_AX ** 2, (y - VIS_Y0) / VIS_AY ** 2, np.zeros(len(p))], 1)
     outv = outv / (np.linalg.norm(outv, axis=1, keepdims=True) + 1e-9)
     fr = _ss(0.35, 0.75, (n * outv).sum(1)) * (1.0 - _ss(0.6, 0.85, np.abs(n[:, 2])))
     ax = np.abs(x)
     col = np.tile(C("glass"), (len(p), 1))
-    # the recess behind the glass: a deep smoky band, densest at the middle
-    deep = np.exp(-((z + 0.001) / 0.0150) ** 2) * fr * _ss(0.076, 0.050, ax)
-    col = _mix(col, C("glass_deep"), 0.90 * deep)      # (r2 refix: the eye line reads as a dark band at splash size)
-    # the closed eyelids seen through it: the lid line a gentle downward curve, the lid above it catching light
-    for sx in (-1.0, 1.0):
-        dx = x - sx * 0.030
-        zl = -0.0015 - 0.0042 * np.clip(1.0 - (dx / 0.0165) ** 2, 0.0, 1.0)
-        span = _ss(0.0175, 0.0135, np.abs(dx)) * fr
-        lid = np.exp(-((dx / 0.0150) ** 2 + ((z - zl - 0.0052) / 0.0050) ** 2)) * fr
-        col = _mix(col, C("glass_lid"), 0.55 * lid)
-        lash = np.exp(-((z - zl) / 0.0012) ** 2) * span
-        col = _mix(col, C("glass_eye") * 0.45, 0.85 * lash)
+    # (ruling 55: the circlet sits over the brow: no smoky eye band and no eyelids in the glass)
     # the sky's reflection over the upper third, the streak along the top edge, the highlight line and glints
     sky_band = _ss(0.002, 0.016, z) * fr
     col = _mix(col, C("glass_sky"), 0.18 * sky_band)
@@ -3975,10 +3985,10 @@ def model(ctx) -> list:
     return P
 
 
-VIS_T, VIS_H = 0.0028, 0.025                          # the visor glass: half thickness, half height
+VIS_T, VIS_H = 0.0028, 0.013                          # the visor glass: half thickness, half height (ruling 55: 2.5 -> 1.3 cm)
 VIS_XE = 0.076                                        # the band's ends, tucked inside the wrap's silhouette at the
                                                       # temples (closing lisvel-M1: 0.082 stood 3-4 px past it)
-VIS_AX, VIS_Y0, VIS_AY = 0.0855, 0.0255, 0.1620       # its path: an elliptic arc, the front 3.2 cm off the face
+VIS_AX, VIS_Y0, VIS_AY = 0.0855, 0.0255, 0.1440       # its path: an elliptic arc (ruling 55: 2.3 cm off the brow)
 
 
 def visor_path(x):
@@ -4001,7 +4011,7 @@ def visor_mesh(col, n=46):
     rings = []
     for x in xs:
         e = 1e-4
-        p0 = np.array([x, float(visor_path(x)), VIS_Z])
+        p0 = np.array([x, float(visor_path(x)), VIS_BAND_Z])
         t = _n(np.array([2 * e, float(visor_path(x + e) - visor_path(x - e)), 0.0]))
         out = np.array([t[1], -t[0], 0.0])                      # away from the head (front: -y)
         if out[1] > 0:

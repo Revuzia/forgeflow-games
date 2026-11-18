@@ -75,7 +75,7 @@ SOCKETS = {"weapon": "prop.R", "dart_tip": "x_dart_tip", "quiver": "x_quiver"}
 # (final parity client F3: fill 0.88 -> 0.94, the figure at 0.81 of the splash's height, 0.68 of W2's loading card)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.94, "yaw": 22.0, "rim_cool": 0.35, "rim_warm": 0.45,
           # (max2 g2 fix) two eyes in the carved band's slit (rest, m: BAND_Z - BAND_H + 6 mm), for plates.paint_eyes
-          "eyes3d": [[-0.030, -0.138, 1.699], [0.030, -0.138, 1.699]]}
+          "eyes3d": [[-0.030, -0.140, 1.7115], [0.030, -0.140, 1.7115]]}   # (ruling 55: the eye window)
 # PER-SKIN CARDS (closing review ULK-M1; schema: art/blender/portraits.py header). Each card is its own moment, the crest
 # of darts fanning to screen-right (the camera on her right side): base: the Hurl's draw on the high rim at dusk, low
 # stride, the thrower drawn back, the laid dart's dawnglass catching the low sun as the key; Highrim: Bound's leap
@@ -110,7 +110,7 @@ CARDS = {
         # (max2 g2 fix: the face-only xAI repaint put photo-real eyes in the slit: two stylised lidded eyes painted on
         # the 3D card instead, plates.paint_eyes; the painted portrait keeps its own)
         "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496", "haze": 0.0, "match": 0.12,
-                  "wrap": 0.16, "amb_tint": 0.30, "retouch": {"splash": [{"op": "eyes", "w": 1.7, "h": 0.75, "tilt": 0.06, "lid_k": 0.40, "iris": "#211C1A", "ink": "#121012", "lid": "#9C8466", "socket": 0.60, "line": 0.10, "crease": 0.0}]}},
+                  "wrap": 0.16, "amb_tint": 0.30, "retouch": {"splash": [{"op": "eyes", "w": 1.50, "h": 0.74, "tilt": 0.05, "lid_k": 0.36, "white": "#D2C6B4", "iris": "#6A4A30", "iris_r": 0.82, "iris_y": 0.05, "pupil": 0.42, "ink": "#15110E", "lid": "#7E5640", "socket": 0.15, "line": 0.08, "crease": 0.2}]}},
     },
     "ulkro_highrim": {
         # (card engineer 2, closing2: Bound's leap floated the figure off the ground: the Hamstring Dart's crouch, feet down)
@@ -122,7 +122,7 @@ CARDS = {
         "portrait": {"yaw": -22.0, "lens": 70.0},
         # (max2 g2 fix, verify_r2_g2a "no eyes: blank/mummy wrap face": two lidded eyes in the slit, plates.paint_eyes)
         "plate": {"glow": [0.55, 0.30, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.85,
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#A39C90", "socket": 0.15, "line": 0.08, "crease": 0.0}], "portrait": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#A39C90", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.50, "h": 0.74, "tilt": 0.05, "lid_k": 0.36, "white": "#D2C6B4", "iris": "#6A4A30", "iris_r": 0.82, "iris_y": 0.05, "pupil": 0.42, "ink": "#15110E", "lid": "#7E5640", "socket": 0.15, "line": 0.08, "crease": 0.2}], "portrait": [{"op": "eyes", "w": 1.50, "h": 0.74, "tilt": 0.05, "lid_k": 0.36, "white": "#D2C6B4", "iris": "#6A4A30", "iris_r": 0.82, "iris_y": 0.05, "pupil": 0.42, "ink": "#15110E", "lid": "#7E5640", "socket": 0.15, "line": 0.08, "crease": 0.2}]}},
     },
     "ulkro_long_evening": {
         # (max2 g2, verify_roll2: one dark dot in the slit read as a single cyclops eye at card size: a three-quarter
@@ -142,7 +142,7 @@ CARDS = {
         "portrait": {"yaw": 16.0, "lens": 70.0},
         # (max2 g2 fix 2: the restaged splash's highlights sat at p99.9 229 under card_qa's 230: sub_hi 0.93 -> 0.95)
         "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866", "sub_hi": 0.95,
-                  "retouch": {"splash": [{"op": "close", "px": 9, "at": [-0.07, 0.395], "r": [0.075, 0.07]}, {"op": "eyes", "w": 1.7, "h": 0.75, "tilt": 0.06, "lid_k": 0.40, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.60, "line": 0.10, "crease": 0.0}], "portrait": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
+                  "retouch": {"splash": [{"op": "close", "px": 9, "at": [-0.07, 0.395], "r": [0.075, 0.07]}, {"op": "eyes", "w": 1.50, "h": 0.74, "tilt": 0.05, "lid_k": 0.36, "white": "#D2C6B4", "iris": "#6A4A30", "iris_r": 0.82, "iris_y": 0.05, "pupil": 0.42, "ink": "#15110E", "lid": "#7E5640", "socket": 0.15, "line": 0.08, "crease": 0.2}], "portrait": [{"op": "eyes", "w": 1.50, "h": 0.74, "tilt": 0.05, "lid_k": 0.36, "white": "#D2C6B4", "iris": "#6A4A30", "iris_r": 0.82, "iris_y": 0.05, "pupil": 0.42, "ink": "#15110E", "lid": "#7E5640", "socket": 0.15, "line": 0.08, "crease": 0.2}]}},
     },
 }
 TEXTURE_SIZE = 2048
@@ -362,7 +362,7 @@ def fist(name, grip, axis, wrist, knuckle, shaft_r, scale=1.0, index_fwd=1.0):
     bk = _n(toward_w - u * (toward_w @ u))             # from the shaft toward the back of the hand / wrist
     kn = _n(np.asarray(knuckle, float) - u * (u @ knuckle))
     q = _n(np.cross(u, kn))
-    fr = 0.0118 * scale
+    fr = 0.0130 * scale        # (ruling 55: "fragmented gloves": fingers a step fuller, fused into one glove below)
     rf = shaft_r + fr * 0.95
     # palm + back of the hand: between the shaft and the wrist, knuckle side up
     S.add(Ellipsoid(g + bk * 0.046 * scale + kn * 0.006, (0.048 * scale, 0.034 * scale, 0.027 * scale),
@@ -375,8 +375,8 @@ def fist(name, grip, axis, wrist, knuckle, shaft_r, scale=1.0, index_fwd=1.0):
         ths = np.radians(np.array([-35.0, 25.0, 95.0, 165.0, 230.0 * ln]))
         pts = [c + rf * (np.cos(t) * kn + np.sin(t) * q) for t in ths]
         pts[0] = pts[0] + bk * 0.022 * scale
-        S.add(Tube(pts, [fr * 1.05, fr, fr * 0.96, fr * 0.9, fr * 0.82], k=0.006), k=0.006)
-        S.add(Sphere(c + kn * (rf + 0.004) + bk * 0.012 * scale, fr * 1.05), k=0.008)   # knuckle
+        S.add(Tube(pts, [fr * 1.05, fr, fr * 0.96, fr * 0.9, fr * 0.82], k=0.008), k=0.011)
+        S.add(Sphere(c + kn * (rf + 0.004) + bk * 0.012 * scale, fr * 1.05), k=0.012)   # knuckle
     # thumb: from the palm's base round the other side, its tip over the index finger
     tb = g + bk * 0.04 * scale - u * 0.03 * scale * index_fwd - q * 0.022 * scale
     S.add(Tube([tb, g - q * (rf + 0.004) + bk * 0.012 - u * 0.006 * index_fwd,
@@ -664,8 +664,8 @@ def sculpts() -> list:
     part("bracers", br, "leather", "auto", 620)
     WK_R = _n(np.array([-0.2, -0.55, 0.8]))           # the right fist's knuckles: up and forward
     WK_L = _n(np.array([0.15, -0.9, -0.1]))           # the left: forward, the palm toward her
-    part("hand_R", fist("hand_R", GRIP_R, AX, WR_R, WK_R, 0.024, 1.08, index_fwd=1.0), "skin", "bone:hand.R", 700, vs=0.55)
-    part("hand_L", fist("hand_L", GRIP_L, AX, WR_L, WK_L, DART_R, 1.04, index_fwd=-1.0), "skin", "bone:hand.L", 650, vs=0.55)
+    part("hand_R", fist("hand_R", GRIP_R, AX, WR_R, WK_R, 0.024, 1.08, index_fwd=1.0), "skin", "bone:hand.R", 820, vs=0.42)
+    part("hand_L", fist("hand_L", GRIP_L, AX, WR_L, WK_L, DART_R, 1.04, index_fwd=-1.0), "skin", "bone:hand.L", 780, vs=0.42)
 
     # SKIRT: the wrapped tunic's long skirt from the sash to the hem, split at the front (analytic hips/thigh weights)
     sk = Sculpt("skirt")
@@ -1747,8 +1747,34 @@ def paint_eyeband(p, n):
     v = (0.92 + 0.05 * NOISE(p, 40.0)) * (1 - 0.40 * np.clip(carve, 0, 1)) * (1 + 0.12 * _ss(0.010, 0.019, z))
     v = v * (0.85 + 0.20 * np.clip(-n[:, 1], 0, 1))
     col = _hl("#4A382B") * v[:, None]
-    slit = np.exp(-((z - (-BAND_H + 0.006)) / 0.0035) ** 2) * (n[:, 1] < 0.2)
-    return col * (1 - slit[:, None]) + _hl("#17161A") * slit[:, None]
+    # (orch1 W3-B, ruling 55: "eye slits too thin", 5 cards fail): the band's front is an open eye WINDOW in her own
+    # skin between the carved wood's rims, with two calm lidded eyes (a muted white, a dark-brown iris and pupil, the
+    # upper lid over the iris's top, an ink lash line); the thin ink slit is gone
+    ax = np.abs(p[:, 0])
+    front = _ss(0.15, 0.55, -n[:, 1])
+    win = _ss(0.064, 0.050, ax) * _ss(-BAND_H + 0.0035, -BAND_H + 0.0075, z) * _ss(BAND_H - 0.004, BAND_H - 0.008, z) * front
+    skin = _hl("#8E6248") * (0.95 + 0.10 * np.clip(-n[:, 1], 0, 1))[:, None]
+    col = col * (1 - win[:, None]) + skin * win[:, None]
+    EL, EH, EX, EZ = 0.0150, 0.0074, 0.0300, BAND_Z - 0.0005
+    u = (ax - EX) / EL
+    v = (p[:, 2] - (EZ + 0.05 * (ax - EX))) / EH
+    q = np.clip(1.0 - u * u, 0.0, 1.0)
+    top, bot = q ** 0.7, -0.80 * q ** 0.9
+    m = np.minimum(np.minimum(top - v, v - bot), 1.0 - np.abs(u))
+    ins = np.clip(m / 0.10, 0, 1) ** 2 * (3 - 2 * np.clip(m / 0.10, 0, 1)) * win
+    mix = lambda c, h, t: c * (1 - t[:, None]) + _hl(h) * t[:, None]     # noqa: E731
+    col = mix(col, "#5E3F2E", np.exp(-((u / 1.45) ** 2 + ((v - 0.2) / 2.0) ** 2) * 2.0) * win * 0.35)
+    col = mix(col, "#D2C6B4", ins * 0.95)
+    di = np.hypot(u * EL, (v - 0.05) * EH)
+    ir = 0.82 * EH
+    col = mix(col, "#6A4A30", _ss(ir, ir - 0.0007, di) * ins * 0.97)
+    col = mix(col, "#15110E", _ss(0.42 * ir, 0.42 * ir - 0.0006, di) * ins * 0.96)
+    edge = top - 0.36 * (top - bot)
+    col = mix(col, "#7E5640", ins * _ss(edge, edge + 0.10, v) * 0.97)
+    lash = _ss(0.16, 0.08, np.abs(v - edge)) * _ss(1.08, 1.0, np.abs(u)) * win
+    col = mix(col, "#17120F", lash * 0.92)
+    crease = _ss(0.12, 0.05, np.abs(v - (top + 0.55))) * _ss(0.85, 0.70, np.abs(u)) * win
+    return mix(col, "#5A3C2C", crease * 0.5)
 
 
 def paint_tail(p, n):

@@ -139,7 +139,7 @@ CARDS = {
                   # (max2 g2 fix, verify_r2_g2a: the face-only xAI repaint put photo-real white-sclera eyes in the cracked
                   # mask: stylised lidded eyes painted in the recesses on the 3D card instead, plates.paint_eyes)
                   # (and "pot reads as an eyeball": the near pot's blue glass a step calmer, less saturated and darker)
-                  "retouch": {"splash": [{"op": "hue", "at": [-0.53, 0.24], "r": [0.075, 0.085], "h": [185.0, 250.0], "s_min": 0.25, "sat": 0.45, "val": 0.72}, {"op": "eyes", "w": 4.0, "h": 1.5, "tilt": 0.12, "lid_k": 0.55, "iris": "#35281F", "ink": "#151112", "lid": "#CFA06A", "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
+                  "retouch": {"splash": [{"op": "hue", "at": [-0.53, 0.24], "r": [0.075, 0.085], "h": [185.0, 250.0], "s_min": 0.25, "sat": 0.45, "val": 0.72}, {"op": "eyes", "w": 4.2, "h": 2.0, "tilt": 0.07, "lid_k": 0.38, "white": "#D6C9B2", "iris": "#5C3F27", "iris_r": 0.70, "iris_y": 0.02, "pupil": 0.42, "ink": "#15100D", "lid": "#B98F5E", "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
     },
     "odrum_noon_fair": {
         # (card engineer 2, closing2: the run collapsed the bar onto the shoulder and hid a pot: the festival porter's
@@ -157,7 +157,7 @@ CARDS = {
         "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4",
                   "face_off": {"splash": [0.0, 0.035]},     # (max2 g2: the face's middle on the three-quarter splash)
                   # (max2 g2 fix, verify_r2_g2a "fragmented yoke hand": the skin hand's holes and shard gaps closed)
-                  "retouch": {"splash": [{"op": "close", "px": 7, "at": [-0.225, 0.075], "r": [0.05, 0.045]}, {"op": "eyes", "w": 4.0, "h": 1.5, "tilt": 0.12, "lid_k": 0.55, "iris": "#2A211C", "ink": "#151112", "lid": "#A29482", "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
+                  "retouch": {"splash": [{"op": "close", "px": 7, "at": [-0.225, 0.075], "r": [0.05, 0.045]}, {"op": "eyes", "w": 4.2, "h": 2.0, "tilt": 0.07, "lid_k": 0.38, "white": "#D6C9B2", "iris": "#5C3F27", "iris_r": 0.70, "iris_y": 0.02, "pupil": 0.42, "ink": "#15100D", "lid": "#B98F5E", "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
     },
     "odrum_shadeprint": {
         # (closing round 2: the bent neck of cast_a1 lost the eye inlays and the raised pole shrank the figure)
@@ -183,8 +183,8 @@ CARDS = {
                   # crack lines closed, the slits painted as lidded eyes in the recesses)
                   # (max2 g2 fix 2: the splash still tripped card_qa blank 0.72 and a yellow inlay rim showed round the
                   # painted almonds: the rim taken to the lid grey (hue op), the socket shade 0 -> 0.35, smoke 0.30 -> 0.45)
-                  "retouch": {"splash": [{"op": "close", "px": 2, "at": [0.0, 0.0], "r": [0.05, 0.055]}, {"op": "hue", "h": [20.0, 80.0], "s_min": 0.12, "sat": 0.2, "val": 0.75, "to": "#8C8290", "mix": 0.6, "at": [0.0, 0.0], "r": [0.05, 0.05]}, {"op": "eyes", "w": 4.0, "h": 1.5, "tilt": 0.12, "lid_k": 0.30, "iris": "#1E1714", "ink": "#151112", "lid": "#8C8290", "socket": 0.35, "smoke": [4.2, 2.4, 0.45], "line": 0.17, "crease": 0.0}],
-                              "portrait": [{"op": "close", "px": 4, "at": [0.0, 0.0], "r": [0.20, 0.22]}, {"op": "eyes", "w": 4.0, "h": 1.5, "tilt": 0.12, "lid_k": 0.55, "iris": "#2A211C", "ink": "#151112", "lid": "#8C8290", "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
+                  "retouch": {"splash": [{"op": "close", "px": 2, "at": [0.0, 0.0], "r": [0.05, 0.055]}, {"op": "hue", "h": [20.0, 80.0], "s_min": 0.12, "sat": 0.2, "val": 0.75, "to": "#8C8290", "mix": 0.6, "at": [0.0, 0.0], "r": [0.05, 0.05]}, {"op": "eyes", "w": 4.2, "h": 2.0, "tilt": 0.07, "lid_k": 0.38, "white": "#D6C9B2", "iris": "#5C3F27", "iris_r": 0.70, "iris_y": 0.02, "pupil": 0.42, "ink": "#15100D", "lid": "#B98F5E", "socket": 0.0, "line": 0.12, "crease": 0.0}],
+                              "portrait": [{"op": "close", "px": 4, "at": [0.0, 0.0], "r": [0.20, 0.22]}, {"op": "eyes", "w": 4.2, "h": 2.0, "tilt": 0.07, "lid_k": 0.38, "white": "#D6C9B2", "iris": "#5C3F27", "iris_r": 0.70, "iris_y": 0.02, "pupil": 0.42, "ink": "#15100D", "lid": "#B98F5E", "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
     },
 }
 SKINS: list = [
@@ -220,7 +220,7 @@ SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_sling_pouch", "pot_l": "x_pot_l"
 # splash's height, 0.64 of W2's loading card; now in the cast's 0.82-0.89 band with both jars inside the frame)
 # (max2 g2 fix) "eyes3d": the almond recesses' centres (EYES; rest, m, on the voids' floor) for plates.paint_eyes
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.86, "x": 0.70, "pitch": 1.0, "yaw": 30.0,
-          "eyes3d": [[-0.079, -0.150, 1.651], [0.067, -0.150, 1.652]],
+          "eyes3d": [[-0.079, -0.156, 1.651], [0.067, -0.156, 1.652]],
           "sun": 2.25}
 HERO_SPEC = 0.0                       # the hero renders' specular level (see _install_render)
 HERO_FILL = 0.55                      # ... and the sky fill under the map's (see _install_render): the shading carries
@@ -521,12 +521,15 @@ def groove(S: Sculpt, prim, xz, r=0.0045, side=-1.0, k=0.002, sink=0.0):
 MX, FY = -0.005, -0.168             # the painted face's centre line and the mask's front plane
 # the almond eye voids: (centre x, centre z, half length, half height, slant deg): the inner corners lower (the
 # concept's angry slant), deep enough to read as black voids, not painted lids
-EYES_PAINTED = {-1: (MX - 0.075, 1.654, 0.045, 0.0185, 13.0), 1: (MX + 0.073, 1.655, 0.043, 0.0180, 13.0)}
+EYES_PAINTED = {-1: (MX - 0.075, 1.654, 0.045, 0.0230, 4.0), 1: (MX + 0.073, 1.655, 0.043, 0.0225, 4.0)}
+# (orch1 W3-B, ruling 55: "slit eyes on a salmon mask", the scowl and the black voids): the eyes are calm, level,
+# shallow almond recesses (slant 16 -> 4 deg, a third taller, 1.2 cm deep, the brow cut no longer flattening them)
+# with a painted open eye on the floor: a muted white, a dark-brown iris and pupil, the upper lid over the iris's top
 # the carved slits: narrower than the painted eyes, slanted harder and their tops cut straight under the brows (a
 # scowl, not round ovals): the lens keeps EYE_TOP of its half height above its long axis
-EYES = {-1: (MX - 0.074, 1.651, 0.044, 0.0170, 16.0), 1: (MX + 0.072, 1.652, 0.042, 0.0165, 16.0)}
-EYE_TOP = 0.42
-EYE_FLOOR = FY + 0.030              # the voids' flat floor (3 cm into the face)
+EYES = {-1: (MX - 0.074, 1.651, 0.044, 0.0215, 4.0), 1: (MX + 0.072, 1.652, 0.042, 0.0210, 4.0)}
+EYE_TOP = 0.85
+EYE_FLOOR = FY + 0.012              # the recesses' flat floor (ruling 55: 1.2 cm into the face, was 3)
 BROW_Z = (1.706, 1.790)             # the brow band (the mask's top slab across the cap's front)
 BAND_FY = -0.201                    # its front plane: 3.3 cm proud of the face, overhanging the brows (a stone block)
 MASK_SIDE = 0.148                   # half-width of the face at the eye line (the head block continues it)
@@ -558,6 +561,46 @@ def eye_void(sx) -> sdf.Blend:
     S.inter(HalfSpace((0, EYE_FLOOR, 0), (0, 1, 0), 1.0), k=0.004)
     S.inter(HalfSpace(c + w * h * EYE_TOP, w, 1.0), k=0.002)           # the straight top under the brow
     return as_prim(S)
+
+
+EYE_PAINT = {"white": "#D6C9B2", "iris": "#5C3F27", "iris_dk": "#3E2A1A", "pupil": "#15100D", "lid": "#B98F5E",
+             "lash": "#1C1512"}
+
+
+def eye_floor_paint(P, base, hexf):
+    """(ruling 55) colours for eye-recess texels P (n, 3): on the floor an open eye (a muted white almond, an iris disc
+    with a pupil, the calm upper lid over the iris's top with an ink lash line), the walls keep `base`. `hexf` maps a
+    hex to the caller's colour space."""
+    P = np.asarray(P, dtype=np.float64)
+    out = np.asarray(base, dtype=np.float64).copy()
+    E = {k: np.asarray(hexf(h), dtype=np.float64) for k, h in EYE_PAINT.items()}
+    floor = _smooth(EYE_FLOOR - 0.006, EYE_FLOOR - 0.002, P[:, 1])
+    for sx in (-1, 1):
+        c, u, w = eye_frame(sx)
+        _, _, L, h, _ = EYES[sx]
+        q = P - c
+        a, b = (q @ u) / L, (q @ w) / h
+        near = np.abs(q[:, 0]) < L * 1.3
+        if not near.any():
+            continue
+        qq = np.clip(1.0 - a * a, 0.0, 1.0)
+        top, bot = 0.82 * qq ** 0.7, -0.80 * qq ** 0.9
+        ins = _smooth(0.0, 0.12, np.minimum(np.minimum(top - b, b - bot), 1.0 - np.abs(a))) * floor * near
+        col = out * (1 - ins[:, None]) + E["white"][None] * ins[:, None]
+        di = np.hypot(a * L, (b - 0.02) * h)
+        ir = 0.70 * h
+        irc = E["iris"][None] + (E["iris_dk"] - E["iris"])[None] * _smooth(0.45 * ir, 0.95 * ir, di)[:, None]
+        k_ = (_smooth(ir, ir - 0.0012, di) * ins)[:, None]
+        col = col * (1 - k_) + irc * k_
+        k_ = (_smooth(0.42 * ir, 0.42 * ir - 0.0010, di) * ins)[:, None]
+        col = col * (1 - k_) + E["pupil"][None] * k_
+        edge = top - 0.38 * (top - bot)
+        k_ = (ins * _smooth(edge, edge + 0.10, b))[:, None]
+        col = col * (1 - k_) + E["lid"][None] * k_
+        k_ = (_smooth(0.15, 0.07, np.abs(b - edge)) * _smooth(1.06, 0.98, np.abs(a)) * floor * near)[:, None] * 0.92
+        col = col * (1 - k_) + E["lash"][None] * k_
+        out = np.where(near[:, None], col, out)
+    return out
 
 
 def in_eye(P, grow=0.0, eyes=None) -> np.ndarray:
@@ -604,7 +647,7 @@ def beak() -> sdf.Blend:
     return as_prim(S)
 
 
-def fist(name, C, b, e1, e2, R, wrist=None) -> Sculpt:
+def fist(name, C, b, e1, e2, R, wrist=None, solid=False) -> Sculpt:
     """A carved fist closed round a grip channel through C along b (a bar's axis when it holds one). Across b, e1
     points from the channel to the wrist (the hand's body) and e2 to the back of the hand. Four separate fingers side
     by side along b (the index at -b), each in carved segments wrapped round the channel at radius R: the MCP
@@ -625,6 +668,8 @@ def fist(name, C, b, e1, e2, R, wrist=None) -> Sculpt:
     S.add(RoundBox(body_c, (0.049, 0.037, 0.026), 0.015, axes=np.stack([b, e1, e2])), k=0.0)
     # the curled fingers close on the palm (or on the bar): no hole through the fist
     S.add(Capsule(C - b * 0.036 + e1 * 0.004, C + b * 0.036 + e1 * 0.004, max(0.012, R - 0.012)), k=0.006)
+    if solid:   # (orch1 W3-B, ruling 55: "holed hands") an empty fist is closed right through: no channel to see into
+        S.add(Capsule(C - b * 0.040, C + b * 0.040, R + 0.002), k=0.010)
     if wrist is not None:
         S.add(Capsule(body_c + e1 * 0.02, np.asarray(wrist, dtype=np.float64), 0.026), k=0.012)
     fingers = ((-0.0375, 0.0138, 0.0), (-0.0125, 0.0144, 0.0), (0.0125, 0.0138, -0.001), (0.0370, 0.0122, -0.005))
@@ -914,7 +959,7 @@ def sculpts(lanterns: bool = False) -> list:
     # proud, the thumb laid across the fingers; see fist()). The left one hangs closed (its grip channel runs
     # front to back, the knuckles out, the thumb forward); the right one closes round the yoke above the shoulder,
     # the palm side and the thumb toward the camera, the fingers over the top of the bar
-    part("hand_L", fist("hand_L", *FIST_L), "sandstone", "bone:hand.L", 850, 0.8)
+    part("hand_L", fist("hand_L", *FIST_L, solid=True), "sandstone", "bone:hand.L", 850, 0.8)
     part("hand_R", fist("hand_R", *FIST_R), "sandstone", "bone:hand.R", 850, 0.8)
 
     # THE YOKE (rigid on prop.R): the walnut bar, leather grip bands and knot wraps, amber end caps, the sling
@@ -2011,6 +2056,8 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
                 near = np.abs(p[ev, 0] - cx) < 0.06
                 low = np.where(near, np.clip((cz - p[ev, 2]) / 0.012, 0.0, 1.0), low)
             c[ev] = _hex("#5A4130")[None, :] * ((1.0 - 0.28 * dep) * (1.0 + 0.30 * low))[:, None]
+            # (ruling 55) the recess floor carries an open, calm eye; the walls keep the umber glaze
+            c[ev] = eye_floor_paint(p[ev], c[ev], _hex)
             out[m] = c
     # procedural props
     for nm, kind in PROCEDURAL.items():
@@ -2214,6 +2261,8 @@ def _recolour_value(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
                 a0 = project._lin(scene.hex_srgb(lac["inlay_deep"]))
                 a1 = project._lin(scene.hex_srgb(lac["inlay"]))
                 col[ev] = a0[None, :] * (1.0 - dep) + a1[None, :] * dep
+                # (ruling 55: the solid amber slits read as solid eyes) an open eye with a pupil on the floor
+                col[ev] = eye_floor_paint(p[ev], col[ev], lambda h: project._lin(scene.hex_srgb(h)))
             out[m] = np.clip(col, 0.0, 0.92)
             log(f"  shadeprint: lacquer mask {lac['col']} at L* {lac['L']}, {int(ev.sum())} inlay texels")
         rimc = project._lin(scene.hex_srgb(SHADEPRINT["rim_col"]))

@@ -54,8 +54,8 @@ const MIN_MODE_TIME = 1.5;
 const LANE_PEEL_HP = 0.25;
 /** (ruling 55) … and a partner held by hard CC only under this share (a stun in a full-health trade is the trade) */
 const LANE_PEEL_HELD_HP = 0.5;
-/** ruling 55: how far above frayBreak a losing FRAY fighter starts to leave (a constant: the sim reads no environment) */
-const FRAY_EARLY = 0.2;
+/** ruling 55: how far above frayBreak a losing FRAY fighter starts to leave (a constant: the sim reads no environment; ruling 55: 0.25, was 0.2) */
+const FRAY_EARLY = 0.25;
 /** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
  *  — until this time, unless its team starts the endgame push sooner */
 const LANE_PHASE_END = 840;
@@ -716,7 +716,7 @@ export class Bot extends BotBase implements BotController {
       // (a tier that reads waves sends answers to a threatened road; the whole team turns for a push of three or more
       // fighters, or the base — not for every Wick at a Needle, which pulls it off its own siege; W4 G3 refix)
       for (let i = 0; i < b.defend.length; i++) if (!this.diff.readsWaves || b.defendFighters[i] >= 3) global = Math.max(global, b.defend[i]);
-      // (ruling 56: Wicks alone at the base do not turn a team that has just won its fight — its posts send one to clear them)
+      // (ruling 55: Wicks alone at the base do not turn a team that has just won its fight — its posts send one to clear them)
       if (!(b.window && b.baseFighters === 0 && kind === 'rift')) global = Math.max(global, b.baseThreat);
       if (lp) {
         // laning: a wave or my lane opponent at my own tower is laning (lane mode clears it under the
@@ -1926,7 +1926,7 @@ export class Bot extends BotBase implements BotController {
   /**
    * ruling 55 (FRAY chase discipline, adept and veteran): a chase that has not closed the gap by a metre in chaseQuit
    * seconds, with the target out of my reach and no gap-closer or engage ready to reach it, is given up — the target is
-   * left alone for 6 s. A fleeing fighter as fast as its chaser keeps the gap for ever; the chaser walked 10-15 m behind a
+   * left alone for 9 s (ruling 55; was 6). A fleeing fighter as fast as its chaser keeps the gap for ever; the chaser walked 10-15 m behind a
    * fighter at 20 % for 4 s and more, out of the fight, while a third seat lined up on both. False when given up now.
    */
   private chaseOn(t: Entity): boolean {
@@ -1940,7 +1940,7 @@ export class Bot extends BotBase implements BotController {
     if (this.chaseId !== t.id) { this.chaseId = t.id; this.chaseAt = now; this.chaseGap = d; return true; }
     if (now - this.chaseAt < q) return true;
     if (d < this.chaseGap - 1) { this.chaseAt = now; this.chaseGap = d; return true; }
-    this.chaseDrop.set(t.id, now + 6); this.chaseId = -1;
+    this.chaseDrop.set(t.id, now + 9); this.chaseId = -1;
     if (this.huntTarget === t) this.huntTarget = null;
     if (this.killTarget === t) this.killTarget = null;
     return false;
