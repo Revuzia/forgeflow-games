@@ -1,0 +1,53 @@
+{
+ "lane": "W2-A",
+ "round": 3,
+ "verifier": "independent adversarial render verifier (Opus 5.5)",
+ "head": "d7e595ce5",
+ "pass": false,
+ "score": 7.6,
+ "safeToShip": false,
+ "summary": "The fix-2 character light removes the round-2 blocker. Fighters keep their painted value structure: units_gate value spread is min 41.5 / median 56.1 L* (r2 15.5 / 23.8). In my own A/B crops, fighters with W2-A on and with the switches off look almost the same, and in greyscale they separate from the lifted ground. The whole-frame read is good on all three maps. The ground is calm and mid-value, lanes, river and jungle are told apart, and walls show a lighter top than face. Matrix, value_probe, flash, telegraph and lilac gates all pass. One Done-when line fails: units_gate still FAILs, with 27 fails. Against the wave-1 src tree on the same art (25 fails) that is mixed. P3 improved 3 -> 0. P2 regressed 0 -> 2 (odrum and nurrow tops now sit in the enemy/harm band), P4 went 6 -> 8 and lilac went 28.9 -> 26.4 (still at least 25). Ruling 49, which the code and tokens cite, is not written.",
+ "doneWhen": [
+  {
+   "line": "perf_1080 matrix programs <= 36, 0 late, tris <= 470k, draws <= 450",
+   "holds": true,
+   "numbers": "Own run, dev server, seed 7, to 10:00, x4. rift/high 292k / 208 draws / 36 programs / 0 late. rift/ultra 294k / 208 / 36 / 0. bridge/high 381k / 250 / 36 / 0. bridge/ultra 383k / 250 / 36 / 0. fray/high 153k / 129 / 29 / 0. fray/ultra 153k / 129 / 29 / 0. The r2 verifier's rift/low gave 230k / 171 / 24. Low and medium on bridge and fray were not re-run; they are lower tiers. Programs sit exactly at the 36 bar."
+  },
+  {
+   "line": "Idle High A/B frame time vs wave-1 + 0.5 ms",
+   "holds": "partly verified",
+   "numbers": "Wave-1 tree (src = 52a3a619b^, verified via lighting.ts; own vite :5309) vs HEAD (:5307), perf_1080 --q high --sec 8. Frame avg 16.65 (w1) vs 16.64 / 16.63 (head), p95 16.7 vs 16.8 / 16.8, so it holds inside 0.5 ms. Both runs are vsync-bound. CPU 1.68 vs 2.3 / 2.24 ms is NOT like-for-like: in the head run the fixed view frames no fighters (actors absent, draws 99, 122k tris) while w1 frames 101k actor tris (draws 170). The first w1 run timed out on vite dep optimisation, so there is one w1 sample."
+  },
+  {
+   "line": "value_probe lanes 50-58, jungle 28-34, walls 24-30; telegraph and HARM; colour-blind",
+   "holds": true,
+   "numbers": "Own run: High, seed 7, fog on, report _harness/_reports/vfy_w2a_r3_value.json, no FAIL lines. Lane L* RIFT 51 / BRIDGE 50.5 / FRAY 50. RIFT jungle 29.5. Wall faces RIFT 25, FRAY 25, BRIDGE gorge 15.5 (its own 14-22 band). groundSat 0.24 / 0.25. Fog 0.542. T4 flash RIFT 2.19x, BRIDGE 2.05x, FRAY 2.13x (all at least 2.0). Telegraph edge WCAG p90 3.91-4.73 on every drawn spot, teleEdge 1.0. RIFT jungle telegraph spot: 0 px (depth-tested under canopy, outside this lane's files). Colour-blind sheets were not re-captured: fix 2 touches only fighter light and the post lift, not palettes."
+  },
+  {
+   "line": "Fighters: zone C >= 70 % albedo, top-25 <= 80, units_gate passes, lilac dE76 >= 25",
+   "holds": false,
+   "numbers": "_tmp_w2a_tone (seed 13): zone ratio min 1.05 (pass); zone C* min 16.6 (ulkro 16.8, ardit 17.4, hesmi 18.3, sukri 18.6, ilsheta 18.8, burdam 19.4, all under the plan's work target of 20); top-25 66.0-79.5 (5 under 70 in that harness). units_gate (seeds 7/11/23 x 3, and fresh seeds 3/19/31, identical): FAIL with 27 fails = P1 pair 6 + near-neutral 11, P2 2 (odrum S 0.487, nurrow S 0.403), P3 0, P4 8. Top-25 71.0-79.2. Spread min 41.5 / median 56.1, bottom max 37.2. Dunsom-Vashil dE76 min 26.4 (pass). Wave-1 src tree, same gate and art: 25 fails = P1 16, P2 0, P3 3, P4 6, lilac 28.9. value_probe per-fighter: BRIDGE vashil top-25 80.8 (pooled 77.5 passes)."
+  },
+  {
+   "line": "Fog vs Standing Shadow dE >= 15",
+   "holds": true,
+   "numbers": "No fog or GFX-5 code changed since r2 (diff 747ed515a..HEAD touches lighting, post, renderer, world_material fighter paths and tokens only). The r2 verifier measured 20.4 lit / 18.5 fogged."
+  },
+  {
+   "line": "Render verifier score >= 7.5, no blocker",
+   "holds": true,
+   "numbers": "Score 7.6, no blocker. The fighter-flattening blocker is fixed."
+  }
+ ],
+ "frames": "Own captures, 1920x1080 High, seed 13, t 420, own vite :5307, in the session scratchpad v3/: player_{rift,bridge,fray}_{before,after}.png (seat 0, fog on), fight_{rift,bridge,fray}_{before,after}.png (spectator, b.fight()), cmp_{rift,bridge,fray}.png (crop, colour plus greyscale, before|after). 'before' = envKey, charTone, charExpo switches, LOD2 and teleInk off. Caveat: valeCharExpo is written to material userData at attach time, so the switch does not undo exposure on fighters that have already landed. Whole-frame numbers (after vs before): ground L* p50 RIFT fight 30.4 -> 43.3, BRIDGE 29.1 -> 41.8, FRAY 36.4 -> 49.6; ground < L*15 share 21.7 -> 5.5 %, 22.4 -> 6.2 %, 8.3 -> 2.6 %; fighter top-minus-bottom-quarter L* 57.9 -> 58.2 (RIFT), 60.8 -> 61.2 (BRIDGE), 55.9 -> 53.2 (FRAY); fighter C* p50 22.9 / 27.4 / 15.7 vs ground C* p50 12.3 / 12.5 / 12.6.",
+ "originality": "VALE's own design: Roman-numeral dial plate on FRAY, violet Noonline river and Standing Shadow, Dialwood canopy, lantern and glass needles, marigold/ink telegraph band, VALE fighters and Wicks. The fix-2 code (per-fighter exposure, ground lift) contains no reference names or assets, and no reference frames are in the repo.",
+ "problems": [
+  "units_gate FAILs (27). Against the wave-1 src on the same art (25): P2 0 -> 2 (odrum, nurrow tops in the enemy/harm band), P4 6 -> 8, lilac 28.9 -> 26.4. P3 3 -> 0 is the gain.",
+  "Ruling 49 is cited in lighting.ts and tokens.json but not written in owner_rulings.md (rulings end at 48). The per-fighter exposure table is a hand fit on the gating harness (risk of fitting the measure), and it needs that ruling.",
+  "valeCharExpo is set once at template attach from charExpoSwitch, so the A/B switch does not take it off live fighters. Any material shared under actor.root takes the last fighter's value.",
+  "Signature-zone C* below 20 on 6 kits (min 16.6), and BRIDGE value_probe vashil top-25 80.8.",
+  "RIFT jungle telegraph is still depth-tested out under the canopy (0 px), outside this lane's files.",
+  "Idle A/B CPU is not like-for-like (the head fixed view frames no fighters). Matrix low and medium on bridge and fray were not re-run.",
+  "evidence/units/w2a_f2_units.json is from an intermediate config. This verifier's run is evidence/units/vfy_w2a_r3_units.json."
+ ]
+}
