@@ -6,8 +6,8 @@
 // array (w.f is the scratch), because a double passed to or returned from a call that V8 does not inline is boxed (a heap allocation).
 import type { LifeSnapshot, LifeIntents, LifeEvents } from '../contracts.ts';
 import type { PlaceDef } from '../data/places.ts';
-import { THING_IDS, MECH, ownsArea } from '../data/places.ts';
-import { THING_KIND, EMOTE, SALTS } from '../data/life.ts';
+import { THING_IDS, MECH, ZONE, ownsArea } from '../data/places.ts';
+import { THING_KIND, EMOTE, SALTS, SELF_USE } from '../data/life.ts';
 import { createAttention } from './attention.ts';
 import type { Attention } from './attention.ts';
 
@@ -32,7 +32,22 @@ export const NBEH = 26;
 /** (my reading of LF-09's "2 to 3 thing uses" in a 5-minute visit) after USES_FULL by-itself thing uses this visit (USE events: a ball boop,
  *  a nap on a nap thing; w.usesVisit) a squishy starts no more uses by its play or its dozy trait, nor an S12 pass; a nap from real
  *  tiredness (rest > 0.75), a player-asked use and FIRST_PLAY still come. */
-export const USES_FULL = 2;
+export const USES_FULL = 3;
+/** (round 7, R7_LIFE; the brief: "raise USES_FULL so a 5-minute visit shows variety without turning into noise") USES_FULL is 3 in a place that offers two
+ *  or more KINDS of by-itself use (SELF_USE: a pool and a chime row, a pad and a ball...); Home, and a place whose only by-itself use is its ball (the cabin
+ *  until the host lifts LIFE's own get-on onto a ride), keep round 2's 2 (LF-09's "2 to 3 thing uses" in the cabin; Home's rows). */
+export const USES_ONE = 2;
+/** The by-itself use budget of this visit (an int). */
+export function usesFull(w: LifeWorld): number {
+  if (w.home) return USES_ONE;
+  let kinds = 0;
+  for (let k = 0; k < w.nTD; k++) {
+    const h = w.tH[k];
+    if (h === 0 || h === SELF_USE.NEST || (h === SELF_USE.RIDE && !w.sR)) continue;
+    kinds |= 1 << h;
+  }
+  return (kinds & (kinds - 1)) !== 0 ? USES_FULL : USES_ONE;
+}
 
 /** Scratch float slots in w.f (named, so no helper returns a double). NOW = the sim time of the think (or of the per-call pass) every brain
  *  function reads, instead of taking it as a parameter (a double argument to a call V8 does not inline is boxed: LF-02); DT = the think's dt;
@@ -65,6 +80,13 @@ export interface LifeWorld {
   zFl: Uint8Array; zGa: Float32Array; zGb: Float32Array; zGf: Float32Array; zGn: Float64Array; zGe: Float64Array;
   /** a sky thing (ThingDef p.sky: the Moon Dish; GAZE_SKY), a marking patch (PatchDef.mark), the ground's mark and whether it is snow */
   tSk: Uint8Array; pMk: Uint8Array; gMk: number; snG: number;
+  /** (round 7) per place-local thing: how a squishy uses it by itself (data/life.ts SELF_USE; 0 = none), and a pad thing's part spots (up to 4: x, z) */
+  tH: Uint8Array; tQX: Float32Array; tQZ: Float32Array; tQN: Uint8Array;
+  /** (round 7) a row thing's span along its yaw (a chime, bell or lantern row: p.span; 0 = one part) */
+  tSn: Float32Array;
+  /** (round 7) per character: the things it used by itself this visit (a bit per place-local thing), its use's path end (a row walk, the stones), the act's
+   *  step counter; the host lifts LIFE's own get-on onto a ride (lifeSetSelfRides: 0 = not yet, so no B04 RIDE) */
+  uM: Uint32Array; uX2: Float32Array; uZ2: Float32Array; uQ: Uint8Array; sR: number;
   nP: number; pS: Uint8Array; pX: Float32Array; pZ: Float32Array; pR: Float32Array; pH: Float32Array;
   pHZ: Float32Array; pY: Float32Array; pN: Uint8Array; pI: Uint8Array; pT: Int8Array; pSa: Uint8Array;
   /** Home's home slots (lifeSetHome, D-87): NaN = none */
@@ -171,6 +193,8 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     zSu: f32(MAX_ZONES), zG: u8(MAX_ZONES), zT: i8(MAX_ZONES), zSo: u8(MAX_ZONES),
     zFl: u8(MAX_ZONES), zGa: f32(MAX_ZONES), zGb: f32(MAX_ZONES), zGf: f32(MAX_ZONES), zGn: new Float64Array(MAX_ZONES).fill(1e9), zGe: new Float64Array(MAX_ZONES).fill(-1e9),
     tSk: u8(T), pMk: u8(MAX_PATCHES), gMk: 0, snG: 0,
+    tH: u8(T), tQX: f32(T * 4), tQZ: f32(T * 4), tQN: u8(T), tSn: f32(T),
+    uM: new Uint32Array(n), uX2: f32(n), uZ2: f32(n), uQ: u8(n), sR: 0,
     nP: 0, pS: u8(MAX_PATCHES), pX: f32(MAX_PATCHES), pZ: f32(MAX_PATCHES), pR: f32(MAX_PATCHES), pH: f32(MAX_PATCHES),
     pHZ: f32(MAX_PATCHES), pY: f32(MAX_PATCHES), pN: u8(MAX_PATCHES), pI: u8(MAX_PATCHES), pT: i8(MAX_PATCHES), pSa: u8(MAX_PATCHES),
     hX: f32(n).fill(NaN), hZ: f32(n).fill(NaN),
@@ -262,6 +286,22 @@ export function copyPlace(w: LifeWorld, def: PlaceDef, layout: number): void {
     w.tI[k] = t.icon; w.tV[k] = t.verb; w.tK[k] = KIND_OF_ICON[t.icon] ?? 0;
     w.tFN[k] = (sp ? sp.fromN : undefined) ?? t.fromN ?? 0;
     w.tZo[k] = -1; w.tPa[k] = -1;
+    w.tSn[k] = (t.p.span ?? 0) * sc;
+    // (round 7) a pad thing's parts (physics' props.ts builds part i >= 1 at p.x<i>, p.z<i>, or p.tx<i>, p.tz<i> in the tall layout, else at its wide offset)
+    w.tQN[k] = 0;
+    if (t.mech === MECH.pad) {
+      const np = Math.max(1, Math.min(4, Math.round(t.p.n ?? 1)));
+      for (let q = 0; q < np; q++) {
+        let px = w.tX[k], pz = w.tZ[k];
+        if (q > 0) {
+          const wx = t.p['x' + q], wz = t.p['z' + q], tx = t.p['tx' + q], tz = t.p['tz' + q];
+          if (tall && tx !== undefined && tz !== undefined) { px = tx * sc; pz = tz * sc; }
+          else if (wx !== undefined && wz !== undefined) { px = tall ? w.tX[k] + (wx - t.x) * sc : wx * sc; pz = tall ? w.tZ[k] + (wz - t.z) * sc : wz * sc; }
+          else continue;
+        }
+        w.tQX[k * 4 + w.tQN[k]] = px; w.tQZ[k * 4 + w.tQN[k]] = pz; w.tQN[k]++;
+      }
+    }
   }
   const nz = Math.min(MAX_ZONES, def.zones.length); w.nZ = nz;
   for (let k = 0; k < nz; k++) {
@@ -285,6 +325,35 @@ export function copyPlace(w: LifeWorld, def: PlaceDef, layout: number): void {
     w.pT[k] = -1;
     for (let t = 0; t < nt; t++) if (ownsArea(def.things[t].patch, p.id)) { w.pT[k] = t; if (w.tPa[t] < 0) w.tPa[t] = k; break; }
   }
+  // (round 7) how each thing is used by itself (data/life.ts SELF_USE): from its mechanism, its zone, patch and switch
+  for (let k = 0; k < nt; k++) w.tH[k] = selfUseOf(w, def, k);
+}
+/** (round 7) The self-use kind of place-local thing k (SELF_USE; 0 = none: a switch other than a shower or a comet, a nap patch (B06 naps there), the
+ *  turntable (not built in physics: it would not turn), a floater, a wall block). A sky switch (the Star Scope's comet) is a sky thing too (GAZE_SKY). */
+function selfUseOf(w: LifeWorld, def: PlaceDef, k: number): number {
+  const t = def.things[k], m = t.mech;
+  if (m === MECH.ball) return SELF_USE.BALL;
+  if (m === 0) {
+    const pk = w.tPa[k], zk = w.tZo[k];
+    if (pk >= 0 && w.pI[pk]) return SELF_USE.ICE;
+    if (zk >= 0 && w.zK[zk] === ZONE.updraft) return SELF_USE.UPDRAFT;
+    if (pk >= 0 && !w.pN[pk] && w.pS[pk] === 1) return SELF_USE.STONES;
+    return 0;
+  }
+  if (m === MECH.pool) {
+    if (w.tSk[k]) return SELF_USE.GAZE;
+    const zk = w.tZo[k];
+    return zk >= 0 && w.zSu[zk] >= 0.12 ? SELF_USE.WADE : SELF_USE.SPLASH;
+  }
+  if (m === MECH.chime) return SELF_USE.RING;
+  if (m === MECH.pad) return SELF_USE.PAD;
+  if (m === MECH.mound || m === MECH.ramp) return SELF_USE.CLIMB;
+  if (m === MECH.bar) return t.p.arch ? SELF_USE.ARCH : t.p.standing ? SELF_USE.BUMP : SELF_USE.LEAN;
+  if (m === MECH.ring) return SELF_USE.NEST;
+  if (m === MECH.seesaw || m === MECH.swing) return SELF_USE.RIDE;
+  if (m === MECH.block && t.switch === 'shower') return SELF_USE.SHOWER;
+  if (m === MECH.block && t.switch === 'comet') { w.tSk[k] = 1; return SELF_USE.GAZE; }
+  return 0;
 }
 
 /* ───────────────────────────── geometry (LF-02: no double crosses a call; results in w.f or as integers) ───────────────────────────── */
@@ -332,16 +401,31 @@ export function inBounds(w: LifeWorld, shrinkMm: number): boolean {
   return (ax - cx) * (ax - cx) + (az - cz) * (az - cz) <= rr * rr;
 }
 
-/** Is the query point inside thing k's keep-out (its footprint grown by growMm / 1000 m)? Patch and walk-on things (rug, pad, turntable,
- *  pool) have none. */
+/** Is the query point inside thing k's keep-out (its footprint grown by growMm / 1000 m)? Patch and walk-on things (rug, turntable, pool) have
+ *  none; a pad's parts do (round 7). */
 export function inKeepOut(w: LifeWorld, s: LifeSnapshot, k: number, growMm: number): boolean {
   const m = w.tM[k], g = growMm * 0.001;
   let tx = w.tX[k], tz = w.tZ[k];
   const row = w.rOL[k];
   if (row >= 0) { tx = s.thingX[row]; tz = s.thingZ[row]; }
   else if (s.nThings > 0 || w.home) return false; // not out now (Home's things arrive one by one)
-  if (m === 0 || m === MECH.pad || m === MECH.turntable || m === MECH.pool) return false;
+  // (round 7, R7_LIFE) a pad's parts keep a free target off them (a wander, a nap, a greet's walk-up): a body left standing on a flush pad's rim was pinned
+  // there on the real physics with the shell's over-budget rule (the hush never ended: probe_life_selfuse traces at Cloudloft and Rainleaf); B04's pad use
+  // walks onto its middle on purpose
+  if (m === MECH.pad) {
+    for (let q = 0; q < w.tQN[k]; q++) { const ex = w.f[F.PX] - w.tQX[k * 4 + q], ez = w.f[F.PZ] - w.tQZ[k * 4 + q], r = w.tS[k] + g; if (ex * ex + ez * ez <= r * r) return true; }
+    return false;
+  }
+  if (m === 0 || m === MECH.turntable || m === MECH.pool) return false;
   const dx = w.f[F.PX] - tx, dz = w.f[F.PZ] - tz, s0 = w.tS[k], s1 = w.tS1[k];
+  // (round 7) a chime, bell or lantern row keeps out along its whole span (it was the row's middle only: a body left against an end part was struck again and
+  // again, each strike a USE record)
+  if (m === MECH.chime && w.tSn[k] > 0) {
+    const ux = Math.cos(w.tY[k]), uz = Math.sin(w.tY[k]), h = w.tSn[k] * 0.5;
+    let u = dx * ux + dz * uz; u = u < -h ? -h : u > h ? h : u;
+    const ex = dx - ux * u, ez = dz - uz * u, r = s0 + g;
+    return ex * ex + ez * ez <= r * r;
+  }
   if (m === MECH.ball || m === MECH.mound || m === MECH.chime) { const r = s0 + g; return dx * dx + dz * dz <= r * r; }
   if (m === MECH.ring) return Math.abs(Math.sqrt(dx * dx + dz * dz) - s0) <= s1 + g;
   const yaw = w.tY[k], c = Math.cos(yaw), sn = Math.sin(yaw), lx = Math.abs(dx * c + dz * sn), lz = Math.abs(dz * c - dx * sn);

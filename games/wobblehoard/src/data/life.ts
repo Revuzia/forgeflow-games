@@ -124,6 +124,34 @@ export const GAITS = {
   gummy: { name: 'chew', squash: 0.86, vyS1: 0.75, vyS2: 1.2, stepsPerS: 1.6, glide: 0.28, hops: true, memoryGated: false },
   beadsqueeze: { name: 'crunch', squash: 0.86, vyS1: 0.7, vyS2: 0.9, stepsPerS: 0.8, glide: 0.22, hops: true, memoryGated: true },
 } as const satisfies Record<MaterialFamilyId, Gait>;
+/** (round 7, R7_LIFE) How a squishy uses a thing BY ITSELF (LIFE 5.3's "By itself" column, PLACES 4's "They do by themselves", the orchestrator's round-7
+ *  brief): B04's use kinds, one per thing (life/world.ts copyPlace reads the mechanism, zone, patch and switch). BALL a boop; ICE a glide (one nudge);
+ *  WADE walk into a pool and stay (floaters float, foams soak, the rest wade); SPLASH walk into a puddle and splash-jump in it; GAZE sit by a sky thing at
+ *  night and look up (the Moon Dish, the Star Scope); RING walk along a chime, bell or lantern row and brush every part (the host records each strike);
+ *  PAD walk onto a pad and give one small hop (the pad's gain does the rest); CLIMB walk up onto a mound or a ramp (physics decides how far: on top it rides
+ *  and slides off, else it leans against it); LEAN lean on a log; ARCH walk under an arch and stand there; BUMP bump a standing trunk (the Shake Pine);
+ *  STONES hop along a stepping-stone path; SHOWER stand under a drip leaf while it rains; UPDRAFT a light one hops on the pad in the updraft (or in it);
+ *  NEST curl up in a nest or a basket (B06's ring nap, offered to B04 by a sleepy-enough cuddly or dozy one); RIDE get on a seesaw or a swing (the host
+ *  lifts it there only once it says LIFE's own get-on is not the player's: lifeSetSelfRides). Append-only. */
+export const SELF_USE = { BALL: 1, ICE: 2, WADE: 3, SPLASH: 4, GAZE: 5, RING: 6, PAD: 7, CLIMB: 8, LEAN: 9, ARCH: 10, BUMP: 11, STONES: 12, SHOWER: 13, UPDRAFT: 14,
+  NEST: 15, RIDE: 16 } as const;
+/** Per family: the self-use kinds it likes (+0.2 in B04's score) and those it never starts, from PLACES 3 and 4's family cells (a B cell, or a P cell that
+ *  says it does it best: "best boing", "floats highest", "glides far"; never: what its body cannot do: putty and slime goo never hop, so no splash jump, pad
+ *  or updraft hop; a heavy family "falls straight" in the updraft; the sticky ones barely glide). */
+export const FAMILY_SELF: Readonly<Record<MaterialFamilyId, { readonly likes: readonly number[]; readonly never: readonly number[] }>> = {
+  slowrise: { likes: [SELF_USE.WADE, SELF_USE.GAZE, SELF_USE.SHOWER, SELF_USE.NEST], never: [] },
+  marshmallow: { likes: [SELF_USE.WADE, SELF_USE.UPDRAFT, SELF_USE.NEST, SELF_USE.SHOWER], never: [] },
+  mochidough: { likes: [SELF_USE.LEAN, SELF_USE.NEST, SELF_USE.GAZE], never: [SELF_USE.UPDRAFT, SELF_USE.SPLASH] },
+  jellygel: { likes: [SELF_USE.BALL, SELF_USE.PAD, SELF_USE.CLIMB, SELF_USE.RING], never: [SELF_USE.UPDRAFT] },
+  waterfill: { likes: [SELF_USE.WADE, SELF_USE.SPLASH, SELF_USE.BALL, SELF_USE.ICE], never: [SELF_USE.UPDRAFT] },
+  putty: { likes: [SELF_USE.CLIMB, SELF_USE.LEAN, SELF_USE.NEST], never: [SELF_USE.SPLASH, SELF_USE.PAD, SELF_USE.UPDRAFT, SELF_USE.STONES] },
+  stickystretch: { likes: [SELF_USE.BALL, SELF_USE.RIDE, SELF_USE.ARCH], never: [SELF_USE.ICE, SELF_USE.UPDRAFT] },
+  slimegoo: { likes: [SELF_USE.WADE, SELF_USE.LEAN, SELF_USE.NEST], never: [SELF_USE.ICE, SELF_USE.PAD, SELF_USE.SPLASH, SELF_USE.UPDRAFT, SELF_USE.STONES] },
+  firmsilicone: { likes: [SELF_USE.PAD, SELF_USE.ICE, SELF_USE.CLIMB, SELF_USE.RING, SELF_USE.BUMP], never: [SELF_USE.UPDRAFT] },
+  popdome: { likes: [SELF_USE.PAD, SELF_USE.UPDRAFT, SELF_USE.WADE, SELF_USE.ARCH], never: [] },
+  gummy: { likes: [SELF_USE.BALL, SELF_USE.PAD, SELF_USE.SPLASH, SELF_USE.STONES], never: [SELF_USE.UPDRAFT] },
+  beadsqueeze: { likes: [SELF_USE.RING, SELF_USE.BALL, SELF_USE.STONES, SELF_USE.BUMP], never: [SELF_USE.UPDRAFT] },
+};
 /** The S1 hop cap (m/s) and what pieces do (LIFE 5.2): vy x 0.8, horizontal x cbrt(frac); Calm or reduced motion: heights x 0.6, chains of 3. */
 export const HOP = { capS1: 0.84, pieceVy: 0.8, calmScale: 0.6, calmChain: 3, minGapS: 0.8 } as const;
 

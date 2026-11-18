@@ -677,10 +677,16 @@ function session(tier: number): Session {
   }
   return { h, qu13, c8StoodIn: C8_STOOD_IN, gate: h.gate };
 }
+// (RE-SPECIFIED in round 7, R7_LIFE: these rows said "every shown S1 quest"; from round 7 the build also ships Ripple Shore, Frostbell Ridge and Rainleaf
+// Garden (the orchestrator's brief: R6_SHELL_open_s2.patch), whose 30 quests and Friends Everywhere's X4, X5, X7, X8, X9 are shown too, but this scripted
+// session plays Home and the cabin only (a regular player's first hour). So the rows check the quests of the S1 places as before: Home's 10, Hearthlog's 10
+// and X1, X2, X3, X6, X10 whenever they are shown (in every build that ships them); the S2 places' quests have their own rows (QC: LIFE's kinds at those
+// places; R7: the squirt by ordinary play; QL: every clause's producer; probe_life_selfuse SU-01: what the squishies use there by themselves).)
+const S1_QUESTS = new Set([...Array.from({ length: 10 }, (_, k) => `H${k + 1}`), ...Array.from({ length: 10 }, (_, k) => `C${k + 1}`), 'X1', 'X2', 'X3', 'X6', 'X10']);
 for (const tier of [1, 0]) {
   const S = session(tier), h = S.h, qu13 = S.qu13, C8_STOOD_IN = S.c8StoodIn, st = h.rt.store.journal.st, d = h.rt.defs;
   const TN = tier === 0 ? 'low' : 'med';
-  const shown = QUESTS.filter((q) => isShown(d, q.idx)).map((q) => q.id);
+  const shown = QUESTS.filter((q) => isShown(d, q.idx) && S1_QUESTS.has(q.id)).map((q) => q.id);
   const miss = shown.filter((id) => !qu13.some((x) => x.id === id) || (id === 'C8' && C8_STOOD_IN));
   const pr = new Int32Array(2);
   const missText = miss.map((id) => { questProgress(st, d, Q(id), pr); return `${id} ${pr[0]}/${pr[1]}`; }).join(', ');
@@ -699,7 +705,7 @@ for (const tier of [1, 0]) {
     const unmatched: string[] = [];
     let clauses = 0;
     for (const q of QUESTS) {
-      if (!isShown(d, q.idx)) continue;
+      if (!isShown(d, q.idx) || !S1_QUESTS.has(q.id)) continue;   // (round 7: the S1 places' quests, see above)
       for (const c of q.clauses) {
         if (!LIFE_KINDS.includes(c.ev) || c.by === BY.PLAYER) continue;
         if (c.ev === EV.WISH && c.sub && c.sub[0] !== WISH_STATE.GRANTED) continue;   // SEEN is the card's tap (the player)

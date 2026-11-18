@@ -132,14 +132,14 @@ export function ownsArea(ref: string | undefined, areaId: string): boolean {
 
 /** Every KEPT place's name and opening rule (QUESTS 7; D-96: seven places, so Lanternroof opens at 36 stamps and Cloudloft at 45, the slots the
  *  dropped Fizzwell Tub and Cogwhistle Bench had: the same gaps of 8 to 9 stamps). The dropped three have no row (look a place up by its idx,
- *  never by its position here). `shipped`: true for home and hearthlog only; the orchestrator flips the others when their slice ships (and in
+ *  never by its position here). `shipped`: Home and Hearthlog, and from round 7 Ripple, Frostbell and Rainleaf (R6_SHELL_open_s2.patch, applied by R7_LIFE once their squishies use 3+ things by themselves: R7_LIFE.md); the orchestrator flips Lanternroof and Cloudloft when their slice ships (and in
  *  the same change their PlaceDef's own `shipped`). coined: the coined single words of its names (NAME gate rules, PLACES 7). */
 export const PLACE_INFO: readonly Pick<PlaceDef, 'id' | 'idx' | 'name' | 'coined' | 'stampsToOpen' | 'shipped' | 'night' | 'sky'>[] = [
   { id: 'home', idx: 0, name: 'Home', stampsToOpen: 0, shipped: true, night: false, sky: 'home' },
   { id: 'hearthlog', idx: 1, name: 'Hearthlog Cabin', coined: ['Hearthlog'], stampsToOpen: 'firstWish', shipped: true, night: false, sky: 'cabin' },
-  { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: false, night: false, sky: 'shore' },
-  { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: false, night: false, sky: 'ridge' },
-  { id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: false, night: false, sky: 'garden' },
+  { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: true, night: false, sky: 'shore' },
+  { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false, sky: 'ridge' },
+  { id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: true, night: false, sky: 'garden' },
   { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true, sky: 'roof' },
   { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: false, night: false, sky: 'cloud' },
 ];

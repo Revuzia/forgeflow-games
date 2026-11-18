@@ -282,7 +282,10 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
  *  B4_b4_phone_cabin_t54.png and this lane's shots): 390 x 844: the hint pill "Tap a tool to try it." 618..653 (centred), the party row 660..708,
  *  the name tag and meter from 714: the bottom HUD starts at 618 (226 px); 1280 x 800: the hint pill 672..704, the party row 670..716: 130 px + 6.
  *  Sides: 8 px (the Journal / map column at the top right is above every floor). */
-const PLACE_HUD = { phone: { W: 390, H: 844, b: 226, l: 8, r: 8 }, desktop: { W: 1280, H: 800, b: 136, l: 8, r: 8 } } as const;
+// RE-SPECIFIED in round 7 (R7_LIFE; the orchestrator: "using the hint pill as a bottom HUD row (R6_SHELL section 3: 670 px on 390x844)"): round 6 counted the
+// hint pill in the HUD insets (src/shell/hudBinding.ts reportInsets) and it hangs at 670 on 390 x 844 (R6_SHELL measured: insets top 56, bottom 174; the
+// info row 714, the dock 778), so the phone's bottom HUD starts at 670 (174 px), not 618: the camera frames the place above it (STAGE_INSETS below)
+const PLACE_HUD = { phone: { W: 390, H: 844, b: 174, l: 8, r: 8 }, desktop: { W: 1280, H: 800, b: 136, l: 8, r: 8 } } as const;
 /** A collider's top height for the side test: blocks, bars, mounds, rings (heightOf), a swing's frame (its pivot), a seesaw's board (pivot + its
  *  half thickness), a ball's top. */
 function thingTop(t: ThingDef): number {
@@ -372,11 +375,13 @@ function camProblems(P: PlaceDef, tall: boolean): string[] {
  *  RE-SPECIFIED too (same reason): the desktop's bottom band 150 -> 136 px = the measured lowest HUD band + 6 px (with a party out its row
  *  starts at 670 px: the quick-switch chips 670..714, the hint pill 672..704, "Put back" 682..722, the dock 722..782); the phone's 170 stays
  *  (its quick-switch row starts at 660 = 184 px but spans only the left 16..260 px, under which no Home spot lies). */
-const HUD_INSETS = { phone: { W: 390, H: 844, t: 151, b: 170, l: 8, r: 8, colX: 322, colY: 168 }, desktop: { W: 1280, H: 800, t: 120, b: 136, l: 8, r: 8, colX: 1208, colY: 168 } } as const;
+// (round 7: the phone's bottom band 170 -> 174 px: the hint pill at 670 is a bottom HUD row now, R6_SHELL section 3)
+const HUD_INSETS = { phone: { W: 390, H: 844, t: 151, b: 174, l: 8, r: 8, colX: 322, colY: 168 }, desktop: { W: 1280, H: 800, t: 120, b: 136, l: 8, r: 8, colX: 1208, colY: 168 } } as const;
 /** Round 5 (FIX5_DATA, VERDICT_PG B5 / D1): the rows the shell REPORTS to the stage (hudBinding.ts reportInsets: setSafeInsets({ top, bottom }),
  *  no side rows), measured in the browser at HEAD 16f6ba6fc (stage.info.insets, the dev build at 390 x 844 touch and 1280 x 800, 1 and 3 out):
  *  they drive SR2's band framing (framing.ts: the lens shift, its scale demand) and the visible table the corral and the ball's bounds come from. */
-const STAGE_INSETS = { phone: { t: 56, b: 130 }, desktop: { t: 56, b: 78 } } as const;
+// (round 7, R7_LIFE: the phone's reported bottom row is the hint pill's top since round 6, 844 - 670 = 174 px, R6_SHELL section 3's measurement)
+const STAGE_INSETS = { phone: { t: 56, b: 174 }, desktop: { t: 56, b: 78 } } as const;
 /** The rest columns the band framing measures each body at (framing.ts frameMode 1: top = restH, centre restCy, half width restHalfW; the disc
  *  about the centre of restHalfW x 1.06 and of restRadius): a ball (2R, R, R), a squat dome (1.4R, 0.7R, 1.1R) and a flat cake (1.0R, 0.5R, 1.25R),
  *  which bracket the lens measured in the browser (390 x 844 one Dollop 0.096 against 0.074 / 0.129 / 0.176; 1280 x 800 three out 0.153 against
@@ -652,7 +657,7 @@ for (const P of DEFS) {
     if (strict) row('DT-01', probs.length === 0, `${label}: frame, pad, zones, spawn, rides and push spots, use / peek / gap spots, clearances, bands, ranges, floor rule, opening, counts`,
       probs.length ? `${probs.length} problems: ${probs.slice(0, 6).join(' | ')}` : '0 problems');
     if (strict) { const cp = camProblems(P, tall);
-      row('DT-01', cp.length === 0, `${label} in the shipped place camera (B8, round 5; round 6: every strict place, and its pools, patches and zone things too): every thing inside the frame's sides and its floor above the bottom HUD (${tall ? 'the hint pill, 618 px' : 'the party row, 664 px'})`,
+      row('DT-01', cp.length === 0, `${label} in the shipped place camera (B8, round 5; round 6: every strict place, and its pools, patches and zone things too): every thing inside the frame's sides and its floor above the bottom HUD (${tall ? 'the hint pill, 670 px' : 'the party row, 664 px'})`,
         cp.length ? `${cp.length} problems: ${cp.join(' | ')}` : '0 problems'); }
     if (!strict) { note('DT-01', `${label}: PENDING its slice (${P.id === 'ripple' || P.id === 'frostbell' || P.id === 'rainleaf' ? 'S2' : 'S3'}): ${probs.length} problems${probs.length && !VERBOSE ? ' (--verbose lists them)' : ''}`);
       if (VERBOSE) for (const p of probs) console.log('       ' + p); }

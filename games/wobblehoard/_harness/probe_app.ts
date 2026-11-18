@@ -836,10 +836,12 @@ function press(r: Rig, x: number, y: number, ms: number): number {
     mixed: laterChunkName(null, [id('life/brain.ts'), id('core/rng.ts')]),
     first: laterChunkName(id('shell/boot.ts'), [id('shell/boot.ts')]),
     voices: laterChunkName(id('audio/life_voices.ts'), [id('audio/life_voices.ts')]),
+    // (round 7, D-92's overflow rule: LIFE's brain is a chunk of its own; a chunk mixing it with other lazy modules stays later-shared)
+    brain: laterChunkName(null, [id('life/brain.ts'), id('life/step.ts'), id('life/social.ts')]),
   };
-  check('PLAYGROUND chunk names: the away, place (look, sound, data), lifelook and journal-text facades are later-*; a facade-less chunk is later-shared only when EVERY module in it is lazy-only; boot and the voices the engine loads at the first unlock stay first-play (null: G0b counts them)',
+  check('PLAYGROUND chunk names: the away, place (look, sound, data), lifelook and journal-text facades are later-*; a facade-less chunk is later-shared only when EVERY module in it is lazy-only (round 7: later-brain when every module is LIFE\'s brain, src/life); boot and the voices the engine loads at the first unlock stay first-play (null: G0b counts them)',
     names.away === 'later-away' && names.awaySound === 'later-away-sound' && names.cabin === 'later-place-hearthlog' && names.cabinSound === 'later-place-hearthlog-sound' && names.cabinData === 'later-place-hearthlog-data'
-      && names.lifelook === 'later-lifelook' && names.text === 'later-journal-text' && names.shared === 'later-shared' && names.mixed === null && names.first === null && names.voices === null, JSON.stringify(names));
+      && names.lifelook === 'later-lifelook' && names.text === 'later-journal-text' && names.shared === 'later-shared' && names.mixed === null && names.first === null && names.voices === null && names.brain === 'later-brain', JSON.stringify(names));
   // round 6 (D-96): the build guard against the three dropped places (vite.config.ts droppedPlaceLeaks, run by every `vite build`): a clean bundle of the kept places
   // (its tombstone ids in lower case are not a leak) passes; a chunk named for a dropped place, a module of one, or its player-visible name fails
   const { droppedPlaceLeaks } = await import('../vite.config.ts');

@@ -13,7 +13,7 @@ import { MECH, ZONE, MARK, PROP_SOUND as S, SIGNATURE, FINALE, cells } from './p
 import { USE_VERB as V, EMOTE as E } from './life.ts';
 
 export const PLACE: PlaceDef = {
-  id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: false, night: false,
+  id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: true, night: false,
   ground: { grip: 1.35, glue: 0.8, peel: 0.9, drag: 1.1, mark: MARK.print, markLifeS: 40 },
   patches: [
     { id: 'wetsand', shape: 'box', x: 0, z: -1.75, hx: 3.4, hz: 0.35, mods: { grip: 1.1 }, mark: MARK.print, markLifeS: 60 },

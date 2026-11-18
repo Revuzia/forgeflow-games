@@ -53,7 +53,7 @@ void main() {
     float along = clamp(1.0 - abs(p.x), 0.0, 1.0);
     a = pow(along, 1.5) * exp(-p.y * p.y * 7.0);
     a *= 0.35 + 0.65 * smoothstep(-1.0, 1.0, p.x);          // bright head, faded tail
-  } else {                                 // satellite sphere
+  } else if (vKind < 3.5) {                // satellite sphere
     if (r > 1.0) discard;
     vec3 n = vec3(p, sqrt(max(0.0, 1.0 - r * r)));
     float dif = clamp(dot(n, normalize(vec3(-0.4, 0.6, 0.7))), 0.0, 1.0);
@@ -63,6 +63,18 @@ void main() {
     tint = tint * a + vec3(1.0) * spec * 1.2;
     a = 1.0;
     a *= 1.0 - smoothstep(0.92, 1.0, r);
+  } else {                                 // a water drop (round 7, the squirt): a glossy bead inside a dark ring of its own colour, ONE sprite (no draw
+    if (r > 1.0) discard;                  // order to keep): the ring reads on a pale sea, sky or sand, the bead and its glint on a deep one
+    float q = r * 1.3;
+    if (q < 1.0) {
+      vec3 n = vec3(p * 1.3, sqrt(max(0.0, 1.0 - q * q)));
+      float dif = clamp(dot(n, normalize(vec3(-0.4, 0.6, 0.7))), 0.0, 1.0);
+      float spec = pow(clamp(dot(reflect(vec3(0.0, 0.0, -1.0), n), normalize(vec3(-0.4, 0.6, 0.7))), 0.0, 1.0), 20.0);
+      tint = tint * (0.6 + 0.55 * dif) + vec3(1.0) * spec * 1.3;
+    } else {
+      tint *= 0.14;
+    }
+    a = 1.0 - smoothstep(0.88, 1.0, r);
   }
 #ifdef WH_NORMAL
   gl_FragColor = vec4(tint, clamp(a, 0.0, 1.0) * vCol.a);   // the normal-blend twin (snow, rain, steam wisps: an additive flake vanishes on a pale sky)
@@ -78,7 +90,7 @@ export interface EmitSpec {
   x: number; y: number; z: number;
   vx?: number; vy?: number; vz?: number;
   life: number; size: number;
-  kind?: 0 | 1 | 2 | 3;
+  kind?: 0 | 1 | 2 | 3 | 4;
   r?: number; g?: number; b?: number; a?: number;
   /** 0..1: how strongly the global attractor pulls this particle (merge charge, constellation convergence). */
   attract?: number;

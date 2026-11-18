@@ -7,10 +7,10 @@ import { LIFE_FLAG, LIFE_EV, EMOTE, EXPR, REACT_KIND, TOUCH, USE_VERB, BRAIN, SP
 import { MECH, ZONE, PLACE_IDS } from '../data/places.ts';
 import { SPECIES } from '../data/species.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, BEH, F, MAX_ZONES, USES_FULL, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT } from './world.ts';
-import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, groupCount, say } from './act.ts';
+import { CAP, BEH, F, MAX_ZONES, usesFull, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT } from './world.ts';
+import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, G_GAP, groupCount, say } from './act.ts';
 import { emitVoice, PHRASE, voice } from './voice.ts';
-import { STYLE, MOVER_CAP, tierOf } from './attention.ts';
+import { STYLE, MOVER_CAP, UNIT_CAP, tierOf } from './attention.ts';
 import { TRAIT } from './traits.ts';
 import { WARMPOSE, TOAST, emitReact, leaderOf, addLook } from './looks.ts';
 import { socialPick, beginPicked, updateMoment, startMoment, tryTeeter, abortFor, isFree, MOM, mem, tuneThing, tunePlaying } from './social.ts';
@@ -22,11 +22,19 @@ const FAV_PLACE = new Int8Array(SPECIES.length);
 for (let i = 0; i < SPECIES.length; i++) FAV_PLACE[i] = PLACE_IDS.indexOf(SPECIES_LIFE[SPECIES[i]].place);
 const FAM_FIRM = 8, FAM_POP = 9;
 /** Per family: the mechanisms it likes (B04's family affinity, +0.15 each). */
-import { FAMILY_REACT } from '../data/life.ts';
+import { FAMILY_REACT, FAMILY_SELF, SELF_USE } from '../data/life.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
 const PREFS = new Uint32Array(12), ICE_GRIP = new Float32Array(12);
 for (let f = 0; f < 12; f++) ICE_GRIP[f] = FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].iceGrip;
 for (let f = 0; f < 12; f++) for (const m of FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].mechPrefs) PREFS[f] |= 1 << m;
+/** (round 7) Per family: the self-use kinds it likes and never starts (data/life.ts FAMILY_SELF), as bits; its wind and updraft catch. */
+const SELF_LIKE = new Uint32Array(12), SELF_NEVER = new Uint32Array(12), CATCH = new Float32Array(12);
+for (let f = 0; f < 12; f++) {
+  const fs = FAMILY_SELF[MATERIAL_FAMILY_IDS[f]];
+  for (const u of fs.likes) SELF_LIKE[f] |= 1 << u;
+  for (const u of fs.never) SELF_NEVER[f] |= 1 << u;
+  CATCH[f] = FAMILY_REACT[MATERIAL_FAMILY_IDS[f]].catch;
+}
 
 const ONCE = { LOVE: 1 << 16, BASKED: 1 << 17, ARRIVED: 1 << 18, HELLO: 1 << 19, SIGNATURE: 1 << 20, TOASTED: 1 << 21 } as const;
 
@@ -153,6 +161,29 @@ function towardParty(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
   return false;
 }
 
+/** (round 7, R7_LIFE: "the wander targets") In a place of several kinds of things, a third of B03's wanders go to look at a thing this squishy has not used
+ *  yet this visit: a free target 0.5 to 1.0 m beyond its footprint on the squishy's side (inside the shrunk bounds, outside the keep-outs), so a party
+ *  drifts past the place's things, notices them (B02) and is near enough to use them (B04's 3 m). */
+function towardThing(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
+  if (w.home || w.ki[i] !== 0 || usesFull(w) <= 2 || (rnd(w, i) * 3 >>> 16) !== 0) return false;
+  let n = 0;
+  for (let k = 0; k < w.nTD; k++) if (w.tH[k] !== 0 && ((w.uM[i] >>> k) & 1) === 0 && thingPos(w, s, k)) n++;
+  if (n === 0) return false;
+  let pick = (rnd(w, i) * n) >>> 16, k = 0;
+  for (; k < w.nTD; k++) if (w.tH[k] !== 0 && ((w.uM[i] >>> k) & 1) === 0 && thingPos(w, s, k) && pick-- === 0) break;
+  if (k >= w.nTD || !thingPos(w, s, k)) return false;
+  const tx = w.f[F.X2], tz = w.f[F.Z2], a0 = Math.atan2(s.z[i] - tz, s.x[i] - tx);
+  const reach = (w.tM[k] === MECH.bar || w.tM[k] === MECH.chime ? w.tS1[k] * 0.5 : w.tS[k]) + s.r[i];
+  for (let tries = 0; tries < 6; tries++) {
+    const a = a0 + (rnd(w, i) * U16 - 0.5) * 2.4, d = reach + 0.5 + rnd(w, i) * U16 * 0.5;
+    w.f[F.PX] = tx + Math.cos(a) * d; w.f[F.PZ] = tz + Math.sin(a) * d;
+    if (!freeSpot(w, s, i)) continue;
+    w.f[F.X] = w.f[F.PX]; w.f[F.Z] = w.f[F.PZ];
+    return true;
+  }
+  return false;
+}
+
 /* ───────────────────────────── the per-call pass: HELD, release, touch kinds, landings (5.5; LF-04) ───────────────────────────── */
 
 export function touchPass(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents): void {
@@ -242,6 +273,10 @@ export function behave(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Life
   if (w.ki[i] === 2) { chunkThink(w, s, out, ev, i); return; }
   // the shell's scripts come before a running moment: B12 pose, B14 cheer (the moment ends for everyone in it)
   if ((w.pO && w.beh[i] !== BEH.POSE) || w.cD[i]) { if (w.moo[i] >= 0) abortFor(w, s, out, ev, i); }
+  // (round 7, R7_LIFE; PLAY_WITH, D-79: the player's request wins over the squishies' own plans) one the player asked to go play with a thing leaves the
+  // by-itself moment it is in (the moment ends for everyone, as a touch ends it: the others' "your turn" after 2 s); a song, a teeter or a push stays and the
+  // ask waits for it. (A chat or a greet held the asked use for up to its 60 s: shellview node_checks N1 on the MED tier.)
+  if (w.moo[i] >= 0 && w.pW[i] >= 0 && !keepsMoment(w, w.moo[i])) abortFor(w, s, out, ev, i);
   // a joint moment runs on its first member's think
   const m = w.moo[i];
   if (m >= 0) { if (mem(w, m, 0) === i) updateMoment(w, s, out, ev, m); return; }
@@ -371,7 +406,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   if (forced >= 0 && (canMove || w.pW[i] >= 0)) { const v = 1.2; if (v > bs) { bs = v; best = BEH.USE; bArg = forced; } }
   if (canMove) {
     // B04 use a thing
-    if (w.pl[i] > 0.4 && ready(w, i, BEH.USE) && w.uV[i] < USES_FULL) {
+    if (w.pl[i] > 0.4 && ready(w, i, BEH.USE) && w.uV[i] < usesFull(w)) {
       const k = useCandidate(w, s, i);
       if (k >= 0) { const v = w.f[F.A] + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.USE; bArg = k; } }
     }
@@ -387,7 +422,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
       const dozy = w.tr[tr + TRAIT.dozy];
       // (my reading: the dozy trigger also needs some rest need, 0.6, so a dozy squishy that wakes on the basket does not nap again and
       // again: about two naps in five minutes, LF-09)
-      if (w.re[i] > 0.75 || (dozy > 0.6 && w.re[i] > 0.6 && w.uV[i] < USES_FULL && napSpotWithin(w, s, i, 2))) { const v = 0.8 + 0.4 * dozy + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.NAP; } }
+      if (w.re[i] > 0.75 || (dozy > 0.6 && w.re[i] > 0.6 && w.uV[i] < usesFull(w) && napSpotWithin(w, s, i, 2))) { const v = 0.8 + 0.4 * dozy + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.NAP; } }
     }
     // B03 wander (not with one squishy on a portrait phone at Home)
     if (w.pl[i] > 0.3 && ready(w, i, BEH.WANDER) && !(w.home && w.layout === 1 && w.nO <= 1) && tb - w.tST[i] > 4 && !interestNear(w, s, i) && !tokenWanted(w, i)) {
@@ -444,7 +479,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     case BEH.USE: startUse(w, s, out, ev, i, bArg, (bs * 1000) | 0); break;
     case BEH.BASK: startBask(w, s, out, i, (bs * 1000) | 0); break;
     case BEH.NAP: startNap(w, s, out, ev, i, (bs * 1000) | 0); break;
-    case BEH.WANDER: if ((towardParty(w, s, i) || freeTarget(w, s, i, 2500)) && travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.WANDER, (bs * 1000) | 0, 20000); w.ph[i] = 1; } else w.coo[i * 26 + BEH.WANDER] = tb + 2; break;
+    case BEH.WANDER: if ((towardThing(w, s, i) || towardParty(w, s, i) || freeTarget(w, s, i, 2500)) && travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.WANDER, (bs * 1000) | 0, 20000); w.ph[i] = 1; } else w.coo[i * 26 + BEH.WANDER] = tb + 2; break;
   }
 }
 /** The seeded noise of +-0.05 is written inline as (rnd(w, i) * NZ - BRAIN.noise): rnd returns a small int, so nothing is boxed (LF-02). */
@@ -552,27 +587,65 @@ function interestNear(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
 }
 function tbMoved(w: LifeWorld, k: number): boolean { return w.f[F.LAST_T] - w.tMT[k] < 1; }
 
-/* B04 use a thing: the score into w.f[F.A] and the thing; a free floor-usable thing within 3 m (the ball in S0 and S1). */
+/* B04 use a thing: the score into w.f[F.A] and the thing; a free floor-usable thing within 3 m. Round 7 (R7_LIFE, the brief: "squishies must use EVERY
+ * kind of thing on their own, each in its own way by material family and traits"): every thing with a SELF_USE kind (data/life.ts; world.ts copyPlace) is a
+ * candidate: a pool to wade or float in, a puddle to splash-jump in, a chime, bell or lantern row to brush along, a pad to bounce on, a mound or a ramp to
+ * climb, a log to lean on, an arch to walk under, the pine to bump, stepping stones to hop along, the drip leaf to stand under in the rain, the updraft for
+ * the light ones, a sky thing to gaze from at night, a ride once the host lifts LIFE's own get-on (lifeSetSelfRides). The family's likes (FAMILY_SELF) add
+ * 0.2, what its body cannot do is never a candidate; in a place of several kinds, a thing it already used this visit loses 0.5, one a friend used in the
+ * last 20 s loses 0.1 and one nobody used yet this visit gains 0.1, so a party spreads over the place's things. Where the only kind is the ball (Home, the cabin) the score is round 4's exactly. */
 function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
   let best = -1, bs = 0;
-  const sp = w.species[i], fav = SPECIES_LIFE[SPECIES[sp]].thing;
+  const sp = w.species[i], fav = SPECIES_LIFE[SPECIES[sp]].thing, f = w.fa[i], tb = w.f[F.NOW];
+  const variety = usesFull(w) > 2;
   for (let k = 0; k < w.nTD; k++) {
-    // the floor uses LIFE starts by itself: the ball (S0, S1) and, round 4, an ice patch to glide on (LIFE 5.1's glide; Frostbell's Ice Pond,
-    // QUESTS I3) for a family whose ice grip is under 0.5 (pads, chimes, pools, turntables: S2 / S3, not built)
-    const icy = w.tM[k] === 0 && w.tPa[k] >= 0 && w.pI[w.tPa[k]] === 1 && ICE_GRIP[w.fa[i]] < 0.5;
-    if (w.tM[k] !== MECH.ball && !icy) continue;
+    const how = w.tH[k];
+    if (!selfOk(w, s, i, k, how)) continue;
     if (!thingPos(w, s, k)) continue;
     const r = w.rOL[k];
     if (r >= 0 && s.thingBusy[r]) continue;
     w.f[F.PX] = w.f[F.X2]; w.f[F.PZ] = w.f[F.Z2];
-    // within B04's 3 m; (my reading of LIFE 3's "at 0.8: a thing use") a squishy whose play is over 0.8 goes to it from anywhere in the place
-    if (d2p(w, s, i) > 9 * CM2 && w.pl[i] <= 0.8) continue;
-    let v = 0.3 + 0.5 * w.pl[i] + ((PREFS[w.fa[i]] & (1 << w.tM[k])) !== 0 ? 0.15 : 0) - 0.12 * w.uV[i];
+    // within B04's 3 m; (my reading of LIFE 3's "at 0.8: a thing use") a squishy whose play is over 0.8 goes to it from anywhere in the place; (round 7) in a
+    // place of several kinds a thing nobody in the party has used yet this visit draws it from 4.5 m (a new thing to try across the place)
+    const reach2 = variety && w.tU[k] < 0 ? 20.25 * CM2 : 9 * CM2;
+    if (d2p(w, s, i) > reach2 && w.pl[i] <= 0.8) continue;
+    let v = 0.3 + 0.5 * w.pl[i] + ((PREFS[f] & (1 << w.tM[k])) !== 0 ? 0.15 : 0) - 0.12 * w.uV[i];
     if (w.def && w.def.things[k].id === fav) v += 0.3;
+    if (variety) {
+      if (((SELF_LIKE[f] >>> how) & 1) !== 0) v += 0.2;
+      if (((w.uM[i] >>> k) & 1) !== 0) v -= 0.5;
+      if (w.tU[k] >= 0 && w.tU[k] !== i && tb - w.tUT[k] < 20) v -= 0.1;
+      else if (w.tU[k] < 0) v += 0.1;   // nobody in the party has used it yet this visit: a new thing to try
+    }
     if (v > bs) { bs = v; best = k; }
   }
   w.f[F.A] = bs;
   return best;
+}
+/** (round 7, R7_LIFE) Pads are a by-itself use (walk on, one small hop: the pad does the rest; PH-16 shows the bounce), but on the real physics with the shell
+ *  host a body that stands on a flush pad's rim is pinned there for the rest of the visit (its scoots and the corral's glide go nowhere; measured in
+ *  probe_life_selfuse traces at Cloudloft and Rainleaf, and in isolation by scratch x/pad.ts: after five kicks, a scoot off the pad one way works, the other
+ *  way it is carried back to the rim and stays). Until PHYS fixes it (request in R7_LIFE.md section 5) LIFE starts no pad use by itself; one flag. The
+ *  updraft's use stands in the column off its pad. */
+const PADS_OK = false;
+/** (round 7) May character i start a by-itself use of thing k of kind `how` now? Its family can (FAMILY_SELF.never; a hop it cannot make; the ice grip),
+ *  and the kind's moment is there (the rain for the drip leaf, the night for a sky thing, a light body for the updraft, the host's lift for a ride). */
+function selfOk(w: LifeWorld, s: LifeSnapshot, i: number, k: number, how: number): boolean {
+  const f = w.fa[i];
+  if (how === 0 || how === SELF_USE.NEST) return false;
+  if (((SELF_NEVER[f] >>> how) & 1) !== 0) return false;
+  switch (how) {
+    case SELF_USE.BALL: return true;
+    case SELF_USE.ICE: return ICE_GRIP[f] < 0.5;
+    case SELF_USE.WADE: case SELF_USE.SPLASH: return w.tZo[k] >= 0 && w.zWK1[i] < 0 && (how === SELF_USE.WADE || G_HOPS[f] === 1);
+    case SELF_USE.PAD: return PADS_OK && G_HOPS[f] === 1 && w.tQN[k] > 0;
+    case SELF_USE.UPDRAFT: return G_HOPS[f] === 1 && CATCH[f] >= 0.5 && w.tZo[k] >= 0 && w.ki[i] === 0;
+    case SELF_USE.GAZE: return w.night && w.ki[i] !== 2;
+    case SELF_USE.SHOWER: return w.tZo[k] >= 0 && (s.zoneMask[i] & (1 << ZONE.wet)) !== 0;
+    case SELF_USE.RIDE: return w.sR === 1 && w.ki[i] === 0;
+    case SELF_USE.ARCH: case SELF_USE.LEAN: case SELF_USE.BUMP: case SELF_USE.CLIMB: return w.ki[i] === 0;
+    default: return true;   // RING, STONES
+  }
 }
 
 /** The cut squishy's face piece (or the whole, not cut yet) character i walks over to look at (-1 none). */
@@ -625,16 +698,41 @@ function startUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvent
 
 /** round 6 (N1): how long an asked use waits for the shell to make room for its wake, then the allowance it goes with (one whole's wake). */
 const ASK_WAIT_S = 4, ASK_ALLOW_MILLI = 1000;
+/** (round 7) The asked use's allowance after ASK_WAIT_S: one whole's wake above the units awake NOW. Round 6's one whole above the cap was not enough while the
+ *  over-budget rule had not yet brought the units back under the cap (an asked sleeper with two awake on the MED tier, 2.03 units against 1.345: its wake
+ *  never fitted and the ask ran out after 8 s; shellview node_checks N1, the cabin's Snug Basket). The rule catches up after, as before. */
+function askAllow(w: LifeWorld, s: LifeSnapshot): number {
+  const over = s.units + w.f[F.UNITS] - UNIT_CAP[tierOf(s)];
+  return ASK_ALLOW_MILLI + (over > 0 ? Math.ceil(over * 1000) : 0);
+}
 /** round 6 (N1): the asked use at `i` takes a token: the farthest-from-done by-itself whole mover gives its behaviour up (a wander first). */
-function yieldToken(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): void {
+function yieldToken(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
   let pick = -1, best = -1;
   for (let j = 0; j < CAP; j++) {
-    if (j === i || !w.ac[j] || !w.mo[j] || w.ki[j] !== 0 || w.moo[j] >= 0 || (s.flags[j] & LIFE_FLAG.RIDE) !== 0) continue;
+    if (j === i || !w.ac[j] || !w.mo[j] || w.ki[j] !== 0 || (s.flags[j] & LIFE_FLAG.RIDE) !== 0) continue;
     if (w.beh[j] === BEH.USE && w.uS[j] === 2) continue;
-    const v = w.beh[j] === BEH.WANDER ? 2 : 1;
+    // (round 7) a by-itself moment's walk-up gives it too, after the by-itself movers (the moment ends, as a touch ends it; not a song, a teeter or a push):
+    // with the movers all in a chat or a greet the asked use waited for its end (node_checks N1, MED tier: one mover token)
+    if (w.moo[j] >= 0 && keepsMoment(w, w.moo[j])) continue;
+    const v = w.moo[j] >= 0 ? 0 : w.beh[j] === BEH.WANDER ? 2 : 1;
     if (v > best) { best = v; pick = j; }
   }
-  if (pick >= 0) endBeh(w, s, out, pick, 2);
+  if (pick < 0) return;
+  if (w.moo[pick] >= 0) abortFor(w, s, out, ev, pick);
+  else endBeh(w, s, out, pick, 2);
+}
+/** (round 7) The moments the player's ask does not break: a song (a tune the player played, C8 / L8), a teeter and a push (riders on a ride). */
+function keepsMoment(w: LifeWorld, m: number): boolean {
+  const k = w.mK[m];
+  return k === MOM.SING || k === MOM.TEETER || k === MOM.PUSH;
+}
+/** (round 7) The act's start of a use (a boop, a glide, a hop): an asked one takes the mover token from a by-itself mover (yieldToken) and, after ASK_WAIT_S,
+ *  wakes with one whole's allowance, as its walk does (round 6, N1). A squishy asked where it already stands at the use spot never walked, so it never
+ *  yielded, and waited out its 12 s asleep (shellview node_checks N1, Home's Keepsake Shelf on the MED tier). By-itself uses are unchanged. */
+function useGate(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, asked: boolean): boolean {
+  if (!asked) return gateStart(w, s, i, 0, 0);
+  if (!w.mo[i] && w.movers >= MOVER_CAP[tierOf(s)]) yieldToken(w, s, out, ev, i);
+  return gateStart(w, s, i, 0, w.f[F.NOW] - w.bT[i] > ASK_WAIT_S ? askAllow(w, s) : 0);
 }
 
 /** The ball's use point (behind the ball, toward where it should roll) into w.f[F.X], w.f[F.Z]; the roll direction into w.f[F.A], w.f[F.B]. */
@@ -674,12 +772,16 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   if (k < 0 || !thingPos(w, s, k)) { endBeh(w, s, out, i, 15); return; }
   // another squishy took the ball it was chasing: B16 huff (a squishy-to-squishy scene event only)
   const row = w.rOL[k];
-  if (w.ki[i] === 0 && w.ph[i] <= 1 && takenBy(w, i, k) >= 0) { // (a piece group joining in, P04, follows the whole's use: not a take)
+  // (round 7: the ball only, as HUFF_TRIGGERS says; two can wade in one pool or brush one chime row)
+  if (w.ki[i] === 0 && w.ph[i] <= 1 && w.tM[k] === MECH.ball && takenBy(w, i, k) >= 0) { // (a piece group joining in, P04, follows the whole's use: not a take)
     const o = takenBy(w, i, k);
     endBeh(w, s, out, i, 15); clearPose(w, s, out, i);
     huffScene(w, i, o);
     return;
   }
+  // (round 7) every other kind of thing: its own way (runSelf); a ride the player asked for went to the shell in startUse; a nest asked for keeps round 4's walk
+  const how = w.tH[k];
+  if (how > SELF_USE.ICE && how !== SELF_USE.NEST && (how !== SELF_USE.RIDE || !asked)) { runSelf(w, s, out, ev, i, k, asked); return; }
   if (w.ph[i] === 0) {
     if (tb < w.bN[i]) return;
     if (w.tM[k] === 0 ? !iceUsePoint(w, s, i, k) : !ballUsePoint(w, s, i, k, 0)) { endBeh(w, s, out, i, 15); return; }
@@ -693,8 +795,8 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     // by-itself mover (one not in a moment, not riding, not on an asked use of its own) instead of waiting for it (movers stays within moverCap, LF-10).
     // Its wake waits for room under unitCap, which the shell's over-budget rule makes by sleeping another squishy; if none of them can sleep yet (a
     // napper's pose, a memory still settling) it goes after ASK_WAIT_S anyway, with one whole's wake as its allowance, and the rule catches up after.
-    if (asked && !w.mo[i] && w.movers >= MOVER_CAP[tierOf(s)]) yieldToken(w, s, out, i);
-    if (travelTo(w, s, out, i, 0, asked && tb - w.bT[i] > ASK_WAIT_S ? ASK_ALLOW_MILLI : 0)) { w.ph[i] = 1; w.tw[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04); }
+    if (asked && !w.mo[i] && w.movers >= MOVER_CAP[tierOf(s)]) yieldToken(w, s, out, ev, i);
+    if (travelTo(w, s, out, i, 0, asked && tb - w.bT[i] > ASK_WAIT_S ? askAllow(w, s) : 0)) { w.ph[i] = 1; w.tw[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04); }
     else if (tb - w.bT[i] > 8) endBeh(w, s, out, i, 5);
     else w.tw[i] = 1; // waiting for a mover token (a wander gives way to it: choose)
     return;
@@ -709,14 +811,14 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   if (w.ph[i] === 2 && w.tM[k] === 0) {
     // (round 4) the glide: one nudge across the ice toward the patch's middle at 0.6..1.0 m/s; the ice carries it (GLIDE comes from the
     // distance it really travels, looks.ts)
-    if (!gateStart(w, s, i, 0, 0)) { if (tb - w.bT[i] > 12) endBeh(w, s, out, i, 5); return; }
+    if (!useGate(w, s, out, ev, i, asked)) { if (tb - w.bT[i] > 12) endBeh(w, s, out, i, 5); return; }
     const pk = w.tPa[k], dx = w.pX[pk] - s.x[i], dz = w.pZ[pk] - s.z[i], d = Math.sqrt(dx * dx + dz * dz) || 1;
     w.f[F.X2] = dx / d; w.f[F.Z2] = dz / d;
     if (!emitGlide(w, s, out, i, 600 + ((rnd(w, i) * 400) >>> 16))) { endBeh(w, s, out, i, 5); return; }
     emitEmote(w, s, out, i, EMOTE.star, STYLE.SAY, 2, 0, 0, w.fP[i]);
     voice(w, s, out, i, PHRASE.JOY, 200, 2);
     pushEvent(ev, LIFE_EV.USE, w.tV[k] || USE_VERB.STEP, i, asked ? 254 : -1, 1, w.tG[k]);
-    w.tU[k] = i; w.tUT[k] = tb;
+    w.tU[k] = i; w.tUT[k] = tb; if (k < 32) w.uM[i] |= 1 << k;   // (round 7: used this visit)
     if (w.ki[i] !== 0) pieceUse(w, s, ev, i, k);
     w.pl[i] = Math.max(0, w.pl[i] - 0.3); w.lJT[i] = tb; w.fP[i] = 0; w.uV[i]++;
     w.ph[i] = 3; w.bN[i] = tb + 2.5;
@@ -725,7 +827,7 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   if (w.ph[i] === 2) {
     // the boop: a hop into it and the last centimetres through it (the ball rolls on; physics)
     if (!ballUsePoint(w, s, i, k, 60)) { endBeh(w, s, out, i, 15); return; }
-    if (!gateStart(w, s, i, 0, 0)) { if (tb - w.bT[i] > 12) endBeh(w, s, out, i, 5); return; }
+    if (!useGate(w, s, out, ev, i, asked)) { if (tb - w.bT[i] > 12) endBeh(w, s, out, i, 5); return; }
     const dx = w.f[F.A], dz = w.f[F.B];
     if (thingPos(w, s, k)) {
       const bx = w.f[F.X2], bz = w.f[F.Z2], reach = s.r[i] + w.tS[k] - 0.06;
@@ -738,7 +840,7 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     emitEmote(w, s, out, i, w.tI[k] || EMOTE.ball, STYLE.SAY, 2, 0, 0, w.fP[i]);
     voice(w, s, out, i, PHRASE.JOY, 200, 2);
     pushEvent(ev, LIFE_EV.USE, w.tV[k] || USE_VERB.ROLL, i, asked ? 254 : -1, 1, w.tG[k]);
-    w.tU[k] = i; w.tUT[k] = tb;
+    w.tU[k] = i; w.tUT[k] = tb; if (k < 32) w.uM[i] |= 1 << k;   // (round 7: used this visit)
     if (w.ki[i] !== 0) pieceUse(w, s, ev, i, k);
     w.pl[i] = Math.max(0, w.pl[i] - 0.3); w.lJT[i] = tb; w.fP[i] = 0; w.uV[i]++;
     w.ph[i] = 3; w.bN[i] = tb + 1.6;
@@ -746,6 +848,384 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   }
   if (w.ph[i] === 3 && tb >= w.bN[i]) { clearPose(w, s, out, i); endBeh(w, s, out, i, 15); }
 }
+/* ───────────────────────────── round 7: the by-itself uses of every kind of thing (SELF_USE; R7_LIFE) ───────────────────────────── */
+
+/** The fractions of a pool's radius a wader walks in from its edge to (its first in bounds), and a puddle's or a drip's (the middle first). */
+const SPOT_WADE = new Float32Array([0.45, 0.7, 0.2, 0]), SPOT_MID = new Float32Array([0, 0.3, 0.6, 0.8]);
+/** How long it stays (s): in a pool (a liker +4), gazing, on a pad after the hop, leaning, under an arch or the drip. */
+const STAY = { wade: 6, wadeRnd: 6, wadeLike: 4, gaze: 5, pad: 3, lean: 4, arch: 2.5, shower: 4, bump: 1.6 } as const;
+
+/** The use point of thing k for character i's kind of use into w.f[F.X], w.f[F.Z] (and the second leg's end into w.uX2 / w.uZ2: along a chime row, across
+ *  the stones, up a slope; NaN when there is none). False when none is in the bounds. */
+function selfPoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean {
+  const how = w.tH[k], R = s.r[i], sh = shrinkMm(s, i);
+  w.uX2[i] = NaN; w.uZ2[i] = NaN;
+  if (!thingPos(w, s, k)) return false;
+  const tx = w.f[F.X2], tz = w.f[F.Z2];
+  let dx = s.x[i] - tx, dz = s.z[i] - tz;
+  const d = Math.sqrt(dx * dx + dz * dz);
+  if (d < 0.01) { dx = 0; dz = 1; } else { dx /= d; dz /= d; }
+  switch (how) {
+    case SELF_USE.WADE: case SELF_USE.SPLASH: case SELF_USE.SHOWER: {
+      // the nearest of the thing's own zones (the three Splash Spots), a point inside it on the squishy's side
+      let zq = -1, bd = 1e9;
+      for (let q = 0; q < w.nZ; q++) {
+        if (w.zT[q] !== k || (how === SELF_USE.SHOWER ? w.zK[q] !== ZONE.wet : w.zK[q] !== ZONE.water)) continue;
+        const ex = s.x[i] - w.zX[q], ez = s.z[i] - w.zZ[q], e = ex * ex + ez * ez;
+        if (e < bd) { bd = e; zq = q; }
+      }
+      if (zq < 0) return false;
+      const zr = (w.zSh[zq] === 0 ? w.zR[zq] : Math.min(w.zH[zq], w.zHZ[zq])) - 0.15;
+      let ux = s.x[i] - w.zX[zq], uz = s.z[i] - w.zZ[zq];
+      const ud = Math.sqrt(ux * ux + uz * uz);
+      if (ud < 0.01) { ux = 0; uz = 1; } else { ux /= ud; uz /= ud; }
+      for (let n = 0; n < 4; n++) {
+        const rr = (zr > 0 ? zr : 0) * (how === SELF_USE.WADE ? SPOT_WADE[n] : SPOT_MID[n]);
+        w.f[F.X] = w.zX[zq] + ux * rr; w.f[F.Z] = w.zZ[zq] + uz * rr; qT(w);
+        if (inBounds(w, sh)) return true;
+      }
+      return false;
+    }
+    case SELF_USE.GAZE: case SELF_USE.BUMP: case SELF_USE.RIDE: {
+      // beside it (a sky thing: within GAZE_SKY's 1.5 m; the trunk: a step from it; a ride: 1 m from it, the host lifts it on), on its side first
+      const rr = how === SELF_USE.RIDE ? 1.0 : (w.tM[k] === MECH.pool ? w.tS[k] : Math.max(w.tS[k], w.tS2[k])) + R + (how === SELF_USE.BUMP ? 0.15 : 0.12);
+      const a0 = Math.atan2(dz, dx);
+      for (let n = 0; n < 8; n++) {
+        const a = a0 + ((n & 1) ? 1 : -1) * ((n + 1) >> 1) * 0.6;
+        w.f[F.X] = tx + Math.cos(a) * rr; w.f[F.Z] = tz + Math.sin(a) * rr; qT(w);
+        if (inBounds(w, sh) && clearOfThings(w, s, (R * 1000) | 0)) return true;
+      }
+      return false;
+    }
+    case SELF_USE.RING: {
+      // a line beside the row (the body brushes every part: its side reaches 0.1 m past the parts' line), on the side toward the place's middle; from the
+      // end nearer the squishy to the other (the host records each strike: USE RING by SELF, a sound)
+      const t = w.def ? w.def.things[k] : null, span = t ? (t.p.span ?? 0) : 0, yaw = w.tY[k], ux = Math.cos(yaw), uz = Math.sin(yaw);
+      let nx = -uz, nz = ux;
+      if (nx * (w.bx - tx) + nz * (w.bz - tz) < 0) { nx = -nx; nz = -nz; }
+      const o = R + w.tS[k] - 0.1;
+      for (let side = 0; side < 2; side++) {
+        const cx = tx + nx * o, cz = tz + nz * o, sg = (s.x[i] - cx) * ux + (s.z[i] - cz) * uz >= 0 ? 1 : -1;
+        for (let ext = 0.25; ext > -0.2; ext -= 0.15) {
+          const L = span * 0.5 + ext;
+          w.f[F.PX] = cx + ux * L * sg; w.f[F.PZ] = cz + uz * L * sg;
+          if (!inBounds(w, sh)) continue;
+          const ax = w.f[F.PX], az = w.f[F.PZ];
+          w.f[F.PX] = cx - ux * L * sg; w.f[F.PZ] = cz - uz * L * sg;
+          if (!inBounds(w, sh)) continue;
+          w.uX2[i] = w.f[F.PX]; w.uZ2[i] = w.f[F.PZ]; w.f[F.X] = ax; w.f[F.Z] = az; qT(w);
+          return true;
+        }
+        nx = -nx; nz = -nz;
+      }
+      return false;
+    }
+    case SELF_USE.PAD: case SELF_USE.UPDRAFT: {
+      // a pad's part (the nearest; the updraft: a pad part standing in its column, any pad thing's), else the updraft's middle; at Home the pad's use spot
+      let px = NaN, pz = NaN, bd = 1e9;
+      if (how === SELF_USE.PAD && w.home) { px = w.tUX[k]; pz = w.tUZ[k]; }
+      else if (how === SELF_USE.UPDRAFT && !PADS_OK) {
+        // (no pad: the column's middle side away from any pad part in it, so the body stands clear of the pad: PADS_OK above)
+        const zq = w.tZo[k];
+        let ax = 0, az = 0, na = 0;
+        for (let q = 0; q < w.nTD; q++) if (w.tM[q] === MECH.pad) for (let p = 0; p < w.tQN[q]; p++) { w.f[F.PX] = w.tQX[q * 4 + p]; w.f[F.PZ] = w.tQZ[q * 4 + p]; if (inAreaAt(w, 0, zq, 0)) { ax += w.f[F.PX]; az += w.f[F.PZ]; na++; } }
+        px = w.zX[zq]; pz = w.zZ[zq];
+        if (na > 0) { const ex = px - ax / na, ez = pz - az / na, ed = Math.sqrt(ex * ex + ez * ez) || 1, rr = w.zSh[zq] === 0 ? w.zR[zq] : Math.min(w.zH[zq], w.zHZ[zq]); px += ex / ed * rr * 0.45; pz += ez / ed * rr * 0.45; }
+      }
+      else for (let q = 0; q < w.nTD; q++) {
+        if (how === SELF_USE.PAD ? q !== k : w.tM[q] !== MECH.pad) continue;
+        for (let p = 0; p < w.tQN[q]; p++) {
+          const ax = w.tQX[q * 4 + p], az = w.tQZ[q * 4 + p];
+          if (how === SELF_USE.UPDRAFT) { w.f[F.PX] = ax; w.f[F.PZ] = az; if (!inAreaAt(w, 0, w.tZo[k], 0)) continue; }
+          const e = (s.x[i] - ax) * (s.x[i] - ax) + (s.z[i] - az) * (s.z[i] - az);
+          if (e < bd) { bd = e; px = ax; pz = az; }
+        }
+      }
+      if (!(px === px) && how === SELF_USE.UPDRAFT) { const zq = w.tZo[k]; px = w.zX[zq]; pz = w.zZ[zq]; }
+      if (!(px === px)) return false;
+      w.f[F.X] = px; w.f[F.Z] = pz; qT(w);
+      return w.home || inBounds(w, (R * 1000) | 0);
+    }
+    case SELF_USE.CLIMB: {
+      // a ramp: from beside its foot (local +x is downhill) up its middle line; a mound: from its foot on the squishy's side over its top. Physics decides how
+      // far it gets: on it, the host's RIDE follows (rideThink: its own USE SLIDE); short of it, it leans against it
+      let sx = 0, sz = 0;
+      if (w.tM[k] === MECH.ramp) {
+        const ux = Math.cos(w.tY[k]), uz = Math.sin(w.tY[k]), hl = w.tS[k];
+        sx = tx + ux * (hl + R + 0.1); sz = tz + uz * (hl + R + 0.1);
+        w.uX2[i] = tx - ux * hl * 0.4; w.uZ2[i] = tz - uz * hl * 0.4;
+      } else {
+        const Rm = w.tS[k], top = w.tS1[k], foot = Math.sqrt(Math.max(0, Rm * Rm - (Rm - top) * (Rm - top)));
+        sx = tx + dx * (foot + R + 0.1); sz = tz + dz * (foot + R + 0.1);
+        w.uX2[i] = tx; w.uZ2[i] = tz;
+      }
+      // (the foot of a thing by the edge: slid toward the place's middle until the body stands within the bounds)
+      for (let n = 0; n < 7; n++) {
+        const u = n * 0.1, vx = w.bx - sx, vz = w.bz - sz, vd = Math.sqrt(vx * vx + vz * vz) || 1;
+        w.f[F.X] = sx + vx / vd * u; w.f[F.Z] = sz + vz / vd * u; qT(w);
+        if (inBounds(w, ((R + 0.1) * 1000) | 0)) return true;
+      }
+      return false;
+    }
+    case SELF_USE.LEAN: {
+      // beside the log on the squishy's side, somewhere along its middle half; uX2 / uZ2: the point on its axis it leans toward
+      const ux = Math.cos(w.tY[k]), uz = Math.sin(w.tY[k]), half = w.tS1[k] * 0.5 - w.tS[k];
+      let nx = -uz, nz = ux;
+      if (nx * dx + nz * dz < 0) { nx = -nx; nz = -nz; }
+      const o = w.tS[k] + R + 0.03, along = (rnd(w, i) * U16 * 2 - 1) * half * 0.5;
+      for (let side = 0; side < 2; side++) {
+        w.f[F.X] = tx + nx * o + ux * along; w.f[F.Z] = tz + nz * o + uz * along; qT(w);
+        if (inBounds(w, sh)) { w.uX2[i] = tx + ux * along; w.uZ2[i] = tz + uz * along; return true; }
+        nx = -nx; nz = -nz;
+      }
+      return false;
+    }
+    case SELF_USE.ARCH: {
+      // under the arch (between its posts), else a little toward the front until the body stands within the bounds
+      for (let n = 0; n < 5; n++) {
+        w.f[F.X] = tx; w.f[F.Z] = tz + n * 0.12; qT(w);
+        if (inBounds(w, ((R + 0.05) * 1000) | 0)) return true;
+      }
+      return false;
+    }
+    case SELF_USE.STONES: {
+      // from the end nearer the squishy along the path's long axis to the other end
+      const pk = w.tPa[k];
+      if (pk < 0) return false;
+      const lx = w.pS[pk] === 0 || w.pH[pk] >= w.pHZ[pk], yaw = w.pY[pk] + (lx ? 0 : Math.PI / 2), ux = Math.cos(yaw), uz = Math.sin(yaw);
+      const hl = w.pS[pk] === 0 ? w.pR[pk] : lx ? w.pH[pk] : w.pHZ[pk];
+      const sg = (s.x[i] - w.pX[pk]) * ux + (s.z[i] - w.pZ[pk]) * uz >= 0 ? 1 : -1;
+      for (let L = hl - 0.1; L > 0.2; L -= 0.15) {
+        w.f[F.PX] = w.pX[pk] + ux * L * sg; w.f[F.PZ] = w.pZ[pk] + uz * L * sg;
+        if (!inBounds(w, sh)) continue;
+        const ax = w.f[F.PX], az = w.f[F.PZ];
+        w.f[F.PX] = w.pX[pk] - ux * L * sg; w.f[F.PZ] = w.pZ[pk] - uz * L * sg;
+        if (!inBounds(w, sh)) continue;
+        w.uX2[i] = w.f[F.PX]; w.uZ2[i] = w.f[F.PZ]; w.f[F.X] = ax; w.f[F.Z] = az; qT(w);
+        return true;
+      }
+      return false;
+    }
+    default: return false;
+  }
+}
+/** A by-itself use done: its record (the thing's own verb, a = the squishy, b = SELF) where LIFE makes it (the host makes the strike and pad records). */
+function selfUse(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number, k: number, verb: number): void {
+  pushEvent(ev, LIFE_EV.USE, verb, i, -1, 1, w.tG[k]);
+  if (w.ki[i] !== 0) pieceUse(w, s, ev, i, k);
+}
+/** ... and what every by-itself use does: play falls (a thing use, LIFE 3), the visit's budget, the thing's last user, a happy face for 8 s. */
+function selfDone(w: LifeWorld, i: number, k: number): void {
+  const tb = w.f[F.NOW];
+  w.tU[k] = i; w.tUT[k] = tb; if (k < 32) w.uM[i] |= 1 << k;
+  w.pl[i] = Math.max(0, w.pl[i] - 0.3); w.lJT[i] = tb; w.fP[i] = 0;
+  // (a quiet use, a gaze at the moon or a stand under the drip leaf, moves nothing but the walk: it does not spend the visit's budget, so a night on the roof
+  // is not two gazes and done; it is still used, so it is not chosen again this visit)
+  const h = w.tH[k];
+  if (h !== SELF_USE.GAZE && h !== SELF_USE.SHOWER && w.uV[i] < 255) w.uV[i]++;
+}
+/** The scoot driver lets go (a SETTLE) while the mover token stays (the hops of a splash jump or a pad, as emitGlide does). */
+function settleKeep(w: LifeWorld, out: LifeIntents, i: number): void {
+  const k = pushIntent(w, out, INTENT.SETTLE, i);
+  if (k >= 0) out.a[k] = 0;
+}
+/** Eyes up at the sky over (x, z) (a GAZE at a point 3 m up). */
+function gazeUp(w: LifeWorld, out: LifeIntents, i: number, x: number, z: number): void {
+  const k = pushIntent(w, out, INTENT.GAZE, i);
+  if (k < 0) return;
+  out.a[k] = x; out.b[k] = 3; out.c[k] = z - 1; out.d[k] = 0.9; w.gK[i] = 1;
+}
+/** A lean pose toward the point (w.f[F.X], w.f[F.Z]) (0.08 rest radii). */
+function leanToward(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): void {
+  const dx = w.f[F.X] - s.x[i], dz = w.f[F.Z] - s.z[i], d = Math.sqrt(dx * dx + dz * dz) || 1;
+  w.f[F.X2] = dx / d * 0.08; w.f[F.Z2] = dz / d * 0.08; w.f[F.A] = 0; w.f[F.B] = 0;
+  emitPose(w, s, out, i, 0);
+}
+
+/** (round 7) Off a pad's rim: to the point outside the pad on the line from its middle (the scoot's target) through the body, R + 0.15 m past its edge. */
+function padOff(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): void {
+  const k = w.tT[i], cx = w.tx[i], cz = w.tz[i];
+  if (k >= 0 && k < 32) w.uM[i] |= 1 << k;   // (tried this visit: not again)
+  let dx = s.x[i] - cx, dz = s.z[i] - cz;
+  const d = Math.sqrt(dx * dx + dz * dz);
+  if (d < 0.01) { dx = 0; dz = 1; } else { dx /= d; dz /= d; }
+  const far = (k >= 0 ? w.tS[k] : 0.45) + s.r[i] + 0.15;
+  w.f[F.X] = cx + dx * far; w.f[F.Z] = cz + dz * far; qT(w);
+  if (!inBounds(w, shrinkMm(s, i)) || !travelTo(w, s, out, i, 0, 0)) { endBeh(w, s, out, i, 15); return; }
+  w.ph[i] = 7; w.bN[i] = w.f[F.NOW] + 8;
+}
+/** B04's by-itself use of thing k of a round-7 kind (SELF_USE: everything but the ball and the ice), phase by phase: 0 the use point and the walk's start;
+ *  1 the walk; 2 the act; 3 its second leg or its stay; 4 and 5 the walk out of the water. */
+function runSelf(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, k: number, asked: boolean): void {
+  const tb = w.f[F.NOW], how = w.tH[k], f = w.fa[i];
+  const ph = w.ph[i];
+  if (ph === 0) {
+    if (tb < w.bN[i]) return;
+    if (!selfPoint(w, s, i, k)) { if (k < 32) w.uM[i] |= 1 << k; endBeh(w, s, out, i, 15); return; }   // (no use point in the bounds: another thing next)
+    if (!mayMove(w, s, i, asked)) { if (tb - w.bT[i] > 6) endBeh(w, s, out, i, 5); return; }
+    qT(w);
+    const dc = d2p(w, s, i);
+    if (dc < 400) { w.ph[i] = 2; w.bN[i] = tb; return; }
+    if (asked && !w.mo[i] && w.movers >= MOVER_CAP[tierOf(s)]) yieldToken(w, s, out, ev, i);
+    if (travelTo(w, s, out, i, 0, asked && tb - w.bT[i] > ASK_WAIT_S ? askAllow(w, s) : 0)) { w.ph[i] = 1; w.tw[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04); }
+    else if (tb - w.bT[i] > 8) endBeh(w, s, out, i, 5);
+    else w.tw[i] = 1;
+    return;
+  }
+  if (ph === 1) {
+    // (a wade or a splash starts where the water starts: in the thing's own water on the way)
+    const inIt = (how === SELF_USE.WADE || how === SELF_USE.SPLASH) && w.zWK1[i] >= 0 && w.zT[w.zWK1[i]] === k;
+    const r = inIt ? 1 : travelStep(w, s, out, i, how === SELF_USE.CLIMB ? 200 : 120);
+    if (r === 0) { if (tb > w.bN[i] && tb - w.bT[i] > 12) endBeh(w, s, out, i, 15); return; }
+    if (r === 2) { // blocked: near enough (0.6 m) still acts; a climb leans where it stopped
+      w.f[F.PX] = w.tx[i]; w.f[F.PZ] = w.tz[i];
+      // (a pad: the hop must be made with the centre over the pad, 0.2 m from its middle; stopped on its rim it steps off again instead, never left there)
+      if ((how === SELF_USE.PAD || how === SELF_USE.UPDRAFT) && d2p(w, s, i) > 0.04 * CM2) { padOff(w, s, out, i); return; }
+      if (how !== SELF_USE.CLIMB && d2p(w, s, i) > 0.36 * CM2) { endBeh(w, s, out, i, 15); return; }
+    }
+    w.ph[i] = 2; w.bN[i] = tb;
+    return;
+  }
+  if (ph === 7) { // stepping off a pad's rim, or away from a chime row
+    const r = travelStep(w, s, out, i, 120);
+    if (r !== 0 || tb > w.bN[i]) endBeh(w, s, out, i, 15);
+    return;
+  }
+  if (ph === 2) {
+    switch (how) {
+      case SELF_USE.RING: case SELF_USE.STONES: case SELF_USE.CLIMB: {
+        // the second leg (it holds its mover token: travelTo re-aims the scoot)
+        if (!(w.uX2[i] === w.uX2[i])) { endBeh(w, s, out, i, 15); return; }
+        w.f[F.X] = w.uX2[i]; w.f[F.Z] = w.uZ2[i]; qT(w);
+        const dc = d2p(w, s, i);
+        if (!travelTo(w, s, out, i, 0, 0)) { if (tb - w.bN[i] > 4) endBeh(w, s, out, i, 5); return; }
+        w.ph[i] = 3; w.uQ[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04);
+        if (how === SELF_USE.STONES) say(w, s, out, i, EMOTE.leaf, 2, w.fP[i]);
+        return;
+      }
+      case SELF_USE.WADE: {
+        if (w.mo[i]) stopMove(w, out, i);
+        const floats = w.zWK1[i] >= 0 && (s.flags[i] & LIFE_FLAG.GROUNDED) === 0;
+        emitEmote(w, s, out, i, floats ? EMOTE.bubbles : EMOTE.droplet, STYLE.SAY, 2, 0, 0, w.fP[i]);
+        voice(w, s, out, i, PHRASE.JOY, 200, 2);
+        selfUse(w, s, ev, i, k, w.tV[k] || USE_VERB.WADE); selfDone(w, i, k);
+        w.ph[i] = 3; w.bN[i] = tb + STAY.wade + STAY.wadeRnd * (rnd(w, i) * U16) + (((SELF_LIKE[f] >>> how) & 1) !== 0 ? STAY.wadeLike : 0);
+        return;
+      }
+      case SELF_USE.SPLASH: case SELF_USE.PAD: case SELF_USE.UPDRAFT: {
+        if (!useGate(w, s, out, ev, i, asked)) { if (tb - w.bN[i] > 4) endBeh(w, s, out, i, 5); return; }
+        settleKeep(w, out, i);
+        if (how === SELF_USE.SPLASH) { say(w, s, out, i, EMOTE.droplet, 2, w.fP[i]); selfUse(w, s, ev, i, k, w.tV[k] || USE_VERB.WADE); }
+        else say(w, s, out, i, how === SELF_USE.PAD ? EMOTE.star : EMOTE.swirl, 2, w.fP[i]);
+        voice(w, s, out, i, PHRASE.JOY, 150, 2);
+        selfDone(w, i, k);
+        w.ph[i] = 3; w.uQ[i] = 0; w.bN[i] = tb + 0.3; w.bE[i] = tb + (how === SELF_USE.SPLASH ? 12 : 8);
+        return;
+      }
+      case SELF_USE.GAZE: {
+        if (w.mo[i]) stopMove(w, out, i);
+        gazeUp(w, out, i, w.f[F.X2], w.f[F.Z2]);
+        if (thingPos(w, s, k)) gazeUp(w, out, i, w.f[F.X2], w.f[F.Z2]);
+        say(w, s, out, i, EMOTE.moon, 2, w.fP[i]);
+        voice(w, s, out, i, PHRASE.THING, 300, 2);
+        selfDone(w, i, k);
+        w.ph[i] = 3; w.bN[i] = tb + STAY.gaze;
+        return;
+      }
+      case SELF_USE.LEAN: case SELF_USE.ARCH: case SELF_USE.SHOWER: {
+        if (w.mo[i]) stopMove(w, out, i);
+        if (how === SELF_USE.LEAN) { w.f[F.X] = w.uX2[i]; w.f[F.Z] = w.uZ2[i]; leanToward(w, s, out, i); say(w, s, out, i, EMOTE.snug, 2, w.fP[i]); }
+        else say(w, s, out, i, how === SELF_USE.ARCH ? EMOTE.sparkle : EMOTE.droplet, 2, w.fP[i]);
+        if (how !== SELF_USE.SHOWER) selfUse(w, s, ev, i, k, w.tV[k] || USE_VERB.LEAN);   // (the drip's record is the SHOWER REACT under it)
+        selfDone(w, i, k);
+        w.ph[i] = 3; w.bN[i] = tb + (how === SELF_USE.LEAN ? STAY.lean + 2 * (rnd(w, i) * U16) : how === SELF_USE.ARCH ? STAY.arch : STAY.shower);
+        return;
+      }
+      case SELF_USE.BUMP: {
+        // a bump into the trunk, as a boop: a scoot through its middle and a hop into it (the host's branch strike drops the snow and records USE SHAKE)
+        if (!useGate(w, s, out, ev, i, asked)) { if (tb - w.bN[i] > 4) endBeh(w, s, out, i, 5); return; }
+        if (!thingPos(w, s, k)) { endBeh(w, s, out, i, 15); return; }
+        const bx = w.f[F.X2], bz = w.f[F.Z2], dx = bx - s.x[i], dz = bz - s.z[i], d = Math.sqrt(dx * dx + dz * dz) || 1;
+        w.f[F.X] = bx; w.f[F.Z] = bz;
+        emitScoot(w, out, i, 300, 0);
+        w.f[F.X2] = dx / d; w.f[F.Z2] = dz / d;
+        emitHop(w, s, out, i, 400, 1000);
+        say(w, s, out, i, EMOTE.wow, 2, w.fP[i]);
+        selfDone(w, i, k);
+        w.ph[i] = 3; w.bN[i] = tb + STAY.bump;
+        return;
+      }
+      case SELF_USE.RIDE: {
+        // LIFE's own get-on: the host lifts it (carryTo, b = 1: not a ride the player set up); on the seat, the host's RIDE follows (rideThink: its USE)
+        const q = pushIntent(w, out, INTENT.USE, i);
+        if (q >= 0) { out.a[q] = k; out.b[q] = 1; }
+        say(w, s, out, i, EMOTE.star, 2, w.fP[i]);
+        w.ph[i] = 3; w.bN[i] = tb + 6;
+        return;
+      }
+      default: endBeh(w, s, out, i, 15); return;
+    }
+  }
+  if (ph === 3) {
+    switch (how) {
+      case SELF_USE.RING: case SELF_USE.STONES: case SELF_USE.CLIMB: {
+        const r = travelStep(w, s, out, i, 120);
+        if (r === 0 && !(tb > w.bN[i])) return;
+        if (how === SELF_USE.RING) {
+          say(w, s, out, i, EMOTE.bell, 2, w.fP[i]); voice(w, s, out, i, PHRASE.JOY, 150, 2); selfDone(w, i, k);
+          // then a step away from the row toward the place's middle, so its last part does not keep striking a body left against it (the host writes a
+          // USE RING per strike: a body left touching a row was struck thousands of times in a visit, probe_life_selfuse SU-03's info line)
+          const yaw = w.tY[k];
+          let nx = -Math.sin(yaw), nz = Math.cos(yaw);
+          if (nx * (w.bx - w.tX[k]) + nz * (w.bz - w.tZ[k]) < 0) { nx = -nx; nz = -nz; }
+          w.f[F.X] = s.x[i] + nx * 0.6; w.f[F.Z] = s.z[i] + nz * 0.6; qT(w);
+          if (inBounds(w, shrinkMm(s, i)) && travelTo(w, s, out, i, 0, 0)) { w.ph[i] = 7; w.bN[i] = tb + 6; return; }
+          endBeh(w, s, out, i, 15); return;
+        }
+        if (how === SELF_USE.STONES) { voice(w, s, out, i, PHRASE.JOY, 150, 2); selfUse(w, s, ev, i, k, w.tV[k] || USE_VERB.STEP); selfDone(w, i, k); endBeh(w, s, out, i, 15); return; }
+        // a climb that did not get on (rideThink takes a body that did): it leans against the mound or the ramp's side (PLACES 4.3 "lean against it"; no
+        // record: a USE carries the thing's own verb, SLIDE, which it did not do: journal.ts PLACE_CAPS, QC)
+        if (w.mo[i]) stopMove(w, out, i);
+        if (thingPos(w, s, k)) { w.f[F.X] = w.f[F.X2]; w.f[F.Z] = w.f[F.Z2]; leanToward(w, s, out, i); }
+        say(w, s, out, i, EMOTE.snug, 2, 0); selfDone(w, i, k);
+        w.ph[i] = 6; w.bN[i] = tb + 3;
+        return;
+      }
+      case SELF_USE.SPLASH: case SELF_USE.PAD: case SELF_USE.UPDRAFT: {
+        // the hops: a splash jump is 1 to 3 small hops that land in the puddle; a pad and the updraft one small hop (the pad's gain and the column do the rest)
+        const n = how === SELF_USE.SPLASH ? 1 + ((rnd(w, i) * 3) >>> 16) : 1;
+        if (w.uQ[i] < n && tb >= w.bN[i]) {
+          noLean(w);
+          if (emitHop(w, s, out, i, 0, 1000)) { w.uQ[i]++; w.bN[i] = tb + G_GAP[f] + 0.4; }
+          else w.bN[i] = tb + 0.3;
+        }
+        if ((w.uQ[i] >= n && tb >= w.bN[i] + (how === SELF_USE.SPLASH ? 0.5 : STAY.pad)) || tb >= w.bE[i]) {
+          if (how === SELF_USE.SPLASH) { w.ph[i] = 4; w.bN[i] = tb; return; }
+          padOff(w, s, out, i);   // (off the pad again: never left standing on it)
+        }
+        return;
+      }
+      case SELF_USE.WADE: if (tb >= w.bN[i]) { w.ph[i] = 4; w.bN[i] = tb; } return;
+      case SELF_USE.RIDE: if (tb >= w.bN[i]) endBeh(w, s, out, i, 15); return;
+      default:
+        if (tb >= w.bN[i]) { clearPose(w, s, out, i); endBeh(w, s, out, i, 15); }
+        return;
+    }
+  }
+  if (ph === 4) { // out of the water to the nearest dry spot (LF-18's way out, without its 30 s)
+    if (dryTarget(w, s, i) && travelTo(w, s, out, i, 0, 0)) { w.ph[i] = 5; w.bN[i] = tb + 10; return; }
+    if (tb - w.bN[i] > 6) endBeh(w, s, out, i, 15);
+    return;
+  }
+  if (ph === 5) {
+    const r = travelStep(w, s, out, i, 120);
+    if (r !== 0 || tb > w.bN[i]) endBeh(w, s, out, i, 15);
+    return;
+  }
+  // 6: leaning against what it could not climb
+  if (tb >= w.bN[i]) { clearPose(w, s, out, i); endBeh(w, s, out, i, 15); }
+}
+
 /** Who else is booping ball k now (a squishy-to-squishy take), or -1. */
 function takenBy(w: LifeWorld, i: number, k: number): number {
   for (let j = 0; j < CAP; j++) if (j !== i && w.ac[j] && w.beh[j] === BEH.USE && w.tT[j] === k && w.ph[j] >= 2) return j;
@@ -783,6 +1263,9 @@ function baskScore(w: LifeWorld, s: LifeSnapshot, i: number): number {
     if (w.home && t >= 0 && w.rOL[t] < 0) continue;
     const dx = s.x[i] - w.zX[k], dz = s.z[i] - w.zZ[k], d = Math.sqrt(dx * dx + dz * dz) - (w.zSh[k] === 0 ? w.zR[k] : Math.max(w.zH[k], w.zHZ[k]));
     if (d <= 3) { near3 = true; if ((w.oV[i] & (1 << k)) === 0) unvisited = true; }
+    // (round 7, the brief's "the chimney and warm spots": a warm spot a THING makes (the chimney, the steam pool; not a place's whole sun) draws a squishy
+    // that has not warmed there this visit from 4.5 m in a place of several kinds of use, not only 3 m; Home and the cabin keep round 4's 3 m)
+    else if (d <= 4.5 && t >= 0 && !w.home && (w.oV[i] & (1 << k)) === 0 && usesFull(w) > 2) { near3 = true; unvisited = true; }
     if (d <= 2) near2 = true;
   }
   if (!near3) return 0;
@@ -1120,6 +1603,8 @@ function startCheer(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number):
 function rideThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number): void {
   const tb = w.f[F.NOW];
   if (!w.rP[i] || w.beh[i] !== BEH.RIDE) {
+    // (round 7) a ride LIFE got on by itself: its own climb up a mound or a ramp (B04 CLIMB) or the host's lift of its own get-on (B04 RIDE)
+    const own = w.beh[i] === BEH.USE && w.uS[i] === 1 && w.tT[i] >= 0 && (w.tH[w.tT[i]] === SELF_USE.CLIMB || w.tH[w.tT[i]] === SELF_USE.RIDE) ? w.tT[i] : -1;
     w.rP[i] = 1;
     if (w.mo[i]) stopMove(w, out, i);
     setBeh(w, i, BEH.RIDE, 1000, BRAIN.rideS * 1000); w.rU[i] = tb + BRAIN.rideS;
@@ -1133,6 +1618,8 @@ function rideThink(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEven
       if (d < bd) { bd = d; best = k; }
     }
     w.rTh[i] = best; w.rST[i] = -1e9;
+    // its own ride's record: the ride's verb (SLIDE down the mound or the ramp, ROCK, SWING), by SELF (the host records only the rides the player set up)
+    if (own >= 0 && own === best) { selfUse(w, s, ev, i, own, w.tV[own] || USE_VERB.SLIDE); selfDone(w, i, own); }
     say(w, s, out, i, EMOTE.swirl, 1, 0);
     wishCheck(w, s, out, ev, i);
   }

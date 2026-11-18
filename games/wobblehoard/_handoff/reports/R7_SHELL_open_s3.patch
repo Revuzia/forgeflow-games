@@ -1,0 +1,35 @@
+--- a/games/wobblehoard/src/data/places.ts	2026-11-18 09:50:14.296984435 +0000
++++ b/games/wobblehoard/src/data/places.ts	2026-11-18 09:50:14.316164030 +0000
+@@ -140,8 +140,8 @@
+   { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: true, night: false, sky: 'shore' },
+   { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false, sky: 'ridge' },
+   { id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: true, night: false, sky: 'garden' },
+-  { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true, sky: 'roof' },
+-  { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: false, night: false, sky: 'cloud' },
++  { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: true, night: true, sky: 'roof' },
++  { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: true, night: false, sky: 'cloud' },
+ ];
+ /** A place's PLACE_INFO row by idx (undefined for a dropped or unknown idx). */
+ export const placeInfo = (idx: number): (typeof PLACE_INFO)[number] | undefined => PLACE_INFO.find((p) => p.idx === idx);
+--- a/games/wobblehoard/src/data/place_lanternroof.ts	2026-11-18 09:50:14.299282478 +0000
++++ b/games/wobblehoard/src/data/place_lanternroof.ts	2026-11-18 09:50:14.316319234 +0000
+@@ -11,7 +11,7 @@
+ import { USE_VERB as V, EMOTE as E } from './life.ts';
+ 
+ export const PLACE: PlaceDef = {
+-  id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true,
++  id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: true, night: true,
+   ground: { grip: 1.1, glue: 1, peel: 1, drag: 1, mark: 0, markLifeS: 0 },
+   patches: [
+     { id: 'chimneycorner', shape: 'disc', x: -2.3, z: 0.6, r: 0.9, mods: {  }, nap: true },
+--- a/games/wobblehoard/src/data/place_cloudloft.ts	2026-11-18 09:50:14.301510474 +0000
++++ b/games/wobblehoard/src/data/place_cloudloft.ts	2026-11-18 09:50:14.316391688 +0000
+@@ -11,7 +11,7 @@
+ import { USE_VERB as V, EMOTE as E } from './life.ts';
+ 
+ export const PLACE: PlaceDef = {
+-  id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: false, night: false,
++  id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: true, night: false,
+   ground: { grip: 0.8, glue: 0.6, peel: 0.6, drag: 1.15, mark: MARK.dent, markLifeS: 6 },
+   patches: [
+ 

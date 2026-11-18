@@ -21,7 +21,7 @@ import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WIS
 import { WISH_STATE, PIECES_USE } from '../src/data/quests.ts';
 import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends, lifeSetHops, lifeLooks, lifeAddLook,
-  lifeWishOf, lifePhrase, lifeMotif, lifeAttention, lifeThingTap, lifeGustOn, createAttention, attentionFilter, motionGate, unitCapOf, moverCapOf, CAPS, traitsOf, HUFF_TRIGGERS,
+  lifeWishOf, lifePhrase, lifeMotif, lifeAttention, lifeThingTap, lifeGustOn, lifeSetSelfRides, createAttention, attentionFilter, motionGate, unitCapOf, moverCapOf, CAPS, traitsOf, HUFF_TRIGGERS,
   PHRASE_BUBBLE, BEH, STYLE, UNIT } from '../src/life/step.ts';
 import type { LifeWorld } from '../src/life/step.ts';
 
@@ -1169,6 +1169,56 @@ if (!LF02_CHILD) {
     const up = hopRun(jg, false), off = hopRun(0, false), calm = hopRun(jg, true);
     check('LIFE 5.2', `(S2) lifeSetHops raises the jelly gel whole's hop to vyS2 1.2 (max vy ${up.whole.toFixed(2)}); firm silicone not raised stays at the S1 cap (${up.other.toFixed(2)} <= 0.84); a piece keeps the S1 cap (${up.piece.toFixed(2)}); mask 0 back to S1 (${off.whole.toFixed(2)}); Calm x 0.6 (${calm.whole.toFixed(2)})`,
       up.whole > 0.84 && up.whole <= 1.2 + 1e-6 && up.other <= 0.84 + 1e-6 && up.piece <= 0.84 + 1e-6 && off.whole <= 0.84 + 1e-6 && calm.whole <= 1.2 * 0.6 + 1e-6);
+  }
+  {
+    // LF-28 (round 7, R7_LIFE; the brief: "squishies must use EVERY kind of thing on their own, each in its own way by material family and traits"): on the
+    // kinematic host, three wholes in each S2 / S3 place for 300 s with no input: B04 reaches the act of at least 3 different things there (the real-physics
+    // measure is probe_life_selfuse.ts SU-01); every USE LIFE writes carries the thing's own verb (journal.ts PLACE_CAPS); a putty (it never hops) never starts
+    // a splash jump, a pad, the updraft or the stones; a ride is never started while the host has not said it lifts LIFE's own get-on (lifeSetSelfRides)
+    const SELF = { 3: 'WADE', 4: 'SPLASH', 5: 'GAZE', 6: 'RING', 7: 'PAD', 8: 'CLIMB', 9: 'LEAN', 10: 'ARCH', 11: 'BUMP', 12: 'STONES', 13: 'SHOWER', 14: 'UPDRAFT', 16: 'RIDE' } as Record<number, string>;
+    const lines: string[] = [];
+    let few = 0, offVerb = 0, puttyHop = 0, rides = 0;
+    for (const P of [RIPPLE, FROSTBELL, RAINLEAF, LANTERNROOF, CLOUDLOFT]) {
+      const sim = s2(P, 280 + P.idx);
+      const party = ['dollop', 'kneadle', 'cushlet'], sp = P.spawn as readonly (readonly [number, number])[];
+      party.forEach((id, q) => sim.add(q, id, sp[q][0], sp[q][1]));
+      const acted = new Set<number>(), kinds = new Set<string>();
+      for (let f = 0; f < 300 * 60; f++) {
+        sim.step();
+        for (let q = 0; q < 3; q++) {
+          const k = sim.w.tT[q];
+          if (sim.w.beh[q] !== BEH.USE || k < 0 || sim.w.ph[q] < 2) continue;
+          acted.add(k); kinds.add(SELF[sim.w.tH[k]] ?? (sim.w.tH[k] === 1 ? 'BALL' : sim.w.tH[k] === 2 ? 'ICE' : '?'));
+          if (q === 1 && (sim.w.tH[k] === 4 || sim.w.tH[k] === 7 || sim.w.tH[k] === 14 || sim.w.tH[k] === 12)) puttyHop++;
+          if (sim.w.tH[k] === 16) rides++;
+        }
+      }
+      for (const e of sim.events(LIFE_EV.USE)) { const t = P.things.find((x) => THING_IDS.indexOf(x.id) === e.thing); if (t && e.sub !== t.verb && e.sub !== USE_VERB.NAP && e.sub !== USE_VERB.LISTEN) offVerb++; }
+      if (acted.size < 3) few++;
+      lines.push(`${P.id} ${acted.size} things (${[...kinds].join(' ')})`);
+    }
+    check('LF-28', `(round 7) by-itself uses of every kind: three wholes, 300 s, no input, B04 acts on 3 or more different things at each S2 / S3 place (${lines.join('; ')})`, few === 0);
+    check('LF-28', `(round 7) each in its own way: every USE LIFE writes carries the thing's own verb (${offVerb} off), the putty never starts a hop use (${puttyHop}), no ride is started without the host's lift (${rides})`, offVerb === 0 && puttyHop === 0 && rides === 0);
+    // the get-on, once the host says it lifts LIFE's own (lifeSetSelfRides): at Rainleaf a squishy walks up to the Leaf Teeter and asks the lift with b = 1
+    // (not the player's "Go play with...": no b = 254 anywhere); the host's RIDE then comes on (here: set as the shell would after carryTo) and LIFE writes
+    // its own USE ROCK by SELF from rideThink, once
+    const rr = s2(RAINLEAF, 290), tt = RAINLEAF.things.findIndex((t) => t.id === 'leafteeter');
+    lifeSetSelfRides(rr.w, true);
+    rr.add(0, 'twangle', RAINLEAF.things[tt].x - 1.6, RAINLEAF.things[tt].z + 0.6); rr.add(1, 'kneadle', -2.0, 1.2);
+    for (const bh of [BEH.NAP, BEH.BASK, BEH.WANDER, BEH.MOMENT]) { rr.w.coo[bh] = 1e9; rr.w.coo[26 + bh] = 1e9; }
+    let asked = -1;
+    for (let f = 0; f < 120 * 60 && asked < 0; f++) {
+      rr.step(); rr.w.pl[0] = Math.max(rr.w.pl[0], 0.9);
+      // (only the Leaf Teeter is left to it: every other thing tried)
+      rr.w.uM[0] |= ~(1 << tt);
+      const q = rr.log.findIndex((l) => l.kind === INTENT.USE && l.who === 0);
+      if (q >= 0) asked = q;
+    }
+    const lift = asked >= 0 ? rr.log[asked] : null;
+    if (lift) { rr.extraFlags[0] = LIFE_FLAG.RIDE | LIFE_FLAG.ON_PROP; rr.run(2); }
+    const own = rr.events(LIFE_EV.USE).filter((e) => e.a === 0 && e.thing === TID('leafteeter'));
+    check('LF-28', `(round 7) with the host's lift on, a squishy gets on the Leaf Teeter by itself: INTENT.USE b = 1 (${lift ? `thing ${lift.a}, b ${lift.b}` : 'none'}), then one USE ROCK by SELF from its ride (${own.map((e) => `sub ${e.sub} b ${e.b}`).join(', ') || 'none'})`,
+      !!lift && lift.a === tt && lift.b === 1 && own.length === 1 && own[0].sub === USE_VERB.ROCK && own[0].b !== 254);
   }
   info('LF-21', 'round 4: every REACT kind of QUESTS 4 now has a producer checked on its place above (FLOAT, WADE, SOAK, TOAST, RISE, OOZE, WARM, SHIVER, FROST, SNOWCAP, GLIDE, SPLASH, DRIFT, LIFT, RATTLE, GLOW, GAZE_SKY, PRINT, SHOWER, FIZZ, HOLD_ON; DRY, LOVE)');
   info('LF-15', "friendship's pace (20 a pair a day, levels at 12 and 40, 128 rows, eviction) is the reducer's (PG_QUESTS); LIFE's side: lifeSetPair levels gate chat (Met), duet and nuzzle-for-every-pair (Friends), twirl (Close)");

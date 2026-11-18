@@ -251,7 +251,8 @@ function reactMotion(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, i: number): 
   if (pm !== -1 && grounded && w.zWK1[i] < 0 && (sp > 0.05 || w.pA[i])) emitReact(w, s, ev, i, REACT_KIND.PRINT, pm >= 0 ? (s.patchThing[i] >= 0 ? s.patchThing[i] : w.pT[pm] >= 0 ? w.tG[w.pT[pm]] : -1) : -1, 0);
   // GAZE_SKY at night: idle within 1.5 m of a sky thing for 3 s
   let sky = -1;
-  if (w.night && (w.beh[i] === 1 || w.beh[i] === 0) && w.moo[i] < 0 && w.ki[i] !== 2) {
+  // (round 7: or sitting by it on its own gaze, B04 SELF_USE.GAZE's stay: USE, phase 3)
+  if (w.night && (w.beh[i] === 1 || w.beh[i] === 0 || (w.beh[i] === 4 && w.ph[i] === 3 && w.tT[i] >= 0 && w.tSk[w.tT[i]] === 1)) && w.moo[i] < 0 && w.ki[i] !== 2) {
     for (let k = 0; k < w.nTD; k++) {
       if (!w.tSk[k]) continue;
       const r = w.rOL[k], tx = r >= 0 ? s.thingX[r] : w.tX[k], tz = r >= 0 ? s.thingZ[r] : w.tZ[k];

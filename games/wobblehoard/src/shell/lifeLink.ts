@@ -77,6 +77,10 @@ export interface LifeHostApi extends LifeHostLike {
    *  anchor of its control in CSS px over the canvas (the floor at the thing's foot); [] while LIFE is quiet (a sheet, a ceremony, travel, a non-Hand tool) or
    *  when physics has no AUTO (allocates: the control's 250 ms placement only) */
   autoThings(): Array<{ k: number; id: string; on: boolean; x: number; y: number }>;
+  /** round 7: the spots an AUTO chip must not cover, [x, y, rx, ry, soft] after another (an ellipse's centre and half sizes, CSS px over the canvas; soft 1 = a
+   *  squishy's face or a hinge ride's own seat, given up before a chip would be hidden): every part of the place's things, a flush thing's painted disc
+   *  (Lanternroof's Vane Disc) and every squishy out; [] when none (allocates: the 250 ms placement only) */
+  autoAvoid?(): number[];
   /** the player switches AUTO of place-local thing k (a hinge ride) on or off; false when it cannot (no such ride, no AUTO in physics) */
   setThingAuto(k: number, on: boolean): boolean;
   /** "Go play with..." (11.8; the name tag popover's entry, the dev hook until it is built): the squishy with this item id plays with place-local thing k

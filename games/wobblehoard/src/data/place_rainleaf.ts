@@ -12,7 +12,7 @@ import { MECH, ZONE, MARK, PROP_SOUND as S, SIGNATURE, FINALE, cells } from './p
 import { USE_VERB as V, EMOTE as E } from './life.ts';
 
 export const PLACE: PlaceDef = {
-  id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: false, night: false,
+  id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: true, night: false,
   ground: { grip: 0.85, glue: 1, peel: 1, drag: 1, mark: MARK.trail, markLifeS: 20 },
   patches: [
     { id: 'steppingstones', shape: 'box', x: -1.6, z: 1.65, hx: 0.9, hz: 0.3, mods: { grip: 1.1 } },

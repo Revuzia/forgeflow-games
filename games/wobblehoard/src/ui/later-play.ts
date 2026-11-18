@@ -149,7 +149,8 @@ export function attachPlayUi(o: PlayUiOpts): PlayUi {
       if (!go) idx = here;
     } if (idx >= 0 && v) {
       const qv = v.quests[idx], title = QUEST_TEXT[idx]?.[0] ?? '';
-      const count = qv && qv.need > 1 && !qv.done ? ` · ${fill(UI_TEXT.ofN, { a: String(Math.min(qv.have, qv.need)), b: String(qv.need) })}` : '';
+      // (round 7: the count is one unit, kept on the title's line by its dot: a phone's two-line pill broke "· 0 of" / "2"; now "... watchers ·" / "0 of 2")
+      const count = qv && qv.need > 1 && !qv.done ? `\u00a0· ${fill(UI_TEXT.ofN, { a: String(Math.min(qv.have, qv.need)), b: String(qv.need) }).replace(/ /g, '\u00a0')}` : '';
       const text = title ? `Next: ${title}${count}` : '';
       if (text !== trackerText || go !== trackGo) { trackerText = text; pillText.textContent = text; pillGo.setAttribute('aria-label', `Next stamp: ${title}${count}. ${go ? 'Open Places' : 'Open the Journal'}`); }
     } } catch { idx = -1; go = false; }

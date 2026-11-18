@@ -52,6 +52,9 @@ export interface ShellDevApi {
   stageInfo(): Record<string, unknown> | null;
   /** PLAYGROUND (PG_SHELL round 4, dev only): the stage object itself (its dev members: scene, homeKit), for a harness's look at what is drawn */
   stageObj(): unknown;
+  /** round 7 (R7_SHELL, dev only): a world point's screen position in CSS px through the stage camera (null behind it): the harness aims a press at a flush thing
+   *  (Lanternroof's Vane Disc has no prop to report a centre) without the life chunk carrying the code */
+  project(x: number, y: number, z: number): { x: number; y: number } | null;
   /** SHELL-2b: the practice shelf as the harness checks it */
   hoardState(): { owned: number; items: Array<{ id: string; species: string; name: string; tier: string; seen: boolean; fav: boolean; locked: boolean; origin: string }>; restockClaimed: boolean; tasks: Array<{ id: string; text: string; progress: number; target: number; done: boolean; claimed: boolean }>; mergesToday: number; credits: number; tidyPairs: number; tidyPairsAll: number };
   /** the toy tray and the Cut tool: the tool in hand, whether the physics can cut, the pieces and their shares of the whole */
@@ -247,6 +250,14 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     pauseReasons: () => [...game.pauseReasons],
     paused: () => game.paused,
     stageObj: () => game.stage,
+    project(x, y, z) {
+      const cam = game.stage.camera;
+      try { cam.updateMatrixWorld(); } catch { /* ignore */ }
+      const e = cam.matrixWorldInverse.elements, m = cam.projectionMatrix.elements, v = vp();
+      const vx = e[0] * x + e[4] * y + e[8] * z + e[12], vy = e[1] * x + e[5] * y + e[9] * z + e[13], vz = e[2] * x + e[6] * y + e[10] * z + e[14];
+      const cx = m[0] * vx + m[4] * vy + m[8] * vz + m[12], cy = m[1] * vx + m[5] * vy + m[9] * vz + m[13], cw = m[3] * vx + m[7] * vy + m[11] * vz + m[15];
+      return cw > 1e-6 ? { x: (cx / cw * 0.5 + 0.5) * v.w, y: (0.5 - cy / cw * 0.5) * v.h } : null;
+    },
     stageInfo() {
       try { const i = (game.stage as unknown as { info?: Record<string, unknown> }).info; return i ? JSON.parse(JSON.stringify(i)) as Record<string, unknown> : null; } catch { return null; }
     },

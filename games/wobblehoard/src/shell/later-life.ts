@@ -32,6 +32,7 @@ import type { StorageSubscribe } from '../core/save.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends,
   lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, lifeGustOn, attentionSound, PHRASE, UNIT, CHAR_CAP } from '../life/step.ts';
 import type { LifeWorld } from '../life/step.ts';
+import * as LIFE_STEP from '../life/step.ts';
 import type { PropWorld } from '../physics/props.ts';
 import { PLACE as HOME } from '../data/place_home.ts';
 import { PLACE_INFO, THING_IDS, THING_KINDS, loadPlaceDef, MECH, PROP_SOUND, ZONE, ownsArea } from '../data/places.ts';
@@ -57,6 +58,7 @@ const FLICK_MS = 1.2;    // a tapped ball rolls away from the camera at this spe
 const SHOWER_S = 4;      // a tapped Drip Leaf tips its shower this long (PLACES 2.1 M14: "tap it: the leaf tips a shower")
 const SET_S = 6;         // a ride the body lands on within this many seconds of the player letting go of it (or lifting it there) is a ride the player SET UP
 const PAD_USE_GAP_S = 2; // one USE BOUNCE per body per this many seconds of pad kicks (a landing's kicks in a row are one bounce)
+const CHIME_V = 0.1, CHIME_GAP_S = 1;   // round 7 (R7_LIFE's request): a body's chime strike is its USE only when it moves into it (faster than this, or tossed), one a second
 const HUSH_S = 4;        // round 5 (B7): a body the over-budget rule must put to sleep takes no new LIFE motion for this long (it comes to rest, then sleeps)
 const ASKED_S = 30;      // round 5 (B7), round 6 (VERDICT_PG2 N1): a squishy the player asked to play ("Go play with...") is ASKED until it has used the thing (its
                          // USE BY PLAYER) or this long has passed: the budget never holds its motion back, never hushes it or puts it to sleep, and makes room for it
@@ -102,12 +104,14 @@ interface Char {
   rideUntil: number;      // RIDE (D-74)
   setT: number;           // sim time the player let go of it (a carry ended) or lifted it onto a ride (useRide): QUESTS 4's "rides the player set up"
   padT: number;           // sim time of its last USE BOUNCE from a pad kick
+  chimeT: number;         // (round 7) sim time of its last USE RING from a chime strike
+  perchT: number;         // (round 7) how long it has rested on top of a tall block (perchDown hops it down)
   hushT: number;          // round 5 (B7): until this sim time LIFE's motion intents for it are dropped (the over-budget rule is putting it to sleep)
   askedT: number;         // round 5 (B7): sim time the player last asked it to play (playWith); -1e9 once it used the thing (round 6: see asked())
 }
 const mkChar = (): Char => ({ on: false, body: null, genome: null, itemId: null, view: -1, kind: 0, group: -1, species: 255, family: 0, flavour: 0, pitch: 1, frac: 1, r: 0.5,
   offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, scooting: false, scootX: 0, scootZ: 0,
-  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, hushT: -1e9, askedT: -1e9 });
+  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, chimeT: -1e9, perchT: 0, hushT: -1e9, askedT: -1e9 });
 
 function mkSnapshot(): LifeSnapshot {
   const n = CAP;
@@ -167,6 +171,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const chars: Char[] = Array.from({ length: CAP }, mkChar);
   const report = (e: unknown): void => { console.error(e); };
   lifeSetHops(w, 0);   // S1: every family at the S1 hop cap (LIFE 5.2)
+  // (round 7, R7_LIFE's request) LIFE gets onto teeters, rockers and swings by itself, now that the host lifts its own get-on without the player's mark (useRide's
+  // `self`); AUTO stays the player's. The switch is LIFE's (step.ts lifeSetSelfRides), looked up so a LIFE without it is left as it was.
+  (LIFE_STEP as unknown as { lifeSetSelfRides?: (lw: LifeWorld, on: boolean) => void }).lifeSetSelfRides?.(w, true);
 
   // ---- the queued intents (a delayed hop or voice): typed arrays, no allocation ----
   const qKind = new Uint8Array(QCAP), qWho = new Uint8Array(QCAP), qDue = new Float64Array(QCAP), qA = new Float32Array(QCAP), qB = new Float32Array(QCAP),
@@ -298,7 +305,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const ce = b.center;
     c.lastX = ce.x + off.x; c.lastZ = ce.z + off.z; c.vx = 0; c.vz = 0;
     c.homeX = c.lastX; c.homeZ = c.lastZ;
-    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.hushT = -1e9; c.askedT = -1e9;
+    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.chimeT = -1e9; c.perchT = 0; c.hushT = -1e9; c.askedT = -1e9;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
     if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
@@ -587,14 +594,16 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       case INTENT.EXPRESS: if (c.view >= 0) { try { stage.setBodyExpression?.(c.view, a, b); } catch (x) { report(x); } } return;
       case INTENT.EMOTE: counts.emote++; showEmote(i, icon, style, dots, a | 0); return;
       case INTENT.VOICE: counts.voice++; voice(i, a, b, cc, icon); return;
-      case INTENT.USE: useRide(i, a | 0); return;
+      case INTENT.USE: useRide(i, a | 0, b === 1); return;   // (round 7: b 1 = LIFE's own get-on, R7_LIFE's B04 RIDE)
       default: return;
     }
   }
   /** LIFE's USE intent (LIFE act.ts: a ride the player asked for; LIFE never climbs): physics lifts the body onto the swing's seat or the rocker board's
    *  end nobody is near (carryTo: y = the support's TOP, the body is set down standing there at rest; no event on the way, so never paid), and LIFE
-   *  takes it from there (the snapshot's RIDE, D-74). Nothing happens on a parked or missing thing, with Float's parked world, or while held. */
-  function useRide(i: number, k: number): void {
+   *  takes it from there (the snapshot's RIDE, D-74). Nothing happens on a parked or missing thing, with Float's parked world, or while held.
+   *  Round 7 (R7_LIFE's request): `self` = LIFE's own get-on (B04 RIDE, intent b 1): the same lift, but NOT a ride the player set up (no `setT`), so the ride's
+   *  USE is by SELF and no player quest (I7, R9, the rides) counts it. */
+  function useRide(i: number, k: number, self = false): void {
     const c = chars[i], td = def.things[k], p = k >= 0 && k < thingFirst.length ? thingFirst[k] : -1;
     if (!c.on || !c.body || !world || floatParked || !td || !td.ride || p < 0 || world.isParked(p)) return;
     const P = world.poses;
@@ -629,7 +638,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const d = Math.hypot(x - c.lastX, z - c.lastZ), T = Math.min(5, Math.max(0.6, 0.5 + d * 0.45));
     let ok = false;
     try { ok = c.body.carryTo?.(x - c.offX, y - c.offY, z - c.offZ, T) === true; } catch (e) { report(e); }
-    if (ok) { c.scooting = false; c.setT = game.simTime; counts.ride++; }
+    if (ok) { c.scooting = false; if (!self) c.setT = game.simTime; counts.ride++; }
     if (steady) {
       if (!ok) { endSteady(); return; }
       // the seat eases to rest over most of the lift (a smoothstep of the hand's point, never a snap), then the hand holds it there; at most 2 s past the
@@ -637,6 +646,17 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       steadyT0 = game.simTime; steadyEase = Math.min(0.8, Math.max(0.3, 0.45 * T)); steadyLand = game.simTime + T; steadyEnd = steadyLand + 2;
       steadyStep();
     }
+  }
+  /** (round 7) a squishy resting on top of a block thing at least PERCH_TOP tall for PERCH_S hops down (sense: Char.perchT) to the floor beside it, on the side
+   *  toward the play area's middle, set down at rest (carryTo: no event on the way, never paid). Home's blocks are all lower. */
+  const PERCH_S = 1.5, PERCH_TOP = 0.6;
+  function perchDown(c: Char, p: number, td: ThingDef): void {
+    if (!world || !c.body) return;
+    const P = world.poses, bx = P[p * 8], bz = P[p * 8 + 2], bd = layout === 1 && placeIdx !== 0 ? def.tall.bounds : def.bounds;
+    let dx = bd.x - bx, dz = bd.z - bz;
+    const dl = Math.hypot(dx, dz) || 1, out = Math.max(td.size[0], td.size[2]) + c.r + 0.15;
+    dx /= dl; dz /= dl;
+    try { c.body.carryTo?.(bx + dx * out - c.offX, -c.offY, bz + dz * out - c.offZ, 0.9); } catch (e) { report(e); }
   }
   // ---- the steadying hand of a "Go play with..." lift onto a swing (useRide; its state is declared with the place's, a world rebuild clears it) ----
   function endSteady(): void {
@@ -802,6 +822,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       }
       if ((f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) !== 0) c.rideUntil = -1e9;
       if (c.rideUntil > t) f |= LIFE_FLAG.RIDE;
+      // (round 7) a squishy set down on top of a TALL block (Lanternroof's Chimney Corner, 1.4 m; the cabin's hearth, 0.9 m) hops down beside it after PERCH_S:
+      // up there it stood above the place camera's frame (s3run2's phone shot: on the chimney, half out of the top edge, behind the HUD's buttons)
+      if (dt > 0 && onProp >= 0 && world && onProp < world.count && !c.tossed && (f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) === 0) {
+        const th = world.propThing[onProp], td = th >= 0 ? def.things[th] : null;
+        // (ON its top: the centre above the block's top face; one leaning on its side, as at the chimney's warm nap foot, stays where it is)
+        if (td && td.mech === MECH.block && 2 * td.size[1] >= PERCH_TOP && ce.y + c.offY > 2 * td.size[1]) { c.perchT += dt; if (c.perchT >= PERCH_S) { c.perchT = 0; perchDown(c, onProp, td); } } else c.perchT = 0;
+      } else c.perchT = 0;
       s.flags[i] = f;
       if ((f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) !== 0) touching = true;
       s.touchKind[i] = c.touchKind; c.touchKind = -1;
@@ -884,7 +911,10 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
           else write(EV.SOCIAL, sub, thing, a, b, n2, BY.SELF, 0, piece);
           if (placeIdx === 0) homeThingsSoon = true;   // the first hello brings the rug
           break;
-        case LIFE_EV.USE: write(EV.USE, sub, thing, a, 255, n2, eb === 254 ? BY.PLAYER : BY.SELF, 0, piece); if (eb === 254) { counts.askedUse++; if (ea < CAP) chars[ea].askedT = -1e9; } break;   // (round 6: it used the thing it was asked to: no longer ASKED)
+        case LIFE_EV.USE:
+          write(EV.USE, sub, thing, a, 255, n2, eb === 254 ? BY.PLAYER : BY.SELF, 0, piece); if (eb === 254) { counts.askedUse++; if (ea < CAP) chars[ea].askedT = -1e9; }   // (round 6: it used the thing it was asked to: no longer ASKED)
+          if (sub === USE_VERB.NAP && placeIdx !== 0) chimneyBreath(thing);   // (round 7: a nap at the Chimney Corner's warm foot: the chimney breathes deeper)
+          break;
         case LIFE_EV.REACT: write(EV.REACT, sub, thing, a, 255, n2, BY.SELF, 0, piece); break;
         case LIFE_EV.PIECES: write(EV.PIECES, sub, thing, a, 255, n2, BY.SELF, 0, EV_FLAG.PIECE); break;
         case LIFE_EV.SIGNATURE: write(EV.SIGNATURE, sub, thing, a, 255, n2, BY.SELF, 0, piece); break;
@@ -973,19 +1003,126 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       }
       if (ev >= 0 && audio.setAmbience) { ambP.weather = ev; try { audio.setAmbience(ambP); } catch (x) { report(x); } }
     }
+    windLook();
+  }
+
+  // ---- round 7: what Lanternroof and Cloudloft need from the host (R6_RENDER requests 3 to 5, R6_PHYS 2.3; PLACES 4.8, 4.10) ----
+  /** the wind's level to the look, once a frame: the strongest gust of the place's gusting wind zones (world.gustLevel: physics' push, eased in and out over
+   *  0.3 s, on LIFE's clock through setGust above), so the look's sway and streaks follow the push the squishies feel: Lanternroof's lanterns sway, its gust
+   *  streaks drift and its Vane Disc turns (thingFx(-1, 3, level)); a look without wind ignores it. Sent when it changes (zero allocation). */
+  let windWas = -1;
+  function windLook(): void {
+    if (!world) return;
+    let lv = 0;
+    const n = Math.min(def.zones.length, world.zoneCount);
+    for (let k = 0; k < n; k++) { const zd = def.zones[k]; if (zd.kind === ZONE.wind && zd.gust) { const g = world.gustLevel(k); if (g > lv) lv = g; } }
+    if (Math.abs(lv - windWas) < 0.004 && !(lv === 0 && windWas !== 0)) return;
+    windWas = lv;
+    try { stage.thingFx?.(-1, 3, lv); } catch { /* a look without wind */ }
+  }
+  /** Lanternroof's Vane Disc (PLACES 4.8: "a flush wind rose: the breeze turns it; a squishy on it rides round"). Physics builds no turntable for it (D-96: wind and
+   *  the updraft are the only new physics; R6_PHYS 2.3), so the host keeps its turn: the gust of the wind zone it stands in (the look turns the painted rose by the
+   *  same level, thingFx(-1, 3)) and a player's poke (a tap on the disc: thingFx(k, 1, 1), the look's spin for VANE_POKE_S). Whoever stands on it while it turns
+   *  rides it: one USE SPIN each turn (L4 "Ride the Vane Disc"; by the PLAYER when the player set it there or poked the disc), and its eyes follow the turn. */
+  const VANE_GUST = 0.35, VANE_POKE_S = 3, VANE_W = 1.4;   // a gust turns it from this level; a poke spins it this long; rad/s at full gust (the look's own speed)
+  let vaneK = -1, vaneZone = -1, vanePokeT = -1e9, vaneA = 0, vaneTurning = false;
+  let cometEnd = -1e9, cometDur = 6;   // (the Star Scope's comet flies until this sim time, for this long: tapThing, cometGaze)
+  /** while the Star Scope's comet flies, every squishy on screen follows it with its eyes; after it, each one's eyes are its own again (LIFE's next gaze).
+   *  The look flies its head along COMET_NDC (frame coordinates, per layout) at COMET_D metres from the camera (render/places/lanternroof.ts COMET_PATH and
+   *  COMET_DEPTH, the same numbers: the comet is set in view space so every framing shows it); the eyes look at that point in the world. Zero allocation. */
+  const COMET_NDC = [[-0.42, 0.86, 0.36, 0.74], [-0.85, 0.95, 0.0, 0.88]] as const, COMET_D = 60;
+  let cometGazing = false;
+  function cometGaze(): void {
+    const t = game.simTime, on = t < cometEnd;
+    if (!on && !cometGazing) return;
+    const u = Math.min(1, Math.max(0, 1 - (cometEnd - t) / cometDur)), P = COMET_NDC[layout === 1 ? 1 : 0];
+    let gx = 0, gy = 6, gz = -60;   // (a mock camera without matrices: high in the back)
+    if (on) {
+      // (the head's frame point at COMET_D metres in view space, then into the world: the camera's projection and world matrices)
+      try {
+        const cam = stage.camera, pe = cam.projectionMatrix.elements, me = cam.matrixWorld.elements;
+        const xv = (P[0] + (P[2] - P[0]) * u + pe[8]) * COMET_D / pe[0], yv = (P[1] + (P[3] - P[1]) * u + pe[9]) * COMET_D / pe[5], zv = -COMET_D;
+        const wx = me[0] * xv + me[4] * yv + me[8] * zv + me[12], wy = me[1] * xv + me[5] * yv + me[9] * zv + me[13], wz = me[2] * xv + me[6] * yv + me[10] * zv + me[14];
+        if (Number.isFinite(wx + wy + wz)) { gx = wx; gy = wy; gz = wz; }
+      } catch { /* a mock camera */ }
+    }
+    for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || c.view < 0 || c.kind === 2) continue;
+      try {
+        if (on && (s.flags[i] & LIFE_FLAG.VISIBLE) !== 0 && (s.flags[i] & LIFE_FLAG.ASLEEP) === 0) stage.setBodyGaze?.(c.view, gx, gy, gz, 1);
+        else if (!on) stage.setBodyGaze?.(c.view, 0, 0, 0, 0);
+      } catch { /* ignore */ }
+    }
+    cometGazing = on;
+  }
+  const vaneRode = new Uint8Array(CAP);
+  function vaneSetup(): void {
+    vaneK = -1; vaneZone = -1; vanePokeT = -1e9; vaneTurning = false; vaneRode.fill(0);
+    for (let k = 0; k < def.things.length; k++) if (def.things[k].mech === MECH.turntable && thingFirst[k] < 0) { vaneK = k; break; }
+    if (vaneK < 0) return;
+    const sp = thingSpot(vaneK), x = sp[0], z = sp[1];
+    for (let k = 0; k < def.zones.length; k++) {
+      const zd = def.zones[k], a = layout === 1 ? def.tall.zones[k] ?? zd : zd;
+      if (zd.kind !== ZONE.wind) continue;
+      const dx = x - a.x, dz = z - a.z;
+      if (a.shape === 'disc' ? dx * dx + dz * dz <= (a.r ?? 0) ** 2 : Math.abs(dx) <= (a.hx ?? 0) && Math.abs(dz) <= (a.hz ?? 0)) { vaneZone = k; break; }
+    }
+  }
+  function vaneStep(dt: number): void {
+    if (vaneK < 0 || !world || floatParked || travelling) return;
+    const t = game.simTime, poked = t - vanePokeT < VANE_POKE_S;
+    const lv = vaneZone >= 0 && vaneZone < world.zoneCount ? world.gustLevel(vaneZone) : 0;
+    const turning = poked || lv >= VANE_GUST;
+    const om = poked ? Math.max(VANE_W, lv * VANE_W) : lv * VANE_W;
+    vaneA += om * dt;
+    if (!turning && vaneTurning) {
+      // the turn ended: each rider's eyes are its own again (LIFE's next gaze takes over)
+      for (let i = 0; i < CAP; i++) if (vaneRode[i] && chars[i].on && chars[i].view >= 0) { try { stage.setBodyGaze?.(chars[i].view, 0, 0, 0, 0); } catch { /* ignore */ } }
+      vaneRode.fill(0);
+    }
+    vaneTurning = turning;
+    if (!turning) return;
+    const sp = thingSpot(vaneK), r = def.things[vaneK].size[0];
+    for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || !c.body) continue;
+      const on = Math.hypot(c.lastX - sp[0], c.lastZ - sp[1]) <= r && (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.AIRBORNE)) === 0;
+      if (!on) continue;
+      if (!vaneRode[i]) {
+        vaneRode[i] = 1;
+        write(EV.USE, def.things[vaneK].verb, thingGlobal[vaneK], c.species, 255, 1, poked || t - c.setT < SET_S ? BY.PLAYER : BY.SELF, 0, c.kind !== 0 ? EV_FLAG.PIECE : 0);
+      }
+      // (its eyes go round with the disc: a point 2 m out turning with the rose, a little above the floor)
+      if (c.view >= 0) { try { stage.setBodyGaze?.(c.view, c.lastX + Math.cos(vaneA) * 2, 0.6, c.lastZ + Math.sin(vaneA) * 2, 1); } catch { /* ignore */ } }
+    }
+  }
+  /** a tap on the Vane Disc: it has no prop for the ray, so the press is tested against its painted disc on the floor (after the props missed or hit farther) */
+  function vaneTap(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, tProp: number): number {
+    if (vaneK < 0 || !(dy < -1e-4)) return -1;
+    const tf = (0.01 - oy) / dy;
+    if (!(tf > 0) || tf >= tProp) return -1;
+    const sp = thingSpot(vaneK), hx = ox + dx * tf - sp[0], hz = oz + dz * tf - sp[1];
+    return hx * hx + hz * hz <= def.things[vaneK].size[0] ** 2 ? tf : -1;
+  }
+  /** the chimney's breath (Lanternroof's Chimney Corner, the warm nap spot at its foot): a deeper breath of warm air when the player taps it or a squishy settles
+   *  down to nap at its foot (LIFE's USE NAP naming it); the look's own (thingFx(k, 1, 1)) */
+  function chimneyBreath(globalThing: number): void {
+    for (let k = 0; k < def.things.length; k++) if (thingGlobal[k] === globalThing && def.things[k].look === 'chimney') { try { stage.thingFx?.(k, 1, 1); } catch { /* none */ } return; }
   }
   /** the Shake Pine (PLACES 4.4): its branch struck (a body's bump on the trunk at 0.3 m/s or more, a brush, or the player's tap: physics strikes the branch) drops
    *  a snow puff on anyone within p.puffR (0.7 m) of the branch: snow +p.puffSnow (0.5) with the pine as its source (LIFE's SNOWCAP REACT names it: I4 "Snow from
    *  the pine", whoever shook it), the stage's snow puff; at most one puff a second */
   let pineT = -1e9;
-  function pinePuff(th: number, prop: number): void {
+  function pinePuff(th: number, prop: number): boolean {
     const t = game.simTime;
-    if (!world || t - pineT < 1) return;
+    if (!world || t - pineT < 1) return false;
     pineT = t;
     const td = def.things[th], P = world.poses;
     const bx = P[prop * 8], bz = P[prop * 8 + 2], r = td.p.puffR ?? LOOK_ADD.pinePuff.r, amt = td.p.puffSnow ?? LOOK_ADD.pinePuff.amount;
     for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && Math.hypot(c.lastX - bx, c.lastZ - bz) <= r + c.r) lifeAddLook(w, i, LOOK.snow, amt, thingGlobal[th]); }
     try { stage.thingFx?.(th, 1, 1); } catch { /* no puff drawn */ }
+    return true;
   }
   const isPine = (td: ThingDef | undefined): boolean => !!td && td.mech === MECH.bar && (td.p.branchL ?? 0) > 0;
   /** the Snowball (PLACES 4.4: "push it to a friend: it rolls into them and leaves them snowy (+0.3)"): a rolling ball with p.snowLook that meets a body */
@@ -1022,11 +1159,17 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (cause === 2) continue;   // a weather strike is a sound only (QUESTS 4)
       // (round 6) the Shake Pine's branch: a body's bump (cause 1) or the player's tap (cause 0, the poke of tapThing) drops its snow puff; a body's shake is its USE
       if (isPine(td) && world.propPart[prop] === 1) {
-        pinePuff(th, prop);
-        if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on) write(EV.USE, td.verb, thingGlobal[th], chars[slot].species, 255, 1, BY.SELF, 0);
+        // (round 7: a body's shake is one USE a puff, at most one a second, as the puff: a body resting against the branch in a gust was a record every strike)
+        if (pinePuff(th, prop) && cause === 1 && slot >= 0 && slot < CAP && chars[slot].on) write(EV.USE, td.verb, thingGlobal[th], chars[slot].species, 255, 1, BY.SELF, 0);
         continue;
       }
-      if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.chime) write(EV.USE, td.verb, thingGlobal[th], chars[slot].species, 255, 1, BY.SELF, world.propPart[prop]);
+      // a body's strike on a chime (cause 1): its USE RING only when the body moved into it (faster than CHIME_V, or tossed), at most one a CHIME_GAP_S (round 7,
+      // R7_LIFE's request: a body RESTING against the lantern line while the Night Breeze swung the lanterns into it was struck again and again, 1002 USE RING
+      // records in 300 s, and a squishy leaning on the Icicle Bells would have rung I9 by itself)
+      if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.chime) {
+        const c = chars[slot];
+        if ((c.tossed || Math.hypot(c.vx, c.vz) > CHIME_V) && game.simTime - c.chimeT >= CHIME_GAP_S) { c.chimeT = game.simTime; write(EV.USE, td.verb, thingGlobal[th], c.species, 255, 1, BY.SELF, world.propPart[prop]); }
+      }
       // a pad's kick (physics strikes the pad, cause 1, the body's slot): one USE BOUNCE by the body per landing's run of kicks (G4 "Bounce on the Moss Bouncer")
       else if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.pad && game.simTime - chars[slot].padT >= PAD_USE_GAP_S) {
         chars[slot].padT = game.simTime;
@@ -1215,6 +1358,26 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (game.clock.now() - tapT[k] > TAP_MS || Math.hypot(x - tapX[k], y - tapY[k]) > TAP_PX) return false;
     return tapThing(x, y);
   }
+  /** (round 7) the prop a press's ray finds, seen through the place's walls. A wall is a 2.4 m physics box (PROPS.WALL_H: the cabin's log walls, the guard
+   *  behind Lanternroof's knee-high parapet) and never a thing: where it is drawn lower than its box, its unseen part took the press meant for a thing behind
+   *  it (from the camera Lanternroof's front wall stood over the Star Scope, the hammock's seat and the chimney: "wall"). The ray goes on from the wall's far
+   *  side (walls are the world's last props, one box each, in the layout's order). -1: nothing. */
+  function propOnRay(W: PropWorld, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number {
+    let p = W.raycast(ox, oy, oz, dx, dy, dz);
+    if (p < 0 || W.propThing[p] >= 0) return p;
+    const ws = (layout === 1 ? def.tall : def).walls.filter((a) => a.shape === 'box'), P = W.poses;
+    for (let n = 0; n < 4 && p >= 0 && W.propThing[p] < 0; n++) {
+      const a = ws[ws.length - (W.count - p)];
+      if (!a) return p;
+      let lo = 0, hi = Infinity;
+      const sl = (o: number, d: number, h: number): boolean => { if (Math.abs(d) < 1e-12) return o >= -h && o <= h; const u = (-h - o) / d, v = (h - o) / d; lo = Math.max(lo, Math.min(u, v)); hi = Math.min(hi, Math.max(u, v)); return lo <= hi; };
+      // (the box: its pose's centre; half its height = its centre's height, as it stands on the floor; no layout's wall has a yaw, so its axes are the world's)
+      if (!(sl(ox - P[p * 8], dx, a.hx ?? 0.15) && sl(oy - P[p * 8 + 1], dy, P[p * 8 + 1]) && sl(oz - P[p * 8 + 2], dz, a.hz ?? 0.15)) || !Number.isFinite(hi)) return p;
+      ox += dx * (hi + 1e-3); oy += dy * (hi + 1e-3); oz += dz * (hi + 1e-3);
+      p = W.raycast(ox, oy, oz, dx, dy, dz);
+    }
+    return p;
+  }
   function tapThing(x: number, y: number): boolean {
     if (!world || floatParked || s.quiet || game.tool !== 'hand') { tapWhy = 'off'; return false; }
     const cam = stage.camera;
@@ -1222,7 +1385,23 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
     const n = pxToNdc(x, y, game.viewport);
     const ray = cameraRay(cam, n.x, n.y);
-    const p = world.raycast(ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    const p = propOnRay(world, ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    // (round 7) the Vane Disc has no prop for the ray: its painted disc on the floor takes the press when no prop stands nearer (a prop's centre along the ray)
+    if (vaneK >= 0) {
+      let tP = Infinity;
+      if (p >= 0) { const q = world.poses; tP = (q[p * 8] - ray.origin.x) * ray.dir.x + (q[p * 8 + 1] - ray.origin.y) * ray.dir.y + (q[p * 8 + 2] - ray.origin.z) * ray.dir.z; }
+      const tv = vaneTap(ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z, tP);
+      if (tv >= 0) {
+        for (let i = 0; i < CAP; i++) { const c = chars[i]; if (!c.on || !c.body) continue; const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ }); if (hit && hit.t < tv) { tapWhy = 'body'; return false; } }
+        // "push it round with a poke" (PLACES 4.8): the rose spins for VANE_POKE_S (the look's), its whoosh; whoever stands on it rides (vaneStep: USE SPIN by the PLAYER)
+        const vd = def.things[vaneK];
+        tapWhy = vd.id; playerTouchT = game.simTime; vanePokeT = game.simTime;
+        try { stage.thingFx?.(vaneK, 1, 1); } catch { /* none */ }
+        if (audio.prop && vd.sound) { propP.kind = vd.sound; propP.intensity = 0.6; propP.note = 0; propP.auto = false; propP.size = 0.22; propP.pan = 0; try { audio.prop(propP); } catch (x) { report(x); } }
+        lifeThingTap(w, thingGlobal[vaneK]);
+        return true;
+      }
+    }
     if (p < 0) { tapWhy = 'miss'; return false; }
     const th = world.propThing[p];
     if (th < 0 || th >= def.things.length) { tapWhy = 'wall'; return false; }
@@ -1268,6 +1447,25 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       write(EV.USE, USE_VERB.SWITCH, g, sp, 255, 1, BY.PLAYER, 0);
       // LIFE hears it (PG_LIFE round 4): noticed by everyone near; a fire's puff is a tune they may sing to (C8's finale), so a fire only when it comes on
       if (td.switch !== 'fire' || (zi >= 0 && world.zoneOn[zi] !== 0)) lifeThingTap(w, g);
+      return true;
+    }
+    if (td.switch === 'comet') {
+      // (round 7, PLACES 4.8) the Star Scope: a slow comet crosses the sky (the look's, its p.cometS; none with reduced motion) and every squishy on screen looks
+      // up at it (LIFE's GAZE_SKY for each, its thing the scope: L2 "Moon watchers" counts them); one USE SWITCH by the PLAYER (L7 "A shooting star"). One comet
+      // at a time: a tap while it flies is taken and does nothing more.
+      const cs = (td.p as { cometS?: number }).cometS ?? 6;
+      if (game.simTime < cometEnd) return true;
+      cometEnd = game.simTime + cs; cometDur = cs;
+      try { stage.thingFx?.(th, 1, 1); } catch { /* none */ }
+      if (audio.prop && td.sound) { propP.kind = td.sound; propP.intensity = 0.5; propP.note = 0; propP.auto = false; propP.size = 0.22; propP.pan = 0; try { audio.prop(propP); } catch (x) { report(x); } }
+      write(EV.USE, USE_VERB.SWITCH, g, sp, 255, 1, BY.PLAYER, 0);
+      lifeThingTap(w, g);
+      return true;
+    }
+    if (td.look === 'chimney') {
+      // (round 7) the Chimney Corner: a tap and it breathes a deeper puff of warm air (the look's); its warm foot is the nap spot (LIFE's). Nothing pays.
+      chimneyBreath(g);
+      lifeThingTap(w, g);
       return true;
     }
     if (isPine(td)) {
@@ -1332,7 +1530,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (!cam) return false;
     try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
     const n = pxToNdc(x, y, game.viewport), ray = cameraRay(cam, n.x, n.y);
-    const p = W.raycast(ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    const p = propOnRay(W, ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
     const th = p >= 0 ? W.propThing[p] : -1;
     if (th < 0 || !hingeRide(def.things[th]) || W.isParked(p)) return false;
     // a squishy in front of the seat (the rider) takes the press: the gesture machine grabs it, as any squishy
@@ -1494,7 +1692,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     // moment after the host, so the lines wait for it); then the tracker pill points the way (ui/later-play.ts)
     const v0 = safeView();
     const lines = v0 && placesBefore >= 0 ? PLACE_INFO.filter((p) => p.shipped && p.idx > 1 && (v0.places & (1 << p.idx)) !== 0 && (placesBefore & (1 << p.idx)) === 0).map((p) => `${p.name} is open. Find it in Places.`) : [];
-    if (lines.length) setTimeout(() => { for (const l of lines) { deps.say?.(l); deps.moment?.(l, true); } }, 1500);
+    // (round 7: more than three at one load, a save on a build that ships several places at once: each line is said, ONE moment shows them all; the moments queue
+    // holds three and summed the rest as "N new stamps", the wrong words for places)
+    if (lines.length) setTimeout(() => { for (const l of lines) { deps.say?.(l); if (lines.length <= 3) deps.moment?.(l, true); } if (lines.length > 3) deps.moment?.(`${lines.length} places are open. Find them in Places.`, true); }, 1500);
   }
   syncParty();
   buildHome();
@@ -1540,6 +1740,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     visit++;
     showerOff = -1; showerZone = -1; showerThing = -1;   // (a shower in progress stays behind)
     gustOn.fill(0); waveHi.fill(0); showerWas.fill(-1); pineT = -1e9; snowT.fill(-1e9); modsT = -1e9;   // (round 6: the new place's weather starts afresh)
+    windWas = -1; cometEnd = -1e9; if (cometGazing) cometGaze();   // (round 7: the new place's wind look and comet start afresh; eyes let go of the old one)
     selfUsed.clear(); selfReacted.clear(); selfSocial.clear();
     def = next; placeIdx = next.idx;
     coldPitch = next.zones.some((z) => z.kind === ZONE.cold && z.strength >= 0.5) ? Math.pow(2, -1 / 12) : 1;
@@ -1567,6 +1768,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // Home keeps the published corral about each body's own spot (setBounds -1; D-87's rectangle is not sent: one squishy alone stays the published toy)
       for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.body) { try { c.body.setBounds?.(-1, 0, 0, 0, 0, 0); } catch (e) { report(e); } } }
       buildHome();
+      vaneSetup();   // (none at Home)
       try { stage.setAutonomyFraming?.(true); } catch { /* ignore */ }
       kettleNext = Infinity;
       return;
@@ -1580,6 +1782,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const lay = layout === 1 ? next.tall : next;
     world = buildPropWorld(next, layout === 1 ? 'tall' : 'wide', 1);
     mapThings();
+    vaneSetup();   // (round 7: Lanternroof's Vane Disc, in the layout in use)
     for (let k = 0; k < next.things.length; k++) { try { world.setParked(k, false); } catch { /* none */ } }
     // a shower switch's zone is dry until the player taps its thing (the Drip Leaf); the place's shower envelope starts its clock now
     arriveT = game.simTime; showerOff = -1; showerZone = -1; showerThing = -1;
@@ -1600,8 +1803,10 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       next.things.forEach((t, k) => { if (k >= 32) return; const sp = layout === 1 ? next.tall.things[k] : t; xzr[k * 3] = sp.x; xzr[k * 3 + 1] = sp.z; xzr[k * 3 + 2] = Math.max(0.3, t.size[0]); });
       stage.setObstacles?.(xzr, Math.min(32, next.things.length));
     } catch (e) { report(e); }
-    const hearth = next.things.find((t) => t.zone && next.zones.find((z) => z.id === t.zone)?.kind === 6);
-    if (hearth) { try { stage.setHeatPoint?.(hearth.x, 0.4, hearth.z); } catch { /* ignore */ } }
+    // the heat point (toast browns the side facing it): the warm thing's spot IN THE LAYOUT IN USE (round 7: the wide spot was sent in the tall layout too, over the
+    // look's own: the cabin's fire and Lanternroof's chimney stood elsewhere on a phone)
+    const hk = next.things.findIndex((t) => !!t.zone && next.zones.find((z) => z.id === t.zone)?.kind === 6);
+    if (hk >= 0) { const hs = thingSpot(hk); try { stage.setHeatPoint?.(hs[0], 0.4, hs[1]); } catch { /* ignore */ } }
     try { audio.setAmbience?.({ place: next.id, on: true }); audio.setMusicStyle?.(next.music); } catch (e) { report(e); }
     const spawn = lay.spawn === 'matLayout' ? [] : lay.spawn;
     let k = 0;
@@ -1723,6 +1928,38 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       }
       return rows;
     },
+    autoAvoid() {
+      // (round 7: the Lanternroof shots: the hammock's chip, under its beam, stood over two of the five lanterns on a phone and over the Vane Disc on a desktop)
+      const out: number[] = [], cam = stage.camera, W = world, vw = game.viewport.w, vh = game.viewport.h;
+      if (!W || !cam || placeIdx === 0 || s.quiet || floatParked) return out;
+      const put = (x: number, y: number, z: number, rx: number, ry: number, soft: number): void => {
+        autoAt.x = x; autoAt.y = y; autoAt.z = z;
+        let nd: { x: number; y: number } | null = null;
+        try { nd = projectToNdc(cam, autoAt); } catch { nd = null; }
+        if (nd) out.push((nd.x + 1) * 0.5 * vw, (1 - nd.y) * 0.5 * vh, rx, ry, soft);
+      };
+      // (a hinge ride's own seat or board: SOFT, the chip is its control and stands by it; s3run2's phone shot had the hammock's chip on the hammock's seat)
+      for (let q = 0; q < W.count; q++) { const k = W.propThing[q]; if (k >= 0 && !W.isParked(q)) put(W.poses[q * 8], W.poses[q * 8 + 1], W.poses[q * 8 + 2], 22, 22, hingeRide(def.things[k]) ? 1 : 0); }
+      if (vaneK >= 0) {
+        // (the painted disc: its rim's offsets from its centre on screen, across and in depth, are the half sizes of its ellipse)
+        const sp = thingSpot(vaneK), r0 = def.things[vaneK].size[0], n = out.length;
+        put(sp[0], 0, sp[1], 0, 0, 0); put(sp[0] + r0, 0, sp[1], 0, 0, 0); put(sp[0], 0, sp[1] + r0, 0, 0, 0);
+        if (out.length === n + 15) { out[n + 2] = Math.abs(out[n + 5] - out[n]); out[n + 3] = Math.abs(out[n + 11] - out[n + 1]); }
+        out.length = out.length === n + 15 ? n + 5 : n;
+      }
+      // (and, SOFT, the squishies' faces: s3run2's Cloudloft shot had the Kite Swing's chip over Dollop's face on a pad by the swing, hiding it and taking the press.
+      //  0.7 of a body's screen radius; ui/thingAuto.ts gives them up before it would hide a chip, and keeps a chip where it is while that spot stays free)
+      const e = cam.matrixWorld.elements;   // (the camera's right: its first column; a body's screen radius is its rim's distance from its centre)
+      for (let i = 0; i < CAP; i++) {
+        const c = chars[i];
+        if (!c.on || !c.body || c.view < 0) continue;
+        const cx = c.body.center.x + c.offX, cy = c.body.center.y + c.offY, cz = c.body.center.z + c.offZ, n = out.length;
+        put(cx, cy, cz, 0, 0, 1); put(cx + e[0] * c.r, cy + e[1] * c.r, cz + e[2] * c.r, 0, 0, 1);
+        if (out.length === n + 10) { out[n + 2] = out[n + 3] = 0.7 * Math.hypot(out[n + 5] - out[n], out[n + 6] - out[n + 1]); }
+        out.length = out.length === n + 10 ? n + 5 : n;
+      }
+      return out;
+    },
     setThingAuto(k, on) {
       const td = def.things[k];
       if (!hasAuto() || !hingeRide(td)) return false;
@@ -1798,7 +2035,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         try { stage.setBodyLook?.(c.view, looks[0], looks[1], looks[3], looks[5], looks[4]); } catch { /* ignore */ }
       }
       if (homeThingsSoon) { homeThingsSoon = false; }
-      if (dt > 0) { modsStep(); snowballStep(); }   // (round 6: a soaking foam's density for the water; the Snowball's snow on whoever it rolls into)
+      if (dt > 0) { modsStep(); snowballStep(); vaneStep(dt); cometGaze(); }   // (round 6: a soaking foam's density for the water; the Snowball's snow on whoever it rolls into; round 7: the Vane Disc's riders)
     },
     quest() {
       if (ring.n > 0 && journal) {
@@ -1848,6 +2085,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         ring: { dropped: ring.dropped }, firstPlaySent, firstWishSent, freshProfile,
         party: { held: partyHeld(), restoring: [...restoreQ], newcomer: newcomerId },
         tap: tapWhy,
+        // (round 7: Lanternroof's Vane Disc as the host turns it, and the Star Scope's comet; null where the place has none)
+        vane: vaneK >= 0 ? { turning: vaneTurning, poked: game.simTime - vanePokeT < VANE_POKE_S, riders: vaneRode.reduce((a, x) => a + x, 0) } : null,
+        comet: cometEnd > game.simTime,
         zones: world ? def.zones.map((z, k) => [z.id, world!.zoneOn[k] ?? 1, +(z.kind === ZONE.wind ? world!.gustLevel(k) : z.wave ? world!.waveLevel(k) : 0).toFixed(3)]) : null,   // (round 6: a gust's or a wave's level now)
         auto: { api: hasAuto(), on: [...autoWanted], hands: [...handOn].filter((x) => x === 1).length },
         tune: { on: musicBoxOnUntil > game.simTime, kind: tuneKind, kettle: kettleK, kettleNext: Number.isFinite(kettleNext) ? +kettleNext.toFixed(2) : null },

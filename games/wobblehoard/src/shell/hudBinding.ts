@@ -400,9 +400,13 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     // round 6 (VERDICT_PG2 B8, the orchestrator: "count the hint pill in the HUD insets"): the hint pill is one of the bottom rows wherever it hangs at the bottom
     // (wide, stack, strip; not where it hangs under the top row at 380 px and under, not in tiny): a place's front things (the cabin's tall Rocker Board) and the
     // squishy no longer stand under it. Its LAYOUT box (offsetTop: no transform), so its 8 px show / hide slide never moves the framing.
+    // Round 7 (R7_SHELL, the final run's fix2-dock FAIL): NOT while the Cut or Snap tool is in hand, where hud.css hides the pill for the whole tool session
+    // (visibility: hidden): round 6 counted its empty slot there too, so at 568 x 320 (the strip layout hangs it at the bottom) the camera pulled back and aimed
+    // higher and the two halves' tops went under the Snap strip (9.5 % of each; 3.5 % before round 6: fix2-dock alone on git-archived trees, 23c684a60 and
+    // 559efebe4 pass, HEAD fails). A tool change reports the insets again (the 'tool' handler below); the hint's own show / hide (opacity) still keeps its slot.
     {
       const hint = hud.el.querySelector<HTMLElement>('.hint'), par = hint?.offsetParent as HTMLElement | null;
-      if (hint && par && hint.offsetHeight > 0) { const ht = par.getBoundingClientRect().top + hint.offsetTop; if (ht > ih * 0.5) bottomTop = Math.min(bottomTop, ht); }
+      if (hint && par && hint.offsetHeight > 0 && g.tool !== 'cut' && g.tool !== 'snap') { const ht = par.getBoundingClientRect().top + hint.offsetTop; if (ht > ih * 0.5) bottomTop = Math.min(bottomTop, ht); }
     }
     // ... except the CUT bar: it floats above the tray (UI.md 4.2) over the lowest 80 to 100 px of the frame, where the pieces of a cut squishy lie (two tips of a star and the foot of a pile were under it at 960x600,
     // CUT_C_VERIFY M2; "every piece stays in frame between the safe insets", CUT3.md 3). Only while the Cut tool is in hand and its bar stands above the tray; the capsule's spot moves with the tool then, which is the point.

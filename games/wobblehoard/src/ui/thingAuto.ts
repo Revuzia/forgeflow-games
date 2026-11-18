@@ -26,6 +26,8 @@ export function attachThingAuto(root: HTMLElement, canvas: HTMLCanvasElement, ho
   const layer = h('div', { class: 'thing-auto-layer' });
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2;';
   const btns: HTMLButtonElement[] = [];
+  /** (round 7) each chip's spot last placement (its NEAR index, -1 none): kept while it stays free, so a squishy walking by moves a chip once, not to and fro */
+  const spotOf = new Int8Array(MAX).fill(-1);
   for (let i = 0; i < MAX; i++) {
     const b = h('button', { class: 'k-chip thing-auto', attrs: { type: 'button', 'aria-pressed': 'false', hidden: '' } }, icon('reset'), h('span', { class: 'thing-auto-label', text: 'Auto' }));
     b.style.cssText = 'position:absolute;left:0;top:0;pointer-events:auto;white-space:nowrap;';
@@ -53,11 +55,18 @@ export function attachThingAuto(root: HTMLElement, canvas: HTMLCanvasElement, ho
   const place = (): void => {
     const rows = host.autoThings();
     const c = canvas.getBoundingClientRect();
-    const boxes = rows.length ? chrome() : [];
+    const boxes: Array<{ left: number; right: number; top: number; bottom: number }> = rows.length ? chrome() : [];
+    // (round 7) nor the place's other things: a chip over a lantern or the Vane Disc took the tap meant for it (the Lanternroof shots); and, softly, the squishies'
+    // faces (after the hard boxes: given up when no spot is free of them, so a chip is never hidden for a squishy standing by)
+    const av = rows.length ? host.autoAvoid?.() ?? [] : [];
+    for (let j = 0; j + 4 < av.length; j += 5) if (av[j + 4] === 0) boxes.push({ left: c.left + av[j] - av[j + 2], right: c.left + av[j] + av[j + 2], top: c.top + av[j + 1] - av[j + 3], bottom: c.top + av[j + 1] + av[j + 3] });
+    const hard = boxes.length;
+    for (let j = 0; j + 4 < av.length; j += 5) if (av[j + 4] !== 0) boxes.push({ left: c.left + av[j] - av[j + 2], right: c.left + av[j] + av[j + 2], top: c.top + av[j + 1] - av[j + 3], bottom: c.top + av[j + 1] + av[j + 3] });
     const vw = document.documentElement.clientWidth || window.innerWidth, vh = window.innerHeight;
     for (let i = 0; i < MAX; i++) {
       const b = btns[i], r = rows[i];
-      if (!r) { if (!b.hidden) { if (document.activeElement === b) b.blur(); b.hidden = true; } continue; }
+      if (!r) { spotOf[i] = -1; if (!b.hidden) { if (document.activeElement === b) b.blur(); b.hidden = true; } continue; }
+      if (b.dataset.thing !== r.id) spotOf[i] = -1;
       b.dataset.k = String(r.k); b.dataset.thing = r.id;
       const label = `Auto: the ${nameOf(r.id)} moves by itself`;
       if (b.getAttribute('aria-label') !== label) b.setAttribute('aria-label', label);
@@ -70,13 +79,18 @@ export function attachThingAuto(root: HTMLElement, canvas: HTMLCanvasElement, ho
       const w = b.offsetWidth || 72, hgt = b.offsetHeight || 32;
       const x0 = c.left + r.x - w / 2, y0 = c.top + r.y + 6, step = hgt + EDGE;
       let x = -1, y = -1;
-      for (const [dx, dy] of NEAR) {
-        const cx = Math.max(EDGE, Math.min(vw - w - EDGE, x0 + dx * (w + EDGE))), cy = Math.max(EDGE, Math.min(vh - hgt - EDGE, y0 + dy * step));
-        let hit = false;
-        for (const q of boxes) if (!(cx + w <= q.left || q.right <= cx || cy + hgt <= q.top || q.bottom <= cy)) { hit = true; break; }
-        if (!hit) { x = cx; y = cy; break; }
+      // (round 7: the spot it had, while it stays free; else the nearest free one from the anchor out; the squishies' faces given up last)
+      for (let pass = 0; pass < 2 && y < 0; pass++) {
+        const nb = pass === 0 ? boxes.length : hard;
+        for (let j = spotOf[i] >= 0 ? -1 : 0; j < NEAR.length; j++) {
+          const [dx, dy] = NEAR[j < 0 ? spotOf[i] : j];
+          const cx = Math.max(EDGE, Math.min(vw - w - EDGE, x0 + dx * (w + EDGE))), cy = Math.max(EDGE, Math.min(vh - hgt - EDGE, y0 + dy * step));
+          let hit = false;
+          for (let m = 0; m < nb; m++) { const q = boxes[m]; if (!(cx + w <= q.left || q.right <= cx || cy + hgt <= q.top || q.bottom <= cy)) { hit = true; break; } }
+          if (!hit) { x = cx; y = cy; if (j >= 0) spotOf[i] = j; break; }
+        }
       }
-      if (y < 0) { if (document.activeElement !== b) b.style.visibility = 'hidden'; continue; }
+      if (y < 0) { spotOf[i] = -1; if (document.activeElement !== b) b.style.visibility = 'hidden'; continue; }
       b.style.visibility = '';
       b.style.left = `${x.toFixed(1)}px`; b.style.top = `${y.toFixed(1)}px`;
     }

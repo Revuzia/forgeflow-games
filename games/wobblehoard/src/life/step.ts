@@ -57,6 +57,7 @@ export function lifeSetPlace(w: LifeWorld, placeIdx: number, visit: number, def:
   for (let m = 0; m < MAX_MOMENTS; m++) { w.mK[m] = 0; w.mN[m] = 0; }
   w.gHK.fill(-1); w.gHN.fill(0); w.tnK = -1; w.f[F.TUNE_U] = -1e9; w.zGn.fill(1e9); w.zGe.fill(-1e9);
   w.pG.fill(0); w.pC.fill(0); w.pNe.fill(0);
+  w.tU.fill(-1); w.tUT.fill(-1e9);   // (round 7: a thing's last user is per place-local thing: a new visit's things are other things)
   w.movers = 0; w.att.movers = 0; w.att.allowance = 0;
   for (let i = 0; i < CAP; i++) {
     w.moo[i] = -1; w.mo[i] = 0;
@@ -73,6 +74,7 @@ function visitReset(w: LifeWorld, i: number): void {
   for (let k = 0; k < MAX_ZONES; k++) w.zIT[i * MAX_ZONES + k] = -1e9;
   for (let k = 0; k < 24; k++) w.rC[i * 24 + k] = -1e9;
   w.beh[i] = BEH.NONE; w.ph[i] = 0; w.bSc[i] = 0; w.fPT[i] = -1e9; w.tT[i] = -1; w.tC[i] = -1; w.uV[i] = 0; w.fT[i] = -1e9; w.wdT[i] = -1e9;
+  w.uM[i] = 0; w.uQ[i] = 0;   // (round 7) the things it used by itself this visit
   seedChar(w, i);
 }
 
@@ -319,6 +321,10 @@ export function lifeSetFriends(w: LifeWorld, speciesIdx: number, friendMask: Uin
 /** S2's raised hops (LIFE 5.2, D-07): a bit per MATERIAL_FAMILY_IDS index for each family whose raised hop passed PH-01 (`auto` landings);
  *  0 keeps every family at the S1 cap (vy 0.84). The shell sets it with the slice (a build flag), never per frame. Pieces stay at the S1 cap. */
 export function lifeSetHops(w: LifeWorld, raisedFamilies: number): void { w.hR = raisedFamilies & 0xfff; }
+/** (round 7, R7_LIFE; additive) The host says it lifts LIFE's OWN get-on onto a ride (INTENT.USE with b = 1: carryTo as for "Go play with...", but it is no
+ *  ride the player set up, so no USE by PLAYER: LIFE records its own USE by SELF once the body sits on it). Until the host says so, B04 never picks a ride
+ *  (SELF_USE.RIDE): a get-on the host would record as the player's would be a lie. */
+export function lifeSetSelfRides(w: LifeWorld, on: boolean): void { w.sR = on ? 1 : 0; }
 
 /** 0 none, 1 Met, 2 Friends, 3 Close friends; best = an authored best-friend pair. At spawn, cut and join, and on a FRIEND event. */
 export function lifeSetPair(w: LifeWorld, slotA: number, slotB: number, level: number, best: boolean): void {
@@ -372,7 +378,7 @@ export function lifeDebug(w: LifeWorld): unknown {
   for (let i = 0; i < CAP; i++) if (w.ac[i]) chars.push({ slot: i, kind: w.ki[i], species: w.species[i], beh: w.beh[i], phase: w.ph[i],
     moment: w.moo[i] >= 0 ? w.mK[w.moo[i]] : 0, play: +w.pl[i].toFixed(3), company: +w.co[i].toFixed(3), rest: +w.re[i].toFixed(3),
     traits: Array.from(w.tr.subarray(i * 5, i * 5 + 5), (v) => +v.toFixed(2)), looks: Array.from(w.lo.subarray(i * 6, i * 6 + 6), (v) => +v.toFixed(2)),
-    wish: w.wK[i] ? [w.wK[i], w.wT[i]] : null, moving: w.mo[i] });
+    wish: w.wK[i] ? [w.wK[i], w.wT[i]] : null, moving: w.mo[i], thing: w.tT[i], uses: w.uV[i], used: w.uM[i] });   // (round 7: its target thing, the visit's uses)
   return { place: w.placeIdx, visit: w.visit, layout: w.layout, chars, movers: w.movers, moverCap: w.att.moverCap, unitCap: +w.att.unitCap.toFixed(3),
     allowance: w.att.allowance, granted: w.att.granted, dropped: w.att.dropped, favourites: SPECIES_LIFE.dollop.place };
 }

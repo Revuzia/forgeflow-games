@@ -2123,6 +2123,63 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const gW = weathers(a2);
     check('PLAYGROUND (round 6) Rainleaf Garden: the Rain\'s shower envelope reaches the bed: on at the arrival (setAmbience weather 1), off 40 s later (weather 0)',
       okG && gW[0] === 1 && gW.includes(0) && gW.indexOf(0) > 0, JSON.stringify({ okG, weathers: gW }));
+    // round 7 (R7_SHELL 2): Lanternroof and Cloudloft, the same way (the dev path, the REAL physics; with or without the data flip that ships them)
+    type R7Dbg = { zones: Array<[string, number, number]> | null; tap: string; comet: boolean; selfUsed: string[]; selfReacted: string[]; counts: { records: number };
+      vane: { turning: boolean; riders: number; poked: boolean } | null; chars: Array<{ slot: number; itemId: string | null; x: number; z: number }> };
+    const r7 = (): R7Dbg => host.debug() as unknown as R7Dbg;
+    const meSet = (x: number, y: number, z: number): void => { try { app.body.placeAt?.({ x, y, z }, { x: 0, y: 0, z: 0 }); } catch { /* none */ } };
+    // Lanternroof: the Night Breeze's gusts on LIFE's clock reach the bed (weather 0.8) and the LOOK (thingFx(-1, 3, level): the lanterns sway, the streaks drift, the
+    // Vane Disc turns); a squishy standing on the Vane Disc rides it round while a gust turns it (USE SPIN, by itself here)
+    const a3 = wLog.length, fxW = log.of('thingFx').length;
+    const okL = await host.travel('lanternroof', true);
+    // (the Vane Disc has no prop: its spot from the wide layout, Lanternroof's things[1]; the play body set at rest on it)
+    meSet(2.3, app.body.center.y, -0.7);
+    let lvMax = 0, turned = 0;
+    for (let i = 0; i < 26; i++) { await stepA(60); const z = r7().zones?.find((q) => q[0] === 'nightbreeze'); if (z) lvMax = Math.max(lvMax, z[2]); if (r7().vane?.turning) turned++; }
+    const lW = weathers(a3), sent = log.of('thingFx').slice(fxW).filter((x) => x.args[0] === -1 && x.args[1] === 3).map((x) => x.args[2] as number);
+    check('PLAYGROUND (round 7) Lanternroof: the Night Breeze\'s gusts on LIFE\'s clock are heard (setAmbience weather 0.8, at least 2 in 26 s) and drive the LOOK with physics\' gust level (stage.thingFx(-1, 3, level): up to 1 and back to 0, the lanterns\' sway and the streaks); the Vane Disc turns while one blows and the squishy standing on it rides it (a USE SPIN)',
+      okL && lW.filter((v) => v === 0.8).length >= 2 && sent.length > 4 && Math.max(...sent) > 0.9 && sent.includes(0) && lvMax > 0.9 && turned > 0 && r7().selfUsed.includes('vanedisc'),
+      JSON.stringify({ okL, weathers: lW, sentN: sent.length, sentMax: sent.length ? Math.max(...sent) : null, lvMax, turned, used: r7().selfUsed, vane: r7().vane }));
+    // the Star Scope (things[5]): a still click is a thing tap: the comet (stage.thingFx(5, 1, 1)), a USE SWITCH by PLAYER and LIFE's GAZE_SKY for the squishy on
+    // screen (two more records); a second tap while it flies is taken and adds nothing; the Chimney Corner (things[3]): a tap breathes deeper (thingFx(3, 1, 1))
+    meSet(0.3, app.body.center.y, 0.6); await stepA(60);
+    const sc0 = log.of('thingFx').filter((x) => x.args[0] === 5 && x.args[1] === 1).length, rc0 = r7().counts.records;
+    await tap(thingPt(5));
+    await stepA(10);
+    const sc1 = log.of('thingFx').filter((x) => x.args[0] === 5 && x.args[1] === 1).length, rc1 = r7().counts.records, tap1 = r7().tap, comet1 = r7().comet;
+    await tap(thingPt(5));
+    await stepA(10);
+    const sc2 = log.of('thingFx').filter((x) => x.args[0] === 5 && x.args[1] === 1).length;
+    const ch0 = log.of('thingFx').filter((x) => x.args[0] === 3 && x.args[1] === 1).length;
+    // (the chimney stands at x -2.6, at the edge of this rig's fixed Home camera: its right face, 0.22 m in from its centre, is in view)
+    let chPt: { x: number; y: number } | null = null;
+    if (bound.poses && bound.thing) for (let p = 0; p < bound.count; p++) if (bound.thing[p] === 3) { chPt = proj(bound.poses[p * 8] + 0.22, bound.poses[p * 8 + 1], bound.poses[p * 8 + 2]); break; }
+    await tap(chPt);
+    await stepA(10);
+    const ch1 = log.of('thingFx').filter((x) => x.args[0] === 3 && x.args[1] === 1).length, tapC = r7().tap;
+    check('PLAYGROUND (round 7) Lanternroof\'s taps: the Star Scope sends the comet (thingFx(5, 1, 1)) with a USE SWITCH by PLAYER and LIFE\'s GAZE_SKY (2 or more records), one comet at a time (a tap while it flies adds nothing); the Chimney Corner breathes deeper (thingFx(3, 1, 1))',
+      tap1 === 'starscope' && comet1 && sc1 === sc0 + 1 && rc1 - rc0 >= 2 && sc2 === sc1 && tapC === 'chimneycorner' && ch1 === ch0 + 1,
+      JSON.stringify({ tap1, comet1, comet: [sc0, sc1, sc2], records: [rc0, rc1], tapC, chimney: [ch0, ch1] }));
+    // (round 7) a squishy set down on top of the Chimney Corner (a block 1.4 m tall, wide layout (-2.6, 0.6)) hops down beside it, toward the middle (the host's
+    // perchDown after 1.5 s: up there it stood above the place camera's frame on a phone, s3run2)
+    meSet(-2.6, 2.0, 0.6);
+    for (let i = 0; i < 5; i++) await stepA(60);
+    const pY = app.body.center.y, pX = app.body.center.x, pD = Math.hypot(pX + 2.6, app.body.center.z - 0.6);
+    check('PLAYGROUND (round 7) Lanternroof: a squishy set on top of the Chimney Corner (1.4 m) hops down beside it, toward the middle, within 5 s (the host\'s perchDown)',
+      okL && pY < 0.9 && pD > 0.5 && pX > -2.6, JSON.stringify({ y: +pY.toFixed(3), x: +pX.toFixed(3), d: +pD.toFixed(3) }));
+    // Cloudloft: the Breeze's gusts are heard (weather 0.4); a squishy dropped onto a Puff Pad bounces (a USE BOUNCE by itself); one let go 1.3 m up in the Updraft
+    // floats down (LIFE's LIFT, its thing the Updraft)
+    const a4 = wLog.length;
+    const okU = await host.travel('cloudloft', true);
+    await stepA(60);
+    meSet(2.61, 1.0, -0.52);   // (over the first Puff Pad, the wide layout's things[0] spot)
+    for (let i = 0; i < 4; i++) await stepA(60);
+    meSet(2.2, 1.3, -0.8);     // (in the Updraft's column, its centre)
+    for (let i = 0; i < 22; i++) await stepA(60);
+    const uW = weathers(a4);
+    check('PLAYGROUND (round 7) Cloudloft: the Breeze\'s gusts are heard (setAmbience weather 0.4, at least 1 in 26 s); a squishy dropped onto a Puff Pad bounces (USE BOUNCE by itself) and one let go 1.3 m up in the Updraft floats down (LIFE\'s LIFT naming the Updraft)',
+      okU && uW.filter((v) => v === 0.4).length >= 1 && r7().selfUsed.includes('puffpads') && r7().selfReacted.includes('updraft'),
+      JSON.stringify({ okU, weathers: uW, used: r7().selfUsed, reacted: r7().selfReacted }));
     audio.setAmbience = amb0;
     await host.travel('home'); await stepA(60);
   }

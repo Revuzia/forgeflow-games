@@ -7,7 +7,7 @@ import type { LifeSnapshot, LifeIntents, LifeEvents } from '../contracts.ts';
 import { SOCIAL_KIND, LIFE_EV, LIFE_FLAG, EMOTE, SOCIAL } from '../data/life.ts';
 import { MECH } from '../data/places.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, F, MAX_MOMENTS, MAX_MEMBERS, BEH, USES_FULL, pushEvent, pairIdx, rnd, U16, dmm, inBounds, shrinkMm, keepMm, clearOfThings, noLean, qT, freeSpot } from './world.ts';
+import { CAP, F, MAX_MOMENTS, MAX_MEMBERS, BEH, usesFull, pushEvent, pairIdx, rnd, U16, dmm, inBounds, shrinkMm, keepMm, clearOfThings, noLean, qT, freeSpot } from './world.ts';
 import { gateStart, gateFits, stopMove, travelTo, travelStep, emitHop, emitPose, clearPose, emitGaze, emitEmote, emitExpr, emitScoot, emitSquash, HELD_BITS, say } from './act.ts';
 import { MOVER_CAP, tierOf, UNIT, WAKE, STYLE } from './attention.ts';
 import { emitVoice, PHRASE, toNextBarMs, BAR_S, voice } from './voice.ts';
@@ -164,7 +164,7 @@ export function socialPick(w: LifeWorld, s: LifeSnapshot, i: number, canMove: bo
         if (!w.home && whole && w.ki[j] === 0 && w.tr[j * 5 + TRAIT.bouncy] >= 0.6 && paradeThird(w, s, i, j) >= 0 && v + 0.1 > sc) { sc = v + 0.1; k = MOM.PARADE; }
       }
       // S12 pass the ball: two within 2.5 m of a ball, one bouncy > 0.5
-      if (canMove && (w.tr[tr + TRAIT.bouncy] > 0.5 || w.tr[j * 5 + TRAIT.bouncy] > 0.5) && w.pl[i] > 0.4 && w.uV[i] < USES_FULL && w.uV[j] < USES_FULL) {
+      if (canMove && (w.tr[tr + TRAIT.bouncy] > 0.5 || w.tr[j * 5 + TRAIT.bouncy] > 0.5) && w.pl[i] > 0.4 && w.uV[i] < usesFull(w) && w.uV[j] < usesFull(w)) {
         const ball = ballNear(w, s, i, j);
         if (ball >= 0) { const v = 0.5 + 0.3 * w.pl[i]; if (v > sc) { sc = v; k = MOM.PASS; } }
       }

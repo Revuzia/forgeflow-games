@@ -26,6 +26,8 @@ import { HINT_LOCK, HINT_TEXT, HINT_TOOLS } from '../src/ui/hint.ts';   // the p
 import { PIECE_CEILING } from '../src/shell/cut.ts';   // CUT3 (2026-10-09): no piece limit; the safety ceiling is 64 (reached on mock bodies in shellview/cut_mock_checks.ts, not with the real physics)
 import { PLACE_INFO } from '../src/data/places.ts';   // (round 6: the pg-places sections play each of Ripple Shore, Frostbell Ridge and Rainleaf Garden the build ships)
 import { QUESTS as Q_DEFS } from '../src/data/quests.ts';
+import { PLACE as LANTERNROOF_DEF } from '../src/data/place_lanternroof.ts';   // (round 7: the pg-places-s3 sections' play areas, both layouts)
+import { PLACE as CLOUDLOFT_DEF } from '../src/data/place_cloudloft.ts';
 import { QUEST_TEXT as Q_TEXT } from '../src/data/journal_text.ts';
 const NEST_N = 4;   // the pieces the cut rows make by presses and swipes: four, the most the real physics builds while it still clamps a share at its 1/8 floor (PHYS lifts it in CUT3); the rows no longer assert any limit
 
@@ -4886,6 +4888,29 @@ async function main() {
     };
     /** step the sim in slices (a task between them, so the life chunk's promises and the journal's timers run as they do live) */
     const pgStep = (page, seconds, slice = 0.5) => page.evaluate(async ([s, sl]) => { for (let t = 0; t < s - 1e-9; t += sl) { window.__WH__.step(1 / 60, Math.round(Math.min(sl, s - t) * 60)); await new Promise((r) => setTimeout(r, 0)); } }, [seconds, slice]);
+    /** (round 7) thing `id` as the dev view has it, once no squishy's disc covers its centre on screen (up to 15 s of sim): a press there lands on the thing */
+    const pgClear = async (page, id) => {
+      let t = (await pgLife(page)).things.find((x) => x.id === id);
+      for (let k = 0; k < 30 && t && t.sx !== null; k++) {
+        const cover = await page.evaluate(([x, y]) => window.__WH__.shell.matInfo().bodies.some((b) => b.r > 0 && Math.hypot(b.x - x, b.y - y) < b.r * 1.1), [t.sx, t.sy]);
+        if (!cover) break;
+        await pgStep(page, 0.5);
+        t = (await pgLife(page)).things.find((x) => x.id === id);
+      }
+      return t;
+    };
+    /** (round 7) a part of thing `id` (not one of `skip`) whose centre no squishy's disc covers (`matInfo` discs x 1.1), waiting up to 15 s of sim for one:
+     *  [its index, its [sx, sy, x, z]], or [-1, null]. (A press on a lantern a squishy stands in front of is the squishy's, as it should be.) */
+    const pgClearPart = async (page, id, skip) => {
+      for (let k = 0; k < 30; k++) {
+        const t = (await pgLife(page)).things.find((x) => x.id === id);
+        const discs = await page.evaluate(() => window.__WH__.shell.matInfo().bodies.filter((b) => b.r > 0).map((b) => [b.x, b.y, b.r]));
+        const i = (t?.parts ?? []).findIndex((q, j) => !skip.includes(j) && !discs.some((d) => Math.hypot(d[0] - q[0], d[1] - q[1]) < d[2] * 1.1));
+        if (i >= 0) return [i, t.parts[i]];
+        await pgStep(page, 0.5);
+      }
+      return [-1, null];
+    };
 
     await section('pg-playthrough', async () => {
       const { page, context, w } = await open({ query: '?dev=1&rseed=4242', init: pgInit });
@@ -4968,7 +4993,10 @@ async function main() {
         JSON.stringify({ counts: dc, things: l5.things.filter((t) => t.shown).map((t) => t.id), units: l5.units }));
       await pgShot(page, 'pg_home_party_desktop');
       // a click on the Music Box (a still press on a thing nobody stands in front of): its tune (8 bars); a second click stops it
-      const mb = l5.things.find((t) => t.id === 'musicbox');
+      // (round 7, R7_SHELL: the row waits, up to 15 s of sim, until no squishy's disc covers the box's centre on screen, then clicks it: in R7's S2 run a squishy
+      // stood in front of it at the 40 s mark and the press went to the squishy ("tap1": "body"), as it should; the assertion is unchanged. In the final run
+      // Dollop, at its party slot (1.455, 0), stood in front of the box (2.25, -1.05 slot units) for the whole wait: R7_SHELL 5A (5), a Home layout request)
+      const mb = (await pgClear(page, 'musicbox')) ?? l5.things.find((t) => t.id === 'musicbox');
       if (mb?.sx !== null && mb?.sx !== undefined) await page.mouse.click(mb.sx, mb.sy);
       await pgStep(page, 0.5);
       const t1 = (await pgLife(page)).tune, tap1 = (await pgLife(page)).tap;
@@ -5051,13 +5079,20 @@ async function main() {
       await page.evaluate(() => window.__WH__.resume());
       // Travel: the Places sheet lists Home (here) and the cabin (Go), nothing else; Go -> the cabin
       await hclick(page, '.dock-places'); await settle(page);
-      const tv = await page.evaluate(() => { const d = document.getElementById('wh-travel'); return d ? { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place), later: d.querySelectorAll('.jn-later-row').length, laterText: /coming later/i.test(d.textContent || ''), stamps: [...d.querySelectorAll('.jn-card')].map((c) => c.querySelector('.jn-card-stamps')?.textContent ?? null) } : null; });
+      const tv = await page.evaluate(() => { const d = document.getElementById('wh-travel'); return d ? { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place), later: d.querySelectorAll('.jn-later-row').length, laterText: /coming later/i.test(d.textContent || ''), stamps: [...d.querySelectorAll('.jn-card[data-open="true"]')].map((c) => c.querySelector('.jn-card-stamps')?.textContent ?? null), shut: [...d.querySelectorAll('.jn-card[data-open="false"]')].map((c) => c.querySelector('.jn-q-hint')?.textContent ?? null), text: d.textContent || '' } : null; });
       await pgShot(page, 'pg_travel_desktop');
       // RE-SPECIFIED in round 5 (written reason: VERDICT_PG B4; QUESTS 15 "a place with shipped: false is not shown at all (no 'coming soon' card)" and
       // QUESTS 7 / PG_VERIFY 7.6 "no line names a place that has not shipped"): round 3's row asked for the eight unshipped places as "coming later" rows,
       // which those rules forbid. It now asks for none, and for each open postcard's "N of M stamps" line (QUESTS 15).
-      check('PG Travel sheet: Home and Hearthlog Cabin as postcards (the cabin open with "Go to"), each with its chapter\'s "N of M stamps" line; no unshipped place is listed or named (QUESTS 15)',
-        !!tv && tv.cards.join() === 'home:true,hearthlog:true' && tv.go.join() === 'hearthlog' && tv.later === 0 && !tv.laterText && tv.stamps.every((s) => /^\d+ of \d+ stamps$/.test(s ?? '')), JSON.stringify(tv));
+      // RE-SPECIFIED in round 7 (R7_SHELL; the brief: rows that say "this S1 build ships only Home and Hearthlog" follow the places that ship): the row asked for
+      // exactly Home and the cabin, right for the S1 build; a build that ships later places lists them too, SHUT at this point of the play (a few stamps): each with
+      // its "Opens at N stamps" line, no "Go to". So: every SHIPPED place in PLACE_INFO's order, Home and the cabin open (the cabin by the first wish), "Go to" only
+      // on the cabin, each open postcard with its "N of M stamps" line, and still no unshipped place listed or named (QUESTS 15).
+      const unshipped = PLACE_INFO.filter((p) => !p.shipped).map((p) => p.name);
+      check('PG Travel sheet: Home and Hearthlog Cabin as postcards (the cabin open with "Go to"), each with its chapter\'s "N of M stamps" line; any later place the build ships listed shut ("Opens at N stamps"); no unshipped place is listed or named (QUESTS 15)',
+        !!tv && tv.cards.join() === PLACE_INFO.filter((p) => p.shipped).map((p) => `${p.id}:${p.idx <= 1}`).join() && tv.go.join() === 'hearthlog' && tv.later === 0 && !tv.laterText
+          && tv.stamps.length === 2 && tv.stamps.every((s) => /^\d+ of \d+ stamps$/.test(s ?? '')) && tv.shut.every((s) => /^Opens at \d+ stamps$/.test(s ?? '')) && !unshipped.some((n) => tv.text.includes(n)),
+        JSON.stringify(tv && { ...tv, text: tv.text.slice(0, 160) }));
       await page.evaluate(() => window.__WH__.pause());
       await pclick(page, '.jn-go[data-place="hearthlog"]');
       const arrived = await stepUntil(page, `(wh) => wh.life()?.place === 1 && !wh.life()?.travelling`, 30, 0.25);
@@ -5092,7 +5127,9 @@ async function main() {
         !!swC && !!rkC && swC.pressed === 'false' && rkC.pressed === 'false' && ch0.every((c) => c.inView && c.overHud === 0 && c.tab === 0 && c.h <= 40) && rest < 0.05 && on > 0.25
           && ch1.find((c) => /Pillow Swing/.test(c.label ?? ''))?.pressed === 'true' && autoLive, JSON.stringify({ chips: ch0, rest, on }));
       // the hand on the seat: a real mouse press on the seat takes it (not a camera turn), a drag pulls it, the release lets it swing on (and with AUTO on, back to its arc)
-      const seat = (await pgLife(page)).things.find((t) => t.id === 'pillowswing');
+      // (round 7, R7_SHELL: the press waits, up to 15 s of sim, until no squishy's disc covers the seat on screen: in R7's S2 run one stood in front of it (or rode
+      // it) and took the press, as the host means it to (D-95: a rider in front takes the press); the assertion is unchanged)
+      const seat = (await pgClear(page, 'pillowswing')) ?? (await pgLife(page)).things.find((t) => t.id === 'pillowswing');
       const camBefore = await page.evaluate(() => JSON.stringify(window.__WH__.shell.tools().cam ?? null));
       if (seat?.sx !== null && seat?.sx !== undefined) {
         await page.mouse.move(seat.sx, seat.sy); await page.mouse.down(); await pgStep(page, 0.05, 0.05);
@@ -5334,39 +5371,55 @@ async function main() {
     };
     /** grab the body at `from` (CSS px), lift it (a carry: physics B3; up and 60 px to the side, as the published carry), steer the carried body over the WORLD point
      *  `to` by feedback on its own position (the carry plane is not the floor: a pointer over a floor spot holds the body in front of it), hold still, let go; the sim stepped */
-    const carryOnto = (page, from, to, holdS = 0.5, lift = 340) => page.evaluate(([f, t, hold, lf]) => {
+    const carryOnto = (page, from, to, holdS = 0.5, lift = 340, via = null) => page.evaluate(([f, t, hold, lf, v]) => {
       const wh = window.__WH__; wh.pause();
       const vw = innerWidth, vh = innerHeight;
       let px = f.x, py = f.y;
       const mv = (x, y, n) => { px = Math.min(vw - 2, Math.max(2, x)); py = Math.min(vh - 2, Math.max(2, y)); wh.pointerMove(px / vw, py / vh, 0); wh.step(1 / 60, n); };
       const held = () => wh.shell.matInfo().bodies.find((b) => b.carried) ?? null;
+      // (round 7, R7_SHELL: the press lands on the body's upper part, 0.55 of its screen radius above its centre, so the lift is an OUTWARD drag: gestures.ts
+      // outwardPull commits a press to a pull only when the press is off the body's centre and the drag leaves it outward; a press on the centre became a rub,
+      // so R6's lift from the centre never carried in s2run1 (R9, R7, I7: "carried": false), except when the screen centre happened to differ)
+      const near = wh.shell.matInfo().bodies.reduce((a, b) => (!a || Math.hypot(b.x - f.x, b.y - f.y) < Math.hypot(a.x - f.x, a.y - f.y) ? b : a), null);
+      py = f.y - 0.55 * (near?.r ?? 40);
       wh.pointerDown(px / vw, py / vh, 0); wh.step(1 / 60, 8);
       // the lift: up (and 60 px toward the middle of the screen, as the published carry) only until physics carries it, so the pointer keeps room above it to take
       // the body back (a lift to the top of the frame left none: a thing at the back of the place was out of reach)
       const side = f.x > vw * 0.5 ? -60 : 60;
       let lifted = 0;
-      for (let i = 1; i <= 32 && !held(); i++) { mv(f.x + side * Math.min(1, i / 24), Math.max(8, f.y - lf * i / 24), 2); lifted = i; }
+      const y0 = py;
+      for (let i = 1; i <= 32 && !held(); i++) { mv(f.x + side * Math.min(1, i / 24), Math.max(8, y0 - lf * i / 24), 2); lifted = i; }
       if (!held()) { wh.pointerUp(0); wh.step(1 / 60, 30); return { carried: false, lifted }; }
       for (let k = 0; k < 10; k++) mv(px, py, 2);
       const w0 = held()?.w; mv(px + 40, py, 20); const w1 = held()?.w ?? w0; mv(px, py + 40, 20); const w2 = held()?.w ?? w1;
       let a = (w1[0] - w0[0]) / 40, c = (w1[2] - w0[2]) / 40, b = (w2[0] - w1[0]) / 40, d = (w2[2] - w1[2]) / 40, det = a * d - b * c;
       if (!(Math.abs(det) > 1e-7)) { a = 0.004; d = 0.004; b = 0; c = 0; det = a * d; }
-      let err = 1e9;
-      for (let it = 0; it < 30; it++) {
-        const cur = held(); if (!cur) break;
-        const ex = t.x - cur.w[0], ez = t.z - cur.w[2];
-        err = Math.hypot(ex, ez); if (err < 0.06) break;
-        let dx = (d * ex - b * ez) / det, dy = (-c * ex + a * ez) / det; const l = Math.hypot(dx, dy); if (l > 90) { dx *= 90 / l; dy *= 90 / l; }
-        mv(px + dx, py + dy, 10);
-      }
+      // (round 7: `via`, a floor point the carry passes first: round a thing that stands in the way, as a player's hand would; s3run2's phone carry to the Vane
+      //  Disc caught on the Chimney Corner, 0.7 m tall, on the straight way and was set down on it)
+      const steer = (T, tol) => {
+        let e = 1e9;
+        for (let it = 0; it < 30; it++) {
+          const cur = held(); if (!cur) break;
+          const ex = T.x - cur.w[0], ez = T.z - cur.w[2];
+          e = Math.hypot(ex, ez); if (e < tol) break;
+          let dx = (d * ex - b * ez) / det, dy = (-c * ex + a * ez) / det; const l = Math.hypot(dx, dy); if (l > 90) { dx *= 90 / l; dy *= 90 / l; }
+          mv(px + dx, py + dy, 10);
+        }
+        return e;
+      };
+      if (v) steer(v, 0.15);
+      const err = steer(t, 0.06);
       for (let i = 0; i < Math.round(hold * 10); i++) wh.step(1 / 60, 6);
       const end = held();
       wh.pointerUp(0);
       for (let i = 0; i < 8; i++) wh.step(1 / 60, 15);
       return { carried: true, lifted, over: end ? [+end.w[0].toFixed(2), +end.w[2].toFixed(2)] : null, err: +err.toFixed(3) };
-    }, [from, to, holdS, lift]);
+    }, [from, to, holdS, lift, via]);
     const pgQuest = async (page, id) => ((await page.evaluate(() => window.__WH__.quests()?.quests ?? [])).find((q) => q.id === id) ?? null);
+    /** (round 7) the Places sheet's cards a save of `st` stamps shows: every shipped place in PLACE_INFO's order, `id:open` (open: Home, or its stamps reached) */
+    const sheetWant = (st) => PLACE_INFO.filter((p) => p.shipped).map((p) => `${p.id}:${p.idx === 0 || (typeof p.stampsToOpen === 'number' && p.stampsToOpen <= st)}`);
     const pgTap = async (page, phone, x, y) => { if (phone) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y); };
+
     async function pgPlaces(phone) {
       const tag = phone ? 'phone' : 'desktop', label = `R6 places (${tag})`;
       const { page, context, w } = await open({ query: '?dev=1&rseed=59', ctx: phone ? PHONE : DESKTOP, init: pgPlacesInit });
@@ -5381,8 +5434,12 @@ async function main() {
       await page.evaluate(() => window.__WH__.resume());
       let pill = null;
       for (let k = 0; k < 30 && !pill; k++) { await sleep(500); pill = await page.evaluate(() => { const p = document.querySelector('.pl-pill'); return p && !p.hidden ? p.querySelector('.pl-pill-text')?.textContent ?? null : null; }); }
-      const opened = await page.evaluate(() => ({ live: window.__liveLog.join(' | '), shown: window.__toastLog.filter((t) => / is open\. Find it in Places\./.test(t)), places: window.__WH__.quests()?.places ?? 0 }));
       const three = S2.map((id) => S2_NAMES[id]), bits = S2.reduce((m, id) => m | (1 << PLACE_INFO.find((p) => p.id === id).idx), 0), pillWant = visitPill(S2[0]);
+      // (round 7, R7_SHELL: the open lines come 1.5 s after the attach and their moments one by one after that, and the pill can show first: the row waits for
+      // them (up to 15 s) before it reads them; the final run read them too early ("live": "", "shown": []), as s3run2 did with the S3 row; assertion unchanged)
+      const readOpen = () => page.evaluate(() => ({ live: window.__liveLog.join(' | '), shown: window.__toastLog.filter((t) => / is open\. Find it in Places\./.test(t)), places: window.__WH__.quests()?.places ?? 0 }));
+      let opened = await readOpen();
+      for (let k = 0; k < 30 && !three.every((n) => opened.live.includes(`${n} is open. Find it in Places.`) && opened.shown.some((t) => t.startsWith(n))); k++) { await sleep(500); opened = await readOpen(); }
       await pgShot(page, `pg_places_open_${tag}`);
       await pclick(page, '.pl-pill-go'); await sleep(900); await settle(page);
       const pillSheet = await page.evaluate(() => !!document.getElementById('wh-travel'));
@@ -5396,8 +5453,10 @@ async function main() {
           stamps: [...d.querySelectorAll('.jn-card[data-open="true"] .jn-card-stamps')].map((s) => s.textContent), drawn: [...d.querySelectorAll('canvas.jn-sky')].filter((c) => c.dataset.drawn === 'true').length,
           cardsN: d.querySelectorAll('.jn-card').length, text: d.textContent }; });
       await pgShot(page, `pg_places_sheet_${tag}`);
-      check(`${label}: the Places sheet lists the shipped places (Home, the cabin, ${three.join(', ')}; D-96: nothing of Fizzwell Tub, Cogwhistle Bench or Echo Hollow named), "Go to" on each of them, "N of 10 stamps" on each open postcard, each postcard's picture drawn (render/postcard.ts)`,
-        !!sheet && sheet.cards.join() === ['home:true', 'hearthlog:false', ...S2.map((id) => `${id}:true`)].join() && S2.every((id) => sheet.go.includes(id)) && sheet.stamps.length === 1 + S2.length && sheet.stamps.every((s) => /^\d+ of 10 stamps$/.test(s ?? ''))
+      // (round 7, R7_SHELL: re-specified because a build may ship Lanternroof and Cloudloft as well: every SHIPPED place is listed in PLACE_INFO's order, open
+      // when its stamps are reached (28 here: Home, Ripple, Frostbell, Rainleaf; the cabin opens by the first wish; Lanternroof 36 and Cloudloft 45 stay shut))
+      check(`${label}: the Places sheet lists the shipped places (Home, the cabin, ${three.join(', ')}, and any later place the build ships, shut at 28 stamps; D-96: nothing of Fizzwell Tub, Cogwhistle Bench or Echo Hollow named), "Go to" on each open one, "N of 10 stamps" on each open postcard, each postcard's picture drawn (render/postcard.ts)`,
+        !!sheet && sheet.cards.join() === sheetWant(28).join() && S2.every((id) => sheet.go.includes(id)) && sheet.stamps.length === 1 + S2.length && sheet.stamps.every((s) => /^\d+ of 10 stamps$/.test(s ?? ''))
           && sheet.drawn === sheet.cardsN && !/Fizzwell|Cogwhistle|Echo Hollow|coming/i.test(sheet.text), JSON.stringify(sheet && { ...sheet, text: sheet.text.slice(0, 220) }));
       await page.keyboard.press('Escape'); await settle(page);
       // three out: the first capsule's Wisplet stays out beside Dollop (D-52), the second's Chunkle replaces it in play; Wisplet back out through the Hoard
@@ -5438,14 +5497,36 @@ async function main() {
         await pgShot(page, `pg_${pl}_stay_${tag}`);
         const T = (id) => L2.things.find((t) => t.id === id);
         const chars = async () => (await pgLife(page)).chars.filter((c) => c.kind === 0 && c.sx !== null);
+        // (round 7, R7_SHELL) the squishy a player picks up for a carry to (x, z): the NEAREST one (none of `skip`, by species). carryOnto's drag reaches about a
+        // metre back before the pointer runs out of frame (the hand's drag plane faces the camera, so a drag up the frame lifts more than it takes back): the
+        // final run's R9 and I7 carries of whichever squishy came first ended 0.6 to 2.4 m short of the Sand Mound and the ramp's top, both at the back
+        const nearest = (cs, x, z, skip = []) => cs.filter((c) => !skip.includes(c.species)).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0] ?? null;
+        // (and when the carry ends short, more than 0.3 m from the spot, the player picks the same squishy up again where it landed and carries it on: at most
+        // two more carries; every carry's result is logged)
+        const carryOn = async (c, to, holdS = 0.5, lift = 340) => {
+          const out = [];
+          let r = await carryOnto(page, { x: c.sx, y: c.sy }, to, holdS, lift);
+          out.push(r);
+          for (let k = 0; k < 2 && r?.carried && r.err > 0.3; k++) {
+            await pgStep(page, 0.5);
+            const cur = (await chars()).find((q) => q.species === c.species);
+            if (!cur) break;
+            r = await carryOnto(page, { x: cur.sx, y: cur.sy }, to, holdS, lift);
+            out.push(r);
+          }
+          return out;
+        };
         if (pl === 'ripple') {
           // R3 "Ring the shells": three different shells by the player's taps (still presses on a shell)
-          for (const pt of (T('shellchimes')?.parts ?? []).slice(0, 3)) { await pgTap(page, phone, pt[0], pt[1]); await pgStep(page, 0.6); }
+          // (round 7, R7_SHELL: each tap at a shell's position NOW and on one no squishy stands in front of (pgClearPart, as the S3 lanterns): the final run's phone
+          // tapped the stay's positions of shells 0, 1, 2 after a squishy had walked the row (LIFE's own RING) and got 1 of 3; the assertion is unchanged)
+          const r3hit = [];
+          for (let n = 0; n < 3; n++) { const [i, q] = await pgClearPart(page, 'shellchimes', r3hit.map((u) => u[0])); if (i < 0) break; r3hit.push([i, q[0], q[1]]); await pgTap(page, phone, q[0], q[1]); await pgStep(page, 0.6); }
           const r3 = await pgQuest(page, 'R3');
-          check(`${label} Ripple Shore: R3 "Ring the shells" by the player: three different Shell Chimes tapped (a USE RING by PLAYER each, distinct parts)`, !!r3?.done, JSON.stringify({ r3, parts: T('shellchimes')?.parts }));
+          check(`${label} Ripple Shore: R3 "Ring the shells" by the player: three different Shell Chimes tapped (a USE RING by PLAYER each, distinct parts)`, !!r3?.done, JSON.stringify({ r3, taps: r3hit }));
           // R9 "Slide off the mound": two squishies set on the Sand Mound by the player (a carry let go over it: the ride it lands on is one the player set up)
-          const mound = T('sandmound'), r9log = [];
-          for (let n = 0; n < 2; n++) { const cs = await chars(); const c = cs[n % cs.length]; if (c && mound) r9log.push(await carryOnto(page, { x: c.sx, y: c.sy }, { x: mound.x, z: mound.z })); await pgStep(page, 4); }
+          const mound = T('sandmound'), r9log = [], r9used = [];
+          for (let n = 0; n < 2; n++) { const cs = await chars(); const c = mound ? nearest(cs, mound.x, mound.z, r9used) : null; if (c) { r9used.push(c.species); r9log.push(...(await carryOn(c, { x: mound.x, z: mound.z }))); } await pgStep(page, 4); }
           const r9 = await pgQuest(page, 'R9');
           check(`${label} Ripple Shore: R9 "Slide off the mound" by the player: two squishies carried onto the Sand Mound and let go there (each a USE SLIDE by PLAYER)`, !!r9?.done, JSON.stringify({ r9, r9log }));
           // R7 "A squirt for a friend": Wisplet (a marshmallow) carried into the Rock Pool soaks; a friend set beside it; a held squeeze of Wisplet squirts at the friend
@@ -5455,7 +5536,7 @@ async function main() {
           // (into the water between the Bob Ring, which floats at the pool's centre, and the rim: 0.9 m from the centre toward the middle of the place, 0.6 m in the
           // tall layout's smaller pool)
           if (wl && pool?.setW) { const off = phone ? 0.6 : 0.9, l = Math.hypot(pool.setW[0], pool.setW[1]) || 1;
-            soakLog.push(await carryOnto(page, { x: wl.sx, y: wl.sy }, { x: pool.setW[0] - off * pool.setW[0] / l, z: pool.setW[1] - off * pool.setW[1] / l })); }
+            soakLog.push(...(await carryOn(wl, { x: pool.setW[0] - off * pool.setW[0] / l, z: pool.setW[1] - off * pool.setW[1] / l }))); }
           for (let k = 0; k < 24; k++) { await pgStep(page, 1); wl = (await pgLife(page)).chars.find((c) => c.species === 'wisplet'); if ((wl?.looks?.[2] ?? 0) >= 0.6) break; }
           const fr = (await chars()).find((c) => c.species !== 'wisplet');
           // (the friend 0.9 m from it toward the middle of the play area: inside both layouts' bounds)
@@ -5471,21 +5552,25 @@ async function main() {
             sq1 > sq0 && !!r7?.done, JSON.stringify({ squirts: sq1 - sq0, r7, soak: wl?.looks?.[2], rho: wl?.rho, soakLog }));
         } else if (pl === 'frostbell') {
           // I9 "Ring the icicles": five rings of the Icicle Bells by the player's taps
-          const bells = T('iciclebells')?.parts ?? [];
-          for (let n = 0; n < 5 && bells.length; n++) { const pt = bells[n % bells.length]; await pgTap(page, phone, pt[0], pt[1]); await pgStep(page, 0.8); }
+          // (round 7, R7_SHELL: each tap at a bell's position now, on one no squishy stands in front of: pgClearPart, as R3)
+          const bells = [];
+          for (let n = 0; n < 5; n++) { const [i, q] = await pgClearPart(page, 'iciclebells', []); if (i < 0) break; bells.push([i, q[0], q[1]]); await pgTap(page, phone, q[0], q[1]); await pgStep(page, 0.8); }
           const i9 = await pgQuest(page, 'I9');
           check(`${label} Frostbell Ridge: I9 "Ring the icicles" by the player: the Icicle Bells tapped five times (a USE RING by PLAYER each)`, !!i9?.done, JSON.stringify({ i9, bells }));
           // I7 "Down the glide ramp": a squishy set at the top of the Glide Ramp two times (it slides down onto the ice)
           const ramp = T('glideramp'), i7log = [];
-          for (let n = 0; n < 2; n++) { const cs = await chars(); const c = cs[n % cs.length]; if (c && ramp?.setW) i7log.push(await carryOnto(page, { x: c.sx, y: c.sy }, { x: ramp.setW[0], z: ramp.setW[1] })); await pgStep(page, 4); }
+          for (let n = 0; n < 2; n++) { const cs = await chars(); const c = ramp?.setW ? nearest(cs, ramp.setW[0], ramp.setW[1]) : null; if (c) i7log.push(...(await carryOn(c, { x: ramp.setW[0], z: ramp.setW[1] }))); await pgStep(page, 4); }
           const i7 = await pgQuest(page, 'I7');
           check(`${label} Frostbell Ridge: I7 "Down the glide ramp" by the player: a squishy set at the top of the Glide Ramp two times (each a USE SLIDE by PLAYER)`, !!i7?.done, JSON.stringify({ i7, i7log }));
           // I4 "Snow from the pine" (PLACES 4.4): a squishy under the Shake Pine's branch, the player taps the pine: the snow puff falls on it
-          const pine = T('shakepine'), br = pine?.parts?.[1], cs = await chars();
-          if (br && cs[0]) await carryOnto(page, { x: cs[0].sx, y: cs[0].sy }, { x: br[2] + 0.2, z: br[3] + 0.3 });   // (under the branch: its centre, parts[1] = [sx, sy, x, z])
+          const pine = T('shakepine'), br = pine?.parts?.[1], cs = await chars(), c4 = br ? nearest(cs, br[2] + 0.2, br[3] + 0.3) : null;
+          if (br && c4) await carryOn(c4, { x: br[2] + 0.2, z: br[3] + 0.3 });   // (under the branch: its centre, parts[1] = [sx, sy, x, z])
           await pgStep(page, 1);
-          const pt = (await pgLife(page)).things.find((t) => t.id === 'shakepine');
-          if (pt?.sx !== null) await pgTap(page, phone, pt.sx, pt.sy);
+          // (round 7, R7_SHELL: the tap goes to a part of the pine (trunk or branch: either pokes the branch) no squishy stands in front of: the final run's phone
+          // tapped the pine's centre over the squishy set under its branch ("tap": "body", as it should); the assertion is unchanged)
+          const [pi, pq] = await pgClearPart(page, 'shakepine', []);
+          const pt = pi >= 0 ? { sx: pq[0], sy: pq[1] } : (await pgLife(page)).things.find((t) => t.id === 'shakepine');
+          if (pt && pt.sx !== null && pt.sx !== undefined) await pgTap(page, phone, pt.sx, pt.sy);
           await pgStep(page, 1.5);
           const i4 = await pgQuest(page, 'I4'), L4 = await pgLife(page);
           await pgShot(page, `pg_frostbell_play_${tag}`);
@@ -5493,18 +5578,22 @@ async function main() {
             L4.tap === 'shakepine' && !!i4?.done, JSON.stringify({ i4, tap: L4.tap, branch: br, snow: L4.chars.map((c) => [c.species, c.looks?.[4], c.x, c.z]) }));
         } else {
           // G7 "A shower from the leaf": a squishy under the Drip Leaf, the player taps the leaf: its shower falls on it
-          const drip = T('dripleaf'), cs = await chars();
-          if (drip?.setW && cs[0]) await carryOnto(page, { x: cs[0].sx, y: cs[0].sy }, { x: drip.setW[0], z: drip.setW[1] });
+          const drip = T('dripleaf'), cs = await chars(), c7 = drip?.setW ? nearest(cs, drip.setW[0], drip.setW[1]) : null;
+          if (c7) await carryOn(c7, { x: drip.setW[0], z: drip.setW[1] });
           await pgStep(page, 1.5);
-          const dt = (await pgLife(page)).things.find((t) => t.id === 'dripleaf');
-          if (dt?.sx !== null) await pgTap(page, phone, dt.sx, dt.sy);
+          // (round 7, R7_SHELL: as the pine's: a part of the leaf no squishy stands in front of)
+          const [di, dq] = await pgClearPart(page, 'dripleaf', []);
+          const dt = di >= 0 ? { sx: dq[0], sy: dq[1] } : (await pgLife(page)).things.find((t) => t.id === 'dripleaf');
+          if (dt && dt.sx !== null && dt.sx !== undefined) await pgTap(page, phone, dt.sx, dt.sy);
           await pgStep(page, 2.5);
           const g7 = await pgQuest(page, 'G7'), L7 = await pgLife(page);
           check(`${label} Rainleaf Garden: G7 "A shower from the leaf" by the player: a squishy set under the Drip Leaf, a tap tips its shower onto it (a REACT SHOWER naming the leaf)`,
             L7.tap === 'dripleaf' && !!g7?.done, JSON.stringify({ g7, tap: L7.tap, wet: L7.chars.map((c) => [c.species, c.looks?.[1], c.x, c.z]) }));
           // G4 "Boing on the moss": squishies dropped onto the Moss Bouncer three times (its kicks: one USE BOUNCE per landing)
           const moss = T('mossbouncer'), g4log = [];
-          for (let n = 0; n < 3; n++) { const cs2 = await chars(); const c = cs2[(n + 1) % cs2.length]; if (c && moss) g4log.push(await carryOnto(page, { x: c.sx, y: c.sy }, { x: moss.x, z: moss.z }, 0.3, 360)); await pgStep(page, 3); }
+          // (round 7, R7_SHELL: as the S3 Puff Pads: set down 0.8 m in front of the pad first, then carried back onto it, so it FALLS onto it: the final run's phone
+          // carried two squishies right over the Moss Bouncer (err 0.02) and neither bounced: carried toward the camera, a squishy is held at about its rest height)
+          for (let n = 0; n < 3; n++) { const cs2 = await chars(); const c = moss ? nearest(cs2, moss.x, moss.z + 0.8) : null; if (c) { g4log.push(...(await carryOn(c, { x: moss.x, z: moss.z + 0.8 }, 0.2, 360))); await pgStep(page, 0.5); const cur = (await chars()).find((q) => q.species === c.species); if (cur) g4log.push(await carryOnto(page, { x: cur.sx, y: cur.sy }, { x: moss.x, z: moss.z }, 0.3, 360)); } await pgStep(page, 3); }
           const g4 = await pgQuest(page, 'G4');
           check(`${label} Rainleaf Garden: G4 "Boing on the moss" by the player: three drops onto the Moss Bouncer bounce (three USE BOUNCE)`, !!g4?.done, JSON.stringify({ g4, g4log }));
           // D-95 on the Leaf Teeter: its AUTO chip (off by default) turns it on, the board rocks by itself
@@ -5536,6 +5625,257 @@ async function main() {
     const s2Closed = ['ripple', 'frostbell', 'rainleaf'].filter((id) => !S2.includes(id)).map((id) => S2_NAMES[id]);
     await section('pg-places', async () => { if (!s2Shipped) { notRun.push('pg-places (this build ships none of Ripple Shore, Frostbell Ridge and Rainleaf Garden: data/places.ts PLACE_INFO.shipped)'); return; } if (s2Closed.length) notRun.push(`pg-places: ${s2Closed.join(', ')} (not shipped by this build)`); await pgPlaces(false); });
     await section('pg-places-phone', async () => { if (!s2Shipped) { notRun.push('pg-places-phone (this build ships none of the three: data/places.ts PLACE_INFO.shipped)'); return; } if (s2Closed.length) notRun.push(`pg-places-phone: ${s2Closed.join(', ')} (not shipped by this build)`); await pgPlaces(true); });
+
+    // ================================================================================================
+    // ROUND 7 (R7_SHELL 2): Lanternroof and Cloudloft OPEN, each played through on 1280x800 (pg-places-s3) and 390x844 (pg-places-s3-phone), only on a build
+    // that ships them (data/places.ts PLACE_INFO; the orchestrator's R7_SHELL_open_s3.patch). A save of 45 stamps opens them as it loads (QUESTS 7: Lanternroof
+    // 36, Cloudloft 45), with their open lines and the Places sheet's postcards; three out (rseed 59); then per place: the trip by the Places sheet, the party
+    // arrives (the layout of the frame, its things bound), the place works (Lanternroof: the Night Breeze's gust drives the look and turns the Vane Disc; the
+    // Star Scope's comet; Cloudloft: the Puff Pads kick, the updraft slows a fall), at least two of its quests done by the player's own input (taps, carries),
+    // a toss toward the side stays inside the play area, the hinge ride's AUTO chip, home again by the sheet; screenshots of each; 0 console errors.
+    // ================================================================================================
+    const S3 = ['lanternroof', 'cloudloft'].filter((id) => PLACE_INFO.find((p) => p.id === id)?.shipped === true);
+    const S3_NAMES = { lanternroof: 'Lanternroof', cloudloft: 'Cloudloft' }, S3_DEF = { lanternroof: LANTERNROOF_DEF, cloudloft: CLOUDLOFT_DEF };
+    /** the visit quest's pill ("Next: Up on the roof") of the first place a save of `st` stamps opens that is never visited: PLACE_INFO's order */
+    const firstVisitPill = (st) => {
+      const p = PLACE_INFO.find((x) => x.shipped && x.idx > 1 && typeof x.stampsToOpen === 'number' && x.stampsToOpen <= st);
+      const q = p ? Q_DEFS.find((d) => !d.dropped && d.kind === 'main' && d.clauses.some((c) => c.ev === 1 && c.place === p.idx) && d.clauses.length === 1) ?? Q_DEFS.find((d) => d.id.endsWith('1') && d.chapter > 1 && d.chapter < 10 && d.clauses.some((c) => c.place === p.idx)) : null;
+      return q ? `Next: ${Q_TEXT[q.idx]?.[0] ?? ''}` : '';
+    };
+    /** a toss: the body at `from` (CSS px) lifted until physics carries it, then swept fast toward the screen's side `dir` (+1 right, -1 left) and let go
+     *  mid-sweep; its centre (place space) sampled every 0.1 s for 6 s. Returns the samples. */
+    const tossOut = (page, from, dir, species) => page.evaluate(([f, d, sp]) => {
+      const wh = window.__WH__; wh.pause();
+      const vw = innerWidth, vh = innerHeight;
+      let px = f.x, py = f.y;
+      const mv = (x, y, n) => { px = Math.min(vw - 2, Math.max(2, x)); py = Math.min(vh - 2, Math.max(2, y)); wh.pointerMove(px / vw, py / vh, 0); wh.step(1 / 60, n); };
+      const held = () => wh.shell.matInfo().bodies.find((b) => b.carried) ?? null;
+      const near = wh.shell.matInfo().bodies.reduce((a, b) => (!a || Math.hypot(b.x - f.x, b.y - f.y) < Math.hypot(a.x - f.x, a.y - f.y) ? b : a), null);
+      py = f.y - 0.55 * (near?.r ?? 40);   // (the upper part: an outward drag, as carryOnto)
+      const y0 = py;
+      wh.pointerDown(px / vw, py / vh, 0); wh.step(1 / 60, 8);
+      for (let i = 1; i <= 32 && !held(); i++) mv(f.x, Math.max(8, y0 - 340 * i / 24), 2);
+      const carried = !!held();
+      for (let i = 1; i <= 7; i++) mv(px + d * vw * 0.06, py - vh * 0.004, 1);   // the sweep: 6 % of the width a frame (a hard throw)
+      wh.pointerUp(0);
+      const out = [];
+      for (let i = 0; i < 60; i++) { wh.step(1 / 60, 6); const c = wh.life().chars.find((x) => x.species === sp && x.kind === 0); if (c) out.push([c.x, c.z, c.sx, c.sy]); }
+      return { carried, out };
+    }, [from, dir, species]);
+    async function pgPlacesS3(phone) {
+      const tag = phone ? 'phone' : 'desktop', label = `R7 places (${tag})`;
+      const { page, context, w } = await open({ query: '?dev=1&rseed=59', ctx: phone ? PHONE : DESKTOP, init: pgPlacesInit });
+      mainWatches.push([`pg-places-s3 ${tag}`, w]);
+      // load 1: a fresh profile (the journal writes its save); load 2: the save's stamps at 45 (Lanternroof 36, Cloudloft 45; and every earlier place the build ships)
+      await pgBoot(page, phone);
+      await pgStep(page, 2); await sleep(1500);
+      await page.evaluate(() => sessionStorage.setItem('r6seed', '45'));
+      await page.reload({ waitUntil: 'load', timeout: 180000 });
+      await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
+      const landed = await pgBoot(page, phone);
+      await page.evaluate(() => window.__WH__.resume());
+      const pillWant = firstVisitPill(45);
+      const names = S3.map((id) => S3_NAMES[id]), bits = S3.reduce((m, id) => m | (1 << PLACE_INFO.find((p) => p.id === id).idx), 0);
+      // (more than three places opening at one load show ONE moment, "N places are open. Find them in Places."; each line is still said)
+      const nOpen = PLACE_INFO.filter((p) => p.shipped && p.idx > 1 && typeof p.stampsToOpen === 'number' && p.stampsToOpen <= 45).length;
+      const shownOf = (o, n) => (nOpen > 3 ? o.shown.some((t) => t.startsWith(`${nOpen} places are open`)) : o.shown.some((t) => t.startsWith(n)));
+      const readOpen = () => page.evaluate(() => ({ live: window.__liveLog.join(' | '), shown: window.__toastLog.filter((t) => / is open\. Find it in Places\.| places are open\. Find them in Places\./.test(t)), places: window.__WH__.quests()?.places ?? 0 }));
+      // (the open lines come 1.5 s after the attach, then their moments one by one: wait for them (up to 15 s) before the pill; s3run2 read them too early)
+      let opened = await readOpen();
+      for (let k = 0; k < 30 && !names.every((n) => opened.live.includes(`${n} is open. Find it in Places.`) && shownOf(opened, n)); k++) { await sleep(500); opened = await readOpen(); }
+      let pill = null;
+      for (let k = 0; k < 30 && pill !== pillWant; k++) { await sleep(500); pill = await page.evaluate(() => { const p = document.querySelector('.pl-pill'); return p && !p.hidden ? p.querySelector('.pl-pill-text')?.textContent ?? null : null; }); }
+      const shownOk = (n) => shownOf(opened, n);
+      check(`${label}: a save of 45 stamps opens ${names.join(' and ')} as it loads (QUESTS 7: 36 / 45); each "<place> is open. Find it in Places." is said, and shown in the moments slot (one "N places are open" moment for more than three); the tracker pill points the way ("${pillWant}")`,
+        landed && (opened.places & bits) === bits && names.every((n) => opened.live.includes(`${n} is open. Find it in Places.`) && shownOk(n)) && pill === pillWant,
+        JSON.stringify({ ...opened, pill }));
+      await pgShot(page, `pg_s3_open_${tag}`);
+      // the Places sheet: every shipped place, these two open with "Go to", their stamps line and their postcard picture (render/postcard.ts)
+      await page.evaluate(() => window.__WH__.pause());
+      await hclick(page, '.dock-places'); await settle(page); await sleep(700);
+      const sheet = await page.evaluate(() => { const d = document.getElementById('wh-travel'); if (!d) return null;
+        const r = d.querySelector('.jn')?.getBoundingClientRect();
+        return { cards: [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`), go: [...d.querySelectorAll('.jn-go')].map((b) => b.dataset.place),
+          stamps: Object.fromEntries([...d.querySelectorAll('.jn-card[data-open="true"]')].map((c) => [c.dataset.place, c.querySelector('.jn-card-stamps')?.textContent ?? null])),
+          drawn: [...d.querySelectorAll('canvas.jn-sky')].filter((c) => c.dataset.drawn === 'true').length, cardsN: d.querySelectorAll('.jn-card').length, text: d.textContent,
+          panel: r ? [Math.round(r.top), Math.round(r.bottom), innerHeight] : null }; });
+      await pgShot(page, `pg_s3_sheet_${tag}`);
+      check(`${label}: the Places sheet lists every shipped place in order (${S3.join(', ')} among them, open: "Go to", "0 of 10 stamps"), each postcard's picture drawn, no dropped place named`,
+        !!sheet && sheet.cards.join() === sheetWant(45).join() && S3.every((id) => sheet.go.includes(id) && /^\d+ of 10 stamps$/.test(sheet.stamps[id] ?? '')) && sheet.drawn === sheet.cardsN && !/Fizzwell|Cogwhistle|Echo Hollow|coming/i.test(sheet.text),
+        JSON.stringify(sheet && { ...sheet, text: sheet.text.slice(0, 200) }));
+      await page.keyboard.press('Escape'); await settle(page);
+      // three out (as pg-places: the first capsule's Wisplet beside Dollop, the second's Chunkle in play, Wisplet out again through the Hoard if it went back)
+      await page.evaluate(() => window.__WH__.resume());
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 1); await pgStep(page, 1);
+      await openCapsules(page, 1); await pgStep(page, 1);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', false));
+      if (!(await pgLife(page)).chars.some((c) => c.species === 'wisplet')) await bringOut(page, 'wisplet');
+      await page.evaluate(() => window.__WH__.pause());
+      await pgStep(page, 1);
+      for (const pl of S3) {
+        const name = S3_NAMES[pl], idx = PLACE_INFO.find((p) => p.id === pl).idx, L = pl === 'lanternroof' ? 'L' : 'U';
+        await page.evaluate(() => window.__WH__.resume());
+        await hclick(page, '.dock-places'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await pclick(page, `.jn-go[data-place="${pl}"]`);
+        const arrived = await stepUntil(page, `(wh) => wh.life()?.place === ${idx} && !wh.life()?.travelling`, 30, 0.25);
+        await pgStep(page, 3);
+        const L1 = await pgLife(page), v1 = await pgQuest(page, `${L}1`);
+        const inFrame = L1.chars.filter((c) => c.kind === 0 && c.sx !== null && c.sx >= 0 && c.sx <= (phone ? 390 : 1280) && c.sy >= 0 && c.sy <= (phone ? 844 : 800)).length;
+        check(`${label} ${name}: by the Places sheet the party of three arrives (the ${phone ? 'tall' : 'wide'} layout), "You are at ${name}.", every one of them in the frame, its things bound (props), its VISIT stamp (${L}1)`,
+          arrived >= 0 && L1.place === idx && L1.layout === (phone ? 1 : 0) && L1.chars.filter((c) => c.kind === 0).length === 3 && inFrame === 3 && !!v1?.done && L1.things.filter((t) => t.parked === false).length >= 4
+            && (await page.evaluate((n) => window.__liveLog.some((t) => t.includes(`You are at ${n}.`)), name)),
+          JSON.stringify({ arrived, place: L1.place, layout: L1.layout, inFrame, chars: L1.chars.map((c) => [c.species, c.x, c.z, c.sx, c.sy]), v1, things: L1.things.map((t) => [t.id, t.parked]) }));
+        await pgShot(page, `pg_${pl}_arrive_${tag}`);
+        const T = (id) => L1.things.find((t) => t.id === id);
+        const chars = async () => (await pgLife(page)).chars.filter((c) => c.kind === 0 && c.sx !== null);
+        const look = () => page.evaluate(() => { try { return window.__WH__.shell.stageObj().placeHost?.stats?.() ?? {}; } catch { return {}; } });
+        if (pl === 'lanternroof') {
+          // the Night Breeze: the shell drives the look with physics' gust level (lanterns sway, streaks drift), the Vane Disc turns while it blows
+          let gustSeen = null;
+          for (let k = 0; k < 60 && !gustSeen; k++) {
+            await pgStep(page, 0.5, 0.5);
+            const Lg = await pgLife(page), z0 = Lg.zones?.find((z) => z[0] === 'nightbreeze');
+            if (z0 && z0[2] > 0.6) gustSeen = { at: k * 0.5, level: z0[2], look: await look(), vane: Lg.vane };
+          }
+          await pgShot(page, `pg_lanternroof_gust_${tag}`);
+          check(`${label} Lanternroof: the Night Breeze gusts on LIFE's clock (within 30 s), the look is driven by physics' gust level (its lanterns sway and streaks drift: driven, gust over 0.4) and the Vane Disc turns while it blows (the host's turn and the look's spin)`,
+            !!gustSeen && gustSeen.look.driven === 1 && gustSeen.look.gust > 0.4 && gustSeen.vane?.turning === true && gustSeen.look.vaneW > 0.2, JSON.stringify(gustSeen));
+          // L3 "Light the lanterns": three different lanterns tapped (a USE RING by PLAYER each, distinct parts); the tapped lanterns glow
+          // (each a lantern no squishy stands in front of: a press there is the squishy's)
+          const lit = [];
+          for (let n = 0; n < 3; n++) { const [i, q] = await pgClearPart(page, 'lanternline', lit.map((u) => u[0])); if (i < 0) break; lit.push([i, q[0], q[1]]); await pgTap(page, phone, q[0], q[1]); await pgStep(page, 0.4); }
+          const l3 = await pgQuest(page, 'L3'), g3 = (await look()).glow;
+          check(`${label} Lanternroof: L3 "Light the lanterns" by the player: three different lanterns tapped (a USE RING by PLAYER each, distinct parts); they glow (the look's mean lantern glow up)`,
+            !!l3?.done && g3 > 0.15, JSON.stringify({ l3, glow: g3, lit }));
+          // L7 "A shooting star" and L2 "Moon watchers": a tap on the Star Scope: the comet crosses the sky, every squishy on screen gazes at it
+          const sc = await pgClear(page, 'starscope'), g0 = (await pgLife(page)).counts.gaze;
+          if (sc?.sx !== null) await pgTap(page, phone, sc.sx, sc.sy);
+          await pgStep(page, 2);
+          const Ls = await pgLife(page), lk = await look(), l7 = await pgQuest(page, 'L7'), l2 = await pgQuest(page, 'L2');
+          await pgShot(page, `pg_lanternroof_comet_${tag}`);
+          check(`${label} Lanternroof: L7 "A shooting star" by the player: a tap on the Star Scope (a USE SWITCH by PLAYER) sends the comet across the sky (the look's), and L2 "Moon watchers": the squishies on screen gaze up at it (LIFE's GAZE_SKY each: two kinds)`,
+            // (L2's GAZE_SKY records of two kinds are the gaze; s3run2 also asked LIFE's GAZE intent count to grow within 2 s, which it does or not by LIFE's own
+            //  timing (desktop 1, phone 0, L2 done on both): that extra clause is dropped, the count kept for information)
+            Ls.tap === 'starscope' && Ls.comet === true && lk.comet === 1 && !!l7?.done && !!l2?.done, JSON.stringify({ tap: Ls.tap, comet: Ls.comet, look: lk, l7, l2, gazeIntents: Ls.counts.gaze - g0 }));
+          // the Vane Disc poked (nobody on it): a tap on a part of the disc the press can reach spins it for a while (the host's poke, the look's spin). It has no prop,
+          // so its points come from its spot (the dev hook's projection): its middle, then eight points at 0.75 of its radius, until a tap lands on it (a squishy or
+          // a prop in front, the wide layout's Clothesline Hammock, takes the others)
+          const vs = T('vanedisc')?.setW, vr = 0.75 * (S3_DEF[pl].things.find((t) => t.id === 'vanedisc')?.size[0] ?? 0.6);
+          let vp = null;
+          for (let q = 0; q < 9 && vs; q++) {
+            const pt = await page.evaluate(([x, z]) => window.__WH__.shell.project(x, 0.01, z), [vs[0] + (q ? Math.cos((q - 1) * Math.PI / 4) * vr : 0), vs[1] + (q ? Math.sin((q - 1) * Math.PI / 4) * vr : 0)]);
+            if (!pt || pt.x < 4 || pt.y < 4 || pt.x > (phone ? 386 : 1276) || pt.y > (phone ? 840 : 796)) continue;
+            await pgTap(page, phone, pt.x, pt.y); await pgStep(page, 0.1, 0.1);
+            if ((await pgLife(page)).tap === 'vanedisc') { vp = [+pt.x.toFixed(1), +pt.y.toFixed(1), q]; break; }
+          }
+          await pgStep(page, 0.5);
+          const Lp = await pgLife(page), lp = await look();
+          check(`${label} Lanternroof: a tap on the Vane Disc (no prop: its painted disc on the floor takes the press) spins it (the host's poke; the look's spin over 0.3 rad/s)`,
+            !!vp && Lp.tap === 'vanedisc' && !!Lp.vane?.poked && lp.vaneW > 0.3, JSON.stringify({ at: vp, tap: Lp.tap, vane: Lp.vane, look: lp }));
+          // L4 "Ride the vane": a squishy the player sets on the Vane Disc rides it round when the breeze turns it (a USE SPIN: the next gust within 15 s)
+          const vd = T('vanedisc'), cs = await chars(), rider = cs.find((c) => c.species !== 'dollop') ?? cs[0];
+          let l4log = null;
+          // (the tall layout's Chimney Corner (1.42, -0.9) stands between the party and the disc (1, -2.34): the carry passes left of and behind it first)
+          if (vd?.setW && rider) l4log = await carryOnto(page, { x: rider.sx, y: rider.sy }, { x: vd.setW[0], z: vd.setW[1] }, 0.5, 340, phone ? { x: vd.setW[0] - 0.5, z: vd.setW[1] + 0.5 } : null);
+          let l4 = null, rode = 0;
+          for (let k = 0; k < 30 && !l4?.done; k++) { await pgStep(page, 0.5, 0.5); l4 = await pgQuest(page, 'L4'); rode = Math.max(rode, (await pgLife(page)).vane?.riders ?? 0); }
+          await pgShot(page, `pg_lanternroof_vane_${tag}`);
+          const Lv = await pgLife(page);
+          check(`${label} Lanternroof: L4 "Ride the vane" by the player: a squishy carried onto the Vane Disc rides it round when the Night Breeze turns it (a USE SPIN; its eyes follow the turn)`,
+            !!l4?.done && rode >= 1, JSON.stringify({ l4, rode, l4log, rider: Lv.chars.find((c) => c.species === rider?.species), vane: Lv.vane }));
+          // the chimney: a tap breathes a deeper puff of warm air (the look's)
+          const ch = await pgClear(page, 'chimneycorner');
+          if (ch?.sx !== null) await pgTap(page, phone, ch.sx, ch.sy);
+          await pgStep(page, 0.5);
+          const chl = await look(), cht = (await pgLife(page)).tap;
+          check(`${label} Lanternroof: a tap on the Chimney Corner breathes a deeper puff of warm air (the look's puff)`, cht === 'chimneycorner' && chl.puff === 1, JSON.stringify({ tap: cht, look: chl }));
+        } else {
+          // U2 "Boing on the puffs": squishies dropped onto the Puff Pads three times (their kicks: one USE BOUNCE per landing)
+          // (U2 counts three bounces on any of the pads: the drops go onto the pads nearest the front, in turn (two on a desktop; on a phone the front one: the
+          //  tall layout's other two lie at z -3.2, past the reach of a straight carry); s3run2's carries to the back pads ended 0.78 m (desktop) and 1.6 m
+          //  (phone) short of them, so their drops missed)
+          // (the final run: two of three drops counted though all three carries ended over a pad (err 0.01 to 0.07 m): a carry onto a pad IN FRONT of where the
+          //  squishy was picked up holds it at about its rest height (the hand's drag plane faces the camera: back is up, front is down), so it is set down on
+          //  the pad without a fall and the pad does not kick. The player's way: set it down 0.8 m in front of the pad, pick it up again and carry it back onto
+          //  the pad: the plane rises on the way back and the squishy falls onto the pad. Both carries are logged; the assertion is unchanged)
+          const dropOnto = async (c, x, z) => {
+            const a = await carryOnto(page, { x: c.sx, y: c.sy }, { x, z: z + 0.8 }, 0.2, 360);
+            await pgStep(page, 0.5);
+            const cur = (await chars()).find((q) => q.species === c.species);
+            return [a, cur ? await carryOnto(page, { x: cur.sx, y: cur.sy }, { x, z }, 0.3, 360) : null];
+          };
+          const pads = T('puffpads')?.parts ?? [], u2log = [], near2 = [...pads].sort((a, b) => b[3] - a[3]).slice(0, phone ? 1 : 2);
+          for (let n = 0; n < 3 && near2.length; n++) { const cs = await chars(); const c = cs[n % cs.length], pd = near2[n % near2.length]; if (c) u2log.push(...(await dropOnto(c, pd[2], pd[3]))); await pgStep(page, 2.5); }
+          const u2 = await pgQuest(page, 'U2');
+          check(`${label} Cloudloft: U2 "Boing on the puffs" by the player: three drops onto the Puff Pads bounce (three USE BOUNCE)`, !!u2?.done, JSON.stringify({ u2, u2log, pads: pads.map((p) => p.slice(2)) }));
+          await pgShot(page, `pg_cloudloft_pads_${tag}`);
+          // U3 "Float down slowly": two different squishies carried over the Updraft and let go there: each falls slowly in it (LIFE's LIFT, two kinds)
+          const up = T('updraft'), u3log = [];
+          for (let n = 0; n < 2 && up?.setW; n++) { const cs = await chars(); const c = cs[(n + 1) % cs.length]; if (c) u3log.push(await carryOnto(page, { x: c.sx, y: c.sy }, { x: up.setW[0], z: up.setW[1] }, 0.2, 360)); await pgStep(page, 2); }
+          const u3 = await pgQuest(page, 'U3');
+          check(`${label} Cloudloft: U3 "Float down slowly" by the player: two different squishies let go over the Updraft float down in it (LIFE's LIFT: two kinds)`, !!u3?.done, JSON.stringify({ u3, u3log, up: up?.setW }));
+          // the Cloud Ball: a tap rolls it away (a USE ROLL by PLAYER)
+          const cb = await pgClear(page, 'cloudball');
+          if (cb?.sx !== null) await pgTap(page, phone, cb.sx, cb.sy);
+          await pgStep(page, 1.5);
+          const cb2 = (await pgLife(page)).things.find((t) => t.id === 'cloudball'), cbt = (await pgLife(page)).tap;
+          check(`${label} Cloudloft: a tap on the Cloud Ball rolls it away (it moves 0.2 m or more)`, cbt === 'cloudball' && Math.hypot((cb2?.x ?? 0) - (cb?.x ?? 0), (cb2?.z ?? 0) - (cb?.z ?? 0)) >= 0.2, JSON.stringify({ tap: cbt, from: [cb?.x, cb?.z], to: [cb2?.x, cb2?.z] }));
+        }
+        // the hinge ride's AUTO chip (D-95 revised): off by default, inside the frame, clear of the HUD; a tap turns it on, a second off
+        const rideName = pl === 'lanternroof' ? /Hammock/ : /Kite Swing/;
+        const chip = (await pgChips(page)).find((c) => rideName.test(c.label ?? ''));
+        if (chip) await pgTap(page, phone, chip.x, chip.y);
+        await sleep(400);
+        const chip2 = (await pgChips(page)).find((c) => rideName.test(c.label ?? ''));
+        check(`${label} ${name}: the ${pl === 'lanternroof' ? 'Clothesline Hammock' : 'Kite Swing'}'s Auto chip (D-95) shows off by default inside the frame and clear of the HUD; a ${phone ? 'tap' : 'click'} turns it on`,
+          !!chip && chip.pressed === 'false' && chip.inView && chip.overHud === 0 && chip2?.pressed === 'true', JSON.stringify({ chip, after: chip2?.pressed }));
+        // (round 7, s3run1's shots: the hammock's chip stood over two lanterns on a phone, and the chip takes the press) it covers no part of the place's other
+        // things: no part centre within 14 px of its box (the host keeps it 22 px clear when it places it, 4 Hz; a lantern swings a little in between)
+        {
+          const Lc = await pgLife(page), ch = chip2 ?? chip;
+          const pts = Lc.things.filter((t) => t.id !== 'hammock' && t.id !== 'kiteswing').flatMap((t) => t.parts.map((q) => [t.id, q[0], q[1]]));
+          const under = ch ? pts.filter((q) => q[1] > ch.x - ch.w / 2 - 14 && q[1] < ch.x + ch.w / 2 + 14 && q[2] > ch.y - ch.h / 2 - 14 && q[2] < ch.y + ch.h / 2 + 14) : null;
+          check(`${label} ${name}: the Auto chip covers none of the place's other things (no part within 14 px of it: a lantern, a pad, the ball stay tappable)`,
+            !!ch && under.length === 0, JSON.stringify({ chip: ch && [Math.round(ch.x), Math.round(ch.y), Math.round(ch.w), Math.round(ch.h)], under }));
+        }
+        if (chip2?.pressed === 'true') await pgTap(page, phone, chip2.x, chip2.y);
+        // a toss toward the side never leaves the play area (R6_PHYS 2.4: Lanternroof's parapets, Cloudloft's open sides and the guard)
+        const D = S3_DEF[pl], B = phone ? D.tall.bounds : D.bounds, hx = B.hx ?? 3, hz = B.hz ?? 2.4;
+        const cs2 = await chars(), tc = cs2.reduce((a, c) => (Math.abs(c.x) > Math.abs(a?.x ?? -1) ? c : a), null);
+        const dir = tc && tc.x < 0 ? -1 : 1;
+        const ts = tc ? await tossOut(page, { x: tc.sx, y: tc.sy }, dir, tc.species) : { carried: false, out: [] };
+        const worst = ts.out.reduce((m, q) => Math.max(m, Math.abs(q[0] - B.x) - hx, Math.abs(q[1] - B.z) - hz), -9), last = ts.out[ts.out.length - 1];
+        const lastIn = !!last && Math.abs(last[0] - B.x) <= hx + 0.05 && Math.abs(last[1] - B.z) <= hz + 0.05 && last[2] !== null && last[2] >= 0 && last[2] <= (phone ? 390 : 1280) && last[3] >= 0 && last[3] <= (phone ? 844 : 800);
+        // (the play area's limit is the physics guard's, R6_PHYS 2.4: a walled side (Lanternroof's parapets, inner face = the bounds' edge) stops a centre at the
+        //  edge; an OPEN side (Cloudloft) at the edge + the corral's rim (PG.boundsRim 0.6) + 0.05 m. Plus 0.1 m: one frame of a 6 m/s throw before the reflection.
+        //  s3run2 measured 0.42 m at Cloudloft against round 7's first bar of 0.15, which was the walled side's)
+        const open = (phone ? D.tall.walls : D.walls).length === 0, lim = (open ? 0.65 : 0) + 0.1;
+        await pgShot(page, `pg_${pl}_toss_${tag}`);
+        check(`${label} ${name}: a hard toss toward the ${dir > 0 ? 'right' : 'left'} side never leaves the play area (its centre never past the guard's limit in flight: ${open ? 'open sides, the edge + the corral rim 0.65 m' : 'the parapets\' inner face'}, + 0.1 m; inside the bounds and in the frame 6 s later)`,
+          ts.carried && worst <= lim && lastIn, JSON.stringify({ species: tc?.species, carried: ts.carried, worst: +worst.toFixed(3), lim, last, bounds: [B.x, B.z, hx, hz], n: ts.out.length }));
+        // what they did on their own meanwhile (information: LIFE's by-itself uses are the LIFE lane's, R6_SHELL 2)
+        const Lself = await pgLife(page);
+        console.log(`   info ${label} ${name}: on their own: used ${JSON.stringify(Lself.selfUsed)}, reacted ${JSON.stringify(Lself.selfReacted)}, social ${JSON.stringify(Lself.selfSocial)}; done ${JSON.stringify((await page.evaluate(() => (window.__WH__.quests()?.quests ?? []).filter((q) => q.done).map((q) => q.id))).filter((id) => id.startsWith(L)))}`);
+        await pgShot(page, `pg_${pl}_play_${tag}`);
+        // home again by the sheet
+        await page.evaluate(() => window.__WH__.resume());
+        await hclick(page, '.dock-places'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await pclick(page, '.jn-go[data-place="home"]');
+        const home = await stepUntil(page, `(wh) => wh.life()?.place === 0 && !wh.life()?.travelling`, 30, 0.25);
+        await pgStep(page, 3);
+        const LH = await pgLife(page);
+        check(`${label} ${name}: home again by the Places sheet (the three back on the mat, Home's things shown)`,
+          home >= 0 && LH.place === 0 && LH.chars.filter((c) => c.kind === 0).length === 3 && !!LH.things.find((t) => t.id === 'feltball')?.shown, JSON.stringify({ home, chars: LH.chars.map((c) => [c.species, c.x, c.z]) }));
+      }
+      const noise = w.errors.filter((e) => !/Download the React DevTools/.test(e));
+      check(`${label}: 0 console errors / warnings / page errors, 0 failed requests`, noise.length === 0 && w.pageErrors.length === 0 && w.failed.length === 0 && w.bad.length === 0, [...noise, ...w.failed, ...w.bad].slice(0, 4).join(' | '));
+      await context.close();
+    }
+    await section('pg-places-s3', async () => { if (!S3.length) { notRun.push('pg-places-s3 (this build ships neither Lanternroof nor Cloudloft: data/places.ts PLACE_INFO.shipped)'); return; } await pgPlacesS3(false); });
+    await section('pg-places-s3-phone', async () => { if (!S3.length) { notRun.push('pg-places-s3-phone (this build ships neither Lanternroof nor Cloudloft)'); return; } await pgPlacesS3(true); });
 
     // ------------------------------------------------------------------------------------------------
     // G3: zero console errors / warnings / failed requests across the main flows

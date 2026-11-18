@@ -122,7 +122,7 @@ void main(){
 /** Particle spec reused for every emit (zero allocation per frame). */
 export const SP: EmitSpec = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 1, size: 0.02, kind: 0, r: 1, g: 1, b: 1, a: 1, drag: 0, grav: 0, fade: 1 };
 /** Fill SP and return it (all fields, so nothing from the last emit leaks). */
-export function sp(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, c: Rgb, a: number, drag = 0, grav = 0, kind: 0 | 1 | 2 | 3 = 0, fade: 0 | 1 | 2 = 1): EmitSpec {
+export function sp(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, c: Rgb, a: number, drag = 0, grav = 0, kind: 0 | 1 | 2 | 3 | 4 = 0, fade: 0 | 1 | 2 = 1): EmitSpec {
   const s = SP; s.x = x; s.y = y; s.z = z; s.vx = vx; s.vy = vy; s.vz = vz; s.life = life; s.size = size; s.r = c[0]; s.g = c[1]; s.b = c[2]; s.a = a; s.drag = drag; s.grav = grav; s.kind = kind; s.fade = fade; s.attract = 0; s.spin = 0;
   return s;
 }
@@ -409,8 +409,10 @@ export class ReactFx {
 const STEAM_C = tok('cream', 'cream', 0, 0.97), DRIP_C = tok('lagoon', 'cream', 0.25), BUBBLE_C = tok('lagoon', 'cream', 0.15, 1.05);
 /** Round 3: the strands' pale coral-cream (a sticky thread) and the ripple ring's foam (lagoon-cream, lighter than a drip). */
 const STRAND_C = tok('cream', 'coral', 0.3, 0.92), FOAM_C = tok('cream', 'lagoon', 0.2);
-/** Round 6: the squirt's flight time (src/data/life.ts SQUIRT.arcS), its gravity and its drops' colour (a little lighter than a drip). */
-const SQUIRT_S = 0.4, SQUIRT_G = 9.8, DROP_C = tok('lagoon', 'cream', 0.4, 1.05);
+/** Round 6: the squirt's flight time (src/data/life.ts SQUIRT.arcS), its gravity and its drops' colour. Round 7 (R6_RENDER's open item: soft lagoon-cream
+ *  streaks melted into Ripple's lagoon sea): each drop is a glossy bead in a dark ring of its own colour (particles.ts kind 4, one sprite), so it reads on a
+ *  deep sea (the bead and its white glint) and on a pale one or on sand (the ring). */
+const SQUIRT_S = 0.4, SQUIRT_G = 9.8, DROP_C = tok('lagoon', 'cream', 0.35, 1.05);
 
 /** The host: loads place looks, swaps one in (sky, ground, light, environment, things) and out, poses its movers, frames its bounds. */
 export class PlaceHost {
@@ -612,7 +614,8 @@ export class PlaceHost {
           S[7] -= 1; S[6]--;
           const k = S[6], j = 0.93 + 0.1 * ((k * 0.618) % 1), up = (((k * 0.382) % 1) - 0.5) * 0.25;
           // (round 6, the place run's shot: 2 cm drops were specks at the place camera's 20 m; 4 to 5 cm read as water)
-          D.emit(sp(S[0], S[1], S[2], S[3] * j, S[4] * j + up, S[5] * j, SQUIRT_S / j + 0.3, 0.04 + 0.012 * ((k * 0.73) % 1), DROP_C, 1, 0, SQUIRT_G, 2, 2));
+          // (round 7: a bead is not stretched along its flight like round 6's streak, so 0.8 of the streak's half size: 6 to 8 cm across)
+          D.emit(sp(S[0], S[1], S[2], S[3] * j, S[4] * j + up, S[5] * j, SQUIRT_S / j + 0.3, 0.8 * (0.04 + 0.012 * ((k * 0.73) % 1)), DROP_C, 1, 0, SQUIRT_G, 4, 2));
         }
       }
       if (S[12] > 0 && S[8] >= SQUIRT_S) {

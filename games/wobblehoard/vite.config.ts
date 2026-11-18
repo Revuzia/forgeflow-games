@@ -57,9 +57,15 @@ const LAZY_ONLY: readonly RegExp[] = [
   /[\\/]src[\\/]collection[\\/]journal(_store)?\.ts$/, /[\\/]src[\\/]physics[\\/]props\.ts$/, /[\\/]src[\\/](shell|ui)[\\/]later-/, /[\\/]src[\\/]ui[\\/](wishes\.ts|journal\.css|play\.css)$/,
   /[\\/]src[\\/]render[\\/](place|placeview|lifelook|homekit|emotes|postcard)\.ts$/, /[\\/]src[\\/]render[\\/]places[\\/]/, /[\\/]src[\\/]audio[\\/](ambience|props|things)\.ts$/, /[\\/]src[\\/]audio[\\/]places[\\/]/,
 ];
+/** Round 7 (R7_SHELL; D-92's overflow rule "over a cap a lane packs, then moves into a lazier named chunk"): LIFE's brain (src/life/**) is a chunk of its own,
+ *  `later-brain`, which the life chunk imports (so it loads with it, in parallel: vite's preload of a dynamic import's dependencies). The life chunk was 147.1 KB
+ *  of its 150 KB cap (SZ-02) at round 6's end, and round 7 grows LIFE's brain by about 12 KB and the host by about 3 KB. Only the brain's own modules move
+ *  (no dependency of theirs: `includeDependenciesRecursively: false`), so nothing a first play loads can land in it (the honesty check would fail the build). */
+const BRAIN_RE = /[\\/]src[\\/]life[\\/]/;
 export function laterChunkName(facade: string | null, moduleIds: readonly string[]): string | null {
   const f = facade ?? '';
   for (const [re, nm] of LATER_FACADES) { const m = f.match(re); if (m) return nm(m); }
+  if (!facade && moduleIds.length > 0 && moduleIds.every((id) => BRAIN_RE.test(id))) return 'later-brain';
   if (!facade && moduleIds.length > 0 && moduleIds.every((id) => LAZY_ONLY.some((re) => re.test(id)))) return 'later-shared';
   return null;
 }
@@ -314,6 +320,8 @@ export default defineConfig({
       output: {
         // PLAYGROUND: the later-* names of the lazy chunks (laterChunkName above); every other chunk keeps Vite's default name
         chunkFileNames: (c) => { const n = laterChunkName(c.facadeModuleId ?? null, c.moduleIds); return n ? `assets/${n}-[hash].js` : 'assets/[name]-[hash].js'; },
+        // (round 7) LIFE's brain in a lazy chunk of its own (BRAIN_RE above); every other module is split as before (automatic)
+        codeSplitting: { includeDependenciesRecursively: false, groups: [{ name: 'later-brain', test: BRAIN_RE }] },
       },
     },
   },

@@ -380,10 +380,23 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
   openPlacesByStamps(s2, dM2, o2);
   row('QU-06', 'with Ripple unshipped and Frostbell shipped, 25 stamps open Frostbell (Ripple skipped, its stamps kept); Ripple opens the moment it ships', skipped && placeOpen(s2, 2),
     `stamps ${s2.sc[SC.ST]}, places ${s2.sc[SC.PL].toString(2)}`);
-  const s3 = createQuestState(dS1), o3 = createQuestOut(512);
-  s3.sc[SC.FW] = 1; s3.sc[SC.PL] = 3;
-  for (let q = 0; q < 20; q++) markDone(s3, dS1, q, o3);
-  row('QU-06', 'this S1 build: 20 stamps open nothing beyond Home and Hearthlog (the S2 / S3 places have not shipped)', s3.sc[SC.PL] === 3, `stamps ${s3.sc[SC.ST]}`);
+  // (RE-SPECIFIED in round 7, R7_LIFE: the row said "this S1 build: 20 stamps open nothing beyond Home and Hearthlog (the S2 / S3 places have not shipped)".
+  // Ripple Shore, Frostbell Ridge and Rainleaf Garden ship from round 7 (the orchestrator's brief: R6_SHELL_open_s2.patch), so the build's rule is checked for
+  // the places that SHIP (PLACE_INFO, the build's own table): at 20 stamps and at the most this build's shown quests give, the open places are exactly Home,
+  // Hearthlog and every shipped place whose threshold the stamps reach; an unshipped place never opens. Still true of the S1 build: only Home and Hearthlog.)
+  const shipped = PLACE_INFO.filter((p) => p.shipped).map((p) => p.idx), shownQ = QUESTS.filter((q) => isShown(dS1, q.idx) && q.kind !== 'finale').map((q) => q.idx);
+  const opensBuild: string[] = [];
+  let buildOk = true;
+  for (const n of [20, Math.min(45, shownQ.length)]) {
+    const s3 = createQuestState(dS1), o3 = createQuestOut(512);
+    s3.sc[SC.FW] = 1; s3.sc[SC.PL] = 3;
+    for (const q of shownQ) { if (s3.sc[SC.ST] >= n) break; markDone(s3, dS1, q, o3); }
+    let want = 3;
+    for (const p of shipped) if (p > 1 && typeof PLACE_OPENS_AT[p] === 'number' && PLACE_OPENS_AT[p] <= s3.sc[SC.ST]) want |= bit(p);
+    if (s3.sc[SC.PL] !== want) buildOk = false;
+    opensBuild.push(`${s3.sc[SC.ST]} stamps: ${PLACE_IDS.filter((_, p) => s3.sc[SC.PL] & bit(p)).join(' ')}`);
+  }
+  row('QU-06', `this build (shipped: ${shipped.map((p) => PLACE_IDS[p]).join(', ')}): stamps open exactly the shipped places whose threshold they reach, never an unshipped one`, buildOk, opensBuild.join('; '));
 }
 
 /* ═══════════════════════════════ QU-07: gift finales need the player ═══════════════════════════════ */
@@ -671,8 +684,19 @@ skip('QU-13', 'every quest of a shipped chapter completes from a scripted run of
   for (const def of DEFS) if (def) for (const t of def.things) if (THING_PLACE[THING_IDS.indexOf(t.id)] !== def.idx) tp.push(`${t.id}`);
   row('QU-14', 'journal.ts THING_PLACE matches every ThingDef.place', tp.length === 0 && THING_PLACE.length === THING_IDS.length, tp.join(', ') || `${THING_IDS.length} things`);
   const shown = QUESTS.filter((q) => isShown(dS1, q.idx)).map((q) => q.id);
-  const want = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7', 'H8', 'H9', 'H10', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'X1', 'X2', 'X3', 'X6', 'X10'];
-  row('QU-14', 'this S1 build shows exactly Home\'s 10, Hearthlog\'s 10 and Friends Everywhere\'s X1, X2, X3, X6 and X10 (its finale X8 waits: 4 shown mains)', shown.join() === want.join(), shown.join(' '));
+  // (RE-SPECIFIED in round 7, R7_LIFE: the row said "this S1 build shows exactly Home's 10, Hearthlog's 10 and Friends Everywhere's X1, X2, X3, X6 and X10
+  // (its finale X8 waits: 4 shown mains)". Ripple Shore, Frostbell Ridge and Rainleaf Garden ship from round 7 (the orchestrator's brief), so the shown set is
+  // checked for the places that SHIP (PLACE_INFO): every quest of each shipped place's chapter, and Friends Everywhere's: X1, X2, X3, X6, X10 with Home and
+  // Hearthlog alone (X4 sings in 3 places, X5 visits 3 away places, X7 needs water, cold and warmth, X9 piles in 3 places: none there; X8 waits), all ten
+  // once three more places ship. A shipped set this table does not know fails the row with the set named.)
+  const chap = (letter: string): string[] => Array.from({ length: 10 }, (_, k) => `${letter}${k + 1}`);
+  const shipIds = PLACE_INFO.filter((p) => p.shipped).map((p) => p.id).join(' ');
+  const WANT: Record<string, string[]> = {
+    'home hearthlog': [...chap('H'), ...chap('C'), 'X1', 'X2', 'X3', 'X6', 'X10'],
+    'home hearthlog ripple frostbell rainleaf': [...chap('H'), ...chap('C'), ...chap('R'), ...chap('I'), ...chap('G'), ...chap('X')],
+  };
+  const want = WANT[shipIds] ?? [];
+  row('QU-14', `this build (shipped: ${shipIds}) shows exactly the shipped places' chapters and Friends Everywhere's quests their places can complete`, want.length > 0 && shown.join() === want.join(), shown.join(' '));
   // every shown quest completes with only shipped places in its script
   const bad: string[] = [];
   for (const id of shown) {
@@ -681,7 +705,7 @@ skip('QU-13', 'every quest of a shipped chapter completes from a scripted run of
     for (const r of sc) apply(st, dS1, out, r);
     if (!isDone(st, q)) bad.push(id);
   }
-  row('QU-14', 'every shown quest of this S1 build completes from a script that uses only shipped places and their things', bad.length === 0, bad.join(', ') || `${shown.length} quests`);
+  row('QU-14', 'every shown quest of this build completes from a script that uses only shipped places and their things', bad.length === 0, bad.join(', ') || `${shown.length} quests`);
   // the tracker never shows a hidden quest, and a finale's hidden-ness holds against its own events
   const st = createQuestState(dS1), out = createQuestOut(256);
   st.sc[SC.FW] = 1; st.sc[SC.PL] = 3;
@@ -692,9 +716,13 @@ skip('QU-13', 'every quest of a shipped chapter completes from a scripted run of
     const q = trackerQuest(st, dS1, 0, false, true); if (q >= 0) markDone(st, dS1, q, out);
   }
   const hiddenSeen = [...seen].filter((q) => !isShown(dS1, q)).map((q) => QUESTS[q].id);
-  const x8 = qIdx('X8'); const s8 = stateFor(dS1, x8);
-  for (const r of scriptFor(dAll, DERIVED_CAPS, x8)) apply(s8.st, dS1, s8.out, r);
-  row('QU-14', 'the tracker never shows a hidden quest (30 passes over both places, key and pointer, autonomy on and off), and hidden X8 does not complete from its own photo', hiddenSeen.length === 0 && !isDone(s8.st, x8) && seen.size > 0,
+  // (RE-SPECIFIED in round 7, R7_LIFE: the hidden quest whose own events must not complete it was X8, hidden in the S1 build; with Ripple, Frostbell and
+  // Rainleaf shipped X8 is shown, so the row takes this build's first hidden quest with a script: X8 in the S1 build, a quest of an unshipped place's
+  // chapter (Lanternroof's) once the three ship; the tracker half is unchanged)
+  const hid = isShown(dS1, qIdx('X8')) ? QUESTS.find((q) => !isShown(dS1, q.idx) && !q.dropped && scriptFor(dAll, DERIVED_CAPS, q.idx).length > 0)?.idx ?? -1 : qIdx('X8');
+  const s8 = hid >= 0 ? stateFor(dS1, hid) : null;
+  if (s8) for (const r of scriptFor(dAll, DERIVED_CAPS, hid)) apply(s8.st, dS1, s8.out, r);
+  row('QU-14', `the tracker never shows a hidden quest (30 passes over both places, key and pointer, autonomy on and off), and hidden ${hid >= 0 ? QUESTS[hid].id : '(none)'} does not complete from its own events`, hiddenSeen.length === 0 && !!s8 && !isDone(s8.st, hid) && seen.size > 0,
     hiddenSeen.join(', ') || `${seen.size} quests offered: ${[...seen].map((q) => QUESTS[q].id).join(' ')}`);
 }
 

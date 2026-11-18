@@ -11,7 +11,7 @@ import { MECH, ZONE, MARK, PROP_SOUND as S, SIGNATURE, FINALE, cells } from './p
 import { USE_VERB as V, EMOTE as E } from './life.ts';
 
 export const PLACE: PlaceDef = {
-  id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: false, night: false,
+  id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: true, night: false,
   ground: { grip: 1, glue: 0.9, peel: 1, drag: 1.05, mark: MARK.print, markLifeS: 90 },
   patches: [
     { id: 'icepond', shape: 'disc', x: 1.9, z: -0.9, r: 1.4, mods: { drag: 0.25 }, ice: true },

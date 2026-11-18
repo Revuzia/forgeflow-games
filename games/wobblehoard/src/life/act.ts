@@ -293,7 +293,10 @@ export function travelStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: n
     w.pD[i] = d; w.pT1[i] = tb;
   }
   const f = w.fa[i];
-  if (G_HOPS[f] && w.tSp[i] > 0.05 && tb >= w.hNT[i] && d > 0.15) {
+  // (round 7, R7_LIFE) no gait hop while it stands on a prop (a flush pad, a board, a mound): a step-hop that lands on a pad's rim, its centre not over the pad,
+  // left the body pinned at the rim (measured on the real physics: a gummy walking onto the Moss Bouncer with its gait hops stopped 0.5 m from the pad's
+  // middle and slid to its rim; scooting on without them it reaches the middle, and one small hop there bounces it five times)
+  if (G_HOPS[f] && w.tSp[i] > 0.05 && tb >= w.hNT[i] && d > 0.15 && (s.flags[i] & LIFE_FLAG.ON_PROP) === 0) {
     const step = G_STEPS[f] > 0 ? 1 / G_STEPS[f] : 2;
     noLean(w);
     const calmChain = (s.calm || s.reducedMotion) && w.ch[i] >= HOP.calmChain;

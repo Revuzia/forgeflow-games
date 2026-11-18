@@ -4,7 +4,7 @@
 // (a street-light plane 14 m down and a skyline card), square terracotta roof tiles inside a plum stucco parapet (0.6 m on the back and the
 // sides, 0.3 m at the front: the physics walls are 2.4 m, drawn low), the Lantern Line (five paper lanterns in amber and coral, the warm key;
 // each glows brighter for 3 s when bumped, sways in the Night Breeze's gusts), the Vane Disc (a flush painted wind rose: physics builds no
-// turntable, so it is drawn still), the Clothesline Hammock on two posts, the Chimney (it breathes warm air; its foot the warm nap patch),
+// turntable; round 7: the rose turns with the gust level and spins a while after a poke, thingFx(1, 1)), the Clothesline Hammock on two posts, the Chimney (it breathes warm air; its foot the warm nap patch),
 // the Moon Dish (shallow water with the moon in it) and the Star Scope (tap: a slow comet crosses the sky, thingFx(5, 1)). Gust streaks
 // drift through the Night Breeze while a gust blows (the zone's own clock until the shell drives it with thingFx(-1, 3, level)); the finale
 // (thingFx(-1, 2)): the lanterns glow one by one in time with their song (Calm or reduced motion: all together, steady). BOTH layouts from
@@ -106,15 +106,34 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }`;
-// the comet (the Star Scope's): a soft head and a long faint tail across the sky (additive; uK is its 0..1 fade in and out over 6 s)
-const COMET = /* glsl */`
+// the comet (the Star Scope's): a soft head and a long faint tail across the sky (additive; uK is its 0..1 fade in and out over 6 s).
+// Round 7 (R7_SHELL, the S3 runs' shots): round 6 flew it on a card 100 m behind the roof, where the place camera's lens and low pitch left it above the top edge
+// of the desktop frame (never seen). Now it flies across the sky THE CAMERA SHOWS: its quad is set in view space by the vertex shader, a band along the top of
+// the frame at COMET_DEPTH (past the roof, in front of the skyline: the parapet, the pots and the lanterns still cover it), the head on COMET_PATH (frame
+// coordinates, -1..1, per layout: clear of the HUD's top row and the play slot). Sizes in half frame heights, so it reads the same on a phone and a desktop.
+// The shell's eyes-follow-the-comet uses the same path and depth (shell/later-life.ts cometGaze: COMET_NDC, COMET_D).
+const COMET_PATH: readonly (readonly [number, number, number, number])[] = [[-0.42, 0.86, 0.36, 0.74], [-0.85, 0.95, 0.0, 0.88]];
+const COMET_DEPTH = 60;
+const COMET_VERT = /* glsl */`
+uniform vec4 uBox; uniform float uDepth;
+varying vec2 vNdc; varying float vAsp;
 void main() {
-  vec2 q = vUv - uHead.xy;
-  vec2 dv = normalize(vec2(1.0, -0.65));
+  vec2 ndc = mix(uBox.xy, uBox.zw, uv);
+  vNdc = ndc; vAsp = projectionMatrix[1][1] / projectionMatrix[0][0];
+  float D = uDepth;
+  gl_Position = projectionMatrix * vec4((ndc.x + projectionMatrix[2][0]) * D / projectionMatrix[0][0], (ndc.y + projectionMatrix[2][1]) * D / projectionMatrix[1][1], -D, 1.0);
+}`;
+const COMET = /* glsl */`
+varying vec2 vNdc; varying float vAsp;
+uniform vec4 uHead; uniform vec4 uPath; uniform vec3 uCol; uniform float uK;
+void main() {
+  vec2 q = vec2((vNdc.x - uHead.x) * vAsp, vNdc.y - uHead.y);
+  vec2 dv = normalize(vec2((uPath.z - uPath.x) * vAsp, uPath.w - uPath.y));
   float along = dot(q, dv), side = dot(q, vec2(-dv.y, dv.x));
-  float tail = (1.0 - smoothstep(0.0, 0.22, -along)) * step(along, 0.0) * exp(-side * side * 9000.0 / (1.0 - along * 3.0));
-  float head = exp(-dot(q * vec2(1.0, 3.0), q * vec2(1.0, 3.0)) * 9000.0);
-  gl_FragColor = vec4(uCol * (head * 1.2 + tail * 0.55) * uK, 1.0);
+  float tl = clamp(-along / 0.34, 0.0, 1.0), w = 0.0035 + 0.01 * tl;
+  float tail = step(along, 0.0) * (1.0 - tl) * (1.0 - tl) * exp(-side * side / (w * w));
+  float r2 = dot(q, q), head = exp(-r2 / 0.000056) + 0.35 * exp(-r2 / 0.0004);
+  gl_FragColor = vec4(uCol * (head * 1.3 + tail * 0.7) * uK, 1.0);
   #include <colorspace_fragment>
 }`;
 // the paper lanterns (instanced, unlit: light through paper): amber or coral, brighter where the paper faces the eye, eight ribs, a hot core
@@ -244,9 +263,12 @@ const LOOK: PlaceLook = {
       uMoonC: { value: col(tok('cream', 'cream', 0, 0.98)) }, uSea: { value: col(tok('cream', 'lagoon', 0.35, 0.74)) }, uHalo: { value: col(tok('cream', 'lagoon', 0.35, 0.55)) } };
     const backdrop = kit.card(BACKDROP, bdU, 320, 80, 0, 13, -110, 0, -80);
     g.add(backdrop);
-    const cometU = { uHead: { value: new THREE.Vector4(0, 0, 0, 0) }, uCol: { value: col(tok('cream', 'lagoon', 0.3, 1.0)) }, uK: { value: 0 } };
-    const cometMat = new THREE.ShaderMaterial({ vertexShader: UV_VERT, fragmentShader: `varying vec2 vUv; varying vec3 vWP; uniform vec4 uHead; uniform vec3 uCol; uniform float uK;\n${COMET}`, uniforms: cometU, toneMapped: false, transparent: true, depthWrite: false, ...ADD });
-    const comet = kit.mesh(kit.geo('comet', () => new THREE.PlaneGeometry(60, 26)), kit.own(cometMat), 0, 0.5, -100, -76); comet.visible = false; g.add(comet);
+    // (round 7: the comet's band and path in frame coordinates, set in view space by its vertex shader: never culled, the band from under its path to the top)
+    const cPath = COMET_PATH[layout === 1 ? 1 : 0];
+    const cometU = { uHead: { value: new THREE.Vector4(cPath[0], cPath[1], 0, 0) }, uPath: { value: new THREE.Vector4(cPath[0], cPath[1], cPath[2], cPath[3]) },
+      uBox: { value: new THREE.Vector4(-1, Math.min(cPath[1], cPath[3]) - 0.06, 1, 1) }, uDepth: { value: COMET_DEPTH }, uCol: { value: col(tok('cream', 'lagoon', 0.3, 1.0)) }, uK: { value: 0 } };
+    const cometMat = new THREE.ShaderMaterial({ vertexShader: COMET_VERT, fragmentShader: COMET, uniforms: cometU, toneMapped: false, transparent: true, depthWrite: false, ...ADD });
+    const comet = kit.mesh(kit.geo('comet', () => new THREE.PlaneGeometry(1, 1)), kit.own(cometMat), 0, 0, 0, -76); comet.visible = false; comet.frustumCulled = false; g.add(comet);
 
     // ---- the parapet (stucco over brick: 0.6 m back and sides, 0.3 m front) with a pale coping ----
     // (round 6, first shots: the place camera looks only 8.6 degrees down, so a solid 0.3 m front wall hid 2 m of floor behind it and the
@@ -303,11 +325,12 @@ const LOOK: PlaceLook = {
     };
     const lPool = pool('lpool', 2 * half + 1.6, 2.2, ll.x, ll.z + 0.35, col(tok('amber', 'coral', 0.3, 0.42)));
 
-    // ---- the Vane Disc: a flush painted wind rose (no prop: drawn still) ----
+    // ---- the Vane Disc: a flush painted wind rose (no prop; round 7: it turns in the Night Breeze's gusts and spins a while after a poke, thingFx(1, 1)) ----
     const vd = th(1), vr = PLACE.things[1].size[0];
     const vaneU = { uR: { value: vr }, uPlate: { value: col(tok('ink', 'dusk', 0.45, 1.0)) }, uPaint: { value: col(tok('cream', 'amber', 0.3, 0.85)) }, uPaint2: { value: col(tok('coral', 'amber', 0.3, 0.85)) } };
     const vane = kit.mesh(kit.geo(`vane${vr}`, () => new THREE.CircleGeometry(vr, 48)), kit.local('vane', [1, 1, 1], 0.4, VANE.replace(/vLP/g, 'vLP.xy'), vaneU, 0.7), vd.x, 0.005, vd.z, -47);
     vane.rotation.x = -Math.PI / 2; g.add(vane);
+    let vaneA = 0, vaneW = 0, vanePoke = 0;
 
     // ---- the Clothesline Hammock: two posts, the line at the pivot, a striped cloth seat on two ropes (a mover: the seat) ----
     const hm = th(2), hd = PLACE.things[2], ropeL = hd.p.rope ?? 1.3, pivY = hd.p.pivotY ?? 1.52, seatR = hd.size[0], seatL = hd.size[1];
@@ -339,7 +362,7 @@ const LOOK: PlaceLook = {
     const patch = tall ? T.patches[0] : PLACE.patches[0];
     const warmPool = pool('wpool', 2 * (patch.r ?? 0.9) * 1.3, 2 * (patch.r ?? 0.9) * 1.3, patch.x, patch.z, col(tok('amber', 'coral', 0.35, 0.3)));
     const AIR: [number, number, number] = [0.96, 0.86, 0.74];
-    let breath = 0;
+    let breath = 0, puff = 0;   // (round 7: puff, a deeper breath after a tap or a nap at its foot, thingFx(3, 1): 2.5 s)
     const air = new Emitter([16, 12, 6], true, (p, r) => {
       const [px, pz] = pots[r() < 0.5 ? 0 : 1];
       p.emit(sp(ch.x + px + (r() - 0.5) * 0.05, chH + 0.3, ch.z + pz + (r() - 0.5) * 0.05, (r() - 0.5) * 0.04, 0.22 + 0.1 * r(), (r() - 0.5) * 0.04, 2.4 + r(), 0.09 + 0.06 * r(), AIR, 0.16, 0.25));
@@ -415,6 +438,8 @@ const LOOK: PlaceLook = {
     const movers: (THREE.Object3D | readonly THREE.Object3D[] | null)[] = [lantern, null, seat, null, null, null];
     return {
       group: g, movers, moverKind: [1, 0, 1, 0, 0, 0], heat: [ch.x, chH * 0.5, ch.z],
+      // (round 7, the harness: what the look does now: the gust it draws (and whether the shell drives it), the vane's turn, the comet, the chimney's puff, the lanterns' glow)
+      stats: () => ({ gust: +gust.toFixed(3), driven: driven ? 1 : 0, vaneW: +vaneW.toFixed(3), comet: cometT >= 0 ? 1 : 0, puff: puff > 0 ? 1 : 0, glow: +(lGlow.reduce((a, x) => a + x, 0) / n).toFixed(3) }),
       update(dt, time, quiet, reduced, tier, fin = 0) {
         t += dt; q = quiet; rm = reduced;
         const m = reduced ? 0 : quiet ? 0.3 : 1;
@@ -427,6 +452,11 @@ const LOOK: PlaceLook = {
           gust += (gT - gust) * Math.min(1, dt / 0.3);
         }
         streaks.update(dt, time, quiet, reduced, tier, gust > 0.1 ? gust : 0);
+        // (round 7) the Vane Disc turns with the gust (up to 1.4 rad/s, the shell's VANE_W) and after a poke; eased; reduced motion a quarter as fast
+        vanePoke = Math.max(0, vanePoke - dt);
+        const vT = Math.max(gust, vanePoke > 0 ? 1 : 0) * 1.4 * (reduced ? 0.25 : 1);
+        vaneW += (vT - vaneW) * Math.min(1, dt / 0.5);
+        vaneA = (vaneA + vaneW * dt) % (Math.PI * 2); vane.rotation.z = vaneA;
         // the finale (eased here too: the song's pulse runs on it) and the comet
         finNow += (finale - finNow) * Math.min(1, dt / (quiet || reduced ? 3 : 1.5));
         const fz = Math.max(fin, finNow);
@@ -434,7 +464,7 @@ const LOOK: PlaceLook = {
           cometT += dt;
           const u = cometT / 6;
           if (u >= 1) { cometT = -1; comet.visible = false; }
-          else { cometU.uHead.value.set(0.12 + 0.43 * u, 0.42 - 0.12 * u, 0, 0); cometU.uK.value = Math.min(1, u * 5, (1 - u) * 5); }
+          else { cometU.uHead.value.set(cPath[0] + (cPath[2] - cPath[0]) * u, cPath[1] + (cPath[3] - cPath[1]) * u, 0, 0); cometU.uK.value = Math.min(1, u * 5, (1 - u) * 5); }
         }
         // the lanterns: bumped ones glow for 3 s (glowS), the finale's glow runs along the line in time (the song's beat, 0.6 s a lantern)
         let mean = 0;
@@ -454,8 +484,11 @@ const LOOK: PlaceLook = {
         lPool.value = 0.75 + 0.5 * mean;
         // the chimney breathes: a slow swell of warm air and of the glow at its foot (still with reduced motion)
         breath = 0.5 + 0.5 * Math.sin(t * 0.8 * (m || 0.5));
-        warmPool.value = 0.8 + 0.25 * breath * m;
-        air.update(dt, time, quiet, reduced, tier, 0.5 + breath);
+        // (round 7: thingFx(3, 1) set `breath = 1`, which this line overwrote in the same frame: the deeper breath is its own swell now, up and down over 2.5 s)
+        puff = Math.max(0, puff - dt);
+        const deep = puff > 0 ? Math.sin((puff / 2.5) * Math.PI) : 0;
+        warmPool.value = 0.8 + 0.25 * breath * m + 0.4 * deep;
+        air.update(dt, time, quiet, reduced, tier, 0.5 + breath + 1.5 * deep);
       },
       thingFx(thing, kind, amount) {
         if (kind === 2 && thing === -1) { finale = amount; return true; }
@@ -463,7 +496,8 @@ const LOOK: PlaceLook = {
         if (kind !== 1) return false;
         if (thing === 5 && !rm) { cometT = 0; comet.visible = true; cometU.uK.value = 0; return true; }   // the Star Scope: a comet (none with reduced motion)
         if (thing === 0) { for (let k = 0; k < n; k++) bump[k] = Math.max(bump[k], (ld.p.glowS ?? 3) * amount); return true; }
-        if (thing === 3) { breath = 1; return true; }
+        if (thing === 3) { puff = 2.5; return true; }
+        if (thing === 1) { vanePoke = 3; return true; }   // (round 7) the Vane Disc poked: it spins 3 s (the shell's VANE_POKE_S)
         void q;
         return false;
       },

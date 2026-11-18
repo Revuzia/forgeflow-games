@@ -420,8 +420,27 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     return true;
   }
 
+  /** Round 7 (VERDICT_PG B5, R6_SHELL 3, PLAYGROUND_BUILD 24.1 (a)): Home's Felt Ball as the shell shows it (setHomeThing 0): [shown, x, z] at its spot. */
+  const ballAt = new Float32Array(3);
+  /** its reach in the framing: the ball's 0.22 m and a margin */
+  const BALL_FRAME_R = 0.3;
+  /**
+   * The Felt Ball counts in Home's framing like a waiting capsule (framingFor's `solo` rule: the camera pulls back and aims between the body and it) when
+   * a portrait frame shows exactly ONE whole body at Home with the ball out: the one-body portrait view held the body and about 66 px of floor to each
+   * side, so the ball's bounds (the visible table) pushed it from its spot beside the squishy to in front of its lower right (DT-01's B5 one-out row:
+   * 49.6 px over the body; probe_pg_data's search found no spot the shipped camera could hold). A party's frame already holds it (DT-01 B5), a wide
+   * frame too; a waiting capsule is counted as well (both: the capsule as the cap, the ball as this extra). Its SPOT, never its live position: a rolling
+   * ball never moves the camera. Zero allocation.
+   */
+  function ballFrames(): boolean {
+    if (ballAt[0] !== 1 || !(camera.aspect < 0.9) || placeHost?.active) return false;
+    let n = 0;
+    for (const v of views) if (v.visible) { if (v.isPiece || v.chunk) return false; n++; }
+    return n === 1;
+  }
   function framingFor(withCap: boolean, cx: number, cz: number, cs: number, rest = false): typeof frameOut {
     assignSlots();
+    const ex = ballFrames();
     const pv = primary();
     let want = framing ?? bodyScale * (pv ? pv.growth : 1), n = 0, bcx = 0;   // (a piece that grew since it was built: setFrac)
     // CUT2 8.6: the visible bodies are all PIECES of one squishy (no capsule beside them): the group is framed and aimed at as that one squishy, by its extents about its own centre of mass,
@@ -468,6 +487,11 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (cx - r < x0) x0 = cx - r; if (cx + r > x1) x1 = cx + r; if (cz - r < z0) z0 = cz - r; if (cz + r > z1) z1 = cz + r;
       if (cx - r < tx0) tx0 = cx - r; if (cx + r > tx1) tx1 = cx + r; if (cz - r < tz0) tz0 = cz - r; if (cz + r > tz1) tz1 = cz + r;
     }
+    if (ex) {   // (round 7: the Felt Ball's spot, one body on a portrait frame: ballFrames)
+      const r = BALL_FRAME_R, bx = ballAt[1], bz = ballAt[2];
+      if (bx - r < x0) x0 = bx - r; if (bx + r > x1) x1 = bx + r; if (bz - r < z0) z0 = bz - r; if (bz + r > z1) z1 = bz + r;
+      if (bx - r < tx0) tx0 = bx - r; if (bx + r > tx1) tx1 = bx + r; if (bz - r < tz0) tz0 = bz - r; if (bz + r > tz1) tz1 = bz + r;
+    }
     const hwPer = hwPerNow();
     // a piece that grew in a reconnect (setFrac) must fit the frame's height too, a tall one above all: its rest height above the table, against what the
     // frame shows above the aim point (the bodies' own jumps never count: only the rest height, so a toss does not move the camera)
@@ -502,8 +526,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // (a Mythic body also keeps room for its prism dome, which the rarity pass holds inside the frame's sides: a wide species on a portrait phone had it cut by both, VERIFY_RENDER_B B-m6)
     if (p1) want = Math.max(want, ((p1.restHalfW * (p1.style.dome > 0 ? 1.34 : 1.06) + 0.05 * p1.scale) * p1.growth) / hwPer);
     let multi = false, mx = 0, mz = 0;
-    const solo = n === 1 && withCap;
-    if (!grp && n + (withCap ? 1 : 0) >= 2) {
+    const solo = n === 1 && (withCap || ex);
+    if (!grp && n + (withCap ? 1 : 0) + (ex ? 1 : 0) >= 2) {
       const ax0 = solo ? tx0 : x0, ax1 = solo ? tx1 : x1, az0 = solo ? tz0 : z0, az1 = solo ? tz1 : z1;
       // a lone squishy whose capsule already fits the frame at the single-body framing (a wide frame) keeps the camera where it is: no pull-back,
       // no sideways shift (only a narrow portrait frame needs both)
@@ -1316,6 +1340,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     },
     setHomeThing(thing, shown, x, z, yaw) {
       const k = Math.floor(thing);
+      if (k === 0) { ballAt[0] = shown && Number.isFinite(x) && Number.isFinite(z) ? 1 : 0; ballAt[1] = Number.isFinite(x) ? x : 0; ballAt[2] = Number.isFinite(z) ? z : 0; }   // (round 7: ballFrames)
       if (home) { home.setThing(k, !!shown, x, z, yaw); return; }
       if (k >= 0 && k < 6) { pendThing.set([1, shown ? 1 : 0, x, z, yaw], k * 5); if (shown) needLife(); }
     },
