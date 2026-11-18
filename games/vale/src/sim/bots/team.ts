@@ -453,7 +453,7 @@ export class TeamBrain {
       if (ab('g_coming2') && coming > 0 && minions - mine < 2) coming = 0;
       if (n > 0) {
         // (one more than the divers at an inner or base structure — not in the laning phase, where the roads hold first)
-        if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing && !ab('g_noplus') ? 1 : 0)) * d.defendMatch - 1e-9));
+        if (!(cls <= (ab('l_inner_old') ? 0 : 1) && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing && !ab('g_noplus') ? 1 : 0)) * d.defendMatch - 1e-9));
       } else if (coming > 0) need = Math.max(1, Math.ceil(coming * d.defendMatch - 1e-9));
       // (owner_rulings 44: a big wave — eight or more over ours — is two defenders' work, as is a wave on a structure under half)
       // (round 2: a stacked wave of fourteen or more over ours is three — the late game's 18-33 Wick stacks took Lanterns from
@@ -463,7 +463,7 @@ export class TeamBrain {
       // (owner_rulings 46: a wave alone calls a defender only where the tier's defender holds against the wave (holdWave, and
       // from 25:00 the base only) — a beginner, or a late inner post, backed off the wave it was sent to and stood fit beside
       // the structure while the Wicks took it: novice falls to Wicks beside two fit defenders 0.61 → 0.91 a game)
-      else if (d.holdWave && !ab('nohold') && cls > (laning ? 1 : closing ? 1 : 0) && minions - mine >= 4) {
+      else if (d.holdWave && !ab('nohold') && cls > (laning || ab('v_inner') ? 1 : closing ? 1 : 0) && minions - mine >= 4) {
         need = Math.max(1, Math.ceil((minions - mine >= 14 && !closing ? 3 : minions - mine >= 8 || st.hp < st.maxHp * 0.5 ? 2 : 1) * d.defendMatch - 1e-9));
         if (ab('w_win') && (this.rush || this.window || this.aliveEnemies <= this.aliveAllies - 2)) need = 0;
         if (ab('w_futile') && need > 0 && wdps > 0) {
@@ -525,6 +525,8 @@ export class TeamBrain {
         // other roads' laners across the map: the solo laners spent 2.8-3.9 % of the laning phase in defend mode, against 1.0-1.3 %
         // for the pre-lane bots, most of the laners' in-lane share lost)
         if (laning && cls < 1 && this.assign.get(p.player)?.lane !== info.lane) return null;
+        // (ruling 54: an inner Needle in the laning phase is its road's laners' and the grovehunter's — the other roads hold theirs)
+        if (laning && cls === 1 && !ab('l_inner_old') && !this.assign.get(p.player)?.jungle && this.assign.get(p.player)?.lane !== info.lane) return null;
         const ms = Math.max(1, e.stats.moveSpeed);
         const dist = dhypot(e.x - st.x, e.y - st.y);
         const walk = dist < 14 ? 0 : dist * 1.25 / ms;

@@ -107,46 +107,71 @@ try {
   }
 
   // ── release + buffer: Q held 300 ms (aim, nothing sent), released (cast on the release frame); E mid-dash ──
+  // each trial from open lane ground: the hero teleported to the mid lane, the cursor 260 px to its right (the camera is locked)
   const trial = async (eDelayMs, label) => {
-    await vale(page, () => window.__harness({ type: 'practice', action: 'heal' }));
-    await sleep(600);
+    await vale(page, () => { window.__harness({ type: 'practice', action: 'heal' }); });
+    await sleep(700);
+    // a direction with 7 m of open ground (the nav raycast), so the dash runs its full length
+    const aimAt = await vale(page, (v) => {
+      const c = v.state.match.value, R = v.state.renderer, W = c.sim.world, e = W.entity(c.view.players[c.you].entity);
+      const out = { x: 0, y: 0 };
+      for (let k = 0; k < 16; k++) {
+        const a = (k * Math.PI) / 8, tx = e.x + Math.cos(a) * 7.5, ty = e.y + Math.sin(a) * 7.5;
+        W.nav.raycast(e.x, e.y, tx, ty, out);
+        if (Math.hypot(out.x - e.x, out.y - e.y) >= 7.4) { const s = R.worldToScreen(tx, ty, 0); if (s.x > 200 && s.x < 1700 && s.y > 150 && s.y < 850) return { x: s.x, y: s.y, a: k }; }
+      }
+      return null;
+    });
+    if (!aimAt) throw new Error('no open direction for the dash');
+    await page.mouse.move(aimAt.x, aimAt.y);
+    await sleep(200);
     const n0 = await vale(page, () => window.__H.cmds.length);
     const k0 = await vale(page, () => window.__H.keyups.length);
     await page.keyboard.down('KeyQ');
     await sleep(300);
-    const held = await vale(page, (v, n) => ({ aim: !!v.state.renderer.aim, aiming: v.state.input?.aiming?.value?.slot ?? null, cast: window.__H.cmds.slice(n).filter((c) => c.cmd.type === 'cast').length }), n0);
+    const held = await vale(page, (v, n) => ({ aim: !!v.state.renderer.aim, cast: window.__H.cmds.slice(n).filter((c) => c.cmd.type === 'cast').length }), n0);
     await page.keyboard.up('KeyQ');
     await sleep(eDelayMs);
     await page.keyboard.press('KeyE');
-    await sleep(900);
-    const r = await vale(page, (v, a) => ({ cmds: window.__H.cmds.slice(a.n0), keyups: window.__H.keyups.slice(a.k0), ticks: window.__H.ticks.slice(-140) }), { n0, k0 });
+    await sleep(1200);
+    const r = await vale(page, (v, a) => ({ cmds: window.__H.cmds.slice(a.n0), keyups: window.__H.keyups.slice(a.k0), ticks: window.__H.ticks.slice(-200) }), { n0, k0 });
     const qUp = r.keyups.find((k) => k.code === 'KeyQ');
     const qCast = r.cmds.find((c) => c.cmd.type === 'cast' && c.cmd.slot === 'a1');
     const eCmd = r.cmds.find((c) => c.cmd.type === 'cast' && c.cmd.slot === 'a3');
     const t = r.ticks;
-    const qTick = t.find((x) => x.casts.includes('a1'));
-    let dashEnd = null;
-    for (let i = 1; i < t.length; i++) if (qTick && t[i].tick > qTick.tick && t[i - 1].dash && !t[i].dash) { dashEnd = t[i].tick; break; }
-    const eTick = t.find((x) => x.casts.includes('a3'));
-    const busyAtPress = eCmd ? t.find((x) => x.tick === eCmd.tick + 1) : null;
+    const qTick = qCast ? t.find((x) => x.tick > qCast.tick && x.casts.includes('a1')) : undefined;
+    let dashEnd = null, dashStart = null;
+    for (let i = 1; i < t.length; i++) {
+      if (!qTick || t[i].tick < qTick.tick) continue;
+      if (dashStart === null && t[i].dash) dashStart = t[i].tick;
+      if (t[i - 1].dash && !t[i].dash) { dashEnd = t[i].tick; break; }
+    }
+    // the E command is applied in the step after the one current when it was sent: was the hero busy going into it?
+    const before = eCmd ? t.find((x) => x.tick === eCmd.tick) : undefined;
+    const eTick = eCmd ? t.find((x) => x.tick > eCmd.tick && x.casts.includes('a3')) : undefined;
     const res = {
       label, held, qUpFrame: qUp?.f, qSendFrame: qCast?.f, qSendMinusKeyupMs: qCast && qUp ? +(qCast.wall - qUp.wall).toFixed(2) : null,
-      dashEnd, eCmdTick: eCmd?.tick, eCastTick: eTick?.tick, msBeforeDashEnd: eCmd && dashEnd !== null ? Math.round((dashEnd - eCmd.tick - 1) * 1000 / 30) : null,
-      busyWhenProcessed: busyAtPress ? (busyAtPress.dash || busyAtPress.cast !== null) : null, pendingSeen: t.some((x) => x.pending === 'a3'),
+      qCastTick: qTick?.tick, dashStart, dashEnd, dashMs: dashEnd !== null && dashStart !== null ? Math.round((dashEnd - dashStart) * 1000 / 30) : null,
+      eAppliedTick: eCmd ? eCmd.tick + 1 : null, eCastTick: eTick?.tick ?? null,
+      msBeforeDashEnd: eCmd && dashEnd !== null ? Math.round((dashEnd - eCmd.tick - 1) * 1000 / 30) : null,
+      busyWhenApplied: before ? (before.dash || before.cast !== null) : null,
+      pendingSeen: eCmd ? t.some((x) => x.tick > eCmd.tick && x.pending === 'a3') : false,
     };
+    res.afterDashEnd = res.eCastTick !== null && dashEnd !== null ? res.eCastTick - dashEnd : null;
     report[label] = res;
     console.log(label, JSON.stringify(res));
     return res;
   };
-  const a = await trial(260, 'trial_mid_dash');
+  const ok = (x) => x.busyWhenApplied === true && x.pendingSeen && x.afterDashEnd !== null && x.afterDashEnd >= 0 && x.afterDashEnd <= 2;
+  const a = await trial(300, 'trial_mid_dash');
   check('held 300 ms: the aim shows and no cast is sent', a.held.aim && a.held.cast === 0, a.held);
   check(`release: the cast is sent in the keyup's own frame (frame ${a.qUpFrame} vs ${a.qSendFrame}, ${a.qSendMinusKeyupMs} ms)`, a.qUpFrame !== undefined && a.qUpFrame === a.qSendFrame, a);
-  check(`E pressed mid-dash: the sim held it (pendingCast a3) and cast it ${a.eCastTick - a.dashEnd} tick(s) after the dash end`, a.busyWhenProcessed && a.pendingSeen && a.eCastTick !== undefined && a.dashEnd !== null && a.eCastTick - a.dashEnd >= 0 && a.eCastTick - a.dashEnd <= 2, a);
-  // E about 150 ms before the dash end: windup 150 + dash 438 ms from the release; aim for ~150 ms before
-  const b = await trial(Math.max(0, (a.dashEnd - a.eCmdTick - 1) * 1000 / 30 + 260 - 150), 'trial_150ms');
-  check(`E pressed ${b.msBeforeDashEnd} ms before the dash end: cast ${b.eCastTick - b.dashEnd} tick(s) after it`, b.busyWhenProcessed && b.eCastTick !== undefined && b.dashEnd !== null && b.eCastTick - b.dashEnd >= 0 && b.eCastTick - b.dashEnd <= 2, b);
-  const c2 = await trial(Math.max(0, (a.dashEnd - a.eCmdTick - 1) * 1000 / 30 + 260 - 150), 'trial_150ms_2');
-  check(`repeat: E pressed ${c2.msBeforeDashEnd} ms before the dash end: cast ${c2.eCastTick - c2.dashEnd} tick(s) after it; release frame ${c2.qUpFrame === c2.qSendFrame ? 'same' : 'different'}`, c2.busyWhenProcessed && c2.eCastTick - c2.dashEnd >= 0 && c2.eCastTick - c2.dashEnd <= 2 && c2.qUpFrame === c2.qSendFrame, c2);
+  check(`E pressed mid-dash (${a.msBeforeDashEnd} ms before its end): held (pendingCast a3), cast ${a.afterDashEnd} tick(s) after the dash end`, ok(a), a);
+  // about 150 ms before the dash end, from the first trial's measured timing
+  const lead = a.dashEnd !== null && a.eAppliedTick !== null ? (a.dashEnd - a.eAppliedTick) * 1000 / 30 : 290;
+  const results = [];
+  for (let i = 0; i < 4; i++) results.push(await trial(Math.max(0, Math.round(300 + lead - 150)), `trial_150ms_${i + 1}`));
+  for (const x of results) check(`E pressed ${x.msBeforeDashEnd} ms before the dash end: cast ${x.afterDashEnd} tick(s) after it; release frame ${x.qUpFrame === x.qSendFrame ? 'same' : 'different'}`, ok(x) && x.qUpFrame === x.qSendFrame, x);
   report.consoleErrors = logs.filter((l) => /error/i.test(l));
   check('0 console errors', report.consoleErrors.length === 0, report.consoleErrors.slice(0, 5));
 } catch (err) {

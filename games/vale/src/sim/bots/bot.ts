@@ -50,6 +50,11 @@ const MODE_TICKS = 6;
 /** owner_rulings 46: the plans whose walk a calm fighter does not turn round on more than once in 8 s */
 const WALKS: ReadonlySet<Mode> = new Set<Mode>(['push', 'defend', 'objective', 'roam', 'farm', 'return', 'lane']);
 const MIN_MODE_TIME = 1.5;
+/** (ruling 54) in a road's laning phase a partner is dived, for the peel, only when held or under this share of its health —
+ *  above it the burst is the duo's trade, played from the lane */
+const LANE_PEEL_HP = 0.25;
+/** (ruling 54) … and a partner held by hard CC only under this share (a stun in a full-health trade is the trade) */
+const LANE_PEEL_HELD_HP = 0.5;
 /** owner_rulings 47: how far above frayBreak a losing FRAY fighter starts to leave (a constant: the sim reads no environment) */
 const FRAY_EARLY = 0.2;
 /** RIFT laning phase (s): a laner holds its lane first — no cross-map defends, roams or far objectives
@@ -1296,7 +1301,7 @@ export class Bot extends BotBase implements BotController {
       // the laners' in-lane share against the pre-lane bots, 67.4 / 66.4 → 66.0 / 64.7 %)
       // (and a fit partner's trade is not a dive below the tier's peelLaneHp alone: in the laning phase a partner over 40 % is
       // trading, not dying — the veteran support's peel at 65 % still took 5-6 % of its laning time)
-      if (lp && !held && a.hp > a.maxHp * (ab('l_peel') ? 0.25 : Math.min(0.4, this.diff.peelLaneHp))) continue;
+      if (lp && a.hp > a.maxHp * (held ? LANE_PEEL_HELD_HP : LANE_PEEL_HP)) continue;
       // (and the laning phase's peel is for the partner on my own road: the other roads are their laners' and the grovehunter's —
       // the grovehunter answers a dive on any road it stands beside, the genre's counter-gank)
       if (!des && lp && !this.jungle && (!this.brain || !a.player || this.brain.laneOf(a.player.player).lane !== this.lane)) continue;
@@ -1323,7 +1328,7 @@ export class Bot extends BotBase implements BotController {
     }
     if (this.peelRolls.size > 12) for (const [id, r] of [...this.peelRolls]) if (now - r.last > 6) this.peelRolls.delete(id);
     if (best > 0 && this.protectAlly && this.protectDiver) {
-      this.protectUntil = now + (ab('l_peel') && lp ? 1 : 3); this.protectAllyId = this.protectAlly.id; this.protectDiverId = this.protectDiver.id;
+      this.protectUntil = now + (lp ? 1 : 3); this.protectAllyId = this.protectAlly.id; this.protectDiverId = this.protectDiver.id;
     } else if (now < this.protectUntil && this.mode === 'protect') {
       // (the burst paused: keep on the same diver while it is still in sight near my partner)
       const a = this.w.entity(this.protectAllyId), d = this.w.entity(this.protectDiverId);
@@ -1424,8 +1429,16 @@ export class Bot extends BotBase implements BotController {
       }
     }
     const nA = this.alliesNear(g.x, g.y, 15);
+    // (ruling 54: Wicks hitting the structure while the enemy fighter waits off it, out of my reach, are the post's fight — the
+    // defender that walked at a fighter standing off the post let the wave take the structure behind it)
+    let waveOn = false;
+    if (t && !inside && !ab('g_waveon_old')) for (const u of this.perc.enemyUnits) {
+      if (!u.alive || u.kind !== 'minion' || u.atkTarget < 0) continue;
+      const a = this.w.entity(u.atkTarget);
+      if (a && a.kind === 'structure' && a.team === this.team && this.dist2(a, g.x, g.y) <= 4) { waveOn = true; break; }
+    }
     // (fight the diver under the tower, never in front of it — unless we have the bodies there, or the post does not shoot)
-    if (t && (g.reach === 0 || inside || nA > nE || this.adv >= 0.58)) {
+    if (t && (g.reach === 0 || inside || ((nA > nE || this.adv >= 0.58) && (!waveOn || inAttackRange(e, t))))) {
       this.pFight = t; this.pDive = false;
       this.pMove = true; this.pMoveX = t.x; this.pMoveY = t.y;
       this.waveGuard(this.holdsWave(g.cls));
@@ -1657,7 +1670,7 @@ export class Bot extends BotBase implements BotController {
   private holdsWave(cls: number): boolean {
     // (owner_rulings 44: a beginner backs off a stacked wave — the hold is a skilled tier's)
     if (!this.diff.holdWave || ab('nohold')) return false;
-    if (this.now >= 1500) return cls >= 2;
+    if (this.now >= 1500 || ab('v_inner')) return cls >= 2;
     return cls >= 1 || this.now >= LANE_PHASE_END;
   }
 

@@ -621,3 +621,35 @@ No new ruling. The lane's shipped files stay at the owner-accepted W1-B pass 72c
 
 **Open, reported not relaxed:** at the beat's core the pale stone is still a flat warm cream for the first frames (`rishal_beat_after.jpg`). The lift reaches its top everywhere in the core, so the stone's texture flattens there. A soft knee would keep it but costs the 218 core, which already sits within 0.3 of the clip on Hesmi and Nurrow. The outline width of stacked enemy shapes over a cluster is unchanged (ruling 48's 4 + 4 px); only the fill was lowered.
 - **Also closed:** dist-catalog was rebuilt with `npm run content` (2026.11.8, no uncommitted fighter art at the time; dist-catalog is git-ignored). Its lib_death_shatter carries no #4A443D / #5A5046 (ruling 52's dust and crack lines). Vashil's body minimum passes at 0.49-0.65 with no change to the victim flash in `actors.ts`.
+
+## 54. A cast pressed while busy waits 0.4 s for the hero; each slot picks normal, quick or quick with indicator; a held key shows your attack range; the level-up key and ally views are binds (lead, by delegation, 2026-11-18)
+
+Lane W2-D (controls feel; review_controls_ux CUX-2, CUX-3, CUX-6, CUX-11). Genre-standard practice in VALE's own style; League of Legends was a gauge only.
+
+- **Cast buffer (CUX-2).** A human seat's cast that the sim refuses only because the fighter is busy (a windup, a channel or a dash: `gate()` 'busy') is held by the sim, one per seat (`Player.bufSlot`), for **0.4 s**. It fires through `tryCast` on the first tick the fighter is free. When a windup releases, that is the release tick itself; after a dash it is the next tick. A newer cast press replaces it. A move to a new point, a stop, an attack order or a first attack-in-place click clears it. A held right button that re-sends the point it is already walking does not clear it, and neither does a held attack-in-place re-aim. CC or silence that refuses the slot clears it, and so does death. Bots and unit AI never buffer: their commands go through the same path, but the buffer is gated on `controller === 'human'`, so every all-bot soak is unchanged by construction. `PlayerView.pendingCast` names the waiting slot. The HUD draws a thin dashed chalk outline on that slot (`.aslot.is-queued`). Why 0.4 s: it is long enough to cover a press made during a typical windup (0.15-0.35 s) or the last part of a dash. It is short enough that a press the player has given up on never goes off much later.
+- **Cast modes (CUX-3).** `controls.castModes` is set per slot: a1, a2, a3, ult, spell1, spell2, plus one shared `items` entry. Each takes one of three modes:
+  - `normal`: the press aims, then left-click or the same key again casts.
+  - `quick`: the cast goes at the cursor on the press.
+  - `quickIndicator`: the indicator shows while the key is held, and the cast is sent inside the key's release handler.
+
+  Right-click or Esc while the key is held cancels, and the release then sends nothing. In quick with indicator, a unit ability released with no valid unit under the cursor keeps aiming as a normal cast; it is never wasted. A HUD slot click has no release, so it aims as normal. A window blur drops a held aim. Self and no-target abilities cast on the press in every mode. Migration: a save without `castModes` maps `quickCast: true` to quick on every slot and `false` to normal, and a save's own `castModes` win. `quickCast` is kept, and it now means "every slot is quick". Settings › Controls has a per-slot three-way control plus an "All abilities" row.
+- **Attack range (CUX-6).** `showRange` is a hold bind, default **C**. While it is held, a dashed ring of radius `stats.range + body radius` follows the fighter (the drawn position). It also shows while attack-move is armed (`controls.rangeOnAttackMove`, default on, a Controls toggle). Attack in place keeps its own aim line with the same reach ring. The ring reuses the aim's dashed range-ring telegraph (renderer `setRangeRing`, the same program), so the program count is unchanged.
+- **Binds (CUX-11).** `levelUpMod` (default **Left Ctrl**, either side counts, modifiers allowed) replaces the hard-coded Ctrl. The ability tooltip names the bound key. `viewAlly1-4` are hold binds, default **F2-F5**, matching the genre's ally-view row. A held key keeps the camera on that ally, in seat order and skipping enemies. On release a locked camera returns to your fighter and an unlocked one to the ground it was on. Bound keys never do their browser default, so F5 does not reload in a match. A save from before these actions gets each new default only if the save gave that key to nothing else; otherwise the new action starts unbound.
+
+**Measured (2026-11-18):**
+- `probe_sim_cast_buffer`: 21/21.
+  - Presses 133 and 167 ms before a 0.73 s dash ends fire 1 tick after the dash end.
+  - A press during a 0.5 s windup fires on the release tick.
+  - A press 367 ms early fires; one 433 ms early lapses (pendingCast clears 433 ms after the press).
+  - Move to a new point, stop, attack, stun and death each clear it; a same-point held move does not.
+  - A bot seat never buffers.
+  - Determinism: the same stream twice gives digests 9330197a / 9330197a.
+- `probe_input_castmode`: 47/47 (modes, release, cancel, migration, ring radius, levelUpMod rebinding, viewAlly).
+- Live (`verify_w2d_live.mjs`, real Chrome 1920x1080, Ardit, real keys): 13/13.
+  - Migration: quickCast=true loads as quick ×7.
+  - Q held 300 ms: the aim shows and 0 casts are sent. On release the cast is sent in the keyup's own animation frame, 5 of 5 trials.
+  - Lancing Run (433 ms dash): E pressed 233 ms before the end, then 4 times at 167 ms before the end. The sim held it (pendingCast a3) and cast it **1 tick** after the dash end, 5 of 5.
+  - Ring radius 2.580 = 1.9 + 0.68.
+  - Programs 38 -> 38 -> 38.
+  - Ctrl + W levels up.
+  - 0 console errors.

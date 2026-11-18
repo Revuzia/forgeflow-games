@@ -1,0 +1,330 @@
+{
+ "at": "2026-11-18T10:24:23.307Z",
+ "checks": [
+  {
+   "name": "migration: quickCast=true loads as quick on every slot",
+   "ok": true,
+   "detail": {
+    "a1": "quick",
+    "a2": "quick",
+    "a3": "quick",
+    "ult": "quick",
+    "spell1": "quick",
+    "spell2": "quick",
+    "items": "quick"
+   }
+  },
+  {
+   "name": "Ctrl + W sends levelUp a2 and no cast",
+   "ok": true,
+   "detail": [
+    {
+     "type": "levelUp",
+     "slot": "a2"
+    }
+   ]
+  },
+  {
+   "name": "ring radius 2.580 = stats.range + body radius 2.580",
+   "ok": true,
+   "detail": {
+    "ring": {
+     "x": 8.5,
+     "y": 55,
+     "radius": 2.58
+    },
+    "want": 2.58,
+    "x": 8.5,
+    "y": 55,
+    "programs": 38,
+    "info": null
+   }
+  },
+  {
+   "name": "…hidden on release",
+   "ok": true,
+   "detail": {
+    "ring": null,
+    "programs": 38
+   }
+  },
+  {
+   "name": "programs unchanged (38 -> 38 -> 38)",
+   "ok": true,
+   "detail": {
+    "before": {
+     "programs": 38,
+     "info": null
+    },
+    "on": 38,
+    "off": 38
+   }
+  },
+  {
+   "name": "held 300 ms: the aim shows and no cast is sent",
+   "ok": true,
+   "detail": {
+    "aim": true,
+    "cast": 0
+   }
+  },
+  {
+   "name": "release: the cast is sent in the keyup's own frame (frame 242 vs 242, -1.4 ms)",
+   "ok": true,
+   "detail": {
+    "label": "trial_mid_dash",
+    "held": {
+     "aim": true,
+     "cast": 0
+    },
+    "qUpFrame": 242,
+    "qSendFrame": 242,
+    "qSendMinusKeyupMs": -1.4,
+    "qCastTick": 1028,
+    "dashStart": 1032,
+    "dashEnd": 1045,
+    "dashMs": 433,
+    "eAppliedTick": 1038,
+    "eCastTick": 1046,
+    "msBeforeDashEnd": 233,
+    "busyWhenApplied": true,
+    "pendingSeen": true,
+    "afterDashEnd": 1
+   }
+  },
+  {
+   "name": "E pressed mid-dash (233 ms before its end): held (pendingCast a3), cast 1 tick(s) after the dash end",
+   "ok": true,
+   "detail": {
+    "label": "trial_mid_dash",
+    "held": {
+     "aim": true,
+     "cast": 0
+    },
+    "qUpFrame": 242,
+    "qSendFrame": 242,
+    "qSendMinusKeyupMs": -1.4,
+    "qCastTick": 1028,
+    "dashStart": 1032,
+    "dashEnd": 1045,
+    "dashMs": 433,
+    "eAppliedTick": 1038,
+    "eCastTick": 1046,
+    "msBeforeDashEnd": 233,
+    "busyWhenApplied": true,
+    "pendingSeen": true,
+    "afterDashEnd": 1
+   }
+  },
+  {
+   "name": "E pressed 167 ms before the dash end: cast 1 tick(s) after it; release frame same",
+   "ok": true,
+   "detail": {
+    "label": "trial_150ms_1",
+    "held": {
+     "aim": true,
+     "cast": 0
+    },
+    "qUpFrame": 407,
+    "qSendFrame": 407,
+    "qSendMinusKeyupMs": -0.9,
+    "qCastTick": 1111,
+    "dashStart": 1115,
+    "dashEnd": 1128,
+    "dashMs": 433,
+    "eAppliedTick": 1123,
+    "eCastTick": 1129,
+    "msBeforeDashEnd": 167,
+    "busyWhenApplied": true,
+    "pendingSeen": true,
+    "afterDashEnd": 1
+   }
+  },
+  {
+   "name": "E pressed 167 ms before the dash end: cast 1 tick(s) after it; release frame same",
+   "ok": true,
+   "detail": {
+    "label": "trial_150ms_2",
+    "held": {
+     "aim": true,
+     "cast": 0
+    },
+    "qUpFrame": 577,
+    "qSendFrame": 577,
+    "qSendMinusKeyupMs": -1,
+    "qCastTick": 1196,
+    "dashStart": 1200,
+    "dashEnd": 1213,
+    "dashMs": 433,
+    "eAppliedTick": 1208,
+    "eCastTick": 1214,
+    "msBeforeDashEnd": 167,
+    "busyWhenApplied": true,
+    "pendingSeen": true,
+    "afterDashEnd": 1
+   }
+  },
+  {
+   "name": "E pressed 167 ms before the dash end: cast 1 tick(s) after it; release frame same",
+   "ok": true,
+   "detail": {
+    "label": "trial_150ms_3",
+    "held": {
+     "aim": true,
+     "cast": 0
+    },
+    "qUpFrame": 747,
+    "qSendFrame": 747,
+    "qSendMinusKeyupMs": -0.8,
+    "qCastTick": 1281,
+    "dashStart": 1285,
+    "dashEnd": 1298,
+    "dashMs": 433,
+    "eAppliedTick": 1293,
+    "eCastTick": 1299,
+    "msBeforeDashEnd": 167,
+    "busyWhenApplied": true,
+    "pendingSeen": true,
+    "afterDashEnd": 1
+   }
+  },
+  {
+   "name": "E pressed 167 ms before the dash end: cast 1 tick(s) after it; release frame same",
+   "ok": true,
+   "detail": {
+    "label": "trial_150ms_4",
+    "held": {
+     "aim": true,
+     "cast": 0
+    },
+    "qUpFrame": 918,
+    "qSendFrame": 918,
+    "qSendMinusKeyupMs": -0.8,
+    "qCastTick": 1367,
+    "dashStart": 1371,
+    "dashEnd": 1384,
+    "dashMs": 433,
+    "eAppliedTick": 1379,
+    "eCastTick": 1385,
+    "msBeforeDashEnd": 167,
+    "busyWhenApplied": true,
+    "pendingSeen": true,
+    "afterDashEnd": 1
+   }
+  },
+  {
+   "name": "0 console errors",
+   "ok": true,
+   "detail": []
+  }
+ ],
+ "programs": {
+  "before": {
+   "programs": 38,
+   "info": null
+  },
+  "on": 38,
+  "off": 38
+ },
+ "trial_mid_dash": {
+  "label": "trial_mid_dash",
+  "held": {
+   "aim": true,
+   "cast": 0
+  },
+  "qUpFrame": 242,
+  "qSendFrame": 242,
+  "qSendMinusKeyupMs": -1.4,
+  "qCastTick": 1028,
+  "dashStart": 1032,
+  "dashEnd": 1045,
+  "dashMs": 433,
+  "eAppliedTick": 1038,
+  "eCastTick": 1046,
+  "msBeforeDashEnd": 233,
+  "busyWhenApplied": true,
+  "pendingSeen": true,
+  "afterDashEnd": 1
+ },
+ "trial_150ms_1": {
+  "label": "trial_150ms_1",
+  "held": {
+   "aim": true,
+   "cast": 0
+  },
+  "qUpFrame": 407,
+  "qSendFrame": 407,
+  "qSendMinusKeyupMs": -0.9,
+  "qCastTick": 1111,
+  "dashStart": 1115,
+  "dashEnd": 1128,
+  "dashMs": 433,
+  "eAppliedTick": 1123,
+  "eCastTick": 1129,
+  "msBeforeDashEnd": 167,
+  "busyWhenApplied": true,
+  "pendingSeen": true,
+  "afterDashEnd": 1
+ },
+ "trial_150ms_2": {
+  "label": "trial_150ms_2",
+  "held": {
+   "aim": true,
+   "cast": 0
+  },
+  "qUpFrame": 577,
+  "qSendFrame": 577,
+  "qSendMinusKeyupMs": -1,
+  "qCastTick": 1196,
+  "dashStart": 1200,
+  "dashEnd": 1213,
+  "dashMs": 433,
+  "eAppliedTick": 1208,
+  "eCastTick": 1214,
+  "msBeforeDashEnd": 167,
+  "busyWhenApplied": true,
+  "pendingSeen": true,
+  "afterDashEnd": 1
+ },
+ "trial_150ms_3": {
+  "label": "trial_150ms_3",
+  "held": {
+   "aim": true,
+   "cast": 0
+  },
+  "qUpFrame": 747,
+  "qSendFrame": 747,
+  "qSendMinusKeyupMs": -0.8,
+  "qCastTick": 1281,
+  "dashStart": 1285,
+  "dashEnd": 1298,
+  "dashMs": 433,
+  "eAppliedTick": 1293,
+  "eCastTick": 1299,
+  "msBeforeDashEnd": 167,
+  "busyWhenApplied": true,
+  "pendingSeen": true,
+  "afterDashEnd": 1
+ },
+ "trial_150ms_4": {
+  "label": "trial_150ms_4",
+  "held": {
+   "aim": true,
+   "cast": 0
+  },
+  "qUpFrame": 918,
+  "qSendFrame": 918,
+  "qSendMinusKeyupMs": -0.8,
+  "qCastTick": 1367,
+  "dashStart": 1371,
+  "dashEnd": 1384,
+  "dashMs": 433,
+  "eAppliedTick": 1379,
+  "eCastTick": 1385,
+  "msBeforeDashEnd": 167,
+  "busyWhenApplied": true,
+  "pendingSeen": true,
+  "afterDashEnd": 1
+ },
+ "consoleErrors": []
+}
