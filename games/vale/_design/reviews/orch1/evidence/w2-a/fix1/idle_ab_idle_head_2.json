@@ -1,0 +1,835 @@
+{
+ "quiet": null,
+ "load1": 1.18,
+ "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+ "build": "dev",
+ "viewport": "1920x1080",
+ "dpr": 1,
+ "mode": "rift",
+ "seed": 7,
+ "matchTime": 600,
+ "seconds": 10,
+ "at": "2026-11-18T00:43:00.716Z",
+ "budgets": {
+  "tris": 500000,
+  "draws": 450,
+  "programs": 40,
+  "targets": {
+   "high": {
+    "fps": 59.4,
+    "p95Ms": 17.2,
+    "p99Ms": 25,
+    "cpuMs": 6,
+    "dropShare": 0.01
+   },
+   "low": {
+    "p95Ms": 17.2,
+    "cpuMs": 6,
+    "dropShare": 0.01
+   },
+   "ultra": {
+    "fps": 59.4,
+    "p95Ms": 17.2,
+    "p99Ms": 25,
+    "cpuMs": 6,
+    "dropShare": 0.01
+   }
+  }
+ },
+ "presets": {
+  "high": {
+   "fps": 60,
+   "avgMs": 16.66,
+   "p95Ms": 16.7,
+   "p99Ms": 16.8,
+   "frames": 601,
+   "vsyncMs": 16.7,
+   "dropped": 0,
+   "droppedShare": 0,
+   "worstMs": [
+    16.8,
+    16.8,
+    16.8,
+    16.8,
+    16.8
+   ],
+   "worstCpuMs": [
+    5.3,
+    5.2,
+    5.2,
+    5.2,
+    5
+   ],
+   "cpuMs": {
+    "mean": 2.75,
+    "p50": 2.9,
+    "p95": 4.3,
+    "p99": 4.9
+   },
+   "simMs": {
+    "mean": 0.38,
+    "p50": 0.2,
+    "p95": 1.2,
+    "p99": 1.5
+   },
+   "draws": 99,
+   "tris": 120572,
+   "programs": 35,
+   "programsDrawn": 25,
+   "groups": {
+    "terrain": {
+     "calls": 13,
+     "tris": 8578,
+     "main": {
+      "calls": 7,
+      "tris": 4740
+     },
+     "shadow": {
+      "calls": 6,
+      "tris": 3838
+     }
+    },
+    "grass": {
+     "calls": 2,
+     "tris": 9912,
+     "main": {
+      "calls": 1,
+      "tris": 3304
+     },
+     "shadow": {
+      "calls": 1,
+      "tris": 6608
+     }
+    },
+    "canopy": {
+     "calls": 20,
+     "tris": 73247,
+     "main": {
+      "calls": 7,
+      "tris": 34700
+     },
+     "shadow": {
+      "calls": 13,
+      "tris": 38547
+     }
+    },
+    "rocks": {
+     "calls": 7,
+     "tris": 11011,
+     "main": {
+      "calls": 4,
+      "tris": 10212
+     },
+     "shadow": {
+      "calls": 3,
+      "tris": 799
+     }
+    },
+    "clutter": {
+     "calls": 4,
+     "tris": 3720,
+     "main": {
+      "calls": 4,
+      "tris": 3720
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "landmarks": {
+     "calls": 8,
+     "tris": 5783,
+     "main": {
+      "calls": 2,
+      "tris": 2406
+     },
+     "shadow": {
+      "calls": 6,
+      "tris": 3377
+     }
+    },
+    "ambient": {
+     "calls": 3,
+     "tris": 3104,
+     "main": {
+      "calls": 2,
+      "tris": 2096
+     },
+     "shadow": {
+      "calls": 1,
+      "tris": 1008
+     }
+    },
+    "vfx": {
+     "calls": 10,
+     "tris": 5042,
+     "main": {
+      "calls": 10,
+      "tris": 5042
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "overlay": {
+     "calls": 4,
+     "tris": 144,
+     "main": {
+      "calls": 4,
+      "tris": 144
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "post": {
+     "calls": 28,
+     "tris": 31,
+     "main": {
+      "calls": 28,
+      "tris": 31
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    }
+   },
+   "detail": {
+    "canopy:vale_trees_1": {
+     "calls": 3,
+     "tris": 13701,
+     "main": {
+      "calls": 1,
+      "tris": 6228
+     },
+     "shadow": {
+      "calls": 2,
+      "tris": 7473
+     }
+    },
+    "canopy:vale_trees_2": {
+     "calls": 3,
+     "tris": 13053,
+     "main": {
+      "calls": 1,
+      "tris": 5904
+     },
+     "shadow": {
+      "calls": 2,
+      "tris": 7149
+     }
+    },
+    "canopy:vale_trees_0": {
+     "calls": 3,
+     "tris": 12103,
+     "main": {
+      "calls": 1,
+      "tris": 5180
+     },
+     "shadow": {
+      "calls": 2,
+      "tris": 6923
+     }
+    },
+    "canopy:vale_trees_4": {
+     "calls": 3,
+     "tris": 11735,
+     "main": {
+      "calls": 1,
+      "tris": 5724
+     },
+     "shadow": {
+      "calls": 2,
+      "tris": 6011
+     }
+    },
+    "grass:vale_needlegrass": {
+     "calls": 2,
+     "tris": 9912,
+     "main": {
+      "calls": 1,
+      "tris": 3304
+     },
+     "shadow": {
+      "calls": 1,
+      "tris": 6608
+     }
+    },
+    "canopy:vale_trees_5": {
+     "calls": 2,
+     "tris": 9890,
+     "main": {
+      "calls": 1,
+      "tris": 5880
+     },
+     "shadow": {
+      "calls": 1,
+      "tris": 4010
+     }
+    },
+    "terrain:vale_cliffs": {
+     "calls": 11,
+     "tris": 8549,
+     "main": {
+      "calls": 5,
+      "tris": 4711
+     },
+     "shadow": {
+      "calls": 6,
+      "tris": 3838
+     }
+    },
+    "canopy:vale_trees_3": {
+     "calls": 3,
+     "tris": 7723,
+     "main": {
+      "calls": 1,
+      "tris": 3672
+     },
+     "shadow": {
+      "calls": 2,
+      "tris": 4051
+     }
+    },
+    "rocks:vale_understory_fern": {
+     "calls": 1,
+     "tris": 6160,
+     "main": {
+      "calls": 1,
+      "tris": 6160
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "landmarks:vale": {
+     "calls": 8,
+     "tris": 5783,
+     "main": {
+      "calls": 2,
+      "tris": 2406
+     },
+     "shadow": {
+      "calls": 6,
+      "tris": 3377
+     }
+    },
+    "canopy:vale_trees_7": {
+     "calls": 3,
+     "tris": 5042,
+     "main": {
+      "calls": 1,
+      "tris": 2112
+     },
+     "shadow": {
+      "calls": 2,
+      "tris": 2930
+     }
+    },
+    "ambient:vale_ambient_props": {
+     "calls": 2,
+     "tris": 3088,
+     "main": {
+      "calls": 1,
+      "tris": 2080
+     },
+     "shadow": {
+      "calls": 1,
+      "tris": 1008
+     }
+    },
+    "rocks:vale_boulders_2": {
+     "calls": 2,
+     "tris": 2600,
+     "main": {
+      "calls": 1,
+      "tris": 2168
+     },
+     "shadow": {
+      "calls": 1,
+      "tris": 432
+     }
+    },
+    "rocks:vale_boulders_1": {
+     "calls": 2,
+     "tris": 1840,
+     "main": {
+      "calls": 1,
+      "tris": 1540
+     },
+     "shadow": {
+      "calls": 1,
+      "tris": 300
+     }
+    },
+    "clutter:vale_clutter_moss": {
+     "calls": 1,
+     "tris": 1620,
+     "main": {
+      "calls": 1,
+      "tris": 1620
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "clutter:vale_clutter_tuft": {
+     "calls": 1,
+     "tris": 1332,
+     "main": {
+      "calls": 1,
+      "tris": 1332
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_crescent": {
+     "calls": 1,
+     "tris": 1200,
+     "main": {
+      "calls": 1,
+      "tris": 1200
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_orb": {
+     "calls": 1,
+     "tris": 960,
+     "main": {
+      "calls": 1,
+      "tris": 960
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_column": {
+     "calls": 1,
+     "tris": 960,
+     "main": {
+      "calls": 1,
+      "tris": 960
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_ribbons": {
+     "calls": 1,
+     "tris": 658,
+     "main": {
+      "calls": 1,
+      "tris": 658
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_particles": {
+     "calls": 1,
+     "tris": 478,
+     "main": {
+      "calls": 1,
+      "tris": 478
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_shard": {
+     "calls": 1,
+     "tris": 432,
+     "main": {
+      "calls": 1,
+      "tris": 432
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "rocks:vale_boulders_0": {
+     "calls": 2,
+     "tris": 411,
+     "main": {
+      "calls": 1,
+      "tris": 344
+     },
+     "shadow": {
+      "calls": 1,
+      "tris": 67
+     }
+    },
+    "clutter:vale_clutter_leaf": {
+     "calls": 1,
+     "tris": 408,
+     "main": {
+      "calls": 1,
+      "tris": 408
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "clutter:vale_clutter_pebble": {
+     "calls": 1,
+     "tris": 360,
+     "main": {
+      "calls": 1,
+      "tris": 360
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_ringwave": {
+     "calls": 1,
+     "tris": 256,
+     "main": {
+      "calls": 1,
+      "tris": 256
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "overlay:Mesh": {
+     "calls": 4,
+     "tris": 144,
+     "main": {
+      "calls": 4,
+      "tris": 144
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_decals": {
+     "calls": 1,
+     "tris": 64,
+     "main": {
+      "calls": 1,
+      "tris": 64
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_spike": {
+     "calls": 1,
+     "tris": 32,
+     "main": {
+      "calls": 1,
+      "tris": 32
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "terrain:vale_standing_shadow": {
+     "calls": 1,
+     "tris": 27,
+     "main": {
+      "calls": 1,
+      "tris": 27
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "ambient:vale_ambient_particles": {
+     "calls": 1,
+     "tris": 16,
+     "main": {
+      "calls": 1,
+      "tris": 16
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "terrain:vale_ground": {
+     "calls": 1,
+     "tris": 2,
+     "main": {
+      "calls": 1,
+      "tris": 2
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    },
+    "vfx:vfx_rings": {
+     "calls": 1,
+     "tris": 2,
+     "main": {
+      "calls": 1,
+      "tris": 2
+     },
+     "shadow": {
+      "calls": 0,
+      "tris": 0
+     }
+    }
+   },
+   "programList": [
+    {
+     "type": "RawShaderMaterial",
+     "name": "",
+     "used": 25
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "body",
+     "used": 34
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "needle_outer_aubade_stone",
+     "used": 131
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "gloamoth_little_body",
+     "used": 18
+    },
+    {
+     "type": "RawShaderMaterial",
+     "name": "vale_ink_crowd",
+     "used": 57
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "accent",
+     "used": 29
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "accent",
+     "used": 13
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "ironstone",
+     "used": 2
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "dialwren_matte",
+     "used": 2
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "",
+     "used": 4
+    },
+    {
+     "type": "RawShaderMaterial",
+     "name": "vale_ink_shadow_inst",
+     "used": 54
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "",
+     "used": 2
+    },
+    {
+     "type": "MeshStandardMaterial",
+     "name": "shadow_slab_stone",
+     "used": 2
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "LuminanceMaterial",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "DownsamplingMaterial",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "UpsamplingMaterial",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "EffectMaterial",
+     "used": 1
+    },
+    {
+     "type": "RawShaderMaterial",
+     "name": "",
+     "used": 5
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "EdgeDetectionMaterial",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "SMAAWeightsMaterial",
+     "used": 1
+    },
+    {
+     "type": "ShaderMaterial",
+     "name": "EffectMaterial",
+     "used": 1
+    },
+    {
+     "type": "RawShaderMaterial",
+     "name": "vale_ink_shadow_skin",
+     "used": 6
+    }
+   ],
+   "stats": {
+    "fps": 60.5,
+    "frameMs": 1.2,
+    "calls": 99,
+    "triangles": 120478,
+    "sceneCalls": 99,
+    "sceneTriangles": 120478,
+    "programs": 35,
+    "geometries": 103,
+    "textures": 190,
+    "renderScale": 1,
+    "pixelRatio": 1,
+    "tier": "high",
+    "width": 1920,
+    "height": 1080,
+    "particles": 240,
+    "vfx": 39,
+    "actors": 115,
+    "telegraphs": 0,
+    "mode": "match",
+    "gpuMs": null,
+    "bound": "",
+    "gpuTimer": "trusted",
+    "ambient": {
+     "on": true,
+     "density": 1,
+     "ms": 0.085,
+     "emitters": 84,
+     "particles": 8,
+     "onScreen": {
+      "amb_rift_resin_flame": 8
+     },
+     "critters": 26,
+     "crittersDrawn": 0,
+     "flights": 2,
+     "props": 38
+    },
+    "crowd": 0
+   },
+   "machine": {
+    "before": {
+     "load": 1.44,
+     "heavy": [],
+     "idle": true
+    },
+    "after": {
+     "load": 1.3,
+     "heavy": [],
+     "idle": true
+    },
+    "idle": true
+   },
+   "frameTargets": "pass",
+   "misses": [],
+   "pass": true,
+   "errors": []
+  }
+ },
+ "pass": true
+}

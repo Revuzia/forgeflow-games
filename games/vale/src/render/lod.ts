@@ -60,7 +60,9 @@ export const LOD = {
    *  held within 45 mm (under 4 px at the default zoom, 82 px a metre), the same face lock: the head (~25 % of a LOD1)
    *  never changes, so it reaches 0.55-0.80 of the LOD1 (30 mm reached 0.63-0.84; _harness/_tmp_w2a_lodsweep.mjs).
    *  renderer.ts draws it for a non-local fighter farther than `farM` from the camera's ground centre (back to LOD1
-   *  under `nearM`: the outer ring of the screen at the default zoom) or past the `keep` nearest fighters on screen */
+   *  under `nearM`: the outer ring of the screen at the default zoom) or past the `keep` nearest fighters on screen.
+   *  Fix 1 (ruling 48 addendum): within 55 mm (4.5 px), ratio 0.45, keep 2 (yours and the nearest other stay LOD1), and the
+   *  ink copies at 0.16 of the hull: BRIDGE's 262 s fight, bench actors 208-218k -> 170-180k */
   body2: { ratio: 0.45, errorM: 0.055, normalW: 0.5, uvW: 60, lockBone: 'head', lockW: 0.5, farM: 16, nearM: 14, keep: 2 },
   /** a match fighter's ink copies (rest outline, victim flash, x-ray) over its LOD1 hull: a bound in metres */
   ink: { ratio: 0.16, errorM: 0.014, weld: true },
