@@ -5,7 +5,7 @@
   "parts": {
     "tris_helm": 858,
     "tris_nape": 638,
-    "tris_face": 620,
+    "tris_face": 618,
     "tris_visor": 900,
     "tris_visor_ridge": 344,
     "tris_crest": 640,
@@ -44,18 +44,18 @@
     "tris_knife_grip_L": 160,
     "tris_knife_guard_L": 80,
     "tris_knife_blade_L": 300,
-    "validate_rishal": "18552->18540"
+    "validate_rishal": "18550->18540"
   },
-  "uv_coverage": 0.606,
+  "uv_coverage": 0.6,
   "bake": {
-    "base": 5.0,
-    "rough_metal": 3.58,
-    "normal": 2.97,
-    "ao": 3.73,
-    "normal_fixed_px": 91205,
-    "projection": 75.97,
-    "pack_save": 76.19,
-    "total": 91.7
+    "base": 2.92,
+    "rough_metal": 2.11,
+    "normal": 1.85,
+    "ao": 2.71,
+    "normal_fixed_px": 92274,
+    "projection": 89.52,
+    "pack_save": 89.73,
+    "total": 99.42
   },
   "tris": 20356,
   "mesh_top_m": 1.879,
@@ -166,23 +166,23 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2911700,
+  "glb_bytes_raw": 2913612,
   "optimize": {
     "ok": true,
-    "before": 2911700,
-    "after": 1174716,
+    "before": 2913612,
+    "after": 1175780,
     "q_base": 74
   },
   "zone_grade": {
     "ok": true
   },
-  "glb_bytes": 1192308,
+  "glb_bytes": 1191844,
   "three_load_test": {
     "ok": true,
     "log": [
       "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal.glb (1164 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: rishal_base 2048x2048 202K, rishal_normal 512x512 45K, rishal_orm 512x512 71K",
-      "  skinned meshes: rishal(18161v), rishal_accent(438v)",
+      "  webp: rishal_base 2048x2048 202K, rishal_normal 512x512 45K, rishal_orm 512x512 70K",
+      "  skinned meshes: rishal(18154v), rishal_accent(438v)",
       "  bones: 27 (root hips spine chest neck head x_visor_ridge shoulderL upper_armL forearmL handL propL x_knife_tip_l shoulderR upper_armR forearmR handR propR x_knife_tip_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:0.667s/21tr, attack2:0.667s/21tr, cast_a1:0.500s/23tr, cast_a2:0.833s/22tr, cast_a3:0.667s/24tr, cast_ult:1.167s/21tr, channel:1.333s/20tr, crit:0.667s/22tr, dash:0.500s/21tr, death:1.500s/22tr, idle:2.000s/20tr, idle_lobby:3.000s/24tr, recall:6.000s/24tr, run:0.533s/22tr, stunned:1.333s/22tr, taunt:1.333s/21tr, victory:2.000s/23tr",
       "  tracks checked: 373; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
@@ -199,10 +199,10 @@
       "turntable": "art/renders/fighters/rishal/turntable.png"
     },
     "seconds": {
-      "splash": 73.04,
-      "portrait": 13.8,
-      "icon": 4.57,
-      "turntable": 4.21
+      "splash": 97.35,
+      "portrait": 18.47,
+      "icon": 6.64,
+      "turntable": 9.42
     }
   },
   "three_qa": {
@@ -234,29 +234,29 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/rishal/three_rishal.png",
-    "seconds": 4.8,
+    "seconds": 12.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.36,
-      "model": 26.39,
-      "lows_bind": 2.31,
-      "uv": 8.1,
-      "bake": 91.7,
-      "clips": 0.29,
-      "export": 2.53,
-      "optimize": 1.18,
-      "zone_grade": 35.66,
-      "wrist_weights": 0.27,
+      "materials": 0.11,
+      "model": 12.01,
+      "lows_bind": 0.91,
+      "uv": 4.11,
+      "bake": 99.42,
+      "clips": 0.3,
+      "export": 2.59,
+      "optimize": 1.17,
+      "zone_grade": 35.59,
+      "wrist_weights": 0.29,
       "zero_metal": 0.08,
-      "load_test": 0.29,
-      "render": 96.38,
-      "three_qa": 4.97,
-      "cache": 0.06
+      "load_test": 0.3,
+      "render": 132.65,
+      "three_qa": 12.69,
+      "cache": 0.12
     },
-    "total_s": 270.68
+    "total_s": 302.39
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79
