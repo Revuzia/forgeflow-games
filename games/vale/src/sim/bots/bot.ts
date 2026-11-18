@@ -545,7 +545,7 @@ export class Bot extends BotBase implements BotController {
     // (owner_rulings 47: FRAY early break — a skilled fighter whose health is going and whose fight is not won (blows landing on
     // me, the trade read against me, no kill of mine on) leaves while it still has the health to walk away on; breaking at the
     // last fifth left the chaser in reach for the whole walk: 70 % of the low moments still had a foe within 12 m 4 s later)
-    if (kind === 'fray' && this.diff.frayBreak > 0 && !tolled && hpF < this.diff.frayBreak + FRAY_EARLY && this.recentDps > 0 && this.adv < 0.5 &&
+    if (kind === 'fray' && this.diff.frayBreak > 0 && !tolled && hpF < this.diff.frayBreak + (ab('f_early3') ? 0.3 : FRAY_EARLY) && (this.recentDps > 0 || (ab('f_nodps') && this.nearestEnemyFighter(10) !== null)) && this.adv < 0.5 &&
       !(this.killTarget && this.killMargin >= 1)) retreat = Math.max(retreat, 0.88);
     // (lane AI G5: leave early when the visible enemies' burst would take most of my health before my side finishes one of
     // them — RIFT from the mid game: not in a road's laning phase, whose trades CL-1 tuned, never off a kill that is on, and

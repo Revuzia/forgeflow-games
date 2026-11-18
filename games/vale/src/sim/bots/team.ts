@@ -448,8 +448,11 @@ export class TeamBrain {
       let need = 0;
       const real = hitting > 0 || hurt.has(st) || minions - mine >= 2;
       if (ab('g_real') && !real) { n = 0; if (cls < 2) coming = 0; }
-      if (ab('g_real2') && !(hitting > 0 || hurt.has(st))) { n = 0; if (cls < 2) coming = 0; }
-      if (ab('g_coming') && coming > 0 && coming < 2 && minions - mine < 2) coming = 0;
+      if ((ab('g_real2') || (ab('n_real') && d.defendMatch < 1)) && !(hitting > 0 || hurt.has(st))) { n = 0; if (cls < 2) coming = 0; }
+      // (ruling 54: a lone enemy fighter near the front structure with no wave over ours is not a push — farming its wave, walking by,
+      // or waiting in the fog; posting against it held a defender off its road for nothing: 'coming' posts were the biggest single
+      // share of the defend time, 14-38 s a fighter a game)
+      if (!ab('g_coming_old') && coming > 0 && coming < 2 && minions - mine < 2) coming = 0;
       if (ab('g_coming2') && coming > 0 && minions - mine < 2) coming = 0;
       if (n > 0) {
         // (one more than the divers at an inner or base structure — not in the laning phase, where the roads hold first)
@@ -477,7 +480,7 @@ export class TeamBrain {
       // (owner_rulings 44: the core under fighter attack — the Hourbell or a Bell Needle hit, or hurt with enemy fighters at
       // it — is the whole team's call at a tier that defends the core (coreAll): every fit fighter that can be there in time)
       const coreHit = value >= 4 && (hitting > 0 || (n > 0 && hurt.has(st)));
-      if (coreHit && d.coreAll) need = Math.max(need, 5);
+      if (coreHit && d.coreAll && !ab('nocore')) need = Math.max(need, 5);
       const delay = cls === 0 ? d.macroDelay : coreHit ? Math.min(d.macroDelay, 1) : Math.min(d.macroDelay, 5);
       if (!this.held(`g:${info.id}`, need > 0, now, delay)) need = 0;
       let ttl = n + coming === 0 && !coreHit && wdps > 0 ? (st.hp + st.shield) / wdps : Infinity;
