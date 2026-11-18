@@ -61,6 +61,8 @@ const HYP = 3;
 /** usable leg of a class: S - 2 BORDER - HYP */
 const PAD = 2 * BORDER + HYP;
 const MIPS = 1;
+/** water depth (m) over every cell of a patch that lets it take a coarser tile than its pixels ask */
+const DEEP = 15;
 const BPT = 16;
 
 const R = PATCH_RES;
@@ -230,6 +232,8 @@ interface Tile {
   dirs: Float32Array;
   /** up to 16 of its cells' ground normals (field N), and how many */
   nrm: Float32Array; nN: number;
+  /** every cell >= DEEP m under water: the bed shows through the sea at <= 5 % (it may take a coarser tile) */
+  deep: boolean;
 }
 
 const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3(), _f = new Vector3();
@@ -427,7 +431,11 @@ export class TerrainCache {
   private cellNormals(p: Patch, t: Tile): void {
     const cells = p.vcells, nf = this.fieldTex.N?.image.data as unknown as Float32Array | undefined;
     t.nN = 0;
-    if (!cells || !nf) { this.lod.tcCorners(p, _a, _b, _f); t.nrm.set([_a.x, _a.y, _a.z]); t.nN = 1; return; }
+    if (!cells || !nf) { this.lod.tcCorners(p, _a, _b, _f); t.nrm.set([_a.x, _a.y, _a.z]); t.nN = 1; t.deep = false; return; }
+    // (deep: field A = surface, rough, waterLevel, waterDepth)
+    const af = this.fieldTex.A?.image.data as unknown as Float32Array | undefined;
+    t.deep = !!af;
+    if (af) for (let i = 0; i < cells.length; i++) { const o = cells[i] * 4; if (af[o + 2] - af[o] < DEEP) { t.deep = false; break; } }
     const seen = new Set<number>();
     for (let i = 0; i < cells.length && seen.size < 64; i++) seen.add(cells[i]);
     const list = [...seen], step = Math.max(1, list.length / 16);
@@ -485,7 +493,7 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
+        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, deep: false, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
         // the patch's flat triangle (m^2)
         this.lod.tcCorners(p, _a, _b, _f);
         _a.toArray(t.dirs, 0); _b.toArray(t.dirs, 3); _f.toArray(t.dirs, 6);
@@ -531,7 +539,10 @@ export class TerrainCache {
       // (none of the 15 inside: a sliver at the screen's edge, sized as at its centre)
       const dVis = vis ? Math.max(dn, dMin - 0.3 * size) : Math.max(dn, dc0);
       // the edge (texels) for texels ~ pixels by AREA, at the patch's nearest visible point (the near end is the densest)
-      const need = size * pxPerRad / dVis * Math.sqrt(cEff);
+      // (a deep sea-bed patch — the LOD keeps it coarse, 830 m across at the landing view — that no class resolves takes
+      // the largest: under >= 15 m of water the bed reaches the screen at <= exp(-0.2 x 15) = 5 %, and with
+      // ?deepbed=1 its fragments under ~48 m are not shaded at all, cached or not)
+      const need = Math.min(size * pxPerRad / dVis * Math.sqrt(cEff), t.deep ? (CLASSES[CLASSES.length - 1] - PAD) / TC_DENS : 1e9);
       t.need = need;
       // its screen pixels (the triangle's area x |n.v| x mean of 1 / d^2 over the points, the hidden ones as 0)
       t.area = vis ? Math.min(4 * f2, t.areaW * cEff * f2 * inv2 / 15) : t.areaW * cEff * f2 / Math.max(dc0 * dc0, 0.25) / 15;

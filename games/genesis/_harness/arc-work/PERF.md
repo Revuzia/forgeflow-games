@@ -2630,3 +2630,10 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
 2. Valid town pair (--settle=60), graze (top-down meadow: the green-shift check of tcFwLive), peak, floor; edits +
    sun move: `bash _harness/arc-work/s26-queue.sh` (runs d e f u in turn; s26-run2.sh has the `sun` camera).
 3. Silhouette line on the far ridge in g-y0 (faint): tcFwLive at grazing |n.p| -> check np clamp.
+### 5. AFTER THE HAND-BACK (lead: gap 1, the meadow pair, the proofs, the ridge line)
+- GAP 1 BUILT: per tile `deep` = every cell of the patch has waterLevel - surface >= 15 m (field A, computed with the
+  cell normals once per fieldEpoch). A deep patch whose need exceeds class 576 is clamped to 576 instead of staying on
+  the full shader (the bed reaches the screen through >= 15 m of sea at <= exp(-0.2 x 15) = 5 %).
+  With `?deepbed=1`: the display's deepbed early-out runs BEFORE the cache branch (FRAG_SURFACE order), so skipped
+  fragments cost nothing cached or not; the cached ones cost 3 taps instead of evalTerrain. The bake does not skip
+  (the shallow-angle part of a deep patch still shows): its cost is one bake per patch, then nothing while still.
