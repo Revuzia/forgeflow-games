@@ -1,0 +1,73 @@
+{
+ "lane": "W2 look close (W2-A render look + W2-B VFX readability, ruling 53)",
+ "round": 1,
+ "verifier": "independent adversarial look verifier (Opus 5.5)",
+ "at": "2026-11-18 ~04:15 CST",
+ "head": "804479d3a (render code as in d680f85da; src/render, content/vfx.json clean; only another lane's src/sim wip syncs since)",
+ "setup": "own vite on :5263 (_harness/_tmp_vfy_lc_vite.config.ts, private dep cache, hmr off), stopped after; every browser run and npm run probe through art/blender/common/heavy.py; an orphaned vite from an earlier dead attempt of this run (pid 33112/33132, started 01:40) was killed first and its shots deleted",
+ "pass": true,
+ "score": 7.7,
+ "safeToShip": true,
+ "blockers": [],
+ "gates": {
+  "clutter RIFT High s7/11/23 (log _harness/_tmp_vfy_lc_clutter.log, shots _harness/_tmp_vfy_lc_shots/clutter/)": {
+   "peakFrames": "30/30/30 (all scripted, plan allows)",
+   "medianOcclusion": [0.104, "<=0.25", "PASS (per seed 0.067 / 0.081 / 0.104)"],
+   "worstRunAbove60pctMs": [0, "<=300", "PASS"],
+   "hotBodyMax_Lstar85": [0.169, "<=0.30", "PASS (rishal 0.166 / burdam 0.114 / vashil 0.169)"],
+   "enemyTelegraphEdge (gated fixed circle)": [1.0, ">=0.45", "PASS 1 / 1 / 1"],
+   "enemyTelegraphEdge (bots' casts, info)": "0.45 / 0.593 / 0.507 (implementer 0.449 / 0.584 / 0.507; s7 sits exactly on 0.45)",
+   "selfRing": ["90/90", "100%", "PASS"],
+   "vfxTrisPeak": [30528, "<=35000", "PASS"],
+   "trisPeak": 361866, "drawsPeak": [223, "<=450", "PASS"], "programsPeak": [37, "not above W2-A", "PASS"],
+   "particlesPeak": "1029/2000"
+  },
+  "combat_polish ult(kemdo,rishal,tunlan,hesmi,nurrow,vashil)+cc+flash+hold (_harness/_reports/fw_W1_combat_polish_vfy_lc_polish.json)": "PASS, 0 fails. Victim box white kemdo 0.018, rishal 0.019, tunlan 0.021, hesmi 0.040, nurrow 0.011, vashil 0.019 (bar 0.35). Lift adds to body white 0.001-0.015 (hesmi 0.015, bar 0.10). First-beat core all/ground: kemdo 226.3/237.3, rishal 232.0/234.8, tunlan 226.5/231.0, hesmi 217.6/220.7, nurrow 217.5/219.0, vashil 230.1/233.3 (hesmi and nurrow pass on the ground core per ruling 52). cc 7 plates fade 17-83 ms; flash middle <=0.2 edge 0.5; hold disc 200-233 ms. Matches the implementer's numbers within 0.1",
+  "VFX-O8": "PASS: detailLost hesmi/nurrow/vashil 1/0/1 (<=1), body min 0.48/0.57/0.49 (>=0.45). Vashil 0.49 reproduces the implementer's 0.49 (r2 had 0.36)",
+  "value_probe High seed 7 rift/bridge/fray (_harness/_tmp_vfy_lc_value.log)": "0 FAIL. Lane L* 51 / 51 / 50; RIFT jungle 30; wall faces 25 / 15.5 (BRIDGE gorge band 14-22) / 25. T4 flash 2.18x / 2.08x / 2.05x. RIFT jungle telegraph 2797 px (was 0 before ruling 53), WCAG p90 5.03, teleEdge 1.96; every other telegraph spot WCAG 4.31-4.81, teleEdge >= 1.0",
+  "perf_1080 --match-only rift/bridge/fray High seed 7 (_harness/_reports/vfy_lc_perf.json)": "GATE PASS. rift: peak 427k tris (at 27:58, run to 30:00), 246 draws, 36 programs, 0 first seen after 1:00. bridge: 365k / 261 / 36 / 0 late. fray: 174k / 154 / 29 / 0 late. All under the wave-2 bars (470k / 450 / 36). Frame-time not measured (machine shared with another lane's heavy slot)",
+  "npm run probe": "73 passed, 3 failed of 76: probe_sim_bot_tactics and probe_sim_click_waves (19/20) are the known non-regressions; probe_sim_minion_lane_line also failed (rift bots B4 rejoin overshoot 6, worst 9.6 m). All three are src/sim (another lane's live bot work in the wip syncs); no src/render path feeds them, so not attributed to the look"
+ },
+ "frames": {
+  "dir": "_harness/_tmp_vfy_lc_shots/ (1920x1080, canvas pixels, fog off, spectator; stored as JPEG q85 to save disk)",
+  "capture": "_harness/_tmp_vfy_lc_frames.mjs: laning, 5v5 fight (RIFT and FRAY pulled in by a scripted move), an ult at 0.2/0.45/0.8/1.6 s (rift marund, bridge ervet, fray vashil), a real lethal kill at 0.05/0.3/0.7/1.4 s; _harness/_tmp_vfy_lc_client.mjs: the real client with HUD on RIFT (kill banner, damage numbers)",
+  "read": "All three maps read calm and mid-value with fighters on top. Enemy telegraphs are now a thin orange edge with an ink band and a whisper of fill (lc_rift_fight5v5, lc_bridge_fight5v5_b); a stack of them no longer washes the plaza. The ult beat is a short warm-cream flash that is mostly gone by 0.8 s (lc_bridge_ult_045 -> lc_bridge_ult_080), never a white-out. Kills collapse the body on the death frame and leave no dark smoke or disc by 1.4 s (lc_fray_kill_140)."
+ },
+ "referenceTargets": {
+  "1 mid-value calm ground": ["met", "lc_rift_laning.jpg, lc_fray_laning.jpg: lane L* 50-51, soft painted variation, everything sits on top"],
+  "2 paths/river/jungle by value and hue": ["met", "lc_rift_fight5v5.jpg: stone road, mossy verge, green Dialwood and the blue river step apart; lc_bridge_laning.jpg: deck vs moss planters vs violet gorge"],
+  "3 flat readable light, contact shadows, no crushed darks": ["partly", "contact shadows under every unit (lc_fray_laning.jpg); BRIDGE's gorge cliffs are near-black navy at the frame top (lc_bridge_laning.jpg, wall face L* 15.5, its own ruled band)"],
+  "4 chunky props, lighter top than face": ["met", "lc_rift_laning.jpg: wall caps over faces (wallTop L* 36 vs face 25); FRAY plinths and planters read as blocked"],
+  "5 soft even fog edge": ["partly", "not exercised in the bench frames (fog off); only the client frames show it, with no hard edge visible; fog edge belongs to W4-B"],
+  "6 fighters most saturated, two-three colour masses": ["partly", "true in lanes and small fights (lc_rift_laning.jpg, lc_fray_laning.jpg); inside an ult the enemy cluster takes the caster's pink wash (lc_bridge_ult_045.jpg); units_gate fighter-art fails are carried to W3-B by ruling 49"],
+  "7 dark edge + team-coloured segmented bars": ["met", "segmented blue/orange bars with level plates and team rings on every fighter (lc_rift_fight5v5.jpg, vfy_lc_002_fight_numbers.jpg)"],
+  "8 minions smaller, simpler, team colour plain": ["met", "lc_rift_laning.jpg: blue-hooded and amber-capped Wicks, half fighter height, lower chroma"],
+  "10 shaped effects, hard edge, soft core": ["partly", "rings, domes, rectangles and dial ticks read as geometry (lc_rift_ult_045.jpg, clutter_s7_look10_t8721.jpg), but 5-6 stacked rings over one cluster still merge (clutter_s11_look20_t8731.jpg) and the sanctioned Shade cuts draw as a 4-5 m near-black slab, the darkest mass on screen (lc_fray_fight5v5_b.jpg, lc_rift_kill_005.jpg)"],
+  "11 effects short, little lingering smoke": ["met", "ult flash clears by 0.8 s (lc_bridge_ult_080.jpg); hold 200-233 ms; nothing dark left at 1.4 s after a kill (lc_fray_kill_140.jpg, lc_rift_kill_070.jpg)"],
+  "12 caster colour, white-hot impact cores": ["partly", "caster hues read (ervet pink, marund blue, vashil lilac); by ruling 53 the core inside a lift is warm cream, not white-hot (lc_bridge_ult_045.jpg): a deliberate own-style choice, but it also warms any white VFX core inside the lift radius"],
+  "13 thin, bright, flat ground indicators": ["met", "lc_rift_fight5v5.jpg, lc_bridge_fight5v5_b.jpg: 4 px edge + ink band, interior 0.07; the RIFT jungle telegraph now draws under the canopy (value_probe 2797 px)"],
+  "14 hit feedback: flash, burst, numbers": ["partly", "hit flash and burst present (lc_bridge_laning.jpg); damage numbers are small and sit beside the target (vfy_lc_001_kill_banner.jpg, 31/52); numbers belong to W2-E"],
+  "15 kill banner top centre with portraits": ["met", "vfy_lc_001_kill_banner.jpg: 'First takedown' plate with both portraits under the score bar; body collapse on the death frame (lc_rift_kill_030.jpg)"],
+  "notMetCount": 0
+ },
+ "originality": "VALE's own vocabulary throughout: hour-dial ticks and seat numerals on the ground, lantern towers, chalk crack star, warm-grey dust, glass/lantern shells, ink-band telegraph edge. No reference characters, icons, layouts or abilities; no reference frames stored.",
+ "sensitivity": "No hoods, skulls, eyes, tear streaks or faces introduced by this wave. The Shade slab (lc_fray_fight5v5_b.jpg) has white chips in a dark lens; at gameplay zoom it does not read as a face. Collapsed bodies on a kill are whole, no gore. Player-facing text in the client frames does not mention bots, AI or CPU.",
+ "problems": [
+  "Bots' cast telegraph edge (info, not the gate) sits exactly on 0.45 on seed 7 this run; the gated fixed circle is 1.0, so the gate holds, but the bot-dependent number is still volatile",
+  "Sanctioned Shade cuts (lc_fray_fight5v5_b.jpg spindle, lc_rift_kill_005.jpg wedge) draw as large near-black slabs; allowed by rulings 50/52, but they are the one effect that reads as a hole rather than light (target 10)",
+  "Stacked ally/enemy rings over a 5-fighter cluster still merge into one wash (clutter_s11_look20_t8731.jpg); ruling 53 kept the 4+4 px outline for stacks",
+  "Ruling 53 warm top: inside a lift, any near-white pixel is warmed, including white VFX cores; the core is cream, not white-hot (target 12), and the pale stone flattens for the first frames (as the ruling itself records)",
+  "telegraph-through-canopy is height-based (occluder >= 2.6-3.2 m): telegraphs also draw over tall tower storeys and wall tops on that ray; not seen to hurt in these frames",
+  "npm run probe: probe_sim_minion_lane_line FAIL in addition to the two known ones; it is src/sim (another lane), flagged for that lane, not for the look"
+ ],
+ "safeToShipReason": "Versus the live 2026.11.8 build every player-visible change in this wave is equal or better: no white-out under an ult (box 0.019-0.040, was up to 0.635), quieter enemy fills with the edge kept, the jungle telegraph now visible under the canopy, bodies readable at peak (median occlusion 0.104, worst run 0 ms), no ink blots or dark kill smoke. Budgets hold with headroom (rift 427k / 246 / 36, bridge 365k / 261 / 36, fray 174k / 154 / 29, 0 late programs; clutter VFX 30.5k <= 35k). No program added.",
+ "artefacts": [
+  "_harness/_tmp_vfy_lc_clutter.log, _harness/_tmp_vfy_lc_shots/clutter/",
+  "_harness/_tmp_vfy_lc_polish.log, _harness/_reports/fw_W1_combat_polish_vfy_lc_polish.json",
+  "_harness/_tmp_vfy_lc_value.log",
+  "_harness/_tmp_vfy_lc_perf.log, _harness/_reports/vfy_lc_perf.json",
+  "_harness/_tmp_vfy_lc_frames.log, _harness/_tmp_vfy_lc_shots/*.jpg, frames.json",
+  "_harness/_tmp_vfy_lc_client.log, _harness/_tmp_vfy_lc_shots/client/",
+  "_harness/_tmp_vfy_lc_probe.log"
+ ]
+}

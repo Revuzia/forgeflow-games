@@ -1,0 +1,192 @@
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 44s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42092 for 42s run:node _harness/probe_combat_polish.mjs clutter --seeds 7,11,23 --tag vfy_lc_clutter --; slot2: pid 42116 for 40s run:node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high --seed 7 --tag vfy
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 104s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42092 for 102s run:node _harness/probe_combat_polish.mjs clutter --seeds 7,11,23 --tag vfy_lc_clutter --; slot2: pid 42116 for 100s run:node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high --seed 7 --tag vfy
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 165s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42092 for 163s run:node _harness/probe_combat_polish.mjs clutter --seeds 7,11,23 --tag vfy_lc_clutter --; slot2: pid 42459 for 50s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 225s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42092 for 223s run:node _harness/probe_combat_polish.mjs clutter --seeds 7,11,23 --tag vfy_lc_clutter --; slot2: pid 42459 for 110s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 285s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42092 for 283s run:node _harness/probe_combat_polish.mjs clutter --seeds 7,11,23 --tag vfy_lc_clutter --; slot2: pid 42459 for 170s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 345s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42092 for 343s run:node _harness/probe_combat_polish.mjs clutter --seeds 7,11,23 --tag vfy_lc_clutter --; slot2: pid 42459 for 230s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 406s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 43274 for 45s run:node _harness/probe_combat_polish.mjs ult,cc,flash,hold --ults kemdo,rishal,tunlan,he; slot2: pid 42459 for 291s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 466s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42196 for 6s run:node _harness/_tmp_vfy_lc_frames.mjs rift,bridge,fray; slot2: pid 42459 for 351s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 527s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42196 for 67s run:node _harness/_tmp_vfy_lc_frames.mjs rift,bridge,fray; slot2: pid 42459 for 412s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 587s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 42196 for 127s run:node _harness/_tmp_vfy_lc_frames.mjs rift,bridge,fray; slot2: pid 42459 for 472s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: waiting (all 3 slots busy) — slot0: pid 42083 for 648s run:node _harness/probe_sim_bot_tactics.ts --seeds 64 --fray-seeds 0 --suites rift --seed; slot1: pid 44132 for 56s run:node _harness/_tmp_vfy_lc_client.mjs; slot2: pid 42459 for 533s run:node _harness/perf_1080.mjs --match-only --match-modes rift,bridge,fray --match-q hig
+[heavy] run:npm run probe: got slot1 after 656s
+
+> vale@0.1.0 probe
+> node _harness/run_probes.ts
+
+PASS  probe_bar_clearance.ts                         10.4s
+PASS  probe_boot_gate.ts                              0.4s
+PASS  probe_calibrate.ts                              0.2s
+PASS  probe_camera.ts                                 6.9s
+PASS  probe_camera_edge.ts                            0.4s
+PASS  probe_camera_lock.ts                            0.3s
+PASS  probe_cdn_headers.ts                            0.4s
+PASS  probe_content_build.ts                         21.7s
+PASS  probe_content_ids.ts                            4.0s
+PASS  probe_copy_no_bots.ts                           0.4s
+PASS  probe_crowd_latch.ts                            0.3s
+PASS  probe_deploy_gate.ts                            2.4s
+PASS  probe_dev_frozen_guard.ts                      40.9s
+PASS  probe_dynres_metal.ts                           0.2s
+PASS  probe_frame_guard.ts                            0.3s
+PASS  probe_input_clicks.ts                           0.6s
+PASS  probe_input_pick_truth.ts                       6.7s
+PASS  probe_input_shoot.ts                            0.4s
+PASS  probe_items.ts                                  2.7s
+PASS  probe_kits_A.ts                                 1.0s
+PASS  probe_kits_B.ts                                 1.3s
+PASS  probe_maps.ts                                   4.5s
+PASS  probe_online.ts                               100.3s
+PASS  probe_render_dynres.ts                          0.6s
+PASS  probe_render_dynres_vsync.ts                    0.7s
+PASS  probe_schema_negotiation.ts                     1.8s
+PASS  probe_session_botslane.ts                       8.9s
+PASS  probe_session_draft.ts                          1.1s
+PASS  probe_session_economy.ts                        2.6s
+PASS  probe_session_flows.ts                          5.8s
+PASS  probe_session_queue.ts                          1.5s
+PASS  probe_session_two_tabs.ts                       0.5s
+PASS  probe_session_units.ts                          0.4s
+PASS  probe_ship_session.ts                           0.9s
+PASS  probe_sim_attack_at.ts                          0.7s
+PASS  probe_sim_bot_soak.ts                         120.1s
+FAIL  probe_sim_bot_tactics.ts                      524.6s
+      │   ---- veteran sneak: all roam time visible to the enemy (strike included): 30.1 %
+      │   ---- veteran sneak: ganks struck from a lurk (mid game on): 5 (from approach 33, lurk kills 0)
+      │   ---- veteran sneak: rotations out of fog: 19.4 %
+      │   ---- veteran sneak: fights opened from a thicket: 3.5 %
+      │   PASS veteran fog honesty: hidden casts recorded: 0 of 205326 unseen (bar = 0)
+      │   PASS veteran overextension: deaths per team-minute ahead vs even: 0.48 vs 0.51 (bar ≤ 1.5 × even)
+      │   ---- veteran isolated deaths: 21.5 %
+      │   PASS veteran objectives: Longshade per game past 18:00: 0.69 (48 games) (bar ≥ 0.25)
+      │   PASS veteran objectives: a lamp of the taking team near the pit: 17.3 % (bar ≥ 10 %)
+      │   ---- veteran objectives contested: 56.1 %
+      │   ---- veteran grouping 14:00+: largest cluster: 62.5 %
+      │   ---- veteran ability chains: 37.8 %
+      │   PASS veteran base defence: fit fighters standing idle within 25 m of an inner or base structure under fighter attack, no enemy within 12 m (s per game): 0.6 (bar ≤ 10)
+      │   PASS veteran sneak: invaders seen 8 s alone in our half of the Dialwood (3:00-14:00) hit within 20 s: 100.0 % of 58 (bar ≥ 50.0 %)
+      │   PASS veteran peel: a dived carry's road partner within 6 m damages, holds or heals for it within 3 s: 88.7 % of 1089 (bar ≥ 75.0 %)
+      │   FAIL veteran dithering: full health, no enemy within 30 m, no swing in 12 s, 3+ back-and-forth legs of 4 m+ ending within 5 m (per game): 2.00 (bar ≤ 1)
+      │   ---- veteran objectives taken with one of ours against three of theirs within 22 m: 7
+      │   ---- veteran designated peeler lands a blow, hold, heal or shield within 1.5 s (from 14:00): 61.8 % of 1709; within 3 s 82.7 %
+      │   FAIL veteran peel: a dived ally whose designated peeler stood within reach of the diver gets its blow, hold, heal or shield within 1.5 s (from 14:00): 69.5 % ± 1.4 % of 1102 (bar ≥ 75 %)
+      │   PASS veteran peel: the designated peeler (support within 8 m, else the nearest teammate within 12 m above half health) turns on the diver (attack or attack order on it, hold, heal or shield) within 1.5 s (from 14:00): 94.4 % ± 0.6 % of 1709 (bar ≥ 80.0 %)
+      │   ---- veteran designated peeler answers within 1.5 s (laning phase): 93.2 % of 1146
+      │   ---- veteran sneak: collapses from the fog on a lone enemy in our half (an arriver unseen by its team), share of the collapse episodes: 52.0 % of 900
+      │   PASS veteran sneak: a lone enemy seen 6 s in our Dialwood (3:00+) or on a road in our half (14:00+), out of its towers' cover, two of ours free: 2+ on it within 15 s: 69.3 % ± 1.5 % of 900 (Dialwood 77.2 % of 232, roads 66.6 % of 668) (bar ≥ 60.0 %)
+      │   ---- veteran RIFT low and stayed: mode at the start: retreat 957, lane 214, teamfight 96, allin 29, recall 24, defend 17, return 14, push 9, protect 8, farm 3, objective 2
+      │   ---- veteran falls to Wicks beside fit defenders: the fit defenders' modes: defend 121, push 24, objective 4, roam 2, farm 2, retreat 1, recall 1, lane 1
+      │   ---- veteran designated peeler that did not answer: its mode: lane 16, push 8, defend 5, retreat 5, allin 4, teamfight 3, recall 3, protect 2, objective 2, roam 1, trade 1
+      │   ---- veteran fit and away while the base is hit: mode (s): defend 14, push 1
+      │   ---- veteran self-preservation: under 25 % with a foe in 10 m, still beside one 4 s later (RIFT): 36.0 % of 3817 (clear 31.0 %, died 32.6 %)
+      │   PASS veteran base defence: fit fighters 25-80 m from a base structure under fighter attack, not closing in, no foe within 12 m (s per game): 0.3 ± 0.2 (bar ≤ 6)
+      │   ---- veteran objectives: taken with one of ours against three of theirs within 22 m (per game; open, owner_rulings 44): 0.146 (7)
+      │   ---- veteran objectives taken outnumbered: the taker's mode / camp: lane/resinback 4, farm/resinback 1
+      │   ---- veteran fray: deaths that were already in retreat 3 s before: 80.9 %
+      │   ---- veteran fray low and stayed: mode at the start: retreat 1094, hunt 155, pickup 101, recall 43, allin 2
+      │   ---- veteran fray: kills on the score leader: 11.3 %
+      │   FAIL veteran fray: under 25 % with a foe in 10 m, still beside one 4 s later: 61.3 % of 2276 (clear 21.0 %, died 17.1 %) (bar ≤ 50.0 %)
+      │   PASS adept + veteran base defence: recalls to defend: 30 (bar > 0)
+      │   PASS adept + veteran sneak: ganks struck from a lurk: 15 (bar > 0)
+      │   PASS ladder: veteran base defence vs adept: 10.3 % vs 13.8 % (bar ≤ adept + 5 points)
+      │   PASS ladder: veteran peel no-response vs adept: 19.0 % vs 19.8 % (bar ≤ adept + 5 points)
+      │ FAIL: 5 gate(s)
+PASS  probe_sim_buildplan.ts                          0.9s
+PASS  probe_sim_camps.ts                              0.5s
+FAIL  probe_sim_click_waves.ts                       94.6s
+      │ waves rift
+      │ PASS enough moves (>= 700)
+      │ PASS 0 end > 2 m short of an uncrowded point
+      │ FAIL 0 arrive over 1.3 x the way through the bodies + 1 m — ["marund s41 t1887 (97.95,101.69)→(94.48,97.44) detour 8.87 vs lane 6.01","nurrow s83 t1813 (152.03,57.23)→(145.72,55.54) detour 10.22 vs lane 6.93"]
+      │ PASS 0 walk over 1 m away from the goal while a way through exists
+      │ PASS 0 moves with > 4 reversals
+      │ PASS 0 dither (5 side flips in 1 s)
+      │   rift: away (boxed in) 0, worst 0.71; vs-lane p95 1.04 max 1.48; reversals 23
+      │ PASS enough moves (>= 300)
+      │ PASS 0 regress > 1 m with no forced movement
+      │ PASS 0 end > 2 m short of an uncrowded point
+      │ PASS 0 with 5+ reversals
+      │   rift: boxed in by bodies (no way through, ruling 43) 0; cut by the match ending 0
+      │   rift: forced 56 (regress > 1 m all moves 7, worst unforced 0.84); 3+ reversals 0; arrive p95 3.97 s
+      │ waves bridge
+      │ PASS enough moves (>= 700)
+      │ PASS 0 end > 2 m short of an uncrowded point
+      │ PASS 0 arrive over 1.3 x the way through the bodies + 1 m
+      │ PASS 0 walk over 1 m away from the goal while a way through exists
+      │ PASS 0 moves with > 4 reversals
+      │ PASS 0 dither (5 side flips in 1 s)
+      │   bridge: away (boxed in) 0, worst 0.56; vs-lane p95 1.03 max 1.37; reversals 17
+      │ PASS enough moves (>= 300)
+      │ PASS 0 regress > 1 m with no forced movement
+      │ PASS 0 end > 2 m short of an uncrowded point
+      │ PASS 0 with 5+ reversals
+      │   bridge: boxed in by bodies (no way through, ruling 43) 0; cut by the match ending 0
+      │   bridge: forced 99 (regress > 1 m all moves 17, worst unforced 0.65); 3+ reversals 0; arrive p95 4.57 s
+      │ probe_sim_click_waves: 19 passed, 1 failed
+PASS  probe_sim_core_attack.ts                        0.4s
+PASS  probe_sim_core_casting.ts                       0.5s
+PASS  probe_sim_core_combat.ts                        0.4s
+PASS  probe_sim_core_effects.ts                       0.4s
+PASS  probe_sim_core_nav.ts                           2.0s
+PASS  probe_sim_core_orders.ts                       36.3s
+PASS  probe_sim_core_perf.ts                          1.1s
+PASS  probe_sim_core_rng_math.ts                      0.3s
+PASS  probe_sim_core_status.ts                        0.3s
+PASS  probe_sim_core_vision.ts                        0.3s
+PASS  probe_sim_determinism.ts                        1.1s
+PASS  probe_sim_dmath.ts                              0.2s
+PASS  probe_sim_draft_pace.ts                         1.2s
+PASS  probe_sim_economy.ts                            0.4s
+PASS  probe_sim_edge.ts                               1.5s
+PASS  probe_sim_fighters.ts                           0.5s
+PASS  probe_sim_fray.ts                               0.5s
+PASS  probe_sim_hold_tower.ts                         1.7s
+PASS  probe_sim_kit_diag.ts                         126.8s
+PASS  probe_sim_kit_hooks.ts                          0.4s
+PASS  probe_sim_match_core.ts                         0.6s
+PASS  probe_sim_minion_flow.ts                       97.2s
+FAIL  probe_sim_minion_lane_line.ts                  93.2s
+      │ rift idle: 1246068 free+clear samples, 119 bins; B1 centroid worst median 0.12, max 0.13 (rift|idle|road_high|t0|s84); raw mean-d max 0.80 (rift|idle|road_high|t1|s32)
+      │   B2 single Wick |off| worst p95 0.52 (rift|idle|road_low|t1|s52), max 0.66 (rift|idle|road_low|t1|s52)
+      │   B7 lantern detours in the first 20 m: 6 Wicks
+      │   B3 reversals 0
+      │   B4 rejoins 834: arc to |off| ≤ 0.5 p50 0.0 p95 2.2 max 3.1 m; overshoot 0; worst rift/idle/s31 road_high t1 #650 off -1.92 → ≤0.5 in 3.1 m @255.8s
+      │ rift bots: 2225696 free+clear samples, 138 bins; B1 centroid worst median 0.08, max 0.23 (rift|bots|road_seat|t0|s60); raw mean-d max 1.04 (rift|bots|road_high|t0|s100)
+      │   B2 single Wick |off| worst p95 0.56 (rift|bots|road_high|t0|s52), max 0.67 (rift|bots|road_low|t0|s52)
+      │   B7 lantern detours in the first 20 m: 20 Wicks
+      │   B3 reversals 0
+      │   B4 rejoins 1720: arc to |off| ≤ 0.5 p50 0.0 p95 2.9 max 9.6 m; overshoot 6; worst rift/bots/s19 road_seat t0 #7521 off -6.91 → ≤0.5 in 9.6 m @548.3s
+      │ bridge idle: 360414 free+clear samples, 34 bins; B1 centroid worst median 0.00, max 0.08 (bridge|idle|road_span|t1|s68); raw mean-d max 0.68 (bridge|idle|road_span|t1|s40)
+      │   B2 single Wick |off| worst p95 0.04 (bridge|idle|road_span|t1|s84), max 0.45 (bridge|idle|road_span|t1|s68)
+      │   B7 lantern detours in the first 20 m: 72 Wicks
+      │   B3 reversals 0
+      │   B4 rejoins 348: arc to |off| ≤ 0.5 p50 0.0 p95 3.8 max 5.0 m; overshoot 0; worst bridge/idle/s31 road_span t1 #954 off 1.33 → ≤0.5 in 5.0 m @204.2s
+      │   FAIL B1 bridge|bots|road_span|t0|s112: wave-centroid median |off| 0.20 > 0.20 (1 waves)
+      │ bridge bots: 630906 free+clear samples, 49 bins; B1 centroid worst median 0.20, max 0.27 (bridge|bots|road_span|t0|s92); raw mean-d max 0.91 (bridge|bots|road_span|t1|s64)
+      │   B2 single Wick |off| worst p95 0.31 (bridge|bots|road_span|t0|s104), max 0.70 (bridge|bots|road_span|t0|s100)
+      │   B7 lantern detours in the first 20 m: 139 Wicks
+      │   B3 reversals 0
+      │   B4 rejoins 859: arc to |off| ≤ 0.5 p50 0.9 p95 3.5 max 8.8 m; overshoot 10; worst bridge/bots/s7 road_span t0 #5187 off 4.14 → ≤0.5 in 8.8 m @835.2s
+      │   B5 (reported) bridge|road_span|w3|contact: 89.60 s vs base 89.00 (+0.60)
+      │   B5 (reported) rift|road_high|w2|contact: 87.27 s vs base 85.60 (+1.67)
+      │   B5 (reported) rift|road_low|w2|contact: 87.27 s vs base 85.63 (+1.64)
+      │   B5 (reported) bridge|road_span|w3|contact_any: 87.77 s vs base 89.00 (-1.23)
+      │ B5 timing: 56 arrivals and first contacts (6-seed means) vs before ruling 47, worst +0.10 s (rift|road_high|t1|w1|s_high_needle_outer)
+      │ B6 determinism: rift idle seed 7 3 min hash a3aaba2a / a3aaba2a
+      │ FAIL (1) probe_sim_minion_lane_line 92 s
+PASS  probe_sim_modes.ts                              0.5s
+PASS  probe_sim_perf.ts                               1.8s
+PASS  probe_sim_practice.ts                           0.7s
+PASS  probe_sim_rekey.ts                              2.3s
+PASS  probe_sim_shop.ts                               0.4s
+PASS  probe_sim_skin_neutral.ts                       1.8s
+PASS  probe_sim_structures.ts                         0.4s
+PASS  probe_sim_tempo.ts                              4.4s
+PASS  probe_sim_units.ts                              0.5s
+PASS  probe_sim_wall_click_snap.ts                   15.0s
+PASS  probe_sim_wall_click_stuck.ts                   1.8s
+PASS  probe_sim_waves.ts                              0.6s
+PASS  probe_sim_wick_still.ts                       114.7s
+
+73 passed, 0 skipped, 3 failed (76 probes, 1485.6s)
+DONE_P

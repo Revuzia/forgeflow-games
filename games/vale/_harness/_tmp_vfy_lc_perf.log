@@ -1,0 +1,71 @@
+matrix  rift high seed 7 rot 0
+match   15 s: game 53.6 s, peak so far 245k triangles, 36 programs
+match   30 s: game 114.6 s, peak so far 245k triangles, 36 programs
+match   45 s: game 175.4 s, peak so far 251k triangles, 36 programs
+match   60 s: game 236 s, peak so far 255k triangles, 36 programs
+match   75 s: game 296.8 s, peak so far 258k triangles, 36 programs
+match   91 s: game 357.4 s, peak so far 294k triangles, 36 programs
+match   106 s: game 418.2 s, peak so far 294k triangles, 36 programs
+match   121 s: game 478.8 s, peak so far 294k triangles, 36 programs
+match   136 s: game 539.6 s, peak so far 294k triangles, 36 programs
+match   151 s: game 596.3 s, peak so far 294k triangles, 36 programs
+match   166 s: game 657.2 s, peak so far 294k triangles, 36 programs
+match   181 s: game 718.2 s, peak so far 294k triangles, 36 programs
+match   196 s: game 779 s, peak so far 294k triangles, 36 programs
+match   211 s: game 839.8 s, peak so far 294k triangles, 36 programs
+match   226 s: game 900.4 s, peak so far 294k triangles, 36 programs
+match   242 s: game 961.1 s, peak so far 370k triangles, 36 programs
+match   257 s: game 1021.7 s, peak so far 370k triangles, 36 programs
+match   272 s: game 1082.7 s, peak so far 371k triangles, 36 programs
+match   287 s: game 1143.7 s, peak so far 371k triangles, 36 programs
+match   302 s: game 1204.6 s, peak so far 371k triangles, 36 programs
+match   317 s: game 1265.3 s, peak so far 371k triangles, 36 programs
+match   332 s: game 1322.1 s, peak so far 371k triangles, 36 programs
+match   347 s: game 1382.6 s, peak so far 371k triangles, 36 programs
+match   363 s: game 1443.2 s, peak so far 371k triangles, 36 programs
+match   378 s: game 1503.9 s, peak so far 371k triangles, 36 programs
+match   393 s: game 1564.7 s, peak so far 371k triangles, 36 programs
+match   408 s: game 1625.3 s, peak so far 371k triangles, 36 programs
+match   423 s: game 1686.1 s, peak so far 427k triangles, 36 programs
+match   438 s: game 1746.6 s, peak so far 427k triangles, 36 programs
+match   453 s: game 1799.2 s, peak so far 427k triangles, 36 programs
+match   445 s to game 1800 s (x4): peak 427k triangles at 1677.9 s, 246 draws at 989.3 s, 36 programs at 9 s; 0 programs first seen after 1:00  [peak frame 1673.8 s: actors 196k/102 canopy 94k/20 grass 30k/2 vfx 30k/11 terrain 21k/27 rocks 12k/7 ambient 7k/10 clutter 6k/4 landmarks 3k/9 overlay 0k/5 post 0k/27]
+        PASS
+matrix  bridge high seed 7 rot 0
+match   15 s: game 59.1 s, peak so far 290k triangles, 36 programs
+match   31 s: game 119.6 s, peak so far 331k triangles, 36 programs
+match   46 s: game 180.5 s, peak so far 331k triangles, 36 programs
+match   61 s: game 241.3 s, peak so far 339k triangles, 36 programs
+match   76 s: game 302 s, peak so far 339k triangles, 36 programs
+match   91 s: game 363 s, peak so far 339k triangles, 36 programs
+match   107 s: game 423.8 s, peak so far 339k triangles, 36 programs
+match   122 s: game 484.4 s, peak so far 339k triangles, 36 programs
+match   137 s: game 544.8 s, peak so far 339k triangles, 36 programs
+match   152 s: game 605.4 s, peak so far 339k triangles, 36 programs
+match   167 s: game 666 s, peak so far 339k triangles, 36 programs
+match   182 s: game 726.4 s, peak so far 339k triangles, 36 programs
+match   197 s: game 786.9 s, peak so far 339k triangles, 36 programs
+match   212 s: game 847.4 s, peak so far 339k triangles, 36 programs
+match   227 s: game 907.9 s, peak so far 339k triangles, 36 programs
+match   243 s: game 968.4 s, peak so far 365k triangles, 36 programs
+match   258 s: game 1029 s, peak so far 365k triangles, 36 programs
+match   273 s: game 1085.3 s, peak so far 365k triangles, 36 programs
+match   269 s to game 1087.9 s (x4, ended): peak 365k triangles at 932.1 s, 261 draws at 532.8 s, 36 programs at 34.9 s; 0 programs first seen after 1:00  [peak frame 928 s: actors 245k/149 terrain 62k/43 vfx 35k/14 grass 16k/2 ambient 6k/13 overlay 0k/5 post 0k/28]
+        PASS
+matrix  fray high seed 7 rot 0
+match   15 s: game 56.2 s, peak so far 101k triangles, 29 programs
+match   30 s: game 116.8 s, peak so far 104k triangles, 29 programs
+match   45 s: game 177.3 s, peak so far 143k triangles, 29 programs
+match   60 s: game 237.8 s, peak so far 143k triangles, 29 programs
+match   75 s: game 298.4 s, peak so far 143k triangles, 29 programs
+match   91 s: game 358.9 s, peak so far 143k triangles, 29 programs
+match   106 s: game 419.4 s, peak so far 143k triangles, 29 programs
+match   121 s: game 479.9 s, peak so far 169k triangles, 29 programs
+match   136 s: game 540.5 s, peak so far 174k triangles, 29 programs
+match   151 s: game 601.1 s, peak so far 174k triangles, 29 programs
+match   166 s: game 657.6 s, peak so far 174k triangles, 29 programs
+match   163 s to game 660 s (x4, ended): peak 174k triangles at 540.5 s, 154 draws at 467.8 s, 29 programs at 3.7 s; 0 programs first seen after 1:00  [peak frame 540.5 s: actors 71k/35 grass 25k/2 vfx 15k/13 landmarks 8k/8 ambient 7k/6 terrain 4k/11 overlay 0k/5 post 0k/27]
+        PASS
+GPU: null  → /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/vfy_lc_perf.json
+GATE PASS
+DONE_B
