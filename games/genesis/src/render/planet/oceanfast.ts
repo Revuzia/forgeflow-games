@@ -548,12 +548,14 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float foamAmt = ${f.foam ? '' : '0.0 * '}clamp(max(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), surge * 0.95), 0.0, 1.0);
   ${CUT.has('foamdbg') ? 'gl_FragColor = vec4(shore, whitecap, max(max(crest, surge), rapids), 1.0); return;' : ''}
   if (foamAmt > 0.01) {
+    // (the coarse octaves: taken above only near a shore or a surge; open-sea whitecaps need them too)
+    if (!(edgeOn || shoreOn || surgeOn)) nE = f3N(P, 64.0, vec2(0.0));
     // LACE: ridged noise at two scales drifting with the flow (tile 8 m: lattice 2 / 1 / 0.5 / 0.25 m), thinning out
     vec4 nLc = f3N(P - vFlow * uTime, 8.0, vec2(0.0, uTime * 0.07 / 8.0));
     float l1 = 1.0 - abs(nLc.y);
     float l2 = 1.0 - abs(nLc.z);
     float kL = 1.0 - smoothstep(0.15, 0.9, fw * 2.6);
-    float l0 = 1.0 - abs(nE.z);
+    float l0 = 1.0 - abs(nE.w);   // (2 m lattice: Perlin cells read ~2x the simplex's of the same lattice)
     float fineK = 1.0 - smoothstep(0.03, 0.1, fw);
     float lace = mix(l0 * l0 * l0 * 0.9, l1 * l1 * l1 * 0.75 + l2 * l2 * l2 * l2 * 0.45 * kL, fineK);
     float thinP = smoothstep(0.25, 0.75, nLc.x * 0.5 + 0.5);
