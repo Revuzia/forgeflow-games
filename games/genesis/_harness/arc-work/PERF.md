@@ -2309,3 +2309,52 @@ Also: `wdebug=class` paints the sheet over the hills the SAME blue as the open s
   a 1152 class (a whole layer, 55 MB a patch with both anchors: no), or tiles per QUARTER patch for the finest level
   (the slot table + tcLattice addressing would take a sub-tile index), or texels < pixels near the camera (look loss).
 - glob: gkey includes round(pxPerRad), uVegFade / uCanopyFade (metres) and uShadowOn: any change re-bakes everything.
+### 6. AFTER THE LEAD'S ROUND-16 / ROUND-14 EVIDENCE (MAC-ROUND16-5ee51b2d-full.txt; mac-shots 3, 4, 7, r14-8..12)
+- Facts from the reports: P run 1 = 254 draws / 2.4 M water triangles, post:water 290 ms GPU; P water=0: vertex buffers
+  1 MB x24 (vs 485 MB x3508 with water: the water sheets are what uploads the terrain pages in P). tcache run 17:
+  `tcstat=tiles=118,cached=117,live=2006,hot=0,near=0,wide=61,want=2062/900MB,full=955` (near=0: the camera is 60 m
+  up, so my "near" worry above does not apply there; the cap is the limit). js heap 782 MB (run 1) -> 1262-1471 MB
+  (later runs, also with water=0: NOT GL mirrors). Headers say `5ee51b2d+dirty` and `hdrmerge=0`; round 16 ran lid
+  closed on an XZ320QU 2560x1440 (round 3/4: Dell 1920x1080) — the round-14 file is not in arc-work to compare.
+- THE HILL SHEET REPRODUCES IN SWIFTSHADER (it was never looked at from the owner's camera): surface camera at
+  17.87588 / -35.0, alt 60, yaw 0, pitch -12, 07:45 (probe-s21 --cams, view y0; shots s23/shots/y-y0.png, z*-y0.png).
+  Discriminating runs at that camera (480x274, full scene, all 0 page errors / 0 GL errors):
+  * `water=0`: the pale domes STAY (terrain under them shades as far open water, uwFar) -> not the water pass alone.
+  * `wdebug=class`: blue; `wdebug=wet`: blue (real sim water >= 10 cm in those triangles); `wghost=1`: no change;
+    `wspill=1` (built for a sloping lake->sea pane): no change.
+  * NEW `wdebug=hb` (ground under the sheet in bands, full brightness where the sheet is at sea level): the whole
+    "hill sheet" is RED at full brightness = sea-level water over ground MORE THAN 10 m DEEP. The domes are SEA:
+    submarine rises seen through / under the sea surface on a 3 km-radius planet (lod.radius 3000 m, 40 962 cells
+    of ~55 m; horizon 600 m from 60 m up), pale at grazing view under the haze.
+  * `hide=veg`: the "trunks" vanish -> they are KELP (vegetation.ts kelp forests, cells with > 2.5 m of water).
+    Cause in code: kelp height = 0.6-0.95 x the CELLS' linear water depth, planted on groundHeight (curved ground +
+    detail), which over a submarine rise stands metres above the cells' chord -> fronds broke the surface as dark
+    spires. FIXED (`kelpfit`, default ON, `kelpfit=0` = old): the share is of (surface + water, linear: the sheet's
+    level) - groundHeight. Shot s23/shots/sheet-kelp.png LOOKED: no spires; the sea and domes otherwise unchanged.
+  * cell dump at boot (tcache=1 handle, cells2.js): field texture A == lod.fields arrays (0 mismatches); 141 wet land
+    cells planet-wide, lakes at 41.5 m and 57.3 m exist (cells 1832, 13081-13083) but are not in this view.
+  * SO the earlier "70 % of the frame is real sea" count was right; the sheet is the sea. What reads as "hills" is
+    the sea's own far surface + the kelp spires. What remains for the owner's eye is art: the far sea's paleness at
+    grazing angles (Fresnel sky + haze) on a tiny planet. Not changed.
+- `wspill` (terrainvert.glsl.ts, default OFF): the sloping-pane guard stays as a switch (it is correct for lake-beside-
+  sea triangles, none in this view); `wdebug=hgt` / `hb` probes stay (debug only).
+- MAC RUNS for problem 3: default (kelp fixed) vs `kelpfit=0` at the landing (trunks gone?); `wdebug=hb` screenshot
+  (red at full brightness over the "hills" = sea over > 10 m: settles it); `hide=veg`.
+### 7. tcache coverage (run 17) — the change that fits the view in ~256 MB (PROPOSAL, not built)
+- want 2062 tiles / 900 MB = 0.44 MB a tile (two anchors x 3 targets x 16 B... at classes 96-144). Levers, multiplied:
+  one anchor + per-fragment distance fades (x0.5), T1 RGBA16F -> RGBA8 (D as an octahedral 2x8 + ao; 16 -> 12 B a texel,
+  x0.75), class by the patch's SCREEN AREA (projected area / texel density) instead of its nearest edge (far patches at
+  60 m altitude are long slivers: class 48-72 instead of 96-144, ~x0.4), mips 1.31 kept. ~0.07 MB a tile -> 2062 tiles
+  ~150 MB. Plus priority by screen area (biggest first) and `deepbed`'s sea bed never cached (no need: not shaded).
+### 8. JS heap 0.8-1.4 GB (PROPOSAL): with water=0 the GPU holds 1 MB of vertex buffers yet the heap is 1.4 GB, so the
+  heap is CPU arrays, not GL mirrors: candidates by the code — every page's BatchedMesh attribute arrays (filled by
+  setGeometryAt whether drawn or not: 3508 buffers x ~0.14 MB = ~485 MB when drawn), the ChunkLOD patch cache's
+  stand-alone copies (~140 kB a patch, chunks.ts:800 comment), worker results. Measure with a heap snapshot on
+  SwiftShader at the landing view (`--full`), then: drop the patch cache's copies once a patch sits in a page (rebuild
+  from the worker on a re-split), and give page arrays to GL with no CPU mirror (bufferSubData from the worker's
+  transfer, three's onUpload pattern) — both are render-lane work for the next session.
+- GATE (SESSION 23 final source): `bash _harness/slot.sh npm run check` 1047 pass 0 fail (s23/check.log); `npm run build`
+  exit 0. Default shader text (ocean + terrain) checked identical to 5ee51b2d with `arc-work/shaderdump-s23.mjs`
+  (node shaderdump-s23.mjs <genesis dir> '?switches'). Probe helpers: arc-work/s23-run.sh (land2 per switch set),
+  s23-run-y0.sh (the owner's landing camera), s23-cells.js (field dump via --eval with tcache=1); probe-s21.mjs gained
+  --cams, --step, --eval, view 'boot'.
