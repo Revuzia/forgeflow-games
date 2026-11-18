@@ -2501,3 +2501,45 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
 - NEXT: Mac round: read `js heap by owner` (unattributed = dead buffers + unlisted). If unattributed is 500+ MB, add the
   eager-release of disposed page buffers; if terrain pages dominate, decide the FRESH_EXTRA / 0.75 page allowance.
 - Probes: arc-work/probe-s21.mjs --heapsnap=F --alloc=N --abtrace=1 --eval=s27-mem.js; s27-heap.mjs, s27-ab.mjs, s27-ab.sh.
+
+## SESSION 25 (water wfast=3) (2026-11-18, WATER agent) — the water fragment in the cost class of three's Water.js
+### 1. BUILT (default OFF): `?wfast=3`, new file src/render/planet/oceanfast.ts + a 4-line marked hook in ocean.ts
+- ocean.ts: one import line + the `PERF s25 hook` block in makeOceanMaterial (f3 = fastOceanShaders(OCEAN_VERT, OCEAN_FRAG,
+  rippleMap) when WFAST3; vertex/fragment shader picked from it). Nothing else in ocean.ts moved. The fast shaders are
+  built from the DEFAULT shaders' TEXT: the fragment keeps ocean.ts's main up to `vec3 P = vBodyPos;` verbatim (all the
+  hill-sheet agent's discards / debug views carry over), then its own body; the vertex gets one block appended before
+  `#include <logdepthbuf_vertex>`. If an anchor goes missing: console.warn and the default water (no break).
+- VERTEX (per wet vertex, vDepth > -40 m): Gerstner 4 + swell 3 GRADIENTS in three groups (short 5.3/8.5 m, long 13/21 m,
+  swell 34-87 m) faded by the LATTICE spacing (uMorph.z / 1.5, x2 while morphing; kept while >= 2.5-5 vertices a
+  wavelength), their slope variances passed; what the lattice drops goes into tile B's amplitude (same band) or, for
+  the swell, the roughness. Sun colour (transmittance x cloud shadow), sky irradiance + night floor, the moon's cloud
+  shadow, the mirrored deck's LIGHT at the flat-mirror hit, extinction (sigmaA + sigmaS incl. temperature, river, coast,
+  4 silt zones) and in-scatter albedo, the ripple amplitudes kA / kB (sea state x fetch x group noise). 8 vec4 varyings
+  (14 rows in all with the old ones; WebGL2 minimum 15).
+- FRAGMENT after the discards: normal = 3 vertex groups faded by footprint (anisotropy capped 2:1) + wfast=2's ripple
+  map (tiles 5.3/3.9 m, 37/29 m, textureGrad, triplanar |up|^6 with <2 % weights dropped: 1 projection on most of the
+  planet), each tile's taps skipped once its mip has flattened it (variance -> roughness, LEAN as before); rivers: the
+  two-phase flow map. Sky mirror skyRadiance (2 LUT taps); clouds mirrored = 1 cube tap of the cloud-shadow cube
+  (cloudDensityAt is that one tap) along the long waves' normal, lit by the vertex. SSR = screen-space DDA
+  (McGuire-Mara: 1/w, z/w linear on screen), 20 samples at u^1.8 (dense near the water pixel: banks / trees),
+  INDEPENDENT taps (no matrix per step), 4 bisection, 3 reprojected taps on a hit, only where F > 0.03 and view < 3 km.
+  Refraction 2 depth + 1 colour, extinction analytic (vertex coefficients). Glint GGX + glitter (3 hashes) + moon
+  (2 LUT taps at night). Sun shadow: 5 PCF taps in cascade 0 only, 1 beyond. Foam / shore / whitecaps / gale streaks /
+  lace / surge churn: taps of ONE 256^2 RGBA8 tiling gradient-noise map (channels = lattice tile/4../32, std 0.37 =
+  snoise's, measured) at 64 m (shore pulse + bite, surge margin), 32 m (surf, drifting), 8 m (lace, flow-advected),
+  24 m anisotropic (whitecaps), stretched frame (gale), 256 m (surge billows) — each only where its term can be non-zero.
+  Ice and silt streaks: arithmetic noise kept (rare, gated as before).
+- Sub-cuts `?wshade3=` nodetail (no ripple taps), noreflect (no deck, no SSR), nossr, norefract (no scene taps),
+  nofoam, nosky (no sky LUT: irradiance stand-in), pcf5 (5 PCF taps in every cascade).
+### 2. STATIC COUNT per water fragment (open calm sea by day, one projection; s = arithmetic simplex ~150 ops)
+                         default (s21 count)                     wfast=3
+  simplex                20 (+5-8 foam, +4 rivers)               0 (ice / silt only, gated)
+  loops                  4 Gerstner + 3 swell + 14 wavelets      SSR 20 x ~12 ops (+4 refine), no wave loop
+                         (x2 rivers) + SSR 28 x (mat4 + tap)
+  taps                   ~45: PCF 5, cloud shadow 2 cube, deck   waterland 1(+4) [unchanged], ripple 4 near / 2 mid /
+                         1 cube + 2 LUT-light (~6), sky/sun      0 far (x2 rivers, x2-3 at cube diagonals), sky 2,
+                         LUTs ~8, depth 2 + colour 1, SSR <=28   deck 1 cube, shadow 1 (5 in cascade 0), depth 2 +
+                         + 8 + 3, moon LUT 2 + cloud 2           colour 1, SSR <=20 + 4 + 3 (F > 0.03), shore 1-2 and
+                                                                 foam 1-4 only there, moon 2 at night
+  ALU (rough)            ~3000 noise + ~1500 loops + ~600 rest   ~350 + SSR ~250
+  vertex (per wet vtx)   unchanged base                          + 7 wave terms (~200 ops) + ~12 taps (LUT / cube)
