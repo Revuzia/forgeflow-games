@@ -144,11 +144,11 @@ export const CAPSULE = Object.freeze({ r: 0.45, h: 1.8, step: 0.55 });   // play
 const CROUCH_H = 1.54;                                     // (W10 R1A) the crouched capsule (royale.js: 1.36 + 0.18 m) - nothing lower over a floor fits under it
 export const MAX_FLOORS = 3;               // O3
 export const TRI_BUDGET = 4000;            // per furnished storey
-// (W10 R3A, plan R3A budget: shops +2-4k a large shop, offices ~+1k a storey) a work building's furnished storey: a shop / hall (stores, warehouses, offices) 6000, a
-// mid-rise / tower (offices, meeting rooms, lobbies) 5000 - WORK_FIT; every other non-home storey TRI_BUDGET. triBudgetOf(H) is the selftest's recount bar
-// and a big one more, by its footprint: TRI_WORK_M2 a m2, up to TRI_WORK_MAX (a 30 x 22.5 m mall storey held 7 gondolas in a 219 m2 store at 6000)
-export const TRI_BUDGET_WORK = Object.freeze({ shop: 6000, hall: 6000, midrise: 5000, tower: 5000 });
-export const TRI_WORK_M2 = 18, TRI_WORK_MAX = 9000;
+// (W10 R3A, plan R3A budget: shops +2-4k a large shop, offices ~+1k a storey) a work building's furnished storey: a shop / hall (stores, warehouses, offices) 5000, a
+// mid-rise / tower (offices, meeting rooms, lobbies) 4000 - WORK_FIT; every other non-home storey TRI_BUDGET. triBudgetOf(H) is the selftest's recount bar
+// and a big one more, by its footprint: TRI_WORK_M2 a m2, up to TRI_WORK_MAX 6000 (a 30 x 22.5 m mall storey held 7 gondolas in a 219 m2 store at 6000)
+export const TRI_BUDGET_WORK = Object.freeze({ shop: 5000, hall: 5000, midrise: 4000, tower: 4000 });
+export const TRI_WORK_M2 = 18, TRI_WORK_MAX = 6000;
 const workBudget = (use, W, D) => (TRI_BUDGET_WORK[use] ? Math.max(TRI_BUDGET_WORK[use], Math.min(TRI_WORK_MAX, Math.round(TRI_WORK_M2 * W * D))) : 0);
 export function triBudgetOf(H) {
   const ruined = !!(THEMES[H.theme] && THEMES[H.theme].ruined), home = H.use === "house" && !ruined;
@@ -196,7 +196,7 @@ export const SHOP_PITCH = 2.5;             // m from one aisle row to the next (
 export const WORK_COVER = true;
 export const PITCHED_HOMES = true;
 export const ROOF_FLAT_ALL = false;
-export const AO = Object.freeze({ k: 0.32, r: 0.35, minH: 0.25, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
+export const AO = Object.freeze({ k: 0.32, r: 0.35, minH: 0.4, minA: 0.15, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
 export const RNG_LEAK = false;            // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
 const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
@@ -5233,8 +5233,8 @@ function wearBands(H, groups, acc, faceIn, colOf) {
 // (W10 R3A, audits 6 + 7) THE FINISH, drawn only (no collider, not in house.tris - like the wear strips; maps.js: desktop medium and up). Every quad is a plate a few mm
 // in front of the face it dresses, in that face's material (the same world-aligned UVs: a darker wall foot is the wall's own texture, darker), vertex colours baked:
 //  - under every standing piece (>= AO.minH tall, on its room's floor): a soft dark ring, AO.k at the footprint (+ 2 cm) fading to the floor's colour AO.r out
-//    (clipped to the cells it stands on, inside the walls), the footprint itself AO.k (a table's legs stand in it) - BAKED_AO;
-//  - each wall run of a room: the foot (AO.foot at the skirting's top fading to the wall colour AO.footH higher), the floor along it (AO.foot at the wall, the floor
+//    (clipped to the cells it stands on, inside the walls; a piece >= AO.minA m2 of footprint; the ring only - 8 triangles) - BAKED_AO;
+//  - each wall run of a room: the foot (AO.foot at the skirting's top fading to the wall colour AO.footH higher), a corner
 //    colour AO.floorW out), a corner where another run of the room meets (AO.corner at the corner, AO.cornerW along the wall, floor to ceiling); a kitchen's tile
 //    splash (0.9 - 1.5 m) and a bath's wainscot (0.1 - 1.25 m) on the solid runs;
 //  - a light pool under each ceiling light: the floor colour lifted (warm in homes) at the middle, fading out;
@@ -5256,9 +5256,9 @@ function finishGeo(H, acc, colOf, split) {
   const rooms = new Map(H.rooms.map((r) => [r.id, r])), UP = [0, 1, 0];
   // AO under the pieces
   if (BAKED_AO) H.furniture.forEach((p, k) => {
-    if (p.deco || p.mount === "wall" || p.mount === "top" || p.max[1] - p.min[1] < AO.minH) return;
+    if (p.deco || p.mount === "wall" || p.mount === "top" || p.max[1] - p.min[1] < AO.minH || (p.max[0] - p.min[0]) * (p.max[2] - p.min[2]) < AO.minA) return;
     const r = rooms.get(p.room);
-    if (!r || r.fpal == null || Math.abs(p.min[1] - r.y) > 0.02) return;
+    if (!r || r.fpal == null || Math.abs(p.min[1] - r.y) > 0.02 || r.kind === "storage" || r.kind === "warehouse") return;     // (a store room's packed stock and racks: no ring - triangles where they read least)
     const pe = H.palette[r.fpal], c1 = colOf(pe.color), c0 = mul(c1, kk(AO.k)), y = r.y + 0.004 + (k % 4) * 0.0006;
     const I = [p.min[0] - 0.02, p.min[2] - 0.02, p.max[0] + 0.02, p.max[2] + 0.02];
     let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
@@ -5269,7 +5269,6 @@ function finishGeo(H, acc, colOf, split) {
     const i0 = [Math.max(O[0], I[0]), Math.max(O[1], I[1]), Math.min(O[2], I[2]), Math.min(O[3], I[3])];
     if (!(i0[2] > i0[0] && i0[3] > i0[1])) return;
     const iv = [[i0[0], y, i0[1]], [i0[2], y, i0[1]], [i0[2], y, i0[3]], [i0[0], y, i0[3]]], ov = [[O[0], y, O[1]], [O[2], y, O[1]], [O[2], y, O[3]], [O[0], y, O[3]]];
-    quad(pe.mat, iv, UP, [c0, c0, c0, c0]);
     for (let e = 0; e < 4; e++) {
       const e2 = (e + 1) % 4;
       if (Math.abs(ov[e][0] - iv[e][0]) + Math.abs(ov[e][2] - iv[e][2]) + Math.abs(ov[e2][0] - iv[e2][0]) + Math.abs(ov[e2][2] - iv[e2][2]) < 0.02) continue;
@@ -5288,20 +5287,16 @@ function finishGeo(H, acc, colOf, split) {
     }
     const cf = mul(cw, kk(AO.foot));
     quad(pw.mat, [P(0, q.y + 0.1, o), P(L, q.y + 0.1, o), P(L, q.y + 0.1 + AO.footH, o), P(0, q.y + 0.1 + AO.footH, o)], n, [cf, cf, cw, cw]);
-    if (q.fpal != null) {
-      const pf = H.palette[q.fpal], cl = colOf(pf.color), cd = mul(cl, kk(AO.foot)), y = q.y + 0.003;
-      quad(pf.mat, [P(0, y, 0.016), P(L, y, 0.016), P(L, y, AO.floorW), P(0, y, AO.floorW)], UP, [cd, cd, cl, cl]);
-    }
     const cc = mul(cw, kk(AO.corner)), wC = Math.min(AO.cornerW, L / 2), o2 = o + 0.001;
     if (q.c0) quad(pw.mat, [P(0, q.y + 0.1, o2), P(wC, q.y + 0.1, o2), P(wC, q.h, o2), P(0, q.h, o2)], n, [cc, cw, cw, cc]);
     if (q.c1) quad(pw.mat, [P(L - wC, q.y + 0.1, o2), P(L, q.y + 0.1, o2), P(L, q.h, o2), P(L - wC, q.h, o2)], n, [cw, cc, cc, cw]);
   }
-  // light pools: an octagon fan, the floor colour lifted at the middle
+  // light pools: a diamond fan (4 triangles), the floor colour lifted at the middle
   for (const q of fin.pools) {
     const pf = H.palette[q.fpal]; if (!pf) continue;
     const cl = colOf(pf.color), cm = mul(cl, q.warm ? [1.16, 1.1, 0.98] : [1.1, 1.1, 1.1]), y = q.y + 0.0045, ring = [];
-    for (let k = 0; k < 8; k++) ring.push([q.x + q.r * Math.cos(k * Math.PI / 4), y, q.z + q.r * Math.sin(k * Math.PI / 4)]);
-    for (let k = 0; k < 8; k += 2) quad(pf.mat, [[q.x, y, q.z], ring[k], ring[k + 1], ring[(k + 2) % 8]], UP, [cm, cl, cl, cl]);
+    for (let k = 0; k < 4; k++) ring.push([q.x + q.r * Math.cos(k * Math.PI / 2), y, q.z + q.r * Math.sin(k * Math.PI / 2)]);
+    for (let k = 0; k < 4; k += 2) quad(pf.mat, [[q.x, y, q.z], ring[k], ring[k + 1], ring[(k + 2) % 4]], UP, [cm, cl, cl, cl]);
   }
   // casings: doors (both faces of an interior door, the inside face of a street door), windows (the inside face)
   const trim = colOf(H.trim != null ? H.trim : 0xf2efe6), trimMat = H.theme === "lodge" ? "wood" : "plaster", CW = 0.08, TT = [trim, trim, trim, trim];
