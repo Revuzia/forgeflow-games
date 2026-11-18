@@ -499,6 +499,10 @@ export class TeamBrain {
           // (the laning phase's grovehunter keeps its clear and its ganks at the outer Needles: an inner or base call
           // takes it — kept off the inner Needles too, a fighter siege there went unanswered 22 % of the time, veteran)
           if (laning && cls < 1 && this.assign.get(p.player)?.jungle) continue;
+          // (owner_rulings 51: and an outer Needle in the laning phase is its own road's to hold — a dive there does not post the
+          // other roads' laners across the map: the solo laners spent 2.8-3.9 % of the laning phase in defend mode, against 1.0-1.3 %
+          // for the pre-lane bots, most of the laners' in-lane share lost)
+          if (laning && cls < 1 && this.assign.get(p.player)?.lane !== info.lane) continue;
           const ms = Math.max(1, e.stats.moveSpeed);
           const dist = dhypot(e.x - st.x, e.y - st.y);
           const walk = dist < 14 ? 0 : dist * 1.25 / ms;
