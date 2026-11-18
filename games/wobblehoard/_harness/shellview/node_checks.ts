@@ -2025,7 +2025,8 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   // The verifier saw it asleep where it stood for the Music Box and the Warm Lamp at Home (works on high and in the cabin); the same at Home and in the cabin here.
   {
     const stats0 = st.stats;
-    for (const id of [...app.mat.itemIds]) { if (app.mat.count <= 3) break; if (id !== app.identity.itemId) app.mat.remove(id); }
+    app.mat.clear(); await stepA(10);
+    { const { speciesBaseGenome } = await import('../../src/data/catalog.ts'); for (const [sp, id] of [['crimpo', 'gp-a'], ['thudge', 'gp-b']] as const) { app.mat.add({ genome: speciesBaseGenome(sp, 8), itemId: id }, { restore: true }); await stepA(10); } }
     st.stats = () => ({ ...stats0(), tier: 'med' as const });
     await stepA(300);
     type GDbg = { units: number; life: { unitCap: number }; counts: { askedUse: number }; chars: Array<{ slot: number; kind: number; itemId: string | null; asleep: boolean; x: number; z: number }>; things: Array<{ id: string; x: number | null; z: number | null }> };

@@ -57,7 +57,8 @@ const SHOWER_S = 4;      // a tapped Drip Leaf tips its shower this long (PLACES
 const SET_S = 6;         // a ride the body lands on within this many seconds of the player letting go of it (or lifting it there) is a ride the player SET UP
 const PAD_USE_GAP_S = 2; // one USE BOUNCE per body per this many seconds of pad kicks (a landing's kicks in a row are one bounce)
 const HUSH_S = 4;        // round 5 (B7): a body the over-budget rule must put to sleep takes no new LIFE motion for this long (it comes to rest, then sleeps)
-const ASKED_S = 15;      // round 5 (B7): for this long after the player asked a squishy to play ("Go play with..."), its motion is never held back by the budget
+const ASKED_S = 30;      // round 5 (B7), round 6 (VERDICT_PG2 N1): a squishy the player asked to play ("Go play with...") is ASKED until it has used the thing (its
+                         // USE BY PLAYER) or this long has passed: the budget never holds its motion back, never hushes it or puts it to sleep, and makes room for it
 /** Home's things by THING_IDS index: what each one arrives after (PLACES 4.1) */
 const THING_FELT = 0, THING_MUSIC = 1, THING_RUG = 2, THING_LAMP = 3, THING_SHELF = 4, THING_PAD = 5;
 /** the cut flavour index (audio/cut.ts CUT_FLAVOURS: gel, sticky, foam, beads, dough, firm) of each material family (MATERIAL_FAMILY_IDS order) */
@@ -101,7 +102,7 @@ interface Char {
   setT: number;           // sim time the player let go of it (a carry ended) or lifted it onto a ride (useRide): QUESTS 4's "rides the player set up"
   padT: number;           // sim time of its last USE BOUNCE from a pad kick
   hushT: number;          // round 5 (B7): until this sim time LIFE's motion intents for it are dropped (the over-budget rule is putting it to sleep)
-  askedT: number;         // round 5 (B7): sim time the player last asked it to play (playWith): the budget's wake gate lets its motion through for ASKED_S
+  askedT: number;         // round 5 (B7): sim time the player last asked it to play (playWith); -1e9 once it used the thing (round 6: see asked())
 }
 const mkChar = (): Char => ({ on: false, body: null, genome: null, itemId: null, view: -1, kind: 0, group: -1, species: 255, family: 0, flavour: 0, pitch: 1, frac: 1, r: 0.5,
   offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, scooting: false, scootX: 0, scootZ: 0,
@@ -522,18 +523,20 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   }
 
   // ---- intents (the one arbiter: LIFE drives a body only by scootTo, hop and setSquash; physics pauses them under a touch) ----
+  /** round 6 (N1): the player asked it to play and it has not used that thing yet (for at most ASKED_S) */
+  function asked(c: Char): boolean { return game.simTime - c.askedT <= ASKED_S; }
   function applyIntent(kind: number, i: number, a: number, b: number, cc: number, d: number, e: number, icon: number, style: number, dots: number): void {
     const c = chars[i];
     if (!c.on || !c.body) return;
     const body = c.body;
     // round 5 (B7, D-61): a body the over-budget rule is putting to sleep takes no new LIFE motion until it sleeps (or the hush ends): physics' sleep() needs it still
     const motion = kind === INTENT.SCOOT || kind === INTENT.HOP || kind === HOP_GO || kind === INTENT.GLIDE || kind === INTENT.SQUASH;
-    if (motion && c.hushT > game.simTime) return;
+    if (motion && c.hushT > game.simTime && !asked(c)) return;
     // round 5 (B7, SH-22): and over the budget nothing wakes. A motion intent for a SLEEPING body is dropped while waking it would put the awake units over
     // unitCap (+ the ride allowance); this frame's earlier wakes count. LIFE's own gate checks a start's wake, but a squishy LIFE already counts as a mover
     // keeps its token while this rule puts its body to sleep, and its next scoot or hop woke it straight back (node_checks' B7 window: 13 such wakes in 30 s
     // with 5 out, over the cap in 4 of 24 samples). A use the player asked for ("Go play with...") is never held back.
-    if (motion && c.body.metrics.asleep === true && game.simTime - c.askedT > ASKED_S) {
+    if (motion && c.body.metrics.asleep === true && !asked(c)) {
       const wake = c.kind === 0 ? UNIT.whole - UNIT.sleeper : UNIT.piece - UNIT.sleeper;
       if (s.units + wakeClaim + wake > att.unitCap + att.allowance + 0.001) { counts.held++; return; }
       wakeClaim += wake;
@@ -866,7 +869,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
           else write(EV.SOCIAL, sub, thing, a, b, n2, BY.SELF, 0, piece);
           if (placeIdx === 0) homeThingsSoon = true;   // the first hello brings the rug
           break;
-        case LIFE_EV.USE: write(EV.USE, sub, thing, a, 255, n2, eb === 254 ? BY.PLAYER : BY.SELF, 0, piece); if (eb === 254) counts.askedUse++; break;
+        case LIFE_EV.USE: write(EV.USE, sub, thing, a, 255, n2, eb === 254 ? BY.PLAYER : BY.SELF, 0, piece); if (eb === 254) { counts.askedUse++; if (ea < CAP) chars[ea].askedT = -1e9; } break;   // (round 6: it used the thing it was asked to: no longer ASKED)
         case LIFE_EV.REACT: write(EV.REACT, sub, thing, a, 255, n2, BY.SELF, 0, piece); break;
         case LIFE_EV.PIECES: write(EV.PIECES, sub, thing, a, 255, n2, BY.SELF, 0, EV_FLAG.PIECE); break;
         case LIFE_EV.SIGNATURE: write(EV.SIGNATURE, sub, thing, a, 255, n2, BY.SELF, 0, piece); break;
@@ -941,26 +944,31 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   // every one of them moving, so the rule asked the same farthest body every frame and nobody ever slept. Now the rule takes as many wholes as the excess needs,
   // farthest first: each that physics puts to sleep counts; each it refuses is HUSHED (its scoot ends, its squash eases out, LIFE's new motion intents for it are
   // dropped for HUSH_S), so it comes to rest and sleeps a moment later. The touched, carried, tossed and riding bodies are never forced.
+  // Round 6 (VERDICT_PG2 N1: on med, unitCap 1.48, a squishy asked to "Go play with..." stayed asleep or was put to sleep on its way): an ASKED squishy is
+  // never taken (not stopped, hushed or slept), and while it is still asleep its wake counts against the cap, so the rule sleeps another (the play squishy too,
+  // if untouched) until LIFE's own gate (units + its wake <= unitCap) lets its walk start.
   const tried = new Uint8Array(CAP);
   function overBudget(): void {
     const cap = att.unitCap + att.allowance + 0.001;
-    if (!(s.units > cap)) return;
+    let pend = 0;
+    for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.body && c.body.metrics.asleep === true && asked(c)) pend += c.kind === 0 ? UNIT.whole - UNIT.sleeper : UNIT.piece - UNIT.sleeper; }
+    if (!(s.units + pend > cap)) return;
     const cx = 0, cz = 0, t = game.simTime;
     let far = -1, fd = -1;
     for (let i = 0; i < CAP; i++) {
       const c = chars[i];
-      if (!c.on || !c.scooting || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE)) !== 0) continue;
+      if (!c.on || !c.scooting || asked(c) || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE)) !== 0) continue;
       const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
       if (d > fd) { fd = d; far = i; }
     }
     if (far >= 0) endScoot(far);
-    let need = Math.ceil((s.units - cap) / (UNIT.whole - UNIT.sleeper) - 1e-6);
+    let need = Math.ceil((s.units + pend - cap) / (UNIT.whole - UNIT.sleeper) - 1e-6);
     tried.fill(0);
     while (need > 0) {
       let sl = -1, sd = -1;
       for (let i = 0; i < CAP; i++) {
         const c = chars[i];
-        if (tried[i] || !c.on || c.kind !== 0 || !c.body || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) !== 0 || c.tossed) continue;
+        if (tried[i] || !c.on || c.kind !== 0 || !c.body || asked(c) || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) !== 0 || c.tossed) continue;
         const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
         if (d > sd) { sd = d; sl = i; }
       }
@@ -1582,7 +1590,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const i = chars.findIndex((c) => c.on && c.kind === 0 && c.itemId === itemId);
       if (i < 0 || !def.things[k] || floatParked || travelling) return false;
       lifeScript(w, i, SCRIPT.PLAY_WITH, k);
-      chars[i].askedT = game.simTime;
+      chars[i].askedT = game.simTime; chars[i].hushT = -1e9;   // (round 6, N1: an asked squishy is never hushed)
       return true;
     },
     thingsNow() {
