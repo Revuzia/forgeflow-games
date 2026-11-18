@@ -1,0 +1,877 @@
+GENESIS Mac ROUND 16 (water), build 5ee51b2d on genesis-water (all 18 headers: "build 5ee51b2d")
+6:54-7:19 PM CT Tue Nov 17 (look checks to ~7:45 PM). Lid CLOSED, external XZ320QU 2560x1440.
+Clean Chrome, one tab, render 1686x963 at dpr 1, Ultra. Every run landed at 59.7 m.
+
+BEFORE STARTING: CPU Idle 88%. GPU busy: device 0% (WindowServer 15.5%, main Chrome 11.8%).
+  No node jobs, no screen recording. CPU idle stayed 78-95% during the runs.
+  Re-checked after run 18 with the game page closed: CPU idle 97%, GPU device 0%.
+
+TABLE (P = scene=0&shadows=0)
+  run  switch                                              fps   p50 ms  p95 ms
+   1   P                                                    5.8   167     184
+   2   P + water=0                                         60.0    17      18
+   3   P + wshade=nonoise                                   6.2   150     217
+   4   P + wshade=noripple                                  6.6   150     217
+   5   P                                                   10.3    84     150
+   6   P + wshade=nossr                                     5.1   184     299
+   7   P + wshade=nopcf                                     4.1   234     367
+   8   P + wshade=nofoam                                    3.6   284     367
+   9   P + wshade=norefr                                    3.5   300     350
+  10   P                                                    4.4   217     317
+  11   P + wshade=nonoise,noripple,nossr,nopcf,nofoam,norefr 7.6  117     217
+  12   P + wfast=2                                          7.1   134     202
+  13   P + wfast=1                                          4.3   234     282
+  14   P                                                    7.7   133     183
+  15   N                                                    1.3   784    1134
+  16   N + wfast=2                                          1.4   717    1034
+  17   N + wfast=2&tcache=1 (waited 30 s)                   1.2   800    1352
+  18   N                                                    1.0   950    1252
+
+READING - BE CAREFUL: this build is very noisy on this Mac.
+- The four P repeats are 5.8 / 10.3 / 4.4 / 7.7 fps (mean ~7) on a quiet machine. Runs 6-10 sit in a slow stretch.
+  No single wshade switch stands clearly above the P range.
+- Clear results:
+  - water=0 is 60 fps (the cap), so the water is the whole cost of P.
+  - All six wshade cuts together (7.6) and wfast=2 (7.1) are only around the P mean, NOT a big win.
+  - wfast=1 (4.3) is no better.
+- The full game is slower on this link than on genesis-next round 14 (N 1.0-1.3 vs 2.5-2.9) at the same 1686x963.
+  wfast=2 (1.4) and wfast=2&tcache=1 (1.2) don't change it.
+- Suggest re-running Part 1 with more P repeats (or longer recordings) before deciding.
+
+LOOK CHECKS (wfast=2 vs N, same camera steps; pairs in genesis_round16_water_shots/)
+a. Open sea by day at the landing spot (07:45, clear weather): same colour, same wave streaks and sun sheen, same beach foam line.
+   - Difference: the palm reflections are bolder and more smeared/wavy with wfast=2; the normal water's reflection is finer and grainier.
+   - Toward the horizon (and on the hill sheet), wfast=2 shows a little more fine streaky texture but no repeating pattern, tiling or grain.
+b. Shore with trees: tree and sky reflections are still there with wfast=2 (landing beach palms, see a).
+   - The lake-town view (Taabon) landed at night/dusk because that town is on the night side.
+   - Running the clock forward to midday there didn't land in daylight either.
+c. Night (Taabon lake + sea, 23:40, clear; no storm anywhere, weather "Clear skies").
+   - wfast=2 shows brighter, more visible moonlit wave texture on the sea; the normal water is darker and smoother.
+   - In the wfast=2 night shot most houses had not streamed in yet.
+d. Water in motion while panning: 4 frames each taken between small pans. No grain, shimmer or flicker seen between frames.
+   But at ~1-2 fps true motion shimmer can't be judged from single frames.
+e. Colour view (wdebug=class) at the landing:
+   - The sheet on the hill is the SAME blue as the open sea, with a thin green band only at the beach edge. So the hill sheet is drawn as ocean-class water.
+   - With waterland=0 the sheet is still there (normal colours). With wdebug=class&waterland=0 it is still all sea-blue.
+   - So waterland=0 does not remove it.
+
+====================================================================
+FULL REPORTS (unedited except the filled-in "machine" line)
+====================================================================
+
+
+######## 1_P.txt ########
+GENESIS perf report v2 · 2026-11-18T00:55:56Z · 20.4 s · 118 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 5.8 | interval p50 166.8 p95 183.6 ms | main 8.9 ms/frame = 5% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 514 ms, NOT in main 514 ms = 25.2 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour GREEN | swap used 2.97 GB of 4.00 GB | GPU process 1342 MB | this tab 1209 MB | separate Chrome instance yes || page: js heap 820 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 166.8 p95 183.6 p99 184.4 max 367 | fps 5.8 | >20ms 117 >33ms 117 >50ms 117
+main ms: mean 8.9 p95 16.9 max 33.5
+main by slot (mean/p95): planets 4.9/10.6 godfx 0.1/0.2 actors 0.1/0.2 post 3.1/5.4 audio 0.1/0.2 ui.post 0.4/0.8 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.1/0.1 post 1368.4/1623.8 | total 1368.5/1623.8 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.1/0.1 · post 0/0 · post:gtao 2.2/2.3 · post:copies 2.2/2.3 · post:decals 2.6/2.8 · post:water 290.4/304.1 · post:clouds 145.2/152.4 · post:atmo 158.3/166.1 · post:fx 158.5/166.4 · post:keep 0/0 · post:photo 0/0 · post:god 158.5/166.5 · post:bloom 142.5/166.1 · post:lum 113.6/166 · post:tonemap 104.6/168.1 · post:fxaa 102/168.2
+render: draws 254 (max 254) tris 2.4M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.3 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.3 0.04MB
+  post|bindVertexArray 0.14ms x234 max 0.1 · post|multiDrawElementsWEBGL 0.1ms x215 max 0.1 · post|bufferSubData 0.02ms x5 0MB max 0.1 · uploads|texSubImage2D 0.02ms x0.3 0.04MB max 0.2 · post|bindFramebuffer 0.01ms x43 max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · post|clear 0.01ms x25 max 0.1 · post|useProgram 0ms x20 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · post|drawElements 0ms x5 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · other|getParameter 0ms x1 max 0.1 · scene|clear 0ms x1 max 0 · post|drawElementsInstanced 0ms x1 max 0
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/216 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 793.5 MB (peak 793.5, 869.5 MB/min over 1 min) | buffers(vertex) 484.6 MB x3508 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 29.9 MB x272 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 579.1 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p2 1.9 · planet-0/terrain-L3-p8 1.9
+js heap: used 781.7 MB of 787.9 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.16 MB/frame | in flight ~0 MB | 13 full GPU waits so far (one per 64 MB fresh: 886.2 MB, 971.1 MB/min) | copied by owner since load: planet-0/terrain-L6-p16 1.9 MB · planet-0/terrain-L6-p18 1.9 MB · planet-0/terrain-L5-p10 1.9 MB · planet-0/terrain-L5-p8 1.9 MB · planet-0/terrain-L5-p7 1.9 MB · planet-0/terrain-L5-p5 1.9 MB · planet-0/terrain-L6-p4 1.9 MB · planet-0/terrain-L6-p3 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1608x0.2MB · 1876x0.1MB · 268x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11144 m | sim speed 1
+long tasks: 1 (max 514 ms, total 514 ms)
+hitches >50ms: 117
+  t 0s 367 ms: main 10 [planets 6 post 3] gpu 902.5 | draws 254 built 0 +prog 0 | alt 60 moved 54 m | longtask 514
+  t 0.4s 184 ms: main 14 [planets 8 post 5] gpu 1591.1 | draws 254 built 0 +prog 0 | alt 60 moved 52 m
+  t 0.9s 184 ms: main 15 [planets 9 post 5] gpu 1099.8 | draws 254 built 0 +prog 0 | alt 60 moved 137 m
+  t 1.4s 184 ms: main 15 [planets 9 post 5] gpu 1591.3 | draws 254 built 0 +prog 0 | alt 60 moved 121 m
+  t 1.6s 184 ms: main 15 [planets 9 post 5] gpu 1274.9 | draws 254 built 0 +prog 0 | alt 60 moved 112 m
+  t 4.4s 184 ms: main 17 [planets 9 post 7] gpu 1585.5 | draws 254 built 0 +prog 0 | alt 60 moved 105 m
+  t 5.1s 184 ms: main 16 [planets 9 post 6] gpu 1577.8 | draws 254 built 0 +prog 0 | alt 60 moved 99 m
+  t 7.7s 184 ms: main 14 [planets 9 post 5] gpu 1503.5 | draws 254 built 0 +prog 0 | alt 60 moved 99 m
+  t 8.2s 184 ms: main 4 [post 2 planets 2] gpu 1041.6 | draws 254 built 0 +prog 0 | alt 60 moved 100 m
+  t 9.6s 184 ms: main 4 [post 2 planets 2] gpu 1561.6 | draws 254 built 0 +prog 0 | alt 60 moved 97 m
+  t 12.4s 184 ms: main 5 [post 3 planets 2] gpu 1571.5 | draws 254 built 0 +prog 0 | alt 60 moved 99 m
+  t 15s 184 ms: main 5 [post 2 planets 2] gpu 1599.7 | draws 254 built 0 +prog 0 | alt 60 moved 107 m
+worst per 1 s: 367 184 184 184 184 184 184 184 184 184 167 184 184 184 184 184 184 184 184 184 167
+
+######## 2_P_water0.txt ########
+GENESIS perf report v2 · 2026-11-18T00:57:10Z · 20 s · 1199 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 60 | interval p50 16.7 p95 17.6 ms | main 3 ms/frame = 18% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 0, 0 ms, NOT in main 0 ms = 0 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches water=0&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=0 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour GREEN | swap used 2.97 GB of 4.00 GB | GPU process 766 MB | this tab 2051 MB | separate Chrome instance yes || page: js heap 1471 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 16.7 p95 17.6 p99 17.6 max 17.7 | fps 60 | >20ms 0 >33ms 0 >50ms 0
+main ms: mean 3 p95 4.2 max 17
+main by slot (mean/p95): planets 2/2.9 post 0.7/0.9 ui.post 0.1/0.3
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.1/0.1 post 73.7/94.8 | total 73.7/94.9 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.1/0.1 · post 0/0 · post:gtao 0.6/0.8 · post:copies 0.6/0.8 · post:decals 0.9/1.2 · post:water 0/0 · post:clouds 5.5/6.9 · post:atmo 10.1/11.8 · post:fx 10.7/12.3 · post:keep 0/0 · post:photo 0/0 · post:god 10.7/12.4 · post:bloom 10.5/12.5 · post:lum 8.2/12.4 · post:tonemap 7.9/12.7 · post:fxaa 7.9/12.9
+render: draws 39 (max 39) tris 0M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.1 | framebuffer switches 39/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0 0MB
+  post|bindVertexArray 0.01ms x19 max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · post|bindFramebuffer 0.01ms x38 max 0.1 · post|clear 0.01ms x25 max 0.1 · post|useProgram 0.01ms x19 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · post|drawElements 0ms x5 max 0.1 · other|getParameter 0ms x1 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · post|blitFramebuffer 0ms x1 max 0.1 · uploads|texSubImage2D 0ms x0 0MB max 0.2
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post hdr 1686x963 rgba16f msaa4 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt1 1x1 rg32f 0.5/0.5 · post adapt0 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 280.1 MB (peak 280.1, 309.6 MB/min over 1 min) | tex2d 189.3 MB x49 · rb 74.3 MB x2 · tex3d 9.1 MB x3 · cube 6.2 MB x3 · buffers(vertex) 1 MB x24 · buffers(index) 0.1 MB x4
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 491.5 MB | planet-0/vegetation 52.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L2-p1 1.9 · planet-0/terrain-L3-p2 1.9
+js heap: used 1403.2 MB of 1445 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/godfx 1.1 x27 · tex:godMask 0.8 x1 · tex:bloom1 0.8 x1 · tex:godA 0.8 x1
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.02 MB/frame | in flight ~0 MB | 0 full GPU waits so far (one per 64 MB fresh: 1.1 MB, 1.3 MB/min)
+gpu mem buffer sizes (count x size, >= 64 kB): 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 10877 m | sim speed 1
+long tasks: 0
+hitches >50ms: 0
+worst per 1 s: 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 17
+
+######## 3_P_wshade_nonoise.txt ########
+GENESIS perf report v2 · 2026-11-18T00:58:23Z · 20.3 s · 126 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 6.2 | interval p50 150.2 p95 216.9 ms | main 4.8 ms/frame = 3% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 430 ms, NOT in main 430 ms = 21.2 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wshade=nonoise&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=nonoise wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 2.97 GB of 4.00 GB | GPU process 1360 MB | this tab 2085 MB | separate Chrome instance yes || page: js heap 1402 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 150.2 p95 216.9 p99 250.3 max 317 | fps 6.2 | >20ms 125 >33ms 125 >50ms 125
+main ms: mean 4.8 p95 6.6 max 27.9
+main by slot (mean/p95): planets 2.2/3.7 actors 0.1/0.1 post 1.9/2.3 audio 0.1/0.2 ui.post 0.3/0.5
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.1/0.1 post 1334/1883.8 | total 1334.1/1883.9 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.1/0.1 · post 0/0 · post:gtao 3.2/4.9 · post:copies 3.2/4.8 · post:decals 3.7/5.4 · post:water 149.4/207.7 · post:clouds 145.2/202 · post:atmo 148/207.6 · post:fx 148.2/208 · post:keep 0/0 · post:photo 0/0 · post:god 148.3/208.1 · post:bloom 148.6/208.5 · post:lum 148.7/208.6 · post:tonemap 149.1/209.1 · post:fxaa 149.2/209.3
+render: draws 244 (max 244) tris 2.4M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.2 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.2 0.04MB
+  post|bindVertexArray 0.08ms x224 max 0.1 · post|multiDrawElementsWEBGL 0.05ms x205 max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · uploads|texSubImage2D 0.01ms x0.2 0.04MB max 0.2 · scene|bindFramebuffer 0.01ms x1 max 0.1 · post|bindFramebuffer 0.01ms x43 max 0.1 · post|useProgram 0ms x20 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · post|clear 0ms x25 max 0.1 · post|drawElements 0ms x5 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · scene|clear 0ms x1 max 0 · other|getParameter 0ms x1 max 0
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/206 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 803.1 MB (peak 803.1, 855.7 MB/min over 1 min) | buffers(vertex) 493.7 MB x3573 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 30.5 MB x277 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 600.7 MB | planet-0/vegetation 52.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L3-p4 1.9
+js heap: used 1337 MB of 1345.2 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.16 MB/frame | in flight ~0 MB | 14 full GPU waits so far (one per 64 MB fresh: 959 MB, 1021.9 MB/min) | copied by owner since load: planet-0/terrain-L5-p25 1.9 MB · planet-0/terrain-L5-p3 1.9 MB · planet-0/terrain-L5-p20 1.9 MB · planet-0/terrain-L5-p5 1.9 MB · planet-0/terrain-L5-p15 1.9 MB · planet-0/terrain-L5-p14 1.9 MB · planet-0/terrain-L5-p13 1.9 MB · planet-0/terrain-L5-p12 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1638x0.2MB · 1911x0.1MB · 273x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11036 m | sim speed 1
+long tasks: 1 (max 430 ms, total 430 ms)
+hitches >50ms: 125
+  t 0s 317 ms: main 6 [planets 4 post 2] gpu 1014.8 | draws 244 built 0 +prog 0 | alt 60 moved 149 m | longtask 430
+  t 12.2s 200 ms: main 4 [post 2 planets 2] gpu 1977.6 | draws 244 built 0 +prog 0 | alt 60 moved 94 m
+  t 12.4s 217 ms: main 5 [planets 2 post 2] gpu 2044 | draws 244 built 0 +prog 0 | alt 60 moved 104 m
+  t 12.9s 234 ms: main 5 [post 2 planets 2] gpu 1897 | draws 244 built 0 +prog 0 | alt 60 moved 116 m
+  t 13.1s 233 ms: main 28 [planets 25 post 2] gpu 1949.8 | draws 244 built 0 +prog 0 | alt 60 moved 117 m
+  t 13.3s 234 ms: main 7 [planets 4 post 2] gpu 1883.9 | draws 244 built 0 +prog 0 | alt 60 moved 119 m
+  t 13.6s 250 ms: main 5 [post 2 planets 2] gpu 1810.2 | draws 244 built 0 +prog 0 | alt 60 moved 128 m
+  t 13.8s 217 ms: main 5 [post 2 planets 2] gpu 1708.2 | draws 244 built 0 +prog 0 | alt 60 moved 112 m
+  t 14s 234 ms: main 5 [post 2 planets 2] gpu 1722.7 | draws 244 built 0 +prog 0 | alt 60 moved 131 m
+  t 14.3s 217 ms: main 5 [post 2 planets 2] gpu 1404.3 | draws 244 built 0 +prog 0 | alt 60 moved 120 m
+  t 14.5s 217 ms: main 4 [planets 2 post 2] gpu 1655.4 | draws 244 built 0 +prog 0 | alt 60 moved 119 m
+  t 15.1s 200 ms: main 6 [planets 4 post 2] gpu 1296.3 | draws 244 built 0 +prog 0 | alt 60 moved 125 m
+worst per 1 s: 317 200 167 150 168 184 167 166 150 167 184 184 234 250 234 200 184 184 167 184 134
+
+######## 4_P_wshade_noripple.txt ########
+GENESIS perf report v2 · 2026-11-18T00:59:38Z · 20.3 s · 134 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 6.6 | interval p50 150.1 p95 217.4 ms | main 7.3 ms/frame = 5% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 406 ms, NOT in main 406 ms = 20 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wshade=noripple&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=noripple wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour GREEN | swap used 2.97 GB of 4.00 GB | GPU process 1308 MB | this tab 2120 MB | separate Chrome instance yes || page: js heap 1382 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 150.1 p95 217.4 p99 283.5 max 283.7 | fps 6.6 | >20ms 133 >33ms 133 >50ms 133
+main ms: mean 7.3 p95 15.6 max 33
+main by slot (mean/p95): planets 3.4/8.8 godfx 0.1/0.2 actors 0.1/0.2 post 3.1/6.5 audio 0.1/0.2 ui.post 0.4/0.6 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.1/0.2 post 1062/1567.6 | total 1062.1/1567.7 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.1/0.2 · post 0/0 · post:gtao 3.4/5.5 · post:copies 3.4/5.6 · post:decals 3.9/6.3 · post:water 137.2/210.9 · post:clouds 131.9/191 · post:atmo 134.2/186.2 · post:fx 133.8/180.9 · post:keep 0/0 · post:photo 0/0 · post:god 133.6/179.8 · post:bloom 117.6/173.5 · post:lum 96.2/169.2 · post:tonemap 88.2/168.7 · post:fxaa 86.7/169
+render: draws 245 (max 245) tris 2.4M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.3 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.2 0.04MB
+  post|bindVertexArray 0.12ms x225 max 0.1 · post|multiDrawElementsWEBGL 0.08ms x206 max 0.1 · post|bufferSubData 0.02ms x5 0MB max 0.2 · post|drawArrays 0.02ms x33 max 0.1 · post|bindFramebuffer 0.02ms x43 max 0.1 · uploads|texSubImage2D 0.01ms x0.2 0.04MB max 0.2 · post|useProgram 0.01ms x20 max 0.1 · post|clear 0.01ms x25 max 0.1 · other|getParameter 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · post|drawElements 0ms x5 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/207 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt1 1x1 rg32f 0.5/0.5 · post adapt0 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 766.7 MB (peak 766.7, 826.1 MB/min over 1 min) | buffers(vertex) 459.4 MB x3326 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 28.4 MB x258 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 575.8 MB | planet-0/vegetation 52.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L3-p2 1.9
+js heap: used 1317.8 MB of 1343.2 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.16 MB/frame | in flight ~0 MB | 13 full GPU waits so far (one per 64 MB fresh: 865.2 MB, 932.2 MB/min) | copied by owner since load: planet-0/terrain-L2-p6 3.8 MB · planet-0/terrain-L7-p10 1.9 MB · planet-0/terrain-L5-p8 1.9 MB · planet-0/terrain-L5-p7 1.9 MB · planet-0/terrain-L5-p6 1.9 MB · planet-0/terrain-L5-p5 1.9 MB · planet-0/terrain-L5-p4 1.9 MB · planet-0/terrain-L5-p3 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1524x0.2MB · 1778x0.1MB · 254x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11086 m | sim speed 1
+long tasks: 1 (max 406 ms, total 406 ms)
+hitches >50ms: 133
+  t 0s 284 ms: main 8 [planets 5 post 2] gpu 1004.9 | draws 245 built 0 +prog 0 | alt 60 moved 140 m | longtask 406
+  t 12.4s 200 ms: main 4 [post 2 planets 2] gpu 1911.5 | draws 245 built 0 +prog 0 | alt 60 moved 109 m
+  t 12.7s 217 ms: main 6 [planets 3 post 2] gpu 1462.3 | draws 245 built 0 +prog 0 | alt 60 moved 118 m
+  t 12.9s 250 ms: main 5 [planets 2 post 2] gpu 1674.5 | draws 245 built 0 +prog 0 | alt 60 moved 138 m
+  t 13.2s 267 ms: main 5 [post 2 planets 2] gpu 993 | draws 245 built 0 +prog 0 | alt 60 moved 140 m
+  t 13.5s 284 ms: main 5 [post 2 planets 2] gpu 1694.7 | draws 245 built 0 +prog 0 | alt 60 moved 143 m
+  t 13.7s 267 ms: main 5 [planets 2 post 2] gpu 1007.3 | draws 245 built 0 +prog 0 | alt 60 moved 144 m
+  t 14s 266 ms: main 33 [planets 30 post 2] gpu 1623.1 | draws 245 built 0 +prog 0 | alt 60 moved 139 m
+  t 14.2s 217 ms: main 8 [planets 5 post 2] gpu 1035 | draws 245 built 0 +prog 0 | alt 60 moved 120 m
+  t 14.4s 217 ms: main 6 [planets 3 post 2] gpu 1567.7 | draws 245 built 0 +prog 0 | alt 60 moved 119 m
+  t 14.6s 200 ms: main 5 [planets 2 post 2] gpu 1004.8 | draws 245 built 0 +prog 0 | alt 60 moved 110 m
+  t 14.8s 200 ms: main 5 [post 2 planets 2] gpu 1510 | draws 245 built 0 +prog 0 | alt 60 moved 110 m
+worst per 1 s: 284 150 167 150 167 167 167 150 150 183 167 167 250 284 266 184 150 167 151 150 134
+
+######## 5_P.txt ########
+GENESIS perf report v2 · 2026-11-18T01:00:53Z · 20.2 s · 209 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 10.3 | interval p50 83.8 p95 150.1 ms | main 10 ms/frame = 10% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 255 ms, NOT in main 255 ms = 12.6 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 2.96 GB of 4.00 GB | GPU process 1313 MB | this tab 2206 MB | separate Chrome instance yes || page: js heap 1386 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 83.8 p95 150.1 p99 167.2 max 199.8 | fps 10.3 | >20ms 208 >33ms 208 >50ms 208
+main ms: mean 10 p95 15.6 max 31
+main by slot (mean/p95): planets 4.7/8.7 godfx 0.1/0.2 actors 0.1/0.2 post 4.4/6.7 audio 0.1/0.2 ui.post 0.3/0.6 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.1/0.2 post 637/978.4 | total 637.1/978.5 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.1/0.2 · post 0/0 · post:gtao 3.2/5.2 · post:copies 3.2/5.2 · post:decals 3.7/5.8 · post:water 80.2/117.1 · post:clouds 76.2/114.7 · post:atmo 80/112.4 · post:fx 80.3/112.8 · post:keep 0/0 · post:photo 0/0 · post:god 80.4/112.9 · post:bloom 71.2/110 · post:lum 57.5/107.2 · post:tonemap 52.5/105.9 · post:fxaa 51.6/106.2
+render: draws 245 (max 245) tris 2.4M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.4 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.1 0.02MB
+  post|bindVertexArray 0.17ms x225 max 0.1 · post|multiDrawElementsWEBGL 0.11ms x206 max 0.1 · post|drawArrays 0.02ms x33 max 0.1 · post|bufferSubData 0.02ms x5 0MB max 0.2 · post|bindFramebuffer 0.02ms x43 max 0.1 · uploads|texSubImage2D 0.01ms x0.1 0.02MB max 0.2 · post|clear 0.01ms x25 max 0.1 · post|useProgram 0.01ms x20 max 0.1 · post|drawElements 0ms x5 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1 · other|getParameter 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/207 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt1 1x1 rg32f 0.5/0.5 · post adapt0 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 776.3 MB (peak 776.3, 840.4 MB/min over 1 min) | buffers(vertex) 468.4 MB x3391 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 28.9 MB x263 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 569.5 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p3 1.9 · planet-0/terrain-L2-p1 1.9
+js heap: used 1321.4 MB of 1351.3 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.09 MB/frame | in flight ~0 MB | 14 full GPU waits so far (one per 64 MB fresh: 941.8 MB, 1019.6 MB/min) | copied by owner since load: planet-0/terrain-L2-p3 5.7 MB · planet-0/terrain-L5-p1 1.9 MB · planet-0/terrain-L5-p29 1.9 MB · planet-0/terrain-L5-p41 1.9 MB · planet-0/terrain-L5-p0 1.9 MB · planet-0/terrain-L5-p6 1.9 MB · planet-0/terrain-L5-p5 1.9 MB · planet-0/terrain-L5-p2 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1554x0.2MB · 1813x0.1MB · 259x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 10999 m | sim speed 1
+long tasks: 1 (max 255 ms, total 255 ms)
+hitches >50ms: 208
+  t 0s 200 ms: main 10 [planets 6 post 3] gpu 669.9 | draws 245 built 0 +prog 0 | alt 60 moved 106 m | longtask 255
+  t 12.3s 151 ms: main 11 [post 5 planets 5] gpu 880.6 | draws 245 built 0 +prog 0 | alt 60 moved 84 m
+  t 12.6s 151 ms: main 6 [planets 3 post 2] gpu 1080.8 | draws 245 built 0 +prog 0 | alt 60 moved 84 m
+  t 12.7s 166 ms: main 5 [planets 2 post 2] gpu 1079.8 | draws 245 built 0 +prog 0 | alt 60 moved 92 m
+  t 12.9s 166 ms: main 5 [planets 2 post 2] gpu 1049.4 | draws 245 built 0 +prog 0 | alt 60 moved 92 m
+  t 13.1s 167 ms: main 5 [post 2 planets 2] gpu 1227.1 | draws 245 built 0 +prog 0 | alt 60 moved 91 m
+  t 13.2s 167 ms: main 5 [planets 2 post 2] gpu 1229.6 | draws 245 built 0 +prog 0 | alt 60 moved 91 m
+  t 13.4s 167 ms: main 5 [planets 2 post 2] gpu 672.7 | draws 245 built 0 +prog 0 | alt 60 moved 91 m
+  t 13.6s 167 ms: main 5 [planets 2 post 2] gpu 978.5 | draws 245 built 0 +prog 0 | alt 60 moved 91 m
+  t 13.7s 150 ms: main 5 [planets 2 post 2] gpu 595.2 | draws 245 built 0 +prog 0 | alt 60 moved 82 m
+  t 13.9s 150 ms: main 5 [post 2 planets 2] gpu 864.7 | draws 245 built 0 +prog 0 | alt 60 moved 82 m
+  t 14s 150 ms: main 31 [planets 28 post 2] gpu 667.9 | draws 245 built 0 +prog 0 | alt 60 moved 84 m
+worst per 1 s: 200 100 101 117 118 117 100 100 101 100 101 117 166 167 150 118 133 101 100 100 100
+
+######## 6_P_wshade_nossr.txt ########
+GENESIS perf report v2 · 2026-11-18T01:02:08Z · 20.5 s · 104 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 5.1 | interval p50 183.6 p95 298.6 ms | main 10.9 ms/frame = 6% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 537 ms, NOT in main 537 ms = 26.1 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wshade=nossr&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=nossr wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 2.96 GB of 4.00 GB | GPU process 1296 MB | this tab 2158 MB | separate Chrome instance yes || page: js heap 1356 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 183.6 p95 298.6 p99 351.4 max 399.1 | fps 5.1 | >20ms 103 >33ms 103 >50ms 103
+main ms: mean 10.9 p95 16.9 max 33.1
+main by slot (mean/p95): ui.pre 0.1/0.1 planets 5.8/10.8 godfx 0.1/0.2 actors 0.1/0.2 post 4/6.4 audio 0.1/0.2 ui.post 0.5/1 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.1/0.2 post 1404.6/2115.3 | total 1404.7/2115.4 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.1/0.2 · post 0/0 · post:gtao 3.2/5.5 · post:copies 3.2/5.5 · post:decals 3.6/6.3 · post:water 182.1/279.3 · post:clouds 178/274.7 · post:atmo 180.6/254.7 · post:fx 180.8/255.2 · post:keep 0/0 · post:photo 0/0 · post:god 180.4/255.3 · post:bloom 155.8/255.7 · post:lum 127.2/239.7 · post:tonemap 112.5/235.4 · post:fxaa 111/235.6
+render: draws 237 (max 237) tris 2.3M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.4 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.3 0.05MB
+  post|bindVertexArray 0.14ms x217 max 0.1 · post|multiDrawElementsWEBGL 0.11ms x198 max 0.1 · uploads|texSubImage2D 0.03ms x0.3 0.05MB max 0.2 · post|bufferSubData 0.02ms x5 0MB max 0.1 · post|bindFramebuffer 0.02ms x43 max 0.1 · post|clear 0.02ms x25 max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · post|useProgram 0.01ms x20 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · other|getParameter 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · post|drawElements 0ms x5 max 0.1 · post|drawElementsInstanced 0ms x1 max 0
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/199 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 753.3 MB (peak 753.3, 800.9 MB/min over 1 min) | buffers(vertex) 446.8 MB x3235 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 27.6 MB x251 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 556.6 MB | planet-0/vegetation 52.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L2-p1 1.9 · planet-0/terrain-L3-p2 1.9
+js heap: used 1292.7 MB of 1318.8 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.2 MB/frame | in flight ~0 MB | 12 full GPU waits so far (one per 64 MB fresh: 813.4 MB, 864.9 MB/min) | copied by owner since load: planet-0/terrain-L5-p6 1.9 MB · planet-0/terrain-L5-p13 1.9 MB · planet-0/terrain-L5-p12 1.9 MB · planet-0/terrain-L5-p11 1.9 MB · planet-0/terrain-L5-p10 1.9 MB · planet-0/terrain-L5-p9 1.9 MB · planet-0/terrain-L5-p8 1.9 MB · planet-0/terrain-L5-p5 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1482x0.2MB · 1729x0.1MB · 247x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11142 m | sim speed 1
+long tasks: 1 (max 537 ms, total 537 ms)
+hitches >50ms: 103
+  t 0s 399 ms: main 10 [planets 6 post 3] gpu 753.2 | draws 237 built 0 +prog 0 | alt 60 moved 154 m | longtask 537
+  t 12.2s 267 ms: main 5 [planets 3 post 2] gpu 2559.5 | draws 237 built 0 +prog 0 | alt 60 moved 131 m
+  t 12.5s 315 ms: main 5 [planets 2 post 2] gpu 1981.3 | draws 237 built 0 +prog 0 | alt 60 moved 141 m
+  t 12.9s 351 ms: main 5 [planets 2 post 2] gpu 2162.6 | draws 237 built 0 +prog 0 | alt 60 moved 153 m
+  t 13.3s 351 ms: main 33 [planets 30 post 2] gpu 2101.8 | draws 237 built 0 +prog 0 | alt 60 moved 170 m
+  t 13.6s 334 ms: main 10 [planets 6 post 2] gpu 1999 | draws 237 built 0 +prog 0 | alt 60 moved 172 m
+  t 13.9s 299 ms: main 6 [planets 2 post 2] gpu 2109.8 | draws 237 built 0 +prog 0 | alt 60 moved 170 m
+  t 14.1s 252 ms: main 6 [planets 3 post 2] gpu 1114.5 | draws 237 built 0 +prog 0 | alt 60 moved 167 m
+  t 14.4s 250 ms: main 5 [post 2 planets 2] gpu 2027.4 | draws 237 built 0 +prog 0 | alt 60 moved 160 m
+  t 14.8s 250 ms: main 5 [post 2 planets 2] gpu 2049.5 | draws 237 built 0 +prog 0 | alt 60 moved 150 m
+  t 19.9s 252 ms: main 5 [post 2 planets 2] | draws 237 built 0 +prog 0 | alt 60 moved 131 m
+  t 20.2s 267 ms: main 10 [audio 4 planets 2 post 2] | draws 237 built 0 +prog 0 | alt 60 moved 144 m
+worst per 1 s: 399 216 200 184 217 201 200 185 199 215 200 235 351 351 252 250 234 200 217 252 267
+
+######## 7_P_wshade_nopcf.txt ########
+GENESIS perf report v2 · 2026-11-18T01:03:25Z · 20.7 s · 84 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 4.1 | interval p50 233.5 p95 367 ms | main 6.7 ms/frame = 3% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 610 ms, NOT in main 610 ms = 29.5 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wshade=nopcf&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=nopcf wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 2.96 GB of 4.00 GB | GPU process 1309 MB | this tab 2159 MB | separate Chrome instance yes || page: js heap 1370 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 233.5 p95 367 p99 433.7 max 433.7 | fps 4.1 | >20ms 83 >33ms 83 >50ms 83
+main ms: mean 6.7 p95 13.1 max 31.5
+main by slot (mean/p95): planets 3.4/7.3 godfx 0.1/0.2 actors 0.1/0.2 post 2.4/4.4 audio 0.1/0.2 ui.post 0.4/0.7
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.2/0.2 post 1680.6/2562.3 | total 1680.8/2562.4 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.2/0.2 · post 0/0 · post:gtao 3.8/6.9 · post:copies 3.8/6.9 · post:decals 4.3/7.5 · post:water 215.4/324 · post:clouds 207.1/304.6 · post:atmo 224.3/297.9 · post:fx 224.5/298.3 · post:keep 0/0 · post:photo 0/0 · post:god 224.7/298.4 · post:bloom 218.8/298.9 · post:lum 126/290 · post:tonemap 125.9/293.9 · post:fxaa 122.9/294.1
+render: draws 241 (max 241) tris 2.3M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.3 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.4 0.06MB
+  post|bindVertexArray 0.1ms x221 max 0.1 · post|multiDrawElementsWEBGL 0.08ms x202 max 0.1 · uploads|texSubImage2D 0.03ms x0.4 0.06MB max 0.3 · post|clear 0.01ms x25 max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · post|bindFramebuffer 0ms x43 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · post|useProgram 0ms x20 max 0.1 · other|getParameter 0ms x1 max 0.1 · post|drawElements 0ms x5 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · post|drawElementsInstanced 0ms x1 max 0
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/203 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 738 MB (peak 738, 793.4 MB/min over 1 min) | buffers(vertex) 432.3 MB x3131 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 26.7 MB x243 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 546.5 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L2-p2 1.9
+js heap: used 1306.9 MB of 1351.9 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.27 MB/frame | in flight ~0 MB | 12 full GPU waits so far (one per 64 MB fresh: 780.9 MB, 839.5 MB/min) | copied by owner since load: planet-0/terrain-L5-p3 3.8 MB · planet-0/terrain-L7-p1 1.9 MB · planet-0/terrain-L5-p23 1.9 MB · planet-0/terrain-L5-p17 1.9 MB · planet-0/terrain-L5-p5 1.9 MB · planet-0/terrain-L5-p19 1.9 MB · planet-0/terrain-L5-p40 1.9 MB · planet-0/terrain-L5-p1 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1434x0.2MB · 1673x0.1MB · 239x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11144 m | sim speed 1
+long tasks: 1 (max 610 ms, total 610 ms)
+hitches >50ms: 83
+  t 0s 434 ms: main 7 [planets 5 post 2] gpu 1669 | draws 241 built 0 +prog 0 | alt 60 moved 160 m | longtask 610
+  t 12.4s 317 ms: main 4 [post 2 planets 2] gpu 2064.3 | draws 241 built 0 +prog 0 | alt 60 moved 151 m
+  t 12.8s 367 ms: main 5 [post 2 planets 2] gpu 2454 | draws 241 built 0 +prog 0 | alt 60 moved 163 m
+  t 13.2s 400 ms: main 5 [post 2 planets 2] gpu 1657.7 | draws 241 built 0 +prog 0 | alt 60 moved 132 m
+  t 13.5s 384 ms: main 5 [post 2 planets 2] gpu 2464.9 | draws 241 built 0 +prog 0 | alt 60 moved 130 m
+  t 13.9s 367 ms: main 32 [planets 29 post 2] gpu 1716.6 | draws 241 built 0 +prog 0 | alt 60 moved 201 m
+  t 14.2s 348 ms: main 7 [planets 4 post 2] gpu 2444.7 | draws 241 built 0 +prog 0 | alt 60 moved 197 m
+  t 15.1s 319 ms: main 7 [post 3 planets 2] gpu 1814.9 | draws 241 built 0 +prog 0 | alt 60 moved 181 m
+  t 15.7s 317 ms: main 9 [post 4 planets 3] gpu 1941.7 | draws 241 built 0 +prog 0 | alt 60 moved 190 m
+  t 16.1s 315 ms: main 24 [planets 11 post 9 ui.post 2] gpu 2243.8 | draws 241 built 0 +prog 0 | alt 60 moved 185 m
+  t 19.9s 317 ms: main 8 [post 4 planets 3] | draws 241 built 0 +prog 0 | alt 60 moved 141 m
+  t 20.3s 317 ms: main 11 [planets 6 post 3] | draws 241 built 0 +prog 0 | alt 60 moved 148 m
+worst per 1 s: 434 234 250 250 267 234 234 217 200 217 232 282 367 400 348 319 315 286 267 317 317
+
+######## 8_P_wshade_nofoam.txt ########
+GENESIS perf report v2 · 2026-11-18T01:04:43Z · 20.6 s · 74 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 3.6 | interval p50 283.6 p95 367 ms | main 6.6 ms/frame = 2% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 943 ms, NOT in main 943 ms = 45.7 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wshade=nofoam&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=nofoam wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 3.87 GB of 5.00 GB | GPU process 1414 MB | this tab 2166 MB | separate Chrome instance yes || page: js heap 1351 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 283.6 p95 367 p99 633.9 max 633.9 | fps 3.6 | >20ms 73 >33ms 73 >50ms 73
+main ms: mean 6.6 p95 9.8 max 39.4
+main by slot (mean/p95): planets 3.7/6.6 godfx 0.1/0.1 actors 0.1/0.2 post 2.2/3.1 audio 0.1/0.2 ui.post 0.4/0.6
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.9/3.4 post 1887.1/2668.8 | total 1861.4/2673.8 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.9/3.4 · post 0/0 · post:gtao 6.6/14.9 · post:copies 7/15.9 · post:decals 7.5/15.3 · post:water 234.9/305.8 · post:clouds 227.9/292.6 · post:atmo 249.9/318.7 · post:fx 250.3/323.6 · post:keep 0/0 · post:photo 0/0 · post:god 251/325.5 · post:bloom 252.8/331.6 · post:lum 135.1/299.9 · post:tonemap 131.3/304 · post:fxaa 132.7/305.7
+render: draws 236 (max 236) tris 2.3M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.3 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.4 0.07MB
+  post|bindVertexArray 0.11ms x216 max 0.1 · post|multiDrawElementsWEBGL 0.09ms x197 max 0.1 · uploads|texSubImage2D 0.04ms x0.4 0.07MB max 0.2 · post|drawArrays 0.02ms x33 max 0.1 · post|bindFramebuffer 0.01ms x43 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · post|clear 0.01ms x25 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · other|getParameter 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · post|useProgram 0ms x20 max 0.1 · post|drawElements 0ms x5 max 0
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/198 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 739.9 MB (peak 739.9, 788.1 MB/min over 1 min) | buffers(vertex) 434.1 MB x3144 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 26.8 MB x244 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 535 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p3 1.9 · planet-0/terrain-L2-p4 1.9
+js heap: used 1288.2 MB of 1319.1 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.29 MB/frame | in flight ~0 MB | 12 full GPU waits so far (one per 64 MB fresh: 828.8 MB, 882.8 MB/min) | copied by owner since load: planet-0/terrain-L2-p5 7.7 MB · planet-0/terrain-L2-p6 1.9 MB · planet-0/terrain-L5-p7 1.9 MB · planet-0/terrain-L5-p4 1.9 MB · planet-0/terrain-L5-p6 1.9 MB · planet-0/terrain-L6-p0 1.9 MB · planet-0/terrain-L5-p0 1.9 MB · planet-0/terrain-L5-p1 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1440x0.2MB · 1680x0.1MB · 240x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11144 m | sim speed 1
+long tasks: 1 (max 943 ms, total 943 ms)
+hitches >50ms: 73
+  t 0s 634 ms: main 11 [planets 8 post 3] gpu 1610.4 | draws 236 built 0 +prog 0 | alt 60 moved 206 m | longtask 943
+  t 6.1s 317 ms: main 5 [planets 2 post 2] gpu 1643.9 | draws 236 built 0 +prog 0 | alt 60 moved 172 m
+  t 12s 318 ms: main 5 [post 2 planets 2] gpu 2754 | draws 236 built 0 +prog 0 | alt 60 moved 178 m
+  t 12.4s 367 ms: main 5 [planets 3 post 2] gpu 1992.8 | draws 236 built 0 +prog 0 | alt 60 moved 183 m
+  t 12.8s 400 ms: main 6 [planets 3 post 3] gpu 2673.8 | draws 236 built 0 +prog 0 | alt 60 moved 192 m
+  t 13.2s 401 ms: main 39 [planets 36 post 2] gpu 1541.6 | draws 236 built 0 +prog 0 | alt 60 moved 184 m
+  t 13.5s 334 ms: main 9 [planets 6 post 3] gpu 2087.2 | draws 236 built 0 +prog 0 | alt 60 moved 183 m
+  t 13.9s 350 ms: main 6 [post 3 planets 3] gpu 1587.2 | draws 236 built 0 +prog 0 | alt 60 moved 184 m
+  t 14.2s 317 ms: main 7 [planets 3 post 3] gpu 2188.6 | draws 236 built 0 +prog 0 | alt 60 moved 174 m
+  t 16.8s 317 ms: main 7 [post 3 planets 2] gpu 1786.8 | draws 236 built 0 +prog 0 | alt 60 moved 153 m
+  t 18s 317 ms: main 5 [post 3 planets 2] gpu 1871.9 | draws 236 built 0 +prog 0 | alt 60 moved 168 m
+  t 18.4s 350 ms: main 5 [planets 2 post 2] gpu 2168.4 | draws 236 built 0 +prog 0 | alt 60 moved 139 m
+worst per 1 s: 634 300 284 217 250 300 317 299 316 300 301 283 400 401 317 300 317 300 350 300 300
+
+######## 9_P_wshade_norefr.txt ########
+GENESIS perf report v2 · 2026-11-18T01:06:04Z · 20.7 s · 73 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 3.5 | interval p50 299.7 p95 350.3 ms | main 7.5 ms/frame = 3% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 800 ms, NOT in main 800 ms = 38.7 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wshade=norefr&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=norefr wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 4.02 GB of 5.00 GB | GPU process 1377 MB | this tab 2109 MB | separate Chrome instance yes || page: js heap 1321 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 299.7 p95 350.3 p99 533.4 max 533.4 | fps 3.5 | >20ms 72 >33ms 72 >50ms 72
+main ms: mean 7.5 p95 12.9 max 39.5
+main by slot (mean/p95): planets 4.2/7.6 godfx 0.1/0.2 actors 0.1/0.2 post 2.3/3.7 audio 0.1/0.2 ui.post 0.5/0.9
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.8/4.4 post 2073.3/2787.6 | total 2044.5/2788.3 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.8/4.4 · post 0/0 · post:gtao 5.4/11.4 · post:copies 5.5/11.5 · post:decals 5.7/10.5 · post:water 244.6/294.6 · post:clouds 239.9/290.7 · post:atmo 260.5/314.8 · post:fx 260.8/315.3 · post:keep 0/0 · post:photo 0/0 · post:god 261.7/315.5 · post:bloom 235.6/317.1 · post:lum 195.7/315.8 · post:tonemap 178.5/317.3 · post:fxaa 179.2/319.2
+render: draws 220 (max 220) tris 2.3M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.2 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.4 0.07MB
+  post|bindVertexArray 0.09ms x200 max 0.1 · post|multiDrawElementsWEBGL 0.06ms x181 max 0.1 · uploads|texSubImage2D 0.04ms x0.4 0.07MB max 0.3 · post|useProgram 0.01ms x20 max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · post|bindFramebuffer 0.01ms x43 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · post|clear 0.01ms x25 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · post|drawElements 0ms x5 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · scene|clear 0ms x1 max 0 · post|drawElementsInstanced 0ms x1 max 0 · post|invalidateFramebuffer 0ms x1 max 0 · other|getParameter 0ms x1 max 0
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/182 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 695.8 MB (peak 695.8, 722.7 MB/min over 1 min) | buffers(vertex) 392.6 MB x2845 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 24.3 MB x221 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 517.8 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L3-p3 1.9
+js heap: used 1259.4 MB of 1269.1 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 26.8 MB in a frame with bufferData) for 5.9 bufferSubData/frame of 0.06 MB | bufferData 0.65 MB/frame | texSubImage 0.3 MB/frame | in flight ~0 MB | 10 full GPU waits so far (one per 64 MB fresh: 700.4 MB, 727.5 MB/min) | copied by owner since load: planet-0/terrain-L2-p2 3.8 MB · planet-0/terrain-L5-p3 1.9 MB · planet-0/terrain-L5-p5 1.9 MB · planet-0/terrain-L7-p4 1.9 MB · planet-0/terrain-L5-p19 1.9 MB · planet-0/terrain-L5-p20 1.9 MB · planet-0/terrain-L5-p9 1.9 MB · planet-0/terrain-L5-p8 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1302x0.2MB · 1519x0.1MB · 217x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11248 m | sim speed 1
+long tasks: 1 (max 800 ms, total 800 ms)
+hitches >50ms: 72
+  t 0s 533 ms: main 8 [planets 5 post 2] gpu 1420.6 | draws 220 built 0 +prog 0 | alt 60 moved 175 m | longtask 800
+  t 2.2s 334 ms: main 10 [planets 6 post 3] gpu 2120.8 | draws 220 built 0 +prog 0 | alt 60 moved 164 m
+  t 2.6s 334 ms: main 12 [planets 6 post 4 ui.post 1] gpu 2205 | draws 220 built 0 +prog 0 | alt 60 moved 168 m
+  t 5.6s 350 ms: main 8 [planets 4 post 3] gpu 2475.7 | draws 220 built 0 +prog 0 | alt 60 moved 159 m
+  t 6s 350 ms: main 5 [planets 2 post 2] gpu 2450.9 | draws 220 built 0 +prog 0 | alt 60 moved 148 m
+  t 6.3s 334 ms: main 5 [post 2 planets 2] gpu 2434.3 | draws 220 built 0 +prog 0 | alt 60 moved 156 m
+  t 10.7s 334 ms: main 5 [planets 2 post 2] gpu 1430.2 | draws 220 built 0 +prog 0 | alt 60 moved 152 m
+  t 12.2s 349 ms: main 6 [planets 3 post 2] gpu 2807.5 | draws 220 built 0 +prog 0 | alt 60 moved 169 m
+  t 12.5s 335 ms: main 6 [planets 3 post 3] gpu 2141.8 | draws 220 built 0 +prog 0 | alt 60 moved 172 m
+  t 13.2s 367 ms: main 10 [planets 6 post 2] gpu 2495.4 | draws 220 built 0 +prog 0 | alt 60 moved 146 m
+  t 13.5s 334 ms: main 7 [planets 3 post 3] gpu 2272.5 | draws 220 built 0 +prog 0 | alt 60 moved 153 m
+  t 18.4s 334 ms: main 5 [planets 2 post 2] gpu 2450.9 | draws 220 built 0 +prog 0 | alt 60 moved 173 m
+worst per 1 s: 533 300 334 300 267 350 334 301 300 217 334 300 349 367 317 317 301 317 334 334 284
+
+######## 10_P.txt ########
+GENESIS perf report v2 · 2026-11-18T01:07:23Z · 20.6 s · 91 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 4.4 | interval p50 216.8 p95 316.5 ms | main 5.3 ms/frame = 2% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 652 ms, NOT in main 652 ms = 31.6 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour GREEN | swap used 3.99 GB of 5.00 GB | GPU process 1390 MB | this tab 2079 MB | separate Chrome instance yes || page: js heap 1320 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 216.8 p95 316.5 p99 450.4 max 450.4 | fps 4.4 | >20ms 90 >33ms 90 >50ms 90
+main ms: mean 5.3 p95 8.5 max 28
+main by slot (mean/p95): planets 2.9/5.6 godfx 0.1/0.1 actors 0.1/0.2 post 1.8/2.1 audio 0.1/0.2 ui.post 0.3/0.5
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.1/0.2 post 1705.1/2467 | total 1705.1/2467.1 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.1/0.2 · post 0/0 · post:gtao 3.5/5.1 · post:copies 3.5/5 · post:decals 4/5.6 · post:water 198.1/266.4 · post:clouds 193.1/261.1 · post:atmo 208.9/285.4 · post:fx 209/285.8 · post:keep 0/0 · post:photo 0/0 · post:god 209.1/285.9 · post:bloom 209.4/286.3 · post:lum 209.5/286.5 · post:tonemap 138.2/280.7 · post:fxaa 138.4/280.9
+render: draws 232 (max 232) tris 2.3M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.2 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.3 0.05MB
+  post|bindVertexArray 0.08ms x212 max 0.1 · post|multiDrawElementsWEBGL 0.06ms x193 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · uploads|texSubImage2D 0.01ms x0.3 0.05MB max 0.3 · post|bindFramebuffer 0.01ms x43 max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · post|clear 0.01ms x25 max 0.1 · post|useProgram 0.01ms x20 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · post|drawElements 0ms x5 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · other|getParameter 0ms x1 max 0.1 · post|drawElementsInstanced 0ms x1 max 0
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/194 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt1 1x1 rg32f 0.5/0.5 · post adapt0 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 728.4 MB (peak 728.4, 780.6 MB/min over 1 min) | buffers(vertex) 423.3 MB x3066 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 26.1 MB x238 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 523.3 MB | planet-0/vegetation 34.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L2-p2 1.9
+js heap: used 1259.2 MB of 1268.2 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.24 MB/frame | in flight ~0 MB | 11 full GPU waits so far (one per 64 MB fresh: 756 MB, 810.2 MB/min) | copied by owner since load: planet-0/terrain-L2-p9 1.9 MB · planet-0/terrain-L5-p16 1.9 MB · planet-0/terrain-L5-p4 1.9 MB · planet-0/terrain-L5-p10 1.9 MB · planet-0/terrain-L5-p0 1.9 MB · planet-0/terrain-L5-p7 1.9 MB · planet-0/terrain-L5-p24 1.9 MB · planet-0/terrain-L5-p23 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1404x0.2MB · 1638x0.1MB · 234x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11213 m | sim speed 1
+long tasks: 1 (max 652 ms, total 652 ms)
+hitches >50ms: 90
+  t 0s 450 ms: main 6 [planets 4 post 2] gpu 1297.5 | draws 232 built 0 +prog 0 | alt 60 moved 168 m | longtask 652
+  t 11.7s 284 ms: main 5 [post 2 planets 2] gpu 1942 | draws 232 built 0 +prog 0 | alt 60 moved 139 m
+  t 12.6s 317 ms: main 5 [post 2 planets 2] gpu 2595.2 | draws 232 built 0 +prog 0 | alt 60 moved 132 m
+  t 12.9s 317 ms: main 5 [post 2 planets 2] gpu 2005.7 | draws 232 built 0 +prog 0 | alt 60 moved 172 m
+  t 13.2s 300 ms: main 7 [planets 4 post 2] gpu 2467.1 | draws 232 built 0 +prog 0 | alt 60 moved 170 m
+  t 13.5s 317 ms: main 5 [post 2 planets 2] gpu 2320.8 | draws 232 built 0 +prog 0 | alt 60 moved 170 m
+  t 13.8s 317 ms: main 5 [post 2 planets 2] gpu 2217.5 | draws 232 built 0 +prog 0 | alt 60 moved 179 m
+  t 14.2s 301 ms: main 5 [post 3 planets 2] gpu 2535.8 | draws 232 built 0 +prog 0 | alt 60 moved 175 m
+  t 14.4s 300 ms: main 4 [post 2 planets 2] gpu 2432.2 | draws 232 built 0 +prog 0 | alt 60 moved 172 m
+  t 15.1s 301 ms: main 28 [planets 26 post 2] gpu 2156.1 | draws 232 built 0 +prog 0 | alt 60 moved 139 m
+  t 15.3s 300 ms: main 6 [planets 4 post 2] gpu 1615.6 | draws 232 built 0 +prog 0 | alt 60 moved 145 m
+  t 15.6s 300 ms: main 4 [post 2 planets 2] gpu 1695.4 | draws 232 built 0 +prog 0 | alt 60 moved 149 m
+worst per 1 s: 450 234 233 234 234 234 217 234 234 234 217 284 317 317 301 301 267 234 233 234 233
+
+######## 11_P_wshade_all6.txt ########
+GENESIS perf report v2 · 2026-11-18T01:08:38Z · 20.2 s · 153 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 7.6 | interval p50 116.8 p95 216.6 ms | main 7.6 ms/frame = 6% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 296 ms, NOT in main 296 ms = 14.6 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wshade=nonoise,noripple,nossr,nopcf,nofoam,norefr&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=nonoise+noripple+nossr+nopcf+nofoam+norefr wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 4.02 GB of 5.00 GB | GPU process 1404 MB | this tab 2159 MB | separate Chrome instance yes || page: js heap 1337 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 116.8 p95 216.6 p99 233.6 max 250.2 | fps 7.6 | >20ms 152 >33ms 152 >50ms 152
+main ms: mean 7.6 p95 14.9 max 34.9
+main by slot (mean/p95): planets 3.7/9.1 godfx 0.1/0.2 actors 0.1/0.2 post 3/6.1 audio 0.1/0.2 ui.post 0.4/0.8 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.4/2.7 post 823.4/1391.8 | total 823.9/1391.9 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.4/2.7 · post 0/0 · post:gtao 5.4/18 · post:copies 5.6/18.4 · post:decals 6/16 · post:water 94.1/148.3 · post:clouds 88.2/136 · post:atmo 108.7/162.1 · post:fx 108.5/159.8 · post:keep 0/0 · post:photo 0/0 · post:god 108.8/160.9 · post:bloom 78/156.9 · post:lum 73/157.2 · post:tonemap 76.7/161.7 · post:fxaa 75.9/162.1
+render: draws 234 (max 234) tris 2.3M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.3 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.2 0.03MB
+  post|bindVertexArray 0.14ms x214 max 0.1 · post|multiDrawElementsWEBGL 0.1ms x195 max 0.1 · post|bindFramebuffer 0.02ms x43 max 0.1 · post|drawArrays 0.02ms x33 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · post|useProgram 0.01ms x20 max 0.1 · post|clear 0.01ms x25 max 0.1 · uploads|texSubImage2D 0.01ms x0.2 0.03MB max 0.2 · scene|bindFramebuffer 0ms x1 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1 · other|getParameter 0ms x1 max 0.1 · post|drawElements 0ms x5 max 0.1 · scene|clear 0ms x1 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/196 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 732.2 MB (peak 732.2, 795.5 MB/min over 1 min) | buffers(vertex) 426.9 MB x3092 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 26.4 MB x240 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 531.2 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p3 1.9 · planet-0/terrain-L3-p8 1.9
+js heap: used 1275.3 MB of 1299 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.13 MB/frame | in flight ~0 MB | 13 full GPU waits so far (one per 64 MB fresh: 865.2 MB, 939.9 MB/min) | copied by owner since load: planet-0/terrain-L2-p7 5.7 MB · planet-0/terrain-L5-p8 1.9 MB · planet-0/terrain-L5-p10 1.9 MB · planet-0/terrain-L5-p9 1.9 MB · planet-0/terrain-L5-p1 1.9 MB · planet-0/terrain-L5-p7 1.9 MB · planet-0/terrain-L6-p18 1.9 MB · planet-0/terrain-L4-p0 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1416x0.2MB · 1652x0.1MB · 236x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11002 m | sim speed 1
+long tasks: 1 (max 296 ms, total 296 ms)
+hitches >50ms: 152
+  t 0s 201 ms: main 7 [planets 5 post 2] gpu 792.8 | draws 234 built 0 +prog 0 | alt 60 moved 107 m | longtask 296
+  t 4.9s 234 ms: main 10 [planets 6 post 3] gpu 928.4 | draws 234 built 0 +prog 0 | alt 60 moved 126 m
+  t 5.2s 250 ms: main 7 [post 3 planets 3] gpu 1247.7 | draws 234 built 0 +prog 0 | alt 60 moved 135 m
+  t 5.4s 217 ms: main 6 [post 3 planets 2] gpu 1117.3 | draws 234 built 0 +prog 0 | alt 60 moved 116 m
+  t 12.5s 217 ms: main 5 [post 2 planets 2] gpu 1094.6 | draws 234 built 0 +prog 0 | alt 60 moved 117 m
+  t 12.7s 217 ms: main 5 [planets 2 post 2] gpu 832.6 | draws 234 built 0 +prog 0 | alt 60 moved 112 m
+  t 12.9s 217 ms: main 7 [planets 4 post 2] gpu 1201.8 | draws 234 built 0 +prog 0 | alt 60 moved 113 m
+  t 13.1s 217 ms: main 5 [post 2 planets 2] gpu 761.5 | draws 234 built 0 +prog 0 | alt 60 moved 114 m
+  t 17.4s 201 ms: main 7 [post 4 planets 3] gpu 1391.9 | draws 234 built 0 +prog 0 | alt 60 moved 107 m
+  t 17.6s 217 ms: main 8 [post 3 planets 3 ui.post 1] gpu 922.5 | draws 234 built 0 +prog 0 | alt 60 moved 116 m
+  t 18s 217 ms: main 11 [post 5 planets 4] gpu 764.2 | draws 234 built 0 +prog 0 | alt 60 moved 105 m
+  t 18.4s 201 ms: main 8 [post 4 planets 3] gpu 680.8 | draws 234 built 0 +prog 0 | alt 60 moved 101 m
+worst per 1 s: 201 117 100 133 234 250 150 167 117 117 100 167 217 217 150 150 184 217 201 167 167
+
+######## 12_P_wfast2.txt ########
+GENESIS perf report v2 · 2026-11-18T01:09:56Z · 20.4 s · 144 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 7.1 | interval p50 133.5 p95 201.5 ms | main 9.8 ms/frame = 7% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 381 ms, NOT in main 381 ms = 18.7 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wfast=2&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=2 wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour GREEN | swap used 4.02 GB of 5.00 GB | GPU process 1412 MB | this tab 2122 MB | separate Chrome instance yes || page: js heap 1354 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 133.5 p95 201.5 p99 251.6 max 266.9 | fps 7.1 | >20ms 143 >33ms 143 >50ms 143
+main ms: mean 9.8 p95 15.1 max 38.7
+main by slot (mean/p95): ui.pre 0.1/0.2 planets 4.6/8.9 godfx 0.1/0.2 actors 0.1/0.2 post 4.1/6.4 audio 0.1/0.2 ui.post 0.4/0.9 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.1/0.2 post 968.6/1457.7 | total 968.7/1457.9 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.1/0.2 · post 0/0 · post:gtao 3.2/4.2 · post:copies 3.2/4.2 · post:decals 3.7/4.8 · post:water 124.8/183.1 · post:clouds 120.2/177.5 · post:atmo 123/172.6 · post:fx 123.3/173 · post:keep 0/0 · post:photo 0/0 · post:god 123.3/173.2 · post:bloom 107.3/165.2 · post:lum 86.6/165.3 · post:tonemap 78.3/162.5 · post:fxaa 78.5/162.8
+render: draws 242 (max 242) tris 2.4M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.4 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.2 0.03MB
+  post|bindVertexArray 0.17ms x222 max 0.1 · post|multiDrawElementsWEBGL 0.11ms x203 max 0.1 · post|bufferSubData 0.02ms x5 0MB max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · post|useProgram 0.01ms x20 max 0.1 · uploads|texSubImage2D 0.01ms x0.2 0.03MB max 0.1 · post|bindFramebuffer 0.01ms x43 max 0.1 · post|clear 0.01ms x25 max 0.1 · post|drawElements 0.01ms x5 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · other|getParameter 0ms x1 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/204 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 767.1 MB (peak 767.1, 837.9 MB/min over 1 min) | buffers(vertex) 459.4 MB x3326 · tex2d 189.7 MB x50 · rb 74.3 MB x2 · buffers(index) 28.4 MB x258 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 562.1 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L3-p2 1.9
+js heap: used 1291.2 MB of 1298.9 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31.4 x4 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.13 MB/frame | in flight ~0 MB | 15 full GPU waits so far (one per 64 MB fresh: 961 MB, 1049.6 MB/min) | copied by owner since load: planet-0/terrain-L7-p0 3.8 MB · planet-0/terrain-L2-p5 1.9 MB · planet-0/terrain-L5-p16 1.9 MB · planet-0/terrain-L6-p17 1.9 MB · planet-0/terrain-L6-p19 1.9 MB · planet-0/terrain-L6-p21 1.9 MB · planet-0/terrain-L5-p8 1.9 MB · planet-0/terrain-L5-p6 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1524x0.2MB · 1778x0.1MB · 254x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11085 m | sim speed 1
+long tasks: 1 (max 381 ms, total 381 ms)
+hitches >50ms: 143
+  t 0s 267 ms: main 7 [planets 5 post 2] gpu 1214 | draws 242 built 0 +prog 0 | alt 60 moved 134 m | longtask 381
+  t 12.1s 184 ms: main 12 [planets 6 post 5] gpu 1770.1 | draws 242 built 0 +prog 0 | alt 60 moved 96 m
+  t 12.5s 184 ms: main 12 [planets 6 post 5] gpu 1141 | draws 242 built 0 +prog 0 | alt 60 moved 97 m
+  t 12.7s 216 ms: main 15 [planets 9 post 4] gpu 1490.9 | draws 242 built 0 +prog 0 | alt 60 moved 115 m
+  t 12.9s 252 ms: main 12 [planets 6 post 5] gpu 1264.1 | draws 242 built 0 +prog 0 | alt 60 moved 133 m
+  t 13.2s 250 ms: main 11 [post 5 planets 5] gpu 1671.3 | draws 242 built 0 +prog 0 | alt 60 moved 134 m
+  t 13.4s 250 ms: main 11 [post 5 planets 5] gpu 1643.1 | draws 242 built 0 +prog 0 | alt 60 moved 150 m
+  t 13.7s 234 ms: main 12 [planets 6 post 5] gpu 1403.4 | draws 242 built 0 +prog 0 | alt 60 moved 137 m
+  t 13.9s 232 ms: main 11 [post 5 planets 5] gpu 1463.7 | draws 242 built 0 +prog 0 | alt 60 moved 134 m
+  t 14.1s 202 ms: main 11 [planets 5 post 5] gpu 1430.2 | draws 242 built 0 +prog 0 | alt 60 moved 114 m
+  t 14.3s 200 ms: main 11 [post 5 planets 5] gpu 1471.8 | draws 242 built 0 +prog 0 | alt 60 moved 112 m
+  t 14.5s 201 ms: main 39 [planets 36 post 2] gpu 845.8 | draws 242 built 0 +prog 0 | alt 60 moved 99 m
+worst per 1 s: 267 151 150 150 135 134 149 152 169 134 150 167 252 250 202 184 152 134 151 150 132
+
+######## 13_P_wfast1.txt ########
+GENESIS perf report v2 · 2026-11-18T01:11:12Z · 20.4 s · 87 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 4.3 | interval p50 233.5 p95 281.7 ms | main 13.5 ms/frame = 6% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 2, 601 ms, NOT in main 532 ms = 26.1 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wfast=1&scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=1 wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 4.02 GB of 5.00 GB | GPU process 1380 MB | this tab 2173 MB | separate Chrome instance yes || page: js heap 1327 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 233.5 p95 281.7 p99 585.2 max 585.2 | fps 4.3 | >20ms 86 >33ms 86 >50ms 86
+main ms: mean 13.5 p95 20 max 69.1
+main by slot (mean/p95): ui.pre 0.1/0.1 planets 7.2/12.1 godfx 0.1/0.2 actors 0.1/0.2 uploads 0.1/0.6 post 4.9/6.6 audio 0.2/0.2 ui.post 0.6/1.1 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 1/3.8 post 1623.5/2137.4 | total 1624.6/2140.3 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 1/3.8 · post 0/0 · post:gtao 6.3/13.1 · post:copies 7/13.8 · post:decals 7.3/12.9 · post:water 212.7/244.1 · post:clouds 199.4/228.7 · post:atmo 202/234.3 · post:fx 202.3/235.1 · post:keep 0/0 · post:photo 0/0 · post:god 202.8/236.3 · post:bloom 184.7/237.5 · post:lum 149.8/237.9 · post:tonemap 134.2/237.3 · post:fxaa 134.6/238
+render: draws 230 (max 230) tris 2.3M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.5 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.3 0.06MB
+  post|bindVertexArray 0.16ms x210 max 0.1 · post|multiDrawElementsWEBGL 0.13ms x191 max 0.1 · uploads|texSubImage2D 0.05ms x0.3 0.06MB max 0.4 · post|bindFramebuffer 0.03ms x43 max 0.1 · post|bufferSubData 0.03ms x5 0MB max 0.2 · post|drawArrays 0.02ms x33 max 0.1 · post|useProgram 0.02ms x20 max 0.1 · post|clear 0.01ms x25 max 0.1 · scene|bindFramebuffer 0.01ms x1 max 0.1 · post|drawElements 0.01ms x5 max 0.1 · other|getParameter 0ms x1 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/192 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 727.1 MB (peak 727.1, 772 MB/min over 1 min) | buffers(vertex) 407.1 MB x2949 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 25.1 MB x229 · tex3d 25.1 MB x4 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex3d 128x128x128 rgba16f 16 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 531.2 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p2 1.9 · planet-0/terrain-L3-p3 1.9
+js heap: used 1265.5 MB of 1295 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 47 x4 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.27 MB/frame | in flight ~0 MB | 10 full GPU waits so far (one per 64 MB fresh: 698.5 MB, 741.6 MB/min) | copied by owner since load: planet-0/terrain-L7-p6 3.8 MB · planet-0/terrain-L7-p4 3.8 MB · planet-0/terrain-L7-p2 1.9 MB · planet-0/terrain-L5-p4 1.9 MB · planet-0/terrain-L5-p26 1.9 MB · planet-0/terrain-L7-p8 1.9 MB · planet-0/terrain-L7-p7 1.9 MB · planet-0/terrain-L5-p1 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1350x0.2MB · 1575x0.1MB · 225x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11098 m | sim speed 1
+long tasks: 2 (max 531 ms, total 601 ms)
+hitches >50ms: 86
+  t 0s 385 ms: main 10 [planets 6 post 4] gpu 954 | draws 230 built 0 +prog 0 | alt 60 moved 155 m | longtask 531
+  t 2.8s 282 ms: main 16 [planets 9 post 5 ui.post 1] gpu 1838.8 | draws 230 built 0 +prog 0 | alt 60 moved 150 m
+  t 6.4s 267 ms: main 14 [planets 8 post 5] gpu 1193.7 | draws 230 built 0 +prog 0 | alt 60 moved 140 m
+  t 8.1s 382 ms: main 11 [planets 6 post 3] gpu 999.2 | draws 230 built 0 +prog 0 | alt 60 moved 152 m
+  t 8.7s 585 ms: main 9 [planets 5 post 3] gpu 1511.2 | draws 230 built 0 +prog 0 | alt 60 moved 194 m
+  t 9s 367 ms: main 8 [post 4 planets 3] gpu 1016.8 | draws 230 built 0 +prog 0 | alt 60 moved 199 m
+  t 16.2s 267 ms: main 11 [planets 5 post 5] gpu 2140.3 | draws 230 built 0 +prog 0 | alt 60 moved 138 m
+  t 16.7s 269 ms: main 12 [post 6 planets 5] gpu 1927.2 | draws 230 built 0 +prog 0 | alt 60 moved 140 m
+  t 17.2s 269 ms: main 16 [planets 10 post 5] gpu 2124.1 | draws 230 built 0 +prog 0 | alt 60 moved 141 m
+  t 17.8s 267 ms: main 11 [post 5 planets 4 ui.post 1] gpu 2147.6 | draws 230 built 0 +prog 0 | alt 60 moved 141 m
+  t 18s 267 ms: main 13 [post 7 planets 5] gpu 2020.8 | draws 230 built 0 +prog 0 | alt 60 moved 134 m
+  t 18.6s 268 ms: main 13 [post 6 planets 6] gpu 1963.9 | draws 230 built 0 +prog 0 | alt 60 moved 138 m
+worst per 1 s: 385 235 282 252 250 250 267 252 585 367 200 219 234 251 215 267 269 269 268 266 251
+
+######## 14_P.txt ########
+GENESIS perf report v2 · 2026-11-18T01:12:31Z · 20.2 s · 156 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 7.7 | interval p50 133.3 p95 183.4 ms | main 9.4 ms/frame = 7% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 2, 351 ms, NOT in main 281 ms = 13.9 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches scene=0&shadows=0&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=0 shadows=0 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 4.02 GB of 5.00 GB | GPU process 1431 MB | this tab 2171 MB | separate Chrome instance yes || page: js heap 1351 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 133.3 p95 183.4 p99 250.3 max 250.6 | fps 7.7 | >20ms 155 >33ms 155 >50ms 155
+main ms: mean 9.4 p95 17.1 max 69.7
+main by slot (mean/p95): planets 4.9/9.5 godfx 0.1/0.2 actors 0.1/0.2 post 3.6/6.5 audio 0.1/0.2 ui.post 0.4/0.8 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 0/0 scene 0.3/0.8 post 926.8/1345.3 | total 927.1/1345.4 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 0.3/0.8 · post 0/0 · post:gtao 5.4/14.7 · post:copies 5.5/15 · post:decals 6.2/16.1 · post:water 109.8/147.4 · post:clouds 103.9/141.8 · post:atmo 109/144.3 · post:fx 109.7/144.8 · post:keep 0/0 · post:photo 0/0 · post:god 110.2/145 · post:bloom 101.4/145.5 · post:lum 93.4/145.7 · post:tonemap 89/146.4 · post:fxaa 89.3/146.8
+render: draws 245 (max 245) tris 2.4M shadow 0M | patches built 0 | new programs 0
+tris by layer, scene (0.00M = 0.00 per px): none
+tris by layer, shadow (0.00M = 0.00 per shadow texel): none
+gl calls (main ms/frame in the call): total 0.4 | framebuffer switches 44/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x5 0MB · texSubImage2D x0.2 0.03MB
+  post|bindVertexArray 0.15ms x225 max 0.1 · post|multiDrawElementsWEBGL 0.11ms x206 max 0.1 · uploads|texSubImage2D 0.03ms x0.2 0.03MB max 0.3 · post|drawArrays 0.02ms x33 max 0.1 · post|bindFramebuffer 0.02ms x43 max 0.1 · post|bufferSubData 0.02ms x5 0MB max 0.1 · post|clear 0.01ms x25 max 0.1 · post|useProgram 0.01ms x20 max 0.1 · scene|bindFramebuffer 0ms x1 max 0.1 · scene|clear 0ms x1 max 0.1 · post|drawElements 0ms x5 max 0.1 · other|getParameter 0ms x1 max 0.1 · post|blitFramebuffer 0ms x2 max 0.1 · post|invalidateFramebuffer 0ms x1 max 0.1 · post|drawElementsInstanced 0ms x1 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/207 · scene hdr 1686x963 rgba16f msaa4 1/0 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 760.9 MB (peak 760.9, 833.7 MB/min over 1 min) | buffers(vertex) 454 MB x3287 · tex2d 189.3 MB x49 · rb 74.3 MB x2 · buffers(index) 28 MB x255 · tex3d 9.1 MB x3 · cube 6.2 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2 · tex2d 1686x963 r32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 558 MB | planet-0/vegetation 40.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p3 1.9 · planet-0/terrain-L2-p5 1.9
+js heap: used 1288.1 MB of 1294.4 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 83.5 x22 · rb:hdr 74.3 x2 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 21.7 x5 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x14 · planet-0/terrain-L1-p1 1.9 x14 · planet-0/terrain-L1-p2 1.9 x14 · planet-0/terrain-L1-p3 1.9 x14
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0 MB/frame x0 (max 0 MB in a frame with bufferData) for 5 bufferSubData/frame of 0 MB | bufferData 0 MB/frame | texSubImage 0.13 MB/frame | in flight ~0 MB | 13 full GPU waits so far (one per 64 MB fresh: 857.5 MB, 939.5 MB/min) | copied by owner since load: planet-0/terrain-L5-p11 1.9 MB · planet-0/terrain-L6-p1 1.9 MB · planet-0/terrain-L5-p10 1.9 MB · planet-0/terrain-L5-p8 1.9 MB · planet-0/terrain-L5-p7 1.9 MB · planet-0/terrain-L5-p5 1.9 MB · planet-0/terrain-L5-p3 1.9 MB · planet-0/terrain-L5-p2 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1506x0.2MB · 1757x0.1MB · 251x0.1MB · 1x0.8MB · 2x0.1MB · 1x0.1MB
+camera: alt 60-60 m, travelled 11055 m | sim speed 1
+long tasks: 2 (max 281 ms, total 351 ms)
+hitches >50ms: 155
+  t 0s 200 ms: main 8 [planets 5 post 2] gpu 419.4 | draws 245 built 0 +prog 0 | alt 60 moved 69 m | longtask 281
+  t 5.2s 183 ms: main 8 [post 4 planets 3] gpu 826.4 | draws 245 built 0 +prog 0 | alt 60 moved 102 m
+  t 11.9s 185 ms: main 4 [post 2 planets 2] gpu 1897 | draws 245 built 0 +prog 0 | alt 60 moved 95 m
+  t 12.1s 200 ms: main 5 [post 2 planets 2] gpu 2001.2 | draws 245 built 0 +prog 0 | alt 60 moved 104 m
+  t 12.3s 217 ms: main 5 [post 3 planets 2] gpu 1361.8 | draws 245 built 0 +prog 0 | alt 60 moved 114 m
+  t 12.6s 216 ms: main 5 [post 2 planets 2] gpu 1051.1 | draws 245 built 0 +prog 0 | alt 60 moved 114 m
+  t 12.8s 251 ms: main 6 [post 3 planets 2] gpu 1316.5 | draws 245 built 0 +prog 0 | alt 60 moved 133 m
+  t 13s 250 ms: main 7 [post 3 planets 3] gpu 877 | draws 245 built 0 +prog 0 | alt 60 moved 122 m
+  t 13.3s 183 ms: main 19 [planets 12 post 4] gpu 1216 | draws 245 built 0 +prog 0 | alt 60 moved 92 m
+  t 13.6s 167 ms: main 9 [post 4 planets 4] gpu 724.8 | draws 245 built 0 +prog 0 | alt 60 moved 79 m
+  t 13.9s 167 ms: main 9 [post 4 planets 4] gpu 607.6 | draws 245 built 0 +prog 0 | alt 60 moved 95 m
+  t 19.7s 167 ms: main 11 [post 5 planets 3 ui.post 1] gpu 919.3 | draws 245 built 0 +prog 0 | alt 60 moved 93 m
+worst per 1 s: 200 150 150 132 135 183 102 165 151 151 150 185 251 250 151 133 134 150 134 167 133
+
+######## 15_N.txt ########
+GENESIS perf report v2 · 2026-11-18T01:14:01Z · 21.7 s · 28 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 1.3 | interval p50 784 p95 1134.2 ms | main 21.2 ms/frame = 3% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 2362 ms, NOT in main 2362 ms = 109.1 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=1 shadows=1 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 4.02 GB of 5.00 GB | GPU process 1769 MB | this tab 2252 MB | separate Chrome instance yes || page: js heap 1359 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 784 p95 1134.2 p99 1551.2 max 1551.2 | fps 1.3 | >20ms 27 >33ms 27 >50ms 27
+main ms: mean 21.2 p95 32.5 max 34.6
+main by slot (mean/p95): ui.pre 0.1/0.1 planets 7.7/12.2 godfx 0.1/0.2 actors 0.1/0.2 uploads 1.5/2.3 shadows 7/15.1 scene 1.7/2.6 post 1.9/3 audio 0.3/0.3 ui.post 0.7/1 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 22.8/27 scene 635.9/744.8 post 6253.2/8355.8 | total 6635.4/9128.9 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 635.9/744.8 · post 0/0 · post:gtao 619.3/727.9 · post:copies 619.9/728.2 · post:decals 620.8/728.7 · post:water 644.8/822 · post:clouds 636.4/820.6 · post:atmo 629/846.5 · post:fx 630.1/847.6 · post:keep 0/0 · post:photo 0/0 · post:god 630.7/848.2 · post:bloom 608.1/849.6 · post:lum 460.8/815 · post:tonemap 79.3/138 · post:fxaa 74.1/137.1
+render: draws 1111 (max 1115) tris 25.6M shadow 18.1M | patches built 145 | new programs 0
+tris by layer, scene (5.25M = 3.23 per px): terrain 2.58M (1.59) · fartrees 2.01M (1.24) · trees 0.63M (0.39) · other 0.02M (0.01) · animals 0.01M (0.00)
+tris by layer, shadow (18.10M = 1.08 per shadow texel): fartrees 8.04M (0.48) · terrain 7.89M (0.47) · trees 2.17M (0.13)
+gl calls (main ms/frame in the call): total 1.4 | framebuffer switches 51/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x208.1 1.15MB · texSubImage2D x1.1 0.19MB
+  shadows|bindVertexArray 0.31ms x679.4 max 0.1 · shadows|multiDrawElementsWEBGL 0.28ms x536.7 max 0.1 · uploads|bufferSubData 0.18ms x203.1 1.15MB max 0.2 · scene|bindVertexArray 0.11ms x227 max 0.1 · post|bindVertexArray 0.11ms x190 max 0.1 · post|multiDrawElementsWEBGL 0.09ms x171 max 0.1 · uploads|texSubImage2D 0.09ms x1.1 0.19MB max 0.3 · scene|multiDrawElementsWEBGL 0.07ms x179 max 0.1 · shadows|drawElementsInstanced 0.07ms x138.7 max 0.1 · scene|drawElementsInstanced 0.02ms x43 max 0.1 · post|bufferSubData 0.02ms x5 0MB max 0.1 · post|clear 0.01ms x25 max 0.1 · post|drawArrays 0.01ms x33 max 0.1 · shadows|useProgram 0.01ms x16 max 0.1 · scene|useProgram 0.01ms x10 max 0.1 · post|bindFramebuffer 0.01ms x43 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/675.4 · post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/172 · scene hdr 1686x963 rgba16f msaa4 1/226 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 753.7 MB (peak 753.7, 749.6 MB/min over 1 min) | buffers(vertex) 426.3 MB x3457 · tex2d 191.9 MB x467 · rb 74.3 MB x2 · cube 28.7 MB x4 · buffers(index) 23.3 MB x255 · tex3d 9.1 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · cube 768x768 rgba8 cube 22.5 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 504.5 MB | planet-0/vegetation 33.1 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p2 1.9 · planet-0/terrain-L3-p3 1.9
+js heap: used 1296.2 MB of 1342.9 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 106.6 x24 · rb:hdr 74.3 x2 · planet-0/vegetation 51.1 x685 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 23.5 x7 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x16 · planet-0/terrain-L1-p1 1.9 x16 · planet-0/terrain-L1-p2 1.9 x16
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0.4 MB/frame x2.9 (max 40.4 MB in a frame with bufferData) for 110.4 bufferSubData/frame of 1.88 MB | bufferData 4.7 MB/frame | texSubImage 0.51 MB/frame | in flight ~0 MB | 10 full GPU waits so far (one per 64 MB fresh: 645.6 MB, 642.1 MB/min) | copied by owner since load: planet-0/terrain-L7-p8 3.8 MB · planet-0/terrain-L5-p0 3.8 MB · planet-0/terrain-L5-p9 3.8 MB · planet-0/terrain-L5-p8 3.8 MB · planet-0/terrain-L4-p1 1.9 MB · planet-0/terrain-L4-p0 1.9 MB · planet-0/terrain-L5-p6 1.9 MB · planet-0/terrain-L7-p7 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1242x0.2MB · 1449x0.1MB · 207x0.1MB · 3x4MB · 6x2MB · 6x1MB · 12x0.5MB · 12x0.3MB
+camera: alt 60-60 m, travelled 12175 m | sim speed 1
+long tasks: 1 (max 2362 ms, total 2362 ms)
+hitches >50ms: 27
+  t 0s 1551 ms: main 19 [planets 10 shadows 4 uploads 2] gpu 7862.6 | draws 1115 built 96 +prog 0 | alt 60 moved 74 m | longtask 2362
+  t 2.3s 801 ms: main 15 [planets 5 shadows 5 post 2] gpu 10103.6 | draws 1114 built 0 +prog 0 | alt 60 moved 293 m
+  t 5.7s 1134 ms: main 25 [planets 9 shadows 8 post 2] gpu 5637.3 | draws 1112 built 0 +prog 0 | alt 60 moved 211 m
+  t 11.9s 851 ms: main 17 [planets 6 shadows 5 uploads 2] gpu 8017 | draws 1111 built 0 +prog 0 | alt 60 moved 290 m
+  t 12.8s 917 ms: main 18 [planets 6 shadows 6 uploads 2] gpu 3735.7 | draws 1110 built 0 +prog 0 | alt 60 moved 1106 m
+  t 13.7s 901 ms: main 21 [planets 8 shadows 6 post 2] gpu 8089.5 | draws 1110 built 0 +prog 0 | alt 60 moved 236 m
+  t 14.5s 851 ms: main 20 [shadows 7 planets 6 post 2] gpu 7911.8 | draws 1110 built 0 +prog 0 | alt 60 moved 304 m
+  t 15.3s 817 ms: main 21 [planets 9 shadows 5 post 2] gpu 8580.5 | draws 1110 built 0 +prog 0 | alt 60 moved 321 m
+  t 16.2s 832 ms: main 19 [shadows 7 planets 6 post 2] gpu 7315.9 | draws 1110 built 0 +prog 0 | alt 60 moved 255 m
+  t 17s 802 ms: main 22 [shadows 9 planets 6 post 2] gpu 6244.3 | draws 1110 built 0 +prog 0 | alt 60 moved 951 m
+  t 17.8s 799 ms: main 26 [planets 8 shadows 7 audio 5] gpu 0 | draws 1110 built 0 +prog 0 | alt 60 moved 230 m
+  t 18.7s 869 ms: main 25 [shadows 15 planets 5 scene 2] | draws 1110 built 0 +prog 0 | alt 60 moved 336 m
+worst per 1 s: 1551 734 801 767 717 1134 784 651 651 784 584 851 917 901 851 817 832 799 869 749 735
+
+######## 16_N_wfast2.txt ########
+GENESIS perf report v2 · 2026-11-18T01:15:29Z · 21.9 s · 31 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 1.4 | interval p50 717.2 p95 1034.2 ms | main 18.9 ms/frame = 3% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 1, 1624 ms, NOT in main 1624 ms = 74.1 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wfast=2&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=1 shadows=1 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=2 wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 4.09 GB of 5.00 GB | GPU process 1745 MB | this tab 2173 MB | separate Chrome instance yes || page: js heap 1284 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 717.2 p95 1034.2 p99 1084.2 max 1084.2 | fps 1.4 | >20ms 30 >33ms 30 >50ms 30
+main ms: mean 18.9 p95 27.5 max 38.3
+main by slot (mean/p95): planets 6.8/15.6 godfx 0.1/0.2 actors 0.1/0.2 uploads 1.2/2.2 shadows 6.1/9.7 scene 1.7/2.5 post 1.8/3 audio 0.3/0.5 ui.post 0.7/1.5 other 0.1/0.2
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 20.9/27.4 scene 564.6/745.4 post 5752.8/9100.1 | total 6112/9867.5 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 564.6/745.4 · post 0/0 · post:gtao 548.7/732.8 · post:copies 549.2/733.6 · post:decals 550.3/735 · post:water 618.9/908.7 · post:clouds 591.5/899.8 · post:atmo 595.5/929.4 · post:fx 595.8/929.9 · post:keep 0/0 · post:photo 0/0 · post:god 596.6/930.1 · post:bloom 539.4/930.5 · post:lum 391.5/930.2 · post:tonemap 87.7/178.4 · post:fxaa 87.7/177.8
+render: draws 1093 (max 1096) tris 25.7M shadow 18.2M | patches built 0 | new programs 0
+tris by layer, scene (5.25M = 3.23 per px): terrain 2.58M (1.59) · fartrees 2.01M (1.24) · trees 0.63M (0.39) · other 0.02M (0.01) · animals 0.01M (0.00)
+tris by layer, shadow (18.17M = 1.08 per shadow texel): fartrees 8.06M (0.48) · terrain 7.89M (0.47) · trees 2.22M (0.13)
+gl calls (main ms/frame in the call): total 1.1 | framebuffer switches 51/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x163.3 1MB · texSubImage2D x1 0.17MB
+  shadows|bindVertexArray 0.28ms x671 max 0.1 · shadows|multiDrawElementsWEBGL 0.22ms x535.7 max 0.4 · uploads|bufferSubData 0.13ms x158.3 1MB max 0.1 · scene|bindVertexArray 0.09ms x222 max 0.1 · post|bindVertexArray 0.09ms x185 max 0.1 · uploads|texSubImage2D 0.08ms x1 0.17MB max 0.2 · scene|multiDrawElementsWEBGL 0.06ms x176 max 0.1 · shadows|drawElementsInstanced 0.05ms x131.3 max 0.1 · post|multiDrawElementsWEBGL 0.03ms x166 max 0.1 · scene|useProgram 0.01ms x10 max 0.1 · scene|drawElementsInstanced 0.01ms x41 max 0.1 · shadows|bindFramebuffer 0.01ms x2 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · post|bindFramebuffer 0.01ms x43 max 0.1 · shadows|clear 0.01ms x1 max 0.1 · scene|bindFramebuffer 0.01ms x6 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/667 · post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/167 · scene hdr 1686x963 rgba16f msaa4 1/221 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 741.4 MB (peak 741.4, 756.6 MB/min over 1 min) | buffers(vertex) 413.6 MB x3453 · tex2d 192.3 MB x468 · rb 74.3 MB x2 · cube 28.7 MB x4 · buffers(index) 23.3 MB x255 · tex3d 9.1 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · cube 768x768 rgba8 cube 22.5 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 504.5 MB | planet-0/vegetation 29 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L2-p1 1.9
+js heap: used 1224.7 MB of 1248.7 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 106.6 x24 · rb:hdr 74.3 x2 · planet-0/vegetation 38.4 x681 · planet-0/terrain-L1-p0-water (textures) 31.4 x4 · tex2d (unnamed) 23.5 x7 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x16 · planet-0/terrain-L1-p1 1.9 x16 · planet-0/terrain-L1-p2 1.9 x16
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0.34 MB/frame x2.5 (max 44.1 MB in a frame with bufferData) for 98 bufferSubData/frame of 1.88 MB | bufferData 3.66 MB/frame | texSubImage 0.48 MB/frame | in flight ~0 MB | 8 full GPU waits so far (one per 64 MB fresh: 575.4 MB, 587.2 MB/min) | copied by owner since load: planet-0/terrain-L2-p8 3.8 MB · planet-0/terrain-L6-p0 1.9 MB · planet-0/terrain-L7-p12 1.9 MB · planet-0/terrain-L7-p2 1.9 MB · planet-0/terrain-L7-p18 1.9 MB · planet-0/terrain-L6-p7 1.9 MB · planet-0/terrain-L6-p6 1.9 MB · planet-0/terrain-L7-p17 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1242x0.2MB · 1449x0.1MB · 207x0.1MB · 9x2MB · 15x0.5MB · 9x0.4MB · 8x0.3MB · 15x0.1MB
+camera: alt 60-60 m, travelled 11718 m | sim speed 1
+long tasks: 1 (max 1624 ms, total 1624 ms)
+hitches >50ms: 30
+  t 0s 1084 ms: main 26 [planets 16 shadows 4 uploads 2] gpu 5308.6 | draws 1096 built 0 +prog 0 | alt 60 moved 108 m | longtask 1624
+  t 6.7s 983 ms: main 19 [planets 6 shadows 6 post 2] gpu 6805.7 | draws 1095 built 0 +prog 0 | alt 60 moved 332 m
+  t 7.6s 868 ms: main 24 [planets 9 shadows 8 scene 2] gpu 3382.6 | draws 1093 built 0 +prog 0 | alt 60 moved 1028 m
+  t 14s 751 ms: main 17 [shadows 7 planets 5 scene 2] gpu 7321.6 | draws 1091 built 0 +prog 0 | alt 60 moved 310 m
+  t 14.8s 817 ms: main 15 [shadows 8 scene 2 planets 2] gpu 8691.2 | draws 1091 built 0 +prog 0 | alt 60 moved 265 m
+  t 15.8s 1034 ms: main 16 [shadows 7 post 3 planets 2] gpu 7234.6 | draws 1090 built 0 +prog 0 | alt 60 moved 1109 m
+  t 16.6s 751 ms: main 22 [shadows 10 planets 6 post 3] gpu 8390.1 | draws 1090 built 0 +prog 0 | alt 60 moved 180 m
+  t 17.4s 851 ms: main 21 [shadows 10 scene 3 planets 3] gpu 7582.3 | draws 1090 built 0 +prog 0 | alt 60 moved 303 m
+  t 18.3s 884 ms: main 20 [shadows 8 planets 6 post 2] gpu 0 | draws 1090 built 0 +prog 0 | alt 60 moved 1059 m
+  t 19.2s 851 ms: main 13 [shadows 7 planets 2 scene 2] | draws 1090 built 0 +prog 0 | alt 60 moved 234 m
+  t 20s 834 ms: main 13 [shadows 5 planets 3 post 2] | draws 1090 built 0 +prog 0 | alt 60 moved 268 m
+  t 20.9s 884 ms: main 16 [shadows 5 audio 4 planets 2] | draws 1090 built 0 +prog 0 | alt 60 moved 225 m
+worst per 1 s: 1084 534 567 567 566 686 983 868 701 701 701 734 717 751 817 1034 751 851 884 851 884
+
+######## 17_N_wfast2_tcache1.txt ########
+GENESIS perf report v2 · 2026-11-18T01:17:22Z · 22.6 s · 27 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 1.2 | interval p50 800.4 p95 1352.4 ms | main 53.6 ms/frame = 6% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 18, 3293 ms, NOT in main 2191 ms = 96.8 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches wfast=2&tcache=1&scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=1 shadows=1 shcolour=0 shnear=1 span=0 tcache=1(246.7MB,9L) tcbias=def tcbudget=def tcdens=def tcmb=def tcstat=tiles=118,cached=117,live=2006,hot=0,near=0,wide=61,want=2062/900MB,full=955,bakes=1347,glob=1 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=2 wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour YELLOW | swap used 5.63 GB of 6.00 GB | GPU process 2111 MB | this tab 2083 MB | separate Chrome instance yes || page: js heap 1324 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 800.4 p95 1352.4 p99 1451.2 max 1451.2 | fps 1.2 | >20ms 26 >33ms 26 >50ms 26
+main ms: mean 53.6 p95 73.5 max 99.3
+main by slot (mean/p95): ui.pre 0.1/0.2 planets 13.5/23.1 godfx 0.1/0.2 actors 0.2/0.3 uploads 2.2/3.5 shadows 24.6/37.3 scene 5.4/8 post 6.1/8.8 audio 0.2/0.3 ui.post 1/1.9 other 0.1/0.3
+gpu ms (mean/p95): planets 0/0 actors 0.2/0 shadows 96.2/186.1 scene 724.9/1170.7 post 6207.8/7488.3 | total 6748/8975.8 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 724.9/1170.7 · post 0/0 · post:gtao 649.4/695 · post:copies 650.4/695.3 · post:decals 651.5/696.2 · post:water 617.3/733.8 · post:clouds 610.4/727.9 · post:atmo 634.8/752.8 · post:fx 609.2/755 · post:keep 0/0 · post:photo 0/0 · post:god 610.8/757.6 · post:bloom 559.6/759.6 · post:lum 469.9/761.3 · post:tonemap 71.8/108.5 · post:fxaa 72.6/108.8
+render: draws 1096 (max 1123) tris 25.4M shadow 17.8M | patches built 0 | new programs 0
+tris by layer, scene (5.25M = 3.23 per px): terrain 2.58M (1.59) · fartrees 2.01M (1.24) · trees 0.63M (0.39) · other 0.02M (0.01) · animals 0.01M (0.00)
+tris by layer, shadow (17.85M = 1.06 per shadow texel): fartrees 8.06M (0.48) · terrain 7.84M (0.47) · trees 1.96M (0.12) · other 0.01M (0.00)
+gl calls (main ms/frame in the call): total 3 | framebuffer switches 61.6/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x203.2 0.56MB · texSubImage2D x20.5 0.25MB
+  shadows|bindVertexArray 0.64ms x664.9 max 0.2 · shadows|multiDrawElementsWEBGL 0.51ms x523.1 max 0.1 · uploads|bufferSubData 0.44ms x198.4 0.56MB max 0.2 · uploads|texSubImage2D 0.34ms x20.3 0.24MB max 0.4 · scene|multiDrawElementsWEBGL 0.2ms x178 max 0.1 · scene|bindVertexArray 0.19ms x226 max 0.1 · post|bindVertexArray 0.18ms x188 max 0.1 · post|multiDrawElementsWEBGL 0.16ms x169 max 0.1 · shadows|drawElementsInstanced 0.14ms x135.7 max 0.6 · shadows|useProgram 0.04ms x17 max 0.1 · scene|drawElementsInstanced 0.03ms x43 max 0.1 · post|drawArrays 0.03ms x33 max 0.1 · post|bindFramebuffer 0.02ms x42.8 max 0.1 · post|bufferSubData 0.02ms x4.8 0MB max 0.1 · shadows|blitFramebuffer 0.01ms x18.6 max 0.1 · scene|bindFramebuffer 0.01ms x6 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/658.8 · post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/170 · scene hdr 1686x963 rgba16f msaa4 1/225 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · shadows rt 576x576 3xrgba8 0.3/0.6 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · shadows rt 288x288 3xrgba8 0.7/1.4 · post bloom2 210x120 rgba16f 2/2 · actors cube 256x256 rgba16f 0.4/0.4 · shadows rt 192x192 3xrgba8 0.8/1.5 · post bloom3 105x60 rgba16f 2/2 · shadows rt 144x144 3xrgba8 0.3/0.6 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 1013.1 MB (peak 1013.1, 705.5 MB/min over 1 min) | buffers(vertex) 438 MB x3509 · tex3d 248.3 MB x6 · tex2d 199.9 MB x708 · rb 74.3 MB x2 · cube 28.7 MB x4 · buffers(index) 23.7 MB x259
+gpu mem largest: tex3d 1152x1152x9 rgba16f 119.6 · tex2d 4096x4096 depth_component32f 64 · tex3d 1152x1152x9 srgb8_alpha8 59.8 · tex3d 1152x1152x9 rgba8 59.8 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · cube 768x768 rgba8 cube 22.5 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4
+cpu retained (typed arrays of live geometry / data textures, by owner): total 515.9 MB | planet-0/vegetation 34.6 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L3-p2 1.9
+js heap: used 1262.8 MB of 1281.4 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 286 x26 · rb:hdr 74.3 x2 · tex3d (unnamed) 59.8 x1 · planet-0/vegetation 55.6 x685 · planet-0/terrain-L1-p0-water (textures) 31.4 x4 · tex2d (unnamed) 31 x28 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x17 · planet-0/terrain-L1-p1 1.9 x17
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0.43 MB/frame x3.2 (max 50.3 MB in a frame with bufferData) for 143.2 bufferSubData/frame of 2.13 MB | bufferData 3.81 MB/frame | texSubImage 0.68 MB/frame | in flight ~0 MB | 10 full GPU waits so far (one per 64 MB fresh: 661.6 MB, 460.7 MB/min) | copied by owner since load: planet-0/terrain-L5-p5 3.8 MB · planet-0/terrain-L6-p18 3.8 MB · planet-0/terrain-L4-p2 1.9 MB · planet-0/terrain-L4-p1 1.9 MB · planet-0/terrain-L4-p0 1.9 MB · planet-0/terrain-L5-p6 1.9 MB · planet-0/terrain-L5-p0 1.9 MB · planet-0/terrain-L7-p11 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1266x0.2MB · 1477x0.1MB · 211x0.1MB · 9x2MB · 3x4MB · 15x0.5MB · 9x0.4MB · 3x1MB
+camera: alt 60-60 m, travelled 11418 m | sim speed 1
+long tasks: 18 (max 2165 ms, total 3293 ms)
+hitches >50ms: 26
+  t 0.1s 1451 ms: main 36 [planets 23 shadows 7 scene 2] gpu 5655 | draws 1102 built 0 +prog 0 | alt 60 moved 0 m | longtask 2165
+  t 3.9s 817 ms: main 56 [shadows 22 planets 20 scene 5] gpu 7203.5 | draws 1101 built 0 +prog 0 | alt 60 moved 287 m | longtask 58
+  t 5.3s 1352 ms: main 99 [shadows 45 planets 20 post 16] gpu 3300.9 | draws 1095 built 0 +prog 0 | alt 60 moved 320 m | longtask 103
+  t 6.2s 901 ms: main 67 [shadows 37 planets 12 post 8] gpu 7053.9 | draws 1096 built 0 +prog 0 | alt 60 moved 1380 m | longtask 103
+  t 9.3s 818 ms: main 64 [shadows 32 planets 12 post 8] gpu 6754.9 | draws 1093 built 0 +prog 0 | alt 60 moved 960 m | longtask 68
+  t 10.1s 801 ms: main 74 [shadows 32 planets 20 post 8] gpu 8218.6 | draws 1093 built 0 +prog 0 | alt 60 moved 239 m | longtask 75
+  t 11.7s 819 ms: main 66 [shadows 34 planets 12 post 8] gpu 6689.3 | draws 1093 built 0 +prog 0 | alt 60 moved 234 m | longtask 68
+  t 13.3s 851 ms: main 66 [shadows 34 planets 11 post 8] gpu 3155.3 | draws 1093 built 0 +prog 0 | alt 60 moved 1115 m | longtask 68
+  t 14.1s 817 ms: main 72 [shadows 34 planets 17 post 8] gpu 4976.1 | draws 1096 built 0 +prog 0 | alt 60 moved 239 m | longtask 73
+  t 15.7s 801 ms: main 58 [shadows 28 planets 10 post 9] gpu 7318.5 | draws 1092 built 0 +prog 0 | alt 60 moved 232 m | longtask 59
+  t 18.1s 851 ms: main 55 [shadows 22 planets 16 post 7] gpu 7964.6 | draws 1092 built 0 +prog 0 | alt 60 moved 247 m | longtask 69
+  t 19.7s 801 ms: main 42 [shadows 22 planets 8 post 4] | draws 1096 built 0 +prog 0 | alt 60 moved 214 m
+worst per 1 s: 1451 751 699 817 0 1352 901 767 800 818 801 819 801 851 817 801 751 800 851 801 0 751
+
+######## 18_N.txt ########
+GENESIS perf report v2 · 2026-11-18T01:19:00Z · 22.4 s · 23 frames · build 5ee51b2d+dirty built 2026-11-17T18:55Z
+HEADLINE: fps 1 | interval p50 949.5 p95 1252 ms | main 24.1 ms/frame = 2% of wall (the rest waits: GPU / GPU process / vsync) | long tasks 3, 2877 ms, NOT in main 2772 ms = 123.7 ms/s
+NOTE: on ANGLE-Metal (Chrome on a Mac) the "gpu ms" lines are summed Metal command-buffer spans, not pass costs (overlapping, not additive): decide on the HEADLINE, the gpuprobe line and interleaved A/B fps
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version) | preset ultra | canvas 1686x963 (css 1686x963, render 1686x963) | dpr 1 | zcons on | timer yes | switches scenario=babel&seed=307987276
+perf fixes (A/B switches, effective): aoalias=1 aoblur=1 atmo=1 atmosteps=def bldpage=1 bloom=1 bshade=none bufring=1 clouds=1 cloudsteps=def decals=1 deckfull=1 deckmist=1 deckzoom=1 fartrees=1 flat=0 freeze=0 freezequiet=def freezestill=def freshland=1 fx=1 godrays=1 gpuprobe=0 gputimer=1 gtao=1 hdrmerge=0 hide=none invalidate=1 lazypools=1 lum=1 msaa=1 orthodepth=1 overdraw=0 pagenormal=1 pagepool=1 pagerelease=1 passsync=0 patchworker=1 prefetchkeep=1 preupload=0 prevalias=1 reach=1 recms=def revz=0 rscale=def scene=1 shadows=1 shcolour=0 shnear=1 span=0 tcache=0 tnoise=none tshade=none upsched=1 vshade=none vzpre=0 water=1 waterland=1 watershare=1 wclock=def wdebug=none wfast=def wshade=none wwind=def zcons=1 zedge=1 zpre=def
+depth: LOGARITHMIC (gl_FragDepth in every shader) | EXT_clip_control YES | off (default; ?revz=1 turns it on)
+depth extensions: +EXT_clip_control +EXT_conservative_depth +EXT_depth_clamp +EXT_polygon_offset_clamp +WEBGL_polygon_mode +EXT_color_buffer_float +EXT_color_buffer_half_float +EXT_float_blend +WEBGL_lose_context +EXT_disjoint_timer_query_webgl2 +WEBGL_multi_draw +WEBGL_provoking_vertex +WEBGL_clip_cull_distance
+machine (fill in from Activity Monitor): memory pressure colour GREEN | swap used 4.06 GB of 5.75 GB | GPU process 1779 MB | this tab 1707 MB | separate Chrome instance yes || page: js heap 1017 MB | deviceMemory 16 GB || (memory = macOS memory footprint of the clean instance, sampled ~11 s into the recording)
+ua: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 | cores 10
+frame ms: p50 949.5 p95 1252 p99 1934.9 max 1934.9 | fps 1 | >20ms 22 >33ms 22 >50ms 22
+main ms: mean 24.1 p95 51.1 max 53.8
+main by slot (mean/p95): planets 8.5/14.1 godfx 0.1/0.2 actors 0.1/0.2 uploads 1.5/1.9 shadows 7.8/20.7 scene 2.1/5.5 post 2.5/7.9 audio 0.6/0.4 ui.post 0.7/1.4
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 25.5/32.3 scene 679.5/906.9 post 7767.1/11040.3 | total 8048.5/11975.7 | NOTE: more GPU ms than frame ms: this driver's timer spans overlap, not additive
+gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): scene 0/0 · scene:opaque 679.5/906.9 · post 0/0 · post:gtao 657/845.8 · post:copies 657.4/847 · post:decals 659/847.7 · post:water 817/1110.3 · post:clouds 810/1099.5 · post:atmo 833.8/1128.9 · post:fx 799.2/1129.5 · post:keep 0/0 · post:photo 0/0 · post:god 801/1130 · post:bloom 746.7/1134.4 · post:lum 603.8/1136.3 · post:tonemap 190.9/374.8 · post:fxaa 191.5/375.3
+render: draws 1098 (max 1101) tris 25.9M shadow 18.3M | patches built 0 | new programs 0
+tris by layer, scene (5.29M = 3.26 per px): terrain 2.59M (1.59) · fartrees 2.05M (1.26) · trees 0.63M (0.39) · other 0.02M (0.01) · animals 0.01M (0.00)
+tris by layer, shadow (18.29M = 1.09 per shadow texel): fartrees 8.20M (0.49) · terrain 7.90M (0.47) · trees 2.19M (0.13)
+gl calls (main ms/frame in the call): total 1.3 | framebuffer switches 51/frame | uploads inside a pass 0/frame
+uploads per frame (all slots): bufferSubData x229.5 1.26MB · texSubImage2D x1.3 0.21MB
+  shadows|multiDrawElementsWEBGL 0.25ms x529.8 max 0.1 · shadows|bindVertexArray 0.25ms x672.7 max 0.1 · uploads|bufferSubData 0.17ms x224.5 1.26MB max 0.1 · post|multiDrawElementsWEBGL 0.1ms x168 max 0.1 · scene|bindVertexArray 0.1ms x223 max 0.1 · post|bindVertexArray 0.1ms x187 max 0.1 · scene|multiDrawElementsWEBGL 0.09ms x175 max 0.1 · uploads|texSubImage2D 0.05ms x1.3 0.21MB max 0.2 · shadows|drawElementsInstanced 0.05ms x138.9 max 0.1 · scene|drawElementsInstanced 0.02ms x43 max 0.1 · post|useProgram 0.01ms x20 max 0.1 · post|bufferSubData 0.01ms x5 0MB max 0.1 · shadows|useProgram 0.01ms x16 max 0.1 · post|bindFramebuffer 0.01ms x43 max 0.1 · post|clear 0.01ms x25 max 0.1 · post|invalidateFramebuffer 0.01ms x1 max 0.1
+render targets (slot name WxH format [msaa] binds/frame draws/frame): shadows shadowAtlas 4096x4096 r8 6/668.7 · post atmoA 1686x963 rgba16f 4/8 · post sceneCopy 1686x963 rgba16f 2/2 · post hdr 1686x963 rgba16f msaa4 2/169 · scene hdr 1686x963 rgba16f msaa4 1/222 · post atmoB 1686x963 rgba16f 1/1 · post linDepth 1686x963 r32f 1/1 · post ldr 1686x963 rgba8 1/2 · post cloudsHistA 1686x963 2xrgba16f 0.5/0.5 · post cloudsHistB 1686x963 2xrgba16f 0.5/0.5 · post bloom0 843x481 rgba16f 2/2 · post cloudsRaw 843x482 2xrgba16f 1/1 · post godA 421x240 rgba16f 2/2 · post bloom1 421x240 rgba16f 2/2 · post godMask 421x240 rgba16f 1/1 · post godB 421x240 rgba16f 1/1 · post bloom2 210x120 rgba16f 2/2 · post bloom3 105x60 rgba16f 2/2 · post lum0 64x64 rg32f 1/1 · post bloom4 52x30 rgba16f 2/2 · post bloom5 26x15 rgba16f 2/2 · post lum1 16x16 rg32f 1/1 · post bloom6 13x7 rgba16f 1/1 · post lum2 4x4 rg32f 1/1 · post lum3 1x1 rg32f 1/1 · post adapt0 1x1 rg32f 0.5/0.5 · post adapt1 1x1 rg32f 0.5/0.5
+gpu mem (est., live GL allocations): total 749.9 MB (peak 749.9, 742.7 MB/min over 1 min) | buffers(vertex) 422.7 MB x3431 · tex2d 191.9 MB x463 · rb 74.3 MB x2 · cube 28.7 MB x4 · buffers(index) 23.1 MB x253 · tex3d 9.1 MB x3
+gpu mem largest: tex2d 4096x4096 depth_component32f 64 · rb 1686x963 rgba16f msaa4 49.5 · rb 1686x963 depth_component32f msaa4 24.8 · cube 768x768 rgba8 cube 22.5 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex2d 1686x963 rgba16f 12.4 · tex3d 128x128x128 rgba8 8 · tex2d 1686x963 depth_component32f 6.2
+cpu retained (typed arrays of live geometry / data textures, by owner): total 500.7 MB | planet-0/vegetation 33.1 · planet-0/life (textures) 7.6 · planet-1/vegetation 4.6 · planet-0/godfx 2.2 · planet-0/groundcover 2.2 · planet-1/groundcover 2.2 · planet-0/terrain-L1-p0 1.9 · planet-0/terrain-L1-p1 1.9 · planet-0/terrain-L1-p2 1.9 · planet-0/terrain-L1-p3 1.9 · planet-0/terrain-L3-p0 1.9 · planet-0/terrain-L2-p0 1.9 · planet-0/terrain-L3-p1 1.9 · planet-0/terrain-L3-p3 1.9
+js heap: used 970.3 MB of 985 MB
+gpu mem by owner (MB x objects): planet-0/life (textures) 106.6 x24 · rb:hdr 74.3 x2 · planet-0/vegetation 51.1 x685 · planet-0/terrain-L1-p0-water (textures) 31 x3 · tex2d (unnamed) 23.5 x7 · tex:hdr 12.4 x1 · tex:atmoB 12.4 x1 · tex:cloudsHistB 12.4 x1 · tex:cloudsHistA 12.4 x1 · tex:ldr 6.2 x1 · tex:cloudsRaw 3.1 x1 · tex:bloom0 3.1 x1 · cube (unnamed) 3 x1 · planet-0/terrain-L1-p0 1.9 x16 · planet-0/terrain-L1-p1 1.9 x16 · planet-0/terrain-L1-p2 1.9 x16
+angle transients (est., ANGLE-Metal; mean over 120 frames): whole-buffer copies 0.46 MB/frame x3.4 (max 42.2 MB in a frame with bufferData) for 95.8 bufferSubData/frame of 1.93 MB | bufferData 4.91 MB/frame | texSubImage 0.69 MB/frame | in flight ~0 MB | 10 full GPU waits so far (one per 64 MB fresh: 644.8 MB, 638.6 MB/min) | copied by owner since load: planet-0/terrain-L5-p1 3.8 MB · planet-0/terrain-L5-p0 3.8 MB · planet-0/terrain-L6-p6 1.9 MB · planet-0/terrain-L6-p7 1.9 MB · planet-0/terrain-L6-p9 1.9 MB · planet-0/terrain-L6-p8 1.9 MB · planet-0/terrain-L7-p2 1.9 MB · planet-0/terrain-L6-p1 1.9 MB
+gpu mem buffer sizes (count x size, >= 64 kB): 1230x0.2MB · 1435x0.1MB · 205x0.1MB · 3x4MB · 6x2MB · 6x1MB · 12x0.5MB · 12x0.3MB
+camera: alt 60-60 m, travelled 11977 m | sim speed 1
+long tasks: 3 (max 2769 ms, total 2877 ms)
+hitches >50ms: 22
+  t 0s 1935 ms: main 13 [planets 5 shadows 4 uploads 1] gpu 8153 | draws 1101 built 0 +prog 0 | alt 60 moved 42 m | longtask 2769
+  t 1.9s 950 ms: main 15 [planets 6 shadows 4 uploads 1] gpu 9095.1 | draws 1100 built 0 +prog 0 | alt 60 moved 331 m
+  t 2.9s 969 ms: main 15 [planets 6 shadows 4 uploads 1] gpu 6697.1 | draws 1099 built 0 +prog 0 | alt 60 moved 1141 m
+  t 3.9s 1016 ms: main 17 [planets 7 shadows 4 uploads 2] gpu 8913.4 | draws 1099 built 0 +prog 0 | alt 60 moved 177 m
+  t 4.9s 984 ms: main 15 [planets 6 shadows 4 uploads 2] gpu 6239 | draws 1099 built 0 +prog 0 | alt 60 moved 331 m
+  t 8.6s 1016 ms: main 18 [planets 8 shadows 4 uploads 1] gpu 6348.1 | draws 1097 built 0 +prog 0 | alt 60 moved 286 m
+  t 12.6s 1184 ms: main 21 [planets 8 shadows 6 post 2] gpu 9447.7 | draws 1096 built 0 +prog 0 | alt 60 moved 977 m
+  t 13.8s 1252 ms: main 23 [shadows 9 planets 7 post 3] gpu 9485.4 | draws 1096 built 0 +prog 0 | alt 60 moved 248 m
+  t 16.7s 968 ms: main 54 [shadows 22 planets 13 post 8] gpu 9256.1 | draws 1096 built 0 +prog 0 | alt 60 moved 250 m | longtask 55
+  t 17.7s 1034 ms: main 47 [shadows 20 planets 10 post 8] gpu 0 | draws 1096 built 0 +prog 0 | alt 60 moved 335 m | longtask 55
+  t 18.6s 950 ms: main 51 [shadows 16 planets 14 audio 10] | draws 1096 built 0 +prog 0 | alt 60 moved 1098 m | longtask 53
+  t 20.5s 951 ms: main 32 [planets 12 shadows 12 post 3] | draws 1096 built 0 +prog 0 | alt 60 moved 316 m
+worst per 1 s: 1935 950 969 1016 984 936 901 901 1016 885 932 919 1184 1252 934 917 968 1034 950 918 951
