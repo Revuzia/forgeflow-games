@@ -21,6 +21,12 @@
 //   audio.mono               off (default): the mix is summed to mono after the master (one-sided hearing, one earbud)
 //   audio.softenLoud         off (default): a lower limiter threshold with gentle compression tames loud transients
 // The renderer reads video.dynamicResolution; the audio engine reads mono / softenLoud through AudioPort.settings.
+//   controls.castModes       per cast slot (a1 a2 a3 ult spell1 spell2, one shared 'items' entry): 'normal' (press aims,
+//                            left-click or the key again casts) · 'quick' (casts at the cursor on the press) ·
+//                            'quickIndicator' (the aim shows while the key is held, the cast goes on its release;
+//                            right-click or Esc cancels). A save without castModes migrates its quickCast: true -> every
+//                            slot 'quick', else 'normal'. quickCast is kept as "every slot is quick" (ruling 54)
+//   controls.rangeOnAttackMove  on (default): your attack-range ring shows while attack-move is armed (ruling 54)
 //
 // KEYBINDS: action → KeyboardEvent.code (layout-independent). Actions: a1 a2 a3 ult spell1 spell2
 // item1..item6 recall shop scoreboard ping attackMove stop cameraLock centerCamera selfCastMod fightersOnly attackInPlace.
@@ -33,8 +39,22 @@ export type VideoPreset = Exclude<Settings['video']['preset'], 'custom'>;
 export type VideoSettings = Settings['video'] & { dynamicResolution?: boolean };
 /** Settings.audio plus the extras above (see EXTRAS) */
 export type AudioSettings = Settings['audio'] & { mono?: boolean; softenLoud?: boolean };
+export type CastMode = 'normal' | 'quick' | 'quickIndicator';
+export const CAST_MODES: readonly CastMode[] = ['normal', 'quick', 'quickIndicator'];
+/** the castModes keys: the ability and spell slots, and one entry for every item slot */
+export const CAST_MODE_SLOTS = ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2', 'items'] as const;
+export type CastModeSlot = (typeof CAST_MODE_SLOTS)[number];
+/** Settings.controls plus the extras above (see EXTRAS) */
+export type ControlSettings = Settings['controls'] & { castModes?: Record<CastModeSlot, CastMode>; rangeOnAttackMove?: boolean };
 /** the extras' defaults */
-export const SETTINGS_EXTRAS = { video: { dynamicResolution: true }, audio: { mono: false, softenLoud: false } } as const;
+export const SETTINGS_EXTRAS = { video: { dynamicResolution: true }, audio: { mono: false, softenLoud: false }, controls: { rangeOnAttackMove: true } } as const;
+const allModes = (m: CastMode): Record<CastModeSlot, CastMode> => Object.fromEntries(CAST_MODE_SLOTS.map((k) => [k, m])) as Record<CastModeSlot, CastMode>;
+/** the cast mode of a sim slot (item1..item6 share 'items'); a controls block without castModes reads its quickCast */
+export function castModeOf(c: Settings['controls'], slot: string): CastMode {
+  const m = (c as ControlSettings).castModes;
+  const k = slot.startsWith('item') ? 'items' : slot;
+  return m?.[k as CastModeSlot] ?? (c.quickCast ? 'quick' : 'normal');
+}
 export const VIDEO_PRESETS: readonly VideoPreset[] = ['low', 'medium', 'high', 'ultra'];
 
 type Ladder = Pick<Settings['video'], 'renderScale' | 'shadows' | 'ao' | 'bloom' | 'antialias' | 'particles' | 'scatter' | 'maxDpr'>;
@@ -53,6 +73,8 @@ export const DEFAULT_BINDS: Readonly<Record<string, string>> = {
   recall: 'KeyB', shop: 'KeyP', scoreboard: 'Tab', ping: 'KeyG',
   attackMove: 'KeyA', stop: 'KeyS', cameraLock: 'KeyY', centerCamera: 'Space', selfCastMod: 'AltLeft',
   fightersOnly: 'KeyZ', attackInPlace: 'ShiftLeft',
+  // W2-D (ruling 54): hold to see your attack range; the level-up modifier (with an ability key); hold to watch an ally
+  showRange: 'KeyC', levelUpMod: 'ControlLeft', viewAlly1: 'F2', viewAlly2: 'F3', viewAlly3: 'F4', viewAlly4: 'F5',
 };
 
 /** the defaults, in the canonical key order normalizeSettings produces (stable JSON) */
@@ -65,7 +87,7 @@ function rawDefaults(): Settings {
   return {
     video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false, ambientEffects: true, ...SETTINGS_EXTRAS.video } as VideoSettings,
     audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true, ...SETTINGS_EXTRAS.audio } as AudioSettings,
-    controls: { binds: { ...DEFAULT_BINDS }, quickCast: false, cameraLock: true, edgePan: true, panSpeed: 0.5, attackMoveOnClick: false, selfCastModifier: 'AltLeft' },
+    controls: { binds: { ...DEFAULT_BINDS }, quickCast: false, cameraLock: true, edgePan: true, panSpeed: 0.5, attackMoveOnClick: false, selfCastModifier: 'AltLeft', castModes: allModes('normal'), ...SETTINGS_EXTRAS.controls } as ControlSettings,
     access: { colorblind: 'off', uiScale: 1, hudScale: 1, minimapScale: 1, reduceMotion: false, screenShake: 0.5, subtitles: true, locFlash: false, damageFlash: false },
     gameplay: { showDamageNumbers: true, showAllyIndicators: true, healthBarTicks: true, minimapSide: 'right' },
   };
@@ -96,10 +118,17 @@ const str = (v: unknown, d: string): string => (typeof v === 'string' && v.lengt
 export function normalizeSettings(raw: unknown, base: Settings = defaultSettings()): Settings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof Settings, Record<string, unknown>>>;
   const v = r.video ?? {}, a = r.audio ?? {}, c = r.controls ?? {}, x = r.access ?? {}, g = r.gameplay ?? {};
-  const bv: VideoSettings = base.video, ba: AudioSettings = base.audio, bc = base.controls, bx = base.access, bg = base.gameplay;
+  const bv: VideoSettings = base.video, ba: AudioSettings = base.audio, bc: ControlSettings = base.controls, bx = base.access, bg = base.gameplay;
   const binds: Record<string, string> = { ...DEFAULT_BINDS, ...bc.binds };
   if (c.binds && typeof c.binds === 'object') {
-    for (const [k, val] of Object.entries(c.binds as Record<string, unknown>)) if (typeof val === 'string' && val.length <= 32) binds[k] = val;
+    const raw = c.binds as Record<string, unknown>;
+    for (const [k, val] of Object.entries(raw)) if (typeof val === 'string' && val.length <= 32) binds[k] = val;
+    // an action a save predates takes its default key only when the save gave that key to nothing else (a player who put
+    // the shop on C keeps C for the shop; the new action starts unbound)
+    for (const k of Object.keys(DEFAULT_BINDS)) {
+      if (k in raw) continue;
+      if (Object.entries(raw).some(([o, v]) => o !== k && v === DEFAULT_BINDS[k])) binds[k] = '';
+    }
   }
   const video: VideoSettings = {
     preset: oneOf(v.preset, ['low', 'medium', 'high', 'ultra', 'custom'] as const, bv.preset),
@@ -122,11 +151,14 @@ export function normalizeSettings(raw: unknown, base: Settings = defaultSettings
     muteInBackground: bool(a.muteInBackground, ba.muteInBackground),
     mono: bool(a.mono, ba.mono ?? SETTINGS_EXTRAS.audio.mono), softenLoud: bool(a.softenLoud, ba.softenLoud ?? SETTINGS_EXTRAS.audio.softenLoud),
   };
-  return {
-    video,
-    audio,
-    controls: {
-      binds, quickCast: bool(c.quickCast, bc.quickCast),
+  // cast modes (ruling 54): a save with castModes keeps each valid entry; a save from before them migrates its quickCast
+  // (true -> every slot quick); quickCast then reads "every slot is quick"
+  const rawModes = c.castModes && typeof c.castModes === 'object' ? (c.castModes as Record<string, unknown>) : null;
+  const legacy: CastMode | null = !rawModes && typeof c.quickCast === 'boolean' ? (c.quickCast ? 'quick' : 'normal') : null;
+  const castModes = {} as Record<CastModeSlot, CastMode>;
+  for (const k of CAST_MODE_SLOTS) castModes[k] = oneOf(rawModes?.[k], CAST_MODES, legacy ?? bc.castModes?.[k] ?? (bc.quickCast ? 'quick' : 'normal'));
+  const controls: ControlSettings = {
+      binds, quickCast: CAST_MODE_SLOTS.every((k) => castModes[k] === 'quick'),
       // the camera is locked to your fighter by default; a save from before that default only keeps an unlocked
       // camera if the player chose it (cameraLockChosen), so old default saves lock once
       cameraLock: c.cameraLockChosen === true || bc.cameraLockChosen === true ? bool(c.cameraLock, bc.cameraLock) : bc.cameraLock,
@@ -134,7 +166,13 @@ export function normalizeSettings(raw: unknown, base: Settings = defaultSettings
       edgePan: bool(c.edgePan, bc.edgePan),
       panSpeed: clamp(c.panSpeed, 0, 1, bc.panSpeed), attackMoveOnClick: bool(c.attackMoveOnClick, bc.attackMoveOnClick),
       selfCastModifier: str(c.selfCastModifier, bc.selfCastModifier),
-    },
+      castModes,
+      rangeOnAttackMove: bool(c.rangeOnAttackMove, bc.rangeOnAttackMove ?? SETTINGS_EXTRAS.controls.rangeOnAttackMove),
+  };
+  return {
+    video,
+    audio,
+    controls,
     access: {
       colorblind: oneOf(x.colorblind, ['off', 'deutan', 'protan', 'tritan'] as const, bx.colorblind),
       uiScale: clamp(x.uiScale, 0.5, 2, bx.uiScale), hudScale: clamp(x.hudScale, 0.5, 2, bx.hudScale),

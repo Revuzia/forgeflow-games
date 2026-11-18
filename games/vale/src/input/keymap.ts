@@ -4,7 +4,8 @@
 // labels. Action vocabulary (code, not content): a1 a2 a3 ult spell1 spell2 item1..item6 recall shop
 // scoreboard ping attackMove stop cameraLock centerCamera selfCastMod fightersOnly (held: clicks and
 // attack-moves consider enemy fighters only) attackInPlace (held: a left-click attacks in place toward the cursor,
-// never walking; default Shift, ruling 39).
+// never walking; default Shift, ruling 39) showRange (held: your attack-range ring) levelUpMod (held with an ability key:
+// level it up; default Ctrl) viewAlly1..viewAlly4 (held: the camera watches that ally; ruling 54).
 
 import type { SlotT } from '../contracts/catalog.ts';
 import type { Settings } from '../contracts/session.ts';
@@ -12,7 +13,10 @@ import type { Settings } from '../contracts/session.ts';
 export type Action =
   | 'a1' | 'a2' | 'a3' | 'ult' | 'spell1' | 'spell2'
   | 'item1' | 'item2' | 'item3' | 'item4' | 'item5' | 'item6'
-  | 'recall' | 'shop' | 'scoreboard' | 'ping' | 'attackMove' | 'stop' | 'cameraLock' | 'centerCamera' | 'selfCastMod' | 'fightersOnly' | 'attackInPlace';
+  | 'recall' | 'shop' | 'scoreboard' | 'ping' | 'attackMove' | 'stop' | 'cameraLock' | 'centerCamera' | 'selfCastMod' | 'fightersOnly' | 'attackInPlace'
+  | 'showRange' | 'levelUpMod' | 'viewAlly1' | 'viewAlly2' | 'viewAlly3' | 'viewAlly4';
+/** the hold-to-watch-an-ally actions, in ally order */
+export const VIEW_ALLY: readonly Action[] = ['viewAlly1', 'viewAlly2', 'viewAlly3', 'viewAlly4'];
 
 export const CAST_ACTIONS: readonly Action[] = ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2', 'item1', 'item2', 'item3', 'item4', 'item5', 'item6'];
 export const LEVEL_SLOTS = ['a1', 'a2', 'a3', 'ult'] as const;

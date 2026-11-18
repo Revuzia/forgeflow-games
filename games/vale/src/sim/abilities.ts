@@ -22,7 +22,7 @@ import { TICK_DT, type EntityId } from '../contracts/sim.ts';
 import type { AbilityCoreT } from './catalog_index.ts';
 import { makeCtx, matchesFilter, onEffectHit, ranked, runEffects } from './effects.ts';
 import {
-  AbilitySlot, ORDER_CAST, ORDER_NONE, SLOT_A1, SLOT_INDEX, SLOT_ITEM1, SLOT_NAMES, SLOT_SPELL1, SLOT_ULT, type Entity, type SourceRef,
+  AbilitySlot, ORDER_CAST, ORDER_NONE, SLOT_A1, SLOT_INDEX, SLOT_ITEM1, SLOT_NAMES, SLOT_SPELL1, SLOT_ULT, type Entity, type Player, type SourceRef,
 } from './entity.ts';
 import { breakInvisibility, canCast } from './status.ts';
 import { markStatsDirty, computeStats } from './stats.ts';
@@ -398,13 +398,43 @@ export function interruptCast(w: World, e: Entity, byCC: boolean): void {
   e.cast = null;
 }
 
+// ── the cast buffer (ruling 54) ─────────────────────────────────────────────────────────────────
+// A human seat's cast that the sim refused only because the fighter was busy (a windup, a channel or a dash: gate()
+// 'busy') is held, one per seat, for CAST_BUFFER_S and fired through tryCast on the first tick the fighter is free. A
+// newer cast press replaces it; a move to a new point, a stop, an attack order, CC or silence that refuses it, and death
+// clear it. Bots and unit AI never buffer (their commands and tryCast calls are untouched).
+/** how long (s) a cast pressed while busy waits for the fighter to be free */
+export const CAST_BUFFER_S = 0.4;
+
+/** hold a busy-refused cast for `p` (a human seat) */
+export function bufferCast(w: World, p: Player, slotIndex: number, x: number | undefined, y: number | undefined, target: EntityId | undefined): void {
+  p.bufSlot = slotIndex; p.bufX = x ?? NaN; p.bufY = y ?? NaN; p.bufTarget = target ?? -1;
+  p.bufUntil = w.time + CAST_BUFFER_S;
+}
+export function clearCastBuffer(p: Player | null | undefined): void {
+  if (!p || p.bufSlot < 0) return;
+  p.bufSlot = -1; p.bufTarget = -1; p.bufX = NaN; p.bufY = NaN;
+}
+/** the 'casts' phase step for a held cast: lapse, clear on CC / death, or fire on the first free tick */
+function stepCastBuffer(w: World, e: Entity): void {
+  const p = e.player;
+  if (!p || p.bufSlot < 0) return;
+  const s = e.slots[p.bufSlot];
+  if (!e.alive || !s || w.time > p.bufUntil + 1e-9 || !canCast(e, s.kind)) { clearCastBuffer(p); return; }
+  if (e.cast || e.dash) return;
+  const slot = p.bufSlot, x = p.bufX, y = p.bufY, t = p.bufTarget;
+  clearCastBuffer(p);
+  tryCast(w, e, slot, Number.isNaN(x) ? undefined : x, Number.isNaN(y) ? undefined : y, t >= 0 ? t : undefined);
+}
+
 /** the 'casts' phase: windups, channels, casts waiting for range */
 export function castSystem(w: World): void {
   const list = w.entities;
   const dt = TICK_DT;
   for (let i = 0; i < list.length; i++) {
     const e = list[i];
-    if (!e.alive) continue;
+    if (!e.alive) { if (e.player && e.player.bufSlot >= 0) clearCastBuffer(e.player); continue; }
+    stepCastBuffer(w, e);
     if (e.order === ORDER_CAST && !e.cast) {
       const s = e.slots[e.pendingSlot];
       const tgt = e.pendingTarget >= 0 ? w.live(e.pendingTarget) : null;
@@ -421,7 +451,7 @@ export function castSystem(w: World): void {
     if (!cs) continue;
     if (cs.phase === 'windup') {
       cs.t += dt;
-      if (cs.t + 1e-9 >= cs.dur) releaseCast(w, e);
+      if (cs.t + 1e-9 >= cs.dur) { releaseCast(w, e); if (!e.cast) stepCastBuffer(w, e); }
       continue;
     }
     // channel
@@ -439,6 +469,7 @@ export function castSystem(w: World): void {
     if (e.cast === cs && cs.t + 1e-9 >= cs.dur) {
       e.cast = null;
       runEffects(w, cs.def.effects, cs.ctx);
+      if (!e.cast) stepCastBuffer(w, e);
     }
   }
 }

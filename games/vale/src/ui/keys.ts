@@ -34,10 +34,12 @@ export const ACTION_LABELS: Record<string, string> = {
   recall: 'Recall', shop: 'Open shop', scoreboard: 'Scoreboard (hold)', ping: 'Ping', attackMove: 'Attack-move', stop: 'Stop',
   cameraLock: 'Camera lock', centerCamera: 'Centre camera (hold)', selfCastMod: 'Self-cast modifier',
   fightersOnly: 'Target fighters only (hold)', attackInPlace: 'Attack in place (hold + left-click)',
+  showRange: 'Show attack range (hold)', levelUpMod: 'Level-up key (hold + ability key)',
+  viewAlly1: 'Watch ally 1 (hold)', viewAlly2: 'Watch ally 2 (hold)', viewAlly3: 'Watch ally 3 (hold)', viewAlly4: 'Watch ally 4 (hold)',
 };
 export const ACTION_GROUPS: { title: string; actions: string[] }[] = [
   { title: 'Abilities', actions: ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2'] },
   { title: 'Items', actions: ['item1', 'item2', 'item3', 'item4', 'item5', 'item6'] },
-  { title: 'Commands', actions: ['attackMove', 'attackInPlace', 'fightersOnly', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
-  { title: 'Camera', actions: ['cameraLock', 'centerCamera'] },
+  { title: 'Commands', actions: ['attackMove', 'attackInPlace', 'fightersOnly', 'showRange', 'levelUpMod', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
+  { title: 'Camera', actions: ['cameraLock', 'centerCamera', 'viewAlly1', 'viewAlly2', 'viewAlly3', 'viewAlly4'] },
 ];

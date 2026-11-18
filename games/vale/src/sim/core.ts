@@ -16,7 +16,7 @@
 
 import type { CatalogT } from '../contracts/catalog.ts';
 import { TICK_DT, type MatchSetup, type PlayerId } from '../contracts/sim.ts';
-import { castSystem, levelUpAbility, tickSlots, tryCast } from './abilities.ts';
+import { bufferCast, castSystem, clearCastBuffer, levelUpAbility, tickSlots, tryCast } from './abilities.ts';
 import { attackSystem } from './attack.ts';
 import type { CatalogIndex } from './catalog_index.ts';
 import { killEntity, tickShields } from './combat.ts';
@@ -40,16 +40,28 @@ export function commandSystem(w: World): void {
     const p = w.players[player];
     if (!p) continue;
     const e = p.ent;
+    // the cast buffer (ruling 54, human seats only): a newer order drops a held cast, except a re-send of the move being
+    // walked (a held button) and a held attack-in-place's own re-aims
+    const human = p.controller === 'human';
     switch (cmd.type) {
-      case 'move': if (e && e.alive) issueMove(w, e, cmd.x, cmd.y, !!cmd.attackMove, cmd.prefer); break;
+      case 'move':
+        if (e && e.alive) {
+          if (human && p.bufSlot >= 0 && !(Math.abs(e.orderReqX - cmd.x) + Math.abs(e.orderReqY - cmd.y) < 0.05)) clearCastBuffer(p);
+          issueMove(w, e, cmd.x, cmd.y, !!cmd.attackMove, cmd.prefer);
+        }
+        break;
       case 'attack': {
         const t = w.live(cmd.target);
-        if (e && e.alive && t && t.team !== e.team) issueAttack(w, e, t);
+        if (e && e.alive && t && t.team !== e.team) { if (human) clearCastBuffer(p); issueAttack(w, e, t); }
         break;
       }
-      case 'attackAt': if (e && e.alive) { if (cmd.end) endAttackAt(e); else issueAttackAt(w, e, cmd.x, cmd.y, cmd.target ?? -1, !!cmd.fighters, !!cmd.held); } break;
-      case 'stop': if (e && e.alive) issueStop(w, e); break;
-      case 'cast': if (e) tryCast(w, e, SLOT_INDEX[cmd.slot] ?? -1, cmd.x, cmd.y, cmd.target); break;
+      case 'attackAt': if (e && e.alive) { if (human && !cmd.held && !cmd.end) clearCastBuffer(p); if (cmd.end) endAttackAt(e); else issueAttackAt(w, e, cmd.x, cmd.y, cmd.target ?? -1, !!cmd.fighters, !!cmd.held); } break;
+      case 'stop': if (e && e.alive) { if (human) clearCastBuffer(p); issueStop(w, e); } break;
+      case 'cast': if (e) {
+        const slot = SLOT_INDEX[cmd.slot] ?? -1;
+        const r = tryCast(w, e, slot, cmd.x, cmd.y, cmd.target);
+        if (human) { if (r === 'busy' && e.alive) bufferCast(w, p, slot, cmd.x, cmd.y, cmd.target); else clearCastBuffer(p); }
+      } break;
       case 'levelUp': if (e) levelUpAbility(w, e, cmd.slot); break;
       default: {
         const h = w.hooks.command[cmd.type];

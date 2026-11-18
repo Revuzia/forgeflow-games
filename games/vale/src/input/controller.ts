@@ -24,10 +24,16 @@
 //   S stop · B recall · P shop · Tab scoreboard (hold)
 //   hover                   the outline shows exactly what a click would attack (the attack-move target
 //                           while Shift is held or A is armed)
-//   Q W E R D F 1–6         cast: quick cast (controls.quickCast) at the cursor, or normal cast = aim
-//                           first (the renderer draws your indicator), then left-click or the key again;
-//                           right-click / Esc cancels; the self-cast modifier casts unit abilities on you
-//   Ctrl + Q W E R          level the ability up
+//   Q W E R D F 1–6         cast, by the slot's cast mode (controls.castModes, ruling 54): normal = aim first (the
+//                           renderer draws your indicator), then left-click or the key again; quick = at the cursor on
+//                           the press; quick with indicator = the indicator shows while the key is held and the cast
+//                           goes on its release (a unit ability with no valid unit under the cursor keeps aiming, as
+//                           normal). Right-click / Esc cancels; the self-cast modifier casts unit abilities on you. A
+//                           press while the fighter is busy (windup, dash) is held by the sim for 0.4 s (ruling 54)
+//   levelUpMod + Q W E R    level the ability up (default Ctrl)
+//   showRange (hold)        your attack-range ring (range + body radius); it also shows while attack-move is armed
+//                           (controls.rangeOnAttackMove) and, with the aim line, while attack in place is held
+//   viewAlly1–4 (hold)      the camera watches that ally (default F2–F5); letting go returns it
 //   G (hold)                ping wheel at the cursor; a tap pings "Look here"; Alt + left-click pings too
 //   Y                       camera lock · Space (hold) centre on your fighter · wheel zoom · middle-drag
 //                           pans (unlocks the camera) · edge pan through the renderer's camera rig
@@ -38,7 +44,8 @@ import type { SlotT } from '../contracts/catalog.ts';
 import type { MatchClient, Settings } from '../contracts/session.ts';
 import type { EntityId, EntityView, PingKind, PlayerView } from '../contracts/sim.ts';
 import { AbilityIndex, aimSpec, canSelfCast, clampToRange, reachOf, unitMatches, type AbilityCore, type AimSpecLike } from './abilities.ts';
-import { Keymap, LEVEL_SLOTS, mouseCode, slotOfAction, type Action } from './keymap.ts';
+import { Keymap, LEVEL_SLOTS, mouseCode, slotOfAction, VIEW_ALLY, type Action } from './keymap.ts';
+import { castModeOf, type ControlSettings } from '../session/settings.ts';
 
 export interface CameraLike {
   setMode(m: 'locked' | 'semi' | 'free'): void;
@@ -59,6 +66,8 @@ export interface InputRenderer {
   pickEntity?(x: number, y: number, opts?: PickOpts): EntityId | null;
   worldToScreen?(x: number, y: number, height?: number): { x: number; y: number; visible: boolean };
   setAim?(aim: AimSpecLike | null): void;
+  /** your attack-range ring (W2-D: the telegraph layer's dashed range ring), null hides it */
+  setRangeRing?(ring: { x: number; y: number; radius: number } | null): void;
   setHover?(id: EntityId | null): void;
   setTarget?(id: EntityId | null): void;
   /** where a unit is drawn now (the interpolated actor the pick boxes use), in sim x/y */
@@ -128,8 +137,8 @@ const isField = (t: EventTarget | null): boolean => {
 export class InputController {
   readonly keymap: Keymap;
   readonly index: AbilityIndex;
-  /** the slot being aimed (normal cast) */
-  readonly aiming = signal<{ slot: SlotT; def: AbilityCore } | null>(null);
+  /** the slot being aimed (normal cast; `hold`: quick cast with indicator, cast on the key's release) */
+  readonly aiming = signal<{ slot: SlotT; def: AbilityCore; hold?: boolean } | null>(null);
   /** attack-move armed (next left-click) */
   readonly attackMove = signal(false);
   readonly wheel = signal<WheelState | null>(null);
@@ -170,6 +179,11 @@ export class InputController {
   private hudAt = -1e9;
   private hudHit = false;
   private centring: { prev: 'locked' | 'semi' | 'free' } | null = null;
+  /** a viewAlly key is held: which ally (0-3), and how to give the camera back (a locked camera peeks; an unlocked one
+   *  returns to the ground it was on) */
+  private viewing: { ally: number; action: Action; scouting: boolean; back: { x: number; y: number } | null } | null = null;
+  /** the attack-range ring as last sent (null hidden) */
+  private ringOn = false;
   private pingTimes: number[] = [];
   private wheelAt = 0;
   private off: (() => void)[] = [];
@@ -299,6 +313,9 @@ export class InputController {
     if (this.wheel.value) this.wheel.value = null;
     this.hooks.scoreboard(false);
     if (this.centring) this.endCentre();
+    if (this.viewing) this.endView();
+    // a held quick-cast-with-indicator key never sends its release now: the aim is dropped
+    if (this.aiming.value?.hold) this.cancelAim();
   }
 
   // ── per frame (the HUD's rAF): aim indicator, hover, held move, centring ────────────────────────
@@ -363,8 +380,15 @@ export class InputController {
         this.moveTo(this.lastMoveTo, this.rightHeldAttack, false);
       }
     }
+    // the attack-range ring: held showRange, or attack-move armed (controls.rangeOnAttackMove); attack in place draws its own
+    const ring = !!body && body.alive && !this.shootAim && (this.keymap.isHeld('showRange', this.held) || (this.attackMove.value && (this.settings.controls as ControlSettings).rangeOnAttackMove !== false));
+    if (ring) { const at = this.r.unitPos?.(body!.id) ?? body!; this.r.setRangeRing?.({ x: at.x, y: at.y, radius: this.attackReach(body!) }); this.ringOn = true; }
+    else if (this.ringOn) { this.ringOn = false; this.r.setRangeRing?.(null); }
     if (this.centring) this.r.camera?.centerOnSelf();
+    else if (this.viewing) { const a = this.allyBody(this.viewing.ally); if (a) this.r.camera?.focusOn(a.x, a.y); }
   }
+  /** your basic attack's reach from your centre: stats.range + body radius (the ring and the attack-in-place line) */
+  attackReach(b: EntityView): number { return Math.max(0.5, (this.me?.stats?.range ?? 0) + b.radius); }
 
   /**
    * is the pointer over HUD chrome? The last pointermove's own hit-test target answers for free, but only for
@@ -402,7 +426,8 @@ export class InputController {
     if (this.hooks.blocked()) return;
     const repeat = e.repeat || this.held.has(e.code);
     this.held.add(e.code);
-    for (const a of acts) this.action(a, true, repeat, e.ctrlKey);
+    const lvl = this.levelModHeld(e);
+    for (const a of acts) this.action(a, true, repeat, lvl);
   }
   private onKeyUp(e: KeyboardEvent): void {
     this.held.delete(e.code);
@@ -411,19 +436,33 @@ export class InputController {
     for (const a of acts) this.action(a, false, false, false);
   }
 
-  /** an action pressed (down) or released (up) — keys and bound mouse buttons alike */
-  action(a: Action, down: boolean, repeat = false, ctrl = false): void {
+  /** is the level-up modifier held (levelUpMod, default Ctrl; either side of a modifier pair, or the key event's own flag) */
+  private levelModHeld(e?: { ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean; shiftKey?: boolean }): boolean {
+    const c = this.keymap.code('levelUpMod');
+    if (!c) return false;
+    if (this.keymap.isHeld('levelUpMod', this.held)) return true;
+    const m = /^(Control|Alt|Meta|Shift)(Left|Right)$/.exec(c);
+    if (!m || !e) return false;
+    return m[1] === 'Control' ? !!e.ctrlKey : m[1] === 'Alt' ? !!e.altKey : m[1] === 'Meta' ? !!e.metaKey : !!e.shiftKey;
+  }
+
+  /** an action pressed (down) or released (up) — keys and bound mouse buttons alike. `lvl`: the level-up modifier is held */
+  action(a: Action, down: boolean, repeat = false, lvl = false): void {
     if (!down) {
       if (a === 'scoreboard') this.hooks.scoreboard(false);
       else if (a === 'ping') this.releaseWheel();
       else if (a === 'centerCamera') this.endCentre();
+      else if (this.viewing?.action === a) this.endView();
+      else { const s = slotOfAction(a); if (s) this.releaseSlot(s); }
       return;
     }
     if (a === 'scoreboard') { this.hooks.scoreboard(true); return; }
     if (repeat) return;
-    if (ctrl && (LEVEL_SLOTS as readonly string[]).includes(a)) { this.levelUp(a as (typeof LEVEL_SLOTS)[number]); return; }
+    if (lvl && (LEVEL_SLOTS as readonly string[]).includes(a)) { this.levelUp(a as (typeof LEVEL_SLOTS)[number]); return; }
     const slot = slotOfAction(a);
-    if (slot) { this.press(slot); return; }
+    if (slot) { this.press(slot, true); return; }
+    const ally = VIEW_ALLY.indexOf(a);
+    if (ally >= 0) { this.startView(ally, a); return; }
     switch (a) {
       case 'attackMove': this.cancelAim(); this.attackMove.value = true; this.cursor.value = 'attackMove'; break;
       case 'stop': this.cancelAim(); this.attackMove.value = false; this.client.send({ type: 'stop' }); break;
@@ -483,8 +522,8 @@ export class InputController {
     return false;
   }
 
-  /** a cast key (or a HUD slot click) was pressed */
-  press(slot: SlotT): void {
+  /** a cast key (`key`) or a HUD slot click was pressed */
+  press(slot: SlotT, key = false): void {
     const body = this.body;
     if (!body || !body.alive) { this.hooks.denied(slot, 'dead'); return; }
     const info = this.slotInfo(slot);
@@ -496,7 +535,10 @@ export class InputController {
     if (kind === 'unit' && canSelfCast(def) && this.keymap.selfCastHeld(this.held)) { this.cancelAim(); this.sendCast(slot, { target: body.id }); return; }
     const cur = this.aiming.value;
     if (cur && cur.slot === slot) { this.confirmAim(); return; }        // the key again casts at the cursor
-    if (this.settings.controls.quickCast) {
+    const mode = castModeOf(this.settings.controls, slot);
+    // quick cast with indicator: aim while the key is held, cast on its release (a HUD click has no release: it aims)
+    if (mode === 'quickIndicator') { this.startAim(slot, def, key); return; }
+    if (mode === 'quick') {
       if (kind === 'unit') {
         const t = this.aimUnitAt(def, body);
         if (t && unitMatches(def.targeting.filter, body, t, this.team)) { this.cancelAim(); this.sendCast(slot, { target: t.id }); }
@@ -521,8 +563,8 @@ export class InputController {
     return def.targeting.kind === 'point' ? clampToRange(body, g, reachOf(def)) : g;
   }
 
-  private startAim(slot: SlotT, def: AbilityCore): void {
-    this.aiming.value = { slot, def };
+  private startAim(slot: SlotT, def: AbilityCore, hold = false): void {
+    this.aiming.value = hold ? { slot, def, hold } : { slot, def };
     this.cursor.value = 'aim';
     this.frame(performance.now());
   }
@@ -532,6 +574,23 @@ export class InputController {
     this.r.setAim?.(null);
     this.cursor.value = 'default';
   }
+  /**
+   * a cast key went up: a quick-cast-with-indicator aim of that slot casts now, on the release (ruling 54). A unit ability
+   * with no valid unit under the cursor, or a fighter that cannot act, keeps aiming as a normal cast (left-click or the
+   * key again); a modal opened meanwhile drops the aim
+   */
+  private releaseSlot(slot: SlotT): void {
+    const aim = this.aiming.value;
+    if (!aim || aim.slot !== slot || !aim.hold) return;
+    if (this.hooks.blocked()) { this.cancelAim(); return; }
+    const body = this.body;
+    if (aim.def.targeting.kind === 'unit' && body) {
+      const t = this.aimUnitAt(aim.def, body);
+      if (!t || !unitMatches(aim.def.targeting.filter, body, t, this.team) || this.castLocked()) { this.aiming.value = { slot, def: aim.def }; return; }
+    }
+    if (!this.confirmAim() && this.aiming.value) this.aiming.value = { slot, def: aim.def };
+  }
+
   /** cast the aimed slot at the cursor; false when the cursor holds no valid target */
   private confirmAim(): boolean {
     const aim = this.aiming.value, body = this.body;
@@ -703,7 +762,7 @@ export class InputController {
   }
   /** the attack-in-place aim line: from the hero toward the cursor, its attack reach (range + body) long, the reach ring */
   private shootSpec(b: EntityView, g: { x: number; y: number }): AimSpecLike {
-    const reach = Math.max(0.5, (this.me?.stats?.range ?? 0) + b.radius);
+    const reach = this.attackReach(b);
     return { shape: 'line', x: b.x, y: b.y, dir: Math.atan2(g.y - b.y, g.x - b.x), length: reach, width: SHOOT_LINE_W, range: reach, casterX: b.x, casterY: b.y };
   }
 
@@ -763,6 +822,30 @@ export class InputController {
     if (!cam || this.centring) return;
     this.centring = { prev: cam.mode };
     cam.centerOnSelf();
+  }
+  /** your allies' fighters in seat order (viewAlly1 = the first) */
+  private allyBody(i: number): EntityView | undefined {
+    const allies = this.client.view.players.filter((p) => p && p.team === this.team && p.player !== this.client.you).sort((a, b) => a.player - b.player);
+    const p = allies[i];
+    return p ? this.client.view.entity(p.entity) : undefined;
+  }
+  private startView(ally: number, action: Action): void {
+    const cam = this.r.camera;
+    if (!cam || this.viewing || this.centring || !this.allyBody(ally)) return;
+    const scouting = cam.mode === 'locked';
+    const back = scouting ? null : this.ground(innerWidth / 2, innerHeight / 2);
+    if (scouting) cam.scout(true);
+    this.viewing = { ally, action, scouting, back };
+    const a = this.allyBody(ally);
+    if (a) cam.focusOn(a.x, a.y);
+  }
+  private endView(): void {
+    const v = this.viewing;
+    this.viewing = null;
+    const cam = this.r.camera;
+    if (!v || !cam) return;
+    if (v.scouting) cam.scout(false);
+    else if (v.back) cam.focusOn(v.back.x, v.back.y);
   }
   private endCentre(): void {
     const c = this.centring;

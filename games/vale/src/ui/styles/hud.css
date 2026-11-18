@@ -306,6 +306,8 @@
 .aslot.is-unlearned .hglyph { filter: grayscale(1) brightness(0.4); }
 .aslot.is-nores .hglyph { filter: saturate(0.35) brightness(0.55) hue-rotate(200deg); }
 .aslot.is-aiming::after { box-shadow: inset 0 0 0 2px var(--chalk-hi), inset 0 0 16px rgba(255, 248, 234, 0.35); }   /* on the overlay: the glyph covers an inset shadow on the slot */
+/* a cast held by the sim while you are busy (ruling 54): a thin chalk outline, dashed so it never reads as the aim's solid frame */
+.aslot.is-queued::after { box-shadow: inset 0 0 0 1px var(--chalk-hi); outline: 1px dashed var(--chalk-hi); outline-offset: -4px; }
 /* the lock (r12 M4): you cannot cast it — darkened, an ember wash and the status mark */
 .aslot.is-locked .hglyph, .islot.is-locked .iglyph { filter: saturate(0.4) brightness(0.55); }
 .aslot__lock { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: rgba(90, 26, 18, 0.45); pointer-events: none; }

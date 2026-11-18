@@ -256,6 +256,8 @@ function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
       if (Number.isFinite(s.act)) { if (s.act > actMax.current) actMax.current = s.act; setVar(actEl.current, '--a', clamp01(s.act / Math.max(0.01, actMax.current)).toFixed(3)); }
       else setVar(actEl.current, '--a', '1');
     } else actMax.current = 0;
+    // a cast pressed while busy, held by the sim until you are free (ruling 54): a thin chalk outline on its slot
+    setCls(el.current, 'is-queued', (model.me as { pendingCast?: string | null } | undefined)?.pendingCast === p.slot);
   });
   useSlotAnims(p.slot, el);
 
@@ -271,7 +273,7 @@ function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
     <div class="tipx tipx--ability">
       <AbilityTip record={{ ...def, targeting: { ...def.targeting, range: reachOf(def) } }} keyLabel={key(p.slot)} kind={`${cv.t(`hud.slot.${p.slot}`, p.slot)}${av && !spell ? ` · ${cv.t('hud.ability.rank', 'Rank {n} of {max}', { n: av.rank, max: av.maxRank })}` : ''}`} resourceName={res?.name}
         rank={av && !spell ? { rank: av.rank, canLevel: av.canLevel } : undefined} />
-      {av && !spell ? <RankHint av={av} ult={ult} levelKey={key(p.slot)} level={model.body?.level ?? 1} ultLevels={ultLevels} /> : null}
+      {av && !spell ? <RankHint av={av} ult={ult} levelKey={key(p.slot)} modKey={key('levelUpMod')} level={model.body?.level ?? 1} ultLevels={ultLevels} /> : null}
     </div>
   ) : null, { place: 'above', wide: true });
 
@@ -312,10 +314,10 @@ function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
 /** the line under a slot's tooltip (HUD-5): how to put a point in now; a locked ultimate says the level it opens at
  *  (never "Level up an ability" while it cannot be learned); an unlearned basic ability says where your next point goes */
 // (rendered in the tooltip layer, outside the HUD's context: everything it needs comes in as props)
-function RankHint(p: { av: AbilityView; ult: boolean; levelKey: string; level: number; ultLevels: readonly number[] }): JSX.Element | null {
+function RankHint(p: { av: AbilityView; ult: boolean; levelKey: string; modKey: string; level: number; ultLevels: readonly number[] }): JSX.Element | null {
   const { cv } = useApp();
   const av = p.av;
-  if (av.canLevel) return <p class="t-caption tipx__hint">{cv.t('hud.ability.level_up', 'Level up')} · <span class="keycap">Ctrl</span> + <span class="keycap">{p.levelKey}</span></p>;
+  if (av.canLevel) return <p class="t-caption tipx__hint">{cv.t('hud.ability.level_up', 'Level up')}{p.modKey && p.modKey !== '—' ? <> · <span class="keycap">{p.modKey}</span> + <span class="keycap">{p.levelKey}</span></> : null}</p>;
   if (av.rank >= av.maxRank) return null;
   if (p.ult) {
     const at = p.ultLevels[av.rank];

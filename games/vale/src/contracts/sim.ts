@@ -168,6 +168,9 @@ export interface PlayerView {
   readonly stats: FighterStatsView;
   readonly canShop: boolean;
   readonly recallProgress: number;                // 0..1
+  /** CHANGED(W2-D), additive: the slot of a cast pressed while you were busy (a windup, a channel, a dash) and held by
+   *  the sim for up to 0.4 s until you are free (ruling 54); null when none waits */
+  readonly pendingCast?: SlotT | null;
   readonly streak: number;
   readonly bounty: number;
 }

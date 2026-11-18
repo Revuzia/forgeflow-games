@@ -10,7 +10,7 @@ import type { InputRenderer } from '../../input/controller.ts';
 
 /** every InputRenderer member forwarded as-is (setTarget is wrapped, camera is a getter) */
 type Forwarded = Exclude<keyof InputRenderer, 'setTarget' | 'camera'>;
-export const FORWARD: { readonly [K in Forwarded]: true } = { pickGround: true, pickEntity: true, worldToScreen: true, setAim: true, setHover: true, unitPos: true };
+export const FORWARD: { readonly [K in Forwarded]: true } = { pickGround: true, pickEntity: true, worldToScreen: true, setAim: true, setRangeRing: true, setHover: true, unitPos: true };
 
 export function selecting(r: InputRenderer, select: (id: EntityId | null) => void): InputRenderer {
   const w: InputRenderer = {

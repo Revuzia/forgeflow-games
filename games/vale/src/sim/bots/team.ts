@@ -449,6 +449,8 @@ export class TeamBrain {
       const real = hitting > 0 || hurt.has(st) || minions - mine >= 2;
       if (ab('g_real') && !real) { n = 0; if (cls < 2) coming = 0; }
       if (ab('g_real2') && !(hitting > 0 || hurt.has(st))) { n = 0; if (cls < 2) coming = 0; }
+      if (ab('g_coming') && coming > 0 && coming < 2 && minions - mine < 2) coming = 0;
+      if (ab('g_coming2') && coming > 0 && minions - mine < 2) coming = 0;
       if (n > 0) {
         // (one more than the divers at an inner or base structure — not in the laning phase, where the roads hold first)
         if (!(cls === 0 && laning && n <= this.lanersOn(info.lane))) need = Math.max(1, Math.ceil((n + (cls > 0 && !laning && !closing && !ab('g_noplus') ? 1 : 0)) * d.defendMatch - 1e-9));

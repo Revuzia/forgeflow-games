@@ -168,6 +168,8 @@ export interface Renderer {
    *  listener rides it (W3 AUD-9); the last match focus while the menu is up */
   listenerFocus(): { x: number; y: number };
   setAim(aim: AimSpec | null): void;
+  /** W2-D (ruling 54): your attack-range ring (the aim's dashed range ring style), null hides it */
+  setRangeRing(ring: { x: number; y: number; radius: number } | null): void;
   setHover(id: EntityId | null): void;
   setTarget(id: EntityId | null): void;
   setStation(name: string): void;
@@ -318,6 +320,7 @@ class ValeRenderer implements Renderer {
   /** instanced, GPU-skinned units (UnitDef.art.instanced: the Wicks; crowd.ts) */
   private readonly crowd = new CrowdLayer(outlineUniforms.uOutlineRes, { rimUniforms: hoverRimUniforms });
   private aim: AimSpec | null = null;
+  private rangeRing: { x: number; y: number; radius: number } | null = null;
   private hover: EntityId | null = null;
   private target: EntityId | null = null;
   // post
@@ -1196,6 +1199,9 @@ class ValeRenderer implements Renderer {
       }
       t.push(spec);
     }
+    // your attack-range ring (W2-D): the aim's dashed range ring, same telegraph program, its own radius
+    const rr = this.rangeRing;
+    if (rr) t.push({ ...spec, x: rr.x, z: rr.y, dir: 0, shape: TELE_SHAPE.circle, radius: rr.radius, inner: 0, color: p.relationColor('self'), fill: 0, edge: 0.45, edgePx: 2, sweep: 1, dashed: true, tick: null, key: 0.45, ringFlash: 0 });
     // your own aim
     const aim = this.aim;
     if (aim) {
@@ -1506,6 +1512,7 @@ class ValeRenderer implements Renderer {
   listenerFocus(): { x: number; y: number } { return { x: this.rig.focus.x, y: this.rig.focus.z }; }
 
   setAim(aim: AimSpec | null): void { this.aim = aim; }
+  setRangeRing(ring: { x: number; y: number; radius: number } | null): void { this.rangeRing = ring && ring.radius > 0 ? { ...ring } : null; }
   setHover(id: EntityId | null): void { this.hover = id; }
   setTarget(id: EntityId | null): void { this.target = id; }
 

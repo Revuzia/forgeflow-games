@@ -12,7 +12,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { Settings } from '../../contracts/session.ts';
-import { defaultSettings } from '../../session/settings.ts';
+import { CAST_MODE_SLOTS, CAST_MODES, castModeOf, defaultSettings, type CastMode, type ControlSettings } from '../../session/settings.ts';
 import { creditRows, NOTICES_FILE, NOTICES_JSON, parseNotices, type CreditEntry, type NoticeRow } from '../credits.ts';
 import { useApp } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
@@ -185,12 +185,13 @@ function Audio(p: { s: Settings; set: SetFn }): JSX.Element {
 const ACTION_GROUPS: { key: string; actions: string[] }[] = [
   { key: 'abilities', actions: ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2'] },
   { key: 'items', actions: ['item1', 'item2', 'item3', 'item4', 'item5', 'item6'] },
-  { key: 'commands', actions: ['attackMove', 'attackInPlace', 'fightersOnly', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
-  { key: 'camera', actions: ['cameraLock', 'centerCamera'] },
+  { key: 'commands', actions: ['attackMove', 'attackInPlace', 'fightersOnly', 'showRange', 'levelUpMod', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
+  { key: 'camera', actions: ['cameraLock', 'centerCamera', 'viewAlly1', 'viewAlly2', 'viewAlly3', 'viewAlly4'] },
 ];
 
-/** binds that may take a modifier key too (a held modifier with a click: attack in place, default Shift) */
-const ANY_KEY: ReadonlySet<string> = new Set(['attackInPlace']);
+/** binds that may take a modifier key too (a held modifier with a click: attack in place, default Shift; the level-up
+ *  key, default Ctrl, ruling 54) */
+const ANY_KEY: ReadonlySet<string> = new Set(['attackInPlace', 'levelUpMod']);
 
 function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
   const { cv, state } = useApp();
@@ -212,6 +213,7 @@ function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
     p.set('controls', patch);
   };
   const defaults = defaultSettings().controls.binds;
+  const setModes = (m: Record<string, CastMode>): void => p.set('controls', { castModes: m } as Partial<Settings['controls']>);
   return (
     <div class="srows">
       <div class="srows__intro stg">
@@ -232,8 +234,26 @@ function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
           </div>
         </div>
       ))}
-      <Row id="c-qc" label={cv.t('settings.controls.quickCast.label', 'Quick cast')} desc={cv.t('settings.controls.quickCast.desc', '')}>
-        <Toggle id="c-qc" label={cv.t('settings.controls.quickCast.label', 'Quick cast')} checked={c.quickCast} onChange={(x) => p.set('controls', { quickCast: x })} />
+      <div class="bindgroup stg">
+        <h3 class="t-label muted bindgroup__title">{cv.t('settings.controls.castMode.title', 'Cast mode')}</h3>
+        <span class="t-body-s muted">{cv.t('settings.controls.castMode.desc', '')}</span>
+        <div class="bindgroup__rows">
+          <div class="bindrow">
+            <span class="t-body-s">{cv.t('settings.controls.castMode.all', 'All abilities')}</span>
+            <Segmented size="s" label={cv.t('settings.controls.castMode.all', 'All abilities')} value={CAST_MODE_SLOTS.every((k) => castModeOf(c, k) === castModeOf(c, 'a1')) ? castModeOf(c, 'a1') : ('' as CastMode)}
+              options={opts(cv, 'controls.castMode', CAST_MODES)} onChange={(x) => setModes(Object.fromEntries(CAST_MODE_SLOTS.map((k) => [k, x])) as Record<string, CastMode>)} />
+          </div>
+          {CAST_MODE_SLOTS.map((k) => (
+            <div class="bindrow">
+              <span class="t-body-s">{k === 'items' ? cv.t('settings.controls.castMode.items', 'Item actives') : name(k)}</span>
+              <Segmented size="s" label={k === 'items' ? cv.t('settings.controls.castMode.items', 'Item actives') : name(k)} value={castModeOf(c, k)}
+                options={opts(cv, 'controls.castMode', CAST_MODES)} onChange={(x) => setModes({ ...Object.fromEntries(CAST_MODE_SLOTS.map((j) => [j, castModeOf(c, j)])), [k]: x })} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <Row id="c-ring" label={cv.t('settings.controls.rangeOnAttackMove.label', 'Show attack range during attack-move')} desc={cv.t('settings.controls.rangeOnAttackMove.desc', '')}>
+        <Toggle id="c-ring" label={cv.t('settings.controls.rangeOnAttackMove.label', 'Show attack range during attack-move')} checked={(c as ControlSettings).rangeOnAttackMove !== false} onChange={(x) => p.set('controls', { rangeOnAttackMove: x } as Partial<Settings['controls']>)} />
       </Row>
       <Row id="c-lock" label={cv.t('settings.controls.cameraLock.label', 'Lock camera to your fighter')} desc={cv.t('settings.controls.cameraLock.desc', '')}>
         <Toggle id="c-lock" label={cv.t('settings.controls.cameraLock.label', 'Lock camera to your fighter')} checked={c.cameraLock} onChange={(x) => p.set('controls', { cameraLock: x, cameraLockChosen: true })} />
