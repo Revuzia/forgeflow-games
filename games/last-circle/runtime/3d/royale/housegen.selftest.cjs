@@ -90,6 +90,8 @@ function loadManifest() {
 const THREE_JS = path.join(ROOT, "assets", "vendor", "three", "build", "three.module.js");
 const N_PARCELS = Number(process.env.HG_PARCELS || 500);
 const PLANT_SLOW_MS = Number(process.env.HG_PLANT_SLOW_MS) || 0;
+const PLANT_REGEN = process.env.HG_PLANT_REGEN === "1";                // (W10 R1A fix12, ruling R-d) planted fault of the paired CPU row (_harness/p23/hg_cpu.py --plant slow-gen): every house generated a second time (the result dropped) = a generator >= 40 % slower
+const CPU_ROW_WRAPPED = process.env.HG_CPU_ROW === "wrapper";      // (ruling R-d) the CPU row is judged by _harness/p23/hg_cpu.py (absolute <= 36 ms, else paired with the reference build 04e82d802): here it prints the same reading as info
 const HG_CPU_MS_PER_HOUSE = 36;                                    // (P23-fix timing bar: CPU ms of the JS threads (workers + main) per generated + checked house; 25.8-27.3 ms measured 2026-10-27 on the shared 16-core box with 3 other lanes running (wall 21-25 s); x1.3-1.4 headroom; HG_PLANT_SLOW_MS=15 (+11 ms a house, x1.4) reads 37.6 and FAILS)
 const THEMES = ["city", "resort", "lodge"];                        // the town themes (the fixed rows below)
 const ALL_THEMES = ["city", "resort", "lodge", "farm", "ruin", "mill"];   // + towngen's compound themes (round 3)
@@ -818,6 +820,7 @@ async function runJobs(jobs) {
     const p = Object.assign({}, j.parcel, { theme: j.theme, storeys: j.storeys });
     const t = Date.now();
     const H = HGmod.generate(p, j.opts);
+    if (PLANT_REGEN) HGmod.generate(p, j.opts);                     // (the paired CPU row's plant: the generator's work done twice)
     if (PLANT_SLOW_MS > 0) { const t1 = performance.now(); while (performance.now() - t1 < PLANT_SLOW_MS); }   // (negative control for the timing row: HG_PLANT_SLOW_MS=15 must FAIL it)
     const ms = Date.now() - t;                                     // (wall ms: the p50 / p99 info only - Windows counts thread CPU in 15.6 ms ticks, fine summed, too coarse per house)
     // (the JSON is only needed where it is compared: a house generated twice, and the sampled houses whose hash the main thread / a fresh process check)
@@ -1482,7 +1485,7 @@ else if (require.main === module) (async () => {
   // contended box), so the bar judges the JS threads only: the workers' own thread CPU + the main thread's; the share is workers / (workers + main))
   const wCpuS = workerCpuMs.reduce((a, b) => a + b, 0) / 1000, mCpuS = threadCpuMs() / 1000, perHouse = (wCpuS + mCpuS) * 1000 / Math.max(1, res.length), share = wCpuS / Math.max(1e-9, wCpuS + mCpuS);
   info("CPU: " + cpuS.toFixed(1) + " s for the whole process (" + wCpuS.toFixed(1) + " s on the " + NW + " workers, " + mCpuS.toFixed(1) + " s on the main thread, " + (cpuS - wCpuS - mCpuS).toFixed(1) + " s in V8 helper threads); wall " + secs.toFixed(1) + " s (a shared box stretches the wall time, not the CPU)");
-  ok(workerCpuMs.length === NW && perHouse <= HG_CPU_MS_PER_HOUSE && share >= 0.75, "selftest CPU " + perHouse.toFixed(1) + " ms a house on the JS threads (<= " + HG_CPU_MS_PER_HOUSE + " ms: " + (wCpuS + mCpuS).toFixed(1) + " s for " + res.length + " houses), " + (100 * share).toFixed(0) + " % of the JS threads' CPU on the workers (>= 75 %: the run stays parallel); wall " + secs.toFixed(1) + " s, not judged");
+  (CPU_ROW_WRAPPED ? (cond, msg) => info(msg + " [judged by _harness/p23/hg_cpu.py: " + (cond ? "absolute PASS" : "absolute red") + "]") : ok)(workerCpuMs.length === NW && perHouse <= HG_CPU_MS_PER_HOUSE && share >= 0.75, "selftest CPU " + perHouse.toFixed(1) + " ms a house on the JS threads (<= " + HG_CPU_MS_PER_HOUSE + " ms: " + (wCpuS + mCpuS).toFixed(1) + " s for " + res.length + " houses), " + (100 * share).toFixed(0) + " % of the JS threads' CPU on the workers (>= 75 %: the run stays parallel); wall " + secs.toFixed(1) + " s, not judged");
   console.log("\n" + (failed ? "FAIL" : "PASS") + "  " + passed + " passed, " + failed + " failed");
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error("FAIL  selftest crashed: " + (e && e.stack || e)); process.exit(1); });
