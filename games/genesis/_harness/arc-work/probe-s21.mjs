@@ -103,6 +103,19 @@ console.log('state', JSON.stringify(await G(() => window.__GENESIS__.state())).s
 console.log('switches', await G(() => { try { return (window.__GENESIS__.perfSwitches?.() ?? '') ; } catch { return ''; } }));
 console.log('page errors', errors.length, errors.slice(0, 5));
 console.log('gl messages', glmsgs.length, glmsgs.slice(0, 8));
+// (PERF s27) --alloc=N: V8 sampling heap profile over N rendered frames = who allocates (the garbage the heap fills with)
+if (opts.alloc) {
+  const c2 = await page.context().newCDPSession(page);
+  await c2.send('HeapProfiler.startSampling', { samplingInterval: 8192 });
+  const h0 = await G(() => performance.memory.usedJSHeapSize);
+  await G((n) => window.__GENESIS__.frames(n), Number(opts.alloc));
+  const { profile } = await c2.send('HeapProfiler.stopSampling');
+  const sites = new Map();
+  (function walk(n) { const k = `${n.callFrame.functionName || '(anon)'} ${n.callFrame.url.split('/').pop()}:${n.callFrame.lineNumber}`; sites.set(k, (sites.get(k) ?? 0) + n.selfSize); n.children.forEach(walk); })(profile.head);
+  console.log('alloc over', opts.alloc, 'frames (bytes still live at stop are what sampling reports; top self sizes):');
+  console.log([...sites].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => `${(v / 1048576).toFixed(2)}MB ${k}`).join('\n'));
+  console.log('heap before/after', h0, await G(() => performance.memory.usedJSHeapSize));
+}
 // (PERF s27) --heapsnap=FILE: a V8 heap snapshot of the page after the views (node s27-heap.mjs FILE sums it by owner)
 if (opts.heapsnap) {
   const cdp = await page.context().newCDPSession(page);

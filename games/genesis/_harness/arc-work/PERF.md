@@ -2412,3 +2412,44 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
 - deepbed's thin dark diagonal streak (r17 lower right; thin dark diagonals show in r17-14 without deepbed too): not
   investigated this session. Suspect: a hairline crack in the water sheet at a patch LOD border (the water has no skirts),
   through which the bed shows (black under deepbed). Check with `wdebug=hb` on a dark background (`deepbed=2`) at that view.
+
+## SESSION 26 (lean tcache) (2026-11-18, TERRAIN-CACHE agent) — `?tcache=1` to cover the landing view in ~256 MB
+### 1. WHY s22's tiles came to ~2 MB each (run 17: 246.7 MB, 9 L, tiles=118, want=2062/900MB, full=955)
+- Storage: 9 layers of 1152^2 x 16 B (sRGB8 4 + RGBA16F 8 + RGBA8 4) x 1.3125 (3 mips) = 26.6 MB a layer, cut in
+  4 slabs of 576 = 36 slabs of 6.97 MB. A slab held ONE class: 576 -> 1 tile, 288 -> 4, 192 -> 9, 144 -> 16, 96 -> 36.
+- A tile was a full square holding BOTH distance anchors (A = lower-left triangle, B = the same lattice rotated): 2x.
+- Class by the patch's edge in pixels at its NEAREST point (no foreshortening): from 60 m up every patch is seen at
+  5-20 deg, |n.v| ~0.1-0.35, so the class was ~2-3x the edge a by-area class needs (4-9x the texels). want = 0.44 MB a
+  tile on average = class ~144 with both anchors.
+- The queue was nearest first, so the NEAREST patches (largest classes: 288 / 576 = 1-4 tiles a 7 MB slab) were baked
+  first and took the slabs; with 7 classes each needing its own slab, the 36 slabs filled with 118 tiles (36 x 6.97 /
+  118 = 2.1 MB a tile). 955 refused (`full`), churn (bakes=1347 for 118 tiles: steal / LRU release and re-bake).
+- So: 2x anchors x ~4-9x class (foreshortening) x slab rounding (one class a 7 MB slab) x nearest-first.
+### 2. THE LEAN LAYOUT (built; tcache.ts + 3 hook lines in terrainmat.ts + the bake call moved in renderer.ts)
+- ONE BAKE AT THE CAMERA OF THE BAKE, texel by texel: camDist = |P - cam|, the sward's eye term from (cam - P), and
+  the footprint = the full shader's own length(fwidth(P)) rebuilt from the screen axes and the triangle's plane
+  (`tcFwLive`: d/dx = depth/f (R - p (n.R)/(n.p)) in view space, back to the body frame, componentwise abs). So every
+  distance fade, the graze term and every footprint fade are the live ones at that camera; neighbours meet without
+  steps. No anchors, no tcFade ladder, no `wide`. Camera moved > 3 % of the patch's distance or turned > 15 deg:
+  slow-stale (shown, re-baked behind the uncached); moved > 15 %: full shader until re-baked. The graze correction
+  per fragment now uses the bake camera (stored per slot).
+- FOOTPRINT FINDING (the s22 "meadow greener / softer from 160 m" candidate): s22 baked fw = sqrt2 x d / f (face on);
+  the live length(fwidth(P)) of two orthogonal pixel steps of length a, componentwise abs, is on average 1.83 a for a
+  random orientation (Monte Carlo), not 1.41 a, and larger off-axis. The bake was ~30 % SHARPER in fw -> more sward
+  tips / flowers resolved (+G -B = the measured shift). tcFwLive removes this by construction. To be confirmed by the
+  top-down pair below.
+- HALF SQUARES: a patch takes HALF a square (lower-left, or rotated 180 deg), two patches a square. Borders 2 texels on
+  the legs, 4.24 across on the hypotenuse (x + y <= S - 6), and the display's lod clamped to <= 1 (MIPS 2): proven by
+  texel arithmetic that bilinear mip-0/1 taps never reach the partner half. The bake copies the square into the
+  scratch first (partner kept), draws its half, copies the square back + mip 1.
+- CLASS BY SCREEN AREA: edge = tcdens x (edge px at the nearest point) x sqrt(min(1, |n.v| + relief/size)); classes
+  24 32 48 72 96 144 (288 slabs), 192 576 (576 blocks), 288. Usable leg S - 10. tcdens default 1.3 (Nyquist for
+  aaF's 0.12-0.45 fw ramp with the footprint above). A tile > 1.9x denser than needed re-bakes smaller.
+- PRIORITY: uncached first, then the most screen pixels (area = triangle m^2 x |n.v| x f^2 / (dn x dc)). When full:
+  idle tiles (LRU), then a drawn tile of the same class with < half the pixels.
+- BAKE COST: `tcbudget` default 64 000 texels a frame (~13 ms GPU on the M5 at ~0.2 us a full-shader texel). The bake
+  now runs in the frame's UPLOADS slot (renderer.ts, before any pass); the forest-floor mask then reads the previous
+  frame's shadow maps with their (also previous) matrices.
+- SLOT TABLE writes compare float32 values (s22 compared doubles to float32 = a texture upload per page per frame).
+- tcstat now: `pix=<% of the drawn patches' estimated screen pixels on a valid tile>,used=<MB of tiles>,tiles,cached,
+  live,stale,hot,near,want=N/MB,full,bakes,bakeMs=<main-thread ms per tile>/<worst frame>,glob,cls=<edge:n/...>`.

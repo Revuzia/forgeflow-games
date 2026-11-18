@@ -135,6 +135,7 @@ import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from './lights.ts';
 import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS } from './terrainvert.glsl.ts';
+import { WFAST3, fastOceanShaders } from './oceanfast.ts'; // PERF s25 hook (wfast=3)
 
 const WAVES_GLSL = /* glsl */ `
 // four Gerstner waves: (dir seed xyz, wavelength m), amplitude factor, steepness
@@ -1068,9 +1069,13 @@ export function makeOceanMaterial(shared: Record<string, IUniform>, morph: IUnif
   if (WCLOCK != null) uniforms.uTime = { value: WCLOCK };
   if (WWIND != null) uniforms.uWind = { value: WWIND };
   uniforms.uMorph = morph;
+  // ── PERF s25 hook (water agent): `?wfast=3` = oceanfast.ts's restructured shaders built from these; default off ──
+  const f3 = WFAST3 ? fastOceanShaders(OCEAN_VERT, OCEAN_FRAG, rippleMap) : null;
+  if (f3) Object.assign(uniforms, f3.uniforms);
+  // ── end PERF s25 hook ──
   const m = new ShaderMaterial({
-    vertexShader: OCEAN_VERT,
-    fragmentShader: OCEAN_FRAG,
+    vertexShader: f3 ? f3.vert : OCEAN_VERT,
+    fragmentShader: f3 ? f3.frag : OCEAN_FRAG,
     uniforms,
     depthWrite: true,
     depthTest: !WDEBUG.has('nodepth'),

@@ -409,7 +409,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float sig2 = unres + meanK * res + nVar * 0.5;
   vec3 rB = reflect(-vB, nR);
   rB = normalize(rB + up * (max(0.0, -dot(rB, up)) * 1.02 + sqrt(sig2) * 0.8));
-  vec3 skyR = ${f.sky ? 'skyRadiance(up, rB, uSunDirBody)' : 'skyE * (0.35 + 0.25 * rB.y * 0.0) / 3.14159'} + uNightAmbient * 0.3;
+  vec3 skyR = ${f.sky ? 'skyRadiance(up, rB, uSunDirBody)' : 'skyE * 0.35 / 3.14159'} + uNightAmbient * 0.3;
   ${f.reflect ? `if (uCloudOn > 0.5) {
     // the deck mirrored along the long waves' normal: its density where that ray crosses the mid-shell (1 cube tap),
     // lit as the vertex found it
@@ -539,22 +539,22 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float foamAmt = ${f.foam ? '' : '0.0 * '}clamp(max(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), surge * 0.95), 0.0, 1.0);
   if (foamAmt > 0.01) {
     // LACE: ridged noise at two scales drifting with the flow (tile 8 m: lattice 2 / 1 / 0.5 / 0.25 m), thinning out
-    vec4 nL = f3N(P - vFlow * uTime, 8.0, vec2(0.0, uTime * 0.07 / 8.0));
-    float l1 = 1.0 - abs(nL.y);
-    float l2 = 1.0 - abs(nL.z);
+    vec4 nLc = f3N(P - vFlow * uTime, 8.0, vec2(0.0, uTime * 0.07 / 8.0));
+    float l1 = 1.0 - abs(nLc.y);
+    float l2 = 1.0 - abs(nLc.z);
     float kL = 1.0 - smoothstep(0.15, 0.9, fw * 2.6);
     float l0 = 1.0 - abs(nE.z);
     float fineK = 1.0 - smoothstep(0.03, 0.1, fw);
     float lace = mix(l0 * l0 * l0 * 0.9, l1 * l1 * l1 * 0.75 + l2 * l2 * l2 * l2 * 0.45 * kL, fineK);
-    float thinP = smoothstep(0.25, 0.75, nL.x * 0.5 + 0.5);
+    float thinP = smoothstep(0.25, 0.75, nLc.x * 0.5 + 0.5);
     float pat = mix(0.6, clamp(lace * (0.55 + 0.6 * thinP), 0.0, 1.0), 1.0 - smoothstep(0.15, 1.2, fw));
-    if (lean > 0.06 && flowSpd > 1.0) pat = mix(pat, 0.75 + 0.25 * smoothstep(0.1, 0.7, nL.w * 0.5 + 0.5), smoothstep(0.06, 0.2, lean));
+    if (lean > 0.06 && flowSpd > 1.0) pat = mix(pat, 0.75 + 0.25 * smoothstep(0.1, 0.7, nLc.w * 0.5 + 0.5), smoothstep(0.06, 0.2, lean));
     float churn = max(surge, rapids * smoothstep(3.0, 8.0, vDepth));
     float surgeStreak = 0.5;
     if (churn > 0.02) {
       // a surge's face: boils of ~2 m and ~10 m, billows of ~50 m (one more tap, 256 m)
       vec4 nC = f3N(P, 256.0, vec2(0.0, uTime * 0.12 / 256.0));
-      float stF = nL.x * (1.0 - smoothstep(0.4, 1.5, fw));
+      float stF = nLc.x * (1.0 - smoothstep(0.4, 1.5, fw));
       float stC = nE.y * (1.0 - smoothstep(3.0, 12.0, fw));
       float stB = nC.y * (1.0 - smoothstep(60.0, 220.0, fw));
       surgeStreak = clamp(0.5 + 0.5 * (stF * 0.45 + stC * 0.6 + stB * 0.7), 0.0, 1.0);
@@ -578,7 +578,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   }
   // ── shore blend: the sheet thins to nothing at the ground's contour, bitten by noise (1 tap, above) ──
   {
-    float edgeN = edgeOn ? nE.x * 0.3 + nE.w * 0.08 + 0.0 : 0.0;
+    float edgeN = edgeOn ? nE.x * 0.3 + nE.w * 0.08 : 0.0;
     float thickE = mix(vertThick, max(vertThick, vDepth), smoothstep(0.25, 1.5, fw));
     float edge = smoothstep(0.012, 0.18, thickE + min(edgeN, 0.12) * smoothstep(1.6, 0.2, thickE) * (1.0 - smoothstep(0.1, 0.25, vSimD)));
     float film = smoothstep(0.03, 0.3, thickE);
