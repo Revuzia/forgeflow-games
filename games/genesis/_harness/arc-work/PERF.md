@@ -2650,3 +2650,20 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
 - TOWN PAIR VALID (run d, settle 60): 621 patches all cached, want 20 MB, used 34.5 MB, pix 100 %; mean |d| 1.95, RGB
   102.3 117.2 81.2 both (EQUAL), detail 6.18 / 5.98; diff = flower dots + the pond's wet-rim line (sheet-d1 LOOKED).
   (rebakeKnot 703 = stale marks while the probe moved the camera between views: expected.)
+
+## LEAD NOTE after MAC ROUND 18 PART 3 (build 58e2b027, Ultra 1686x963; CPU ~40-60 % busy with other jobs, GPU idle before)
+- N3 784 / 634 / 951 ms. tcache=1: 651 (pix 65.5 %, used 117 MB). tcache=1&deepbed=1: 467 (pix 87 %, 131 MB).
+  tcache=1&wfast=3&deepbed=1: 301 ms = 3.2 fps (pix 82.6 %); panning 434 ms, p95 1068 (uploads slot 55 ms mean / 567 p95).
+  tcache=1&tcdens=1.6: 884 ms, pix 36.6 % (worse: bakes cannot keep up), and NOT crisper to the owner's eye.
+- tcstat run 22: tiles=1241 cached=1013 live=1110 stale=177 near=0 want=2123/132MB full=0 bakes=2270 bakeMs=0.22/391 glob=1.
+  So memory is NOT the limit any more (want 132 MB, cap 256); HALF THE PATCHES ARE STILL LIVE after 50 s. Causes to check:
+  (1) the bake budget is per FRAME (64 000 texels): at 2-3 fps that is ~150 k texels a second, 8.2 M texels wanted = ~55 s;
+      make it per second of wall time (and larger while the frame is slow, since a bake is cheaper than a live patch);
+  (2) churn: bakes=2270 for 1241 tiles, stale=177-318 with a STILL camera. The perf report shows the camera 'travelled'
+      ~11 km in 20 s with the view still (hitches list 'moved 240-1380 m' a frame): if the stale test uses a camera position
+      in a frame that moves with the planet's spin / orbit, every tile goes stale continuously. Use the body-frame camera.
+  (3) one bake reported 391 ms / 3452 ms worst main-thread: a hitch.
+- Look (owner): same colours; tcache sand 'very slightly softer' in a close crop; no patch lines; no pop seen; the hill sheet
+  is GONE on this build (fogwater confirmed on the Mac).
+- JS heap: terrain pages 393-508 MB; unattributed (dead buffers) 113-637 MB; heap 633-1217 MB.
+- Still 300 ms with everything on: the next Mac round bisects the combined configuration.
