@@ -606,17 +606,17 @@
           0.6
         ],
         "color": [
-          "#2A2C33",
-          "#17181B"
+          "#6E6A62",
+          "#57544E"
         ],
         "alpha": [
-          0.6,
-          0
+          0.45,
+          0.0
         ],
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#D9A15A",
-        "rimAlpha": 0.5,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "rotDeg": [
           0,
@@ -1192,18 +1192,18 @@
           1.9
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.75,
-          0.5,
-          0
+          0.45,
+          0.3,
+          0.0
         ],
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#FFEFD8",
-        "rimAlpha": 0.9,
+        "rimAlpha": 0.3,
         "soft": 0.25,
         "rotDeg": [
           0,
@@ -1756,10 +1756,44 @@
       {
         "type": "flash",
         "at": "origin",
-        "radius": 0.675,
-        "life": 0.05,
+        "radius": 0.8,
+        "life": 0.06,
         "color": "team",
-        "intensity": 3.0
+        "intensity": 6.0
+      },
+      {
+        "type": "shockwave",
+        "at": "origin",
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.35,
+            1.05
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "width": [
+          0.16,
+          0.04
+        ],
+        "life": 0.4,
+        "color": "team",
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 3.2,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "mode": "vertical",
+        "blend": "add"
       },
       {
         "type": "emitter",
@@ -2893,18 +2927,18 @@
           1.4
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.7,
           0.45,
-          0
+          0.289,
+          0.0
         ],
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#D9A7C7",
-        "rimAlpha": 0.85,
+        "rimAlpha": 0.3,
         "soft": 0.25,
         "rotDeg": [
           0,
@@ -3260,18 +3294,18 @@
           1.87
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.75,
-          0.5,
-          0
+          0.45,
+          0.3,
+          0.0
         ],
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#FFEFD8",
-        "rimAlpha": 0.85,
+        "rimAlpha": 0.3,
         "soft": 0.25,
         "rotDeg": [
           0,
@@ -3506,14 +3540,14 @@
           ]
         ],
         "life": 0.8,
-        "color": "#2A2C33",
+        "color": "#7D776C",
         "alpha": [
-          0.8,
-          0.7,
+          0.75,
+          0.6,
           0
         ],
-        "emissive": 0.35,
-        "rim": "team"
+        "emissive": 0.25,
+        "rim": "#F1E2C6"
       },
       {
         "type": "emitter",
@@ -3775,18 +3809,18 @@
           1.364
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.75,
-          0.5,
-          0
+          0.45,
+          0.3,
+          0.0
         ],
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#FFEFD8",
-        "rimAlpha": 0.85,
+        "rimAlpha": 0.3,
         "soft": 0.25,
         "rotDeg": [
           0,
@@ -5109,19 +5143,19 @@
           0.1
         ],
         "color": [
-          "#2A2C33",
-          "#17181B"
+          "#6E6A62",
+          "#57544E"
         ],
         "alpha": [
-          0.9,
-          0
+          0.45,
+          0.0
         ],
         "drag": 3,
         "texture": "streak",
         "stretch": 0.08,
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.8,
+        "rimAlpha": 0.3,
         "offset": [
           0,
           -0.6,
@@ -9810,14 +9844,14 @@
           1.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0.75,
-          0
+          0.0,
+          0.45,
+          0.375,
+          0.0
         ],
         "gravity": -0.2,
         "drag": 2.6,
@@ -9833,7 +9867,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "soft": 0.3
       },
       {
@@ -10349,14 +10383,14 @@
           0.6
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.7,
-          0.5,
-          0
+          0.0,
+          0.45,
+          0.321,
+          0.0
         ],
         "gravity": -0.02,
         "drag": 2.0,
@@ -10367,7 +10401,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.35,
+        "rimAlpha": 0.3,
         "soft": 0.25,
         "fit": true
       }
@@ -10628,18 +10662,18 @@
           0.08
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.85,
-          0
+          0.45,
+          0.0
         ],
         "texture": "streak",
         "stretch": 0.06,
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.6
+        "rimAlpha": 0.3
       },
       {
         "type": "emitter",
@@ -11173,13 +11207,13 @@
           0.36
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.95,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "turbulence": 5,
         "turbulenceScale": 3,
@@ -11194,7 +11228,7 @@
         "texture": "wisp",
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "space": "local"
       },
@@ -11347,19 +11381,19 @@
           0.09
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 7,
         "texture": "drop",
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.5
+        "rimAlpha": 0.3
       },
       {
         "type": "mesh",
@@ -11475,19 +11509,19 @@
           0.1
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.8,
-          0
+          0.45,
+          0.0
         ],
         "drag": 2,
         "texture": "streak",
         "stretch": 0.06,
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.6
+        "rimAlpha": 0.3
       },
       {
         "type": "emitter",
@@ -12334,19 +12368,19 @@
           0.06
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "texture": "streak",
         "stretch": 0.06,
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.7
+        "rimAlpha": 0.3
       },
       {
         "type": "decal",
@@ -12535,13 +12569,13 @@
           1.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "drag": 2.4,
         "turbulence": 0.6,
@@ -12556,7 +12590,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.5,
+        "rimAlpha": 0.3,
         "soft": 0.2
       },
       {
@@ -12621,20 +12655,20 @@
           0
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          1,
-          1,
-          0
+          0.0,
+          0.45,
+          0.45,
+          0.0
         ],
         "orbitDeg": 300,
         "texture": "drop",
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.8,
+        "rimAlpha": 0.3,
         "space": "local",
         "spinDeg": [
           -60,
@@ -13440,20 +13474,20 @@
           0
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0.9,
-          0
+          0.0,
+          0.45,
+          0.45,
+          0.0
         ],
         "orbitDeg": 240,
         "texture": "mote",
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.8,
+        "rimAlpha": 0.3,
         "space": "local"
       },
       {
@@ -15428,18 +15462,18 @@
           0.08
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.9,
-          0
+          0.45,
+          0.0
         ],
         "texture": "streak",
         "stretch": 0.06,
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.7
+        "rimAlpha": 0.3
       },
       {
         "type": "emitter",
@@ -17145,14 +17179,14 @@
           1.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0.75,
-          0
+          0.0,
+          0.45,
+          0.375,
+          0.0
         ],
         "gravity": -0.8,
         "drag": 2.6,
@@ -17168,7 +17202,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.5,
+        "rimAlpha": 0.3,
         "soft": 0.3
       },
       {
@@ -23512,14 +23546,14 @@
           1.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0.75,
-          0
+          0.0,
+          0.45,
+          0.375,
+          0.0
         ],
         "gravity": -0.1,
         "drag": 2.6,
@@ -23535,7 +23569,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "soft": 0.3
       },
       {
@@ -23735,12 +23769,12 @@
         ],
         "color": [
           "#241D19",
-          "#17181B"
+          "#57544E"
         ],
         "alpha": [
-          0.6,
           0.45,
-          0
+          0.338,
+          0.0
         ],
         "texture": "ink_puff",
         "frame": 2,
@@ -23801,13 +23835,13 @@
           0.6
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          0,
-          0.6,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": -0.4,
         "drag": 2,
@@ -23815,7 +23849,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.45,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -24276,20 +24310,20 @@
           0.105
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 12,
         "drag": 0.7,
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.65,
+        "rimAlpha": 0.3,
         "align": "velocity",
         "secondary": true
       },
@@ -24667,13 +24701,13 @@
           0.9
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          0,
-          0.55,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": -0.1,
         "drag": 1.5,
@@ -24681,7 +24715,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.5,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -25004,20 +25038,20 @@
           0.105
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 12,
         "drag": 0.7,
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.65,
+        "rimAlpha": 0.3,
         "align": "velocity",
         "fit": false,
         "secondary": true
@@ -25740,20 +25774,20 @@
           0.11199999999999999
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 12,
         "drag": 0.7,
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.65,
+        "rimAlpha": 0.3,
         "align": "velocity",
         "delay": 0.28,
         "fit": false,
@@ -25784,20 +25818,20 @@
           0.65
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          0,
-          0.7,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": -0.3,
         "drag": 2,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.5,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -26213,20 +26247,20 @@
           0.06999999999999999
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 12,
         "drag": 0.7,
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.65,
+        "rimAlpha": 0.3,
         "align": "velocity",
         "secondary": true
       }
@@ -26332,19 +26366,19 @@
           0.5
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          0.9,
-          0.7,
-          0
+          0.45,
+          0.35,
+          0.0
         ],
         "drag": 0.5,
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "align": "velocity",
         "aspect": 0.4,
         "fit": false
@@ -26664,20 +26698,20 @@
           0.126
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#241D19"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 12,
         "drag": 0.7,
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.65,
+        "rimAlpha": 0.3,
         "align": "velocity",
         "delay": 0.31,
         "fit": false,
@@ -27508,19 +27542,19 @@
         ],
         "color": [
           "#221E2C",
-          "#17181B"
+          "#57544E"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "drag": 0.8,
         "orbitDeg": -140,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#B4A8D8",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -27555,13 +27589,13 @@
         ],
         "color": [
           "#221E2C",
-          "#17181B"
+          "#57544E"
         ],
         "alpha": [
-          0,
-          0.9,
-          0.75,
-          0
+          0.0,
+          0.45,
+          0.375,
+          0.0
         ],
         "gravity": -0.2,
         "drag": 2.6,
@@ -27577,7 +27611,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "soft": 0.3,
         "delay": 0.26
       },
@@ -27836,18 +27870,18 @@
           0.1
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "space": "local"
       },
@@ -27925,19 +27959,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -28182,19 +28216,19 @@
         ],
         "color": [
           "#221E2C",
-          "#17181B"
+          "#57544E"
         ],
         "alpha": [
-          0,
-          0.8,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": 1.5,
         "drag": 1.5,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#B4A8D8",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -28559,18 +28593,18 @@
           0.1
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "space": "local"
       },
@@ -28648,19 +28682,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -28838,13 +28872,13 @@
         ],
         "color": [
           "#221E2C",
-          "#17181B"
+          "#57544E"
         ],
         "alpha": [
-          0,
-          0.9,
-          0.75,
-          0
+          0.0,
+          0.45,
+          0.375,
+          0.0
         ],
         "gravity": -0.3,
         "drag": 2.6,
@@ -28860,7 +28894,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#B4A8D8",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "soft": 0.3
       },
       {
@@ -29242,19 +29276,19 @@
           0.3
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": 0.6,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "soft": 0.3,
         "secondary": true
       },
@@ -29398,18 +29432,18 @@
         ],
         "color": [
           "#221E2C",
-          "#17181B"
+          "#57544E"
         ],
         "alpha": [
-          0,
-          0.7,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "drag": 1.5,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.5,
+        "rimAlpha": 0.3,
         "soft": 0.2
       }
     ]
@@ -29756,20 +29790,20 @@
           0.12
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#221E2C"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 12,
         "drag": 0.6,
         "texture": "drop",
         "blend": "ink",
         "rim": "#B4A8D8",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "align": "velocity",
         "fit": false
       },
@@ -29800,13 +29834,13 @@
         ],
         "color": [
           "#221E2C",
-          "#17181B"
+          "#57544E"
         ],
         "alpha": [
-          0,
-          0.9,
-          0.75,
-          0
+          0.0,
+          0.45,
+          0.375,
+          0.0
         ],
         "gravity": -0.1,
         "drag": 2.6,
@@ -29822,7 +29856,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#B4A8D8",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "soft": 0.3
       },
       {
@@ -30276,18 +30310,18 @@
         ],
         "color": [
           "#221E2C",
-          "#17181B"
+          "#57544E"
         ],
         "alpha": [
-          0,
-          0.8,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "drag": 1.5,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#B4A8D8",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -30500,18 +30534,18 @@
           0.1
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "space": "local"
       },
@@ -30589,19 +30623,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -37590,19 +37624,19 @@
         ],
         "color": [
           "#141419",
-          "#2A2C33"
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.6,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": -0.05,
         "drag": 1,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.35,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -38729,18 +38763,18 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "soft": 0.3,
         "secondary": true
       },
@@ -38818,19 +38852,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -40992,17 +41026,17 @@
         ],
         "color": [
           "#141419",
-          "#2A2C33"
+          "#6E6A62"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "align": "velocity"
       }
     ]
@@ -41114,19 +41148,19 @@
         ],
         "color": [
           "#141419",
-          "#2A2C33"
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.6,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": -0.05,
         "drag": 1,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.35,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -41976,18 +42010,18 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "soft": 0.3,
         "secondary": true
       },
@@ -42065,19 +42099,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -57402,19 +57436,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -57805,20 +57839,20 @@
           0.09
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#2B2433"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 9,
         "drag": 1.0,
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.7
+        "rimAlpha": 0.3
       }
     ]
   },
@@ -58088,19 +58122,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -58395,18 +58429,18 @@
           0.1
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.9,
-          0.6,
-          0
+          0.45,
+          0.3,
+          0.0
         ],
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25,
         "secondary": true
       }
@@ -59738,19 +59772,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -73214,20 +73248,20 @@
           0.9
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#1F2127"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "drag": 2.5,
         "gravity": 0.6,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "secondary",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -73797,20 +73831,20 @@
           0.6
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#1F2127"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": 1.5,
         "drag": 2.5,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "secondary",
-        "rimAlpha": 0.55,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -74053,20 +74087,20 @@
           0.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.95,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "turbulence": 4,
         "turbulenceScale": 3,
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.75,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "space": "local"
       },
@@ -74191,19 +74225,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -75051,20 +75085,20 @@
           0.1
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 10,
         "drag": 1.0,
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.7
+        "rimAlpha": 0.3
       },
       {
         "type": "emitter",
@@ -75088,20 +75122,20 @@
           0.9
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#1F2127"
         ],
         "alpha": [
-          0,
-          0.8,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": 0.4,
         "drag": 2.5,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "secondary",
-        "rimAlpha": 0.5,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -75292,20 +75326,20 @@
           0.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.95,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "turbulence": 4,
         "turbulenceScale": 3,
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.75,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "space": "local"
       },
@@ -75430,19 +75464,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -75640,20 +75674,20 @@
           0.7
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#1F2127"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3.2,
         "gravity": 0,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.65,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -75681,20 +75715,20 @@
           0.16
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          1,
-          0.9,
-          0
+          0.45,
+          0.405,
+          0.0
         ],
         "drag": 3,
         "texture": "streak",
         "stretch": 0.05,
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.8,
+        "rimAlpha": 0.3,
         "offset": [
           0,
           0.25,
@@ -75939,20 +75973,20 @@
           0.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.95,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "turbulence": 4,
         "turbulenceScale": 3,
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.75,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "space": "local"
       },
@@ -76077,19 +76111,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {
@@ -76371,19 +76405,19 @@
           0.1
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.9,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "turbulence": 3,
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "secondary": true
       },
@@ -76452,13 +76486,13 @@
           0.12
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "drag": 4,
         "gravity": -2,
@@ -76466,7 +76500,7 @@
         "stretch": 0.05,
         "blend": "ink",
         "rim": "team",
-        "rimAlpha": 0.8
+        "rimAlpha": 0.3
       },
       {
         "type": "shockwave",
@@ -76527,20 +76561,20 @@
           0.75
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#1F2127"
         ],
         "alpha": [
-          0,
-          0.8,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": 0.5,
         "drag": 2.5,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -77416,20 +77450,20 @@
           1.6
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#1F2127"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "drag": 2.2,
         "gravity": -0.3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.55,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -77458,20 +77492,20 @@
           0.12
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          1,
-          1,
-          0
+          0.45,
+          0.45,
+          0.0
         ],
         "gravity": 12,
         "drag": 0.8,
         "texture": "drop",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.3,
         "fit": false,
         "secondary": true
       },
@@ -77851,20 +77885,20 @@
           1.1
         ],
         "color": [
-          "#17181B",
+          "#57544E",
           "#1F2127"
         ],
         "alpha": [
-          0,
-          0.85,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "gravity": -1.5,
         "drag": 1.0,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.55,
+        "rimAlpha": 0.3,
         "rotDeg": [
           0,
           360
@@ -78024,20 +78058,20 @@
           0.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0,
-          0.95,
-          0
+          0.0,
+          0.45,
+          0.0
         ],
         "turbulence": 4,
         "turbulenceScale": 3,
         "texture": "wisp",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.75,
+        "rimAlpha": 0.3,
         "soft": 0.2,
         "space": "local"
       },
@@ -78162,19 +78196,19 @@
           0.2
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#57544E",
+          "#6E6A62"
         ],
         "alpha": [
-          0.95,
-          0.8,
-          0
+          0.45,
+          0.379,
+          0.0
         ],
         "drag": 3,
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "signature",
-        "rimAlpha": 0.7,
+        "rimAlpha": 0.3,
         "soft": 0.25
       },
       {

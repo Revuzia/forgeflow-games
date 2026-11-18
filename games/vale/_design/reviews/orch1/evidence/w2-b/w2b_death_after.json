@@ -1,0 +1,274 @@
+{
+ "gate": "death",
+ "at": "2026-11-18T03:07:59.776Z",
+ "seed": 7,
+ "quality": "high",
+ "setup": {
+  "me": 1,
+  "meDef": "ervet",
+  "foe": 6,
+  "foeDef": "kemdo",
+  "foeHp": 30.56266666666667
+ },
+ "standing": {
+  "t": 420.067,
+  "alive": true,
+  "state": "move",
+  "role": "",
+  "clipT": null,
+  "head": 1.808
+ },
+ "deaths": [
+  {
+   "e": "death",
+   "t": 420.8,
+   "dst": 6,
+   "killer": 11,
+   "by": 0,
+   "assists": [],
+   "gold": 280,
+   "kind": "fighter",
+   "at": 420.8
+  }
+ ],
+ "fired": [
+  {
+   "id": "lib_hit_phys_light",
+   "h": 56,
+   "t": 420.767,
+   "src": 4730,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_light",
+   "h": 57,
+   "t": 420.767,
+   "src": 5071,
+   "tier": 1
+  },
+  {
+   "id": "marund_passive_hearth",
+   "h": 58,
+   "t": 420.8,
+   "src": 4,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_heavy",
+   "h": 59,
+   "t": 420.8,
+   "src": 11,
+   "tier": 1
+  },
+  {
+   "id": "lib_death_shatter",
+   "h": 60,
+   "t": 420.8,
+   "src": 6,
+   "tier": 3
+  },
+  {
+   "id": "lib_level_up",
+   "h": 61,
+   "t": 420.8,
+   "src": 4,
+   "tier": 2
+  },
+  {
+   "id": "lib_hit_phys_light",
+   "h": 62,
+   "t": 420.833,
+   "src": 5085,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_heavy",
+   "h": 63,
+   "t": 420.833,
+   "src": 4705,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_light",
+   "h": 64,
+   "t": 420.833,
+   "src": 4731,
+   "tier": 1
+  },
+  {
+   "id": "lib_bolt_lumen",
+   "h": 65,
+   "t": 420.867,
+   "src": 5088,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_light",
+   "h": 66,
+   "t": 420.867,
+   "src": 5098,
+   "tier": 1
+  },
+  {
+   "id": "marund_ult_windup",
+   "h": 67,
+   "t": 420.9,
+   "src": 4,
+   "tier": 4
+  },
+  {
+   "id": "lib_ult_windup",
+   "h": 68,
+   "t": 420.9,
+   "src": 4,
+   "tier": 4
+  },
+  {
+   "id": "lib_bolt_lumen",
+   "h": 69,
+   "t": 420.9,
+   "src": 5075,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_light",
+   "h": 70,
+   "t": 420.933,
+   "src": 5066,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_heavy",
+   "h": 71,
+   "t": 420.967,
+   "src": 4740,
+   "tier": 1
+  },
+  {
+   "id": "lib_wick_death",
+   "h": 72,
+   "t": 420.967,
+   "src": 4730,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_light",
+   "h": 73,
+   "t": 420.967,
+   "src": 5077,
+   "tier": 1
+  },
+  {
+   "id": "lib_hit_phys_light",
+   "h": 74,
+   "t": 421,
+   "src": 5100,
+   "tier": 1
+  }
+ ],
+ "frames": [
+  {
+   "at": 0,
+   "t": 420.8,
+   "alive": false,
+   "state": "dead",
+   "role": "death",
+   "clipT": 0,
+   "head": 1.689,
+   "drop": 0.066
+  },
+  {
+   "at": 0.1,
+   "t": 420.9,
+   "alive": false,
+   "state": "dead",
+   "role": "death",
+   "clipT": 0.22,
+   "head": 1.629,
+   "drop": 0.099
+  },
+  {
+   "at": 0.2,
+   "t": 421,
+   "alive": false,
+   "state": "dead",
+   "role": "death",
+   "clipT": 0.44,
+   "head": 1.485,
+   "drop": 0.179
+  },
+  {
+   "at": 0.3,
+   "t": 421.1,
+   "alive": false,
+   "state": "dead",
+   "role": "death",
+   "clipT": 0.66,
+   "head": 1.2,
+   "drop": 0.336
+  },
+  {
+   "at": 0.5,
+   "t": 421.3,
+   "alive": false,
+   "state": "dead",
+   "role": "death",
+   "clipT": 0.86,
+   "head": 1.124,
+   "drop": 0.378
+  },
+  {
+   "at": 0.8,
+   "t": 421.6,
+   "alive": false,
+   "state": "dead",
+   "role": "death",
+   "clipT": 1.16,
+   "head": 0.873,
+   "drop": 0.517
+  },
+  {
+   "at": 1.2,
+   "t": 422,
+   "alive": false,
+   "state": "dead",
+   "role": "death",
+   "clipT": 1.56,
+   "head": 0.81,
+   "drop": 0.552
+  }
+ ],
+ "preDeath": [
+  {
+   "t": 420.733,
+   "alive": true,
+   "state": "move",
+   "role": "run",
+   "clipT": 0.435,
+   "head": 1.682
+  },
+  {
+   "t": 420.767,
+   "alive": true,
+   "state": "move",
+   "role": "run",
+   "clipT": 0.468,
+   "head": 1.687
+  },
+  {
+   "t": 420.8,
+   "alive": false,
+   "state": "dead",
+   "role": "death",
+   "clipT": 0,
+   "head": 1.689
+  }
+ ],
+ "done": {
+  "deathVfxOnDeathFrame": true,
+  "roleDeathOnDeathFrame": true,
+  "headDrop05": 0.378,
+  "pass": true
+ },
+ "consoleErrors": []
+}

@@ -148,7 +148,11 @@ async function clutterMain() {
               // W2-B (GFX-3): VFX at display L* > 85 over the body (the pixel is that bright with the VFX and was not without)
               if (Y(full.px, o) > HOT_Y && Y(noFx.px, o) <= HOT_Y) hot++;
             }
-            if (n >= 200) fighters.push({ id: f.id, def: f.def, team: f.team, bodyPx: n, occlusion: +(ch / n).toFixed(3), hot: +(hot / n).toFixed(3), me: f.id === meE?.id });
+            // which effects sit on a body that goes hot (W2-B diagnosis): live instances within 1.6 m of it
+            let near = undefined;
+            if (n >= 200 && hot / n > 0.3) near = R.vfx.insts.filter((it) => it.active && Math.hypot((it.following ? it.head : it.target).x - f.x, (it.following ? it.head : it.target).z - f.y) < 1.6)
+              .map((it) => `${it.def.id}:T${it.tier}:${it.t.toFixed(2)}`);
+            if (n >= 200) fighters.push({ id: f.id, def: f.def, team: f.team, bodyPx: n, occlusion: +(ch / n).toFixed(3), hot: +(hot / n).toFixed(3), me: f.id === meE?.id, ...(near ? { near } : {}) });
           }
           // self ring: pixels the ring mesh changes around the local fighter's feet
           let selfRing = null;
@@ -167,6 +171,27 @@ async function clutterMain() {
             for (let o = 0; o < W * H * 4; o += 4 * 2) { const a = luma(full.px, o), c = luma(noTele.px, o); const dd = Math.abs(a - c) / Math.max(c, a, 16); if (dd > 0.04) d.push(dd); }
             d.sort((x, y) => x - y);
             teleEdge = { px: d.length, p90: d.length ? +d[Math.floor(d.length * 0.9)].toFixed(3) : 0, n: st.telegraphs };
+            // W2-B: the bar reads the ENEMY telegraphs alone (ally outlines, own aim and zone outlines left out, as the bar names
+            // them): the director's list held to the viewer's enemies for the on / off pair, the same p90 over their pixels
+            const T = R.director.telegraphs, keep = T.slice(), vt = R.palette.viewer.team;
+            const foe = keep.filter((x) => vt >= 0 && x.team !== vt && x.team >= 0 && !x.heal);
+            if (foe.length) {
+              T.length = 0; T.push(...foe);
+              const eOn = grab(); R.overlay.teleScene.visible = false; R.teles.mesh.layers.disableAll(); const eOff = grab(); R.teles.mesh.layers.mask = tMask; R.overlay.teleScene.visible = tv;
+              // the same pair with the VFX pass off: how much of the edge the effects under it take (info)
+              R.vfx.draw = () => {};
+              const xOn = grab(); R.overlay.teleScene.visible = false; R.teles.mesh.layers.disableAll(); const xOff = grab(); R.teles.mesh.layers.mask = tMask; R.overlay.teleScene.visible = tv;
+              R.vfx.draw = dv;
+              T.length = 0; T.push(...keep);
+              const x = [];
+              for (let o = 0; o < W * H * 4; o += 4 * 2) { const a = luma(xOn.px, o), c = luma(xOff.px, o); const dd = Math.abs(a - c) / Math.max(c, a, 16); if (dd > 0.04) x.push(dd); }
+              x.sort((p, q) => p - q);
+              const e = [];
+              for (let o = 0; o < W * H * 4; o += 4 * 2) { const a = luma(eOn.px, o), c = luma(eOff.px, o); const dd = Math.abs(a - c) / Math.max(c, a, 16); if (dd > 0.04) e.push(dd); }
+              e.sort((x, y) => x - y);
+              teleEdge.enemy = { px: e.length, p90: e.length ? +e[Math.floor(e.length * 0.9)].toFixed(3) : 0, n: foe.length, p90NoFx: x.length ? +x[Math.floor(x.length * 0.9)].toFixed(3) : 0 };
+            }
+            R.render(0);
           }
           return { fighters, selfRing, teleEdge, particles: st.particles, vfx: st.vfx, telegraphs: st.telegraphs, particleBudget: budget, tris: prof?.total?.tris ?? st.triangles, vfxTris: prof?.groups?.vfx?.tris ?? null, vfxCalls: prof?.groups?.vfx?.calls ?? null, draws: prof?.total?.calls ?? st.calls, programs: st.programs, $png: shotNow ? png(full) : null, $pngNoFx: shotNow ? png(noFx) : null };
         };
@@ -235,19 +260,19 @@ async function clutterMain() {
         looksWithSides: { minA: Math.min(...out.looks.map((l) => l.a)), minC: Math.min(...out.looks.map((l) => l.c)) },
         medianOcclusion: med(occ), p90Occlusion: occ.length ? [...occ].sort((x, y) => x - y)[Math.floor(occ.length * 0.9)] : null, fighterSamples: occ.length,
         worstFighterRun: worst, selfRing: { frames: rings.length, found: rings.filter((r) => r.found).length, rate: rings.length ? +(rings.filter((r) => r.found).length / rings.length).toFixed(3) : null },
-        teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)) },
+        teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)), enemyFrames: teles.filter((t) => t.enemy).length, enemyMedianP90: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90)), enemyMedianP90NoFx: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90NoFx)) },
         particles: { peak: Math.max(0, ...peaks), median: med(peaks), budget: out.looks[0]?.particleBudget ?? null, overBudgetFrames: out.looks.filter((l) => l.particles > l.particleBudget).length },
         hotBody: { max: hots[0]?.hot ?? null, worst: hots[0] ?? null, median: med(hots.map((h) => h.hot)), over30: hots.filter((h) => h.hot > 0.3).length },
         frame: { vfxTrisPeak: Math.max(0, ...num('vfxTris')), vfxTrisMedian: med(num('vfxTris')), trisPeak: Math.max(0, ...num('tris')), drawsPeak: Math.max(0, ...num('draws')), programsPeak: Math.max(0, ...num('programs')) },
         consoleErrors: logs.filter((l) => !/favicon/.test(l)).slice(0, 5), looks: out.looks,
       };
       res.seeds.push(s);
-      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90}, particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
+      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90} (enemy ${s.teleEdge.enemyMedianP90} over ${s.teleEdge.enemyFrames}, with no VFX ${s.teleEdge.enemyMedianP90NoFx}), particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
     } finally { await browser.close(); }
   }
   const okSeeds = res.seeds.filter((s) => s.peakFrames4v4 >= WANT).length;
   const all = (k) => res.seeds.map((s) => k(s)).filter((v) => v !== null && v !== undefined);
-  res.summary = { seedsWith30PeakFrames: okSeeds, medianOcclusion: all((s) => s.medianOcclusion).length ? Math.max(...all((s) => s.medianOcclusion)) : null, worstRunMs: Math.max(0, ...res.seeds.map((s) => s.worstFighterRun.ms)), teleEdge: all((s) => s.teleEdge.medianP90).length ? Math.min(...all((s) => s.teleEdge.medianP90)) : null, selfRingRate: all((s) => s.selfRing.rate).length ? Math.min(...all((s) => s.selfRing.rate)) : null, particlesPeak: Math.max(0, ...res.seeds.map((s) => s.particles.peak)),
+  res.summary = { seedsWith30PeakFrames: okSeeds, medianOcclusion: all((s) => s.medianOcclusion).length ? Math.max(...all((s) => s.medianOcclusion)) : null, worstRunMs: Math.max(0, ...res.seeds.map((s) => s.worstFighterRun.ms)), teleEdge: all((s) => s.teleEdge.enemyMedianP90).length ? Math.min(...all((s) => s.teleEdge.enemyMedianP90)) : null, teleEdgeAll: all((s) => s.teleEdge.medianP90).length ? Math.min(...all((s) => s.teleEdge.medianP90)) : null, selfRingRate: all((s) => s.selfRing.rate).length ? Math.min(...all((s) => s.selfRing.rate)) : null, particlesPeak: Math.max(0, ...res.seeds.map((s) => s.particles.peak)),
     hotBodyMax: Math.max(0, ...res.seeds.map((s) => s.hotBody.max ?? 0)), vfxTrisPeak: Math.max(0, ...res.seeds.map((s) => s.frame.vfxTrisPeak)), trisPeak: Math.max(0, ...res.seeds.map((s) => s.frame.trisPeak)),
     drawsPeak: Math.max(0, ...res.seeds.map((s) => s.frame.drawsPeak)), programsPeak: Math.max(0, ...res.seeds.map((s) => s.frame.programsPeak)) };
   res.bars.pass = { scan: okSeeds >= 2, medianOcclusion: res.summary.medianOcclusion !== null && res.summary.medianOcclusion <= res.bars.medianOcclusion, worstRun: res.summary.worstRunMs <= res.bars.worstRunMs, teleEdge: res.summary.teleEdge !== null && res.summary.teleEdge >= res.bars.teleEdge, selfRing: res.summary.selfRingRate === 1,
@@ -260,6 +285,93 @@ async function clutterMain() {
   console.log(`clutter: ${okSeeds}/${SEEDS.length} seeds with ${WANT} peak frames; summary ${JSON.stringify(res.summary)}; bars ${JSON.stringify(res.bars.pass)} -> ${outFile}`);
   process.exit(okSeeds >= 2 ? 0 : 1);
 }
+// ---------------------------------------------------------------------------------------------- death (orch1 VFX-O4, W2-B)
+//   death   a REAL kill on RIFT/High (seed 7, spectator, fog off): seat 0's fighter basic-attacks an enemy fighter left at a sliver of
+//           health (the kill comes through the sim's own attack path, not dealDamage from page script); both drivers are removed so
+//           nobody walks off. The director's events and fired defs are logged; from the death event's frame the victim's clip role, clip
+//           time, head height (its head socket) and the frame are taken at 0 / 0.1 / 0.2 / 0.3 / 0.5 / 0.8 / 1.2 s.
+//           done: the fighter death def (vfxEvents.death) fires on the death frame; the clip role is 'death' on the death frame and the
+//           head has dropped >= 25 % of its standing height by 0.5 s.
+//           node _harness/probe_combat_polish.mjs death [--shots <dir>] [--seed 7] [--tag <name>]
+async function deathMain() {
+  const SEED = Number(opt('seed', 7)), SHOTS = opt('shots', '');
+  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=${QUALITY}&t=420&seed=${SEED}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
+  const res = { gate: 'death', at: new Date().toISOString(), seed: SEED, quality: QUALITY };
+  try {
+    await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
+    const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
+    await page.waitForTimeout(4000);
+    for (let i = 0; i < 60 && (await B((b) => b.renderer.lib?.pending ?? 0)) > 0; i++) await page.waitForTimeout(1000);
+    await B(async (b, d) => { const { VfxDef } = await import('/src/contracts/catalog.ts'); b.renderer.vfx.redefine(d.map((x) => VfxDef.parse(x))); }, defs);
+    const setup = await B((b) => {
+      const R = b.renderer, v = b.host.view;
+      R.palette.viewer.team = -1; R.fog.enabled = false; R.rig.spectator = true;
+      const me = v.entity(v.players.find((p) => p.player === 0).entity);
+      for (let i = 0; i < 600 && !me.alive; i++) b.frames(1, 1 / 30);
+      const foeP = v.players.find((p) => v.entity(p.entity)?.team !== me.team && v.entity(p.entity)?.alive);
+      const foe = v.entity(foeP.entity);
+      b.host.drivers.delete(0); b.host.drivers.delete(foeP.player);
+      const x = 60, y = 55;
+      me.x = x; me.y = y; me.vx = me.vy = 0; me.hp = me.maxHp;
+      foe.x = x + 1.6; foe.y = y; foe.vx = foe.vy = 0; foe.hp = Math.max(1, foe.maxHp * 0.02); foe.shields = [];
+      v.hashDirty = true;
+      b.zoom(b.catalog.maps.find((q) => q.id === b.host.setup.map).camera.distance); b.focus(x + 0.8, y);
+      // the logs: director events (death) and fired defs
+      const d = R.director, fire = d.fire.bind(d), handle = d.handle.bind(d);
+      b.__fired = []; b.__deaths = [];
+      d.fire = (id, src, tier, o) => { const h = fire(id, src, tier, o); b.__fired.push({ id: id ?? null, h, t: +v.time.toFixed(3), src, tier }); return h; };
+      d.handle = (evs) => { for (const e of evs) if (e.e === 'death') b.__deaths.push({ ...e, at: +v.time.toFixed(3) }); return handle(evs); };
+      b.frames(2, 1 / 30);
+      return { me: me.id, meDef: me.def, foe: foe.id, foeDef: foe.def, foeHp: foe.hp };
+    });
+    res.setup = setup;
+    // the victim's state per frame
+    const probe = () => B((b, id) => {
+      const R = b.renderer, a = R.actors.get(id), e = b.host.view.entity(id);
+      const hp = { x: 0, y: 0, z: 0 }; let head = null;
+      try { const V = R.rig.camera.position.constructor; const out = new V(); if (R.vfx.world.socketPos?.(id, 'head', out)) head = +out.y.toFixed(3); } catch { /* none */ }
+      return { t: +b.host.view.time.toFixed(3), alive: e?.alive ?? null, state: e?.state ?? null, role: a?.currentKey ?? null, clipT: a?.current ? +a.current.time.toFixed(3) : null, head };
+    }, setup.foe);
+    const stand = await probe();
+    res.standing = stand;
+    await B((b, p) => b.host.sim.command(0, { type: 'attack', target: p.foe }), setup);
+    let deathFrame = null; const pre = [];
+    for (let i = 0; i < 240; i++) {
+      await B((b) => b.frames(1, 1 / 30));
+      const d = await B((b) => b.__deaths.length);
+      pre.push(await probe());
+      if (d > 0) { deathFrame = i; break; }
+    }
+    res.deaths = await B((b) => b.__deaths);
+    if (deathFrame === null) throw new Error('no death event in 8 s');
+    const AT = [0, 0.1, 0.2, 0.3, 0.5, 0.8, 1.2];
+    const frames = []; let el = 0;
+    for (const at of AT) {
+      const n = Math.round((at - el) * 30); if (n > 0) await B((b, n) => b.frames(n, 1 / 30), n); el = at;
+      const st = await probe();
+      const png = await B((b) => { b.renderer.render(0); return document.getElementById('c').toDataURL('image/png').split(',')[1]; });
+      if (SHOTS) { mkdirSync(SHOTS, { recursive: true }); writeFileSync(join(SHOTS, `death_${setup.foeDef}_${String(Math.round(at * 10)).padStart(2, '0')}.png`), Buffer.from(png, 'base64')); }
+      frames.push({ at, ...st, drop: stand.head && st.head ? +(1 - st.head / stand.head).toFixed(3) : null });
+    }
+    const dt = res.deaths[0].at;
+    res.fired = (await B((b) => b.__fired)).filter((f) => f.t >= dt - 0.05 && f.t <= dt + 0.2);
+    res.frames = frames; res.preDeath = pre.slice(-3);
+    const deathDef = JSON.parse(readFileSync(join(HERE, '../content/client.json'), 'utf8')).vfxEvents.death;
+    const firedDeath = res.fired.find((f) => f.id === deathDef && f.src === setup.foe);
+    res.done = {
+      deathVfxOnDeathFrame: !!firedDeath && Math.abs(firedDeath.t - dt) < 0.001,
+      roleDeathOnDeathFrame: frames[0].role === 'death',
+      headDrop05: frames.find((f) => f.at === 0.5)?.drop ?? null,
+    };
+    res.done.pass = res.done.deathVfxOnDeathFrame && res.done.roleDeathOnDeathFrame && (res.done.headDrop05 ?? 0) >= 0.25;
+    res.consoleErrors = logs.filter((l) => !/favicon/.test(l)).slice(0, 5);
+  } finally { await browser.close(); }
+  const out = opt('out', join(REPS, `w2b_death${TAG ? '_' + TAG : ''}.json`));
+  writeFileSync(out, JSON.stringify(res, null, 1));
+  console.log(`death: ${res.setup?.meDef} kills ${res.setup?.foeDef}; fired ${JSON.stringify(res.fired?.map((f) => f.id))}; frames ${JSON.stringify(res.frames?.map((f) => [f.at, f.role, f.clipT, f.head, f.drop]))}; done ${JSON.stringify(res.done)} -> ${out}`);
+  process.exit(0);
+}
+if (ONLY.includes('death')) await deathMain();
 if (ONLY.includes('clutter')) await clutterMain();
 
 const report = { at: new Date().toISOString(), defs: BEFORE || 'content/vfx.json', ult: [], cc: null, flash: [], hold: [], pass: true, fails: [] };

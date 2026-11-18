@@ -345,6 +345,8 @@ export class Director {
   private readonly seals = new Map<string, { units: ReadonlySet<string>; until: number }>();
   /** the world moments' clock (engine-r2-03 / -04): the view they last saw, its time and Gorge Wind step */
   private momentView: WorldView | null = null;
+  /** orch1 W2-B: this frame's fighters whose bodies the VFX keep readable */
+  private readonly bodies: number[] = [];
   private momentT = 0;
   private gorgeSeen = 0;
 
@@ -445,7 +447,7 @@ export class Director {
     const sg = this.signatureOf(src);
     return this.vfx.spawnHandle(id, {
       tier, team: c, element: this.elementOf(src), signature: sg?.sig ?? null, secondary: sg?.sec ?? null, hueFrom: sg?.base ?? null,
-      ally: rel === 'ally', ownT1: rel === 'self' && tier <= 1,
+      ally: rel === 'ally', ownT1: rel === 'self' && tier <= 1, enemy: rel === 'enemy',
       origin: o.origin ?? null, target: o.target ?? null, ground: o.ground ?? null, scale: o.scale, dir: o.dir,
       follow: o.follow, followFor: o.followFor, targetId: o.targetId, sourceId: srcId, anchor: o.anchor, loopWhile: o.loopWhile,
       sustain: o.sustain, timeScale: o.timeScale, phase: o.phase, world: o.world, clip: o.clip,
@@ -1062,6 +1064,10 @@ export class Director {
     screenFx.setDead(!!me && view.phase !== 'ended' && me.respawnIn > 0 && (!meE || !meE.alive));
     this.syncStatuses(view);
     this.syncRecalls(view);
+    // orch1 W2-B (GFX-3 / FU-6): every fighter standing in view keeps its body readable under the effects
+    this.bodies.length = 0;
+    for (const e of view.entities) if (e.kind === 'fighter' && e.alive && this.host.entityVisible(e)) this.bodies.push(e.id);
+    this.vfx.setBodies(this.bodies);
     for (const e of view.entities) {
       if (e.kind !== 'zone' || this.zonesSeen.has(e.id)) continue;
       this.zonesSeen.add(e.id);
@@ -1089,7 +1095,7 @@ export class Director {
         // the caster's signature carries the zone (M12): resin, dome, shadow, tracks … in the fighter's own hue
         const sg = this.signatureOf(src);
         this.vfx.spawn(e.vfx, {
-          tier: 3, team: c, element: this.elementOf(src), signature: sg?.sig ?? null, secondary: sg?.sec ?? null, hueFrom: sg?.base ?? null, ally: rel === 'ally',
+          tier: 3, team: c, element: this.elementOf(src), signature: sg?.sig ?? null, secondary: sg?.sec ?? null, hueFrom: sg?.base ?? null, ally: rel === 'ally', enemy: rel === 'enemy',
           origin: C, ground: C, scale: R, dir: e.facing, anchor: 'ground', loopWhile: e.id, sourceId: src ? src.id : -1,
         });
       }

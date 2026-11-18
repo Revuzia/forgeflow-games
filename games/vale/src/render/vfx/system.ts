@@ -42,16 +42,16 @@ import {
 import { uberAttrs } from '../uber.ts';
 import type { VfxDefT } from '../../contracts/catalog.ts';
 import { VfxTextures } from './atlas.ts';
-import { type ColorRef, evalCurve, GradientPool } from './curves.ts';
+import { type ColorRef, curveMax, evalCurve, GradientPool } from './curves.ts';
 import {
   type Anchor, type BeamL, type Def, DIR, type DecalL, type DistortL, type EmitterL, type FeelL, type Layer, type LightL, MESH_ALIGN, type MeshL,
   DECAL_STYLES, parseDef, type RibbonL, SHAPE, type ShockwaveL,
 } from './defs.ts';
 import {
-  PREMUL, VFX_KIND, VFX_KINDS, VFX_PROGRAM, vfxUniforms,
+  MAX_BODIES, PREMUL, VFX_KIND, VFX_KINDS, VFX_PROGRAM, vfxUniforms,
 } from './shaders.ts';
 import { screenFx, screenUniforms, VFX_LIFT_CAP } from './screen.ts';
-import { buildShape, SHAPE_KIND, SHAPE_LO, SHAPE_LO_M, VFX_SHAPES } from './shapes.ts';
+import { buildShape, SHAPE_KIND, SHAPE_LO, SHAPE_LO_M, shapeIndex, VFX_SHAPES } from './shapes.ts';
 
 export type VfxAnchor = 'origin' | 'target' | 'path' | 'ground';
 export type Tier = 0 | 1 | 2 | 3 | 4;
@@ -81,6 +81,9 @@ export interface SpawnOpts {
   ally: boolean;
   /** own basic attacks at 85 % */
   ownT1?: boolean;
+  /** orch1 W2-B: the source is the viewer's enemy (its large ground fills and area shells may stay a little stronger
+   *  than an ally's: tokens.json vfx.rules.zoneFill) */
+  enemy?: boolean;
   origin?: Vector3 | null;
   target?: Vector3 | null;
   ground?: Vector3 | null;
@@ -141,6 +144,27 @@ const RELEASE_TAIL = 1.0;
 /** a swing arc's sub-frame point spacing (radians) */
 const ARC_STEP = (4 * Math.PI) / 180;
 
+// orch1 W2-B (tokens.json vfx.rules.bodyShell / zoneFill): sustained looks on a body are read by their rim
+const SHELL_FILL = 0.12;
+const SHELL_SCALE = 1.25;
+const SHELL_RIM_POW = 3;
+/** a round additive mesh on a unit this large (m) or larger encloses the body: a shell */
+const SHELL_BODY_MIN = 0.9;
+/** a round additive mesh on the ground this large (m) or larger covers an area: an area shell */
+const AREA_SHELL_MIN = 2.0;
+const ZONE_FILL_ALLY = 0.10;
+const ZONE_FILL_ENEMY = 0.18;
+const ROUND_SHELLS = new Set([shapeIndex('orb'), shapeIndex('dome')]);
+const DECAL_SHAPE_RING = 1;
+/** orch1 W2-B: an ultimate's body exemption from the character-protection rule (s) and its fade back (s) */
+const T4_EXEMPT_S = 0.15;
+const T4_EXEMPT_FADE_S = 0.1;
+/** orch1 W2-B: a fighter's body column round its body centre (m): down over the legs (not the ground at the feet), up over
+ *  the head and a raised weapon, its radius */
+const BODY_LOW = 0.95;
+const BODY_HIGH = 1.5;
+const BODY_R = 0.95;
+
 let uidSeq = 1;
 
 class Inst {
@@ -163,6 +187,8 @@ class Inst {
   world = false;
   prevTarget = new Vector3();
   tier: Tier = 2;
+  /** orch1 W2-B: the source's relationship to the viewer is enemy (SpawnOpts.enemy) */
+  enemy = false;
   opacity = 1;
   density = 1;
   secondary = 1;
@@ -209,7 +235,7 @@ interface Ribbon {
   arcF: number; arcT: number;
 }
 interface Beam { on: boolean; inst: Inst | null; l: BeamL | null; a: Vector3; b: Vector3; age: number; slot: number; opacity: number; cap: number; seed: number; rate: number }
-interface Ring { on: boolean; l: ShockwaveL | null; x: number; y: number; z: number; age: number; s: number; slot: number; opacity: number; cap: number; seed: number; rate: number }
+interface Ring { on: boolean; l: ShockwaveL | null; x: number; y: number; z: number; age: number; s: number; slot: number; opacity: number; cap: number; seed: number; rate: number; fillCap: number }
 interface Decal {
   on: boolean; l: DecalL | null; x: number; z: number; rot: number; age: number; s: number; slot: number; opacity: number; cap: number; seed: number; rim: Color; rate: number;
   /** sustained / following owner (hold, tracking) */
@@ -221,10 +247,19 @@ interface Decal {
   path: boolean;
   /** max VFX-1: the owner's remaining share last seen (a countdown dial keeps it once its owner is gone) */
   rem: number;
+  /** orch1 W2-B (VFX-O3): the most alpha this decal may reach (a zone's ground fill: ally 0.10, enemy 0.18); 1 = free */
+  fillCap: number;
 }
 interface MeshEl {
   on: boolean; l: MeshL | null; inst: Inst | null; pos: Vector3; q: Quaternion; age: number; s: number; slot: number; opacity: number; cap: number;
   spinA: number; seed: number; rim: Color; edge: Color; follow: boolean; rate: number;
+  /** orch1 W2-B (VFX-O2 / O3): a shell over a body or an area: its FILL (the colour term) is held to this alpha while its
+   *  fresnel rim keeps the authored alpha; 1 = free */
+  fillCap: number;
+  /** orch1 W2-B: the shell's scale is held to this (1.25 for a shell on a body); Infinity = free */
+  scaleCap: number;
+  /** orch1 W2-B: the shell's rim power is at least this */
+  rimPowMin: number;
 }
 interface DistortEl { on: boolean; l: DistortL | null; inst: Inst | null; pos: Vector3; age: number; s: number; rate: number; seed: number; opacity: number }
 
@@ -306,6 +341,8 @@ export class VfxSystem {
   /** combat F4: the most an ultimate envelope lifts an effect (display ×; screen.ts VFX_LIFT_CAP); null = the envelope
    *  lifts effects like the ground (the pre-F4 look; a harness seam: probe_combat_polish / value_probe --vfxcap) */
   liftCap: number | null = VFX_LIFT_CAP;
+  /** orch1 W2-B harness switch: false turns the character-protection rule off (A/B captures); never off in play */
+  bodyProtect = true;
   budget = 4000;
   /** max VFX-11: extra density for secondary emitters (Ultra 1.3; quality.ts) */
   secondaryDensity = 1;
@@ -319,6 +356,11 @@ export class VfxSystem {
   private readonly free: Inst[] = [];
   private readonly grads = new GradientPool();
   private now = 0;
+  /** orch1 W2-B (GFX-3): the fighter bodies the character-protection rule reads (Director.update: alive, seen fighters) */
+  private readonly bodyIds: number[] = [];
+  /** orch1 W2-B: recent ultimate (T4) impacts, whose bodies take the effect whole for T4_EXEMPT_S */
+  private readonly t4Marks: { x: number; z: number; r: number; t: number }[] = [];
+  private readonly _body = new Vector3();
 
   // particles (SoA)
   private pn = 0;
@@ -440,7 +482,7 @@ export class VfxSystem {
       mesh.frustumCulled = false; mesh.renderOrder = 9; mesh.name = 'vfx_rings';
       this.scene.add(mesh);
       this.ringDraw = { mesh, geo, aPos, aSty, aCol, aMisc };
-      for (let i = 0; i < RING_MAX; i++) this.rings.push({ on: false, l: null, x: 0, y: 0, z: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rate: 1 });
+      for (let i = 0; i < RING_MAX; i++) this.rings.push({ on: false, l: null, x: 0, y: 0, z: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rate: 1, fillCap: 1 });
     }
     {
       const geo = instGeo();
@@ -450,10 +492,10 @@ export class VfxSystem {
       mesh.frustumCulled = false; mesh.renderOrder = 8; mesh.name = 'vfx_decals';
       this.scene.add(mesh);
       this.decalDraw = { mesh, geo, aPos, aRot, aCol, aMisc, aRimC };
-      for (let i = 0; i < DECAL_MAX; i++) this.decals.push({ on: false, l: null, x: 0, z: 0, rot: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), rate: 1, inst: null, sus: false, path: false, rem: 1 });
+      for (let i = 0; i < DECAL_MAX; i++) this.decals.push({ on: false, l: null, x: 0, z: 0, rot: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), rate: 1, inst: null, sus: false, path: false, rem: 1, fillCap: 1 });
     }
     for (let i = 0; i < 192; i++) {
-      this.meshEls.push({ on: false, l: null, inst: null, pos: new Vector3(), q: new Quaternion(), age: 0, s: 1, slot: 0, opacity: 1, cap: 1, spinA: 0, seed: 0, rim: new Color(), edge: new Color(), follow: false, rate: 1 });
+      this.meshEls.push({ on: false, l: null, inst: null, pos: new Vector3(), q: new Quaternion(), age: 0, s: 1, slot: 0, opacity: 1, cap: 1, spinA: 0, seed: 0, rim: new Color(), edge: new Color(), follow: false, rate: 1, fillCap: 1, scaleCap: Infinity, rimPowMin: 0 });
     }
     {
       // distortion sprites: signed UV offsets summed into a half-float target (additive, no clamp)
@@ -487,6 +529,34 @@ export class VfxSystem {
   }
 
   get particleCount(): number { return this.pn; }
+
+  /** orch1 W2-B (GFX-3 / FU-6): the fighters whose bodies the VFX pass keeps readable this frame (at most MAX_BODIES) */
+  setBodies(ids: readonly number[]): void {
+    this.bodyIds.length = 0;
+    for (const id of ids) { if (this.bodyIds.length >= MAX_BODIES) break; this.bodyIds.push(id); }
+  }
+
+  /** the body columns into the VFX uniforms (draw): from the body centre (the renderer's bodyPos: the feet + up to 1.3 m)
+   *  the column runs BODY_LOW below it (over the feet and the ground they stand on) to BODY_HIGH above (the head and a
+   *  raised weapon), BODY_R wide; protection 0 for an ultimate's first T4_EXEMPT_S near it, back to 1 over T4_EXEMPT_FADE_S */
+  private feedBodies(): void {
+    const A = vfxUniforms.uBodyA.value, Bq = vfxUniforms.uBodyB.value, now = this.now;
+    for (let i = this.t4Marks.length - 1; i >= 0; i--) if (now - this.t4Marks[i].t > T4_EXEMPT_S + T4_EXEMPT_FADE_S) this.t4Marks.splice(i, 1);
+    let n = 0;
+    for (const id of this.bodyIds) {
+      const p = this._body;
+      if (!this.world.entityPos(id, p)) continue;
+      let k = 1;
+      for (const m of this.t4Marks) {
+        if (Math.hypot(p.x - m.x, p.z - m.z) > m.r) continue;
+        k = Math.min(k, Math.max(0, (now - m.t - T4_EXEMPT_S) / T4_EXEMPT_FADE_S));
+      }
+      A[n].set(p.x, p.z, p.y - BODY_LOW, p.y + BODY_HIGH);
+      Bq[n].set(BODY_R, k, 0, 0);
+      n++;
+    }
+    vfxUniforms.uBodyN.value = n;
+  }
   get instanceCount(): number { return this.insts.length; }
 
   // ── spawning ─────────────────────────────────────────────────────────────────────────────────
@@ -511,6 +581,11 @@ export class VfxSystem {
     it.cancelled = false;
     it.world = !!o.world;
     it.tier = o.tier;
+    it.enemy = !!o.enemy;
+    if (o.tier >= 4 && (o.phase ?? 'main') !== 'windup') {
+      const at = o.target ?? o.ground ?? o.origin;
+      if (at && this.t4Marks.length < 32) this.t4Marks.push({ x: at.x, z: at.z, r: Math.max(2.5, (o.scale ?? 1) * 1.3), t: this.now });
+    }
     it.opacity = o.ally ? 0.65 : o.ownT1 ? 0.85 : 1;
     it.secondary = o.ally ? 0.5 : 1;
     it.density = this.density * (o.ally ? 0.75 : 1);
@@ -858,6 +933,7 @@ export class VfxSystem {
         r.on = true; r.l = l; r.x = p.x; r.y = l.vertical ? p.y : (at === 'path' ? p.y : 0.06); r.z = p.z;
         r.age = 0; r.s = s; r.slot = this.bake(it, li, l.color, l.blend === 1 || l.blend === 3); r.opacity = it.opacity; r.cap = this.cap(it); r.seed = Math.random();
         r.rate = l.fitTime ? it.rate : 1;
+        r.fillCap = it.loopWhile >= 0 ? (it.enemy ? ZONE_FILL_ENEMY : ZONE_FILL_ALLY) : 1;
         return;
       }
       case 'decal': {
@@ -879,6 +955,9 @@ export class VfxSystem {
         dc.sus = it.sustained && l.hold > 0;
         dc.path = pathLight;
         dc.rem = it.rem;
+        // orch1 W2-B (VFX-O3): a zone's ground fill is quiet (ally / own 0.10, enemy 0.18); its edge band (a ring decal, the
+        // telegraph outline) carries the identity
+        dc.fillCap = it.loopWhile >= 0 && l.shape !== DECAL_SHAPE_RING ? (it.enemy ? ZONE_FILL_ENEMY : ZONE_FILL_ALLY) : 1;
         this.resolve(l.rim ?? null, it, dc.rim);
         if (!l.rim) dc.rim.copy(it.team);
         it.el[li] = this.decals.indexOf(dc);
@@ -892,6 +971,19 @@ export class VfxSystem {
         e.rate = l.fitTime ? it.rate : 1;
         e.pos.copy(p); if (at === 'ground') e.pos.y = 0.02;
         e.age = 0; e.s = s; e.slot = this.bake(it, li, l.color, l.blend === 1 || l.blend === 3); e.opacity = it.opacity; e.cap = this.cap(it); e.spinA = 0; e.seed = Math.random();
+        // orch1 W2-B (VFX-O2 / O3, tokens.json vfx.rules.bodyShell / zoneFill): a round shell is read by its rim, never as a ball
+        e.fillCap = 1; e.scaleCap = Infinity; e.rimPowMin = 0;
+        if (l.blend === 0 && ROUND_SHELLS.has(l.shape)) {
+          const big = curveMax(l.scale) * s;
+          if ((at === 'target' || at === 'caster' || at === 'origin') && big >= SHELL_BODY_MIN) {
+            e.fillCap = SHELL_FILL; e.scaleCap = SHELL_SCALE * s; e.rimPowMin = SHELL_RIM_POW;
+          } else if (at === 'ground' && big >= AREA_SHELL_MIN) {
+            // stacked shells of one area (a dome's body and its course bands) share the cap: the area's fill, not each layer's
+            let n = 0;
+            for (const x of it.def.layers) if (x.type === 'mesh' && (x as MeshL).blend === 0 && ROUND_SHELLS.has((x as MeshL).shape) && this.atOf(it, x) === 'ground') n++;
+            e.fillCap = (it.enemy ? ZONE_FILL_ENEMY : ZONE_FILL_ALLY) / Math.max(1, n);
+          }
+        }
         if (l.rim) this.resolve(l.rim, it, e.rim); else e.rim.setRGB(0, 0, 0);
         if (l.edge) this.resolve(l.edge, it, e.edge); else e.edge.copy(it.team);
         this.orientMesh(e, it, l);
@@ -1295,9 +1387,11 @@ export class VfxSystem {
       this.grads.sample(r.slot, t, _rgb, 0);
       const e = Math.min(r.cap, Math.max(0, evalCurve(l.emissive, t)));
       G.aPos.setXYZW(nr, r.x, r.y, r.z, Math.max(0.01, evalCurve(l.radius, t) * r.s));
-      G.aSty.setXYZW(nr, Math.max(0.01, evalCurve(l.width, t) * Math.max(1, Math.sqrt(r.s) * 0.8)), Math.max(0, evalCurve(l.alpha, t)) * r.opacity, l.sharp, l.noise);
+      const ra = Math.max(0, evalCurve(l.alpha, t)) * r.opacity;
+      G.aSty.setXYZW(nr, Math.max(0.01, evalCurve(l.width, t) * Math.max(1, Math.sqrt(r.s) * 0.8)), ra, l.sharp, l.noise);
       G.aCol.setXYZW(nr, _rgb[0] * e, _rgb[1] * e, _rgb[2] * e, l.blend);
-      G.aMisc.setXYZW(nr, l.vertical ? 1 : 0, r.seed, l.inner, t);
+      // orch1 W2-B (VFX-O3): a zone's ring keeps its edge, its inner fill (× 0.35 in the shader) stays at the zone's fill cap
+      G.aMisc.setXYZW(nr, l.vertical ? 1 : 0, r.seed, r.fillCap < 1 && ra > 1e-3 ? Math.min(l.inner, r.fillCap / (0.35 * ra)) : l.inner, t);
       nr++;
     }
     G.geo.instanceCount = nr; flush([G.aPos, G.aSty, G.aCol, G.aMisc], nr); G.mesh.visible = nr > 0;
@@ -1318,7 +1412,7 @@ export class VfxSystem {
       // a countdown dial (max VFX-1): a sector of the dial whose half-angle closes with the state's remaining share
       const param = l.shape === 2 ? (l.countdown ? Math.max(0.03, Math.PI * dc.rem) : l.angle) : l.shape >= 3 ? Math.max(0.05, (l.width || rad * 0.3) / Math.max(1e-3, rad * 2)) : 0;
       DD.aPos.setXYZW(nd, dc.x, 0.035, dc.z, rad);
-      DD.aRot.setXYZW(nd, dc.rot, l.shape, l.style, Math.max(0, evalCurve(l.alpha, t)) * dc.opacity);
+      DD.aRot.setXYZW(nd, dc.rot, l.shape, l.style, Math.min(dc.fillCap, Math.max(0, evalCurve(l.alpha, t)) * dc.opacity));
       DD.aCol.setXYZW(nd, _rgb[0], _rgb[1], _rgb[2], e);
       // the styled erosion runs on the decal's own age; a held status mark stays whole while held and erodes in its tail
       const ero = dc.sus ? Math.max(0, (t - l.hold) / Math.max(0.05, 1 - l.hold)) : t;
@@ -1336,7 +1430,7 @@ export class VfxSystem {
       if (holding(e.inst) && !l.repeat) e.age = Math.min(e.age + d * e.rate, l.life * l.hold); else e.age += d * e.rate;
       if (e.age >= l.life && (!e.inst || (e.inst.sustained && !e.inst.held) || l.repeat > 0)) { e.on = false; e.inst = null; continue; }
       const t = Math.min(1, e.age / l.life);
-      const sc = Math.max(0.001, evalCurve(l.scale, t) * e.s);
+      const sc = Math.min(e.scaleCap, Math.max(0.001, evalCurve(l.scale, t) * e.s));
       // perf PERF-m5: a small round shell draws the coarser copy (shapes.ts SHAPE_LO)
       const sd = this.shapeDraw(l.shape, sc * Math.max(l.stretch[0], l.stretch[1], l.stretch[2]) < SHAPE_LO_M);
       if (sd.n >= MESH_PER_SHAPE) continue;
@@ -1350,9 +1444,12 @@ export class VfxSystem {
       const em = Math.min(e.cap, Math.max(0, evalCurve(l.emissive, t)));
       const legacyAdd = l.legacy && l.blend === 0 ? Math.min(e.cap, 1.6) : em;
       const a = Math.max(0, evalCurve(l.alpha, t)) * e.opacity;
-      sd.aColor.setXYZW(sd.n, _rgb[0] * legacyAdd, _rgb[1] * legacyAdd, _rgb[2] * legacyAdd, a);
-      const re = Math.min(e.cap, l.rimEmissive);
-      sd.aRimC.setXYZW(sd.n, e.rim.r * re, e.rim.g * re, e.rim.b * re, l.rimPow);
+      // a capped shell (orch1 W2-B): the fill draws at fillCap, the rim term is raised by a / fillCap so the edge keeps the
+      // light it was authored with (the shader multiplies colour and rim by the one alpha)
+      const af = Math.min(a, e.fillCap), rk = af > 1e-4 ? a / af : 1;
+      sd.aColor.setXYZW(sd.n, _rgb[0] * legacyAdd, _rgb[1] * legacyAdd, _rgb[2] * legacyAdd, af);
+      const re = Math.min(e.cap, l.rimEmissive) * rk;
+      sd.aRimC.setXYZW(sd.n, e.rim.r * re, e.rim.g * re, e.rim.b * re, Math.max(e.rimPowMin, l.rimPow));
       const ee = Math.min(e.cap, l.edgeEmissive);
       sd.aEdge.setXYZW(sd.n, e.edge.r * ee, e.edge.g * ee, e.edge.b * ee, l.edgeWidth);
       sd.aNoise.setXYZW(sd.n, l.noiseScale, l.scroll[0], l.scroll[1], l.noise);
@@ -1446,7 +1543,10 @@ export class VfxSystem {
     // combat F4: the envelope as the shaders' vfxLift reads it (the same camera the post chain rebuilds height with)
     vfxUniforms.uLiftOn.value = this.liftCap !== null && screenUniforms.uLiftA.value.some((q) => q.w > 0) ? 1 : 0;
     vfxUniforms.uLiftCap.value = (this.liftCap ?? VFX_LIFT_CAP) - 1;
-    if (vfxUniforms.uLiftOn.value) {
+    // the envelope's ground test and the body protection (orch1 W2-B) rebuild the scene surface with the same camera
+    this.feedBodies();
+    if (this.bodyProtect === false) vfxUniforms.uBodyN.value = 0;
+    if (vfxUniforms.uLiftOn.value || vfxUniforms.uBodyN.value > 0) {
       vfxUniforms.uLiftInvProj.value.copy(cam.projectionMatrixInverse);
       vfxUniforms.uLiftCamWorld.value.copy(cam.matrixWorld);
     }
@@ -1491,6 +1591,7 @@ export class VfxSystem {
     for (const l of this.lights) { l.age = l.life = 1; l.light.intensity = 0; }
     this.byUid.clear();
     this.distortN = 0;
+    this.bodyIds.length = 0; this.t4Marks.length = 0; vfxUniforms.uBodyN.value = 0;
     // round 4 MEM-1 refix: the distortion target is sized to the match's render scale (High 1536×864 RGBA16F, 10 MB) and
     // was kept at Home after every match; it is made again on the next distortion draw
     this.distortRT?.dispose(); this.distortRT = null;

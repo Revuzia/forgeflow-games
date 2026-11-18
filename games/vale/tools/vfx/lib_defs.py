@@ -395,7 +395,10 @@ def defs() -> list:
                  motes("origin", 0, rate=14, rise=1.6, radius=0.7, emissive=2.0),
                  comment="T2 · Lumen · recall channel (loop): a slow team ring at the feet, a faint column, motes drifting up"))
     D.append(vfx("lib_death_shatter", 3.2,
-                 flash(2, at="origin", color="team", scale=0.9),
+                 # orch1 W2-B (VFX-O4): the kill lands as a moment: a T3 flash 0.8 m in the victim's relationship colour on the
+                 # death frame (never white: ruling 10), and a ring that rises off the body (the lamp going out)
+                 flash(3, at="origin", color="team", scale=0.8 / FLASH_R[3]),
+                 shockwave("origin", radius=(0.3, 1.3), width=(0.16, 0.04), life=0.4, emissive=3.2, vertical=True, alpha=(1, 0.8, 0)),
                  chips("origin", 22, color=(CHALK, CHALK_DK), speed=(2.5, 6), life=(0.6, 0.9), size=0.2),
                  sparks("origin", 10, speed=(4, 8), emissive=2.4),
                  shockwave("origin", radius=(0.2, 1.0), width=(0.2, 0.05), life=0.35, emissive=2.0),

@@ -4,9 +4,19 @@
 // composer's stable scene depth (the VFX pass runs after AO, whichever ping-pong buffer is current):
 // `vfxSoft(m)` gives soft-particle fades (depth difference / m) and hides fragments behind the scene.
 
-import { AddEquation, CustomBlending, Matrix4, OneFactor, OneMinusSrcAlphaFactor, type Texture, Vector2 } from 'three';
+import { AddEquation, CustomBlending, Matrix4, OneFactor, OneMinusSrcAlphaFactor, type Texture, Vector2, Vector4 } from 'three';
 import { type UberKind, uberProgram } from '../uber.ts';
 import { LIFT_BODY_CAP, MAX_LIFTS, screenUniforms, VFX_LIFT_CAP } from './screen.ts';
+
+/** orch1 W2-B: the most fighter bodies the character-protection rule reads (10 seats and spares) */
+export const MAX_BODIES = 12;
+/** orch1 W2-B (GFX-3, tokens.json vfx.rules.bodyProtect): what a non-exempt effect keeps of its light and coverage over a
+ *  fighter's body (the body's own pixels, found from the scene depth, never the air around it) */
+export const BODY_DIM = 0.45;
+/** orch1 W2-B: what an effect keeps of its LIGHT over a body (its colour; coverage keeps BODY_DIM) */
+export const BODY_LIGHT = 0.35;
+/** orch1 W2-B: the most premultiplied light (linear HDR) one effect fragment adds over a body */
+export const BODY_HDR_CAP = 0.35;
 
 /** uniforms shared by reference by every VFX material (updated once per frame) */
 export const vfxUniforms = {
@@ -29,6 +39,11 @@ export const vfxUniforms = {
   uLiftCap: { value: VFX_LIFT_CAP - 1 },
   uLiftInvProj: { value: new Matrix4() },
   uLiftCamWorld: { value: new Matrix4() },
+  // orch1 W2-B (GFX-3 / FU-6): the fighters' bodies (system.ts setBodies): per body (x, z, bottom y, top y) and (radius,
+  // protection 0..1); a VFX fragment over a scene surface inside one keeps BODY_DIM of its light and coverage
+  uBodyA: { value: Array.from({ length: MAX_BODIES }, () => new Vector4()) },
+  uBodyB: { value: Array.from({ length: MAX_BODIES }, () => new Vector4()) },
+  uBodyN: { value: 0 },
 };
 
 /** premultiplied "over" (additive when alpha is 0) */
@@ -87,6 +102,42 @@ float vfxLift() {
     post = mix( lift, min( lift, ${(LIFT_BODY_CAP - 1).toFixed(3)} ), smoothstep( 0.05, 0.2, w.y ) * step( z, 0.99999 ) );
   }
   return pow( ( 1.0 + min( post, uLiftCap ) ) / ( 1.0 + post ), 2.2 );
+}
+uniform vec4 uBodyA[ ${MAX_BODIES} ];
+uniform vec4 uBodyB[ ${MAX_BODIES} ];
+uniform float uBodyN;
+// orch1 W2-B (GFX-3 / FU-6, the character-protection rule): a teamfight's effects buried the fighters (shells, bursts and
+// zone light over every body). The scene surface under this fragment is rebuilt from the composer's depth (the same
+// camera as the envelope's); when it lies inside a fighter's body column (above its feet, under its head, within its
+// radius) the effect keeps ${BODY_DIM} of its light AND coverage there, so the body, its pose and its weapon read through,
+// while the same effect around the silhouette stays whole (the burst still frames the struck body). An ultimate's first
+// 150 ms is exempt (the body's protection is 0 then: system.ts). Fragments behind the body never draw (vfxSoft).
+float vfxBodyK() {
+  if ( uBodyN < 0.5 || uHasDepth < 0.5 ) return 0.0;
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float z = texture2D( uDepth, uv ).r;
+  if ( z > 0.99999 ) return 1.0;
+  vec4 v = uLiftInvProj * vec4( vec3( uv, z ) * 2.0 - 1.0, 1.0 );
+  vec3 w = ( uLiftCamWorld * vec4( v.xyz / v.w, 1.0 ) ).xyz;
+  float k = 0.0;
+  for ( int i = 0; i < ${MAX_BODIES}; i ++ ) {
+    if ( float( i ) >= uBodyN ) break;
+    vec4 a = uBodyA[ i ];
+    vec4 q = uBodyB[ i ];
+    float inside = ( 1.0 - smoothstep( q.x * 0.75, q.x, length( w.xz - a.xy ) ) ) * step( a.z, w.y ) * step( w.y, a.w );
+    k = max( k, inside * q.y );
+  }
+  return k;
+}
+// premultiplied colour × the light share, coverage × the coverage share (a stack of additive light over a pale body is held
+// a step lower than its coverage, so five overlapping hits do not sum to white on it), and over the body the light is held
+// under BODY_HDR_CAP: an HDR core there would bloom back over the silhouette after this pass
+vec4 vfxBodyApply( vec4 c ) {
+  float k = vfxBodyK();
+  if ( k <= 0.0 ) return c;
+  vec3 rgb = c.rgb * ( 1.0 - k * ${(1 - BODY_LIGHT).toFixed(3)} );
+  rgb = mix( rgb, min( rgb, vec3( ${BODY_HDR_CAP.toFixed(3)} ) ), k );
+  return vec4( rgb, c.a * ( 1.0 - k * ${(1 - BODY_DIM).toFixed(3)} ) );
 }
 `;
 
@@ -155,7 +206,7 @@ void main() {
     float a = smoothstep( 0.4, 0.6, cov * keep ) * vCol.a * step( 0.001, soft );
     if ( a < 0.01 ) discard;
     vec3 rgb = vCol.rgb * ( 0.42 + 0.78 * t.r ) + vRim * t.g * vPar.y;
-    gl_FragColor = vec4( rgb * a, a );
+    gl_FragColor = vfxBodyApply( vec4( rgb * a, a ) );
     return;
   }
   float a = cov * keep * vCol.a * soft;
@@ -170,6 +221,7 @@ void main() {
     gl_FragColor = vec4( ( body * ( 1.0 - rim ) + vRim * rim ) * a, a * ( 1.0 - rim * 0.35 ) );
   }
   gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
+  gl_FragColor = vfxBodyApply( gl_FragColor );   // orch1 W2-B: the fighter's body reads through the effect
 }`;
 
 // ── ribbons (CPU-built camera-facing strips, one draw) ─────────────────────────────────────────
@@ -204,6 +256,7 @@ void main() {
     gl_FragColor = vec4( mix( vCol.rgb * ( 0.6 + 0.4 * n ), vRim.rgb, rim ) * a, a );
   }
   gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
+  gl_FragColor = vfxBodyApply( gl_FragColor );   // orch1 W2-B: the fighter's body reads through the effect
 }`;
 
 // ── beams (instanced noise-displaced strips) ───────────────────────────────────────────────────
@@ -253,6 +306,7 @@ void main() {
   if ( vD.w < 0.5 ) gl_FragColor = vec4( rgb * a, 0.0 );
   else gl_FragColor = vec4( rgb * a, a );
   gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
+  gl_FragColor = vfxBodyApply( gl_FragColor );   // orch1 W2-B: the fighter's body reads through the effect
 }`;
 
 // ── shockwave rings (ground or camera-facing) ──────────────────────────────────────────────────
@@ -293,6 +347,7 @@ void main() {
   if ( mode < 0.5 ) gl_FragColor = vec4( rgb * a, 0.0 );
   else gl_FragColor = vec4( rgb * a, a );
   gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
+  gl_FragColor = vfxBodyApply( gl_FragColor );   // orch1 W2-B: the fighter's body reads through the effect
 }`;
 
 // ── ground decals (animated styles) ────────────────────────────────────────────────────────────
@@ -376,6 +431,7 @@ void main() {
   if ( a < 0.002 ) discard;
   gl_FragColor = vec4( rgb * a, addOnly > 0.5 ? 0.0 : a );
   gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
+  gl_FragColor = vfxBodyApply( gl_FragColor );   // orch1 W2-B: the fighter's body reads through the effect
 }`;
 
 // ── FX meshes (one material: fresnel rim, two scrolling noises, dissolve with a glowing edge,
@@ -480,6 +536,7 @@ void main() {
     gl_FragColor = vec4( rgb * aa, aa * ( 1.0 - rim * 0.3 ) );
   }
   gl_FragColor.rgb *= vfxLift();   // combat F4: the envelope never lifts an effect past the body cap
+  gl_FragColor = vfxBodyApply( gl_FragColor );   // orch1 W2-B: the fighter's body reads through the effect
 }`;
 
 // ── distortion sprites (into the half-res distortion buffer, additive offsets in UV units) ───────

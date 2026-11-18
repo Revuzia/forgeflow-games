@@ -83,6 +83,10 @@ const DEV_MANNEQUIN_HEIGHT = 1.95;
 /** baked rows a crowd texture may hold (WebGL2 guarantees 2048; every desktop GPU VALE targets has ≥ 8192) */
 const CROWD_MAX_ROWS = 4096;
 const IMPACT_AT = 0.4;
+/** orch1 W2-B (VFX-O4): the death clip's cut-in (s), its rushed opening (× speed over the first seconds of the state) */
+const DEATH_FADE_S = 0.03;
+const DEATH_RUSH = 2.2;
+const DEATH_RUSH_S = 0.3;
 /** an instant cast's clip: played at the pace of a cast this long (s) …, reaching its impact this long after the event */
 const INSTANT_PACE_S = 0.25;
 const INSTANT_LEAD_S = 0.12;
@@ -1293,7 +1297,8 @@ export class Actor implements CrowdActor {
     if (key !== this.currentKey || (restarted && !held && !LOOPING.has(role) && role !== 'run' && role !== 'death')) {
       const next = this.action(role);
       if (next) {
-        const fade = role.startsWith('attack') || role === 'crit' ? 0.06 : 0.1;
+        // orch1 W2-B (VFX-O4): the collapse starts on the death tick: a near cut into the death clip, no 0.1 s blend of standing
+        const fade = role.startsWith('attack') || role === 'crit' ? 0.06 : role === 'death' ? DEATH_FADE_S : 0.1;
         next.reset();
         next.enabled = true;
         next.setEffectiveWeight(1);
@@ -1335,7 +1340,12 @@ export class Actor implements CrowdActor {
         act.timeScale = 0;
         act.time = Math.min(clipDur - 1e-3, (st / v.stateDuration) * clipDur);
       } else if (role === 'death') {
-        act.timeScale = 1; // plays once, clampWhenFinished holds the last frame
+        // plays once, clampWhenFinished holds the last frame. orch1 W2-B (VFX-O4): the kill lands as a moment: the clip's
+        // opening (a stagger before the fall: the head dropped 6-10 % in the first 0.3 s, 26 % by 0.5 s) runs DEATH_RUSH× over
+        // the first DEATH_RUSH_S of the state, then the clip goes on at its own pace from there
+        act.timeScale = 0;
+        const t = v.stateTime;
+        act.time = Math.min(clipDur - 1e-3, t < DEATH_RUSH_S ? t * DEATH_RUSH : DEATH_RUSH_S * DEATH_RUSH + (t - DEATH_RUSH_S));
       } else {
         act.timeScale = 1;
       }
