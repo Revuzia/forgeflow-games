@@ -35,7 +35,7 @@ export const PLACE: PlaceDef = {
   tall: { // laid under P7 (S2): the Leaf Teeter across the back (it rocks side to side as the camera sees it), the Drip Leaf back right with its
     // drip in front of it, the Moss Bouncer in the left strip (its edge inside the bounds), the Stepping Stones between the teeter and the pad, the
     // three Splash Spots across the front band, the Seed Pod front right
-    bounds: { shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3, round: 0.4 }, walls: [],
+    bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
     spawn: [[0.425, 0.325], [-0.275, 2.175], [-0.075, -1.525], [-0.425, -0.425], [-0.425, 1.075]],
     things: [
       { x: -0.9, z: 2.4, yaw: 0 },
@@ -45,7 +45,7 @@ export const PLACE: PlaceDef = {
       { x: 0, z: -1.75, yaw: 0 },
       { x: 1, z: 1.5, yaw: 0 },
     ],
-    zones: [{ shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3 }, { shape: 'disc', x: -0.9, z: 2.4, r: 0.65 }, { shape: 'disc', x: 0.9, z: 2.4, r: 0.6 }, { shape: 'disc', x: 0, z: 3, r: 0.6 }, { shape: 'disc', x: 1.121, z: -1.565, r: 0.6 }],
+    zones: [{ shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }, { shape: 'disc', x: -0.9, z: 2.4, r: 0.65 }, { shape: 'disc', x: 0.9, z: 2.4, r: 0.6 }, { shape: 'disc', x: 0, z: 3, r: 0.6 }, { shape: 'disc', x: 1.121, z: -1.565, r: 0.6 }],
     patches: [{ shape: 'box', x: 0, z: -1.75, hx: 0.9, hz: 0.3 }],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },

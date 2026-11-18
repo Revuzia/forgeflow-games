@@ -22,6 +22,7 @@ import type { SpeciesId } from '../data/catalog.ts';
 import { FRIENDSHIP, SOCIAL, SOCIAL_KIND, SPECIES_LIFE, USE_VERB, WARMTH, WISH_KIND, TOUCH, REACT_KIND } from '../data/life.ts';
 import {
   BY, CHAPTERS, EV, EV_FLAG, FACT, FACT_REACTS, FINALE_AT, FRIEND_LEVEL, GIFT, GIFT_LISTS, KEEPSAKES, KEEP_BY, PIECES_USE, QUESTS, WISH_RULES, WISH_STATE,
+  DROPPED_PLACE_MASK, KEEPSAKE_MASK, thingDropped,
 } from '../data/quests.ts';
 import type { QuestDef } from '../data/quests.ts';
 
@@ -190,6 +191,7 @@ export function buildQuestDefs(input: QuestDefsInput, quests: readonly QuestDef[
   let placeShipped = 0;
   const opensAt = new Int16Array(PLACE_BITS);
   for (let p = 0; p < nPlaces && p < PLACE_BITS; p++) { if (input.shipped[p]) placeShipped |= 1 << p; opensAt[p] = input.opensAt[p]; }
+  placeShipped &= ~DROPPED_PLACE_MASK;   // D-96: a dropped place never ships, whatever the input says (an "all shipped" probe build included)
   const thingPlace = new Uint8Array(input.thingIds.length);
   for (let t = 0; t < thingPlace.length; t++) thingPlace[t] = input.thingPlace[t] ?? NO;
   // species tables
@@ -239,7 +241,7 @@ export function buildQuestDefs(input: QuestDefsInput, quests: readonly QuestDef[
   for (let qi = 0; qi < nq; qi++) {
     const ch = quests[qi].chapter;
     const chPlace = CHAPTERS[ch].place;
-    let ok = chPlace < 0 || (placeShipped & (1 << chPlace)) !== 0;
+    let ok = !quests[qi].dropped && !CHAPTERS[ch].dropped && (chPlace < 0 || (placeShipped & (1 << chPlace)) !== 0);   // (D-96: a tombstone is never shown)
     let key = 2, auto = false;
     for (let k = qFirst[qi]; k < qFirst[qi + 1] && ok; k++) {
       const can = placesFor(k);
@@ -373,14 +375,15 @@ export const hasKeys = (d: QuestDefs, q: number): boolean => (d.keys[q >>> 5] & 
 export const needsAutonomy = (d: QuestDefs, q: number): boolean => (d.needsAuto[q >>> 5] & (1 << (q & 31))) !== 0;
 export const placeOpen = (st: QuestState, p: number): boolean => (st.sc[SC.PL] & (1 << p)) !== 0;
 
-/** Finales done among the place chapters (0..9). */
+/** Finales done among the place chapters (0..9; D-96: a dropped chapter's never counts). */
 export function finalesDone(st: QuestState): number {
   let n = 0;
-  for (let ch = 0; ch < CHAPTER_COUNT; ch++) if (CHAPTERS[ch].place >= 0 && isDone(st, CHAPTERS[ch].finale)) n++;
+  for (let ch = 0; ch < CHAPTER_COUNT; ch++) if (CHAPTERS[ch].place >= 0 && !CHAPTERS[ch].dropped && isDone(st, CHAPTERS[ch].finale)) n++;
   return n;
 }
 export function chapterOpen(st: QuestState, ch: number): boolean {
   const c = CHAPTERS[ch];
+  if (c.dropped) return false;   // D-96
   if (c.opens === 'start') return true;
   if (c.opens === 'finales') return finalesDone(st) >= (c.n ?? 2);
   return c.place >= 0 && placeOpen(st, c.place);
@@ -660,7 +663,7 @@ export function openPlacesByStamps(st: QuestState, d: QuestDefs, out: QuestOut):
 }
 function openPlace(st: QuestState, out: QuestOut, p: number): void {
   const bit = 1 << p;
-  if (st.sc[SC.PL] & bit) return;
+  if ((st.sc[SC.PL] & bit) || (DROPPED_PLACE_MASK & bit)) return;   // (D-96: a dropped place never opens)
   st.sc[SC.PL] |= bit;
   emit(out, QOUT.UNLOCK, p, 0, 0);
 }
@@ -822,10 +825,10 @@ function keepsakeCounts(st: QuestState, out: QuestOut): void {
       case KEEP_BY.CLOSE_PAIRS:
         if (closePairs < 0) { closePairs = 0; for (let r = 0; r < sc[SC.FRN]; r++) if (st.frPts[r] >= FRIENDSHIP.close) closePairs++; }
         have = closePairs; break;
-      case KEEP_BY.SONG_PLACES: have = popcount16(sc[SC.SG]); break;
+      case KEEP_BY.SONG_PLACES: have = popcount16(sc[SC.SG] & ~DROPPED_PLACE_MASK); break;
       case KEEP_BY.WISHES: have = sc[SC.WG]; break;
       case KEEP_BY.GOLD_PAGES: have = sc[SC.GOLD]; break;
-      case KEEP_BY.ALL_PLACES: { have = 0; for (let p = 0; p < PLACE_BITS; p++) if (st.pv[p] > 0) have++; break; }
+      case KEEP_BY.ALL_PLACES: { have = 0; for (let p = 0; p < PLACE_BITS; p++) if (st.pv[p] > 0 && !(DROPPED_PLACE_MASK & (1 << p))) have++; break; }
       default: continue;   // finales: complete()
     }
     if (have >= k.n) { sc[SC.KS] |= bit; emit(out, QOUT.KEEPSAKE, k.bit, -1, 0); }
@@ -858,8 +861,35 @@ export function markFact(st: QuestState, sp: number, f: number): void {
   if ((after & 0x7ff) === 0x7ff && (before & 0x7ff) !== 0x7ff) st.sc[SC.GOLD]++;
 }
 export function markDone(st: QuestState, d: QuestDefs, q: number, out: QuestOut): void {
-  if (isDone(st, q)) return;
+  if (isDone(st, q) || d.quests[q]?.dropped) return;   // (D-96: a tombstone is never done)
   complete(st, d, out, q, BY.PLAYER, 0);
+}
+/**
+ * D-96 (round 6): forget what a save holds of the three dropped places, so no count, line or rule depends on one: the done bits of their 30
+ * tombstone quests (their stamps leave the saved stamp count), the retired keepsake bits (5, 6, 8; anything outside KEEPSAKE_MASK), their
+ * place, song-place and visit entries, a resting wish for a dropped place or a ride on a dropped thing, and a current place that is dropped
+ * (Home then). Facts, friendship and warmth are species and item facts, not a place's: kept. Never throws; call before recountDerived.
+ * Returns how many entries it dropped (0 for every save a shipped build ever wrote).
+ */
+export function forgetDropped(st: QuestState, d: QuestDefs): number {
+  const sc = st.sc;
+  let n = 0;
+  for (let q = 0; q < d.nq && q < 128; q++) {
+    if (!d.quests[q].dropped || !isDone(st, q)) continue;
+    st.done[q >>> 5] &= ~(1 << (q & 31)); n++;
+    if (sc[SC.ST] > 0) sc[SC.ST]--;
+  }
+  const ks = sc[SC.KS] & KEEPSAKE_MASK; if (ks !== sc[SC.KS]) { n++; sc[SC.KS] = ks; }
+  if (sc[SC.PL] & DROPPED_PLACE_MASK) { n++; sc[SC.PL] &= ~DROPPED_PLACE_MASK; }
+  if (sc[SC.SG] & DROPPED_PLACE_MASK) { n++; sc[SC.SG] &= ~DROPPED_PLACE_MASK; }
+  for (let p = 0; p < PLACE_BITS; p++) if ((DROPPED_PLACE_MASK & (1 << p)) && st.pv[p]) { n++; st.pv[p] = 0; }
+  if (sc[SC.CURP] >= 0 && sc[SC.CURP] < PLACE_BITS && (DROPPED_PLACE_MASK & (1 << sc[SC.CURP]))) { n++; sc[SC.CURP] = 0; }
+  for (let k = sc[SC.WIN] - 1; k >= 0; k--) {
+    const kind = st.wiKind[k], t = st.wiTarget[k];
+    if ((kind === WISH_KIND.PLACE && t >= 0 && t < PLACE_BITS && (DROPPED_PLACE_MASK & (1 << t))) || (kind === WISH_KIND.RIDE && t >= 0 && thingDropped(t))) { removeWishAt(st, k); n++; }
+  }
+  for (let ch = 0; ch < CHAPTER_COUNT && ch < st.giftState.length; ch++) if (CHAPTERS[ch].dropped && st.giftState[ch]) { st.giftState[ch] = 0; st.giftSp[ch] = NO; st.giftDay[ch] = -1; n++; }
+  return n;
 }
 /** Recount the derived scalars after a load or a merge (stamps from the done set, gold pages from the facts). */
 export function recountDerived(st: QuestState, d: QuestDefs): void {

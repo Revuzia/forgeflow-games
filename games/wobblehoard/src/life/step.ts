@@ -13,7 +13,7 @@ import type { LifeSnapshot, LifeIntents, LifeEvents } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { pitchRatio } from '../core/genome.ts';
 import type { PlaceDef } from '../data/places.ts';
-import { THING_IDS, MECH } from '../data/places.ts';
+import { THING_IDS, MECH, DROPPED_PLACE_MASK } from '../data/places.ts';
 import { SCRIPT, LIFE_FLAG, SPECIES_LIFE, REACT_KIND } from '../data/life.ts';
 import { speciesIdx, familyOf } from '../data/catalog.ts';
 import { MATERIAL_FAMILY_IDS } from '../data/materials.ts';
@@ -303,7 +303,7 @@ export function lifeScript(w: LifeWorld, slot: number, script: number, arg: numb
 export function lifeSetJournal(w: LifeWorld, owned: Uint32Array, openPlaces: number, favKnown: Uint32Array, thingKinds: number): void {
   for (let j = 0; j < 2; j++) w.ow[j] = owned[j] ?? 0;
   for (let j = 0; j < 4; j++) w.fK[j] = favKnown[j] ?? 0;
-  w.oP = openPlaces >>> 0; w.tKi = thingKinds | 0;
+  w.oP = (openPlaces & ~DROPPED_PLACE_MASK) >>> 0; w.tKi = thingKinds | 0;   // (D-96: a dropped place is never a wish's place)
   if ((w.oP & 2) !== 0 && !w.fWP) w.fWD = 1;
 }
 

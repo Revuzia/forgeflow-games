@@ -6,6 +6,8 @@
 import type { SpeciesId } from './catalog.ts';
 import type { PlaceId, ThingId } from './places.ts';
 import { PLACE_IDS, THING_IDS } from './places.ts';
+/** D-96: the dropped places, re-exported so the reducer (which imports only data/quests.ts, life.ts and catalog.ts: QU-01) can mask them. */
+export { DROPPED_PLACE_MASK, thingDropped } from './places.ts';
 import { TOUCH, WISH_KIND, REACT_KIND, SOCIAL_KIND, USE_VERB } from './life.ts';
 
 /* ═══════════════════════════════════════ event ids (QUESTS 4; contracts.ts PlayEventRing) ═══════════════════════════════════════ */
@@ -46,7 +48,9 @@ export interface Clause { readonly ev: number; readonly sub?: readonly number[];
 /** idx: append-only (saved); id: the spec's code (H1, C8, X10); chapter: CHAPTERS index; keys: K = the keyboard can complete it, K* = it needs
  *  the keyboard stretch (QUESTS 6); playerClause: on a gift finale, the index of its player-caused clause (QU-07). */
 export interface QuestDef { readonly idx: number; readonly id: string; readonly chapter: number; readonly kind: 'main' | 'finale' | 'bonus'; readonly clauses: readonly Clause[];
-  readonly keys: 'K' | 'K*'; readonly playerClause?: number }
+  readonly keys: 'K' | 'K*'; readonly playerClause?: number;
+  /** D-96: a quest of a dropped place's chapter: a tombstone that keeps the later quests' saved idx (no clause, never shown, never counted). */
+  readonly dropped?: true }
 
 const P = (id: PlaceId): number => PLACE_IDS.indexOf(id);
 const T = (id: ThingId): number => THING_IDS.indexOf(id);
@@ -59,11 +63,15 @@ function chapter(ch: number, rules: readonly (readonly Clause[])[], keys: Readon
   return rules.map((clauses, k) => ({ idx: ch * 10 + k, id: LETTER[ch] + (k + 1), chapter: ch, kind: kindOf(k), clauses, keys: keys[k] ?? 'K',
     ...(k === 7 && playerClause !== undefined ? { playerClause } : {}) }));
 }
+/** D-96: the ten idx of a dropped place's chapter, kept as tombstones (no rule ships; core/quests.ts never shows or counts them). */
+function dropped(ch: number): QuestDef[] {
+  return Array.from({ length: 10 }, (_, k) => ({ idx: ch * 10 + k, id: LETTER[ch] + (k + 1), chapter: ch, kind: kindOf(k), clauses: [], keys: 'K' as const, dropped: true as const }));
+}
 const { VISIT, TOUCH: EV_TOUCH, USE, REACT, SOCIAL, FRIEND, WISH, DISCOVER, PIECES, PHOTO, CAPSULE, UI } = EV;
 const R = REACT_KIND, S = SOCIAL_KIND, U = USE_VERB;
 const F1 = (place: PlaceId): Clause => c(DISCOVER, 1, { sub: [FACT.PLACE], place: P(place) });
 
-/** All 110 quests (QUESTS 6.0 to 6.10, exactly as written). */
+/** All 110 quest idx (QUESTS 6.0 to 6.10, exactly as written); D-96: chapters 5, 6 and 8 (the dropped places) are tombstones, so 80 quests ship. */
 export const QUESTS: readonly QuestDef[] = /* @__PURE__ */ (() => [
   ...chapter(0, [
     [c(EV_TOUCH, 1, { sub: [TOUCH.SQUEEZE], v: 0.4 })],
@@ -125,30 +133,8 @@ export const QUESTS: readonly QuestDef[] = /* @__PURE__ */ (() => [
     [c(REACT, 1, { sub: [R.SOAK], place: P('rainleaf') })],
     [F1('rainleaf')],
   ], {}, 0),
-  ...chapter(5, [
-    [c(VISIT, 1, { place: P('fizzwell') })],
-    [c(REACT, 1, { sub: [R.FLOAT], place: P('fizzwell') }), c(REACT, 1, { sub: [R.WADE], place: P('fizzwell') })],
-    [c(USE, 2, { thing: T('swirlride'), sub: [U.SPIN] })],
-    [c(REACT, 2, { sub: [R.FIZZ], thing: T('bubblepatch'), distinct: 'species' })],
-    [c(SOCIAL, 3, { sub: [S.GREET], place: P('fizzwell'), distinct: 'pair' })],
-    [c(PIECES, 1, { sub: [R.FLOAT, R.WADE], place: P('fizzwell'), minN: 3 })],
-    [c(USE, 1, { thing: T('tap'), sub: [U.SWITCH], by: BY.PLAYER }), c(REACT, 1, { sub: [R.DRIFT], place: P('fizzwell') })],
-    [c(SOCIAL, 1, { sub: [S.SING], place: P('fizzwell'), minN: 3 })],
-    [c(USE, 2, { thing: T('soapslide'), sub: [U.SLIDE] })],
-    [F1('fizzwell')],
-  ]),
-  ...chapter(6, [
-    [c(VISIT, 1, { place: P('cogwhistle') })],
-    [c(USE, 1, { thing: T('windupkey'), sub: [U.SWITCH], by: BY.PLAYER }), c(USE, 1, { thing: T('spinningcog'), sub: [U.SPIN] })],
-    [c(USE, 3, { thing: T('springplate'), sub: [U.BOUNCE] })],
-    [c(USE, 1, { thing: T('magnet'), sub: [U.SWITCH], by: BY.PLAYER }), c(USE, 1, { thing: T('steelmarble'), sub: [U.ROLL] })],
-    [c(SOCIAL, 2, { sub: [S.COPY], place: P('cogwhistle') })],
-    [c(PIECES, 1, { sub: [PIECES_USE + U.SPIN], place: P('cogwhistle'), minN: 3 })],
-    [c(USE, 2, { thing: T('tickclock'), sub: [U.LISTEN], distinct: 'species' })],
-    [c(USE, 1, { thing: T('spinningcog'), sub: [U.SPIN] }), c(USE, 1, { thing: T('springplate'), sub: [U.BOUNCE] }), c(USE, 1, { thing: T('littlebell'), sub: [U.RING] })],
-    [c(USE, 3, { thing: T('littlebell'), sub: [U.RING] })],
-    [F1('cogwhistle')],
-  ]),
+  ...dropped(5),   // Fizzwell Tub: T1..T10 dropped (D-96)
+  ...dropped(6),   // Cogwhistle Bench: W1..W10 dropped (D-96)
   ...chapter(7, [
     [c(VISIT, 1, { place: P('lanternroof') })],
     [c(REACT, 2, { sub: [R.GAZE_SKY], place: P('lanternroof'), distinct: 'species' })],
@@ -161,18 +147,7 @@ export const QUESTS: readonly QuestDef[] = /* @__PURE__ */ (() => [
     [c(SOCIAL, 1, { sub: [S.PUSH], thing: T('hammock') })],
     [F1('lanternroof')],
   ]),
-  ...chapter(8, [
-    [c(VISIT, 1, { place: P('echohollow') })],
-    [c(REACT, 2, { sub: [R.GLOW], thing: T('glowpool'), distinct: 'species' })],
-    [c(USE, 3, { thing: T('crystals'), sub: [U.RING], distinct: 'part' })],
-    [c(USE, 1, { thing: T('echostone'), sub: [U.SWITCH], by: BY.PLAYER })],
-    [c(SOCIAL, 1, { sub: [S.ECHO], place: P('echohollow') })],
-    [c(PIECES, 1, { sub: [R.GLOW], place: P('echohollow'), minN: 3 })],
-    [c(SOCIAL, 1, { sub: [S.PEEK], thing: T('humrock') })],
-    [c(SOCIAL, 1, { sub: [S.SING], place: P('echohollow'), minN: 3 })],
-    [c(USE, 2, { thing: T('stoneslide'), sub: [U.SLIDE] })],
-    [F1('echohollow')],
-  ]),
+  ...dropped(8),   // Echo Hollow: E1..E10 dropped (D-96)
   ...chapter(9, [
     [c(VISIT, 1, { place: P('cloudloft') })],
     [c(USE, 3, { thing: T('puffpads'), sub: [U.BOUNCE] })],
@@ -203,21 +178,25 @@ export const QUESTS: readonly QuestDef[] = /* @__PURE__ */ (() => [
 
 /** How a chapter opens: 'start' (Home), 'firstWish' (Hearthlog: when the first wish shows, or at 5:00 of play), a stamp count (QUESTS 7), or
  *  'finales' (Friends Everywhere: when `n` chapter finales are done). place: its place idx, -1 for Friends Everywhere. finale: its finale
- *  quest idx; keepsake: the finale's keepsake bit; gift: the finale gives a gift (GIFT_LISTS[chapter]). */
+ *  quest idx; keepsake: the finale's keepsake bit; gift: the finale gives a gift (GIFT_LISTS[chapter]); giftPlace: the place the gift's three
+ *  love (the next place to open; -1 = none, Friends Everywhere's three are the hard-to-find families). dropped (D-96): the chapter of a dropped
+ *  place, never open, its quests tombstones and its keepsake retired. */
 export interface ChapterDef { readonly idx: number; readonly place: number; readonly opens: 'start' | 'firstWish' | 'finales' | number; readonly n?: number;
-  readonly finale: number; readonly keepsake: number; readonly gift: boolean }
+  readonly finale: number; readonly keepsake: number; readonly gift: boolean; readonly giftPlace?: number; readonly dropped?: true }
+/** D-96 (round 6): seven places. Lanternroof opens at 36 stamps and Cloudloft at 45 (the slots of the dropped Fizzwell Tub and Cogwhistle Bench,
+ *  the same 8 to 9 stamp gaps of QUESTS 7); Rainleaf's gift now loves Lanternroof (the next place); chapters 5, 6 and 8 are dropped. */
 export const CHAPTERS: readonly ChapterDef[] = [
   { idx: 0, place: 0, opens: 'start', finale: 7, keepsake: 0, gift: false },
-  { idx: 1, place: 1, opens: 'firstWish', finale: 17, keepsake: 1, gift: true },
-  { idx: 2, place: 2, opens: 12, finale: 27, keepsake: 2, gift: true },
-  { idx: 3, place: 3, opens: 20, finale: 37, keepsake: 3, gift: true },
-  { idx: 4, place: 4, opens: 28, finale: 47, keepsake: 4, gift: true },
-  { idx: 5, place: 5, opens: 36, finale: 57, keepsake: 5, gift: false },
-  { idx: 6, place: 6, opens: 45, finale: 67, keepsake: 6, gift: false },
-  { idx: 7, place: 7, opens: 54, finale: 77, keepsake: 7, gift: false },
-  { idx: 8, place: 8, opens: 63, finale: 87, keepsake: 8, gift: false },
-  { idx: 9, place: 9, opens: 72, finale: 97, keepsake: 9, gift: false },
-  { idx: 10, place: -1, opens: 'finales', n: 2, finale: 107, keepsake: 10, gift: true },
+  { idx: 1, place: 1, opens: 'firstWish', finale: 17, keepsake: 1, gift: true, giftPlace: 2 },
+  { idx: 2, place: 2, opens: 12, finale: 27, keepsake: 2, gift: true, giftPlace: 3 },
+  { idx: 3, place: 3, opens: 20, finale: 37, keepsake: 3, gift: true, giftPlace: 4 },
+  { idx: 4, place: 4, opens: 28, finale: 47, keepsake: 4, gift: true, giftPlace: 7 },
+  { idx: 5, place: 5, opens: -1, finale: 57, keepsake: 5, gift: false, dropped: true },
+  { idx: 6, place: 6, opens: -1, finale: 67, keepsake: 6, gift: false, dropped: true },
+  { idx: 7, place: 7, opens: 36, finale: 77, keepsake: 7, gift: false },
+  { idx: 8, place: 8, opens: -1, finale: 87, keepsake: 8, gift: false, dropped: true },
+  { idx: 9, place: 9, opens: 45, finale: 97, keepsake: 9, gift: false },
+  { idx: 10, place: -1, opens: 'finales', n: 2, finale: 107, keepsake: 10, gift: true, giftPlace: -1 },
 ];
 /** The REACT kinds that find each family fact (QUESTS 9: F1 a LOVE, F4 water, F5 warm, F6 cold, F7 ground); DT-15 checks each has a trigger. */
 export const FACT_REACTS: Readonly<Record<number, readonly number[]>> = {
@@ -231,22 +210,28 @@ export const FACT_REACTS: Readonly<Record<number, readonly number[]>> = {
 export const FINALE_AT = 5;
 /** How a keepsake is found (QUESTS 10). */
 export const KEEP_BY = { FINALE: 1, BEST_PAIRS: 2, CLOSE_PAIRS: 3, SONG_PLACES: 4, WISHES: 5, GOLD_PAGES: 6, ALL_PLACES: 7 } as const;
-/** The 20 keepsakes: bit (append-only, a 32-bit set), id (their names and lines are journal_text.ts KEEPSAKE_TEXT), how they are found and
- *  the number (the chapter for a finale, a count otherwise; ALL_PLACES: every place, BEST_PAIRS 25: all of them). */
+/** The keepsakes: bit (append-only, a 32-bit set), id (their names and lines are journal_text.ts KEEPSAKE_TEXT), how they are found and
+ *  the number (the chapter for a finale, a count otherwise; ALL_PLACES: every place, BEST_PAIRS 25: all of them). D-96 (round 6): 17 ship.
+ *  Bits 5 (Bubble Ring), 6 (Little Brass Cog) and 8 (Glow Crystal) were the dropped places' finale keepsakes; QUESTS 10 gives each only its
+ *  own finale and no other home, so they are retired (no row; the bits are never set, and a save holding one loads without it). The Pocket
+ *  Map's "every place" is the seven (n 7, was 10). The Songbook's five song places stay five (of seven). */
 export const KEEPSAKES: readonly { readonly bit: number; readonly id: string; readonly by: number; readonly n: number }[] = [
   { bit: 0, id: 'feltstar', by: KEEP_BY.FINALE, n: 0 }, { bit: 1, id: 'emberpinecone', by: KEEP_BY.FINALE, n: 1 },
   { bit: 2, id: 'seaglasspebble', by: KEEP_BY.FINALE, n: 2 }, { bit: 3, id: 'tinyfrostbell', by: KEEP_BY.FINALE, n: 3 },
-  { bit: 4, id: 'raindropbead', by: KEEP_BY.FINALE, n: 4 }, { bit: 5, id: 'bubblering', by: KEEP_BY.FINALE, n: 5 },
-  { bit: 6, id: 'littlebrasscog', by: KEEP_BY.FINALE, n: 6 }, { bit: 7, id: 'paperlantern', by: KEEP_BY.FINALE, n: 7 },
-  { bit: 8, id: 'glowcrystal', by: KEEP_BY.FINALE, n: 8 }, { bit: 9, id: 'cloudpuff', by: KEEP_BY.FINALE, n: 9 },
+  { bit: 4, id: 'raindropbead', by: KEEP_BY.FINALE, n: 4 },
+  { bit: 7, id: 'paperlantern', by: KEEP_BY.FINALE, n: 7 },
+  { bit: 9, id: 'cloudpuff', by: KEEP_BY.FINALE, n: 9 },
   { bit: 10, id: 'friendshipframe', by: KEEP_BY.FINALE, n: 10 }, { bit: 11, id: 'paircharm', by: KEEP_BY.BEST_PAIRS, n: 1 },
   { bit: 12, id: 'friendshipribbon', by: KEEP_BY.CLOSE_PAIRS, n: 1 }, { bit: 13, id: 'ribbongarland', by: KEEP_BY.CLOSE_PAIRS, n: 5 },
   { bit: 14, id: 'songbook', by: KEEP_BY.SONG_PLACES, n: 5 }, { bit: 15, id: 'wishjar', by: KEEP_BY.WISHES, n: 10 },
   { bit: 16, id: 'littlebutton', by: KEEP_BY.GOLD_PAGES, n: 5 }, { bit: 17, id: 'thimble', by: KEEP_BY.GOLD_PAGES, n: 15 },
-  { bit: 18, id: 'pocketmap', by: KEEP_BY.ALL_PLACES, n: 10 }, { bit: 19, id: 'friendsquilt', by: KEEP_BY.BEST_PAIRS, n: 25 },
+  { bit: 18, id: 'pocketmap', by: KEEP_BY.ALL_PLACES, n: 7 }, { bit: 19, id: 'friendsquilt', by: KEEP_BY.BEST_PAIRS, n: 25 },
 ];
-/** The five gift lists by chapter idx (PLACES 5, QUESTS 11): three Common or Uncommon fans of the next place (Friends Everywhere: the three
- *  families with no Common); pick one. */
+/** The keepsake bits that ship (17 of the 20 bits; D-96 retired 5, 6 and 8). */
+export const KEEPSAKE_MASK = /* @__PURE__ */ KEEPSAKES.reduce((m, k) => m | (1 << k.bit), 0);
+/** The five gift lists by chapter idx (PLACES 5, QUESTS 11): three Common or Uncommon fans of the next place (CHAPTERS giftPlace; Friends
+ *  Everywhere: the three families with no Common); pick one. D-96: list 4's Plumpet, Glugbean and Tadpolo were Fizzwell's fans; they now love
+ *  Lanternroof (life.ts SPECIES_LIFE), the place after Rainleaf, so the list and QUESTS 6.4's words stand. */
 export const GIFT_LISTS: Readonly<Record<number, readonly SpeciesId[]>> = {
   1: ['puddlo', 'crumbit', 'swishel'], 2: ['boingle', 'hooplet', 'knubby'], 3: ['munchip', 'sproutle', 'acornel'], 4: ['plumpet', 'glugbean', 'tadpolo'],
   10: ['capnap', 'kneadle', 'wrigglo'],

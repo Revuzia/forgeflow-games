@@ -13,8 +13,8 @@ import {
   doableAt, giftReady, setGiftState,
 } from '../src/core/quests.ts';
 import type { QuestDefs, QuestState, PlaceCaps } from '../src/core/quests.ts';
-import { PLACE_CAPS, THING_PLACE, journalDefs, createJournal, mergeJournals, serializeJournal } from '../src/collection/journal.ts';
-import { PLACE_IDS, PLACE_INFO, THING_IDS, MECH, ZONE } from '../src/data/places.ts';
+import { PLACE_CAPS, THING_PLACE, PLACE_SHIPPED, PLACE_OPENS_AT, journalDefs, createJournal, mergeJournals, serializeJournal } from '../src/collection/journal.ts';
+import { PLACE_IDS, PLACE_INFO, THING_IDS, MECH, ZONE, KEPT_PLACE_IDS, placeDropped } from '../src/data/places.ts';
 import type { PlaceDef } from '../src/data/places.ts';
 import { REACT_KIND as R, SOCIAL_KIND as S, USE_VERB, WISH_KIND, TOUCH, SPECIES_LIFE } from '../src/data/life.ts';
 import { QUESTS, CHAPTERS, EV, BY, EV_FLAG, FACT, WISH_STATE, FRIEND_LEVEL, PIECES_USE, UI_KIND, GIFT_LISTS } from '../src/data/quests.ts';
@@ -27,9 +27,13 @@ const row = (id: string, what: string, ok: boolean, extra = ''): void => { if (!
 const skip = (id: string, what: string, why: string): void => { notRun++; console.log(`NOT RUN ${id} ${what}  (${why})`); };
 const info = (id: string, what: string): void => console.log(`info ${id} ${what}`);
 
-const DEFS: PlaceDef[] = [];
-for (const id of PLACE_IDS) DEFS.push(((await import(`../src/data/place_${id}.ts`)) as { PLACE: PlaceDef }).PLACE);
+// (round 6, D-96) the seven kept places have a PlaceDef; DEFS stays indexed by place idx (a dropped place's slot is null)
+const DEFS: (PlaceDef | null)[] = [];
+for (const id of PLACE_IDS) DEFS.push(placeDropped(id) ? null : ((await import(`../src/data/place_${id}.ts`)) as { PLACE: PlaceDef }).PLACE);
 const NQ = QUESTS.length;
+/** (round 6, D-96) the quests that ship: the 80 that are not tombstones of the dropped places' chapters. */
+const KEPT_Q = QUESTS.filter((q) => !q.dropped).map((q) => q.idx);
+void KEPT_PLACE_IDS;
 const sp = (id: string): number => CATALOG.findIndex((d) => d.id === id);
 const famOf = (s: number): number => MATERIAL_FAMILY_IDS.indexOf(CATALOG[s].family);
 const qIdx = (id: string): number => QUESTS.findIndex((q) => q.id === id);
@@ -37,7 +41,7 @@ const bit = (i: number): number => 1 << i;
 
 /* ═══════════════════════════════ defs for a shipped set ═══════════════════════════════ */
 function defsFor(shipped: readonly boolean[], caps: readonly PlaceCaps[] = PLACE_CAPS): QuestDefs {
-  return buildQuestDefs({ placeIds: PLACE_IDS, thingIds: THING_IDS, shipped, opensAt: PLACE_INFO.map((p) => (p.stampsToOpen === 'firstWish' ? -1 : p.stampsToOpen)), thingPlace: THING_PLACE, caps });
+  return buildQuestDefs({ placeIds: PLACE_IDS, thingIds: THING_IDS, shipped, opensAt: PLACE_OPENS_AT, thingPlace: THING_PLACE, caps });   // (round 6: by place idx, D-96)
 }
 
 /* ═══════════════════════════════ caps derived from the PlaceDefs (QU-14's independent recomputation) ═══════════════════════════════ */
@@ -74,9 +78,10 @@ function capsOf(def: PlaceDef): PlaceCaps {
   if (Object.values(SPECIES_LIFE).some((l) => l.place === def.id)) reacts |= bit(R.LOVE);
   return { reacts, socials, verbs };
 }
-const DERIVED_CAPS = DEFS.map(capsOf);
+const DERIVED_CAPS = DEFS.map((d) => d ? capsOf(d) : { reacts: 0, socials: 0, verbs: 0 });   // (D-96: a dropped place produces nothing)
 const ALL = PLACE_IDS.map(() => true);
-const S1 = PLACE_INFO.map((p) => p.shipped);
+const S1 = PLACE_SHIPPED;
+void PLACE_INFO;
 const dAll = defsFor(ALL, DERIVED_CAPS);
 const dS1 = journalDefs();
 
@@ -182,7 +187,7 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
 /* ═══════════════════════════════ QU-02: every quest from its minimal script; replay; near miss ═══════════════════════════════ */
 {
   const fails: string[] = [], replayFails: string[] = [], nearFails: string[] = [];
-  for (let q = 0; q < NQ; q++) {
+  for (const q of KEPT_Q) {   // (round 6, D-96: the 80 kept quests; the 30 tombstones are checked never shown and never done in QU-14)
     const script = scriptFor(dAll, DERIVED_CAPS, q);
     const { st, out } = stateFor(dAll, q);
     if (!questOpen(st, dAll, q)) { fails.push(`${QUESTS[q].id} (not open)`); continue; }
@@ -198,7 +203,7 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
     for (const r of script.slice(0, -1)) apply(n2.st, dAll, n2.out, r);
     if (isDone(n2.st, q)) nearFails.push(QUESTS[q].id);
   }
-  row('QU-02', `every one of the ${NQ} quests completes from its generated minimal event script (an all-shipped build, so all 110 are shown)`, fails.length === 0, fails.join(', ') || `${NQ} of ${NQ}`);
+  row('QU-02', `every one of the ${KEPT_Q.length} kept quests completes from its generated minimal event script (an all-shipped build, so all ${KEPT_Q.length} are shown; re-specified in round 6: was 110, D-96 dropped 30)`, fails.length === 0, fails.join(', ') || `${KEPT_Q.length} of ${KEPT_Q.length}`);
   row('QU-02', 'replaying a completed quest\'s script completes it no second time (no second stamp, no decrement)', replayFails.length === 0, replayFails.join(', '));
   row('QU-02', 'a near-miss script (the minimal script without its last record) completes none of them', nearFails.length === 0, nearFails.join(', '));
   // field near misses: wrong place, wrong by, too few characters, wrong thing
@@ -307,7 +312,7 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
   for (let d2 = 0; d2 < 3; d2++) { setQuestDay(k, 20 + d2); for (let z = 0; z < 10; z++) applyEventFields(k, dAll, out, EV.SOCIAL, S.NUZZLE, 0, -1, 4, 5, 0, 2, BY.SELF, 0, 0); }  // Ribbon (12)
   for (let p = 0; p < 5; p++) applyEventFields(k, dAll, out, EV.SOCIAL, S.SING, p, -1, 4, 5, 0, 3, BY.SELF, 0, 0);                 // Songbook (14)
   for (let z = 0; z < 10; z++) applyEventFields(k, dAll, out, EV.WISH, WISH_STATE.GRANTED, 0, -1, 4, 255, 0, 0, BY.PLAYER, 0, WISH_KIND.NAP);  // Wish Jar (15)
-  for (let p = 0; p < 10; p++) applyEventFields(k, dAll, out, EV.VISIT, 0, p, -1, 255, 255, 255, 1, BY.PLAYER, 0, 0);               // Pocket Map (18)
+  for (let p = 0; p < 10; p++) if (!placeDropped(p)) applyEventFields(k, dAll, out, EV.VISIT, 0, p, -1, 255, 255, 255, 1, BY.PLAYER, 0, 0);   // Pocket Map (18): the seven (D-96)
   markDone(k, dAll, CHAPTERS[0].finale, out);                                                                                        // Felt Star (0)
   const ks = k.sc[SC.KS];
   const want = [0, 11, 12, 14, 15, 18].reduce((m, b) => m | (1 << b), 0);
@@ -318,7 +323,7 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
 /* ═══════════════════════════════ QU-05: finales open at 5 of 7 (Home's at the first wish), never earlier ═══════════════════════════════ */
 {
   const early: string[] = [], late: string[] = [];
-  for (const ch of CHAPTERS) {
+  for (const ch of CHAPTERS) { if (ch.dropped) continue;   // (round 6, D-96: a dropped chapter has no finale)
     const q = ch.finale;
     const st = createQuestState(dAll), out = createQuestOut(256);
     setQuestDay(st, 20407);
@@ -347,13 +352,13 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
 
 /* ═══════════════════════════════ QU-06: places open by stamps, in order; unshipped skipped, stamps kept ═══════════════════════════════ */
 {
-  const at = PLACE_INFO.map((p) => p.stampsToOpen);
+  const at = PLACE_OPENS_AT;   // (by place idx, round 6)
   const order: string[] = [];
   const st = createQuestState(dAll), out = createQuestOut(512);
   apply(st, dAll, out, [EV.WISH, WISH_STATE.SHOWN, 0, 1, 0, 255, 0, 0, BY.SELF, 0, WISH_KIND.PLACE]);
   let ok = placeOpen(st, 1) && !placeOpen(st, 2);
   for (let q = 0; q < NQ && st.sc[SC.ST] < 80; q++) {
-    if (QUESTS[q].kind === 'finale') continue;
+    if (QUESTS[q].kind === 'finale' || QUESTS[q].dropped) continue;
     const before = st.sc[SC.PL];
     out.n = 0;
     markDone(st, dAll, q, out);
@@ -361,7 +366,9 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
     for (let p = 0; p < PLACE_IDS.length; p++) if (opened & bit(p)) { order.push(`${PLACE_IDS[p]}@${st.sc[SC.ST]}`); if (st.sc[SC.ST] !== at[p]) ok = false; }
   }
   const inOrder = order.map((s) => PLACE_IDS.indexOf(s.split('@')[0] as typeof PLACE_IDS[number])).every((p, i, a) => i === 0 || p > a[i - 1]);
-  row('QU-06', 'stamps open the places in order, each exactly at its threshold (12 / 20 / 28 / 36 / 45 / 54 / 63 / 72), all shipped', ok && inOrder && order.length === 8, order.join(' '));
+  // (re-specified in round 6 for D-96: the five places past the cabin at 12 / 20 / 28 / 36 / 45, was eight at 12 .. 72; Lanternroof and Cloudloft take
+  // the dropped Fizzwell Tub's and Cogwhistle Bench's slots, the same 8 to 9 stamp gaps of QUESTS 7)
+  row('QU-06', 'stamps open the places in order, each exactly at its threshold (12 / 20 / 28 / 36 / 45), all shipped; a dropped place never opens', ok && inOrder && order.join(' ') === 'ripple@12 frostbell@20 rainleaf@28 lanternroof@36 cloudloft@45', order.join(' '));
   // an unshipped place is skipped and its stamps kept; it opens the moment it ships
   const mixed = PLACE_IDS.map((id) => id === 'home' || id === 'hearthlog' || id === 'frostbell');
   const dM = defsFor(mixed, DERIVED_CAPS);
@@ -433,15 +440,15 @@ const apply = (st: QuestState, d: QuestDefs, out: ReturnType<typeof createQuestO
     const miss: string[] = [];
     for (let p = 2; p < PLACE_IDS.length; p++) {
       if (!(d.placeShipped & bit(p))) continue;
-      const t = PLACE_INFO[p].stampsToOpen as number;
-      const avail = QUESTS.filter((q) => isShown(d, q.idx) && pred(q.idx) && (CHAPTERS[q.chapter].place < 0 ? true : (PLACE_INFO[CHAPTERS[q.chapter].place].stampsToOpen === 'firstWish' || PLACE_INFO[CHAPTERS[q.chapter].place].stampsToOpen === 0 || (PLACE_INFO[CHAPTERS[q.chapter].place].stampsToOpen as number) < t))).length;
+      const t = PLACE_OPENS_AT[p];   // (by place idx, round 6: a dropped place never ships, so it is skipped above)
+      const avail = QUESTS.filter((q) => isShown(d, q.idx) && pred(q.idx) && (CHAPTERS[q.chapter].place < 0 ? true : PLACE_OPENS_AT[CHAPTERS[q.chapter].place] <= 0 || PLACE_OPENS_AT[CHAPTERS[q.chapter].place] < t)).length;
       if (avail < t) miss.push(`${PLACE_IDS[p]} needs ${t}, ${avail} reachable`);
     }
     return miss;
   };
   const kOnly = (q: number): boolean => hasKeys(dAll, q) && !(dAll.keyStar[q >>> 5] & (1 << (q & 31)));
   const m1 = reach(dAll, kOnly);
-  row('QU-09', 'without the keyboard stretch (K quests only), the stamps of the places open before each threshold reach it (all-shipped build; Friends Everywhere counted)', m1.length === 0, m1.join('; ') || 'all 8 thresholds');
+  row('QU-09', 'without the keyboard stretch (K quests only), the stamps of the places open before each threshold reach it (all-shipped build; Friends Everywhere counted)', m1.length === 0, m1.join('; ') || 'all 5 thresholds');
   const cs1 = QUESTS.filter((q) => isShown(dS1, q.idx) && kOnly(q.idx)).length;
   row('QU-09', 'this S1 build: K quests (not K*) shown with Home and Hearthlog reach Ripple Shore\'s 12 for when it ships', cs1 >= 12, `${cs1} K stamps`);
 }
@@ -622,9 +629,10 @@ function firstTen(P: number, H: number): [number, Rec][] {
   const after = (e: string | undefined): number => (e ? Number(e.split('@')[1]) : Infinity);
   const inOrder = rip >= 0 && fro > rip && rain > fro && stampsAt[2] >= 12 && stampsAt[3] >= 20 && stampsAt[4] >= 28 && stampsAt[2] < 14 && stampsAt[3] < 22 && stampsAt[4] < 30;
   // the hard part of the stream (a gate): every S2 place opens within four active days, in order, at its stamp count; no stall; X3 by the gift pair
-  row('QU-11', 'the multi-day stream, S2 build: Ripple, Frostbell and Rainleaf open in order at 12, 20 and 28 stamps within four active days; Fizzwell (S3) stays shut; the player never runs out of open work; X3 completes by the gift pair Puddlo and Boingle after both are claimed',
-    inOrder && !placeOpen(st, 5) && stalls === 0 && x3 >= after(boiAt) && x3pair === 'puddlo+boingle',
-    `stamps at opening ${stampsAt[2]} / ${stampsAt[3]} / ${stampsAt[4]}; ${st.sc[SC.ST]} stamps at ${t.toFixed(1)} min (Fizzwell needs 36); stalls ${stalls}; X3 at ${x3.toFixed(1)} min (${x3pair}); ${pudAt ?? 'no Puddlo'} ${boiAt ?? 'no Boingle'}`);
+  // (re-specified in round 6 for D-96: the first S3 place is now Lanternroof (idx 7, 36 stamps), was the dropped Fizzwell Tub (idx 5, 36 stamps))
+  row('QU-11', 'the multi-day stream, S2 build: Ripple, Frostbell and Rainleaf open in order at 12, 20 and 28 stamps within four active days; Lanternroof (S3) stays shut; the player never runs out of open work; X3 completes by the gift pair Puddlo and Boingle after both are claimed',
+    inOrder && !placeOpen(st, 7) && !placeOpen(st, 5) && stalls === 0 && x3 >= after(boiAt) && x3pair === 'puddlo+boingle',
+    `stamps at opening ${stampsAt[2]} / ${stampsAt[3]} / ${stampsAt[4]}; ${st.sc[SC.ST]} stamps at ${t.toFixed(1)} min (Lanternroof needs 36); stalls ${stalls}; X3 at ${x3.toFixed(1)} min (${x3pair}); ${pudAt ?? 'no Puddlo'} ${boiAt ?? 'no Boingle'}`);
   // QU-11 is a REPORTED row (PLAYGROUND_BUILD 18): the times against QUESTS 7's estimates, +-50%, at the pace assumed above
   const rep = (name: string, v: number, est: number, when: string): string => `${name} ${v.toFixed(1)} min (QUESTS 7: ${when}, est. ${est} -> ${within(v, est) ? 'within' : 'OUTSIDE'} +-50%)`;
   info('QU-11', `reported, S2 stream vs QUESTS 7: ${rep('Ripple', rip, 18.75, "day 1's second session")}; ${rep('Frostbell', fro, 37.5, 'about day 2')}; ${rep('Rainleaf', rain, 62.5, 'about day 3')}; ${rep('Friends Everywhere', fe, 18.75, 'the second session')}; finales and gifts ${events.join(' ')}`);
@@ -660,7 +668,7 @@ skip('QU-13', 'every quest of a shipped chapter completes from a scripted run of
   const capDiff = PLACE_IDS.map((id, p) => { const a = PLACE_CAPS[p], b = DERIVED_CAPS[p]; return a.reacts === b.reacts && a.socials === b.socials && a.verbs === b.verbs ? '' : `${id} table r${a.reacts} s${a.socials} v${a.verbs} vs derived r${b.reacts} s${b.socials} v${b.verbs}`; }).filter(Boolean);
   row('QU-14', 'journal.ts PLACE_CAPS equals the caps recomputed from every PlaceDef (LIFE 4.2\'s triggers, LIFE 6.1\'s moments, the things\' verbs)', capDiff.length === 0, capDiff.join('; ') || `${PLACE_IDS.length} places`);
   const tp: string[] = [];
-  for (const def of DEFS) for (const t of def.things) if (THING_PLACE[THING_IDS.indexOf(t.id)] !== def.idx) tp.push(`${t.id}`);
+  for (const def of DEFS) if (def) for (const t of def.things) if (THING_PLACE[THING_IDS.indexOf(t.id)] !== def.idx) tp.push(`${t.id}`);
   row('QU-14', 'journal.ts THING_PLACE matches every ThingDef.place', tp.length === 0 && THING_PLACE.length === THING_IDS.length, tp.join(', ') || `${THING_IDS.length} things`);
   const shown = QUESTS.filter((q) => isShown(dS1, q.idx)).map((q) => q.id);
   const want = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7', 'H8', 'H9', 'H10', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'X1', 'X2', 'X3', 'X6', 'X10'];
@@ -688,6 +696,24 @@ skip('QU-13', 'every quest of a shipped chapter completes from a scripted run of
   for (const r of scriptFor(dAll, DERIVED_CAPS, x8)) apply(s8.st, dS1, s8.out, r);
   row('QU-14', 'the tracker never shows a hidden quest (30 passes over both places, key and pointer, autonomy on and off), and hidden X8 does not complete from its own photo', hiddenSeen.length === 0 && !isDone(s8.st, x8) && seen.size > 0,
     hiddenSeen.join(', ') || `${seen.size} quests offered: ${[...seen].map((q) => QUESTS[q].id).join(' ')}`);
+}
+
+/* ═══ QU-14 (round 6, D-96): the dropped places' 30 tombstone quests are never shown and never done, in any build ═══ */
+{
+  const tomb = QUESTS.filter((q) => q.dropped).map((q) => q.idx), p: string[] = [];
+  if (tomb.length !== 30 || tomb.some((q) => !((q >= 50 && q < 70) || (q >= 80 && q < 90)))) p.push(`tombstones ${tomb.length}: ${tomb.join(' ')}`);
+  for (const d of [dAll, dS1]) {
+    if (d.placeShipped & ((1 << 5) | (1 << 6) | (1 << 8))) p.push('a dropped place ships');
+    for (const q of tomb) if (isShown(d, q)) p.push(`${QUESTS[q].id} shown`);
+  }
+  // the busiest state there is: every place bit set (dropped ones too), the first wish shown, then every kept quest's script and 2 finales
+  const st = createQuestState(dAll), out = createQuestOut(1024); st.sc[SC.FW] = 1; st.sc[SC.PL] = 0xffff;
+  for (const q of KEPT_Q) for (const r of scriptFor(dAll, DERIVED_CAPS, q)) { out.n = 0; apply(st, dAll, out, r); }
+  for (const q of tomb) { markDone(st, dAll, q, out); if (isDone(st, q)) p.push(`${QUESTS[q].id} done`); }
+  for (const ch of [5, 6, 8]) if (chapterOpen(st, ch)) p.push(`chapter ${ch} open`);
+  if (st.sc[SC.KS] & ((1 << 5) | (1 << 6) | (1 << 8))) p.push('a retired keepsake bit set');
+  row('QU-14', '(round 6, D-96) the 30 tombstone quests of the dropped places are shown in no build (all-shipped included), never done (every kept script played, markDone tried), their chapters never open, their keepsake bits never set',
+    p.length === 0, p.join(', ') || `${tomb.length} tombstones; ${st.sc[SC.ST]} stamps from the kept scripts`);
 }
 
 /* ═══════════════════════════════ the tracker's order (SH-20's rule, the reducer half) ═══════════════════════════════ */
@@ -749,11 +775,12 @@ skip('QU-13', 'every quest of a shipped chapter completes from a scripted run of
   // thresholds reachable with autonomy off (blocked quests excluded; a finale counts when its 5 mains can be done)
   const miss: string[] = [];
   for (let p = 2; p < PLACE_IDS.length; p++) {
-    const t = PLACE_INFO[p].stampsToOpen as number;
-    const avail = QUESTS.filter((q) => !needsAutonomy(dAll, q.idx) && (CHAPTERS[q.chapter].place < 0 || [0, 1].includes(CHAPTERS[q.chapter].place) || (PLACE_INFO[CHAPTERS[q.chapter].place].stampsToOpen as number) < t)).length;
+    if (placeDropped(p)) continue;   // (round 6, D-96: a dropped place has no threshold; its tombstones count for nothing)
+    const t = PLACE_OPENS_AT[p];
+    const avail = QUESTS.filter((q) => !q.dropped && !needsAutonomy(dAll, q.idx) && (CHAPTERS[q.chapter].place < 0 || [0, 1].includes(CHAPTERS[q.chapter].place) || PLACE_OPENS_AT[CHAPTERS[q.chapter].place] < t)).length;
     if (avail < t) miss.push(`${PLACE_IDS[p]} ${avail}/${t}`);
   }
-  row('QU-16', 'with autonomy off every opening threshold is reachable (stamps of the places open before it, blocked quests left out)', miss.length === 0, miss.join(' ') || 'all 8');
+  row('QU-16', 'with autonomy off every opening threshold is reachable (stamps of the places open before it, blocked quests left out)', miss.length === 0, miss.join(' ') || 'all 5');
   const s1 = QUESTS.filter((q) => isShown(dS1, q.idx) && !needsAutonomy(dS1, q.idx)).length;
   row('QU-16', 'this S1 build with autonomy off: the shown, unblocked stamps reach Ripple Shore\'s 12 for when it ships', s1 >= 12, `${s1} stamps`);
 }

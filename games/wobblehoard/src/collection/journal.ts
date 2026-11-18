@@ -11,13 +11,13 @@
 //     gift is practice. Real-ledger entries sit under the blob's one `acct` tag and leave on sign-out or an account switch.
 //   * Over JOURNAL_MAX_CHARS the write drops `fd` rows, then Met-only `fr` rows with the fewest points (never Friends or closer, never a
 //     best-friend pair), then `ids` no field names; never `qd`, `fx`, `ks`, `pl`, `gift` or a `wm` row (CO-11). Still over: null (refused).
-import { PLACE_IDS, PLACE_INFO, THING_IDS } from '../data/places.ts';
+import { PLACE_IDS, THING_IDS, placeInfo } from '../data/places.ts';
 import { FRIENDSHIP } from '../data/life.ts';
 import { CHAPTERS, FACT, GIFT_LISTS } from '../data/quests.ts';
 import type { QuestDefs, QuestState, PlaceCaps, QuestOut } from '../core/quests.ts';
 import {
   PAIR_SET, PARTY_MAX, SC, SPECIES_BITS, WISH_KEPT, WM_ROWS, buildQuestDefs, chapterOpen, createQuestState, finaleOpen, giftReady, hasKeys, isDone, isShown,
-  markDone, markFact, needsAutonomy, questOpen, questProgress, recountDerived, setQuestParty, trackerQuest, friendLevel,
+  markDone, markFact, needsAutonomy, questOpen, questProgress, recountDerived, setQuestParty, trackerQuest, friendLevel, forgetDropped,
 } from '../core/quests.ts';
 import { ACCT_TAG_PATTERN, DEVICE_ID_PATTERN, ID_PATTERN } from './constants.ts';
 import type { JournalView, Ledger, StorageReport } from './types.ts';
@@ -62,14 +62,14 @@ export const PLACE_CAPS: readonly PlaceCaps[] = [
   { reacts: 14946302, socials: 894974, verbs: 58050 },
   /* rainleaf    reacts SOAK SPLASH PRINT SHOWER LOVE; socials + TEETER SQUIRT; verbs ROLL ROCK BOUNCE SWITCH WADE STEP */
   { reacts: 9179144, socials: 897022, verbs: 42022 },
-  /* fizzwell    reacts FLOAT WADE SOAK RISE OOZE WARM DRIFT FIZZ DRY LOVE; socials + SQUIRT; verbs SPIN FLOAT_ON SLIDE SWITCH WADE STEP */
-  { reacts: 13639918, socials: 886782, verbs: 42768 },
-  /* cogwhistle  reacts WARM RATTLE PRINT LOVE; socials + -; verbs ROLL SPIN BOUNCE RING SWITCH LISTEN */
-  { reacts: 8683648, socials: 862206, verbs: 3186 },
+  /* fizzwell    DROPPED (D-96): nothing */
+  { reacts: 0, socials: 0, verbs: 0 },
+  /* cogwhistle  DROPPED (D-96): nothing */
+  { reacts: 0, socials: 0, verbs: 0 },
   /* lanternroof reacts SOAK TOAST RISE OOZE WARM SPLASH GAZE_SKY HOLD_ON DRY LOVE; socials + PUSH SQUIRT; verbs SWING SPIN RING NAP SWITCH WADE */
   { reacts: 14815480, socials: 890878, verbs: 9432 },
-  /* echohollow  reacts FLOAT WADE SOAK SHIVER FROST GLOW PRINT LOVE; socials + PEEK SQUIRT ECHO; verbs RING NAP SLIDE SWITCH LEAN WADE */
-  { reacts: 8717070, socials: 1034238, verbs: 14016 },
+  /* echohollow  DROPPED (D-96): nothing */
+  { reacts: 0, socials: 0, verbs: 0 },
   /* cloudloft   reacts LIFT PRINT HOLD_ON LOVE; socials + PUSH; verbs ROLL SWING BOUNCE NAP STEP */
   { reacts: 10764288, socials: 866302, verbs: 32938 },
 ];
@@ -78,12 +78,15 @@ const THINGS_PER_PLACE = [6, 6, 6, 7, 6, 6, 7, 6, 6, 6] as const;
 export const THING_PLACE: readonly number[] = THINGS_PER_PLACE.flatMap((n, p) => new Array<number>(n).fill(p));
 
 let defaultDefs: QuestDefs | null = null;
+/** Per place idx: shipped, and the stamps it opens at (0 = the start, -1 = the first wish), from PLACE_INFO (D-96: a dropped place has no row:
+ *  never shipped, opens never (0 with no ship bit)). */
+export const PLACE_SHIPPED: readonly boolean[] = PLACE_IDS.map((_, i) => placeInfo(i)?.shipped === true);
+export const PLACE_OPENS_AT: readonly number[] = PLACE_IDS.map((_, i) => { const p = placeInfo(i); return !p ? 0 : p.stampsToOpen === 'firstWish' ? -1 : p.stampsToOpen; });
 /** The rules compiled against this build's shipped places (PLACE_INFO.shipped). */
 export function journalDefs(): QuestDefs {
   if (!defaultDefs) {
     defaultDefs = buildQuestDefs({
-      placeIds: PLACE_IDS, thingIds: THING_IDS, shipped: PLACE_INFO.map((p) => p.shipped),
-      opensAt: PLACE_INFO.map((p) => (p.stampsToOpen === 'firstWish' ? -1 : p.stampsToOpen)), thingPlace: THING_PLACE, caps: PLACE_CAPS,
+      placeIds: PLACE_IDS, thingIds: THING_IDS, shipped: PLACE_SHIPPED, opensAt: PLACE_OPENS_AT, thingPlace: THING_PLACE, caps: PLACE_CAPS,
     });
   }
   return defaultDefs;
@@ -346,6 +349,7 @@ function sanitizeInner(x: unknown, d: QuestDefs): Journal | null {
   // compact empty id slots away (an invalid id was kept as '' only so the indexes above stayed right)
   compactIds(j, (k) => j.ids[k] !== '');
   sc[SC.ST] = intIn(x.st, 0, 1000) ?? 0;
+  forgetDropped(st, d);   // D-96: a save that names a dropped place's stamp, keepsake, visit or wish loads without it
   recountDerived(st, d);
   return j;
 }

@@ -10,7 +10,7 @@ import { MECH, ZONE, MARK, PROP_SOUND as S, SIGNATURE, FINALE, cells } from './p
 import { USE_VERB as V, EMOTE as E } from './life.ts';
 
 export const PLACE: PlaceDef = {
-  id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 54, shipped: false, night: true,
+  id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true,
   ground: { grip: 1.1, glue: 1, peel: 1, drag: 1, mark: 0, markLifeS: 0 },
   patches: [
     { id: 'chimneycorner', shape: 'disc', x: -2.3, z: 0.6, r: 0.9, mods: {  }, nap: true },
@@ -34,7 +34,7 @@ export const PLACE: PlaceDef = {
     // 3.1), the Lantern Line across the very back, the Clothesline Hammock swinging along z at the left of the back band (pushed from its front
     // end), the Moon Dish beside it, the Vane Disc back right, the Chimney Corner in the right strip with its nap spot toward the room, the Star
     // Scope (0.4 m) in the front band; the Night Breeze over the back band (the lanterns, the vane and the hammock in it; 1.25 m from the pad)
-    bounds: { shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3, round: 0.4 }, walls: [{ shape: 'box', x: 0, z: -3.85, hx: 2.6, hz: 0.15 }, { shape: 'box', x: -2.45, z: 0, hx: 0.15, hz: 3.9 }, { shape: 'box', x: 2.45, z: 0, hx: 0.15, hz: 3.9 }, { shape: 'box', x: 0, z: 3.25, hx: 2.6, hz: 0.15 }],
+    bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [{ shape: 'box', x: 0, z: -3.85, hx: 2.6, hz: 0.15 }, { shape: 'box', x: -2.45, z: 0, hx: 0.15, hz: 3.9 }, { shape: 'box', x: 2.45, z: 0, hx: 0.15, hz: 3.9 }, { shape: 'box', x: 0, z: 3.25, hx: 2.6, hz: 0.15 }],
     spawn: [[0.425, 0.625], [0.125, -1.075], [0.375, 2.175], [-0.425, 1.375], [-0.425, -0.075]],
     things: [
       { x: -0.8, z: -3.35, yaw: 0 },

@@ -296,7 +296,7 @@ export const MUSIC_STYLES: Readonly<Record<string, MusicStyle>> = {
   home: { next: FIELD_NEXT, lp: 0 },
   // Hearthlog Cabin: more dusk and home fields (the fireside evening), a warmer low-passed mallet
   cabin: { next: [[[1, 0.15], [2, 0.6], [3, 0.25]], [[0, 0.55], [2, 0.35], [3, 0.1]], [[1, 0.15], [3, 0.2], [0, 0.65]], [[0, 0.55], [2, 0.45]]], lp: 1500 },
-  // PG_AUDIO round 2 (PLACES 4.3..4.10 "Music style"). Every row keeps FIELD_NEXT's own drifts (only the weights move), so a style can
+  // PG_AUDIO round 2 (PLACES 4.3..4.10 "Music style"; D-96: the three dropped places' styles bath, bench and hollow are gone). Every row keeps FIELD_NEXT's own drifts (only the weights move), so a style can
   // never return to the field it just left and pick() still draws one number. Fields: 0 home, 1 lift, 2 dusk, 3 glow.
   // Ripple Shore: more lift and glow
   shore: { next: [[[1, 0.5], [2, 0.1], [3, 0.4]], [[0, 0.35], [2, 0.1], [3, 0.55]], [[1, 0.5], [3, 0.3], [0, 0.2]], [[0, 0.7], [2, 0.3]]], lp: 0 },
@@ -304,14 +304,8 @@ export const MUSIC_STYLES: Readonly<Record<string, MusicStyle>> = {
   ridge: { next: [[[1, 0.2], [2, 0.2], [3, 0.6]], [[0, 0.6], [2, 0.15], [3, 0.25]], [[1, 0.15], [3, 0.45], [0, 0.4]], [[0, 0.75], [2, 0.25]]], lp: 0, thin: 0.35 },
   // Rainleaf Garden: home and lift
   garden: { next: [[[1, 0.6], [2, 0.2], [3, 0.2]], [[0, 0.65], [2, 0.2], [3, 0.15]], [[1, 0.4], [3, 0.2], [0, 0.4]], [[0, 0.75], [2, 0.25]]], lp: 0 },
-  // Fizzwell Tub: the glow field, a rounder mallet (its top softened, a little longer)
-  bath: { next: [[[1, 0.25], [2, 0.2], [3, 0.55]], [[0, 0.35], [2, 0.15], [3, 0.5]], [[1, 0.2], [3, 0.55], [0, 0.25]], [[0, 0.65], [2, 0.35]]], lp: 2200, tau: 1.15 },
-  // Cogwhistle Bench: the lift field, a drier mallet (no echo, shorter)
-  bench: { next: [[[1, 0.65], [2, 0.15], [3, 0.2]], [[0, 0.55], [2, 0.25], [3, 0.2]], [[1, 0.6], [3, 0.15], [0, 0.25]], [[0, 0.7], [2, 0.3]]], lp: 0, tau: 0.7, echo: 0 },
   // Lanternroof: the dusk field, a soft mallet
   roof: { next: [[[1, 0.2], [2, 0.6], [3, 0.2]], [[0, 0.3], [2, 0.55], [3, 0.15]], [[1, 0.2], [3, 0.3], [0, 0.5]], [[0, 0.4], [2, 0.6]]], lp: 1700 },
-  // Echo Hollow: the glow field, longer note tails, a fuller echo (still scheduled, no DelayNode)
-  hollow: { next: [[[1, 0.25], [2, 0.2], [3, 0.55]], [[0, 0.35], [2, 0.15], [3, 0.5]], [[1, 0.2], [3, 0.55], [0, 0.25]], [[0, 0.65], [2, 0.35]]], lp: 0, tau: 1.7, echo: 1.6 },
   // Cloudloft: lift and glow
   cloud: { next: [[[1, 0.45], [2, 0.1], [3, 0.45]], [[0, 0.35], [2, 0.1], [3, 0.55]], [[1, 0.5], [3, 0.3], [0, 0.2]], [[0, 0.6], [2, 0.4]]], lp: 0 },
 };

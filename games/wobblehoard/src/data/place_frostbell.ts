@@ -35,7 +35,7 @@ export const PLACE: PlaceDef = {
   tall: { // laid under P7 (S2): the Ice Pond back right with the Glide Ramp sliding toward the camera onto it, the Steam Pool back left, the
     // Icicle Bells across the very back (just behind the water's edge), the Shake Pine in the right strip, the low Snowdrift Nest in the front
     // band with its gap toward the pad, the Snowball front left; the Wind Gap over the whole back band; spawn spots off the ice and the water
-    bounds: { shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3, round: 0.4 }, walls: [],
+    bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
     spawn: [[-0.425, -0.425], [0.425, 1.325], [0.425, 0.225], [-0.325, -1.475], [-0.425, 0.775]],
     things: [
       { x: 1.083, z: -2.394, yaw: 0 },
@@ -46,7 +46,7 @@ export const PLACE: PlaceDef = {
       { x: -1.22, z: 2.378, yaw: 0 },
       { x: 1.673, z: -0.725, yaw: 0 },
     ],
-    zones: [{ shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3 }, { shape: 'disc', x: -1.2, z: -2, r: 1 }, { shape: 'disc', x: -1.2, z: -2, r: 1 }, { shape: 'box', x: 0, z: -2.5, hx: 2.3, hz: 1.2 }],
+    zones: [{ shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }, { shape: 'disc', x: -1.2, z: -2, r: 1 }, { shape: 'disc', x: -1.2, z: -2, r: 1 }, { shape: 'box', x: 0, z: -2.5, hx: 2.3, hz: 1.2 }],
     patches: [{ shape: 'disc', x: 1.083, z: -2.394, r: 1.4 }],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },

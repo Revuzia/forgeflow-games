@@ -14,11 +14,25 @@ export const THING_IDS = ['feltball', 'musicbox', 'snoozerug', 'warmlamp', 'keep
   'rockpool', 'bobring', 'driftlog', 'shellchimes', 'pebbleball', 'sandmound',                                          // Ripple 12..17
   'icepond', 'glideramp', 'steampool', 'iciclebells', 'snowdriftnest', 'snowball', 'shakepine',                         // Frostbell 18..24
   'splashspots', 'leafteeter', 'mossbouncer', 'dripleaf', 'steppingstones', 'seedpod',                                  // Rainleaf 25..30
-  'bathwater', 'tap', 'swirlride', 'soapslide', 'spongeraft', 'bubblepatch',                                           // Fizzwell 31..36
-  'spinningcog', 'windupkey', 'springplate', 'magnet', 'steelmarble', 'tickclock', 'littlebell',                       // Cogwhistle 37..43
+  'bathwater', 'tap', 'swirlride', 'soapslide', 'spongeraft', 'bubblepatch',                                           // Fizzwell 31..36 (DROPPED, D-96)
+  'spinningcog', 'windupkey', 'springplate', 'magnet', 'steelmarble', 'tickclock', 'littlebell',                       // Cogwhistle 37..43 (DROPPED, D-96)
   'lanternline', 'vanedisc', 'hammock', 'chimneycorner', 'moondish', 'starscope',                                      // Lanternroof 44..49
-  'crystals', 'glowpool', 'stoneslide', 'mossbed', 'echostone', 'humrock',                                             // Echo Hollow 50..55
+  'crystals', 'glowpool', 'stoneslide', 'mossbed', 'echostone', 'humrock',                                             // Echo Hollow 50..55 (DROPPED, D-96)
   'puffpads', 'updraft', 'kiteswing', 'sunbowarch', 'cloudnest', 'cloudball'] as const;                                // Cloudloft 56..61
+/** D-96 (owner, 2026-11-18): the place list is SEVEN. Fizzwell Tub (5), Cogwhistle Bench (6) and Echo Hollow (8) are DROPPED: their ids stay
+ *  in the append-only lists above as tombstones (a place idx, a thing idx, a quest idx and a keepsake bit are saved, so no index moves), but
+ *  nothing of theirs ships: no PlaceDef module, no PLACE_INFO row, no quest rule, wish, fact, keepsake, favourite, gift, sound or text, and a
+ *  save that names one loads with those entries ignored (collection/journal.ts sanitize). A build can never ship them (core/quests.ts masks
+ *  them out of every shipped set). */
+export const DROPPED_PLACES = ['fizzwell', 'cogwhistle', 'echohollow'] as const;
+/** The dropped places as a bit per place idx (5, 6, 8). */
+export const DROPPED_PLACE_MASK = (1 << 5) | (1 << 6) | (1 << 8);
+/** The seven places in their opening order (idx order). */
+export const KEPT_PLACE_IDS = ['home', 'hearthlog', 'ripple', 'frostbell', 'rainleaf', 'lanternroof', 'cloudloft'] as const;
+/** Is this place idx (or id) one of the dropped three? */
+export const placeDropped = (p: number | string): boolean => typeof p === 'number' ? p >= 0 && p < 31 && (DROPPED_PLACE_MASK & (1 << p)) !== 0 : (DROPPED_PLACES as readonly string[]).includes(p);
+/** The thing idx ranges of the dropped places (THING_IDS: Fizzwell 31..36, Cogwhistle 37..43, Echo Hollow 50..55). */
+export const thingDropped = (t: number): boolean => (t >= 31 && t <= 43) || (t >= 50 && t <= 55);
 export type PlaceId = (typeof PLACE_IDS)[number];
 export type ThingId = (typeof THING_IDS)[number];
 
@@ -31,7 +45,8 @@ export const MARK = { print: 1, trail: 2, dust: 3, dent: 4, glow: 5 } as const;
 /** A thing's sound kind (SquishAudio.prop). */
 export const PROP_SOUND = { ball: 1, creak: 2, chime: 3, splash: 4, crunch: 5, crackle: 6, boing: 7, bell: 8, tick: 9, kettle: 10, rustle: 11, whoosh: 12 } as const;
 
-/** Each place's signature verb event (P13, DT-13) and finale spectacle (render and audio ids; looks and sound only, inside the flash gate). */
+/** Each place's signature verb event (P13, DT-13) and finale spectacle (render and audio ids; looks and sound only, inside the flash gate). Append-only:
+ *  floatsit, cogride, echotalk and bubblecolumn, machinetune, crystalscale belonged to the dropped places (D-96) and are used by no place. */
 export const SIGNATURE = { arrive: 1, toast: 2, squirt: 3, glide: 4, splashjump: 5, floatsit: 6, cogride: 7, moongaze: 8, echotalk: 9, updraft: 10 } as const;
 export const FINALE = { wishtrip: 1, firesong: 2, sunset: 3, stars: 4, rainstop: 5, bubblecolumn: 6, machinetune: 7, lanternsong: 8, crystalscale: 9, sunrise: 10 } as const;
 
@@ -115,24 +130,25 @@ export function ownsArea(ref: string | undefined, areaId: string): boolean {
 
 /* ───────────────────────────── what Travel and the reducer need without loading a place ───────────────────────────── */
 
-/** Every place's name and opening rule (QUESTS 7). `shipped`: true for home and hearthlog only; the orchestrator flips the others when their
- *  slice ships (and in the same change their PlaceDef's own `shipped`). coined: the coined single words of its names (NAME gate rules, PLACES 7). */
+/** Every KEPT place's name and opening rule (QUESTS 7; D-96: seven places, so Lanternroof opens at 36 stamps and Cloudloft at 45, the slots the
+ *  dropped Fizzwell Tub and Cogwhistle Bench had: the same gaps of 8 to 9 stamps). The dropped three have no row (look a place up by its idx,
+ *  never by its position here). `shipped`: true for home and hearthlog only; the orchestrator flips the others when their slice ships (and in
+ *  the same change their PlaceDef's own `shipped`). coined: the coined single words of its names (NAME gate rules, PLACES 7). */
 export const PLACE_INFO: readonly Pick<PlaceDef, 'id' | 'idx' | 'name' | 'coined' | 'stampsToOpen' | 'shipped' | 'night' | 'sky'>[] = [
   { id: 'home', idx: 0, name: 'Home', stampsToOpen: 0, shipped: true, night: false, sky: 'home' },
   { id: 'hearthlog', idx: 1, name: 'Hearthlog Cabin', coined: ['Hearthlog'], stampsToOpen: 'firstWish', shipped: true, night: false, sky: 'cabin' },
   { id: 'ripple', idx: 2, name: 'Ripple Shore', stampsToOpen: 12, shipped: false, night: false, sky: 'shore' },
   { id: 'frostbell', idx: 3, name: 'Frostbell Ridge', coined: ['Frostbell'], stampsToOpen: 20, shipped: false, night: false, sky: 'ridge' },
   { id: 'rainleaf', idx: 4, name: 'Rainleaf Garden', coined: ['Rainleaf'], stampsToOpen: 28, shipped: false, night: false, sky: 'garden' },
-  { id: 'fizzwell', idx: 5, name: 'Fizzwell Tub', coined: ['Fizzwell'], stampsToOpen: 36, shipped: false, night: false, sky: 'bath' },
-  { id: 'cogwhistle', idx: 6, name: 'Cogwhistle Bench', coined: ['Cogwhistle'], stampsToOpen: 45, shipped: false, night: true, sky: 'bench' },
-  { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 54, shipped: false, night: true, sky: 'roof' },
-  { id: 'echohollow', idx: 8, name: 'Echo Hollow', stampsToOpen: 63, shipped: false, night: false, sky: 'hollow' },
-  { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 72, shipped: false, night: false, sky: 'cloud' },
+  { id: 'lanternroof', idx: 7, name: 'Lanternroof', coined: ['Lanternroof'], stampsToOpen: 36, shipped: false, night: true, sky: 'roof' },
+  { id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: false, night: false, sky: 'cloud' },
 ];
+/** A place's PLACE_INFO row by idx (undefined for a dropped or unknown idx). */
+export const placeInfo = (idx: number): (typeof PLACE_INFO)[number] | undefined => PLACE_INFO.find((p) => p.idx === idx);
 /** A bit per thing-wish glyph kind (life.ts THING_KIND: ball 1, bell 2, droplet 4, note 8, flame 16, sun 32) each place's things have, from
  *  each ThingDef's icon (QUESTS 8; the wish scheduler's mask, LF-25). DT-16 recomputes it from the PlaceDefs. */
 export const THING_KINDS: Readonly<Record<PlaceId, number>> = {
-  home: 41, hearthlog: 25, ripple: 7, frostbell: 7, rainleaf: 5, fizzwell: 4, cogwhistle: 11, lanternroof: 18, echohollow: 6, cloudloft: 1,
+  home: 41, hearthlog: 25, ripple: 7, frostbell: 7, rainleaf: 5, fizzwell: 0, cogwhistle: 0, lanternroof: 18, echohollow: 0, cloudloft: 1,   // (the dropped three: 0, D-96)
 };
 /** Mechanism parameter ranges (PLACES 2.1, revision 3), checked by DT-01. Lengths in m, angles in degrees, notes in MIDI. */
 export const MECH_RANGES: Readonly<Record<number, Readonly<Record<string, readonly [number, number]>>>> = {
@@ -155,7 +171,8 @@ export const MECH_RANGES: Readonly<Record<number, Readonly<Record<string, readon
 
 /** A place's PlaceDef, loaded lazily (D-69): a dynamic import of src/data/place_<id>.ts, so each place is its own chunk (T1 sums it with the
  *  place's render and audio chunks). Home's module is in the life chunk: the life host imports place_home.ts statically, and this call then
- *  resolves from the same module. Rejects on a load failure (Travel keeps the player where they were). */
+ *  resolves from the same module. Rejects on a load failure (Travel keeps the player where they were), and always for a dropped place (D-96:
+ *  it has no module). */
 export function loadPlaceDef(id: PlaceId): Promise<PlaceDef> {
   switch (id) {
     case 'home': return import('./place_home.ts').then((m) => m.PLACE);
@@ -163,10 +180,8 @@ export function loadPlaceDef(id: PlaceId): Promise<PlaceDef> {
     case 'ripple': return import('./place_ripple.ts').then((m) => m.PLACE);
     case 'frostbell': return import('./place_frostbell.ts').then((m) => m.PLACE);
     case 'rainleaf': return import('./place_rainleaf.ts').then((m) => m.PLACE);
-    case 'fizzwell': return import('./place_fizzwell.ts').then((m) => m.PLACE);
-    case 'cogwhistle': return import('./place_cogwhistle.ts').then((m) => m.PLACE);
     case 'lanternroof': return import('./place_lanternroof.ts').then((m) => m.PLACE);
-    case 'echohollow': return import('./place_echohollow.ts').then((m) => m.PLACE);
     case 'cloudloft': return import('./place_cloudloft.ts').then((m) => m.PLACE);
+    default: return Promise.reject(new Error(`${id}: dropped (D-96)`));
   }
 }

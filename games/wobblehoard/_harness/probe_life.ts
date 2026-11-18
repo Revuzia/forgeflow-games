@@ -14,13 +14,10 @@ import { PLACE as CABIN } from '../src/data/place_hearthlog.ts';
 import { PLACE as RIPPLE } from '../src/data/place_ripple.ts';
 import { PLACE as FROSTBELL } from '../src/data/place_frostbell.ts';
 import { PLACE as RAINLEAF } from '../src/data/place_rainleaf.ts';
-import { PLACE as FIZZWELL } from '../src/data/place_fizzwell.ts';
-import { PLACE as COGWHISTLE } from '../src/data/place_cogwhistle.ts';
 import { PLACE as LANTERNROOF } from '../src/data/place_lanternroof.ts';
-import { PLACE as ECHOHOLLOW } from '../src/data/place_echohollow.ts';
 import { PLACE as CLOUDLOFT } from '../src/data/place_cloudloft.ts';
 import { THING_IDS, ZONE, MECH } from '../src/data/places.ts';
-import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, LOOK, TRAIT_MEDIANS, EMOTE, THING_KIND, USE_VERB } from '../src/data/life.ts';
+import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, LOOK, TRAIT_MEDIANS, EMOTE, THING_KIND, USE_VERB, REACT_TRIGGERS } from '../src/data/life.ts';
 import { WISH_STATE, PIECES_USE } from '../src/data/quests.ts';
 import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends, lifeSetHops, lifeLooks, lifeAddLook,
@@ -1083,36 +1080,35 @@ if (!LF02_CHILD) {
     check('LF-22', `(S3, round 4) three pieces in the Night Breeze hold on in a gust: PIECES HOLD_ON reaching n = 3 (${ph.map((q) => `${q.t.toFixed(1)} s n ${q.n2}`).join(', ') || 'none'})`, ph.some((q) => q.n2 === 3));
   }
   {
-    // LIFT (Cloudloft's updraft: airborne in it for 0.3 s; an event, 5 s apart; thing the updraft), RATTLE (a bead squeeze within 0.6 m of
-    // Cogwhistle's switched-on magnet: thing the magnet; off, none), GLOW (Echo Hollow's Glow Pool, 1 s), SHOWER (under Rainleaf's Drip Leaf
-    // while it drips: thing the leaf; in the rain elsewhere, none), FIZZ (Fizzwell's Bubble Patch, 1 s)
+    // LIFT (Cloudloft's updraft: airborne in it for 0.3 s; an event, 5 s apart; thing the updraft), SHOWER (under Rainleaf's Drip Leaf while it
+    // drips: thing the leaf; in the rain elsewhere, none); RATTLE, GLOW and FIZZ: retired with the dropped places (D-96)
     const up = CLOUDLOFT.zones.find((z) => z.id === 'updraft')!;
     const l = s2(CLOUDLOFT, 171); l.add(0, 'cushlet', up.x, up.z); calmS(l, 1);
     l.run(1); l.bodies[0].air = 0.6; l.run(2); l.bodies[0].air = 0.6; l.run(5); l.bodies[0].air = 0.6; l.run(1);
     const lift = evs(l, REACT_KIND.LIFT);
     check('LF-21', `(S3, round 4) LIFT: airborne in Cloudloft's updraft for 0.3 s, an event 5 s apart (${tl(lift)}: the updraft ${TID('updraft')})`,
       lift.length === 2 && lift.every((q) => q.thing === TID('updraft')) && lift[1].t - lift[0].t >= 5);
-    const mg = COGWHISTLE.zones.find((z) => z.id === 'magnetfield')!;
-    const ra = s2(COGWHISTLE, 172); ra.add(0, 'rattlebead', mg.x, mg.z + 0.7); ra.add(1, 'dollop', mg.x - 0.7, mg.z); ra.physics = false; calmS(ra, 2); ra.run(3);
-    const rb = s2(COGWHISTLE, 173); rb.zoneOff.add('magnetfield'); rb.add(0, 'rattlebead', mg.x, mg.z + 0.7); rb.physics = false; calmS(rb, 1); rb.run(3);
-    check('LF-21', `(S3, round 4) RATTLE: a bead squeeze 0.7 m from the switched-on magnet (${tl(evs(ra, REACT_KIND.RATTLE))}: the magnet ${TID('magnet')}); a jelly gel beside it none (${evs(ra, REACT_KIND.RATTLE, 1).length}); the magnet off, none (${evs(rb, REACT_KIND.RATTLE).length})`,
-      evs(ra, REACT_KIND.RATTLE).length === 1 && evs(ra, REACT_KIND.RATTLE)[0].thing === TID('magnet') && evs(ra, REACT_KIND.RATTLE, 1).length === 0 && evs(rb, REACT_KIND.RATTLE).length === 0);
-    const gp = ECHOHOLLOW.zones.find((z) => z.id === 'glowpool')!;
+    // (re-specified in round 6 for D-96: RATTLE was Cogwhistle Bench's magnet, GLOW Echo Hollow's Glow Pool, FIZZ Fizzwell Tub's Bubble Patch; the owner
+    // dropped those places, so the three kinds have no trigger row and no producer. The rows now check that no kept place makes one: a bead squeeze
+    // and a gel set in each kept place's water and zones for 3 s.)
+    const RETIRED = [REACT_KIND.RATTLE, REACT_KIND.GLOW, REACT_KIND.FIZZ];
+    const retiredIn: Record<number, string[]> = { [REACT_KIND.RATTLE]: [], [REACT_KIND.GLOW]: [], [REACT_KIND.FIZZ]: [] };
+    let seedR = 172;
+    for (const P of [HOME, CABIN, RIPPLE, FROSTBELL, RAINLEAF, LANTERNROOF, CLOUDLOFT]) for (const z of P.zones) {
+      const r = s2(P, seedR++); r.add(0, 'rattlebead', z.x + 0.3, z.z); r.add(1, 'dollop', z.x - 0.3, z.z); r.physics = false; calmS(r, 2); r.run(3);
+      for (const k of RETIRED) for (const q of evs(r, k)) retiredIn[k].push(`${P.id}/${z.id}@${q.t.toFixed(1)}`);
+    }
+    for (const [k, name] of [[REACT_KIND.RATTLE, 'RATTLE'], [REACT_KIND.GLOW, 'GLOW'], [REACT_KIND.FIZZ, 'FIZZ']] as const)
+      check('LF-21', `(round 6, D-96) ${name} (a dropped place's REACT) has no trigger and no kept place makes it (a bead squeeze and a gel 3 s in each of the seven places' zones: ${retiredIn[k].length})`,
+        !REACT_TRIGGERS.some((t) => t.kind === k) && retiredIn[k].length === 0, retiredIn[k].slice(0, 4).join(' '));
     // (a squishy that comes out inside a zone is in it at once, LIFE 3.1: these come out beside it and are set in at 1 s)
     const setIn = (r: Sim, x: number, z: number): void => { r.run(1); r.bodies[0].x = x; r.bodies[0].z = z; r.bodies[0].tx = x; r.bodies[0].tz = z; };
-    const gw = s2(ECHOHOLLOW, 174); gw.add(0, 'dollop', gp.x - 2.0, gp.z + 1.2); gw.physics = false; calmS(gw, 1); setIn(gw, gp.x, gp.z); gw.run(3);
-    check('LF-21', `(S3, round 4) GLOW: in Echo Hollow's Glow Pool for 1 s, once a visit (${tl(evs(gw, REACT_KIND.GLOW))}: the pool ${TID('glowpool')}; set in at 1.0 s)`,
-      evs(gw, REACT_KIND.GLOW).length === 1 && evs(gw, REACT_KIND.GLOW)[0].thing === TID('glowpool') && evs(gw, REACT_KIND.GLOW)[0].t >= 2 && evs(gw, REACT_KIND.GLOW)[0].t < 2.3);
     const dz = RAINLEAF.zones.find((z) => z.id === 'leafdrip')!;
     const sh = s2(RAINLEAF, 175); sh.add(0, 'dollop', dz.x + 1.4, dz.z + 1.0); sh.add(1, 'crimpo', 1.0, 0.0); sh.physics = false; calmS(sh, 2); setIn(sh, dz.x, dz.z); sh.run(25);
     const sd = s2(RAINLEAF, 176); sd.zoneOff.add('leafdrip'); sd.zoneOff.add('rain'); sd.add(0, 'dollop', dz.x, dz.z); sd.physics = false; calmS(sd, 1); sd.run(3);
     check('LF-21', `(S3, round 4) SHOWER: under the Drip Leaf while it drips (${tl(evs(sh, REACT_KIND.SHOWER))}: the leaf ${TID('dripleaf')}; set in at 1.0 s; an event 20 s apart), in the rain elsewhere none (${evs(sh, REACT_KIND.SHOWER, 1).length}), the leaf dry none (${evs(sd, REACT_KIND.SHOWER).length})`,
       evs(sh, REACT_KIND.SHOWER).length === 2 && evs(sh, REACT_KIND.SHOWER).every((q) => q.thing === TID('dripleaf')) && evs(sh, REACT_KIND.SHOWER)[0].t >= 2 && evs(sh, REACT_KIND.SHOWER)[1].t - evs(sh, REACT_KIND.SHOWER)[0].t >= 19.95
       && evs(sh, REACT_KIND.SHOWER, 1).length === 0 && evs(sd, REACT_KIND.SHOWER).length === 0);
-    const bp = FIZZWELL.zones.find((z) => z.id === 'bubblepatch')!;
-    const fz = s2(FIZZWELL, 177); fz.add(0, 'dollop', bp.x + 1.6, bp.z + 1.4); fz.physics = false; calmS(fz, 1); setIn(fz, bp.x, bp.z); fz.run(3);
-    check('LF-21', `(S2, round 4) FIZZ: in Fizzwell's Bubble Patch for 1 s, once a visit (${tl(evs(fz, REACT_KIND.FIZZ))}: the patch ${TID('bubblepatch')}; set in at 1.0 s)`,
-      evs(fz, REACT_KIND.FIZZ).length === 1 && evs(fz, REACT_KIND.FIZZ)[0].thing === TID('bubblepatch') && evs(fz, REACT_KIND.FIZZ)[0].t >= 2 && evs(fz, REACT_KIND.FIZZ)[0].t < 2.3);
   }
   // S2's raised hops (LIFE 5.2, D-07): lifeSetHops raises a family's hop to its vyS2 once PH-01 passed; pieces keep the S1 cap; 0 returns to S1
   {

@@ -11,7 +11,7 @@ import { MECH, ZONE, MARK, PROP_SOUND as S, SIGNATURE, FINALE, cells } from './p
 import { USE_VERB as V, EMOTE as E } from './life.ts';
 
 export const PLACE: PlaceDef = {
-  id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 72, shipped: false, night: false,
+  id: 'cloudloft', idx: 9, name: 'Cloudloft', coined: ['Cloudloft', 'Sunbow'], stampsToOpen: 45, shipped: false, night: false,
   ground: { grip: 0.8, glue: 0.6, peel: 0.6, drag: 1.15, mark: MARK.dent, markLifeS: 6 },
   patches: [
 
@@ -32,7 +32,7 @@ export const PLACE: PlaceDef = {
   bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
   pad: [0, 0, 1.2], spawn: [[-0.575, 0.525], [1.725, -1.575], [1.275, 0.725], [0.525, -0.625], [-0.825, -0.775], [0.225, 1.575]],
   tall: { // FIRST DRAFT (S2 / S3 re-lay)
-    bounds: { shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3, round: 0.4 }, walls: [],
+    bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
     spawn: [[-0.4, -0.6], [0.4, 0], [-0.4, 0.6], [0.4, 1.2], [-0.4, 1.8]],
     things: [
       { x: 0.814, z: -1, yaw: 0 },
@@ -42,7 +42,7 @@ export const PLACE: PlaceDef = {
       { x: 0.962, z: 1.625, yaw: -2.678, use: [0.962, 1.625] },
       { x: -0.333, z: 2.125, yaw: 0 },
     ],
-    zones: [{ shape: 'disc', x: 0.814, z: -1, r: 1 }, { shape: 'box', x: 0, z: -2.281, hx: 1.25, hz: 0.719 }, { shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3 }],
+    zones: [{ shape: 'disc', x: 0.814, z: -1, r: 1 }, { shape: 'box', x: 0, z: -2.281, hx: 1.4, hz: 0.719 }, { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }],
     patches: [],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },

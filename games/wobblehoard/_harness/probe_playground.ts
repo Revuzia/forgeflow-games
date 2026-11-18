@@ -7,7 +7,7 @@
 // Independent meters: own fold meter (the largest dihedral between neighbouring triangles, degrees; the rest shapes' own maximum is about 50), own
 // lowest-particle and centre tracking, own volume integral (metrics.volume is cross-checked), own wall clock (performance.now) and new-space growth.
 import v8 from 'node:v8';
-import { PG, SoftBody } from '../src/physics/softbody.ts';
+import { PG, SLEEP, SoftBody } from '../src/physics/softbody.ts';
 import { PROPS, PropWorld, buildPropWorld } from '../src/physics/props.ts';
 import { ContactPlanner } from '../src/physics/broad.ts';
 import { makeStarterGenome, quantizeGenome } from '../src/core/genome.ts';
@@ -19,6 +19,8 @@ import { PLACE as HOME } from '../src/data/place_home.ts';
 import { PLACE as RIPPLE } from '../src/data/place_ripple.ts';
 import { PLACE as FROSTBELL } from '../src/data/place_frostbell.ts';
 import { PLACE as RAINLEAF } from '../src/data/place_rainleaf.ts';
+import { PLACE as LANTERN } from '../src/data/place_lanternroof.ts';
+import { PLACE as CLOUD } from '../src/data/place_cloudloft.ts';
 import { FAMILY_REACT } from '../src/data/life.ts';
 import { MECH } from '../src/data/places.ts';
 import type { PlaceDef, ThingDef } from '../src/data/places.ts';
@@ -1022,7 +1024,7 @@ if (run('water')) {
     }
     add('PH-15 the S2 places\' own water: Ripple\'s Rock Pool floats a marshmallow and wades a jelly gel; Frostbell\'s Steam Pool floats a pop dome; Rainleaf\'s shallow splash spot (0.07 m) only wets a marshmallow (it wades)', res.join('; '), 'as the table', ok);
   }
-  info('PH-15 not built: soaking (a slow-rise or marshmallow soaking to its soaked density: SoftBody.mods[4], the shell writes it; physics reads mods[4] when present), the bulge slosh in water, waves (Ripple\'s surf edge), the current zone kind (only a water zone\'s own flow acts)', '');
+  info('PH-15 not built: the bulge slosh in water, the current zone kind (only a water zone\'s own flow acts). (Round 6: soaking is the shell\'s write of world.mods(body)[4], physics reads it, --only=surface; Ripple\'s waves, --only=surf)', '');
 }
 
 /* ───────────── PH-16: the flush pad (S2: Rainleaf's Moss Bouncer) ───────────── */
@@ -1241,7 +1243,7 @@ if (run('order')) {
   b.scootTo(0.3, 0, 0.4);
   let n1 = 0, cause = -1, slot = -2;
   for (let i = 0; i < 180; i++) { frameW(cw, [b], null); const m = cw.drainStrikes(out); if (m > 0 && n1 === 0) { cause = out[2]; slot = out[3]; } n1 += m; }
-  add('PH-23 drainStrikes: a poke on a chime gives cause 0 (slot -1); a body walking into it gives cause 1 with its contactSlot (7); weather (cause 2) has no producer in this build (S2 / S3 zones)',
+  add('PH-23 drainStrikes: a poke on a chime gives cause 0 (slot -1); a body walking into it gives cause 1 with its contactSlot (7); weather (cause 2): round 6\'s gusts and waves, see --only=surf',
     `poke: ${n0} strike (cause ${out[2] === undefined ? '-' : poke ? 0 : 'wrong'}); body: ${n1} strike(s), first cause ${cause} slot ${slot}`, 'cause 0; cause 1 slot 7', poke && n1 > 0 && cause === 1 && slot === 7);
 }
 
@@ -1267,6 +1269,308 @@ if (run('det')) {
   const a = once(), b = once();
   add('PH-10 determinism: the cabin, three bodies with sleep on, a scoot into the ball, a squash, a hop, a poke, the rocker carrying one: two runs give equal body and prop hashes at every sample', a === b ? 'equal' : 'DIFFERENT', 'equal', a === b);
   info('PH-10 re-baselined hash rows: none (sleep for wholes is opt-in, every existing hash row runs with it off; no existing row binds a PropWorld)', '');
+}
+
+/* ───────────── R6 (round 6, R6_PHYS.md): the surface (PH-08), the surf's waves, wind gusts and the updraft (PH-17), the bounds guard ───────────── */
+const zoneIdx = (p: PlaceDef, id: string): number => p.zones.findIndex((z) => z.id === id);
+/** A body set down at (x, z) (y: its rest centre's height above the floor; 0 = on it) in world w. */
+const placed = (w: PropWorld, fam: string, x: number, z: number, y = 0, g: Genome = NEUTRAL, frac = 1): SoftBody => {
+  const b = mk(g, fam, { piece: { frac, chunk: false, at: v3(x, y, z) } }); b.setPropWorld(w); return b;
+};
+/** The slide of a body nudged at v m/s along +x from rest at (x, z) in a fresh world of `place`: its distance and when it stopped (the last time it was 5 mm or more from
+ *  where it ended), over 4 s. */
+/** The slide of a body nudged at v m/s along +x from rest at (x, z) in a fresh world of `place`: its distance (the centre, 4 s), its grip multiplier (surfaceOf) and
+ *  whether its FOOT had stopped by 0.3 s: the particles on the floor at 0.3 s and at the end moved at most 5 mm in between (a rocking body lifts and sets down
+ *  particles; a slide moves the ones that stay down). */
+const slide = (place: PlaceDef, fam: string, x: number, z: number, v: number): { d: number; stop: number; grip: number; foot: number } => {
+  const w = buildPropWorld(place, 'wide', 1), b = placed(w, fam, x, z), q = new Float64Array(4), X = (b as unknown as { X: Float64Array }).X;
+  for (let i = 0; i < 40; i++) frameW(w, [b], null);
+  const x0 = b.center.x; b.nudge(v3(v, 0, 0));
+  let at = new Float64Array(0);
+  for (let i = 0; i < 240; i++) { frameW(w, [b], null); if (i === 2) w.surfaceOf(b, q); if (i === 17) at = Float64Array.from(X); }
+  let sx = 0, sz = 0, n = 0;
+  for (let k = 0; k < X.length; k += 3) if (X[k + 1] < 0.012 && at[k + 1] < 0.012) { sx += X[k] - at[k]; sz += X[k + 2] - at[k + 2]; n++; }
+  const foot = n > 0 ? Math.hypot(sx / n, sz / n) : 0;
+  b.setPropWorld(null);
+  return { d: b.center.x - x0, stop: foot <= 0.003 ? 0.3 : 4, grip: q[0], foot };
+};
+const spearman = (a: number[], b: number[]): number => {
+  const rank = (v: number[]): number[] => { const ix = v.map((x, i) => [x, i] as [number, number]).sort((p, q) => p[0] - q[0]); const r = new Array<number>(v.length); ix.forEach(([, i], k) => { r[i] = k; }); return r; };
+  const ra = rank(a), rb = rank(b), n = a.length;
+  let d2 = 0; for (let i = 0; i < n; i++) d2 += (ra[i] - rb[i]) ** 2;
+  return 1 - (6 * d2) / (n * (n * n - 1));
+};
+if (run('det')) {
+  // (R6) the new places' paths: Frostbell's ice (a glide off a nudge) and its Wind Gap, Cloudloft's updraft pad bounce in gusts, Lanternroof's guard (a throw over the parapet)
+  const once6 = (): string => {
+    const wf = buildPropWorld(FROSTBELL, 'wide', 1), wc = buildPropWorld(CLOUD, 'wide', 1), wl = buildPropWorld(LANTERN, 'wide', 1), ice = FROSTBELL.patches.find((pp) => pp.ice)!;
+    const a = placed(wf, 'jellygel', ice.x - 1.0, ice.z), c = placed(wc, 'popdome', wc.poses[0], wc.poses[2], 0.5), l = placed(wl, 'firmsilicone', 2.5, 0, 0.8);
+    l.setBounds(1, 0, 0, 3.4, 2.4, 0.8); l.nudge(v3(1.5, 10, 0));
+    const hs: number[] = [];
+    for (let i = 0; i < (QUICK ? 150 : 300); i++) {
+      if (i === 10) a.nudge(v3(0.8, 0, 0));
+      frameW(wf, [a], null); frameW(wc, [c], null); frameW(wl, [l], null);
+      if (i % 30 === 0) hs.push(wf.stateHash(), wc.stateHash(), a.stateHash(), c.stateHash(), l.stateHash(), Math.round(wf.gustLevel(3) * 1e6));
+    }
+    return hs.join(',');
+  };
+  const r1 = once6(), r2 = once6();
+  add('PH-10 determinism, round 6 paths: Frostbell\'s ice glide and Wind Gap, Cloudloft\'s updraft pad, Lanternroof\'s guard (a throw over the parapet): two runs give equal body and prop hashes at every sample', r1 === r2 ? 'equal' : 'DIFFERENT', 'equal', r1 === r2);
+}
+if (run('surface')) {
+  const ice = FROSTBELL.patches.find((p) => p.ice)!;
+  // (a) PH-08: the Ice Pond's glide by family (nudged at 0.8 m/s, LIFE's GLIDE nudge is 0.6 to 1.0, from 1.1 m inside the pond's left edge toward its middle)
+  const fams = QUICK ? ['firmsilicone', 'jellygel', 'marshmallow', 'putty', 'stickystretch'] : FAMS;
+  const dI: number[] = [], gI: number[] = [], parts: string[] = []; let snowMax = 0, minFast = 9, stickyD = 0;
+  for (const fam of fams) {
+    const r = slide(FROSTBELL, fam, ice.x - 1.1, ice.z, 0.8), s = slide(FROSTBELL, fam, -0.5, 1.0, 0.8), ig = (FAMILY_REACT as Record<string, { iceGrip: number }>)[fam].iceGrip;
+    dI.push(r.d); gI.push(-ig); parts.push(`${fam} ${f(r.d, 2)}/${f(s.d, 3)}`);
+    snowMax = Math.max(snowMax, s.d); if (ig <= 0.15) minFast = Math.min(minFast, r.d); if (fam === 'stickystretch') stickyD = r.d;
+  }
+  const rho = spearman(dI, gI);
+  add(`PH-08 the Ice Pond (Frostbell): glide distances from a 0.8 m/s nudge rank by the family's ice grip (${fams.length} families; ice / packed snow, m)`, `Spearman ${f(rho, 3)}; ${parts.join(', ')}`, '>= 0.8', rho >= 0.8);
+  add('R6 the Ice Pond is a glide: the families of ice grip 0.15 or less glide at least LIFE\'s GLIDE distance (0.5 m) from a 0.8 m/s nudge; sticky stretch "grips the ice, barely moves"; on the packed snow beside it every one stops',
+    `fastest families' least ${f(minFast, 3)} m; sticky stretch ${f(stickyD, 3)} m; snow at most ${f(snowMax, 4)} m`, '>= 0.5; <= 0.25; <= 0.02', minFast >= 0.5 && stickyD <= 0.25 && snowMax <= 0.02);
+  // (b) PH-08: sand stops a slide within 0.3 s (Ripple Shore's ground, grip 1.35)
+  const sandFams = QUICK ? ['firmsilicone', 'jellygel'] : ['firmsilicone', 'jellygel', 'gummy', 'popdome', 'marshmallow', 'putty'];
+  const sand = sandFams.map((fm) => slide(RIPPLE, fm, -0.5, 0.6, 0.8));
+  add(`PH-08 sand (Ripple Shore, grip 1.35) stops a slide within 0.3 s (${sandFams.length} families nudged at 0.8 m/s: the mean move of the particles on the floor at both 0.3 s and 4 s: a slide moves them together, a body settling on its foot does not)`,
+    sand.map((r, i) => `${sandFams[i]} foot ${f(r.foot * 1000, 1)} mm after 0.3 s (slid ${f(r.d, 3)} m in all, grip x${f(r.grip, 2)})`).join(', '), '<= 3 mm', sand.every((r) => r.stop <= 0.3));
+  // (c) wet grip: Rainleaf's rain in its shower phase (40 s on, 30 s off from the arrival): grip x 0.8, sticky stretch keeps its own; off phase: the loam's own
+  {
+    const q = new Float64Array(4), w = buildPropWorld(RAINLEAF, 'wide', 1), bj = placed(w, 'jellygel', 0.4, 0.3), bs = placed(w, 'stickystretch', -0.6, -0.2);
+    for (let i = 0; i < 60; i++) frameW(w, [bj, bs], null);
+    w.surfaceOf(bj, q); const jOn = q[0]; w.surfaceOf(bs, q); const sOn = q[0];
+    for (let i = 0; i < Math.round(44 / DT); i++) w.endFrame(DT);   // (the world's clock to 45 s: the shower's off phase; the bodies asleep or not, no step needed)
+    bj.nudge(v3(0, 0.01, 0)); for (let i = 0; i < 40; i++) frameW(w, [bj, bs], null);
+    w.surfaceOf(bj, q); const jOff = q[0];
+    const g = RAINLEAF.ground.grip;
+    add('R6 wet grip (Rainleaf\'s rain): in the shower a jelly gel\'s grip is the loam\'s x 0.8 and a sticky stretch keeps the loam\'s; in the dry phase (45 s after the arrival) the jelly is back to the loam\'s',
+      `jelly x${f(jOn, 3)} (want ${f(g * PROPS.WET_GRIP, 3)}), sticky x${f(sOn, 3)} (want ${f(g, 3)}); dry jelly x${f(jOff, 3)}`, 'within 0.005', Math.abs(jOn - g * PROPS.WET_GRIP) < 0.005 && Math.abs(sOn - g) < 0.005 && Math.abs(jOff - g) < 0.005);
+  }
+  // (d) the live places keep the published floor bit for bit, and a body leaving a place gets its own values back bit for bit
+  {
+    const vals = (b: SoftBody): number[] => { const p = (b as unknown as { p: Record<string, number>; dragF: number }); return [p.p.tableMu, p.p.glue, p.p.groundDamp, p.dragF]; };
+    const same = (a: number[], b: number[]): boolean => a.every((x, i) => Object.is(x, b[i]));
+    let liveOk = 0; const q = new Float64Array(4);
+    for (const [pl, x, z] of [[HOME, 0, -0.36], [CABIN, 0.8, 0.9]] as [PlaceDef, number, number][]) {
+      const w = buildPropWorld(pl, 'wide', 1), b = placed(w, 'jellygel', x, z), twin = mk(NEUTRAL, 'jellygel', { piece: { frac: 1, chunk: false, at: v3(x, 0, z) } });
+      for (let i = 0; i < 90; i++) frameW(w, [b], null);
+      w.surfaceOf(b, q);
+      if (same(vals(b), vals(twin)) && q.every((v) => v === 1)) liveOk++;
+    }
+    const w = buildPropWorld(FROSTBELL, 'wide', 1), b = placed(w, 'firmsilicone', ice.x, ice.z), twin = mk(NEUTRAL, 'firmsilicone', { piece: { frac: 1, chunk: false, at: v3(ice.x, 0, ice.z) } });
+    for (let i = 0; i < 30; i++) frameW(w, [b], null);
+    const onIce = vals(b)[0];
+    b.setPropWorld(null);
+    const back = same(vals(b), vals(twin));
+    add('R6 the live places keep the published floor (Home\'s Snooze Rug, the cabin\'s rug: friction, tack, peel damping and air drag bit for bit as a body bound to no world); a firm silicone that leaves the Ice Pond\'s world gets its own values back bit for bit',
+      `live ${liveOk}/2 untouched; on the ice tableMu ${f(onIce, 4)} -> after leaving ${back ? 'bit for bit its own' : 'DIFFERENT'} (${f(vals(b)[0], 4)})`, '2/2; bit for bit', liveOk === 2 && back && onIce < vals(twin)[0]);
+  }
+  // (e) the density seam (PG_SHELL's request: SoftBodyLike.mods[4], served as world.mods(body)): the family's dry density at the bind; a soaked slow-rise sinks in
+  // Frostbell's Steam Pool (0.26 m), a dry one floats; a sleeper in the pool wakes when the density written for it changes by more than 0.02
+  {
+    const pool = FROSTBELL.zones[zoneIdx(FROSTBELL, 'steampool')];
+    const w = buildPropWorld(FROSTBELL, 'wide', 1), b = placed(w, 'slowrise', pool.x + 0.1, pool.z);
+    const m = w.mods(b)!, other = mk(NEUTRAL, 'slowrise');
+    const init = m !== null && m[4] === (FAMILY_REACT as Record<string, { density: number }>).slowrise.density && m[7] === 0 && m[0] === 1 && m[5] === 1 && w.mods(other) === null;
+    b.sleepEnabled = true;
+    for (let i = 0; i < 180; i++) frameW(w, [b], null);
+    const dryLo = lowest(b);
+    m[4] = 1.2;
+    for (let i = 0; i < 300; i++) frameW(w, [b], null);
+    const wetLo = lowest(b), wetSub = b.metrics.submerged ?? 0;
+    for (let i = 0; i < 120 && !b.sleeping; i++) frameW(w, [b], null);
+    const slept = b.sleeping || b.sleep();
+    m[4] = 1.19;   // (a change of 0.01: it sleeps on)
+    for (let i = 0; i < 30; i++) frameW(w, [b], null);
+    const stillAsleep = b.sleeping;
+    m[4] = 0.15;   // (dried: it wakes and floats again)
+    for (let i = 0; i < 240; i++) frameW(w, [b], null);
+    const reLo = lowest(b);
+    add('R6 the density seam (world.mods(body), PG_SHELL\'s request): [4] starts at the family\'s dry density ([7] 0, the rest 1; null for a body of another world); a dry slow-rise floats in the Steam Pool, written soaked (1.2) it settles on the floor; asleep there, a change of 0.01 lets it sleep on, dried (0.15) it wakes and floats again',
+      `init ${init ? 'ok' : 'WRONG'}; lowest point dry ${f(dryLo, 3)} m, soaked ${f(wetLo, 3)} m (submerged ${f(wetSub, 2)}); asleep ${slept}, after +-0.01 ${stillAsleep ? 'asleep' : 'AWAKE'}; dried again ${f(reLo, 3)} m`,
+      'ok; dry > 0.008 (afloat: it rises until its submerged share is its density), soaked < 0.004; asleep; dried > 0.008', init && dryLo > 0.008 && wetLo < 0.004 && slept && stillAsleep && reLo > 0.008);
+  }
+}
+if (run('surf')) {
+  // Ripple Shore's surf edge (PLACES 4.3): the surface 0.06 m rising to 0.12 m on a wave every 7 to 10 s; the wave's water runs toward the shore as it rises: it carries
+  // a floating body and never a wader; a wave's breeze rings a shell now and then (cause 2, the weather)
+  const zi = zoneIdx(RIPPLE, 'surfedge'), surf = RIPPLE.zones[zi];
+  const w = buildPropWorld(RIPPLE, 'wide', 1), sleep0 = SLEEP.enabled;
+  SLEEP.enabled = false;   // (the wader stays awake for the measurement: a wave does not wake a sleeper, its last wet share stands)
+  const wader = placed(w, 'jellygel', 0.6, surf.z), mini = placed(w, 'marshmallow', -0.6, surf.z, 0, NEUTRAL, 0.1);
+  const starts: number[] = []; let prev = 0, subMin = 9, subMax = 0, wx0 = 0, mz0 = 0, mzMax = -9, mzMin = 9, cause2 = 0, otherCause = 0;
+  const sb = new Float32Array(64);
+  const T = QUICK ? 32 : 62;
+  for (let i = 0; i < Math.round(T / DT); i++) {
+    frameW(w, [wader, mini], null);
+    const lv = w.waveLevel(zi);
+    if (lv > 0 && prev === 0) starts.push(w.time);
+    prev = lv;
+    if (i === 60) { wx0 = wader.center.x; mz0 = mini.center.z; }
+    if (i > 60) { const s = wader.metrics.submerged ?? 0; subMin = Math.min(subMin, s); subMax = Math.max(subMax, s); mzMax = Math.max(mzMax, mini.center.z - mz0); mzMin = Math.min(mzMin, mini.center.z - mz0); }
+    const n = w.drainStrikes(sb); for (let k = 0; k < n; k++) { if (sb[k * 4 + 2] === 2) cause2++; else otherCause++; }
+  }
+  SLEEP.enabled = sleep0;
+  const gaps = starts.slice(1).map((t, i) => t - starts[i]);
+  add(`R6 the surf's waves (Ripple Shore, ${T} s): a wave every 7 to 10 s (the world's clock from the arrival); the first within 10 s`,
+    `${starts.length} waves at ${starts.map((t) => f(t, 1)).join(', ')} s; gaps ${gaps.map((g) => f(g, 1)).join(', ')} s`, 'gaps 7..10 s; first <= 10 s',
+    starts.length >= 2 && starts[0] <= 10 && gaps.every((g) => g >= 7 - 1e-6 && g <= 10 + 1e-6));
+  add('R6 a wave lifts the surf (0.06 -> 0.12 m): a jelly gel wading at the water line is wetter at its top (submerged share) and never pushed (it moves under 1 cm); a floating mini marshmallow (frac 0.1) is carried toward the shore and back',
+    `wader submerged ${f(subMin, 3)}..${f(subMax, 3)}, moved ${f(Math.abs(wader.center.x - wx0), 4)} m; the mini's z ${f(mzMin, 3)}..+${f(mzMax, 3)} m`, 'max >= 2 x min; < 0.01 m; shoreward >= 0.03 m',
+    subMax >= 2 * subMin && subMin > 0 && Math.abs(wader.center.x - wx0) < 0.01 && mzMax >= 0.03);
+  add('R6 a wave\'s breeze rings a shell chime now and then (every second wave): strikes of cause 2 (the weather: a sound, never a USE event), none of another cause while nobody touches them',
+    `${cause2} cause-2 strikes, ${otherCause} other`, '>= 1; 0 other', cause2 >= 1 && otherCause === 0);
+}
+if (run('wind')) {
+  // Lanternroof's Night Breeze (PLACES 4.8): gusts every 6 to 10 s for 2.5 s, strength 0.8; they push an airborne (or floating) body by its catch, never a held,
+  // grounded or sleeping one (PH-17)
+  const zi = zoneIdx(LANTERN, 'nightbreeze');
+  {
+    const w = buildPropWorld(LANTERN, 'wide', 1);
+    const starts: number[] = [], lens: number[] = []; let on = -1;
+    for (let i = 0; i < Math.round(62 / DT); i++) { w.endFrame(DT); const lv = w.gustLevel(zi); if (lv > 0.5 && on < 0) { on = w.time; starts.push(on); } else if (lv <= 0.5 && on >= 0) { lens.push(w.time - on); on = -1; } }
+    const gaps = starts.slice(1).map((t, i) => t - starts[i]);
+    add('PH-17 the Night Breeze\'s own clock (no driver): gusts every 6 to 10 s for 2.5 s (62 s from the arrival)', `${starts.length} gusts; gaps ${gaps.map((g) => f(g, 1)).join(', ')} s; lengths ${lens.map((g) => f(g, 2)).join(', ')} s`,
+      'gaps 6..10 s; 2.5 s +- 0.05', starts.length >= 5 && gaps.every((g) => g >= 6 - 0.02 && g <= 10 + 0.02) && lens.every((l) => Math.abs(l - 2.5) <= 0.05));
+  }
+  // a toss straight up inside the breeze, during a gust (setGust: the shell's driver) and without one; the drift along the wind
+  // (a body set in the air at 1.2 m and given 2 m/s up: a nudge on a resting soft body mostly goes into its squash, PG_PHYS R4.4)
+  const toss = (fam: string, gust: boolean): { dx: number; dz: number } => {
+    const w = buildPropWorld(LANTERN, 'wide', 1);
+    w.setGust(zi, gust);
+    for (let i = 0; i < 30; i++) w.endFrame(DT);
+    const b = placed(w, fam, 2.0, -1.6, 1.2), x0 = b.center.x, z0 = b.center.z; b.nudge(v3(0, 2, 0));
+    for (let i = 0; i < 90; i++) frameW(w, [b], null);
+    return { dx: b.center.x - x0, dz: b.center.z - z0 };
+  };
+  const mG = toss('marshmallow', true), m0 = toss('marshmallow', false), pG = toss('putty', true), p0 = toss('putty', false);
+  const mDrift = -(mG.dx - m0.dx), pDrift = -(pG.dx - p0.dx);   // (the breeze blows from its band toward the roof's middle: -x)
+  add('PH-17 a gust pushes an airborne body by its catch: a marshmallow tossed up in the Night Breeze drifts along the wind (toward the roof\'s middle), a putty (catch 0.1) far less (drift with the gust minus without, m)',
+    `marshmallow ${f(mDrift, 3)} m, putty ${f(pDrift, 3)} m`, 'marshmallow >= 0.15; putty <= 0.3 x it', mDrift >= 0.15 && pDrift <= 0.3 * mDrift && pDrift > -0.01);
+  // grounded, held (a carry across the band) and sleeping bodies: nothing
+  {
+    const w = buildPropWorld(LANTERN, 'wide', 1), g = placed(w, 'marshmallow', 2.4, -1.4), c = placed(w, 'marshmallow', 1.6, 0.0), s = placed(w, 'marshmallow', 2.6, 0.2);
+    s.sleepEnabled = true;
+    for (let i = 0; i < 60; i++) frameW(w, [g, c, s], null);
+    s.sleep();
+    const gx = g.center.x, gz = g.center.z;
+    w.setGust(zi, true);
+    c.carryTo(2.8, 0, -0.4, 1.5);
+    for (let i = 0; i < 150; i++) frameW(w, [g, c, s], null);
+    const gm = Math.hypot(g.center.x - gx, g.center.z - gz), ce = Math.hypot(c.center.x - 2.8, c.center.z + 0.4);
+    add('PH-17 a gust never moves a grounded, a held (carried) or a sleeping body: a marshmallow on the roof tiles, one carried across the breeze (carryTo), one asleep, through 2.5 s of gust',
+      `grounded moved ${f(gm, 4)} m; the carry ended ${f(ce, 4)} m from its spot; the sleeper ${s.sleeping ? 'asleep' : 'WOKEN'}`, '< 0.005; < 0.01; asleep', gm < 0.005 && ce < 0.01 && s.sleeping);
+  }
+}
+if (run('updraft')) {
+  // Cloudloft's Updraft (PLACES 4.10, 2.2): an airborne body inside the column falls with gravity x (1 - 0.4 catch): a marshmallow at 0.6 g floats down slowly, a putty
+  // falls almost straight; off the floor the Cloud Ball too
+  const up = CLOUD.zones[zoneIdx(CLOUD, 'updraft')];
+  const fall = (fam: string, x: number, z: number): number => {
+    const w = buildPropWorld(CLOUD, 'wide', 1), b = placed(w, fam, x, z, 1.2);
+    for (let i = 0; i < 300; i++) { frameW(w, [b], null); if (i > 2 && b.metrics.airborne !== true) return (i + 1) * DT; }
+    return NaN;
+  };
+  const cell = (fam: string): [number, number] => [fall(fam, up.x + 0.6, up.z), fall(fam, -1.0, 0.6)];
+  const [mIn, mOut] = cell('marshmallow'), [pIn, pOut] = cell('putty');
+  const rm = mIn / mOut, rp = pIn / pOut, wantM = Math.sqrt(1 / (1 - PROPS.UPDRAFT_K * (FAMILY_REACT as Record<string, { catch: number }>).marshmallow.catch));
+  add('PH-17 the updraft: dropped from 1.2 m, a marshmallow (catch 1) takes sqrt(1 / 0.6) = 1.29 x as long to land inside the column as outside it; a putty (catch 0.1) about as long',
+    `marshmallow ${f(mIn, 3)} / ${f(mOut, 3)} s = x${f(rm, 3)}; putty ${f(pIn, 3)} / ${f(pOut, 3)} s = x${f(rp, 3)}`, `marshmallow within 0.08 of x${f(wantM, 2)}; putty <= x1.06`, Math.abs(rm - wantM) <= 0.08 && rp <= 1.06 && rp >= 0.97);
+  // the Puff Pad in the column: a marshmallow's first bounce there is airborne longer than on the pad outside it ("floats down slowly, after a bounce on the pad inside it")
+  // the Puff Pads: a body dropped from 0.5 m onto the pad in the column and onto one outside it, 5 s: its first bounce's time in the air and its highest centre after
+  // the first landing (a pop dome's kicks grow to the pad's apex cap: in the column that cap speed carries it 1 / (1 - 0.4 x 0.6) = 1.32 x as high)
+  const cw = buildPropWorld(CLOUD, 'wide', 1), padK = [0, 1, 2].filter((k) => cw.propThing[k] === CLOUD.things.findIndex((t) => t.mech === MECH.pad));
+  const inCol = (k: number): boolean => Math.hypot(cw.poses[k * 8] - up.x, cw.poses[k * 8 + 2] - up.z) < (up.r ?? 1) - 0.45;
+  const kIn = padK.find(inCol) ?? 0, kOut = padK.find((k) => !inCol(k)) ?? 1;
+  const bounce = (fam: string, k: number): { air: number; rise: number } => {
+    const w = buildPropWorld(CLOUD, 'wide', 1), b = placed(w, fam, cw.poses[k * 8], cw.poses[k * 8 + 2], 0.5), y0 = (b as unknown as { restCenterY: number }).restCenterY;
+    let land = 0, air = 0, n = 0, top = 0;
+    for (let i = 0; i < 300; i++) {
+      frameW(w, [b], null);
+      const a = b.metrics.airborne === true;
+      if (land > 0) top = Math.max(top, b.center.y - y0);
+      if (land === 0 && !a && i > 2) land = 1; else if (land === 1 && a) { land = 2; n = 0; } else if (land === 2) { if (a) n++; else { air = n * DT; land = 3; } }
+    }
+    return { air, rise: top };
+  };
+  const mIn2 = bounce('marshmallow', kIn), mOut2 = bounce('marshmallow', kOut), pIn2 = bounce('popdome', kIn), pOut2 = bounce('popdome', kOut);
+  add(`PH-17 the three Puff Pads are built (${padK.length} pad props); on the one in the updraft a pop dome bounces higher and a marshmallow's first bounce stays up longer than on one outside it (it rides up and floats down slowly)`,
+    `pop dome highest ${f(pIn2.rise, 3)} m in the column, ${f(pOut2.rise, 3)} m outside (x${f(pIn2.rise / Math.max(1e-6, pOut2.rise), 2)}); marshmallow's first bounce ${f(mIn2.air, 3)} / ${f(mOut2.air, 3)} s`,
+    '3 pads; pop dome >= 1.15 x; marshmallow in > out', padK.length === 3 && pIn2.rise >= 1.15 * pOut2.rise && mIn2.air > mOut2.air);
+  // the Cloud Ball poked up inside the column and outside it
+  {
+    const ballPlace = (zones: unknown[]): PlaceDef => ({ ...CABIN, things: [thing(MECH.ball, 0, 0, [0.26, 0, 0], { mass: 0.12, rollDamp: 0.8 })], walls: [], zones, patches: [], tall: { ...CABIN.tall, things: [{ x: 0, z: 0, yaw: 0 }], walls: [], zones, patches: [] } }) as unknown as PlaceDef;
+    const ballAir = (zones: unknown[]): number => {
+      const w = buildPropWorld(ballPlace(zones), 'wide', 1); w.poke(0, 0, 3, 0);
+      const ps = w.poses;
+      for (let i = 0; i < 240; i++) { w.beginFrame(); w.endFrame(DT); if (i > 2 && ps[1] <= 0.26 + 1e-4) return (i + 1) * DT; }
+      return NaN;
+    };
+    const col = [{ id: 'updraft', kind: 4, strength: 1, shape: 'disc', x: 0, z: 0, r: 1 }];
+    const bIn = ballAir(col), bOut = ballAir([]), want = 1 / (1 - PROPS.UPDRAFT_K * PROPS.BALL_CATCH);   // (up and back down: the time in the air is 2 v / g)
+    add('R6 the Cloud Ball "falls slowly too" in the updraft: poked up at 3 m/s, its time in the air inside a column vs without one', `${f(bIn, 3)} / ${f(bOut, 3)} s = x${f(bIn / bOut, 3)}`, `x${f(want, 2)} +- 0.06`, Math.abs(bIn / bOut - want) <= 0.06);
+  }
+}
+if (run('guard')) {
+  // R6 (4): a toss never leaves the play area, at Lanternroof (a parapet on four sides) and Cloudloft (open: the corral's rim and the guard), both layouts, with the
+  // place's area set on each body as the shell does (setBounds), the breeze gusting and the updraft on. Tosses: up and out at 4 m/s up + 6 m/s out from near each side,
+  // straight up 10 m/s beside each side with 1.5 m/s toward it (over a wall's top), and diagonal throws into the corners
+  // (the quick set: Lanternroof wide only, the 4 throws over a parapet's top and 2 corners, 5 s; --only=guard or --full: all four layouts, 12 throws, 3 families, 6 s)
+  const cases: [string, PlaceDef, 'wide' | 'tall'][] = QUICK ? [['Lanternroof wide', LANTERN, 'wide']]
+    : [['Lanternroof wide', LANTERN, 'wide'], ['Lanternroof tall', LANTERN, 'tall'], ['Cloudloft wide', CLOUD, 'wide'], ['Cloudloft tall', CLOUD, 'tall']];
+  const famsG = QUICK ? ['marshmallow'] : ['marshmallow', 'firmsilicone', 'jellygel'];
+  for (const [name, pl, lay] of cases) {
+    const bd = lay === 'tall' ? pl.tall.bounds : pl.bounds, walls = lay === 'tall' ? pl.tall.walls : pl.walls, hx = bd.hx ?? 3.4, hz = bd.hz ?? 2.4;
+    const inner = (s: number): number => { // the walls' inner face on side s (+x, -x, +z, -z), or +inf for an open side
+      let v = Infinity;
+      for (const wl of walls) { const whx = wl.hx ?? 0.15, whz = wl.hz ?? 0.15;
+        if (s === 0 && wl.x - whx >= bd.x + hx - 0.05) v = Math.min(v, wl.x - whx - bd.x); if (s === 1 && wl.x + whx <= bd.x - hx + 0.05) v = Math.min(v, bd.x - wl.x - whx);
+        if (s === 2 && wl.z - whz >= bd.z + hz - 0.05) v = Math.min(v, wl.z - whz - bd.z); if (s === 3 && wl.z + whz <= bd.z - hz + 0.05) v = Math.min(v, bd.z - wl.z - whz); }
+      return v;
+    };
+    const walledS = [0, 1, 2, 3].map((s) => inner(s) < Infinity);
+    const lims = [0, 1, 2, 3].map((s) => (walledS[s] ? inner(s) : (s < 2 ? hx : hz) + PG.boundsRim + 0.3));   // (an open side: the corral's rim + 0.3 m)
+    const throws: [number, number, number, number, number][] = [];   // x, z, vx, vy, vz
+    const ex = hx - 0.9, ez = hz - 0.9;
+    for (const [sx, sz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { if (!QUICK) throws.push([sx * ex, sz * ez, sx * 6, 4, sz * 6]); throws.push([sx * ex, sz * ez, sx * 1.5, 10, sz * 1.5]); }
+    for (const [sx, sz] of QUICK ? [[1, 1], [-1, -1]] : [[1, 1], [-1, 1], [1, -1], [-1, -1]]) throws.push([sx * ex * 0.8, sz * ez * 0.8, sx * 5, 5, sz * 5]);
+    let worst = -9, worstEnd = -9, worstP = -9, worstT = -9, n = 0, badEnd = 0;
+    for (const fam of famsG) {
+      const w = buildPropWorld(pl, lay, 1);
+      for (let k = 0; k < pl.zones.length; k++) if (pl.zones[k].kind === 3) w.setGust(k, true);
+      for (let i = 0; i < 30; i++) w.endFrame(DT);
+      // (each set in the air at 0.8 m and thrown from there: as a hand lets go of a lifted squishy)
+      const bs = throws.map(([x, z]) => { const b = placed(w, fam, bd.x + x, bd.z + z, 0.8); b.setBounds(1, bd.x, bd.z, hx, hz, bd.round ?? 0); return b; });
+      bs.forEach((b, i) => b.nudge(v3(throws[i][2], throws[i][3], throws[i][4])));
+      // the centre past the play area (a walled side: the parapet's inner face; an open side: the edge + the corral's rim + 0.3 m), and any particle past a parapet's
+      // OUTER face (through or over it), m (negative: inside)
+      const over = (b: SoftBody): number => { const dx = b.center.x - bd.x, dz = b.center.z - bd.z; return Math.max(dx - lims[0], -dx - lims[1], dz - lims[2], -dz - lims[3]); };
+      const through = (b: SoftBody): number => {
+        const P = b.positions; let m = -9;
+        for (let i = 0; i < P.length; i += 3) {
+          const dx = P[i] - bd.x, dz = P[i + 2] - bd.z;
+          if (walledS[0]) m = Math.max(m, dx - lims[0] - 0.3); if (walledS[1]) m = Math.max(m, -dx - lims[1] - 0.3);
+          if (walledS[2]) m = Math.max(m, dz - lims[2] - 0.3); if (walledS[3]) m = Math.max(m, -dz - lims[3] - 0.3);
+        }
+        return m;
+      };
+      // a body reaching above a parapet's top (PROPS.WALL_H, the physics wall's: the drawn parapet is lower) stays inside its inner face less its radius (it never
+      // lands on the parapet's top)
+      const overTop = (b: SoftBody): number => {
+        if (!(b.center.y + b.restRadius > PROPS.WALL_H)) return -9;
+        const dx = b.center.x - bd.x, dz = b.center.z - bd.z, R = b.restRadius; let m = -9;
+        if (walledS[0]) m = Math.max(m, dx - lims[0] + R); if (walledS[1]) m = Math.max(m, -dx - lims[1] + R); if (walledS[2]) m = Math.max(m, dz - lims[2] + R); if (walledS[3]) m = Math.max(m, -dz - lims[3] + R);
+        return m;
+      };
+      for (let i = 0; i < (QUICK ? 300 : 360); i++) { frameW(w, bs, null); for (const b of bs) { worst = Math.max(worst, over(b)); worstT = Math.max(worstT, overTop(b)); if (i % 3 === 0) worstP = Math.max(worstP, through(b)); } }
+      for (const b of bs) { const e = over(b); worstEnd = Math.max(worstEnd, e); n++; const dx = Math.abs(b.center.x - bd.x) - hx, dz = Math.abs(b.center.z - bd.z) - hz; if (dx > 0.62 || dz > 0.62 || e > 0) badEnd++; }
+    }
+    add(`R6 the bounds guard, ${name}: ${n} tosses (${famsG.join(', ')}; ${QUICK ? 'up 10 m/s beside each side, 2 corners' : 'out 6 m/s, up 10 m/s beside each side, the corners'}; gusts on, the place's area set as the shell does): no centre passes the play area (a parapet's inner face; an open side's edge + the corral's rim + 0.3 m), no particle goes through or over a parapet (its outer face), a body above a parapet's top stays inside its inner face less its radius (+0.1 m: it never lands on it), and after ${QUICK ? 5 : 6} s every one is back inside`,
+      `centre worst ${f(worst, 3)} m past (negative: inside); ${walledS.some((x) => x) ? `particles worst ${f(worstP, 3)} m past a parapet's outer face; above the parapet's top worst ${worstT > -9 ? f(worstT, 3) : 'none'} m` : 'no parapet'}; at the end worst ${f(worstEnd, 3)} m, ${badEnd} outside`,
+      '<= 0 m; <= 0 m; <= 0.1 m; 0 outside', worst <= 0 && worstP <= 0 && worstT <= 0.1 && badEnd === 0);
+  }
 }
 
 /* ───────────── PH-11: allocation ───────────── */
@@ -1331,6 +1635,37 @@ if (run('alloc') && LONG('alloc')) {
   for (let wd = 0; wd < 4; wd++) { events = 0; const u0 = newUsed(); for (let i = 0; i < 120; i++) frame(); const d = newUsed() - u0; win.push(`${d - base} B / ${events} ev`); if (d >= 0 && events === 0) best = Math.min(best, d - base); }
   add('PH-11 allocation, round 4 paths: the cabin\'s swing on AUTO with a rider holding on (and the rocker on AUTO), a marshmallow afloat in a pool with a current (the world\'s zone step and its nudges): new-space growth per 120 frames with no SoftEvent (best of 4 windows, after a 100 s warm-up)',
     `${win.join(' ; ')} (AUTO share ${f(wc.autoShare(kS), 2)}, rider on ${r.metrics.onProp === kS}, floater submerged ${f(fl.metrics.submerged ?? 0, 3)})`, '0 B', best <= 0);
+}
+
+/* ───────────── PH-11 (round 6 paths): the surface, the weather, the waves, the guard ───────────── */
+if (run('alloc') && LONG('alloc')) {
+  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+  // Frostbell: a firm silicone scooting to and fro across the Ice Pond's edge (its surface eased as it crosses), a marshmallow afloat in the Steam Pool under the
+  // Wind Gap's gusts (its own clock); Ripple: a mini marshmallow afloat in the surf (the waves); Cloudloft: the Cloud Ball poked up in the updraft now and then
+  // (outside the windows); every world's guard and weather clock running
+  const wf = buildPropWorld(FROSTBELL, 'wide', 1), wr = buildPropWorld(RIPPLE, 'wide', 1);
+  const col = [{ id: 'updraft', kind: 4, strength: 1, shape: 'disc', x: 0, z: 0, r: 1 }];
+  const wb = buildPropWorld({ ...CLOUD, things: [thing(MECH.ball, 0, 0, [0.26, 0, 0], { mass: 0.12, rollDamp: 0.8, updraftCatch: 1 })], walls: [], zones: col, patches: [],
+    tall: { ...CLOUD.tall, things: [{ x: 0, z: 0, yaw: 0 }], walls: [], zones: col, patches: [] } } as unknown as PlaceDef, 'wide', 1);
+  const pool = FROSTBELL.zones[zoneIdx(FROSTBELL, 'steampool')], ice = FROSTBELL.patches.find((pp) => pp.ice)!, surf = RIPPLE.zones[zoneIdx(RIPPLE, 'surfedge')];
+  const sk = placed(wf, 'firmsilicone', ice.x - ice.r! + 0.1, ice.z), fl = placed(wf, 'marshmallow', pool.x, pool.z - 0.35), mi = placed(wr, 'marshmallow', 0.3, surf.z, 0, NEUTRAL, 0.1);
+  const bodies = [sk, fl, mi];
+  const evs: SoftEvent[] = [];
+  let events = 0, flip = 0;
+  const frame = (): void => {
+    wf.beginFrame(); wr.beginFrame(); wb.beginFrame();
+    for (const b of bodies) { b.step(DT); evs.length = 0; b.drainEvents(evs); events += evs.length; }
+    wf.endFrame(DT); wr.endFrame(DT); wb.endFrame(DT);
+  };
+  const reScoot = (): void => { flip ^= 1; sk.scootTo(flip ? ice.x - ice.r! + 0.9 : ice.x - ice.r! - 0.4, ice.z, 0.3); wb.poke(0, 0, 2.5, 0); };
+  for (let i = 0; i < 6000; i++) { if (i % 240 === 0) reScoot(); frame(); }
+  const empty: number[] = [];
+  for (let i = 0; i < 6; i++) { const u0 = newUsed(); empty.push(newUsed() - u0); }
+  const base = empty[empty.length - 1], win: string[] = [];
+  let best = Infinity;
+  for (let wd = 0; wd < 4; wd++) { reScoot(); for (let i = 0; i < 10; i++) frame(); events = 0; const u0 = newUsed(); for (let i = 0; i < 120; i++) frame(); const d = newUsed() - u0; win.push(`${d - base} B / ${events} ev`); if (d >= 0 && events === 0) best = Math.min(best, d - base); }
+  add('PH-11 allocation, round 6 paths: a firm silicone scooting across the Ice Pond\'s edge, a marshmallow afloat in the Steam Pool in the Wind Gap\'s gusts, a mini afloat in Ripple\'s waves, the Cloud Ball in an updraft (every guard and weather clock running): new-space growth per 120 frames with no SoftEvent (best of 4 windows, after a 100 s warm-up)',
+    `${win.join(' ; ')} (floater submerged ${f(fl.metrics.submerged ?? 0, 3)}, mini ${f(mi.metrics.submerged ?? 0, 3)})`, '0 B', best <= 0);
 }
 
 /* ───────────── PH-12: cost with 4 props in reach ───────────── */

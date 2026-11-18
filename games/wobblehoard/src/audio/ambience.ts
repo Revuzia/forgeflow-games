@@ -37,15 +37,13 @@ const RECIPES: Record<string, () => Promise<{ recipe: AmbRecipe }>> = {
   ripple: () => import('./places/ripple.ts'),
   frostbell: () => import('./places/frostbell.ts'),
   rainleaf: () => import('./places/rainleaf.ts'),
-  fizzwell: () => import('./places/fizzwell.ts'),
-  cogwhistle: () => import('./places/cogwhistle.ts'),
   lanternroof: () => import('./places/lanternroof.ts'),
-  echohollow: () => import('./places/echohollow.ts'),
   cloudloft: () => import('./places/cloudloft.ts'),
 };
-/** PlaceDef.ambience ids (src/data/place_*.ts) -> place ids, so the shell may pass either. Mirrored; probe_chatter checks it. */
+/** PlaceDef.ambience ids (src/data/place_*.ts) -> place ids, so the shell may pass either. Mirrored; probe_chatter checks it. D-96: the seven
+ *  places only (Fizzwell Tub, Cogwhistle Bench and Echo Hollow are dropped: no recipe, no alias). */
 export const AMB_ALIAS: Readonly<Record<string, string>> = {
-  cabin: 'hearthlog', shore: 'ripple', ridge: 'frostbell', garden: 'rainleaf', bath: 'fizzwell', bench: 'cogwhistle', roof: 'lanternroof', hollow: 'echohollow', cloud: 'cloudloft',
+  cabin: 'hearthlog', shore: 'ripple', ridge: 'frostbell', garden: 'rainleaf', roof: 'lanternroof', cloud: 'cloudloft',
 };
 /** The recipe key for a place id or an ambience id ('' for none). */
 export const ambKey = (place: string): string => (Object.prototype.hasOwnProperty.call(RECIPES, place) ? place : AMB_ALIAS[place] ?? '');

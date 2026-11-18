@@ -598,5 +598,56 @@ function worstJournal(): Journal {
   A.off(); B.off(); A.ach.dispose(); B.ach.dispose(); A.hoard.dispose(); B.hoard.dispose();
 }
 
+/* ═══ CO-13 (round 6, D-96): a save that names a dropped place loads cleanly, without those entries ═══ */
+{
+  // The owner dropped Fizzwell Tub (5), Cogwhistle Bench (6) and Echo Hollow (8). No shipped build could reach them, but a dev visit or a hand-edited
+  // save can hold their stamps, keepsakes, visits, a resting wish or a current place; such a save must load without error and without them, and
+  // nothing derived (the stamp count, the Pocket Map, the Songbook, the chapters, a wish) may count them.
+  const T1 = qIdx('T1'), W3 = qIdx('W3'), E10 = qIdx('E10'), H1 = qIdx('H1'), C1 = qIdx('C1'), R1 = qIdx('R1');
+  const st0 = createJournal(d, 'dev-r6').st; for (const q of [H1, C1, R1, T1, W3, E10]) st0.done[q >>> 5] |= 1 << (q & 31);
+  const words = Array.from(st0.done);
+  const b64 = Buffer.from(new Uint8Array(new Uint32Array(words).buffer)).toString('base64');
+  const blob = { v: 1, dev: 'dev-r6', bf: 1, st: 6, qd: b64, qp: [[T1 + 1, 0, 1], [qIdx('E2'), 0, 1, [3, 4]]], fx: [[0, 3]], fr: [], ids: [], real: [], wm: [], wday: 20407,
+    ks: (1 << 0) | (1 << 1) | (1 << 5) | (1 << 6) | (1 << 8), pl: 1 | 2 | 4 | (1 << 5) | (1 << 6) | (1 << 8), pv: [3, 2, 1, 0, 0, 4, 5, 0, 6, 0],
+    wi: [[sp('plumpet'), WISH_KIND.PLACE, 5, 20407], [sp('tadpolo'), WISH_KIND.RIDE, 33, 20407], [sp('dollop'), WISH_KIND.PLACE, 2, 20407]],
+    gift: [[5, 1, sp('plumpet'), 20407]], gday: -1, fw: [2, 0], sg: 1 | 2 | (1 << 5) | (1 << 8), wg: 1, cur: { p: 8, party: [] }, day: 20407 };
+  let threw = '', j: Journal | null = null;
+  try { j = sanitizeJournal(JSON.parse(JSON.stringify(blob)), d); } catch (e) { threw = (e as Error).message; }
+  const p: string[] = [];
+  if (threw || !j) p.push(`load: ${threw || 'null'}`);
+  else {
+    const st = j.st, sc = st.sc, dropMask = (1 << 5) | (1 << 6) | (1 << 8);
+    for (const q of [T1, W3, E10]) if (isDone(st, q)) p.push(`${QUESTS[q].id} still done`);
+    for (const q of [H1, C1, R1]) if (!isDone(st, q)) p.push(`${QUESTS[q].id} lost`);
+    if (sc[SC.ST] !== 3) p.push(`stamps ${sc[SC.ST]} (3 kept quests done)`);
+    if (sc[SC.KS] !== 3) p.push(`keepsakes ${sc[SC.KS].toString(2)}`);
+    if (sc[SC.PL] & dropMask || (sc[SC.PL] & 7) !== 7) p.push(`places ${sc[SC.PL].toString(2)}`);
+    if (sc[SC.SG] & dropMask || (sc[SC.SG] & 3) !== 3) p.push(`song places ${sc[SC.SG].toString(2)}`);
+    if (st.pv[5] || st.pv[6] || st.pv[8] || st.pv[0] !== 3 || st.pv[1] !== 2) p.push(`visits ${Array.from(st.pv.subarray(0, 10))}`);
+    if (sc[SC.CURP] !== 0) p.push(`current place ${sc[SC.CURP]}`);
+    if (sc[SC.WIN] !== 1 || st.wiTarget[0] !== 2) p.push(`wishes ${sc[SC.WIN]} (target ${st.wiTarget[0]})`);
+    if (st.giftState[5]) p.push('a dropped chapter\'s gift row');
+    if ((st.fx[0] & 3) !== 3) p.push('a species fact lost');
+    const text = serializeJournal(j, d), again = sanitizeJournal(JSON.parse(text), d);
+    if (!again || serializeJournal(again, d) !== text) p.push('the cleaned save does not round-trip');
+    const o = JSON.parse(text) as { ks: number; pl: number; sg: number; pv: number[]; qp: number[][] };
+    if ((o.ks | o.pl | o.sg) & dropMask || (o.pv[5] ?? 0) || (o.pv[8] ?? 0) || o.qp.some((r) => QUESTS[r[0]]?.dropped)) p.push(`the written save still names a dropped place: ${text.slice(0, 160)}`);
+    // the view and the stores: the Journal, the Places sheet's open places, the tracker
+    const m = memoryStorage(); m.map.set(JOURNAL_KEY, JSON.stringify(blob));
+    const c = mkColl(m, 61); let rt: JournalRuntime | null = null, threw2 = '';
+    try { rt = mkJ(c, m); } catch (e) { threw2 = (e as Error).message; }
+    if (!rt) p.push(`attach: ${threw2 || 'null'}`);
+    else { const v = rt.view();
+      if (v.places & dropMask) p.push(`view places ${v.places.toString(2)}`); if (v.keepsakes & dropMask) p.push('view keepsakes');
+      if (v.quests.some((q) => QUESTS[q.idx]?.dropped && (q.shown || q.done))) p.push('a tombstone shown or done in the view');
+      if (v.wishes.some((w) => w.kind === WISH_KIND.PLACE && [5, 6, 8].includes(w.target))) p.push('a wish for a dropped place in the view');
+      for (const pl of [0, 1, 2, 5, 6, 8]) { const tq = v.tracker(pl, false, true); if (tq >= 0 && QUESTS[tq].dropped) p.push(`tracker at ${pl}: ${QUESTS[tq].id}`); }
+      rt.store.flush?.(); }
+    c.dispose();
+  }
+  row('CO-13', '(round 6, D-96) a save holding a dropped place\'s stamps, quest progress, keepsakes, places, visits, song places, a wish for it or a ride on its thing, its gift row and it as the current place loads without error; those entries are gone (3 stamps stay of 6, Home as the place, one kept wish), nothing derived counts them, the cleaned save round-trips, the view and the tracker name none',
+    p.length === 0, p.join(' | '));
+}
+
 console.log(`\n${bad === 0 ? 'all checks passed' : `${bad} FAILED`}`);
 process.exit(bad ? 1 : 0);

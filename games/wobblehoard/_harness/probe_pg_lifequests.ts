@@ -18,7 +18,7 @@ import { SPECIES } from '../src/data/species.ts';
 import type { PlaceDef } from '../src/data/places.ts';
 import { PLACE as HOME } from '../src/data/place_home.ts';
 import { PLACE as CABIN } from '../src/data/place_hearthlog.ts';
-import { THING_IDS, ZONE, MECH, PLACE_IDS } from '../src/data/places.ts';
+import { THING_IDS, ZONE, MECH, PLACE_IDS, placeDropped } from '../src/data/places.ts';
 import { PLACE_CAPS, THING_PLACE } from '../src/collection/journal.ts';
 import { INTENT, LIFE_FLAG, LIFE_EV, SCRIPT, TOUCH, REACT_KIND, SOCIAL_KIND, WISH_KIND, THING_KIND, USE_VERB, SPECIES_LIFE as SPECIES_LIFE_T } from '../src/data/life.ts';
 import { WISH_STATE, EV, BY, QUESTS, FACT, UI_KIND, EV_FLAG, CHAPTERS } from '../src/data/quests.ts';
@@ -747,14 +747,16 @@ for (const tier of [1, 0]) {
  * outside the caps would mean the shown set hides a quest LIFE can do there (or the tracker skips it). The coverage line (info) lists the
  * chapter's clauses LIFE produced on this host; what it did not produce is not evidence of a problem (no contacts, no real water or riding). */
 {
-  const PLACE_MODS: PlaceDef[] = [];
-  for (const id of PLACE_IDS) PLACE_MODS.push(((await import(`../src/data/place_${id}.ts`)) as { PLACE: PlaceDef }).PLACE);
+  // (round 6, D-96: by place idx, the dropped three's slots null: they have no PlaceDef and are skipped)
+  const PLACE_MODS: (PlaceDef | null)[] = [];
+  for (const id of PLACE_IDS) PLACE_MODS.push(placeDropped(id) ? null : ((await import(`../src/data/place_${id}.ts`)) as { PLACE: PlaceDef }).PLACE);
   const bitOf = (k: number): number => 1 << k;
   const famFirst = MATERIAL_FAMILY_IDS.map((f) => CATALOG.find((c) => c.family === f)!.id);
   const outside: string[] = [], cover: string[] = [];
   let totalEv = 0;
   for (let p = 2; p < PLACE_MODS.length; p++) {
     const def = PLACE_MODS[p], caps = PLACE_CAPS[p];
+    if (!def) continue;
     const lovers = Object.entries(SPECIES_LIFE_T as Record<string, { place: string }>).filter(([, l]) => l.place === def.id).map(([id]) => id);
     const party: string[] = [];
     for (const id of [...lovers, ...famFirst]) if (party.length < 5 && !party.includes(id) && !party.some((q) => CATALOG.find((c) => c.id === q)!.family === CATALOG.find((c) => c.id === id)!.family && !lovers.includes(id))) party.push(id);
@@ -798,7 +800,7 @@ for (const tier of [1, 0]) {
     }
     cover.push(`${def.id} ${got.length}/${want.length}${want.filter((x) => !got.includes(x)).length ? ' (not on this host: ' + want.filter((x) => !got.includes(x)).join(' ') + ')' : ''}`);
   }
-  check('QC', `(QU-14's LIFE half) at the 8 S2 / S3 places the real lifeStep (2 seeds x 4 min each, five out, set down zone by zone) emits only REACT / SOCIAL / USE kinds inside journal.ts PLACE_CAPS, and names only that place's things (THING_PLACE)`,
+  check('QC', `(QU-14's LIFE half) at the 5 S2 / S3 places (round 6, D-96: was 8) the real lifeStep (2 seeds x 4 min each, five out, set down zone by zone) emits only REACT / SOCIAL / USE kinds inside journal.ts PLACE_CAPS, and names only that place's things (THING_PLACE)`,
     outside.length === 0 && totalEv > 0, outside.length ? [...new Set(outside)].join(', ') : `${totalEv} LIFE events`);
   console.log(`info QC the chapters' REACT / SOCIAL / USE clauses LIFE produced on this host: ${cover.join('; ')}`);
 }

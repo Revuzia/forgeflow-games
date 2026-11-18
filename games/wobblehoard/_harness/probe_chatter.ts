@@ -18,10 +18,7 @@ import { PLACE as P_HEARTH } from '../src/data/place_hearthlog.ts';
 import { PLACE as P_RIPPLE } from '../src/data/place_ripple.ts';
 import { PLACE as P_FROST } from '../src/data/place_frostbell.ts';
 import { PLACE as P_RAIN } from '../src/data/place_rainleaf.ts';
-import { PLACE as P_FIZZ } from '../src/data/place_fizzwell.ts';
-import { PLACE as P_COG } from '../src/data/place_cogwhistle.ts';
 import { PLACE as P_ROOF } from '../src/data/place_lanternroof.ts';
-import { PLACE as P_HOLLOW } from '../src/data/place_echohollow.ts';
 import { PLACE as P_CLOUD } from '../src/data/place_cloudloft.ts';
 
 const rows: { id: string; name: string; ok: boolean; v: string }[] = [];
@@ -173,30 +170,34 @@ row('IDS', "MusicStyle 'home' is today's FIELD_NEXT, no mallet filter (AU-07)", 
 
 /* ── round 2 (S2, S3): the place things, the beds and the styles every place names ── */
 {
-  const PLACES = [P_HOME, P_HEARTH, P_RIPPLE, P_FROST, P_RAIN, P_FIZZ, P_COG, P_ROOF, P_HOLLOW, P_CLOUD];
+  const PLACES = [P_HOME, P_HEARTH, P_RIPPLE, P_FROST, P_RAIN, P_ROOF, P_CLOUD];   // (round 6, D-96: the seven; Fizzwell Tub, Cogwhistle Bench and Echo Hollow are dropped)
   const elsewhere = [PROP.ball, PROP.creak, PROP.crackle, PROP.kettle];
   const kinds = Object.values(PROP).filter((k) => !elsewhere.includes(k as never));
   row('IDS', 'every PROP_SOUND kind has a voice: ball, creak, crackle and kettle as before, the other 8 in things.ts STRIKE (and nothing else)', kinds.every((k) => typeof STRIKE[k] === 'function') && Object.keys(STRIKE).length === kinds.length, Object.keys(STRIKE).join(','));
   const used = new Set<number>(); for (const pl of PLACES) for (const th of pl.things) if (th.sound) used.add(th.sound);
   row('IDS', 'every thing sound the place data names has a voice', [...used].every((k) => elsewhere.includes(k as never) || typeof STRIKE[k] === 'function'), [...used].sort((x, y) => x - y).join(','));
   const amb = PLACES.filter((pl) => pl.ambience !== 'none');
-  row('IDS', "every place's ambience id and place id resolve to its recipe (AMB_ALIAS); Home has none", amb.every((pl) => ambKey(pl.ambience) === pl.id && ambKey(pl.id) === pl.id) && ambKey('home') === '' && ambKey('none') === '' && Object.keys(AMB_ALIAS).length === 9, amb.map((pl) => `${pl.ambience}->${ambKey(pl.ambience)}`).join(' '));
+  row('IDS', "every place's ambience id and place id resolve to its recipe (AMB_ALIAS); Home has none", amb.every((pl) => ambKey(pl.ambience) === pl.id && ambKey(pl.id) === pl.id) && ambKey('home') === '' && ambKey('none') === '' && Object.keys(AMB_ALIAS).length === 6,   // (round 6, D-96: six aliases, was nine)
+    amb.map((pl) => `${pl.ambience}->${ambKey(pl.ambience)}`).join(' '));
   row('IDS', "every place's music style exists in MUSIC_STYLES", PLACES.every((pl) => Object.prototype.hasOwnProperty.call(MUSIC_STYLES, pl.music)), PLACES.map((pl) => pl.music).join(','));
   // the tuned things' notes are D major pentatonic already (snapPenta leaves them), and the snap moves any note at most a semitone
   const notes: number[] = []; for (const pl of PLACES) for (const th of pl.things) if ((th as { notes?: number[] }).notes) notes.push(...((th as { notes?: number[] }).notes as number[]));
   let snapOk = true; for (let m = 48; m <= 100; m++) { const q = snapPenta(m); if (!PENTA.includes(((q % 12) + 12) % 12) || Math.abs(q - m) > 1) snapOk = false; }
-  row('PITCH', 'chime / bell / crystal notes in the place data are D pentatonic (unchanged by the snap); any note snaps within a semitone', notes.length >= 15 && notes.every((m) => snapPenta(m) === m) && snapOk, notes.join(','));
+  // (re-specified in round 6 for D-96: at least 9 notes, was 15: the Singing Crystals and the Little Bell went with Echo Hollow and Cogwhistle Bench;
+  // the kept tuned things are the Shell Chimes' 5 and the Icicle Bells' 4)
+  row('PITCH', 'chime / bell / crystal notes in the place data are D pentatonic (unchanged by the snap); any note snaps within a semitone', notes.length >= 9 && notes.every((m) => snapPenta(m) === m) && snapOk, notes.join(','));
   // every style keeps FIELD_NEXT's drifts (weights only move), sums to 1, and a non-home style draws the same number of composer numbers
   let drift = true;
   for (const [k, st] of Object.entries(STYLES)) for (let f = 0; f < 4; f++) {
     const a = st.next[f].map((q) => q[0]).sort().join(), b = FIELD_NEXT[f].map((q) => q[0]).sort().join();
     if (a !== b || Math.abs(st.next[f].reduce((s2, q) => s2 + q[1], 0) - 1) > 1e-9) { drift = false; console.log('style', k, f); }
   }
-  row('STYLE', `all ${Object.keys(STYLES).length} styles keep FIELD_NEXT's drifts (never back to the field just left), weights sum to 1`, drift && Object.keys(STYLES).length === 10, Object.keys(STYLES).join(','));
+  row('STYLE', `all ${Object.keys(STYLES).length} styles keep FIELD_NEXT's drifts (never back to the field just left), weights sum to 1`, drift && Object.keys(STYLES).length === 7,   // (round 6, D-96: seven styles, was ten)
+    Object.keys(STYLES).join(','));
   const share = (style: string): number[] => { const c = new Composer(5); c.style = STYLES[style]; const n = [0, 0, 0, 0]; for (let b2 = 0; b2 < 4000; b2++) n[c.nextBar().field]++; return n.map((v) => v / 4000); };
   const h = share('home');
   // PLACES' "Music style" lines: which fields each style favours (more bars than home's share of them)
-  const want: Record<string, number[]> = { shore: [1, 3], ridge: [3, 0], garden: [0, 1], bath: [3], bench: [1], roof: [2], hollow: [3], cloud: [1, 3] };
+  const want: Record<string, number[]> = { shore: [1, 3], ridge: [3, 0], garden: [0, 1], roof: [2], cloud: [1, 3] };   // (round 6, D-96: bath, bench, hollow went with their places)
   const res: string[] = []; let fav = true;
   for (const [k, fs] of Object.entries(want)) { const sh = share(k); const ok = fs.reduce((s2, f) => s2 + sh[f] - h[f], 0) > 0.08; if (!ok) fav = false; res.push(`${k} ${sh.map((v) => v.toFixed(2)).join('/')}`); }
   row('STYLE', 'each place style favours the fields PLACES names (their share over home\'s by > 0.08; 4000 bars)', fav, `home ${h.map((v) => v.toFixed(2)).join('/')}; ${res.join('; ')}`);

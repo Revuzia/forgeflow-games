@@ -13,8 +13,9 @@ export function fill(template: string, vars: Readonly<Record<string, string>>): 
   return template.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
 }
 
-/** The 110 quests' [title, hint] by quest idx (QUESTS 6.0 to 6.10 as written; one fix: R9's hint names its count, "two times", as Q7 and
- *  DT-09 require). Home's ten are also in quests.ts HOME_TEXT (the tracker needs them before this chunk). */
+/** The 110 quest idx' [title, hint] (QUESTS 6.0 to 6.10 as written; one fix: R9's hint names its count, "two times", as Q7 and DT-09 require).
+ *  Home's ten are also in quests.ts HOME_TEXT (the tracker needs them before this chunk). D-96: the 30 quests of the dropped places (idx 50..69,
+ *  80..89) are empty tombstones: no line names a dropped place or its things. */
 export const QUEST_TEXT: readonly (readonly [string, string])[] = [
   ['A gentle squeeze', 'Press and hold your squishy for a moment.'], // H1
   ['Watch it play', 'Let go and wait a little.'], // H2
@@ -66,26 +67,26 @@ export const QUEST_TEXT: readonly (readonly [string, string])[] = [
   ['When the rain stops', 'Take a photo in the garden. Then three sing.'], // G8
   ['Soak it up', 'A foam squishy soaks up the rain.'], // G9
   ['Who loves the rain?', 'Find a squishy that loves it here.'], // G10
-  ['Bubbles up', 'Go to Fizzwell Tub.'], // T1
-  ['One floats, one sits', 'See one squishy float and one sit in the bath.'], // T2
-  ['Round the swirl', 'Ride the Swirl Ride twice.'], // T3
-  ['Fizz in the bubbles', 'Two squishies fizz in the Bubble Patch.'], // T4
-  ['Bath-time hellos', 'Three different pairs say hello in the bath.'], // T5
-  ['Bubbly bits', 'Cut a squishy into three in the bath.'], // T6
-  ['Run the tap', 'Tap the tap. Watch a floater drift round.'], // T7
-  ['Bubble song', 'Three squishies sing in the bath.'], // T8
-  ['Whee, soap slide', 'Set a squishy at the top of the Soap Slide two times.'], // T9
-  ['Who loves the bath?', 'Find a squishy that loves it here.'], // T10
-  ['Tick, tock', 'Go to Cogwhistle Bench.'], // W1
-  ['Wind the cog', 'Tap the key. Then ride the cog round.'], // W2
-  ['Boing on the plate', 'Bounce on the Spring Plate three times.'], // W3
-  ['The marble and the magnet', 'Tap the magnet. Watch the marble roll to it.'], // W4
-  ['Copy me', 'Watch a squishy copy a friend, twice.'], // W5
-  ['Bits on the cog', 'Cut a squishy into three on the cog.'], // W6
-  ['Sing to the clock', 'Tap the Tick Clock. Two squishies sing back.'], // W7
-  ['The big machine', 'A squishy rides the cog. Then a bounce and a ding.'], // W8
-  ['Ding', 'Ring the Little Bell three times.'], // W9
-  ['Who loves the bench?', 'Find a squishy that loves it here.'], // W10
+  ['', ''], // T1 (dropped, D-96)
+  ['', ''], // T2 (dropped, D-96)
+  ['', ''], // T3 (dropped, D-96)
+  ['', ''], // T4 (dropped, D-96)
+  ['', ''], // T5 (dropped, D-96)
+  ['', ''], // T6 (dropped, D-96)
+  ['', ''], // T7 (dropped, D-96)
+  ['', ''], // T8 (dropped, D-96)
+  ['', ''], // T9 (dropped, D-96)
+  ['', ''], // T10 (dropped, D-96)
+  ['', ''], // W1 (dropped, D-96)
+  ['', ''], // W2 (dropped, D-96)
+  ['', ''], // W3 (dropped, D-96)
+  ['', ''], // W4 (dropped, D-96)
+  ['', ''], // W5 (dropped, D-96)
+  ['', ''], // W6 (dropped, D-96)
+  ['', ''], // W7 (dropped, D-96)
+  ['', ''], // W8 (dropped, D-96)
+  ['', ''], // W9 (dropped, D-96)
+  ['', ''], // W10 (dropped, D-96)
   ['Up on the roof', 'Go to Lanternroof.'], // L1
   ['Moon watchers', 'Two squishies gaze at the moon.'], // L2
   ['Light the lanterns', 'Light three different lanterns.'], // L3
@@ -96,16 +97,16 @@ export const QUEST_TEXT: readonly (readonly [string, string])[] = [
   ['Lantern song', 'Three squishies sing on the roof.'], // L8
   ['Hammock push', 'A friend pushes the hammock.'], // L9
   ['Who loves the night?', 'Find a squishy that loves it here.'], // L10
-  ['Hello, hello, hello', 'Go to Echo Hollow.'], // E1
-  ['Glow bath', 'Two squishies glow in the Glow Pool.'], // E2
-  ['Ring the crystals', 'Ring three different crystals.'], // E3 (QUESTS 6 wrote the noun "Crystal scale"; Q7: a title says what you do; R2)
-  ['Wake the echo', 'Tap the Echo Stone.'], // E4
-  ['Echo talk', 'A squishy answers its own echo.'], // E5
-  ['Glowing bits', 'Cut a squishy into three in the glow.'], // E6
-  ['Peekaboo by the rock', 'Watch two play peekaboo by the Hum Rock.'], // E7
-  ['Cave song', 'Three squishies sing in the cave.'], // E8
-  ['Stone slide', 'Set a squishy at the top of the Stone Slide two times.'], // E9
-  ['Who loves the cave?', 'Find a squishy that loves it here.'], // E10
+  ['', ''], // E1 (dropped, D-96)
+  ['', ''], // E2 (dropped, D-96)
+  ['', ''], // E3 (dropped, D-96)
+  ['', ''], // E4 (dropped, D-96)
+  ['', ''], // E5 (dropped, D-96)
+  ['', ''], // E6 (dropped, D-96)
+  ['', ''], // E7 (dropped, D-96)
+  ['', ''], // E8 (dropped, D-96)
+  ['', ''], // E9 (dropped, D-96)
+  ['', ''], // E10 (dropped, D-96)
   ['Above the clouds', 'Go to Cloudloft.'], // U1
   ['Boing on the puffs', 'Bounce on the Puff Pads three times.'], // U2
   ['Float down slowly', 'Two squishies float down in the updraft.'], // U3
@@ -127,12 +128,12 @@ export const QUEST_TEXT: readonly (readonly [string, string])[] = [
   ['A nap in three places', 'Nap piles in three different places.'], // X9
   ['Wishes come true', 'Grant five wishes.'], // X10
 ];
-/** The 11 chapter names by chapter idx (QUESTS 6). */
-export const CHAPTER_TEXT: readonly string[] = ['First Days', 'By the Fire', 'Sun and Splash', 'Frost and Glide', 'Rainy Day Play', 'Bath Time', 'Tick and Spin',
-  'Moon and Lanterns', 'Hello, Hello', 'Above the Clouds', 'Friends Everywhere'];
-/** Every thing's name (PLACES 4; the thing id `hearth` is the Fireplace) and its "Tap it yourself" line when a tap moves or switches it
- *  (QUESTS 15, D-93; '' when a tap does nothing). */
-export const THING_TEXT: Readonly<Record<ThingId, readonly [string, string]>> = {
+/** The 11 chapter names by chapter idx (QUESTS 6; D-96: chapters 5, 6 and 8 are dropped, '' tombstones). */
+export const CHAPTER_TEXT: readonly string[] = ['First Days', 'By the Fire', 'Sun and Splash', 'Frost and Glide', 'Rainy Day Play', '', '',
+  'Moon and Lanterns', '', 'Above the Clouds', 'Friends Everywhere'];
+/** Every kept thing's name (PLACES 4; the thing id `hearth` is the Fireplace) and its "Tap it yourself" line when a tap moves or switches it
+ *  (QUESTS 15, D-93; '' when a tap does nothing). D-96: the dropped places' things have no name here. */
+export const THING_TEXT: Readonly<Partial<Record<ThingId, readonly [string, string]>>> = {
   feltball: ['Felt Ball', 'Roll the Felt Ball'], musicbox: ['Music Box', 'Play the Music Box'], snoozerug: ['Snooze Rug', ''], warmlamp: ['Warm Lamp', 'Tap the lamp'],
   keepsakeshelf: ['Keepsake Shelf', 'Ring a keepsake'], bouncepad: ['Bounce Pad', ''],
   hearth: ['Fireplace', 'Tap the fireplace'], rockerboard: ['Rocker Board', 'Rock the Rocker Board'], yarnball: ['Yarn Ball', 'Roll the Yarn Ball'],
@@ -143,13 +144,8 @@ export const THING_TEXT: Readonly<Record<ThingId, readonly [string, string]>> = 
   snowball: ['Snowball', 'Roll the Snowball'], shakepine: ['Shake Pine', 'Shake the pine'],
   splashspots: ['Splash Spots', ''], leafteeter: ['Leaf Teeter', 'Rock the Leaf Teeter'], mossbouncer: ['Moss Bouncer', ''], dripleaf: ['Drip Leaf', 'Tap the Drip Leaf'],
   steppingstones: ['Stepping Stones', ''], seedpod: ['Seed Pod', 'Roll the Seed Pod'],
-  bathwater: ['Bath Water', ''], tap: ['Tap', 'Run the tap'], swirlride: ['Swirl Ride', ''], soapslide: ['Soap Slide', ''], spongeraft: ['Sponge Raft', ''], bubblepatch: ['Bubble Patch', ''],
-  spinningcog: ['Spinning Cog', ''], windupkey: ['Wind-up Key', 'Wind the key'], springplate: ['Spring Plate', ''], magnet: ['Horseshoe Magnet', 'Tap the magnet'],
-  steelmarble: ['Steel Marble', 'Roll the Steel Marble'], tickclock: ['Tick Clock', 'Tap the clock'], littlebell: ['Little Bell', 'Ring the Little Bell'],
   lanternline: ['Lantern Line', 'Light the lanterns'], vanedisc: ['Vane Disc', 'Turn the Vane Disc'], hammock: ['Clothesline Hammock', 'Push the hammock'],
   chimneycorner: ['Chimney Corner', ''], moondish: ['Moon Dish', ''], starscope: ['Star Scope', 'Look through the Star Scope'],
-  crystals: ['Singing Crystals', 'Ring the crystals'], glowpool: ['Glow Pool', ''], stoneslide: ['Stone Slide', ''], mossbed: ['Glow Moss Bed', ''], echostone: ['Echo Stone', 'Tap the Echo Stone'],
-  humrock: ['Hum Rock', ''],
   puffpads: ['Puff Pads', ''], updraft: ['Updraft', ''], kiteswing: ['Kite Swing', 'Push the Kite Swing'], sunbowarch: ['Sunbow Arch', ''], cloudnest: ['Cloud Nest', ''],
   cloudball: ['Cloud Ball', 'Roll the Cloud Ball'],
 };
@@ -157,33 +153,35 @@ export const THING_TEXT: Readonly<Record<ThingId, readonly [string, string]>> = 
 export const AREA_TEXT: Readonly<Record<string, string>> = {
   lampwarmth: 'Lamp Warmth', snoozerug: 'Snooze Rug', firesidewarmth: 'Fireside Warmth', windowchill: 'Window Chill', rug: 'Rug',
   rockpool: 'Rock Pool', surfedge: 'Surf Edge', sun: 'Sun', wetsand: 'Wet Sand', mountaincold: 'Mountain Cold', steampool: 'Steam Pool', windgap: 'Wind Gap', icepond: 'Ice Pond',
-  rain: 'Rain', splashspots: 'Splash Spots', leafdrip: 'Leaf Drip', steppingstones: 'Stepping Stones', bathwater: 'Bath Water', tapswirl: 'Tap Swirl', bubblepatch: 'Bubble Patch',
-  bathmat: 'Bath Mat', magnetfield: 'Magnet Field', lampwarm: 'Lamp Warm', feltpad: 'Felt Pad', nightbreeze: 'Night Breeze', chimneywarmth: 'Chimney Warmth', moondish: 'Moon Dish',
-  chimneycorner: 'Chimney Corner', echo: 'Echo', cavecool: 'Cave Cool', glowpool: 'Glow Pool', drips: 'Drips', mossbed: 'Glow Moss Bed', updraft: 'Updraft', breeze: 'Breeze',
-};
-/** The 20 keepsakes by bit: [name, how it is found (the dashed outline's hint), what a tap says (a place only while it has shipped: {place})]. */
-export const KEEPSAKE_TEXT: readonly (readonly [string, string, string])[] = [
-  ['Felt Star', 'A wish comes true at Home.', 'From Home.'],
-  ['Ember Pinecone', 'Finish By the Fire.', 'From {place}.'],
-  ['Sea-glass Pebble', 'Finish Sun and Splash.', 'From {place}.'],
-  ['Tiny Frost Bell', 'Finish Frost and Glide.', 'From {place}.'],
-  ['Raindrop Bead', 'Finish Rainy Day Play.', 'From {place}.'],
-  ['Bubble Ring', 'Finish Bath Time.', 'From {place}.'],
-  ['Little Brass Cog', 'Finish Tick and Spin.', 'From {place}.'],
-  ['Paper Lantern', 'Finish Moon and Lanterns.', 'From {place}.'],
-  ['Glow Crystal', 'Finish Hello, Hello.', 'From {place}.'],
-  ['Cloud Puff', 'Finish Above the Clouds.', 'From {place}.'],
-  ['Friendship Frame', 'Finish Friends Everywhere.', 'A photo of friends.'],
-  ['Pair Charm', 'Find your first pair of best friends.', 'For your first best friends.'],
-  ['Friendship Ribbon', 'Two squishies become close friends.', 'For your first close friends.'],
-  ['Ribbon Garland', 'Five pairs become close friends.', 'For five pairs of close friends.'],
-  ['Songbook', 'Sing together in five places.', 'For songs in five places.'],
-  ['Wish Jar', 'Ten wishes come true.', 'For ten wishes.'],
-  ['Little Button', 'Five pages get a gold edge.', 'For five gold pages.'],
-  ['Thimble', 'Fifteen pages get a gold edge.', 'For fifteen gold pages.'],
-  ['Pocket Map', 'Visit every place.', 'For a trip to every place.'],
-  ['Friends Quilt', 'Find all 25 pairs of best friends.', 'For every pair of best friends.'],
-];
+  rain: 'Rain', splashspots: 'Splash Spots', leafdrip: 'Leaf Drip', steppingstones: 'Stepping Stones', nightbreeze: 'Night Breeze', chimneywarmth: 'Chimney Warmth', moondish: 'Moon Dish',
+  chimneycorner: 'Chimney Corner', updraft: 'Updraft', breeze: 'Breeze',
+};   // (D-96: the dropped places' zones and patches have no name)
+/** The keepsakes by bit: [name, how it is found (the dashed outline's hint), what a tap says (a place only while it has shipped: {place})].
+ *  D-96: bits 5, 6 and 8 (Bubble Ring, Little Brass Cog, Glow Crystal: the dropped places' finale keepsakes) are retired: HOLES in this array
+ *  (forEach and the Journal's Keepsakes tab skip them), so the 17 that ship keep their bit as their index. The Pocket Map's line: every place.
+ *  (Round 6) a finale keepsake's tap line names its own place outright: it is found only by finishing that place's chapter, so the place has
+ *  shipped (the screens filled {place} from bit + 1, which named the NEXT place: request to the screens in R6_DATA.md). */
+export const KEEPSAKE_TEXT: readonly (readonly [string, string, string])[] = /* @__PURE__ */ (() => {
+  const t: (readonly [string, string, string])[] = [];
+  t[0] = ['Felt Star', 'A wish comes true at Home.', 'From Home.'];
+  t[1] = ['Ember Pinecone', 'Finish By the Fire.', 'From Hearthlog Cabin.'];
+  t[2] = ['Sea-glass Pebble', 'Finish Sun and Splash.', 'From Ripple Shore.'];
+  t[3] = ['Tiny Frost Bell', 'Finish Frost and Glide.', 'From Frostbell Ridge.'];
+  t[4] = ['Raindrop Bead', 'Finish Rainy Day Play.', 'From Rainleaf Garden.'];
+  t[7] = ['Paper Lantern', 'Finish Moon and Lanterns.', 'From Lanternroof.'];
+  t[9] = ['Cloud Puff', 'Finish Above the Clouds.', 'From Cloudloft.'];
+  t[10] = ['Friendship Frame', 'Finish Friends Everywhere.', 'A photo of friends.'];
+  t[11] = ['Pair Charm', 'Find your first pair of best friends.', 'For your first best friends.'];
+  t[12] = ['Friendship Ribbon', 'Two squishies become close friends.', 'For your first close friends.'];
+  t[13] = ['Ribbon Garland', 'Five pairs become close friends.', 'For five pairs of close friends.'];
+  t[14] = ['Songbook', 'Sing together in five places.', 'For songs in five places.'];
+  t[15] = ['Wish Jar', 'Ten wishes come true.', 'For ten wishes.'];
+  t[16] = ['Little Button', 'Five pages get a gold edge.', 'For five gold pages.'];
+  t[17] = ['Thimble', 'Fifteen pages get a gold edge.', 'For fifteen gold pages.'];
+  t[18] = ['Pocket Map', 'Visit every place.', 'For a trip to every place.'];
+  t[19] = ['Friends Quilt', 'Find all 25 pairs of best friends.', 'For every pair of best friends.'];
+  return t;
+})();
 /** The facts' found lines and hints by fact bit (QUESTS 9). Keys: {name} the species, {place} its favourite place, {thing} its favourite
  *  thing, {friend} its best friend, {family} a family name (MATERIAL_FAMILIES[f].name), {line} its family's FAMILY_LINES entry, {touch} its
  *  loved touch (TOUCH_WORDS), {wish} the WISH_DONE line of its granted wish. F3's hint: `friendPlace` while the friend's favourite place

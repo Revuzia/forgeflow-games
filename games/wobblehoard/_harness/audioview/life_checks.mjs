@@ -430,11 +430,13 @@ async function propChecks(page, check, want, extra) {
   check('PROPS', "the kettle's whistle (music off: the home field) sits on D, A and E within 10 cents", okN, notes.map((m) => m.toFixed(2)).join(', '), 'rest tones');
 }
 
-/* ═══════════════════════════════ round 2 (S2, S3): place things, the eight beds, the styles, the Music Box's key, the double echo ═══════════════════════════════ */
+/* ═══════════════════════════════ round 2 (S2, S3): place things, the beds (five since D-96), the styles, the Music Box's key, the double echo ═══════════════════════════════ */
 
 const KIND = { chime: 3, splash: 4, crunch: 5, boing: 7, bell: 8, tick: 9, rustle: 11, whoosh: 12 };
-const BEDS = ['ripple', 'frostbell', 'rainleaf', 'fizzwell', 'cogwhistle', 'lanternroof', 'echohollow', 'cloudloft'];
-const STYLES2 = ['shore', 'ridge', 'garden', 'bath', 'bench', 'roof', 'hollow', 'cloud'];
+// (re-specified in round 6 for D-96: the five kept places past the cabin, was eight: Fizzwell Tub, Cogwhistle Bench and Echo Hollow are dropped,
+// their beds and their music styles bath, bench and hollow with them)
+const BEDS = ['ripple', 'frostbell', 'rainleaf', 'lanternroof', 'cloudloft'];
+const STYLES2 = ['shore', 'ridge', 'garden', 'roof', 'cloud'];
 const D_MAJOR = [2, 4, 6, 7, 9, 11, 1];
 
 async function r2Checks(page, check, want, extra) {
@@ -481,7 +483,7 @@ async function r2Checks(page, check, want, extra) {
     // the tick lands on the music's eighth grid (musicClock's bar), struck at odd times
     const ev = [];
     for (let i = 0; i < 6; i++) { const t = 3.137 + 1.71 * i; ev.push({ t, op: 'clock', a: {} }); ev.push({ t, op: 'prop', a: { kind: 9, intensity: 0.9, auto: false } }); }
-    const R = await run(page, { secs: 14, seed: 125, musicOn: true, taps: true, preload: true, ambience: 'cogwhistle', want: ['fx'], events: ev, recordReturns: true });
+    const R = await run(page, { secs: 14, seed: 125, musicOn: true, taps: true, preload: true, ambience: 'lanternroof', want: ['fx'], events: ev, recordReturns: true });   // (round 6, D-96: was Cogwhistle's bed; the tick's grid does not depend on the bed)
     const fx = dec(R.stems.fx), clocks = (R.rets ?? []).filter((q) => q[1] === 'clock');
     const offs = clocks.map((q) => { const on = onsetAfter(fx, q[5], 1e-3); const k = (on - q[4]) / E; return Math.abs(k - Math.round(k)) * E * 1000; });
     check('THINGS', 'a tick lands on the music\'s eighth grid (onset against musicClock\'s bar start, 6 strikes at odd times)', clocks.length === 6 && clocks.every((q) => q[2]) && offs.every((o) => o <= 2), offs.map((o) => o.toFixed(2)).join(', ') + ' ms', '<= 2 ms');
@@ -499,7 +501,7 @@ async function r2Checks(page, check, want, extra) {
     const fF = pk(1.0), fY = pk(2.5), st = 12 * Math.log2(fF / fY);
     check('THINGS', 'the felt ball (r 0.22) and the yarn ball (r 0.24) are at least 2 semitones apart, the yarn ball lower', st >= 2 && st <= 4.5, `felt ${f1(fF)} Hz, yarn ${f1(fY)} Hz: ${st.toFixed(2)} semitones`, '2..4.5');
   }
-  /* ── AMB2: the eight new beds: under the music, audible, few nodes, the shell's weather ── */
+  /* ── AMB2: the five new beds (D-96; were eight): under the music, audible, few nodes, the shell's weather ── */
   if (want('AMB2')) {
     // the node counters are module-wide in the page: a render that ends with sources still scheduled leaves its count behind (their
     // 'ended' never fires), so each bed is measured against a no-bed run made right before it (same leftovers), not one shared baseline
@@ -540,7 +542,7 @@ async function r2Checks(page, check, want, extra) {
       check('AU-03', `player effects over the ${pl} bed (its weather on at 6 s and 20 s): in-band >= 8 dB and K-weighted >= 10 LU (${rows.length} placements)`, wi.inband >= 8 && wk.K >= 10, `worst in-band ${f1(wi.inband)} dB (${wi.kind}); worst K ${f1(wk.K)} LU (${wk.kind})`, '>= 8 dB, >= 10 LU');
     }
   }
-  /* ── STYLE2: the eight place styles play in key and level; 'home' set explicitly is today's music ── */
+  /* ── STYLE2: the five place styles (D-96; were eight) play in key and level; 'home' set explicitly is today's music ── */
   if (want('STYLE2')) {
     const H = await run(page, { secs: 30, seed: 151, musicOn: true, taps: true, preload: true, want: ['music'], events: [] });
     const H2 = await run(page, { secs: 30, seed: 151, musicOn: true, taps: true, preload: true, want: ['music'], events: [{ t: 0.02, op: 'setMusicStyle', a: 'home' }] });
@@ -589,7 +591,7 @@ async function r2Checks(page, check, want, extra) {
     const okF = ms2.every((m, i) => Number.isFinite(m) && Math.abs(m - Math.round(m)) <= 0.1 && fs[i] >= 0 && MEL[fs[i]].includes(((Math.round(m) % 12) + 12) % 12) && D_MAJOR.includes(((Math.round(m) % 12) + 12) % 12));
     check('BOX', 'with the music on (from 30 s): every note within 10 cents in the scale of the field sounding (musicClock), all in D major', ons2.length >= 20 && okF, `${ons2.length} notes over fields ${[...new Set(fs)].join(',')}: ${ms2.map((m, i) => `${m.toFixed(2)}@${fs[i]}`).join(' ')}`, 'field scale');
   }
-  /* ── ECHO: the Echo Stone's double echo (creature echoes: 2) ── */
+  /* ── ECHO: the creature echo option, double (echoes: 2); it was the Echo Stone's (Echo Hollow, dropped by D-96): the contract's voice option stays ── */
   if (want('ECHO')) {
     const ph = (o) => ({ t: 1, op: 'creature', a: phrase([[3, 0, 0, 1]], { at: 0, ...o }) });
     const r0 = await run(page, { secs: 3, seed: 171, musicOn: false, taps: true, preload: true, want: ['chatter'], events: [ph({})] });

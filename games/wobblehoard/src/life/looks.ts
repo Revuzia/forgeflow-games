@@ -30,9 +30,6 @@ function floatsAt(w: LifeWorld, s: LifeSnapshot, i: number, h: number): boolean 
   return share > d;
 }
 export { WARMPOSE, TOAST, SHIVER };
-const FAM_BEADS = MATERIAL_FAMILY_IDS.indexOf('beadsqueeze');
-/** The Bubble Patch's place-global id (FIZZ: "in the Bubble Patch zone"); round 2 typed 36. */
-const BUBBLE_PATCH = THING_IDS.indexOf('bubblepatch');
 /** The REACT kind a look's 0.5 crossing (or a lifeAddLook of it) emits; 0 = none (wet and sand have none). */
 export const LOOK_REACT: readonly number[] = [REACT_KIND.FROST, 0, REACT_KIND.SOAK, 0, REACT_KIND.SNOWCAP, REACT_KIND.TOAST];
 const NT = REACT_TRIGGERS.length;
@@ -97,9 +94,9 @@ export function senseZones(w: LifeWorld, s: LifeSnapshot, i: number): void {
   w.eAO[i] = 0;
 }
 
-/** The place-global thing that owns the zone the REACT happened in: (round 4) the trigger's own zone's owner when it has one (FIZZ in the
- *  Bubble Patch inside Fizzwell's bath: both zones strength 1, and the snapshot's zoneThing names the first, the bath; QUESTS T4 counts
- *  REACT{FIZZ, thing bubblepatch}), else the snapshot's zoneThing (the strongest zone's owner at its centre), else -1. */
+/** The place-global thing that owns the zone the REACT happened in: (round 4) the trigger's own zone's owner when it has one (a zone inside
+ *  another, both of strength 1: the snapshot's zoneThing names the first), else the snapshot's zoneThing (the strongest zone's owner at its
+ *  centre), else -1. */
 function zoneThingOf(w: LifeWorld, s: LifeSnapshot, i: number, k: number): number {
   if (k >= 0 && w.zT[k] >= 0) return w.tG[w.zT[k]];
   if (s.zoneThing[i] >= 0) return s.zoneThing[i];
@@ -185,7 +182,6 @@ function condHolds(w: LifeWorld, s: LifeSnapshot, i: number, tr: number): boolea
       return (s.zoneMask[i] & (1 << TR_ARG[tr])) !== 0;
     }
     case REACT_COND.POSE_AT: w.f[F.C] = w.zWK[i]; return w.zW[i] >= TR_MIN[tr] && Math.abs(w.sqS[i] - TR_ARG[tr] * 0.01) < 0.005;
-    case REACT_COND.GLOW_WATER: { const k = w.zWK1[i]; w.f[F.C] = k; return k >= 0 && w.zG[k] === 1; }
     case REACT_COND.UPDRAFT: w.f[F.C] = w.zUK[i]; return w.zUK[i] >= 0 && (fl & LIFE_FLAG.AIRBORNE) !== 0;
     // (round 4) SHOWER is the Drip Leaf's zone only (a zone owned by a 'shower' switch thing) while it drips: the host's wet bit at the
     // centre (the rain's on-phase or the leaf tapped); round 2 fired it for any wet zone, the whole-place rain included
@@ -195,15 +191,7 @@ function condHolds(w: LifeWorld, s: LifeSnapshot, i: number, tr: number): boolea
       for (let k = 0; k < w.nZ; k++) { const t = w.zT[k]; if (w.zK[k] === ZONE.wet && t >= 0 && w.tSw[t] === 4 && inAreaAt(w, 0, k, 0)) { w.f[F.C] = k; return true; } }
       return false;
     }
-    case REACT_COND.FIZZ_ZONE: { for (let k = 0; k < w.nZ; k++) { const t = w.zT[k]; if (t >= 0 && w.tG[t] === BUBBLE_PATCH && w.zIT[i * MAX_ZONES + k] > -1e8) { w.f[F.C] = k; return true; } } return false; }
-    case REACT_COND.NEAR_MAGNET: {
-      if (w.fa[i] !== FAM_BEADS) return false;
-      for (let k = 0; k < w.nZ; k++) if (w.zK[k] === ZONE.magnet && (s.zoneMask[i] & (1 << ZONE.magnet)) !== 0) {
-        const dx = s.x[i] - w.zX[k], dz = s.z[i] - w.zZ[k];
-        if (dx * dx + dz * dz <= (TR_MIN[tr] + s.r[i]) * (TR_MIN[tr] + s.r[i])) { w.f[F.C] = k; return true; }
-      }
-      return false;
-    }
+    // (D-96, round 6) GLOW_WATER, FIZZ_ZONE and NEAR_MAGNET were the dropped places' (Echo Hollow, Fizzwell Tub, Cogwhistle Bench): no trigger row
     default: return false;
   }
 }
@@ -384,7 +372,7 @@ export function cutReacts(w: LifeWorld, s: LifeSnapshot, ev: LifeEvents, g: numb
   if (lead < 0) return;
   for (let tr = 0; tr < NT; tr++) {
     const cond = TR_COND[tr];
-    if (cond !== REACT_COND.IN_ZONE && cond !== REACT_COND.IN_WATER_FLOAT && cond !== REACT_COND.IN_WATER_WADE && cond !== REACT_COND.GLOW_WATER && cond !== REACT_COND.FIZZ_ZONE) continue;
+    if (cond !== REACT_COND.IN_ZONE && cond !== REACT_COND.IN_WATER_FLOAT && cond !== REACT_COND.IN_WATER_WADE) continue;
     let n = 0, thing = -1;
     for (let j = 0; j < CAP; j++) {
       if (!w.ac[j] || w.ki[j] === 0 || w.gr[j] !== g || j >= s.n) continue;

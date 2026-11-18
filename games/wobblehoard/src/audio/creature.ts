@@ -32,7 +32,7 @@ export const WHOLE_LO = 69, WHOLE_HI = 86, PIECE_LO = 86, PIECE_HI = 98;
  *  voice one piece + 2 dB. */
 export const WHOLE_PEAK = dbToGain(-24.5);
 export const PIECE_DB = -7, GROUP_DB = 2;
-/** The echo (Echo Hollow, LIFE 8.3): one scheduled repeat. */
+/** The echo (LIFE 8.3): one scheduled repeat. It was Echo Hollow's (dropped, D-96): no place asks for it today; kept as the contract's voice option. */
 export const ECHO_S = 0.22, ECHO_DB = -12;
 
 const midiHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);

@@ -51,7 +51,8 @@ export const THING_KIND = { ball: 1, bell: 2, droplet: 4, note: 8, flame: 16, su
 
 /* ── the event sub ids LIFE produces (QUESTS 4; quests.ts re-exports them, so the reducer and LIFE share one table) ── */
 
-/** REACT kinds (QUESTS 4, LIFE 4.2), LOVE included (B10 in its favourite place). */
+/** REACT kinds (QUESTS 4, LIFE 4.2), LOVE included (B10 in its favourite place). RATTLE, GLOW and FIZZ belonged to the dropped places (D-96): no
+ *  trigger produces them. */
 export const REACT_KIND = {
   FLOAT: 1, WADE: 2, SOAK: 3, TOAST: 4, RISE: 5, OOZE: 6, WARM: 7, SHIVER: 8, FROST: 9, SNOWCAP: 10, GLIDE: 11, SPLASH: 12, DRIFT: 13,
   LIFT: 14, RATTLE: 15, GLOW: 16, GAZE_SKY: 17, PRINT: 18, SHOWER: 19, FIZZ: 20, HOLD_ON: 21, DRY: 22, LOVE: 23,
@@ -60,7 +61,7 @@ export const REACT_KIND = {
 export const SOCIAL_KIND = {
   GREET: 1, CHAT: 2, BOOP: 3, NUZZLE: 4, COPY: 5, PARADE: 6, SING: 7, SNUGGLE: 8, PILE: 9, COMFORT: 10, TEETER: 11, PUSH: 12, PASS: 13, PEEK: 14,
   SQUIRT: 15, MIRROR: 16, ECHO: 17, DUET: 18, TWIRL: 19,
-} as const;
+} as const;   // (ECHO, S16, needs an echo zone: Echo Hollow's only, dropped by D-96; no quest names it)
 /** USE verbs (QUESTS 4; ThingDef.verb). */
 export const USE_VERB = { ROLL: 1, ROCK: 2, SWING: 3, SPIN: 4, BOUNCE: 5, RING: 6, NAP: 7, FLOAT_ON: 8, SLIDE: 9, SWITCH: 10, LISTEN: 11, LEAN: 12, WADE: 13, SHAKE: 14, STEP: 15 } as const;
 
@@ -307,6 +308,8 @@ export const REACT_COND = { IN_WATER_FLOAT: 1, IN_WATER_WADE: 2, LOOK_UP: 3, POS
 /** once 'visit': once per character per zone or thing per visit; 'event': every time, after cooldownS. thing: where the REACT's thing comes
  *  from: the zone's owning thing (LifeSnapshot.zoneThing), the patch's (patchThing), the source thing of the lifeAddLook or switch that caused
  *  it, or none (-1). addEvent: a lifeAddLook (or the comet) also fires it, every time, with its source thing. */
+/** D-96: RATTLE (Cogwhistle's magnet), GLOW (Echo Hollow's Glow Pool) and FIZZ (Fizzwell's Bubble Patch) have no row: only the dropped places
+ *  could produce them, so no quest, fact or line names them (their REACT_KIND and REACT_COND ids stay, append-only, unused). */
 export interface ReactTrigger { readonly kind: number; readonly cond: number; readonly arg: number; readonly min?: number; readonly forS?: number; readonly fam?: MaterialFamilyId;
   readonly shiverOnly?: boolean; readonly once: 'visit' | 'event'; readonly cooldownS: number; readonly thing: 'zone' | 'patch' | 'source' | 'none'; readonly addEvent?: boolean }
 export const REACT_TRIGGERS: readonly ReactTrigger[] = [
@@ -324,12 +327,9 @@ export const REACT_TRIGGERS: readonly ReactTrigger[] = [
   { kind: REACT_KIND.SPLASH, cond: REACT_COND.LAND_SHALLOW, arg: 0, min: 0.12, once: 'event', cooldownS: 5, thing: 'zone' },
   { kind: REACT_KIND.DRIFT, cond: REACT_COND.CURRENT, arg: 0, min: 0.3, once: 'visit', cooldownS: 0, thing: 'zone' },
   { kind: REACT_KIND.LIFT, cond: REACT_COND.UPDRAFT, arg: 0, forS: 0.3, once: 'event', cooldownS: 5, thing: 'zone' },
-  { kind: REACT_KIND.RATTLE, cond: REACT_COND.NEAR_MAGNET, arg: 0, min: 0.6, fam: 'beadsqueeze', once: 'visit', cooldownS: 0, thing: 'zone' },
-  { kind: REACT_KIND.GLOW, cond: REACT_COND.GLOW_WATER, arg: 0, forS: 1, once: 'visit', cooldownS: 0, thing: 'zone' },
   { kind: REACT_KIND.GAZE_SKY, cond: REACT_COND.SKY, arg: 0, min: 1.5, forS: 3, once: 'visit', cooldownS: 0, thing: 'source', addEvent: true },
   { kind: REACT_KIND.PRINT, cond: REACT_COND.FIRST_PRINT, arg: 0, once: 'visit', cooldownS: 0, thing: 'patch' },
   { kind: REACT_KIND.SHOWER, cond: REACT_COND.UNDER_DRIP, arg: 0, forS: 1, once: 'event', cooldownS: 20, thing: 'zone' },
-  { kind: REACT_KIND.FIZZ, cond: REACT_COND.FIZZ_ZONE, arg: 0, forS: 1, once: 'visit', cooldownS: 0, thing: 'zone' },
   { kind: REACT_KIND.HOLD_ON, cond: REACT_COND.BEHAVIOUR, arg: 19, once: 'event', cooldownS: 0, thing: 'none' },
   { kind: REACT_KIND.DRY, cond: REACT_COND.LOOK_DRY, arg: LOOK.soak, min: 0.1, once: 'visit', cooldownS: 0, thing: 'zone' },
   { kind: REACT_KIND.LOVE, cond: REACT_COND.BEHAVIOUR, arg: 10, once: 'visit', cooldownS: 0, thing: 'none' },
@@ -337,25 +337,30 @@ export const REACT_TRIGGERS: readonly ReactTrigger[] = [
 
 /* ═══════════════════════════════════════ favourites and best friends (PLACES 5; DT-03, DT-04) ═══════════════════════════════════════ */
 
-/** A species' favourite place and thing and its best friend (one of 25 authored, symmetric pairs). Species facts, never per instance. */
+/** A species' favourite place and thing and its best friend (one of 25 authored, symmetric pairs). Species facts, never per instance.
+ *  D-96 (round 6): the 17 fans of the three dropped places are re-homed to a kept place's thing of the same kind of use (a ride to a ride, a
+ *  pool to a pool, a bell to a bell, a switch to a switch; every family still in 2+ places, a Common in each; Hearthlog's six unchanged, so the
+ *  live cabin is as it was): Plumpet, Glugbean and Tadpolo to Lanternroof (Rainleaf's gift list is now Lanternroof's: the next place to open),
+ *  Gloopsy, Kneadle and Fossilo to Ripple Shore, Thudge, Spirelo, Cindergoo and Ambrosel to Frostbell Ridge, Rattlebead, Glimglop and Burrbin to
+ *  Rainleaf Garden, Cushlet, Flipdome, Dimpla and Prismelo to Cloudloft (8 / 9 / 9 / 9 / 9 fans; the old pair on each line's comment). */
 export interface SpeciesLife { readonly place: PlaceId; readonly thing: ThingId; readonly friend: SpeciesId }
 export const SPECIES_LIFE = {
   dollop: { place: 'hearthlog', thing: 'yarnball', friend: 'crimpo' },
-  plumpet: { place: 'fizzwell', thing: 'spongeraft', friend: 'wisplet' },
+  plumpet: { place: 'lanternroof', thing: 'hammock', friend: 'wisplet' },   // D-96: was fizzwell / spongeraft
   twangle: { place: 'cloudloft', thing: 'kiteswing', friend: 'chunkle' },
   puddlo: { place: 'ripple', thing: 'rockpool', friend: 'boingle' },
-  glugbean: { place: 'fizzwell', thing: 'bathwater', friend: 'thumbly' },
+  glugbean: { place: 'lanternroof', thing: 'moondish', friend: 'thumbly' },   // D-96: was fizzwell / bathwater
   crumbit: { place: 'ripple', thing: 'shellchimes', friend: 'cushlet' },
   chunkle: { place: 'lanternroof', thing: 'lanternline', friend: 'twangle' },
   munchip: { place: 'rainleaf', thing: 'mossbouncer', friend: 'dimpla' },
   wisplet: { place: 'cloudloft', thing: 'updraft', friend: 'plumpet' },
-  cushlet: { place: 'cogwhistle', thing: 'springplate', friend: 'crumbit' },
+  cushlet: { place: 'cloudloft', thing: 'puffpads', friend: 'crumbit' },   // D-96: was cogwhistle / springplate
   crimpo: { place: 'hearthlog', thing: 'hearth', friend: 'dollop' },
   thumbly: { place: 'hearthlog', thing: 'rockerboard', friend: 'glugbean' },
   boingle: { place: 'frostbell', thing: 'icepond', friend: 'puddlo' },
-  dimpla: { place: 'echohollow', thing: 'echostone', friend: 'munchip' },
+  dimpla: { place: 'cloudloft', thing: 'cloudball', friend: 'munchip' },   // D-96: was echohollow / echostone
   nuzzo: { place: 'cloudloft', thing: 'cloudball', friend: 'capnap' },
-  tadpolo: { place: 'fizzwell', thing: 'swirlride', friend: 'swishel' },
+  tadpolo: { place: 'lanternroof', thing: 'vanedisc', friend: 'swishel' },   // D-96: was fizzwell / swirlride
   swishel: { place: 'ripple', thing: 'pebbleball', friend: 'tadpolo' },
   granulo: { place: 'ripple', thing: 'sandmound', friend: 'sproutle' },
   sproutle: { place: 'rainleaf', thing: 'seedpod', friend: 'granulo' },
@@ -363,31 +368,31 @@ export const SPECIES_LIFE = {
   acornel: { place: 'rainleaf', thing: 'dripleaf', friend: 'hooplet' },
   capnap: { place: 'hearthlog', thing: 'snugbasket', friend: 'nuzzo' },
   knubby: { place: 'frostbell', thing: 'steampool', friend: 'wrigglo' },
-  kneadle: { place: 'cogwhistle', thing: 'spinningcog', friend: 'burrbin' },
+  kneadle: { place: 'ripple', thing: 'sandmound', friend: 'burrbin' },   // D-96: was cogwhistle / spinningcog
   hooplet: { place: 'frostbell', thing: 'glideramp', friend: 'acornel' },
-  spirelo: { place: 'echohollow', thing: 'crystals', friend: 'diademo' },
+  spirelo: { place: 'frostbell', thing: 'iciclebells', friend: 'diademo' },   // D-96: was echohollow / crystals
   zingle: { place: 'lanternroof', thing: 'hammock', friend: 'gloopsy' },
   petalop: { place: 'rainleaf', thing: 'leafteeter', friend: 'marigel' },
-  burrbin: { place: 'cogwhistle', thing: 'magnet', friend: 'kneadle' },
+  burrbin: { place: 'rainleaf', thing: 'mossbouncer', friend: 'kneadle' },   // D-96: was cogwhistle / magnet
   marigel: { place: 'rainleaf', thing: 'steppingstones', friend: 'petalop' },
-  gloopsy: { place: 'fizzwell', thing: 'soapslide', friend: 'zingle' },
+  gloopsy: { place: 'ripple', thing: 'rockpool', friend: 'zingle' },   // D-96: was fizzwell / soapslide
   hushpuff: { place: 'hearthlog', thing: 'hearth', friend: 'thudge' },
   slumbrel: { place: 'cloudloft', thing: 'cloudnest', friend: 'caromel' },
-  thudge: { place: 'cogwhistle', thing: 'tickclock', friend: 'hushpuff' },
+  thudge: { place: 'frostbell', thing: 'snowdriftnest', friend: 'hushpuff' },   // D-96: was cogwhistle / tickclock
   diademo: { place: 'frostbell', thing: 'iciclebells', friend: 'spirelo' },
   taffelin: { place: 'lanternroof', thing: 'vanedisc', friend: 'cindergoo' },
-  rattlebead: { place: 'fizzwell', thing: 'bubblepatch', friend: 'pastrel' },
-  cindergoo: { place: 'echohollow', thing: 'glowpool', friend: 'taffelin' },
+  rattlebead: { place: 'rainleaf', thing: 'seedpod', friend: 'pastrel' },   // D-96: was fizzwell / bubblepatch
+  cindergoo: { place: 'frostbell', thing: 'steampool', friend: 'taffelin' },   // D-96: was echohollow / glowpool
   selenuff: { place: 'lanternroof', thing: 'moondish', friend: 'flipdome' },
   pastrel: { place: 'hearthlog', thing: 'kettle', friend: 'rattlebead' },
-  flipdome: { place: 'cogwhistle', thing: 'littlebell', friend: 'selenuff' },
+  flipdome: { place: 'cloudloft', thing: 'kiteswing', friend: 'selenuff' },   // D-96: was cogwhistle / littlebell
   caromel: { place: 'cloudloft', thing: 'puffpads', friend: 'slumbrel' },
-  ambrosel: { place: 'echohollow', thing: 'stoneslide', friend: 'fossilo' },
+  ambrosel: { place: 'frostbell', thing: 'glideramp', friend: 'fossilo' },   // D-96: was echohollow / stoneslide
   tidelume: { place: 'ripple', thing: 'bobring', friend: 'glimglop' },
-  glimglop: { place: 'fizzwell', thing: 'tap', friend: 'tidelume' },
+  glimglop: { place: 'rainleaf', thing: 'dripleaf', friend: 'tidelume' },   // D-96: was fizzwell / tap
   somnuff: { place: 'lanternroof', thing: 'chimneycorner', friend: 'constello' },
-  fossilo: { place: 'echohollow', thing: 'humrock', friend: 'ambrosel' },
+  fossilo: { place: 'ripple', thing: 'driftlog', friend: 'ambrosel' },   // D-96: was echohollow / humrock
   skeinara: { place: 'lanternroof', thing: 'starscope', friend: 'prismelo' },
   constello: { place: 'frostbell', thing: 'snowdriftnest', friend: 'somnuff' },
-  prismelo: { place: 'echohollow', thing: 'mossbed', friend: 'skeinara' },
+  prismelo: { place: 'cloudloft', thing: 'cloudnest', friend: 'skeinara' },   // D-96: was echohollow / mossbed
 } as const satisfies Record<SpeciesId, SpeciesLife>;

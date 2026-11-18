@@ -1,5 +1,5 @@
 // PLAYGROUND data probe (PG_DATA): DT-01 to DT-16 and the T6 row of _spec/PLAYGROUND_BUILD.md 18, over src/data/places.ts, life.ts, quests.ts,
-// journal_text.ts and the ten place_<id>.ts modules. Plain node:  node _harness/probe_pg_data.ts   (one line per row; exit 1 on any failure).
+// journal_text.ts and the seven place_<id>.ts modules (D-96, round 6: Fizzwell Tub, Cogwhistle Bench and Echo Hollow are dropped: DT-17). Plain node:  node _harness/probe_pg_data.ts   (one line per row; exit 1 on any failure).
 // Thresholds are the spec's, stated here, never loosened to pass. DT-01 is strict for the places whose slice is being built (STRICT_PLACES:
 // Home and Hearthlog for S0 / S1); for the S2 and S3 places it prints their problem count as PENDING (their slice lays both layouts with this
 // same code and adds them to STRICT_PLACES), so nothing hides: every problem is listed with --verbose.
@@ -7,11 +7,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve, relative } from 'node:path';
-import { PLACE_IDS, THING_IDS, MECH, ZONE, MECH_RANGES, PLACE_INFO, THING_KINDS, SIGNATURE, FINALE, ownsArea } from '../src/data/places.ts';
+import { PLACE_IDS, THING_IDS, MECH, ZONE, MECH_RANGES, PLACE_INFO, THING_KINDS, SIGNATURE, FINALE, ownsArea, DROPPED_PLACES, DROPPED_PLACE_MASK, KEPT_PLACE_IDS, placeDropped, thingDropped, loadPlaceDef } from '../src/data/places.ts';
 import type { PlaceDef, ThingDef, Area, PlaceId } from '../src/data/places.ts';
 import { EMOTE, SALTS, FAMILY_REACT, GAITS, REACT_TRIGGERS, REACT_KIND, SOCIAL_KIND, USE_VERB, SPECIES_LIFE, CHANNEL, PHYS_ARG, RPOSE, PARTICLE, REACT_SOUND, LOOK, THING_KIND,
   DEFAULT_REACTIONS, LOOK_ADD, BUBBLE_WORDS, BUBBLE_MEANINGS, TRAIT_WORDS, STAR_MEANINGS } from '../src/data/life.ts';
-import { QUESTS, EV, FACT, KEEPSAKES, CHAPTERS, GIFT_LISTS, HOME_TEXT, FACT_REACTS, PIECES_USE } from '../src/data/quests.ts';
+import { QUESTS, EV, FACT, KEEPSAKES, CHAPTERS, GIFT_LISTS, HOME_TEXT, FACT_REACTS, PIECES_USE, KEEPSAKE_MASK } from '../src/data/quests.ts';
 import { QUEST_TEXT, CHAPTER_TEXT, THING_TEXT, AREA_TEXT, KEEPSAKE_TEXT, FACT_LINES, FAMILY_LINES, WISH_LINES, GIFT_LINES, UI_TEXT, TOUCH_WORDS } from '../src/data/journal_text.ts';
 import { CATALOG, LANES } from '../src/data/catalog.ts';
 import type { SpeciesId } from '../src/data/catalog.ts';
@@ -27,11 +27,13 @@ const row = (id: string, ok: boolean, what: string, extra = ''): void => { if (!
 const note = (id: string, what: string): void => console.log(`info ${id} ${what}`);
 const f2 = (v: number): string => v.toFixed(2);
 const D2R = Math.PI / 180;
-/** The places whose layouts DT-01 must pass now (S0 / S1). S2 adds ripple, frostbell, rainleaf; S3 the other five. */
-const STRICT_PLACES: readonly PlaceId[] = ['home', 'hearthlog', 'ripple', 'frostbell', 'rainleaf', 'fizzwell', 'cogwhistle', 'lanternroof'];
+/** The places whose layouts DT-01 must pass now. D-96 (round 6): the seven kept places; the dropped three have no layout to check. Round 6 also
+ *  checks every strict place in the shipped place camera (B8), shipped or not: Ripple, Frostbell, Rainleaf, Lanternroof and Cloudloft are
+ *  built next, so their layouts must already fit the camera they will ship with. */
+const STRICT_PLACES: readonly PlaceId[] = ['home', 'hearthlog', 'ripple', 'frostbell', 'rainleaf', 'lanternroof', 'cloudloft'];
 
 const DEFS: PlaceDef[] = [];
-for (const id of PLACE_IDS) DEFS.push(((await import(`../src/data/place_${id}.ts`)) as { PLACE: PlaceDef }).PLACE);
+for (const id of KEPT_PLACE_IDS) DEFS.push(((await import(`../src/data/place_${id}.ts`)) as { PLACE: PlaceDef }).PLACE);
 
 /* ═══════════════════════════════ T6: the copied gate still matches probe_catalog.ts ═══════════════════════════════ */
 {
@@ -210,7 +212,12 @@ function checkPlace(P: PlaceDef, tall: boolean): string[] {
       if (t.size[0] - t.size[1] < 0.625 - 1e-9) probs.push(`${t.id} clear inner radius ${f2(t.size[0] - t.size[1])} m holds no body of R 0.625`);
     }
     if (pos[i].use && t.mech !== MECH.ring) bodyOK(`${t.id} use spot`, pos[i].use![0], pos[i].use![1], i);
-    if (pos[i].peek) { const pk = pos[i].peek!; bodyOK(`${t.id} left peek spot`, pk[0], pk[1], i); bodyOK(`${t.id} right peek spot`, pk[2], pk[3], i); }
+    if (pos[i].peek) { const pk = pos[i].peek!; bodyOK(`${t.id} left peek spot`, pk[0], pk[1], i); bodyOK(`${t.id} right peek spot`, pk[2], pk[3], i);
+      // (round 6, R6_DATA) LIFE 6.1 S13 / LIFE 5.3: the peek spots are "left and right of it as the camera sees it": the left spot left of the
+      // thing's footprint, the right one right of it, each beside it (its z inside the footprint's depth), not in front of or behind it
+      let fx0 = Infinity, fx1 = -Infinity, fz0 = Infinity, fz1 = -Infinity;
+      for (const sh of fp[i]) for (const [x, z] of outline(sh)) { fx0 = Math.min(fx0, x); fx1 = Math.max(fx1, x); fz0 = Math.min(fz0, z); fz1 = Math.max(fz1, z); }
+      if (!(pk[0] < fx0 && pk[2] > fx1 && pk[1] >= fz0 - 1e-9 && pk[1] <= fz1 + 1e-9 && pk[3] >= fz0 - 1e-9 && pk[3] <= fz1 + 1e-9)) probs.push(`${t.id} peek spots (${f2(pk[0])}, ${f2(pk[1])}) / (${f2(pk[2])}, ${f2(pk[3])}) are not left and right of it as the camera sees it (x ${f2(fx0)}..${f2(fx1)}, z ${f2(fz0)}..${f2(fz1)})`); }
     if (t.mech === MECH.ramp && (t.p.angle ?? 0) > 16 + 1e-9) probs.push(`${t.id} ramp ${t.p.angle} degrees (at most 16)`);
     // P2 thickness and the ball radius
     const thick = t.mech === MECH.block || t.mech === MECH.ramp || t.mech === MECH.seesaw ? 2 * Math.min(t.size[0], t.size[1], t.size[2] || 9) : [MECH.bar, MECH.swing, MECH.chime, MECH.ring].includes(t.mech as never) ? 2 * (t.mech === MECH.ring ? t.size[1] : t.size[0]) : 9;
@@ -316,9 +323,14 @@ function camProblems(P: PlaceDef, tall: boolean): string[] {
   const probs: string[] = [], pc = placeCam(P, tall), Hd = PLACE_HUD[tall ? 'phone' : 'desktop'];
   if (!pc.ok) return [pc.why];
   P.things.forEach((t, i) => {
-    const sp = tall ? P.tall.things[i] : { x: t.x, z: t.z, yaw: t.yaw }, fpi = footprints(t, sp.x, sp.z, sp.yaw);
+    const sp = tall ? P.tall.things[i] : { x: t.x, z: t.z, yaw: t.yaw };
+    // (round 6, R6_DATA; PG_SHELL R4b: "Ripple's Rock Pool stood off the frame") a pool or a patch / zone thing (mech 0: the Ice Pond, the
+    // Updraft, the Stepping Stones) has no collider but is a thing the player sees and plays in: its own zones and patches in this layout
+    // count as its outline (the water's surface as its top)
+    const own = t.mech === MECH.pool || t.mech === 0 ? [...P.zones.map((z, k) => ownsArea(t.zone, z.id) ? (tall ? P.tall.zones[k] : z) : null), ...P.patches.map((pa, k) => ownsArea(t.patch, pa.id) ? (tall ? P.tall.patches[k] : pa) : null)].filter((x): x is Area => !!x) : [];
+    const fpi = [...footprints(t, sp.x, sp.z, sp.yaw), ...own.map(areaShape)];
     if (!fpi.length) return;
-    const top = thingTop(t); let x0 = Infinity, x1 = -Infinity, yFloor = -Infinity;
+    const top = t.mech === MECH.pool ? t.size[1] : thingTop(t); let x0 = Infinity, x1 = -Infinity, yFloor = -Infinity;
     for (const sh of fpi) for (const [x, z] of outline(sh)) {
       const [ax, ay] = pc.proj(x, 0, z), [bx] = pc.proj(x, top, z);
       x0 = Math.min(x0, ax, bx); x1 = Math.max(x1, ax, bx); yFloor = Math.max(yFloor, ay);
@@ -624,10 +636,10 @@ for (const P of DEFS) {
     const probs = checkPlace(P, tall), label = `${P.name} ${tall ? 'tall' : 'wide'}`;
     if (strict) row('DT-01', probs.length === 0, `${label}: frame, pad, zones, spawn, rides and push spots, use / peek / gap spots, clearances, bands, ranges, floor rule, opening, counts`,
       probs.length ? `${probs.length} problems: ${probs.slice(0, 6).join(' | ')}` : '0 problems');
-    if (strict && P.shipped) { const cp = camProblems(P, tall);
-      row('DT-01', cp.length === 0, `${label} in the shipped place camera (B8, round 5): every collider inside the frame's sides and its floor above the bottom HUD (${tall ? 'the hint pill, 618 px' : 'the party row, 664 px'})`,
+    if (strict) { const cp = camProblems(P, tall);
+      row('DT-01', cp.length === 0, `${label} in the shipped place camera (B8, round 5; round 6: every strict place, and its pools, patches and zone things too): every thing inside the frame's sides and its floor above the bottom HUD (${tall ? 'the hint pill, 618 px' : 'the party row, 664 px'})`,
         cp.length ? `${cp.length} problems: ${cp.join(' | ')}` : '0 problems'); }
-    else { note('DT-01', `${label}: PENDING its slice (${P.id === 'ripple' || P.id === 'frostbell' || P.id === 'rainleaf' ? 'S2' : 'S3'}): ${probs.length} problems${probs.length && !VERBOSE ? ' (--verbose lists them)' : ''}`);
+    if (!strict) { note('DT-01', `${label}: PENDING its slice (${P.id === 'ripple' || P.id === 'frostbell' || P.id === 'rainleaf' ? 'S2' : 'S3'}): ${probs.length} problems${probs.length && !VERBOSE ? ' (--verbose lists them)' : ''}`);
       if (VERBOSE) for (const p of probs) console.log('       ' + p); }
   }
 }
@@ -643,11 +655,13 @@ function placeCells(): { where: string; fam: string; text: string; col: string }
   return out;
 }
 const CELLS = placeCells();
+/** D-96: KEEPSAKE_TEXT has holes at the retired bits 5, 6 and 8; Object.values reads only the 17 that ship. */
+const KT = Object.values(KEEPSAKE_TEXT);
 const stripTags = (t: string): string => t.replace(/(^|[\s,;])[PLSB](?=$|[\s,;])/g, '$1').replace(/\s+/g, ' ').trim();
 {
   const coined = new Set<string>(PLACE_INFO.flatMap((p) => p.coined ?? []));
-  const names: string[] = [...PLACE_INFO.map((p) => p.name), ...Object.values(THING_TEXT).map((t) => t[0]), ...Object.values(AREA_TEXT), ...KEEPSAKE_TEXT.map((k) => k[0]), ...CHAPTER_TEXT];
-  const lines: string[] = [...QUEST_TEXT.flat(), ...HOME_TEXT.quests.flat(), HOME_TEXT.chapter, ...Object.values(THING_TEXT).map((t) => t[1]).filter(Boolean), ...KEEPSAKE_TEXT.flatMap((k) => [k[1], k[2]]),
+  const names: string[] = [...PLACE_INFO.map((p) => p.name), ...Object.values(THING_TEXT).map((t) => t[0]), ...Object.values(AREA_TEXT), ...KT.map((k) => k[0]), ...CHAPTER_TEXT.filter(Boolean)];
+  const lines: string[] = [...QUEST_TEXT.flat(), ...HOME_TEXT.quests.flat(), HOME_TEXT.chapter, ...Object.values(THING_TEXT).map((t) => t[1]).filter(Boolean), ...KT.flatMap((k) => [k[1], k[2]]),
     ...FACT_LINES.found, ...FACT_LINES.hint.filter(Boolean), FACT_LINES.friendPlace, FACT_LINES.friendFamily, ...Object.values(TOUCH_WORDS), ...Object.values(FAMILY_LINES).flat(),
     ...flatStrings(WISH_LINES), ...flatStrings(GIFT_LINES), ...flatStrings(UI_TEXT), ...BUBBLE_WORDS.filter(Boolean), ...BUBBLE_MEANINGS.filter(Boolean), ...TRAIT_WORDS, ...Object.values(STAR_MEANINGS)];
   const cellTexts = CELLS.map((c) => stripTags(c.text));
@@ -689,7 +703,13 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
     if (!(self || t.ride || t.switch)) probs.push(`${d.id}: favourite ${t.id} has no self event, ride or switch`); }
   for (const [ch, list] of Object.entries(GIFT_LISTS)) { const c = Number(ch); if (list.length !== 3) probs.push(`gift list ${ch} has ${list.length}`);
     for (const id of list) { const d = byId.get(id)!; if (d.tier !== 'common' && d.tier !== 'uncommon') probs.push(`gift ${id} is ${d.tier}`);
-      if (c < 10 && SL[id].place !== PLACE_IDS[c + 1]) probs.push(`gift ${id} (chapter ${ch}) does not love ${PLACE_IDS[c + 1]}`); } }
+      // (re-specified in round 6 for D-96: "the next place" is the next KEPT place to open, CHAPTERS[ch].giftPlace, not PLACE_IDS[ch + 1]: after
+      // Rainleaf (4) that is Lanternroof (7), the dropped Fizzwell Tub was 5; and no gift may love a dropped place)
+      const gp = CHAPTERS[c]?.giftPlace ?? -1;
+      if (c < 10 && (gp < 0 || placeDropped(gp) || SL[id].place !== PLACE_IDS[gp])) probs.push(`gift ${id} (chapter ${ch}) does not love ${gp >= 0 ? PLACE_IDS[gp] : 'its next place'}`); } }
+  for (const ch of CHAPTERS) if (ch.gift && ch.place >= 0) { const nxt = CHAPTERS.filter((x) => !x.dropped && typeof x.opens === 'number' && x.place > ch.place).sort((a, b) => (a.opens as number) - (b.opens as number))[0];
+    if (!nxt || ch.giftPlace !== nxt.place) probs.push(`chapter ${ch.idx}'s gift loves ${ch.giftPlace}, the next place to open is ${nxt?.place}`); }
+  for (const d of CATALOG) if (placeDropped(SL[d.id].place)) probs.push(`${d.id} loves the dropped ${SL[d.id].place}`);
   row('DT-03', probs.length === 0, 'favourites: 50 rows, 4+ fans and a Common per place, every family in 2+ places, the thing in the place, every favourite has a self event / ride / switch, the gift lists', probs.slice(0, 5).join(' | '));
   const p4: string[] = [], laneOf = (id: SpeciesId): string => byId.get(id)!.lane, tierIdx = (id: SpeciesId): number => ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'].indexOf(byId.get(id)!.tier);
   for (const d of CATALOG) { const f = SL[d.id].friend; if (f === d.id || SL[f].friend !== d.id) p4.push(`${d.id} ~ ${f} not symmetric`); if (laneOf(f) === laneOf(d.id)) p4.push(`${d.id} ~ ${f} same lane`);
@@ -740,7 +760,8 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
   const text = (f: string): string => readFileSync(resolve(dir, f), 'utf8');
   const jt = mine.filter((f) => f !== 'journal_text.ts' && /from '\.\/journal_text\.ts'/.test(text(f)));
   const bad7 = mine.filter((f) => /from '\.\.\/(core\/quests|life\/)|from '\.\.\/(render|shell|ui|audio|physics)\//.test(text(f)));
-  row('DT-07', mine.length === 14 && cycles.length === 0 && failed.length === 0 && jt.length === 0 && bad7.length === 0, `the ${mine.length} data modules are flat in src/data, the value-import graph is acyclic, each loads first in a bare node, journal_text.ts is imported by none of them`,
+  // (re-specified in round 6 for D-96: 11 modules, was 14: places, life, quests, journal_text and the SEVEN place modules)
+  row('DT-07', mine.length === 11 && cycles.length === 0 && failed.length === 0 && jt.length === 0 && bad7.length === 0, `the ${mine.length} data modules are flat in src/data, the value-import graph is acyclic, each loads first in a bare node, journal_text.ts is imported by none of them`,
     [...cycles, ...failed.map((f) => 'load ' + f), ...jt.map((f) => 'imports journal_text: ' + f), ...bad7.map((f) => 'forbidden import: ' + f)].join(' | '));
 }
 
@@ -748,13 +769,16 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
 {
   const p: string[] = [];
   if (QUEST_TEXT.length !== 110) p.push(`${QUEST_TEXT.length} quest texts`);
-  QUEST_TEXT.forEach(([t, h], i) => { if (t.length > 32) p.push(`${QUESTS[i].id} title ${t.length} chars`); if (h.length > 90) p.push(`${QUESTS[i].id} hint ${h.length} chars`);
+  // (round 6, D-96: a dropped quest's text is an empty tombstone, and only a dropped quest's)
+  QUEST_TEXT.forEach(([t, h], i) => { if (!!QUESTS[i].dropped !== (t === '' && h === '')) p.push(`${QUESTS[i].id}: ${QUESTS[i].dropped ? 'a dropped quest has text' : 'no text'}`); if (t.length > 32) p.push(`${QUESTS[i].id} title ${t.length} chars`); if (h.length > 90) p.push(`${QUESTS[i].id} hint ${h.length} chars`);
     for (const s of h.split(/(?<=[.!?])\s+/)) if (s.split(/\s+/).filter(Boolean).length > 12) p.push(`${QUESTS[i].id} sentence over 12 words`); });
   HOME_TEXT.quests.forEach(([t, h], i) => { if (t !== QUEST_TEXT[i][0] || h !== QUEST_TEXT[i][1]) p.push(`HOME_TEXT ${i} differs from QUEST_TEXT`); });
-  const all = [...QUEST_TEXT.flat(), ...flatStrings(WISH_LINES), ...flatStrings(GIFT_LINES), ...flatStrings(UI_TEXT), ...flatStrings(FACT_LINES), ...KEEPSAKE_TEXT.flat(), ...BUBBLE_MEANINGS];
+  const all = [...QUEST_TEXT.flat(), ...flatStrings(WISH_LINES), ...flatStrings(GIFT_LINES), ...flatStrings(UI_TEXT), ...flatStrings(FACT_LINES), ...KT.flat(), ...BUBBLE_MEANINGS];
   for (const t of all) { if ((t.match(/!/g) ?? []).length > 1) p.push(`two "!" in "${t}"`); for (const s of t.split(/(?<=[.!?])\s+/)) if (s.split(/\s+/).filter(Boolean).length > 12) p.push(`over 12 words: "${s}"`); }
   for (const w of BUBBLE_WORDS) if (w.split(' ').length > 2) p.push(`bubble word "${w}"`);
-  if (KEEPSAKE_TEXT.length !== KEEPSAKES.length || CHAPTER_TEXT.length !== CHAPTERS.length || Object.keys(THING_TEXT).length !== THING_IDS.length) p.push('a text table does not match its ids');
+  // (re-specified in round 6 for D-96: a text row exactly for each shipped keepsake bit, each kept chapter and each kept thing; none for the dropped)
+  const ksBits = KEEPSAKES.map((k) => k.bit).join(), ktBits = Object.keys(KEEPSAKE_TEXT).join(), keptThings = THING_IDS.filter((_, t) => !thingDropped(t));
+  if (ksBits !== ktBits || CHAPTER_TEXT.length !== CHAPTERS.length || CHAPTERS.some((c) => !!c.dropped !== (CHAPTER_TEXT[c.idx] === '')) || Object.keys(THING_TEXT).join() !== keptThings.join()) p.push(`a text table does not match its ids (keepsake bits ${ksBits} / text ${ktBits})`);
   row('DT-08', p.length === 0, 'text lengths: titles <= 32, hints <= 90, <= 12 words a sentence, at most one "!" per text; text tables match their ids', p.slice(0, 5).join(' | '));
 }
 
@@ -771,7 +795,7 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
     [EV.PIECES]: /bits/i, [EV.DISCOVER]: /loves|best friends/i, [EV.FRIEND]: /friends/i, [EV.PHOTO]: /picture|rain stops/i };
   const NUM: Record<number, RegExp> = { 2: /\b(two|twice)\b/i, 3: /\bthree\b/i, 4: /\bfour\b/i, 5: /\bfive\b/i };
   const p: string[] = [];
-  QUESTS.forEach((q, i) => { const [title, hint] = QUEST_TEXT[i];
+  QUESTS.forEach((q, i) => { const [title, hint] = QUEST_TEXT[i]; if (q.dropped) return;   // (D-96: a tombstone has no rule and no text)
     if (!q.clauses.every((c) => c.ev === EV.VISIT)) { if (!q.clauses.some((c) => KW[c.ev]?.test(title))) p.push(`${q.id} "${title}" has no verb for ${q.clauses.map((c) => Object.keys(EV).find((k) => EV[k as keyof typeof EV] === c.ev)).join('+')}`); }
     else if (!/^Go to |^Visit /.test(hint)) p.push(`${q.id} VISIT hint "${hint}" does not carry the verb`);
     for (const c of q.clauses) { const n = c.count; if (n >= 2 && !NUM[n]?.test(hint)) p.push(`${q.id} hint "${hint}" does not say x${n}`); if ((c.minN ?? 0) >= 2 && !NUM[c.minN!]?.test(hint) && !(c.ev === EV.PHOTO)) p.push(`${q.id} hint does not say ${c.minN}`); } });
@@ -792,7 +816,8 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
   for (const f of ['slowrise', 'marshmallow']) if (!soaks(f) || floats(f, 0.28, true).some(Boolean)) p.push(`${f} soaked does not sit at every band (PLACES 2.5)`);
   for (const P of DEFS) for (const z of P.zones) if (z.kind === ZONE.water && (z.surfaceY ?? 0) >= 0.12) for (const f of MATERIAL_FAMILY_IDS) if (soaks(f) && floats(f, z.surfaceY!, true).some(Boolean)) p.push(`${f} soaked floats in ${P.id} ${z.id}`);
   // every water cell (the default pool column and each place's deep-water columns) against the table, at every deep zone of that place
-  const WATER_COLS: Record<string, string[]> = { '3.1': ['Pool (0.28 m)'], '4.3': ['Rock Pool'], '4.4': ['Steam Pool'], '4.6': ['Bath Water'], '4.9': ['Glow Pool'] };
+  // (round 6, D-96: PLACES 4.6's Bath Water and 4.9's Glow Pool are the dropped places' and no longer ship: not checked)
+  const WATER_COLS: Record<string, string[]> = { '3.1': ['Pool (0.28 m)'], '4.3': ['Rock Pool'], '4.4': ['Steam Pool'] };
   const placeOfSec = (sec: string): PlaceDef | undefined => DEFS.find((P) => `4.${P.idx + 1}` === sec);
   for (const c of CELLS) { if (!WATER_COLS[c.where]?.includes(c.col)) continue; const P = placeOfSec(c.where), zs = P ? deep.filter((d) => d.P === P).map((d) => d.z.surfaceY!) : [0.28];
     const says = /\bfloats?\b/i.test(c.text) ? (/if small/i.test(c.text) ? 'small' : 'floats') : /\bwades?\b|\bsits?\b/i.test(c.text) ? 'sits' : '';
@@ -835,7 +860,8 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
   const HEAD: Record<number, string> = { [SIGNATURE.arrive]: 'arrive', [SIGNATURE.toast]: 'warm', [SIGNATURE.squirt]: 'pool', [SIGNATURE.glide]: 'ice', [SIGNATURE.splashjump]: 'pool', [SIGNATURE.floatsit]: 'pool',
     [SIGNATURE.cogride]: 'turntable', [SIGNATURE.moongaze]: 'sky', [SIGNATURE.echotalk]: 'echo', [SIGNATURE.updraft]: 'updraft' };
   const sig = DEFS.map((P) => P.signature), fin = DEFS.map((P) => P.finale), cnt = new Map<string, number>(); for (const s of sig) cnt.set(HEAD[s] ?? '?', (cnt.get(HEAD[s] ?? '?') ?? 0) + 1);
-  const ok13 = new Set(sig).size === 10 && new Set(fin).size === 10 && fin.every((f) => Object.values(FINALE).includes(f as never)) && [...cnt.values()].every((n) => n <= 3) && !cnt.has('?');
+  // (re-specified in round 6 for D-96: every one of the DEFS.length = 7 places has its own, was 10)
+  const ok13 = DEFS.length === 7 && new Set(sig).size === DEFS.length && new Set(fin).size === DEFS.length && fin.every((f) => Object.values(FINALE).includes(f as never)) && [...cnt.values()].every((n) => n <= 3) && !cnt.has('?');
   row('DT-13', ok13, `each place has its own signature verb and finale spectacle; no mechanism heads more than 3 places (${[...cnt].map(([k, n]) => `${k} ${n}`).join(', ')})`);
 }
 
@@ -845,14 +871,15 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
     places: 'home hearthlog ripple frostbell rainleaf fizzwell cogwhistle lanternroof echohollow cloudloft',
     things: 'feltball musicbox snoozerug warmlamp keepsakeshelf bouncepad hearth rockerboard yarnball pillowswing snugbasket kettle rockpool bobring driftlog shellchimes pebbleball sandmound icepond glideramp steampool iciclebells snowdriftnest snowball shakepine splashspots leafteeter mossbouncer dripleaf steppingstones seedpod bathwater tap swirlride soapslide spongeraft bubblepatch spinningcog windupkey springplate magnet steelmarble tickclock littlebell lanternline vanedisc hammock chimneycorner moondish starscope crystals glowpool stoneslide mossbed echostone humrock puffpads updraft kiteswing sunbowarch cloudnest cloudball',
     quests: 'H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 I1 I2 I3 I4 I5 I6 I7 I8 I9 I10 G1 G2 G3 G4 G5 G6 G7 G8 G9 G10 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 W1 W2 W3 W4 W5 W6 W7 W8 W9 W10 L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 E1 E2 E3 E4 E5 E6 E7 E8 E9 E10 U1 U2 U3 U4 U5 U6 U7 U8 U9 U10 X1 X2 X3 X4 X5 X6 X7 X8 X9 X10',
-    keepsakes: 'feltstar emberpinecone seaglasspebble tinyfrostbell raindropbead bubblering littlebrasscog paperlantern glowcrystal cloudpuff friendshipframe paircharm friendshipribbon ribbongarland songbook wishjar littlebutton thimble pocketmap friendsquilt',
+    // (re-specified in round 6 for D-96: by bit, '-' for the three retired bits 5 bubblering, 6 littlebrasscog and 8 glowcrystal; no bit moved)
+    keepsakes: 'feltstar emberpinecone seaglasspebble tinyfrostbell raindropbead - - paperlantern - cloudpuff friendshipframe paircharm friendshipribbon ribbongarland songbook wishjar littlebutton thimble pocketmap friendsquilt',
     emotes: 'snug:1 hello:2 giggle:3 sparkle:4 question:5 wow:6 zzz:7 note:8 star:9 swirl:10 puff:11 sun:12 flame:13 snowflake:14 droplet:15 bubbles:16 leaf:17 moon:18 ball:19 bell:20 shell:21 postcard:22 squeeze:23 stretch:24',
     facts: 'MET:0 PLACE:1 THING:2 FRIEND:3 WATER:4 WARM:5 COLD:6 GROUND:7 SONG:8 TOUCH:9 WISH:10 TWIN:11',
     react: 'FLOAT:1 WADE:2 SOAK:3 TOAST:4 RISE:5 OOZE:6 WARM:7 SHIVER:8 FROST:9 SNOWCAP:10 GLIDE:11 SPLASH:12 DRIFT:13 LIFT:14 RATTLE:15 GLOW:16 GAZE_SKY:17 PRINT:18 SHOWER:19 FIZZ:20 HOLD_ON:21 DRY:22 LOVE:23',
     use: 'ROLL:1 ROCK:2 SWING:3 SPIN:4 BOUNCE:5 RING:6 NAP:7 FLOAT_ON:8 SLIDE:9 SWITCH:10 LISTEN:11 LEAN:12 WADE:13 SHAKE:14 STEP:15',
   };
   const kv = (o: Readonly<Record<string, number>>): string => Object.entries(o).map(([k, v]) => `${k}:${v}`).join(' ');
-  const now = { places: PLACE_IDS.join(' '), things: THING_IDS.join(' '), quests: QUESTS.map((q, i) => (q.idx === i ? q.id : '?')).join(' '), keepsakes: KEEPSAKES.map((k, i) => (k.bit === i ? k.id : '?')).join(' '),
+  const now = { places: PLACE_IDS.join(' '), things: THING_IDS.join(' '), quests: QUESTS.map((q, i) => (q.idx === i ? q.id : '?')).join(' '), keepsakes: Array.from({ length: 20 }, (_, b) => KEEPSAKES.filter((k) => k.bit === b).map((k) => k.id).join('') || '-').join(' '),
     emotes: kv(EMOTE), facts: kv(FACT), react: kv(REACT_KIND), use: kv(USE_VERB) };
   const diff = (Object.keys(LOCK) as (keyof typeof LOCK)[]).filter((k) => LOCK[k] !== now[k]);
   row('DT-14', diff.length === 0, 'the append-only id lists (places, things, quests, keepsakes, emotes, facts, REACT kinds, USE verbs) equal the frozen lock (append to both)', diff.join(' '));
@@ -860,11 +887,16 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
 
 /* ═══════════════════════════════ DT-15: every REACT a quest or fact uses has a trigger; a REACT by thing names an owner or a source ═══════════════════════════════ */
 {
-  const p: string[] = [], trig = new Set(REACT_TRIGGERS.map((r) => r.kind)), used = new Set<number>();
-  for (const q of QUESTS) for (const c of q.clauses) if (c.ev === EV.REACT || c.ev === EV.PIECES) for (const s of c.sub ?? (c.ev === EV.REACT ? Object.values(REACT_KIND) : [])) if (s < PIECES_USE) used.add(s);
+  const p: string[] = [], trig = new Set(REACT_TRIGGERS.map((r) => r.kind)), used = new Set<number>(), anyUsed = new Set<number>();
+  // (round 6, D-96) a clause naming no REACT kind (X6 "four kinds react") is met by any kind a kept place makes: every kind but the retired three
+  const RETIRED: readonly number[] = [REACT_KIND.RATTLE, REACT_KIND.GLOW, REACT_KIND.FIZZ];
+  for (const q of QUESTS) for (const c of q.clauses) if (c.ev === EV.REACT || c.ev === EV.PIECES) for (const s of c.sub ?? (c.ev === EV.REACT ? Object.values(REACT_KIND).filter((k) => !RETIRED.includes(k)) : [])) if (s < PIECES_USE) (c.sub ? used : anyUsed).add(s);
+  for (const k of anyUsed) used.add(k);
   for (const ks of Object.values(FACT_REACTS)) for (const k of ks) used.add(k);
   for (const k of used) if (!trig.has(k)) p.push(`REACT ${k} has no trigger`);
-  if (trig.size !== Object.keys(REACT_KIND).length) p.push(`${trig.size} triggers for ${Object.keys(REACT_KIND).length} kinds`);
+  // (re-specified in round 6 for D-96: every kind but the three only the dropped places made, RATTLE, GLOW and FIZZ, which have none and are used by nothing)
+  for (const k of RETIRED) { if (trig.has(k)) p.push(`retired REACT ${k} has a trigger`); if (used.has(k)) p.push(`retired REACT ${k} is used`); }
+  if (trig.size !== Object.keys(REACT_KIND).length - RETIRED.length) p.push(`${trig.size} triggers for ${Object.keys(REACT_KIND).length} kinds`);
   const sources = new Set(Object.values(LOOK_ADD).map((a) => a.thing).filter(Boolean) as string[]);
   for (const q of QUESTS) for (const c of q.clauses) if (c.ev === EV.REACT && c.thing !== undefined) { const id = THING_IDS[c.thing], P = DEFS.find((d) => d.things.some((t) => t.id === id))!, t = P.things.find((x) => x.id === id)!;
     const owns = P.zones.some((z) => ownsArea(t.zone, z.id)) || P.patches.some((pa) => ownsArea(t.patch, pa.id)); if (!owns && !sources.has(id)) p.push(`${q.id}: ${id} owns no zone or patch and is no look source`); }
@@ -875,7 +907,41 @@ const SL = SPECIES_LIFE as Readonly<Record<SpeciesId, { place: PlaceId; thing: s
 {
   const KIND_OF: Record<number, number> = { [EMOTE.ball]: THING_KIND.ball, [EMOTE.bell]: THING_KIND.bell, [EMOTE.droplet]: THING_KIND.droplet, [EMOTE.note]: THING_KIND.note, [EMOTE.flame]: THING_KIND.flame, [EMOTE.sun]: THING_KIND.sun };
   const p: string[] = []; for (const P of DEFS) { const k = P.things.reduce((m, t) => m | (KIND_OF[t.icon] ?? 0), 0); if (k !== THING_KINDS[P.id]) p.push(`${P.id}: data ${THING_KINDS[P.id]}, things ${k}`); }
+  for (const id of DROPPED_PLACES) if (THING_KINDS[id] !== 0) p.push(`${id} (dropped, D-96): ${THING_KINDS[id]}`);
   row('DT-16', p.length === 0, 'THING_KINDS equals the wish glyph kinds of each place\'s things (ball, bell, droplet, note, flame, sun)', p.join(' | '));
+}
+/* ═══════════════════════════════ DT-17 (round 6, D-96): nothing of a dropped place ships ═══════════════════════════════ */
+{
+  // The owner (2026-11-18): "lantern roof and cloudloft ONLY": Fizzwell Tub, Cogwhistle Bench and Echo Hollow are dropped; "their data, sound and
+  // quest rows must not ship in the build or show anywhere to the player ... no stamp, wish or count may name or depend on a dropped place".
+  // Their ids stay as append-only tombstones (DT-14: saved indices never move); everything else is checked absent here.
+  const p: string[] = [], dIdx = DROPPED_PLACES.map((id) => PLACE_IDS.indexOf(id));
+  const NAMES = ['Fizzwell', 'Cogwhistle', 'Echo Hollow', 'Bath Water', 'Swirl Ride', 'Soap Slide', 'Sponge Raft', 'Bubble Patch', 'Spinning Cog', 'Wind-up Key', 'Spring Plate',
+    'Horseshoe Magnet', 'Steel Marble', 'Tick Clock', 'Little Bell', 'Singing Crystals', 'Glow Pool', 'Stone Slide', 'Glow Moss Bed', 'Echo Stone', 'Hum Rock', 'Bath Time', 'Tick and Spin', 'Hello, Hello',
+    'Bubble Ring', 'Little Brass Cog', 'Glow Crystal', 'Tap Swirl', 'Bath Mat', 'Magnet Field', 'Cave Cool'];
+  if (dIdx.reduce((m, i) => m | (1 << i), 0) !== DROPPED_PLACE_MASK || dIdx.join() !== '5,6,8') p.push(`DROPPED_PLACE_MASK ${DROPPED_PLACE_MASK} vs ${dIdx}`);
+  if (KEPT_PLACE_IDS.length !== 7 || KEPT_PLACE_IDS.some((id) => placeDropped(id)) || PLACE_IDS.filter((id) => !placeDropped(id)).join() !== KEPT_PLACE_IDS.join()) p.push('KEPT_PLACE_IDS is not the seven');
+  for (const id of DROPPED_PLACES) {
+    for (const f of [`src/data/place_${id}.ts`, `src/audio/places/${id}.ts`, `src/render/places/${id}.ts`]) { try { readFileSync(resolve(ROOT, f)); p.push(`${f} exists`); } catch { /* absent: good */ } }
+    if (PLACE_INFO.some((x) => x.id === id)) p.push(`PLACE_INFO has ${id}`);
+    let rejected = false; try { await loadPlaceDef(id); } catch { rejected = true; } if (!rejected) p.push(`loadPlaceDef('${id}') resolves`);
+  }
+  for (const q of QUESTS) { const dropCh = !!CHAPTERS[q.chapter]?.dropped;
+    if (dropCh !== !!q.dropped || (q.dropped && q.clauses.length)) p.push(`${q.id}: tombstone ${!!q.dropped}, chapter dropped ${dropCh}, ${q.clauses.length} clauses`);
+    for (const c of q.clauses) { if (typeof c.place === 'number' && placeDropped(c.place)) p.push(`${q.id} names dropped place ${c.place}`); if (c.thing !== undefined && thingDropped(c.thing)) p.push(`${q.id} names dropped thing ${THING_IDS[c.thing]}`); } }
+  if (CHAPTERS.filter((c) => c.dropped).map((c) => c.place).join() !== '5,6,8') p.push('the dropped chapters are not 5, 6, 8');
+  for (const c of CHAPTERS) if (c.dropped && (c.gift || GIFT_LISTS[c.idx])) p.push(`dropped chapter ${c.idx} gives a gift`);
+  if (KEEPSAKES.some((k) => [5, 6, 8].includes(k.bit)) || KEEPSAKES.length !== 17 || (KEEPSAKE_MASK & ((1 << 5) | (1 << 6) | (1 << 8)))) p.push('a retired keepsake bit ships');
+  const map = KEEPSAKES.find((k) => k.id === 'pocketmap'); if (!map || map.n !== KEPT_PLACE_IDS.length) p.push(`the Pocket Map needs ${map?.n} places, ${KEPT_PLACE_IDS.length} exist`);
+  for (const id of Object.keys(THING_TEXT)) if (thingDropped(THING_IDS.indexOf(id as never))) p.push(`THING_TEXT names ${id}`);
+  const texts = [...QUEST_TEXT.flat(), ...CHAPTER_TEXT, ...Object.values(THING_TEXT).flatMap((t) => t ?? []), ...Object.values(AREA_TEXT), ...KT.flat(), ...flatStrings(FACT_LINES), ...flatStrings(WISH_LINES), ...flatStrings(GIFT_LINES), ...flatStrings(UI_TEXT)];
+  for (const t of texts) for (const n of NAMES) if (t.includes(n)) p.push(`text "${t}" names ${n}`);
+  // sound: no recipe, alias or music style of a dropped place; no string literal anywhere in src names one (places.ts keeps the tombstone ids)
+  const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(resolve(d, e.name)) : e.name.endsWith('.ts') ? [resolve(d, e.name)] : []);
+  for (const f of walk(resolve(ROOT, 'src'))) { if (f.endsWith('src/data/places.ts')) continue; const src = readFileSync(f, 'utf8');
+    for (const m of src.matchAll(/'(fizzwell|cogwhistle|echohollow|bath|bench|hollow)'|\b(bath|bench|hollow): \{ next:/g)) p.push(`${relative(ROOT, f)}: ${m[0]}`); }
+  row('DT-17', p.length === 0, '(round 6, D-96) nothing of Fizzwell Tub, Cogwhistle Bench or Echo Hollow ships: no PlaceDef, PLACE_INFO row, quest rule, favourite, gift, keepsake, text, sound recipe or music style; tombstone ids only, the Pocket Map counts seven',
+    p.length ? p.slice(0, 6).join(' | ') : `${QUESTS.filter((q) => q.dropped).length} tombstone quests, ${KEEPSAKES.length} keepsakes, ${KEPT_PLACE_IDS.length} places`);
 }
 void MATERIAL_FAMILIES;
 process.exit(bad ? 1 : 0);

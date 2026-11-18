@@ -32,7 +32,7 @@ export const PLACE: PlaceDef = {
   pad: [0, 0, 1.2], spawn: [[-0.025, 0.825], [2.575, 1.575], [0.925, -1.575], [-1.375, -0.325], [-1.575, 1.575], [1.575, 0.175]],
   tall: { // laid under P7 (S2): the log at the back of the middle (its peek spots at its back end), the pool and the Bob Ring back right (the
     // ring at the pool's full depth, its rider inside the bounds), the chimes in the left strip, the mound and the ball in the front band
-    bounds: { shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3, round: 0.4 }, walls: [],
+    bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
     spawn: [[0.375, 0.975], [-0.425, 0.375], [-0.425, 1.575], [0.425, -0.175], [-0.375, -0.775]],
     things: [
       { x: 1.403, z: -2.07, yaw: 0 },
@@ -42,7 +42,7 @@ export const PLACE: PlaceDef = {
       { x: -1, z: 2.6, yaw: 0 },
       { x: 0.8, z: 2.75, yaw: 0 },
     ],
-    zones: [{ shape: 'disc', x: 1.403, z: -2.07, r: 1.3 }, { shape: 'box', x: 0, z: -3.25, hx: 2.3, hz: 0.45 }, { shape: 'box', x: 0, z: 0, hx: 1.25, hz: 3 }],
+    zones: [{ shape: 'disc', x: 1.403, z: -2.07, r: 1.3 }, { shape: 'box', x: 0, z: -3.25, hx: 2.3, hz: 0.45 }, { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }],
     patches: [{ shape: 'box', x: 0, z: -2.45, hx: 2.3, hz: 0.35 }],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },
