@@ -414,6 +414,9 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
             const c = cls(s.def.id); let def = 0, alive = 0;
             for (const pl of w.players) { const f = pl.ent; if (f && f.alive && f.team === st.team) { alive++; if ((f.x - st.x) ** 2 + (f.y - st.y) ** 2 <= 20 * 20) def++; } }
             add(C, `fall.${c}`); if (def === 0 && alive >= 2) add(C, `fall.${c}.noDefender`);
+            // (timeline, minutes: the first fall of each class on either side — where a longer game spends its extra time)
+            if (C[`tl.${c}`] === undefined) C[`tl.${c}`] = now / 60;
+            if (C[`tl.${c}.t${st.team}`] === undefined) C[`tl.${c}.t${st.team}`] = now / 60;
             // (owner_rulings 42: a structure taken by Wicks alone while two fit defenders stood beside it)
             let foes = 0, fit = 0;
             for (const pl of w.players) { const f = pl.ent; if (!f || !f.alive) continue; const d2 = (f.x - st.x) ** 2 + (f.y - st.y) ** 2;

@@ -1,12 +1,12 @@
 {
  "phase": "vfy_lc",
- "finishedAt": "2026-11-18T08:17:56.226Z",
+ "finishedAt": "2026-11-18T09:14:13.946Z",
  "env": {
   "chrome": "157.0.8103.79",
-  "load1End": 13.91,
+  "load1End": 9.1,
   "node": "v22.23.3",
   "base": "http://localhost:5263",
-  "wallMs": 103465
+  "wallMs": 105696
  },
  "steps": [
   {
@@ -15,13 +15,13 @@
    "phase": "vfy_lc",
    "step": "kill",
    "name": "kill_banner",
-   "desc": "first kill banner t=85.2",
+   "desc": "first kill banner t=85",
    "route": "scr--match",
    "hud": true,
    "crop": null,
-   "bytes": 2777680,
-   "tMs": 46297,
-   "load1": 9.4,
+   "bytes": 2524705,
+   "tMs": 49094,
+   "load1": 8.03,
    "layout": {
     "minFont": {
      "px": 11,
@@ -49,9 +49,9 @@
    "route": "scr--match",
    "hud": true,
    "crop": null,
-   "bytes": 2686450,
-   "tMs": 81821,
-   "load1": 11.18,
+   "bytes": 2404836,
+   "tMs": 84394,
+   "load1": 9.6,
    "layout": {
     "minFont": {
      "px": 11,
@@ -75,13 +75,13 @@
    "phase": "vfy_lc",
    "step": "fight2",
    "name": "fight_numbers_late",
-   "desc": "later fight t=394.7",
+   "desc": "later fight t=395.6",
    "route": "scr--match",
    "hud": true,
    "crop": null,
-   "bytes": 2777768,
-   "tMs": 103458,
-   "load1": 13.91,
+   "bytes": 2427111,
+   "tMs": 105682,
+   "load1": 9.1,
    "layout": {
     "minFont": {
      "px": 11,
@@ -164,7 +164,7 @@
   [
    "kill",
    {
-    "time": 85.2,
+    "time": 85,
     "dead": false,
     "enemyNear": 0,
     "ended": false,
@@ -175,7 +175,7 @@
   [
    "fight",
    {
-    "time": 281.4,
+    "time": 281.1,
     "dead": false,
     "enemyNear": 1,
     "ended": false,
@@ -186,7 +186,7 @@
   [
    "fight2",
    {
-    "time": 395.7,
+    "time": 396.5,
     "dead": false,
     "enemyNear": 1,
     "ended": false,
