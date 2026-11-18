@@ -2637,3 +2637,9 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   With `?deepbed=1`: the display's deepbed early-out runs BEFORE the cache branch (FRAG_SURFACE order), so skipped
   fragments cost nothing cached or not; the cached ones cost 3 taps instead of evalTerrain. The bake does not skip
   (the shallow-angle part of a deep patch still shows): its cost is one bake per patch, then nothing while still.
+- MEADOW PAIR (run d, gap-1 build, top-down 160 m `graze`, 480x274 fast set-up, settle 60; 254 patches all cached, want
+  9 MB, pix 100 %): mean |d| 1.88, RGB live 102.1 116.3 68.5 / cache 102.1 116.3 68.5 (EQUAL; s22 dist7 had G +2.3,
+  B -2.3), detail 5.05 / 4.75. Sheet s26/sheet-d0.png LOOKED: the diff is two rain streaks and a few flower dots.
+  => s22's "top-down meadow 2.5 % greener" was the bake's footprint (sqrt2 d/f vs the live length(fwidth) ~1.83 d/f):
+  CLOSED by tcFwLive. The -6 % fine contrast is the bilinear reconstruction of a pre-filtered tile (texels ~ 1.3 per
+  pixel by edge); `tcdens=1.6` would buy it back at ~1.5x memory (not measured).
