@@ -31,6 +31,36 @@ import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS } from './terrainvert.glsl.ts';
 import { GROUND_FRAG_PARS, GROUND_UNIFORMS, GROUND_VERT_MAIN, GROUND_VERT_PARS } from './groundfloor.ts';
 import { orthoDepth } from '../shaders/zcons.ts';
 import { TNOISE, TNOISE_GLSL, TNOISE_UNIFORMS } from './noisetex.ts';
+import { perfNum, perfSwitch } from '../perfswitch.ts';
+/**
+ * PERF s23 `?deepbed=1` (default off): ground the water above it hides completely is not shaded. The water pass
+ * (ocean.ts) shows the opaque scene under it as refr * Tw, Tw = exp(-(sigmaA + sigmaS) * 1.25 * path), and its
+ * smallest extinction (blue, open warm salt sea, no silt / coast / river terms) is (0.11 + 0.05) * 1.25 = 0.2 / m.
+ * The path from a bed point to the surface toward the eye is uw / cos(angle to the vertical) exactly (the straight ray
+ * leaves a point uw under the plane). Past 48 m of path Tw < 7e-5: an HDR bed of up to ~5x white adds < 0.1 / 255.
+ * 4 m are taken off the depth first (wave troughs, tides). Off when the water is off (`?water=0`), with the
+ * camera below the level, and in every debug view. The fragment keeps its depth (log depth is written before).
+ * At the landing view (camera ~60 m, sea at -19..-74 m seen at 5-20 deg) this is most of the sea bed = most of the
+ * screen's terrain fragments, which the water drawn in a LATER pass cannot hide from the GPU.
+ */
+// (`?deepbed=2` debug: the skipped fragments painted magenta, also with `?water=0`, to count them)
+const DEEPBED_N = perfNum('deepbed', 0)!;
+const DEEPBED = DEEPBED_N === 2 || (DEEPBED_N === 1 && perfSwitch('water'));
+const DEEPBED_GLSL = /* glsl */ `
+#if !defined(TC_BAKE)
+  {
+    float dbUw = vF4.y - vF4.w - 4.0;
+    if (dbUw > 0.0 && uDebug < 0.5) {
+      vec3 dbToEye = transpose(uBodyToView) * vViewPosition;
+      float dbCos = abs(dot(normalize(vBodyPos), normalize(dbToEye)));
+      if (length(vBodyPos + dbToEye) - uRadius > vF4.y + 1.0 && dbUw > 48.0 * dbCos) {
+        gl_FragColor = vec4(${DEEPBED_N === 2 ? '1.0, 0.0, 1.0' : '0.0, 0.0, 0.0'}, 1.0);
+        return;
+      }
+    }
+  }
+#endif
+`;
 import { TCACHE, TC_BAKE_SIDE, TC_FRAG_BAKE_OUT, TC_FRAG_FETCH, TC_FRAG_PARS, TC_VERT_MAIN, TC_VERT_PARS } from './tcache.ts';
 
 /** planet kind → palette / behaviour code used by the shaders */
@@ -1631,7 +1661,7 @@ ${TCACHE ? TC_VERT_MAIN : ''}
 
 const FRAG_SURFACE = /* glsl */ `
   float tFw = length(fwidth(vBodyPos));
-#ifdef TS_NOSURF
+${DEEPBED ? DEEPBED_GLSL : ''}#ifdef TS_NOSURF
   TSurf ts; ts.albedo = vec3(0.3, 0.34, 0.2); ts.rough = 0.85; ts.bump = 0.0; ts.ao = 1.0; ts.emis = vec3(0.0); ts.glint = 0.0; ts.microG = vec3(0.0); ts.sky = 1.0; ts.sward = 0.0;
 #elif defined(TC_BAKE)
   // (tcache.ts) the bake: the surface at this texel for the anchor's distance, written to the tile's three targets
@@ -1956,7 +1986,7 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
   };
   // (tcache.ts: the display program reads tiles; TC_ON / TC_BAKE are material defines, part of three's program key)
   if (TCACHE) mat.defines = { ...(mat.defines ?? {}), TC_ON: '' };
-  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}${TNOISE ? '-tnoise' : ''}${TCACHE ? '-tc' : ''}`;
+  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}${TNOISE ? '-tnoise' : ''}${TCACHE ? '-tc' : ''}${DEEPBED ? '-deep' : ''}`;
   return mat;
 }
 

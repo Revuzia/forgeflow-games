@@ -86,6 +86,29 @@ function rippleMap(): DataTexture {
 /** PERF s21 debug `?wdebug=class,nodepth`: class = flat colour by vDepth class (red: ground above the sheet by more
  *  than 8 cm, yellow: by less, green: draped film, blue: water); nodepth = the water passes the depth test everywhere (it still writes depth): what a failing test would show */
 const WDEBUG = perfList('wdebug');
+/**
+ * PERF s23 Mac isolation switches for the water pass (all default = the current picture and cost):
+ * `?wfrag=0`  the fragment ends right after the land discards with a constant colour (depth write + discards kept);
+ * `?wdepth=0` no gl_FragDepth write (log depth chunks left out) and no discard at all: the water is plain opaque
+ *             geometry (its depth is then the rasterised one: the conservative-depth bound with zcons, so it tests a
+ *             few cm nearer than the log depth; WITHOUT zcons the depth test is wrong — timing only);
+ * `?wvert=0`  flat vertex stage: no Gerstner displacement and none of its 4 vertex simplex (the fragment's normals stay);
+ * `?wcopy=0` / `?wsingle=1` (renderer.ts) imply NOSCENE here: the water reads neither the colour nor the depth copy
+ *             (refraction = the `norefr` constant, no SSR, no waterland depth taps) — so compare them with
+ *             `wshade=norefr,nossr`, not with the base.
+ * `?wdebug=wet` (problem 3, the sheet over the hills): magenta = no wet sim cell under this sheet at all (the level
+ *             is the dry cells' extrapolated construction: ghost water), orange = wet cells, but the sim's water there
+ *             is a film under 10 cm (rain / damp ground), blue = real water.
+ * `?wghost=1` drop ghost water (magenta of wdebug=wet): fragments whose sim triangle holds less than 1 % of a wet cell.
+ */
+const WFRAG = perfSwitch('wfrag');
+const WDEPTH = perfSwitch('wdepth');
+const WVERT = perfSwitch('wvert');
+const NOSCENE = !perfSwitch('wcopy') || perfSwitch('wsingle', false);
+const WGHOST = perfSwitch('wghost', false);
+const NOREFR = WCUT.has('norefr') || NOSCENE;
+const NOSSR = WCUT.has('nossr') || NOSCENE;
+const WET_ON = WGHOST || WDEBUG.has('wet');
 
 // the 14 ripple wavelets' constants (WFAST): what ripples() derives per fragment and per wavelet from its index
 const f32 = Math.fround;
@@ -173,6 +196,7 @@ varying vec3 vWind;
 varying vec4 vSurge;
 varying float vBedCos;
 varying float vSimD;
+${WET_ON ? 'varying float vWet;\nvarying float vWetD;' : ''}
 #include <logdepthbuf_pars_vertex>
 void main() {
 ${TERRAIN_VERT_CORE}
@@ -186,6 +210,15 @@ ${TERRAIN_VERT_CORE}
   // harbour's 0.2-0.8 m margin drew as grass 25 m out from the pier the sim floods. Deep water and the dry cells' levels
   // (under their ground) are left alone
   vSimD = tH - tS;
+  ${WET_ON ? '{' : '/*'}
+    // (PERF s23 wdebug=wet / wghost) the barycentric say of WET cells (fieldpack WET = 0.02 m) in this vertex's sim
+    // triangle: 0 on every edge between two dry cells and all over a triangle of three dry cells (continuous across
+    // sim-triangle edges: a cell has no weight on the edge opposite it), and the sim's own water depth there
+    float wB = aCells.w, wC = aMisc.x, wA = 1.0 - wB - wC;
+    float da = texelFetch(uFieldA, tfUV(aCells.x), 0).w, db = texelFetch(uFieldA, tfUV(aCells.y), 0).w, dc = texelFetch(uFieldA, tfUV(aCells.z), 0).w;
+    vWet = wA * step(0.02, da) + wB * step(0.02, db) + wC * step(0.02, dc);
+    vWetD = wA * da + wB * db + wC * dc;
+  ${WET_ON ? '}' : '*/'}
   {
     float drape = smoothstep(0.1, 0.25, vSimD) * (1.0 - smoothstep(1.5, 3.0, vSimD));
     float lift = max(0.0, tG + 0.18 - tH) * drape;
@@ -209,9 +242,9 @@ ${TERRAIN_VERT_CORE}
   float calm = smoothstep(0.3, 4.0, depth) * (1.0 - smoothstep(0.4, 1.2, flowSpd)) * (1.0 - smoothstep(0.05, 0.4, M1.z));
   vec3 disp = vec3(0.0);
   float crest = 0.0;
-  float gwW = gwWarpAt(tPos, uTime);
-  vec2 gwG = gwGroupAt(tPos, uTime);
-  for (int i = 0; i < 4; i++) {
+  float gwW = ${WVERT ? 'gwWarpAt(tPos, uTime)' : '0.0'};
+  vec2 gwG = ${WVERT ? 'gwGroupAt(tPos, uTime)' : 'vec2(0.0)'};
+  for (int i = 0; i < ${WVERT ? 4 : 0}; i++) {
     float L = GW_D[i].w;
     // fade by camera distance (not by LOD level): both sides of a patch edge displace identically, no cracks
     float amp = GW_A[i] * sea * calm * (1.0 - smoothstep(L * 5.0, L * 11.0, distance(tPos, uCamBody)));
@@ -377,7 +410,7 @@ ${WAVES_GLSL}
 ${WFAST && !WSHADE.has('nonoise') ? '#define snoise(p) snoiseT(p, __LINE__)' : ''}
 ${WFAST ? RIPPLE_CONSTS : ''}
 ${GATES}
-#include <logdepthbuf_pars_fragment>
+${WDEPTH ? '#include <logdepthbuf_pars_fragment>' : ''}
 uniform mat3 uBodyToView;
 uniform vec3 uSunDirBody;
 uniform vec3 uSunDirView;
@@ -418,6 +451,7 @@ varying vec3 vWind;
 varying vec4 vSurge;
 varying float vBedCos;
 varying float vSimD;
+${WET_ON ? 'varying float vWet;\nvarying float vWetD;' : ''}
 float gSea = 1.0;
 vec3 gWindT = vec3(0.0);
 // the pixel's footprint ALONG a wave's direction d: at a grazing view the footprint is metres long toward the horizon
@@ -463,7 +497,7 @@ ${WCUT.has('noripple') ? RIPPLES_NONE : WFAST2 ? RIPPLES_MAP : WFAST ? RIPPLES_F
 // the step, and a miss returns no confidence: the caller's sky radiance is then the one and only sky source.
 // Returns rgb + confidence.
 vec4 ssr(vec3 posV, vec3 rV, vec3 nV) {
-  if (uPrevValid < 0.5${WCUT.has('nossr') ? ' || true' : ''}) return vec4(0.0);
+  if (uPrevValid < 0.5${NOSSR ? ' || true' : ''}) return vec4(0.0);
   // rays turning back toward the camera cannot be found on screen: fade them out (no hard cut line on the sea)
   float facing = 1.0 - smoothstep(0.05, 0.3, rV.z);
   if (facing <= 0.0) return vec4(0.0);
@@ -513,15 +547,16 @@ vec4 ssr(vec3 posV, vec3 rV, vec3 nV) {
 }
 
 void main() {
-  #include <logdepthbuf_fragment>
-  ${WATERLAND ? `// the ground stands above the sheet here (by more than 8 cm and the depth's change over the pixel, so a
+  ${WDEPTH ? '#include <logdepthbuf_fragment>' : ''}
+  ${WGHOST && WDEPTH ? 'if (vWet < 0.01) { discard; return; }' : ''}
+  ${!WDEPTH ? '' : WATERLAND ? `// the ground stands above the sheet here (by more than 8 cm and the depth's change over the pixel, so a
   // shoreline pixel keeps every sample the depth test gives it): not water, nothing to shade
   float landCut = max(-0.6, -0.08 - 1.5 * fwidth(vDepth));
   if (vDepth < landCut) { discard; return; }
   // ... and the opaque scene stands in front of the sheet here (the linear depth copy the refraction reads anyway; a
   // margin of 5 cm + 0.4 %): hidden water, nothing to shade. Only where the four neighbouring pixels agree, so the
   // one-pixel rim round an occluder is still left to the per-sample depth test (its anti-aliased edge)
-  {
+  ${NOSCENE ? '/*' : '{'}
     vec2 wuv = gl_FragCoord.xy / uResolution, wpx = 1.0 / uResolution;
     float wz = -vViewPos.z * 0.996 - 0.05;
     if (texture(tSceneDepth, wuv).r < wz) {
@@ -529,7 +564,13 @@ void main() {
                      max(texture(tSceneDepth, wuv + vec2(0.0, wpx.y)).r, texture(tSceneDepth, wuv - vec2(0.0, wpx.y)).r));
       if (zn < wz) { discard; return; }
     }
-  }` : 'if (vDepth < -0.6) discard;'}
+  ${NOSCENE ? '*/' : '}'}` : 'if (vDepth < -0.6) discard;'}
+  ${!WFRAG ? 'gl_FragColor = vec4(0.02, 0.05, 0.07, 1.0); return;' : ''}
+  ${WDEBUG.has('wet') ? `{
+    vec3 dc = vWet < 0.01 ? vec3(1.0, 0.0, 1.0) : vWetD < 0.1 ? vec3(1.0, 0.5, 0.0) : vec3(0.0, 0.0, 1.0);
+    if (vDepth < 0.0) dc *= 0.35;
+    gl_FragColor = vec4(dc * 0.6, 1.0); return;
+  }` : ''}
   ${WDEBUG.has('zdiff') ? `{
     float zs = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r, zf = -vViewPos.z;
     float rel = (zs - zf) / zf;
@@ -637,16 +678,16 @@ void main() {
   // ── refraction + absorption ──
   vec2 suv = gl_FragCoord.xy / uResolution;
   float fragZ = -vViewPos.z;
-  float sceneZ0 = ${WCUT.has('norefr') ? 'fragZ + 5.0' : 'texture(tSceneDepth, suv).r'};
+  float sceneZ0 = ${NOREFR ? 'fragZ + 5.0' : 'texture(tSceneDepth, suv).r'};
   float thick0 = max(sceneZ0 - fragZ, 0.0);
   // (gentle: with the waves really drawn, a 3.5 % screen offset shattered the shallow floor into a blocky mosaic)
   vec2 ruv = suv + nV.xy * 0.016 * clamp(thick0 * 0.25, 0.0, 1.0) / max(fragZ * 0.02, 1.0);
-  float sceneZ = ${WCUT.has('norefr') ? 'sceneZ0' : 'texture(tSceneDepth, ruv).r'};
+  float sceneZ = ${NOREFR ? 'sceneZ0' : 'texture(tSceneDepth, ruv).r'};
   if (sceneZ < fragZ) { ruv = suv; sceneZ = sceneZ0; }
   float cosV = max(abs(normalize(vViewPos).z), 0.05);
   float pathLen = max(sceneZ - fragZ, 0.0) / cosV;
   pathLen = min(pathLen, 400.0);
-  vec3 refr = ${WCUT.has('norefr') ? 'vec3(0.02, 0.05, 0.07)' : 'texture(tSceneColor, ruv).rgb'};
+  vec3 refr = ${NOREFR ? 'vec3(0.02, 0.05, 0.07)' : 'texture(tSceneColor, ruv).rgb'};
   // cold seas a little greener, warm shallows turquoise
   // (coastal and lake water carries plankton and silt: the floor fades within a few metres — a quay's foot 9 m down
   // stayed in plain view and every pool read as a swimming pool)
@@ -991,7 +1032,7 @@ void main() {
     // again here it drew a dotted line of tiny pools wherever the 3 m detail relief dips under the level)
     float film = smoothstep(0.03, 0.3, thickE);
     vec3 wetGround = mix(refr, refr * 0.8 + skyR * F * 0.3, film);
-    ${WATERLAND ? 'edge *= smoothstep(landCut, min(landCut + 0.06, 0.0), vDepth);' : ''}
+    ${WATERLAND && WDEPTH ? 'edge *= smoothstep(landCut, min(landCut + 0.06, 0.0), vDepth);' : ''}
     col = mix(wetGround, col, edge * (1.0 - paper));
   }
   // (UI lane, additive) a map overlay (the UI's O key, overlaytex.ts) tints the sea with its colour too, at the

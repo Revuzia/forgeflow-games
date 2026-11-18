@@ -56,6 +56,14 @@ import { perfList, perfNum, perfSwitch, perfSwitchNote } from './perfswitch.ts';
 const SW_MSAA = perfSwitch('msaa');
 const SW_CLOUDS = perfSwitch('clouds');
 const SW_WATER = perfSwitch('water');
+/**
+ * PERF s23 (Mac isolation of the water pass; timing switches, the water's look changes): `?wcopy=0` skips the colour /
+ * linear-depth copies for the water (the water then samples neither: ocean.ts NOSCENE); `?wsingle=1` draws the water
+ * INSIDE the opaque pass (same render, no second MSAA load/store/resolve of hdr; the copies still run, the water
+ * samples none of them). Also the problem-3 test: the water then depth-tests against the terrain in the same pass.
+ */
+const SW_WCOPY = perfSwitch('wcopy');
+const SW_WSINGLE = perfSwitch('wsingle', false);
 const SW_GTAO = perfSwitch('gtao');
 const SW_ATMO = perfSwitch('atmo');
 // (GPU-HUNT-PLAN §2) more bisection switches, all default = unchanged:
@@ -600,8 +608,11 @@ export class Renderer {
     r.setRenderTarget(post.hdr);
     r.setClearColor(0x000000, 1);
     perfmon.mark('scene:opaque');
-    if (!SW_SCENE) r.clear();
-    else {
+    if (!SW_SCENE) {
+      r.clear();
+      // (PERF s23 `?wsingle=1`) the water in the same pass as the clear
+      if (SW_WSINGLE && SW_WATER) { cam.layers.set(2); r.autoClear = false; r.render(this.scene, cam); r.autoClear = true; cam.layers.set(0); }
+    } else {
       // (bisection: ?flat=1 one plain material for everything opaque, ?hide=veg,cover,life,terrain)
       const hv = SW_HIDE.size && primaryVis ? primaryVis : null;
       const was = hv ? [hv.vegetation.group.visible, hv.groundCover.group.visible, hv.life.group.visible, hv.terrainMats.map((m) => m.visible)] as const : null;
@@ -625,7 +636,10 @@ export class Renderer {
         if (VZPRE) zpre.vegetation.swapZpre(false);
         r.autoClear = false;
       }
+      // (PERF s23 `?wsingle=1`: the water layer drawn by the same render, after the opaque scene by its renderOrder)
+      if (SW_WSINGLE && SW_WATER) cam.layers.enable(2);
       r.render(this.scene, cam);
+      cam.layers.set(0);
       r.autoClear = true;
       this.scene.overrideMaterial = null;
       if (hv && was) {
@@ -665,7 +679,7 @@ export class Renderer {
     let anyWater = false;
     for (const vis of this.planets.values()) if (vis.lod.stats.waterPatches > 0) anyWater = true;
     perfmon.mark('post:copies');
-    post.copyForWater(r, this.fsq, cam.far, anyWater || this.ships.fx.wantsSceneCopy || !SKIP_COPY);
+    if (SW_WCOPY) post.copyForWater(r, this.fsq, cam.far, anyWater || this.ships.fx.wantsSceneCopy || !SKIP_COPY);
     // ground decals and FX lights (brush, reticles, the hand's shadow, crater glow, cracks…) under the water and haze
     perfmon.mark('post:decals');
     // (ROADMAP step 6, `?hdrmerge=0` off) the decals are drawn with the water below: one render into the MSAA hdr
@@ -678,7 +692,7 @@ export class Renderer {
     (this.waterScene.uProj.value as Matrix4).copy(cam.projectionMatrix);
     this.waterScene.uFrame.value = this.frameNo % 64;
     perfmon.mark('post:water');
-    const waterOn = anyWater && SW_WATER;
+    const waterOn = anyWater && SW_WATER && !SW_WSINGLE;
     if (waterOn || decalsOn) {
       cam.layers.mask = (waterOn ? 1 << 2 : 0) | (decalsOn ? 1 << 5 : 0);
       r.autoClear = false;

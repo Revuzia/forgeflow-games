@@ -2234,3 +2234,78 @@ Also: `wdebug=class` paints the sheet over the hills the SAME blue as the open s
    ocean-class water whose level the shader believes is above the ground, yet it draws over visibly higher terrain while tree
    trunks draw over it. So either the terrain's depth is wrong for the water pass on Metal (water passes the depth test over
    terrain but not over trees), or the water surface there really is above the terrain mesh (level / height mismatch).
+
+## SESSION 23 (2026-11-18, PERF lane) — the three open problems of round 16, by the code; switches for ONE Mac round
+### 1. REGRESSION e50830af -> 5ee51b2d: the code cannot double the frame; only `waterland` is default-on
+- `git diff e50830af 5ee51b2d -- src`: ONLY src/render changed (chunks, noisetex, ocean, planetview, tcache (new),
+  terrainmat, renderer +2 lines). No sim / ui / app change.
+- SHADER-TEXT PROOF (scratch/dump.mjs: imports each tree's ocean.ts + terrainmat.ts in node, prints the ocean vert/frag
+  and the terrain program after onBeforeCompile, comments stripped): with tcache off the terrain program differs ONLY
+  inside `#ifdef TC_BAKE` / `#elif defined(TC_ON)` blocks (dead: neither define is set), program key unchanged
+  (`-tc` only with tcache). Ocean with `?waterland=0` = e50830af's text up to rewrites the compiler folds (`#define
+  GW_N(p,s) snoise(p)`, `if (true) {...}` for the W_*_ON gates). So `?waterland=0` IS the old water and the old terrain.
+- tcache with tcache off, CPU side: `if (TCACHE)` guards tcInitPage / TerrainCache / bake (null -> no-op); tcache.ts
+  top level only reads switches. noisetex: WNOISE = `wfast=1` only (`wfast=2` does not build the volume). No work.
+- `waterland` (default on) adds per water fragment: fwidth + 1 tap (+4 where the opaque scene is in front) of the R32F
+  linear depth copy (a separate texture, NOT attached: no feedback) and an earlier discard (the old shader already had
+  a discard and gl_FragDepth, so early-Z was already off). It REMOVES shading work (hidden water). Nothing here can
+  add ~500 ms. The same-build spread is as large: P on dbadbde1 50 ms (round 12) vs 117-133 (round 13); P on 5ee51b2d
+  84-217 in one session. CONCLUSION: by the code this is machine state (thermal, memory pressure / swap — round 3 saw
+  swap 8.6->11.8 GB — WindowServer), not a code regression. Settle it with N vs N&waterland=0 interleaved AND, if the
+  lead can host it, build e50830af itself interleaved in the same session (the only clean control).
+### 2. WATER PASS ~100 ms with a trivial fragment: what happens around the draw (renderer.ts 597-705, pipeline.ts 595-660)
+- passes (MSAA 4x at Ultra; 1686x963 = 1.62 MP; hdr = 4x RGBA16F renderbuffer + 4x DEPTH32F renderbuffer, resolve
+  targets RGBA16F + DEPTH32F texture): (a) scene pass -> hdr MSAA, store 52 + 26 MB; three's blitFramebuffer resolve
+  colour+depth (read 78, write 19.5 MB); (b) GTAO; (c) copyForWater: 2 fsq draws -> sceneCopy (RGBA16F 13 MB) + linDepth
+  (R32F 6.5 MB); (d) WATER: setRenderTarget(hdr) again, autoClear off -> Metal pass with LOAD of 78 MB, draw, store
+  78 MB, second resolve blit (78 read / 19.5 write); (e) invalidate (after the resolve, so it saves nothing for (d)'s
+  store — that pass is already closed). No mips, no per-frame texture uploads in the water path.
+- ~400 MB/frame of attachment traffic = ~3-4 ms at M5 bandwidth: NOT 100 ms, unless ANGLE-Metal does the re-entry or
+  the depth resolve through a slow path (e.g. a shader 'unresolve' of the MSAA contents, or a per-sample depth resolve
+  draw). Vertex stage: TERRAIN_VERT_CORE (12-36 texelFetch with morph) + 15 field fetches + 4 vertex simplex + 4
+  Gerstner per vertex x ~1.1 k vertices x water patches; rscale also lowers the patch count (pixel-error LOD), so the
+  rscale result does not separate vertex from fragment.
+- What a flat (`wshade` all six) water fragment STILL runs: gl_FragDepth (log), the waterland taps, 4 Gerstner + 3 swell
+  normal loops, sky LUTs, cloud shadow + mirrored deck (cloudDensityAt), glint, moon, overlay. So "trivial" was not.
+- BUILT (all default = current picture and cost; defaults' shader text checked identical with dump.mjs):
+  `?wfrag=0` constant colour right after the land discards (depth write + discards kept) = the real trivial fragment;
+  `?wdepth=0` no gl_FragDepth (log-depth fragment chunks left out) and no discard (timing only: depth = the rasterised
+  zcons bound); `?wvert=0` no Gerstner / vertex simplex; `?wcopy=0` no colour / depth copies (ocean NOSCENE: no
+  refraction taps, no SSR, no waterland depth taps -> compare with `wshade=norefr,nossr`); `?wsingle=1` the water layer
+  drawn INSIDE the opaque render (no second MSAA load / store / resolve; NOSCENE too; with scene=0 it is drawn right
+  after the clear in the same pass).
+### 3. THE SHEET OVER THE HILLS: blue in wdebug=class means vDepth >= 0 — the sheet IS above its own ground
+- vDepth = tH - tG of the SAME vertex in the SAME program (terrainvert tGround), so a depth-test failure would paint the
+  class of the sheet that leaks through: a sea patch behind a hill is blue too, so class alone cannot tell. But a
+  geometric cause exists in the code: fieldpack.ts 146-156 gives a DRY cell next to water the level min(mean wet level,
+  sc - 0.05) (5 cm under its own CELL height), and chunks.ts vertexWater draws a patch's sheet when ANY vertex cell has
+  wl > s - 0.5 (true for every such dry cell). Over a triangle of dry cells the level is the chord of cell heights - 5 cm,
+  while the ground is the CURVED surface (CURVE_ALPHA 0.75 x R x bend: sags metres below the chord on concave slopes,
+  the fieldpack comment records 20-30 m) plus detail relief (+-2 m) plus dunes: wherever the ground dips under the chord
+  the sheet stands above it — blue, waterland cannot touch it (vDepth > 0), trunks pierce it (the sheet is a real
+  surface metres up, under the crowns), a "rippled translucent sea-coloured sheet" (thin water over ground refracts the
+  ground). Same for wet cells with a few cm of sim water (rain film) on a hill. SwiftShader probes run speed 0 at the
+  boot water state and their views may not hold such a slope; whether the Mac's view does is what wdebug=wet says.
+- BUILT: `?wdebug=wet` magenta = no wet sim cell in this sheet's sim triangle (barycentric say of wet cells < 1 %: the
+  level is the dry cells' construction = ghost water), orange = wet cells but the sim's water there < 10 cm, blue = real
+  water; dimmed where vDepth < 0. `?wghost=1` the fix candidate: ghost fragments are discarded (a 1 % sliver along
+  dry-dry sim edges, a whole all-dry sim triangle). Costs 3 texelFetch + 2 varyings only when one of them is on.
+- If wdebug=wet shows the sheet BLUE (real sim water), the depth path is the suspect: then `wsingle=1` (same pass as the
+  terrain: no re-entry, no reload of the MSAA depth), `msaa=0`, `invalidate=0`, `zcons=0` separate it.
+### 4. NEW LEVER: `?deepbed=1` (default off) — the sea bed under the water is shaded in full and then hidden
+- The water is drawn in a LATER pass, so the GPU's HSR cannot drop the terrain under it: at the landing view (~70 %
+  sea, bed at -19..-74 m) most terrain fragments are sea bed, each running evalTerrain + lighting. The water shows the
+  bed as refr * Tw with Tw = exp(-(sigmaA + sigmaS) * 1.25 * path); its smallest extinction (blue, warm open salt sea, no
+  coast / river / silt) is 0.2 / m and path = uw / cos(angle to the vertical) EXACTLY (the straight ray from a point uw
+  under the plane). terrainmat FRAG_SURFACE: if (uw - 4 m) > 48 m x cos -> Tw < 7e-5 -> output black and return (depth
+  already written; off with water=0, camera under the level, any uDebug view, the tcache bake). Lossless by that bound.
+  `?deepbed=2` paints the skipped fragments magenta (also with water=0) to count them.
+### 5. tcache=1 at the landing view, by the code (tcache.ts update 418-486)
+- near (live): need = size(level) x pxPerRad / dn > (576 - 6.8) / tcdens -> with the finest patches (spacing0 / 2^maxLevel
+  ~0.4-0.8 m x 32 = 13-26 m) and pxPerRad ~1030 at 963 px, every finest patch nearer than ~45-50 m stays LIVE. The probes'
+  landing camera (orbit 60 m, tilt 75 from vertical) stands ~15 m over the ground: the ground from ~24 m to ~50 m fills
+  roughly the lower 40 % of the frame — the land part, the costly part. The sea bed, far away, is what gets cached.
+  So the design cannot cover the near ground there; deepbed covers the sea bed for free. To cover the near ground:
+  a 1152 class (a whole layer, 55 MB a patch with both anchors: no), or tiles per QUARTER patch for the finest level
+  (the slot table + tcLattice addressing would take a sub-tile index), or texels < pixels near the camera (look loss).
+- glob: gkey includes round(pxPerRad), uVegFade / uCanopyFade (metres) and uShadowOn: any change re-bakes everything.
