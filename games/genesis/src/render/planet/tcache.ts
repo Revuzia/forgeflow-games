@@ -627,7 +627,8 @@ export class TerrainCache {
       const pl = this.place(t), L = t.slab.layer;
       // the partner half's texels go into the scratch first (the bake draws one half; the square is copied back whole)
       const partner = t.slab.owner[t.sub ^ 1];
-      if (partner && partner.baked) { bind(); blit(pl.x, pl.y, S, L, false); unbind(); }
+      // (setRenderTarget first: three makes the scratch's GL textures at its first use)
+      if (partner && partner.baked) { r.setRenderTarget(this.scratch.get(S)!); bind(); blit(pl.x, pl.y, S, L, false); unbind(); }
       t.cam.copy(this.cam); t.fwd.copy(this.fwd);
       t.sun.copy(this.sunNow); t.year = this.yearNow; t.gkey = this.gkey;
       // the draw: the page's geometry, this slot's index range, into the class's scratch target
