@@ -80,5 +80,6 @@
   }
   // sample column x = 36 (the right hump) and x = 28: per row, terrain / water record
   const col = (x) => rows(0, H, (xx, y) => (xx !== x ? null : { y, t: tb[y * W + x] && { d: +tb[y * W + x].d.toFixed(0), g: +tb[y * W + x].g.toFixed(1), chord: +tb[y * W + x].chord.toFixed(1), lvl: +tb[y * W + x].lvl.toFixed(1), simD: +tb[y * W + x].simD.toFixed(1), cell: tb[y * W + x].cell }, w: wb[y * W + x] && { d: +wb[y * W + x].d.toFixed(0), h: +wb[y * W + x].h.toFixed(1) } }));
-  return { sea, Rad, nP, nW, tick: globalThis.__GENESIS__.state().tick, vis, terrainHeight: tmap, waterHeight: wmap, levelAtTerrain: dmap, bands, col36: col(36), col28: col(28), col12: col(12) };
+  const S = globalThis.__GENESIS_FX__?.fx?.screenState; const fog = S ? { density: S.fogDensity, scale: S.fogScale, col: [S.fogCol.x, S.fogCol.y, S.fogCol.z].map((v) => +v.toFixed(4)) } : null;
+  return { fog, sea, Rad, nP, nW, tick: globalThis.__GENESIS__.state().tick, vis, terrainHeight: tmap, waterHeight: wmap, levelAtTerrain: dmap, bands, col36: col(36), col28: col(28), col12: col(12) };
 })()

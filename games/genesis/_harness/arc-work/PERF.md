@@ -2358,3 +2358,16 @@ Also: `wdebug=class` paints the sheet over the hills the SAME blue as the open s
   (node shaderdump-s23.mjs <genesis dir> '?switches'). Probe helpers: arc-work/s23-run.sh (land2 per switch set),
   s23-run-y0.sh (the owner's landing camera), s23-cells.js (field dump via --eval with tcache=1); probe-s21.mjs gained
   --cams, --step, --eval, view 'boot'.
+
+## LEAD NOTE after MAC ROUND 17 (NEW bc923bf6 vs OLD e50830af, alternating; CPU busy with other jobs, GPU idle before)
+- NO REGRESSION: N-old 701 / 901 / 834 ms, N-new 867 / 884 / 767 / 817 ms (means equal). The round-16 "regression" was noise.
+- WATER: P 133-150 ms early in the round (drifting to 334 later). P + wfrag=0: 33 ms (28 fps). + wdepth=0: no further gain.
+  So the water's cost IS its fragment shading after the discards: the six wshade cuts leave most of it (sky LUT taps, cloud
+  shadow, mirrored cloud deck, glint / moon, the 4 + 3 normal loops, waterland taps). Target for the water: near wfrag=0.
+- THE HILL SHEET IS NOT THE SEA'S SHAPE: with `wsingle=1` on the full game the owner sees a FLAT SEA TO THE HORIZON and the
+  hill sheet is GONE (mac-shots/r17-13.jpg vs r17-14.jpg, same view, same minute). So water sheets exist there and are flat;
+  in the normal two-pass path something removes or loses the water over the far sea and the submarine rise shows through with
+  its pale under-water / far-water stand-in look. `wdebug=hb` paints sea and "hill" the same red (r17-15.jpg).
+  wsingle=1 reads no scene copies, so it also lost reflections and depth colour (expected for the switch).
+- kelpfit: confirmed on the Mac (spires gone; kelpfit=0 brings them back).
+- deepbed=1: looks the same; one faint thin dark diagonal streak on the water at the lower right (check).
