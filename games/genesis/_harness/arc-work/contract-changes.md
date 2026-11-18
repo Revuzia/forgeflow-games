@@ -238,3 +238,10 @@
   and yes to registering the five reach events as silent in the audio map.
 - Free spells: "not rainbow, needs to be other basic things. maybe 2-3 others." => rain, heal-person, plant, lightning stay free;
   omen-rainbow is priced; add 2-3 other very basic tier-0 acts.
+
+## Owner rulings 2026-11-18 — performance push
+- (verbatim) "do it all at once. but also, make sure the quality of our graphics doesnt go down. remember, we have beautiful water in
+  some of our games and 3js on git or other sources, so we can use whatever is known to function best."
+  => all four performance lanes run in parallel (hill sheet, water shading, lean terrain cache, memory). Quality must stay equal or
+     better; a different look that is at least as beautiful is allowed for the water. Code may be reused from the owner's own games
+     and from three.js (MIT, notice kept) and other clearly permissively licensed sources, with the source recorded.
