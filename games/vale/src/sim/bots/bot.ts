@@ -843,7 +843,9 @@ export class Bot extends BotBase implements BotController {
    * 'falls to Wicks beside fit defenders' left after ruling 44.
    */
   private clearOwn(): void {
-    if (this.k.kind !== 'rift' || this.pClear || this.pFight || this.pSiege || this.hpF < 0.6) return;
+    // (owner_rulings 51: a fighter I am set on but cannot reach does not hold me off the wave — a defender walking at a fighter
+    // 13 m off the structure watched the Wicks finish it)
+    if (this.k.kind !== 'rift' || this.pClear || (this.pFight && inAttackRange(this.e, this.pFight)) || this.pSiege || this.hpF < 0.6) return;
     const m = this.mode;
     if (m === 'retreat' || m === 'recall' || m === 'allin' || m === 'teamfight' || m === 'protect' || m === 'trade') return;
     const e = this.e, b = this.brain;
@@ -866,7 +868,7 @@ export class Bot extends BotBase implements BotController {
     }
     if (!wk) return;
     for (const f of this.perc.enemyFighters) if (this.isNoticed(f) && this.dist2(f, st.x, st.y) <= 12 * 12) return;
-    this.pClear = true; this.pFarm = 2; this.pMonsters = false;
+    this.pClear = true; this.pFarm = 2; this.pMonsters = false; this.pFight = null;
     const r = e.stats.range + e.radius + wk.radius;
     this.pMove = true;
     if (this.dist2(wk, e.x, e.y) > sq(r + 0.5)) {
@@ -1897,6 +1899,12 @@ export class Bot extends BotBase implements BotController {
     return (this.chaseDrop.get(f.id) ?? -1e9) > this.now;
   }
 
+  /** owner_rulings 51: a seen fighter moving away from me at 80 % or more of my speed (its motion is in plain sight) */
+  private fleeing(f: Entity): boolean {
+    const e = this.e, dx = f.x - e.x, dy = f.y - e.y, d = dhypot(dx, dy) || 1;
+    return (f.vx * dx + f.vy * dy) / d >= 0.8 * Math.max(1, e.stats.moveSpeed);
+  }
+
   /**
    * owner_rulings 46 (FRAY chase discipline, adept and veteran): a chase that has not closed the gap by a metre in chaseQuit
    * seconds, with the target out of my reach and no gap-closer or engage ready to reach it, is given up — the target is
@@ -1909,7 +1917,8 @@ export class Bot extends BotBase implements BotController {
     const e = this.e, now = this.now;
     const d = Math.sqrt(this.dist2(t, e.x, e.y));
     // (only a wounded target's run counts — under 40 %: the one that breaks off; a third party's wait beside a fight is not a chase)
-    if (t.hp >= t.maxHp * 0.4 || inAttackRange(e, t) || this.strikeReach() >= d - t.radius) { this.chaseId = -1; return true; }
+    // (owner_rulings 51: or any target seen running from me at my speed)
+    if ((t.hp >= t.maxHp * 0.4 && !this.fleeing(t)) || inAttackRange(e, t) || this.strikeReach() >= d - t.radius) { this.chaseId = -1; return true; }
     if (this.chaseId !== t.id) { this.chaseId = t.id; this.chaseAt = now; this.chaseGap = d; return true; }
     if (now - this.chaseAt < q) return true;
     if (d < this.chaseGap - 1) { this.chaseAt = now; this.chaseGap = d; return true; }
@@ -2015,6 +2024,10 @@ export class Bot extends BotBase implements BotController {
       if ((tp.lives ?? 2) <= 1) s += 0.08;
       // careful on the last life: an even fight is a worse pick, never no pick (a skip here froze whole endgames)
       if (lastLife && kill < 0.8 && f.hp > f.maxHp * 0.4) s -= 0.6;
+      // (owner_rulings 51, chase discipline: a seat running from me — moving away at most of my speed, out of my reach — is a chase
+      // I cannot win at even speed; a skilled seat takes the fight in front of it instead. The whole arena hunting the one that
+      // broke off kept a foe within 12 m of 61-67 % of the fighters under a quarter's health)
+      if (this.diff.chaseQuit < Infinity && this.fleeing(f) && this.strikeReach() < d - f.radius) s -= 0.7;
       if (s > bs) { bs = s; best = f; }
     }
     this.huntQuality = Math.max(0, bs);

@@ -310,8 +310,8 @@ def defs() -> list:
                  decal("ground", "ink", [[0, 0.3], [0.2, 0.95], [1, 1.0]], 0.7, color=SMOKE, alpha=(0.55, 0.3, 0), rim="team", fit=True),
                  decal("ground", "light", [[0, 0.4], [0.2, 1.1], [1, 1.15]], 0.9, color="team", alpha=(0.6, 0.35, 0), emissive=1.8, texture="rune", fit=True),
                  mesh("ground", "column", [[0, 0.2], [0.3, 0.7], [1, 0.72]], 0.6, color=[DAWNGLASS, "team"], alpha=(0.7, 0), emissive=2.2, rim="team",
-                      rim_pow=1.3, rim_emissive=2.8, stretch=[0.9, 1.6, 0.9], noise=0.7, scroll=[0, 1.6], dissolve=[0, 0, 0.25, 1], edge="team",
-                      edge_emissive=2.6),
+                      rim_pow=1.3, rim_emissive=2.8, stretch=[0.9, 1.6, 0.9], noise=0.25, scroll=[0, 1.6], edge="team",
+                      edge_emissive=2.6),  # orch1 W2-B fix 2: no dissolve (its noise holes read as a face at 0.45 s): it fades by alpha
                  L("emitter", at="ground", count=14, shape="ring", radius=0.55, dir="up", spreadDeg=12, speed=[1.8, 3.2], life=[0.4, 0.65],
                    size=[0.4, 0.08], color=[INK, INK2], alpha=[0.9, 0], texture="streak", stretch=0.06, blend="ink", rim="team", rimAlpha=0.7),
                  motes("ground", 16, rise=2.6, radius=0.6, emissive=2.6),
@@ -407,8 +407,9 @@ def defs() -> list:
                  # killer-side ring runs out wide, a brief pool of the fighter's light on the ground, and a scorched hour-mark stays
                  # where they fell (3 s); never a flash to white (ruling 10)
                  # max2: the plume is warm smoke (SMOKE), not a near-black blob over the body
-                 ink("origin", 6, size=0.6, speed=(1.4, 2.6), life=(0.7, 1.1), radius=0.3, dir_="up", gravity=-1.4, delay=0.08, rim_alpha=0.45,
-                     color=(SMOKE, SMOKE2)),
+                 # orch1 W2-B fix 2 (verifier r2: the plume still read as dark chip smoke, #4A443D at 0.9, at 0.8 s): warm-grey dust
+                 # at the dust alpha, gone by 0.75 s (ruling 52)
+                 dust("origin", 6, size=0.6, speed=(1.4, 2.6), life=(0.45, 0.7), radius=0.3, shape="sphere", dir_="up", delay=0.08),
                  L("emitter", at="origin", count=26, shape="sphere", radius=0.35, dir="up", spreadDeg=40, speed=[1.4, 3.4], life=[0.8, 1.4],
                    size=[0.12, 0.05], color=["signature", EMBER], alpha=[1, 0.8, 0], emissive=2.6, gravity=-1.4, drag=1.2, turbulence=1.4,
                    texture="ember", blend="add", delay=0.05),
@@ -417,7 +418,9 @@ def defs() -> list:
                    texture="glow", blend="add"),
                  shockwave("origin", radius=(0.6, 2.6), width=(0.18, 0.04), life=0.55, emissive=2.2, delay=0.06, alpha=(0.9, 0.6, 0)),
                  decal("origin", "light", 1.6, 0.6, color="signature", alpha=(0.55, 0.3, 0), emissive=1.6, texture="glow"),
-                 decal("origin", "scorch", [[0, 0.5], [0.06, 1.15], [1, 1.2]], 3.2, color=CHAR, alpha=[[0, 0.7], [0.75, 0.55], [1, 0]], emissive=1.2,
+                 # orch1 W2-B fix 2 (verifier r2: a dark scorch disc still lay under the body at 0.8 s): the hour-mark is the chalk
+                 # crack star's thin lines (never a disc) in warm dust grey with the fighter's light in the rim, gone in 1.2 s
+                 decal("origin", "crack", [[0, 0.5], [0.06, 1.0], [1, 1.05]], 1.2, color=DUST, alpha=[[0, 0.6], [0.5, 0.35], [1, 0]], emissive=1.0,
                        rim="signature"),
                  decal("origin", "light", 1.2, 3.0, color="signature", alpha=[[0, 0.7], [0.7, 0.35], [1, 0]], emissive=1.0, texture="rune"),
                  light("origin", "signature", 8, 6, 0.6),

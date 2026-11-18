@@ -45,7 +45,8 @@
 //           skinned meshes alone into an empty target) share of pixels the VFX pass changes (VFX draw + telegraph layer off vs on; changed =
 //           luma delta > 24/255 or chroma delta > 40/255) = `occlusion`; whether the local fighter's ground ring is found (ring mesh off vs
 //           on: >= 60 changed pixels around its feet) = `selfRing`; the telegraph edge contrast (telegraph layer off vs on, the 90th
-//           percentile of |dL| / max(L, 16) over the changed pixels) = `teleEdge`; screen particles vs the preset's budget. If a seed finds
+//           percentile of |dL| / max(L, 16) over the changed pixels) = `teleEdge` (GATED on a fixed enemy circle r 3 m injected at
+//           the enemy side's centroid in every look, W2-B fix 2; the bots' own casts are info); screen particles vs the preset's budget. If a seed finds
 //           fewer than 30 natural looks, the 10 fighters are moved into one arena (5 a side, 5 m apart) and the scan goes on (`scripted`).
 //           Bars (W2-B): median occlusion <= 0.25, no fighter above 0.60 for more than 300 ms, teleEdge >= 0.45, selfRing 100 %.
 //           node _harness/probe_combat_polish.mjs clutter [--seeds 7,11,23] [--frames 30] [--t0 720] [--scan 4500] [--tag <name>] [--out <json>]
@@ -205,7 +206,34 @@ async function clutterMain() {
             }
             R.render(0);
           }
-          return { fighters, selfRing, teleEdge, particles: st.particles, vfx: st.vfx, telegraphs: st.telegraphs, particleBudget: budget, tris: prof?.total?.tris ?? st.triangles, vfxTris: prof?.groups?.vfx?.tris ?? null, vfxCalls: prof?.groups?.vfx?.calls ?? null, draws: prof?.total?.calls ?? st.calls, programs: st.programs, $png: shotNow ? png(full) : null, $pngNoFx: shotNow ? png(noFx) : null };
+          // W2-B fix 2 (verifier r2: the bots' own telegraphs gave 0.38-0.58 run to run on the same render code, as the casts
+          // they happened to throw had more or less interior fill): the GATED measure is a FIXED scene in every look. One
+          // enemy circle r 3 m (value_probe's tele shape, ruling 48) is injected at the enemy side's centroid, over the bodies
+          // and effects of the fight, the director's list is held to it alone for the on / off pair, and the same p90 is read
+          // over the pixels it changes. The bots' casts above stay as info.
+          let teleFixed = null;
+          {
+            const T = R.director.telegraphs, keep = T.slice(), vt = R.palette.viewer.team;
+            const foes = v.entities.filter((e) => e.kind === 'fighter' && e.alive && vt >= 0 && e.team !== vt);
+            if (foes.length) {
+              const fx0 = foes.reduce((s, e) => s + e.x, 0) / foes.length, fy0 = foes.reduce((s, e) => s + e.y, 0) / foes.length;
+              const src = foes.reduce((p, e) => (Math.hypot(e.x - fx0, e.y - fy0) < Math.hypot(p.x - fx0, p.y - fy0) ? e : p));
+              R.injectEvents([{ e: 'area', t: v.time, src: src.id, ability: 'clutter_tele_fixed', x: fx0, y: fy0, shape: { kind: 'circle', radius: 3 }, delay: 0.6, telegraph: 'everyone' }]);
+              for (let i = 0; i < 3; i++) R.render(0);
+              const mine = T.filter((x) => !keep.includes(x));
+              if (mine.length) {
+                T.length = 0; T.push(...mine);
+                const fOn = grab(); R.overlay.teleScene.visible = false; R.teles.mesh.layers.disableAll(); const fOff = grab(); R.teles.mesh.layers.mask = tMask; R.overlay.teleScene.visible = tv;
+                const q = [];
+                for (let o = 0; o < W * H * 4; o += 4 * 2) { const a = luma(fOn.px, o), c = luma(fOff.px, o); const dd = Math.abs(a - c) / Math.max(c, a, 16); if (dd > 0.04) q.push(dd); }
+                q.sort((p, r) => p - r);
+                teleFixed = { px: q.length, p90: q.length ? +q[Math.floor(q.length * 0.9)].toFixed(3) : 0, at: [+fx0.toFixed(1), +fy0.toFixed(1)] };
+              }
+              T.length = 0; T.push(...keep);
+              R.render(0);
+            }
+          }
+          return { fighters, selfRing, teleEdge, teleFixed, particles: st.particles, vfx: st.vfx, telegraphs: st.telegraphs, particleBudget: budget, tris: prof?.total?.tris ?? st.triangles, vfxTris: prof?.groups?.vfx?.tris ?? null, vfxCalls: prof?.groups?.vfx?.calls ?? null, draws: prof?.total?.calls ?? st.calls, programs: st.programs, $png: shotNow ? png(full) : null, $pngNoFx: shotNow ? png(noFx) : null };
         };
         let shotNow = false;
         const looks = []; let step = 0;
@@ -272,19 +300,19 @@ async function clutterMain() {
         looksWithSides: { minA: Math.min(...out.looks.map((l) => l.a)), minC: Math.min(...out.looks.map((l) => l.c)) },
         medianOcclusion: med(occ), p90Occlusion: occ.length ? [...occ].sort((x, y) => x - y)[Math.floor(occ.length * 0.9)] : null, fighterSamples: occ.length,
         worstFighterRun: worst, selfRing: { frames: rings.length, found: rings.filter((r) => r.found).length, rate: rings.length ? +(rings.filter((r) => r.found).length / rings.length).toFixed(3) : null },
-        teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)), enemyFrames: teles.filter((t) => t.enemy).length, enemyMedianP90: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90)), enemyMedianP90NoFx: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90NoFx)), enemyMedianP90Boundary: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90Boundary)) },
+        teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)), enemyFrames: teles.filter((t) => t.enemy).length, enemyMedianP90: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90)), enemyMedianP90NoFx: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90NoFx)), enemyMedianP90Boundary: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90Boundary)), fixedFrames: out.looks.filter((l) => l.teleFixed).length, fixedMedianP90: med(out.looks.filter((l) => l.teleFixed).map((l) => l.teleFixed.p90)) },
         particles: { peak: Math.max(0, ...peaks), median: med(peaks), budget: out.looks[0]?.particleBudget ?? null, overBudgetFrames: out.looks.filter((l) => l.particles > l.particleBudget).length },
         hotBody: { max: hots[0]?.hot ?? null, worst: hots[0] ?? null, median: med(hots.map((h) => h.hot)), over30: hots.filter((h) => h.hot > 0.3).length },
         frame: { vfxTrisPeak: Math.max(0, ...num('vfxTris')), vfxTrisMedian: med(num('vfxTris')), trisPeak: Math.max(0, ...num('tris')), drawsPeak: Math.max(0, ...num('draws')), programsPeak: Math.max(0, ...num('programs')) },
         consoleErrors: logs.filter((l) => !/favicon/.test(l)).slice(0, 5), looks: out.looks,
       };
       res.seeds.push(s);
-      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90} (enemy ${s.teleEdge.enemyMedianP90} over ${s.teleEdge.enemyFrames}, with no VFX ${s.teleEdge.enemyMedianP90NoFx}, boundary only ${s.teleEdge.enemyMedianP90Boundary}), particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
+      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90} (enemy ${s.teleEdge.enemyMedianP90} over ${s.teleEdge.enemyFrames}, with no VFX ${s.teleEdge.enemyMedianP90NoFx}, boundary only ${s.teleEdge.enemyMedianP90Boundary}; GATED fixed enemy circle ${s.teleEdge.fixedMedianP90} over ${s.teleEdge.fixedFrames}), particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
     } finally { await browser.close(); }
   }
   const okSeeds = res.seeds.filter((s) => s.peakFrames4v4 >= WANT).length;
   const all = (k) => res.seeds.map((s) => k(s)).filter((v) => v !== null && v !== undefined);
-  res.summary = { seedsWith30PeakFrames: okSeeds, medianOcclusion: all((s) => s.medianOcclusion).length ? Math.max(...all((s) => s.medianOcclusion)) : null, worstRunMs: Math.max(0, ...res.seeds.map((s) => s.worstFighterRun.ms)), teleEdge: all((s) => s.teleEdge.enemyMedianP90).length ? Math.min(...all((s) => s.teleEdge.enemyMedianP90)) : null, teleEdgeAll: all((s) => s.teleEdge.medianP90).length ? Math.min(...all((s) => s.teleEdge.medianP90)) : null, selfRingRate: all((s) => s.selfRing.rate).length ? Math.min(...all((s) => s.selfRing.rate)) : null, particlesPeak: Math.max(0, ...res.seeds.map((s) => s.particles.peak)),
+  res.summary = { seedsWith30PeakFrames: okSeeds, medianOcclusion: all((s) => s.medianOcclusion).length ? Math.max(...all((s) => s.medianOcclusion)) : null, worstRunMs: Math.max(0, ...res.seeds.map((s) => s.worstFighterRun.ms)), teleEdge: all((s) => s.teleEdge.fixedMedianP90).length ? Math.min(...all((s) => s.teleEdge.fixedMedianP90)) : null, teleEdgeBots: all((s) => s.teleEdge.enemyMedianP90).length ? Math.min(...all((s) => s.teleEdge.enemyMedianP90)) : null, teleEdgeAll: all((s) => s.teleEdge.medianP90).length ? Math.min(...all((s) => s.teleEdge.medianP90)) : null, selfRingRate: all((s) => s.selfRing.rate).length ? Math.min(...all((s) => s.selfRing.rate)) : null, particlesPeak: Math.max(0, ...res.seeds.map((s) => s.particles.peak)),
     hotBodyMax: Math.max(0, ...res.seeds.map((s) => s.hotBody.max ?? 0)), vfxTrisPeak: Math.max(0, ...res.seeds.map((s) => s.frame.vfxTrisPeak)), trisPeak: Math.max(0, ...res.seeds.map((s) => s.frame.trisPeak)),
     drawsPeak: Math.max(0, ...res.seeds.map((s) => s.frame.drawsPeak)), programsPeak: Math.max(0, ...res.seeds.map((s) => s.frame.programsPeak)) };
   res.bars.pass = { scan: okSeeds >= 2, medianOcclusion: res.summary.medianOcclusion !== null && res.summary.medianOcclusion <= res.bars.medianOcclusion, worstRun: res.summary.worstRunMs <= res.bars.worstRunMs, teleEdge: res.summary.teleEdge !== null && res.summary.teleEdge >= res.bars.teleEdge, selfRing: res.summary.selfRingRate === 1,

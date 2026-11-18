@@ -148,7 +148,8 @@ export interface DifficultyProfile {
   /** peel: the dived partner is followed under the enemy's tower ('none'; 'low': only a partner under 40 %; 'all': a fit
    *  frontline or support for any partner, as ruling 42) */
   readonly peelDive: 'none' | 'low' | 'all';
-  /** a posted or answering defender holds its structure against the stacked wave (ruling 42; a beginner backs off it) */
+  /** a posted or answering defender holds its structure against the stacked wave (ruling 42; a beginner backs off it; adept
+   *  too since owner_rulings 51 — its holds kept adept games 3 min longer than the pre-lane bots', p90 34-40 against the 32 bar) */
   readonly holdWave: boolean;
   /** FRAY: under this share of health with a foe within 10 m and no kill on, a fighter breaks off (toward a heal if one is
    *  near), whether or not it is being hit right now (0: only the old retreat) */
@@ -204,7 +205,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     defendMatch: 1, recallDefend: 'base', defendHold: 6, peelChance: 0.7, peelBodyBlock: true, peelLaneHp: 0.5, aheadCaution: 0.08, lurkMax: 4, avoidVision: false,
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
-    punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: true, frayBreak: 0.2,
+    punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: false, frayBreak: 0.2,
     coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8,
   },
   veteran: {
