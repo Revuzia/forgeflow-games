@@ -26,8 +26,8 @@
 // LIVE (full shader): patches with lava or fire (uTime), patches nearer than the largest class resolves, patches
 // whose tile is not baked yet / moved out of its bracket / changed by the sim, and what does not fit the memory cap.
 import {
-  DataArrayTexture, DataTexture, DoubleSide, FloatType, HalfFloatType, LinearFilter, Mesh, RGBAFormat, Scene, SRGBColorSpace,
-  UnsignedByteType, Vector3, Vector4, WebGLRenderTarget, NearestFilter,
+  DataArrayTexture, DataTexture, DoubleSide, FloatType, LinearFilter, Mesh, RGBAFormat, Scene, SRGBColorSpace,
+  Vector3, Vector4, WebGLRenderTarget, NearestFilter,
   type BatchedMesh, type Camera, type IUniform, type Material, type Matrix3, type Texture, type WebGLRenderer,
 } from 'three';
 import { perfNum, perfSwitch, perfSwitchNote } from '../perfswitch.ts';
@@ -283,9 +283,9 @@ export class TerrainCache {
   private slabs: Slab[] = [];
   private tiles = new Map<Patch, Tile>();
   private queue: Patch[] = [];
-  private scratch = new Map<number, WebGLRenderTarget>();
-  private fbR: WebGLFramebuffer | null = null;
-  private fbD: WebGLFramebuffer | null = null;
+  /** per layer: a framebuffer with the three arrays' layer attached (MRT), handed to three as an external target */
+  private layerFb: WebGLFramebuffer[] = [];
+  private layerRT: WebGLRenderTarget[] = [];
   private readonly scene = new Scene();
   private readonly mesh: Mesh;
   private readonly bakeMat: Material;
@@ -331,7 +331,7 @@ export class TerrainCache {
     const float = r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
     this.stats.float = float;
     const bpt = 4 + (float ? 8 : 4) + 4;
-    const scratchMB = CLASSES.reduce((s, c) => s + c * c, 0) * (4 + (float ? 8 : 4) + 4) / 1048576;
+    const scratchMB = 0;
     const layerMB = TC_SL * TC_SL * bpt / 1048576;
     const maxLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
     this.layers = Math.max(1, Math.min(maxLayers, Math.floor((TC_MB - scratchMB) / layerMB)));
@@ -359,14 +359,21 @@ export class TerrainCache {
     const bk = (this.bakeMat.userData.uTcBakeK as IUniform<Vector4>).value;
     if (float) { k.y = 1; k.z = 0; bk.set(1, 0, 0, 0); } else { k.y = 4; k.z = -2; bk.set(0.25, 0.5, 0, 0); console.warn('[genesis] tcache: no float render targets, 8-bit normals'); }
     for (let l = 0; l < this.layers; l++) for (let y = 0; y < TC_SL; y += SLAB) for (let x = 0; x < TC_SL; x += SLAB) this.slabs.push({ layer: l, x, y, cls: -1, free: [], used: 0, owner: [], head: null });
-    for (const c of CLASSES) {
-      const rt = new WebGLRenderTarget(c, c, { count: 3, depthBuffer: false, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
-      rt.textures[0].colorSpace = SRGBColorSpace;
-      rt.textures[1].type = float ? HalfFloatType : UnsignedByteType;
-      this.scratch.set(c, rt);
+    // the bake draws straight into the tile's layer: its half only (the partner half is never touched), no scratch, no
+    // blits (s26b: the uploads slot was 55 ms mean on the Mac with a draw + 3-6 blits + re-attachments a bake)
+    for (let l = 0; l < this.layers; l++) {
+      const fb = gl.createFramebuffer()!;
+      r.state.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      for (let i = 0; i < 3; i++) gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, this.glTex[i], 0, l);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+      r.state.bindFramebuffer(gl.FRAMEBUFFER, null);
+      const rt = new WebGLRenderTarget(TC_SL, TC_SL, { depthBuffer: false, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
+      rt.texture.colorSpace = SRGBColorSpace;
+      rt.scissorTest = true;
+      // (three r186 has it; its typings do not)
+      (r as unknown as { setRenderTargetFramebuffer: (t: WebGLRenderTarget, f: WebGLFramebuffer) => void }).setRenderTargetFramebuffer(rt, fb);
+      this.layerFb.push(fb); this.layerRT.push(rt);
     }
-    this.fbR = gl.createFramebuffer();
-    this.fbD = gl.createFramebuffer();
     perfSwitchNote('tcache', `1(${this.stats.mb}MB,${this.layers}L${float ? '' : ',d8'})`);
     return true;
   }
@@ -651,7 +658,11 @@ export class TerrainCache {
         if (range) {
           this.compiling = true;
           this.mesh.geometry = range.mesh.geometry;
+          // (with a scratch target bound: three keys the program on the output target)
+          const prev = r.getRenderTarget();
+          r.setRenderTarget(this.layerRT[0]);
           r.compileAsync(this.scene, camera).then(() => { this.compiled = true; }, () => { this.compiled = true; });
+          r.setRenderTarget(prev);
         }
       }
       st.bakeMs = 0;
@@ -659,7 +670,6 @@ export class TerrainCache {
     }
     // not-yet-cached before merely slow-stale, then the most screen pixels first
     q.sort((a, b) => { const ta = this.tiles.get(a)!, tb = this.tiles.get(b)!; const sa = ta.stale && ta.baked && !ta.dirty ? 1 : 0, sb = tb.stale && tb.baked && !tb.dirty ? 1 : 0; return sa - sb || tb.area - ta.area; });
-    const gl = r.getContext() as WebGL2RenderingContext;
     const prevRT = r.getRenderTarget(), prevAuto = r.autoClear;
     r.autoClear = false;
     let spent = 0, held = false;
@@ -671,33 +681,6 @@ export class TerrainCache {
     let credit = credit0;
     const failed: boolean[] = [];
     const bu = this.bakeMat.userData as { uTcBake: IUniform<Vector4>; uTcBakeF: IUniform<Vector4>; uTcEi: IUniform<Vector3>; uTcEj: IUniform<Vector3>; uMorph: IUniform<Vector4> };
-    const blit = (x: number, y: number, S: number, L: number, toTile: boolean): void => {
-      // level-0 copy of a square between the class's scratch and the tile (all three targets)
-      const rt = this.scratch.get(S)!;
-      for (let i = 0; i < 3; i++) {
-        const sTex = (r.properties.get(rt.textures[i]) as { __webglTexture: WebGLTexture }).__webglTexture;
-        if (toTile) {
-          gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sTex, 0);
-          gl.framebufferTextureLayer(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 0, L);
-          gl.blitFramebuffer(0, 0, S, S, x, y, x + S, y + S, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-        } else {
-          gl.framebufferTextureLayer(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.glTex[i], 0, L);
-          gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sTex, 0);
-          gl.blitFramebuffer(x, y, x + S, y + S, 0, 0, S, S, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-        }
-      }
-      gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
-      gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
-    };
-    const bind = (): void => {
-      r.state.setScissorTest(false);
-      r.state.bindFramebuffer(gl.READ_FRAMEBUFFER, this.fbR);
-      r.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbD);
-    };
-    const unbind = (): void => {
-      r.state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-      r.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-    };
     for (const p of q) {
       const t = this.tiles.get(p)!;
       const cls = classFor(t.need * TC_DENS);
@@ -723,14 +706,11 @@ export class TerrainCache {
         t.slab = a.slab; t.sub = a.sub; t.cls = cls;
       }
       const pl = this.place(t), L = t.slab.layer;
-      // the partner half's texels go into the scratch first (the bake draws one half; the square is copied back whole)
-      const partner = t.slab.owner[t.sub ^ 1];
-      // (setRenderTarget first: three makes the scratch's GL textures at its first use)
-      if (partner && partner.baked) { r.setRenderTarget(this.scratch.get(S)!); bind(); blit(pl.x, pl.y, S, L, false); unbind(); }
       t.cam.copy(this.cam); t.fwd.copy(this.fwd);
       t.sun.copy(this.sunNow); t.year = this.yearNow; t.gkey = this.gkey;
-      // the draw: the page's geometry, this slot's index range, into the class's scratch target
-      const rt = this.scratch.get(S)!;
+      // the draw: the page's geometry, this slot's index range, into the tile's square of its layer (viewport + scissor)
+      const rt = this.layerRT[L];
+      rt.viewport.set(pl.x, pl.y, S, S); rt.scissor.set(pl.x, pl.y, S, S);
       const geo = range.mesh.geometry;
       this.mesh.geometry = geo;
       geo.setDrawRange(range.indexStart, range.indexCount);
@@ -746,9 +726,6 @@ export class TerrainCache {
       bu.uTcBakeF.value.set(this.cam.x, this.cam.y, this.cam.z, this.pxPerRad);
       r.render(this.scene, camera);
       geo.setDrawRange(0, Infinity);
-      bind();
-      blit(pl.x, pl.y, S, L, true);
-      unbind();
       t.baked = true; t.dirty = false; t.stale = false;
       spent += S * S / 2; credit -= S * S / 2;
       st.bakes++; st.bakesTotal++;
@@ -765,10 +742,9 @@ export class TerrainCache {
 
   dispose(r?: WebGLRenderer): void {
     const gl = r?.getContext() as WebGL2RenderingContext | undefined;
-    if (gl) { for (const t of this.glTex) gl.deleteTexture(t); if (this.fbR) gl.deleteFramebuffer(this.fbR); if (this.fbD) gl.deleteFramebuffer(this.fbD); }
+    if (gl) { for (const t of this.glTex) gl.deleteTexture(t); for (const fb of this.layerFb) gl.deleteFramebuffer(fb); }
     this.glTex = [];
-    for (const rt of this.scratch.values()) rt.dispose();
-    this.scratch.clear();
+    this.layerFb = []; this.layerRT = [];
     this.tiles.clear();
     this.slabs = [];
     const g = globalThis as unknown as { __TCACHE__?: TerrainCache };

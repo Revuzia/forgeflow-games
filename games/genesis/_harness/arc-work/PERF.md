@@ -2667,3 +2667,42 @@ s24-simcells.ts (headless sim). Shots / logs: scratch/arc/perf/s24/.
   is GONE on this build (fogwater confirmed on the Mac).
 - JS heap: terrain pages 393-508 MB; unattributed (dead buffers) 113-637 MB; heap 633-1217 MB.
 - Still 300 ms with everything on: the next Mac round bisects the combined configuration.
+### 6. AFTER MAC ROUND 18 PART 3 (build 58e2b027: pix 82.6 %, used 132 MB, live 1110, bakes 2270 for 1241 tiles still)
+- READING: memory is no longer the limit; the bake RATE is. 64 k texels a FRAME at 2-3 fps = ~150 k/s for ~8.2 M
+  wanted. tcdens=1.6 asked 2.5x the texels at the same rate = pix 36.6 % (not "worse quality", a slower landing).
+- THE "CAMERA TRAVELLED 11 km" is the WORLD frame (planet orbit / spin; N3 without tcache shows it too). tcache's
+  camBody is planetview's camRel rotated into the BODY frame (planetview.ts 222): body-fixed, so a still surface
+  camera does not stale tiles by position. The churn must be sun / field / class / evict: now counted (below).
+- BUILT (tcache.ts only):
+  1. WALL-TIME BUDGET: while any queued patch is uncached, the frame's texels = max(tcbudget, tcshare x the frame's
+     wall ms (EMA) / tccost) (defaults 0.25, 0.0002 ms a texel = the M5's full-shader pixel), capped 3 M; with only
+     slow-stale re-bakes left, tcbudget (64 k). At 300 ms frames: ~375 k texels a frame = ~22 frames for 8.2 M.
+  2. WHY COUNTERS in tcstat: `why=cam:/sun:/field:/edit:/cls:/evict:` (cumulative) and `budget=<k texels>`.
+  3. FIELD DRIFT no longer sends patches to the full shader: a cell past WATCH = slow-stale (shown, re-baked at low
+     priority); only past 5x WATCH (an edit: snow paint 0.5, a crater) = invalid (full shader until re-baked). The
+     s22 note's 9 196 dirty cells after a 4-tick step were all drift at speed 1.
+  4. NO STALLS: the one `gl.getError()` after the first bake is gone (it waits for the GPU: ~one frame of GPU time on the
+     main thread = the 391 ms); the bake program compiles with `compileAsync` (KHR_parallel_shader_compile) before the
+     first bake (the 3 452 ms: a synchronous compile of the full terrain program). Remaining one-time cost: the
+     texStorage3D of 250 MB at the first bake (Metal zero-fills it).
+  5. NO BLITS: the bake draws straight into its tile's layer (one cached 3-attachment framebuffer per layer, given to
+     three as an external target, viewport + scissor = the square): it writes its half only, so the partner half needs
+     no copy-in, and there are no scratch targets and no mip (s26a: none needed). Per bake: 1 draw, 0 blits (was 1 draw
+     + 3-6 blits + 6-12 attachment changes: the uploads slot's 55 ms mean).
+  6. NEAR GROUND (owner: cached sand "very slightly softer" in a close crop; tcdens=1.6 not crisper). Reading: the live
+     path's fine grain at the near ground includes the per-pixel bump gradient from SCREEN derivatives (bumpNormal of
+     ts.bump with dFdx/dFdy over the 2x2 quad), which no texel cache reproduces at any density. Two switches for the
+     Mac to price: `?tclive=<m>` (patches whose nearest visible point is nearer than m stay on the full shader) and
+     `?tcnearx=<k>&tcnearm=<m>` (texel density x k for patches nearer than m, default 150). Both default off.
+- PROOF (run h, 480x274 fast set-up, the s26b build): town 612 patches all cached, pix 100 %, used 32.9 MB, budget 915 k
+  (SwiftShader's slow frames), why cam 0 / sun 10 / field 0 / edit 0 / cls 2 / evict 90 (boot LOD churn); pair mean
+  |d| 1.96, RGB 102.2 117.1 81.2 / 102.1 117.0 81.1, detail 6.18 / 6.00 = the same as the blit build (sheet-h0 LOOKED:
+  flower dots + the rim line, no diagonal / partner-half artefacts: the direct-to-layer bake is correct).
+  (bakeMsMax 27 s here is SwiftShader executing ~900 k texels inside the call; on the Mac the call only submits.)
+- GATE (s26b source): check 1048 pass 0 fail (s26/check3.log); `npm run build` exit 0.
+- MAC RUNS WANTED: (a) `tcache=1&wfast=3&deepbed=1` still 30 s + 20 s: read pix (target >= 95 % within ~5 s: note
+  when it gets there), live, why=..., budget, bakes vs tiles, bakeMs max; uploads slot ms. (b) same + `tcshare=0.5`
+  (faster landing) and `tcshare=0.1` (smoother). (c) look + cost: `tclive=120`, `tclive=250`, `tcnearx=2` (near sand
+  crispness vs frame time). (d) sim speed 1 for 60 s still: why.sun / why.field growth = the steady re-bake load.
+- NEXT: graze re-run on this build (run h, in progress); s26-queue.sh (full picture, edits + sun, Ultra count); the
+  far-ridge line (not seen on the Mac: owner item k says no line along the far ridge -> lower priority).
