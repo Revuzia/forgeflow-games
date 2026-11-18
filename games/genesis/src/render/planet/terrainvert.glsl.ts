@@ -11,6 +11,21 @@ import { CURVE_ALPHA } from '../../sim/grid/surface.ts';
 import { perfSwitch } from '../perfswitch.ts';
 
 const ZEDGE = perfSwitch('zedge');
+/**
+ * PERF s23 `?wspill=1` (the owner's "sheet over the hills", rounds 2-16): a sim triangle that joins a wet cell to a cell
+ * whose level is far lower (a lake 57 m up beside the sea, a basin beside a dry cell under its level) interpolates a
+ * SLOPING pane from the high level down to the low one; still water is never sloped, and over the curved ground
+ * between the cells (kilometre-wide cells) the pane stood tens of metres above whole hills: the water sheet drew it
+ * (wdebug=class blue, wdebug=wet blue, waterland blind to it) and the terrain shaded the hills as sea floor / far
+ * water under it (uwFar), which is why `water=0` alone did not remove the pale domes. Rule: where the level lies
+ * under a wet cell's level of the same triangle (the pane slopes down from that basin) the sheet may stand at most
+ * 1.5 x the sim's interpolated water depth + 2 m over the ground; past that it is pulled down by twice the excess,
+ * so it meets the ground in a continuous waterline instead of hanging. Flat water (sea, lakes inside their banks,
+ * shore extrapolation at the basin's own level) has no wet cell above its level: untouched. The basin's say fades
+ * with its barycentric weight, so both triangles of a sim edge agree (no step). The terrain reads the same corrected
+ * level (vF4.y), so its under-water look follows the sheet.
+ */
+export const WSPILL = perfSwitch('wspill', false);
 
 export const TERRAIN_VERT_PARS = /* glsl */ `
 // early depth rejection (shaders/zcons.ts): a bound on the length of the edges at this vertex (m), tZEdge, set at the
@@ -41,6 +56,15 @@ attribute vec3 aGradM;
 attribute vec3 aGradD;
 attribute vec3 aGradDM;
 const float CURVE_ALPHA = ${CURVE_ALPHA.toFixed(6)};
+${WSPILL ? `float tLevelFix = 0.0;
+// (wspill) how far 'lvl' lies under a wet cell's level of this triangle, 0..1, by the cells' barycentric say
+float tSpillK(vec4 Aa, vec4 Ab, vec4 Ac, float wA, float wB, float wC, float lvl) {
+  float ka = smoothstep(0.02, 0.08, Aa.w) * smoothstep(0.0, 0.2, wA) * smoothstep(0.5, 2.0, Aa.z - lvl);
+  float kb = smoothstep(0.02, 0.08, Ab.w) * smoothstep(0.0, 0.2, wB) * smoothstep(0.5, 2.0, Ab.z - lvl);
+  float kc = smoothstep(0.02, 0.08, Ac.w) * smoothstep(0.0, 0.2, wC) * smoothstep(0.5, 2.0, Ac.z - lvl);
+  return max(ka, max(kb, kc));
+}
+float tSpill(float lvl, float g, float d, float k) { return lvl - 2.0 * k * max((lvl - g) - (1.5 * d + 2.0), 0.0); }` : ''}
 ivec2 tfUV(float c) { int i = int(c + 0.5); return ivec2(i & 255, i >> 8); }
 vec4 tfInterp(highp sampler2D t, vec4 cells, float wC) {
   float wB = cells.w;
@@ -115,6 +139,10 @@ void tGround(vec4 cells, float wC, vec3 dir, float detail, float dune, out vec4 
 #else
   h = g;
 #endif
+${WSPILL ? `  tLevelFix = tSpill(A.z, g, A.w, tSpillK(Aa, Ab, Ac, wA, wB, wC, A.z));
+#ifdef WATER_SURFACE
+  h = tSpill(h, g, A.w, tSpillK(Aa, Ab, Ac, wA, wB, wC, h));
+#endif` : ''}
 }
 `;
 
@@ -126,6 +154,7 @@ void tGround(vec4 cells, float wC, vec3 dir, float detail, float dune, out vec4 
 export const TERRAIN_VERT_CORE = /* glsl */ `
   vec4 tA; vec3 tN; float tS; float tH; float tDA; float tG;
   tGround(aCells, aMisc.x, position, aMisc.y, aMisc.w, tA, tN, tS, tDA, tG, tH);
+${WSPILL ? '  float tLvl = tLevelFix;' : ''}
   vec3 tPos = position * (uRadius + tH);
   vec3 tNrm = normalize(tN - aGrad * tA.y - aGradD * tDA);
   float tMorph = 0.0;

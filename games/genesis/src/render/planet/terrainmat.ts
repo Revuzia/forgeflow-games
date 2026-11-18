@@ -27,7 +27,7 @@ import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from './lights.ts';
-import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS } from './terrainvert.glsl.ts';
+import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS, WSPILL } from './terrainvert.glsl.ts';
 import { GROUND_FRAG_PARS, GROUND_UNIFORMS, GROUND_VERT_MAIN, GROUND_VERT_PARS } from './groundfloor.ts';
 import { orthoDepth } from '../shaders/zcons.ts';
 import { TNOISE, TNOISE_GLSL, TNOISE_UNIFORMS } from './noisetex.ts';
@@ -1645,7 +1645,7 @@ ${TERRAIN_VERT_CORE}
   }
   vBodyPos = tPos;
   vBodyN = tNrm;
-  vF4 = vec4(tS, tA.z, tA.w, tH);
+  vF4 = vec4(tS, ${WSPILL ? 'tLvl' : 'tA.z'}, tA.w, tH);
   vF5 = tfInterp(uFieldS, aCells, aMisc.x);
   vOre = tfInterp(uFieldO, aCells, aMisc.x);
   vCurv = tfInterp(uFieldN, aCells, aMisc.x).w;
@@ -1986,7 +1986,7 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
   };
   // (tcache.ts: the display program reads tiles; TC_ON / TC_BAKE are material defines, part of three's program key)
   if (TCACHE) mat.defines = { ...(mat.defines ?? {}), TC_ON: '' };
-  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}${TNOISE ? '-tnoise' : ''}${TCACHE ? '-tc' : ''}${DEEPBED ? '-deep' : ''}`;
+  mat.customProgramCacheKey = () => `genesis-terrain-v3${TSHADE.key}${ZPRE ? '-zpre' : ''}${TNOISE ? '-tnoise' : ''}${TCACHE ? '-tc' : ''}${DEEPBED ? '-deep' : ''}${WSPILL ? '-spill' : ''}`;
   return mat;
 }
 
