@@ -39,6 +39,8 @@ W10 R3A rows (interiors II, plan lane R3A; same 12 builds):
                 room); >= 1 cover piece per 25 m2 pooled AND floor(area / 25) cover pieces in >= 90 % of those rooms. COVER = standing on the room's floor,
                 not decor, >= 0.9 m tall, >= 0.7 m wide                                                                 [21 per 100 m2; a 125 m2 store with 4 pieces]
   office-cover  office / meeting / lobby / corridor (a hall of a non-home building) rooms: >= 90 % of each kind hold >= 1 cover piece   [office 24, meeting 12.9, corridor 0 %]
+  work-density  (W10 R3A fix5, orchestrator rulings R3A-7 / R3A-8) pieces per 100 m2 pooled PER KIND: shops alone >= 30, offices >= 35, meeting rooms >= 25,
+                corridors >= 25, lobbies >= 25                                                 [pass 4: shop 27.9, office 29.4, meeting 15.4, corridor 21.0]
   flat-roofs    resort buildings with a flat roof <= 25 %; homes outside a downtown core (H.core) pitched (any roof but flat) >= 80 %; porch share of those homes
                 printed (plan: ~30 %)                                                                                     [resort 51 %, city 76 % flat]
 Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each must exit 1 on its rows):
@@ -52,6 +54,8 @@ Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each mus
   (W10 R3A) grey-ceil (the home ceiling plaster grey-beige, L ~0.64) -> finish
   (W10 R3A) plank-curtain (CURTAIN_FOLDS off: round 3's flat plank skins) -> finish     bare-office (WORK_COVER off: no partitions / sized tables / cover pass) -> office-cover
   flat-everywhere (ROOF_FLAT_ALL: every roof flat) -> flat-roofs     sparse-shop (WORK_FIT off: the round-3 shop / store furnishing) -> shop-density
+  (W10 R3A fix5) sparse-office (WORK_DENSE off: the pass-4 office / meeting / lobby / corridor dressing) -> work-density
+  no-work-budget (WORK_BUDGET off: every work storey back at 4000 triangles) -> work-density
 """
 from __future__ import annotations
 
@@ -119,6 +123,10 @@ PLANTS = {
     "bare-office": ({"office-cover"}, [(HG, r"export const WORK_COVER = true;", "export const WORK_COVER = false;")]),
     "flat-everywhere": ({"flat-roofs"}, [(HG, r"export const ROOF_FLAT_ALL = false;", "export const ROOF_FLAT_ALL = true;")]),
     "sparse-shop": ({"shop-density"}, [(HG, r"export const WORK_FIT = true;", "export const WORK_FIT = false;")]),
+    # (W10 R3A fix5, rulings R3A-7 / R3A-8) work-density's controls: the offices / meeting rooms / lobbies / corridors' size-scaled dressing off (the pass-4
+    # furnishing), and the work storeys' budgets back at TRI_BUDGET 4000 (what held shops at 27.9 and offices at 29.4 per 100 m2)
+    "sparse-office": ({"work-density"}, [(HG, r"export const WORK_DENSE = true;", "export const WORK_DENSE = false;")]),
+    "no-work-budget": ({"work-density"}, [(HG, r"export const WORK_BUDGET = true;", "export const WORK_BUDGET = false;")]),
 }
 
 
@@ -313,7 +321,7 @@ def judge_interiors(v, B):
     """(W10 R3A) the interiors-II rows: finish, shop-density, office-cover, flat-roofs"""
     I = [R.get("inter") for R in B]
     if not all(I):
-        for row in ("finish", "shop-density", "office-cover", "flat-roofs"):
+        for row in ("finish", "shop-density", "work-density", "office-cover", "flat-roofs"):
             v.cnj(row, "the census has no interiors record (homes.mjs too old for this tree)")
         return
     lived = [r for x in I for r in x["lived"]]
@@ -352,6 +360,22 @@ def judge_interiors(v, B):
                 "%d rooms, %.0f m2: %.1f pieces per 100 m2 pooled (bar >= 30); cover %.2f per 25 m2 pooled (bar >= 1); rooms with floor(area / 25) cover pieces %.1f %% (bar >= 90); by kind %s; e.g. %s %s %.1f m2 %d pieces %d cover" % (
                     len(sw), area, per, cov, okr, "; ".join("%s %d rooms %.1f / 100 m2, cover %.2f / 25 m2" % (k, q[3], 100.0 * q[0] / q[1], 25.0 * q[2] / q[1]) for k, q in sorted(kinds.items())),
                     worst["h"], worst["kind"], worst["area"], worst["n"], worst["cover"]), ">= 30 / 100 m2, >= 1 cover / 25 m2, >= 90 % of rooms")
+    # (W10 R3A fix5, orchestrator ruling R3A-7 / R3A-8) work-density: pieces per 100 m2 pooled PER KIND (every furniture record in the room, as shop-density
+    # counts): shops alone >= 30 (shop-density pools them with storage / warehouse), offices >= 35, meeting rooms >= 25, corridors >= 25, lobbies >= 25 - the bars
+    # as the ruling gives them (audit / pass-4 values: shop 27.9, office 29.4, meeting 15.4, corridor 21.0)
+    WD_BARS = (("shop", 30), ("office", 35), ("meeting", 25), ("corridor", 25), ("lobby", 25))
+    wd = {}
+    for r in work:
+        wd.setdefault(r["kind"], [0, 0.0, 0])
+        wd[r["kind"]][0] += r["n"]
+        wd[r["kind"]][1] += r["area"]
+        wd[r["kind"]][2] += 1
+    if any(k not in wd for k, _ in WD_BARS):
+        v.cnj("work-density", "kinds found: %s (need %s)" % (sorted(wd), ", ".join(k for k, _ in WD_BARS)))
+    else:
+        dens = {k: 100.0 * wd[k][0] / wd[k][1] for k, _ in WD_BARS}
+        v.check("work-density", all(dens[k] >= bar for k, bar in WD_BARS), "pieces per 100 m2 pooled per kind: %s" % "; ".join(
+            "%s %d rooms %.0f m2 %.1f (bar >= %d)" % (k, wd[k][2], wd[k][1], dens[k], bar) for k, bar in WD_BARS), "shop >= 30, office >= 35, meeting / corridor / lobby >= 25")
     oc = {}
     for r in work:
         if r["kind"] in ("office", "meeting", "lobby", "corridor"):
