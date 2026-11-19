@@ -1,0 +1,47 @@
+{
+  "lane": "auto attack switch (ruling 61)",
+  "round": 1,
+  "verifier": "independent",
+  "head": "70be6ba2c",
+  "date": "2026-11-19",
+  "pass": true,
+  "score": 8.5,
+  "safeToShip": true,
+  "blockers": [],
+  "problems": [
+    "Minor: the Auto attack switch sits at the bottom of a long Controls tab, under the full key list and the cast-mode table. At 1920x1080 and 1366x768 you must scroll to find it. Not a defect.",
+    "Minor: the description only says what Off does, so it reads a little odd beside an ON switch. 'Stands still' could also be read as 'does not move'. Players will still understand it."
+  ],
+  "checks": {
+    "code_review": "Command {type:'autoAttack', on} is validated in world.ts. It is applied in core.ts to that seat's own fighter only (Entity.seatAutoOff) and mirrored on Player.autoAttack. In attack.ts, only the ORDER_NONE idle branch reads it, so attack orders, attack-move and attack in place are untouched. stateDigest hashes an explicit field list that includes neither new flag, so default-on matches cannot change their digest. The controller sends the command only when the setting differs from the seat's view value. Every command path, local and facade, uses validCommand.",
+    "probes": {
+      "probe_sim_autoattack_off": "38/38",
+      "probe_input_castmode": "47/47",
+      "probe_input_clicks": "62/62",
+      "probe_input_pick_truth": "2/2",
+      "probe_input_shoot": "31/31",
+      "probe_sim_attack_at": "56/56",
+      "probe_sim_core_orders": "85/85",
+      "probe_sim_determinism": "6/6",
+      "probe_sim_cast_buffer": "21/21",
+      "probe_copy_no_bots": "ok",
+      "content_check": "0 warnings",
+      "tsc": "no errors outside other lanes' _tmp_/_ab_ files"
+    },
+    "live_chrome": {
+      "setup": "Own vite dev server on :5199, started and stopped by me. Real Chrome (playwright-core, channel chrome, fresh profile) with real mouse and keys. RIFT practice as Lisvel, structures off, harness heal.",
+      "default": "Settings > Controls shows Auto attack ON on a fresh profile.",
+      "off_persists": "Clicking the switch turns it OFF. After a reload it is still OFF. The match starts with the seat off (PlayerView.autoAttack false, seatAutoOff true).",
+      "idle_10s_beside_wicks": "0 swings in 10 s, with 6 enemy Wicks in attack range the whole time and the fighter being hit.",
+      "right_click": "Right-click on a Wick sent attack; 8 swings until it died. Then 0 swings in 5 s and order back to idle, with 5 enemy Wicks still in range.",
+      "attack_move": "A + left-click on open ground behind the fighter sent move{attackMove:true}; it acquired and swung twice in 3 s.",
+      "last_hit": "Right-click on a Wick at 48 HP: CS went from 2 to 3.",
+      "mid_match_on": "Esc > Settings > Controls > switch ON in the pause menu, then back to the match. One autoAttack{on:true} command was sent, the seat went on, and idle beside Wicks gave 4 swings in 5 s.",
+      "on_persists": "After a reload, Settings > Controls shows ON.",
+      "layout": "1920x1080 and 1366x768: label, description and switch line up with the other rows; no clipping and no horizontal scroll. The optional key row 'Turn auto attack on or off' shows unbound (—)."
+    },
+    "determinism": "Default-on digests match the pre-lane baselines (lane 5edfad52, FRAY 441084ba, lane with stops 29f3e850). The same stream run twice gives equal digests. The digest field list leaves out the new flags.",
+    "opponent_unaffected": "The probe shows equal opponent swing counts with the switch on and off, and through the facade only the human seat changes."
+  },
+  "cleanup": "Deleted my _harness/_tmp_vfy_aa_r1.* and the shots, stopped the :5199 server and closed the browser tab."
+}
