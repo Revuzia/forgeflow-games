@@ -88,6 +88,14 @@ OUT_CARS = GAME / "assets" / "props" / "cars"
 DEFAULT_SCRATCH = Path("C:/Users/TestRun/AppData/Local/Temp/claude/C--Users-TestRun-Claude-Claw/82f9ca33-342f-4680-86ad-98a5ab9d2079/scratchpad/lc_improve/wave4/ART-B")
 
 # ───────────────────────────── catalogue ─────────────────────────────
+# (W10 R4B) yard-dressing sources: CC0 packs already on disk (no download, no spend)
+YARD_SRC = {
+    "fantasytown": Path("F:/3d-asset-packs/kenney_fantasy-town-kit/Models/GLB format"),
+    "survival": Path("F:/3d-asset-packs/kenney_survival-kit/Models/GLB format"),
+    "holiday": Path("F:/3d-asset-packs/kenney_holiday-kit/Models/GLB format"),
+    "pirate": Path("F:/3d-asset-packs/kenney_pirate-kit/Models/GLB format"),
+    "polypizza": Path("F:/AssetLibrary/polypizza"),
+}
 # palette key -> source colormap + licence line
 PALETTES = {
     "suburban": dict(src=SRC / "_colormaps" / "city-suburban.png", file="palettes/suburban.png",
@@ -100,6 +108,12 @@ PALETTES = {
                 kit="Kenney Car Kit 3.1", sampler="LINEAR/LINEAR_MIPMAP_LINEAR"),
     "graveyard": dict(src=GRAVE_TEX, file="palettes/graveyard.png", kit="Kenney Graveyard Kit 5.0", sampler="LINEAR/LINEAR_MIPMAP_LINEAR"),
     "quaternius_atlas": dict(src=None, file="palettes/quaternius_atlas.png", kit="Quaternius props via Poly Pizza (CC0)", sampler="LINEAR/LINEAR_MIPMAP_LINEAR"),
+    # (W10 R4B yard dressing) the Kenney 2.0 kits' own colormaps (one material, one draw per type) and the Poly Pizza mailbox's embedded texture
+    "fantasytown": dict(src=YARD_SRC["fantasytown"] / "Textures" / "colormap.png", file="palettes/fantasytown.png", kit="Kenney Fantasy Town Kit 2.0", sampler="NEAREST/NEAREST_MIPMAP_NEAREST"),
+    "survival": dict(src=YARD_SRC["survival"] / "Textures" / "colormap.png", file="palettes/survival.png", kit="Kenney Survival Kit 2.0", sampler="NEAREST/NEAREST_MIPMAP_NEAREST"),
+    "holiday": dict(src=YARD_SRC["holiday"] / "Textures" / "colormap.png", file="palettes/holiday.png", kit="Kenney Holiday Kit 2.0", sampler="NEAREST/NEAREST_MIPMAP_NEAREST"),
+    "pirate": dict(src=YARD_SRC["pirate"] / "Textures" / "colormap.png", file="palettes/pirate.png", kit="Kenney Pirate Kit 2.0", sampler="NEAREST/NEAREST_MIPMAP_NEAREST"),
+    "mailbox": dict(src=None, glb=YARD_SRC["polypizza"] / "objects" / "2olZ0G8iur.glb", file="palettes/mailbox.png", kit="Mailbox by CreativeTrio via Poly Pizza (CC0)", sampler="LINEAR/LINEAR_MIPMAP_LINEAR"),
 }
 # recoloured variants: (variant, [(cell box x0,y0,x1,y1 in the 512 px map, target sRGB colour, what)])
 ROOF_CELL = (0, 128, 64, 256)        # the green roof swatch of the suburban + commercial colormaps
@@ -205,6 +219,20 @@ P = [   # street / yard props
     ("props", "props/barrier-traffic-quaternius.glb", "barrier-traffic", "quaternius_atlas", 1.0, "barrier", "footprint"),
     ("props", "props/crate-quaternius.glb", "crate-yard", None, 6.0, "crate", "bbox"),
     ("props", "props/shipping-container-quaternius.glb", "shipping-container", None, 1.38, "container", "bbox"),
+]
+# (W10 R4B) yard dressing: name, source, palette, suggested scale, role, collider mode, yaw quarter-turns (front +Z, a run's long side along local X), credit.
+# Origin = footprint centre at the bottom (center). A fence / hedge piece is one run module; a path stone is drawn flat (no collider: under the 0.30 m body band).
+YARD = [
+    ("yard-fence", YARD_SRC["fantasytown"] / "fence.glb", "fantasytown", 2.0, "fence", "bbox", 1, "Kenney Fantasy Town Kit 2.0 (CC0): fence"),
+    ("yard-hedge", YARD_SRC["fantasytown"] / "hedge-large.glb", "fantasytown", 1.8, "hedge", "bbox", 1, "Kenney Fantasy Town Kit 2.0 (CC0): hedge-large"),
+    ("yard-path", YARD_SRC["holiday"] / "floor-stone.glb", "holiday", 1.2, "path", "none", 0, "Kenney Holiday Kit 2.0 (CC0): floor-stone"),
+    ("yard-bench", YARD_SRC["holiday"] / "bench.glb", "holiday", 1.6, "bench", "bbox", 0, "Kenney Holiday Kit 2.0 (CC0): bench"),
+    ("yard-log", YARD_SRC["survival"] / "tree-log.glb", "survival", 2.4, "woodpile", "bbox", 1, "Kenney Survival Kit 2.0 (CC0): tree-log"),
+    ("yard-barrel", YARD_SRC["survival"] / "barrel.glb", "survival", 3.0, "barrel", "bbox", 0, "Kenney Survival Kit 2.0 (CC0): barrel"),
+    ("yard-bucket", YARD_SRC["survival"] / "bucket.glb", "survival", 3.0, "bucket", "bbox", 0, "Kenney Survival Kit 2.0 (CC0): bucket"),
+    ("yard-boat", YARD_SRC["pirate"] / "boat-row-small.glb", "pirate", 1.3, "boat", "bbox", 0, "Kenney Pirate Kit 2.0 (CC0): boat-row-small"),
+    ("yard-parasol", SRC / "props" / "detail-parasol-a.glb", "commercial", 6.0, "parasol", "pole", 0, "Kenney City Kit (Commercial) 2.1 (CC0): detail-parasol-a"),
+    ("yard-mailbox", YARD_SRC["polypizza"] / "objects" / "2olZ0G8iur.glb", "mailbox", 1.15, "mailbox", "bbox", 0, "Mailbox by CreativeTrio, Poly Pizza objects/2olZ0G8iur (CC0)"),
 ]
 CARS = [(n, "car", 1.7 if n not in ("delivery",) else 1.6) for n in
         ["sedan", "suv", "taxi", "police", "van", "hatchback-sports", "truck", "delivery"]]
@@ -381,6 +409,9 @@ def catalogue():
         cat.append(dict(group=g, src=src, name=n, palette=opt.get("palette"), scale=sc, role="furniture" if g == "furniture" else "wall", mode=mode,
                         out=OUT / g / f"{n}.glb", kind="furniture" if g == "furniture" else "wall", interior=True, rooms=rooms, use=use, place=place,
                         remap_y=opt.get("remap_y"), drop_mats=opt.get("drop_mats"), credit=opt.get("credit"), yaw_q=opt.get("yaw_q", 0), center=(g == "furniture")))
+    for n, src, pal, sc, role, mode, yq, credit in YARD:
+        cat.append(dict(group="props", src=src, name=n, palette=pal, scale=sc, role=role, mode=mode, out=OUT / "props" / f"{n}.glb", kind="prop",
+                        center=True, yaw_q=yq, credit=credit))
     for c in cat:
         c["id"] = f"{c['group']}/{c['name']}"
     return cat
@@ -996,7 +1027,13 @@ def build_palettes(cat) -> dict:
             g = read_glb(c["src"])
             atlas_bytes = g.images[0]
     for key, p in PALETTES.items():
-        if p["src"] is None:
+        if p["src"] is None and p.get("glb"):                   # (W10 R4B) a single-texture GLB's embedded image is the palette
+            dst = OUT / p["file"]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            im = Image.open(__import__("io").BytesIO(read_glb(p["glb"]).images[0]))
+            size = save_png(im, dst)
+            im_size = im.size
+        elif p["src"] is None:
             dst = OUT / p["file"]
             dst.parent.mkdir(parents=True, exist_ok=True)
             im = Image.open(__import__("io").BytesIO(atlas_bytes))
@@ -1351,6 +1388,8 @@ def main() -> int:
             "colliders": [{"min": b[:3], "max": b[3:]} for b in boxes], "collider_mode": c["mode"],
             "collider_info": info,
         }
+        if c.get("credit") and not c.get("interior"):
+            types[c["id"]]["source"] = c["credit"]
         if c.get("interior"):
             interior_ids.add(c["id"])
             types[c["id"]]["source"] = c["credit"] or "Kenney Furniture Kit 2.0 (CC0): %s" % c["src"].name
@@ -1387,7 +1426,7 @@ def main() -> int:
     manifest = {
         "version": 1,
         "generated_by": "games/last-circle/_tools/art_b_city.py",
-        "licence": "CC0 throughout: Kenney City Kit Suburban / Commercial / Roads, Car Kit, Furniture Kit, Graveyard Kit; Quaternius props (Poly Pizza). See CREDITS.md.",
+        "licence": "CC0 throughout: Kenney City Kit Suburban / Commercial / Roads, Car Kit, Furniture Kit, Graveyard Kit, Fantasy Town / Survival / Holiday / Pirate Kits; Quaternius and CreativeTrio props (Poly Pizza). See CREDITS.md.",
         "readme": README + (README_INTERIOR if into_main else []),
         "districts": {
             "downtown": [k for k in sorted_types if k.startswith("skyscraper/")] + ["commercial/building-i", "commercial/building-m", "commercial/building-f", "commercial/building-a", "commercial/building-h"],
@@ -1395,6 +1434,7 @@ def main() -> int:
             "warehouse_yard": ["commercial/building-e", "props/shipping-container", "props/crate-yard", "props/dumpster", "props/barrier-traffic", "props/construction-barrier"],
             "far_skyline": [k for k in sorted_types if k.startswith("lowdetail/")],
             "street": ["props/light-curved", "props/light-curved-double", "props/light-square", "props/hydrant", "props/grave-bench", "props/cone-traffic", "props/planter", "props/fence-suburban", "props/box-crate"],
+            "yard": [k for k in sorted_types if k.startswith("props/yard-")],
             "parking": [k for k in sorted_types if k.startswith("cars/")],
             "interior_kit": [k for k in sorted_types if k.startswith("walls/") or k.startswith("furniture/")],
         },
