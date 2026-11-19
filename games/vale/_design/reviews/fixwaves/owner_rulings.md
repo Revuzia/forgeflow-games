@@ -948,3 +948,84 @@ The owner played the live build on 2026-11-18 and asked for a way to turn auto a
 - Damage numbers, real client RIFT seed 7, the same fixed feed on the same targets at t ~279 s (52 + 31 merged = 83, magic 140, crit 380, true 65 on a fighter; six 30 ms hits on a Wick merged to 213). Font size before -> after: **1920x1080 17.1-36.7 -> 23.4-45.2 px**; **1366x768 13.7-29.4 -> 21.5-41.6 px** (smallest 65: 13.7 -> 21.5). Per target 4 / 1 both, and none over its own plate. At 1366 the magic 140 crosses a neighbour's plate at 72 % alpha in both runs, as CUX-8 allows (`nums_{before,after}_*.jpg`, `cux8_*.json`).
 
 **Open, noted:** the seam setting was re-checked on one seed and 10 looks, not the full 3 x 30. A side flip at the view edge can put a number onto the other side's stack in rare edge cases. Over a busy ultimate the VFX still dominates the frame (W2-B's lane). Unit team rings (rings.ts) are unchanged.
+
+## 62. The round-1 package's pace cost is the structure posts; they are off at every tier until a round pays for them. RIFT calls do not stand on, and the calm-walk latch is 12 s at every tier (lead, by delegation, 2026-11-19)
+
+Lane AI, pace round (orch1 W1-A opponents / W3-A), after `orch1/verify_ai_r4.json` (6.5, not safe to ship: RIFT +1.2 / +2.0 / +2.3 min against the pre-lane bots, 14 and 12 games in 64 reaching 30:00 at adept and veteran against 2 and 4). Game length is a hard bar (ruling 60). Genre-standard practice in VALE's own terms; League of Legends was a gauge only.
+
+**Method.** A per-feature bisect, not one-knob ablations. Every arm ran on this one tree with `VALE_BOTS` (a copy of src/sim/bots from a commit) plus env-selected switches in that copy, so each arm is the same code with one feature group turned off. Seeds RIFT 701-764 (n = 64 a tier, paired, cut at 30:00); new tool `_harness/probe_sim_bot_pace.ts` (length, end before the cut, falls by class). Pace is arm − pre in minutes, ± paired SE; "cut" is games reaching 30:00 (pre 6 / 2 / 4).
+
+**Bisect inside c85476cb6 (the first ruling-40 drop; it reads +2.20 / +2.40 / +1.59, cut 11 / 11 / 7):**
+
+| Turned off in c85476cb6 | novice | adept | veteran |
+|---|---|---|---|
+| Group A: posts, peel/protect, 18 m team fight, gathered gate, fountain stop, split push, lurk/flank, follow floor | −0.10, cut 5 | −0.02, cut 0 | −0.42, cut 2 |
+| Group B: fog-honest memory, CC chains/item actives/threat CC, exposure and burst retreat, objective extras, adaptive build | +1.65, cut 12 | +1.83, cut 10 | +1.69, cut 8 |
+| The rest of A (18 m team fight, gathered gate, split push, lurk/flank, follow floor) | +2.24 | +2.95 | +1.66 |
+| Posts, protect, fountain | −0.14 | +0.06 | +0.68 |
+| **Posts alone (G1 `thinkGuard`)** | **+0.02, cut 6** | **−0.79, cut 1** | **+0.54, cut 4** |
+| Protect alone / fountain stop alone | +1.58 / +1.57 | +2.90 / +2.02 | +1.59 / +1.47 |
+| Posts by class: outer only / inner only / base only off (adept, veteran) | | +2.28 / +0.47 / +1.68 | +2.25 / +0.59 / +1.65 |
+| The "+1 defender" at inner and base off | | +2.64 | +1.91 |
+
+- So the whole round-1 cost is the posts. Most of it is inner-Needle posts: adept group sieges on inner Needles last 753 team-seconds a game with posts against 450 without (pre 472), and 17.3 of them are repelled against 9.8 (pre 12.4). Base posts carry some at every tier.
+
+**At HEAD 1b548f8d0 the cause is layered.** Posts off alone: −0.18, cut 5 / +1.04, cut 10 / +1.69, cut 5. A commit bisect with posts off found the rest arriving between e2c4925e5 and 5503f9fad (adept spread, veteran jumps between 658fdc5eb and 5c55ef885), where the 4 s defend/answer stand-on (`DEFEND_STICK`) is the largest piece at 5c55ef885 (veteran +2.12 → +0.78 with it off). Then:
+- Posts and stand-on off: adept −0.08, cut 3; veteran +1.45, cut 7.
+- And veteran's 20 s calm-walk latch at 12 s: veteran +0.61, cut 6.
+- With the posts on, no change brings pace near pre (novice / adept / veteran, against pre):
+  - stand-on off: — / +1.75 / +2.55; with latch 12 too: +1.26 / +1.75 / +2.13;
+  - outer, inner or base posts off one class at a time: at best +0.73 (novice, inner) / +1.68 (adept, base) / +2.15 (veteran, base);
+  - the +1 off: +1.29 / +2.26 / +2.18; no posts while the team itself is pressing: +1.15 / +1.76 / +2.03;
+  - posts only at base structures and the core from 20:00: +1.53 / +2.34 / +2.78;
+  - the closing commit rule off: — / +1.73 / +2.10; closeOut off: — / +2.04 / +2.97; wave clearing (`pClear`) off: +1.16 / +1.59 / +2.33;
+  - inner posts and stand-on off together: +1.47 / +1.00 / +2.14; posts at base structures only, stand-on off, latch 12: +1.47 / +0.80 / +1.13.
+- With the posts off, the five round-2 knobs (punishInvade, peelDive, peelFirst, closeOut, collapseRoads) off together read adept +0.58, veteran +1.57: not the rest of the cost.
+- The redundancy is why rulings 55, 58 and 59 found "no single feature": several layers each hold a threatened structure, and with one removed the others still do.
+
+**Decided (src/sim/bots):**
+- **`guardPosts: false` at every tier** (difficulty.ts; `thinkGuard` returns before naming a defender). The code stays for a later round that pays for it. Everything else that defends stays on: whole-team base calls, road defend calls, veteran answers, `clearOwn`, peel, sneak, collapse.
+- **RIFT calls do not stand on** (`stickOf`: 0 s on RIFT, 4 s elsewhere, so BRIDGE is unchanged). The walk latch now holds a calm fighter's turn, which was the stand-on's job.
+- **Veteran `turnLatch` 20 → 12 s,** as novice and adept.
+- FRAY and BRIDGE are unchanged: posts, the latch and now the stand-on change are RIFT-only.
+
+**Measured, final code against pre (and HEAD), RIFT, n = 64, cut 30:00:**
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| Pace s701-764, new − pre | +0.50 ± 0.62 | −0.08 ± 0.52 | +0.61 ± 0.61 |
+| Pace s701-764, new − HEAD | −0.68 ± 0.49 | −2.12 ± 0.51 | −1.65 ± 0.56 |
+| Reaching 30:00, s701-764: pre / HEAD / new | 6 / 2 / 5 | 2 / 14 / 3 | 4 / 12 / 6 |
+| Pace s765-828, new − pre | −0.35 ± 0.55 | +0.09 ± 0.46 | **+1.93 ± 0.54** |
+| Pace s765-828, new − HEAD | −1.29 ± 0.51 | −1.21 ± 0.51 | −1.29 ± 0.53 |
+| Reaching 30:00, s765-828: pre / HEAD / new | 5 / 12 / 4 | 3 / 8 / 1 | 2 / 18 / 8 |
+
+Defence and dither, s701-764 (`probe_sim_bot_tactics --suites rift`). Columns are pre / HEAD (ruling 59's table) / new:
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| Inner+base falls to Wicks beside fit defenders | 0.56 / 0.70 / 0.55 | 1.09 / 0.83 / 0.69 | 0.84 / 0.88 / 1.06 |
+| Inner only | 0.11 / 0.16 / 0.14 | 0.38 / 0.27 / 0.22 | 0.19 / 0.50 / 0.33 |
+| Base only | 0.45 / 0.55 / 0.41 | 0.72 / 0.56 / 0.47 | 0.66 / 0.38 / 0.73 |
+| Unanswered base intrusions | 2.09 / 1.84 / 2.19 | 0.94 / 0.56 / 1.23 | 1.77 / 0.45 / 0.83 |
+| Dither (bars 3 / 1.5 / 1) | 4.95 / 2.98 / 2.84 | 2.39 / 1.36 / 1.55 | 5.30 / 1.30 / 2.28 |
+
+**Given back (said plainly).**
+- Novice and adept answer base intrusions about as the pre-lane bots did (2.19 and 1.23 a game, against HEAD's 1.84 and 0.56). Veteran keeps about half its gain (0.83, pre 1.77).
+- Veteran base falls to Wicks beside fit defenders return to the pre level (0.73), and veteran dither rises 1.30 → 2.28 (still under half of pre's 5.30).
+- All three intrusion bars and the Wicks-falls bar still pass (≤ 3 / 1.5 / 1, and ≤ 1.1).
+- Veteran tactics gate on the final code: 5 fails. They are the undefended-siege share at 20.0 % against a 20 % bar, overextension, dither 2.28, peel within 1.5 s 70.6 %, and fit fighters away from a base under attack, 9.7 s against 6.
+- `probe_sim_bot_soak` quick: PASS.
+
+**Secondary (veteran inner falls to Wicks only).** 0.50 → 0.33 (pre 0.19). That is better, not fixed.
+
+**Open, not met:**
+- **Veteran pace.** It is within noise on s701 (+0.61) but not on s765 (+1.93, 8 games reaching 30:00 against 2). Single veteran knobs tried there with posts and stand-on off, latch 12:
+  - readsWaves off: +1.14
+  - collapseRoads off with punishInvade 1: +1.17
+  - convertsLeads off: +2.45
+  - readsWaves, collapse and punish together: +1.78 on s765, +0.42 on s701
+
+  None closes the gap, and none is kept. The remaining veteran cost sits in the posts-off code between 5c55ef885 and 5503f9fad, and it is not found yet.
+- **Base defence that does not cost pace.** No post design measured here (any class, any count, any time window) kept the posts and pre pace. Rebuilding defence a different way is its own lane under ruling 60.
+- Rulings 55/58/59's other open bars (FRAY stays, veteran peel within 1.5 s, collapse ordering) were not worked this round.

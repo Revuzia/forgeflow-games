@@ -65,6 +65,9 @@ export interface Entry { readonly x: number; readonly y: number; readonly lane: 
 export const TEAM_THINK_TICKS = 15;
 /** owner_rulings 44, round 2: seconds a defend call or an answer stands after its threat last showed */
 const DEFEND_STICK = 4;
+/** ruling 60: RIFT's calls do not stand on — with the walk latch (rulings 55/58) holding a calm fighter's turn, the 4 s stand-on
+ *  only kept defenders on a threat that had gone (part of the round-1 package's pace cost, measured with the posts off) */
+const stickOf = (k: Knowledge): number => (k.kind === 'rift' ? 0 : DEFEND_STICK);
 
 function roleOf(k: Knowledge, s: SeatSetup): string {
   if (s.role) return s.role;
@@ -390,7 +393,9 @@ export class TeamBrain {
    */
   private thinkGuard(w: World): void {
     const k = this.k, tp = this.perc, now = w.time, d = this.diff;
-    if (k.kind !== 'rift') { this.guard.clear(); return; }
+    // (ruling 60: posts are off at every tier — guardPosts — the measured cause of the round-1 package's pace cost; the code
+    // stays for a later round that pays for it)
+    if (k.kind !== 'rift' || !d.guardPosts) { this.guard.clear(); return; }
     for (const [p, g] of this.guard) {
       const e = w.players[p]?.ent;
       // (a post whose structure has fallen is over at once: its defenders stood at the rubble while the next structure
@@ -645,7 +650,7 @@ export class TeamBrain {
     this.answerFill(w);
     // (round 2: an answer stands DEFEND_STICK s after it was last given, while its fighter is fit — see delayDefend)
     // (ruling 55: no stand-on in the laning phase, as for the defend calls)
-    if (now >= 840) for (const [p, lane] of this.answer) this.answerUntil.set(p, { lane, until: now + DEFEND_STICK });
+    if (now >= 840) for (const [p, lane] of this.answer) this.answerUntil.set(p, { lane, until: now + stickOf(k) });
     for (const [p, a] of [...this.answerUntil]) {
       const e = w.players[p]?.ent;
       if (now > a.until || !e || !e.alive || e.hp < e.maxHp * 0.5) { this.answerUntil.delete(p); continue; }
@@ -817,12 +822,13 @@ export class TeamBrain {
     // (ruling 55: not in the laning phase — a road's dive call there is its laners' moment, and the 4 s it stood after the
     // dive ended kept the solo laners in defend mode 2.4-3.9 % of the laning phase, against 1.0-1.3 % for the pre-lane bots)
     const laning = now < 840 && this.phase !== 'late';
+    const stick = stickOf(this.k);
     for (let i = 0; i < this.defend.length; i++) {
       if (laning) continue;
-      if (this.defend[i] > 0.05) { this.stickDef[i] = now + DEFEND_STICK; this.stickVal[i] = this.defend[i]; this.stickX[i] = this.defendX[i]; this.stickY[i] = this.defendY[i]; this.stickF[i] = this.defendFighters[i]; }
+      if (this.defend[i] > 0.05) { this.stickDef[i] = now + stick; this.stickVal[i] = this.defend[i]; this.stickX[i] = this.defendX[i]; this.stickY[i] = this.defendY[i]; this.stickF[i] = this.defendFighters[i]; }
       else if (now < this.stickDef[i]) { this.defend[i] = this.stickVal[i]; this.defendX[i] = this.stickX[i]; this.defendY[i] = this.stickY[i]; this.defendFighters[i] = this.stickF[i]; }
     }
-    if (this.baseThreat > 0.05) { this.stickBase = now + DEFEND_STICK; this.stickBaseV = this.baseThreat; this.stickBaseX = this.baseX; this.stickBaseY = this.baseY; }
+    if (this.baseThreat > 0.05) { this.stickBase = now + stick; this.stickBaseV = this.baseThreat; this.stickBaseX = this.baseX; this.stickBaseY = this.baseY; }
     else if (now < this.stickBase) { this.baseThreat = this.stickBaseV; this.baseX = this.stickBaseX; this.baseY = this.stickBaseY; }
   }
 
