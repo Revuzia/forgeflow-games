@@ -186,7 +186,7 @@ export const SHOP_PITCH = 2.5;             // m from one aisle row to the next (
 export const WORK_COVER = true;
 export const PITCHED_HOMES = true;
 export const ROOF_FLAT_ALL = false;
-export const AO = Object.freeze({ k: 0.32, m: 0.06, r: 0.35, minH: 0.25, minA: 0.08, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
+export const AO = Object.freeze({ k: 0.26, m: 0.06, r: 0.35, minH: 0.25, minA: 0.08, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.26 reads ~0.55 of the floor in sRGB - fix4: 0.32 left the looks gate at 78 % once the shops filled with shelving): the ring's inner / outer, wall feet, corners
 export const RNG_LEAK = false;            // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
 const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
