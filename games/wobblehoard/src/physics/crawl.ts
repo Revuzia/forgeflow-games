@@ -133,10 +133,11 @@ export class Crawl {
     if (a === 0) { if (this.on) { this.on = false; b.crawlOn = false; this.d.fill(0); S[4] = 0; } return; }
     this.on = true; b.crawlOn = true;
     if (fresh) S[0] = 0;
-    // ---- the wave's axis: the facing (the face end is the front that stretches and plants); the lean follows the yaw rate
+    // ---- the wave's axis: the facing (the face end is the front that stretches and plants); the lean follows the yaw rate while it crawls (x a: the turn on the spot
+    // at the start of a walk does not lean: leaning there rolled the body and drifted it 20 degrees off its way)
     const ux = fl > 0.5 ? fx : hx, uz = fl > 0.5 ? fz : hz;
     S[2] = ux; S[3] = uz;
-    const lw = CRAWL.leanK * rate * v, lt = lw > CRAWL.leanMax ? CRAWL.leanMax : lw < -CRAWL.leanMax ? -CRAWL.leanMax : lw;
+    const lw = CRAWL.leanK * rate * v * a, lt = lw > CRAWL.leanMax ? CRAWL.leanMax : lw < -CRAWL.leanMax ? -CRAWL.leanMax : lw;
     S[4] += (lt - S[4]) * (1 - Math.exp(-dt / 0.2));
     const bend = CRAWL.bend * (e > 1 ? 1 : e < -1 ? -1 : e);   // (the front swings toward the heading first: x the remaining yaw, saturating at a radian)
     // ---- the rest frame (the body's rotation from the last substep): travel u, up and lateral (u x up) in rest coordinates
