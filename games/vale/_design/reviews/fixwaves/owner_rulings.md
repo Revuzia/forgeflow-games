@@ -897,3 +897,14 @@ Lane AI, fix round 3 (orch1 W1-A opponents / W3-A), after `orch1/verify_ai_r3.js
 - Item 7: tactics gate.
 
 **Next.** A per-feature bisect inside c85476cb6, on 64 paired seeds, with the 30:00-reach count as the primary read rather than the mean.
+
+## 60. Operating rules: two fix rounds per lane, ship in small pieces, hard bars only where a player can notice (owner, 2026-11-18)
+
+The owner agreed to these on 2026-11-18 ("i agree, lets do that. all of it").
+
+- **Round cap.** A lane gets its build, then at most two fix rounds. After that the part that passed ships and the rest is parked with a written reason.
+- **Small ships.** Lanes are cut so each can ship alone. The opponents lane ships base defence first; ally protection and sneak attacks become their own lanes.
+- **Hard bars** are the ones a player notices: game length and pace, readability in a fight, the sensitivity and face rules, frame rate and load, and any regression against the live build. A verifier fails a lane only on these.
+- **Soft bars.** A numeric bar a player cannot perceive (for example 72.7 % against 75 %, or luma 217.7 against 218) is reported as a note when it is within about 10 % of the bar. It does not fail the lane.
+- **Cards** are a slight visual (ruling 57 and the owner's direction of the same day): best available version, no paid polish rounds.
+- **Parked:** the fighter-colour leftovers of the units gate (ruling 49) and the remaining card misses.
