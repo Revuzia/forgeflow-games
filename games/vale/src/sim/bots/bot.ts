@@ -44,6 +44,7 @@ import { BotBase, gauss, holdLeft, type Mode } from './micro.ts';
 import type { Guard } from './team.ts';
 import { fighterPower, memoryWeight } from './perception.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
+import type { PingKind } from '../../contracts/sim.ts';
 
 const MODE_TICKS = 6;
 /** ruling 55: the plans whose walk a calm fighter does not turn round on more than once in 8 s */
@@ -111,6 +112,9 @@ export class Bot extends BotBase implements BotController {
   /** since when that opponent has been my lane foe, and when it last swung at me or cast (castSeen's estimate) */
   private foeSince = 0;
   private foeHitAt = -1e9;
+  /** ruling 65: where and when I last watched my road opponent (for a "missing" call) */
+  private readonly foeSeen = { id: -1, x: 0, y: 0, t: -1e9 };
+  private readonly foePrev = { id: -1, x: 0, y: 0, t: -1e9, since: 0 };
   /** the fighter my current all-in was started on (-1: none) */
   private allinTarget = -1;
   // situation (5 Hz)
@@ -193,8 +197,12 @@ export class Bot extends BotBase implements BotController {
     this.clearPlan();
     this.execute();
     this.clearOwn();
+    this.loneStop();
     this.holdWalk();
     this.act();
+    // (ruling 65: a call the team brain gave me to say)
+    const call = this.brain ? this.brain.comms.takeCall(this.player, this.now) : null;
+    if (call) this.say(call.kind, call.x, call.y, call.key, call.hold);
     // publish the focus target for teammates
     if (this.brain) { if (this.pFight && this.pFight.kind === 'fighter') this.brain.focus.set(this.player, this.pFight.id); else this.brain.focus.delete(this.player); }
     return out;
@@ -351,6 +359,19 @@ export class Bot extends BotBase implements BotController {
       const fs = this.m.castSeen(this.team, this.laneEnemy.id);
       if (this.laneEnemy.atkTarget === e.id || (fs && fs.some((x) => x > this.now))) this.foeHitAt = this.now;
       if (this.laneEnemy.stateOverride === 'recall') this.foeRecallAt = this.now;
+    }
+    // (ruling 65: where I last watched my road opponent walk — a jump of more than 6 m in a moment is a recall landing or a
+    // blink read off a sight that is already gone, not a place I saw it)
+    const lf = this.laneFoe >= 0 ? this.w.entity(this.laneFoe) : undefined;
+    if (lf && lf.alive && this.isNoticed(lf) && lf.stateOverride === 'recall') this.foeRecallAt = this.now;
+    if (lf && lf.alive && this.isNoticed(lf)) {
+      // (a steady sighting only: in sight 0.2 s since its last jump — a recall landing or a blink shows the new spot for a
+      // moment on a sight already gone)
+      const fp = this.foePrev;
+      const dtS = this.now - fp.t;
+      if (fp.id !== lf.id || dtS > 0.5 || sq(fp.x - lf.x) + sq(fp.y - lf.y) > sq(0.5 + 8 * dtS)) fp.since = this.now;
+      fp.id = lf.id; fp.x = lf.x; fp.y = lf.y; fp.t = this.now;
+      if (this.now - fp.since >= 0.2) { const fs = this.foeSeen; fs.id = lf.id; fs.x = lf.x; fs.y = lf.y; fs.t = this.now; }
     }
     // Wicks, summons and monsters hitting me
     let ud = 0;
@@ -552,7 +573,13 @@ export class Bot extends BotBase implements BotController {
     if (this.diff.burstRetreat && this.nearE > 0 && kind === 'rift' && !edgy && !!b && b.phase !== 'early' && hpF < (lastLife ? 0.85 : 0.75) &&
       !(this.killTarget && this.killMargin >= 1.2) && !tolled && this.burstDanger()) retreat = Math.max(retreat, 0.86);
     retreat = Math.max(retreat, this.outmatched());
+    // (ruling 65: a teammate's "fall back" near me is weighed — never a blind turn: only when my own fight read agrees or I am hurt)
+    if (b && kind === 'rift' && this.nearE > 0) {
+      const h = b.comms.near('retreat', e.x, e.y, 25, now, 4, this.player);
+      if (h && (this.adv < 0.55 || hpF < 0.5) && !(this.killTarget && this.killMargin >= 1.3)) retreat = Math.max(retreat, 0.84);
+    }
     consider('retreat', retreat);
+    this.speakOwn();
     // recall / shop
     const lp = this.lanePhase();
     const base = k.bases.find((x) => x.team === this.team);
@@ -707,6 +734,8 @@ export class Bot extends BotBase implements BotController {
       else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle && (!lp || this.nearestEnemyFighter(20) === null)) consider('push', 0.3 + 0.2 * b.push[this.lane]);
       // (sent to answer a threatened road, W4 G3: before the plan, not before my life)
       if (b.answer.has(this.player) && hpF > 0.5) consider('defend', 0.8);
+      // (ruling 65: answering a teammate's "help here")
+      if (b.helpers.has(this.player) && hpF > 0.5) consider('defend', 0.79);
       // (lane AI G1: posted to a threatened structure — the post comes before the plan, and in the laning phase too)
       const post = b.guard.get(this.player);
       // (the base outranks a siege at its tower — 0.92 — an inner Needle does not: that siege hands the post on, below)
@@ -796,6 +825,83 @@ export class Bot extends BotBase implements BotController {
       this.recallTriedAt = -1e9;
       this.campTarget = -1;
     }
+  }
+
+  /** ruling 65: say a ping (the same Command a player sends) — once per event key, within my gap and the team's budget */
+  private say(kind: PingKind, x: number, y: number, key: string, hold: number): boolean {
+    const b = this.brain;
+    if (!b || this.k.ffa || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    if (!b.comms.canSay(this.player, this.now, key)) return false;
+    b.comms.said(this.player, this.now, key, hold);
+    this.out.push({ type: 'ping', kind, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+    return true;
+  }
+
+  /**
+   * ruling 65 — my own calls: "help here" when enemy fighters took a fifth of my health in 2 s with none of ours beside me and
+   * a teammate in reach (in a road's laning phase only under half health: a trade is laning), heard by my team brain at once
+   * (thinkAssist); "missing" when my road opponent, in sight on my road moments ago, is gone (4-8 s unseen, not seen leaving to
+   * recall, alive), at where it was last seen — tiers that read the field (pingReads), from 2:30.
+   */
+  private speakOwn(): void {
+    const b = this.brain, e = this.e, now = this.now, k = this.k;
+    if (!b || k.ffa || k.kind === 'practice') return;
+    const burst = this.m.hurtBy(e.id, now, 2);
+    if (burst >= 0.2 * e.maxHp && this.nearE >= 1 && this.hpF >= 0.15 && this.nearA <= 1 && (!this.lanePhase() || this.hpF < 0.5)) {
+      let mate = false;
+      for (const a of this.perc.allyFighters) { if (a === e || !a.alive) continue; const d2 = this.dist2(a, e.x, e.y); if (d2 > 12 * 12 && d2 <= 50 * 50) { mate = true; break; } }
+      if (mate && this.say('assist', e.x, e.y, `as:${this.player}`, 12)) b.selfAssist.set(this.player, { x: e.x, y: e.y, t: now });
+    }
+    // (on my road, laning or pushing it, before 20:00 — later the teams move as groups — and once a minute a foe at most)
+    const onRoad = this.mode === 'lane' || this.mode === 'trade' || this.mode === 'push';
+    if (k.kind === 'rift' && this.diff.pingReads && this.lane >= 0 && !this.jungle && this.laneFoe >= 0 && now >= 150 && now < 1200 && onRoad && this.laneDist2(e.x, e.y) <= 20 * 20) {
+      const foe = this.w.entity(this.laneFoe), ls = this.foeSeen.id === this.laneFoe ? this.foeSeen : null;
+      // (not where another enemy fighter stands in sight: that one is not missing)
+      let other = !ls;
+      if (ls) for (const f of this.perc.enemyFighters) if (f.alive && this.dist2(f, ls.x, ls.y) <= 12 * 12) { other = true; break; }
+      // (and the team's own last sight of it agrees — none newer elsewhere)
+      // (the call goes at the team's last sight of it, when that agrees with mine — a sight more than 2.5 m from where I watched
+      // it walk is a recall landing or a blink seen on a sight already gone)
+      const tl = this.perc.lastSeen.get(this.laneFoe);
+      if (!tl || !ls || sq(tl.x - ls.x) + sq(tl.y - ls.y) > 2.5 * 2.5) other = true;
+      // (any enemy fighter in our sight there — one that cannot be targeted this moment is still in sight — is not missing)
+      // (nor where another enemy fighter was in our sight a moment ago)
+      if (tl && !other) for (const o of this.perc.lastSeen.values()) if (o.id !== this.laneFoe && now - o.t <= 1.5 && sq(o.x - tl.x) + sq(o.y - tl.y) <= 12 * 12) { other = true; break; }
+      if (tl && !other) for (const pl of this.w.players) { const f = pl?.ent; if (f && f.alive && f.team !== this.team && (f.visibleMask & this.perc.bit) !== 0 && this.dist2(f, tl.x, tl.y) <= 12 * 12) { other = true; break; } }
+      if (foe && foe.alive && tl && !other && !this.perc.sees(foe) && now - tl.t >= 5 && now - tl.t <= 8 && now - this.foeRecallAt > 9 && this.laneDist2(tl.x, tl.y) <= 20 * 20) {
+        this.say('missing', tl.x, tl.y, `mis:${foe.id}`, 60);
+      }
+    }
+  }
+
+  /**
+   * ruling 65 — no lone walk into three: from 14:00 on RIFT a walking plan (a push, a camp, a roam, the lane, a walk back)
+   * whose point has the tier's loneStop of enemy fighters in sight (or a teammate's danger ping, 6 s) with none of ours there
+   * or beside me stops short: it waits where it is, or backs off when they are already close. A post, an answer, a peel, a
+   * fight, a retreat and the endgame rush are not walks.
+   */
+  private loneStop(): void {
+    const b = this.brain, e = this.e, n0 = this.diff.loneStop;
+    if (!b || this.k.kind !== 'rift' || n0 === Infinity || !this.pMove || this.now < LANE_PHASE_END || b.rush) return;
+    const m = this.mode;
+    if (m !== 'push' && m !== 'objective' && m !== 'roam' && m !== 'farm' && m !== 'return' && m !== 'lane') return;
+    if (this.pFight && inAttackRange(e, this.pFight)) return;
+    const tx = this.pMoveX, ty = this.pMoveY;
+    let n = 0, cx = 0, cy = 0;
+    for (const f of this.perc.enemyFighters) if (this.isNoticed(f) && this.dist2(f, tx, ty) <= 14 * 14) { n++; cx += f.x; cy += f.y; }
+    let danger = false;
+    if (n < n0 && this.diff.pingReads) {
+      const h = b.comms.near('danger', tx, ty, 14, this.now, 6, this.player);
+      if (h) { danger = true; cx = h.x; cy = h.y; n = 1; }
+    }
+    if (n === 0 || (n < n0 && !danger)) return;
+    cx /= n; cy /= n;
+    if (this.alliesNear(tx, ty, 14) - (this.dist2(e, tx, ty) <= 14 * 14 ? 1 : 0) > 0 || this.alliesNear(e.x, e.y, 12) > 1) return;
+    const dc = Math.sqrt(this.dist2(e, cx, cy));
+    if (dc > 20) { this.pMoveX = e.x; this.pMoveY = e.y; }
+    else { this.pMoveX = this.safeX; this.pMoveY = this.safeY; }
+    this.pSiege = null; this.pMonsters = false;
+    if (this.pFight && this.pFight.kind === 'fighter') this.pFight = null;
   }
 
   /** ruling 55: fit, nothing hitting me, no enemy fighter noticed within 25 m */
@@ -1578,6 +1684,8 @@ export class Bot extends BotBase implements BotController {
     // (lane AI G5: exposed, no structure past where I hold; a pressed siege waits at the group point until the team is there)
     if (siege && this.exposed && !(b && (b.rush || b.stage)) && this.dist2(siege, this.holdX, this.holdY) > 14 * 14) siege = null;
     if (siege && grouped && b && !b.gathered && !b.rush && !b.stage && this.minionsTanking(siege) < 2) siege = null;
+    // (ruling 65: the team waits at the group point for the arrivals still walking in — not already at the structure)
+    if (siege && grouped && b && b.regroup && !b.rush && !b.stage && this.dist2(siege, e.x, e.y) > sq(siege.stats.range + siege.radius + 3)) siege = null;
     if (b && b.stage) {
       // gathering for the final push: wait at the staging point, fight what comes
       this.pMoveX = b.groupX; this.pMoveY = b.groupY;
@@ -1632,7 +1740,9 @@ export class Bot extends BotBase implements BotController {
     if (post) { this.execGuard(post); return; }
     let x = b.baseX, y = b.baseY, best = b.baseThreat;
     const ans = b.answer.get(this.player);
+    const help = b.helpers.get(this.player);
     if (ans !== undefined) { x = b.answerX[ans]; y = b.answerY[ans]; best = 3; }
+    else if (help) { x = help.x; y = help.y; best = 3; }
     else if (this.lane >= 0 && b.defend[this.lane] > 0.05) { x = b.defendX[this.lane]; y = b.defendY[this.lane]; best = 2; }
     for (let i = 0; i < b.defend.length; i++) if (b.defend[i] > best) { best = b.defend[i]; x = b.defendX[i]; y = b.defendY[i]; }
     // (round 2: no call left to answer — the mode is a moment stale: carry on with the plan, never toward the map's corner)

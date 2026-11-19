@@ -180,6 +180,13 @@ export class BotMatch {
           }
           break;
         }
+        case 'ping': {
+          // (ruling 65: a ping is heard by the pinger's own team only — the enemy never reads it)
+          const pl = w.players[ev.player];
+          const b = pl ? this.brains[pl.team] : null;
+          if (b) b.hearPing({ kind: ev.kind, x: ev.x, y: ev.y, target: ev.target ?? -1, t: ev.t, player: ev.player, human: b.isHuman(ev.player) });
+          break;
+        }
         case 'structure': {
           // public: when a structure fell (gates come back after their respawn time)
           const v = w.entity(ev.id);

@@ -178,9 +178,11 @@ export interface DifficultyProfile {
    *  threat, a rush or a target at hand turns at once) */
   readonly turnLatch: number;
   // ── ruling 60 ──
-  /** RIFT structure posts (lane AI G1, rulings 40-55): a threatened own structure gets named defenders. Off at every tier:
-   *  a per-feature bisect put the round-1 package's pace cost (RIFT +1.2 / +2.0 / +2.3 min, 14 and 12 games in 64 reaching
-   *  30:00 at adept and veteran) in the posts, at every structure class at once */
+  /** RIFT structure posts (lane AI G1, rulings 40-55): a threatened own structure gets named defenders. Off at every tier by
+   *  ruling 62 (the round-1 package's pace cost: RIFT +1.2 / +2.0 / +2.3 min, 14 and 12 games in 64 reaching 30:00 at adept and
+   *  veteran, the posts at every structure class at once); back by ruling 65 at adept (base structures) and veteran (inner and
+   *  base) under its pace rule (+1.5 min, no more 30:00 games than the old live opponents); with posts on, the base answer
+   *  (thinkBaseAnswer) is the posts' own call */
   readonly guardPosts: boolean;
   // ── ruling 64 ──
   /** RIFT base answer (team.ts thinkBaseAnswer): a base structure (a Lantern, a Bell Needle, the Hourbell) taking enemy
@@ -190,6 +192,24 @@ export interface DifficultyProfile {
   readonly baseAnswerDelay: number;
   /** ... and not from this game time on (s; Infinity: always) */
   readonly baseAnswerUntil: number;
+  /** ruling 65: the shallowest structure class a post goes to when guardPosts is on (2: base structures only, 1: inner too) */
+  readonly guardFrom: 0 | 1 | 2;
+  /** ruling 65, pings: seconds between one fighter's pings, pings a team may send in any 10 s, and whether the tier reads
+   *  the field well enough to warn (danger) and call a missing road opponent (missing) */
+  readonly pingGap: number;
+  readonly pingTeam: number;
+  readonly pingReads: boolean;
+  /** ruling 65: a teammate's assist ping is answered by fit fighters within this many metres (0: never) and at most this many */
+  readonly assistReach: number;
+  readonly assistMax: number;
+  /** ruling 65, play as a team: a road two (or this many) of ours have committed to — at an enemy structure — is joined by the
+   *  free fit rest (Infinity: never) */
+  readonly joinAt: number;
+  /** ruling 65: a group siege waits at its group point up to this many seconds for the teammates still walking in, so they
+   *  arrive together (0: no wait) */
+  readonly regroupWait: number;
+  /** ruling 65: a calm walk stops short of this many enemy fighters in sight together with no teammate beside them (Infinity: off) */
+  readonly loneStop: number;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -216,6 +236,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     punishInvade: 0, punishFrom: Infinity, punishDelay: 99, peelDive: 'none', holdWave: false, frayBreak: 0,
     coreAll: false, peelFirst: false, collapseRoads: false, closeOut: false, chaseQuit: Infinity, anticipates: false, turnLatch: 12, guardPosts: false,
     baseAnswerDelay: 5, baseAnswerUntil: 1500,
+    guardFrom: 2, pingGap: 15, pingTeam: 2, pingReads: false, assistReach: 30, assistMax: 1, joinAt: 3, regroupWait: 0, loneStop: 4,
   },
   // (CW3s r3, CL-1: adept's longest quiet stretch fell at 3:00-12:00 with the laners 9 m apart at 75 % health; deaths a minute run under veteran's from 5:00 to 13:00. It now contests an enemy start at a camp, the fight veteran's team takes there, and reads a kill as veteran does. A flat +0.08 on the trade edge was tried and dropped: stretch 3.2 min, takedowns by 10:00 7.15 -> 6.70. team.ts thinkGank and bot.ts's roam read widen for every tier: gaps at 8:00-12:00. Laning retreat bias -0.04: takedowns by 10:00 5.95 -> 6.50 on seeds 8101-8120. Untuned seeds 8501-8520 / 8701-8720: stretch 2.7 / 2.8 min, was 3.4 / 3.6)
   adept: {
@@ -229,8 +250,9 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
     punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: false, frayBreak: 0.2,
-    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true, turnLatch: 12, guardPosts: false,
+    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true, turnLatch: 12, guardPosts: true,
     baseAnswerDelay: 1, baseAnswerUntil: Infinity,
+    guardFrom: 2, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 45, assistMax: 2, joinAt: 2, regroupWait: 8, loneStop: 3,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -243,8 +265,9 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
     punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: false, frayBreak: 0.25,
-    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true, turnLatch: 12, guardPosts: false,
+    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true, turnLatch: 12, guardPosts: true,
     baseAnswerDelay: 1, baseAnswerUntil: Infinity,
+    guardFrom: 1, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 55, assistMax: 2, joinAt: 2, regroupWait: 10, loneStop: 3,
   },
 };
 
