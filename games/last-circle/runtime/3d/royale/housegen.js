@@ -508,12 +508,21 @@ const AUTH = {
     [-0.76, 0, -0.185, 0.76, 0.1, 0.225, "wood", 0], [-0.76, 0.5, -0.185, 0.76, 0.54, 0.225, "wood", 0], [-0.76, 1.0, -0.185, 0.76, 1.05, 0.225, "wood", WOODD],
     [-0.7, 0.1, -0.15, -0.1, 0.42, 0.18, "fabric", 0xf0ad4e], [0.0, 0.1, -0.12, 0.7, 0.38, 0.2, "fabric", 0x5bc0de], [-0.7, 0.54, -0.15, 0.05, 0.86, 0.18, "fabric", 0xd9534f], [0.15, 0.54, -0.12, 0.7, 0.9, 0.2, "fabric", 0x5cb85c]],
     cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]], surface: 1.05 },
-  // (W10 R3A, budget: 166 -> ~110 triangles) the stock is one packed block per shelf level and side (was 8 small blocks), muted colours
-  gondola: { w: 1.8, d: 0.9, parts: [[-0.9, 0, -0.45, 0.9, 0.12, 0.45, "metal", 0xd8dadc], [-0.88, 0.12, -0.03, 0.88, 1.35, 0.03, "metal", 0xc8cacc], [-0.9, 0.12, -0.45, -0.86, 1.35, 0.45, "metal", 0x9aa1a6], [0.86, 0.12, -0.45, 0.9, 1.35, 0.45, "metal", 0x9aa1a6],
-    [-0.86, 0.6, -0.45, 0.86, 0.63, 0.45, "metal", 0xd8dadc], [-0.86, 1.1, -0.45, 0.86, 1.13, 0.45, "metal", 0xd8dadc],
-    [-0.82, 0.12, 0.05, 0.82, 0.48, 0.41, "fabric", 0xa8675c], [-0.82, 0.63, 0.05, 0.82, 0.98, 0.4, "fabric", 0x5f7f9c],
-    [-0.82, 0.12, -0.41, 0.82, 0.46, -0.05, "fabric", 0xc4a26a], [-0.82, 0.63, -0.4, 0.82, 1.0, -0.05, "fabric", 0x7a9472]],
-    cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]], surface: 1.13 },
+  // (W10 R3A fix4, budget: 166 -> 110 -> 70 triangles - a big shop's aisles had to stop at 4-5 gondolas inside the storey's 4,000) one packed stock face a side,
+  // the two shelf boards running through it (3 cm proud of the stock: the shelf lines read on both faces), the back panel only as the header over the top shelf
+  gondola: { w: 1.8, d: 0.9, parts: [[-0.9, 0, -0.45, 0.9, 0.12, 0.45, "metal", 0xd8dadc], [-0.88, 1.13, -0.03, 0.88, 1.35, 0.03, "metal", 0xc8cacc],
+    [-0.9, 0.6, -0.45, 0.9, 0.63, 0.45, "metal", 0xd8dadc], [-0.9, 1.1, -0.45, 0.9, 1.13, 0.45, "metal", 0xd8dadc],
+    [-0.86, 0.12, 0.02, 0.86, 1.1, 0.42, "fabric", 0x8a6f62], [-0.86, 0.12, -0.42, 0.86, 1.1, -0.02, "fabric", 0x6a7f8a]],
+    cols: [[0, 1, 2, 3, 4, 5]], surface: 1.13 },
+  // (W10 R3A fix4, audit 9) a shop's wall shelving (1.82 m: cover), ~70 triangles: a back panel, a plinth, three boards through one packed stock face in the
+  // piece's tint (muted stock colours) - a shop's walls lined with stocked shelves, not storeroom crates
+  shopShelf: { w: 1.2, d: 0.5, parts: [[-0.6, 0, -0.25, 0.6, 1.82, -0.21, "metal", 0x9aa1a6], [-0.6, 0, -0.21, 0.6, 0.12, 0.25, "metal", 0xd8dadc],
+    [-0.6, 0.66, -0.21, 0.6, 0.69, 0.25, "metal", 0xd8dadc], [-0.6, 1.22, -0.21, 0.6, 1.25, 0.25, "metal", 0xd8dadc], [-0.6, 1.78, -0.21, 0.6, 1.82, 0.25, "metal", 0xd8dadc],
+    [-0.57, 0.12, -0.21, 0.57, 1.76, 0.21, "fabric", 0]], cols: [[0, 1, 2, 3, 4, 5]] },
+  // (fix4) the same shelving 1.02 m tall: it stands under a shop window's sill (1.20) - crouch cover, ~58 triangles
+  shopShelfLow: { w: 1.2, d: 0.5, parts: [[-0.6, 0, -0.25, 0.6, 1.02, -0.21, "metal", 0x9aa1a6], [-0.6, 0, -0.21, 0.6, 0.12, 0.25, "metal", 0xd8dadc],
+    [-0.6, 0.55, -0.21, 0.6, 0.58, 0.25, "metal", 0xd8dadc], [-0.6, 0.99, -0.21, 0.6, 1.02, 0.25, "metal", 0xd8dadc],
+    [-0.57, 0.12, -0.21, 0.57, 0.97, 0.21, "fabric", 0]], cols: [[0, 1, 2, 3, 4]] },
   shopCounter: { w: 2.0, d: 0.7, parts: [[-1.0, 0, -0.35, 1.0, 1.0, 0.33, "wood", 0], [-1.02, 1.0, -0.36, 1.02, 1.05, 0.35, "wood", WOODD], [-0.95, 0.15, 0.33, 0.95, 0.9, 0.35, "wood", WOOD],
     [0.3, 1.05, -0.25, 0.7, 1.3, 0.05, "metal", 0x3a3f44]], cols: [[0, 1, 2], [3]], surface: 1.05 },
   crate: { w: 0.9, d: 0.9, parts: [[-0.45, 0, -0.45, 0.45, 0.9, 0.45, "wood", 0], [-0.46, 0.38, -0.46, 0.46, 0.52, 0.46, "wood", WOODD]], cols: [[0, 1]], surface: 0.9 },
@@ -931,7 +940,7 @@ export function generate(parcel, opts) {
     if (roofKind === "gable" && use === "barn" && (P.theme === "farm" || P.theme === "lodge")) roofKind = "gambrel";
     else if (roofKind === "gable" && use === "shed" && rng() < 0.6) roofKind = "lean";
     // (W10 R3A, audit 13) a home outside a downtown core is never flat-roofed: a gable, a stepped hip on an L plan (no stream drawn: the house's draws stay)
-    if (PITCHED_HOMES && home && !P.core && roofKind === "flat") roofKind = cut ? "hip" : "gable";
+    if (PITCHED_HOMES && home && !P.core && P.theme !== "city" && roofKind === "flat") roofKind = cut ? "hip" : "gable";
     if (ROOF_FLAT_ALL) roofKind = "flat";
   }
   const pitched = roofKind === "gable" || roofKind === "gambrel" || roofKind === "lean";
@@ -3720,7 +3729,7 @@ export function generate(parcel, opts) {
         return null;
       };
       for (let k = 0; k < Math.round(area / 3); k++) X.push(() => {
-        const id = (kind === "shop" ? ["boxStack", "cartonOpen", "crate", "carton"] : ["boxStack", "crate", "cartonOpen", "drum", "carton"])[k % (kind === "shop" ? 4 : 5)];
+        const id = (kind === "shop" ? ["shopShelf", "cartonOpen", "shopShelfLow", "carton"] : ["boxStack", "crate", "cartonOpen", "drum", "carton"])[k % (kind === "shop" ? 4 : 5)];     // (fix4: a shop's walls take stocked shelving)
         const tint = id === "drum" ? 0x4a6a7a : id === "crate" ? 0x8a6e50 : [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][k % 4];
         const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50) : null);
         if (p && (id === "crate" || p.cat.id === "palletLoad")) stackOn(p, "box", { force: true });
@@ -4201,6 +4210,8 @@ export function generate(parcel, opts) {
           if (WORK_FIT && c1 && area >= 40) tryWall("shopCounter", "corner", { tint: tintW, also: (run) => run === c1.run });     // (W10 R3A: a checkout line - two tills on one wall)
         });
         later(() => tryWall("cooler", "corner")); later(() => tryWall("cooler", "corner"));
+        // (W10 R3A fix4) wall shelving before the aisles: a small shop (no room for an aisle row) still reads as a shop - stocked shelves on its walls
+        if (WORK_FIT) for (let n = 0; n < Math.max(2, Math.floor(area / 25)); n++) later(() => { const t = [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][n % 4]; tryWall("shopShelf", "corner", { tint: t }) || tryWall("shopShelfLow", "corner", { tint: t }); });
         // aisles: rows of free-standing gondolas down the shop floor
         // (W10 R3A, audit 9) as many aisle rows as the floor holds at SHOP_PITCH (was 4 / 8 gondolas: a 125 m2 store held 4 pieces)
         later(() => { if (LB >= 4.4) rows("gondola", WORK_FIT ? Math.max(4, Math.ceil(area / 7)) : area >= 50 ? 8 : 4, WORK_FIT ? SHOP_PITCH - 0.9 : 1.35, { end: 1.2 }); });
