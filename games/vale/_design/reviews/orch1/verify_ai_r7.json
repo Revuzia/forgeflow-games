@@ -1,0 +1,85 @@
+{
+  "verifier": "lane AI (opponents, W1-A / W3-A), independent verifier round 1 after ruling 64 (thinkBaseAnswer), at HEAD 8c95deb52",
+  "date": "2026-11-19 CST",
+  "pass": true,
+  "score": 7.0,
+  "safeToShip": true,
+  "blockers": [],
+  "method": {
+    "arms": "One tree, no worktree. The probes take VALE_BOTS. src/sim/_vfy7_pre (bots at 0aeac587b, pre-lane), src/sim/_vfy7_e2c (e2c4925e5, the live ship) and src/sim/_vfy7_h65 (65bc15aaf, the previous HEAD) were git-archive copies beside HEAD's src/sim/bots. Every arm ran with the HEAD probe and the HEAD sim. All three copies were deleted after the runs.",
+    "sim": "probe_sim_bot_tactics under heavy.py. HEAD, pre, e2c and h65 on s701-764 (64 RIFT, cut at 30:00, + 24 FRAY per tier). HEAD, pre and h65 RIFT on fresh s801-832 (32 per tier). HEAD and h65 BRIDGE s701-724. HEAD at default seeds (the gate). probe_sim_bot_soak quick. Full soak --full --lineup shuffle on --seed0 1 and 21 (labels vfy7_s1, vfy7_s21). Pairs are matched per seed and reported as mean +- SE of the paired difference.",
+    "live": "Real Chrome (pw.mjs, GPU on) against two private vite servers, hmr off, private dep caches: :5366 served the HEAD tree; :5367 served the same tree with a resolveId plugin that pointed src/sim/bots at the h65 copy (no src edit). Seat 0 was the round-1 scripted player with the per-second core-hit monitor (_tmp_vfy_ai_brain.js). Runs: RIFT veteran s5 and FRAY veteran s9 on HEAD; RIFT veteran s5, s3, s7, adept s5 and novice s5 on HEAD and on h65, paired. I looked at the screenshots: they are real renders, for example the dive engage at 11:01.",
+    "determinism_check": "The h65 arm reproduces round 6 exactly. Live RIFT veteran s5 on h65 ends by core at 1638.9 s with 8 fighter-seconds of fit defenders more than 25 m from a hit Bell (round 6: 27:19, 8). Live FRAY veteran s9 on HEAD is the same as rounds 3-6: 190 low-health episodes, 96 stayed, 65 retreated, 28 died. The implementer's pooled tables reproduce to the digit: pace vs pre +0.28+-0.50 / -0.48+-0.42 / -0.12+-0.44, vs HEAD +0.18+-0.23 / -0.32+-0.26 / -0.30+-0.16, fit and away 28.7 / 6.6 / 4.5 (h65 41.0 / 11.5 / 9.6). FRAY is byte-identical to h65 in 72 of 72 games (s701) and BRIDGE in 72 of 72 (s701-724).",
+    "code_read": "team.ts thinkBaseAnswer runs only on RIFT with the posts off, for tiers with baseAnswerDelay < Infinity, before baseAnswerUntil. It reads only the team's own structure health and perc.enemyFighters (seen fighters), so it uses only what a player could know. Hourbell/Bell get +1. Defenders are released by g.until (1.5 s after the last think that saw hits) or under 35 % health. The structHitAt map it now fills while the posts are off is read elsewhere only by hitRecently() for a post holder, so it has no side effect. No new fog read and 0 hidden casts recorded at every tier.",
+    "cleanup": "The three _vfy7 bot folders, both private vite configs, their dep caches, the copied web brain and the two tagged live scripts were removed. Vite :5366 and :5367 were stopped. No worktree was created (the two listed were already there), no probe, vite or Chrome processes are left, and all heavy slots are free. Raw data is in the session scratchpad under v7/. Soak reports are in _harness/_reports/fw_W4_soak_vfy7_* and live reports in _harness/_reports/vfy7*_r1_* (both gitignored)."
+  },
+  "items": {
+    "1_base_defence": {
+      "verdict": "PARTLY MET. The targeted measure is clearly narrowed against live at every tier (novice still 3x live). The other base gaps against live did not move.",
+      "facts": [
+        "Fit fighters 25-80 m from a hit base structure, not closing (s a game), pooled n 96, HEAD / h65 / pre: novice 28.7 / 41.0 / 33.1, adept 6.5 / 11.5 / 13.0, veteran 4.5 / 9.6 / 14.6. HEAD minus h65: -12.3+-2.8, -4.9+-1.2, -5.1+-0.9. s701 against live e2c: 31.8 / 6.9 / 4.7 vs 9.6 / 3.2 / 2.8. The gap to live narrows from 33.8 to 22.2 s (novice), 7.4 to 3.6 (adept), 6.8 to 1.8 (veteran). Adept passes its 9 s gate and veteran its 6 s gate on both seed sets. Novice fails at default seeds (29.8 against 25) but passes on s801 (22.6).",
+        "Inner+base falls to Wicks alone beside two fit defenders, per game. s701 HEAD / pre / e2c / h65: novice 0.66 / 0.56 / 0.89 / 0.55, adept 0.70 / 1.09 / 1.03 / 0.69, veteran 0.91 / 0.84 / - / 1.02. s801 HEAD / pre / h65: 0.59 / 0.63 / 0.50, 0.88 / 1.22 / 0.88, 0.88 / 1.06 / 0.81. Better than pre at adept on both sets. Novice and veteran are level with pre within noise, so the round-1 bar ('better than pre at every tier') is still met only at adept.",
+        "Unanswered base intrusions a game, pooled HEAD minus pre: novice +0.01+-0.22, adept +0.31+-0.15, veteran -0.96+-0.15. HEAD minus h65: +0.02+-0.10, +0.04+-0.10, -0.06+-0.05. s701 against e2c: +0.83+-0.25, +0.95+-0.16, +0.05+-0.16 (round 6: +0.75 / +0.80 / +0.17). Not narrowed at novice or adept.",
+        "Base structure falls a game, pooled HEAD minus h65: -0.09 / -0.10 / -0.04 (noise). Veteran against e2c (s701): +0.80+-0.21 (round 6: +0.84).",
+        "Idle within 25 m of a sieged structure (s a game, s701), HEAD / pre / e2c: 7.3 / 10.0 / 12.2, 3.0 / 6.6 / 14.6, 4.8 / 5.9 / 12.6. Better than pre and live at every tier.",
+        "Deterministic seed-5 window, live RIFT veteran s5 on HEAD. The first Bell siege (t 1329-1369, 1-3 attackers) is now held. The fit defenders close in: p3 walks 35 m to 14 m at 1353-1359, p2 from 14 m to 2 m, p4 joins at 10-12 m. Nobody idles more than 25 m away. Both Bells end at 48 % and 79 % (h65 lost one at 1360). The 1365-1398 idle-while-falling blocker from round 1 is gone. The later siege at 1548-1571 is weaker: both Bells fall with 1 defender beside them. Two fit allies (p1 at 40-57 m, p3 at 35-48 m) stay away for about 20 s, and p1 moves further away. Fighter-seconds of fit defenders more than 25 m from a hit Bell/Hourbell in this game: 34 (h65: 8). This is one game that went down a different path after 1329, not a paired rate. The paired sim rate above is the measure."
+      ]
+    },
+    "3_pace": {
+      "verdict": "MET in the sim. One live note.",
+      "facts": [
+        "RIFT length, HEAD minus pre, paired. s701: novice +0.85+-0.62, adept -0.28+-0.49, veteran -0.16+-0.54. s801: -0.86+-0.80, -0.89+-0.78, -0.05+-0.80. Pooled n 96: +0.28+-0.50, -0.48+-0.42, -0.12+-0.44. HEAD minus h65, pooled: +0.18+-0.23, -0.32+-0.26, -0.30+-0.17. Games reaching 30:00 (dur >= 29:59), pooled HEAD / pre / h65: 8 / 9 / 9, 5 / 4 / 5, 3 / 4 / 4.",
+        "HEAD against live e2c, s701: novice -1.92+-0.58, adept -2.33+-0.51, veteran -1.62+-0.56 min. e2c reaches 30:00 in 18 / 8 / 9 of 64 games; HEAD in 7 / 2 / 3.",
+        "Full soak RIFT adept p90 23.8 (s1) and 28.1 (s21), bar 32 (round 6: 23.8 / 27.5). Adept max on s21 is 33.5 min (round 6: 28.5): one long game. Veteran p90 25.1 / 25.5 (round 6: 26.3 / 28.2).",
+        "Live, HEAD vs h65 paired, end by core in seconds: veteran s3 1265 vs 1290, veteran s7 1556 vs 1545, adept s5 1347 vs 1352, novice s5 1265 vs 1312. Veteran s5 reaches the 28:00 harness cap on HEAD (1680 s, no core): our Bells fell at 1558/1571, the Hourbell was at 93 % under siege and our team took Longshade at 27:53. h65 ended by core at 1639. This happens because the player's own team now holds the first Bell siege. Unlike round 5's stall, the game is still moving at the cap, and the 96-seed paired veteran pace is -0.30+-0.17 against h65 with fewer 30:00 games.",
+        "FRAY is byte-identical to h65 (72/72). Adept and veteran FRAY still run +1.95+-0.51 / +1.24+-0.38 min longer than pre, inside 11:00 (unchanged since round 3)."
+      ]
+    },
+    "4_laning": {
+      "verdict": "MET (no regression)",
+      "facts": [
+        "Laner in-lane time 1:00-14:00, HEAD minus h65, pooled: +0.6+-0.6 / 0.0+-0.0 / -1.1+-0.8 lane-seconds a game, effectively identical. HEAD minus pre: -4.8+-17.7, -11.8+-22.1, -9.6+-18.8 (noise).",
+        "Soak laners in lane: adept 67.8 / 68.3 %, veteran 66.6 / 65.4 % (pre 68.4 / 66.6). Adept shadehold takedowns before 14:00: 1.60 (s1) / 1.50 (s21), the same as round 6. Veteran duo-road level 6 median: 7.2 / 7.6 min, bar 7.6, met."
+      ]
+    },
+    "2_self_preservation": {
+      "verdict": "NOT MET (unchanged; FRAY byte-identical to h65)",
+      "facts": [
+        "FRAY low-health stays: adept 65.5 % (s701) / 62.9 % (default), veteran 63.0 % / 61.3 %, against 60 / 50 %. Live FRAY veteran s9: 96 of 190 stayed (50.5 %).",
+        "RIFT full-HP dither a game, pooled: 2.56 / 1.50 / 2.04 (bars 3 / 1.5 / 1). HEAD minus h65: -0.04+-0.10, -0.04+-0.06, -0.13+-0.07. HEAD minus pre: -2.41, -0.96, -3.17. Default seeds: adept 1.58, veteran 1.54 (both fail)."
+      ]
+    },
+    "5_peel": {
+      "verdict": "NOT MET at veteran; met at adept (unchanged)",
+      "facts": [
+        "Veteran blow/hold/heal/shield within 1.5 s from 14:00: 70.9 % (s701), 69.7 % (default), bar 75 %. Adept within 2.5 s: 82.1 % (s701), bar 75 %. Peel no-response a game, pooled HEAD minus h65: novice +1.00+-0.37 (more no-response), adept -0.98+-0.55, veteran -0.26+-0.37.",
+        "Live RIFT veteran s5 dive at 11:01 (before 14:00, same code): the diver engaged carry p8 beside support p9 and escaped at 71 %, the same as round 6."
+      ]
+    },
+    "6_sneak": {
+      "verdict": "MEASURED, non-zero (unchanged in substance)",
+      "facts": [
+        "s701 lone-enemy collapse (2+ within 15 s): novice 55.7 %, adept 68.0 %, veteran 73.0 %+-1.4 (h65 55.0 / 71.5 / 73.3; pre veteran 65.9 %; e2c 63.6 %). Ganks struck from a lurk at adept + veteran: 22. Gank approach visible: 8.8 / 9.0 %, bar 15 %. Live s5: the scripted player's lone farm at 5:28 was found by p5, which had been hidden for 71 % of the 10 s before."
+      ]
+    },
+    "7_gates": {
+      "verdict": "NOT MET (better than h65)",
+      "facts": [
+        "probe_sim_bot_tactics at default seeds: 7 fails (h65 8): novice base fitAway 29.8, adept dither 1.58, adept FRAY stays 62.9 %, veteran undefended inner+base share 21.6 %, veteran dither 1.54, veteran peel 69.7 %, veteran FRAY stays 61.3 %.",
+        "s701-764: 6 fails (h65 9, pre 21, e2c 8). s801-832 RIFT: 3 fails (h65 7, pre 19).",
+        "probe_sim_bot_soak quick: PASS. Full soak s1: 2 enforced fails, the same as round 6: FRAY placement band (fighter balance) and items held 2.43 against 2.5 (round 6: 2.45). Full soak s21: 2, the same as round 6: FRAY placement band and the adept no-death stretch of 3.0 min (boundary).",
+        "Fog honesty: 0 hidden casts recorded at every tier."
+      ]
+    }
+  },
+  "head_vs_live_e2c": "For a player, HEAD is better than the live bots. Games are 1.6-2.3 min shorter and reach 30:00 much less often (7 / 2 / 3 vs 18 / 8 / 9 of 64). Dithering is much lower (-2.2 / -0.7 / -2.5 a game). Fighters idle less beside a siege (-5 to -12 s a game). There are fewer Wick-only falls beside fit defenders, and lone-enemy collapses are more frequent. With this build, fit fighters standing off a hit base dropped from 3-4x live to 1.7x (veteran) and 2.1x (adept). Still worse than live on base defence: unanswered intrusions at novice and adept (+0.8 / +0.95 a game), veteran base structures falling (+0.8 a game), and novice fit and away (3.3x).",
+  "head_vs_h65": "No regression a player could see. RIFT pace is the same or shorter (-0.3 min at adept and veteran, +0.18+-0.23 at novice). Laning is identical. FRAY and BRIDGE are byte-identical. Dither is slightly lower, and the base answer is visibly faster in the live seed-5 Bell siege. The live veteran s5 run reaching the 28:00 cap is the one live difference, and paired sim pace does not support it as a trend.",
+  "problems": [
+    "Item 1: only fit and away moved. Unanswered intrusions vs e2c are +0.83 / +0.95 at novice / adept (not narrowed; adept +0.31+-0.15 vs pre), veteran base falls vs e2c are +0.80, and novice fit and away is 28.7 s against live 9.2 (gate fails at default seeds). Wick-falls beat pre only at adept.",
+    "Live RIFT veteran s5 on HEAD reaches the 28:00 cap with no core. h65 ended by core at 27:19. In the late Bell siege, at 1548-1571, two fit allies stood 35-57 m off for about 20 s while both Bells fell.",
+    "Soak s21 adept has one 33.5 min game (p90 28.1, under the 32 bar).",
+    "Novice peel no-response +1.00+-0.37 a game against h65 (small, novice only).",
+    "Unchanged open items: FRAY stays 63-65 %, veteran dither 1.5-2.0, veteran peel within 1.5 s 70-71 %, veteran undefended inner+base share 21.6 %, FRAY adept/veteran +1.2-2.0 min vs pre."
+  ],
+  "next": "Ship HEAD as the opponents build. The base answer reproduces exactly, costs no pace, and narrows the fit-and-away gap to live at every tier. Next round: answer intrusions that walk in without hitting, without the pace cost the implementer measured (ruling 64's rejected arm). Also look at why fit allies 35-57 m from a hit Bell did not take the answer in the live s5 1548-1571 window (likely the busy/12 m check or the 2 s hand-on decline). Then veteran base falls vs live, novice fit and away, veteran peel and dither, and FRAY stays. Use the same paired A/B on s701-764 + s801-832 against pre, e2c and h65."
+}
