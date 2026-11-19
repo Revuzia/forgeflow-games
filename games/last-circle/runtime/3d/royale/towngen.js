@@ -2704,17 +2704,17 @@ export const CONTAINER_TINTS = [[0x2f4f7a, 4], [0x1f3a5c, 3], [0x2e5a3c, 2.5], [
 /** (W10 R4B item 1) a home's yard dressing by theme: the front run (fence / hedge, gap at the path), the small props inside the run (<= 0.36 m half-depth: they keep 1.5 m off
  *  the door path in a 4 m front yard) and the side-yard props (beside the house, only where a 1.2 m passage stays open). All CC0 (art_b_city.py YARD). */
 export const YARD_TYPES = ["props/yard-fence", "props/yard-hedge", "props/yard-path", "props/yard-bench", "props/yard-log", "props/yard-barrel", "props/yard-bucket", "props/yard-boat",
-  "props/yard-parasol", "props/yard-mailbox", "props/yard-cart"];
+  "props/yard-parasol", "props/yard-mailbox", "props/yard-cart", "props/yard-grass", "props/yard-woodpile", "props/yard-ac"];
 const YARD_RUN = { fence: ["props/yard-fence", 2.0, 0.075], hedge: ["props/yard-hedge", 1.8, 0.36] };      // [type, module length, half thickness]
 // small front props: [type, half extent along the run (t), half extent across (s), rot offset from facing the street]
 const YARD_SMALL = { mailbox: ["props/yard-mailbox", 0.271, 0.09, 1], bucket: ["props/yard-bucket", 0.216, 0.216, 0], barrel: ["props/yard-barrel", 0.355, 0.355, 0], bin: ["furniture/trashcan", 0.23, 0.26, 0] };
 // side props (long side along the house's depth): [type, half width across the side yard, half length along it]
 const YARD_SIDE = { bench: ["props/yard-bench", 0.506, 0.897], log: ["props/yard-log", 0.299, 1.2], parasol: ["props/yard-parasol", 0.96, 0.96], boat: ["props/yard-boat", 1.542, 1.787],
-  cart: ["props/yard-cart", 0.7, 1.07] };
+  cart: ["props/yard-cart", 0.7, 1.07], woodpile: ["props/yard-woodpile", 0.261, 0.615], ac: ["props/yard-ac", 0.385, 0.519] };
 const YARD_THEME = {
   resort: { run: ["hedge"], small: ["mailbox", "bucket", "mailbox"], side: ["parasol", "bench", "parasol"] },
-  lodge: { run: ["fence"], small: ["barrel", "bucket", "mailbox"], side: ["log", "boat", "cart", "log", "bench"] },
-  city: { run: ["hedge", "fence"], small: ["mailbox", "bin", "mailbox"], side: ["bench"] },
+  lodge: { run: ["fence"], small: ["barrel", "bucket", "mailbox"], side: ["log", "boat", "cart", "woodpile", "bench"] },
+  city: { run: ["hedge", "fence"], small: ["mailbox", "bin", "mailbox"], side: ["bench", "ac", "ac"] },
 };
 export const YARD_PATH_CLEAR = 1.5;     // m every yard prop keeps off the door path (the front walk and the stem) - the w10_yards clear-doors bar
 export const YARD_RUN_INSET = 0.3;      // m: a boundary run stands this far inside its lot's -t line
@@ -2774,6 +2774,25 @@ function yardDressing(L, seed, add, out, homes) {
     if (gap >= 2 * spr[1] + 1.2 + 0.3) {
       const t = dir < 0 ? tL + 0.15 + spr[1] : tR - 0.15 - spr[1], q = W(sB - 2.7 - spr[2], t);
       add(spr[0], q[0], q[1], fz ? 1 : 0, "yard", Math.max(spr[1], spr[2]));
+    }
+  }
+  // (W10 R4B pass 2) ground cover: grass tufts (no collider, under the body band) along the street edge of each front yard, either side of the gate, and in the side
+  // yards; from their own sub-stream "yard3" (the dressing above is unchanged). Each keeps the same door / path clearance as any yard prop (add -> doorClear).
+  const gr = subRng(seed === undefined ? L.seed : seed, L.id, "yard3");
+  for (const h of homes) {
+    if (!h.yard) continue;
+    const { W, sF, sB, tL, tR, tc } = h;
+    for (let t = tL + 1.0; t <= tR - 0.5 + 1e-6; t += 1.55) {
+      const j = gr(), r2 = gr();
+      if (Math.abs(t - tc) < 1.6 || j < 0.2) continue;                          // the gate (the stem keeps YARD_PATH_CLEAR anyway) and a few gaps
+      const q = W(sF - 0.55 - 0.25 * r2, t + (j - 0.5) * 0.3);
+      add("props/yard-grass", q[0], q[1], Math.floor(r2 * 4), "yard", 0.45);
+    }
+    for (const side of [-1, 1]) {                                                // one tuft in each side yard wide enough, level with the front half of the house
+      const j = gr(), t = side < 0 ? (tL + h.bL) / 2 : (h.bR + tR) / 2, s2 = sB - 2.7 - 2.0 * j;
+      if ((side < 0 ? h.bL - tL : tR - h.bR) < 1.4) continue;
+      const q = W(s2, t);
+      add("props/yard-grass", q[0], q[1], Math.floor(j * 4), "yard", 0.45);
     }
   }
 }
