@@ -238,6 +238,13 @@ IC_WATCH = [("match", "isla_viva", ["volcano_rim@p54"]), ("match", "ashgrid", ["
             ("housegen", "ashgrid", ["s7h2"]), ("fixture", "ashgrid", None)]          # None = every injected house
 
 
+def _ic_key(t):
+    """(W10 tools, ticket 4) the darkest-views print key: (mean, dark) then the names as text - a tie on (mean, dark, house, room) used to
+    compare a view's int yaw with another view's str 'from' (TypeError -> a harness exception -> a spurious COULD-NOT-JUDGE). Same order
+    otherwise: numbers first, numerically; names by their text."""
+    return tuple(t[:2]) + tuple((0, x, "") if isinstance(x, (int, float)) and not isinstance(x, bool) else (1, 0, str(x)) for x in t[2:])
+
+
 def part_icwatch(args, plant, v, shots):
     import interiorcheck as IC
     out = []
@@ -274,7 +281,7 @@ def part_icwatch(args, plant, v, shots):
             if miss:
                 out.append({"src": src, "map": map_id, "error": "watched house(s) not in interiorcheck's sample: %s (sample %s)" % (miss, lst)})
             print("  [icwatch %s %s] %d views of %s; darkest %s" % (src, map_id, sum(1 for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o), got,
-                  sorted([(o["mean"], o["dark"], o["house"], o["room"], o["view"]) for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o])[:2]), flush=True)
+                  sorted([(o["mean"], o["dark"], o["house"], o["room"], o["view"]) for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o], key=_ic_key)[:2]), flush=True)
     return out
 
 
