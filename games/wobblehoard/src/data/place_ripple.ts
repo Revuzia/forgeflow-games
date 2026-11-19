@@ -37,15 +37,19 @@ export const PLACE: PlaceDef = {
     // width-bound and frames the bounds' front above the hint pill), the Rock Pool back left (r 0.835 here) with the Bob Ring at its centre, the
     // Shell Chimes across the very back right, the Pebble Ball back centre, the Sand Mound in the right strip, the Driftwood Log along z in the
     // front left with its peek spots left and right of its front half (LIFE 6.1 S13: "left and right of it as the camera sees it")
+    // Round 12 (R12_INTEGRATE; R11_FIX 5): the Shell Chimes stood at z -3.10, behind the bounds' back edge (hz 3.0): no squishy could touch them by itself and a
+    // dragged one could not reach them either (bounds). Now z -2.72 (x 1.02, along x): a squishy's back reaches the shells from inside the bounds; the Pebble Ball
+    // 0.13 m forward (-0.12, -2.12) and the Sand Mound 0.27 m forward (1.33, -1.53) keep 0.3 m from the row, and the five spawn spots are re-laid by DT-01's
+    // spawn map (SPAWNMAP=ripple:tall): 1.0 m apart, 0.9 m from every thing.
     bounds: { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3, round: 0.4 }, walls: [],
-    spawn: [[-0.575, -1.175], [0.275, -0.625], [-0.575, -0.075], [0.381, 0.375], [0.488, 1.375]],
+    spawn: [[-0.55, -0.9], [0.35, -0.35], [-0.55, 0.1], [0.3, 0.65], [0.5, 1.65]],
     things: [
       { x: -1.088, z: -2.754, yaw: 0 },
       { x: -1.088, z: -2.754, yaw: 0 },
       { x: -0.6, z: 1.823, yaw: 1.571, peek: [-1.38, 2.53, 0.18, 2.53] },
-      { x: 1.026, z: -3.103, yaw: 0 },
-      { x: -0.123, z: -2.25, yaw: 0 },
-      { x: 1.329, z: -1.803, yaw: 0 },
+      { x: 1.02, z: -2.72, yaw: 0 },
+      { x: -0.12, z: -2.12, yaw: 0 },
+      { x: 1.33, z: -1.53, yaw: 0 },
     ],
     zones: [{ shape: 'disc', x: -1.088, z: -2.754, r: 0.835 }, { shape: 'box', x: 0, z: -3.25, hx: 2.3, hz: 0.45 }, { shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }],
     patches: [{ shape: 'box', x: 0, z: -2.45, hx: 2.3, hz: 0.35 }],

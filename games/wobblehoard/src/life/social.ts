@@ -105,6 +105,22 @@ export function abortFor(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
   endMoment(w, s, out, ev, m, false);
 }
 
+/** (round 12, R12_INTEGRATE; D-79 "the player's request wins") j leaves its song on its own: the player asked it to go play with a thing. The others sing on
+ *  (the moment ends only when none is left); j is free at once. (Round 7 kept an asked squishy in a song until it ended: up to a bar's wait + 2 bars, 7 to 11 s,
+ *  so an asked walk in the cabin started 9.3 s late with three awake under D-101: node_checks N1, its 8 s bar.) */
+export function leaveMoment(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, j: number): void {
+  const m = w.moo[j];
+  if (m < 0) return;
+  const n = w.mN[m];
+  if (n <= 1) { endMoment(w, s, out, ev, m, false); return; }
+  let k2 = 0;
+  for (let k = 0; k < n; k++) { const o = mem(w, m, k); if (o !== j) w.mM[m * MAX_MEMBERS + k2++] = o; }
+  w.mN[m] = k2;
+  if (w.mo[j]) stopMove(w, out, j);
+  if ((s.flags[j] & HELD_BITS) === 0) clearPose(w, s, out, j);
+  w.moo[j] = -1; w.beh[j] = BEH.IDLE; w.ph[j] = 0; w.bT[j] = w.f[F.NOW]; w.bSc[j] = 0.1;
+}
+
 /* ───────────────────────────── choosing a moment (scores feed the brain's utility choice) ───────────────────────────── */
 
 function idle(w: LifeWorld, j: number): boolean { const b = w.beh[j]; return b === BEH.IDLE || b === BEH.NONE || b === BEH.WANDER || b === BEH.NOTICE || b === BEH.WATCH; }
@@ -253,6 +269,7 @@ function tuneNear(w: LifeWorld, s: LifeSnapshot, j: number, tk: number): boolean
  *  through its face piece). */
 function canSing(w: LifeWorld, s: LifeSnapshot, j: number): boolean {
   if (j >= s.n || w.ac[j] !== 1 || w.ki[j] === 2 || w.moo[j] >= 0) return false;
+  if (w.pW[j] >= 0) return false;   // (round 12) one the player asked to go play is not called into a song on its way (D-79)
   if ((s.flags[j] & HELD_BITS) !== 0 || (s.flags[j] & LIFE_FLAG.RIDE) !== 0) return false;
   const b = w.beh[j];
   return b === BEH.NONE || b === BEH.IDLE || b === BEH.WANDER || b === BEH.NOTICE || (b === BEH.WATCH && w.ph[j] !== 1) || b === BEH.ANSWER ||

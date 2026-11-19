@@ -137,6 +137,8 @@ interface Ptr {
   /** a Shift pull's second grab: its slot (-1 = none) and the surface point it holds (the camera-facing plane for its target goes through it) */
   mslot: Slot | -1;
   mthrough: V3 | null;
+  /** the body's screen centre when the finger went down (NaN: none): the outward direction of a pull is measured from it */
+  pcx: number; pcy: number;
 }
 
 /** The mirror point shrinks toward the centre by this factor per try while the ray through it misses the body, down to MIRROR_MIN_SCALE. */
@@ -187,12 +189,18 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
   function outwardPull(p: Ptr, x: number, y: number): boolean {
     const c = host.bodyScreen();
     if (!c) return false;
-    const ox = p.sx - c.x, oy = p.sy - c.y;
-    const ol = Math.hypot(ox, oy);
-    if (ol < Math.max(cfg.minOutwardPx, 0.1 * c.r)) return false;
     const dx = x - p.sx, dy = y - p.sy;
     const dl = Math.hypot(dx, dy);
     if (dl === 0) return false;
+    // (round 12, R12_INTEGRATE) "away from the body's centre": from where the centre is now OR from where it was on screen when the finger went down. A squishy
+    // that was walking (D-100's crawl) or is shoved by the press itself moves on screen before the drag passes the slop; measured from its live centre alone,
+    // an outward drag from the side of a walking squishy read as a rub and it could not be lifted. A body that stands still is unchanged (both are one point).
+    return outwardFrom(p, c.x, c.y, c.r, dx, dy, dl) || (p.pcx === p.pcx && outwardFrom(p, p.pcx, p.pcy, c.r, dx, dy, dl));
+  }
+  function outwardFrom(p: Ptr, cx: number, cy: number, r: number, dx: number, dy: number, dl: number): boolean {
+    const ox = p.sx - cx, oy = p.sy - cy;
+    const ol = Math.hypot(ox, oy);
+    if (ol < Math.max(cfg.minOutwardPx, 0.1 * r)) return false;
     return (dx * ox + dy * oy) / (dl * ol) > cfg.outwardCos;
   }
 
@@ -283,13 +291,15 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       if (!finite(s)) return;
       const dup = ptrs.get(s.id);
       if (dup) releasePtr(dup, true); // a missed pointerup: clean up, then start over
-      const base = { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, tLast: s.t, squish: false, pressure: 0, orbitAnnounced: false, mslot: -1 as Slot | -1, mthrough: null as V3 | null };
+      const base = { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, tLast: s.t, squish: false, pressure: 0, orbitAnnounced: false, mslot: -1 as Slot | -1, mthrough: null as V3 | null, pcx: NaN, pcy: NaN };
       const button = s.button ?? 0;
       const hit = button === 0 ? host.hitTest(s.x, s.y) : null;
       if (hit) {
         const slot = freeSlot(s);
         if (slot === null) { ptrs.set(s.id, { ...base, kind: 'ignored', mode: 'ignored', slot: 0, hit: null }); return; }
         const p: Ptr = { ...base, kind: 'body', mode: 'press', slot, hit, pressure: cfg.tapPressure };
+        const c0 = host.bodyScreen();
+        if (c0) { p.pcx = c0.x; p.pcy = c0.y; }
         ptrs.set(s.id, p);
         emit({ type: 'fingerDown', slot, hit });
         emit({ type: 'fingerPressure', slot, target: cfg.tapPressure });
@@ -315,7 +325,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       if (!finite(s)) return;
       const dup = ptrs.get(s.id);
       if (dup) releasePtr(dup, true);
-      ptrs.set(s.id, { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, tLast: s.t, squish: false, pressure: 0, orbitAnnounced: false, mslot: -1, mthrough: null, kind: 'ignored', mode: 'ignored', slot: 0, hit: null });
+      ptrs.set(s.id, { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, tLast: s.t, squish: false, pressure: 0, orbitAnnounced: false, mslot: -1, mthrough: null, pcx: NaN, pcy: NaN, kind: 'ignored', mode: 'ignored', slot: 0, hit: null });
     },
 
     pointerMove(s) {

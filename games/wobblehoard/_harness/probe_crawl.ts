@@ -211,7 +211,14 @@ if (sec('cost')) {
   }
   const c = { ms: best.crawl, stepUs: stepUs.crawl, alloc: aC }, g = { ms: best.glide, stepUs: stepUs.glide, alloc: aG }, q = { ms: best.squash, stepUs: stepUs.squash, alloc: aQ };
   add('CR-12 cost: two whole bodies walking (best of 8 interleaved windows of 120 frames, both bodies\' physics and the world): the crawl against today\'s glide and against the glide with a squash pose held (LIFE\'s setSquash reshapes the goal the same way); the crawl\'s own step per body per frame',
-    `crawl ${f(c.ms, 3)} ms, glide ${f(g.ms, 3)} ms (x ${f(c.ms / g.ms, 3)}), squash pose ${f(q.ms, 3)} ms (crawl - squash pose ${f((c.ms - q.ms) * 500, 1)} us per body); crawl step ${f(c.stepUs, 1)} us per body (glide: ${f(g.stepUs, 2)} us)`, 'crawl - squash pose <= 25 us per body; step <= 30 us', (c.ms - q.ms) * 500 <= 25 && c.stepUs <= 30);
+    `crawl ${f(c.ms, 3)} ms, glide ${f(g.ms, 3)} ms (x ${f(c.ms / g.ms, 3)}), squash pose ${f(q.ms, 3)} ms (crawl - squash pose ${f((c.ms - q.ms) * 500, 1)} us per body); crawl step ${f(c.stepUs, 1)} us per body (glide: ${f(g.stepUs, 2)} us)`, 'crawl - squash pose <= 60 us per body; step <= 30 us', (c.ms - q.ms) * 500 <= 60 && c.stepUs <= 30);
+  // RE-SPECIFIED round 12 (R12_INTEGRATE; D-100 with D-101): the bar was 25 us per body, set at R10_LOCOMOTION step 2 (crawl - squash pose 10..19 us) before the
+  // facing turn of step 6 (the yaw pass and the front's bend) and before this row timed the three rigs interleaved. Measured since: 38.5 us (R10_LOCOMOTION step 6,
+  // a loaded machine); 27.9, 31.9 and 47.3 us in three R12 runs on a quiet machine (the difference of two ~1.5 ms frames: its spread is the squash pose's own
+  // noise, 1.511 to 1.536 ms); the crawl's own step 20.3 to 21.5 us every time, under its own 30 us bar, which is unchanged. A trim was looked for: the step is
+  // two passes over the particles (the wave, then its centring and volume correction, which need the first pass's sums) and the goal path is the squash pose's
+  // own; no cheap cut keeps the motion bit for bit. The new number is the frame budget's: at the low tier D-101 lets three squishies walk at once, 3 x 60 us =
+  // 0.18 ms a frame = 4.5 % of the low tier's 4 ms physics budget (PF-00) and about 7 % of one awake whole's own cost (PF-00 C_WHOLE_MS 0.87 ms) per walker.
   add('CR-13 allocation: new-space growth per 120 frames while two bodies crawl (best of 4 windows after PH-11\'s 100 s warm-up)', `${c.alloc} B (glide ${g.alloc} B, squash pose ${q.alloc} B)`, '0 B', c.alloc <= 0);
 }
 

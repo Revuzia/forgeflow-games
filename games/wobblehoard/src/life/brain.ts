@@ -13,7 +13,7 @@ import { emitVoice, PHRASE, voice } from './voice.ts';
 import { STYLE, MOVER_CAP, UNIT_CAP, tierOf } from './attention.ts';
 import { TRAIT } from './traits.ts';
 import { WARMPOSE, TOAST, emitReact, leaderOf, addLook } from './looks.ts';
-import { socialPick, beginPicked, updateMoment, startMoment, tryTeeter, abortFor, isFree, MOM, mem, tuneThing, tunePlaying } from './social.ts';
+import { socialPick, beginPicked, updateMoment, startMoment, tryTeeter, abortFor, leaveMoment, isFree, MOM, mem, tuneThing, tunePlaying } from './social.ts';
 import { wishThink, wishCheck, firstWishThink } from './wish.ts';
 import { INTENT } from '../data/life.ts';
 import { PIECES_USE } from '../data/quests.ts';
@@ -307,7 +307,8 @@ export function behave(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Life
   // (round 7, R7_LIFE; PLAY_WITH, D-79: the player's request wins over the squishies' own plans) one the player asked to go play with a thing leaves the
   // by-itself moment it is in (the moment ends for everyone, as a touch ends it: the others' "your turn" after 2 s); a song, a teeter or a push stays and the
   // ask waits for it. (A chat or a greet held the asked use for up to its 60 s: shellview node_checks N1 on the MED tier.)
-  if (w.moo[i] >= 0 && w.pW[i] >= 0 && !keepsMoment(w, w.moo[i])) abortFor(w, s, out, ev, i);
+  // (round 12, R12_INTEGRATE) ... and it leaves a song on its own (the others sing on: social.ts leaveMoment); a teeter or a push still waits (its partner rides on it)
+  if (w.moo[i] >= 0 && w.pW[i] >= 0) { if (w.mK[w.moo[i]] === MOM.SING) leaveMoment(w, s, out, ev, i); else if (!keepsMoment(w, w.moo[i])) abortFor(w, s, out, ev, i); }
   // a joint moment runs on its first member's think
   const m = w.moo[i];
   if (m >= 0) { if (mem(w, m, 0) === i) updateMoment(w, s, out, ev, m); return; }
@@ -1004,6 +1005,23 @@ function selfPoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean
           w.f[F.PX] = cx - ux * L * sg; w.f[F.PZ] = cz - uz * L * sg;
           if (!inBounds(w, sh)) continue;
           w.uX2[i] = w.f[F.PX]; w.uZ2[i] = w.f[F.PZ]; w.f[F.X] = ax; w.f[F.Z] = az; qT(w);
+          return true;
+        }
+        nx = -nx; nz = -nz;
+      }
+      // (round 12, R12_INTEGRATE) a row that runs past the area's edge in a TALL layout (2.8 m wide: Ripple's tall Shell Chimes reach 0.2 m past the bounds' side):
+      // the walk takes its part inside the area, from the end nearer the squishy, when that part is at least RING_MIN_M long (two parts of the row); it used to
+      // find no spot at all. (The wide layouts' rows lie inside their bounds (DT-01) and keep their published walks.)
+      for (let side = 0; side < 2 && w.layout === 1; side++) {
+        const cx = tx + nx * o, cz = tz + nz * o, sg = (s.x[i] - cx) * ux + (s.z[i] - cz) * uz >= 0 ? 1 : -1;
+        let lo = NaN, hi = NaN;
+        for (let L = -(span * 0.5 + 0.1); L <= span * 0.5 + 0.1 + 1e-9; L += 0.05) {
+          w.f[F.PX] = cx + ux * L; w.f[F.PZ] = cz + uz * L;
+          if (inBounds(w, sh)) { if (!(lo === lo)) lo = L; hi = L; } else if (lo === lo) break;
+        }
+        if (lo === lo && hi - lo >= RING_MIN_M) {
+          const a0 = sg > 0 ? hi : lo, a1 = sg > 0 ? lo : hi;
+          w.uX2[i] = cx + ux * a1; w.uZ2[i] = cz + uz * a1; w.f[F.PX] = w.uX2[i]; w.f[F.PZ] = w.uZ2[i]; w.f[F.X] = cx + ux * a0; w.f[F.Z] = cz + uz * a0; qT(w);
           return true;
         }
         nx = -nx; nz = -nz;

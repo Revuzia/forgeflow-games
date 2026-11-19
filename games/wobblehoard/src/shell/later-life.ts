@@ -58,6 +58,8 @@ const MUSIC_BOX_S = 29.1, MUSIC_BOX_GAP_S = 40, KETTLE_BAR_S = 3.6;   // PLACES 
 const FLICK_MS = 1.2;    // a tapped ball rolls away from the camera at this speed (m/s): "Roll the Felt Ball"
 const SHOWER_S = 4;      // a tapped Drip Leaf tips its shower this long (PLACES 2.1 M14: "tap it: the leaf tips a shower")
 const SET_S = 6;         // a ride the body lands on within this many seconds of the player letting go of it (or lifting it there) is a ride the player SET UP
+const LAND_V = 0.05, LAND_MAX_S = 3; // (round 12, D-97 with D-100) after Table LIFE's motion waits until every squishy out is on the ground and still (its centre's
+                                     // vertical speed under LAND_V m/s, all in the same frame), at most LAND_MAX_S
 const PAD_USE_GAP_S = 2; // one USE BOUNCE per body per this many seconds of pad kicks (a landing's kicks in a row are one bounce)
 const CHIME_V = 0.1, CHIME_GAP_S = 1;   // round 7 (R7_LIFE's request): a body's chime strike is its USE only when it moves into it (faster than this, or tossed), one a second
 // (round 11, R11_FIX 2) ... or when LIFE walks it into the row (its scoot on, moving faster than CHIME_WALK_V): the slow families walk 0.05 to 0.07 m/s, under CHIME_V,
@@ -216,6 +218,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   let thingGlobal = new Int16Array(0);     // per place-local thing: its THING_IDS index
   const homeShown = new Uint8Array(8);     // Home's things shown now
   let travelling = false;
+  let landT = 0;                           // (round 12) after Float: LIFE's motion parked while the party lands, until it is still or this sim time
+  const landY = new Float64Array(CAP);     // (each squishy's centre height last frame, while landing)
   let floatParked = false;                 // the Float rule (D-97, replaced D-83): Float is on: every squishy out floats, at every place (LIFE's motion, rides and thing play pause; the world stays)
   // round 5: a "Go play with..." lift onto a swing holds the seat with a steadying hand (useRide, steadyStep): its prop, the squishy, when it sat, the ease
   let steadyP = -1, steadyI = -1, steadyOnT = -1, steadyT0 = 0, steadyEase = 0.5, steadyLand = 0, steadyEnd = 0;
@@ -465,6 +469,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     for (let i = 0; i < CAP; i++) { const b = chars[i].body; if (chars[i].on && b && b.gravity === now) { try { b.gravity = !now; } catch { /* a mock */ } } }
     if (now === floatParked) return;
     floatParked = now;
+    // (round 12, R12_INTEGRATE) Table: the party comes down (physics' descent) and LIFE takes up its motion once everyone has landed and settled. It started a
+    // walk the moment a body touched down, mid landing squash: with D-100's crawl the body's centre then rose and fell at once (probe_float F4: never at rest)
+    landT = now ? 0 : game.simTime + LAND_MAX_S; landY.fill(NaN);
     if (now) for (let i = 0; i < CAP; i++) if (chars[i].on && chars[i].body) floatHome(i);
   }
   /** D-97: a squishy that starts floating rises where it stands: its hover spot (physics' home) is its centre now (a walk is ended), kept inside the place's
@@ -587,11 +594,11 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     }
     switch (kind) {
       case INTENT.SCOOT:
-        if (floatParked) return;
+        if (floatParked || (landT > 0 && !asked(c))) return;
         try { if (body.scootTo?.(a - c.offX, b - c.offZ, cc)) { c.scooting = true; c.scootX = a; c.scootZ = b; counts.scoot++; } } catch (x) { report(x); }
         return;
       case INTENT.HOP:
-        if (floatParked) return;
+        if (floatParked || (landT > 0 && !asked(c))) return;
         // (R10 LOCOMOTION, D-100: the crawl IS the walking gait: a hop on the spot during LIFE's walk (its gait step hop) is not layered on it; a hop that goes
         //  somewhere (a boop, onto a pad), a hop within 15 cm of the walk's end (LIFE's step hop needs more) or after it, and every hop in Calm (no crawl) stay)
         if (a === 0 && cc === 0 && c.scooting && world !== null && !world.calm && Math.hypot(c.lastX - c.scootX, c.lastZ - c.scootZ) > 0.15) return;
@@ -599,7 +606,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         else doHop(i, a, b, cc);
         return;
       case HOP_GO: try { body.setSquash?.(1, 0.08); } catch { /* ignore */ } doHop(i, a, b, cc); return;
-      case INTENT.SQUASH: if (!floatParked) { try { body.setSquash?.(a, b); } catch (x) { report(x); } } return;
+      case INTENT.SQUASH: if (!floatParked && landT === 0) { try { body.setSquash?.(a, b); } catch (x) { report(x); } } return;
       case INTENT.POSE: if (c.view >= 0) { counts.pose++; try { stage.setBodyPose?.(c.view, a, b, cc, d, e); } catch (x) { report(x); } } return;
       case INTENT.GLIDE: if (!floatParked) { nudgeV.x = a; nudgeV.y = 0; nudgeV.z = b; try { body.nudge(nudgeV); } catch (x) { report(x); } } return;
       case INTENT.SETTLE: endScoot(i); return;
@@ -937,7 +944,18 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     s.phone = deps.phone?.() ?? false;
     s.calm = game.settings.calm; s.reducedMotion = deps.reducedMotion?.() ?? false;
     if (world) world.calm = s.calm || s.reducedMotion;   // (R10 LOCOMOTION, D-100: Calm or reduced motion: no crawl, LIFE's walk is today's glide)
-    s.autonomy = game.settings.autonomy && !floatParked;
+    if (landT > 0) {
+      let still = dt > 0;
+      for (let i = 0; i < CAP; i++) {
+        const b = chars[i].body;
+        if (!chars[i].on || !b) continue;
+        const y = b.center.y, v = (y - landY[i]) / Math.max(1e-6, dt);
+        if (b.metrics.airborne === true || !(Math.abs(v) < LAND_V)) still = false;
+        landY[i] = y;
+      }
+      if (still || t >= landT) landT = 0;
+    }
+    s.autonomy = game.settings.autonomy && !floatParked && landT === 0;
     s.quiet = quietNow();
     s.musicField = 0; s.musicOn = game.settings.music > 0.001; s.musicBoxOn = musicBoxOnUntil > t; s.beatPhase = (t * 66 / 60) % 1;
     const vw = Math.max(1, game.viewport.w), vh = Math.max(1, game.viewport.h);

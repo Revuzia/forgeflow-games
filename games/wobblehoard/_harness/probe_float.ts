@@ -7,6 +7,10 @@
 //   F4 a place (the cabin, and Ripple Shore by the dev path): every body rises, stays inside the place's area for 20 s, a hard shove in the air does not carry
 //      it out; LIFE starts no walk while floating and its autonomy is back on Table
 //   F5 feelings and voices go on while floating (emotes / voices through the host); F6 cut pieces float at their own spots
+//   (round 12, R12_INTEGRATE: lanes met) F7 Float meets the crawl (D-100): a squishy crawling when Float comes on stops crawling at once and does not turn
+//      while it floats; F8 Float while one squishy of a party of three is cut (D-99): every whole and every piece floats, Table brings them all down
+//   (round 12) F3 / F4 Table: LIFE takes up its motion only once the party has landed and is still (later-life.ts LAND_V): it used to start a crawl walk the
+//      moment a body touched down, mid landing squash, so the party never came to rest
 // Usage: node _harness/probe_float.ts   (exits 1 on a failure)
 import type { SoftBodyCtor, SoftBodyLike, StageLike } from '../src/contracts.ts';
 import { createApp } from '../src/app.ts';
@@ -190,6 +194,44 @@ await host.travel('home'); await stepA(120);
     !!ok && p.length >= 2 && p.every((x) => x.g === false && x.y > 0.2 + 0.5 * x.R) && apart >= 0.25, JSON.stringify({ ok, pieces: p.map((x) => [f3(x.x), f3(x.y), f3(x.z)]), apart: f3(apart) }));
   app.cut.reconnectAll(false); await stepA(120);
   setFloat(false); await stepA(240);
+}
+// F7 (round 12): Float meets the crawl (D-100). One out at Home: a walk that crawls (the prop world's crawl on), then Float: the walk ends and the crawl lets go
+// within the touch gate's time (0.15 s), and while it floats the body does not turn (its facing, the fitted rotation's +Z on the floor, moves under 2 degrees)
+{
+  app.mat.clear(); await stepA(120);
+  const b = app.body as unknown as { crawlOn: boolean; qr: Float64Array; center: { x: number; z: number }; scootTo(x: number, z: number, v: number): boolean };
+  const facing = (): number => { const q = b.qr; return Math.atan2(2 * (q[0] * q[2] + q[3] * q[1]), 1 - 2 * (q[0] * q[0] + q[1] * q[1])); };
+  let crawled = false;
+  b.scootTo(b.center.x + 1.2, b.center.z - 0.6, 0.25);
+  for (let k = 0; k < 90; k++) { step(1); if (b.crawlOn) crawled = true; if (k % 10 === 0) await tick(); }
+  setFloat(true);
+  let offAt = -1;
+  for (let k = 1; k <= 30; k++) { step(1); if (offAt < 0 && !b.crawlOn) offAt = k / 60; }
+  const y0 = facing(); let turn = 0, crawlAgain = false;
+  for (let k = 0; k < 240; k++) { step(1); if (b.crawlOn) crawlAgain = true; const d = Math.abs(Math.atan2(Math.sin(facing() - y0), Math.cos(facing() - y0))); if (d > turn) turn = d; if (k % 10 === 0) await tick(); }
+  check('F7 Float meets the crawl (D-97 x D-100): a squishy crawling when Float comes on stops crawling within 0.15 s, never crawls again while it floats, and does not turn while floating (facing moves under 2 degrees over 4 s)',
+    crawled && offAt > 0 && offAt <= 0.15 && !crawlAgain && turn * 180 / Math.PI < 2, JSON.stringify({ crawled, offAt: offAt > 0 ? f3(offAt) : -1, crawlAgain, turnDeg: f3(turn * 180 / Math.PI) }));
+  setFloat(false); await stepA(240);
+}
+// F8 (round 12): Float while one squishy of a party of three is cut (D-99: the stroke cut the play squishy; the other two stay whole): every whole and piece
+// floats (gravity off, over 0.2 m up for 10 s), and Table brings all of them down gently and to rest within 3 s
+{
+  app.mat.add({ genome: speciesBaseGenome('crimpo', 3), itemId: 'g-floatcrimpo2' });
+  app.mat.add({ genome: speciesBaseGenome('capnap', 4), itemId: 'g-floatcapnap2' });
+  await stepA(180);
+  const ok = app.cut.splitInTwo?.();
+  await stepA(240);
+  const rest = pos(), n = rest.length, pieces = all().filter(({ b }) => app.cut.isPiece(b)).length;
+  setFloat(true); await stepA(180);
+  let minRise = Infinity;
+  for (let s2 = 0; s2 < 10; s2++) { await stepA(60); pos().forEach((q, i) => { minRise = Math.min(minRise, q.y - rest[i].y); }); }
+  const grav = all().map(({ b }) => b.gravity);
+  const t = await tableTrial(rest.map((q) => q.y));
+  check('F8 Float while one of a party of three is cut (D-97 x D-99): its two pieces and the two wholes all float (gravity off, every one over 0.2 m up for 10 s); Table brings every one down gently (fall <= 1.0 m/s) and to rest within 3 s',
+    !!ok && n === 4 && pieces === 2 && minRise >= 0.2 && grav.every((g) => g === false) && t.tRest > 0 && t.tRest <= 3 && t.vmin >= -1.0 && t.grav.every((g) => g === true),
+    JSON.stringify({ ok, n, pieces, minRise: f3(minRise), grav, table: t }));
+  app.cut.reconnectAll(false); await stepA(120);
+  app.mat.clear(); await stepA(120);
 }
 check('no console.error during the probe', errors.length === 0, errors.slice(0, 3).map((e) => String(e[0])).join(' | '));
 console.error = realError;

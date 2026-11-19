@@ -434,7 +434,9 @@ function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: numbe
     // reach (restHalfW x 1.06 + 0.05 x scale; no dome for the model's round body) and the rest pitch of visibleTable are pinned too.
     'const sl = camera.aspect < 0.9 ? MAT_SLOTS_TALL : MAT_SLOTS_WIDE', 'slotXZ.x = sl[i][0] * bodyScale; slotXZ.z = sl[i][1] * bodyScale',
     'aimOut.x = slotXZ.x * 0.6; aimOut.z = slotXZ.z * 0.6', 'aimOut.y = TARGET_Y * scale + Math.max(0, p.restCy * p.growth - TARGET_Y * scale) * 0.7',
-    'if (autoFraming && !p.playerMoving)', '((p1.restHalfW * (p1.style.dome > 0 ? 1.34 : 1.06) + 0.05 * p1.scale) * p1.growth) / hwPer',
+    // (round 12, R12_INTEGRATE: D-97 Float added `&& !floatMode` to this line: a FLOATING single body is followed instead of framed at its slot. The model's
+    // bodies stand at their slots with Float off, where the line does exactly what it did; the new text is pinned, so any further change still stops the model)
+    'if (autoFraming && !p.playerMoving && !floatMode)', '((p1.restHalfW * (p1.style.dome > 0 ? 1.34 : 1.06) + 0.05 * p1.scale) * p1.growth) / hwPer',
     'const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))',
     'const dist = f.want * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect))', 'visibleTableAt(ax, ay, az, dist, REST_PITCH, camera.fov',
     // round 5: SR2's band framing, which the model now carries (the shipped camera: the verdict's B5 ball sat 25 to 40 px from where the old model

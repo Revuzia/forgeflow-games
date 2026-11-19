@@ -5,6 +5,11 @@
 //   C3 while one is cut, a stroke across another whole squishy is refused in words ("One squishy at a time ...") and cuts nothing
 //   C4 after Reconnect all a stroke across the third squishy cuts it (any of them, one at a time)
 //   C5 one squishy out: the published cut (a stroke across it cuts it, its pieces rejoin at the middle)
+//   (round 12, R12_INTEGRATE: the lanes of rounds 10 and 11 met; rows for where they cross)
+//   C6 a right-button drag with the Cut tool while a party of three is out and one of them is in pieces turns the view (D-98) and cuts nothing, refuses nothing
+//   C7 the + Friends picker (src/ui/partyPick.ts) while one squishy is in pieces (D-99): a friend comes out whole beside the pieces; Reconnect all, the friend stays out
+//   C8 the + Friends picker at a place (the cabin, by the dev path): the friends that come out stand inside the place's area, apart, and are LIFE's characters
+//   C9 a stroke across a squishy that is crawling (D-100) mid-walk cuts it; its pieces stay sane (no runaway: under 1.5 m/s, finite, on the table), whole again on Reconnect all
 // Usage: node _harness/probe_partycut.ts   (exits 1 on a failure)
 import type { SoftBodyCtor, SoftBodyLike, StageLike } from '../src/contracts.ts';
 import { createApp } from '../src/app.ts';
@@ -26,6 +31,8 @@ const { attachLifeHost } = await import('../src/shell/later-life.ts');
 const lifeParts = { attachJournal: (await import('../src/shell/later-quests.ts')).attachJournal, buildPropWorld: (await import('../src/shell/later-props.ts')).buildPropWorld };
 const { createMockStage, createMockAudio, createMockHaptics } = await import('./mocks.ts');
 const { createProfileStore } = await import('../src/core/save.ts');
+const { bringFriends, toggleOut } = await import('../src/ui/partyPick.ts');
+const { loadPlaceDef } = await import('../src/data/places.ts');
 type SB = SoftBodyLike;
 const W = 1280, H = 800;
 const st = createMockStage() as ReturnType<typeof createMockStage> & Record<string, unknown>;
@@ -136,6 +143,79 @@ const one = app.cut.pieces;
 app.cut.reconnectAll(false); await stepA(60);
 check('C5 one squishy out: a stroke across it cuts it (the published cut) and Reconnect all makes it whole', one === 2 && app.cut.pieces === 1 && app.mat.count === 1, `pieces ${one}`);
 app.setTool('hand');
+// ---- round 12 (R12_INTEGRATE): where the lanes cross ----
+/** a picker game on the REAL mat and identity (the picker's choices only read the hoard; what it does goes through app.mat as the Friends strip's does) */
+type PG = Parameters<typeof bringFriends>[0];
+const hoardOf = (ids: Array<[string, string]>): PG['hoard'] => {
+  const items = ids.map(([id, sp], k) => ({ id, species: sp, name: sp[0].toUpperCase() + sp.slice(1), fav: false, genome: speciesBaseGenome(sp as Parameters<typeof speciesBaseGenome>[0], 3 + k), tier: 'common' })) as unknown as ReturnType<PG['hoard']['items']>;
+  return { items: () => items, item: (id: string) => items.find((x) => x.id === id) ?? null };
+};
+const pg = (ids: Array<[string, string]>): PG => ({ identity: app.identity, mat: app.mat, hoard: hoardOf(ids), history: { recent: () => [] } }) as unknown as PG;
+// C6: a right drag while cutting, with a party and one of them in pieces
+{
+  app.mat.add({ genome: speciesBaseGenome('crimpo', 3), itemId: 'g-pcutcrimpo6' });
+  app.mat.add({ genome: speciesBaseGenome('capnap', 4), itemId: 'g-pcutcapnap6' });
+  await stepA(180);
+  app.setTool('cut');
+  await strokeAcross(app.body);
+  const p0 = app.cut.pieces, o0 = (st as unknown as { rec: { count(k: string): number } }).rec.count('orbit'), n0 = notices.length;
+  const other = app.bodies.extras.find((x) => x.itemId === 'g-pcutcapnap6')!;
+  const q = proj(other.body.center.x + other.position.x, other.body.center.y, other.body.center.z + other.position.z)!;
+  app.input.pointerDown({ id: 9, x: q.x - 120, y: q.y, t: clockT, type: 'mouse', button: 2 });
+  for (let k = 1; k <= 8; k++) { app.input.pointerMove({ id: 9, x: q.x - 120 + k * 30, y: q.y + k * 2, t: clockT, type: 'mouse' }); step(2); }
+  app.input.pointerUp({ id: 9, x: q.x + 120, y: q.y + 16, t: clockT, type: 'mouse', button: 2 });
+  await stepA(120);
+  const o1 = (st as unknown as { rec: { count(k: string): number } }).rec.count('orbit');
+  check('C6 (round 12; D-98 x D-99) with the Cut tool, three out and Dollop in pieces, a right-button drag across Capnap turns the view (orbit) and cuts nothing: the same pieces, Capnap whole, no "one at a time" refusal',
+    p0 === 2 && o1 > o0 && app.cut.pieces === p0 && !app.cut.isPiece(other.body) && notices.length === n0, JSON.stringify({ p0, orbits: o1 - o0, pieces: app.cut.pieces, notices: notices.slice(n0) }));
+  // C7: + Friends while one squishy is in pieces
+  app.setTool('hand');
+  app.mat.remove('g-pcutcapnap6'); await stepA(60);
+  const n7 = app.mat.count, pieces7 = app.cut.pieces;
+  const r = toggleOut(pg([['g-pcutwisp7', 'wisplet']]), hoardOf([['g-pcutwisp7', 'wisplet']]).items()[0]);
+  await stepA(180);
+  const wisp = app.bodies.extras.find((x) => x.itemId === 'g-pcutwisp7');
+  const whole7 = !!wisp && !wisp.piece && !app.cut.isPiece(wisp.body), stillPieces = app.cut.pieces === pieces7;
+  app.cut.reconnectAll(true); await stepA(300);
+  check('C7 (round 12; the + Friends picker x D-99) while Dollop is in pieces, a friend tapped in the picker comes out whole (the pieces stay pieces); Reconnect all makes Dollop whole and the friend stays out',
+    r.out && r.refused === null && whole7 && stillPieces && app.mat.count === n7 + 1 && app.cut.pieces === 1 && app.mat.has('g-pcutwisp7'), JSON.stringify({ r, whole7, stillPieces, count: app.mat.count, n7, pieces: app.cut.pieces }));
+  app.mat.clear(); await stepA(120);
+}
+// C8: + Friends at a place (the cabin)
+{
+  const ok = await host.travel('hearthlog', true);
+  await stepA(240);
+  const def = await loadPlaceDef('hearthlog');
+  const bd = def.bounds;
+  const r = bringFriends(pg([['g-pcutcrimpo8', 'crimpo'], ['g-pcutcapnap8', 'capnap']]));
+  await stepA(300);
+  const w = wholes(), out = w.map((q) => Math.max(Math.abs(q.x - bd.x) - (bd.hx ?? 3), Math.abs(q.z - bd.z) - (bd.hz ?? 2.4)));
+  const party = (host.partyNow?.() ?? []).map((x: { itemId: string | null }) => x.itemId);
+  check('C8 (round 12; the + Friends picker x a place) in the cabin, "Bring friends" brings two (the mat\'s count 3); every squishy stands inside the cabin\'s area, at least 0.6 m apart, and both friends are LIFE\'s characters there',
+    ok && r.came.length === 2 && app.mat.count === 3 && out.every((v) => v <= 0) && minGap() >= 0.6 && party.includes('g-pcutcrimpo8') && party.includes('g-pcutcapnap8'),
+    JSON.stringify({ ok, came: r.came, why: r.why, worst: f3(Math.max(...out)), gap: f3(minGap()), party }));
+  app.mat.clear(); await stepA(60);
+  await host.travel('home'); await stepA(180);
+}
+// C9: a stroke across a squishy mid-crawl
+{
+  const b = app.body as unknown as SB & { crawlOn: boolean; scootTo(x: number, z: number, v: number): boolean };
+  let crawled = false;
+  b.scootTo(b.center.x + 1.2, b.center.z - 0.5, 0.25);
+  // (the stroke comes while the crawl is on: the first frame 0.4 s into the walk with the wave running)
+  for (let k = 0; k < 180 && !(crawled && k >= 24); k++) { step(1); crawled = b.crawlOn; if (k % 10 === 0) await tick(); }
+  const wasCrawling = b.crawlOn;
+  app.setTool('cut');
+  await strokeAcross(app.body);
+  const pieces = app.cut.pieces;
+  const ps = () => app.bodies.extras.filter((x) => x.piece).map((x) => ({ b: x.body, off: x.position })).concat(app.cut.isPiece(app.body) ? [{ b: app.body, off: ox }] : []);
+  let vmax = 0, finite = true, low = Infinity; const prev = ps().map(({ b: q, off }) => ({ x: q.center.x + off.x, z: q.center.z + off.z }));
+  for (let k = 0; k < 120; k++) { step(1); ps().forEach(({ b: q, off }, i) => { const x = q.center.x + off.x, z = q.center.z + off.z; if (!Number.isFinite(x + z + q.center.y)) finite = false; if (prev[i]) { vmax = Math.max(vmax, Math.hypot(x - prev[i].x, z - prev[i].z) * 60); prev[i] = { x, z }; } low = Math.min(low, q.center.y); }); if (k % 10 === 0) await tick(); }
+  app.cut.reconnectAll(true); await stepA(300);
+  check('C9 (round 12; D-100 x the cut) a stroke across Dollop while it crawls mid-walk cuts it in two; its pieces stay sane for 2 s (finite, under 1.5 m/s, on the table), and Reconnect all makes it whole',
+    crawled && wasCrawling && pieces === 2 && finite && vmax < 1.5 && low > 0 && app.cut.pieces === 1, JSON.stringify({ crawled, wasCrawling, pieces, finite, vmax: f3(vmax), low: f3(low), after: app.cut.pieces }));
+  app.setTool('hand');
+}
 check('no console.error during the probe', errors.length === 0, errors.slice(0, 3).map((e) => String(e[0])).join(' | '));
 console.error = realError;
 console.log(`\n${total - bad}/${total} party cut checks passed`);
