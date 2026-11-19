@@ -234,10 +234,10 @@ YARD = [
     ("yard-parasol", SRC / "props" / "detail-parasol-a.glb", "commercial", 6.0, "parasol", "footprint", 0, "Kenney City Kit (Commercial) 2.1 (CC0): detail-parasol-a"),
     ("yard-cart", YARD_SRC["fantasytown"] / "cart.glb", "fantasytown", 1.6, "cart", "footprint", 0, "Kenney Fantasy Town Kit 2.0 (CC0): cart"),
     ("yard-mailbox", YARD_SRC["polypizza"] / "objects" / "2olZ0G8iur.glb", "mailbox", 1.15, "mailbox", "bbox", 0, "Mailbox by CreativeTrio, Poly Pizza objects/2olZ0G8iur (CC0)"),
-    # (W10 R4B pass 2) ground cover (a grass tuft under the 0.30 m body band: no collider), the lodge woodpile, the city's AC condenser
+    # (W10 R4B pass 2) ground cover (a grass tuft) and a low lodge woodpile (both under the 0.30 m body band: no collider, a step), the city AC condenser
     ("yard-grass", YARD_SRC["survival"] / "grass-large.glb", "survival", 2.0, "grass", "none", 0, "Kenney Survival Kit 2.0 (CC0): grass-large"),
-    ("yard-woodpile", YARD_SRC["survival"] / "resource-wood.glb", "survival", 6.0, "woodpile", "bbox", 1, "Kenney Survival Kit 2.0 (CC0): resource-wood"),
-    ("yard-ac", SRC / "props" / "ac-unit-quaternius.glb", "quaternius_atlas", 1.0, "ac", "bbox", 0, "AC unit by Quaternius via Poly Pizza (CC0), cc0-city props/ac-unit-quaternius"),
+    ("yard-woodpile", YARD_SRC["survival"] / "resource-wood.glb", "survival", 4.6, "woodpile", "none", 1, "Kenney Survival Kit 2.0 (CC0): resource-wood"),
+    ("yard-ac", SRC / "props" / "ac-unit-quaternius.glb", "quaternius_atlas", 1.0, "ac", "footprint", 0, "AC unit by Quaternius via Poly Pizza (CC0), cc0-city props/ac-unit-quaternius"),
 ]
 CARS = [(n, "car", 1.7 if n not in ("delivery",) else 1.6) for n in
         ["sedan", "suv", "taxi", "police", "van", "hatchback-sports", "truck", "delivery"]]

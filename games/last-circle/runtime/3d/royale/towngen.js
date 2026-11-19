@@ -2710,7 +2710,7 @@ const YARD_RUN = { fence: ["props/yard-fence", 2.0, 0.075], hedge: ["props/yard-
 const YARD_SMALL = { mailbox: ["props/yard-mailbox", 0.271, 0.09, 1], bucket: ["props/yard-bucket", 0.216, 0.216, 0], barrel: ["props/yard-barrel", 0.355, 0.355, 0], bin: ["furniture/trashcan", 0.23, 0.26, 0] };
 // side props (long side along the house's depth): [type, half width across the side yard, half length along it]
 const YARD_SIDE = { bench: ["props/yard-bench", 0.506, 0.897], log: ["props/yard-log", 0.299, 1.2], parasol: ["props/yard-parasol", 0.96, 0.96], boat: ["props/yard-boat", 1.542, 1.787],
-  cart: ["props/yard-cart", 0.7, 1.07], woodpile: ["props/yard-woodpile", 0.261, 0.615], ac: ["props/yard-ac", 0.385, 0.519] };
+  cart: ["props/yard-cart", 0.7, 1.07], woodpile: ["props/yard-woodpile", 0.2, 0.472], ac: ["props/yard-ac", 0.385, 0.519] };
 const YARD_THEME = {
   resort: { run: ["hedge"], small: ["mailbox", "bucket", "mailbox"], side: ["parasol", "bench", "parasol"] },
   lodge: { run: ["fence"], small: ["barrel", "bucket", "mailbox"], side: ["log", "boat", "cart", "woodpile", "bench"] },

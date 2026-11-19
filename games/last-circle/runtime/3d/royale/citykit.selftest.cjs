@@ -58,8 +58,8 @@ function refBox(b, q, k, x, y, z) {
   ok(drift.length === 0, "the embedded collider table equals manifest.json EXACTLY (every box, every number)" + (drift.length ? " - run: node citykit.selftest.cjs --emit-table" : ""), drift.slice(0, 5));
   const modes = {};
   for (const id of mIds) modes[manifest.types[id].collider_mode] = (modes[manifest.types[id].collider_mode] || 0) + 1;
-  ok(Object.keys(modes).length === 7 && modes.bands === 8 && modes.bbox === 94 && modes.elevation === 6 && modes.footprint === 47 && modes.none === 6 && modes.pole === 3 && modes.steps === 2,
-    "collider modes (Wave 8 stage A2: the interior kit merged into manifest.json by art_b_city.py --interior-into-main; W10 R1A item 8: +12 bbox, +4 footprint; W10 R4B yards: +9 bbox, +3 footprint, +2 none): bands 8, bbox 94, elevation 6, footprint 47, none 6, pole 3, steps 2", modes);
+  ok(Object.keys(modes).length === 7 && modes.bands === 8 && modes.bbox === 92 && modes.elevation === 6 && modes.footprint === 48 && modes.none === 7 && modes.pole === 3 && modes.steps === 2,
+    "collider modes (Wave 8 stage A2: the interior kit merged into manifest.json by art_b_city.py --interior-into-main; W10 R1A item 8: +12 bbox, +4 footprint; W10 R4B yards: +7 bbox, +4 footprint, +3 none): bands 8, bbox 92, elevation 6, footprint 48, none 7, pole 3, steps 2", modes);
 
   // ---------------------------------------------------------------- mkCollider contract (maps.js:228)
   const mk = K.mkCollider("box", 1, 2, 3, 4, 5, 6, -1, null, -1, 0);
@@ -135,7 +135,7 @@ function refBox(b, q, k, x, y, z) {
     if ((mxY - mnY) < 0.5 * bh - 1e-9 || (mxX - mnX) < 0.4 * bw - 1e-9 || (mxZ - mnZ) < 0.4 * bd - 1e-9) { covFail++; covFirst = covFirst || [id, mxY - mnY, bh, mxX - mnX, bw, mxZ - mnZ, bd]; }
   }
   ok(bboxFail === 0, "all " + mIds.length + " collider sets sit inside the manifest bbox_m (+0.3 m, the intake's own rule)", { bboxFail, bboxFirst });
-  ok(covFail === 0 && covN === 157, "all " + covN + " collider sets that are neither pole nor none (157 = 166 - 3 pole - 6 none) cover the body (>= 50 % of the height, >= 40 % of each footprint side)", { covN, covFail, covFirst });
+  ok(covFail === 0 && covN === 156, "all " + covN + " collider sets that are neither pole nor none (156 = 166 - 3 pole - 7 none) cover the body (>= 50 % of the height, >= 40 % of each footprint side)", { covN, covFail, covFirst });
   ok(noneBad.length === 0, "the 5 collider-mode-none types (rugs, pallet, the yard path stone) have no collider box and are drawn no higher than 0.30 m, the body band's floor (a player never meets them)", noneBad);
 
   // ---------------------------------------------------------------- composition, scale and translation are exact
