@@ -49,6 +49,7 @@ Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each mus
   no-sets (the centre groups off) -> sets       tri-flood (TRI_BUDGET 6000 -> 60000 and the quota 1 per 1.5 m2) -> tris     loot-drop (house loot halved) -> loot
   rng-leak (Math.random in the furnisher) -> determinism     no-bath-set (no mirror / shower) -> bath-set     (loot-drop also -> loot-density)
   draw-scale-drop (maps.js reads suggested_scale off citykit's indexed manifest: the pass-1 bug, pieces baked at native size x k) -> scale
+  (W10 R3A) grey-ceil (the home ceiling plaster grey-beige, L ~0.64) -> finish
   (W10 R3A) plank-curtain (CURTAIN_FOLDS off: round 3's flat plank skins) -> finish     bare-office (WORK_COVER off: no partitions / sized tables / cover pass) -> office-cover
   flat-everywhere (ROOF_FLAT_ALL: every roof flat) -> flat-roofs     sparse-shop (WORK_FIT off: the round-3 shop / store furnishing) -> shop-density
 """
@@ -113,6 +114,8 @@ PLANTS = {
     "no-bath-set": ({"bath-set"}, [(HG, r"export const BATH_SET = true;", "export const BATH_SET = false;")]),
     # (W10 R3A) interiors II
     "plank-curtain": ({"finish"}, [(HG, r"export const CURTAIN_FOLDS = true;", "export const CURTAIN_FOLDS = false;")]),
+    # (W10 R3A fix3) the ceiling half of finish can fail: the home ceiling plaster at a grey-beige (L ~0.64) instead of 0xf4f2ee
+    "grey-ceil": ({"finish"}, [(HG, r'P_CEIL = pal\("plaster", 0xf4f2ee\)', 'P_CEIL = pal("plaster", 0xa8a49c)')]),
     "bare-office": ({"office-cover"}, [(HG, r"export const WORK_COVER = true;", "export const WORK_COVER = false;")]),
     "flat-everywhere": ({"flat-roofs"}, [(HG, r"export const ROOF_FLAT_ALL = false;", "export const ROOF_FLAT_ALL = true;")]),
     "sparse-shop": ({"shop-density"}, [(HG, r"export const WORK_FIT = true;", "export const WORK_FIT = false;")]),
