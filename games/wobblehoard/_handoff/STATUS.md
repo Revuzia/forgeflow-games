@@ -1,3 +1,28 @@
+# SESSION 3 STATE (2026-11-19, after the second PLAYGROUND deploy)
+
+**LIVE NOW: commit 6c495e9c1**, deployed 2026-11-19 to the R2 bucket `forgeflow-games` under `squish-keeper/` (57 files; every file byte-identical at the CDN; boots and plays on 1280x800 and 390x844 with 0 errors).
+- Open places: Home, Hearthlog Cabin, Ripple Shore, Frostbell Ridge, Rainleaf Garden, Lanternroof, Cloudloft (D-96).
+- New in this deploy: squishies use every kind of thing on their own (3 to 5 different things per 3-minute visit at low tier, both frames, VERDICT_R12); a party of 3 is awake at every graphics tier (D-101); Float floats everyone everywhere and floaters can be tossed (D-97); "+ Friends" party button; right-drag / two-finger orbit while cutting (D-98); cut any ONE squishy with a party out (D-99; all at once needs a multi-set cutter); slug-like crawl (D-100); Who's coming chips, photo frame, Journal gifts in trophies; whole-build cap 2250 KB (D-102).
+- Rollback: the previous live top files are in `_live_snapshot/2026-11-19-before-places/` (its hashed assets are still in the bucket: re-upload that index.html, game_meta.json, credits.txt, thumbnail.png). The pre-PLAYGROUND build is `_live_snapshot/2026-11-16/`.
+- Deploy method: Cloudflare R2 REST API through the proxy-injected credential (see the previous section); assets first, index.html last; then compare every file at the CDN.
+
+**Pre-deploy check (orchestrator, final13 in the scratchpad):** published steps 23/23 desktop and 21/21 phone vs the live snapshot, saves both ways, cut + reconnect lines; probe_app 188/188, gestures 160/160, cut 17/17, float 16/16, crawl 14/14, SU-04 24/24; build T1 2111 KB.
+
+**Known issues at deploy:**
+- shellview/node_checks 185/186: the Shake Pine click row (a squishy stands on the click point; flaky).
+- probe_life_selfuse SU-05: one behaviour flip-flop at the cabin in 54 visits (4 switches, bar 3).
+- Cloudloft on a phone: 3 things at low, was 2 at high before round 13 (not re-measured in a browser); a hard left toss could leave the area briefly (fix in code, not run); one 10 s stuck squishy not traced.
+- Naps rule (one napper at a time at places, 12 to 20 s) not re-measured in a browser.
+- Home things can be hidden behind resting squishies (clickable through them; DT-18 silhouette red). LF-02 allocation row red (explained).
+- Clear, see-through families are hard to see on Cloudloft's clouds.
+- D-101 cost on a low-end phone is an estimate (10 to 12 ms a frame), never measured on a device.
+- Sound has been measured (no clipping, no silence) but never listened to.
+- Not checked on the final build: player actions at Frostbell, Lanternroof and the cabin; Home with five out.
+
+**Next:** the owner plays the live game; their list sets the next round. Candidates: cut several squishies at once (D-99), Home layout spread, Cloudloft cloud tint, merge this branch to the main line so GitHub matches the CDN.
+
+---
+
 # SESSION 3 STATE (2026-11-18): read this first; everything below it is the PC session's ledger from October
 
 - **LIVE:** commit `23c684a60` of branch `claude/exciting-faraday-2dakqx` was deployed to the R2 bucket `forgeflow-games/squish-keeper/` on 2026-11-18

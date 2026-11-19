@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Squish Keeper</title>
+<meta name="theme-color" content="#14102a">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Squish Keeper: a squishy toy that squishes back. Poke it, squash it, pull it, let go.">
+<!--
+  No inline script and no inline style on this page, so the production build runs under a strict Content Security Policy.
+  Recommended response header for dist/ (the CDN or the portal sets it; a <meta> tag cannot carry frame-ancestors):
+    Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self';
+      font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors <the portal origin>
+  img-src data: covers the favicon below and the Quality select's arrow (src/ui/styles.css). The app sets styles only through the CSSOM
+  (element.style.setProperty), which style-src 'self' allows. _harness/browser_shell.mjs serves the built dist/ with this policy
+  (frame-ancestors aside) and fails on any CSP violation. The dev server (vite) injects inline modules and styles: dev is not covered.
+-->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3c2 4 9 7 10 14 1 6-4 12-10 12S5 24 6 17C7 10 14 7 16 3z' fill='%23ffb347'/%3E%3Ccircle cx='12' cy='19' r='2' fill='%2314102a'/%3E%3Ccircle cx='20' cy='19' r='2' fill='%2314102a'/%3E%3C/svg%3E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script type="module" crossorigin src="./assets/index-B7EcxM3a.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/rng-DTRKR-_l.js">
+  <link rel="modulepreload" crossorigin href="./assets/rarity-3KSwYZm1.js">
+  <link rel="modulepreload" crossorigin href="./assets/catalog-C0bPHA_q.js">
+  <link rel="stylesheet" crossorigin href="./assets/index-DsRnhDt0.css">
+</head>
+<body>
+<canvas id="stage" role="img" aria-label="Your squishy: a soft translucent toy on a felt mat."></canvas>
+<div id="ui"></div>
+<div id="boot" role="status" aria-live="polite" data-step="0">
+<div class="boot-mark" role="img" aria-label="SQUISH KEEPER">
+<svg class="bt-w bt-a" viewBox="-6 -9 414 124" aria-hidden="true" focusable="false"><defs><linearGradient id="bt-g" gradientUnits="userSpaceOnUse" x1="0" y1="5" x2="0" y2="95"><stop offset="0" stop-color="#ffd191"/><stop offset="0.42" stop-color="#ffb347"/><stop offset="1" stop-color="#d9912d"/></linearGradient><linearGradient id="bt-h" gradientUnits="userSpaceOnUse" x1="0" y1="5" x2="0" y2="95"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity=".25"/></linearGradient><path id="bt-S" d="M49 28C47 16 39 9 29 9C17 9 11 17 11 28C11 40 21 46 31 50C43 55 51 60 51 72C51 83 43 91 31 91C19 91 11 84 9 72"/><path id="bt-Q" d="M36 8C52 8 64 24 64 50C64 76 52 92 36 92C20 92 8 76 8 50C8 24 20 8 36 8M42 64L64 94"/><path id="bt-U" d="M10 10V60C10 80 20 92 34 92C48 92 58 80 58 60V10"/><path id="bt-I" d="M10 10V90"/><path id="bt-H" d="M10 10V90M58 10V90M10 50H58"/><path id="bt-K" d="M10 10V90M58 10L12 52L58 90"/><path id="bt-E" d="M58 10H28Q10 10 10 28V72Q10 90 28 90H58M10 50H48"/><path id="bt-P" d="M10 90V10H36C50 10 58 20 58 34C58 48 50 58 36 58H10"/><path id="bt-R" d="M10 90V10H36C50 10 58 20 58 33C58 46 50 54 36 54H10M34 54L58 90"/><g id="bt-wa"><use href="#bt-S"/><use href="#bt-Q" x="72"/><use href="#bt-U" x="154"/><use href="#bt-I" x="232"/><use href="#bt-S" x="262"/><use href="#bt-H" x="334"/></g><g id="bt-wb"><use href="#bt-K"/><use href="#bt-E" x="77"/><use href="#bt-E" x="155"/><use href="#bt-P" x="233"/><use href="#bt-E" x="310"/><use href="#bt-R" x="388"/></g></defs><use class="bt-sh" transform="translate(0 7)" href="#bt-wa"/><use class="bt-ol" href="#bt-wa"/><use class="bt-sd" transform="translate(0 3)" href="#bt-wa"/><use class="bt-bd" stroke="url(#bt-g)" href="#bt-wa"/><use class="bt-hi" stroke="url(#bt-h)" transform="translate(-3 -4)" href="#bt-wa"/></svg>
+<svg class="bt-w bt-b" viewBox="-6 -9 467 124" aria-hidden="true" focusable="false"><use class="bt-sh" transform="translate(0 7)" href="#bt-wb"/><use class="bt-ol" href="#bt-wb"/><use class="bt-sd" transform="translate(0 3)" href="#bt-wb"/><use class="bt-bd" stroke="url(#bt-g)" href="#bt-wb"/><use class="bt-hi" stroke="url(#bt-h)" transform="translate(-3 -4)" href="#bt-wb"/></svg>
+</div>
+<div class="boot-bar" aria-hidden="true"><span class="boot-fill"></span></div>
+<p class="boot-line" id="boot-line">Warming up the jelly…</p>
+<p class="boot-slow">This is taking a while. Check your connection, then <a href="./">Reload</a>.</p>
+</div>
+<noscript>Squish Keeper needs JavaScript to run. Please switch it on and reload.</noscript>
+</body>
+</html>

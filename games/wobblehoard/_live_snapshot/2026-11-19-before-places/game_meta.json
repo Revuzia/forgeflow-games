@@ -1,0 +1,27 @@
+{
+  "title": "Squish Keeper",
+  "short_description": "A squishy toy that squishes back. Poke, stretch and slice real soft-body jelly, then open capsules to collect 50 squishies.",
+  "description": "A squishy toy that squishes back.\n\nEvery squishy is a soft 3D body made of physics, not animation: hundreds of points held together by a real-time soft-body simulation, so every dent, bulge and wobble is worked out as it happens. Tap to poke it. Hold to squish: it flattens, bulges out at the sides and blushes warmer where you press. Press on it and drag outward to pull it into a stretchy lobe, then let go and watch it snap back and jiggle to rest. Shift and drag, or two fingers, pull both sides at once, and when a pull is stretched all the way, Shift locks it there until you let go.\n\nSquishing and stretching fills a ring, and a full ring drops a capsule. Open it to meet one of 50 squishies in six rarities, from Common to Mythic, and keep them in your Hoard (press H). Each squishy shows its odds, there is a daily gift and a short list of daily tasks, and holding Merge on two spare copies of a kind can turn them into something rarer. Twenty achievements, called trophies in the game, are waiting to be found.\n\nPick up the Cut tool to slice a squishy into pieces. Clean cut gives you the real parts of the squishy on each side of the slice; Minis gives you complete little copies. Reconnect all puts everything back together. Snap takes a photo against a backdrop you pick. Table lets it rest on the felt mat; Float lets it drift in the air.\n\nEvery sound is synthesised in your browser while you play: no recordings and no samples. Settings cover volume, music, Louder squish, haptics, Calm effects (no camera moves, flashes or shake) and graphics quality. It plays with the keyboard too. Your Hoard stays in this browser, and when you play signed in on forgeflowgames.com your achievements are saved to your account.",
+  "genre": "arcade",
+  "sub_genre": "soft-body squishy toy",
+  "difficulty": "easy",
+  "controls_keyboard": "Mouse: click = poke · hold = squish · press on the squishy and drag outward = pull · SHIFT + drag = pull both sides · SHIFT when a pull is stretched all the way = lock it (ESC lets go) · right-drag = turn the view · wheel = zoom. Keys: SPACE tap = poke · SPACE hold = squish · 1 Hand · 2 or C Cut · 3 or S Snap · H Hoard · [ ] switch squishy · G Table / Float · M mute · F full screen · P menu · ? how to play · ARROW KEYS turn the view · + / - zoom · ESC close or back to the Hand",
+  "controls_touch": "Tap = poke · press and hold = squish · press on the squishy and drag outward = pull · two fingers on the squishy = pull both sides · drag empty space = turn the view · pinch = zoom",
+  "tags": [
+    "toy",
+    "squishy",
+    "soft-body",
+    "physics",
+    "jelly",
+    "fidget",
+    "relaxing",
+    "cozy",
+    "3d",
+    "collection",
+    "touch",
+    "singleplayer",
+    "no-combat"
+  ],
+  "art_direction": "One squishy toy photographed on a dark felt play-mat at dusk: an ink-indigo set (#14102a background, plum #2a1744, dusk violet #5b3a86, felt mat #2a2150) under a warm sodium-amber softbox key light (#ffb347) with a cold lagoon-cyan rim light (#59d6e6). The squishy is a squat dollop of translucent apricot-amber jelly with a soft swirl peak on top: glossy specular highlights from the softbox, light passing through its body, and an ember-coral core (#ff5a4d) glowing from inside, casting a warm coloured pool of light on the felt beneath it. Its only face is two glossy ink-dark eyes: no mouth, no limbs, no other character. The SQUISH KEEPER wordmark is drawn as glossy, bouncy amber-jelly letters with a thin ink outline. Moody, tactile and original, deliberately unlike pastel-kawaii toy shelves; no logos, brands or characters from any other game or toy line.",
+  "mobile_support": "full"
+}
