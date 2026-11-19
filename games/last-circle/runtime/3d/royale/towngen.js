@@ -680,7 +680,9 @@ function frontYardExtra(rect, fx, fz, d) {
   const spare = (fz !== 0 ? rect[3] - rect[1] : rect[2] - rect[0]) - d;            // front + back yard together
   if (spare < YARD_MIN_FRONT + BACK_MARGIN - 1e-6) return 0;                       // (a shallow lot: the old setback)
   // the front yard first (>= YARD_MIN_FRONT, the back keeps at least the old BACK_MARGIN), then up to YARD_FRONT while the back keeps YARD_BACK_KEEP
-  return Math.max(0, Math.min(YARD_FRONT, Math.max(YARD_MIN_FRONT, spare - YARD_BACK_KEEP)) - FRONT_SETBACK);
+  let F = Math.min(YARD_FRONT, Math.max(YARD_MIN_FRONT, spare - YARD_BACK_KEEP));
+  if (F > 3.2 && F < 3.6) F = 3.2;                                                 // (the door path's 1.2 m stones then end within 0.8 m of the street line, never overlapping)
+  return Math.max(0, F - FRONT_SETBACK);
 }
 function makeBuildingParcel(S, rng, pid, blockId, rect, fx, fz, fit, theme, extra) {
   const frame = placeBuilding(rect, fx, fz, fit.w, fit.d, theme === "city" && fit.gen === "tower" ? RAMP_LANE : 0);
@@ -2732,8 +2734,7 @@ function yardHomes(L) {
       // the door path: the facade walk (1.2 m stones, centred on the facade: the housegen front door is somewhere on it) and the stem to the street
       const nW = Math.max(1, Math.floor((bR - bL) / 1.2 + 1e-6));
       for (let k = 0; k < nW; k++) h.tiles.push(W(sB + 0.6, h.tc + (k - (nW - 1) / 2) * 1.2));
-      const s0 = sB + 1.8, s1 = sF - 0.8, nS = s1 > s0 ? Math.ceil((s1 - s0) / 1.2 - 1e-6) + 1 : 1;
-      for (let k = 0; k < nS; k++) h.tiles.push(W(nS > 1 ? s0 + (s1 - s0) * k / (nS - 1) : s0, h.tc));
+      for (let st = sB + 1.8; st + 0.6 <= sF + 1e-6; st += 1.2) h.tiles.push(W(st, h.tc));          // (touching, never overlapping: coplanar stones would z-fight)
     }
     H.push(h);
   }
