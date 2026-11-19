@@ -883,7 +883,10 @@ NEGATIVE += [
 # retries), plus the Node selftests and the anchors census. About 60 min on this 8-core box (measured 2026-11-19, see README). It is
 # NOT a release verdict: the full battery stays the only release gate.
 QUICK = ["anchors", "bootcheck", "playtest", "genversion", "interiorcheck", "w10_gunhold", "w10_lootlook", "mobile", "p23_tierprof",
-         "probe_match", "collisioncheck", "w10_waterlook", "w10_sfx", "perf_district"]
+         "probe_match", "collisioncheck", "w10_waterlook", "w10_sfx", "perf_district",
+         # + the measured head run took 38 min (2026-11-19), so 8 more short rows on the areas the list above leaves out (HUD, camera, combat, feel,
+         #   rig, audio mix, memory, lifecycle; ~14 min by their round-3 walls)
+         "hud_checks", "player_camwall", "p23_spray", "feelcheck", "rigcheck", "p23_audiotap", "leaktest", "lifecycle"]
 QUICK_NOTE = "QUICK TIER (gate.py --quick): early warning only - NOT a release verdict; the full battery is the only release gate"
 
 
