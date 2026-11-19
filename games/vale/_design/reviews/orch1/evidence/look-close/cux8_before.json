@@ -1,0 +1,197 @@
+{
+ "tag": "before",
+ "targets": {
+  "time": 279.2,
+  "ok": true,
+  "a": {
+   "id": 9,
+   "x": 75.28916966996454,
+   "y": 97.94429711464622,
+   "kind": "fighter"
+  },
+  "b": {
+   "id": 3122,
+   "x": 68.95232824404162,
+   "y": 98.51848521498228,
+   "kind": "minion"
+  }
+ },
+ "vps": {
+  "1920x1080": {
+   "pops": [
+    {
+     "text": "213",
+     "dst": "3122",
+     "cls": "wpop wpop--phys num ",
+     "fontPx": 23.7,
+     "weight": "700",
+     "box": [
+      878,
+      648,
+      45,
+      24
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    },
+    {
+     "text": "83",
+     "dst": "9",
+     "cls": "wpop wpop--phys num ",
+     "fontPx": 18.1,
+     "weight": "700",
+     "box": [
+      1442,
+      519,
+      23,
+      18
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    },
+    {
+     "text": "140",
+     "dst": "9",
+     "cls": "wpop wpop--magic num ",
+     "fontPx": 20.7,
+     "weight": "700",
+     "box": [
+      1245,
+      517,
+      39,
+      21
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    },
+    {
+     "text": "380",
+     "dst": "9",
+     "cls": "wpop wpop--phys num is-crit",
+     "fontPx": 36.7,
+     "weight": "700",
+     "box": [
+      1442,
+      536,
+      70,
+      37
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    },
+    {
+     "text": "65",
+     "dst": "9",
+     "cls": "wpop wpop--true num ",
+     "fontPx": 17.1,
+     "weight": "700",
+     "box": [
+      1261,
+      548,
+      26,
+      20
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    }
+   ],
+   "perTarget": {
+    "9": 4,
+    "3122": 1
+   },
+   "minFontPx": 17.1,
+   "maxFontPx": 36.7,
+   "overPlate": 0,
+   "full": "1920x1080/cux8_before_002_nums_full.png",
+   "crop": "1920x1080/cux8_before_001_nums_crop.png"
+  },
+  "1366x768": {
+   "pops": [
+    {
+     "text": "213",
+     "dst": "3122",
+     "cls": "wpop wpop--phys num ",
+     "fontPx": 19,
+     "weight": "700",
+     "box": [
+      518,
+      458,
+      36,
+      19
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    },
+    {
+     "text": "83",
+     "dst": "9",
+     "cls": "wpop wpop--phys num ",
+     "fontPx": 14.5,
+     "weight": "700",
+     "box": [
+      1034,
+      360,
+      18,
+      14
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    },
+    {
+     "text": "140",
+     "dst": "9",
+     "cls": "wpop wpop--magic num ",
+     "fontPx": 16.6,
+     "weight": "700",
+     "box": [
+      870,
+      358,
+      31,
+      17
+     ],
+     "opacity": 0.72,
+     "overPlatePx": 0
+    },
+    {
+     "text": "380",
+     "dst": "9",
+     "cls": "wpop wpop--phys num is-crit",
+     "fontPx": 29.4,
+     "weight": "700",
+     "box": [
+      1039,
+      378,
+      56,
+      29
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    },
+    {
+     "text": "65",
+     "dst": "9",
+     "cls": "wpop wpop--true num ",
+     "fontPx": 13.7,
+     "weight": "700",
+     "box": [
+      885,
+      387,
+      19,
+      15
+     ],
+     "opacity": 1,
+     "overPlatePx": 0
+    }
+   ],
+   "perTarget": {
+    "9": 4,
+    "3122": 1
+   },
+   "minFontPx": 13.7,
+   "maxFontPx": 29.4,
+   "overPlate": 0,
+   "full": "1366x768/cux8_before_004_nums_full.png",
+   "crop": "1366x768/cux8_before_003_nums_crop.png"
+  }
+ }
+}

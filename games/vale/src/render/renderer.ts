@@ -1124,6 +1124,10 @@ class ValeRenderer implements Renderer {
   readonly teleInk = { on: true, key: 0.6, band: 1, bandPx: 4, edge: 1, edgePx: 4 };
   /** harness seam (ruling 53 A/B): the enemy telegraph's interior fill (TELE_ENEMY_FILL) */
   readonly teleFill = TELE_ENEMY_FILL;
+  /** orch1 look close (ruling 62): overlapping enemy shapes of one colour draw their union's outline once (the ink band and the
+   *  full edge only where no other such shape lies), each shape's edge inside the union thinned to a seam (`seamPx` at `seamA`).
+   *  Harness seam: on = false is ruling 53's stack (every shape its own full edge and band). */
+  readonly teleUnion = { on: true, seamPx: 2, seamA: 0.75 };
   private readonly inkBlack = new Color(0, 0, 0);
   /** world metres per drawing-buffer pixel at ground point (x, z) (the telegraph target's resolution) */
   private metresPerPx(x: number, z: number): number {
@@ -1137,7 +1141,7 @@ class ValeRenderer implements Renderer {
     const t = this.teles;
     t.begin();
     const now = this.time;
-    const spec: TeleSpec = { x: 0, z: 0, dir: 0, shape: 0, radius: 1, inner: 0, halfAngle: 0.5, length: 1, width: 1, color: this.tmpColor, fill: 0, edge: 0, edgePx: 2, sweep: 1, dashed: false, tick: null, ringFlash: 0, ringDepth: 0 };
+    const spec: TeleSpec = { x: 0, z: 0, dir: 0, shape: 0, radius: 1, inner: 0, halfAngle: 0.5, length: 1, width: 1, color: this.tmpColor, fill: 0, edge: 0, edgePx: 2, sweep: 1, dashed: false, tick: null, ringFlash: 0, ringDepth: 0, union: -1, unionInk: 0 };
     for (const tg of this.director.telegraphs) {
       if (now < tg.start) continue;
       const rel = p.relation(tg.team, tg.owner, true);
@@ -1167,7 +1171,10 @@ class ValeRenderer implements Renderer {
           spec.fill = 0.2; spec.ringFlash = 0.5;
           spec.ringDepth = flashContourDepth(spec.shape, spec.radius, spec.inner, spec.halfAngle, spec.width);
         }
-        const ink = this.teleInk;
+        const ink = this.teleInk, un = this.teleUnion;
+        // ruling 62: list the shape at its true size; the group is its colour (a spectator's two sides never merge)
+        const ui = un.on ? t.addUnion(spec, spec.color.getHex()) : -1;
+        spec.union = ui; spec.seamPx = un.seamPx; spec.seamA = un.seamA;
         if (ink.on) {
           // the ink band: the same shape grown by the band's width, its edge band (drawn inside ITS boundary) lying just
           // outside the real edge, where no fill is. MAX blending: where the two overlap (the grow is sized by the
@@ -1183,22 +1190,26 @@ class ValeRenderer implements Renderer {
             spec.x -= fx * back; spec.z -= fz * back; spec.radius += back + g;
           } else { spec.x -= fx * g; spec.z -= fz * g; spec.length += 2 * g; spec.width += 2 * g; }
           spec.color = this.inkBlack; spec.fill = 0; spec.edge = ink.band; spec.edgePx = ink.bandPx; spec.ringFlash = 0; spec.tick = null; spec.key = ink.key;
+          spec.unionInk = 1;
           t.push(spec);
+          spec.unionInk = 0;
           spec.x = x; spec.z = z; spec.radius = radius; spec.inner = inner; spec.length = length; spec.width = width;
           spec.color = col; spec.fill = fill; spec.edge = Math.max(edge, ink.edge); spec.edgePx = ink.edgePx; spec.ringFlash = rf; spec.tick = tick;
           spec.key = ink.key;
         } else spec.key = undefined;
       } else if (rel === 'neutral') {
-        spec.key = undefined;
+        spec.key = undefined; spec.union = -1;
         spec.color = p.relationColor('neutral'); spec.fill = 0.12; spec.edge = 0.8; spec.edgePx = 2;
       } else {
-        spec.key = undefined;
+        spec.key = undefined; spec.union = -1;
         spec.color = tg.heal ? p.get('#63D88B') : p.relationColor(rel === 'self' ? 'self' : 'ally');
         spec.fill = rel === 'self' ? 0.08 : 0; spec.edge = tg.heal ? 0.5 : rel === 'self' ? 0.6 : 0.45; spec.edgePx = 2;
         if (flash) spec.fill = Math.max(spec.fill, 0.12);
       }
       t.push(spec);
     }
+    // the range ring and your aim below copy `spec`: never into the union (ruling 62)
+    spec.union = -1; spec.unionInk = 0;
     // your attack-range ring (W2-D): the aim's dashed range ring, same telegraph program, its own radius
     const rr = this.rangeRing;
     if (rr) t.push({ ...spec, x: rr.x, z: rr.y, dir: 0, shape: TELE_SHAPE.circle, radius: rr.radius, inner: 0, color: p.relationColor('self'), fill: 0, edge: 0.45, edgePx: 2, sweep: 1, dashed: true, tick: null, key: 0.45, ringFlash: 0 });

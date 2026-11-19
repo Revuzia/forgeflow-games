@@ -649,12 +649,21 @@
 
 /* ── world layer ──────────────────────────────────────────────────────────────────────────────── */
 .hudworld { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
-.wpop { position: absolute; left: 0; top: 0; font-weight: 700; font-size: max(13px, calc(var(--ps, 18) * 1px * var(--k))); line-height: 1; white-space: nowrap; will-change: transform, opacity;
-  text-shadow: 0 1px 0 var(--ink-0), 0 0 3px var(--ink-0), 0 0 1px var(--ink-0); }
-.wpop.is-crit { text-shadow: 0 1px 0 var(--ink-0), 0 0 3px var(--ink-0), 0 0 8px rgba(255, 248, 234, 0.35); }
+/* ruling 62 (CUX-8): numbers read at a glance at 1920x1080 and 1366x768: 20-34 px by amount (crit 1.35x), never under 18 px
+   (the UI scale counts down to 0.92 only), a 2 px ink outline all round (8 offsets, tokens hud.numbers.outline) and a soft drop */
+.wpop { position: absolute; left: 0; top: 0; font-weight: 700; font-size: max(18px, calc(var(--ps, 20) * 1px * max(0.92, var(--k)))); line-height: 1; white-space: nowrap; will-change: transform, opacity;
+  letter-spacing: 0.02em;
+  --wpop-ol: var(--ink-0);
+  text-shadow: -2px 0 0 var(--wpop-ol), 2px 0 0 var(--wpop-ol), 0 -2px 0 var(--wpop-ol), 0 2px 0 var(--wpop-ol),
+    -1.5px -1.5px 0 var(--wpop-ol), 1.5px -1.5px 0 var(--wpop-ol), -1.5px 1.5px 0 var(--wpop-ol), 1.5px 1.5px 0 var(--wpop-ol), 0 3px 5px rgba(11, 13, 17, 0.55); }
+.wpop.is-big { font-weight: 800; }
+.wpop.is-crit { font-weight: 800; text-shadow: -2px 0 0 var(--wpop-ol), 2px 0 0 var(--wpop-ol), 0 -2px 0 var(--wpop-ol), 0 2px 0 var(--wpop-ol),
+    -1.5px -1.5px 0 var(--wpop-ol), 1.5px -1.5px 0 var(--wpop-ol), -1.5px 1.5px 0 var(--wpop-ol), 1.5px 1.5px 0 var(--wpop-ol), 0 0 10px rgba(255, 248, 234, 0.35); }
 .wpop--phys { color: var(--dmg-physical); }
 .wpop--magic { color: var(--dmg-magic); font-style: italic; }
-.wpop--true { color: var(--dmg-true); text-shadow: 0 0 0 var(--dmg-true-halo), 1px 1px 0 var(--dmg-true-halo), -1px -1px 0 var(--dmg-true-halo), 1px -1px 0 var(--dmg-true-halo), -1px 1px 0 var(--dmg-true-halo), 0 0 4px var(--dmg-true-halo); }
+.wpop--true { color: var(--dmg-true); --wpop-ol: var(--dmg-true-halo); }
+.wpop--true, .wpop--true.is-crit { text-shadow: -2px 0 0 var(--wpop-ol), 2px 0 0 var(--wpop-ol), 0 -2px 0 var(--wpop-ol), 0 2px 0 var(--wpop-ol),
+    -1.5px -1.5px 0 var(--wpop-ol), 1.5px -1.5px 0 var(--wpop-ol), -1.5px 1.5px 0 var(--wpop-ol), 1.5px 1.5px 0 var(--wpop-ol), 0 0 4px var(--dmg-true-halo); }
 .wpop--heal { color: var(--dmg-heal); }
 .wpop--gold { color: var(--chalk-hi); font-size: max(14px, calc(17 * var(--k))); font-weight: 500; }
 .wpop--gold::before { content: ''; display: inline-block; width: 0.7em; height: 0.7em; margin-right: 3px; vertical-align: 0; background: currentColor;

@@ -233,7 +233,56 @@ async function clutterMain() {
               R.render(0);
             }
           }
-          return { fighters, selfRing, teleEdge, teleFixed, particles: st.particles, vfx: st.vfx, telegraphs: st.telegraphs, particleBudget: budget, tris: prof?.total?.tris ?? st.triangles, vfxTris: prof?.groups?.vfx?.tris ?? null, vfxCalls: prof?.groups?.vfx?.calls ?? null, draws: prof?.total?.calls ?? st.calls, programs: st.programs, $png: shotNow ? png(full) : null, $pngNoFx: shotNow ? png(noFx) : null };
+          // ruling 62 (info): a STACK of six enemy shapes over the enemy side (three circles, a ring, a cone, a rect, wind-up
+          // fill 0.16, the worst wind-up), held alone, drawn with the union outline off (ruling 53: every shape its own 4 px
+          // edge and 4 px ink band) and on. Read over the pixels the stack changes: `inkInner` the share of the stack's interior
+          // (every pixel 8 px round changed too) that the overlay darkens to under 0.6 of the ground (ink lines crossing the
+          // fills), `edgeInner` the share it brightens by 0.25 or more (edges / seams inside), `boundaryP90` the contrast p90
+          // of the outer boundary (changed pixels within 6 px of an unchanged one), `p90` the all-pixel p90 (teleFixed's measure).
+          let teleStack = null;
+          {
+            const T = R.director.telegraphs, keep = T.slice(), vt = R.palette.viewer.team;
+            const foes = v.entities.filter((e) => e.kind === 'fighter' && e.alive && vt >= 0 && e.team !== vt);
+            if (foes.length && R.teleUnion) {
+              const cx = foes.reduce((s, e) => s + e.x, 0) / foes.length, cy = foes.reduce((s, e) => s + e.y, 0) / foes.length;
+              const src = foes[0], now = R.time;
+              const mk = (dx, dy, dir, shape) => ({ x: cx + dx, y: cy + dy, dir, shape, start: now - 0.999, land: now + 0.001, end: now + 1, src: src.id, team: src.team, owner: src.owner, zone: -1, heal: false, ability: 'clutter_tele_stack' });
+              const stack = [mk(0, 0, 0, { kind: 'circle', radius: 3 }), mk(2.2, 0.8, 0, { kind: 'circle', radius: 2.5 }), mk(-1.8, 1.5, 0, { kind: 'circle', radius: 2 }),
+                mk(0.8, -1.8, 0, { kind: 'ring', radius: 3.2, inner: 1.6 }), mk(-3, -1, 0.5, { kind: 'cone', radius: 6, angle: (70 * Math.PI) / 180 }), mk(-2.5, 2, -0.3, { kind: 'rect', length: 7, width: 1.6 })];
+              const read = (on, off) => {
+                const cmk = new Uint8Array(W * H), dark = new Uint8Array(W * H), brt = new Uint8Array(W * H), dd = new Float32Array(W * H);
+                let px = 0;
+                for (let i = 0, o = 0; i < W * H; i++, o += 4) {
+                  const a = luma(on.px, o), c = luma(off.px, o);
+                  if (Math.max(Math.abs(on.px[o] - off.px[o]), Math.abs(on.px[o + 1] - off.px[o + 1]), Math.abs(on.px[o + 2] - off.px[o + 2])) < 3) continue;
+                  cmk[i] = 1; px++; dd[i] = Math.abs(a - c) / Math.max(c, a, 16);
+                  if (c > 20 && a < 0.6 * c) dark[i] = 1; else if (a > c && (a - c) / Math.max(c, 16) >= 0.25) brt[i] = 1;
+                }
+                let inner = 0, inkIn = 0, edgeIn = 0; const eb = [], all = [], R8 = 8, R6 = 6;
+                for (let y = R8; y < H - R8; y += 2) for (let x = R8; x < W - R8; x += 2) {
+                  const i = y * W + x; if (!cmk[i]) continue; all.push(dd[i]);
+                  if (!cmk[i - R6] || !cmk[i + R6] || !cmk[i - R6 * W] || !cmk[i + R6 * W]) eb.push(dd[i]);
+                  if (cmk[i - R8] && cmk[i + R8] && cmk[i - R8 * W] && cmk[i + R8 * W] && cmk[i - R8 - R8 * W] && cmk[i + R8 + R8 * W] && cmk[i - R8 + R8 * W] && cmk[i + R8 - R8 * W]) {
+                    inner++; if (dark[i]) inkIn++; if (brt[i]) edgeIn++;
+                  }
+                }
+                eb.sort((p, q) => p - q); all.sort((p, q) => p - q);
+                return { px, innerPx: inner * 4, inkInner: inner ? +(inkIn / inner).toFixed(4) : 0, edgeInner: inner ? +(edgeIn / inner).toFixed(4) : 0,
+                  boundaryP90: eb.length ? +eb[Math.floor(eb.length * 0.9)].toFixed(3) : 0, boundaryMed: eb.length ? +eb[Math.floor(eb.length * 0.5)].toFixed(3) : 0, p90: all.length ? +all[Math.floor(all.length * 0.9)].toFixed(3) : 0 };
+              };
+              T.length = 0; T.push(...stack);
+              const uOn = R.teleUnion.on;
+              R.teles.mesh.layers.disableAll(); R.overlay.teleScene.visible = false; const sOff = grab(); R.teles.mesh.layers.mask = tMask; R.overlay.teleScene.visible = tv;
+              R.teleUnion.on = false; const s0 = grab();
+              R.teleUnion.on = true; const s1 = grab();
+              R.teleUnion.on = uOn;
+              teleStack = { n: stack.length, at: [+cx.toFixed(1), +cy.toFixed(1)], off: read(s0, sOff), on: read(s1, sOff) };
+              if (shotNow) { teleStack.$off = png(s0); teleStack.$on = png(s1); }
+              T.length = 0; T.push(...keep);
+              R.render(0);
+            }
+          }
+          return { fighters, selfRing, teleEdge, teleFixed, teleStack, particles: st.particles, vfx: st.vfx, telegraphs: st.telegraphs, particleBudget: budget, tris: prof?.total?.tris ?? st.triangles, vfxTris: prof?.groups?.vfx?.tris ?? null, vfxCalls: prof?.groups?.vfx?.calls ?? null, draws: prof?.total?.calls ?? st.calls, programs: st.programs, $png: shotNow ? png(full) : null, $pngNoFx: shotNow ? png(noFx) : null };
         };
         let shotNow = false;
         const looks = []; let step = 0;
@@ -263,8 +312,8 @@ async function clutterMain() {
           shotNow = shots.includes(looks.length);
           const m = await measure();
           const t = +host.view.time.toFixed(2);
-          if (m.$png) window.__clutterShots.push({ i: looks.length, t, png: m.$png, noFx: m.$pngNoFx });
-          delete m.$png; delete m.$pngNoFx;
+          if (m.$png) window.__clutterShots.push({ i: looks.length, t, png: m.$png, noFx: m.$pngNoFx, stackOff: m.teleStack?.$off ?? null, stackOn: m.teleStack?.$on ?? null });
+          delete m.$png; delete m.$pngNoFx; if (m.teleStack) { delete m.teleStack.$off; delete m.teleStack.$on; }
           looks.push({ t, a: c.a, c: c.c, scripted, ...m });
           if (!scripted) natural++;
           b.focus(c.x, c.y);
@@ -277,6 +326,8 @@ async function clutterMain() {
         for (const sh of await page.evaluate(() => window.__clutterShots)) {
           writeFileSync(join(SHOTS, `clutter_s${seed}_look${String(sh.i).padStart(2, '0')}_t${Math.round(sh.t * 10)}.png`), Buffer.from(sh.png, 'base64'));
           writeFileSync(join(SHOTS, `clutter_s${seed}_look${String(sh.i).padStart(2, '0')}_t${Math.round(sh.t * 10)}_nofx.png`), Buffer.from(sh.noFx, 'base64'));
+          if (sh.stackOff) writeFileSync(join(SHOTS, `clutter_s${seed}_look${String(sh.i).padStart(2, '0')}_t${Math.round(sh.t * 10)}_stack_off.png`), Buffer.from(sh.stackOff, 'base64'));
+          if (sh.stackOn) writeFileSync(join(SHOTS, `clutter_s${seed}_look${String(sh.i).padStart(2, '0')}_t${Math.round(sh.t * 10)}_stack_on.png`), Buffer.from(sh.stackOn, 'base64'));
         }
       }
       // aggregate
@@ -301,13 +352,15 @@ async function clutterMain() {
         medianOcclusion: med(occ), p90Occlusion: occ.length ? [...occ].sort((x, y) => x - y)[Math.floor(occ.length * 0.9)] : null, fighterSamples: occ.length,
         worstFighterRun: worst, selfRing: { frames: rings.length, found: rings.filter((r) => r.found).length, rate: rings.length ? +(rings.filter((r) => r.found).length / rings.length).toFixed(3) : null },
         teleEdge: { frames: teles.length, medianP90: med(teles.map((t) => t.p90)), enemyFrames: teles.filter((t) => t.enemy).length, enemyMedianP90: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90)), enemyMedianP90NoFx: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90NoFx)), enemyMedianP90Boundary: med(teles.filter((t) => t.enemy).map((t) => t.enemy.p90Boundary)), fixedFrames: out.looks.filter((l) => l.teleFixed).length, fixedMedianP90: med(out.looks.filter((l) => l.teleFixed).map((l) => l.teleFixed.p90)) },
+        teleStack: (() => { const L = out.looks.map((l) => l.teleStack).filter(Boolean); const m2 = (side, k) => med(L.map((x) => x[side][k]));
+          return { frames: L.length, off: { inkInner: m2('off', 'inkInner'), edgeInner: m2('off', 'edgeInner'), boundaryP90: m2('off', 'boundaryP90'), p90: m2('off', 'p90') }, on: { inkInner: m2('on', 'inkInner'), edgeInner: m2('on', 'edgeInner'), boundaryP90: m2('on', 'boundaryP90'), p90: m2('on', 'p90') }, minBoundaryP90On: L.length ? Math.min(...L.map((x) => x.on.boundaryP90)) : null }; })(),
         particles: { peak: Math.max(0, ...peaks), median: med(peaks), budget: out.looks[0]?.particleBudget ?? null, overBudgetFrames: out.looks.filter((l) => l.particles > l.particleBudget).length },
         hotBody: { max: hots[0]?.hot ?? null, worst: hots[0] ?? null, median: med(hots.map((h) => h.hot)), over30: hots.filter((h) => h.hot > 0.3).length },
         frame: { vfxTrisPeak: Math.max(0, ...num('vfxTris')), vfxTrisMedian: med(num('vfxTris')), trisPeak: Math.max(0, ...num('tris')), drawsPeak: Math.max(0, ...num('draws')), programsPeak: Math.max(0, ...num('programs')) },
         consoleErrors: logs.filter((l) => !/favicon/.test(l)).slice(0, 5), looks: out.looks,
       };
       res.seeds.push(s);
-      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90} (enemy ${s.teleEdge.enemyMedianP90} over ${s.teleEdge.enemyFrames}, with no VFX ${s.teleEdge.enemyMedianP90NoFx}, boundary only ${s.teleEdge.enemyMedianP90Boundary}; GATED fixed enemy circle ${s.teleEdge.fixedMedianP90} over ${s.teleEdge.fixedFrames}), particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
+      console.log(`clutter seed ${seed}: ${s.peakFrames4v4} peak frames (${s.naturalPeakFrames} natural), median occlusion ${s.medianOcclusion}, worst run ${s.worstFighterRun.ms} ms (${s.worstFighterRun.def}), self ring ${s.selfRing.found}/${s.selfRing.frames}, tele edge p90 ${s.teleEdge.medianP90} (enemy ${s.teleEdge.enemyMedianP90} over ${s.teleEdge.enemyFrames}, with no VFX ${s.teleEdge.enemyMedianP90NoFx}, boundary only ${s.teleEdge.enemyMedianP90Boundary}; GATED fixed enemy circle ${s.teleEdge.fixedMedianP90} over ${s.teleEdge.fixedFrames}), stack (info, union off -> on) inkInner ${s.teleStack.off.inkInner} -> ${s.teleStack.on.inkInner}, edgeInner ${s.teleStack.off.edgeInner} -> ${s.teleStack.on.edgeInner}, boundary p90 ${s.teleStack.off.boundaryP90} -> ${s.teleStack.on.boundaryP90}, particles peak ${s.particles.peak}/${s.particles.budget}, hot body max ${s.hotBody.max} (${s.hotBody.worst?.def}), vfx tris peak ${s.frame.vfxTrisPeak}, draws peak ${s.frame.drawsPeak}, programs ${s.frame.programsPeak}`);
     } finally { await browser.close(); }
   }
   const okSeeds = res.seeds.filter((s) => s.peakFrames4v4 >= WANT).length;

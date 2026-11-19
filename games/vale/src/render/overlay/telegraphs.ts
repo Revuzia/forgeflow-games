@@ -13,6 +13,10 @@
 // lights a 0.35 m band inside the edge and one inner contour (half the shape's inscribed depth). Overlaps never stack: telegraphs render into their own target with MAX blending (premultiplied)
 // and are composited once, so a stack of fills stays ≤ 40 %. Identical on every quality tier. FRAY:
 // telegraphs stay HARM with the caster's seat colour as a 6 px tick at the origin.
+// orch1 look close (ruling 62): enemy shapes of one colour that overlap read as ONE outline. Each enemy shape is listed in a
+// small uniform table (uTeleU, at most UNION_MAX); a pixel of a shape's ink band that lies inside another listed shape of the
+// same colour is dropped, and its marigold edge there thins to a seam (seamPx at seamA), so a stack over a cluster shows its
+// union's outer boundary once (marigold over ink) with each shape still traced inside it. One shape alone draws as before.
 
 import {
   type Color, CustomBlending, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, MaxEquation, Mesh,
@@ -22,6 +26,8 @@ import { DEPTH_TEST_GLSL } from './depth.ts';
 import { overlayAttrs, overlayMaterial } from './program.ts';
 
 export const TELE_SHAPE = { circle: 0, ring: 1, cone: 2, rect: 3 } as const;
+/** ruling 62: the most enemy shapes merged into one outline per frame (more draw on their own, as before) */
+export const UNION_MAX = 16;
 
 export interface TeleSpec {
   x: number; z: number;               // anchor (world)
@@ -42,6 +48,12 @@ export interface TeleSpec {
   ringFlash?: number;
   /** the inner contour's depth inside the edge (m) */
   ringDepth?: number;
+  /** ruling 62: this draw's shape in the union table (addUnion; -1 / absent = drawn on its own) */
+  union?: number;
+  /** ruling 62: 1 = this draw is the shape's ink band (dropped inside another shape), 0 = the shape (its edge thins to a seam) */
+  unionInk?: number;
+  /** ruling 62: the seam an edge thins to inside another shape: width (px) and alpha */
+  seamPx?: number; seamA?: number;
 }
 
 /** combat m-3: a landing flash over an area wider than this (m: circle, ring or cone radius, half a rect's longer
@@ -69,7 +81,8 @@ attribute vec4 aC;      // width, fill, edge, edgePx
 attribute vec4 aD;      // sweep, dashed, tick on, keyline alpha
 attribute vec4 aColor;     // rgb, landing ring flash alpha (combat m-3)
 attribute vec4 aTick;      // FRAY tick rgb, inner contour depth (m)
-varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vColor; varying vec4 vTick;
+attribute vec4 aE;         // ruling 62: union index (-1 none), ink band 0/1, seam px, seam alpha
+varying vec2 vLocal; varying vec2 vEi; varying vec2 vEs; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vColor; varying vec4 vTick;
 void main() {
   float shape = aA.w;
   // bounds in the shape's local frame (u along dir, v across)
@@ -83,13 +96,15 @@ void main() {
   vec2 s = vec2( -f.y, f.x );
   vec2 w = aA.xy + f * uv.x + s * uv.y;
   vLocal = uv;
-  vA = aA; vB = aB; vC = aC; vD = aD; vColor = aColor; vTick = aTick;
+  vA = aA; vB = aB; vC = aC; vD = aD; vColor = aColor; vTick = aTick; vEi = aE.xy; vEs = aE.zw;
   gl_Position = projectionMatrix * viewMatrix * vec4( w.x, 0.04, w.y, 1.0 );
 }`;
 
 export const TELE_FRAG = /* glsl */`
 ${DEPTH_TEST_GLSL}
-varying vec2 vLocal; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vColor; varying vec4 vTick;
+uniform vec4 uTeleU[${UNION_MAX * 3}];
+uniform float uTeleUN;
+varying vec2 vLocal; varying vec2 vEi; varying vec2 vEs; varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vColor; varying vec4 vTick;
 float sdBox( vec2 p, vec2 b ) { vec2 d = abs( p ) - b; return length( max( d, 0.0 ) ) + min( max( d.x, d.y ), 0.0 ); }
 // signed distance to a circular sector (apex at the origin, axis +x, half-angle ha); < 0 inside. The side
 // test is the 2D cross c × p: negative while p lies between the axis and the edge ray c = (cos ha, sin ha),
@@ -100,6 +115,16 @@ float sdSector( vec2 p, float r, float ha ) {
   float l = length( p ) - r;
   float m = length( p - c * clamp( dot( p, c ), 0.0, r ) );
   return max( l, m * sign( c.x * p.y - c.y * p.x ) );
+}
+// ruling 62: the signed distance (m) from world point w to a union table shape (a: x, z, dir, shape; b: radius, inner,
+// halfAngle, length; width), the same shapes main() draws
+float teleUnionSd( vec4 a, vec4 b, float width, vec2 w ) {
+  vec2 f = vec2( cos( a.z ), sin( a.z ) ); vec2 s = vec2( -f.y, f.x );
+  vec2 q = w - a.xy; vec2 p = vec2( dot( q, f ), dot( q, s ) );
+  if ( a.w < 0.5 ) return length( p ) - b.x;
+  if ( a.w < 1.5 ) { float l = length( p ); return max( l - b.x, b.y - l ); }
+  if ( a.w < 2.5 ) return sdSector( p, b.x, b.z );
+  return sdBox( p - vec2( b.w * 0.5, 0.0 ), vec2( b.w * 0.5, width * 0.5 ) );
 }
 // orch1 W2 close (ruling 53): the depth test of valeVisible( 0.2 ), except that an occluder standing high over the
 // ground (a jungle canopy, a crown, a tower's upper storey: TELE_THROUGH_M and up) does not hide a telegraph: danger on
@@ -145,6 +170,29 @@ void main() {
   float inside = 1.0 - smoothstep( -0.75 * px, 0.75 * px, d );
   float edge = ( 1.0 - smoothstep( edgeW - 0.75 * px, edgeW + 0.75 * px, -d ) ) * inside;
   float key = ( 1.0 - smoothstep( 0.75 * px, 1.75 * px, d ) ) * ( 1.0 - inside );
+  // ruling 62: inside another enemy shape of the same colour this draw's ink band (and its keyline) drops and its edge thins
+  // to a seam, so a stack reads as one outline with each shape traced inside it
+  float cov = 0.0;
+  if ( vEi.x > -0.5 && uTeleUN > 1.5 ) {
+    vec2 f0 = vec2( cos( vA.z ), sin( vA.z ) ); vec2 s0 = vec2( -f0.y, f0.x );
+    vec2 w = vA.xy + f0 * p.x + s0 * p.y;
+    int me = int( vEi.x + 0.5 );
+    float grp = uTeleU[ me * 3 + 2 ].y;
+    float dm = 1e5;
+    for ( int j = 0; j < ${UNION_MAX}; j++ ) {
+      if ( float( j ) > uTeleUN - 0.5 ) break;
+      if ( j == me || abs( uTeleU[ j * 3 + 2 ].y - grp ) > 0.5 ) continue;
+      dm = min( dm, teleUnionSd( uTeleU[ j * 3 ], uTeleU[ j * 3 + 1 ], uTeleU[ j * 3 + 2 ].x, w ) );
+    }
+    cov = 1.0 - smoothstep( -1.0 * px, 0.5 * px, dm );
+    if ( vEi.y > 0.5 ) { edge *= 1.0 - cov; }
+    else {
+      float sw = vEs.x * px;
+      float seam = ( 1.0 - smoothstep( sw - 0.75 * px, sw + 0.75 * px, -d ) ) * inside;
+      edge = mix( edge, seam * vEs.y, cov );
+    }
+    key *= 1.0 - cov;
+  }
   if ( vD.y > 0.5 ) {
     vec2 f = vec2( cos( vA.z ), sin( vA.z ) ); vec2 s = vec2( -f.y, f.x );
     vec2 wo = f * p.x + s * p.y;
@@ -195,7 +243,11 @@ export class TelegraphLayer {
   private readonly aD: InstancedBufferAttribute;
   private readonly aColor: InstancedBufferAttribute;
   private readonly aTick: InstancedBufferAttribute;
+  private readonly aE: InstancedBufferAttribute;
   private count = 0;
+  /** ruling 62: the union table (per shape 3 vec4: x, z, dir, shape | radius, inner, halfAngle, length | width, group) */
+  private readonly union = new Float32Array(UNION_MAX * 12);
+  private readonly unionN = { value: 0 };
 
   constructor() {
     const quad = new PlaneGeometry(1, 1);
@@ -203,11 +255,11 @@ export class TelegraphLayer {
     this.geo.index = quad.index;
     this.geo.setAttribute('position', quad.getAttribute('position'));
     const mk = (size: number): InstancedBufferAttribute => { const a = new InstancedBufferAttribute(new Float32Array(MAX * size), size); a.setUsage(DynamicDrawUsage); return a; };
-    this.aA = mk(4); this.aB = mk(4); this.aC = mk(4); this.aD = mk(4); this.aColor = mk(4); this.aTick = mk(4);
-    this.attrs = [this.aA, this.aB, this.aC, this.aD, this.aColor, this.aTick];
-    overlayAttrs(this.geo, 'tele', { aA: this.aA, aB: this.aB, aC: this.aC, aD: this.aD, aColor: this.aColor, aTick: this.aTick });
+    this.aA = mk(4); this.aB = mk(4); this.aC = mk(4); this.aD = mk(4); this.aColor = mk(4); this.aTick = mk(4); this.aE = mk(4);
+    this.attrs = [this.aA, this.aB, this.aC, this.aD, this.aColor, this.aTick, this.aE];
+    overlayAttrs(this.geo, 'tele', { aA: this.aA, aB: this.aB, aC: this.aC, aD: this.aD, aColor: this.aColor, aTick: this.aTick, aE: this.aE });
     this.geo.instanceCount = 0;
-    const mat = overlayMaterial('tele', {}, {
+    const mat = overlayMaterial('tele', { uTeleU: { value: this.union }, uTeleUN: this.unionN }, {
       // the quad's local (u, v) maps onto world (x, z) without the y flip rings.ts applies, which mirrors
       // the winding: seen from above it is a back face. The shapes are SDFs in world space, so both faces
       // draw the same decal; DoubleSide keeps any aim direction from culling it (r12 B2: 0 px drawn).
@@ -220,7 +272,20 @@ export class TelegraphLayer {
     this.mesh.frustumCulled = false;
   }
 
-  begin(): void { this.count = 0; }
+  begin(): void { this.count = 0; this.unionN.value = 0; }
+
+  /** ruling 62: list a shape (its true size, not the ink band's) in the union table under `group` (shapes of one group merge);
+   *  returns its index, or -1 when the table is full (that shape then draws on its own) */
+  addUnion(t: TeleSpec, group: number): number {
+    const i = this.unionN.value;
+    if (i >= UNION_MAX) return -1;
+    const u = this.union, o = i * 12;
+    u[o] = t.x; u[o + 1] = t.z; u[o + 2] = t.dir; u[o + 3] = t.shape;
+    u[o + 4] = t.radius; u[o + 5] = t.inner; u[o + 6] = t.halfAngle; u[o + 7] = t.length;
+    u[o + 8] = t.width; u[o + 9] = group; u[o + 10] = 0; u[o + 11] = 0;
+    this.unionN.value = i + 1;
+    return i;
+  }
 
   push(t: TeleSpec): void {
     if (this.count >= MAX) return;
@@ -231,6 +296,7 @@ export class TelegraphLayer {
     this.aD.setXYZW(i, t.sweep, t.dashed ? 1 : 0, t.tick ? 1 : 0, t.key ?? 0.35);
     this.aColor.setXYZW(i, t.color.r, t.color.g, t.color.b, t.ringFlash ?? 0);
     if (t.tick) this.aTick.setXYZW(i, t.tick.r, t.tick.g, t.tick.b, t.ringDepth ?? 0); else this.aTick.setW(i, t.ringDepth ?? 0);
+    this.aE.setXYZW(i, t.union ?? -1, t.unionInk ?? 0, t.seamPx ?? 2, t.seamA ?? 0.75);
   }
 
   end(): void {

@@ -1,0 +1,268 @@
+{
+ "gate": "clutter",
+ "at": "2026-11-19T05:43:44.355Z",
+ "quality": "high",
+ "t0": 720,
+ "scan": 4500,
+ "bars": {
+  "medianOcclusion": 0.25,
+  "worstRunMs": 300,
+  "worstRunOcclusion": 0.6,
+  "teleEdge": 0.45,
+  "selfRing": 1,
+  "hotBody": 0.3,
+  "vfxTris": 35000,
+  "draws": 450,
+  "pass": {
+   "scan": true,
+   "medianOcclusion": true,
+   "worstRun": true,
+   "teleEdge": true,
+   "selfRing": true,
+   "hotBody": true,
+   "vfxTris": true,
+   "draws": true
+  },
+  "enforcedBy": "W2-B"
+ },
+ "seeds": [
+  {
+   "seed": 7,
+   "peakFrames4v4": 30,
+   "naturalPeakFrames": 0,
+   "scriptedPeakFrames": 30,
+   "scanSeconds": 111,
+   "looksWithSides": {
+    "minA": 5,
+    "minC": 5
+   },
+   "medianOcclusion": 0.083,
+   "p90Occlusion": 0.273,
+   "fighterSamples": 300,
+   "worstFighterRun": {
+    "ms": 100,
+    "id": 8,
+    "def": "hesmi"
+   },
+   "selfRing": {
+    "frames": 30,
+    "found": 30,
+    "rate": 1
+   },
+   "teleEdge": {
+    "frames": 29,
+    "medianP90": 0.304,
+    "enemyFrames": 19,
+    "enemyMedianP90": 0.579,
+    "enemyMedianP90NoFx": 0.443,
+    "enemyMedianP90Boundary": 0.952,
+    "fixedFrames": 30,
+    "fixedMedianP90": 1
+   },
+   "teleStack": {
+    "frames": 30,
+    "off": {
+     "inkInner": 0.0442,
+     "edgeInner": 0.0884,
+     "boundaryP90": 0.967,
+     "p90": 0.345
+    },
+    "on": {
+     "inkInner": 0.0008,
+     "edgeInner": 0.0356,
+     "boundaryP90": 0.96,
+     "p90": 0.207
+    },
+    "minBoundaryP90On": 0.778
+   },
+   "particles": {
+    "peak": 834,
+    "median": 596,
+    "budget": 2000,
+    "overBudgetFrames": 0
+   },
+   "hotBody": {
+    "max": 0.169,
+    "worst": {
+     "hot": 0.169,
+     "def": "odrum",
+     "t": 872
+    },
+    "median": 0.003,
+    "over30": 0
+   },
+   "frame": {
+    "vfxTrisPeak": 17544,
+    "vfxTrisMedian": 13112,
+    "trisPeak": 332301,
+    "drawsPeak": 205,
+    "programsPeak": 37
+   },
+   "consoleErrors": []
+  },
+  {
+   "seed": 11,
+   "peakFrames4v4": 30,
+   "naturalPeakFrames": 0,
+   "scriptedPeakFrames": 30,
+   "scanSeconds": 108,
+   "looksWithSides": {
+    "minA": 5,
+    "minC": 5
+   },
+   "medianOcclusion": 0.085,
+   "p90Occlusion": 0.296,
+   "fighterSamples": 297,
+   "worstFighterRun": {
+    "ms": 0,
+    "id": null,
+    "def": null
+   },
+   "selfRing": {
+    "frames": 30,
+    "found": 30,
+    "rate": 1
+   },
+   "teleEdge": {
+    "frames": 30,
+    "medianP90": 0.312,
+    "enemyFrames": 24,
+    "enemyMedianP90": 0.588,
+    "enemyMedianP90NoFx": 0.498,
+    "enemyMedianP90Boundary": 1,
+    "fixedFrames": 30,
+    "fixedMedianP90": 1
+   },
+   "teleStack": {
+    "frames": 30,
+    "off": {
+     "inkInner": 0.0535,
+     "edgeInner": 0.0231,
+     "boundaryP90": 0.97,
+     "p90": 0.344
+    },
+    "on": {
+     "inkInner": 0.0006,
+     "edgeInner": 0.0092,
+     "boundaryP90": 0.969,
+     "p90": 0.15
+    },
+    "minBoundaryP90On": 0.651
+   },
+   "particles": {
+    "peak": 1109,
+    "median": 794,
+    "budget": 2000,
+    "overBudgetFrames": 0
+   },
+   "hotBody": {
+    "max": 0.253,
+    "worst": {
+     "hot": 0.253,
+     "def": "hesmi",
+     "t": 872.9
+    },
+    "median": 0.003,
+    "over30": 0
+   },
+   "frame": {
+    "vfxTrisPeak": 22020,
+    "vfxTrisMedian": 17418,
+    "trisPeak": 350736,
+    "drawsPeak": 215,
+    "programsPeak": 37
+   },
+   "consoleErrors": []
+  },
+  {
+   "seed": 23,
+   "peakFrames4v4": 30,
+   "naturalPeakFrames": 0,
+   "scriptedPeakFrames": 30,
+   "scanSeconds": 123,
+   "looksWithSides": {
+    "minA": 5,
+    "minC": 4
+   },
+   "medianOcclusion": 0.054,
+   "p90Occlusion": 0.193,
+   "fighterSamples": 277,
+   "worstFighterRun": {
+    "ms": 100,
+    "id": 10,
+    "def": "dunsom"
+   },
+   "selfRing": {
+    "frames": 30,
+    "found": 30,
+    "rate": 1
+   },
+   "teleEdge": {
+    "frames": 30,
+    "medianP90": 0.361,
+    "enemyFrames": 29,
+    "enemyMedianP90": 0.503,
+    "enemyMedianP90NoFx": 0.436,
+    "enemyMedianP90Boundary": 0.701,
+    "fixedFrames": 30,
+    "fixedMedianP90": 1
+   },
+   "teleStack": {
+    "frames": 30,
+    "off": {
+     "inkInner": 0.0415,
+     "edgeInner": 0.0981,
+     "boundaryP90": 0.986,
+     "p90": 0.327
+    },
+    "on": {
+     "inkInner": 0.0009,
+     "edgeInner": 0.0292,
+     "boundaryP90": 0.981,
+     "p90": 0.211
+    },
+    "minBoundaryP90On": 0.785
+   },
+   "particles": {
+    "peak": 883,
+    "median": 624,
+    "budget": 2000,
+    "overBudgetFrames": 0
+   },
+   "hotBody": {
+    "max": 0.183,
+    "worst": {
+     "hot": 0.183,
+     "def": "dunsom",
+     "t": 872.4
+    },
+    "median": 0.001,
+    "over30": 0
+   },
+   "frame": {
+    "vfxTrisPeak": 17138,
+    "vfxTrisMedian": 13594,
+    "trisPeak": 327959,
+    "drawsPeak": 212,
+    "programsPeak": 37
+   },
+   "consoleErrors": []
+  }
+ ],
+ "summary": {
+  "seedsWith30PeakFrames": 3,
+  "medianOcclusion": 0.085,
+  "worstRunMs": 100,
+  "teleEdge": 1,
+  "teleEdgeBots": 0.503,
+  "teleEdgeAll": 0.304,
+  "selfRingRate": 1,
+  "particlesPeak": 1109,
+  "hotBodyMax": 0.253,
+  "vfxTrisPeak": 22020,
+  "trisPeak": 350736,
+  "drawsPeak": 215,
+  "programsPeak": 37
+ },
+ "load1": 17.42626953125
+}

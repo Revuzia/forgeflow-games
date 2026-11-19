@@ -27,7 +27,7 @@ function kindsOf(): Record<Kind, UberKind> {
     ring: { vert: RING_VERT, frag: RING_FRAG, attrs: ['aRing', 'aStyle', 'aColor'] },
     bar: { vert: BAR_VERT, frag: BAR_FRAG, attrs: ['aAnchor', 'aBox', 'aHp', 'aRes', 'aCol', 'aResCol', 'aSeat', 'aMisc'] },
     label: { vert: LABEL_VERT, frag: LABEL_FRAG, attrs: ['aAnchor', 'aRect', 'aUv', 'aTint'] },
-    tele: { vert: TELE_VERT, frag: TELE_FRAG, attrs: ['aA', 'aB', 'aC', 'aD', 'aColor', 'aTick'] },
+    tele: { vert: TELE_VERT, frag: TELE_FRAG, attrs: ['aA', 'aB', 'aC', 'aD', 'aColor', 'aTick', 'aE'] },
   });
 }
 /** the one overlay program's source */

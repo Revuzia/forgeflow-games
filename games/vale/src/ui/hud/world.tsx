@@ -32,9 +32,12 @@ export interface WorldMarks { markers: Signal<MarkerMark[]> }
 const MERGE_MS = 120;
 const MAX_POPS = 16;
 const MAX_PER_TARGET = 4;
-/** damage numbers by amount: 15 px (a graze) to 26 px (350+), a crit a third larger (1080p reference px) */
-// W2-E r1: size follows the amount over a wide band (a 15-point nick 13 px, a 400-point blow 30 px at 1080), crits 1.25x
-const popPx = (amount: number, crit: boolean): number => (13 + 17 * Math.pow(Math.min(1, Math.max(0, (amount - 15) / 385)), 0.7)) * (crit ? 1.25 : 1);
+/** damage numbers by amount (1080p reference px; tokens.json hud.numbers): ruling 62 (look close, CUX-8) reads them at a glance at
+ *  1920x1080 and 1366x768. A 15-point nick 20 px, a 400-point blow 34 px; a crit 1.35x (to ~46 px), a big hit (>= BIG_HIT) a
+ *  heavier weight. The CSS floors the rendered size at 18 px however small the UI scale (W2-E r1 was 13-30 px, crit 1.25x) */
+const POP_SIZE = { minPx: 20, spanPx: 14, critX: 1.35 } as const;
+const BIG_HIT = 200;
+const popPx = (amount: number, crit: boolean): number => (POP_SIZE.minPx + POP_SIZE.spanPx * Math.pow(Math.min(1, Math.max(0, (amount - 15) / 385)), 0.7)) * (crit ? POP_SIZE.critX : 1);
 const POP_MS = { damage: 900, heal: 1100, gold: 1100 } as const;
 const MARKER_MS = 900;
 const PING_MS = 4000;
@@ -75,7 +78,7 @@ export function WorldLayer(p: { marks: WorldMarks }): JSX.Element {
       if (same) {
         same.total += n.amount; same.last = now; same.born = now;
         same.n = { ...same.n, crit: same.n.crit || n.crit };
-        paintPop(same);
+        paintPop(same); sizePop(same);
         same.el.animate([{ transform: `${same.el.style.transform} scale(1.18)` }, { transform: same.el.style.transform }], { duration: 120 });
         return;
       }
@@ -92,13 +95,14 @@ export function WorldLayer(p: { marks: WorldMarks }): JSX.Element {
       el.dataset.dst = String(n.dst);
       paintPop(pop);
       host.appendChild(el);
+      sizePop(pop);
       pops.push(pop);
     });
 
     const paintPop = (x: Pop): void => {
       const n = x.n;
       const cls = n.kind === 'gold' ? 'wpop wpop--gold' : n.kind === 'heal' ? 'wpop wpop--heal' : `wpop wpop--${n.dtype ?? 'phys'}`;
-      x.el.className = `${cls} num ${n.crit ? 'is-crit' : ''}`;
+      x.el.className = `${cls} num${n.crit ? ' is-crit' : ''}${n.kind === 'damage' && x.total >= BIG_HIT ? ' is-big' : ''}`;
       const amt = fmtInt(x.total);
       x.el.textContent = n.kind === 'heal' ? `+${amt}` : n.kind === 'gold' ? `+${amt}` : amt;
       if (n.kind !== 'gold') {
@@ -106,6 +110,13 @@ export function WorldLayer(p: { marks: WorldMarks }): JSX.Element {
         x.el.style.setProperty('--ps', ps.toFixed(1));
         x.w = (x.el.textContent?.length ?? 2) * ps * 0.64 + 4; x.h = ps * 1.1;
       }
+    };
+    // ruling 62: the laid-out box (the CSS sets the final size: UI scale, the 18 px floor); untransformed, so the scale-in pop
+    // does not count
+    const sizePop = (x: Pop): void => {
+      if (x.n.kind === 'gold' || !x.el.isConnected) return;
+      const w = x.el.offsetWidth, h = x.el.offsetHeight;
+      if (w > 0 && h > 0) { x.w = w; x.h = h; }
     };
 
     const frame = (now: number): void => {
@@ -158,6 +169,9 @@ export function WorldLayer(p: { marks: WorldMarks }): JSX.Element {
           if (pl) {
             const gap = 8 * pxc;
             px = x.side > 0 ? pl.r + gap + x.w / 2 : pl.l - gap - x.w / 2;
+            // ruling 62: a number that would leave the view takes the plate's other side
+            if (px + x.w / 2 > host.clientWidth - 4) px = pl.l - gap - x.w / 2;
+            else if (px - x.w / 2 < 4) px = pl.r + gap + x.w / 2;
             py = (pl.t + pl.b) / 2 - rise - lift; vis = true;
           } else {
             const s = toScreen(wx, wy, HEAD_M);
