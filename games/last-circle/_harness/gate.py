@@ -403,6 +403,9 @@ GATES = [
     #      lazy-play, storm-siren, bytes, licence, bed-hiss, snow-birds, loop-seam, no-clip, xcat. (p23_audiotap above now also carries amb-level /
     #      amb-spectrum / indoor + an INFO pcm-held row)
     ("w10_sfx", "p23/sfxcheck.py", [], 1800, False),
+    # ---- Wave 10 R3B (characters): ground-loot models - loot-shapes (0 primitive box / cylinder pickups; frag vs smoke silhouette IoU <= 0.7)
+    #      (w10_gunhold above gains the rows reload-height, reload-hand, pistol-reload, swim, swim-view, swim-head, swim-arms and swap via its default --parts)
+    ("w10_lootlook", "p23/lootlook.py", [], 3600, False),
     ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
@@ -750,6 +753,18 @@ NEGATIVE = [
     ("w10_waterlook-plant-crushed-toe", "p23/waterlook.py", ["--parts", "light", "--plant", "crushed-toe"], 3600),   # FAILs light: shadowed road + light: interiors darkest view
     ("w10_waterlook-plant-dark-rooms", "p23/waterlook.py", ["--parts", "light", "--plant", "dark-rooms"], 3600),     # FAILs light: interiors darkest view (+ road, + interiors ratio)
     ("w10_waterlook-rev-r2a-merge", "p23/waterlook.py", ["--rev", "3065e2c7a", "--parts", "light"], 3600),          # the R2A merge slip: MUST FAIL light: shadowed road + light: interiors darkest view
+    # ---- Wave 10 R3B: each planted fault must FAIL its own row (w10_gunhold parts reload / swim / swap; w10_lootlook loot-shapes)
+    ("w10_gunhold-plant-head-reload", "p23/gunhold.py", ["--skins", "soldier", "--plant", "head-reload", "--parts", "reload"], 1800),   # reload-height
+    ("w10_gunhold-plant-reload-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "reload-off", "--parts", "reload"], 1800),   # reload-hand + pistol-reload
+    ("w10_gunhold-plant-gun-in-water", "p23/gunhold.py", ["--skins", "soldier", "--plant", "gun-in-water", "--parts", "swim"], 1800),   # swim
+    ("w10_gunhold-plant-swim-cam-under", "p23/gunhold.py", ["--skins", "soldier", "--plant", "swim-cam-under", "--parts", "swim"], 1800),   # swim-view
+    ("w10_gunhold-plant-swim-sunk", "p23/gunhold.py", ["--skins", "soldier", "--plant", "swim-sunk", "--parts", "swim"], 1800),   # swim-head
+    ("w10_gunhold-plant-swim-lean", "p23/gunhold.py", ["--skins", "soldier", "--plant", "swim-lean", "--parts", "swim"], 1800),   # swim + swim-head
+    ("w10_gunhold-plant-swim-arms-up", "p23/gunhold.py", ["--skins", "soldier", "--plant", "swim-arms-up", "--parts", "swim"], 1800),   # swim-arms
+    ("w10_gunhold-plant-sling-all", "p23/gunhold.py", ["--skins", "soldier", "--plant", "sling-all", "--parts", "swap"], 1800),   # swap
+    ("w10_lootlook-plant-box-ammo", "p23/lootlook.py", ["--plant", "box-ammo"], 3600),           # loot-shapes (primitive ammo)
+    ("w10_lootlook-plant-same-grenade", "p23/lootlook.py", ["--plant", "same-grenade"], 3600),   # loot-shapes (frag vs smoke IoU)
+    ("w10_lootlook-plant-zero-normal", "p23/lootlook.py", ["--plant", "zero-normal"], 3600),   # (R3B fix5) loot-nan: the loot models' zero-normal slivers back (lootNormalsSafe off) -> black frames + zero-normal tris
     # (the w10_waterlook main row needs no change: the darkest-view row now also renders interiorcheck's own views of match isla_viva
     #  volcano_rim@p54, ashgrid downtown@p4/p27/p44, housegen s7h2 and the fixture house in 4 extra Chromes; full run ~7.5 min, well inside 7000 s)
     # stormfx_fx controls (run by the integrator from driver scripts, not registered: plant curve-at-0 FAILs the BIT-IDENTICAL row, plant meshopt

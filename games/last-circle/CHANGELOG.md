@@ -3,6 +3,25 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-18 — Wave 10 round 3c: R3B fix5 re-merge (black interior view, gunhold controls) (LIVE ?v=1795067149)
+
+Wave 10 round 3c re-merges lane R3B (`w10-r3-characters`, head 6dcec08bb) onto `w10` after round 3b was held on three rows (interiorcheck light, controls w10_gunhold-plant-gun-in-dead-hand and w10_gunhold-rev-w9-tip). No world change: `MAP_GEN_VERSION` stays 8.
+
+- Wave 10 round 3b fix: about one interior view in a thousand rendered fully black. Four ammo loot models had invisible zero-area triangles with zero normals. A rare sliver of one lit a single pixel NaN, and the bloom spread it over the whole frame. loot.js now drops such triangles on load (lootNormalsSafe). interiorcheck light is back to 1019/1019 on 3 runs in a row.
+- w10_lootlook: new row loot-nan (0 loot-model triangles on a zero-length normal; 7 kinds x 200 random poses x 20 instances through the composer, 0 black frames) and plant zero-normal (MUST FAIL loot-nan), registered in gate.py as `w10_lootlook-plant-zero-normal`.
+- w10_gunhold: plant gun-in-dead-hand re-anchored to the R3B weaponMesh.visible line (same fault, a dead actor keeps the gun); the reload parts read FAIL with a message on a build without audio.js RELOAD_SETS / RELOAD_SET_OF, so the control rev-w9-tip FAILs again instead of going COULD-NOT-JUDGE.
+- Known follow-up (not in this release): the loot-model build script make_loot.py still bakes the zero-normal slivers into the 4 ammo GLBs; the game drops them on load and the loot-nan row guards it.
+
+## 2026-11-17 — Wave 10 round 3b: characters (reload, surface swim, swap, ground loot)
+
+Wave 10 round 3b merges lane R3B (`w10-r3-characters`, head 17447f38b) onto `w10`. No world change: `MAP_GEN_VERSION` stays 8.
+
+- Reloads happen at chest height with the left hand on the magazine well, timed to the recorded reload sounds. The pistol has its own reload.
+- Surface swimming puts the gun away (held and slung) on every tier. On desktop medium and up the swimmer treads water upright with head and shoulders out, arms sculling under the surface, and the camera stays above the water. Low and phones also sink the body until the head sits about 0.18 m above the water, but keep the plain Mixamo swim clip with its forward lean (no upright torso, no arm correction), so the chest there sits slightly above the surface (+0.02 to +0.07 m, measured; the swim rows judge the desktop tier only).
+- Gun swaps dip the barrel through the change. The second gun shows slung on the back of up to 8 nearby players.
+- Ground loot: 7 real models replace the W9 boxes and capsules (light / medium / heavy ammo, shells, grenade ammo, frag, smoke), built from CC0 parts. Desktop medium and up; Low and phones keep the old shapes.
+- Gates: w10_gunhold gains reload-height, reload-hand, pistol-reload, swim, swim-view, swim-head, swim-arms and swap, each with a planted fault that fails it (head-reload, reload-off, gun-in-water, swim-cam-under, swim-sunk, swim-lean, swim-arms-up, sling-all). New gate w10_lootlook (loot-shapes) with plants box-ammo and same-grenade. The swim rows measure the soldier skin only.
+
 ## 2026-11-16 — Wave 10 round 2b: light fix (rooms, street shadows, skin sheen) (LIVE ?v=1794894969)
 
 Wave 10 round 2b re-merges lane R2A (`w10-r2-water-light`, head 932956106) onto `w10` with its light fix. No world change: `MAP_GEN_VERSION` stays 8.
