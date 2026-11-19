@@ -66,6 +66,8 @@ export const inOnePiece = 'It is in one piece.';
 
 /** a swipe that missed (a swipe under 24 px, a tap, says nothing); Split in two that found nothing */
 export const swipeMiss = 'Swipe across the squishy to cut it.';
+/** D-99 (round 13: also SHOWN, as a toast, not only said): a stroke across another whole squishy while one is in pieces cuts nothing */
+export const oneAtATime = 'One squishy at a time: Reconnect all, then cut another.';
 export const nothingToCut = 'Nothing to cut there.';
 
 /** the refusals the physics makes (each with a tremble): `thin` (a sliver thinner than the mesh can hold, or a part it cannot build) and `loose` (a side of two separate parts: said ONLY by a physics

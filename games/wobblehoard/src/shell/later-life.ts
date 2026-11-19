@@ -30,7 +30,7 @@ import { pitchRatio } from '../core/genome.ts';
 import type { StorageLike } from '../core/settings.ts';
 import type { StorageSubscribe } from '../core/save.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends,
-  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, lifeGustOn, attentionSound, PHRASE, UNIT, CHAR_CAP, lifeSeeksNew, lifeWaitsTurn, lifeBusy, lifeUsesOf } from '../life/step.ts';
+  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, lifeGustOn, attentionSound, PHRASE, UNIT, CHAR_CAP, lifeSeeksNew, lifeWaitsTurn, lifeBusy, lifeUsesOf, lifeShowsAwake } from '../life/step.ts';
 import type { LifeWorld } from '../life/step.ts';
 import * as LIFE_STEP from '../life/step.ts';
 import type { PropWorld } from '../physics/props.ts';
@@ -119,10 +119,13 @@ interface Char {
   stuckT: number; stuckX: number; stuckZ: number;   // (round 9) where and since when a LIFE scoot has made no headway (unstick)
   hushT: number;          // round 5 (B7): until this sim time LIFE's motion intents for it are dropped (the over-budget rule is putting it to sleep)
   askedT: number;         // round 5 (B7): sim time the player last asked it to play (playWith); -1e9 once it used the thing (round 6: see asked())
+  scootV: number;         // round 13: the speed of LIFE's scoot in force (a detour's legs glide at it)
+  blkN: number;           // round 13: physics' metrics.scootBlocks last seen (a change = a glide a thing stopped head-on)
+  detT: number; detX: number; detZ: number; detN: number; detSide: number; detOx: number; detOz: number;   // round 13: a detour round a thing in the way (start time or -1e9, its waypoint, steps this walk, its side)
 }
 const mkChar = (): Char => ({ on: false, body: null, genome: null, itemId: null, view: -1, kind: 0, group: -1, species: 255, family: 0, flavour: 0, pitch: 1, frac: 1, r: 0.5,
   offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, scooting: false, scootX: 0, scootZ: 0,
-  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, chimeT: -1e9, perchT: 0, padRestT: 0, outT: 0, stuckT: 0, stuckX: 0, stuckZ: 0, hushT: -1e9, askedT: -1e9 });
+  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, chimeT: -1e9, perchT: 0, padRestT: 0, outT: 0, stuckT: 0, stuckX: 0, stuckZ: 0, hushT: -1e9, askedT: -1e9, scootV: 0.1, blkN: 0, detT: -1e9, detX: 0, detZ: 0, detN: 0, detSide: 1, detOx: 0, detOz: 0 });
 
 function mkSnapshot(): LifeSnapshot {
   const n = CAP;
@@ -207,7 +210,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const vis = new Float32Array(4);
   const wishOut = new Int32Array(2);
   const strikes = new Float32Array(32 * 4);
-  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0, held: 0, askedUse: 0, squirt: 0 };   // what LIFE did through the host (the dev view; held: motion the budget's wake gate dropped; askedUse: uses BY PLAYER)
+  const counts = { emote: 0, voice: 0, scoot: 0, hop: 0, gaze: 0, pose: 0, auto: 0, records: 0, ride: 0, held: 0, askedUse: 0, squirt: 0, detour: 0, tossIn: 0 };   // what LIFE did through the host (the dev view; held: motion the budget's wake gate dropped; askedUse: uses BY PLAYER)
   let wakeClaim = 0;                       // round 5 (B7): the units this frame's allowed wakes add (the snapshot shows them next frame)
 
   // ---- the place: Home's world now, a place's world after a trip ----
@@ -317,7 +320,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const ce = b.center;
     c.lastX = ce.x + off.x; c.lastZ = ce.z + off.z; c.vx = 0; c.vz = 0;
     c.homeX = c.lastX; c.homeZ = c.lastZ;
-    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.chimeT = -1e9; c.perchT = 0; c.padRestT = 0; c.outT = 0; c.stuckT = game.simTime; c.hushT = -1e9; c.askedT = -1e9;
+    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.chimeT = -1e9; c.perchT = 0; c.padRestT = 0; c.outT = 0; c.stuckT = game.simTime; c.hushT = -1e9; c.askedT = -1e9; c.detT = -1e9; c.detN = 0; c.blkN = c.body?.metrics.scootBlocks ?? 0;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
     if (world) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
@@ -479,7 +482,37 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   function floatHome(i: number): void {
     const c = chars[i], b = c.body!;
     if (c.scooting) { try { b.scootTo?.(NaN, 0, 0); } catch { /* ignore */ } c.scooting = false; }
-    let x = b.center.x + c.offX, z = b.center.z + c.offZ;
+    floatSpot(i, b.center.x + c.offX, b.center.z + c.offZ);
+  }
+  /** (round 13, R13_FIX 6) floaters keep a gap: VERDICT_R12 (4a) saw two floaters overlap at Cloudloft and one pressed against another at Home. At most 10 times a
+   *  second, two floaters (wholes or pieces) at rest in the air (both under FLOAT_GAP_V) whose centres are closer than their radii + FLOAT_GAP each get their hover
+   *  spot moved apart along the line between them by a third of the shortfall (so it eases apart over a few tenths of a second), inside the place's area */
+  const FLOAT_GAP = 0.1, FLOAT_GAP_V = 0.25;
+  let floatGapT = 0;
+  function floatGap(dt: number): void {
+    floatGapT += dt;
+    if (floatGapT < 0.1) return;
+    floatGapT = 0;
+    for (let i = 0; i < CAP; i++) {
+      const a = chars[i];
+      if (!a.on || !a.body || a.body.gravity !== false || Math.hypot(a.vx, a.vz) > FLOAT_GAP_V || (a.body.metrics.fingers ?? 0) > 0 || a.body.metrics.grabbed) continue;
+      for (let j = i + 1; j < CAP; j++) {
+        const o = chars[j];
+        if (!o.on || !o.body || o.body.gravity !== false || Math.hypot(o.vx, o.vz) > FLOAT_GAP_V || (o.body.metrics.fingers ?? 0) > 0 || o.body.metrics.grabbed) continue;
+        let dx = o.lastX - a.lastX, dz = o.lastZ - a.lastZ;
+        const d = Math.hypot(dx, dz), need = a.r + o.r + FLOAT_GAP;
+        if (d >= need) continue;
+        if (d < 1e-4) { dx = 1; dz = 0; } else { dx /= d; dz /= d; }
+        const push = (need - d) / 3;
+        floatSpot(i, a.lastX - dx * push, a.lastZ - dz * push);
+        floatSpot(j, o.lastX + dx * push, o.lastZ + dz * push);
+      }
+    }
+  }
+  /** a floater's hover spot at (x, z) (world), inside the place's area by its radius + 0.25 m (Home: as asked) */
+  function floatSpot(i: number, x0: number, z0: number): void {
+    const c = chars[i], b = c.body!;
+    let x = x0, z = z0;
     if (placeIdx !== 0) {
       const bd = (layout === 1 ? def.tall : def).bounds, m = c.r + 0.25;
       if (bd.shape === 'disc') {
@@ -595,7 +628,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     switch (kind) {
       case INTENT.SCOOT:
         if (floatParked || (landT > 0 && !asked(c))) return;
-        try { if (body.scootTo?.(a - c.offX, b - c.offZ, cc)) { c.scooting = true; c.scootX = a; c.scootZ = b; counts.scoot++; } } catch (x) { report(x); }
+        try { if (body.scootTo?.(a - c.offX, b - c.offZ, cc)) { c.scooting = true; c.scootX = a; c.scootZ = b; c.scootV = cc; c.detT = -1e9; c.detN = 0; counts.scoot++; } } catch (x) { report(x); }
         return;
       case INTENT.HOP:
         if (floatParked || (landT > 0 && !asked(c))) return;
@@ -762,6 +795,69 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     try { c.body.carryTo?.(tx - c.offX, -c.offY, tz - c.offZ, 0.6); } catch (e) { report(e); }
     c.scooting = false;   // (carryTo released the scoot driver; LIFE's walk re-aims it)
   }
+  /** (round 13, R13_FIX 1) an ASKED walk ("Go play with...") whose glide a thing stops head-on (physics' metrics.scootBlocks) steers round it, at Home too:
+   *  VERDICT_R12 / R12_INTEGRATE 4: at Home the resting Felt Ball lay on the asked squishy's way to the Keepsake Shelf, the glide stopped against it, the body
+   *  fell asleep where it stood and the walk ran out (no unstick acts at Home). The host glides it (the same scoot, LIFE's speed) DETOUR_STEP to the side the
+   *  thing leaves free (away from the nearest footprint's centre across its way) and a little forward, then on to LIFE's own target; blocked again, it steps
+   *  again (round a long block in steps), and a leg that is itself blocked turns to the other side. Inside the bounds and clear of the other squishies; LIFE's
+   *  walk, its target and its token are unchanged; at most DETOUR_MAX steps a walk. */
+  const DETOUR_STEP = 0.45, DETOUR_FWD = 0.12, DETOUR_HOP_S = 0.5, DETOUR_MAX = 6;
+  function detour(c: Char, i: number, x: number, z: number, legBlocked: boolean): void {
+    if (!c.body || !world || c.detN >= DETOUR_MAX) return;
+    let ux = c.scootX - x, uz = c.scootZ - z;
+    const dl = Math.hypot(ux, uz);
+    if (!(dl > (asked(c) ? 0.15 : 0.5))) return;   // (a by-itself walk that meets a thing within 0.5 m of its end meant to: a bump, a lean on the log)
+    ux /= dl; uz /= dl;
+    if (c.detN === 0) {
+      // the side: away from the centre of the nearest prop across the way ahead (a squishy's radius + 0.6 m of it)
+      let blat = 0, ba = 1e9, ox = x - ux, oz = z - uz;
+      const P = world.poses;
+      for (let p = 0; p < world.count; p++) {
+        if (world.isParked(p)) continue;
+        const qx = P[p * 8] - x, qz = P[p * 8 + 2] - z, a = qx * ux + qz * uz, lat = qz * ux - qx * uz;
+        if (a < -0.1 || Math.hypot(qx, qz) > c.r + 1.2) continue;
+        if (a < ba) { ba = a; blat = lat; ox = P[p * 8]; oz = P[p * 8 + 2]; }
+      }
+      c.detSide = blat > 0 ? -1 : 1; c.detOx = ox; c.detOz = oz;
+    } else if (legBlocked) c.detSide = -c.detSide;
+    c.detN++;
+    // (each step also leaves the thing a little (away from its centre): a step along a wall that still presses on it is held back by the wall's friction)
+    let ax = x - c.detOx, az = z - c.detOz;
+    const al = Math.hypot(ax, az) || 1;
+    ax /= al; az /= al;
+    for (let q = 0; q < 3; q++) {
+      const sg = q === 1 ? -c.detSide : c.detSide, nx = -uz * sg, nz = ux * sg;
+      let vx = q < 2 ? nx + ux * DETOUR_FWD / DETOUR_STEP + ax * 0.5 : nx * 0.8 - ux * 0.45 + ax * 0.5, vz = q < 2 ? nz + uz * DETOUR_FWD / DETOUR_STEP + az * 0.5 : nz * 0.8 - uz * 0.45 + az * 0.5;
+      const vl = Math.hypot(vx, vz) || 1;
+      vx /= vl; vz /= vl;
+      const wx = x + vx * DETOUR_STEP, wz = z + vz * DETOUR_STEP;
+      if (outOfBounds(wx, wz) > -0.05) continue;
+      let free = true;
+      for (let j = 0; j < CAP; j++) { const o = chars[j]; if (j !== i && o.on && o.body && Math.hypot(wx - o.lastX, wz - o.lastZ) < 0.9 * (c.r + o.r)) { free = false; break; } }
+      if (!free) continue;
+      if (q === 1) c.detSide = -c.detSide;
+      // (a small hop to the side (carryTo, as the places' unstick: an arc over what it touches, never paid): a glide that starts while the body still presses on
+      //  the thing is held back by its friction at once, measured in node_checks N1's cabin trace (R13_FIX.md 1); the walk's glide goes on from where it lands)
+      try { c.body.carryTo?.(wx - c.offX, -c.offY, wz - c.offZ, DETOUR_HOP_S); c.detT = game.simTime; c.detX = wx; c.detZ = wz; counts.detour++; } catch (e) { report(e); }
+      return;
+    }
+  }
+  /** (round 13, R13_FIX 7; VERDICT_R12 (3b) Cloudloft phone: a hard toss left carried a squishy 0.6 m past the tall layout's edge, to physics' bounds rim, screen
+   *  x 19 of 390) a toss let go in a place keeps at most TOSS_OUT_K x the room it has before the nearest edge (+ TOSS_OUT_MIN) of its speed toward that edge:
+   *  the rest is taken back (a nudge against it), so it lands inside; its speed along the edge and away from it is untouched */
+  const TOSS_OUT_K = 2.0, TOSS_OUT_MIN = 0.4;
+  function tossInside(c: Char, x: number, z: number): void {
+    if (!c.body) return;
+    const e = 0.05, o0 = outOfBounds(x, z);
+    let nx = outOfBounds(x + e, z) - outOfBounds(x - e, z), nz = outOfBounds(x, z + e) - outOfBounds(x, z - e);
+    const nl = Math.hypot(nx, nz);
+    if (!(nl > 1e-6)) return;
+    nx /= nl; nz /= nl;
+    const room = Math.max(0, -o0 - 0.5 * c.r), vOut = c.vx * nx + c.vz * nz, vMax = TOSS_OUT_MIN + TOSS_OUT_K * room;
+    if (!(vOut > vMax)) return;
+    nudgeV.x = -nx * (vOut - vMax); nudgeV.y = 0; nudgeV.z = -nz * (vOut - vMax);
+    try { c.body.nudge(nudgeV); counts.tossIn++; } catch (er) { report(er); }
+  }
   function perchDown(c: Char, p: number, td: ThingDef): void {
     if (!world || !c.body) return;
     const P = world.poses, bx = P[p * 8], bz = P[p * 8 + 2], bd = layout === 1 && placeIdx !== 0 ? def.tall.bounds : def.bounds;
@@ -853,7 +949,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const c = chars[i];
     if (!c.body) return;
     if (c.scooting) { try { c.body.scootTo?.(NaN, 0, 0); } catch { /* ignore */ } }
-    c.scooting = false;
+    c.scooting = false; c.detT = -1e9;
     rehome(i);
   }
   /** the corral's home moves to where LIFE brought the body to rest (physics setHome), so the corral never glides it back to its spawn spot */
@@ -974,7 +1070,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // a carry let go: a toss until it lands (and a ride it lands on is one the player set up). (round 8) One let go while it already rests ON something (a ride's
       // top, the floor: the carry over the ground sets a squishy down there) never "lands" (no fall, no land event) and stayed a toss: R8's phone run set a squishy at
       // the Glide Ramp's top twice and the second (picked up from the ramp and set back) was no USE. Supported at the let go = set down, not tossed.
-      if (c.wasCarried && !carried) { c.tossed = !((m.onProp ?? -1) >= 0 || m.grounded === true); c.setT = t; }
+      if (c.wasCarried && !carried) { c.tossed = !((m.onProp ?? -1) >= 0 || m.grounded === true); c.setT = t; if (placeIdx !== 0 && c.tossed && dt > 0) tossInside(c, x, z); }
       if (!c.wasCarried && carried) c.touchKind = TOUCH.CARRY;
       c.wasCarried = carried;
       let f = 0;
@@ -1036,6 +1132,21 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         if (Math.hypot(x - c.stuckX, z - c.stuckZ) > 0.03) { c.stuckX = x; c.stuckZ = z; c.stuckT = t; }
         else if (t - c.stuckT > STUCK_S) { c.stuckT = t; unstick(c, i, x, z); }
       } else { c.stuckX = x; c.stuckZ = z; c.stuckT = t; }
+      // (round 13) an asked walk a thing stops head-on steers round it (detour); at its waypoint (or after DETOUR_S) it glides on to LIFE's target
+      { const nb = m.scootBlocks ?? 0;
+        if (nb !== c.blkN) {
+          c.blkN = nb;
+          // (R13_FIX 7: in a place EVERY LIFE walk steers round a thing it meets head-on, not only an asked one: Cloudloft's tall layout (2.8 m wide, VERDICT_R12
+          //  (3) phone) ended its walks to the Kite Swing, the Puff Pads and the Sunbow Arch blocked short of them, without a use; Home keeps its published walks)
+          if (dt > 0 && c.scooting && (asked(c) || (placeIdx !== 0 && !(onProp >= 0 && world !== null && onProp < world.count && world.poses[onProp * 8 + 1] > 0.25))) && (f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.AIRBORNE | LIFE_FLAG.LOCKED)) === 0) detour(c, i, x, z, c.detT > -1e8);   // (a by-itself walk on TOP of a raised thing (a perch, the arch's bar: its prop 0.25 m up or more) is never hopped off it: perchDown owns that; a flush pad is walked over as the floor)
+        }
+        if (c.detT > -1e8) {
+          if (!c.scooting) c.detT = -1e9;
+          else if (t - c.detT > DETOUR_HOP_S + 0.1 && m.carried !== true && (f & LIFE_FLAG.AIRBORNE) === 0) {
+            c.detT = -1e9;
+            try { b.scootTo?.(c.scootX - c.offX, c.scootZ - c.offZ, c.scootV); } catch (e) { report(e); }
+          }
+        } }
       s.flags[i] = f;
       if ((f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) !== 0) touching = true;
       s.touchKind[i] = c.touchKind; c.touchKind = -1;
@@ -1043,7 +1154,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       s.submerged[i] = m.submerged ?? 0;
       s.warmth[i] = 0;
       units += asleep ? UNIT.sleeper : c.kind === 0 ? UNIT.whole : UNIT.piece;   // (LIFE's own weights, PF-00: PG_LIFE round 4's request)
-      if (asleep !== c.asleepShown && c.view >= 0) { c.asleepShown = asleep; try { stage.setBodyAsleep?.(c.view, asleep); } catch { /* ignore */ } }
+      // (round 13, R13_FIX 5) drawn asleep only while LIFE has it neither riding a thing nor in a social moment (its body may sleep for the budget: eyes open)
+      const drawnAsleep = asleep && (f & LIFE_FLAG.RIDE) === 0 && !lifeShowsAwake(w, i);
+      if (drawnAsleep !== c.asleepShown && c.view >= 0) { c.asleepShown = drawnAsleep; try { stage.setBodyAsleep?.(c.view, drawnAsleep); } catch { /* ignore */ } }
       // a scoot that has arrived: release the driver and re-home the corral there (setHome)
       if (c.scooting && Math.hypot(x - c.scootX, z - c.scootZ) < 0.05 && Math.hypot(c.vx, c.vz) < 0.02) endScoot(i);
     }
@@ -1464,7 +1577,21 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   // never taken (not stopped, hushed or slept), and while it is still asleep its wake counts against the cap, so the rule sleeps another (the play squishy too,
   // if untouched) until LIFE's own gate (units + its wake <= unitCap) lets its walk start (after 4 s LIFE starts it anyway: brain.ts ASK_WAIT_S). The bodies an
   // awake asked squishy touches are not slept either (a sleeper is a wall it cannot push past: the med-tier walk stalled against the sleeping play squishy).
-  const tried = new Uint8Array(CAP);
+  const tried = new Uint8Array(CAP), refused = new Int8Array(CAP), refusedTurn = new Uint8Array(CAP);
+  // (round 13) the rule's running counts (host-scope, so the rule allocates nothing a frame): the excess left, with a turn, the wholes still to sleep
+  let obLeft = 0, obLeftTurn = 0, obNeed = 0, obNeedTurn = 0, obTurn = 0, obIdle = false;
+  function obWants(): boolean { return obIdle ? obLeft > 1e-6 || (obTurn > 0 && obLeftTurn > 1e-6) : obNeed > 0 || obNeedTurn > 0; }
+  /** what putting squishy sl to sleep frees (round 10, places): its wake and the pair unit of every awake body it touches that is not asleep already */
+  function obFreedBy(sl: number): number {
+    let freed = UNIT.whole - UNIT.sleeper;
+    const cs = chars[sl].body!.metrics.contacts ?? 0;
+    for (let j = 0; j < CAP; j++) {
+      const o = chars[j];
+      if (j === sl || tried[j] === 2 || !o.on || !o.body || (s.flags[j] & LIFE_FLAG.ASLEEP) !== 0) continue;
+      if (((cs >>> j) & 1) !== 0 || (((o.body.metrics.contacts ?? 0) >>> sl) & 1) !== 0) freed += UNIT.pair;
+    }
+    return freed;
+  }
   function overBudget(): void {
     const cap = att.unitCap + att.allowance + 0.001;
     let pend = 0, near = 0;
@@ -1491,30 +1618,30 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const idleFirst = placeIdx > 1;
     // (round 10) and in a place the body a LIFE walker is pushing past is not slept while they touch (as round 6 spares the bodies an asked squishy touches): a
     // sleeper is a wall a scoot cannot move, and in the tall layouts (2.8 m wide) a party of three stands close, so every walk out of a huddle pushed one
-    if (idleFirst) for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.body && c.scooting && lifeBusy(w, i) && c.body.metrics.asleep !== true) near |= c.body.metrics.contacts ?? 0; }
+    // (round 13) at Home and in the cabin too: the rule now sleeps the first squishy that CAN sleep, and a still one a walker is pushing past could (it was
+    // woken again by the walker the next frame and slept again: a wake every frame while they touched, node_checks' B7 window over the cap at the samples)
+    for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.body && c.scooting && lifeBusy(w, i) && c.body.metrics.asleep !== true) near |= c.body.metrics.contacts ?? 0; }
     let idleAwake = false;
     if (idleFirst) for (let i = 0; i < CAP; i++) {
       const c = chars[i];
       if (c.on && c.kind === 0 && c.body && !lifeBusy(w, i) && !asked(c) && !lifeSeeksNew(w, i) && ((near >>> i) & 1) === 0 && (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) === 0 && !c.tossed) { idleAwake = true; break; }
     }
-    let far = -1, fd = -1;
-    if (over && !idleAwake) for (let i = 0; i < CAP; i++) {
-      const c = chars[i];
-      if (!c.on || !c.scooting || asked(c) || lifeSeeksNew(w, i) || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE)) !== 0) continue;
-      const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
-      if (d > fd) { fd = d; far = i; }
-    }
-    if (far >= 0) endScoot(far);
     // (round 10) in a place the excess is counted down by what each sleep really frees: its whole's wake AND the touching-pair unit of every awake body it touches
     // (LIFE 10.3's UNIT.pair goes with either body's sleep). Round 5's count (excess / a whole's wake, rounded up) made one squishy walking into a sleeper (2.28
     // units against 1.06: two wholes and their pair) take TWO sleeps, and the second was the walker: every by-itself walk in a party of three at the low tier
     // ended there (R10_FIX.md 1, the trace). Home and the cabin keep round 5's count.
-    let left = s.units + pend - cap, leftTurn = left + turn;
-    let need = over ? Math.ceil(left / (UNIT.whole - UNIT.sleeper) - 1e-6) : 0;
-    let needTurn = turn > 0 ? Math.ceil(leftTurn / (UNIT.whole - UNIT.sleeper) - 1e-6) - need : 0;
+    // (round 13, R13_FIX 1) the candidates are tried in the same order, but one that physics can put to sleep NOW is taken before one that must first come to
+    // rest: round 5's rule asked only the first (the farthest), and while physics refused it (a moment's partner still easing out, a crawl turning back) the
+    // others stood still and awake: node_checks' B7 window (5 out on high, D-101's cap of 3 awake) was over the cap 1 to 2 s at a time, 16 % of the samples,
+    // with a still squishy beside it at every one of them (R13_FIX.md 1, the trace). Only when none can sleep now is the first refused one hushed (and, at Home,
+    // the farthest LIFE scoot stopped), as before.
+    obLeft = s.units + pend - cap; obLeftTurn = obLeft + turn; obIdle = idleFirst; obTurn = turn;
+    obNeed = over ? Math.ceil(obLeft / (UNIT.whole - UNIT.sleeper) - 1e-6) : 0;
+    obNeedTurn = turn > 0 ? Math.ceil(obLeftTurn / (UNIT.whole - UNIT.sleeper) - 1e-6) - obNeed : 0;
     tried.fill(0);
-    while (idleFirst ? left > 1e-6 || (turn > 0 && leftTurn > 1e-6) : need > 0 || needTurn > 0) {
-      const forTurn = idleFirst ? !(left > 1e-6) : need <= 0;
+    let nRef = 0;
+    while (obWants()) {
+      const forTurn = idleFirst ? !(obLeft > 1e-6) : obNeed <= 0;
       let sl = -1, sd = -1;
       for (let i = 0; i < CAP; i++) {
         const c = chars[i];
@@ -1528,26 +1655,33 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       }
       if (sl < 0) break;
       tried[sl] = 1;
-      if (forTurn) needTurn--; else need--;
       const c = chars[sl];
-      if (idleFirst) {
-        let freed = UNIT.whole - UNIT.sleeper;
-        const cs = c.body!.metrics.contacts ?? 0;
-        for (let j = 0; j < CAP; j++) {
-          const o = chars[j];
-          if (j === sl || tried[j] || !o.on || !o.body || (s.flags[j] & LIFE_FLAG.ASLEEP) !== 0) continue;
-          if (((cs >>> j) & 1) !== 0 || (((o.body.metrics.contacts ?? 0) >>> sl) & 1) !== 0) freed += UNIT.pair;
-        }
-        left -= freed; leftTurn -= freed;
-      }
       let slept = false;
       try { slept = c.body!.sleep?.() === true; } catch { slept = false; }
-      if (!slept) {
-        // not at rest yet: it is hushed (no new LIFE motion), its scoot ends and its squash eases out, so a later frame's sleep() takes
-        if (c.hushT <= t) { c.hushT = t + HUSH_S; for (let k = 0; k < qLen; k++) if (qWho[k] === sl && (qKind[k] === HOP_GO || qKind[k] === INTENT.HOP || qKind[k] === INTENT.SCOOT)) qKind[k] = 0; }
-        endScoot(sl);
-        try { c.body!.setSquash?.(1, 0.12); } catch { /* ignore */ }
-      } else c.hushT = -1e9;
+      if (!slept) { if (nRef < CAP) { refused[nRef] = sl; refusedTurn[nRef] = forTurn ? 1 : 0; nRef++; } continue; }
+      tried[sl] = 2;
+      c.hushT = -1e9;
+      if (forTurn) obNeedTurn--; else obNeed--;
+      if (idleFirst) { const fr = obFreedBy(sl); obLeft -= fr; obLeftTurn -= fr; }
+    }
+    // none (or too few) could sleep this frame: the first refused ones are hushed (no new LIFE motion; the scoot ends, the squash eases out), so a later
+    // frame's sleep() takes them; at Home (and the cabin) the farthest LIFE scoot is stopped first, as round 5 did, but only now
+    if (!obWants()) return;
+    let far = -1, fd = -1;
+    if (over && !idleAwake) for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || !c.scooting || asked(c) || lifeSeeksNew(w, i) || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE)) !== 0) continue;
+      const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
+      if (d > fd) { fd = d; far = i; }
+    }
+    if (far >= 0) endScoot(far);
+    for (let k = 0; k < nRef && obWants(); k++) {
+      const sl = refused[k], c = chars[sl];
+      if (refusedTurn[k]) obNeedTurn--; else obNeed--;
+      if (idleFirst) { const fr = obFreedBy(sl); obLeft -= fr; obLeftTurn -= fr; }
+      if (c.hushT <= t) { c.hushT = t + HUSH_S; for (let q = 0; q < qLen; q++) if (qWho[q] === sl && (qKind[q] === HOP_GO || qKind[q] === INTENT.HOP || qKind[q] === INTENT.SCOOT)) qKind[q] = 0; }
+      endScoot(sl);
+      try { c.body!.setSquash?.(1, 0.12); } catch { /* ignore */ }
     }
   }
 
@@ -2368,6 +2502,17 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     playWith(itemId, k) {
       const i = chars.findIndex((c) => c.on && c.kind === 0 && c.itemId === itemId);
       if (i < 0 || !def.things[k] || floatParked || travelling) return false;
+      // (round 13, R13_FIX 1) asked to play with another thing while it rides one (RIDE holds LIFE's every other choice for 20 s): the ride ends now, so the
+      // asked walk starts at once (node_checks N1: the cabin's yarn ball asked of a squishy on the rocker started its walk 7.3 s later); off a raised seat it
+      // hops down beside the ride first (perchDown). The ride is not re-armed for 25 s (rideUntil just past).
+      { const c = chars[i], t = game.simTime;
+        if (c.rideUntil > t && c.body && world) {
+          const rp = c.body.metrics.onProp ?? -1, th = rp >= 0 && rp < world.count ? world.propThing[rp] : -1;
+          if (th !== k) {
+            c.rideUntil = t - 1e-3;
+            if (th >= 0 && def.things[th] && world.poses[rp * 8 + 1] > 0.2) perchDown(c, rp, def.things[th]);
+          }
+        } }
       lifeScript(w, i, SCRIPT.PLAY_WITH, k);
       chars[i].askedT = game.simTime; chars[i].hushT = -1e9;   // (round 6, N1: an asked squishy is never hushed)
       return true;
@@ -2411,6 +2556,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     },
     sense(dt) {
       if (dt > 0 && world) { world.endFrame(dt); drainProps(); heldVoices(); }
+      if (dt > 0 && floatParked) floatGap(dt);   // (round 13: floaters keep a gap)
       if (finaleOff >= 0 && game.simTime >= finaleOff) { finaleOff = -1; try { stage.thingFx?.(-1, 2, 0); } catch { /* none */ } }
       fillSnapshot(dt);
       wakeClaim = 0;   // (the snapshot's units now show every body woken before it)
@@ -2452,7 +2598,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const v = safeView();
       return {
         life: lifeDebug(w), place: placeIdx, visit, layout, bodyScale, units: s.units, quiet: s.quiet, autonomy: s.autonomy, floatParked,
-        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1, rho: (() => { const m = world && c.body ? world.mods(c.body) : null; return m ? +m[4].toFixed(3) : null; })(), sx: s.sx[i] === s.sx[i] ? +(s.sx[i] * game.viewport.w).toFixed(1) : null, sy: s.sy[i] === s.sy[i] ? +(s.sy[i] * game.viewport.h).toFixed(1) : null, scoot: c.scooting, hush: c.hushT > game.simTime, looks: (() => { lifeLooks(w, i, looks); return Array.from(looks, (x) => +x.toFixed(2)); })() } : null)).filter(Boolean),
+        chars: chars.map((c, i) => (c.on ? { slot: i, kind: c.kind, group: c.group, species: CATALOG[c.species]?.id ?? null, itemId: c.itemId, view: c.view, x: +c.lastX.toFixed(3), z: +c.lastZ.toFixed(3), flags: s.flags[i], asleep: c.body?.metrics.asleep === true, drawnAsleep: c.asleepShown, r: +c.r.toFixed(3), face: (() => { const q = (c.body as unknown as { frame?: { x: number; y: number; z: number; w: number } } | null)?.frame; return q ? Math.round(Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y)) * 180 / Math.PI) : null; })(), sub: +s.submerged[i].toFixed(3), onProp: c.body?.metrics.onProp ?? -1, rho: (() => { const m = world && c.body ? world.mods(c.body) : null; return m ? +m[4].toFixed(3) : null; })(), sx: s.sx[i] === s.sx[i] ? +(s.sx[i] * game.viewport.w).toFixed(1) : null, sy: s.sy[i] === s.sy[i] ? +(s.sy[i] * game.viewport.h).toFixed(1) : null, scoot: c.scooting, hush: c.hushT > game.simTime, looks: (() => { lifeLooks(w, i, looks); return Array.from(looks, (x) => +x.toFixed(2)); })() } : null)).filter(Boolean),
         things: def.things.map((t, k) => {
           const p = thingFirst[k] ?? -1, at = !!world && p >= 0;
           // (its centre on screen in CSS px, for the harness's taps: the stage camera's projection, dev view only)

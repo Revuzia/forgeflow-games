@@ -18,11 +18,26 @@ import type { SoftBody } from './softbody.ts';
 
 /** per family: stride (half-lengths per cycle), kappa (pi units: the front leads the rear by 2 kappa), sharpness of the grip, the local bunch's height share,
  *  the head lift (half-lengths), the hump (the middle rises as the body shortens: x the length deficit; 1.5 gives the deficit's volume back in height) */
+// (R13_FIX 4, owner: "slug / snail movement", VERDICT_R12 (d): the firm and springy families pumped up and down at about 2 Hz, the body 30 % taller and thinner
+// and back, more bobbing than a slug) every family but the slime, the jelly and the water-filled one (their look kept, by the owner's word) keeps its stride,
+// lead and grip, and now puts the wave's volume into its WIDTH, not its height: the bunch's height share 0.08..0.12 (was 0.3..0.4), the hump 0.25..0.4 (was
+// 1.6..1.9: the length deficit's volume went back as height), and the front reaching forward goes LOW (a negative head lift: its upper part dips while it
+// reaches). The cycle is capped per family by CRAWL_FMAX (below).
 export const CRAWL_FAMILY: Record<string, [number, number, number, number, number, number]> = {
-  slowrise: [0.5, 0.6, 2, 0.35, 0.06, 1.6], marshmallow: [0.45, 0.6, 2, 0.4, 0.08, 1.7], mochidough: [0.6, 0.55, 3, 0.3, 0.04, 1.8],
-  jellygel: [0.46, 0.65, 1.8, 0.4, 0.08, 1.5], waterfill: [0.48, 0.65, 1.8, 0.4, 0.06, 1.5], putty: [0.75, 0.55, 3, 0.3, 0.04, 1.9],
-  stickystretch: [0.45, 0.6, 3.5, 0.35, 0.1, 1.6], slimegoo: [0.5, 0.7, 1.5, 0.4, 0.05, 1.4], firmsilicone: [0.42, 0.55, 2.5, 0.4, 0.08, 1.6],
-  popdome: [0.42, 0.55, 2.5, 0.4, 0.08, 1.6], gummy: [0.4, 0.55, 2.5, 0.4, 0.08, 1.6], beadsqueeze: [0.55, 0.55, 3, 0.3, 0.05, 1.8],
+  slowrise: [0.6, 0.6, 2, 0.1, -0.04, 0.3], marshmallow: [0.56, 0.6, 2, 0.12, -0.04, 0.35], mochidough: [0.68, 0.55, 3, 0.08, -0.04, 0.25],
+  jellygel: [0.46, 0.65, 1.8, 0.4, 0.08, 1.5], waterfill: [0.48, 0.65, 1.8, 0.4, 0.06, 1.5], putty: [0.75, 0.55, 3, 0.08, -0.04, 0.25],
+  stickystretch: [0.58, 0.6, 3.5, 0.1, -0.03, 0.3], slimegoo: [0.5, 0.7, 1.5, 0.4, 0.05, 1.4], firmsilicone: [0.72, 0.55, 2.5, 0.1, -0.05, 0.3],
+  popdome: [0.66, 0.55, 2.5, 0.1, -0.05, 0.3], gummy: [0.66, 0.55, 2.5, 0.1, -0.05, 0.3], beadsqueeze: [0.66, 0.55, 3, 0.08, -0.04, 0.25],
+};
+/** (R13_FIX 4) the fastest crawl cycle per family (Hz): one cycle per stride OR per glide of fMax seconds, whichever is longer (a fast glide on a short body made
+ *  the firm families cycle at 1.5 to 2.5 Hz). The firm ones are slow and heavy; the rest at most 1 Hz (the owner's bar: no faster than about 1.1 Hz). A longer
+ *  stride grows the wave's travel along the body, so its grip share is taken down by sqrt(stride0 / stride): the strain grows only by the other sqrt. */
+/** (R13) the families whose look is kept (the slime, the jelly, the water-filled): when their cycle is capped the grip share is taken down by the WHOLE
+ *  stride0 / stride, so the wave's strain (their look) is exactly as before and only slower */
+const CRAWL_KEEP: Record<string, boolean> = { jellygel: true, waterfill: true, slimegoo: true };
+export const CRAWL_FMAX: Record<string, number> = {
+  slowrise: 0.9, marshmallow: 0.9, mochidough: 0.8, jellygel: 1.0, waterfill: 1.0, putty: 0.8, stickystretch: 0.9, slimegoo: 1.0, firmsilicone: 0.9,
+  popdome: 0.8, gummy: 0.8, beadsqueeze: 0.8,
 };
 /** tuning shared by every family (PROBES may set them) */
 export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, yawTau: 0.12, yawMax: 8, bend: 0.14, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
@@ -56,6 +71,8 @@ export class Crawl {
    *  frame, every 8th frame: s0, s1, y0, y1) */
   readonly s = new Float64Array(10);
   private readonly pf: [number, number, number, number, number, number];
+  private readonly fMax: number;
+  private readonly keep: boolean;
   private readonly body: SoftBody;
   constructor(body: SoftBody) {
     this.body = body;
@@ -75,6 +92,8 @@ export class Crawl {
     for (let i = 0; i < b.n * 3; i++) v3 += vg[i] * Q[i];   // = 3 V0 (Euler: the volume is homogeneous of degree 3)
     this.iv3 = Math.abs(v3) > 1e-12 ? 1 / v3 : 0;
     this.pf = CRAWL_FAMILY[body.family] ?? CRAWL_FAMILY.jellygel;
+    this.fMax = CRAWL_FMAX[body.family] ?? 1;
+    this.keep = CRAWL_KEEP[body.family] === true;
     const k = this.pf[2], tk = Math.tanh(k), T = this.T;
     for (let i = 0; i <= NT; i++) T[i * 2] = Math.tanh(k * Math.sin((i / NT) * TAU)) / tk;
     let acc = 0, mean = 0;
@@ -86,6 +105,9 @@ export class Crawl {
    *  before any arithmetic on doubles, so the call costs nothing while this method is not yet optimised: a body that does not walk calls it every frame.) */
   step(w: World, i: number, calm: boolean): void {
     const b = this.body as unknown as Body, S = this.s;
+    // (R13_FIX 6, owner: "when Float starts each squishy slowly turns to face the camera so none floats edge-on with its face hidden") a FLOATING body, once its
+    // crawl has let go (it fades under the gate below first), turns slowly back to face +Z, the camera's side, as a walk's end does on the floor
+    if (!b.gravityOn && !this.on) { S[5] = 0; this.turn = false; if (!b.asleep) this.floatFace(b, w.hNow); return; }
     if (b.asleep || (!this.on && !this.turn && (!b.scootOn || calm || !CRAWL.on || b.heldF))) { S[5] = 0; return; }   // (`on` mirrors s[1] > 0: an element of a Float64Array read by code not yet optimised is a HeapNumber)
     const n = b.n, dt = w.hNow, grip = w.bsf[i * 12 + 4];
     if (!(dt > 0)) return;
@@ -165,14 +187,14 @@ export class Crawl {
       S[6] = s0; S[7] = s1; S[8] = y0; S[9] = y1;
     }
     const sh = 0.5 * (S[7] - S[6]) > 1e-4 ? 0.5 * (S[7] - S[6]) : 1e-4, sm = 0.5 * (S[6] + S[7]), y0 = S[8], ht = S[9] - y0 > 1e-4 ? S[9] - y0 : 1e-4;
-    const pf = this.pf, stride = pf[0] * sh, kap = pf[1] * Math.PI, bul = pf[3];
+    const pf = this.pf, stride0 = pf[0] * sh, sCap = v / this.fMax, stride = sCap > stride0 ? sCap : stride0, kap = pf[1] * Math.PI, bul = pf[3];
     const gr = grip >= 1 ? 1 : grip <= 0 ? CRAWL.gripMin : CRAWL.gripMin + (1 - CRAWL.gripMin) * grip;
     // ---- the phase: one cycle per stride of glide (frozen in the air: nothing is planted there)
     const ds = ground ? v * dt : 0;
     let th = S[0] + (TAU * ds) / stride;
     if (th > TAU) th -= TAU;
     S[0] = th;
-    const amp = a * gr, aD = (amp * stride) / TAU, aE = (aD * kap) / sh;   // axial offset per unit of G; strain per unit of g
+    const amp = a * gr * (this.keep ? stride0 / stride : Math.sqrt(stride0 / stride)), aD = (amp * stride) / TAU, aE = (aD * kap) / sh;   // axial offset per unit of G; strain per unit of g (R13: the grip share x sqrt(stride0 / stride))
     const ti = NT / TAU, ish = 1 / sh, iht = 1 / ht, lift = a * pf[4] * sh, lean = S[4], pB = kap * ish * ti, pA = th * ti - pB * sm, bl = 1 - bul;
     // (the hump: the middle rises while the body is short, the inchworm's arch, and flattens while it reaches)
     const lenRel = (tab(T, (th + kap) * ti, 1) - tab(T, (th - kap) * ti, 1)) * aD * 0.5 * ish, hump = -pf[5] * lenRel;
@@ -208,7 +230,28 @@ export class Crawl {
     }
     b.cx += (wm - wb) * ex; b.cz += (wm - wb) * ez;
   }
+  /** R13: while floating (and nothing holds or drives it) the whole body yaws about its centre toward facing +Z (a move of X and V, as the crawl's own turn,
+   *  and the fitted rotation turns with it); a cut piece and a body on its side are not turned */
+  private floatFace(b: Body, dt: number): void {
+    if (!(dt > 0) || b.heldF || b.moveOn || b.cyOn || b.carried || b.chunk || b.capFlat) return;
+    const q = b.qr;
+    const qx = q[0], qy = q[1], qz = q[2], qw = q[3];
+    const fx = 2 * (qx * qz + qw * qy), fz = 1 - 2 * (qx * qx + qy * qy), fl = Math.sqrt(fx * fx + fz * fz);
+    if (fl < 0.5) return;
+    const e = Math.atan2(fx / fl, fz / fl);   // (the angle of +Z from the facing, as the crawl's e with the heading (0, 1))
+    if (e < 0.02 && e > -0.02) return;
+    const mx = FLOAT_FACE_MAX * dt, k = e * (1 - Math.exp(-dt / FLOAT_FACE_TAU)), dl = k > mx ? mx : k < -mx ? -mx : k;
+    const c = Math.cos(dl), sn = Math.sin(dl), ox = b.center.x, oz = b.center.z, X = b.X, V = b.V, n = b.n;
+    for (let j = 0; j < n * 3; j += 3) {
+      const x = X[j] - ox, z = X[j + 2] - oz, vx = V[j], vz = V[j + 2];
+      X[j] = ox + x * c - z * sn; X[j + 2] = oz + x * sn + z * c; V[j] = vx * c - vz * sn; V[j + 2] = vx * sn + vz * c;
+    }
+    const c2 = Math.cos(0.5 * dl), s2 = Math.sin(0.5 * dl);
+    q[0] = c2 * qx - s2 * qz; q[1] = c2 * qy - s2 * qw; q[2] = c2 * qz + s2 * qx; q[3] = c2 * qw + s2 * qy;
+  }
 }
+/** R13: a floater's slow turn back to face the camera's side (+Z): yaw time constant FLOAT_FACE_TAU s, at most FLOAT_FACE_MAX rad/s */
+const FLOAT_FACE_TAU = 0.9, FLOAT_FACE_MAX = 1.2;
 /** table T at p (cycle steps, any real), column c (0 g, 1 G) */
 function tab(T: Float64Array, p: number, c: number): number {
   let x = p % NT;

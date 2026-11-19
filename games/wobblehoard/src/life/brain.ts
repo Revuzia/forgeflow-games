@@ -457,7 +457,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     // B05 bask or warm up
     if (ready(w, i, BEH.BASK)) { const v0 = baskScore(w, s, i); if (v0 > 0) { const v = v0 * 0.001 + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.BASK; } } }
     // B06 nap (never in water)
-    if (ready(w, i, BEH.NAP) && w.zWK1[i] < 0) {
+    if (ready(w, i, BEH.NAP) && w.zWK1[i] < 0 && napTurn(w, s, i)) {
       const dozy = w.tr[tr + TRAIT.dozy];
       // (my reading: the dozy trigger also needs some rest need, 0.6, so a dozy squishy that wakes on the basket does not nap again and
       // again: about two naps in five minutes, LF-09)
@@ -471,7 +471,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     }
   }
   // B06 with autonomy off: it naps where it is (sleeping moves nothing, LIFE 5.6: so piles still form; not while LIFE is quiet)
-  if (!canMove && !s.autonomy && !quietFor(w, s, i) && ready(w, i, BEH.NAP) && w.zWK1[i] < 0 && (w.re[i] > 0.75 || (w.tr[tr + TRAIT.dozy] > 0.6 && w.re[i] > 0.6 && napSpotWithin(w, s, i, 2)))) {
+  if (!canMove && !s.autonomy && !quietFor(w, s, i) && ready(w, i, BEH.NAP) && w.zWK1[i] < 0 && napTurn(w, s, i) && (w.re[i] > 0.75 || (w.tr[tr + TRAIT.dozy] > 0.6 && w.re[i] > 0.6 && napSpotWithin(w, s, i, 2)))) {
     const v = 0.8 + 0.4 * w.tr[tr + TRAIT.dozy] + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.NAP; }
   }
   // the most curious walks over to look at the cut squishy's pieces (9): a walk to beside its face piece, then B13's watch
@@ -850,6 +850,17 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   if (w.ph[i] === 0) {
     if (tb < w.bN[i]) return;
     if (w.tM[k] === 0 ? !iceUsePoint(w, s, i, k) : !ballUsePoint(w, s, i, k, 0)) { endBeh(w, s, out, i, 15); return; }
+    // (round 13, R13_FIX 1) a nest the player asked for (a ring: its wall all round but the mouth) is walked into by its mouth: from anywhere but the mouth's
+    // side the walk goes first to the gap's waypoint (as B06's nap does), then on from there (tw 2 = on that first leg). Its use point seen from behind the
+    // ring lay across the wall: the cabin's asked Snug Basket pressed its walker on the wall until the walk ran out (node_checks N1, R13_FIX.md 1).
+    w.tw[i] = 0;
+    if (asked && w.tM[k] === MECH.ring && w.tWX[k] === w.tWX[k] && thingPos(w, s, k)) {
+      const cx = w.f[F.X2], cz = w.f[F.Z2], ax = s.x[i] - cx, az = s.z[i] - cz, bx = w.tWX[k] - w.tX[k], bz = w.tWZ[k] - w.tZ[k];
+      const al = Math.sqrt(ax * ax + az * az), bl = Math.sqrt(bx * bx + bz * bz);
+      const mouthSide = al > 1e-3 && bl > 1e-3 && (ax * bx + az * bz) / (al * bl) > 0.6;
+      const wx = cx + bx, wz = cz + bz, dwx = s.x[i] - wx, dwz = s.z[i] - wz;
+      if (!mouthSide && al > w.tS[k] && dwx * dwx + dwz * dwz > 0.09) { w.f[F.X] = wx; w.f[F.Z] = wz; qT(w); if (inBounds(w, 0)) w.tw[i] = 2; else ballUsePoint(w, s, i, k, 0); }
+    }
     if (!mayMove(w, s, i, asked)) { if (tb - w.bT[i] > 6) endBeh(w, s, out, i, 5); return; }
     qT(w);
     const dc = d2p(w, s, i);
@@ -861,14 +872,16 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     // Its wake waits for room under unitCap, which the shell's over-budget rule makes by sleeping another squishy; if none of them can sleep yet (a
     // napper's pose, a memory still settling) it goes after ASK_WAIT_S anyway, with one whole's wake as its allowance, and the rule catches up after.
     if (asked && !w.mo[i] && w.movers >= MOVER_CAP[tierOf(s)]) yieldToken(w, s, out, ev, i);
-    if (travelTo(w, s, out, i, 0, asked && tb - w.bT[i] > ASK_WAIT_S ? askAllow(w, s) : 0)) { w.ph[i] = 1; w.tw[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04); }
+    const via = w.tw[i] === 2;
+    if (travelTo(w, s, out, i, 0, asked && tb - w.bT[i] > ASK_WAIT_S ? askAllow(w, s) : 0)) { w.ph[i] = 1; w.tw[i] = via ? 2 : 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04); }
     else if (tb - w.bT[i] > 8) endBeh(w, s, out, i, 5);
     else w.tw[i] = 1; // waiting for a mover token (a wander gives way to it: choose)
     return;
   }
   if (w.ph[i] === 1) {
-    const r = travelStep(w, s, out, i, 70);
+    const r = travelStep(w, s, out, i, w.tw[i] === 2 ? 150 : 70);
     if (r === 2) { endBeh(w, s, out, i, 15); return; }
+    if (r === 1 && w.tw[i] === 2) { w.tw[i] = 0; w.ph[i] = 0; w.bN[i] = tb; return; }   // (round 13: at the nest's mouth: on to its use point from there)
     if (r === 1) { w.ph[i] = 2; w.bN[i] = tb; return; }
     if (tb > w.bN[i] && tb - w.bT[i] > 12) endBeh(w, s, out, i, 15);
     return;
@@ -1542,9 +1555,18 @@ function ringFree(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean 
   for (let j = 0; j < s.n; j++) if (j !== i && w.ac[j] && ((w.beh[j] === BEH.NAP && w.tT[j] === k) || d2p(w, s, j) < r * r * CM2)) return false;
   return true;
 }
+/** (round 13, R13_FIX 5; VERDICT_R12 (3): in 3 of 12 place visits all three squishies slept at the same moment for 20 to 36 s, naps of up to 60 s: a visit looked
+ *  dead) at a place, not Home, at most one of the party naps at a time unless more than three wholes are out; Home keeps its naps */
+function napTurn(w: LifeWorld, s: LifeSnapshot, i: number): boolean {
+  if (w.home) return true;
+  let wholes = 0, napping = false;
+  for (let j = 0; j < s.n; j++) { if (!w.ac[j] || w.ki[j] !== 0) continue; wholes++; if (j !== i && w.beh[j] === BEH.NAP) napping = true; }
+  return wholes > 3 || !napping;
+}
 function startNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, score: number): void {
   // (round 9, R9_FIX 2: under the visit's variety floor a nap is 20..35 s, not 30..90 s)
-  setBeh(w, i, BEH.NAP, score, varietyFloorOn(w) ? 20000 + ((rnd(w, i) * 15000) >>> 16) : 30000 + ((rnd(w, i) * 60000) >>> 16)); w.tT[i] = -1; w.tC[i] = -1;
+  // (round 13, R13_FIX 5: at a place every nap is 12..20 s, the walk to its spot included; Home keeps 30..90 s)
+  setBeh(w, i, BEH.NAP, score, !w.home ? 12000 + ((rnd(w, i) * 8000) >>> 16) : varietyFloorOn(w) ? 20000 + ((rnd(w, i) * 15000) >>> 16) : 30000 + ((rnd(w, i) * 60000) >>> 16)); w.tT[i] = -1; w.tC[i] = -1;
   let ok = false;
   if (w.home) {
     // the play body naps at its own slot (the rug's centre is within 0.65 m of slot 0); the second napper at the rug's use spot

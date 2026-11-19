@@ -30,7 +30,7 @@ import { emitVoice, PHRASE as PH, voice, BAR_S } from './voice.ts';
 import { EMOTE } from '../data/life.ts';
 
 export { createLifeWorld };
-export { lifeSeeksNew, lifeWaitsTurn, lifeBusy, lifeUsesOf } from './world.ts';   // (round 10: lifeWaitsTurn, lifeBusy, lifeUsesOf: the host's turn rule)   // (round 9, R9_FIX 2: the host's over-budget rule spares a squishy on its way to the visit's next new thing)
+export { lifeSeeksNew, lifeWaitsTurn, lifeBusy, lifeUsesOf, lifeShowsAwake } from './world.ts';   // (round 10: lifeWaitsTurn, lifeBusy, lifeUsesOf: the host's turn rule)   // (round 9, R9_FIX 2: the host's over-budget rule spares a squishy on its way to the visit's next new thing)
 export type { LifeWorld };
 export { lifePhrase, lifeMotif, PHRASE, PHRASE_BUBBLE } from './voice.ts';
 export { createAttention, attentionFilter, motionGate, motionGateWake, unitCapOf, moverCapOf, CHAR_CAP, CAPS, UNIT, WAKE, PHONE_FACTOR,

@@ -19,7 +19,7 @@ export interface CutBinding {
   destroy(): void;
 }
 
-export function bindCut(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, ui: { announcer: Announcer; toast(text: string, ms?: number): void }): CutBinding {
+export function bindCut(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, ui: { announcer: Announcer; toast(text: string, ms?: number): void; show?(text: string): void }): CutBinding {
   const off: Array<() => void> = [];
   const say = (t: string): void => ui.announcer.say(t);
   const hasUndo = (): boolean => typeof g.cut.undoCut === 'function';
@@ -55,6 +55,9 @@ export function bindCut(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, u
       bar.setBlade({ x0: c.left + b.x0, y0: c.top + b.y0, x1: c.left + b.x1, y1: c.top + b.y1 });
     }),
     g.on('cut', (r) => { if (r === 'miss') say(T.swipeMiss); }),
+    // (round 13, VERDICT_R12 4c) D-99's refusal is SHOWN as well as said: the line went only to the visually hidden live region, so a sighted player saw
+    // nothing. A toast at the top (the live region already has it from the notice: the toast itself does not say it again)
+    g.on('notice', (t) => { if (t === T.oneAtATime) { if (ui.show) ui.show(t); else ui.toast(t); } }),
     g.onStep(() => { if (g.tool === 'cut') refresh(false); }),
   );
 

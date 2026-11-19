@@ -180,6 +180,14 @@ const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
 /** D-97 (Table after Float "brings them down again gently"): for DESCEND_S after gravity comes back, or until the body reaches a support, it falls no faster than DESCEND_V m/s. */
 const DESCEND_S = 2, DESCEND_V = 0.9;
+/** R13_FIX 4 / 6 (owner: "a floating squishy can be stretched but not tossed: the hover spring returns it to exactly its spot"): a FLING carries a floating body.
+ *  Let go (no finger, no grab) moving across the floor faster than FLING_V and AWAY from its hover spot (a stretch let go springs back TOWARD it: no fling), the spot
+ *  follows the body while it drifts, slowed by FLING_DRAG (1/s) only, until it is slower than FLING_STOP; then the spring holds it there. The spot stays inside the
+ *  place's bounds less 0.8 of the body's radius + 0.1 m, at Home within FLING_HOME_R of where the first fling of this float found it; Table puts Home's spot back. */
+const FLING_V = 0.45, FLING_STOP = 0.08, FLING_DRAG = 1.1, FLING_HOME_R = 0.9;
+/** only the HAND's let-go flings (within FLING_ARM_S of a grab's or a finger's release: a fast stroke across a floater shoves it as a flick does): a shove, a bump
+ *  or a nudge in the air with no hand on it springs back to its spot as published (probe_float F4) */
+const FLING_ARM_S = 1.0;
 /** Give law exponent: depth ~ smOmega^GIVE_EXP, from deriveParams' own squashDepth 0.66 -> 0.34 over smOmega 12 -> 40 (see the constructor). */
 const GIVE_EXP = Math.log(0.34 / 0.66) / Math.log(40 / 12);
 /** Supported gravity is withdrawn as the lowest point of the shape-matching goal rises from 0 to GOAL_FLOAT x restRadius above the table
@@ -478,7 +486,7 @@ export class SoftBody implements SoftBodyLike {
   readonly metrics: SoftMetrics = {
     compression: 0, compressionRate: 0, stretch: 0, volume: 1, kinetic: 0, grounded: true, fingers: 0, grabbed: false, press: 0, reaction: 0, strands: 0, slosh: 0,
     pull: 0, carried: false, locked: 0,
-    asleep: false, onProp: -1, airborne: false, memoryBusy: false, contacts: 0, submerged: 0,   // PLAYGROUND (PG_PHYS; submerged: props.ts writes it in a water zone)
+    asleep: false, onProp: -1, airborne: false, memoryBusy: false, contacts: 0, submerged: 0, scootBlocks: 0,   // PLAYGROUND (PG_PHYS; submerged: props.ts writes it in a water zone; scootBlocks round 13)
   };
   restRadius!: number;
   /** Harness-only counters (not part of SoftBodyLike). `safetyResets` must stay 0: it counts emergency non-finite recoveries. */
@@ -554,6 +562,7 @@ export class SoftBody implements SoftBodyLike {
   crawlOn = false; crawlD = new Float64Array(0); crawlF: Float64Array = new Float64Array(0);
   private sqTarget = 1; private sqNow = 1; private sqTau = 0.12; private sqAskTau = 0;   // setSquash: the asked squash (1 = released), the eased one, its time constant, the call in force
   private descendT = 0;                     // D-97: seconds left of the gentle descent after gravity came back (DESCEND_S)
+  private flingOn = false; private flingAnch = false; private fAX = 0; private fAZ = 0; private flingArmT = 0;   // R13: a fling in the air (FLING_V): on, and Home's anchor (set at the first fling)
   private hopLeft = 0; private hopT = -10; private glueK = 1;   // hop: substeps left with the glue and peel suspended, its sim time, the tack factor (0 during them)
   private heldF = false;                       // the touch gate this frame: a finger down, a grab, a carry or a lock
   private suppEff = 0;                         // the share of the weight the supports carry this substep (supp x (1 - goal float) x glueK): the weight transfer
@@ -1144,6 +1153,9 @@ export class SoftBody implements SoftBodyLike {
     this.airSub = 0;
     this.wake();   // CUT3: a change of the gravity mode wakes a sleeping piece
     this.descendT = on ? DESCEND_S : 0;   // (D-97: back to the table gently)
+    // (R13: a fling's spot ends with the float; at Home (the home corral) the spot goes back to where the first fling found it, so Table lands it in its place)
+    if (on && this.flingAnch && this.bndShape < 0) { this.homeX = this.fAX; this.homeZ = this.fAZ; }
+    this.flingOn = false; this.flingAnch = false; this.flingArmT = 0;
     if (!on) { this.pinned.fill(0); this.pinCount = 0; this.carried = false; this.liftOk = false; }   // a floating body has no table to be glued to (nor a carry)
   }
 
@@ -1435,7 +1447,7 @@ export class SoftBody implements SoftBodyLike {
     if (this.isHeld() || this.ceremonyOn()) return false;
     this.stx = x; this.stz = z;
     this.sSpeed = speed < PG.scootMin ? PG.scootMin : speed > PG.scootMax ? PG.scootMax : speed;
-    if (!this.scootOn) { this.scootOn = true; this.sV = 0; }
+    if (!this.scootOn) { this.scootOn = true; this.sV = 0; this.scootBlock = false; }   // (round 13: a fresh glide is not held by the last one's block: it is tested anew)
     this.wake();
     return true;
   }
@@ -1506,7 +1518,11 @@ export class SoftBody implements SoftBodyLike {
     const want = Math.min(this.sSpeed, Math.sqrt(2 * acc * d)) * (gate ? 0 : 1);
     const v0 = this.sV, v = v0 < want ? Math.min(want, v0 + dv) : Math.max(want, v0 - (gate ? dv / 0.9 : dv));   // (under the gate: at rest inside 0.9 x PG.scootEase, so within it at frame granularity)
     this.sV = v;
-    if (gate && v <= 0) { this.scootOn = false; this.sGx = 0; this.sGz = 0; return; }
+    if (gate && v <= 0) {
+      // (round 13) a glide a static prop stopped head-on is counted (metrics.scootBlocks): the host steers an asked walk round the thing in its way
+      if (this.scootBlock && !this.heldF && !this.moveOn) this.metrics.scootBlocks = (this.metrics.scootBlocks ?? 0) + 1;
+      this.scootOn = false; this.sGx = 0; this.sGz = 0; return;
+    }
     if (d < 1e-4) { if (v <= dv) { this.scootOn = false; this.sV = 0; } this.sGx = 0; this.sGz = 0; return; }
     const s = Math.min(v * H, d), ux = dx / d, uz = dz / d, mx = ux * s, mz = uz * s, X = this.X;
     this.sGx = ux * v; this.sGz = uz * v;
@@ -1888,7 +1904,7 @@ export class SoftBody implements SoftBodyLike {
   }
 
   fingerUp(id: Slot): void {
-    if (this.fingers[id] && this.fingers[id].down) { this.thrownF = true; this.thrownCalm = 0; }   // PLAYGROUND (8.8): a finger's flick is the player's too, until the body settles or lands
+    if (this.fingers[id] && this.fingers[id].down) { this.thrownF = true; this.thrownCalm = 0; if (!this.gravityOn) this.flingArmT = FLING_ARM_S; }   // PLAYGROUND (8.8): a finger's flick is the player's too, until the body settles or lands (R13: and a floater's fling)
     const f = this.fingers[id];
     if (!f || !f.down) return;
     // 'release' on max(compression, press) (physics round-2 fix round, the shell's contract request): a single-finger dent the global
@@ -1982,6 +1998,7 @@ export class SoftBody implements SoftBodyLike {
     if (!g || !g.active) return;
     g.active = false;
     this.thrownF = true; this.thrownCalm = 0;   // PLAYGROUND (8.8): the player let go: its next landing (or a bump before it settles) is not auto
+    if (!this.gravityOn) this.flingArmT = FLING_ARM_S;   // (R13: a floater the hand let go may be flung: see FLING_V)
     this.gripChangeT = this.simTime;
     const other = this.otherGrab(id);
     if (this.carried && other < 0) {
@@ -2922,7 +2939,7 @@ export class SoftBody implements SoftBodyLike {
   }
 
   private hoverY(t: number): number {
-    return this.restRadius + HOVER_ABOVE + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * t + this.seedPhase);
+    return (this.restCenterY > this.restRadius ? this.restCenterY : this.restRadius) + HOVER_ABOVE + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * t + this.seedPhase);
   }
 
   private triNormal(a: number, b: number, c: number): [number, number, number] {
@@ -3675,16 +3692,47 @@ export class SoftBody implements SoftBodyLike {
       }
     } else {
       // float mode: weak hover spring on the centre of mass (stiffer while a finger or a lobe holds it) + slow bob
-      const boost = 1 + 2.5 * nFingers + (grabbing ? 3 : 0);
+      // (R13_FIX 6: a PULL (a grab) is the hand taking it: the spring yields (x 1.5) so the body follows the hand and a fling can carry it; a press or a poke
+      //  without a grab keeps the stiff hold (1 + 2.5 a finger) so a tap never shoves a floater away. Before: x 6.5 under a pull, the body barely followed)
+      const boost = grabbing ? 1.5 : 1 + 2.5 * nFingers;
       const w2 = HOVER_OMEGA * HOVER_OMEGA * boost, c = 2 * HOVER_ZETA * HOVER_OMEGA * Math.sqrt(boost);
       // the bob of hoverY(), written out: substep() is too large for the optimiser to inline into, so a call passing and returning
       // a double would box both (two HeapNumbers per substep)
-      const hy = this.restRadius + HOVER_ABOVE + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * this.simTime + this.seedPhase);
+      // (R13: over the higher of its rest radius and its rest centre: a TALL species (Capnap, centre 0.61 m at rest) rose only 0.22 m over its table rest,
+      //  less than every other squishy; now every one rises at least HOVER_ABOVE over where it rested)
+      const hy = (this.restCenterY > this.restRadius ? this.restCenterY : this.restRadius) + HOVER_ABOVE + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * this.simTime + this.seedPhase);
       // (D-97, owner 2026-11-19: Float floats everyone everywhere: the spring holds the body over its HOME (the origin for the play body, as before; a mat
       //  squishy's or a piece's own spot; where LIFE last brought it to rest, setHome), so a party no longer collapses into the world origin)
-      ax = -w2 * (this.cx - this.homeX) - c * this.vcx;
+      // (R13: a fling carries it: the spot follows while it drifts, only FLING_DRAG slows it; see FLING_V)
+      if (nFingers === 0 && !grabbing) {
+        const vx = this.vcx, vz = this.vcz, sp2 = vx * vx + vz * vz;
+        if (this.flingArmT > 0) this.flingArmT -= H;
+        if (this.flingOn) { if (sp2 < FLING_STOP * FLING_STOP) this.flingOn = false; }
+        else if (this.flingArmT > 0 && sp2 > FLING_V * FLING_V && (this.cx - this.homeX) * vx + (this.cz - this.homeZ) * vz > 0) {
+          this.flingOn = true;
+          if (!this.flingAnch) { this.flingAnch = true; this.fAX = this.homeX; this.fAZ = this.homeZ; }
+        }
+        if (this.flingOn) {
+          let hx = this.cx, hz = this.cz;
+          if (this.bndShape >= 0) {
+            this.boundsAt(hx, hz);
+            const q = this.bq, out = q[0] + 0.8 * this.restRadius + 0.1;
+            if (out > 0) { hx -= q[1] * out; hz -= q[2] * out; }
+          } else {
+            const dx = hx - this.fAX, dz = hz - this.fAZ, dl = Math.sqrt(dx * dx + dz * dz);
+            if (dl > FLING_HOME_R) { hx = this.fAX + (dx * FLING_HOME_R) / dl; hz = this.fAZ + (dz * FLING_HOME_R) / dl; }
+          }
+          this.homeX = hx; this.homeZ = hz;
+        }
+      } else this.flingOn = false;
+      if (this.flingOn) {
+        ax = -w2 * (this.cx - this.homeX) - FLING_DRAG * this.vcx;
+        az = -w2 * (this.cz - this.homeZ) - FLING_DRAG * this.vcz;
+      } else {
+        ax = -w2 * (this.cx - this.homeX) - c * this.vcx;
+        az = -w2 * (this.cz - this.homeZ) - c * this.vcz;
+      }
       ay = -w2 * (this.cy - hy) - c * this.vcy;
-      az = -w2 * (this.cz - this.homeZ) - c * this.vcz;
     }
     if (this.holdOn) { ax += this.holdAx; ay += this.holdAy; az += this.holdAz; }   // D-95 AUTO: a rider holds on (propPass)
     const hax = ax * H, hay = ay * H, haz = az * H;

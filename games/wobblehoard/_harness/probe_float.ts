@@ -207,10 +207,16 @@ await host.travel('home'); await stepA(120);
   setFloat(true);
   let offAt = -1;
   for (let k = 1; k <= 30; k++) { step(1); if (offAt < 0 && !b.crawlOn) offAt = k / 60; }
-  const y0 = facing(); let turn = 0, crawlAgain = false;
-  for (let k = 0; k < 240; k++) { step(1); if (b.crawlOn) crawlAgain = true; const d = Math.abs(Math.atan2(Math.sin(facing() - y0), Math.cos(facing() - y0))); if (d > turn) turn = d; if (k % 10 === 0) await tick(); }
-  check('F7 Float meets the crawl (D-97 x D-100): a squishy crawling when Float comes on stops crawling within 0.15 s, never crawls again while it floats, and does not turn while floating (facing moves under 2 degrees over 4 s)',
-    crawled && offAt > 0 && offAt <= 0.15 && !crawlAgain && turn * 180 / Math.PI < 2, JSON.stringify({ crawled, offAt: offAt > 0 ? f3(offAt) : -1, crawlAgain, turnDeg: f3(turn * 180 / Math.PI) }));
+  // (round 13, R13_FIX 6, re-specified: the owner asked that "when Float starts each squishy slowly turns to face the camera so none floats edge-on with its face
+  //  hidden" (VERDICT_R12 (4a): Granulo floated edge-on 20 s). The row's "does not turn" becomes: its facing turns only TOWARD the camera's side (+Z), never away
+  //  from it by more than 2 degrees, slowly (under 90 degrees a second), and faces it within 10 degrees after 4 s; the crawl part is unchanged)
+  const awayZ = (): number => Math.abs(facing());   // (the facing's angle from +Z, 0..pi)
+  const a0 = awayZ(); let grew = 0, crawlAgain = false, fastest = 0, last = a0;
+  for (let k = 0; k < 240; k++) { step(1); if (b.crawlOn) crawlAgain = true; const a = awayZ(); grew = Math.max(grew, a - a0); fastest = Math.max(fastest, Math.abs(a - last) * 60); last = a; if (k % 10 === 0) await tick(); }
+  const aEnd = awayZ();
+  check('F7 Float meets the crawl (D-97 x D-100): a squishy crawling when Float comes on stops crawling within 0.15 s and never crawls again while it floats; (R13) while floating it turns slowly to face the camera (+Z): never away by over 2 degrees, under 90 degrees a second, within 10 degrees of +Z after 4 s',
+    crawled && offAt > 0 && offAt <= 0.15 && !crawlAgain && grew * 180 / Math.PI < 2 && fastest * 180 / Math.PI < 90 && aEnd * 180 / Math.PI <= 10,
+    JSON.stringify({ crawled, offAt: offAt > 0 ? f3(offAt) : -1, crawlAgain, startDeg: f3(a0 * 180 / Math.PI), endDeg: f3(aEnd * 180 / Math.PI), awayDeg: f3(grew * 180 / Math.PI), maxDegPerS: f3(fastest * 180 / Math.PI) }));
   setFloat(false); await stepA(240);
 }
 // F8 (round 12): Float while one squishy of a party of three is cut (D-99: the stroke cut the play squishy; the other two stay whole): every whole and piece

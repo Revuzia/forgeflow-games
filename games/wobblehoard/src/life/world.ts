@@ -73,6 +73,9 @@ export function lifeSeeksNew(w: LifeWorld, i: number): boolean {
 export function lifeWaitsTurn(w: LifeWorld, i: number): boolean { return w.ac[i] === 1 && w.beh[i] === BEH.USE && w.ph[i] === 0 && w.tw[i] === 1 && w.uS[i] !== 2; }
 /** (round 10) Does LIFE hold a mover token for character i, or is it in a joint moment? (the host's turn rule never sleeps such a one for a waiter) */
 export function lifeBusy(w: LifeWorld, i: number): boolean { return w.mo[i] === 1 || w.moo[i] >= 0; }
+/** (round 13, R13_FIX 5) Is character i riding a thing or in a social moment for LIFE? The host never DRAWS such a one asleep (its body may still sleep for the
+ *  awake budget: it is still, and its eyes stay open): VERDICT_R12 (3)'s "HELD" sleepers of 16 to 20 s rode a thing or stood in a moment, eyes shut */
+export function lifeShowsAwake(w: LifeWorld, i: number): boolean { return w.moo[i] >= 0 || w.beh[i] === BEH.RIDE; }
 /** (round 10) character i's by-itself thing uses this visit (the turn goes from the one that used most) */
 export function lifeUsesOf(w: LifeWorld, i: number): number { return w.uV[i]; }
 

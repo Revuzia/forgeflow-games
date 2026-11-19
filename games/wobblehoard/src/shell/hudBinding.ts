@@ -175,6 +175,9 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     tiny: () => layout.current().layout === 'tiny',
   });
   off.push(() => toaster.destroy());
+  // (round 13) when the tool caption chip last showed (game clock and wall clock, ms): it goes after CAPTION_GONE_MS of either
+  const CAPTION_GONE_MS = 2000;
+  let capAt = -1e9, capWall = -1e9;
   const toast = (text: string, ms?: number): void => { toaster.show('info', text, { ms }); };
   // the renderer B6's seam waits for (shell/trophyToast.ts): a trophy toast with a tier chip and the name, "+N XP" only when signed in; the live region says it ONCE (trophyLine)
   setTrophyToastSink((t) => {
@@ -470,7 +473,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
         gravityWas = s.gravity;
         const m = GRAVITY_MODES.find((x) => x.table === s.gravity)!;
         announcer.say(m.line);
-        if (showsToolCaption(gravSource)) tb.showCaption(m.label, m.hint);
+        if (showsToolCaption(gravSource)) { tb.showCaption(m.label, m.hint); capAt = g.clock.now(); capWall = performance.now(); }
         gravSource = 'key';
         cue(m.sound);   // (one cue per change, from the setting: the pair's buttons are silent themselves, `data-sound="none"`, so the G key and a press sound alike)
       }
@@ -493,6 +496,9 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     }),
     // the plate leaves PLATE_MS of game time after the reveal (the gesture clock: frozen while paused, stepped by DebugHook.step)
     g.onStep(() => { if (plate.shown && !g.ceremonies.active && g.clock.now() - plateAt >= PLATE_MS) plate.hide(); }),
+    // (round 13, VERDICT_R12 (4a) phone: "Table: Rests on the table" stayed over the Friends button until the next touch) the tool caption chip also goes once
+    // CAPTION_GONE_MS of game time OR of wall time has passed since it showed, whichever comes first (its own 1.4 s timer is the usual way)
+    g.onStep(() => { if (tb.caption.dataset.show === 'true' && (g.clock.now() - capAt >= CAPTION_GONE_MS || performance.now() - capWall >= CAPTION_GONE_MS)) tb.hideCaption(); }),
     g.on('phase', (ph) => {
       document.body.dataset.phase = ph;
       if (ph !== 'play') menu?.close('code');
@@ -535,7 +541,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   { const n = g.collection.loadNotice(); if (n) toaster.show('warning', n, { ms: 6000 }); }
 
   // ---- tools: the Cut bar and its blade line (cutBinding.ts), Snap's bar and backdrop tint, and the Save
-  const cutB = bindCut(root, canvas, g, { announcer, toast });
+  const cutB = bindCut(root, canvas, g, { announcer, toast, show: (t) => { toaster.show('info', t, { say: false, ms: 3200 }); } });
   let tintX = 0, tintY = 0;
   const placeTint = (): void => {
     const c = canvas.getBoundingClientRect();
@@ -610,7 +616,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
       else if (t === 'cut') { cutB.bar.show(true); tb.attach(cutB.bar.el, 'cut'); }
       else { tb.attach(null); snap.show(false); }
       if (t === 'hand' && (document.activeElement === document.body || !document.activeElement || tb.toolsEl.contains(document.activeElement))) tb.focusTool('hand');   // focus returns to the Hand button
-      if (showsToolCaption(toolSource)) { const d = TOOLS.find((x) => x.id === t); if (d) tb.showCaption(d.label, d.hint); } else tb.hideCaption();
+      if (showsToolCaption(toolSource)) { const d = TOOLS.find((x) => x.id === t); if (d) { tb.showCaption(d.label, d.hint); capAt = g.clock.now(); capWall = performance.now(); } } else tb.hideCaption();
       announcer.say(t === 'cut' ? cutB.toolLine() : TOOL_LINES[t]);
       cutB.onTool(t);   // the Cut bar follows the tool; back in the Hand with pieces, the hint comes after the tool's line
       // a bar the dock let go of waits, hidden, in the UI root (it keeps its place in the DOM: the harness and the probes find `.cutbar` and `.snapbar` there)

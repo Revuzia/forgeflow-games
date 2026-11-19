@@ -141,12 +141,14 @@ export function boing(ctx: Ctx, out: AudioNode, t0: number, p: ThingP): VoiceGro
   return bag;
 }
 
-/** A clock's tick (or a tock: `note` odd = tock, a fourth lower): a 3 ms noise grain through a 2.2 kHz resonance, very short. */
+/** A clock's tick (or a tock: `note` odd = tock, a fourth lower): a short noise grain through a 2.2 kHz resonance. (R13_FIX 8, VERDICT_R12 (6) E1: it
+ *  started with a click: its curve jumped from 0 to 0.78 of its level in a quarter of a millisecond. Now a 1.5 ms raised-cosine attack, then the same kind
+ *  of exponential fall, over 6 ms in 24 points.) */
 export function tick(ctx: Ctx, out: AudioNode, t0: number, p: ThingP): VoiceGroup {
   const t = Math.max(0, fin(t0, 0)), A = lvl(p, -4), tock = (Math.floor(fin(p.note, 0)) & 1) === 1;
-  const c = new Float32Array(16);
-  for (let i = 1; i < 15; i++) c[i] = A * Math.exp(-i / 4);
-  return noiseShape(ctx, out, t, p, 'tick', 'bandpass', tock ? 1650 : 2200, 6, c, 0.004);
+  const N = 24, ATT = 6, c = new Float32Array(N);
+  for (let i = 1; i < N - 1; i++) c[i] = A * (i < ATT ? 0.5 - 0.5 * Math.cos((Math.PI * i) / ATT) : 1) * Math.exp(-Math.max(0, i - ATT) / 5);
+  return noiseShape(ctx, out, t, p, 'tick', 'bandpass', tock ? 1650 : 2200, 6, c, 0.006);
 }
 
 /** A slide, a ride or an updraft (PROP_SOUND whoosh): band-passed noise rising and falling over 0.5..1.2 s. */

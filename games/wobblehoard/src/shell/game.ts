@@ -20,6 +20,7 @@ import type {
 } from '../contracts.ts';
 import type { Cutter, CutResult } from './cut.ts';
 import { createCutter } from './cut.ts';
+import { oneAtATime } from './cutText.ts';
 import type { Genome, SquishyInstance } from '../core/genome.ts';
 import { genomeEquals } from '../core/genome.ts';
 import { clamp } from '../core/rng.ts';
@@ -30,7 +31,7 @@ import { createProfileStore } from '../core/save.ts';
 import type { BodyHost } from '../input/camera.ts';
 import { cameraRay, createBodyHost, pxToNdc, raycastAt } from '../input/camera.ts';
 import type { Gestures } from '../input/gestures.ts';
-import { createGestures } from '../input/gestures.ts';
+import { createGestures, DEFAULT_GESTURE_CONFIG } from '../input/gestures.ts';
 import type { Haptics } from '../input/haptics.ts';
 import { createHaptics } from '../input/haptics.ts';
 import type { BodyManager, ExtraBody, PlayIdentity } from './bodies.ts';
@@ -768,7 +769,14 @@ export function createGame(deps: GameDeps): Game {
           // two fingers: the change of their spread zooms (spread growing = closer)
           let a: { x: number; y: number } | null = null, b: { x: number; y: number } | null = null;
           for (const [id, v] of snapDrag) { if (id === p.id) continue; if (!a) a = v; else if (!b) b = v; }
-          if (a) { const d0 = Math.hypot(q.x - a.x, q.y - a.y), d1 = Math.hypot(p.x - a.x, p.y - a.y); driver.onAction({ type: 'zoom', delta: d0 - d1, source: 'pinch' }); }
+          if (a && tool === 'cut') {
+            // (round 13, VERDICT_R12 4c; D-98) with the Cut tool a phone has no one-finger orbit (one finger is the blade), so two fingers do both: their
+            // midpoint's travel turns the view (this finger moved, so the midpoint moved half as far) and their spread's change zooms, in the Hand's pinch
+            // units (a notch per DEFAULT_GESTURE_CONFIG.pinchPxPerNotch px); before, two fingers only pinch-zoomed and the view could not be turned while cutting
+            const d0 = Math.hypot(q.x - a.x, q.y - a.y), d1 = Math.hypot(p.x - a.x, p.y - a.y), mdx = (p.x - q.x) / 2, mdy = (p.y - q.y) / 2;
+            if (mdx !== 0 || mdy !== 0) driver.onAction({ type: 'orbit', dx: mdx, dy: mdy });
+            if (d1 !== d0) driver.onAction({ type: 'zoom', delta: (d0 - d1) / DEFAULT_GESTURE_CONFIG.pinchPxPerNotch, source: 'pinch' });
+          } else if (a) { const d0 = Math.hypot(q.x - a.x, q.y - a.y), d1 = Math.hypot(p.x - a.x, p.y - a.y); driver.onAction({ type: 'zoom', delta: d0 - d1, source: 'pinch' }); }
           void b;
         } else driver.onAction({ type: 'orbit', dx: p.x - q.x, dy: p.y - q.y });
         q.x = p.x; q.y = p.y;
@@ -794,7 +802,7 @@ export function createGame(deps: GameDeps): Game {
         // (one cut squishy at a time: the cutter has one tree of pieces). With one squishy out nothing here runs: the published cut, bit for bit.
         if (r === 'miss' && bodies.extras.length) {
           const xb = strokeWhole(b.x0, b.y0, p.x, p.y);
-          if (xb && cut.pieces > 1) { emit('notice', 'One squishy at a time: Reconnect all, then cut another.'); r = 'busy'; }
+          if (xb && cut.pieces > 1) { emit('notice', oneAtATime); r = 'busy'; }
           else if (xb && bodies.exchange?.(xb.body)) {
             const c0 = bodies.body.center;
             cutHome = { x: c0.x, y: 0, z: c0.z };

@@ -654,6 +654,9 @@ export interface SoftMetrics {
   /** PLAYGROUND: a bit per contactSlot (bit k = the body with contactSlot k) of the bodies this body was in contact with in its last
    *  collide; 0 = none. The shell counts the touching pairs of LifeSnapshot.units from it (a pair touches when either body reports it). */
   contacts?: number;
+  /** PLAYGROUND (round 13): how many scootTo glides a STATIC prop has stopped head-on so far (the glide eased out against it and let go). The shell's
+   *  host reads a change of it as "this walk is blocked" and steers an asked walk round the thing in its way. Absent = never counted. */
+  scootBlocks?: number;
 }
 
 export interface SoftBodyLike {
