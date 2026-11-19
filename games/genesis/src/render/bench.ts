@@ -296,7 +296,7 @@ export function parseBench(search: string): BenchPlan {
     load: num('bload', BENCH_DEFAULTS.load, 5, 3600),
     preset,
     order: p.get('border') === 'rot' ? 'rot' : 'seq',
-    focus: p.get('bfocus') !== '0',
+    focus: p.get('bfocus') === '1', // lead, after Mac round 21: a window behind other apps still renders; only a HIDDEN page invalidates by default
     dist: dist || null,
     cam,
     auto: p.get('bauto') !== '0',

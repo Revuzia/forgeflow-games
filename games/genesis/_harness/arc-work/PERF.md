@@ -2895,3 +2895,30 @@ Full report `MAC-ROUND20-water.txt`; shots `mac-shots/r20-*.jpg`. Lid closed, ex
   3. Storm: `?wfast=3&wwind=2.2` vs `?wfast=3&wwind=2.2&wshade3=capold` vs `?wwind=2.2`.
   4. The pass around the draw (each on P&wfrag=0, 51 ms ref): +wcopy=0 | +wsingle=1 | +wdepth=0 | +waterland=0 |
      +msaa=0 | +wvert=0; and P&wvdiag=1 (timing only, wrong image) vs P&water=0.
+
+## LEAD NOTE after Mac round 21 (AUTOMATIC bench, quiet Mac), 2026-11-19 21:40 UTC — build ee1d186e, genesis-next
+Files: `MAC-ROUND21.txt` (tester summary + look), `MAC-ROUND21-bench-terrain.txt`, `MAC-ROUND21-bench-water.txt`,
+shots `mac-shots/r21-*.jpg`. Lid closed, DELL S3222HN, CPU idle 84-90 %, GPU 0 % before, no other jobs. 3 interleaved
+repeats each, spread within ~3 %: THE FIRST TRUSTWORTHY NUMBERS. FIX = tcache=1&wfast=3&deepbed=1; P = scene=0&shadows=0.
+- Whole frame (p50 ms): N 348 | N+tcache 133 | FIX 98.5 (10.1 fps, 3.5x N) | FIX+water0 70.3 | FIX+shadows0 82.7 |
+  FIX+msaa0 85.2 | FIX+hide=veg,cover,life 94.8 | FIX+P 64.6 | FIX+rscale=0.5 41.8.
+- Water only (p50 ms): old 71.9 | new (wfast=3, SSR land mask) 60.0 | ssrall 52.8 | nossr 46.4 | wfrag0 18.0 |
+  wvdiag 16.6 | nowater 16.7 (vsync cap).
+- READINGS:
+  1. tcache works on the Mac: 348 -> 133 ms, pix=100 %, live=0, 157-165 MB. Look: sand as crisp, no pop (owner's tester).
+  2. The SSR LAND MASK IS SLOWER than the full march on the M5: 60.0 vs 52.8 ms (+7 ms). Full SSR costs only ~6 ms
+     (52.8 vs 46.4). The mask's two passes / extra taps cost more than they save -> make ssrall the wfast=3 default
+     (or make the mask free); the image is identical either way.
+  3. The "34 ms water pass overhead" does NOT exist: wfrag0 18.0, wvdiag 16.6, nowater 16.7. Dead end, closed.
+     (It came from comparing two different noisy rounds.)
+  4. The rest of the wfast=3 fragment (nossr 46.4 -> wfrag0 18) is ~28 ms on a P frame: the next water target.
+  5. In the full frame: water 28 ms, shadows 16 ms, msaa 13 ms, veg+cover+life 4 ms; scene+shadows together 34 ms
+     (FIX 98.5 -> FIX+P 64.6). rscale=0.5 -> 41.8 ms: the frame is pixel-bound everywhere.
+  6. tcstat: bakes keep running at rest: why=sun 4380 -> 6270 in 15 s (~126 bakes/s; all 2090 tiles every ~16 s at 1x
+     speed), field 61 -> 421, edit 291 -> 370 with nobody editing. bakeMs max 262 ms once. The sun term must not
+     re-bake the whole cache continuously (and what happens at 1000x?).
+  7. Bench: every step was INVALID on the first try because the untouched window was not focused; lead changed the
+     default to bfocus off (only a hidden page invalidates).
+- Target (owner, 2026-11-19): 15-25 fps at Ultra = 66-40 ms. From 98.5 ms: need -32 ms for 15 fps.
+- Look, confirmed by the tester: wfast=3 reflections identical with/without mask, same-to-better than N; seam gone;
+  foam good; storm contrast equal; thin straight dark lines at lower right in storm on BOTH waters (old item).

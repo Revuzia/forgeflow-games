@@ -67,7 +67,7 @@ test('bench=<base64url JSON> and bench=<JSON>: lists, objects, timings', () => {
 test('parseBench: defaults, overrides, the base and the forced preset', () => {
   const d = parseBench('?bench=water');
   assert.equal(d.name, 'water');
-  assert.deepEqual(d.opts, { reps: 3, settle: 30, settleTc: 60, rec: 15, load: 240, preset: 'ultra', order: 'seq', focus: true, dist: null, cam: '', auto: true });
+  assert.deepEqual(d.opts, { reps: 3, settle: 30, settleTc: 60, rec: 15, load: 240, preset: 'ultra', order: 'seq', focus: false, dist: null, cam: '', auto: true });
   assert.equal(d.base, 'scenario=babel&seed=307987276');
   const o = parseBench('?bench=TERRAIN&breps=2&bsettle=5&brec=2.5&bload=60&bpreset=High&border=rot&bfocus=0&bdist=80&bauto=0&scenario=lookdev&seed=7&gltrace=0&bv=extra~flat:1');
   assert.equal(o.name, 'terrain');

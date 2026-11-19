@@ -1,0 +1,49 @@
+GENESIS Mac ROUND 21 (automatic), build ee1d186e on genesis-next.
+Thu Nov 19, 1:26-3:30 PM CT.
+
+SETUP
+- Lid CLOSED. One external display: DELL S3222HN (not the XZ320QU of earlier rounds).
+- Clean Chrome, one tab, window 1686x1050, render 1686x963 at dpr 1 (the bench's own header confirms this). Window not touched or covered.
+- Before LINK 1: CPU idle 84%, GPU busy 0% (WindowServer 3%). Before LINK 2: CPU idle 90%, GPU busy 0%.
+  No other jobs running.
+- FIRST TRY was all INVALID: every step flagged "window lost focus during the recording".
+  - The Chrome window sat behind other apps and never had keyboard focus; I hadn't touched it.
+  - I re-ran both links with Chrome's focus emulation on (DevTools Emulation.setFocusEmulationEnabled), so the page counts as focused (document.hasFocus() = true) without raising the window.
+  - The second try is fully valid: "WARNINGS: none" on both.
+  - First-try files kept in genesis_perf_tools/round22/try1_focus_invalid/. Their numbers were close to the valid ones.
+- Downloads were allowed into a set folder (no prompt).
+
+LINK 1 - terrain bench (34.8 min): genesis-bench-terrain-ee1d186e+dirty-20261119-2019.txt
+  variant        n    fps med (min-max)    p50 ms   p95 ms
+  N              3/3   2.9 (2.9-3.5)       348.1    354.6
+  N+tcache       3/3   7.5 (7.4-7.7)       133.4    138.1
+  FIX            3/3  10.1 (10.1-10.4)      98.5    108.6   (tcache=1&wfast=3&deepbed=1)
+  FIX+water0     3/3  14.2 (14.0-14.2)      70.3     77.5
+  FIX+shadows0   3/3  12.1 (12.1-12.4)      82.7     91.0
+  FIX+msaa0      3/3  11.8 (11.7-11.8)      85.2     92.2
+  FIX+hide       3/3  10.6 (10.5-10.9)      94.8    103.6
+  FIX+P          3/3  15.5 (15.5-15.9)      64.6     71.9
+  FIX+rscale.5   3/3  23.6 (23.6-24.4)      41.8     46.4
+  FIX is 3.5x N. tcache alone is 2.6x.
+
+LINK 2 - water bench (17.2 min): genesis-bench-custom-ee1d186e+dirty-20261119-2054.txt
+  variant   n    fps med (min-max)   p50 ms   p95 ms
+  old       3/3  14.0 (13.7-15.4)    71.9     73.2
+  new       3/3  16.7 (16.5-17.5)    60.0     61.9
+  ssrall    3/3  19.0 (18.5-19.1)    52.8     55.2
+  nossr     3/3  21.5 (21.5-21.9)    46.4     48.3
+  wfrag0    3/3  55.5 (54.6-55.6)    18.0     19.8
+  wvdiag    3/3  60.0 (59.9-60.0)    16.6     18.2
+  nowater   3/3  60.0 (60-60)        16.7     19.1
+
+LOOK CHECKS (by hand, Ultra, standard landing at 59.7 m, ~07:46 game time; shots in genesis_round21_shots/)
+ a  Palm reflections: wfast=3 and wfast=3&wshade3=ssrall are IDENTICAL (crops refl_a_wfast3 / refl_a_ssrall).
+    Against N: the SAME-to-slightly-BETTER: bolder, clearer palm shapes, where N's are finer and grainier/speckled.
+ b  wfast=3: the seam is still GONE (no line at the lower right, landing and 6 pan frames).
+    Beach foam is still good: broken white dashes along the sand edge, like N.
+ c  Storm (wwind=2.2): whitecaps now look EQUAL in contrast between N and wfast=3. wfast=3 is at most a hair softer far out.
+    Both still show a few thin straight dark lines on the water at the lower right.
+ d  N vs N&tcache=1&wfast=3&deepbed=1 (30 s settle):
+    - Beach sand in a close crop is as crisp, with the same colours.
+    - With the fixes it's a very slight bit smoother; only visible side by side.
+    - While panning (6 frames 1.5 s apart): no pop and no blurry patch; the ground is unchanged between frames.
