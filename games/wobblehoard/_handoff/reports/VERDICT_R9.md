@@ -1,6 +1,6 @@
 # VERDICT_R9: independent verification of Squish Keeper at HEAD d2bd392ea (2026-11-19)
 
-**PROVISIONAL VERDICT (03:53 UTC): NOT READY to deploy with all six places open. (a) no BLOCKER; (b) regression PASS. (c) things used on their own in 180 s (desk / phone, USE+REACT+SOCIAL): Hearthlog 5 / 4 (READY), Ripple 2 / 2, Frostbell 5 / 2, Rainleaf 4 / 2 (two squishies stuck 2.5 min on the phone), Lanternroof 1 / 5, Cloudloft 3 / 2: only Hearthlog meets the owner's 3-thing bar on both frames at the low tier SwiftShader resolves to. Quality-high reruns, the pad and squirt re-tests, Home (d) and sound (e) still running.**
+**PROVISIONAL VERDICT (05:00 UTC): NOT READY to deploy with all six places open. (a) no BLOCKER; (b) regression PASS. (c) things used on their own in 180 s at the LOW tier (desk / phone): Hearthlog 5 / 4, Ripple 2 / 2, Frostbell 5 / 2, Rainleaf 4 / 2, Lanternroof 1 / 5, Cloudloft 3 / 2. At HIGH quality the low runs become Lanternroof desk 4, Rainleaf phone 3, Ripple desk 3, Frostbell phone 4, but Ripple phone stays 2. Ripple Shore fails on a phone at both tiers. (d), (e), pad / squirt re-tests and Cloudloft phone at high still running.**
 
 Verifier: independent; wrote no file in `src` or `_harness`, ran no git write command.
 Scratch: `/tmp/claude-0/-home-user-forgeflow-games/2d4e12a5-0f4d-5239-bdda-16316c996a1a/scratchpad/pg_verify_r9/` (below `S/`): `scripts/`, `logs/`, `shots/`, `snap/` (copy of the tree).
@@ -120,5 +120,12 @@ The low-count runs are being repeated with quality forced to high (`S/logs/PL_<p
 | Lanternroof | desk | 1 | **4** (USE vanedisc 62 s, hammock 93 s; REACT starscope, moondish; + social chimney corner = 5) | L2, L4, L5 on their own; every squishy moves (path 3.5 / 12.2 / 9.5 m against 2.9 / 3.9 / 0.07 at low) |
 | Ripple Shore | desk | 2 | **3** (USE rockpool 28 s (a wade), driftlog 95 s, pebbleball 96 s) | all three move (5.6 / 7.7 / 7.4 m); Dollop also walks to the chimes and the mound |
 | Frostbell | phone | 2 | **4** (snowball 17 s, glideramp 45 s, shakepine 126 s, snowdriftnest 131 s; REACT snowball, shakepine) | I2, I4 on their own; Dollop and Crimpo glide on the ice pond (ride 40 s each) |
+| Ripple Shore | phone | 2 | **2** (USE pebbleball 43 s; REACT rockpool; still 2 at 300 s) | **fails at high too**: Glimglop and Crimpo start walks to five things each and finish none; 156 voices in 180 s (139 single chirps) |
 | Rainleaf | phone | 1 (2 with social) | **3** (USE leafteeter 124 s, seedpod 141 s; REACT dripleaf; stepping stones by 300 s) | G7, G10 on their own; all three move (6.3 / 5.4 / 5.0 m); Crimpo still stands at the stones 33 s without a use |
+
+
+**Moss Bouncer drop re-test, every squishy, both frames** (`S/scripts/pads.mjs`, `S/logs/PAD_rainleaf_{desk,phone}.out`; each carried by real input over the pad and let go from 1.2 to 2.1 m; height sampled every 0.05 s):
+desktop: Glimglop (slime) one rebound of **0.24 m**; Dollop (jelly) four small rebounds up to 0.08 m; Crimpo (dough) none. Phone: Glimglop **0.29 m**; Dollop four rebounds up to 0.13 m; Crimpo landed beside the pad.
+So a drop on the Moss Bouncer bounces on both frames (clearly for slime, weakly for jelly, not for dough, which the family table allows). "Boing on the moss" (G4) stamped on both frames. 0 errors.
+**Puff Pads** (from the place runs): desktop Dollop 5 rebounds, Glimglop one of 0.24 m; phone Glimglop 3, Dollop 5: they bounce on both frames; U2 stamped on both.
 
