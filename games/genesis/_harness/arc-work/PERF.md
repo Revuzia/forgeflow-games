@@ -2787,3 +2787,15 @@ Debug views: `wshade3=spdbg` (R tile-B amplitude, G / B short / long Gerstner va
   3. Beach foam: `?wfast=3` vs default at the sand edge (r18w-25 / -26 framing); `?wfast=3&wshade3=foamold` = s25.
   4. Storm whitecaps near the shore: `?wfast=3&wwind=2.2` vs `?wwind=2.2`.
   GATE RESULT: npm run build exit 0 (s25/build-prod26.log); tsc clean on the final source.
+
+## LEAD NOTE after Mac round 20 (water re-check), 2026-11-19 03:50 UTC — build e0f6caa1, genesis-water
+Full report `MAC-ROUND20-water.txt`; shots `mac-shots/r20-*.jpg`. Lid closed, external display, CPU idle 88-92 % runs 1-5.
+- LOOK: seam GONE on wfast=3 (seamold brings it back) — confirmed. Beach foam now matches / slightly stronger than
+  normal; foamold worse. Storm whitecaps same amount, wfast=3 slightly softer / lower contrast. Pan: nothing new.
+  Thin straight dark lines at lower right in storm on BOTH waters (not wfast=3; the old "water cracks" item).
+- SPEED (P = scene=0&shadows=0): P 7.5 (133 ms) / 2.9; wfast=3 7.5 / 6.1; ssrold 6.8; nossr 12.3 (82 ms);
+  noreflect 9.9 (CPU busier); wfrag=0 18.0 (51 ms).
+  Reading: (1) SSR is THE cost of wfast=3: about 50 ms of the ~80 ms water fragment; everything else ~30 ms.
+  (2) the SSR restructure gained nothing measurable. (3) wfast=3 was 1.7-2.3x faster than P in round 18 and is
+  ~equal to P here: either noise or the seam fix (per-pixel group noise fades) cost something — must be checked.
+  (4) floor with no scene, no shadows, no water fragment is still 51 ms = 18 fps: round 19 part 2 must explain it.
