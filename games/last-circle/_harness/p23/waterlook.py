@@ -48,6 +48,7 @@ clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest 
   low-identical low tier, isla_viva: 4 views identical to the base build (<= 0.001 % of the pixels differ - the base's own run-to-run
                 noise is 1 pixel, control --rev cbf0a1ff; loot, launch portals and door leaves hidden: they animate on the sim
                 clock / bot traffic) - phones / low untouched
+                R-i: ground / groundlow judged paired (head vs base A <= base A vs base B, + 0.001 pp; noise > 0.1 % or > 2 levels = CNJ)
   underwater    from below (vshots `underup`): high-frequency energy (mean |Laplacian| of luminance) of the upper half <= 0.4 x the base's
   tiers         SSIM(ultra, medium) on the 3 eye-level pinned views (ground, inwater, shore) <= 0.92; vista and vista2 reported [identical]
   programs      0 new shader programs after the warm frames, on every tier
@@ -861,6 +862,35 @@ def _base_low(args, v, shots, lstem):
     return info, low
 
 
+# W10 rfast (ruling R-i, 2026-11-19): at the only views clear of changed objects (ground / groundlow face the sea horizon) the base build against
+# ITSELF differs 0.016-0.028 % (max 1 level) - above the 0.001 % bar - so the absolute reading there measures horizon noise, not the Low render path.
+# For ground and groundlow ONLY the row is judged paired inside this run: base A and base B (BASE_REV rendered twice, fresh) and the head once; the
+# view PASSES when max diff(head, A) <= max diff(A, B) AND pct(head, A) <= pct(A, B) + 0.001 (percentage points: the 0.001 % bar stays as the
+# allowance above measured noise); base-vs-base > 0.1 % or max > 2 levels = COULD-NOT-JUDGE (noise too high), never a pass. shore and inwater keep
+# the absolute <= 0.001 % bar (against base A).
+LOW_PAIRED = ("ground", "groundlow")
+
+
+def _base_low_pair(args, v, shots):
+    """R-i: BASE_REV's low-tier views rendered twice in this run (base A, base B), two fresh Chrome sessions, no cache"""
+    out = []
+    for k in ("A", "B"):
+        a2 = copy.copy(args)
+        a2.rev = BASE_REV
+        a2.disk = True
+        a2.overlay = None
+        a2.plant = None
+        with C.Session(a2, "w10_waterlook_base_low_" + k) as s:
+            start(s, "low", "isla_viva")
+            out.append(part_low(s, v, {}, os.path.join(shots, "base"), "base" + k))
+    return out[0], out[1]
+
+
+def _lowdiff(a, b):
+    d = np.abs(a.astype(np.float64) - b.astype(np.float64)).max(axis=2)
+    return float(d.max()), float((d > 0).mean() * 100)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
@@ -1053,7 +1083,7 @@ def main():
                 if not vw or wmis:
                     v.cnj("light: interiors darkest view", "no per-view numbers (a build measured before fix5) or a watch house not found: %s" % wmis)
                 else:
-                    v.check("light: interiors darkest view - every view of every room (4 headings, 3 houses per map + the watch houses' ground-floor rooms + interiorcheck's own views of its darkest houses: match isla_viva volcano_rim@p54, ashgrid downtown, housegen s7h2, the fixture) mean luma >= 25 / 255 and dark share (< 16 / 255) <= 30 % (interiorcheck's bar)",
+                    v.check("light: interiors darkest view - every view of every room (4 headings, 3 houses per map + the watch houses' ground-floor rooms + interiorcheck's own views of its darkest houses: match isla_viva volcano_rim@p18, ashgrid outpost@p12 / cmp10@p2 / mall@p11, housegen s7h2, the fixture) mean luma >= 25 / 255 and dark share (< 16 / 255) <= 30 % (interiorcheck's bar)",
                             not bad, {"views": len(vw), "bad": bad[:6], "darkestMean": worst, "darkestShare": wdk}, ">= 25 / 255, <= 0.30")
         if "grass" in want:
             gr = {m: R.get(m, {}).get("grass") for m in maps}
@@ -1069,18 +1099,46 @@ def main():
                 v.check("grass-sand: the blade layer grows on grass only - a low view over dry non-grass ground (a 30 m disc >= 95 % sand / dunes / mud / snow), the blades A/B moves <= 0.5 % of the lower half (every map with such a spot)",
                         all(x["bladePixPct"] <= 0.5 for x in judged.values()), gs_, "<= 0.5 %")
         if "low" in want:
-            bl, lb = (base or {}).get("low") or {}, R.get("lowBuild") or {}
-            res = {}
+            # R-i: base A / base B rendered fresh in this run (the cached base low views are not used by this row)
+            bl, bB = _base_low_pair(args, v, shots)
+            lb = R.get("lowBuild") or {}
+            res, verdicts = {}, {}
             for nm in sorted(set(bl) | set(lb)):
-                if nm in bl and nm in lb and bl[nm].shape == lb[nm].shape:
-                    d = np.abs(bl[nm] - lb[nm]).max(axis=2)
-                    res[nm] = {"maxDiff": float(d.max()), "pctDiff": round(float((d > 0).mean() * 100), 4)}
-                else:
+                if not (nm in bl and nm in lb and bl[nm].shape == lb[nm].shape):
                     res[nm] = {"missingOrSize": [nm in bl, nm in lb]}
-            # identical up to the sim's own noise: the base build against its own cache (control --rev cbf0a1ff) differs in ONE pixel of one view
-            # (0.0001 %: a far object the sim moves between runs); <= 0.001 % (9 px at 1280 x 720) per view - the grass-on-low plant moves 0.2-12 %
-            v.check("low-identical: low tier, isla_viva, the views identical to the base build (<= 0.001 % of the pixels differ per view: the base's own run-to-run noise is 1 px)",
-                    bool(res) and len(res) >= 3 and all(x.get("pctDiff") is not None and x["pctDiff"] <= 0.001 for x in res.values()), res, "<= 0.001 %")
+                    verdicts[nm] = "fail"
+                    continue
+                hm, hp = _lowdiff(lb[nm], bl[nm])
+                r = {"maxDiff": hm, "pctDiff": round(hp, 4)}
+                if nm in LOW_PAIRED:
+                    if nm not in bB or bB[nm].shape != bl[nm].shape:
+                        r["branch"] = "paired: base B missing -> COULD-NOT-JUDGE"
+                        verdicts[nm] = "cnj"
+                    else:
+                        nmx, npc = _lowdiff(bl[nm], bB[nm])
+                        r.update({"baseAB_maxDiff": nmx, "baseAB_pctDiff": round(npc, 4)})
+                        if npc > 0.1 or nmx > 2:
+                            r["branch"] = "paired: base-vs-base noise too high (> 0.1 %% or max > 2) -> COULD-NOT-JUDGE"
+                            verdicts[nm] = "cnj"
+                        else:
+                            ok = hm <= nmx and hp <= npc + 0.001
+                            r["branch"] = "paired: max %.0f <= %.0f and pct %.4f <= %.4f + 0.001 -> %s" % (hm, nmx, hp, npc, "PASS" if ok else "FAIL")
+                            verdicts[nm] = "pass" if ok else "fail"
+                else:
+                    ok = hp <= 0.001
+                    r["branch"] = "absolute: pct %.4f <= 0.001 -> %s" % (hp, "PASS" if ok else "FAIL")
+                    verdicts[nm] = "pass" if ok else "fail"
+                res[nm] = r
+                print("  [low-identical %s] %s" % (nm, json.dumps(r)))
+            name = ("low-identical: low tier, isla_viva, the views identical to the base build (shore / inwater: <= 0.001 % of the pixels differ per view; "
+                    "ground / groundlow, ruling R-i: paired against BASE_REV rendered twice in this run - max diff <= base-vs-base max AND pct <= base-vs-base pct + 0.001)")
+            vals = list(verdicts.values())
+            if len(res) < 3 or "fail" in vals:
+                v.check(name, False, res, "<= 0.001 % / paired")
+            elif "cnj" in vals:
+                v.cnj(name, "base-vs-base noise too high or base B missing: %s" % json.dumps(res))
+            else:
+                v.check(name, True, res, "<= 0.001 % / paired")
             for nm in lb:
                 Image.fromarray(np.clip(np.abs(lb[nm] - bl.get(nm, lb[nm])) * 8, 0, 255).astype(np.uint8)).save(os.path.join(shots, "lowdiff_x8_%s.png" % nm))
         if "uw" in want:
