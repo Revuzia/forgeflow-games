@@ -123,7 +123,7 @@ SOURCES = [
     ("worldcheck.py", lambda m: {"rng-shift": [(RB + "maps.js", [(m.RNG_ANCHOR, m.RNG_ANCHOR)], 1, False)]}),
     ("navcheck.py", lambda m: {p: [("runtime/3d/ffg_royale3d.js", [(m.HOOK_ANCHOR, m.HOOK_TEXT)], 1, False)] for p in ("raw-strafe", "heal-yaw", "pocket-raw")}),
     ("new/hud_checks.py", lambda m: {"pill-unclamped": [(RB + "hud.js", [(m.EDGE_CLAMP_LINE.decode("utf-8"), "")], "+", False)]}),
-    ("housegen_demo_looks.py", lambda m: {k: [(RB + "housegen.js", [tuple(v)], 1, True)] for k, v in m.PLANT_EDIT.items()}),
+    ("housegen_demo_looks.py", lambda m: {k: [(RB + "housegen.js", [tuple(e) for e in v] if isinstance(v, list) else [tuple(v)], 1, True)] for k, v in m.PLANT_EDIT.items()}),   # W10 R3A: a plant may be a list of edits (sparse)
     ("worldlive.py", lambda m: {p: [(RB + "player.js", "ONE_OF", ["if (!K.rampBlocks(c, x, z, yd, h, r, STEP_UP)) continue;",
                                                                "if (!K.rampBlocksA(c, RBA)) continue;"], False)] for p in m.PLANTS}),
 ]

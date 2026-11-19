@@ -114,7 +114,7 @@
  * max abs sqrt; quarter turns from exact tables (no sin / cos / atan).
  */
 
-export const VERSION = 6;                  // 6: Wave 9 round 1 (lane R1A, LC-91 + W9) - door leaves (H.doorLeaves: a closed and an open slab collider per leaf, swing discs kept clear of furniture / floor loot, the swing side's door zone 1.2 m), phase 5 judged and searched with the accurate (third-person camera + eye) model, the eye-only search its fallback; 5: Wave 8 fix round (lane K1) - phase 5 (every room shows >= 3 of its own pieces to the doorway eye), the outline door keeps off straight-across / thin-opposite edges, P.near + DOOR_OUT (no street / back door onto an alley), a ruin's wreckage (remnants, rubble, scorch, cracks, moss, weeds, broken panes) from its own stream; 4: stage B (lane I1) - meshData / translateY exports, the machine's exact colliders, no clutter staircase, a room reads from its own pieces; 3: round 3 (lane H6) - themes, pitched roofs (house.roofs / gables, roof ramps), relief, dense layouts; 2: round 2 (lane H4) - uses, storey heights, shells, dressing, rooms[].walk / anchor / views, furniture mount / on
+export const VERSION = 8;                  // 8: Wave 10 round 3 (lane R3A) - interiors II: shops' aisle rows scale with the room (2.5 m pitch) + a checkout line, storage racks / pallet rows by area, cubicle partitions, sized conference tables, cover in every office / meeting room / lobby / corridor, pitched roofs on the homes outside a downtown core + porches, the finish records (H.fin: curtains, pictures, wall runs, light pools) meshData draws; 7: Wave 10 round 1 (lane R1A) - homes: room programme (living + kitchen + bedroom + bath), rooms >= 2 cells wide, furniture x FURN_K 1.15, the area quota (>= 6 pieces a lived room), centre groups, one closed kitchen run with wall units and a hood, bath sets, filler caps, loot by room area; 6: Wave 9 round 1 (lane R1A, LC-91 + W9) - door leaves (H.doorLeaves: a closed and an open slab collider per leaf, swing discs kept clear of furniture / floor loot, the swing side's door zone 1.2 m), phase 5 judged and searched with the accurate (third-person camera + eye) model, the eye-only search its fallback; 5: Wave 8 fix round (lane K1) - phase 5 (every room shows >= 3 of its own pieces to the doorway eye), the outline door keeps off straight-across / thin-opposite edges, P.near + DOOR_OUT (no street / back door onto an alley), a ruin's wreckage (remnants, rubble, scorch, cracks, moss, weeds, broken panes) from its own stream; 4: stage B (lane I1) - meshData / translateY exports, the machine's exact colliders, no clutter staircase, a room reads from its own pieces; 3: round 3 (lane H6) - themes, pitched roofs (house.roofs / gables, roof ramps), relief, dense layouts; 2: round 2 (lane H4) - uses, storey heights, shells, dressing, rooms[].walk / anchor / views, furniture mount / on
 
 // ── constants ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const U = 2.5;                      // grid module (towngen CELL)
@@ -141,8 +141,100 @@ export const RAIL_H = 1.0, RAIL_T = 0.1;   // the half-wall across a stairwell h
 export const PARAPET = 0.6;                // flat roofs: the parapet above the roof surface
 export const OVERHANG = 0.35;              // stepped (hip) roofs overhang the walls' outer faces
 export const CAPSULE = Object.freeze({ r: 0.45, h: 1.8, step: 0.55 });   // player.js STEP_UP, sim PLAYERK
+const CROUCH_H = 1.54;                                     // (W10 R1A) the crouched capsule (royale.js: 1.36 + 0.18 m) - nothing lower over a floor fits under it
 export const MAX_FLOORS = 3;               // O3
 export const TRI_BUDGET = 4000;            // per furnished storey
+// ---- Wave 10 round 1 (lane R1A, the houses audit): homes (use house, not a ruin) - each switch below is ON in the game; the homes gate (_harness/p23/homes.py) plants turn one off
+export const MIN_ROOM_W = 2;               // a home's rooms are >= 2 cells (5.0 m) on the narrow side (audit 11: 19.7 % were 2.5 m wide); one 1 x 2-cell bath nook per floor is the exception
+export const FURN_K = 1.15;                // every piece of furniture (kit and authored) x FURN_K, drawn AND collided (audit 3: 2.26 m doors, 3.4 m storeys and 2.5 m cells
+                                           // against real-size furniture read as a doll's house); window sills (SILL) and door sizes are NOT scaled
+const COL_K = FURN_K;                      // the kit's COLLIDER scale (= FURN_K; the homes gate's scale-draw-only plant sets 1: drawn bigger than collided)
+export const HOME_PROGRAMME = true;        // every home holds living + kitchen + bedroom + bath; >= 150 m2 of rooms adds a second bedroom (audit 12)
+export const TRI_BUDGET_HOME = 6000;       // a home's furnished storey (audit 2: the median home storey already drew 3,341 of the 4,000)
+// (W10 R3A fix5, orchestrator ruling R3A-7: the plan's own '+2-4k triangles per large shop' and '+1k per office storey') a WORK storey of a non-home building
+// (not a ruin) draws up to: an office / meeting room / lobby / corridor on it -> TRI_BUDGET_WORK; a shop or warehouse on it -> TRI_BUDGET_SHOP, or
+// TRI_BUDGET_SHOP_L when the storey's footprint (W x D) is >= SHOP_L_M2. Every other storey keeps TRI_BUDGET. WORK_BUDGET false = TRI_BUDGET everywhere, as before
+export const WORK_BUDGET = true;
+// (W10 R3A fix5) WORK_DENSE: offices, meeting rooms, lobbies and corridors dressed to their room's size inside the work storey's budget (the owner: rooms with
+// 3-4 pieces read empty) - filing / storage along an office's walls, a meeting room's wall chairs + sideboard, a lobby's seating group, a corridor's locker
+// banks and benches; the homes gate's sparse-office plant: off (the pass-4 dressing)
+export const WORK_DENSE = true;
+// (W10 R3A fix5) SHOP_SEEN: a shop's checkout counter where its best entrance sees it, and its gondola rows laid out before the coolers / wall shelving take the
+// wall bands (false = the fix4 order: counter anywhere, shelving first, rows last)
+export const SHOP_SEEN = true;
+export const TRI_BUDGET_WORK = 5000, TRI_BUDGET_SHOP = 6000, TRI_BUDGET_SHOP_L = 8000, SHOP_L_M2 = 300;
+/** (W10 R3A fix5) the triangle budget of storey f of a building: `kinds` = the room kinds on that storey, home / ruined as generate reads them */
+export function storeyBudget(kinds, home, ruined, footM2) {
+  if (home) return TRI_BUDGET_HOME;
+  if (!WORK_BUDGET || ruined) return TRI_BUDGET;
+  if (kinds.some((k) => k === "shop" || k === "warehouse")) return footM2 >= SHOP_L_M2 ? TRI_BUDGET_SHOP_L : TRI_BUDGET_SHOP;
+  if (kinds.some((k) => k === "office" || k === "meeting" || k === "lobby" || k === "hall")) return TRI_BUDGET_WORK;
+  return TRI_BUDGET;
+}
+export const AREA_QUOTA = true;            // lived rooms of a home (living, bedroom, kitchen): >= max(QUOTA_MIN, area / QUOTA_M2) substantive pieces (audit 2: "4 in view" left
+export const QUOTA_M2 = 4;                 //   a 37 m2 living room with 4 pieces); replaces the VIEW_WANT top-up there (phase 3) - the guarantee (phase 5) still runs
+export const QUOTA_MIN = 6;
+export const FILLER_CAPS = true;           // a home: <= 1 clock, <= 1 floor lamp and <= 1 potted plant a room (audit 4: a clock in 55 % of rooms, filler 49 % of pieces)
+export const LANDING_HALL = true;
+export const LIVED_VIEW = true;             // (W10 R1A pass 5) phase 8: a home's lived room shows >= LIVED_SEE substantive pieces to its best entrance (accurate model)
+export const LIVED_NEAR = { living: ["armchair", "ottoman", "sideTable", "plant"], bedroom: ["armchair", "chairMod", "sideTable", "plant"], kitchen: ["chairMod", "stool", "plant"] };   // (phase 8's piece by the doorway)
+export const LIVED_CHEAP = ["wallCab", "ottoman", "chairMod", "sideTable", "stool"];   // (phase 8: the quota's floor from the cheapest pieces, 32-120 triangles)
+export const LIVED_SEE = 6;                 //   (the looks gate's bar is 5 in pixels: one of margin for the model)           // (W10 R1A pass 5) a home's upper floors: the stair lands in a hall the rooms open off (see the per-floor cells)
+export const CENTRE_GROUPS = true;         // a home's sets: sofa + coffee table + armchairs + TV unit; bed + 2 nightstands + wardrobe / dresser; a dining set by the kitchen
+export const KITCHEN_RUN = true;           // the base units stand as ONE run (touching), upper cabinets over it, a hood over the stove, on a wall with no window when one exists
+export const BATH_SET = true;              // a home's bath: a basin with a mirror over it, a tub or a shower
+export const FREE5_STEP = 0.5;             // (W10 R1A) phase 5's free-standing search lattice, m (housegen.selftest's CPU-per-house bar: was 0.25)
+export const LOOT_KEEP = 1;                // the share of a building's loot points kept on top of LOOT_K (1: all; the homes gate's loot-drop plant halves it)
+// (W10 R1A) bigger homes, more rooms, bigger town parcels: the per-room loot rule (1-3 points a room) would hand out +20-25 % more loot a map. The points a room
+// keeps, by use (the map's loot count stays within +-10 % of the Wave-9 build; homes 1 x 1.0, ruined houses / shops / mid-rises thinned)
+export const HOME_LOOT_M2 = 0.074;        // (W10 R1A) a home room's loot points a m2 (x LOOT_K.home; x HOME_LOOT_THEME: the Savanna homes held more, Deepwood's - most of its loot - less)
+export const HOME_LOOT_THEME = Object.freeze({ city: 1.25, lodge: 0.98, mill: 0.98 });
+export const LOOT_K_LODGE = 0.5;           // (W10 R1A) a lodge / mill building (Deepwood) that is not a home keeps x this of its points on top of LOOT_K (there homes hold ~85 % of the loot)
+export const LOOT_K = Object.freeze({ home: 1, house: 0.6, shop: 0.85, midrise: 0.95, tower: 1, hall: 0.8, shed: 0.7, barn: 1 });
+// (W10 R3A) interiors II. FINISH: the drawn-only finish meshData builds on medium and up (like the wear strips: opts.finish / opts.wear, never on low, no collider,
+// not in house.tris): pictures, tile bands in kitchens and baths, inside door / window casings, light pools, darker wall feet and corners. CURTAIN_FOLDS: the
+// lived rooms' windows get a rod and two pleated panels (the homes gate's plank-curtain plant: the flat 1.5 cm plank skins of round 3 instead). BAKED_AO: a soft
+// dark ring baked under every standing piece (vertex colour; the looks gate's no-ao plant: none). WORK_FIT: shop aisles / storage rows sized to the room at
+// SHOP_PITCH, a checkout line. WORK_COVER: cubicle partitions, sized conference tables, a cover piece (>= 0.9 m tall, >= 0.7 m wide) in every office, meeting
+// room, lobby and corridor (the bare-office plant: off). PITCHED_HOMES: a home outside a downtown core (P.core) never has a flat roof; ROOF_FLAT_ALL: the
+// flat-everywhere plant (every roof flat).
+export const FINISH = true;
+// (W10 R3A fix5, orchestrator ruling R3A-6) ART_ATLAS: with meshData's opts.art (maps.js: desktop medium and up, the art-atlas variant of the insides' material)
+// every picture (an art piece's canvas, a framed print: H.fin.pics) is ONE quad keyed "art" whose UVs are its picture's cell of assets/tex/interior_art.jpg
+// (_tools/interior_art.py: a 4 x 4 grid of 256 px cells, ART_PAD px of repeated edge round each), cropped to the picture's own proportions; without opts.art
+// (low, phones, Node) the colour-block print as before. ART_UV false = every picture's UVs collapsed onto one point (one flat texel: the homes gate's no-art plant)
+export const ART_ATLAS = true, ART_UV = true, ART_GRID = 4, ART_PX = 1024, ART_PAD = 12;
+/** (W10 R3A fix5) [u0, v0, u1, v1] of picture `pic` (0..15) in the art atlas for a w x h picture (flipY: v 1 = the image's top row), centred, cropped to w / h */
+export function artCell(pic, w, h) {
+  const k = ((pic % (ART_GRID * ART_GRID)) + ART_GRID * ART_GRID) % (ART_GRID * ART_GRID), c = k % ART_GRID, r = Math.floor(k / ART_GRID), cell = 1 / ART_GRID, pad = ART_PAD / ART_PX;
+  let u0 = c * cell + pad, u1 = (c + 1) * cell - pad, v1 = 1 - r * cell - pad, v0 = 1 - (r + 1) * cell + pad;
+  const a = w / Math.max(1e-3, h), cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, s = u1 - u0;
+  if (a >= 1) { v0 = cv - s / a / 2; v1 = cv + s / a / 2; } else { u0 = cu - s * a / 2; u1 = cu + s * a / 2; }
+  if (!ART_UV) { u0 = u1 = cu; v0 = v1 = cv; }
+  return [u0, v0, u1, v1];
+}
+export const CURTAIN_FOLDS = true;
+export const BAKED_AO = true;
+export const WORK_FIT = true;
+export const SHOP_PITCH = 2.5;             // m from one aisle row to the next (plan scope cut 1: 3.0)
+export const WORK_COVER = true;
+export const PITCHED_HOMES = true;
+export const ROOF_FLAT_ALL = false;
+export const AO = Object.freeze({ k: 0.26, m: 0.06, r: 0.35, minH: 0.25, minA: 0.08, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.26 reads ~0.55 of the floor in sRGB - fix4: 0.32 left the looks gate at 78 % once the shops filled with shelving): the ring's inner / outer, wall feet, corners
+export const RNG_LEAK = false;            // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
+const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
+const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
+/** (W10 R1A) a catalog entry's filler-cap class (0 none, 1 clock, 2 floor lamp, 3 potted plant), cached on the entry */
+let catKeyN = 0;
+const catKey = (c) => c._mk || (c._mk = ++catKeyN);   // (W10 R1A, CPU: a catalog entry's identity for the furnisher's failure memo - a number, the entry itself never changes)
+const capKind = (c) => { if (c._capK === undefined) { const t = c.type || ""; c._capK = /clock/.test(t) ? 1 : /lamp(Round|Square)Floor/.test(t) ? 2 : /pottedPlant/.test(t) ? 3 : 0; } return c._capK; };
+const QUOTA_KINDS = new Set(["living", "bedroom", "kitchen"]);
+// the substantive pieces a lived room's quota draws from, in order (kit where the kit has it; authored stand-ins where the budget asks)
+const QUOTAPOOL = {
+  living: ["armchair", "bookcaseOpen", "sideTable", "bookcaseLow", "dresser", "ottoman", "bookcase", "armchair", "chairMod", "shelf", "sideTable", "bookcaseWide", "wallCab", "wallCab"],
+  bedroom: ["dresser", "bookcaseLow", "armchair", "sideTable", "chairMod", "desk", "bookcaseOpen", "ottoman", "wardrobe", "sideTable", "bookcase", "wallCab", "wallCab"],
+  kitchen: ["chairMod", "bookcaseLow", "stool", "sideTable", "dresser", "chairMod", "bookcaseOpen", "stool", "armchair"],     // (no loose base units: one run)
+};
 export const RISER_MAX = 0.18;             // stair visual: steps no taller than this
 export const STAIR_RUN = 2 * U;            // 5 m
 export const GRID = 0.25;                  // the capsule walk's sample pitch
@@ -230,6 +322,104 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
 function shuffle(r, a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 
 // ── quarter turns (towngen's tables) ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── (W10 R1A) collider merge: the structure's collision as the exact union of its boxes ────────────────────────────────────────────────
+// A room-by-room plan cuts a storey's slab into one box per room and its walls into one box per run between junctions: a query at a room junction got 3-4
+// slabs and every wall stub (houseload collider-load x1.6-1.9). Boxes of one part kind and one height span are replaced IN THE COLLISION by a rectangle
+// cover of their union (coordinate-compressed grid, the fewer of the x-first and z-first greedy covers): the same solid, so every mover, bullet and support
+// answer is unchanged. The drawn boxes stay as they were (c 0, cm 1); the cover boxes are collision-only (h 63: no face drawn, mergedCol 1). A group whose
+// cover is not smaller is left alone. The footstep surface inside a house is houseAt's (maps.js houseFloors: the DRAWN slabs, per room), never a cover's.
+const MERGE_PARTS = { wall: 1, slab: 1, fill: 1, trim: 1 };
+function coverRects(xs, zs, cov, nx, nz, xFirst, lap) {
+  // (lap: a rectangle grows through cells another rectangle already holds - overlapping covers: a wall cross is 2 boxes, not 3)
+  // (cell (a, b) of the scan = cov[a * sa + b * sb]: strides instead of index closures - W10 R1A, CPU; the same rectangles)
+  const used = new Uint8Array(nx * nz), out = [];
+  const A = xFirst ? nx : nz, B = xFirst ? nz : nx, sa = xFirst ? 1 : nx, sb = xFirst ? nx : 1;
+  for (let b = 0; b < B; b++) for (let a = 0; a < A; a++) {
+    const k0 = a * sa + b * sb;
+    if (!cov[k0] || used[k0]) continue;
+    let a0 = a, a1 = a;
+    while (a1 + 1 < A) { const k = (a1 + 1) * sa + b * sb; if (!(cov[k] && (lap || !used[k]))) break; a1++; }
+    if (lap) while (a0 > 0) { const k = (a0 - 1) * sa + b * sb; if (!(cov[k] && (lap || !used[k]))) break; a0--; }
+    const row = (bb) => { for (let q = a0; q <= a1; q++) { const k = q * sa + bb * sb; if (!(cov[k] && (lap || !used[k]))) return false; } return true; };
+    let b0 = b, b1 = b; while (b1 + 1 < B && row(b1 + 1)) b1++;
+    if (lap) while (b0 > 0 && row(b0 - 1)) b0--;
+    for (let bb = b0; bb <= b1; bb++) for (let q = a0; q <= a1; q++) used[q * sa + bb * sb] = 1;
+    out.push(xFirst ? [xs[a0], zs[b0], xs[a1 + 1], zs[b1 + 1]] : [xs[b0], zs[a0], xs[b1 + 1], zs[a1 + 1]]);
+  }
+  return out;
+}
+/** (W10 R1A) the collision cover of boxes (in place): returns the number of collider boxes saved. Exported for the selftest. */
+export function mergeColliderBoxes(boxes, palette) {
+  const groups = new Map(), n0 = boxes.length;
+  for (let bi = 0; bi < n0; bi++) {
+    const b = boxes[bi];
+    if (!b.c || !MERGE_PARTS[b.p]) continue;
+    const key = b.p + "|" + Math.round(b.min[1] * 1000) + "|" + Math.round(b.max[1] * 1000);
+    let g = groups.get(key); if (!g) groups.set(key, g = []); g.push(bi);
+  }
+  let saved = 0;
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    const xv = [], zv = [];
+    for (const bi of g) { const b = boxes[bi]; xv.push(Math.round(b.min[0] * 1000), Math.round(b.max[0] * 1000)); zv.push(Math.round(b.min[2] * 1000), Math.round(b.max[2] * 1000)); }
+    const xs = [...new Set(xv)].sort((a, b) => a - b), zs = [...new Set(zv)].sort((a, b) => a - b);
+    const nx = xs.length - 1, nz = zs.length - 1;
+    if (nx * nz > 4096) continue;                        // (never on a house: a guard on the grid's size)
+    const xi = new Map(xs.map((v, i) => [v, i])), zi = new Map(zs.map((v, i) => [v, i]));
+    const cov = new Uint8Array(nx * nz);
+    for (const bi of g) {
+      const b = boxes[bi], i0 = xi.get(Math.round(b.min[0] * 1000)), i1 = xi.get(Math.round(b.max[0] * 1000)), j0 = zi.get(Math.round(b.min[2] * 1000)), j1 = zi.get(Math.round(b.max[2] * 1000));
+      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) cov[j * nx + i] = 1;
+    }
+    let R = null;
+    // (partitions only: overlapping covers are fewer boxes but stack two over one floor - a query there gets both)
+    for (const xf of [true, false]) { const c = coverRects(xs, zs, cov, nx, nz, xf, false); if (!R || c.length < R.length) R = c; }
+    if (R.length >= g.length) continue;
+    const s = boxes[g[0]], y0 = s.min[1], y1 = s.max[1];
+    for (const bi of g) { boxes[bi].c = 0; boxes[bi].cm = 1; }      // (cm: its collision is carried by a cover box - maps.js houseFloors reads the drawn slabs)
+    for (const r of R) boxes.push({ p: s.p, min: [r[0] / 1000, y0, r[1] / 1000], max: [r[2] / 1000, y1, r[3] / 1000], f: s.f.slice(), h: 63, c: 1, fl: s.fl, mergedCol: 1 });
+    saved += g.length - R.length;
+  }
+  return saved;
+}
+
+/** (W10 R1A) furniture collider boxes [minX, maxX, minY, maxY, minZ, maxZ] -> the same solid with fewer boxes: per exact vertical span, a rectangle partition of the
+ *  union (coverRects, the fewer of x-first / z-first) where it is smaller than the group; every other box as it was, in its order. Exported for the selftest. */
+export let FURN_MERGE = true;
+export function setFurnMerge(on) { FURN_MERGE = !!on; }
+export function mergeFurnBoxes(fb) {
+  const groups = new Map();
+  for (let i = 0; i < fb.length; i++) { const b = fb[i], key = Math.round(b[2] * 1000) + "|" + Math.round(b[3] * 1000); let g = groups.get(key); if (!g) groups.set(key, g = []); g.push(i); }
+  const drop = new Uint8Array(fb.length), add = [];
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    // only boxes that touch another of the span can merge: split the span into touching clusters first (most pieces stand alone)
+    const par = g.map((_, k) => k), find = (k) => { while (par[k] !== k) k = par[k] = par[par[k]]; return k; };
+    for (let a = 0; a < g.length; a++) { const A = fb[g[a]]; for (let b = a + 1; b < g.length; b++) { const B = fb[g[b]];
+      if (A[0] <= B[1] + 1e-4 && B[0] <= A[1] + 1e-4 && A[4] <= B[5] + 1e-4 && B[4] <= A[5] + 1e-4) par[find(a)] = find(b); } }
+    const cl = new Map(); g.forEach((bi, k) => { const r = find(k); let c = cl.get(r); if (!c) cl.set(r, c = []); c.push(bi); });
+    for (const c of cl.values()) {
+      if (c.length < 2) continue;
+      const xv = [], zv = [];
+      for (const bi of c) { const b = fb[bi]; xv.push(Math.round(b[0] * 1000), Math.round(b[1] * 1000)); zv.push(Math.round(b[4] * 1000), Math.round(b[5] * 1000)); }
+      const xs = [...new Set(xv)].sort((a, b) => a - b), zs = [...new Set(zv)].sort((a, b) => a - b), nx = xs.length - 1, nz = zs.length - 1;
+      if (nx * nz > 4096) continue;
+      const xi = new Map(xs.map((v, i) => [v, i])), zi = new Map(zs.map((v, i) => [v, i])), cov = new Uint8Array(nx * nz);
+      for (const bi of c) { const b = fb[bi], i0 = xi.get(Math.round(b[0] * 1000)), i1 = xi.get(Math.round(b[1] * 1000)), j0 = zi.get(Math.round(b[4] * 1000)), j1 = zi.get(Math.round(b[5] * 1000));
+        for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) cov[j * nx + i] = 1; }
+      let R = null;
+      for (const xf of [true, false]) { const q = coverRects(xs, zs, cov, nx, nz, xf, false); if (!R || q.length < R.length) R = q; }
+      if (R.length >= c.length) continue;
+      const y0 = fb[c[0]][2], y1 = fb[c[0]][3];
+      for (const bi of c) drop[bi] = 1;
+      for (const r of R) add.push([r[0] / 1000, r[2] / 1000, y0, y1, r[1] / 1000, r[3] / 1000]);
+    }
+  }
+  if (!add.length) return fb;
+  const out = []; for (let i = 0; i < fb.length; i++) if (!drop[i]) out.push(fb[i]);
+  return out.concat(add);
+}
+
 const COS = [1, 0, -1, 0], SIN = [0, 1, 0, -1];
 export const FACE = [[0, 1], [1, 0], [0, -1], [-1, 0]];        // quarter turn q -> world direction of local +Z
 const turnOfDir = (dx, dz) => (dz > 0.5 ? 0 : dx > 0.5 ? 1 : dz < -0.5 ? 2 : 3);
@@ -270,6 +460,26 @@ export const KIT_BOXES = {
   "furniture/lampRoundFloor": { min: [-0.167, 0, -0.193], max: [0.167, 1.892, 0.193], tris: 76, m: "interior" },
   "furniture/loungeChair": { min: [-0.539, 0, -0.451], max: [0.539, 1.012, 0.451], tris: 124, m: "interior" },
   "furniture/coatRackStanding": { min: [-0.3, 0, -0.3], max: [0.3, 1.694, 0.3], tris: 185, m: "interior" },
+  // (W10 R1A item 8) the 16 Kenney Furniture Kit 2.0 pieces (CC0) copied in for the homes' variety (manifest.json rows; a literal copy as above). Placed as per-house
+  // variants (VARIETY): the double wall unit, the big hood, the drawer nightstand, the glass coffee table, the relax armchair, the rounded dining chair, the pedestal
+  // basin, the vintage TV, the stacked washer-dryer, the bunk bed, the wall coat hooks. Shipped, not placed: the corner sofa (an L: one AABB leaves > 0.25 m empty), the
+  // round shower (2.77 m tall at FURN_K), the large fridge (wider than a kitchen-run unit), the upper corner unit, the bench (the mirror stayed out of the kit: no collider fits it).
+  "furniture/hoodLarge": { min: [-0.473, 0, -0.313], max: [0.473, 0.813, 0.313], tris: 34, m: "interior" },
+  "furniture/kitchenCabinetUpperDouble": { min: [-0.473, 0, -0.242], max: [0.473, 0.858, 0.242], tris: 230, m: "interior" },
+  "furniture/kitchenCabinetUpperCorner": { min: [-0.237, 0, -0.231], max: [0.237, 0.858, 0.231], tris: 204, m: "interior" },
+  "furniture/kitchenFridgeLarge": { min: [-0.572, 0, -0.446], max: [0.572, 2.024, 0.446], tris: 436, m: "interior" },
+  "furniture/bathroomSink": { min: [-0.374, 0, -0.319], max: [0.374, 1.232, 0.319], tris: 312, m: "interior" },
+  "furniture/showerRound": { min: [-0.618, 0, -0.618], max: [0.618, 2.407, 0.618], tris: 958, m: "interior" },
+  "furniture/loungeDesignSofaCorner": { min: [-1.485, 0, -1.485], max: [1.485, 0.88, 1.485], tris: 168, m: "interior" },
+  "furniture/loungeChairRelax": { min: [-0.539, 0, -0.742], max: [0.539, 1.386, 0.742], tris: 184, m: "interior" },
+  "furniture/chairRounded": { min: [-0.22, 0, -0.22], max: [0.22, 1.001, 0.22], tris: 278, m: "interior" },
+  "furniture/bedBunk": { min: [-0.628, 0, -1.204], max: [0.628, 1.87, 1.204], tris: 567, m: "interior" },
+  "furniture/cabinetBedDrawerTable": { min: [-0.293, 0, -0.239], max: [0.293, 0.579, 0.239], tris: 138, m: "interior" },
+  "furniture/tableCoffeeGlass": { min: [-0.727, 0, -0.44], max: [0.727, 0.506, 0.44], tris: 136, m: "interior" },
+  "furniture/televisionVintage": { min: [-0.451, 0, -0.297], max: [0.451, 0.594, 0.297], tris: 280, m: "interior" },
+  "furniture/washerDryerStacked": { min: [-0.429, 0, -0.429], max: [0.429, 2.068, 0.429], tris: 986, m: "interior" },
+  "furniture/coatRack": { min: [-0.493, 0, -0.148], max: [0.493, 0.616, 0.148], tris: 122, m: "interior" },
+  "furniture/bench": { min: [-0.44, 0, -0.22], max: [0.44, 1.034, 0.22], tris: 163, m: "interior" },
   // round 2 (lane H4): the interior types round 1 left unused (kitchen wall cabinets, microwave, a slim TV, sofas, shelving, lamps, laundry, ...).
   // Not taken: hoodModern, deskCorner, loungeSofaCorner / Long, tableRound (their drawn shapes leave > 0.25 m of an AABB collider empty), lampWall /
   // lampSquareCeiling (< 0.25 m, or hung where the camera pulls in), books (decor under 0.25 m).
@@ -332,11 +542,21 @@ const AUTH = {
     [-0.76, 0, -0.185, 0.76, 0.1, 0.225, "wood", 0], [-0.76, 0.5, -0.185, 0.76, 0.54, 0.225, "wood", 0], [-0.76, 1.0, -0.185, 0.76, 1.05, 0.225, "wood", WOODD],
     [-0.7, 0.1, -0.15, -0.1, 0.42, 0.18, "fabric", 0xf0ad4e], [0.0, 0.1, -0.12, 0.7, 0.38, 0.2, "fabric", 0x5bc0de], [-0.7, 0.54, -0.15, 0.05, 0.86, 0.18, "fabric", 0xd9534f], [0.15, 0.54, -0.12, 0.7, 0.9, 0.2, "fabric", 0x5cb85c]],
     cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]], surface: 1.05 },
-  gondola: { w: 1.8, d: 0.9, parts: [[-0.9, 0, -0.45, 0.9, 0.12, 0.45, "metal", 0xd8dadc], [-0.88, 0.12, -0.03, 0.88, 1.35, 0.03, "metal", 0xc8cacc], [-0.9, 0.12, -0.45, -0.86, 1.35, 0.45, "metal", 0x9aa1a6], [0.86, 0.12, -0.45, 0.9, 1.35, 0.45, "metal", 0x9aa1a6],
-    [-0.86, 0.6, -0.45, 0.86, 0.63, 0.45, "metal", 0xd8dadc], [-0.86, 1.1, -0.45, 0.86, 1.13, 0.45, "metal", 0xd8dadc],
-    [-0.8, 0.12, 0.05, -0.15, 0.45, 0.4, "fabric", 0xd9534f], [-0.05, 0.12, 0.05, 0.8, 0.5, 0.42, "fabric", 0x428bca], [-0.8, 0.63, 0.05, 0.1, 0.95, 0.4, "fabric", 0xf0ad4e], [0.2, 0.63, 0.05, 0.8, 1.0, 0.4, "fabric", 0x5cb85c],
-    [-0.8, 0.12, -0.42, 0.0, 0.48, -0.05, "fabric", 0x5bc0de], [0.1, 0.12, -0.4, 0.8, 0.42, -0.05, "fabric", 0xe8e1c8], [-0.8, 0.63, -0.4, -0.2, 0.92, -0.05, "fabric", 0xd9534f], [-0.1, 0.63, -0.42, 0.8, 1.02, -0.05, "fabric", 0xf0ad4e]],
-    cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]], surface: 1.13 },
+  // (W10 R3A fix4, budget: 166 -> 110 -> 70 triangles - a big shop's aisles had to stop at 4-5 gondolas inside the storey's 4,000) one packed stock face a side,
+  // the two shelf boards running through it (3 cm proud of the stock: the shelf lines read on both faces), the back panel only as the header over the top shelf
+  gondola: { w: 1.8, d: 0.9, parts: [[-0.9, 0, -0.45, 0.9, 0.12, 0.45, "metal", 0xd8dadc], [-0.88, 1.13, -0.03, 0.88, 1.35, 0.03, "metal", 0xc8cacc],
+    [-0.9, 0.6, -0.45, 0.9, 0.63, 0.45, "metal", 0xd8dadc], [-0.9, 1.1, -0.45, 0.9, 1.13, 0.45, "metal", 0xd8dadc],
+    [-0.86, 0.12, 0.02, 0.86, 1.1, 0.42, "fabric", 0x8a6f62], [-0.86, 0.12, -0.42, 0.86, 1.1, -0.02, "fabric", 0x6a7f8a]],
+    cols: [[0, 1, 2, 3, 4, 5]], surface: 1.13 },
+  // (W10 R3A fix4, audit 9) a shop's wall shelving (1.82 m: cover), ~70 triangles: a back panel, a plinth, three boards through one packed stock face in the
+  // piece's tint (muted stock colours) - a shop's walls lined with stocked shelves, not storeroom crates
+  shopShelf: { w: 1.2, d: 0.5, parts: [[-0.6, 0, -0.25, 0.6, 1.82, -0.21, "metal", 0x9aa1a6], [-0.6, 0, -0.21, 0.6, 0.12, 0.25, "metal", 0xd8dadc],
+    [-0.6, 0.66, -0.21, 0.6, 0.69, 0.25, "metal", 0xd8dadc], [-0.6, 1.22, -0.21, 0.6, 1.25, 0.25, "metal", 0xd8dadc], [-0.6, 1.78, -0.21, 0.6, 1.82, 0.25, "metal", 0xd8dadc],
+    [-0.57, 0.12, -0.21, 0.57, 1.76, 0.21, "fabric", 0]], cols: [[0, 1, 2, 3, 4, 5]] },
+  // (fix4) the same shelving 1.02 m tall: it stands under a shop window's sill (1.20) - crouch cover, ~58 triangles
+  shopShelfLow: { w: 1.2, d: 0.5, parts: [[-0.6, 0, -0.25, 0.6, 1.02, -0.21, "metal", 0x9aa1a6], [-0.6, 0, -0.21, 0.6, 0.12, 0.25, "metal", 0xd8dadc],
+    [-0.6, 0.55, -0.21, 0.6, 0.58, 0.25, "metal", 0xd8dadc], [-0.6, 0.99, -0.21, 0.6, 1.02, 0.25, "metal", 0xd8dadc],
+    [-0.57, 0.12, -0.21, 0.57, 0.97, 0.21, "fabric", 0]], cols: [[0, 1, 2, 3, 4]] },
   shopCounter: { w: 2.0, d: 0.7, parts: [[-1.0, 0, -0.35, 1.0, 1.0, 0.33, "wood", 0], [-1.02, 1.0, -0.36, 1.02, 1.05, 0.35, "wood", WOODD], [-0.95, 0.15, 0.33, 0.95, 0.9, 0.35, "wood", WOOD],
     [0.3, 1.05, -0.25, 0.7, 1.3, 0.05, "metal", 0x3a3f44]], cols: [[0, 1, 2], [3]], surface: 1.05 },
   crate: { w: 0.9, d: 0.9, parts: [[-0.45, 0, -0.45, 0.45, 0.9, 0.45, "wood", 0], [-0.46, 0.38, -0.46, 0.46, 0.52, 0.46, "wood", WOODD]], cols: [[0, 1]], surface: 0.9 },
@@ -348,12 +568,24 @@ const AUTH = {
   // wall dressing: 2 cm thin, drawn only (inside the 2 cm visual tolerance), hung 1.30-2.00 m above the floor on a SOLID wall stretch
   art: { w: 0.9, d: 0.02, parts: [[-0.45, 1.3, -0.01, 0.45, 2.0, 0.0, "wood", 0x3a2e24], [-0.38, 1.37, 0.0, 0.38, 1.93, 0.01, "fabric", 0]], cols: [], deco: true, wall: true, plate: "z" },
   artWide: { w: 1.4, d: 0.02, parts: [[-0.7, 1.35, -0.01, 0.7, 1.95, 0.0, "wood", 0xc9a45a], [-0.63, 1.42, 0.0, 0.63, 1.88, 0.01, "fabric", 0]], cols: [], deco: true, wall: true, plate: "z" },
+  // (W10 R1A) a cooker hood over the stove (canopy + chimney, mounted 1.75 m up), a corner shower (tray, back and side panels, a head) and a mirror hung
+  // over a pedestal basin (its frame from 1.55 m: the kit basin stands 1.47 m)
+  hood: { w: 0.9, d: 0.5, parts: [[-0.45, 0, -0.25, 0.45, 0.16, 0.25, "metal", 0xc9ccce], [-0.15, 0.16, -0.25, 0.15, 0.7, 0.0, "metal", 0xb8bcbf]], cols: [[0, 1]], mountY: 1.75 },
+  shower: { w: 0.9, d: 0.9, parts: [[-0.45, 0, -0.45, 0.45, 0.08, 0.45, "ceramic", CERAM], [-0.45, 0.08, -0.45, 0.45, 1.95, -0.4, "ceramic", 0xdfeef0], [-0.45, 0.08, -0.4, -0.4, 1.95, 0.45, "ceramic", 0xdfeef0],
+    [-0.08, 1.75, -0.4, 0.08, 1.8, -0.2, "metal", STEEL]], cols: [[0, 1, 2, 3]] },
+  mirrorHi: { w: 0.62, d: 0.02, parts: [[-0.31, 1.55, -0.01, 0.31, 2.2, 0.0, "wood", 0xd8d8d8], [-0.27, 1.59, 0.0, 0.27, 2.16, 0.01, "ceramic", 0xa9c7d6]], cols: [], deco: true, wall: true, plate: "z" },
   mirror: { w: 0.7, d: 0.02, parts: [[-0.35, 1.25, -0.01, 0.35, 2.0, 0.0, "wood", 0xd8d8d8], [-0.3, 1.3, 0.0, 0.3, 1.95, 0.01, "ceramic", 0xa9c7d6]], cols: [], deco: true, wall: true, plate: "z" },
   // (collider groups: split where a single box would leave a big empty volume - under a desk or a table top - but never into a staircase a planner
   // could climb: a chair's seat, a stack of boxes, a hay stack stay one box; interiorcheck's planner walks every top within 0.5 m of the last)
   // ── round 3 (lane H6): the cheap pieces that make rooms DENSE inside the 4k-per-storey budget. A kit piece costs 60-600 triangles; these cost
   // ~10 per box (a box resting on the floor or a host top does not draw its bottom; a plate draws one face). Original art, CC0 by construction.
   // offices: a desk (top + two side panels + a modesty panel), a swivel chair, a monitor (stands on a desk), filing cabinets, lockers, a whiteboard
+  // (W10 R3A) a cubicle partition (1.4 m: soft cover between back-to-back desks), a sized conference table (2.6 / 3.6 m: a meeting room's 6 / 8 seats)
+  partition: { w: 1.4, d: 0.08, parts: [[-0.7, 0, -0.04, 0.7, 1.4, 0.04, "fabric", 0x8a96a0], [-0.7, 1.4, -0.045, 0.7, 1.43, 0.045, "metal", 0x5a5e64]], cols: [[0, 1]] },
+  confTable: { w: 2.6, d: 1.2, parts: [[-1.3, 0.71, -0.6, 1.3, 0.76, 0.6, "wood", 0], [-1.0, 0, -0.32, -0.88, 0.71, 0.32, "metal", 0x3a3e44], [0.88, 0, -0.32, 1.0, 0.71, 0.32, "metal", 0x3a3e44]],
+    cols: [[0], [1], [2]], surface: 0.76 },
+  confTableL: { w: 3.6, d: 1.3, parts: [[-1.8, 0.71, -0.65, 1.8, 0.76, 0.65, "wood", 0], [-1.45, 0, -0.35, -1.33, 0.71, 0.35, "metal", 0x3a3e44], [1.33, 0, -0.35, 1.45, 0.71, 0.35, "metal", 0x3a3e44],
+    [-0.06, 0, -0.3, 0.06, 0.71, 0.3, "metal", 0x3a3e44]], cols: [[0], [1], [2], [3]], surface: 0.76 },
   deskA: { w: 1.4, d: 0.7, parts: [[-0.7, 0.72, -0.35, 0.7, 0.76, 0.35, "wood", 0], [-0.68, 0, -0.33, -0.63, 0.72, 0.33, "metal", 0x4a4e54], [0.63, 0, -0.33, 0.68, 0.72, 0.33, "metal", 0x4a4e54],
     [-0.63, 0.32, -0.33, 0.63, 0.7, -0.3, "metal", 0x4a4e54]], cols: [[0], [1], [2], [3]], surface: 0.76 },
   officeChair: { w: 0.56, d: 0.56, parts: [[-0.28, 0, -0.28, 0.28, 0.06, 0.28, "metal", 0x26282c], [-0.04, 0.06, -0.04, 0.04, 0.42, 0.04, "metal", 0x6a6e74],
@@ -362,6 +594,8 @@ const AUTH = {
     [-0.28, 0.13, -0.1, 0.28, 0.45, -0.07, "metal", 0x1a1c20], [-0.26, 0.15, -0.07, 0.26, 0.43, -0.066, "ceramic", 0x2a4a6a]], cols: [[0, 1], [2, 3]], top: true },
   filingCab: { w: 0.48, d: 0.6, parts: [[-0.24, 0, -0.3, 0.24, 1.32, 0.29, "metal", 0x8a9296], [-0.21, 0.06, 0.29, 0.21, 0.46, 0.3, "metal", 0xb0b6ba], [-0.21, 0.5, 0.29, 0.21, 0.9, 0.3, "metal", 0xb0b6ba],
     [-0.21, 0.94, 0.29, 0.21, 1.28, 0.3, "metal", 0xb0b6ba]], cols: [[0, 1, 2, 3]], surface: 1.32 },
+  // (W10 R3A) a two-door locker (0.8 m): the cover a narrow corridor's end wall takes beside a door zone
+  lockers2: { w: 0.8, d: 0.5, parts: [[-0.4, 0, -0.25, 0.4, 1.9, 0.24, "metal", 0x6f8a9a], [-0.37, 0.08, 0.24, -0.02, 1.86, 0.25, "metal", 0x86a2b2], [0.02, 0.08, 0.24, 0.37, 1.86, 0.25, "metal", 0x86a2b2]], cols: [[0, 1, 2]] },
   lockers: { w: 1.2, d: 0.5, parts: [[-0.6, 0, -0.25, 0.6, 1.9, 0.24, "metal", 0x6f8a9a], [-0.57, 0.08, 0.24, -0.21, 1.86, 0.25, "metal", 0x86a2b2], [-0.18, 0.08, 0.24, 0.18, 1.86, 0.25, "metal", 0x86a2b2],
     [0.21, 0.08, 0.24, 0.57, 1.86, 0.25, "metal", 0x86a2b2]], cols: [[0, 1, 2, 3]] },
   whiteboard: { w: 1.8, d: 0.02, parts: [[-0.9, 1.0, -0.01, 0.9, 2.0, 0.0, "metal", 0xb8bcc0], [-0.86, 1.04, 0.0, 0.86, 1.96, 0.008, "ceramic", 0xf6f8f8]], cols: [], deco: true, wall: true, plate: "z" },
@@ -383,9 +617,11 @@ const AUTH = {
     [-0.82, 1.48, -0.26, 0.82, 1.96, 0.26, "fabric", 0x8a6a48]], cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]] },
   rackRow: { w: 2.2, d: 0.9, parts: [[-1.1, 0, -0.45, -1.05, 2.1, 0.45, "metal", 0x2f5a8a], [1.05, 0, -0.45, 1.1, 2.1, 0.45, "metal", 0x2f5a8a], [-1.05, 0.12, -0.45, 1.05, 0.16, 0.45, "metal", 0xc06a2a],
     [-1.05, 0.78, -0.45, 1.05, 0.82, 0.45, "metal", 0xc06a2a], [-1.05, 1.44, -0.45, 1.05, 1.48, 0.45, "metal", 0xc06a2a], [-1.05, 2.04, -0.45, 1.05, 2.08, 0.45, "metal", 0xc06a2a],
-    [-1.0, 0.16, -0.42, 0.0, 0.66, 0.4, "fabric", 0xb2875a], [0.1, 0.16, -0.4, 1.0, 0.6, 0.42, "fabric", 0x6a8a5a], [-0.95, 0.82, -0.4, 0.9, 1.32, 0.4, "fabric", 0xc49a62],
-    [-0.9, 1.48, -0.38, 0.4, 1.86, 0.42, "fabric", 0x8a6a48], [0.5, 1.48, -0.4, 1.0, 1.78, 0.38, "fabric", 0xb03a2e]], cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]] },
-  carton: { w: 0.52, d: 0.44, parts: [[-0.26, 0, -0.22, 0.26, 0.42, 0.22, "fabric", 0xb2875a], [-0.05, 0.42, -0.22, 0.05, 0.424, 0.22, "fabric", 0xd8c8a0]], cols: [[0, 1]], surface: 0.424 },
+    [-1.0, 0.16, -0.42, 1.0, 0.66, 0.4, "fabric", 0xb2875a], [-0.95, 0.82, -0.4, 0.9, 1.32, 0.4, "fabric", 0xc49a62], [-0.9, 1.48, -0.38, 0.95, 1.86, 0.42, "fabric", 0x8a6a48]],
+    cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8]] },     // (W10 R3A, budget: one pallet of stock a level, was 5 blocks)
+  // (W10 R3A) a stock pack: one sealed box (~10 triangles) - the cheap stock a shop / store room / warehouse stacks on its cartons and crates
+  pack: { w: 0.5, d: 0.4, parts: [[-0.25, 0, -0.2, 0.25, 0.34, 0.2, "fabric", 0xa89a80]], cols: [[0]], surface: 0.34 },
+  carton: { w: 0.52, d: 0.44, parts: [[-0.26, 0, -0.22, 0.26, 0.424, 0.22, "fabric", 0xb2875a]], cols: [[0]], surface: 0.424 },     // (W10 R3A fix2: one box, 10 triangles - the 4 mm tape strip was a second box)
   cartonOpen: { w: 0.6, d: 0.46, parts: [[-0.3, 0, -0.23, 0.3, 0.36, 0.23, "fabric", 0xc49a62], [-0.3, 0.36, -0.23, 0.3, 0.5, -0.2, "fabric", 0xc49a62], [-0.3, 0.36, 0.2, 0.3, 0.5, 0.23, "fabric", 0xc49a62]],
     cols: [[0], [1], [2]] },
   boxStack: { w: 0.7, d: 0.6, parts: [[-0.35, 0, -0.3, 0.35, 0.46, 0.3, "fabric", 0xb2875a], [-0.3, 0.46, -0.26, 0.24, 0.86, 0.22, "fabric", 0xc49a62], [-0.2, 0.86, -0.2, 0.16, 1.14, 0.14, "fabric", 0xa87a4a]],
@@ -401,6 +637,8 @@ const AUTH = {
     [-0.4, 0.74, -0.28, 0.4, 1.16, 0.3, "fabric", 0x3a7a4a], [-0.4, 1.28, -0.28, 0.4, 1.7, 0.3, "fabric", 0xd8a03a], [-0.41, 0.16, 0.36, 0.41, 1.86, 0.375, "glass", 0x9fc4d6]],
     cols: [[0, 1, 2, 3, 4, 5, 6, 7, 8]] },
   // the rest: a trestle table, a stool, a dresser, a washer, a coat stand, a workbench, hay, sacks, rubble, a machine
+  diningTable: { w: 0.9, d: 0.9, parts: [[-0.45, 0.7, -0.45, 0.45, 0.76, 0.45, "wood", 0], [-0.05, 0, -0.05, 0.05, 0.7, 0.05, "wood", WOODD], [-0.25, 0, -0.25, 0.25, 0.03, 0.25, "wood", WOODD]],
+    cols: [[0], [1, 2]], surface: 0.76 },          // (W10 R1A: a small square dining table on a pedestal, for a kitchen too tight for the long one)
   tableA: { w: 1.6, d: 0.9, parts: [[-0.8, 0.7, -0.45, 0.8, 0.76, 0.45, "wood", 0], [-0.7, 0, -0.38, -0.62, 0.7, 0.38, "wood", WOODD], [0.62, 0, -0.38, 0.7, 0.7, 0.38, "wood", WOODD]], cols: [[0], [1], [2]], surface: 0.76 },
   stoolA: { w: 0.4, d: 0.4, parts: [[-0.2, 0.62, -0.2, 0.2, 0.68, 0.2, "wood", 0], [-0.04, 0, -0.04, 0.04, 0.62, 0.04, "metal", 0x55585c], [-0.16, 0, -0.16, 0.16, 0.03, 0.16, "metal", 0x55585c]], cols: [[0, 1, 2]] },
   dresserA: { w: 1.1, d: 0.48, parts: [[-0.55, 0, -0.24, 0.55, 0.84, 0.23, "wood", 0], [-0.5, 0.06, 0.23, 0.5, 0.3, 0.24, "wood", WOODD], [-0.5, 0.33, 0.23, 0.5, 0.57, 0.24, "wood", WOODD],
@@ -430,6 +668,12 @@ const AUTH = {
 // authored pieces: their footprint is the EXACT extent of their parts (recentred on the origin), so a piece placed against a wall touches it and
 // never reaches into it (round 1 sized a few by a nominal w / d: shop counters and crates stood 1-2 cm inside the wall)
 for (const A of Object.values(AUTH)) {
+  // (W10 R1A) x FURN_K: every part's box and the loot surface (a wall piece's mount height mountY is a height on the WALL, not scaled)
+  // (drawn-only dressing - rugs, pictures, clocks, mirrors: deco, <= 2 cm thin, no collider - keeps its size: a picture is not furniture)
+  if (!A.deco && !A.plate && A.cols && A.cols.length) {
+    for (const pt of A.parts) for (let q = 0; q < 6; q++) pt[q] = Math.round(pt[q] * FURN_K * 10000) / 10000;
+    if (A.surface) A.surface = Math.round(A.surface * FURN_K * 1000) / 1000;
+  }
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const p of A.parts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[3]); z0 = Math.min(z0, p[2]); z1 = Math.max(z1, p[5]); }
   A.ox = r3((x0 + x1) / 2); A.oz = r3((z0 + z1) / 2); A.w = r3(x1 - x0); A.d = r3(z1 - z0);
@@ -438,7 +682,8 @@ for (const A of Object.values(AUTH)) {
 const authTris = (a) => a.parts.reduce((n, pt) => n + (a.plate ? 2 : pt[1] === 0 && !a.mountY ? 10 : 12), 0);
 function buildCatalog(over, remap) {
   const C = {};
-  const kit = (id, type, surface, extra) => { const b = KIT_BOXES[type]; C[id] = Object.assign({ id, src: "kit", type, w: r3(b.max[0] - b.min[0]), d: r3(b.max[2] - b.min[2]), h: b.max[1], tris: b.tris, surface: surface || null, deco: !!b.deco, mount: "floor", y0: 0 }, extra || {}); };
+  // (W10 R1A) a kit piece's footprint / height / loot surface x COL_K (= FURN_K): the collider of the piece the game draws at suggested_scale x FURN_K
+  const kit = (id, type, surface, extra) => { const b = KIT_BOXES[type]; C[id] = Object.assign({ id, src: "kit", type, w: r3((b.max[0] - b.min[0]) * COL_K), d: r3((b.max[2] - b.min[2]) * COL_K), h: r3(b.max[1] * COL_K), tris: b.tris, surface: surface ? r3(surface * COL_K) : null, deco: !!b.deco, mount: "floor", y0: 0 }, extra || {}); };
   kit("bookcase", "furniture/bookcaseClosed");
   kit("tv", "furniture/cabinetTelevision", 0.682);
   kit("box", "furniture/cardboardBoxClosed", 0.618);
@@ -459,9 +704,16 @@ function buildCatalog(over, remap) {
     const a = AUTH[id];
     let h = 0;
     for (const p of a.parts) h = Math.max(h, p[4]);
-    // lowTop: the lowest top among its colliders (a toilet's bowl, 0.46, under its 0.8 tank): what a planner may step onto
-    const lowTop = a.cols.length ? Math.min(...a.cols.map((g) => Math.max(...g.map((k) => a.parts[k][4])))) : r3(h);
-    C[id] = { id, auth: id, src: "box", type: "box/" + id, w: a.w, d: a.d, h: r3(h), lowTop: r3(lowTop), tris: authTris(a), surface: a.surface || null, deco: !!a.deco, wall: !!a.wall, mount: a.mountY ? "wall" : a.top ? "top" : "floor", y0: a.mountY || 0 };
+    // (W10 R1A) colKeep: the collider groups a mover can meet. A group that lies wholly under another group of the piece whose underside is lower over the
+    // floor than a crouched mover is tall (a table's legs under its top, a workbench's shelf under its worktop) is met by that top first: it is left out of
+    // the collision (a bullet under the top passes the legs, as in most shooters; the drawn parts are unchanged). Quarter turns keep "wholly under".
+    const gb = a.cols.map((g) => { const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity]; for (const k of g) { const q = a.parts[k]; for (let ax = 0; ax < 3; ax++) { mn[ax] = Math.min(mn[ax], q[ax]); mx[ax] = Math.max(mx[ax], q[ax + 3]); } } return [mn, mx]; });
+    const colKeep = [];
+    gb.forEach((B, i) => { if (!gb.some((Aq, j) => j !== i && Aq[0][0] <= B[0][0] + 1e-4 && Aq[1][0] >= B[1][0] - 1e-4 && Aq[0][2] <= B[0][2] + 1e-4 && Aq[1][2] >= B[1][2] - 1e-4 &&
+      Aq[0][1] >= B[1][1] - 1e-3 && Aq[0][1] + (a.mountY || 0) < CROUCH_H)) colKeep.push(i); });
+    // lowTop: the lowest top among its (reachable) colliders (a toilet's bowl, 0.46, under its 0.8 tank): what a planner may step onto
+    const lowTop = colKeep.length ? Math.min(...colKeep.map((i) => gb[i][1][1])) : r3(h);
+    C[id] = { id, auth: id, src: "box", type: "box/" + id, w: a.w, d: a.d, h: r3(h), lowTop: r3(lowTop), tris: authTris(a), surface: a.surface || null, deco: !!a.deco, wall: !!a.wall, mount: a.mountY ? "wall" : a.top ? "top" : "floor", y0: a.mountY || 0, colKeep: colKeep.length < a.cols.length ? colKeep : null };
   }
   // alt: the piece it replaces (an authored stand-in): the furnisher takes it when the room's / storey's triangle budget cannot take the kit piece
   for (const [id, type, surface, extra] of over || []) { const prev = C[id]; kit(id, type, surface, extra); if (prev) C[id].alt = prev; }
@@ -477,11 +729,13 @@ export const CATALOGS = {
   interior: buildCatalog([["bed", "furniture/bedDouble", 0.825], ["bedSingle", "furniture/bedSingle", 0.825], ["nightstand", "furniture/cabinetBed", 0.513],
     ["wardrobe", "furniture/bookcaseClosedDoors"], ["toilet", "furniture/toilet"], ["basin", "furniture/bathroomSinkSquare"],
     ["counter", "furniture/kitchenCabinet", 0.99], ["stoveBox", "furniture/kitchenStoveElectric", 0.99], ["lamp", "furniture/lampRoundFloor"], ["armchair", "furniture/loungeChair"],
-    ["upper", "furniture/kitchenCabinetUpper", null, { mount: "wall", y0: 1.45 }], ["microwave", "furniture/kitchenMicrowave", null, { mount: "top" }],
+    ["upper", "furniture/kitchenCabinetUpper", null, { mount: "wall", y0: 1.62 }], ["microwave", "furniture/kitchenMicrowave", null, { mount: "top" }],
     ["tvSet", "furniture/televisionModern", null, { mount: "top" }], ["sofaDesign", "furniture/loungeDesignSofa"],
     ["coffeeSq", "furniture/tableCoffeeSquare", 0.506], ["bookcaseOpen", "furniture/bookcaseOpen"], ["lampSq", "furniture/lampSquareFloor"], ["lampTable", "furniture/lampSquareTable", null, { mount: "top" }],
     ["nightLow", "furniture/cabinetBed", 0.513], ["bathCab", "furniture/bathroomCabinet", null, { mount: "wall", y0: 1.35 }],
-    ["tableCloth", "furniture/tableCloth", 0.719], ["chairMod", "furniture/chairModernCushion"], ["plantSmall", "furniture/plantSmall1", null, { mount: "top" }]],
+    ["tableCloth", "furniture/tableCloth", 0.719], ["chairMod", "furniture/chairModernCushion"], ["plantSmall", "furniture/plantSmall1", null, { mount: "top" }],
+    // (W10 R1A item 8) the variants (VARIETY): the double wall unit, the rounded dining chair, the pedestal basin
+    ["upperDbl", "furniture/kitchenCabinetUpperDouble", null, { mount: "wall", y0: 1.62 }], ["chairRound", "furniture/chairRounded"], ["basinPed", "furniture/bathroomSink"]],
   { box: "carton", boxOpen: "cartonOpen", chair: "chairMod", chairDesk: "officeChair", desk: "deskA", stove: "stoveBox", stool: "stoolA", coffee: "coffeeSq", screen: "monitor",
     ottoman: "stoolA", rack: "rackWall", pallet: "palletA", rugRect: "rugLarge", rugRound: "rugLarge", dresser: "dresserA", dryer: "washer", drawerCab: "counter", tableCross: "tableA",
     bookcaseLow: "shelfLow", bookcaseWide: "bookcase", coatRack: "coatRackA" }),
@@ -489,9 +743,23 @@ export const CATALOGS = {
 // the base profile has no round-2 kit types: a recipe asking for one gets the nearest piece the profile has (or nothing)
 const ALIAS = { rack: "shelf", lampSq: "plant", lamp: "plant", bookcaseLow: "shelfLow", bookcaseOpen: "bookcase", bookcaseWide: "bookcase", sofaDesign: "sofa", dresser: "sideTable",
   nightLow: "nightstand", drawerCab: "counter", chairMod: "chair", tableCross: "table", tableCloth: "table", coffeeSq: "coffee", boxOpen: "box", armchair: "chair", coatRack: "plant" };
+// (W10 R1A item 8) per-house model variety, AFTER the furnishing (so every placement, every draw of the furnishing stream and every gate count is what it was):
+// a placed kit piece of type T becomes its variant when the house drew it (its own stream, subRng "kitvar": half of the houses per variant, one choice for the
+// whole house) and the variant fits inside the piece's footprint, mounts the same way, carries nothing on its top and keeps the storey in budget. A
+// wall piece keeps its back on the wall. (The new kit pieces wider or deeper than the piece they would replace - the big hood, the glass coffee table, the
+// relax armchair, the vintage TV, the wall coat hooks, the stacked washer-dryer, the drawer nightstand (5 mm deeper) - and the bunk bed, 2.15 m tall, are shipped in the kit and not placed;
+// the interior profile's kit download stays <= 300 KB: housegen.selftest 'kit download')
+const VARIETY = [["furniture/kitchenCabinetUpper", "upperDbl"], ["furniture/chairModernCushion", "chairRound"], ["furniture/bathroomSinkSquare", "basinPed"]];
 // a room's share of its storey's triangle budget is weighted by what it must hold (a kitchen's counter row and dining set cost ~1,400 triangles,
 // a bathroom's set is mostly authored boxes, a hall holds a lamp and a plant)
 const SHAREW = { ruin: 0.8, kitchen: 2.0, living: 1.5, shop: 1.5, lobby: 1.3, bedroom: 1.2, meeting: 1.2, office: 1.0, warehouse: 1.0, barn: 1.0, storage: 0.7, bath: 0.8, hall: 0.5 };
+// (W10 R3A fix5, WORK_DENSE) the dressing rotation of a work room, one piece a DENSE_M2 m2 of its area (office 30, meeting 5, lobby 7, corridor 18); cheap authored
+// pieces (34-46 triangles; pictures 4): perf_district's ashgrid s2026 drop view read x1.364 (bar x1.25) with 1 a 12 m2 of 45-125 triangle pieces
+const DENSE_IDS = { office: ["filingCab", "lockers2", "wallCab", "coatRack"],
+  meeting: ["dresser", "officeChair", "art", "officeChair", "coatRack", "wallCab", "filingCab", "poster"],
+  lobby: ["armchair", "coatRack", "art", "wallCab", "poster", "plant"],
+  hall: ["lockers2", "wallCab", "coatRack"] };
+const DENSE_M2 = { office: 30, meeting: 5, lobby: 7, hall: 18 };
 // phase 3's last resort: what may stand free in the open floor a doorway looks at
 const FREEPOOL = { living: ["armchair", "ottoman", "lampSq", "plant"], bedroom: ["chairMod", "lampSq", "plant"], kitchen: ["chairMod", "stool", "trash"], bath: ["trash", "plant"],
   office: ["chairMod", "plant", "box"], storage: ["boxStack", "crate", "carton"], ruin: ["rubble", "crate", "carton"], warehouse: ["box", "crate", "crateStack"], barn: ["crate", "box", "crateStack"], shop: ["box", "crate", "boxOpen"],
@@ -499,7 +767,9 @@ const FREEPOOL = { living: ["armchair", "ottoman", "lampSq", "plant"], bedroom: 
 // (stage B) the small pieces the rescue pass may add to any room still short of 3 of its own pieces in view
 const RESCUE = ["wallShelf", "wallCab", "plant", "lampSq", "trash", "sideTable", "bookcaseLow", "filingCab", "chairMod", "box"];
 // (stage B) the low clutter a mover steps onto in passing (lowest top 0.2 .. 0.55 m): never within 0.9 m of a piece one more step up (see stairsOK)
-const VIS_PTS = new Float64Array(30);      // (the view model's sample points: one buffer, generate() is synchronous)
+const VIS_OCC = [], VIS_OCC3 = [];          // (W10 R1A: the occluders near one entrance's sight lines, reused buffers - see visMask)
+const VIS_PTS = new Float64Array(30), SEG = new Float64Array(16), ROOM_PEND = [];
+const WR_G = { rect: [0, 0, 0, 0], u: 0, v: 0, fq: 0 }, WR_G5 = { rect: [0, 0, 0, 0], u: 0, v: 0, fq: 0 };   // (W10 R1A, CPU: scratch wall spots for tryWall's scan / the guarantee's search)      // (the view model's sample points: one buffer, generate() is synchronous)
 const STEP_CLUTTER = new Set(["rubble", "carton", "cartonOpen", "sacks", "hayBale", "boxStack", "box", "boxOpen", "palletLoad"]);
 // pieces nothing is stood on (a lamp on a bed, a box on a crate stack): everything else with a flat top may carry a lamp / a small plant / a box
 const NOHOST = new Set(["rubble", "hayStack", "sacks", "palletLoad", "boxStack", "cartonOpen", "officeChair", "stoolA", "deskA", "bed", "bedSingle", "sofa", "sofaDesign", "chair", "chairMod", "chairDesk", "stool", "armchair", "ottoman", "crateStack", "bathtub", "toilet", "basin", "sink", "gondola", "shelfLow", "pallet"]);
@@ -530,9 +800,9 @@ export const CATALOG = CATALOGS[DEFAULT_KIT];
 export const THEMES = {
   city: { facadeMat: ["brick", "brick", "plaster"], facade: { brick: [0xa4553f, 0x8e4a3a, 0xb86f52, 0x9a5a48, 0x7e3f33, 0xb5644a], plaster: [0xd8cdb8, 0xbfc6c9, 0xc9b79a, 0xd6d0c4, 0xc4b2a0, 0xa9b4b8] },
     trim: [0xede6d6, 0xdcd6c8, 0xc9c2b4], roofs: { flat: 0.7, gable: 0.3 }, pitch: 30, roofC: [0x6b6e70, 0x5f6366, 0x7a4a3a, 0x4f5559], shop: 0.35, L: 0.3, win: 0.62, backDoor: 0.6,
-    interiorMat: "plaster", base: { p: 0.55, mat: ["plaster", "stone"], color: [0xcfc6b4, 0xa8a196, 0x8f8a82, 0xd8d2c4] }, porch: 0, canopy: 0.8, balcony: 0.25, belts: 0.85, pilasters: 0.6, chimney: 0.5, shutters: 0, awning: 0.9 },
+    interiorMat: "plaster", base: { p: 0.55, mat: ["plaster", "stone"], color: [0xcfc6b4, 0xa8a196, 0x8f8a82, 0xd8d2c4] }, porch: 0.3, canopy: 0.8, balcony: 0.25, belts: 0.85, pilasters: 0.6, chimney: 0.5, shutters: 0, awning: 0.9 },
   resort: { facadeMat: ["stucco"], facade: { stucco: [0xf2a48f, 0xa8dcc8, 0x8ccbd9, 0xf4d27a, 0xf0e4d0, 0xe9a8b8, 0xd9c7f0, 0xf7e9c4] },
-    trim: [0xffffff, 0xf7f3ea], roofs: { flat: 0.45, gable: 0.55 }, pitch: 22, roofC: [0xc0623b, 0xb5573a, 0xa94e32, 0xd07a4a], shop: 0.15, L: 0.5, win: 0.72, backDoor: 0.7,
+    trim: [0xffffff, 0xf7f3ea], roofs: { flat: 0.2, gable: 0.8 }, pitch: 22, roofC: [0xc0623b, 0xb5573a, 0xa94e32, 0xd07a4a], shop: 0.15, L: 0.5, win: 0.72, backDoor: 0.7,
     interiorMat: "plaster", base: { p: 0.3, mat: ["stucco"], color: [0xffffff, 0xf3ece0] }, porch: 0.35, canopy: 0.5, balcony: 0.6, belts: 0.5, pilasters: 0.3, chimney: 0.1, shutters: 0.75, awning: 0.9 },
   lodge: { facadeMat: ["plank"], facade: { plank: [0x7a5234, 0x8e5e3b, 0x6e7b4f, 0x9c8b70, 0x5e6b4a, 0x8b3a2e, 0x6a4a36, 0x857a66] },
     trim: [0xe8e0cc, 0x3a2e24], roofs: { gable: 0.9, flat: 0.1 }, pitch: 38, roofC: [0x4a3f38, 0x3e4a3a, 0x5a3a2c, 0x34383c], shop: 0.1, L: 0.4, win: 0.55, backDoor: 0.5,
@@ -563,6 +833,21 @@ const ROOMSTYLE = {
   ruin: { wall: [0x8a857a, 0x7a766c, 0x9a9282], floor: "floor_concrete", fc: [0x6f6a60, 0x7d776c] },
 };
 const LODGE_INNER = [0xc79a6a, 0xb98d5f, 0xd2a878];
+// (W10 R3A, audit 6) 16 prints the finish draws on the art pieces' canvases and the framed pictures (meshData: a 4 x 3 cell grid, 5 x 4 vertex colours = each row's
+// left .. right colour). Original procedural prints (landscapes, abstracts), no texture: the insides' material has no free sampler (0 programs, 0 draw calls, 0 KB)
+export const PICS = [
+  [[0xc6dcec, 0xa9cbe4], [0x7fa9cc, 0x6f9cc4], [0x2f5f86, 0x3a6f9a], [0xd8c8a0, 0xc9b48a]], [[0xf2c27a, 0xe8a060], [0xe07a4a, 0xf3d08a], [0x7a3a4a, 0x5a2e44], [0x2e2a3a, 0x3a3046]],
+  [[0xcfe0d8, 0xb8d4cc], [0x5e8a5a, 0x4a7a4e], [0x2f5a36, 0x3a6a40], [0x6a5a3a, 0x5a4a30]], [[0xe8d8b8, 0xf0e0c0], [0xd8a868, 0xc89458], [0xb87a48, 0xa86a3a], [0x8a5a34, 0x9a6a3e]],
+  [[0x9ab8d8, 0xa8c4e0], [0xf4f4f6, 0xd8dde4], [0x6a7488, 0x5a6478], [0x4a6a4a, 0x3e5e40]], [[0xc0453a, 0xc0453a], [0xc0453a, 0x2f5f8a], [0xe8e0cc, 0x2f5f8a], [0xe8e0cc, 0xd9b44a]],
+  [[0xd9b44a, 0xe0a040], [0xd9b44a, 0xb05a3a], [0x8a3b3b, 0xb05a3a], [0x8a3b3b, 0x3a2e24]], [[0xf0ece2, 0xc0302a], [0xf0ece2, 0xf0ece2], [0x2a4a8a, 0xf0ece2], [0x2a4a8a, 0xe8c040]],
+  [[0xeee6d2, 0xeee6d2], [0xe6dcc0, 0x6a8a4a], [0x6a8a4a, 0x4a6a3a], [0xeee6d2, 0xe6dcc0]], [[0x1a2238, 0x22304a], [0x2e3a5a, 0x3a4a6a], [0x5a5a6a, 0xd8b060], [0x2a2a34, 0x3a3a44]],
+  [[0x2f6f6a, 0x3a8a7a], [0xe8e2d0, 0x3a8a7a], [0xe8e2d0, 0xd07a4a], [0x2f6f6a, 0xd07a4a]], [[0xc8d4ec, 0xd8c8e8], [0x9a8ac8, 0x8a7ab8], [0x6a5a9a, 0x7a6aa8], [0x4a6a3a, 0x5a7a44]],
+  [[0xe8d8b0, 0xd8c8a0], [0xc87a3a, 0xb85a2a], [0x9a4a2a, 0xc8902a], [0x5a4a30, 0x4a3a28]], [[0xe8e6e2, 0xd8d6d2], [0xb8b6b2, 0x8a8884], [0x5a5854, 0x8a8884], [0xe8e6e2, 0xc8c6c2]],
+  [[0xd8e4ec, 0xc8d8e4], [0x6a8a6a, 0x5a7a5e], [0x6f93a6, 0x5f839a], [0x4a6a7a, 0x3e5e6e]], [[0xe85a7a, 0xf0c040], [0xf0c040, 0x3ab0c0], [0x3ab0c0, 0x6a4ac0], [0x6a4ac0, 0xe85a7a]],
+];
+const COVER_IDS = { office: ["lockers", "bookcase", "shelf", "bookcaseOpen", "shelfLow", "partition"], meeting: ["bookcase", "shelfLow", "bookcaseOpen", "lockers", "shelf"],
+  lobby: ["shopCounter", "shelfLow", "bookcase", "lockers"], hall: ["lockers", "lockers2", "shelfLow", "bookcase", "partition"] };     // (W10 R3A: the cover pieces each work room tries, in order)
+const PIC_KINDS = new Set(["living", "bedroom", "kitchen", "dining", "office", "lobby", "meeting", "hall"]);
 const RUG = [0x8a3b3b, 0x3b5a8a, 0x6a8a3b, 0xb07a3a, 0x5a3b6a, 0x2f6f6a];
 const TINT_WOOD = [0x9a6b43, 0x7d5435, 0xb2875a, 0x5e4430];
 const ART = [0x2f5f8a, 0xc0563a, 0x6a8a3b, 0xd9b44a, 0x7a4a8a, 0x3a8a7a, 0xe0d6c0, 0x8a3b3b];
@@ -590,6 +875,8 @@ function normParcel(p) {
     // (Wave 8 fix round, lane K1) the caller's other buildings round this one, world rects [x0, z0, x1, z1]: no street / back door opens onto one of them closer
     // than DOOR_OUT (an alley narrower than a doorway's approach; verify_b: 11 Savanna downtown back doors faced a tower wall 1-3 m away)
     near: Array.isArray(p.near) ? p.near.filter((q) => Array.isArray(q) && q.length === 4 && q.every((v) => isFinite(+v))).map((q) => q.map(Number)) : null,
+    // (W10 R3A) the building stands in a downtown core (maps.js: towngen's core town kind): its homes keep the flat roofs of a city block, no porch
+    core: !!p.core,
   };
 }
 export const DOOR_OUT = 4.0;               // m of open ground in front of a street / back door (the approach a walker starts from 3.5 m out + a capsule)
@@ -600,10 +887,14 @@ export function generate(parcel, opts) {
   const kitProfile = opts && CATALOGS[opts.kit] ? opts.kit : DEFAULT_KIT, CATALOG = CATALOGS[kitProfile];
   const rng = subRng(P.seed, P.id, "house");
   const TH = THEMES[P.theme];
+  // (W10 R1A item 8) this house's model variety (VARIETY): its own stream, so every other draw of the house is what it was
+  const VAR = {};
+  { const rv = subRng(P.seed, P.id, "kitvar"); for (const [t, v] of VARIETY) { const x = rv(); if (x < 0.5 && CATALOG[v]) VAR[t] = CATALOG[v]; } }
   const rr5 = TH.ruined ? subRng(P.seed, P.id, "ruin") : null;          // (K1) a ruin's wreckage: its own stream (the house's rooms and furniture keep theirs)
   const { nx, nz } = P;
   const W = nx * U, D = nz * U;
   const notes = [];
+  let hasPorch = false;                                   // (W10 R3A: a front porch was built - the homes census's porch share)
   if (P.themeAsked != null && P.themeAsked !== P.theme) notes.push("theme " + P.themeAsked + " unknown -> city");
   const uL = (i) => -W / 2 + i * U, vL = (j) => -D / 2 + j * U;
   const cIdx = (i, j) => j * nx + i;
@@ -613,7 +904,8 @@ export function generate(parcel, opts) {
   const use = P.use || (rng() < TH.shop ? "shop" : "house");
   const FHu = P.fh != null ? P.fh : USE_FH[use];
   const tall = use === "tower" || use === "midrise";      // tall shells: the storeys over the walkable ones (O3) stay CLOSED
-  const store = use === "shop" && nx >= 11 && nz >= 8;    // (P23 / LC-29) a DEPARTMENT STORE (towngen's Old Mall, 30 x 22.5 m; no other shop is that wide): big trading floors on every storey, no flat upstairs
+  const store = use === "shop" && nx >= 11 && nz >= 8;
+  const home = use === "house" && !TH.ruined && !tall;          // (W10 R1A) a HOME: its rooms are planned by homeRects (no strip rooms) and get the full programme    // (P23 / LC-29) a DEPARTMENT STORE (towngen's Old Mall, 30 x 22.5 m; no other shop is that wide): big trading floors on every storey, no flat upstairs
   let S = Math.min(P.storeysAsked, MAX_FLOORS);
   if (P.storeysAsked > MAX_FLOORS && !tall) notes.push("storeys " + P.storeysAsked + " -> " + MAX_FLOORS + " (O3: <= 3 walkable floors)");
   if (S >= 2 && FHu > STAIR_MAX_RISE + 1e-9) { notes.push("storeys " + S + " -> 1: a " + FHu + " m storey is too tall for a 5 m stair"); S = 1; }
@@ -637,7 +929,10 @@ export function generate(parcel, opts) {
   const stairs = [];
   for (let f = 0; f < S - 1; f++) {
     const st = strips[f % strips.length];
-    const k = rint(rng, 1, st.L - 3);
+    // (W10 R1A pass 5: a HOME's stair rises to the strip's end - k 1, the exit in cell 0 - so the landing hall upstairs runs straight along the end row from the
+    // stair top: a stair arriving mid-strip made the hall an L whose middle a player off the stair looked at across the stairwell)
+    const k0 = rint(rng, 1, st.L - 3), hallW = st.axis === "col" ? nx - strips.length : nz - 1;     // (the cells beside the stair a hall would run along)
+    const k = use === "house" && !TH.ruined && LANDING_HALL && hallW >= MIN_ROOM_W + 1 ? 1 : k0;
     stairs.push({ f, strip: f % strips.length, k });
   }
 
@@ -648,7 +943,11 @@ export function generate(parcel, opts) {
     const side = strips.length ? (strips[0].at === 0 ? 1 : 0) : (rng() < 0.5 ? 0 : 1);       // 0 = cut on the -u side, 1 = +u side
     const cw = rint(rng, 1, Math.max(1, Math.min(nx >> 1, nx - 2 - (strips.length ? 1 : 0))));
     const cd = rint(rng, 1, Math.max(1, Math.min(nz >> 1, nz - 2)));
-    cut = side ? [nx - cw, 0, nx, cd] : [0, 0, cw, cd];
+    // (W10 R1A) a home's L leaves >= MIN_ROOM_W cells beside and in front of the removed corner (else no room there could be 5 m wide): the corner is clamped, or the
+    // plan stays a rectangle
+    const restW = nx - (strips.length ? 1 : 0), cw2 = home ? clamp(cw, MIN_ROOM_W, restW - MIN_ROOM_W) : cw, cd2 = home ? clamp(cd, MIN_ROOM_W, nz - MIN_ROOM_W) : cd;
+    // ... and keeps >= 16 cells of rooms per floor (4 rooms of 2 x 2: the programme's living, kitchen, bedroom and bath on a bungalow)
+    if (!home || (restW - cw2 >= MIN_ROOM_W && cw2 >= MIN_ROOM_W && nz - cd2 >= MIN_ROOM_W && cd2 >= MIN_ROOM_W && restW * nz - cw2 * cd2 >= 16)) cut = side ? [nx - cw2, 0, nx, cd2] : [0, 0, cw2, cd2];
   } else if (P.plan === "L") notes.push("plan L -> rect (needs >= 4 x 4 cells and <= 2 storeys with a side stair)");
   const inFoot = (i, j) => i >= 0 && j >= 0 && i < nx && j < nz && !(cut && i >= cut[0] && i < cut[2] && j >= cut[1] && j < cut[3]);
   // (lane K1) is the ground in front of an exterior doorway on edge (ori, i, j) free of the caller's other buildings (P.near) for DOOR_OUT? (no rng)
@@ -681,6 +980,11 @@ export function generate(parcel, opts) {
     if (roofKind === "gable" && cut) roofKind = "hip";
     if (roofKind === "gable" && use === "barn" && (P.theme === "farm" || P.theme === "lodge")) roofKind = "gambrel";
     else if (roofKind === "gable" && use === "shed" && rng() < 0.6) roofKind = "lean";
+    // (W10 R3A, audit 13) a home outside a downtown core is never flat-roofed: a gable, a stepped hip on an L plan (no stream drawn: the house's draws stay)
+    // (fix4) except the city theme's homes (Savanna): they keep the theme's own mix (gable 0.8 - was 0.55) - forcing every one of them pitched cost the LOW tier's
+    // bot / nav-grid frame +16 KB of JS heap (p23_tierprof kb [ashgrid low] 94.3 against the bar 85; with the city's own mix 76.3, homes pitched 91.1 % pooled)
+    if (PITCHED_HOMES && home && !P.core && P.theme !== "city" && roofKind === "flat") roofKind = cut ? "hip" : "gable";
+    if (ROOF_FLAT_ALL) roofKind = "flat";
   }
   const pitched = roofKind === "gable" || roofKind === "gambrel" || roofKind === "lean";
   const palette = [], palKey = new Map();
@@ -735,16 +1039,44 @@ export function generate(parcel, opts) {
     // the rest: guillotine rooms over the bounding rectangle of the non-strip cells
     let ri0 = 0, ri1 = nx, rj0 = 0, rj1 = nz;
     for (const si of active) { const sp = strips[si]; if (sp.axis === "col") { if (sp.at === 0) ri0 = 1; else ri1 = nx - 1; } else rj0 = 1; }
+    // (W10 R1A pass 5) a HOME's halls: on an upper floor the stair arrives in a LANDING HALL (never inside a bedroom) and on the ground floor the front door opens into
+    // an ENTRY HALL that holds the stair's foot; the rooms open off the hall, so no room is the way to another through a bath. The stair's exit run always reaches
+    // the strip's end cell 0 (the hole is at k, k + 1 and the exit at k - 1) and its approach run the end cell L - 1 (the approach is at k + 2): the hall is that run
+    // plus the row (a 'col' strip) / column (a 'row' strip) of the rest beside that end cell, up to another strip or the L plan's removed corner. The rooms are
+    // planned beside it; a bath nook goes to the far side upstairs (an en-suite: the room it is cut from keeps its wall on the hall), next to the hall downstairs.
+    const lhCells = new Set();
+    let lhNook = null;
+    if (home && LANDING_HALL && S >= 2) {
+      const up = f > 0, st = up ? stairs.find((q) => q.f + 1 === f) : stairs.find((q) => q.f === 0), sp = st && strips[st.strip];
+      const [ei, ej] = sp ? stripCell(sp, up ? st.k - 1 : st.k + 2) : [-1, -1], h = sp ? regs.find((q) => q.hall && q.strip === st.strip && q.cells.includes(cIdx(ei, ej))) : null;
+      const end = sp ? (up ? 0 : sp.L - 1) : -1;
+      if (h && h.cells.includes(cIdx(...stripCell(sp, end)))) {
+        const add = [];
+        if (sp.axis === "col") { const di = sp.at === 0 ? 1 : -1; for (let i = sp.at + di; i >= 0 && i < nx; i += di) { const c = cIdx(i, end); if (type[c] !== 1 || stripOf[c] >= 0) break; add.push(c); } }
+        else for (let j = 1; j < nz; j++) { const c = cIdx(end, j); if (type[c] !== 1 || stripOf[c] >= 0) break; add.push(c); }
+        // (only where the floor keeps its rooms: the rest beside the hall is planned to >= 3 rooms, or as many as without it - a 10 x 10 m home keeps its 3 rooms a floor and gets no hall)
+        const nRooms = (a0, b0, a1, b1) => { let n = 0; for (let jj = b0; jj < b1; jj++) for (let ii = a0; ii < a1; ii++) if (type[cIdx(ii, jj)] === 1) n++; return homeRects(() => 0.5, a0, b0, a1, b1, clamp(Math.round(n / 4), 1, 6), cut, MIN_ROOM_W, null).length; };
+        const lowE = end === 0, R0 = nRooms(ri0, rj0, ri1, rj1);
+        const R1 = sp.axis === "col" ? (lowE ? nRooms(ri0, Math.max(rj0, 1), ri1, rj1) : nRooms(ri0, rj0, ri1, Math.min(rj1, nz - 1))) : (lowE ? nRooms(Math.max(ri0, 1), rj0, ri1, rj1) : nRooms(ri0, rj0, Math.min(ri1, nx - 1), rj1));
+        if (add.length >= MIN_ROOM_W + 1 && R1 >= Math.min(R0, 3)) {      // (>= 3 cells beside the stair: a 2-cell hall in a 7.5 - 10 m wide house is a closet the door looks across)
+          for (const c of add) { h.cells.push(c); lhCells.add(c); }
+          h.landingHall = true;
+          const ax = sp.axis === "col" ? "j" : "i", low = end === 0;          // (the hall on the low side of the rest: its rooms start one cell further in)
+          if (sp.axis === "col") { if (low) rj0 = Math.max(rj0, 1); else rj1 = Math.min(rj1, nz - 1); } else { if (low) ri0 = Math.max(ri0, 1); else ri1 = Math.min(ri1, nx - 1); }
+          lhNook = ax + ((low === up) ? "+" : "-");                           // (upstairs: away from the hall; downstairs: beside it)
+        }
+      }
+    }
     let restCells = 0;
     for (let j = rj0; j < rj1; j++) for (let i = ri0; i < ri1; i++) if (type[cIdx(i, j)] === 1) restCells++;
     // about one room per 4 cells (25 m2): PUBG-sized rooms, cleared one by one, not 40 m2 halls
     const target = use === "shed" ? 1 : use === "barn" ? (restCells >= 24 ? 2 : 1) : use === "hall" ? (restCells >= 24 ? 3 : 2)
       : store ? clamp(Math.round(restCells / 14), 2, 4)
         : use === "shop" && f === 0 ? (restCells >= 12 ? 2 : 1) : clamp(Math.round(restCells / 4), 1, 6);
-    const rects = guillotine(rng, ri0, rj0, ri1, rj1, target);
+    const rects = home ? homeRects(rng, ri0, rj0, ri1, rj1, target, cut, MIN_ROOM_W, lhNook) : guillotine(rng, ri0, rj0, ri1, rj1, target);
     for (const r of rects) {
       const cells = [];
-      for (let j = r[1]; j < r[3]; j++) for (let i = r[0]; i < r[2]; i++) { const c = cIdx(i, j); if (type[c] === 1 && stripOf[c] < 0) cells.push(c); }
+      for (let j = r[1]; j < r[3]; j++) for (let i = r[0]; i < r[2]; i++) { const c = cIdx(i, j); if (type[c] === 1 && stripOf[c] < 0 && !lhCells.has(c)) cells.push(c); }
       if (cells.length) regs.push({ hall: false, strip: -1, cells, rect: r });
     }
     // a stair LANDING (a hall segment of <= 2 cells: the approach or the exit with a cell beside it) opens into the room beside it instead of being a
@@ -833,7 +1165,19 @@ export function generate(parcel, opts) {
       // (the front door's room is the root every other room hangs off: never a <= 2-cell room when a bigger one also fronts the street - a tiny
       // root collects three doorways and has no wall left that a doorway sees)
       const regSize = (i) => { const r = F.region[cIdx(i, nz - 1)]; return r >= 0 ? F.regs[r].cells.length : 0; };
-      if (regSize(fi) <= 2) { const big = cols.filter((i) => regSize(i) > 2); if (big.length) fi = big.slice().sort((a, b) => Math.abs(a - fi) - Math.abs(b - fi) || a - b)[0]; }
+      // (W10 R1A pass 4: a HOME's front room is its living room, and a lived room is >= 4 cells - a 3-cell front room became a store-room vestibule between the
+      // street door and the living room, a strip whose door zones left no spot a doorway sees: interiorcheck --source housegen s7h2.f0r4 showed 2 pieces)
+      const tiny = home ? 3 : 2;
+      if (regSize(fi) <= tiny) { const big = cols.filter((i) => regSize(i) > tiny); if (big.length) fi = big.slice().sort((a, b) => Math.abs(a - fi) - Math.abs(b - fi) || a - b)[0]; }
+      // (W10 R1A pass 5: a home's entry hall that reaches the street takes the front door)
+      const lh = F.regs.findIndex((r) => r.landingHall), lhc = lh >= 0 ? cols.filter((i) => F.region[cIdx(i, nz - 1)] === lh) : [];
+      if (lhc.length && F.region[cIdx(fi, nz - 1)] !== lh) fi = lhc[(lhc.length - 1) >> 1];
+      // (... as far along it as it goes from the living room's wall - the biggest room: the doorway into it then has hall wall behind it, not the open front door)
+      if (lhc.length > 1) {
+        const big = F.regs.map((r, ri) => [r, ri]).filter((q) => !q[0].hall).sort((a, b) => b[0].cells.length - a[0].cells.length || a[1] - b[1])[0];
+        const bc = big ? lhc.filter((i) => nz >= 2 && F.region[cIdx(i, nz - 2)] === big[1]) : [];
+        if (bc.length) { const mid = lhc[(lhc.length - 1) >> 1], gap = (i) => Math.min(...bc.map((b) => Math.abs(i - b))); fi = lhc.slice().sort((a, b) => gap(b) - gap(a) || Math.abs(a - mid) - Math.abs(b - mid) || a - b)[0]; }
+      }
       F.frontCol = fi;
       root = F.region[cIdx(fi, nz - 1)];
     } else {
@@ -847,14 +1191,14 @@ export function generate(parcel, opts) {
     const rest = regs.filter((x) => !x.r.hall);
     const order = [];
     if (F.f === 0) {
-      const root = rest.find((x) => x.i === F.root) || rest[0];
+      const root = rest.find((x) => x.i === F.root) || (F.regs[F.root] && F.regs[F.root].landingHall ? rest.slice().sort((a, b) => b.n - a.n || a.i - b.i)[0] : rest[0]);   // (an entry hall: the biggest room is the living room)
       if (root) order.push(root);
       const others = rest.filter((x) => x !== root).sort((a, b) => b.n - a.n || a.i - b.i);
       for (const o of others) order.push(o);
       const seq = store ? ["shop", "shop", "storage", "office"] : use === "shop" ? ["shop", "storage", "office", "storage"] : use === "shed" ? ["storage"] : use === "barn" ? ["barn", "storage"]
         : use === "hall" ? ["warehouse", "office", "storage", "bath"] : tall ? ["lobby", "office", "storage", "bath", "office", "storage"]
           : P.theme === "lodge" || P.theme === "farm" ? ["living", "kitchen", "storage", "bedroom", "bath", "office"]
-            : P.theme === "mill" ? ["warehouse", "office", "storage", "bath", "office", "storage"]
+            : P.theme === "mill" && !home ? ["warehouse", "office", "storage", "bath", "office", "storage"]          // (W10 R1A: a mill's HOME is furnished as a home)
               : P.theme === "resort" ? ["living", "kitchen", "bedroom", "bath", "bedroom", "office"] : ["living", "kitchen", "bath", "office", "bedroom", "storage"];
       // a barn / hall: the BIGGEST room is the barn / warehouse floor wherever the front door is
       const ord = use === "barn" || use === "hall" ? rest.slice().sort((a, b) => b.n - a.n || a.i - b.i) : order;
@@ -886,6 +1230,63 @@ export function generate(parcel, opts) {
     if (TH.ruined) for (const x of regs) if (x.r.kind !== "bath" && x.r.kind !== "hall") x.r.kind = "ruin";
   };
   for (const F of floors) kindsFor(F);
+  // (W10 R1A, audit 12) a home's programme: living + kitchen + bedroom + bath somewhere in the house (an office / storage room, else a second room of a kind
+  // the house has twice, takes the missing kind: living / kitchen on the ground floor, the bath the smallest, a bedroom the biggest - upstairs first); >= 150 m2
+  // of rooms adds a second bedroom the same way. A pure function of the plan (no rng).
+  if (home && HOME_PROGRAMME) {
+    const all = [];
+    for (const F of floors) for (const r of F.regs) if (!r.hall) all.push({ r, f: F.f, n: r.cells.length, root: F.f === 0 && F.regs.indexOf(r) === F.root });
+    const count = (k) => all.filter((o) => o.r.kind === k).length;
+    const donors = (want) => {
+      const spare = all.filter((o) => (o.r.kind === "office" || o.r.kind === "storage") && !o.root);
+      const dup = all.filter((o) => ["bedroom", "bath", "kitchen", "living"].includes(o.r.kind) && o.r.kind !== want && count(o.r.kind) >= 2 && !o.root);
+      return spare.length ? spare : dup;
+    };
+    const take = (want, list) => {
+      if (want !== "bath") list = list.filter((o) => o.n >= 4);              // (a 1 x 2 nook is never a lived room)
+      if (!list.length) return false;
+      const ground = list.filter((o) => o.f === 0), up = list.filter((o) => o.f > 0);
+      const pool = want === "living" || want === "kitchen" ? (ground.length ? ground : list) : want === "bedroom" ? (up.length ? up : list) : list;
+      const by = pool.slice().sort((a, b) => (want === "bath" ? a.n - b.n : b.n - a.n) || a.f - b.f || a.r.cells[0] - b.r.cells[0]);
+      by[0].r.kind = want;
+      return true;
+    };
+    // a 1 x 2 nook a stair landing opened into is the landing's hall (its door zones and the stair approach leave no wall for a tub): the bath goes elsewhere
+    // (W10 R1A pass 5: a stair's foot or top only - the rail-end cell past an upper hole beside a landing hall leaves the en-suite a bath)
+    const stairEnd = (o) => !LANDING_HALL || o.r.cells.some((c) => floors[o.f].approach.has(c) || floors[o.f].exit.has(c));
+    for (const o of all) if (o.r.landing && o.n <= 3 && o.r.kind === "bath" && stairEnd(o) && all.filter((q) => q.f === o.f && q !== o).length >= 2) o.r.kind = "hall";
+    // a lived room cut to a 1 x 2-cell nook is the floor's bath (swapped with a bigger bath on that floor) or a box room; one bath a floor (a second, bigger one is a bedroom)
+    for (const o of all) {
+      if (o.n >= 4 || !["living", "kitchen", "bedroom"].includes(o.r.kind)) continue;
+      const b = all.find((q) => q.f === o.f && q.r.kind === "bath" && q.n > o.n);
+      // (W10 R1A pass 5: beside a home's entry hall, a cloakroom WC - a one-cell-wide store strip entered from its long side reads as 2.3 m of rack)
+      if (b) { b.r.kind = o.r.kind; o.r.kind = "bath"; } else o.r.kind = LANDING_HALL && floors[o.f].regs.some((q) => q.landingHall) ? "bath" : "storage";
+    }
+    // (W10 R1A pass 5) ... and a one-cell-wide store room or office (<= 3 cells) is that floor's WC when the floor has no bath (a strip of rack entered from its long side
+    // shows 2.3 m of rack: interiorcheck furniture-view, deepwood hollow@p7.f0r2)
+    if (LANDING_HALL) for (const o of all) {
+      if (o.n > 3 || !["storage", "office"].includes(o.r.kind)) continue;
+      const is = o.r.cells.map((c) => c % nx), js = o.r.cells.map((c) => Math.floor(c / nx));
+      if (Math.min(Math.max(...is) - Math.min(...is), Math.max(...js) - Math.min(...js)) === 0 && !all.some((q) => q.f === o.f && q !== o && q.r.kind === "bath")) o.r.kind = "bath";
+    }
+    for (const F of floors) {
+      const baths = all.filter((o) => o.f === F.f && o.r.kind === "bath").sort((a, b) => a.n - b.n || a.r.cells[0] - b.r.cells[0]);
+      for (const o of baths.slice(1)) if (o.n >= 4) o.r.kind = count("bedroom") >= 2 ? "office" : "bedroom";
+    }
+    for (const k of ["living", "kitchen", "bath", "bedroom"]) if (!count(k)) take(k, donors(k));
+    const area = all.reduce((a, o) => a + o.n * U * U, 0);
+    if (area >= 150 && count("bedroom") < 2) take("bedroom", all.filter((o) => (o.r.kind === "office" || o.r.kind === "storage") && !o.root));
+    // (W10 R1A pass 5) an upper floor with no landing hall (too small for one): the stair never arrives inside a bedroom - the room it lands in trades kinds with the
+    // floor's study / store room (>= 4 cells) when there is one
+    if (LANDING_HALL) for (const F of floors) {
+      if (F.f === 0 || F.regs.some((q) => q.landingHall)) continue;
+      const land = all.find((o) => o.f === F.f && F.regs.indexOf(o.r) === F.root);
+      if (!land || land.r.kind !== "bedroom") continue;
+      const sw = all.filter((o) => o.f === F.f && o !== land && o.n >= 4 && (o.r.kind === "office" || o.r.kind === "storage")).sort((a, b) => b.n - a.n || a.r.cells[0] - b.r.cells[0])[0];
+      if (sw) { sw.r.kind = "bedroom"; land.r.kind = "office"; }
+      else if (count("bedroom") >= 2) land.r.kind = "office";               // (a study on the landing: the house sleeps in its other bedroom(s))
+    }
+  }
   // which of the wall cells two rooms share gets the door: the middle one, among those with no stair approach / exit on either side (a doorway
   // that opens onto a stairwell landing shows the stair, not the room: nothing can stand in its view)
   const pickEdge = (F, list) => {
@@ -901,7 +1302,26 @@ export function generate(parcel, opts) {
   // pieces). The door trees prefer any other shared wall cell.
   const across = (F, ori, i, j) => {
     if (ori === "V") return (i + 1 <= nx && F.eV[(i + 1) * nz + j] === 2) || (i - 1 >= 0 && F.eV[(i - 1) * nz + j] === 2);
-    return (j + 1 <= nz && F.eH[(j + 1) * nx + i] === 2) || (j - 1 >= 0 && F.eH[(j - 1) * nx + i] === 2) || (F.f === 0 && i === F.frontCol && j === nz - 1);
+    // (W10 R1A pass 5: a home's one-cell-deep entry hall - nor beside the front door: the game's camera, 0.7 m off the shoulder, leaves through it)
+    const lhFront = home && LANDING_HALL && F.f === 0 && j === nz - 1 && Math.abs(i - F.frontCol) === 1 && F.region[cIdx(i, nz - 1)] >= 0 && F.regs[F.region[cIdx(i, nz - 1)]].landingHall;
+    return (j + 1 <= nz && F.eH[(j + 1) * nx + i] === 2) || (j - 1 >= 0 && F.eH[(j - 1) * nx + i] === 2) || (F.f === 0 && i === F.frontCol && j === nz - 1) || lhFront || farAcross(F, ori, i, j);
+  };
+  // (W10 R1A pass 5) in a home, nor straight across a deeper room from its other doorway (the en-suite door facing the hall door of a 5 x 5 m bedroom: the two door
+  // zones run through the room's middle and each doorway looks at the other - 4 of the room's 7 substantive pieces showed)
+  const farAcross = (F, ori, i, j) => {
+    if (!(home && LANDING_HALL)) return false;
+    const H = ori === "H", L = H ? nz : nx;
+    const cell = (k) => (H ? cellAt(i, k) : cellAt(k, j)), edge = (k) => (H ? F.eH[k * nx + i] : F.eV[k * nz + j]);
+    const at = H ? j : i;
+    for (const [c0, dk] of [[at, 1], [at - 1, -1]]) {
+      const r = c0 >= 0 && c0 < L ? F.region[cell(c0)] : -1;
+      if (r < 0 || cell(c0) < 0) continue;
+      let k = c0;
+      while (k + dk >= 0 && k + dk < L && cell(k + dk) >= 0 && F.region[cell(k + dk)] === r) k += dk;
+      const far = dk > 0 ? k + 1 : k;
+      if (far !== at && edge(far) === 2) return true;
+    }
+    return false;
   };
   // ... and in a room one cell thick (a 2.5 m wide strip), never a second doorway in the long wall OPPOSITE its other doorway: each would look across 2.26 m at the
   // other door's zone (the room shows 1-2 pieces from either); on the same wall or on an end wall, a doorway looks along the strip or at its free far wall
@@ -939,9 +1359,23 @@ export function generate(parcel, opts) {
     for (let j = 1; j < nz; j++) for (let i = 0; i < nx; i++) if (F.eH[j * nx + i] === 1 && !F.extH[j * nx + i]) addCand(cellAt(i, j - 1), cellAt(i, j), "H", i, j);
     for (let i = 1; i < nx; i++) for (let j = 0; j < nz; j++) if (F.eV[i * nz + j] === 1 && !F.extV[i * nz + j]) addCand(cellAt(i - 1, j), cellAt(i, j), "V", i, j);
     const root = F.root;
+    // (W10 R1A) a home's kitchen next to its living room: a kitchen that shares no wall with it trades places with a bedroom (>= 4 cells) that does
+    if (home && CENTRE_GROUPS) {
+      const ck = (x, y) => cand.has(x < y ? x + "|" + y : y + "|" + x);
+      const ki = R.findIndex((q) => q && q.kind === "kitchen"), li = R.findIndex((q) => q && q.kind === "living");
+      if (ki >= 0 && li >= 0 && !ck(ki, li)) {
+        const bi = R.findIndex((q, i) => q && q.kind === "bedroom" && q.cells.length >= 4 && ck(i, li));
+        if (bi >= 0) { R[bi].kind = "kitchen"; R[ki].kind = "bedroom"; }
+      }
+    }
     const seen = new Uint8Array(nR); seen[root] = 1;
     const queue = [root], later = [], linked = new Set();
     const leafy = (ri) => R[ri].kind === "bath";
+    // (W10 R1A) a home's front room (the living room) opens into at most 2 rooms when the others can be reached through them: a hub with 4-5 doorways is all door zone
+    // (a 25 m2 front room - 4 cells - into ONE: with the front door and two doorways it held 5 pieces at most, the homes gate's 6-a-room minimum)
+    let rootDeg = 0;
+    const held = [], deg = [];                               // (and a room of <= 5 cells past it - its own doorway in - into one more: each a chain, not a hub)
+    for (;;) {
     while (queue.length || later.length) {
       const a = queue.length ? queue.shift() : later.shift();
       const nb = [];
@@ -950,8 +1384,16 @@ export function generate(parcel, opts) {
         const k = a < b ? a + "|" + b : b + "|" + a;
         if (cand.has(k)) nb.push(b);
       }
+      if (home && a === root) nb.sort((x, y) => (R[y].kind === "kitchen" ? 1 : 0) - (R[x].kind === "kitchen" ? 1 : 0) || x - y);
+      // (W10 R1A pass 5: a small hall a stair lands in - a nook kept as the landing - opens into its BIGGEST neighbour: the chain then ends in the smaller room, which
+      // can take the house's bath)
+      if (home && LANDING_HALL && a === root && R[root].kind === "hall" && !R[root].hall) nb.sort((x, y) => R[y].cells.length - R[x].cells.length || x - y);     // (the front room's doorway: to the kitchen first - its dining set may stand here)
       for (const b of nb) {
         if (seen[b]) continue;
+        if (home && a === root && rootDeg >= (R[root].cells.length <= 5 ? 1 : 2) && !R[root].hall) { if (!held.some((h) => h[1] === b)) held.push([a, b]); continue; }
+        if (home && a !== root && R[a].cells.length <= 5 && (deg[a] || 0) >= 1 && !R[a].hall) { if (!held.some((h) => h[1] === b)) held.push([a, b]); continue; }
+        if (a === root) rootDeg++;
+        deg[a] = (deg[a] || 0) + 1;
         seen[b] = 1;
         const k = a < b ? a + "|" + b : b + "|" + a, list = cand.get(k);
         const e = pickEdgeA(F, list, a, b);
@@ -960,16 +1402,38 @@ export function generate(parcel, opts) {
         (leafy(b) ? later : queue).push(b);
       }
     }
+    // a held room nobody else reached: through the room that held it after all
+    const hh = held.find((h) => !seen[h[1]]);
+    if (hh == null) break;
+    const [ha, hb] = hh;
+    const kr = ha < hb ? ha + "|" + hb : hb + "|" + ha, e = pickEdgeA(F, cand.get(kr), ha, hb);
+    seen[hb] = 1; if (ha === root) rootDeg++; deg[ha] = (deg[ha] || 0) + 1;
+    R[hb].entry = mkDoor(F, e.ori, e.i, e.j, "interior", ha, hb);
+    linked.add(kr);
+    (leafy(hb) ? later : queue).push(hb);
+    }
     F.sealed = [];
     for (let b = 0; b < nR; b++) if (!seen[b]) F.sealed.push(b);
+    // (W10 R1A) a home's kitchen opens into its living room when they share a wall (the dining set may stand in either: census "kitchen or a room it opens into")
+    if (home && CENTRE_GROUPS) {
+      const ki = R.findIndex((q) => q && q.kind === "kitchen"), li = R.findIndex((q) => q && q.kind === "living");
+      const kk = ki < li ? ki + "|" + li : li + "|" + ki;
+      if (ki >= 0 && li >= 0 && seen[ki] && seen[li] && cand.has(kk) && !linked.has(kk)) {
+        const e = pickEdgeA(F, cand.get(kk), Math.min(ki, li), Math.max(ki, li));
+        mkDoor(F, e.ori, e.i, e.j, "interior", Math.min(ki, li), Math.max(ki, li));
+        linked.add(kk);
+      }
+    }
     // a second way round now and then (PUBG houses rarely dead-end): one extra door between two rooms not yet joined directly
     if (rng() < 0.35) {
       // (never into a room of <= 2 cells: a 5 x 2.5 m room with three doorways is all door zone - nothing can stand where a doorway sees it)
-      const keys = [...cand.keys()].filter((k) => !linked.has(k) && !k.split("|").some((x) => leafy(+x) || R[+x].cells.length <= 2)).sort();
+      // (W10 R1A: in a home, never into a room that already has 2 doorways - a 25 m2 living room with four doorways is all door zone)
+      const nDoors = (ri) => doors.filter((d) => d.floor === F.f && (d.a === ri || d.b === ri)).length;
+      const keys = [...cand.keys()].filter((k) => !linked.has(k) && !k.split("|").some((x) => leafy(+x) || R[+x].cells.length <= 2 || (home && (nDoors(+x) >= 2 || (+x === root && R[root].cells.length <= 5))))).sort();
       if (keys.length) {
         const k = pick(rng, keys), [a, b] = k.split("|").map(Number);
         const list = cand.get(k), e = pickEdgeA(F, list, a, b);
-        mkDoor(F, e.ori, e.i, e.j, "interior", a, b);
+        mkDoor(F, e.ori, e.i, e.j, "interior", a, b).extra = true;
       }
     }
   }
@@ -989,7 +1453,22 @@ export function generate(parcel, opts) {
     // (never straight across a room from another door: in a one-cell-deep room the two door zones would leave nothing in either doorway's view)
     const opp = (e) => (e[0] === "H" ? F0.eH[(e[2] + 1) * nx + e[1]] : e[1] === e[3] % nx ? F0.eV[(e[1] + 1) * nz + e[2]] : F0.eV[(e[1] - 1) * nz + e[2]]) === 2;
     // (lane K1: and never onto an alley narrower than DOOR_OUT - the caller's neighbours, P.near: the house keeps its street door then)
-    const far = cands.filter((e) => !(e[0] === "H" && e[2] === nz) && !opp(e) && doorOut(e[0], e[1], e[2]));
+    // (W10 R1A: a home's back door opens into a room with < 2 doorways when one has an outside wall: not the hub living room)
+    const nD0 = (ri) => doors.filter((d) => d.floor === 0 && (d.a === ri || d.b === ri)).length;
+    let far = cands.filter((e) => !(e[0] === "H" && e[2] === nz) && !opp(e) && doorOut(e[0], e[1], e[2]));
+    if (home) { const few = far.filter((e) => nD0(F0.region[e[3]]) < 2); if (few.length) far = few; }
+    // (nor a third doorway into a small room - <= 5 cells: no back door then; outpost@p36 seed 2026, a 25 m2 living room with 3 doorways held 5 pieces)
+    if (home) far = far.filter((e) => nD0(F0.region[e[3]]) < 2 || F0.regs[F0.region[e[3]]].cells.length > 5);
+    // (and never into a bedroom or a bath - no back door then: its leaf and door zone left a 5 x 5 m bedroom no wall for the bed - logging@p19)
+    if (home) far = far.filter((e) => !["bedroom", "bath"].includes(F0.regs[F0.region[e[3]]].kind));
+    // (W10 R1A pass 5: a home with an entry hall: not into the kitchen or the living room either - the room is then read from the yard, the camera 3 m out)
+    if (home && LANDING_HALL && F0.regs.some((q) => q.landingHall)) far = far.filter((e) => !["kitchen", "living"].includes(F0.regs[F0.region[e[3]]].kind));
+    // (W10 R1A pass 2: and not in the last cell of its wall when another cell will do - a leaf shut 0.24 m from the corner is walked round: collisioncheck doors-closed,
+    // banana_farm@p2.d5 Isla Viva seed 7. A cell's wall runs on when the footprint holds the cells on both sides of it along that wall)
+    if (home) {
+      const runsOn = (e) => { const ci = e[3] % nx, cj = Math.floor(e[3] / nx); return e[0] === "H" ? inFoot(ci - 1, cj) && inFoot(ci + 1, cj) : inFoot(ci, cj - 1) && inFoot(ci, cj + 1); };
+      const mid = far.filter(runsOn); if (mid.length) far = mid;
+    }
     if (far.length) { const e = pick(rng, far); mkDoor(F0, e[0], e[1], e[2], "back", F0.region[e[3]], null); }
   }
   // READ FROM ITS DOOR: every room gets a door on its OUTLINE (its bounding rectangle: where a player standing in the doorway sees the whole room
@@ -1047,6 +1526,53 @@ export function generate(parcel, opts) {
       mkDoor(F, e[1], e[2], e[3], e[0] ? "back" : "interior", ri, e[4]);
     });
   }
+  // (W10 R1A pass 5) a home's bath is never the way into another room: a bath the doors run through (>= 2 doorways: the trees, the outline doors) trades kinds with a room they end in (one
+  // doorway, not a floor's root, not a hall) anywhere in the house - a study or store room first, then (the bath >= 4 cells, or the house keeping a bedroom) a
+  // bedroom of <= 5 cells (never a 40 m2 bath), the smallest first. A bath of <= 3 cells (a nook with a stair's foot) that gives way to a bedroom becomes an inner hall. The doors stay where they are.
+  if (home && LANDING_HALL) {
+    const dg = (F, ri) => doors.filter((d) => d.floor === F.f && (d.a === ri || d.b === ri)).length;
+    const rank = { office: 0, storage: 0, bedroom: 1 };
+    for (let guard = 0; guard < 6; guard++) {
+      let pb = null;
+      for (const F of floors) { const bi = F.regs.findIndex((q, ri) => q.kind === "bath" && dg(F, ri) >= 2); if (bi >= 0) { pb = [F, bi]; break; } }
+      if (!pb) break;
+      const [F, bi] = pb, B = F.regs[bi], nBed = floors.reduce((n, G) => n + G.regs.filter((q) => q.kind === "bedroom").length, 0);
+      const leaves = [];
+      for (const G of floors) G.regs.forEach((q, ri) => { if (ri !== G.root && !q.hall && q.kind in rank && dg(G, ri) === 1 && (q.kind !== "bedroom" || B.cells.length >= 4 || nBed >= 2) && (q.kind !== "bedroom" || q.cells.length <= 5)) leaves.push([q, G.f]); });
+      leaves.sort((x, y) => rank[x[0].kind] - rank[y[0].kind] || (x[1] === F.f ? 0 : 1) - (y[1] === F.f ? 0 : 1) || x[0].cells.length - y[0].cells.length || x[0].cells[0] - y[0].cells[0]);
+      let leaf = leaves[0];
+      // (none: a room the trees END in but for its second way round - the extra doorway, never needed to reach a room - loses that doorway and takes the bath)
+      if (!leaf) for (const G of floors) for (const d of doors.slice()) {
+        if (leaf || !d.extra || d.floor !== G.f) continue;
+        for (const ri of [d.a, d.b]) {
+          const q = G.regs[ri];
+          if (leaf || !q || ri === G.root || q.hall || !(q.kind in rank) || dg(G, ri) !== 2 || (q.kind === "bedroom" && (q.cells.length > 5 || !(B.cells.length >= 4 || nBed >= 2)))) continue;
+          if (d.ori === "H") G.eH[d.j * nx + d.i] = 1; else G.eV[d.i * nz + d.j] = 1;
+          G.doorAt.delete(d.key); doors.splice(doors.indexOf(d), 1);
+          leaf = [q, G.f];
+        }
+      }
+      // (still none: a bath nook of <= 3 cells that is the way on is an inner hall when the house has another bath)
+      if (!leaf && B.cells.length <= 3 && floors.some((G) => G.regs.some((q) => q !== B && q.kind === "bath"))) { B.kind = "hall"; continue; }
+      // (W10 R1A pass 6, still none: a study / store room the trees end in but for a BACK door - the inside's last room, its other doorway the yard's - takes the
+      // bath, and the nook it leaves (<= 3 cells) is an inner hall: ashgrid s2026 outpost@p22, a 1 x 2 bath between a bedroom and the back study)
+      let backLeaf = false;
+      if (!leaf) for (const G of floors) G.regs.forEach((q, ri) => { if (!leaf && ri !== G.root && !q.hall && (q.kind === "office" || q.kind === "storage") && q.cells.length <= 6 &&
+        doors.filter((d) => d.floor === G.f && (d.a === ri || d.b === ri) && d.kind === "interior").length === 1 && dg(G, ri) === 2) { leaf = [q, G.f]; backLeaf = true; } });
+      if (!leaf) { notes.push("a bath on floor " + F.f + " is a pass-through (no room the trees end in can take it)"); break; }
+      const k = leaf[0].kind; leaf[0].kind = "bath";
+      B.kind = backLeaf && B.cells.length <= 3 ? "hall" : k === "bedroom" && B.cells.length < 4 ? "storage" : k;          // (a nook a bedroom cannot be: a utility room on the way)
+    }
+  }
+  // (W10 R1A pass 6) a home's one-cell-wide study / store strip (<= 3 cells) that is the way into another room (>= 2 doorways) is a CORRIDOR: entered from its long
+  // side it showed a 2.3 m rack across a pass-through (ashgrid s2 metro@p7 / outpost@p1: the kitchen behind a 1 x 2 office); a floor's WC strip took this when the
+  // floor had no bath (above)
+  if (home && LANDING_HALL) for (const F of floors) F.regs.forEach((q, ri) => {
+    if (q.hall || q.cells.length > 3 || (q.kind !== "office" && q.kind !== "storage")) return;
+    const is = q.cells.map((c) => c % nx), js = q.cells.map((c) => Math.floor(c / nx));
+    if (Math.min(Math.max(...is) - Math.min(...is), Math.max(...js) - Math.min(...js)) !== 0) return;
+    if (doors.filter((d) => d.floor === F.f && (d.a === ri || d.b === ri)).length >= 2) q.kind = "hall";
+  });
   // windows
   for (const F of floors) {
     const winOK = (c) => c >= 0 && F.type[c] === 1;
@@ -1057,9 +1583,17 @@ export function generate(parcel, opts) {
       // not straight across the cell from a doorway: that stretch of wall is the one the doorway looks at (tall pieces stand there)
       const ci = c % nx, cj = (c - ci) / nx;
       if (ori === "H" ? F.eH[(cj === j ? j + 1 : j - 1) * nx + i] === 2 : F.eV[(ci === i ? i + 1 : i - 1) * nz + j] === 2) return false;
+      // (W10 R1A pass 5: in a home's hall, nor across from a doorway in the cell beside: the game's camera behind a player in that doorway, 0.7 m off the shoulder,
+      // leaves through the glass - the hall is one cell deep - and the room is seen from the street)
+      if (home && LANDING_HALL && F.region[c] >= 0 && F.regs[F.region[c]].landingHall) for (const dd of [-1, 1]) {
+        if (ori === "H" ? i + dd >= 0 && i + dd < nx && F.eH[(cj === j ? j + 1 : j - 1) * nx + i + dd] === 2 : j + dd >= 0 && j + dd < nz && F.eV[(ci === i ? i + 1 : i - 1) * nz + j + dd] === 2) return false;
+      }
       // (a store room keeps its walls for shelving: a third of the windows a living room would get)
       const rk = F.region[c] >= 0 ? F.regs[F.region[c]].kind : null;
-      if (rng() >= (rk === "storage" || rk === "warehouse" || rk === "barn" ? p * 0.35 : p)) return false;
+      // (W10 R1A: a home's kitchen too - its counter run, wall units and hood need a wall without a window; it keeps the one window every room gets)
+      // (and a home's small lived room - <= 5 cells - with three doorways: its walls are its furniture's; outpost@p36 seed 2026, 3 doors + 3 windows held 5 pieces)
+      const crowd = home && AREA_QUOTA && QUOTA_KINDS.has(rk) && F.regs[F.region[c]].cells.length <= 5 && doors.filter((d) => d.floor === F.f && (d.a === F.region[c] || d.b === F.region[c])).length >= 3;
+      if (rng() >= (rk === "storage" || rk === "warehouse" || rk === "barn" || (rk === "kitchen" && home && KITCHEN_RUN) || (rk === "bath" && home && BATH_SET) || crowd ? p * 0.35 : p)) return false;
       arr[idx] = 3;
       roomWin.set(F.region[c], (roomWin.get(F.region[c]) || 0) + 1);
       return true;
@@ -1437,7 +1971,13 @@ export function generate(parcel, opts) {
       const cells = r.cells.map((c) => [c % nx, Math.floor(c / nx)]);
       let i0 = Infinity, j0 = Infinity, i1 = -Infinity, j1 = -Infinity;
       for (const [i, j] of cells) { i0 = Math.min(i0, i); j0 = Math.min(j0, j); i1 = Math.max(i1, i + 1); j1 = Math.max(j1, j + 1); }
-      const rec = { id: P.id + ".f" + F.f + "r" + ri, floor: F.f, kind: r.kind, reg: r, ri, cells, bounds: [i0, j0, i1, j1], doors: [], stairs: [] };
+      // (W10 R1A pass 9, CPU) every field the furnisher gives a room later is declared here, undefined (a read of it is the same undefined as before): one
+      // object shape for every room - the fields were added lazily in a different order per room, the room records ran through dozens of shapes and every
+      // read of them was a megamorphic lookup, and the optimized code that read them was thrown away and rebuilt (nothing lists a room record's keys)
+      const rec = { id: P.id + ".f" + F.f + "r" + ri, floor: F.f, kind: r.kind, reg: r, ri, cells, bounds: [i0, j0, i1, j1], doors: [], stairs: [],
+        share: undefined, spent: undefined, chest: undefined, tintW: undefined, walk: undefined, sofa: undefined, noDining: undefined, dining: undefined, bed: undefined, row: undefined,
+        _acc: undefined, _accMask: undefined, _tall: undefined, _vcm: undefined, _pm: undefined, _ext: undefined, _pv: undefined, _view: undefined, _twm: undefined, _twmG: undefined,
+        _tsfail: undefined, _subst: undefined, _st: undefined, _sofaSet: undefined, _rw: undefined, _qpts: undefined, _qfail: undefined, _ps: undefined, _gen: undefined, _decor: undefined };
       roomRecs.push(rec);
       roomOfReg.set(F.f + ":" + ri, rec);
     });
@@ -1550,8 +2090,13 @@ export function generate(parcel, opts) {
     const zoneOf = (g, Z) => (g.along === "u" ? [g.o0 - 0.1, g.line - Z, g.o1 + 0.1, g.line + Z] : [g.line - Z, g.o0 - 0.1, g.line + Z, g.o1 + 0.1]);
     const order = doors.map((d, k) => [d, k]).filter(([d]) => doorSide.has(d));
     order.sort((a, b) => (a[0].kind === "interior" ? 1 : 0) - (b[0].kind === "interior" ? 1 : 0) || a[1] - b[1]);
+    // (W10 R1A pass 5) a home's hall doorways are open (no leaves): a room is read from its hall door, and two open leaves 1.13 m into a 5 m wide room hid half of it
+    // (housegen_demo_looks view-lived-cover: 0.17-0.18 with them, 0.25-0.33 without). Every other interior door keeps the hash rule (a door is leafed only
+    // when its hash is under LEAF_SHARE - the selftest's leaves row)
+    const hallDoor = (d) => home && LANDING_HALL && d.kind === "interior" && ([d.a, d.b].some((ri) => ri != null && floors[d.floor].regs[ri] && floors[d.floor].regs[ri].landingHall) ||
+      [d.a, d.b].map((ri) => ri != null && floors[d.floor].regs[ri] ? floors[d.floor].regs[ri].kind : null).sort().join("|") === "kitchen|living");     // (and the kitchen's doorway to the living room: an open kitchen-diner passage)
     for (const [d, k] of order) {
-      if (d.kind === "interior" && leafHash(P.id + ".d" + k) >= LEAF_SHARE) continue;
+      if (hallDoor(d) || (d.kind === "interior" && leafHash(P.id + ".d" + k) >= LEAF_SHARE)) continue;
       const g = doorGeo(d), side = doorSide.get(d), f = d.floor, sf = s[f], face = g.line + side * JAMB;
       // the room runs on SIDEWAYS from the cell in front of the opening (a hall, a corridor-like room, a room round a stair) but not around the leaf's tip: the
       // open leaves (tips 1.25 m out) would leave 1.1 m of the 2.26 m to pass them - narrower than the walk's fat capsule (the bots' free band, WALK_MARGIN):
@@ -1695,7 +2240,7 @@ export function generate(parcel, opts) {
     // (stage B, lane I1) a porch / canopy ceiling is painted light (a porch's beadboard, a canopy's soffit): in the shade under it the roof colour read near black from
     // the doorway (interiorcheck light: a lodge porch's dark roof underside was a third of the entrance view)
     const P_CEIL = pal("wood", P.theme === "lodge" || P.theme === "farm" ? 0xc9b48e : 0xe6dfd0), undersideOf = (pi) => [pi, pi, pi, P_CEIL, pi, pi];
-    const porchOn = use === "house" && rng() < TH.porch, awnOn = use === "shop" && rng() < TH.awning, canopyOn = rng() < TH.canopy;
+    const porchOn = use === "house" && rng() < (P.core ? 0 : TH.porch), awnOn = use === "shop" && rng() < TH.awning, canopyOn = rng() < TH.canopy;
     for (const d of doors) {
       if (d.kind === "interior") continue;
       const g = doorGeo(d), F = floors[0], cPlus = cellAt(d.i, d.j), plusIn = cPlus >= 0 && F.type[cPlus] !== 0, n = plusIn ? -1 : 1;     // n: outward along the door's normal
@@ -1707,6 +2252,7 @@ export function generate(parcel, opts) {
         box(t0, t1, y0p - BASE0, s[0], 0, dep, P_DECK);                                                           // the deck (floor level: one 5 cm step)
         box(t0 + 0.02, t0 + 0.18, s[0], s[0] + 2.62, dep - 0.18, dep - 0.02, P_POST); box(t1 - 0.18, t1 - 0.02, s[0], s[0] + 2.62, dep - 0.18, dep - 0.02, P_POST);
         box(t0 - 0.1, t1 + 0.1, s[0] + 2.62, s[0] + 2.78, 0, dep + 0.15, undersideOf(P_ROOF));                   // its roof (a light ceiling under it)
+        hasPorch = true;
         continue;
       }
       if (front && awnOn) {
@@ -2002,11 +2548,12 @@ export function generate(parcel, opts) {
     }
   }
 
+  const finRuns = [], finPools = [], finCur = [];          // (W10 R3A) the finish records (local), see FINISH
   // ---- INTERIOR DRESSING (round 3, lane H6): skins (<= 1.5 cm, drawn only, flat on one collider face) that make a room read finished for 2 triangles
   // each - a skirting board round every wall run, ceiling lights (a lit panel on the slab's underside: the "lamp" material), curtains beside the
   // windows of the lived-in rooms
   {
-    const LIVED = new Set(["living", "bedroom", "kitchen", "office", "lobby", "meeting"]);
+    const LIVED = new Set(["living", "bedroom", "kitchen", "office", "lobby", "meeting", "dining"]);      // (W10 R3A: + dining)
     const P_LAMP = pal("lamp", 0xfff2d6), P_LAMPW = pal("lamp", 0xf4f8ff);
     const skirtC = { plank_in: 0x5e4430, plaster: 0xf2efe6 };
     for (const F of floors) {
@@ -2028,6 +2575,34 @@ export function generate(parcel, opts) {
         const runs = [];
         for (const g of segs) { const L = runs[runs.length - 1]; if (L && L[0] === g[0] && L[1] === g[1] && L[2] === g[2] && Math.abs(L[4] - g[3]) < 1e-6) L[4] = g[4]; else runs.push(g.slice()); }
         for (const [ax, line, sg, t0, t1] of runs) if (t1 - t0 > 2 * JAMB + 0.1) skinOn(ax, line, sg, t0 + JAMB, t1 - JAMB, sf, sf + 0.1, P_SK, f);
+        // (W10 R3A) the finish's wall runs (meshData draws them on medium and up): darker wall feet, the corners (a run end another run of the room meets), a tile
+        // band on the solid runs of a kitchen (splash, 0.9 - 1.5 m) or a bath (wainscot to 1.25 m). No stream drawn, no box, no collider.
+        if (FINISH && !TH.ruined) {
+          const ends = new Map();
+          const key = (ax, line, t) => (ax === "u" ? Math.round(t * 1000) + ":" + Math.round(line * 1000) : Math.round(line * 1000) + ":" + Math.round(t * 1000));
+          for (const [ax, line, , t0, t1] of runs) for (const t of [t0, t1]) { const k = key(ax, line, t); ends.set(k, (ends.get(k) || 0) | (ax === "u" ? 1 : 2)); }
+          const band = kind === "kitchen" ? 1 : kind === "bath" ? 2 : 0;
+          for (const [ax, line, sg, t0, t1] of runs) {
+            if (t1 - t0 < 0.5) continue;
+            const c0 = ends.get(key(ax, line, t0)) === 3 ? 1 : 0, c1 = ends.get(key(ax, line, t1)) === 3 ? 1 : 0;
+            finRuns.push({ f, ax, line, sg, t0, t1, pal: rc.wall, fpal: rc.floor, c0, c1, band: 0, ceil });
+          }
+          if (band) {
+            // the band runs on SOLID wall only (no window in it): the solid edges of the room, merged per line, short of the jambs
+            const so = [];
+            for (const c of r.cells) {
+              const i = c % nx, j = (c - i) / nx;
+              if (F.eH[j * nx + i] === 1) so.push(["u", vL(j), 1, uL(i), uL(i + 1)]);
+              if (F.eH[(j + 1) * nx + i] === 1) so.push(["u", vL(j + 1), -1, uL(i), uL(i + 1)]);
+              if (F.eV[i * nz + j] === 1) so.push(["v", uL(i), 1, vL(j), vL(j + 1)]);
+              if (F.eV[(i + 1) * nz + j] === 1) so.push(["v", uL(i + 1), -1, vL(j), vL(j + 1)]);
+            }
+            so.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0) || a[1] - b[1] || a[2] - b[2] || a[3] - b[3]);
+            const sr = [];
+            for (const g of so) { const L = sr[sr.length - 1]; if (L && L[0] === g[0] && L[1] === g[1] && L[2] === g[2] && Math.abs(L[4] - g[3]) < 1e-6) L[4] = g[4]; else sr.push(g.slice()); }
+            for (const [ax, line, sg, t0, t1] of sr) if (t1 - t0 > 0.5) finRuns.push({ f, ax, line, sg, t0, t1, pal: rc.wall, fpal: rc.floor, c0: 0, c1: 0, band, ceil });
+          }
+        }
         // ceiling lights: one per ~3 cells (<= 4), spread by farthest-point picking from the cell nearest the room's middle
         const n = clamp(Math.round(r.cells.length / 3), 1, 4), cs = r.cells.map((c) => [uL(c % nx) + U / 2, vL((c - (c % nx)) / nx) + U / 2]);
         const mu = cs.reduce((a, q) => a + q[0], 0) / cs.length, mv = cs.reduce((a, q) => a + q[1], 0) / cs.length;
@@ -2043,12 +2618,16 @@ export function generate(parcel, opts) {
           const hw = strip ? 0.6 : 0.28, hd = strip ? 0.12 : 0.28, pl = strip ? P_LAMPW : P_LAMP, fc = [pl, pl, pl, pl, pl, pl];
           const li = addBox("skin", u - hw, u + hw, ceil - SKIN, ceil, v - hd, v + hd, fc, 0, f);
           if (li >= 0) boxes[li].hp = 63 & ~8;                // (it hangs under the slab: only its underside is drawn)
+          if (FINISH && !TH.ruined && !strip && u === pickL[0][0] && v === pickL[0][1]) finPools.push({ f, u, v, r: strip ? 1.5 : 1.2, warm: strip ? 0 : 1, fpal: rc.floor });     // (W10 R3A: the light's pool on the floor - fix2: a warm panel's, the room's first light only)
         }
         // curtains beside the windows of the lived-in rooms (on the piers' inner faces)
         if (LIVED.has(kind)) {
           const P_CUR = pal("fabric", pick(rng, [0x8a3b3b, 0x3b5a8a, 0xd8c8a0, 0x6a8a5a, 0xb07a3a, 0xe8e2d6]));
-          for (const w of winGeo) {
+          for (let wk = 0; wk < winGeo.length; wk++) {
+            const w = winGeo[wk];
             if (w.f !== f || F.region[w.cell] !== ri) continue;
+            // (W10 R3A, audit 6) a rod and two pleated panels (H.fin.cur: meshData draws them); the plank-curtain plant keeps round 3's flat 1.5 cm planks
+            if (CURTAIN_FOLDS && !TH.ruined) { finCur.push([wk, P_CUR, kind === "living" || kind === "bedroom" ? 1 : 0]); continue; }
             const nIn = -(w.along === "u" ? w.nv : w.nu);
             skinOn(w.along, w.line, nIn, w.o0 - 0.4, w.o0 - 0.05, sf + 1.0, sf + HEAD + 0.1, P_CUR, f);
             skinOn(w.along, w.line, nIn, w.o1 + 0.05, w.o1 + 0.4, sf + 1.0, sf + HEAD + 0.1, P_CUR, f);
@@ -2062,8 +2641,15 @@ export function generate(parcel, opts) {
   const NU = Math.round((W + 2 * RING) / GRID), NV = Math.round((D + 2 * RING) / GRID);
   const su = (a) => -W / 2 - RING + (a + 0.5) * GRID, sv = (b) => -D / 2 - RING + (b + 0.5) * GRID;
   const cellOfS = (a, b) => { const i = Math.floor((su(a) + W / 2) / U), j = Math.floor((sv(b) + D / 2) / U); return i >= 0 && j >= 0 && i < nx && j < nz && inFoot(i, j) ? cIdx(i, j) : -1; };
+  const NO_BOXES = [];
   const pieceBoxes = (p) => {                             // local collider boxes of a placed piece: [u0, u1, y0, y1, v0, v1]
-    if (p.cat.deco) return [];
+    if (p.cat.deco) return NO_BOXES;
+    // (W10 R1A, CPU: kept on the piece while its rect / cat / height stand - the variety swap gives a piece a new rect and cat; the callers only read it)
+    if (p._pb && p._pbR === p.rect && p._pbC === p.cat && p._pbY === p.y0) return p._pb;
+    p._pbR = p.rect; p._pbC = p.cat; p._pbY = p.y0;
+    return (p._pb = pieceBoxes0(p));
+  };
+  const pieceBoxes0 = (p) => {
     const yb = s[p.f] + (p.y0 || 0);
     // (round 3: a piece over 0.2 m - a coffee table, an ottoman, a carton - blocks the walk like a tall one: the capsule could step onto it, but
     // the game's NavGrid does not route bots across furniture tops, and a layout that is only open over a coffee table strands them; a 0.14 m
@@ -2086,6 +2672,24 @@ export function generate(parcel, opts) {
   const SXA = new Float64Array(NU), SZA = new Float64Array(NV);
   for (let a = 0; a < NU; a++) SXA[a] = su(a);
   for (let b = 0; b < NV; b++) SZA[b] = sv(b);
+  // (W10 R1A, CPU) blockInto's clearing stamp (value 0) that logs each cell it changes as (index, old value): the room-walk cache takes the last piece it took in
+  // out again by undoing the log (unput right after a passed check - the furnisher's commonest move), instead of rebuilding the room from the structure
+  const blockLog = (fr, sfl, u0, u1, yA, yB, v0, v1, extra, log) => {
+    if (!(yB > sfl + CAPSULE.step && yA < sfl + CAPSULE.h)) return;
+    const r = CAPSULE.r + WALK_MARGIN + (extra || 0), r2 = r * r;
+    const a0 = Math.max(0, Math.floor((u0 - r + W / 2 + RING) / GRID - 0.5)), a1 = Math.min(NU - 1, Math.ceil((u1 + r + W / 2 + RING) / GRID - 0.5));
+    const b0 = Math.max(0, Math.floor((v0 - r + D / 2 + RING) / GRID - 0.5)), b1 = Math.min(NV - 1, Math.ceil((v1 + r + D / 2 + RING) / GRID - 0.5));
+    for (let b = b0; b <= b1; b++) {
+      const z = SZA[b], ez = z < v0 ? v0 - z : z > v1 ? z - v1 : 0;
+      if (ez >= r) continue;
+      const ez2 = ez * ez, o = b * NU;
+      for (let a = a0; a <= a1; a++) {
+        const x = SXA[a], ex = x < u0 ? u0 - x : x > u1 ? x - u1 : 0;
+        if (ex * ex + ez2 < r2 && fr[o + a] !== 0) { log.push(o + a, fr[o + a]); fr[o + a] = 0; }
+      }
+    }
+  };
+  const blockIntoB = (fr, sfl, pb, stampV, extra) => blockInto(fr, sfl, pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], stampV, extra);   // (W10 R1A, CPU: a box array in, unpacked where blockInto is inlined)
   const blockInto = (fr, sfl, u0, u1, yA, yB, v0, v1, stampV, extra) => {      // (extra: PASS_MARGIN for the ports check)
     const val = stampV || 0;
     if (!(yB > sfl + CAPSULE.step && yA < sfl + CAPSULE.h)) return;
@@ -2126,6 +2730,9 @@ export function generate(parcel, opts) {
   for (const bx of leafBoxes) structSolids.push([bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1]);
   // ---- furniture
   const furn = [];                                        // { cat, room, f, u, v (centre), fq (local facing turn), rect [u0, v0, u1, v1], parts [box idx], tint, order }
+  // (W10 R1A) the storey's triangle budget; (W10 R3A fix5) per storey: a work storey's by its rooms (storeyBudget)
+  const TBf = [];
+  for (let f = 0; f <= S; f++) TBf.push(f < S ? storeyBudget(roomRecs.filter((r) => r.floor === f).map((r) => r.kind), home, !!TH.ruined, W * D) : (home ? TRI_BUDGET_HOME : TRI_BUDGET));
   const tris = new Array(S + 1).fill(0);                  // [storey 0 .. S - 1, the closed shell storeys of a tall building]
   // ---- hidden faces: a structure box face that another structure box covers completely (the slab edge inside a wall, a wall's end in the
   // corner square, the fill under a stair inside its steps, every bottom face below the pad) is never drawn. A face is only culled when ONE box
@@ -2140,14 +2747,19 @@ export function generate(parcel, opts) {
       }
     });
     const E = 1e-4, DEEP = 0.01;
-    const covers = (bi, lo, hi) => {                       // is the region lo..hi ([u, y, v]) inside a box other than bi? (such a box holds its centre: one bucket)
-      const l = bucket.get(bkey(Math.floor((lo[0] + hi[0]) / 2 / BK), Math.floor((lo[2] + hi[2]) / 2 / BK)));
+    // (W10 R1A, CPU: the region rides in one Float64Array, CVR = lo[0..2], hi[0..2] - was two arrays a call; the same tests)
+    const CVR = new Float64Array(6);
+    const cv = (a0, a1, a2, b0, b1, b2) => { CVR[0] = a0; CVR[1] = a1; CVR[2] = a2; CVR[3] = b0; CVR[4] = b1; CVR[5] = b2; return CVR; };
+    const covers = (bi, R6) => {                           // is the region lo..hi ([u, y, v]) inside a box other than bi? (such a box holds its centre: one bucket)
+      const l0 = R6[0], l1 = R6[1], l2 = R6[2], h0 = R6[3], h1 = R6[4], h2 = R6[5];
+      const l = bucket.get(bkey(Math.floor((l0 + h0) / 2 / BK), Math.floor((l2 + h2) / 2 / BK)));
       if (!l) return false;
-      for (const oi of l) {
+      for (let i = 0; i < l.length; i++) {
+        const oi = l[i];
         if (oi === bi) continue;
         const o = boxes[oi];
         if (o.p === "skin" || o.p === "glass") continue;      // dressing never hides a face (a pane is see-through, a skin is not a wall)
-        if (o.u0 <= lo[0] + E && o.u1 >= hi[0] - E && o.y0 <= lo[1] + E && o.y1 >= hi[1] - E && o.v0 <= lo[2] + E && o.v1 >= hi[2] - E) return true;
+        if (o.u0 <= l0 + E && o.u1 >= h0 - E && o.y0 <= l1 + E && o.y1 >= h1 - E && o.v0 <= l2 + E && o.v1 >= h2 - E) return true;
       }
       return false;
     };
@@ -2156,17 +2768,17 @@ export function generate(parcel, opts) {
       if (b.p === "gable") { b.h = 63; return; }          // an attic layer: a collider inside the plank + end-wall polygons that draw it (never drawn itself)
       if (b.hp != null) { b.h = b.hp; return; }           // a plate whose wall side is known where it was made (the selftest's flatOn proves the wall is there)
       if (b.p === "skin") {                                // a skin is a PLATE (below): only which thin face lies on the wall matters
-        if (b.y1 - b.y0 <= 0.0151) b.h = covers(bi, [b.u0, b.y1, b.v0], [b.u1, b.y1 + DEEP, b.v1]) ? 63 & ~8 : covers(bi, [b.u0, b.y0 - DEEP, b.v0], [b.u1, b.y0, b.v1]) ? 63 & ~4 : 0;    // a ceiling light
-        else if (b.u1 - b.u0 <= 0.0151) b.h = covers(bi, [b.u0 - DEEP, b.y0, b.v0], [b.u0, b.y1, b.v1]) ? 63 & ~1 : covers(bi, [b.u1, b.y0, b.v0], [b.u1 + DEEP, b.y1, b.v1]) ? 63 & ~2 : 0;
-        else b.h = covers(bi, [b.u0, b.y0, b.v0 - DEEP], [b.u1, b.y1, b.v0]) ? 63 & ~16 : covers(bi, [b.u0, b.y0, b.v1], [b.u1, b.y1, b.v1 + DEEP]) ? 63 & ~32 : 0;
+        if (b.y1 - b.y0 <= 0.0151) b.h = covers(bi, cv(b.u0, b.y1, b.v0, b.u1, b.y1 + DEEP, b.v1)) ? 63 & ~8 : covers(bi, cv(b.u0, b.y0 - DEEP, b.v0, b.u1, b.y0, b.v1)) ? 63 & ~4 : 0;    // a ceiling light
+        else if (b.u1 - b.u0 <= 0.0151) b.h = covers(bi, cv(b.u0 - DEEP, b.y0, b.v0, b.u0, b.y1, b.v1)) ? 63 & ~1 : covers(bi, cv(b.u1, b.y0, b.v0, b.u1 + DEEP, b.y1, b.v1)) ? 63 & ~2 : 0;
+        else b.h = covers(bi, cv(b.u0, b.y0, b.v0 - DEEP, b.u1, b.y1, b.v0)) ? 63 & ~16 : covers(bi, cv(b.u0, b.y0, b.v1, b.u1, b.y1, b.v1 + DEEP)) ? 63 & ~32 : 0;
         return;
       }
-      if (covers(bi, [b.u1, b.y0, b.v0], [b.u1 + DEEP, b.y1, b.v1])) h |= 1;
-      if (covers(bi, [b.u0 - DEEP, b.y0, b.v0], [b.u0, b.y1, b.v1])) h |= 2;
-      if (covers(bi, [b.u0, b.y1, b.v0], [b.u1, b.y1 + DEEP, b.v1])) h |= 4;
-      if (b.y0 <= y0 + E || covers(bi, [b.u0, b.y0 - DEEP, b.v0], [b.u1, b.y0, b.v1])) h |= 8;
-      if (covers(bi, [b.u0, b.y0, b.v1], [b.u1, b.y1, b.v1 + DEEP])) h |= 16;
-      if (covers(bi, [b.u0, b.y0, b.v0 - DEEP], [b.u1, b.y1, b.v0])) h |= 32;
+      if (covers(bi, cv(b.u1, b.y0, b.v0, b.u1 + DEEP, b.y1, b.v1))) h |= 1;
+      if (covers(bi, cv(b.u0 - DEEP, b.y0, b.v0, b.u0, b.y1, b.v1))) h |= 2;
+      if (covers(bi, cv(b.u0, b.y1, b.v0, b.u1, b.y1 + DEEP, b.v1))) h |= 4;
+      if (b.y0 <= y0 + E || covers(bi, cv(b.u0, b.y0 - DEEP, b.v0, b.u1, b.y0, b.v1))) h |= 8;
+      if (covers(bi, cv(b.u0, b.y0, b.v1, b.u1, b.y1, b.v1 + DEEP))) h |= 16;
+      if (covers(bi, cv(b.u0, b.y0, b.v0 - DEEP, b.u1, b.y1, b.v0))) h |= 32;
       // (a skin, <= 1.5 cm trim / shutter / blind window, is a PLATE: only its outward face is drawn - its back lies on the wall; its 1.5 cm edges
       // are not worth two triangles each: nothing can be seen through a 1.5 cm edge but the wall it lies on)
       b.h = h;
@@ -2210,7 +2822,7 @@ export function generate(parcel, opts) {
   // view until every room shows >= VIEW_WANT pieces from its best entrance (or nothing fits: the floor plan, the doors, the budget).
   const TAN_H = 0.9004, TAN_V = 0.5206, EYE_H = 1.62, VIEW_WANT = 4;      // (round 3: 42 x 27.5 deg half-angles, inside interiorcheck's 44 x 28.5; round 2 used 40 x 26)
   // the third-person camera's view (player.js: vertical 57 deg, 16:9 -> 88 deg across; judged a little inside: 84 x 54) and its boom
-  const TAN_H3 = 0.9004, TAN_V3 = 0.5095, CAM3 = { dist: 4.2, shoulder: 0.7, lift: 0.25, r: 0.28, minD: 0.12 };
+  const TAN_H3 = 0.9004, TAN_V3 = 0.5095, CAM3 = { dist: 4.2, shoulder: 0.7, lift: 0.25, r: 0.32, minD: 0.12 };      // (W10 R1A pass 3: r = player.js CAM_R, 0.28 -> 0.32)
   // camRayHit (player.js) over the structure colliders: the first t in (0, 1] at which the boom o + t d enters a box grown by r
   const camHit = (ox, oy, oz, dx, dy, dz, r) => {
     let best = 1;
@@ -2218,8 +2830,12 @@ export function generate(parcel, opts) {
       let rr = r;
       for (let pass = 0; pass < 2; pass++) {
         let t0 = 0, t1 = best, miss = false;
-        const slab = (o, d, lo, hi) => { if (miss) return; if (d > -1e-9 && d < 1e-9) { if (o < lo - rr || o > hi + rr) miss = true; return; } let a = (lo - rr - o) / d, b = (hi + rr - o) / d; if (a > b) { const tq = a; a = b; b = tq; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) miss = true; };
-        slab(ox, dx, q[0], q[1]); slab(oy, dy, q[2], q[3]); slab(oz, dz, q[4], q[5]);
+        // (W10 R1A, CPU: the three slabs written out - was a closure made per box and pass: garbage; the same arithmetic in the same order)
+        for (let ax = 0; ax < 3 && !miss; ax++) {
+          const o = ax === 0 ? ox : ax === 1 ? oy : oz, d = ax === 0 ? dx : ax === 1 ? dy : dz, lo = q[2 * ax], hi = q[2 * ax + 1];
+          if (d > -1e-9 && d < 1e-9) { if (o < lo - rr || o > hi + rr) miss = true; continue; }
+          let a = (lo - rr - o) / d, b = (hi + rr - o) / d; if (a > b) { const tq = a; a = b; b = tq; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) miss = true;
+        }
         if (miss) break;
         if (t0 > 0) { best = t0; break; }
         if (pass === 1) break;
@@ -2236,25 +2852,31 @@ export function generate(parcel, opts) {
   const occluders = boxes.filter((b) => b.p !== "glass" && b.p !== "skin" && b.p !== "slab" && b.p !== "roof" && b.p !== "shell" && b.p !== "gable" && b.p !== "trim").concat(leafBoxes);
   // (stage B, lane I1: the same boolean, faster - a box wholly outside the segment's bounding box is skipped before the slab divisions, and the view model's
   //  extra lists (the room's tall pieces but the one tested, a body) are walked in place instead of being concatenated per call: no garbage)
-  const segBlocked = (ax, ay, az, bx, by, bz, list, tMax, list2, skip, one) => {
-    const dx = bx - ax, dy = by - ay, dz = bz - az;
+  // (W10 R1A, CPU) the sight line rides in one Float64Array (SEG: ax ay az, bx by bz, tMax; then dx dy dz and the segment's box) instead of 8-15 double
+  // arguments a call: a double passed to a call that is not inlined is boxed (garbage per call, ~0.6 MB a house). The same arithmetic in the same order.
+  const segBlocked = (list, list2, skip, one) => {
+    const S_ = SEG, ax = S_[0], ay = S_[1], az = S_[2], tMax = S_[6];
+    const dx = S_[3] - ax, dy = S_[4] - ay, dz = S_[5] - az;
     const ex = ax + dx * tMax, ey = ay + dy * tMax, ez = az + dz * tMax;
-    const x0 = ax < ex ? ax : ex, x1 = ax < ex ? ex : ax, y0 = ay < ey ? ay : ey, y1 = ay < ey ? ey : ay, z0 = az < ez ? az : ez, z1 = az < ez ? ez : az;
-    if (segHit(ax, ay, az, dx, dy, dz, tMax, list, x0, x1, y0, y1, z0, z1, null)) return true;
-    if (list2 && segHit(ax, ay, az, dx, dy, dz, tMax, list2, x0, x1, y0, y1, z0, z1, skip)) return true;
-    if (one && segHit1(ax, ay, az, dx, dy, dz, tMax, one, x0, x1, y0, y1, z0, z1)) return true;
+    S_[7] = dx; S_[8] = dy; S_[9] = dz;
+    S_[10] = ax < ex ? ax : ex; S_[11] = ax < ex ? ex : ax; S_[12] = ay < ey ? ay : ey; S_[13] = ay < ey ? ey : ay; S_[14] = az < ez ? az : ez; S_[15] = az < ez ? ez : az;
+    if (segHit(list, null)) return true;
+    if (list2 && segHit(list2, skip)) return true;
+    if (one && segHit1(one)) return true;
     return false;
   };
-  const segHit = (ax, ay, az, dx, dy, dz, tMax, list, x0, x1, y0, y1, z0, z1, skip) => {
+  const segHit = (list, skip) => {
+    const S_ = SEG, x0 = S_[10], x1 = S_[11], y0 = S_[12], y1 = S_[13], z0 = S_[14], z1 = S_[15];
     for (let i = 0; i < list.length; i++) {
       const b = list[i];
       if (b.u1 <= x0 || b.u0 >= x1 || b.y1 <= y0 || b.y0 >= y1 || b.v1 <= z0 || b.v0 >= z1) continue;
       if (skip && b.u0 === skip[0] && b.v0 === skip[1] && b.u1 === skip[2] && b.v1 === skip[3]) continue;
-      if (segHit1(ax, ay, az, dx, dy, dz, tMax, b, x0, x1, y0, y1, z0, z1)) return true;
+      if (segHit1(b)) return true;
     }
     return false;
   };
-  const segHit1 = (ax, ay, az, dx, dy, dz, tMax, b) => {
+  const segHit1 = (b) => {
+    const S_ = SEG, ax = S_[0], ay = S_[1], az = S_[2], tMax = S_[6], dx = S_[7], dy = S_[8], dz = S_[9];
     {
       let t0 = 0, t1 = tMax;
       if (Math.abs(dx) < 1e-12) { if (ax <= b.u0 || ax >= b.u1) return false; } else { let a = (b.u0 - ax) / dx, c = (b.u1 - ax) / dx; if (a > c) { const q = a; a = c; c = q; } if (a > t0) t0 = a; if (c < t1) t1 = c; if (t0 >= t1) return false; }
@@ -2307,6 +2929,13 @@ export function generate(parcel, opts) {
     R._view = { ents, prim, occ, occ3, inner };
     return R._view;
   };
+  // (W10 R1A, CPU) the occluders meeting the box round a sight line's origin and the sample points' box (was a closure made per visMask call: garbage)
+  const visNear = (list, out, ax, ay, az, px0, px1, py0, py1, pz0, pz1) => {
+    const x0 = ax < px0 ? ax : px0, x1 = ax > px1 ? ax : px1, y0 = ay < py0 ? ay : py0, y1 = ay > py1 ? ay : py1, z0 = az < pz0 ? az : pz0, z1 = az > pz1 ? az : pz1;
+    out.length = 0;
+    for (let i = 0; i < list.length; i++) { const b = list[i]; if (b.u1 <= x0 || b.u0 >= x1 || b.y1 <= y0 || b.y0 >= y1 || b.v1 <= z0 || b.v0 >= z1) continue; out.push(b); }
+    return out;
+  };
   const visMask = (R, rect, yA, yB, occ, only) => {      // (only: a mask of the entrances to test; default all)              // bit e = entrance e sees the box rect x [yA, yB] (absolute heights)
     if (yB - yA < 0.25) return 0;
     const V = roomView(R), ey = s[R.floor] + EYE_H;
@@ -2326,10 +2955,16 @@ export function generate(parcel, opts) {
     let q = 6;
     for (let a = -1; a <= 1; a += 2) for (let b = -1; b <= 1; b += 2) for (let c = -1; c <= 1; c += 2) { P[q++] = cu + a * hu; P[q++] = cy + b * hy; P[q++] = cv + c * hv; }
     let m = 0;
+    // (W10 R1A, CPU) per entrance, the occluders that can block ANY of its 10 sight lines - the ones meeting the box round the eye (camera) and the 10 points; a
+    // sight line's own box lies inside it, so segHit skips every other one anyway: the same answer, one pass over the list instead of ten (two lists, accurate)
+    let px0 = Infinity, px1 = -Infinity, py0 = Infinity, py1 = -Infinity, pz0 = Infinity, pz1 = -Infinity;
+    for (let pi = 0; pi < 30; pi += 3) { const a = P[pi], b = P[pi + 1], c = P[pi + 2]; if (a < px0) px0 = a; if (a > px1) px1 = a; if (b < py0) py0 = b; if (b > py1) py1 = b; if (c < pz0) pz0 = c; if (c > pz1) pz1 = c; }
     for (let ei = 0; ei < V.ents.length && ei < 30; ei++) {
       if (only && !(only & (1 << ei))) continue;
       const e = V.ents[ei];
-      const o3 = acc ? (occX || e.occ3) : null, one = acc && occX ? e.body : null;
+      // (lazy: built at the first sample point inside the view cone - most entrances see none of a candidate spot's points)
+      let occE = null, o3 = null;
+      const one = acc && occX ? e.body : null;
       let n = 0;
       for (let pi = 0; pi < 30; pi += 3) {
         const p0 = P[pi], p1 = P[pi + 1], p2 = P[pi + 2];
@@ -2342,7 +2977,9 @@ export function generate(parcel, opts) {
         if (Math.abs(dy) > hz * TAN_V) continue;
         const dist = Math.sqrt(hz * hz + dy * dy);
         if (dist < 0.2 || dist > 30) continue;
-        if (segBlocked(e.u, ey, e.v, p0, p1, p2, occ, 1 - 0.02 / dist, tall, rect, null)) continue;
+        if (occE === null) occE = visNear(occ, VIS_OCC, e.u, ey, e.v, px0, px1, py0, py1, pz0, pz1);
+        SEG[0] = e.u; SEG[1] = ey; SEG[2] = e.v; SEG[3] = p0; SEG[4] = p1; SEG[5] = p2; SEG[6] = 1 - 0.02 / dist;
+        if (segBlocked(occE, tall, rect, null)) continue;
         // (the accurate model) and from the third-person camera - through the doorway, past the body
         if (acc) { const du3 = p0 - e.cu, dv3 = p2 - e.cv, dy3 = p1 - e.cy, fwd3 = du3 * e.fu + dv3 * e.fv;
           if (fwd3 <= 0.3) continue;
@@ -2351,14 +2988,17 @@ export function generate(parcel, opts) {
           const hz3 = Math.sqrt(fwd3 * fwd3 + lat3 * lat3);
           if (Math.abs(dy3) > hz3 * TAN_V3) continue;
           const dist3 = Math.sqrt(hz3 * hz3 + dy3 * dy3);
-          if (dist3 > 30 || segBlocked(e.cu, e.cy, e.cv, p0, p1, p2, o3, 1 - 0.02 / dist3, tall, rect, one)) continue; }
+          if (dist3 > 30) continue;
+          if (o3 === null) o3 = visNear(occX || e.occ3, VIS_OCC3, e.cu, e.cy, e.cv, px0, px1, py0, py1, pz0, pz1);
+          SEG[0] = e.cu; SEG[1] = e.cy; SEG[2] = e.cv; SEG[3] = p0; SEG[4] = p1; SEG[5] = p2; SEG[6] = 1 - 0.02 / dist3;
+          if (segBlocked(o3, tall, rect, one)) continue; }
         if (++n >= 2) break;
       }
       if (n >= 2) m |= 1 << ei;
     }
     return m;
   };
-  const counted = (p) => !p.slot && !p.cat.deco && p.cat.h >= 0.25;
+  const counted = (p) => !p.slot && !p.cat.deco && p.cat.h >= 0.25 && !(p.room && p.room._subst && isFiller(p.cat.type || ""));   // (_subst: phase 8 counts substantive pieces only)
   // pieces of OTHER rooms a doorway sees (through the opening across the room, or the next room's door): counted once, when the room's own
   // pieces fall short (phase 3), against every structure box of the storey
   const extCounts = (R) => {
@@ -2377,8 +3017,14 @@ export function generate(parcel, opts) {
   };
   const visOf = (p) => { if (p.vis == null) p.vis = counted(p) ? visMask(p.room, p.rect, s[p.f] + (p.y0 || 0), s[p.f] + (p.y0 || 0) + p.cat.h, null, p.room._acc ? p.room._accMask : 0) : 0; return p.vis; };
   const viewCounts = (R) => {                               // pieces seen from each entrance of R (its own, + the other rooms' once measured)
+    // (W10 R1A, CPU) kept while nothing it reads changes: the room's pieces (R._pv steps on every put / unput), its other-room counts (R._ext: a new array
+    // whenever reset) and the view model (_acc / _accMask / _subst; every model switch also resets _ext). Every counted piece's vis is cached by the
+    // call that filled the memo, so a hit is the same answer; every place that clears the pieces' vis drops the memo (R._vcm = null). A fresh array per call
+    const M = R._vcm;
+    if (M && M.pv === R._pv && M.ext === R._ext && M.acc === R._acc && M.am === R._accMask && M.sub === R._subst) return M.n.slice();
     const V = roomView(R), n = R._ext ? R._ext.slice() : new Array(V.ents.length).fill(0);
     for (const p of R._ps || []) if (counted(p)) { const m = visOf(p); for (let ei = 0; ei < n.length; ei++) if (m & (1 << ei)) n[ei]++; }
+    R._vcm = { pv: R._pv, ext: R._ext, acc: R._acc, am: R._accMask, sub: R._subst, n: n.slice() };
     return n;
   };
   const bestView = (R) => { const n = viewCounts(R); let b = -1, bi = -1; n.forEach((x, i) => { if (x > b || (x === b && i === roomView(R).prim)) { b = x; bi = i; } }); return { n: Math.max(0, b), ei: bi }; };
@@ -2465,22 +3111,31 @@ export function generate(parcel, opts) {
     const placed = R._ps || (R._ps = []);                 // the room's pieces (a live list: put / unput / the walk keep it)
     // a box rect x [ya, yb] (above this floor) is free: inside the room, out of door / stair / leaf zones, clear of every other piece it shares
     // heights with (4 cm apart; touching for a counter row), and nothing taller than the sill in front of a window
+    // (W10 R1A, CPU) the pieces valid() tests against, for one height band and host, kept while the room's pieces do not change (a scan tests ~100 spots
+    // with the same band): the same pieces in the same order, so the same answer
+    let vMemo = null;
     const valid = (r, ya, yb, touch, host) => {
       if (r[0] < inner[0] - 1e-6 || r[1] < inner[1] - 1e-6 || r[2] > inner[2] + 1e-6 || r[3] > inner[3] + 1e-6) return false;
       for (const hr of holes) if (ovl(r, hr, 0)) return false;
       for (const k of keep) if (ovl(r, k.r, 1e-6)) return false;
-      for (const p of placed) {                            // (a piece inside this room's walls can only meet this room's pieces)
-        if (p.cat.deco || p === host) continue;
-        const pa = p.y0 || 0, pb = pa + p.cat.h;
-        if (pb <= ya + 1e-6 || pa >= yb - 1e-6) continue;
-        if (ovl(r, p.rect, touch ? 0.001 : -0.04)) return false;
+      if (!vMemo || vMemo.ver !== R._pv || vMemo.ya !== ya || vMemo.yb !== yb || vMemo.host !== host) {
+        const l = [];
+        for (const p of placed) {                          // (a piece inside this room's walls can only meet this room's pieces)
+          if (p.cat.deco || p === host) continue;
+          const pa = p.y0 || 0, pb = pa + p.cat.h;
+          if (pb <= ya + 1e-6 || pa >= yb - 1e-6) continue;
+          l.push(p);
+        }
+        vMemo = { ver: R._pv, ya, yb, host, l };
       }
-      if (yb > SILL - 0.05) for (const z of wins) if (ovl(r, z, 1e-6)) return false;
+      const ml = vMemo.l, m = touch ? 0.001 : -0.04;
+      for (let i = 0; i < ml.length; i++) if (ovl(r, ml[i].rect, m)) return false;
+      if (yb > SILL - (home ? 0.03 : 0.05)) for (const z of wins) if (ovl(r, z, 1e-6)) return false;     // (W10 R1A: a home 3 cm, the x1.15 sofa backs stand 1.16 m)
       return true;
     };
     // the storey's budget, and (phases 0 and 1) this room's fair share of it: a big kitchen cannot starve the bedrooms; a kit piece over the share falls back
     // to its authored stand-in (catOf). Phases 2 and 3 top rooms up with what is left of the storey's budget.
-    const budgetOK = (cat) => tris[f] + cat.tris <= TRI_BUDGET && (phase >= 2 || R.spent + cat.tris <= R.share);
+    const budgetOK = (cat) => tris[f] + cat.tris <= TBf[f] && (phase >= 2 || R.spent + cat.tris <= R.share);
     // the room's PORTS (each doorway's inner side, the stair approach / exit inside it) must stay joined through its free floor (the fat capsule):
     // checked after every piece, so a piece that closes a path is refused on the spot instead of being found by the whole-house walk
     const RW = roomWalk(R), { mineK, portWin, wa0, wa1, wb0, wb1, roomQ } = RW, regF = regS[f], myRi = R.ri, vis = roomVis;
@@ -2510,17 +3165,23 @@ export function generate(parcel, opts) {
       const pm = R._pm != null ? R._pm : PASS_MARGIN;
       if (!RW.free || RW.stale) {                          // (stale: a piece of the cache was taken out - set where pieces leave a room; was a scan of the cache per call)
         RW.stale = false;
-        RW.free = RW.free || new Uint8Array(NS); RW.inc = new Set();
+        RW.free = RW.free || new Uint8Array(NS); RW.inc = new Set(); RW.log = [];
         const sf0 = pm ? structFreeP[f] : structFree[f];
         for (let b = wb0; b <= wb1; b++) { const o = b * NU; for (let a = wa0; a <= wa1; a++) RW.free[o + a] = sf0[o + a]; }
       }
       // the pieces not yet in the cache are stamped (not copied in): a sample is free when the cache says so and no new piece stamps it
-      const pend = placed.filter((p) => !RW.inc.has(p)), st = ++roomStamp.b;
-      for (const p of pend) for (const pb of pieceBoxes(p)) blockInto(roomBlk, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], st, pm);
+      const pend = ROOM_PEND, st = ++roomStamp.b; pend.length = 0;
+      for (let i = 0; i < placed.length; i++) if (!RW.inc.has(placed[i])) pend.push(placed[i]);     // (W10 R1A, CPU: a reused list - roomOK is not re-entered)
+      const sfl = s[f];
+      for (let i = 0; i < pend.length; i++) { const pbs = pieceBoxes(pend[i]); for (let j = 0; j < pbs.length; j++) blockIntoB(roomBlk, sfl, pbs[j], st, pm); }
       const ok = roomOK0(RW.free, st);
-      if (ok) for (const p of pend) { for (const pb of pieceBoxes(p)) blockInto(RW.free, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], 0, pm); RW.inc.add(p); }
+      if (ok) for (let i = 0; i < pend.length; i++) { const p = pend[i], lg = [], pbs = pieceBoxes(p); for (let j = 0; j < pbs.length; j++) { const pb = pbs[j]; blockLog(RW.free, sfl, pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], pm, lg); } RW.inc.add(p); RW.log.push(p, lg); }
       return ok;
     };
+    // (W10 R1A pass 8, CPU) footprints whose ports' walk FAILED (flat [u0, v0, u1, v1, ...]): a floor piece over 0.2 m blocks the capsule over its whole
+    // footprint (pieceBoxes), so a footprint that COVERS a failed one blocks every sample that one did and fails too - while the room only gains pieces
+    // and the pass margin stands (the searches below keep one list per search and clear it where a kept piece leaves). The same answer, no put / walk.
+    const covFail = (L, r) => { for (let i = 0; i < L.length; i += 4) if (r[0] <= L[i] + 1e-9 && r[1] <= L[i + 1] + 1e-9 && r[2] >= L[i + 2] - 1e-9 && r[3] >= L[i + 3] - 1e-9) return true; return false; };
     const roomOK0 = (fr, bst) => {
       const blk = roomBlk, pk = [];
       for (const list of portWin) { let best = -1; for (const k of list) if (fr[k] && blk[k] !== bst) { best = k; break; } if (best < 0) return false; if (!pk.includes(best)) pk.push(best); }
@@ -2540,12 +3201,20 @@ export function generate(parcel, opts) {
       }
       return got >= np && n >= 16;
     };
-    const unput = (p) => { R._tall = null; if (RW.inc && RW.inc.has(p)) RW.stale = true; const i = furn.indexOf(p); if (i >= 0) furn.splice(i, 1); const j = placed.indexOf(p); if (j >= 0) placed.splice(j, 1); tris[f] -= p.cat.tris; R.spent -= p.cat.tris; if (p.host) p.host.tops = (p.host.tops || 1) - 1; };
+    const unput = (p) => { R._tall = null; R._pv = (R._pv || 0) + 1;
+      if (R._twm && p._g <= R._twmG) { for (const [k, g] of R._twm) if (g >= p._g) R._twm.delete(k); }     // (a piece that stood when a failure was memoised leaves: those failures may pass now)
+      if (RW.inc && RW.inc.has(p)) {                      // (the piece the cache took in last: its cells back as they were; any other: the cache is rebuilt)
+        const L = RW.log;
+        if (!RW.stale && L && L.length && L[L.length - 2] === p) { const lg = L.pop(); L.pop(); for (let i = lg.length - 2; i >= 0; i -= 2) RW.free[lg[i]] = lg[i + 1]; RW.inc.delete(p); }
+        else RW.stale = true;
+      } const i = furn.indexOf(p); if (i >= 0) furn.splice(i, 1); const j = placed.indexOf(p); if (j >= 0) placed.splice(j, 1); tris[f] -= p.cat.tris; R.spent -= p.cat.tris; if (p.host) p.host.tops = (p.host.tops || 1) - 1; };
     const put = (cat, u, v, fq, tint, extra) => {
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
       const rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
-      const p = Object.assign({ cat, room: R, f, u, v, fq, rect, tint: tint || 0, order: furn.length, y0: 0 }, extra || {});
-      furn.push(p); placed.push(p); R.spent += cat.tris; R._tall = null;
+      // (W10 R1A pass 9, CPU) the fields a piece gets from `extra` or later declared up front (undefined: the same reads): one shape for every piece
+      const p = Object.assign({ cat, room: R, f, u, v, fq, rect, tint: tint || 0, order: furn.length, y0: 0, host: undefined, slot: undefined, run: undefined, t: undefined, sideways: undefined,
+        rescue5: undefined, vis: undefined, _g: undefined, tops: undefined, _pb: undefined, _pbR: undefined, _pbC: undefined, _pbY: undefined, _rid: undefined }, extra || {});
+      furn.push(p); placed.push(p); R.spent += cat.tris; R._tall = null; R._pv = (R._pv || 0) + 1; p._g = R._gen = (R._gen || 0) + 1;
       tris[f] += cat.tris;
       if (p.host) p.host.tops = (p.host.tops || 0) + 1;
       return p;
@@ -2556,20 +3225,36 @@ export function generate(parcel, opts) {
       if (run.axis === "u") { const v0 = run.sg > 0 ? face : face - cat.d, v1 = run.sg > 0 ? face + cat.d : face; return { rect: [t - cat.w / 2, v0, t + cat.w / 2, v1], u: t, v: (v0 + v1) / 2, fq: run.sg > 0 ? 0 : 2 }; }
       const u0 = run.sg > 0 ? face : face - cat.d, u1 = run.sg > 0 ? face + cat.d : face; return { rect: [u0, t - cat.w / 2, u1, t + cat.w / 2], u: (u0 + u1) / 2, v: t, fq: run.sg > 0 ? 1 : 3 };
     };
+    // (W10 R1A, CPU: the positions' de-duplication written out - was a closure made per call)
+    const rpAdd = (out, t, lo, hi) => { if (t < lo - 1e-6 || t > hi + 1e-6) return; for (let q = 0; q < out.length; q++) if (Math.abs(out[q] - t) < 1e-3) return; out.push(t); };
+    // (the same rect / centre / facing as wallRect, into a reused record)
+    const wallRectInto = (run, cat, t, g) => {
+      const face = run.line + run.sg * JAMB, r = g.rect;
+      if (run.axis === "u") { const v0 = run.sg > 0 ? face : face - cat.d, v1 = run.sg > 0 ? face + cat.d : face; r[0] = t - cat.w / 2; r[1] = v0; r[2] = t + cat.w / 2; r[3] = v1; g.u = t; g.v = (v0 + v1) / 2; g.fq = run.sg > 0 ? 0 : 2; return g; }
+      const u0 = run.sg > 0 ? face : face - cat.d, u1 = run.sg > 0 ? face + cat.d : face; r[0] = u0; r[1] = t - cat.w / 2; r[2] = u1; r[3] = t + cat.w / 2; g.u = (u0 + u1) / 2; g.v = t; g.fq = run.sg > 0 ? 1 : 3; return g;
+    };
+    const wrCopy = (g) => ({ rect: [g.rect[0], g.rect[1], g.rect[2], g.rect[3]], u: g.u, v: g.v, fq: g.fq });
     const runPositions = (run, wdt, pref) => {
       const lo = run.t0 + wdt / 2, hi = run.t1 - wdt / 2;
       if (hi < lo - 1e-6) return [];
       const out = [];
-      const add = (t) => { if (t < lo - 1e-6 || t > hi + 1e-6) return; for (let q = 0; q < out.length; q++) if (Math.abs(out[q] - t) < 1e-3) return; out.push(t); };
       const lo2 = Math.max(lo, run.t0 + JAMB + wdt / 2), hi2 = Math.min(hi, run.t1 - JAMB - wdt / 2);
-      if (pref === "corner") { add(lo2); add(hi2); add(lo); add(hi); }
-      add((lo + hi) / 2);
-      for (let t = lo; t <= hi + 1e-6; t += 0.5) add(Math.round(t * 1000) / 1000);
+      if (pref === "corner") { rpAdd(out, lo2, lo, hi); rpAdd(out, hi2, lo, hi); rpAdd(out, lo, lo, hi); rpAdd(out, hi, lo, hi); }
+      rpAdd(out, (lo + hi) / 2, lo, hi);
+      for (let t = lo; t <= hi + 1e-6; t += 0.5) rpAdd(out, Math.round(t * 1000) / 1000, lo, hi);
       if (pref === "center") out.sort((a, b) => Math.abs(a - (lo + hi) / 2) - Math.abs(b - (lo + hi) / 2) || a - b);
       return out;
     };
     // the catalog id -> the piece the budget allows: the kit piece, else its cheaper stand-in(s)
-    const catOf = (id) => { let c = CATALOG[id] || CATALOG[ALIAS[id]]; while (c && !budgetOK(c) && c.alt) c = c.alt; return c; };
+    // (W10 R1A) a home's filler caps: one clock in the house, one floor lamp and one potted plant a room
+    const capOK = (c) => {
+      if (!c || !home || !FILLER_CAPS) return true;
+      const k = capKind(c);                              // (W10 R1A, CPU: the class cached on the catalog entry - was three regexes a lookup)
+      if (k === 1) return !furn.some((q) => capKind(q.cat) === 1);
+      if (k === 2 || k === 3) return !placed.some((q) => capKind(q.cat) === k);
+      return true;
+    };
+    const catOf = (id) => { let c = CATALOG[id] || CATALOG[ALIAS[id]]; while (c && !budgetOK(c) && c.alt) c = c.alt; return capOK(c) ? c : null; };
     // which entrance the room is dressed for: the one that already sees the most (ties: the door the room is reached through)
     const target = () => { const V = roomView(R); if (!V.ents.length) return 0; const b = bestView(R); return 1 << (b.ei >= 0 ? b.ei : V.prim); };
     // READ ON ENTRY: the room's entry is the door its spanning tree came through (the front door for the living room / shop, the stair exit upstairs);
@@ -2592,6 +3277,12 @@ export function generate(parcel, opts) {
     // y0 (a wall-hung piece: its bottom above the floor), hTop (the height the window rule tests, for a piece that will carry another))
     const tryWall = (id, pref, opts) => {
       opts = opts || {};
+      // (W10 R1A) a home's lived room takes its FILLER (lamps, plants, pictures, wall shelves, bins) after the area quota (phase 7): the quota gets the walls and the
+      // storey budget first, the dressing what is left
+      if (phase === 1 && home && AREA_QUOTA && QUOTA_KINDS.has(R.kind) && !opts._now) {
+        const c0 = CATALOG[id] || CATALOG[ALIAS[id]];
+        if (c0 && isFiller(c0.type || "")) { (R._decor || (R._decor = [])).push(() => tryWall(id, pref, Object.assign({}, opts, { _now: true }))); return null; }
+      }
       const cat = catOf(id);
       if (!cat || !budgetOK(cat)) return null;
       if (cat.wall) return hang(cat, opts.tint);
@@ -2600,24 +3291,34 @@ export function generate(parcel, opts) {
       if (opts.runFirst) order.sort((a, b) => (opts.runFirst(b) ? 1 : 0) - (opts.runFirst(a) ? 1 : 0));
       // (the view model steers a piece only while the room still reads short from its entrance; a room that already shows VIEW_WANT takes the
       // rest where they fit - the expensive sight lines are not drawn for every candidate spot of every extra piece)
-      const want = cat.h >= 0.25 && (opts.seen || opts.want || bestView(R).n < VIEW_WANT) ? (opts.want || target()) : 0, spare = [];
+      const want = !opts.noView && cat.h >= 0.25 && (opts.seen || opts.want || bestView(R).n < VIEW_WANT) ? (opts.want || target()) : 0, spare = [];   // (noView: the area quota's pieces go where they fit)
       // until the room's best entrance sees VIEW_WANT pieces, its extras (phase 1) go only where it sees them
       const mustSee = opts.seen || (phase === 1 && want && bestView(R).n < VIEW_WANT);
+      // (W10 R1A, CPU) THE FAILURE MEMO: a wall piece that found no spot in this room fails again while the room only GAINS pieces - every test of a spot
+      // (inside the room and clear of its pieces, the window rule, the ports' walk, the clutter staircase, the sight lines past its tall pieces) only gets
+      // harder when a piece is added - for the same piece, spots (corner or not), height band, sideways, wanted entrance(s), must-see, view model and
+      // pass margin. Not memoised: a call that keeps up to 4 unseen spares (a later piece can change WHICH spots are the first spares) or has an `also` test.
+      // A piece that stood when a failure was memoised leaves (unput, not a spot's own try) -> those entries go. The rng is drawn as before: the same houses.
+      const mk = !opts.also && (mustSee || !want) ? catKey(cat) + "|" + (pref === "corner" ? 1 : 0) + (opts.sideways ? 1 : 0) + (opts.seen ? 1 : 0) + (mustSee ? 1 : 0) + "|" + y0p + "|" + yTop + "|" + want + "|" + (R._acc ? R._accMask : -1) + "|" + (R._pm != null ? R._pm : "d") : null;
+      if (mk !== null && R._twm && R._twm.has(mk)) return null;
       const attempt = (run, t, g, side, m) => {
         const p = put(cat, g.u, g.v, side ? (g.fq + 1) % 4 : g.fq, opts.tint, { y0: y0p });      // (m tested only the wanted entrance: its full mask is counted lazily)
         if (!roomOK()) { unput(p); return null; }
         return Object.assign(p, { run, t, sideways: !!side });
       };
+      // (W10 R1A, CPU: a candidate spot is written into one scratch record - a copy is made only for a spot that is kept as a spare or passed on: the same spots)
       const scan = (dims, side) => {
-        for (const run of order) for (const t of runPositions(run, dims.w, side ? "corner" : pref)) {
-          const g = wallRect(run, dims, t);
+        const g = WR_G;
+        for (let oi = 0; oi < order.length; oi++) { const run = order[oi], ts = runPositions(run, dims.w, side ? "corner" : pref);
+        for (let ti = 0; ti < ts.length; ti++) { const t = ts[ti];
+          wallRectInto(run, dims, t, g);
           if (!valid(g.rect, y0p, yTop)) continue;
           if (opts.also && !opts.also(run, g)) continue;
           const m = want ? visMask(R, g.rect, s[f] + y0p, s[f] + y0p + cat.h, null, want) : null;
-          if (want && !(m & want)) { if (!mustSee && spare.length < 4) spare.push([run, t, g, side, m]); continue; }
+          if (want && !(m & want)) { if (!mustSee && spare.length < 4) spare.push([run, t, wrCopy(g), side, m]); continue; }
           const p = attempt(run, t, g, side, m);
           if (p) return p;
-        }
+        } }
         return null;
       };
       let p = scan(cat, false);
@@ -2626,6 +3327,7 @@ export function generate(parcel, opts) {
       // (phase 3, the accurate model found no spot the game's camera sees: a spot the first-person eye sees still reads to a player who steps in -
       // a narrow room seen from its long side hides its far wall behind the body)
       if (!p && R._acc && opts.seen) { R._acc = false; p = scan(cat, false); R._acc = true; if (p) p.vis = null; }
+      if (!p && mk !== null) { (R._twm || (R._twm = new Map())).set(mk, R._gen || 0); R._twmG = Math.max(R._twmG || 0, R._gen || 0); }
       return p;
     };
     const tryAt = (id, u, v, fq, tint, touch) => {        // a piece centred at (u, v) facing fq
@@ -2683,30 +3385,74 @@ export function generate(parcel, opts) {
       return [p.u + dir[0] * off + sx, p.v + dir[1] * off + sz];
     };
     // a table with chairs round it, near the room's middle (dining, meeting, a workbench without chairs)
+    // (W10 R3A) the chairs along a table's long side: a conference table seats 3 / 4 a side
+    const seatsAlong = (w) => (w >= 3.4 ? [-1.2, -0.4, 0.4, 1.2] : w >= 2.4 ? [-0.8, 0, 0.8] : w >= 1.7 ? [-0.5, 0.5] : [0]);
+    // (W10 R3A, audit 10) a COVER piece (>= 0.9 m tall, >= 0.7 m wide, standing on the floor): an office, meeting room, lobby or corridor without one gets the
+    // first of `ids` that fits against a wall (where the room's ports stay joined) - WORK_COVER
+    const isCover = (p) => !p.slot && !p.cat.deco && !p.cat.wall && !(p.y0 > 0) && !p.host && p.cat.h >= 0.9 && Math.max(p.rect[2] - p.rect[0], p.rect[3] - p.rect[1]) >= 0.7;
+    const coverPiece = (ids) => { if (!WORK_COVER || placed.some(isCover)) return; for (const id of ids) if (tryWall(id, "corner", { tint: tintW, noView: true })) return; };
     const tableSet = (tableId, chairId, maxChairs) => {
       const tc = catOf(tableId);
       if (!tc) return null;
-      const cu = (inner[0] + inner[2]) / 2, cv = (inner[1] + inner[3]) / 2, tq = iw >= idp ? 0 : 1;
+      // (W10 R1A: a home's set that found no spot is not searched again - the room only fills up: by its table piece alone when no spot took the table at all)
+      const tsf = home ? R._tsfail || (R._tsfail = new Set()) : null, tsk = tc.id + "|" + chairId + "|" + (maxChairs || 6);
+      if (tsf && (tsf.has(tsk) || tsf.has(tc.id + "|none"))) return null;
+      let anyT = false;
+      const cu = (inner[0] + inner[2]) / 2, cv = (inner[1] + inner[3]) / 2, tq0 = iw >= idp ? 0 : 1;
       const pts = [];
       for (let du = -2; du <= 2; du += 0.5) for (let dv = -2; dv <= 2; dv += 0.5) pts.push([cu + du, cv + dv]);
       pts.sort((a, b) => ((a[0] - cu) * (a[0] - cu) + (a[1] - cv) * (a[1] - cv)) - ((b[0] - cu) * (b[0] - cu) + (b[1] - cv) * (b[1] - cv)) || a[0] - b[0] || a[1] - b[1]);
-      for (const [pu, pv] of pts) {
-        const t = tryAt(tableId, pu, pv, tq);
-        if (!t) continue;
-        if (!chairId) return t;
-        const ch = catOf(chairId);
-        if (!ch) return t;
-        const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = t.cat.w >= 1.7 ? [-0.5, 0.5] : [0];
+      // (W10 R1A, CPU) the chairs a spot could seat, judged BEFORE the table is put (the furnisher's dominant cost was a table put, its room-walk check, chairs
+      // tried and all of it taken out again): the chair the budget gives once the table is in, each chair spot's valid() - a chair never overlaps its own table
+      // (0.12 m apart) and the chairs placed first only take spots away, so fewer valid spots than the set needs = the full attempt fails the same way. The table is
+      // still tried at such a spot until one fits (anyT: which failure the room records)
+      const need = !chairId ? 0 : home && CENTRE_GROUPS && (maxChairs || 6) >= 2 ? 2 : 1;
+      let chPre = null;
+      if (need) { tris[f] += tc.tris; R.spent += tc.tris; chPre = catOf(chairId); tris[f] -= tc.tris; R.spent -= tc.tris; }
+      const seats = (pu, pv, tq) => {
+        const off = tc.d / 2 + 0.12 + chPre.d / 2, sp = seatsAlong(tc.w);
         const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
         let n = 0;
         for (const [ou, ov, q] of sides) for (const s2 of sp) {
+          const u = pu + ou + (tq === 0 ? s2 : 0), v = pv + ov + (tq === 0 ? 0 : s2), w = q % 2 ? chPre.d : chPre.w, d = q % 2 ? chPre.w : chPre.d;
+          if (valid([u - w / 2, v - d / 2, u + w / 2, v + d / 2], 0, chPre.h)) n++;
+        }
+        return n;
+      };
+      const skipped = [];
+      let stopAll = false;
+      for (const tq of home ? [tq0, 1 - tq0] : [tq0]) { if (stopAll) break; for (const [pu, pv] of pts) {          // (W10 R1A: a home's table also turned across the room)
+        // (W10 R1A, CPU: the seat count is judged before the table at EVERY spot - a spot with fewer valid seats than the set needs fails with the table in too.
+        // Whether ANY spot takes the table alone (which failure the room records) is settled after the search, only when no set was placed)
+        if (chPre && seats(pu, pv, tq) < need) { if (!anyT) skipped.push([pu, pv, tq]); continue; }
+        const t = tryAt(tableId, pu, pv, tq);
+        if (!t) continue;
+        anyT = true;
+        if (!chairId) return t;
+        const ch = catOf(chairId);
+        if (!ch) return t;
+        const off = t.cat.d / 2 + 0.12 + ch.d / 2, sp = seatsAlong(t.cat.w);
+        const sides = tq === 0 ? [[0, off, 2], [0, -off, 0]] : [[off, 0, 3], [-off, 0, 1]];
+        let n = 0;
+        const chs = [];
+        let broke = -1;                                     // (W10 R1A, CPU) the chair count at which the catalog / the storey's budget gave no chair
+        for (const [ou, ov, q] of sides) for (const s2 of sp) {
           if (n >= (maxChairs || 6)) break;
           const cu2 = pu + ou + (tq === 0 ? s2 : 0), cv2 = pv + ov + (tq === 0 ? 0 : s2);
-          if (tryAt(chairId, cu2, cv2, q)) n++;
+          if (broke < 0) { const cc = catOf(chairId); if (!cc || !budgetOK(cc)) broke = n; }
+          const c = tryAt(chairId, cu2, cv2, q);
+          if (c) { n++; chs.push(c); }
         }
-        if (n === 0) { unput(t); continue; }
+        // the table and k chairs leave the same budget and pieces at EVERY spot: when no chair was to be had after k < the set's minimum, no spot can seat the
+        // set - the rest of the search is the same failure, skipped (the room records the set as tried with a table in: anyT)
+        const setMin = home && CENTRE_GROUPS && (maxChairs || 6) >= 2 ? 2 : 1;
+        if (broke >= 0 && broke < setMin && (n === 0 || n < setMin)) { for (let i = chs.length - 1; i >= 0; i--) unput(chs[i]); unput(t); stopAll = true; break; }
+        // (W10 R1A: a home's dining set seats two at least - a table with one chair is not one; the next spot is tried)
+        if (n === 0 || (home && CENTRE_GROUPS && n < 2 && (maxChairs || 6) >= 2)) { for (let i = chs.length - 1; i >= 0; i--) unput(chs[i]); unput(t); continue; }      // (last placed first: the room-walk cache undoes them)
         return t;
-      }
+      } }
+      if (!anyT) for (const [pu, pv, tq] of skipped) { const t = tryAt(tableId, pu, pv, tq); if (t) { unput(t); anyT = true; break; } }
+      if (tsf) tsf.add(anyT ? tsk : tc.id + "|none");
       return null;
     };
     const nStanding = () => placed.filter(counted).length;
@@ -2714,6 +3460,7 @@ export function generate(parcel, opts) {
     if (R.tintW == null) R.tintW = pick(rng, TINT_WOOD);
     const tintW = R.tintW;
     const X = [], later = (fn) => { X.push(fn); };
+    if (phase === 7) return (R._decor || X).slice(0, 3);                          // (W10 R1A: the deferred dressing, see tryWall: its first three)
     // PHASES (a storey's budget is shared round-robin, every room's KEY pieces first): 0 = what says what the room is (a sofa and a TV, the
     // kitchen counter row, a bed, the bathroom set, a desk, the shop counter and shelves), 1 = the rest of the room, 2 = >= 3 standing pieces,
     // 3 = pieces in VIEW of the best entrance until it sees VIEW_WANT
@@ -2738,6 +3485,10 @@ export function generate(parcel, opts) {
     // (housegen notes "pieces in view") were short - one-cell rooms with two doors and a window, thin L baths, a living room between two doors. No rng is drawn
     // here: a room that already reads is untouched.
     if (phase === 5) {
+      // (W10 R1A: a ruin's room is searched to 4 - its furniture x1.15 hid the third piece from the game's camera, housegen_demo_looks ruin_house.f0r2 showed 2)
+      // (W10 R1A pass 5: and a big room - >= 8 cells, 50 m2 - to 4: its third piece in the model was a chair hiding the desk behind it on screen, housegen_demo_looks
+      // lodge_tower.f1r3 office showed 2)
+      const NEED5 = TH.ruined || R.cells.length >= 8 ? 4 : 3;
       const V5 = roomView(R);
       if (!V5.ents.length) return X;
       later(() => {
@@ -2746,27 +3497,30 @@ export function generate(parcel, opts) {
         // a room the eye read but the camera did not (housegen_demo_looks lodge_tower.f1r1: two box stacks behind a 2.1 m rack in line with the right-shoulder
         // camera) stopped here. FALLBACK: when the accurate search cannot reach 3, the eye-only search runs as before (no regression against interiorcheck's
         // first-person judge; the looks gate keeps reporting such a room).
-        const model5 = (acc) => { R._acc = acc; if (acc) R._accMask = (1 << Math.min(30, V5.ents.length)) - 1; R._ext = null; R._tall = null; for (const q of placed) q.vis = null; };
+        const model5 = (acc) => { R._acc = acc; if (acc) R._accMask = (1 << Math.min(30, V5.ents.length)) - 1; R._ext = null; R._tall = null; R._vcm = null; for (const q of placed) q.vis = null; };
         model5(true);
-        if (bestView(R).n >= 3) return;
+        if (bestView(R).n >= NEED5) return;
         const run5 = () => {
-        const FL = s[f], budget5 = (cat) => tris[f] + cat.tris <= TRI_BUDGET;
+        const FL = s[f], budget5 = (cat) => tris[f] + cat.tris <= TBf[f];
         const cnt = () => viewCounts(R);
         const entOrder = cnt().map((n, i) => [n, i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).map((q) => q[1]);
         const ids = [];
         for (const id of (VIEWPOOL[kind] || VIEWPOOL.hall).concat(RESCUE, FREEPOOL[kind] || FREEPOOL.hall, ["trash", "plant", "sideTable", "box", "chairMod"])) if (!ids.includes(id)) ids.push(id);
-        const cat5 = (id) => { let c = CATALOG[id] || CATALOG[ALIAS[id]]; while (c && !budget5(c) && c.alt) c = c.alt; return c && budget5(c) && !c.deco && !c.wall && c.mount !== "top" && c.h >= 0.3 ? c : null; };
+        const cat5 = (id) => { let c = CATALOG[id] || CATALOG[ALIAS[id]]; while (c && !budget5(c) && c.alt) c = c.alt; return c && budget5(c) && capOK(c) && !c.deco && !c.wall && c.mount !== "top" && c.h >= 0.3 ? c : null; };
+        const bf5 = [], flat5 = (cat, y0) => !y0 && cat.h > 0.2;          // (covFail: this search's failed floor footprints)
         const tryPiece = (cat, g, y0, want, ei) => {
           if (!valid(g.rect, y0, y0 + cat.h)) return false;
+          if (flat5(cat, y0) && covFail(bf5, g.rect)) return false;
           if (!(visMask(R, g.rect, FL + y0, FL + y0 + cat.h, null, want) & want)) return false;
           const n0 = cnt()[ei];
           const p = put(cat, g.u, g.v, g.fq, tintW, { y0, rescue5: true });
-          if (!roomOK() || cnt()[ei] <= n0) { unput(p); return false; }
+          if (!roomOK()) { if (flat5(cat, y0) && stairsOK()) bf5.push(g.rect[0], g.rect[1], g.rect[2], g.rect[3]); unput(p); return false; }
+          if (cnt()[ei] <= n0) { unput(p); return false; }
           return true;
         };
         const search = (ei) => {
           const e = V5.ents[ei], want = 1 << ei;
-          const need = () => cnt()[ei] < 3;
+          const need = () => cnt()[ei] < NEED5;
           const fqTo = Math.abs(e.fu) > 0.5 ? (e.fu > 0 ? 3 : 1) : (e.fv > 0 ? 2 : 0);   // a free piece's front toward the entrance
           for (const mode of ["wall", "free"]) for (const id of ids) {
             if (!need()) break;
@@ -2775,13 +3529,16 @@ export function generate(parcel, opts) {
             let done = false;
             if (mode === "wall") {
               const y0 = cat.mount === "wall" ? cat.y0 : 0;
-              for (const run of merged) { if (done) break; for (let t = run.t0 + cat.w / 2; t <= run.t1 - cat.w / 2 + 1e-6 && !done; t += 0.1) done = tryPiece(cat, wallRect(run, cat, Math.round(t * 1000) / 1000), y0, want, ei); }
+              for (const run of merged) { if (done) break; for (let t = run.t0 + cat.w / 2; t <= run.t1 - cat.w / 2 + 1e-6 && !done; t += 0.1) done = tryPiece(cat, wallRectInto(run, cat, Math.round(t * 1000) / 1000, WR_G5), y0, want, ei); }   // (a scratch spot: tryPiece keeps none)
             } else {
-              for (const fq of [fqTo, (fqTo + 1) % 4, (fqTo + 3) % 4]) {
+              for (const fq of [fqTo, (fqTo + 1) % 4]) {        // (W10 R1A pass 8, CPU: was also (fqTo + 3) % 4 - the same footprint as (fqTo + 1) % 4 at the same lattice spots, and every test here reads the footprint, not the facing: it could never pass where (fqTo + 1) % 4 had failed)
                 const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
-                for (let pu = inner[0] + w / 2; pu <= inner[2] - w / 2 + 1e-6 && !done; pu += 0.25) for (let pv = inner[1] + d / 2; pv <= inner[3] - d / 2 + 1e-6 && !done; pv += 0.25) {
+                // (W10 R1A, CPU: a 0.5 m lattice, was 0.25 - the free spots were ~2/3 of the searches' sight-line checks; the guarantee's outcome per room kind measured
+                // the same over 1,080 houses, ruins 8 short of 4 in 797 rooms vs 4)
+                for (let pu = inner[0] + w / 2; pu <= inner[2] - w / 2 + 1e-6 && !done; pu += FREE5_STEP) for (let pv = inner[1] + d / 2; pv <= inner[3] - d / 2 + 1e-6 && !done; pv += FREE5_STEP) {
                   const u = Math.round(pu * 1000) / 1000, v = Math.round(pv * 1000) / 1000;
-                  done = tryPiece(cat, { rect: [u - w / 2, v - d / 2, u + w / 2, v + d / 2], u, v, fq }, 0, want, ei);
+                  const G = WR_G5, gr = G.rect; gr[0] = u - w / 2; gr[1] = v - d / 2; gr[2] = u + w / 2; gr[3] = v + d / 2; G.u = u; G.v = v; G.fq = fq;
+                  done = tryPiece(cat, G, 0, want, ei);
                 }
                 if (done) break;
               }
@@ -2795,7 +3552,7 @@ export function generate(parcel, opts) {
         const slot = placed.find((q) => q.slot);
         if (!slot) return;
         const sc = slot.cat;
-        unput(slot);
+        unput(slot); bf5.length = 0;
         let ok = false;
         for (const ei of entOrder) if (search(ei)) { ok = true; break; }
         if (!ok) { const b = put(sc, slot.u, slot.v, slot.fq, 0, { slot: true }); b.vis = null; if (!roomOK()) unput(b); return; }
@@ -2810,24 +3567,241 @@ export function generate(parcel, opts) {
         }
         };
         run5();
-        if (bestView(R).n >= 3) return;
+        if (bestView(R).n >= NEED5) return;
+        // (W10 R1A pass 8, CPU: the accurate search is not run a second time with the plain capsule - over 1,350 selftest houses it rescued 10 of 380 rooms
+        // for 2.7 % of the generator's time; those rooms take the eye-only fallback below, which searches with the plain capsule as before)
         R._pm = 0; RW.stale = true;
-        run5();
-        if (bestView(R).n >= 3) return;
         model5(false);                                    // (the fallback: the eye-only model, as before Wave 9)
-        if (bestView(R).n >= 3) return;
+        if (bestView(R).n >= NEED5) return;
         run5();
       });
       return X;
+    }
+    // (W10 R1A pass 5) phase 8 = A HOME'S LIVED ROOM READS FROM ITS DOORWAY, after the guarantee: the best entrance's ACCURATE model (the game's third-person camera
+    // and the first-person eye) sees >= LIVED_SEE of the room's own SUBSTANTIVE pieces (not filler: housegen_demo_looks view-lived counts those) - more of the kind's
+    // substantive pieces against a wall that entrance sees, then free-standing facing it (0.5 m lattice), each spot through valid() and roomOK(), inside the
+    // storey's budget. Nothing already placed moves (the sets stay whole); a room that reads is untouched; no rng is drawn.
+    if (phase === 8) {
+      // (W10 R3A fix5) WORK_DENSE: an office / meeting room / lobby / corridor of a non-home building dressed to its size, LAST - after every room's key pieces,
+      // extras, a shop's / store's stock (phase 2) and the guarantee (5), from what the work storey's budget (storeyBudget) has left: one piece a DENSE_M2[kind] m2
+      // against its walls, in DENSE_IDS[kind]'s order (in phase 2 it took the storey's budget from the store room beside it: lodge_tower f2 storage 12 -> 8 pieces)
+      if (WORK_DENSE && !home && !TH.ruined && DENSE_IDS[kind]) {
+        const ids = DENSE_IDS[kind];
+        for (let k = 0; k < Math.floor(area / DENSE_M2[kind]); k++) X.push(() => { const id = ids[k % ids.length]; tryWall(id, catOf(id) && catOf(id).mount === "wall" ? "center" : "corner", { tint: tintW }); });
+        return X;
+      }
+      if (!(home && AREA_QUOTA && LIVED_VIEW && QUOTA_KINDS.has(kind))) return X;      // (part of the area quota: the looks / homes 'sparse' plants turn it off with it)
+      const V8 = roomView(R);
+      if (!V8.ents.length) return X;
+      later(() => {
+        // (first the quota's floor: >= QUOTA_MIN substantive pieces - the cheapest ones, where they fit, when the storey's budget left the quota short)
+        { const subs = () => { let n = 0; for (const q of placed) if (!q.slot && !q.cat.deco && !isFiller(q.cat.type || "")) n++; return n; };
+          for (let pass = 0, more = true; pass < 4 && more && subs() < QUOTA_MIN; pass++) { more = false;
+            for (const id of LIVED_CHEAP) { if (subs() >= QUOTA_MIN) break; if (tryWall(id, "corner", { tint: tintW, noView: true }) || tryWall(id, "center", { tint: tintW, noView: true })) more = true; } }
+          // (no wall left: a stool / an ottoman / a chair free-standing on a 0.5 m lattice, nearest the room's middle first)
+          if (subs() < QUOTA_MIN) {
+            const cu = (inner[0] + inner[2]) / 2, cv = (inner[1] + inner[3]) / 2, pts = [];
+            for (let pu = inner[0] + 0.4; pu <= inner[2] - 0.4 + 1e-6; pu += 0.5) for (let pv = inner[1] + 0.4; pv <= inner[3] - 0.4 + 1e-6; pv += 0.5) pts.push([Math.hypot(pu - cu, pv - cv), Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000]);
+            pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+            for (const id of ["ottoman", "stool", "chairMod"]) for (const [, pu, pv] of pts) { if (subs() >= QUOTA_MIN) break; tryAt(id, pu, pv, 0, tintW); }
+            // (still short - a small room with three doorways: the walk between them is judged with the plain capsule, as the guarantee's second search does)
+            if (subs() < QUOTA_MIN && R._pm == null) {
+              R._pm = 0; RW.stale = true;
+              for (const id of LIVED_CHEAP) { if (subs() >= QUOTA_MIN) break; tryWall(id, "corner", { tint: tintW, noView: true }) || tryWall(id, "center", { tint: tintW, noView: true }); }
+              for (const id of ["ottoman", "stool", "chairMod"]) for (const [, pu, pv] of pts) { if (subs() >= QUOTA_MIN) break; tryAt(id, pu, pv, 0, tintW); }
+              R._pm = null; RW.stale = true;
+            }
+            // (the storey's triangle budget spent - a bungalow's one storey holds every room: a floor lamp / a plant of this room gives its triangles to a cheap
+            // substantive piece; put back when none fits)
+            for (let guard = 0; guard < 3 && subs() < QUOTA_MIN; guard++) {
+              const fl = placed.filter((q) => !q.slot && !q.cat.deco && !q.host && !q.tops && isFiller(q.cat.type || "")).sort((a, b) => b.cat.tris - a.cat.tris)[0];
+              if (!fl) break;
+              const keep = { cat: fl.cat, u: fl.u, v: fl.v, fq: fl.fq, tint: fl.tint, o: { y0: fl.y0, run: fl.run, t: fl.t, sideways: fl.sideways } };
+              unput(fl); RW.stale = true;
+              let got = null;
+              for (const id of LIVED_CHEAP) { got = tryWall(id, "corner", { tint: tintW, noView: true }) || tryWall(id, "center", { tint: tintW, noView: true }); if (got) break; }
+              if (!got) for (const id of ["ottoman", "stool"]) { for (const [, pu, pv] of pts) { got = tryAt(id, pu, pv, 0, tintW); if (got) break; } if (got) break; }
+              if (!got) { const b = put(keep.cat, keep.u, keep.v, keep.fq, keep.tint, keep.o); b.vis = null; break; }
+            }
+          } }
+        const mode = (on) => { R._subst = on; R._acc = on; if (on) R._accMask = (1 << Math.min(30, V8.ents.length)) - 1; R._ext = null; R._tall = null; R._vcm = null; for (const q of placed) q.vis = null; };
+        mode(true);
+        const b0 = bestView(R);
+        if (b0.n < LIVED_SEE && b0.ei >= 0) {
+          const ei = b0.ei, want = 1 << ei, e = V8.ents[ei], FL = s[f], cnt = () => viewCounts(R)[ei];
+          const ids = [];
+          for (const id of (QUOTAPOOL[kind] || []).concat(VIEWPOOL[kind] || [], FREEPOOL[kind] || [])) { const c = catOf(id); if (c && !ids.includes(id) && !isFiller(c.type || "")) ids.push(id); }
+          for (let pass = 0, more = true; pass < 3 && more && cnt() < LIVED_SEE; pass++) { more = false; for (const id of ids) { if (cnt() >= LIVED_SEE) break; if (tryWall(id, "view", { seen: true, tint: tintW, want })) more = true; } }
+          const fqTo = Math.abs(e.fu) > 0.5 ? (e.fu > 0 ? 3 : 1) : (e.fv > 0 ? 2 : 0), BF8 = [];      // (covFail: the search's failed floor footprints)
+          for (const id of ids) {
+            if (cnt() >= LIVED_SEE) break;
+            const cat = catOf(id);
+            if (!cat || cat.mount === "wall" || cat.mount === "top" || cat.wall || tris[f] + cat.tris > TBf[f] || !capOK(cat)) continue;
+            let done = false;
+            const bf8 = BF8;
+            for (const fq of [fqTo, (fqTo + 1) % 4]) {        // (W10 R1A pass 8, CPU: was also (fqTo + 3) % 4 - the same footprint as (fqTo + 1) % 4 at the same lattice spots, and every test here reads the footprint, not the facing: it could never pass where (fqTo + 1) % 4 had failed)
+              const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
+              for (let pu = inner[0] + w / 2; pu <= inner[2] - w / 2 + 1e-6 && !done; pu += FREE5_STEP) for (let pv = inner[1] + d / 2; pv <= inner[3] - d / 2 + 1e-6 && !done; pv += FREE5_STEP) {
+                const u = Math.round(pu * 1000) / 1000, v = Math.round(pv * 1000) / 1000, rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
+                if (!valid(rect, 0, cat.h) || (cat.h > 0.2 && covFail(bf8, rect)) || !(visMask(R, rect, FL, FL + cat.h, null, want) & want)) continue;
+                const n0 = cnt(), p = put(cat, u, v, fq, tintW, {});
+                if (!roomOK()) { if (cat.h > 0.2 && stairsOK()) bf8.push(rect[0], rect[1], rect[2], rect[3]); unput(p); continue; }
+                if (cnt() <= n0) { unput(p); continue; }
+                done = true;
+              }
+              if (done) break;
+            }
+          }
+        }
+        mode(false);
+        // ... and the doorway's camera looks INTO furniture, not across bare floor (view-lived-cover: >= 20 % of the frame under the horizon is furniture): one
+        // free-standing piece of the kind 1.0 - 2.8 m in from the best entrance, beside its walk line (0.5 - 1.8 m off it), nearest first
+        if (LIVED_NEAR) {
+          const b = bestView(R), en = b.ei >= 0 ? V8.ents[b.ei] : null;
+          if (en) {
+            const pts = [];
+            for (let pu = inner[0] + 0.4; pu <= inner[2] - 0.4 + 1e-6; pu += 0.25) for (let pv = inner[1] + 0.4; pv <= inner[3] - 0.4 + 1e-6; pv += 0.25) {
+              const du = pu - en.u, dv = pv - en.v, fw = du * en.fu + dv * en.fv, lat = Math.abs(-du * en.fv + dv * en.fu);
+              if (fw >= 1.0 && fw <= 2.8 && lat >= 0.5 && lat <= 1.8) pts.push([fw + 0.5 * lat, Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000, Math.sign(-du * en.fv + dv * en.fu)]);
+            }
+            pts.sort((a, c) => a[0] - c[0] || a[1] - c[1] || a[2] - c[2]);
+            const fqTo = Math.abs(en.fu) > 0.5 ? (en.fu > 0 ? 3 : 1) : (en.fv > 0 ? 2 : 0), NEAR_SIDE = { v: 0 };
+            // (one on each side of the walk line when both have room: the doorway frames the room between them)
+            for (const side of [0, 1]) {
+              let got = null;
+              for (const id of LIVED_NEAR[kind] || []) { for (const [, pu, pv, sg] of pts) { if (side && sg === NEAR_SIDE.v) continue; got = tryAt(id, pu, pv, fqTo, tintW); if (got) { NEAR_SIDE.v = sg; break; } } if (got) break; }
+              if (!got) break;
+            }
+          }
+        }
+      });
+      return X;
+    }
+    // (W10 R1A) phase 6 = THE AREA QUOTA of a home's lived rooms: substantive pieces (not filler) until the room holds max(QUOTA_MIN, area / QUOTA_M2) - against a
+    // wall (corner, then centre spots), else free-standing on a 0.5 m lattice from the room's middle out (an armchair, a chair, a stool, a side table); every spot
+    // still passes valid() and roomOK(). Round-robin with the other rooms of the storey (one piece per room per turn) inside the home's storey budget.
+    // (W10 R1A) a breakfast nook: the small square table with its back to a wall, a chair at each free end facing it (a kitchen whose middle is its walkway)
+    const nook = () => {
+      const ch = catOf("chairMod");
+      if (!ch) return null;
+      // (the square table: a chair at each free end; the long table: two chairs side by side in front of it)
+      for (const [tid, ends] of [["diningTable", true], ["tableA", false], ["diningTable", false]]) for (const pref of ["center", "corner"]) {
+        const tried = new Set();
+        for (let n = 0; n < 12; n++) {
+          const t = tryWall(tid, pref, { tint: tintW, also: (run, g) => !tried.has(Math.round(g.u * 100) + ":" + Math.round(g.v * 100)) });
+          if (!t) break;
+          tried.add(Math.round(t.u * 100) + ":" + Math.round(t.v * 100));
+          const dir = FACE[t.fq], side = [dir[1], -dir[0]], got = [];
+          const endS = [1, -1].map((sg) => { const off = t.cat.w / 2 + 0.12 + ch.d / 2; return [t.u + side[0] * sg * off, t.v + side[1] * sg * off, turnOfDir(-side[0] * sg, -side[1] * sg)]; });
+          const frontS = (t.cat.w >= 1.2 ? [1, -1] : [0]).map((sg) => { const fo = t.cat.d / 2 + 0.12 + ch.d / 2, so = Math.min(0.42, t.cat.w / 2 - 0.05) * sg; return [t.u + dir[0] * fo + side[0] * so, t.v + dir[1] * fo + side[1] * so, turnOfDir(-dir[0], -dir[1])]; });
+          for (const [cu, cv, q] of ends ? endS.concat(frontS) : frontS.concat(endS)) { if (got.length >= 2) break; const c = tryAt("chairMod", Math.round(cu * 1000) / 1000, Math.round(cv * 1000) / 1000, q); if (c) got.push(c); }
+          if (got.length >= 2) return t;
+          for (const c of got) unput(c);
+          unput(t);
+        }
+      }
+      return null;
+    };
+    if (phase === 6) {
+      if (!(home && AREA_QUOTA && QUOTA_KINDS.has(kind))) return X;
+      // (W10 R1A) a kitchen that had no room for its dining set: once more first (a small table and 2 chairs), else the living room it opens into takes it
+      if (CENTRE_GROUPS && kind === "kitchen" && R.noDining && (tableSet("diningTable", "chairMod", 2) || tableSet("table", "chair", 2) || tableSet("tableA", "chairMod", 2) || nook())) R.noDining = false;
+      if (CENTRE_GROUPS && kind === "living") later(() => {
+        const kn = doors.filter((d) => d.floor === f && (d.a === R.ri || d.b === R.ri)).map((d) => (d.a === R.ri ? d.b : d.a))
+          .map((ri) => roomRecs.find((q) => q.floor === f && q.ri === ri)).find((q) => q && q.kind === "kitchen" && q.noDining);
+        if (kn && (tableSet("tableCloth", "chairMod", 4) || tableSet("table", "chair", 4) || tableSet("diningTable", "chairMod", 4) || tableSet("diningTable", "chairMod", 2))) kn.noDining = false;
+      });
+      const goal = Math.max(QUOTA_MIN, Math.ceil(area / QUOTA_M2 - 1e-9));
+      const subs = () => { let n = 0; for (const q of placed) if (!q.slot && !isFiller(q.cat.type || "")) n++; return n; };
+      const pool = QUOTAPOOL[kind];
+      const cu0 = (inner[0] + inner[2]) / 2, cv0 = (inner[1] + inner[3]) / 2;     // (the layouts' own cu0 / cv0 are declared below this phase's return)
+      // (a piece that found no spot in this room finds none later in the phase either - the room only fills up, the storey's budget only shrinks: not searched again)
+      const fails = R._qfail || (R._qfail = new Set());
+      const ptsBy = R._qpts || (R._qpts = new Map());
+      const freeAt = (id, all) => {
+        const c = catOf(id);
+        if (!c || c.h > 1.3 || c.mount !== "floor") return null;
+        const hw = Math.max(c.w, c.d) / 2 + 0.05;
+        const stp = all ? 0.25 : 0.5;                                                // (the 0.5 m lattice; the under-minimum rescue the 0.25 m one)
+        let pts = ptsBy.get(hw + ":" + stp);
+        if (!pts) {
+        pts = [];
+        for (let pu = inner[0] + hw; pu <= inner[2] - hw + 1e-6; pu += stp) for (let pv = inner[1] + hw; pv <= inner[3] - hw + 1e-6; pv += stp) pts.push([(pu - cu0) * (pu - cu0) + (pv - cv0) * (pv - cv0), pu, pv]);
+        pts.sort((a, b) => b[0] - a[0] || a[1] - b[1] || a[2] - b[2]);            // (the room's edges first: its middle is where people walk between the doorways)
+        ptsBy.set(hw + ":" + stp, pts);
+        }
+        for (const [, pu, pv] of all ? pts : pts.slice(0, 48)) {
+          const fq = Math.abs(pu - cu0) >= Math.abs(pv - cv0) ? (pu > cu0 ? 3 : 1) : (pv > cv0 ? 2 : 0);          // facing the room's middle
+          const q = tryAt(id, Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000, fq, tintW) || (all ? tryAt(id, Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000, (fq + 1) % 4, tintW) : null);
+          if (q) return q;
+        }
+        return null;
+      };
+      let miss = 0, qi = RNG_LEAK && Math.random() < 0.5 ? 1 : 0;
+      // (the first pool.length turns fill every room of the storey to QUOTA_MIN, the rest to its area goal: a big room's goal spent the storey's budget
+      // while a bedroom beside it stood at 3 - metro@p0, Ashgrid seed 2026)
+      const quotaTurn = (n) => later(() => {
+        if (subs() >= (n < pool.length ? Math.min(goal, QUOTA_MIN) : goal) || (miss >= pool.length && n >= pool.length)) return;
+        let id = pool[qi++ % pool.length];
+        if (tris[f] > TBf[f] - 700) id = ["dresser", "wallCab", "ottoman", "bookcaseLow", "shelf"][qi % 5];      // (a full storey: authored pieces, 20-60 triangles)
+        if (fails.has(id)) { miss++; return; }
+        const q = tryWall(id, "corner", { tint: tintW }) || freeAt(id);          // (a corner scan tries every wall spot: "center" only orders them differently)
+        if (!q) { miss++; fails.add(id); return; }
+        miss = 0;
+      });
+      for (let n = 0; n < pool.length; n++) quotaTurn(n);
+      // (a room still under QUOTA_MIN: the small pieces once more, anywhere on the lattice - its middle too - where the room's ports stay joined)
+      // (pass 2: the room's own kind first - a living room short of 6 takes an armchair / a coffee table before the generic small pieces)
+      // (W10 R3A: right after the first turns, BEFORE the turns that fill rooms to their area goal - a bungalow's pitched roof takes ~40 triangles of its one storey, and a
+      // 25 m2 bedroom stood at 5 while the kitchen beside it filled to 14: ashgrid s1234 mall@p23)
+      const RESCUE_KIND = { living: ["armchair", "coffeeSq", "armchair"], bedroom: ["dresser", "chairMod"], kitchen: ["stool", "chairMod"], dining: ["chairMod", "stool"] };
+      for (const id of (RESCUE_KIND[kind] || []).concat(["wallCab", "sideTable", "ottoman", "stool", "wallCab", "chairMod", "bookcaseLow", "sideTable", "ottoman", "stool"])) later(() => {
+        if (subs() >= QUOTA_MIN || fails.has(id + "*")) return;
+        const c = catOf(id);
+        if (c && c.mount === "wall") { if (!tryWall(id, "center", { tint: tintW, noView: true })) fails.add(id + "*"); return; }
+        if (!(tryWall(id, "corner", { tint: tintW, noView: true }) || freeAt(id, true))) fails.add(id + "*");
+      });
+      for (let n = pool.length; n < 3 * pool.length; n++) quotaTurn(n);
+      return X;
+    }
+    // (W10 R3A, audit 9) a shop's / store room's / warehouse's STOCK, after every room's key pieces and extras (the storey's budget, not the room's share - a shop's
+    // aisle rows spend its share): cartons, open bins, box stacks, crates with a box on top and drums along the walls, ~1 per 5 m2, in muted colours - WORK_FIT
+    if (phase === 2 && WORK_FIT && !TH.ruined && (kind === "shop" || kind === "storage" || kind === "warehouse")) {
+      // (and once the walls are full, free-standing on a 0.5 m lattice from the room's edges in - a display bin, a crate or a pallet stack in the open floor, where the
+      // room's ports stay joined for the fat capsule)
+      const pts = [];
+      for (let pu = inner[0] + 0.55; pu <= inner[2] - 0.55 + 1e-6; pu += 0.5) for (let pv = inner[1] + 0.55; pv <= inner[3] - 0.55 + 1e-6; pv += 0.5)
+        pts.push([Math.min(pu - inner[0], inner[2] - pu, pv - inner[1], inner[3] - pv), Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000]);
+      pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+      // (at most one free-standing stock piece per 15 m2: the floor loot needs open floor - a 5 x 12.5 m shop filled with 9 crate stacks had no loot point left)
+      let freeFails = 0, freeN = Math.floor(area / 15);
+      const freeStock = (id, tint) => {
+        if (freeFails >= 3 || freeN <= 0) return null;
+        for (const [, pu, pv] of pts) { const q = tryAt(id, pu, pv, 0, tint) || tryAt(id, pu, pv, 1, tint); if (q) { freeFails = 0; freeN--; return q; } }
+        freeFails++;
+        return null;
+      };
+      for (let k = 0; k < Math.round(area / 3); k++) X.push(() => {
+        const id = (kind === "shop" ? ["shopShelf", "cartonOpen", "shopShelfLow", "carton"] : ["boxStack", "crate", "cartonOpen", "drum", "carton"])[k % (kind === "shop" ? 4 : 5)];     // (fix4: a shop's walls take stocked shelving)
+        const tint = id === "drum" ? 0x4a6a7a : id === "crate" ? 0x8a6e50 : [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][k % 4];
+        const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? (kind === "shop" ? freeStock("cartonOpen", tint)
+          : freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50)) : null);     // (fix4: a shop's free-standing stock is an open display bin, not a storeroom pallet / crate stack)
+        if (p && (id === "crate" || p.cat.id === "palletLoad")) stackOn(p, "box", { force: true });
+        else if (p && p.cat.surface && !p.tops) { const q = stackOn(p, "pack", { force: true, tint }); if (q && q.y0 + q.cat.h < 1.6) stackOn(q, "pack", { force: true, tint }); }     // (sealed packs on the carton / pack: stock piled up, never over 1.6 m)
+      });
     }
     if (phase === 2) {                                   // top-up: every room should hold at least 3 standing pieces
       for (const id of ["plant", "lampSq", "trash", "box", "lamp", "sideTable", "stool", "coatRack", "boxOpen", "plant"]) later(() => { if (nStanding() < 3) tryWall(id, "corner"); });
       return X;
     }
+    // (W10 R3A, audit 10) phase 4 (right after every room's key pieces; the storey's budget, not the room's share): an office, meeting room, lobby or corridor
+    // with no cover piece gets one against a wall - its own phase-1 recipe tries again later (WORK_COVER)
+    if (phase === 4 && WORK_COVER && COVER_IDS[kind] && (kind !== "hall" || !home)) later(() => coverPiece(COVER_IDS[kind]));
     if (phase === 3 || phase === 4) {                    // in view: cheap pieces where the best entrance sees them
       // phase 4 (round 3: right after the key pieces, before anybody's extras use the storey's budget) = the MINIMUM: 3 pieces in view by the cheap
       // model. Phase 3 (after the extras) = THE ACCURATE COUNT (once per room): what shows from the game's third-person camera AND the first-person
       // eye, the room's tall pieces hiding what stands behind them, up to VIEW_WANT; a room that already reads so is done.
+      if (phase === 3 && home && AREA_QUOTA && QUOTA_KINDS.has(kind)) return X;        // (W10 R1A: the area quota furnished it)
       const GOAL = phase === 4 ? 3 : VIEW_WANT;
       // (a room the cheap model already sees VIEW_WANT + 3 pieces of reads from the camera too: not counted again - the accurate count is the
       // slow part of a house, kept for the rooms where it can change the answer)
@@ -2836,7 +3810,7 @@ export function generate(parcel, opts) {
         // (counted again from the two entrances the cheap model rates best: the camera's count is for where a player reads the room)
         const cn = viewCounts(R), top2 = cn.map((n, i) => [n, i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, 2);
         R._accMask = top2.reduce((m, q) => m | (1 << q[1]), 0);
-        R._acc = true; R._tall = null; R._ext = null; for (const p of R._ps || []) p.vis = null;     // (the next rooms' pieces too: counted again below if needed)
+        R._acc = true; R._tall = null; R._ext = null; R._vcm = null; for (const p of R._ps || []) p.vis = null;     // (the next rooms' pieces too: counted again below if needed)
       }
       if (!roomView(R).ents.length || bestView(R).n >= GOAL) { R._acc = false; return X; }
       // (stage B, lane I1: no extCounts(R) here any more - round 3 let the next rooms' pieces seen through the doorway count from phase 3 on, so a room could stop
@@ -2922,7 +3896,8 @@ export function generate(parcel, opts) {
       const A = pat(step / 2), Bp = pat(0), aisleA = Math.min(...[0, step, -step, 2 * step, -2 * step].map((x) => Math.abs(x - dc))), aisleB = Math.min(...[step / 2, -step / 2, 1.5 * step, -1.5 * step].map((x) => Math.abs(x - dc)));
       // (and never a row in the doorway's own line of sight: the entrant - and the camera over his shoulder - looks down an aisle)
       const doorsAcross = roomView(R).ents.filter((e) => e.door && Math.abs(alongU ? e.fu : e.fv) > 0.5).map((e) => (alongU ? e.v - cv0 : e.u - cu0));
-      const offs = (aisleA <= aisleB ? A : Bp).filter((ob) => doorsAcross.every((d) => Math.abs(ob - d) >= pd / 2 + 0.9)).sort((x, y) => Math.abs(x) - Math.abs(y) || x - y);
+      const dcl = opt.doorClear != null ? opt.doorClear : 0.9;      // (W10 R3A fix5) a shop's aisle centred on its doorway: 0.75 (the aisle 1.6 m wide), not 0.9
+      const offs = (aisleA <= aisleB ? A : Bp).filter((ob) => doorsAcross.every((d) => Math.abs(ob - d) >= pd / 2 + dcl)).sort((x, y) => Math.abs(x) - Math.abs(y) || x - y);
       let n = 0;
       for (const ob of offs) {
         if (n >= maxN) break;
@@ -2940,7 +3915,8 @@ export function generate(parcel, opts) {
     // the open floor, 1.3 m aisles. A cluster that cannot keep both of a pair's desks is taken out again.
     const clusters = (maxN) => {
       const dk = catOf("deskA"), ch = catOf("officeChair"); if (!dk || !ch) return 0;
-      const pairW = dk.w, span = 2 * (dk.d + ch.d + 0.12);            // a pair: along a = desk width, across b = desk, desk, chairs either side
+      const PG = WORK_COVER ? 0.055 : 0;                              // (W10 R3A: a cubicle partition between the backs of a pair - fix2: 11 cm, the partition is 8 x 1.15 = 9.2 cm thick; 9 cm never held it)
+      const pairW = dk.w, span = 2 * (dk.d + ch.d + 0.12 + PG);        // a pair: along a = desk width, across b = desk, desk, chairs either side
       const stepA = 2 * pairW + 1.3, stepB = span + 1.3;
       const na = Math.max(0, Math.floor((LA - 1.3 + 1e-6) / stepA)), nb = Math.max(0, Math.floor((LB - 1.3 + 1e-6) / stepB));
       let n = 0;
@@ -2951,46 +3927,104 @@ export function generate(parcel, opts) {
         for (const half of [-1, 1]) {                                   // two pairs side by side along a
           const a = ca + half * pairW / 2, got = [];
           for (const sd of [-1, 1]) {                                   // the two desks of a pair, back to back across b
-            const [du, dv] = A2UV(a, cb + sd * dk.d / 2), fq = longU ? (sd < 0 ? 2 : 0) : (sd < 0 ? 3 : 1);
+            const [du, dv] = A2UV(a, cb + sd * (dk.d / 2 + PG)), fq = longU ? (sd < 0 ? 2 : 0) : (sd < 0 ? 3 : 1);
             const d = tryAt("deskA", cu0 + du, cv0 + dv, fq, tintW, true);
             if (!d) continue;
             got.push(d);
-            const [cuC, cvC] = A2UV(a, cb + sd * (dk.d + 0.08 + ch.d / 2));
+            const [cuC, cvC] = A2UV(a, cb + sd * (dk.d + PG + 0.08 + ch.d / 2));
             tryAt("officeChair", cu0 + cuC, cv0 + cvC, (fq + 2) % 4);
             stackOn(d, "monitor", { along: half * 0.3 });
           }
-          if (got.length) n += got.length;
+          if (got.length) { n += got.length; if (PG) { const [pu, pv] = A2UV(a, cb); tryAt("partition", cu0 + pu, cv0 + pv, longU ? 0 : 1, 0, true); } }
         }
       }
       return n;
     };
+    // (W10 R1A) a free-standing sofa (no wall spot took one): on a 0.5 m lattice near the room's middle, its back to the entrance side, facing across the room
+    const freeSofa = () => {
+      const ids = ["sofa", "sofaDesign"], pts = [];
+      for (let pu = inner[0] + 0.55; pu <= inner[2] - 0.55 + 1e-6; pu += 0.25) for (let pv = inner[1] + 0.55; pv <= inner[3] - 0.55 + 1e-6; pv += 0.25) pts.push([(pu - cu0) * (pu - cu0) + (pv - cv0) * (pv - cv0), pu, pv]);
+      pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+      for (const [, pu, pv] of pts.slice(0, 120)) for (const id of ids) for (const fq of longU ? [0, 2, 1, 3] : [1, 3, 0, 2]) {
+        const q = tryAt(id, Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000, fq, 0);
+        if (q) return q;
+      }
+      return null;
+    };
     // the sofa SET: a coffee table in front of the sofa on a big rug, an armchair at its side facing it, a side table + lamp beside the sofa
     const sofaSet = (sofa) => {
-      if (!sofa || !furn.includes(sofa)) return;
+      if (!sofa || !furn.includes(sofa) || R._sofaSet) return;
+      R._sofaSet = true;
       const cid = rng() < 0.5 ? "coffee" : "coffeeSq", cc = catOf(cid) || catOf("coffee"); if (!cc) return;
-      const [cu, cv] = inFront(sofa, 0.42, cc);
-      const cof = tryAt(cid, cu, cv, sofa.fq) || tryAt("coffeeSq", cu, cv, sofa.fq);
+      const coffeeFor = (sofa, near) => {
+        const [cu, cv] = inFront(sofa, 0.42, cc);
+        let cof = tryAt(cid, cu, cv, sofa.fq) || tryAt("coffeeSq", cu, cv, sofa.fq);
+        // (W10 R1A) a home: the coffee table may stand a little further out, or shifted along the sofa (a door zone in front of its middle)
+        if (!cof && home && CENTRE_GROUPS) for (const [gap, sd] of [[0.6, 0], [0.42, 0.5], [0.42, -0.5], [0.8, 0], [0.6, 0.6], [0.6, -0.6]]) {
+          const [cu2, cv2] = inFront(sofa, gap, catOf("coffeeSq") || cc, sd);
+          cof = tryAt("coffeeSq", cu2, cv2, sofa.fq) || tryAt(cid, cu2, cv2, sofa.fq);
+          if (cof) break;
+        }
+        // (and else anywhere within 2.2 m of the sofa on a 0.25 m lattice, nearest first: a living room's coffee table, census bar 90 %)
+        if (!cof && home && CENTRE_GROUPS && !near) {
+          // (in front of the sofa only - the half the sofa faces: a coffee table behind it is not its set)
+          const pts = [], fd = FACE[sofa.fq];
+          for (let du = -2.2; du <= 2.2 + 1e-6; du += 0.25) for (let dv = -2.2; dv <= 2.2 + 1e-6; dv += 0.25) { const d2 = du * du + dv * dv; if (d2 <= 4.84 && d2 > 0.3 && du * fd[0] + dv * fd[1] > 0.3) pts.push([d2, Math.round((sofa.u + du) * 1000) / 1000, Math.round((sofa.v + dv) * 1000) / 1000]); }
+          pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+          for (const [, pu, pv] of pts) { cof = tryAt("coffeeSq", pu, pv, sofa.fq) || tryAt("coffeeSq", pu, pv, (sofa.fq + 1) % 4); if (cof) break; }
+        }
+        return cof;
+      };
+      let cof = coffeeFor(sofa);
+      // (W10 R1A) a home's sofa with no room for its coffee table moves to another wall spot (up to 8) where the pair fits; else it goes back where it stood
+      if (!cof && home && CENTRE_GROUPS && sofa.run && R.sofa === sofa) {
+        const key = (g) => Math.round(g.u * 100) + ":" + Math.round(g.v * 100), tried = new Set([key(sofa)]);
+        const back = [sofa.cat, sofa.u, sofa.v, sofa.fq, sofa.tint, { y0: 0, run: sofa.run, t: sofa.t, sideways: sofa.sideways }];
+        unput(sofa);
+        for (let n = 0; n < 8 && !cof; n++) {
+          const s2 = tryWall(sofa.cat.id, "center", { tint: sofa.tint, also: (run, g) => !tried.has(key(g)) });
+          if (!s2) break;
+          tried.add(key(s2));
+          cof = coffeeFor(s2, true);                                         // (the spots straight in front of it: the lattice was searched for the first sofa)
+          if (cof) { sofa = s2; R.sofa = s2; } else unput(s2);
+        }
+        if (!cof) { sofa = put(...back); R.sofa = sofa; if (!roomOK()) { unput(sofa); R.sofa = null; return; } }
+      }
       if (!cof) return;
       tryAt(area >= 22 ? "rugLarge" : "rug", cof.u, cof.v, sofa.fq % 2 ? 1 : 0, pick(rng, RUG)) || tryAt("rugSmall", cof.u, cof.v, sofa.fq % 2 ? 1 : 0, pick(rng, RUG));
       if (rng() < 0.6) stackOn(cof, "plantSmall");
       const dir = FACE[sofa.fq], side = [dir[1], -dir[0]], ac = catOf("armchair");
+      let nA = 0;
       if (ac) for (const sg of rng() < 0.5 ? [1, -1] : [-1, 1]) {
         const off = (cof.fq % 2 ? cof.rect[3] - cof.rect[1] : cof.rect[2] - cof.rect[0]) / 2 + 0.25 + ac.d / 2;
         const fqA = turnOfDir(-side[0] * sg, -side[1] * sg);           // its front toward the coffee table
-        if (tryAt("armchair", cof.u + side[0] * sg * off, cof.v + side[1] * sg * off, fqA)) break;
+        if (tryAt("armchair", cof.u + side[0] * sg * off, cof.v + side[1] * sg * off, fqA)) { nA++; if (!(home && CENTRE_GROUPS && area >= 25)) break; }     // (W10 R1A: a home's big living room, two)
       }
     };
     const wallDecor = (ids) => { for (const id of ids) later(() => tryWall(id, "center")); };
     if (kind === "living") {
       if (core) {
-        later(() => { R.sofa = tryWall(rng() < 0.3 ? "sofaDesign" : "sofa", "center", { tint: 0 }) || tryWall("sofa", "center", { tint: 0 }); });
+        later(() => {
+          R.sofa = tryWall(rng() < 0.3 ? "sofaDesign" : "sofa", "center", { tint: 0 }) || tryWall("sofa", "center", { tint: 0 });
+          // (W10 R1A) a home's living room always gets its sofa: against any wall spot, else free-standing in the room's middle facing a wall (a centre group)
+          if (!R.sofa && home && CENTRE_GROUPS) R.sofa = tryWall("sofaDesign", "corner", { tint: 0 }) || tryWall("sofa", "corner", { tint: 0 }) || freeSofa();
+        });
         later(() => {
           const sofa = R.sofa;
-          const tv = tryWall("tv", "center", Object.assign({ hTop: 1.7 }, sofa ? { runFirst: (run) => run.axis === sofa.run.axis && run.sg === -sofa.run.sg } : {}));
+          const opp = sofa && sofa.run ? { runFirst: (run) => run.axis === sofa.run.axis && run.sg === -sofa.run.sg } : {};
+          let tv = tryWall("tv", "center", Object.assign({ hTop: 1.7 }, opp));
+          if (!tv && home && CENTRE_GROUPS) tv = tryWall("tv", "center", opp) || tryWall("tv", "corner");     // (W10 R1A: the TV unit even where its set cannot stand)
           if (tv) stackOn(tv, "tvSet");
         });
+        if (home && CENTRE_GROUPS) later(() => sofaSet(R.sofa));                  // (W10 R1A: a home's sofa set is a KEY group: coffee table + armchairs before the extras)
       } else {
         later(() => sofaSet(R.sofa));
+        if (home && CENTRE_GROUPS) later(() => {
+          // (W10 R1A) the dining set of a kitchen next door that had no room for one (census: a dining set in the kitchen or a room it opens into)
+          const kn = doors.filter((d) => d.floor === f && (d.a === R.ri || d.b === R.ri)).map((d) => (d.a === R.ri ? d.b : d.a))
+            .map((ri) => roomRecs.find((q) => q.floor === f && q.ri === ri)).find((q) => q && q.kind === "kitchen" && q.noDining);
+          if (kn && (tableSet("tableCloth", "chairMod", 4) || tableSet("table", "chair", 4) || tableSet("diningTable", "chairMod", 4) || tableSet("diningTable", "chairMod", 2))) kn.noDining = false;
+        });
         later(() => { const st = tryWall("sideTable", "corner"); if (st) stackOn(st, "lampTable"); });
         later(() => tryWall(rng() < 0.5 ? "bookcase" : "bookcaseOpen", "corner"));
         later(() => tryWall("plant", "corner"));
@@ -3008,8 +4042,10 @@ export function generate(parcel, opts) {
         // over the counters, a microwave on one
         const seqs = [["fridge", "counter", "sink", "stoveBox", "counter", "drawerCab"], ["drawerCab", "counter", "sink", "stoveBox", "counter", "fridge"], ["fridge", "counter", "sink", "stoveBox", "counter"],
           ["counter", "sink", "stoveBox", "counter", "fridge"], ["counter", "sink", "stoveBox", "counter"], ["sink", "stoveBox", "counter"], ["sink", "stoveBox"]];
-        let done = null;
-        const runsBy = merged.slice().sort((a, b) => (b.t1 - b.t0) - (a.t1 - a.t0) || a.line - b.line || a.sg - b.sg);
+        let done = null, fallbackRow = null;
+        // (W10 R1A) a home's run goes on a wall with no window first (its uppers and the hood cannot hang over a window)
+        const winOn = (run) => { const g = wallRect(run, { w: Math.max(0.01, run.t1 - run.t0 - 0.02), d: 0.6 }, (run.t0 + run.t1) / 2); return wins.some((z) => ovl(g.rect, z, 1e-6)); };
+        const runsBy = merged.slice().sort((a, b) => (home && KITCHEN_RUN ? (winOn(a) ? 1 : 0) - (winOn(b) ? 1 : 0) : 0) || (b.t1 - b.t0) - (a.t1 - a.t0) || a.line - b.line || a.sg - b.sg);
         for (const seq of seqs) {
           if (done) break;
           for (const run of runsBy) {
@@ -3023,12 +4059,18 @@ export function generate(parcel, opts) {
                 for (const id of seq) {
                   const cat = catOf(id);
                   if (!cat) break;
-                  if (got.length) t += dir * (got[got.length - 1].cat.w / 2 + cat.w / 2);
+                  if (got.length) t += dir * (got[got.length - 1].cat.w / 2 + cat.w / 2 + (home && !KITCHEN_RUN ? 0.35 : 0));     // (gap-kitchen plant: units 0.35 m apart)
                   const g = wallRect(run, cat, t);
                   if (!budgetOK(cat) || !valid(g.rect, 0, cat.h, got.length > 0)) break;
                   got.push(Object.assign(put(cat, g.u, g.v, g.fq, id === "counter" || id === "drawerCab" ? tintW : 0), { run, t }));
                 }
-                if (got.length >= Math.min(3, seq.length) && roomOK()) { done = got; break; }
+                if (got.length >= Math.min(3, seq.length) && roomOK()) {
+                  // (W10 R1A) a home keeps looking for a row whose stove is not under a window (its hood hangs there); the first full row stays the fallback
+                  const stoves = got.filter((q) => /Stove|stove/.test(q.cat.type || q.cat.id));
+                  const stoveWin = home && KITCHEN_RUN && (!stoves.length || stoves.some((q) => wins.some((z) => ovl(q.rect, z, 1e-6))));     // (a row cut short before its stove too)
+                  if (!stoveWin) { done = got; break; }
+                  if (!fallbackRow) fallbackRow = got.map((q) => [q.cat, q.u, q.v, q.fq, q.tint, q.run, q.t]);
+                }
                 for (const p of got) unput(p);
               }
               if (done) break;
@@ -3036,15 +4078,34 @@ export function generate(parcel, opts) {
             if (done) break;
           }
         }
+        if (!done && fallbackRow) done = fallbackRow.map(([cat, u, v, fq, tint, run, t]) => Object.assign(put(cat, u, v, fq, tint), { run, t }));
         if (!done) { tryWall("stoveBox", "corner"); tryWall("fridge", "corner"); return; }
         R.row = done;
+        if (home && KITCHEN_RUN) {
+          // (W10 R1A) the key phase hangs the wall units: an upper cabinet over every base unit but the stove and the fridge, a hood over the stove
+          for (const p of done) {
+            if (!furn.includes(p) || p.cat.h > 1.6) continue;
+            const isStove = p.cat.id === "stoveBox" || p.cat.id === "stove" || /Stove/.test(p.cat.type || "");
+            const cat = catOf(isStove ? "hood" : "upper");
+            if (!cat) continue;
+            const y0 = cat.mount === "wall" ? cat.y0 : 1.62, g = wallRect(p.run, cat, p.t);
+            if (!valid(g.rect, y0, y0 + cat.h, true)) continue;                     // (touching its neighbour: one closed row of wall units)
+            put(cat, g.u, g.v, g.fq, isStove ? 0 : tintW, { y0, run: p.run, t: p.t });
+          }
+        }
       });
-      if (core && area >= 15) later(() => { const ch = rng() < 0.25 ? "chair" : "chairMod"; tableSet(rng() < 0.5 ? "table" : "tableCloth", ch, 4) || tableSet("table", "chair", 4); R.dining = true; });
+      if (core && (area >= 15 || (home && CENTRE_GROUPS))) later(() => {
+        const ch = rng() < 0.25 ? "chair" : "chairMod";
+        const t = tableSet(rng() < 0.5 ? "table" : "tableCloth", ch, 4) || tableSet("table", "chair", 4) ||
+          (home && CENTRE_GROUPS ? tableSet("tableA", "chairMod", 4) || tableSet("diningTable", "chairMod", 4) || tableSet("diningTable", "chairMod", 2) : null);
+        R.dining = true;
+        if (!t && home) R.noDining = true;                                          // (W10 R1A: the living room next door takes the set)
+      });
       if (!core) {
         later(() => {
           const row = R.row || [];
           const upper = CATALOG.upper;
-          if (upper) for (const p of row) {
+          if (upper && !(home && KITCHEN_RUN)) for (const p of row) {
             if (!furn.includes(p) || !(p.cat.id === "counter" || p.cat.id === "drawerCab" || p.cat.id === "stoveBox" || p.cat === (CATALOG.counter && CATALOG.counter.alt))) continue;
             const cat = catOf("upper");
             if (!cat || !budgetOK(cat)) break;
@@ -3068,20 +4129,33 @@ export function generate(parcel, opts) {
       if (core) {
         later(() => {
           const blanket = pick(rng, BLANKET);
-          const bed = tryWall(big ? "bed" : "bedSingle", "center", { tint: blanket }) || tryWall("bedSingle", "center", { tint: blanket, sideways: true });
+          // (W10 R1A pass 5: a home's bedroom read along its 7.5 m length from its doorway: the bed against a SIDE wall - at the far wall it is a strip across the
+          // doorway's view, beside it the room reads as a bedroom from the door: housegen_demo_looks view-lived-cover)
+          const deep = home && LANDING_HALL && view && (Math.abs(view[0]) > 0.5 ? iw : idp) >= 6.5;
+          const side = deep ? { runFirst: (run) => (run.axis === "u") === (Math.abs(view[0]) > 0.5) } : {};
+          let bed = tryWall(big ? "bed" : "bedSingle", "center", Object.assign({ tint: blanket }, side)) || tryWall("bedSingle", "center", Object.assign({ tint: blanket, sideways: true }, side)) ||
+            (home ? tryWall(big ? "bed" : "bedSingle", "corner", { tint: blanket }) || tryWall("bedSingle", "corner", { tint: blanket, sideways: true }) : null);      // (W10 R1A: a home's bedroom keeps its bed)
+          // (W10 R1A: else a home's single bed anywhere it fits, head to the nearest wall - a bedroom with no bed becomes a store room and the home loses its bedroom)
+          if (!bed && home) {
+            const bc = catOf("bedSingle"), pts = [];
+            if (bc) for (let pu = inner[0] + 0.5; pu <= inner[2] - 0.5 + 1e-6; pu += 0.25) for (let pv = inner[1] + 0.5; pv <= inner[3] - 0.5 + 1e-6; pv += 0.25) pts.push([Math.min(pu - inner[0], inner[2] - pu, pv - inner[1], inner[3] - pv), Math.round(pu * 1000) / 1000, Math.round(pv * 1000) / 1000]);
+            pts.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+            for (const [, pu, pv] of pts) { for (const q of [0, 1, 2, 3]) { bed = tryAt("bedSingle", pu, pv, q, blanket); if (bed) break; } if (bed) break; }
+          }
           R.bed = bed;
-          if (bed && !bed.sideways) {
+          if (bed && !bed.sideways && bed.run) {
             let n = 0;
             for (const sd of [1, -1]) {
               const ns = catOf("nightstand");
               if (!ns) break;
               const t = bed.t + sd * (bed.cat.w / 2 + 0.05 + ns.w / 2);
               const g = wallRect(bed.run, ns, t);
-              if (budgetOK(ns) && valid(g.rect, 0, ns.h)) { const p = put(ns, g.u, g.v, g.fq, tintW); if (!roomOK()) { unput(p); continue; } n++; stackOn(p, n === 1 ? "lampTable" : "plantSmall"); if (n >= (big ? 2 : 1)) break; }
+              if (budgetOK(ns) && valid(g.rect, 0, ns.h)) { const p = put(ns, g.u, g.v, g.fq, tintW); if (!roomOK()) { unput(p); continue; } n++; stackOn(p, n === 1 ? "lampTable" : "plantSmall"); if (n >= (big || (home && CENTRE_GROUPS) ? 2 : 1)) break; }
             }
           }
+          if (home && CENTRE_GROUPS && !placed.some((q) => q.cat.id === "nightstand" || q.cat.id === "nightLow")) { const ns = tryWall("nightstand", "corner", { tint: tintW }) || tryWall("nightLow", "corner", { tint: tintW }); if (ns) stackOn(ns, "lampTable"); }
         });
-        later(() => tryWall("wardrobe", "corner", { tint: tintW }));
+        later(() => { if (!tryWall("wardrobe", "corner", { tint: tintW }) && home && CENTRE_GROUPS) tryWall("dresser", "corner", { tint: tintW, hTop: 1.0 }) || tryWall("dresser", "center", { tint: tintW }); });
       } else {
         later(() => { const b = R.bed; if (b && furn.includes(b) && big) { const [ru, rv] = inFront(b, -1.1, catOf("rug") || CATALOG.rug); tryAt("rug", ru, rv, b.fq % 2 ? 0 : 1, pick(rng, RUG)); } });
         later(() => { const dr = tryWall("dresser", "corner", { tint: tintW, hTop: 1.0 }); if (dr) stackOn(dr, rng() < 0.6 ? "lampTable" : "plantSmall"); });
@@ -3098,9 +4172,42 @@ export function generate(parcel, opts) {
         if (area >= 20) { later(() => tryWall("armchair", "corner")); later(() => tryWall("bookcaseLow", "corner", { tint: tintW })); }
       }
     } else if (kind === "bath") {
-      if (core) { later(() => tryWall("toilet", "corner")); later(() => tryWall("basin", "center", { tint: 0xe9e6dc })); later(() => tryWall("bathtub", "corner", { sideways: true })); }
+      if (core && home && BATH_SET) {
+        later(() => tryWall("toilet", "corner"));
+        // (the basin before the tub: a 2.5 x 5 m bath with a tub and a toilet had no wall left for it - 26 of 205 Deepwood baths; a small bath takes a shower first)
+        const wash = () => (area <= 12.5 ? tryWall("shower", "corner") || tryWall("shower", "center") || tryWall("bathtub", "corner", { sideways: true })
+          : tryWall("bathtub", "corner", { sideways: true }) || tryWall("shower", "corner") || tryWall("shower", "center")) || tryWall("bathtub", "center", { sideways: true });
+        // (W10 R1A) the basin with a mirror hung over it (a drawn-only plate on the wall behind it, never in a leaf's swing or on a stairwell wall)
+        // (the mirror only on ONE solid wall cell edge - its own collider box: not across a cell joint, a window, a doorway or a rail; housegen.selftest vis-col "hung flat")
+        // (judged on the wall COLLIDER boxes themselves - one box covers the plate's width and height: 1.55 - 2.2 m above the floor)
+        const onSolid = (run, t, w) => solidRuns.some((q) => q.axis === run.axis && q.sg === run.sg && Math.abs(q.line - run.line) < 1e-6 && q.t0 <= t - w / 2 + 1e-6 && q.t1 >= t + w / 2 - 1e-6) &&
+          boxes.some((bx) => bx.p === "wall" && bx.c && bx.fl === f && bx.y0 <= s[f] + 1.55 + 1e-3 && bx.y1 >= s[f] + 2.2 - 1e-3 && (run.axis === "u"
+            ? Math.abs((bx.v0 + bx.v1) / 2 - run.line) < 1e-3 && bx.u0 <= t - w / 2 + 1e-3 && bx.u1 >= t + w / 2 - 1e-3
+            : Math.abs((bx.u0 + bx.u1) / 2 - run.line) < 1e-3 && bx.v0 <= t - w / 2 + 1e-3 && bx.v1 >= t + w / 2 - 1e-3));
+        const basinSet = () => {
+          const mw = CATALOG.mirrorHi ? CATALOG.mirrorHi.w : 0, mirOK = (run, g) => onSolid(run, run.axis === "u" ? g.u : g.v, mw);
+          const b = tryWall("basin", "center", { tint: 0xe9e6dc, also: mirOK }) || tryWall("basin", "corner", { tint: 0xe9e6dc, also: mirOK }) ||
+            tryWall("basin", "center", { tint: 0xe9e6dc }) || tryWall("basin", "corner", { tint: 0xe9e6dc });
+          const mc = b && b.run ? CATALOG.mirrorHi : null;
+          let m = null;
+          if (mc) {
+            const g = wallRect(b.run, mc, b.t);
+            const bad = !onSolid(b.run, b.t, mc.w) || keep.some((k) => (k.why === "stair" || k.why === "leaf") && ovl(g.rect, k.r, 1e-6)) || inLeafDisc(f, g.rect);
+            if (!bad) m = put(mc, g.u, g.v, g.fq, 0xd8d8d8);
+          }
+          return b ? [b, m] : null;
+        };
+        later(() => {
+          const bs = basinSet();
+          if (wash()) return;
+          // (no wall left for a tub or a shower beside the basin: the wash first, then the basin where it still fits)
+          if (bs) { for (const p of bs) if (p) unput(p); }
+          wash();
+          basinSet();
+        });
+      } else if (core) { later(() => tryWall("toilet", "corner")); later(() => tryWall("basin", "center", { tint: 0xe9e6dc })); later(() => tryWall("bathtub", "corner", { sideways: true })); }
       else {
-        later(() => tryWall("mirror", "center"));
+        if (!(home && BATH_SET)) later(() => tryWall("mirror", "center"));
         later(() => tryWall("bathCab", "center"));
         later(() => tryWall("trash", "corner"));
         later(() => tryWall("dryer", "corner"));
@@ -3113,12 +4220,32 @@ export function generate(parcel, opts) {
       if (core) {
         later(() => {
           if (roomy && clusters(area >= 45 ? 8 : 4) > 0) return;
+          // (W10 R3A fix2, audit 10) an office too small for back-to-back clusters: a row of wall workstations - a desk on the wall, its chair and monitor, and a
+          // 1.4 m partition beside it running out from the wall (the cubicle side), one a 12 m2 (<= 4); the bare-office plant (WORK_COVER off): the one desk as before
+          if (WORK_COVER) {
+            let n = 0;
+            for (let k = 0; k < Math.max(1, Math.min(4, Math.floor(area / 12))); k++) {
+              const d = tryWall("deskA", "corner", { tint: tintW });
+              if (!d) break;
+              n++;
+              const [cu, cv] = inFront(d, 0.08, catOf("officeChair") || CATALOG.officeChair);
+              tryAt("officeChair", cu, cv, (d.fq + 2) % 4);
+              stackOn(d, "monitor");
+              const pc = catOf("partition");
+              if (!pc) continue;
+              const dir = FACE[d.fq], sd = [dir[1], -dir[0]], hw = (d.fq % 2 ? d.rect[3] - d.rect[1] : d.rect[2] - d.rect[0]) / 2, hd = (d.fq % 2 ? d.rect[2] - d.rect[0] : d.rect[3] - d.rect[1]) / 2;
+              const along = pc.w / 2 - hd;
+              for (const sg of [1, -1]) if (tryAt("partition", d.u + sd[0] * sg * (hw + 0.07) + dir[0] * along, d.v + sd[1] * sg * (hw + 0.07) + dir[1] * along, (d.fq + 1) % 4, 0, true)) break;
+            }
+            if (n) return;
+          }
           const desk = tryWall("desk", "center", { tint: tintW });
           if (desk) { const [cu, cv] = inFront(desk, 0.02, CATALOG.chairDesk || CATALOG.chair); tryAt("chairDesk", cu, cv, (desk.fq + 2) % 4) || tryAt("chairMod", cu, cv, (desk.fq + 2) % 4); stackOn(desk, "screen"); }
         });
         later(() => tryWall("filingCab", "corner"));
         later(() => tryWall("bookcase", "corner"));
       } else {
+        later(() => coverPiece(["lockers", "bookcase", "shelf", "bookcaseOpen", "shelfLow", "partition"]));
         wallDecor(["whiteboard", "clock"]);
         later(() => tryWall("filingCab", "corner")); later(() => tryWall("filingCab", "corner"));
         if (!roomy && area >= 15) later(() => { const desk = tryWall("desk", "corner", { tint: tintW }); if (desk) { const [cu, cv] = inFront(desk, 0.02, CATALOG.chairDesk || CATALOG.chair); tryAt("chairDesk", cu, cv, (desk.fq + 2) % 4); stackOn(desk, "screen"); } });
@@ -3133,10 +4260,21 @@ export function generate(parcel, opts) {
     } else if (kind === "shop") {
       const shelf = () => tryWall(rng() < 0.5 ? "shelf" : "rackWall", "corner", { tint: tintW }) || tryWall("shelfLow", "corner", { tint: tintW });
       if (core) {
-        later(() => { tryWall("shopCounter", "corner", { tint: tintW, runFirst: (run) => run.axis === "v" }); });
-        later(() => tryWall("cooler", "corner")); later(() => tryWall("cooler", "corner"));
+        // (W10 R3A fix5) the checkout where the doorway sees it (the ruling's doorway shots: city_shop's counter stood on a wall the entrance did not face)
+        later(() => {
+          const c1 = (SHOP_SEEN && WORK_FIT && tryWall("shopCounter", "corner", { tint: tintW, seen: true, runFirst: (run) => run.axis === "v" })) || tryWall("shopCounter", "corner", { tint: tintW, runFirst: (run) => run.axis === "v" });
+          if (WORK_FIT && c1 && area >= 40) tryWall("shopCounter", "corner", { tint: tintW, also: (run) => run === c1.run });     // (W10 R3A: a checkout line - two tills on one wall)
+        });
         // aisles: rows of free-standing gondolas down the shop floor
-        later(() => { if (LB >= 4.4) rows("gondola", area >= 50 ? 8 : 4, 1.35, { end: 1.2 }); });
+        // (W10 R3A, audit 9) as many aisle rows as the floor holds at SHOP_PITCH (was 4 / 8 gondolas: a 125 m2 store held 4 pieces)
+        // (W10 R3A fix5) ...laid out BEFORE the coolers and the wall shelving when the floor takes a row (LB >= 4.4): the wall pieces' bands left one gondola in
+        // city_shop's 56 m2 shop (its doorway saw cartons); a shop too narrow for a row still gets its walls shelved below
+        const aisles = () => { if (LB >= 4.4) rows("gondola", WORK_FIT ? Math.max(4, Math.ceil(area / 7)) : area >= 50 ? 8 : 4, WORK_FIT ? SHOP_PITCH - 0.9 : 1.35, { end: 1.2, doorClear: SHOP_SEEN && WORK_FIT ? 0.75 : 0.9 }); };
+        if (SHOP_SEEN && WORK_FIT) later(aisles);
+        later(() => tryWall("cooler", "corner")); later(() => tryWall("cooler", "corner"));
+        // (W10 R3A fix4) wall shelving before the aisles: a small shop (no room for an aisle row) still reads as a shop - stocked shelves on its walls
+        if (WORK_FIT) for (let n = 0; n < Math.max(2, Math.floor(area / 25)); n++) later(() => { const t = [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][n % 4]; tryWall("shopShelf", "corner", { tint: t }) || tryWall("shopShelfLow", "corner", { tint: t }); });
+        if (!(SHOP_SEEN && WORK_FIT)) later(aisles);
       } else {
         later(() => tryWall("cooler", "corner"));
         for (let n = 0; n < 4; n++) later(shelf);
@@ -3155,12 +4293,13 @@ export function generate(parcel, opts) {
           later(() => rows(rng() < 0.6 ? "rackRow" : "palletLoad", Math.max(3, Math.round(area / 9)), 1.45, { tint: 0xb2875a }));
           if (P.theme === "mill") later(() => tryWall("machine", "center"));
         } else {
-          later(() => { if (LB >= 4.4 && LA >= 4.4 && rng() < 0.7) rows("rackRow", 4, 1.4); });
+          later(() => { const go = rng() < 0.7; if (LB >= 4.4 && LA >= 4.4 && (go || WORK_FIT)) rows("rackRow", WORK_FIT ? Math.max(4, Math.round(area / 8)) : 4, 1.4); });     // (W10 R3A: racks by area)
           later(() => tryWall("rackWall", "corner", { tint: tintW }));
         }
         later(() => tryWall("rackWall", "corner", { tint: tintW }));
       } else {
         const n = big ? Math.max(2, Math.round(area / 25)) : 1;
+        if (WORK_FIT && kind !== "barn") for (let k = 0; k < Math.max(1, Math.round(area / 30)); k++) later(() => tryWall(k % 2 ? "crateStack" : "palletLoad", "corner", { tint: k % 2 ? tintW : 0xb2875a }));     // (W10 R3A: pallet stacks, cover)
         for (let k = 0; k < n; k++) later(() => tryWall(k % 2 ? "rackWall" : "crateStack", "corner", { tint: tintW }));
         later(() => tryWall("palletLoad", "corner", { tint: 0xb2875a }));
         later(() => tryWall("boxStack", "corner")); later(() => tryWall("carton", "corner")); later(() => tryWall("cartonOpen", "corner"));
@@ -3177,14 +4316,22 @@ export function generate(parcel, opts) {
         later(() => tryWall("shopCounter", "center", { tint: tintW }));
         later(() => { const so = tryWall("sofaDesign", "center", { tint: 0 }) || tryWall("sofa", "center", { tint: 0 }); R.sofa = so; });
       } else {
+        later(() => coverPiece(["shopCounter", "shelfLow", "bookcase", "lockers"]));
         later(() => sofaSet(R.sofa));
         later(() => tryWall("plant", "corner")); later(() => tryWall("plant", "corner"));
         wallDecor(["artWide", "clock"]);
         later(() => tryWall("lampSq", "corner")); later(() => tryWall("bookcaseLow", "corner", { tint: tintW })); later(() => tryWall("armchair", "corner"));
       }
     } else if (kind === "meeting") {
-      if (core) { later(() => tableSet(rng() < 0.5 ? "tableA" : "tableCloth", "chairMod", 6) || tableSet("table", "chair", 4)); later(() => tryWall("bookcase", "corner")); }
+      if (core) {
+        later(() => {
+          const r0 = rng() < 0.5, big = WORK_COVER && LA >= 7.4 && LB >= 4.9 ? "confTableL" : WORK_COVER && LA >= 6.2 && LB >= 4.4 ? "confTable" : null;     // (W10 R3A: sized to the room)
+          return (big && tableSet(big, "chairMod", big === "confTableL" ? 8 : 6)) || tableSet(r0 ? "tableA" : "tableCloth", "chairMod", 6) || tableSet("table", "chair", 4);
+        });
+        later(() => tryWall("bookcase", "corner"));
+      }
       else {
+        later(() => coverPiece(["bookcase", "shelfLow", "bookcaseOpen", "lockers", "shelf"]));
         later(() => { const tv = tryWall("tv", "center", { hTop: 1.7 }); if (tv) stackOn(tv, "tvSet"); });
         wallDecor(["whiteboard", "clock"]);
         later(() => tryWall("plant", "corner")); later(() => tryWall("plant", "corner")); later(() => tryWall("filingCab", "corner")); later(() => tryWall("lampSq", "corner"));
@@ -3199,8 +4346,16 @@ export function generate(parcel, opts) {
         later(() => tryWall("carton", "corner")); wallDecor(["poster"]);
       }
     } else if (kind === "hall" && core) {
+      // (W10 R1A pass 5) a home's entry / landing hall is furnished like one: a console with a lamp, a low bookcase, a dresser - where its entrance sees them
+      // (a 2.3 m deep hall read from the front door across it showed a coat rack and a plant)
+      if (home && LANDING_HALL && R.reg.landingHall) {
+        later(() => { const d = tryWall("sideTable", "view", { seen: true, tint: tintW }); if (d) stackOn(d, "lampTable"); });
+        later(() => tryWall("bookcaseLow", "view", { seen: true, tint: tintW }));
+        later(() => tryWall("dresser", "view", { seen: true, tint: tintW }));
+      }
       later(() => tryWall("coatRack", "corner")); later(() => tryWall("plant", "corner"));
     } else if (kind === "hall" && !core) {
+      if (!home) later(() => coverPiece(["lockers", "lockers2", "shelfLow", "bookcase"]));      // (W10 R3A: a corridor's lockers / console)
       later(() => tryAt("runner", cu0, cv0, longU ? 1 : 0, pick(rng, RUG)));
       wallDecor(["art", "clock"]);
       later(() => tryWall("plant", "corner"));
@@ -3216,17 +4371,61 @@ export function generate(parcel, opts) {
     const cands = roomRecs.filter((r) => r.floor === f && r.kind !== "hall" && r.kind !== "bath");
     if (cands.length && rng() < 0.6) pick(rng, cands).chest = true;
   }
-  const roundRobin = (queues) => { for (let more = true; more;) { more = false; for (const q of queues) if (q.length) { q.shift()(); more = true; } } };
+  const roundRobin = (queues) => { const at = queues.map(() => 0); for (let more = true; more;) { more = false; for (let i = 0; i < queues.length; i++) { const q = queues[i]; if (at[i] < q.length) { q[at[i]++](); more = true; } } } };   // (W10 R1A, CPU: an index, not shift(); a queue only grows at its end)
   // the storey's budget: shares by area with a floor (a 6 m2 bathroom still gets its set), a reserve held back for the in-view pieces of phase 3
   for (let f = 0; f < S; f++) {
     const mine = roomRecs.filter((r) => r.floor === f), wt = (r) => (SHAREW[r.kind] || 1) * (r.cells.length + 2), wsum = mine.reduce((a, r) => a + wt(r), 0);
-    const avail = Math.max(0, TRI_BUDGET - tris[f] - Math.min(200 * mine.length, 0.3 * Math.max(0, TRI_BUDGET - tris[f])));
+    const avail = Math.max(0, TBf[f] - tris[f] - Math.min(200 * mine.length, 0.3 * Math.max(0, TBf[f] - tris[f])));
     for (const r of mine) { r.share = avail * wt(r) / Math.max(1, wsum); r.spent = 0; }
   }
-  for (const ph of [0, 4, 1, 3, 2, 5]) roundRobin(roomRecs.map((R) => furnishRoom(R, ph)));      // (5: the guarantee, lane K1)
-  for (const R of roomRecs) { const b = bestView(R); if (b.n < 3) notes.push("room f" + R.floor + "r" + R.ri + " (" + R.kind + "): " + b.n + " pieces in view from " + roomView(R).ents.length + " entrance(s); storey budget left " + (TRI_BUDGET - tris[R.floor]) + ", share " + Math.round(R.share) + " spent " + R.spent); }
+  for (const ph of [0, 4, 1, 6, 7, 3, 2, 5, 8]) roundRobin(roomRecs.map((R) => furnishRoom(R, ph)));      // (5: the guarantee, lane K1; 6: a home's area quota, 7: its deferred dressing, W10 R1A)
+  for (const R of roomRecs) { const b = bestView(R); if (b.n < 3) notes.push("room f" + R.floor + "r" + R.ri + " (" + R.kind + "): " + b.n + " pieces in view from " + roomView(R).ents.length + " entrance(s); storey budget left " + (TBf[R.floor] - tris[R.floor]) + ", share " + Math.round(R.share) + " spent " + R.spent); }
   // honest labels: a "bedroom" no bed fits in (door zones, a narrow L) is a box room
   for (const R of roomRecs) if (R.kind === "bedroom" && !furn.some((p) => p.room === R && (p.cat.id === "bed" || p.cat.id === "bedSingle"))) R.kind = "storage";
+
+  // ---- (W10 R3A, audit 6) PICTURES: every art piece's canvas shows a print (one of PICS), and a lived room, office, lobby, meeting room or hall with no wall decor
+  // gets a framed print on a solid wall stretch where nothing over 1.25 m stands in front of it, no stair / door leaf is near and no swing reaches it. Drawn only
+  // (H.fin.pics, meshData on medium and up), no collider, its own stream (subRng "finpic"): every other draw of the house is what it was.
+  const finPics = [];
+  if (FINISH && !TH.ruined) {
+    const rp = subRng(P.seed, P.id, "finpic");
+    const CANVAS = { art: [-0.38, 0.38, 1.37, 1.93, 0.013], artWide: [-0.63, 0.63, 1.42, 1.88, 0.013], poster: [-0.26, 0.26, 1.66, 2.08, 0.003] };
+    for (const R of roomRecs) {
+      const mine = furn.filter((p) => p.room === R && !p.slot);
+      let decor = false;
+      for (const p of mine) {
+        if (!p.cat.wall) continue;
+        decor = true;
+        const cv = CANVAS[p.cat.auth];
+        if (!cv) continue;
+        const dir = FACE[p.fq], side = [dir[1], -dir[0]], lx = (cv[0] + cv[1]) / 2;
+        finPics.push({ room: R, f: p.f, u: p.u + side[0] * lx + dir[0] * cv[4], v: p.v + side[1] * lx + dir[1] * cv[4], du: dir[0], dv: dir[1], y0: cv[2], y1: cv[3], w: cv[1] - cv[0], pic: Math.floor(rp() * PICS.length), frame: 0 });
+      }
+      if (decor || !PIC_KINDS.has(R.kind)) continue;
+      const { solidRuns, keep } = roomStatic(R);
+      const order = shuffle(rp, solidRuns.slice());
+      let done = false;
+      for (const run of order) {
+        if (done) break;
+        const face = run.line + run.sg * JAMB, tm = (run.t0 + run.t1) / 2;
+        for (const t of [tm, tm - 0.4, tm + 0.4]) {
+          const hw = 0.5, a0 = t - hw, a1 = t + hw;
+          if (a0 < run.t0 + JAMB + 0.05 || a1 > run.t1 - JAMB - 0.05) continue;
+          const d0 = run.sg > 0 ? face : face - 0.6, d1 = run.sg > 0 ? face + 0.6 : face;
+          const rect = run.axis === "u" ? [a0, d0, a1, d1] : [d0, a0, d1, a1];
+          let clash = false;
+          for (const k of keep) if ((k.why === "stair" || k.why === "leaf") && ovl(rect, k.r, 1e-6)) { clash = true; break; }
+          if (!clash && inLeafDisc(R.floor, rect)) clash = true;
+          if (!clash) for (const p of mine) if (((p.y0 || 0) + p.cat.h > 1.25 || p.cat.wall) && ovl(rect, p.rect, -0.05)) { clash = true; break; }
+          if (clash) continue;
+          const du = run.axis === "u" ? 0 : run.sg, dv = run.axis === "u" ? run.sg : 0;
+          finPics.push({ room: R, f: R.floor, u: run.axis === "u" ? t : face + du * 0.004, v: run.axis === "u" ? face + dv * 0.004 : t, du, dv, y0: 1.42, y1: 1.98, w: 0.82, pic: Math.floor(rp() * PICS.length), frame: 1 });
+          done = true;
+          break;
+        }
+      }
+    }
+  }
 
   // ---- the capsule walk (setup above the furnisher)
   const walk = () => {
@@ -3337,16 +4536,27 @@ export function generate(parcel, opts) {
     for (let k = furn.length - 1; k >= 0; k--) if (furn[k].f === fl && !furn[k].cat.deco && !furn[k].slot) { li = k; break; }
     if (li < 0) { notes.push("floor " + fl + ": unreachable with no furniture left"); break; }
     const p = furn.splice(li, 1)[0];
-    { const l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); if (p.room._rw) p.room._rw.stale = true; }
+    { const l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); p.room._vcm = null; if (p.room._rw) p.room._rw.stale = true; }
     tris[p.f] -= p.cat.tris;
     if (p.host) p.host.tops = (p.host.tops || 1) - 1;
     // a rug left under a removed coffee table is fine; chairs of a removed table are removed with it by the next passes if they block
     removed++;
   }
   // (a piece standing on a removed one goes with it: tops are placed after their hosts, so the walk removes them first; this is the guard)
-  for (let k = furn.length - 1; k >= 0; k--) if (furn[k].host && !furn.includes(furn[k].host)) { const p = furn[k], l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); if (p.room._rw) p.room._rw.stale = true; tris[p.f] -= p.cat.tris; furn.splice(k, 1); removed++; }
+  for (let k = furn.length - 1; k >= 0; k--) if (furn[k].host && !furn.includes(furn[k].host)) { const p = furn[k], l = p.room._ps, q = l.indexOf(p); if (q >= 0) l.splice(q, 1); p.room._vcm = null; if (p.room._rw) p.room._rw.stale = true; tris[p.f] -= p.cat.tris; furn.splice(k, 1); removed++; }
   if (removed) notes.push("walk: removed " + removed + " piece(s) that closed a path");
 
+  // ---- (W10 R1A item 8) model variety: the house's variants swapped in for the pieces they fit (see VARIETY)
+  for (const p of furn) {
+    const v = VAR[p.cat.type];
+    if (!v || p.slot || p.tops || p.host || v.mount !== p.cat.mount || v.w > p.cat.w + 1e-6 || v.d > p.cat.d + 1e-6 || tris[p.f] - p.cat.tris + v.tris > TBf[p.f]) continue;
+    const dd = (p.cat.d - v.d) / 2, dir = FACE[p.fq];
+    if (p.run) { p.u -= dir[0] * dd; p.v -= dir[1] * dd; }                       // (a wall piece keeps its back on the wall)
+    const w = p.fq % 2 ? v.d : v.w, d = p.fq % 2 ? v.w : v.d;
+    p.rect = [p.u - w / 2, p.v - d / 2, p.u + w / 2, p.v + d / 2];
+    tris[p.f] += v.tris - p.cat.tris;
+    p.cat = v;
+  }
   // ---- loot points: furniture tops first (front edge, reachable), then free floor spots; chests on their slots
   const loot = [], underM = [];
   // (Wave 9) a door leaf's swing quarter disc (+ 0.15 m: the item's own size) is no place for floor loot: the leaf would sweep it / stand on it
@@ -3387,23 +4597,38 @@ export function generate(parcel, opts) {
     for (const bx of leafBoxes) if (bx.fl === f && segHitsRect(au, av, bu, bv, bx.u0 - LEAF_SEE_M, bx.v0 - LEAF_SEE_M, bx.u1 + LEAF_SEE_M, bx.v1 + LEAF_SEE_M)) return true;
     return false;
   };
-  const standSees = (R, f, u, v) => {                        // the room's walk sample nearest (u, v) (no limit, like standFor) sees (u, v) past the open leaves
+  const standSees = (R, f, u, v) => {                        // the room's stand point for (u, v) sees it past the open leaves
     if (!leafBoxes.some((bx) => bx.fl === f)) return true;
-    const seenF = wk.seen[f], reg = floors[f].region;
-    let best = -1, bd = Infinity;
+    // (W10 R3A) the stand point is what loot.js standFor (and the selftest's leafsee) hand out: the nearest point of the room's walk RECTS - the union of its walk
+    // samples' squares (GRID wide) - so the nearest point over those squares; and the nearest sample's centre as before (isla_viva s1 coco_village@p16: a stock carton
+    // by a door, seen from the sample's centre, hidden from the rect's edge)
+    const seenF = wk.seen[f], reg = floors[f].region, h = GRID / 2;
+    let best = -1, bd = Infinity, pu = u, pv = v, cd = Infinity, ck = -1;
     for (let k = 0; k < NS; k++) {
       if (!seenF[k] || sCell[k] < 0 || reg[sCell[k]] !== R.ri) continue;
-      const a = k % NU, b = (k - a) / NU, dx = su(a) - u, dz = sv(b) - v, dd = dx * dx + dz * dz;
-      if (dd < bd - 1e-12) { bd = dd; best = k; }
+      const a = k % NU, b = (k - a) / NU, x = su(a), z = sv(b), dx = x - u, dz = z - v, dd = dx * dx + dz * dz;
+      if (dd < cd - 1e-12) { cd = dd; ck = k; }
+      const qx = Math.min(x + h, Math.max(x - h, u)), qz = Math.min(z + h, Math.max(z - h, v)), qd = (qx - u) * (qx - u) + (qz - v) * (qz - v);
+      if (qd < bd - 1e-12) { bd = qd; best = k; pu = qx; pv = qz; }
     }
     if (best < 0) return true;                               // (no walk of its own: the reach test decides, as before)
-    const a = best % NU, b = (best - a) / NU;
-    return !leafHides(f, su(a), sv(b), u, v);
+    const a = ck % NU, b = (ck - a) / NU;
+    return !leafHides(f, su(a), sv(b), u, v) && !leafHides(f, pu, pv, u, v);
   };
   (() => {                                                   // (loot: own function, see above)
+  const lootMain = roomRecs.filter((q) => q.kind !== "hall").sort((x, y) => y.cells.length - x.cells.length || x.floor - y.floor || x.ri - y.ri)[0] || roomRecs[0];
+  // (W10 R1A pass 5) a home's halls hold no loot of their own (a corridor is door zones): its rooms carry the halls' share, so the home keeps its points a m2
+  const lhLootK = (() => { if (!(home && LANDING_HALL)) return 1; let a = 0, b = 0; for (const R of roomRecs) { a += R.cells.length; if (R.kind !== "hall") b += R.cells.length; } return b > 0 ? a / b : 1; })();
   for (const R of roomRecs) {
     const f = R.floor, area = R.cells.length * U * U;
     let want = R.kind === "hall" ? (rng() < 0.3 ? 1 : 0) : 1 + (area >= 15 ? 1 : 0) + (area >= 35 ? 1 : 0);
+    {   // (W10 R1A) thinned by LOOT_K x LOOT_KEEP: floor(want x k + a hash of the room in [0, 1)) - no rng drawn, the house's stream is untouched
+      // (a home's room, not its hall: HOME_LOOT_M2 points a m2 the same way - the Wave-9 homes held ~0.08 a m2 of room; bigger, two-storey homes keep the density)
+      const k = (home ? LOOT_K.home : (LOOT_K[use] != null ? LOOT_K[use] : 1) * (P.theme === "lodge" || P.theme === "mill" ? LOOT_K_LODGE : 1)) * LOOT_KEEP, hr = (hash32(P.id + ":" + R.floor + ":" + R.ri + ":loot") % 1000) / 1000;
+      if (home && (R.kind !== "hall" || (LANDING_HALL && R.reg && R.reg.landingHall))) want = Math.floor(area * lhLootK * HOME_LOOT_M2 * (HOME_LOOT_THEME[P.theme || "city"] || 1) * k + hr);
+      else if (k < 1) want = Math.floor(want * k + hr);
+      if (R === lootMain && want < 1 && LOOT_KEEP >= 1) want = 1;            // (every building keeps a point: its biggest room - housegen.selftest "every house has loot points")
+    }
     // (not on a washbasin, a stool, a bath: NOHOST; nor on a piece carrying another or hung on the wall)
     // (not on a top a planner could "climb" to over a low neighbour - a carton beside a crate makes two 0.45 m steps: the walker is sent up a
     // staircase it cannot climb, interiorcheck's loot-reach planned exactly that)
@@ -3492,9 +4717,9 @@ export function generate(parcel, opts) {
     if (p.host) { rec.mount = "top"; rec.on = p.host._rid; }                      // stands on that piece's top (rec.min[1] = its surface)
     else if (p.y0) rec.mount = "wall";                                              // hung on the wall, rec.min[1] above the floor (a wall cabinet)
     if (cat.src === "kit") {
-      const kb = KIT_BOXES[cat.type], bcx = (kb.min[0] + kb.max[0]) / 2, bcz = (kb.min[2] + kb.max[2]) / 2;
-      const [ox, oz] = rotQ(wq, bcx, bcz);                  // the manifest origin = the footprint centre minus the rotated bbox centre
-      rec.kit = { type: cat.type, x: r3(wx - ox), y: r3(ys), z: r3(wz - oz), rot: wq };
+      const kb = KIT_BOXES[cat.type], bcx = (kb.min[0] + kb.max[0]) / 2 * FURN_K, bcz = (kb.min[2] + kb.max[2]) / 2 * FURN_K;
+      const [ox, oz] = rotQ(wq, bcx, bcz);                  // the manifest origin = the footprint centre minus the rotated bbox centre (drawn x FURN_K)
+      rec.kit = { type: cat.type, x: r3(wx - ox), y: r3(ys), z: r3(wz - oz), rot: wq, scale: FURN_K };     // (W10 R1A: scale = the multiplier on the type's suggested_scale)
     } else {
       const A = AUTH[cat.auth || cat.id], parts = [];
       // hidden faces (world bits): a plate draws one face (a rug its top; a picture its face, local +z -> world FACE[wq]); a box resting on the floor or
@@ -3519,12 +4744,15 @@ export function generate(parcel, opts) {
           for (const k of g) { const bb = outBoxes[parts[k]]; for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], bb.min[a]); mx[a] = Math.max(mx[a], bb.max[a]); } }
           return { min: mn, max: mx };
         });
+        const keep = cat.colKeep;            // (W10 R1A) the groups a mover can meet (buildCatalog: colKeep)
+        if (keep) rec.cols = keep.map((i) => rec.cols[i]);
       } else rec.cols = [];
     }
     if (cat.deco) { rec.deco = true; rec.cols = []; }
     furniture.push(rec);
   }
   })();
+  mergeColliderBoxes(outBoxes, palette);                    // (W10 R1A) the structure's collision as the union of its boxes (after every index into outBoxes is taken)
   // ramps (world): dir from the local rising direction
   const outRamps = ramps.map((rp) => {
     const wb = wbox(rp.lr[0], rp.lr[1], rp.y0, rp.y1, rp.lr[2], rp.lr[3]);
@@ -3556,7 +4784,7 @@ export function generate(parcel, opts) {
     // the room's entrances as the view model saw them: where a player stands when the room first reads (eye 1.62 m up) and how many pieces it shows
     const V = roomView(R), cnt = viewCounts(R);
     const views = V.ents.map((e, ei) => { const [ex, ez] = wp(e.u, e.v); return { door: e.door ? P.id + ".d" + doors.indexOf(e.door) : null, stair: e.stair ? P.id + ".s" + stairRecs.indexOf(e.stair) : null, x: ex, z: ez, dir: wdir(e.fu, e.fv).map(r3), seen: cnt[ei] }; });
-    return { id: R.id, floor: R.floor, kind: R.kind, cells: R.cells, rects, x0: wb.min[0], z0: wb.min[2], x1: wb.max[0], z1: wb.max[2], cx: wx, cz: wz, y: r3(s[R.floor]), ceil: r3(s[R.floor + 1] - SLAB), area: r3(R.cells.length * U * U), doors: [], stairs: [], views };
+    return { id: R.id, floor: R.floor, kind: R.kind, cells: R.cells, rects, x0: wb.min[0], z0: wb.min[2], x1: wb.max[0], z1: wb.max[2], cx: wx, cz: wz, y: r3(s[R.floor]), ceil: r3(s[R.floor + 1] - SLAB), area: r3(R.cells.length * U * U), doors: [], stairs: [], views, fpal: (roomCol.get(R.reg) || {}).floor };
   });
   const roomById = new Map(rooms2.map((r) => [r.id, r]));
   const roomIdOf = (f, ri) => (ri == null ? null : roomOfReg.get(f + ":" + ri).id);
@@ -3730,11 +4958,23 @@ export function generate(parcel, opts) {
   if (sealed) notes.push("sealed rooms: " + sealed);
 
   for (const r of rooms2) { r.doors.sort(); r.stairs.sort(); }
+  // (W10 R3A) the finish records, world: wall runs (the inside face, inward normal, the room's wall / floor palette, corners, band 1 kitchen splash / 2 bath wainscot),
+  // light pools, curtains ([window index, palette, long]), pictures (centre on the wall plane, facing, bottom / top, width, print, framed)
+  const fin = {
+    runs: finRuns.map((q) => {
+      const face = q.line + q.sg * JAMB, a = q.t0 + JAMB, b = q.t1 - JAMB;
+      const A = q.ax === "u" ? wp(a, face) : wp(face, a), B = q.ax === "u" ? wp(b, face) : wp(face, b), n = q.ax === "u" ? wdir(0, q.sg) : wdir(q.sg, 0);
+      return { x0: A[0], z0: A[1], x1: B[0], z1: B[1], nx: Math.round(n[0]), nz: Math.round(n[1]), y: r3(s[q.f]), h: r3(q.ceil), pal: q.pal, fpal: q.fpal, c0: q.c0, c1: q.c1, band: q.band };
+    }),
+    pools: finPools.map((q) => { const [x, z] = wp(q.u, q.v); return { x, z, y: r3(s[q.f]), r: q.r, warm: q.warm, fpal: q.fpal }; }),
+    cur: finCur.map((q) => q.slice()),
+    pics: finPics.map((q) => { const [x, z] = wp(q.u, q.v), n = wdir(q.du, q.dv); return { room: q.room.id, x, z, nx: Math.round(n[0]), nz: Math.round(n[1]), y0: r3(s[q.f] + q.y0), y1: r3(s[q.f] + q.y1), w: q.w, pic: q.pic, frame: q.frame }; }),
+  };
   return {
     v: VERSION, kit: kitProfile, id: P.id, theme: P.theme, use, seed: P.seed, turn: P.turn, cx: r3(P.cx), cz: r3(P.cz), y0: r3(y0), nx, nz, U, W, D,
-    storeys: S, storeysAsked: P.storeysAsked, notes, plan: cut ? "L" : "rect", cut, roof: roofKind, facade: { mat: fMat, color: facadeC }, trim: trimC,
+    storeys: S, storeysAsked: P.storeysAsked, notes, plan: cut ? "L" : "rect", cut, roof: roofKind, core: P.core, porch: hasPorch, facade: { mat: fMat, color: facadeC }, trim: trimC,
     floors: s.slice(0, S).map((y, f) => ({ f, y: r3(y), ceil: r3(s[f + 1] - SLAB) })),
-    rooms: rooms2, doors: doors2, doorLeaves: doorLeaves2, windows: windows2, stairs: stairs2, rails: rails2, palette, boxes: outBoxes, ramps: outRamps, roofs: roofs2, gables: gables2, furniture, loot: loot2, chests: chests2,
+    rooms: rooms2, doors: doors2, doorLeaves: doorLeaves2, windows: windows2, stairs: stairs2, rails: rails2, palette, boxes: outBoxes, ramps: outRamps, roofs: roofs2, gables: gables2, furniture, loot: loot2, chests: chests2, fin,
     nav: { nodes, links }, tris: { floors: trisF.slice(0, S), shell: trisF[S], total: trisF.reduce((a, b) => a + b, 0) }, fh: FHu, shell,
     aabb: { min: mn.map(r3), max: mx.map(r3) }, lod: { cx: ctr[0], cy: ctr[1], cz: ctr[2], r: rad, furnitureR: 60 },
   };
@@ -3762,6 +5002,60 @@ function guillotine(rng, i0, j0, i1, j1, k) {
     const cut = clamp(Math.round(L * (0.38 + 0.24 * rng())), 1, L - 1);
     if (alongI) { rooms[best] = [r[0], r[1], r[0] + cut, r[3]]; rooms.push([r[0] + cut, r[1], r[2], r[3]]); }
     else { rooms[best] = [r[0], r[1], r[2], r[1] + cut]; rooms.push([r[0], r[1] + cut, r[2], r[3]]); }
+  }
+  return rooms;
+}
+
+/** (W10 R1A) a HOME's rooms: the rest-of-plan rectangle [i0, j0, i1, j1) (minus the L plan's removed corner, when it reaches in) cut into <= k rectangles,
+ *  each >= minW cells on BOTH sides, plus at most one 1 x 2-cell nook (a bath: aspect 2.0) when no other cut fits. Every rectangle is all walkable cells. */
+function homeRects(rng, i0, j0, i1, j1, k, cut, minW, nookFar) {
+  let rooms = [[i0, j0, i1, j1]];
+  if (cut) {
+    const c = [Math.max(i0, cut[0]), Math.max(j0, cut[1]), Math.min(i1, cut[2]), Math.min(j1, cut[3])];
+    if (c[0] < c[2] && c[1] < c[3]) {
+      // the L as two rectangles: split along the corner's x edge or its z edge, whichever leaves the wider narrowest side
+      const xs = c[0] === i0 ? [c[2], i1] : [i0, c[0]], zs = c[1] === j0 ? [c[3], j1] : [j0, c[1]];
+      const o1 = [[i0, zs[0], i1, zs[1]], [xs[0], c[1], xs[1], c[3]]], o2 = [[xs[0], j0, xs[1], j1], [c[0], zs[0], c[2], zs[1]]];
+      const mn = (o) => Math.min(...o.map((r) => Math.min(r[2] - r[0], r[3] - r[1])));
+      rooms = mn(o1) > mn(o2) ? o1 : mn(o2) > mn(o1) ? o2 : rng() < 0.5 ? o1 : o2;
+    }
+  }
+  let nook = 0, guard = 0;
+  while (rooms.length < k && guard++ < 24) {
+    let best = -1, ba = 0;
+    for (let a = 0; a < rooms.length; a++) {
+      const r = rooms[a], w = r[2] - r[0], d = r[3] - r[1];
+      if ((w >= 2 * minW || d >= 2 * minW) && w * d > ba) { ba = w * d; best = a; }
+    }
+    if (best >= 0) {
+      const r = rooms[best], w = r[2] - r[0], d = r[3] - r[1];
+      let alongI = w > d ? true : d > w ? false : rng() < 0.5;
+      if ((alongI ? w : d) < 2 * minW) alongI = !alongI;
+      const L = alongI ? w : d;
+      const cutAt = clamp(Math.round(L * (0.38 + 0.24 * rng())), minW, L - minW);
+      if (alongI) { rooms[best] = [r[0], r[1], r[0] + cutAt, r[3]]; rooms.push([r[0] + cutAt, r[1], r[2], r[3]]); }
+      else { rooms[best] = [r[0], r[1], r[2], r[1] + cutAt]; rooms.push([r[0], r[1] + cutAt, r[2], r[3]]); }
+      continue;
+    }
+    // no room can be halved: one 1 x 2 nook off a room whose other side is 2 cells (the bath), at most one per floor
+    if (nook || minW < 2) break;
+    let nb = -1, nAlong = false, na = 0;
+    for (let a = 0; a < rooms.length; a++) {
+      const r = rooms[a], w = r[2] - r[0], d = r[3] - r[1];
+      if (d === 2 && w >= 1 + minW && w * d > na) { na = w * d; nb = a; nAlong = true; }
+      if (w === 2 && d >= 1 + minW && w * d > na) { na = w * d; nb = a; nAlong = false; }
+    }
+    if (nb < 0) break;
+    // (W10 R1A pass 5: beside a home's hall - nookFar 'i+' / 'i-' / 'j+' / 'j-' - the nook goes to that side of the room it is cut from)
+    // (W10 R1A pass 5: else to the side where it touches fewer other rooms - a nook between two rooms becomes the way from one to the other, a bath walked through)
+    const r = rooms[nb], hi0 = rng() < 0.5, ax = nAlong ? "i" : "j";
+    const touch = (q) => rooms.filter((o, oi) => oi !== nb && ((o[0] === q[2] || o[2] === q[0]) && o[1] < q[3] && q[1] < o[3] || (o[1] === q[3] || o[3] === q[1]) && o[0] < q[2] && q[0] < o[2])).length;
+    const nkHi = nAlong ? [r[2] - 1, r[1], r[2], r[3]] : [r[0], r[3] - 1, r[2], r[3]], nkLo = nAlong ? [r[0], r[1], r[0] + 1, r[3]] : [r[0], r[1], r[2], r[1] + 1];
+    const tH = touch(nkHi), tL = touch(nkLo);
+    const hi = nookFar === ax + "+" ? true : nookFar === ax + "-" ? false : nookFar == null && tH !== tL ? tH < tL : hi0;
+    if (nAlong) { const x = hi ? r[2] - 1 : r[0] + 1; rooms[nb] = hi ? [r[0], r[1], x, r[3]] : [x, r[1], r[2], r[3]]; rooms.push(hi ? [x, r[1], r[2], r[3]] : [r[0], r[1], x, r[3]]); }
+    else { const z = hi ? r[3] - 1 : r[1] + 1; rooms[nb] = hi ? [r[0], r[1], r[2], z] : [r[0], z, r[2], r[3]]; rooms.push(hi ? [r[0], z, r[2], r[3]] : [r[0], r[1], r[2], z]); }
+    nook++;
   }
   return rooms;
 }
@@ -3799,6 +5093,8 @@ export function translateY(H, dy) {
   out.nav = { nodes: H.nav.nodes.map((n) => Object.assign({}, n, { y: q(n.y) })), links: H.nav.links.map((l) => Object.assign({}, l, { from: v3(l.from), to: v3(l.to) })) };
   out.aabb = { min: v3(H.aabb.min), max: v3(H.aabb.max) };
   out.lod = Object.assign({}, H.lod, { cy: q(H.lod.cy) });
+  if (H.fin) out.fin = { runs: H.fin.runs.map((r) => Object.assign({}, r, { y: q(r.y), h: q(r.h) })), pools: H.fin.pools.map((p) => Object.assign({}, p, { y: q(p.y) })),
+    cur: H.fin.cur.map((c) => c.slice()), pics: H.fin.pics.map((p) => Object.assign({}, p, { y0: q(p.y0), y1: q(p.y1) })) };
   return out;
 }
 
@@ -3815,11 +5111,15 @@ export function collidersOf(H, mk, opts) {
   const out = [];
   for (const b of H.boxes) if (b.c) out.push(mk("box", b.min[0], b.max[0], b.min[1], b.max[1], b.min[2], b.max[2], -1, null, -1, 0));
   for (const r of H.ramps) out.push(mk("ramp", r.min[0], r.max[0], r.min[1], r.max[1], r.min[2], r.max[2], r.dir, null, -1, 0));
+  // furniture: (W10 R1A) the exact union per vertical span - pieces of one span that touch (a kitchen's base run, a row of upper cabinets, a shop's shelf
+  // row) answer as a rectangle partition of their union (the same solid: houseload collider-load counts what a query hands back)
+  const fb = [];
   for (const p of H.furniture) {
     if (p.deco) continue;
-    if (p.src === "kit") out.push(mk("box", p.min[0], p.max[0], p.min[1], p.max[1], p.min[2], p.max[2], -1, null, -1, 0));
-    else for (const g of p.cols) out.push(mk("box", g.min[0], g.max[0], g.min[1], g.max[1], g.min[2], g.max[2], -1, null, -1, 0));
+    if (p.src === "kit") fb.push([p.min[0], p.max[0], p.min[1], p.max[1], p.min[2], p.max[2]]);
+    else for (const g of p.cols) fb.push([g.min[0], g.max[0], g.min[1], g.max[1], g.min[2], g.max[2]]);
   }
+  for (const b of (FURN_MERGE ? mergeFurnBoxes(fb) : fb)) out.push(mk("box", b[0], b[1], b[2], b[3], b[4], b[5], -1, null, -1, 0));
   if (!(opts && opts.doors === false)) {
     let di = -1, last = null;
     for (const L of H.doorLeaves || []) {
@@ -3838,7 +5138,7 @@ export function leafColliderCount(H) { return 2 * ((H && H.doorLeaves) || []).le
 /** the kit furniture as citykit.place() entries (x y z = the manifest origin at the floor, rot = quarter-turn index) */
 export function kitEntries(H, district) {
   const out = [];
-  for (const p of H.furniture) if (p.src === "kit") out.push({ type: p.kit.type, x: p.kit.x, y: p.kit.y, z: p.kit.z, rot: p.kit.rot, district: district || H.id });
+  for (const p of H.furniture) if (p.src === "kit") out.push({ type: p.kit.type, x: p.kit.x, y: p.kit.y, z: p.kit.z, rot: p.kit.rot, scale: p.kit.scale == null ? 1 : p.kit.scale, district: district || H.id });
   return out;
 }
 
@@ -4015,6 +5315,134 @@ function wearBands(H, groups, acc, faceIn, colOf) {
  *  not hidden (h bits), the pitched roofs' planks exactly as their ramps collide, the gables' end polygons. key = the palette material ("brick", "floor_wood",
  *  ...); with opts.interior the faces that face INTO the house (both sides of the face centre inside the walls' outer faces and under the top ceiling) are
  *  keyed "<mat>|in" (maps.js darkens them: the sky light is not occluded indoors). colOf(hex) -> [r, g, b] in the renderer's working colour space. */
+// (W10 R3A, audits 6 + 7) THE FINISH, drawn only (no collider, not in house.tris - like the wear strips; maps.js: desktop medium and up). Every quad is a plate a few mm
+// in front of the face it dresses, in that face's material (the same world-aligned UVs: a darker wall foot is the wall's own texture, darker), vertex colours baked:
+//  - under every standing piece (>= AO.minH tall, on its room's floor): a soft dark ring, AO.k at the footprint (+ 2 cm) fading to the floor's colour AO.r out
+//    (clipped to the cells it stands on, inside the walls; a piece >= AO.minA m2 of footprint, >= AO.minH tall; the footprint AO.k too - 10 triangles) - BAKED_AO;
+//  - each wall run of a room: the foot (AO.foot at the skirting's top fading to the wall colour AO.footH higher), a corner
+//    colour AO.floorW out), a corner where another run of the room meets (AO.corner at the corner, AO.cornerW along the wall, floor to ceiling); a kitchen's tile
+//    splash (0.9 - 1.5 m) and a bath's wainscot (0.1 - 1.25 m) on the solid runs;
+//  - a light pool under each ceiling light: the floor colour lifted (warm in homes) at the middle, fading out;
+//  - curtains: per window of a lived room, a rod over the opening and two panels pleated in 4 folds (crests lit, troughs dark), sill - 0.22 m to the rod (floor to rod
+//    in a living room or bedroom) - CURTAIN_FOLDS;
+//  - casings round every door opening (both faces of an interior door, the inside face of a street door) and window: two jambs and a head, 8 cm, the trim colour;
+//  - pictures: one of PICS on each art piece's canvas, and the framed prints (H.fin.pics).
+function finishGeo(H, acc, colOf, split, art) {
+  const fin = H.fin;
+  const mul = (c, k) => [Math.min(1, c[0] * k[0]), Math.min(1, c[1] * k[1]), Math.min(1, c[2] * k[2])], kk = (k) => [k, k, k];
+  const quad = (mat, P, n, C) => {
+    const a = acc("walls", mat, split, false), tile = TILE[mat] || 2, ax = Math.abs(n[1]) > 0.5 ? [0, 2] : Math.abs(n[0]) > 0.5 ? [2, 1] : [0, 1];
+    const e1 = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]], e2 = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
+    const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const ord = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0 ? [0, 3, 2, 1] : [0, 1, 2, 3], base = a.pos.length / 3;
+    for (const k of ord) { const p = P[k], c = C[k]; a.pos.push(p[0], p[1], p[2]); a.nor.push(n[0], n[1], n[2]); a.uv.push(p[ax[0]] / tile, p[ax[1]] / tile); a.col.push(c[0], c[1], c[2]); }
+    a.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const rooms = new Map(H.rooms.map((r) => [r.id, r])), UP = [0, 1, 0];
+  // AO under the pieces
+  if (BAKED_AO) H.furniture.forEach((p, k) => {
+    if (p.deco || p.mount === "wall" || p.mount === "top" || p.max[1] - p.min[1] < AO.minH || (p.max[0] - p.min[0]) * (p.max[2] - p.min[2]) < AO.minA) return;
+    const r = rooms.get(p.room);
+    if (!r || r.fpal == null || Math.abs(p.min[1] - r.y) > 0.02) return;
+    const pe = H.palette[r.fpal], c1 = colOf(pe.color), c0 = mul(c1, kk(AO.k)), y = r.y + 0.004 + (k % 4) * 0.0006;
+    const I = [p.min[0] - 0.02, p.min[2] - 0.02, p.max[0] + 0.02, p.max[2] + 0.02];
+    let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
+    for (const c of r.rects) if (c[0] < I[2] && c[2] > I[0] && c[1] < I[3] && c[3] > I[1]) { bx0 = Math.min(bx0, c[0]); bz0 = Math.min(bz0, c[1]); bx1 = Math.max(bx1, c[2]); bz1 = Math.max(bz1, c[3]); }
+    if (!(bx1 > bx0)) return;
+    bx0 += JAMB; bz0 += JAMB; bx1 -= JAMB; bz1 -= JAMB;
+    // (fix2, plan budget +2 a piece) ONE quad: the footprint + AO.m, clipped to the room's cells inside the walls, at AO.k - no fading ring
+    const q = [Math.max(bx0, I[0] - AO.m), Math.max(bz0, I[1] - AO.m), Math.min(bx1, I[2] + AO.m), Math.min(bz1, I[3] + AO.m)];
+    if (!(q[2] > q[0] && q[3] > q[1])) return;
+    quad(pe.mat, [[q[0], y, q[1]], [q[2], y, q[1]], [q[2], y, q[3]], [q[0], y, q[3]]], UP, [c0, c0, c0, c0]);
+  });
+  // wall runs: feet, the floor along them, corners, tile bands
+  for (const q of fin.runs) {
+    const pw = H.palette[q.pal], cw = colOf(pw.color), n = [q.nx, 0, q.nz], o = 0.006, L = Math.hypot(q.x1 - q.x0, q.z1 - q.z0);
+    if (L < 0.2) continue;
+    const tx = (q.x1 - q.x0) / L, tz = (q.z1 - q.z0) / L, P = (t, y, off) => [q.x0 + tx * t + q.nx * off, y, q.z0 + tz * t + q.nz * off];
+    if (q.band) {
+      const tc = colOf(q.band === 1 ? 0xe8ecec : 0xdfeaf0), ya = q.y + (q.band === 1 ? 0.9 : 0.1), yb = q.y + (q.band === 1 ? 1.5 : 1.25);
+      quad("floor_tile", [P(0, ya, 0.009), P(L, ya, 0.009), P(L, yb, 0.009), P(0, yb, 0.009)], n, [tc, tc, tc, tc]);
+      continue;
+    }
+    if (L < 1.0) continue;
+    // (fix2, plan budget +40 a room) one quad a run: the foot AO.foot, a corner end (another run of the room meets it) AO.corner x that, top fading to the wall
+    const cf = mul(cw, kk(AO.foot)), cc = mul(cw, kk(AO.foot * AO.corner)), ct = mul(cw, kk(AO.corner + (1 - AO.corner) * 0.5));
+    quad(pw.mat, [P(0, q.y + 0.1, o), P(L, q.y + 0.1, o), P(L, q.y + 0.1 + AO.footH, o), P(0, q.y + 0.1 + AO.footH, o)], n, [q.c0 ? cc : cf, q.c1 ? cc : cf, q.c1 ? ct : cw, q.c0 ? ct : cw]);
+  }
+  // light pools: a diamond fan (4 triangles), the floor colour lifted at the middle
+  for (const q of fin.pools) {
+    const pf = H.palette[q.fpal]; if (!pf) continue;
+    const cl = colOf(pf.color), cm = mul(cl, q.warm ? [1.16, 1.1, 0.98] : [1.1, 1.1, 1.1]), y = q.y + 0.0045, ring = [];
+    for (let k = 0; k < 4; k++) ring.push([q.x + q.r * Math.cos(k * Math.PI / 2), y, q.z + q.r * Math.sin(k * Math.PI / 2)]);
+    for (let k = 0; k < 4; k += 2) quad(pf.mat, [[q.x, y, q.z], ring[k], ring[k + 1], ring[(k + 2) % 4]], UP, [cm, cl, cl, cl]);
+  }
+  // casings: doors (both faces of an interior door, the inside face of a street door), windows (the inside face)
+  const trim = colOf(H.trim != null ? H.trim : 0xf2efe6), trimMat = H.theme === "lodge" ? "wood" : "plaster", CW = 0.08, TT = [trim, trim, trim, trim];
+  const casing = (cx, cz, ax, nx, nz, y0, y1, half) => {          // ax: the wall's along axis 'x' | 'z'; (nx, nz): the face's normal (into the room); (cx, cz) on the wall's centreline
+    const tx = ax === "x" ? 1 : 0, tz = ax === "x" ? 0 : 1, off = T / 2 + 0.008, n = [nx, 0, nz];
+    const P = (t, y) => [cx + tx * t + nx * off, y, cz + tz * t + nz * off];
+    quad(trimMat, [P(-half - CW, y0), P(-half, y0), P(-half, y1 + CW), P(-half - CW, y1 + CW)], n, TT);
+    quad(trimMat, [P(half, y0), P(half + CW, y0), P(half + CW, y1 + CW), P(half, y1 + CW)], n, TT);
+    quad(trimMat, [P(-half, y1), P(half, y1), P(half, y1 + CW), P(-half, y1 + CW)], n, TT);
+  };
+  for (const d of H.doors) {
+    const sides = d.kind === "interior" ? [1] : [-1];                 // (a street door's normal points out: its inside face is -n; fix2: an interior door one face)
+    for (const sg of sides) casing(d.x, d.z, d.axis, d.nx * sg, d.nz * sg, d.y, d.y + DOOR_H, DOOR_CLEAR / 2);
+  }
+  const curW = new Set(CURTAIN_FOLDS ? fin.cur.map((c) => c[0]) : []);
+  // (fix2, budget) a window without curtains: its sill board (8 cm, the trim colour, 2 triangles) - a curtained window's jambs are behind its panels
+  H.windows.forEach((w, wk) => {
+    if (curW.has(wk)) return;
+    const tx = w.axis === "x" ? 1 : 0, tz = w.axis === "x" ? 0 : 1, nx = -w.nx, nz = -w.nz, off = T / 2 + 0.008, h = w.width / 2 + CW;
+    const P = (t, y) => [w.x + tx * t + nx * off, y, w.z + tz * t + nz * off];
+    quad(trimMat, [P(-h, w.sill - CW), P(h, w.sill - CW), P(h, w.sill), P(-h, w.sill)], [nx, 0, nz], TT);
+  });
+  // curtains: a rod and two pleated panels per window of a lived room
+  if (CURTAIN_FOLDS) for (const [wk, pi, long] of fin.cur) {
+    const w = H.windows[wk], pe = H.palette[pi]; if (!w || !pe) continue;
+    const c = colOf(pe.color), cD = mul(c, kk(0.66)), nx = -w.nx, nz = -w.nz, tx = w.axis === "x" ? 1 : 0, tz = w.axis === "x" ? 0 : 1, n = [nx, 0, nz];
+    const P = (t, y, off) => [w.x + tx * t + nx * (T / 2 + off), y, w.z + tz * t + nz * (T / 2 + off)];
+    let fy = -1e9; for (const F of H.floors) if (F.y <= w.sill && F.y > fy) fy = F.y;
+    const yTop = w.head + 0.16, yBot = long ? fy + 0.04 : w.sill - 0.22, half = w.width / 2, rod = colOf(0x3a3632);
+    quad("metal", [P(-half - 0.52, yTop, 0.13), P(half + 0.52, yTop, 0.13), P(half + 0.52, yTop + 0.035, 0.13), P(-half - 0.52, yTop + 0.035, 0.13)], n, [rod, rod, rod, rod]);
+    for (const sd of [-1, 1]) {
+      const t0 = sd < 0 ? -half - 0.46 : half - 0.02, t1 = sd < 0 ? -half + 0.02 : half + 0.46, NF = 2;      // (fix2: two folds a panel - a crest and a trough)
+      for (let k = 0; k < NF; k++) {
+        const ta = t0 + (t1 - t0) * k / NF, tb = t0 + (t1 - t0) * (k + 1) / NF, da = k % 2 ? 0.115 : 0.04, db = k % 2 ? 0.04 : 0.115;
+        const ca = k % 2 ? c : cD, cb = k % 2 ? cD : c;
+        quad("fabric", [P(ta, yBot, da), P(tb, yBot, db), P(tb, yTop, db), P(ta, yTop, da)], n, [ca, cb, cb, ca]);
+      }
+    }
+  }
+  // pictures: a 4 x 3 cell print (5 x 4 vertex colours), a framed one on a dark frame plate 5 cm wider each side
+  // (W10 R3A fix5) with `art` (ART_ATLAS): the picture is one quad keyed "art", its UVs its cell of the art atlas (artCell), white vertex colours - in fin.pics order
+  // (the homes gate reads the art group's quads in that order)
+  const white = colOf(0xffffff);
+  for (const q of fin.pics) {
+    const n = [q.nx, 0, q.nz], tx = -q.nz, tz = q.nx, half = q.w / 2, G = PICS[q.pic % PICS.length];
+    const P = (t, y, off) => [q.x + tx * t + q.nx * off, y, q.z + tz * t + q.nz * off];
+    if (q.frame) { const fc = colOf(0x2e2620); quad("wood", [P(-half - 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y1 + 0.05, 0), P(-half - 0.05, q.y1 + 0.05, 0)], n, [fc, fc, fc, fc]); }
+    if (art && ART_ATLAS) {
+      // the viewer faces -n: +t runs to his LEFT (t = -n.z, n.x), so the cell's left edge (u0) sits at t = +half; the bottom (y0) at v0
+      const off = q.frame ? 0.004 : 0, [u0, v0, u1, v1] = artCell(q.pic, q.w, q.y1 - q.y0);
+      const Pq = [P(-half, q.y0, off), P(half, q.y0, off), P(half, q.y1, off), P(-half, q.y1, off)], UV = [[u1, v0], [u0, v0], [u0, v1], [u1, v1]];
+      const a = acc("walls", "art", split, false);
+      const e1 = [Pq[1][0] - Pq[0][0], Pq[1][1] - Pq[0][1], Pq[1][2] - Pq[0][2]], e2 = [Pq[2][0] - Pq[0][0], Pq[2][1] - Pq[0][1], Pq[2][2] - Pq[0][2]];
+      const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      const ord = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0 ? [0, 3, 2, 1] : [0, 1, 2, 3], base = a.pos.length / 3;
+      for (const k of ord) { const p = Pq[k]; a.pos.push(p[0], p[1], p[2]); a.nor.push(n[0], n[1], n[2]); a.uv.push(UV[k][0], UV[k][1]); a.col.push(white[0], white[1], white[2]); }
+      a.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      continue;
+    }
+    // (fix2) 2 x 2 flat colour blocks, split at the print's own proportions (crisp blocks, not vertex gradients; 8 triangles): the spec's rows 1 and 2
+    const off = q.frame ? 0.004 : 0, sx = 0.38 + 0.24 * ((q.pic * 7) % 5) / 4, sy = 0.4 + 0.2 * ((q.pic * 3) % 4) / 3;
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+      const ta = -half + q.w * (i ? sx : 0), tb = -half + q.w * (i ? 1 : sx), ya = q.y0 + (q.y1 - q.y0) * (j ? sy : 0), yb = q.y0 + (q.y1 - q.y0) * (j ? 1 : sy), c = colOf(G[2 - j][i]);
+      quad("fabric", [P(ta, ya, off), P(tb, ya, off), P(tb, yb, off), P(ta, yb, off)], n, [c, c, c, c]);
+    }
+  }
+}
 export function meshData(H, colOf, opts) {
   opts = opts || {};
   const split = !!opts.interior;
@@ -4040,7 +5468,11 @@ export function meshData(H, colOf, opts) {
   const boxRanges = new Array(H.boxes.length);
   // (K1 re-run) opts.ns: an OUTSIDE face of a box flagged ns (a ruin's wreckage) is keyed "<mat>#ns" (maps.js: the no-shadow twin mesh); without opts.ns nothing changes
   const nsSplit = !!opts.ns;
-  const acc = (grp, mat, inn, ns) => { const key = inn ? mat + "|in" : ns ? mat + "#ns" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
+  // (W10 R3A) the finish: only when opts.finish is set (maps.js: desktop medium and up; buildHouse: unless opts.finish === false) and the wear option allows it (never
+  // on low); a house record without H.fin draws none. Without opts.finish meshData draws exactly what it drew before (the selftest's split / wear rows).
+  // With it, an inside ceiling face (a slab / roof / shell underside in plaster) is keyed "plaster|ceil" when split (maps.js lifts it to read white)
+  const finOn = !!H.fin && !!opts.finish && wearOn(opts.wear);
+  const acc = (grp, mat, inn, ns, ceil) => { const key = ceil ? mat + "|ceil" : inn ? mat + "|in" : ns ? mat + "#ns" : mat; let a = groups[grp].get(key); if (!a) { a = { pos: [], nor: [], uv: [], col: [], idx: [], boxes: [] }; groups[grp].set(key, a); } return a; };
   // a box -> faces grouped by material (one box can span two materials: brick outside, plaster inside)
   const FACES = [                                    // [normal, 4 corners as (x, y, z) picks 0 = min 1 = max], uv axes
     [[1, 0, 0], [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], [2, 1]],
@@ -4056,7 +5488,8 @@ export function meshData(H, colOf, opts) {
     let first = null;
     for (let fi = 0; fi < 6; fi++) {
       if (b.h & (1 << fi)) continue;
-      const pe = H.palette[b.f[fi]], a = acc(grp, pe.mat, split && grp !== "glass" && faceIn(b, fi), nsSplit && grp === "walls" && b.ns === 1), base = a.pos.length / 3;
+      const pe = H.palette[b.f[fi]], inn = split && grp !== "glass" && faceIn(b, fi);
+      const a = acc(grp, pe.mat, inn, nsSplit && grp === "walls" && b.ns === 1, inn && finOn && fi === 3 && pe.mat === "plaster" && (b.p === "slab" || b.p === "roof" || b.p === "shell")), base = a.pos.length / 3;
       if (!first) first = [grp, pe.mat, base];
       const [n, cs, ax] = FACES[fi], tile = TILE[pe.mat] || 2, rgb = colOf(pe.color);
       for (const cr of cs) {
@@ -4115,6 +5548,7 @@ export function meshData(H, colOf, opts) {
     }
   }
   for (const g of H.gables || []) { const pe = pick0(H.palette, g.pal); poly(pe.mat, pe.color, g.pts, g.n, (P) => [g.n[0] ? P[2] : P[0], P[1]]); }
+  if (finOn) finishGeo(H, acc, colOf, split, !!opts.art);                                // (W10 R3A: the finish - medium and up, drawn only, not in house.tris)
   if (wearOn(opts.wear)) wearBands(H, groups, acc, faceIn, colOf);           // (P23 / LC-17: after every box face and roof polygon; D10: opts.wear "low" / false = none)
   return { groups, boxRanges };
 }
@@ -4130,7 +5564,7 @@ export function buildHouse(THREE, H, opts) {
   const col3 = (c) => { const k = new THREE.Color(c); return [k.r, k.g, k.b]; };     // sRGB hex -> working colour space (three r152+ colour management)
   const colCache = new Map();
   const colOf = (c) => { let v = colCache.get(c); if (!v) { v = col3(c); colCache.set(c, v); } return v; };
-  const { groups, boxRanges } = meshData(H, colOf, { wear: opts.wear });                 // (P23: opts.wear false / "low" leaves the wear strips out, see WEAR_BY_TIER)
+  const { groups, boxRanges } = meshData(H, colOf, { wear: opts.wear, finish: opts.finish !== false });     // (W10 R3A: the finish unless opts.finish === false)                 // (P23: opts.wear false / "low" leaves the wear strips out, see WEAR_BY_TIER)
   const meshOf = (a, mat) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
@@ -4167,7 +5601,8 @@ export function buildHouse(THREE, H, opts) {
         const im = new THREE.InstancedMesh(pt.geometry, pt.material, list.length);
         list.forEach((e, k) => {
           const c = COS[e.rot], s = SIN[e.rot];
-          Mx.set(c, 0, s, e.x, 0, 1, 0, e.y, -s, 0, c, e.z, 0, 0, 0, 1);
+          const ks = e.scale == null ? 1 : e.scale;         // (W10 R1A: the entry's scale on top of the template's suggested_scale)
+          Mx.set(c * ks, 0, s * ks, e.x, 0, ks, 0, e.y, -s * ks, 0, c * ks, e.z, 0, 0, 0, 1);
           if (pt.local) Mx.multiply(pt.local);
           im.setMatrixAt(k, Mx);
         });

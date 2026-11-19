@@ -143,7 +143,7 @@ WAVE7C_REV = "6191b380"      # the Wave-7 COMPLETION release (live until the Wav
                              # MAP_GEN_VERSION 4). NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
 # ---- Wave 7b (lane B2). Which maps' rows COUNT. Isla Viva and Deepwood get their towns and endgame areas from lane B1 in the same stage; each constant was set at the END of the stage to what B1
 # reported landed (README "Wave-7b gates"). A map left out of a list runs as INFORMATION ("would PASS / would FAIL"), never silently skipped.
-MAP_GEN_TARGET = 8                                     # Wave 9 R1A: 7 -> 8 (LC-91 door leaves + slabs change every map's colliders; OD-16 supply roll rides the same bump). Was: genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings; release prep 10-27: 6 -> 7, the parity waves P1-P3 change every map's world and loot)
+MAP_GEN_TARGET = 10                                    # W10 round 3 (homes + interiors, orchestrator ruling 2026-11-18): R1A homes 8 -> 9 and R3A interiors II (furniture colliders, roofs, porches) 9 -> 10, shipped together. Was: Wave 9 R1A: 7 -> 8 (LC-91 door leaves + slabs change every map's colliders; OD-16 supply roll rides the same bump). Was: genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings; release prep 10-27: 6 -> 7, the parity waves P1-P3 change every map's world and loot)
 ALL_MAPS = "isla_viva,ashgrid,deepwood"
 CITY_BLOCK = ALL_MAPS                                  # citycheck --block-maps (all three maps: lane B1 landed the themed towns, compounds and both endgame areas)
 NAVTOWN_BLOCK = ALL_MAPS                               # navtown --block-maps
@@ -406,6 +406,12 @@ GATES = [
     # ---- Wave 10 R3B (characters): ground-loot models - loot-shapes (0 primitive box / cylinder pickups; frag vs smoke silhouette IoU <= 0.7)
     #      (w10_gunhold above gains the rows reload-height, reload-hand, pistol-reload, swim, swim-view, swim-head, swim-arms and swap via its default --parts)
     ("w10_lootlook", "p23/lootlook.py", [], 3600, False),
+    # ---- Wave 10 round 3 (R1A homes + R3A interiors II): w10_homes - the R1A home rows + finish, shop-density, office-cover, flat-roofs, work-density
+    #      (p23/homes.py, Node census, 12 builds). housegen_demo_looks gains contact-shadow; navgrid.selftest memory-per-town (no new row)
+    ("w10_homes", "p23/homes.py", [], 1800, False),
+    # housegen.selftest CPU judged by the paired row (ruling R-d / 2026-11-18 (2)): <= 36 ms a house absolute, else <= 1.32 x the reference 04e82d802 when the
+    # reference reads > 27.3 ms; ref-vs-ref control outside 0.93-1.07 = COULD-NOT-JUDGE. The Node selftest run prints the same reading as info (HG_CPU_ROW=wrapper)
+    ("p23_hg_cpu", "p23/hg_cpu.py", [], 3600, False),
     ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
@@ -864,7 +870,11 @@ if not P23_PENDING:
 NODE_NEGATIVE = [
     ("runtime/3d/royale/housegen.selftest.cjs", ["--plant", "no-hash"]),
     ("runtime/3d/royale/housegen.selftest.cjs", ["--plant", "start-ignored"]),
+    # W10 R3A: navgrid memory-per-town with list order + 32-bit items (the pre-fix6 layout) must FAIL (4.44 MB vs the 3.56 MB limit)
+    ("-e", ["globalThis.__ngWideItems = 1; require('./runtime/sim/navgrid.selftest.cjs')"]),
 ]
+# W10 round 3: the housegen selftest's absolute CPU line is judged by the paired row p23_hg_cpu (ruling R-d); the Node runs print it as info
+NODE_ENV = {"runtime/3d/royale/housegen.selftest.cjs": {"HG_CPU_ROW": "wrapper"}}
 # ---- W10 tools lane (2026-11-19; owner: faster releases, NO bar lowered). Lines ADDED only.
 # anchors: every planted fault that patches a source by an exact text anchor (anchors.py census), checked at the served tree in seconds,
 # no browser; a miss is a FAIL (a plant that would go could-not-judge hours into a battery). Controls: the census's own plants.
@@ -878,6 +888,19 @@ NEGATIVE += [
     # the same failure on the game's OWN origin must still FAIL them
     ("player_rim-plant-net-third-party-font", "new/player_rim.py", ["--plant", "net-third-party-font"], 3600, 2),
     ("player_rim-plant-net-own-asset", "new/player_rim.py", ["--plant", "net-own-asset"], 3600),
+]
+# ---- Wave 10 round 3 (R1A homes + R3A interiors II): each planted fault MUST FAIL its own row (exit 1)
+NEGATIVE += [
+    ("w10_homes-plant-plank-curtain", "p23/homes.py", ["--plant", "plank-curtain"], 1800),      # -> finish FAILS
+    ("w10_homes-plant-grey-ceil", "p23/homes.py", ["--plant", "grey-ceil"], 1800),              # -> finish FAILS (ceiling half)
+    ("w10_homes-plant-no-art", "p23/homes.py", ["--plant", "no-art"], 1800),                    # -> finish FAILS (art atlas UVs off)
+    ("w10_homes-plant-bare-office", "p23/homes.py", ["--plant", "bare-office"], 1800),          # -> office-cover FAILS
+    ("w10_homes-plant-flat-everywhere", "p23/homes.py", ["--plant", "flat-everywhere"], 1800),  # -> flat-roofs FAILS
+    ("w10_homes-plant-sparse-shop", "p23/homes.py", ["--plant", "sparse-shop"], 1800),          # -> shop-density FAILS
+    ("w10_homes-plant-sparse-office", "p23/homes.py", ["--plant", "sparse-office"], 1800),      # -> work-density FAILS
+    ("w10_homes-plant-no-work-budget", "p23/homes.py", ["--plant", "no-work-budget"], 1800),    # -> work-density FAILS
+    ("housegen_demo_looks-plant-no-ao", "housegen_demo_looks.py", ["--plant", "no-ao"], 1800),  # -> contact-shadow FAILS
+    ("p23_hg_cpu-plant-slow-gen", "p23/hg_cpu.py", ["--plant", "slow-gen"], 3600),              # every house generated 3x -> cpu FAILS (absolute and ratio)
 ]
 # gate.py --quick: an early-warning SELECTION of GATES rows, each run exactly as the full battery runs it (same args, same bars, same
 # retries), plus the Node selftests and the anchors census. About 60 min on this 8-core box (measured 2026-11-19, see README). It is
@@ -925,7 +948,8 @@ def node_selftests():
         rel = os.path.relpath(f, C.ROOT).replace(os.sep, "/")
         t0 = time.time()
         try:
-            r = subprocess.run(["node", f], cwd=C.ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900)
+            r = subprocess.run(["node", f], cwd=C.ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900,
+                               env=dict(os.environ, **NODE_ENV.get(rel, {})))
             code = 0 if r.returncode == 0 else 1
             tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-3:]
         except subprocess.TimeoutExpired:
@@ -937,7 +961,9 @@ def node_selftests():
     for rel, extra in NODE_NEGATIVE:
         t0 = time.time()
         try:
-            r = subprocess.run(["node", os.path.join(C.ROOT, rel)] + list(extra), cwd=C.ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900)
+            cmd = ["node", "-e"] + list(extra) if rel == "-e" else ["node", os.path.join(C.ROOT, rel)] + list(extra)
+            r = subprocess.run(cmd, cwd=C.ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900,
+                               env=dict(os.environ, **NODE_ENV.get(rel, {})))
             code = {1: 0, 0: 1}.get(r.returncode, 2)          # a planted fault must FAIL the selftest: exit 1 is the pass here
             tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-2:]
         except subprocess.TimeoutExpired:
