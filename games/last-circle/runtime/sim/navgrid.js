@@ -208,6 +208,16 @@
   /** Copy the geometry of a collider list into typed arrays (dead colliders are left out AT THIS MOMENT: the set is a
    *  snapshot, so a prop destroyed later changes nothing and every client's tiles stay identical). `blockers` = extra
    *  boxes {minX..maxZ} that stop the capsule like a wall but are never a floor (kind 2): the launch portals. */
+  // the planted fault of the memory-per-town row (gate: node -e "globalThis.__ngWideItems = 1; require('./runtime/sim/navgrid.selftest.cjs')" must FAIL): list order, 32-bit items
+  var _wideItems = typeof globalThis !== "undefined" && globalThis.__ngWideItems === 1;
+  var COL_ROW = 32;     // (W10 R3A fix6) the ground-order row of a large collider set (makeColSet), m
+  /** (W10 R3A fix6) a tile whose cell-list items span < 65535 collider-set indices reads the set through views that start at its lowest index: the items are
+   *  16-bit offsets, every reader indexes T.lx0[item] ... as before (the same numbers, in the same order). base 0 = the set itself. */
+  function rebaseTile(T, cs, base) {
+    if (base === 0) return;
+    T.m = cs.n - base; T.lx0 = cs.minX.subarray(base); T.lx1 = cs.maxX.subarray(base); T.ly0 = cs.minY.subarray(base); T.ly1 = cs.maxY.subarray(base);
+    T.lz0 = cs.minZ.subarray(base); T.lz1 = cs.maxZ.subarray(base); T.lk = cs.kind.subarray(base); T.ld = cs.dir.subarray(base);
+  }
   function makeColSet(list, blockers, noFloor) {
     if (list && list.isColSet) return list;
     var n = 0, i, c, nb = blockers ? blockers.length : 0;
@@ -218,9 +228,21 @@
       minX: new Float64Array(tot), maxX: new Float64Array(tot), minY: new Float64Array(tot), maxY: new Float64Array(tot),
       minZ: new Float64Array(tot), maxZ: new Float64Array(tot), kind: new Uint8Array(tot), dir: new Int8Array(tot),
     };
-    var j = 0;
-    for (i = 0; i < list.length; i++) {
-      c = list[i];
+    var j = 0, ord = null;
+    // (W10 R3A fix6) a set of 65535 or more colliders (every housed map: ashgrid s7 holds 74,206 live ones) is laid out in ground order - rows of COL_ROW m
+    // along z, then x, ties in list order - so a tile's colliders hold NEARBY indices and its cell lists fit 16 bits as offsets from its lowest one
+    // (rebaseTile). In list order a tile saw a house's colliders AND the props / map pieces maps.js appends last (indices 66,000-74,206): every
+    // cell-list item of every tile stayed 32-bit and a furnished downtown held 4.44 MB of tile arrays (the selftest's limit 3.56). A smaller set keeps
+    // list order exactly (every tile and route as before). The order is a pure function of the list: every client and prebake worker builds the same set.
+    if (tot >= 65535 && !_wideItems) {
+      ord = [];
+      for (i = 0; i < list.length; i++) if (!list[i].dead) ord.push(i);
+      var rk = new Float64Array(list.length);
+      for (i = 0; i < ord.length; i++) { c = list[ord[i]]; rk[ord[i]] = Math.floor((c.minZ + c.maxZ) / 2 / COL_ROW) * 1e6 + Math.floor((c.minX + c.maxX) / 2 / COL_ROW); }
+      ord.sort(function (a, b) { return rk[a] - rk[b] || a - b; });
+    }
+    for (var oi = 0; oi < (ord ? ord.length : list.length); oi++) {
+      c = list[ord ? ord[oi] : oi];
       if (c.dead) continue;
       cs.minX[j] = c.minX; cs.maxX[j] = c.maxX; cs.minY[j] = c.minY; cs.maxY[j] = c.maxY;
       cs.minZ[j] = c.minZ; cs.maxZ[j] = c.maxZ; cs.kind[j] = c.kind === "ramp" ? 1 : (noFloor && noFloor.has(c) ? 3 : 0); cs.dir[j] = c.dir | 0;
@@ -1051,7 +1073,7 @@
       deepY: 0.5, wetY: 0.5,
       m: 0, lx0: null, lx1: null, ly0: null, ly1: null,
       lz0: null, lz1: null, lk: null, ld: null,
-      nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
+      nearStart: null, nearItems: null, nbase: 0, slot: -1, base: 0, linkedAll: false,
       // set by the bake (bakeTileGen) / the payload (pbAssemble)
       dOrth: 0.5, dDiag: 0.5, n: 0, x: null, y: null, z: null, flag: null, bord: null, adj: null, cellStart: null,
       edgeStart: null, edgeTo: null, edgeCost: null, edgeKind: null, bordCount: 0, holes: null,
@@ -1077,6 +1099,8 @@
       T.grp = { rects: [] }; T.island = new Uint8Array(1); T.island = null; T.key = 2 + i; T.minX = 0.5; T.minZ = 0.5; T.maxX = 1.5; T.maxZ = 1.5; T.cell = 1.5; T.inv = 0.6;
       T.nx = 3; T.nz = 3; T.hf = function () { return 1; }; T.hl = { L: null, n: 0, c: 0, k: 0.5, h: 0.5 }; T.hl = null; T.deepY = -0.5; T.wetY = 0.5; T.m = 1;
       T.nearStart = new Int32Array(1); T.nearItems = new Int32Array(1); T.nearStart = new Uint16Array(1); T.nearItems = new Uint16Array(1);
+      T.nbase = 1; T.nbase = 0; rebaseTile(T, cs, 0); T.lx0 = cs.minX.subarray(0); T.lx1 = cs.maxX.subarray(0); T.ly0 = cs.minY.subarray(0); T.ly1 = cs.maxY.subarray(0);     // (W10 R3A fix6: rebaseTile writes them again)
+      T.lz0 = cs.minZ.subarray(0); T.lz1 = cs.maxZ.subarray(0); T.lk = cs.kind.subarray(0); T.ld = cs.dir.subarray(0); T.m = 2; T.m = 1;
       T.slot = 1; T.base = STRIDE; T.linkedAll = true; T.linkedAll = false;
       T.dOrth = 0.75; T.dDiag = 1.06; T.n = 1; T.n = 2;
       T.x = new Float32Array(1); T.y = new Float32Array(1); T.z = new Float32Array(1); T.flag = new Uint8Array(1); T.bord = new Uint8Array(1); T.adj = new Uint8Array(1);
@@ -1427,6 +1451,12 @@
     // (W10 R1A) the two narrow on their own: a list ITEM is a collider id (16 bits while the set holds < 65535), a START an offset into the list (16 bits while the
     // list holds < 65535). A furnished downtown tile has > 65535 items (W10's bigger homes and their x1.15 furniture): both stayed 32-bit - downtown 3.21 -> 4.61 MB
     if (cs.n < 65535) T.nearItems = Uint16Array.from(nearItems);
+    else if (nearItems.length > 0 && !_wideItems) {
+      // (W10 R3A fix6) a large set: the items as 16-bit offsets from the tile's lowest index when they span < 65535 (rebaseTile), else 32-bit as before
+      var nLo = nearItems[0], nHi = nearItems[0];
+      for (k = 1; k < nearItems.length; k++) { q = nearItems[k]; if (q < nLo) nLo = q; else if (q > nHi) nHi = q; }
+      if (nHi - nLo < 65535) { var nU = new Uint16Array(nearItems.length); for (k = 0; k < nearItems.length; k++) nU[k] = nearItems[k] - nLo; T.nearItems = nU; T.nbase = nLo; rebaseTile(T, cs, nLo); }
+    }
     if (nearItems.length < 65535) T.nearStart = Uint16Array.from(nearStart);
     if (nK >= STRIDE) throw new Error("navgrid: a tile may hold at most " + (STRIDE - 1) + " nodes");
     var tEnd = now();
@@ -1770,7 +1800,7 @@
     for (i = 0; i < rec.length; i++) if (rec[i] > 2147483647) { big = true; break; }
     return {
       key: d.key, kind: d.kind, a: a, stats: T.stats, hash: T.hash, ev: big ? Float64Array.from(rec) : Int32Array.from(rec),
-      s: [T.minX, T.minZ, T.maxX, T.maxZ, T.cell, T.nx, T.nz, T.inv, T.deepY, T.wetY, T.n, T.dOrth, T.dDiag, T.bordCount],
+      s: [T.minX, T.minZ, T.maxX, T.maxZ, T.cell, T.nx, T.nz, T.inv, T.deepY, T.wetY, T.n, T.dOrth, T.dDiag, T.bordCount, T.nbase],
     };
   }
   /** The tile a payload describes, in the world's terms (its collider set, its height function, its hole list): the object bakeTileGen returns,
@@ -1779,7 +1809,7 @@
     var s = P.s, a = P.a, cs = W.cs, hf = W.hf;
     var holes = P.kind === 0 ? (W.fineByCoarse.get(P.key) || null) : null;
     var T = tileShell(P.key, s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], hf, s[8], s[9], cs);      // (final/nav) the one tile class, see tileShell
-    T.nearStart = a.nearStart; T.nearItems = a.nearItems;
+    T.nearStart = a.nearStart; T.nearItems = a.nearItems; T.nbase = s[14] | 0; rebaseTile(T, cs, T.nbase);
     T.dOrth = s[11]; T.dDiag = s[12];
     T.n = s[10] | 0; T.x = a.x; T.y = a.y; T.z = a.z; T.flag = a.flag; T.bord = a.bord; T.adj = a.adj; T.cellStart = a.cellStart;
     T.edgeStart = a.edgeStart; T.edgeTo = a.edgeTo; T.edgeCost = a.edgeCost; T.edgeKind = a.edgeKind;
