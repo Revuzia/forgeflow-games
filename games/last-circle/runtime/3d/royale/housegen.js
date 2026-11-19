@@ -199,6 +199,20 @@ export const LOOT_K = Object.freeze({ home: 1, house: 0.6, shop: 0.85, midrise: 
 // room, lobby and corridor (the bare-office plant: off). PITCHED_HOMES: a home outside a downtown core (P.core) never has a flat roof; ROOF_FLAT_ALL: the
 // flat-everywhere plant (every roof flat).
 export const FINISH = true;
+// (W10 R3A fix5, orchestrator ruling R3A-6) ART_ATLAS: with meshData's opts.art (maps.js: desktop medium and up, the art-atlas variant of the insides' material)
+// every picture (an art piece's canvas, a framed print: H.fin.pics) is ONE quad keyed "art" whose UVs are its picture's cell of assets/tex/interior_art.jpg
+// (_tools/interior_art.py: a 4 x 4 grid of 256 px cells, ART_PAD px of repeated edge round each), cropped to the picture's own proportions; without opts.art
+// (low, phones, Node) the colour-block print as before. ART_UV false = every picture's UVs collapsed onto one point (one flat texel: the homes gate's no-art plant)
+export const ART_ATLAS = true, ART_UV = true, ART_GRID = 4, ART_PX = 1024, ART_PAD = 12;
+/** (W10 R3A fix5) [u0, v0, u1, v1] of picture `pic` (0..15) in the art atlas for a w x h picture (flipY: v 1 = the image's top row), centred, cropped to w / h */
+export function artCell(pic, w, h) {
+  const k = ((pic % (ART_GRID * ART_GRID)) + ART_GRID * ART_GRID) % (ART_GRID * ART_GRID), c = k % ART_GRID, r = Math.floor(k / ART_GRID), cell = 1 / ART_GRID, pad = ART_PAD / ART_PX;
+  let u0 = c * cell + pad, u1 = (c + 1) * cell - pad, v1 = 1 - r * cell - pad, v0 = 1 - (r + 1) * cell + pad;
+  const a = w / Math.max(1e-3, h), cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, s = u1 - u0;
+  if (a >= 1) { v0 = cv - s / a / 2; v1 = cv + s / a / 2; } else { u0 = cu - s * a / 2; u1 = cu + s * a / 2; }
+  if (!ART_UV) { u0 = u1 = cu; v0 = v1 = cv; }
+  return [u0, v0, u1, v1];
+}
 export const CURTAIN_FOLDS = true;
 export const BAKED_AO = true;
 export const WORK_FIT = true;
@@ -5313,7 +5327,7 @@ function wearBands(H, groups, acc, faceIn, colOf) {
 //    in a living room or bedroom) - CURTAIN_FOLDS;
 //  - casings round every door opening (both faces of an interior door, the inside face of a street door) and window: two jambs and a head, 8 cm, the trim colour;
 //  - pictures: one of PICS on each art piece's canvas, and the framed prints (H.fin.pics).
-function finishGeo(H, acc, colOf, split) {
+function finishGeo(H, acc, colOf, split, art) {
   const fin = H.fin;
   const mul = (c, k) => [Math.min(1, c[0] * k[0]), Math.min(1, c[1] * k[1]), Math.min(1, c[2] * k[2])], kk = (k) => [k, k, k];
   const quad = (mat, P, n, C) => {
@@ -5402,10 +5416,25 @@ function finishGeo(H, acc, colOf, split) {
     }
   }
   // pictures: a 4 x 3 cell print (5 x 4 vertex colours), a framed one on a dark frame plate 5 cm wider each side
+  // (W10 R3A fix5) with `art` (ART_ATLAS): the picture is one quad keyed "art", its UVs its cell of the art atlas (artCell), white vertex colours - in fin.pics order
+  // (the homes gate reads the art group's quads in that order)
+  const white = colOf(0xffffff);
   for (const q of fin.pics) {
     const n = [q.nx, 0, q.nz], tx = -q.nz, tz = q.nx, half = q.w / 2, G = PICS[q.pic % PICS.length];
     const P = (t, y, off) => [q.x + tx * t + q.nx * off, y, q.z + tz * t + q.nz * off];
     if (q.frame) { const fc = colOf(0x2e2620); quad("wood", [P(-half - 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y1 + 0.05, 0), P(-half - 0.05, q.y1 + 0.05, 0)], n, [fc, fc, fc, fc]); }
+    if (art && ART_ATLAS) {
+      // the viewer faces -n: +t runs to his LEFT (t = -n.z, n.x), so the cell's left edge (u0) sits at t = +half; the bottom (y0) at v0
+      const off = q.frame ? 0.004 : 0, [u0, v0, u1, v1] = artCell(q.pic, q.w, q.y1 - q.y0);
+      const Pq = [P(-half, q.y0, off), P(half, q.y0, off), P(half, q.y1, off), P(-half, q.y1, off)], UV = [[u1, v0], [u0, v0], [u0, v1], [u1, v1]];
+      const a = acc("walls", "art", split, false);
+      const e1 = [Pq[1][0] - Pq[0][0], Pq[1][1] - Pq[0][1], Pq[1][2] - Pq[0][2]], e2 = [Pq[2][0] - Pq[0][0], Pq[2][1] - Pq[0][1], Pq[2][2] - Pq[0][2]];
+      const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      const ord = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0 ? [0, 3, 2, 1] : [0, 1, 2, 3], base = a.pos.length / 3;
+      for (const k of ord) { const p = Pq[k]; a.pos.push(p[0], p[1], p[2]); a.nor.push(n[0], n[1], n[2]); a.uv.push(UV[k][0], UV[k][1]); a.col.push(white[0], white[1], white[2]); }
+      a.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      continue;
+    }
     // (fix2) 2 x 2 flat colour blocks, split at the print's own proportions (crisp blocks, not vertex gradients; 8 triangles): the spec's rows 1 and 2
     const off = q.frame ? 0.004 : 0, sx = 0.38 + 0.24 * ((q.pic * 7) % 5) / 4, sy = 0.4 + 0.2 * ((q.pic * 3) % 4) / 3;
     for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
@@ -5519,7 +5548,7 @@ export function meshData(H, colOf, opts) {
     }
   }
   for (const g of H.gables || []) { const pe = pick0(H.palette, g.pal); poly(pe.mat, pe.color, g.pts, g.n, (P) => [g.n[0] ? P[2] : P[0], P[1]]); }
-  if (finOn) finishGeo(H, acc, colOf, split);                                // (W10 R3A: the finish - medium and up, drawn only, not in house.tris)
+  if (finOn) finishGeo(H, acc, colOf, split, !!opts.art);                                // (W10 R3A: the finish - medium and up, drawn only, not in house.tris)
   if (wearOn(opts.wear)) wearBands(H, groups, acc, faceIn, colOf);           // (P23 / LC-17: after every box face and roof polygon; D10: opts.wear "low" / false = none)
   return { groups, boxRanges };
 }
