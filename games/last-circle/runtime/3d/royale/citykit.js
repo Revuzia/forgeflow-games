@@ -475,6 +475,9 @@ export function colliderFor(type, x, y, z, rot, scale, sy) {
 /** The XZ footprint (and height) the colliders of one instance cover: the union AABB. Lets a town generator fit a lot before placing. */
 export function footprintFor(type, x, z, rot, scale, sy) {
   const cs = colliderFor(type, x, 0, z, rot, scale, sy);
+  // (W10 R4B) a type with no collider (collider mode none: a path stone, a rug) has its origin as its footprint - maps.js cityKitY stands it on the ground there
+  // (the empty union was +-Infinity: the ground sample was NaN and the stone went to the water level)
+  if (!cs.length) return { minX: x, maxX: x, minZ: z, maxZ: z, height: -Infinity, w: 0, d: 0 };
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, maxY = -Infinity;
   for (const c of cs) { if (c.minX < minX) minX = c.minX; if (c.maxX > maxX) maxX = c.maxX; if (c.minZ < minZ) minZ = c.minZ; if (c.maxZ > maxZ) maxZ = c.maxZ; if (c.maxY > maxY) maxY = c.maxY; }
   return { minX, maxX, minZ, maxZ, height: maxY, w: maxX - minX, d: maxZ - minZ };

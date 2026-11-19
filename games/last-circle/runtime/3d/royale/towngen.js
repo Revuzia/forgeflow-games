@@ -2793,7 +2793,10 @@ function doorClear(L, homes) {
       if (m <= 7) street.push(e);
     }
   }
-  for (const h of homes) for (const q of h.tiles) stones.push(q);
+  for (const h of homes) {
+    for (const q of h.tiles) stones.push(q);
+    if (h.yard) for (const k of [1, 2, 3]) stones.push(h.W(h.sF + 1.2 * k - 0.6, h.tc));         // the gate's apron across the sidewalk (kept clear, not drawn): no lamp in the gateway
+  }
   const dBox = (a, x, z) => { const dx = Math.max(a[0] - x, 0, x - a[2]), dz = Math.max(a[1] - z, 0, z - a[3]); return Math.sqrt(dx * dx + dz * dz); };
   return (x, z, r, kind) => {
     for (const a of kind === "yard" ? walls : street) if (dBox(a, x, z) - r < DOOR_SWING + YARD_PATH_CLEAR + 0.02) return false;
