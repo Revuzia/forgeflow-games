@@ -30,6 +30,7 @@ import { emitVoice, PHRASE as PH, voice, BAR_S } from './voice.ts';
 import { EMOTE } from '../data/life.ts';
 
 export { createLifeWorld };
+export { lifeSeeksNew } from './world.ts';   // (round 9, R9_FIX 2: the host's over-budget rule spares a squishy on its way to the visit's next new thing)
 export type { LifeWorld };
 export { lifePhrase, lifeMotif, PHRASE, PHRASE_BUBBLE } from './voice.ts';
 export { createAttention, attentionFilter, motionGate, motionGateWake, unitCapOf, moverCapOf, CHAR_CAP, CAPS, UNIT, WAKE, PHONE_FACTOR,
@@ -58,6 +59,7 @@ export function lifeSetPlace(w: LifeWorld, placeIdx: number, visit: number, def:
   w.gHK.fill(-1); w.gHN.fill(0); w.tnK = -1; w.f[F.TUNE_U] = -1e9; w.zGn.fill(1e9); w.zGe.fill(-1e9);
   w.pG.fill(0); w.pC.fill(0); w.pNe.fill(0);
   w.tU.fill(-1); w.tUT.fill(-1e9);   // (round 7: a thing's last user is per place-local thing: a new visit's things are other things)
+  w.f[F.VISIT_T] = NaN;   // (round 9: the visit's clock starts at its first step: world.ts varietyFloorOn)
   w.movers = 0; w.att.movers = 0; w.att.allowance = 0;
   for (let i = 0; i < CAP; i++) {
     w.moo[i] = -1; w.mo[i] = 0;
@@ -146,6 +148,7 @@ export function lifeStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Li
   w.pCh.fill(0);
   const t = s.t;
   if (!(w.f[F.T0] === w.f[F.T0])) w.f[F.T0] = t;
+  if (!(w.f[F.VISIT_T] === w.f[F.VISIT_T])) w.f[F.VISIT_T] = t;
   // newly added characters start thinking from now; a cut's time is now
   w.nO = 0;
   for (let i = 0; i < CAP; i++) {

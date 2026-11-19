@@ -36,7 +36,7 @@ export const PLACE: PlaceDef = {
   tall: { // (round 6, R6_DATA item 2) re-laid for the shipped place camera (render/placeview.ts fitPlace, the phone's 618 px hint pill): the
     // bounds 1.4 x 3.0 (P7's 1.25 widened: the fit is width-bound, report); the Ice Pond (r 0.75 here) back right with the Glide Ramp
     // sliding toward the camera onto it (its foot on the ice), the Steam Pool (r 0.7 here) back left, the Icicle Bells along the very back,
-    // the Shake Pine in the right strip, the low Snowdrift Nest in the front band with its gap toward the pad (its front edge 2.66 m, under
+    // the Shake Pine in the right strip (round 9: turned so its branch reaches in), the low Snowdrift Nest in the front band with its gap toward the pad (its front edge 2.66 m, under
     // every fit's pill line), the Snowball front left; the Wind Gap over the back band; spawn spots off the ice and the water. DT-01 0 in
     // the frame and in the shipped camera, and still 0 with the framed front moved -0.1..+0.2 m (the fit's near-tie, report). The Ice Pond's
     // middle is inside the bodies' bounds (LIFE's glide use point, brain.ts iceUsePoint, must be: at x 1.1 no squishy ever glided)
@@ -49,7 +49,7 @@ export const PLACE: PlaceDef = {
       { x: -1.1, z: -3.3, yaw: 0 },
       { x: 0.4, z: 1.66, yaw: -1.571, use: [0.4, 1.66] },
       { x: -1.14, z: 1.15, yaw: 0 },
-      { x: 1.55, z: -0.55, yaw: 0 },
+      { x: 1.55, z: -0.55, yaw: 3.1416 }, // (round 9, R9_FIX 3: turned round: its branch (local +x; physics poses it, the render follows) pointed out of the frame, centre at x 383 of 390 px on a phone; now it reaches in over the floor. The left edge was tried: there the crown hid the Icicle Bells)
     ],
     zones: [{ shape: 'box', x: 0, z: 0, hx: 1.4, hz: 3 }, { shape: 'disc', x: -1.2, z: -2.05, r: 0.7 }, { shape: 'disc', x: -1.2, z: -2.05, r: 0.7 }, { shape: 'box', x: 0, z: -2.5, hx: 2.3, hz: 1.2 }],
     patches: [{ shape: 'disc', x: 0.65, z: -1.95, r: 0.75 }],

@@ -1827,6 +1827,35 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   await tap(mb);
   const t2 = dbg().tune;
   check('PLAYGROUND thing taps: a click on the Music Box plays its tune (audio.musicBox tune 0); a second click stops it', tap1 === 'musicbox' && t1.on && t1.kind === 0 && !t2.on && log.of('a.musicBox').length >= 2, JSON.stringify({ tap1, t1, t2 }));
+  // (round 9, R9_FIX 4: the owner's "fix it" for Home's things behind the party; option (c), later-life.ts throughTap) the newcomer, set down RESTING between the camera
+  // and the Music Box (on the camera's line to the box, 0.8 of the way): a still click on the box's centre, now behind the squishy, plays the tune and the squishy's
+  // poke is cancelled (no poke sound); a click on the squishy where no thing lies behind it is a poke as before; a press there that drags is the squishy's (no tune)
+  {
+    let X = NaN, Y = NaN, Z = NaN;
+    if (bound.poses && bound.thing) for (let p = 0; p < bound.count; p++) if (bound.thing[p] === 1) { X = bound.poses[p * 8]; Y = bound.poses[p * 8 + 1]; Z = bound.poses[p * 8 + 2]; break; }
+    const C = cam.position, f = 0.8, px = C.x + f * (X - C.x), pz = C.z + f * (Z - C.z);
+    const nc = (dbg().chars as unknown as Array<{ species: string; view: number; x: number; z: number }>).find((c) => c.species !== 'dollop');
+    const nb = nc ? views.get(nc.view) as (SB & { carryTo?(x: number, y: number, z: number, s: number): boolean }) | undefined : undefined;
+    if (nb && nc) nb.carryTo?.(px - (nc.x - nb.center.x), 0, pz - (nc.z - nb.center.z), 0.9);
+    await stepA(300);
+    const mbPt = thingPt(1);
+    // (the box's centre on screen lies inside the squishy's disc: its projected centre and rest radius)
+    const hidden = (() => { if (!mbPt || !nb) return false; const c0 = proj(nb.center.x, nb.center.y, nb.center.z), c1 = proj(nb.center.x + nb.restRadius, nb.center.y, nb.center.z);
+      return !!c0 && !!c1 && Math.hypot(mbPt.x - c0.x, mbPt.y - c0.y) < 0.8 * Math.hypot(c1.x - c0.x, c1.y - c0.y); })();
+    const pk0 = audio.rec.count('poke'), mb0 = log.of('a.musicBox').length;
+    await tap(mbPt);
+    const tt = { ...dbg().tune }, tw = dbg().tap, pk1 = audio.rec.count('poke');
+    await tap(mbPt); await stepA(30);   // (a second click stops it)
+    // a click on the squishy's own middle (no thing behind it there) is its poke, as before
+    const sp = nb ? proj(nb.center.x, nb.center.y, nb.center.z) : null;
+    await tap(sp); await stepA(30);
+    const pk2 = audio.rec.count('poke'), tw2 = dbg().tap;
+    // (the press itself is felt by the squishy as any press is: physics' contact at the finger's down plays its touch sound (feedback.ts), before the release can
+    //  know it was a tap; what the through-tap takes is the TAP: the thing's, not the squishy's gesture)
+    check('PLAYGROUND (round 9) Home: a still click on the Music Box behind a RESTING squishy goes to the box (its tune; the squishy only feels the press, its tap gesture is cancelled); a click on the squishy where nothing lies behind it is still its poke (no thing tap)',
+      hidden && tw === 'musicbox' && tt.on && pk1 <= pk0 + 1 && log.of('a.musicBox').length >= mb0 + 1 && pk2 > pk1 && tw2 !== 'musicbox',
+      JSON.stringify({ tap: tw, tune: tt, pokes: [pk0, pk1, pk2], tap2: tw2, squishy: nb && [+nb.center.x.toFixed(2), +nb.center.z.toFixed(2)], box: [X, Z], at: mbPt }));
+  }
   // 60 s after the first reveal the first wish opens Hearthlog; the trip; the kettle
   for (let k = 0; k < 40 && !(host.openPlaces() & 2); k++) await stepA(300);
   const okC = await host.travel('hearthlog');

@@ -7,7 +7,7 @@ import { LIFE_FLAG, LIFE_EV, EMOTE, EXPR, REACT_KIND, TOUCH, USE_VERB, BRAIN, SP
 import { MECH, ZONE, PLACE_IDS } from '../data/places.ts';
 import { SPECIES } from '../data/species.ts';
 import type { LifeWorld } from './world.ts';
-import { CAP, BEH, F, MAX_ZONES, usesFull, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT, gustZoneAt } from './world.ts';
+import { CAP, BEH, F, MAX_ZONES, usesFull, varietyFloorOn, lifeSeeksNew, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT, gustZoneAt } from './world.ts';
 import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, G_GAP, groupCount, say } from './act.ts';
 import { emitVoice, PHRASE, voice } from './voice.ts';
 import { STYLE, MOVER_CAP, UNIT_CAP, tierOf } from './attention.ts';
@@ -391,7 +391,9 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
   const tb = w.f[F.NOW];
   const cur = w.beh[i];
   // (round 4) noticing the thing whose tune plays now (the fire puff's switch tap) is the start of singing to it: S06 may follow at once
-  const curScore = cur === BEH.IDLE || cur === BEH.NONE || (cur === BEH.NOTICE && w.nTa[i] >= 0 && w.nTa[i] === tunePlaying(w, s)) ? 0 : w.bSc[i] + BRAIN.keep;
+  // (round 9, R9_FIX 2) a use on its way to a thing nobody in the party has used yet this visit, under the variety floor, holds on SEEK_KEEP more (a dozy one's
+  // nap took it over half way there: R9's Cloudloft traces)
+  const curScore = cur === BEH.IDLE || cur === BEH.NONE || (cur === BEH.NOTICE && w.nTa[i] >= 0 && w.nTa[i] === tunePlaying(w, s)) ? 0 : w.bSc[i] + BRAIN.keep + (cur === BEH.USE && lifeSeeksNew(w, i) ? SEEK_KEEP : 0);
   const tr = i * 5;
   let best = 0, bs = 0.1 + (rnd(w, i) * NZ - BRAIN.noise), bArg = -1;
   // B13 watch
@@ -436,7 +438,9 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
       const dozy = w.tr[tr + TRAIT.dozy];
       // (my reading: the dozy trigger also needs some rest need, 0.6, so a dozy squishy that wakes on the basket does not nap again and
       // again: about two naps in five minutes, LF-09)
-      if (w.re[i] > 0.75 || (dozy > 0.6 && w.re[i] > 0.6 && w.uV[i] < usesFull(w) && napSpotWithin(w, s, i, 2))) { const v = 0.8 + 0.4 * dozy + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.NAP; } }
+      // (round 9, R9_FIX 2) under the visit's variety floor a dozy squishy does not curl up early (only real tiredness, rest over 0.75): a party of a slime goo and
+      // a putty spent two fifths of a Cloudloft visit asleep and used two things
+      if (w.re[i] > 0.75 || (dozy > 0.6 && w.re[i] > 0.6 && w.uV[i] < usesFull(w) && !varietyFloorOn(w) && napSpotWithin(w, s, i, 2))) { const v = 0.8 + 0.4 * dozy + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.NAP; } }
     }
     // B03 wander (not with one squishy on a portrait phone at Home)
     if (w.pl[i] > 0.3 && ready(w, i, BEH.WANDER) && !(w.home && w.layout === 1 && w.nO <= 1) && tb - w.tST[i] > 4 && !interestNear(w, s, i) && !tokenWanted(w, i)) {
@@ -608,10 +612,16 @@ function tbMoved(w: LifeWorld, k: number): boolean { return w.f[F.LAST_T] - w.tM
  * the light ones, a sky thing to gaze from at night, a ride once the host lifts LIFE's own get-on (lifeSetSelfRides). The family's likes (FAMILY_SELF) add
  * 0.2, what its body cannot do is never a candidate; in a place of several kinds, a thing it already used this visit loses 0.5, one a friend used in the
  * last 20 s loses 0.1 and one nobody used yet this visit gains 0.1, so a party spreads over the place's things. Where the only kind is the ball (Home, the cabin) the score is round 4's exactly. */
+/** (round 9, R9_FIX 2; the owner: "3 to 5 different things per visit at EVERY place, reliably") the visit's variety floor: in a place of several kinds, while the
+ *  party has used fewer than VARIETY_FLOOR different things by itself this visit (w.tU), a thing nobody has used yet draws a squishy from anywhere in the place
+ *  and scores NEW_PULL more than round 7's +0.1 (it is not a new use: the budget (usesFull), the cooldowns and the attention gate are unchanged) */
+const NEW_PULL = 0.35, SEEK_KEEP = 0.3;
+/** (round 9) how far out of the arch's line its use point stands (in the opening, on the squishy's side) */
+const ARCH_IN = 0.3, ARCH_NEAR = 1.0;
 function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
   let best = -1, bs = 0;
   const sp = w.species[i], fav = SPECIES_LIFE[SPECIES[sp]].thing, f = w.fa[i], tb = w.f[F.NOW];
-  const variety = usesFull(w) > 2;
+  const variety = usesFull(w) > 2, floor = variety && varietyFloorOn(w);
   for (let k = 0; k < w.nTD; k++) {
     const how = w.tH[k];
     if (!selfOk(w, s, i, k, how)) continue;
@@ -622,14 +632,14 @@ function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
     // within B04's 3 m; (my reading of LIFE 3's "at 0.8: a thing use") a squishy whose play is over 0.8 goes to it from anywhere in the place; (round 7) in a
     // place of several kinds a thing nobody in the party has used yet this visit draws it from 4.5 m (a new thing to try across the place)
     const reach2 = variety && w.tU[k] < 0 ? 20.25 * CM2 : 9 * CM2;
-    if (d2p(w, s, i) > reach2 && w.pl[i] <= 0.8) continue;
+    if (d2p(w, s, i) > reach2 && w.pl[i] <= 0.8 && !(floor && w.tU[k] < 0)) continue;
     let v = 0.3 + 0.5 * w.pl[i] + ((PREFS[f] & (1 << w.tM[k])) !== 0 ? 0.15 : 0) - 0.12 * w.uV[i];
     if (w.def && w.def.things[k].id === fav) v += 0.3;
     if (variety) {
       if (((SELF_LIKE[f] >>> how) & 1) !== 0) v += 0.2;
       if (((w.uM[i] >>> k) & 1) !== 0) v -= 0.5;
       if (w.tU[k] >= 0 && w.tU[k] !== i && tb - w.tUT[k] < 20) v -= 0.1;
-      else if (w.tU[k] < 0) v += 0.1;   // nobody in the party has used it yet this visit: a new thing to try
+      else if (w.tU[k] < 0) v += floor ? 0.1 + NEW_PULL : 0.1;   // nobody in the party has used it yet this visit: a new thing to try (round 9: more under the floor)
     }
     if (v > bs) { bs = v; best = k; }
   }
@@ -641,7 +651,8 @@ function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
  *  probe_life_selfuse traces at Cloudloft and Rainleaf, and in isolation by scratch x/pad.ts: after five kicks, a scoot off the pad one way works, the other
  *  way it is carried back to the rim and stays). Until PHYS fixes it (request in R7_LIFE.md section 5) LIFE starts no pad use by itself; one flag. The
  *  updraft's use stands in the column off its pad. */
-const PADS_OK = false;
+const PADS_OK = true;   // (round 9, R9_FIX 2: on again: the host now hops a squishy at rest on a pad off it after 1.5 s (later-life.ts padOffHop), so neither a rim nor the
+                        //  middle can hold one there; the pad's kick writes its USE BOUNCE by SELF)
 /** (round 8) SPIN: a squishy starts toward the Vane Disc when its wind zone's next gust is at most this many seconds away (or one blows now), and stays on
  *  it until that gust has ended (at most SPIN_MAX_S). */
 const SPIN_LEAD_S = 7, SPIN_MAX_S = 16;
@@ -655,7 +666,7 @@ function selfOk(w: LifeWorld, s: LifeSnapshot, i: number, k: number, how: number
     case SELF_USE.BALL: return true;
     case SELF_USE.ICE: return ICE_GRIP[f] < 0.5;
     case SELF_USE.WADE: case SELF_USE.SPLASH: return w.tZo[k] >= 0 && w.zWK1[i] < 0 && (how === SELF_USE.WADE || G_HOPS[f] === 1);
-    case SELF_USE.PAD: return PADS_OK && G_HOPS[f] === 1 && w.tQN[k] > 0;
+    case SELF_USE.PAD: return PADS_OK && !w.home && G_HOPS[f] === 1 && w.tQN[k] > 0;   // (round 9: not Home's Bounce Pad: Home's party row stands in front of it, and the host's pad hop is a place's)
     case SELF_USE.UPDRAFT: return G_HOPS[f] === 1 && CATCH[f] >= 0.5 && w.tZo[k] >= 0 && w.ki[i] === 0;
     case SELF_USE.GAZE: return w.night && w.ki[i] !== 2;
     case SELF_USE.SHOWER: return w.tZo[k] >= 0 && (s.zoneMask[i] & (1 << ZONE.wet)) !== 0;
@@ -1009,9 +1020,13 @@ function selfPoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean
       return inBounds(w, ((R * 0.5) * 1000) | 0);
     }
     case SELF_USE.ARCH: {
-      // under the arch (between its posts), else a little toward the front until the body stands within the bounds
+      // (round 9, R9_FIX 2) in the arch's opening, ARCH_IN m out on the squishy's side of it (across the arch's span: its local z, whatever its yaw), then further
+      // out until the body stands within the bounds: a walk to its very middle caught a post on a slanting way in and gave up (Cloudloft's Sunbow Arch, tried
+      // again and again in R9's traces); round 7 aimed at the middle, then toward +z, which is a post where the tall layout turns the arch along z
+      const ax = -Math.sin(w.tY[k]), az = Math.cos(w.tY[k]), sd = (s.x[i] - tx) * ax + (s.z[i] - tz) * az >= 0 ? 1 : -1;
       for (let n = 0; n < 5; n++) {
-        w.f[F.X] = tx; w.f[F.Z] = tz + n * 0.12; qT(w);
+        const o = sd * (ARCH_IN + n * 0.12);
+        w.f[F.X] = tx + ax * o; w.f[F.Z] = tz + az * o; qT(w);
         if (inBounds(w, ((R + 0.05) * 1000) | 0)) return true;
       }
       return false;
@@ -1104,12 +1119,25 @@ function runSelf(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents
     // (a wade or a splash starts where the water starts: in the thing's own water on the way)
     const inIt = (how === SELF_USE.WADE || how === SELF_USE.SPLASH) && w.zWK1[i] >= 0 && w.zT[w.zWK1[i]] === k;
     const r = inIt ? 1 : travelStep(w, s, out, i, how === SELF_USE.CLIMB ? 200 : 120);
-    if (r === 0) { if (tb > w.bN[i] && tb - w.bT[i] > 12) endBeh(w, s, out, i, 15); return; }
+    // (round 9, R9_FIX 2) a walk that times out or is blocked short of the thing marks it tried for this squishy in a place of several kinds (it was retried again
+    // and again: Cloudloft's Sunbow Arch six times by one putty in a 300 s trace), so its next use goes to another thing; not while the variety floor is not met
+    // (there the failed thing may be the only new one left: a slime goo and a putty spent all their uses on the ball and the nest once the arch was marked)
+    // (round 9: the ARCH is "stand at the arch": a slow walker that runs out of time within ARCH_NEAR of its point stands there)
+    if (r === 0) {
+      if (tb > w.bN[i] && tb - w.bT[i] > 12) {
+        w.f[F.PX] = w.tx[i]; w.f[F.PZ] = w.tz[i];
+        if (how === SELF_USE.ARCH && d2p(w, s, i) <= ARCH_NEAR * ARCH_NEAR * CM2) { w.ph[i] = 2; w.bN[i] = tb; return; }
+        if (k < 32 && usesFull(w) > 2 && !varietyFloorOn(w)) w.uM[i] |= 1 << k; endBeh(w, s, out, i, 15);
+      }
+      return;
+    }
     if (r === 2) { // blocked: near enough (0.6 m) still acts; a climb leans where it stopped
       w.f[F.PX] = w.tx[i]; w.f[F.PZ] = w.tz[i];
       // (a pad: the hop must be made with the centre over the pad, 0.2 m from its middle; stopped on its rim it steps off again instead, never left there)
-      if ((how === SELF_USE.PAD || how === SELF_USE.UPDRAFT) && d2p(w, s, i) > 0.04 * CM2) { padOff(w, s, out, i); return; }
-      if (how !== SELF_USE.CLIMB && d2p(w, s, i) > 0.36 * CM2) { endBeh(w, s, out, i, 15); return; }
+      // (round 9, R9_FIX 2: a PAD's hop is made with the centre anywhere over the pad, 0.1 m inside its edge (physics kicks a landing whose centre is over it): the
+      //  walk onto a flush pad stops at its rim more often than not; the host hops a squishy left at rest on a pad off it, so the rim cannot hold it any more)
+      if ((how === SELF_USE.PAD || how === SELF_USE.UPDRAFT) && d2p(w, s, i) > (how === SELF_USE.PAD ? (w.tS[k] > 0.15 ? (w.tS[k] - 0.1) * (w.tS[k] - 0.1) : 0.04) : 0.04) * CM2) { padOff(w, s, out, i); return; }
+      if (how !== SELF_USE.CLIMB && d2p(w, s, i) > (how === SELF_USE.ARCH ? ARCH_NEAR * ARCH_NEAR : 0.36) * CM2) { if (k < 32 && usesFull(w) > 2 && !varietyFloorOn(w)) w.uM[i] |= 1 << k; endBeh(w, s, out, i, 15); return; }
     }
     w.ph[i] = 2; w.bN[i] = tb;
     return;
@@ -1428,7 +1456,8 @@ function ringFree(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean 
   return true;
 }
 function startNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, score: number): void {
-  setBeh(w, i, BEH.NAP, score, 30000 + ((rnd(w, i) * 60000) >>> 16)); w.tT[i] = -1; w.tC[i] = -1;
+  // (round 9, R9_FIX 2: under the visit's variety floor a nap is 20..35 s, not 30..90 s)
+  setBeh(w, i, BEH.NAP, score, varietyFloorOn(w) ? 20000 + ((rnd(w, i) * 15000) >>> 16) : 30000 + ((rnd(w, i) * 60000) >>> 16)); w.tT[i] = -1; w.tC[i] = -1;
   let ok = false;
   if (w.home) {
     // the play body naps at its own slot (the rug's centre is within 0.65 m of slot 0); the second napper at the rug's use spot

@@ -49,6 +49,22 @@ export function usesFull(w: LifeWorld): number {
   return (kinds & (kinds - 1)) !== 0 ? USES_FULL : USES_ONE;
 }
 
+/** (round 9, R9_FIX 2; the owner: "3 to 5 different things per visit at EVERY place, reliably") the visit's VARIETY FLOOR: in a place of several kinds (usesFull 3),
+ *  while the party has used fewer than VARIETY_FLOOR different things by itself this visit (w.tU: LIFE's own uses), brain.ts useCandidate pulls a squishy to a
+ *  thing nobody has used yet (NEW_PULL, from anywhere in the place) and the host's over-budget rule stops or sleeps another squishy before the one walking to
+ *  such a thing (lifeSeeksNew: as it spares one the player asked). The budget itself (unitCap, usesFull, the cooldowns) is unchanged. */
+export const VARIETY_FLOOR = 3, FLOOR_AFTER_S = 60;   // (the floor acts from the visit's 60th second: its first minute is round 8's, arrivals and asked plays untouched)
+export function partyDistinct(w: LifeWorld): number { let n = 0; for (let k = 0; k < w.nTD; k++) if (w.tU[k] >= 0) n++; return n; }
+/** (round 9) the cabin (place idx 1) keeps round 8's LIFE: its visits use 5 to 6 different things without the floor (R9_FIX.md 2), and the floor there moved the
+ *  play squishy onto the Pillow Swing before node_checks' "Go play with..." ride rows and broke the budget's wake-gate row (SH-22 B7) */
+const FLOOR_SKIP_PLACE = 1;
+export function varietyFloorOn(w: LifeWorld): boolean { return !w.home && w.placeIdx !== FLOOR_SKIP_PLACE && w.f[F.NOW] - w.f[F.VISIT_T] >= FLOOR_AFTER_S && usesFull(w) > 2 && partyDistinct(w) < VARIETY_FLOOR; }
+/** Is character i on its way to (or at) a by-itself use of a thing nobody in the party has used this visit, while the floor is not met? */
+export function lifeSeeksNew(w: LifeWorld, i: number): boolean {
+  const k = w.tT[i];
+  return w.beh[i] === BEH.USE && k >= 0 && k < w.nTD && w.tU[k] < 0 && varietyFloorOn(w);
+}
+
 /** Scratch float slots in w.f (named, so no helper returns a double). NOW = the sim time of the think (or of the per-call pass) every brain
  *  function reads, instead of taking it as a parameter (a double argument to a call V8 does not inline is boxed: LF-02); DT = the think's dt;
  *  PX, PZ = the query point of the geometry tests below (inBounds, inKeepOut, inAreaAt, zoneStrengthAt, d2p). The world's scalar doubles
@@ -56,7 +72,7 @@ export function usesFull(w: LifeWorld): number {
  *  the first), T0 the session's first t, UNITS the units LIFE's own starts woke this call (not yet in the snapshot), MUSIC_ON the Music
  *  Box's last start, NEW_WISH the last new wish on screen, SONG the last S06 song, TUNE_U the end of a tapped thing's tune (lifeThingTap). */
 export const F = { X: 0, Z: 1, D: 2, X2: 3, Z2: 4, S: 5, T: 6, A: 7, B: 8, C: 9, E: 10, G: 11, NOW: 12, DT: 13, PX: 14, PZ: 15,
-  LAST_T: 16, T0: 17, UNITS: 18, MUSIC_ON: 19, NEW_WISH: 20, SONG: 21, TUNE_U: 22 } as const;
+  LAST_T: 16, T0: 17, UNITS: 18, MUSIC_ON: 19, NEW_WISH: 20, SONG: 21, TUNE_U: 22, VISIT_T: 23 } as const;   // (VISIT_T, round 9: the visit's first step)
 
 export interface LifeWorld {
   seed: number; maxChars: number;
@@ -245,7 +261,7 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     f: f64(24),
     att: createAttention(),
   };
-  w.f[F.LAST_T] = NaN; w.f[F.T0] = NaN; w.f[F.MUSIC_ON] = -1e9; w.f[F.NEW_WISH] = -1e9; w.f[F.SONG] = -1e9; w.f[F.TUNE_U] = -1e9;
+  w.f[F.LAST_T] = NaN; w.f[F.T0] = NaN; w.f[F.VISIT_T] = NaN; w.f[F.MUSIC_ON] = -1e9; w.f[F.NEW_WISH] = -1e9; w.f[F.SONG] = -1e9; w.f[F.TUNE_U] = -1e9;
   return w;
 }
 

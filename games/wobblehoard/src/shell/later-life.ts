@@ -30,7 +30,7 @@ import { pitchRatio } from '../core/genome.ts';
 import type { StorageLike } from '../core/settings.ts';
 import type { StorageSubscribe } from '../core/save.ts';
 import { createLifeWorld, lifeSetPlace, lifeSetHome, lifeAdd, lifeRemove, lifeStep, lifeScript, lifeSetJournal, lifeSetPair, lifeSetFriends,
-  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, lifeGustOn, attentionSound, PHRASE, UNIT, CHAR_CAP } from '../life/step.ts';
+  lifeLooks, lifeAddLook, lifeWishOf, lifePhrase, lifeAttention, lifeDebug, lifeSetHops, lifeThingTap, lifeGustOn, attentionSound, PHRASE, UNIT, CHAR_CAP, lifeSeeksNew } from '../life/step.ts';
 import type { LifeWorld } from '../life/step.ts';
 import * as LIFE_STEP from '../life/step.ts';
 import type { PropWorld } from '../physics/props.ts';
@@ -91,6 +91,8 @@ export interface LifeHostDeps {
   /** the journal store's timers (node checks pass none: then it writes at once) */
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (h: unknown) => void;
+  /** (round 9, dev and probes only) LIFE's world seed (default 0x5eed1e): probe_life_selfuse's `seed=` runs the same parties on another stream */
+  lifeSeed?: number;
 }
 
 interface Char {
@@ -107,12 +109,15 @@ interface Char {
   padT: number;           // sim time of its last USE BOUNCE from a pad kick
   chimeT: number;         // (round 7) sim time of its last USE RING from a chime strike
   perchT: number;         // (round 7) how long it has rested on top of a tall block (perchDown hops it down)
+  padRestT: number;       // (round 9) how long it has rested on a pad in a place (padOffHop hops it off)
+  outT: number;           // (round 9) how long it has rested outside the place's bounds (backIn hops it in)
+  stuckT: number; stuckX: number; stuckZ: number;   // (round 9) where and since when a LIFE scoot has made no headway (unstick)
   hushT: number;          // round 5 (B7): until this sim time LIFE's motion intents for it are dropped (the over-budget rule is putting it to sleep)
   askedT: number;         // round 5 (B7): sim time the player last asked it to play (playWith); -1e9 once it used the thing (round 6: see asked())
 }
 const mkChar = (): Char => ({ on: false, body: null, genome: null, itemId: null, view: -1, kind: 0, group: -1, species: 255, family: 0, flavour: 0, pitch: 1, frac: 1, r: 0.5,
   offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, scooting: false, scootX: 0, scootZ: 0,
-  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, chimeT: -1e9, perchT: 0, hushT: -1e9, askedT: -1e9 });
+  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, chimeT: -1e9, perchT: 0, padRestT: 0, outT: 0, stuckT: 0, stuckX: 0, stuckZ: 0, hushT: -1e9, askedT: -1e9 });
 
 function mkSnapshot(): LifeSnapshot {
   const n = CAP;
@@ -166,7 +171,7 @@ export function frontReach(d: PlaceDef, layout: 0 | 1): number {
 /** Build the LIFE host and attach it to the game (game.attachLife). Returns null when the game cannot host it (no stage camera). */
 export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const stage = game.stage, audio = game.audio, bodies = game.bodies;
-  const w: LifeWorld = createLifeWorld(0x5eed1e, CAP);
+  const w: LifeWorld = createLifeWorld(deps.lifeSeed ?? 0x5eed1e, CAP);
   const s = mkSnapshot(), out = mkIntents(), ev = mkEvents(), ring = mkRing();
   const att = lifeAttention(w);
   const chars: Char[] = Array.from({ length: CAP }, mkChar);
@@ -306,7 +311,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const ce = b.center;
     c.lastX = ce.x + off.x; c.lastZ = ce.z + off.z; c.vx = 0; c.vz = 0;
     c.homeX = c.lastX; c.homeZ = c.lastZ;
-    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.chimeT = -1e9; c.perchT = 0; c.hushT = -1e9; c.askedT = -1e9;
+    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.chimeT = -1e9; c.perchT = 0; c.padRestT = 0; c.outT = 0; c.stuckT = game.simTime; c.hushT = -1e9; c.askedT = -1e9;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
     if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
@@ -483,7 +488,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       case THING_RUG: return done('H5');                             // after the first hello
       case THING_LAMP: return done('H4');                            // after the first capsule (the backfill marks H4 for an older shelf)
       case THING_SHELF: return done('H8');                           // with the Home finale
-      case THING_PAD: return false;                                  // pads ship in S2
+      case THING_PAD: return done('C8');                             // (round 9, R9_FIX 4: with the cabin's finale, as its data says (arrives after finale:hearthlog);
+                                                                     //  it was never shown: "pads ship in S2", and S2 has shipped)
       default: return false;
     }
   }
@@ -660,6 +666,66 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (td.mech !== MECH.bar) return 0;
     const pp = td.p as { arch?: number; height?: number; standing?: number };
     return pp.arch ? (pp.height ?? td.size[2]) : pp.standing ? td.size[1] : 2 * td.size[0];
+  }
+  /** (round 9, R9_FIX 1) off a pad: after PAD_REST_S at rest on pad part p (longer than any family's sticky hold before a kick, 0.6 s, and a landing's squash)
+   *  the squishy hops (carryTo, as perchDown: no event on the way, never paid) to the floor pad radius + its own + 0.15 m from the part's middle, toward the play
+   *  area's middle, or the nearest direction (0.45 rad steps either way) whose spot is inside the bounds and clear of every pad part and of the other squishies */
+  const PAD_REST_S = 1.5;
+  function padOffHop(c: Char, i: number, p: number): void {
+    if (!world || !c.body) return;
+    const P = world.poses, px = P[p * 8], pz = P[p * 8 + 2], bd = layout === 1 ? def.tall.bounds : def.bounds, td = def.things[world.propThing[p]];
+    const out = td.size[0] + c.r + 0.15, a0 = Math.atan2(bd.z - pz, bd.x - px);
+    for (let k = 0; k < 9; k++) {
+      const a = a0 + ((k & 1) === 1 ? 0.45 : -0.45) * Math.ceil(k / 2), tx = px + Math.cos(a) * out, tz = pz + Math.sin(a) * out;
+      if (bd.shape === 'disc' ? Math.hypot(tx - bd.x, tz - bd.z) > (bd.r ?? 3) - 0.2 : Math.abs(tx - bd.x) > (bd.hx ?? 3) - 0.2 || Math.abs(tz - bd.z) > (bd.hz ?? 2.4) - 0.2) continue;
+      let clear = true;
+      for (let q = 0; q < world.count && clear; q++) {
+        const tq = def.things[world.propThing[q]];
+        if (tq?.mech === MECH.pad && !world.isParked(q) && Math.hypot(tx - P[q * 8], tz - P[q * 8 + 2]) < tq.size[0] + 0.8 * c.r) clear = false;
+      }
+      for (let j = 0; j < CAP && clear; j++) { const o = chars[j]; if (j !== i && o.on && o.body && Math.hypot(tx - o.lastX, tz - o.lastZ) < 0.9 * (c.r + o.r)) clear = false; }
+      if (!clear) continue;
+      try { c.body.carryTo?.(tx - c.offX, -c.offY, tz - c.offZ, 0.9); } catch (e) { report(e); }
+      return;
+    }
+  }
+  /** (round 9, R9_FIX 3) how far (m) a centre at (x, z) is outside the layout's bounds (<= 0 inside; the corners rounded as physics' setBounds rounds them) */
+  const OUT_REST_S = 0.6, IN_MARGIN = 0.15;
+  function outOfBounds(x: number, z: number): number {
+    const bd = layout === 1 ? def.tall.bounds : def.bounds, dx = x - bd.x, dz = z - bd.z;
+    if (bd.shape === 'disc') return Math.hypot(dx, dz) - (bd.r ?? 3);
+    const hx = bd.hx ?? 3.4, hz = bd.hz ?? 2.4, rr = Math.min(bd.round ?? 0, hx, hz), ax = Math.abs(dx) - (hx - rr), az = Math.abs(dz) - (hz - rr);
+    return ax > 0 && az > 0 ? Math.hypot(ax, az) - rr : Math.max(ax, az) - rr;
+  }
+  /** (round 9) back inside the bounds: a hop (carryTo, as perchDown) to the nearest spot IN_MARGIN inside the edge (clamped into the box less IN_MARGIN and the
+   *  rounding, or along the disc's radius), set down at rest */
+  function backIn(c: Char, i: number, x: number, z: number): void {
+    if (!c.body) return;
+    const bd = layout === 1 ? def.tall.bounds : def.bounds;
+    let tx: number, tz: number;
+    if (bd.shape === 'disc') { const d = Math.hypot(x - bd.x, z - bd.z) || 1, R = Math.max(0.1, (bd.r ?? 3) - IN_MARGIN); tx = bd.x + ((x - bd.x) * R) / d; tz = bd.z + ((z - bd.z) * R) / d; }
+    else {
+      const m = IN_MARGIN + Math.min(bd.round ?? 0, 0.4) * 0.3, ix = Math.max(0.05, (bd.hx ?? 3.4) - m), iz = Math.max(0.05, (bd.hz ?? 2.4) - m);
+      tx = Math.min(bd.x + ix, Math.max(bd.x - ix, x)); tz = Math.min(bd.z + iz, Math.max(bd.z - iz, z));
+    }
+    void i;
+    try { c.body.carryTo?.(tx - c.offX, -c.offY, tz - c.offZ, 0.7); } catch (e) { report(e); }
+  }
+  /** (round 9) a stuck scoot toward a spot more than 1 m away: a hop (carryTo 0.6 s, an arc over what it touches) UNSTICK_M toward it, kept inside the bounds and clear of
+   *  the other squishies; LIFE's walk then goes on from there (or ends on arrival) */
+  const STUCK_S = 4, UNSTICK_M = 0.6;
+  function unstick(c: Char, i: number, x: number, z: number): void {
+    if (!c.body) return;
+    let dx = c.scootX - x, dz = c.scootZ - z;
+    const dl = Math.hypot(dx, dz);
+    if (!(dl > 1)) return;   // (a scoot that ends against a thing on purpose (a lean on the log, a bump into the trunk) is never lifted)
+    dx /= dl; dz /= dl;
+    const step = UNSTICK_M;
+    let tx = x + dx * step, tz = z + dz * step;
+    if (outOfBounds(tx, tz) > -IN_MARGIN) { const bd = layout === 1 ? def.tall.bounds : def.bounds; tx += (bd.x - tx) * 0.2; tz += (bd.z - tz) * 0.2; if (outOfBounds(tx, tz) > 0) return; }
+    for (let j = 0; j < CAP; j++) { const o = chars[j]; if (j !== i && o.on && o.body && Math.hypot(tx - o.lastX, tz - o.lastZ) < 0.9 * (c.r + o.r)) return; }
+    try { c.body.carryTo?.(tx - c.offX, -c.offY, tz - c.offZ, 0.6); } catch (e) { report(e); }
+    c.scooting = false;   // (carryTo released the scoot driver; LIFE's walk re-aims it)
   }
   function perchDown(c: Char, p: number, td: ThingDef): void {
     if (!world || !c.body) return;
@@ -900,6 +966,29 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         // (ON its top: the centre above the thing's top; one leaning on its side, as at the chimney's warm nap foot, or standing under the arch, stays where it is)
         if (td && top >= PERCH_TOP && ce.y + c.offY > top) { c.perchT += dt; if (c.perchT >= PERCH_S) { c.perchT = 0; perchDown(c, onProp, td); } } else c.perchT = 0;
       } else c.perchT = 0;
+      // (round 9, R9_FIX 1) a squishy at REST on a pad in a place (its run of kicks over, or a foot on the rim) hops off after PAD_REST_S to the floor beside the pad
+      // (padOffHop). R8's phone U2 traced on the real physics with this host (R9_FIX.md 1): the first drop's Dollop bounced five times, came to rest on the front
+      // Puff Pad and STAYED there, and the next two squishies dropped on the pad landed on its head (1 of 3 bounces); a body left on a pad's rim stayed pinned
+      // there for the visit (R7_LIFE). Home's Bounce Pad is unchanged (its party row stands in front of it)
+      if (dt > 0 && placeIdx !== 0 && onProp >= 0 && world && onProp < world.count && (f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.AIRBORNE)) === 0
+        && c.vx * c.vx + c.vz * c.vz < 0.09 && def.things[world.propThing[onProp]]?.mech === MECH.pad) {
+        c.padRestT += dt;
+        if (c.padRestT >= PAD_REST_S) { c.padRestT = 0; padOffHop(c, i, onProp); }
+      } else c.padRestT = 0;
+      // (round 9, R9_FIX 3) a squishy that comes to REST outside the place's bounds (a hard toss toward an open side) hops back in after OUT_REST_S (backIn). The
+      // bounds corral glides a body back from the edge slowly (about 3 cm/s 0.13 m out) and stops while it sleeps: R8's phone toss at Cloudloft rested 0.12 m past the
+      // tall bounds' side and was still there 6 s later (traced on the real physics with this host: asleep at once, the glide 0.12 m in 3.5 s once woken)
+      if (dt > 0 && placeIdx !== 0 && onProp < 0 && (f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.AIRBORNE | LIFE_FLAG.LOCKED | LIFE_FLAG.RIDE)) === 0
+        && c.vx * c.vx + c.vz * c.vz < 0.09 && outOfBounds(x, z) > 0.02) {
+        c.outT += dt;
+        if (c.outT >= OUT_REST_S) { c.outT = 0; backIn(c, i, x, z); }
+      } else c.outT = 0;
+      // (round 9, R9_FIX 2) a LIFE scoot that makes no headway (3 cm in STUCK_S) in a place is lifted past what holds it (unstick): R9's traces had a putty held
+      // against the Sunbow Arch's post for 100 s and more, its every walk, bask and wander going nowhere (a static prop it touches blocks its glide)
+      if (dt > 0 && placeIdx !== 0 && c.scooting && (f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.AIRBORNE | LIFE_FLAG.LOCKED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) === 0) {
+        if (Math.hypot(x - c.stuckX, z - c.stuckZ) > 0.03) { c.stuckX = x; c.stuckZ = z; c.stuckT = t; }
+        else if (t - c.stuckT > STUCK_S) { c.stuckT = t; unstick(c, i, x, z); }
+      } else { c.stuckX = x; c.stuckZ = z; c.stuckT = t; }
       s.flags[i] = f;
       if ((f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) !== 0) touching = true;
       s.touchKind[i] = c.touchKind; c.touchKind = -1;
@@ -1153,7 +1242,27 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const a = (qx * ax + qy * ay + qz * az) / (L * L), b = (qx * bx + qz * bz) / (W * W);
     return a >= -0.05 && a <= 1.05 && b >= -0.55 && b <= 0.55 ? t : -1;
   }
+  /** (round 9, R9_FIX 3) Frostbell's Shake Pine: its snowy crown as render/places/frostbell.ts draws it (three cones from 1.25 m to 2.65 m, radius 0.5 down to 0.28,
+   *  over the trunk's spot) has no prop (the trunk and the low branch are its props): a press that reaches the crown before any prop taps the pine. The crown stands
+   *  above every squishy, so a party in front of the trunk no longer hides the whole tree (R8's phone run: the trunk behind the squishy set under the branch, the
+   *  branch at the frame's edge: "tap": "body"). Approximated by the cone of the tiers' outline: radius 0.5 at 1.25 m to 0.2 at 2.65 m. -1: none here. */
+  let crownK = -1;
+  function crownTap(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number {
+    if (crownK < 0) return -1;
+    const sp = thingSpot(crownK), cx = sp[0], cz = sp[1], y0 = 1.25, y1 = 2.65, r0 = 0.5, r1 = 0.2;
+    // march the ray through the crown's height band (24 steps): the first point inside the cone's radius at its height
+    const ta = Math.abs(dy) > 1e-9 ? (y0 - oy) / dy : -1, tb = Math.abs(dy) > 1e-9 ? (y1 - oy) / dy : -1;
+    let t0 = Math.min(ta, tb), t1 = Math.max(ta, tb);
+    if (!(t1 > 0)) return -1;
+    if (t0 < 0) t0 = 0;
+    for (let k = 0; k <= 24; k++) {
+      const t = t0 + ((t1 - t0) * k) / 24, y = oy + dy * t, r = r0 + ((r1 - r0) * (y - y0)) / (y1 - y0), ex = ox + dx * t - cx, ez = oz + dz * t - cz;
+      if (ex * ex + ez * ez <= r * r) return t;
+    }
+    return -1;
+  }
   function vaneSetup(): void {
+    crownK = placeIdx === 0 ? -1 : def.things.findIndex((t) => isPine(t) && t.look === 'pine');
     leafK = placeIdx === 0 ? -1 : def.things.findIndex((t) => t.look === 'dripleaf' && t.switch === 'shower');
     vaneK = -1; vaneZone = -1; vanePokeT = -1e9; vaneTurning = false; vaneRode.fill(0);
     for (let k = 0; k < def.things.length; k++) if (def.things[k].mech === MECH.turntable && thingFirst[k] < 0) { vaneK = k; break; }
@@ -1322,7 +1431,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     let far = -1, fd = -1;
     for (let i = 0; i < CAP; i++) {
       const c = chars[i];
-      if (!c.on || !c.scooting || asked(c) || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE)) !== 0) continue;
+      if (!c.on || !c.scooting || asked(c) || lifeSeeksNew(w, i) || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE)) !== 0) continue;
       const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
       if (d > fd) { fd = d; far = i; }
     }
@@ -1333,7 +1442,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       let sl = -1, sd = -1;
       for (let i = 0; i < CAP; i++) {
         const c = chars[i];
-        if (tried[i] || !c.on || c.kind !== 0 || !c.body || asked(c) || ((near >>> i) & 1) !== 0 || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) !== 0 || c.tossed) continue;
+        // (round 9, R9_FIX 2) a squishy on its way to a thing nobody in the party has used this visit, while the visit's variety floor is not met (LIFE's
+        // lifeSeeksNew), is spared as an asked one is: the rule sleeps another; the budget's cap is unchanged
+        if (tried[i] || !c.on || c.kind !== 0 || !c.body || asked(c) || lifeSeeksNew(w, i) || ((near >>> i) & 1) !== 0 || (s.flags[i] & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED | LIFE_FLAG.RIDE | LIFE_FLAG.ASLEEP)) !== 0 || c.tossed) continue;
         const d = Math.hypot(c.lastX - cx, c.lastZ - cz);
         if (d > sd) { sd = d; sl = i; }
       }
@@ -1455,6 +1566,72 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (game.clock.now() - tapT[k] > TAP_MS || Math.hypot(x - tapX[k], y - tapY[k]) > TAP_PX) return false;
     return tapThing(x, y);
   }
+  /** (round 9, R9_FIX 4: the owner's "fix it" for Home's things hidden behind the party) At HOME a still tap whose ray first meets one or more RESTING party
+   *  squishies and then a SHOWN Home thing's collider goes to the thing (its own tap: the Music Box's tune, the lamp, the shelf's bell, the pad's boing, the ball's
+   *  roll); the squishy's poke is cancelled (the gesture's finger lifts with no tap). Resting: not carried, not scooting, slower than 0.15 m/s and on the
+   *  ground (asleep or idle). A press that moves or holds is the squishy's as before (a pull, a squeeze), a squishy LIFE is moving still takes the press, and every
+   *  place keeps "a squishy in front takes the press". Why this and not a row that steps aside or leaves gaps: the party row's slots and Home's framing are pinned
+   *  by the published Home rows and LIFE's camera model (a thing 1 to 2.4 m behind a 1 m squishy shows over it only from ~43 degrees of pitch; R8_SHELL 5 (7)),
+   *  and this changes no geometry: only where a still click on that exact spot goes (R9_FIX.md 4). */
+  /** (round 9) a Home block drawn taller than its collider (the Warm Lamp: its 0.2 m base is the prop, its shade reaches p.shadeH = 0.6 m, homekit.ts): a ray that
+   *  meets the drawn upright box (the base's half width, 0..shadeH, at body scale) before prop p takes that thing's prop instead. A click on the lamp's shade was a
+   *  miss: DT-18's tap point (the drawn silhouette's middle, 0.3 m up) is on the shade */
+  function homeShadeProp(p: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number {
+    if (placeIdx !== 0 || !world) return p;
+    const sc = def.unit === 'slot' ? bodyScale : 1, q = world.poses;
+    let best = p, bt = p >= 0 ? (q[p * 8] - ox) * dx + (q[p * 8 + 1] - oy) * dy + (q[p * 8 + 2] - oz) * dz : Infinity;
+    for (let k = 0; k < def.things.length; k++) {
+      const td = def.things[k], H = (td.p.shadeH ?? 0) * sc, f = thingFirst[k] ?? -1;
+      if (!(H > 0) || f < 0 || homeShown[k] !== 1) continue;
+      const sp = thingSpot(k), r = td.size[0] * sc;
+      let lo = 0, hi = Infinity;
+      const sl = (o: number, d: number, a: number, b: number): boolean => { if (Math.abs(d) < 1e-12) return o >= a && o <= b; const u = (a - o) / d, v = (b - o) / d; lo = Math.max(lo, Math.min(u, v)); hi = Math.min(hi, Math.max(u, v)); return lo <= hi; };
+      if (!sl(ox, dx, sp[0] - r, sp[0] + r) || !sl(oy, dy, 0, H) || !sl(oz, dz, sp[1] - r, sp[1] + r)) continue;
+      if (lo < bt) { bt = lo; best = f; }
+    }
+    return best;
+  }
+  let throughWhy = '';   // (dev view) the last Home still tap's through-tap outcome
+  function throughTap(x: number, y: number): boolean {
+    throughWhy = 'off';
+    if (placeIdx !== 0 || !world || floatParked || s.quiet || game.tool !== 'hand') return false;
+    const cam = stage.camera;
+    if (!cam) return false;
+    try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
+    const n = pxToNdc(x, y, game.viewport), ray = cameraRay(cam, n.x, n.y);
+    const p = homeShadeProp(propOnRay(world, ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z), ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    const th = p >= 0 && p < world.count ? world.propThing[p] : -1;
+    if (th < 0 || th >= def.things.length || homeShown[th] !== 1) { throughWhy = `no thing (${p})`; return false; }
+    const q = world.poses, tThing = (q[p * 8] - ray.origin.x) * ray.dir.x + (q[p * 8 + 1] - ray.origin.y) * ray.dir.y + (q[p * 8 + 2] - ray.origin.z) * ray.dir.z;
+    let behind = 0;
+    for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || !c.body) continue;
+      const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ });
+      if (!hit || !(hit.t < tThing)) continue;
+      // (resting: asleep, or not carried, not in the air and slower than 0.3 m/s across the floor (a jelly's own wobble is slower); a squishy on the move takes
+      //  the press. A scoot flag alone is no motion: a body the budget put to sleep mid-scoot kept it)
+      const m = c.body.metrics;
+      if (m.asleep !== true && (m.carried === true || m.airborne === true || Math.hypot(c.vx, c.vz) > 0.3)) { throughWhy = `moving ${CATALOG[c.species]?.id ?? i}`; return false; }
+      behind++;
+    }
+    throughWhy = behind > 0 ? `through ${def.things[th].id} (${behind})` : `clear ${def.things[th].id}`;
+    return behind > 0 && (tapThing(x, y, true) || tapWhy === def.things[th].id);   // (a thing with nothing to do still takes the tap: never the squishy's)
+  }
+  /** (round 9) the input port's release, seen first by the life chunk while it is attached (dispose gives it back): Home's through-tap above */
+  type UpPort = { pointerUp(p: { id: number; x: number; y: number }): void; pointerCancel(id: number): void };
+  const inPort = ((game as { input?: UpPort }).input ?? null) as UpPort | null;
+  const upPublished = inPort ? inPort.pointerUp : null;
+  if (inPort && upPublished) inPort.pointerUp = (p: { id: number; x: number; y: number }): void => {
+    let k = -1;
+    if (placeIdx === 0) for (let j = 0; j < 4; j++) if (tapId[j] === p.id) { k = j; break; }
+    if (k >= 0 && game.clock.now() - tapT[k] <= TAP_MS && Math.hypot(p.x - tapX[k], p.y - tapY[k]) <= TAP_PX && throughTap(p.x, p.y)) {
+      tapId[k] = -1;
+      inPort.pointerCancel(p.id);   // (the squishy's finger lifts with no tap: the press was the thing's)
+      return;
+    }
+    upPublished.call(inPort, p);
+  };
   /** (round 7) the prop a press's ray finds, seen through the place's walls. A wall is a 2.4 m physics box (PROPS.WALL_H: the cabin's log walls, the guard
    *  behind Lanternroof's knee-high parapet) and never a thing: where it is drawn lower than its box, its unseen part took the press meant for a thing behind
    *  it (from the camera Lanternroof's front wall stood over the Star Scope, the hammock's seat and the chimney: "wall"). The ray goes on from the wall's far
@@ -1475,14 +1652,14 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     }
     return p;
   }
-  function tapThing(x: number, y: number): boolean {
+  function tapThing(x: number, y: number, through = false): boolean {
     if (!world || floatParked || s.quiet || game.tool !== 'hand') { tapWhy = 'off'; return false; }
     const cam = stage.camera;
     if (!cam) { tapWhy = 'nocam'; return false; }
     try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
     const n = pxToNdc(x, y, game.viewport);
     const ray = cameraRay(cam, n.x, n.y);
-    let p = propOnRay(world, ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
+    let p = homeShadeProp(propOnRay(world, ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z), ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z);
     // (round 8) the Drip Leaf's big leaf has no prop (the stalk is its prop): a press that reaches the drawn leaf before any prop taps the Drip Leaf. A player taps the
     // leaf, not its 2 cm stalk; with a squishy set under it (G7) the stalk's middle is behind the squishy and the press was "body" or nothing (R7's final1b2 G7 row)
     let leafHit = false;
@@ -1493,6 +1670,16 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         for (let i = 0; i < CAP; i++) { const c = chars[i]; if (!c.on || !c.body) continue; const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ }); if (hit && hit.t < tl) { tapWhy = 'body'; return false; } }
         const lp = thingFirst[leafK] ?? -1;
         if (lp >= 0) { p = lp; leafHit = true; }
+      }
+    }
+    // (round 9) the Shake Pine's crown, as the leaf: a press that reaches the drawn crown before any prop (and before any squishy) taps the pine (its branch: part 1)
+    if (crownK >= 0 && !leafHit) {
+      const tc = crownTap(ray.origin.x, ray.origin.y, ray.origin.z, ray.dir.x, ray.dir.y, ray.dir.z), q = world.poses;
+      const tP = p >= 0 ? (q[p * 8] - ray.origin.x) * ray.dir.x + (q[p * 8 + 1] - ray.origin.y) * ray.dir.y + (q[p * 8 + 2] - ray.origin.z) * ray.dir.z : Infinity;
+      if (tc >= 0 && tc < tP) {
+        for (let i = 0; i < CAP; i++) { const c = chars[i]; if (!c.on || !c.body) continue; const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ }); if (hit && hit.t < tc) { tapWhy = 'body'; return false; } }
+        const cp = thingFirst[crownK] ?? -1;
+        if (cp >= 0) { p = cp; leafHit = true; }
       }
     }
     // (round 7) the Vane Disc has no prop for the ray: its painted disc on the floor takes the press when no prop stands nearer (a prop's centre along the ray)
@@ -1517,7 +1704,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     // a squishy in front of the thing takes the press (the gesture machine has it already)
     const pr = world.poses, px = pr[p * 8] - ray.origin.x, py = pr[p * 8 + 1] - ray.origin.y, pz = pr[p * 8 + 2] - ray.origin.z;
     const tThing = px * ray.dir.x + py * ray.dir.y + pz * ray.dir.z;
-    if (!leafHit) for (let i = 0; i < CAP; i++) {   // (the leaf's own check above measured to the drawn leaf)
+    if (!leafHit && !through) for (let i = 0; i < CAP; i++) {   // (the leaf's own check above measured to the drawn leaf; Home's through-tap checked its own)
       const c = chars[i];
       if (!c.on || !c.body) continue;
       const hit = raycastAt(c.body, ray.origin, ray.dir, { x: c.offX, y: c.offY, z: c.offZ });
@@ -1597,6 +1784,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       world.poke(p, ray.dir.x * 0.6, -0.4, ray.dir.z * 0.6);
       write(EV.USE, td.verb, g, sp, 255, 1, BY.PLAYER, world.propPart[p]);
       if (td.mech === MECH.chime) lifeThingTap(w, g);   // a tapped chime row is one bar of tune (PG_LIFE round 4, LIFE 6.1)
+      return true;
+    }
+    if (td.sound) {
+      // (round 9, R9_FIX 4) any other thing with a voice answers a tap with it (Home's Keepsake Shelf its bell, a pad its boing, the Glide Ramp its whoosh) and whoever
+      // is near notices; no USE record (U2 / G4 count the bounces of squishies). They did nothing before: the dev view said the thing's id and the release fell through
+      if (audio.prop) { propP.kind = td.sound; propP.intensity = 0.5; propP.note = 0; propP.auto = false; propP.size = 0.22; propP.pan = 0; try { audio.prop(propP); } catch (x) { report(x); } }
+      lifeThingTap(w, g);
       return true;
     }
     return false;
@@ -2198,7 +2392,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         selfUsed: [...selfUsed].map((t) => THING_IDS[t] ?? t), selfReacted: [...selfReacted].map((t) => THING_IDS[t] ?? t), selfSocial: [...selfSocial].map((t) => THING_IDS[t] ?? t),
         ring: { dropped: ring.dropped }, firstPlaySent, firstWishSent, freshProfile,
         party: { held: partyHeld(), restoring: [...restoreQ], newcomer: newcomerId },
-        tap: tapWhy,
+        tap: tapWhy, through: throughWhy,
         // (round 7: Lanternroof's Vane Disc as the host turns it, and the Star Scope's comet; null where the place has none)
         vane: vaneK >= 0 ? { turning: vaneTurning, poked: game.simTime - vanePokeT < VANE_POKE_S, riders: vaneRode.reduce((a, x) => a + x, 0) } : null,
         comet: cometEnd > game.simTime,
@@ -2211,6 +2405,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     dispose() {
       dropAll();
       gHost.planePoint = planeAt;
+      if (inPort && upPublished) inPort.pointerUp = upPublished;
       offEvents(); offCeremony(); offSettings();
       for (let i = 0; i < CAP; i++) if (chars[i].on) { clearBubbles(i); try { chars[i].body?.setPropWorld?.(null); } catch { /* ignore */ } }
       try { stage.bindProps?.(null, 0, null); stage.setAutonomyFraming?.(false); } catch { /* ignore */ }

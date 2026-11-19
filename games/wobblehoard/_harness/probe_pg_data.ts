@@ -668,8 +668,8 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
  *  its top) covered by NEARER slot bodies (bodyEll, nearer by depth) is at most HIDE_MAX, and its tap point (the silhouette's centre) is under none. (The Felt
  *  Ball where it stands, ballAt; the Snooze Rug is a floor patch with no collider, not checked.) `only` limits it to one thing and frame (the spot search). */
 const HIDE_MAX = 0.5;
-function hideRow(P: PlaceDef, only?: { id: string; fr: 'phone' | 'desktop' }): { bad: string[]; worst: string[]; most: number; tapN: number } {
-  const worst: string[] = [], bad: string[] = []; let mostAll = 0, tapN = 0;
+function hideRow(P: PlaceDef, only?: { id: string; fr: 'phone' | 'desktop' }): { bad: string[]; worst: string[]; most: number; tapN: number; tapBehind: string[] } {
+  const worst: string[] = [], bad: string[] = [], tapBehind: string[] = []; let mostAll = 0, tapN = 0;
   for (const fr of ['phone', 'desktop'] as const) { const TALLF = fr === 'phone';
     if (only && only.fr !== fr) continue;
     P.things.forEach((t, i) => { if (t.mech === 0 || (only && only.id !== t.id)) return;
@@ -693,10 +693,13 @@ function hideRow(P: PlaceDef, only?: { id: string; fr: 'phone' | 'desktop' }): {
       mostAll = Math.max(mostAll, most);
       worst.push(`${TALLF ? 'TALL' : 'WIDE'} ${t.id} ${(most * 100).toFixed(0)}%${most > 0 ? ' (' + mostAt + ')' : ''}`);
       if (VERBOSE && !only) console.log(`     DT-18 ${TALLF ? 'TALL' : 'WIDE'} ${t.id} (${sp.x}, ${sp.z}) from ${from}: hidden by n ${perN.slice(1).map((v, k) => k + 1 < from ? '-' : (v * 100).toFixed(0) + '%').join(' ')}`);
-      if (most > HIDE_MAX || tapHid) bad.push(`${TALLF ? 'TALL' : 'WIDE'} ${t.id}: ${(most * 100).toFixed(0)}% hidden at ${mostAt}${tapHid ? `, its centre behind a body at ${tapHid}` : ''}`);
+      // (round 9, R9_FIX 4) the silhouette part and the tap-point part are two rows now: `bad` is the silhouette's (more than HIDE_MAX hidden), `tapBehind` lists the
+      // tap points that lie behind a RESTING party body at its slot (every slot body of this model rests there), which Home's through-tap passes to the thing
+      if (most > HIDE_MAX || (only && tapHid)) bad.push(`${TALLF ? 'TALL' : 'WIDE'} ${t.id}: ${(most * 100).toFixed(0)}% hidden at ${mostAt}${tapHid ? `, its centre behind a body at ${tapHid}` : ''}`);
+      if (tapHid) tapBehind.push(`${TALLF ? 'TALL' : 'WIDE'} ${t.id} (${tapHid})`);
     });
   }
-  return { bad, worst, most: mostAll, tapN };
+  return { bad, worst, most: mostAll, tapN, tapBehind };
 }
 // (round 8) the spot search (DT18SEARCH=<thing id>:<phone|desktop>[:x0,x1,z0,z1]): every spot of a 0.05 slot-unit grid where DT-18 and the Home row both pass
 // for that thing; printed nearest its current spot first. A tool for re-laying Home, not a row.
@@ -765,8 +768,17 @@ for (const P of DEFS) {
       row('DT-01', ok, 'Home B5, one squishy out on a phone (TALL n = 1): the Felt Ball where it stands covers no part of the squishy and hides behind none, with 0.25 m of first-play roll',
         o ? `${ok ? '' : found ? `the spot (${found}) would pass: re-lay it; ` : `no spot can with the shipped camera (${tried} spots tried; needs RENDER: PLAYGROUND_BUILD 24.1 (a), the one-out portrait framing makes room for the ball); `}it covers ${o.cover.toFixed(1)} px of the body (${(o.frac * 100).toFixed(1)}% of it, ${o.sq > 0 ? `${o.sq.toFixed(1)} px into` : 'clear of'} its squeeze area), ${(o.hide * 100).toFixed(0)}% hidden, ${f2(o.gap)} m from it, ${f2(o.room)} m of roll room (worst scale and shape)` : 'no ball'); }
     { const r18 = hideRow(P);
-      row('DT-18', r18.bad.length === 0, `(round 8) no Home thing hides behind a party slot: parties of 1 to 5 (from each thing's fromN), phone and desktop, ${SCALES.length} scales x ${SHAPES.length} rest shapes: at most ${HIDE_MAX * 100}% of its silhouette behind nearer squishies at their slots and its centre (the tap point) behind none`,
-        r18.bad.length ? r18.bad.slice(0, 6).join(' | ') : `worst: ${r18.worst.join('; ')}`); }
+      row('DT-18', r18.bad.length === 0, `(round 8) no Home thing hides behind a party slot: parties of 1 to 5 (from each thing's fromN), phone and desktop, ${SCALES.length} scales x ${SHAPES.length} rest shapes: at most ${HIDE_MAX * 100}% of its silhouette behind nearer squishies at their slots`,
+        r18.bad.length ? r18.bad.slice(0, 6).join(' | ') : `worst: ${r18.worst.join('; ')}`);
+      // (round 9, R9_FIX 4: the owner's answer to the Music Box behind the party is "fix it"; option (c) of the round-9 brief was chosen: at Home a still tap whose ray
+      // meets RESTING party squishies before a shown thing goes to the thing (later-life.ts throughTap; the lamp's drawn shade takes a press too, homeShadeProp). The
+      // tap-point part: every Home thing's tap point (its drawn silhouette's middle) is in front of every slot body, or behind resting slot bodies only, which pass
+      // a still press there to the thing. Pinned on the product's rule: without throughTap in later-life.ts (or with it limited to visible tap points) this row fails.
+      // The proof that the press reaches the thing is the browser row "Home: every thing clicked through the party" and probe_r8_features TT-01, not this model)
+      const ll = readFileSync(resolve(ROOT, 'src/shell/later-life.ts'), 'utf8');
+      const pin = ll.includes('function throughTap(x: number, y: number): boolean') && ll.includes('return behind > 0 && (tapThing(x, y, true) || tapWhy === def.things[th].id);') && ll.includes('function homeShadeProp(');
+      row('DT-18', pin, `(round 9) the tap-point part: every Home thing's tap point (the middle of its drawn silhouette) is behind no slot body, or behind RESTING slot bodies only (the model's slot bodies all rest at their slots), where Home's through-tap (later-life.ts throughTap, pinned) passes a still press to the thing`,
+        `${pin ? 'the through-tap is in place' : 'later-life.ts throughTap / homeShadeProp missing or changed'}; tap points behind a resting slot body: ${r18.tapBehind.length ? r18.tapBehind.join('; ') : 'none'}`); }
     continue;
   }
   for (const tall of [false, true]) {

@@ -36,6 +36,10 @@ const args = process.argv.slice(2);
 const QUICK = args.includes('--quick');
 const PORT = Number((args.find((a) => a.startsWith('--port=')) ?? '--port=5366').split('=')[1]);
 const ONLY = (args.find((a) => a.startsWith('--only=')) ?? '').split('=')[1]?.split(',').filter(Boolean) ?? [];
+// (round 9, R9_FIX: a dev filter for the place sections: --places=cloudloft,frostbell runs only those places' blocks inside pg-places* (the sections' other rows run as
+//  before); --trace adds per-drop traces to the Cloudloft U2 row's detail. Neither changes any assertion)
+const PLACES_ONLY = (args.find((a) => a.startsWith('--places=')) ?? '').split('=')[1]?.split(',').filter(Boolean) ?? [];
+const TRACE = args.includes('--trace');
 const SHOTS = resolve(ROOT, '_shots', 'shell');
 const REPORTS = resolve(ROOT, '_harness', '_reports');
 mkdirSync(SHOTS, { recursive: true });
@@ -5349,7 +5353,7 @@ async function main() {
     // home again by the sheet; screenshots of each; 0 console errors. Runs only on a build that ships the three (data/places.ts PLACE_INFO).
     // ================================================================================================
     // (each of the three the build ships is played; one the build keeps closed is not listed, named or played: its row says so)
-    const S2 = ['ripple', 'frostbell', 'rainleaf'].filter((id) => PLACE_INFO.find((p) => p.id === id)?.shipped === true);
+    const S2 = ['ripple', 'frostbell', 'rainleaf'].filter((id) => PLACE_INFO.find((p) => p.id === id)?.shipped === true && (!PLACES_ONLY.length || PLACES_ONLY.includes(id)));
     const s2Shipped = S2.length > 0;
     const S2_NAMES = { ripple: 'Ripple Shore', frostbell: 'Frostbell Ridge', rainleaf: 'Rainleaf Garden' };
     /** the tracker pill's text for a place's VISIT quest (R1 / I1 / G1: "Next: Sand and sea") */
@@ -5371,7 +5375,7 @@ async function main() {
     };
     /** grab the body at `from` (CSS px), lift it (a carry: physics B3; up and 60 px to the side, as the published carry), steer the carried body over the WORLD point
      *  `to` by feedback on its own position (the carry plane is not the floor: a pointer over a floor spot holds the body in front of it), hold still, let go; the sim stepped */
-    const carryOnto = (page, from, to, holdS = 0.5, lift = 340, via = null) => page.evaluate(([f, t, hold, lf, v]) => {
+    const carryOnto = (page, from, to, holdS = 0.5, lift = 340, via = null, tr = false) => page.evaluate(([f, t, hold, lf, v, trc]) => {
       const wh = window.__WH__; wh.pause();
       const vw = innerWidth, vh = innerHeight;
       let px = f.x, py = f.y;
@@ -5425,9 +5429,13 @@ async function main() {
       for (let i = 0; i < Math.round(hold * 10); i++) wh.step(1 / 60, 6);
       const end = held();
       wh.pointerUp(0);
-      for (let i = 0; i < 8; i++) wh.step(1 / 60, 15);
-      return { carried: true, lifted, over: end ? [+end.w[0].toFixed(2), +end.w[2].toFixed(2)] : null, err: +err.toFixed(3) };
-    }, [from, to, holdS, lift, via]);
+      // (round 9, --trace: the let-go body's centre height and onProp every 3 frames, the pads' strikes seen as U2's count; the same 120 frames either way)
+      const trace = [];
+      if (trc) { const id = end?.itemId; for (let i = 0; i < 40; i++) { wh.step(1 / 60, 3); const b = wh.shell.matInfo().bodies.find((q) => q.itemId === id), L = wh.life(), c = L.chars.find((q) => q.itemId === id);
+        trace.push([i * 3, b ? +b.w[1].toFixed(3) : null, c ? c.onProp : null, c ? +c.x.toFixed(2) : null, c ? +c.z.toFixed(2) : null]); } }
+      else for (let i = 0; i < 8; i++) wh.step(1 / 60, 15);
+      return { carried: true, lifted, over: end ? [+end.w[0].toFixed(2), +end.w[2].toFixed(2)] : null, err: +err.toFixed(3), y: end ? +end.w[1].toFixed(3) : null, ...(trc ? { trace } : {}) };
+    }, [from, to, holdS, lift, via, tr]);
     const pgQuest = async (page, id) => ((await page.evaluate(() => window.__WH__.quests()?.quests ?? [])).find((q) => q.id === id) ?? null);
     /** (round 7) the Places sheet's cards a save of `st` stamps shows: every shipped place in PLACE_INFO's order, `id:open` (open: Home, or its stamps reached) */
     const sheetWant = (st) => PLACE_INFO.filter((p) => p.shipped).map((p) => `${p.id}:${p.idx === 0 || (typeof p.stampsToOpen === 'number' && p.stampsToOpen <= st)}`);
@@ -5590,7 +5598,10 @@ async function main() {
           // (round 7, R7_SHELL: the tap goes to a part of the pine (trunk or branch: either pokes the branch) no squishy stands in front of: the final run's phone
           // tapped the pine's centre over the squishy set under its branch ("tap": "body", as it should); the assertion is unchanged)
           const [pi, pq] = await pgClearPart(page, 'shakepine', []);
-          const pt = pi >= 0 ? { sx: pq[0], sy: pq[1] } : (await pgLife(page)).things.find((t) => t.id === 'shakepine');
+          // (round 9, R9_FIX 3: the pine's snowy crown takes a press now (later-life.ts crownTap): with no part clear, the tap goes to the crown's middle, 1.9 m up
+          //  over the trunk, where a player taps a tree; before, it went to the trunk's centre behind the squishy ("tap": "body"). The assertion is unchanged)
+          const crown = pine?.x !== null && pine?.x !== undefined ? await page.evaluate(([x, z]) => window.__WH__.shell.project(x, 1.9, z), [pine.x, pine.z]) : null;
+          const pt = pi >= 0 ? { sx: pq[0], sy: pq[1] } : crown && crown.x > 4 && crown.y > 4 && crown.x < (phone ? 386 : 1276) ? { sx: crown.x, sy: crown.y } : (await pgLife(page)).things.find((t) => t.id === 'shakepine');
           if (pt && pt.sx !== null && pt.sx !== undefined) await pgTap(page, phone, pt.sx, pt.sy);
           await pgStep(page, 1.5);
           const i4 = await pgQuest(page, 'I4'), L4 = await pgLife(page);
@@ -5662,7 +5673,7 @@ async function main() {
     // Star Scope's comet; Cloudloft: the Puff Pads kick, the updraft slows a fall), at least two of its quests done by the player's own input (taps, carries),
     // a toss toward the side stays inside the play area, the hinge ride's AUTO chip, home again by the sheet; screenshots of each; 0 console errors.
     // ================================================================================================
-    const S3 = ['lanternroof', 'cloudloft'].filter((id) => PLACE_INFO.find((p) => p.id === id)?.shipped === true);
+    const S3 = ['lanternroof', 'cloudloft'].filter((id) => PLACE_INFO.find((p) => p.id === id)?.shipped === true && (!PLACES_ONLY.length || PLACES_ONLY.includes(id)));
     const S3_NAMES = { lanternroof: 'Lanternroof', cloudloft: 'Cloudloft' }, S3_DEF = { lanternroof: LANTERNROOF_DEF, cloudloft: CLOUDLOFT_DEF };
     /** the visit quest's pill ("Next: Up on the roof") of the first place a save of `st` stamps opens that is never visited: PLACE_INFO's order */
     const firstVisitPill = (st) => {
@@ -5850,7 +5861,10 @@ async function main() {
             const a = await carryOnto(page, { x: c.sx, y: c.sy }, { x, z: z + 0.8 }, 0.2, 360);
             await pgStep(page, 0.5);
             const cur = (await chars()).find((q) => q.species === c.species);
-            return [a, cur ? await carryOnto(page, { x: cur.sx, y: cur.sy }, { x, z }, 0.3, 360) : null];
+            const b = cur ? await carryOnto(page, { x: cur.sx, y: cur.sy }, { x, z }, 0.3, 360, null, TRACE) : null;
+            // (round 9, --trace: where every squishy is after the drop, and U2's count)
+            if (TRACE && b) { const Lt = await pgLife(page); b.after = { u2: (await pgQuest(page, 'U2'))?.have ?? null, chars: Lt.chars.filter((q) => q.kind === 0).map((q) => [q.species, q.x, q.z, q.onProp, q.asleep]) }; }
+            return [a, b];
           };
           const pads = T('puffpads')?.parts ?? [], u2log = [], near2 = [...pads].sort((a, b) => b[3] - a[3]).slice(0, phone ? 1 : 2);
           for (let n = 0; n < 3 && near2.length; n++) { const cs = await chars(); const c = cs[n % cs.length], pd = near2[n % near2.length]; if (c) u2log.push(...(await dropOnto(c, pd[2], pd[3]))); await pgStep(page, 2.5); }
@@ -6059,6 +6073,60 @@ async function main() {
       await context.close();
     }
     await section('r8-features', async () => { await r8Features(false); await r8Features(true); });
+
+    // ================================================================================================
+    // ROUND 9 (R9_FIX 4; the owner's answer "fix it" to Home's things behind the party): every Home thing can be clicked or tapped with the party out. A save whose
+    // Home finale (H8: the Keepsake Shelf) and cabin finale (C8: the Bounce Pad) are done, six capsules (the Warm Lamp after the first), then N out; each of the Music
+    // Box, the Warm Lamp, the Keepsake Shelf and the Bounce Pad is clicked (desktop) or tapped (phone) at its centre on screen (the dev view's projection of its
+    // prop), whoever stands in front of it: a still press there goes to the thing (the host's tap: `tap` is its id; the box's tune plays). Home's through-tap
+    // (later-life.ts throughTap): a press whose ray meets RESTING squishies before a shown Home thing is the thing's. At most 4 tries 0.5 s apart (a squishy
+    // walking past takes the press, as it should); each logs whether a squishy's disc covered the point.
+    // ================================================================================================
+    async function r9HomeThings(phone, nOut) {
+      const tag = `${phone ? 'phone' : 'desktop'} ${nOut} out`, label = `R9 Home things (${tag})`;
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242', ctx: phone ? PHONE : DESKTOP, init: r8Init });
+      mainWatches.push([`r9-home-things ${tag}`, w]);
+      await pgBoot(page, phone);
+      await pgStep(page, 2); await sleep(1500);
+      await page.evaluate(() => sessionStorage.setItem('r8seed', JSON.stringify({ st: 28, ks: 0, qd: [7, 17] })));
+      await page.reload({ waitUntil: 'load', timeout: 180000 });
+      await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
+      const landed = await pgBoot(page, phone);
+      await page.evaluate(() => window.__WH__.resume());
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 6);
+      await pgStep(page, 1);
+      const idNow = await page.evaluate(() => window.__WH__.shell.identity());
+      const items = (await hstate(page)).items;
+      const spp = [...new Set(items.filter((it) => it.id !== idNow.itemId && it.species !== idNow.species).map((it) => it.species))];
+      for (const sp of spp) { if ((await page.evaluate(() => window.__WH__.shell.matInfo().count)) >= nOut) break; await bringOut(page, sp); }
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', false));
+      await page.evaluate(() => window.__WH__.pause());
+      await pgStep(page, 6);
+      const out = await page.evaluate(() => window.__WH__.shell.matInfo().count);
+      const ids = ['musicbox', 'warmlamp', 'keepsakeshelf', 'bouncepad'], log = [];
+      for (const id of ids) {
+        let res = { id, ok: false, shown: false, tries: 0 };
+        for (let k = 0; k < 4; k++) {
+          const L = await pgLife(page), t = L.things.find((x) => x.id === id);
+          res = { ...res, shown: !!t?.shown };
+          if (!t?.shown || t.sx === null) break;
+          const discs = await page.evaluate(() => window.__WH__.shell.matInfo().bodies.filter((b) => b.r > 0).map((b) => [b.x, b.y, b.r]));
+          const covered = discs.filter((d) => Math.hypot(d[0] - t.sx, d[1] - t.sy) < d[2]).length;
+          await pgTap(page, phone, t.sx, t.sy); await pgStep(page, 0.3, 0.3);
+          const L2 = await pgLife(page);
+          res = { ...res, tries: k + 1, tap: L2.tap, through: L2.through, covered, at: [t.sx, t.sy], ...(id === 'musicbox' ? { tune: L2.tune.on } : {}) };
+          if (L2.tap === id) { res.ok = id !== 'musicbox' || L2.tune.on === true; if (id === 'musicbox' && L2.tune.on) { await pgTap(page, phone, t.sx, t.sy); await pgStep(page, 0.3, 0.3); } break; }
+          await pgStep(page, 0.5);
+        }
+        log.push(res);
+      }
+      await pgShot(page, `r9_home_things_${phone ? 'phone' : 'desktop'}_${nOut}`);
+      check(`${label}: every Home thing can be ${phone ? 'tapped' : 'clicked'} with ${nOut} out: the Music Box (its tune), the Warm Lamp, the Keepsake Shelf and the Bounce Pad each take a still press at their centre, a resting squishy in front or not (Home's through-tap)`,
+        landed && out === nOut && log.every((r) => r.shown && r.ok), JSON.stringify({ out, log }));
+      await context.close();
+    }
+    await section('r9-home-things', async () => { await r9HomeThings(false, 3); await r9HomeThings(false, 5); await r9HomeThings(true, 3); await r9HomeThings(true, 5); });
 
     // ------------------------------------------------------------------------------------------------
     // G3: zero console errors / warnings / failed requests across the main flows

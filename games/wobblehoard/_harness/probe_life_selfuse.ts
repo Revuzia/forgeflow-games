@@ -23,6 +23,8 @@ import { recorder } from './mocks.ts';
 const arg = (k: string, d: string): string => process.argv.find((a) => a.startsWith(`${k}=`))?.slice(k.length + 1) ?? d;
 const QUICK = process.argv.includes('--quick'), TRACE = process.argv.includes('--trace'), SQ_ONLY = process.argv.includes('--squirt-only');
 const STAY = +arg('stay', QUICK ? '120' : '300');
+// (round 9, R9_FIX 2) seed=N: LIFE's world seed (the host's deps.lifeSeed; default the shipped 0x5eed1e) and the party genomes' seed (default 8): another draw of the same parties
+const SEED = arg('seed', ''), GSEED = SEED ? (+SEED % 97) + 1 : 8;
 const PARTIES = arg('parties', QUICK ? 'wisplet+chunkle' : 'wisplet+chunkle,puddlo+boingle,gloopsy+kneadle,twangle+dimpla,capnap+burrbin').split(',').map((p) => p.split('+'));
 const PLACES = arg('places', 'hearthlog,ripple,frostbell,rainleaf,lanternroof,cloudloft').split(',');
 /** SU-03: by-itself use episodes per squishy per 300 s visit at most (USES_FULL by B04 + a pass's turn + a nap from real tiredness + the thing it bumps on its
@@ -96,13 +98,13 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
     env: { vibrate: false, reducedMotion: false }, now: () => clockT, epochNow: () => 1_700_000_000_000 + clockT, raf: () => 0, caf: () => {},
   });
   app.resize(W, H, 1); app.setPhase('play');
-  const host = attachLifeHost(app, { parts: lifeParts, storage: mem, say: () => {}, moment: () => {}, setTimer: () => 0, clearTimer: () => {} })!;
+  const host = attachLifeHost(app, { parts: lifeParts, storage: mem, say: () => {}, moment: () => {}, setTimer: () => 0, clearTimer: () => {}, ...(SEED ? { lifeSeed: +SEED } : {}) })!;
   const step = (n: number): void => { for (let i = 0; i < n; i++) { clockT += 1000 / 60; app.clock.advance?.(1000 / 60); app.stepOnce(1 / 60); } };
   const stepA = async (n: number): Promise<void> => { for (let i = 0; i < n; i += 10) { step(10); await tick(); } };
   type D = { place: number; chars: Array<{ species: string; kind: number; x: number; z: number; flags: number; asleep: boolean; onProp: number }>; life: { chars: Array<{ beh: number; phase: number; moment: number; thing: number; uses: number; play: number }> } };
   const dbg = (): D => host.debug() as unknown as D;
   await stepA(120);
-  for (const [k, sp] of party.entries()) { app.mat.add({ genome: speciesBaseGenome(sp as Parameters<typeof speciesBaseGenome>[0], 8), itemId: `p-${k}` }, { restore: true }); await stepA(10); }
+  for (const [k, sp] of party.entries()) { app.mat.add({ genome: speciesBaseGenome(sp as Parameters<typeof speciesBaseGenome>[0], GSEED), itemId: `p-${k}` }, { restore: true }); await stepA(10); }
   await stepA(120);
   type Grabby = SB & { raycast: (o: unknown, d: unknown) => { vertex: number; point: { x: number; y: number; z: number }; normal: { x: number; y: number; z: number } } | null; grab: (i: number, v: number, p: unknown) => void; grabMove: (i: number, p: unknown) => void; grabRelease: (i: number) => void; fingerDown: (i: number, a: unknown) => void; fingerPressure: (i: number, d: number) => void; fingerUp: (i: number) => void; metrics: { carried: boolean } };
   const bodyOf = (species: string): { b: Grabby; ci: number } => {
@@ -222,12 +224,16 @@ const info = (id: string, what: string): void => console.log(`info ${id} ${what}
 }
 const all: Visit[] = [];
 if (!SQ_ONLY) for (const p of PARTIES) all.push(...(await runParty(p)));
-const nParties = PARTIES.length, need = Math.min(nParties, Math.max(1, Math.ceil(nParties * 0.8)));
+// (round 9, R9_FIX 2: tightened to EVERY party, the owner's "3 to 5 different things per visit at every place, reliably"; it was 4 of 5)
+const nParties = PARTIES.length, need = nParties;
 if (SQ_ONLY) { console.log(fails ? `${fails} failed` : 'all selfuse checks passed (SQ-01 only)'); process.exit(fails ? 1 : 0); }
 for (const pl of PLACES) {
   const vs = all.filter((v) => v.place === pl), pass = vs.filter((v) => v.ok && v.things.length >= 3);
   check('SU-01', `${pl}: at least 3 different things used by themselves in ${STAY} s with 3 squishies and no input, for ${need} of ${nParties} parties (${pass.length}: ${vs.map((v) => `${v.things.length} [${v.things.join(' ')}]${v.three >= 0 ? ` 3 by ${v.three} s` : ''}`).join('; ')})`, pass.length >= need);
 }
+// (round 9, R9_FIX 2) per place: the min / median / max of different things used by themselves across the parties (the owner's goal: 3 to 5 at every place)
+for (const pl of PLACES) { const ns = all.filter((v) => v.place === pl).map((v) => v.things.length).sort((a, b) => a - b);
+  if (ns.length) info('SU-01', `${pl}: different things per visit min ${ns[0]} / median ${ns[ns.length >> 1]} / max ${ns[ns.length - 1]} (${ns.join(' ')})${SEED ? ` seed ${SEED}` : ''}`); }
 // SU-02: per place, each family's things; families prefer different things when, at most places, two families' sets of things differ
 const famThings: Record<string, Record<string, Set<string>>> = {};
 for (const v of all) for (const [sp, th] of Object.entries(v.bySpecies)) { const f = FAM[sp] ?? sp; ((famThings[v.place] ??= {})[f] ??= new Set()); for (const t of th) famThings[v.place][f].add(t); }
