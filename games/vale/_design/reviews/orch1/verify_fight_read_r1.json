@@ -1,0 +1,40 @@
+{
+ "lane": "W2 fight read (look close follow-up, ruling 62): A stacked enemy telegraphs, B damage numbers (CUX-8)",
+ "round": 1,
+ "verifier": "independent adversarial verifier (Opus 5.5)",
+ "at": "2026-11-19 ~00:50 CST",
+ "head": "269d9c085 (ruling 62); only src/render/overlay/{telegraphs,program}.ts, src/render/renderer.ts buildTelegraphs, src/ui/hud/world.tsx, src/ui/styles/hud.css, _design/tokens.json hud.numbers changed in src/design; sim untouched by this commit",
+ "setup": "own vite on :5268 (private dep cache, hmr off), started and stopped by me; every browser run through art/blender/common/heavy.py (machine shared with another lane's bot runs, load 18-20). Frames from my own scripts (bench RIFT High seed 11 t 760, viewer = seat 0's team so enemy telegraphs get the enemy treatment; real client RIFT seed 7 with HUD) at 1920x1080 and 1366x768. Live look = union off (ruling 53 harness seam, same scene, same frame) plus the r1 look-close frames (clutter_s11_look20_t8731, vfy_lc_002_fight_numbers) and the implementer's nums_before crops",
+ "pass": true,
+ "score": 8.0,
+ "safeToShip": true,
+ "blockers": [],
+ "itemA_stackedTelegraphs": {
+  "verdict": "visibly better",
+  "look": "Six enemy shapes (3 circles, ring, 9 m cone, 10 m rect) over a 5-fighter cluster, with the bots' own casts and VFX alive. Union off (= live): a tangle of crossing marigold+black lines through every fighter's feet, ink bands cutting the interior into slivers. Union on: one marigold-over-ink outline around the whole danger area, each shape still traced inside by a thin 2 px marigold seam, no black inside. You can see where the danger ends at a glance and still count the shapes. Same read at 1366x768 (seams thin but visible). Fills did not add up before or after (MAX blend)",
+  "singleTelegraph": "one enemy circle: union on vs off differs only by frame noise (1920: on/off 3312 px max 8/255 vs off/off 2216 px max 8/255; 1366: 1446 px max 10 vs 935 px max 10); code path gated on uTeleUN > 1.5, so a lone shape takes the old path. Frame shows the usual orange edge + ink band",
+  "canopy": "two overlapping enemy circles at the RIFT Dialwood spot (W*0.33, H*0.28) draw through the canopy as before; with union on the inner arc thins to a seam, the outer edge is unchanged",
+  "clutterProbe": "RIFT High s7/11/23, 30 looks each, all bars PASS: median occlusion 0.083/0.085/0.054 (<=0.25), worst run 100/0/100 ms (<=300), self ring 90/90, GATED fixed enemy circle 1.0/1.0/1.0 (>=0.45), bots' casts 0.578/0.584/0.503 (info), hot body max 0.244 (<=0.30), vfx tris peak 22.0k (<=35k), draws 215 (<=450), programs 37. Stack info union off->on: inkInner 0.044/0.053/0.041 -> 0.0008/0.0006/0.0009, edgeInner 0.091/0.023/0.098 -> 0.048/0.013/0.050, boundary p90 0.962/0.969/0.989 -> 0.959/0.969/0.986. Reproduces the implementer's numbers",
+  "valueProbe": "High seed 7 rift/bridge/fray: 0 FAIL; every tele spot WCAG p90 4.33-5.03, teleEdge >= 1.0, RIFT jungle 2797 px; lane L* 51/51/50, jungle 30, walls 25/15.5/25, flash 2.18x/2.17x/2.05x. Identical to the r1 look-close numbers"
+ },
+ "itemB_damageNumbers": {
+  "verdict": "visibly better",
+  "look": "Real client, a fixed hit list dealt by the local fighter (fighter: 68 phys, 121 magic, 554 crit, 70 true, 30+392 phys 66 ms apart; Wick: 118+93 phys 33 ms apart). Numbers now read at a glance at both sizes: thick dark outline, white/pink/true colours pop off stone and grass, the crit is clearly the biggest thing near the target. Before (live) they were 13.7-29.4 px at 1366x768 with a soft shadow and the small ones nearly disappeared on pale stone",
+  "measured_1920x1080": "121 magic 25.7 px, 70 true 23.6 px, 211 (merged 118+93) 28.7 px weight 800, 422 (merged 30+392) 34.0 px, 554 crit 45.9 px; 4 shown on the fighter (cap 4: the oldest 68 dropped), 1 on the Wick; 0 number-on-number overlaps; none off screen; none over its own target's bar",
+  "measured_1366x768": "smallest 21.7 px (70 true), 121 23.6, 211 26.4, 422 31.3, crit 622 (554+68 merged under machine load) 42.2 px; cap 4 and merge hold; 0 overlaps; none off screen",
+  "rules": "merge within 120 ms seen twice (211, 422); max 4 per target held; 18 px floor never reached (smallest 21.7 px)"
+ },
+ "perf_1080": "--prod --match-only High seed 7: rift peak 440k tris / 306 draws / 36 programs, bridge 364k / 260 / 36, fray 174k / 154 / 29; 0 programs first seen after 1:00; GATE PASS (<=500k / 450 / 40). Rift draws 306 vs 246 in r1 is a different peak second (the bots' match ran to 22:35, another lane's bot changes); the clutter frame draws are 205-215 vs 207-223 in r1, so not attributed to this change. Frame time not measured (machine busy)",
+ "hudProbes": "hud_renders --at 100: no per-tick re-renders (SkyLedger 1 render per change, top component 2 renders in 180 ticks); probe_copy_no_bots PASS, probe_bar_clearance PASS, probe_content_build PASS; tsc clean outside other lanes' scratch folders (src/sim/_ab_*, _harness/_tmp_vfy_ai42_fog.ts)",
+ "problems": [
+  "B: numbers are kept off their OWN target's bar but still sit on a NEIGHBOUR's bar or name at 72 % alpha (1366x768: '70' lies on nadir_kai's HP bar, '422' covers most of bellringer_lu's name; 1920x1080: '422' over bellringer_lu's name). Allowed by CUX-8 and seen in the live build too (the implementer's before/after both show 140 on nadir_kai's bar), but the larger size covers more of the neighbour plate; a player may notice for the 0.9 s a number lives. Note, not a blocker",
+  "B: a merged later hit lifts a stacked number a full row, so the 554 crit at 1920x1080 floats ~60 px above its target's plate; still reads as belonging to that cluster",
+  "A: inner seams are 2 px at 0.75 alpha: under heavy VFX (purple ult washes) they get faint, so individual shapes inside a big stack are harder to count than the outer boundary; the outer boundary is the important read and it is clear",
+  "A (pre-existing, not this change): a long cone telegraph draws its fill over the tall grass / wall-top band (fr_1920x1080_stack_on top centre), same with union off; it is ruling 53's through-canopy height rule",
+  "Bots' cast telegraph edge (info) 0.503-0.584 this run vs 0.45-0.593 in r1: volatile with the other lane's bot work; the gated fixed circle is 1.0"
+ ],
+ "safeToShipReason": "Versus the live build: single telegraphs unchanged (diff within frame noise), stacks read as one outlined area instead of a black-and-orange tangle, numbers 21.7-46 px with a hard outline instead of 13.7-36.7 px, merge/cap rules intact. Clutter, value, perf and HUD gates all pass; no shader program added (37 in clutter, 36 in the match), sim untouched. The neighbour-plate overlap existed before and is allowed by CUX-8",
+ "originality": "VALE's own marigold-over-ink edge and seat-coloured numbers; nothing copied from the reference game",
+ "sensitivity": "No player-facing text added; no mention of bots/AI/CPU",
+ "artefactsDeleted": "own frames (_harness/_tmp_vfy_fr_shots), logs, scripts, vite config, private vite cache, clutter_vfy_fr.json and vfy_fr_perf.json reports deleted; idle_gates.json and _reports/value_probe.json restored to HEAD after the probes rewrote them; vite stopped"
+}
