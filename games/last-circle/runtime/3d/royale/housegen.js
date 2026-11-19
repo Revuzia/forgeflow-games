@@ -151,6 +151,19 @@ export const FURN_K = 1.15;                // every piece of furniture (kit and 
 const COL_K = FURN_K;                      // the kit's COLLIDER scale (= FURN_K; the homes gate's scale-draw-only plant sets 1: drawn bigger than collided)
 export const HOME_PROGRAMME = true;        // every home holds living + kitchen + bedroom + bath; >= 150 m2 of rooms adds a second bedroom (audit 12)
 export const TRI_BUDGET_HOME = 6000;       // a home's furnished storey (audit 2: the median home storey already drew 3,341 of the 4,000)
+// (W10 R3A fix5, orchestrator ruling R3A-7: the plan's own '+2-4k triangles per large shop' and '+1k per office storey') a WORK storey of a non-home building
+// (not a ruin) draws up to: an office / meeting room / lobby / corridor on it -> TRI_BUDGET_WORK; a shop or warehouse on it -> TRI_BUDGET_SHOP, or
+// TRI_BUDGET_SHOP_L when the storey's footprint (W x D) is >= SHOP_L_M2. Every other storey keeps TRI_BUDGET. WORK_BUDGET false = TRI_BUDGET everywhere, as before
+export const WORK_BUDGET = true;
+export const TRI_BUDGET_WORK = 5000, TRI_BUDGET_SHOP = 6000, TRI_BUDGET_SHOP_L = 8000, SHOP_L_M2 = 300;
+/** (W10 R3A fix5) the triangle budget of storey f of a building: `kinds` = the room kinds on that storey, home / ruined as generate reads them */
+export function storeyBudget(kinds, home, ruined, footM2) {
+  if (home) return TRI_BUDGET_HOME;
+  if (!WORK_BUDGET || ruined) return TRI_BUDGET;
+  if (kinds.some((k) => k === "shop" || k === "warehouse")) return footM2 >= SHOP_L_M2 ? TRI_BUDGET_SHOP_L : TRI_BUDGET_SHOP;
+  if (kinds.some((k) => k === "office" || k === "meeting" || k === "lobby" || k === "hall")) return TRI_BUDGET_WORK;
+  return TRI_BUDGET;
+}
 export const AREA_QUOTA = true;            // lived rooms of a home (living, bedroom, kitchen): >= max(QUOTA_MIN, area / QUOTA_M2) substantive pieces (audit 2: "4 in view" left
 export const QUOTA_M2 = 4;                 //   a 37 m2 living room with 4 pieces); replaces the VIEW_WANT top-up there (phase 3) - the guarantee (phase 5) still runs
 export const QUOTA_MIN = 6;
@@ -2689,7 +2702,9 @@ export function generate(parcel, opts) {
   for (const bx of leafBoxes) structSolids.push([bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1]);
   // ---- furniture
   const furn = [];                                        // { cat, room, f, u, v (centre), fq (local facing turn), rect [u0, v0, u1, v1], parts [box idx], tint, order }
-  const TB = home ? TRI_BUDGET_HOME : TRI_BUDGET;          // (W10 R1A) the storey's triangle budget
+  // (W10 R1A) the storey's triangle budget; (W10 R3A fix5) per storey: a work storey's by its rooms (storeyBudget)
+  const TBf = [];
+  for (let f = 0; f <= S; f++) TBf.push(f < S ? storeyBudget(roomRecs.filter((r) => r.floor === f).map((r) => r.kind), home, !!TH.ruined, W * D) : (home ? TRI_BUDGET_HOME : TRI_BUDGET));
   const tris = new Array(S + 1).fill(0);                  // [storey 0 .. S - 1, the closed shell storeys of a tall building]
   // ---- hidden faces: a structure box face that another structure box covers completely (the slab edge inside a wall, a wall's end in the
   // corner square, the fill under a stair inside its steps, every bottom face below the pad) is never drawn. A face is only culled when ONE box
@@ -3092,7 +3107,7 @@ export function generate(parcel, opts) {
     };
     // the storey's budget, and (phases 0 and 1) this room's fair share of it: a big kitchen cannot starve the bedrooms; a kit piece over the share falls back
     // to its authored stand-in (catOf). Phases 2 and 3 top rooms up with what is left of the storey's budget.
-    const budgetOK = (cat) => tris[f] + cat.tris <= TB && (phase >= 2 || R.spent + cat.tris <= R.share);
+    const budgetOK = (cat) => tris[f] + cat.tris <= TBf[f] && (phase >= 2 || R.spent + cat.tris <= R.share);
     // the room's PORTS (each doorway's inner side, the stair approach / exit inside it) must stay joined through its free floor (the fat capsule):
     // checked after every piece, so a piece that closes a path is refused on the spot instead of being found by the whole-house walk
     const RW = roomWalk(R), { mineK, portWin, wa0, wa1, wb0, wb1, roomQ } = RW, regF = regS[f], myRi = R.ri, vis = roomVis;
@@ -3458,7 +3473,7 @@ export function generate(parcel, opts) {
         model5(true);
         if (bestView(R).n >= NEED5) return;
         const run5 = () => {
-        const FL = s[f], budget5 = (cat) => tris[f] + cat.tris <= TB;
+        const FL = s[f], budget5 = (cat) => tris[f] + cat.tris <= TBf[f];
         const cnt = () => viewCounts(R);
         const entOrder = cnt().map((n, i) => [n, i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).map((q) => q[1]);
         const ids = [];
@@ -3585,7 +3600,7 @@ export function generate(parcel, opts) {
           for (const id of ids) {
             if (cnt() >= LIVED_SEE) break;
             const cat = catOf(id);
-            if (!cat || cat.mount === "wall" || cat.mount === "top" || cat.wall || tris[f] + cat.tris > TB || !capOK(cat)) continue;
+            if (!cat || cat.mount === "wall" || cat.mount === "top" || cat.wall || tris[f] + cat.tris > TBf[f] || !capOK(cat)) continue;
             let done = false;
             const bf8 = BF8;
             for (const fq of [fqTo, (fqTo + 1) % 4]) {        // (W10 R1A pass 8, CPU: was also (fqTo + 3) % 4 - the same footprint as (fqTo + 1) % 4 at the same lattice spots, and every test here reads the footprint, not the facing: it could never pass where (fqTo + 1) % 4 had failed)
@@ -3692,7 +3707,7 @@ export function generate(parcel, opts) {
       const quotaTurn = (n) => later(() => {
         if (subs() >= (n < pool.length ? Math.min(goal, QUOTA_MIN) : goal) || (miss >= pool.length && n >= pool.length)) return;
         let id = pool[qi++ % pool.length];
-        if (tris[f] > TB - 700) id = ["dresser", "wallCab", "ottoman", "bookcaseLow", "shelf"][qi % 5];      // (a full storey: authored pieces, 20-60 triangles)
+        if (tris[f] > TBf[f] - 700) id = ["dresser", "wallCab", "ottoman", "bookcaseLow", "shelf"][qi % 5];      // (a full storey: authored pieces, 20-60 triangles)
         if (fails.has(id)) { miss++; return; }
         const q = tryWall(id, "corner", { tint: tintW }) || freeAt(id);          // (a corner scan tries every wall spot: "center" only orders them differently)
         if (!q) { miss++; fails.add(id); return; }
@@ -4318,11 +4333,11 @@ export function generate(parcel, opts) {
   // the storey's budget: shares by area with a floor (a 6 m2 bathroom still gets its set), a reserve held back for the in-view pieces of phase 3
   for (let f = 0; f < S; f++) {
     const mine = roomRecs.filter((r) => r.floor === f), wt = (r) => (SHAREW[r.kind] || 1) * (r.cells.length + 2), wsum = mine.reduce((a, r) => a + wt(r), 0);
-    const avail = Math.max(0, TB - tris[f] - Math.min(200 * mine.length, 0.3 * Math.max(0, TB - tris[f])));
+    const avail = Math.max(0, TBf[f] - tris[f] - Math.min(200 * mine.length, 0.3 * Math.max(0, TBf[f] - tris[f])));
     for (const r of mine) { r.share = avail * wt(r) / Math.max(1, wsum); r.spent = 0; }
   }
   for (const ph of [0, 4, 1, 6, 7, 3, 2, 5, 8]) roundRobin(roomRecs.map((R) => furnishRoom(R, ph)));      // (5: the guarantee, lane K1; 6: a home's area quota, 7: its deferred dressing, W10 R1A)
-  for (const R of roomRecs) { const b = bestView(R); if (b.n < 3) notes.push("room f" + R.floor + "r" + R.ri + " (" + R.kind + "): " + b.n + " pieces in view from " + roomView(R).ents.length + " entrance(s); storey budget left " + (TRI_BUDGET - tris[R.floor]) + ", share " + Math.round(R.share) + " spent " + R.spent); }
+  for (const R of roomRecs) { const b = bestView(R); if (b.n < 3) notes.push("room f" + R.floor + "r" + R.ri + " (" + R.kind + "): " + b.n + " pieces in view from " + roomView(R).ents.length + " entrance(s); storey budget left " + (TBf[R.floor] - tris[R.floor]) + ", share " + Math.round(R.share) + " spent " + R.spent); }
   // honest labels: a "bedroom" no bed fits in (door zones, a narrow L) is a box room
   for (const R of roomRecs) if (R.kind === "bedroom" && !furn.some((p) => p.room === R && (p.cat.id === "bed" || p.cat.id === "bedSingle"))) R.kind = "storage";
 
@@ -4492,7 +4507,7 @@ export function generate(parcel, opts) {
   // ---- (W10 R1A item 8) model variety: the house's variants swapped in for the pieces they fit (see VARIETY)
   for (const p of furn) {
     const v = VAR[p.cat.type];
-    if (!v || p.slot || p.tops || p.host || v.mount !== p.cat.mount || v.w > p.cat.w + 1e-6 || v.d > p.cat.d + 1e-6 || tris[p.f] - p.cat.tris + v.tris > TB) continue;
+    if (!v || p.slot || p.tops || p.host || v.mount !== p.cat.mount || v.w > p.cat.w + 1e-6 || v.d > p.cat.d + 1e-6 || tris[p.f] - p.cat.tris + v.tris > TBf[p.f]) continue;
     const dd = (p.cat.d - v.d) / 2, dir = FACE[p.fq];
     if (p.run) { p.u -= dir[0] * dd; p.v -= dir[1] * dd; }                       // (a wall piece keeps its back on the wall)
     const w = p.fq % 2 ? v.d : v.w, d = p.fq % 2 ? v.w : v.d;

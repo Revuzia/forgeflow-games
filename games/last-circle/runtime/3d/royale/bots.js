@@ -150,7 +150,26 @@ function calmDropOn(W, b) {
  *  own drop limit, NAV_DROP_MAX, routes it round by the stairs). */
 function calmHeld(W, b, drop) {
   const a = b.actor, bb = b.bb;
-  if (!bb.calmDrop || !(drop <= walkDropHp(a))) return;
+  if (!bb.calmDrop) return;
+  if (!(drop <= walkDropHp(a))) { hpHeld(W, b); return; }      // (W10 R3A fix5) the hp limit refused it, not the calm cap: hpHeld
+  replanHeld(W, b);
+}
+/** (W10 R3A fix5) HP-BOUND HOLDS RE-PLAN TOO. edgeGuard held the bot at a drop / a flight its HP limit refuses (a wounded bot: walkDropHp under the
+ *  calm cap, or a FLEE / CLOSEIN / pressed-ROTATE bot, which keep the hp limit): before this only the calm cap's holds re-planned (calmHeld), so an
+ *  hp-bound hold stood still until the 3 s progress test or the 3 s loop breaker moved it - a 3 s stuck window every time, and the breaker's exit led
+ *  back to the same refused leg. probe_match --sweep isla_viva seed 1: s36 FLEE at 10 hp (limit 4.81 m) on the terrace top north-west of the village,
+ *  its grid route's walk leg (-23.6, 50.9, -4.1) -> (-29.7, 41.7, -2.3) down a 9 m slope (a flight at walk speed): held 3 s, broken out, routed back,
+ *  6 stuck episodes in 60 s; seed 5: s20 ROTATE at 19 -> 6 hp on the same terrace, 5; --pencheck setup 3 (s1 LOOT at 17 hp, limit 5.96 < the calm cap
+ *  6.3) held 3 s by the flight test before its progress test re-planned. Now an hp-bound hold asks the planner at once and counts its loops exactly as
+ *  a calm hold does (replanHeld: a route that leads straight back = a failed re-plan; CALM_HOLD_N of them -> the trap breaker). */
+const HP_REPLAN = true;           // false = an hp-bound hold waits for the 3 s progress test / loop breaker, as before (probe_match --sweep --plant no-hp-replan)
+function hpHeld(W, b) {
+  if (!HP_REPLAN) return;
+  replanHeld(W, b);
+}
+/** (W9 R1B, from calmHeld) a held bot asks for a route at once; a re-plan that led straight back here counts as failed (calmReplanFailed). */
+function replanHeld(W, b) {
+  const a = b.actor, bb = b.bb;
   // ...unless the last re-plan's route has just led it back to a refused drop here: the planner walks a steep face in 0.5 m steps that each fall
   // less than NAV_DROP_MAX while the mover flies the whole face (p23_fall rim, Isla seed 7 lip (-70, -34): 23 holds, each re-plan the same route,
   // held 2.5-8 s at a time). That route counts as a failed re-plan (calmReplanFailed: 3 -> the trap breaker), and no new search is asked for.
@@ -5569,7 +5588,7 @@ function edgeGuard(W, b) {
       inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
       bb.nextPathT = 0;
       nav.st.edgeHolds++;
-      if (bb.calmDrop) calmHeld(W, b, k <= 3 && a.pos.y - sup > lim ? a.pos.y - sup : runTop - sup);
+      if (bb.calmDrop) calmHeld(W, b, k <= 3 && a.pos.y - sup > lim ? a.pos.y - sup : runTop - sup); else hpHeld(W, b);      // (W10 R3A fix5) hp-bound holds re-plan too
       return;
     }
     if (a.pos.y - sup < -1.0 && runTop !== runTop) break;                     // rising ground / a wall: no edge this way
@@ -5608,7 +5627,7 @@ function edgeGuard(W, b) {
   inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
   bb.nextPathT = 0;
   nav.st.edgeHolds++; nav.st.edgeFlights++;
-  if (bb.calmDrop) { FLQ[2] = walkV; FLQ[3] = walkDropHp(a); if (flightSafe(W, a)) calmHeld(W, b, 0); }
+  if (bb.calmDrop) { FLQ[2] = walkV; FLQ[3] = walkDropHp(a); if (flightSafe(W, a)) calmHeld(W, b, 0); else hpHeld(W, b); } else hpHeld(W, b);      // (W10 R3A fix5) hp-bound holds re-plan too
 }
 /** (W9 R1 fix botpen) The legs' heading moved since edgeGuard's last probe: the yaw by more than EDGE_RETURN_YAW rad, or the move stick by more than
  *  EDGE_RETURN_STICK (|dmz| + |dmx|) - the probe interval assumed the heading it judged. Plain compares of the input numbers (no heading arithmetic). */

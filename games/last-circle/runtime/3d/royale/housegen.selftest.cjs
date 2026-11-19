@@ -107,6 +107,18 @@ const threadCpuMs = () => { const u = typeof process.threadCpuUsage === "functio
 
 // ── constants the checker uses (its own copies: a change in housegen must be a change here too) ─────────────────────────────────────────
 const R = 0.45, HGT = 1.8, STEP = 0.55, GRID = 0.25, RING = 1.5, REACH_XZ = 1.5, REACH_DY = 2.2, TOL = 0.02, TRI_BUDGET = 4000;
+/** The budget row's bar for storey f of H. (W10 R3A fix5, orchestrator ruling R3A-7) a WORK storey of a non-home building (not a ruin) has its bar written
+ *  here as literal numbers (never read from the module judged): a shop or warehouse on the storey -> 6000, 8000 when the footprint W x D >= 300 m2; else an
+ *  office / meeting room / lobby / corridor (hall) on it -> 5000; every other storey TRI_BUDGET (4000); a home's storey as before (<= 6000). */
+function storeyBar(H, f, HGmod) {
+  const ruined = H.theme === "ruin" || !!(HGmod.THEMES && HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined);
+  if (H.use === "house" && !ruined) return Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET);
+  if (ruined) return TRI_BUDGET;
+  const ks = H.rooms.filter((r) => r.floor === f).map((r) => r.kind);
+  if (ks.some((k) => k === "shop" || k === "warehouse")) return H.W * H.D >= 300 ? 8000 : 6000;
+  if (ks.some((k) => k === "office" || k === "meeting" || k === "lobby" || k === "hall")) return 5000;
+  return TRI_BUDGET;
+}
 const SILL = 1.2, HEAD = 2.3, EYE = 1.62, CROUCH_EYE = 0.97, RAMP_THICK = 0.3;
 function headroomRun(rise, run) { const m = Math.max(0.05, rise / run), mv = m * 8, arc = mv * mv / 44; return (1.8 + arc + 0.1) / m + 0.45; }   // maps.js:1684
 function fnv(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16); }
@@ -541,8 +553,7 @@ function checkHouse(H, HGmod, MAN) {
   for (const rf of H.roofs || []) triF[S - 1] += 2 + 4 + (rf.freeLow ? 2 : 0) + (rf.freeHigh ? 2 : 0) + 2 * rf.soffit.length;
   for (const g of H.gables || []) triF[S - 1] += g.pts.length - 2;
   // (W10 R1A: a home's storey - use house, not a ruin - draws up to TRI_BUDGET_HOME, itself held <= 6000 here; every other storey TRI_BUDGET)
-  const TBH = H.use === "house" && H.theme !== "ruin" && !(HGmod.THEMES && HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined) ? Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) : TRI_BUDGET;
-  for (let f = 0; f < S; f++) if (triF[f] > TBH) E("budget", "floor " + f + " has " + triF[f] + " triangles (budget " + TBH + ")");
+  for (let f = 0; f < S; f++) { const bar = storeyBar(H, f, HGmod); if (triF[f] > bar) E("budget", "floor " + f + " has " + triF[f] + " triangles (budget " + bar + ")"); }
   })();
   // ---- reach: capsule walk on the colliders
   const x0 = H.aabb.min[0] - RING, z0 = H.aabb.min[2] - RING, NX = Math.ceil((H.aabb.max[0] + RING - x0) / GRID), NZ = Math.ceil((H.aabb.max[2] + RING - z0) / GRID);
@@ -1249,7 +1260,7 @@ else if (require.main === module) (async () => {
     for (const use of ["tower", "midrise"]) for (const theme of THEMES) for (const st of [4, 6, 9]) {
       const H = HGmod.generate({ id: "tall", w: 15, d: 15, theme, use, storeys: st, seed: 31 + st });
       if (H.floors.length > 3 || H.storeys + H.shell !== st || !H.boxes.some((b) => b.p === "shell" && b.c)) bad.push(use + " " + st + ": walkable " + H.floors.length + " shell " + H.shell);
-      if (Math.max(...H.tris.floors) > TRI_BUDGET || H.tris.shell > TRI_BUDGET * Math.max(1, H.shell)) bad.push(use + " " + st + " budget " + H.tris.floors + " / " + H.tris.shell);
+      if (H.tris.floors.some((t, f) => t > storeyBar(H, f, HGmod)) || H.tris.shell > TRI_BUDGET * Math.max(1, H.shell)) bad.push(use + " " + st + " budget " + H.tris.floors + " / " + H.tris.shell);
     }
     okP(bad.length === 0, "towers / mid-rises asked for 4-9 storeys: <= 3 walkable, the others one closed mass, height kept; budget (18 buildings)", bad.slice(0, 3).join(" | "));
   }
@@ -1333,7 +1344,7 @@ else if (require.main === module) (async () => {
   row("windows", "windows: empty aperture, sill 1.20 / header 2.30, shootable standing, cover crouched, no tall piece in front");
   row("vis-col", "colliders == visual extents (structure exact; kit vs manifest bbox, authored, steps vs ramp within 2 cm)");
   row("stairs", "stairs <= 45 deg, lip 0, top on the next floor, hole >= stairHeadroomRun");
-  row("budget", "<= " + TRI_BUDGET + " triangles per storey, a home's <= " + Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) + " (recounted)");
+  row("budget", "<= " + TRI_BUDGET + " triangles per storey, a home's <= " + Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) + ", a work storey's (W10 R3A ruling R3A-7) office / meeting / lobby / corridor <= 5000, shop / warehouse <= 6000 (8000 at a footprint >= 300 m2) (recounted)");
   row("roof", "pitched roofs: every plank IS its ramp (<= 45 deg, underside drawn only outside the walls); the attic sealed by layers under the plank; end walls on the layers");
   row("loot", "floor loot points on free floor (never inside / under a piece's collider)");
   row("staircase", "no furniture staircase: no low clutter (lowest top 0.2-0.55 m) within 0.9 m of a piece one step up");
@@ -1452,6 +1463,22 @@ else if (require.main === module) (async () => {
     // (Wave 9) the start state: the same house judged as if its doors started SHUT (closed slabs alive) must be caught - the slab check reads the dead flags
     { const errs = []; checkLeaves(base, HGmod, HGmod.collidersOf(base), (c, m) => errs.push(c + ": " + m), () => false);
       ok(errs.some((e) => e.startsWith("leaves:")), "negative control [leaves]: the slab colliders judged against a shut start state are caught", errs.slice(0, 1).join(" | ") || "no error raised"); }
+    // (W10 R3A fix5, ruling R3A-7) the work-storey bars still catch a storey over its new number: a shop storey (footprint >= 300 m2, bar 8000), a small shop
+    // storey (bar 6000) and an office storey (bar 5000), each padded with 12-triangle boxes to just past its bar, must be caught by the budget row
+    for (const [use, w, d, theme, want, bar] of [["shop", 20, 17.5, "city", "shop", 8000], ["shop", 12.5, 10, "city", "shop", 6000], ["tower", 15, 12.5, "city", "office", 5000]]) {
+      let Hw = null, fw = -1;
+      for (let sd = 1; sd <= 12 && fw < 0; sd++) {
+        const G = HGmod.generate({ id: "budget-" + use + "-" + sd, w, d, theme, use, storeys: use === "tower" ? 3 : 1, seed: sd, plan: "rect" });
+        const isBar = (f) => { const ks = G.rooms.filter((r) => r.floor === f).map((r) => r.kind); return want === "shop" ? ks.some((k) => k === "shop" || k === "warehouse") : !ks.some((k) => k === "shop" || k === "warehouse") && ks.some((k) => k === "office" || k === "meeting" || k === "lobby" || k === "hall"); };
+        for (let f = 0; f < G.floors.length && fw < 0; f++) if (isBar(f) && checkHouse(G, HGmod, MAN).length === 0) { Hw = G; fw = f; }
+      }
+      if (!Hw) { ok(false, "negative control [budget, ruling R3A-7]: a clean " + use + " (" + w + " x " + d + ") with a " + want + " storey to pad", "none in seeds 1-12"); continue; }
+      const sl = Hw.boxes.find((q) => q.p === "slab" && q.fl === fw) || Hw.boxes.find((q) => q.p === "slab");
+      const now = Hw.tris.floors[fw], n = Math.ceil((bar + 1 - now) / 12);
+      for (let k = 0; k < n; k++) Hw.boxes.push(Object.assign({}, sl, { c: 0, p: "step2", h: 0, fl: fw }));
+      const errs = checkHouse(Hw, HGmod, MAN);
+      ok(errs.some((e) => e.startsWith("budget:")), "negative control [budget, ruling R3A-7]: a " + want + " storey (" + use + " " + w + " x " + d + ", floor " + fw + ", bar " + bar + ") padded from " + now + " to " + (now + 12 * n) + " triangles is caught", errs.slice(0, 2).join(" | ") || "no error raised");
+    }
     // the pitched-roof plants on a gable house
     const g0 = HGmod.generate({ id: "gable-base", w: 12.5, d: 10, theme: "lodge", use: "house", storeys: 2, seed: 4, plan: "rect" });
     ok(g0.roof === "gable" && checkHouse(g0, HGmod, MAN).length === 0, "negative-control gable house passes every check (roof " + g0.roof + ")");
