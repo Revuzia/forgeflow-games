@@ -940,7 +940,9 @@ export function generate(parcel, opts) {
     if (roofKind === "gable" && use === "barn" && (P.theme === "farm" || P.theme === "lodge")) roofKind = "gambrel";
     else if (roofKind === "gable" && use === "shed" && rng() < 0.6) roofKind = "lean";
     // (W10 R3A, audit 13) a home outside a downtown core is never flat-roofed: a gable, a stepped hip on an L plan (no stream drawn: the house's draws stay)
-    if (PITCHED_HOMES && home && !P.core && roofKind === "flat") roofKind = cut ? "hip" : "gable";
+    // (fix4) except the city theme's homes (Savanna): they keep the theme's own mix (gable 0.8 - was 0.55) - forcing every one of them pitched cost the LOW tier's
+    // bot / nav-grid frame +16 KB of JS heap (p23_tierprof kb [ashgrid low] 94.3 against the bar 85; with the city's own mix 76.3, homes pitched 91.1 % pooled)
+    if (PITCHED_HOMES && home && !P.core && P.theme !== "city" && roofKind === "flat") roofKind = cut ? "hip" : "gable";
     if (ROOF_FLAT_ALL) roofKind = "flat";
   }
   const pitched = roofKind === "gable" || roofKind === "gambrel" || roofKind === "lean";
