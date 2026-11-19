@@ -45,6 +45,22 @@ function setBeh(w: LifeWorld, i: number, b: number, scoreMilli: number, durMs: n
   const tb = w.f[F.NOW];
   w.beh[i] = b; w.ph[i] = 0; w.bT[i] = tb; w.bE[i] = tb + durMs * 0.001; w.bSc[i] = scoreMilli * 0.001;
 }
+/** (round 11, R11_FIX 3) the hysteresis of a squishy's behaviour switches IN A PLACE (Home and the cabin keep their published rows: a hold there changed
+ *  probe_life's scripted scenes). Every think it sees the behaviour (a moment begun by another counts too; IDLE between two is not one): SWITCH_N switches
+ *  within SWITCH_S while it moved under SWITCH_M hold it SWITCH_HOLD_S: no new behaviour of its own (choose) and no moment that needs it (social.ts isFree);
+ *  the running behaviour goes on, a use the player asked for and the scripts (afterglow, arrive, cheer, a ride) are never held. VERDICT_R10 S1 (Glimglop
+ *  COMEBACK / "USE rockpool" every 0.5 s for 12.5 s on Ripple's drift log) and SU-05's catches (a slow slime trying USE > NOTICE > WANDER > MOMENT on one spot). */
+const SWITCH_N = 3, SWITCH_S = 5, SWITCH_M = 0.1, SWITCH_HOLD_S = 5;
+function hystStep(w: LifeWorld, s: LifeSnapshot, i: number): void {
+  if (w.placeIdx <= 1) return;
+  const tb = w.f[F.NOW], dx = s.x[i] - w.bSwX[i], dz = s.z[i] - w.bSwZ[i], r = i * 4;
+  if (dx * dx + dz * dz > SWITCH_M * SWITCH_M) { w.bSwX[i] = s.x[i]; w.bSwZ[i] = s.z[i]; for (let k = 0; k < 4; k++) w.bSwT[r + k] = -1e9; }   // it moved: a new spot
+  const b = w.beh[i];
+  if (b > BEH.IDLE && b !== w.bSwB[i]) { if (w.bSwB[i] > BEH.IDLE) { w.bSwT[r + (w.bSwN[i] & 3)] = tb; w.bSwN[i] = (w.bSwN[i] + 1) & 3; } w.bSwB[i] = b; }
+  let n = 0;
+  for (let k = 0; k < 4; k++) if (tb - w.bSwT[r + k] <= SWITCH_S) n++;
+  if (n >= SWITCH_N && tb >= w.bSwH[i]) { w.bSwH[i] = tb + SWITCH_HOLD_S; for (let k = 0; k < 4; k++) w.bSwT[r + k] = -1e9; }
+}
 function endBeh(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, coolS: number): void {
   const tb = w.f[F.NOW];
   const b = w.beh[i];
@@ -284,6 +300,7 @@ export function behave(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Life
   const tb = w.f[F.NOW];
   const fl = s.flags[i];
   if ((fl & HELD_BITS) !== 0) return; // HELD: its own brain does nothing (needs and looks still integrate)
+  hystStep(w, s, i);   // (round 11, R11_FIX 3)
   if (w.ki[i] === 2) { chunkThink(w, s, out, ev, i); return; }
   // the shell's scripts come before a running moment: B12 pose, B14 cheer (the moment ends for everyone in it)
   if ((w.pO && w.beh[i] !== BEH.POSE) || w.cD[i]) { if (w.moo[i] >= 0) abortFor(w, s, out, ev, i); }
@@ -467,6 +484,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
 
   w.wD[i] = -1;
   if (best === 0 || bs <= curScore) return;
+  if (tb < w.bSwH[i] && forced < 0) return;   // (round 11, R11_FIX 3) the hysteresis' hold in a place: nothing new of its own (hystStep)
   // the running behaviour is never restarted by its own fresh score (it would never get past its first phase)
   if (best === cur && (best !== BEH.USE || bArg === w.tT[i])) return;
   // start it
@@ -937,11 +955,17 @@ function selfPoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean
       }
       // (round 11, R11_FIX 5) none of those on the squishy's line is in the bounds: the water's point nearest the bounds' middle that is (Ripple's TALL layout puts
       // the Rock Pool's centre 0.3 m outside LIFE's shrunk bounds, so no wade spot was ever found there on a phone)
-      {
-        const zx = w.zX[zq], zz = w.zZ[zq];
+      if (zr > 0) {
+        const zx = w.zX[zq], zz = w.zZ[zq], m = sh * 0.001 + 0.02;
+        // the water's centre clamped into the shrunk bounds (a box: per axis; a disc: along its radius), if that point is still in the water
+        let cx = zx, cz = zz;
+        if (w.bS !== 0) { const hx = w.ba - m, hz = w.bb - m; cx = Math.max(w.bx - hx, Math.min(w.bx + hx, zx)); cz = Math.max(w.bz - hz, Math.min(w.bz + hz, zz)); }
+        else { const ex = zx - w.bx, ez = zz - w.bz, el = Math.sqrt(ex * ex + ez * ez), lim = w.ba - m; if (el > lim && el > 0) { cx = w.bx + ex / el * lim; cz = w.bz + ez / el * lim; } }
+        if ((cx - zx) * (cx - zx) + (cz - zz) * (cz - zz) <= zr * zr) { w.f[F.X] = cx; w.f[F.Z] = cz; qT(w); if (inBounds(w, sh)) return true; }
+        // else toward the bounds' middle
         let vx = w.bx - zx, vz = w.bz - zz;
         const vl = Math.sqrt(vx * vx + vz * vz);
-        if (vl > 0.01 && zr > 0) {
+        if (vl > 0.01) {
           vx /= vl; vz /= vl;
           for (let n = 1; n <= 8; n++) {
             const rr = zr * n / 8;

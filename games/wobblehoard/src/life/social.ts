@@ -31,6 +31,7 @@ export function mem(w: LifeWorld, m: number, k: number): number { return w.mM[m 
 export function isFree(w: LifeWorld, s: LifeSnapshot, j: number, rideOk: boolean): boolean {
   if (j < 0 || j >= s.n || !w.ac[j] || w.moo[j] >= 0) return false;
   if ((s.flags[j] & HELD_BITS) !== 0) return false;
+  if (w.f[F.NOW] < w.bSwH[j]) return false;   // (round 11, R11_FIX 3) the hysteresis holds it in a place (brain.ts hystStep): no moment pulls it in
   if (!rideOk && (s.flags[j] & LIFE_FLAG.RIDE) !== 0) return false;
   const b = w.beh[j];
   // the still, short behaviours (notice, watch, answer) give way to a moment; a wander stops for it
