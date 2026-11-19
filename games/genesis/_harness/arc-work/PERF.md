@@ -3008,3 +3008,22 @@ repeats each, spread within ~3 %: THE FIRST TRUSTWORTHY NUMBERS. FIX = tcache=1&
   depth / colour traffic cannot be compressed: that, not per-sample shading, is the likely MSAA / overdraw cost now
   that the terrain fragment is cheap. `?revz=1` (session 18: reversed-Z through EXT_clip_control, which the M5 has:
   no gl_FragDepth) exists and was never timed on the Mac. It is the first bench item for MSAA and the opaque pass.
+- EQUALITY of the exact cuts (dist15, default vs `wshade3=capall` = whitecap tap always; glitter / ice changes are
+  identical by construction): water pixels over 8/255 — y25 8, land 31, y0 30 (a repeat: the first y0 of the default
+  run came out with a pale mottle all over the sea, 9.6 k px; the SAME build re-run (d-N2) matches capall to 30 px, so
+  that first frame was a bad run, not the code. Noted: a first view can go wrong under load ~14; repeat before blaming).
+- Compile check (s25-glslcheck.mjs, one query per run): wfast=0; wfast=3; +ssrmask; +ssrmask,ssrwin0,ssrdbg; +ssrall;
+  +nossr with each of noglint / nodeck / norare / nodetail / norefract / nosky / nofoam; +capall; +capold; +nossr &
+  waterland=0; +seamold,foamold,ssrold: all OK.
+- GATE: `bash _harness/slot.sh npm run check` # pass 1058 # fail 1: tests/worker.test.ts "worker pacing ... 100x runs
+  66 ticks/s" (a timing test of the sim worker, load ~14; not water code) — re-run alone: # pass 2 # fail 0.
+  `npm run build` exit 0; tsc clean.
+### 3. BENCH PLAN for the Mac (10 variants; each "ns-X" minus "nossr" = the cost of term X; W3 minus nossr = SSR)
+  The `bv` value (commas inside wshade3 pass through unchanged: the bench maps only `;` and `:`; checked with
+  bench.ts parseBench + stepSearch, and through encodeURIComponent; labels use `-` because `+` decodes to a space):
+  ?bench=custom&bv=W3~scene:0;shadows:0;wfast:3|nossr~scene:0;shadows:0;wfast:3;wshade3:nossr|ns-nodetail~scene:0;shadows:0;wfast:3;wshade3:nossr,nodetail|ns-norefract~scene:0;shadows:0;wfast:3;wshade3:nossr,norefract|ns-nosky~scene:0;shadows:0;wfast:3;wshade3:nossr,nosky|ns-nodeck~scene:0;shadows:0;wfast:3;wshade3:nossr,nodeck|ns-noglint~scene:0;shadows:0;wfast:3;wshade3:nossr,noglint|ns-nofoam~scene:0;shadows:0;wfast:3;wshade3:nossr,nofoam|ns-norare~scene:0;shadows:0;wfast:3;wshade3:nossr,norare|ns-noguard~scene:0;shadows:0;wfast:3;wshade3:nossr;waterland:0
+  Reference points from round 21 (no need to repeat): wfrag=0 18.0, ssrall (= the new default) 52.8, nossr 46.4.
+  Reading: nodetail = the 4 ripple taps; norefract = 2 depth + 1 colour reads; nosky = the sky LUT; nodeck = the
+  mirrored clouds; noglint = GGX + glitter + moon glint; nofoam = all foam / shore / whitecap work; norare = ice + silt
+  code compiled out (if THIS is large, the cost is the shader's size / registers, not its work); noguard = the
+  waterland discard's depth reads (the old `vDepth < -0.6` test instead).
