@@ -2799,3 +2799,51 @@ Full report `MAC-ROUND20-water.txt`; shots `mac-shots/r20-*.jpg`. Lid closed, ex
   (2) the SSR restructure gained nothing measurable. (3) wfast=3 was 1.7-2.3x faster than P in round 18 and is
   ~equal to P here: either noise or the seam fix (per-pixel group noise fades) cost something — must be checked.
   (4) floor with no scene, no shadows, no water fragment is still 51 ms = 18 fps: round 19 part 2 must explain it.
+
+## SESSION 25c (water wfast=3, Mac round 20: the SSR cost) (2026-11-19, WATER agent) — IN PROGRESS, notes as I go
+### Task 2 first (by the code): the seam fix adds NOTHING per pixel. Per vertex: 1 length, 1 dot, 1 divide, 4 smoothstep
+  (vs the vertex stage's 4 simplex + 12-36 texelFetch). The s25b foam changes only swap texture channels / one tile size;
+  the s25b SSR restructure has the same tap count. So the round 18 -> 20 drift of `wfast=3` vs P is not the seam fix (the
+  P repeats themselves spread 7.0 / 2.8 / 4.3 in round 18). Clean Mac pair anyway: `wfast=3` vs `wfast=3&wshade3=seamold`.
+### Task 1: why the SSR costs ~50 ms, and the cut
+- Why (by the code, untestable on SwiftShader): over open sea the march NEVER exits early (nothing to hit), so every
+  eligible sea pixel (F > 0.03, ~70 % of the frame at the landing) runs all 20 depth reads + per-step math. The reads
+  are long-range along each ray (poor cache reuse at the far end) and each iteration's test depends on the previous
+  one's prz, so with this shader's register load (a big fragment: low occupancy) their latency is not hidden: tens of
+  serialized ~0.5 us reads per pixel x 1.1 M pixels. The s25b restructure (texelFetch, 4 at a time) changed none of
+  that: the same reads still run for every pixel. The lever is to NOT run them where they cannot find anything.
+- BUILT `wshade3=ssrall` = old (march everywhere), default inside wfast=3 = LAND MASK:
+  * renderer.ts hook (3 lines, after the water copies): ssrMaskUpdate() draws 2 tiny passes from linDepth into a
+    (W/4) x 1 RGBA32F texture: per 4-px screen column, the min / max screen v and nearest depth of LAND pixels (opaque
+    points whose body-frame radius > R - 2 m - |tide|). ~64 + ~60 reads per output texel, 2 draws.
+  * In f3Ssr, before the march: a hit needs an opaque point in front of a ray point; ray points are above the water,
+    the sea bed is under it along the same sight line, the sky is at infinity: only land pixels can be hit. If no
+    column the screen segment crosses (<= 32 columns, else march) holds land inside the segment's rows (+-2 px) and
+    nearer than its far end (+1 %), the result is "no hit" without marching. Exact up to one corner case: a sight line
+    that dips under the sea sphere beyond the horizon could meet the bed in front of a ray point; the old march could
+    accept that as a "hit" on the bed (reflecting last frame's water there). Camera under sea level: mask off.
+  * debug `wshade3=ssrdbg`: black = SSR gated off before the march, BLUE = skipped by the mask, yellow ramp = depth reads
+    taken / 24 (with `ssrall`: the before picture).
+- First mask (one summary per column; dist10, c-dbgM): sea pixels skipped by the mask y0 57 % / y25 34 %; mean depth
+  taps per sea pixel 8.2 / 7.3 (counter: _harness/arc-work/s25-ssrcount.py on the ssrdbg shots). Too conservative: a
+  column holding the near island at the bottom AND a far mountain at the top became one wide land range with the near
+  depth. REFINED (dist11): per column per 128-px band (mask (W/4) x (H/128)), and per band the ray's own depth where it
+  crosses that band (monotonic along the segment: its band ends bound it). <= 8 columns x 8 bands of tests, on a
+  ~422 x 8 texture (cache-resident), before the march; > 8 columns = march.
+### Task 3 (storm whitecaps softer / lower contrast on the Mac)
+- Not the noise's distribution: quantiles of my Perlin octaves vs GENESIS's snoise (2e5 samples) agree within ~0.03 up
+  to the 99.9th percentile (kurtosis 2.54 vs 2.69). It is the filtering: the mips / anisotropic filter lower the spread of
+  the far noise, and s25b's coverage fix then widened the ramp too: soft, grey patches where the point-sampled original
+  keeps hard edges (aliasing). FIX (`wshade3=capold` = s25b): each filtered octave is rescaled to the spread it had
+  (1/sqrt(retained share), up to 2x), only the remainder widens the ramp. Same coverage, crisper patches.
+- dist12 = + a whole-column summary row (first reject per column; column cap back to 32). dist13 = + the WINDOW: while
+  testing the cells it records the u-range of the ones that pass; the march reads depth ONLY for samples inside it (a
+  sample outside cannot hit, by the same argument; its ray depth, pure math, still feeds the next sample's crossing
+  test, so every decision is unchanged). `wshade3=ssrwin0` turns the window off.
+- RESULT (ssrdbg shots, landing cams, mean depth reads per SEA pixel; sheet shots/sheet-ssr-work.png: left before
+  (`ssrall`), right after, LOOKED):        y0 (pitch -12)   y25 (pitch -28)
+    before (ssrall, dist10)                    22.1             15.0
+    column mask (dist10)                        8.2              7.3
+    + bands + summary + window (dist13)         6.3              1.6
+  What still marches is where it must: the water under the palm island's columns (its reflection), and a few thin
+  columns with something above water far out.

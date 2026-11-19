@@ -33,7 +33,11 @@
 //     * ice and silt streaks keep their arithmetic noise (rare, gated as before).
 // Sub-cuts for a Mac bisect: `?wshade3=nodetail,noreflect,nossr,norefract,nofoam,nosky,pcf5` (+ `spdbg`: R tile-B amplitude, G / B the short / long Gerstner shares the lattice keeps; `foamdbg`: R shore, G whitecap / gale, B crest / surge / rapids).
 // STATIC COUNT (open calm sea, day, one projection): see PERF.md SESSION 25.
-import { DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, RepeatWrapping, UnsignedByteType, type IUniform, type Vector4 } from 'three';
+import {
+  DataTexture, FloatType, LinearFilter, LinearMipmapLinearFilter, NearestFilter, RGBAFormat, RepeatWrapping, ShaderMaterial, UnsignedByteType,
+  Vector4 as V4, WebGLRenderTarget, type IUniform, type Matrix3, type Matrix4, type Texture, type Vector3, type Vector4, type WebGLRenderer,
+} from 'three';
+import type { FullscreenQuad } from '../post/fsquad.ts';
 import { perfList, perfNum } from '../perfswitch.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
@@ -47,6 +51,15 @@ const SEAMOLD = CUT.has('seamold');
 const FOAMOLD = CUT.has('foamold');
 /** (s25b) `wshade3=ssrold`: s25's SSR loop (texture() taps, hit handling inside the loop), for A/B */
 const SSROLD = CUT.has('ssrold');
+/** (s25c) `wshade3=ssrall` = every eligible pixel marches (s25b); default: the land mask below skips rays that cannot hit */
+const SSRMASK = !CUT.has('ssrall');
+/** (s25c) `wshade3=ssrdbg`: paint the SSR work per pixel (black: gated off before the march, blue: skipped by the land
+ *  mask, yellow ramp: depth taps taken / 24) */
+const SSRDBG = CUT.has('ssrdbg');
+/** (s25c) `wshade3=capold`: s25b's whitecap ramp (filtered noise, widened ramp only) */
+const CAPOLD = CUT.has('capold');
+/** (s25c) `wshade3=ssrwin0`: march the whole segment where the mask lets a pixel through (default: only its window) */
+const SSRWIN = !CUT.has('ssrwin0');
 const WCT = FOAMOLD ? '48.0' : '24.0';
 // (s25b) every water level's uMorph (x = K x size(level - 1) = 2 K R spacing(level), z = max(1.5, 1.5 spacing)): 1 / (K R)
 // from any level whose z is not clamped; a getter, so three reads it fresh at every upload
@@ -237,6 +250,9 @@ const VERT_MAIN = /* glsl */ `
 const fragDecl = (n: number): string => /* glsl */ `
 uniform sampler2D uRipMap;
 uniform sampler2D uF3Noise;
+uniform highp sampler2D uF3Mask;  // (s25c) per 4-px screen column: x = min, y = max screen v of land pixels, z = their nearest depth
+uniform float uF3MaskOn;
+float gF3Steps = -1.0;            // (ssrdbg) -1 = no SSR attempted, -2 = skipped by the mask, else depth taps taken
 varying vec4 vF3A;
 varying vec4 vF3B;
 varying vec4 vF3S;
@@ -334,6 +350,56 @@ vec4 f3Ssr(vec3 posV, vec3 rV, vec3 nV) {
   float K1 = mix(k0, k1, tm);
   vec2 S1 = s0 + dS * tm;
   if (length((S1 - s0) * uResolution) < 3.0) return vec4(0.0);
+  ${SSRMASK ? `// (s25c) can anything be hit? A hit needs an opaque point IN FRONT of a ray point, and every ray point lies above
+  // the water; the opaque scene behind the water (the sea bed, under the surface along the same line of sight) or
+  // the sky never is. So only LAND pixels (opaque points above the lowest water level, uF3Mask) can be hit: if none
+  // of the 4-px columns the segment crosses holds land within its screen rows and nearer than its far end, the march
+  // cannot find anything and is skipped (the same result, exactly: the output was "no hit" = sky)
+  float uLo = 0.0, uHi = 1.0;   // (s25c) the part of the segment that can hold a hit (the mask's passing cells)
+  if (uF3MaskOn > 0.5) {
+    // (per 4-px column the segment crosses, per 128-px screen band of it: is there land in those rows, nearer than the
+    // ray gets while it is in them? depth along the segment is monotonic, so its ends bound it; margins 1-2 px, 1 %)
+    vec2 m0 = (s0 * 0.5 + 0.5) * uResolution, m1 = (S1 * 0.5 + 0.5) * uResolution, dm = m1 - m0;
+    ivec2 msz = textureSize(uF3Mask, 0);
+    int c0 = int(min(m0.x, m1.x)) / 4, c1 = int(max(m0.x, m1.x)) / 4;
+    if (c1 - c0 < 32) {
+      bool any = false;
+      float uL = 2.0, uH = -1.0;
+      int nb = msz.y - 1;                      // the last row: each column's summary over the whole screen
+      float vlo = min(m0.y, m1.y) - 2.0, vhi = max(m0.y, m1.y) + 2.0;
+      float zall = max(-posV.z, -Q1.z / K1) * 1.01 + 1.0;
+      for (int ci = 0; ci < 32; ci++) {
+        int c = c0 + ci;
+        if (c > c1) break;
+        vec4 sm = texelFetch(uF3Mask, ivec2(clamp(c, 0, msz.x - 1), nb), 0);
+        if (!(sm.y * uResolution.y >= vlo - 1.0 && sm.x * uResolution.y <= vhi + 1.0 && sm.z < zall)) continue;
+        float ua = 0.0, ub = 1.0;
+        if (abs(dm.x) > 1e-3) {
+          float t0 = (float(c * 4) - 1.0 - m0.x) / dm.x, t1 = (float(c * 4 + 4) + 1.0 - m0.x) / dm.x;
+          ua = max(0.0, min(t0, t1)); ub = min(1.0, max(t0, t1));
+        }
+        if (ua > ub) continue;
+        float ylo = min(m0.y + dm.y * ua, m0.y + dm.y * ub) - 2.0, yhi = max(m0.y + dm.y * ua, m0.y + dm.y * ub) + 2.0;
+        int r0 = max(int(floor(max(ylo, 0.0))) / 128, 0), r1 = min(int(floor(max(yhi, 0.0))) / 128, nb - 1);
+        for (int bi = 0; bi < 8; bi++) {
+          int bd = r0 + bi;
+          if (bd > r1) break;
+          float va = max(ylo, float(bd * 128)), vb = min(yhi, float(bd * 128 + 128));
+          float uA = ua, uB = ub;
+          if (abs(dm.y) > 1e-3) {
+            float t0 = (va - m0.y) / dm.y, t1 = (vb - m0.y) / dm.y;
+            uA = clamp(max(ua, min(t0, t1)), 0.0, 1.0); uB = clamp(min(ub, max(t0, t1)), 0.0, 1.0);
+          }
+          float zmax = max(-mix(Q0.z, Q1.z, uA) / mix(k0, K1, uA), -mix(Q0.z, Q1.z, uB) / mix(k0, K1, uB)) * 1.01 + 1.0;
+          vec4 mk = texelFetch(uF3Mask, ivec2(clamp(c, 0, msz.x - 1), bd), 0);
+          if (mk.y * uResolution.y >= va - 1.0 && mk.x * uResolution.y <= vb + 1.0 && mk.z < zmax) { any = true; uL = min(uL, uA); uH = max(uH, uB); }
+        }
+      }
+      if (!any) { gF3Steps = -2.0; return vec4(0.0); }
+      ${SSRWIN ? 'uLo = uL - 0.02; uHi = uH + 0.02;' : ''}
+    }
+  }` : ''}
+  gF3Steps = 0.0;
   float jit = 0.5 + 0.2 * (sin(vBodyPos.x * 0.9 + vBodyPos.y * 0.4) + sin(vBodyPos.z * 0.8 + vBodyPos.y * 0.7));
   float prz = -posV.z, uPrev = 0.0;
   ${SSROLD ? `/* s25 loop */
@@ -373,11 +439,17 @@ vec4 f3Ssr(vec3 posV, vec3 rV, vec3 nV) {
   for (int g = 0; g < ${n / 4}; g++) {
     vec4 u = pow((vec4(float(g * 4)) + vec4(0.0, 1.0, 2.0, 3.0) + jit) / ${n}.0, vec4(1.8));
     vec4 rz = -mix(vec4(Q0.z), vec4(Q1.z), u) / mix(vec4(k0), vec4(K1), u);
-    vec4 sz = vec4(
-      texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.x) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r,
-      texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.y) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r,
-      texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.z) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r,
-      texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.w) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r);
+    // (s25c) samples outside [uLo, uHi] cannot hit (no land there, by the mask): no read, the test fails as it would
+    // (their ray depth still feeds the next sample's crossing test, so the decisions are the same)
+    vec4 sz = vec4(1e9);
+    if (u.w >= uLo && u.x <= uHi) {
+      gF3Steps += dot(step(vec4(uLo), u) * step(u, vec4(uHi)), vec4(1.0));
+      sz = vec4(
+        (u.x >= uLo && u.x <= uHi) ? texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.x) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r : 1e9,
+        (u.y >= uLo && u.y <= uHi) ? texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.y) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r : 1e9,
+        (u.z >= uLo && u.z <= uHi) ? texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.z) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r : 1e9,
+        (u.w >= uLo && u.w <= uHi) ? texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, u.w) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r : 1e9);
+    }
     for (int j = 0; j < 4; j++) {
       float r = rz[j], d = sz[j];
       if (d < 1e8 && r > d && d > prz - (0.5 + 0.02 * d) && r < d + max(1.0, abs(r - prz) * 1.5 + 0.01 * r)) { uHit = u[j]; break; }
@@ -387,6 +459,7 @@ vec4 f3Ssr(vec3 posV, vec3 rV, vec3 nV) {
   }
   if (uHit < 0.0) return vec4(0.0);
   float u0 = uPrev, u1 = uHit;
+  gF3Steps += 4.0;
   for (int j = 0; j < 4; j++) {
     float um = 0.5 * (u0 + u1);
     float dm = texelFetch(tSceneDepth, clamp(ivec2((mix(s0, S1, um) * 0.5 + 0.5) * dszf), ivec2(0), dsz - 1), 0).r;
@@ -608,13 +681,19 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   float whitecap = 0.0;
   if (${f.foam ? 'true' : 'false'} && cover > 0.001 && vSalt > 0.3 && vDepth > 2.0 && calm > 0.0) {
     vec4 nW = f3N(P, vec3(0.38, 1.0, 0.38), ${WCT}, vec2(-0.19, 0.125) * uTime / ${WCT});
-    float wcN = nW.y * 0.55 + nW.w * 0.3 + (vCrest - 0.6) * 0.35;
     // (a thresholded noise read through its mips: the filtered value drifts to the mean, so far out every pixel would be
     // all-white or all-clear. The share of the noise's spread the mips removed (mip level of the 48 m tile: G octave
     // 32 texels, A octave 8) widens the ramp instead: the pixel gets the expected coverage, what the point-sampled
     // original showed as a speckle of the same mean)
     float wl = log2(max(fw * 0.7 * 256.0 / ${WCT}, 1e-3));
-    float wsd = 0.116 * sqrt(0.77 * smoothstep(3.0, 5.5, wl) + 0.23 * smoothstep(1.0, 3.5, wl)) * 1.7;
+    float lG = smoothstep(3.0, 5.5, wl), lA = smoothstep(1.0, 3.5, wl);   // the share of each octave's spread the mips removed
+    ${CAPOLD ? `float wcN = nW.y * 0.55 + nW.w * 0.3 + (vCrest - 0.6) * 0.35;
+    float wsd = 0.116 * sqrt(0.77 * lG + 0.23 * lA) * 1.7;` : `// (s25c) CONTRAST RESTORED first: each filtered octave is rescaled to the spread it had (up to 2x), so the patches
+    // keep the hard edges the point-sampled original showed (the Mac: same amount, but softer and lower in contrast);
+    // only the spread beyond that 2x widens the ramp (the expected coverage, as s25b). 'wshade3=capold' = s25b
+    float kG = inversesqrt(max(1.0 - lG, 0.25)), kA = inversesqrt(max(1.0 - lA, 0.25));
+    float wcN = nW.y * 0.55 * kG + nW.w * 0.3 * kA + (vCrest - 0.6) * 0.35;
+    float wsd = 0.116 * sqrt(0.77 * max(lG - 0.75, 0.0) * 4.0 + 0.23 * max(lA - 0.75, 0.0) * 4.0) * 1.7;`}
     whitecap = smoothstep(1.0 - cover * 4.0 - wsd, 1.0 - cover * 2.0 + 0.02 + wsd, wcN * 0.5 + 0.5) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
   }
   if (${f.foam ? 'true' : 'false'} && windSpd * uWind > 9.0 && vSalt > 0.3 && calm > 0.0) {
@@ -683,6 +762,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
     col = mix(col, ov.rgb * (lum * 2.2 + uOverlayK.z * 0.6), ov.a * 0.8);
   }
   gl_FragColor = vec4(col, 1.0);
+  ${SSRDBG ? 'gl_FragColor = gF3Steps < -1.5 ? vec4(0.0, 0.0, 1.0, 1.0) : gF3Steps < 0.0 ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(vec3(1.0, 1.0, 0.0) * (0.15 + 0.85 * gF3Steps / 24.0), 1.0);' : ''}
 }
 `;
 
@@ -708,6 +788,104 @@ export function fastOceanShaders(vert: string, frag: string, rippleMap: () => Da
   return {
     vert: vert.slice(0, vMain) + VERT_DECL + vert.slice(vMain, vEnd) + VERT_MAIN + vert.slice(vEnd),
     frag: frag.slice(0, fMain) + fragDecl(20) + frag.slice(fMain, fBody) + fragMain(f),
-    uniforms: { uRipMap: { value: rippleMap() }, uF3Noise: { value: foamNoiseMap() }, uF3KR: krUniform },
+    uniforms: { uRipMap: { value: rippleMap() }, uF3Noise: { value: foamNoiseMap() }, uF3KR: krUniform, uF3Mask: maskU.tex, uF3MaskOn: maskU.on },
   };
+}
+
+// ───────────────────────────── (s25c) the SSR land mask ─────────────────────────────
+// Built once a frame from the linear depth copy (renderer.ts hook, after the copies, before the water): pass 1 reduces
+// 4 x 16-pixel blocks, pass 2 the 128-px bands of each column, into a (W/4) x (H/128) RGBA32F texture: per 4-pixel column the lowest and highest
+// screen v of LAND pixels — opaque points whose body-frame radius exceeds the planet radius minus a margin (2 m and the
+// tide's depression), i.e. anything that can stand above a water surface — and their nearest linear depth. Cost: 2
+// small full-screen draws, 64 + ~60 texel reads per output texel.
+const maskU = { tex: { value: null as Texture | null }, on: { value: 0 } };
+const MASK_PARS = /* glsl */ `
+uniform highp sampler2D tLin;
+uniform vec4 uP;          // P00, P11, P20, P21 of the projection
+uniform mat3 uB2V;
+uniform vec3 uCam;
+uniform float uLandR;
+`;
+const MASK1 = /* glsl */ `
+${MASK_PARS}
+void main() {
+  ivec2 sz = textureSize(tLin, 0);
+  ivec2 o = ivec2(gl_FragCoord.xy) * ivec2(4, 16);
+  mat3 v2b = transpose(uB2V);
+  float ymin = 2.0, ymax = -1.0, zmin = 1e30;
+  for (int j = 0; j < 16; j++) for (int i = 0; i < 4; i++) {
+    ivec2 p = o + ivec2(i, j);
+    if (p.x >= sz.x || p.y >= sz.y) continue;
+    float d = texelFetch(tLin, p, 0).r;
+    if (!(d < 1e8)) continue;
+    vec2 ndc = (vec2(p) + 0.5) / vec2(sz) * 2.0 - 1.0;
+    vec3 pv = vec3(d * (ndc.x + uP.z) / uP.x, d * (ndc.y + uP.w) / uP.y, -d);
+    if (length(uCam + v2b * pv) > uLandR) {
+      float v = (float(p.y) + 0.5) / float(sz.y);
+      ymin = min(ymin, v); ymax = max(ymax, v); zmin = min(zmin, d);
+    }
+  }
+  gl_FragColor = vec4(ymin, ymax, zmin, 1.0);
+}
+`;
+const MASK2 = /* glsl */ `
+uniform highp sampler2D tBlk;
+void main() {
+  ivec2 sz = textureSize(tBlk, 0);
+  ivec2 o = ivec2(gl_FragCoord.xy);
+  vec3 m = vec3(2.0, -1.0, 1e30);
+  int nb = (sz.y + 7) / 8;
+  bool all = o.y >= nb;                     // the extra last row: the whole column
+  for (int j = 0; j < 512; j++) {
+    if (!all && j >= 8) break;
+    int row = all ? j : o.y * 8 + j;
+    if (row >= sz.y) break;
+    vec3 t = texelFetch(tBlk, ivec2(o.x, row), 0).xyz;
+    m = vec3(min(m.x, t.x), max(m.y, t.y), min(m.z, t.z));
+  }
+  gl_FragColor = vec4(m, 1.0);
+}
+`;
+const VS = 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }';
+let mk: { m1: ShaderMaterial; m2: ShaderMaterial; t1: WebGLRenderTarget; t2: WebGLRenderTarget } | null = null;
+const _p = new V4();
+function maskRT(w: number, h: number): WebGLRenderTarget {
+  const t = new WebGLRenderTarget(w, h, { type: FloatType, format: RGBAFormat, minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false });
+  t.texture.generateMipmaps = false; t.texture.name = 'water-ssr-mask';
+  return t;
+}
+/**
+ * (s25c) renderer.ts hook: build this frame's land mask for the primary planet's water. `pu` = that planet's shader
+ * uniforms (uBodyToView, uCamBody, uRadius, uTide). Without wfast=3, or with `wshade3=ssrall`, it does nothing.
+ */
+export function ssrMaskUpdate(r: WebGLRenderer, fsq: FullscreenQuad, linDepth: Texture, w: number, h: number, proj: Matrix4, pu: Record<string, IUniform> | null): void {
+  maskU.on.value = 0;
+  if (!WFAST3 || !SSRMASK || !pu || !pu.uBodyToView || !pu.uCamBody || !pu.uRadius) return;
+  const cam = pu.uCamBody.value as Vector3, R = pu.uRadius.value as number;
+  const tide = pu.uTide ? Math.abs((pu.uTide.value as Vector4).w) : 0;
+  if (cam.length() < R + 0.5) return;  // a camera under the sea level: march everywhere
+  const bw = Math.ceil(w / 4), bh = Math.ceil(h / 16);
+  if (!mk) {
+    const common = { vertexShader: VS, depthTest: false, depthWrite: false };
+    mk = {
+      m1: new ShaderMaterial({ ...common, fragmentShader: MASK1, uniforms: { tLin: { value: null }, uP: { value: new V4() }, uB2V: { value: null }, uCam: { value: null }, uLandR: { value: 0 } } }),
+      m2: new ShaderMaterial({ ...common, fragmentShader: MASK2, uniforms: { tBlk: { value: null } } }),
+      t1: maskRT(bw, bh), t2: maskRT(bw, Math.ceil(bh / 8) + 1),
+    };
+  }
+  if (mk.t1.width !== bw || mk.t1.height !== bh) { mk.t1.setSize(bw, bh); mk.t2.setSize(bw, Math.ceil(bh / 8) + 1); }
+  const e = proj.elements;
+  const u1 = mk.m1.uniforms;
+  u1.tLin.value = linDepth;
+  (u1.uP.value as V4).copy(_p.set(e[0], e[5], e[8], e[9]));
+  u1.uB2V.value = pu.uBodyToView.value as Matrix3;
+  u1.uCam.value = cam;
+  u1.uLandR.value = R - 2 - tide;
+  const prev = r.getRenderTarget();
+  fsq.render(r, mk.m1, mk.t1);
+  mk.m2.uniforms.tBlk.value = mk.t1.texture;
+  fsq.render(r, mk.m2, mk.t2);
+  r.setRenderTarget(prev);
+  maskU.tex.value = mk.t2.texture;
+  maskU.on.value = 1;
 }

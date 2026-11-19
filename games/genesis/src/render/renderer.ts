@@ -84,6 +84,7 @@ const SW_AOALIAS = perfSwitch('aoalias');
 const SW_AOBLUR = perfSwitch('aoblur');
 let _flatMat: MeshBasicMaterial | null = null;
 import { flushTextureUploads, installSpanUploads, installTexturePreUpload, wantSpanUploads } from './upload.ts';
+import { ssrMaskUpdate } from './planet/oceanfast.ts'; // PERF s25c hook (wfast=3 SSR land mask)
 import { PAGE_RELEASE_STATE, installPageRelease, onPageRelease } from './pagerelease.ts';
 /** PERF F20: textures flagged for upload go up before the frame's first pass (`?preupload=0` = at their draw, as before) */
 // (OFF by default since session 9, `?preupload=1` = on: the owner's M5 A/B ran 1.9 fps without it vs 1.2-1.3 with it;
@@ -693,6 +694,8 @@ export class Renderer {
     this.waterScene.uPrevValid.value = post.prevValid && post.prevTex ? 1 : 0;
     (this.waterScene.uProj.value as Matrix4).copy(cam.projectionMatrix);
     this.waterScene.uFrame.value = this.frameNo % 64;
+    // ── PERF s25c hook (water agent): the wfast=3 SSR land mask (oceanfast.ts; returns at once without ?wfast=3) ──
+    if (SW_WCOPY && anyWater) ssrMaskUpdate(r, this.fsq, post.linDepth.texture, post.w, post.h, cam.projectionMatrix, (this.planets.get(this.primaryId)?.uniforms ?? null) as unknown as Parameters<typeof ssrMaskUpdate>[6]);
     perfmon.mark('post:water');
     const waterOn = anyWater && SW_WATER && !SW_WSINGLE;
     if (waterOn || decalsOn) {
