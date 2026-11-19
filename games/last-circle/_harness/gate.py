@@ -403,6 +403,9 @@ GATES = [
     #      lazy-play, storm-siren, bytes, licence, bed-hiss, snow-birds, loop-seam, no-clip, xcat. (p23_audiotap above now also carries amb-level /
     #      amb-spectrum / indoor + an INFO pcm-held row)
     ("w10_sfx", "p23/sfxcheck.py", [], 1800, False),
+    # ---- Wave 10 R3B (characters): ground-loot models - loot-shapes (0 primitive box / cylinder pickups; frag vs smoke silhouette IoU <= 0.7)
+    #      (w10_gunhold above gains the rows reload-height, reload-hand, pistol-reload, swim, swim-view, swim-head, swim-arms and swap via its default --parts)
+    ("w10_lootlook", "p23/lootlook.py", [], 3600, False),
     ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
@@ -750,6 +753,18 @@ NEGATIVE = [
     ("w10_waterlook-plant-crushed-toe", "p23/waterlook.py", ["--parts", "light", "--plant", "crushed-toe"], 3600),   # FAILs light: shadowed road + light: interiors darkest view
     ("w10_waterlook-plant-dark-rooms", "p23/waterlook.py", ["--parts", "light", "--plant", "dark-rooms"], 3600),     # FAILs light: interiors darkest view (+ road, + interiors ratio)
     ("w10_waterlook-rev-r2a-merge", "p23/waterlook.py", ["--rev", "3065e2c7a", "--parts", "light"], 3600),          # the R2A merge slip: MUST FAIL light: shadowed road + light: interiors darkest view
+    # ---- Wave 10 R3B: each planted fault must FAIL its own row (w10_gunhold parts reload / swim / swap; w10_lootlook loot-shapes)
+    ("w10_gunhold-plant-head-reload", "p23/gunhold.py", ["--skins", "soldier", "--plant", "head-reload", "--parts", "reload"], 1800),   # reload-height
+    ("w10_gunhold-plant-reload-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "reload-off", "--parts", "reload"], 1800),   # reload-hand + pistol-reload
+    ("w10_gunhold-plant-gun-in-water", "p23/gunhold.py", ["--skins", "soldier", "--plant", "gun-in-water", "--parts", "swim"], 1800),   # swim
+    ("w10_gunhold-plant-swim-cam-under", "p23/gunhold.py", ["--skins", "soldier", "--plant", "swim-cam-under", "--parts", "swim"], 1800),   # swim-view
+    ("w10_gunhold-plant-swim-sunk", "p23/gunhold.py", ["--skins", "soldier", "--plant", "swim-sunk", "--parts", "swim"], 1800),   # swim-head
+    ("w10_gunhold-plant-swim-lean", "p23/gunhold.py", ["--skins", "soldier", "--plant", "swim-lean", "--parts", "swim"], 1800),   # swim + swim-head
+    ("w10_gunhold-plant-swim-arms-up", "p23/gunhold.py", ["--skins", "soldier", "--plant", "swim-arms-up", "--parts", "swim"], 1800),   # swim-arms
+    ("w10_gunhold-plant-sling-all", "p23/gunhold.py", ["--skins", "soldier", "--plant", "sling-all", "--parts", "swap"], 1800),   # swap
+    ("w10_lootlook-plant-box-ammo", "p23/lootlook.py", ["--plant", "box-ammo"], 3600),           # loot-shapes (primitive ammo)
+    ("w10_lootlook-plant-same-grenade", "p23/lootlook.py", ["--plant", "same-grenade"], 3600),   # loot-shapes (frag vs smoke IoU)
+    ("w10_lootlook-plant-zero-normal", "p23/lootlook.py", ["--plant", "zero-normal"], 3600),   # (R3B fix5) loot-nan: the loot models' zero-normal slivers back (lootNormalsSafe off) -> black frames + zero-normal tris
     # (the w10_waterlook main row needs no change: the darkest-view row now also renders interiorcheck's own views of match isla_viva
     #  volcano_rim@p54, ashgrid downtown@p4/p27/p44, housegen s7h2 and the fixture house in 4 extra Chromes; full run ~7.5 min, well inside 7000 s)
     # stormfx_fx controls (run by the integrator from driver scripts, not registered: plant curve-at-0 FAILs the BIT-IDENTICAL row, plant meshopt
@@ -850,6 +865,57 @@ NODE_NEGATIVE = [
     ("runtime/3d/royale/housegen.selftest.cjs", ["--plant", "no-hash"]),
     ("runtime/3d/royale/housegen.selftest.cjs", ["--plant", "start-ignored"]),
 ]
+# ---- W10 tools lane (2026-11-19; owner: faster releases, NO bar lowered). Lines ADDED only.
+# anchors: every planted fault that patches a source by an exact text anchor (anchors.py census), checked at the served tree in seconds,
+# no browser; a miss is a FAIL (a plant that would go could-not-judge hours into a battery). Controls: the census's own plants.
+GATES += [
+    ("anchors", "anchors.py", [], 300, False),
+]
+NEGATIVE += [
+    ("anchors-plant-missing-anchor", "anchors.py", ["--plant", "missing-anchor"], 300),     # a plant whose anchor is not in the tree
+    ("anchors-plant-stale-inline", "anchors.py", ["--plant", "stale-inline"], 300),         # an anchors.INLINE copy whose literal left its harness file
+    # netnoise (ticket 3): a network-level failure to a THIRD-PARTY host makes the error rows could-not-judge (want exit 2, never retried here);
+    # the same failure on the game's OWN origin must still FAIL them
+    ("player_rim-plant-net-third-party-font", "new/player_rim.py", ["--plant", "net-third-party-font"], 3600, 2),
+    ("player_rim-plant-net-own-asset", "new/player_rim.py", ["--plant", "net-own-asset"], 3600),
+]
+# gate.py --quick: an early-warning SELECTION of GATES rows, each run exactly as the full battery runs it (same args, same bars, same
+# retries), plus the Node selftests and the anchors census. About 60 min on this 8-core box (measured 2026-11-19, see README). It is
+# NOT a release verdict: the full battery stays the only release gate.
+QUICK = ["anchors", "bootcheck", "playtest", "genversion", "interiorcheck", "w10_gunhold", "w10_lootlook", "mobile", "p23_tierprof",
+         "probe_match", "collisioncheck", "w10_waterlook", "w10_sfx", "perf_district",
+         # + the measured head run took 38 min (2026-11-19), so 8 more short rows on the areas the list above leaves out (HUD, camera, combat, feel,
+         #   rig, audio mix, memory, lifecycle; ~14 min by their round-3 walls)
+         "hud_checks", "player_camwall", "p23_spray", "feelcheck", "rigcheck", "p23_audiotap", "leaktest", "lifecycle"]
+QUICK_NOTE = "QUICK TIER (gate.py --quick): early warning only - NOT a release verdict; the full battery is the only release gate"
+
+
+def retry_netnoise(r, name, script, extra, timeout, args, logdir):
+    """W10 tools (ticket 3): a gate that came back COULD-NOT-JUDGE because an error row saw ONLY network-level failures to a third-party
+    host (its log has a `NETNOISE` line, netnoise.py) runs ONCE more; the second verdict stands. Never applied twice (a p23_ gate that
+    retry_cnj already re-ran keeps that verdict)."""
+    if r["exit"] != 2 or r.get("firstAttempt"):
+        return r
+    try:
+        noisy = [ln for ln in open(r["log"], encoding="utf-8", errors="replace").read().splitlines() if ln.startswith("NETNOISE ")]
+    except Exception:
+        noisy = []
+    if not noisy:
+        return r
+    print("    -> network noise (%s): retrying %s once" % (noisy[0][len("NETNOISE "):][:160], name), flush=True)
+    r2 = run_gate(name + "#netretry", script, extra, timeout, args, logdir)
+    r2["name"] = name
+    r2["firstAttempt"] = {"exit": r["exit"], "verdict": r["verdict"], "wall": r["wall"], "log": r["log"], "netnoise": noisy[:3]}
+    r2["verdict"] = "(retry after network noise) " + r2["verdict"]
+    r2["wall"] = round(r["wall"] + r2["wall"], 1)
+    return r2
+
+
+def check_anchors_main():
+    """gate.py --check-anchors: the anchors census alone (seconds, no browser): rc 1 on any miss."""
+    import anchors
+    return anchors.main([])
+
 
 
 def node_selftests():
@@ -947,9 +1013,19 @@ def main():
     ap.add_argument("--no-node", action="store_true", help="skip the Node selftests")
     ap.add_argument("--negative-controls", action="store_true", help="also run the planted-fault runs (each must exit 1)")
     ap.add_argument("--post-deploy", action="store_true", help="run ONLY the post-deploy check (POST_DEPLOY: coldcache --live, squadguard_live --live, the perf baseline); every row counts")
+    ap.add_argument("--quick", action="store_true", help="W10 tools: the QUICK tier (QUICK + Node selftests, ~60 min): early warning, NOT a release verdict")
+    ap.add_argument("--check-anchors", action="store_true", help="W10 tools: check every plant's text anchor at the current tree (anchors.py; seconds); rc 1 on any miss")
     args = ap.parse_args()
     only = set(x for x in (args.only or "").split(",") if x) or None
     skip = set(x for x in args.skip.split(",") if x)
+    if args.check_anchors:
+        return check_anchors_main()
+    if args.quick:
+        if args.negative_controls or args.post_deploy:
+            print("gate: --quick runs no controls and no post-deploy rows (ignored)", flush=True)
+            args.negative_controls = args.post_deploy = False
+        only = (only & set(QUICK + ["node"])) if only is not None else set(QUICK + ["node"])
+        print(QUICK_NOTE + "\n  rows: node selftests, " + ", ".join(QUICK), flush=True)
     stamp = C.stamp()
     logdir = os.path.join(C.REPORTS, "gate_%s" % stamp)
     os.makedirs(logdir, exist_ok=True)
@@ -976,6 +1052,7 @@ def main():
             continue
         r = run_gate(name, script, extra, timeout, args, logdir)
         r = retry_cnj(r, name, script, extra, timeout, args, logdir)
+        r = retry_netnoise(r, name, script, extra, timeout, args, logdir)
         r["info"] = info
         rows.append(r)
     if args.negative_controls and not args.post_deploy:
@@ -987,6 +1064,7 @@ def main():
             r = run_gate(name, script, extra, timeout, args, logdir)
             if want == 1:
                 r = retry_cnj(r, name, script, extra, timeout, args, logdir)
+                r = retry_netnoise(r, name, script, extra, timeout, args, logdir)
             r["negative"] = True
             r["info"] = False
             r["gateExit"] = r["exit"]
@@ -1007,6 +1085,8 @@ def main():
         tag = {0: "PASS", 1: "FAIL", 2: "CNJ "}[r["exit"]] + (" (info)" if r.get("info") else "")
         print("  %-12s %-34s %6.0f s  %s" % (tag, r["name"], r.get("wall", 0), str(r.get("verdict") or " | ".join(r.get("tail") or []))[:150]))
     print("OVERALL: %s" % {0: "PASS", 1: "FAIL", 2: "COULD-NOT-JUDGE (re-run the CNJ gates; never counted as a pass)"}[code])
+    if args.quick:
+        print(QUICK_NOTE)
     out = os.path.join(logdir, "gate_table.json")
     with open(out, "w", encoding="utf-8") as fh:
         json.dump({"stamp": stamp, "args": vars(args), "otherChromes": n, "rows": rows, "exit": code}, fh, indent=1)

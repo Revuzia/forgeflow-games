@@ -15,6 +15,8 @@ import urllib.parse
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import common as C  # noqa: E402
+import netnoise  # noqa: E402  (W10 tools: a third-party network-only failure makes an error row could-not-judge, see netnoise.py)
+netnoise.install()
 
 # the files lane PLAYER owns / consumes from lane ART-A (clips + canopy), relative to games/last-circle
 OVERLAY = {

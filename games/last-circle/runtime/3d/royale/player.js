@@ -98,6 +98,12 @@ export function init(W) {
   // same microsecond, inside the measured window) and they ran unoptimized - allocating a heap box per double - while they re-tiered.
   // 0 reads exactly like the old undefined at every reader ((wpn.burstLeft || 0) > 0, burstLeft = 0 on a swap).
   W.events.on("weaponEquipped", (a, w) => { if (w && w.burstLeft === undefined) w.burstLeft = 0; });
+  // (W10 R3B, combat finding 13) a SWAP (another gun than the one held) lowers and raises the weapon over SWAP_S (barrelWeld)
+  W.events.on("weaponEquipped", (a, w) => {
+    const id = w && w.id;
+    if (a._eqWid != null && id && id !== a._eqWid && !String(id).startsWith("consumable")) a._swapAt = W.t;
+    a._eqWid = id || null;
+  });
   // (P23, LC-14) every throw plays the toss on the thrower's upper body; a quick throw gets its previous slot back
   W.events.on("grenadeThrown", (a) => onThrown(W, a));
   // (P23, LC-59 / OD-7) the local player's own BIG-MAP pin placed during the drop is the landing waypoint
@@ -167,6 +173,9 @@ export function createActor(W, opts) {
     _bodyYaw: 0, _hasBodyYaw: false, _tiltX: 0, _tiltZ: 0, _eyeY: 0, _hasEyeY: false,
     _armW: 0, _hasArmW: false, _armMode: null, _weldFor: null, _animTS: 1, _adsT: 0, _stepAcc: 0,
     hitReactT: 0, _hitReactAt: -9, _portalT: 0, _portalBoost: false, _ovReload: false,
+    // (W10 R3B) swap dip, reload layer, surface swim and the slung second gun (created here: no hidden-class change mid-match)
+    _swapAt: -9, _eqWid: null, _swapK: 0, _rlOn: false, _rlW: 0, _rlAnim: null, _aimHL: new THREE.Vector3(), _hasAimHL: false,
+    _swimOff: 0, _swimObjY: -1e9, _swTilt: null, _sling: null, _slingId: null, _slingOn: false, _rlKey: null,
     // rim light (P1.8): 0 = not applied yet, 1 = the faint cool rim, 2 = SQUAD UP ally rim.
     // _sinkT: corpse timeline on SIM time (killActor / corpseStep), -1 = not a corpse;
     // _sinkFall: a corpse that died in the air drops to its floor first (_sinkVy, _sinkFloor).
@@ -2061,6 +2070,7 @@ export function frame(W, dt, alpha) {
     if (!a.alive || !a._vmode) continue;
     if (k < 1 && a._ppT === _tickN && a._pp.distanceToSquared(a.pos) < TELEPORT2) a.obj.position.lerpVectors(a._pp, a.pos, k);
     else a.obj.position.copy(a.pos);
+    if (a.swimming || a._swimOff !== 0) swimView(W, a, dt);
     if (a._vmode === 1) syncObj(W, a, dt);
     else if (a.mantleT != null) {
       // (P23, LC-30) a MANTLE keeps its body yaw (no syncObj) but runs the clip chain + pose layers: the mantle branch of
@@ -2147,7 +2157,8 @@ function viewPass(W, dt) {
     // pistol in the drop shots (LOOK/camera-characters/shots/03_parachute_tpp.png);
     // nobody shoots from a parachute, and the weapon is back on the first grounded
     // frame because this line runs every frame. Also one fewer draw per nearby glider.
-    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2 && !a.emoting && !a.gliding && a.alive;
+    // && !swimming (W10 R3B, combat finding 8): the gun is put away on the surface (no shooting while swimming, weapons.js)
+    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2 && !a.emoting && !a.gliding && !a.swimming && a.alive;
     if (!a.nameTag) continue;
     // Peers stay tagged out to 250 m — the game's own gunfire-audible radius
     // (hud.js: `if (d < 12 || d > 250) return;` on the direction chevrons), so a
@@ -2161,6 +2172,7 @@ function viewPass(W, dt) {
       ? (a.alive && a !== W._camFocus)
       : (a.alive && a !== W._camFocus && d2 > 12 && d2 < range * range);
   }
+  slingPass(W, camPos);
 }
 
 /** Point one actor's body material at the rim colour/strength for `mode` (1 =
@@ -3274,7 +3286,8 @@ function animate(W, a, dt) {
       else if (a.gliding && !a.chute) mode = "skydive";
       else if (a.gliding) mode = "hang";
       else if (a.swimming) mode = null;
-      else if (armed && a.weapon.state === "reloading") mode = "reload";
+      // (W10 R3B) a PISTOL reloads in its chest hold (gunReady) under the reload layer (reloadLayer) on desktop medium+ near actors
+      else if (armed && a.weapon.state === "reloading" && !(isPistol(a) && a._ikNear && deskHi(W))) mode = "reload";
       // (W10 R1B, combat finding 6) a PISTOL is carried in the two-hand chest hold (gunReady + the support hand cupping the
       // grip) in and out of combat: the hip carry pointed it at the ground and fired it from the waist
       else if (armed && !combat && !isPistol(a)) mode = "lowReady";
@@ -3330,6 +3343,19 @@ function animate(W, a, dt) {
         else if (a._slideT >= 0 && !(a.clips && a.clips.slide)) { lm = "slide"; lw = Math.min(1, a._slideT / 0.12); }
         if (lm && lw > 0.01) applyLegPose(a.obj, a.armBones, lm, lw);
       }
+      // (W10 R3B, verify2 finding) treading upright on the surface: the swim clip's forward lean straightened (swimUpright)
+      if (layers && a.swimming && a.armBones && a.alive && deskHi(W)) {
+        const sw = Math.hypot(a.vel.x, a.vel.z) > 0.7 ? SWIM_TILT_MOVE : SWIM_TILT_STILL;
+        a._swTilt = a._swTilt == null ? sw : a._swTilt + (sw - a._swTilt) * Math.min(1, dt * 4);
+        swimUpright(a, a._swTilt);
+        // the eased sink (swimView) works off last frame's pose, so the stroke bobbed the head +-3 cm: settle it on THIS frame's posed head
+        // (the camera subtracts _swimOff, so it does not move with this)
+        const hd = a.armBones.head;
+        if (hd && hd.parent) {
+          const err = K.clamp((W.map.water ? W.map.water.position.y : W.map.waterY) + SWIM_HEAD - hd.matrixWorld.elements[13], -0.1, 0.1);
+          a.obj.position.y += err; a._swimOff += err; a._swimObjY = a.obj.position.y;
+        }
+      }
       const wantW = mode ? 1 : 0;
       a._armW = (!a._hasArmW ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));
       a._hasArmW = true;
@@ -3374,8 +3400,10 @@ function animate(W, a, dt) {
       // never ran on the ground and the holder kept its glide-time grip on the frozen pose (seed 7 s18 juggernaut LMG, 219 m off
       // screen, barrel . chest -0.065). The bones do not move while skipped, so one weld holds until they are re-keyed.
       const weldOn = !!(a.hand && a.handBone && !a.emoting && !a.downed && (poseAim || mixamoAim));
+      // (W10 R3B) the swap dip's phase: 0 outside the SWAP_S window after a gun swap, sin(pi u) inside it (barrelWeld lowers the muzzle)
+      { const u = (W.t - a._swapAt) / SWAP_S; a._swapK = u >= 0 && u < 1 ? Math.sin(Math.PI * u) : 0; }
       const wid = armed ? a.weapon.id : null;
-      if (weldOn && (layers || a._evalNow || a._weldFor !== wid)) {
+      if (weldOn && (layers || a._evalNow || a._weldFor !== wid || a._swapK > 0)) {
         barrelWeld(a, bodyFwdYaw, (spineTwisted && !layers) ? 0 : twist, mixamoAim);
         a._weldFor = wid;
       } else if (!weldOn) a._weldFor = null;
@@ -3406,6 +3434,15 @@ function animate(W, a, dt) {
       // (W10 R1B) desktop Low and touch: the W9 tip's call, unchanged (gunReady only, no palm / fingers, its own grip cache)
       if (!deskHi(W) && layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting &&
           a._armMode === "gunReady" && a._armW > 0.5) supportHandIK9(a);
+      // (W10 R3B, combat finding 2) RELOAD at chest height: the right hand held where the aim pose holds it, the gun canted, the left
+      // hand on the mag well / shell port / slide on the R2B reload beats (desktop medium+, near actors; Low / touch keep the clip)
+      const rlOn = !!(layers && weldOn && armed && a.weapon.state === "reloading" && a._ikNear && deskHi(W) && a.armBones && a.armBones.lArm &&
+        a.armBones.rArm && a.alive && !a.downed && !a.gliding && !a.swimming && !a._throwOv);
+      if (rlOn) reloadLayer(W, a, bodyFwdYaw, (spineTwisted && !layers) ? 0 : twist, mixamoAim, dt);
+      else {
+        if (a._rlOn) reloadEnd(a);
+        if (layers && weldOn && armed && a.weapon.state !== "reloading" && a._swapK === 0 && a.onGround) captureAimHand(a);
+      }
       // (W10 R1B) the gun holder's world matrix as POSED this frame (weld + arm layers): a shot fires in weapons.update, before
       // this pass re-poses the bones the mixer just re-keyed, so the muzzle read there from the live bones sat where the CLIP
       // holds the hand (a pistol on the rifle legs: 0.14 m off the drawn barrel). weapons.js fire reads this instead.
@@ -3448,7 +3485,8 @@ function selectClip(W, a, gs, fam, FK, useMixamoGun) {
     playAnim(a, "run", PA_DIVE);
   }
   else if (a.gliding) playAnim(a, "idle");
-  else if (a.swimming) playAnim(a, "swim", paTs(gs > 4.5 ? 1.25 : 1));
+  // (W10 R3B, combat finding 8) treading water when still: W9's swim clip slowed (owner question 1 fallback: no Treading Water fetch)
+  else if (a.swimming) playAnim(a, "swim", paTs(gs > 0.7 ? K.clamp(gs / SWIM_CLIP_MS, 0.8, 1.3) : SWIM_TREAD_TS));
   else if (a.mantleT != null && (C.jump_loop || C.crouch)) {
     // (P23, LC-30) mantle: the in-air tuck (jump_loop) under the procedural leg tuck (animate -> applyLegPose "mantle")
     if (C.jump_loop) playAnim(a, "jump_loop", PA_FREEZE);
@@ -3657,6 +3695,347 @@ function reloadOverlay(a, gs, useMixamoGun) {
   }
 }
 
+// ── (W10 R3B) characters II: reload at chest height, surface swim, swap dip, slung second gun ─────────────────────────────────
+// The reload beats are R2B's recorded reload sets (audio.js RELOAD_SETS, fractions of the weapon's reloadS): the left hand is on the
+// mag well / shell port on each magazine / shell beat, on the slide for the pistol's slide beat, pumps on the pump beat; the bolt and
+// the break-open move the gun. Loaded lazily (no import cycle, no load-order change); the rifle set is the fallback until it is in.
+let _AUD = null;
+import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => { _AUD = m; }, () => {});
+const RL_FALLBACK = [[0.05, "rl_rifle_out"], [0.55, "rl_rifle_in"], [0.86, "rl_rifle_rack"]];
+const RL_MAG = { rl_rifle_out: 1, rl_rifle_in: 1, rl_pistol_in: 1, rl_shell: 1, rl_ln_shell: 1 };
+const RL_KEYS = new Map();               // set name -> [[fraction, target kind], ...] (built once per set)
+const SWAP_S = 0.25, SWAP_DIP = 0.8;     // the swap: lower-and-raise over 0.25 s, muzzle down 0.8 rad (46 deg) at mid-swap
+const SWIM_CHEST = 0.14;                 // fallback (a rig without a Head bone): the swimmer's chest (Spine2) sits this far under the surface
+const SWIM_HEAD = 0.18;                  // the swimmer's Head bone sits this far ABOVE the surface (treading water: face and shoulders out)
+const SWIM_TILT_STILL = 0.10, SWIM_TILT_MOVE = 0.20;   // swimUpright: most lean (rad) left on each spine bone, still / swimming on
+const SWIM_ARMS_ON = true, SWIM_ARM_DROP = 0.25;   // swimUpright keeps the clip's arms (world) and lowers them this far (rad)
+const _swAQ = [new THREE.Quaternion(), new THREE.Quaternion()];
+const _swU = new THREE.Vector3(0, 1, 0), _swY = new THREE.Vector3(), _swX = new THREE.Vector3(), _swPQ = new THREE.Quaternion(), _swR = new THREE.Quaternion();
+const SWIM_TREAD_TS = 0.45, SWIM_CLIP_MS = 1.6;
+const SLING_CAP = 8;                     // slung second guns drawn on at most this many actors (the nearest to the camera)
+const SLING_M = 35, SLING_M2 = SLING_M * SLING_M;
+const MAGW = new Map();                  // weapon id -> { well, slide } (holder space, snapped to a vertex of the model)
+const _rlA = new THREE.Vector3(), _rlB = new THREE.Vector3(), _rlP = new THREE.Vector3(), _rlT = new THREE.Vector3(), _rlS = new THREE.Vector3();
+const _rlQ = new THREE.Quaternion(), _rlE = new THREE.Euler(0, 0, 0, "ZXY"), _rlM = new THREE.Matrix4(), _rlM2 = new THREE.Matrix4();
+const _slA = new Array(SLING_CAP + 1).fill(null), _slD = new Float64Array(SLING_CAP + 1);
+const _slV = new THREE.Vector3(), _slF = new THREE.Vector3(), _slX = new THREE.Vector3(), _slU = new THREE.Vector3(0, 0, -1), _slMb = new THREE.Matrix4();
+
+/** the reload set (R2B) of the held gun: [[fraction, cue], ...] */
+function reloadBeats(a) {
+  const def = a.weapon && K.WEAPONS[a.weapon.id];
+  if (!_AUD || !_AUD.RELOAD_SETS || !_AUD.gunSnd) return { name: "rifle", beats: RL_FALLBACK };
+  const name = _AUD.RELOAD_SET_OF[_AUD.gunSnd(a.weapon.id, def)] || "rifle";
+  return { name, beats: _AUD.RELOAD_SETS[name] || RL_FALLBACK };
+}
+/** the left hand's key targets over the reload (fraction -> grip / well / pouch / slide / pump), from the set's beats */
+function reloadKeys(name, beats) {
+  let K2 = RL_KEYS.get(name);
+  if (K2) return K2;
+  K2 = [[0, "grip"]];
+  const mags = beats.filter((b) => RL_MAG[b[1]]);
+  let prev = 0;
+  for (let i = 0; i < beats.length; i++) {
+    const f = beats[i][0], c = beats[i][1];
+    if (RL_MAG[c]) {
+      // the first magazine / shell long after the start: to the pouch for it first
+      if (mags[0] === beats[i] && f > 0.3) { const m = (prev + f) / 2; K2.push([m - 0.02, "pouch"], [m + 0.02, "pouch"]); }
+      K2.push([Math.max(0.01, f - 0.03), "well"], [f + 0.04, "well"]);
+      const nx = mags[mags.indexOf(beats[i]) + 1];
+      if (nx && nx[0] - f > 0.15) { const m = (f + nx[0]) / 2; K2.push([m - 0.02, "pouch"], [m + 0.02, "pouch"]); }
+    } else if (c === "rl_pistol_out") K2.push([f + 0.12, "pouch"], [f + 0.3, "pouch"]);
+    else if (c === "rl_pistol_slide") K2.push([f - 0.04, "slide"], [f + 0.03, "slide"]);
+    else if (c === "rl_pump") K2.push([f - 0.05, "grip"], [f, "pump"], [f + 0.05, "grip"]);
+    else if (c === "rl_rifle_rack") K2.push([f - 0.035, "well"], [f + 0.03, "well"]);
+    prev = f;
+  }
+  K2.push([1, "grip"]);
+  K2.sort((x, y) => x[0] - y[0]);
+  RL_KEYS.set(name, K2);
+  return K2;
+}
+/** the held gun's mag well (and pistol slide top) in holder space, measured once per weapon id from the model's own vertices */
+function magWell(a) {
+  const id = a.weapon.id;
+  let m = MAGW.get(id);
+  if (m) { if (!a.weaponMesh.userData.magWell) a.weaponMesh.userData.magWell = { x: m.well.x, y: m.well.y, z: m.well.z }; return m; }
+  const wm = a.weaponMesh;
+  if (!wm || wm.userData.wid !== id || !wm.userData.tip) return null;
+  a.obj.updateMatrixWorld(true);
+  _rlM.copy(a.hand.matrixWorld).invert();
+  const P = [];
+  wm.traverse((o) => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+    const pa = o.geometry.attributes.position, st = Math.max(1, Math.floor(pa.count / 4000));
+    _rlM2.multiplyMatrices(_rlM, o.matrixWorld);
+    for (let i = 0; i < pa.count; i += st) { _rlS.fromBufferAttribute(pa, i).applyMatrix4(_rlM2); P.push(_rlS.x, _rlS.y, _rlS.z); }
+  });
+  if (!P.length) return null;
+  const tip = wm.userData.tip, gd = wm.userData.guard;
+  const pistol = isPistol(a);
+  let tx = 0, ty = 0, tz = 0;
+  if (pistol) {
+    // the base of the grip (the magazine goes in from below): the lowest point near the firing hand
+    let yLo = 1e9, cx = 0, cz = 0;
+    for (let i = 0; i < P.length; i += 3) if (P[i + 2] > -0.07 && P[i + 2] < 0.05 && Math.abs(P[i]) < 0.04 && P[i + 1] < yLo) { yLo = P[i + 1]; cx = P[i]; cz = P[i + 2]; }
+    tx = cx; ty = yLo; tz = cz;
+  } else {
+    // the magazine: the 2 cm station between the grip and the handguard where the gun hangs lowest; the well is where it meets the
+    // receiver (<= 7 cm under the bore)
+    const z1 = Math.max(0.08, (gd ? gd.z : 0.3) - 0.06);
+    let best = 1e9, bz = 0.1, bx = 0;
+    for (let z = 0.03; z < z1; z += 0.02) {
+      let lo = 1e9, sx = 0, n = 0;
+      for (let i = 0; i < P.length; i += 3) if (Math.abs(P[i + 2] - z) < 0.01 && Math.abs(P[i]) < 0.05) { if (P[i + 1] < lo) lo = P[i + 1]; sx += P[i]; n++; }
+      if (n && lo < best) { best = lo; bz = z; bx = sx / n; }
+    }
+    tx = bx; ty = Math.max(best, tip.y - 0.07); tz = bz;
+  }
+  // snap to the nearest vertex (the anchor is ON the gun)
+  let dm = 1e9, sx = tx, sy = ty, sz = tz;
+  for (let i = 0; i < P.length; i += 3) { const d = (P[i] - tx) ** 2 + (P[i + 1] - ty) ** 2 + (P[i + 2] - tz) ** 2; if (d < dm) { dm = d; sx = P[i]; sy = P[i + 1]; sz = P[i + 2]; } }
+  // the slide's rear top (pistol): the highest point behind the firing hand's line
+  let yHi = -1e9, hx = 0, hz = 0;
+  for (let i = 0; i < P.length; i += 3) if (P[i + 2] > -0.06 && P[i + 2] < 0.03 && Math.abs(P[i]) < 0.03 && P[i + 1] > yHi) { yHi = P[i + 1]; hx = P[i]; hz = P[i + 2]; }
+  m = { well: new THREE.Vector3(sx, sy, sz), slide: new THREE.Vector3(hx, yHi > -1e8 ? yHi : tip.y, hz) };
+  MAGW.set(id, m);
+  wm.userData.magWell = { x: sx, y: sy, z: sz };
+  return m;
+}
+/** the right hand where the aim pose holds it (actor-local), kept up to date on every armed, welded, non-reload frame (near actors) */
+function captureAimHand(a) {
+  if (!a._ikNear || !a.handBone) return;
+  a.handBone.getWorldPosition(_rlA);
+  a._aimHL.copy(a.obj.worldToLocal(_rlA));
+  a._hasAimHL = true;
+}
+function smooth01(x) { return x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x); }
+/** one target of the left hand in world space */
+function rlTarget(a, kind, mw, out, bodyFwdYaw) {
+  const ud = a.weaponMesh.userData;
+  if (kind === "well") { out.set(mw.well.x + 0.03, mw.well.y - 0.02, mw.well.z); return a.hand.localToWorld(out); }
+  if (kind === "slide") { out.set(mw.slide.x + 0.04, mw.slide.y + 0.02, mw.slide.z); return a.hand.localToWorld(out); }
+  if (kind === "pump") { const g = ud.guard; out.set(g.x, g.y, g.z - 0.08); return a.hand.localToWorld(out); }
+  if (kind === "pouch") {
+    // the support side of the belt, in front of the hip (the spare magazines / shell carrier)
+    const h = a.armBones.hips || a.armBones.spine;
+    h.getWorldPosition(out);
+    const fx = -Math.sin(bodyFwdYaw), fz = -Math.cos(bodyFwdYaw);
+    out.x += fx * 0.16 + fz * 0.14; out.z += fz * 0.16 - fx * 0.14; out.y += 0.04;   // left = (fz, 0, -fx)
+    return out;
+  }
+  const g = ud.guard;
+  if (g) out.set(g.x, g.y, g.z); else out.set(0.04, -0.08, 0.3);
+  return a.hand.localToWorld(out);
+}
+/** RELOAD layer (desktop medium+, near actors): right hand to its aim-pose spot, the gun re-welded and canted, left hand along the
+ *  reload keys. Runs after the weld and the support-hand pass of this frame. */
+function reloadLayer(W, a, bodyFwdYaw, twist, mixamoAim, dt) {
+  const def = K.WEAPONS[a.weapon.id];
+  if (!def || !(def.reloadS > 0) || !a.weaponMesh || a.weaponMesh.userData.wid !== a.weapon.id) return;
+  const mw = magWell(a);
+  if (!mw) return;
+  const f = K.clamp(1 - a.weapon.reloadT / def.reloadS, 0, 1);
+  if (!a._rlOn) { a._rlOn = true; a._rlW = 0; }
+  a._rlW = Math.min(1, a._rlW + dt * 10);
+  const w = a._rlW;
+  const pistol = isPistol(a);
+  a._rlAnim = pistol ? "pistol_reload" : "rifle_reload_ik";
+  const RB = reloadBeats(a);
+  const KS = reloadKeys(RB.name, RB.beats);
+  let i = 0;
+  while (i < KS.length - 2 && KS[i + 1][0] <= f) i++;
+  const k0 = KS[i], k1 = KS[i + 1];
+  const u = k1[0] > k0[0] ? smooth01((f - k0[0]) / (k1[0] - k0[0])) : 1;
+  a._rlKey = u < 0.5 ? k0[1] : k1[1];
+  // 1) + 2) the gun placed (right hand at its aim-pose spot + the cant), then the left hand's target on it; when that target is out of
+  //    the support arm's reach (the clip turns the shoulder away mid-reload), the gun is brought in toward the support shoulder by the
+  //    shortfall and placed again - a real reload pulls the rifle in to the chest, it does not leave the hand short of the magazine
+  _rlS.set(0, 0, 0);
+  for (let pass = 0; pass < 2; pass++) {
+    rlPlaceGun(a, bodyFwdYaw, twist, mixamoAim, f, w, pistol, RB, _rlS);
+    rlTarget(a, k0[1], mw, _rlA, bodyFwdYaw);
+    if (k1[1] !== k0[1]) { rlTarget(a, k1[1], mw, _rlB, bodyFwdYaw); _rlA.lerp(_rlB, u); }
+    if (pass === 1 || pistol || !a._hasAimHL) break;
+    a.armBones.lArm.getWorldPosition(_rlP); a.armBones.lFore.getWorldPosition(_rlB); a.armBones.lHand.getWorldPosition(_rlT);
+    const reach = (_rlP.distanceTo(_rlB) + _rlB.distanceTo(_rlT)) * 0.93, d = _rlP.distanceTo(_rlA);
+    if (d <= reach) break;
+    _rlS.copy(_rlP).sub(_rlA).multiplyScalar((d - reach) / d);       // world shift of the gun toward the shoulder
+  }
+  // 3) the left hand along the keys (smooth between neighbours)
+  a.armBones.lArm.getWorldPosition(_rlP);
+  _rlP.x -= Math.cos(a.yaw) * 0.25; _rlP.y -= 0.45; _rlP.z += Math.sin(a.yaw) * 0.25;
+  twoBoneIK(a.armBones.lArm, a.armBones.lFore, a.armBones.lHand, _rlA, w, _rlP);
+  twoBoneIK(a.armBones.lArm, a.armBones.lFore, a.armBones.lHand, _rlA, w, _rlP);
+}
+const _rlH = new THREE.Vector3();
+/** the gun during the reload: the right hand at its aim-pose spot (+ `shift`, world), re-welded to the aim, canted toward the support hand
+ *  (mag well to the left), muzzle a little down (a pistol: tipped up and in); the bolt beats rock it, the launcher's break-open drops the
+ *  muzzle until the close */
+function rlPlaceGun(a, bodyFwdYaw, twist, mixamoAim, f, w, pistol, RB, shift) {
+  const rx = Math.cos(bodyFwdYaw), rz = -Math.sin(bodyFwdYaw);      // the body's RIGHT (its left is (-cos, 0, +sin) of the forward yaw)
+  if (a._hasAimHL && !pistol) {
+    _rlH.copy(a._aimHL); a.obj.localToWorld(_rlH); _rlH.add(shift);
+    a.armBones.rArm.getWorldPosition(_rlP);
+    _rlP.x += rx * 0.25; _rlP.z += rz * 0.25; _rlP.y -= 0.45;
+    twoBoneIK(a.armBones.rArm, a.armBones.rFore, a.armBones.rHand, _rlH, w, _rlP);
+    twoBoneIK(a.armBones.rArm, a.armBones.rFore, a.armBones.rHand, _rlH, w, _rlP);
+  }
+  barrelWeld(a, bodyFwdYaw, twist, mixamoAim);
+  const env = smooth01(f / 0.08) * (1 - smooth01((f - 0.9) / 0.1));
+  let roll = (pistol ? 0.45 : 0.38) * env, pitchDn = (pistol ? -0.3 : 0.12) * env;
+  let open = -1;
+  for (let i = 0; i < RB.beats.length; i++) {
+    const b = RB.beats[i];
+    if (b[1] === "rl_bolt_open" || b[1] === "rl_bolt_close") { const x = (f - b[0]) / 0.045; roll += 0.35 * Math.exp(-x * x); }
+    else if (b[1] === "rl_break_open") open = b[0];
+    else if (b[1] === "rl_break_close" && open >= 0) pitchDn += 0.45 * smooth01((f - open) / 0.06) * (1 - smooth01((f - b[0]) / 0.06));
+  }
+  _rlE.set(pitchDn * w, 0, roll * w);
+  a.hand.quaternion.multiply(_rlQ.setFromEuler(_rlE));
+  a.hand.updateWorldMatrix(true, false);
+}
+/** the reload is over (done / cancelled / out of range): the support-hand IK takes the hand back at full weight (it ends on the grip) */
+function reloadEnd(a) {
+  a._rlOn = false; a._rlW = 0; a._rlAnim = null; a._rlKey = null;
+  if (a._ikW != null) a._ikW = 1;
+}
+
+/** (W10 R3B, combat finding 8) SURFACE SWIM view: the body sinks until its chest is SWIM_CHEST under the surface (treading water:
+ *  head and shoulders out), eased in and out; the sim position is untouched (hits, collisions) and updateCamera subtracts
+ *  _swimOff, so the camera keeps the un-sunk height (a surface swimmer never sees the underwater look). */
+function swimView(W, a, dt) {
+  let want = 0;
+  // (verify2 finding) the sink keys off the HEAD: keyed off the chest, the clip's 31 deg forward lean left only the crown of the hair out
+  const hd = a.armBones && a.armBones.head, b = hd || (a.armBones && (a.armBones.spine2 || a.armBones.spine1));
+  if (a.swimming && b) {
+    const rel = a._swimObjY > -1e8 ? b.matrixWorld.elements[13] - a._swimObjY : (hd ? 1.55 : 1.3);   // last frame's head (chest) above last frame's body
+    // against the DRAWN surface (maps.js bobs the water mesh +-0.12 m on a ~9 s swell; the camera clamp and the underwater test use it too):
+    // keyed off the static waterY the swimmer stood still while the sea rose over its chin and fell below its chest
+    const sy = W.map.water ? W.map.water.position.y : W.map.waterY;
+    want = K.clamp((hd ? sy + SWIM_HEAD : sy - SWIM_CHEST) - (a.obj.position.y + rel), -1.5, 0);
+  }
+  a._swimOff += (want - a._swimOff) * Math.min(1, dt * 6);
+  if (!a.swimming && Math.abs(a._swimOff) < 1e-3) a._swimOff = 0;
+  a.obj.position.y += a._swimOff;
+  a._swimObjY = a.swimming ? a.obj.position.y : -1e9;
+}
+
+/** (W10 R3B, verify2 finding) SURFACE SWIM upright: W9's swim clip leans the whole body ~31 deg forward (the Head bone only ~0.13 m
+ *  above the chest), so no sink depth put the head out AND the chest under. Each spine bone (Hips .. Head; Mixamo bones point +Y down the
+ *  chain) is turned the least way that leaves its +Y axis at most maxTilt off vertical: a treading column, legs under the body, face level.
+ *  Pose correction on the Mixamo clip (owner question 1 default); desktop medium+ on-screen swimmers only (Low / touch keep the clip). */
+function swimUpright(a, maxTilt) {
+  const B = a.armBones, chain = [B.hips, B.spine, B.spine1, B.spine2, B.neck, B.head];
+  // (verify3 finding) the arms hang off Spine2 and the clip posed them for its forward lean: straightening the torso swung them up to the
+  // face (both wrists 0.12-0.31 m ABOVE the water on 258 of 258 frames). Keep each upper arm's clip WORLD orientation (the stroke as the clip
+  // draws it, flat at the waterline) and drop it SWIM_ARM_DROP further, so the hands scull at or under the surface.
+  const arms = SWIM_ARMS_ON ? [B.lArm, B.rArm] : [];
+  for (let i = 0; i < arms.length; i++) if (arms[i] && arms[i].parent) arms[i].getWorldQuaternion(_swAQ[i]);
+  let first = true;
+  for (let i = 0; i < chain.length; i++) {
+    const b = chain[i];
+    if (!b || !b.parent) continue;
+    b.updateWorldMatrix(first, false); first = false;
+    _swY.setFromMatrixColumn(b.matrixWorld, 1).normalize();
+    const ang = Math.acos(K.clamp(_swY.dot(_swU), -1, 1));
+    if (ang <= maxTilt) continue;
+    _swX.crossVectors(_swY, _swU);
+    if (_swX.lengthSq() < 1e-10) continue;
+    _swR.setFromAxisAngle(_swX.normalize(), ang - maxTilt);            // world-space correction
+    b.parent.getWorldQuaternion(_swPQ);
+    b.quaternion.premultiply(_swPQ).premultiply(_swR).premultiply(_swPQ.invert());   // local' = P^-1 * R * P * local
+    b.updateWorldMatrix(false, false);
+  }
+  for (let i = 0; i < arms.length; i++) {
+    const b = arms[i];
+    if (!b || !b.parent) continue;
+    // the drop: about the body's sideways axis (actor +X in world), lowering the arm's forward reach toward the legs
+    _swX.set(1, 0, 0).applyQuaternion(a.obj.quaternion).normalize();
+    _swR.setFromAxisAngle(_swX, SWIM_ARM_DROP);
+    _swAQ[i].premultiply(_swR);
+    b.parent.updateWorldMatrix(true, false);
+    b.parent.getWorldQuaternion(_swPQ);
+    b.quaternion.copy(_swPQ.invert().multiply(_swAQ[i]));               // local = P^-1 * world
+    b.updateWorldMatrix(false, true);
+  }
+}
+
+/** the gun a slung actor carries on its back: the first OTHER weapon slot */
+function slungId(a) {
+  const inv = a.inventory;
+  if (!inv || !inv.slots) return null;
+  const held = a.weapon && a.weapon.id;
+  for (let i = 0; i < inv.slots.length; i++) {
+    if (i === inv.active) continue;
+    const s = inv.slots[i];
+    if (s && s.kind === "weapon" && s.id !== held) return s.id;
+  }
+  return null;
+}
+/** (W10 R3B, combat finding 13) SLUNG SECOND GUN: a clone of the actor's other gun across its back, on the SLING_CAP actors nearest the
+ *  camera within SLING_M (desktop medium+ only; not an attachment system - the gun is the inventory's other slot). */
+function slingPass(W, camPos) {
+  const P = W._weaponProtos, acts = W.actors;
+  let n = 0, m = 0;
+  if (deskHi(W) && P) {
+    for (let i = 0; i < acts.length; i++) {
+      const a = acts[i];
+      a._slingOn = false;
+      if (!a.alive || !a.rig || !a.armBones || !(a.armBones.spine2 || a.armBones.spine1) || a.downed || a.swimming || a.gliding || a.emoting) continue;
+      const id = slungId(a);
+      if (!id || !P[id]) continue;
+      const d2 = a.pos.distanceToSquared(camPos);
+      if (d2 > SLING_M2) continue;
+      // keep the SLING_CAP nearest (insertion into a fixed-size list)
+      let j;
+      if (m < SLING_CAP) j = m++;
+      else { if (d2 >= _slD[SLING_CAP - 1]) continue; j = SLING_CAP - 1; }
+      while (j > 0 && _slD[j - 1] > d2) { _slA[j] = _slA[j - 1]; _slD[j] = _slD[j - 1]; j--; }
+      _slA[j] = a; _slD[j] = d2;
+    }
+    for (let i = 0; i < m; i++) { _slA[i]._slingOn = true; _slA[i] = null; }
+  } else for (let i = 0; i < acts.length; i++) acts[i]._slingOn = false;
+  for (let i = 0; i < acts.length; i++) {
+    const a = acts[i];
+    if (a._slingOn) { if (slingPlace(a, P)) n++; }
+    else if (a._sling) {
+      a._sling.visible = false;
+      if (!a.alive) { if (a._sling.parent) a._sling.parent.remove(a._sling); a._sling = null; a._slingId = null; }
+    }
+  }
+  W._slingN = n;
+}
+function slingPlace(a, P) {
+  const id = slungId(a);
+  if (!a._sling || a._slingId !== id) {
+    if (a._sling && a._sling.parent) a._sling.parent.remove(a._sling);
+    const g = new THREE.Group();
+    const c = P[id].clone();
+    c.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    g.add(c);
+    g.name = "sling";
+    a.obj.add(g);
+    a._sling = g; a._slingId = id;
+    g.userData.tip = P[id].userData.tip; g.userData.len = P[id].userData.len || 0.8;
+  }
+  const g = a._sling;
+  if (!a._onScreen) { g.visible = false; return false; }
+  const b = a.armBones.spine2 || a.armBones.spine1;
+  b.getWorldPosition(_slV);
+  a.obj.worldToLocal(_slV);
+  const s = a.obj.scale.x || 1;
+  // barrel up over the left shoulder (actor-local: +Z facing, +X left), the gun's top facing away from the back
+  _slF.set(0.5, 0.866, 0);
+  _slX.crossVectors(_slU, _slF);
+  _slMb.makeBasis(_slX, _slU, _slF);
+  g.quaternion.setFromRotationMatrix(_slMb);
+  const tz = g.userData.tip ? g.userData.tip.z : 0.5, mid = tz - g.userData.len / 2;
+  g.position.set(_slV.x - _slF.x * mid / s, _slV.y - _slF.y * mid / s, _slV.z - 0.19 / s);
+  g.scale.setScalar(1 / s);
+  g.visible = true;
+  return true;
+}
+
 /** BARREL AIM weld: the holder's local rotation that points the barrel along the twisted chest + aim pitch. */
 function barrelWeld(a, bodyFwdYaw, twist, mixamoAim) {
   a.handBone.updateWorldMatrix(true, false);          // fresh, not stale
@@ -3668,7 +4047,8 @@ function barrelWeld(a, bodyFwdYaw, twist, mixamoAim) {
   // was calibrated on one clip frame and pointed some skins' guns at
   // their own chest.
   // Mixamo armed: always track pitch (clips already hold the weapon up).
-  const bpitch = (!mixamoAim && a._armMode === "lowReady") ? -0.55 : a.pitch;
+  // (W10 R3B) - the swap dip: the muzzle goes down SWAP_DIP rad and back up over SWAP_S
+  const bpitch = ((!mixamoAim && a._armMode === "lowReady") ? -0.55 : a.pitch) - SWAP_DIP * a._swapK;
   const cp = Math.cos(bpitch), sp = Math.sin(bpitch);
   // barrel follows the TWISTED CHEST, not the raw camera yaw: when the
   // body runs at an angle to the aim, welding to camera yaw pointed the
@@ -4279,7 +4659,9 @@ function updateCamera(W, dt, alpha) {
   // (applied every frame, never held until the next tick); anyone spectated
   // turns smoothly between its last two ticks.
   const fp = (focus.alive && focus._vmode) ? focus.obj.position : focus.pos;
-  const eye = fp.y + focus._eyeY;
+  // (W10 R3B) swimView sinks the DRAWN body (obj.position.y += _swimOff) to tread water; the camera keeps the un-sunk
+  // height, so a surface swimmer's view stays above the water exactly as before the sink (verify1: the eye went under)
+  const eye = fp.y - (fp === focus.obj.position ? focus._swimOff || 0 : 0) + focus._eyeY;
   camTarget.set(fp.x, eye, fp.z);
   const liveLook = focus === W.player && focus.alive && !focus.netRemote;
   const fYaw = liveLook ? focus.input.yaw : (focus._ppT === _tickN ? lerpAngle(focus._pyaw, focus.yaw, k) : focus.yaw);
