@@ -739,12 +739,13 @@ const VARIETY = [["furniture/kitchenCabinetUpper", "upperDbl"], ["furniture/chai
 // a room's share of its storey's triangle budget is weighted by what it must hold (a kitchen's counter row and dining set cost ~1,400 triangles,
 // a bathroom's set is mostly authored boxes, a hall holds a lamp and a plant)
 const SHAREW = { ruin: 0.8, kitchen: 2.0, living: 1.5, shop: 1.5, lobby: 1.3, bedroom: 1.2, meeting: 1.2, office: 1.0, warehouse: 1.0, barn: 1.0, storage: 0.7, bath: 0.8, hall: 0.5 };
-// (W10 R3A fix5, WORK_DENSE) the dressing rotation of a work room, one piece a DENSE_M2 m2 of its area (office 12, meeting 5, lobby 7, corridor 9)
-const DENSE_IDS = { office: ["filingCab", "lockers2", "plant", "filingCab", "wallCab", "trash", "coatRack", "filingCab"],
-  meeting: ["dresser", "officeChair", "officeChair", "filingCab", "wallCab", "coatRack", "officeChair", "plant", "art"],
-  lobby: ["armchair", "plant", "coatRack", "bookcaseLow", "trash", "wallCab", "art", "plant"],
-  hall: ["lockers2", "plant", "trash", "wallShelf", "lockers2", "coatRack", "filingCab"] };
-const DENSE_M2 = { office: 12, meeting: 5, lobby: 7, hall: 9 };
+// (W10 R3A fix5, WORK_DENSE) the dressing rotation of a work room, one piece a DENSE_M2 m2 of its area (office 30, meeting 5, lobby 7, corridor 18); cheap authored
+// pieces (34-46 triangles; pictures 4): perf_district's ashgrid s2026 drop view read x1.364 (bar x1.25) with 1 a 12 m2 of 45-125 triangle pieces
+const DENSE_IDS = { office: ["filingCab", "lockers2", "wallCab", "coatRack"],
+  meeting: ["dresser", "officeChair", "art", "officeChair", "coatRack", "wallCab", "filingCab", "poster"],
+  lobby: ["armchair", "coatRack", "art", "wallCab", "poster", "plant"],
+  hall: ["lockers2", "wallCab", "coatRack"] };
+const DENSE_M2 = { office: 30, meeting: 5, lobby: 7, hall: 18 };
 // phase 3's last resort: what may stand free in the open floor a doorway looks at
 const FREEPOOL = { living: ["armchair", "ottoman", "lampSq", "plant"], bedroom: ["chairMod", "lampSq", "plant"], kitchen: ["chairMod", "stool", "trash"], bath: ["trash", "plant"],
   office: ["chairMod", "plant", "box"], storage: ["boxStack", "crate", "carton"], ruin: ["rubble", "crate", "carton"], warehouse: ["box", "crate", "crateStack"], barn: ["crate", "box", "crateStack"], shop: ["box", "crate", "boxOpen"],
