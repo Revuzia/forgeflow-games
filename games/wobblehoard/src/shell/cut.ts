@@ -163,6 +163,8 @@ export interface CutDeps {
   /** PLAYGROUND (11.4, SH-03): the most pieces while a party is out (min(the pieces cap, the characters cap - (wholes - 1))); null or absent = the
    *  safety ceiling alone (the published toy) */
   pieceCap?(): number | null;
+  /** D-99: where the cut squishy goes back together (its own spot when it was cut in a party after an exchange); null or absent = the middle of the table, as published */
+  homeSpot?(): V3 | null;
   panOf(p: V3): number;
   say(text: string): void;
   report(e: unknown): void;
@@ -1068,10 +1070,10 @@ export function createCutter(d: CutDeps): Cutter {
     if (!face) { pieces = []; locked = null; return; }
     const others = pieces.slice(1);
     if (!others.length && face.body === d.bodies.body && fracOf(face) >= 1 && face.built >= 1) { pieces = []; locked = null; tree = createCutTree(); nodeFrac.clear(); return; }
-    const c = face.body.center;
-    if (glide && typeof face.body.moveTo === 'function' && Math.hypot(c.x, c.z) > HOME_NEAR) {
+    const c = face.body.center, hs = d.homeSpot?.() ?? null, hx = hs ? hs.x : 0, hz = hs ? hs.z : 0;
+    if (glide && typeof face.body.moveTo === 'function' && Math.hypot(c.x - hx, c.z - hz) > HOME_NEAR) {
       face.frac = 1;
-      try { face.body.moveTo({ x: 0, y: c.y, z: 0 }, 1.2); } catch (e) { d.report(e); swapWhole(face); return; }
+      try { face.body.moveTo({ x: hx, y: c.y, z: hz }, 1.2); } catch (e) { d.report(e); swapWhole(face); return; }
       anim = { kind: 'home', face, others, t0: d.simTime() };
       return;
     }
@@ -1084,7 +1086,8 @@ export function createCutter(d: CutDeps): Cutter {
     for (const q of pieces) { if (q === face) continue; try { q.body.moveTo?.(null); } catch { /* optional */ } d.bodies.setGhost(q.body, false); }
     try { face.body.moveTo?.(null); } catch { /* optional */ }
     let b: SoftBodyLike;
-    try { b = d.createBody(g); }
+    const hs = d.homeSpot?.() ?? null;   // (D-99: a squishy cut in a party goes back together at its own spot, never into another squishy at the middle)
+    try { b = hs ? d.createBody(g, { at: { x: hs.x, y: 0, z: hs.z } }) : d.createBody(g); }
     catch (e) { d.report(e); return; }   // (the squishy stays as it is; the next leave tries again)
     d.beforeChange();
     for (const q of pieces) { if (q === face) continue; const x = extraOf(q.body); if (x) d.bodies.removeExtra(x.id); }

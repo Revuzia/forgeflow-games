@@ -178,6 +178,8 @@ const REACT_REF = 20;              // metrics.reaction: push-back (m/s^2 per uni
                                    // contact impulse at ~1; at 20 a held full press reads soft 0.2-0.6, starter 0.3-0.6, firm 0.45-0.9
 const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
+/** D-97 (Table after Float "brings them down again gently"): for DESCEND_S after gravity comes back, or until the body reaches a support, it falls no faster than DESCEND_V m/s. */
+const DESCEND_S = 2, DESCEND_V = 0.9;
 /** Give law exponent: depth ~ smOmega^GIVE_EXP, from deriveParams' own squashDepth 0.66 -> 0.34 over smOmega 12 -> 40 (see the constructor). */
 const GIVE_EXP = Math.log(0.34 / 0.66) / Math.log(40 / 12);
 /** Supported gravity is withdrawn as the lowest point of the shape-matching goal rises from 0 to GOAL_FLOAT x restRadius above the table
@@ -546,7 +548,12 @@ export class SoftBody implements SoftBodyLike {
   private evAuto = false; private evProp = -1; private evOther = -1;   // the next emit's SoftEvent.auto / prop / other (land and bump set them; emit resets them)
   private propBumpT: Int32Array = new Int32Array(0);   // per prop: the substep index of this body's last contact with it (a prop 'bump' is the start of a contact, like a body's)
   private scootOn = false; private stx = 0; private stz = 0; private sSpeed = 0; private sV = 0; private sGx = 0; private sGz = 0;   // scootTo: target, asked speed, the glide's speed and velocity now
+  /** R10 LOCOMOTION (D-100): the crawl of a prop world that tracks the body (physics/crawl.ts, the props chunk) moves its particles once a frame and, while
+   *  crawlOn, crawlD (3 per particle) is added to the goal in the rest frame and the rotation is fitted against crawlF (the rest shape + crawlD, centred: a cut
+   *  chunk's goal is not, and a fit against it ran away); off: scootTo's glide of before, bit for bit */
+  crawlOn = false; crawlD = new Float64Array(0); crawlF: Float64Array = new Float64Array(0);
   private sqTarget = 1; private sqNow = 1; private sqTau = 0.12; private sqAskTau = 0;   // setSquash: the asked squash (1 = released), the eased one, its time constant, the call in force
+  private descendT = 0;                     // D-97: seconds left of the gentle descent after gravity came back (DESCEND_S)
   private hopLeft = 0; private hopT = -10; private glueK = 1;   // hop: substeps left with the glue and peel suspended, its sim time, the tack factor (0 during them)
   private heldF = false;                       // the touch gate this frame: a finger down, a grab, a carry or a lock
   private suppEff = 0;                         // the share of the weight the supports carry this substep (supp x (1 - goal float) x glueK): the weight transfer
@@ -1136,6 +1143,7 @@ export class SoftBody implements SoftBodyLike {
     this.gravityOn = on;
     this.airSub = 0;
     this.wake();   // CUT3: a change of the gravity mode wakes a sleeping piece
+    this.descendT = on ? DESCEND_S : 0;   // (D-97: back to the table gently)
     if (!on) { this.pinned.fill(0); this.pinCount = 0; this.carried = false; this.liftOk = false; }   // a floating body has no table to be glued to (nor a carry)
   }
 
@@ -1194,6 +1202,7 @@ export class SoftBody implements SoftBodyLike {
     this.asleep = false; this.restT = 0; this.calmT = 0; this.restRefOn = false; this.bRvalid = false; this.restMem = 1;
     // PLAYGROUND: the LIFE drivers released, the prop contact state cleared (the bound world, sleepEnabled and contactSlot are configuration and stay)
     this.scootOn = false; this.stx = 0; this.stz = 0; this.sSpeed = 0; this.sV = 0; this.sGx = 0; this.sGz = 0;
+    this.descendT = 0;
     this.sqTarget = 1; this.sqNow = 1; this.sqTau = 0.12; this.sqAskTau = 0; this.hopLeft = 0; this.hopT = -10; this.glueK = 1; this.heldF = false; this.suppEff = 0; this.subK = 0;
     this.propNear = 0; this.propNearM = 0; this.propMinY = 0; this.supSx = 0; this.supSy = 0; this.supSz = 0; this.tiltOn = false; this.tnx = 0; this.tny = 1; this.tnz = 0;
     this.onMoving = false; this.onPropIdx = -1; this.holdOn = false; this.fdl = 0; this.memDev = 0; this.pminRaw = 0; this.tblNearM = 0; this.propFoldT = 0; this.scootBlock = false; this.peelRef = 0;
@@ -1229,7 +1238,7 @@ export class SoftBody implements SoftBodyLike {
     // once per frame: memory arm, ceremony easing, goal shape (an int argument: no boxing). Only called when something is active: a body
     // that never needs it (the gel at rest, pressed or pulled) must not run a function the warm-up left without type feedback every frame
     // (it was deoptimised and ran unoptimised: 144 B of boxed doubles per frame)
-    if (this.memOn || this.goalOn || this.edgesBent || this.fold !== this.foldTarget || this.burstO > 0 || this.trembleAmp > 0 || this.flatK > 0 || this.neckOn || this.fracDur > 0 || this.fracNow !== this.fracBuilt || this.sqNow !== this.sqTarget || this.sqNow !== 1) this.frameUpdate(nsub);
+    if (this.memOn || this.goalOn || this.edgesBent || this.fold !== this.foldTarget || this.burstO > 0 || this.trembleAmp > 0 || this.flatK > 0 || this.neckOn || this.fracDur > 0 || this.fracNow !== this.fracBuilt || this.sqNow !== this.sqTarget || this.sqNow !== 1 || this.crawlOn) this.frameUpdate(nsub);
     for (let s = 0; s < nsub; s++) {
       this.subK = s;
       this.substep();
@@ -2074,6 +2083,7 @@ export class SoftBody implements SoftBodyLike {
     for (let i = 0; i < 6; i++) frame();
     w.setSquash(0.85, 0.12); w.scootTo(w.center.x + 0.4, w.center.z, 0.3); for (let i = 0; i < 4; i++) frame();
     top(0, 0.1); frame(); frame(); w.fingerUp(0); for (let i = 0; i < 3; i++) frame();
+    w.crawlD = new Float64Array(w.n * 3); w.crawlF = w.Q; w.crawlOn = true; frame(); w.crawlOn = false;   // (R10: the crawl's goal and fit paths)
     w.setSquash(1, 0.12); w.scootTo(NaN, 0, 0); w.hopT = -10; w.hop(0.1, 0.6, 0); for (let i = 0; i < 8; i++) frame();
     // 2) a mixed workout until the optimiser has compiled it all
     for (let k = 0; k < 4; k++) {
@@ -3592,7 +3602,8 @@ export class SoftBody implements SoftBodyLike {
     // (a hop's glue and peel stay suspended for PG.hopSubs substeps AND until the body is back on a support: at 0.84 m/s ten substeps lift the foot ~2 cm, inside
     // the jelly's 2.5 cm tack layer, which pulled it back to the table: the jelly gel, water fill, firm silicone and pop dome hopped 1.2 cm instead of 3.2)
     if (this.hopLeft > 0) { if (this.hopLeft > 1 || this.nearCount > 0) this.hopLeft--; if (this.hopLeft === 0) this.glueK = 1; }
-    if (this.gravityOn && !grabbing && !this.moveOn && !this.scootOn && !this.cyOn && !this.onMoving && this.pinCount === 0 && (this.bndShape < 0 ? hdx * hdx + hdz * hdz > this.p.matR0 * this.p.matR0 * 0.81 : this.nearBoundsEdge())) {
+    // (D-97: a FLOATING body with place bounds is corralled by them too, so a toss in the air never leaves the place; Home's home corral stays table-only, as published)
+    if ((this.gravityOn || this.bndShape >= 0) && !grabbing && !this.moveOn && !this.scootOn && !this.cyOn && !this.onMoving && this.pinCount === 0 && (this.bndShape < 0 ? hdx * hdx + hdz * hdz > this.p.matR0 * this.p.matR0 * 0.81 : this.nearBoundsEdge())) {
       const a0 = f0.down || f0.retracting, a1 = f1.down || f1.retracting;
       if (!(a0 && f0.touching) && !(a1 && f1.touching) && !(extra && this.extraTouch())) this.matCorral(a0 || a1 || extra);
     }
@@ -3658,6 +3669,10 @@ export class SoftBody implements SoftBodyLike {
       this.suppEff = se;
       ay = this.carried || this.cyOn ? 0 : -GRAVITY * (1 - se);   // a carried body: the hand holds its weight (carryTo: the arc does)
       if (this.tiltOn && !this.carried && !this.cyOn) { const k = GRAVITY * se * this.tny; ax = k * this.tnx; ay = -GRAVITY + k * this.tny; az = k * this.tnz; }
+      if (this.descendT > 0) {   // D-97: Table after Float: a gentle descent (the fall speed capped) until a support is reached
+        if (this.nearCount > 0 || this.propNearM > 0) this.descendT = 0;
+        else { this.descendT -= H; const lim = (-DESCEND_V - this.vcy) / H; if (ay < lim) ay = lim; }
+      }
     } else {
       // float mode: weak hover spring on the centre of mass (stiffer while a finger or a lobe holds it) + slow bob
       const boost = 1 + 2.5 * nFingers + (grabbing ? 3 : 0);
@@ -3665,9 +3680,11 @@ export class SoftBody implements SoftBodyLike {
       // the bob of hoverY(), written out: substep() is too large for the optimiser to inline into, so a call passing and returning
       // a double would box both (two HeapNumbers per substep)
       const hy = this.restRadius + HOVER_ABOVE + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * this.simTime + this.seedPhase);
-      ax = -w2 * this.cx - c * this.vcx;
+      // (D-97, owner 2026-11-19: Float floats everyone everywhere: the spring holds the body over its HOME (the origin for the play body, as before; a mat
+      //  squishy's or a piece's own spot; where LIFE last brought it to rest, setHome), so a party no longer collapses into the world origin)
+      ax = -w2 * (this.cx - this.homeX) - c * this.vcx;
       ay = -w2 * (this.cy - hy) - c * this.vcy;
-      az = -w2 * this.cz - c * this.vcz;
+      az = -w2 * (this.cz - this.homeZ) - c * this.vcz;
     }
     if (this.holdOn) { ax += this.holdAx; ay += this.holdAy; az += this.holdAz; }   // D-95 AUTO: a rider holds on (propPass)
     const hax = ax * H, hay = ay * H, haz = az * H;
@@ -3686,7 +3703,7 @@ export class SoftBody implements SoftBodyLike {
       // CUT2 5.4 (found by P5's gate rows): while a neck forms the best-fit rotation is extracted against the NECKED goal, as 5.7 does for a morph. Against the rest shape the matrix
       // A = sum m p q^T of a body sitting at the necked goal is R S I_Q (S the pinch, I_Q the rest shape's second moment): a product of two symmetric matrices that do not commute for
       // a plane that is not along the rest shape's own axes, so its polar rotation is turned by tens of degrees (measured at the swap: 23 to 156 degrees, the body lifted by up to 0.3 m)
-      const QF = this.neckOn && NECK_FIT.goal ? this.QG : Q;
+      const QF = this.neckOn && NECK_FIT.goal ? this.QG : this.crawlOn ? this.crawlF : Q;   // (R10: fitted against Q, the crawl's wave spun the body up)
       for (let i = 0; i < n; i++) {
         const i3 = i * 3, m = M[i];
         const mx = m * XP[i3], my = m * XP[i3 + 1], mz = m * XP[i3 + 2];
@@ -3967,7 +3984,8 @@ export class SoftBody implements SoftBodyLike {
     if (this.ps !== null) { this.fdl = fingerDown; this.propPass(); }
     {
       // (round 8: and of a carried body: it is in the hand, held CARRY_LIFT_K R up; the tack layer kept its foot on the table and the carry dragged it along the floor)
-      const mu = this.p.tableMu, glue = this.p.glue * (this.restRadius / 0.5) * (1 - this.fold) * (this.carried ? 0 : this.glueK), H0 = this.H0;   // the tack layer scales with the body (and lets go of a folding one; and of a hop: glueK)
+      // (D-97: and of a FLOATING body: Float chosen while it rested on the table kept its foot glued, the hover only stretched it 5 cm up; "float doesnt actually make them float")
+      const mu = this.p.tableMu, glue = this.p.glue * (this.restRadius / 0.5) * (1 - this.fold) * (this.carried || !this.gravityOn ? 0 : this.glueK), H0 = this.H0;   // the tack layer scales with the body (and lets go of a folding one; and of a hop: glueK)
       // normal-load proxy for Coulomb friction: this substep's penetration plus the supported weight (g h^2 per
       // particle, concentrated on the particles that are actually touching)
       const load = this.supp * GRAVITY * H * H * Math.min(LOAD_CONC, this.Mtot / Math.max(1, this.nearMass));
@@ -4150,7 +4168,7 @@ export class SoftBody implements SoftBodyLike {
     this.volScale = fs * fs * fs;
     this.volNeck = nk;   // the volume constraint stiffens with the neck (substep; a field: the substep's own int / double mix was boxed)
     const fd = this.fold, bo = this.burstO, ta = this.trembleAmp * TREMBLE_AMP * this.restRadius, sq = this.sqNow;
-    const shaped = fd !== 0 || bo !== 0 || fs !== 1 || fk !== 0 || nk !== 0 || sq !== 1;
+    const cw = this.crawlOn, shaped = fd !== 0 || bo !== 0 || fs !== 1 || fk !== 0 || nk !== 0 || sq !== 1 || cw;
     if (!this.memOn && !shaped && ta === 0) {
       if (this.goalOn) { this.QG.set(Q); this.LQG.set(this.LQ); this.goalOn = false; }
       if (this.edgesBent) this.restoreEdges();
@@ -4166,6 +4184,7 @@ export class SoftBody implements SoftBodyLike {
       GB[i3 + 1] = (qy + fd * (QS[i3 + 1] - qy) + fk * (FL[i3 + 1] - qy)) * sc * sq;
       GB[i3 + 2] = (qz + fd * (QS[i3 + 2] - qz) + fk * (FL[i3 + 2] - qz)) * sc * sqx;
     }
+    if (cw) { const D = this.crawlD; for (let i = 0; i < n * 3; i++) GB[i] += D[i]; }   // (R10 LOCOMOTION: the crawl's wave)
     this.fracScale = fs;
     if (nk > 0) { this.neckGoal(); if (SoftBody.centreGoal) this.centreGB(); }   // (no arguments: doubles passed to a call this large are boxed; it reads neckT and fracScale)
     // the memory arm measures the body against that goal: the body is MADE to take the cut / ceremony shape, it is not a deformation to keep

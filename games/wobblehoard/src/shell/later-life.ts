@@ -213,11 +213,10 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   let thingGlobal = new Int16Array(0);     // per place-local thing: its THING_IDS index
   const homeShown = new Uint8Array(8);     // Home's things shown now
   let travelling = false;
-  let floatParked = false;                 // the Float rule (D-83): Float with one squishy at Home binds no prop world
+  let floatParked = false;                 // the Float rule (D-97, replaced D-83): Float is on: every squishy out floats, at every place (LIFE's motion, rides and thing play pause; the world stays)
   // round 5: a "Go play with..." lift onto a swing holds the seat with a steadying hand (useRide, steadyStep): its prop, the squishy, when it sat, the ease
   let steadyP = -1, steadyI = -1, steadyOnT = -1, steadyT0 = 0, steadyEase = 0.5, steadyLand = 0, steadyEnd = 0;
   const steadyFrom = new Float64Array(3), steadyTo = new Float64Array(3);
-  let groundSaid = false;
 
   // ---- the journal, the ring and the moments ----
   let journal: JournalRuntime | null = null;
@@ -313,7 +312,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     c.homeX = c.lastX; c.homeZ = c.lastZ;
     c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.chimeT = -1e9; c.perchT = 0; c.padRestT = 0; c.outT = 0; c.stuckT = game.simTime; c.hushT = -1e9; c.askedT = -1e9;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
-    if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
+    if (world) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
     try { warm = itemId ? Math.min(5, Math.floor((game.hoard.warmthOf?.(itemId) ?? 0))) : 0; } catch { warm = 0; }
     lifeAdd(w, i, g, kind, c.group, warm, isNew);
@@ -334,7 +333,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     c.lastX = ce.x + c.offX; c.lastZ = ce.z + c.offZ; c.vx = 0; c.vz = 0; c.homeX = c.lastX; c.homeZ = c.lastZ;
     c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
-    if (world && !floatParked) { try { b.setPropWorld?.(world); } catch (x) { report(x); } }
+    if (world) { try { b.setPropWorld?.(world); } catch (x) { report(x); } }
     if (placeIdx === 0) lifeSetHome(w, i, c.homeX, c.homeZ);
   }
   function removeChar(i: number): void {
@@ -453,22 +452,35 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     if (placeIdx === 0) homeThings();
   }
 
-  // ---- the Float rule (D-83): Float at Home with one squishy out; otherwise gravity is forced at run time (the saved setting never changes) ----
+  // ---- the Float rule (D-97, owner 2026-11-19 "float doesnt actually make them float"; it replaced D-83, which forced the table with a party or in a place):
+  //      Float floats EVERY squishy out (any party, its cut pieces) at EVERY place. The place's world stays bound and its things stay where they are (the
+  //      player's taps on them still work); while it is on LIFE starts no motion (autonomy off: no walks, hops, self-started uses or rides; feelings, looks and
+  //      voices go on) and the AUTO chips hide. Each squishy rises where it stands (its hover spot, physics' home, inside the place's area); Table brings
+  //      everyone down gently (physics' descent) and LIFE takes up its motion again. The saved setting is the one truth: nothing here overrides it. ----
   function floatRule(): void {
-    const wantFloat = !game.settings.gravity;
-    const lone = wholesOut() <= 1 && placeIdx === 0 && cutGroup < 0;
-    const parkNow = wantFloat && lone;
-    if (wantFloat && !lone) {
-      for (const c of chars) if (c.on && c.body && !c.body.gravity) { try { c.body.gravity = true; } catch { /* ignore */ } }
-      try { stage.setFloatMode(false); } catch { /* ignore */ }
-      if (!groundSaid) { groundSaid = true; deps.say?.('Here your squishies stand on the ground.'); }
+    const now = !game.settings.gravity;
+    for (let i = 0; i < CAP; i++) { const b = chars[i].body; if (chars[i].on && b && b.gravity === now) { try { b.gravity = !now; } catch { /* a mock */ } } }
+    if (now === floatParked) return;
+    floatParked = now;
+    if (now) for (let i = 0; i < CAP; i++) if (chars[i].on && chars[i].body) floatHome(i);
+  }
+  /** D-97: a squishy that starts floating rises where it stands: its hover spot (physics' home) is its centre now (a walk is ended), kept inside the place's
+   *  area by its radius + 0.25 m so a toss in the air never carries it out of the place (physics' bounds corral catches the rest) */
+  function floatHome(i: number): void {
+    const c = chars[i], b = c.body!;
+    if (c.scooting) { try { b.scootTo?.(NaN, 0, 0); } catch { /* ignore */ } c.scooting = false; }
+    let x = b.center.x + c.offX, z = b.center.z + c.offZ;
+    if (placeIdx !== 0) {
+      const bd = (layout === 1 ? def.tall : def).bounds, m = c.r + 0.25;
+      if (bd.shape === 'disc') {
+        const r = Math.max(0, (bd.r ?? 3) - m), dx = x - bd.x, dz = z - bd.z, d = Math.hypot(dx, dz);
+        if (d > r && d > 1e-6) { x = bd.x + dx * r / d; z = bd.z + dz * r / d; }
+      } else {
+        const hx = Math.max(0, (bd.hx ?? 3) - m), hz = Math.max(0, (bd.hz ?? 2.4) - m);
+        x = Math.min(bd.x + hx, Math.max(bd.x - hx, x)); z = Math.min(bd.z + hz, Math.max(bd.z - hz, z));
+      }
     }
-    if (parkNow !== floatParked) {
-      floatParked = parkNow;
-      for (const c of chars) if (c.on && c.body) { try { c.body.setPropWorld?.(parkNow ? null : world); } catch { /* ignore */ } }
-      try { stage.bindProps?.(parkNow || !world ? null : world.poses, parkNow || !world ? 0 : world.count, parkNow || !world ? null : world.propThing); } catch (e) { report(e); }
-      if (placeIdx === 0) homeThings();
-    }
+    try { b.setHome?.(x - c.offX, z - c.offZ); } catch { /* a mock */ }
   }
 
   // ---- Home's things (PLACES 4.1, D-88): each shows after its event AND while the party is at least its spot's fromN ----
@@ -499,7 +511,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     for (let k = 0; k < HOME.things.length; k++) {
       const t = HOME.things[k], spot = tall ? HOME.tall.things[k] : null;
       const fromN = (spot ? spot.fromN : t.fromN) ?? 1;
-      const show = !floatParked && arrived(k) && n >= fromN;
+      const show = arrived(k) && n >= fromN;   // (D-97: Float no longer parks Home's things: they stay where they are)
       if ((homeShown[k] === 1) === show) continue;
       homeShown[k] = show ? 1 : 0;
       try { world.setParked(k, !show); } catch (e) { report(e); }
@@ -518,8 +530,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     mapThings();
     homeShown.fill(0);
     for (let k = 0; k < HOME.things.length; k++) { try { world.setParked(k, true); } catch { /* none */ } }
-    for (const c of chars) if (c.on && c.body && !floatParked) { try { c.body.setPropWorld?.(world); } catch (e) { report(e); } }
-    try { if (!floatParked) stage.bindProps?.(world.poses, world.count, world.propThing); } catch (e) { report(e); }
+    for (const c of chars) if (c.on && c.body) { try { c.body.setPropWorld?.(world); } catch (e) { report(e); } }
+    try { stage.bindProps?.(world.poses, world.count, world.propThing); } catch (e) { report(e); }
     lifeSetPlace(w, 0, visit, HOME, layout, bodyScale);
     for (let i = 0; i < CAP; i++) if (chars[i].on && chars[i].kind === 0) lifeSetHome(w, i, chars[i].homeX, chars[i].homeZ);
     homeThings();
@@ -918,6 +930,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     s.tier = tier;
     s.phone = deps.phone?.() ?? false;
     s.calm = game.settings.calm; s.reducedMotion = deps.reducedMotion?.() ?? false;
+    if (world) world.calm = s.calm || s.reducedMotion;   // (R10 LOCOMOTION, D-100: Calm or reduced motion: no crawl, LIFE's walk is today's glide)
     s.autonomy = game.settings.autonomy && !floatParked;
     s.quiet = quietNow();
     s.musicField = 0; s.musicOn = game.settings.music > 0.001; s.musicBoxOn = musicBoxOnUntil > t; s.beatPhase = (t * 66 / 60) % 1;
@@ -1645,7 +1658,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   let throughWhy = '';   // (dev view) the last Home still tap's through-tap outcome
   function throughTap(x: number, y: number): boolean {
     throughWhy = 'off';
-    if (placeIdx !== 0 || !world || floatParked || s.quiet || game.tool !== 'hand') return false;
+    if (placeIdx !== 0 || !world || s.quiet || game.tool !== 'hand') return false;   // (D-97: also while floating: the things stay and answer)
     const cam = stage.camera;
     if (!cam) return false;
     try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
@@ -1704,7 +1717,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     return p;
   }
   function tapThing(x: number, y: number, through = false): boolean {
-    if (!world || floatParked || s.quiet || game.tool !== 'hand') { tapWhy = 'off'; return false; }
+    if (!world || s.quiet || game.tool !== 'hand') { tapWhy = 'off'; return false; }   // (D-97: also while floating)
     const cam = stage.camera;
     if (!cam) { tapWhy = 'nocam'; return false; }
     try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
@@ -1877,7 +1890,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   }
   function grabAt(id: number, x: number, y: number): boolean {
     const W = world;
-    if (!W || floatParked || s.quiet || game.tool !== 'hand' || handSlot(id) >= 0) return false;
+    if (!W || s.quiet || game.tool !== 'hand' || handSlot(id) >= 0) return false;   // (D-97: also while floating)
     const j = handFree();
     if (j < 0) return false;
     const cam = stage.camera;
@@ -2236,7 +2249,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     },
     act(dt) {
       if (dt > 0) weatherStep();   // (round 6: the gusts follow LIFE's clock before the props step; the bed hears each weather event)
-      if (dt > 0 && world && !floatParked) world.beginFrame();
+      if (dt > 0 && world) world.beginFrame();   // (D-97: the world steps while floating too)
       steadyStep();
       pumpRestore();
       syncParty();
@@ -2372,7 +2385,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       return Math.max(2, Math.min(CHAR_CAP.pieces[t], CHAR_CAP.chars[t] - (wholes - 1)));
     },
     sense(dt) {
-      if (dt > 0 && world && !floatParked) { world.endFrame(dt); drainProps(); heldVoices(); }
+      if (dt > 0 && world) { world.endFrame(dt); drainProps(); heldVoices(); }
       if (finaleOff >= 0 && game.simTime >= finaleOff) { finaleOff = -1; try { stage.thingFx?.(-1, 2, 0); } catch { /* none */ } }
       fillSnapshot(dt);
       wakeClaim = 0;   // (the snapshot's units now show every body woken before it)

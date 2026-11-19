@@ -20,6 +20,7 @@ import { icon } from './icons.ts';
 import { attachTooltip } from './tooltip.ts';
 import { cue } from './uiSound.ts';
 import { wishLine } from './later-journal.ts';
+import { attachPartyStrip } from './later-party.ts';
 import type { LifeHostApi } from '../shell/lifeLink.ts';
 import type { Game } from '../shell/game.ts';
 import { CATALOG } from '../data/catalog.ts';
@@ -300,6 +301,9 @@ export function attachPlayUi(o: PlayUiOpts): PlayUi {
   offs.push(offEv);
   refreshTracker();
   layoutSlot();
+  // R10_PLAYUX item 2: the Friends strip beside the name tag (ui/later-party.ts, in this chunk)
+  const friends = attachPartyStrip({ game, root: o.root, say: o.say, covered });
+  offs.push(() => friends.destroy());
 
   return {
     moment,

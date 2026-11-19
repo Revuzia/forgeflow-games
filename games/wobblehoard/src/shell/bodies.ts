@@ -58,6 +58,11 @@ export interface BodyManager {
    *  (its view is removed). Identity (genome, item, nickname, tier) is unchanged and nothing is announced. false, and nothing changes, when `body` is not an extra or the stage cannot re-point
    *  its primary (an old stage: the caller falls back to swapTo, which shows every view again). */
   promote(body: SoftBodyLike): boolean;
+  /** D-99 (owner 2026-11-19: "if i have multiple squishies out i should be able to cut any/all of them"): a WHOLE squishy out (a shared extra, not a piece) becomes the play
+   *  squishy where it stands: the stage re-points its primary view (setPrimaryBody), the play squishy of before stays out as a shared extra with its own view and body,
+   *  nothing is rebuilt or moved, and the identity follows (afterSwap, not silent: the name tag says who is in play). false, and nothing changes, when `body` is not such
+   *  an extra or the stage cannot re-point its primary. */
+  exchange?(body: SoftBodyLike): boolean;
   /** the stage's view id of a body (the play body: the stage's primary; an extra: its id), or null */
   viewIdOf(body: SoftBodyLike): number | null;
   /** bodies that push against each other every step (body.collide; 0 when fewer than two can) */
@@ -183,6 +188,24 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
       styleTier(d.stage, identity.tier);
       rebuildContacts();
       try { d.afterSwap(identity, body, true); } catch (e) { d.report(e); }
+      return true;
+    },
+    exchange(b) {
+      const i = extras.findIndex((x) => x.body === b && !x.piece && x.shared);
+      if (i < 0 || b === body || typeof d.stage.setPrimaryBody !== 'function') return false;
+      let oldView: number | null = null;
+      try { oldView = d.stage.primaryBodyId?.() ?? null; } catch { /* an old stage */ }
+      if (oldView === null || oldView < 0) return false;
+      const x = extras[i];
+      try { d.beforeSwap(false); } catch (e) { d.report(e); }
+      try { d.stage.setPrimaryBody(x.id); } catch (e) { d.report(e); return false; }
+      extras[i] = { id: oldView, body, genome: identity.genome, tier: identity.tier, itemId: identity.itemId, position: { x: 0, y: 0, z: 0 }, shared: true };
+      try { d.stage.setBodyTier?.(oldView, identity.tier); } catch { /* an old stage */ }
+      body = b;
+      identity = { genome: x.genome, tier: x.tier, itemId: x.itemId, nickname: null };
+      styleTier(d.stage, identity.tier);
+      rebuildContacts();
+      try { d.afterSwap(identity, body, false); } catch (e) { d.report(e); }
       return true;
     },
     viewIdOf(b) {

@@ -172,7 +172,7 @@ Where the judges disagreed, the row says so. "F" = JUDGE_FUN, "K"/"F#" in feasib
 | D-80 | **Every reaction cell carries a real channel** (a pose target, a render pose, a look and its level, a particle preset, a sound id or a behaviour id); DT-06 counts only cells with one; the cabin's "turn round" became "hops back from the heat when golden" | words with no mechanism | REVIEW_game-truth M13. |
 | D-81 | **Tunes**: the Music Box plays 8 bars (29.1 s) at most once per 40 s and a second tap stops it; the kettle whistles 1 bar (3.6 s) every 45 to 90 s, never within 60 s of a Music Box tune; with no input, tunes sound at most 20% of a cabin visit (AU-14) | an 8-bar kettle tune every 30 to 50 s | REVIEW_game-truth M14: 58 to 97% of the time start to start. |
 | D-82 | **"Kind" means family in every player line**, and the Journal shows the family name (`MATERIAL_FAMILIES[f].name`, already the Hoard's words) on every page and tile | "kind" for species in two lines | REVIEW_rules-and-clarity M4. |
-| D-83 | **The Float rule**: Float works at Home with one squishy out; while it is on, the shell binds no PropWorld (Home's things are parked, not drawn) and LIFE issues no motion; with more than one out, or in any place, the shell forces gravity at run time (the saved setting is never changed), shows "Here your squishies stand on the ground." once a session, and never calls `setFloatMode(true)` | PH-21 "with a PropWorld bound, gravity = false is ignored" (from S0 a PropWorld is always bound at Home); P12's "autonomy paused" | REVIEW_code-truth M7, REVIEW_rules-and-clarity m11: three rules disagreed and Float died at Home. |
+| D-83 | **SUPERSEDED by D-97 (owner, 2026-11-19: Float floats everyone everywhere; see the end of this file).** **The Float rule**: Float works at Home with one squishy out; while it is on, the shell binds no PropWorld (Home's things are parked, not drawn) and LIFE issues no motion; with more than one out, or in any place, the shell forces gravity at run time (the saved setting is never changed), shows "Here your squishies stand on the ground." once a session, and never calls `setFloatMode(true)` | PH-21 "with a PropWorld bound, gravity = false is ignored" (from S0 a PropWorld is always bound at Home); P12's "autonomy paused" | REVIEW_code-truth M7, REVIEW_rules-and-clarity m11: three rules disagreed and Float died at Home. |
 | D-84 | **Who the feedback belongs to**: the quest-complete haptic and `registerFx` only when the event that completed it was by PLAYER (otherwise the stamp sound is an auto UI sound with no haptic); "the player is touching" is a finger, a grab or a carry, never a lock alone; B08's emote and voice go through the attention budget as P1 | a haptic on every quest moment; HELD (with locks) silencing the party | REVIEW_game-truth M11 and m8, REVIEW_rules-and-clarity M2 and M3. |
 | D-85 | **The motion gate's floor holds one awake whole and every sleeper, and a ride moment has its riders' allowance** (revision 4). unitCap = max((B / F - 0.20) / 0.87, 1.0 + 0.03 x (the tier's wholes cap - 1)): the floors are 1.06 / 1.09 / 1.12, so at F = 4 unitCap is 1.06 / 1.49 / 2.64 (compared with a 0.001 tolerance). The riders the player set on a ride are the player's bodies: while their ride moment runs (S10 teeter, S11 push), the start test and the over-budget rule add the riders' units to unitCap, so S11's one pusher may wake; at most two awake wholes come of it (a ride seats at most two, S10 wakes nobody, S11 is one rider and one pusher), which PF-06 bounds. Where a boop's two bodies and their touching pair do not fit (low and med at F = 4), S03 is a **soft boop**: the last centimetres at 0.04 m/s (the target stays asleep), the target's wobble a render wiggle | "a sleeping whole costs 0 in the start test"; drop C3, L9 and U4 from Q4's low and med promise (both CONFIRM CT-B2's options) | CONFIRM CT-B2 and N4: with the floor at 1.0, waking one of n sleeping wholes gives 1.0 + 0.03 (n - 1) > 1.0, so LIFE froze on low with 2 or 3 out, and PF-02's own "one awake, two asleep" (1.06) was over the cap; a rider on a hinge prop never sleeps (the rest test needs a static face, 8.6), so S11's pusher needed about 2.0 units against 1.0 and 1.49. A sleeper's cost is real (about 0.02 ms, PHYS map 4), so it stays in the units and the floor rises by exactly what the other wholes cost asleep; hiding C3, an S1 main quest, on low and med phones would hide a cabin quest from most players. |
 | D-86 | **`auto` counts only the player's hands** (revision 4): a land, a prop bump or a body bump is `auto` unless the player is touching the body (for a body bump: either body) with a finger, a grab or a carry, or threw it since its last landing. A lock alone never counts here; it still makes the locked body HELD for its own brain and for the touch gate | count a lock as HELD for `auto` (revision 3's contract wording) | CONFIRM CT-B1 and N5: a LIFE body bumping a locked body nobody touches (LOCK.md 1 allows walking away) gave a non-`auto` bump, which reached `feedback.handle` and `haptics.pop()` (feedback.ts 150): autonomy buzzed the phone, against L7 and D-84. |
@@ -1377,3 +1377,54 @@ The owner saw concept sketches of the five undrawn places and decided: "lantern 
   quest, wish, fact and keepsake totals: no stamp, wish or count may name or depend on a dropped place). The Float setting stays as it is.
 - Order: beach, mountain, garden first; then Lanternroof and Cloudloft (wind gusts and the updraft are the only new physics).
 - The owner also said two open 3D places "is NOT enough": opening places is the priority after the first deploy.
+
+## OWNER DECISION 2026-11-19 (D-97): Float floats everyone, everywhere (this replaces D-83, SH-11, V20 and P12's Float half)
+The owner played the game and said: "looks like gravity is broken - float doesnt actually make them float."
+1. **Float floats every squishy that is out**, with any party size (1 to 5), its cut pieces too, and at every place (Home and each place).
+   Each one rises where it stands and drifts in the air (the hover and its slow bob), as one squishy alone at Home was always meant to.
+2. **Inside the play area:** a floating squishy never drifts off frame, through a wall or through the floor (its hover spot is kept inside the
+   place's area; a toss in the air is caught by the place's bounds).
+3. **Still a toy:** while floating, squishies can be grabbed, tossed and squished, and keep their feelings, looks and voices. Their self-started
+   motion (walks, hops, self-started uses of things, rides, "Go play with...") pauses and resumes on Table. The things of the place stay where they
+   are and still answer the player's taps.
+4. **Table brings them down again gently** (the fall is slowed to under 1 m/s until they reach the ground) and LIFE takes up its motion again.
+5. The saved setting is the one truth: nothing overrides it at run time (D-83's forced table and its "Here your squishies stand on the ground." line
+   are gone). Two causes were fixed with it (R10_PLAYUX 1): the table's tack layer held a resting body's foot in float mode (so Float barely lifted
+   even one squishy at Home), and the hover pulled every body to the world origin (a party collapsed into the middle).
+
+## OWNER DECISION 2026-11-19 (D-98): turn the view with the right button while cutting
+The owner: "i should be able to rotate with right click even when im CUTTING".
+1. With the Cut tool in hand, a right-button (or middle-button) drag turns the view exactly as it does with the Hand. It never starts a cut.
+2. A left-button stroke in progress is never broken by it: the stroke still cuts when it is let go.
+3. On touch, a second finger while a stroke is down drops that stroke (nothing is cut) and the two fingers turn and pinch-zoom the view as two
+   fingers on empty space do with the Hand; a lone finger's stroke still cuts.
+(Cause: `game.ts` routed every press with the Cut tool to the blade and returned on any button but the left one, so a right drag did nothing.)
+
+## OWNER DECISION 2026-11-19 (D-99): cut any squishy that is out
+The owner: "if i have multiple squishies out i should be able to cut any/all of them".
+1. With 2 to 5 out, a cut stroke cuts the squishy it crosses, not only the one you play with: the crossed squishy becomes the one you play with
+   where it stands (nobody is rebuilt or moved; the one of before stays out, whole) and the same stroke cuts it.
+2. Its pieces are its own: pieces of different squishies never merge, and "Reconnect all" puts it back together at ITS spot (never into another
+   squishy at the middle of the table).
+3. One cut squishy at a time: while one is in pieces, a stroke across another whole squishy cuts nothing and says so in words ("One squishy at a
+   time: Reconnect all, then cut another."). The piece and awake budgets are the party's (SH-03): the published kind line when the limit is reached.
+4. One squishy out: the published cut, unchanged.
+Not done, and why: cutting SEVERAL squishies at the same time. The cutter (`shell/cut.ts`) holds ONE tree of pieces anchored on the play body
+(its identity, the HUD, Reconnect all, the joins and the piece cache all assume one cut squishy). "All at once" needs a cutter per squishy (a
+map from the whole's item id to its own tree, anchor, joins and Reconnect all), the LIFE host's piece groups keyed by that id (it keys them by the
+cut whole's slot already), and the piece budget shared across trees.
+
+## OWNER DECISION 2026-11-19 (D-100): squishies crawl like slugs / snails instead of sliding
+The owner: "squishies now just slide, but is there a way to be able to make them move, kind of like slugs/snails that kind of movement?"
+1. A squishy that travels by itself (LIFE's SCOOT: walking to a thing, wandering, scooting to a friend) CRAWLS: a wave runs through its soft body
+   from front to rear: the front stretches forward and plants, the middle bunches up into a little arch, the rear pulls in; the base grips the
+   ground where it is planted; the front lifts a little as it reaches; it leans into turns; it settles back to its rest shape when it stops.
+2. It is the real soft body that crawls (the wave is in its goal shape and the grip moves its particles), not an animation over a slide: a touch,
+   a grab, a toss, a ceremony, a hop or a collision behaves as before, and a touch ends the crawl within the touch gate (0.12 s).
+3. HOW, never WHERE or WHEN: scootTo's speed, ease, target and gate are unchanged, so travel times stay within a few per cent of the glide's
+   (probe_crawl CR-03) and LIFE, quests and self-use see the same walks.
+4. Per material family: stride, rhythm and arch (a jelly ripples quickly, putty and mochi creep in slow heavy pulses, the springy ones inch with a
+   bounce). Less grip slips: on ice the base slides more. Cut pieces and every body size crawl too.
+5. Calm (and prefers-reduced-motion) keep today's glide, bit for bit. No crawl under 0.045 m/s (LIFE's contact approach glides as before).
+Code: `src/physics/crawl.ts` (in the lazy props chunk), a 4-line hook in `softbody.ts` (`crawlOn` / `crawlD`), `props.ts` (the world steps each
+body's crawl in beginFrame), one line in `shell/later-life.ts` (world.calm). Proof: `_harness/probe_crawl.ts`; report `_handoff/reports/R10_LOCOMOTION.md`.

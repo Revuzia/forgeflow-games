@@ -782,7 +782,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // motion never moves the band framing either; a chunk then not at all. Off: every view is measured live, exactly as before.)
     if (autoFraming) assignSlots();
     for (const v of views) {
-      if (!autoFraming || !atSlot(v, false)) { v.frameMode = 0; continue; }
+      // (D-97: while Float is on every body floats where it is, so each is measured live: the band framing keeps the floating squishies in frame)
+      if (!autoFraming || floatMode || !atSlot(v, false)) { v.frameMode = 0; continue; }
       if (v.chunk) { v.frameMode = 2; continue; }
       framePoint(v, false);
       const pw = v.wholeR > 0, g = v.growth, fs = v.frameSlot;   // (a piece: the whole's rest column)
@@ -814,7 +815,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       wy = TARGET_Y * camScale + Math.max(0, gy - TARGET_Y * camScale) * 0.7;
     } else if (p && !director.active) {
       const c = p.proxy.center;
-      if (autoFraming && !p.playerMoving) {
+      if (autoFraming && !p.playerMoving && !floatMode) {   // (D-97: a floating squishy is followed, as the published toy did)
         // PLAYGROUND (D-37): LIFE at Home: the one body is framed at its slot and rest height, so its own hops and scoots never move the camera
         restAim(p, camScale);
         wx = aimOut.x; wy = aimOut.y; wz = aimOut.z;

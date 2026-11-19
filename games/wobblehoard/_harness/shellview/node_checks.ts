@@ -896,14 +896,22 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       r.app.setTool('cut');
       const blades: Array<{ x1: number; y1: number } | null> = [];
       r.app.on('blade', (b) => blades.push(b ? { x1: b.x1, y1: b.y1 } : null));
+      const pieces92 = r.app.cut.pieces;
       r.app.input.pointerDown({ id: 91, x: c.x - 60, y: c.y - 50, t: r.w.clock.t, type: 'mouse', button: 0 });
       const bladeDown = r.app.input.isDown(91);
       r.app.input.pointerMove({ id: 91, x: c.x + 40, y: c.y + 30, t: r.w.clock.t, type: 'mouse' });
       const followed = blades.at(-1)?.x1 === c.x + 40;
       r.app.suspend('hidden'); r.app.unsuspend('hidden');   // the shell's own release, no pointerup
       const bladeAfterRelease = r.app.input.isDown(91), bladeCleared = blades.at(-1) === null;
+      // RE-SPECIFIED 2026-11-19 (D-98, the owner: "i should be able to rotate with right click even when im CUTTING"): a right drag in the Cut tool TURNS THE VIEW (it is held:
+      // isDown, and its move orbits) and is never a blade (no blade line); until D-98 it was "nothing: not a blade" (isDown false)
+      const blades92 = blades.length;
       r.app.input.pointerDown({ id: 92, x: c.x - 60, y: c.y - 50, t: r.w.clock.t, type: 'mouse', button: 2 });
-      const rightMouseInCut = r.app.input.isDown(92);   // a right drag in the Cut tool is nothing: not a blade
+      const o92 = r.w.stage.rec.count('orbit');
+      r.app.input.pointerMove({ id: 92, x: c.x - 20, y: c.y - 50, t: r.w.clock.t, type: 'mouse' });
+      const rightMouseInCut = r.app.input.isDown(92) && r.w.stage.rec.count('orbit') > o92 && blades.length === blades92;
+      r.app.input.pointerUp({ id: 92, x: c.x - 20, y: c.y - 50, t: r.w.clock.t, type: 'mouse' });
+      const rightUpCut = !r.app.input.isDown(92) && r.app.cut.pieces === pieces92;
       r.app.setTool('snap');
       r.app.input.pointerDown({ id: 93, x: c.x, y: c.y, t: r.w.clock.t, type: 'mouse', button: 0 });
       const leftMouse = r.app.input.isDown(93);
@@ -920,8 +928,59 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       const afterRelease = r.app.input.isDown(95);
       r.app.setTool('hand');
       check('input.isDown answers for every owner of a pressed pointer (pointer.ts forwards moves only while it does): the Cut blade (and its line follows the move), a Snap right-mouse drag and a finger but not a left mouse button; up, cancel and a release (hidden tab) clear them',
-        bladeDown && followed && !bladeAfterRelease && bladeCleared && !rightMouseInCut && !leftMouse && rightMouse && finger && orbited && !afterUp && !afterRelease,
-        JSON.stringify({ bladeDown, followed, bladeAfterRelease, bladeCleared, rightMouseInCut, leftMouse, rightMouse, finger, orbited, afterUp, afterRelease }));
+        bladeDown && followed && !bladeAfterRelease && bladeCleared && rightMouseInCut && rightUpCut && !leftMouse && rightMouse && finger && orbited && !afterUp && !afterRelease,
+        JSON.stringify({ bladeDown, followed, bladeAfterRelease, bladeCleared, rightMouseInCut, rightUpCut, leftMouse, rightMouse, finger, orbited, afterUp, afterRelease }));
+    }
+    // D-98 (R10_PLAYUX item 3; owner 2026-11-19: "i should be able to rotate with right click even when im CUTTING"): with the Cut tool in hand a right or middle drag orbits
+    // exactly as with the Hand and never cuts; a left stroke in progress is not broken by a right drag; two fingers turn / pinch the view (the first finger's stroke is dropped)
+    {
+      r.app.setTool('cut');
+      r.app.cut.reconnectAll(false);
+      const p0 = r.app.cut.pieces, o0 = r.w.stage.rec.count('orbit'), z0 = r.w.stage.rec.count('zoom');
+      // the middle button: a view drag too, no cut
+      r.app.input.pointerDown({ id: 101, x: c.x - 80, y: c.y - 100, t: r.w.clock.t, type: 'mouse', button: 1 });
+      r.app.input.pointerMove({ id: 101, x: c.x + 80, y: c.y + 100, t: r.w.clock.t, type: 'mouse' });
+      r.app.input.pointerUp({ id: 101, x: c.x + 80, y: c.y + 100, t: r.w.clock.t, type: 'mouse' });
+      run2(r.w, r.app, neckMs);
+      const middle = r.w.stage.rec.count('orbit') > o0 && r.app.cut.pieces === p0;
+      // a left stroke across the squishy with a right drag in the middle of it: the right drag orbits, the stroke still cuts at its release
+      r.app.input.pointerDown({ id: 102, x: c.x - 60, y: c.y - 120, t: r.w.clock.t, type: 'mouse', button: 0 });
+      r.app.input.pointerMove({ id: 102, x: c.x - 50, y: c.y, t: r.w.clock.t, type: 'mouse' });
+      const o1 = r.w.stage.rec.count('orbit');
+      r.app.input.pointerDown({ id: 103, x: c.x + 200, y: c.y, t: r.w.clock.t, type: 'mouse', button: 2 });
+      r.app.input.pointerMove({ id: 103, x: c.x + 240, y: c.y, t: r.w.clock.t, type: 'mouse' });
+      r.app.input.pointerUp({ id: 103, x: c.x + 240, y: c.y, t: r.w.clock.t, type: 'mouse' });
+      const rightDuring = r.w.stage.rec.count('orbit') > o1;
+      r.app.input.pointerMove({ id: 102, x: c.x - 40, y: c.y + 120, t: r.w.clock.t, type: 'mouse' });
+      r.app.input.pointerUp({ id: 102, x: c.x - 40, y: c.y + 120, t: r.w.clock.t, type: 'mouse' });
+      run2(r.w, r.app, neckMs);
+      const strokeCut = r.app.cut.pieces === p0 + 1;
+      r.app.cut.reconnectAll(false);
+      // touch: one finger starts a stroke, a second finger arrives: the stroke is dropped (no cut) and the two fingers pinch-zoom; one finger left turns the view
+      const p1 = r.app.cut.pieces;
+      r.app.input.pointerDown({ id: 104, x: c.x - 60, y: c.y - 120, t: r.w.clock.t, type: 'touch' });
+      r.app.input.pointerMove({ id: 104, x: c.x - 50, y: c.y, t: r.w.clock.t, type: 'touch' });
+      r.app.input.pointerDown({ id: 105, x: c.x + 100, y: c.y, t: r.w.clock.t, type: 'touch' });
+      const z1 = r.w.stage.rec.count('zoom');
+      r.app.input.pointerMove({ id: 105, x: c.x + 160, y: c.y, t: r.w.clock.t, type: 'touch' });
+      const pinched = r.w.stage.rec.count('zoom') > z1;
+      r.app.input.pointerUp({ id: 105, x: c.x + 160, y: c.y, t: r.w.clock.t, type: 'touch' });
+      const o2 = r.w.stage.rec.count('orbit');
+      r.app.input.pointerMove({ id: 104, x: c.x - 20, y: c.y + 40, t: r.w.clock.t, type: 'touch' });
+      const oneLeftOrbits = r.w.stage.rec.count('orbit') > o2;
+      r.app.input.pointerUp({ id: 104, x: c.x - 20, y: c.y + 40, t: r.w.clock.t, type: 'touch' });
+      run2(r.w, r.app, neckMs);
+      const noTouchCut = r.app.cut.pieces === p1 && !r.app.input.isDown(104) && !r.app.input.isDown(105);
+      // and a lone finger stroke still cuts
+      r.app.input.pointerDown({ id: 106, x: c.x - 60, y: c.y - 120, t: r.w.clock.t, type: 'touch' });
+      r.app.input.pointerMove({ id: 106, x: c.x - 40, y: c.y + 120, t: r.w.clock.t, type: 'touch' });
+      r.app.input.pointerUp({ id: 106, x: c.x - 40, y: c.y + 120, t: r.w.clock.t, type: 'touch' });
+      run2(r.w, r.app, neckMs);
+      const fingerCut = r.app.cut.pieces === p1 + 1;
+      r.app.cut.reconnectAll(false);
+      r.app.setTool('hand');
+      check('D-98 rotate while cutting: with the Cut tool a middle drag orbits and cuts nothing; a right drag during a left stroke orbits and the stroke still cuts; on touch a second finger drops the stroke and the two pinch-zoom, the one left turns the view; a lone finger still cuts',
+        middle && rightDuring && strokeCut && pinched && oneLeftOrbits && noTouchCut && fingerCut && z0 >= 0, JSON.stringify({ middle, rightDuring, strokeCut, pinched, oneLeftOrbits, noTouchCut, fingerCut }));
     }
     // SHELL-4 fix round 2 (VERIFY_SHELL4_A_R1 N1): a swipe in progress when a Reconnect all (or a join, or a parting) animation ends must not be dropped. The swap that ends the animation calls beforeChange /
     // beforeSwap (fingers off the bodies), and since fix round 1 that also cleared the blade: the line vanished at that moment and the finished swipe cut nothing. The shell's own releases (hidden tab, a

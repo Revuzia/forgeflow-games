@@ -1,0 +1,740 @@
+# R10 LOCOMOTION patch: my parts only, against HEAD ad75c5043 (softbody.ts hunks shown with the other engineer's D-97 context excluded)
++  /** R10 LOCOMOTION (D-100): the crawl of a prop world that tracks the body (physics/crawl.ts, the props chunk) moves its particles once a frame and, while
++   *  crawlOn, crawlD (3 per particle) is added to the goal in the rest frame and the rotation is fitted against crawlF (the rest shape + crawlD, centred: a cut
++  crawlOn = false; crawlD = new Float64Array(0); crawlF: Float64Array = new Float64Array(0);
++    if (this.memOn || this.goalOn || this.edgesBent || this.fold !== this.foldTarget || this.burstO > 0 || this.trembleAmp > 0 || this.flatK > 0 || this.neckOn || this.fracDur > 0 || this.fracNow !== this.fracBuilt || this.sqNow !== this.sqTarget || this.sqNow !== 1 || this.crawlOn) this.frameUpdate(nsub);
++    w.crawlD = new Float64Array(w.n * 3); w.crawlF = w.Q; w.crawlOn = true; frame(); w.crawlOn = false;   // (R10: the crawl's goal and fit paths)
++      const QF = this.neckOn && NECK_FIT.goal ? this.QG : this.crawlOn ? this.crawlF : Q;   // (R10: fitted against Q, the crawl's wave spun the body up)
++    const cw = this.crawlOn, shaped = fd !== 0 || bo !== 0 || fs !== 1 || fk !== 0 || nk !== 0 || sq !== 1 || cw;
++    if (cw) { const D = this.crawlD; for (let i = 0; i < n * 3; i++) GB[i] += D[i]; }   // (R10 LOCOMOTION: the crawl's wave)
+
+diff --git a/games/wobblehoard/src/physics/props.ts b/games/wobblehoard/src/physics/props.ts
+index 7e863ba04..50c82ff5c 100644
+--- a/games/wobblehoard/src/physics/props.ts
++++ b/games/wobblehoard/src/physics/props.ts
+@@ -41,6 +41,7 @@ import { PA, PS, PG } from './softbody.ts';
+ import type { PropSolve, SoftBody } from './softbody.ts';
+ import { GRAVITY, H } from './params.ts';
+ import { FAMILY_REACT } from '../data/life.ts';
++import { Crawl } from './crawl.ts';
+ 
+ /** Tunables (PROBES may read them). */
+ export const PROPS = {
+@@ -193,6 +194,7 @@ export class PropWorld implements PropWorldLike {
+   private readonly zf: Float64Array;            // the zones, packed (ZS)
+   private readonly phys: boolean;               // a water zone or a pad exists (otherwise beginFrame does nothing more than before)
+   private bodies: SoftBody[] = [];              // tracked bodies (allocated only when one binds or unbinds)
++  private readonly crawls: Crawl[] = [];        // (R10 LOCOMOTION) each tracked body's crawl, in the same order
+   private bst = new Float64Array(0);           // per tracked body (BS)
+   private readonly nv = { x: 0, y: 0, z: 0 };   // the impulse handed to SoftBody.nudge (one object, reused)
+   // ---- R6: the surface (ground, patches, wet zones), the weather (gusts, the updraft, waves) and the bounds guard (WorldExtras)
+@@ -280,13 +282,20 @@ export class PropWorld implements PropWorldLike {
+ 
+   // ------------------------------------------------------------------ PropWorldLike
+ 
+-  beginFrame(): void { this.solve.A.fill(0); if (this.phys && this.bodies.length > 0) this.zoneStep(); }
++  /** R10 LOCOMOTION (D-100): the shell's Calm (or prefers-reduced-motion): no crawl, a scoot is today's rigid glide */
++  calm = false;
++  beginFrame(): void {
++    this.solve.A.fill(0); if (this.phys && this.bodies.length > 0) this.zoneStep();
++    // R10 LOCOMOTION: each tracked body's crawl (crawl.ts), before the bodies step; its grip is the surface's (an ice patch slips)
++    for (let i = 0; i < this.crawls.length; i++) this.crawls[i].step(this as never, i, this.calm);
++  }
+ 
+   /** SoftBody.setPropWorld calls this as a body binds (on) or leaves (off): the bodies the zones and pads act on. Allocates (a bind is not per frame). */
+   trk(b: SoftBody, on: boolean): void {
+     const i = this.bodies.indexOf(b);
+     if (on && i < 0) {
+       this.bodies.push(b);
++      this.crawls.push(new Crawl(b));   // (R10 LOCOMOTION)
+       const nb = new Float64Array(this.bodies.length * BS); nb.set(this.bst.subarray(0, Math.min(this.bst.length, nb.length)));
+       const o = (this.bodies.length - 1) * BS; nb[o + 5] = -1; nb[o + 8] = NaN; this.bst = nb;
+       // R6: the body's own surface values (given back when it leaves), the eased multipliers at 1, and the shell's modifiers (its family's dry density in [4])
+@@ -301,6 +310,7 @@ export class PropWorld implements PropWorldLike {
+       this.bmods.push(m);
+     } else if (!on && i >= 0) {
+       this.surfRestore(i);
++      b.crawlOn = false; this.crawls.splice(i, 1);
+       this.bodies.splice(i, 1);
+       const nb = new Float64Array(this.bodies.length * BS);
+       nb.set(this.bst.subarray(0, i * BS)); nb.set(this.bst.subarray((i + 1) * BS), i * BS); this.bst = nb;
+
++    if (world) world.calm = s.calm || s.reducedMotion;   // (R10 LOCOMOTION, D-100: Calm or reduced motion: no crawl, LIFE's walk is today's glide)
+--- /dev/null	2026-11-19 00:21:06.957157479 +0000
++++ src/physics/crawl.ts	2026-11-19 07:16:25.376840711 +0000
+@@ -0,0 +1,188 @@
++// R10 LOCOMOTION (owner, 2026-11-19, D-100): a squishy that travels by itself CRAWLS like a slug or a snail instead of gliding as a rigid blob.
++// In the props chunk (later-props: softbody.ts's first load is at its cap); a prop world gives each body it tracks one Crawl (props.ts trk) and steps it once
++// a frame in beginFrame, before the bodies step. The soft body itself does the crawling, so squishing, grabbing and collisions behave as before:
++//   1. the GOAL: a travelling wave of axial strain along the travel direction, in the body's rest frame (SoftBody.crawlD, added to the goal shape in
++//      frameUpdate while SoftBody.crawlOn; the rotation is fitted against the rest shape + the wave, SoftBody.crawlF): the front stretches forward and plants, the middle bunches up into an arch as the body shortens (and a little
++//      bulge rides with each bunched part), the rear pulls in; the front's upper part lifts a little while it reaches; the body leans into a turn. The phase advances with the distance glided (one cycle per stride),
++//      the front leads the rear by 2 kappa, and the field's mass-weighted mean is 0 (the goal stays centred: no drift).
++//   2. the GRIP: scootTo's rigid glide stays as it was (its speed, ease, touch gate and target: WHERE and WHEN a squishy goes do not change); once a frame each
++//      particle is moved by w x the frame's glide along the travel direction, w = the wave's speed share (-1 planted: the base stays where it is on the ground,
++//      +1 reaching: twice the glide). It is a move of X before the frame's substeps (like the glide), so friction never sees it and nothing gains momentum; the
++//      wave of the goal is its integral, so the shape matching agrees with it. Averaged over a cycle w is 0: the travel speed is the glide's. CRAWL.beta of the
++//      wave's mean over the body at the moment is taken out of the move (the centre surges less; the planted base then slips at about a quarter of the glide).
++//   3. the FADE: off under a touch (the touch gate), while held, carried, in a ceremony, floating, in the air for long, in Calm (the shell's world.calm: today's
++//      glide) and once the glide stops: the wave eases out and the shape matching brings the body back to its rest shape.
++// Per family (CRAWL_FAMILY): stride (body half-lengths per cycle), the phase lead, the grip's sharpness (a square wave plants hard), the bunch's height
++// share, the head lift and the arch. Less grip (ice) scales the wave: the base slips. Zero allocation after construction.
++import type { SoftBody } from './softbody.ts';
++
++/** per family: stride (half-lengths per cycle), kappa (pi units: the front leads the rear by 2 kappa), sharpness of the grip, the local bunch's height share,
++ *  the head lift (half-lengths), the hump (the middle rises as the body shortens: x the length deficit; 1.5 gives the deficit's volume back in height) */
++export const CRAWL_FAMILY: Record<string, [number, number, number, number, number, number]> = {
++  slowrise: [0.5, 0.6, 2, 0.35, 0.06, 1.6], marshmallow: [0.45, 0.6, 2, 0.4, 0.08, 1.7], mochidough: [0.6, 0.55, 3, 0.3, 0.04, 1.8],
++  jellygel: [0.37, 0.65, 1.2, 0.4, 0.08, 1.5], waterfill: [0.4, 0.65, 1.2, 0.4, 0.06, 1.5], putty: [0.6, 0.55, 3, 0.3, 0.04, 1.9],
++  stickystretch: [0.45, 0.6, 3.5, 0.35, 0.1, 1.6], slimegoo: [0.5, 0.7, 1.5, 0.4, 0.05, 1.4], firmsilicone: [0.42, 0.55, 2.5, 0.4, 0.08, 1.6],
++  popdome: [0.42, 0.55, 2.5, 0.4, 0.08, 1.6], gummy: [0.4, 0.55, 2.5, 0.4, 0.08, 1.6], beadsqueeze: [0.55, 0.55, 3, 0.3, 0.05, 1.8],
++};
++/** tuning shared by every family (PROBES may set them) */
++export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, turn: 5, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
++const NT = 256, TAU = Math.PI * 2;
++
++/** the private PropWorld state a crawl reads (props.ts: BF = 12 floats per tracked body, [4] the eased grip multiplier) */
++interface World { hNow: number; bsf: Float64Array }
++/** the private SoftBody state a crawl reads and moves (as props.ts's zone physics does) */
++interface Body {
++  n: number; X: Float64Array; Q: Float64Array; M: Float64Array; Mtot: number; qr: Float64Array; cx: number; cz: number;
++  scootOn: boolean; sV: number; stx: number; stz: number; heldF: boolean; moveOn: boolean; cyOn: boolean; carried: boolean; gravityOn: boolean; nearCount: number;
++  asleep: boolean; crawlOn: boolean; crawlD: Float64Array; crawlF: Float64Array;
++}
++
++export class Crawl {
++  on = false;
++  readonly d: Float64Array;
++  /** the rest shape + d (centred): what the body's rotation is fitted against while the crawl is on */
++  private readonly f: Float64Array;
++  private readonly w: Float64Array;
++  /** the rest shape's volume gradient (3 per particle: dV/dq, from the skin's triangles) and 1 / (3 V0): the wave's first-order volume change is taken back
++   *  by a uniform scale of the rest shape (the foams' and the beads' volume follows the goal: an uncorrected wave breathed them 10 % in and out) */
++  private readonly vg: Float64Array;
++  private readonly iv3: number;
++  /** the grip wave g(theta) (-1 planted .. 1 reaching) and its integral G (zero mean), interleaved: [g0, G0, g1, G1, ...] over a cycle in NT steps */
++  private readonly T = new Float64Array((NT + 1) * 2);
++  /** [0] phase, [1] amplitude, [2] ux, [3] uz (the travel direction), [4] lean, [5] time in the air, [6..9] the body's extent along the travel and up (rest
++   *  frame, measured each frame for the next one: s0, s1, y0, y1) */
++  readonly s = new Float64Array(10);
++  private readonly pf: [number, number, number, number, number, number];
++  private readonly body: SoftBody;
++  constructor(body: SoftBody) {
++    this.body = body;
++    const b = body as unknown as Body;
++    this.d = new Float64Array(b.n * 3); this.w = new Float64Array(b.n);
++    this.f = Float64Array.from(b.Q);
++    b.crawlD = this.d; b.crawlF = this.f; b.crawlOn = false;
++    const vg = (this.vg = new Float64Array(b.n * 3)), I = body.indices, Q = b.Q;
++    for (let t = 0; t + 2 < I.length; t += 3) {
++      const a = I[t] * 3, c = I[t + 1] * 3, e = I[t + 2] * 3;
++      // dV/dqa = (qc x qe) / 6 for each triangle (a, c, e), and its turns
++      vg[a] += (Q[c + 1] * Q[e + 2] - Q[c + 2] * Q[e + 1]) / 6; vg[a + 1] += (Q[c + 2] * Q[e] - Q[c] * Q[e + 2]) / 6; vg[a + 2] += (Q[c] * Q[e + 1] - Q[c + 1] * Q[e]) / 6;
++      vg[c] += (Q[e + 1] * Q[a + 2] - Q[e + 2] * Q[a + 1]) / 6; vg[c + 1] += (Q[e + 2] * Q[a] - Q[e] * Q[a + 2]) / 6; vg[c + 2] += (Q[e] * Q[a + 1] - Q[e + 1] * Q[a]) / 6;
++      vg[e] += (Q[a + 1] * Q[c + 2] - Q[a + 2] * Q[c + 1]) / 6; vg[e + 1] += (Q[a + 2] * Q[c] - Q[a] * Q[c + 2]) / 6; vg[e + 2] += (Q[a] * Q[c + 1] - Q[a + 1] * Q[c]) / 6;
++    }
++    let v3 = 0;
++    for (let i = 0; i < b.n * 3; i++) v3 += vg[i] * Q[i];   // = 3 V0 (Euler: the volume is homogeneous of degree 3)
++    this.iv3 = Math.abs(v3) > 1e-12 ? 1 / v3 : 0;
++    this.pf = CRAWL_FAMILY[body.family] ?? CRAWL_FAMILY.jellygel;
++    const k = this.pf[2], tk = Math.tanh(k), T = this.T;
++    for (let i = 0; i <= NT; i++) T[i * 2] = Math.tanh(k * Math.sin((i / NT) * TAU)) / tk;
++    let acc = 0, mean = 0;
++    for (let i = 0; i <= NT; i++) { if (i > 0) acc += 0.5 * (T[i * 2 - 2] + T[i * 2]) * (TAU / NT); T[i * 2 + 1] = acc; if (i < NT) mean += acc / NT; }
++    for (let i = 0; i <= NT; i++) T[i * 2 + 1] -= mean;
++  }
++  /** once a frame (props.ts beginFrame), before the body steps: w the world (its frame step hNow, and tracked body i's eased grip multiplier bsf[i x 12 + 4], 1 = the
++   *  felt), calm = today's glide. (No double is passed in: doubles passed to a call that is not inlined are boxed, a HeapNumber a call; and an idle crawl returns
++   *  before any arithmetic on doubles, so the call costs nothing while this method is not yet optimised: a body that does not walk calls it every frame.) */
++  step(w: World, i: number, calm: boolean): void {
++    const b = this.body as unknown as Body, S = this.s;
++    if (b.asleep || (!this.on && (!b.scootOn || calm || !CRAWL.on || b.heldF))) { S[5] = 0; return; }   // (`on` mirrors s[1] > 0: an element of a Float64Array read by code not yet optimised is a HeapNumber)
++    const n = b.n, dt = w.hNow, grip = w.bsf[i * 12 + 4];
++    if (!(dt > 0)) return;
++    const tx = b.stx - b.cx, tz = b.stz - b.cz, tl = Math.sqrt(tx * tx + tz * tz);
++    const v = b.scootOn && tl > 0.03 ? b.sV : 0;   // (a glide that has arrived keeps a creep of speed at its target: no crawl there)
++    const free = CRAWL.on && !calm && !b.heldF && !b.moveOn && !b.cyOn && !b.carried && b.gravityOn;
++    S[5] = b.nearCount > 0 ? 0 : S[5] + dt;
++    const ground = S[5] < CRAWL.airS;
++    // (no crawl under vMin: LIFE's contact approach, the last centimetres at 0.04 m/s, glides as before; full from vFull)
++    const u0 = (v - CRAWL.vMin) / (CRAWL.vFull - CRAWL.vMin), want = free && ground && u0 > 0 ? (u0 >= 1 ? 1 : u0 * u0 * (3 - 2 * u0)) : 0;
++    let a = S[1];
++    const fresh = a === 0;
++    a += (want - a) * (1 - Math.exp(-dt / (!free ? CRAWL.tauHeld : want > a ? CRAWL.tauIn : CRAWL.tauOut)));
++    if (want === 0 && a < (free ? 0.03 : 0.08)) a = 0;   // (the last few per cent of the wave are millimetres: let go)
++    S[1] = a;
++    if (a === 0) { if (this.on) { this.on = false; b.crawlOn = false; this.d.fill(0); S[4] = 0; } return; }
++    this.on = true; b.crawlOn = true;
++    // ---- the travel direction: toward the glide's target, turned at most CRAWL.turn rad/s; the lean follows the turn rate
++    let ux = S[2], uz = S[3];
++    let rate = 0;
++    if (b.scootOn && tl > 0.02) {
++      const dx = tx / tl, dz = tz / tl;
++      if (fresh || ux * ux + uz * uz < 0.5) { ux = dx; uz = dz; if (fresh) S[0] = 0; }
++      else {
++        const ang = Math.atan2(ux * dz - uz * dx, ux * dx + uz * dz), mx = CRAWL.turn * dt, t = ang > mx ? mx : ang < -mx ? -mx : ang;
++        const c = Math.cos(t), sn = Math.sin(t), nx = ux * c - uz * sn, nz = ux * sn + uz * c;
++        ux = nx; uz = nz; rate = t / dt;
++      }
++    }
++    S[2] = ux; S[3] = uz;
++    const lw = CRAWL.leanK * rate * v, lt = lw > CRAWL.leanMax ? CRAWL.leanMax : lw < -CRAWL.leanMax ? -CRAWL.leanMax : lw;
++    S[4] += (lt - S[4]) * (1 - Math.exp(-dt / 0.2));
++    // ---- the rest frame (the body's rotation from the last substep): travel u, up and lateral (u x up) in rest coordinates
++    const q = b.qr, qx = q[0], qy = q[1], qz = q[2], qw = q[3];
++    const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qw * qz), r02 = 2 * (qx * qz + qw * qy);
++    const r10 = 2 * (qx * qy + qw * qz), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qw * qx);
++    const r20 = 2 * (qx * qz - qw * qy), r21 = 2 * (qy * qz + qw * qx), r22 = 1 - 2 * (qx * qx + qy * qy);
++    const sux = r00 * ux + r20 * uz, suy = r01 * ux + r21 * uz, suz = r02 * ux + r22 * uz;     // R^T (ux, 0, uz)
++    const yx = r10, yy = r11, yz = r12;                                                       // R^T (0, 1, 0)
++    const lx = -r00 * uz + r20 * ux, ly = -r01 * uz + r21 * ux, lz = -r02 * uz + r22 * ux;   // R^T (-uz, 0, ux)
++    const Q = b.Q, M = b.M, X = b.X, D = this.d, W = this.w, T = this.T;
++    if (fresh) {   // (the extents of the first frame; later frames use the last frame's, measured in the main loop)
++      let s0 = 1e9, s1 = -1e9, y0 = 1e9, y1 = -1e9;
++      for (let i = 0; i < n * 3; i += 3) {
++        const s = Q[i] * sux + Q[i + 1] * suy + Q[i + 2] * suz, y = Q[i] * yx + Q[i + 1] * yy + Q[i + 2] * yz;
++        if (s < s0) s0 = s; if (s > s1) s1 = s; if (y < y0) y0 = y; if (y > y1) y1 = y;
++      }
++      S[6] = s0; S[7] = s1; S[8] = y0; S[9] = y1;
++    }
++    const sh = 0.5 * (S[7] - S[6]) > 1e-4 ? 0.5 * (S[7] - S[6]) : 1e-4, sm = 0.5 * (S[6] + S[7]), y0 = S[8], ht = S[9] - y0 > 1e-4 ? S[9] - y0 : 1e-4;
++    const pf = this.pf, stride = pf[0] * sh, kap = pf[1] * Math.PI, bul = pf[3];
++    const gr = grip >= 1 ? 1 : grip <= 0 ? CRAWL.gripMin : CRAWL.gripMin + (1 - CRAWL.gripMin) * grip;
++    // ---- the phase: one cycle per stride of glide (frozen in the air: nothing is planted there)
++    const ds = ground ? v * dt : 0;
++    let th = S[0] + (TAU * ds) / stride;
++    if (th > TAU) th -= TAU;
++    S[0] = th;
++    const amp = a * gr, aD = (amp * stride) / TAU, aE = (aD * kap) / sh;   // axial offset per unit of G; strain per unit of g
++    const ti = NT / TAU, ish = 1 / sh, iht = 1 / ht, lift = a * pf[4] * sh, lean = S[4], pB = kap * ish * ti, pA = th * ti - pB * sm, bl = 1 - bul;
++    // (the hump: the middle rises while the body is short, the inchworm's arch, and flattens while it reaches)
++    const lenRel = (tab(T, (th + kap) * ti, 1) - tab(T, (th - kap) * ti, 1)) * aD * 0.5 * ish, hump = -pf[5] * lenRel;
++    const VG = this.vg;
++    let mx = 0, my = 0, mz = 0, wm = 0, s0 = 1e9, s1 = -1e9, y0n = 1e9, y1n = -1e9, dv = 0;
++    for (let i = 0, j = 0; i < n * 3; i += 3, j++) {
++      const qx_ = Q[i], qy_ = Q[i + 1], qz_ = Q[i + 2];
++      const sr = qx_ * sux + qy_ * suy + qz_ * suz, yw = qx_ * yx + qy_ * yy + qz_ * yz, la = qx_ * lx + qy_ * ly + qz_ * lz;
++      if (sr < s0) s0 = sr; if (sr > s1) s1 = sr; if (yw < y0n) y0n = yw; if (yw > y1n) y1n = yw;
++      const sg = (sr - sm) * ish, yr = yw - y0;
++      // (the wave tables at this particle's phase (th + kappa sg) in table steps, wrapped into one cycle: th is in [0, 2 pi) and kappa under pi)
++      const p0 = pA + pB * sr, p = p0 < 0 ? p0 + NT : p0 >= NT ? p0 - NT : p0, k0 = p | 0, fk = p - k0, t2 = k0 * 2;
++      const gi = T[t2] + (T[t2 + 2] - T[t2]) * fk, ax = aD * (T[t2 + 1] + (T[t2 + 3] - T[t2 + 1]) * fk), e = aE * gi;
++      let dy = (hump * (1 - sg * sg) - e * bul) * yr;
++      if (sg > 0.2 && gi > 0) { const fr = (sg - 0.2) * 1.25, hh = yr * iht; dy += lift * fr * fr * gi * hh * hh; }   // (the head lift: the front's upper part, while it reaches)
++      const dl = lean * yr - e * bl * la;
++      const ox = ax * sux + dy * yx + dl * lx, oy = ax * suy + dy * yy + dl * ly, oz = ax * suz + dy * yz + dl * lz;
++      D[i] = ox; D[i + 1] = oy; D[i + 2] = oz;
++      dv += VG[i] * ox + VG[i + 1] * oy + VG[i + 2] * oz;
++      const m = M[j], wi = amp * gi;
++      mx += m * ox; my += m * oy; mz += m * oz;
++      W[j] = wi; wm += m * wi;
++    }
++    S[6] = s0; S[7] = s1; S[8] = y0n; S[9] = y1n;
++    const iM = 1 / b.Mtot;
++    mx *= iM; my *= iM; mz *= iM; wm *= iM;
++    // ---- the goal's wave about the centre (mean 0), and the grip: this frame's share of the wave, moved like the glide (before the substeps: friction never sees it)
++    const ex = ux * ds, ez = uz * ds, wb = CRAWL.beta * wm;
++    const vs = -dv * this.iv3;   // (the uniform scale that gives the wave's volume change back; the scaled rest shape has mean 0)
++    const F = this.f;
++    for (let i = 0, j = 0; i < n * 3; i += 3, j++) {
++      D[i] += vs * Q[i] - mx; D[i + 1] += vs * Q[i + 1] - my; D[i + 2] += vs * Q[i + 2] - mz;
++      F[i] = Q[i] + D[i]; F[i + 1] = Q[i + 1] + D[i + 1]; F[i + 2] = Q[i + 2] + D[i + 2];
++      const k = W[j] - wb; X[i] += k * ex; X[i + 2] += k * ez;
++    }
++    b.cx += (wm - wb) * ex; b.cz += (wm - wb) * ez;
++  }
++}
++/** table T at p (cycle steps, any real), column c (0 g, 1 G) */
++function tab(T: Float64Array, p: number, c: number): number {
++  let x = p % NT;
++  if (x < 0) x += NT;
++  const i = x | 0, f = x - i, o = i * 2 + c;
++  return T[o] + (T[o + 2] - T[o]) * f;
++}
+--- /dev/null	2026-11-19 00:21:06.957157479 +0000
++++ _harness/probe_crawl.ts	2026-11-19 07:10:02.989398577 +0000
+@@ -0,0 +1,360 @@
++// R10 LOCOMOTION (owner, 2026-11-19, D-100): squishies CRAWL like slugs / snails instead of gliding. The crawl's rows on the real physics (plain node, type stripping).
++//   node _harness/probe_crawl.ts            the quick set: 4 families on the flat, turns, ice, water, ramp and mound, scales, pieces, the gate, Calm, cost (about 40 s: one short heavy job)
++//   node _harness/probe_crawl.ts --full     every family (12) and every row (about 2 min)
++//   node _harness/probe_crawl.ts --only=flat,turn,surf,scale,gate,cost   some sections
++// Every walk is a scootTo (LIFE's own travel driver) at the family's glide speed (src/data/life.ts GAITS), on a prop world (the crawl is the world's: props.ts trk),
++// measured against the same walk with the crawl off (CRAWL.on false: today's rigid glide, bit for bit). Own meters: the ground-contact footprint (particles under
++// 12 mm) and the whole body's extent along the travel, each third's velocity phase, the centre's speed, the volume, the fold, the planted base's slip.
++import v8 from 'node:v8';
++import { PG, SoftBody } from '../src/physics/softbody.ts';
++import { buildPropWorld } from '../src/physics/props.ts';
++import type { PropWorld } from '../src/physics/props.ts';
++import { CRAWL } from '../src/physics/crawl.ts';
++import { makeStarterGenome, quantizeGenome } from '../src/core/genome.ts';
++import type { Genome } from '../src/core/genome.ts';
++import { MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
++import { GAITS } from '../src/data/life.ts';
++import { PLACE as CABIN } from '../src/data/place_hearthlog.ts';
++import { PLACE as FROSTBELL } from '../src/data/place_frostbell.ts';
++import { PLACE as RIPPLE } from '../src/data/place_ripple.ts';
++import type { PlaceDef } from '../src/data/places.ts';
++import type { SoftEvent, V3 } from '../src/contracts.ts';
++
++const FULL = process.argv.includes('--full');
++const ONLY = (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice(7).split(',').filter(Boolean);
++const sec = (k: string): boolean => ONLY.length === 0 || ONLY.includes(k);
++const DT = 1 / 60;
++interface Row { what: string; value: string; limit: string; pass: boolean }
++const rows: Row[] = [];
++const add = (what: string, value: string, limit: string, pass: boolean): void => { rows.push({ what, value, limit, pass }); };
++const f = (x: number, d = 2): string => (Number.isFinite(x) ? x.toFixed(d) : String(x));
++const v3 = (x: number, y: number, z: number): V3 => ({ x, y, z });
++const G0: Genome = quantizeGenome({ ...makeStarterGenome(), firmness: 0.5, bounce: 0.5, stretch: 0.5, size: 0.5 });
++const SMALL: Genome = quantizeGenome({ ...makeStarterGenome(), firmness: 0.5, bounce: 0.5, stretch: 0.5, size: 0.05 });
++const BIG: Genome = quantizeGenome({ ...makeStarterGenome(), firmness: 0.5, bounce: 0.5, stretch: 0.5, size: 0.95 });
++const FAMS = (FULL ? MATERIAL_FAMILY_IDS : ['jellygel', 'putty', 'firmsilicone', 'slimegoo']) as readonly string[];
++const GLIDE = GAITS as Record<string, { glide: number }>;
++const flatDef = { ...CABIN, things: [], walls: [], zones: [], patches: [], tall: { ...CABIN.tall, things: [], walls: [], zones: [], patches: [] } } as unknown as PlaceDef;
++type Priv = { scootOn: boolean; vcx: number; vcz: number; n: number; crawlOn: boolean; M: Float64Array; Mtot: number };
++const P_ = (b: SoftBody): Priv => b as unknown as Priv;
++/** the crawl a world keeps for its i-th tracked body (props.ts `crawls`) */
++const crawlOf = (w: PropWorld, i = 0): { on: boolean; s: Float64Array; w: Float64Array } | undefined => (w as unknown as { crawls: { on: boolean; s: Float64Array; w: Float64Array }[] }).crawls[i];
++const ev: SoftEvent[] = [];
++
++/* ───────────── meters ───────────── */
++const EDGE = new Map<Uint32Array, Int32Array>();
++function foldDeg(b: SoftBody): number {
++  const P = b.positions, I = b.indices;
++  let pr = EDGE.get(I);
++  if (!pr) {
++    const m = new Map<string, number>(), out: number[] = [];
++    for (let t = 0; t < I.length / 3; t++) for (let e = 0; e < 3; e++) { const a = I[t * 3 + e], c = I[t * 3 + ((e + 1) % 3)], k = a < c ? `${a},${c}` : `${c},${a}`; const o = m.get(k); if (o === undefined) m.set(k, t); else out.push(o, t); }
++    pr = Int32Array.from(out); EDGE.set(I, pr);
++  }
++  let worst = 1;
++  const A = [0, 0, 0], B = [0, 0, 0];
++  const nrm = (t: number, o: number[]): void => {
++    const a = I[t * 3] * 3, c = I[t * 3 + 1] * 3, d = I[t * 3 + 2] * 3;
++    const ux = P[c] - P[a], uy = P[c + 1] - P[a + 1], uz = P[c + 2] - P[a + 2], vx = P[d] - P[a], vy = P[d + 1] - P[a + 1], vz = P[d + 2] - P[a + 2];
++    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz) || 1;
++    o[0] = nx / l; o[1] = ny / l; o[2] = nz / l;
++  };
++  for (let k = 0; k < pr.length; k += 2) { nrm(pr[k], A); nrm(pr[k + 1], B); const c = A[0] * B[0] + A[1] * B[1] + A[2] * B[2]; if (c < worst) worst = c; }
++  return (Math.acos(Math.max(-1, Math.min(1, worst))) * 180) / Math.PI;
++}
++const wrap = (x: number): number => { let y = x; while (y > Math.PI) y -= 2 * Math.PI; while (y < -Math.PI) y += 2 * Math.PI; return y; };
++
++interface Walk {
++  arrive: number; fpMin: number; fpMax: number; len: number; osc: number; lagFM: number; lagMR: number; cycle: number; vMin: number; vMax: number; vMean: number;
++  volMin: number; volMax: number; fold: number; rest: number; settle: number; lat: number; yaw: number; slip: number; finite: boolean; kinMax: number; leanMax: number; air: number; prog: number;
++}
++interface WalkOpts { world?: PropWorld; at?: V3; to?: V3; turnAt?: number; turnTo?: V3; genome?: Genome; piece?: { frac: number; chunk: boolean }; maxS?: number; hold?: number }
++/** one walk: settle 1 s, scootTo the target at the family's glide speed; LIFE's arrival (within 5 cm: endScoot + setHome); then 2 s of rest */
++function walk(fam: string, crawl: boolean, o: WalkOpts = {}): Walk {
++  const w = o.world ?? buildPropWorld(flatDef, 'wide', 1);
++  w.calm = !crawl;   // (today's glide: Calm's fallback, bit for bit by CR-11; the module switch CRAWL.on is left alone: toggling it deoptimises the crawl, see CR-13)
++  const at = o.at ?? v3(0, 0, 0);
++  const b = new SoftBody(o.genome ?? G0, { family: fam, piece: { frac: o.piece?.frac ?? 1, chunk: o.piece?.chunk ?? false, at, cutNormal: v3(-1, 0, 0) } } as never);
++  b.setPropWorld(w);
++  const fr = (): void => { w.beginFrame(); b.step(DT); ev.length = 0; b.drainEvents(ev); w.endFrame(DT); };
++  for (let i = 0; i < 60; i++) fr();
++  const x0 = b.center.x, z0 = b.center.z, to = o.to ?? v3(x0 + 2, 0, z0);
++  const sp = GLIDE[fam].glide;
++  b.scootTo(to.x, to.z, sp);
++  const P = b.positions, n = P.length / 3, pb = P_(b);
++  const r: Walk = { arrive: -1, fpMin: 1e9, fpMax: -1e9, len: 0, osc: 0, lagFM: NaN, lagMR: NaN, cycle: NaN, vMin: 1e9, vMax: -1e9, vMean: 0, volMin: 9, volMax: 0, fold: 0, rest: -1, settle: -1, lat: 0, yaw: 0, slip: NaN, finite: true, kinMax: 0, leanMax: 0, air: 0, prog: 0 };
++  const q0 = b.frame.y;
++  // the thirds of the body along the travel (rest coordinates at the start)
++  let ux = to.x - x0, uz = to.z - z0; const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
++  let smin = 1e9, smax = -1e9; for (let i = 0; i < n; i++) { const s = P[i * 3] * ux + P[i * 3 + 2] * uz; smin = Math.min(smin, s); smax = Math.max(smax, s); }
++  const third = new Int8Array(n); for (let i = 0; i < n; i++) { const u = (P[i * 3] * ux + P[i * 3 + 2] * uz - smin) / (smax - smin); third[i] = u > 0.72 ? 0 : u < 0.28 ? 2 : u > 0.4 && u < 0.6 ? 1 : -1; }
++  const thF: number[] = [], thM: number[] = [], thR: number[] = [], cS: number[] = [];
++  const lastX = new Float64Array(n * 3); lastX.set(P);
++  let slipN = 0, slipS = 0, t = 0, turned = false, lenMax = 0;
++  const steadyFrom = 0.35, total = Math.hypot(to.x - x0, to.z - z0);
++  const maxF = Math.round((o.maxS ?? 40) / DT);
++  for (let k = 0; k < maxF; k++) {
++    fr(); t += DT;
++    if (o.turnAt !== undefined && !turned && t >= o.turnAt && o.turnTo) { turned = true; b.scootTo(o.turnTo.x, o.turnTo.z, sp); }
++    const tgt = turned && o.turnTo ? o.turnTo : to;
++    let gx = tgt.x - b.center.x, gz = tgt.z - b.center.z; const gl = Math.hypot(gx, gz) || 1; gx /= gl; gz /= gl;
++    if (o.turnAt === undefined) { gx = ux; gz = uz; }
++    // steady part of a straight walk: 35 cm in, 35 cm before the end
++    const done = (b.center.x - x0) * ux + (b.center.z - z0) * uz;
++    const steady = o.turnAt === undefined && done > steadyFrom && done < total - steadyFrom;
++    if (done > r.prog) r.prog = done;
++    let cmin = 1e9, cmax = -1e9, amin = 1e9, amax = -1e9, low = 1e9;
++    const acc = [0, 0, 0], cnt = [0, 0, 0];
++    for (let i = 0; i < n; i++) {
++      const s = P[i * 3] * gx + P[i * 3 + 2] * gz, y = P[i * 3 + 1];
++      if (s < amin) amin = s; if (s > amax) amax = s; if (y < low) low = y;
++      if (y < 0.012) { if (s < cmin) cmin = s; if (s > cmax) cmax = s; }
++      const th = third[i]; if (th >= 0) { acc[th] += s; cnt[th]++; }
++    }
++    if (low > 0.03) r.air++;
++    if (steady) {
++      const fp = cmax - cmin; if (fp < r.fpMin) r.fpMin = fp; if (fp > r.fpMax) r.fpMax = fp; lenMax = Math.max(lenMax, amax - amin);
++      thF.push(acc[0] / cnt[0]); thM.push(acc[1] / cnt[1]); thR.push(acc[2] / cnt[2]); cS.push(b.center.x * gx + b.center.z * gz);
++      // the planted base: particles on the ground the crawl holds (w well under 0), their ground speed against the glide's
++      const cr = crawlOf(w);
++      if (cr && cr.on) {
++        let wmin = 0; for (let i = 0; i < n; i++) if (cr.w[i] < wmin) wmin = cr.w[i];
++        for (let i = 0; i < n; i++) if (P[i * 3 + 1] < 0.012 && cr.w[i] < 0.6 * wmin && wmin < -0.05) { slipS += Math.hypot(P[i * 3] - lastX[i * 3], P[i * 3 + 2] - lastX[i * 3 + 2]); slipN++; }
++      } else if (!crawl) for (let i = 0; i < n; i++) if (P[i * 3 + 1] < 0.012) { slipS += Math.hypot(P[i * 3] - lastX[i * 3], P[i * 3 + 2] - lastX[i * 3 + 2]); slipN++; }
++    }
++    lastX.set(P);
++    const vol = b.metrics.volume; if (vol < r.volMin) r.volMin = vol; if (vol > r.volMax) r.volMax = vol;
++    r.kinMax = Math.max(r.kinMax, b.metrics.kinetic ?? 0);
++    { const cr = crawlOf(w); if (cr) r.leanMax = Math.max(r.leanMax, Math.abs(cr.s[4])); }
++    if (k % 6 === 0) r.fold = Math.max(r.fold, foldDeg(b));
++    if (!Number.isFinite(b.center.x) || b.debug.safetyResets > 0) { r.finite = false; break; }
++    if (Math.hypot(b.center.x - tgt.x, b.center.z - tgt.z) < 0.05 && Math.hypot(pb.vcx, pb.vcz) < 0.12 && (o.turnAt === undefined || turned)) {
++      r.arrive = t; b.scootTo(NaN, 0, 0); b.setHome(b.center.x, b.center.z); break;
++    }
++  }
++  r.slip = slipN > 0 ? slipS / slipN / (sp * DT) : NaN;
++  r.len = lenMax; r.osc = lenMax > 0 ? (r.fpMax - r.fpMin) / lenMax : 0;
++  r.lat = Math.abs((b.center.x - x0) * -uz + (b.center.z - z0) * ux);
++  // the centre's speed over 0.1 s windows; the thirds' velocity phase at the strongest frequency
++  if (cS.length > 60) {
++    const vs: number[] = []; for (let i = 6; i < cS.length; i++) vs.push((cS[i] - cS[i - 6]) / (6 * DT));
++    r.vMean = vs.reduce((a, c) => a + c, 0) / vs.length; r.vMin = Math.min(...vs) / r.vMean; r.vMax = Math.max(...vs) / r.vMean;
++    const vel = (a: number[]): number[] => a.slice(1).map((x, i) => x - a[i]);
++    const vf = vel(thF), vm = vel(thM), vr = vel(thR), N = vf.length;
++    let bestP = 0, bestK = 1;
++    for (let kk = 1; kk < N / 4; kk++) { let re = 0, im = 0; for (let i = 0; i < N; i++) { re += vf[i] * Math.cos(2 * Math.PI * kk * i / N); im += vf[i] * Math.sin(2 * Math.PI * kk * i / N); } const p = re * re + im * im; if (p > bestP) { bestP = p; bestK = kk; } }
++    const ph = (a: number[]): number => { let re = 0, im = 0; for (let i = 0; i < N; i++) { re += a[i] * Math.cos(2 * Math.PI * bestK * i / N); im += a[i] * Math.sin(2 * Math.PI * bestK * i / N); } return Math.atan2(im, re); };
++    const pf = ph(vf), pm = ph(vm), pr = ph(vr);
++    // (a signal that leads has the smaller phase here: lag > 0 = the front moves first)
++    r.lagFM = -wrap(pf - pm) / (2 * Math.PI); r.lagMR = -wrap(pm - pr) / (2 * Math.PI); r.cycle = N * DT / bestK;
++  }
++  // after the stop: at rest (PG's sleep test: kinetic under restKin, the centre under restSpeed) and the crawl's wave gone
++  const ts = t;
++  for (let k = 0; k < 150; k++) {
++    fr(); t += DT;
++    const still = (b.metrics.kinetic ?? 1) < PG.restKin && Math.hypot(pb.vcx, pb.vcz) < PG.restSpeed;
++    if (r.rest < 0 && still) r.rest = t - ts;
++    if (r.settle < 0 && still && !pb.crawlOn) r.settle = t - ts;
++  }
++  r.yaw = Math.abs(b.frame.y - q0) * 2 * 180 / Math.PI;
++  return r;
++}
++
++const t0 = performance.now();
++// (the cost and allocation rows first: they measure a JIT that the other rows have not yet put through other families and sizes)
++/* ───────────── CR-12 cost and allocation ───────────── */
++if (sec('cost')) {
++  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
++  // two whole bodies walking to and fro: today's glide, the glide with a squash pose held (LIFE's setSquash: the same goal-reshaping path the crawl uses), the crawl
++  const run = (mode: 'glide' | 'squash' | 'crawl'): { ms: number; stepUs: number; alloc: number } => {
++    const w = buildPropWorld(flatDef, 'wide', 1);
++    w.calm = mode !== 'crawl';
++    const bs = [new SoftBody(G0, { family: 'jellygel', piece: { frac: 1, chunk: false, at: v3(-1, 0, -0.8) } } as never), new SoftBody(G0, { family: 'gummy', piece: { frac: 1, chunk: false, at: v3(1, 0, 0.8) } } as never)];
++    for (const b of bs) b.setPropWorld(w);
++    let flip = 0;
++    const re = (): void => { flip ^= 1; bs[0].scootTo(flip ? 1 : -1, -0.8, 0.26); bs[1].scootTo(flip ? -1 : 1, 0.8, 0.28); if (mode === 'squash') for (const b of bs) b.setSquash(flip ? 0.95 : 0.96, 0.2); };
++    const frame = (): void => { w.beginFrame(); for (const b of bs) { b.step(DT); ev.length = 0; b.drainEvents(ev); } w.endFrame(DT); };
++    for (let i = 0; i < 6000; i++) { if (i % 300 === 0) re(); frame(); }   // (PH-11's 100 s warm-up: a once-a-frame entry point tiers up with use)
++    let best = Infinity;
++    for (let k = 0; k < 5; k++) { re(); for (let i = 0; i < 20; i++) frame(); const a = performance.now(); for (let i = 0; i < 120; i++) frame(); best = Math.min(best, (performance.now() - a) / 120); }
++    const empty: number[] = []; for (let i = 0; i < 6; i++) { const u0 = newUsed(); empty.push(newUsed() - u0); }
++    const base = empty[empty.length - 1];
++    let alloc = Infinity;
++    for (let k = 0; k < 4; k++) { re(); for (let i = 0; i < 10; i++) frame(); const u0 = newUsed(); for (let i = 0; i < 120; i++) frame(); const d = newUsed() - u0 - base; if (d >= 0) alloc = Math.min(alloc, d); }
++    // the world's beginFrame alone (the crawl steps of both bodies; nothing else runs there on a flat place), per body per frame, while both walk
++    let stepUs = Infinity;
++    for (let k = 0; k < 5; k++) {
++      re(); for (let i = 0; i < 20; i++) frame();
++      let tb = 0;
++      for (let i = 0; i < 120; i++) { const a = performance.now(); w.beginFrame(); tb += performance.now() - a; for (const b of bs) { b.step(DT); ev.length = 0; b.drainEvents(ev); } w.endFrame(DT); }
++      stepUs = Math.min(stepUs, tb / 120 / 2 * 1000);
++    }
++    return { ms: best, stepUs, alloc };
++  };
++  const c = run('crawl'), g = run('glide'), q = run('squash');
++  add('CR-12 cost: two whole bodies walking (best of 5 windows of 120 frames, both bodies\' physics and the world): the crawl against today\'s glide and against the glide with a squash pose held (LIFE\'s setSquash reshapes the goal the same way); the crawl\'s own step per body per frame',
++    `crawl ${f(c.ms, 3)} ms, glide ${f(g.ms, 3)} ms (x ${f(c.ms / g.ms, 3)}), squash pose ${f(q.ms, 3)} ms (crawl - squash pose ${f((c.ms - q.ms) * 500, 1)} us per body); crawl step ${f(c.stepUs, 1)} us per body (glide: ${f(g.stepUs, 2)} us)`, 'crawl - squash pose <= 25 us per body; step <= 30 us', (c.ms - q.ms) * 500 <= 25 && c.stepUs <= 30);
++  add('CR-13 allocation: new-space growth per 120 frames while two bodies crawl (best of 4 windows after PH-11\'s 100 s warm-up)', `${c.alloc} B (glide ${g.alloc} B, squash pose ${q.alloc} B)`, '0 B', c.alloc <= 0);
++}
++
++/* ───────────── CR-01..05 per family on the flat ───────────── */
++if (sec('flat')) {
++  const lines: string[] = [];
++  let okOsc = 0, okLead = 0, okSpeed = 0, okRest = 0, okVol = 0, okSafe = 0, okGrip = 0;
++  let worstSpeed = 0, worstRest = 0, worstVol = 0, worstFold = 0, worstLat = 0, worstYaw = 0, minOsc = 9, maxSlip = 0, glideSlip = 0, minV = 9;
++  // "volume as now": today's LIFE walk (the glide, with the family's gait hops and their anticipation squash every 0.8 s, act.ts travelStep) moves a foam's
++  // or the beads' volume by several per cent (their volume constraint is compliant); the crawl may move it within 1 % or within that range, never beyond
++  const nowVol = (fam: string): [number, number] => {
++    const w = buildPropWorld(flatDef, 'wide', 1); w.calm = true;
++    const b = new SoftBody(G0, { family: fam }); b.setPropWorld(w);
++    const fr = (): void => { w.beginFrame(); b.step(DT); ev.length = 0; b.drainEvents(ev); w.endFrame(DT); };
++    for (let i = 0; i < 60; i++) fr();
++    const ga = GAITS as Record<string, { squash: number; vyS1: number; hops: boolean }>;
++    const gt = ga[fam];
++    let lo = 1, hi = 1;
++    b.scootTo(2, 0, GLIDE[fam].glide);
++    for (let k = 0; k < 360; k++) {
++      if (gt.hops && k % 48 === 0) b.setSquash(gt.squash, 0.08);
++      if (gt.hops && k % 48 === 7) { b.setSquash(1, 0.08); b.hop(0.3, gt.vyS1, 0); }
++      fr(); const v = b.metrics.volume; lo = Math.min(lo, v); hi = Math.max(hi, v);
++    }
++    return [lo, hi];
++  };
++  for (const fam of FAMS) {
++    const c = walk(fam, true), g = walk(fam, false), nv = nowVol(fam);
++    const dv = c.arrive / g.arrive - 1;
++    lines.push(`${fam} osc ${f(c.osc * 100, 1)}% (len ${f(c.len)} m) lead ${f(c.lagFM)}/${f(c.lagMR)} cyc (cycle ${f(c.cycle)} s) arrive ${f(c.arrive)} vs ${f(g.arrive)} s (${dv >= 0 ? '+' : ''}${f(dv * 100, 1)}%) centre ${f(c.vMin)}..${f(c.vMax)}x vol ${f(c.volMin, 3)}..${f(c.volMax, 3)} (today's walk with its gait hops ${f(nv[0], 3)}..${f(nv[1], 3)}) rest ${f(c.rest)} s (glide ${f(g.rest)}) slip ${f(c.slip)} (glide ${f(g.slip)}) fold ${f(c.fold, 0)} lat ${f(c.lat * 1000, 0)} mm yaw ${f(c.yaw, 1)} deg`);
++    if (c.osc >= 0.12) okOsc++; minOsc = Math.min(minOsc, c.osc);
++    if (c.lagFM > 0.03 && c.lagMR > 0.03) okLead++;
++    if (Math.abs(dv) <= 0.2 && c.arrive > 0) okSpeed++; worstSpeed = Math.max(worstSpeed, Math.abs(dv));
++    if (c.rest >= 0 && c.rest <= 1 && c.settle >= 0 && c.settle <= 1) okRest++; worstRest = Math.max(worstRest, c.settle < 0 ? 9 : c.settle);
++    const dvol = Math.max(Math.abs(c.volMin - 1), Math.abs(c.volMax - 1)); worstVol = Math.max(worstVol, dvol); if (dvol <= 0.01 || (c.volMin >= nv[0] - 0.002 && c.volMax <= nv[1] + 0.002)) okVol++;
++    if (c.finite && c.fold <= 120 && c.lat < 0.03 && c.yaw < 5 && c.vMin > 0) okSafe++;
++    worstFold = Math.max(worstFold, c.fold); worstLat = Math.max(worstLat, c.lat); worstYaw = Math.max(worstYaw, c.yaw); minV = Math.min(minV, c.vMin);
++    if (c.slip <= 0.4) okGrip++; maxSlip = Math.max(maxSlip, c.slip); glideSlip = Math.max(glideSlip, g.slip);
++  }
++  const N = FAMS.length;
++  for (const l of lines) console.log('  ' + l);
++  add(`CR-01 stretch and bunch: the ground-contact footprint's length oscillates during a 2 m walk by at least 12 % of the body length (${N} families, template genome)`, `${okOsc}/${N}; smallest ${f(minOsc * 100, 1)} %`, '>= 12 % each', okOsc === N);
++  add('CR-02 the front leads the rear: the velocity phase of the front third leads the middle\'s, and the middle\'s leads the rear\'s (a wave from front to rear)', `${okLead}/${N} (see the lines above: front->mid / mid->rear in cycles)`, 'both > 0.03 cycle', okLead === N);
++  add('CR-03 travel time unchanged: the 2 m walk (LIFE\'s arrival: within 5 cm) takes within 20 % of today\'s glide', `${okSpeed}/${N}; worst ${f(worstSpeed * 100, 1)} %`, '<= 20 %', okSpeed === N);
++  add('CR-04 settles: at rest (PG.restKin, PG.restSpeed) with the wave gone within 1 s of the stop; volume as now: within 1 % during the walk, or within the family\'s own range on today\'s walk (the glide with its gait hops and their squash)', `rest ${okRest}/${N} (worst ${f(worstRest)} s); volume ${okVol}/${N} (worst ${f(worstVol * 100, 2)} %: see the lines above)`, '<= 1 s; <= 1 % or within today\'s range', okRest === N && okVol === N);
++  add('CR-05 no jitter, no runaway: finite, no fold over 120 deg, lateral drift under 3 cm, yaw under 5 deg, the centre never moves backward', `${okSafe}/${N}; fold ${f(worstFold, 0)} deg, drift ${f(worstLat * 1000, 0)} mm, yaw ${f(worstYaw, 1)} deg, centre speed min ${f(minV)} x`, 'all', okSafe === N);
++  add('CR-06 the base grips where it is planted: the planted base particles\' ground speed against the glide\'s (today\'s glide: every base particle slides at 1.0)', `${okGrip}/${N}; worst ${f(maxSlip)} (glide ${f(glideSlip)})`, '<= 0.4', okGrip === N);
++}
++
++/* ───────────── CR-07 turns ───────────── */
++if (sec('turn')) {
++  const fams = FULL ? FAMS : ['jellygel', 'putty'];
++  let ok = 0; const ls: string[] = [];
++  for (const fam of fams) {
++    const sp = GLIDE[fam].glide, tTurn = 0.6 / sp;
++    const o = { to: v3(2, 0, 0), turnAt: tTurn, turnTo: v3(0.6, 0, 1.4) };
++    const c = walk(fam, true, o), g = walk(fam, false, o);
++    const dv = c.arrive / g.arrive - 1;
++    ls.push(`${fam} ${f(c.arrive)} vs ${f(g.arrive)} s, lean ${f(c.leanMax, 3)}, fold ${f(c.fold, 0)}, rest ${f(c.settle)} s`);
++    if (c.arrive > 0 && Math.abs(dv) <= 0.2 && c.leanMax > 0.01 && c.fold <= 120 && c.finite && c.settle >= 0 && c.settle <= 1) ok++;
++  }
++  add('CR-07 turns: a walk retargeted 90 degrees on the way arrives within 20 % of the glide\'s time, leans into the turn, no fold over 120, at rest within 1 s', `${ok}/${fams.length}: ${ls.join('; ')}`, 'all', ok === fams.length);
++}
++
++/* ───────────── CR-08 ice, water, ramp, mound ───────────── */
++if (sec('surf')) {
++  // each on a flat place with the one surface or shape (the real data: Frostbell's ice, Ripple's surf depth, Frostbell's Glide Ramp, Ripple's Sand Mound)
++  const place = (o: { base?: PlaceDef; things?: unknown[]; zones?: unknown[]; patches?: unknown[] }): PlaceDef => {
++    const things = (o.things ?? []) as { x: number; z: number; yaw: number }[], B = o.base ?? CABIN;
++    return { ...B, things, walls: [], zones: o.zones ?? [], patches: o.patches ?? [], tall: { ...B.tall, things: things.map((t) => ({ x: t.x, z: t.z, yaw: t.yaw })), walls: [], zones: o.zones ?? [], patches: o.patches ?? [] } } as unknown as PlaceDef;
++  };
++  const ice = place({ base: FROSTBELL, patches: [{ ...FROSTBELL.patches.find((p) => p.ice)!, x: 0, z: 0, r: 3 }] });
++  const surf = RIPPLE.zones.find((z) => z.id === 'surfedge')!;
++  const water = place({ base: RIPPLE, zones: [{ id: 'shallow', kind: surf.kind, strength: 1, shape: 'disc', x: 0, z: 0, r: 3, surfaceY: 0.08, ramp: 0.4 }] });
++  const ramp = place({ things: [{ ...FROSTBELL.things.find((t) => t.id === 'glideramp')!, x: 0, z: 0, yaw: 0 }] });
++  const mound = place({ things: [{ ...RIPPLE.things.find((t) => t.id === 'sandmound')!, x: 0, z: 0, yaw: 0 }] });
++  const ls: string[] = []; let ok = 0, n = 0;
++  for (const fam of FULL ? ['jellygel', 'putty', 'firmsilicone', 'stickystretch'] : ['jellygel', 'putty']) {
++    const o = { at: v3(-1, 0, 0), to: v3(1.2, 0, 0) };
++    const c = walk(fam, true, { ...o, world: buildPropWorld(ice, 'wide', 1) }), g = walk(fam, false, { ...o, world: buildPropWorld(ice, 'wide', 1) }), fl = walk(fam, true, o);
++    const dv = c.arrive / g.arrive - 1; n++;
++    const pass = c.arrive > 0 && Math.abs(dv) <= 0.2 && c.slip > fl.slip + 0.05 && c.fold <= 120 && c.finite && c.settle >= 0 && c.settle <= 1;
++    if (pass) ok++;
++    ls.push(`ice ${fam}: ${f(c.arrive)} vs ${f(g.arrive)} s, base slip ${f(c.slip)} (felt ${f(fl.slip)}), osc ${f(c.osc * 100, 1)} % (felt ${f(fl.osc * 100, 1)})${pass ? '' : ' FAIL'}`);
++  }
++  for (const fam of ['jellygel', 'putty']) {
++    const o = { at: v3(-1, 0, 0), to: v3(1.2, 0, 0) };
++    const c = walk(fam, true, { ...o, world: buildPropWorld(water, 'wide', 1) }), g = walk(fam, false, { ...o, world: buildPropWorld(water, 'wide', 1) });
++    const dv = c.arrive / g.arrive - 1; n++;
++    const pass = c.arrive > 0 && Math.abs(dv) <= 0.2 && c.fold <= 120 && c.finite && c.settle >= 0 && c.settle <= 1;
++    if (pass) ok++;
++    ls.push(`water 8 cm ${fam}: ${f(c.arrive)} vs ${f(g.arrive)} s, osc ${f(c.osc * 100, 1)} %, rest ${f(c.settle)} s${pass ? '' : ' FAIL'}`);
++  }
++  // the ramp and the mound: scooting into them from the floor (the glide stops against them: a static prop holds it back) and walking down from the top
++  for (const [nm, def, at, to] of [['into the ramp\'s low end', ramp, v3(2.2, 0, 0), v3(-0.2, 0, 0)], ['down the ramp from its top', ramp, v3(-0.7, 0.95, 0), v3(2.6, 0, 0)],
++    ['into the mound', mound, v3(-2, 0, 0), v3(2, 0, 0)], ['down the mound from its top', mound, v3(0, 0.8, 0), v3(2.2, 0, 0)]] as const) {
++    for (const fam of ['jellygel', 'firmsilicone']) {
++      const c = walk(fam, true, { world: buildPropWorld(def, 'wide', 1), at, to, maxS: 20 }), g = walk(fam, false, { world: buildPropWorld(def, 'wide', 1), at, to, maxS: 20 });
++      n++;
++      const both = c.arrive > 0 === g.arrive > 0, dv = c.arrive > 0 && g.arrive > 0 ? c.arrive / g.arrive - 1 : 0;
++      const pass = both && Math.abs(dv) <= 0.2 && Math.abs(c.prog - g.prog) <= 0.1 && c.fold <= 120 && c.finite && (c.settle >= 0 && c.settle <= 1.5);
++      if (pass) ok++;
++      ls.push(`${nm} ${fam}: ${c.arrive > 0 ? 'arrived ' + f(c.arrive) + ' s' : 'stopped'} at ${f(c.prog)} m vs glide ${g.arrive > 0 ? 'arrived ' + f(g.arrive) + ' s' : 'stopped'} at ${f(g.prog)} m, fold ${f(c.fold, 0)}, rest ${f(c.settle)} s${pass ? '' : ' FAIL'}`);
++    }
++  }
++  add('CR-08 surfaces and shapes: on ice the base slips more than on the felt and the walk arrives on time; through shallow water (8 cm); into and down the ramp and the mound the crawl gets where the glide gets (within 10 cm, 20 % of its time); no fold over 120; at rest within 1.5 s', `${ok}/${n}: ${ls.join('; ')}`, 'all', ok === n);
++}
++
++/* ───────────── CR-09 scales and pieces ───────────── */
++if (sec('scale')) {
++  const ls: string[] = []; let ok = 0, n = 0;
++  for (const [nm, o] of [['small genome', { genome: SMALL }], ['big genome', { genome: BIG }], ['half chunk', { piece: { frac: 0.5, chunk: true } }], ['1/8 mini', { piece: { frac: 0.125, chunk: false } }]] as const) {
++    for (const fam of FULL ? ['jellygel', 'putty', 'firmsilicone'] : ['jellygel']) {
++      const c = walk(fam, true, o as WalkOpts), g = walk(fam, false, o as WalkOpts);
++      const dv = c.arrive / g.arrive - 1; n++;
++      const pass = c.arrive > 0 && Math.abs(dv) <= 0.2 && c.osc >= 0.12 && c.fold <= 120 && c.finite && c.settle >= 0 && c.settle <= 1 && Math.max(Math.abs(c.volMin - 1), Math.abs(c.volMax - 1)) <= 0.015;
++      if (pass) ok++;
++      ls.push(`${nm} ${fam}: osc ${f(c.osc * 100, 1)} % (len ${f(c.len)}), ${f(c.arrive)} vs ${f(g.arrive)} s, rest ${f(c.settle)} s, vol ${f(c.volMin, 3)}..${f(c.volMax, 3)}${pass ? '' : ' FAIL'}`);
++    }
++  }
++  add('CR-09 every scale and cut pieces crawl: a small and a big genome, a half chunk (flat cut face) and a 1/8 mini: footprint oscillation >= 12 %, on time within 20 %, at rest within 1 s, volume within 1.5 %', `${ok}/${n}: ${ls.join('; ')}`, 'all', ok === n);
++}
++
++/* ───────────── CR-10 the touch gate and Calm, inert when not walking ───────────── */
++if (sec('gate')) {
++  // a finger lands mid-walk: the wave is gone within 0.15 s, the goal back to rest (the touch gate's 0.12 s + one frame)
++  const w = buildPropWorld(flatDef, 'wide', 1);
++  const b = new SoftBody(G0, { family: 'jellygel' }); b.setPropWorld(w);
++  const fr = (): void => { w.beginFrame(); b.step(DT); ev.length = 0; b.drainEvents(ev); w.endFrame(DT); };
++  for (let i = 0; i < 60; i++) fr();
++  b.scootTo(2, 0, 0.26);
++  for (let i = 0; i < 60; i++) fr();
++  const on0 = P_(b).crawlOn;
++  const h = b.raycast(v3(b.center.x, 3, b.center.z + 0.02), v3(0, -1, 0));
++  if (h) { b.fingerDown(0, { point: h.point, normal: h.normal, dir: v3(0, -1, 0) }); b.fingerPressure(0, 0.5); }
++  let offAt = -1;
++  for (let i = 0; i < 30; i++) { fr(); if (offAt < 0 && !P_(b).crawlOn) offAt = (i + 1) * DT; }
++  b.fingerUp(0);
++  add('CR-10 the touch gate: a finger down mid-walk ends the crawl (its wave eased out, the goal back to rest) within 0.15 s', `walking ${on0}; off after ${f(offAt, 3)} s`, '<= 0.15 s', on0 && offAt > 0 && offAt <= 0.15);
++  // Calm (world.calm, the shell's Calm or prefers-reduced-motion): today's glide bit for bit; and a body bound to a world that does not walk steps bit for bit as before
++  const hashRun = (calm: boolean, crawlOn: boolean, scoot: boolean): number[] => {
++    CRAWL.on = crawlOn;
++    const ww = buildPropWorld(flatDef, 'wide', 1); ww.calm = calm;
++    const bb = new SoftBody(G0, { family: 'gummy' }); bb.setPropWorld(ww);
++    const out: number[] = [];
++    for (let i = 0; i < 200; i++) {
++      if (i === 30 && scoot) bb.scootTo(1.2, 0.3, 0.28);
++      if (i === 60) bb.nudge(v3(0.3, 0.6, 0));
++      if (i === 150 && scoot) bb.scootTo(NaN, 0, 0);
++      ww.beginFrame(); bb.step(DT); ev.length = 0; bb.drainEvents(ev); ww.endFrame(DT); out.push(bb.stateHash());
++    }
++    CRAWL.on = true;
++    return out;
++  };
++  const same = (a: number[], c: number[]): boolean => a.length === c.length && a.every((x, i) => x === c[i]);
++  const calmEq = same(hashRun(true, true, true), hashRun(false, false, true)), inertEq = same(hashRun(false, true, false), hashRun(false, false, false));
++  const differs = !same(hashRun(false, true, true), hashRun(false, false, true));
++  add('CR-11 Calm falls back to today\'s motion: with world.calm a walk steps bit for bit as the glide (200 frames, state hash every frame); a body that does not walk is untouched; the crawl does change a walk', `calm = glide ${calmEq}; no walk = before ${inertEq}; crawl differs ${differs}`, 'true, true, true', calmEq && inertEq && differs);
++}
++
++let failed = 0;
++for (const r of rows) { const ok = r.pass ? 'PASS' : 'FAIL'; if (!r.pass) failed++; console.log(`${ok}  ${r.what}\n      ${r.value}   [${r.limit}]`); }
++console.log(`\nprobe_crawl: ${rows.length - failed}/${rows.length} pass (${f((performance.now() - t0) / 1000, 1)} s${FULL ? ', --full' : ''})`);
++process.exitCode = failed ? 1 : 0;
+--- /dev/null	2026-11-19 00:21:06.957157479 +0000
++++ _harness/crawl_film.mjs	2026-11-19 07:32:01.027594369 +0000
+@@ -0,0 +1,121 @@
++// R10 LOCOMOTION: the crawl's browser filmstrip (one heavy job). The real game at Home (?dev=1), LIFE's autonomy off so the walk is scripted,
++// the play body walks by scootTo (LIFE's own travel driver) and frames are captured over a crawl cycle: from the game camera and side-on.
++//   node _harness/crawl_film.mjs [--port 5356] [--w 1280 --h 800] [--genome seed] [--out dir] [--tag name] [--every 6] [--frames 48] [--crawl 0|1]
++import { startVite, launch } from './pw.mjs';
++import { mkdirSync, writeFileSync } from 'node:fs';
++import { resolve } from 'node:path';
++
++const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i >= 0 ? process.argv[i + 1] : d; };
++const PORT = Number(arg('port', 5356)), W = Number(arg('w', 1280)), Hh = Number(arg('h', 800));
++const OUT = resolve(arg('out', '_shots/crawl')), TAG = arg('tag', `${W}x${Hh}`), EVERY = Number(arg('every', 6)), FRAMES = Number(arg('frames', 48));
++const GENOMES = String(arg('fam', '')).split(',').filter(Boolean);
++const CRAWL_ON = arg('crawl', '1') !== '0', SIDE = arg('side', '1') !== '0', DIST = Number(arg('dist', 1.0)), PLACE = arg('place', ''), LIFE = arg('life', '0') === '1';
++mkdirSync(OUT, { recursive: true });
++const vite = await startVite(PORT);
++const browser = await launch();
++const problems = [];
++try {
++  const page = await browser.newPage({ viewport: { width: W, height: Hh }, deviceScaleFactor: 1 });
++  page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
++  page.on('pageerror', (e) => problems.push(e.message));
++  await page.goto(`${vite.url}?dev=1`, { waitUntil: 'load' });
++  await page.waitForSelector('.cta:not([disabled])', { timeout: 120000 });
++  const b = await page.locator('.cta').boundingBox();
++  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
++  await page.waitForFunction(() => window.__WH__.state().phase === 'play', null, { timeout: 60000 });
++  await page.evaluate(async () => {
++    const pm = await import('/src/physics/props.ts');
++    const cm = await import('/src/physics/crawl.ts');
++    window.__CR__ = cm;
++    const orig = pm.PropWorld.prototype.beginFrame;
++    pm.PropWorld.prototype.beginFrame = function () { window.__PW__ = this; return orig.call(this); };
++  });
++  // wait for the life chunk and its world (step the game: the dev hook pauses the rAF loop)
++  for (let k = 0; k < 400; k++) {
++    const ok = await page.evaluate(() => { window.__WH__.step(1 / 60, 10); return !!(window.__PW__ && window.__PW__.bodies && window.__PW__.bodies.length > 0); });
++    if (ok) break;
++    await page.waitForTimeout(50);
++  }
++  if (PLACE) { const ok = await page.evaluate((p) => window.__WH__.travel(p, true), PLACE); console.log(`travel ${PLACE}: ${ok}`); for (let k = 0; k < 40; k++) { await page.evaluate(() => window.__WH__.step(1 / 60, 10)); await page.waitForTimeout(30); } }
++  const grab = async (file) => { const url = await page.evaluate(() => { const st = window.__WH__.shell.stageObj(); st.render(); return st.canvas.toDataURL('image/png'); }); writeFileSync(file, Buffer.from(url.split(',')[1], 'base64')); };
++  if (LIFE) {
++    // LIFE drives (autonomy on): step until a squishy crawls on its own, then film it
++    let who = -1;
++    for (let k = 0; k < 900 && who < 0; k++) {
++      who = await page.evaluate(() => { window.__WH__.step(1 / 60, 6); const w = window.__PW__; if (!w) return -1; for (let i = 0; i < w.crawls.length; i++) if (w.crawls[i].on && w.crawls[i].s[1] > 0.85) return i; return -1; });
++      if (k % 20 === 0) await page.waitForTimeout(10);
++    }
++    console.log(`life: crawler ${who}`);
++    if (who >= 0) {
++      const name = `${TAG}_life${PLACE ? '_' + PLACE : ''}`;
++      for (let f = 0; f < FRAMES; f += EVERY) {
++        const idx = String(f).padStart(3, '0');
++        const s = await page.evaluate((i) => { const w = window.__PW__, bd = w.bodies[i], c = w.crawls[i]; return { fam: bd.family, x: bd.center.x, z: bd.center.z, on: c.on, a: c.s[1], ph: c.s[0] }; }, who);
++        await grab(`${OUT}/${name}_game_${idx}.png`);
++        if (SIDE) {
++          await page.evaluate((i) => {
++            const st = window.__WH__.shell.stageObj(), cam = st.camera, w = window.__PW__, bd = w.bodies[i], c = w.crawls[i];
++            if (!window.__SIDE__) { const ux = c.s[2], uz = c.s[3], cx = bd.center.x + ux * 0.25, cz = bd.center.z + uz * 0.25; window.__SIDE__ = { x: cx - uz * 4.6, z: cz + ux * 4.6, lx: cx, lz: cz }; }
++            window.__CAM__ = { p: cam.position.clone(), q: cam.quaternion.clone() };
++            const S = window.__SIDE__; cam.position.set(S.x, 0.45, S.z); cam.lookAt(S.lx, 0.4, S.lz); cam.updateMatrixWorld();
++          }, who);
++          await grab(`${OUT}/${name}_side_${idx}.png`);
++          await page.evaluate(() => { const cam = window.__WH__.shell.stageObj().camera; cam.position.copy(window.__CAM__.p); cam.quaternion.copy(window.__CAM__.q); cam.updateMatrixWorld(); });
++        }
++        console.log(`  frame ${idx} ${s.fam} x ${s.x.toFixed(3)} z ${s.z.toFixed(3)} on ${s.on} amp ${s.a.toFixed(2)} phase ${s.ph.toFixed(2)}`);
++        await page.evaluate((e) => window.__WH__.step(1 / 60, e), EVERY);
++      }
++    }
++  }
++  if (!LIFE) await page.evaluate(() => window.__WH__.setSetting('autonomy', false));
++  const list = LIFE ? [] : GENOMES.length ? GENOMES : [''];
++  for (const gn of list) {
++    if (gn) {
++      const sp = await page.evaluate(async (fam) => {
++        const gm = await import('/src/core/genome.ts'), cm = await import('/src/data/catalog.ts');
++        const s = cm.CATALOG.find((d) => cm.familyOf(d.id) === fam);
++        if (!s) return null;
++        window.__WH__.setGenome(gm.encodeGenome({ ...gm.makeStarterGenome(), species: s.id }));
++        return s.id;
++      }, gn);
++      console.log(`family ${gn}: species ${sp}`);
++      await page.evaluate(() => window.__WH__.step(1 / 60, 150));
++    }
++    const info = await page.evaluate(([on, dist]) => {
++      window.__CR__.CRAWL.on = on;
++      const w = window.__PW__, bd = w.bodies[0];
++      window.__WH__.step(1 / 60, 30);
++      const c = bd.center, sp = { slowrise: 0.18, marshmallow: 0.22, mochidough: 0.18, jellygel: 0.26, waterfill: 0.22, putty: 0.12, stickystretch: 0.2, slimegoo: 0.1, firmsilicone: 0.32, popdome: 0.28, gummy: 0.28, beadsqueeze: 0.22 }[bd.family] ?? 0.2;
++      window.__T__ = { x0: c.x, z0: c.z, sp, dist };
++      bd.scootTo(c.x + dist, c.z, sp);
++      return { family: bd.family, x: c.x, z: c.z, sp, n: bd.n, R: bd.restRadius };
++    }, [CRAWL_ON, DIST]);
++    console.log(`body ${JSON.stringify(info)}`);
++    // walk in: 0.6 s, then the film
++    await page.evaluate(() => window.__WH__.step(1 / 60, 36));
++    const name = `${TAG}_${info.family}${CRAWL_ON ? '' : '_glide'}`;
++    for (let f = 0; f < FRAMES; f += EVERY) {
++      const s = await page.evaluate(() => { const bd = window.__PW__.bodies[0]; const c = window.__PW__.crawls[0]; return { x: bd.center.x, ph: c ? c.s[0] : 0, a: c ? c.s[1] : 0 }; });
++      const idx = String(f).padStart(3, '0');
++      await grab(`${OUT}/${name}_game_${idx}.png`);
++      if (SIDE) {
++        // side-on: the stage camera moved level with the body, square to the travel, for this one picture (put back after)
++        await page.evaluate(() => {
++          const st = window.__WH__.shell.stageObj(), cam = st.camera, bd = window.__PW__.bodies[0], c = bd.center;
++          window.__CAM__ = { p: cam.position.clone(), q: cam.quaternion.clone() };
++          const mx = window.__T__.x0 + window.__T__.dist * 0.5;
++          cam.position.set(mx, 0.42, window.__T__.z0 + 5.2); cam.lookAt(mx, 0.42, window.__T__.z0); cam.updateMatrixWorld();
++        });
++        await grab(`${OUT}/${name}_side_${idx}.png`);
++        await page.evaluate(() => { const cam = window.__WH__.shell.stageObj().camera; cam.position.copy(window.__CAM__.p); cam.quaternion.copy(window.__CAM__.q); cam.updateMatrixWorld(); });
++      }
++      console.log(`  frame ${idx} x ${s.x.toFixed(3)} phase ${s.ph.toFixed(2)} amp ${s.a.toFixed(2)}`);
++      await page.evaluate((e) => window.__WH__.step(1 / 60, e), EVERY);
++    }
++    await page.evaluate(() => { const bd = window.__PW__.bodies[0]; bd.scootTo(NaN, 0, 0); bd.setHome(bd.center.x, bd.center.z); window.__WH__.step(1 / 60, 90); });
++  }
++} finally {
++  await browser.close();
++  vite.stop();
++  console.log(`problems: ${problems.length}${problems.length ? '\n  ' + problems.slice(0, 5).join('\n  ') : ''}`);
++}

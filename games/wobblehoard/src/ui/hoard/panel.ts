@@ -417,7 +417,8 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
           acts.append(back2);
         } else if (env.playItemId() !== sel.id) {
           const why = env.mat.refusal(sel);
-          const out = h('button', { class: 'act-btn k-btn k-btn--sm', attrs: { type: 'button', 'data-key': 'mat' } }, h('span', { text: 'Bring out' }));
+          // (R10_PLAYUX item 2: "Take out too" says it joins the one you play with; it was "Bring out")
+          const out = h('button', { class: 'act-btn k-btn k-btn--sm', attrs: { type: 'button', 'data-key': 'mat' } }, kit.glyph('plus', 'k-icon k-icon--sm', { size: 20 }), h('span', { text: 'Take out too' }));
           out.disabled = !!why;
           out.addEventListener('click', () => {
             const r = env.mat.bringOut(sel);

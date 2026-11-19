@@ -477,12 +477,35 @@ export function createGame(deps: GameDeps): Game {
     // pieces join it as one group); the published toy (no host: the life chunk not landed, or one squishy out) clears the mat as before
     clearMat: () => { if (life?.beforeCut) { try { return life.beforeCut(); } catch (e) { report(e); return 0; } } const n = mat.count - 1; try { mat.clear(); } catch (e) { report(e); } return n; },
     pieceCap: () => { try { return life?.pieceCap?.() ?? null; } catch (e) { report(e); return null; } },
+    homeSpot: () => cutHome,
     panOf: (p) => panOfPoint(p),
     say: (t) => emit('notice', t),
     report,
   });
+  /** D-99: the spot the play squishy goes back together at after a cut (set when a stroke made a squishy out the play one in place; null: the middle, as published) */
+  let cutHome: V3 | null = null;
+  /** D-99 (owner 2026-11-19: "if i have multiple squishies out i should be able to cut any/all of them"): the WHOLE squishy out (not the play one) that a stroke crosses
+   *  most (16 samples along it; the nearest body under each), or null. Only shared extras (in the play body's space) count. */
+  function strokeWhole(x0: number, y0: number, x1: number, y1: number): ExtraBody | null {
+    const cam = stage.camera;
+    if (!cam || !bodies.extras.length) return null;
+    try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
+    const hits = new Map<ExtraBody, number>();
+    for (let k = 0; k <= 16; k++) {
+      const n = pxToNdc(x0 + (x1 - x0) * k / 16, y0 + (y1 - y0) * k / 16, viewport), r = cameraRay(cam, n.x, n.y);
+      let best: ExtraBody | null = null, bestT = Infinity;
+      const h0 = raycastAt(bodies.body, r.origin, r.dir, ORIGIN);
+      if (h0) bestT = h0.t;
+      for (const xb of bodies.extras) { if (xb.piece || !xb.shared) continue; const h = raycastAt(xb.body, r.origin, r.dir, xb.position); if (h && h.t < bestT) { bestT = h.t; best = xb; } }
+      if (best) hits.set(best, (hits.get(best) ?? 0) + 1);
+    }
+    let out: ExtraBody | null = null, most = 0;
+    for (const [xb, nh] of hits) if (nh > most) { most = nh; out = xb; }
+    return out;
+  }
   /** leaving puts a cut squishy back together at once (CUT.md 2.2: a switch, a card, a ceremony; the body is replaced right after) */
   function leaving(): void {
+    cutHome = null;
     releaseEverything();
     try { cut.reconnectAll(false); } catch (e) { report(e); }
   }
@@ -500,7 +523,7 @@ export function createGame(deps: GameDeps): Game {
     if (tool === 'cut') { try { cut.prewarm(); } catch (e) { report(e); } }   // get the first cut ready (a no-op until the true cut; CUT2.md 6.1)
   }
   // the Cut tool's swipe, and Snap's drag-to-orbit (every other gesture is paused while those tools are in hand)
-  let blade: { id: number; x0: number; y0: number; x1: number; y1: number } | null = null;
+  let blade: { id: number; x0: number; y0: number; x1: number; y1: number; touch?: boolean } | null = null;
   const snapDrag = new Map<number, { x: number; y: number }>();
   /** a press on the mat: the nearest body under it becomes the one the fingers act on (only between touches) */
   function pickBody(x: number, y: number): void {
@@ -705,7 +728,19 @@ export function createGame(deps: GameDeps): Game {
       pointerNdc = ndcOf(p.x, p.y);
       if (phase !== 'play' || reasons.size > 0 || holds.size > 0) return;
       if (ceremonies.active) { ceremonies.tapSkip(); return; }
-      if (tool === 'cut') { if (!blade && (p.button ?? 0) === 0) { blade = { id: p.id, x0: p.x, y0: p.y, x1: p.x, y1: p.y }; emit('interaction'); emit('blade', { x0: p.x, y0: p.y, x1: p.x, y1: p.y }); } return; }
+      if (tool === 'cut') {
+        // D-98 (owner 2026-11-19: "i should be able to rotate with right click even when im CUTTING"): the right or middle mouse button turns the view as it does
+        // with the Hand (Snap's drag, the same orbit) and never starts a cut; a second finger while a finger's stroke is down drops that stroke (nothing is cut)
+        // and the two fingers turn and pinch-zoom the view, as two fingers on empty space do with the Hand; a left stroke in progress is never broken by them
+        if (p.type === 'mouse' && (p.button ?? 0) !== 0) { if (!blade || blade.id !== p.id) { snapDrag.set(p.id, { x: p.x, y: p.y }); emit('interaction'); } return; }
+        if (p.type === 'touch' && (snapDrag.size > 0 || (blade && blade.touch && blade.id !== p.id))) {
+          if (blade && blade.touch) { snapDrag.set(blade.id, { x: blade.x1, y: blade.y1 }); blade = null; emit('blade', null); }
+          snapDrag.set(p.id, { x: p.x, y: p.y }); emit('interaction');
+          return;
+        }
+        if (!blade && (p.button ?? 0) === 0) { blade = { id: p.id, x0: p.x, y0: p.y, x1: p.x, y1: p.y, touch: p.type === 'touch' }; emit('interaction'); emit('blade', { x0: p.x, y0: p.y, x1: p.x, y1: p.y }); }
+        return;
+      }
       if (tool === 'snap') { if (p.type === 'mouse' && (p.button ?? 0) === 0) return; snapDrag.set(p.id, { x: p.x, y: p.y }); emit('interaction'); return; }   // a mouse turns the view with the RIGHT button only (owner decision 2026-10-06)
       if ((p.button ?? 0) === 0 && capsules.pointerDown(p.id, p.x, p.y)) { emit('interaction'); return; }
       if (bodies.extras.length && gestures.activeCount() === 0 && !driver.touch.contact()) pickBody(p.x, p.y);
@@ -725,8 +760,8 @@ export function createGame(deps: GameDeps): Game {
     pointerMove(p) {
       pointerNdc = ndcOf(p.x, p.y);
       if (phase !== 'play') return;
-      if (tool === 'cut') { if (blade && blade.id === p.id) { blade.x1 = p.x; blade.y1 = p.y; emit('blade', { x0: blade.x0, y0: blade.y0, x1: p.x, y1: p.y }); } return; }
-      if (tool === 'snap') {
+      if (tool === 'cut') { if (blade && blade.id === p.id) { blade.x1 = p.x; blade.y1 = p.y; emit('blade', { x0: blade.x0, y0: blade.y0, x1: p.x, y1: p.y }); return; } if (!snapDrag.has(p.id)) return; }
+      if (tool === 'snap' || tool === 'cut') {   // (D-98: the Cut tool's view drags are Snap's)
         const q = snapDrag.get(p.id);
         if (!q || !inputLive()) return;
         if (snapDrag.size >= 2) {
@@ -747,12 +782,26 @@ export function createGame(deps: GameDeps): Game {
       if (p.type && p.type !== 'mouse') pointerNdc = null;
       if (phase !== 'play') return;
       if (tool === 'cut') {
+        if (snapDrag.delete(p.id)) return;   // (D-98: a view drag ends)
         if (!blade || blade.id !== p.id) return;
         const b = blade;
         blade = null;
         emit('blade', null);
         if (!inputLive()) return;
-        const r = cut.swipe(b.x0, b.y0, p.x, p.y);
+        let r = cut.swipe(b.x0, b.y0, p.x, p.y);
+        // D-99: a stroke that crosses only ANOTHER whole squishy out cuts that one: while the play squishy is whole, the crossed one becomes the play squishy where it
+        // stands (bodies.exchange: nothing rebuilt or moved; the one of before stays out) and the same stroke cuts it; while one is cut already, it is said in words
+        // (one cut squishy at a time: the cutter has one tree of pieces). With one squishy out nothing here runs: the published cut, bit for bit.
+        if (r === 'miss' && bodies.extras.length) {
+          const xb = strokeWhole(b.x0, b.y0, p.x, p.y);
+          if (xb && cut.pieces > 1) { emit('notice', 'One squishy at a time: Reconnect all, then cut another.'); r = 'busy'; }
+          else if (xb && bodies.exchange?.(xb.body)) {
+            const c0 = bodies.body.center;
+            cutHome = { x: c0.x, y: 0, z: c0.z };
+            try { (bodies.body as { setHome?(x: number, z: number): void }).setHome?.(c0.x, c0.z); } catch { /* optional */ }
+            r = cut.swipe(b.x0, b.y0, p.x, p.y);
+          }
+        }
         emit('cut', r);
         return;
       }

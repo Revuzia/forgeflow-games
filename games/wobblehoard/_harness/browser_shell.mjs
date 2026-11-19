@@ -1498,7 +1498,7 @@ async function main() {
         await hclick(page, '.hoard-btn'); await settle(page);
         await hclick(page, `.hoard .plinth[data-species="${sp}"]`); await settle(page);
         const can = await page.evaluate(() => { const b = document.querySelector('.hcard-actions [data-key="mat"]'); return b ? { disabled: b.disabled, text: b.textContent, note: [...document.querySelectorAll('.hcard-actions .act-note')].map((e) => e.textContent).join(' | ') } : null; });
-        if (can && !can.disabled && /Bring out/.test(can.text)) { await hclick(page, '.hcard-actions [data-key="mat"]'); await settle(page); }
+        if (can && !can.disabled && /Bring out|Take out too/.test(can.text)) { await hclick(page, '.hcard-actions [data-key="mat"]'); await settle(page); }
         else { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await settle(page); }
         return can;
       };
@@ -1657,12 +1657,13 @@ async function main() {
     /** a text with no "Toys": the word is reserved for the pets update (UI.md 1.7, 4.6). The squishy-toy copy (the canvas label, the tagline) is the one allowed use. */
     const toysWord = (t) => /\btoys?\b/i.test(String(t).replace(/(squishy|translucent) toy/gi, ''));
     const cutIdle = (page, max = 4) => stepUntil(page, `(wh) => !wh.shell.tools().busy`, max, 0.05);
-    /** bring a squishy of `species` out of the Hoard onto the mat (its card's "Bring out") */
+    /** bring a squishy of `species` out of the Hoard onto the mat (its card's "Bring out"; RE-SPECIFIED 2026-11-19, R10_PLAYUX item 2: the owner asked for an easier way to take
+     *  squishies out, and the card's button now reads "Take out too" (same data-key, same action); the rows accept either word) */
     async function bringOut(page, sp) {
       await hclick(page, '.hoard-btn'); await settle(page);
       await hclick(page, `.hoard .plinth[data-species="${sp}"]`); await settle(page);
       const can = await page.evaluate(() => { const b = document.querySelector('.hcard-actions [data-key="mat"]'); return b ? { disabled: b.disabled, text: b.textContent } : null; });
-      if (can && !can.disabled && /Bring out/.test(can.text)) { await hclick(page, '.hcard-actions [data-key="mat"]'); await settle(page); }
+      if (can && !can.disabled && /Bring out|Take out too/.test(can.text)) { await hclick(page, '.hcard-actions [data-key="mat"]'); await settle(page); }
       else { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await settle(page); }
       return can;
     }
@@ -4973,14 +4974,14 @@ async function main() {
       await hclick(page, '.hoard-btn'); await settle(page);
       await hclick(page, `.hoard .plinth[data-species="${first.species}"]`); await settle(page);
       const btn = await card();
-      if (/Bring out/.test(btn ?? '')) { await hclick(page, '.hcard-actions [data-key="mat"]'); await settle(page); }
+      if (/Bring out|Take out too/.test(btn ?? '')) { await hclick(page, '.hcard-actions [data-key="mat"]'); await settle(page); }
       else { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await settle(page); }
       await page.evaluate(() => window.__WH__.pause());
       await pgStep(page, 1);
       const l4 = await pgLife(page);
       check('PG party: after a second capsule its newcomer is in play and Dollop survived the ceremony (2 out; the first newcomer back on the shelf, as published); the Hoard card\'s "Bring out" brings the first newcomer out again (3 out), each a LIFE character with its own slot',
         l3b.chars.length === 2 && l3b.chars.some((c) => c.species === 'dollop') && l3b.chars.some((c) => c.itemId === idNow.itemId) && !l3b.chars.some((c) => c.itemId === first.itemId)
-          && /Bring out/.test(btn ?? '') && l4.chars.length === 3 && l4.chars.some((c) => c.itemId === first.itemId) && (await page.evaluate(() => window.__WH__.shell.matInfo().count)) === 3,
+          && /Bring out|Take out too/.test(btn ?? '') && l4.chars.length === 3 && l4.chars.some((c) => c.itemId === first.itemId) && (await page.evaluate(() => window.__WH__.shell.matInfo().count)) === 3,
         JSON.stringify({ after2: l3b.chars.map((c) => [c.slot, c.species]), play: idNow.species, btn, now: l4.chars.map((c) => [c.slot, c.species, c.x, c.z]) }));
       // "Put back n" (R4 polish): a kit button (the PC's chip had no kit class and drew as the browser's grey box), 44 px high, the kit's rounded glass
       const chip = await page.evaluate(() => { const c = document.querySelector('.mat-chip'); if (!c) return null; const cs = getComputedStyle(c), r = c.getBoundingClientRect(); return { kit: c.classList.contains('k-btn'), hidden: c.hidden, h: r.height, radius: parseFloat(cs.borderTopLeftRadius), bg: cs.backgroundColor, font: cs.fontFamily, text: c.textContent }; });

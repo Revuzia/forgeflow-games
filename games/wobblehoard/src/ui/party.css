@@ -1,0 +1,40 @@
+/* R10_PLAYUX item 2: the Friends strip and its picker (ui/later-party.ts, in the later-play chunk). Kit components (k-btn, k-glass, k-chip, k-card, k-gel) do
+   the skinning; this file only places and sizes. The strip sits in the info row right after the name tag (its auto right margin keeps it there, clear of
+   the dock and the ring; the script steps it down to fewer parts when the row is short). */
+.pt-strip { flex: none; margin-right: auto; display: flex; align-items: center; pointer-events: auto; min-width: 0; }
+.pt-strip[hidden], .pt-card[hidden], .pt-note[hidden], .pt-bring[hidden] { display: none; }
+/* wide: the row between the name tag and the dock is too short for a labelled button (1280 x 800: about 100 px, measured), so the strip stands on its own line
+   right above the name tag, and the quick switcher's row moves up by one line to make room (it sat right above the name tag) */
+body[data-layout="wide"] .pt-strip { position: absolute; left: 0; bottom: calc(100% + var(--wh-s2)); margin: 0; }
+body[data-layout="wide"]:has(.pt-strip:not([hidden])) .qswitch { bottom: calc(var(--dk-bottom) + 72px + var(--tap) + var(--wh-s2)); }
+body[data-ceremony] .pt-strip, body[data-tool="snap"] :is(.pt-strip, .pt-card) { visibility: hidden; }
+.k-btn.pt-btn { min-height: var(--tap); gap: var(--wh-s2); padding: 0 var(--wh-s3) 0 var(--wh-s2); font: var(--wh-fb-small-1); font-weight: 800; color: var(--k-fg); }
+.pt-faces { display: inline-flex; align-items: center; }
+.pt-btn[data-out="0"] .pt-faces { display: none; }
+.pt-face { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--k-surface-hi, var(--k-surface)); border: 2px solid var(--k-ink); }
+.pt-face + .pt-face { margin-left: -10px; }
+.pt-face-icon { width: 24px; height: 24px; }
+.pt-more { font: var(--wh-fb-small-1); font-size: var(--wh-fs-label); font-weight: 800; color: var(--k-fg); }
+.pt-plus { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--wh-amber); color: var(--wh-ink); }
+.pt-plus .k-icon { width: 18px; height: 18px; stroke-width: 3; }
+.pt-label { white-space: nowrap; }
+.pt-strip[data-form="nofaces"] .pt-faces, .pt-strip[data-form="icon"] .pt-faces { display: none; }
+.pt-strip[data-form="icon"] .pt-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pt-strip[data-form="icon"] .k-btn.pt-btn { padding: 0; width: var(--tap); justify-content: center; }
+
+/* the picker: over the strip, at most 360 wide; scrolls when the owner has many species */
+.pt-card { position: fixed; z-index: var(--wh-z-panel); display: grid; gap: var(--wh-s3); padding: var(--wh-s3); overflow: auto; pointer-events: auto; animation: ov-fade var(--k-fd-2) linear backwards; }
+.pt-head { display: flex; align-items: center; gap: var(--wh-s2); }
+.pt-title { flex: 1; min-width: 0; margin: 0; font: var(--wh-w-bold) var(--wh-fs-body)/1.25 var(--wh-font-ui); color: var(--k-fg); }
+.pt-count { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--k-sel-fill); color: var(--k-fg); font: var(--wh-fb-small-1); font-size: var(--wh-fs-label); font-weight: 800; font-variant-numeric: tabular-nums; }
+.k-btn.pt-bring { justify-self: start; gap: var(--wh-s2); }
+.pt-bring .k-icon { width: 18px; height: 18px; }
+.k-chip.pt-chip { padding-left: 6px; }
+.pt-chip-icon { width: 26px; height: 26px; flex: none; }
+.pt-chip-name { white-space: nowrap; }
+.pt-chip-mark { display: grid; place-items: center; width: 18px; height: 18px; margin-left: 2px; border-radius: 50%; background: var(--wh-lagoon); color: var(--wh-ink); }
+.pt-chip-mark .k-icon { width: 13px; height: 13px; stroke-width: 3; }
+/* the one you play with: marked as in, not greyed (it stays out; a tap only says so) */
+.k-chip.pt-chip[data-play="true"] { color: var(--k-fg); background: var(--k-sel-fill); border-style: solid; border-color: var(--k-sel-edge); cursor: default; }
+.pt-note { margin: 0; font: var(--wh-w-mid) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg); }
+@media (forced-colors: active) { .pt-plus, .pt-chip-mark, .pt-face { border: 1px solid CanvasText; } }

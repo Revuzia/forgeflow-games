@@ -41,6 +41,7 @@ import { PA, PS, PG } from './softbody.ts';
 import type { PropSolve, SoftBody } from './softbody.ts';
 import { GRAVITY, H } from './params.ts';
 import { FAMILY_REACT } from '../data/life.ts';
+import { Crawl } from './crawl.ts';
 
 /** Tunables (PROBES may read them). */
 export const PROPS = {
@@ -193,6 +194,7 @@ export class PropWorld implements PropWorldLike {
   private readonly zf: Float64Array;            // the zones, packed (ZS)
   private readonly phys: boolean;               // a water zone or a pad exists (otherwise beginFrame does nothing more than before)
   private bodies: SoftBody[] = [];              // tracked bodies (allocated only when one binds or unbinds)
+  private readonly crawls: Crawl[] = [];        // (R10 LOCOMOTION) each tracked body's crawl, in the same order
   private bst = new Float64Array(0);           // per tracked body (BS)
   private readonly nv = { x: 0, y: 0, z: 0 };   // the impulse handed to SoftBody.nudge (one object, reused)
   // ---- R6: the surface (ground, patches, wet zones), the weather (gusts, the updraft, waves) and the bounds guard (WorldExtras)
@@ -280,13 +282,20 @@ export class PropWorld implements PropWorldLike {
 
   // ------------------------------------------------------------------ PropWorldLike
 
-  beginFrame(): void { this.solve.A.fill(0); if (this.phys && this.bodies.length > 0) this.zoneStep(); }
+  /** R10 LOCOMOTION (D-100): the shell's Calm (or prefers-reduced-motion): no crawl, a scoot is today's rigid glide */
+  calm = false;
+  beginFrame(): void {
+    this.solve.A.fill(0); if (this.phys && this.bodies.length > 0) this.zoneStep();
+    // R10 LOCOMOTION: each tracked body's crawl (crawl.ts), before the bodies step; its grip is the surface's (an ice patch slips)
+    for (let i = 0; i < this.crawls.length; i++) this.crawls[i].step(this as never, i, this.calm);
+  }
 
   /** SoftBody.setPropWorld calls this as a body binds (on) or leaves (off): the bodies the zones and pads act on. Allocates (a bind is not per frame). */
   trk(b: SoftBody, on: boolean): void {
     const i = this.bodies.indexOf(b);
     if (on && i < 0) {
       this.bodies.push(b);
+      this.crawls.push(new Crawl(b));   // (R10 LOCOMOTION)
       const nb = new Float64Array(this.bodies.length * BS); nb.set(this.bst.subarray(0, Math.min(this.bst.length, nb.length)));
       const o = (this.bodies.length - 1) * BS; nb[o + 5] = -1; nb[o + 8] = NaN; this.bst = nb;
       // R6: the body's own surface values (given back when it leaves), the eased multipliers at 1, and the shell's modifiers (its family's dry density in [4])
@@ -301,6 +310,7 @@ export class PropWorld implements PropWorldLike {
       this.bmods.push(m);
     } else if (!on && i >= 0) {
       this.surfRestore(i);
+      b.crawlOn = false; this.crawls.splice(i, 1);
       this.bodies.splice(i, 1);
       const nb = new Float64Array(this.bodies.length * BS);
       nb.set(this.bst.subarray(0, i * BS)); nb.set(this.bst.subarray((i + 1) * BS), i * BS); this.bst = nb;
