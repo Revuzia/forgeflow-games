@@ -122,6 +122,8 @@ async function main(): Promise<void> {
   const ready = new Promise<void>((ok, fail) => { readyOk = ok; readyFail = fail; });
   ready.catch(() => { /* reported through the fatal card */ });
   installTestSurface(() => app, ready);
+  // `?bench=` only: the automated benchmark (ui/benchpanel.ts); its launch and results pages boot no world
+  if (/[?&]bench=/.test(location.search) && (await import('./ui/benchpanel.ts')).benchBoot(ready) === 'stop') return;
 
   if (!hasWebGL2()) {
     const card = document.getElementById('nogpu');

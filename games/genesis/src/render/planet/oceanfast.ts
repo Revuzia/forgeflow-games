@@ -350,12 +350,12 @@ vec4 f3Ssr(vec3 posV, vec3 rV, vec3 nV) {
   float K1 = mix(k0, k1, tm);
   vec2 S1 = s0 + dS * tm;
   if (length((S1 - s0) * uResolution) < 3.0) return vec4(0.0);
+  float uLo = 0.0, uHi = 1.0;   // (s25c) the part of the segment that can hold a hit (the mask's passing cells)
   ${SSRMASK ? `// (s25c) can anything be hit? A hit needs an opaque point IN FRONT of a ray point, and every ray point lies above
   // the water; the opaque scene behind the water (the sea bed, under the surface along the same line of sight) or
   // the sky never is. So only LAND pixels (opaque points above the lowest water level, uF3Mask) can be hit: if none
   // of the 4-px columns the segment crosses holds land within its screen rows and nearer than its far end, the march
   // cannot find anything and is skipped (the same result, exactly: the output was "no hit" = sky)
-  float uLo = 0.0, uHi = 1.0;   // (s25c) the part of the segment that can hold a hit (the mask's passing cells)
   if (uF3MaskOn > 0.5) {
     // (per 4-px column the segment crosses, per 128-px screen band of it: is there land in those rows, nearer than the
     // ray gets while it is in them? depth along the segment is monotonic, so its ends bound it; margins 1-2 px, 1 %)
@@ -889,3 +889,20 @@ export function ssrMaskUpdate(r: WebGLRenderer, fsq: FullscreenQuad, linDepth: T
   maskU.tex.value = mk.t2.texture;
   maskU.on.value = 1;
 }
+
+// ───────────────────────────── (s25c) `?wvdiag=1`: a TIMING-ONLY diagnostic (the image is wrong) ─────────────────────────────
+/**
+ * The water vertex stage's ground core (TERRAIN_VERT_CORE: 1-3 tGround evaluations, 12-36 texel reads) replaced by a
+ * stub: a smooth sphere at sea level, every fragment dry (vDepth = -50 m), so each fragment dies at its first discard.
+ * `P` vs `P&wvdiag=1` vs `P&water=0` splits the water pass into vertex core, raster + the pass around the draw.
+ * Works with or without wfast=3.
+ */
+export const WVDIAG = perfNum('wvdiag', 0) === 1;
+export const VDIAG_CORE = /* glsl */ `
+  vec4 tA = vec4(0.0); vec3 tN = position; float tS = 0.0; float tH = 0.0; float tDA = 0.0; float tG = 50.0;
+  float tLvl = 0.0;
+  vec3 tPos = position * uRadius;
+  vec3 tNrm = position;
+  float tMorph = 0.0;
+  float tZEdge = 2.0 * (3.0 * uMorph.z + 2.0);
+`;

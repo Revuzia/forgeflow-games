@@ -2847,3 +2847,28 @@ Full report `MAC-ROUND20-water.txt`; shots `mac-shots/r20-*.jpg`. Lid closed, ex
     + bands + summary + window (dist13)         6.3              1.6
   What still marches is where it must: the water under the palm island's columns (its reflection), and a few thin
   columns with something above water far out.
+### Task 4 (lead, after round 20): the ~34 ms of the water pass that is not fragment math (P+wfrag=0 51 ms vs P+water=0 17)
+- What the pass does around its draw, by the code (renderer.ts 680-705, pipeline.ts 595-660):
+  1. the scene pass ends in the msaa4 hdr target; three resolves it (colour + depth blit) when that render() returns;
+  2. copyForWater: 2 full-screen draws (sceneCopy RGBA16F, linDepth R32F) from the resolved textures (+ now, with
+     wfast=3, the 2 tiny mask draws: (W/4)x(H/16) and (W/4)x9 — negligible);
+  3. water: setRenderTarget(hdr) AGAIN -> on Apple TBDR a new Metal pass: LOAD 4x colour + 4x depth, draw, STORE, and a
+     second resolve blit;
+  4. each water fragment writes gl_FragDepth and may discard -> no early-Z / HSR for the sheet; the waterland guard's
+     fwidth + 1 (+4) linDepth taps run even in `wfrag=0`;
+  5. vertex stage: TERRAIN_VERT_CORE (1 tGround, 3 while morphing, 12-36 texel reads) + 15 field reads + 4 simplex
+     (wvert) on ~2.4 M water triangles: the sea at the landing uses the TERRAIN's patch geometry (same vertices),
+     i.e. terrain-density triangles for a flat sheet.
+- Switches for one Mac round (each alone on P&wfrag=0 unless said; all exist except the new `wvdiag`):
+    P&wfrag=0 (51 ms ref) | +wcopy=0 (no copies: item 2) | +wsingle=1 (no re-entry / 2nd resolve, no copies: 2+3) |
+    +wdepth=0 (no gl_FragDepth, no discard: 4) | +waterland=0 (no depth taps in the guard: 4) | +msaa=0 (samples) |
+    +wvert=0 (Gerstner + vertex simplex) | NEW `P&wvdiag=1` (TIMING ONLY, wrong image: the vertex ground core stubbed and
+    every fragment dead at its first discard = vertex core removed + fragment ~free: P&wvdiag=1 - P&water=0 = raster +
+    pass structure; P&wfrag=0 - P&wvdiag=1 = vertex core + the guard's taps). Build after this split; until it says
+    which, an "identical image" fix would be a guess.
+- (process) a compile check that takes seconds: `node _harness/arc-work/s25-glslcheck.mjs '<?query>'` (one query per run:
+  modules cache the switches) dumps the water shaders for that query, resolves three's chunks and compiles + links
+  them in a bare SwiftShader WebGL2 context. It caught `ssrall` failing to compile in dist13 (a declaration inside the
+  mask's template; fixed in dist14): the dist13 `ssrall` image runs were void and are redone on dist14. All of
+  wfast=0 / 3 / +ssrall / ssrold / ssrdbg / ssrwin0,capold,seamold,foamold / wvdiag (with and without wfast=3) / the six
+  cuts / spdbg,pcf5 compile and link.
