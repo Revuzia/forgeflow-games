@@ -772,7 +772,8 @@ NEGATIVE = [
     ("w10_lootlook-plant-same-grenade", "p23/lootlook.py", ["--plant", "same-grenade"], 3600),   # loot-shapes (frag vs smoke IoU)
     ("w10_lootlook-plant-zero-normal", "p23/lootlook.py", ["--plant", "zero-normal"], 3600),   # (R3B fix5) loot-nan: the loot models' zero-normal slivers back (lootNormalsSafe off) -> black frames + zero-normal tris
     # (the w10_waterlook main row needs no change: the darkest-view row now also renders interiorcheck's own views of match isla_viva
-    #  volcano_rim@p54, ashgrid downtown@p4/p27/p44, housegen s7h2 and the fixture house in 4 extra Chromes; full run ~7.5 min, well inside 7000 s)
+    #  volcano_rim@p18, ashgrid outpost@p12/cmp10@p2/mall@p11 (W10 rfast R-h: re-picked on the MAP_GEN 10 world; were volcano_rim@p54, downtown@p4/p27/p44),
+    #  housegen s7h2 and the fixture house in 4 extra Chromes; full run ~7.5 min, well inside 7000 s)
     # stormfx_fx controls (run by the integrator from driver scripts, not registered: plant curve-at-0 FAILs the BIT-IDENTICAL row, plant meshopt
     #   wrong geometry FAILs the meshopt row; F:/lc_p23/w10/t/R2A/fix4/plant_curve_at0.py, plant_meshopt_geom.py)
     # ---- Wave 10 R2B: each planted fault must FAIL its own w10_sfx / p23_audiotap row; the W10 R1 base cbf0a1ff1 must FAIL w10_sfx

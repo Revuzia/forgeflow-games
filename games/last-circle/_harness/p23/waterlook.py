@@ -220,7 +220,11 @@ WALLCAM_JS = r"""([dist]) => { const W = window.__LC__.W, M = W.map, st = W.stor
 # interiors: the 3 houses nearest the drop POI, each one's biggest ground-floor room, camera at its centre 1.6 m up looking at its far corner
 # fix5: houses whose rooms read darkest in interiorcheck (seed 7, the R2A merge: isla_viva volcano_rim@p54 f0r1 / f0r2 mean 21.4-24.2 / 255, dark share
 # 0.4-0.6). Every ground-floor room of these is viewed (4 headings) for the interiors darkest-view row only (the base ratio keeps its 3 houses)
-WATCH_HOUSES = {"isla_viva": ["volcano_rim@p54"]}
+# W10 rfast (ruling R-h): MAP_GEN 10 rebuilt the houses - volcano_rim@p54 / ashgrid downtown@p4 / p27 / p44 are no longer in interiorcheck's seeded
+# 10-house sample (or the world), so the watch came back COULD-NOT-JUDGE. Re-picked as interiorcheck's darkest-ranked sampled houses at the head
+# (interiorcheck --source match, seed 7, merge 2f8d804b7, _reports/interiorcheck_20261119_132900.json; interior min mean luma): isla_viva
+# volcano_rim@p18 (30.23), ashgrid outpost@p12 (35.96) / cmp10@p2 (40.6) / mall@p11 (43.78). Same counts as before (1 + 3); bar and row logic unchanged.
+WATCH_HOUSES = {"isla_viva": ["volcano_rim@p18"]}
 WATCH_JS = r"""([ids]) => { const M = window.__LC__.W.map, out = [];
   for (const H of M.houses || []) { if (!ids.includes(H.id)) continue;
     for (const R of H.rooms || []) { if (R.floor !== 0 || !(R.area >= 4)) continue;
@@ -234,7 +238,7 @@ WATCH_JS = r"""([ids]) => { const M = window.__LC__.W.map, out = [];
 # sample) and renders the watched houses through its own views(): every room entrance (door / stair top) and the room centre x 4 headings, from the
 # player's third-person camera. Watched: interiorcheck's darkest rooms on the R2A merge (match isla_viva volcano_rim@p54 f0r1 / f0r2; ashgrid's
 # downtown houses of its sample), housegen ashgrid s7h2 (f0r3 23.25 / dark 0.48) and the fixture house (kitchen dark 0.36).
-IC_WATCH = [("match", "isla_viva", ["volcano_rim@p54"]), ("match", "ashgrid", ["downtown@p4", "downtown@p27", "downtown@p44"]),
+IC_WATCH = [("match", "isla_viva", ["volcano_rim@p18"]), ("match", "ashgrid", ["outpost@p12", "cmp10@p2", "mall@p11"]),
             ("housegen", "ashgrid", ["s7h2"]), ("fixture", "ashgrid", None)]          # None = every injected house
 
 
@@ -765,11 +769,29 @@ def part_storm_late(s, v, R, map_id, shots):
     return out
 
 
+# W10 rfast (ruling R-h): the low-identical row's 4 views, pinned. The row measures that the LOW RENDER PATH is unchanged against BASE_REV; the
+# old views came from CAMS_JS's searches, which frame towns / trees, and this release rebuilds the houses (MAP_GEN 8 -> 10; the tree / prop / clutter
+# placements and the yard pads re-roll with them), so those views differed on buildings / trees only (ground 5.28 %, groundlow 4.83 %, inwater 8.28 %,
+# shore 0.95 % of pixels; terrain, water and sky 0 px - F:/lc_p23/w10/rfast/int/lowdiff). Same kinds (ground 1.7 m / groundlow 0.5 m on flat open
+# ground, shore = the shore search's beach eye looking along the waterline, inwater = 0.45 m over the water looking back at the land), same map,
+# tier, clock (t 100) and hidden layers; spots picked by script (F:/lc_p23/w10/rfast/int/tools/lowcam_*.py) from BOTH worlds' instance lists:
+# every drawn object / merged-mesh vertex cell / terrain cell that differs between head 2f8d804b7 and BASE_REV is outside the frustum (+3 deg, out
+# to 1500 m: the exp2 fog 0.0018 leaves < 0.5 / 255 beyond) or behind terrain; the first such candidate in the searches' own order (shore: the
+# smallest turn from the original heading). Base, bar (<= 0.001 %) and row logic unchanged.
+LOW_CAMS = {
+    "ground": [323.2, 4.339, 268.219, 350.588, 1.622, 306.624, 70],
+    "groundlow": [323.2, 3.139, 268.219, 329.826, 2.294, 273.128, 60],
+    "shore": [193.004, 2.499, -331.283, 216.02, 0.3, -368.152, 70],
+    "inwater": [184.87, 0.45, -360.333, 204.669, 2.5, -397.102, 70],
+}
+LOW_CAMS_ID = "lowcams1"
+
+
 def part_low(s, v, R, shots, tag):
     """the low tier on isla_viva: 4 views with the map clock pinned (t 100), for the pixel compare with the base. The loot group is hidden in
     these frames (its beams pulse on the sim clock: W.t differs run to run; loot.js is not this lane's file), and so are the launch portals'
     rings / swirls (animated off the frame loop) and the door leaves (bots open them): none of them changed by this lane"""
-    cams = s.js(CAMS_JS)
+    cams = LOW_CAMS
     out = {}
     for nm in ("ground", "groundlow", "shore", "inwater"):
         if nm in cams and cams[nm]:
@@ -784,7 +806,14 @@ def base_cache(args, v, shots):
     if os.path.exists(stem + ".json") and not args.no_cache:
         with open(stem + ".json") as f:
             res = json.load(f)
-        res["low"] = {k: np.load(stem + "_low_%s.npy" % k) for k in res.get("lowViews", [])}
+        lstem = stem + "_" + LOW_CAMS_ID
+        if os.path.exists(lstem + "_low.json"):
+            with open(lstem + "_low.json") as f:
+                res.update(json.load(f))
+            res["low"] = {k: np.load(lstem + "_low_%s.npy" % k) for k in res.get("lowViews", [])}
+            return res, True
+        res["infoLow"], res["low"] = _base_low(args, v, shots, lstem)
+        res["lowViews"] = sorted(res["low"])
         return res, True
     a2 = copy.copy(args)
     a2.rev = BASE_REV
@@ -808,16 +837,28 @@ def base_cache(args, v, shots):
             res["interiors"][m] = R[m].get("interiors")
             res["spread"][m] = R[m].get("spread")
             res["drop"][m] = R[m].get("dropMean")
-    with C.Session(a2, "w10_waterlook_base_low") as s:
-        res["infoLow"] = start(s, "low", "isla_viva")
-        low = part_low(s, v, R, os.path.join(shots, "base"), "base")
-    res["lowViews"] = sorted(low)
     with open(stem + ".json", "w") as f:
         json.dump(res, f, default=str)
-    for k, A in low.items():
-        np.save(stem + "_low_%s.npy" % k, A)
-    res["low"] = low
+    res["infoLow"], res["low"] = _base_low(args, v, shots, stem + "_" + LOW_CAMS_ID)
+    res["lowViews"] = sorted(res["low"])
     return res, False
+
+
+def _base_low(args, v, shots, lstem):
+    """the base build's low-tier views at LOW_CAMS (second Chrome on BASE_REV), cached under the camera set's id"""
+    a2 = copy.copy(args)
+    a2.rev = BASE_REV
+    a2.disk = True
+    a2.overlay = None
+    a2.plant = None
+    with C.Session(a2, "w10_waterlook_base_low") as s:
+        info = start(s, "low", "isla_viva")
+        low = part_low(s, v, {}, os.path.join(shots, "base"), "base")
+    with open(lstem + "_low.json", "w") as f:
+        json.dump({"infoLow": info, "lowViews": sorted(low), "lowCams": LOW_CAMS}, f, default=str)
+    for k, A in low.items():
+        np.save(lstem + "_low_%s.npy" % k, A)
+    return info, low
 
 
 def main():
