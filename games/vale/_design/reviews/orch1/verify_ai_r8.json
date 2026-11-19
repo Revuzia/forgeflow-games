@@ -1,0 +1,80 @@
+{
+  "verifier": "lane AI (opponents, W1-A / W3-A), independent verifier round 1 after ruling 65 (team play and pings), at HEAD ad87744df (bots as of a97194a2d)",
+  "date": "2026-11-19 CST",
+  "pass": false,
+  "score": 6.0,
+  "safeToShip": false,
+  "blockers": [
+    "A person's 'Press on' (push) ping gets a teammate's 'heading there' within 0.5 s, but nobody comes. Live: 10 of 11 push pings I sent were acknowledged. In 30 s, 0-1 teammates came within 25 m (one exception, at adept s7 15:00, where the team was already heading there), and the pinged structure was not hit after the ping in any of them. The implementer's own probe_sim_bot_pings, which I ran on s901+8 a tier, agrees: push followed (3+ teammates within 30 m in 25 s) 0 % of 10 / 9 / 11 at adept / veteran / novice, acknowledged 80 / 67 / 73 %. To a player this reads as a broken promise. Either the bots act on the push ping, or they do not say onMyWay.",
+    "Attack is not clearly stronger than the live bots (8c95deb52), but adept games are longer. Pooled RIFT n96 (s701-764 + s901-932), HEAD minus 8c95deb52: adept length +1.75+-0.46 min, and 12 games reach 30:00 against 4. Veteran +1.29+-0.44 min, 9 against 5. Adept is the tier Quick and Draft queue with. Group sieges with 3+ attackers within 6 s: adept 37.9 % vs 40.7 %, veteran 41.0 % vs 39.2 %. Won fights followed by a structure blow within 20 s: adept 19.8 % vs 22.1 %, veteran 21.3 % vs 19.4 %. Only novice gains on attack (won-to-structure 21.4 vs 17.5 %)."
+  ],
+  "method": {
+    "arms": "One tree, no worktree. The probes take VALE_BOTS. I extracted src/sim/_vfy8_pre (0aeac587b), _vfy8_e2c (e2c4925e5, old live) and _vfy8_prev (8c95deb52, the previous bots now live) with git archive next to HEAD's src/sim/bots. Every arm ran with HEAD's probe and HEAD's sim. All three copies were deleted afterwards.",
+    "sim": "probe_sim_bot_tactics under heavy.py, 4 arms each: RIFT s701-764 (64 a tier, cut at 30:00) + FRAY s701-724 (24 a tier); fresh RIFT s901-932 (32 a tier); BRIDGE s701-724 (24 a tier). Pairs are matched per seed and reported as mean +- SE of the paired difference. Also probe_sim_bot_soak quick, and probe_sim_bot_pings --seed0 901 --seeds 8 at each tier.",
+    "live": "Real Chrome via pw.mjs (GPU on), my own vite servers with hmr off and private dep caches. :5381 served HEAD. :5382 served the same tree with a resolveId plugin pointing src/sim/bots at the 8c95deb52 copy (no src edit; I checked the served import resolves to the copy). The bench page _tmp_ai_live.html, full matches. Seat 0 is a person's seat (setup controller human) on team 0 with four computer-run teammates. Its walking came from the bench autopilot with the autopilot's own pings stripped. I sent its pings myself through host.send: assist when in a fight with no ally within 12 m (every 90 s), retreat in a fight beside allies (every 2 min), push on the nearest enemy Needle from 15:00 (every 4 min). Matches, paired HEAD and 8c95deb52: RIFT veteran s5, adept s5, novice s5, veteran s3, adept s7, BRIDGE adept s5, veteran s5. Then the REAL client (Play > RIFT > Quick, adept, HUD on, dev autopilot for my seat with its pings stripped, speed 4) to 20:00 as a person. There I pinged through client.send and once with the real G key, and recorded every ping event, every .wping world mark and every feed line. I looked at the screenshots: real renders of fights, sieges and the HUD's 'dax_shadeline is heading there' mark on my help ping.",
+    "cleanup": "Removed the three _vfy8 bot folders, my vite config, the live drivers and in-page watcher (_harness/_tmp_vfy_ai8_*), and both vite servers. No worktree was made. Raw JSON, logs and screenshots are in the session scratchpad only."
+  },
+  "items": {
+    "attack_together": {
+      "verdict": "NOT CLEARLY STRONGER than live 8c95deb52 at adept and veteran. Clearly stronger than pre and e2c at adept and veteran.",
+      "facts": [
+        "Group sieges from 14:00, share with 3+ attackers arriving within 6 s, pooled n96, HEAD / 8c95deb52 / pre / e2c: novice 16.1 / 13.8 / 14.7 / 12.0, adept 37.9 / 40.7 / 26.5 / 31.6, veteran 41.0 / 39.2 / 32.4 / 31.5. On s701 alone, adept fell from 44.0 to 36.1 %.",
+        "Won fights followed by a structure blow within 20 s: novice 21.4 / 17.5 / 23.9 / 19.8, adept 19.8 / 22.1 / 15.5 / 15.4, veteran 21.3 / 19.4 / 22.9 / 11.3.",
+        "Lone deaths into three (14:00+): novice 7.6 / 7.3 / 6.5 / 8.5 %, adept 10.1 / 12.8 / 11.0 / 10.1, veteran 11.6 / 13.2 / 13.9 / 10.6. Better than 8c95deb52 at adept and veteran.",
+        "Collapse on a lone enemy in our half (s701) adept 75.3 vs 68.0 %. Objectives taken with one of ours against three (s701) adept 21 vs 33, veteran 12 vs 23. Fewer reckless solo takes.",
+        "Live, paired (HEAD vs 8c95deb52, five RIFT matches): sieges with 3 arriving within 6 s 21 vs 17; won fights followed by a structure hit within 20 s 6 of 28 vs 3 of 14; lone deaths into three 7 vs 3; idle-beside-a-fight episodes of 3 s or more 27 vs 35."
+      ]
+    },
+    "defence_together": {
+      "verdict": "CLEARLY STRONGER than 8c95deb52 and pre at adept and veteran. Veteran is now at or better than old live e2c. Novice and adept are still short of e2c on unanswered intrusions.",
+      "facts": [
+        "Unanswered base intrusions a game, pooled n96, HEAD minus 8c95deb52 / pre / e2c: novice -0.19+-0.21 / -0.09+-0.22 / +0.45+-0.20, adept -0.27+-0.14 / +0.04+-0.14 / +0.55+-0.13, veteran -0.33+-0.10 / -1.33+-0.14 / -0.23+-0.09.",
+        "Fit fighters 25-80 m from a hit base structure, not closing (s a game): novice 23.1 / 31.1 / 33.6 / 9.5, adept 4.8 / 7.1 / 11.8 / 3.4, veteran 2.7 / 4.8 / 15.5 / 3.6.",
+        "Gate, s701 inner+base fighter siege with no defender within 16 m, HEAD vs 8c95deb52: adept 28.0 vs 37.0 % (8c95deb52 FAILS its bar), veteran 11.9 vs 16.7 %. Recalls to defend 130 vs 77.",
+        "Inner+base falls a game (both sides, mirror): adept +0.65+-0.33 vs 8c95deb52, veteran -0.25+-0.25. Inner+base falls to Wicks alone beside two fit defenders (s701): adept 0.92 vs 0.70, veteran 1.09 vs 0.91. Veteran sits right at its 1.1 bar.",
+        "Live: in the matches I watched, the first defender reached a hit inner or base structure in a median 0.1-0.4 s on both arms. Undefended inner/base sieges were level at 5 vs 5. Fit-and-away seconds were 142 vs 118 (novice s5 and adept s7 drove it)."
+      ]
+    },
+    "pings": {
+      "verdict": "Mostly sensible: few, never spam, never about anything unseen, enemy pings never shown, assist answered half the time. One defect: push pings are acknowledged and then not followed (blocker 1).",
+      "facts": [
+        "Sim, s701 + s901: pings about something the team could not see 0, spam 0 / 0, hidden casts 0 at every tier. Rate 0.26 / 0.50 / 0.57 a fighter-minute (novice / adept / veteran), about one ping every 2-4 minutes per fighter. That is few enough to mean something. Teammates' assist pings answered within 5 s: 39 / 62 / 64 %.",
+        "Live, all 7 HEAD matches: 0 per-fighter gap violations and 0 team-budget violations. 46 pings in a BRIDGE match and 87-158 in a RIFT match, across 9 computer-run fighters. A few retreat pings (1-2 a match) had no enemy in sight within 15 m when the ping fired. They are called on the last think's sighting and fire up to 0.5 s later. Not a fog read.",
+        "Real client, as a person on team 1 (adept Quick, 20 game-minutes): 141 ping events (79 my team, 62 enemy). 275 world ping marks were shown, 0 of them the enemy's, and 0 enemy ping lines in the feed. The audio uses the same team rule (src/audio/index.ts case 'ping'). Teammates called 'needs a hand', 'is heading there', 'lost sight of an enemy', 'marks an objective' and 'wants to press on'.",
+        "My pings, real client: help pings got an onMyWay in 2 of 6 (one at 5.5 s). Push pings got one in 3 of 3, within 0.5 s. Retreat pings got no ping back (by design: only weighed). Bench, 7 HEAD matches: in the laning phase, help pings with 1 enemy and teammates 40-100 m away were mostly left alone (laning-phase reach rule). From 14:00, help pings in a 2-enemy fight got onMyWay in 1 s and a teammate walking in. Help pings into 4 enemies got no sender (never into a lost fight), which is right.",
+        "Retreat pings I sent were weighed rather than obeyed: allies' distance to the nearest enemy 3 s later grew in about half the cases, mostly the hurt ones (for example adept s7 25:58: 54 m from 14 m at 25-29 % health). That is the intended 'only when my own read agrees'.",
+        "probe_sim_bot_pings s901+8: a person's assist answered 52 / 47 / 50 % (adept / veteran / novice). Push followed 0 / 0 / 0 %, acknowledged 80 / 67 / 73 %. Enemy pings shown 0 of 275 / 320 / 162."
+      ]
+    },
+    "pace_and_stalls": {
+      "verdict": "Within the +1.5 min-of-pre rule at every tier (novice close). Games reaching 30:00 are at or below e2c at novice and veteran and one over at adept. Longer than the live 8c95deb52 at adept and veteran.",
+      "facts": [
+        "RIFT length, pooled n96, HEAD minus pre: novice +1.41+-0.44, adept +1.23+-0.45, veteran +0.61+-0.45 min. s701 alone: +1.22 / +1.28 / +0.86. s901 alone: +1.80+-0.72 / +1.14 / +0.10. The implementer's +0.74 / +0.86 / +0.94 used a different fresh set; novice is near the limit on mine.",
+        "HEAD minus 8c95deb52: +0.47+-0.43 / +1.75+-0.46 / +1.29+-0.44 min. HEAD minus e2c: -1.26 / -0.61 / -0.72.",
+        "Games reaching 30:00, s701-764 (the implementer's set): HEAD 6 / 8 / 5, e2c 18 / 8 / 9, 8c95deb52 7 / 2 / 3, pre 6 / 2 / 4. This reproduces the implementer's 6 / 8 / 5 and 18 / 8 / 9 exactly. Pooled n96: HEAD 10 / 12 / 9, e2c 25 / 11 / 13, 8c95deb52 9 / 4 / 5.",
+        "Live: HEAD RIFT matches 21.9 (veteran s5), 22.9 (adept s5), 30.0 cap (novice s5), 27.9 (veteran s3), 30.0 cap (adept s7). The same seeds on 8c95deb52: 30.0 cap, 20.8, 23.5, 24.5, 24.0. Both caps on HEAD come from long back-and-forth base sieges with 2 undefended inner/base hits, not from idle stalls."
+      ]
+    },
+    "laning_bridge_fray": {
+      "verdict": "NOT WORSE.",
+      "facts": [
+        "Laners in lane (1:00-14:00), s701: 77.0 / 68.0 / 66.6 % vs 8c95deb52 77.4 / 67.9 / 67.2. Soak quick: PASS (cs at 10:00 50.5 / 52.1, Wicks last-hit share 45.4 / 45.1 %).",
+        "BRIDGE s701-724: length and winner identical to 8c95deb52 in 72 of 72 games. Live BRIDGE adept s5 and veteran s5 ended identically on both arms (pings appear on BRIDGE but change nothing).",
+        "FRAY s701-724: length and winner identical to 8c95deb52 in 72 of 72 games.",
+        "Default tactics gates on s701: HEAD fails 4 (novice fit-and-away now PASSES 22.9 vs 31.8). 8c95deb52 fails 6, e2c 8, pre 21. The remaining fails (adept and veteran FRAY stays, veteran dither 1.77, veteran peel 69.9 %) are old, unchanged items."
+      ]
+    }
+  },
+  "watched_as_a_player": "What I saw. Mid and late game they now do look like a team. They call fights ('needs a hand'), say 'heading there' and the nearest one turns up, warn about a group of three ('trouble here'), call a missing road opponent, and mark camps and pushes. There are few calls, never two from one fighter in 10 s, and the enemy's calls never reached my screen. The help call is the best part: in a 2-on-1 a teammate says it is coming and does come, and nobody is thrown into a 4-on-1. Defending a hit inner or base structure, someone is there in well under a second, and posts are visibly back at veteran. Sieges after 14:00 more often arrive as 3 together. But attack does not read stronger than the current live build. Won fights still mostly do not turn into a structure hit (about 1 in 5). Adept and novice games still run into long late-base back-and-forth, two of five live RIFT seeds hit the 30:00 cap, and lone deaths into three still happen (1-3 a match). The one thing that would annoy a player: ping 'Press on' at a tower, get 'heading there' at once, and then nobody comes.",
+  "head_vs_live_8c95deb52": "Better defence (unanswered intrusions -0.27 / -0.33 a game at adept / veteran, fit-and-away down at every tier) and a working, quiet, leak-free ping layer. Attack is level with live, not better. Adept games are 1.75 min longer, with 12 vs 4 of 96 games reaching 30:00. The push-ping acknowledgement is a visible broken promise. A player would like the talk and the defence, would notice adept games dragging and the empty 'heading there', and would not see a stronger attack.",
+  "problems": [
+    "Push pings: acknowledged (onMyWay) 67-80 % of the time, followed 0 % (sim probe and live). Blocker 1.",
+    "Attack not clearly stronger than 8c95deb52 at adept and veteran: group sieges 37.9 vs 40.7 % (adept), won-fight-to-structure 19.8 vs 22.1 % (adept), 21.3 vs 19.4 % (veteran). Blocker 2.",
+    "Adept pace vs 8c95deb52 +1.75+-0.46 min, and 30:00 games 12 vs 4 of 96 (pooled 12 vs e2c 11, one over the 'at or below e2c' rule; s701 alone 8 = 8). Veteran +1.29 min, 9 vs 5.",
+    "Novice pace vs pre +1.41+-0.44 pooled (+1.80 on s901). Inside the +1.5 rule but at its edge.",
+    "Inner+base falls to Wicks alone beside two fit defenders rose at adept (0.92 vs 0.70) and veteran (1.09 vs 0.91, bar 1.1).",
+    "Novice and adept unanswered intrusions are still above e2c (+0.45 / +0.55 a game). Novice fit-and-away is 2.4x e2c.",
+    "Old, unchanged: FRAY stays at adept and veteran, veteran dither 1.77, veteran peel within 1.5 s 69.9 %."
+  ],
+  "next": "Fix round, small. (1) Make a person's push ping real or silent. The thinkSiege pingPush branch sets best/group, yet no teammate walks there. Either the bot-side siege gating (gathered / minionsTanking / exposed / regroup at the group point) drops it, or a later block overrides it. Only say onMyWay from a fighter that is actually assigned and walking. Gate it in probe_sim_bot_pings: followed >= 50 % of acknowledged. (2) Find what lengthened adept vs 8c95deb52 (the posts at adept base structures are the likely cost, ruling 62's history) and what cut adept's group-siege share. A per-feature bisect at adept on s701-764 against 8c95deb52 (posts at adept / joinAt / regroupWait / loneStop) would show it. Keep veteran's posts, which pay. Re-verify with the same 4-arm pairing on s701-764 + s901-932, and add the push-follow gate."
+}
