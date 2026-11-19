@@ -60,7 +60,8 @@ PLANTS = {"eye-only-phase5": {"view-pixels"},
           # (W10 R3A) the baked contact shadows off (housegen BAKED_AO false: no ring under any piece)
           "no-ao": {"contact-shadow"}}
 HG_REL = "runtime/3d/royale/housegen.js"
-PLANT_EDIT = {"eye-only-phase5": ("        model5(true);\n        if (bestView(R).n >= 3) return;\n        const run5", "        model5(false);\n        if (bestView(R).n >= 3) return;\n        const run5")}
+# (W10 R3A fix6) re-anchored: R1A (e6954297a) made phase 5's want NEED5; the same fault (model5(false) where phase 5 starts)
+PLANT_EDIT = {"eye-only-phase5": ("        model5(true);\n        if (bestView(R).n >= NEED5) return;\n        const run5", "        model5(false);\n        if (bestView(R).n >= NEED5) return;\n        const run5")}
 PLANT_EDIT["no-ao"] = ("export const BAKED_AO = true;", "export const BAKED_AO = false;")
 PLANT_EDIT["sparse"] = [("export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"), ("export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;"),
                         ("export const TRI_BUDGET_HOME = 6000;", "export const TRI_BUDGET_HOME = 4000;")]      # (pass 3: plan item 5 undone as a unit, homes.py's sparse)
