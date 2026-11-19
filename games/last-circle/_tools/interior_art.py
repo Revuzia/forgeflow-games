@@ -2,7 +2,7 @@
 2 still lifes, 2 posters, 2 maps, a night skyline, a botanical print, an abstract painting and a winter scene. Original work made here (numpy + Pillow,
 fixed seeds): no third-party image, no licence beyond this repository's own.
 
-    python _tools/interior_art.py                 # -> assets/tex/interior_art.jpg (1024 x 1024: a 4 x 4 grid of 256 px cells)
+    python _tools/interior_art.py                 # -> assets/tex/interior_art.jpg (1024 x 1024: a 4 x 4 grid of 256 px cells, ~117 KB)
 
 Cell k (0..15) holds picture k = housegen PICS index k (row-major from the top-left; housegen ART_CELL reads them the same way). Each picture is drawn on
 CELL - 2 * PAD px and its edge pixels are repeated into the PAD border, so mip levels down to ~32 px do not bleed one picture into the next.
@@ -83,7 +83,7 @@ def brush(img, seed, k=0.06):
     """a painterly grain: low-frequency tint wobble + fine canvas noise"""
     n = fbm2(S, seed, 4, 3)[..., None]
     f = rng(seed + 1).normal(0, 1, (S, S, 1))
-    return np.clip(img * (1 + (n - 0.5) * k * 2) + f * 3.0, 0, 255)
+    return np.clip(img * (1 + (n - 0.5) * k * 2) + f * 1.2, 0, 255)
 
 
 def pil(a):
@@ -387,7 +387,7 @@ def main():
         cell = np.pad(np.asarray(im), ((PAD, PAD), (PAD, PAD), (0, 0)), mode="edge")
         atlas.paste(Image.fromarray(cell), ((k % GRID) * CELL, (k // GRID) * CELL))
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    atlas.save(OUT, "JPEG", quality=84, optimize=True, progressive=False)
+    atlas.save(OUT, "JPEG", quality=80, optimize=True, progressive=False)
     print("wrote %s (%d bytes)" % (os.path.abspath(OUT), os.path.getsize(OUT)))
 
 
