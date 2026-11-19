@@ -1428,3 +1428,24 @@ The owner: "squishies now just slide, but is there a way to be able to make them
 5. Calm (and prefers-reduced-motion) keep today's glide, bit for bit. No crawl under 0.045 m/s (LIFE's contact approach glides as before).
 Code: `src/physics/crawl.ts` (in the lazy props chunk), a 4-line hook in `softbody.ts` (`crawlOn` / `crawlD`), `props.ts` (the world steps each
 body's crawl in beginFrame), one line in `shell/later-life.ts` (world.calm). Proof: `_harness/probe_crawl.ts`; report `_handoff/reports/R10_LOCOMOTION.md`.
+
+## ORCHESTRATOR DECISION 2026-11-19 (D-101): the awake budget never depends on the graphics tier
+Round 10 found (VERDICT_R10, R10_FIX 1) that at the low and medium quality tiers only ONE squishy was awake at a time (the awake budget
+unitCap 1.06 / 1.345 and one mover token, LIFE 10.3), so a party of three could not use three things or play together; at the forced low tier
+five out slept all together. That defeats the owner's ask (several squishies out at once that are social).
+1. Behaviour must not depend on the graphics tier. At EVERY tier a party of up to 3 is fully awake, at Home and at every place; with 4 or 5 out at
+   least 3 are awake. The budget may only limit beyond that.
+2. Code: `src/life/attention.ts` AWAKE_MIN 3 and AWAKE_FLOOR = 3 wholes + their 3 touching pairs + 2 sleepers = 3.81 units, at least 3 mover
+   tokens; unitCap = max(the tier formula, D-85's floor, AWAKE_FLOOR). With PF-00's numbers every tier reads 3.81 / 3 today. The physics is the
+   same at every tier (fixed substeps, detail-3 wholes); only the render detail differs (`render/quality.ts`). The number out at once
+   (`shell/mat.ts` MAT_LIMIT low 3, med 4, high 5) is unchanged.
+3. The cost is measured, not assumed (R11_FIX.md item 1): physics + LIFE step per frame with 3 and 5 out at the low tier, before and after.
+4. Probe rows that asserted one awake whole at low or med (LF-10's caps and soft boop, the B7 wake-gate rows and similar) are re-specified with
+   this reason.
+
+## ORCHESTRATOR DECISION 2026-11-19 (D-102): the whole-build size cap is 2250 KB
+The 2000 KB total (SZ-02, D9) was set when the game had two places; it now has seven places plus the party, Float, the crawl and the photo
+features. Places and features load lazily (a player downloads only what they open), so the whole-build cap (`vite.config.ts` T1, every file
+under `dist/assets`) is raised to **2250 KB**. The first-play cap (G0b, and the first-play delta) is unchanged: it is met. Cheap trims still go in
+(dead code of the three dropped places beyond their save tombstones, duplicate helpers), and the life code fetched at Wake should stay near its
+150 KB target (R11_FIX.md item 6).

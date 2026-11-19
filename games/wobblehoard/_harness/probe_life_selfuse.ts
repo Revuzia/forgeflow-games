@@ -22,6 +22,8 @@ import { recorder } from './mocks.ts';
 
 const arg = (k: string, d: string): string => process.argv.find((a) => a.startsWith(`${k}=`))?.slice(k.length + 1) ?? d;
 const QUICK = process.argv.includes('--quick'), TRACE = process.argv.includes('--trace'), SQ_ONLY = process.argv.includes('--squirt-only');
+// (round 11, R11_FIX 5) --su4-only: SU-04 (and SU-05 over its visits) alone, without SQ-01 and SU-01's five parties (about 10 min instead of 37)
+const SU4_ONLY = process.argv.includes('--su4-only');
 const STAY = +arg('stay', QUICK ? '120' : '300');
 let STAY_NOW = STAY;   // (round 10: SU-04's visits are STAY4 s)
 // (round 9, R9_FIX 2) seed=N: LIFE's world seed (the host's deps.lifeSeed; default the shipped 0x5eed1e) and the party genomes' seed (default 8): another draw of the same parties
@@ -46,13 +48,13 @@ let W = FRAME === 'tall' ? 390 : 1280, H = FRAME === 'tall' ? 844 : 800;
 const setFrame = (f: string, t: string): void => { FRAME = f; TIER = t; W = f === 'tall' ? 390 : 1280; H = f === 'tall' ? 844 : 800; };
 /** (round 10) SU-04: what the browser runs (VERDICT_R9 (c)): Dollop + Glimglop (slime) + Crimpo (dough), STAY4 s, every place, each frame x tier below; the default run
  *  adds it after SU-01..03 (`--no-su4` skips it; an explicit frame= or tier= runs only that frame and tier as SU-01) */
-const SU4 = !process.argv.includes('--no-su4') && !QUICK && !process.argv.some((a) => a.startsWith('frame=') || a.startsWith('tier=') || a.startsWith('parties='));
+const SU4 = SU4_ONLY || (!process.argv.includes('--no-su4') && !QUICK && !process.argv.some((a) => a.startsWith('frame=') || a.startsWith('tier=') || a.startsWith('parties=')));
 const STAY4 = 180, SU4_RUNS: ReadonlyArray<readonly [string, string]> = [['tall', 'low'], ['wide', 'low'], ['tall', 'high'], ['wide', 'high']];
 const FAM: Record<string, string> = {};
 for (const c of CATALOG) FAM[c.id] = c.family;
 const verbName = (v: number): string => Object.keys(USE_VERB).find((k) => USE_VERB[k as keyof typeof USE_VERB] === v) ?? String(v);
 
-interface Visit { party: string; place: string; ok: boolean; things: string[]; first: Record<string, number>; three: number; bySpecies: Record<string, string[]>; usesPer: Record<string, number>; episodes: Record<string, number>; how: string[]; napShare: number; wallS: number }
+interface Visit { party: string; place: string; ok: boolean; things: string[]; first: Record<string, number>; three: number; bySpecies: Record<string, string[]>; usesPer: Record<string, number>; episodes: Record<string, number>; how: string[]; napShare: number; wallS: number; flips: string[] }
 
 /** SQ-01's measurements (round 8). */
 interface Sq { carried: boolean; landed: string; inPoolS: number; outAt: number; movedAt: number; soakAt12: number; soak05At: number; dollopCarried: boolean; gap: number; heldFor: number; fx: number; social: number; target: string; place: number; trace: string[] }
@@ -184,13 +186,19 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
     const tArr = clockT, r0 = recs.length;
     let three = -1, naps = 0, samples = 0;
     const last: string[] = [];
+    const track: Array<Array<[number, number, number, number]>> = [];
     for (let t = 10; t <= STAY_NOW; t += 10) {
       if (TRACE) for (let q = 0; q < 10; q++) {
         await stepA(60);
         const d = dbg();
         d.life.chars.forEach((c, j) => { const k = `${c.beh}.${c.phase}.${c.thing}`; if (last[j] !== k) { last[j] = k; console.log(`  t ${Math.round((clockT - tArr) / 1000)} ${d.chars[j]?.species} beh ${c.beh} ph ${c.phase} thing ${c.thing} uses ${c.uses} play ${c.play} at ${d.chars[j]?.x},${d.chars[j]?.z} fl ${d.chars[j]?.flags} sl ${d.chars[j]?.asleep ? 1 : 0} op ${d.chars[j]?.onProp}`); } });
       }
-      else await stepA(600);
+      else for (let q = 0; q < 20; q++) {
+        // (round 11, R11_FIX 3) LIFE's behaviour of each squishy every 0.5 s (SU-05: a flip-flop between behaviours without moving)
+        await stepA(30);
+        const d = dbg(), ts = (clockT - tArr) / 1000;
+        d.life.chars.forEach((c, j) => { const h = d.chars[j]; if (h) (track[j] ??= []).push([ts, c.beh, h.x, h.z]); });
+      }
       const seen = new Set(recs.slice(r0).map((r) => r.thing));
       if (three < 0 && seen.size >= 3) three = t;
       for (const c of dbg().life.chars) { samples++; if (c.beh === 6) naps++; }
@@ -205,7 +213,25 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
       const h = `${th}:${kind}${r.kind === EV.USE ? '.' + verbName(r.sub) : ''}`;
       if (!how.includes(h)) how.push(h);
     }
-    out.push({ party: ['dollop', ...party].join('+'), place: pl, ok, things: Object.keys(first), first, three, bySpecies, usesPer, episodes, how, napShare: +(naps / Math.max(1, samples)).toFixed(2), wallS: Math.round((Date.now() - t0) / 1000) });
+    // (round 11, R11_FIX 3) SU-05: a flip-flop = more than 3 switches between (non-idle) behaviours within 5 s while the squishy moves under 0.1 m
+    const flips: string[] = [];
+    track.forEach((tr, j) => {
+      const sp = dbg().chars[j]?.species ?? String(j);
+      for (let a = 0; a < tr.length; a++) {
+        let sw = 0, prev = -1, mx = 0;
+        const seq: number[] = [];
+        for (let b = a; b < tr.length && tr[b][0] - tr[a][0] <= 5 + 1e-6; b++) {
+          mx = Math.max(mx, Math.hypot(tr[b][2] - tr[a][2], tr[b][3] - tr[a][3]));
+          const be = tr[b][1];
+          if (be <= 1) continue;   // NONE / IDLE between two behaviours is not a behaviour
+          if (prev >= 0 && be !== prev) sw++;
+          if (be !== prev) seq.push(be);
+          prev = be;
+        }
+        if (sw > 3 && mx < 0.1) { flips.push(`${sp} ${tr[a][0].toFixed(1)} s: ${sw} switches (beh ${seq.join('>')}), ${mx.toFixed(3)} m`); break; }
+      }
+    });
+    out.push({ party: ['dollop', ...party].join('+'), place: pl, ok, things: Object.keys(first), first, three, bySpecies, usesPer, episodes, how, napShare: +(naps / Math.max(1, samples)).toFixed(2), wallS: Math.round((Date.now() - t0) / 1000), flips });
     console.log('visit', JSON.stringify(out[out.length - 1]));
     await host.travel('home', true); await stepA(120);
   }
@@ -218,7 +244,7 @@ let fails = 0;
 const check = (id: string, what: string, ok: boolean): void => { if (!ok) fails++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${id} ${what}`); };
 const info = (id: string, what: string): void => console.log(`info ${id} ${what}`);
 // SQ-01 (round 8): the squirt by ordinary play, on the real physics and host, autonomy on
-{
+if (!SU4_ONLY) {
   const t0 = Date.now();
   await runParty(['wisplet', 'chunkle'], true);
   const q = SQ as Sq | null;
@@ -232,7 +258,7 @@ const info = (id: string, what: string): void => console.log(`info ${id} ${what}
   }
 }
 const all: Visit[] = [];
-if (!SQ_ONLY) for (const p of PARTIES) all.push(...(await runParty(p)));
+if (!SQ_ONLY && !SU4_ONLY) for (const p of PARTIES) all.push(...(await runParty(p)));
 // (round 10, R10_FIX 1) SU-04 runs after the default visits (its numbers below)
 const su4: Array<{ frame: string; tier: string; v: Visit[] }> = [];
 if (SU4 && !SQ_ONLY) {
@@ -243,6 +269,7 @@ if (SU4 && !SQ_ONLY) {
 // (round 9, R9_FIX 2: tightened to EVERY party, the owner's "3 to 5 different things per visit at every place, reliably"; it was 4 of 5)
 const nParties = PARTIES.length, need = nParties;
 if (SQ_ONLY) { console.log(fails ? `${fails} failed` : 'all selfuse checks passed (SQ-01 only)'); process.exit(fails ? 1 : 0); }
+if (!SU4_ONLY) {   // (round 11: --su4-only runs SU-04 and SU-05 alone)
 for (const pl of PLACES) {
   const vs = all.filter((v) => v.place === pl), pass = vs.filter((v) => v.ok && v.things.length >= 3);
   check('SU-01', `${pl}: at least 3 different things used by themselves in ${STAY} s with 3 squishies and no input, for ${need} of ${nParties} parties (${pass.length}: ${vs.map((v) => `${v.things.length} [${v.things.join(' ')}]${v.three >= 0 ? ` 3 by ${v.three} s` : ''}`).join('; ')})`, pass.length >= need);
@@ -266,11 +293,19 @@ check('SU-02', `different families prefer different things: at ${differ} of ${PL
 const over = all.flatMap((v) => Object.entries(v.episodes).filter(([, n]) => n > USE_MAX * STAY / 300).map(([sp, n]) => `${v.place} ${sp} ${n}`));
 check('SU-03', `the attention budget rules: no squishy has more than ${USE_MAX} by-itself use episodes in a ${STAY} s visit (${over.length ? over.join(', ') : 'none over'}; most ${Math.max(0, ...all.flatMap((v) => Object.values(v.episodes)))})`, over.length === 0);
 info('SU-03', `USE records per squishy and visit (the host's, a strike each): most ${Math.max(0, ...all.flatMap((v) => Object.values(v.usesPer)))}; over 30: ${all.flatMap((v) => Object.entries(v.usesPer).filter(([, n]) => n > 30).map(([sp, n]) => `${v.place} ${sp} ${n}`)).join(', ') || 'none'}`);
+}
 // (round 10, R10_FIX 1) SU-04: the owner's bar where the browser measures it (VERDICT_R9 (c): 3 squishies travelled there, 180 s, no input, at 1280x800 and 390x844, at
 // the low and the high quality tier): at least 3 different things used by themselves at EVERY place in every frame and tier. Behaviour must not depend on the tier.
 for (const r of su4) for (const pl of PLACES) {
   const v = r.v.find((x) => x.place === pl);
   check('SU-04', `(round 10) ${pl} ${r.frame === 'tall' ? '390x844 (tall layout)' : '1280x800'} at the ${r.tier} tier: at least 3 different things used by themselves in ${STAY4} s by Dollop + Glimglop + Crimpo, no input (${v ? `${v.things.length} [${v.things.join(' ')}]${v.three >= 0 ? ` 3 by ${v.three} s` : ''}` : 'not run'})`, !!v && v.ok && v.things.length >= 3);
+}
+// (round 11, R11_FIX 3) SU-05: no squishy flips between behaviours without moving (VERDICT_R10 S1: Glimglop flipped COMEBACK / USE every 0.5 s for 12.5 s on Ripple's
+// drift log): more than 3 switches between behaviours within 5 s while moving under 0.1 m, at every place, in every visit above (wide and tall in SU-04)
+{
+  const vs = [...all, ...su4.flatMap((r) => r.v.map((v) => ({ ...v, place: `${v.place} ${r.frame}/${r.tier}` })))];
+  const bad = vs.filter((v) => v.flips.length).map((v) => `${v.place}: ${v.flips.join('; ')}`);
+  check('SU-05', `(round 11) no behaviour flip-flop (more than 3 switches in 5 s with under 0.1 m moved) in ${vs.length} visits (${[...new Set(vs.map((v) => v.place.split(' ')[0]))].join(', ')}${su4.length ? '; SU-04 wide and tall' : ''}): ${bad.length ? bad.join(' | ') : 'none'}`, bad.length === 0);
 }
 console.log(fails ? `${fails} failed` : 'all selfuse checks passed');
 process.exit(fails ? 1 : 0);

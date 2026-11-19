@@ -60,6 +60,9 @@ const SHOWER_S = 4;      // a tapped Drip Leaf tips its shower this long (PLACES
 const SET_S = 6;         // a ride the body lands on within this many seconds of the player letting go of it (or lifting it there) is a ride the player SET UP
 const PAD_USE_GAP_S = 2; // one USE BOUNCE per body per this many seconds of pad kicks (a landing's kicks in a row are one bounce)
 const CHIME_V = 0.1, CHIME_GAP_S = 1;   // round 7 (R7_LIFE's request): a body's chime strike is its USE only when it moves into it (faster than this, or tossed), one a second
+// (round 11, R11_FIX 2) ... or when LIFE walks it into the row (its scoot on, moving faster than CHIME_WALK_V): the slow families walk 0.05 to 0.07 m/s, under CHIME_V,
+// so a slime's or a dough's walk along the Shell Chimes struck them and was never recorded (VERDICT_R10 C1r: 32 to 65 s at the chimes, no record)
+const CHIME_WALK_V = 0.02;
 const HUSH_S = 4;        // round 5 (B7): a body the over-budget rule must put to sleep takes no new LIFE motion for this long (it comes to rest, then sleeps)
 const ASKED_S = 30;      // round 5 (B7), round 6 (VERDICT_PG2 N1): a squishy the player asked to play ("Go play with...") is ASKED until it has used the thing (its
                          // USE BY PLAYER) or this long has passed: the budget never holds its motion back, never hushes it or puts it to sleep, and makes room for it
@@ -1400,7 +1403,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // records in 300 s, and a squishy leaning on the Icicle Bells would have rung I9 by itself)
       if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.chime) {
         const c = chars[slot];
-        if ((c.tossed || Math.hypot(c.vx, c.vz) > CHIME_V) && game.simTime - c.chimeT >= CHIME_GAP_S) { c.chimeT = game.simTime; write(EV.USE, td.verb, thingGlobal[th], c.species, 255, 1, BY.SELF, world.propPart[prop]); }
+        const sp = Math.hypot(c.vx, c.vz);
+        if ((c.tossed || sp > CHIME_V || (c.scooting && sp > CHIME_WALK_V)) && game.simTime - c.chimeT >= CHIME_GAP_S) { c.chimeT = game.simTime; write(EV.USE, td.verb, thingGlobal[th], c.species, 255, 1, BY.SELF, world.propPart[prop]); }
       }
       // a pad's kick (physics strikes the pad, cause 1, the body's slot): one USE BOUNCE by the body per landing's run of kicks (G4 "Bounce on the Moss Bouncer")
       else if (cause === 1 && slot >= 0 && slot < CAP && chars[slot].on && td.mech === MECH.pad && game.simTime - chars[slot].padT >= PAD_USE_GAP_S) {

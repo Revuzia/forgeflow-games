@@ -223,9 +223,10 @@ export async function boot(): Promise<(() => void) | null> {
   // round 5 (VERDICT_PG B3, B8): the play-time UI (ui/later-play.ts, its own later chunk): the tracker pill, the stamp moments in a free spot one at a time,
   // the wish card, the party popover. Until it lands a moment is the published toast.
   let playUi: { moment(t: string, said?: boolean): void; showWish(sp: number, k: number, t: number, byKey?: boolean): void; destroy(): void } | null = null;
+  let lifeLoading = false;
   const loadLife = (): void => {
-    if (lifeGone || g.life || g.phase !== 'play') return;
-    lifeTries++;
+    if (lifeGone || g.life || g.phase !== 'play' || lifeLoading) return;
+    lifeTries++; lifeLoading = true;
     // (round 5, VERDICT_PG C1: the quest reducer + journal store and the prop world builder are lazy chunks of their own, requested in parallel)
     Promise.all([import('./later-life.ts'), import('./later-quests.ts'), import('./later-props.ts')]).then(([m, mq, mp]) => {
       if (lifeGone || g.life) return;
@@ -252,10 +253,24 @@ export async function boot(): Promise<(() => void) | null> {
       ui.lifeAttached();
     }).catch((e: unknown) => {
       console.error(e);
+      lifeLoading = false;
       if (lifeTries < 5) lifeTimer = window.setTimeout(loadLife, 3000 * lifeTries);
     });
   };
-  const offLifePhase = g.on('phase', (ph) => { if (ph === 'play' && !g.life) requestAnimationFrame(() => { lifeTimer = window.setTimeout(loadLife, 0); }); });
+  // (round 11, R11_FIX 6; VERDICT_R10 A2: the life set, later-life 70 KB + later-brain 113 KB, was fetched AT Wake, 183 KB against 150) the brain is needed from
+  // the moment the host attaches (it runs even one squishy at Home: idle, emotes, the first-play script), so the whole life set waits until it is needed: the
+  // first party (the mat changes: now), else LIFE_IDLE_MS without a touch after Wake, and never later than LIFE_LATEST_MS. Until then Home is the published toy,
+  // as before the chunk lands (game.ts's early log keeps the player's events for the Journal).
+  const LIFE_IDLE_MS = 2500, LIFE_LATEST_MS = 10000;
+  let lifeFrom = 0;
+  const lifeIdle = (): void => {
+    if (g.life || lifeGone || lifeFrom === 0) return;
+    clearTimeout(lifeTimer);
+    lifeTimer = window.setTimeout(loadLife, Math.max(0, Math.min(LIFE_IDLE_MS, lifeFrom + LIFE_LATEST_MS - performance.now())));
+  };
+  const offLifeTouch = g.onInteraction(lifeIdle);
+  const offLifeMat = g.mat.onChange(() => { if (!g.life && !lifeGone && g.phase === 'play') { clearTimeout(lifeTimer); lifeTimer = window.setTimeout(loadLife, 0); } });
+  const offLifePhase = g.on('phase', (ph) => { if (ph === 'play' && !g.life) requestAnimationFrame(() => { if (lifeFrom === 0) lifeFrom = performance.now(); lifeIdle(); }); });
 
   // another tab changed the settings: follow it (the 'storage' event fires in the OTHER tabs only)
   const onStorage = (e: StorageEvent): void => {
@@ -312,7 +327,7 @@ export async function boot(): Promise<(() => void) | null> {
   // teardown (a host that unmounts the game, a test): every listener off, the saves flushed, GL context and AudioContext released
   return () => {
     clearTimeout(lostTimer);
-    lifeGone = true; clearTimeout(lifeTimer); offLifePhase(); lifeUiOff();
+    lifeGone = true; clearTimeout(lifeTimer); offLifePhase(); offLifeTouch(); offLifeMat(); lifeUiOff();
     offMute();
     removePause(); detachUiSound();
     detachPointer(); detachKeys(); detachLife();

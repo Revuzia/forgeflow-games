@@ -2115,8 +2115,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     // next scoot or hop woke it straight back (this window: 13 such wakes, over the cap in 270 of 1800 frames); the host now holds a motion intent for a sleeping
     // body while waking it would pass the cap (never one the player asked for)
     const held = ((host.debug() as { counts: { held?: number } }).counts.held ?? 0) - held0;
-    check('PLAYGROUND (round 5, B7; SH-22) the budget\'s wake gate: in the same window LIFE\'s motion for a sleeping squishy is held while waking it would pass unitCap, and the awake units are over the cap in at most 10 % of 6-a-second samples',
-      held > 0 && fineOver <= 0.1 * fineN, `${held} motion intents held; over the cap in ${fineOver} of ${fineN} samples (${(100 * fineOver / Math.max(1, fineN)).toFixed(1)} %)`);
+    // (round 11, R11_FIX item 1, written reason: D-101, orchestrator 2026-11-19: at every tier 3 may be awake (unitCap 3.81, 3 movers); with 5 out the window
+    //  rarely needs the wake gate to hold a motion (0 held here; R10's tree held 2 and was over the cap 13 %). The row keeps its bar on what the gate is for,
+    //  the awake units over the cap in at most 10 % of the samples, and asserts D-101's cap; `held` is reported)
+    const capNow = (host.debug() as UDbg).life.unitCap;
+    check('PLAYGROUND (round 5, B7; SH-22) the budget\'s wake gate: in the same window the awake units are over the cap in at most 10 % of 6-a-second samples (LIFE\'s motion for a sleeping squishy is held while waking it would pass unitCap); D-101: the cap lets 3 be awake (unitCap >= 3.81)',
+      capNow >= 3.81 - 0.001 && fineOver <= 0.1 * fineN, `${held} motion intents held; over the cap in ${fineOver} of ${fineN} samples (${(100 * fineOver / Math.max(1, fineN)).toFixed(1)} %); unitCap ${capNow}`);
   }
   // round 6 (VERDICT_PG2 N1; LIFE PLAY_WITH, D-79, SH-22): "Go play with..." on the MED tier (unitCap 1.48, one mover token) with 3 out: the squishy the player asked
   // (not the play squishy) must go to the thing and use it (a USE BY PLAYER), never be put to sleep by the over-budget rule on the way (another sleeps instead).

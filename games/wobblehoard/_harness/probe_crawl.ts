@@ -177,8 +177,11 @@ const t0 = performance.now();
 /* ───────────── CR-12 cost and allocation ───────────── */
 if (sec('cost')) {
   const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
-  // two whole bodies walking to and fro: today's glide, the glide with a squash pose held (LIFE's setSquash: the same goal-reshaping path the crawl uses), the crawl
-  const run = (mode: 'glide' | 'squash' | 'crawl'): { ms: number; stepUs: number; alloc: number } => {
+  // two whole bodies walking to and fro: today's glide, the glide with a squash pose held (LIFE's setSquash: the same goal-reshaping path the crawl uses), the crawl.
+  // All three are built and warmed first (PH-11's 100 s warm-up each), then their 120-frame windows are timed in turn, 8 rounds, best of each (a shared machine's load
+  // drifts between runs: timed one after the other, the squash pose's own reference moved by 0.2 ms)
+  type Rig = { frame(): void; re(): void; w: PropWorld; bs: SoftBody[] };
+  const rig = (mode: 'glide' | 'squash' | 'crawl'): Rig => {
     const w = buildPropWorld(flatDef, 'wide', 1);
     w.calm = mode !== 'crawl';
     const bs = [new SoftBody(G0, { family: 'jellygel', piece: { frac: 1, chunk: false, at: v3(-1, 0, -0.8) } } as never), new SoftBody(G0, { family: 'gummy', piece: { frac: 1, chunk: false, at: v3(1, 0, 0.8) } } as never)];
@@ -186,25 +189,28 @@ if (sec('cost')) {
     let flip = 0;
     const re = (): void => { flip ^= 1; bs[0].scootTo(flip ? 1 : -1, -0.8, 0.26); bs[1].scootTo(flip ? -1 : 1, 0.8, 0.28); if (mode === 'squash') for (const b of bs) b.setSquash(flip ? 0.95 : 0.96, 0.2); };
     const frame = (): void => { w.beginFrame(); for (const b of bs) { b.step(DT); ev.length = 0; b.drainEvents(ev); } w.endFrame(DT); };
-    for (let i = 0; i < 6000; i++) { if (i % 300 === 0) re(); frame(); }   // (PH-11's 100 s warm-up: a once-a-frame entry point tiers up with use)
-    let best = Infinity;
-    for (let k = 0; k < 5; k++) { re(); for (let i = 0; i < 20; i++) frame(); const a = performance.now(); for (let i = 0; i < 120; i++) frame(); best = Math.min(best, (performance.now() - a) / 120); }
+    for (let i = 0; i < 6000; i++) { if (i % 300 === 0) re(); frame(); }
+    return { frame, re, w, bs };
+  };
+  const allocOf = (r: Rig): number => {
     const empty: number[] = []; for (let i = 0; i < 6; i++) { const u0 = newUsed(); empty.push(newUsed() - u0); }
     const base = empty[empty.length - 1];
-    let alloc = Infinity;
-    for (let k = 0; k < 4; k++) { re(); for (let i = 0; i < 10; i++) frame(); const u0 = newUsed(); for (let i = 0; i < 120; i++) frame(); const d = newUsed() - u0 - base; if (d >= 0) alloc = Math.min(alloc, d); }
-    // the world's beginFrame alone (the crawl steps of both bodies; nothing else runs there on a flat place), per body per frame, while both walk
-    let stepUs = Infinity;
-    for (let k = 0; k < 5; k++) {
-      re(); for (let i = 0; i < 20; i++) frame();
-      let tb = 0;
-      for (let i = 0; i < 120; i++) { const a = performance.now(); w.beginFrame(); tb += performance.now() - a; for (const b of bs) { b.step(DT); ev.length = 0; b.drainEvents(ev); } w.endFrame(DT); }
-      stepUs = Math.min(stepUs, tb / 120 / 2 * 1000);
-    }
-    return { ms: best, stepUs, alloc };
+    let al = Infinity;
+    for (let k = 0; k < 4; k++) { r.re(); for (let i = 0; i < 10; i++) r.frame(); const u0 = newUsed(); for (let i = 0; i < 120; i++) r.frame(); const d = newUsed() - u0 - base; if (d >= 0) al = Math.min(al, d); }
+    return al;
   };
-  const c = run('crawl'), g = run('glide'), q = run('squash');
-  add('CR-12 cost: two whole bodies walking (best of 5 windows of 120 frames, both bodies\' physics and the world): the crawl against today\'s glide and against the glide with a squash pose held (LIFE\'s setSquash reshapes the goal the same way); the crawl\'s own step per body per frame',
+  if (process.env.CRAWL_NOYAW) CRAWL.yawMax = 0;
+  const rc = rig('crawl'), aC = allocOf(rc), rg = rig('glide'), aG = allocOf(rg), rq = rig('squash'), aQ = allocOf(rq);   // (each measured right after its own warm-up)
+  const R3 = { crawl: rc, glide: rg, squash: rq };
+  const best = { crawl: Infinity, glide: Infinity, squash: Infinity }, stepUs = { crawl: Infinity, glide: Infinity, squash: Infinity };
+  for (let round = 0; round < 8; round++) for (const k of ['crawl', 'glide', 'squash'] as const) {
+    const r = R3[k]; r.re(); for (let i = 0; i < 20; i++) r.frame();
+    let tb = 0; const a = performance.now();
+    for (let i = 0; i < 120; i++) { const t0b = performance.now(); r.w.beginFrame(); tb += performance.now() - t0b; for (const b of r.bs) { b.step(DT); ev.length = 0; b.drainEvents(ev); } r.w.endFrame(DT); }
+    best[k] = Math.min(best[k], (performance.now() - a) / 120); stepUs[k] = Math.min(stepUs[k], tb / 120 / 2 * 1000);
+  }
+  const c = { ms: best.crawl, stepUs: stepUs.crawl, alloc: aC }, g = { ms: best.glide, stepUs: stepUs.glide, alloc: aG }, q = { ms: best.squash, stepUs: stepUs.squash, alloc: aQ };
+  add('CR-12 cost: two whole bodies walking (best of 8 interleaved windows of 120 frames, both bodies\' physics and the world): the crawl against today\'s glide and against the glide with a squash pose held (LIFE\'s setSquash reshapes the goal the same way); the crawl\'s own step per body per frame',
     `crawl ${f(c.ms, 3)} ms, glide ${f(g.ms, 3)} ms (x ${f(c.ms / g.ms, 3)}), squash pose ${f(q.ms, 3)} ms (crawl - squash pose ${f((c.ms - q.ms) * 500, 1)} us per body); crawl step ${f(c.stepUs, 1)} us per body (glide: ${f(g.stepUs, 2)} us)`, 'crawl - squash pose <= 25 us per body; step <= 30 us', (c.ms - q.ms) * 500 <= 25 && c.stepUs <= 30);
   add('CR-13 allocation: new-space growth per 120 frames while two bodies crawl (best of 4 windows after PH-11\'s 100 s warm-up)', `${c.alloc} B (glide ${g.alloc} B, squash pose ${q.alloc} B)`, '0 B', c.alloc <= 0);
 }

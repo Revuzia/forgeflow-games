@@ -8,7 +8,7 @@ import { MECH, ZONE, PLACE_IDS } from '../data/places.ts';
 import { SPECIES } from '../data/species.ts';
 import type { LifeWorld } from './world.ts';
 import { CAP, BEH, F, MAX_ZONES, usesFull, varietyFloorOn, lifeSeeksNew, inAreaAt, pushEvent, pushIntent, rnd, U16, inBounds, clearOfThings, keepMm, shrinkMm, pairIdx, d2c, d2t, d2p, CM2, freeSpot, noLean, qT, gustZoneAt } from './world.ts';
-import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, G_GAP, groupCount, say } from './act.ts';
+import { gateStart, stopMove, travelTo, travelStep, emitHop, emitGlide, emitSquash, emitPose, clearPose, emitGaze, emitExpr, emitEmote, emitScoot, emitCancel, HELD_BITS, G_HOPS, G_GAP, G_GLIDE, groupCount, say } from './act.ts';
 import { emitVoice, PHRASE, voice } from './voice.ts';
 import { STYLE, MOVER_CAP, UNIT_CAP, tierOf } from './attention.ts';
 import { TRAIT } from './traits.ts';
@@ -318,14 +318,14 @@ export function behave(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: Life
   const asked = w.pW[i] >= 0;
   const canMove = mayMove(w, s, i, asked);
 
-  // B11 come back after a toss
-  if ((fl & LIFE_FLAG.TOSSED) !== 0 && (fl & LIFE_FLAG.AIRBORNE) === 0 && w.beh[i] !== BEH.COMEBACK && canMove && needsComeBack(w, s, i)) {
+  // B11 come back after a toss ((round 11, R11_FIX 3) not while a come back that got nowhere cools down: ready)
+  if ((fl & LIFE_FLAG.TOSSED) !== 0 && (fl & LIFE_FLAG.AIRBORNE) === 0 && w.beh[i] !== BEH.COMEBACK && canMove && ready(w, i, BEH.COMEBACK) && needsComeBack(w, s, i)) {
     if (comeBackTarget(w, s, i)) { endBeh(w, s, out, i, 0); if (travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.COMEBACK, 1000, 15000); w.ph[i] = 1; return; } }
   }
 
   // LF-18 (S2): after 30 s in water (by itself, or set there by the player) it heads out to the nearest dry spot by SCOOT, a floater too
   // (scootTo glides a floating body; never moveTo); it never naps there (B06 starts nowhere in water)
-  if (w.iWT[i] > -1e8 && tb - w.iWT[i] >= BRAIN.waterMaxS && w.beh[i] !== BEH.COMEBACK && canMove) {
+  if (w.iWT[i] > -1e8 && tb - w.iWT[i] >= BRAIN.waterMaxS && w.beh[i] !== BEH.COMEBACK && canMove && ready(w, i, BEH.COMEBACK)) {
     if (dryTarget(w, s, i)) {
       if (w.beh[i] !== BEH.IDLE && w.beh[i] !== BEH.NONE) endBeh(w, s, out, i, 0);
       if (travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.COMEBACK, 1000, 20000); w.ph[i] = 1; return; }
@@ -411,7 +411,12 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     const v = 0.95 + (rnd(w, i) * NZ - BRAIN.noise); if (v > bs) { bs = v; best = BEH.LOVE; }
   }
   // B02 notice
-  const src = noticeCandidate(w, s, i);
+  // (round 11, R11_FIX 3) the hysteresis of a walk: an ordinary notice (not a switch tap) never cuts short a walk (USE, WANDER, COMEBACK, WATCH) in its first
+  // WALK_DWELL_S: SU-05 caught Dollop at Ripple MOMENT > NOTICE > USE > NOTICE > WANDER in 5 s on one spot, each walk's start taken by the next notice
+  // (in a place: Home and the cabin keep their published rows, as round 10's rules)
+  const fresh = w.placeIdx > 1 && (cur === BEH.USE || cur === BEH.WANDER || cur === BEH.COMEBACK || cur === BEH.WATCH) && tb - w.bT[i] < WALK_DWELL_S;
+  let src = noticeCandidate(w, s, i);
+  if (fresh && src >= 0 && src < 1000) src = -1;
   if (src >= 0) { const v = 0.9 + (rnd(w, i) * NZ - BRAIN.noise) + (src >= 1000 ? 0.2 : 0); if (v > bs) { bs = v; best = BEH.NOTICE; bArg = src; } }
   // B18 answer a thing (a tune starts: the Music Box, the kettle's whistle)
   if (s.musicBoxOn && tb - w.f[F.MUSIC_ON] < 3 && w.tr[tr + TRAIT.chatty] > 0.5 && ready(w, i, BEH.ANSWER) && w.beh[i] !== BEH.NAP) {
@@ -539,7 +544,13 @@ function runBehaviour(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeE
       return;
     case BEH.WANDER: case BEH.COMEBACK: {
       const r = travelStep(w, s, out, i, 80);
-      if (r !== 0 || tb >= w.bE[i]) { clearPose(w, s, out, i); endBeh(w, s, out, i, b === BEH.WANDER ? 6 : 0); }
+      if (r !== 0 || tb >= w.bE[i]) {
+        // (round 11, R11_FIX 3) the hysteresis: a come back that got nowhere (under COMEBACK_GAIN_M nearer its spot: blocked at once, as on Ripple's drift log)
+        // cools down COMEBACK_COOL_S, so the water rule (LF-18) and the toss rule do not start it again the next think. VERDICT_R10 S1: Glimglop flipped
+        // COMEBACK / "USE rockpool" every 0.5 s for 12.5 s without moving 1 cm
+        const gain = w.pD[i] - Math.hypot(s.x[i] - w.tx[i], s.z[i] - w.tz[i]);
+        clearPose(w, s, out, i); endBeh(w, s, out, i, b === BEH.WANDER ? 6 : gain < COMEBACK_GAIN_M ? COMEBACK_COOL_S : 0);
+      }
       return;
     }
     case BEH.USE: runUse(w, s, out, ev, i); return;
@@ -665,7 +676,8 @@ function selfOk(w: LifeWorld, s: LifeSnapshot, i: number, k: number, how: number
   switch (how) {
     case SELF_USE.BALL: return true;
     case SELF_USE.ICE: return ICE_GRIP[f] < 0.5;
-    case SELF_USE.WADE: case SELF_USE.SPLASH: return w.tZo[k] >= 0 && w.zWK1[i] < 0 && (how === SELF_USE.WADE || G_HOPS[f] === 1);
+    // (round 11, R11_FIX 3: not one the water rule is sending out of the water, LF-18's 30 s: it would flip between the two, VERDICT_R10 S1)
+    case SELF_USE.WADE: case SELF_USE.SPLASH: return w.tZo[k] >= 0 && w.zWK1[i] < 0 && (how === SELF_USE.WADE || G_HOPS[f] === 1) && !(w.iWT[i] > -1e8 && w.f[F.NOW] - w.iWT[i] >= BRAIN.waterMaxS);
     case SELF_USE.PAD: return PADS_OK && !w.home && G_HOPS[f] === 1 && w.tQN[k] > 0;   // (round 9: not Home's Bounce Pad: Home's party row stands in front of it, and the host's pad hop is a place's)
     case SELF_USE.UPDRAFT: return G_HOPS[f] === 1 && CATCH[f] >= 0.5 && w.tZo[k] >= 0 && w.ki[i] === 0;
     case SELF_USE.GAZE: return w.night && w.ki[i] !== 2;
@@ -888,6 +900,11 @@ function runUse(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
 const SPOT_WADE = new Float32Array([0.45, 0.7, 0.2, 0]), SPOT_MID = new Float32Array([0, 0.3, 0.6, 0.8]);
 /** How long it stays (s): in a pool (a liker +4), gazing, on a pad after the hop, leaning, under an arch or the drip. */
 const STAY = { wade: 6, wadeRnd: 6, wadeLike: 4, gaze: 5, pad: 3, lean: 4, arch: 2.5, shower: 4, bump: 1.6 } as const;
+/** (round 11, R11_FIX 2) a by-itself use lasts at most this long from its arrival (VERDICT_R10: 32 to 65 s at the Shell Chimes); a row walk is at most what the
+ *  squishy covers in RING_WALK_S at its glide, never under RING_MIN_M (the first parts of the row: they are 0.3 m apart at the Shell Chimes) */
+const SELF_USE_MAX_S = 15, RING_WALK_S = 11, RING_MIN_M = 0.7;
+/** (round 11, R11_FIX 3) a come back that got less than this much nearer its spot cools down this long (the hysteresis of the water and toss rules) */
+const COMEBACK_GAIN_M = 0.1, COMEBACK_COOL_S = 8, WALK_DWELL_S = 3;
 
 /** The use point of thing k for character i's kind of use into w.f[F.X], w.f[F.Z] (and the second leg's end into w.uX2 / w.uZ2: along a chime row, across
  *  the stones, up a slope; NaN when there is none). False when none is in the bounds. */
@@ -917,6 +934,21 @@ function selfPoint(w: LifeWorld, s: LifeSnapshot, i: number, k: number): boolean
         const rr = (zr > 0 ? zr : 0) * (how === SELF_USE.WADE ? SPOT_WADE[n] : SPOT_MID[n]);
         w.f[F.X] = w.zX[zq] + ux * rr; w.f[F.Z] = w.zZ[zq] + uz * rr; qT(w);
         if (inBounds(w, sh)) return true;
+      }
+      // (round 11, R11_FIX 5) none of those on the squishy's line is in the bounds: the water's point nearest the bounds' middle that is (Ripple's TALL layout puts
+      // the Rock Pool's centre 0.3 m outside LIFE's shrunk bounds, so no wade spot was ever found there on a phone)
+      {
+        const zx = w.zX[zq], zz = w.zZ[zq];
+        let vx = w.bx - zx, vz = w.bz - zz;
+        const vl = Math.sqrt(vx * vx + vz * vz);
+        if (vl > 0.01 && zr > 0) {
+          vx /= vl; vz /= vl;
+          for (let n = 1; n <= 8; n++) {
+            const rr = zr * n / 8;
+            w.f[F.X] = zx + vx * rr; w.f[F.Z] = zz + vz * rr; qT(w);
+            if (inBounds(w, sh)) return true;
+          }
+        }
       }
       return false;
     }
@@ -1102,6 +1134,10 @@ function padOff(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number): voi
 function runSelf(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents, i: number, k: number, asked: boolean): void {
   const tb = w.f[F.NOW], how = w.tH[k], f = w.fa[i];
   const ph = w.ph[i];
+  // (round 11, R11_FIX 2) a by-itself use lasts at most SELF_USE_MAX_S from its arrival (the end of its walk there): VERDICT_R10 saw three squishies "use" Ripple's
+  // Shell Chimes 32 to 65 s each (a slime's row walk at 0.05 m/s); its doing phase (3: the row walk, a wade, the hops; 6: a lean) is ended as if its time ran out
+  if (ph < 2) w.uA[i] = tb;
+  else if (!asked && (ph === 3 || ph === 6) && tb - w.uA[i] > SELF_USE_MAX_S) { if (w.bN[i] > tb - 0.001) w.bN[i] = tb - 0.001; if (w.bE[i] > tb - 0.001) w.bE[i] = tb - 0.001; }
   if (ph === 0) {
     if (tb < w.bN[i]) return;
     if (!selfPoint(w, s, i, k)) { if (k < 32) w.uM[i] |= 1 << k; endBeh(w, s, out, i, 15); return; }   // (no use point in the bounds: another thing next)
@@ -1152,10 +1188,19 @@ function runSelf(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents
       case SELF_USE.RING: case SELF_USE.STONES: case SELF_USE.CLIMB: {
         // the second leg (it holds its mover token: travelTo re-aims the scoot)
         if (!(w.uX2[i] === w.uX2[i])) { endBeh(w, s, out, i, 15); return; }
-        w.f[F.X] = w.uX2[i]; w.f[F.Z] = w.uZ2[i]; qT(w);
+        w.f[F.X] = w.uX2[i]; w.f[F.Z] = w.uZ2[i];
+        // (round 11, R11_FIX 2) a row walk is at most what the squishy covers in RING_WALK_S at its glide (never under RING_MIN_M: two parts of a row): a slime's
+        // whole 1.7 m at 0.05 m/s took up to 54 s. It still brushes the parts it passes (the host records each strike it moves into)
+        if (how === SELF_USE.RING) {
+          const gl = G_GLIDE[f] > 0.04 ? G_GLIDE[f] : 0.04, Lmax = Math.max(RING_MIN_M, gl * RING_WALK_S);
+          const ex = w.f[F.X] - s.x[i], ez = w.f[F.Z] - s.z[i], el = Math.sqrt(ex * ex + ez * ez);
+          if (el > Lmax) { w.f[F.X] = s.x[i] + ex / el * Lmax; w.f[F.Z] = s.z[i] + ez / el * Lmax; }
+        }
+        qT(w);
         const dc = d2p(w, s, i);
         if (!travelTo(w, s, out, i, 0, 0)) { if (tb - w.bN[i] > 4) endBeh(w, s, out, i, 5); return; }
         w.ph[i] = 3; w.uQ[i] = 0; w.bN[i] = tb + 3 + 1.5 * Math.sqrt(dc / CM2) / (w.tSp[i] > 0.04 ? w.tSp[i] : 0.04);
+        if (how === SELF_USE.RING && w.bN[i] > tb + RING_WALK_S + 3) w.bN[i] = tb + RING_WALK_S + 3;
         if (how === SELF_USE.STONES) say(w, s, out, i, EMOTE.leaf, 2, w.fP[i]);
         return;
       }

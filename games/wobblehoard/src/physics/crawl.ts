@@ -41,6 +41,7 @@ export class Crawl {
   on = false;
   /** after a walk the body turns back to face +Z (the camera's side: as it faces at rest, today) until it does, unless something holds it */
   private turn = false;
+  private ext = 0;   // (frames since the extents were measured)
   readonly d: Float64Array;
   /** the rest shape + d (centred): what the body's rotation is fitted against while the crawl is on */
   private readonly f: Float64Array;
@@ -51,8 +52,8 @@ export class Crawl {
   private readonly iv3: number;
   /** the grip wave g(theta) (-1 planted .. 1 reaching) and its integral G (zero mean), interleaved: [g0, G0, g1, G1, ...] over a cycle in NT steps */
   private readonly T = new Float64Array((NT + 1) * 2);
-  /** [0] phase, [1] amplitude, [2] ux, [3] uz (the wave's axis: the facing), [4] lean, [5] time in the air, [6..9] the body's extent along the travel and up (rest
-   *  frame, measured each frame for the next one: s0, s1, y0, y1) */
+  /** [0] phase, [1] amplitude, [2] ux, [3] uz (the wave's axis: the facing), [4] lean, [5] time in the air, [6..9] the body's extent along the axis and up (rest
+   *  frame, every 8th frame: s0, s1, y0, y1) */
   readonly s = new Float64Array(10);
   private readonly pf: [number, number, number, number, number, number];
   private readonly body: SoftBody;
@@ -113,7 +114,7 @@ export class Crawl {
         const mx = CRAWL.yawMax * dt, k = e * (1 - Math.exp(-dt / CRAWL.yawTau)), dl = k > mx ? mx : k < -mx ? -mx : k;
         if (!go && e < 0.03 && e > -0.03) this.turn = false;
         const c = Math.cos(dl), sn = Math.sin(dl);
-        if (real) {
+        if (real && (e > 0.009 || e < -0.009)) {   // (within half a degree of its way it is not turned: a pass over the particles each frame for nothing)
           const ox = b.center.x, oz = b.center.z, X = b.X, V = b.V;
           for (let j = 0; j < n * 3; j += 3) {
             const x = X[j] - ox, z = X[j + 2] - oz, vx = V[j], vz = V[j + 2];
@@ -155,7 +156,7 @@ export class Crawl {
     const yx = r10, yy = r11, yz = r12;                                                       // R^T (0, 1, 0)
     const lx = -r00 * uz + r20 * ux, ly = -r01 * uz + r21 * ux, lz = -r02 * uz + r22 * ux;   // R^T (-uz, 0, ux)
     const Q = b.Q, M = b.M, X = b.X, D = this.d, W = this.w, T = this.T;
-    if (fresh) {   // (the extents of the first frame; later frames use the last frame's, measured in the main loop)
+    if (fresh || (++this.ext & 7) === 0) {   // (the body's extents along the axis and up: on the first frame and every 8th (they move only as it turns or bends))
       let s0 = 1e9, s1 = -1e9, y0 = 1e9, y1 = -1e9;
       for (let i = 0; i < n * 3; i += 3) {
         const s = Q[i] * sux + Q[i + 1] * suy + Q[i + 2] * suz, y = Q[i] * yx + Q[i + 1] * yy + Q[i + 2] * yz;
@@ -176,11 +177,10 @@ export class Crawl {
     // (the hump: the middle rises while the body is short, the inchworm's arch, and flattens while it reaches)
     const lenRel = (tab(T, (th + kap) * ti, 1) - tab(T, (th - kap) * ti, 1)) * aD * 0.5 * ish, hump = -pf[5] * lenRel;
     const VG = this.vg;
-    let mx = 0, my = 0, mz = 0, wm = 0, s0 = 1e9, s1 = -1e9, y0n = 1e9, y1n = -1e9, dv = 0;
+    let mx = 0, my = 0, mz = 0, wm = 0, dv = 0;
     for (let i = 0, j = 0; i < n * 3; i += 3, j++) {
       const qx_ = Q[i], qy_ = Q[i + 1], qz_ = Q[i + 2];
       const sr = qx_ * sux + qy_ * suy + qz_ * suz, yw = qx_ * yx + qy_ * yy + qz_ * yz, la = qx_ * lx + qy_ * ly + qz_ * lz;
-      if (sr < s0) s0 = sr; if (sr > s1) s1 = sr; if (yw < y0n) y0n = yw; if (yw > y1n) y1n = yw;
       const sg = (sr - sm) * ish, yr = yw - y0;
       // (the wave tables at this particle's phase (th + kappa sg) in table steps, wrapped into one cycle: th is in [0, 2 pi) and kappa under pi)
       const p0 = pA + pB * sr, p = p0 < 0 ? p0 + NT : p0 >= NT ? p0 - NT : p0, k0 = p | 0, fk = p - k0, t2 = k0 * 2;
@@ -195,7 +195,6 @@ export class Crawl {
       mx += m * ox; my += m * oy; mz += m * oz;
       W[j] = wi; wm += m * wi;
     }
-    S[6] = s0; S[7] = s1; S[8] = y0n; S[9] = y1n;
     const iM = 1 / b.Mtot;
     mx *= iM; my *= iM; mz *= iM; wm *= iM;
     // ---- the goal's wave about the centre (mean 0), and the grip: this frame's share of the wave, moved like the glide (before the substeps: friction never sees it)

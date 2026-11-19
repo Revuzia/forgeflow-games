@@ -114,6 +114,9 @@ export interface LifeWorld {
   /** (round 7) per character: the things it used by itself this visit (a bit per place-local thing), its use's path end (a row walk, the stones), the act's
    *  step counter; the host lifts LIFE's own get-on onto a ride (lifeSetSelfRides: 0 = not yet, so no B04 RIDE) */
   uM: Uint32Array; uX2: Float32Array; uZ2: Float32Array; uQ: Uint8Array; sR: number;
+  /** (round 11, R11_FIX 2) per character: the last think its by-itself use was still on its way (phase 0 or 1): the use's own time is counted from there
+   *  (brain.ts SELF_USE_MAX_S) */
+  uA: Float64Array;
   nP: number; pS: Uint8Array; pX: Float32Array; pZ: Float32Array; pR: Float32Array; pH: Float32Array;
   pHZ: Float32Array; pY: Float32Array; pN: Uint8Array; pI: Uint8Array; pT: Int8Array; pSa: Uint8Array;
   /** Home's home slots (lifeSetHome, D-87): NaN = none */
@@ -224,6 +227,7 @@ export function createLifeWorld(seed: number, maxChars: number): LifeWorld {
     tSk: u8(T), pMk: u8(MAX_PATCHES), gMk: 0, snG: 0,
     tH: u8(T), tQX: f32(T * 4), tQZ: f32(T * 4), tQN: u8(T), tSn: f32(T),
     uM: new Uint32Array(n), uX2: f32(n), uZ2: f32(n), uQ: u8(n), sR: 0,
+    uA: new Float64Array(n),
     nP: 0, pS: u8(MAX_PATCHES), pX: f32(MAX_PATCHES), pZ: f32(MAX_PATCHES), pR: f32(MAX_PATCHES), pH: f32(MAX_PATCHES),
     pHZ: f32(MAX_PATCHES), pY: f32(MAX_PATCHES), pN: u8(MAX_PATCHES), pI: u8(MAX_PATCHES), pT: i8(MAX_PATCHES), pSa: u8(MAX_PATCHES),
     hX: f32(n).fill(NaN), hZ: f32(n).fill(NaN),

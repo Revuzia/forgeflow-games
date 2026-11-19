@@ -28,20 +28,30 @@ export const GATE_TOL = 0.001;
 /** Character caps (LIFE 10.4; the shell reads them): wholes out, pieces of the one cut squishy, characters, brains; by tier low / med / high. */
 export const CHAR_CAP = { wholes: [3, 4, 5], pieces: [4, 6, 6], chars: [6, 8, 10], brains: [3, 4, 5] } as const;
 
-/** unitCap = max((B / F - props) / c_whole, 1.0 + sleeper x (wholes cap - 1)) (D-61, D-85): the formula, never under the floor. */
+/** D-101 (orchestrator 2026-11-19, R11_FIX item 1): behaviour must not depend on the graphics tier. At EVERY tier a party of up to AWAKE_MIN (3)
+ *  is fully awake, at Home and at every place, and with 4 or 5 out at least AWAKE_MIN are awake; the budget may only limit beyond that. Round 10 found
+ *  the low and med tiers' unitCap (1.06 / 1.345: ONE awake whole) let one squishy of a party of three move at a time, so they could not use three
+ *  things or play together (VERDICT_R10, R10_FIX 1). The floor is AWAKE_MIN wholes, every pair of them touching, and the rest of the biggest party
+ *  (PARTY_MAX, mat.ts MAT_LIMIT high) asleep: 3 + 3 x 0.25 + 2 x 0.03 = 3.81 units, 3 mover tokens. The physics is the same at every tier (fixed
+ *  1/360 s substeps, detail-3 wholes); only the render detail differs (render/quality.ts), so nothing else LIFE sees changes with the tier. */
+export const AWAKE_MIN = 3;
+export const PARTY_MAX = 5;
+export const AWAKE_FLOOR = AWAKE_MIN * UNIT.whole + (AWAKE_MIN * (AWAKE_MIN - 1) / 2) * UNIT.pair + (PARTY_MAX - AWAKE_MIN) * UNIT.sleeper;
+/** unitCap = max((B / F - props) / c_whole, 1.0 + sleeper x (wholes cap - 1), D-101's AWAKE_FLOOR) (D-61, D-85, D-101): the formula, never under the
+ *  floors. With PF-00's numbers the formula (0.77 / 1.345 / 2.494) is under D-101's floor at every tier, so every tier reads 3.81 today. */
 export function unitCapOf(tier: number, f: number = PHONE_FACTOR): number {
   const t = tier < 0 ? 0 : tier > 2 ? 2 : tier | 0;
   const formula = (PHYS_BUDGET_MS[t] / f - PROPS_MS) / C_WHOLE_MS;
-  const floor = UNIT.whole + UNIT.sleeper * (CHAR_CAP.wholes[t] - 1);
+  const floor = Math.max(UNIT.whole + UNIT.sleeper * (CHAR_CAP.wholes[t] - 1), AWAKE_FLOOR);
   return formula > floor ? formula : floor;
 }
 /** unitCap and moverCap at F = PHONE_FACTOR per tier, computed once by the formula (the hot path reads these: a double returned from a call
  *  is boxed, LF-02). */
 export const UNIT_CAP = new Float64Array(3);
-/** moverCap = max(1, floor(unitCap)) (with the tolerance, so 1.999.. counts as 2). */
+/** moverCap = max(AWAKE_MIN, floor(unitCap)) (with the tolerance, so 1.999.. counts as 2; D-101: never under AWAKE_MIN movers). */
 export function moverCapOf(tier: number, f: number = PHONE_FACTOR): number {
   const m = Math.floor(unitCapOf(tier, f) + GATE_TOL);
-  return m < 1 ? 1 : m;
+  return m < AWAKE_MIN ? AWAKE_MIN : m;
 }
 /** moverCap per tier at F = PHONE_FACTOR (the hot path reads it). */
 export const MOVER_CAP = new Int8Array(3);
@@ -97,7 +107,7 @@ export function createAttention(): Attention {
     voiceUntil: new Float64Array(8).fill(-1e9), voiceGroup: new Uint8Array(8),
     charGapT: new Float64Array(16).fill(-1e9), iconT: new Float64Array(16 * 25).fill(-1e9),
     pN: 0, pWho: new Int8Array(PEND), pUntil: new Float64Array(PEND), pF: new Float32Array(PEND * 8), pB: new Uint8Array(PEND * 5), pKind: new Uint8Array(PEND),
-    movers: 0, moverCap: 1, unitCap: 1.06, allowance: 0,
+    movers: 0, moverCap: MOVER_CAP[0], unitCap: UNIT_CAP[0], allowance: 0,
     keep: new Uint8Array(64), order: new Int8Array(64),
     granted: 0, dropped: 0,
   };

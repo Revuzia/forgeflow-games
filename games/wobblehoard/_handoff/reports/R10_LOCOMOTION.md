@@ -107,3 +107,29 @@ putty creeps in slow heavy pulses. Open: the body does not turn to face its trav
 walk crawls "crab-wise"; turning bodies is a separate decision. The gait hops of LIFE still happen on top of the crawl (LIFE's, untouched).
 Files: NEW src/physics/crawl.ts, _harness/probe_crawl.ts, _harness/crawl_film.mjs; EDITED src/physics/softbody.ts (hook), src/physics/props.ts,
 src/shell/later-life.ts (1 line), _spec/PLAYGROUND_BUILD.md (D-100 at the end). Patch: R10_LOCOMOTION.patch.
+
+## Step 6 (follow-up from the coordinator: FACING and HOPS; working tree, tsc clean)
+FACING. Nothing turned a body before (the face is on the rest +Z: render/wholeRef.ts anchors the eyes there; LIFE's GAZE moves only the eyes, POSE is a
+render shear), so the crawl turns the soft body itself: while LIFE walks it, `Crawl.step` yaws the whole body about its centre toward the heading (a move
+of X and V like the glide, the fitted rotation `qr` turned with it; rate-limited 8 rad/s, tau 0.12 s, a 0.5 degree dead band), the front bends toward the
+turn first (goal `bend`), the wave runs along the FACING axis (the face end stretches and plants) and starts only once it faces within ~18 degrees (it turns
+first, then crawls); the lean follows the yaw rate x the wave amplitude (a lean during the turn on the spot rolled the body 20 degrees off its way). After
+the walk it turns back to face +Z (as every body faces at rest today) unless a hand has it. Cut pieces (a cut face, or the legacy chunk) do not turn: their
+wave runs along a virtual facing that turns the same way (a turned half put its cut face along the wave and its foot creased to 145 degrees once a cycle).
+Strides of jelly / water fill / putty lengthened, jelly / water fill grip a little sharper (their front-back footprint is shorter than their width).
+HOPS. later-life.ts INTENT.HOP: a hop with no horizontal speed while LIFE's walk is on (c.scooting), more than 15 cm from its target, with a world and not
+Calm, is dropped (LIFE's gait step hop: act.ts travelStep emitHop(.., 0, 600)); boops / pad hops (horizontal), hops at or after the walk's end, and every hop
+in Calm stay. Measured on probe_life_selfuse's rig (3 places, 90 s): hops while crawling 0, other hops 52.
+probe_crawl (working tree, --full by sections): CR-01..CR-11, CR-13, CR-14 PASS. CR-14 (new): 4 directions x 6 families, facing vs centre velocity from 0.6 s:
+worst 16.7..18.5 deg (bar 25), turned back to +Z within 0.48 s. CR-12 FAILS its bar: measured fairly now (all three rigs warmed, windows interleaved, best
+of 8): crawl frame 1.585 ms vs squash pose 1.508 vs glide 1.475 for two walking bodies = crawl - squash pose 38.5 us per body (bar 25); the crawl step
+itself 19.9..21 us per body per frame; 0 for bodies that do not walk. NOT loosened. CR-13 allocation 0 B; PH-11 3/3 PASS (0 / 0 / 16 B).
+probe_playground quick 74/74; probe_quests all pass; probe_life_selfuse --quick all pass (SU-01 6/6, SU-02, SU-03, SU-05 none, SQ-01); one earlier run
+missed Rainleaf (2 things) while the round-11 engineer's LIFE code was changing; the same run with the crawl OFF then failed SU-05; the final run with the
+crawl on passes all.
+vite build (into scratch, the working tree as it stood): [G0] 2524 KB of 3072; [G0b] first play 463 KB gzip of 600; [T1] 2102.6 KB of the 2250 KB cap
+(D-102). My share: crawl.ts 5,290 B raw / 2,870 B gzip (later-props, 42.0 kB), props.ts ~+190 B, later-life.ts ~+350 B, softbody.ts +281 B raw / +90 B gzip
+(first play): about 6.1 KB raw in all.
+Shots (filmed from a scratch snapshot: the dev server reloaded mid-film while others saved files): `_shots/crawl_face/` sheet_jellygel_side.png and
+sheet_jellygel_game.png (a scripted +x walk: the face leads), sheet_firmsilicone_side.png, sheet_1280x800_life_{game,side}.png and
+sheet_390x844_life_{game,side}.png (LIFE walks Dollop to the ball: face toward the ball, eyes at the front).

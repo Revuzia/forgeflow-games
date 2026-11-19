@@ -32,7 +32,10 @@ const G0B_FIRST_PLAY_GZIP_BYTES = 600 * 1024;
 // (round 10, R10_FIX 3; VERDICT_R9 A3) T1 = PLAYGROUND_BUILD 14.3's whole-build cap SZ-02 (D9's ceiling): every file under the output folder's `assets/` (the code and
 // styles the game downloads over a play, first load and lazy chunks; the page, credits, meta and thumbnail beside it are the portal's) at most 2000 KB (decimal, as
 // SZ-02 and the verifier measure it). `vite build` FAILS over it; until round 10 only G0's 3 MB folder gate ran, so the total grew past 2000 unnoticed.
-const T1_ASSETS_BUDGET_BYTES = 2000 * 1000;
+// (round 11, R11_FIX item 6) D-102 (orchestrator 2026-11-19, _spec/PLAYGROUND_BUILD.md): the 2000 KB total was set when the game had two places; it grew to seven
+// places plus the party, Float, the crawl and the photo features, and places and features load lazily (a player downloads only what they open), so the WHOLE-build
+// cap is raised to 2250 KB. The first-play cap (G0b below) is NOT changed: it is met. Still a hard gate: `vite build` fails over 2250.
+const T1_ASSETS_BUDGET_BYTES = 2250 * 1000;
 
 // PLAYGROUND (PG_SHELL round 3; PLAYGROUND_BUILD.md 13, 14.3, D-69): the lazy chunks that only load AFTER the first frame of play are named `later-*`, so G0b counts
 // what a first play downloads and nothing else. By file name already: `shell/later-life.ts` (the LIFE chunk, requested after the first frame of play) and
@@ -287,10 +290,10 @@ export function sizeBudget(limit: number, firstPlayLimit: number, assetsLimit = 
       const line2 = `[G0b] first-play download ${kb(first)} gzip of the ${kb(firstPlayLimit)} budget (html, js and css except later-* chunks)`;
       let assets = 0;
       try { assets = dirBytes(resolve(outDir, 'assets')); } catch { assets = 0; }
-      const line3 = `[T1] game assets ${(assets / 1000).toFixed(1)} KB of the ${(assetsLimit / 1000).toFixed(0)} KB whole-build cap (SZ-02, D9: every file under assets/)`;
+      const line3 = `[T1] game assets ${(assets / 1000).toFixed(1)} KB of the ${(assetsLimit / 1000).toFixed(0)} KB whole-build cap (SZ-02, D9, D-102: every file under assets/)`;
       if (total >= limit) throw new Error(`${line}: OVER BUDGET (CONTRACT section 6, gate G0)`);
       if (first >= firstPlayLimit) throw new Error(`${line2}: OVER BUDGET (CONTRACT section 6, gate G0b)`);
-      if (assets > assetsLimit) throw new Error(`${line3}: OVER BUDGET (PLAYGROUND_BUILD 14.3 SZ-02, gate T1)`);
+      if (assets > assetsLimit) throw new Error(`${line3}: OVER BUDGET (PLAYGROUND_BUILD 14.3 SZ-02 and D-102, gate T1)`);
       console.log(line);
       console.log(line2);
       console.log(line3);
