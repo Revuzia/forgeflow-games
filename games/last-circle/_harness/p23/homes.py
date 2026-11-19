@@ -450,6 +450,14 @@ def judge_interiors(v, B, root=None):
 
 def main_fn(v, args):
     root, label = L.node_root(args)
+    # (fix5) a --rev tree (git archive of runtime + assets/props + vendor) has no assets/tex: the finish row's art atlas is read from that revision too
+    if getattr(args, "rev", None) and not os.path.isfile(os.path.join(root, ART_FILE)):
+        import subprocess
+        blob = subprocess.run(["git", "-C", C.REPO, "show", "%s:games/last-circle/%s" % (args.rev, ART_FILE.replace(os.sep, "/"))], capture_output=True)
+        if blob.returncode == 0 and blob.stdout:
+            os.makedirs(os.path.join(root, os.path.dirname(ART_FILE)), exist_ok=True)
+            with open(os.path.join(root, ART_FILE), "wb") as fh:
+                fh.write(blob.stdout)
     if args.plant:
         root = planted_root(root, args.plant)
         label += " + plant " + args.plant
