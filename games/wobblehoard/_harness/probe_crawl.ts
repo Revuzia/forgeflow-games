@@ -1,7 +1,7 @@
 // R10 LOCOMOTION (owner, 2026-11-19, D-100): squishies CRAWL like slugs / snails instead of gliding. The crawl's rows on the real physics (plain node, type stripping).
 //   node _harness/probe_crawl.ts            the quick set: 4 families on the flat, turns, ice, water, ramp and mound, scales, pieces, the gate, Calm, cost (about 40 s: one short heavy job)
 //   node _harness/probe_crawl.ts --full     every family (12) and every row (about 2 min)
-//   node _harness/probe_crawl.ts --only=flat,turn,surf,scale,gate,cost   some sections
+//   node _harness/probe_crawl.ts --only=flat,turn,face,surf,scale,gate,cost   some sections
 // Every walk is a scootTo (LIFE's own travel driver) at the family's glide speed (src/data/life.ts GAITS), on a prop world (the crawl is the world's: props.ts trk),
 // measured against the same walk with the crawl off (CRAWL.on false: today's rigid glide, bit for bit). Own meters: the ground-contact footprint (particles under
 // 12 mm) and the whole body's extent along the travel, each third's velocity phase, the centre's speed, the volume, the fold, the planted base's slip.
@@ -66,7 +66,7 @@ const wrap = (x: number): number => { let y = x; while (y > Math.PI) y -= 2 * Ma
 
 interface Walk {
   arrive: number; fpMin: number; fpMax: number; len: number; osc: number; lagFM: number; lagMR: number; cycle: number; vMin: number; vMax: number; vMean: number;
-  volMin: number; volMax: number; fold: number; rest: number; settle: number; lat: number; yaw: number; slip: number; finite: boolean; kinMax: number; leanMax: number; air: number; prog: number;
+  volMin: number; volMax: number; fold: number; rest: number; settle: number; lat: number; yaw: number; slip: number; finite: boolean; kinMax: number; leanMax: number; air: number; prog: number; faceMax: number; faceBack: number;
 }
 interface WalkOpts { world?: PropWorld; at?: V3; to?: V3; turnAt?: number; turnTo?: V3; genome?: Genome; piece?: { frac: number; chunk: boolean }; maxS?: number; hold?: number }
 /** one walk: settle 1 s, scootTo the target at the family's glide speed; LIFE's arrival (within 5 cm: endScoot + setHome); then 2 s of rest */
@@ -82,12 +82,16 @@ function walk(fam: string, crawl: boolean, o: WalkOpts = {}): Walk {
   const sp = GLIDE[fam].glide;
   b.scootTo(to.x, to.z, sp);
   const P = b.positions, n = P.length / 3, pb = P_(b);
-  const r: Walk = { arrive: -1, fpMin: 1e9, fpMax: -1e9, len: 0, osc: 0, lagFM: NaN, lagMR: NaN, cycle: NaN, vMin: 1e9, vMax: -1e9, vMean: 0, volMin: 9, volMax: 0, fold: 0, rest: -1, settle: -1, lat: 0, yaw: 0, slip: NaN, finite: true, kinMax: 0, leanMax: 0, air: 0, prog: 0 };
+  const r: Walk = { arrive: -1, fpMin: 1e9, fpMax: -1e9, len: 0, osc: 0, lagFM: NaN, lagMR: NaN, cycle: NaN, vMin: 1e9, vMax: -1e9, vMean: 0, volMin: 9, volMax: 0, fold: 0, rest: -1, settle: -1, lat: 0, yaw: 0, slip: NaN, finite: true, kinMax: 0, leanMax: 0, air: 0, prog: 0, faceMax: 0, faceBack: -1 };
   const q0 = b.frame.y;
-  // the thirds of the body along the travel (rest coordinates at the start)
+  // the thirds of the body along its own front (rest +Z, where the face is: the crawl turns the body to lead with it)
   let ux = to.x - x0, uz = to.z - z0; const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
-  let smin = 1e9, smax = -1e9; for (let i = 0; i < n; i++) { const s = P[i * 3] * ux + P[i * 3 + 2] * uz; smin = Math.min(smin, s); smax = Math.max(smax, s); }
-  const third = new Int8Array(n); for (let i = 0; i < n; i++) { const u = (P[i * 3] * ux + P[i * 3 + 2] * uz - smin) / (smax - smin); third[i] = u > 0.72 ? 0 : u < 0.28 ? 2 : u > 0.4 && u < 0.6 ? 1 : -1; }
+  const Q0 = (b as unknown as { Q: Float64Array }).Q;
+  let smin = 1e9, smax = -1e9; for (let i = 0; i < n; i++) { const s = Q0[i * 3 + 2]; smin = Math.min(smin, s); smax = Math.max(smax, s); }
+  const third = new Int8Array(n); for (let i = 0; i < n; i++) { const u = (Q0[i * 3 + 2] - smin) / (smax - smin); third[i] = u > 0.72 ? 0 : u < 0.28 ? 2 : u > 0.4 && u < 0.6 ? 1 : -1; }
+  // the facing on the floor (the frame's +Z) and the centre's velocity over 0.1 s, from 0.6 s after the start while it moves faster than 5 cm/s
+  const facing = (): [number, number] => { const q = b.frame; const fx = 2 * (q.x * q.z + q.w * q.y), fz = 1 - 2 * (q.x * q.x + q.y * q.y), l = Math.hypot(fx, fz) || 1; return [fx / l, fz / l]; };
+  const cHist: number[] = [];
   const thF: number[] = [], thM: number[] = [], thR: number[] = [], cS: number[] = [];
   const lastX = new Float64Array(n * 3); lastX.set(P);
   let slipN = 0, slipS = 0, t = 0, turned = false, lenMax = 0;
@@ -112,6 +116,11 @@ function walk(fam: string, crawl: boolean, o: WalkOpts = {}): Walk {
       const th = third[i]; if (th >= 0) { acc[th] += s; cnt[th]++; }
     }
     if (low > 0.03) r.air++;
+    cHist.push(b.center.x, b.center.z);
+    if (t >= 0.6 && cHist.length >= 14) {
+      const L = cHist.length, vx = (cHist[L - 2] - cHist[L - 14]) / (6 * DT), vz = (cHist[L - 1] - cHist[L - 13]) / (6 * DT), sp2 = Math.hypot(vx, vz);
+      if (sp2 > 0.05) { const [fx, fz] = facing(), ang = Math.acos(Math.max(-1, Math.min(1, (fx * vx + fz * vz) / sp2))) * 180 / Math.PI; if (ang > r.faceMax) r.faceMax = ang; }
+    }
     if (steady) {
       const fp = cmax - cmin; if (fp < r.fpMin) r.fpMin = fp; if (fp > r.fpMax) r.fpMax = fp; lenMax = Math.max(lenMax, amax - amin);
       thF.push(acc[0] / cnt[0]); thM.push(acc[1] / cnt[1]); thR.push(acc[2] / cnt[2]); cS.push(b.center.x * gx + b.center.z * gz);
@@ -155,6 +164,8 @@ function walk(fam: string, crawl: boolean, o: WalkOpts = {}): Walk {
     const still = (b.metrics.kinetic ?? 1) < PG.restKin && Math.hypot(pb.vcx, pb.vcz) < PG.restSpeed;
     if (r.rest < 0 && still) r.rest = t - ts;
     if (r.settle < 0 && still && !pb.crawlOn) r.settle = t - ts;
+    const fz = facing()[1];
+    if (fz >= Math.cos(10 * Math.PI / 180)) { if (r.faceBack < 0) r.faceBack = t - ts; } else r.faceBack = -1;
   }
   r.yaw = Math.abs(b.frame.y - q0) * 2 * 180 / Math.PI;
   return r;
@@ -239,7 +250,7 @@ if (sec('flat')) {
   add('CR-02 the front leads the rear: the velocity phase of the front third leads the middle\'s, and the middle\'s leads the rear\'s (a wave from front to rear)', `${okLead}/${N} (see the lines above: front->mid / mid->rear in cycles)`, 'both > 0.03 cycle', okLead === N);
   add('CR-03 travel time unchanged: the 2 m walk (LIFE\'s arrival: within 5 cm) takes within 20 % of today\'s glide', `${okSpeed}/${N}; worst ${f(worstSpeed * 100, 1)} %`, '<= 20 %', okSpeed === N);
   add('CR-04 settles: at rest (PG.restKin, PG.restSpeed) with the wave gone within 1 s of the stop; volume as now: within 1 % during the walk, or within the family\'s own range on today\'s walk (the glide with its gait hops and their squash)', `rest ${okRest}/${N} (worst ${f(worstRest)} s); volume ${okVol}/${N} (worst ${f(worstVol * 100, 2)} %: see the lines above)`, '<= 1 s; <= 1 % or within today\'s range', okRest === N && okVol === N);
-  add('CR-05 no jitter, no runaway: finite, no fold over 120 deg, lateral drift under 3 cm, yaw under 5 deg, the centre never moves backward', `${okSafe}/${N}; fold ${f(worstFold, 0)} deg, drift ${f(worstLat * 1000, 0)} mm, yaw ${f(worstYaw, 1)} deg, centre speed min ${f(minV)} x`, 'all', okSafe === N);
+  add('CR-05 no jitter, no runaway: finite, no fold over 120 deg, lateral drift under 3 cm, the centre never moves backward; 2.5 s after the stop it faces as it did (yaw under 5 deg)', `${okSafe}/${N}; fold ${f(worstFold, 0)} deg, drift ${f(worstLat * 1000, 0)} mm, yaw ${f(worstYaw, 1)} deg, centre speed min ${f(minV)} x`, 'all', okSafe === N);
   add('CR-06 the base grips where it is planted: the planted base particles\' ground speed against the glide\'s (today\'s glide: every base particle slides at 1.0)', `${okGrip}/${N}; worst ${f(maxSlip)} (glide ${f(glideSlip)})`, '<= 0.4', okGrip === N);
 }
 
@@ -256,6 +267,26 @@ if (sec('turn')) {
     if (c.arrive > 0 && Math.abs(dv) <= 0.2 && c.leanMax > 0.01 && c.fold <= 120 && c.finite && c.settle >= 0 && c.settle <= 1) ok++;
   }
   add('CR-07 turns: a walk retargeted 90 degrees on the way arrives within 20 % of the glide\'s time, leans into the turn, no fold over 120, at rest within 1 s', `${ok}/${fams.length}: ${ls.join('; ')}`, 'all', ok === fams.length);
+}
+
+/* ───────────── CR-14 facing: it leads with its face ───────────── */
+if (sec('face')) {
+  const fams = FULL ? ['jellygel', 'putty', 'firmsilicone', 'slimegoo', 'marshmallow', 'gummy'] : ['jellygel', 'putty', 'firmsilicone', 'slimegoo'];
+  const dirs: [string, number, number][] = [['+x', 2, 0], ['-x', -2, 0], ['away (-z)', 0, -2], ['toward (+z)', 0, 2]];
+  let ok = 0, n = 0, worst = 0, worstBack = 0; const ls: string[] = [];
+  for (const fam of fams) {
+    const parts: string[] = [];
+    for (const [nm, dx, dz] of dirs) {
+      const c = walk(fam, true, { to: v3(dx, 0, dz) });
+      n++; worst = Math.max(worst, c.faceMax); worstBack = Math.max(worstBack, c.faceBack < 0 ? 9 : c.faceBack);
+      const pass = c.arrive > 0 && c.faceMax <= 25 && c.faceBack >= 0 && c.faceBack <= 1.5 && c.fold <= 120 && c.finite;
+      if (pass) ok++;
+      parts.push(`${nm} ${f(c.faceMax, 0)} deg, back ${f(c.faceBack)} s${pass ? '' : ' FAIL'}`);
+    }
+    ls.push(`${fam}: ${parts.join(', ')}`);
+  }
+  add('CR-14 it leads with its face: a 2 m walk in four directions from rest (facing +Z): from 0.6 s after the start the angle between its facing (its rest +Z, the face) and the centre\'s velocity; after the stop it turns back to face +Z (within 10 deg)',
+    `${ok}/${n}; worst ${f(worst, 1)} deg, turned back after ${f(worstBack)} s at most: ${ls.join('; ')}`, '<= 25 deg; back <= 1.5 s', ok === n);
 }
 
 /* ───────────── CR-08 ice, water, ramp, mound ───────────── */

@@ -8,10 +8,10 @@ Scratch: `/tmp/claude-0/-home-user-forgeflow-games/2d4e12a5-0f4d-5239-bdda-16316
 ## Status
 | item | what | state |
 |---|---|---|
-| 1 | Float floats everyone everywhere (D-97 replaces D-83) | code + node probe done (probe_float 14/14, node_checks 185/185); browser check running (desk home1, cabin1 pass) |
-| 2 | an easier way to take squishies out to play together | done in code; browser 26/26 on both frames (first run); the desktop label fix (strip above the name tag on wide) re-checked in the final run |
-| 3 | rotate with right click while cutting (D-98) | done in code (game.ts), node rows in node_checks (one re-specified, one new); browser check in `_harness/browser_cutparty.mjs` |
-| 4 | cut any/all with a party (D-99) | any ONE squishy, chosen by the stroke, then another after Reconnect all (probe_partycut 6/6); all at once NOT done (one cut tree) |
+| 1 | Float floats everyone everywhere (D-97 replaces D-83) | DONE: probe_float 14/14; browser_float 22/22 (both frames, 1 and 3 out, Home and the cabin) |
+| 2 | an easier way to take squishies out to play together | DONE: probe_party 10/10; browser_party 26/26 (both frames, after the desktop label fix) |
+| 3 | rotate with right click while cutting (D-98) | DONE: node_checks 186/186 (one row re-specified, one new); browser_cutparty D-98 rows pass |
+| 4 | cut any/all with a party (D-99) | DONE for ANY one squishy (the stroke chooses), then another after Reconnect all: probe_partycut 6/6, browser_cutparty 10/10; ALL AT ONCE not done (one cut tree) |
 
 ## 1. Float
 
@@ -116,3 +116,22 @@ the dev page (`window.__WH__` undefined). Commands: `WH_FROZEN=1 node _harness/b
   drag then cut (2 pieces). D-99 desk and phone (3 out, real mouse / CDP touch): the stroke across Puddlo (not the play squishy) cut Puddlo (name tag "Puddlo", 2
   pieces, 3 out); a stroke across another while it was cut said "One squishy at a time: Reconnect all, then cut another." and cut nothing; Reconnect all (its bar
   button) gave 1 piece and 3 out; 0 console errors. Shots `_harness/_renders/cutparty/*.png` (looked at: the cut squishy's halves at its own spot, the others whole).
+- browser_float.mjs (frozen): **22/22**. Rise (lowest centre over its table rest, every second of 20 s) / off-frame samples / Table at rest:
+  desk home1 0.514 m / 0 / 0.75 s; desk cabin1 0.442 / 0 / 0.75; desk home3 0.316 / 0 / 0.75; desk cabin3 0.318 / 0 / 0.75; phone home1 0.466 / 0 / 1.0;
+  phone cabin1 0.499 / 0 / 0.75; phone home3 0.335 / 0 / 0.75; phone cabin3 0.321 / 0 / 1.0; 0 console errors both frames. The 3 out are taken out by the Friends
+  strip (real taps). Shots `_harness/_renders/float/float_{home1,cabin1,home3,cabin3}_{desk,phone}.png` (looked at: everyone up off the floor with shadows, in frame).
+
+## Size (T1)
+Not measured by a build (the machine was busy; the other engineer owns the size work). Measured by module: the Friends strip adds 7.2 KB minified JS (rolldown, deps
+external) + 2.9 KB minified CSS (lightningcss) to the LAZY later-play chunk; the first-play files grow by about 1.5 KB (game.ts stroke routing and view drags,
+bodies.exchange); softbody and later-life changes are net about +0.5 KB. So T1 (all assets) grows by roughly 12 KB: this makes the failing 2000 KB gate WORSE by
+that much. Not offset.
+
+## Not done / open
+- Cutting SEVERAL squishies at the same time (D-99 says what it takes: a cutter per squishy).
+- T1 +~12 KB (above).
+- After an exchange the play squishy is the cut one (the name tag follows); the history notes it, so a reload starts with it. Reconnect returns it to the spot it had
+  when the stroke chose it, not to where LIFE may have walked it since.
+- The whole browser_shell.mjs was not run (70 min); its 4 rows that matched "Bring out" now accept "Take out too"; the quick switcher row moves up one line on the
+  wide layout while the Friends strip shows (no browser_shell row measured its exact height, but sections that compare it with the name tag were not re-run).
+- probe_life LF-02 (lifeStep allocation) fails as before this round (src/life untouched here).

@@ -25,7 +25,7 @@ export const CRAWL_FAMILY: Record<string, [number, number, number, number, numbe
   popdome: [0.42, 0.55, 2.5, 0.4, 0.08, 1.6], gummy: [0.4, 0.55, 2.5, 0.4, 0.08, 1.6], beadsqueeze: [0.55, 0.55, 3, 0.3, 0.05, 1.8],
 };
 /** tuning shared by every family (PROBES may set them) */
-export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, turn: 5, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
+export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, yawTau: 0.12, yawMax: 8, bend: 0.14, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
 const NT = 256, TAU = Math.PI * 2;
 
 /** the private PropWorld state a crawl reads (props.ts: BF = 12 floats per tracked body, [4] the eased grip multiplier) */
@@ -34,11 +34,13 @@ interface World { hNow: number; bsf: Float64Array }
 interface Body {
   n: number; X: Float64Array; Q: Float64Array; M: Float64Array; Mtot: number; qr: Float64Array; cx: number; cz: number;
   scootOn: boolean; sV: number; stx: number; stz: number; heldF: boolean; moveOn: boolean; cyOn: boolean; carried: boolean; gravityOn: boolean; nearCount: number;
-  asleep: boolean; crawlOn: boolean; crawlD: Float64Array; crawlF: Float64Array;
+  asleep: boolean; crawlOn: boolean; crawlD: Float64Array; crawlF: Float64Array; V: Float64Array; center: { x: number; z: number };
 }
 
 export class Crawl {
   on = false;
+  /** after a walk the body turns back to face +Z (the camera's side: as it faces at rest, today) until it does, unless something holds it */
+  private turn = false;
   readonly d: Float64Array;
   /** the rest shape + d (centred): what the body's rotation is fitted against while the crawl is on */
   private readonly f: Float64Array;
@@ -49,7 +51,7 @@ export class Crawl {
   private readonly iv3: number;
   /** the grip wave g(theta) (-1 planted .. 1 reaching) and its integral G (zero mean), interleaved: [g0, G0, g1, G1, ...] over a cycle in NT steps */
   private readonly T = new Float64Array((NT + 1) * 2);
-  /** [0] phase, [1] amplitude, [2] ux, [3] uz (the travel direction), [4] lean, [5] time in the air, [6..9] the body's extent along the travel and up (rest
+  /** [0] phase, [1] amplitude, [2] ux, [3] uz (the wave's axis: the facing), [4] lean, [5] time in the air, [6..9] the body's extent along the travel and up (rest
    *  frame, measured each frame for the next one: s0, s1, y0, y1) */
   readonly s = new Float64Array(10);
   private readonly pf: [number, number, number, number, number, number];
@@ -83,16 +85,46 @@ export class Crawl {
    *  before any arithmetic on doubles, so the call costs nothing while this method is not yet optimised: a body that does not walk calls it every frame.) */
   step(w: World, i: number, calm: boolean): void {
     const b = this.body as unknown as Body, S = this.s;
-    if (b.asleep || (!this.on && (!b.scootOn || calm || !CRAWL.on || b.heldF))) { S[5] = 0; return; }   // (`on` mirrors s[1] > 0: an element of a Float64Array read by code not yet optimised is a HeapNumber)
+    if (b.asleep || (!this.on && !this.turn && (!b.scootOn || calm || !CRAWL.on || b.heldF))) { S[5] = 0; return; }   // (`on` mirrors s[1] > 0: an element of a Float64Array read by code not yet optimised is a HeapNumber)
     const n = b.n, dt = w.hNow, grip = w.bsf[i * 12 + 4];
     if (!(dt > 0)) return;
     const tx = b.stx - b.cx, tz = b.stz - b.cz, tl = Math.sqrt(tx * tx + tz * tz);
-    const v = b.scootOn && tl > 0.03 ? b.sV : 0;   // (a glide that has arrived keeps a creep of speed at its target: no crawl there)
+    const go = b.scootOn && tl > 0.03, v = go ? b.sV : 0;   // (a glide that has arrived keeps a creep of speed at its target: no crawl there)
     const free = CRAWL.on && !calm && !b.heldF && !b.moveOn && !b.cyOn && !b.carried && b.gravityOn;
     S[5] = b.nearCount > 0 ? 0 : S[5] + dt;
     const ground = S[5] < CRAWL.airS;
-    // (no crawl under vMin: LIFE's contact approach, the last centimetres at 0.04 m/s, glides as before; full from vFull)
-    const u0 = (v - CRAWL.vMin) / (CRAWL.vFull - CRAWL.vMin), want = free && ground && u0 > 0 ? (u0 >= 1 ? 1 : u0 * u0 * (3 - 2 * u0)) : 0;
+    // ---- FACING: a slug leads with its head. The body's front is its rest +Z (where the face is: render/wholeRef.ts); while it walks it turns toward the
+    // heading (the glide's target), after the walk back to +Z (as it faces at rest), by a smooth yaw of the whole body about its centre (a move of X and V
+    // like the glide: no momentum; the rotation the shape matching fits turns with it). Its front bends toward the turn first (the goal's `bend`, below).
+    const q = b.qr;
+    let qx = q[0], qy = q[1], qz = q[2], qw = q[3];
+    let fx = 2 * (qx * qz + qw * qy), fz = 1 - 2 * (qx * qx + qy * qy);   // R (0, 0, 1) on the floor: the facing
+    const fl = Math.sqrt(fx * fx + fz * fz), hx = go ? tx / tl : 0, hz = go ? tz / tl : 1;
+    let e = 0, rate = 0;
+    if (go && free) this.turn = true;
+    if (fl > 0.5) {   // (upright enough to have a facing: a body on its side is not turned)
+      fx /= fl; fz /= fl;
+      e = Math.atan2(fx * hz - fz * hx, fx * hx + fz * hz);   // the heading's angle from the facing (+: toward the facing's left, (-fz, fx))
+      if (free && ground && (go || this.turn)) {
+        const mx = CRAWL.yawMax * dt, k = e * (1 - Math.exp(-dt / CRAWL.yawTau)), dl = k > mx ? mx : k < -mx ? -mx : k;
+        if (!go && e < 0.03 && e > -0.03) this.turn = false;
+        const c = Math.cos(dl), sn = Math.sin(dl), ox = b.center.x, oz = b.center.z, X = b.X, V = b.V;
+        for (let j = 0; j < n * 3; j += 3) {
+          const x = X[j] - ox, z = X[j + 2] - oz, vx = V[j], vz = V[j + 2];
+          X[j] = ox + x * c - z * sn; X[j + 2] = oz + x * sn + z * c; V[j] = vx * c - vz * sn; V[j + 2] = vx * sn + vz * c;
+        }
+        // (the fitted rotation turns by the same yaw, about -y in this sense: its next fit starts there)
+        const c2 = Math.cos(0.5 * dl), s2 = Math.sin(0.5 * dl);
+        const nx = c2 * qx - s2 * qz, ny = c2 * qy - s2 * qw, nz = c2 * qz + s2 * qx, nw = c2 * qw + s2 * qy;
+        q[0] = nx; q[1] = ny; q[2] = nz; q[3] = nw; qx = nx; qy = ny; qz = nz; qw = nw;
+        const gx = fx * c - fz * sn, gz = fx * sn + fz * c;
+        fx = gx; fz = gz; e -= dl; rate = dl / dt;
+      } else if (!free) this.turn = false;   // (a hand took it: it stays as it is left)
+    } else if (!go) this.turn = false;
+    // (no crawl under vMin: LIFE's contact approach, the last centimetres at 0.04 m/s, glides as before; full from vFull; and none while it still faces
+    // more than about 50 degrees away from its way, full within 18: it turns first)
+    const u0 = (v - CRAWL.vMin) / (CRAWL.vFull - CRAWL.vMin), ce = (Math.cos(e) - 0.6) / 0.35, al = fl > 0.5 ? (ce >= 1 ? 1 : ce <= 0 ? 0 : ce * ce * (3 - 2 * ce)) : 1;
+    const want = free && ground && u0 > 0 ? (u0 >= 1 ? 1 : u0 * u0 * (3 - 2 * u0)) * al : 0;
     let a = S[1];
     const fresh = a === 0;
     a += (want - a) * (1 - Math.exp(-dt / (!free ? CRAWL.tauHeld : want > a ? CRAWL.tauIn : CRAWL.tauOut)));
@@ -100,23 +132,14 @@ export class Crawl {
     S[1] = a;
     if (a === 0) { if (this.on) { this.on = false; b.crawlOn = false; this.d.fill(0); S[4] = 0; } return; }
     this.on = true; b.crawlOn = true;
-    // ---- the travel direction: toward the glide's target, turned at most CRAWL.turn rad/s; the lean follows the turn rate
-    let ux = S[2], uz = S[3];
-    let rate = 0;
-    if (b.scootOn && tl > 0.02) {
-      const dx = tx / tl, dz = tz / tl;
-      if (fresh || ux * ux + uz * uz < 0.5) { ux = dx; uz = dz; if (fresh) S[0] = 0; }
-      else {
-        const ang = Math.atan2(ux * dz - uz * dx, ux * dx + uz * dz), mx = CRAWL.turn * dt, t = ang > mx ? mx : ang < -mx ? -mx : ang;
-        const c = Math.cos(t), sn = Math.sin(t), nx = ux * c - uz * sn, nz = ux * sn + uz * c;
-        ux = nx; uz = nz; rate = t / dt;
-      }
-    }
+    if (fresh) S[0] = 0;
+    // ---- the wave's axis: the facing (the face end is the front that stretches and plants); the lean follows the yaw rate
+    const ux = fl > 0.5 ? fx : hx, uz = fl > 0.5 ? fz : hz;
     S[2] = ux; S[3] = uz;
     const lw = CRAWL.leanK * rate * v, lt = lw > CRAWL.leanMax ? CRAWL.leanMax : lw < -CRAWL.leanMax ? -CRAWL.leanMax : lw;
     S[4] += (lt - S[4]) * (1 - Math.exp(-dt / 0.2));
+    const bend = CRAWL.bend * (e > 1 ? 1 : e < -1 ? -1 : e);   // (the front swings toward the heading first: x the remaining yaw, saturating at a radian)
     // ---- the rest frame (the body's rotation from the last substep): travel u, up and lateral (u x up) in rest coordinates
-    const q = b.qr, qx = q[0], qy = q[1], qz = q[2], qw = q[3];
     const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qw * qz), r02 = 2 * (qx * qz + qw * qy);
     const r10 = 2 * (qx * qy + qw * qz), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qw * qx);
     const r20 = 2 * (qx * qz - qw * qy), r21 = 2 * (qy * qz + qw * qx), r22 = 1 - 2 * (qx * qx + qy * qy);
@@ -153,10 +176,10 @@ export class Crawl {
       const sg = (sr - sm) * ish, yr = yw - y0;
       // (the wave tables at this particle's phase (th + kappa sg) in table steps, wrapped into one cycle: th is in [0, 2 pi) and kappa under pi)
       const p0 = pA + pB * sr, p = p0 < 0 ? p0 + NT : p0 >= NT ? p0 - NT : p0, k0 = p | 0, fk = p - k0, t2 = k0 * 2;
-      const gi = T[t2] + (T[t2 + 2] - T[t2]) * fk, ax = aD * (T[t2 + 1] + (T[t2 + 3] - T[t2 + 1]) * fk), e = aE * gi;
-      let dy = (hump * (1 - sg * sg) - e * bul) * yr;
+      const gi = T[t2] + (T[t2 + 2] - T[t2]) * fk, ax = aD * (T[t2 + 1] + (T[t2 + 3] - T[t2 + 1]) * fk), ep = aE * gi;
+      let dy = (hump * (1 - sg * sg) - ep * bul) * yr;
       if (sg > 0.2 && gi > 0) { const fr = (sg - 0.2) * 1.25, hh = yr * iht; dy += lift * fr * fr * gi * hh * hh; }   // (the head lift: the front's upper part, while it reaches)
-      const dl = lean * yr - e * bl * la;
+      const dl = lean * yr - ep * bl * la + (sg > 0 ? bend * sg * sg * sh : 0);
       const ox = ax * sux + dy * yx + dl * lx, oy = ax * suy + dy * yy + dl * ly, oz = ax * suz + dy * yz + dl * lz;
       D[i] = ox; D[i + 1] = oy; D[i + 2] = oz;
       dv += VG[i] * ox + VG[i + 1] * oy + VG[i + 2] * oz;
