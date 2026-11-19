@@ -186,7 +186,7 @@ export const SHOP_PITCH = 2.5;             // m from one aisle row to the next (
 export const WORK_COVER = true;
 export const PITCHED_HOMES = true;
 export const ROOF_FLAT_ALL = false;
-export const AO = Object.freeze({ k: 0.32, m: 0.06, r: 0.35, minH: 0.25, minA: 0.08, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.32 reads ~0.6 of the floor in sRGB): the ring's inner / outer, wall feet, corners
+export const AO = Object.freeze({ k: 0.26, m: 0.06, r: 0.35, minH: 0.25, minA: 0.08, foot: 0.72, footH: 0.45, corner: 0.8, cornerW: 0.35, floorW: 0.3 });   // baked light (LINEAR vertex colour: 0.26 reads ~0.55 of the floor in sRGB - fix4: 0.32 left the looks gate at 78 % once the shops filled with shelving): the ring's inner / outer, wall feet, corners
 export const RNG_LEAK = false;            // (the homes gate's rng-leak plant: Math.random in the quota - the census must see two builds differ)
 const FILLER_TYPE = /clock|lamp|[pP]lant|trash|art|poster|rug|wallShelf|mirror|whiteboard|runner|coatRack|monitor|carton|box\/box|televisionModern|Microwave/;   // (the homes census's FILL list)
 const FILLER_MEMO = new Map(), isFiller = (t) => { let v = FILLER_MEMO.get(t); if (v === undefined) FILLER_MEMO.set(t, (v = FILLER_TYPE.test(t))); return v; };   // (W10 R1A, CPU: one regex test per kit type)
@@ -940,6 +940,8 @@ export function generate(parcel, opts) {
     if (roofKind === "gable" && use === "barn" && (P.theme === "farm" || P.theme === "lodge")) roofKind = "gambrel";
     else if (roofKind === "gable" && use === "shed" && rng() < 0.6) roofKind = "lean";
     // (W10 R3A, audit 13) a home outside a downtown core is never flat-roofed: a gable, a stepped hip on an L plan (no stream drawn: the house's draws stay)
+    // (fix4) except the city theme's homes (Savanna): they keep the theme's own mix (gable 0.8 - was 0.55) - forcing every one of them pitched cost the LOW tier's
+    // bot / nav-grid frame +16 KB of JS heap (p23_tierprof kb [ashgrid low] 94.3 against the bar 85; with the city's own mix 76.3, homes pitched 91.1 % pooled)
     if (PITCHED_HOMES && home && !P.core && P.theme !== "city" && roofKind === "flat") roofKind = cut ? "hip" : "gable";
     if (ROOF_FLAT_ALL) roofKind = "flat";
   }
@@ -3731,7 +3733,8 @@ export function generate(parcel, opts) {
       for (let k = 0; k < Math.round(area / 3); k++) X.push(() => {
         const id = (kind === "shop" ? ["shopShelf", "cartonOpen", "shopShelfLow", "carton"] : ["boxStack", "crate", "cartonOpen", "drum", "carton"])[k % (kind === "shop" ? 4 : 5)];     // (fix4: a shop's walls take stocked shelving)
         const tint = id === "drum" ? 0x4a6a7a : id === "crate" ? 0x8a6e50 : [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][k % 4];
-        const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50) : null);
+        const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? (kind === "shop" ? freeStock("cartonOpen", tint)
+          : freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50)) : null);     // (fix4: a shop's free-standing stock is an open display bin, not a storeroom pallet / crate stack)
         if (p && (id === "crate" || p.cat.id === "palletLoad")) stackOn(p, "box", { force: true });
         else if (p && p.cat.surface && !p.tops) { const q = stackOn(p, "pack", { force: true, tint }); if (q && q.y0 + q.cat.h < 1.6) stackOn(q, "pack", { force: true, tint }); }     // (sealed packs on the carton / pack: stock piled up, never over 1.6 m)
       });
