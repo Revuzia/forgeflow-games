@@ -2922,3 +2922,89 @@ repeats each, spread within ~3 %: THE FIRST TRUSTWORTHY NUMBERS. FIX = tcache=1&
 - Target (owner, 2026-11-19): 15-25 fps at Ultra = 66-40 ms. From 98.5 ms: need -32 ms for 15 fps.
 - Look, confirmed by the tester: wfast=3 reflections identical with/without mask, same-to-better than N; seam gone;
   foam good; storm contrast equal; thin straight dark lines at lower right in storm on BOTH waters (old item).
+
+## SESSION 25d (water wfast=3, Mac round 21: the mask lost; the other ~28 ms) (2026-11-19, WATER agent)
+### 1. SSR: the full march is the wfast=3 default again; the land mask behind `wshade3=ssrmask`
+- Without the token: none of the mask's shader code is compiled and ssrMaskUpdate() returns before its two passes
+  (renderer hook unchanged). `ssrall` is now a no-op token (old bench strings keep working). `ssrwin0` / `ssrdbg` only
+  mean something with `ssrmask`.
+- Why it lost (by the code, no time spent): on the M5 the 20 march reads are cheap (the whole SSR is ~6 ms = ~5 ns a
+  sea pixel: coherent, independent reads), while the mask added to EVERY eligible pixel a nested data-dependent loop
+  (up to 32 columns x 8 bands, a texelFetch + ~25 ALU each, before the march could start), more live registers, and
+  divergence between skipped and marching neighbours; plus 2 extra passes. It removed cheap work with dearer work.
+### 2. The rest of the wfast=3 fragment (~28 ms on a P frame): inventory per pixel class (by the code, dist15)
+  (T = texture read; s = arithmetic simplex ~150 ops; "u" = uniform branch, "d" = data branch the compiler keeps as a
+  branch — every gate below is an `if` around the work, not a ?: / mix that could evaluate both sides)
+  ALWAYS, every water pixel that survives the discards:
+  - prefix (ocean.ts, unchanged): fwidth(vDepth) + waterland guard 1 T of linDepth (+4 T where the opaque scene is in
+    front) + the log-depth gl_FragDepth write (needed: with the logarithmic depth buffer every material writes it; a
+    water pixel that skipped it would depth-test against a different metric)
+  - derivatives: dFdx / dFdy of P, triplanar weights (pow, normalise), the vertex wave groups' footprint fades
+  - ripple map: 2 T tile A (5.3 / 3.9 m) while its mip is not flat (near), 2 T tile B (37 / 29 m) likewise; x 1
+    projection on most of the planet (x2-3 within ~10 deg of the cube diagonals), x 2 on rivers (flow phases)
+  - normal derivatives (nVar): dFdx / dFdy of nB
+  - sun shadow: u (shadows off in P) else 1 T (5 T in cascade 0)
+  - refraction: 2 T linDepth + 1 T scene colour, analytic extinction (vertex coefficients): 2 exp
+  - sky mirror: skyRadiance = acos + 2 T LUT
+  - mirrored clouds: u (clouds on) + d (ray hits the shell): raySphere + 1 T cube + exp
+  - SSR: d (F > 0.03, view < 3 km): 20 T + ~12 ops each (+4 T refine, +3 T on a hit) — ~6 ms on the M5 (round 21)
+  - glint GGX ~35 ops; inscatter cap; shore blend (thickness, film): ~25 ops
+  - glitter: NOW d (its weight > 0: a few metres out to ~3 m footprint on salt water): 3 hashes + exp2/log2/exp
+  - moon: u (moon up) 2 T LUT + GGX
+  OPEN SEA, calm / breeze: + whitecap noise 1 T (x proj) where cover > 0 AND (NEW) the noise can reach the ramp's
+  lower edge (|n| <= 1 bound, exact); foam block (lace 1 T, +1 T coarse) only where foamAmt > 0.01 (crests / caps).
+  NEAR SHORE (thickness < 1.4-1.6 m): + coarse noise 1 T (shore pulse, bite, surge margin) + surf 1 T; foam block.
+  STORM: + gale streak 1 T (wind > 9 m/s), whitecaps nearly everywhere, foam block nearly everywhere (lace 1-2 T).
+  RARE: ice (d, vIce > 0.01: NOW a real branch — it was `?:` around 2 s, which a compiler may evaluate speculatively on
+  every pixel) + voronoi3; silt (d, silt > 0): 2 s; overlay (u).
+- So outside SSR an open-sea pixel does ~9-10 T + ~400 ops. Candidates for the ~22 ms not yet attributed: the ripple
+  taps (textureGrad, anisotropic), the 3 refraction reads, the sky LUT, the guard, and the shader's SIZE itself (all
+  the rare code is compiled in: registers / occupancy) — `norare` tests the last one.
+- EXACT cuts built now (identical image by construction): glitter computed only where its weight is non-zero; ice's two
+  simplex inside a real branch; whitecap tap skipped where the noise cannot reach the ramp (`wshade3=capall` = always).
+- Not moved to the vertex: every remaining per-pixel term depends on the per-pixel normal, the screen position or a
+  high-frequency noise; the smooth ones already are per vertex (s25), and the seam showed what undersampled per-vertex
+  terms do.
+
+## SESSION 27 (2026-11-19, TERRAIN-CACHE agent) — after Mac round 21: bake churn at rest, shadows, MSAA, bench plan
+### 1. WHY THE CACHE RE-BAKES AT REST (round 21: why=sun ~140 bakes/s = every tile every ~15 s at 1x; field, edit)
+- What the baked texels read of the sun (evalTerrain, by the code): (a) the meadow's sun-facing dry-out
+  `sunny = clamp(3 tan(N).s_az)` (vegetation > 0.01), by the sun's AZIMUTH over the patch; (b) snow's `aspectSun`
+  (snow > 0); (c) the forest floor `ff_canopy` (5 shadow-map taps; trees > 0.01, inside the instanced range, shadows
+  on, sun > ~9 deg); lava / fire's day factors (those patches are live anyway). NOTHING else: rock, sand, bare soil and
+  the whole sea bed (~70 % of the landing view) do not read the sun, yet s26 re-baked every tile per 4 deg of sun.
+- BUILT `?tcsun=` (default ON inside tcache; `tcsun=0` = s26): per tile, from its cells (V, M0 at each field change):
+  no vegetation / snow / trees in range -> never sun-stale; meadow only -> stale after 6 deg of local azimuth (the mix
+  toward `dry` moves <= 0.12 x angle: 6 deg = 0.013 of a mix, < 1/255 of the output); snow or forest floor -> 4 deg
+  in 3D as before. Season (year > 0.004) is now its own counter `why.season`.
+- FIELDS: `tcstat` gains `wf=<tex>:n/<tex>!:n` (cells past WATCH per field texture; `!` = edit-sized, 5x). And the
+  water channels of A (level, depth) now use max(threshold, 2 % of the column): a sea sloshing 0.25 m over a 20 m
+  bed was an "edit" (full shader until re-baked) — the likely source of edit 279 -> 360 with nobody editing.
+- 100x / 1000x: the sun races, so meadow / snow / forest tiles stay slow-stale and re-bake at the stale budget
+  (tcbudget 64 k texels a frame, never more: no thrash beyond ~13 ms GPU at worst); they are SHOWN meanwhile (the
+  lag is in the meadow dry-out tint and the forest-floor litter mask; direct sun and shadows are live per pixel).
+### 2. WHAT THE CHURN COSTS (and question 3: FIX+P 64.6 vs the water-only 60.0)
+- Round 21's report: `uploads rt 1152x1152 binds 12.4/frame` = ~12 bakes a frame at rest; at ~2 600 texels a tile
+  (classes 56-96) and ~0.2 us a texel that is ~5-6 ms of GPU a frame, i.e. the 4.6 ms of FIX+P over the water-only
+  frame (scene=0 still runs the LOD, tcache.update and the bakes). deepbed costs nothing with scene=0 (no terrain
+  fragments). So the churn fix should be worth ~5 ms on FIX.
+### 3. SHADOWS (16 ms) — by the round-21 report
+- 4 cascades in a 4096^2 depth atlas (2048^2 each), split for far = alt x 14 + 600 = 1440 m: ~120 / 280 / 600 /
+  1440 m, texels ~0.13 / 0.25 / 0.5 / 1.2 m. 548 draws, 17.6 M caster triangles a frame (fartrees 7.95 M, terrain
+  7.68 M, trees 1.93 M) vs 5.2 M in the scene: casters are drawn ~3-4x. At 07:45 the sun is low: the reach-based
+  caster culling (F6 / F11 / F22) lets most casters into every cascade.
+- BUILT `?shcache=1` (lights.ts; default OFF): cascades 2 and 3 keep their atlas tile while their light box is the
+  same, the sun turned < 0.25 texel / 100 m (c3: 0.17 deg = ~0.6 s at 1x; c2: 0.07 deg), no terrain patch was built
+  (renderer.ts sets `shadows.casterSig = lod.stats.builtTotal`, one line before fit) and the tile is < 6 frames
+  old (ships / god effects cast into every cascade; animals and crowds are already left out of cascades >= 2). A
+  kept tile is read with the light matrix it was drawn with (x the current camera), so the depth compares are exact
+  for everything that did not move. Expect ~half the caster triangles gone at a still landing view (c2 + c3 hold the
+  far trees). Header note: `shcache=1(kept <n>/frame)`.
+- Receivers: the terrain fragment (cached) still runs the full lighting: 5 shadow PCF taps + cloud shadow + SH +
+  sky LUTs. Not cut here.
+### 4. MSAA (13 ms) and the opaque pass
+- Every shader writes gl_FragDepth (log depth; `depth: LOGARITHMIC` in the header). On Apple's TBDR GPU a depth write
+  from the shader turns off hidden-surface removal and early-Z, so EVERY overlapping fragment is shaded and MSAA's
+  depth / colour traffic cannot be compressed: that, not per-sample shading, is the likely MSAA / overdraw cost now
+  that the terrain fragment is cheap. `?revz=1` (session 18: reversed-Z through EXT_clip_control, which the M5 has:
+  no gl_FragDepth) exists and was never timed on the Mac. It is the first bench item for MSAA and the opaque pass.

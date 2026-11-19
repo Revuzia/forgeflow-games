@@ -590,6 +590,8 @@ export class Renderer {
       _sun.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]);
       const far = Math.min(q.shadowDistance, Math.max(300, alt * 14 + 600));
       const near = Math.max(0.5, Math.min(alt * 0.2, 50));
+      // (PERF s27 `?shcache=1`: a terrain patch built = casters changed: every cascade is drawn)
+      this.shadows.casterSig = primaryVis.lod.stats.builtTotal;
       this.shadows.fit(cam, _sun, q.shadowCascades, near, far, Math.min(4000, pv.params.radius));
       const vis = primaryVis;
       this.shadowCull(vis, camSunEl);

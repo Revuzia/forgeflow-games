@@ -31,7 +31,7 @@
 //       channels, std matched to snoise), 1-3 taps where foam can be, none elsewhere; the shore bite = 1 tap;
 //     * glint (GGX), glitter (3 hashes), moon (2 LUT taps + GGX), sun shadow 1 tap (5 in the nearest cascade);
 //     * ice and silt streaks keep their arithmetic noise (rare, gated as before).
-// Sub-cuts for a Mac bisect: `?wshade3=nodetail,noreflect,nossr,norefract,nofoam,nosky,pcf5` (+ `spdbg`: R tile-B amplitude, G / B the short / long Gerstner shares the lattice keeps; `foamdbg`: R shore, G whitecap / gale, B crest / surge / rapids).
+// Sub-cuts for a Mac bisect: `?wshade3=nodetail,noreflect,nossr,norefract,nofoam,nosky,pcf5` (+ s25d single-term cuts `noglint` (glint, glitter, moon glint), `nodeck` (mirrored clouds), `norare` (ice + silt code); `spdbg`: R tile-B amplitude, G / B the short / long Gerstner shares the lattice keeps; `foamdbg`: R shore, G whitecap / gale, B crest / surge / rapids).
 // STATIC COUNT (open calm sea, day, one projection): see PERF.md SESSION 25.
 import {
   DataTexture, FloatType, LinearFilter, LinearMipmapLinearFilter, NearestFilter, RGBAFormat, RepeatWrapping, ShaderMaterial, UnsignedByteType,
@@ -51,14 +51,19 @@ const SEAMOLD = CUT.has('seamold');
 const FOAMOLD = CUT.has('foamold');
 /** (s25b) `wshade3=ssrold`: s25's SSR loop (texture() taps, hit handling inside the loop), for A/B */
 const SSROLD = CUT.has('ssrold');
-/** (s25c) `wshade3=ssrall` = every eligible pixel marches (s25b); default: the land mask below skips rays that cannot hit */
-const SSRMASK = !CUT.has('ssrall');
+/**
+ * (s25c, s25d) `wshade3=ssrmask`: the land mask below skips rays that cannot hit (identical image). OFF by default since
+ * Mac round 21: the mask was 7 ms SLOWER than the full march (60.0 vs 52.8 ms p50) and the whole SSR costs ~6 ms.
+ * Without the token neither of its two passes runs and none of its code is compiled. (`ssrall` = the default, kept as a
+ * no-op token so old bench strings still work.)
+ */
+const SSRMASK = CUT.has('ssrmask');
 /** (s25c) `wshade3=ssrdbg`: paint the SSR work per pixel (black: gated off before the march, blue: skipped by the land
  *  mask, yellow ramp: depth taps taken / 24) */
 const SSRDBG = CUT.has('ssrdbg');
 /** (s25c) `wshade3=capold`: s25b's whitecap ramp (filtered noise, widened ramp only) */
 const CAPOLD = CUT.has('capold');
-/** (s25c) `wshade3=ssrwin0`: march the whole segment where the mask lets a pixel through (default: only its window) */
+/** (s25c) with ssrmask, `wshade3=ssrwin0`: march the whole segment where the mask lets a pixel through (default: only its window) */
 const SSRWIN = !CUT.has('ssrwin0');
 const WCT = FOAMOLD ? '48.0' : '24.0';
 // (s25b) every water level's uMorph (x = K x size(level - 1) = 2 K R spacing(level), z = max(1.5, 1.5 spacing)): 1 / (K R)
@@ -561,7 +566,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   vec3 rB = reflect(-vB, nR);
   rB = normalize(rB + up * (max(0.0, -dot(rB, up)) * 1.02 + sqrt(sig2) * 0.8));
   vec3 skyR = ${f.sky ? 'skyRadiance(up, rB, uSunDirBody)' : 'skyE * 0.35 / 3.14159'} + uNightAmbient * 0.3;
-  ${f.reflect ? `if (uCloudOn > 0.5) {
+  ${f.reflect && !CUT.has('nodeck') ? `if (uCloudOn > 0.5) {
     // the deck mirrored along the long waves' normal: its density where that ray crosses the mid-shell (1 cube tap),
     // lit as the vertex found it
     vec3 rL = reflect(-vB, nL);
@@ -594,14 +599,19 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   vec3 glint = sunCol * (a2 / (3.14159 * dd * dd)) * (0.25 / ((NdL * (1.0 - kG) + kG) * visV))
     * (0.02 + 0.98 * pow(1.0 - max(dot(hB, vB), 0.0), 5.0)) * NdL;
   // glitter: sub-pixel facets flashing where the glint is broad (ocean.ts, the same cells and hashes)
-  float cellM = exp2(floor(log2(max(fw * 2.0, 0.05))));
-  vec3 gc = floor(P / cellM);
-  float tk = floor(uTime * 6.0 + gn_hash13(gc) * 6.0);
-  float spark = gn_hash13(gc + tk * 0.37);
-  vec3 gd = P - (gc + 0.25 + 0.5 * gn_hash33(gc + tk)) * cellM;
-  gd -= up * dot(gd, up);
-  float dotK = exp(-dot(gd, gd) / (cellM * cellM * 0.06));
-  float sparkK = mix(1.0, 0.3 + 8.0 * step(0.9, spark) * dotK, smoothstep(0.06, 0.2, a) * smoothstep(0.02, 0.09, fw) * (1.0 - smoothstep(0.8, 3.0, fw)) * smoothstep(0.3, 0.8, vSalt));
+  // (s25d: its weight first, the cells and 3 hashes only where it is not zero — calm near water, far water, ponds: identical)
+  float gK = smoothstep(0.06, 0.2, a) * smoothstep(0.02, 0.09, fw) * (1.0 - smoothstep(0.8, 3.0, fw)) * smoothstep(0.3, 0.8, vSalt);
+  float sparkK = 1.0;
+  if (gK > 0.0) {
+    float cellM = exp2(floor(log2(max(fw * 2.0, 0.05))));
+    vec3 gc = floor(P / cellM);
+    float tk = floor(uTime * 6.0 + gn_hash13(gc) * 6.0);
+    float spark = gn_hash13(gc + tk * 0.37);
+    vec3 gd = P - (gc + 0.25 + 0.5 * gn_hash33(gc + tk)) * cellM;
+    gd -= up * dot(gd, up);
+    float dotK = exp(-dot(gd, gd) / (cellM * cellM * 0.06));
+    sparkK = mix(1.0, 0.3 + 8.0 * step(0.9, spark) * dotK, gK);
+  }
   // moonlight: the moonlit sky in the mirror and a path of moon glints
   if (dot(uMoonE, uMoonE) > 0.0) {
     float mUp = smoothstep(-0.03, 0.06, dot(up, uMoonDirBody));
@@ -613,6 +623,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
       * (0.02 + 0.98 * pow(1.0 - max(dot(hM, vB), 0.0), 5.0)) * NdLm;
   }
   glint *= sparkK;
+  ${CUT.has('noglint') ? 'glint = vec3(0.0);' : ''}
   // the water body's own glow never outshines what it mirrors (cap at half the mirrored sky's luminance)
   {
     vec3 LUM = vec3(0.2126, 0.7152, 0.0722);
@@ -621,7 +632,7 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
     if (li > cap) under -= inscat * (1.0 - cap / li);
   }
   // ARC §10: a silted river, mud-brown with streaks along the current (rare: arithmetic noise kept)
-  if (silt > 0.0) {
+  if (${CUT.has('norare') ? 'false' : 'silt > 0.0'}) {
     vec3 LUMs = vec3(0.2126, 0.7152, 0.0722);
     float lu = dot(under, LUMs);
     vec3 fd = flowSpd > 0.05 ? vFlow / flowSpd : vec3(0.0);
@@ -679,7 +690,17 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
   // whitecaps by wind speed, born on the crests, drawn out east-west (anisotropic body-frame noise, drifting)
   float cover = clamp(0.0012 * pow(max(windSpd * uWind - 3.5, 0.0), 2.2), 0.0, 0.35);
   float whitecap = 0.0;
-  if (${f.foam ? 'true' : 'false'} && cover > 0.001 && vSalt > 0.3 && vDepth > 2.0 && calm > 0.0) {
+  ${CAPOLD ? '' : `// (s25d) the whitecap ramp's lower edge vs the largest input the noise can give (|n| <= 1 in every octave): below it
+  // the result is exactly 0, so the tap is skipped (a breeze's open sea between the crests). 'wshade3=capall' = always tap
+  float wcLo = 0.0, wcMax = 1.0;
+  {
+    float wl0 = log2(max(fw * 0.7 * 256.0 / ${WCT}, 1e-3));
+    float lG0 = smoothstep(3.0, 5.5, wl0), lA0 = smoothstep(1.0, 3.5, wl0);
+    float wsd0 = 0.116 * sqrt(0.77 * max(lG0 - 0.75, 0.0) * 4.0 + 0.23 * max(lA0 - 0.75, 0.0) * 4.0) * 1.7;
+    wcLo = 1.0 - cover * 4.0 - wsd0;
+    wcMax = 0.5 + 0.5 * (0.55 * inversesqrt(max(1.0 - lG0, 0.25)) + 0.3 * inversesqrt(max(1.0 - lA0, 0.25)) + (vCrest - 0.6) * 0.35);
+  }`}
+  if (${f.foam ? 'true' : 'false'} && cover > 0.001 && vSalt > 0.3 && vDepth > 2.0 && calm > 0.0${CAPOLD || CUT.has('capall') ? '' : ' && wcMax > wcLo'}) {
     vec4 nW = f3N(P, vec3(0.38, 1.0, 0.38), ${WCT}, vec2(-0.19, 0.125) * uTime / ${WCT});
     // (a thresholded noise read through its mips: the filtered value drifts to the mean, so far out every pixel would be
     // all-white or all-clear. The share of the noise's spread the mips removed (mip level of the 48 m tile: G octave
@@ -736,7 +757,11 @@ const fragMain = (f: F3Flags): string => /* glsl */ `
     col = mix(col, foamC, foam);
   }
   // ── sea ice (rare: ocean.ts's arithmetic noise and Voronoi kept) ──
-  float iceW = vIce > 0.01 ? smoothstep(0.08, 0.5, vIce + (snoise(P * 0.012) * 0.3 + snoise(P * 0.06) * 0.12) * min(1.0, vIce * 6.0)) : 0.0;
+  // (s25d: a real branch: as a ?: the two simplex could be evaluated on every pixel and then discarded)
+  float iceW = 0.0;
+  ${CUT.has('norare') ? '/* norare: no ice */ if (false) {' : 'if (vIce > 0.01) {'}
+    iceW = smoothstep(0.08, 0.5, vIce + (snoise(P * 0.012) * 0.3 + snoise(P * 0.06) * 0.12) * min(1.0, vIce * 6.0));
+  }
   if (iceW > 0.0) {
     vec3 iv = voronoi3(P * 0.09);
     float aa = 1.0 - smoothstep(0.1, 0.45, fw * 0.09 / 0.04);
@@ -856,7 +881,7 @@ function maskRT(w: number, h: number): WebGLRenderTarget {
 }
 /**
  * (s25c) renderer.ts hook: build this frame's land mask for the primary planet's water. `pu` = that planet's shader
- * uniforms (uBodyToView, uCamBody, uRadius, uTide). Without wfast=3, or with `wshade3=ssrall`, it does nothing.
+ * uniforms (uBodyToView, uCamBody, uRadius, uTide). Only with wfast=3 AND `wshade3=ssrmask`; otherwise it returns at once.
  */
 export function ssrMaskUpdate(r: WebGLRenderer, fsq: FullscreenQuad, linDepth: Texture, w: number, h: number, proj: Matrix4, pu: Record<string, IUniform> | null): void {
   maskU.on.value = 0;

@@ -49,6 +49,11 @@ const TC_BUDGET = TCACHE ? perfNum('tcbudget', 64000)! : 0;
  */
 const TC_SHARE = TCACHE ? perfNum('tcshare', 0.25)! : 0;
 const TC_COST = TCACHE ? perfNum('tccost', 0.0002)! : 1;
+/**
+ * s27 `?tcsun=0` = the s26 sun trigger (every tile re-bakes when the sun turns 4 deg: at 1x speed the whole view every
+ * ~15 s). Default: by what the tile's texels read of the sun (see `sunMode`).
+ */
+const TC_SUN = TCACHE ? perfSwitch('tcsun', true) : true;
 /** `?tclive=<m>`: patches whose nearest visible point is nearer stay on the full shader (the near ground's own grain) */
 const TC_LIVE = TCACHE ? perfNum('tclive', 0)! : 0;
 /** `?tcnearx=<k>` (with `?tcnearm=<m>`, default 150): texel density x k for patches nearer than m */
@@ -245,6 +250,14 @@ interface Tile {
   nrm: Float32Array; nN: number;
   /** every cell >= DEEP m under water: the bed shows through the sea at <= 5 % (it may take a coarser tile) */
   deep: boolean;
+  /**
+   * s27: what of the sun its texels read (evalTerrain): 0 nothing (bare rock, sand, sea bed); 1 the meadow's
+   * sun-facing dry-out (`sunny`: vegetation > 0.01), by the sun's AZIMUTH over the patch; 2 also the snow's aspect
+   * (`aspectSun`) or the forest floor (`ff_canopy`, shadow maps: trees > 0.01, inside the instanced range)
+   */
+  veg: boolean; snow: boolean; trees: boolean;
+  /** the sun's azimuth over the patch at the bake (unit, tangent) */
+  sunAz: Vector3;
   /** this patch's own density factor (tcnearx) */
   dens: number;
 }
@@ -269,12 +282,14 @@ export interface TcStats {
   /** main-thread ms of this frame's bake call, per tile (running mean), the worst frame so far */
   bakeMs: number; bakeMsPer: number; bakeMsMax: number;
   /** s26b: why tiles were re-baked (cumulative): camera moved / turned, sun / season, sim drift (shown meanwhile), an edit (full shader meanwhile), class, evicted */
-  why: { cam: number; sun: number; field: number; edit: number; cls: number; evict: number };
+  why: { cam: number; sun: number; season: number; field: number; edit: number; cls: number; evict: number };
+  /** s27: cells past WATCH by field texture (drift / edit), cumulative */
+  wf: Record<string, number>;
   budget: number;
 }
 
 export class TerrainCache {
-  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, wantN: 0, wantMB: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0, pixAll: 0, pixPct: 0, usedMB: 0, stale: 0, byClass: '', bakeMs: 0, bakeMsPer: 0, bakeMsMax: 0, why: { cam: 0, sun: 0, field: 0, edit: 0, cls: 0, evict: 0 }, budget: 0 };
+  readonly stats: TcStats = { on: true, mb: 0, layers: 0, float: true, tiles: 0, cached: 0, live: 0, hot: 0, near: 0, wide: 0, wantN: 0, wantMB: 0, full: 0, queued: 0, bakes: 0, bakesTotal: 0, texels: 0, rebakeDirty: 0, rebakeKnot: 0, rebakeClass: 0, rebakeSlow: 0, globals: 0, dirtyCells: 0, pixAll: 0, pixPct: 0, usedMB: 0, stale: 0, byClass: '', bakeMs: 0, bakeMsPer: 0, bakeMsMax: 0, why: { cam: 0, sun: 0, season: 0, field: 0, edit: 0, cls: 0, evict: 0 }, wf: {}, budget: 0 };
   /** `false` = every patch draws with the full shader (in-page A/B: frame-adjacent pairs) */
   enabled = true;
   private readonly tex: DataArrayTexture[] = [];
@@ -437,11 +452,15 @@ export class TerrainCache {
       const cur = tex.image.data as unknown as Float32Array;
       let ref = this.ref.get(name);
       if (!ref) { this.ref.set(name, cur.slice()); continue; }
-      const th = WATCH[name], n = this.cellCount, dc = this.dirtyCell;
+      const th = WATCH[name], n = this.cellCount, dc = this.dirtyCell, isA = name === 'A';
       for (let c = 0, o = 0; c < n; c++, o += 4) {
-        if (Math.abs(cur[o] - ref[o]) > th[0] || Math.abs(cur[o + 1] - ref[o + 1]) > th[1] || Math.abs(cur[o + 2] - ref[o + 2]) > th[2] || Math.abs(cur[o + 3] - ref[o + 3]) > th[3]) {
+        // (s27, A = surface, rough, waterLevel, waterDepth: the water channels by 2 % of the column, so a sea's sloshing
+        // over a deep bed is no edit; `?tcsun=0` keeps s26's absolute thresholds)
+        const tz = isA && TC_SUN ? Math.max(th[2], 0.02 * Math.abs(cur[o + 3])) : th[2], tw = isA && TC_SUN ? Math.max(th[3], 0.02 * Math.abs(cur[o + 3])) : th[3];
+        if (Math.abs(cur[o] - ref[o]) > th[0] || Math.abs(cur[o + 1] - ref[o + 1]) > th[1] || Math.abs(cur[o + 2] - ref[o + 2]) > tz || Math.abs(cur[o + 3] - ref[o + 3]) > tw) {
           // (2 = an edit-sized change, 5x the threshold: the full shader until re-baked; 1 = sim drift: shown, re-baked)
-          const big = Math.abs(cur[o] - ref[o]) > 5 * th[0] || Math.abs(cur[o + 1] - ref[o + 1]) > 5 * th[1] || Math.abs(cur[o + 2] - ref[o + 2]) > 5 * th[2] || Math.abs(cur[o + 3] - ref[o + 3]) > 5 * th[3];
+          const big = Math.abs(cur[o] - ref[o]) > 5 * th[0] || Math.abs(cur[o + 1] - ref[o + 1]) > 5 * th[1] || Math.abs(cur[o + 2] - ref[o + 2]) > 5 * tz || Math.abs(cur[o + 3] - ref[o + 3]) > 5 * tw;
+          const wk = name + (big ? '!' : ''); this.stats.wf[wk] = (this.stats.wf[wk] ?? 0) + 1;
           if (!dc[c]) this.stats.dirtyCells++;
           dc[c] = Math.max(dc[c], big ? 2 : 1);
           ref[o] = cur[o]; ref[o + 1] = cur[o + 1]; ref[o + 2] = cur[o + 2]; ref[o + 3] = cur[o + 3];
@@ -450,6 +469,22 @@ export class TerrainCache {
       }
     }
     return any;
+  }
+
+  /**
+   * s27: did the sun move enough to change what this tile's texels read of it? 2 (snow / forest floor): 4 deg in 3D,
+   * as s26 for every tile. 1 (meadow only): 6 deg of AZIMUTH over the patch — `sunny` = clamp(3 tan(N).s_az) moves the
+   * dry-out mix by <= 0.12 x 3 |tan N| x angle and saturates past |tan N| = 0.33, i.e. <= 0.12 / rad: 6 deg = 0.013 of
+   * a mix toward `dry` (< 1/255 of the output for any |dry - lush| <= 0.3). 0: never.
+   */
+  private sunMoved(t: Tile, up: Vector3, sun: Vector3, cf: { x: number; y: number }, dn: number, shadowOn: boolean): boolean {
+    if (!TC_SUN) return t.sun.dot(sun) < 0.9976;
+    const ff = t.trees && shadowOn && cf.x < 1e8 && dn < cf.y;
+    if (t.snow || ff) return t.sun.dot(sun) < 0.9976;
+    if (!t.veg) return false;
+    _f.copy(sun).addScaledVector(up, -sun.dot(up));
+    if (_f.lengthSq() < 1e-12) return false;
+    return _f.normalize().dot(t.sunAz) < 0.9945;
   }
 
   /** the ground normals of up to 16 distinct cells of the patch (field N: per-cell normal, body frame) */
@@ -461,6 +496,15 @@ export class TerrainCache {
     const af = this.fieldTex.A?.image.data as unknown as Float32Array | undefined;
     t.deep = !!af;
     if (af) for (let i = 0; i < cells.length; i++) { const o = cells[i] * 4; if (af[o + 2] - af[o] < DEEP) { t.deep = false; break; } }
+    // (sun use: V = grass, shrub, tree, crop; M0.x = snow; a margin under the shader's own gates)
+    const vf = this.fieldTex.V?.image.data as unknown as Float32Array | undefined, mf = this.fieldTex.M0?.image.data as unknown as Float32Array | undefined;
+    t.veg = !vf; t.trees = !vf; t.snow = !mf;
+    for (let i = 0; i < cells.length; i++) {
+      const o = cells[i] * 4;
+      if (vf && vf[o] + vf[o + 1] + vf[o + 2] + vf[o + 3] > 0.005) t.veg = true;
+      if (vf && vf[o + 2] > 0.005) t.trees = true;
+      if (mf && mf[o] > 0.0005) t.snow = true;
+    }
     const seen = new Set<number>();
     for (let i = 0; i < cells.length && seen.size < 64; i++) seen.add(cells[i]);
     const list = [...seen], step = Math.max(1, list.length / 16);
@@ -522,7 +566,7 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, deep: false, dens: 1, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
+        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, deep: false, veg: true, snow: true, trees: true, sunAz: new Vector3(), dens: 1, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
         // the patch's flat triangle (m^2)
         this.lod.tcCorners(p, _a, _b, _f);
         _a.toArray(t.dirs, 0); _b.toArray(t.dirs, 3); _f.toArray(t.dirs, 6);
@@ -589,7 +633,8 @@ export class TerrainCache {
       if (valid && !t.stale) {
         // slow-stale: shown, re-baked behind the uncached patches (camera moved / turned, sun, season, class)
         if (moved > 0.03 || t.fwd.dot(this.fwd) < 0.966) { t.stale = true; st.rebakeKnot++; st.why.cam++; }
-        else if (t.sun.dot(sunBody) < 0.9976 || Math.abs(yearFrac - t.year) > 0.004) { t.stale = true; st.rebakeSlow++; st.why.sun++; }
+        else if (Math.abs(yearFrac - t.year) > 0.004) { t.stale = true; st.rebakeSlow++; st.why.season++; }
+        else if (this.sunMoved(t, up.copy(sc).normalize(), sunBody, cf, dn, u.uShadowOn?.value === 1)) { t.stale = true; st.rebakeSlow++; st.why.sun++; }
         // (smaller only when a smaller class fits: 288 -> 576 is a 2x step, a test on the usable edge alone looped)
         else if (need * TC_DENS > usable || (classFor(need * TC_DENS) < t.cls && need * TC_DENS * 1.9 < usable)) { t.stale = true; st.rebakeClass++; st.why.cls++; }
       }
@@ -628,7 +673,7 @@ export class TerrainCache {
     for (const s of this.slabs) if (!s.head && s.cls >= 0) { st.tiles += s.used; by[s.cls] += s.used; usedT += s.used * CLASSES[s.cls] ** 2 / 2; }
     st.usedMB = Math.round(usedT * BPT / 104857.6) / 10;
     st.byClass = CLASSES.map((c, i) => (by[i] ? `${c}:${by[i]}` : '')).filter(Boolean).join('/');
-    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `pix=${st.pixPct}%,used=${st.usedMB}MB,tiles=${st.tiles},cached=${st.cached},live=${st.live},stale=${st.stale},hot=${st.hot},near=${st.near},want=${st.wantN}/${st.wantMB}MB,full=${st.full},bakes=${st.bakesTotal},why=cam:${st.why.cam}/sun:${st.why.sun}/field:${st.why.field}/edit:${st.why.edit}/cls:${st.why.cls}/evict:${st.why.evict},budget=${Math.round(st.budget / 1000)}k,bakeMs=${st.bakeMsPer.toFixed(2)}/${st.bakeMsMax.toFixed(1)},glob=${st.globals},cls=${st.byClass}`);
+    if ((frame & 63) === 0 && this.glTex.length) perfSwitchNote('tcstat', `pix=${st.pixPct}%,used=${st.usedMB}MB,tiles=${st.tiles},cached=${st.cached},live=${st.live},stale=${st.stale},hot=${st.hot},near=${st.near},want=${st.wantN}/${st.wantMB}MB,full=${st.full},bakes=${st.bakesTotal},why=cam:${st.why.cam}/sun:${st.why.sun}/season:${st.why.season}/field:${st.why.field}/edit:${st.why.edit}/cls:${st.why.cls}/evict:${st.why.evict},budget=${Math.round(st.budget / 1000)}k,bakeMs=${st.bakeMsPer.toFixed(2)}/${st.bakeMsMax.toFixed(1)},glob=${st.globals},cls=${st.byClass},wf=${Object.entries(st.wf).map(([k, v]) => `${k}:${v}`).join('/')}`);
     // (the bake wants these again: kept on the instance)
     this.sunNow.copy(sunBody); this.yearNow = yearFrac;
   }
@@ -708,6 +753,8 @@ export class TerrainCache {
       const pl = this.place(t), L = t.slab.layer;
       t.cam.copy(this.cam); t.fwd.copy(this.fwd);
       t.sun.copy(this.sunNow); t.year = this.yearNow; t.gkey = this.gkey;
+      _d.copy(p.sphere.center).normalize(); t.sunAz.copy(this.sunNow).addScaledVector(_d, -this.sunNow.dot(_d));
+      if (t.sunAz.lengthSq() > 1e-12) t.sunAz.normalize();
       // the draw: the page's geometry, this slot's index range, into the tile's square of its layer (viewport + scissor)
       const rt = this.layerRT[L];
       rt.viewport.set(pl.x, pl.y, S, S); rt.scissor.set(pl.x, pl.y, S, S);

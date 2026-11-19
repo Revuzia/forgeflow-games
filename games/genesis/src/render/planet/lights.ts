@@ -62,10 +62,21 @@ export interface ShadowUniforms {
   uShadowTexel: IUniform<number>;
 }
 
-import { perfSwitch } from '../perfswitch.ts';
+import { perfSwitch, perfSwitchNote } from '../perfswitch.ts';
 import { standardDepth } from '../shaders/revz.ts';
 
 const SH_STRIP = !perfSwitch('shcolour', false);
+/**
+ * PERF s27 `?shcache=1` (default OFF): the far cascades (2, 3) keep last frame's atlas tile while nothing they hold can
+ * have moved by more than a quarter texel: the light box (centre, radius) is the same, the sun turned less than
+ * 0.25 texel / SH_CACHE_H (a caster 100 m above its receiver moves its shadow by H x angle), no terrain patch was built
+ * (`casterSig`), and at most SH_CACHE_AGE frames passed (ships / god effects, which cast into every cascade). Animals
+ * and crowds are not drawn into cascades >= 2 (Renderer.perCascade). A kept tile is read with the matrix it was drawn
+ * with, so the receivers sample exactly the old depth at the right place.
+ */
+const SH_CACHE = perfSwitch('shcache', false);
+const SH_CACHE_H = 100;
+const SH_CACHE_AGE = 6;
 const _corners: Vector3[] = Array.from({ length: 8 }, () => new Vector3());
 const _c = new Vector3();
 const _ls = new Vector3();
@@ -83,6 +94,19 @@ export class SunShadows {
   splits = [0, 0, 0, 0];
   /** world size of one shadow texel per cascade (m) */
   readonly texel = [0, 0, 0, 0];
+  /** PERF s27 `?shcache=1`: per cascade, the light matrix (proj x view), sun, box and frame of the last draw */
+  private shPV = [new Matrix4(), new Matrix4(), new Matrix4(), new Matrix4()];
+  private shSun = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+  private shBox = [new Vector4(), new Vector4(), new Vector4(), new Vector4()];
+  private shAge = [1e9, 1e9, 1e9, 1e9];
+  private shSig = [NaN, NaN, NaN, NaN];
+  private shKeep = [false, false, false, false];
+  /** set by the Renderer each frame: changes whenever a caster appeared (patches built) */
+  casterSig = 0;
+  /** cascades kept this frame (stats) */
+  kept = 0;
+  private keptSum = 0;
+  private shFrames = 0;
   /** per cascade: the bounding sphere of its view slice (world space; PERF F6 caster culling) */
   readonly radii = [0, 0, 0, 0];
   readonly centers = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
@@ -158,6 +182,7 @@ export class SunShadows {
 
   setSize(size: number): void {
     if (size === this.size) return;
+    this.shAge.fill(1e9);
     this.rt.dispose();
     this.size = size;
     this.rt = this.makeTarget(size);
@@ -229,7 +254,18 @@ export class SunShadows {
       cam.updateProjectionMatrix();
       // view-space position → atlas tile [0,1]: tile × bias × proj × lightView × cameraWorld
       _tile.makeTranslation((k % 2) * 0.5, Math.floor(k / 2) * 0.5, 0).multiply(new Matrix4().makeScale(0.5, 0.5, 1));
+      // PERF s27 `?shcache=1`: keep the far cascade's tile (and read it with the matrix it was drawn with)
+      const keep = SH_CACHE && k >= 2 && this.shAge[k] < SH_CACHE_AGE && this.shSig[k] === this.casterSig
+        && this.shBox[k].w === r && Math.abs(this.shBox[k].x - _c.x) + Math.abs(this.shBox[k].y - _c.y) + Math.abs(this.shBox[k].z - _c.z) < 0.25 * texel
+        && Math.acos(Math.min(1, this.shSun[k].dot(sunDir))) * SH_CACHE_H < 0.25 * texel;
+      this.shKeep[k] = keep;
+      if (keep) { this.shAge[k]++; u.uShadowMat.value[k].copy(_tile).multiply(_bias).multiply(this.shPV[k]).multiply(camera.matrixWorld); }
+      else {
+        this.shAge[k] = 0; this.shSig[k] = this.casterSig;
+        this.shBox[k].set(_c.x, _c.y, _c.z, r); this.shSun[k].copy(sunDir);
+        this.shPV[k].multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
       u.uShadowMat.value[k].copy(_tile).multiply(_bias).multiply(cam.projectionMatrix).multiply(cam.matrixWorldInverse).multiply(camera.matrixWorld);
+      }
       // normal-offset bias ≈ 1.5 texels of this cascade
       (['x', 'y', 'z', 'w'] as const).forEach((key, i) => { if (i === k) u.uShadowBias.value[key] = texel * 1.5; });
     }
@@ -283,18 +319,23 @@ export class SunShadows {
     this.rt.viewport.set(0, 0, this.size, this.size);
     renderer.setRenderTarget(this.rt);
     renderer.setClearColor(0xffffff, 1);
-    renderer.clear(true, true, false);
+    // (s27 `?shcache=1`: each drawn tile clears itself, a kept one keeps its depth)
+    if (!SH_CACHE) renderer.clear(true, true, false);
     renderer.autoClear = false;
     const half = this.size / 2;
+    this.kept = 0;
     for (let k = 0; k < this.cascades; k++) {
+      if (SH_CACHE && this.shKeep[k]) { this.kept++; continue; }
       this.rt.viewport.set((k % 2) * half, Math.floor(k / 2) * half, half, half);
       this.rt.scissor.copy(this.rt.viewport);
       this.rt.scissorTest = true;
       renderer.setRenderTarget(this.rt);
+      if (SH_CACHE) renderer.clear(true, true, false);
       perCascade?.(k);
       renderer.render(scene, this.cams[k]);
     }
     perCascade?.(-1);
+    if (SH_CACHE) { this.keptSum += this.kept; if ((++this.shFrames & 63) === 0) { perfSwitchNote('shcache', `1(kept ${(this.keptSum / 64).toFixed(2)}/frame)`); this.keptSum = 0; } }
     this.rt.scissorTest = false;
     renderer.autoClear = prevAuto;
     renderer.setClearColor(0x000000, 1);
