@@ -3733,7 +3733,8 @@ export function generate(parcel, opts) {
       for (let k = 0; k < Math.round(area / 3); k++) X.push(() => {
         const id = (kind === "shop" ? ["shopShelf", "cartonOpen", "shopShelfLow", "carton"] : ["boxStack", "crate", "cartonOpen", "drum", "carton"])[k % (kind === "shop" ? 4 : 5)];     // (fix4: a shop's walls take stocked shelving)
         const tint = id === "drum" ? 0x4a6a7a : id === "crate" ? 0x8a6e50 : [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][k % 4];
-        const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50) : null);
+        const p = tryWall(id, "corner", { tint }) || (k % 3 === 0 ? (kind === "shop" ? freeStock("cartonOpen", tint)
+          : freeStock(k % 2 ? "palletLoad" : "crateStack", k % 2 ? 0xb2875a : 0x8a6e50)) : null);     // (fix4: a shop's free-standing stock is an open display bin, not a storeroom pallet / crate stack)
         if (p && (id === "crate" || p.cat.id === "palletLoad")) stackOn(p, "box", { force: true });
         else if (p && p.cat.surface && !p.tops) { const q = stackOn(p, "pack", { force: true, tint }); if (q && q.y0 + q.cat.h < 1.6) stackOn(q, "pack", { force: true, tint }); }     // (sealed packs on the carton / pack: stock piled up, never over 1.6 m)
       });
