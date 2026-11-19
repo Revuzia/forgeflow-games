@@ -2872,3 +2872,26 @@ Full report `MAC-ROUND20-water.txt`; shots `mac-shots/r20-*.jpg`. Lid closed, ex
   mask's template; fixed in dist14): the dist13 `ssrall` image runs were void and are redone on dist14. All of
   wfast=0 / 3 / +ssrall / ssrold / ssrdbg / ssrwin0,capold,seamold,foamold / wvdiag (with and without wfast=3) / the six
   cuts / spdbg,pcf5 compile and link.
+- EQUALITY, mask (default) vs `ssrall`, same build dist14, same views (c-img2-* vs c-imgA2-*), pixels over 8/255 in the
+  water: y0 13 of 52 000, y25 3 of 80 000 (the 573 of a wider box were the palm leaves in its corner: tree sway),
+  shoreC 0 of 22 500; mean |d| 1.5-1.6 everywhere = the run-to-run post grain. Identical by day.
+- NIGHT (c-nM vs c-nS, dist14): water 162 px over 8/255, all inside the palms' mirror image while the palms above differ
+  the same way (tree sway on the wall clock); SUNSET (c-dM vs c-dS): 593 px, the same place (s25b's own loop-vs-loop
+  sunset pair had 533 there); the open sea right of the island: 3. Identical where it is the same scene.
+- STORM (wwind=2.2, land view; c-stN = new, c-stO = capold, same build): whitecap field over the near / mid sea
+  (180..480 x 90..200 px): mean luminance 123.9 / 123.6 (coverage kept), std 53.6 / 53.4, edge energy 14.38 / 13.82
+  (+4 %): crisper, a small step at 480x270 (the gain is where the mips act: farther out, at the Mac's resolution).
+- GATE (dist14 source + the wvdiag hook): `bash _harness/slot.sh npm run check` # pass 1059 # fail 0 (s25/check25c.log).
+  vs DEFAULT water (c-stA): edge energy 12.79 / 16.59 (near-mid / far band) against wfast=3 14.38 / 18.04 (capold
+  13.82 / 16.63), means within 1: at 480x270 SwiftShader does not show the Mac's "softer" (wfast=3 is already the
+  crisper here); the Mac's softness likely comes from its fuller anisotropic filtering of the far noise, which is what
+  the restoration targets. Judge on the Mac: `?wfast=3&wwind=2.2` vs `&wshade3=capold` vs `?wwind=2.2`.
+- `npm run build` exit 0 (s25/build-prod25c.log); tsc clean.
+### MAC RUNS WANTED (Ultra 1686x963, landing; P = scene=0&shadows=0)
+  1. SSR mask (the cut): P&wfast=3 | P&wfast=3&wshade3=ssrall (march everywhere = s25b) | P&wfast=3&wshade3=ssrwin0
+     (mask, no window) | P&wfast=3&wshade3=nossr (floor). Look: `?wfast=3` vs `?wfast=3&wshade3=ssrall` at the palm
+     bank by day / sunset / night (must be identical). `?wfast=3&wshade3=ssrdbg` screenshot = where it still marches.
+  2. Seam-fix cost check: P&wfast=3 vs P&wfast=3&wshade3=seamold (by the code: per-vertex only, expect equal).
+  3. Storm: `?wfast=3&wwind=2.2` vs `?wfast=3&wwind=2.2&wshade3=capold` vs `?wwind=2.2`.
+  4. The pass around the draw (each on P&wfrag=0, 51 ms ref): +wcopy=0 | +wsingle=1 | +wdepth=0 | +waterland=0 |
+     +msaa=0 | +wvert=0; and P&wvdiag=1 (timing only, wrong image) vs P&water=0.
