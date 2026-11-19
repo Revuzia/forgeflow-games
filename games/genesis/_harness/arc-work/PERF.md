@@ -2769,3 +2769,21 @@ Debug views: `wshade3=spdbg` (R tile-B amplitude, G / B short / long Gerstner va
 - NIGHT (view `night` as the run's FIRST view, so the hour holds; s26-n-B / -O / -A): new SSR vs ssrold water box mean|d|
   0.85, 0 px over 8/255 (identical; the full-frame difference is the animated sky). wfast=3 vs default at night: equal,
   palm reflections a touch crisper in wfast=3 (sheet: s26-n-A-night | s26-n-B-night, LOOKED).
+- SUNSET (view `dusk` first, hour 18.2; s26-d-B / -O / -A): new SSR vs ssrold water box mean|d| 1.01, 533 px over 8/255 —
+  ALL of them inside the palms' mirror image, and the palms themselves differ the same way above (tree sway runs on
+  the wall clock, not wclock): the SSR reflects the trees it is given, the loop change is identical. wfast=3 vs default
+  at sunset: equal (warm cloud mirror, palm reflections; B's cloud mirror a little lighter on the right).
+- Mac-only questions: the speed of the restructured SSR (SwiftShader cannot time it), and the beach dashes (1-2 px at
+  1686x963, below the probe's resolution). The default-water A run at the beach (s26-A) was killed by the restart and
+  not repeated: at 480x270 it cannot show the dashes.
+### 4. GATE
+- `bash _harness/slot.sh npm run check`: # pass 1048 # fail 0 (s25/check26.log, on the final shader code; afterwards only
+  GLSL comment text changed, tsc clean). `npm run build`: see the line below.
+### 5. MAC RUNS WANTED (Ultra 1686x963, landing; P = scene=0&shadows=0)
+  1. Speed: P&wfast=3 | P&wfast=3&wshade3=ssrold | P&wfast=3&wshade3=nossr | P&wfast=3&wshade3=noreflect | P&wfrag=0.
+     (ssrold vs default = the gain of the restructure; nossr vs noreflect = deck vs SSR.)
+  2. Seam: `?wfast=3` at the r18w-25 view (lower right) — the line must be gone; `?wfast=3&wshade3=seamold` brings it back.
+     If anything is still there: `?wfast=3&wshade3=spdbg` screenshot (any straight edge in that field = a per-vertex term).
+  3. Beach foam: `?wfast=3` vs default at the sand edge (r18w-25 / -26 framing); `?wfast=3&wshade3=foamold` = s25.
+  4. Storm whitecaps near the shore: `?wfast=3&wwind=2.2` vs `?wwind=2.2`.
+  GATE RESULT: npm run build exit 0 (s25/build-prod26.log); tsc clean on the final source.
