@@ -105,3 +105,8 @@ Buildings, street props, cars, furniture and wall modules are repacked offline (
 
 ## Wave 10 round 1 (2026-11) — lane R1B guns in hand
 - No new assets, clips or downloads in R1B. It uses the existing CC0 gun models already on disk (their metal/polymer roughness maps are derived in code) and the existing Mixamo clips (rifle leg clips reused for the pistol, with no new clip fetched).
+
+## Wave 10 round 3b (2026-11) — lane R3B characters
+- `assets/props/loot/ammo_light.glb`, `ammo_medium.glb`, `ammo_heavy.glb`, `ammo_shells.glb`, `ammo_grenades.glb`: built from Kenney "Survival Kit" parts (box, box-large, box-large-open, bucket) by Kenney (https://kenney.nl), CC0 1.0, plus a "Crate" by Quaternius via Poly Pizza (https://poly.pizza/m/CnMGEDwg8s), CC0 1.0. Recoloured per ammo type, with procedurally built rounds, shotshells and 40 mm rounds.
+- `assets/props/loot/frag.glb`, `smoke.glb`: original geometry built in-house with a lathe (procedural), no third-party asset.
+- No new animation clips: the reload, surface-swim and swap poses are runtime corrections layered on the existing Mixamo clips.
