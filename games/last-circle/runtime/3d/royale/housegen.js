@@ -3851,7 +3851,7 @@ export function generate(parcel, opts) {
     // the open floor, 1.3 m aisles. A cluster that cannot keep both of a pair's desks is taken out again.
     const clusters = (maxN) => {
       const dk = catOf("deskA"), ch = catOf("officeChair"); if (!dk || !ch) return 0;
-      const PG = WORK_COVER ? 0.045 : 0;                              // (W10 R3A: a cubicle partition, 8 cm, between the backs of a pair)
+      const PG = WORK_COVER ? 0.055 : 0;                              // (W10 R3A: a cubicle partition between the backs of a pair - fix2: 11 cm, the partition is 8 x 1.15 = 9.2 cm thick; 9 cm never held it)
       const pairW = dk.w, span = 2 * (dk.d + ch.d + 0.12 + PG);        // a pair: along a = desk width, across b = desk, desk, chairs either side
       const stepA = 2 * pairW + 1.3, stepB = span + 1.3;
       const na = Math.max(0, Math.floor((LA - 1.3 + 1e-6) / stepA)), nb = Math.max(0, Math.floor((LB - 1.3 + 1e-6) / stepB));
@@ -4156,6 +4156,25 @@ export function generate(parcel, opts) {
       if (core) {
         later(() => {
           if (roomy && clusters(area >= 45 ? 8 : 4) > 0) return;
+          // (W10 R3A fix2, audit 10) an office too small for back-to-back clusters: a row of wall workstations - a desk on the wall, its chair and monitor, and a
+          // 1.4 m partition beside it running out from the wall (the cubicle side), one a 12 m2 (<= 4); the bare-office plant (WORK_COVER off): the one desk as before
+          if (WORK_COVER) {
+            let n = 0;
+            for (let k = 0; k < Math.max(1, Math.min(4, Math.floor(area / 12))); k++) {
+              const d = tryWall("deskA", "corner", { tint: tintW });
+              if (!d) break;
+              n++;
+              const [cu, cv] = inFront(d, 0.08, catOf("officeChair") || CATALOG.officeChair);
+              tryAt("officeChair", cu, cv, (d.fq + 2) % 4);
+              stackOn(d, "monitor");
+              const pc = catOf("partition");
+              if (!pc) continue;
+              const dir = FACE[d.fq], sd = [dir[1], -dir[0]], hw = (d.fq % 2 ? d.rect[3] - d.rect[1] : d.rect[2] - d.rect[0]) / 2, hd = (d.fq % 2 ? d.rect[2] - d.rect[0] : d.rect[3] - d.rect[1]) / 2;
+              const along = pc.w / 2 - hd;
+              for (const sg of [1, -1]) if (tryAt("partition", d.u + sd[0] * sg * (hw + 0.07) + dir[0] * along, d.v + sd[1] * sg * (hw + 0.07) + dir[1] * along, (d.fq + 1) % 4, 0, true)) break;
+            }
+            if (n) return;
+          }
           const desk = tryWall("desk", "center", { tint: tintW });
           if (desk) { const [cu, cv] = inFront(desk, 0.02, CATALOG.chairDesk || CATALOG.chair); tryAt("chairDesk", cu, cv, (desk.fq + 2) % 4) || tryAt("chairMod", cu, cv, (desk.fq + 2) % 4); stackOn(desk, "screen"); }
         });
