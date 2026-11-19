@@ -3,7 +3,7 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
-## 2026-11-18 — Wave 10 round 3c: R3B fix5 re-merge (black interior view, gunhold controls)
+## 2026-11-18 — Wave 10 round 3c: R3B fix5 re-merge (black interior view, gunhold controls) (LIVE ?v=1795067149)
 
 Wave 10 round 3c re-merges lane R3B (`w10-r3-characters`, head 6dcec08bb) onto `w10` after round 3b was held on three rows (interiorcheck light, controls w10_gunhold-plant-gun-in-dead-hand and w10_gunhold-rev-w9-tip). No world change: `MAP_GEN_VERSION` stays 8.
 
