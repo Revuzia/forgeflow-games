@@ -1185,3 +1185,115 @@ Base defence, pooled n 96. Columns are pre / live e2c / HEAD / new:
 - veteran base falls against live;
 - novice fit and away (3x live);
 - the earlier open items, not worked here: veteran peel, sneak attacks, FRAY stays.
+
+## 65. Computer-played fighters play as a team and talk through pings: they say help, on my way, fall back, careful, missing, group here and take this, once per event; they answer a teammate's help; a road two of ours commit to is joined; defence posts are back where they pay (lead, by delegation, 2026-11-19)
+
+Lane AI, "play as a team" (orch1 W1-A opponents / W3-A), at HEAD 45a072713 (bots 8c95deb52). The owner, 2026-11-19: stronger defence and attack and more human team play ("If bots see that 2-3 people are going into a line to attack, all should join — but this is not a FINITE answer"), and pings "like WATCH OUT, or HELP HERE, without spamming them", "according to industry standard". Genre practice in VALE's own terms; League of Legends was a gauge only, nothing copied.
+
+**New pace rule (this ruling replaces the "within noise of pre" bar of rulings 58-64).** RIFT mean length may rise up to about +1.5 min against the pre-lane bots (0aeac587b) at any tier. Not acceptable: a stall. Games reaching 30:00 on s701-764 must stay at or below the old live opponents (e2c4925e5): 18 / 8 / 9 of 64 (novice / adept / veteran), and aim well under.
+
+**Decided (src/sim/bots; tier knobs in difficulty.ts).**
+- **Pings (new comms.ts).** A computer-played fighter pings with the same Command a player sends, so every person on its team sees and hears it like a player's ping. The enemy team's pings never reach a person: the HUD (model.ts) draws and the audio sounds only pings from a player of your own team. When it pings:
+  - assist ("help here"): enemy fighters took a fifth of its health in 2 s with none of ours beside it and a teammate 12-50 m off (on a road in the laning phase only under half health); a structure of ours with enemy fighters on it (a post or base answer for a fight).
+  - onMyWay: a fighter sent to answer an assist, a post 20 m+ away, or a person's push ping.
+  - retreat: three or more enemy fighters within 14 m of one of ours, two more than ours, the team not ahead in numbers (from 14:00).
+  - danger: three or more enemy fighters in sight together, with a teammate alone 12-32 m from them (adept and veteran, from 14:00).
+  - missing: a road opponent watched on the road, unseen 5-8 s, not seen leaving to recall, at the team's last sight of it, and only where no other enemy fighter is or was a moment ago (adept and veteran, 2:30-20:00).
+  - push: the team's group call on a structure, held 2 s (from 10:00 on RIFT). objective: the team's camp call, held 2 s.
+- **No spam.** One ping per event (a key per event, not repeated while it holds: 12-60 s). At most one a fighter every 10 s (novice 15 s), three a team every 10 s (novice two). Warnings about moving fighters (danger, retreat) are said within 0.5 s or not at all. Nothing about anything the team cannot see: a recall landing or a blink seen on a sight already gone is not a sighting (steady sightings only).
+- **Listening.**
+  - A teammate's assist — a person's ping, or a computer-played teammate's own call — is answered by the nearest fit (55 %+) computer-played fighters within 30 / 45 / 55 m (novice / adept / veteran), one, or two with two or more enemy fighters there (novice one). Not a fighter in its own fight, recalling, posted, answering or hunting. In the laning phase only that road's laners and the grovehunter. Never into a lost fight: with more of theirs in sight there than ours could make even, nobody goes. Each answerer says onMyWay. The answer holds 8 s or until the place is quiet with the answerer there.
+  - A teammate's retreat within 25 m (4 s) turns a fighter whose own read agrees (fight read under 0.55, or under half health), never off a kill that is on.
+  - A teammate's danger (6 s) stops a calm walk whose point it marks.
+  - A person's push on an enemy structure is the team's group call for 25 s once the numbers are even, held unless the team falls two behind. A person's camp ping is the team's camp call for 25 s at even numbers when the pit is not lost. A person's onMyWay counts as an answer to an assist.
+- **Attack together.**
+  - From 14:00 on RIFT, an enemy structure with two (novice three) of our fit fighters at it, and no more of theirs than ours + 1, is the team's siege for at least 15 s. The free fit rest join it.
+  - A group siege waits at its group point for fit teammates still walking in (within 50 m), up to 8 s adept and 10 s veteran (novice none). Those not yet at the structure hold, so the arrivals start together.
+  - A won fight takes the structure nearest where the team stands, not the least-pushed road.
+  - A won defence counter-pushes: an enemy fighter at an inner or base structure of ours in the last 10 s, none now, and a fighter more up count as a won fight for 20 s.
+- **Read like people.** From 14:00 a calm walk (push, camp, roam, lane, a walk back) stops short of three (novice four) enemy fighters in sight together, or a teammate's danger ping, with none of ours there or beside it. It waits, or backs off when they are already close.
+- **Defence: posts are back where a tier pays for them.** Veteran: posts at inner and base structures (`guardFrom` 1), with the 'coming' read, the +1 at inner and base, and recall-to-defend. Adept: posts at base structures only (`guardFrom` 2). Novice: no posts, keeps ruling 64's base answer. With posts on, the base answer is the posts' own call.
+- FRAY and BRIDGE: play unchanged. Every behaviour above is RIFT-only; BRIDGE bots only say push and assist pings. Checked byte-identical against HEAD on BRIDGE adept s701-704 and FRAY veteran s701-703.
+
+**Method.** One tree, no worktree. `VALE_BOTS` pointed at git-archive copies of the bots at pre (0aeac587b), live (e2c4925e5) and HEAD (8c95deb52). Arms read switches from the environment while screened; the chosen settings were then fixed in code and the switches removed. All copies deleted afterwards. Tool: `_harness/probe_sim_bot_tactics.ts --suites rift`, both teams at one tier, cut at 30:00, paired by seed. Seeds s701-764 (n 64) and s801-832 (n 32). Mean ± paired SE.
+
+**Measured, final code (`src/sim/bots` at the commit of this ruling), RIFT pooled n 96.** Pace is new − baseline, minutes. "Cut" counts games reaching 30:00.
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| Pace vs pre | +0.74 ± 0.45 | +0.86 ± 0.44 | +0.94 ± 0.41 |
+| Pace vs HEAD | +0.46 ± 0.45 | +1.34 ± 0.44 | +1.06 ± 0.44 |
+| Pace vs live e2c | −1.41 ± 0.46 | −1.04 ± 0.44 | −0.55 ± 0.46 |
+| Pace vs pre, s701-764 / s801-832 | +1.22 / −0.21 | +1.28 / +0.03 | +0.86 / +1.09 |
+| Cut s701-764: new / pre / HEAD / e2c (bar: ≤ e2c) | 6 / 6 / 7 / 18 | 8 / 2 / 2 / 8 | 5 / 4 / 3 / 9 |
+| Cut s801-832: new / pre / HEAD / e2c | 4 / 3 / 1 / 2 | 1 / 2 / 3 / 4 | 3 / 0 / 0 / 1 |
+
+Defence and team play, pooled n 96. Columns are new / pre / HEAD / e2c:
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| Fit and away from a hit base structure (s a game) | 21.2 / 33.1 / 28.7 / 9.2 | 4.7 / 13.0 / 6.6 / 3.1 | **3.2** / 14.6 / 4.5 / 3.2 |
+| Unanswered base intrusions a game | 1.83 / 1.98 / 1.99 / 1.36 | 1.10 / 0.94 / 1.25 / 0.40 | **0.32** / 1.61 / 0.66 / 0.48 |
+| Base structure falls a game | 6.31 / 6.25 / 6.28 / 6.16 | 6.95 / 6.50 / 6.76 / 6.54 | 6.05 / 6.58 / 6.18 / 5.57 |
+| Inner+base falls to Wicks beside fit defenders | 0.59 / 0.58 / 0.64 / 1.08 | 0.93 / 1.14 / 0.76 / 1.12 | 1.02 / 0.92 / 0.90 / 1.44 |
+| Idle within 25 m of a sieged structure (s) | 6.4 / 10.9 / 7.4 / 13.4 | 4.3 / 6.7 / 3.1 / 16.4 | 4.2 / 6.9 / 5.4 / 13.2 |
+| Dither (bars 3 / 1.5 / 1) | 2.43 / 4.97 / 2.56 / 5.08 | 1.40 / 2.46 / 1.50 / 2.15 | 1.86 / 5.21 / 2.04 / 4.07 |
+| Laners in lane 1:00-14:00 | 76.9 / 77.4 / 77.2 / 76.4 % | 67.9 / 68.4 / 68.1 / 66.9 % | 67.0 / 67.3 / 67.0 / 65.6 % |
+| Sieges from 14:00 with 3+ arriving within 6 s | 15.3 / 15.6 / 15.0 / 14.4 % | 35.2 / 24.6 / 45.0 / 33.6 % | 40.3 / 31.6 / 39.5 / 33.2 % |
+| Won fights followed by a structure blow within 20 s | 25.8 / 24.6 / 17.7 / 19.9 % | 20.0 / 17.3 / 21.0 / 18.3 % | 22.4 / 21.7 / 21.5 / 12.8 % |
+| Deaths from 14:00 alone into three | 6.9 / 6.7 / 7.5 / 8.9 % | 9.6 / 11.4 / 12.9 / 10.4 % | 11.7 / 14.6 / 12.8 / 11.1 % |
+
+Pings, pooled n 96 (per team-minute; ten fighters, two teams):
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| Per fighter-minute / per team-minute | 0.26 / 1.28 | 0.49 / 2.47 | 0.56 / 2.79 |
+| assist / onMyWay / retreat / danger / missing / push / objective | 0.42 / 0.15 / 0.03 / 0 / 0 / 0.47 / 0.22 | 0.49 / 0.40 / 0.14 / 0.33 / 0.24 / 0.55 / 0.31 | 0.51 / 0.58 / 0.13 / 0.30 / 0.25 / 0.60 / 0.42 |
+| Assist pings answered by a teammate within 5 s | 39.5 % | 62.2 % | 64.1 % |
+| Pings about anything the team could not see | 0 | 0 | 0 |
+| A fighter twice in 10 s / a team over 3 in 10 s | 0 / 0 | 0 / 0 | 0 / 0 |
+
+- **A person on the team** (new `_harness/probe_sim_bot_pings.ts`, s701-708, one person standing in base with four computer-played teammates):
+  - The person's assist pings were answered within 5 s 65 / 59 / 77 % of the time (HEAD 10 / 20 / 12 %).
+  - The person's push pings were acknowledged with onMyWay 73 / 55 / 50 %, but followed (three teammates at the structure within 25 s) only 9 / 0 / 10 % (HEAD 0 / 10 / 0 %). In that probe the team plays four against five and is mostly defending its own base, and the call yields to the defence by design.
+  - Enemy-team pings: 175 / 335 / 363 sent, 0 shown to the person.
+- **Gates.** `probe_sim_bot_tactics` at default seeds fails 5 (HEAD 7). The new ping gates pass at every tier. Adept dither and the veteran undefended inner+base share now pass. The five fails were all open before this ruling:
+  - novice fit and away 28.6 (bar 25);
+  - FRAY stays at adept 62.9 % and veteran 61.3 %;
+  - veteran dither 1.60;
+  - veteran peel within 1.5 s 68.4 %.
+- `probe_sim_bot_soak` quick: PASS. It ran on the build before the last missing-ping fix, whose games are identical to the final code's in every probe table above.
+
+**Met.**
+- Pace and stalls hold the new rule at every tier.
+- Veteran defence is at or better than live e2c on fit-and-away (3.24 against 3.18) and unanswered intrusions (0.32 against 0.48), and better than HEAD on both.
+- Assist pings are answered about two-thirds of the time at adept and veteran.
+- Won fights turn into structure hits more often at novice.
+- Fewer lone deaths into three enemies at adept and veteran.
+- Laning, dither, FRAY and BRIDGE are no worse than HEAD.
+
+**Worse or not met, said plainly.**
+- **Adept defence is short of e2c.** Fit and away is 4.74 against 3.09, unanswered intrusions 1.10 against 0.40, base falls 6.95 against 6.54. Adept is better than HEAD on the first two only.
+  - Every adept arm that went further broke the stall bar on s701-764. Inner posts: cut 12, pace +1.72. Inner posts until 25:00: cut 11 and 14. Inner posts until 20:00: cut 14. Base posts with joinAt 3: cut 10.
+  - So adept keeps base posts only.
+- **Veteran base falls** are 6.05 a game against e2c's 5.57: better than HEAD and pre, not at live. Holding stacked waves at veteran posts got 5.95, but cut 10 against the bar of 9, so it is not kept.
+- **Adept group sieges with 3+ arriving within 6 s** fell from HEAD's 45.0 % to 35.2 % (pre 24.6, e2c 33.6). The joins make more two-fighter sieges, and the regroup does not cover the pair already at the structure. Holding the pair off too (arm RA) changed nothing (−1 point) and was dropped. Veteran is level with HEAD (40.3 against 39.5).
+- **Adept pace** against HEAD is +1.34 ± 0.44 (against pre +0.86). Cut 8 on s701-764 equals e2c's 8: at the bar, not under it.
+- Inner+base falls to Wicks beside fit defenders rose against HEAD at adept (+0.17) and veteran (+0.12). Both are still under pre and e2c.
+
+**Tried and not kept** (s701-764, against the build of the moment):
+- adept inner posts (always / to 25:00 / to 20:00): cut 12 / 11 / 14;
+- veteran holding stacked waves at posts: pace +1.75 against pre, cut 10;
+- regroup holding everyone off the structure: no gain;
+- no joins (adept): pace −0.48, grouping +3 points, but it drops the owner's ask.
+
+**Left for later** (genre team play not worked here):
+- resetting together before a timed objective;
+- trading an objective for one across the map at adept (veteran has it);
+- a split push answered by the right number;
+- wave management before an objective;
+- protecting the carry beyond the existing peel;
+- not chasing past vision on RIFT;
+- following a person's push when the team is on its own base;
+- adept defence at e2c's level without stalls;
+- the earlier open items: veteran peel within 1.5 s, veteran dither, FRAY stays, novice fit and away.
