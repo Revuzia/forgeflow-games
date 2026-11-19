@@ -589,6 +589,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         return;
       case INTENT.HOP:
         if (floatParked) return;
+        // (R10 LOCOMOTION, D-100: the crawl IS the walking gait: a hop on the spot during LIFE's walk (its gait step hop) is not layered on it; a hop that goes
+        //  somewhere (a boop, onto a pad), a hop within 15 cm of the walk's end (LIFE's step hop needs more) or after it, and every hop in Calm (no crawl) stay)
+        if (a === 0 && cc === 0 && c.scooting && world !== null && !world.calm && Math.hypot(c.lastX - c.scootX, c.lastZ - c.scootZ) > 0.15) return;
         if (d < 0.999) { try { body.setSquash?.(d, 0.08); } catch (x) { report(x); } queue(HOP_GO, i, HOP_LEAD_S, a, b, cc, 0, 0, 0, 0, 0); }
         else doHop(i, a, b, cc);
         return;

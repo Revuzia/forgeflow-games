@@ -20,7 +20,7 @@ import type { SoftBody } from './softbody.ts';
  *  the head lift (half-lengths), the hump (the middle rises as the body shortens: x the length deficit; 1.5 gives the deficit's volume back in height) */
 export const CRAWL_FAMILY: Record<string, [number, number, number, number, number, number]> = {
   slowrise: [0.5, 0.6, 2, 0.35, 0.06, 1.6], marshmallow: [0.45, 0.6, 2, 0.4, 0.08, 1.7], mochidough: [0.6, 0.55, 3, 0.3, 0.04, 1.8],
-  jellygel: [0.37, 0.65, 1.2, 0.4, 0.08, 1.5], waterfill: [0.4, 0.65, 1.2, 0.4, 0.06, 1.5], putty: [0.6, 0.55, 3, 0.3, 0.04, 1.9],
+  jellygel: [0.46, 0.65, 1.8, 0.4, 0.08, 1.5], waterfill: [0.48, 0.65, 1.8, 0.4, 0.06, 1.5], putty: [0.75, 0.55, 3, 0.3, 0.04, 1.9],
   stickystretch: [0.45, 0.6, 3.5, 0.35, 0.1, 1.6], slimegoo: [0.5, 0.7, 1.5, 0.4, 0.05, 1.4], firmsilicone: [0.42, 0.55, 2.5, 0.4, 0.08, 1.6],
   popdome: [0.42, 0.55, 2.5, 0.4, 0.08, 1.6], gummy: [0.4, 0.55, 2.5, 0.4, 0.08, 1.6], beadsqueeze: [0.55, 0.55, 3, 0.3, 0.05, 1.8],
 };
@@ -34,7 +34,7 @@ interface World { hNow: number; bsf: Float64Array }
 interface Body {
   n: number; X: Float64Array; Q: Float64Array; M: Float64Array; Mtot: number; qr: Float64Array; cx: number; cz: number;
   scootOn: boolean; sV: number; stx: number; stz: number; heldF: boolean; moveOn: boolean; cyOn: boolean; carried: boolean; gravityOn: boolean; nearCount: number;
-  asleep: boolean; crawlOn: boolean; crawlD: Float64Array; crawlF: Float64Array; V: Float64Array; center: { x: number; z: number };
+  asleep: boolean; crawlOn: boolean; crawlD: Float64Array; crawlF: Float64Array; V: Float64Array; center: { x: number; z: number }; chunk: boolean; capFlat: boolean;
 }
 
 export class Crawl {
@@ -96,27 +96,34 @@ export class Crawl {
     // ---- FACING: a slug leads with its head. The body's front is its rest +Z (where the face is: render/wholeRef.ts); while it walks it turns toward the
     // heading (the glide's target), after the walk back to +Z (as it faces at rest), by a smooth yaw of the whole body about its centre (a move of X and V
     // like the glide: no momentum; the rotation the shape matching fits turns with it). Its front bends toward the turn first (the goal's `bend`, below).
-    const q = b.qr;
+    // A cut piece (a cut face, or the legacy eyeless chunk) does not turn: its wave runs along a facing of its own that turns the same way (the piece keeps its
+    // orientation, as it does today: a half turned 90 degrees put its cut face along the wave, and its foot creased past 120 degrees once a cycle).
+    const q = b.qr, real = !b.chunk && !b.capFlat;
     let qx = q[0], qy = q[1], qz = q[2], qw = q[3];
-    let fx = 2 * (qx * qz + qw * qy), fz = 1 - 2 * (qx * qx + qy * qy);   // R (0, 0, 1) on the floor: the facing
-    const fl = Math.sqrt(fx * fx + fz * fz), hx = go ? tx / tl : 0, hz = go ? tz / tl : 1;
+    let fx = real ? 2 * (qx * qz + qw * qy) : S[2], fz = real ? 1 - 2 * (qx * qx + qy * qy) : S[3];   // R (0, 0, 1) on the floor: the facing
+    const hx = go ? tx / tl : 0, hz = go ? tz / tl : 1;
+    if (!real && fx * fx + fz * fz < 0.25) { fx = hx; fz = hz; }
+    const fl = Math.sqrt(fx * fx + fz * fz);
     let e = 0, rate = 0;
-    if (go && free) this.turn = true;
+    if (go && free && real) this.turn = true;
     if (fl > 0.5) {   // (upright enough to have a facing: a body on its side is not turned)
       fx /= fl; fz /= fl;
       e = Math.atan2(fx * hz - fz * hx, fx * hx + fz * hz);   // the heading's angle from the facing (+: toward the facing's left, (-fz, fx))
       if (free && ground && (go || this.turn)) {
         const mx = CRAWL.yawMax * dt, k = e * (1 - Math.exp(-dt / CRAWL.yawTau)), dl = k > mx ? mx : k < -mx ? -mx : k;
         if (!go && e < 0.03 && e > -0.03) this.turn = false;
-        const c = Math.cos(dl), sn = Math.sin(dl), ox = b.center.x, oz = b.center.z, X = b.X, V = b.V;
-        for (let j = 0; j < n * 3; j += 3) {
-          const x = X[j] - ox, z = X[j + 2] - oz, vx = V[j], vz = V[j + 2];
-          X[j] = ox + x * c - z * sn; X[j + 2] = oz + x * sn + z * c; V[j] = vx * c - vz * sn; V[j + 2] = vx * sn + vz * c;
+        const c = Math.cos(dl), sn = Math.sin(dl);
+        if (real) {
+          const ox = b.center.x, oz = b.center.z, X = b.X, V = b.V;
+          for (let j = 0; j < n * 3; j += 3) {
+            const x = X[j] - ox, z = X[j + 2] - oz, vx = V[j], vz = V[j + 2];
+            X[j] = ox + x * c - z * sn; X[j + 2] = oz + x * sn + z * c; V[j] = vx * c - vz * sn; V[j + 2] = vx * sn + vz * c;
+          }
+          // (the fitted rotation turns by the same yaw, about -y in this sense: its next fit starts there)
+          const c2 = Math.cos(0.5 * dl), s2 = Math.sin(0.5 * dl);
+          const nx = c2 * qx - s2 * qz, ny = c2 * qy - s2 * qw, nz = c2 * qz + s2 * qx, nw = c2 * qw + s2 * qy;
+          q[0] = nx; q[1] = ny; q[2] = nz; q[3] = nw; qx = nx; qy = ny; qz = nz; qw = nw;
         }
-        // (the fitted rotation turns by the same yaw, about -y in this sense: its next fit starts there)
-        const c2 = Math.cos(0.5 * dl), s2 = Math.sin(0.5 * dl);
-        const nx = c2 * qx - s2 * qz, ny = c2 * qy - s2 * qw, nz = c2 * qz + s2 * qx, nw = c2 * qw + s2 * qy;
-        q[0] = nx; q[1] = ny; q[2] = nz; q[3] = nw; qx = nx; qy = ny; qz = nz; qw = nw;
         const gx = fx * c - fz * sn, gz = fx * sn + fz * c;
         fx = gx; fz = gz; e -= dl; rate = dl / dt;
       } else if (!free) this.turn = false;   // (a hand took it: it stays as it is left)
