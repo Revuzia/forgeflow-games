@@ -216,6 +216,9 @@ function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
   const setModes = (m: Record<string, CastMode>): void => p.set('controls', { castModes: m } as Partial<Settings['controls']>);
   return (
     <div class="srows">
+      <Row id="c-auto" label={cv.t('settings.controls.autoAttack.label', 'Auto attack')} desc={cv.t('settings.controls.autoAttack.desc', '')}>
+        <Toggle id="c-auto" label={cv.t('settings.controls.autoAttack.label', 'Auto attack')} checked={(c as ControlSettings).autoAttack !== false} onChange={(x) => p.set('controls', { autoAttack: x } as Partial<Settings['controls']>)} />
+      </Row>
       <div class="srows__intro stg">
         <h2 class="t-h2">{cv.t('settings.controls.binds.title', 'Keys')}</h2>
         <span class="t-body-s muted">{cv.t('settings.controls.binds.desc', 'Click a key, then press the key or mouse button you want.')} {cv.t('settings.controls.cancel_hint', 'Press Esc to cancel.')}</span>
@@ -252,9 +255,6 @@ function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
           ))}
         </div>
       </div>
-      <Row id="c-auto" label={cv.t('settings.controls.autoAttack.label', 'Auto attack')} desc={cv.t('settings.controls.autoAttack.desc', '')}>
-        <Toggle id="c-auto" label={cv.t('settings.controls.autoAttack.label', 'Auto attack')} checked={(c as ControlSettings).autoAttack !== false} onChange={(x) => p.set('controls', { autoAttack: x } as Partial<Settings['controls']>)} />
-      </Row>
       <Row id="c-ring" label={cv.t('settings.controls.rangeOnAttackMove.label', 'Show attack range during attack-move')} desc={cv.t('settings.controls.rangeOnAttackMove.desc', '')}>
         <Toggle id="c-ring" label={cv.t('settings.controls.rangeOnAttackMove.label', 'Show attack range during attack-move')} checked={(c as ControlSettings).rangeOnAttackMove !== false} onChange={(x) => p.set('controls', { rangeOnAttackMove: x } as Partial<Settings['controls']>)} />
       </Row>

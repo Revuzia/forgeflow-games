@@ -1534,7 +1534,7 @@
   "settings.controls.castMode.opt.quick": "Quick",
   "settings.controls.castMode.opt.quickIndicator": "On release",
   "settings.controls.autoAttack.label": "Auto attack",
-  "settings.controls.autoAttack.desc": "Off: your fighter stands still until you order an attack, which makes last hits on Wicks easier to time.",
+  "settings.controls.autoAttack.desc": "On: your fighter attacks nearby enemies by itself when you are not giving orders. Off: it attacks only what you order, which makes last hits on Wicks easier to time.",
   "settings.controls.rangeOnAttackMove.label": "Show attack range during attack-move",
   "settings.controls.rangeOnAttackMove.desc": "Your attack range rings your fighter while attack-move is armed. Hold the Show attack range key to see it any time.",
   "settings.controls.cameraLock.label": "Lock camera to your fighter",
