@@ -3027,3 +3027,21 @@ repeats each, spread within ~3 %: THE FIRST TRUSTWORTHY NUMBERS. FIX = tcache=1&
   mirrored clouds; noglint = GGX + glitter + moon glint; nofoam = all foam / shore / whitecap work; norare = ice + silt
   code compiled out (if THIS is large, the cost is the shader's size / registers, not its work); noguard = the
   waterland discard's depth reads (the old `vDepth < -0.6` test instead).
+### 5. QUESTION 3 — the rest of the scene cost (98.5 - 64.6 = 34 ms, shadows 16)
+- scene=0 skips only the opaque pass (renderer.ts: `r.clear()` instead); LOD, tcache.update + bakes, all post passes
+  still run. So 34 ms = shadow pass + receivers (16) + the opaque pass (~18: terrain display 2.54 M tris with full
+  per-pixel lighting, far trees 2 M, trees 0.6 M, cover; MSAA 4x raster) + the bake churn's share. veg+cover+life =
+  4 ms only, so most of the ~18 is the terrain's lighting and raster under log depth (no HSR on the M5).
+- The extra 4.6 ms of FIX+P over the water-only frame = the bake churn (~12 bakes a frame at rest, ~5 ms GPU):
+  section 2. deepbed costs nothing there.
+### 6. GATE: `bash _harness/slot.sh npm run check` 1059 pass 0 fail (s27/check1.log); `npm run build` exit 0.
+### 7. MAC BENCH PLAN (round 22), one variant per fix / suspect; F = tcache:1;wfast:3;deepbed:1
+  `?bench=custom&breps=3&bv=FIX~tcache:1;wfast:3;deepbed:1|sun0~tcache:1;wfast:3;deepbed:1;tcsun:0|still~tcache:1;wfast:3;deepbed:1;speed:0|x100~tcache:1;wfast:3;deepbed:1;speed:100|shc~tcache:1;wfast:3;deepbed:1;shcache:1|revz~tcache:1;wfast:3;deepbed:1;revz:1|revzmsaa0~tcache:1;wfast:3;deepbed:1;revz:1;msaa:0|revzshc~tcache:1;wfast:3;deepbed:1;revz:1;shcache:1|budget16~tcache:1;wfast:3;deepbed:1;tcbudget:16000`
+  - FIX vs sun0: the new sun trigger (tcstat why=sun should stop growing at rest; frame -~5 ms).
+  - still (speed 0): the floor with no churn at all; x100: thrash bound (why.sun / wf grow; frame must stay near FIX).
+  - shc: far-cascade reuse (header `shcache=1(kept n/frame)`, expect ~2 of 4; shadow ms down).
+  - revz / revz+msaa0 / revz+shc: no gl_FragDepth -> HSR + early-Z on the M5: the opaque pass and MSAA cost.
+  - budget16: caps the re-bake load (what the churn costs, if any is left).
+  Read in each report: frame p50, tcstat why= / wf= / bakes start->end, the uploads rt binds/frame, the `shcache=`
+  note, gpu shadows ms. LOOK (owner): FIX vs shc (far shadows while the sun moves at 1x; a ship if one is in view),
+  FIX vs revz (decals, the shore, far land), meadow tint after 60 s at 1x (sun trigger).
