@@ -13,7 +13,8 @@ Only grid towns (towns with blocks) are judged. Footprints are citykit.footprint
 Rows (any FAIL -> exit 1; the probe not running -> exit 2):
   props-per-building  (street + yard props) / buildings of the grid towns >= 2.0 per map (cars count, as the audit did; path stones do not; a lot's fence /
                       hedge run counts once); distinct non-car prop types placed over the 12 builds >= 18 (path stones not counted)   [Isla s1 153 / 240 = 0.64; 9 types]
-  yards               >= 70 % of homes (use house, housegen) have a fence / hedge run with a gap >= 1.6 m where the path crosses it AND a door path: the
+  yards               >= 70 % of homes (use house, housegen) have a fence / hedge run that leaves >= 1.6 m open where the path runs (towngen lays it along a lot
+                      boundary of the front yard: across the front it would stand in housegen's 4 m door approach) AND a door path: the
                       path stones of the lot form one chain (touching within 5 cm) from the house's REAL front door (housegen's, map.houses) to within 0.8 m
                       of the lot's street line   [0]
   pitch-variety       every grid town of > 1 block has >= 3 distinct block pitches (adjacent block centres, rounded to 0.5 m) and every village street is
@@ -22,7 +23,7 @@ Rows (any FAIL -> exit 1; the probe not running -> exit 2):
                       a path stone; 0 lots closed by their run (a fence / hedge piece on a path stone, or no gap >= 1.6 m at the path)
 PLANTS (each must make its rows FAIL):
   bare-lots     towngen yardDressing() returns at once                                    -> yards, props-per-building
-  fence-closed  YARD_GAP 2.6 -> 0 (the run is continuous across the path)                   -> clear-doors
+  fence-closed  the run laid down the middle of the front yard (on the path's line)       -> clear-doors
   one-pitch     gridShifts returns no jog / shift (every block on the one PITCH lattice)   -> pitch-variety
 """
 from __future__ import annotations
@@ -45,7 +46,7 @@ SEEDS = "1,7,1234,2026"
 TG = "runtime/3d/royale/towngen.js"
 PLANTS = {
     "bare-lots": ({"yards", "props-per-building"}, [(TG, r"function yardDressing\(L, seed, add, out, homes\) \{\n", "function yardDressing(L, seed, add, out, homes) {\n  return;\n")]),
-    "fence-closed": ({"clear-doors"}, [(TG, r"export const YARD_GAP = 2\.6;", "export const YARD_GAP = 0;")]),
+    "fence-closed": ({"clear-doors"}, [(TG, r"tRun = tL \+ YARD_RUN_INSET,", "tRun = tc,")]),
     "one-pitch": ({"pitch-variety"}, [(TG, r"function gridShifts\(rng, cols, rows\) \{\n",
                                        "function gridShifts(rng, cols, rows) {\n  if (rng) return { J: 0, rowShift: new Array(rows).fill(0), colShift: new Array(cols).fill(0) };\n")]),
 }

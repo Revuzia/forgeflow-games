@@ -2715,7 +2715,7 @@ const YARD_THEME = {
   city: { run: ["hedge", "fence"], small: ["mailbox", "bin", "mailbox"], side: ["bench"] },
 };
 export const YARD_PATH_CLEAR = 1.5;     // m every yard prop keeps off the door path (the front walk and the stem) - the w10_yards clear-doors bar
-export const YARD_GAP = 2.6;            // m: the gap in a front run at the path (the 1.2 m path + 0.7 m a side)
+export const YARD_RUN_INSET = 0.3;      // m: a boundary run stands this far inside its lot's -t line
 /** (W10 R4B items 1-2) the yard dressing of a grid town's homes, as streetProps entries (kind "fence" | "path" | "yard"); its own sub-stream "yard2", six draws per home whatever is
  *  placed (nothing else in the layout moves). The door path: a walk of path stones along the whole facade (the housegen front door is somewhere on it) and a stem from it to the run's gap. */
 function yardHomes(L) {
@@ -2747,22 +2747,22 @@ function yardDressing(L, seed, add, out, homes) {
     const d0 = yr(), d1 = yr(), d2 = yr(), d3 = yr(), d4 = yr(), d5 = yr();          // six draws per home whatever is placed
     if (!h.yard) continue;
     const { fx, fz, lz, W, sF, sB, tL, tR, bL, bR, tc } = h;
-    const face = faceIdx(fx, fz), along = lz ? 1 : 0;                                   // along: the rot that lays a piece's local X along the frontage (rot 1: local X -> world Z)
+    const face = faceIdx(fx, fz);
     for (const q of h.tiles) push("props/yard-path", q[0], q[1], 0, "path");
-    // the front run, 0.4 m inside the lot line, open at the path
-    const run = YARD_RUN[TH.run[Math.floor(d0 * TH.run.length)]], sR = sF - 0.4;
-    for (const [u0, u1] of [[tL + 0.3, tc - YARD_GAP / 2], [tc + YARD_GAP / 2, tR - 0.3]]) {
-      const n = Math.floor((u1 - u0) / run[1] + 1e-6);
-      for (let k = 0; k < n; k++) { const q = W(sR, u0 + (u1 - u0 - n * run[1]) / 2 + run[1] * (k + 0.5)); push(run[0], q[0], q[1], along, "fence"); }
-    }
+    // the run: along the lot's -t boundary from the street line back to the facade line (each shared boundary of a row of homes gets ONE run, from the lot on its
+    // +t side). Never across the front: housegen keeps DOOR_OUT (4 m) of open ground before a street door wherever the door is on the facade, and a 3-4 m front yard
+    // has no line across it that clears that (collisioncheck doors-open: the door walk starts 3.5 m out)
+    const run = YARD_RUN[TH.run[Math.floor(d0 * TH.run.length)]], tRun = tL + YARD_RUN_INSET, rot = lz ? 0 : 1;      // rot: the piece's local X along s (rot 1: local X -> world Z)
+    { const u0 = sB + 0.2, u1 = sF - 0.3, n = Math.floor((u1 - u0) / run[1] + 1e-6);
+      for (let k = 0; k < n; k++) { const q = W(u0 + (u1 - u0 - n * run[1]) / 2 + run[1] * (k + 0.5), tRun); push(run[0], q[0], q[1], rot, "fence"); } }
     // one or two small props inside the run, >= YARD_PATH_CLEAR off the walk and the stem
-    const sIn = sR - run[2] - 0.05;
+    const sIn = sF - 0.3;
     const slots = d1 < 0.55 ? [-1, 1] : [d2 < 0.5 ? -1 : 1];
     for (const side of slots) {
       const sp = YARD_SMALL[TH.small[Math.floor((side < 0 ? d2 : d3) * TH.small.length)]];
       const sc = sIn - sp[2];
       if (sc - sp[2] < sB + 1.2 + YARD_PATH_CLEAR) continue;
-      const tMin = 0.6 + YARD_PATH_CLEAR + sp[1], tMax = (side < 0 ? tc - tL : tR - tc) - 0.3 - sp[1];
+      const tMin = 0.6 + YARD_PATH_CLEAR + sp[1], tMax = (side < 0 ? tc - tL - YARD_RUN_INSET - run[2] - 0.1 : tR - tc - 0.3) - sp[1];
       if (tMax < tMin) continue;
       const q = W(sc, tc + side * (tMin + (tMax - tMin) * d4));
       add(sp[0], q[0], q[1], (face + sp[3]) % 4, "yard", Math.max(sp[1], sp[2]));
