@@ -65,6 +65,17 @@ export function lifeSeeksNew(w: LifeWorld, i: number): boolean {
   return w.beh[i] === BEH.USE && k >= 0 && k < w.nTD && w.tU[k] < 0 && varietyFloorOn(w);
 }
 
+/** (round 10, R10_FIX 1) TURNS within the awake budget: is character i in a by-itself use's first phase, waiting for its mover token or its wake (brain.ts runUse /
+ *  runSelf set w.tw while travelTo's gate refuses it)? On the LOW and MED tiers (one awake whole: unitCap 1.06 / 1.345) a sleeping squishy's use could only start
+ *  once the one awake squishy fell asleep by itself, so an awake one idling, napping awake or posing held the wake for the whole visit (R10_FIX.md 1: Rainleaf tall
+ *  low, two of three "USE" asleep for 60 s and more, VERDICT_R9 (c)). The host's over-budget rule gives such a waiter its turn: it puts an awake squishy that is
+ *  doing nothing that moves (not a LIFE mover, not in a moment, not touched or riding) to sleep, so the waiter's wake fits the same cap. */
+export function lifeWaitsTurn(w: LifeWorld, i: number): boolean { return w.ac[i] === 1 && w.beh[i] === BEH.USE && w.ph[i] === 0 && w.tw[i] === 1 && w.uS[i] !== 2; }
+/** (round 10) Does LIFE hold a mover token for character i, or is it in a joint moment? (the host's turn rule never sleeps such a one for a waiter) */
+export function lifeBusy(w: LifeWorld, i: number): boolean { return w.mo[i] === 1 || w.moo[i] >= 0; }
+/** (round 10) character i's by-itself thing uses this visit (the turn goes from the one that used most) */
+export function lifeUsesOf(w: LifeWorld, i: number): number { return w.uV[i]; }
+
 /** Scratch float slots in w.f (named, so no helper returns a double). NOW = the sim time of the think (or of the per-call pass) every brain
  *  function reads, instead of taking it as a parameter (a double argument to a call V8 does not inline is boxed: LF-02); DT = the think's dt;
  *  PX, PZ = the query point of the geometry tests below (inBounds, inKeepOut, inAreaAt, zoneStrengthAt, d2p). The world's scalar doubles

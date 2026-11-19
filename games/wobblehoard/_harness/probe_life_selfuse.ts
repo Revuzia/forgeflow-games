@@ -23,6 +23,7 @@ import { recorder } from './mocks.ts';
 const arg = (k: string, d: string): string => process.argv.find((a) => a.startsWith(`${k}=`))?.slice(k.length + 1) ?? d;
 const QUICK = process.argv.includes('--quick'), TRACE = process.argv.includes('--trace'), SQ_ONLY = process.argv.includes('--squirt-only');
 const STAY = +arg('stay', QUICK ? '120' : '300');
+let STAY_NOW = STAY;   // (round 10: SU-04's visits are STAY4 s)
 // (round 9, R9_FIX 2) seed=N: LIFE's world seed (the host's deps.lifeSeed; default the shipped 0x5eed1e) and the party genomes' seed (default 8): another draw of the same parties
 const SEED = arg('seed', ''), GSEED = SEED ? (+SEED % 97) + 1 : 8;
 const PARTIES = arg('parties', QUICK ? 'wisplet+chunkle' : 'wisplet+chunkle,puddlo+boingle,gloopsy+kneadle,twangle+dimpla,capnap+burrbin').split(',').map((p) => p.split('+'));
@@ -38,7 +39,15 @@ const lifeParts = { attachJournal: (await import('../src/shell/later-quests.ts')
 const { createMockStage, createMockAudio, createMockHaptics } = await import('./mocks.ts');
 const { createProfileStore } = await import('../src/core/save.ts');
 type SB = SoftBodyLike;
-const W = 1280, H = 800;
+// (round 10, R10_FIX 1) frame=wide|tall (1280x800 or the phone's 390x844: the TALL layouts, a phone's caps) and tier=low|med|high (the quality tier the stage
+// reports: LIFE's awake budget follows it). The browser ran the tall layouts at the low tier (SwiftShader); this probe ran only wide at high until round 10.
+let FRAME = arg('frame', 'wide'), TIER = arg('tier', 'high');
+let W = FRAME === 'tall' ? 390 : 1280, H = FRAME === 'tall' ? 844 : 800;
+const setFrame = (f: string, t: string): void => { FRAME = f; TIER = t; W = f === 'tall' ? 390 : 1280; H = f === 'tall' ? 844 : 800; };
+/** (round 10) SU-04: what the browser runs (VERDICT_R9 (c)): Dollop + Glimglop (slime) + Crimpo (dough), STAY4 s, every place, each frame x tier below; the default run
+ *  adds it after SU-01..03 (`--no-su4` skips it; an explicit frame= or tier= runs only that frame and tier as SU-01) */
+const SU4 = !process.argv.includes('--no-su4') && !QUICK && !process.argv.some((a) => a.startsWith('frame=') || a.startsWith('tier=') || a.startsWith('parties='));
+const STAY4 = 180, SU4_RUNS: ReadonlyArray<readonly [string, string]> = [['tall', 'low'], ['wide', 'low'], ['tall', 'high'], ['wide', 'high']];
 const FAM: Record<string, string> = {};
 for (const c of CATALOG) FAM[c.id] = c.family;
 const verbName = (v: number): string => Object.keys(USE_VERB).find((k) => USE_VERB[k as keyof typeof USE_VERB] === v) ?? String(v);
@@ -64,7 +73,7 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
     setBodyTier: () => {},
     matLayout: (n: number) => [[0, 0], [1.3, 0], [-1.3, 0], [2.6, 0], [-2.6, 0]].slice(0, Math.max(1, Math.min(5, n))).map(([x, z]) => ({ x, y: 0, z })),
     visibleTable: (out: Float32Array) => { out[0] = -3.0; out[1] = -2.6; out[2] = 3.0; out[3] = 0.9; return true; },
-    stats: () => ({ drawCalls: 0, triangles: 0, tier: 'high', frameMsEma: 0 }),
+    stats: () => ({ drawCalls: 0, triangles: 0, tier: TIER, frameMsEma: 0 }),
     emote: () => {}, clearEmote: () => {}, emoteScreen: (_k: number, o: Float32Array) => { o[0] = 600; o[1] = 300; o[2] = 20; return true; },
     loadPlace: async () => true, setPlace: () => true,
   });
@@ -98,7 +107,7 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
     env: { vibrate: false, reducedMotion: false }, now: () => clockT, epochNow: () => 1_700_000_000_000 + clockT, raf: () => 0, caf: () => {},
   });
   app.resize(W, H, 1); app.setPhase('play');
-  const host = attachLifeHost(app, { parts: lifeParts, storage: mem, say: () => {}, moment: () => {}, setTimer: () => 0, clearTimer: () => {}, ...(SEED ? { lifeSeed: +SEED } : {}) })!;
+  const host = attachLifeHost(app, { parts: lifeParts, storage: mem, say: () => {}, moment: () => {}, setTimer: () => 0, clearTimer: () => {}, phone: () => FRAME === 'tall', ...(SEED ? { lifeSeed: +SEED } : {}) })!;
   const step = (n: number): void => { for (let i = 0; i < n; i++) { clockT += 1000 / 60; app.clock.advance?.(1000 / 60); app.stepOnce(1 / 60); } };
   const stepA = async (n: number): Promise<void> => { for (let i = 0; i < n; i += 10) { step(10); await tick(); } };
   type D = { place: number; chars: Array<{ species: string; kind: number; x: number; z: number; flags: number; asleep: boolean; onProp: number }>; life: { chars: Array<{ beh: number; phase: number; moment: number; thing: number; uses: number; play: number }> } };
@@ -128,7 +137,7 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
     return seen;
   };
   async function squirtScenario(): Promise<Sq> {
-    const pool = RIPPLE.zones.find((z) => z.id === 'rockpool')!, pr = pool.r ?? 1.3;
+    const pz = RIPPLE.zones.findIndex((z) => z.id === 'rockpool'), pool = FRAME === 'tall' ? { ...RIPPLE.zones[pz], ...(RIPPLE.tall.zones[pz] ?? {}) } : RIPPLE.zones[pz], pr = pool.r ?? 1.3;   // (round 10: the layout in use)
     await host.travel('ripple', true);
     await stepA(20 * 60);
     // set Wisplet in the pool's front half (0.95 m in front of its centre: in the water, clear of the Bob Ring at the centre)
@@ -175,7 +184,7 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
     const tArr = clockT, r0 = recs.length;
     let three = -1, naps = 0, samples = 0;
     const last: string[] = [];
-    for (let t = 10; t <= STAY; t += 10) {
+    for (let t = 10; t <= STAY_NOW; t += 10) {
       if (TRACE) for (let q = 0; q < 10; q++) {
         await stepA(60);
         const d = dbg();
@@ -224,6 +233,13 @@ const info = (id: string, what: string): void => console.log(`info ${id} ${what}
 }
 const all: Visit[] = [];
 if (!SQ_ONLY) for (const p of PARTIES) all.push(...(await runParty(p)));
+// (round 10, R10_FIX 1) SU-04 runs after the default visits (its numbers below)
+const su4: Array<{ frame: string; tier: string; v: Visit[] }> = [];
+if (SU4 && !SQ_ONLY) {
+  const stay0 = STAY;
+  for (const [f, t] of SU4_RUNS) { setFrame(f, t); STAY_NOW = STAY4; su4.push({ frame: f, tier: t, v: await runParty(['glimglop', 'crimpo']) }); }
+  STAY_NOW = stay0; setFrame('wide', 'high');
+}
 // (round 9, R9_FIX 2: tightened to EVERY party, the owner's "3 to 5 different things per visit at every place, reliably"; it was 4 of 5)
 const nParties = PARTIES.length, need = nParties;
 if (SQ_ONLY) { console.log(fails ? `${fails} failed` : 'all selfuse checks passed (SQ-01 only)'); process.exit(fails ? 1 : 0); }
@@ -250,5 +266,11 @@ check('SU-02', `different families prefer different things: at ${differ} of ${PL
 const over = all.flatMap((v) => Object.entries(v.episodes).filter(([, n]) => n > USE_MAX * STAY / 300).map(([sp, n]) => `${v.place} ${sp} ${n}`));
 check('SU-03', `the attention budget rules: no squishy has more than ${USE_MAX} by-itself use episodes in a ${STAY} s visit (${over.length ? over.join(', ') : 'none over'}; most ${Math.max(0, ...all.flatMap((v) => Object.values(v.episodes)))})`, over.length === 0);
 info('SU-03', `USE records per squishy and visit (the host's, a strike each): most ${Math.max(0, ...all.flatMap((v) => Object.values(v.usesPer)))}; over 30: ${all.flatMap((v) => Object.entries(v.usesPer).filter(([, n]) => n > 30).map(([sp, n]) => `${v.place} ${sp} ${n}`)).join(', ') || 'none'}`);
+// (round 10, R10_FIX 1) SU-04: the owner's bar where the browser measures it (VERDICT_R9 (c): 3 squishies travelled there, 180 s, no input, at 1280x800 and 390x844, at
+// the low and the high quality tier): at least 3 different things used by themselves at EVERY place in every frame and tier. Behaviour must not depend on the tier.
+for (const r of su4) for (const pl of PLACES) {
+  const v = r.v.find((x) => x.place === pl);
+  check('SU-04', `(round 10) ${pl} ${r.frame === 'tall' ? '390x844 (tall layout)' : '1280x800'} at the ${r.tier} tier: at least 3 different things used by themselves in ${STAY4} s by Dollop + Glimglop + Crimpo, no input (${v ? `${v.things.length} [${v.things.join(' ')}]${v.three >= 0 ? ` 3 by ${v.three} s` : ''}` : 'not run'})`, !!v && v.ok && v.things.length >= 3);
+}
 console.log(fails ? `${fails} failed` : 'all selfuse checks passed');
 process.exit(fails ? 1 : 0);

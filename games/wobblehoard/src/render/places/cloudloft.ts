@@ -282,15 +282,8 @@ const LOOK: PlaceLook = {
     // ---- the Sunbow Arch: a banded tube along physics' posts and top bar (static) ----
     const sa = th(3), sd = PLACE.things[3], aR = sd.size[0], aW = sd.p.width ?? 1.6, aH = sd.p.height ?? 1.3;
     const hw = Math.max(aR, aW / 2 - aR), top = Math.max(2 * aR, aH - aR), cr = Math.min(0.32, hw * 0.5);
-    const path = new THREE.CurvePath<THREE.Vector3>();
-    const V3 = (x: number, y: number): THREE.Vector3 => new THREE.Vector3(x, y, 0);
-    path.add(new THREE.LineCurve3(V3(-hw, 0), V3(-hw, top - cr)));
-    path.add(new THREE.QuadraticBezierCurve3(V3(-hw, top - cr), V3(-hw, top), V3(-hw + cr, top)));
-    path.add(new THREE.LineCurve3(V3(-hw + cr, top), V3(hw - cr, top)));
-    path.add(new THREE.QuadraticBezierCurve3(V3(hw - cr, top), V3(hw, top), V3(hw, top - cr)));
-    path.add(new THREE.LineCurve3(V3(hw, top - cr), V3(hw, 0)));
     const bowBand = { uTop: { value: top }, uHw: { value: hw }, uCr: { value: cr }, uB1: { value: col(tok('amber', 'coral', 0.12, 0.95)) }, uB2: { value: col(tok('coral', 'amber', 0.15, 0.92)) }, uB3: { value: col(tok('lagoon', 'dusk', 0.15, 0.95)) } };
-    const arch = kit.mesh(kit.geo(`arch${hw},${top}`, () => new THREE.TubeGeometry(path, 72, aR, 14, false)), kit.local('sunbow', [1, 1, 1], 0.45, SUNBOW, bowBand, 0.45), sa.x, 0, sa.z, 2);
+    const arch = kit.mesh(kit.geo(`arch${hw},${top}`, () => archTube(hw, top, cr, aR, 72, 14)), kit.local('sunbow', [1, 1, 1], 0.45, SUNBOW, bowBand, 0.45), sa.x, 0, sa.z, 2);
     arch.quaternion.copy(yawQ(-sa.yaw)); g.add(arch);
     for (const s of [-1, 1]) {
       B.add('puff', kit.sphere(1, 16, 12), puffM, sa.x + Math.cos(sa.yaw) * hw * s, 0.06, sa.z + Math.sin(sa.yaw) * hw * s, aR * 1.9, 0.16, aR * 1.9);   // a cloud puff at each foot
@@ -371,3 +364,54 @@ const LOOK: PlaceLook = {
   },
 };
 export default LOOK;
+
+/** (round 10, R10_FIX 3; VERDICT_R9 A1) the Sunbow Arch's tube, built here the way THREE.TubeGeometry(path, tub, r, rad, false) builds it along round 8's path (the
+ *  left post up, a quadratic bend of radius cr, the top bar, a bend, the right post down; in the arch's own x-y plane): TubeGeometry and its curve classes (CurvePath,
+ *  LineCurve3, QuadraticBezierCurve3) had no other user, and three.js ships as ONE module, so this lazy place's one mesh grew the FIRST-PLAY three.core chunk by
+ *  14.9 KB. Same vertex grid, order, normals and uvs: the points spaced by arc length (getPointAt), and the frames of a planar path (TubeGeometry's Frenet frames
+ *  for it: N = (0, 0, -1) throughout, B = T x N), the ring vertex P + r (-cos v N + sin v B), uv (i / tub, j / rad). */
+function archTube(hw: number, top: number, cr: number, r: number, tub: number, rad: number): THREE.BufferGeometry {
+  // the path as a dense polyline (by each piece's own parameter), its cumulative length and its tangent (each piece's derivative)
+  const segs: ReadonlyArray<readonly number[]> = [[0, -hw, 0, 0, 0, -hw, top - cr], [1, -hw, top - cr, -hw, top, -hw + cr, top], [0, -hw + cr, top, 0, 0, hw - cr, top],
+    [1, hw - cr, top, hw, top, hw, top - cr], [0, hw, top - cr, 0, 0, hw, 0]];
+  const PER = 400, M = segs.length * PER + 1, X = new Float64Array(M), Y = new Float64Array(M), TX = new Float64Array(M), TY = new Float64Array(M), C = new Float64Array(M);
+  let n = 0;
+  for (let q = 0; q < segs.length; q++) {
+    const [k, x0, y0, cx, cy, x1, y1] = segs[q];
+    for (let h = q === 0 ? 0 : 1; h <= PER; h++) {
+      const t = h / PER, u = 1 - t;
+      if (k === 0) { X[n] = x0 + (x1 - x0) * t; Y[n] = y0 + (y1 - y0) * t; TX[n] = x1 - x0; TY[n] = y1 - y0; }
+      else { X[n] = u * u * x0 + 2 * u * t * cx + t * t * x1; Y[n] = u * u * y0 + 2 * u * t * cy + t * t * y1; TX[n] = 2 * u * (cx - x0) + 2 * t * (x1 - cx); TY[n] = 2 * u * (cy - y0) + 2 * t * (y1 - cy); }
+      const tl = Math.hypot(TX[n], TY[n]) || 1; TX[n] /= tl; TY[n] /= tl;
+      C[n] = n === 0 ? 0 : C[n - 1] + Math.hypot(X[n] - X[n - 1], Y[n] - Y[n - 1]);
+      n++;
+    }
+  }
+  const L = C[n - 1], pos = new Float32Array((tub + 1) * (rad + 1) * 3), nor = new Float32Array(pos.length), uv = new Float32Array((tub + 1) * (rad + 1) * 2);
+  let a = 0;
+  for (let i = 0; i <= tub; i++) {
+    const want = L * i / tub;
+    while (a < n - 2 && C[a + 1] < want) a++;
+    const f = C[a + 1] > C[a] ? Math.min(1, Math.max(0, (want - C[a]) / (C[a + 1] - C[a]))) : 0;
+    const px = X[a] + (X[a + 1] - X[a]) * f, py = Y[a] + (Y[a + 1] - Y[a]) * f;
+    let tx = TX[a] + (TX[a + 1] - TX[a]) * f, ty = TY[a] + (TY[a + 1] - TY[a]) * f;
+    const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    for (let j = 0; j <= rad; j++) {
+      const v = j / rad * Math.PI * 2, sn = Math.sin(v), cs = -Math.cos(v);
+      // N = (0, 0, -1), B = T x N = (-ty, tx, 0): normal = cs N + sn B
+      const nx = -sn * ty, ny = sn * tx, nz = -cs, o = (i * (rad + 1) + j) * 3;
+      nor[o] = nx; nor[o + 1] = ny; nor[o + 2] = nz;
+      pos[o] = px + r * nx; pos[o + 1] = py + r * ny; pos[o + 2] = r * nz;
+      const w = (i * (rad + 1) + j) * 2; uv[w] = i / tub; uv[w + 1] = j / rad;
+    }
+  }
+  const idx: number[] = [];
+  for (let j = 1; j <= tub; j++) for (let i = 1; i <= rad; i++) {
+    const p0 = (rad + 1) * (j - 1) + (i - 1), p1 = (rad + 1) * j + (i - 1), p2 = (rad + 1) * j + i, p3 = (rad + 1) * (j - 1) + i;
+    idx.push(p0, p1, p3, p1, p2, p3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setIndex(idx);
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return g;
+}

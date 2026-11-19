@@ -1,8 +1,8 @@
 # VERDICT_R9: independent verification of Squish Keeper at HEAD d2bd392ea (2026-11-19)
 
-**PROVISIONAL VERDICT (05:00 UTC): NOT READY to deploy with all six places open. (a) no BLOCKER; (b) regression PASS. (c) things used on their own in 180 s at the LOW tier (desk / phone): Hearthlog 5 / 4, Ripple 2 / 2, Frostbell 5 / 2, Rainleaf 4 / 2, Lanternroof 1 / 5, Cloudloft 3 / 2. At HIGH quality the low runs become Lanternroof desk 4, Rainleaf phone 3, Ripple desk 3, Frostbell phone 4, but Ripple phone stays 2. Ripple Shore fails on a phone at both tiers. (d), (e), pad / squirt re-tests and Cloudloft phone at high still running.**
+**VERDICT (FINAL, 05:50 UTC): NOT READY to deploy with all six places open. No BLOCKER; regression, saves, actions, quests, tosses, Home clicks, chips and sound levels pass with 0 errors. MAJOR C1: Ripple Shore and Cloudloft give only 2 things used on their own on the phone at both quality tiers. MAJOR C2: at the low tier Frostbell (phone), Rainleaf (phone) and Lanternroof (desktop) fall to 1 to 2 (4 / 3 / 4 at high). Deployable: close all five new places (Home + Hearthlog only), or, if the high tier is accepted, close Ripple Shore and Cloudloft; neither reduced build was built or run here.**
 
-Verifier: independent; wrote no file in `src` or `_harness`, ran no git write command.
+Verifier: independent; wrote no file in `src` or `_harness`, ran no git write command. **Every result is for HEAD d2bd392ea** (a `git archive` copy); at 05:50 UTC the working tree had new uncommitted edits by another agent (`src/life/step.ts`, `src/life/world.ts`, `src/render/places/cloudloft.ts`, `_harness/probe_life_selfuse.ts`, an R10 fix lane): they are NOT covered here. Nothing of mine is left running (the remaining `probe_life_selfuse` process belongs to that lane).
 Scratch: `/tmp/claude-0/-home-user-forgeflow-games/2d4e12a5-0f4d-5239-bdda-16316c996a1a/scratchpad/pg_verify_r9/` (below `S/`): `scripts/`, `logs/`, `shots/`, `snap/` (copy of the tree).
 Ports: 5370 (vite dev of the copy), 5371 (new prod, static), 5372 (live snapshot, static), 5373 (old build 23c684a60, static).
 
@@ -121,6 +121,7 @@ The low-count runs are being repeated with quality forced to high (`S/logs/PL_<p
 | Ripple Shore | desk | 2 | **3** (USE rockpool 28 s (a wade), driftlog 95 s, pebbleball 96 s) | all three move (5.6 / 7.7 / 7.4 m); Dollop also walks to the chimes and the mound |
 | Frostbell | phone | 2 | **4** (snowball 17 s, glideramp 45 s, shakepine 126 s, snowdriftnest 131 s; REACT snowball, shakepine) | I2, I4 on their own; Dollop and Crimpo glide on the ice pond (ride 40 s each) |
 | Ripple Shore | phone | 2 | **2** (USE pebbleball 43 s; REACT rockpool; still 2 at 300 s) | **fails at high too**: Glimglop and Crimpo start walks to five things each and finish none; 156 voices in 180 s (139 single chirps) |
+| Cloudloft | phone | 2 | **2** (USE cloudnest 80 s, cloudball 110 s; still 2 at 300 s) | **fails at high too**: walks to the kite swing, the arch and the pads end without a use |
 | Rainleaf | phone | 1 (2 with social) | **3** (USE leafteeter 124 s, seedpod 141 s; REACT dripleaf; stepping stones by 300 s) | G7, G10 on their own; all three move (6.3 / 5.4 / 5.0 m); Crimpo still stands at the stones 33 s without a use |
 
 
@@ -128,4 +129,73 @@ The low-count runs are being repeated with quality forced to high (`S/logs/PL_<p
 desktop: Glimglop (slime) one rebound of **0.24 m**; Dollop (jelly) four small rebounds up to 0.08 m; Crimpo (dough) none. Phone: Glimglop **0.29 m**; Dollop four rebounds up to 0.13 m; Crimpo landed beside the pad.
 So a drop on the Moss Bouncer bounces on both frames (clearly for slime, weakly for jelly, not for dough, which the family table allows). "Boing on the moss" (G4) stamped on both frames. 0 errors.
 **Puff Pads** (from the place runs): desktop Dollop 5 rebounds, Glimglop one of 0.24 m; phone Glimglop 3, Dollop 5: they bounce on both frames; U2 stamped on both.
+
+**Beach squirt with a foam, both frames** (`S/scripts/squirt.mjs`, `S/logs/SQ_{desk,phone}.json`; a Wisplet from capsules, brought out, Places sheet to Ripple, Wisplet carried into the Rock Pool, 20 s, a friend set near, Wisplet squeezed 1.4 s by real input):
+desktop and phone alike: in the pool it rides the Bob Ring (wet 1.0), soak 0.3 -> **1.0 after 20 s**, the squeeze makes **1 squirt** (the arc of drops is drawn: `S/shots/SQ_phone_squirt.png`), soak falls to 0.73, **"A squirt for a friend" (R7) stamped**. 0 errors.
+
+
+### (d) Home and the new features (DONE 05:30 UTC; `S/scripts/home.mjs`, `home2.mjs`; `S/logs/HM_{n3_desk,n5_desk,n1_phone}.out`, `HM2.json`; seed `S/logs/seed_home.json` = seed_p3 with H4, H5, H8, C8 done so all four things are shown)
+- **3 out, desktop**: Music Box click: tune ON (`tune.on` true), a second click OFF; Warm Lamp click goes to the lamp (`tap: warmlamp`); Bounce Pad click goes to the pad (through a squishy: "through bouncepad (1)"); Keepsake Shelf: its centre click went to the Felt Ball that had rolled in front of it ("through feltball"), and in the re-test its centre, top and right end go to the shelf (`tap: keepsakeshelf`), its left end to a squishy walking past. Felt Ball click: the ball. 0 errors.
+- **5 out could not be made: the mat stopped at 4** ("Granulo is out on the mat (4 of 4)"; the fifth "Bring out" did nothing) with this profile on the low tier. With **4 out**: Music Box on / off, Warm Lamp, Keepsake Shelf ("clear keepsakeshelf") all go to the thing; the **Bounce Pad click went to a squishy walking over it** ("moving crimpo": the through-tap only passes resting squishies, by design). MINOR (D2): a click on the pad can be taken by a passer-by; it works when nobody walks over it.
+- **A still click on a resting squishy that covers the Music Box goes to the box**: Glimglop set in front of it (covering its screen centre), click there: `tap: musicbox`, "through musicbox (1)", the tune starts (`S/shots/HM_n3_desk_cover_click.png`). **It does not break the squishy**: on that covering squishy a 1.4 s squeeze gives poke / press / release, compression 0.19, press 1.0 (an uncovered squishy: 0.18, 1.0); a sideways pull gives grab / snap (compression 0.16); a still tap at its own centre pokes it (`miss`, no thing behind that point); it is picked up and carried 1 m (`carried: true`). (`S/logs/HM2.json`)
+- **Phone, one out**: the Felt Ball (centre 309,445, r 41 px) stands **clear of the squishy** (centre 180,329, r 85): 48 px gap, no overlap (`S/shots/HM_n1_phone_party.png`). The Music Box, lamp, shelf and pad are hidden with one out on the phone (their `fromN`), as the data says.
+- **"Who's coming?" chips** (Places sheet, 3 and 4 out): one chip per squishy out, 56 px tall, the one in hand marked "in your hand, always comes" and not toggleable; a tap on Dollop's chip: `aria-pressed` false, "Dollop stays at Home."; "Go to Hearthlog Cabin": the party arrives without Dollop (3 -> 2, 4 -> 3). Works.
+- **Photo frame and Journal gifts in the trophies**: NOT checked in the browser (no time left in this window); `probe_r8_features` 9/9 covers them in node (the frame's thumbnail write and read, the gift sweep on a `gift` hoard event).
+- DT-18 (Home things hidden behind the party): seen in the screens (with 3 out the Felt Ball and the Music Box sit partly behind squishies, `S/shots/PL_cloudloft_desk_home_back.png`); the through-tap makes them clickable. MINOR (D1).
+
+
+### (e) Sound (DONE 05:40 UTC; `node _harness/sound_survey.ts --port=5376` on the copy, 77 s; `S/logs/sound_survey.{log,json}`)
+- 76 sounds rendered offline through the game's own master chain: **0 clipped samples anywhere**; the worst master peak **-4.0 dBFS** at master 1.0 (the clip test); every place mix (Home, Hearthlog, Ripple, Frostbell, Rainleaf, Lanternroof, Cloudloft at master 0.8 and 1.0) `noClip: true`, master peaks -18.2 to -14.0 dBFS, voices 8.5 to 14.4 dB over the ambience, no stem more than 6.4 dB over its peers (rule 12 dB); 0 page errors.
+- **No silent sound**: the quietest is the thing "tick" (peak -38.7 dBFS, 10 ms), which is also the one sound flagged with a **click at its start** (MINOR E1). The other note is informational (the cabin fire's bed swells 3.6 dB when the fireplace is tapped, as designed).
+- Not measurable offline: how often voices play. In the place runs the voice spy counted 45 to 76 creature phrases per 180 s, but **149 at Frostbell (desk, low) and 156 at Ripple (phone, high), about 140 of them a single "chirp"** (MINOR E2: likely a chatter of chirps nearly every second; nobody has listened).
+- Nobody has listened to any of it (no audio device here).
+
+
+## Per place: OPEN-READY
+
+Things used on their own in 180 s with no input (by-itself USE, REACT or SOCIAL record of the host; one run per place and frame at the LOW tier that `quality: auto` resolves to here; HIGH = quality forced high, run only where low fell short):
+
+| Place | Desk (low) | Phone (low) | High rerun | OPEN-READY | Why |
+|---|---|---|---|---|---|
+| Hearthlog Cabin | 5 | 4 | - | **yes** | 3+ on both frames, each squishy in its own way, emotes (9 kinds) and voices, C5 by play, tosses inside, home again, 0 errors |
+| Ripple Shore | 2 | 2 | desk 3, **phone 2** | **no** | below 3 on the phone even at high quality; at low nobody wades or floats on its own; the actions (pool, soak, squirt with a foam, shells, mound) and R3 / R7 / R9 work |
+| Frostbell Ridge | 5 | 2 | phone 4 | **no at low, yes at high** | the phone at the low tier: 2 things by 300 s (Crimpo "uses" the ice pond for 76 s with no record); every action works (ramp, pine snow, bells, ice) |
+| Rainleaf Garden | 4 | 2 | phone 3 | **no at low, yes at high** | the phone at the low tier: 1 USE by 300 s, two squishies stand still 2.5 min in a "use" they never finish; rain, drip leaf and the Moss Bouncer (both frames) work |
+| Lanternroof | 1 | 5 | desk 4 | **no at low, yes at high** | the desktop at the low tier: 1 thing by 300 s, two of three asleep in a "use"; breeze, scope comet, vane and lanterns work; my chimney carry missed (not checked) |
+| Cloudloft | 3 | 2 | **phone 2** | **no** | below 3 on the phone at BOTH tiers (2 by 300 s: nest and ball; walks to the kite swing, arch and pads end without a use); pads bounce on both frames, updraft floats, U2 / U3 by play |
+
+## Findings (severity, repro, screenshot)
+
+| Id | Severity | Finding | Repro / evidence |
+|---|---|---|---|
+| C1 | **MAJOR** | **Ripple Shore and Cloudloft miss the owner's bar on the phone at BOTH quality tiers: 2 things used on their own in 180 s (and still 2 at 300 s)**; Ripple also 2 on the desktop at low. Squishies start walks to the shells, mound, pool (Ripple) or kite swing, arch, pads (Cloudloft) and finish none | `place.mjs <dev> phone ripple seed_p3.json 180` (+ `Q=high`); `S/logs/PL_ripple_{desk,phone}{,_high}.json`; `S/shots/PL_ripple_phone_watch_100s.png` (all three piled at the log); `S/logs/PL_cloudloft_phone{,_high}.json` |
+| C2 | **MAJOR** | **At the low quality tier the variety collapses at four more places**: Frostbell phone 2, Rainleaf phone 1 to 2 (two squishies frozen 2.5 min in a USE behaviour), Lanternroof desktop 1 (two asleep in a USE), Cloudloft phone 2. With quality forced high the same scripts give 4, 3, 4. The awake budget of the low tier (fewer movers) starves the by-itself uses; R9's node probe (SU-01) does not run the low tier or the tall phone layouts | `S/logs/PL_{frostbell,rainleaf,cloudloft}_phone.json`, `PL_lanternroof_desk.json` vs `*_high.json`; `S/shots/PL_rainleaf_phone_after_watch.png`, `PL_lanternroof_desk_watch_100s.png` |
+| A1 | MINOR | First-play download +75.5 KB raw over the snapshot (SZ-01 hard cap 70 KB; three.core +14.9 KB since 23c684a60) | `S/logs/REQ_{new,live}.json`, fp.py |
+| A2 | MINOR | The 150 KB life cap is met by splitting LIFE into `later-brain` (112.7 KB) loaded together with `later-life` (68.6 KB): 181 KB at Wake | `S/logs/build_new.log` |
+| A3 | MINOR | `dist/assets` 2095 KB against D9 / SZ-02's 2000 KB (the build gate is still G0 3072 KB, so `vite build` passes); D-92 says the last-opening place should then ship false | `S/logs/build_new.log` |
+| D1 | MINOR | Home things still drawn behind the party (DT-18 fails: shelf 95 % hidden at n3 tall, Music Box 54 %, lamp 95 % wide); clickable through resting squishies now | probe_pg_data DT-18; `S/shots/PL_cloudloft_desk_home_back.png` |
+| D2 | MINOR | With 4 out a click on the Bounce Pad was taken by a squishy walking over it (`through: moving crimpo`) | `S/logs/HM_n5_desk.out` click_bouncepad |
+| D3 | MINOR | 5 out could not be reached: the mat stopped at "4 of 4" with this profile on the low tier, so "five out" was not checked | `S/logs/HM_n5_desk.out` party |
+| V1 | MINOR | Clipping and crowding: the Drip Leaf blade drawn through a squishy (Rainleaf phone); the hammock post and rope through Glimglop with the Auto chip on its face (Lanternroof desk); an emote bubble over the swing's Auto chip (cabin desk); the Shake Pine's crown cut by the top of the frame (Frostbell desk); the Sunbow Arch reads as one orange post on the phone; parties arrive piled on top of each other (Frostbell phone, Ripple phone) | `S/shots/PL_rainleaf_phone_after_watch.png`, `PL_lanternroof_desk_watch_100s.png`, `PL_hearthlog_desk_after_watch.png`, `PL_frostbell_desk_act_ice.png`, `PL_cloudloft_phone_arrive.png`, `PL_frostbell_phone_arrive.png` |
+| V2 | MINOR | Cabin on a phone: a squishy rested 0.6 m in front of the tall bounds at x 368 of 390 px (its edge at the frame's edge) after other squishies were tossed | `S/logs/PL_hearthlog_phone.json` hard_toss |
+| E1 | MINOR | The thing "tick" sound starts with a click | `S/logs/sound_survey.log` |
+| E2 | MINOR | About 140 single "chirp" phrases in 180 s at Frostbell (desk, low) and Ripple (phone, high), 2 to 3 x the other places | voice spy, `S/logs/PL_frostbell_desk.json`, `PL_ripple_phone_high.json` |
+| X1 | MINOR (note) | On 23c684a60 (the live build) the first wish never showed in 194 to 450 s of stepped play with 3 out (`firstWishSent` true, no wish on anyone); not re-checked on HEAD | `S/logs/OLDSAVE2.out`, `OLDSAVE3.out` |
+
+No BLOCKER: 0 console errors, 0 page errors, 0 failed requests in every run (32 browser runs); every published step and both save directions unchanged; no trace of Fizzwell Tub, Cogwhistle Bench or Echo Hollow in any Places sheet or build string a player can see; every hard toss ends inside the play area.
+
+## Ready to deploy with all six places open: **NO**, because
+the owner's bar for a place (3 different things used on their own in 180 s, on both frames) is met only by Hearthlog Cabin at the tier this machine resolves to; Ripple Shore and Cloudloft miss it on the phone even at high quality (C1); Frostbell, Rainleaf and Lanternroof miss it on one frame at the low tier only (C2). Everything else (regression, saves, actions, quests, tosses, Home clicks, chips, sound levels) holds.
+
+**To make a deployable build**: set `shipped: false` for **Ripple Shore, Frostbell Ridge, Rainleaf Garden, Lanternroof and Cloudloft** (in `src/data/places.ts` PLACE_INFO and each PlaceDef's own `shipped`), leaving Home + Hearthlog Cabin, which is the live content plus rounds 6 to 9's fixes. If the owner accepts the HIGH tier as the measure (devices fast enough for it), close **Ripple Shore and Cloudloft** and keep Frostbell, Rainleaf and Lanternroof (they reach 4 / 3 / 4 at high; low-end devices would see 1 to 2).
+**Is that reduced build ready?** Not verified: I built and ran neither reduced build. Everything it keeps passed here (Hearthlog both frames, Home, regression, saves, 0 errors), and PG2 verified a Home + Hearthlog build before; it needs one build and a short smoke run (Places sheet lists only Home and the cabin, the cabin's travel, no "Opens at" line for a closed place, a save whose journal has the closed places' bits still loads) before deploy.
+
+## What was not checked
+- Audio by ear (no device); voice frequency only counted.
+- The photo frame (Friendship Frame thumbnail) and Journal gifts on the trophies shelf in the browser (node `probe_r8_features` 9/9 only).
+- 5 out at Home (mat capped at 4 here); landscape phones, 320 px, Calm / reduced motion; keyboard and screen-reader paths of the new UI.
+- The chimney carry at Lanternroof desk and the Sunbow Arch carry on desktop (my steering missed); the Leaf Teeter and Kite Swing by the player; the player's ice flick on desktop landed on another squishy.
+- Places at the MED tier; real GPUs and devices (SwiftShader only); more than one run per place and frame at each tier (the counts are single samples of a stochastic simulation).
+- The first wish and cabin opening by real play on HEAD (the place runs used a journal with 45 stamps); frame cost / performance.
+- The 23c684a60 save's cabin bit was set by hand (`pl |= 2`), because its first wish did not show in my budget.
 

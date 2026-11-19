@@ -30,7 +30,7 @@ import { emitVoice, PHRASE as PH, voice, BAR_S } from './voice.ts';
 import { EMOTE } from '../data/life.ts';
 
 export { createLifeWorld };
-export { lifeSeeksNew } from './world.ts';   // (round 9, R9_FIX 2: the host's over-budget rule spares a squishy on its way to the visit's next new thing)
+export { lifeSeeksNew, lifeWaitsTurn, lifeBusy, lifeUsesOf } from './world.ts';   // (round 10: lifeWaitsTurn, lifeBusy, lifeUsesOf: the host's turn rule)   // (round 9, R9_FIX 2: the host's over-budget rule spares a squishy on its way to the visit's next new thing)
 export type { LifeWorld };
 export { lifePhrase, lifeMotif, PHRASE, PHRASE_BUBBLE } from './voice.ts';
 export { createAttention, attentionFilter, motionGate, motionGateWake, unitCapOf, moverCapOf, CHAR_CAP, CAPS, UNIT, WAKE, PHONE_FACTOR,
@@ -382,7 +382,7 @@ export function lifeDebug(w: LifeWorld): unknown {
   for (let i = 0; i < CAP; i++) if (w.ac[i]) chars.push({ slot: i, kind: w.ki[i], species: w.species[i], beh: w.beh[i], phase: w.ph[i],
     moment: w.moo[i] >= 0 ? w.mK[w.moo[i]] : 0, play: +w.pl[i].toFixed(3), company: +w.co[i].toFixed(3), rest: +w.re[i].toFixed(3),
     traits: Array.from(w.tr.subarray(i * 5, i * 5 + 5), (v) => +v.toFixed(2)), looks: Array.from(w.lo.subarray(i * 6, i * 6 + 6), (v) => +v.toFixed(2)),
-    wish: w.wK[i] ? [w.wK[i], w.wT[i]] : null, moving: w.mo[i], thing: w.tT[i], uses: w.uV[i], used: w.uM[i] });   // (round 7: its target thing, the visit's uses)
+    wish: w.wK[i] ? [w.wK[i], w.wT[i]] : null, moving: w.mo[i], thing: w.tT[i], uses: w.uV[i], used: w.uM[i], wait: w.tw[i] });   // (round 10: waiting for a mover token or its wake)   // (round 7: its target thing, the visit's uses)
   return { place: w.placeIdx, visit: w.visit, layout: w.layout, chars, movers: w.movers, moverCap: w.att.moverCap, unitCap: +w.att.unitCap.toFixed(3),
     allowance: w.att.allowance, granted: w.att.granted, dropped: w.att.dropped, favourites: SPECIES_LIFE.dollop.place };
 }
