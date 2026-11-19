@@ -30,6 +30,10 @@
 //                   team within 16 m of the pit at ≥ 10 % of objective takes (adept, veteran)
 //   ladder          veteran's inner+base undefended share ≤ adept's + 5 points, and its peel no-response ≤ adept's + 5 points
 //   fray            reported: retreat-mode deaths (mode 3 s before), kills on the score leader
+//   pings (ruling 65) pings about something the team could not see 0 (every tier); spam: a fighter twice in 10 s / a team over
+//                   3 in 10 s 0 / 0; reported: pings per fighter- and team-minute by kind, assist pings answered within 5 s
+//   team play (ruling 65, reported) fighter sieges from 14:00 with 3+ attackers arriving within 6 s; won fights followed by a
+//                   structure blow within 20 s; lone deaths into three (3+ enemy fighters within 15 m, no ally within 20 m)
 // Every match is a pure function of (catalog, setup).
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import type { CatalogT } from '../src/contracts/catalog.ts';
@@ -213,6 +217,20 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
   // (owner_rulings 44, round 2) RIFT low health with a foe within 10 m (FRAY's read, on the roads)
   const rLowEp = new Map<number, { t: number; m: string }>();
   const rLowCd = new Map<number, number>();
+  // (ruling 65, play as a team) group sieges: per enemy structure, the episode of fighter blows on it (ends 8 s after the last)
+  // and each attacker's first blow in it; won fights: takedown clusters (gaps ≤ 10 s) and each team's fighter blows on enemy
+  // structures, read at the game's end
+  const gSiege = new Map<number, { team: number; start: number; last: number; first: Map<number, number> }>();
+  const gSiegeDone: { team: number; start: number; firsts: number[] }[] = [];
+  const tdTimes: { t: number; team: number }[] = [];
+  const sHitT: number[][] = [[], []];
+  // (ruling 65, pings) per team: when each enemy fighter was last visible to it and where; open assist episodes; ping times
+  const visAt = new Map<number, { t: number; x: number; y: number }>();
+  const sightHist = new Map<number, { t: number; x: number; y: number }[]>();
+  const visAny = new Map<number, { t: number; x: number; y: number }>();
+  const visPrev = new Map<number, { t: number; x: number; y: number; since: number }>();
+  const asEp: { x: number; y: number; t: number; team: number; p: number; far: Set<number>; done: boolean }[] = [];
+  const pingT = new Map<number, number>(), teamPingT: number[][] = [[], []];
   const lim = cut > 0 ? cut : 3600;
   let guard = 0;
   while (sim.view.phase !== 'ended' && guard++ < 30 * 3700) {
@@ -229,14 +247,58 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
     const evs: SimEvent[] = sim.step();
     const w = W(), now = w.time;
     if (now > lim) break;
+    if (!isFray) {
+      for (const f of w.entities) { if (f.kind !== 'fighter' || !f.alive || f.removed) continue; for (let t = 0; t < 2; t++) if (t !== f.team && (f.visibleMask & (1 << t))) { visAny.set(t * 100000 + f.id, { t: now, x: f.x, y: f.y }); { const hk = t * 100000 + f.id; let hl = sightHist.get(hk); if (!hl) { hl = []; sightHist.set(hk, hl); } if (!hl.length || now - hl[hl.length - 1].t >= 0.1) { hl.push({ t: now, x: f.x, y: f.y }); if (hl.length > 150) hl.shift(); } } const key = t * 100000 + f.id, o = visPrev.get(key); const since = !o || now - o.t > 0.5 || (o.x - f.x) ** 2 + (o.y - f.y) ** 2 > (0.5 + 8 * (now - o.t)) ** 2 ? now : o.since; visPrev.set(key, { t: now, x: f.x, y: f.y, since }); if (now - since >= 0.15) visAt.set(key, { t: now, x: f.x, y: f.y }); } }
+      for (const ep of asEp) {
+        if (ep.done) continue;
+        if (now - ep.t > 5) { ep.done = true; continue; }
+        for (const pl of w.players) { const f = pl.ent; if (!f || !f.alive || f.team !== ep.team || pl.player === ep.p || !ep.far.has(pl.player)) continue; if ((f.x - ep.x) ** 2 + (f.y - ep.y) ** 2 <= 144) { ep.done = true; add(C, 'ping.assist.answered'); break; } }
+      }
+    }
     for (const ev of evs) {
       switch (ev.e) {
+        case 'ping': {
+          const pl = w.players[ev.player]; if (!pl || isFray) break;
+          const team = pl.team, k = ev.kind;
+          add(C, 'ping.n'); add(C, `ping.k.${k}`);
+          if (now - (pingT.get(ev.player) ?? -1e9) < 9.99) add(C, 'ping.gapViol');
+          pingT.set(ev.player, now);
+          const tl = teamPingT[team] ?? (teamPingT[team] = []); tl.push(now); while (tl.length && now - tl[0] >= 10) tl.shift(); if (tl.length > 3) add(C, 'ping.teamViol');
+          // fog honesty: what the point refers to must be something the team sees, owns or last saw. A ping event lands a tick
+          // after the speaker's decision, which came before that tick's sight update: "a foe in sight at a missing ping" is read
+          // on the sight from two ticks back (an enemy stepping into view in the tick of the call was not in view at it)
+          const seenFoe = (r: number): boolean => w.entities.some((q) => q.kind === 'fighter' && q.alive && !q.removed && q.team !== team && ((mask0.get(q.id) ?? q.visibleMask) & (1 << team)) && (q.x - ev.x) ** 2 + (q.y - ev.y) ** 2 <= r * r);
+          let ok = true;
+          // (the speaker decided a tick before the event, on the sight it had then)
+          const seenRecent = (r: number): boolean => { for (const [key, hl] of sightHist) if (Math.floor(key / 100000) === team) for (const v of hl) if (now - v.t <= 1 && (v.x - ev.x) ** 2 + (v.y - ev.y) ** 2 <= r * r) return true; return false; };
+          if (k === 'retreat' || k === 'danger') ok = seenFoe(16) || seenRecent(16);
+          else if (k === 'assist') ok = seenFoe(16) || seenRecent(16) || w.entities.some((x) => x.kind === 'structure' && x.team === team && (x.x - ev.x) ** 2 + (x.y - ev.y) ** 2 <= 4);
+          else if (k === 'missing') { let near = false; for (const [key, hl] of sightHist) if (Math.floor(key / 100000) === team) for (const v of hl) if (now - v.t >= 0.06 && now - v.t <= 0.15 && (v.x - ev.x) ** 2 + (v.y - ev.y) ** 2 <= 64) near = true; let last = false; for (const [key, hl] of sightHist) if (Math.floor(key / 100000) === team) for (const v of hl) if (now - v.t <= 12 && (v.x - ev.x) ** 2 + (v.y - ev.y) ** 2 <= 9) last = true; ok = !near && last; if (near) add(H('ping.unseenKind'), 'missing:foeInSight'); if (!last) { add(H('ping.unseenKind'), 'missing:notLastSeen'); } }
+          else if (k === 'push') ok = w.entities.some((x) => x.kind === 'structure' && x.team !== team && (x.x - ev.x) ** 2 + (x.y - ev.y) ** 2 <= 4);
+          if (!ok) { add(C, 'ping.unseen'); add(H('ping.unseenKind'), k); }
+          if (k === 'assist') {
+            add(C, 'ping.assist.n');
+            const far = new Set<number>();
+            for (const q of w.players) if (q.ent && q.ent.alive && q.team === team && q.player !== ev.player && (q.ent.x - ev.x) ** 2 + (q.ent.y - ev.y) ** 2 > 225) far.add(q.player);
+            asEp.push({ x: ev.x, y: ev.y, t: now, team, p: ev.player, far, done: far.size === 0 });
+            if (far.size === 0) add(C, 'ping.assist.noneAway');
+          }
+          if (k === 'onMyWay') for (const ep of asEp) if (!ep.done && ep.team === team && ep.p !== ev.player && (ep.x - ev.x) ** 2 + (ep.y - ev.y) ** 2 <= 900) { ep.done = true; add(C, 'ping.assist.answered'); break; }
+          break;
+        }
         case 'damage': {
           const dst = w.entity(ev.dst); if (!dst) break;
           const src = credit(ev.src);
           if (dst.kind === 'structure') {
             sDmgAt.set(dst.id, now);
             if (src) sFDmgAt.set(dst.id, now);
+            if (src && src.kind === 'fighter' && src.team !== dst.team && !isFray) {
+              if (src.team >= 0 && src.team < 2) { const l = sHitT[src.team]; if (!l.length || now - l[l.length - 1] >= 1) l.push(now); }
+              let ge = gSiege.get(dst.id);
+              if (ge && now - ge.last > 8) { gSiegeDone.push({ team: ge.team, start: ge.start, firsts: [...ge.first.values()] }); ge = undefined; }
+              if (!ge) { ge = { team: src.team, start: now, last: now, first: new Map() }; gSiege.set(dst.id, ge); }
+              ge.last = now; if (!ge.first.has(src.id)) ge.first.set(src.id, now);
+            }
           } else if (dst.kind === 'fighter' && src && src.team !== dst.team) {
             let l = dmgLog.get(dst.id); if (!l) { l = []; dmgLog.set(dst.id, l); }
             l.push({ t: now, a: ev.amount, src: src.id });
@@ -365,6 +427,9 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
             let ally = false;
             for (const pl of w.players) { const f = pl.ent; if (f && f !== v && f.alive && f.team === v.team && (f.x - v.x) ** 2 + (f.y - v.y) ** 2 <= 25 * 25) { ally = true; break; } }
             if (!ally && !isFray) add(C, 'f.deaths.isolated');
+            // (ruling 65: a lone walk into three — 3+ enemy fighters within 15 m, no ally within 20 m, from 14:00)
+            if (!isFray && now >= 840) { let foes3 = 0, al20 = false; for (const pl of w.players) { const f = pl.ent; if (!f || f === v || !f.alive) continue; const d2 = (f.x - v.x) ** 2 + (f.y - v.y) ** 2; if (f.team !== v.team && d2 <= 225) foes3++; else if (f.team === v.team && d2 <= 400) al20 = true; }
+              add(C, 'f.deaths14'); if (foes3 >= 3 && !al20) add(C, 'f.deaths.lone3'); }
             // a diver punished
             for (const [, pe] of peel) if (pe.divers.has(v.id)) pe.resp.add('diverDied');
           }
@@ -373,6 +438,7 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
         case 'takedown': {
           const vp = w.players[ev.victim]; const ve = vp?.ent; if (!ve) break;
           add(C, 'td.n');
+          if (!isFray) tdTimes.push({ t: now, team: ve.team });
           const parts = [ev.killer, ...ev.assists].filter((x) => x >= 0);
           for (const st of strikes) if (st.target === ve.id && now - st.t <= 8 && parts.includes(st.p)) { add(C, st.lurk ? 'gank.successLurk' : 'gank.success'); st.t = -1e9; }
           if (isFray) {
@@ -824,6 +890,37 @@ function runGame(catalog: CatalogT, modeId: string, seed: number, diff: string, 
   }
   const w = W();
   out.dur = w.time;
+  // (a bot that threw is dropped by the sim: count it — a run with faults is not a measurement)
+  const faults = (sim as unknown as { faults?: string[] }).faults ?? [];
+  if (faults.length) { add(C, 'bot.faults', faults.length); console.error(`FAULT ${modeId} seed ${seed} ${diff}: ${faults[0].slice(0, 400)}`); }
+  // (ruling 65) group sieges from 14:00: 3+ attackers whose first blows fall within 6 s of each other
+  for (const ge of gSiege.values()) gSiegeDone.push({ team: ge.team, start: ge.start, firsts: [...ge.first.values()] });
+  for (const ge of gSiegeDone) {
+    if (ge.start < 840) continue;
+    add(C, 'gs.n'); const f = ge.firsts.sort((a, b) => a - b);
+    if (f.length >= 2) add(C, 'gs.n2'); if (f.length >= 3) add(C, 'gs.n3');
+    let tog = false; for (let i = 0; i + 2 < f.length; i++) if (f[i + 2] - f[i] <= 6) { tog = true; break; }
+    if (tog) add(C, 'gs.together3');
+    add(C, 'gs.attackers', f.length);
+  }
+  // (ruling 65) won fights: takedown clusters (gaps ≤ 10 s) from 10:00 where one team took 2+ and more than the other — then a
+  // blow of the winners' fighters on an enemy structure within 20 s of the cluster's last takedown
+  {
+    let i = 0;
+    while (i < tdTimes.length) {
+      let j = i; while (j + 1 < tdTimes.length && tdTimes[j + 1].t - tdTimes[j].t <= 10) j++;
+      const cl = tdTimes.slice(i, j + 1), t0 = cl[0].t, tl = cl[cl.length - 1].t;
+      // (a takedown's team is the victim's: kills for team 0 are victims of team 1)
+      const k0 = cl.filter((x) => x.team === 1).length, k1 = cl.filter((x) => x.team === 0).length;
+      const win = k0 >= 2 && k0 > k1 ? 0 : k1 >= 2 && k1 > k0 ? 1 : -1;
+      if (win >= 0 && t0 >= 600 && tl + 20 <= w.time + 1e-6) {
+        add(C, 'wf.n'); if (tl >= 840) add(C, 'wf.n14');
+        const hit = sHitT[win].some((t) => t >= t0 && t <= tl + 20);
+        if (hit) { add(C, 'wf.hit20'); if (tl >= 840) add(C, 'wf.hit20_14'); }
+      }
+      i = j + 1;
+    }
+  }
   // ult usage per minute alive after level 6
   for (let p = 0; p < n; p++) if (ultAt6[p] >= 0) add(C, 'ult.minutesAfter6', (w.time - ultAt6[p]) / 60);
   // ahead / behind at 15:00
@@ -952,6 +1049,16 @@ function gates(runs: TierRun[]): string[] {
       if (diff !== 'novice' && sum(R, 'tm.ahead') >= 5) line(ah <= ev * 1.5, `${diff} overextension: deaths per team-minute ahead vs even`, `${ah.toFixed(2)} vs ${ev.toFixed(2)}`, '≤ 1.5 × even');
       else rpt(`${diff} deaths per team-minute ahead vs even`, `${ah.toFixed(2)} vs ${ev.toFixed(2)}`);
       rpt(`${diff} isolated deaths`, pct(share(sum(R, 'f.deaths.isolated'), sum(R, 'f.deaths'))));
+      // (ruling 65, play as a team)
+      rpt(`${diff} group sieges: fighter sieges from 14:00 with 3+ attackers arriving (first blow) within 6 s`, `${pct(share(sum(R, 'gs.together3'), sum(R, 'gs.n')))} of ${sum(R, 'gs.n')} (of those with 3+ attackers ${pct(share(sum(R, 'gs.together3'), sum(R, 'gs.n3')))} of ${sum(R, 'gs.n3')}; mean attackers ${(sum(R, 'gs.attackers') / Math.max(1, sum(R, 'gs.n'))).toFixed(2)})`);
+      rpt(`${diff} won fights (10:00+, 2+ takedowns and more than the other side) followed by a structure blow within 20 s`, `${pct(share(sum(R, 'wf.hit20'), sum(R, 'wf.n')))} of ${sum(R, 'wf.n')} (from 14:00 ${pct(share(sum(R, 'wf.hit20_14'), sum(R, 'wf.n14')))} of ${sum(R, 'wf.n14')})`);
+      rpt(`${diff} lone deaths into three (14:00+: 3+ enemy fighters within 15 m, no ally within 20 m)`, `${pct(share(sum(R, 'f.deaths.lone3'), sum(R, 'f.deaths14')))} of ${sum(R, 'f.deaths14')}`);
+      // (ruling 65, pings)
+      { const mins = R.reduce((a, g) => a + g.dur / 60, 0), kinds = ['assist', 'onMyWay', 'retreat', 'danger', 'missing', 'push', 'objective'];
+        rpt(`${diff} pings per fighter-minute / per team-minute`, `${(sum(R, 'ping.n') / Math.max(1, mins * 10)).toFixed(3)} / ${(sum(R, 'ping.n') / Math.max(1, mins * 2)).toFixed(2)} (${kinds.map((k) => `${k} ${(sum(R, `ping.k.${k}`) / Math.max(1, mins * 2)).toFixed(2)}`).join(', ')})`);
+        line(sum(R, 'ping.unseen') === 0, `${diff} pings about something the team could not see`, `${sum(R, 'ping.unseen')}`, '0');
+        line(sum(R, 'ping.gapViol') === 0 && sum(R, 'ping.teamViol') === 0, `${diff} ping spam: a fighter twice in 10 s / a team over 3 in 10 s`, `${sum(R, 'ping.gapViol')} / ${sum(R, 'ping.teamViol')}`, '0 / 0');
+        rpt(`${diff} assist pings answered by a teammate within 5 s (onMyWay, or one from 15 m+ away reaching 12 m)`, `${pct(share(sum(R, 'ping.assist.answered'), sum(R, 'ping.assist.n') - sum(R, 'ping.assist.noneAway')))} of ${sum(R, 'ping.assist.n') - sum(R, 'ping.assist.noneAway')}`); }
       const long = R.filter((g) => g.dur >= 1080), ls = long.reduce((a, g) => a + (g.h.obj?.longshade ?? 0), 0);
       if (diff === 'veteran' && long.length >= 3) line(ls / long.length >= 0.25, `${diff} objectives: Longshade per game past 18:00`, `${(ls / long.length).toFixed(2)} (${long.length} games)`, '≥ 0.25');
       else rpt(`${diff} Longshade per game past 18:00`, long.length ? (ls / long.length).toFixed(2) : '-');
