@@ -47,8 +47,7 @@ clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest 
                 >= 95 % land outside the town mask), and the blade layer moves >= 8 % of the lower half of a low view there [0.148]
   low-identical low tier, isla_viva: 4 views identical to the base build (<= 0.001 % of the pixels differ - the base's own run-to-run
                 noise is 1 pixel, control --rev cbf0a1ff; loot, launch portals and door leaves hidden: they animate on the sim
-                clock / bot traffic) - phones / low untouched
-                R-i: ground / groundlow judged paired (head vs base A <= base A vs base B, + 0.001 pp; noise > 0.1 % or > 2 levels = CNJ)
+                clock / bot traffic; the storm wall's own shader clock pinned) - phones / low untouched
   underwater    from below (vshots `underup`): high-frequency energy (mean |Laplacian| of luminance) of the upper half <= 0.4 x the base's
   tiers         SSIM(ultra, medium) on the 3 eye-level pinned views (ground, inwater, shore) <= 0.92; vista and vista2 reported [identical]
   programs      0 new shader programs after the warm frames, on every tier
@@ -457,17 +456,27 @@ def start(s, tier, map_id, mode="standard"):
     return {"setGfx": got, "start": st, "info": info}
 
 
-def view(s, spec, hide=(), pts=None, settle=None, step=26):
+def view(s, spec, hide=(), pts=None, settle=None, step=26, wall_t=None):
     s.js(SS.SPEC_JS, ["cam:" + ",".join(str(x) for x in spec), {"plant": None}])
     s.step_frames(step, dt=1.0 / 20, render=False)
     s.js(SS.UNPIN_JS)
     if settle is not None:
         s.js(SETTLE_JS, settle)
+    if wall_t is not None:
+        s.js(WALL_PIN_JS, wall_t)
     return s.js(RENDER_JS, [spec, list(hide), pts])
 
 
-def shoot(s, spec, shots, name, hide=(), pts=None, settle=None):
-    r = view(s, spec, hide, pts, settle)
+# the storm wall's shader clock pinned (LOWID fix1): storm.js drives the wall's uTime from its own accumulator of kernel dt (_clock += dt), not the
+# map clock SETTLE_JS pins, so it differs per session / per shot (boot frames run on real dt). Its streaks reach the sea-horizon band of the low
+# ground views through the fog: base vs base 0.016-0.043 % there, 0 px with the wall's uTime pinned (F:/lc_p23/w10/t/LOWID/fix1/notes.txt)
+WALL_PIN_JS = r"""(t) => { const W = window.__LC__.W, w = W.stormCtl && W.stormCtl.wall; let n = 0; if (!w) return 0;
+  w.traverse((o) => { const m = o.material; for (const mm of (Array.isArray(m) ? m : m ? [m] : [])) if (mm.uniforms && mm.uniforms.uTime) { mm.uniforms.uTime.value = t; n++; } });
+  return n; }"""
+
+
+def shoot(s, spec, shots, name, hide=(), pts=None, settle=None, wall_t=None):
+    r = view(s, spec, hide, pts, settle, wall_t=wall_t)
     save(r["png"], shots, name + ".png")
     r["A"] = decode(r.pop("png"))
     return r
@@ -785,7 +794,7 @@ LOW_CAMS = {
     "shore": [193.004, 2.499, -331.283, 216.02, 0.3, -368.152, 70],
     "inwater": [184.87, 0.45, -360.333, 204.669, 2.5, -397.102, 70],
 }
-LOW_CAMS_ID = "lowcams1"
+LOW_CAMS_ID = "lowcams1w"   # (w: the storm wall's uTime pinned in these frames - base views cached before the pin are not reused)
 
 
 def part_low(s, v, R, shots, tag):
@@ -796,7 +805,7 @@ def part_low(s, v, R, shots, tag):
     out = {}
     for nm in ("ground", "groundlow", "shore", "inwater"):
         if nm in cams and cams[nm]:
-            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot", "portals", "doors"), settle=100.0)
+            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot", "portals", "doors"), settle=100.0, wall_t=100.0)
             out[nm] = r["A"]
     return out
 
@@ -860,30 +869,6 @@ def _base_low(args, v, shots, lstem):
     for k, A in low.items():
         np.save(lstem + "_low_%s.npy" % k, A)
     return info, low
-
-
-# W10 rfast (ruling R-i, 2026-11-19): at the only views clear of changed objects (ground / groundlow face the sea horizon) the base build against
-# ITSELF differs 0.016-0.028 % (max 1 level) - above the 0.001 % bar - so the absolute reading there measures horizon noise, not the Low render path.
-# For ground and groundlow ONLY the row is judged paired inside this run: base A and base B (BASE_REV rendered twice, fresh) and the head once; the
-# view PASSES when max diff(head, A) <= max diff(A, B) AND pct(head, A) <= pct(A, B) + 0.001 (percentage points: the 0.001 % bar stays as the
-# allowance above measured noise); base-vs-base > 0.1 % or max > 2 levels = COULD-NOT-JUDGE (noise too high), never a pass. shore and inwater keep
-# the absolute <= 0.001 % bar (against base A).
-LOW_PAIRED = ("ground", "groundlow")
-
-
-def _base_low_pair(args, v, shots):
-    """R-i: BASE_REV's low-tier views rendered twice in this run (base A, base B), two fresh Chrome sessions, no cache"""
-    out = []
-    for k in ("A", "B"):
-        a2 = copy.copy(args)
-        a2.rev = BASE_REV
-        a2.disk = True
-        a2.overlay = None
-        a2.plant = None
-        with C.Session(a2, "w10_waterlook_base_low_" + k) as s:
-            start(s, "low", "isla_viva")
-            out.append(part_low(s, v, {}, os.path.join(shots, "base"), "base" + k))
-    return out[0], out[1]
 
 
 def _lowdiff(a, b):
@@ -1099,8 +1084,7 @@ def main():
                 v.check("grass-sand: the blade layer grows on grass only - a low view over dry non-grass ground (a 30 m disc >= 95 % sand / dunes / mud / snow), the blades A/B moves <= 0.5 % of the lower half (every map with such a spot)",
                         all(x["bladePixPct"] <= 0.5 for x in judged.values()), gs_, "<= 0.5 %")
         if "low" in want:
-            # R-i: base A / base B rendered fresh in this run (the cached base low views are not used by this row)
-            bl, bB = _base_low_pair(args, v, shots)
+            bl = (base or {}).get("low") or {}
             lb = R.get("lowBuild") or {}
             res, verdicts = {}, {}
             for nm in sorted(set(bl) | set(lb)):
@@ -1109,36 +1093,14 @@ def main():
                     verdicts[nm] = "fail"
                     continue
                 hm, hp = _lowdiff(lb[nm], bl[nm])
-                r = {"maxDiff": hm, "pctDiff": round(hp, 4)}
-                if nm in LOW_PAIRED:
-                    if nm not in bB or bB[nm].shape != bl[nm].shape:
-                        r["branch"] = "paired: base B missing -> COULD-NOT-JUDGE"
-                        verdicts[nm] = "cnj"
-                    else:
-                        nmx, npc = _lowdiff(bl[nm], bB[nm])
-                        r.update({"baseAB_maxDiff": nmx, "baseAB_pctDiff": round(npc, 4)})
-                        if npc > 0.1 or nmx > 2:
-                            r["branch"] = "paired: base-vs-base noise too high (> 0.1 %% or max > 2) -> COULD-NOT-JUDGE"
-                            verdicts[nm] = "cnj"
-                        else:
-                            ok = hm <= nmx and hp <= npc + 0.001
-                            r["branch"] = "paired: max %.0f <= %.0f and pct %.4f <= %.4f + 0.001 -> %s" % (hm, nmx, hp, npc, "PASS" if ok else "FAIL")
-                            verdicts[nm] = "pass" if ok else "fail"
-                else:
-                    ok = hp <= 0.001
-                    r["branch"] = "absolute: pct %.4f <= 0.001 -> %s" % (hp, "PASS" if ok else "FAIL")
-                    verdicts[nm] = "pass" if ok else "fail"
-                res[nm] = r
-                print("  [low-identical %s] %s" % (nm, json.dumps(r)))
-            name = ("low-identical: low tier, isla_viva, the views identical to the base build (shore / inwater: <= 0.001 % of the pixels differ per view; "
-                    "ground / groundlow, ruling R-i: paired against BASE_REV rendered twice in this run - max diff <= base-vs-base max AND pct <= base-vs-base pct + 0.001)")
-            vals = list(verdicts.values())
-            if len(res) < 3 or "fail" in vals:
-                v.check(name, False, res, "<= 0.001 % / paired")
-            elif "cnj" in vals:
-                v.cnj(name, "base-vs-base noise too high or base B missing: %s" % json.dumps(res))
-            else:
-                v.check(name, True, res, "<= 0.001 % / paired")
+                res[nm] = {"maxDiff": hm, "pctDiff": round(hp, 4)}
+                verdicts[nm] = "pass" if hp <= 0.001 else "fail"
+                print("  [low-identical %s] %s" % (nm, json.dumps(res[nm])))
+            # identical up to the sim's own noise: the base build against its own cache (control --rev cbf0a1ff) differs in ONE pixel of one view
+            # (0.0001 %: a far object the sim moves between runs); <= 0.001 % (9 px at 1280 x 720) per view - the grass-on-low plant moves 0.2-12 %.
+            # LOWID fix1: with the storm wall's shader clock pinned (WALL_PIN_JS) base vs base is 0 px at all 4 LOW_CAMS views (3 runs)
+            v.check("low-identical: low tier, isla_viva, the views identical to the base build (<= 0.001 % of the pixels differ per view: the base's own run-to-run noise is 1 px)",
+                    bool(res) and len(res) >= 3 and all(x == "pass" for x in verdicts.values()), res, "<= 0.001 %")
             for nm in lb:
                 Image.fromarray(np.clip(np.abs(lb[nm] - bl.get(nm, lb[nm])) * 8, 0, 255).astype(np.uint8)).save(os.path.join(shots, "lowdiff_x8_%s.png" % nm))
         if "uw" in want:
