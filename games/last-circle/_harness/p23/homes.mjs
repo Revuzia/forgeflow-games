@@ -79,16 +79,36 @@ const FLOORLAMP = /lamp(Round|Square)Floor|box\/lampFloor/, PLANT = /pottedPlant
 const WORK = new Set(["shop", "storage", "warehouse", "office", "meeting", "lobby", "hall"]);
 const DECOR = /^box\/(art|artWide|poster|clock|mirror|mirrorHi|whiteboard)$/;
 const isCover = (q, r) => !q.deco && !q.mount && Math.abs(q.min[1] - r.y) <= 0.02 && q.max[1] - q.min[1] >= 0.9 - 1e-6 && Math.max(q.max[0] - q.min[0], q.max[2] - q.min[2]) >= 0.7 - 1e-6;
+const ART_MIN = 0.05;          // (W10 R3A fix5) a picture's UV rect, both ways, of the 1 x 1 atlas (its cell spans 0.25 less the pad, cropped to the picture's proportions)
 const lumOf = (hex) => (0.2126 * ((hex >> 16) & 255) + 0.7152 * ((hex >> 8) & 255) + 0.0722 * (hex & 255)) / 255;
 function interiorRows(M) {
-  const out = { work: [], lived: [], ceil: { n: 0, white: 0, min: 1 }, roofs: [], finTris: [] };
+  const out = { work: [], lived: [], ceil: { n: 0, white: 0, min: 1 }, roofs: [], finTris: [], art: [] };
   for (const H of M.houses) {
     const home = H.use === "house" && H.theme !== "ruin";
     out.roofs.push({ id: H.id, use: H.use, theme: H.theme, roof: H.roof, home: home ? 1 : 0, core: H.core ? 1 : 0, porch: H.porch ? 1 : 0 });
     if (H.theme === "ruin") continue;
     const pics = (H.fin && H.fin.pics) || [], cur = new Set(((H.fin && H.fin.cur) || []).map((c) => c[0]));
+    // (W10 R3A fix5, ruling R3A-6) the pictures as the medium+ renderer draws them: meshData with the finish AND the art atlas (opts.art), the "art|in" group's
+    // quads in H.fin.pics order; a picture SAMPLES THE ATLAS when its UV rect spans >= ART_MIN of the atlas both ways (a cell is 0.25; the no-art plant collapses it)
+    const artBy = new Map();
+    if (HG && HG.ART_ATLAS != null && pics.length) {
+      const md = HG.meshData(H, () => [1, 1, 1], { interior: true, finish: true, art: true, leaves: false });
+      const ag = md.groups.walls.get("art|in") || md.groups.walls.get("art"), uv = ag ? ag.uv : [];
+      pics.forEach((p, i) => {
+        const q = uv.slice(i * 8, i * 8 + 8);
+        if (q.length < 8) return;
+        const us = [q[0], q[2], q[4], q[6]], vs = [q[1], q[3], q[5], q[7]], du = Math.max(...us) - Math.min(...us), dv = Math.max(...vs) - Math.min(...vs);
+        const e = artBy.get(p.room) || { n: 0, atlas: 0, cells: [] };
+        e.n++; if (du >= ART_MIN && dv >= ART_MIN) { e.atlas++; e.cells.push(p.pic); }
+        artBy.set(p.room, e);
+      });
+    }
     for (const r of H.rooms) {
       const f = H.furniture.filter((q) => q.room === r.id);
+      if ((home && r.kind === "living") || (!home && (r.kind === "office" || r.kind === "lobby"))) {
+        const e = artBy.get(r.id) || { n: 0, atlas: 0, cells: [] };
+        out.art.push({ h: H.id, kind: r.kind, pics: e.n, atlas: e.atlas, cells: e.cells });
+      }
       if (!home && WORK.has(r.kind) && H.use !== "barn") {
         out.work.push({ h: H.id, use: H.use, kind: r.kind === "hall" ? "corridor" : r.kind, area: r.area, n: f.length, cover: f.filter((q) => isCover(q, r)).length });
       }

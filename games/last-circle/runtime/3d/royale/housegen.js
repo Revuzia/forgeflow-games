@@ -155,6 +155,13 @@ export const TRI_BUDGET_HOME = 6000;       // a home's furnished storey (audit 2
 // (not a ruin) draws up to: an office / meeting room / lobby / corridor on it -> TRI_BUDGET_WORK; a shop or warehouse on it -> TRI_BUDGET_SHOP, or
 // TRI_BUDGET_SHOP_L when the storey's footprint (W x D) is >= SHOP_L_M2. Every other storey keeps TRI_BUDGET. WORK_BUDGET false = TRI_BUDGET everywhere, as before
 export const WORK_BUDGET = true;
+// (W10 R3A fix5) WORK_DENSE: offices, meeting rooms, lobbies and corridors dressed to their room's size inside the work storey's budget (the owner: rooms with
+// 3-4 pieces read empty) - filing / storage along an office's walls, a meeting room's wall chairs + sideboard, a lobby's seating group, a corridor's locker
+// banks and benches; the homes gate's sparse-office plant: off (the pass-4 dressing)
+export const WORK_DENSE = true;
+// (W10 R3A fix5) SHOP_SEEN: a shop's checkout counter where its best entrance sees it, and its gondola rows laid out before the coolers / wall shelving take the
+// wall bands (false = the fix4 order: counter anywhere, shelving first, rows last)
+export const SHOP_SEEN = true;
 export const TRI_BUDGET_WORK = 5000, TRI_BUDGET_SHOP = 6000, TRI_BUDGET_SHOP_L = 8000, SHOP_L_M2 = 300;
 /** (W10 R3A fix5) the triangle budget of storey f of a building: `kinds` = the room kinds on that storey, home / ruined as generate reads them */
 export function storeyBudget(kinds, home, ruined, footM2) {
@@ -192,6 +199,20 @@ export const LOOT_K = Object.freeze({ home: 1, house: 0.6, shop: 0.85, midrise: 
 // room, lobby and corridor (the bare-office plant: off). PITCHED_HOMES: a home outside a downtown core (P.core) never has a flat roof; ROOF_FLAT_ALL: the
 // flat-everywhere plant (every roof flat).
 export const FINISH = true;
+// (W10 R3A fix5, orchestrator ruling R3A-6) ART_ATLAS: with meshData's opts.art (maps.js: desktop medium and up, the art-atlas variant of the insides' material)
+// every picture (an art piece's canvas, a framed print: H.fin.pics) is ONE quad keyed "art" whose UVs are its picture's cell of assets/tex/interior_art.jpg
+// (_tools/interior_art.py: a 4 x 4 grid of 256 px cells, ART_PAD px of repeated edge round each), cropped to the picture's own proportions; without opts.art
+// (low, phones, Node) the colour-block print as before. ART_UV false = every picture's UVs collapsed onto one point (one flat texel: the homes gate's no-art plant)
+export const ART_ATLAS = true, ART_UV = true, ART_GRID = 4, ART_PX = 1024, ART_PAD = 12;
+/** (W10 R3A fix5) [u0, v0, u1, v1] of picture `pic` (0..15) in the art atlas for a w x h picture (flipY: v 1 = the image's top row), centred, cropped to w / h */
+export function artCell(pic, w, h) {
+  const k = ((pic % (ART_GRID * ART_GRID)) + ART_GRID * ART_GRID) % (ART_GRID * ART_GRID), c = k % ART_GRID, r = Math.floor(k / ART_GRID), cell = 1 / ART_GRID, pad = ART_PAD / ART_PX;
+  let u0 = c * cell + pad, u1 = (c + 1) * cell - pad, v1 = 1 - r * cell - pad, v0 = 1 - (r + 1) * cell + pad;
+  const a = w / Math.max(1e-3, h), cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, s = u1 - u0;
+  if (a >= 1) { v0 = cv - s / a / 2; v1 = cv + s / a / 2; } else { u0 = cu - s * a / 2; u1 = cu + s * a / 2; }
+  if (!ART_UV) { u0 = u1 = cu; v0 = v1 = cv; }
+  return [u0, v0, u1, v1];
+}
 export const CURTAIN_FOLDS = true;
 export const BAKED_AO = true;
 export const WORK_FIT = true;
@@ -732,6 +753,12 @@ const VARIETY = [["furniture/kitchenCabinetUpper", "upperDbl"], ["furniture/chai
 // a room's share of its storey's triangle budget is weighted by what it must hold (a kitchen's counter row and dining set cost ~1,400 triangles,
 // a bathroom's set is mostly authored boxes, a hall holds a lamp and a plant)
 const SHAREW = { ruin: 0.8, kitchen: 2.0, living: 1.5, shop: 1.5, lobby: 1.3, bedroom: 1.2, meeting: 1.2, office: 1.0, warehouse: 1.0, barn: 1.0, storage: 0.7, bath: 0.8, hall: 0.5 };
+// (W10 R3A fix5, WORK_DENSE) the dressing rotation of a work room, one piece a DENSE_M2 m2 of its area (office 12, meeting 5, lobby 7, corridor 9)
+const DENSE_IDS = { office: ["filingCab", "lockers2", "plant", "filingCab", "wallCab", "trash", "coatRack", "filingCab"],
+  meeting: ["dresser", "officeChair", "officeChair", "filingCab", "wallCab", "coatRack", "officeChair", "plant", "art"],
+  lobby: ["armchair", "plant", "coatRack", "bookcaseLow", "trash", "wallCab", "art", "plant"],
+  hall: ["lockers2", "plant", "trash", "wallShelf", "lockers2", "coatRack", "filingCab"] };
+const DENSE_M2 = { office: 12, meeting: 5, lobby: 7, hall: 9 };
 // phase 3's last resort: what may stand free in the open floor a doorway looks at
 const FREEPOOL = { living: ["armchair", "ottoman", "lampSq", "plant"], bedroom: ["chairMod", "lampSq", "plant"], kitchen: ["chairMod", "stool", "trash"], bath: ["trash", "plant"],
   office: ["chairMod", "plant", "box"], storage: ["boxStack", "crate", "carton"], ruin: ["rubble", "crate", "carton"], warehouse: ["box", "crate", "crateStack"], barn: ["crate", "box", "crateStack"], shop: ["box", "crate", "boxOpen"],
@@ -3554,6 +3581,14 @@ export function generate(parcel, opts) {
     // substantive pieces against a wall that entrance sees, then free-standing facing it (0.5 m lattice), each spot through valid() and roomOK(), inside the
     // storey's budget. Nothing already placed moves (the sets stay whole); a room that reads is untouched; no rng is drawn.
     if (phase === 8) {
+      // (W10 R3A fix5) WORK_DENSE: an office / meeting room / lobby / corridor of a non-home building dressed to its size, LAST - after every room's key pieces,
+      // extras, a shop's / store's stock (phase 2) and the guarantee (5), from what the work storey's budget (storeyBudget) has left: one piece a DENSE_M2[kind] m2
+      // against its walls, in DENSE_IDS[kind]'s order (in phase 2 it took the storey's budget from the store room beside it: lodge_tower f2 storage 12 -> 8 pieces)
+      if (WORK_DENSE && !home && !TH.ruined && DENSE_IDS[kind]) {
+        const ids = DENSE_IDS[kind];
+        for (let k = 0; k < Math.floor(area / DENSE_M2[kind]); k++) X.push(() => { const id = ids[k % ids.length]; tryWall(id, catOf(id) && catOf(id).mount === "wall" ? "center" : "corner", { tint: tintW }); });
+        return X;
+      }
       if (!(home && AREA_QUOTA && LIVED_VIEW && QUOTA_KINDS.has(kind))) return X;      // (part of the area quota: the looks / homes 'sparse' plants turn it off with it)
       const V8 = roomView(R);
       if (!V8.ents.length) return X;
@@ -3860,7 +3895,8 @@ export function generate(parcel, opts) {
       const A = pat(step / 2), Bp = pat(0), aisleA = Math.min(...[0, step, -step, 2 * step, -2 * step].map((x) => Math.abs(x - dc))), aisleB = Math.min(...[step / 2, -step / 2, 1.5 * step, -1.5 * step].map((x) => Math.abs(x - dc)));
       // (and never a row in the doorway's own line of sight: the entrant - and the camera over his shoulder - looks down an aisle)
       const doorsAcross = roomView(R).ents.filter((e) => e.door && Math.abs(alongU ? e.fu : e.fv) > 0.5).map((e) => (alongU ? e.v - cv0 : e.u - cu0));
-      const offs = (aisleA <= aisleB ? A : Bp).filter((ob) => doorsAcross.every((d) => Math.abs(ob - d) >= pd / 2 + 0.9)).sort((x, y) => Math.abs(x) - Math.abs(y) || x - y);
+      const dcl = opt.doorClear != null ? opt.doorClear : 0.9;      // (W10 R3A fix5) a shop's aisle centred on its doorway: 0.75 (the aisle 1.6 m wide), not 0.9
+      const offs = (aisleA <= aisleB ? A : Bp).filter((ob) => doorsAcross.every((d) => Math.abs(ob - d) >= pd / 2 + dcl)).sort((x, y) => Math.abs(x) - Math.abs(y) || x - y);
       let n = 0;
       for (const ob of offs) {
         if (n >= maxN) break;
@@ -4223,16 +4259,21 @@ export function generate(parcel, opts) {
     } else if (kind === "shop") {
       const shelf = () => tryWall(rng() < 0.5 ? "shelf" : "rackWall", "corner", { tint: tintW }) || tryWall("shelfLow", "corner", { tint: tintW });
       if (core) {
+        // (W10 R3A fix5) the checkout where the doorway sees it (the ruling's doorway shots: city_shop's counter stood on a wall the entrance did not face)
         later(() => {
-          const c1 = tryWall("shopCounter", "corner", { tint: tintW, runFirst: (run) => run.axis === "v" });
+          const c1 = (SHOP_SEEN && WORK_FIT && tryWall("shopCounter", "corner", { tint: tintW, seen: true, runFirst: (run) => run.axis === "v" })) || tryWall("shopCounter", "corner", { tint: tintW, runFirst: (run) => run.axis === "v" });
           if (WORK_FIT && c1 && area >= 40) tryWall("shopCounter", "corner", { tint: tintW, also: (run) => run === c1.run });     // (W10 R3A: a checkout line - two tills on one wall)
         });
+        // aisles: rows of free-standing gondolas down the shop floor
+        // (W10 R3A, audit 9) as many aisle rows as the floor holds at SHOP_PITCH (was 4 / 8 gondolas: a 125 m2 store held 4 pieces)
+        // (W10 R3A fix5) ...laid out BEFORE the coolers and the wall shelving when the floor takes a row (LB >= 4.4): the wall pieces' bands left one gondola in
+        // city_shop's 56 m2 shop (its doorway saw cartons); a shop too narrow for a row still gets its walls shelved below
+        const aisles = () => { if (LB >= 4.4) rows("gondola", WORK_FIT ? Math.max(4, Math.ceil(area / 7)) : area >= 50 ? 8 : 4, WORK_FIT ? SHOP_PITCH - 0.9 : 1.35, { end: 1.2, doorClear: SHOP_SEEN && WORK_FIT ? 0.75 : 0.9 }); };
+        if (SHOP_SEEN && WORK_FIT) later(aisles);
         later(() => tryWall("cooler", "corner")); later(() => tryWall("cooler", "corner"));
         // (W10 R3A fix4) wall shelving before the aisles: a small shop (no room for an aisle row) still reads as a shop - stocked shelves on its walls
         if (WORK_FIT) for (let n = 0; n < Math.max(2, Math.floor(area / 25)); n++) later(() => { const t = [0xa89a80, 0x8a9a8a, 0x9a8a7a, 0x8a8a9a][n % 4]; tryWall("shopShelf", "corner", { tint: t }) || tryWall("shopShelfLow", "corner", { tint: t }); });
-        // aisles: rows of free-standing gondolas down the shop floor
-        // (W10 R3A, audit 9) as many aisle rows as the floor holds at SHOP_PITCH (was 4 / 8 gondolas: a 125 m2 store held 4 pieces)
-        later(() => { if (LB >= 4.4) rows("gondola", WORK_FIT ? Math.max(4, Math.ceil(area / 7)) : area >= 50 ? 8 : 4, WORK_FIT ? SHOP_PITCH - 0.9 : 1.35, { end: 1.2 }); });
+        if (!(SHOP_SEEN && WORK_FIT)) later(aisles);
       } else {
         later(() => tryWall("cooler", "corner"));
         for (let n = 0; n < 4; n++) later(shelf);
@@ -5285,7 +5326,7 @@ function wearBands(H, groups, acc, faceIn, colOf) {
 //    in a living room or bedroom) - CURTAIN_FOLDS;
 //  - casings round every door opening (both faces of an interior door, the inside face of a street door) and window: two jambs and a head, 8 cm, the trim colour;
 //  - pictures: one of PICS on each art piece's canvas, and the framed prints (H.fin.pics).
-function finishGeo(H, acc, colOf, split) {
+function finishGeo(H, acc, colOf, split, art) {
   const fin = H.fin;
   const mul = (c, k) => [Math.min(1, c[0] * k[0]), Math.min(1, c[1] * k[1]), Math.min(1, c[2] * k[2])], kk = (k) => [k, k, k];
   const quad = (mat, P, n, C) => {
@@ -5374,10 +5415,25 @@ function finishGeo(H, acc, colOf, split) {
     }
   }
   // pictures: a 4 x 3 cell print (5 x 4 vertex colours), a framed one on a dark frame plate 5 cm wider each side
+  // (W10 R3A fix5) with `art` (ART_ATLAS): the picture is one quad keyed "art", its UVs its cell of the art atlas (artCell), white vertex colours - in fin.pics order
+  // (the homes gate reads the art group's quads in that order)
+  const white = colOf(0xffffff);
   for (const q of fin.pics) {
     const n = [q.nx, 0, q.nz], tx = -q.nz, tz = q.nx, half = q.w / 2, G = PICS[q.pic % PICS.length];
     const P = (t, y, off) => [q.x + tx * t + q.nx * off, y, q.z + tz * t + q.nz * off];
     if (q.frame) { const fc = colOf(0x2e2620); quad("wood", [P(-half - 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y0 - 0.05, 0), P(half + 0.05, q.y1 + 0.05, 0), P(-half - 0.05, q.y1 + 0.05, 0)], n, [fc, fc, fc, fc]); }
+    if (art && ART_ATLAS) {
+      // the viewer faces -n: +t runs to his LEFT (t = -n.z, n.x), so the cell's left edge (u0) sits at t = +half; the bottom (y0) at v0
+      const off = q.frame ? 0.004 : 0, [u0, v0, u1, v1] = artCell(q.pic, q.w, q.y1 - q.y0);
+      const Pq = [P(-half, q.y0, off), P(half, q.y0, off), P(half, q.y1, off), P(-half, q.y1, off)], UV = [[u1, v0], [u0, v0], [u0, v1], [u1, v1]];
+      const a = acc("walls", "art", split, false);
+      const e1 = [Pq[1][0] - Pq[0][0], Pq[1][1] - Pq[0][1], Pq[1][2] - Pq[0][2]], e2 = [Pq[2][0] - Pq[0][0], Pq[2][1] - Pq[0][1], Pq[2][2] - Pq[0][2]];
+      const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      const ord = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0 ? [0, 3, 2, 1] : [0, 1, 2, 3], base = a.pos.length / 3;
+      for (const k of ord) { const p = Pq[k]; a.pos.push(p[0], p[1], p[2]); a.nor.push(n[0], n[1], n[2]); a.uv.push(UV[k][0], UV[k][1]); a.col.push(white[0], white[1], white[2]); }
+      a.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      continue;
+    }
     // (fix2) 2 x 2 flat colour blocks, split at the print's own proportions (crisp blocks, not vertex gradients; 8 triangles): the spec's rows 1 and 2
     const off = q.frame ? 0.004 : 0, sx = 0.38 + 0.24 * ((q.pic * 7) % 5) / 4, sy = 0.4 + 0.2 * ((q.pic * 3) % 4) / 3;
     for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
@@ -5491,7 +5547,7 @@ export function meshData(H, colOf, opts) {
     }
   }
   for (const g of H.gables || []) { const pe = pick0(H.palette, g.pal); poly(pe.mat, pe.color, g.pts, g.n, (P) => [g.n[0] ? P[2] : P[0], P[1]]); }
-  if (finOn) finishGeo(H, acc, colOf, split);                                // (W10 R3A: the finish - medium and up, drawn only, not in house.tris)
+  if (finOn) finishGeo(H, acc, colOf, split, !!opts.art);                                // (W10 R3A: the finish - medium and up, drawn only, not in house.tris)
   if (wearOn(opts.wear)) wearBands(H, groups, acc, faceIn, colOf);           // (P23 / LC-17: after every box face and roof polygon; D10: opts.wear "low" / false = none)
   return { groups, boxRanges };
 }

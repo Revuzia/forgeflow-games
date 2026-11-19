@@ -391,6 +391,24 @@ async function loadGrimeTexture(W) {
 // in _texCache (SHARED: the per-match teardown never frees them). A failed load leaves the slot null: the water then has flat normals and no foam pattern.
 const WATER_FILES = { normal: "assets/tex/water_normal.jpg", foam: "assets/tex/water_foam.png" };
 let _waterLoad = null;
+// (W10 R3A fix5, ruling R3A-6) the art atlas of the house pictures: one texture, cached for the page (_texCache: shared, never disposed with a map). Made at once
+// (the program compiles against it in the warm frame; three uploads the image when it arrives - the same program); a load that fails leaves a 1 x 1 grey.
+const ART_FILE = "assets/tex/interior_art.jpg";
+function artAtlasTex(W) {
+  if (_texCache.art) return _texCache.art;
+  if (typeof THREE.TextureLoader !== "function" || typeof document === "undefined") return null;
+  const r = W.kernel && W.kernel.renderer;
+  const t = new THREE.TextureLoader().load((W.assetBase || "") + ART_FILE, undefined, undefined, (err) => {
+    console.warn("[maps] art atlas " + ART_FILE + " unavailable:", err && err.message || err);
+    const cv = document.createElement("canvas"); cv.width = cv.height = 1; const g = cv.getContext("2d"); if (g) { g.fillStyle = "#8a847a"; g.fillRect(0, 0, 1, 1); }
+    t.image = cv; t.needsUpdate = true;
+  });
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.anisotropy = Math.min(r && r.capabilities && r.capabilities.getMaxAnisotropy ? r.capabilities.getMaxAnisotropy() : 4, Math.max(2, W._texAniso || 4));
+  _texCache.art = t;
+  return t;
+}
 async function loadWaterTextures(W) {
   if (_texCache.waterN2 && _texCache.waterFoam) return { normal: _texCache.waterN2, foam: _texCache.waterFoam };
   const r = W.kernel && W.kernel.renderer;
@@ -1493,6 +1511,9 @@ export async function buildMap(W, mapId) {
   }[TIER];
   if (W10V && (TIER === "high" || TIER === "ultra")) TIER_Q.propD = Math.round(TIER_Q.propD * 1.25);
   const waterTexPromise = W10V ? loadWaterTextures(W).catch(() => null) : Promise.resolve(null);
+  // (W10 R3A fix5, orchestrator ruling R3A-6) the pictures' art atlas (assets/tex/interior_art.jpg, _tools/interior_art.py): made on desktop medium and up only
+  // (W10V) - the insides' material takes its art variant then (dualStructMaterial); low and phones never make it, never sample it
+  const artTexW = W10V ? artAtlasTex(W) : null;
   const GRADE = K.grade || { exposure: 1.15, ground: 1, water: 1 };   // LC-04 / OD-2 (see MAPS)
   const grimePromise = LCFX ? loadGrimeTexture(W).catch(() => null) : Promise.resolve(null);   // LC-17: the CC0 wall photograph (medium and up)
   // the world-shader layer's per-match textures (the ground lattice, the contact-AO mask): no material slot holds them (they are uniforms), so the map
@@ -4380,7 +4401,7 @@ export async function buildMap(W, mapId) {
   // (W10 R3A, audit 6 "tinted ceilings") the inside ceiling faces (keyed "plaster|ceil" by meshData's finish, desktop medium and up only) take this on top of
   // HG_INDOOR: lit from below by the hemisphere's ground colour, the white plaster read grey-beige
   const HG_CEIL = 1.18;
-  const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
+  const HG_TKI = { s: 0, plank: 1, stucco: 2, art: 3 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood); art: W10 R3A fix5, the pictures (W10V only)
   const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
   const _hgc = new THREE.Color(), hgColCache = new Map();
   const hgCol = (hex) => { let v = hgColCache.get(hex); if (!v) { _hgc.set(hex); v = [_hgc.r, _hgc.g, _hgc.b]; hgColCache.set(hex, v); } return v; };
@@ -4567,11 +4588,12 @@ export async function buildMap(W, mapId) {
     // (K1 re-run: ns - a ruin's wreckage comes keyed "<mat>#ns" and goes to the district's no-shadow twin, "vcn|<kind>", see mergeBatchSet)
     // (W10 R3A) finish: the drawn-only interior finish (curtains, pictures, casings, tile bands, baked contact shadows, wall feet / corners, light pools) on desktop
     // medium and up (W10V) - low and touch draw exactly what they drew (no finish quad, no "|ceil" key)
-    const md = HG.meshData(H, hgCol, { interior: true, ns: true, leaves: false, finish: W10V });     // (Wave 9: the door leaves are drawn swinging, in houses:doors@all - see buildDoorLeaves)
+    // (W10 R3A fix5, ruling R3A-6) art: the pictures sample the art atlas (one quad each, keyed "art|in" -> tki 3 -> dualStructMaterial's art variant) - W10V only
+    const md = HG.meshData(H, hgCol, { interior: true, ns: true, leaves: false, finish: W10V, art: W10V && !!artTexW });     // (Wave 9: the door leaves are drawn swinging, in houses:doors@all - see buildDoorLeaves)
     for (const [key, a] of md.groups.walls) {
       if (!a.idx.length) continue;
       const nsK = key.endsWith("#ns"), key0 = nsK ? key.slice(0, -3) : key;
-      const bar = key0.indexOf("|"), mat = bar < 0 ? key0 : key0.slice(0, bar), kind = HG_MAT_KIND[mat] || "s";
+      const bar = key0.indexOf("|"), mat = bar < 0 ? key0 : key0.slice(0, bar), kind = mat === "art" ? "art" : HG_MAT_KIND[mat] || "s";
       if (bar >= 0) { toChunk(a, mat === "lamp" ? 1 : key0.endsWith("|ceil") ? HG_INDOOR * HG_CEIL : HG_INDOOR, HG_TKI[kind] || 0, true); continue; }     // (W10 R3A: a ceiling reads white)
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
@@ -6542,9 +6564,13 @@ export async function buildMap(W, mapId) {
     if (_st && pk && sc) {
       mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5);
       const SC = THREE.ShaderChunk;
-      // tki 0 = s (brick / stone), 1 = plank, 2 = stucco: weights from the flat per-vertex index (no interpolation across a box: every vertex of a box has the same index)
+      // (W10 R3A fix5, orchestrator ruling R3A-6) THE ART VARIANT, desktop medium and up only (W10V and the atlas texture made): a 7th sampler, the art atlas
+      // (assets/tex/interior_art.jpg), read where tki = 3 (the pictures: housegen meshData opts.art) at the RAW uv (the atlas cell; the struct textures keep
+      // vMapUv). Its own program cache key: the low / touch program (no W10V) is the unchanged "lc-struct-mix-v3" below, byte for byte, and on medium+ this
+      // program REPLACES it (the same one struct-mix program per page: no new program, no new draw call - the pictures ride in the insides' batch)
+      const art = artTexW;
       const pick3 = (a, b, c, uv) => "( texture2D( " + a + ", " + uv + " ) * ( 1.0 - step( 0.5, vTki ) ) + texture2D( " + b + ", " + uv + " ) * ( step( 0.5, vTki ) - step( 1.5, vTki ) ) + texture2D( " + c + ", " + uv + " ) * step( 1.5, vTki ) )";
-      mat.customProgramCacheKey = () => "lc-struct-mix-v3";
+      mat.customProgramCacheKey = art ? () => "lc-struct-mix-v3-art" : () => "lc-struct-mix-v3";
       mat.onBeforeCompile = (sh) => {
         // LC-17: the per-kind roughness of the three kinds this material mixes (brick / stone, plank, plaster: KIND_PBR)
         sh.fragmentShader = sh.fragmentShader.replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = vTki < 0.5 ? " + KIND_PBR.s[0].toFixed(3) + " : ( vTki < 1.5 ? " + KIND_PBR.plank[0].toFixed(3) + " : " + KIND_PBR.stucco[0].toFixed(3) + " );");
@@ -6553,6 +6579,12 @@ export async function buildMap(W, mapId) {
         sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform sampler2D map2;\nuniform sampler2D normalMap2;\nuniform sampler2D map3;\nuniform sampler2D normalMap3;\nvarying float vTki;")
           .replace("#include <map_fragment>", SC.map_fragment.split("texture2D( map, vMapUv )").join(pick3("map", "map2", "map3", "vMapUv")))
           .replace("#include <normal_fragment_maps>", SC.normal_fragment_maps.split("texture2D( normalMap, vNormalMapUv )").join(pick3("normalMap", "normalMap2", "normalMap3", "vNormalMapUv")));     // (every occurrence: the chunk samples the normal map in its object-space AND its tangent-space branch)
+        if (art) {                                     // (W10 R3A fix5) the art variant: tki >= 2.5 takes the atlas texel at the raw uv; its normal is the stucco pick (near flat)
+          sh.uniforms.artMap = { value: art };
+          sh.vertexShader = sh.vertexShader.replace("varying float vTki;", "varying float vTki;\nvarying vec2 vArtUv;").replace("vTki = tki;", "vTki = tki;\nvArtUv = uv;");
+          sh.fragmentShader = sh.fragmentShader.replace("varying float vTki;", "varying float vTki;\nuniform sampler2D artMap;\nvarying vec2 vArtUv;")
+            .split(pick3("map", "map2", "map3", "vMapUv")).join("( " + pick3("map", "map2", "map3", "vMapUv") + " * ( 1.0 - step( 2.5, vTki ) ) + texture2D( artMap, vArtUv ) * step( 2.5, vTki ) )");
+        }
       };
     }
     if (LCFX) lcPatch(mat, STRUCT_LC);

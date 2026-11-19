@@ -35,10 +35,14 @@ W10 R3A rows (interiors II, plan lane R3A; same 12 builds):
   finish        the homes' lived rooms (living, bedroom, kitchen, dining): >= 95 % have wall decor (a picture / poster / clock / mirror / board, or a finish print -
                 H.fin.pics); 100 % of their windows have real curtains (a rod + pleated panels: H.fin.cur); every home ceiling face (slab / roof / shell underside
                 above the ground floor) white, sRGB luminance >= 0.85                                                    [20.4 % of rooms without decor; plank curtains]
+                (fix5, ruling R3A-6) + >= 1 picture sampling the art atlas (assets/tex/interior_art.jpg, as meshData draws it on medium+) in >= 60 % of the homes'
+                living rooms, of the offices and of the lobbies, each; the atlas's 16 cells each a picture (luminance std >= 10)
   shop-density  shop / storage / warehouse rooms (non-home buildings, not barns, not ruins): >= 30 pieces per 100 m2 pooled (every furniture record in the
                 room); >= 1 cover piece per 25 m2 pooled AND floor(area / 25) cover pieces in >= 90 % of those rooms. COVER = standing on the room's floor,
                 not decor, >= 0.9 m tall, >= 0.7 m wide                                                                 [21 per 100 m2; a 125 m2 store with 4 pieces]
   office-cover  office / meeting / lobby / corridor (a hall of a non-home building) rooms: >= 90 % of each kind hold >= 1 cover piece   [office 24, meeting 12.9, corridor 0 %]
+  work-density  (W10 R3A fix5, orchestrator rulings R3A-7 / R3A-8) pieces per 100 m2 pooled PER KIND: shops alone >= 30, offices >= 35, meeting rooms >= 25,
+                corridors >= 25, lobbies >= 25                                                 [pass 4: shop 27.9, office 29.4, meeting 15.4, corridor 21.0]
   flat-roofs    resort buildings with a flat roof <= 25 %; homes outside a downtown core (H.core) pitched (any roof but flat) >= 80 %; porch share of those homes
                 printed (plan: ~30 %)                                                                                     [resort 51 %, city 76 % flat]
 Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each must exit 1 on its rows):
@@ -52,6 +56,9 @@ Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each mus
   (W10 R3A) grey-ceil (the home ceiling plaster grey-beige, L ~0.64) -> finish
   (W10 R3A) plank-curtain (CURTAIN_FOLDS off: round 3's flat plank skins) -> finish     bare-office (WORK_COVER off: no partitions / sized tables / cover pass) -> office-cover
   flat-everywhere (ROOF_FLAT_ALL: every roof flat) -> flat-roofs     sparse-shop (WORK_FIT off: the round-3 shop / store furnishing) -> shop-density
+  (W10 R3A fix5) sparse-office (WORK_DENSE off: the pass-4 office / meeting / lobby / corridor dressing) -> work-density
+  no-work-budget (WORK_BUDGET off: every work storey back at 4000 triangles) -> work-density
+  no-art (ART_UV off: every picture's atlas UVs collapsed onto one point - a flat texel) -> finish
 """
 from __future__ import annotations
 
@@ -119,6 +126,12 @@ PLANTS = {
     "bare-office": ({"office-cover"}, [(HG, r"export const WORK_COVER = true;", "export const WORK_COVER = false;")]),
     "flat-everywhere": ({"flat-roofs"}, [(HG, r"export const ROOF_FLAT_ALL = false;", "export const ROOF_FLAT_ALL = true;")]),
     "sparse-shop": ({"shop-density"}, [(HG, r"export const WORK_FIT = true;", "export const WORK_FIT = false;")]),
+    # (W10 R3A fix5, rulings R3A-7 / R3A-8) work-density's controls: the offices / meeting rooms / lobbies / corridors' size-scaled dressing off (the pass-4
+    # furnishing), and the work storeys' budgets back at TRI_BUDGET 4000 (what held shops at 27.9 and offices at 29.4 per 100 m2)
+    "sparse-office": ({"work-density"}, [(HG, r"export const WORK_DENSE = true;", "export const WORK_DENSE = false;")]),
+    "no-work-budget": ({"work-density"}, [(HG, r"export const WORK_BUDGET = true;", "export const WORK_BUDGET = false;")]),
+    # (W10 R3A fix5, ruling R3A-6) the pictures' atlas UVs collapsed onto one point (one flat texel): finish's picture half must FAIL
+    "no-art": ({"finish"}, [(HG, r"export const ART_ATLAS = true, ART_UV = true,", "export const ART_ATLAS = true, ART_UV = false,")]),
 }
 
 
@@ -134,7 +147,7 @@ def q(vals, p):
 def planted_root(src, plant):
     """a scratch copy of <src>/runtime + assets/props + assets/vendor with the plant's edits (each anchor must match exactly once)"""
     dst = tempfile.mkdtemp(prefix="lc_w10homes_%s_" % plant)
-    for part in ("runtime", os.path.join("assets", "props"), os.path.join("assets", "vendor")):
+    for part in ("runtime", os.path.join("assets", "props"), os.path.join("assets", "vendor"), os.path.join("assets", "tex")):      # (fix5: + tex, the art atlas the finish row reads)
         if os.path.isdir(os.path.join(src, part)):
             shutil.copytree(os.path.join(src, part), os.path.join(dst, part))
     for rel, rx, rep in PLANTS[plant][1]:
@@ -173,7 +186,7 @@ def baseline(maps, seeds):
     return d
 
 
-def judge(v, d, base):
+def judge(v, d, base, root=None):
     B = d["builds"]
     homes = [b for R in B for b in R["buildings"] if b["home"]]
     allb = [b for R in B for b in R["buildings"]]
@@ -300,7 +313,7 @@ def judge(v, d, base):
         bad_den = [b for b in bad if b not in bad_map]
         v.check("loot", not bad_map and bool(parts), "vs %s: map loot %s%s" % (W9_TIP, "; ".join(parts), (" | OUT: " + "; ".join(bad_map)) if bad_map else ""), "+-10 % per map x seed")
         v.check("loot-density", not bad_den and bool(dens), "vs %s: home loot per m2 %s%s" % (W9_TIP, "; ".join(dens), (" | OUT: " + "; ".join(bad_den)) if bad_den else ""), "+-15 % per map")
-    judge_interiors(v, B)
+    judge_interiors(v, B, root)
     # determinism
     dt = d.get("determinism")
     if not dt:
@@ -309,11 +322,37 @@ def judge(v, d, base):
         v.check("determinism", dt["a"] == dt["b"], "%s seed %d built twice: %s vs %s" % (dt["map"], dt["seed"], dt["a"], dt["b"]), "identical hashes")
 
 
-def judge_interiors(v, B):
+ART_FILE = os.path.join("assets", "tex", "interior_art.jpg")
+ART_PICS_BAR, ART_CELL_STD = 60, 10.0
+
+
+def atlas_cells(root):
+    """(W10 R3A fix5) the art atlas's 16 cells (4 x 4 of a 1024 px image): [(luminance std, distinct 4-bit colours)] or an error string"""
+    fn = os.path.join(root, ART_FILE)
+    if not os.path.isfile(fn):
+        return "no %s" % ART_FILE
+    try:
+        from PIL import Image
+        import numpy as np
+    except Exception as e:  # pragma: no cover
+        return "PIL / numpy unavailable: %s" % e
+    im = np.asarray(Image.open(fn).convert("RGB"), dtype=float)
+    if im.shape[:2] != (1024, 1024):
+        return "atlas is %s, not 1024 x 1024" % (im.shape[:2],)
+    out = []
+    for k in range(16):
+        c = im[(k // 4) * 256 + 12:(k // 4 + 1) * 256 - 12, (k % 4) * 256 + 12:(k % 4 + 1) * 256 - 12]
+        lum = c @ np.array([0.2126, 0.7152, 0.0722])
+        q = (c // 16).astype(int)
+        out.append((round(float(lum.std()), 1), int(len(np.unique(q[..., 0] * 256 + q[..., 1] * 16 + q[..., 2])))))
+    return out
+
+
+def judge_interiors(v, B, root=None):
     """(W10 R3A) the interiors-II rows: finish, shop-density, office-cover, flat-roofs"""
     I = [R.get("inter") for R in B]
     if not all(I):
-        for row in ("finish", "shop-density", "office-cover", "flat-roofs"):
+        for row in ("finish", "shop-density", "work-density", "office-cover", "flat-roofs"):
             v.cnj(row, "the census has no interiors record (homes.mjs too old for this tree)")
         return
     lived = [r for x in I for r in x["lived"]]
@@ -328,9 +367,25 @@ def judge_interiors(v, B):
         by.setdefault(r["kind"], [0, 0])
         by[r["kind"]][0] += r["decor"]
         by[r["kind"]][1] += 1
-    v.check("finish", bool(lived) and dec >= 95 and wins > 0 and cur == wins and cn > 0 and cw == cn,
-            "lived rooms %d: wall decor %.1f %% (bar >= 95; %s); their windows %d: real curtains %d = %.1f %% (bar 100); home ceiling faces %d: white (L >= 0.85) %d, darkest L %.3f (bar all)" % (
-                len(lived), dec, ", ".join("%s %.1f %%" % (k, pct(a, n)) for k, (a, n) in sorted(by.items())), wins, cur, pct(cur, wins), cn, cw, cmin), ">= 95 %, 100 %, all white")
+    # (W10 R3A fix5, ruling R3A-6) + the pictures that sample the art atlas (medium+: meshData opts.art) - >= 1 in >= 60 % of the homes' living rooms, of the
+    # offices and of the lobbies, each; and the atlas itself: 16 cells, each a picture (luminance std >= 10 over the cell), not a flat fill
+    art = [r for x in I for r in x.get("art", [])]
+    ak = {}
+    for r in art:
+        ak.setdefault(r["kind"], [0, 0, 0])
+        ak[r["kind"]][0] += 1 if r["atlas"] >= 1 else 0
+        ak[r["kind"]][1] += 1
+        ak[r["kind"]][2] += r["pics"]
+    cells = atlas_cells(root) if root else "no root"
+    cells_ok = isinstance(cells, list) and len(cells) == 16 and all(s >= ART_CELL_STD for s, _ in cells)
+    art_ok = all(k in ak and pct(ak[k][0], ak[k][1]) >= ART_PICS_BAR for k in ("living", "office", "lobby")) and cells_ok
+    v.check("finish", bool(lived) and dec >= 95 and wins > 0 and cur == wins and cn > 0 and cw == cn and art_ok,
+            "lived rooms %d: wall decor %.1f %% (bar >= 95; %s); their windows %d: real curtains %d = %.1f %% (bar 100); home ceiling faces %d: white (L >= 0.85) %d, darkest L %.3f (bar all); "
+            "pictures sampling the art atlas (medium+): %s (bar >= %d %% each); atlas cells (luminance std, 4-bit colours): %s (bar std >= %.0f each)" % (
+                len(lived), dec, ", ".join("%s %.1f %%" % (k, pct(a, n)) for k, (a, n) in sorted(by.items())), wins, cur, pct(cur, wins), cn, cw, cmin,
+                ", ".join("%s %d of %d rooms = %.1f %% (%d pictures)" % (k, a, n, pct(a, n), p) for k, (a, n, p) in sorted(ak.items())) or "none", ART_PICS_BAR,
+                cells if not isinstance(cells, list) else "min std %.1f, min colours %d (%s)" % (min(s for s, _ in cells), min(c for _, c in cells), cells), ART_CELL_STD),
+            ">= 95 %, 100 %, all white, pictures on the atlas >= 60 % of living rooms / offices / lobbies, 16 picture cells")
     work = [r for x in I for r in x["work"]]
     sw = [r for r in work if r["kind"] in ("shop", "storage", "warehouse")]
     if not sw:
@@ -352,6 +407,22 @@ def judge_interiors(v, B):
                 "%d rooms, %.0f m2: %.1f pieces per 100 m2 pooled (bar >= 30); cover %.2f per 25 m2 pooled (bar >= 1); rooms with floor(area / 25) cover pieces %.1f %% (bar >= 90); by kind %s; e.g. %s %s %.1f m2 %d pieces %d cover" % (
                     len(sw), area, per, cov, okr, "; ".join("%s %d rooms %.1f / 100 m2, cover %.2f / 25 m2" % (k, q[3], 100.0 * q[0] / q[1], 25.0 * q[2] / q[1]) for k, q in sorted(kinds.items())),
                     worst["h"], worst["kind"], worst["area"], worst["n"], worst["cover"]), ">= 30 / 100 m2, >= 1 cover / 25 m2, >= 90 % of rooms")
+    # (W10 R3A fix5, orchestrator ruling R3A-7 / R3A-8) work-density: pieces per 100 m2 pooled PER KIND (every furniture record in the room, as shop-density
+    # counts): shops alone >= 30 (shop-density pools them with storage / warehouse), offices >= 35, meeting rooms >= 25, corridors >= 25, lobbies >= 25 - the bars
+    # as the ruling gives them (audit / pass-4 values: shop 27.9, office 29.4, meeting 15.4, corridor 21.0)
+    WD_BARS = (("shop", 30), ("office", 35), ("meeting", 25), ("corridor", 25), ("lobby", 25))
+    wd = {}
+    for r in work:
+        wd.setdefault(r["kind"], [0, 0.0, 0])
+        wd[r["kind"]][0] += r["n"]
+        wd[r["kind"]][1] += r["area"]
+        wd[r["kind"]][2] += 1
+    if any(k not in wd for k, _ in WD_BARS):
+        v.cnj("work-density", "kinds found: %s (need %s)" % (sorted(wd), ", ".join(k for k, _ in WD_BARS)))
+    else:
+        dens = {k: 100.0 * wd[k][0] / wd[k][1] for k, _ in WD_BARS}
+        v.check("work-density", all(dens[k] >= bar for k, bar in WD_BARS), "pieces per 100 m2 pooled per kind: %s" % "; ".join(
+            "%s %d rooms %.0f m2 %.1f (bar >= %d)" % (k, wd[k][2], wd[k][1], dens[k], bar) for k, bar in WD_BARS), "shop >= 30, office >= 35, meeting / corridor / lobby >= 25")
     oc = {}
     for r in work:
         if r["kind"] in ("office", "meeting", "lobby", "corridor"):
@@ -390,7 +461,7 @@ def main_fn(v, args):
         base = baseline(args.maps, args.seeds)
     except Exception as e:  # the baseline is the loot row's only input: a failure there is that row's could-not-judge, never a pass
         v.note("baseline census failed: %s" % str(e)[:300])
-    judge(v, d, base)
+    judge(v, d, base, root)
     if args.plant:
         must = PLANTS[args.plant][0]
         for r in v.rows:

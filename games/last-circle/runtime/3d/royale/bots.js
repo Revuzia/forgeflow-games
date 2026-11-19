@@ -162,7 +162,7 @@ function calmHeld(W, b, drop) {
  *  6 stuck episodes in 60 s; seed 5: s20 ROTATE at 19 -> 6 hp on the same terrace, 5; --pencheck setup 3 (s1 LOOT at 17 hp, limit 5.96 < the calm cap
  *  6.3) held 3 s by the flight test before its progress test re-planned. Now an hp-bound hold asks the planner at once and counts its loops exactly as
  *  a calm hold does (replanHeld: a route that leads straight back = a failed re-plan; CALM_HOLD_N of them -> the trap breaker). */
-const HP_REPLAN = true;           // false = an hp-bound hold waits for the 3 s progress test / loop breaker, as before (probe_match --sweep --plant no-hp-replan)
+const HP_REPLAN = true;           // false = an hp-bound hold waits for the 3 s progress test / loop breaker, as before (fix5 diag: isla_viva s1 s36 6 episodes, s5 s20 5, pencheck setup 3 1)
 function hpHeld(W, b) {
   if (!HP_REPLAN) return;
   replanHeld(W, b);
