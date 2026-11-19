@@ -1029,3 +1029,81 @@ Defence and dither, s701-764 (`probe_sim_bot_tactics --suites rift`). Columns ar
   None closes the gap, and none is kept. The remaining veteran cost sits in the posts-off code between 5c55ef885 and 5503f9fad, and it is not found yet.
 - **Base defence that does not cost pace.** No post design measured here (any class, any count, any time window) kept the posts and pre pace. Rebuilding defence a different way is its own lane under ruling 60.
 - Rulings 55/58/59's other open bars (FRAY stays, veteran peel within 1.5 s, collapse ordering) were not worked this round.
+
+## 63. A veteran team's camp call is held back from 14:00 only by a road call of 0.7, the level that holds every tier; the veteran pace cost was that rule reading the lane AI's earlier defend calls (lead, by delegation, 2026-11-19)
+
+Lane AI, pace round 2 (orch1 W1-A opponents / W3-A), after `orch1/verify_ai_r5.json` (6.0, not safe to ship). The blocker: RIFT veteran games were longer than the pre-lane bots' (0aeac587b). Paired over 96 seeds the gap was +1.31 ± 0.47 min, and on s801-832 it was +2.70. Novice and adept were already within noise. Game length is a hard bar (ruling 60). The gap was traced in VALE's own code. League of Legends was a gauge only.
+
+**Method.** All arms ran on one tree. `VALE_BOTS` pointed at a copy of the HEAD bots or a copy of pre's bots. Each copy read profile overrides (`VALE_OVR`) and site switches (`VALE_SW`) from the environment. The copies were deleted afterwards. The tool was `_harness/probe_sim_bot_pace.ts`: RIFT veteran, both teams at the same tier, cut at 30:00, paired by seed. Results are arm − pre in minutes ± paired SE. "Cut" counts games that reached 30:00. Screening used s765-892 (n 128). There HEAD reads **+1.85 ± 0.37, cut 16 vs 4**, and its s801-832 subset is +2.70 ± 0.62, the verifier's number to the digit. Confirmation added s701-764 and s893-956 (n 256).
+
+**The bisect:**
+
+| Arm (veteran only, HEAD code) | pace vs pre | cut (arm vs pre) |
+|---|---|---|
+| Lane-AI team knobs at adept's values | +1.32 ± 0.36 | 15 vs 4 |
+| Lane-AI micro knobs at adept's values | +1.93 ± 0.37 | 23 vs 4 |
+| Both | +0.91 ± 0.37 | 9 vs 4 |
+| Both, plus adept's macro knobs (n 256) | −0.18 ± 0.28 | 13 vs 11 |
+| **Only convertsLeads, readsWaves and objectiveSense off (n 256)** | **−1.81 ± 0.26** | 5 vs 11 |
+| convertsLeads off | +2.49 ± 0.38 | 23 vs 4 |
+| readsWaves off | +1.34 ± 0.38 | 13 vs 4 |
+| **objectiveSense off** | **−0.98 ± 0.35** | 2 vs 4 |
+| Single knob or switch arms: gathered rule off, pre commit rule, punish/collapse/trade/split at adept, lurk/flank/vision at adept, peel at adept | +1.22 to +1.94 | 9-22 vs 4 |
+
+objectiveSense is read at six sites. Each arm turned off one site:
+
+| objectiveSense site off | pace vs pre | cut |
+|---|---|---|
+| push needs 45 % health (bot.ts) | +1.69 ± 0.37 | 17 vs 4 |
+| defend needs 40 % health | +1.67 ± 0.36 | 15 vs 4 |
+| objective needs 45 % health | +1.55 ± 0.39 | 17 vs 4 |
+| press needs fit fighters (team.ts) | +1.37 ± 0.37 | 13 vs 4 |
+| the siege target sticks | +0.72 ± 0.40 | 16 vs 4 |
+| **the camp call (thinkObjective) (n 256)** | **−1.08 ± 0.26** | 3 vs 11 |
+| camp call: lane AI G7's long-objective take off | +1.44 ± 0.38 | 11 vs 4 |
+| camp call: ruling 55's closing rule off | +1.83 ± 0.37 | 16 vs 4 |
+| camp call: threat return kept, desire rules off (n 256) | +0.61 ± 0.27 | 19 vs 11 |
+| **camp call: the 0.3 threat return raised to 0.7 from 14:00 (n 256)** | **+0.07 ± 0.28** | **9 vs 11** |
+
+- **Cause.** objectiveSense's camp call returns early, with no call, whenever any road's defend call is ≥ 0.3 or a stacked enemy wave is deep in our half. The lane AI's defend calls fire sooner and more often: they read a push coming, a fighter beside a structure, and a structure losing health. So from 14:00 a veteran team was almost never free to call a camp. It took Longshade and Sunsplinter less often, and the games ran on into the base stalls ruling 59 traced. Pre's sparser defend calls rarely reached 0.3, which is why pre's veteran did not stall.
+- In a 32-seed mode trace on s765-796, turning the camp call off moved veteran mid-game Longshade calls from 105 to 187 s a game and cut late-game push time from 1,085 to 477 s. Pre was 87 s and 957 s.
+- The weak pattern in rulings 58, 59 and 62 ("no single feature") came from noise. Single arms at n 64 have SE 0.5-0.6, and the lane-AI knob arms here each move ±0.5 or less. Only the camp-call arms move pace by more than 2 SE.
+
+**Decided (src/sim/bots/team.ts, thinkObjective):** from 14:00, a team with objectiveSense (veteran only) skips the camp call only when a road call is at 0.7. That is the same road call that already stops every tier's camp calls. The old line was 0.3, and the stacked-wave read (0.5) no longer blocks the call from 14:00. Nothing else changes. Before 14:00 the 0.6 rule stays. Novice and adept never enter this code, so their games are byte-identical to b4660c710: novice +0.10 ± 0.51 and adept −0.16 ± 0.40 over 96 seeds (verify_ai_r5). FRAY and BRIDGE are untouched.
+
+**Measured on the final code.** The `src/sim/bots` run on s765-828 matches the switch arm game for game.
+
+| RIFT veteran, new − pre | pace | cut new / pre |
+|---|---|---|
+| s701-764 | +0.16 ± 0.54 | 4 / 4 |
+| s765-892 | +0.29 ± 0.37 | 4 / 4 |
+| s801-832 (the verifier's fresh set; HEAD +2.70 ± 0.62) | +0.20 ± 0.78 | 0 / 0 |
+| s893-956 | −0.47 ± 0.61 | 1 / 3 |
+| **pooled, n 256** | **+0.07 ± 0.28** | **9 / 11** |
+
+Defence and dither on s701-764 (`probe_sim_bot_tactics --diffs veteran --suites rift --seeds 64 --seed0 701`). Columns are pre / HEAD b4660c710 / new:
+
+| | pre | HEAD | new |
+|---|---|---|---|
+| Unanswered base intrusions a game | 1.77 | 0.83 | **0.73** |
+| Inner+base falls to Wicks beside fit defenders | 0.84 | 1.06 | 1.02 |
+| Dither (bar 1) | 5.30 | 2.28 | 1.98 |
+| Undefended inner+base siege share (bar 20 %) | — | 20.0 % (fail) | 19.7 % (pass) |
+| Overextension | — | fail | pass (0.78 vs 0.53) |
+| Longshade per game past 18:00 (bar 0.25) | — | pass | 0.30 |
+| Veteran tactics gates failing | — | 5 | **3**: dither 1.98, peel within 1.5 s 70.7 %, fit fighters 25-80 m from a hit base structure 9.6 s |
+
+- `probe_sim_bot_soak` quick: PASS. Laning is untouched, because the change runs only from 14:00.
+- **Given back:** nothing measured. Intrusions answered and dither both improve slightly. Wick falls are level with HEAD.
+- **Tried and not kept:**
+  - veteran's lane knobs at adept's values: it removes the veteran's own play and closes only half the gap;
+  - adept's macro knobs too: within noise, but it removes the veteran's lead conversion and wave reading;
+  - the camp-call branch off entirely: −1.08, shorter than pre; veteran lurk ganks after 14:00 2-3 → 0; Longshade 0.57;
+  - the threat return kept with the desire rules off: +0.61, cut 19 vs 11.
+
+**Open, not worked this round:**
+- veteran inner falls to Wicks (secondary, not pursued);
+- dither at veteran (1.98 against 1);
+- peel within 1.5 s (70.7 % against 75 %);
+- fit fighters standing off a hit base structure (9.6 s against 6);
+- FRAY low-health stays.

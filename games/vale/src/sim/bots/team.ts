@@ -1028,7 +1028,12 @@ export class TeamBrain {
     // (CW3s r2 refix, done:2: not in the early phase: a wave deep in one half is the laning's normal state. This read, the time
     // bars and the 60 s block below split veteran first Sunsplinter takes into 7-10 and 14+ min, where adept stays at 7-10;
     // holding the even-numbers call past 10:00 instead cost far more: veteran beat novice 27/40, a core fell at 15.5 min)
-    if (sense && threat >= (early ? 0.6 : 0.3)) return;
+    // (ruling 63: from 14:00 only a road call of 0.7 — the one that holds every tier above — keeps the camp call back; it was
+    // 0.3. The lane AI's defend calls read threats sooner and more often (a push coming, a fighter beside a structure), so
+    // the old 0.3 kept a veteran team off every camp for most of the mid and late game: no Longshade, no Sunsplinter, and
+    // the games that stall at a base. A per-feature bisect put the veteran pace cost here: RIFT veteran length against the
+    // pre-lane bots +1.85 min (s765-892) → +0.07 min (s701-956); games reaching 30:00 16 of 128 (pre 4) → 9 of 256 (pre 11))
+    if (sense && threat >= (early ? 0.6 : 0.7)) return;
     // (objectiveSense: where the team is — an even-numbers call is for a camp on its way, not one across the map)
     let cx = 0, cy = 0, cn = 0;
     for (const f of this.perc.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }
