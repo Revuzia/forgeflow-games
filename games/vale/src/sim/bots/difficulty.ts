@@ -139,49 +139,6 @@ export interface DifficultyProfile {
   readonly adaptiveBuild: boolean;
   /** FRAY: waits outside a fight between two others and enters when one is low (chance per fight) */
   readonly thirdParty: number;
-  // ── lane AI round 2 (owner_rulings 44) ──
-  /** an enemy fighter seen alone in the team's own half of the Dialwood is hunted by up to this many fighters (0: never) */
-  readonly punishInvade: number;
-  /** ... from this match time (s), once it has been in sight this long (s) */
-  readonly punishFrom: number;
-  readonly punishDelay: number;
-  /** peel: the dived partner is followed under the enemy's tower ('none'; 'low': only a partner under 40 %; 'all': a fit
-   *  frontline or support for any partner, as ruling 42) */
-  readonly peelDive: 'none' | 'low' | 'all';
-  /** a posted or answering defender holds its structure against the stacked wave (ruling 42; a beginner backs off it; adept
-   *  too since ruling 55 — its holds kept adept games 3 min longer than the pre-lane bots', p90 34-40 against the 32 bar;
-   *  veteran too since ruling 55 — its wave-only posts walked fit defenders up to inner Needles that the stacked wave took
-   *  anyway: falls to Wicks beside fit defenders 1.03 → 0.83 a game, the pre-lane bots 0.86) */
-  readonly holdWave: boolean;
-  /** FRAY: under this share of health with a foe within 10 m and no kill on, a fighter breaks off (toward a heal if one is
-   *  near), whether or not it is being hit right now (0: only the old retreat) */
-  readonly frayBreak: number;
-  /** the core under fighter attack (the Hourbell or a Bell Needle) calls every fit fighter that can be there in time (false: the
-   *  count rule, defendMatch × divers) */
-  readonly coreAll: boolean;
-  /** peel: the designated peeler of a dived partner (the support within 8 m, else the nearest teammate within 12 m) always
-   *  answers, whatever peelChance rolls (false: peelChance only) */
-  readonly peelFirst: boolean;
-  /** a lone enemy fighter on a road in our half, out of its towers' cover, is collapsed on like an invader (from 14:00) */
-  readonly collapseRoads: boolean;
-  /** closing: ahead with the enemy core open (its middle Lantern down), the team groups and ends — no staging wait */
-  readonly closeOut: boolean;
-  // ── lane AI round 3 (ruling 55) ──
-  /** FRAY: a chase that has not closed on its target for this long (s), out of reach and with no gap-closer ready, is given
-   *  up and the target left alone for 6 s (Infinity: never) */
-  readonly chaseQuit: number;
-  // ── ruling 55 ──
-  /** structure defence reads a threat before the structure is hit — enemy fighters beside it, a push coming at the road's
-   *  front (a beginner answers only a structure being hit) */
-  readonly anticipates: boolean;
-  /** RIFT walking plans (ruling 58; ruling 60: 12 s at every tier, veteran's 20 s cost ~0.8 min a game): a calm full-health walk turns back at most once in this many seconds (a fight, a
-   *  threat, a rush or a target at hand turns at once) */
-  readonly turnLatch: number;
-  // ── ruling 60 ──
-  /** RIFT structure posts (lane AI G1, rulings 40-55): a threatened own structure gets named defenders. Off at every tier:
-   *  a per-feature bisect put the round-1 package's pace cost (RIFT +1.2 / +2.0 / +2.3 min, 14 and 12 games in 64 reaching
-   *  30:00 at adept and veteran) in the posts, at every structure class at once */
-  readonly guardPosts: boolean;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -205,8 +162,6 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     defendMatch: 0.5, recallDefend: 'none', defendHold: 4, peelChance: 0.3, peelBodyBlock: false, peelLaneHp: 0.5, aheadCaution: 0, lurkMax: 0, avoidVision: false,
     flank: false, riskCap: Infinity, burstRetreat: false, splitPush: false, groupFollowFloor: 0, visionSetup: false,
     longshadeTtk: 0, crossTrade: false, objectiveEvenLate: 0.35, ccChain: 0, threatCc: false, adaptiveBuild: false, thirdParty: 0,
-    punishInvade: 0, punishFrom: Infinity, punishDelay: 99, peelDive: 'none', holdWave: false, frayBreak: 0,
-    coreAll: false, peelFirst: false, collapseRoads: false, closeOut: false, chaseQuit: Infinity, anticipates: false, turnLatch: 12, guardPosts: false,
   },
   // (CW3s r3, CL-1: adept's longest quiet stretch fell at 3:00-12:00 with the laners 9 m apart at 75 % health; deaths a minute run under veteran's from 5:00 to 13:00. It now contests an enemy start at a camp, the fight veteran's team takes there, and reads a kill as veteran does. A flat +0.08 on the trade edge was tried and dropped: stretch 3.2 min, takedowns by 10:00 7.15 -> 6.70. team.ts thinkGank and bot.ts's roam read widen for every tier: gaps at 8:00-12:00. Laning retreat bias -0.04: takedowns by 10:00 5.95 -> 6.50 on seeds 8101-8120. Untuned seeds 8501-8520 / 8701-8720: stretch 2.7 / 2.8 min, was 3.4 / 3.6)
   adept: {
@@ -219,8 +174,6 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     defendMatch: 1, recallDefend: 'base', defendHold: 6, peelChance: 0.7, peelBodyBlock: true, peelLaneHp: 0.5, aheadCaution: 0.08, lurkMax: 4, avoidVision: false,
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
-    punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: false, frayBreak: 0.2,
-    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true, turnLatch: 12, guardPosts: false,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -232,8 +185,6 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     defendMatch: 1, recallDefend: 'inner', defendHold: 6, peelChance: 1, peelBodyBlock: true, peelLaneHp: 0.65, aheadCaution: 0.05, lurkMax: 8, avoidVision: true,
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
-    punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: false, frayBreak: 0.25,
-    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true, turnLatch: 12, guardPosts: false,
   },
 };
 
