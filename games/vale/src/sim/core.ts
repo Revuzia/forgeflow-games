@@ -63,6 +63,8 @@ export function commandSystem(w: World): void {
         if (human) { if (r === 'busy' && e.alive) bufferCast(w, p, slot, cmd.x, cmd.y, cmd.target); else clearCastBuffer(p); }
       } break;
       case 'levelUp': if (e) levelUpAbility(w, e, cmd.slot); break;
+      // the seat's auto attack switch (ruling 61): this seat's own fighter only (the entity is kept across deaths)
+      case 'autoAttack': p.autoAttack = cmd.on; if (e) e.seatAutoOff = !cmd.on; break;
       default: {
         const h = w.hooks.command[cmd.type];
         if (h) h(w, p, cmd);

@@ -9,7 +9,7 @@
 //
 // Targets: taunt forces the taunter; an attack order chases its target; an attack-move with a
 // picked enemy (prefer) commits to it while it is attackable; attack-move and idle
-// units (autoAttack) acquire the best enemy in range — lowest acquireScore (hooks.acquireScore,
+// units (autoAttack, and not a seat's fighter whose seat turned auto attack off: seatAutoOff, ruling 61) acquire the best enemy in range — lowest acquireScore (hooks.acquireScore,
 // default: nearest, structures and wards last). Units that are moving, casting, dashing,
 // disarmed, feared or hard-CC'd do not start attacks; losing the target (dead or untargetable) or
 // getting CC'd during the windup cancels the attack (the cooldown still runs, as with any started
@@ -110,7 +110,7 @@ export function desiredAttackTarget(w: World, e: Entity): Entity | null {
       return acquireTarget(w, e);
     }
     case ORDER_NONE: {
-      if (!e.autoAttack) return null;
+      if (!e.autoAttack || e.seatAutoOff) return null;
       const cur = w.live(e.atkTarget);
       if (cur && attackable(w, e, cur) && inAttackRange(e, cur)) return cur;
       return acquireTarget(w, e);

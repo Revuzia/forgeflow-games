@@ -389,6 +389,9 @@ export class Entity implements EntityView {
   atkAimX = 0; atkAimY = 0;
   /** idle auto-acquire (fighters, towers, summons); unit AI may turn it off */
   autoAttack = true;
+  /** the owning seat turned auto attack off (Command 'autoAttack', ruling 61): a seat's fighter only; idle acquire is
+   *  skipped whatever autoAttack says (recall's save and restore of autoAttack leaves it alone) */
+  seatAutoOff = false;
   // motion
   dash: DashState | null = null;
   moved = false;
@@ -509,6 +512,8 @@ export class Player implements PlayerView {
    *  none), aim point (bufPoint: one was given), target and the sim time it lapses at (never NaN: seat state stays finite) */
   bufSlot = -1; bufX = 0; bufY = 0; bufPoint = false; bufTarget: EntityId = -1; bufUntil = 0;
   get pendingCast(): SlotT | null { return this.bufSlot >= 0 ? SLOT_NAMES[this.bufSlot] : null; }
+  /** the seat's auto attack switch (Command 'autoAttack', ruling 61); mirrored onto the fighter as ent.seatAutoOff */
+  autoAttack = true;
 
   constructor(seat: SeatSetup) {
     this.seat = seat;

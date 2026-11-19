@@ -908,3 +908,27 @@ The owner agreed to these on 2026-11-18 ("i agree, lets do that. all of it").
 - **Soft bars.** A numeric bar a player cannot perceive (for example 72.7 % against 75 %, or luma 217.7 against 218) is reported as a note when it is within about 10 % of the bar. It does not fail the lane.
 - **Cards** are a slight visual (ruling 57 and the owner's direction of the same day): best available version, no paid polish rounds.
 - **Parked:** the fighter-colour leftovers of the units gate (ruling 49) and the remaining card misses.
+
+## 61. Auto attack is a seat switch, on by default; off, your fighter attacks only when ordered, attack-move still acquires, and a hit does not draw an answer (lead, by delegation, 2026-11-18)
+
+The owner played the live build on 2026-11-18 and asked for a way to turn auto attack off, to make last hits easier. Genre-standard practice in VALE's own words and layout; League of Legends was a gauge only.
+
+- **The switch.** Settings › Controls › **Auto attack**, on by default (today's behaviour). The line under it: off, your fighter stands still until you order an attack, which makes last hits on Wicks easier to time. It persists in the profile (`controls.autoAttack`) and can be changed from the pause menu's settings mid-match; it applies within a frame plus a tick.
+- **Off means.** Idle, after a move ends, after Stop, and after an ordered target dies, your fighter does not pick a target by itself. Orders still attack: right-click on an enemy (chases and keeps hitting it until it dies or is lost), attack in place (Shift + left-click).
+- **Attack-move still acquires.** Attack-move (A + click, Shift + right-click, attack on move) is an explicit order to fight on the way, so it stops for the first enemy in range as before. When it reaches its point, the fighter goes idle and stays idle.
+- **No answer when hit.** With the switch off, a fighter standing idle that is hit does not swing back. That is the genre standard: the switch exists so the fighter never swings at something you did not choose, and a retaliation rule would steal the last hit the switch is for.
+- **Through the sim.** Command `{ type: 'autoAttack', on }` (additive). It sets the sender's seat value (`Player.autoAttack`, shown in `PlayerView.autoAttack`) and that seat's fighter only (`Entity.seatAutoOff`, kept across death and respawn, separate from the unit `autoAttack` that recall saves and restores). Opponent seats, summons, towers and other units keep their own behaviour. The input controller sends it whenever the seat's value in the view differs from the setting (re-sent at most every 0.4 s while in flight), so a player who never turns it off sends nothing and default matches keep their command streams and digests.
+- **Key.** `toggleAutoAttack` (Settings › Controls › Commands, "Turn auto attack on or off"), **unbound by default**. When bound it flips the setting in a match and shows the HUD's info toast ("Auto attack on." / "Auto attack off: you attack only when you order it.").
+
+**Measured (2026-11-18):**
+- `probe_sim_autoattack_off`: 38/38.
+  - Control (on): 5 swings in 5 s idle beside an enemy. Off: 0 swings in 5 s idle, 0 after Stop, 0 after a move ends beside enemies, 0 while the enemy fighters hit you.
+  - Off + right-click: the ordered target is attacked and dies; 0 swings at the next enemy in reach in the 5 s after (on: it picks the next enemy).
+  - Off + attack-move: stops for the enemy on the way and swings. Off + attack in place: 1 swing.
+  - Opponent seats: same swing count whether your switch is on or off; their switch stays on.
+  - On (sent at tick 0) = the same digest and swings as never sent. Off then on: swings again within 2 ticks. On then off mid-fight: no attack starts after the command.
+  - Same command stream twice: digests c8d48fb1 / c8d48fb1, equal event streams.
+  - Default-on matches keep HEAD 17a901310's digests (measured with this lane's sim edits reversed): lane seed 99 5edfad52, FRAY seed 5 441084ba, lane seed 99 with stops 29f3e850. Through the facade the switch lands on the human seat only.
+  - Controller: default settings send nothing; off sends one command and the seat reads off; changed back mid-match sends one on; normalize keeps a saved off and reads a save without it as on; the bound key calls the toggle once.
+- Unchanged: probe_sim_determinism 6/6, probe_sim_core_attack 19/19, probe_sim_core_orders 85/85, probe_sim_attack_at 56/56, probe_sim_cast_buffer 21/21, probe_sim_edge 94/94, probe_sim_practice 44/44, probe_input_castmode 47/47, probe_input_clicks 62/62, probe_input_shoot 31/31, probe_session_flows 72/72, probe_sim_rekey 45/45, probe_boot_gate 34/34, probe_copy_no_bots ok, content check 0 warnings, typecheck clean outside other lanes' `_tmp_` and `_ab_` files.
+- Live (dev build, 1280x800): the switch and its line show in Settings › Controls, on by default; the key row shows unbound; a click writes `autoAttack: false` to the saved profile and a second click writes it back. Not checked in a live match by hand.

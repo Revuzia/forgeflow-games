@@ -18,7 +18,8 @@
 import type { CSSProperties, JSX } from 'preact';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import { effect, signal } from '@preact/signals';
-import type { MatchClient } from '../../contracts/session.ts';
+import type { MatchClient, Settings } from '../../contracts/session.ts';
+import type { ControlSettings } from '../../session/settings.ts';
 import { AbilityIndex, InputController, type Action, type DenyReason, type InputRenderer } from '../../input/index.ts';
 import { useApp, useEsc } from '../app_ctx.ts';
 import { keyShort } from '../keys.ts';
@@ -89,6 +90,13 @@ export function Hud(p: { client: MatchClient; onMenu?: () => void }): JSX.Elemen
         const c = state.settings.peek().controls;
         session.updateSettings({ controls: { ...c, cameraLock: locked, cameraLockChosen: true } });
         model.say(locked ? cv.t('hud.camera.locked', 'Camera locked to your fighter.') : cv.t('hud.camera.unlocked', 'Camera unlocked.'), 'info');
+      },
+      toggleAutoAttack: () => {
+        // ruling 61: the switch in Settings › Controls; the controller sends it to the sim on its next frame
+        const c = state.settings.peek().controls as ControlSettings;
+        const on = c.autoAttack === false;
+        session.updateSettings({ controls: { ...c, autoAttack: on } as Settings['controls'] });
+        model.say(on ? cv.t('hud.autoAttack.on', 'Auto attack on.') : cv.t('hud.autoAttack.off', 'Auto attack off: you attack only when you order it.'), 'info');
       },
       blocked: () => overlay.modals.value.length > 0,
       pingsDisabled: () => model.ffa,

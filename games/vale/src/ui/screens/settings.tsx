@@ -185,7 +185,7 @@ function Audio(p: { s: Settings; set: SetFn }): JSX.Element {
 const ACTION_GROUPS: { key: string; actions: string[] }[] = [
   { key: 'abilities', actions: ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2'] },
   { key: 'items', actions: ['item1', 'item2', 'item3', 'item4', 'item5', 'item6'] },
-  { key: 'commands', actions: ['attackMove', 'attackInPlace', 'fightersOnly', 'showRange', 'levelUpMod', 'stop', 'recall', 'shop', 'ping', 'scoreboard'] },
+  { key: 'commands', actions: ['attackMove', 'attackInPlace', 'fightersOnly', 'showRange', 'levelUpMod', 'stop', 'toggleAutoAttack', 'recall', 'shop', 'ping', 'scoreboard'] },
   { key: 'camera', actions: ['cameraLock', 'centerCamera', 'viewAlly1', 'viewAlly2', 'viewAlly3', 'viewAlly4'] },
 ];
 
@@ -252,6 +252,9 @@ function Controls(p: { s: Settings; set: SetFn }): JSX.Element {
           ))}
         </div>
       </div>
+      <Row id="c-auto" label={cv.t('settings.controls.autoAttack.label', 'Auto attack')} desc={cv.t('settings.controls.autoAttack.desc', '')}>
+        <Toggle id="c-auto" label={cv.t('settings.controls.autoAttack.label', 'Auto attack')} checked={(c as ControlSettings).autoAttack !== false} onChange={(x) => p.set('controls', { autoAttack: x } as Partial<Settings['controls']>)} />
+      </Row>
       <Row id="c-ring" label={cv.t('settings.controls.rangeOnAttackMove.label', 'Show attack range during attack-move')} desc={cv.t('settings.controls.rangeOnAttackMove.desc', '')}>
         <Toggle id="c-ring" label={cv.t('settings.controls.rangeOnAttackMove.label', 'Show attack range during attack-move')} checked={(c as ControlSettings).rangeOnAttackMove !== false} onChange={(x) => p.set('controls', { rangeOnAttackMove: x } as Partial<Settings['controls']>)} />
       </Row>

@@ -170,6 +170,7 @@ export function validCommand(c: unknown): c is Command {
     case 'ping': return PING_KINDS.has(o.kind as PingKind) && finite(o.x) && finite(o.y) && optInt(o.target)
       && (o.slot === undefined || (typeof o.slot === 'string' && PING_SLOT.test(o.slot)));
     case 'surrenderVote': return typeof o.yes === 'boolean';
+    case 'autoAttack': return typeof o.on === 'boolean';
     case 'practice': return typeof o.action === 'string';
     default: return false;
   }

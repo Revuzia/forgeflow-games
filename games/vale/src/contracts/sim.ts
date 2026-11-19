@@ -67,6 +67,10 @@ export type Command =
   /** slot: an Alt-click call-out of one of the sender's slots ('a1' 'a2' 'a3' 'ult' 'spell1' 'spell2' 'item0'..'item5') */
   | { type: 'ping'; kind: PingKind; x: number; y: number; target?: EntityId; slot?: string }
   | { type: 'surrenderVote'; yes: boolean }
+  /** CHANGED(ruling 61), additive: the seat's auto attack switch (Settings › Controls). off: the seat's own fighter never picks
+   *  a target by itself when idle (after a move, a Stop or an ordered kill); orders (attack, attack-move, attack in place) still
+   *  attack. A seat that never sends it stays on */
+  | { type: 'autoAttack'; on: boolean }
   // practice tool only
   | { type: 'practice'; action: 'gold' | 'level' | 'resetCooldowns' | 'toggleCooldowns' | 'spawnDummy' | 'heal' | 'resetMatch'
       /** CHANGED(W4 g3), additive: Wicks on/off (off clears the roads), structures on/off (off: they neither shoot nor take
@@ -171,6 +175,8 @@ export interface PlayerView {
   /** CHANGED(W2-D), additive: the slot of a cast pressed while you were busy (a windup, a channel, a dash) and held by
    *  the sim for up to 0.4 s until you are free (ruling 54); null when none waits */
   readonly pendingCast?: SlotT | null;
+  /** CHANGED(ruling 61), additive: the seat's auto attack switch as the sim applies it (absent or true: on) */
+  readonly autoAttack?: boolean;
   readonly streak: number;
   readonly bounty: number;
 }

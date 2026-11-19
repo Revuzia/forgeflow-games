@@ -27,9 +27,12 @@
 //                            right-click or Esc cancels). A save without castModes migrates its quickCast: true -> every
 //                            slot 'quick', else 'normal'. quickCast is kept as "every slot is quick" (ruling 54)
 //   controls.rangeOnAttackMove  on (default): your attack-range ring shows while attack-move is armed (ruling 54)
+//   controls.autoAttack      on (default): your fighter attacks the nearest enemy in range by itself when idle; off: it attacks
+//                            only when ordered (easier last hits). Sent to the sim as Command 'autoAttack' (ruling 61)
 //
 // KEYBINDS: action → KeyboardEvent.code (layout-independent). Actions: a1 a2 a3 ult spell1 spell2
-// item1..item6 recall shop scoreboard ping attackMove stop cameraLock centerCamera selfCastMod fightersOnly attackInPlace.
+// item1..item6 recall shop scoreboard ping attackMove stop cameraLock centerCamera selfCastMod fightersOnly attackInPlace
+// showRange levelUpMod viewAlly1..4 toggleAutoAttack (unbound by default).
 // There is no chat bind in this slice. Mouse buttons are 'Mouse0'..'Mouse4'.
 
 import type { Settings } from '../contracts/session.ts';
@@ -45,9 +48,9 @@ export const CAST_MODES: readonly CastMode[] = ['normal', 'quick', 'quickIndicat
 export const CAST_MODE_SLOTS = ['a1', 'a2', 'a3', 'ult', 'spell1', 'spell2', 'items'] as const;
 export type CastModeSlot = (typeof CAST_MODE_SLOTS)[number];
 /** Settings.controls plus the extras above (see EXTRAS) */
-export type ControlSettings = Settings['controls'] & { castModes?: Record<CastModeSlot, CastMode>; rangeOnAttackMove?: boolean };
+export type ControlSettings = Settings['controls'] & { castModes?: Record<CastModeSlot, CastMode>; rangeOnAttackMove?: boolean; autoAttack?: boolean };
 /** the extras' defaults */
-export const SETTINGS_EXTRAS = { video: { dynamicResolution: true }, audio: { mono: false, softenLoud: false }, controls: { rangeOnAttackMove: true } } as const;
+export const SETTINGS_EXTRAS = { video: { dynamicResolution: true }, audio: { mono: false, softenLoud: false }, controls: { rangeOnAttackMove: true, autoAttack: true } } as const;
 const allModes = (m: CastMode): Record<CastModeSlot, CastMode> => Object.fromEntries(CAST_MODE_SLOTS.map((k) => [k, m])) as Record<CastModeSlot, CastMode>;
 /** the cast mode of a sim slot (item1..item6 share 'items'); a controls block without castModes reads its quickCast */
 export function castModeOf(c: Settings['controls'], slot: string): CastMode {
@@ -75,6 +78,8 @@ export const DEFAULT_BINDS: Readonly<Record<string, string>> = {
   fightersOnly: 'KeyZ', attackInPlace: 'ShiftLeft',
   // W2-D (ruling 54): hold to see your attack range; the level-up modifier (with an ability key); hold to watch an ally
   showRange: 'KeyC', levelUpMod: 'ControlLeft', viewAlly1: 'F2', viewAlly2: 'F3', viewAlly3: 'F4', viewAlly4: 'F5',
+  // ruling 61: flips Settings › Controls › Auto attack in a match; unbound by default
+  toggleAutoAttack: '',
 };
 
 /** the defaults, in the canonical key order normalizeSettings produces (stable JSON) */
@@ -168,6 +173,7 @@ export function normalizeSettings(raw: unknown, base: Settings = defaultSettings
       selfCastModifier: str(c.selfCastModifier, bc.selfCastModifier),
       castModes,
       rangeOnAttackMove: bool(c.rangeOnAttackMove, bc.rangeOnAttackMove ?? SETTINGS_EXTRAS.controls.rangeOnAttackMove),
+      autoAttack: bool(c.autoAttack, bc.autoAttack ?? SETTINGS_EXTRAS.controls.autoAttack),
   };
   return {
     video,

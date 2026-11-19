@@ -22,6 +22,8 @@
 //   fightersOnly (hold)     every click and attack-move above considers enemy fighters only (wider radius)
 //   left-click              confirm an aimed ability, finish A attack-move, otherwise select a unit to inspect
 //   S stop · B recall · P shop · Tab scoreboard (hold)
+//   toggleAutoAttack        flips controls.autoAttack (unbound by default); the setting reaches the sim as Command
+//                           'autoAttack' (ruling 61): off, your fighter attacks only when ordered
 //   hover                   the outline shows exactly what a click would attack (the attack-move target
 //                           while Shift is held or A is armed)
 //   Q W E R D F 1–6         cast, by the slot's cast mode (controls.castModes, ruling 54): normal = aim first (the
@@ -97,6 +99,8 @@ export interface InputHooks {
   pingsDisabled(): boolean;
   /** casts and pings for the HUD's own feedback (slot press flash, ping log) */
   cast?(slot: SlotT): void;
+  /** the toggleAutoAttack key: flip controls.autoAttack (the HUD saves it and says so; ruling 61) */
+  toggleAutoAttack?(): void;
 }
 
 /** clockwise from 12 o'clock (client_hud §5) */
@@ -118,6 +122,8 @@ const PICK_SLOP_PX = 14;
 const slopKind = (v: EntityView): boolean => v.kind === 'minion' || v.kind === 'fighter';
 /** attack-move click: the enemy whose edge is nearest the click point within this (m) is the target */
 const CLICK_RADIUS_M = 2;
+/** the auto attack switch is re-sent this often (ms) while the sim's seat value still differs from the setting */
+const AUTO_RESEND_MS = 400;
 /** … with fightersOnly held (fighters only, so the radius can be wider) */
 const FIGHTER_CLICK_RADIUS_M = 3;
 const HOVER_MS = 50;
@@ -185,6 +191,8 @@ export class InputController {
   /** the attack-range ring as last sent (null hidden) */
   private ringOn = false;
   private pingTimes: number[] = [];
+  /** when the auto attack switch was last sent to the sim (ruling 61; re-sent while the sim's seat value differs) */
+  private autoSentAt = -1e9;
   private wheelAt = 0;
   private off: (() => void)[] = [];
 
@@ -320,6 +328,7 @@ export class InputController {
 
   // ── per frame (the HUD's rAF): aim indicator, hover, held move, centring ────────────────────────
   frame(now: number): void {
+    this.syncAutoAttack(now);
     const aim = this.aiming.value;
     const body = this.body;
     if (aim && (!body || !body.alive)) this.cancelAim();
@@ -386,6 +395,19 @@ export class InputController {
     else if (this.ringOn) { this.ringOn = false; this.r.setRangeRing?.(null); }
     if (this.centring) this.r.camera?.centerOnSelf();
     else if (this.viewing) { const a = this.allyBody(this.viewing.ally); if (a) this.r.camera?.focusOn(a.x, a.y); }
+  }
+  /**
+   * the auto attack switch (controls.autoAttack, ruling 61) reaches the sim as Command 'autoAttack': whenever the seat's
+   * value in the view differs from the setting it is sent (at most every AUTO_RESEND_MS while the command is in flight).
+   * A player who never turns it off sends nothing, so default matches keep their command streams and digests.
+   */
+  private syncAutoAttack(now: number): void {
+    const me = this.me;
+    if (!me) return;
+    const want = (this.settings.controls as ControlSettings).autoAttack !== false;
+    if ((me.autoAttack !== false) === want || now - this.autoSentAt < AUTO_RESEND_MS) return;
+    this.autoSentAt = now;
+    this.client.send({ type: 'autoAttack', on: want });
   }
   /** your basic attack's reach from your centre: stats.range + body radius (the ring and the attack-in-place line) */
   attackReach(b: EntityView): number { return Math.max(0.5, (this.me?.stats?.range ?? 0) + b.radius); }
@@ -471,6 +493,7 @@ export class InputController {
       case 'ping': this.openWheel(); break;
       case 'cameraLock': this.hooks.setCameraLock(this.r.camera?.mode !== 'locked'); break;
       case 'centerCamera': this.startCentre(); break;
+      case 'toggleAutoAttack': this.hooks.toggleAutoAttack?.(); break;
       default: break;
     }
   }
