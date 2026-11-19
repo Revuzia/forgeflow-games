@@ -182,6 +182,14 @@ export interface DifficultyProfile {
    *  a per-feature bisect put the round-1 package's pace cost (RIFT +1.2 / +2.0 / +2.3 min, 14 and 12 games in 64 reaching
    *  30:00 at adept and veteran) in the posts, at every structure class at once */
   readonly guardPosts: boolean;
+  // ── ruling 64 ──
+  /** RIFT base answer (team.ts thinkBaseAnswer): a base structure (a Lantern, a Bell Needle, the Hourbell) taking enemy
+   *  fighters' blows gets the nearest fit fighters within 80 m, as many as hit it (one more at the core), this many seconds
+   *  after the hits start; released 1.5 s after the hits stop (Infinity: off). Novice reads it late, 5 s, and not in the
+   *  closing game: every earlier or later novice answer measured cost pace */
+  readonly baseAnswerDelay: number;
+  /** ... and not from this game time on (s; Infinity: always) */
+  readonly baseAnswerUntil: number;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -207,6 +215,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     longshadeTtk: 0, crossTrade: false, objectiveEvenLate: 0.35, ccChain: 0, threatCc: false, adaptiveBuild: false, thirdParty: 0,
     punishInvade: 0, punishFrom: Infinity, punishDelay: 99, peelDive: 'none', holdWave: false, frayBreak: 0,
     coreAll: false, peelFirst: false, collapseRoads: false, closeOut: false, chaseQuit: Infinity, anticipates: false, turnLatch: 12, guardPosts: false,
+    baseAnswerDelay: 5, baseAnswerUntil: 1500,
   },
   // (CW3s r3, CL-1: adept's longest quiet stretch fell at 3:00-12:00 with the laners 9 m apart at 75 % health; deaths a minute run under veteran's from 5:00 to 13:00. It now contests an enemy start at a camp, the fight veteran's team takes there, and reads a kill as veteran does. A flat +0.08 on the trade edge was tried and dropped: stretch 3.2 min, takedowns by 10:00 7.15 -> 6.70. team.ts thinkGank and bot.ts's roam read widen for every tier: gaps at 8:00-12:00. Laning retreat bias -0.04: takedowns by 10:00 5.95 -> 6.50 on seeds 8101-8120. Untuned seeds 8501-8520 / 8701-8720: stretch 2.7 / 2.8 min, was 3.4 / 3.6)
   adept: {
@@ -221,6 +230,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
     punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: false, frayBreak: 0.2,
     coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true, turnLatch: 12, guardPosts: false,
+    baseAnswerDelay: 1, baseAnswerUntil: Infinity,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -234,6 +244,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
     punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: false, frayBreak: 0.25,
     coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true, turnLatch: 12, guardPosts: false,
+    baseAnswerDelay: 1, baseAnswerUntil: Infinity,
   },
 };
 

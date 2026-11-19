@@ -63,6 +63,13 @@ export interface Guard {
 export interface Entry { readonly x: number; readonly y: number; readonly lane: number; readonly thicket: number }
 
 export const TEAM_THINK_TICKS = 15;
+/** ruling 64, the base answer: a hit within this many seconds still counts as the structure being hit */
+const BA_HIT = 1.5;
+/** ... an answer holds this long after the last think that saw the hits (then the defenders go back to the plan) */
+const BA_HOLD = 1.5;
+/** ... defenders: above this share of health, within this many metres, and not in a fight of their own (an enemy fighter
+ *  this close to them, away from the structure) */
+const BA_HP = 0.6, BA_CAP = 80, BA_BUSY = 12;
 /** owner_rulings 44, round 2: seconds a defend call or an answer stands after its threat last showed */
 const DEFEND_STICK = 4;
 /** ruling 60: RIFT's calls do not stand on — with the walk latch (rulings 55/58) holding a calm fighter's turn, the 4 s stand-on
@@ -395,7 +402,8 @@ export class TeamBrain {
     const k = this.k, tp = this.perc, now = w.time, d = this.diff;
     // (ruling 60: posts are off at every tier — guardPosts — the measured cause of the round-1 package's pace cost; the code
     // stays for a later round that pays for it)
-    if (k.kind !== 'rift' || !d.guardPosts) { this.guard.clear(); return; }
+    // (ruling 64: with the posts off, a tier with a base answer still answers a base structure being hit — thinkBaseAnswer)
+    if (k.kind !== 'rift' || !d.guardPosts) { if (k.kind === 'rift' && d.baseAnswerDelay < Infinity && now < d.baseAnswerUntil) this.thinkBaseAnswer(w); else this.guard.clear(); return; }
     for (const [p, g] of this.guard) {
       const e = w.players[p]?.ent;
       // (a post whose structure has fallen is over at once: its defenders stood at the rubble while the next structure
@@ -583,6 +591,79 @@ export class TeamBrain {
       if (have < th.need) { short = true; break; }
     }
     if (short) for (const [p, g] of [...this.guard]) if (!valueOfPost.has(g.sid)) this.guard.delete(p);
+  }
+
+  /**
+   * Ruling 64 — the base answer (RIFT, while the posts are off): a base structure (a Lantern, a Bell Needle, the Hourbell)
+   * that enemy fighters are hitting — seen swinging at it, or its health dropping with them beside it — gets the nearest fit
+   * fighters within 80 m, as many as hit it × defendMatch (one more at the core). A wave alone is not answered: no tier holds
+   * a wave (holdWave), and a defender sent to one backs off it and stands beside the structure while it falls. The answer goes through the post machinery (execGuard) and ends 1.5 s
+   * after the hits stop: the posts' defendHold, the +1 at every base structure, the 'coming' read and the inner posts are
+   * what made the round-1 package's games long (ruling 62), and none of them is here.
+   */
+  private thinkBaseAnswer(w: World): void {
+    const tp = this.perc, now = w.time, d = this.diff;
+    // own structures' health is the owner's to know: a drop since the last think is a hit, seen or not
+    const hurt = new Set<number>();
+    for (const st of tp.allyStructs) {
+      if (!st.alive) continue;
+      const prev = this.structHp.get(st.id);
+      if (prev !== undefined && st.hp < prev - 1) this.structHitAt.set(st.id, now);
+      if (now - (this.structHitAt.get(st.id) ?? -1e9) <= BA_HIT) hurt.add(st.id);
+      this.structHp.set(st.id, st.hp);
+    }
+    for (const [p, g] of this.guard) {
+      const e = w.players[p]?.ent;
+      if (!e || !e.alive || e.hp < e.maxHp * 0.35 || now > g.until || !this.ownStanding(g.sid)) this.guard.delete(p);
+    }
+    const base = this.k.bases.find((b) => b.team === this.team);
+    for (const st of tp.allyStructs) {
+      if (!st.alive || !st.targetable) continue;
+      const info = this.structInfoOf(st);
+      if (!info || this.classOf(info) < 2) continue;
+      const reach = Math.max(9, info.range + info.radius + 6);
+      let hitting = 0, near = 0;
+      for (const f of tp.enemyFighters) {
+        if (!f.alive) continue;
+        if (f.atkTarget === st.id) hitting++;
+        if (sq(f.x - st.x) + sq(f.y - st.y) <= reach * reach) near++;
+      }
+      const isHurt = hurt.has(st.id);
+      const fighters = Math.max(hitting, isHurt ? near : 0);
+      const value = this.valueOf(info);
+      const need = fighters > 0 ? Math.max(1, Math.ceil((fighters + (value >= 4 ? 1 : 0)) * d.defendMatch - 1e-9)) : 0;
+      if (!this.held(`ba:${info.id}`, need > 0, now, Math.min(d.macroDelay, d.baseAnswerDelay)) || need === 0) continue;
+      let have = 0;
+      for (const g of this.guard.values()) if (g.sid === info.id) { have++; g.until = now + BA_HOLD; }
+      if (have >= need) continue;
+      const sreach = info.attacks ? Math.max(0, info.range + info.radius - 1) : 0;
+      let sx = st.x, sy = st.y;
+      if (base) {
+        const dx = base.fx - st.x, dy = base.fy - st.y, dd = dhypot(dx, dy) || 1;
+        const off = info.attacks ? Math.min(sreach * 0.5, 3.5) : info.radius + 1.5;
+        sx = st.x + (dx / dd) * off; sy = st.y + (dy / dd) * off;
+      }
+      const cand: { p: PlayerId; dd: number }[] = [];
+      for (const p of w.players) {
+        if (!p || p.team !== this.team || this.guard.has(p.player)) continue;
+        if ((this.guardDeclined.get(p.player) ?? -1) > now) continue;
+        const e = p.ent;
+        if (!e || !e.alive || e.hp < e.maxHp * BA_HP || e.stateOverride === 'recall') continue;
+        const dd = dhypot(e.x - st.x, e.y - st.y);
+        if (dd > BA_CAP) continue;
+        // (a fighter in a fight of its own elsewhere keeps it)
+        let busy = false;
+        if (dd > reach + 4) for (const f of tp.enemyFighters) if (f.alive && sq(f.x - e.x) + sq(f.y - e.y) <= BA_BUSY * BA_BUSY) { busy = true; break; }
+        if (busy) continue;
+        cand.push({ p: p.player, dd });
+      }
+      cand.sort((a, b) => a.dd - b.dd || a.p - b.p);
+      for (const c of cand) {
+        if (have >= need) break;
+        this.guard.set(c.p, { sid: info.id, x: st.x, y: st.y, standX: sx, standY: sy, reach: sreach, cls: 2, recall: false, until: now + BA_HOLD, since: now, why: value >= 4 ? 'core' : 'fight' });
+        have++;
+      }
+    }
   }
 
   /** owner_rulings 44: what a structure is worth defending — the Hourbell 5, its Bell Needles 4, a Lantern or other base

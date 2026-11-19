@@ -1107,3 +1107,81 @@ Defence and dither on s701-764 (`probe_sim_bot_tactics --diffs veteran --suites 
 - peel within 1.5 s (70.7 % against 75 %);
 - fit fighters standing off a hit base structure (9.6 s against 6);
 - FRAY low-health stays.
+
+## 64. A base structure being hit is answered by the nearest fit fighters, as many as hit it, and only while the hits last; a beginner team reads it 5 s late and not from 25:00 (lead, by delegation, 2026-11-19)
+
+Lane AI, base defence without a pace cost (orch1 W1-A opponents / W3-A), after `orch1/verify_ai_r6.json` (7.0, shipped as catalog 2026.11.14). Ruling 60 applies: one build and at most one fix round, and only player-visible things are hard bars. The goal was one thing: when a base structure is being hit, fit fighters who could reach it close in and fight. The hard constraint was pace within noise of the pre-lane bots (0aeac587b) at every tier, with no more games reaching 30:00 than pre. Genre practice in VALE's own terms; League of Legends was a gauge only.
+
+**Method.** One tree, no worktree. `VALE_BOTS` pointed at git-archive copies of the bots at pre (0aeac587b), the live ship's opponents (e2c4925e5) and HEAD (65bc15aaf). The arms of the new code read knobs from an environment variable while they were being screened; the knobs were then fixed in code. All copies were deleted afterwards. The tool was `_harness/probe_sim_bot_tactics.ts --suites rift`, both teams at one tier, cut at 30:00, paired by seed, on s701-764 (n 64) and s801-832 (n 32). Results are mean ± paired SE. "Fit and away" is the probe's gate: fit fighters 25-80 m from a base structure under fighter attack, not closing in, with no enemy fighter within 12 m, in seconds a game.
+
+**Decided (src/sim/bots, team.ts `thinkBaseAnswer`, difficulty.ts `baseAnswerDelay` / `baseAnswerUntil`).** The posts stay off (ruling 62). In their place, on RIFT, a base structure (a Lantern, a Bell Needle or the Hourbell) that enemy fighters are hitting gets an answer. "Hitting" means a visible enemy fighter swinging at it, or the structure's own health dropping with enemy fighters beside it.
+- **Who goes:** the nearest fighters within 80 m that are above 60 % health, not recalling and not in a fight of their own. A fighter counts as in its own fight when an enemy fighter is within 12 m of it away from the structure.
+- **How many:** as many as there are attackers × the tier's defendMatch, plus one at the Hourbell or a Bell Needle.
+- **How:** it runs through the posts' own movement (`execGuard`): stand on the home side inside the structure's reach and fight the attacker under it.
+- **When it ends:** 1.5 s after the last think that saw the hits. A defender that has not turned to the call 2 s after it was given hands it on, as before.
+- **Left out, because ruling 62 measured them as the pace cost:**
+  - defendHold's 4-6 s stand-on;
+  - the +1 defender at every inner and base structure;
+  - the 'coming' read of fighters near the road's front;
+  - recall-to-defend;
+  - inner and outer posts.
+- **A wave alone is not answered.** No tier holds a wave (`holdWave` is off at every tier), and a defender sent to a stacked wave backs off it and stands beside the structure while it falls (ruling 55).
+- **By tier:**
+  - Adept and veteran answer 1 s after the hits start (their macroDelay or 1 s), at any game time.
+  - Novice answers 5 s after the hits start, and not from 25:00. A beginner team reads the hit late. In the closing game, every novice answer measured kept the base alive into a 30:00 stall.
+- FRAY and BRIDGE are byte-identical to HEAD: 16 of 16 games a tier on s701-708 for both modes. Before 14:00 a base structure is rarely hit, so laning is unchanged.
+
+**Measured on the final code.** The final `src/sim/bots` reproduces the screened arm game for game on s801-832 (96 of 96).
+
+Pace, new − pre, minutes, paired (cut = games reaching 30:00, new / pre):
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| s701-764 | +0.85 ± 0.62, cut 6 / 6 | −0.28 ± 0.49, cut 2 / 2 | −0.16 ± 0.53, cut 3 / 4 |
+| s801-832 | −0.86 ± 0.80, cut 1 / 3 | −0.89 ± 0.78, cut 2 / 2 | −0.05 ± 0.80, cut 0 / 0 |
+| **pooled, n 96** | **+0.28 ± 0.50, cut 7 / 9** | **−0.48 ± 0.42, cut 4 / 4** | **−0.12 ± 0.44, cut 3 / 4** |
+| new − HEAD, pooled | +0.18 ± 0.23 | −0.32 ± 0.26 | −0.30 ± 0.16 |
+| new − live e2c, pooled | −1.87 ± 0.48 | −2.38 ± 0.41 | −1.61 ± 0.46 |
+
+Base defence, pooled n 96. Columns are pre / live e2c / HEAD / new:
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| Fit and away from a hit base structure (s a game) | 33.1 / 9.2 / 41.0 / **28.7** | 13.0 / 3.1 / 11.5 / **6.6** | 14.6 / 3.2 / 9.6 / **4.5** |
+| Base structure falls a game | 6.25 / 6.16 / 6.38 / 6.28 | 6.50 / 6.54 / 6.86 / 6.76 | 6.58 / 5.57 / 6.22 / 6.18 |
+| Unanswered base intrusions a game | 1.98 / 1.36 / 1.97 / 1.99 | 0.94 / 0.40 / 1.21 / 1.25 | 1.61 / 0.48 / 0.72 / 0.66 |
+| Inner+base falls to Wicks beside fit defenders | 0.58 / 1.08 / 0.53 / 0.64 | 1.14 / 1.12 / 0.75 / 0.76 | 0.92 / 1.44 / 0.95 / 0.90 |
+| Idle within 25 m of a sieged structure (s) | 10.9 / 13.4 / 7.5 / 7.4 | 6.7 / 16.4 / 4.5 / 3.1 | 6.9 / 13.2 / 4.8 / 5.4 |
+| Dither (bars 3 / 1.5 / 1) | 4.97 / 5.08 / 2.60 / 2.56 | 2.46 / 2.15 / 1.54 / 1.50 | 5.21 / 4.07 / 2.17 / 2.04 |
+| Laners in lane 1:00-14:00 | 77.4 / 76.4 / 77.2 / 77.2 % | 68.4 / 66.9 / 68.1 / 68.1 % | 67.3 / 65.6 / 67.0 / 67.0 % |
+
+- **The goal, met at adept and veteran.** Fit and away, new − HEAD: −4.9 ± 1.2 s at adept and −5.1 ± 0.9 s at veteran. That brings them from 3-4x live to 2.1x (adept) and 1.4x (veteran), with no pace cost: both tiers are slightly shorter than HEAD. Veteran meets the probe's 6 s gate on both seed sets (4.7 and 4.2).
+- **Novice, partly.** Fit and away falls 12.3 ± 2.9 s from HEAD, to about pre's level (28.7 against 33.1). It is still 3x live (9.2). Every novice design that went further cost pace (below).
+- **Laning, dither, FRAY and BRIDGE did not get worse.** Laning is the same to the decimal. Dither is −0.04 to −0.13 against HEAD. FRAY and BRIDGE are byte-identical.
+- **Gates.** `probe_sim_bot_tactics` at default seeds fails 7 (HEAD 8). Veteran fit and away now passes. Novice fit and away still fails (29.8 against 25). The other fails are unchanged items: adept dither 1.58 (HEAD 1.54), veteran dither 1.54, the veteran undefended inner+base siege share 21.6 % (HEAD 23.6 %), veteran peel within 1.5 s 69.7 %, and FRAY stays at adept and veteran. `probe_sim_bot_soak` quick: PASS.
+
+**Worse, said plainly.**
+- Novice pace is +0.18 ± 0.23 min against HEAD (pooled), and +0.35 ± 0.31 on s701, where it reads +0.85 ± 0.62 against pre. It is within noise of pre, and the cut count is 7 against pre's 9, but it is the one tier that pays something.
+- Unanswered base intrusions did not move: +0.62 / +0.85 / +0.18 a game against live at novice / adept / veteran. The probe counts an intrusion as any enemy fighter within 20 m of a base structure, hitting or not. An answer to the hits does not reach the ones that walk in and do not hit.
+- Veteran base structures still fall +0.60 ± 0.17 a game more often than live (HEAD +0.65). Live's lower number came with its inner and 'coming' posts, and with +1.5 min games.
+
+**Tried and not kept** (s701, against HEAD):
+- **Novice at adept's settings (1 s, any time):** +1.02 ± 0.36 min, cut 12 against 5, fit and away 19.5.
+- **Novice with one setting changed:**
+  - 5 s read: +0.55, cut 7;
+  - not from 25:00: +0.67, cut 7;
+  - not from 20:00, 5 s read: +0.26, cut 7, fit and away only −6.5;
+  - Lanterns only: +0.40, cut 6;
+  - core only: +0.52, cut 9;
+  - no core +1: +0.69, cut 9;
+  - 45 m reach: +0.68, cut 10;
+  - only fighters above 80 % health: +0.60, cut 8.
+  - The novice cost scales with how much the novice team defends: a defended beginner base turns a lost game into a 30:00 one.
+- **Adept and veteran, +1 defender at every base structure:** no change in fit and away (6.5 / 4.6) or in unanswered intrusions (1.38 / 0.59), so it is not kept.
+- **Adept and veteran, also answering enemy fighters standing beside a base structure without hitting it:** adept +0.86 ± 0.31 min against this build, cut 10 against 4, and unanswered intrusions no better (1.33). Not kept.
+
+**Open:**
+- unanswered intrusions against live at novice and adept;
+- veteran base falls against live;
+- novice fit and away (3x live);
+- the earlier open items, not worked here: veteran peel, sneak attacks, FRAY stays.
