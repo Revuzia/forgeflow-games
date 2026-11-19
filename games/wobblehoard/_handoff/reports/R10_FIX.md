@@ -76,3 +76,23 @@ the ball, the log and the pool.
 tsc clean. node_checks 185/185; probe_app 188/188; probe_playground --quick 74/74; probe_pg_lifequests 16/16; probe_chatter 42/42; probe_life 127 ok / 1 (LF-02,
 known); probe_r8_features 9/9; renderview pg_node_checks 40/0; probe_pg_data 44 ok / 1 (DT-18 silhouette, known); probe_quests all run ok (3 NOT RUN, as before);
 probe_journal all; probe_trophies 31/31; probe_merge 22/22; probe_gestures 160/160. probe_life_selfuse (full, with SU-04): see below.
+
+**probe_life_selfuse, full default run on this tree (`S/su_full.log`, 37 min on a loaded machine; the unstick detour of item 2 was edited in after it started)**:
+SQ-01 x2 ok; **SU-01 ok at all six places, 5 of 5 parties** (min / median / max: Hearthlog 5/5/6, Ripple 3/4/5, Frostbell 5/5/6, Rainleaf 3/4/5, Lanternroof 4/4/5,
+Cloudloft 3/4/4; R9's were 5/5/6, 3/3/4, 4/5/5, 3/5/5, 3/4/5, 3/4/4); SU-02 6 of 6; SU-03 ok (most 7 episodes, host records at most 10). **SU-04 (new): 16 of 24 ok, 8 FAIL**:
+| place | tall low | wide low | tall high | wide high |
+|---|---|---|---|---|
+| Hearthlog | 4 | 4 | **2** | 6 |
+| Ripple | 3 | **2** | 3 | 3 |
+| Frostbell | **2** | 4 | **2** | 4 |
+| Rainleaf | 3 | 4 | **2** | 3 |
+| Lanternroof | 4 | **2** | 5 | 4 |
+| Cloudloft | **2** | 3 | **2** | 4 |
+(Hearthlog is untouched by this round: the cabin keeps round 8's LIFE and the host's old rule, so its tall-high 2 is the existing behaviour.) Item 1 stays OPEN: the
+owner's bar is not met in node at 180 s, and no browser run was made this round (it would only confirm the node failures).
+
+## Files changed
+src/shell/later-life.ts (turn rule, excess counted by what a sleep frees, idle before walker, pushed body spared, unstick detour, dev debug scoot/hush);
+src/life/world.ts (lifeWaitsTurn, lifeBusy, lifeUsesOf); src/life/step.ts (exports; lifeDebug `wait`); src/render/places/cloudloft.ts (archTube for the Sunbow Arch);
+vite.config.ts (T1 gate); _harness/probe_life_selfuse.ts (frame=, tier=, SU-04, SQ-01 pool per layout); this report.
+No process of mine is left running.
