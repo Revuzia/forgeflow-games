@@ -2723,3 +2723,49 @@ Full report: `MAC-ROUND18-water.txt`; shots `mac-shots/r18w-22..26.jpg`. P = sce
   wfast=3 can be default.
 - fogwater=0 brings back the pale hill + kelp trunks: fogwater fix confirmed again.
 - Not covered: river, storm (none in view); pond pair not clean (clock differed).
+
+## SESSION 25b (water wfast=3, Mac round 18 fixes) (2026-11-19, WATER agent) — seam, beach foam, reflection cost
+All in src/render/planet/oceanfast.ts (+ the s25 hook call in ocean.ts now passes the level's `morph` uniform). Default
+water untouched; every change sits inside wfast=3 with an A/B token in `?wshade3=`: `seamold`, `foamold`, `ssrold`.
+Debug views: `wshade3=spdbg` (R tile-B amplitude, G / B short / long Gerstner variance the lattice keeps),
+`wshade3=spdbg2` (R fract(spacing estimate), G the 5.3 m wave's kept share, B tile-A amplitude).
+### 1. THE SEAM — cause and fix
+- CAUSE: per-vertex terms that the LOD lattice cannot carry, so they change across a patch border:
+  (a) the long waves' GROUP NOISE (gwGroupAt: snoise of P x 0.035 / x 0.09, blobs of ~14 / ~5 m) evaluated per vertex.
+      On a coarse patch (vertices tens of metres apart) it is a few random samples, interpolated; on the fine patch
+      beside it the blobs are drawn. The waves' amplitude, tile-B amplitude, roughness, so the glitter and the
+      mirrored clouds, all differ across the border: "brightness + speckle change across a hard line". Default water
+      evaluates that noise per pixel: no seam.
+  (b) the lattice-spacing estimate uMorph.z / 1.5 x (1 + tMorph): uMorph.z = max(1.5, 1.5 spacing) clamps for every
+      level finer than 1 m, so two fine levels disagreed 2 m / 1 m along their border.
+- PROOF (SwiftShader 480x270, full scene, wclock=100, surface cam y25 = 17.87588 / -35.0, alt 60, yaw 20, pitch -28):
+  `spdbg` with seamold (s26-dbgold-y25.png): hard stair-stepped straight edge across the sea at y~175 and another at
+  the right; with (b) fixed only (s26-dbgnew-y25.png) the edge stays; `spdbg2` (s26-dbg2-y25.png) shows the new spacing
+  estimate and the kept shares SMOOTH (concentric rings), so (a) is the edge; with (a) + (b) fixed (s26-dbg9-y25.png) no
+  edge anywhere. Sheet: shots/sheet-seam-debug.png (before | after, LOOKED). Shaded picture before / after:
+  sheet-seam-before-after.png (y25, contrast-stretched + |d| x8): mean|d| 1.86, mean RGB equal to 0.04: the fix changes
+  nothing but the border (at 480x270 in this run's haze the seam itself is faint in the shaded image; the debug field
+  is the decisive picture).
+- FIX: (b) spacing = the LOD selection distance (silhouette-boosted, as chunks.ts) / (K R), with 1/(K R) = 2 spacing(L) /
+  uMorph.x(L) read from any level whose uMorph.z is not clamped (a uniform getter over all water levels' morph uniforms):
+  continuous across borders, equal to the old bound at the full-morph distance. (a) each group-noise term fades to its
+  mean where the lattice cannot carry it (smoothstep 3-6 m and 1.2-2.5 m of spacing); the wave gradients are dropped
+  below ~5 vertices a wavelength (0.12 L - 0.25 L, was 0.2 - 0.4 L), their slope variance going to tile B as before.
+### 2. BEACH FOAM (`foamold` = s25)
+- The Mac's sand edge: s25 drew a thin even line where the original breaks into short bright dashes. Same cause as the
+  storm lace: a Perlin cell reads ~2x a simplex cell of the same lattice. Moved one octave finer: surf streaks 4 -> 2 m,
+  the band edge 2 -> 1 m, lace l1 / l2 1 / 0.5 -> 0.5 / 0.25 m; whitecap tile 48 -> 24 m (the s25 open item).
+- All of these are in dist8 / dist9 (the probe builds below). At 480x270 the surf band is a soft line either way:
+  SwiftShader cannot show the Mac's 1-2 px dashes; judge on the Mac.
+### 3. REFLECTION COST (`ssrold` = s25 loop)
+- SSR restructured with the SAME samples and tests: depth taps by texelFetch (the depth copy is NEAREST: identical
+  values) instead of texture() with implicit derivatives inside a data-dependent loop; the 20 samples fetched 4 at a time
+  (positions depend only on the index, so the loads overlap) and tested in order; bisection + reprojection hoisted out
+  of the loop (once per pixel, not compiled into every iteration). The mirrored deck is 1 cube tap + 1 ray-sphere: not
+  touched.
+- EQUALITY (s26-ssrold-* vs s26-fin-*, same build dist9, same view order): water-only boxes mean|d| 1.63 / 1.51 / 1.51
+  (y0 / y25 / shoreC), pixels over 8/255: 10 of 57 600 / 1 of 45 600 / 0 of 22 500. The rest of the frame differs by
+  swaying leaves on land and a uniform post grain (the run-to-run floor). Identical to the eye.
+- NIGHT (view `night` as the run's FIRST view, so the hour holds; s26-n-B / -O / -A): new SSR vs ssrold water box mean|d|
+  0.85, 0 px over 8/255 (identical; the full-frame difference is the animated sky). wfast=3 vs default at night: equal,
+  palm reflections a touch crisper in wfast=3 (sheet: s26-n-A-night | s26-n-B-night, LOOKED).
