@@ -2704,7 +2704,7 @@ export const CONTAINER_TINTS = [[0x2f4f7a, 4], [0x1f3a5c, 3], [0x2e5a3c, 2.5], [
 /** (W10 R4B item 1) a home's yard dressing by theme: the front run (fence / hedge, gap at the path), the small props inside the run (<= 0.36 m half-depth: they keep 1.5 m off
  *  the door path in a 4 m front yard) and the side-yard props (beside the house, only where a 1.2 m passage stays open). All CC0 (art_b_city.py YARD). */
 export const YARD_TYPES = ["props/yard-fence", "props/yard-hedge", "props/yard-path", "props/yard-bench", "props/yard-log", "props/yard-barrel", "props/yard-bucket", "props/yard-boat",
-  "props/yard-parasol", "props/yard-mailbox", "props/yard-cart", "props/yard-grass", "props/yard-woodpile", "props/yard-ac"];
+  "props/yard-parasol", "props/yard-mailbox", "props/yard-cart", "props/yard-grass", "props/yard-woodpile", "props/yard-ac", "props/yard-tree", "props/yard-palm", "props/yard-pine"];
 const YARD_RUN = { fence: ["props/yard-fence", 2.0, 0.075], hedge: ["props/yard-hedge", 1.8, 0.36] };      // [type, module length, half thickness]
 // small front props: [type, half extent along the run (t), half extent across (s), rot offset from facing the street]
 const YARD_SMALL = { mailbox: ["props/yard-mailbox", 0.271, 0.09, 1], bucket: ["props/yard-bucket", 0.216, 0.216, 0], barrel: ["props/yard-barrel", 0.355, 0.355, 0], bin: ["furniture/trashcan", 0.23, 0.26, 0] };
@@ -2716,7 +2716,9 @@ const YARD_THEME = {
   lodge: { run: ["fence"], small: ["barrel", "bucket", "mailbox"], side: ["log", "boat", "cart", "woodpile", "bench"] },
   city: { run: ["hedge", "fence"], small: ["mailbox", "bin", "mailbox"], side: ["bench", "ac", "ac"] },
 };
-export const YARD_PATH_CLEAR = 1.5;     // m every yard prop keeps off the door path (the front walk and the stem) - the w10_yards clear-doors bar
+// (W10 R4B pass 3) the yard tree by theme: [type, radius = the half-diagonal of its citykit pole box (the clear-doors bar measures the box)]
+const YARD_TREE = { resort: ["props/yard-palm", 0.8], lodge: ["props/yard-pine", 0.51], city: ["props/yard-tree", 0.51] };
+export const YARD_PATH_CLEAR = 1.5;    // m every yard prop keeps off the door path (the front walk and the stem) - the w10_yards clear-doors bar
 export const YARD_RUN_INSET = 0.3;      // m: a boundary run stands this far inside its lot's -t line
 /** (W10 R4B items 1-2) the yard dressing of a grid town's homes, as streetProps entries (kind "fence" | "path" | "yard"); its own sub-stream "yard2", six draws per home whatever is
  *  placed (nothing else in the layout moves). The door path: a walk of path stones along the whole facade (the housegen front door is somewhere on it) and a stem from it to the run's gap. */
@@ -2774,6 +2776,26 @@ function yardDressing(L, seed, add, out, homes) {
     if (gap >= 2 * spr[1] + 1.2 + 0.3) {
       const t = dir < 0 ? tL + 0.15 + spr[1] : tR - 0.15 - spr[1], q = W(sB - 2.7 - spr[2], t);
       add(spr[0], q[0], q[1], fz ? 1 : 0, "yard", Math.max(spr[1], spr[2]));
+    }
+  }
+  // (W10 R4B pass 3) a tree per home where one fits (a palm in a resort, a pine at a lodge, a round broadleaf in a city): first in the front yard near its street edge,
+  // else on the verge of the 3 m sidewalk in front of the lot (trunk centre 2.1-2.25 m out from the lot line, its box inside the curb), each trunk >= DOOR_SWING +
+  // YARD_PATH_CLEAR off every wall and YARD_PATH_CLEAR off the door path and the gate's apron (add -> doorClear), 0.6 m clear of a street light or any other prop (add ->
+  // clear). Placed before the ground cover so a tuft gives way to a trunk; its own sub-stream "yard4", two draws per home whatever is placed.
+  const tr = subRng(seed === undefined ? L.seed : seed, L.id, "yard4");
+  const tree = YARD_TREE[L.theme] || YARD_TREE.city;
+  for (const h of homes) {
+    const e0 = tr(), e1 = tr();
+    const { W, sF, tL, tR, tc } = h, face = faceIdx(h.fx, h.fz), r = tree[1];
+    const cands = [];
+    const yt = [tR - 0.3 - r, tL + YARD_RUN_INSET + 0.36 + 0.6 + r, (tc + tR) / 2, (tL + tc) / 2];
+    if (e0 < 0.5) { yt.push(yt.shift()); yt.push(yt.shift()); }                       // half the homes try the -t side first
+    if (h.yard) for (const t of yt) if (t - r >= tL + YARD_RUN_INSET + 0.36 + 0.3 && t + r <= tR - 0.2) cands.push([sF - 0.2 - r - 0.25 * e1, t]);
+    const sV = sF + 2.95 - r - 0.15 * e1, dV = 0.6 + YARD_PATH_CLEAR + r + 0.05;          // the verge: off the gate's apron (1.2 m wide, at tc)
+    for (const t of e0 < 0.5 ? [tc - dV - 0.6, tc + dV + 0.6, tL + 0.5, tR - 0.5] : [tc + dV + 0.6, tc - dV - 0.6, tR - 0.5, tL + 0.5]) cands.push([sV, t]);
+    for (const c of cands) {
+      const q = W(c[0], c[1]);
+      if (add(tree[0], q[0], q[1], (face + Math.floor(e1 * 4)) % 4, "yard", r)) break;
     }
   }
   // (W10 R4B pass 2) ground cover: grass tufts (no collider, under the body band) along the street edge of each front yard, either side of the gate, and in the side

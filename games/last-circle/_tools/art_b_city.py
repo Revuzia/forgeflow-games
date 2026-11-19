@@ -238,6 +238,10 @@ YARD = [
     ("yard-grass", YARD_SRC["survival"] / "grass-large.glb", "survival", 2.0, "grass", "none", 0, "Kenney Survival Kit 2.0 (CC0): grass-large"),
     ("yard-woodpile", YARD_SRC["survival"] / "resource-wood.glb", "survival", 4.6, "woodpile", "none", 1, "Kenney Survival Kit 2.0 (CC0): resource-wood"),
     ("yard-ac", SRC / "props" / "ac-unit-quaternius.glb", "quaternius_atlas", 1.0, "ac", "footprint", 0, "AC unit by Quaternius via Poly Pizza (CC0), cc0-city props/ac-unit-quaternius"),
+    # (W10 R4B pass 3) a yard tree per home, by theme: a round broadleaf (city), a palm (resort), a tall pine (lodge); pole colliders (the trunk; the canopy is overhead, as a street light's arm)
+    ("yard-tree", YARD_SRC["fantasytown"] / "tree-high-round.glb", "fantasytown", 2.2, "tree", "pole", 0, "Kenney Fantasy Town Kit 2.0 (CC0): tree-high-round"),
+    ("yard-palm", YARD_SRC["pirate"] / "palm-straight.glb", "pirate", 1.5, "tree", "pole", 0, "Kenney Pirate Kit 2.0 (CC0): palm-straight"),
+    ("yard-pine", YARD_SRC["survival"] / "tree-tall.glb", "survival", 3.4, "tree", "pole", 0, "Kenney Survival Kit 2.0 (CC0): tree-tall"),
 ]
 CARS = [(n, "car", 1.7 if n not in ("delivery",) else 1.6) for n in
         ["sedan", "suv", "taxi", "police", "van", "hatchback-sports", "truck", "delivery"]]
