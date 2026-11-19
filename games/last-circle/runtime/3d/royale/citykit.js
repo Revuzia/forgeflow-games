@@ -133,6 +133,7 @@ const COLLIDER_BOXES = Object.freeze({
   "props/yard-bench": [-0.897,0,-0.506,0.897,1.169,0.506],
   "props/yard-boat": [-1.787,0,-1.542,1.787,1.102,1.542],
   "props/yard-bucket": [-0.216,0,-0.216,0.216,0.576,0.216],
+  "props/yard-cart": [-0.714,0,-1.072,0.714,0.857,1.072],
   "props/yard-fence": [-1,0,-0.075,1,0.76,0.075],
   "props/yard-hedge": [-0.9,0,-0.36,0.9,1.08,0.36],
   "props/yard-log": [-1.2,0,-0.299,1.2,0.665,0.299],

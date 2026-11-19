@@ -637,7 +637,9 @@ function fitArch(rng, key, fw, fd, minFloors, grow) {
   if (!fit.length) return null;
   fit.sort((p, q) => q[0] * q[1] - p[0] * p[1]);
   let dm = fit[Math.min(fit.length - 1, rng() < 0.6 ? 0 : 1)];
-  if (grow) dm = growDims(rng, key, A, dm, fw, fd);
+  // (W10 R4B item 2) a home does not GROW into its front yard: its depth grows only as far as leaves YARD_FRONT before it and YARD_BACK_KEEP behind it (the size it
+  // fits at, 10 x 10 m and up, is unchanged - a lot with no spare depth keeps the old setback)
+  if (grow) dm = growDims(rng, key, A, dm, fw, A.use === "house" ? fd - (YARD_FRONT + YARD_BACK_KEEP - FRONT_SETBACK - BACK_MARGIN) : fd);
   let cap = Math.min(MAX_FLOORS, maxFloorsFor(dm[0], dm[1]));
   if (grow && A.gen === "tower" && dm[0] < 15) cap = Math.min(cap, 2);                  // (city: a 12.5 m tower() of three storeys climbs its roof ramp at 44.4 degrees and a sprint down it mantles: two storeys there)
   let fl = A.floors.filter((f) => f <= cap);
@@ -669,8 +671,23 @@ function paletteFor(rng, theme, big) {
   return { key: e[0], variant: pick(rng, e[1]) };
 }
 /** build the parcel record (and its interior) for an archetype placed in `rect` */
+/** (W10 R4B item 2) a home's front yard: how far past FRONT_SETBACK a house stands back from the street, so its lot has a 3-4 m front garden (fence, door path) and still keeps
+ *  YARD_BACK_KEEP of back yard (back-to-back homes >= 5 m apart: housegen's DOOR_OUT 4 m back-door approach past its 0.3 m neighbour pad). The archetype that fits is chosen BEFORE (fitArch / room() with the
+ *  old setback), so the set of buildings, their sizes and interiors are unchanged: only where they stand in their lots moves. A lot with no spare depth keeps the old 1.2 / 1.5 m. */
+export const YARD_FRONT = 4.0, YARD_BACK_KEEP = 2.5;
+export const YARD_MIN_FRONT = 3.0;      // m of front yard a home needs for its run and path (less: an old 1.2 / 1.5 m lot, left as it was)
+function frontYardExtra(rect, fx, fz, d) {
+  const spare = (fz !== 0 ? rect[3] - rect[1] : rect[2] - rect[0]) - d;            // front + back yard together
+  if (spare < YARD_MIN_FRONT + BACK_MARGIN - 1e-6) return 0;                       // (a shallow lot: the old setback)
+  // the front yard first (>= YARD_MIN_FRONT, the back keeps at least the old BACK_MARGIN), then up to YARD_FRONT while the back keeps YARD_BACK_KEEP
+  return Math.max(0, Math.min(YARD_FRONT, Math.max(YARD_MIN_FRONT, spare - YARD_BACK_KEEP)) - FRONT_SETBACK);
+}
 function makeBuildingParcel(S, rng, pid, blockId, rect, fx, fz, fit, theme, extra) {
   const frame = placeBuilding(rect, fx, fz, fit.w, fit.d, theme === "city" && fit.gen === "tower" ? RAMP_LANE : 0);
+  if (fit.use === "house" && !extra) {
+    const e = frontYardExtra(rect, fx, fz, fit.d);
+    frame.cx -= fx * e; frame.cz -= fz * e;
+  }
   const bd = { cx: r3(frame.cx), cz: r3(frame.cz), turn: frame.turn, w: fit.w, d: fit.d, floors: fit.floors, floorH: fit.fh, use: fit.use };
   const bb = aabbOf(bd, fit.w, fit.d);
   const big = fit.use === "midrise" || fit.use === "tower" || fit.use === "hall" || fit.use === "barn" || fit.use === "shop";
@@ -2682,7 +2699,110 @@ export const CAR_TINTS = [[0xf0f0ee, 3], [0xc7cbd0, 4], [0x8c929a, 3], [0x3a3e44
 export const TINTABLE_CARS = ["cars/sedan", "cars/suv", "cars/hatchback-sports", "cars/van", "cars/truck", "cars/delivery"];
 /** (P23) shipping-container liveries [sRGB hex, weight]: the shipping lines' blues, a deep green, a rust red, an orange, a mustard, a cream, a grey - weathered, never saturated toys */
 export const CONTAINER_TINTS = [[0x2f4f7a, 4], [0x1f3a5c, 3], [0x2e5a3c, 2.5], [0x8a3226, 3.5], [0xb2582a, 2], [0xb08a2e, 1.5], [0xc9c2ad, 1.5], [0x6d7276, 2], [0x5e2a3a, 1]];
-const LIGHT_OFFSET = 6.4;       // m from a street centreline: the middle of the 3 m sidewalk (5 .. 8)
+/** (W10 R4B item 1) a home's yard dressing by theme: the front run (fence / hedge, gap at the path), the small props inside the run (<= 0.36 m half-depth: they keep 1.5 m off
+ *  the door path in a 4 m front yard) and the side-yard props (beside the house, only where a 1.2 m passage stays open). All CC0 (art_b_city.py YARD). */
+export const YARD_TYPES = ["props/yard-fence", "props/yard-hedge", "props/yard-path", "props/yard-bench", "props/yard-log", "props/yard-barrel", "props/yard-bucket", "props/yard-boat",
+  "props/yard-parasol", "props/yard-mailbox", "props/yard-cart"];
+const YARD_RUN = { fence: ["props/yard-fence", 2.0, 0.075], hedge: ["props/yard-hedge", 1.8, 0.36] };      // [type, module length, half thickness]
+// small front props: [type, half extent along the run (t), half extent across (s), rot offset from facing the street]
+const YARD_SMALL = { mailbox: ["props/yard-mailbox", 0.271, 0.09, 1], bucket: ["props/yard-bucket", 0.216, 0.216, 0], barrel: ["props/yard-barrel", 0.355, 0.355, 0], bin: ["furniture/trashcan", 0.23, 0.26, 0] };
+// side props (long side along the house's depth): [type, half width across the side yard, half length along it]
+const YARD_SIDE = { bench: ["props/yard-bench", 0.506, 0.897], log: ["props/yard-log", 0.299, 1.2], parasol: ["props/yard-parasol", 0.96, 0.96], boat: ["props/yard-boat", 1.542, 1.787],
+  cart: ["props/yard-cart", 0.7, 1.07] };
+const YARD_THEME = {
+  resort: { run: ["hedge"], small: ["mailbox", "bucket", "mailbox"], side: ["parasol", "bench", "parasol"] },
+  lodge: { run: ["fence"], small: ["barrel", "bucket", "mailbox"], side: ["log", "boat", "cart", "log", "bench"] },
+  city: { run: ["hedge", "fence"], small: ["mailbox", "bin", "mailbox"], side: ["bench"] },
+};
+export const YARD_PATH_CLEAR = 1.5;     // m every yard prop keeps off the door path (the front walk and the stem) - the w10_yards clear-doors bar
+export const YARD_GAP = 2.6;            // m: the gap in a front run at the path (the 1.2 m path + 0.7 m a side)
+/** (W10 R4B items 1-2) the yard dressing of a grid town's homes, as streetProps entries (kind "fence" | "path" | "yard"); its own sub-stream "yard2", six draws per home whatever is
+ *  placed (nothing else in the layout moves). The door path: a walk of path stones along the whole facade (the housegen front door is somewhere on it) and a stem from it to the run's gap. */
+function yardHomes(L) {
+  const H = [];
+  for (const p of L.parcels) {
+    const b = p.building;
+    if (p.use !== "house" || !b || b.gen === "shell") continue;
+    const fx = p.facing[0], fz = p.facing[1], lx = fz ? 1 : 0, lz = fz ? 0 : 1, r = p.rect, a = b.aabb;
+    const S = (x, z) => x * fx + z * fz, T = (x, z) => x * lx + z * lz, W = (s, t) => [s * fx + t * lx, s * fz + t * lz];
+    const sF = Math.max(S(r[0], r[1]), S(r[2], r[3])), sB = Math.max(S(a[0], a[1]), S(a[2], a[3]));
+    const tL = Math.min(T(r[0], r[1]), T(r[2], r[3])), tR = Math.max(T(r[0], r[1]), T(r[2], r[3])), bL = Math.min(T(a[0], a[1]), T(a[2], a[3])), bR = Math.max(T(a[0], a[1]), T(a[2], a[3]));
+    const h = { p, b, fx, fz, lx, lz, W, sF, sB, tL, tR, bL, bR, tc: (bL + bR) / 2, yard: sF - sB >= YARD_MIN_FRONT - 1e-6, tiles: [] };
+    if (h.yard) {
+      // the door path: the facade walk (1.2 m stones, centred on the facade: the housegen front door is somewhere on it) and the stem to the street
+      const nW = Math.max(1, Math.floor((bR - bL) / 1.2 + 1e-6));
+      for (let k = 0; k < nW; k++) h.tiles.push(W(sB + 0.6, h.tc + (k - (nW - 1) / 2) * 1.2));
+      const s0 = sB + 1.8, s1 = sF - 0.8, nS = s1 > s0 ? Math.ceil((s1 - s0) / 1.2 - 1e-6) + 1 : 1;
+      for (let k = 0; k < nS; k++) h.tiles.push(W(nS > 1 ? s0 + (s1 - s0) * k / (nS - 1) : s0, h.tc));
+    }
+    H.push(h);
+  }
+  return H;
+}
+function yardDressing(L, seed, add, out, homes) {
+  const yr = subRng(seed === undefined ? L.seed : seed, L.id, "yard2");
+  const TH = YARD_THEME[L.theme] || YARD_THEME.city;
+  const push = (type, x, z, rot, kind) => out.push({ type, x: r3(x), z: r3(z), rot, kind });
+  for (const h of homes) {
+    const d0 = yr(), d1 = yr(), d2 = yr(), d3 = yr(), d4 = yr(), d5 = yr();          // six draws per home whatever is placed
+    if (!h.yard) continue;
+    const { fx, fz, lz, W, sF, sB, tL, tR, bL, bR, tc } = h;
+    const face = faceIdx(fx, fz), along = lz ? 1 : 0;                                   // along: the rot that lays a piece's local X along the frontage (rot 1: local X -> world Z)
+    for (const q of h.tiles) push("props/yard-path", q[0], q[1], 0, "path");
+    // the front run, 0.4 m inside the lot line, open at the path
+    const run = YARD_RUN[TH.run[Math.floor(d0 * TH.run.length)]], sR = sF - 0.4;
+    for (const [u0, u1] of [[tL + 0.3, tc - YARD_GAP / 2], [tc + YARD_GAP / 2, tR - 0.3]]) {
+      const n = Math.floor((u1 - u0) / run[1] + 1e-6);
+      for (let k = 0; k < n; k++) { const q = W(sR, u0 + (u1 - u0 - n * run[1]) / 2 + run[1] * (k + 0.5)); push(run[0], q[0], q[1], along, "fence"); }
+    }
+    // one or two small props inside the run, >= YARD_PATH_CLEAR off the walk and the stem
+    const sIn = sR - run[2] - 0.05;
+    const slots = d1 < 0.55 ? [-1, 1] : [d2 < 0.5 ? -1 : 1];
+    for (const side of slots) {
+      const sp = YARD_SMALL[TH.small[Math.floor((side < 0 ? d2 : d3) * TH.small.length)]];
+      const sc = sIn - sp[2];
+      if (sc - sp[2] < sB + 1.2 + YARD_PATH_CLEAR) continue;
+      const tMin = 0.6 + YARD_PATH_CLEAR + sp[1], tMax = (side < 0 ? tc - tL : tR - tc) - 0.3 - sp[1];
+      if (tMax < tMin) continue;
+      const q = W(sc, tc + side * (tMin + (tMax - tMin) * d4));
+      add(sp[0], q[0], q[1], (face + sp[3]) % 4, "yard", Math.max(sp[1], sp[2]));
+    }
+    // a side-yard prop beside the house (a 1.2 m passage stays open between it and the house), 2.7 m behind the facade line (clear of a front door's swing + 1.5 m)
+    const spr = YARD_SIDE[TH.side[Math.floor(d5 * TH.side.length)]], dir = d3 < 0.5 ? -1 : 1;
+    const gap = dir < 0 ? bL - tL : tR - bR;
+    if (gap >= 2 * spr[1] + 1.2 + 0.3) {
+      const t = dir < 0 ? tL + 0.15 + spr[1] : tR - 0.15 - spr[1], q = W(sB - 2.7 - spr[2], t);
+      add(spr[0], q[0], q[1], fz ? 1 : 0, "yard", Math.max(spr[1], spr[2]));
+    }
+  }
+}
+// (W10 R4B clear-doors) a prop (not a car, not a container) keeps DOOR_SWING + YARD_PATH_CLEAR off the walls of every enterable building (see doorClear) and
+// YARD_PATH_CLEAR off every door-path stone; a sidewalk light / bench slides along its sidewalk (<= 4 m) to clear them, anything else that cannot is not placed
+export const DOOR_SWING = 1.13;
+function doorClear(L, homes) {
+  const walls = [], street = [], stones = [];
+  const blk = new Map(); for (const b of L.blocks) blk.set(b.id, b);
+  for (const p of L.parcels) {                    // the walls of every enterable building (housegen puts a back door on any wall of a corner building): a sidewalk prop
+    const B = p.building;                         // keeps off those that face a street (<= 7 m from the block edge), a yard prop off all four
+    if (!B || B.gen === "shell" || B.enterable === false) continue;
+    const a = B.aabb, bk = blk.get(p.block);
+    for (const e of [[a[0], a[1], a[0], a[3]], [a[2], a[1], a[2], a[3]], [a[0], a[1], a[2], a[1]], [a[0], a[3], a[2], a[3]]]) {
+      walls.push(e);
+      if (!bk) { street.push(e); continue; }
+      const m = Math.min(e[0] - (bk.cx - BLOCK_HALF), bk.cx + BLOCK_HALF - e[2], e[1] - (bk.cz - BLOCK_HALF), bk.cz + BLOCK_HALF - e[3]);
+      if (m <= 7) street.push(e);
+    }
+  }
+  for (const h of homes) for (const q of h.tiles) stones.push(q);
+  const dBox = (a, x, z) => { const dx = Math.max(a[0] - x, 0, x - a[2]), dz = Math.max(a[1] - z, 0, z - a[3]); return Math.sqrt(dx * dx + dz * dz); };
+  return (x, z, r, kind) => {
+    for (const a of kind === "yard" ? walls : street) if (dBox(a, x, z) - r < DOOR_SWING + YARD_PATH_CLEAR + 0.02) return false;
+    for (const q of stones) if (dBox([q[0] - 0.6, q[1] - 0.6, q[0] + 0.6, q[1] + 0.6], x, z) - r < YARD_PATH_CLEAR + 0.02) return false;
+    return true;
+  };
+}
+const LIGHT_OFFSET = 6.2;       // m from a street centreline: 1.2 m in from the curb of the 3 m sidewalk (5 .. 8) (W10 R4B: was the middle, 6.4 - a city facade 1.2 m behind the lot line
+                                //  then had a pole 2.58 m off its doors; 6.2 keeps DOOR_SWING + 1.5 m)
 const CAR_OFFSET = 3.55;        // m from a street centreline: the middle of the curb lane (a 2.55 m car spans 2.3 .. 4.8)
 const JUNCTION = 9.5;           // m from a node a street prop keeps clear (half the road + the curb radius + a car length of approach)
 /** quarter-turn index whose front (+Z) faces (dx, dz) */
@@ -2709,7 +2829,16 @@ export function streetProps(L, seed) {
   const inBlock = (x, z, m) => { for (const b of L.blocks) if (Math.abs(x - b.cx) <= BLOCK_HALF - m && Math.abs(z - b.cz) <= BLOCK_HALF - m) return true; return false; };
   const taken = [];                                                    // [x, z, kind, r] placed so far: 1.5 m clear of a prop of the same kind, 2.5 m of a light
   const clear = (x, z, kind, r) => { for (const q of taken) { const dx = q[0] - x, dz = q[1] - z, rr = q[3] + r + 0.6; if (dx * dx + dz * dz < rr * rr) return false; } return true; };
-  const add = (type, x, z, rot, kind, r) => {
+  const homes = yardHomes(L), okDoor = doorClear(L, homes);
+  const add = (type, x, z, rot, kind, r, slide) => {
+    if (kind !== "car" && kind !== "container" && !okDoor(x, z, r, kind)) {
+      let moved = false;
+      if (slide) for (const dd of [1, -1, 2, -2, 3, -3, 4, -4]) {
+        const x2 = x + slide[0] * dd, z2 = z + slide[1] * dd;
+        if (okDoor(x2, z2, r, kind) && clear(x2, z2, kind, r)) { x = x2; z = z2; moved = true; break; }
+      }
+      if (!moved) return false;
+    }
     if (!clear(x, z, kind, r)) return false;
     taken.push([x, z, kind, r]);
     const e = { type, x: r3(x), z: r3(z), rot, kind };
@@ -2729,7 +2858,7 @@ export function streetProps(L, seed) {
         if (!inBlock(px, pz, 0.3)) continue;
         let lt = "props/light-curved";
         if (vrng) vrng();                                              // (one stream draw per light kept: the other dressing below does not shift)
-        add(lt, px, pz, faceIdx(nx * side, nz * side), "light", 0.3);
+        add(lt, px, pz, faceIdx(nx * side, nz * side), "light", 0.3, [ux, uz]);
       }
     }
   }
@@ -2742,8 +2871,8 @@ export function streetProps(L, seed) {
     }
     for (const side of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {            // the four sidewalks (side = the direction of the street from the block centre)
       if (rng() < 0.45) continue;
-      const along = (rng() - 0.5) * 18, px = b.cx + side[0] * (BLOCK_HALF - 1.5) + (side[0] ? 0 : along), pz = b.cz + side[1] * (BLOCK_HALF - 1.5) + (side[1] ? 0 : along);
-      add("props/grave-bench", px, pz, faceIdx(side[0], side[1]), "bench", 0.8);
+      const along = (rng() - 0.5) * 18, px = b.cx + side[0] * (BLOCK_HALF - 1.0) + (side[0] ? 0 : along), pz = b.cz + side[1] * (BLOCK_HALF - 1.0) + (side[1] ? 0 : along);      // (W10 R4B: 1.0 m from the curb, was 1.5: off the facades' doors)
+      add("props/grave-bench", px, pz, faceIdx(side[0], side[1]), "bench", 0.8, side[0] ? [0, 1] : [1, 0]);
     }
   }
   // parked cars in the curb lanes (never in a junction), more of them downtown
@@ -2821,6 +2950,7 @@ export function streetProps(L, seed) {
       add("furniture/trashcan", b.cx + sx * (BLOCK_HALF - 2.3), b.cz + sz * (BLOCK_HALF - 1.4), Math.floor(vrng() * 4), "bin", 0.35);
     }
   }
+  yardDressing(L, seed, add, out, homes);                                       // (W10 R4B: last, from its own stream: every entry above is where it was)
   return out;
 }
 

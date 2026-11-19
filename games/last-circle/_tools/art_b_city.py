@@ -232,6 +232,7 @@ YARD = [
     ("yard-bucket", YARD_SRC["survival"] / "bucket.glb", "survival", 3.0, "bucket", "bbox", 0, "Kenney Survival Kit 2.0 (CC0): bucket"),
     ("yard-boat", YARD_SRC["pirate"] / "boat-row-small.glb", "pirate", 1.3, "boat", "bbox", 0, "Kenney Pirate Kit 2.0 (CC0): boat-row-small"),
     ("yard-parasol", SRC / "props" / "detail-parasol-a.glb", "commercial", 6.0, "parasol", "pole", 0, "Kenney City Kit (Commercial) 2.1 (CC0): detail-parasol-a"),
+    ("yard-cart", YARD_SRC["fantasytown"] / "cart.glb", "fantasytown", 1.6, "cart", "bbox", 0, "Kenney Fantasy Town Kit 2.0 (CC0): cart"),
     ("yard-mailbox", YARD_SRC["polypizza"] / "objects" / "2olZ0G8iur.glb", "mailbox", 1.15, "mailbox", "bbox", 0, "Mailbox by CreativeTrio, Poly Pizza objects/2olZ0G8iur (CC0)"),
 ]
 CARS = [(n, "car", 1.7 if n not in ("delivery",) else 1.6) for n in
