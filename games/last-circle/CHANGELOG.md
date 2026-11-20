@@ -3,7 +3,9 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
-## 2026-11-19 — Wave 10 round 3 (homes + interiors)
+## 2026-11-19 — Wave 10 round 3 (homes + interiors) (LIVE ?v=1795189314)
+
+- Released on the fast route (owner decision 2026-11-19 / 20): targeted re-verify before release, full battery after. Also in this release: bots reach every top floor (navgrid covers navNear's 32 m ring; 643 of 643, was 603), same-seed matches are repeatable again on Savanna (navgrid pbShape), the nav memory per town is back under its limit (3.12 MB). Known at release, to fix next: 2 of 5,828 ramps on Isla Viva cannot be walked up; the control probe_match-plant-no-door-funnel no longer discriminates on this world (ruling R-k); worldcheck rng-stream differs from the previous live map (props and wild loot moved with the new house lots).
 
 Wave 10 round 3 merges lane R3A (`w10-r3-interiors`, head c8d1e0dcb), which already contains lane R1A (`w10-r1-homes`, head f7441b132), onto `w10` (master c7352d0b1 + the W10 test-tools lane 08511383a). The world changes: `MAP_GEN_VERSION` 8 -> 10 (gate.py `MAP_GEN_TARGET` = 10). Released on the owner's faster route (2026-11-19): a targeted re-verify before the release, the full battery after it as a separate job.
 
