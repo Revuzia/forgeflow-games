@@ -180,9 +180,10 @@ export interface DifficultyProfile {
   // ── ruling 60 ──
   /** RIFT structure posts (lane AI G1, rulings 40-55): a threatened own structure gets named defenders. Off at every tier by
    *  ruling 62 (the round-1 package's pace cost: RIFT +1.2 / +2.0 / +2.3 min, 14 and 12 games in 64 reaching 30:00 at adept and
-   *  veteran, the posts at every structure class at once); back by ruling 65 at veteran (inner and base; adept's base posts,
-   *  back in ruling 65, are off again by ruling 66: they were adept's pace cost) under its pace rule (+1.5 min, no more 30:00 games than the old live opponents); with posts on, the base answer
-   *  (thinkBaseAnswer) is the posts' own call */
+   *  veteran, the posts at every structure class at once); back by ruling 65 at adept (base structures) and veteran (inner and
+   *  base) under its pace rule (+1.5 min, no more 30:00 games than the old live opponents); off again at every tier by ruling 66
+   *  (the pings carve-out ships the live 8c95deb52 tactics; the posts stay in the code for a later lane); with posts on, the
+   *  base answer (thinkBaseAnswer) is the posts' own call */
   readonly guardPosts: boolean;
   // ── ruling 64 ──
   /** RIFT base answer (team.ts thinkBaseAnswer): a base structure (a Lantern, a Bell Needle, the Hourbell) taking enemy
@@ -210,6 +211,18 @@ export interface DifficultyProfile {
   readonly regroupWait: number;
   /** ruling 65: a calm walk stops short of this many enemy fighters in sight together with no teammate beside them (Infinity: off) */
   readonly loneStop: number;
+  // ── ruling 66 (the pings carve-out) ──
+  /** ruling 65: a won fight takes the structure nearest where the team stands, and a won defence counter-pushes (off: the
+   *  live 8c95deb52 siege choice) */
+  readonly teamPush: boolean;
+  /** ruling 65: the team says push ("group here") and objective ("take this") pings, and weighs a person's push and camp
+   *  pings as team calls (and acknowledges a push with onMyWay). Off by ruling 66: a push acknowledged and not followed is a
+   *  broken promise (verify r8); with it off a person's push and objective pings are neither answered nor acknowledged */
+  readonly planPings: boolean;
+  /** ruling 65: a computer-played teammate's own assist and retreat calls are heard (answered / weighed) like a person's.
+   *  Off by ruling 66: with them on, games between computer-played teams ran longer than live 8c95deb52 (RIFT veteran +0.93 /
+   *  adept +0.97 min pooled n96, veteran 11 games at 30:00 against 5); a person's assist and retreat pings are always heard */
+  readonly hearMates: boolean;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -236,7 +249,9 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     punishInvade: 0, punishFrom: Infinity, punishDelay: 99, peelDive: 'none', holdWave: false, frayBreak: 0,
     coreAll: false, peelFirst: false, collapseRoads: false, closeOut: false, chaseQuit: Infinity, anticipates: false, turnLatch: 12, guardPosts: false,
     baseAnswerDelay: 5, baseAnswerUntil: 1500,
-    guardFrom: 2, pingGap: 15, pingTeam: 2, pingReads: false, assistReach: 30, assistMax: 1, joinAt: 3, regroupWait: 0, loneStop: 4,
+    // (ruling 66: the team-play tactics of ruling 65 are off — joinAt Infinity (was 3), loneStop Infinity (was 4) — pings stay)
+    guardFrom: 2, pingGap: 15, pingTeam: 2, pingReads: false, assistReach: 30, assistMax: 1, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
+    teamPush: false, planPings: false, hearMates: false,
   },
   // (CW3s r3, CL-1: adept's longest quiet stretch fell at 3:00-12:00 with the laners 9 m apart at 75 % health; deaths a minute run under veteran's from 5:00 to 13:00. It now contests an enemy start at a camp, the fight veteran's team takes there, and reads a kill as veteran does. A flat +0.08 on the trade edge was tried and dropped: stretch 3.2 min, takedowns by 10:00 7.15 -> 6.70. team.ts thinkGank and bot.ts's roam read widen for every tier: gaps at 8:00-12:00. Laning retreat bias -0.04: takedowns by 10:00 5.95 -> 6.50 on seeds 8101-8120. Untuned seeds 8501-8520 / 8701-8720: stretch 2.7 / 2.8 min, was 3.4 / 3.6)
   adept: {
@@ -250,11 +265,12 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
     punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: false, frayBreak: 0.2,
-    // (ruling 66: adept's base posts were the adept pace cost of ruling 65 — s701-764 vs 8c95deb52 +1.56 min and 8 vs 2 games at 30:00 with them, +0.66 and 5 without, unanswered intrusions 1.03 with and 1.06 without; adept keeps ruling 64's base answer)
     coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true, turnLatch: 12, guardPosts: false,
     baseAnswerDelay: 1, baseAnswerUntil: Infinity,
-    // (ruling 66: with the base posts off, a 12 s regroup — s701-764: 3 games at 30:00 against 5 at 8 s, sieges with 3+ arriving within 6 s 39.7 % against 39.0 %)
-    guardFrom: 2, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 45, assistMax: 2, joinAt: 2, regroupWait: 12, loneStop: 3,
+    // (ruling 66: posts (ruling 65: true), joinAt (2), regroupWait (8), loneStop (3), teamPush and planPings off — the live
+    // 8c95deb52 tactics; the pings that held up in verify r8 stay)
+    guardFrom: 2, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 45, assistMax: 2, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
+    teamPush: false, planPings: false, hearMates: false,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -267,9 +283,12 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: true, riskCap: 1.5, burstRetreat: true, splitPush: true, groupFollowFloor: 1, visionSetup: true,
     longshadeTtk: 45, crossTrade: true, objectiveEvenLate: 0, ccChain: 1, threatCc: true, adaptiveBuild: true, thirdParty: 1,
     punishInvade: 2, punishFrom: 180, punishDelay: 1.5, peelDive: 'all', holdWave: false, frayBreak: 0.25,
-    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true, turnLatch: 12, guardPosts: true,
+    coreAll: true, peelFirst: true, collapseRoads: true, closeOut: true, chaseQuit: 1.2, anticipates: true, turnLatch: 12, guardPosts: false,
     baseAnswerDelay: 1, baseAnswerUntil: Infinity,
-    guardFrom: 1, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 55, assistMax: 2, joinAt: 2, regroupWait: 10, loneStop: 3,
+    // (ruling 66: posts with recall-to-defend (ruling 65: true from the inner Needles), joinAt (2), regroupWait (10), loneStop (3),
+    // teamPush and planPings off — the live 8c95deb52 tactics; the pings that held up in verify r8 stay)
+    guardFrom: 1, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 55, assistMax: 2, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
+    teamPush: false, planPings: false, hearMates: false,
   },
 };
 

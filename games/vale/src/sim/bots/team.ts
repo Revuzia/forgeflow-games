@@ -25,6 +25,9 @@
 //     arrivals (regroupWait), a won fight takes the structure in front of it, a won defence counter-pushes, and the team
 //     talks through pings (comms.ts): it says push / objective / assist / retreat / danger / onMyWay, answers a teammate's
 //     assist, and weighs a person's push and objective pings;
+//     ruling 66 (the carve-out that ships): only the pings that held up stay on — assist, onMyWay to an assist, retreat,
+//     danger, missing, and the answer to a teammate's assist; the joins, regroup, won-fight and counter-push siege choice,
+//     posts, the calm-walk stop, and push / objective pings (said or heard) are off by tier switch (difficulty.ts);
 //   * endgame (W4 gameplay G5): only towers that can be hit count as standing in front of a gate, so a
 //     Lantern guarding a protected Bell Needle is sieged instead of leaving the team without a target, and
 //     a tower opened by a fallen gate is pushed before the gate relights.
@@ -234,11 +237,7 @@ export class TeamBrain {
   /** ruling 65: a computer-played teammate's own "help here" (said through the team, heard here at once) */
   readonly selfAssist = new Map<PlayerId, { x: number; y: number; t: number }>();
   /** ruling 65: a person's push or objective ping the team is weighing, until when */
-  private pingPush: { x: number; y: number; until: number; by: PlayerId; on: boolean; asked: boolean } | null = null;
-  /** ruling 65 fix round: the fighters walking to a person's push ping (the structure, until when); only they say onMyWay */
-  readonly pushers = new Map<PlayerId, { sid: number; until: number; d0: number }>();
-  /** ruling 65 fix round: when the named walkers' progress is checked for the onMyWay (-1: said, or none to say) */
-  private pushAckAt = -1;
+  private pingPush: { x: number; y: number; until: number; by: PlayerId; on: boolean } | null = null;
   private pingObj: { x: number; y: number; until: number; by: PlayerId } | null = null;
   /** ruling 65: the road two or three of ours committed to (an enemy structure id), until when */
   private joinSid = -1; private joinUntil = -1e9;
@@ -377,7 +376,8 @@ export class TeamBrain {
    * a won fight for 20 s (`window`): the beaten attackers' road is pushed while they walk back, as players do.
    */
   private thinkCounter(w: World, aliveDiff: number): void {
-    if (this.k.kind !== 'rift') return;
+    // (ruling 66: off with teamPush — the live 8c95deb52 siege choice)
+    if (this.k.kind !== 'rift' || !this.diff.teamPush) return;
     const now = w.time, tp = this.perc;
     let at = false;
     for (const st of tp.allyStructs) {
@@ -435,14 +435,15 @@ export class TeamBrain {
     for (const f of this.perc.enemyFighters) if (f.alive) this.foePos.set(f.id, { x: f.x, y: f.y, t: now });
     const tp = { enemyFighters: steady, allyFighters: this.perc.allyFighters };
     // push: a group call on a structure that has held 2 s (from 10:00 on a road map; at once on one road)
+    // (ruling 66: push and objective pings only with planPings — off, so no team call is said that the team may not follow)
     const single = k.kind !== 'rift';
     const sg = this.siege;
-    if (this.held(`pk${sg ? sg.id : -1}`, !!sg && this.group && (single || now >= 600) && (this.window || this.press || this.joined || this.rush || this.stage || this.phase === 'late'), now, 2) && sg) {
+    if (d.planPings && this.held(`pk${sg ? sg.id : -1}`, !!sg && this.group && (single || now >= 600) && (this.window || this.press || this.joined || this.rush || this.stage || this.phase === 'late'), now, 2) && sg) {
       this.callOut(w, 'push', sg.x, sg.y, `push:${sg.id}`, 45);
     }
     // objective: the camp call (desire 0.6+, held 2 s)
     const o = this.objective;
-    if (o && this.held(`ok${o.camp.index}`, o.desire >= 0.6, now, 2)) this.callOut(w, 'objective', o.camp.x, o.camp.y, `obj:${o.camp.index}`, 60);
+    if (d.planPings && o && this.held(`ok${o.camp.index}`, o.desire >= 0.6, now, 2)) this.callOut(w, 'objective', o.camp.x, o.camp.y, `obj:${o.camp.index}`, 60);
     if (k.kind !== 'rift') return;
     // assist: a structure of ours with enemy fighters on it (a post or base answer called for a fight)
     for (const g of this.guard.values()) {
@@ -498,8 +499,10 @@ export class TeamBrain {
     if (this.k.kind !== 'rift') { this.heardSeen = hs.length > 0 ? hs[hs.length - 1].t : 0; return; }
     for (const h of hs) {
       if (h.t <= this.heardSeen) continue;
-      if (!h.human) continue;
-      if (h.kind === 'push') this.pingPush = { x: h.x, y: h.y, until: h.t + 25, by: h.player, on: false, asked: false };
+      // (ruling 66: a person's push and camp pings are weighed — and a push acknowledged — only with planPings: off, they are
+      // neither followed nor answered, so no onMyWay is said to a call the team does not take)
+      if (!h.human || !this.diff.planPings) continue;
+      if (h.kind === 'push') this.pingPush = { x: h.x, y: h.y, until: h.t + 25, by: h.player, on: false };
       else if (h.kind === 'objective') this.pingObj = { x: h.x, y: h.y, until: h.t + 25, by: h.player };
     }
     if (hs.length > 0) this.heardSeen = hs[hs.length - 1].t;
@@ -526,7 +529,9 @@ export class TeamBrain {
     if (this.k.kind !== 'rift' || d.assistReach <= 0) return;
     const calls: { x: number; y: number; t: number; from: PlayerId }[] = [];
     for (const h of this.comms.heard) if (h.human && h.kind === 'assist' && now - h.t <= 6) calls.push({ x: h.x, y: h.y, t: h.t, from: h.player });
-    for (const [p, a] of this.selfAssist) calls.push({ x: a.x, y: a.y, t: a.t, from: p });
+    // (ruling 66: a computer-played teammate's own call is answered only where the tier hears its mates — hearMates, off: the
+    // answers between computer-played fighters moved the pace; a person's call is always heard)
+    if (d.hearMates) for (const [p, a] of this.selfAssist) calls.push({ x: a.x, y: a.y, t: a.t, from: p });
     for (const c of calls) {
       const key = `as:${c.from}:${Math.round(c.t * 10)}`;
       let foes = 0, ours = 0;
@@ -543,7 +548,7 @@ export class TeamBrain {
       const cl = laning ? this.nearestLaneOf(c.x, c.y) : -1;
       const cand: { p: PlayerId; dd: number }[] = [];
       for (const p of this.botSeats) {
-        if (p === c.from || this.helpers.has(p) || this.guard.has(p) || this.answer.has(p) || this.hunters.has(p) || this.pushers.has(p)) continue;
+        if (p === c.from || this.helpers.has(p) || this.guard.has(p) || this.answer.has(p) || this.hunters.has(p)) continue;
         const e = w.players[p]?.ent;
         if (!e || !e.alive || e.hp < e.maxHp * 0.55 || e.stateOverride === 'recall') continue;
         const dd = dhypot(e.x - c.x, e.y - c.y);
@@ -1257,7 +1262,8 @@ export class TeamBrain {
         if (d.objectiveSense && k.kind === 'rift' && e === prevSiege) score += 15;
         // (ruling 65: a won fight takes the structure in front of it — the nearest one to where the team stands — before
         // walking to the least-pushed road)
-        if (k.kind === 'rift' && this.window && cn > 0) score += Math.max(0, 70 - dhypot(e.x - cx, e.y - cy)) * 2;
+        // (ruling 66: off with teamPush)
+        if (d.teamPush && k.kind === 'rift' && this.window && cn > 0) score += Math.max(0, 70 - dhypot(e.x - cx, e.y - cy)) * 2;
       }
       if (score > bestScore) { bestScore = score; best = e; bestInfo = info; }
     }
@@ -1300,10 +1306,10 @@ export class TeamBrain {
         if (info && d2 < pd) { pd = d2; ps = e; pI = info; }
       }
       if (ps && pI) {
-        this.takePush(w, ps, pp);
+        if (!this.comms.holds(`ack:push:${ps.id}`, now0)) this.callOut(w, 'onMyWay', ps.x, ps.y, `ack:push:${ps.id}`, 45, this.speaker(w, ps.x, ps.y, pp.by));
         best = ps; bestInfo = pI; bestScore = Math.max(bestScore, 0); group = true;
-      } else { this.pushers.clear(); this.pushAckAt = -1; }
-    } else { this.pushers.clear(); this.pushAckAt = -1; }
+      }
+    }
     this.siege = bestScore >= 0 ? best : null;
     this.siegeLane = bestInfo ? bestInfo.lane : -1;
     // endgame: every tower that guards the core is down — gates (they come back) and the core must
@@ -1351,7 +1357,7 @@ export class TeamBrain {
     }
     // (lane AI G7: a cross-map trade — the enemy is on an objective we cannot contest: press the structure farthest from
     // it for 25 s; G5: a pressed siege goes in only with enough fit fighters at the group point)
-    if (k.kind === 'rift' && now0 < this.tradeUntil && !endgame && this.pushers.size === 0) {
+    if (k.kind === 'rift' && now0 < this.tradeUntil && !endgame) {
       let tb: Entity | null = null, tbI: StructInfo | undefined, td = -Infinity;
       for (const e of tp.enemyStructs) {
         if (!e.alive || !e.targetable) continue;
@@ -1406,61 +1412,6 @@ export class TeamBrain {
       }
       if (info.lane >= 0) this.push[info.lane] = Math.max(this.push[info.lane], this.group ? 0.9 : 0.5);
     }
-  }
-
-  /**
-   * Ruling 65, fix round — a person's push ping is followed, not only acknowledged. When the team takes it up, the fit free
-   * computer-played fighters (55 %+ health, not recalling, posted, answering, hunting or in a fight of their own, within
-   * 85 m: there within the ping's 25 s) are named to walk to it, the nearest first, all of them; with fewer than two free nobody is named and nobody says
-   * onMyWay (a promise the team cannot keep is not made). Nor while a road or our base is under threat. The onMyWay is
-   * said once, by the nearest named fighter, when two of them are seen on the way; if they are not within 4 s, they are let
-   * go and nothing is said. A named fighter drops out under 35 % health, when posted or sent to an answer, or when the ping's 25 s end.
-   */
-  private takePush(w: World, ps: Entity, pp: { until: number; by: PlayerId; asked: boolean }): void {
-    const now = w.time, tp = this.perc;
-    for (const [p, a] of [...this.pushers]) {
-      const e = w.players[p]?.ent;
-      if (!e || !e.alive || e.hp < e.maxHp * 0.35 || a.sid !== ps.id || now > a.until || this.guard.has(p) || this.answer.has(p) || this.helpers.has(p)) this.pushers.delete(p);
-    }
-    // (the onMyWay is said once two named fighters are seen walking to it — 2 m nearer than when named — within 4 s;
-    // otherwise the call is let go unsaid and nobody is held to it)
-    if (this.pushAckAt >= 0 && now >= this.pushAckAt) {
-      let going = 0, first: PlayerId = -1, fd = Infinity;
-      for (const [p, a] of this.pushers) {
-        const e = w.players[p]?.ent;
-        if (!e) continue;
-        const dd = dhypot(e.x - ps.x, e.y - ps.y);
-        if (dd <= a.d0 - 2 || dd <= 30) { going++; if (dd < fd) { fd = dd; first = p; } }
-      }
-      if (going >= 2 && first >= 0) { this.callOut(w, 'onMyWay', ps.x, ps.y, `ack:push:${ps.id}`, 45, first); this.pushAckAt = -1; }
-      else if (now >= this.pushAckAt + 2) { this.pushers.clear(); this.pushAckAt = -1; }
-    }
-    // (a threat to the base, or a push of three of theirs on a road, after the call: the named walkers are let go to it)
-    if (this.pushers.size > 0) {
-      let hard = this.baseThreat >= 0.4;
-      for (let i = 0; i < this.defend.length; i++) if (this.defend[i] >= 0.7 && this.defendFighters[i] >= 3) hard = true;
-      if (hard) { this.pushers.clear(); this.pushAckAt = -1; }
-    }
-    if (pp.asked) return;
-    pp.asked = true;
-    // (a road or the base of ours under threat holds the team: the defence first, and no promise)
-    if (this.baseThreat >= 0.2) return;
-    for (let i = 0; i < this.defend.length; i++) if (this.defend[i] >= 0.5) return;
-    const cand: { p: PlayerId; dd: number }[] = [];
-    for (const p of this.botSeats) {
-      if (p === pp.by || this.helpers.has(p) || this.guard.has(p) || this.answer.has(p) || this.hunters.has(p)) continue;
-      const e = w.players[p]?.ent;
-      if (!e || !e.alive || e.hp < e.maxHp * 0.55 || e.stateOverride === 'recall') continue;
-      const dd = dhypot(e.x - ps.x, e.y - ps.y);
-      if (dd > 85) continue;
-      let busy = false;
-      for (const f of tp.enemyFighters) if (f.alive && sq(f.x - e.x) + sq(f.y - e.y) <= 14 * 14 && sq(f.x - ps.x) + sq(f.y - ps.y) > 25 * 25) { busy = true; break; }
-      if (!busy) cand.push({ p, dd });
-    }
-    if (cand.length < 2) return;
-    cand.sort((x, y) => x.dd - y.dd || x.p - y.p);
-    for (const c of cand) this.pushers.set(c.p, { sid: ps.id, until: pp.until, d0: c.dd });
-    this.pushAckAt = now + 2;
   }
 
   private thinkObjective(w: World, aa: number, ae: number): void {

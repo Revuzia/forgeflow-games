@@ -31,7 +31,8 @@
 //   ladder          veteran's inner+base undefended share ≤ adept's + 5 points, and its peel no-response ≤ adept's + 5 points
 //   fray            reported: retreat-mode deaths (mode 3 s before), kills on the score leader
 //   pings (ruling 65) pings about something the team could not see 0 (every tier); spam: a fighter twice in 10 s / a team over
-//                   3 in 10 s 0 / 0; reported: pings per fighter- and team-minute by kind, assist pings answered within 5 s
+//                   3 in 10 s 0 / 0; push and objective pings said 0 / 0 (ruling 66: off in the carve-out build); reported: pings
+//                   per fighter- and team-minute by kind, assist pings answered within 5 s
 //   team play (ruling 65, reported) fighter sieges from 14:00 with 3+ attackers arriving within 6 s; won fights followed by a
 //                   structure blow within 20 s; lone deaths into three (3+ enemy fighters within 15 m, no ally within 20 m)
 // Every match is a pure function of (catalog, setup).
@@ -1058,6 +1059,8 @@ function gates(runs: TierRun[]): string[] {
         rpt(`${diff} pings per fighter-minute / per team-minute`, `${(sum(R, 'ping.n') / Math.max(1, mins * 10)).toFixed(3)} / ${(sum(R, 'ping.n') / Math.max(1, mins * 2)).toFixed(2)} (${kinds.map((k) => `${k} ${(sum(R, `ping.k.${k}`) / Math.max(1, mins * 2)).toFixed(2)}`).join(', ')})`);
         line(sum(R, 'ping.unseen') === 0, `${diff} pings about something the team could not see`, `${sum(R, 'ping.unseen')}`, '0');
         line(sum(R, 'ping.gapViol') === 0 && sum(R, 'ping.teamViol') === 0, `${diff} ping spam: a fighter twice in 10 s / a team over 3 in 10 s`, `${sum(R, 'ping.gapViol')} / ${sum(R, 'ping.teamViol')}`, '0 / 0');
+        // (ruling 66: this build says no push or objective pings — a team call it might not follow is not said)
+        line(sum(R, 'ping.k.push') + sum(R, 'ping.k.objective') === 0, `${diff} push / objective pings said (off by ruling 66)`, `${sum(R, 'ping.k.push')} / ${sum(R, 'ping.k.objective')}`, '0 / 0');
         rpt(`${diff} assist pings answered by a teammate within 5 s (onMyWay, or one from 15 m+ away reaching 12 m)`, `${pct(share(sum(R, 'ping.assist.answered'), sum(R, 'ping.assist.n') - sum(R, 'ping.assist.noneAway')))} of ${sum(R, 'ping.assist.n') - sum(R, 'ping.assist.noneAway')}`); }
       const long = R.filter((g) => g.dur >= 1080), ls = long.reduce((a, g) => a + (g.h.obj?.longshade ?? 0), 0);
       if (diff === 'veteran' && long.length >= 3) line(ls / long.length >= 0.25, `${diff} objectives: Longshade per game past 18:00`, `${(ls / long.length).toFixed(2)} (${long.length} games)`, '≥ 0.25');

@@ -96,12 +96,13 @@ export class TeamComms {
     return null;
   }
 
-  /** the latest heard ping of a kind within r of (x, y), no older than `age` s, by someone other than `self` */
-  near(kind: PingKind, x: number, y: number, r: number, now: number, age: number, self: PlayerId): Heard | null {
+  /** the latest heard ping of a kind within r of (x, y), no older than `age` s, by someone other than `self` (only a person's
+   *  when `people`) */
+  near(kind: PingKind, x: number, y: number, r: number, now: number, age: number, self: PlayerId, people = false): Heard | null {
     for (let i = this.heard.length - 1; i >= 0; i--) {
       const h = this.heard[i];
       if (now - h.t > age) break;
-      if (h.kind !== kind || h.player === self) continue;
+      if (h.kind !== kind || h.player === self || (people && !h.human)) continue;
       if ((h.x - x) * (h.x - x) + (h.y - y) * (h.y - y) <= r * r) return h;
     }
     return null;

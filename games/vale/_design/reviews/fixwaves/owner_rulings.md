@@ -1297,3 +1297,65 @@ Pings, pooled n 96 (per team-minute; ten fighters, two teams):
 - following a person's push when the team is on its own base;
 - adept defence at e2c's level without stalls;
 - the earlier open items: veteran peel within 1.5 s, veteran dither, FRAY stays, novice fit and away.
+
+## 66. The pieces of ruling 65 that held up ship alone: computer-played fighters say their pings and answer a person's "help here"; every other team-play change is switched off, so their tactics and pace are the live opponents' (lead, by delegation, 2026-11-19)
+
+Lane AI carve-out after verify r8 failed ruling 65's build (6.0, `_design/reviews/orch1/verify_ai_r8.json`). The owner, 2026-11-19, on the lead's report that ping sending and help-ping answering held up: "ship the peices taht held up". Base: live opponents `src/sim/bots` at 8c95deb52 (catalog 2026.11.15). The build is ruling 65's code (a97194a2d) with tier switches in difficulty.ts; the paused, unverified fix round (a14cebd56: push followers, adept regroup 12 s, adept posts off) is dropped from the code and stays in history.
+
+**Decided.**
+- **Kept on, every tier (RIFT; BRIDGE says assist only, as in ruling 65):**
+  - Sending pings as built in ruling 65 (comms.ts): assist, onMyWay, retreat, danger, missing.
+    - One ping per event.
+    - At most one ping per fighter every 10 s (novice 15 s), and three per team every 10 s (novice two).
+    - Danger and missing at adept and veteran only.
+    - Nothing about anything the team cannot see.
+    - The enemy team's pings never reach a person.
+  - A person's assist ("help here") is answered as ruling 65 built it:
+    - the nearest fit (55 %+) computer-played fighters within 30 / 45 / 55 m answer, one or two of them;
+    - they never go into a lost fight, and in the laning phase only that road's laners and the grovehunter go;
+    - each one that goes says onMyWay.
+  - A person's retreat ping within 25 m (4 s) turns a fighter only when its own read agrees: fight read under 0.55 or under half health, and never off a kill that is on.
+- **Off by switch (the code stays for a later lane):**
+  - `guardPosts` false at every tier. This turns off the adept base posts, the veteran inner and base posts, the 'coming' read, the +1 and recall-to-defend. Ruling 64's base answer is back, as live.
+  - `joinAt` Infinity: no joining a road that two of ours committed to.
+  - `regroupWait` 0: no siege regroup wait.
+  - `loneStop` Infinity: no calm-walk stop. A heard danger ping only acted through it, so a danger ping is now said but not acted on.
+  - New `teamPush` false: a won fight no longer takes the nearest structure, and there is no counter-push after a defence.
+  - New `planPings` false: no push or objective pings are said. A person's push or objective ping is neither weighed nor acknowledged, so no onMyWay is ever said to a call the team does not take (verify r8 blocker 1).
+  - New `hearMates` false: a computer-played teammate's own assist and retreat calls are not answered or weighed; only a person's are.
+    - With `hearMates` on, games between computer-played teams ran longer than live. Pooled RIFT n96 against 8c95deb52: adept +0.97 ± 0.48 min, veteran +0.93 ± 0.47 min (11 games at 30:00 against 5), novice −0.82 ± 0.44.
+    - Each half alone still moved veteran on s701-764: answering off +0.45 ± 0.42 (cut 5 vs 3), retreat-weighing off +0.43 ± 0.55. So neither half alone fixes the pace.
+    - This drops one piece the lead listed: a computer-played fighter's own "help here" is still said and shown to its people, but its computer-played mates do not answer it.
+
+**Method.** One tree, no worktree. `VALE_BOTS` pointed at a git-archive copy of 8c95deb52's bots (`src/sim/_live8c`), plus one screening copy (`src/sim/_arm66`, env switches). Both copies were deleted afterwards.
+- Probes: `probe_sim_bot_tactics --suites rift` on s701-764 (n 64 per tier) and s901-932 (n 32), and `--suites bridge,fray` s701-724. Both teams at one tier, cut at 30:00, paired by seed.
+- Screen check: with pings silenced (`pingTeam` 0), veteran s701-764 was byte-identical to live in 64 of 64 games, so the switches leave no trace.
+
+**Measured, final code, against live 8c95deb52.**
+- **Games between computer-played teams are the live games.**
+  - RIFT s701-764 at every tier: game length, winner and every non-ping counter are identical in 192 of 192 games. The same holds for RIFT s901-932 (96 of 96) and BRIDGE + FRAY s701-724 (144 of 144).
+  - So pace is +0.00 at every tier, and games reaching 30:00 are equal (s701-764 7 / 2 / 3, s901-932 2 / 2 / 2).
+  - Laning, base defence (fit-and-away, unanswered intrusions), dithering, BRIDGE and FRAY are the live numbers. The same four old fails remain (novice fit-and-away, adept undefended inner+base share, veteran dither, veteran peel), and the same two FRAY stays.
+- **Pings, s701-764:**
+  - Rate per team-minute (novice / adept / veteran): 0.50 / 1.21 / 1.23.
+  - About anything unseen: 0. Spam (a fighter twice in 10 s / a team over three in 10 s): 0 / 0. Push and objective pings: 0 / 0.
+  - With mates not answering, a computer-played fighter's own assist is reached by a teammate within 5 s 12-14 % of the time, which is the live rate of wandering by.
+- **A person on the team** (`probe_sim_bot_pings`, s701+8 and s901+8 per tier; one person standing in base with four computer-played teammates). Build / live:
+  - The person's assist answered within 5 s: novice 63 % / 9 % (n 109 / 113), adept 65 % / 20 % (89 / 79), veteran 72 % / 18 % (93 / 94).
+  - Push pings acknowledged with onMyWay: 0 at every tier. Acknowledged and not followed: 0.
+  - Enemy-team pings: 664 sent, 0 shown to the person.
+- Determinism: `probe_sim_determinism` 6/6 PASS. Every pairing above reproduced live's games exactly in a separate process.
+
+**Probe gates now match this build.**
+- `probe_sim_bot_tactics`: push / objective pings said 0 / 0 at every tier (new), next to the unseen-ping and spam gates.
+- `probe_sim_bot_pings`:
+  - enemy pings shown 0;
+  - a push acknowledged and not followed 0;
+  - a person's assist answered ≥ 35 % (8 or more asks).
+  - An onMyWay is now credited to the person's assist it answers, not to a push ping nearby. Before this, 3 of 107 pushes read as "acknowledged" off an assist answer.
+  - Live fails the assist gate (8-23 %), as intended.
+
+**Not met, said plainly.**
+- No attack or defence gain over live in games between computer-played teams. This build changes nothing there by design.
+- Pace in games with a person on the team is not separately measured. The person's own assist and retreat pings are the only behaviour change, and only for that person's teammates.
+- The lead's "teammate's help ping answered" is shipped for people only. Bot-to-bot answering stays off until a lane pays for its pace.

@@ -4,9 +4,11 @@
 //   * from 15:00, every 60 s the person pings "help here" on the teammate of theirs nearest an enemy fighter in sight
 //     (the genre's ask: "I see a fight, go help") — answered when a teammate says onMyWay for it, or one 15 m+ away walks
 //     to within 12 m of it, within 5 s;
-//   * at 16:30, 19:00, 21:30 and 24:00 the person pings "group here" on the visible enemy structure nearest the team: followed when
-//     three or more of the person's teammates stand within 30 m of it inside 25 s, and acknowledged when a teammate says onMyWay
-//     within 5 s (ruling 66 gate: an acknowledged push is followed at least half the time — onMyWay is a promise);
+//   * at 16:30, 19:00, 21:30 and 24:00 the person pings "group here" on the visible enemy structure nearest the team: followed
+//     when three or more of the person's teammates stand within 30 m of it inside 25 s, and acknowledged when a teammate says
+//     onMyWay within 5 s. Gate (ruling 66): an acknowledged push that is not followed — a broken promise — 0. (The carve-out
+//     build neither answers nor acknowledges a push: both read 0.)
+//   * gate (ruling 66): a person's assist answered within 5 s at least 35 % (the live 8c95deb52 opponents: 10-20 %);
 //   * every ping event of the enemy team is run through the HUD's own rule (a ping is drawn and sounded only when its
 //     player is on your team: src/ui/hud/model.ts, src/audio/index.ts) for the person's seat: must be 0 shown.
 //   node _harness/probe_sim_bot_pings.ts --diff adept --seed0 701 --seeds 8
@@ -42,7 +44,7 @@ function lineup(seed: number): MatchSetup {
   return { matchId: `pings-${seed}-${diff}`, seed, queue: queue.id, mode: mode.id, map: mode.map, seats, catalogVersion: catalog.version };
 }
 
-const tot = { assist: 0, assistAnswered: 0, push: 0, pushFollowed: 0, pushAcked: 0, pushAckedFollowed: 0, enemyPings: 0, enemyShown: 0, allyBotPings: 0 };
+const tot = { assist: 0, assistAnswered: 0, push: 0, pushFollowed: 0, pushAcked: 0, pushBroken: 0, enemyPings: 0, enemyShown: 0, allyBotPings: 0 };
 for (let s = seed0; s < seed0 + seeds; s++) {
   const setup = lineup(s);
   const sim = createSim(catalog, setup, { bots: createBots(catalog, setup), pregameSeconds: 0 });
@@ -85,9 +87,14 @@ for (let s = seed0; s < seed0 + seeds; s++) {
       // the HUD's rule (model.ts: `if (!pv || pv.team !== this.myTeam) break;`) for seat 0
       if (by.team !== me.team) { tot.enemyPings++; if (by.team === me.team) tot.enemyShown++; continue; }
       if (ev.player !== me.player) tot.allyBotPings++;
-      if (ev.kind === 'onMyWay') for (const a of asks) if (now - a.t <= 5 && Math.hypot(a.x - ev.x, a.y - ev.y) <= 30) {
-        if (a.kind === 'assist' && !a.done) { a.done = true; tot.assistAnswered++; }
-        if (a.kind === 'push' && !a.acked) { a.acked = true; tot.pushAcked++; }
+      // (an onMyWay belongs to the person's assist it answers — a bot's onMyWay is said only for an assist in this build — and
+      // counts as a push acknowledgement only when no assist of the person's within 8 s and 30 m of it could be what it answers)
+      if (ev.kind === 'onMyWay') {
+        const forAssist = asks.some((a) => a.kind === 'assist' && now - a.t <= 8 && Math.hypot(a.x - ev.x, a.y - ev.y) <= 30);
+        for (const a of asks) if (now - a.t <= 5 && Math.hypot(a.x - ev.x, a.y - ev.y) <= 30) {
+          if (a.kind === 'assist' && !a.done) { a.done = true; tot.assistAnswered++; }
+          if (a.kind === 'push' && !a.acked && !forAssist) { a.acked = true; tot.pushAcked++; }
+        }
       }
     }
     for (const a of asks) {
@@ -99,10 +106,17 @@ for (let s = seed0; s < seed0 + seeds; s++) {
       if (k >= 3) { a.followed = true; tot.pushFollowed++; }
     }
   }
-  for (const a of asks) if (a.kind === 'push' && a.acked && a.followed) tot.pushAckedFollowed++;
+  for (const a of asks) if (a.kind === 'push' && a.acked && !a.followed) tot.pushBroken++;
 }
 const pc = (a: number, b: number): string => (b ? `${((a / b) * 100).toFixed(0)} % of ${b}` : '-');
-console.log(`probe_sim_bot_pings ${diff} s${seed0}+${seeds}: a person's assist answered within 5 s ${pc(tot.assistAnswered, tot.assist)}; push followed (3+ teammates within 30 m of it inside 25 s) ${pc(tot.pushFollowed, tot.push)}, acknowledged with onMyWay ${pc(tot.pushAcked, tot.push)}, of those followed ${pc(tot.pushAckedFollowed, tot.pushAcked)}; teammates' pings ${tot.allyBotPings}; enemy-team pings ${tot.enemyPings}, shown to the person ${tot.enemyShown}`);
-const ackOk = tot.pushAcked === 0 || tot.pushAckedFollowed * 2 >= tot.pushAcked;
-if (!ackOk) console.log('FAIL: an acknowledged push ping is followed less than half the time');
-process.exit(tot.enemyShown === 0 && ackOk ? 0 : 1);
+console.log(`probe_sim_bot_pings ${diff} s${seed0}+${seeds}: a person's assist answered within 5 s ${pc(tot.assistAnswered, tot.assist)}; push followed (3+ teammates within 30 m of it inside 25 s) ${pc(tot.pushFollowed, tot.push)}, acknowledged with onMyWay ${pc(tot.pushAcked, tot.push)}; teammates' pings ${tot.allyBotPings}; enemy-team pings ${tot.enemyPings}, shown to the person ${tot.enemyShown}`);
+// (ruling 66 gates: the enemy team's pings never shown; an onMyWay to a push is never an empty promise; a person's assist is
+// answered clearly more often than by the live 8c95deb52 opponents, 10-20 %)
+const fails: string[] = [];
+if (tot.enemyShown !== 0) fails.push(`enemy-team pings shown to the person ${tot.enemyShown} (bar 0)`);
+if (tot.pushBroken !== 0) fails.push(`push pings acknowledged and not followed ${tot.pushBroken} (bar 0)`);
+if (tot.assist >= 10 && tot.assistAnswered < 0.35 * tot.assist) fails.push(`a person's assist answered ${pc(tot.assistAnswered, tot.assist)} (bar ≥ 35 %)`);
+console.log(`  push acknowledged and not followed: ${tot.pushBroken}`);
+for (const f of fails) console.log(`FAIL: ${f}`);
+if (!fails.length) console.log('PASS');
+process.exit(fails.length ? 1 : 0);
