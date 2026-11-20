@@ -53,6 +53,34 @@ const HG = path.join(__dirname, "housegen.js");
 const TG = path.join(__dirname, "towngen.js");
 const MANIFEST = path.join(ROOT, "assets", "props", "city", "manifest.json");
 const MANIFEST_INT = path.join(ROOT, "assets", "props", "city", "manifest_interior.json");     // lane H2 (Wave 8 stage A); merged into manifest.json in stage B
+/** (W10 R1A) two sets of boxes of ONE height span cover the same plan area, to the millimetre (coordinate-compressed: every cell of the joint grid is in both
+ *  unions or in neither) */
+function sameUnion(A, B) {
+  const r = (v) => Math.round(v * 1000), xs = new Set(), zs = new Set();
+  for (const b of A.concat(B)) { xs.add(r(b.min[0])); xs.add(r(b.max[0])); zs.add(r(b.min[2])); zs.add(r(b.max[2])); }
+  const X = [...xs].sort((a, b) => a - b), Z = [...zs].sort((a, b) => a - b), xi = new Map(X.map((v, i) => [v, i])), zi = new Map(Z.map((v, i) => [v, i]));
+  const nx = X.length - 1, nz = Z.length - 1, ca = new Uint8Array(Math.max(1, nx * nz)), cb = new Uint8Array(Math.max(1, nx * nz));
+  const mark = (L, c) => { for (const b of L) { const i0 = xi.get(r(b.min[0])), i1 = xi.get(r(b.max[0])), j0 = zi.get(r(b.min[2])), j1 = zi.get(r(b.max[2])); for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) c[j * nx + i] = 1; } };
+  mark(A, ca); mark(B, cb);
+  for (let k = 0; k < ca.length; k++) if (ca[k] !== cb[k]) return false;
+  return true;
+}
+/** (W10 R1A) the furniture part of collidersOf (housegen mergeFurnBoxes) is the SAME solid as the pieces' own collider boxes (kit: its box; authored: its
+ *  kept groups; deco: none), per vertical span to the millimetre, and never more boxes than the pieces hold: null, or the error */
+function furnColErr(H, HGmod, allCols) {
+  const s0 = H.boxes.reduce((n, b) => n + (b.c ? 1 : 0), 0) + H.ramps.length, s1 = allCols.length - HGmod.leafColliderCount(H);
+  const want = new Map(), got = new Map(), key = (y0, y1) => Math.round(y0 * 1000) + "|" + Math.round(y1 * 1000);
+  const add = (M, y0, y1, b) => { const k = key(y0, y1); let l = M.get(k); if (!l) M.set(k, l = []); l.push(b); };
+  let nWant = 0;
+  for (const p of H.furniture) {
+    if (p.deco) continue;
+    for (const g of p.src === "kit" ? [p] : p.cols) { add(want, g.min[1], g.max[1], { min: g.min, max: g.max }); nWant++; }
+  }
+  for (let i = s0; i < s1; i++) { const c = allCols[i]; add(got, c.minY, c.maxY, { min: [c.minX, c.minY, c.minZ], max: [c.maxX, c.maxY, c.maxZ] }); }
+  if (s1 - s0 > nWant) return "the furniture collision holds " + (s1 - s0) + " boxes for " + nWant + " piece boxes";
+  for (const k of new Set([...want.keys(), ...got.keys()])) if (!sameUnion(want.get(k) || [], got.get(k) || [])) return "span " + k + ": the furniture collision is not the union of the pieces' boxes";
+  return null;
+}
 function loadManifest() {
   const man = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
   const types = Object.assign({}, man.types);
@@ -62,6 +90,8 @@ function loadManifest() {
 const THREE_JS = path.join(ROOT, "assets", "vendor", "three", "build", "three.module.js");
 const N_PARCELS = Number(process.env.HG_PARCELS || 500);
 const PLANT_SLOW_MS = Number(process.env.HG_PLANT_SLOW_MS) || 0;
+const PLANT_REGEN = process.env.HG_PLANT_REGEN === "1";                // (W10 R1A fix12, ruling R-d) planted fault of the paired CPU row (_harness/p23/hg_cpu.py --plant slow-gen): every house generated two more times (the results dropped; fix15, was once more) = a generator ~80 % slower
+const CPU_ROW_WRAPPED = process.env.HG_CPU_ROW === "wrapper";      // (ruling R-d) the CPU row is judged by _harness/p23/hg_cpu.py (absolute <= 36 ms, else paired with the reference build 04e82d802): here it prints the same reading as info
 const HG_CPU_MS_PER_HOUSE = 36;                                    // (P23-fix timing bar: CPU ms of the JS threads (workers + main) per generated + checked house; 25.8-27.3 ms measured 2026-10-27 on the shared 16-core box with 3 other lanes running (wall 21-25 s); x1.3-1.4 headroom; HG_PLANT_SLOW_MS=15 (+11 ms a house, x1.4) reads 37.6 and FAILS)
 const THEMES = ["city", "resort", "lodge"];                        // the town themes (the fixed rows below)
 const ALL_THEMES = ["city", "resort", "lodge", "farm", "ruin", "mill"];   // + towngen's compound themes (round 3)
@@ -77,6 +107,18 @@ const threadCpuMs = () => { const u = typeof process.threadCpuUsage === "functio
 
 // ── constants the checker uses (its own copies: a change in housegen must be a change here too) ─────────────────────────────────────────
 const R = 0.45, HGT = 1.8, STEP = 0.55, GRID = 0.25, RING = 1.5, REACH_XZ = 1.5, REACH_DY = 2.2, TOL = 0.02, TRI_BUDGET = 4000;
+/** The budget row's bar for storey f of H. (W10 R3A fix5, orchestrator ruling R3A-7) a WORK storey of a non-home building (not a ruin) has its bar written
+ *  here as literal numbers (never read from the module judged): a shop or warehouse on the storey -> 6000, 8000 when the footprint W x D >= 300 m2; else an
+ *  office / meeting room / lobby / corridor (hall) on it -> 5000; every other storey TRI_BUDGET (4000); a home's storey as before (<= 6000). */
+function storeyBar(H, f, HGmod) {
+  const ruined = H.theme === "ruin" || !!(HGmod.THEMES && HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined);
+  if (H.use === "house" && !ruined) return Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET);
+  if (ruined) return TRI_BUDGET;
+  const ks = H.rooms.filter((r) => r.floor === f).map((r) => r.kind);
+  if (ks.some((k) => k === "shop" || k === "warehouse")) return H.W * H.D >= 300 ? 8000 : 6000;
+  if (ks.some((k) => k === "office" || k === "meeting" || k === "lobby" || k === "hall")) return 5000;
+  return TRI_BUDGET;
+}
 const SILL = 1.2, HEAD = 2.3, EYE = 1.62, CROUCH_EYE = 0.97, RAMP_THICK = 0.3;
 function headroomRun(rise, run) { const m = Math.max(0.05, rise / run), mv = m * 8, arc = mv * mv / 44; return (1.8 + arc + 0.1) / m + 0.45; }   // maps.js:1684
 function fnv(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16); }
@@ -149,6 +191,7 @@ function checkHouse(H, HGmod, MAN) {
   const boxes = cols.filter((c) => c.kind === "box"), ramps = cols.filter((c) => c.kind === "ramp");
   checkLeaves(H, HGmod, allCols, E);
   checkLeafSee(H, E);
+  { const fe = furnColErr(H, HGmod, allCols); if (fe) E("vis-col", fe); }
   // a 2 m grid over the colliders (box colliders only): near(x0, z0, x1, z1) -> every box whose footprint may meet that rectangle (each once)
   const GI = new Map(), GS = 2;
   boxes.forEach((c, i) => { for (let gx = Math.floor(c.minX / GS); gx <= Math.floor(c.maxX / GS); gx++) for (let gz = Math.floor(c.minZ / GS); gz <= Math.floor(c.maxZ / GS); gz++) { const k = gx * 65536 + gz; let l = GI.get(k); if (!l) { l = []; GI.set(k, l); } l.push(i); } });
@@ -177,7 +220,18 @@ function checkHouse(H, HGmod, MAN) {
       if (!c || Math.abs(c.minX - b.min[0]) > 5e-4 || Math.abs(c.minY - b.min[1]) > 5e-4 || Math.abs(c.minZ - b.min[2]) > 5e-4 || Math.abs(c.maxX - b.max[0]) > 5e-4 || Math.abs(c.maxY - b.max[1]) > 5e-4 || Math.abs(c.maxZ - b.max[2]) > 5e-4) { bad = b.p; break; }
     }
     if (bad || k !== structCols.length) E("vis-col", "a collider with no drawn box (or a box drawn without its collider): " + bad); }
-  for (const b of H.boxes) if (!b.c && (b.p === "wall" || b.p === "slab" || b.p === "roof" || b.p === "rail" || b.p === "shell" || b.p === "leaf")) { E("vis-col", "drawn " + b.p + " box with no collider"); break; }
+  for (const b of H.boxes) if (!b.c && !b.cm && (b.p === "wall" || b.p === "slab" || b.p === "roof" || b.p === "rail" || b.p === "shell" || b.p === "leaf")) { E("vis-col", "drawn " + b.p + " box with no collider"); break; }
+  // (W10 R1A) the collision covers (housegen mergeColliderBoxes): per part kind and height span, the cover boxes (mergedCol, nothing drawn) and the drawn
+  // boxes they replace (cm) are the SAME solid - each inside the union of the other set, to the millimetre - and a cover never draws a face
+  { const grp = new Map(), key = (b) => b.p + "|" + Math.round(b.min[1] * 1000) + "|" + Math.round(b.max[1] * 1000);
+    for (const b of H.boxes) if (b.cm || b.mergedCol) { const kb = key(b); let g = grp.get(kb); if (!g) grp.set(kb, g = { cm: [], mc: [] }); (b.mergedCol ? g.mc : g.cm).push(b); }
+    let bad = null;
+    for (const [k, g] of grp) {
+      if (g.mc.some((b) => b.h !== 63 || !b.c)) { bad = k + ": a cover box draws a face or does not collide"; break; }
+      if (!g.mc.length || !g.cm.length) { bad = k + ": covers without replaced boxes (or replaced boxes without covers)"; break; }
+      if (!sameUnion(g.cm, g.mc)) { bad = k + ": the covers are not the union of the boxes they replace"; break; }
+    }
+    if (bad) E("vis-col", bad); }
   (() => {                                       // (a section of its own function: smaller units for the optimizing compiler)
   // dressing. A SKIN (trim, shutter, blind window) is drawn only: <= 1.5 cm thick and lying flat on ONE collider face that covers it. A door LEAF is a
   // collider <= 4 cm thick lying flat on a wall collider face (no slot behind it). A GLASS pane is drawn only, <= 2 cm, exactly in a window's aperture.
@@ -191,6 +245,8 @@ function checkHouse(H, HGmod, MAN) {
     const add = (k, c) => { let l = FI.get(k); if (!l) { l = []; FI.set(k, l); } l.push(c); };
     // key: (side * 3 + axis) * 1e9 + plane in mm (side 1 = a max face, facing +)
     for (const c of structCols) { const q = bxOf(c); for (let a = 0; a < 3; a++) { add((3 + a) * 1e9 + Math.round(q[3 + a] * 1000), q); add(a * 1e9 + Math.round(q[a] * 1000), q); } }
+    // (W10 R1A) a drawn box whose collision a cover carries (cm) is solid all through (the cover row below proves it inside the covers' union): its faces hold a skin as before
+    for (const b of H.boxes) if (b.cm) { const q = [b.min[0], b.min[1], b.min[2], b.max[0], b.max[1], b.max[2]]; for (let a = 0; a < 3; a++) { add((3 + a) * 1e9 + Math.round(q[3 + a] * 1000), q); add(a * 1e9 + Math.round(q[a] * 1000), q); } }
     return FI;
   };
   const flatOn = (b, thick) => {
@@ -270,7 +326,7 @@ function checkHouse(H, HGmod, MAN) {
   (() => {                                       // (a section of its own function: smaller units for the optimizing compiler)
   // culled faces: every face a box does not draw is covered from outside by ONE other drawn box (or lies at / under the pad)
   {
-    const sb = H.boxes.filter((b) => b.p !== "furn" && b.p !== "deco");
+    const sb = H.boxes.filter((b) => b.p !== "furn" && b.p !== "deco" && !b.mergedCol);      // (W10 R1A: a collision cover draws nothing - it neither needs nor gives cover)
     const BK = 2.5, bk = new Map();
     // (what may cover a face: a box, never a skin or a pane - a 1.5 cm trim or a see-through pane hides nothing behind it)
     for (const o of sb) { if (o.p === "skin" || o.p === "glass") continue; for (let i = Math.floor(o.min[0] / BK); i <= Math.floor(o.max[0] / BK); i++) for (let j = Math.floor(o.min[2] / BK); j <= Math.floor(o.max[2] / BK); j++) { const k = i * 100003 + j; let l = bk.get(k); if (!l) { l = []; bk.set(k, l); } l.push(o); } }
@@ -326,7 +382,8 @@ function checkHouse(H, HGmod, MAN) {
       const q = p.kit.rot, c = [1, 0, -1, 0][q], s = [0, 1, 0, -1][q];
       let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
       for (const X of [t.bbox_min_m[0], t.bbox_max_m[0]]) for (const Y of [t.bbox_min_m[1], t.bbox_max_m[1]]) for (const Z of [t.bbox_min_m[2], t.bbox_max_m[2]]) {
-        const w = [p.kit.x + X * c + Z * s, p.kit.y + Y, p.kit.z - X * s + Z * c];
+        const k = p.kit.scale == null ? 1 : p.kit.scale;            // (W10 R1A: the entry's scale on top of suggested_scale - the size the game draws it)
+        const w = [p.kit.x + k * (X * c + Z * s), p.kit.y + k * Y, p.kit.z + k * (-X * s + Z * c)];
         for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], w[a]); mx[a] = Math.max(mx[a], w[a]); }
       }
       for (let a = 0; a < 3; a++) if (Math.abs(mn[a] - p.min[a]) > TOL || Math.abs(mx[a] - p.max[a]) > TOL) { E("vis-col", "kit " + p.kit.type + " collider != drawn bbox (axis " + a + ")"); break; }
@@ -335,10 +392,15 @@ function checkHouse(H, HGmod, MAN) {
       for (const bi of p.parts) { const b = H.boxes[bi]; for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], b.min[a]); mx[a] = Math.max(mx[a], b.max[a]); } }
       let cn = [Infinity, Infinity, Infinity], cx = [-Infinity, -Infinity, -Infinity];
       for (const g of p.cols) for (let a = 0; a < 3; a++) { cn[a] = Math.min(cn[a], g.min[a]); cx[a] = Math.max(cx[a], g.max[a]); }
-      for (let a = 0; a < 3; a++) if (Math.abs(mn[a] - cn[a]) > TOL || Math.abs(mx[a] - cx[a]) > TOL) { E("vis-col", p.cat + " parts AABB != collider AABB"); break; }
+      // REASON (W10 R1A): no mover fits under a collider < 1.54 m over the floor, so a part beneath it needs no collider of its own (control: [vis-col relaxation]).
+      // (W10 R1A) a group wholly under another of the piece, whose underside is lower over the floor than the crouched capsule (1.54 m), is not a
+      // collider (buildCatalog colKeep): the colliders' AABB keeps the parts' footprint and top exactly and may only start higher; a part outside every
+      // collider must lie wholly under (in plan, and below the underside of) one that a crouched mover cannot pass beneath
+      for (let a = 0; a < 3; a++) if ((a === 1 ? Math.abs(mx[a] - cx[a]) > TOL || cn[a] < mn[a] - TOL : Math.abs(mn[a] - cn[a]) > TOL || Math.abs(mx[a] - cx[a]) > TOL)) { E("vis-col", p.cat + " parts AABB != collider AABB"); break; }
       for (const bi of p.parts) {
         const b = H.boxes[bi];
-        if (!p.cols.some((g) => b.min[0] >= g.min[0] - TOL && b.min[1] >= g.min[1] - TOL && b.min[2] >= g.min[2] - TOL && b.max[0] <= g.max[0] + TOL && b.max[1] <= g.max[1] + TOL && b.max[2] <= g.max[2] + TOL)) { E("vis-col", p.cat + " part outside its colliders"); break; }
+        if (p.cols.some((g) => b.min[0] >= g.min[0] - TOL && b.min[1] >= g.min[1] - TOL && b.min[2] >= g.min[2] - TOL && b.max[0] <= g.max[0] + TOL && b.max[1] <= g.max[1] + TOL && b.max[2] <= g.max[2] + TOL)) continue;
+        if (!p.cols.some((g) => b.min[0] >= g.min[0] - TOL && b.min[2] >= g.min[2] - TOL && b.max[0] <= g.max[0] + TOL && b.max[2] <= g.max[2] + TOL && b.max[1] <= g.min[1] + TOL && g.min[1] - fy[p.floor] < 1.54)) { E("vis-col", p.cat + " part outside its colliders"); break; }
       }
     }
   }
@@ -490,7 +552,8 @@ function checkHouse(H, HGmod, MAN) {
   for (const p of H.furniture) triF[p.floor] += p.src === "kit" ? MAN.types[p.kit.type].tris : p.parts.reduce((a, bi) => a + 12 - 2 * pop(H.boxes[bi].h || 0), 0);
   for (const rf of H.roofs || []) triF[S - 1] += 2 + 4 + (rf.freeLow ? 2 : 0) + (rf.freeHigh ? 2 : 0) + 2 * rf.soffit.length;
   for (const g of H.gables || []) triF[S - 1] += g.pts.length - 2;
-  for (let f = 0; f < S; f++) if (triF[f] > TRI_BUDGET) E("budget", "floor " + f + " has " + triF[f] + " triangles");
+  // (W10 R1A: a home's storey - use house, not a ruin - draws up to TRI_BUDGET_HOME, itself held <= 6000 here; every other storey TRI_BUDGET)
+  for (let f = 0; f < S; f++) { const bar = storeyBar(H, f, HGmod); if (triF[f] > bar) E("budget", "floor " + f + " has " + triF[f] + " triangles (budget " + bar + ")"); }
   })();
   // ---- reach: capsule walk on the colliders
   const x0 = H.aabb.min[0] - RING, z0 = H.aabb.min[2] - RING, NX = Math.ceil((H.aabb.max[0] + RING - x0) / GRID), NZ = Math.ceil((H.aabb.max[2] + RING - z0) / GRID);
@@ -583,9 +646,11 @@ function checkHouse(H, HGmod, MAN) {
     }
   }
   // ---- floor loot is on free floor: never inside or under a piece's collider (a coffee table, a pallet: the walk steps over them)
+  const solidByFloor = new Map();                // (W10 R1A, CPU: the solid pieces per floor, listed once - was a scan of every piece per loot point)
+  for (const q of H.furniture) if (!q.deco) { let l = solidByFloor.get(q.floor); if (!l) solidByFloor.set(q.floor, l = []); l.push(q); }
   for (const l of H.loot) {
     if (l.on !== "floor") continue;
-    const p = H.furniture.find((q) => !q.deco && q.floor === l.floor && l.x > q.min[0] - 0.05 && l.x < q.max[0] + 0.05 && l.z > q.min[2] - 0.05 && l.z < q.max[2] + 0.05);
+    const p = (solidByFloor.get(l.floor) || []).find((q) => l.x > q.min[0] - 0.05 && l.x < q.max[0] + 0.05 && l.z > q.min[2] - 0.05 && l.z < q.max[2] + 0.05);
     if (p) { E("loot", "floor loot " + l.id + " under / inside " + p.cat); break; }
   }
   // ---- nav graph: every room joined to the street
@@ -766,6 +831,7 @@ async function runJobs(jobs) {
     const p = Object.assign({}, j.parcel, { theme: j.theme, storeys: j.storeys });
     const t = Date.now();
     const H = HGmod.generate(p, j.opts);
+    if (PLANT_REGEN) { HGmod.generate(p, j.opts); HGmod.generate(p, j.opts); }   // (the paired CPU row's plant: the generator's work done three times - fix15: was twice, ratio 1.406 vs the 1.319 limit, too thin a margin)
     if (PLANT_SLOW_MS > 0) { const t1 = performance.now(); while (performance.now() - t1 < PLANT_SLOW_MS); }   // (negative control for the timing row: HG_PLANT_SLOW_MS=15 must FAIL it)
     const ms = Date.now() - t;                                     // (wall ms: the p50 / p99 info only - Windows counts thread CPU in 15.6 ms ticks, fine summed, too coarse per house)
     // (the JSON is only needed where it is compared: a house generated twice, and the sampled houses whose hash the main thread / a fresh process check)
@@ -774,14 +840,17 @@ async function runJobs(jobs) {
     const js = j.hashed ? JSON.stringify(H) : null, same = j.twice ? deepSame(H, HGmod.generate(p, j.opts)) : true;
     const errors = checkHouse(H, HGmod, MAN);
     if (!same) errors.push("determinism: two runs differ");
-    const catsOf = new Map(); for (const q of H.furniture) { let l = catsOf.get(q.room); if (!l) { l = []; catsOf.set(q.room, l); } l.push(q.cat); }
+    // (W10 R1A) one pass over the furniture: each room's cats, its pieces (loot hosts) and its substantive / deco counts (was a scan of every piece per room
+    // and per loot item: the homes' rooms and pieces grew, the bookkeeping grew with their product). The same values.
+    const catsOf = new Map(), piecesOf = new Map(), nSub = new Map(), nDeco = new Map();
+    for (const q of H.furniture) { let l = catsOf.get(q.room); if (!l) { l = []; catsOf.set(q.room, l); piecesOf.set(q.room, []); } l.push(q.cat); piecesOf.get(q.room).push(q); const m = q.deco ? nDeco : nSub; m.set(q.room, (m.get(q.room) || 0) + 1); }
     const keyed = new Map(), key = (k) => { let v = keyed.get(k); if (!v) { v = H.rooms.filter((r) => r.kind === k).map((r) => catsOf.get(r.id) || []); keyed.set(k, v); } return v; };
     const viewShort = H.rooms.filter((r) => Math.max(0, ...(r.views || []).map((v) => v.seen)) < 3).length;
     let lootIn = 0;
-    for (const l of H.loot) if (l.on !== "floor") { const p = H.furniture.find((q) => q.room === l.room && q.cat === l.on && l.x > q.min[0] && l.x < q.max[0] && l.z > q.min[2] && l.z < q.max[2]); if (p && l.y < p.max[1] - 0.005) lootIn++; }
+    for (const l of H.loot) if (l.on !== "floor") { const p = (piecesOf.get(l.room) || []).find((q) => q.cat === l.on && l.x > q.min[0] && l.x < q.max[0] && l.z > q.min[2] && l.z < q.max[2]); if (p && l.y < p.max[1] - 0.005) lootIn++; }
     out.push({ key: j.key, hash: j.hashed ? fnv(js) : null, errors, ms, kit: H.kit, viewShort, lootIn, leaves: (H.doorLeaves || []).length, leafDoors: H.doors.filter((d) => d.leaves).map((d) => d.kind), doorKinds: H.doors.map((d) => d.kind), intRefused: H.doors.filter((d) => d.kind === "interior" && HGmod.leafHash(d.id) >= HGmod.LEAF_SHARE).length, hasTop: H.furniture.some((q) => q.mount === "top"), shell: H.shell || 0, fh: H.fh, hasRug: H.furniture.some((q) => q.cat === "rug") && H.furniture.some((q) => q.deco && q.max[1] - q.min[1] > 0.1), bedrooms: key("bedroom").length, bedless: key("bedroom").filter((l) => !l.includes("bed") && !l.includes("bedSingle")).length,
       baths: key("bath").length, toiletless: key("bath").filter((l) => !l.includes("toilet")).length, livings: key("living").length, sofaless: key("living").filter((l) => !l.includes("sofa") && !l.includes("sofaDesign")).length, storeys: H.storeys, asked: H.storeysAsked, plan: H.plan, use: H.use, roof: H.roof, theme: H.theme, facade: H.facade.mat + ":" + H.facade.color, relief: H.boxes.reduce((a, b) => a + (b.p === "trim" ? 1 : 0), 0),
-      dens: H.rooms.map((r) => [r.kind, r.area, H.furniture.reduce((a, q) => a + (q.room === r.id && !q.deco ? 1 : 0), 0), H.furniture.reduce((a, q) => a + (q.room === r.id && q.deco ? 1 : 0), 0)]),
+      dens: H.rooms.map((r) => [r.kind, r.area, nSub.get(r.id) || 0, nDeco.get(r.id) || 0]),
       kitTypes: [...new Set(H.furniture.filter((q) => q.src === "kit").map((q) => q.kit.type))], rooms: H.rooms.length, kinds: H.rooms.map((r) => r.kind),
       furn: H.furniture.length, loot: H.loot.length, chests: H.chests.length, doors: H.doors.length, windows: H.windows.length, tris: H.tris.floors, notes: H.notes, colliders: H.boxes.reduce((a, b) => a + b.c, 0) + H.ramps.length + H.furniture.reduce((a, q) => a + (q.deco ? 0 : q.src === "kit" ? 1 : q.cols.length), 0) });
   }
@@ -1093,6 +1162,33 @@ else if (require.main === module) (async () => {
     }
     okP(bad.length === 0 && nums > 100000, "translateY == generate at that height, every number of 36 houses (" + nums + " numbers, <= 1.5 mm)", bad.slice(0, 3).join(" | "));
     okP(splitBad === 0, "meshData: the interior split keeps every face (its triangles + the kit pieces' == house.tris.total on 36 houses)", splitBad + " differ");
+    // (W10 R3A) the finish (opts.finish): drawn ONLY inside (every finish key "<mat>|in" or a ceiling's "plaster||ceil" when split), never on low (wear "low"), the
+    // structure's own faces untouched (the split's triangles are still all there), and a home draws some (curtains, casings, wall feet)
+    {
+      let finBad = [], finTris = 0, homes = 0, finBudget = 0, aoPieces = 0, finWorst = 0;
+      const AOc = HGmod.AO || { minH: 0.25, minA: 0.08 };
+      for (let k = 0; k < 36 && finBad.length < 4; k++) {
+        const par = Object.assign({}, PS[(k * 13) % PS.length], { theme: THEMES[k % THEMES.length], storeys: 1 + (k % 3), use: HGmod.USES[k % HGmod.USES.length], y: 0 });
+        const H = HGmod.generate(par), tri = (md) => { let n = 0; for (const g of Object.values(md.groups)) for (const a of g.values()) n += a.idx.length / 3; return n; };
+        const m1 = HGmod.meshData(H, one, { interior: true, wear: false }), mF = HGmod.meshData(H, one, { interior: true, wear: true, finish: true });
+        const mL = HGmod.meshData(H, one, { interior: true, wear: "low", finish: true }), mW = HGmod.meshData(H, one, { interior: true, wear: true });
+        if (tri(mL) !== tri(m1)) finBad.push(H.id + " low draws " + (tri(mL) - tri(m1)) + " finish triangles");
+        const add = tri(mF) - tri(mW);
+        if (add < 0) finBad.push(H.id + " finish removed faces");
+        for (const [key] of mF.groups.walls) if (!m1.groups.walls.has(key) && !mW.groups.walls.has(key) && !/^[a-z_]+\|(in|ceil)$/.test(key)) finBad.push(H.id + " finish key " + key);
+        if (H.use === "house" && !(HGmod.THEMES[H.theme] && HGmod.THEMES[H.theme].ruined)) { homes++; if (add <= 0) finBad.push(H.id + " a home with no finish"); }
+        finTris += add;
+        // (fix2) the plan's finish budget: +2 a shadowed piece, +40 a room
+        const aoN = H.furniture.filter((p) => !(p.deco || p.mount === "wall" || p.mount === "top" || p.max[1] - p.min[1] < AOc.minH || (p.max[0] - p.min[0]) * (p.max[2] - p.min[2]) < AOc.minA)).length;
+        const b = 2 * aoN + 40 * H.rooms.length;
+        aoPieces += aoN; finBudget += b; finWorst = Math.max(finWorst, b ? add / b : 0);
+      }
+      // (W10 R3A fix2) the finish's drawn-only triangles, all 36 houses: <= the plan's budget (2 a shadowed piece + 40 a room); its control: the round-1 shadow
+      // (a 10-triangle ring, +8 a piece) on the same houses must read over it
+      okP(finTris <= finBudget, "finish budget (W10 R3A): drawn-only finish " + finTris + " triangles <= plan 2 a shadowed piece + 40 a room = " + finBudget + " (36 houses; worst house x" + finWorst.toFixed(2) + " its own, info)", "over by " + (finTris - finBudget));
+      okP(finTris + 8 * aoPieces > finBudget, "negative control [finish budget]: the 10-triangle shadow ring (+8 a piece, " + aoPieces + " pieces) is caught", "not caught: " + (finTris + 8 * aoPieces) + " <= " + finBudget);
+      okP(finBad.length === 0 && homes > 0, "meshData finish (W10 R3A): inside keys only, none on low, a home draws it (" + homes + " homes of 36 houses, +" + finTris + " drawn-only triangles, not in house.tris)", finBad.slice(0, 3).join(" | "));
+    }
   }
     // (P23 / LC-17) the wear strips: only on OUTSIDE faces of wall materials, WEAR_OFF in front of a face of a box, never brighter than the wall, the foot strip within
     // WEAR_FOOT[1] of the ground floor and the eave strip within WEAR_EAVE of the top ceiling; the box faces (and so boxRanges) are untouched; <= 14 % more wall triangles
@@ -1164,7 +1260,7 @@ else if (require.main === module) (async () => {
     for (const use of ["tower", "midrise"]) for (const theme of THEMES) for (const st of [4, 6, 9]) {
       const H = HGmod.generate({ id: "tall", w: 15, d: 15, theme, use, storeys: st, seed: 31 + st });
       if (H.floors.length > 3 || H.storeys + H.shell !== st || !H.boxes.some((b) => b.p === "shell" && b.c)) bad.push(use + " " + st + ": walkable " + H.floors.length + " shell " + H.shell);
-      if (Math.max(...H.tris.floors) > TRI_BUDGET || H.tris.shell > TRI_BUDGET * Math.max(1, H.shell)) bad.push(use + " " + st + " budget " + H.tris.floors + " / " + H.tris.shell);
+      if (H.tris.floors.some((t, f) => t > storeyBar(H, f, HGmod)) || H.tris.shell > TRI_BUDGET * Math.max(1, H.shell)) bad.push(use + " " + st + " budget " + H.tris.floors + " / " + H.tris.shell);
     }
     okP(bad.length === 0, "towers / mid-rises asked for 4-9 storeys: <= 3 walkable, the others one closed mass, height kept; budget (18 buildings)", bad.slice(0, 3).join(" | "));
   }
@@ -1248,7 +1344,7 @@ else if (require.main === module) (async () => {
   row("windows", "windows: empty aperture, sill 1.20 / header 2.30, shootable standing, cover crouched, no tall piece in front");
   row("vis-col", "colliders == visual extents (structure exact; kit vs manifest bbox, authored, steps vs ramp within 2 cm)");
   row("stairs", "stairs <= 45 deg, lip 0, top on the next floor, hole >= stairHeadroomRun");
-  row("budget", "<= " + TRI_BUDGET + " triangles per storey (recounted)");
+  row("budget", "<= " + TRI_BUDGET + " triangles per storey, a home's <= " + Math.min(6000, HGmod.TRI_BUDGET_HOME || TRI_BUDGET) + ", a work storey's (W10 R3A ruling R3A-7) office / meeting / lobby / corridor <= 5000, shop / warehouse <= 6000 (8000 at a footprint >= 300 m2) (recounted)");
   row("roof", "pitched roofs: every plank IS its ramp (<= 45 deg, underside drawn only outside the walls); the attic sealed by layers under the plank; end walls on the layers");
   row("loot", "floor loot points on free floor (never inside / under a piece's collider)");
   row("staircase", "no furniture staircase: no low clutter (lowest top 0.2-0.55 m) within 0.9 m of a piece one step up");
@@ -1367,6 +1463,22 @@ else if (require.main === module) (async () => {
     // (Wave 9) the start state: the same house judged as if its doors started SHUT (closed slabs alive) must be caught - the slab check reads the dead flags
     { const errs = []; checkLeaves(base, HGmod, HGmod.collidersOf(base), (c, m) => errs.push(c + ": " + m), () => false);
       ok(errs.some((e) => e.startsWith("leaves:")), "negative control [leaves]: the slab colliders judged against a shut start state are caught", errs.slice(0, 1).join(" | ") || "no error raised"); }
+    // (W10 R3A fix5, ruling R3A-7) the work-storey bars still catch a storey over its new number: a shop storey (footprint >= 300 m2, bar 8000), a small shop
+    // storey (bar 6000) and an office storey (bar 5000), each padded with 12-triangle boxes to just past its bar, must be caught by the budget row
+    for (const [use, w, d, theme, want, bar] of [["shop", 20, 17.5, "city", "shop", 8000], ["shop", 12.5, 10, "city", "shop", 6000], ["tower", 15, 12.5, "city", "office", 5000]]) {
+      let Hw = null, fw = -1;
+      for (let sd = 1; sd <= 12 && fw < 0; sd++) {
+        const G = HGmod.generate({ id: "budget-" + use + "-" + sd, w, d, theme, use, storeys: use === "tower" ? 3 : 1, seed: sd, plan: "rect" });
+        const isBar = (f) => { const ks = G.rooms.filter((r) => r.floor === f).map((r) => r.kind); return want === "shop" ? ks.some((k) => k === "shop" || k === "warehouse") : !ks.some((k) => k === "shop" || k === "warehouse") && ks.some((k) => k === "office" || k === "meeting" || k === "lobby" || k === "hall"); };
+        for (let f = 0; f < G.floors.length && fw < 0; f++) if (isBar(f) && checkHouse(G, HGmod, MAN).length === 0) { Hw = G; fw = f; }
+      }
+      if (!Hw) { ok(false, "negative control [budget, ruling R3A-7]: a clean " + use + " (" + w + " x " + d + ") with a " + want + " storey to pad", "none in seeds 1-12"); continue; }
+      const sl = Hw.boxes.find((q) => q.p === "slab" && q.fl === fw) || Hw.boxes.find((q) => q.p === "slab");
+      const now = Hw.tris.floors[fw], n = Math.ceil((bar + 1 - now) / 12);
+      for (let k = 0; k < n; k++) Hw.boxes.push(Object.assign({}, sl, { c: 0, p: "step2", h: 0, fl: fw }));
+      const errs = checkHouse(Hw, HGmod, MAN);
+      ok(errs.some((e) => e.startsWith("budget:")), "negative control [budget, ruling R3A-7]: a " + want + " storey (" + use + " " + w + " x " + d + ", floor " + fw + ", bar " + bar + ") padded from " + now + " to " + (now + 12 * n) + " triangles is caught", errs.slice(0, 2).join(" | ") || "no error raised");
+    }
     // the pitched-roof plants on a gable house
     const g0 = HGmod.generate({ id: "gable-base", w: 12.5, d: 10, theme: "lodge", use: "house", storeys: 2, seed: 4, plan: "rect" });
     ok(g0.roof === "gable" && checkHouse(g0, HGmod, MAN).length === 0, "negative-control gable house passes every check (roof " + g0.roof + ")");
@@ -1381,6 +1493,41 @@ else if (require.main === module) (async () => {
       let errs; try { plant(H); errs = checkHouse(H, HGmod, MAN); } catch (e) { errs = ["threw: " + e.message]; }
       ok(errs.some((e) => e.startsWith("roof:")), "negative control [roof]: " + label + " is caught", errs.slice(0, 2).join(" | ") || "no error raised");
     }
+    // (W10 R1A) the control of the collision covers' union check: one cover 10 cm short of the boxes it replaces
+    { const H = JSON.parse(JSON.stringify(g0)), c = H.boxes.find((b) => b.mergedCol && b.max[0] - b.min[0] > 0.3);
+      let errs = ["no collision cover in the house"];
+      if (c) { c.max[0] -= 0.1; try { errs = checkHouse(H, HGmod, MAN); } catch (e) { errs = ["threw: " + e.message]; } }
+      ok(errs.some((e) => e.includes("the covers are not the union")), "negative control [vis-col]: a collision cover 10 cm short of the boxes it replaces is caught", errs.slice(0, 2).join(" | ") || "no error raised"); }
+    // (W10 R1A) the control of the furniture collision's union check: one merged furniture box (a kitchen run's) 10 cm short
+    { let H = null, cols = null, s0 = 0, s1 = 0;
+      const pieceN = (h) => h.furniture.reduce((n, p) => n + (p.deco ? 0 : p.src === "kit" ? 1 : p.cols.length), 0);
+      for (let i = 0; i < Math.min(PS.length, 60) && !H; i++) {      // (the first selftest parcel whose furniture merges: a run of cabinets or shelves)
+        const h = HGmod.generate(PS[i]), cs = HGmod.collidersOf(h), a = h.boxes.reduce((n, b) => n + (b.c ? 1 : 0), 0) + h.ramps.length, b = cs.length - HGmod.leafColliderCount(h);
+        if (b - a < pieceN(h)) { H = h; cols = cs; s0 = a; s1 = b; }
+      }
+      if (!H) { H = JSON.parse(JSON.stringify(g0)); cols = HGmod.collidersOf(H); s0 = H.boxes.reduce((n, b) => n + (b.c ? 1 : 0), 0) + H.ramps.length; s1 = cols.length - HGmod.leafColliderCount(H); }
+      let c = null; for (let i = s0; i < s1 && !c; i++) if (cols[i].maxX - cols[i].minX > 1.2 || cols[i].maxZ - cols[i].minZ > 1.2) c = cols[i];
+      if (c && !(furnColErr(H, HGmod, cols) === null)) c = null;     // (the house is clean before the plant)
+      const nPiece = pieceN(H);
+      let msg = "no wide furniture box in the house";
+      if (c) { c.maxX -= 0.1; msg = furnColErr(H, HGmod, cols) || "no error raised"; }
+      ok(c && /not the union/.test(msg) && s1 - s0 < nPiece, "negative control [vis-col]: a merged furniture collider 10 cm short of the pieces it covers is caught (the house's " + nPiece + " piece boxes collide as " + (s1 - s0) + ")", msg); }
+    // (W10 R1A pass 5) the control of vis-col's one relaxation (a part wholly under a collider whose underside is < 1.54 m over the floor: no crouched
+    // mover fits beneath, so buildCatalog keeps no collider for it): that collider's underside lifted to 1.60 m over the floor - a gap a crouched mover
+    // could take - must be caught as "part outside its colliders"
+    { let H = null, pc = null, g = null;
+      for (let i = 0; i < Math.min(PS.length, 120) && !H; i++) {
+        const h = HGmod.generate(PS[i]), fy = h.floors.map((f) => f.y);
+        for (const p of h.furniture) { if (p.src === "kit" || p.deco || !p.cols || !p.parts) continue;
+          for (const bi of p.parts) { const b = h.boxes[bi];
+            if (p.cols.some((q) => b.min[0] >= q.min[0] - TOL && b.min[1] >= q.min[1] - TOL && b.min[2] >= q.min[2] - TOL && b.max[0] <= q.max[0] + TOL && b.max[1] <= q.max[1] + TOL && b.max[2] <= q.max[2] + TOL)) continue;
+            const q = p.cols.find((q) => b.min[0] >= q.min[0] - TOL && b.min[2] >= q.min[2] - TOL && b.max[0] <= q.max[0] + TOL && b.max[2] <= q.max[2] + TOL && b.max[1] <= q.min[1] + TOL && q.min[1] - fy[p.floor] < 1.54);
+            if (q) { H = h; pc = p; g = q; break; } }
+          if (H) break; } }
+      let errs = ["no piece in " + Math.min(PS.length, 120) + " parcels uses the relaxation"];
+      if (H && checkHouse(H, HGmod, MAN).some((e) => e.includes("part outside its colliders"))) errs = ["the house fails before the plant"];
+      else if (H) { g.min[1] = H.floors[pc.floor].y + 1.60; try { errs = checkHouse(H, HGmod, MAN); } catch (e) { errs = ["threw: " + e.message]; } }
+      ok(errs.some((e) => e.includes("part outside its colliders")), "negative control [vis-col relaxation]: a " + (pc ? pc.cat : "?") + " collider lifted to 1.60 m over the floor (a crouched mover fits under) leaves its part uncovered - caught", errs.slice(0, 2).join(" | ") || "no error raised"); }
     const p2 = Object.assign({}, PS[0], { theme: "city", storeys: 2 });
     ok(fnv(JSON.stringify(HGmod.generate(p2))) !== fnv(JSON.stringify(HGmod.generate(Object.assign({}, p2, { seed: (p2.seed + 1) >>> 0 })))), "negative control [determinism]: a different seed gives a different house (the hash compare bites)");
   }
@@ -1392,7 +1539,7 @@ else if (require.main === module) (async () => {
   // contended box), so the bar judges the JS threads only: the workers' own thread CPU + the main thread's; the share is workers / (workers + main))
   const wCpuS = workerCpuMs.reduce((a, b) => a + b, 0) / 1000, mCpuS = threadCpuMs() / 1000, perHouse = (wCpuS + mCpuS) * 1000 / Math.max(1, res.length), share = wCpuS / Math.max(1e-9, wCpuS + mCpuS);
   info("CPU: " + cpuS.toFixed(1) + " s for the whole process (" + wCpuS.toFixed(1) + " s on the " + NW + " workers, " + mCpuS.toFixed(1) + " s on the main thread, " + (cpuS - wCpuS - mCpuS).toFixed(1) + " s in V8 helper threads); wall " + secs.toFixed(1) + " s (a shared box stretches the wall time, not the CPU)");
-  ok(workerCpuMs.length === NW && perHouse <= HG_CPU_MS_PER_HOUSE && share >= 0.75, "selftest CPU " + perHouse.toFixed(1) + " ms a house on the JS threads (<= " + HG_CPU_MS_PER_HOUSE + " ms: " + (wCpuS + mCpuS).toFixed(1) + " s for " + res.length + " houses), " + (100 * share).toFixed(0) + " % of the JS threads' CPU on the workers (>= 75 %: the run stays parallel); wall " + secs.toFixed(1) + " s, not judged");
+  (CPU_ROW_WRAPPED ? (cond, msg) => info(msg + " [judged by _harness/p23/hg_cpu.py: " + (cond ? "absolute PASS" : "absolute red") + "]") : ok)(workerCpuMs.length === NW && perHouse <= HG_CPU_MS_PER_HOUSE && share >= 0.75, "selftest CPU " + perHouse.toFixed(1) + " ms a house on the JS threads (<= " + HG_CPU_MS_PER_HOUSE + " ms: " + (wCpuS + mCpuS).toFixed(1) + " s for " + res.length + " houses), " + (100 * share).toFixed(0) + " % of the JS threads' CPU on the workers (>= 75 %: the run stays parallel); wall " + secs.toFixed(1) + " s, not judged");
   console.log("\n" + (failed ? "FAIL" : "PASS") + "  " + passed + " passed, " + failed + " failed");
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error("FAIL  selftest crashed: " + (e && e.stack || e)); process.exit(1); });

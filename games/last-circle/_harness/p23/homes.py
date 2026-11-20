@@ -1,0 +1,490 @@
+#!/usr/bin/env python
+"""homes - w10_homes: are the furnished homes house-sized, furnished like homes, with kitchens, baths and real-size furniture?  (Wave 10, round 1, lane R1A.)
+NODE ONLY: no browser, no server, no file of the tree edited (a planted fault edits a scratch copy).
+
+    python _harness/p23/homes.py --disk                     # the working copy: 3 maps x seeds 1, 7, 1234, 2026 (12 builds) + a determinism re-build (~1-2 min)
+    python _harness/p23/homes.py --rev 361c5ec3             # a frozen commit (the W9 tip: every W10 row FAILS there)
+    python _harness/p23/homes.py --disk --plant sparse      # a planted fault (see PLANTS): exit 1 = caught
+
+homes.mjs builds each map with the unmodified maps.js (world_env.mjs) and records every enterable building and every room of a home (use house, not a ruin),
+the same census as the W10 houses audit (F:/lc_p23/w10/audit/houses/census.mjs). "Substantive" = a piece whose drawn type is not filler (the audit's FILL list:
+clocks, lamps, plants, bins, art, posters, rugs, wall shelves, mirrors, whiteboards, runners, coat racks, monitors, cartons, small boxes, a slim TV, a microwave).
+"Lived rooms" = living, bedroom, kitchen, dining (of homes).
+
+Rows (any FAIL -> exit 1; the census not running -> exit 2):
+  home-size     0 homes under 100 m2 of footprint (W x D), 0 homes at 7.5 x 7.5 m                                  [audit: 403 at 7.5 x 7.5; half <= 75 m2]
+  storeys       >= 30 % of homes two-storey pooled over the 12 builds (40 % before plan scope cut 1, pass 2), each map >= 30 %                             [16.9 %]
+  programme     100 % of homes hold living + kitchen + bedroom + bath; median rooms (corridors not counted) >= 5     [median 3; no kitchen 48.9 %]
+  sheds         one-room enterable buildings <= 8 % of all enterable buildings                                       [15 %]
+  coverage      lived rooms: median floor coverage (standing pieces' footprint / room area) >= 25 %; <= 10 % under 15 %   [15 %; 53 % under 15 %]
+  density       lived rooms: substantive pieces per 10 m2 median >= 2.5; every lived room >= 6 substantive pieces    [1.6; median 4]
+  sets          bedroom bed 100 %, nightstand >= 90 %, wardrobe / dresser >= 90 %; living sofa >= 98 %, coffee table >= 90 %, TV unit >= 80 %;
+                kitchen dining set (a table + >= 2 chairs in the kitchen or a room it opens into) >= 95 %          [kitchen table 50.5 %]
+  kitchen-run   the kitchen's base units form ONE run (each touching the next within 0.05 m) in >= 90 % of kitchens; upper cabinets >= 70 %;
+                a hood over the stove >= 70 %                                                                         [uppers 69 / 866; 0 hoods]
+  bath-set      baths: a basin with a mirror over it >= 90 %, a shower or tub >= 90 % (plan item 7)
+  filler        filler <= 35 % of a home's pieces (pooled); clocks <= 1 in every home; floor lamps <= 1 and potted plants <= 1 in every room   [48.8 %]
+  narrow        living / kitchen / bedroom: the narrow side of the room's biggest rectangle >= 5.0 m in >= 98 %; bath long / narrow <= 2.0 in >= 95 %   [19.7 % at 2.5 m]
+  scale         housegen.FURN_K in [1.15, 1.25] and every kit piece's collider == the box of the vertices maps.js BAKES for it (buildHouseFurniture, the real
+                meshopt GLB at maps.js's draw scale, read through its Node-only __LC_KITDRAWN hook) within 2 cm (0 mismatches)   [k = 1.0]
+  tris          furnished home storeys: p90 <= 6,000 triangles (housegen's own count of what it draws)                [p50 3,341]
+  loot          every map x seed: the map's loot points (map.lootPoints - it holds every house's points - + house chests) within +-10 % of the W9 tip
+  loot-density  homes' loot points (+ chests) per m2 of room, per map (4 seeds pooled), within +-15 % of the W9 tip (the plan's loot row, second half)
+  determinism   the first map x seed built twice gives the same census hash
+W10 R3A rows (interiors II, plan lane R3A; same 12 builds):
+  finish        the homes' lived rooms (living, bedroom, kitchen, dining): >= 95 % have wall decor (a picture / poster / clock / mirror / board, or a finish print -
+                H.fin.pics); 100 % of their windows have real curtains (a rod + pleated panels: H.fin.cur); every home ceiling face (slab / roof / shell underside
+                above the ground floor) white, sRGB luminance >= 0.85                                                    [20.4 % of rooms without decor; plank curtains]
+                (fix5, ruling R3A-6) + >= 1 picture sampling the art atlas (assets/tex/interior_art.jpg, as meshData draws it on medium+) in >= 60 % of the homes'
+                living rooms, of the offices and of the lobbies, each; the atlas's 16 cells each a picture (luminance std >= 10)
+  shop-density  shop / storage / warehouse rooms (non-home buildings, not barns, not ruins): >= 30 pieces per 100 m2 pooled (every furniture record in the
+                room); >= 1 cover piece per 25 m2 pooled AND floor(area / 25) cover pieces in >= 90 % of those rooms. COVER = standing on the room's floor,
+                not decor, >= 0.9 m tall, >= 0.7 m wide                                                                 [21 per 100 m2; a 125 m2 store with 4 pieces]
+  office-cover  office / meeting / lobby / corridor (a hall of a non-home building) rooms: >= 90 % of each kind hold >= 1 cover piece   [office 24, meeting 12.9, corridor 0 %]
+  work-density  (W10 R3A fix5, orchestrator rulings R3A-7 / R3A-8) pieces per 100 m2 pooled PER KIND: shops alone >= 30, offices >= 35, meeting rooms >= 25,
+                corridors >= 25, lobbies >= 25                                                 [pass 4: shop 27.9, office 29.4, meeting 15.4, corridor 21.0]
+  flat-roofs    resort buildings with a flat roof <= 25 %; homes outside a downtown core (H.core) pitched (any roof but flat) >= 80 %; porch share of those homes
+                printed (plan: ~30 %)                                                                                     [resort 51 %, city 76 % flat]
+Plants (a scratch copy of runtime/ + assets/props with ONE source edit; each must exit 1 on its rows):
+  tiny-homes (7.5 x 7.5 back in towngen ARCH house_s, one floor) -> home-size, storeys     sparse (plan item 5 undone: VIEW_WANT top-up, no groups, budget 4000) -> coverage, density
+  bare (the quota and the centre groups off, furniture x1: the audit's furnishing) -> coverage, density
+  clock-spam (the clock / lamp / plant caps off) -> filler      gap-kitchen (base units spaced, not run) -> kitchen-run     strip-rooms (1-cell minimum width) -> narrow
+  scale-draw-only (kit drawn at k, colliders at 1) -> scale     no-programme (the minimum programme off) -> programme       shed-flood (shed weights x20) -> sheds
+  no-sets (the centre groups off) -> sets       tri-flood (TRI_BUDGET 6000 -> 60000 and the quota 1 per 1.5 m2) -> tris     loot-drop (house loot halved) -> loot
+  rng-leak (Math.random in the furnisher) -> determinism     no-bath-set (no mirror / shower) -> bath-set     (loot-drop also -> loot-density)
+  draw-scale-drop (maps.js reads suggested_scale off citykit's indexed manifest: the pass-1 bug, pieces baked at native size x k) -> scale
+  (W10 R3A) grey-ceil (the home ceiling plaster grey-beige, L ~0.64) -> finish
+  (W10 R3A) plank-curtain (CURTAIN_FOLDS off: round 3's flat plank skins) -> finish     bare-office (WORK_COVER off: no partitions / sized tables / cover pass) -> office-cover
+  flat-everywhere (ROOF_FLAT_ALL: every roof flat) -> flat-roofs     sparse-shop (WORK_FIT off: the round-3 shop / store furnishing) -> shop-density
+  (W10 R3A fix5) sparse-office (WORK_DENSE off: the pass-4 office / meeting / lobby / corridor dressing) -> work-density
+  no-work-budget (WORK_BUDGET off: every work storey back at 4000 triangles) -> work-density
+  no-art (ART_UV off: every picture's atlas UVs collapsed onto one point - a flat texel) -> finish
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import statistics
+import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import p23lib as L  # noqa: E402
+
+C = L.C
+GATE = "w10_homes"
+HERE = os.path.dirname(os.path.abspath(__file__))
+MJS = os.path.join(HERE, "homes.mjs")
+MAPS = "isla_viva,ashgrid,deepwood"
+SEEDS = "1,7,1234,2026"
+W9_TIP = "361c5ec3"          # the Wave-9 round-1 tip Wave 10 starts from (master 361c5ec3 = LIVE_REV b7e245ef + the gates baseline move): the loot baseline. NEVER moves
+HG = "runtime/3d/royale/housegen.js"
+TG = "runtime/3d/royale/towngen.js"
+MJ = "runtime/3d/royale/maps.js"
+# plant -> (rows that must FAIL, [(file, regex, replacement)]) - each regex must match exactly once in the scratch copy (else could-not-judge)
+STOREYS_POOLED = 30          # (pass 2: plan scope cut 1 - was 40)
+
+PLANTS = {
+    # (pass 2, scope cut 1: the storeys floor is 30 % - the 7.5 m one-storey house_s alone leaves ~34 % two-storey, so storeys gets its own control, flat-homes)
+    "flat-homes": ({"storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'house_s: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1]'),
+                                 (TG, r'house_m: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'house_m: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10]], floors: [1]'),
+                                 (TG, r'cabin: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]', 'cabin: { use: "house", gen: "house", dims: [[10, 10], [12.5, 10], [10, 12.5]], floors: [1]')]),
+    "tiny-homes": ({"home-size", "storeys"}, [(TG, r'house_s: \{ use: "house", gen: "house", dims: \[[^\n]*?\], floors: \[[^\]]*\]',
+                                                 'house_s: { use: "house", gen: "house", dims: [[7.5, 7.5], [10, 7.5]], floors: [1]')]),
+    # (pass 3) the plan's control "VIEW_WANT = 4 top-up back": plan item 5 undone as the unit it is - the VIEW_WANT top-up instead of the area quota, no
+    # centre-of-room groups, the home storey's triangle budget back at 4000 - -> coverage AND density (measured 2026-11-14: median coverage 22.9 %, 14.1 %
+    # under 15 %; density median 1.60 per 10 m2 = the audit's 1.6). Pass 2's sparse (quota + groups only) held coverage at 27.6 %: the 6000 budget let the
+    # top-up's pieces stand. 'bare' (furniture x1 as well) stays as a second coverage control.
+    "sparse": ({"coverage", "density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
+                                         (HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;"),
+                                         (HG, r"export const TRI_BUDGET_HOME = 6000;", "export const TRI_BUDGET_HOME = 4000;")]),
+    # (the quota alone off leaves coverage at ~28 %: the centre groups and the x1.15 furniture carry it - coverage's own plant is the audit's furnishing back)
+    "bare": ({"coverage", "density"}, [(HG, r"export const AREA_QUOTA = true;", "export const AREA_QUOTA = false;"),
+                                       (HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;"),
+                                       (HG, r"export const FURN_K = 1.15;", "export const FURN_K = 1;")]),
+    "clock-spam": ({"filler"}, [(HG, r"export const FILLER_CAPS = true;", "export const FILLER_CAPS = false;")]),
+    "gap-kitchen": ({"kitchen-run"}, [(HG, r"export const KITCHEN_RUN = true;", "export const KITCHEN_RUN = false;")]),
+    "strip-rooms": ({"narrow"}, [(HG, r"export const MIN_ROOM_W = 2;", "export const MIN_ROOM_W = 1;")]),
+    "scale-draw-only": ({"scale"}, [(HG, r"const COL_K = FURN_K;", "const COL_K = 1;")]),
+    # the pass-1 bug back: maps.js reads the raw manifest key (`suggested_scale`) off citykit's INDEXED manifest (it keeps `.scale`): every piece baked at native x k
+    "draw-scale-drop": ({"scale"}, [(MJ, r"return T && T\.scale > 0 \? T\.scale : 1;", "return T && T.suggested_scale > 0 ? T.suggested_scale : 1;")]),
+    "no-programme": ({"programme"}, [(HG, r"export const HOME_PROGRAMME = true;", "export const HOME_PROGRAMME = false;")]),
+    "shed-flood": ({"sheds"}, [(TG, r"export const SHED_W = 1;", "export const SHED_W = 20;")]),
+    "no-sets": ({"sets"}, [(HG, r"export const CENTRE_GROUPS = true;", "export const CENTRE_GROUPS = false;")]),
+    "tri-flood": ({"tris"}, [(HG, r"export const TRI_BUDGET_HOME = 6000;", "export const TRI_BUDGET_HOME = 60000;"),
+                             (HG, r"export const QUOTA_M2 = 4;", "export const QUOTA_M2 = 1.5;")]),
+    "loot-drop": ({"loot", "loot-density"}, [(HG, r"export const LOOT_KEEP = 1;", "export const LOOT_KEEP = 0.5;")]),
+    "rng-leak": ({"determinism"}, [(HG, r"export const RNG_LEAK = false;", "export const RNG_LEAK = true;")]),
+    "no-bath-set": ({"bath-set"}, [(HG, r"export const BATH_SET = true;", "export const BATH_SET = false;")]),
+    # (W10 R3A) interiors II
+    "plank-curtain": ({"finish"}, [(HG, r"export const CURTAIN_FOLDS = true;", "export const CURTAIN_FOLDS = false;")]),
+    # (W10 R3A fix3) the ceiling half of finish can fail: the home ceiling plaster at a grey-beige (L ~0.64) instead of 0xf4f2ee
+    "grey-ceil": ({"finish"}, [(HG, r'P_CEIL = pal\("plaster", 0xf4f2ee\)', 'P_CEIL = pal("plaster", 0xa8a49c)')]),
+    "bare-office": ({"office-cover"}, [(HG, r"export const WORK_COVER = true;", "export const WORK_COVER = false;")]),
+    "flat-everywhere": ({"flat-roofs"}, [(HG, r"export const ROOF_FLAT_ALL = false;", "export const ROOF_FLAT_ALL = true;")]),
+    "sparse-shop": ({"shop-density"}, [(HG, r"export const WORK_FIT = true;", "export const WORK_FIT = false;")]),
+    # (W10 R3A fix5, rulings R3A-7 / R3A-8) work-density's controls: the offices / meeting rooms / lobbies / corridors' size-scaled dressing off (the pass-4
+    # furnishing), and the work storeys' budgets back at TRI_BUDGET 4000 (what held shops at 27.9 and offices at 29.4 per 100 m2)
+    "sparse-office": ({"work-density"}, [(HG, r"export const WORK_DENSE = true;", "export const WORK_DENSE = false;")]),
+    "no-work-budget": ({"work-density"}, [(HG, r"export const WORK_BUDGET = true;", "export const WORK_BUDGET = false;")]),
+    # (W10 R3A fix5, ruling R3A-6) the pictures' atlas UVs collapsed onto one point (one flat texel): finish's picture half must FAIL
+    "no-art": ({"finish"}, [(HG, r"export const ART_ATLAS = true, ART_UV = true,", "export const ART_ATLAS = true, ART_UV = false,")]),
+}
+
+
+def pct(a, b):
+    return 100.0 * a / b if b else 0.0
+
+
+def q(vals, p):
+    v = sorted(vals)
+    return v[min(len(v) - 1, int(p * len(v)))] if v else None
+
+
+def planted_root(src, plant):
+    """a scratch copy of <src>/runtime + assets/props + assets/vendor with the plant's edits (each anchor must match exactly once)"""
+    dst = tempfile.mkdtemp(prefix="lc_w10homes_%s_" % plant)
+    for part in ("runtime", os.path.join("assets", "props"), os.path.join("assets", "vendor"), os.path.join("assets", "tex")):      # (fix5: + tex, the art atlas the finish row reads)
+        if os.path.isdir(os.path.join(src, part)):
+            shutil.copytree(os.path.join(src, part), os.path.join(dst, part))
+    for rel, rx, rep in PLANTS[plant][1]:
+        fn = os.path.join(dst, rel.replace("/", os.sep))
+        with open(fn, encoding="utf-8") as fh:
+            s = fh.read()
+        n = len(re.findall(rx, s))
+        if n != 1:
+            raise C.EnvFailure("plant %s: anchor %r matched %d times in %s (the tree moved: re-anchor the plant)" % (plant, rx, n, rel))
+        s = re.sub(rx, lambda _m: rep, s)
+        with open(fn, "w", encoding="utf-8") as fh:
+            fh.write(s)
+    return dst
+
+
+def census(root, maps, seeds, twice):
+    argv = [MJS, "--root", root, "--maps", maps, "--seeds", seeds, "--vendor", os.path.join(root, "assets", "vendor", "three")]
+    if twice:
+        argv.append("--twice")
+    data, _tail, secs = L.run_node(argv, timeout=3600)
+    data["secs"] = secs
+    return data
+
+
+def baseline(maps, seeds):
+    """the W9 tip's census (cached by maps / seeds under _reports)"""
+    fn = os.path.join(C.REPORTS, "w10_homes_base_%s_%s_%s.json" % (W9_TIP, maps.replace(",", "-"), seeds.replace(",", "-")))
+    if os.path.isfile(fn):
+        with open(fn, encoding="utf-8") as fh:
+            return json.load(fh)
+    root, _label = L._rev_root(W9_TIP)
+    d = census(root, maps, seeds, False)
+    os.makedirs(C.REPORTS, exist_ok=True)
+    with open(fn, "w", encoding="utf-8") as fh:
+        json.dump(d, fh)
+    return d
+
+
+def judge(v, d, base, root=None):
+    B = d["builds"]
+    homes = [b for R in B for b in R["buildings"] if b["home"]]
+    allb = [b for R in B for b in R["buildings"]]
+    rooms = [r for R in B for r in R["rooms"]]
+    lived = [r for r in rooms if r["kind"] in ("living", "bedroom", "kitchen", "dining")]
+    if not homes or not lived:
+        v.cnj("census", "no homes / lived rooms in %d builds" % len(B))
+        return
+    v.data["census"] = {"builds": len(B), "buildings": len(allb), "homes": len(homes), "rooms": len(rooms), "lived": len(lived), "furnK": d.get("furnK"), "hgVersion": d.get("hgVersion"),
+                        "genVersion": d.get("genVersion"), "secs": d.get("secs")}
+    v.info("census", v.data["census"])
+    # home-size
+    small = [b for b in homes if b["W"] * b["D"] < 100 - 1e-6]
+    tiny = [b for b in homes if abs(b["W"] - 7.5) < 1e-6 and abs(b["D"] - 7.5) < 1e-6]
+    fp = sorted(b["W"] * b["D"] for b in homes)
+    v.check("home-size", not small and not tiny, "%d homes; %d under 100 m2, %d at 7.5 x 7.5 (bar 0 / 0); footprint min %.1f p50 %.1f m2%s" % (
+        len(homes), len(small), len(tiny), fp[0], q(fp, 0.5), (" e.g. " + small[0]["id"]) if small else ""), "0 under 100 m2, 0 at 7.5 x 7.5")
+    # storeys
+    two = pct(sum(1 for b in homes if b["storeys"] >= 2), len(homes))
+    per = {}
+    for R in B:
+        hs = [b for b in R["buildings"] if b["home"]]
+        per.setdefault(R["map"], [0, 0])
+        per[R["map"]][0] += sum(1 for b in hs if b["storeys"] >= 2)
+        per[R["map"]][1] += len(hs)
+    perp = {m: pct(a, n) for m, (a, n) in per.items()}
+    # (W10 R1A pass 2) PLAN SCOPE CUT (1) taken: perf_district ashgrid s2026 drop view x1.371 triangles (bar x1.25) -> "2-storey share 40 % -> 30 % (the floor of the
+    # row)". STOREYS_POOLED is that floor; the per-map floor stays 30 %
+    v.check("storeys", two >= STOREYS_POOLED and all(x >= 30 for x in perp.values()), "two-storey homes %.1f %% pooled (bar >= %d, plan scope cut 1); per map %s (bar >= 30 each)" % (
+        two, STOREYS_POOLED, ", ".join("%s %.1f %%" % kv for kv in perp.items())), ">= %d %% pooled, >= 30 %% per map" % STOREYS_POOLED)
+    # programme
+    need = ("living", "kitchen", "bedroom", "bath")
+    miss = [b for b in homes if not all(k in b["kinds"].split("+") for k in need)]
+    medr = statistics.median(b["roomsNonHall"] for b in homes)
+    v.check("programme", not miss and medr >= 5, "%d of %d homes miss a living / kitchen / bedroom / bath (bar 0)%s; median rooms %.1f (bar >= 5)" % (
+        len(miss), len(homes), (" e.g. %s (%s)" % (miss[0]["id"], miss[0]["kinds"])) if miss else "", medr), "100 %, median >= 5")
+    # sheds
+    one = sum(1 for b in allb if b["rooms"] == 1)
+    v.check("sheds", pct(one, len(allb)) <= 8, "one-room enterable buildings %d of %d = %.1f %% (bar <= 8 %%)" % (one, len(allb), pct(one, len(allb))), "<= 8 %")
+    # coverage
+    cov = [r["cov"] for r in lived]
+    low = pct(sum(1 for c in cov if c < 0.15), len(cov))
+    v.check("coverage", statistics.median(cov) >= 0.25 and low <= 10, "lived rooms %d: median coverage %.1f %% (bar >= 25), under 15 %%: %.1f %% (bar <= 10); by kind %s" % (
+        len(cov), 100 * statistics.median(cov), low, ", ".join("%s %.0f %%" % (k, 100 * statistics.median([r["cov"] for r in lived if r["kind"] == k])) for k in ("living", "bedroom", "kitchen", "dining") if any(r["kind"] == k for r in lived))),
+        "median >= 25 %, <= 10 % under 15 %")
+    # density
+    den = [10.0 * r["sub"] / r["area"] for r in lived]
+    mins = min(r["sub"] for r in lived)
+    worst = min(lived, key=lambda r: r["sub"])
+    v.check("density", statistics.median(den) >= 2.5 and mins >= 6, "lived rooms: substantive per 10 m2 median %.2f (bar >= 2.5); fewest %d (bar >= 6: %s %s %.1f m2); rooms under 6: %d" % (
+        statistics.median(den), mins, worst["h"], worst["kind"], worst["area"], sum(1 for r in lived if r["sub"] < 6)), "median >= 2.5, min >= 6")
+    # sets
+    def share(kind, key):
+        rs = [r for r in rooms if r["kind"] == kind]
+        return pct(sum(r[key] for r in rs), len(rs)), len(rs)
+    S = {("bedroom", "bed"): 100, ("bedroom", "night"): 90, ("bedroom", "ward"): 90, ("living", "sofa"): 98, ("living", "coffee"): 90, ("living", "tv"): 80, ("kitchen", "dine"): 95}
+    got = {k: share(*k) for k in S}
+    v.check("sets", all(got[k][0] >= bar - 1e-9 for k, bar in S.items()), "; ".join("%s %s %.1f %% of %d (bar %d)" % (k[0], k[1], got[k][0], got[k][1], bar) for k, bar in S.items()),
+            "bed 100, night 90, wardrobe 90, sofa 98, coffee 90, TV 80, dining 95")
+    # kitchen-run
+    ks = [r for r in rooms if r["kind"] == "kitchen"]
+    one_run = pct(sum(1 for r in ks if r["base"] >= 1 and r["runs"] == 1), len(ks))
+    up = pct(sum(r["upper"] for r in ks), len(ks))
+    hood = pct(sum(r["hood"] for r in ks), len(ks))
+    v.check("kitchen-run", one_run >= 90 and up >= 70 and hood >= 70, "kitchens %d: one closed base run %.1f %% (bar >= 90); upper cabinets %.1f %% (>= 70); hood over the stove %.1f %% (>= 70)" % (
+        len(ks), one_run, up, hood), "run >= 90 %, uppers >= 70 %, hood >= 70 %")
+    # bath-set
+    bs = [r for r in rooms if r["kind"] == "bath"]
+    sm = pct(sum(1 for r in bs if r["bsink"] and r["mirror"]), len(bs))
+    wa = pct(sum(r["wash"] for r in bs), len(bs))
+    v.check("bath-set", sm >= 90 and wa >= 90, "baths %d: basin + mirror %.1f %% (bar >= 90); shower or tub %.1f %% (bar >= 90)" % (len(bs), sm, wa), ">= 90 % / >= 90 %")
+    # filler
+    fill = pct(sum(b["fill"] for b in homes), sum(b["pieces"] for b in homes))
+    clk = [b for b in homes if b["clocks"] > 1]
+    lmp = [r for r in rooms if r["lamps"] > 1]
+    pl = [r for r in rooms if r["plants"] > 1]
+    v.check("filler", fill <= 35 and not clk and not lmp and not pl, "filler %.1f %% of home pieces (bar <= 35); homes with > 1 clock %d; rooms with > 1 floor lamp %d, > 1 potted plant %d (bars 0)" % (
+        fill, len(clk), len(lmp), len(pl)), "<= 35 %, 0, 0, 0")
+    # narrow
+    lk = [r for r in rooms if r["kind"] in ("living", "kitchen", "bedroom")]
+    wide = pct(sum(1 for r in lk if r["nw"] >= 5.0 - 1e-6), len(lk))
+    bath_ok = pct(sum(1 for r in bs if r["nw"] > 0 and r["nl"] / r["nw"] <= 2.0 + 1e-9), len(bs))
+    v.check("narrow", wide >= 98 and bath_ok >= 95, "living / kitchen / bedroom %d: narrow side >= 5.0 m in %.1f %% (bar >= 98); baths %d: aspect <= 2.0 in %.1f %% (bar >= 95)" % (
+        len(lk), wide, len(bs), bath_ok), ">= 98 %, >= 95 %")
+    # scale: the collider vs the box of the vertices maps.js BAKED for the entry (buildHouseFurniture's draw path, the real GLB at maps.js's draw scale)
+    k = d.get("furnK") or 1
+    kn = sum(R["kit"]["n"] for R in B)
+    kd = sum(R["kit"].get("drawn", 0) for R in B)
+    kx = sum(R["kit"].get("boxes", 0) for R in B)
+    kb = sum(R["kit"]["bad"] for R in B)
+    kw = max(B, key=lambda R: R["kit"]["worst"])["kit"]
+    msg = "FURN_K %.3f (bar 1.15 .. 1.25); kit pieces %d, baked by maps.js %d (GLB %d, collider-box stand-ins %d); baked box != collider (> 2 cm) %d (bar 0); worst %.3f m (%s); entry scales %s" % (
+        k, kn, kd, kd - kx, kx, kb, kw["worst"], kw["worstId"], json.dumps(B[0]["kit"]["ks"]))
+    if kn == 0 or kd != kn or kx > 0:
+        v.cnj("scale", msg + " - every kit piece must be baked from its GLB to judge the draw path")
+    else:
+        v.check("scale", 1.15 - 1e-9 <= k <= 1.25 + 1e-9 and kb == 0, msg, "k in [1.15, 1.25], 0 mismatches")
+    # tris
+    st = [t for b in homes for t in b["tris"] if t > 0]
+    v.check("tris", bool(st) and q(st, 0.9) <= 6000, "home storeys %d: triangles p50 %d, p90 %d (bar <= 6000), max %d" % (len(st), q(st, 0.5), q(st, 0.9), max(st)), "p90 <= 6000")
+    # loot
+    if base is None:
+        v.cnj("loot", "no W9-tip baseline census")
+    else:
+        bb = {(R["map"], R["seed"]): R for R in base["builds"]}
+        bad, parts = [], []
+        for R in B:
+            o = bb.get((R["map"], R["seed"]))
+            if not o:
+                continue
+            r = R["loot"]["total"] / max(1, o["loot"]["total"])
+            parts.append("%s s%d %d -> %d (x%.3f)" % (R["map"], R["seed"], o["loot"]["total"], R["loot"]["total"], r))
+            if not 0.9 <= r <= 1.1:
+                bad.append(parts[-1])
+        dens = []
+        for m in sorted({R["map"] for R in B}):
+            a = sum(R["homeLoot"] for R in B if R["map"] == m) / max(1e-9, sum(R["homeArea"] for R in B if R["map"] == m))
+            b0 = sum(o["homeLoot"] for o in base["builds"] if o["map"] == m) / max(1e-9, sum(o["homeArea"] for o in base["builds"] if o["map"] == m))
+            r = a / b0 if b0 else 0
+            dens.append("%s %.4f -> %.4f /m2 (x%.3f)" % (m, b0, a, r))
+            if not 0.85 <= r <= 1.15:
+                bad.append(dens[-1])
+        bad_map = [b for b in bad if " s" in b.split(" -> ")[0]]
+        bad_den = [b for b in bad if b not in bad_map]
+        v.check("loot", not bad_map and bool(parts), "vs %s: map loot %s%s" % (W9_TIP, "; ".join(parts), (" | OUT: " + "; ".join(bad_map)) if bad_map else ""), "+-10 % per map x seed")
+        v.check("loot-density", not bad_den and bool(dens), "vs %s: home loot per m2 %s%s" % (W9_TIP, "; ".join(dens), (" | OUT: " + "; ".join(bad_den)) if bad_den else ""), "+-15 % per map")
+    judge_interiors(v, B, root)
+    # determinism
+    dt = d.get("determinism")
+    if not dt:
+        v.cnj("determinism", "no re-build")
+    else:
+        v.check("determinism", dt["a"] == dt["b"], "%s seed %d built twice: %s vs %s" % (dt["map"], dt["seed"], dt["a"], dt["b"]), "identical hashes")
+
+
+ART_FILE = os.path.join("assets", "tex", "interior_art.jpg")
+ART_PICS_BAR, ART_CELL_STD = 60, 10.0
+
+
+def atlas_cells(root):
+    """(W10 R3A fix5) the art atlas's 16 cells (4 x 4 of a 1024 px image): [(luminance std, distinct 4-bit colours)] or an error string"""
+    fn = os.path.join(root, ART_FILE)
+    if not os.path.isfile(fn):
+        return "no %s" % ART_FILE
+    try:
+        from PIL import Image
+        import numpy as np
+    except Exception as e:  # pragma: no cover
+        return "PIL / numpy unavailable: %s" % e
+    im = np.asarray(Image.open(fn).convert("RGB"), dtype=float)
+    if im.shape[:2] != (1024, 1024):
+        return "atlas is %s, not 1024 x 1024" % (im.shape[:2],)
+    out = []
+    for k in range(16):
+        c = im[(k // 4) * 256 + 12:(k // 4 + 1) * 256 - 12, (k % 4) * 256 + 12:(k % 4 + 1) * 256 - 12]
+        lum = c @ np.array([0.2126, 0.7152, 0.0722])
+        q = (c // 16).astype(int)
+        out.append((round(float(lum.std()), 1), int(len(np.unique(q[..., 0] * 256 + q[..., 1] * 16 + q[..., 2])))))
+    return out
+
+
+def judge_interiors(v, B, root=None):
+    """(W10 R3A) the interiors-II rows: finish, shop-density, office-cover, flat-roofs"""
+    I = [R.get("inter") for R in B]
+    if not all(I):
+        for row in ("finish", "shop-density", "work-density", "office-cover", "flat-roofs"):
+            v.cnj(row, "the census has no interiors record (homes.mjs too old for this tree)")
+        return
+    lived = [r for x in I for r in x["lived"]]
+    dec = pct(sum(r["decor"] for r in lived), len(lived))
+    wins = sum(r["wins"] for r in lived)
+    cur = sum(r["cur"] for r in lived)
+    cn = sum(x["ceil"]["n"] for x in I)
+    cw = sum(x["ceil"]["white"] for x in I)
+    cmin = min(x["ceil"]["min"] for x in I)
+    by = {}
+    for r in lived:
+        by.setdefault(r["kind"], [0, 0])
+        by[r["kind"]][0] += r["decor"]
+        by[r["kind"]][1] += 1
+    # (W10 R3A fix5, ruling R3A-6) + the pictures that sample the art atlas (medium+: meshData opts.art) - >= 1 in >= 60 % of the homes' living rooms, of the
+    # offices and of the lobbies, each; and the atlas itself: 16 cells, each a picture (luminance std >= 10 over the cell), not a flat fill
+    art = [r for x in I for r in x.get("art", [])]
+    ak = {}
+    for r in art:
+        ak.setdefault(r["kind"], [0, 0, 0])
+        ak[r["kind"]][0] += 1 if r["atlas"] >= 1 else 0
+        ak[r["kind"]][1] += 1
+        ak[r["kind"]][2] += r["pics"]
+    cells = atlas_cells(root) if root else "no root"
+    cells_ok = isinstance(cells, list) and len(cells) == 16 and all(s >= ART_CELL_STD for s, _ in cells)
+    art_ok = all(k in ak and pct(ak[k][0], ak[k][1]) >= ART_PICS_BAR for k in ("living", "office", "lobby")) and cells_ok
+    v.check("finish", bool(lived) and dec >= 95 and wins > 0 and cur == wins and cn > 0 and cw == cn and art_ok,
+            "lived rooms %d: wall decor %.1f %% (bar >= 95; %s); their windows %d: real curtains %d = %.1f %% (bar 100); home ceiling faces %d: white (L >= 0.85) %d, darkest L %.3f (bar all); "
+            "pictures sampling the art atlas (medium+): %s (bar >= %d %% each); atlas cells (luminance std, 4-bit colours): %s (bar std >= %.0f each)" % (
+                len(lived), dec, ", ".join("%s %.1f %%" % (k, pct(a, n)) for k, (a, n) in sorted(by.items())), wins, cur, pct(cur, wins), cn, cw, cmin,
+                ", ".join("%s %d of %d rooms = %.1f %% (%d pictures)" % (k, a, n, pct(a, n), p) for k, (a, n, p) in sorted(ak.items())) or "none", ART_PICS_BAR,
+                cells if not isinstance(cells, list) else "min std %.1f, min colours %d (%s)" % (min(s for s, _ in cells), min(c for _, c in cells), cells), ART_CELL_STD),
+            ">= 95 %, 100 %, all white, pictures on the atlas >= 60 % of living rooms / offices / lobbies, 16 picture cells")
+    work = [r for x in I for r in x["work"]]
+    sw = [r for r in work if r["kind"] in ("shop", "storage", "warehouse")]
+    if not sw:
+        v.cnj("shop-density", "no shop / storage / warehouse rooms")
+    else:
+        area = sum(r["area"] for r in sw)
+        per = 100.0 * sum(r["n"] for r in sw) / area
+        cov = sum(r["cover"] for r in sw) / area * 25.0
+        okr = pct(sum(1 for r in sw if r["cover"] >= int(r["area"] // 25)), len(sw))
+        kinds = {}
+        for r in sw:
+            kinds.setdefault(r["kind"], [0, 0, 0, 0])
+            kinds[r["kind"]][0] += r["n"]
+            kinds[r["kind"]][1] += r["area"]
+            kinds[r["kind"]][2] += r["cover"]
+            kinds[r["kind"]][3] += 1
+        worst = min(sw, key=lambda r: (r["cover"] - r["area"] / 25.0, r["n"] / r["area"]))
+        v.check("shop-density", per >= 30 and cov >= 1 and okr >= 90,
+                "%d rooms, %.0f m2: %.1f pieces per 100 m2 pooled (bar >= 30); cover %.2f per 25 m2 pooled (bar >= 1); rooms with floor(area / 25) cover pieces %.1f %% (bar >= 90); by kind %s; e.g. %s %s %.1f m2 %d pieces %d cover" % (
+                    len(sw), area, per, cov, okr, "; ".join("%s %d rooms %.1f / 100 m2, cover %.2f / 25 m2" % (k, q[3], 100.0 * q[0] / q[1], 25.0 * q[2] / q[1]) for k, q in sorted(kinds.items())),
+                    worst["h"], worst["kind"], worst["area"], worst["n"], worst["cover"]), ">= 30 / 100 m2, >= 1 cover / 25 m2, >= 90 % of rooms")
+    # (W10 R3A fix5, orchestrator ruling R3A-7 / R3A-8) work-density: pieces per 100 m2 pooled PER KIND (every furniture record in the room, as shop-density
+    # counts): shops alone >= 30 (shop-density pools them with storage / warehouse), offices >= 35, meeting rooms >= 25, corridors >= 25, lobbies >= 25 - the bars
+    # as the ruling gives them (audit / pass-4 values: shop 27.9, office 29.4, meeting 15.4, corridor 21.0)
+    WD_BARS = (("shop", 30), ("office", 35), ("meeting", 25), ("corridor", 25), ("lobby", 25))
+    wd = {}
+    for r in work:
+        wd.setdefault(r["kind"], [0, 0.0, 0])
+        wd[r["kind"]][0] += r["n"]
+        wd[r["kind"]][1] += r["area"]
+        wd[r["kind"]][2] += 1
+    if any(k not in wd for k, _ in WD_BARS):
+        v.cnj("work-density", "kinds found: %s (need %s)" % (sorted(wd), ", ".join(k for k, _ in WD_BARS)))
+    else:
+        dens = {k: 100.0 * wd[k][0] / wd[k][1] for k, _ in WD_BARS}
+        v.check("work-density", all(dens[k] >= bar for k, bar in WD_BARS), "pieces per 100 m2 pooled per kind: %s" % "; ".join(
+            "%s %d rooms %.0f m2 %.1f (bar >= %d)" % (k, wd[k][2], wd[k][1], dens[k], bar) for k, bar in WD_BARS), "shop >= 30, office >= 35, meeting / corridor / lobby >= 25")
+    oc = {}
+    for r in work:
+        if r["kind"] in ("office", "meeting", "lobby", "corridor"):
+            oc.setdefault(r["kind"], [0, 0])
+            oc[r["kind"]][0] += 1 if r["cover"] >= 1 else 0
+            oc[r["kind"]][1] += 1
+    if len(oc) < 4:
+        v.cnj("office-cover", "kinds found: %s (need office, meeting, lobby, corridor)" % sorted(oc))
+    else:
+        v.check("office-cover", all(pct(a, n) >= 90 for a, n in oc.values()), "rooms with >= 1 cover piece: %s (bar >= 90 %% each)" % (
+            ", ".join("%s %d of %d = %.1f %%" % (k, a, n, pct(a, n)) for k, (a, n) in sorted(oc.items()))), ">= 90 % each kind")
+    roofs = [r for x in I for r in x["roofs"]]
+    res = [r for r in roofs if r["theme"] == "resort"]
+    homes = [r for r in roofs if r["home"] and not r["core"]]
+    rf = pct(sum(1 for r in res if r["roof"] == "flat"), len(res))
+    hp = pct(sum(1 for r in homes if r["roof"] != "flat"), len(homes))
+    kinds = {}
+    for r in homes:
+        kinds[r["roof"]] = kinds.get(r["roof"], 0) + 1
+    porch = pct(sum(r["porch"] for r in homes), len(homes))
+    v.check("flat-roofs", bool(res) and bool(homes) and rf <= 25 and hp >= 80,
+            "resort buildings %d: flat %.1f %% (bar <= 25); homes outside a downtown core %d: pitched %.1f %% (bar >= 80; %s); porches %.1f %% of them (plan ~30, info); downtown-core homes %d" % (
+                len(res), rf, len(homes), hp, ", ".join("%s %d" % kv for kv in sorted(kinds.items())), porch, sum(1 for r in roofs if r["home"] and r["core"])), "<= 25 %, >= 80 %")
+
+
+def main_fn(v, args):
+    root, label = L.node_root(args)
+    # (fix5) a --rev tree (git archive of runtime + assets/props + vendor) has no assets/tex: the finish row's art atlas is read from that revision too
+    if getattr(args, "rev", None) and not os.path.isfile(os.path.join(root, ART_FILE)):
+        import subprocess
+        blob = subprocess.run(["git", "-C", C.REPO, "show", "%s:games/last-circle/%s" % (args.rev, ART_FILE.replace(os.sep, "/"))], capture_output=True)
+        if blob.returncode == 0 and blob.stdout:
+            os.makedirs(os.path.join(root, os.path.dirname(ART_FILE)), exist_ok=True)
+            with open(os.path.join(root, ART_FILE), "wb") as fh:
+                fh.write(blob.stdout)
+    if args.plant:
+        root = planted_root(root, args.plant)
+        label += " + plant " + args.plant
+        v.note("plant %s: rows that must FAIL: %s" % (args.plant, ", ".join(sorted(PLANTS[args.plant][0]))))
+    v.data["tree"] = label
+    d = census(root, args.maps, args.seeds, True)
+    base = None
+    try:
+        base = baseline(args.maps, args.seeds)
+    except Exception as e:  # the baseline is the loot row's only input: a failure there is that row's could-not-judge, never a pass
+        v.note("baseline census failed: %s" % str(e)[:300])
+    judge(v, d, base, root)
+    if args.plant:
+        must = PLANTS[args.plant][0]
+        for r in v.rows:
+            if r["kind"] == "gate" and r["name"] not in must and r["ok"] is not None:
+                r["kind"] = "info"          # under a plant only the designated rows count (exit 1 = the fault was caught)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    L.add_args(ap, PLANTS.keys())
+    ap.add_argument("--maps", default=MAPS)
+    ap.add_argument("--seeds", default=SEEDS)
+    args = L.parse(ap)
+    return C.run_gate(GATE, lambda v: main_fn(v, args), args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

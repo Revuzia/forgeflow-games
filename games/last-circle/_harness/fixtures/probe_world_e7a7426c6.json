@@ -1,0 +1,50 @@
+{
+ "what": "WORLD FIXTURE of probe_match --pencheck (its Volcano Rim fixture row) and --cornercheck: the world generator of the released build e7a7426c6 (MAP_GEN 8) - every module and data file that builds the terrain, towns, furnished houses, colliders and loot, served from git by the harness for these rows only. The bots and the nav grid (bots.js, sim/navgrid.js) and everything else stay the head's.",
+ "ruling": "W10 R1A fix15, orchestrator ruling R-g (2026-11-18): FIXTURE ANCHOR",
+ "build": "e7a7426c69fd9008eb1adbbec6ef19c326ad3509",
+ "genVersion": 8,
+ "why_whole_world": "fix15 measured a box overlay first (the lattice nodes + colliders of the two boxes, sampled from e7a7426c6 and written into the head's map): on e7a7426c6 ITSELF that overlay, with the box's house records unlisted, read setup 1 of the pen in 26.5 s with 1 stuck episode where the natural spot reads 11.5 s / 0 - the bot starts inside the hut volcano_rim@p34 and its goal is in volcano_rim@p33 (room records, doors, house loot such as h2:volcano_rim@p33.l1 it walks for), none of which a terrain + collider patch carries. The world modules carry all of it, byte for byte.",
+ "differs_from_head": "e7a7426c6..head touches these world files and, besides them, only bots.js and sim/navgrid.js (the code under test, kept the head's) and player.js (CAM_R, the camera lens - no bot path)",
+ "files": {
+  "runtime/3d/royale/maps.js": {
+   "blob": "d7f7927ca7a2f19dd8edfa61f9e9e24eb7b2514e",
+   "sha256": "1f63cf69b4ddb3460fd078b9519de69f93d2e9124a02b50bb38798435ace805f",
+   "bytes": 634427
+  },
+  "runtime/3d/royale/housegen.js": {
+   "blob": "95d14d13a326d6544efcc0db56e58f3303567490",
+   "sha256": "163886495d49176b6a365acbff16acf059e7b9273da802c7560a5f1688d7ea64",
+   "bytes": 339731
+  },
+  "runtime/3d/royale/towngen.js": {
+   "blob": "a85f77dea1f33e48ca7d0d3a7da32717c0dbd072",
+   "sha256": "4997425d2cd6ee05ed28b0f9bfb12167ebeac02fda38f52347decb5de0bf7f02",
+   "bytes": 214748
+  },
+  "runtime/3d/royale/citykit.js": {
+   "blob": "45671251fbc16558d48d67229377ee632d98accc",
+   "sha256": "c1155c3cdf473a20b1ff006e1c3290c47b80c987c162166d0d7cdc9c8b30483a",
+   "bytes": 93099
+  },
+  "runtime/3d/royale/loot.js": {
+   "blob": "f273ba6a1ddaac4ad21a09f6d4305ba52a455652",
+   "sha256": "9619924bc91fcc5877af6d75a878863e95da687ff1843f0063fd6440b526b843",
+   "bytes": 162401
+  },
+  "assets/props/city/manifest.json": {
+   "blob": "9e853eb433215cc0058a61caed710f983d6f7d36",
+   "sha256": "863249093d1d7434581666396a5814c084a947091ed9616b880a685fecac71f0",
+   "bytes": 101474
+  },
+  "assets/props/city/manifest_interior.json": {
+   "blob": "038568ffc849ee1e284a6b970830cbb80dc0e2bd",
+   "sha256": "1f32447af770e281fd8186bf235f40728592b8140c1d5e356a0502a9bc02ca88",
+   "bytes": 11623
+  },
+  "assets/props/prop_colliders.json": {
+   "blob": "20ae424d955dc7b9eb2b10b09ac29194374c2cdf",
+   "sha256": "a4843c67345dbcf73bf76cdd223fdc616128a14fb9a768db926da41fdea74f6e",
+   "bytes": 13365
+  }
+ }
+}

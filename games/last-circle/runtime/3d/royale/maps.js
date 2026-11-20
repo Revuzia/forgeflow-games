@@ -391,6 +391,24 @@ async function loadGrimeTexture(W) {
 // in _texCache (SHARED: the per-match teardown never frees them). A failed load leaves the slot null: the water then has flat normals and no foam pattern.
 const WATER_FILES = { normal: "assets/tex/water_normal.jpg", foam: "assets/tex/water_foam.png" };
 let _waterLoad = null;
+// (W10 R3A fix5, ruling R3A-6) the art atlas of the house pictures: one texture, cached for the page (_texCache: shared, never disposed with a map). Made at once
+// (the program compiles against it in the warm frame; three uploads the image when it arrives - the same program); a load that fails leaves a 1 x 1 grey.
+const ART_FILE = "assets/tex/interior_art.jpg";
+function artAtlasTex(W) {
+  if (_texCache.art) return _texCache.art;
+  if (typeof THREE.TextureLoader !== "function" || typeof document === "undefined") return null;
+  const r = W.kernel && W.kernel.renderer;
+  const t = new THREE.TextureLoader().load((W.assetBase || "") + ART_FILE, undefined, undefined, (err) => {
+    console.warn("[maps] art atlas " + ART_FILE + " unavailable:", err && err.message || err);
+    const cv = document.createElement("canvas"); cv.width = cv.height = 1; const g = cv.getContext("2d"); if (g) { g.fillStyle = "#8a847a"; g.fillRect(0, 0, 1, 1); }
+    t.image = cv; t.needsUpdate = true;
+  });
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.anisotropy = Math.min(r && r.capabilities && r.capabilities.getMaxAnisotropy ? r.capabilities.getMaxAnisotropy() : 4, Math.max(2, W._texAniso || 4));
+  _texCache.art = t;
+  return t;
+}
 async function loadWaterTextures(W) {
   if (_texCache.waterN2 && _texCache.waterFoam) return { normal: _texCache.waterN2, foam: _texCache.waterFoam };
   const r = W.kernel && W.kernel.renderer;
@@ -953,8 +971,16 @@ function mkHeightFn(mapId, seed) {
 //     rocks and braziers (LC-73); in the seeded loot: POI loot tiers and one hot zone per match, the three new guns (DMR, LMG, burst rifle) in the
 //     floor / chest lists, frag and smoke grenade weights on, the medium-ammo / sniper rebalance; and in the match's seeded loot stream supply drops
 //     (crates by storm phase) and death piles (a dead man's whole bag on one spot). A version-6 client builds a different world from the same seed.
-export const MAP_GEN_VERSION = 8;                   // see map.genVersion (8 = Wave 9 (round 1, lane R1A): door leaves on the furnished houses - new slab colliders, furniture and loot moved off the swings, housegen VERSION 6, the doors' start state; 7 = the parity release P1-P3, above; 6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
+export const MAP_GEN_VERSION = 10;                  // see map.genVersion (10 = Wave 10 round 3 (lane R3A): interiors II - shops' aisle rows by area + a checkout line, store / warehouse racks, stock and pallet stacks, cubicle partitions, sized conference tables, cover in every office / meeting room / lobby / corridor, pitched roofs on the homes outside a downtown core + porches - housegen VERSION 8; 9 = Wave 10 round 1 (lane R1A): homes 10 x 10 m and up, ~45 % two-storey, room programme, furniture x1.15, area quota, kitchens / baths, fewer sheds, loot by home room area - towngen VERSION 5, housegen VERSION 7; 8 = Wave 9 (round 1, lane R1A): door leaves on the furnished houses - new slab colliders, furniture and loot moved off the swings, housegen VERSION 6, the doors' start state; 7 = the parity release P1-P3, above; 6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
 const FALLBACK_GEN_VERSION = { ashgrid: 2, isla_viva: 4, deepwood: 4 };   // the generator version of the layout a page plays when towngen.js / citykit.js do not load (see prepareCity): Savanna's Wave-6 layout is 2; Isla Viva's and Deepwood's pre-7b worlds are 4 (their maps were identical in 2, 3 and 4, only the loot settled differently from 3)
+/** (W10 R1A) the factor maps.js bakes a house kit piece's GLB vertices by (buildHouseFurniture): the GLB is in the kit's NATIVE units, so a piece is drawn at its
+ *  type's scale - citykit's indexed manifest keeps the raw suggested_scale as `.scale` - x the entry's scale (housegen FURN_K): the size of its collider.
+ *  Exported for _harness/p23/homes.mjs (w10_homes 'scale' row), which measures the drawn box through these two functions. */
+export function kitTypeDrawScale(manifest, type) {
+  const T = manifest && manifest.types && manifest.types[type];
+  return T && T.scale > 0 ? T.scale : 1;
+}
+export function kitDrawScale(typeScale, entryScale) { return (typeScale > 0 ? typeScale : 1) * (entryScale > 0 ? entryScale : 1); }
 export const LAT_CELLS = 608;                       // 8 chunks x 76 near-LOD cells (see CHUNKS / NEAR_SEG in buildMap)
 export const LAT_N = LAT_CELLS + 1;                 // 609 nodes per side
 export const LAT_PITCH = SIZE / LAT_CELLS;          // 2.6316 m
@@ -1485,6 +1511,9 @@ export async function buildMap(W, mapId) {
   }[TIER];
   if (W10V && (TIER === "high" || TIER === "ultra")) TIER_Q.propD = Math.round(TIER_Q.propD * 1.25);
   const waterTexPromise = W10V ? loadWaterTextures(W).catch(() => null) : Promise.resolve(null);
+  // (W10 R3A fix5, orchestrator ruling R3A-6) the pictures' art atlas (assets/tex/interior_art.jpg, _tools/interior_art.py): made on desktop medium and up only
+  // (W10V) - the insides' material takes its art variant then (dualStructMaterial); low and phones never make it, never sample it
+  const artTexW = W10V ? artAtlasTex(W) : null;
   const GRADE = K.grade || { exposure: 1.15, ground: 1, water: 1 };   // LC-04 / OD-2 (see MAPS)
   const grimePromise = LCFX ? loadGrimeTexture(W).catch(() => null) : Promise.resolve(null);   // LC-17: the CC0 wall photograph (medium and up)
   // the world-shader layer's per-match textures (the ground lattice, the contact-AO mask): no material slot holds them (they are uniforms), so the map
@@ -4369,7 +4398,10 @@ export async function buildMap(W, mapId) {
   // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
   // W10 R2A (desktop medium+): the hemisphere fill is x0.75 outside, and indoors that fill is most of the light - the rooms are lifted back (gate: interiors >= 0.9x)
   const HG_INDOOR = (mapId === "deepwood" ? 0.95 : 0.8) * (W10V ? (K.w10Indoor || W10_INDOOR) : 1);   // (per map: K.w10Indoor)
-  const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
+  // (W10 R3A, audit 6 "tinted ceilings") the inside ceiling faces (keyed "plaster|ceil" by meshData's finish, desktop medium and up only) take this on top of
+  // HG_INDOOR: lit from below by the hemisphere's ground colour, the white plaster read grey-beige
+  const HG_CEIL = 1.18;
+  const HG_TKI = { s: 0, plank: 1, stucco: 2, art: 3 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood); art: W10 R3A fix5, the pictures (W10V only)
   const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
   const _hgc = new THREE.Color(), hgColCache = new Map();
   const hgCol = (hex) => { let v = hgColCache.get(hex); if (!v) { _hgc.set(hex); v = [_hgc.r, _hgc.g, _hgc.b]; hgColCache.set(hex, v); } return v; };
@@ -4526,7 +4558,8 @@ export async function buildMap(W, mapId) {
     const HG = city.HG;
     const use = p.use && HG.USES.indexOf(p.use) >= 0 ? p.use : (b.use && HG.USES.indexOf(b.use) >= 0 ? b.use : "house");
     const theme = T.theme || (mapId === "isla_viva" ? "resort" : mapId === "deepwood" ? "lodge" : "city");
-    const par = { id: T.id + "@" + p.id, cx: b.cx, cz: b.cz, y: 0, w: b.w, d: b.d, turn: b.turn, theme, storeys: Math.max(1, b.floors || 1), seed: seed >>> 0, use, fh: b.floorH, near: hgNear(b) };
+    const par = { id: T.id + "@" + p.id, cx: b.cx, cz: b.cz, y: 0, w: b.w, d: b.d, turn: b.turn, theme, storeys: Math.max(1, b.floors || 1), seed: seed >>> 0, use, fh: b.floorH, near: hgNear(b),
+      core: T.kind === "core" };     // (W10 R3A: a downtown core's homes keep flat roofs, no porch)
     // Savanna's towns keep their block palettes (cityPalette: a block's two wall colours and two roof colours, the colours the live towns wear): the city theme's own
     // colours are brick reds and plasters only
     if (mapId === "ashgrid" && theme === "city" && wallC && roofC) { par.facadeColor = parseInt(wallC.slice(1), 16); par.roofColor = parseInt(roofC.slice(1), 16); }
@@ -4553,12 +4586,15 @@ export async function buildMap(W, mapId) {
     const toChunk = (a, k, tki, inside) => { if (a.idx.length) (inside ? C.inside : C.parts).push(a, k, tki); };   // (copied once into the chunk's typed arrays, see buildHouseFurniture; K1: the insides and the furniture apart)
     // structure: the outside -> the district sink, the inside -> the chunk
     // (K1 re-run: ns - a ruin's wreckage comes keyed "<mat>#ns" and goes to the district's no-shadow twin, "vcn|<kind>", see mergeBatchSet)
-    const md = HG.meshData(H, hgCol, { interior: true, ns: true, leaves: false });     // (Wave 9: the door leaves are drawn swinging, in houses:doors@all - see buildDoorLeaves)
+    // (W10 R3A) finish: the drawn-only interior finish (curtains, pictures, casings, tile bands, baked contact shadows, wall feet / corners, light pools) on desktop
+    // medium and up (W10V) - low and touch draw exactly what they drew (no finish quad, no "|ceil" key)
+    // (W10 R3A fix5, ruling R3A-6) art: the pictures sample the art atlas (one quad each, keyed "art|in" -> tki 3 -> dualStructMaterial's art variant) - W10V only
+    const md = HG.meshData(H, hgCol, { interior: true, ns: true, leaves: false, finish: W10V, art: W10V && !!artTexW });     // (Wave 9: the door leaves are drawn swinging, in houses:doors@all - see buildDoorLeaves)
     for (const [key, a] of md.groups.walls) {
       if (!a.idx.length) continue;
       const nsK = key.endsWith("#ns"), key0 = nsK ? key.slice(0, -3) : key;
-      const bar = key0.indexOf("|"), mat = bar < 0 ? key0 : key0.slice(0, bar), kind = HG_MAT_KIND[mat] || "s";
-      if (bar >= 0) { toChunk(a, mat === "lamp" ? 1 : HG_INDOOR, HG_TKI[kind] || 0, true); continue; }
+      const bar = key0.indexOf("|"), mat = bar < 0 ? key0 : key0.slice(0, bar), kind = mat === "art" ? "art" : HG_MAT_KIND[mat] || "s";
+      if (bar >= 0) { toChunk(a, mat === "lamp" ? 1 : key0.endsWith("|ceil") ? HG_INDOOR * HG_CEIL : HG_INDOOR, HG_TKI[kind] || 0, true); continue; }     // (W10 R3A: a ceiling reads white)
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
       geo.setAttribute("normal", new THREE.Float32BufferAttribute(a.nor, 3));
@@ -4573,7 +4609,7 @@ export async function buildMap(W, mapId) {
       for (let i = 0; i < a.idx.length; i++) hgGlass.idx.push(a.idx[i] + base);
     }
     for (const [key, a] of md.groups.furniture) { const mat = key.split("|")[0]; toChunk(a, HG_INDOOR, mat === "wood" ? 1 : 2); }
-    for (const f of H.furniture) if (f.src === "kit") C.kit.push({ type: f.kit.type, x: f.kit.x, y: f.kit.y, z: f.kit.z, rot: f.kit.rot, min: f.min, max: f.max });
+    for (const f of H.furniture) if (f.src === "kit") C.kit.push({ type: f.kit.type, x: f.kit.x, y: f.kit.y, z: f.kit.z, rot: f.kit.rot, scale: f.kit.scale == null ? 1 : f.kit.scale, min: f.min, max: f.max });
     // colliders: structure boxes, ramps (stairs + roof planks), furniture - housegen's order
     const c0 = colliders.length, nBox = H.boxes.reduce((n, q) => n + (q.c ? 1 : 0), 0), roofRamps = [];
     for (const c of HG.collidersOf(H, mkCollider)) colliders.push(c);
@@ -4626,6 +4662,9 @@ export async function buildMap(W, mapId) {
     const types = new Set();
     for (const C of hgChunks.values()) for (const e of C.kit) types.add(e.type);
     const tpl = new Map();                                                     // type -> [{ pos (the GLB mesh's matrix applied), nor, idx, col [r, g, b] }] | null
+    // (W10 R1A) the GLB is in the kit's NATIVE units: a piece is drawn at the type's manifest suggested_scale x the entry's scale (housegen FURN_K) - the size its
+    // collider has. Until W10 the pieces were drawn at native size (1 / 2.2 of their colliders: knee-high counters standing apart, a lamp floating over a nightstand)
+    const tplScale = new Map();
     const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _nm = new THREE.Matrix3();
     if (kit && !low && typeof kit.parts === "function") {
       for (const t of types) {
@@ -4648,6 +4687,7 @@ export async function buildMap(W, mapId) {
           out.push({ pos, nor, idx, col: c });
         }
         tpl.set(t, out.length ? out : null);
+        tplScale.set(t, kitTypeDrawScale(kit.manifest, t));
       }
     }
     const COSQ = [1, 0, -1, 0], SINQ = [0, 1, 0, -1];
@@ -4707,12 +4747,13 @@ export async function buildMap(W, mapId) {
         v += n;
       }
       for (const e of kitL) {
-        const kp = tpl.get(e.type), c = COSQ[e.rot & 3], sn = SINQ[e.rot & 3];
+        const kp = tpl.get(e.type), c = COSQ[e.rot & 3], sn = SINQ[e.rot & 3], ks = kitDrawScale(tplScale.get(e.type), e.scale);
+        const v0 = v;
         if (kp) {
           for (const t of kp) {
             const base = v, cr = c8(t.col[0] * HG_INDOOR), cg = c8(t.col[1] * HG_INDOOR), cb = c8(t.col[2] * HG_INDOOR);
             for (let i = 0; i < t.pos.length; i += 3) {
-              const lx = t.pos[i], ly = t.pos[i + 1], lz = t.pos[i + 2], px = e.x + lx * c + lz * sn, py = e.y + ly, pz = e.z - lx * sn + lz * c;
+              const lx = t.pos[i] * ks, ly = t.pos[i + 1] * ks, lz = t.pos[i + 2] * ks, px = e.x + lx * c + lz * sn, py = e.y + ly, pz = e.z - lx * sn + lz * c;
               const nx = t.nor[i], ny = t.nor[i + 1], nz = t.nor[i + 2], wx = nx * c + nz * sn, wz = -nx * sn + nz * c;
               P[v * 3] = px; P[v * 3 + 1] = py; P[v * 3 + 2] = pz;
               N[v * 3] = n8(wx); N[v * 3 + 1] = n8(ny); N[v * 3 + 2] = n8(wz);
@@ -4741,6 +4782,13 @@ export async function buildMap(W, mapId) {
           quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1]);
           quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0]);
           quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0]);
+        }
+        // (W10 R1A) a harness hook (w10_homes 'scale' row, Node only - unset in the game): the box of the vertices just BAKED for this entry vs its collider
+        const KD = globalThis.__LC_KITDRAWN;
+        if (KD && v > v0) {
+          const m = [1e9, 1e9, 1e9, -1e9, -1e9, -1e9];
+          for (let w = v0; w < v; w++) for (let a = 0; a < 3; a++) { const x = P[w * 3 + a]; if (x < m[a]) m[a] = x; if (x > m[a + 3]) m[a + 3] = x; }
+          KD.push({ type: e.type, glb: !!kp, drawn: m, min: e.min, max: e.max });
         }
       }
       const geo = new THREE.BufferGeometry();
@@ -6516,9 +6564,13 @@ export async function buildMap(W, mapId) {
     if (_st && pk && sc) {
       mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5);
       const SC = THREE.ShaderChunk;
-      // tki 0 = s (brick / stone), 1 = plank, 2 = stucco: weights from the flat per-vertex index (no interpolation across a box: every vertex of a box has the same index)
+      // (W10 R3A fix5, orchestrator ruling R3A-6) THE ART VARIANT, desktop medium and up only (W10V and the atlas texture made): a 7th sampler, the art atlas
+      // (assets/tex/interior_art.jpg), read where tki = 3 (the pictures: housegen meshData opts.art) at the RAW uv (the atlas cell; the struct textures keep
+      // vMapUv). Its own program cache key: the low / touch program (no W10V) is the unchanged "lc-struct-mix-v3" below, byte for byte, and on medium+ this
+      // program REPLACES it (the same one struct-mix program per page: no new program, no new draw call - the pictures ride in the insides' batch)
+      const art = artTexW;
       const pick3 = (a, b, c, uv) => "( texture2D( " + a + ", " + uv + " ) * ( 1.0 - step( 0.5, vTki ) ) + texture2D( " + b + ", " + uv + " ) * ( step( 0.5, vTki ) - step( 1.5, vTki ) ) + texture2D( " + c + ", " + uv + " ) * step( 1.5, vTki ) )";
-      mat.customProgramCacheKey = () => "lc-struct-mix-v3";
+      mat.customProgramCacheKey = art ? () => "lc-struct-mix-v3-art" : () => "lc-struct-mix-v3";
       mat.onBeforeCompile = (sh) => {
         // LC-17: the per-kind roughness of the three kinds this material mixes (brick / stone, plank, plaster: KIND_PBR)
         sh.fragmentShader = sh.fragmentShader.replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = vTki < 0.5 ? " + KIND_PBR.s[0].toFixed(3) + " : ( vTki < 1.5 ? " + KIND_PBR.plank[0].toFixed(3) + " : " + KIND_PBR.stucco[0].toFixed(3) + " );");
@@ -6527,6 +6579,12 @@ export async function buildMap(W, mapId) {
         sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform sampler2D map2;\nuniform sampler2D normalMap2;\nuniform sampler2D map3;\nuniform sampler2D normalMap3;\nvarying float vTki;")
           .replace("#include <map_fragment>", SC.map_fragment.split("texture2D( map, vMapUv )").join(pick3("map", "map2", "map3", "vMapUv")))
           .replace("#include <normal_fragment_maps>", SC.normal_fragment_maps.split("texture2D( normalMap, vNormalMapUv )").join(pick3("normalMap", "normalMap2", "normalMap3", "vNormalMapUv")));     // (every occurrence: the chunk samples the normal map in its object-space AND its tangent-space branch)
+        if (art) {                                     // (W10 R3A fix5) the art variant: tki >= 2.5 takes the atlas texel at the raw uv; its normal is the stucco pick (near flat)
+          sh.uniforms.artMap = { value: art };
+          sh.vertexShader = sh.vertexShader.replace("varying float vTki;", "varying float vTki;\nvarying vec2 vArtUv;").replace("vTki = tki;", "vTki = tki;\nvArtUv = uv;");
+          sh.fragmentShader = sh.fragmentShader.replace("varying float vTki;", "varying float vTki;\nuniform sampler2D artMap;\nvarying vec2 vArtUv;")
+            .split(pick3("map", "map2", "map3", "vMapUv")).join("( " + pick3("map", "map2", "map3", "vMapUv") + " * ( 1.0 - step( 2.5, vTki ) ) + texture2D( artMap, vArtUv ) * step( 2.5, vTki ) )");
+        }
       };
     }
     if (LCFX) lcPatch(mat, STRUCT_LC);
@@ -6898,7 +6956,17 @@ export async function buildMap(W, mapId) {
         }
         const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
         // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak
-        const pk = p.peak, pdy = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
+        const pk = p.peak, pdyPk = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
+        // (W10 R1A / collisioncheck clip isla_viva rocks) a LEANED rock part's drawn top is not always over its table peak: the lean lifts the side it leans
+        // toward, and a low flat part's highest drawn point moves there (isla_viva s7 cover rocks leaned 4-15 deg: drawn 0.55-0.60 m over their ground while
+        // the peak's lift read 0.45-0.50, so they were taken for steps, their boxes cut to 0.04-0.48 m and the capsule walked 0.4-1.0 m into the drawn rock).
+        // The table's `lean` vertices (bake_prop_colliders.mjs: the candidates for the highest vertex under a lean) give the drawn top under THIS lean.
+        let pdy = pdyPk;
+        if (tg && p.lean && p.lean.length) {
+          let hi = -Infinity, raw = -Infinity;
+          for (const q of p.lean) { const u = q[0] * sc, w = q[1] * sc, y = q[2] * sc + tg.tx * (u * c + w * sn) + tg.tz * (-u * sn + w * c); if (y > hi) hi = y; if (q[2] > raw) raw = q[2]; }
+          pdy = Math.max(pdyPk, hi - raw * sc);
+        }
         const y0 = yLo(ox, oz, ex, ez), y1 = p.byScale ? it.y + top + pdy : hullBoxTop(it, x0, x1, z0, z1, y0, it.y + top + pdy, p.hull, sc, c, sn, pk);
         colliders.push(mkCollider("box", it.x + x0, it.x + x1, y0, y1, it.z + z0, it.z + z1, -1, kind, idx, hp));
       }
@@ -6918,7 +6986,7 @@ export async function buildMap(W, mapId) {
   // ground right under its own peak read 0.46 m "over its ground", was taken for a step, and its box top dropped 1.01 m - to 0.50 m UNDER the ground at its own centre: a
   // buried box, and a drawn rock with no wall. A part is a step only if its drawn top is under HULL_STEP_PART over the ground under its PEAK as well (the drawn top is AT
   // the peak: that is where a walker meets it); otherwise it keeps its full height, as before a89bee66. (No peak in the table: the box centre.)
-  const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5;
+  const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5, HULL_STEP_UP = 0.55, HULL_SKIRT = 0.02;   // HULL_STEP_UP = player.js STEP_UP; HULL_SKIRT: the table hull's buried skirt reads the mean ground under a part up to 2 cm high (isla_viva s7 rock 65: 0.542 vs 0.551 under the drawn band)
   function hullBoxTop(it, x0, x1, z0, z1, y0, topY, hull, sc, c, sn, pk) {
     let gm = 0;
     for (const q of hull) { const u = q[0] * sc, w = q[1] * sc; gm += heightAt0(it.x + u * c + w * sn, it.z - u * sn + w * c); }
@@ -6934,7 +7002,12 @@ export async function buildMap(W, mapId) {
       const g = heightAt0(x, z);
       if (g < gl) gl = g;
     }
-    return Math.max(y0 + 0.05, Math.min(topY, gl + HULL_STEP));
+    // (W10 R1A) a part drawn at or over the mover's STEP_UP above the mean ground under it is a body a walker meets, not a step, whatever the 0.58 rule above
+    // decided for its 1-3 cm misreads: its box is never cut under STEP_UP (+1 cm) over the ground at its own centre (isla_viva s7 rock 42: drawn 0.565 m,
+    // cut to 0.48 m - a step box under a drawn body, clip 0.53 m); such a box may stand up to HULL_SKIRT + 1 cm over the part's top to read as a body over the
+    // ground at its centre (rock 65: drawn 0.551 m over the drawn band's ground, its peak 0.539 m over the box centre's)
+    const gc = heightAt0(it.x + (x0 + x1) / 2, it.z + (z0 + z1) / 2), keep = topY - gm >= HULL_STEP_UP - HULL_SKIRT ? Math.min(Math.max(topY, gc + HULL_STEP_UP + 0.01), topY + HULL_SKIRT + 0.01) : -Infinity;
+    return Math.max(y0 + 0.05, keep, Math.min(topY, gl + HULL_STEP));
   }
   function mergePartsByMaterial(meshes) {
     const byMat = new Map(), out = [];
@@ -7521,7 +7594,8 @@ vGrC = gt.rgb * mix( 0.36, 1.36, clamp( gtip / 0.4, 0.0, 1.0 ) ) * ( 0.8 + 0.4 *
     for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const k = cKey(i, j); if (!houseHash.has(k)) houseHash.set(k, []); houseHash.get(k).push(hi); }
     // the floor slabs (their walkable tops): [x0, z0, x1, z1, top, surf]
     const sl = [];
-    for (const b of H.boxes) if (b.p === "slab" && b.c) { const pe = H.palette[b.f[2]]; sl.push([b.min[0], b.min[2], b.max[0], b.max[2], b.max[1], HG_SURF[pe && pe.mat] || "concrete"]); }
+    for (const b of H.boxes) if (b.p === "slab" && (b.c ? !b.mergedCol : b.cm)) { const pe = H.palette[b.f[2]];      // (W10 R1A: the drawn slabs - a collision cover box spans rooms of different floors)
+      sl.push([b.min[0], b.min[2], b.max[0], b.max[2], b.max[1], HG_SURF[pe && pe.mat] || "concrete"]); }
     houseFloors.push(sl);
   });
   const _ha = { house: -1, id: "", floor: 0, room: -1, y: 0, surf: "concrete" };

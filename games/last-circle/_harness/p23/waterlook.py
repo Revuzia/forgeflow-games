@@ -47,7 +47,7 @@ clock then pinned - SHORE_T for the shore / in-water views, VIEW_T for the rest 
                 >= 95 % land outside the town mask), and the blade layer moves >= 8 % of the lower half of a low view there [0.148]
   low-identical low tier, isla_viva: 4 views identical to the base build (<= 0.001 % of the pixels differ - the base's own run-to-run
                 noise is 1 pixel, control --rev cbf0a1ff; loot, launch portals and door leaves hidden: they animate on the sim
-                clock / bot traffic) - phones / low untouched
+                clock / bot traffic; the storm wall's own shader clock pinned) - phones / low untouched
   underwater    from below (vshots `underup`): high-frequency energy (mean |Laplacian| of luminance) of the upper half <= 0.4 x the base's
   tiers         SSIM(ultra, medium) on the 3 eye-level pinned views (ground, inwater, shore) <= 0.92; vista and vista2 reported [identical]
   programs      0 new shader programs after the warm frames, on every tier
@@ -220,7 +220,11 @@ WALLCAM_JS = r"""([dist]) => { const W = window.__LC__.W, M = W.map, st = W.stor
 # interiors: the 3 houses nearest the drop POI, each one's biggest ground-floor room, camera at its centre 1.6 m up looking at its far corner
 # fix5: houses whose rooms read darkest in interiorcheck (seed 7, the R2A merge: isla_viva volcano_rim@p54 f0r1 / f0r2 mean 21.4-24.2 / 255, dark share
 # 0.4-0.6). Every ground-floor room of these is viewed (4 headings) for the interiors darkest-view row only (the base ratio keeps its 3 houses)
-WATCH_HOUSES = {"isla_viva": ["volcano_rim@p54"]}
+# W10 rfast (ruling R-h): MAP_GEN 10 rebuilt the houses - volcano_rim@p54 / ashgrid downtown@p4 / p27 / p44 are no longer in interiorcheck's seeded
+# 10-house sample (or the world), so the watch came back COULD-NOT-JUDGE. Re-picked as interiorcheck's darkest-ranked sampled houses at the head
+# (interiorcheck --source match, seed 7, merge 2f8d804b7, _reports/interiorcheck_20261119_132900.json; interior min mean luma): isla_viva
+# volcano_rim@p18 (30.23), ashgrid outpost@p12 (35.96) / cmp10@p2 (40.6) / mall@p11 (43.78). Same counts as before (1 + 3); bar and row logic unchanged.
+WATCH_HOUSES = {"isla_viva": ["volcano_rim@p18"]}
 WATCH_JS = r"""([ids]) => { const M = window.__LC__.W.map, out = [];
   for (const H of M.houses || []) { if (!ids.includes(H.id)) continue;
     for (const R of H.rooms || []) { if (R.floor !== 0 || !(R.area >= 4)) continue;
@@ -234,8 +238,15 @@ WATCH_JS = r"""([ids]) => { const M = window.__LC__.W.map, out = [];
 # sample) and renders the watched houses through its own views(): every room entrance (door / stair top) and the room centre x 4 headings, from the
 # player's third-person camera. Watched: interiorcheck's darkest rooms on the R2A merge (match isla_viva volcano_rim@p54 f0r1 / f0r2; ashgrid's
 # downtown houses of its sample), housegen ashgrid s7h2 (f0r3 23.25 / dark 0.48) and the fixture house (kitchen dark 0.36).
-IC_WATCH = [("match", "isla_viva", ["volcano_rim@p54"]), ("match", "ashgrid", ["downtown@p4", "downtown@p27", "downtown@p44"]),
+IC_WATCH = [("match", "isla_viva", ["volcano_rim@p18"]), ("match", "ashgrid", ["outpost@p12", "cmp10@p2", "mall@p11"]),
             ("housegen", "ashgrid", ["s7h2"]), ("fixture", "ashgrid", None)]          # None = every injected house
+
+
+def _ic_key(t):
+    """(W10 tools, ticket 4) the darkest-views print key: (mean, dark) then the names as text - a tie on (mean, dark, house, room) used to
+    compare a view's int yaw with another view's str 'from' (TypeError -> a harness exception -> a spurious COULD-NOT-JUDGE). Same order
+    otherwise: numbers first, numerically; names by their text."""
+    return tuple(t[:2]) + tuple((0, x, "") if isinstance(x, (int, float)) and not isinstance(x, bool) else (1, 0, str(x)) for x in t[2:])
 
 
 def part_icwatch(args, plant, v, shots):
@@ -274,7 +285,7 @@ def part_icwatch(args, plant, v, shots):
             if miss:
                 out.append({"src": src, "map": map_id, "error": "watched house(s) not in interiorcheck's sample: %s (sample %s)" % (miss, lst)})
             print("  [icwatch %s %s] %d views of %s; darkest %s" % (src, map_id, sum(1 for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o), got,
-                  sorted([(o["mean"], o["dark"], o["house"], o["room"], o["view"]) for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o])[:2]), flush=True)
+                  sorted([(o["mean"], o["dark"], o["house"], o["room"], o["view"]) for o in out if o.get("src") == src and o.get("map") == map_id and "mean" in o], key=_ic_key)[:2]), flush=True)
     return out
 
 
@@ -445,17 +456,27 @@ def start(s, tier, map_id, mode="standard"):
     return {"setGfx": got, "start": st, "info": info}
 
 
-def view(s, spec, hide=(), pts=None, settle=None, step=26):
+def view(s, spec, hide=(), pts=None, settle=None, step=26, wall_t=None):
     s.js(SS.SPEC_JS, ["cam:" + ",".join(str(x) for x in spec), {"plant": None}])
     s.step_frames(step, dt=1.0 / 20, render=False)
     s.js(SS.UNPIN_JS)
     if settle is not None:
         s.js(SETTLE_JS, settle)
+    if wall_t is not None:
+        s.js(WALL_PIN_JS, wall_t)
     return s.js(RENDER_JS, [spec, list(hide), pts])
 
 
-def shoot(s, spec, shots, name, hide=(), pts=None, settle=None):
-    r = view(s, spec, hide, pts, settle)
+# the storm wall's shader clock pinned (LOWID fix1): storm.js drives the wall's uTime from its own accumulator of kernel dt (_clock += dt), not the
+# map clock SETTLE_JS pins, so it differs per session / per shot (boot frames run on real dt). Its streaks reach the sea-horizon band of the low
+# ground views through the fog: base vs base 0.016-0.043 % there, 0 px with the wall's uTime pinned (F:/lc_p23/w10/t/LOWID/fix1/notes.txt)
+WALL_PIN_JS = r"""(t) => { const W = window.__LC__.W, w = W.stormCtl && W.stormCtl.wall; let n = 0; if (!w) return 0;
+  w.traverse((o) => { const m = o.material; for (const mm of (Array.isArray(m) ? m : m ? [m] : [])) if (mm.uniforms && mm.uniforms.uTime) { mm.uniforms.uTime.value = t; n++; } });
+  return n; }"""
+
+
+def shoot(s, spec, shots, name, hide=(), pts=None, settle=None, wall_t=None):
+    r = view(s, spec, hide, pts, settle, wall_t=wall_t)
     save(r["png"], shots, name + ".png")
     r["A"] = decode(r.pop("png"))
     return r
@@ -758,15 +779,33 @@ def part_storm_late(s, v, R, map_id, shots):
     return out
 
 
+# W10 rfast (ruling R-h): the low-identical row's 4 views, pinned. The row measures that the LOW RENDER PATH is unchanged against BASE_REV; the
+# old views came from CAMS_JS's searches, which frame towns / trees, and this release rebuilds the houses (MAP_GEN 8 -> 10; the tree / prop / clutter
+# placements and the yard pads re-roll with them), so those views differed on buildings / trees only (ground 5.28 %, groundlow 4.83 %, inwater 8.28 %,
+# shore 0.95 % of pixels; terrain, water and sky 0 px - F:/lc_p23/w10/rfast/int/lowdiff). Same kinds (ground 1.7 m / groundlow 0.5 m on flat open
+# ground, shore = the shore search's beach eye looking along the waterline, inwater = 0.45 m over the water looking back at the land), same map,
+# tier, clock (t 100) and hidden layers; spots picked by script (F:/lc_p23/w10/rfast/int/tools/lowcam_*.py) from BOTH worlds' instance lists:
+# every drawn object / merged-mesh vertex cell / terrain cell that differs between head 2f8d804b7 and BASE_REV is outside the frustum (+3 deg, out
+# to 1500 m: the exp2 fog 0.0018 leaves < 0.5 / 255 beyond) or behind terrain; the first such candidate in the searches' own order (shore: the
+# smallest turn from the original heading). Base, bar (<= 0.001 %) and row logic unchanged.
+LOW_CAMS = {
+    "ground": [323.2, 4.339, 268.219, 350.588, 1.622, 306.624, 70],
+    "groundlow": [323.2, 3.139, 268.219, 329.826, 2.294, 273.128, 60],
+    "shore": [193.004, 2.499, -331.283, 216.02, 0.3, -368.152, 70],
+    "inwater": [184.87, 0.45, -360.333, 204.669, 2.5, -397.102, 70],
+}
+LOW_CAMS_ID = "lowcams1w"   # (w: the storm wall's uTime pinned in these frames - base views cached before the pin are not reused)
+
+
 def part_low(s, v, R, shots, tag):
     """the low tier on isla_viva: 4 views with the map clock pinned (t 100), for the pixel compare with the base. The loot group is hidden in
     these frames (its beams pulse on the sim clock: W.t differs run to run; loot.js is not this lane's file), and so are the launch portals'
     rings / swirls (animated off the frame loop) and the door leaves (bots open them): none of them changed by this lane"""
-    cams = s.js(CAMS_JS)
+    cams = LOW_CAMS
     out = {}
     for nm in ("ground", "groundlow", "shore", "inwater"):
         if nm in cams and cams[nm]:
-            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot", "portals", "doors"), settle=100.0)
+            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot", "portals", "doors"), settle=100.0, wall_t=100.0)
             out[nm] = r["A"]
     return out
 
@@ -777,7 +816,14 @@ def base_cache(args, v, shots):
     if os.path.exists(stem + ".json") and not args.no_cache:
         with open(stem + ".json") as f:
             res = json.load(f)
-        res["low"] = {k: np.load(stem + "_low_%s.npy" % k) for k in res.get("lowViews", [])}
+        lstem = stem + "_" + LOW_CAMS_ID
+        if os.path.exists(lstem + "_low.json"):
+            with open(lstem + "_low.json") as f:
+                res.update(json.load(f))
+            res["low"] = {k: np.load(lstem + "_low_%s.npy" % k) for k in res.get("lowViews", [])}
+            return res, True
+        res["infoLow"], res["low"] = _base_low(args, v, shots, lstem)
+        res["lowViews"] = sorted(res["low"])
         return res, True
     a2 = copy.copy(args)
     a2.rev = BASE_REV
@@ -801,16 +847,33 @@ def base_cache(args, v, shots):
             res["interiors"][m] = R[m].get("interiors")
             res["spread"][m] = R[m].get("spread")
             res["drop"][m] = R[m].get("dropMean")
-    with C.Session(a2, "w10_waterlook_base_low") as s:
-        res["infoLow"] = start(s, "low", "isla_viva")
-        low = part_low(s, v, R, os.path.join(shots, "base"), "base")
-    res["lowViews"] = sorted(low)
     with open(stem + ".json", "w") as f:
         json.dump(res, f, default=str)
-    for k, A in low.items():
-        np.save(stem + "_low_%s.npy" % k, A)
-    res["low"] = low
+    res["infoLow"], res["low"] = _base_low(args, v, shots, stem + "_" + LOW_CAMS_ID)
+    res["lowViews"] = sorted(res["low"])
     return res, False
+
+
+def _base_low(args, v, shots, lstem):
+    """the base build's low-tier views at LOW_CAMS (second Chrome on BASE_REV), cached under the camera set's id"""
+    a2 = copy.copy(args)
+    a2.rev = BASE_REV
+    a2.disk = True
+    a2.overlay = None
+    a2.plant = None
+    with C.Session(a2, "w10_waterlook_base_low") as s:
+        info = start(s, "low", "isla_viva")
+        low = part_low(s, v, {}, os.path.join(shots, "base"), "base")
+    with open(lstem + "_low.json", "w") as f:
+        json.dump({"infoLow": info, "lowViews": sorted(low), "lowCams": LOW_CAMS}, f, default=str)
+    for k, A in low.items():
+        np.save(lstem + "_low_%s.npy" % k, A)
+    return info, low
+
+
+def _lowdiff(a, b):
+    d = np.abs(a.astype(np.float64) - b.astype(np.float64)).max(axis=2)
+    return float(d.max()), float((d > 0).mean() * 100)
 
 
 def main():
@@ -1005,7 +1068,7 @@ def main():
                 if not vw or wmis:
                     v.cnj("light: interiors darkest view", "no per-view numbers (a build measured before fix5) or a watch house not found: %s" % wmis)
                 else:
-                    v.check("light: interiors darkest view - every view of every room (4 headings, 3 houses per map + the watch houses' ground-floor rooms + interiorcheck's own views of its darkest houses: match isla_viva volcano_rim@p54, ashgrid downtown, housegen s7h2, the fixture) mean luma >= 25 / 255 and dark share (< 16 / 255) <= 30 % (interiorcheck's bar)",
+                    v.check("light: interiors darkest view - every view of every room (4 headings, 3 houses per map + the watch houses' ground-floor rooms + interiorcheck's own views of its darkest houses: match isla_viva volcano_rim@p18, ashgrid outpost@p12 / cmp10@p2 / mall@p11, housegen s7h2, the fixture) mean luma >= 25 / 255 and dark share (< 16 / 255) <= 30 % (interiorcheck's bar)",
                             not bad, {"views": len(vw), "bad": bad[:6], "darkestMean": worst, "darkestShare": wdk}, ">= 25 / 255, <= 0.30")
         if "grass" in want:
             gr = {m: R.get(m, {}).get("grass") for m in maps}
@@ -1021,18 +1084,23 @@ def main():
                 v.check("grass-sand: the blade layer grows on grass only - a low view over dry non-grass ground (a 30 m disc >= 95 % sand / dunes / mud / snow), the blades A/B moves <= 0.5 % of the lower half (every map with such a spot)",
                         all(x["bladePixPct"] <= 0.5 for x in judged.values()), gs_, "<= 0.5 %")
         if "low" in want:
-            bl, lb = (base or {}).get("low") or {}, R.get("lowBuild") or {}
-            res = {}
+            bl = (base or {}).get("low") or {}
+            lb = R.get("lowBuild") or {}
+            res, verdicts = {}, {}
             for nm in sorted(set(bl) | set(lb)):
-                if nm in bl and nm in lb and bl[nm].shape == lb[nm].shape:
-                    d = np.abs(bl[nm] - lb[nm]).max(axis=2)
-                    res[nm] = {"maxDiff": float(d.max()), "pctDiff": round(float((d > 0).mean() * 100), 4)}
-                else:
+                if not (nm in bl and nm in lb and bl[nm].shape == lb[nm].shape):
                     res[nm] = {"missingOrSize": [nm in bl, nm in lb]}
+                    verdicts[nm] = "fail"
+                    continue
+                hm, hp = _lowdiff(lb[nm], bl[nm])
+                res[nm] = {"maxDiff": hm, "pctDiff": round(hp, 4)}
+                verdicts[nm] = "pass" if hp <= 0.001 else "fail"
+                print("  [low-identical %s] %s" % (nm, json.dumps(res[nm])))
             # identical up to the sim's own noise: the base build against its own cache (control --rev cbf0a1ff) differs in ONE pixel of one view
-            # (0.0001 %: a far object the sim moves between runs); <= 0.001 % (9 px at 1280 x 720) per view - the grass-on-low plant moves 0.2-12 %
+            # (0.0001 %: a far object the sim moves between runs); <= 0.001 % (9 px at 1280 x 720) per view - the grass-on-low plant moves 0.2-12 %.
+            # LOWID fix1: with the storm wall's shader clock pinned (WALL_PIN_JS) base vs base is 0 px at all 4 LOW_CAMS views (3 runs)
             v.check("low-identical: low tier, isla_viva, the views identical to the base build (<= 0.001 % of the pixels differ per view: the base's own run-to-run noise is 1 px)",
-                    bool(res) and len(res) >= 3 and all(x.get("pctDiff") is not None and x["pctDiff"] <= 0.001 for x in res.values()), res, "<= 0.001 %")
+                    bool(res) and len(res) >= 3 and all(x == "pass" for x in verdicts.values()), res, "<= 0.001 %")
             for nm in lb:
                 Image.fromarray(np.clip(np.abs(lb[nm] - bl.get(nm, lb[nm])) * 8, 0, 255).astype(np.uint8)).save(os.path.join(shots, "lowdiff_x8_%s.png" % nm))
         if "uw" in want:

@@ -157,6 +157,7 @@ def main():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--map", default="isla_viva", choices=C.MAPS)
     ap.add_argument("--shots", default=None, help="folder for the A0/A1 PNGs (default: _harness/_shots)")
+    ap.add_argument("--plant", default=None, choices=PL.netnoise.PLANTS, help="W10 tools network-noise controls: net-third-party-font must read COULD-NOT-JUDGE on the error rows, net-own-asset must FAIL them (netnoise.py)")
     args = ap.parse_args()
     PL.prepare(args)
     shots = args.shots or C.SHOTS
@@ -165,6 +166,8 @@ def main():
         with C.Session(args, "player_rim") as s:
             PL.overlay(s, args)
             PL.served_note(v, args)
+            if args.plant:
+                v.note("PLANTED FAULT: " + PL.netnoise.plant_route(s, args.plant))
             s.boot()
             s.start_match("standard", args.seed, args.map)
             s.guard_player(True)

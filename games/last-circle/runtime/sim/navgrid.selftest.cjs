@@ -686,6 +686,17 @@ const mkc = (k) => ({ kind: k[0] ? "ramp" : "box", minX: k[1], maxX: k[2], minY:
   const wide = NG.bakeTown(scene, flat, [{ minX: 15, maxX: 40, minZ: 15, maxZ: 35 }], { margin: 2 });
   const wideAll = NG.createWorld({ colliders: scene, heightFn: flat });
   ok(NG.tileFor(wide.world, 600, 600, true) === null && NG.tileFor(wideAll, 600, 600, true) !== null, "outside the town rects nothing bakes (a hop that leaves them is simply blocked); an uncovered world bakes anywhere");
+  // (W10 R3A fix7) coverPad: a street start up to the pad outside the rect (+ margin) plans into the top floor; the rects' own tiles are what bakes up front.
+  // Control: the same town without coverPad answers null from that start (no tile under it) - the MAP_GEN 10 ashgrid's 40 failed street -> 4th-storey plans.
+  {
+    const R0 = [{ minX: 15, maxX: 40, minZ: 15, maxZ: 35 }];
+    const noPad = NG.bakeTown(scene, flat, R0, { margin: 2 }), padded = NG.bakeTown(scene, flat, R0, { margin: 2, coverPad: 32 });
+    const nC = (w) => NG.tiles(w).filter((t) => t.kind === "coarse").length, c0 = nC(noPad.world), c1 = nC(padded.world);
+    const q0 = NG.findPath(noPad.world, 70, 0, 25, 26, 7.2, 25), q1 = NG.findPath(padded.world, 70, 0, 25, 26, 7.2, 25);
+    ok(c0 === c1 && q0 === null && q1 !== null && q1.length > 0 && q1[q1.length - 1].y > 6 && padded.rects[0].maxX === noPad.rects[0].maxX,
+      "coverPad: a start 28 m past the rect + margin plans into the top floor (" + (q1 ? q1.length : 0) + " waypoints; without the pad: " + (q0 === null ? "null" : q0.length) +
+      "); the up-front bake (" + c1 + " coarse tiles, without the pad " + c0 + ") and the areas are unchanged");
+  }
   const pr = NG.findPath(one.world, 36.5, 0, 33, 26, 7.2, 25);
   ok(pr !== null && pr.length > 0 && pr[pr.length - 1].y > 6, "a route into the top floor works inside a baked town (" + (pr ? pr.length : 0) + " waypoints)");
   // layouts in towngen's shape, discs and arrays are all rects
