@@ -255,7 +255,9 @@ interface Tile {
    * sun-facing dry-out (`sunny`: vegetation > 0.01), by the sun's AZIMUTH over the patch; 2 also the snow's aspect
    * (`aspectSun`) or the forest floor (`ff_canopy`, shadow maps: trees > 0.01, inside the instanced range)
    */
-  veg: boolean; snow: boolean; trees: boolean;
+  veg: boolean; snow: boolean; trees: boolean; crops: boolean;
+  /** the season the texels were baked with at the patch's latitude (autumn, winter: terrainmat.ts evalTerrain) */
+  aut: number; win: number;
   /** the sun's azimuth over the patch at the bake (unit, tangent) */
   sunAz: Vector3;
   /** this patch's own density factor (tcnearx) */
@@ -263,6 +265,18 @@ interface Tile {
 }
 
 const _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _d = new Vector3(), _f = new Vector3();
+const ss = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const _sk: [number, number] = [0, 0];
+/** terrainmat.ts evalTerrain's autumn / winter at a body-frame point (lat = up.y), as the shader computes them */
+function seasonAt(p: Vector3, yf: number, amp: number): [number, number] {
+  const lat = p.y / (p.length() || 1);
+  const yfS = (yf + 0.5) % 1;
+  const aN = ss(0.48, 0.58, yf) * (1 - ss(0.72, 0.8, yf)), aS = ss(0.48, 0.58, yfS) * (1 - ss(0.72, 0.8, yfS));
+  const wN = ss(0.7, 0.8, yf) + (1 - ss(0, 0.08, yf)), wS = ss(0.7, 0.8, yfS) + (1 - ss(0, 0.08, yfS));
+  const k = amp * ss(0.06, 0.32, Math.abs(lat)), h = ss(-0.12, 0.12, lat);
+  _sk[0] = (aS + (aN - aS) * h) * k; _sk[1] = (wS + (wN - wS) * h) * k;
+  return _sk;
+}
 const classFor = (n: number): number => { let c = 0; while (c < CLASSES.length - 1 && CLASSES[c] - PAD < n) c++; return c; };
 
 /** per-channel change (since the value a tile may have been baked with) that re-bakes the tiles of a cell */
@@ -443,6 +457,7 @@ export class TerrainCache {
   /** the sim's fields: cells that moved past WATCH since their reference value (the reference follows them) */
   private watchFields(): boolean {
     let any = false;
+    const bigCells: number[] = [];
     for (const name of Object.keys(WATCH)) {
       const tex = this.fieldTex[name];
       if (!tex) continue;
@@ -463,11 +478,15 @@ export class TerrainCache {
           const wk = name + (big ? '!' : ''); this.stats.wf[wk] = (this.stats.wf[wk] ?? 0) + 1;
           if (!dc[c]) this.stats.dirtyCells++;
           dc[c] = Math.max(dc[c], big ? 2 : 1);
+          if (big) bigCells.push(c);
           ref[o] = cur[o]; ref[o + 1] = cur[o + 1]; ref[o + 2] = cur[o + 2]; ref[o + 3] = cur[o + 3];
           any = true;
         }
       }
     }
+    // (s27: an edit — a paint, a crater — moves tens of cells; the sim itself at 100-1000x moves thousands a frame past
+    // 5x WATCH: that is drift, shown while re-baked, not a reason to put the whole view back on the full shader)
+    if (TC_SUN && bigCells.length > 400) { for (const c of bigCells) this.dirtyCell[c] = 1; this.stats.wf.mass = (this.stats.wf.mass ?? 0) + 1; }
     return any;
   }
 
@@ -487,6 +506,20 @@ export class TerrainCache {
     return _f.normalize().dot(t.sunAz) < 0.9945;
   }
 
+  /**
+   * s27: did the season move enough to change this tile's texels? The year reaches evalTerrain only through
+   * vegetation (`autumn`, `winter`: smoothstep ramps of the year, zero slope outside them; at most a 0.35 mix of the
+   * meadow and the broadleaf crowns' turn) and the crop calendar (step changes by field phase). No vegetation: never.
+   * Crops: s26's 0.004 of a year. Else: the tile's own autumn / winter moved by > 0.02 (outside the ramps: never).
+   */
+  private seasonMoved(t: Tile, c: Vector3, year: number, amp: number): boolean {
+    if (!TC_SUN) return Math.abs(year - t.year) > 0.004;
+    if (!t.veg) return false;
+    if (t.crops) return Math.abs(year - t.year) > 0.004;
+    const sk = seasonAt(c, year, amp);
+    return Math.abs(sk[0] - t.aut) > 0.02 || Math.abs(sk[1] - t.win) > 0.02;
+  }
+
   /** the ground normals of up to 16 distinct cells of the patch (field N: per-cell normal, body frame) */
   private cellNormals(p: Patch, t: Tile): void {
     const cells = p.vcells, nf = this.fieldTex.N?.image.data as unknown as Float32Array | undefined;
@@ -498,11 +531,12 @@ export class TerrainCache {
     if (af) for (let i = 0; i < cells.length; i++) { const o = cells[i] * 4; if (af[o + 2] - af[o] < DEEP) { t.deep = false; break; } }
     // (sun use: V = grass, shrub, tree, crop; M0.x = snow; a margin under the shader's own gates)
     const vf = this.fieldTex.V?.image.data as unknown as Float32Array | undefined, mf = this.fieldTex.M0?.image.data as unknown as Float32Array | undefined;
-    t.veg = !vf; t.trees = !vf; t.snow = !mf;
+    t.veg = !vf; t.trees = !vf; t.snow = !mf; t.crops = !vf;
     for (let i = 0; i < cells.length; i++) {
       const o = cells[i] * 4;
       if (vf && vf[o] + vf[o + 1] + vf[o + 2] + vf[o + 3] > 0.005) t.veg = true;
       if (vf && vf[o + 2] > 0.005) t.trees = true;
+      if (vf && vf[o + 3] > 0.0005) t.crops = true;
       if (mf && mf[o] > 0.0005) t.snow = true;
     }
     const seen = new Set<number>();
@@ -566,7 +600,7 @@ export class TerrainCache {
       if (!tab) continue;
       let t = this.tiles.get(p);
       if (!t) {
-        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, deep: false, veg: true, snow: true, trees: true, sunAz: new Vector3(), dens: 1, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
+        t = { dirs: new Float32Array(9), nrm: new Float32Array(48), nN: 0, deep: false, veg: true, snow: true, trees: true, crops: true, aut: 0, win: 0, sunAz: new Vector3(), dens: 1, cls: -1, slab: null, sub: 0, cam: new Vector3(), fwd: new Vector3(), sun: new Vector3(), year: 0, gkey: '', baked: false, dirty: false, stale: false, hot: false, hotEpoch: -1, lastUsed: 0, dn: 0, need: 0, area: 0, areaW: 0 };
         // the patch's flat triangle (m^2)
         this.lod.tcCorners(p, _a, _b, _f);
         _a.toArray(t.dirs, 0); _b.toArray(t.dirs, 3); _f.toArray(t.dirs, 6);
@@ -633,7 +667,7 @@ export class TerrainCache {
       if (valid && !t.stale) {
         // slow-stale: shown, re-baked behind the uncached patches (camera moved / turned, sun, season, class)
         if (moved > 0.03 || t.fwd.dot(this.fwd) < 0.966) { t.stale = true; st.rebakeKnot++; st.why.cam++; }
-        else if (Math.abs(yearFrac - t.year) > 0.004) { t.stale = true; st.rebakeSlow++; st.why.season++; }
+        else if (this.seasonMoved(t, sc, yearFrac, u.uSeasonAmp.value as number)) { t.stale = true; st.rebakeSlow++; st.why.season++; }
         else if (this.sunMoved(t, up.copy(sc).normalize(), sunBody, cf, dn, u.uShadowOn?.value === 1)) { t.stale = true; st.rebakeSlow++; st.why.sun++; }
         // (smaller only when a smaller class fits: 288 -> 576 is a 2x step, a test on the usable edge alone looped)
         else if (need * TC_DENS > usable || (classFor(need * TC_DENS) < t.cls && need * TC_DENS * 1.9 < usable)) { t.stale = true; st.rebakeClass++; st.why.cls++; }
@@ -753,6 +787,7 @@ export class TerrainCache {
       const pl = this.place(t), L = t.slab.layer;
       t.cam.copy(this.cam); t.fwd.copy(this.fwd);
       t.sun.copy(this.sunNow); t.year = this.yearNow; t.gkey = this.gkey;
+      { const sk = seasonAt(p.sphere.center, this.yearNow, this.shared.uSeasonAmp.value as number); t.aut = sk[0]; t.win = sk[1]; }
       _d.copy(p.sphere.center).normalize(); t.sunAz.copy(this.sunNow).addScaledVector(_d, -this.sunNow.dot(_d));
       if (t.sunAz.lengthSq() > 1e-12) t.sunAz.normalize();
       // the draw: the page's geometry, this slot's index range, into the tile's square of its layer (viewport + scissor)
