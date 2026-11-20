@@ -208,6 +208,16 @@
   /** Copy the geometry of a collider list into typed arrays (dead colliders are left out AT THIS MOMENT: the set is a
    *  snapshot, so a prop destroyed later changes nothing and every client's tiles stay identical). `blockers` = extra
    *  boxes {minX..maxZ} that stop the capsule like a wall but are never a floor (kind 2): the launch portals. */
+  // the planted fault of the memory-per-town row (gate: node -e "globalThis.__ngWideItems = 1; require('./runtime/sim/navgrid.selftest.cjs')" must FAIL): list order, 32-bit items
+  var _wideItems = typeof globalThis !== "undefined" && globalThis.__ngWideItems === 1;
+  var COL_ROW = 32;     // (W10 R3A fix6) the ground-order row of a large collider set (makeColSet), m
+  /** (W10 R3A fix6) a tile whose cell-list items span < 65535 collider-set indices reads the set through views that start at its lowest index: the items are
+   *  16-bit offsets, every reader indexes T.lx0[item] ... as before (the same numbers, in the same order). base 0 = the set itself. */
+  function rebaseTile(T, cs, base) {
+    if (base === 0) return;
+    T.m = cs.n - base; T.lx0 = cs.minX.subarray(base); T.lx1 = cs.maxX.subarray(base); T.ly0 = cs.minY.subarray(base); T.ly1 = cs.maxY.subarray(base);
+    T.lz0 = cs.minZ.subarray(base); T.lz1 = cs.maxZ.subarray(base); T.lk = cs.kind.subarray(base); T.ld = cs.dir.subarray(base);
+  }
   function makeColSet(list, blockers, noFloor) {
     if (list && list.isColSet) return list;
     var n = 0, i, c, nb = blockers ? blockers.length : 0;
@@ -218,9 +228,21 @@
       minX: new Float64Array(tot), maxX: new Float64Array(tot), minY: new Float64Array(tot), maxY: new Float64Array(tot),
       minZ: new Float64Array(tot), maxZ: new Float64Array(tot), kind: new Uint8Array(tot), dir: new Int8Array(tot),
     };
-    var j = 0;
-    for (i = 0; i < list.length; i++) {
-      c = list[i];
+    var j = 0, ord = null;
+    // (W10 R3A fix6) a set of 65535 or more colliders (every housed map: ashgrid s7 holds 74,206 live ones) is laid out in ground order - rows of COL_ROW m
+    // along z, then x, ties in list order - so a tile's colliders hold NEARBY indices and its cell lists fit 16 bits as offsets from its lowest one
+    // (rebaseTile). In list order a tile saw a house's colliders AND the props / map pieces maps.js appends last (indices 66,000-74,206): every
+    // cell-list item of every tile stayed 32-bit and a furnished downtown held 4.44 MB of tile arrays (the selftest's limit 3.56). A smaller set keeps
+    // list order exactly (every tile and route as before). The order is a pure function of the list: every client and prebake worker builds the same set.
+    if (tot >= 65535 && !_wideItems) {
+      ord = [];
+      for (i = 0; i < list.length; i++) if (!list[i].dead) ord.push(i);
+      var rk = new Float64Array(list.length);
+      for (i = 0; i < ord.length; i++) { c = list[ord[i]]; rk[ord[i]] = Math.floor((c.minZ + c.maxZ) / 2 / COL_ROW) * 1e6 + Math.floor((c.minX + c.maxX) / 2 / COL_ROW); }
+      ord.sort(function (a, b) { return rk[a] - rk[b] || a - b; });
+    }
+    for (var oi = 0; oi < (ord ? ord.length : list.length); oi++) {
+      c = list[ord ? ord[oi] : oi];
       if (c.dead) continue;
       cs.minX[j] = c.minX; cs.maxX[j] = c.maxX; cs.minY[j] = c.minY; cs.maxY[j] = c.maxY;
       cs.minZ[j] = c.minZ; cs.maxZ[j] = c.maxZ; cs.kind[j] = c.kind === "ramp" ? 1 : (noFloor && noFloor.has(c) ? 3 : 0); cs.dir[j] = c.dir | 0;
@@ -1051,7 +1073,7 @@
       deepY: 0.5, wetY: 0.5,
       m: 0, lx0: null, lx1: null, ly0: null, ly1: null,
       lz0: null, lz1: null, lk: null, ld: null,
-      nearStart: null, nearItems: null, slot: -1, base: 0, linkedAll: false,
+      nearStart: null, nearItems: null, nbase: 0, slot: -1, base: 0, linkedAll: false,
       // set by the bake (bakeTileGen) / the payload (pbAssemble)
       dOrth: 0.5, dDiag: 0.5, n: 0, x: null, y: null, z: null, flag: null, bord: null, adj: null, cellStart: null,
       edgeStart: null, edgeTo: null, edgeCost: null, edgeKind: null, bordCount: 0, holes: null,
@@ -1077,6 +1099,8 @@
       T.grp = { rects: [] }; T.island = new Uint8Array(1); T.island = null; T.key = 2 + i; T.minX = 0.5; T.minZ = 0.5; T.maxX = 1.5; T.maxZ = 1.5; T.cell = 1.5; T.inv = 0.6;
       T.nx = 3; T.nz = 3; T.hf = function () { return 1; }; T.hl = { L: null, n: 0, c: 0, k: 0.5, h: 0.5 }; T.hl = null; T.deepY = -0.5; T.wetY = 0.5; T.m = 1;
       T.nearStart = new Int32Array(1); T.nearItems = new Int32Array(1); T.nearStart = new Uint16Array(1); T.nearItems = new Uint16Array(1);
+      T.nbase = 1; T.nbase = 0; rebaseTile(T, cs, 0); T.lx0 = cs.minX.subarray(0); T.lx1 = cs.maxX.subarray(0); T.ly0 = cs.minY.subarray(0); T.ly1 = cs.maxY.subarray(0);     // (W10 R3A fix6: rebaseTile writes them again)
+      T.lz0 = cs.minZ.subarray(0); T.lz1 = cs.maxZ.subarray(0); T.lk = cs.kind.subarray(0); T.ld = cs.dir.subarray(0); T.m = 2; T.m = 1;
       T.slot = 1; T.base = STRIDE; T.linkedAll = true; T.linkedAll = false;
       T.dOrth = 0.75; T.dDiag = 1.06; T.n = 1; T.n = 2;
       T.x = new Float32Array(1); T.y = new Float32Array(1); T.z = new Float32Array(1); T.flag = new Uint8Array(1); T.bord = new Uint8Array(1); T.adj = new Uint8Array(1);
@@ -1424,9 +1448,16 @@
     T.bordCount = bordCount; T.holes = holeList;
     T.extStart = null; T.extTo = null; T.extCost = null; T.extKind = null; T.pend = null; T.linked = [];
     // the lookup lists were built wide for the bake; keep them narrow (they are read by every replay of this tile for the rest of the match)
-    if (nearItems.length < 65535 && cs.n < 65535) {
-      T.nearStart = Uint16Array.from(nearStart); T.nearItems = Uint16Array.from(nearItems);
+    // (W10 R1A) the two narrow on their own: a list ITEM is a collider id (16 bits while the set holds < 65535), a START an offset into the list (16 bits while the
+    // list holds < 65535). A furnished downtown tile has > 65535 items (W10's bigger homes and their x1.15 furniture): both stayed 32-bit - downtown 3.21 -> 4.61 MB
+    if (cs.n < 65535) T.nearItems = Uint16Array.from(nearItems);
+    else if (nearItems.length > 0 && !_wideItems) {
+      // (W10 R3A fix6) a large set: the items as 16-bit offsets from the tile's lowest index when they span < 65535 (rebaseTile), else 32-bit as before
+      var nLo = nearItems[0], nHi = nearItems[0];
+      for (k = 1; k < nearItems.length; k++) { q = nearItems[k]; if (q < nLo) nLo = q; else if (q > nHi) nHi = q; }
+      if (nHi - nLo < 65535) { var nU = new Uint16Array(nearItems.length); for (k = 0; k < nearItems.length; k++) nU[k] = nearItems[k] - nLo; T.nearItems = nU; T.nbase = nLo; rebaseTile(T, cs, nLo); }
     }
+    if (nearItems.length < 65535) T.nearStart = Uint16Array.from(nearStart);
     if (nK >= STRIDE) throw new Error("navgrid: a tile may hold at most " + (STRIDE - 1) + " nodes");
     var tEnd = now();
     T.stats = {
@@ -1560,6 +1591,8 @@
    *   opts.cellOutdoor 1.5, opts.cellIndoor 0.75 (nominal; the lattice divides the rect into whole cells)
    *   opts.cover       (tx, tz) -> bool: which coarse tiles may be baked (default: all). opts.zones [{x, z, r}] and opts.rects [{minX, maxX, minZ, maxZ}]
    *                    (grown by opts.margin, default 6 m) are shortcuts: only the coarse tiles that touch them bake. bakeTown() adds rects later.
+   *   opts.coverPad    (W10 R3A fix7) m: with opts.rects, the coarse tiles within coverPad of a (grown) rect may bake TOO - on demand only: the rects'
+   *                    own tiles (W.zoneRects: the jobs, the prebake) are unchanged, a padding tile bakes when a query needs it (default 0 = as before)
    *   opts.fineRects   override the building rects found from the colliders ([] = none); opts.maxFine = the largest building tile side (default 16 m)
    *   opts.waterY      terrain this far under the water is not walkable
    *   opts.portals     [{x, y, z}] the map's launch portals: walking into one flings the actor, so they are obstacles
@@ -1581,15 +1614,22 @@
       // that needs a building which is not baked yet fails fast instead of stalling a frame for 10-140 ms, and the answer is a function of
       // which tiles the schedule has baked - not of the clock. Every edge that exists is still certified by the mover replay.
       noBake: !!opts.lazy, wanted: [], wantSeen: new Set(),
+      coverPad: 0,                 // (W10 R3A fix7) see opts.coverPad
     };
     var zones = opts.zones || null;
     W.zoneRects = [];
     if (opts.rects) addCoverRects(W, opts.rects, opts.margin);
     if (typeof opts.cover === "function") W.cover = opts.cover;
     else if (opts.rects) {
+      // (W10 R3A fix7) coverPad: bots.js's navNear hands the grid a route to / from an upper storey whose other end is up to NAV_NEAR_M (32 m) outside a
+      // town / compound rect, but only the tiles touching the rect + margin existed: on the MAP_GEN 10 ashgrid 40 of 643 street -> 4th-storey plans
+      // (navcheck_seeds top-floor-paths, starts 25 m out) started on no tile, the grid was never asked and the window planner's partial route ended on the
+      // ground under the goal. The padded ring is cover, never a zone: nothing bakes there until a query reaches it.
+      var pad = opts.coverPad > 0 ? +opts.coverPad : 0;
+      W.coverPad = pad;
       W.cover = function (tx, tz) {
-        var x0 = tx * W.tileSize, z0 = tz * W.tileSize, x1 = x0 + W.tileSize, z1 = z0 + W.tileSize, R = W.zoneRects;
-        for (var i = 0; i < R.length; i++) if (x1 > R[i].minX && x0 < R[i].maxX && z1 > R[i].minZ && z0 < R[i].maxZ) return true;
+        var x0 = tx * W.tileSize, z0 = tz * W.tileSize, x1 = x0 + W.tileSize, z1 = z0 + W.tileSize, R = W.zoneRects, P = W.coverPad;
+        for (var i = 0; i < R.length; i++) if (x1 > R[i].minX - P && x0 < R[i].maxX + P && z1 > R[i].minZ - P && z0 < R[i].maxZ + P) return true;
         return false;
       };
     } else if (zones) {
@@ -1769,8 +1809,15 @@
     for (i = 0; i < rec.length; i++) if (rec[i] > 2147483647) { big = true; break; }
     return {
       key: d.key, kind: d.kind, a: a, stats: T.stats, hash: T.hash, ev: big ? Float64Array.from(rec) : Int32Array.from(rec),
-      s: [T.minX, T.minZ, T.maxX, T.maxZ, T.cell, T.nx, T.nz, T.inv, T.deepY, T.wetY, T.n, T.dOrth, T.dDiag, T.bordCount],
+      s: pbShape(T),
     };
+  }
+  /** (W10 R3A fix8) The scalars of a payload (pbAssemble reads them back): ONE builder for the bake worker's reply and pbForward's copy to the stitch worker.
+   *  pbForward kept its own list and lost T.nbase (s[14], fix6): a main-baked rebased tile reached the mirror world un-rebased, so its seam records read
+   *  other colliders - and whether a seam record or the live evalEdge linked a pair depended on which tiles a worker had delivered in time (ashgrid seed 11
+   *  diverged at ~60 s). */
+  function pbShape(T) {
+    return [T.minX, T.minZ, T.maxX, T.maxZ, T.cell, T.nx, T.nz, T.inv, T.deepY, T.wetY, T.n, T.dOrth, T.dDiag, T.bordCount, T.nbase];
   }
   /** The tile a payload describes, in the world's terms (its collider set, its height function, its hole list): the object bakeTileGen returns,
    *  field for field and in the same property order (one hidden class for every tile). */
@@ -1778,7 +1825,7 @@
     var s = P.s, a = P.a, cs = W.cs, hf = W.hf;
     var holes = P.kind === 0 ? (W.fineByCoarse.get(P.key) || null) : null;
     var T = tileShell(P.key, s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], hf, s[8], s[9], cs);      // (final/nav) the one tile class, see tileShell
-    T.nearStart = a.nearStart; T.nearItems = a.nearItems;
+    T.nearStart = a.nearStart; T.nearItems = a.nearItems; T.nbase = s[14] | 0; rebaseTile(T, cs, T.nbase);
     T.dOrth = s[11]; T.dDiag = s[12];
     T.n = s[10] | 0; T.x = a.x; T.y = a.y; T.z = a.z; T.flag = a.flag; T.bord = a.bord; T.adj = a.adj; T.cellStart = a.cellStart;
     T.edgeStart = a.edgeStart; T.edgeTo = a.edgeTo; T.edgeCost = a.edgeCost; T.edgeKind = a.edgeKind;
@@ -2000,7 +2047,7 @@
     for (var i = 0; i < PB_ARRS.length; i++) a[PB_ARRS[i]] = T[PB_ARRS[i]];
     try {
       pb.sw.postMessage({ t: "tile", P: { key: T.key, kind: T.kind === "coarse" ? 0 : 1, a: a, stats: T.stats, hash: T.hash,
-        s: [T.minX, T.minZ, T.maxX, T.maxZ, T.cell, T.nx, T.nz, T.inv, T.deepY, T.wetY, T.n, T.dOrth, T.dDiag, T.bordCount] } });
+        s: pbShape(T) } });
       pb.fwd++;
     } catch (e) { /* the copy is a nicety */ }
   }
@@ -3064,7 +3111,7 @@
     var t0 = now(), margin = opts.margin != null ? opts.margin : 6, W = opts.world || null, i;
     if (W === null) {
       W = createWorld({ colliders: colliders, heightFn: heightFn, waterY: opts.waterY, portals: opts.portals, tileSize: opts.tileSize, cellOutdoor: opts.cellOutdoor,
-        cellIndoor: opts.cellIndoor, maxFine: opts.maxFine, fineRects: opts.fineRects, rects: rects, margin: margin, lazy: opts.lazy, noFloor: opts.noFloor });
+        cellIndoor: opts.cellIndoor, maxFine: opts.maxFine, fineRects: opts.fineRects, rects: rects, margin: margin, lazy: opts.lazy, noFloor: opts.noFloor, coverPad: opts.coverPad });
     } else addCoverRects(W, rects, margin);
     var areas = [];
     for (i = 0; i < rects.length; i++) areas.push(normRect(rects[i], margin));

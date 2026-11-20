@@ -1137,3 +1137,5 @@ def pct(s, p):
     lo = int(k)
     hi = min(lo + 1, len(s) - 1)
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
+
+import netnoise; netnoise.install()  # W10 tools (ticket 3, ruled): every gate - a third-party network-only failure makes an error row could-not-judge (netnoise.py)

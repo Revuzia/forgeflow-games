@@ -539,12 +539,13 @@ def serve_patched(s, rel, edits):
     """serve `rel` with each (old, new) edit applied (each `old` must occur exactly once: a moved anchor is could-not-judge, never a silent
     no-op plant). Call BEFORE the page loads the module. Returns the number of edits applied."""
     import urllib.parse
+    import anchors as A                    # (W10 tools) line-ending independent: an anchor spanning lines is found in a CRLF tree too
     src = served_text(s, rel)
     for old, new in edits:
-        n = src.count(old)
+        n = A.count(src, old)
         if n != 1:
             raise C.EnvFailure("plant anchor in %s found %d times (want 1): %r" % (rel, n, old[:80]))
-        src = src.replace(old, new, 1)
+        src = A.apply(src, old, new, 1, rel)
     body = src.encode("utf-8")
     s.disk.overrides.append((lambda url, rel=rel: urllib.parse.urlparse(url).path.endswith("/" + rel),
                              lambda route, body=body: route.fulfill(status=200, body=body, headers={
