@@ -1809,8 +1809,15 @@
     for (i = 0; i < rec.length; i++) if (rec[i] > 2147483647) { big = true; break; }
     return {
       key: d.key, kind: d.kind, a: a, stats: T.stats, hash: T.hash, ev: big ? Float64Array.from(rec) : Int32Array.from(rec),
-      s: [T.minX, T.minZ, T.maxX, T.maxZ, T.cell, T.nx, T.nz, T.inv, T.deepY, T.wetY, T.n, T.dOrth, T.dDiag, T.bordCount, T.nbase],
+      s: pbShape(T),
     };
+  }
+  /** (W10 R3A fix8) The scalars of a payload (pbAssemble reads them back): ONE builder for the bake worker's reply and pbForward's copy to the stitch worker.
+   *  pbForward kept its own list and lost T.nbase (s[14], fix6): a main-baked rebased tile reached the mirror world un-rebased, so its seam records read
+   *  other colliders - and whether a seam record or the live evalEdge linked a pair depended on which tiles a worker had delivered in time (ashgrid seed 11
+   *  diverged at ~60 s). */
+  function pbShape(T) {
+    return [T.minX, T.minZ, T.maxX, T.maxZ, T.cell, T.nx, T.nz, T.inv, T.deepY, T.wetY, T.n, T.dOrth, T.dDiag, T.bordCount, T.nbase];
   }
   /** The tile a payload describes, in the world's terms (its collider set, its height function, its hole list): the object bakeTileGen returns,
    *  field for field and in the same property order (one hidden class for every tile). */
@@ -2040,7 +2047,7 @@
     for (var i = 0; i < PB_ARRS.length; i++) a[PB_ARRS[i]] = T[PB_ARRS[i]];
     try {
       pb.sw.postMessage({ t: "tile", P: { key: T.key, kind: T.kind === "coarse" ? 0 : 1, a: a, stats: T.stats, hash: T.hash,
-        s: [T.minX, T.minZ, T.maxX, T.maxZ, T.cell, T.nx, T.nz, T.inv, T.deepY, T.wetY, T.n, T.dOrth, T.dDiag, T.bordCount] } });
+        s: pbShape(T) } });
       pb.fwd++;
     } catch (e) { /* the copy is a nicety */ }
   }
