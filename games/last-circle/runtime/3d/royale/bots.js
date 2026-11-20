@@ -3475,7 +3475,10 @@ function startNav(W) {
     // (Wave 8) the tall furniture of the furnished houses is never a floor of the grid (no routes over tables, beds, counters, shelves) and walls
     // the capsule from a step away (navgrid TALL_LIFT); null on a map without houses: the world of Wave 7b, hash for hash
     const noFloor = typeof G.tallFurniture === "function" ? G.tallFurniture(W.map) : null;
-    const town = G.bakeTown(W.map.colliders, hfn, lay.towns.concat(lay.compounds), { waterY: W.map.waterY, portals: W.map.portals, maxMs: 0, lazy: true, noFloor });
+    // (W10 R3A fix7) coverPad NAV_NEAR_M: the tiles navNear plans on (an upper-storey end inside a rect, the other end up to 32 m outside it) exist; they bake
+    // on demand like every lazy tile, the rects' own tiles (the barrier job, the prebake) are unchanged. Without it, 40 of 643 street -> 4th-storey plans
+    // on the MAP_GEN 10 ashgrid started on no tile and got the window planner's partial route (navcheck_seeds top-floor-paths 93.8 %)
+    const town = G.bakeTown(W.map.colliders, hfn, lay.towns.concat(lay.compounds), { waterY: W.map.waterY, portals: W.map.portals, coverPad: NAV_NEAR_M, maxMs: 0, lazy: true, noFloor });
     nav.G = G; nav.world = town.world; nav.areas = town.rects; nav.qKeys = new Set();
     nav.st.areas = town.rects.length;
     const jobs = [], seen = new Set();
@@ -3561,8 +3564,8 @@ function navTick(W) {
   while (G.work() - w0 < budget && guard++ < 48) {
     if (!nav.cur) {
       let j = null;
-      while (!j && nav.qNeed.length) { const c = nav.qNeed.shift(); if (c.rect.tile === null) j = c; }
-      while (!j && nav.qPre.length) { const c = nav.qPre.shift(); if (c.rect.tile === null) j = c; }
+      while (!j && nav.qNeed.length) { const c = nav.qNeed.shift(); if (!navJobIn(c)) j = c; }
+      while (!j && nav.qPre.length) { const c = nav.qPre.shift(); if (!navJobIn(c)) j = c; }
       if (!j) break;
       try { nav.cur = G.beginJob(w, j); } catch (err) { navFail(err); return; }
     }
@@ -3577,6 +3580,8 @@ function navTick(W) {
   }
   if (G.work() > w0) st.ticksWorked++;
 }
+/** (W10 R3A fix7) Is the tile of bake job j in already? A building tile (kind 1) or a coarse tile (kind 0: the coverPad ring past the rects). */
+function navJobIn(j) { return j.kind === 0 ? nav.world.coarse.has(j.key) : j.rect.tile !== null; }
 /** Take what the last query asked for off the world and queue it: a tile new to the queues goes to the back of qNeed, one that was only
  *  queued as a prefetch is promoted to qNeed (a bot is waiting for it). Returns how many unbaked building tiles the query needed. */
 function navDrainWanted() {
@@ -3586,7 +3591,8 @@ function navDrainWanted() {
   let n = 0;
   for (let k = 0; k < js.length; k++) {
     const j = js[k];
-    if (j.kind !== 1 || j.rect.tile !== null) continue;       // the outdoor tiles are all in after the barrier
+    // the outdoor tiles of the rects are all in after the barrier; (W10 R3A fix7) a coarse tile of the coverPad ring (navNear's 32 m) bakes when a query needs it
+    if (navJobIn(j)) continue;
     n++;
     if (nav.cur && nav.cur.j.key === j.key) continue;         // being baked right now
     if (!nav.qKeys.has(j.key)) { nav.qKeys.add(j.key); nav.qNeed.push(j); nav.st.needJobs++; continue; }
@@ -3798,7 +3804,7 @@ function findPathSettled(W, sx, sy, sz, tx, tz, ty) {
     let ran = 0;
     try {
       if (nav.cur) { while (!nav.G.stepJob(nav.world, nav.cur)); nav.cur = null; ran++; }
-      while (nav.qNeed.length) { const j = nav.qNeed.shift(); if (j.rect.tile === null) { nav.G.runJob(nav.world, j); ran++; } }
+      while (nav.qNeed.length) { const j = nav.qNeed.shift(); if (!navJobIn(j)) { nav.G.runJob(nav.world, j); ran++; } }
     } catch (err) { navFail(err); return p; }
     if (!ran) return p;
   }

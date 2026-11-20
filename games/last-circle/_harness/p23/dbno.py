@@ -77,7 +77,7 @@ DITHER_N, DITHER_CAP_S, DITHER_MATE_M, DITHER_PEEK_S = 4, 52, 15, 2.0
 DITHER_MED_MAX, DITHER_MAX_MAX, REVSTART_MIN = 2, 4, 80.0
 # one episode: knock the human, the enemy peeks at the mate (2 s seen / 2 s hidden), every frame the mate's state; the episode ends at the revive,
 # the human's death, or capS (then the setup rescue). Returns the flip count (REVIVE <-> ENGAGE between consecutive REVIVE / ENGAGE states).
-DITHER_JS = r"""([me, mate, foe, cx, cz, threatM, capS, peekS, mateM]) => {
+DITHER_JS = r"""([me, mate, foe, cx, cz, threatM, capS, peekS, mateM, seeK]) => {
   const W = window.__LC__.W, M = W.map, P = window.__H_PUMP__, Q = window.__P23D__, K = W.SIM, H = (M.half || 760) - 40;
   const cl = (v) => Math.max(-H, Math.min(H, v));
   const at = (x, z) => [cl(x), M.heightAt(cl(x), cl(z)) + 0.05, cl(z)];
@@ -111,10 +111,13 @@ DITHER_JS = r"""([me, mate, foe, cx, cz, threatM, capS, peekS, mateM]) => {
     const dx = o.pos.x - cx, dz = o.pos.z - cz, d = Math.hypot(dx, dz); if (d < FENCE_M) { const k = (FENCE_M + 5) / Math.max(0.1, d); put(o, at(cx + dx * k, cz + dz * k)); } } };
   fence();
   const from = Q.ev.length, t0 = W.t;
-  let flips = 0, last = null, revStart = null, revived = null, died = null, seenN = 0, otherTarget = 0, minFoeD = 1e9; const states = [];
+  let flips = 0, last = null, revStart = null, revived = null, died = null, seenN = 0, otherTarget = 0, minFoeD = 1e9, scriptedN = 0; const states = [];
   for (let f = 0; f < capS * 60; f++) {
     const shown = Math.floor((W.t - t0) / peekS) % 2 === 0;
     put(E, shown ? vis : hid); E.hp = 100; E.shield = 100; fence();
+    // (W10 tools, ticket 5) CONTROL ONLY (seeK, the no-revive-threat plant run): every shown frame the mate's sighting clock is set, so the
+    // threat the plant keys on is present by construction (a scripted peek schedule); the normal run never sets it
+    if (seeK && shown && B.brain) { B.brain.bb.targetSeenT = W.t; scriptedN++; }
     P.step(1, 1 / 60, false);
     const st = B.brain ? B.brain.state : null;
     if (st === 'REVIVE' || st === 'ENGAGE') { if (last && st !== last) flips++; last = st; }
@@ -145,7 +148,7 @@ DITHER_JS = r"""([me, mate, foe, cx, cz, threatM, capS, peekS, mateM]) => {
     rescued = { up: !!(A.alive && !A.downed), byHarness };
   }
   put(E, hid);
-  return { threatM, flips, revStart, revived, died, bleedLeftS, rescued, seenN, otherTarget, minFoeD: +minFoeD.toFixed(1), vis: vis.map((v) => +v.toFixed(1)),
+  return { threatM, flips, revStart, revived, died, bleedLeftS, rescued, seenN, scriptedN, otherTarget, minFoeD: +minFoeD.toFixed(1), vis: vis.map((v) => +v.toFixed(1)),
            states: states.slice(0, 40), mateState: B.brain ? B.brain.state : null, humanUp: !!(A.alive && !A.downed) }; }"""
 
 CONTRACT = {
@@ -413,11 +416,17 @@ def part_bot(args, v):
                 "downed, downed, up -> all dead")
         L.pin_actor(s, None)
         L.errors_row(v, s, "errors [trio]")
-        part_dither(s, v)
+        part_dither(s, v, scripted_sight=(args.plant == "no-revive-threat"))
 
 
-def part_dither(s, v):
-    """(W9 R1B) the bot mate that dithered between fighting and reviving: a fresh DUO match in the bot part's page (see the docstring)."""
+def part_dither(s, v, scripted_sight=False):
+    """(W9 R1B) the bot mate that dithered between fighting and reviving: a fresh DUO match in the bot part's page (see the docstring).
+    scripted_sight (W10 tools, ticket 5; ONLY the control p23_dbno-plant-no-revive-threat): the plant removes the revive while an enemy was
+    seen in the last 10 s, and whether the mate's own eyes register the 2 s peeks at 50 m was chance (round 3c: one run of three saw too
+    few sightings and every 50 m episode revived - the control missed). In the control the mate's sighting clock is set on every shown frame
+    (a fixed peek schedule), so the plant's condition holds by construction; the rows, their bars and the normal run are unchanged."""
+    if scripted_sight:
+        v.note("CONTROL: scripted sightings - the mate's targetSeenT is set on every frame the enemy is shown (no-revive-threat plant run only)")
     s.thaw_loop()
     st = L.start(s, "standard", 7, "ashgrid", team="duo", guard=True)
     v.data["dither_start"] = st
@@ -447,7 +456,7 @@ def part_dither(s, v):
     # set, run after four capped 30 m episodes, met the closing storm at the isolated spot (the human died in it: setup lost, could-not-judge)
     for threat in (50, 30):
         for _ in range(DITHER_N):
-            r = s.js(DITHER_JS, [info["me"], info["mate"], info["foe"], iso["x"], iso["z"], threat, DITHER_CAP_S, DITHER_PEEK_S, DITHER_MATE_M])
+            r = s.js(DITHER_JS, [info["me"], info["mate"], info["foe"], iso["x"], iso["z"], threat, DITHER_CAP_S, DITHER_PEEK_S, DITHER_MATE_M, bool(scripted_sight)])
             eps[threat].append(r)
             if r.get("error") or (r.get("rescued") and not r["rescued"]["up"]) or r.get("died") is not None:
                 break
@@ -455,7 +464,7 @@ def part_dither(s, v):
     v.data["dither"] = eps
     good30 = [r for r in eps[30] if not r.get("error")]
     good50 = [r for r in eps[50] if not r.get("error")]
-    brief = lambda rs: [{k: r.get(k) for k in ("flips", "revStart", "revived", "died", "bleedLeftS", "rescued", "seenN", "otherTarget", "minFoeD")} for r in rs]
+    brief = lambda rs: [{k: r.get(k) for k in ("flips", "revStart", "revived", "died", "bleedLeftS", "rescued", "seenN", "scriptedN", "otherTarget", "minFoeD")} for r in rs]
     if len(good30) < 3 or sum(1 for r in good30 if r["seenN"] > 0) < 2:
         v.cnj(name_d, "SETUP missed: %d usable episodes (want >= 3, the mate saw the enemy in >= 2): %s" % (len(good30), brief(eps[30])))
     else:

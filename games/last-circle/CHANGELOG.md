@@ -3,6 +3,43 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-19 — Wave 10 round 3 (homes + interiors)
+
+Wave 10 round 3 merges lane R3A (`w10-r3-interiors`, head c8d1e0dcb), which already contains lane R1A (`w10-r1-homes`, head f7441b132), onto `w10` (master c7352d0b1 + the W10 test-tools lane 08511383a). The world changes: `MAP_GEN_VERSION` 8 -> 10 (gate.py `MAP_GEN_TARGET` = 10). Released on the owner's faster route (2026-11-19): a targeted re-verify before the release, the full battery after it as a separate job.
+
+- Lane R1A (homes): bigger, normally furnished homes - 17 more Kenney Furniture Kit 2.0 pieces (manifest 136 -> 153 types), two-storey homes, a homes census (`p23/homes.py`, gate row `w10_homes`).
+- Last Circle W10 R1A (fix15, 01cdefdef): the bot pen and corner checks (probe_match --pencheck / --cornercheck) now also run on a pinned world: the map generator of the released build e7a7426c6 (MAP_GEN 8), served from git by the test harness only, with the head's own bot and navigation code. The new homes towns had removed the original terrace spots. On this fixture the head passes (pen 11.5 / 8.5 / 11.5 s, corner 1 / 1.5 / 2 s, 0 stuck episodes), and all three planted faults (no-pen-fix, no-calm-lag, no-early-turn) are caught. Results were identical over 3 runs, and identical on e7a7426c6 itself. The natural seed-5 pen check stays as it was.
+- Last Circle W10 R1A (fix15, f7441b132): the planted fault for the housegen CPU check now generates every house three times (was twice), so it fails with a wide margin (ratio 1.80 vs the 1.32 limit, was 1.41). The head still passes (ratio 1.01).
+- Last Circle W10 R1A (fix12, d9e739f4d): the housegen.selftest CPU row is now measured against the pinned reference build 04e82d802, interleaved (ref, head, ref x3), via _harness/p23/hg_cpu.py. The bar stays 36 ms absolute. Otherwise the head passes at <= 1.32 x the reference, and only when the reference itself reads > 27.3 ms. A ref-vs-ref control is required, and plant slow-gen is caught on both branches.
+- Wave 10 round 3 (lane R3A, interiors II): shops read as shops - a lighter 70-triangle aisle gondola so the aisles run on, stocked wall shelving (tall and under-sill) lining a shop's walls before the aisles, a checkout counter line, open display bins instead of storeroom pallets on the shop floor; store rooms and warehouses keep rack rows and pallet stacks as cover.
+- Wave 10 round 3 (lane R3A): work storeys are dressed to their size within the plan's budgets - shops 34.7, offices 36.6, meeting rooms 30.0, corridors 28.6, lobbies 28.2 pieces per 100 m2; every office, meeting room, lobby and corridor has a cover piece (cubicle partitions, sized conference tables, reception counter and sofa, corridor lockers).
+- Wave 10 round 3 (lane R3A): homes outside a downtown core get pitched roofs (resort / lodge always; Savanna's city homes keep their own mix, 80 % gabled) and front porches; 91 % of homes are pitched.
+- Wave 10 round 3 (lane R3A): interior finish on desktop medium and up - curtains on a rod with folds on every home window, white ceilings, tile bands in kitchens and baths, door and window casings, a darker contact shadow under furniture, darker wall feet and corners, warm light pools under ceiling panels, and 16 real pictures on the walls (an art atlas: landscapes, seascapes, still lifes, posters, maps, a skyline, a botanical print, an abstract and a winter scene). Low tier and phones draw no finish and never load the atlas.
+- Wave 10 round 3 (lane R3A): bots that run low on health no longer stall at a steep edge on a fleeing route - they re-plan instead.
+- Wave 10 round 3 (lane R3A): bot navigation uses less memory on big maps - a furnished downtown's nav tiles 4.44 -> 3.12 MB (collider lists stored as 16-bit offsets).
+- Map generator version 10 (MAP_GEN_VERSION 10, housegen VERSION 8): the world changed (furniture colliders, roofs, porches); a version-9 client builds a different world from the same seed.
+- gate.py: new rows `w10_homes` and `p23_hg_cpu`; new plants w10_homes plank-curtain / grey-ceil / no-art / bare-office / flat-everywhere / sparse-shop / sparse-office / no-work-budget, housegen_demo_looks no-ao, p23_hg_cpu slow-gen, and a Node plant (navgrid memory-per-town with the old 32-bit list layout). The Node run of housegen.selftest prints its absolute CPU line as info (HG_CPU_ROW=wrapper); p23_hg_cpu judges it. common.py installs netnoise for every gate (W10 tools ticket 3).
+- No agent listened to audio or played the game by hand.
+
+## 2026-11-18 — Wave 10 round 3c: R3B fix5 re-merge (black interior view, gunhold controls) (LIVE ?v=1795067149)
+
+Wave 10 round 3c re-merges lane R3B (`w10-r3-characters`, head 6dcec08bb) onto `w10` after round 3b was held on three rows (interiorcheck light, controls w10_gunhold-plant-gun-in-dead-hand and w10_gunhold-rev-w9-tip). No world change: `MAP_GEN_VERSION` stays 8.
+
+- Wave 10 round 3b fix: about one interior view in a thousand rendered fully black. Four ammo loot models had invisible zero-area triangles with zero normals. A rare sliver of one lit a single pixel NaN, and the bloom spread it over the whole frame. loot.js now drops such triangles on load (lootNormalsSafe). interiorcheck light is back to 1019/1019 on 3 runs in a row.
+- w10_lootlook: new row loot-nan (0 loot-model triangles on a zero-length normal; 7 kinds x 200 random poses x 20 instances through the composer, 0 black frames) and plant zero-normal (MUST FAIL loot-nan), registered in gate.py as `w10_lootlook-plant-zero-normal`.
+- w10_gunhold: plant gun-in-dead-hand re-anchored to the R3B weaponMesh.visible line (same fault, a dead actor keeps the gun); the reload parts read FAIL with a message on a build without audio.js RELOAD_SETS / RELOAD_SET_OF, so the control rev-w9-tip FAILs again instead of going COULD-NOT-JUDGE.
+- Known follow-up (not in this release): the loot-model build script make_loot.py still bakes the zero-normal slivers into the 4 ammo GLBs; the game drops them on load and the loot-nan row guards it.
+
+## 2026-11-17 — Wave 10 round 3b: characters (reload, surface swim, swap, ground loot)
+
+Wave 10 round 3b merges lane R3B (`w10-r3-characters`, head 17447f38b) onto `w10`. No world change: `MAP_GEN_VERSION` stays 8.
+
+- Reloads happen at chest height with the left hand on the magazine well, timed to the recorded reload sounds. The pistol has its own reload.
+- Surface swimming puts the gun away (held and slung) on every tier. On desktop medium and up the swimmer treads water upright with head and shoulders out, arms sculling under the surface, and the camera stays above the water. Low and phones also sink the body until the head sits about 0.18 m above the water, but keep the plain Mixamo swim clip with its forward lean (no upright torso, no arm correction), so the chest there sits slightly above the surface (+0.02 to +0.07 m, measured; the swim rows judge the desktop tier only).
+- Gun swaps dip the barrel through the change. The second gun shows slung on the back of up to 8 nearby players.
+- Ground loot: 7 real models replace the W9 boxes and capsules (light / medium / heavy ammo, shells, grenade ammo, frag, smoke), built from CC0 parts. Desktop medium and up; Low and phones keep the old shapes.
+- Gates: w10_gunhold gains reload-height, reload-hand, pistol-reload, swim, swim-view, swim-head, swim-arms and swap, each with a planted fault that fails it (head-reload, reload-off, gun-in-water, swim-cam-under, swim-sunk, swim-lean, swim-arms-up, sling-all). New gate w10_lootlook (loot-shapes) with plants box-ammo and same-grenade. The swim rows measure the soldier skin only.
+
 ## 2026-11-16 — Wave 10 round 2b: light fix (rooms, street shadows, skin sheen) (LIVE ?v=1794894969)
 
 Wave 10 round 2b re-merges lane R2A (`w10-r2-water-light`, head 932956106) onto `w10` with its light fix. No world change: `MAP_GEN_VERSION` stays 8.

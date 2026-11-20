@@ -67,7 +67,7 @@ DEFAULT_BASE = "http://127.0.0.1:8790" + GAME_PATH + "index.html"
 MAPS = ["isla_viva", "ashgrid", "deepwood"]                   # hud.js BATTLE_MAPS
 # The build that is LIVE on the CDN: the default baseline of the perf rows (perf_district) and the frozen "must fail" build of the Wave-7 rows.
 # AFTER A DEPLOY move this ONE constant to the new live build's commit (README "After the Wave-7 deploy"); nothing else holds the sha.
-LIVE_REV = "2b4d9c17"                                          # Wave 10 round 2b release (merge of w10 @cc235c0d5, ?v=1794894969); before it cb244268 = Wave 10 round 1 release (merge of w10 @b47243d7f, ?v=1794658791); before it b7e245ef = Wave 8 + P1/P2/P3 release (merge of int-p23 @16b0e93c, ?v=1793384602, MAP_GEN_VERSION 7); before it Wave 7b 9115494d, Wave 7 completion 6191b380
+LIVE_REV = "21c25b83"                                          # Wave 10 round 3c release (merge of w10 @98d1d9445, ?v=1795067149); before it 2b4d9c17 = Wave 10 round 2b release (merge of w10 @cc235c0d5, ?v=1794894969); before it cb244268 = Wave 10 round 1 release (merge of w10 @b47243d7f, ?v=1794658791); before it b7e245ef = Wave 8 + P1/P2/P3 release (merge of int-p23 @16b0e93c, ?v=1793384602, MAP_GEN_VERSION 7); before it Wave 7b 9115494d, Wave 7 completion 6191b380
 # The DEPLOYED game (Cloudflare Workers CDN, served under /last-circle/ - the repo's scoped server uses /games/last-circle/). The one place that holds the live URL:
 # squadguard_live --live and the README's post-deploy checklist read it. Read-only use only (a page load; the squad relay is a stand-in, no production data is touched).
 LIVE_BASE = "https://forgeflow-games-cdn.isimcha85.workers.dev/last-circle/index.html"
@@ -1137,3 +1137,5 @@ def pct(s, p):
     lo = int(k)
     hi = min(lo + 1, len(s) - 1)
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
+
+import netnoise; netnoise.install()  # W10 tools (ticket 3, ruled): every gate - a third-party network-only failure makes an error row could-not-judge (netnoise.py)

@@ -1591,6 +1591,8 @@
    *   opts.cellOutdoor 1.5, opts.cellIndoor 0.75 (nominal; the lattice divides the rect into whole cells)
    *   opts.cover       (tx, tz) -> bool: which coarse tiles may be baked (default: all). opts.zones [{x, z, r}] and opts.rects [{minX, maxX, minZ, maxZ}]
    *                    (grown by opts.margin, default 6 m) are shortcuts: only the coarse tiles that touch them bake. bakeTown() adds rects later.
+   *   opts.coverPad    (W10 R3A fix7) m: with opts.rects, the coarse tiles within coverPad of a (grown) rect may bake TOO - on demand only: the rects'
+   *                    own tiles (W.zoneRects: the jobs, the prebake) are unchanged, a padding tile bakes when a query needs it (default 0 = as before)
    *   opts.fineRects   override the building rects found from the colliders ([] = none); opts.maxFine = the largest building tile side (default 16 m)
    *   opts.waterY      terrain this far under the water is not walkable
    *   opts.portals     [{x, y, z}] the map's launch portals: walking into one flings the actor, so they are obstacles
@@ -1612,15 +1614,22 @@
       // that needs a building which is not baked yet fails fast instead of stalling a frame for 10-140 ms, and the answer is a function of
       // which tiles the schedule has baked - not of the clock. Every edge that exists is still certified by the mover replay.
       noBake: !!opts.lazy, wanted: [], wantSeen: new Set(),
+      coverPad: 0,                 // (W10 R3A fix7) see opts.coverPad
     };
     var zones = opts.zones || null;
     W.zoneRects = [];
     if (opts.rects) addCoverRects(W, opts.rects, opts.margin);
     if (typeof opts.cover === "function") W.cover = opts.cover;
     else if (opts.rects) {
+      // (W10 R3A fix7) coverPad: bots.js's navNear hands the grid a route to / from an upper storey whose other end is up to NAV_NEAR_M (32 m) outside a
+      // town / compound rect, but only the tiles touching the rect + margin existed: on the MAP_GEN 10 ashgrid 40 of 643 street -> 4th-storey plans
+      // (navcheck_seeds top-floor-paths, starts 25 m out) started on no tile, the grid was never asked and the window planner's partial route ended on the
+      // ground under the goal. The padded ring is cover, never a zone: nothing bakes there until a query reaches it.
+      var pad = opts.coverPad > 0 ? +opts.coverPad : 0;
+      W.coverPad = pad;
       W.cover = function (tx, tz) {
-        var x0 = tx * W.tileSize, z0 = tz * W.tileSize, x1 = x0 + W.tileSize, z1 = z0 + W.tileSize, R = W.zoneRects;
-        for (var i = 0; i < R.length; i++) if (x1 > R[i].minX && x0 < R[i].maxX && z1 > R[i].minZ && z0 < R[i].maxZ) return true;
+        var x0 = tx * W.tileSize, z0 = tz * W.tileSize, x1 = x0 + W.tileSize, z1 = z0 + W.tileSize, R = W.zoneRects, P = W.coverPad;
+        for (var i = 0; i < R.length; i++) if (x1 > R[i].minX - P && x0 < R[i].maxX + P && z1 > R[i].minZ - P && z0 < R[i].maxZ + P) return true;
         return false;
       };
     } else if (zones) {
@@ -3095,7 +3104,7 @@
     var t0 = now(), margin = opts.margin != null ? opts.margin : 6, W = opts.world || null, i;
     if (W === null) {
       W = createWorld({ colliders: colliders, heightFn: heightFn, waterY: opts.waterY, portals: opts.portals, tileSize: opts.tileSize, cellOutdoor: opts.cellOutdoor,
-        cellIndoor: opts.cellIndoor, maxFine: opts.maxFine, fineRects: opts.fineRects, rects: rects, margin: margin, lazy: opts.lazy, noFloor: opts.noFloor });
+        cellIndoor: opts.cellIndoor, maxFine: opts.maxFine, fineRects: opts.fineRects, rects: rects, margin: margin, lazy: opts.lazy, noFloor: opts.noFloor, coverPad: opts.coverPad });
     } else addCoverRects(W, rects, margin);
     var areas = [];
     for (i = 0; i < rects.length; i++) areas.push(normRect(rects[i], margin));
