@@ -3034,7 +3034,7 @@ repeats each, spread within ~3 %: THE FIRST TRUSTWORTHY NUMBERS. FIX = tcache=1&
   4 ms only, so most of the ~18 is the terrain's lighting and raster under log depth (no HSR on the M5).
 - The extra 4.6 ms of FIX+P over the water-only frame = the bake churn (~12 bakes a frame at rest, ~5 ms GPU):
   section 2. deepbed costs nothing there.
-### 6. GATE: `bash _harness/slot.sh npm run check` 1059 pass 0 fail (s27/check1.log); `npm run build` exit 0.
+### 6. GATE (first): check 1059 / 0 (s27/check1.log), build 0. FINAL source (season + mass fixes): check 1059 pass 0 fail (s27/check2.log), `npm run build` exit 0.
 ### 7. MAC BENCH PLAN (round 22), one variant per fix / suspect; F = tcache:1;wfast:3;deepbed:1
   `?bench=custom&breps=3&bv=FIX~tcache:1;wfast:3;deepbed:1|sun0~tcache:1;wfast:3;deepbed:1;tcsun:0|still~tcache:1;wfast:3;deepbed:1;speed:0|x100~tcache:1;wfast:3;deepbed:1;speed:100|shc~tcache:1;wfast:3;deepbed:1;shcache:1|revz~tcache:1;wfast:3;deepbed:1;revz:1|revzmsaa0~tcache:1;wfast:3;deepbed:1;revz:1;msaa:0|revzshc~tcache:1;wfast:3;deepbed:1;revz:1;shcache:1|budget16~tcache:1;wfast:3;deepbed:1;tcbudget:16000`
   - FIX vs sun0: the new sun trigger (tcstat why=sun should stop growing at rest; frame -~5 ms).
@@ -3074,3 +3074,23 @@ min-max spread up to 2x, so only medians and only large differences count. P = s
   / per-pixel structure rather than a term. Single-term trimming of the water is at diminishing returns.
 - Next water questions (cheap to bench, no new code): P+wfast=3 with msaa=0 (is the water paying per sample?),
   with rscale=0.5 (pure pixel scaling), and the cumulative cut nossr,nofoam,nodetail. Fold into the next combined bench.
+### 9. shcache IMAGE (full picture: trees, shadows, water, clouds, MSAA; Ultra 480x274, landing y0; runs s1 / s0)
+- shcache=1 vs off, separate boots: mean |d| 2.38, 2.1 % px > 16; the x4 diff (s27/sheet-shc.png, LOOKED) holds only
+  the edges of moving dark blobs and the water's grain — nothing shaped like a shadow. 0 page errors either way.
+- THE BLACK BLOBS on the sea in these full-picture shots are NOT the terrain cache and NOT shcache: run n0 (tcache=0,
+  same view) shows them too, and they move between boots (screen-space rain on the lens, or the water work in
+  progress, or a SwiftShader artefact) -> for the lead / water agent.
+### 10. CHURN PROBE AFTER THE FIXES (run k2, same set-up as k1)
+  phase     why.sun  why.season  why.edit  why.field  live / pix
+  1x 20 f     696        0          2         139      0 / 100 %   (k1: season 612, edit 374)
+  100x 8 f    970        0          3         139      0 / 100 %
+  1000x 4 f  1221        8          4         139      0 / 100 %   (k1: 582 live, pix 6 %)
+- season churn gone outside the ramps; edits only real ones (`wf=mass:2`: the sim's mass changes were treated as drift);
+  1000x keeps the whole view cached (stale tiles shown, re-baked at <= tcbudget a frame: no thrash beyond it).
+- What remains at 1x is the MEADOW sun term: 6 deg of local azimuth is the honest 1/255 bound (mix slope 0.12 / rad
+  x |dry - lush| <= 0.2 x sRGB slope ~1.6 at a lit meadow). On round 21's clock (the sun 4 deg per ~15 s = a ~22 min
+  day) that is every vegetated tile every ~20-25 s: ~25 bakes/s at the landing view instead of ~140/s.
+- NEXT (not built): make the meadow sun term free: the meadow colour is affine in the `dry` mix weight w all the way to
+  the final albedo, so d(albedo)/dw is one RGB vector per texel; carried through evalTerrain as a tracer (each later
+  gcol op applied to it linearly) and stored (+4 B a texel), the display adds it x (w(sun now) - w(sun baked)) per
+  pixel: exact, no sun re-bake for meadow tiles at all. Touches evalTerrain's meadow branch (shared file).
