@@ -3045,3 +3045,32 @@ repeats each, spread within ~3 %: THE FIRST TRUSTWORTHY NUMBERS. FIX = tcache=1&
   Read in each report: frame p50, tcstat why= / wf= / bakes start->end, the uploads rt binds/frame, the `shcache=`
   note, gpu shadows ms. LOOK (owner): FIX vs shc (far shadows while the sun moves at 1x; a ship if one is in view),
   FIX vs revz (decals, the shore, far land), meadow tint after 60 s at 1x (sun trigger).
+### 8. CHURN PROBE (run k1, town 90 m, 480x274 fast set-up, the tcsun build; speed 0 -> 1x 20 frames -> 100x 8 -> 1000x 4)
+- 1x: why.sun 0 (the new sun trigger: no meadow tile moved 6 deg of azimuth), but why.SEASON 612 = every tile. The
+  babel world has a 12-DAY YEAR: s26's "year moved 0.004" is ~69 ticks = every ~15 s at 1x on the Mac — round 21's
+  "sun" churn (sun and season were one counter) was mostly the season. wf: C 10 075, M1 6 816 drift; A! / M1! 971
+  edit-sized (water depth + wetness of the same cells: the sim's first ticks after speed 0).
+- 100x: sun 700 (meadow tiles, as designed), stale 610 shown; pix 100 %.
+- 1000x: thousands of cells a frame past 5x WATCH (C!, V!, S!, M0!, A!) -> 582 of 612 tiles invalid -> pix 6 % (the
+  whole view on the full shader: the N frame cost).
+- FIXES (built after k1, tcache.ts, all under `tcsun`, default on inside tcache; `tcsun=0` = s26):
+  1. SEASON by what the texels read: the year reaches evalTerrain only through the vegetation branch (`autumn`,
+     `winter` = smoothstep ramps of the year at 0.48-0.58 / 0.72-0.80 / 0.70-0.80 / 0.00-0.08, ZERO slope outside;
+     x seasonK by latitude) and the crop calendar (field phases: step changes). Per tile: no vegetation -> never;
+     crops -> 0.004 of a year (s26); else the tile's own autumn / winter (seasonAt(): the shader's formula on the
+     CPU at the patch's latitude) moved by > 0.02 (crowns' turn: ~1.7 / 255; meadow 0.35 x: ~0.7 / 255). Outside the
+     ramps (~60 % of the year) no season re-bake at all; inside, the rate the live picture itself changes at.
+  2. MASS CHANGES ARE DRIFT: if one field update moves > 400 cells past 5x WATCH (an edit — paint, crater — moves
+     tens), they count as drift (shown, re-baked behind), not edits. `wf=mass:n` counts such updates.
+
+## LEAD NOTE after Mac round 22 (automatic, water parts), 2026-11-20 — build 7ed46116, genesis-water
+Files `MAC-ROUND22.txt`, `MAC-ROUND22-bench-water.txt`. NOT a quiet GPU: Safari held 27-31 % of the GPU, CPU idle 72 %;
+min-max spread up to 2x, so only medians and only large differences count. P = scene=0&shadows=0, all with wfast=3.
+- p50 ms: W3 73.7 | nossr 57.5 | +nodetail 54.8 | +norefract 55.9 | +nosky 57.0 | +nodeck 61.1 | +noglint 62.0 |
+  +nofoam 51.2 | +norare 56.6 | +waterland=0 57.8.   (round 21 quiet: W3-equivalent 52.8, nossr 46.4, wfrag0 18.0)
+- Reading: NO single fat term is left. SSR ~6-16 ms, foam ~6 ms, detail ~3 ms, everything else inside the noise;
+  compiling the rare code out (norare) and dropping the guard reads give nothing. Yet nossr -> wfrag0 is ~28 ms and
+  all-six-off equals wfrag0 (round 18). So the cost is spread / not additive (shader as a whole), or it is per-sample
+  / per-pixel structure rather than a term. Single-term trimming of the water is at diminishing returns.
+- Next water questions (cheap to bench, no new code): P+wfast=3 with msaa=0 (is the water paying per sample?),
+  with rscale=0.5 (pure pixel scaling), and the cumulative cut nossr,nofoam,nodetail. Fold into the next combined bench.

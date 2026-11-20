@@ -1,0 +1,28 @@
+GENESIS Mac ROUND 22 (automatic, water parts). Build 7ed46116 on genesis-water.
+Bench file: genesis-bench-custom-7ed46116+dirty-20261119-2327.txt ("WARNINGS: none", 30 of 30 steps valid).
+5:27-5:52 PM CT Thu Nov 19.
+
+SETUP
+- Lid CLOSED, one display DELL S3222HN.
+- Clean Chrome, one tab, window 1686x1050 (render 1686x963 dpr 1). The window was left visible and untouched; focus emulation was still on.
+- Before: CPU idle 20% (another session's 3 VALE bot-tactics jobs at ~100% each).
+  Those jobs were PAUSED for the bench (5:27-5:52 PM), which brought idle to 72%.
+- After resuming, those job processes ended within a minute or two, and the other session started new ones (seen at 5:53 PM).
+  The pause may have tripped a timeout on that side; worth a look in that session.
+- GPU before: 0-47% busy, mostly Safari (27-31% of the GPU), which stayed open. That probably explains the wide min-max spread below.
+
+SUMMARY (fps median, min-max; p50/p95 ms)
+  W3            13.2  (9.3-15.9)   73.7 / 109.7
+  nossr         17.5  (14.7-19.5)  57.5 /  60.7
+  ns-nodetail   18.3  (15.7-18.3)  54.8 /  61.5
+  ns-norefract  16.9  (15.5-18.3)  55.9 /  69.6
+  ns-nosky      17.5  (10.8-17.8)  57.0 /  64.2
+  ns-nodeck     15.3  (10.8-16.3)  61.1 /  96.4
+  ns-noglint    15.7  (11.1-20.1)  62.0 /  80.4
+  ns-nofoam     19.5  (11.9-22.5)  51.2 /  56.6
+  ns-norare     17.7  (10.9-19.6)  56.6 /  60.0
+  ns-noguard    17.4  (11.3-19.8)  57.8 /  61.3
+READING
+- nossr is ~1.33x W3.
+- On top of nossr only nofoam (19.5) and nodetail (18.3) stand above nossr's own 17.5, and only by a little.
+- norefract, nosky, nodeck, noglint, norare and noguard are within the spread or below it.
