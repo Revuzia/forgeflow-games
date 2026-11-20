@@ -3094,3 +3094,17 @@ min-max spread up to 2x, so only medians and only large differences count. P = s
   the final albedo, so d(albedo)/dw is one RGB vector per texel; carried through evalTerrain as a tracer (each later
   gcol op applied to it linearly) and stored (+4 B a texel), the display adds it x (w(sun now) - w(sun baked)) per
   pixel: exact, no sun re-bake for meadow tiles at all. Touches evalTerrain's meadow branch (shared file).
+
+## LEAD NOTE 2026-11-20 05:35 UTC — PAUSED (owner at weekly usage limit). Where to pick up.
+- Verified build 31d84347 is on ALL of: genesis-preview (main preview), genesis-next. genesis-water has 7ed46116. Fixes are
+  still OFF by default (tcache / wfast=3 / deepbed by URL switch). Live prefix `genesis/` is NOT uploaded; the site listing
+  (Supabase games row) is NOT done: the owner declined the key form; route = `python pipeline/deploy_game.py --game-dir
+  games/genesis/dist --slug genesis` on the owner's PC, or the key via the secure form if the owner asks.
+- Owner decision 2026-11-20: publish WITH the fixes on by default ("for sure lets get the 10fps update in").
+  The workflow that flips the defaults and proves them (edits, time speeds, presets/scenarios/fallbacks, code review) was
+  STOPPED before it changed anything. Re-run it: script at
+  /root/.claude/projects/-home-user-forgeflow-games/e29a687c-a988-5248-a395-3b144d9274c2/workflows/scripts/genesis-release-defaults-wf_0b7ae9f0-326.js
+  (if lost: flip the three defaults with automatic fallback, 4 adversarial verifiers, 1 fixer, gate).
+- Mac round 23 (automatic, link in the chat of 2026-11-20 01:09 UTC, build 31d84347 on genesis-next) is NOT run yet: churn fix
+  (FIX vs sun0), shcache, revz re-test, water msaa question, and look checks for edits and 1000x.
+- Then: upload the default-on build to genesis-preview and to `genesis/`, do the listing, portal rebuild.
