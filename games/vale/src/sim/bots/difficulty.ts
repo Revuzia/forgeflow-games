@@ -180,8 +180,8 @@ export interface DifficultyProfile {
   // ── ruling 60 ──
   /** RIFT structure posts (lane AI G1, rulings 40-55): a threatened own structure gets named defenders. Off at every tier by
    *  ruling 62 (the round-1 package's pace cost: RIFT +1.2 / +2.0 / +2.3 min, 14 and 12 games in 64 reaching 30:00 at adept and
-   *  veteran, the posts at every structure class at once); back by ruling 65 at adept (base structures) and veteran (inner and
-   *  base) under its pace rule (+1.5 min, no more 30:00 games than the old live opponents); with posts on, the base answer
+   *  veteran, the posts at every structure class at once); back by ruling 65 at veteran (inner and base; adept's base posts,
+   *  back in ruling 65, are off again by ruling 66: they were adept's pace cost) under its pace rule (+1.5 min, no more 30:00 games than the old live opponents); with posts on, the base answer
    *  (thinkBaseAnswer) is the posts' own call */
   readonly guardPosts: boolean;
   // ── ruling 64 ──
@@ -250,9 +250,11 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     flank: false, riskCap: 1.5, burstRetreat: true, splitPush: false, groupFollowFloor: 0.9, visionSetup: true,
     longshadeTtk: 45, crossTrade: false, objectiveEvenLate: 0, ccChain: 0.5, threatCc: false, adaptiveBuild: true, thirdParty: 0.6,
     punishInvade: 1, punishFrom: 300, punishDelay: 4, peelDive: 'low', holdWave: false, frayBreak: 0.2,
-    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true, turnLatch: 12, guardPosts: true,
+    // (ruling 66: adept's base posts were the adept pace cost of ruling 65 — s701-764 vs 8c95deb52 +1.56 min and 8 vs 2 games at 30:00 with them, +0.66 and 5 without, unanswered intrusions 1.03 with and 1.06 without; adept keeps ruling 64's base answer)
+    coreAll: true, peelFirst: true, collapseRoads: false, closeOut: true, chaseQuit: 1.8, anticipates: true, turnLatch: 12, guardPosts: false,
     baseAnswerDelay: 1, baseAnswerUntil: Infinity,
-    guardFrom: 2, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 45, assistMax: 2, joinAt: 2, regroupWait: 8, loneStop: 3,
+    // (ruling 66: with the base posts off, a 12 s regroup — s701-764: 3 games at 30:00 against 5 at 8 s, sieges with 3+ arriving within 6 s 39.7 % against 39.0 %)
+    guardFrom: 2, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 45, assistMax: 2, joinAt: 2, regroupWait: 12, loneStop: 3,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,

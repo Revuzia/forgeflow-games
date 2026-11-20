@@ -734,6 +734,9 @@ export class Bot extends BotBase implements BotController {
       else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle && (!lp || this.nearestEnemyFighter(20) === null)) consider('push', 0.3 + 0.2 * b.push[this.lane]);
       // (sent to answer a threatened road, W4 G3: before the plan, not before my life)
       if (b.answer.has(this.player) && hpF > 0.5) consider('defend', 0.8);
+      // (ruling 65 fix round: named to walk to a person's push ping — said onMyWay, so it goes)
+      const pushing = b.pushers.has(this.player) && hpF > 0.45 && b.baseThreat < 0.4;
+      if (pushing) consider('push', 0.8);
       // (ruling 65: answering a teammate's "help here")
       if (b.helpers.has(this.player) && hpF > 0.5) consider('defend', 0.79);
       // (lane AI G1: posted to a threatened structure — the post comes before the plan, and in the laning phase too)
@@ -760,7 +763,8 @@ export class Bot extends BotBase implements BotController {
           for (let i = 0; i < b.defend.length; i++) if (b.defendFighters[i] >= 3) siege = Math.max(siege, b.defend[i]);
           if (siege > 0.05 && follow && hpF > 0.4) consider('defend', 0.55 + 0.2 * siege);
         }
-      } else if (d > 0.05) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
+      } else if (pushing) { /* (ruling 65 fix round: on my way to a person's push — the road calls are the others') */ }
+      else if (d > 0.05) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
       else if (global >= 0.7 && follow && (!this.diff.objectiveSense || kind !== 'rift' || hpF > 0.4)) consider('defend', 0.55 + 0.2 * global);
       // laning: only the laners of the lane beside an objective go, and only on an opening (it is up
       // and we have a fighter more), not to wait for its spawn; the other lanes keep farming
@@ -768,7 +772,7 @@ export class Bot extends BotBase implements BotController {
       const oc = b.objective?.camp;
       const opening = !!b.objective && b.objective.desire >= 0.75;
       const jungleLaning = this.jungle && kind === 'rift' && now < LANE_PHASE_END && b.phase !== 'late';
-      if (b.objective && oc && follow && (lp ? opening && this.nearestLane(oc.x, oc.y) === this.lane && this.laneDist2(oc.x, oc.y) <= sq(LANE_OBJECTIVE_REACH)
+      if (b.objective && oc && follow && !pushing && (lp ? opening && this.nearestLane(oc.x, oc.y) === this.lane && this.laneDist2(oc.x, oc.y) <= sq(LANE_OBJECTIVE_REACH)
         : (!jungleLaning || opening) && (!this.jungle || now >= JUNGLE_OBJECTIVE_FROM)) && (!this.diff.objectiveSense || hpF > (this.mode === 'objective' ? 0.3 : 0.45))) {
         consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
       }
@@ -1665,8 +1669,9 @@ export class Bot extends BotBase implements BotController {
     const b = this.brain, k = this.k, e = this.e;
     // a laner in the laning phase pushes its own lane (a won fight is a free wave, not a cross-map siege)
     // (lane AI G6: the split-pusher works its own road, away from the group)
-    const split = !!b && k.kind === 'rift' && b.splitSeat === this.player && b.splitLane >= 0 && b.group;
-    const grouped = !!b && (b.group || k.kind === 'bridge' || k.kind === 'brawl') && !this.lanePhase() && !split;
+    const split = !!b && k.kind === 'rift' && b.splitSeat === this.player && b.splitLane >= 0 && b.group && !b.pushers.has(this.player);
+    const pinged = !!b && b.pushers.has(this.player) && !!b.siege;
+    const grouped = !!b && (b.group || k.kind === 'bridge' || k.kind === 'brawl') && (!this.lanePhase() || pinged) && !split;
     let lane = this.lane >= 0 ? this.lane : 0;
     if (split && b) lane = b.splitLane;
     else if (grouped && b && b.siegeLane >= 0) lane = b.siegeLane;
@@ -1715,7 +1720,8 @@ export class Bot extends BotBase implements BotController {
       else if (grouped && b) {
         // wait for the wave on our side of it
         mx = b.groupX; my = b.groupY;
-        if (this.dist2(e, mx, my) > 30 * 30) { mx = this.holdX; my = this.holdY; }
+        // (ruling 65 fix round: a fighter that said it is coming to a person's push walks to the group point, not behind its wave)
+        if (this.dist2(e, mx, my) > 30 * 30 && !pinged) { mx = this.holdX; my = this.holdY; }
       }
     } else if (grouped && b) { mx = b.groupX; my = b.groupY; }
     // group with the team: do not run ahead alone
@@ -1726,6 +1732,8 @@ export class Bot extends BotBase implements BotController {
       if (this.alliesNear(mx, my, 10) - meThere < 1) { mx = b.groupX; my = b.groupY; }
     }
     this.pMoveX = mx; this.pMoveY = my;
+    // (ruling 65 fix round: on the way to a person's push the walk comes first — no stopping to shove a wave on the way)
+    if (pinged && b && this.dist2(e, b.groupX, b.groupY) > 25 * 25) this.pFarm = 0;
     const f = this.pickFightTarget(9);
     if (f && this.adv >= 0.45 && this.hpF > 0.4 && this.towerSafe(f.x, f.y, 0)) { this.pFight = f; this.pAggro = 0.7; }
     // laning: shoving my own lane is not worth tanking its Wicks
