@@ -265,8 +265,13 @@ async function buildProtos(W) {
 }
 
 // support-hand anchor along the forward run of the gun (fraction of grip -> tip), clamped to what the support arm reaches
-const GUARD_F = { smg: 0.55, ar: 0.5, burst: 0.5, lmg: 0.42, dmr: 0.42, shotgun: 0.5, sniper: 0.4, glauncher: 0.45 };
+const GUARD_F = { smg: 0.55, ar: 0.5, burst: 0.5, lmg: 0.42, dmr: 0.42, shotgun: 0.5, sniper: 0.44, glauncher: 0.45 };
 const GUARD_ZMIN = 0.16, GUARD_ZMAX = 0.36;
+// (W10 anim fix 2) the support hand on the bolt gun's FOREND, measured from the held model (holder space, metres from the grip): the
+// sniper's forend runs 0.26-0.52 and a bolt gun is held nearer the action than a C-clamp: palm ~0.36 (was ~0.33, the elbow at
+// 95-100 deg on the soldier). The shotgun stays at the cap (wrist 0.33, palm 0.35-0.38 on the pump's rear half, z 0.32-0.52): the
+// pump's centre (0.42) is out of the athlete's and juggernaut's reach from the Mixamo idle's gun position (measured: the IK's reach
+// slide pulled the palm back to 0.30).
 /** tip + support-hand anchor of a weapon proto (holder space), stored on proto.userData (clones share it). */
 function measureProto(g, id) {
   g.updateMatrixWorld(true);
