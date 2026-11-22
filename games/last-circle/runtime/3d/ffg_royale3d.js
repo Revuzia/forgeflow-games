@@ -1436,6 +1436,11 @@ register3d("royale", async function (kernel, content) {
     // Sits after spawnAll (rigs posed) and before showLobby (loading layer up).
     await warmMatch();
     botsMod.assignDrops(W);
+    // The player is in the game world from the lobby on: the title tune ends
+    // here, not at the drop (owner report 2026-11-22: the title-screen music
+    // kept playing once the game had started). startMatchMusic() in begin()
+    // below is then a no-op (playTrack keeps an already-live track's place).
+    audioMod.startMatchMusic(W);
     hudMod.showLobby(W, () => {     // lobby → drop select → drop
       const begin = () => {
         W.phase = W.mode === "practice" ? "match" : "drop";
