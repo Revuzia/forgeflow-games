@@ -60,8 +60,8 @@ export function QueueScreen(): JSX.Element {
             : q?.estimate !== undefined ? cv.t('queue.searching', 'Searching · {elapsed} · usually under {estimate}', { elapsed: fmtWait(elapsed), estimate: fmtWait(q.estimate) })
               : cv.t('queue.searching_short', 'Searching · {elapsed}', { elapsed: fmtWait(elapsed) })}
         </p>
-        {state.online.value?.status === 'online' && !idle ? (
-          <p class="t-body-s queue__net stg">{cv.t('queue.online', 'Online · {n} searching this queue', { n: state.online.value.searching[q?.queue ?? ''] ?? 1 })}</p>
+        {searching && q?.joined !== undefined && q.total ? (
+          <p class="t-body queue__joined stg" aria-live="polite">{cv.t('queue.joined', 'Players found · {n} of {total}', { n: Math.min(q.joined, q.total), total: q.total })}</p>
         ) : null}
         {queue ? <p class="t-body-s muted queue__desc stg">{queue.desc}</p> : null}
       </div>

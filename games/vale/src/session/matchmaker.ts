@@ -1,7 +1,8 @@
 // VALE session — simulated matchmaking + ready check (CONTRACT §7; research r01 §3.2, r08 §6).
 //
-//   idle ──start──▶ searching (elapsed / estimate, 4 Hz updates; the real wait is drawn 2–6 s from
-//                   the session rng, the estimate is a separate whole-second draw in the same range)
+//   idle ──start──▶ searching (elapsed / estimate / joined of total, 4 Hz updates; the real wait is drawn 8–15 s
+//                   from the session rng and the other seats join one by one across it, so the match fills the way a
+//                   real queue does; the estimate is the top of the range)
 //        ◀─cancel── searching                          (no penalty)
 //   searching ──▶ found: a READY_CHECK_SECONDS ready check. The other seats (bots) accept at random
 //                 times 0.5–3 s in. accept() → 'accepted'; once every seat accepted → onMatched().
@@ -15,7 +16,7 @@ import type { Rng } from '../sim/rng.ts';
 import type { Clock } from './clock.ts';
 
 export const READY_CHECK_SECONDS = 10;
-export const SEARCH_SECONDS: readonly [number, number] = [2, 6];
+export const SEARCH_SECONDS: readonly [number, number] = [8, 15];
 export const LOCKOUT_BASE = 5;
 export const LOCKOUT_MAX = 60;
 const UPDATE_MS = 250;
@@ -45,6 +46,8 @@ export class Matchmaker {
   private youAccepted = false;
   private failures = 0;
   private lockedUntil = 0;
+  /** seconds into the search at which each other seat joins (sorted) */
+  private joinAt: number[] = [];
 
   constructor(clock: Clock, rng: Rng, hooks: MatchmakerHooks, searchRange: readonly [number, number] = SEARCH_SECONDS) {
     this.clock = clock; this.rng = rng; this.hooks = hooks; this.searchRange = searchRange;
@@ -66,7 +69,8 @@ export class Matchmaker {
     this.startedAt = this.clock.now();
     const [lo, hi] = this.searchRange;
     const wait = this.rng.range(lo, hi);
-    this.estimate = Math.round(this.rng.range(lo, hi));
+    this.estimate = Math.round(hi);
+    this.joinAt = joinTimes(this.total - 1, wait, this.rng);
     this.searchingEvent();
     this.cancels.push(this.clock.every(UPDATE_MS, () => this.searchingEvent()));
     this.cancels.push(this.clock.after(wait * 1000, () => this.found()));
@@ -119,8 +123,9 @@ export class Matchmaker {
 
   private searchingEvent(): void {
     if (this._state !== 'searching') return;
+    const t = (this.clock.now() - this.startedAt) / 1000;
     this.hooks.emit({ type: 'queue', state: 'searching', queue: this.queueId ?? undefined,
-      elapsed: Math.round((this.clock.now() - this.startedAt) / 100) / 10, estimate: this.estimate });
+      elapsed: Math.round(t * 10) / 10, estimate: this.estimate, joined: 1 + this.joinAt.filter((x) => x <= t).length, total: this.total });
   }
 
   private found(): void {
@@ -167,4 +172,14 @@ export class Matchmaker {
     this.hooks.emit({ type: 'queue', state: 'declined', queue, reason, lockout });
     this.hooks.emit({ type: 'queue', state: 'idle', queue, reason, lockout });
   }
+}
+
+/** when each of `others` seats joins a search that lasts `wait` seconds: a few quickly, then a steady trickle, the last
+ *  one right at the end (the server uses the same curve, so online and offline searches feel alike) */
+export function joinTimes(others: number, wait: number, rng: { float(): number }): number[] {
+  if (others <= 0) return [];
+  const out: number[] = [];
+  for (let i = 0; i < others - 1; i++) out.push(wait * 0.92 * Math.pow(rng.float(), 0.8));
+  out.push(wait * 0.97);
+  return out.sort((a, b) => a - b);
 }

@@ -13,6 +13,7 @@ import type { CatalogT, QueueDefT } from '../src/contracts/catalog.ts';
 import {
   FRIEND_CODE_ALPHABET, FRIEND_CODE_LEN, FRIEND_ROOM_KINDS, NET_PROTOCOL, type ClientMsg, type FriendRoomError, type FriendRoomState, type ServerMsg,
 } from '../src/contracts/net.ts';
+import { joinTimes, SEARCH_SECONDS } from '../src/session/matchmaker.ts';
 import { findMode, isFfaMode, modeLayout } from '../src/session/setup.ts';
 import { Room, type Peer, type Ticket } from './room.ts';
 
@@ -30,7 +31,9 @@ export interface HubOptions {
   /** seconds a friend-room start waits for every member's ticket */
   friendTicketSeconds?: number;
   /** seconds the oldest ticket waits before a room opens short of humans (bots fill) */
-  waitSeconds?: number;
+  /** seconds the oldest ticket waits before its room opens short of humans: a fixed number (tests), or a range a wait is
+   *  drawn from per search (default 8–15 s, like the offline search: the match fills up one player at a time) */
+  waitSeconds?: number | readonly [number, number];
   /** lockstep speed multiplier (tests) */
   speed?: number;
   readySeconds?: number;
@@ -59,6 +62,8 @@ interface FriendRoom {
   together: boolean;
   /** members in join order; [0] is the host */
   members: Conn[];
+  /** conn id → the side (0/1) each member plays on when friends are against each other */
+  sides: Map<string, number>;
   /** a start in progress: tickets so far, and the timer that gives up on the rest */
   start: { tickets: Map<string, Ticket>; timer: ReturnType<typeof setTimeout> } | null;
 }
@@ -70,6 +75,8 @@ export class HubCore {
   private readonly tickets = new Map<string, Ticket[]>();
   private readonly rooms = new Set<Room>();
   private readonly friendRooms = new Map<string, FriendRoom>();
+  /** per queue: the search its oldest ticket is in (how long it waits, when the other seats appear to join) */
+  private readonly fills = new Map<string, { head: Ticket; wait: number; joinAt: number[] }>();
   private seq = 0;
   private roomSeq = 0;
   private timers: ReturnType<typeof setInterval>[] = [];
@@ -146,6 +153,7 @@ export class HubCore {
       case 'froom_join': this.friendJoin(c, m.code); break;
       case 'froom_set': this.friendSet(c, m); break;
       case 'froom_start': this.friendStart(c); break;
+      case 'froom_side': this.friendSide(c, m.side); break;
       case 'froom_ticket': this.friendTicket(c, m); break;
       case 'froom_leave': this.friendLeave(c); c.send({ t: 'froom', room: null }); break;
       case 'resume': {
@@ -169,7 +177,7 @@ export class HubCore {
     const list = this.tickets.get(q.id) ?? [];
     list.push(t);
     this.tickets.set(q.id, list);
-    c.send({ t: 'queue', e: { type: 'queue', state: 'searching', queue: q.id, elapsed: 0, estimate: this.o.waitSeconds ?? 8 } });
+    c.send({ t: 'queue', e: { type: 'queue', state: 'searching', queue: q.id, elapsed: 0, estimate: this.estimate() } });
   }
 
   private unqueue(c: Conn): boolean {
@@ -190,6 +198,25 @@ export class HubCore {
     return lay.length;
   }
 
+  /** every seat of a queue's match */
+  private matchSeats(q: QueueDefT): number {
+    const mode = findMode(this.o.catalog, q.mode);
+    return mode ? modeLayout(mode).length : 1;
+  }
+
+  private estimate(): number { const w = this.o.waitSeconds ?? SEARCH_SECONDS; return Math.round(typeof w === 'number' ? w : w[1]); }
+
+  /** the search a queue's oldest ticket is in (a new oldest ticket starts a new one) */
+  private fillFor(q: QueueDefT, head: Ticket): { head: Ticket; wait: number; joinAt: number[] } {
+    const cur = this.fills.get(q.id);
+    if (cur && cur.head === head) return cur;
+    const w = this.o.waitSeconds ?? SEARCH_SECONDS;
+    const wait = typeof w === 'number' ? w : w[0] + (w[1] - w[0]) * Math.random();
+    const fill = { head, wait, joinAt: joinTimes(this.matchSeats(q) - 1, wait, { float: Math.random }) };
+    this.fills.set(q.id, fill);
+    return fill;
+  }
+
   private matchmake(): void {
     const now = Date.now();
     for (const [qid, list] of this.tickets) {
@@ -198,15 +225,20 @@ export class HubCore {
       if (!q) continue;
       const n = this.seats(q);
       const oldest = (now - list[0].since) / 1000;
-      for (const t of list) t.peer.send({ t: 'queue', e: { type: 'queue', state: 'searching', queue: qid, elapsed: Math.round((now - t.since) / 1000), estimate: this.o.waitSeconds ?? 8 } });
-      if (list.length < n && oldest < (this.o.waitSeconds ?? 8)) continue;
+      const fill = this.fillFor(q, list[0]);
+      const total = this.matchSeats(q);
+      // the match fills one player at a time: the humans here, plus the other seats as they 'join' along the curve
+      const joined = Math.min(total - 1, Math.max(list.length, 1 + fill.joinAt.filter((x) => x <= oldest).length));
+      for (const t of list) t.peer.send({ t: 'queue', e: { type: 'queue', state: 'searching', queue: qid, elapsed: Math.round((now - t.since) / 1000), estimate: this.estimate(), joined, total } });
+      if (list.length < n && oldest < fill.wait) continue;
+      this.fills.delete(qid);
       const take = list.splice(0, Math.min(n, list.length));
       for (const t of take) (t.peer as Conn).ticket = null;
       this.open(q, take);
     }
   }
 
-  private open(q: QueueDefT, tickets: Ticket[], friends?: { together: boolean }): boolean {
+  private open(q: QueueDefT, tickets: Ticket[], friends?: { together: boolean; sides?: Map<string, number> }): boolean {
     const id = `${++this.roomSeq}`;
     try {
       const room = new Room(id, {
@@ -225,7 +257,7 @@ export class HubCore {
             const list = this.tickets.get(q.id) ?? [];
             list.unshift(t);
             this.tickets.set(q.id, list);
-            c.send({ t: 'queue', e: { type: 'queue', state: 'searching', queue: q.id, elapsed: 0, estimate: this.o.waitSeconds ?? 8 } });
+            c.send({ t: 'queue', e: { type: 'queue', state: 'searching', queue: q.id, elapsed: 0, estimate: this.estimate() } });
           }
         },
         log: this.o.log,
@@ -256,6 +288,38 @@ export class HubCore {
     return lay.length;
   }
 
+  /** friends one side can seat when they are against each other */
+  private friendPerSide(q: QueueDefT): number {
+    const mode = findMode(this.o.catalog, q.mode);
+    if (!mode) return 1;
+    const lay = modeLayout(mode);
+    return isFfaMode(mode) ? lay.length : lay.filter((s) => s.team === lay[0].team).length;
+  }
+
+  /** keep every side within its seats (a queue change can shrink them) */
+  private friendBalance(fr: FriendRoom): void {
+    const q = this.friendQueue(fr.queue);
+    if (!q) return;
+    const per = this.friendPerSide(q);
+    for (const s of [0, 1]) {
+      const on = fr.members.filter((m) => (fr.sides.get(m.id) ?? 0) === s);
+      for (const m of on.slice(per)) fr.sides.set(m.id, 1 - s);
+    }
+  }
+
+  /** a member picks their own side (friends against each other); a full side is refused */
+  private friendSide(c: Conn, side: number): void {
+    const fr = c.friends;
+    if (!fr) { this.friendError(c, 'no_room'); return; }
+    if (fr.start || fr.members.some((m) => m.room)) { this.friendError(c, 'busy'); return; }
+    const s = side === 1 ? 1 : 0;
+    const q = this.friendQueue(fr.queue);
+    if (!q) return;
+    if ((fr.sides.get(c.id) ?? 0) !== s && fr.members.filter((m) => fr.sides.get(m.id) === s).length >= this.friendPerSide(q)) { this.friendError(c, 'side_full'); return; }
+    fr.sides.set(c.id, s);
+    this.friendBroadcast(fr);
+  }
+
   private friendError(c: Conn, reason: FriendRoomError): void { c.send({ t: 'froom_error', reason }); }
 
   private newCode(): string {
@@ -271,7 +335,8 @@ export class HubCore {
     const q = this.friendQueue(fr.queue)!;
     return {
       code: fr.code, queue: fr.queue, together: fr.together, max: this.friendMax(q, fr.together), you: you.id, host: fr.members[0].id,
-      members: fr.members.map((m) => ({ id: m.id, name: m.name, busy: !!m.room })), starting: !!fr.start,
+      members: fr.members.map((m) => ({ id: m.id, name: m.name, busy: !!m.room, side: fr.sides.get(m.id) ?? 0 })), starting: !!fr.start,
+      perSide: this.friendPerSide(q),
     };
   }
 
@@ -282,7 +347,7 @@ export class HubCore {
     const q = this.friendQueue(queue);
     if (!q) { this.friendError(c, 'bad_queue'); return; }
     this.friendLeave(c);
-    const fr: FriendRoom = { code: this.newCode(), queue: q.id, together: !!together, members: [c], start: null };
+    const fr: FriendRoom = { code: this.newCode(), queue: q.id, together: !!together, members: [c], sides: new Map([[c.id, 0]]), start: null };
     this.friendRooms.set(fr.code, fr);
     c.friends = fr;
     this.log(`friends ${fr.code} · made by ${c.name}`);
@@ -299,6 +364,9 @@ export class HubCore {
     if (fr.members.length >= this.friendMax(this.friendQueue(fr.queue)!, fr.together)) { this.friendError(c, 'full'); return; }
     this.friendLeave(c);
     fr.members.push(c);
+    // a newcomer takes the side with fewer friends on it (they can switch)
+    const on1 = fr.members.filter((m) => fr.sides.get(m.id) === 1).length;
+    fr.sides.set(c.id, on1 < fr.members.length - 1 - on1 ? 1 : 0);
     c.friends = fr;
     this.friendBroadcast(fr);
   }
@@ -315,6 +383,7 @@ export class HubCore {
     if (fr.members.length > this.friendMax(queue, together)) { this.friendError(c, 'full'); return; }
     fr.queue = queue.id;
     fr.together = together;
+    this.friendBalance(fr);
     this.friendBroadcast(fr);
   }
 
@@ -324,6 +393,7 @@ export class HubCore {
     if (fr.members[0] !== c) { this.friendError(c, 'not_host'); return; }
     if (fr.start || fr.members.some((m) => m.room)) { this.friendError(c, 'busy'); return; }
     for (const m of fr.members) this.unqueue(m);
+    this.friendBalance(fr);
     const timer = setTimeout(() => this.friendLaunch(fr), (this.o.friendTicketSeconds ?? 6) * 1000);
     fr.start = { tickets: new Map(), timer };
     this.friendBroadcast(fr);
@@ -349,7 +419,7 @@ export class HubCore {
     fr.start = null;
     const q = this.friendQueue(fr.queue);
     const tickets = fr.members.map((m) => st.tickets.get(m.id)).filter((t): t is Ticket => !!t);
-    if (q && tickets.length && this.open(q, tickets, { together: fr.together })) { this.friendBroadcast(fr); return; }
+    if (q && tickets.length && this.open(q, tickets, { together: fr.together, sides: new Map(fr.sides) })) { this.friendBroadcast(fr); return; }
     for (const t of tickets) t.peer.send({ t: 'queue', e: { type: 'queue', state: 'idle', queue: fr.queue, reason: 'cancelled' } });
     this.friendBroadcast(fr);
   }
@@ -360,6 +430,7 @@ export class HubCore {
     if (!fr) return;
     c.friends = null;
     fr.members = fr.members.filter((m) => m !== c);
+    fr.sides.delete(c.id);
     fr.start?.tickets.delete(c.id);
     if (!fr.members.length) { if (fr.start) clearTimeout(fr.start.timer); this.friendRooms.delete(fr.code); this.log(`friends ${fr.code} · closed`); return; }
     if (fr.start && fr.members.every((x) => fr.start!.tickets.has(x.id))) this.friendLaunch(fr);

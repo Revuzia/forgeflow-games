@@ -12,6 +12,7 @@ import type { CatalogView } from '../catalog_view.ts';
 import { Button } from '../components/Button.tsx';
 import { Icon } from '../components/Glyphs.tsx';
 import { Screen, Section } from '../components/Screen.tsx';
+import { SideMark } from '../components/Seat.tsx';
 import { Segmented } from '../components/Select.tsx';
 
 /** queues a friend room may play, in the live modes (optionally one mode's) */
@@ -91,6 +92,17 @@ export function RoomScreen(): JSX.Element {
   const coop = queue?.bots.fill === 'opponents_only';
   const sideFixed = ffa || coop;
   const busy = room.members.some((m) => m.busy) || room.starting;
+  /** friends against each other choose their own side */
+  const split = !sideFixed && !room.together;
+  const Member = (q: { m: (typeof room.members)[number] }): JSX.Element => (
+    <li class={`froom__m plate ${q.m.id === room.you ? 'is-you' : ''}`}>
+      <Icon name="user" size={16} />
+      <span class="t-body">{q.m.name}</span>
+      {q.m.id === room.host ? <span class="chip">{cv.t('froom.host', 'Host')}</span> : null}
+      {q.m.id === room.you ? <span class="chip chip--line">{cv.t('party.you', 'You')}</span> : null}
+      {q.m.busy ? <span class="t-caption muted">{cv.t('froom.in_match', 'In a match')}</span> : null}
+    </li>
+  );
   const link = inviteLink(room.code);
   const copy = (text: string, done: string): void => {
     void (async () => {
@@ -102,7 +114,7 @@ export function RoomScreen(): JSX.Element {
   const queues = friendQueues(cv);
   const sideText = ffa ? cv.t('froom.side_ffa', 'Everyone plays in the same match.')
     : coop ? cv.t('froom.side_coop', 'You all play on one team.')
-      : room.together ? cv.t('froom.side_together_line', 'You all play on one team.') : cv.t('froom.side_against_line', 'You are split across both sides.');
+      : room.together ? cv.t('froom.side_together_line', 'You all play on one team.') : cv.t('froom.side_against_line', 'Friends play against each other. Pick your side above.');
   let reason: string | null = null;
   if (!online) reason = cv.t('froom.offline', 'Playing with friends needs a connection to the game server.');
   else if (!isHost) reason = cv.t('froom.wait_host', 'Waiting for {name} to start the match.', { name: room.members[0]?.name ?? '' });
@@ -125,7 +137,29 @@ export function RoomScreen(): JSX.Element {
           </div>
         </section>
 
-        <Section title={cv.t('froom.members', 'In this room ({n} of {max})', { n: room.members.length, max: room.max })}>
+        <Section title={cv.t('froom.members', 'In this room ({n} of {max})', { n: room.members.length, max: room.max })}
+          hint={split ? cv.t('froom.sides_hint', 'Everyone picks their own side, up to {n} on each.', { n: room.perSide }) : undefined}>
+          {split ? (
+            <div class="froom__sides">
+              {[0, 1].map((side) => {
+                const on = room.members.filter((m) => m.side === side);
+                const mine = room.members.find((m) => m.id === room.you)?.side === side;
+                const full = on.length >= room.perSide;
+                return (
+                  <section class="froom__side plate pad" aria-label={cv.t(side === 0 ? 'team.aubade' : 'team.serenade', side === 0 ? 'Aubade' : 'Serenade')}>
+                    <h3 class="t-label froom__sidehead"><SideMark team={side} withName /><span class="t-caption muted">{on.length} / {room.perSide}</span></h3>
+                    <ul class="froom__members froom__members--side">
+                      {on.map((m) => <Member m={m} />)}
+                    </ul>
+                    {!mine ? (
+                      <Button variant="secondary" size="s" disabled={full || busy} reason={full ? cv.t('froom.error.side_full', 'That side is full.') : cv.t('froom.busy', 'Someone in the room is still in a match.')}
+                        onPress={() => session.setFriendSide?.(side)}>{cv.t('btn.join_side', 'Play on this side')}</Button>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
           <ul class="froom__members">
             {room.members.map((m) => (
               <li class={`froom__m plate ${m.id === room.you ? 'is-you' : ''}`}>
@@ -138,6 +172,7 @@ export function RoomScreen(): JSX.Element {
             ))}
             {open > 0 ? <li class="froom__m froom__m--open t-body-s muted">{open === 1 ? cv.t('froom.open_one', '1 open seat') : cv.t('froom.open_n', '{n} open seats', { n: open })}</li> : null}
           </ul>
+          )}
         </Section>
 
         <Section title={cv.t('froom.game', 'Game')} hint={isHost ? undefined : cv.t('froom.host_sets', 'The host chooses the game.')}>

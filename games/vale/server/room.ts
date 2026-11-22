@@ -40,7 +40,7 @@ export interface RoomOptions {
   speed?: number;
   readySeconds?: number;
   /** a friend room's match: everyone already said yes (no ready check); `together` seats them on one team */
-  friends?: { together: boolean };
+  friends?: { together: boolean; /** peer id → side (0/1) each friend chose, when they are against each other */ sides?: Map<string, number> };
   onClose(room: Room, requeue: Ticket[]): void;
   log?(msg: string): void;
 }
@@ -159,6 +159,16 @@ export class Room {
       for (let k = 0; seatOrder.length < lay.length; k++) for (const col of byTeam) if (col[k] !== undefined) seatOrder.push(col[k]);
     }
     this.humans.forEach((h, i) => { h.player = seatOrder[i]; });
+    // friends against each other: each sits on the side they chose (a full side spills to the other)
+    const sides = this.o.friends?.sides;
+    if (sides && !coop && !ffa && teams.length >= 2) {
+      const free = teams.slice(0, 2).map((t) => lay.filter((s) => s.team === t).map((s) => s.player));
+      for (const h of this.humans) {
+        const want = sides.get(h.t.peer.id) === 1 ? 1 : 0;
+        const col = free[want].length ? free[want] : free[1 - want];
+        h.player = col.shift()!;
+      }
+    }
     const humanOf = new Map(this.humans.map((h) => [h.player, h]));
     // roles: humans take their first free preference, bots fill the rest of their team
     const roles = draftRoles(this.cat, mode);

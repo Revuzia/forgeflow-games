@@ -52,12 +52,15 @@ export interface FriendRoomState {
   max: number;
   you: string;
   host: string;
-  members: { id: string; name: string; busy: boolean }[];
+  /** side: 0 or 1, the team this member plays on when friends are against each other (they choose it) */
+  members: { id: string; name: string; busy: boolean; side: number }[];
+  /** friends per side when they are against each other */
+  perSide: number;
   /** a start is collecting tickets */
   starting: boolean;
 }
 /** why a friend-room request failed (strings: froom.error.<reason>) */
-export type FriendRoomError = 'no_room' | 'full' | 'busy' | 'not_host' | 'bad_queue' | 'in_room';
+export type FriendRoomError = 'no_room' | 'full' | 'busy' | 'not_host' | 'bad_queue' | 'in_room' | 'side_full';
 
 export type ClientMsg =
   | { t: 'hello'; v: number; catalog: string; name: string }
@@ -76,6 +79,8 @@ export type ClientMsg =
   | { t: 'froom_join'; code: string }
   | { t: 'froom_set'; queue?: string; together?: boolean }
   | { t: 'froom_start' }
+  /** choose your own side (friends against each other) */
+  | { t: 'froom_side'; side: number }
   | { t: 'froom_ticket'; req: QueueRequest; profile: NetProfile }
   | { t: 'froom_leave' };
 

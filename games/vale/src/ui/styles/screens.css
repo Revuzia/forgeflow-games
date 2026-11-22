@@ -825,3 +825,7 @@
 .froom__m--open { outline: 1px dashed var(--line-2); outline-offset: -1px; border-radius: inherit; }
 .froom__side { gap: var(--u); align-items: center; flex-wrap: wrap; margin-top: var(--u); }
 .froom__desc { margin: var(--u) 0 0; }
+.froom__sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--u); }
+.froom__side { display: flex; flex-direction: column; gap: var(--u); align-items: flex-start; }
+.froom__sidehead { display: flex; align-items: center; gap: var(--u); justify-content: space-between; width: 100%; margin: 0; }
+.froom__members--side { grid-template-columns: minmax(0, 1fr); width: 100%; }

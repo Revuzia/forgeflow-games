@@ -1,7 +1,7 @@
 // VALE game server — `npm run server` (node server/main.ts). Serves online play over WebSocket
 // (CONTRACT §7.2): matchmaking, server-side drafts and lockstep matches with an authoritative sim.
 //
-//   node server/main.ts [--port 8787] [--host 0.0.0.0] [--catalog <catalog.json>] [--wait 8] [--speed 1]
+//   node server/main.ts [--port 8787] [--host 0.0.0.0] [--catalog <catalog.json>] [--wait <s>, default 8–15] [--speed 1]
 //
 // The catalog must be the one the clients load (same version): by default the newest
 // dist-catalog/schema-1/<version>/catalog.json (`npm run content` writes it).
@@ -28,7 +28,7 @@ const path = opt('catalog', '') || newestCatalog();
 const catalog = Catalog.parse(JSON.parse(readFileSync(path, 'utf8')));
 const hub = new Hub({
   catalog, port: Number(opt('port', '8787')), host: opt('host', '0.0.0.0'),
-  waitSeconds: Number(opt('wait', '8')), speed: Number(opt('speed', '1')),
+  waitSeconds: opt('wait', '') ? Number(opt('wait', '')) : undefined, speed: Number(opt('speed', '1')),
   log: (m) => console.log(`${new Date().toISOString().slice(11, 19)} ${m}`),
 });
 console.log(`VALE server · catalog ${catalog.version} · ws://localhost:${hub.port}`);

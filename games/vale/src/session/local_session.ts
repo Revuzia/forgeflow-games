@@ -693,6 +693,8 @@ export class LocalSession implements Session {
     if (this._phase !== 'idle' && this._phase !== 'postgame') { this.error(`froom: busy`); return; }
     if (!this.opts.online?.send({ t: 'froom_start' })) this.error('froom: offline');
   }
+  /** choose your side when friends are against each other */
+  setFriendSide(side: number): void { if (!this.opts.online?.send({ t: 'froom_side', side })) this.error('froom: offline'); }
   leaveFriendRoom(): void { this.opts.online?.send({ t: 'froom_leave' }); this.froom = null; }
 
   /** the host started: queue into the room's match with your ticket (the server seats everyone, no ready check) */

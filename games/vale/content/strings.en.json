@@ -1647,7 +1647,7 @@
   "froom.side_ffa": "Everyone plays in the same match.",
   "froom.side_coop": "You all play on one team.",
   "froom.side_together_line": "You all play on one team.",
-  "froom.side_against_line": "You are split across both sides.",
+  "froom.side_against_line": "Friends play against each other. Pick your side above.",
   "froom.wait_host": "Waiting for {name} to start the match.",
   "froom.starting": "Starting…",
   "froom.busy": "Someone in the room is still in a match.",
@@ -1684,5 +1684,9 @@
   "froom.error.not_host": "Only the host can do that.",
   "froom.error.bad_queue": "That game cannot be played in a friend room.",
   "froom.error.in_room": "You are already in a room.",
-  "froom.error.offline": "Playing with friends needs a connection to the game server."
+  "froom.error.offline": "Playing with friends needs a connection to the game server.",
+  "froom.sides_hint": "Everyone picks their own side, up to {n} on each.",
+  "froom.error.side_full": "That side is full.",
+  "btn.join_side": "Play on this side",
+  "queue.joined": "Players found · {n} of {total}"
 }

@@ -70,7 +70,7 @@ export class ValeHub extends DurableObject<Env> {
         // local test runs only (DEV=1): a faster clock (`--var SPEED:16`), as the Node harness uses
         const dev = this.env.DEV === '1';
         return new HubCore({
-          catalog, waitSeconds: dev ? num(this.env.WAIT_S, 8) : 8, speed: dev ? num(this.env.SPEED, 1) : 1,
+          catalog, waitSeconds: dev && this.env.WAIT_S ? num(this.env.WAIT_S, 8) : undefined, speed: dev ? num(this.env.SPEED, 1) : 1,
           friendTicketSeconds: dev ? num(this.env.FRIEND_TICKET_S, 6) : 6, log: (m) => this.log(`${version} ${m}`),
         });
       });

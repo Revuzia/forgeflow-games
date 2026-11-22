@@ -84,9 +84,25 @@ await until(() => A.s.currentMatch() === null && B.s.currentMatch() === null, 30
 A.setup = null; B.setup = null; A.loaded = false; B.loaded = false;
 A.s.setFriendRoom({ together: false });
 check(await until(() => room(B)?.together === false), 'the host switches to Against each other and the friend sees it');
+const sideOf = (c: typeof A, who: typeof A) => room(c)?.members.find((m) => m.id === room(who)?.you)?.side;
+check(sideOf(A, A) === 0 && sideOf(A, B) === 1, 'a friend who joins takes the emptier side', room(A)?.members);
+check(room(A)?.perSide === 5, 'each side seats up to 5 friends', room(A)?.perSide);
+// each friend picks their own side: the host moves over to the friend's side
+A.s.setFriendSide(1);
+check(await until(() => sideOf(B, A) === 1), 'a friend can switch sides and everyone sees it', room(B)?.members);
 A.s.startFriendRoom();
 check(await until(() => !!A.setup && !!B.setup, 20000), 'a second Start match takes both to loading', { ea: A.errors, eb: B.errors });
-check(humans(A).length === 2 && new Set(humans(A).map((s) => s.team)).size === 2, 'Against each other: the friends are on opposite sides', humans(A).map((s) => [s.name, s.team]));
+const sideTeam = [...new Set(seatsOf(A).map((s) => s.team))].sort()[1];
+check(humans(A).length === 2 && humans(A).every((s) => s.team === sideTeam), 'Against each other: each friend plays on the side they picked (both chose the second side)', humans(A).map((s) => [s.name, s.team]));
+for (const c of [A, B]) c.s.currentMatch()?.leave();
+await until(() => !!room(A) && room(A)!.members.every((m) => !m.busy), 8000);
+await until(() => A.s.currentMatch() === null && B.s.currentMatch() === null, 3000);
+A.setup = null; B.setup = null; A.loaded = false; B.loaded = false;
+A.s.setFriendSide(0);
+await until(() => sideOf(B, A) === 0);
+A.s.startFriendRoom();
+check(await until(() => !!A.setup && !!B.setup, 20000), 'a third Start match takes both to loading');
+check(humans(A).length === 2 && new Set(humans(A).map((s) => s.team)).size === 2, 'Against each other: friends on different sides play on opposite teams', humans(A).map((s) => [s.name, s.team]));
 for (const c of [A, B]) c.s.currentMatch()?.leave();
 await until(() => !!room(A) && room(A)!.members.every((m) => !m.busy), 8000);
 

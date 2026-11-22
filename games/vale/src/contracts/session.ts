@@ -187,6 +187,8 @@ export type SessionEvent =
   | { type: 'queue'; state: 'idle' | 'searching' | 'found' | 'accepted' | 'declined'; queue?: string; elapsed?: number; estimate?: number;
       /** CHANGED(SESSION), additive: ready-check seconds left / window, seats accepted / total ('found' | 'accepted') */
       readyTimer?: number; readyMax?: number; accepted?: number; total?: number;
+      /** CHANGED(SESSION), additive: players in the match so far while searching (of `total`) */
+      joined?: number;
       /** CHANGED(SESSION), additive: why the queue ended, and the re-queue lockout in seconds ('declined' | 'idle') */
       reason?: 'declined' | 'timeout' | 'cancelled' | 'dodged'; lockout?: number }
   | { type: 'draft'; state: DraftState }
@@ -242,6 +244,7 @@ export interface Session {
   joinFriendRoom?(code: string, roles?: [string, string?]): void;
   setFriendRoom?(patch: { queue?: string; together?: boolean }): void;
   startFriendRoom?(): void;
+  setFriendSide?(side: number): void;
   leaveFriendRoom?(): void;
 }
 
