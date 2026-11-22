@@ -1958,7 +1958,7 @@ function mkEmitter() {
   };
 }
 function loadSettings() {
-  const def = { masterVol: 0.8, musicVol: 0.5, sfxVol: 0.9, sensitivity: 1.0, adsSensitivity: 0.8, graphics: "medium", playerName: "You", keys: {}, showPerf: false, fov: 57, sprintToggle: true, adsToggle: false, shake: 1 };   // SHIFT = click on / click off (owner direction 2026-07-21)
+  const def = { masterVol: 0.8, musicVol: 0.5, sfxVol: 0.9, sensitivity: 1.0, adsSensitivity: 0.8, graphics: "medium", playerName: "You", keys: {}, showPerf: false, fov: 57, sprintToggle: true, adsToggle: false, shake: 1, dmgDir: true };   // SHIFT = click on / click off (owner direction 2026-07-21)
   // The OS "reduce motion" setting starts screen shake at HALF (feel G12;
   // DYEFIELD juice.ts honours prefersReducedMotion). Only a DEFAULT: a stored
   // choice — including FULL — always wins.
@@ -1977,6 +1977,8 @@ function loadSettings() {
     // deliberate 0 straight back to full. Same persistence trap as the sliders above.
     s.shake = (s.shake == null || !isFinite(+s.shake)) ? 1 : Math.min(1, Math.max(0, +s.shake));
     for (const k of ["masterVol", "musicVol", "sfxVol"]) s[k] = Math.min(1, Math.max(0, +s[k] || 0));
+    // damage-direction arc: a boolean, ON unless explicitly switched off (a stray stored value must not hide it)
+    s.dmgDir = s.dmgDir !== false;
     return s;
   } catch (e) { return def; }
 }
