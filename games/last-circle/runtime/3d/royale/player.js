@@ -4269,6 +4269,7 @@ function supportHandIK9(a) {
 // ── (W10 R1B) support-hand palm + finger curl ─────────────────────────────────────────────────────────────────────────────────
 const SPRINT_CLIPS = new Set(["rifle_sprint_g", "rifle_sprint_left", "rifle_sprint_right"]);   // (W10 anim fix) the support arm pumps on these
 const IK_NEAR_M = 30;                     // the support-hand IK, palm and finger curl run on actors nearer than this (and the focus)
+const GRIP_WRIST_MAX = 22 * Math.PI / 180;   // (W10 anim fix) the support wrist bends at most this off the forearm (gripHand)
 const FINGER_CURL = [0.95, 1.15, 0.8];    // rad per joint (proximal, middle, distal): the fingers wrap a ~5 cm handguard
 const THUMB_CURL = [0.3, 0.45, 0.3];
 const _ghQ = new THREE.Quaternion(), _ghP = new THREE.Quaternion(), _ghQ2 = new THREE.Quaternion();
@@ -4333,6 +4334,15 @@ function gripHand(a, w) {
   } else {
     _ghF.copy(_ghX).multiplyScalar(-0.8).addScaledVector(_ghB, 0.55).addScaledVector(_ghU, 0.15).normalize();
     _ghN.copy(_ghU).multiplyScalar(0.85).addScaledVector(_ghX, -0.45);
+  }
+  // (W10 anim fix) the wrist bends at most GRIP_WRIST_MAX off the forearm: the full palm-up turn bent the support wrist 25-50 deg
+  // (the W9 tip's clip hand: ~7 deg), a broken-looking wrist in motion. The fingers are turned from the forearm line toward the
+  // wanted direction by at most that angle; the palm normal follows (orthogonalised below).
+  a.armBones.lFore.getWorldPosition(_ghPl); lh.getWorldPosition(_ghS); _ghS.sub(_ghPl).normalize();
+  const wb = Math.acos(K.clamp(_ghS.dot(_ghF), -1, 1));
+  if (wb > GRIP_WRIST_MAX) {
+    _ghPl.crossVectors(_ghS, _ghF);
+    if (_ghPl.lengthSq() > 1e-8) { _ghPl.normalize(); _ghQ2.setFromAxisAngle(_ghPl, GRIP_WRIST_MAX); _ghF.copy(_ghS).applyQuaternion(_ghQ2); }
   }
   _ghN.addScaledVector(_ghF, -_ghN.dot(_ghF)).normalize();
   // R maps the hand-local (finger, palm, finger x palm) frame onto the world (F, N, F x N) frame
