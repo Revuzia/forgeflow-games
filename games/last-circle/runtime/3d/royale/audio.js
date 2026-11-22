@@ -1191,8 +1191,12 @@ function startTrack(W, r, fadeS) {
     // On a COLD load there has been no user gesture yet, so play() is rejected
     // by the autoplay policy. Remember the failure and let the first real
     // gesture start it (see wire()).
+    // Only the CURRENT track may be remembered as blocked: the rejection arrives
+    // asynchronously, and a menu track refused on a cold load must not be
+    // replayed by the gesture that has meanwhile started the match (owner
+    // report 2026-11-22: the menu music played on under the match).
     const p = r.el.play();
-    if (p && p.catch) p.catch(() => { _blockedTrack = r.el; });
+    if (p && p.catch) p.catch(() => { if (_cur === r && r.want) _blockedTrack = r; });
   } catch (e) {}
 }
 
@@ -1241,6 +1245,9 @@ function musicPump() {
   for (const k in _tr) {
     const r = _tr[k];
     if (r !== _cur && r.stopAt && now >= r.stopAt) { try { r.el.pause(); } catch (e) {} r.stopAt = 0; }
+    // one track at a time: a non-current track playing with no fade-out pending
+    // (whatever started it) is stopped here
+    else if (r !== _cur && !r.stopAt && r.el && !r.el.paused) { try { r.el.pause(); } catch (e) {} }
   }
   const r = _cur;
   if (!r || !r.el || !r.seekable || r.el.paused || !(r.b > r.a)) return;
@@ -2247,11 +2254,13 @@ function wire(W) {
     }
     // the WebAudio context resuming was never enough: the HTMLAudioElement that
     // the autoplay policy rejected is a separate object and needed its own retry.
-    if (_blockedTrack && _blockedTrack.paused) {
-      const p = _blockedTrack.play();
-      if (p && p.catch) p.catch(() => {});
-      else _blockedTrack = null;
-    } else if (_blockedTrack) _blockedTrack = null;
+    // retry only if the blocked track is still the one that should be heard
+    const bt = _blockedTrack;
+    _blockedTrack = null;
+    if (bt && bt === _cur && bt.want && bt.el.paused) {
+      const p = bt.el.play();
+      if (p && p.catch) p.catch(() => { if (_cur === bt && bt.want) _blockedTrack = bt; });
+    }
     // the deferred menu track waits for exactly this moment — see startMenuMusic
     if (_pendingMusic) _pendingMusic();
     routeMusic();
