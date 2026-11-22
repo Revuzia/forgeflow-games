@@ -3952,7 +3952,9 @@ function stepIndicators(W, dt) {
     d.t += dt;
     if (d.t > d.life) { inds.splice(i, 1); parkIndicator(d); continue; }
     // screen angle relative to the camera facing (0 = up/forward)
-    const rel = d.ang - p.yaw + Math.PI;
+    // (2026-11-22: was d.ang - p.yaw + PI, a mirror image - a shot or footstep on your RIGHT was drawn on the LEFT; p23_dmgdir
+    // 'sound-ring-side' measures it against the camera. Same convention as the damage arc, rotate(rel) clockwise from up.)
+    const rel = p.yaw + Math.PI - d.ang;
     // written only when the rounded pixel / degree / opacity step changes (each write built 1-2 strings per cue per frame)
     const sx = Math.round(Math.sin(rel) * RAD), sy = Math.round(-Math.cos(rel) * RAD), dg = Math.round(rel * 180 / Math.PI);
     if (d._sx !== sx || d._sy !== sy || d._dg !== dg) {

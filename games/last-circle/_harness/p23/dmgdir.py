@@ -184,6 +184,27 @@ def main():
             aid, aid2 = ids[0], ids[1]
             have = s.js("() => { const b = document.querySelector('[data-lc=\"dmgdir\"]'); return { pool: b ? b.querySelectorAll('svg').length : 0, def: window.__LC__.W.settings.dmgDir }; }")
             v.check("contract ([data-lc=dmgdir] pooled arcs; W.settings.dmgDir defaults ON)", have["pool"] >= 4 and have["def"] is True, have, "pool >= 4, default true")
+            # the SOUND ring (gunfire cue) must sit on the same side as the shooter (it was mirrored until 2026-11-22)
+            side = {}
+            for name, b in (("right", 90), ("left", 270)):
+                s.js(PLACE_JS, [aid, b, 20])
+                s.step_frames(2, DT, render=True)
+                truth = s.js(ARCS_JS, [aid])["truth"]
+                tr = truth.get(str(aid), truth.get(aid))
+                s.js("""(aid) => { const W = window.__LC__.W, a = W.actorById.get(aid); W.settings.soundVis = true;
+                    const P = W.player; window.__P23RS__ = { alive: P.alive, sv: W.settings.soundVis, d: Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z) };
+                    W.events.emit('shotFired', a, (a.weapon && a.weapon.id) || 'ar', { x: a.pos.x, y: a.pos.y + 1.5, z: a.pos.z }, { x: W.player.pos.x - a.pos.x, y: 0, z: W.player.pos.z - a.pos.z }); return true; }""", aid)
+                s.step_frames(2, DT, render=True)
+                g = s.js("""() => { const L = document.querySelector('[data-lc=indicators]'); if (!L) return null;
+                    const cx = innerWidth / 2, cy = innerHeight / 2;
+                    const els = [...L.children].filter((e) => e.style.display !== 'none' && /︿/.test(e.textContent));
+                    return { n: els.length, all: els.map((e) => { const r = e.getBoundingClientRect(), x = r.left + r.width / 2 - cx, y = r.top + r.height / 2 - cy;
+                      return { op: +e.style.opacity, deg: Math.round(((Math.atan2(x, -y) * 180 / Math.PI) + 360) % 360) }; }) }; }""")
+                fresh = max(g["all"], key=lambda c: c["op"]) if g and g.get("all") else None   # the cue this shot drew = the brightest (older cues are fading)
+                ok = fresh is not None and tr is not None and cdiff(fresh["deg"], tr) <= 25
+                side[name] = {"cue": g, "truth": tr, "state": s.js("() => window.__P23RS__")}
+                v.check("sound-ring-side-%s (a gunshot on the %s draws its ring cue on the %s, +-25 deg)" % (name, name, name), ok, side[name], "|cue - truth| <= 25")
+                expire(s)
             if have["pool"] < 1:
                 L.errors_row(v, s)
                 return
@@ -276,6 +297,7 @@ def main():
             vw = s.js(ARCS_JS, [aid])
             v.check("no-old-glyph (the sound ring draws no damage glyph)", vw["oldGlyph"] == 0, {"oldGlyph": vw["oldGlyph"]}, "0")
             expire(s)
+
             L.errors_row(v, s)
 
         if args.no_touch:
