@@ -55,8 +55,11 @@ export class ValeHub extends DurableObject<Env> {
       const r = await fetch(`${this.env.CATALOG_URL}${version}/catalog.json`);
       if (r.ok) text = await r.text();
     } else if (this.env.GAMES) {
-      const o = await this.env.GAMES.get(`${this.env.CATALOG_PREFIX ?? 'vale/catalog/schema-1/'}${version}/catalog.json`);
-      if (o) text = await o.text();
+      // every slug that ships VALE (vale, vale-playtest): the first that has this version
+      for (const prefix of (this.env.CATALOG_PREFIX ?? 'vale/catalog/schema-1/').split(',').map((s) => s.trim()).filter(Boolean)) {
+        const o = await this.env.GAMES.get(`${prefix}${version}/catalog.json`);
+        if (o) { text = await o.text(); break; }
+      }
     }
     if (text === null) throw new Error(`no catalog ${version}`);
     return Catalog.parse(JSON.parse(text));

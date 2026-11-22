@@ -22,7 +22,7 @@ bucket_name = "forgeflow-games"
 
 [vars]
 ALLOWED_ORIGINS = "https://forgeflow-games-cdn.isimcha85.workers.dev,https://forgeflowgames.com,https://www.forgeflowgames.com"
-CATALOG_PREFIX = "vale/catalog/schema-1/"
+CATALOG_PREFIX = "vale/catalog/schema-1/,vale-playtest/catalog/schema-1/"
 # incoming socket messages per UTC day before new players are turned away (their games then play offline against the
 # usual opponents). Free plan: 100k Durable Object requests a day, shared with dyefield-net; WebSocket messages
 # count 20:1, so 1,200,000 messages ≈ 60,000 requests.

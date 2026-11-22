@@ -7,7 +7,7 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   DEV_ORIGINS?: string;
   DEV?: string;
-  /** R2 key prefix of the catalogs: <prefix><version>/catalog.json */
+  /** R2 key prefixes of the catalogs, comma-separated, tried in order: <prefix><version>/catalog.json */
   CATALOG_PREFIX?: string;
   /** local runs: HTTP base of the catalogs (<url><version>/catalog.json) */
   CATALOG_URL?: string;
