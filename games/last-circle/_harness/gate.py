@@ -412,6 +412,9 @@ GATES = [
     # housegen.selftest CPU judged by the paired row (ruling R-d / 2026-11-18 (2)): <= 36 ms a house absolute, else <= 1.32 x the reference 04e82d802 when the
     # reference reads > 27.3 ms; ref-vs-ref control outside 0.93-1.07 = COULD-NOT-JUDGE. The Node selftest run prints the same reading as info (HG_CPU_ROW=wrapper)
     ("p23_hg_cpu", "p23/hg_cpu.py", [], 3600, False),
+    # owner 2026-11-22 "see where you are getting shot from": the damage-direction arc around the reticle (4 bearings, turn, fade, damage scale,
+    #   shield vs health, two attackers, independent of soundVis, own switch, CB palette, flash reduction; desktop + pixel7 touch)
+    ("p23_dmgdir", "p23/dmgdir.py", [], 3600, False),
     ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
@@ -902,6 +905,8 @@ NEGATIVE += [
     ("w10_homes-plant-no-work-budget", "p23/homes.py", ["--plant", "no-work-budget"], 1800),    # -> work-density FAILS
     ("housegen_demo_looks-plant-no-ao", "housegen_demo_looks.py", ["--plant", "no-ao"], 1800),  # -> contact-shadow FAILS
     ("p23_hg_cpu-plant-slow-gen", "p23/hg_cpu.py", ["--plant", "slow-gen"], 3600),              # every house generated 3x -> cpu FAILS (absolute and ratio)
+    ("p23_dmgdir-plant-dmgdir-mirror", "p23/dmgdir.py", ["--plant", "dmgdir-mirror", "--no-touch"], 3600),          # left / right swapped -> bearing-right / -left FAIL
+    ("p23_dmgdir-plant-dmgdir-tied-to-sound", "p23/dmgdir.py", ["--plant", "dmgdir-tied-to-sound", "--no-touch"], 3600),   # hidden with the sound ring -> sound-off FAILS
 ]
 # gate.py --quick: an early-warning SELECTION of GATES rows, each run exactly as the full battery runs it (same args, same bars, same
 # retries), plus the Node selftests and the anchors census. About 60 min on this 8-core box (measured 2026-11-19, see README). It is

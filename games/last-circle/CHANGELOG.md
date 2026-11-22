@@ -3,6 +3,12 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-22 — damage direction (LIVE ?v=1795386861)
+
+- New: a damage-direction arc around the crosshair points at whoever hit you and keeps pointing there as you turn (blue dashed = shield hit, solid red = health hit; bigger hits draw wider, brighter arcs; several attackers at once; 1.5 s). Its own setting 'Damage direction' (default ON), independent of Sound indicators; honours the colour-blind palettes and Reduce flashes. Replaces the small damage glyph on the sound ring.
+- Fix: the sound ring (footsteps / gunfire) was mirrored left-right.
+- Gate p23_dmgdir (23 rows; plants dmgdir-mirror, dmgdir-tied-to-sound).
+
 ## 2026-11-22 — hotfix: title music (LIVE ?v=1795378490)
 
 - The title-screen tune now ends when the player enters the game world (the pre-drop lobby); before, it played through the whole lobby (owner report). Safety: the music pump stops any non-current track that is still playing.
