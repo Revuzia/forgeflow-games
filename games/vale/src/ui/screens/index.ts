@@ -18,6 +18,7 @@ import { PostgameScreen } from './postgame.tsx';
 import { PracticeScreen } from './practice.tsx';
 import { ProfileScreen } from './profile.tsx';
 import { QueueScreen } from './queue.tsx';
+import { RoomScreen } from './room.tsx';
 import { SettingsScreen } from './settings.tsx';
 import { ShopScreen } from './shop.tsx';
 
@@ -47,4 +48,5 @@ export const SCREENS: Record<string, ScreenDef> = {
   settings: def({ id: 'settings', component: SettingsScreen, music: 'menu' }),
   practice: def({ id: 'practice', component: PracticeScreen, music: 'menu' }),
   custom: def({ id: 'custom', component: CustomScreen, music: 'menu' }),
+  room: def({ id: 'room', component: RoomScreen, music: 'menu' }),
 };

@@ -7,6 +7,7 @@ import type {
   DraftState, GrantSummary, MatchClient, OnlineInfo, PartyMember, Profile, QueueRequest, Session, SessionEvent, Settings,
 } from '../contracts/session.ts';
 import type { MatchResult, MatchSetup, PlayerId } from '../contracts/sim.ts';
+import type { FriendRoomState } from '../contracts/net.ts';
 import type { CatalogView } from './catalog_view.ts';
 import { fmtWait } from './format.ts';
 import type { Router } from './router.ts';
@@ -90,6 +91,10 @@ export class AppState {
   readonly lastError = signal<string | null>(null);
   /** the game-server link (null: this build plays offline) */
   readonly online = signal<OnlineInfo | null>(null);
+  /** your friend room on the game server (null: none) */
+  readonly friendRoom = signal<FriendRoomState | null>(null);
+  /** a ?room=CODE invite this page opened with: joined as soon as the server link is up */
+  private inviteCode: string | null = null;
   /** true from accept until the draft opens */
   readonly accepted = signal(false);
   /** the last re-queue lockout the session gave (seconds): the next is double, capped at 60 (CONTRACT §7) */
@@ -126,7 +131,18 @@ export class AppState {
       const o = this.session.online?.() ?? null;
       const cur = this.online.peek();
       if (JSON.stringify(o) !== JSON.stringify(cur)) this.online.value = o;
+      const fr = this.session.friendRoom?.() ?? null;
+      if (JSON.stringify(fr) !== JSON.stringify(this.friendRoom.peek())) this.friendRoom.value = fr;
+      if (this.inviteCode && o?.status === 'online' && this.session.joinFriendRoom) {
+        const code = this.inviteCode;
+        this.inviteCode = null;
+        this.joinFriendRoom(code);
+      }
     }, 500);
+    try {
+      const code = new URLSearchParams(location.search).get('room');
+      if (code && /^[A-Za-z0-9]{4,8}$/.test(code)) this.inviteCode = code.toUpperCase();
+    } catch { /* no page here */ }
   }
 
   /** seconds left on the re-queue lockout */
@@ -145,8 +161,24 @@ export class AppState {
       if (this.router.route.value.screen !== 'queue') this.router.go('queue', {}, { transition: 'forward' });
     }
   }
-  /** Play again: Session.playAgain when offered, else the last request */
+  // ── friend rooms ──────────────────────────────────────────────────────────────────────────────
+  /** the role preference a friend-room match queues with (the Play screen's roles) */
+  private friendRoles(): [string, string?] | undefined {
+    const r = this.prefs.value.roles;
+    return r?.[0] ? (r[1] && r[1] !== r[0] ? [r[0], r[1]] : [r[0]]) : undefined;
+  }
+  createFriendRoom(queue: string, together: boolean): void {
+    this.session.createFriendRoom?.(queue, together, this.friendRoles());
+    if (this.router.route.value.screen !== 'room') this.router.go('room', {}, { transition: 'forward' });
+  }
+  joinFriendRoom(code: string): void {
+    this.session.joinFriendRoom?.(code, this.friendRoles());
+    if (this.router.route.value.screen !== 'room') this.router.go('room', {}, { transition: 'forward' });
+  }
+
+  /** Play again: Session.playAgain when offered, else the last request (in a friend room: back to the room) */
   playAgain(): void {
+    if (this.friendRoom.value) { this.router.reset('room', {}, 'back'); return; }
     if (this.session.playAgain) { this.readyAlert.prime(); this.session.playAgain(); this.sound.play('queue_search'); }
     else if (this.lastRequest.value) this.queueFor(this.lastRequest.value);
   }
@@ -184,6 +216,8 @@ export class AppState {
         console.warn('[vale] session:', e.message);
         // draft refusals carry a reason code the strings localise (error.draft.<reason>)
         const m = /^draft: (\w+)$/.exec(e.message);
+        const fm = /^froom: (\w+)$/.exec(e.message);
+        if (fm) { this.toast(cv.t(`froom.error.${fm[1]}`, cv.t('froom.error.generic', 'That did not work. Try again.')), 'error'); break; }
         if (m) this.toast(cv.t(`error.draft.${m[1]}`, cv.t('error.draft.unknown_action', "You can't do that right now.")), 'error');
         // the session could not build or start the match ('match setup: …', 'match: could not start …'; it is idle
         // again): never leave the player on a draft or a loading bar that will not move

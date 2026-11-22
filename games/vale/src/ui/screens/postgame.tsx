@@ -66,7 +66,7 @@ export function PostgameScreen(p: { params: Record<string, string> }): JSX.Eleme
         <Button variant="quiet" cue="back" onPress={() => router.reset('home', {}, 'back')}>{cv.t('postgame.next.home', 'Return home')}</Button>
         {reason ? <span class="reason reason--warn t-body-s">{reason}</span> : null}
       </div>}
-      cta={<Button variant="chalk" size="l" wedge disabled={!!reason} reason={reason ?? undefined} onPress={() => state.playAgain()} data-autofocus="">{cv.t('btn.play_again', 'Play again')}</Button>}>
+      cta={<Button variant="chalk" size="l" wedge disabled={!!reason} reason={reason ?? undefined} onPress={() => state.playAgain()} data-autofocus="">{state.friendRoom.value ? cv.t('btn.back_to_room', 'Back to room') : cv.t('btn.play_again', 'Play again')}</Button>}>
       <div class="pg">
         <header class={`pg__banner ${ffa ? 'is-place' : me.won ? 'is-win' : 'is-loss'}`}>
           <span class="t-label muted pg__queue">{cv.t('postgame.queue_line', '{mode} · {queue}', { mode: mode?.name ?? '', queue: queue?.name ?? '' })}</span>

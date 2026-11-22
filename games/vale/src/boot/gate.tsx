@@ -26,14 +26,20 @@ function showPlate(root: HTMLElement, p: Plate): void {
     </div>, root));
 }
 
-/** a device that cannot play: no WebGL2 (Reload), a touch-only device or a window under 1024 x 600 (Try anyway) */
+/** a device that cannot play: no WebGL2 (Reload), a touch-only device or a window under 1024 x 600 (Make it full screen) */
 export function showDevicePlate(root: HTMLElement, p: DeviceProblem, tryAnyway: () => void): void {
   const reload = (): void => location.reload();
   const t = (k: ShipKey): string => shipText(k);
   if (p.kind === 'webgl') showPlate(root, { text: t('state.error.webgl'), actions: [{ label: t('ship.device.reload'), primary: true, run: reload }] });
   else showPlate(root, {
     text: p.kind === 'touch' ? t('ship.device.touch') : t('ship.device.small'),
-    actions: [{ label: t('ship.device.try'), primary: true, run: tryAnyway }],
+    actions: [p.kind === 'touch'
+      ? { label: t('ship.device.try'), primary: true, run: tryAnyway }
+      // a small window: ask for full screen (a refusal or a browser without it is fine), then go on exactly as "Try anyway"
+      : { label: t('ship.device.fullscreen'), primary: true, run: () => {
+        try { void document.documentElement.requestFullscreen?.()?.catch(() => {}); } catch { /* not allowed here */ }
+        tryAnyway();
+      } }],
   });
 }
 

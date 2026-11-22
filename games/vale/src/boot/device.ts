@@ -50,6 +50,7 @@ export const SHIP_TEXT = {
   'ship.device.touch': 'VALE plays on a computer with a mouse and keyboard.',
   'ship.device.small': 'This window is too small for VALE. Make it at least 1024 by 600, or use a bigger screen.',
   'ship.device.try': 'Try anyway',
+  'ship.device.fullscreen': 'Make it full screen',
   'ship.device.reload': 'Reload',
   'ship.tab.title': 'VALE is open in another tab',
   'ship.tab.body': 'Your progress is saved from one tab at a time. Close the other tab, or play here instead.',

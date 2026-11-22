@@ -33,6 +33,32 @@ export interface NetProfile {
   rating?: number;
 }
 
+// FRIEND ROOMS (additive, protocol 1). A private room with a short code: 'froom_create' makes one (you are its host),
+// 'froom_join' enters one by code, the host sets the queue and whether friends play on one team ('froom_set'), and
+// 'froom_start' asks every member for a ticket ('froom_go' → 'froom_ticket', the same request + profile as 'queue'). The
+// server then opens an ordinary Room with every member already accepted; empty seats are filled as in matchmaking.
+// The room outlives its matches: after the post-game everyone is still in it, and can start again.
+/** queue kinds a friend room may play (never ranked: the ladder is for strangers) */
+export const FRIEND_ROOM_KINDS = ['standard', 'coop'] as const;
+export const FRIEND_CODE_LEN = 5;
+/** no 0/O, 1/I/L: a code read out loud or copied by hand still lands */
+export const FRIEND_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export interface FriendRoomState {
+  code: string;
+  queue: string;
+  /** friends share one team (true) or are spread over the sides (false); FFA and co-op queues ignore it */
+  together: boolean;
+  /** humans the room can seat for this queue + side */
+  max: number;
+  you: string;
+  host: string;
+  members: { id: string; name: string; busy: boolean }[];
+  /** a start is collecting tickets */
+  starting: boolean;
+}
+/** why a friend-room request failed (strings: froom.error.<reason>) */
+export type FriendRoomError = 'no_room' | 'full' | 'busy' | 'not_host' | 'bad_queue' | 'in_room';
+
 export type ClientMsg =
   | { t: 'hello'; v: number; catalog: string; name: string }
   | { t: 'queue'; req: QueueRequest; profile: NetProfile }
@@ -45,7 +71,13 @@ export type ClientMsg =
   | { t: 'digest'; n: number; h: string }
   /** back after a dropped connection: resume your seat; the server replays ticks n >= from */
   | { t: 'resume'; room: string; token: string; from: number }
-  | { t: 'leave' };
+  | { t: 'leave' }
+  | { t: 'froom_create'; queue: string; together: boolean }
+  | { t: 'froom_join'; code: string }
+  | { t: 'froom_set'; queue?: string; together?: boolean }
+  | { t: 'froom_start' }
+  | { t: 'froom_ticket'; req: QueueRequest; profile: NetProfile }
+  | { t: 'froom_leave' };
 
 export type QueueSessionEvent = Extract<SessionEvent, { type: 'queue' }>;
 
@@ -63,4 +95,9 @@ export type ServerMsg =
   | { t: 'replay'; ticks: { n: number; c?: [PlayerId, Command][] }[] }
   | { t: 'end'; result: MatchResult }
   | { t: 'desync'; n: number }
-  | { t: 'error'; m: string };
+  | { t: 'error'; m: string }
+  /** your friend room as it is now; null = you are in none */
+  | { t: 'froom'; room: FriendRoomState | null }
+  /** the host started: answer with 'froom_ticket' for this queue */
+  | { t: 'froom_go'; queue: string }
+  | { t: 'froom_error'; reason: FriendRoomError };

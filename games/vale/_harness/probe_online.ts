@@ -27,9 +27,11 @@ const check = (ok: boolean, what: string, detail?: unknown): void => {
 };
 
 const serverResults: string[] = [];
-const hub = new Hub({ catalog, port: 0, host: '127.0.0.1', waitSeconds: 0.5, speed: 64, readySeconds: 10, log: (m) => { if (/ended/.test(m)) serverResults.push(m); } });
+// VALE_NET_URL=ws://127.0.0.1:8791/ws runs the same scenarios against another server (workers/vale-net under wrangler dev)
+const ext = process.env.VALE_NET_URL;
+const hub = ext ? null : new Hub({ catalog, port: 0, host: '127.0.0.1', waitSeconds: 0.5, speed: 64, readySeconds: 10, log: (m) => { if (/ended/.test(m)) serverResults.push(m); } });
 await new Promise((r) => setTimeout(r, 100));
-const url = `ws://127.0.0.1:${hub.port}`;
+const url = ext ?? `ws://127.0.0.1:${hub!.port}`;
 
 async function scenario(queue: string, humans: number, pilot: boolean, dropAt = 0): Promise<void> {
   console.log(`— ${queue}: ${humans} humans${pilot ? ' on autopilot (their commands cross the wire)' : ' standing still'}`);
@@ -69,7 +71,7 @@ async function scenario(queue: string, humans: number, pilot: boolean, dropAt = 
   const humanSeats = results[0]?.players.filter((p) => p.controller === 'human').length ?? 0;
   check(humanSeats === humans, 'the match seated every human as a human', humanSeats);
   const mism = clients.map((c) => (c.s.currentMatch() as LockstepMatchHost | null)?.mismatches ?? 0);
-  check(clients.every((c) => !c.errors.some((e) => /drifted|lost/.test(e))), 'no digest drift and no lost connection', clients.map((c) => c.errors));
+  check(clients.every((c) => !c.errors.some((e) => /drifted|lost|resume:/.test(e))), 'no digest drift, no lost connection, no stray resume', clients.map((c) => c.errors));
   check(mism.every((m) => m === 0), 'every server tick lined up with the client sim', mism);
   check(clients.every((c) => c.s.profile().history[0]?.matchId === results[0]?.matchId), 'each profile booked the online match');
   if (dropAt) check(dropped && resumed, 'a client whose connection dropped mid-match resumed its seat (replayed the missed ticks)', { dropped, resumed });
@@ -85,7 +87,7 @@ await scenario('bridge_standard', 2, true);
 await scenario('fray_standard', 3, true);
 await scenario('rift_coop', 2, false);
 await scenario('bridge_standard', 2, true, 6000);
-check(serverResults.length >= 4, 'the server ran every match to an end', serverResults);
-await hub.close();
+if (hub) check(serverResults.length >= 4, 'the server ran every match to an end', serverResults);
+await hub?.close();
 console.log(`${fails ? 'FAIL' : 'PASS'} probe_online`);
 process.exit(fails ? 1 : 0);

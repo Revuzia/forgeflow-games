@@ -10,6 +10,7 @@
 // LOGIN SEAM: a LoginIdentityProvider replaces LocalIdentityProvider, and a RemoteProfileStore
 // replaces LocalProfileStore; nothing above them changes.
 
+import type { FriendRoomState } from './net.ts';
 import type { Command, MatchResult, MatchSetup, PlayerId, SimEvent, WorldView, LoadoutChoice } from './sim.ts';
 
 // ── identity ────────────────────────────────────────────────────────────────────────────────────
@@ -234,6 +235,14 @@ export interface Session {
   nod?(matchId: string, player: PlayerId): boolean;
   /** CHANGED(SESSION), additive optional (client F17): keep the chosen emblem on the profile (Profile.emblem); '' clears it */
   setEmblem?(emblem: string): void;
+  /** CHANGED(SESSION), additive optional (friend rooms, net.ts): a private room by code on the game server. Failures
+   *  arrive as 'error' events 'froom: <reason>' (FriendRoomError, or 'offline' / 'busy') */
+  friendRoom?(): FriendRoomState | null;
+  createFriendRoom?(queue: string, together: boolean, roles?: [string, string?]): void;
+  joinFriendRoom?(code: string, roles?: [string, string?]): void;
+  setFriendRoom?(patch: { queue?: string; together?: boolean }): void;
+  startFriendRoom?(): void;
+  leaveFriendRoom?(): void;
 }
 
 /** the online link as the UI shows it */

@@ -25,8 +25,11 @@ import { Portrait } from '../components/Portrait.tsx';
 import { RankEmblem } from '../components/RankEmblem.tsx';
 import { Screen, Section } from '../components/Screen.tsx';
 import { fmtInt, fmtWait } from '../format.ts';
+import { defaultFriendQueue, JoinCode } from './room.tsx';
 
 const SIDE_KINDS: QueueDefT['kind'][] = ['custom', 'practice'];
+/** the Play with friends card's id in the queue row (not a catalog queue: it opens a friend room) */
+const FRIENDS = 'friends';
 
 export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
   const { cv, router, state, session, sound } = useApp();
@@ -40,7 +43,7 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
   // "Play as <fighter>" (collection) prefers a queue that takes a fighter at queue time
   const presetQ = p.params.fighter ? queues.find((q) => cv.pickOf(q) === 'role_preset' && !locked(q))?.id : undefined;
   // a first visit lands on co-op (bots, no preset to fill in) so FIND MATCH works straight away
-  const qId = [p.params.queue, presetQ, prefs.lastQueue].find((id) => id && queues.some((q) => q.id === id))
+  const qId = [p.params.queue, presetQ, prefs.lastQueue].find((id) => id && ((id === FRIENDS && !!state.online.value) || queues.some((q) => q.id === id)))
     ?? queues.find((q) => q.kind === 'coop' && !locked(q))?.id ?? queues.find((q) => !locked(q))?.id ?? queues[0]?.id;
   const queue = cv.queue(qId);
   const pick = queue ? cv.pickOf(queue) : null;
@@ -59,22 +62,32 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
     state.setPrefs({ lastMode: m });
     router.setParams({ mode: m, queue: '' });
   };
-  const chooseQueue = (q: QueueDefT): void => {
+  const chooseQueue = (q: { id: string }): void => {
     if (q.id === qId) return;
     sound.play('tab');
     state.setPrefs({ lastQueue: q.id });
     router.setParams({ mode: modeId ?? '', queue: q.id });
   };
+  const friends = qId === FRIENDS && !!state.online.value;
+  const room = state.friendRoom.value;
+  const online = state.online.value?.status === 'online';
+  const friendStart = defaultFriendQueue(cv, modeId);
 
   // ── CTA state ─────────────────────────────────────────────────────────────────────────────────
   const lockLeft = state.lockoutLeft.value;
   let reason: string | null = null;
-  if (!queue) reason = cv.t('play.choose_queue', 'Choose how to play');
+  if (friends) reason = !online && !room ? cv.t('froom.offline', 'Playing with friends needs a connection to the game server.') : !friendStart && !room ? cv.t('play.choose_queue', 'Choose how to play') : null;
+  else if (!queue) reason = cv.t('play.choose_queue', 'Choose how to play');
   else if (locked(queue)) reason = cv.t('state.locked.queue', 'Reach level {level} to play {queue}.', { level: queue.unlockLevel, queue: queue.name });
   else if (lockLeft > 0) reason = cv.t('queue.lockout_banner', 'You can queue again in {t}.', { t: fmtWait(lockLeft) });
   else if (party.length > queue.partyMax) reason = cv.t('play.party_size', 'Party of up to {n}', { n: queue.partyMax });
   else if (pick === 'role_preset' && !preset.fighter) reason = cv.t('play.preset.missing', 'Pick a fighter to queue.');
   const find = (): void => {
+    if (friends) {
+      if (room) router.go('room', {}, { transition: 'forward' });
+      else if (!reason && friendStart) state.createFriendRoom(friendStart.id, true);
+      return;
+    }
     if (!queue || reason) return;
     const roleList: [string, string?] | undefined = roles.length && pick !== 'role_preset' && primary ? (secondary && secondary !== primary ? [primary, secondary] : [primary]) : undefined;
     if (roleList) state.setPrefs({ roles: [primary, secondary] });
@@ -92,7 +105,7 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
     <Screen title={cv.t('play.title', 'Play')}
       stage={<PlayArt modeId={modeId} queue={queue} note={slot?.note} />}
       foot={reason ? <span class={`reason t-body-s ${lockLeft > 0 ? 'reason--warn' : ''}`}>{reason}</span> : null}
-      cta={<Button variant="chalk" size="l" wedge disabled={!!reason} reason={reason ?? undefined} onPress={find} cue="confirm">{cv.t('btn.find_match', 'Find match')}</Button>}>
+      cta={<Button variant="chalk" size="l" wedge disabled={!!reason} reason={reason ?? undefined} onPress={find} cue="confirm">{friends ? (room ? cv.t('btn.open_room', 'Open your room') : cv.t('btn.start_room', 'Start room')) : cv.t('btn.find_match', 'Find match')}</Button>}>
       <div class="play">
         <div class="play__dialwrap stg">
           <ModeDial value={modeId} onChange={chooseMode} />
@@ -107,6 +120,8 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
         <Section title={cv.t('play.choose_queue', 'Choose how to play')}>
           <div class="qcards" role="radiogroup" aria-label={cv.t('play.choose_queue', 'Choose how to play')} data-arrownav="grid">
             {queues.map((q) => <QueueCard q={q} selected={q.id === qId} onPick={() => chooseQueue(q)} />)}
+            {/* a build with no game server configured (VALE_CONFIG.server null) has nowhere to hold a room: no card */}
+            {state.online.value ? <FriendsCard selected={friends} code={room?.code} onPick={() => chooseQueue({ id: FRIENDS })} /> : null}
           </div>
           {anySide.length ? (
             <div class="play__links">
@@ -119,7 +134,13 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
           ) : null}
         </Section>
 
-        {queue && pick === 'role_preset' ? (
+        {friends ? (
+          <Section title={cv.t('froom.title', 'Play with friends')} hint={room ? cv.t('froom.in_room', 'You are in room {code}.', { code: room.code }) : cv.t('froom.play_hint', 'Start a room and share its code, or type a friend\u2019s code to join them.')}>
+            {room ? (
+              <Button variant="secondary" size="m" iconAfter="arrow" onPress={() => router.go('room', {}, { transition: 'forward' })}>{cv.t('btn.open_room', 'Open your room')}</Button>
+            ) : <JoinCode />}
+          </Section>
+        ) : queue && pick === 'role_preset' ? (
           <PresetPanel queue={queue} value={preset} onChange={setPreset} roles={roles.map((r) => r.id)} />
         ) : queue && roles.length && !locked(queue) ? (
           <Section title={cv.t('play.roles.title', 'Your roles')} hint={cv.t('play.roles.hint', 'Pick the roles you want. You may be given either.')}>
@@ -128,7 +149,7 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
           </Section>
         ) : null}
 
-        {queue ? (
+        {queue && !friends ? (
           <Section title={cv.t('play.party', 'Party')} hint={queue.partyMax > 1 ? cv.t('play.party_hint', 'Fill open seats with teammates, or play with the seats open.') : undefined}>
             <div class="party">
               {party.map((m) => (
@@ -201,6 +222,26 @@ function QueueCard(p: { q: QueueDefT; selected: boolean; onPick: () => void }): 
       <span class="t-body-s qcard__desc">{q.desc}</span>
       {lockText ? <span class="qcard__lock t-caption"><Icon name="lock" size={14} />{lockText}</span>
         : <span class={`t-caption ${cur && q.grants.win > 0 ? 'qcard__reward' : 'qcard__lines'}`}>{cur && q.grants.win > 0 ? <Currency id={cur.id} amount={q.grants.win} size="s" tick={false} /> : null}{reward}</span>}
+    </button>
+  );
+}
+
+/** the Play with friends card: a private room by code, beside the queues (it spans the row) */
+function FriendsCard(p: { selected: boolean; code?: string; onPick: () => void }): JSX.Element {
+  const { cv, sound } = useApp();
+  const desc = cv.t('froom.card_desc', 'Start a private room and share its code, or join a friend\u2019s room. Play on one team or against each other.');
+  return (
+    <button type="button" role="radio" aria-checked={p.selected} data-nav="" data-queue="friends"
+      class={`qcard qcard--friends plate ${p.selected ? 'is-selected plate--lit' : ''}`}
+      aria-label={`${cv.t('froom.title', 'Play with friends')}. ${desc}`}
+      onPointerEnter={() => sound.play('hover')} onClick={p.onPick}>
+      {p.selected ? <span class="tick" aria-hidden="true" /> : null}
+      <span class="qcard__head">
+        <span class="t-h2 qcard__name">{cv.t('froom.title', 'Play with friends')}</span>
+        <span class="chip chip--line">{p.code ? cv.t('froom.card_code', 'Room {code}', { code: p.code }) : cv.t('froom.card_chip', 'Room code')}</span>
+      </span>
+      <span class="t-body-s qcard__desc">{desc}</span>
+      <span class="t-caption qcard__lines">{cv.t('froom.card_line', 'Start room · Join friend')}</span>
     </button>
   );
 }

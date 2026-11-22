@@ -1,0 +1,31 @@
+# vale-net: the VALE game server (games/vale/server/hub_core.ts) on Cloudflare. Workers Free + one SQLite-backed
+# Durable Object. NOT DEPLOYED until the owner gives the release go-ahead (see README.md "Going live").
+name = "vale-net"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "ValeHub"
+
+# SQLite-backed classes only (the key-value backend is Workers Paid only).
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ValeHub"]
+
+# the game CDN's bucket (isimcha85): the hub reads vale/catalog/schema-1/<version>/catalog.json for the version a
+# player's game is running, so a content release needs no redeploy here
+[[r2_buckets]]
+binding = "GAMES"
+bucket_name = "forgeflow-games"
+
+[vars]
+ALLOWED_ORIGINS = "https://forgeflow-games-cdn.isimcha85.workers.dev,https://forgeflowgames.com,https://www.forgeflowgames.com"
+CATALOG_PREFIX = "vale/catalog/schema-1/"
+# incoming socket messages per UTC day before new players are turned away (their games then play offline against the
+# usual opponents). Free plan: 100k Durable Object requests a day, shared with dyefield-net; WebSocket messages
+# count 20:1, so 1,200,000 messages ≈ 60,000 requests.
+DAILY_MSG_CAP = "1200000"
+# open sockets per IP
+PER_IP = "6"

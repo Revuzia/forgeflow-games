@@ -12,8 +12,7 @@ import type { DraftAction, QueueRequest } from '../src/contracts/session.ts';
 import type { Command, MatchResult, MatchSetup, PlayerId, SimEvent } from '../src/contracts/sim.ts';
 import { TICK_DT } from '../src/contracts/sim.ts';
 import { BOTS_LINK } from '../src/session/bots_link.ts';
-import { bansForRoster, DraftHost, type DraftSeatInit } from '../src/session/draft.ts';
-import { DRAFT_DEFAULTS } from '../src/session/local_session.ts';
+import { bansForRoster, DRAFT_DEFAULTS, DraftHost, type DraftSeatInit } from '../src/session/draft.ts';
 import { difficultyForRating, type Difficulty } from '../src/session/ratings.ts';
 import {
   botSkins, buildMatchSetup, draftRoles, effectiveRules, fighterPool, findMode, isFfaMode, modeLayout, pickProtocol, sanitizeLoadout,
@@ -40,6 +39,8 @@ export interface RoomOptions {
   /** ticks per real second (30 = real time; tests run faster) */
   speed?: number;
   readySeconds?: number;
+  /** a friend room's match: everyone already said yes (no ready check); `together` seats them on one team */
+  friends?: { together: boolean };
   onClose(room: Room, requeue: Ticket[]): void;
   log?(msg: string): void;
 }
@@ -79,7 +80,7 @@ export class Room {
     this.mode = mode;
     this.rng = stream(o.seed, `room:${id}`);
     this.readyLeft = o.readySeconds ?? READY_SECONDS;
-    this.humans = o.tickets.map((t) => ({ t, player: -1, accepted: false, ready: false, left: false, token: this.rng.nextU32().toString(36) + this.rng.nextU32().toString(36), dropped: false }));
+    this.humans = o.tickets.map((t) => ({ t, player: -1, accepted: !!o.friends, ready: false, left: false, token: this.rng.nextU32().toString(36) + this.rng.nextU32().toString(36), dropped: false }));
     for (const h of this.humans) h.t.peer.room = this;
     this.broadcastReady();
     this.every(250, () => this.tickReady(0.25 * Math.max(1, o.speed ?? 1)));
@@ -150,7 +151,7 @@ export class Room {
     const ffa = isFfaMode(mode);
     // seats: co-op puts every human on one team; versus queues alternate teams; FFA takes seats in order
     const teams = [...new Set(lay.map((s) => s.team))];
-    const coop = q.bots.fill === 'opponents_only' && !ffa;
+    const coop = (q.bots.fill === 'opponents_only' || !!this.o.friends?.together) && !ffa;
     const seatOrder: PlayerId[] = [];
     if (coop || ffa) for (const s of lay) seatOrder.push(s.player);
     else {

@@ -45,7 +45,7 @@ import { LocalIdentityProvider } from './identity.ts';
 import { LocalMatchHost, forfeitResult, MAX_TIME_SCALE, type BotFactory } from './match_host.ts';
 import { LockstepMatchHost } from './lockstep_host.ts';
 import type { OnlineLink } from './online_link.ts';
-import type { NetProfile, ServerMsg } from '../contracts/net.ts';
+import type { FriendRoomState, NetProfile, ServerMsg } from '../contracts/net.ts';
 import { Matchmaker, type QueueEvent } from './matchmaker.ts';
 import {
   HISTORY_CAP, LocalProfileStore, MemoryProfileStore, isRawStore, migrateProfile, newProfile, reconcileProfile, type ProfileContext,
@@ -61,7 +61,8 @@ import { patchSettings } from './settings.ts';
 
 export const DRAFT_TICK_MS = 100;
 export const MAX_PARTY_BOTS = 4;
-export const DRAFT_DEFAULTS = { ban: 20, pick: 25, bench: 20, finalize: 8, presetFinalize: 5 } as const;
+export { DRAFT_DEFAULTS } from './draft.ts';
+import { DRAFT_DEFAULTS } from './draft.ts';
 
 export type SessionPhase = 'idle' | 'searching' | 'found' | 'accepted' | 'draft' | 'loading' | 'match' | 'postgame';
 
@@ -140,6 +141,12 @@ export class LocalSession implements Session {
   private netDraft: DraftState | null = null;
   /** your seat in the online match (resume after a dropped connection) */
   private netSeat: { room: string; token: string } | null = null;
+  /** your friend room on the server (null: none) */
+  private froom: FriendRoomState | null = null;
+  /** the link's last status (onNetStatus acts on changes) */
+  private netStatus = '';
+  /** the role preference the friend room's match is queued with */
+  private froomRoles: [string, string?] | undefined;
   private persistOk = true;
   /** matchReady() arrived before the sim was built (a listener on the first 'loading' event) */
   private readyEarly = false;
@@ -618,7 +625,8 @@ export class LocalSession implements Session {
 
   // ── online (CONTRACT §7.2) ──────────────────────────────────────────────────────────────────
   /** queue on the server: it searches, runs the ready check and the draft, then streams the match */
-  private netQueue(req: QueueRequest, queue: QueueDefT): void {
+  /** what the server needs to seat you in this queue */
+  private netProfile(queue: QueueDefT): NetProfile {
     const skins: Record<string, string[]> = {};
     const loadouts: NetProfile['loadouts'] = {};
     const rules = effectiveRules(findMode(this.catalog, queue.mode)!, queue);
@@ -626,7 +634,11 @@ export class LocalSession implements Session {
       skins[f.id] = yourSkins(this.catalog, this.p, f.id);
       loadouts[f.id] = sanitizeLoadout(this.catalog, rules, this.p.loadouts[f.id]);
     }
-    const profile: NetProfile = { name: this.identity.displayName, skins, loadouts, rating: this.yourRating(queue) };
+    return { name: this.identity.displayName, skins, loadouts, rating: this.yourRating(queue) };
+  }
+
+  private netQueue(req: QueueRequest, queue: QueueDefT): void {
+    const profile = this.netProfile(queue);
     if (!this.opts.online?.send({ t: 'queue', req, profile })) { this.error('online: the server is not reachable'); return; }
     this.onlineFlow = true;
     this.netDraft = null;
@@ -661,8 +673,54 @@ export class LocalSession implements Session {
     if (action.a === 'loadout' && me?.locked) { this.p.loadouts[me.locked] = { spells: [...action.loadout.spells], boons: [...action.loadout.boons] }; this.persist(); }
   }
 
+  // ── friend rooms (net.ts FRIEND ROOMS) ──────────────────────────────────────────────────────────
+  /** your friend room as the server last said (null: none) */
+  friendRoom(): FriendRoomState | null { return this.froom; }
+  /** make a room (you host it): its code comes back in friendRoom() */
+  createFriendRoom(queue: string, together: boolean, roles?: [string, string?]): void {
+    this.froomRoles = roles;
+    if (!this.opts.online?.send({ t: 'froom_create', queue, together })) this.error('froom: offline');
+  }
+  /** join a friend's room by its code */
+  joinFriendRoom(code: string, roles?: [string, string?]): void {
+    this.froomRoles = roles;
+    if (!this.opts.online?.send({ t: 'froom_join', code })) this.error('froom: offline');
+  }
+  /** the host changes the queue or the side */
+  setFriendRoom(patch: { queue?: string; together?: boolean }): void { if (!this.opts.online?.send({ t: 'froom_set', ...patch })) this.error('froom: offline'); }
+  /** the host starts the match for everyone in the room */
+  startFriendRoom(): void {
+    if (this._phase !== 'idle' && this._phase !== 'postgame') { this.error(`froom: busy`); return; }
+    if (!this.opts.online?.send({ t: 'froom_start' })) this.error('froom: offline');
+  }
+  leaveFriendRoom(): void { this.opts.online?.send({ t: 'froom_leave' }); this.froom = null; }
+
+  /** the host started: queue into the room's match with your ticket (the server seats everyone, no ready check) */
+  private onFriendGo(queueId: string): void {
+    const queue = findQueue(this.catalog, queueId);
+    // a public search the server already dropped for this start gives way; anything further along keeps its match
+    const free = this._phase === 'idle' || this._phase === 'postgame' || (this._phase === 'searching' && this.onlineFlow);
+    if (!queue || !free) return;
+    const mode = findMode(this.catalog, queue.mode);
+    const roles = mode?.roles && this.froomRoles?.[0] ? this.froomRoles : undefined;
+    const req: QueueRequest = { queue: queue.id, ...(roles ? { roles } : {}) };
+    if (!this.opts.online?.send({ t: 'froom_ticket', req, profile: this.netProfile(queue) })) return;
+    this.lastReq = structuredClone(req);
+    this.teardownMatch();
+    this.onlineFlow = true;
+    this.netDraft = null;
+    this.pending = null;
+    this._phase = 'accepted';
+    this.emit({ type: 'queue', state: 'accepted', queue: queue.id });
+  }
+
   /** the link dropped or came back: a live match resumes its seat; a search or draft is lost */
   private onNetStatus(status: string): void {
+    // the link re-reports its status on every 'stats' message: act on changes only (a resume is for a new socket)
+    const was = this.netStatus;
+    this.netStatus = status;
+    if (status === was) return;
+    if (status === 'offline' || status === 'refused') this.froom = null;   // the server forgets a closed socket's room
     if (!this.onlineFlow) return;
     if (status === 'online' && this.host instanceof LockstepMatchHost && !this.host.ended && this.netSeat) {
       this.opts.online?.send({ t: 'resume', room: this.netSeat.room, token: this.netSeat.token, from: this.host.lastTick + 1 });
@@ -677,6 +735,9 @@ export class LocalSession implements Session {
   }
 
   private onNet(m: ServerMsg): void {
+    if (m.t === 'froom') { this.froom = m.room; return; }
+    if (m.t === 'froom_go') { this.onFriendGo(m.queue); return; }
+    if (m.t === 'froom_error') { this.error(`froom: ${m.reason}`); return; }
     if (!this.onlineFlow) return;
     switch (m.t) {
       case 'queue': {

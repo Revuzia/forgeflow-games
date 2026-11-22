@@ -810,3 +810,18 @@
 .hrow__open { display: inline-flex; align-items: center; gap: calc(0.75 * var(--u)); color: inherit; }
 .hrow__open svg { opacity: 0.6; }
 .hrow.is-kept:hover .hrow__open svg, .hrow__open:focus-visible svg { opacity: 1; }
+
+/* ── Play with friends (room.tsx): the card spans the queue row; the room screen ──────────────────── */
+.qcard--friends { grid-column: 1 / -1; }
+.joincode { display: flex; align-items: center; gap: var(--u); flex-wrap: wrap; }
+.joincode__input { width: calc(7 * 1.2em); letter-spacing: 0.3em; text-transform: uppercase; text-align: center; }
+.froom { display: flex; flex-direction: column; gap: calc(2 * var(--u)); max-width: 760px; }
+.froom__code { display: flex; flex-direction: column; gap: var(--u); align-items: flex-start; }
+.froom__codetext { letter-spacing: 0.25em; user-select: all; }
+.froom__share { gap: var(--u); flex-wrap: wrap; }
+.froom__members { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--u); }
+.froom__m { display: flex; align-items: center; gap: var(--u); padding: var(--u) calc(1.5 * var(--u)); }
+.froom__m.is-you { box-shadow: inset 0 0 0 1px var(--chalk); }
+.froom__m--open { outline: 1px dashed var(--line-2); outline-offset: -1px; border-radius: inherit; }
+.froom__side { gap: var(--u); align-items: center; flex-wrap: wrap; margin-top: var(--u); }
+.froom__desc { margin: var(--u) 0 0; }

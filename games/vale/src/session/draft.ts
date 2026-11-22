@@ -40,6 +40,9 @@ import type { LoadoutChoice, PlayerId } from '../contracts/sim.ts';
 import type { Rng } from '../sim/rng.ts';
 import type { DraftBrain } from './draft_brain.ts';
 
+/** draft clocks (seconds) when a queue gives none (the server's rooms use the same) */
+export const DRAFT_DEFAULTS = { ban: 20, pick: 25, bench: 20, finalize: 8, presetFinalize: 5 } as const;
+
 export type PickProtocol = 'draft' | 'blind' | 'role_preset' | 'random_bench' | 'ffa_pick';
 export const MAX_BOT_ACTS = 8;
 /** client F12: bots lock 3–8 s into a pick phase/turn; finalize ends READY_GRACE s after everyone is ready */
