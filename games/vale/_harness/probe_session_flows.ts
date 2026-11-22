@@ -1,4 +1,4 @@
-// probe (lane SESSION): a full LocalSession flow for every queue kind — queue → search (2–6 s,
+// probe (lane SESSION): a full LocalSession flow for every queue kind — queue → search (8–15 s,
 // estimate shown) → ready check → accept → draft (your seat by a test driver or the bot brain) →
 // loading → match (pumped at time scale 16, every seat bot-driven) → post-game → grants/history:
 // standard draft, quick role_preset, ranked (rating moves, provisional → tier), coop, bridge
@@ -76,8 +76,11 @@ section('standard draft: the whole flow, your seat by a test driver', () => {
   const searching = h.events.filter((e): e is Extract<SessionEvent, { type: 'queue' }> => e.type === 'queue' && e.state === 'searching');
   const found = h.events.find((e) => e.type === 'queue' && e.state === 'found') as Extract<SessionEvent, { type: 'queue' }>;
   const foundAt = searching[searching.length - 1].elapsed ?? 0;
-  check('search shows elapsed + an estimate in 2–6 s, and pops within 2–6 s', searching.length >= 4 && searching.every((e) => (e.estimate ?? 0) >= 2 && (e.estimate ?? 0) <= 6)
-    && foundAt >= 1.75 && foundAt <= 6, [foundAt, searching[0].estimate]);
+  check('search shows elapsed + an estimate of 15 s, and pops within 8–15 s (the owner: never a 3-second match)', searching.length >= 4 && searching.every((e) => e.estimate === 15)
+    && foundAt >= 7.75 && foundAt <= 15, [foundAt, searching[0].estimate]);
+  const joined = searching.map((e) => e.joined ?? 0);
+  check('players found climbs one at a time toward the full match while searching', joined[0] >= 1 && joined.every((n, i) => i === 0 || n >= joined[i - 1])
+    && joined[joined.length - 1] >= 8 && joined[joined.length - 1] <= 10 && new Set(joined).size >= 5 && searching.every((e) => e.total === 10), joined.filter((n, i) => n !== joined[i - 1]));
   check('ready check: 10 s window, bots accept, total = 10 seats', found.readyMax === 10 && found.readyTimer === 10 && found.total === 10
     && h.events.some((e) => e.type === 'queue' && e.state === 'accepted' && e.accepted === 10), found);
   const d0 = r.drafts[0];
