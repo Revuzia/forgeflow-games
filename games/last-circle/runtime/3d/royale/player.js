@@ -4289,9 +4289,12 @@ function captureGrip(root, bones) {
   // default (no finger bones): Mixamo's hand axes, +Y along the hand, +X out of the left palm
   const out = { fingerL: new THREE.Vector3(0, 1, 0), palmL: new THREE.Vector3(1, 0, 0), joints: [], fingers: 0,
                 handClip: bones.lHand.quaternion.clone(), handLast: null };
-  const mid = by.LeftHandMiddle1, idx = by.LeftHandIndex1, pk = by.LeftHandPinky1 || by.LeftHandRing1;
-  if (mid && idx && pk) {
-    mid.getWorldPosition(M1); idx.getWorldPosition(I1); pk.getWorldPosition(P1);
+  // (W10 anim fix) a rig with only the index + thumb chains (the athlete) curls those: before, it took the palm-up turn with no
+  // curl at all, a flat open hand under the guard. The finger line runs along the index, the hand's width from the thumb side.
+  const idx = by.LeftHandIndex1, mid = by.LeftHandMiddle1 || idx, th = by.LeftHandThumb1, pk = by.LeftHandPinky1 || by.LeftHandRing1;
+  if (mid && idx && (pk || th)) {
+    mid.getWorldPosition(M1); idx.getWorldPosition(I1);
+    if (pk) pk.getWorldPosition(P1); else { th.getWorldPosition(I1); idx.getWorldPosition(P1); }   // thumb - index points the way index - pinky does
     const f = M1.clone().sub(H).normalize();
     // palm normal = finger direction x (index - pinky) for a LEFT hand; the rest pose holds the palm DOWN, so a normal that
     // came out pointing up is flipped (the sign check is the pose, not a convention)
