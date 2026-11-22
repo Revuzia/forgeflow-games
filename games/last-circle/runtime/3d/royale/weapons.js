@@ -290,7 +290,9 @@ function measureProto(g, id) {
   let guard;
   if (pistol) {
     // two-hand pistol: the support hand cups the firing hand under / left of the grip
-    guard = new THREE.Vector3(0.035, -0.085, -0.02);
+    // (W10 anim fix 2) the support wrist just under / left of the firing wrist (hands touching, wrist gap ~5 cm, a little behind so the support arm reaches it from a squared chest; was 0.035,
+    // -0.085, -0.02: 8.5-9 cm apart, the support arm at full stretch in the isosceles aim)
+    guard = new THREE.Vector3(0.03, -0.035, -0.03);
   } else {
     const zg = Math.min(GUARD_ZMAX, Math.max(GUARD_ZMIN, (GUARD_F[id] || 0.5) * zMax));
     // the underside of the handguard at that station (the narrow central band, so a side rail or bipod leg does not count)

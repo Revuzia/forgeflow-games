@@ -3105,8 +3105,11 @@ function addLeanTwist(b, dx, dy) {
   // frozen clip first left a bone un-keyed, which threw the optimized caller away inside tierprof's measured window
   const lx = ud._ltX, ly = ud._ltY, lz = ud._ltZ, ldx = ud._ltDX, ldy = ud._ltDY;
   const sx = r.x === lx, sy = r.y === ly, sz = r.z === lz;
-  const same = lx !== undefined && sx && sy && sz;
-  r.x = (r.x - (same ? ldx : 0)) + dx; r.y = (r.y - (same ? ldy : 0)) + dy;
+  // (W10 anim fix 2) per axis: the pose layer's aim chain (applySpineAim) SETS rotation.x on these bones after this call whenever a
+  // pistol pose runs, so the all-axes test read every frame as re-keyed and the twist (now carrying the pistol's chest squaring,
+  // ~27 deg a bone) stacked up on a frozen clip (a pistol crouched still). The twist is taken back when y and z are untouched.
+  const sameX = lx !== undefined && sx && sz, sameY = lx !== undefined && sy && sz;
+  r.x = (r.x - (sameX ? ldx : 0)) + dx; r.y = (r.y - (sameY ? ldy : 0)) + dy;
   ud._ltDX = dx; ud._ltDY = dy; ud._ltX = r.x; ud._ltY = r.y; ud._ltZ = r.z;
 }
 const TURN_START = 0.9, TURN_START_COMBAT = 0.3, TURN_MAX = 1.9, TURN_RATE = 1.35, TURN_RATE_COMBAT = 2.0;
@@ -3290,6 +3293,11 @@ function animate(W, a, dt) {
       else if (armed && a.weapon.state === "reloading" && !(isPistol(a) && a._ikNear && deskHi(W))) mode = "reload";
       // (W10 R1B, combat finding 6) a PISTOL is carried in the two-hand chest hold (gunReady + the support hand cupping the
       // grip) in and out of combat: the hip carry pointed it at the ground and fired it from the waist
+      // (W10 anim fix 2) a PISTOL aimed down the sights takes the isosceles two-hand aim (arms forward from a squared chest); on
+      // the move out of combat it is carried one-handed and low, the support arm swinging free (the commercial pistol run sets,
+      // owner 2026-11-22 "weapon holding looks bad"); still or firing it keeps the two-hand chest ready below
+      else if (armed && isPistol(a) && a.input.ads && a.onGround) mode = "pistolAim";
+      else if (armed && isPistol(a) && !combat && gs > PISTOL_LOW_GS && a.onGround && !a.mantleT) mode = "pistolLow";
       else if (armed && !combat && !isPistol(a)) mode = "lowReady";
       else if (armed) mode = "gunReady";
       else mode = "relax";
@@ -3313,6 +3321,12 @@ function animate(W, a, dt) {
       // aiming in that twisted frame): the rifle clips carry their own chest, and the 0.6-rad carry clamp left the barrel 77 deg
       // off it on a sideways run (rigcheck (c))
       const pistolRifle = !useMixamoGun && armed && pistolLegs(a);
+      // (W10 anim fix 2) ...and its chest SQUARED onto the aim: the rifle leg clips carry their pelvis bladed ~35-55 deg off the
+      // body (the rifle stance), so the pistol arms reached across the vest from a chest 54 deg off the aim (owner: "weapon
+      // holding looks bad"). The blade is read from the clip's own hip line (the layers never write the hips) and added to the
+      // spine twist below, eased so the run's pelvis swing still shows.
+      if (pistolRifle && layers) pistolBlade(a, a._hasBodyYaw ? a._bodyYaw - Math.PI : a.yaw, dt);
+      else if (!pistolRifle) a._pBlade = 0;
       const pistolTwist = !useMixamoGun && !pistolRifle && armed && isPistol(a) && (combat || a._turnT >= 0) && a.onGround && !a.gliding &&
         !a.swimming && !a.emoting && a.alive && !a.downed && !a.mantleT;
       if (!useMixamoGun && !pistolTwist && !pistolRifle) twist = K.clamp(aimDelta, -0.6, 0.6);
@@ -3326,9 +3340,10 @@ function animate(W, a, dt) {
         // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
         const lean = K.clamp(a.pitch, -1.1, 1.1) * -0.30;
         // (P23-fix) non-compounding on a frozen clip (addLeanTwist): one lean + twist on the clip pose, every frame
-        if (a.armBones.spine1) addLeanTwist(a.armBones.spine1, lean * 0.5, twist * 0.5);
-        if (a.armBones.spine2) addLeanTwist(a.armBones.spine2, lean * 0.5, twist * 0.5);
-        else if (a.armBones.spine && !a.armBones.spine1) addLeanTwist(a.armBones.spine, lean, twist);
+        const tw = twist + (pistolRifle ? a._pBlade || 0 : 0);
+        if (a.armBones.spine1) addLeanTwist(a.armBones.spine1, lean * 0.5, tw * 0.5);
+        if (a.armBones.spine2) addLeanTwist(a.armBones.spine2, lean * 0.5, tw * 0.5);
+        else if (a.armBones.spine && !a.armBones.spine1) addLeanTwist(a.armBones.spine, lean, tw);
       }
       // (W10 R1B) the hit jolt on the base Spine (additive, any speed), only on a frame the mixer re-keyed the bones
       if (layers && a.armBones && a.armBones.spine1 && a._joltT != null) joltLayer(W, a);
@@ -3359,10 +3374,21 @@ function animate(W, a, dt) {
       const wantW = mode ? 1 : 0;
       a._armW = (!a._hasArmW ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));
       a._hasArmW = true;
+      // (W10 anim fix 2) a mode change cross-fades over ARM_XFADE_S (smoothstep) instead of snapping the arms and the muzzle
+      if (mode && a._armMode && mode !== a._armMode && a._armW > 0.02) { a._armFrom = a._armMode; a._armXT = W.t; }
       if (mode) a._armMode = mode;
+      const xu = a._armFrom ? K.clamp((W.t - a._armXT) / ARM_XFADE_S, 0, 1) : 1;
+      if (xu >= 1) a._armFrom = null;
+      const fromK = a._armFrom ? 1 - xu * xu * (3 - 2 * xu) : 0;
+      // the muzzle-down share of the carry (barrelWeld): the low modes, cross-faded with the arms
+      a._lowK = (LOW_MODES[a._armMode] ? 1 - fromK : 0) + (a._armFrom && LOW_MODES[a._armFrom] ? fromK : 0);
+      const swing = a._armMode === "pistolLow" || a._armFrom === "pistolLow" ? armSwing(a) : 0;
       // input.pitch > 0 = looking UP (verified: mouse-up → +pitch; aimDir/camera use sin(pitch));
       // tiltDir(+) raises the muzzle, so pass pitch un-negated or the gun tilts the wrong way
-      if (layers && a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, a.pitch, a._armYawOff || 0);
+      // (W10 anim fix 2) a pistol's two-hand ready (gunReady) holds the gun on the chest's centre line (POSES.pistolReady): the rifle
+      // table put the hand in front of the right shoulder, the support arm reaching across the chest at full stretch
+      const pist = isPistol(a), pn = (m) => (pist && m === "gunReady" ? "pistolReady" : m);
+      if (layers && a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, pn(a._armMode), a._armW, a.pitch, a._armYawOff || 0, a._armFrom && pn(a._armFrom), fromK, swing);
       // ── BARREL AIM ────────────────────────────────────────────────────────
       // HAND_AIM_ROT is a STATIC local rotation grid-searched against ONE frame
       // of the idle clip. But applyArmPose aims the arm CHAIN (rArm->rFore,
@@ -3381,7 +3407,8 @@ function animate(W, a, dt) {
       // Only while a gun is actually up: emotes, death, swim and the glide poses
       // must keep the clip's own arms. Mixamo pistol/rifle clips also need the
       // socket aimed — arms come from the clip, barrel from this weld.
-      const poseAim = (a._armMode === "gunReady" || a._armMode === "reload" || a._armMode === "lowReady") && a._armW > 0.5;
+      const poseAim = (a._armMode === "gunReady" || a._armMode === "reload" || a._armMode === "lowReady" || a._armMode === "pistolAim" ||
+        a._armMode === "pistolLow") && a._armW > 0.5;
       const mixamoAim = useMixamoGun && armed && !a.gliding && !a.swimming && a.onGround;
       // The weld is NOT additive (it sets the holder's world orientation from the
       // hand bone outright), so unlike the layers above it also runs OFF screen on
@@ -3426,18 +3453,24 @@ function animate(W, a, dt) {
       // while the reload / throw owns the left arm. Phones keep the W9 hands (no extra bone work on touch).
       const ikAny = !!(layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting && armed && a.alive && !a.downed &&
         !a.gliding && !a.swimming && !a._throwOv && !a._ovReload && a.weapon.state !== "reloading" && a._ikNear && deskHi(W) &&
-        ((mixamoAim && weldOn) || ((a._armMode === "gunReady" || a._armMode === "lowReady") && a._armW > 0.5)));
+        ((mixamoAim && weldOn) || ((a._armMode === "gunReady" || a._armMode === "lowReady" || a._armMode === "pistolAim" ||
+          (a._armMode === "pistolLow" && a._ikW > 0.02)) && a._armW > 0.5)));
       // (W10 anim fix) a SPRINT clip pumps the support arm (the W9 tip's look): the hand eases off the gun over the sprint and back on
       // when it ends, instead of the arm locked out straight ahead holding the guard (owner 2026-11-22 "running looks worse")
       const sprintArm = mixamoAim && SPRINT_CLIPS.has(a.anim);
-      const ikWant = ikAny && !sprintArm ? 1 : 0;
-      a._ikW = a._ikW == null ? ikWant : a._ikW + (ikWant - a._ikW) * Math.min(1, dt * 12);
+      // (W10 anim fix 2) the pistol's one-hand carry lets go of the gun (a Mixamo long gun leaves a._armMode stale: not that)
+      const pLow = !mixamoAim && a._armMode === "pistolLow";
+      const ikWant = ikAny && !sprintArm && !pLow ? 1 : 0;
+      // (W10 anim fix 2) the hand moves onto / off the gun over IK_RAMP_S, eased (smoothstep): the exponential dt*12 ease jumped the
+      // support elbow 13 deg in one frame as a pistol came up from its one-hand carry
+      a._ikW = a._ikW == null ? ikWant : a._ikW + K.clamp(ikWant - a._ikW, -dt / IK_RAMP_S, dt / IK_RAMP_S);
+      const ikE = a._ikW * a._ikW * (3 - 2 * a._ikW);
       const ikOn = ikAny && !(sprintArm && a._ikW < 0.02);
-      if (ikOn) supportHandIK(a, mixamoAim ? (sprintArm ? a._ikW : Math.max(a._ikW, 0.02)) : K.clamp((a._armW - 0.5) * 2, 0, 1) * a._ikW);
+      if (ikOn) supportHandIK(a, mixamoAim ? (sprintArm ? ikE : Math.max(ikE, 0.02)) : K.clamp((a._armW - 0.5) * 2, 0, 1) * ikE);
       else if (a._gripPosed) releaseGrip(a);
       // (W10 R1B) desktop Low and touch: the W9 tip's call, unchanged (gunReady only, no palm / fingers, its own grip cache)
       if (!deskHi(W) && layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting &&
-          a._armMode === "gunReady" && a._armW > 0.5) supportHandIK9(a);
+          (a._armMode === "gunReady" || a._armMode === "pistolAim") && a._armW > 0.5) supportHandIK9(a);
       // (W10 R3B, combat finding 2) RELOAD at chest height: the right hand held where the aim pose holds it, the gun canted, the left
       // hand on the mag well / shell port / slide on the R2B reload beats (desktop medium+, near actors; Low / touch keep the clip)
       const rlOn = !!(layers && weldOn && armed && a.weapon.state === "reloading" && a._ikNear && deskHi(W) && a.armBones && a.armBones.lArm &&
@@ -3604,6 +3637,41 @@ const RUN_ON = 4.6, RUN_OFF = 4.2, SPRINT_STRAFE_ON = 5.3;
 function pistolLegs(a) {
   const C = a.clips;
   return !!(C && C.rifle_run_g && C.rifle_idle_g && isPistol(a));
+}
+// (W10 anim fix 2) arm-mode cross-fade, the pistol carry's speed gate, the low (muzzle-down) modes
+const ARM_XFADE_S = 0.2, IK_RAMP_S = 0.2, PISTOL_LOW_GS = 0.7, LOW_MODES = { lowReady: 1, pistolLow: 1 };
+const PBLADE_K = 8;    // 1/s: how fast the pistol chest squaring follows the clip's chest
+const _pbL = new THREE.Vector3(), _pbR = new THREE.Vector3();
+/** (W10 anim fix 2) a._pBlade = the yaw (rad) from the CLIP's chest (the shoulder line LeftArm - RightArm, before this frame's
+ *  twist) to the body's forward: added to the pistol spine twist it squares the chest onto the aim on the rifle leg clips. A
+ *  spine the mixer did not re-key this frame still holds last frame's twist (addLeanTwist's own test): that is taken off. */
+function pistolBlade(a, bodyFwdYaw, dt) {
+  const B = a.armBones;
+  if (!B || !B.lArm || !B.rArm || !B.spine2) { a._pBlade = 0; return; }
+  B.lArm.getWorldPosition(_pbL); B.rArm.getWorldPosition(_pbR);
+  const rx = _pbR.x - _pbL.x, rz = _pbR.z - _pbL.z;            // the character's right
+  if (rx * rx + rz * rz < 1e-6) return;
+  const u2 = B.spine2.userData, u1 = B.spine1 ? B.spine1.userData : null;
+  let held = 0;
+  if (u2._ltY !== undefined && B.spine2.rotation.y === u2._ltY) held += u2._ltDY || 0;
+  if (u1 && u1._ltY !== undefined && B.spine1.rotation.y === u1._ltY) held += u1._ltDY || 0;
+  // forward = (-sin y, -cos y) and right = (cos y, -sin y) for yaw y, so y = atan2(-right.z, right.x)
+  const chestYaw = Math.atan2(-rz, rx) - held;
+  let d = bodyFwdYaw - chestYaw;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  d = K.clamp(d, -1.2, 1.2);
+  a._pBlade = a._pBlade == null ? d : a._pBlade + (d - a._pBlade) * Math.min(1, dt * PBLADE_K);
+}
+/** (W10 anim fix 2) the free support arm of the one-hand pistol carry swings against the left leg: forward when the left foot is
+ *  behind (rad, +-0.45), read from this frame's feet so it stays in phase with whatever leg clip plays */
+function armSwing(a) {
+  const B = a.armBones;
+  if (!B || !B.lFoot || !B.rFoot) return 0;
+  B.lFoot.getWorldPosition(_pbL); B.rFoot.getWorldPosition(_pbR);
+  const fy = a._hasBodyYaw ? a._bodyYaw - Math.PI : a.yaw;
+  const s = ((_pbL.x - _pbR.x) * -Math.sin(fy) + (_pbL.z - _pbR.z) * -Math.cos(fy)) / 0.45;
+  return -0.45 * K.clamp(s, -1, 1);
 }
 /** A pistol in the hands (the procedural-arms carry). */
 function isPistol(a) {
@@ -4052,7 +4120,9 @@ function barrelWeld(a, bodyFwdYaw, twist, mixamoAim) {
   // their own chest.
   // Mixamo armed: always track pitch (clips already hold the weapon up).
   // (W10 R3B) - the swap dip: the muzzle goes down SWAP_DIP rad and back up over SWAP_S
-  const bpitch = ((!mixamoAim && a._armMode === "lowReady") ? -0.55 : a.pitch) - SWAP_DIP * a._swapK;
+  // (W10 anim fix 2) the low share is cross-faded with the arms (a._lowK), so raising the gun to the aim no longer pops the muzzle
+  const lowK = mixamoAim ? 0 : (a._lowK != null ? a._lowK : (a._armMode === "lowReady" ? 1 : 0));
+  const bpitch = a.pitch + (-0.55 - a.pitch) * lowK - SWAP_DIP * a._swapK;
   const cp = Math.cos(bpitch), sp = Math.sin(bpitch);
   // barrel follows the TWISTED CHEST, not the raw camera yaw: when the
   // body runs at an angle to the aim, welding to camera yaw pointed the
@@ -4317,6 +4387,15 @@ function captureGrip(root, bones) {
       }
     }
     out.fingers = out.joints.length;
+    // (W10 anim fix 2) index + thumb only (the athlete): the other fingers are skinned to the palm and cannot wrap, so a curled
+    // index over a flat palm read as a CLAW under the pistol (round-1 blind check, athlete idle_pistol ranked last); the pistol
+    // cup keeps those two straight (the long-gun guard still curls them)
+    out.partial = !by.LeftHandMiddle1;
+    // the support thumb chain for the pistol's thumbs-forward grip: [bone, child, its curl joint]
+    const tj = (b) => out.joints.find((J) => J.b === b);
+    out.thChain = [[by.LeftHandThumb1, by.LeftHandThumb2], [by.LeftHandThumb2, by.LeftHandThumb3]]
+      .filter(([b, c]) => b && c && tj(b)).map(([b, c]) => [b, c, tj(b)]);
+    if (!out.thChain.length) out.thChain = null;
   }
   return out;
 }
@@ -4361,13 +4440,29 @@ function gripHand(a, w) {
   _ghP.multiply(_ghQ2);                                      // local = parent^-1 * world
   lh.quaternion.copy(G.handClip).slerp(_ghP, Math.min(1, w));
   G.handLast = (G.handLast || new THREE.Quaternion()).copy(lh.quaternion);
+  const fw = G.partial && isPistol(a) ? 0 : Math.min(1, w);
   for (let i = 0; i < G.joints.length; i++) {
     const J = G.joints[i];
     if (!J.last || !J.b.quaternion.equals(J.last)) J.clip.copy(J.b.quaternion);
     _ghQ.setFromAxisAngle(J.ax, J.ang);
     _ghP.copy(J.rest).multiply(_ghQ);
-    J.b.quaternion.copy(J.clip).slerp(_ghP, Math.min(1, w));
+    J.b.quaternion.copy(J.clip).slerp(_ghP, fw);
     J.last = (J.last || new THREE.Quaternion()).copy(J.b.quaternion);
+  }
+  // (W10 anim fix 2) two-hand pistol: the support THUMB lies forward along the slide (thumbs-forward grip), not curled into the palm
+  // each thumb segment is turned onto the slide line (a little up), proximal first; J.last is re-stamped after the write so the
+  // joint keeps the clip value it captured (absolute each frame, no compounding)
+  if (isPistol(a) && G.thChain) {
+    _ghF.copy(_ghB).addScaledVector(_ghU, 0.15).normalize();
+    for (const [b, c, J] of G.thChain) {
+      b.getWorldPosition(_ghS); c.getWorldPosition(_ghPl); _ghPl.sub(_ghS);
+      if (_ghPl.lengthSq() < 1e-10) continue;
+      _ghQ.setFromUnitVectors(_ghPl.normalize(), _ghF);            // world-space correction
+      b.getWorldQuaternion(_ghP); _ghQ.multiply(_ghP);
+      b.parent.getWorldQuaternion(_ghQ2).invert(); _ghQ2.multiply(_ghQ);
+      b.quaternion.slerp(_ghQ2, Math.min(1, w));
+      J.last.copy(b.quaternion);
+    }
   }
   a._gripPosed = true;
 }

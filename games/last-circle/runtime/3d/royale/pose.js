@@ -133,7 +133,25 @@ export const POSES = {
          [-0.14, -0.97, 0.10], [-0.12, -0.86, -0.34], [0.14, -0.97, 0.10], [0.12, -0.86, -0.34]],
   // reload: muzzle dips, left hand works at the receiver
   reload: [[-0.2, -0.7, 0.6], [-0.05, -0.25, 0.95], [0.28, -0.75, 0.5], [-0.3, -0.15, 0.9]],
+  // (W10 anim fix 2) two-hand pistol AIM, modern isosceles: both arms run forward and in from square shoulders to the gun on
+  // the centre line, near-straight (elbow interior ~165 deg), the support hand cupping the grip (supportHandIK)
+  pistolAim: [[0.40, -0.40, 0.82], [0.30, -0.25, 0.92], [-0.30, -0.22, 0.93], [-0.12, -0.04, 0.99]],
+  // (W10 anim fix 2) two-hand pistol READY (still / firing from the hip): the gun on the chest's centre line ~0.3 m out, elbows bent
+  // (compressed ready); gunReady's rifle table held it in front of the right shoulder
+  pistolReady: [[-0.05, -0.95, 0.30], [0.55, 0.05, 0.83], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
+  // (W10 anim fix 2) one-hand pistol CARRY on the move, not aiming (the commercial pistol run sets): the firing hand low by the
+  // hip, muzzle down (barrelWeld); the support arm free, swinging with the stride (rows 2-3 rebuilt from `swing`, see armDirs)
+  pistolLow: [[-0.14, -0.97, 0.2], [-0.04, -0.62, 0.78], [0.16, -0.99, 0], [0.1, -0.26, 0.96]],
 };
+// the modes whose arms track the aim pitch
+const PITCHED = { gunReady: 1, reload: 1, pistolAim: 1, pistolReady: 1 };
+const SWING_BEND = 1.3;   // rad: the free support forearm runs this far ahead of its upper arm (elbow interior ~105 deg)
+/** the mode's four arm directions; pistolLow's support arm swings `swing` rad forward (+) / back (-) about the shoulder */
+function armDirs(mode, swing) {
+  const P = POSES[mode];
+  if (mode !== "pistolLow" || !swing) return P;
+  return [P[0], P[1], [0.16, -Math.cos(swing), Math.sin(swing)], [0.1, -Math.cos(swing + SWING_BEND), Math.sin(swing + SWING_BEND)]];
+}
 
 /**
  * Apply an arm pose over the current animation frame.
@@ -332,18 +350,29 @@ function applySpineAim(bone, off) {
   bone.rotation.x = bone.userData._aimBaseX + (off || 0);
 }
 
-export function applyArmPose(obj, bones, mode, weight, pitch, yawOff) {
+export function applyArmPose(obj, bones, mode, weight, pitch, yawOff, from, fromK, swing) {
   if (!bones || weight <= 0) return;
-  const P = POSES[mode];
+  let P = POSES[mode];
   if (!P) return;
+  P = armDirs(mode, swing);
   obj.getWorldQuaternion(_oq);
   // (P23/player) yawOff: the arms aim in a frame turned by this much about the body's up axis (a pistol's chest twisted back onto
   // the aim over a combat strafe warp / a planted turn); 0 / undefined = the body frame, as before
   if (yawOff) _oq.multiply(_qYaw.setFromAxisAngle(_yAxis, yawOff));
   // AIM PITCH (AAA upper-body layer): the gun and torso track the camera's
   // vertical aim — only for weapon poses, capped so the spine stays sane
-  const pk = (mode === "gunReady" || mode === "reload") ? Math.max(-0.9, Math.min(0.9, pitch || 0)) : 0;
-  const T = pk ? P.map((d) => tiltDir(d, pk * 0.85)) : P;
+  const pcl = Math.max(-0.9, Math.min(0.9, pitch || 0));
+  let pk = PITCHED[mode] ? pcl : 0;
+  let T = pk ? P.map((d) => tiltDir(d, pk * 0.85)) : P;
+  // (W10 anim fix 2) a mode change CROSS-FADES: the directions are interpolated from the outgoing mode's (`from`, weight fromK)
+  // instead of snapping (a pistol raised from its low carry to the aim, a rifle from low ready): fromK 0 = this mode only
+  if (from && fromK > 0 && POSES[from] && from !== mode) {
+    const pf = PITCHED[from] ? pcl : 0;
+    const F = armDirs(from, swing).map((d) => (pf ? tiltDir(d, pf * 0.85) : d));
+    T = T.map((d, i) => { const f = F[i]; if (!f) return d; const x = d[0] + (f[0] - d[0]) * fromK, y = d[1] + (f[1] - d[1]) * fromK, z = d[2] + (f[2] - d[2]) * fromK;
+      const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; });
+    pk = pk + (pf - pk) * fromK;
+  }
   // scale the spine aim-bend by the pose weight so it fades in/out with the arms
   // (the mixer re-keys Spine01/02 each frame, so the += stays bounded)
   const sw = Math.min(1, weight);
