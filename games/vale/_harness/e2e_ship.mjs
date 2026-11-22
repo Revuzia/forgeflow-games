@@ -4,7 +4,7 @@
 //
 //   plate   TECH-07  /?render=0 (shipped-build rule): the branded plate, no menu, no way to queue; /?dev=1&render=0 and
 //                    /?dev=1 on desktop unchanged; a touch-emulated phone and a 900x500 window get the plate with
-//                    "Try anyway", which starts the app; 0 console errors on every page that is meant to be quiet
+//                    "Try anyway" (touch) / "Make it full screen" (small window), which start the app; 0 console errors on every page that is meant to be quiet
 //   tabs     TECH-08  two pages of one browser profile (?tabs=1): the second shows "VALE is open in another tab", "Play here"
 //                    takes over and the first shows the moved plate; the stored profile keeps the first tab's data
 //   fault    TECH-09  ?dev=1&autopilot=1&fault=pump:<s>: a coop match is queued, 30 pump throws end it as interrupted: Home,
@@ -103,16 +103,22 @@ if (which === 'all' || which === 'plate') {
     step('try_anyway', { ok: true });
     await ctx.close();
   });
-  await journey('plate: a 900x500 window gets the small plate; Try anyway starts the app', async (step) => {
+  await journey('plate: a 900x500 window gets the small plate; Make it full screen asks for full screen and starts the app', async (step) => {
     const ctx = await newCtx({ viewport: { width: 900, height: 500 } });
     const { p, logs } = await page(ctx, '/?dev=1');
     await waitPlate(p);
     const pl = await plateOf(p);
-    expect(/too small/.test(pl.text) && pl.buttons.join() === 'Try anyway', 'small plate wrong', pl);
+    expect(/too small/.test(pl.text) && pl.buttons.join() === 'Make it full screen', 'small plate wrong', pl);
     expect(logs.length === 0, 'console not quiet', logs);
-    await p.getByRole('button', { name: 'Try anyway' }).click();
+    // count full-screen requests (a refused or absent request must not stop the start)
+    await p.evaluate(() => { const el = document.documentElement; const orig = el.requestFullscreen?.bind(el); window.__fsAsked = 0;
+      el.requestFullscreen = (...a) => { window.__fsAsked++; return orig ? orig(...a) : Promise.reject(new Error('none')); }; });
+    await p.getByRole('button', { name: 'Make it full screen' }).click();
     await p.waitForFunction(() => !!window.__vale, null, { timeout: 40000 });
-    step('try_anyway', { ok: true });
+    const asked = await p.evaluate(() => window.__fsAsked);
+    const tried = await p.evaluate(() => sessionStorage.getItem('vale.gate.try.v1'));
+    expect(asked === 1 && tried === '1', 'full screen not asked once, or the tried flag not set', { asked, tried });
+    step('fullscreen_start', { asked, tried });
     await ctx.close();
   });
 }
