@@ -3424,12 +3424,16 @@ function animate(W, a, dt) {
       // (weapons.js measureProto) on top of the clip (owner question 1: an IK correction layered on a Mixamo clip), palm
       // turned up around the guard, fingers curled on the skins that have finger bones. Near actors only (IK_NEAR_M), never
       // while the reload / throw owns the left arm. Phones keep the W9 hands (no extra bone work on touch).
-      const ikOn = !!(layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting && armed && a.alive && !a.downed &&
+      const ikAny = !!(layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting && armed && a.alive && !a.downed &&
         !a.gliding && !a.swimming && !a._throwOv && !a._ovReload && a.weapon.state !== "reloading" && a._ikNear && deskHi(W) &&
         ((mixamoAim && weldOn) || ((a._armMode === "gunReady" || a._armMode === "lowReady") && a._armW > 0.5)));
-      const ikWant = ikOn ? 1 : 0;
+      // (W10 anim fix) a SPRINT clip pumps the support arm (the W9 tip's look): the hand eases off the gun over the sprint and back on
+      // when it ends, instead of the arm locked out straight ahead holding the guard (owner 2026-11-22 "running looks worse")
+      const sprintArm = mixamoAim && SPRINT_CLIPS.has(a.anim);
+      const ikWant = ikAny && !sprintArm ? 1 : 0;
       a._ikW = a._ikW == null ? ikWant : a._ikW + (ikWant - a._ikW) * Math.min(1, dt * 12);
-      if (ikOn) supportHandIK(a, mixamoAim ? Math.max(a._ikW, 0.02) : K.clamp((a._armW - 0.5) * 2, 0, 1) * a._ikW);
+      const ikOn = ikAny && !(sprintArm && a._ikW < 0.02);
+      if (ikOn) supportHandIK(a, mixamoAim ? (sprintArm ? a._ikW : Math.max(a._ikW, 0.02)) : K.clamp((a._armW - 0.5) * 2, 0, 1) * a._ikW);
       else if (a._gripPosed) releaseGrip(a);
       // (W10 R1B) desktop Low and touch: the W9 tip's call, unchanged (gunReady only, no palm / fingers, its own grip cache)
       if (!deskHi(W) && layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting &&
@@ -4263,6 +4267,7 @@ function supportHandIK9(a) {
 }
 
 // ── (W10 R1B) support-hand palm + finger curl ─────────────────────────────────────────────────────────────────────────────────
+const SPRINT_CLIPS = new Set(["rifle_sprint_g", "rifle_sprint_left", "rifle_sprint_right"]);   // (W10 anim fix) the support arm pumps on these
 const IK_NEAR_M = 30;                     // the support-hand IK, palm and finger curl run on actors nearer than this (and the focus)
 const FINGER_CURL = [0.95, 1.15, 0.8];    // rad per joint (proximal, middle, distal): the fingers wrap a ~5 cm handguard
 const THUMB_CURL = [0.3, 0.45, 0.3];
