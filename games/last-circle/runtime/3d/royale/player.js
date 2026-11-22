@@ -3064,7 +3064,9 @@ function combatKey(a, gs, q) {
   let set, fwd;
   if (a.crouching) { set = DIR_SETS.crouch; fwd = C.rifle_crouch_g ? "rifle_crouch_g" : "rifle_crouch"; }
   else {
-    const run = runPick(a, gs);
+    // (W10 anim fix 2) the STRAFES keep the old walk/run switch (4.6 / 4.2 m/s): on the run strafes at the ADS pace the planted foot
+    // skated 1.75x / 1.30x the forward run (p23_move skate bar 1.25x; the walk strafes at ~2x: 0.99x / 1.22x)
+    const run = (q === 1 || q === 3) ? (a._locoRunS = a._locoRunS ? gs > RUN_OFF_STRAFE : gs > RUN_ON_STRAFE) : runPick(a, gs);
     if (!run && (q === 1 || q === 3) && isPistol(a)) {
       const pk = q === 1 ? "pistol_strafe_left" : "pistol_strafe_right";
       if (C[pk]) return pk;
@@ -3632,7 +3634,10 @@ const _paSlide = { once: true, timeScale: 1, startAt: 0, force: true, fade: 0.12
 const AIR_CLIP_MIN_S = 0.16;          // unsupported for less than this (a stair, a kerb) keeps the ground clip
 // walk <-> run clip hysteresis (m/s). The ADS pace (3.8 m/s) stays on the WALK set (at ~2x): in game its strafes skate 0.91-1.16x
 // its forward, against 1.3-2.2x for the run strafes at 0.85x (F:/lc_p23/player/reports/calib2.log, calib3.log)
-const RUN_ON = 4.6, RUN_OFF = 4.2, SPRINT_STRAFE_ON = 5.3;
+// (W10 anim fix 2) the forward / back run set takes over at 3.0 m/s: the industry brief caps a clip's play-rate scale at 0.80-1.20
+// (Lyra: 15-20 %), and the ADS pace (3.8 m/s) on the walk set played it at 2.2x (a scurry at ~250 steps/min); on the run set it
+// plays at 0.85x (forward 3.8 / 4.475, back 0.94). Was 4.6 / 4.2; the strafes keep those (combatKey).
+const RUN_ON = 3.0, RUN_OFF = 2.7, SPRINT_STRAFE_ON = 5.3, RUN_ON_STRAFE = 4.6, RUN_OFF_STRAFE = 4.2;
 /** (W10 R1B) a pistol carry that takes the rifle leg clips (the stride-matched Mixamo set is loaded on this actor) */
 function pistolLegs(a) {
   const C = a.clips;
