@@ -3384,7 +3384,10 @@ function animate(W, a, dt) {
       const fromK = a._armFrom ? 1 - xu * xu * (3 - 2 * xu) : 0;
       // the muzzle-down share of the carry (barrelWeld): the low modes, cross-faded with the arms
       a._lowK = (LOW_MODES[a._armMode] ? 1 - fromK : 0) + (a._armFrom && LOW_MODES[a._armFrom] ? fromK : 0);
-      const swing = a._armMode === "pistolLow" || a._armFrom === "pistolLow" ? armSwing(a) : 0;
+      // (W10 anim fix 3, F2) the free arm's swing reads two foot bones, so it runs only where its arm is drawn this frame: the arm
+      // layer runs (layers, _armW), a near actor on desktop medium+ (phones / Low / far actors carry the arm still, no extra cost).
+      // _armMode alone was not enough: it stays stale after mode goes null (long gun, death, swim, off screen).
+      const swing = layers && a._armW > 0.02 && a._ikNear && deskHi(W) && (a._armMode === "pistolLow" || a._armFrom === "pistolLow") ? armSwing(a) : 0;
       // input.pitch > 0 = looking UP (verified: mouse-up → +pitch; aimDir/camera use sin(pitch));
       // tiltDir(+) raises the muzzle, so pass pitch un-negated or the gun tilts the wrong way
       // (W10 anim fix 2) a pistol's two-hand ready (gunReady) holds the gun on the chest's centre line (POSES.pistolReady): the rifle
