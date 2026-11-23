@@ -99,7 +99,8 @@ def click(s, re_):
 def open_settings(s):
     for re_ in (r"^\W*SETTINGS$", r"SETTINGS"):
         if click(s, re_):
-            if s.wait_js("() => !!document.querySelector('[data-lc=\"settabs\"]') || /SETTINGS/.test(document.body.innerText)", 4, 0.2):
+            # wait_js returns the seconds waited: 0.0 (the modal already open at the first poll) is a success, only None is a miss
+            if s.wait_js("() => !!document.querySelector('[data-lc=\"settabs\"]') || /SETTINGS/.test(document.body.innerText)", 4, 0.2) is not None:
                 return True
     return False
 

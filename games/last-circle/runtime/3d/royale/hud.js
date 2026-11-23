@@ -3148,6 +3148,8 @@ export function showHUD(W) {
   R.indicators = h("div", { position: "absolute", inset: "0", pointerEvents: "none" }, null, L);
   R.indicators.dataset.lc = "indicators";
   buildIndicatorPool();
+  // damage direction: arcs on a ring around the reticle (its own layer and setting, not the sound ring)
+  buildDmgDir(L);
 
   // parachute button indicator during the drop (Final Drop style). bottom 150
   // (was 120): the slot/ammo column moved up to bottom 54 to clear the portal
@@ -3659,6 +3661,7 @@ export function update(W, dt) {
 
   // directional indicators: fade + footstep scan
   stepIndicators(W, dt);
+  stepDmgDir(W, dt);
   // LC-45: one-time hints (2 Hz) and, in practice, the guided basics
   stepHints(W, p, dt);
   if (R._guide) stepGuide(W, p, dt);
@@ -3893,11 +3896,10 @@ function addIndicator(W, worldX, worldZ, kind) {
     const st = el.style;
     if (kind === "footstep") { el.textContent = "👣"; st.filter = "grayscale(1) brightness(2)"; st.fontSize = "17px"; st.color = ""; st.letterSpacing = ""; }
     else if (kind === "shot") { el.textContent = "︿"; st.filter = ""; st.fontSize = "20px"; st.color = "#ffe9a0"; st.letterSpacing = ""; }
-    else if (kind === "fall") { el.textContent = "︽"; st.filter = ""; st.fontSize = "30px"; st.color = (R._cbPal || CB_PAL.off).dmg; st.letterSpacing = ""; }
-    else { el.textContent = "❮❯"; st.filter = ""; st.fontSize = "34px"; st.color = (R._cbPal || CB_PAL.off).dmg; st.letterSpacing = "-4px"; }
+    else { el.textContent = "︽"; st.filter = ""; st.fontSize = "30px"; st.color = (R._cbPal || CB_PAL.off).dmg; st.letterSpacing = ""; }   // "fall"
     d.kind = kind;
   }
-  d.ang = ang; d.t = 0; d.life = kind === "damage" ? 1.6 : kind === "shot" ? 1.2 : 0.9;
+  d.ang = ang; d.t = 0; d.life = kind === "shot" ? 1.2 : 0.9;
   el.style.opacity = "0"; d._op = 0;   // stepIndicators places it and fades it in this frame (d._op: its last written opacity)
   el.style.display = "block";
   inds.push(d);
@@ -3950,7 +3952,9 @@ function stepIndicators(W, dt) {
     d.t += dt;
     if (d.t > d.life) { inds.splice(i, 1); parkIndicator(d); continue; }
     // screen angle relative to the camera facing (0 = up/forward)
-    const rel = d.ang - p.yaw + Math.PI;
+    // (2026-11-22: was d.ang - p.yaw + PI, a mirror image - a shot or footstep on your RIGHT was drawn on the LEFT; p23_dmgdir
+    // 'sound-ring-side' measures it against the camera. Same convention as the damage arc, rotate(rel) clockwise from up.)
+    const rel = p.yaw + Math.PI - d.ang;
     // written only when the rounded pixel / degree / opacity step changes (each write built 1-2 strings per cue per frame)
     const sx = Math.round(Math.sin(rel) * RAD), sy = Math.round(-Math.cos(rel) * RAD), dg = Math.round(rel * 180 / Math.PI);
     if (d._sx !== sx || d._sy !== sy || d._dg !== dg) {
@@ -3959,6 +3963,127 @@ function stepIndicators(W, dt) {
     }
     const op = Math.max(0, Math.round((1 - d.t / d.life) * 50)) / 50;
     if (d._op !== op) { d._op = op; d.el.style.opacity = String(op); }
+  }
+}
+
+// ── DAMAGE DIRECTION (owner 2026-11-22: "if you get shot you can see where you are getting shot from") ─────────────────────
+// The old cue was a 34 px '❮❯' glyph on the far sound ring, switched off with the sound indicators - the owner never noticed
+// it. Industry pattern (Fortnite blue-shield / red-health arc, Valorant / Halo / Scaleform HUD-kit red arc, Battlefield 2042
+// opacity + thickness options; Game Accessibility Guidelines + Xbox XAG 103: the direction you are shot from must be shown
+// visually, and not by colour alone): an ARC on a ring AROUND THE CROSSHAIR, one per attacker, pointing at the attacker's
+// LAST KNOWN position (where they were when they hit you) and re-aimed every frame as you turn, held DD_HOLD s then faded over
+// DD_FADE s; heavier hits = wider, thicker, brighter arc; a shield hit is blue and SEGMENTED, a health hit the palette's damage
+// colour and SOLID (two cues, not colour alone). Its own setting W.settings.dmgDir (default ON), independent of soundVis.
+// Cheap: DD_POOL pooled SVG arcs; per frame only a rounded rotate / opacity is written, and only when it changes.
+const DD_POOL = 6, DD_HOLD = 0.5, DD_FADE = 1.0, DD_FULL = 50, DD_ONSET = 0.1;
+const DD_SHIELD = "#57b0ff";            // the shield hit-marker blue (MK_TIERS.shield)
+const DD_PAD = 10;
+const SVG_NS = "http://www.w3.org/2000/svg";
+const dds = [];                          // {svg, ol, mn, live, id, x, z, t, k, shield, w, th, _dg, _op}
+let ddBox = null, ddR = 0;
+function ddRadius() {
+  // ~8.5 % of the view height (61 px at 720p, 92 px at 1080p): outside the 56 px reticle and the hit marker, inside the
+  // interact prompt (top 60 %) - the ring sits in the reticle's own space, no other HUD piece moves.
+  return Math.max(48, Math.min(120, Math.round(_vh * 0.085)));
+}
+function buildDmgDir(L) {
+  dds.length = 0; ddR = 0;
+  ddBox = h("div", { position: "absolute", left: "50%", top: "50%", width: "0", height: "0", pointerEvents: "none" }, null, L);
+  ddBox.dataset.lc = "dmgdir";
+  for (let i = 0; i < DD_POOL; i++) {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.style.cssText = "position:absolute;left:0;top:0;display:none;opacity:0;overflow:visible;will-change:transform,opacity;";
+    const ol = document.createElementNS(SVG_NS, "path"), mn = document.createElementNS(SVG_NS, "path");
+    ol.setAttribute("fill", "none"); ol.setAttribute("stroke", "rgba(0,0,0,0.55)");
+    mn.setAttribute("fill", "none");
+    svg.appendChild(ol); svg.appendChild(mn);
+    ddBox.appendChild(svg);
+    dds.push({ svg, ol, mn, live: false, id: null, x: 0, z: 0, t: 0, k: 0, shield: false, col: "", w: 0, th: 0, _dg: null, _op: -1, _r: 0 });
+  }
+}
+function ddPaint(d) {
+  // the arc is drawn pointing UP (screen angle 0) in an svg box centred on the reticle; rotate() aims it
+  const R0 = ddR, half = (R0 + DD_PAD), sz = half * 2, a = d.w * Math.PI / 360;
+  const x1 = half - Math.sin(a) * R0, x2 = half + Math.sin(a) * R0, y = half - Math.cos(a) * R0;
+  const path = `M${x1.toFixed(1)} ${y.toFixed(1)}A${R0} ${R0} 0 0 1 ${x2.toFixed(1)} ${y.toFixed(1)}`;
+  const st = d.svg.style;
+  if (d._r !== R0) {
+    d._r = R0;
+    d.svg.setAttribute("width", sz); d.svg.setAttribute("height", sz);
+    st.left = -half + "px"; st.top = -half + "px";
+  }
+  d.ol.setAttribute("d", path); d.mn.setAttribute("d", path);
+  d.ol.setAttribute("stroke-width", (d.th + 3).toFixed(1));
+  d.mn.setAttribute("stroke-width", d.th.toFixed(1));
+  d.mn.setAttribute("stroke", d.col);
+  // shield = segmented (the shield bar's cells), health = solid: told apart without colour
+  if (d.shield) d.mn.setAttribute("stroke-dasharray", "7 3"); else d.mn.removeAttribute("stroke-dasharray");
+  d.svg.dataset.kind = d.shield ? "shield" : "health";
+  d.svg.dataset.w = String(Math.round(d.w));
+  d.svg.dataset.src = String(d.id);
+}
+function ddPark(d) {
+  d.live = false; d.id = null;
+  d.svg.style.display = "none"; d.svg.style.opacity = "0"; d._op = -1; d._dg = null;
+}
+function ddLevel(d) {
+  // current strength 0..1 of a live arc (full through the hold, then linear to 0 over the fade)
+  if (!d.live) return 0;
+  return d.t <= DD_HOLD ? d.k : d.k * Math.max(0, 1 - (d.t - DD_HOLD) / DD_FADE);
+}
+function addDmgDir(W, att, info) {
+  if (!ddBox || !W.player || !att || (W.settings && W.settings.dmgDir === false)) return;
+  const dmg = +info.dmg || 0;
+  if (!(dmg > 0)) return;
+  let d = null, free = null, old = null;
+  for (let i = 0; i < dds.length; i++) {
+    const e = dds[i];
+    if (e.live && e.id === att.id) { d = e; break; }
+    if (!e.live) { if (!free) free = e; } else if (!old || e.t > old.t) old = e;
+  }
+  if (!d) d = free || old;                // six attackers at once: the stalest arc is recycled
+  const prev = d.live && d.id === att.id ? ddLevel(d) : 0;
+  d.id = att.id; d.x = att.pos.x; d.z = att.pos.z;
+  d.k = Math.max(0.3, Math.min(1, prev + dmg / DD_FULL));    // stacking hits from one attacker build the arc up
+  const ts = +info.toShield || 0;
+  d.shield = ts > 0 && ts >= dmg * 0.5;
+  d.col = d.shield ? DD_SHIELD : cbPal(W).dmg;   // the colour-blind palette's damage colour (read now, not a cached palette)
+  d.w = 34 + 26 * d.k;                    // 34..60 deg
+  d.th = 4 + 5 * d.k;                     // 4..9 px
+  d.t = 0; d.live = true;
+  if (!ddR) { ddR = ddRadius(); }
+  ddPaint(d);
+  d.svg.style.display = "block";
+}
+function stepDmgDir(W, dt) {
+  if (!ddBox) return;
+  const p = W.player;
+  const off = (W.settings && W.settings.dmgDir === false) || !p || !p.alive;
+  let r = 0;
+  for (let i = 0; i < dds.length; i++) {
+    const d = dds[i];
+    if (!d.live) continue;
+    if (off) { ddPark(d); continue; }
+    d.t += dt;
+    if (d.t > DD_HOLD + DD_FADE) { ddPark(d); continue; }
+    if (!r) {
+      viewSize(W);
+      r = ddRadius();
+      if (r !== ddR) { ddR = r; for (const e of dds) if (e.live) ddPaint(e); }
+    }
+    // screen angle of the attacker's last known position relative to the camera facing (0 = up / ahead, CLOCKWISE = to the
+    // right). Forward is (-sin yaw, -cos yaw) and the camera's right is (cos yaw, -sin yaw), so a world bearing
+    // atan2(dx, dz) maps to yaw + PI - bearing (checked against the camera-space angle by _harness/p23/dmgdir.py).
+    const rel = p.yaw + Math.PI - Math.atan2(d.x - p.pos.x, d.z - p.pos.z);
+    let dg = Math.round(rel * 180 / Math.PI) % 360;
+    if (dg < 0) dg += 360;
+    if (d._dg !== dg) { d._dg = dg; d.svg.style.transform = `rotate(${dg}deg)`; }
+    const fr = !!(W.settings && W.settings.flashReduce) && !touchOn;   // LC-43 flash reduction, as the hurt tint reads it
+    const peak = (0.55 + 0.45 * d.k) * (fr ? 0.75 : 1);
+    // a 0.1 s full-strength onset reads as the impact; flash reduction drops it and caps the peak
+    const lv = (!fr && d.t < DD_ONSET) ? 1 : peak * (d.t <= DD_HOLD ? 1 : Math.max(0, 1 - (d.t - DD_HOLD) / DD_FADE));
+    const op = Math.round(lv * 50) / 50;
+    if (d._op !== op) { d._op = op; d.svg.style.opacity = String(op); }
   }
 }
 
@@ -4775,7 +4900,7 @@ function wireEvents(W) {
     }
     if (victim !== W.player || !info.attackerId) return;
     const att = W.actorById.get(info.attackerId);
-    if (att) addIndicator(W, att.pos.x, att.pos.z, "damage");
+    if (att && att !== W.player) addDmgDir(W, att, info);   // the arc around the reticle (replaces the old sound-ring glyph)
   });
   // LC-81 DAMAGE LOG: every hit the local player takes (attacker, weapon, amount, headshot) and every storm tick, on the match clock, so the
   // death banner can say who did what in the last 10 s - it only ever named the killer.
@@ -6100,6 +6225,18 @@ function showSettingsTouch(W) {
     b.onclick = () => { W.settings.soundVis = o[1]; save(W); showSettings(W); };
   });
 
+  // Damage direction - the arc around the reticle toward whoever is shooting you; independent of the sound indicators
+  const ddRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Damage direction", ddRow);
+  [["OFF", false], ["ON", true]].forEach((o) => {
+    const on = (W.settings.dmgDir !== false) === o[1];
+    const b = h("button", Object.assign({}, BTN, {
+      padding: "7px 16px", fontSize: "13px",
+      background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+    }), o[0], ddRow);
+    b.onclick = () => { W.settings.dmgDir = o[1]; save(W); showSettings(W); };
+  });
+
   // performance readout — a browser game runs on unknown hardware, so "is it me
   // or is it the game" needs an answer the player can read
   const pRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
@@ -6355,6 +6492,8 @@ function showSettings(W, tab) {
 
     // the screen-edge footstep / gunfire / damage ring (opt-OUT: it has always been on)
     optRow(G, "Sound indicators", [["OFF", false], ["ON", true]], W.settings.soundVis !== false, (v) => { W.settings.soundVis = v; save(W); rerender(); }, "soundvis");
+    // the arc around the reticle toward whoever is shooting you (opt-OUT; its own switch, the sound ring's does not hide it)
+    optRow(G, "Damage direction", [["OFF", false], ["ON", true]], W.settings.dmgDir !== false, (v) => { W.settings.dmgDir = v; save(W); rerender(); }, "dmgdir");
     // "is it me or is it the game": FPS (+ link freshness online)
     optRow(G, "Performance readout", [["OFF", false], ["ON", true]], !!W.settings.showPerf, (v) => {
       W.settings.showPerf = v;

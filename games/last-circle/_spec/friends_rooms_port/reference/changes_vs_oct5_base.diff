@@ -1,0 +1,911 @@
+diff --git a/games/last-circle/game_meta.json b/games/last-circle/game_meta.json
+index d8fd7f095..bc8a32a92 100644
+--- a/games/last-circle/game_meta.json
++++ b/games/last-circle/game_meta.json
+@@ -1,7 +1,7 @@
+ {
+   "title": "Last Circle",
+   "short_description": "A 50-player battle royale shooter — drop onto one of three maps, loot chests, and outlive 49 fiercely competitive opponents as the storm closes in.",
+-  "description": "Last Circle is a full third-person battle royale shooter in the browser. Every match is a 50-player lobby — you plus 49 AI opponents that loot, rotate with the storm, take cover, flank, and fight like real players (friends can join over the network and instantly replace a bot). Three distinct maps — the vibrant tropical Isla Viva, the shattered downtown of Ashgrid, and the deep conifer wilds of Deepwood — each with unique POIs, glowing loot chests, and high ground. Everyone drops with a pistol; fight for assault rifles, shotguns, snipers, SMGs, and grenade launchers, with shields, supply drops, real swimming, and a shrinking storm. Standard, 5-minute Quick, and Practice modes.",
++  "description": "Last Circle is a full third-person battle royale shooter in the browser. Every match is a 50-player lobby — you plus 49 opponents who loot, rotate with the storm, take cover, flank and fight hard. Play with friends: start a room, share the code or invite link, pick one team, two teams or everyone for themselves, and drop in together. Three distinct maps — the vibrant tropical Isla Viva, the shattered downtown of Ashgrid, and the deep conifer wilds of Deepwood — each with unique POIs, glowing loot chests, and high ground. Everyone drops with a pistol; fight for assault rifles, shotguns, snipers, SMGs, and grenade launchers, with shields, supply drops, real swimming, and a shrinking storm. Battle Royale, 5-minute Quick Match, Practice, and Play with Friends.",
+   "genre": "shooter",
+   "sub_genre": "battle-royale",
+   "difficulty": "medium",
+diff --git a/games/last-circle/runtime/3d/ffg_royale3d.js b/games/last-circle/runtime/3d/ffg_royale3d.js
+index 68d378d5a..fb173f2f0 100644
+--- a/games/last-circle/runtime/3d/ffg_royale3d.js
++++ b/games/last-circle/runtime/3d/ffg_royale3d.js
+@@ -477,7 +477,7 @@ register3d("royale", async function (kernel, content) {
+     W.lastMatchError = { message: msg, t: Math.round(performance.now()) };
+     try { teardownMatch(); } catch (e) { console.warn("[royale] teardown after a failed load threw:", e); }
+     try { W.hooks.loadingStop(); } catch (e) {}
+-    if (W.net) { try { netMod.leave(W); } catch (e) {} }
++    try { netMod.leave(W); } catch (e) {}   // also a room kept open after the host left (W.net is null then)
+     removeLoadingLayer();
+     W.paused = false;
+     try {
+@@ -604,7 +604,7 @@ register3d("royale", async function (kernel, content) {
+       if (W._overT) { clearTimeout(W._overT); W._overT = null; }
+       W._winHold = false;
+       teardownMatch();
+-      if (W.net) netMod.leave(W);
++      netMod.leave(W);   // safe without a room; also closes one kept open after the host left
+       // hud.showMenu removes the HUD / death / post-match layers but not the pause,
+       // settings or loading layers; showLoading clears every match screen (its own
+       // list) and the loading layer it adds is removed straight after.
+@@ -697,10 +697,13 @@ register3d("royale", async function (kernel, content) {
+     for (let i = 0; i < total; i++) {
+       const hu = humans.find((x) => x.slot === i);
+       if (hu) {
+-        // Every human in the lobby is one squad. A solo match has exactly one human,
+-        // so teamId stays null and teamOf falls back to the actor's own id —
+-        // nothing about offline play changes.
+-        const a = playerMod.createActor(W, { id: "s" + i, name: hu.name, isBot: false, teamId: humans.length > 1 ? "sq" : null });
++        // A friends room picks its teams (royale/net.js sends hu.team: "sq" = all on
++        // one team, "sqA"/"sqB" = two teams, null = everyone for themselves).
++        // Without a choice every human in the lobby is one squad. A solo match has
++        // exactly one human, so teamId stays null and teamOf falls back to the
++        // actor's own id — nothing about offline play changes.
++        const team = hu.team !== undefined ? hu.team : (humans.length > 1 ? "sq" : null);
++        const a = playerMod.createActor(W, { id: "s" + i, name: hu.name, isBot: false, teamId: team });
+         a.netRemote = !hu.self;
+         if (hu.self) W.player = a;
+       } else {
+@@ -889,8 +892,14 @@ register3d("royale", async function (kernel, content) {
+       timeS: Math.round(elim ? elim.t : W.t),
+       onMenu: () => { W.phase = "menu"; netMod.leave(W); shadowsEveryFrame(); hudMod.showMenu(W, startMatch); },
+       // requeue straight into a fresh match (new random map, same mode) without
+-      // rebuilding the cinematic menu world and re-reading the skin GLBs
+-      onAgain: () => { netMod.leave(W); startMatch({ mapId: hudMod.randomMap(), mode: W.mode }); },
++      // rebuilding the cinematic menu world and re-reading the skin GLBs.
++      // In a friends room the party stays together instead (the usual party
++      // flow): BACK TO ROOM returns to the room's lobby with the same code and
++      // friends, and the host starts the next match from there.
++      onAgain: netMod.inRoom && netMod.inRoom(W)
++        ? () => { W.phase = "menu"; shadowsEveryFrame(); hudMod.showMenu(W, startMatch); netMod.returnToRoom(W); }
++        : () => { netMod.leave(W); startMatch({ mapId: hudMod.randomMap(), mode: W.mode }); },
++      againLabel: netMod.inRoom && netMod.inRoom(W) ? "BACK TO ROOM" : null,
+     };
+   }
+   W.endMatch = endMatch;
+diff --git a/games/last-circle/runtime/3d/royale/hud.js b/games/last-circle/runtime/3d/royale/hud.js
+index 3d2dcf243..cb266261a 100644
+--- a/games/last-circle/runtime/3d/royale/hud.js
++++ b/games/last-circle/runtime/3d/royale/hud.js
+@@ -1149,7 +1149,7 @@ export function showMenu(W, startMatch) {
+       }, "START HERE", txt).dataset.lc = "rookiechip";
+       // the tail drops on a phone on its side, where the full line wrapped to
+       // three lines inside the card
+-      h("span", null, " · FIGHTING IN 10 SECONDS", txt.lastChild).dataset.lc = "chiptail";
++      h("span", null, " · 5-MINUTE MATCHES", txt.lastChild).dataset.lc = "chiptail";
+     }
+     // the card IS the play button — one click launches this mode (no separate DROP IN)
+     h("div", {
+@@ -1162,7 +1162,7 @@ export function showMenu(W, startMatch) {
+       teardownMenuWorld(W);
+       startMatch({ mapId: randomMap(), mode: m.id });
+     };
+-    // Tab-reachable. SQUAD UP / SETTINGS / HOW TO PLAY and the locker arrows are
++    // Tab-reachable. SETTINGS / HOW TO PLAY / CAREER and the locker arrows are
+     // real <button>s, so the keyboard reached everything on this screen EXCEPT
+     // the only three controls that start a match — these cards were plain divs
+     // with a mouse handler. (Map stays random; this is focus, not a picker.)
+@@ -1181,6 +1181,41 @@ export function showMenu(W, startMatch) {
+   }
+   paint();
+ 
++  // PLAY WITH FRIENDS — a card beside the three modes, not a ghost button: the
++  // only way into a friends room used to be "SQUAD UP" in the small row below,
++  // which read as a squad mode and was easy to miss. Opens the friends lobby
++  // (royale/net.js): START ROOM gives a code + invite link, JOIN FRIEND takes one.
++  {
++    const c = h("div", Object.assign({
++      padding: "14px 20px 14px 16px", cursor: "pointer", minWidth: "300px",
++      position: "relative", overflow: "hidden", animation: `lcPanelIn .55s ${0.2 + cards.length * 0.06}s both`,
++    }, PANEL, { borderLeft: "3px solid #4ade80" }), null, leftCol);
++    c.className = "lc-mode-card lc-glass-scan";
++    c.dataset.lc = "friends-card";
++    const row = h("div", { display: "flex", gap: "14px", alignItems: "center" }, null, c);
++    h("div", {
++      width: "40px", height: "40px", borderRadius: "10px", display: "flex", alignItems: "center",
++      justifyContent: "center", fontSize: "18px",
++      background: "linear-gradient(145deg, rgba(74,222,128,0.28), rgba(30,110,70,0.15))",
++      border: "1px solid rgba(140,255,190,0.3)",
++    }, "👥", row);
++    const txt = h("div", { flex: "1" }, null, row);
++    h("div", {
++      fontFamily: "Orbitron, " + FONT_DISPLAY, fontWeight: "800", fontSize: "14px",
++      letterSpacing: "2px", color: "#eaf4ff",
++    }, "PLAY WITH FRIENDS", txt);
++    h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "14px", fontWeight: "500", opacity: "0.72", marginTop: "2px", color: "#b8d0ea" }, "Start a room or join with a code", txt);
++    h("div", {
++      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "16px", fontWeight: "900",
++      color: "#8ff0b4", opacity: "0.85", paddingLeft: "6px",
++      textShadow: "0 0 14px rgba(80,220,140,0.6)",
++    }, "▶", row);
++    c.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mode: selMode }); };
++    c.tabIndex = 0;
++    c.setAttribute("role", "button");
++    c.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); c.onclick(); } };
++  }
++
+   // (No separate DROP IN button — each mode card above launches on click.)
+   h("div", {
+     fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "700",
+@@ -1195,16 +1230,12 @@ export function showMenu(W, startMatch) {
+     border: "1px solid rgba(140,200,255,0.2)",
+     fontFamily: "Rajdhani, " + FONT, fontWeight: "700", letterSpacing: "1.5px",
+   }), label, parent);
+-  const online = mkGhost("🌐  SQUAD UP", subRow);
+-  online.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mode: selMode }); };
+   const settings = mkGhost("⚙  SETTINGS", subRow);
+   settings.onclick = () => { W.events.emit("uiClick"); showSettings(W); };
+   const howTo = mkGhost("❔  HOW TO PLAY", subRow);
+   howTo.onclick = () => { W.events.emit("uiClick"); showHowToPlay(W); };
+-  // Own row: the three above are already ~93px wide inside a 300px column and a
+-  // fourth would wrap "SQUAD UP" onto two lines.
+-  const subRow2 = h("div", { display: "flex", gap: "10px" }, null, leftCol);
+-  const career = mkGhost("📊  CAREER", subRow2);
++  // (The friends room moved out of this row into its own card above.)
++  const career = mkGhost("📊  CAREER", subRow);
+   career.onclick = () => { W.events.emit("uiClick"); showCareer(W); };
+   // First run gets it unprompted. A browser BR is opened cold from a link with
+   // no manual and no install — there was no onboarding of ANY kind, and two of
+@@ -1621,20 +1652,45 @@ export function showLobby(W, onDone) {
+   // reads the same at 0.7 s as it did at 1.4 s. The 900 ms countdown below is
+   // NOT touched — the 3-count is an audible beat (countdownBeep) and shortening
+   // it desyncs the beeps from the numbers.
+-  const FILL_MS = W.mode === "practice" ? 200 : 700;
++  //
++  // MATCHMAKING FEEL (owner, 2026-11-22): an OFFLINE Quick / Battle Royale lobby
++  // no longer fills in 0.7 s — players arrive over time, in uneven bursts, and
++  // the drop comes 8–15 s after the lobby opens (fill + the 2.7 s count). The
++  // join order is shuffled across the grid. Practice keeps its instant fill, and
++  // ONLINE keeps the short fixed fill: every client must leave on the same clock.
++  const lifelike = !W.net && W.mode !== "practice";
++  const FILL_MS = W.mode === "practice" ? 200 : lifelike ? (8000 + Math.random() * 7000) - 2700 : 700;
++  const order = [];
++  for (let i = 1; i < cells.length; i++) order.push(i);
++  let arrive = null;   // ms after open for each arrival in `order` (lifelike only)
++  if (lifelike) {
++    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
++    // a few bursts (a party joining at once) over a steady trickle
++    const bursts = [];
++    for (let k = 3 + Math.floor(Math.random() * 4); k > 0; k--) bursts.push(Math.random() * FILL_MS);
++    arrive = order.map(() => Math.random() < 0.45
++      ? bursts[Math.floor(Math.random() * bursts.length)] + Math.random() * 400
++      : Math.pow(Math.random(), 0.85) * FILL_MS).map((t) => Math.min(FILL_MS, Math.max(150, t))).sort((a, b) => a - b);
++    arrive[arrive.length - 1] = FILL_MS;   // the lobby is full exactly at FILL_MS
++  }
+   const t0 = performance.now();
+   let cdIv = null, ended = false;
+   const fillIv = setInterval(() => {
+-    const want = Math.min(cells.length, 1 + Math.round((cells.length - 1) * (performance.now() - t0) / FILL_MS));
++    const el = performance.now() - t0;
++    let want;
++    if (arrive) { want = 1; while (want - 1 < arrive.length && arrive[want - 1] <= el) want++; }
++    else want = Math.min(cells.length, 1 + Math.round((cells.length - 1) * el / FILL_MS));
+     for (; filled < want; filled++) {
+-      cells[filled].style.color = "#dfeaff";
+-      cells[filled].style.background = "rgba(255,255,255,0.07)";
+-      cells[filled].style.borderColor = "rgba(140,180,220,0.18)";
++      const c = cells[order[filled - 1]];
++      c.style.color = "#dfeaff";
++      c.style.background = "rgba(255,255,255,0.07)";
++      c.style.borderColor = "rgba(140,180,220,0.18)";
+     }
+     count.textContent = (W.net ? "WAITING FOR SQUAD… " : "FILLING LOBBY… ") + filled + "/" + W.actors.length;
+     if (filled >= cells.length) {
+       clearInterval(fillIv);
+       count.textContent = W.actors.length + "/" + W.actors.length + "  —  ALL OPERATIVES READY";
++      if (skipHints) skipHints.forEach((x) => { x.style.visibility = "visible"; });
+       let n = W.mode === "practice" ? 1 : 3;
+       cd.textContent = n;
+       W.events.emit("countdownBeep", false);
+@@ -1672,19 +1728,25 @@ export function showLobby(W, onDone) {
+   // e.repeat is rejected so a held ENTER cannot double-fire the hand-off. (It
+   // originally guarded the drop-select screen's own ENTER listener; that screen
+   // is no longer shown — the lobby now hands straight to the drop.)
+-  const onKey = (e) => { if (!e.repeat && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); finishLobby(); } };
++  // Skipping is for the countdown only: during a lifelike fill the lobby is
++  // "still finding players", so there is nothing to skip to yet.
++  const canSkip = () => !lifelike || filled >= cells.length;
++  const onKey = (e) => { if (!e.repeat && (e.key === "Enter" || e.key === " ") && canSkip()) { e.preventDefault(); finishLobby(); } };
++  let skipHints = null;
+   // Offline ONLY. Online keeps the fixed timer because guests have to leave this
+   // screen on the same clock as the host.
+   if (!W.net) {
+     L.style.cursor = "pointer";
+-    L.onclick = finishLobby;
++    L.onclick = () => { if (canSkip()) finishLobby(); };
+     window.addEventListener("keydown", onKey);
+     const skipSt = {
+       fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "700",
+       letterSpacing: "2.5px", opacity: "0.6", color: "#9fd0ff",
+     };
+-    h("div", skipSt, "CLICK OR PRESS ENTER TO DROP IN NOW", wrap).className = "kbd-hint";
+-    h("div", skipSt, "TAP ANYWHERE TO DROP IN NOW", wrap).className = "lc-touch-only";
++    const k1 = h("div", skipSt, "CLICK OR PRESS ENTER TO DROP IN NOW", wrap); k1.className = "kbd-hint";
++    const k2 = h("div", skipSt, "TAP ANYWHERE TO DROP IN NOW", wrap); k2.className = "lc-touch-only";
++    skipHints = [k1, k2];
++    if (!canSkip()) skipHints.forEach((x) => { x.style.visibility = "hidden"; });
+   }
+ }
+ 
+@@ -3487,7 +3549,7 @@ function wireEvents(W) {
+   // local continuation — the announcement is the difference between "the game
+   // broke" and "the host left, keep playing"
+   W.events.on("hostLost", (converted) => {
+-    announce("HOST LEFT", "MATCH CONTINUES OFFLINE — " + converted + " PLAYERS NOW BOT-CONTROLLED", "#ffb36a", 4200, ANN_PRIO.deploy);
++    announce("HOST LEFT", "THE MATCH CONTINUES — KEEP FIGHTING", "#ffb36a", 4200, ANN_PRIO.deploy);
+   });
+   W.events.on("stormWarning", () => flashMsg("STORM SHRINKS IN 10 SECONDS"));
+   W.events.on("stormClosing", () => flashMsg("THE STORM IS CLOSING"));
+@@ -3931,7 +3993,7 @@ export function showPostMatch(W, res) {
+       background: "linear-gradient(180deg,#7ef0b0,#2fae76)", color: "#04231a",
+       fontSize: "16px", padding: "14px 44px", letterSpacing: "2px",
+       boxShadow: "0 0 24px rgba(70,220,150,0.35)",
+-    }), "PLAY AGAIN", row);
++    }), res.againLabel || "PLAY AGAIN", row);
+     again.className = "lc-btn-play";
+     again.onclick = () => { L.remove(); R.post = null; res.onAgain(); };
+   }
+diff --git a/games/last-circle/runtime/3d/royale/net.js b/games/last-circle/runtime/3d/royale/net.js
+index 9f30d7bb0..da814fa5a 100644
+--- a/games/last-circle/runtime/3d/royale/net.js
++++ b/games/last-circle/runtime/3d/royale/net.js
+@@ -1,40 +1,38 @@
+ /**
+- * royale/net.js — play-with-friends multiplayer over Supabase Realtime
+- * (NetPlay transport — pure WebSocket relay, $0, no Postgres).
++ * royale/net.js — play-with-friends multiplayer.
+  *
+- * Model: room code lobby, up to 4 humans. The old header said 8 and nothing
+- * enforced any number — but Supabase Realtime bills one message per RECEIVING
+- * subscriber, so a room of H humans costs H per send and total traffic grows
+- * as H². At 8 humans the timer traffic alone is several times the free-project
+- * 100 msg/s ceiling, and Realtime does not shed load at the cap, it DROPS THE
+- * CONNECTION — i.e. the match ends in a disconnect. startB.onclick now
+- * truncates the roster to host + 3 and the send rates below scale with H.
++ * TRANSPORT (2026-11-22): the Cloudflare friends-room relay, workers/last-circle-net, through
++ * runtime/net/ffg_cfroom.js (one Durable Object room per 4-character code, origin allow-list, daily
++ * meter). It replaced the shared free Supabase Realtime project (runtime/net/ffg_netplay.js, kept on
++ * disk but no longer imported), whose 2M msgs/month and 100 msg/s ceiling were shared by every
++ * ForgeFlow game and which dropped the connection when exceeded. The per-second send budget below was
++ * sized for that ceiling and is kept as-is: it also keeps the new relay's daily meter well inside the
++ * Workers Free plan.
++ *
++ * Model: room code lobby, up to 4 humans (host + MAX_GUESTS). Truncated at
++ * start: every extra human multiplies every outbound message.
+  *
+  * The world is DETERMINISTIC from the shared seed (terrain, POIs, loot spawns,
+  * chest contents, storm plan), so only live state is relayed:
+  *   - each human simulates their OWN actor and broadcasts state at 12/8/5 Hz
+  *     depending on how many humans are in the room
+- *   - the HOST simulates all 49-minus-guests bots; snapshots (10/8/6.25 Hz)
++ *   - the HOST simulates all 49-minus-guests opponents; snapshots (10/8/6.25 Hz)
+  *     ride the host's state packet (guests render them as netRemote actors)
+  *   - hits on a human are sent to the victim's client ("hitYou") — the victim
+  *     applies damage to itself (client authority over own HP)
+  *   - chest opens / item pickups / gunfire / emotes mirror as cosmetic events,
+- *     batched and RIDING THE STATE PACKET (envelope merge — one billed message
+- *     per client per state tick carries state + evs + [host] bot snapshots)
++ *     batched and RIDING THE STATE PACKET (envelope merge — one message per
++ *     client per state tick carries state + evs + [host] opponent snapshots)
+  *   - eliminations mirror immediately (authoritative, never batched)
+  *
+- * JOIN = TAKE OVER A BOT SLOT: humans occupy slots s0..sK (sorted by peer id,
+- * host = s0); every other slot keeps its bot. A guest joining the lobby simply
+- * claims the next slot before match start; when a guest disconnects mid-match
+- * the host re-attaches a bot brain to that slot — the actor keeps fighting.
++ * JOIN = TAKE OVER AN OPPONENT SLOT: humans occupy slots s0..sK (sorted by peer id,
++ * host = s0); every other slot keeps its computer-run opponent. A guest joining the
++ * lobby claims the next slot before match start; when a guest disconnects mid-match
++ * the host re-attaches a brain to that slot — the actor keeps fighting.
+  */
+-import { NetPlay } from "../../net/ffg_netplay.js";
++import { RoomNet, netBaseUrl } from "../../net/ffg_cfroom.js";
+ import { RTCMesh } from "../../net/ffg_rtc.js";
+ 
+-const SUPABASE_URL = "https://wugoxdewcdxzfppgzohy.supabase.co";
+-const SUPABASE_ANON_KEY =
+-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves";
+-
+ let S = null; // session
+ 
+ export function init(W) {
+@@ -118,7 +116,7 @@ function isAuthority(W) { return S && S.net.isHost(); }
+ // the list because the ENVELOPE is not the right thing to drop — the flush in
+ // update() thins its contents first, so shedding never silently strands a
+ // pickup or a chest open inside a discarded envelope.
+-const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1 };
++const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1, back: 1, mode: 1 };
+ 
+ /** OUTBOUND BUDGET, in messages per rolling second. Supabase Realtime does not
+  *  throttle a connection that exceeds its rate — it DISCONNECTS it, which
+@@ -131,7 +129,7 @@ function sendBudgetLeft() {
+   if (!S) return 0;
+   const now = performance.now();
+   if (S.sendWinT == null || now - S.sendWinT >= 1000) { S.sendWinT = now; S.sendWinN = 0; }
+-  const H = Math.max(1, S.net.peerCount || 1);
++  const H = Math.max(1, (S.cfg && S.cfg.roster ? S.cfg.roster.length : S.net.peerCount) || 1);
+   return Math.max(8, Math.floor(100 / H)) - (S.sendWinN || 0);
+ }
+ 
+@@ -157,146 +155,270 @@ function qsend(t, d) {
+ }
+ 
+ // ── lobby UI ─────────────────────────────────────────────────────────────────
++/** The link a friend opens to land in this room. Inside the forgeflowgames.com game page (an iframe) the
++ *  site page is the link to share — it forwards ?room= into the game (GamePlayer.tsx); the referrer only
++ *  carries the site's origin, so the path is rebuilt. Standalone, the current page with ?room=CODE. */
++export function inviteLink(code) {
++  const c = encodeURIComponent(code);
++  try {
++    if (window.top !== window && document.referrer) {
++      const o = new URL(document.referrer).origin;
++      if (/forgeflowgames\.com$/.test(new URL(o).hostname)) return o + "/games/last-circle?room=" + c;
++    }
++  } catch (e) { /* cross-origin top: fall through */ }
++  if (/^https?:$/.test(location.protocol)) {
++    // build off the CURRENT href so any params the portal put there survive
++    const u = new URL(location.href);
++    u.searchParams.delete("lcretry");
++    u.searchParams.set("room", code);
++    return u.toString();
++  }
++  return code;   // file:// etc: a URL would not be shareable, so hand over the bare code
++}
++
++/** Plain-text reason for a failed start/join, by ffg_cfroom.js error code. */
++function failText(e, code) {
++  const c = e && e.code;
++  if (c === 4004) return ["No room with the code " + (code || "") + ".", "Check the code with your friend. A room closes 15 minutes after everyone leaves."];
++  if (c === 4009) return ["That room is full.", "Ask your friend to start a new room, or play solo from the menu."];
++  if (c === 4029) return ["Friend rooms are full for today.", "Try again tomorrow, or play solo from the menu."];
++  return ["Couldn't reach the online service.", "Check your connection and try again, or play solo from the menu."];
++}
++
+ function openLobby(W, sel) {
+   // clickable overlay: pointer lock would send every click to the canvas
+   try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
++  if (W.__lcLobbyRoot && W.__lcLobbyRoot.isConnected) W.__lcLobbyRoot.remove();
+   const root = document.createElement("div");
++  W.__lcLobbyRoot = root;
++  root.dataset.lc = "friends-lobby";
+   Object.assign(root.style, {
+     position: "absolute", inset: "0", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center",
+     background: "rgba(4,8,16,0.9)", pointerEvents: "auto", fontFamily: "system-ui, sans-serif", color: "#eaf2ff",
++    padding: "16px", overflow: "auto",
+   });
+   W.kernel.parent.appendChild(root);
+   const box = document.createElement("div");
+-  Object.assign(box.style, { background: "rgba(10,19,31,0.95)", border: "1px solid rgba(120,180,255,0.25)", borderRadius: "14px", padding: "30px 40px", textAlign: "center", minWidth: "380px" });
++  Object.assign(box.style, { background: "rgba(10,19,31,0.95)", border: "1px solid rgba(120,180,255,0.25)", borderRadius: "14px", padding: "26px 30px", textAlign: "center", width: "min(460px, 100%)", margin: "auto" });
+   root.appendChild(box);
+-  const html = (s) => { const d = document.createElement("div"); d.innerHTML = s; box.appendChild(d); return d; };
+-  html(`<div style="font-size:22px;font-weight:900;letter-spacing:2px;margin-bottom:14px">PLAY WITH FRIENDS</div>`);
+-  const status = html(`<div style="font-size:13px;opacity:.75;margin-bottom:14px">Create a room or join a friend's code. Everyone else stays a bot.</div>`);
+-  const row = document.createElement("div");
+-  Object.assign(row.style, { display: "flex", gap: "10px", justifyContent: "center", marginBottom: "12px" });
+-  box.appendChild(row);
+-  const mk = (label, primary) => {
+-    const b = document.createElement("button");
+-    b.textContent = label;
+-    Object.assign(b.style, { padding: "10px 22px", borderRadius: "10px", border: "none", cursor: "pointer", fontWeight: "800", fontSize: "14px", background: primary ? "#57b0ff" : "rgba(255,255,255,0.12)", color: primary ? "#fff" : "#cfe4ff" });
+-    row.appendChild(b);
++  const el = (tag, style, text, parent) => {
++    const d = document.createElement(tag);
++    if (style) Object.assign(d.style, style);
++    if (text != null) d.textContent = text;
++    (parent || box).appendChild(d);
++    return d;
++  };
++  el("div", { fontSize: "22px", fontWeight: "900", letterSpacing: "2px", marginBottom: "10px" }, "PLAY WITH FRIENDS");
++  const status = el("div", { fontSize: "14px", opacity: ".8", marginBottom: "16px", lineHeight: "1.5" });
++  const intro = "Start a room and send your friends the code or link, or join a friend's room. Every empty spot in the match is filled by opponents, as usual.";
++  status.textContent = intro;
++
++  const btn = (label, kind, parent) => {
++    const b = el("button", {
++      padding: "11px 20px", borderRadius: "10px", border: "none", cursor: "pointer", fontWeight: "800", fontSize: "14px", letterSpacing: "1px",
++      background: kind === "primary" ? "#57b0ff" : kind === "go" ? "#4ade80" : "rgba(255,255,255,0.12)",
++      color: kind === "primary" ? "#fff" : kind === "go" ? "#08131f" : "#cfe4ff",
++    }, label, parent);
++    b.type = "button";
+     return b;
+   };
+-  const createB = mk("CREATE ROOM", true);
+-  const codeInp = document.createElement("input");
+-  Object.assign(codeInp.style, { padding: "10px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.2)", background: "rgba(0,0,0,0.4)", color: "#fff", width: "90px", textAlign: "center", fontWeight: "800", letterSpacing: "2px" });
++
++  // ── not in a room yet: START ROOM / JOIN FRIEND ──
++  const pick = el("div", { display: "flex", flexDirection: "column", gap: "12px", alignItems: "stretch" });
++  const createB = btn("START ROOM", "primary", pick);
++  createB.dataset.lc = "start-room";
++  el("div", { fontSize: "12px", opacity: ".55", letterSpacing: "2px" }, "— OR —", pick);
++  const joinRow = el("div", { display: "flex", gap: "10px", justifyContent: "center" }, null, pick);
++  const codeInp = el("input", { padding: "10px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.25)", background: "rgba(0,0,0,0.4)", color: "#fff", width: "120px", textAlign: "center", fontWeight: "800", fontSize: "16px", letterSpacing: "4px", textTransform: "uppercase" }, null, joinRow);
+   codeInp.placeholder = "CODE";
+-  codeInp.maxLength = 8;
+-  row.appendChild(codeInp);
+-  const joinB = mk("JOIN", false);
+-  // game_controls.js:65 kills the context menu page-wide with capture:true, so a
+-  // player could not even right-click-copy the room code. Hidden until we are in
+-  // a room; both host and joined guest can share. Clipboard is a LOCAL API — no
+-  // network call is added by this.
+-  const inviteB = mk("COPY INVITE LINK", false);
+-  inviteB.style.display = "none";
+-  inviteB.onclick = async () => {
+-    // build off the CURRENT href so any params the portal put there survive
+-    let link = S.net.room;   // file:// etc: a URL would not be shareable, so hand over the bare code
+-    if (/^https?:$/.test(location.protocol)) {
+-      const u = new URL(location.href);
+-      u.searchParams.set("room", S.net.room);
+-      link = u.toString();
+-    }
++  codeInp.maxLength = 4;
++  codeInp.autocomplete = "off";
++  codeInp.spellcheck = false;
++  codeInp.setAttribute("aria-label", "Room code");
++  codeInp.dataset.lc = "room-code-input";
++  // the page swallows keys for the game (WASD etc.); keep typing inside the box
++  codeInp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") joinB.onclick(); });
++  codeInp.addEventListener("keyup", (e) => e.stopPropagation());
++  codeInp.addEventListener("input", () => { codeInp.value = codeInp.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); });
++  const joinB = btn("JOIN FRIEND", "secondary", joinRow);
++  joinB.dataset.lc = "join-friend";
++
++  // ── in a room: code, invite link, mode, roster, start ──
++  const inRoom = el("div", { display: "none" });
++  el("div", { fontSize: "12px", letterSpacing: "2px", opacity: ".6" }, "ROOM CODE", inRoom);
++  const codeBig = el("div", { fontSize: "40px", fontWeight: "900", letterSpacing: "10px", color: "#7fd3ff", margin: "2px 0 8px" }, "", inRoom);
++  codeBig.dataset.lc = "room-code";
++  const linkInp = el("input", { width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(0,0,0,0.35)", color: "#b9cbe0", fontSize: "12px", marginBottom: "8px" }, null, inRoom);
++  linkInp.readOnly = true;
++  linkInp.setAttribute("aria-label", "Invite link");
++  linkInp.dataset.lc = "invite-link";
++  linkInp.addEventListener("focus", () => linkInp.select());
++  const shareRow = el("div", { display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap", marginBottom: "14px" }, null, inRoom);
++  const inviteB = btn("COPY INVITE LINK", "primary", shareRow);
++  const copyCodeB = btn("COPY CODE", "secondary", shareRow);
++  // game_controls.js kills the context menu page-wide with capture:true, so right-click-copy is gone.
++  // Clipboard is a LOCAL API — no network call is added by this.
++  async function copy(text, b, label) {
+     let ok = false;
+-    try { await navigator.clipboard.writeText(link); ok = true; } catch (e) {}
++    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
+     if (!ok) {
+-      // clipboard-write is denied outside a secure context; fall back to the
+-      // deprecated-but-universal path, then to a selection the player can copy
++      // clipboard-write is denied outside a secure context / in some iframes: the old path, then a selection
+       try {
+         const ta = document.createElement("textarea");
+-        ta.value = link; ta.style.position = "fixed"; ta.style.opacity = "0";
++        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+         root.appendChild(ta); ta.select();
+         ok = document.execCommand("copy");
+         ta.remove();
+       } catch (e) {}
+     }
+-    if (ok) inviteB.textContent = "LINK COPIED";
+-    else { codeInp.value = S.net.room; codeInp.select(); inviteB.textContent = "SELECT + CTRL-C"; }
+-    setTimeout(() => { inviteB.textContent = "COPY INVITE LINK"; }, 1600);
+-  };
+-  const closeB = mk("CANCEL", false);
+-  closeB.onclick = () => { attempt++; if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } root.remove(); };
++    if (ok) b.textContent = "COPIED";
++    else { linkInp.focus(); linkInp.select(); b.textContent = "SELECT + COPY"; }
++    setTimeout(() => { b.textContent = label; }, 1600);
++  }
++  inviteB.onclick = () => { if (S && S.net.room) copy(inviteLink(S.net.room), inviteB, "COPY INVITE LINK"); };
++  copyCodeB.onclick = () => { if (S && S.net.room) copy(S.net.room, copyCodeB, "COPY CODE"); };
+ 
+-  // Who is actually in the room. S.peers has held every peer's chosen name since
+-  // the "hello" handler shipped, but it was read in exactly ONE place — building
+-  // the roster at match start — so the lobby printed a bare count and never a
+-  // name, and you could not tell whether the "2 players" was your friend.
+-  // (rosterEl, not `roster` — startB.onclick below already owns that name for
+-  //  the roster ARRAY it ships in the start packet)
+-  const rosterEl = document.createElement("div");
+-  Object.assign(rosterEl.style, { fontSize: "13px", lineHeight: "1.6", margin: "2px 0 12px", minHeight: "22px", opacity: ".9" });
+-  box.appendChild(rosterEl);
++  // match length: the host picks, everyone sees it. Practice has no online variant.
++  const modeRow = el("div", { display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", marginBottom: "12px", fontSize: "13px" }, null, inRoom);
++  const MODES = [{ id: "standard", label: "STANDARD" }, { id: "quick", label: "QUICK · 5 MIN" }];
++  let roomMode = sel && sel.mode === "quick" ? "quick" : "standard";
++  const modeBtns = MODES.map((m) => {
++    const b = btn(m.label, "secondary", modeRow);
++    b.style.padding = "8px 14px"; b.style.fontSize = "12px";
++    b.onclick = () => { if (!S || !S.net.isHost()) return; roomMode = m.id; paintMode(); send("mode", { mode: roomMode, teams: roomTeams }); };
++    return { m, b };
++  });
++  // teams: the host picks; the opponents filling the other spots are always against everyone
++  const teamRow = el("div", { display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }, null, inRoom);
++  const TEAMS = [{ id: "squad", label: "ALL ON ONE TEAM" }, { id: "two", label: "TWO TEAMS" }, { id: "ffa", label: "EVERYONE FOR THEMSELVES" }];
++  let roomTeams = sel && (sel.teams === "two" || sel.teams === "ffa") ? sel.teams : "squad";
++  const teamBtns = TEAMS.map((m) => {
++    const b = btn(m.label, "secondary", teamRow);
++    b.style.padding = "8px 12px"; b.style.fontSize = "11px";
++    b.dataset.lc = "teams-" + m.id;
++    b.onclick = () => { if (!S || !S.net.isHost()) return; roomTeams = m.id; paintMode(); send("mode", { mode: roomMode, teams: roomTeams }); };
++    return { m, b };
++  });
++  const modeNote = el("div", { fontSize: "12px", opacity: ".6", marginTop: "-6px", marginBottom: "10px" }, "", inRoom);
++  function paintMode() {
++    const host = !!(S && S.net.isHost());
++    modeBtns.forEach(({ m, b }) => {
++      const on = m.id === roomMode;
++      b.style.background = on ? "#57b0ff" : "rgba(255,255,255,0.08)";
++      b.style.color = on ? "#fff" : "#cfe4ff";
++      b.style.cursor = host ? "pointer" : "default";
++      b.disabled = !host;
++      b.setAttribute("aria-pressed", on ? "true" : "false");
++    });
++    teamBtns.forEach(({ m, b }) => {
++      const on = m.id === roomTeams;
++      b.style.background = on ? "#4ade80" : "rgba(255,255,255,0.08)";
++      b.style.color = on ? "#08131f" : "#cfe4ff";
++      b.style.cursor = host ? "pointer" : "default";
++      b.disabled = !host;
++      b.setAttribute("aria-pressed", on ? "true" : "false");
++    });
++    const teamHint = roomTeams === "two" ? " Teams alternate down the list below." : "";
++    modeNote.textContent = (host ? "You pick the mode and teams, then start the match." : "The host picks the mode and teams, then starts the match.") + teamHint;
++    if (typeof paintRoster === "function" && S) paintRoster();
++  }
++
++  // Who is actually in the room (names arrive in "hello").
++  const rosterEl = el("div", { fontSize: "14px", lineHeight: "1.7", margin: "2px 0 12px", minHeight: "22px", opacity: ".9" }, null, inRoom);
++  rosterEl.dataset.lc = "room-roster";
+   function paintRoster() {
+     if (!S || !S.net.room) { rosterEl.innerHTML = ""; return; }
+-    // ffg_netplay.js:64 makes the LOWEST peer id the host, and startB.onclick
+-    // hands out slots by sorted peer id — so sorting every id (peers + self) on
+-    // any client reproduces the exact roster the host will build. No guessing.
+-    const all = Object.keys(S.peers).concat([S.net.id]).sort();
++    // the HOST is slot 0 and startB.onclick hands out the other slots by sorted peer id — reproduce it here
++    const hostId = S.net.owner;
++    const others = (S.net.ids || []).filter((pid) => pid !== hostId).sort();
++    const all = (hostId && (S.net.ids || []).includes(hostId) ? [hostId] : []).concat(others);
+     const badge = (s) => `<span style="font-size:10px;letter-spacing:1px;opacity:.6;margin-left:6px">${s}</span>`;
+     let h = "";
+     all.forEach((pid, i) => {
+       const me = pid === S.net.id;
+       // names arrive from other machines — they go through esc() before innerHTML
+       const nm = esc(me ? S.myName : (S.peers[pid] || "Friend"));
+-      if (i > MAX_GUESTS) { h += `<div style="color:#ffb060">${nm}${badge("SPECTATING — ROOM FULL")}</div>`; return; }
+-      h += `<div style="${me ? "color:#7fd3ff" : ""}">${me ? "<b>" + nm + "</b>" : nm}${badge(i === 0 ? "HOST" : "SLOT " + i)}</div>`;
++      const busy = !me && S.inMatch && S.inMatch[pid];
++      if (i > MAX_GUESTS) { h += `<div style="color:#ffb060">${nm}${badge("WATCHING — ROOM FULL")}</div>`; return; }
++      const team = roomTeams === "two" ? (i % 2 ? " · TEAM B" : " · TEAM A") : "";
++      h += `<div style="${me ? "color:#7fd3ff" : busy ? "opacity:.6" : ""}">${me ? "<b>" + nm + "</b>" : nm}${badge((pid === hostId ? "HOST" : "PLAYER " + (i + 1)) + team + (busy ? " · IN A MATCH" : ""))}</div>`;
+     });
+     rosterEl.innerHTML = h;
+   }
+ 
+-  const startB = document.createElement("button");
+-  startB.textContent = "START MATCH";
+-  Object.assign(startB.style, { padding: "12px 34px", borderRadius: "10px", border: "none", cursor: "pointer", fontWeight: "900", fontSize: "16px", background: "#4ade80", color: "#08131f", display: "none", marginTop: "6px" });
+-  box.appendChild(startB);
++  const startB = btn("START MATCH", "go", inRoom);
++  Object.assign(startB.style, { padding: "12px 34px", fontSize: "16px", fontWeight: "900", display: "none" });
++  startB.dataset.lc = "start-match";
++  const waitEl = el("div", { fontSize: "13px", opacity: ".75", display: "none" }, "Waiting for the host to start…", inRoom);
+ 
+-  // One attempt at a time. A newer attempt (or CANCEL) makes an older one stale: when
++  const closeRow = el("div", { marginTop: "16px" });
++  const closeB = btn("BACK", "secondary", closeRow);
++  closeB.onclick = () => { attempt++; if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } root.remove(); };
++  /** Point the open session's UI hooks at THIS lobby (a fresh one, or the one BACK TO ROOM rebuilds). */
++  function bindUi() {
++    S.root = root;
++    S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
++    S.status = status;             // beginOnlineMatch reports a full room here
++    S.onMode = (m, t) => {
++      if (m === "standard" || m === "quick") roomMode = m;
++      if (t === "squad" || t === "two" || t === "ffa") roomTeams = t;
++      paintMode();
++    };
++    S.roomMode = () => roomMode;
++    S.roomTeams = () => roomTeams;
++    S.ui = {
++      onPeer: () => { if (S && S.net.room && !S.started && root.isConnected) showRoom(S.net); },
++      onLost: (retrying) => { if (S && !S.started && root.isConnected) status.textContent = retrying ? "Connection dropped — reconnecting…" : "Lost the connection to the room."; },
++    };
++  }
++
++  function showRoom(net) {
++    pick.style.display = "none";
++    inRoom.style.display = "block";
++    codeBig.textContent = net.room;
++    linkInp.value = inviteLink(net.room);
++    const host = net.isHost();
++    startB.style.display = host ? "inline-block" : "none";
++    waitEl.style.display = host ? "none" : "block";
++    closeB.textContent = "LEAVE ROOM";
++    const hostBusy = !host && S && S.inMatch && S.inMatch[net.owner];
++    status.textContent = host
++      ? "Room ready. Send your friends the code or the invite link, then start when everyone is in."
++      : hostBusy ? "You're in! The host is finishing a match — you'll play in the next one."
++      : "You're in! The match starts when the host is ready.";
++    waitEl.textContent = hostBusy ? "Waiting for the host's match to end…" : "Waiting for the host to start…";
++    paintMode();
++    paintRoster();
++  }
++
++  // One attempt at a time. A newer attempt (or BACK) makes an older one stale: when
+   // its await finally settles it only cleans up after itself.
+   let attempt = 0;
+-  const within = (p, ms, what) => new Promise((res, rej) => {
+-    const to = setTimeout(() => rej(new Error(what)), ms);
+-    p.then((v) => { clearTimeout(to); res(v); }, (e) => { clearTimeout(to); rej(e); });
+-  });
+-  const connectWithin = (net, ms) => within(net.connect(), ms, "no answer from the online service in " + Math.round(ms / 1000) + " s");
+-  // The failure line + the buttons back. Plain text only (textContent): the error
+-  // message is shown in the console, not injected into the page.
+-  function offline(e) {
++  function failed(e, code) {
++    const [head, tail] = failText(e, code);
+     status.textContent = "";
+     const b = document.createElement("b");
+     b.style.color = "#ff9b8a";
+-    b.textContent = "Couldn't reach the online service.";
++    b.textContent = head;
+     status.appendChild(b);
+     status.appendChild(document.createElement("br"));
+-    status.appendChild(document.createTextNode("Check your connection and try again, or play solo from the menu."));
++    status.appendChild(document.createTextNode(tail));
+     status.setAttribute("data-net-error", String((e && e.message) || e || "error").slice(0, 200));
+     createB.disabled = joinB.disabled = false;
+-    startB.style.display = "none";
+-    inviteB.style.display = "none";
+-    rosterEl.innerHTML = "";
++    pick.style.display = "flex";
++    inRoom.style.display = "none";
++    closeB.textContent = "BACK";
+   }
+   async function enter(code, asHost) {
+     const my = ++attempt;
+     createB.disabled = joinB.disabled = true;
+-    status.textContent = "Connecting…";
+-    const net = new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, "last-circle");
+-    // joinRoom resolves (it does not reject) on CHANNEL_ERROR / TIMED_OUT and reports
+-    // them through "error" — without this the lobby printed a room code for a room
+-    // nobody could ever reach.
+-    let chanErr = null;
+-    net.on("error", (e) => { chanErr = (e && e.status) || "error"; });
++    status.textContent = asHost ? "Starting a room…" : "Joining " + code + "…";
++    const net = new RoomNet(netBaseUrl());
+     try {
+-      await connectWithin(net, 20000);
++      await net.connect();
+     } catch (e) {
+-      // esm.sh unreachable, supabase-js failed to load, or no answer: say so and give the
+-      // buttons back. Before this, enter() had no catch — "Connecting…" forever with
+-      // CREATE ROOM and JOIN both disabled.
+       console.warn("[net] online service unreachable:", e);
+-      if (my === attempt && root.isConnected) offline(e);
++      if (my === attempt && root.isConnected) failed(e, code);
+       return;
+     }
+     if (my !== attempt || !root.isConnected) return;   // cancelled / superseded while loading
+@@ -304,60 +426,64 @@ function openLobby(W, sel) {
+     const myName = (W.settings.playerName && W.settings.playerName !== "You")
+       ? W.settings.playerName
+       : "Player-" + net.id.slice(-3).toUpperCase();
+-    S = { net, peers: {}, myName, started: false, lastState: 0, lastBots: 0, root };
+-    S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
+-    S.status = status;             // beginOnlineMatch reports a full room here
++    S = { net, peers: {}, inMatch: {}, myName, started: false, lastState: 0, lastBots: 0, root };
++    bindUi();
+     // P2P overlay (ffg_rtc.js): the state envelope prefers DataChannels;
+-    // signaling + everything critical + the full fallback stay on Supabase.
+-    // ensurePeer is called lazily the first time a peer's state arrives (both
+-    // sides converge; the lower-id offerer rule breaks the tie).
++    // signaling + everything critical + the full fallback stay on the relay.
+     S.rtc = new RTCMesh(net.id, (to, payload) => send("rtc", Object.assign({ to }, payload)));
+     S.rtc.onMessage = (m) => { if (m && m.t) onMsg(W, { from: m.from, t: m.t, d: m.d }); };
+     W.net = S;
++    const sess = S;
+     net.on("msg", (m) => onMsg(W, m));
+-    net.on("peer", ({ count }) => {
++    // these outlive this lobby (BACK TO ROOM builds a new one): they go through S.ui, which bindUi() re-points
++    net.on("peer", () => {
+       if (S !== sess) return;
+-      status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ${Math.max(1, count)} player(s) connected` +
+-        (net.isHost() ? "" : "<br>Waiting for the host to start…");
+-      if (net.isHost()) startB.style.display = count >= 1 ? "inline-block" : "none";
+-      paintRoster();
++      // forget peers who left, so the roster and the start roster agree
++      for (const pid of Object.keys(S.peers)) if (!net.ids.includes(pid)) { delete S.peers[pid]; delete S.inMatch[pid]; }
++      S.ui.onPeer();
+     });
+-    const sess = S;
++    net.on("owner", () => { if (S === sess) S.ui.onPeer(); });
++    net.on("lost", ({ retrying }) => { if (S === sess) S.ui.onLost(retrying); });
++    net.on("rejoined", () => { if (S === sess) { send("hello", { name: S.myName, busy: S.started }); S.ui.onPeer(); } });
+     try {
+-      await within(net.joinRoom(code, asHost), 20000, "the room did not answer in 20 s");
+-      if (chanErr) throw new Error("realtime channel " + chanErr);
++      if (asHost) await net.createRoom();
++      else await net.joinRoom(code);
+     } catch (e) {
+-      console.warn("[net] could not join the room:", e);
+-      if (S === sess) { try { S.rtc && S.rtc.close(); } catch (x) {} try { net.leave(); } catch (x) {} S = null; W.net = null; }
+-      else { try { net.leave(); } catch (x) {} }
+-      if (my === attempt && root.isConnected) offline(e);
++      console.warn("[net] could not " + (asHost ? "start" : "join") + " the room:", e);
++      if (S === sess) { try { S.rtc && S.rtc.close(); } catch (x) {} S = null; W.net = null; }
++      try { net.leave(); } catch (x) {}
++      if (my === attempt && root.isConnected) failed(e, code);
+       return;
+     }
+     if (S !== sess || my !== attempt) { try { net.leave(); } catch (x) {} return; }   // cancelled while joining
+-    send("hello", { name: S.myName });
+-    status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — share this code.` + (asHost ? "" : "<br>Waiting for the host to start…");
+-    inviteB.style.display = "inline-block";
+-    paintRoster();
+-    if (net.isHost()) startB.style.display = "inline-block";
++    send("hello", { name: S.myName, busy: false });
++    showRoom(net);
+   }
+ 
+-  createB.onclick = () => enter(randCode(), true);
+-  joinB.onclick = () => { if (codeInp.value.trim()) enter(codeInp.value.trim(), false); };
++  createB.onclick = () => { W.events.emit("uiClick"); enter(null, true); };
++  joinB.onclick = () => {
++    const c = codeInp.value.trim().toUpperCase();
++    if (c.length !== 4) { status.textContent = "Type the 4-character code your friend sent you."; codeInp.focus(); return; }
++    W.events.emit("uiClick");
++    enter(c, false);
++  };
++  if (sel && sel.resume && S) { bindUi(); showRoom(S.net); }
+   // arrived via ?room=CODE (see init): show the code we are joining, then join
+-  if (sel && sel.room) { codeInp.value = sel.room; enter(sel.room, false); }
++  else if (sel && sel.room) { codeInp.value = String(sel.room).slice(0, 4); enter(codeInp.value, false); }
++  else setTimeout(() => { try { codeInp.focus({ preventScroll: true }); } catch (e) {} }, 0);
+ 
+   startB.onclick = () => {
+-    if (!S) return;
++    if (!S || !S.net.isHost()) return;
+     // roster: host = slot 0; peers by sorted id = slots 1..k. TRUNCATED at
+-    // MAX_GUESTS: see the header — outbound traffic is O(H²) against a hard
+-    // 100 msg/s ceiling that Realtime enforces by dropping the connection.
++    // MAX_GUESTS: every extra human multiplies every outbound message.
+     // START is deliberately NOT disabled past the cap: a 5th peer wandering in
+     // would otherwise lock the host out of ever starting the match. The extras
+     // stay in the room and are rejected by name in beginOnlineMatch.
+-    const ids = Object.keys(S.peers).sort().slice(0, MAX_GUESTS);
++    // players still finishing the previous match sit this one out (they come back to the room after it)
++    const ids = (S.net.ids || []).filter((pid) => pid !== S.net.id && !S.inMatch[pid]).sort().slice(0, MAX_GUESTS);
+     const roster = [{ peerId: S.net.id, slot: 0, name: S.myName }];
+     ids.forEach((pid, i) => roster.push({ peerId: pid, slot: i + 1, name: S.peers[pid] || "Friend" }));
+-    const cfg = { seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: sel.mode === "practice" ? "standard" : sel.mode, roster };
++    const cfg = { seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: roomMode, teams: roomTeams, roster };
+     send("start", cfg);
+     if (beginOnlineMatch(W, cfg) !== false) root.remove();
+   };
+@@ -393,16 +519,27 @@ function beginOnlineMatch(W, cfg) {
+     if (S.status) S.status.innerHTML = `Room is full (${MAX_GUESTS + 1} players). This match started without you.`;
+     return false;
+   }
+-  const humans = cfg.roster.map((r) => ({ slot: r.slot, name: r.name, self: r.peerId === S.net.id }));
++  // teams: "squad" = everyone together, "two" = alternate down the roster (host on A), "ffa" = no team
++  const teamOf = (slot) => cfg.teams === "ffa" ? null : cfg.teams === "two" ? (slot % 2 ? "sqB" : "sqA") : "sq";
++  const humans = cfg.roster.map((r) => ({ slot: r.slot, name: r.name, self: r.peerId === S.net.id, team: teamOf(r.slot) }));
+   S.cfg = cfg;
+   S.mySlot = me ? me.slot : 0;
+   S.started = true;
++  for (const r of cfg.roster) if (r.peerId !== S.net.id) S.inMatch[r.peerId] = true;
++  if (S.net.setFrozen) S.net.setFrozen(true);   // host = authority over the opponents: fixed for the match
+   window.__LC__.startMatch({ mapId: cfg.mapId, mode: cfg.mode, seed: cfg.seed, humans, guestOf: S.net.isHost() ? null : "host" });
+ }
+ 
+ // ── message handling ─────────────────────────────────────────────────────────
++// What a player who is NOT in this room's running match still listens to.
++const LOBBY_MSG = { hello: 1, back: 1, mode: 1, start: 1, rtc: 1 };
++
+ function onMsg(W, { from, t, d }) {
+   if (!S) return;
++  // In the lobby, or playing on alone after the host left: the room's NEXT match
++  // runs on the same actor ids (s0..s49), so its hits, deaths and snapshots must
++  // never reach this world.
++  if ((!S.started || S._hostLostRan) && !LOBBY_MSG[t]) return;
+   // batched cosmetic envelope (see qsend) — unwrap and dispatch in order.
+   // A nested "ev" is skipped rather than recursed: we never send one, so it
+   // could only ever be a malformed packet, and recursing on it is unbounded.
+@@ -413,12 +550,33 @@ function onMsg(W, { from, t, d }) {
+     // two already in the room learned only theirs. Bounded — the reply fires
+     // only for a first sighting, and everyone already in the room has us.
+     const known = !!S.peers[from];
+-    S.peers[from] = d.name;
+-    if (!known) send("hello", { name: S.myName });
++    S.peers[from] = String((d && d.name) || "Friend").slice(0, 24);
++    // busy = that player is inside a match right now (a newcomer then waits for the next one)
++    S.inMatch[from] = !!(d && d.busy);
++    if (!known) send("hello", { name: S.myName, busy: !!S.started });
++    // the host tells a newcomer which mode the room is set to
++    if (!known && S.net.isHost() && S.roomMode && !S.started) send("mode", { mode: S.roomMode(), teams: S.roomTeams ? S.roomTeams() : "squad" });
+     if (S.paintRoster) S.paintRoster();
++    if (S.ui) S.ui.onPeer();
++    return;
++  }
++  if (t === "back") {
++    // that player finished their match and is in the room's lobby again
++    S.inMatch[from] = false;
++    if (S.ui) S.ui.onPeer();
++    return;
++  }
++  if (t === "mode") {
++    // only the room's owner (the host) sets the mode
++    if (from === S.net.owner && S.onMode && !S.started) S.onMode(d && d.mode, d && d.teams);
+     return;
+   }
+-  if (t === "start" && !S.started) {
++  if (t === "start" && d && Array.isArray(d.roster)) {
++    // everyone in that roster is now in a match (players already in one ignore the start below)
++    for (const r of d.roster) if (r && r.peerId && r.peerId !== S.net.id) S.inMatch[r.peerId] = true;
++    if (S.ui && S.started) S.ui.onPeer();
++  }
++  if (t === "start" && !S.started && (!S.net.owner || from === S.net.owner)) {
+     // remove the lobby only if we actually got a slot — beginOnlineMatch writes
+     // the "room is full" message into the lobby that is still on screen
+     if (beginOnlineMatch(W, d) !== false && S && S.root) S.root.remove();
+@@ -628,12 +786,37 @@ export function hostLost(W) {
+     }
+   }
+   try { S.rtc && S.rtc.close(); } catch (e) {}
+-  try { S.net && S.net.leave && S.net.leave(); } catch (e) {}
++  // The ROOM stays open: in a friends room the host leaving the match (BACK TO
++  // ROOM, or a drop) must not throw the guests out of the party. This match goes
++  // on locally; update() stops sending and onMsg ignores match traffic, and
++  // BACK TO ROOM after it returns to the same room. MAIN MENU leaves it.
+   W.net = null;                                 // frame gates (hitstop etc.) read this
+   W.events.emit("hostLost", converted);
+   console.warn(`[net] host lost — converted ${converted} remote actors to bots, continuing offline`);
+ }
+ 
++/** Still in a friends room (the room's socket is open and the host was not lost)? */
++export function inRoom(W) { return !!(S && S.net && S.net.ws && S.net.ws.readyState === 1); }
++
++/** BACK TO ROOM after a match: the party stays together, as in other battle royales. Clears the
++ *  per-match state, un-freezes the host role (the room may have a new host by now) and reopens the
++ *  room's lobby over the menu. The others see this player as ready again ("back"). */
++export function returnToRoom(W) {
++  if (!inRoom(W)) { leave(W); return; }
++  // leaving a match the others are still in: say so, exactly like closing the tab
++  // (beforeunload) — a guest's slot gets a brain on the host at once, and if this
++  // is the host the guests carry on locally right away instead of after the 8 s watchdog
++  if (S.started && !S._hostLostRan && S.mySlot != null) send("bye", { slot: "s" + S.mySlot });
++  W.net = S;   // hostLost() cleared it for the rest of that match
++  Object.assign(S, {
++    _hostLostRan: false, started: false, cfg: null, mySlot: null, hostSlot: null, hostSeen: 0, lastSeen: {}, evQ: [],
++    lastState: 0, lastBots: 0, botsTick: 0, pendingBots: null, droppedMsgs: 0, sendWinT: null, sendWinN: 0,
++  });
++  if (S.net.setFrozen) S.net.setFrozen(false);
++  send("back", {});
++  openLobby(W, { resume: true, mode: S.roomMode ? S.roomMode() : "standard", teams: S.roomTeams ? S.roomTeams() : "squad" });
++}
++
+ export function leave(W) {
+   if (S) {
+     try { S.rtc && S.rtc.close(); } catch (e) {}
+@@ -651,7 +834,7 @@ export function onMatchStart(W) {
+ }
+ 
+ export function update(W, dt) {
+-  if (!S || !S.started || !W.player) return;
++  if (!S || !S.started || S._hostLostRan || !W.player) return;
+   const now = performance.now();
+   // OWN STATE, rate scaled by room size. Every send is billed once per receiving
+   // subscriber, so H humans at 12 Hz cost 12·H·H messages/s: 48 for a pair but
+@@ -659,7 +842,7 @@ export function update(W, dt) {
+   // title. 12/8/6 Hz keeps the state term at 48/72/96. The interpolation
+   // constant has to follow the rate or a 6 Hz peer smears — player.js's
+   // interpRemote reads W._netLerpK when it is set (default 10 ≈ 12 Hz).
+-  const H = Math.max(1, S.net.peerCount || 1);
++  const H = Math.max(1, (S.cfg && S.cfg.roster ? S.cfg.roster.length : S.net.peerCount) || 1);
+   // 12/8/5 Hz. The 4-human floor moved 6 -> 5 as part of the ENVELOPE MERGE
+   // below: the state packet is now the ONLY periodic message a client sends —
+   // evs ride it, and on the host the bot snapshots ride it too. Messages are

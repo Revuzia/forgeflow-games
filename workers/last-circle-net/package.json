@@ -1,0 +1,16 @@
+{
+  "name": "last-circle-net",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Last Circle friends-room relay: Cloudflare Worker + SQLite Durable Objects (Room, Meter)",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8791",
+    "typecheck": "wrangler types --env-interface CfEnv && node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+    "test": "node test/rooms.mjs",
+    "dry-run": "wrangler deploy --dry-run --outdir .wrangler/dry"
+  },
+  "devDependencies": {
+    "wrangler": "^4.92.0"
+  }
+}
