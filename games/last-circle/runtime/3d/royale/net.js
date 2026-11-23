@@ -1,6 +1,6 @@
 /**
- * royale/net.js — play-with-friends multiplayer over Supabase Realtime
- * (NetPlay transport — pure WebSocket relay, $0, no Postgres).
+ * royale/net.js — play-with-friends multiplayer over the Last Circle relay
+ * (RoomNet transport, runtime/net/ffg_cfroom.js: a Cloudflare Worker + one Durable Object per room code).
  *
  * Model: room code lobby, up to 4 humans. The old header said 8 and nothing
  * enforced any number — but Supabase Realtime bills one message per RECEIVING
@@ -78,12 +78,12 @@
  *   LC-14    frag throws ("nade", cosmetic: remote clients can draw the arc / play the toss) and smoke clouds ("smoke": W.smokes entries made
  *            here are relayed once, so the host's bots and every screen see the same smoke; at most SMOKE_MAX_PER_SENDER per sender).
  */
-import { NetPlay } from "../../net/ffg_netplay.js";
+// TRANSPORT (friends rooms, 2026-11-22): the Cloudflare relay workers/last-circle-net (ffg_cfroom.js) replaced the shared Supabase Realtime
+// project (ffg_netplay.js), whose message ceiling was shared by every ForgeFlow game and DROPPED the connection when exceeded. The relay
+// picks the room code, stamps `from` itself, addresses rtc signaling to its `to` only, and names the room's OWNER (the host); served from
+// this machine the game talks to a local `wrangler dev` on 127.0.0.1:8791, anywhere else to the live relay.
+import { RoomNet, netBaseUrl } from "../../net/ffg_cfroom.js";
 import { RTCMesh } from "../../net/ffg_rtc.js";
-
-const SUPABASE_URL = "https://wugoxdewcdxzfppgzohy.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves";
 
 let S = null; // session
 
@@ -1092,7 +1092,7 @@ function openLobby(W, sel) {
   }
   function paintRoster() {
     if (!S || !S.net.room) { rosterEl.innerHTML = ""; return; }
-    // ffg_netplay.js:64 makes the LOWEST peer id the host, and startB.onclick
+    // The relay's OWNER is the host (slot 0), and startB.onclick
     // hands out slots by sorted peer id — so sorting every id (peers + self) on
     // any client reproduces the exact roster the host will build. No guessing.
     // A peer on another WORLD VERSION never gets a slot (SquadHandshake.planStart), so it is shown as such and does not count towards the
@@ -1100,7 +1100,9 @@ function openLobby(W, sel) {
     // LC-11: only peers still in the room (a friend who closed the tab is no longer listed, and gets no slot at START); a peer on another
     // world version stays listed with its badge after it leaves, so the host can still read why it is not in the match
     const nowP = performance.now();
-    const all = Object.keys(S.peers).filter((pid) => S.hs.isPresent(pid, nowP) || S.hs.gvOf(pid) !== S.hs.gv).concat([S.net.id]).sort();
+    const own = S.net.owner;      // the relay's host: slot 0 of the START roster (planStart), the rest by sorted id
+    const all = Object.keys(S.peers).filter((pid) => S.hs.isPresent(pid, nowP) || S.hs.gvOf(pid) !== S.hs.gv).concat([S.net.id]).sort()
+      .sort((a, b) => (a === own ? -1 : b === own ? 1 : 0));
     const badge = (s) => `<span class="lcn-badge">${s}</span>`;
     let h = "";
     let i = -1;                  // index among the peers that can take a slot (self included)
@@ -1222,10 +1224,16 @@ function openLobby(W, sel) {
     status.textContent = "";
     const b = document.createElement("b");
     b.style.color = "#ff9b8a";
-    b.textContent = "Couldn't reach the online service.";
+    const code = e && e.code;
+    const say = code === 4004 ? ["No room with that code.", "Check the code with your friend - a room closes once everyone has left it."]
+      : code === 4009 ? ["That room is full.", "Ask your friend to start a new room, or play solo from the menu."]
+      : code === 4029 ? ["Online play is full for today.", "Try again tomorrow, or play solo from the menu."]
+      : ["Couldn't reach the online service.", "Check your connection and try again, or play solo from the menu."];
+    b.textContent = say[0];
     status.appendChild(b);
     status.appendChild(document.createElement("br"));
-    status.appendChild(document.createTextNode("Check your connection and try again, or play solo from the menu."));
+    status.appendChild(document.createTextNode(say[1]));
+    if (code != null) status.setAttribute("data-net-code", String(code));
     status.setAttribute("data-net-error", String((e && e.message) || e || "error").slice(0, 200));
     createB.disabled = joinB.disabled = false;
     startB.style.display = "none";
@@ -1240,18 +1248,12 @@ function openLobby(W, sel) {
     for (const a of ["data-net-refused", "data-net-versions", "data-net-error"]) status.removeAttribute(a);
     if (reloadB) { reloadB.remove(); reloadB = null; }
     noteEl.textContent = ""; noteEl.style.display = "none";
-    const net = new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, "last-circle");
-    // joinRoom resolves (it does not reject) on CHANNEL_ERROR / TIMED_OUT and reports
-    // them through "error" — without this the lobby printed a room code for a room
-    // nobody could ever reach.
-    let chanErr = null;
-    net.on("error", (e) => { chanErr = (e && e.status) || "error"; });
+    const net = new RoomNet(netBaseUrl());
     try {
       await connectWithin(net, 20000);
     } catch (e) {
-      // esm.sh unreachable, supabase-js failed to load, or no answer: say so and give the
-      // buttons back. Before this, enter() had no catch — "Connecting…" forever with
-      // CREATE ROOM and JOIN both disabled.
+      // the relay did not answer its health probe: say so and give the buttons back (before enter() had a catch it stayed on
+      // "Connecting…" forever with both buttons disabled)
       console.warn("[net] online service unreachable:", e);
       if (my === attempt && root.isConnected) offline(e);
       return;
@@ -1309,8 +1311,8 @@ function openLobby(W, sel) {
     });
     const sess = S;
     try {
-      await within(net.joinRoom(code, asHost), 20000, "the room did not answer in 20 s");
-      if (chanErr) throw new Error("realtime channel " + chanErr);
+      // the relay picks the code for a new room (createRoom); a join rejects with err.code 4004 / 4009 / 4029 / "unreachable"
+      await within(asHost ? net.createRoom() : net.joinRoom(code), 20000, "the room did not answer in 20 s");
     } catch (e) {
       console.warn("[net] could not join the room:", e);
       if (S === sess) { try { S.rtc && S.rtc.close(); } catch (x) {} try { net.leave(); } catch (x) {} S = null; W.net = null; }
@@ -1319,6 +1321,15 @@ function openLobby(W, sel) {
       return;
     }
     if (S !== sess || my !== attempt) { try { net.leave(); } catch (x) {} return; }   // cancelled while joining
+    // HOST = the room's OWNER (the relay's word, not "the lowest peer id"): the creator, and when it leaves the room the longest-present player
+    // (a dropped host keeps it for a 20 s grace). The transport freezes the role during a match (beginOnlineMatch) - host = authority over the
+    // opponents - and re-reads it after (returnToRoom). Our hello's host flag follows it, so a newcomer reads who the host is now.
+    S.hs.host = net.isHost();
+    net.on("owner", () => {
+      if (S !== sess) return;
+      S.hs.host = net.isHost();
+      if (!S.started) { if (net.isHost()) send("hello", myHello()); if (S.paintRoster) S.paintRoster(); if (S.ui) S.ui.onOwner(); }
+    });
     // LC-49 REJOIN: a page that played in this room a moment ago (this tab's record, or one a closed tab of this browser left) asks for its
     // slot back in its hello; the host answers "rejoin" ok (the match's start) or no (why). Asked again every REJOIN_ASK_EVERY_MS while the
     // host has not yet seen the old page leave (a reload can beat its own presence-leave), for the whole rejoin window (REJOIN_ASK_TRIES; it
@@ -1379,7 +1390,7 @@ function openLobby(W, sel) {
     if (net.isHost()) startB.style.display = "inline-block";
   }
 
-  createB.onclick = () => enter(randCode(), true);
+  createB.onclick = () => enter(null, true);   // the relay picks the code
   joinB.onclick = () => { if (codeInp.value.trim()) enter(codeInp.value.trim(), false); };
   // arrived via ?room=CODE (see init): show the code we are joining, then join
   if (sel && sel.room) { codeInp.value = sel.room; enter(sel.room, false); }
@@ -1421,13 +1432,6 @@ const NEVER_SEEN_MS = 60000;
  *  innerHTML — escape before they reach the DOM. */
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-function randCode() {
-  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let s = "";
-  for (let i = 0; i < 4; i++) s += A[Math.floor(Math.random() * A.length)];
-  return s;
 }
 
 // ── P23 wiring helpers ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1958,6 +1962,8 @@ function reject(t, from, why) {
 
 /** Is a "start" from the room's host? The peer whose hello said host: 1 - or, when no such hello arrived, the peer the roster puts in slot 0. */
 function startFromHost(from, d) {
+  // the relay names the room's owner (= the host) on every welcome / presence: that is the answer when we have it
+  if (S.net && typeof S.net.owner === "string" && S.net.owner) return from === S.net.owner;
   let knownHost = null;
   for (const [pid, rec] of S.hs.peers) if (rec && rec.host) { knownHost = pid; break; }
   if (knownHost) return from === knownHost;
