@@ -141,16 +141,24 @@ export const POSES = {
   pistolReady: [[-0.05, -0.95, 0.30], [0.55, 0.05, 0.83], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
   // (W10 anim fix 2) one-hand pistol CARRY on the move, not aiming (the commercial pistol run sets): the firing hand low by the
   // hip, muzzle down (barrelWeld); the support arm free, swinging with the stride (rows 2-3 rebuilt from `swing`, see armDirs)
-  pistolLow: [[-0.14, -0.97, 0.2], [-0.04, -0.62, 0.78], [0.16, -0.99, 0], [0.1, -0.26, 0.96]],
+  // (W10 anim fix 3, F1) the free arm's still rows = armDirs at swing 0: the upper arm a little behind the body, the forearm down and
+  // forward toward the belt buckle (elbow interior ~105 deg), not the level forward reach that read as a zombie arm
+  pistolLow: [[-0.14, -0.97, 0.2], [-0.04, -0.62, 0.78], [0.1, -0.95, -0.3], [-0.22, -0.52, 0.85]],
 };
 // the modes whose arms track the aim pitch
 const PITCHED = { gunReady: 1, reload: 1, pistolAim: 1, pistolReady: 1 };
-const SWING_BEND = 1.3;   // rad: the free support forearm runs this far ahead of its upper arm (elbow interior ~105 deg)
-/** the mode's four arm directions; pistolLow's support arm swings `swing` rad forward (+) / back (-) about the shoulder */
+// (W10 anim fix 3, F1) the free support arm of the one-hand pistol carry, a runner's arm (elbow 70-110 deg, hand travel >= 15 cm):
+// the upper arm swings about SWING_C (a little behind the body) by SWING_A x `swing`, the forearm SWING_BEND ahead of it and turned in
+// toward the body's centre line, so the hand travels hip -> belt buckle. It was swing +-0.45 about a VERTICAL upper arm with the
+// forearm 1.3 rad ahead: at swing 0 the forearm pointed level forward and at the front of the swing the hand reached chest height,
+// 0.36 m ahead and outside the shoulder (blind check: last on crouch / back, behind the W9 carry on run / sprint / strafe).
+const SWING_BEND = 1.32, SWING_C = -0.3, SWING_A = 0.8, SWING_IN = -0.22;
+/** the mode's four arm directions; pistolLow's support arm swings with `swing` (rad, + = forward) about the shoulder */
 function armDirs(mode, swing) {
   const P = POSES[mode];
   if (mode !== "pistolLow" || !swing) return P;
-  return [P[0], P[1], [0.16, -Math.cos(swing), Math.sin(swing)], [0.1, -Math.cos(swing + SWING_BEND), Math.sin(swing + SWING_BEND)]];
+  const u = SWING_C + SWING_A * swing, f = u + SWING_BEND;
+  return [P[0], P[1], [0.1, -Math.cos(u), Math.sin(u)], [SWING_IN, -Math.cos(f), Math.sin(f)]];
 }
 
 /**
