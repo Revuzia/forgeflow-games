@@ -144,6 +144,10 @@ export const POSES = {
   // (W10 anim fix 3, F1) the free arm's still rows = armDirs at swing 0: the upper arm a little behind the body, the forearm down and
   // forward toward the belt buckle (elbow interior ~105 deg), not the level forward reach that read as a zombie arm
   pistolLow: [[-0.14, -0.97, 0.2], [-0.04, -0.62, 0.78], [0.1, -0.95, -0.3], [-0.22, -0.52, 0.85]],
+  // (W10 anim fix 4, F-A) the compact two-hand LOW READY (a pistol on the crouch, the strafes, the backpedal): the firing upper arm down
+  // by the ribs, the forearm angled down and in so the gun sits low on the centre line (lower chest / belly) ~0.25 m out, the support
+  // arm mirrored onto it (supportHandIK lands the hand on the grip); the muzzle LOW_MODES.pistolCompact down (barrelWeld)
+  pistolCompact: [[0.05, -0.93, 0.36], [0.62, -0.3, 0.72], [-0.05, -0.93, 0.36], [-0.62, -0.3, 0.72]],
 };
 // the modes whose arms track the aim pitch
 const PITCHED = { gunReady: 1, reload: 1, pistolAim: 1, pistolReady: 1 };
