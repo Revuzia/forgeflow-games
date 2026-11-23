@@ -2582,7 +2582,7 @@ function resetMatchState() {
   S.pendingBots = null; S.evQ = []; S.lastState = 0; S.lastBots = 0; S.botsTick = 0;
   S.pendingTakeovers = null; S.hostGone = false; S.mapFails = null; S.pendingNotices = null;
   S.pendingRematch = null; S.wantRematch = false;
-  S.pingIn = null; S.pingOut = null;
+  S.pingIn = null; S.pingOut = null; S.tickAt = 0;
   // P23: the receive order gate, the revive book, the rejoin book and the relayed smokes belong to the match that ended (txSeq keeps counting)
   S.rxGate = null; S.reviveIn = null; S.reviveOut = null; S.goneAt = null; S.rejoined = null; S.rejoin = null; S.slotKeys = null;
   S.teamCheck = null; S.rjSavedAt = 0; S.silentTake = null; S.reclaimed = null; S.lootDefer = null;
@@ -2711,6 +2711,15 @@ export function update(W, dt) {
   if (S.pingOut && S.pingOut.pending) flushPingOut(W, S.pingOut);   // LC-07: a held map pin goes out as soon as its 1/s frees
   if (S.pingIn && S.pingIn.pending) flushPingIn(W, S.pingIn);
   const now = performance.now();
+  // LOCAL STALL: the silence watchdogs below judge the OTHER side by when its last packet was handled HERE. While this page itself was not
+  // ticking (a long world build on a slow device - the guest of a rematch measured 19 s on its first drop tick -, a hidden tab), the
+  // packets that arrived sit unhandled in the queue, and the first tick after it read the stall as the host's silence: hostLost, the guest
+  // played on alone and the host handed its body to a bot. A gap of more than 2 s between two ticks restarts every silence clock from now.
+  if (!S.tickAt || now - S.tickAt > 2000) {                  // (the first tick of a match counts: the load before it was a stall)
+    if (S.hostSeen) S.hostSeen = now;
+    if (S.lastSeen) for (const id in S.lastSeen) S.lastSeen[id] = now;
+  }
+  S.tickAt = now;
   // LC-49 REJOIN, the returning page: "ready" is repeated every 3 s until the host hands the body back ("back")
   if (S.rejoin && S.rejoin.state === "ready" && now - S.rejoin.readyAt > 3000 && S.rejoin.tries < 6) {
     S.rejoin.readyAt = now; S.rejoin.tries++;
