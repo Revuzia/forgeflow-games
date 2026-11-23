@@ -9,8 +9,8 @@
 //     between content releases, so give it a short cache TTL and everything else a long one.
 //   * a one-off override for QA: append ?catalog=<url> to the page URL (it wins over this file).
 // server: the game server for online play (`npm run server`, CONTRACT §7.2), e.g. 'wss://play.example.com'.
-//   null = this build plays every queue against bots. A one-off override: ?server=<url>.
+//   null = this build plays every queue offline. A one-off override: ?server=<url>.
 window.VALE_CONFIG = {
   catalog: './catalog/manifest.json',
-  server: null,
+  server: 'wss://vale-net.isimcha85.workers.dev/ws',
 };
