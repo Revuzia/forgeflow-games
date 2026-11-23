@@ -2072,6 +2072,11 @@ function beginOnlineMatch(W, cfg) {
   S.mySlot = me ? me.slot : 0;
   S.started = true;
   S.rematchN = Math.max(S.rematchN | 0, cfg.rematch | 0);
+  // HOST = authority over the opponents: the role is FROZEN for the match (the relay may hand the room's ownership on while it runs - a
+  // host that left - and that must never flip who simulates the bots under a running match; a lost host is hostLost's job). returnToRoom
+  // un-freezes it. Everyone this start rostered is IN A MATCH for the room's lobby until their "back".
+  if (S.net.setFrozen) S.net.setFrozen(true);
+  for (const r of cfg.roster) if (r && r.peerId && r.peerId !== S.net.id) S.inMatch[r.peerId] = true;
   // LC-49: the host files each guest's rejoin commitment by slot; a guest keeps its secret (and, from update(), its kit) for a reload
   if (S.net.isHost()) {
     S.slotKeys = new Map();
