@@ -319,6 +319,31 @@ const ext = (id: string): SB => app.bodies.extras.find((x) => x.itemId === id)!.
     c.scrolled > 30 && c.dz - s.dz <= -0.3 && s.scrolled === 0, JSON.stringify({ edge: { frames: c.scrolled, dz: f3(c.dz) }, middle: { frames: s.scrolled, dz: f3(s.dz) } }));
 }
 
+// ---- K10 (round 15, R15_FIX F9; VERDICT_R14 F9): D-104's float height and toss cap belong to a ROOM (a body with place bounds); Home's lone squishy, the
+//      published toy (no place bounds), keeps the published 0.35 m and 6 m/s ----
+{
+  const measure = (room: boolean): { hover: number; toss: number } => {
+    const b = new SoftBody(speciesBaseGenome('dollop', 1)) as unknown as SB & { step(dt: number): void; raycast(o: unknown, d: unknown): { vertex: number; point: { x: number; y: number; z: number } } | null; grab(i: number, v: number, p: unknown): void; grabMove(i: number, p: unknown): void; grabRelease(i: number): void };
+    if (room) b.setBounds?.(1, 0, 0, 5.5, 3.9, 0.4);
+    const run = (n: number): void => { for (let i = 0; i < n; i++) b.step(1 / 60); };
+    run(30);
+    const rest = b.center.y;
+    b.gravity = false; run(240);
+    const hover = b.center.y - rest;
+    b.gravity = true; run(240);
+    // the fastest toss: picked up (lift), the hand swept 6 m to the side in 0.2 s and let go while it moves
+    const h = b.raycast({ x: b.center.x, y: b.center.y + 3, z: b.center.z }, { x: 0, y: -1, z: 0 })!;
+    b.grab(0, h.vertex, h.point); b.lift?.(0); run(12);
+    for (let i = 1; i <= 12; i++) { b.grabMove(0, { x: h.point.x + i * 0.5, y: h.point.y + 0.3, z: h.point.z }); run(1); }
+    const x0 = b.center.x; b.grabRelease(0); run(3);
+    return { hover, toss: (b.center.x - x0) / (3 / 60) };
+  };
+  const toy = measure(false), room = measure(true);
+  check('K10 (round 15) the bigger rooms\' numbers belong to a room: a body with place bounds hovers 0.6 m over its rest height in Float and its fastest toss is 7.5 m/s; a body without (Home\'s lone squishy, the published toy) keeps the published 0.35 m and 6 m/s',
+    Math.abs(toy.hover - 0.35) < 0.06 && Math.abs(room.hover - 0.6) < 0.06 && toy.toss > 5.4 && toy.toss <= 6.05 && room.toss > 6.9 && room.toss <= 7.55,
+    JSON.stringify({ toy: { hover: f3(toy.hover), toss: f3(toy.toss) }, room: { hover: f3(room.hover), toss: f3(room.toss) } }));
+}
+
 console.error = realError;
 if (errors.length) console.log('console.error during the run:', errors.slice(0, 3).map((a) => String(a[0]).slice(0, 200)));
 check('no console.error during the run', errors.length === 0, `${errors.length}`);

@@ -27,6 +27,8 @@ export const CARRY_TIP = 'Drag to carry';
 export const HINT_ROOM = {
   touch: 'Drag to carry · tap to poke · hold, then drag out to stretch',
   pointer: 'Drag to carry · click to poke · hold, then drag out to stretch · Shift + drag pulls both sides',
+  // (round 15, R15_FIX F11) the room camera's own line: zoom and moving the view (D-104), on the returning pill's every second turn (ui/hint.ts)
+  view: { touch: 'Pinch to zoom · drag with two fingers to look around', pointer: 'Wheel to zoom · Shift + right-drag to look around · right-drag turns the view' },
 } as const;
 const PS = 36;   // (physics/softbody.ts PS: the packed prop stride; see PropSolve)
 
@@ -155,6 +157,8 @@ export interface Hands {
 const SLOP = 14;
 /** a finger that has not moved more than STILL_PX for STILL_MS lets go of a still hand: set down, never thrown (src/input/gestures.ts has the same pair) */
 const STILL_MS = 120, STILL_PX = 3;
+/** (round 15, R15_FIX F3) ... and so does a finger slower than FLICK_V px per ms on the screen at the let go (gestures.ts has the same pair and the reason) */
+const FLICK_V = 0.35, FLICK_TAU = 50;
 const nowMs = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 export function createHands(d: HandsDeps): Hands {
@@ -162,6 +166,7 @@ export function createHands(d: HandsDeps): Hands {
   const on = new Uint8Array(N), pid = new Int32Array(N), who = new Int16Array(N), lifted = new Uint8Array(N), vtx = new Int32Array(N);
   const x0 = new Float32Array(N), y0 = new Float32Array(N), px = new Float32Array(N), py = new Float32Array(N);
   const mx = new Float32Array(N), my = new Float32Array(N), tm = new Float64Array(N);   // where and when the finger last moved (its still let go)
+  const fv = new Float32Array(N), ft = new Float64Array(N), fx = new Float32Array(N), fy = new Float32Array(N);   // (round 15) the finger's own speed on the screen (px / ms, smoothed) and its last sample
   const thr: V3[] = [], st: CarryPlane[] = [], offs: V3[] = [];
   for (let j = 0; j < N; j++) { thr.push({ x: 0, y: 0, z: 0 }); st.push(carryPlane()); offs.push({ x: 0, y: 0, z: 0 }); }
   const bodyOf = (j: number): SoftBodyLike | null => (on[j] === 1 ? d.body(who[j]) : null);
@@ -170,7 +175,7 @@ export function createHands(d: HandsDeps): Hands {
   function release(j: number): void {
     const b = bodyOf(j);
     on[j] = 0;
-    if (b && lifted[j] === 1) { try { b.grabRelease(HAND2_SLOT as 0 | 1, nowMs() - tm[j] >= STILL_MS); } catch (e) { d.report(e); } }
+    if (b && lifted[j] === 1) { const t = nowMs(); try { b.grabRelease(HAND2_SLOT as 0 | 1, t - tm[j] >= STILL_MS || fv[j] * Math.exp(-(t - ft[j]) / FLICK_TAU) < FLICK_V); } catch (e) { d.report(e); } }
     lifted[j] = 0; st[j].b = null;
   }
   function aim(j: number): void {
@@ -223,7 +228,7 @@ export function createHands(d: HandsDeps): Hands {
       on[j] = 1; pid[j] = id; who[j] = bi; lifted[j] = 0; vtx[j] = hit!.vertex;
       thr[j].x = hit!.point.x; thr[j].y = hit!.point.y; thr[j].z = hit!.point.z;
       x0[j] = x; y0[j] = y; px[j] = x; py[j] = y; st[j].b = null;
-      mx[j] = x; my[j] = y; tm[j] = nowMs();
+      mx[j] = x; my[j] = y; tm[j] = nowMs(); fv[j] = 0; fx[j] = x; fy[j] = y; ft[j] = tm[j];
       return true;
     },
     drag(id, x, y) {
@@ -231,6 +236,7 @@ export function createHands(d: HandsDeps): Hands {
       if (j < 0) return false;
       px[j] = x; py[j] = y;
       if (Math.hypot(x - mx[j], y - my[j]) > STILL_PX) { mx[j] = x; my[j] = y; tm[j] = nowMs(); }
+      { const t = nowMs(), dt = t - ft[j]; if (dt > 0) { const k = Math.exp(-dt / FLICK_TAU); fv[j] = fv[j] * k + (Math.hypot(x - fx[j], y - fy[j]) / dt) * (1 - k); fx[j] = x; fy[j] = y; ft[j] = t; } }
       const b = bodyOf(j);
       if (!b) { on[j] = 0; return true; }
       if (lifted[j] === 0) {

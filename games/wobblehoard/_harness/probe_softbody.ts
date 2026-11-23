@@ -1853,9 +1853,10 @@ async function main(): Promise<void> {
     const b = new SoftBody(starter);
     b.gravity = false;
     b.reset();
-    // RE-SPECIFIED in round 14 (R14_ROOMS, D-104, the owner 2026-11-23: "Make sq footage of rooms wider and volume bigger"): the hover is 0.6 m over the rest
-    // height now (softbody.ts HOVER_ABOVE; it was 0.35): floats have visibly more air in the bigger rooms. Same tolerance.
-    const R = b.restRadius, hoverY = R + 0.6;
+    // (round 14 re-specified this row to 0.6 m: D-104's "volume bigger" had changed the constant for every body. Round 15, R15_FIX F9: the row is the LIVE one
+    // again, restRadius + 0.35: a body with no place bounds is the published toy (Home's lone squishy) and hovers where it did; a body in a ROOM (setBounds: a place,
+    // Home with two or more out) hovers 0.6 m up, softbody.ts HOVER_ROOM, which probe_carry's K10 row holds)
+    const R = b.restRadius, hoverY = R + 0.35;
     run(b, 3);
     const idle = { x: b.center.x, y: b.center.y, z: b.center.z };
     let maxDist = 0;
@@ -1868,7 +1869,7 @@ async function main(): Promise<void> {
     b.nudge(v3(3, 1, -2));
     run(b, 6.0, track);
     const endOff = Math.hypot(b.center.x, b.center.z), endDy = Math.abs(b.center.y - hoverY);
-    add('G1', 'float mode: hover height at rest (centre y vs restRadius + 0.6, bob +/-0.03)', `${f2(idle.y, 3)} vs ${f2(hoverY, 3)}`, 'within 0.06', Math.abs(idle.y - hoverY) < 0.06);
+    add('G1', 'float mode: hover height at rest (centre y vs restRadius + 0.35, bob +/-0.03)', `${f2(idle.y, 3)} vs ${f2(hoverY, 3)}`, 'within 0.06', Math.abs(idle.y - hoverY) < 0.06);
     add('G1', 'float mode: farthest horizontal excursion from the origin after shoves', `${f2(maxDist, 3)} m`, '<= 1.5 m', maxDist <= 1.5);
     add('G1', 'float mode: back at hover 6 s after a hard nudge (horizontal offset, height error)', `${f2(endOff, 3)} m, ${f2(endDy, 3)} m`, '< 0.05 m, < 0.06 m', endOff < 0.05 && endDy < 0.06);
     add('info', 'float mode: horizontal offset 1.5 s after a finger shove', `${f2(dMid, 3)} m`, '(information)', true);

@@ -716,6 +716,11 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
         const cv = n === 1 ? c : roomCamsOf(fr, n, s)[ci];
         for (const [px, pz] of corners(k, x, z)) { if (!inIns(cv, proj(cv, px, 0, pz)) || (k.h > 0 && !inIns(cv, proj(cv, px, k.h, pz)))) { issues.push(`n${n} out of view${n === 1 ? '' : ' in the whole-room view'}`); break; } }
         const [tx, tyy, tz] = topPt(k, x, z), [psx, psy] = proj(c, tx, tyy, tz);
+        // (round 15, R15_FIX F2; VERDICT_R14 F2: "the camera's own view shows only the Felt Ball; the Music Box, Shelf, Lamp and Pad were moved to the rim and sit
+        // outside the frame") TIGHTENED: with two or three out (from the thing's fromN) the room camera BY ITSELF, the party at rest at its slots, shows the thing:
+        // the middle of its footprint at the floor and at its top inside the frame between the HUD bands, at every scale and rest shape. (Four and five out: the
+        // row of slots is 5.2 m wide and the camera frames it; a thing may then stand outside the frame, the rule above (the whole-room view) still holds.)
+        if (n >= 2 && n <= 3 && (!inIns(c, proj(c, x, 0, z)) || (k.h > 0 && !inIns(c, proj(c, x, k.h, z))))) issues.push(`n${n} outside the camera's own view`);
         if (n >= 2 && !(psx >= 0 && psx <= c.W && psy >= 0 && psy <= c.H)) continue;
         for (const [bx, bz] of c.slots) { if (bz <= tz + 0.05) continue; const [cx, cy, ea, eb] = bodyEll(c, bx, bz);
           if (Math.hypot((psx - cx) / ea, (psy - cy) / eb) < 0.95) { issues.push(`n${n} behind a body`); break; } }
@@ -832,17 +837,37 @@ if (process.env.RUGSEARCH) {
     const pr = homeRow(H1).probs.filter((p) => p.startsWith('WIDE')); console.log(`rug use (${ux}, ${uz}) a ${a}: ${pr.length ? pr.join(' | ') : 'ok'}`); }
   process.exit(0);
 }
+// (round 15, dev tool) HOMEVIEW=1: where the room camera BY ITSELF looks at Home with the party at its slots (two to five out, both frames, scale 1 and the
+// extremes): the floor it shows between the HUD bands (the four corners of the inset frame on the floor) and every thing's spot on screen. A tool for
+// re-laying Home (which spots the default view shows), not a row.
+if (process.env.HOMEVIEW) {
+  const H0 = DEFS.find((d) => d.id === 'home')!;
+  for (const fr of ['desktop', 'phone'] as const) for (let n = 2; n <= 5; n++) for (const sc of [0.8, 1.0, 1.25]) {
+    const c = camsOf(fr, n, sc)[0], q = (sx: number, sy: number): string => ground(c, sx, sy).map((v) => v.toFixed(2)).join(',');
+    const th = H0.things.map((t, i) => { const sp = fr === 'phone' ? H0.tall.things[i] : t, [px, py] = proj(c, sp.x * sc, 0, sp.z * sc); return `${t.id} ${px.toFixed(0)},${py.toFixed(0)}${inIns(c, [px, py]) ? '' : ' OUT'}`; });
+    console.log(`HOMEVIEW ${fr} n${n} s${sc}: aim ${c.aim.map((v) => v.toFixed(2)).join(',')} floor back ${q(c.ins.l, c.ins.t)} .. ${q(c.W - c.ins.r, c.ins.t)} front ${q(c.ins.l, c.H - c.ins.b)} .. ${q(c.W - c.ins.r, c.H - c.ins.b)} | ${th.join('; ')}`);
+  }
+  process.exit(0);
+}
 if (process.env.DT18SEARCH) {
   const [id, fr, box] = process.env.DT18SEARCH.split(':') as [string, 'phone' | 'desktop', string | undefined];
   const H0 = DEFS.find((d) => d.id === 'home')!, k = H0.things.findIndex((t) => t.id === id), TALLF = fr === 'phone';
   const [gx0, gx1, gz0, gz1] = (box ?? '-3.2,3.2,-3.2,2.4').split(',').map(Number);
   const cur = TALLF ? H0.tall.things[k] : H0.things[k], found: [number, number, number][] = [];
   for (let gz = gz0; gz <= gz1 + 1e-9; gz += 0.05) for (let gx = gx0; gx <= gx1 + 1e-9; gx += 0.05) {
-    if (Math.hypot(gx, gz) > 3.3) continue;
+    if (Math.hypot(gx, gz) > HOME_R - 0.3) continue;   // (round 15: the felt is r 5.5 m now; it was 3.3 of the live 3.4)
     const x = +gx.toFixed(2), z = +gz.toFixed(2);
+    // (round 15, R15_FIX F2) DT18DEF=<N>: only spots the room camera BY ITSELF shows (the party at its slots) with max(2, fromN) to N out, at every scale and
+    // rest shape: the thing's footprint middle at the floor and at its top inside the frame between the HUD bands
+    if (process.env.DT18DEF) { const t0 = H0.things[k], hTop = t0.mech === MECH.block ? (t0.p.shadeH ?? 2 * t0.size[1]) : t0.mech === MECH.pad ? 0.06 : 2 * t0.size[0], f0 = Math.max(2, (process.env.DT18FROMN ? +process.env.DT18FROMN : cur.fromN) ?? 2);
+      let seen = true;
+      for (let n = f0; n <= +process.env.DT18DEF && seen; n++) for (const sc of SCALES) { for (const c of camsOf(fr, n, sc)) if (!inIns(c, proj(c, x * sc, 0, z * sc)) || !inIns(c, proj(c, x * sc, hTop, z * sc))) { seen = false; break; } if (!seen) break; }
+      if (!seen) continue; }
     const fN = process.env.DT18FROMN ? +process.env.DT18FROMN : undefined;
-    const things = H0.things.map((t, q) => (q === k && !TALLF ? { ...t, x, z, ...(fN ? { fromN: fN } : {}) } : t));
-    const tall = { ...H0.tall, things: H0.tall.things.map((t, q) => (q === k && TALLF ? { ...t, x, z, ...(fN ? { fromN: fN } : {}) } : t)) };
+    // (round 15: the thing's use spot moves with it, the same offset: a re-lay moves both; before, a pad or the lamp could only be searched within reach of its old use spot)
+    const mvU = (u: readonly [number, number] | undefined, t: { x: number; z: number }): [number, number] | undefined => (u ? [+(u[0] + x - t.x).toFixed(2), +(u[1] + z - t.z).toFixed(2)] : undefined);
+    const things = H0.things.map((t, q) => (q === k && !TALLF ? { ...t, x, z, ...(t.useSpot ? { useSpot: mvU(t.useSpot, t) } : {}), ...(fN ? { fromN: fN } : {}) } : t));
+    const tall = { ...H0.tall, things: H0.tall.things.map((t, q) => (q === k && TALLF ? { ...t, x, z, ...(t.use ? { use: mvU(t.use, t) } : {}), ...(fN ? { fromN: fN } : {}) } : t)) };
     const zones = H0.zones;
     const H1 = { ...H0, things, tall, zones } as PlaceDef;
     const h18 = hideRow(H1, { id, fr }), hb = h18.bad;

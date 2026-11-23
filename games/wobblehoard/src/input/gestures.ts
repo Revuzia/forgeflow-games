@@ -156,6 +156,8 @@ interface Ptr {
   orbitAnnounced: boolean;
   /** (CARRY) a carry's pointer: where it last moved by more than STILL_PX and when (a let go after STILL_MS without moving is a set-down, never a throw) */
   lift?: boolean; mx?: number; my?: number; tm?: number;
+  /** (CARRY, round 15) the finger's own speed on the screen (px per ms, smoothed over FLICK_TAU) and its last sample: a let go under FLICK_V is a set-down */
+  fv?: number; fx?: number; fy?: number; ft?: number;
   /** a Shift pull's second grab: its slot (-1 = none) and the surface point it holds (the camera-facing plane for its target goes through it) */
   mslot: Slot | -1;
   mthrough: V3 | null;
@@ -166,6 +168,12 @@ interface Ptr {
 /** The mirror point shrinks toward the centre by this factor per try while the ray through it misses the body, down to MIRROR_MIN_SCALE. */
 /** (CARRY) a carry's finger that has not moved more than STILL_PX for STILL_MS lets go of a still hand */
 const STILL_MS = 120, STILL_PX = 3;
+/** (CARRY, round 15, R15_FIX F3: VERDICT_R14 F3, "a carry let go by Home's back rim jumps 4 m") THE FINGER decides between a toss and a set-down, not the hand:
+ *  a carry let go while the finger moves slower than FLICK_V px per ms on the screen (350 px/s; its speed smoothed over FLICK_TAU ms and fading while it rests)
+ *  lets go of a still hand too. The hand's speed is measured across the FLOOR (the level plane): far back in a room a few px of finger are metres of hand, and
+ *  the room view scrolls the hand along under a finger at the frame's edge, so a slow or just-stopped finger let go of a hand at up to the fastest toss: the
+ *  squishy was thrown at the rim and came back across the felt. A flick (a fast finger at the let go) is the published toss as before. */
+const FLICK_V = 0.35, FLICK_TAU = 50;
 const MIRROR_SHRINK = 0.92;
 const MIRROR_MIN_SCALE = 0.5;
 
@@ -273,7 +281,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       const hit = p.hit!;
       if (!shift && p.tLast - p.t0 <= cfg.carryMs && host.carryOn?.() === true && lone(p)) {
         // CARRY (round 14): the drag started on the body before it was held still: pick it up now, it comes with the finger (any direction)
-        p.mode = 'pull'; p.lift = true; p.mx = x; p.my = y; p.tm = p.tLast;
+        p.mode = 'pull'; p.lift = true; p.mx = x; p.my = y; p.tm = p.tLast; p.fv = 0; p.fx = x; p.fy = y; p.ft = p.tLast;
         emit({ type: 'gesture', kind: 'carry', pointer: p.id, slot: p.slot });
         emit({ type: 'fingerUp', slot: p.slot, why: 'pull' });
         emit({ type: 'grab', slot: p.slot, vertex: hit.vertex, target: host.planePoint(x, y, hit.point) ?? hit.point, lift: true });
@@ -296,6 +304,10 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       doRub(p, x, y);
     } else if (p.mode === 'pull') {
       if (p.lift && Math.hypot(x - p.mx!, y - p.my!) > STILL_PX) { p.mx = x; p.my = y; p.tm = p.tLast; }
+      if (p.lift && p.tLast > p.ft!) {   // (the finger's own speed; a call with the same point (retarget: the view moved under a still finger) samples a speed of 0)
+        const dt = p.tLast - p.ft!, k = Math.exp(-dt / FLICK_TAU);
+        p.fv = p.fv! * k + (Math.hypot(x - p.fx!, y - p.fy!) / dt) * (1 - k); p.fx = x; p.fy = y; p.ft = p.tLast;
+      }
       const target = host.planePoint(x, y, p.hit!.point);
       if (target) emit({ type: 'grabMove', slot: p.slot, target });
       moveMirror(p, x, y);
@@ -307,7 +319,8 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       if (p.mode === 'pull') {
         const why = cancelled ? 'cancel' : 'up';
         // (CARRY: a finger that has rested STILL_MS lets go of a still hand, even while the room view scrolls the hand along: it sets the squishy down, never throws it)
-        emit(p.lift && !cancelled && p.tLast - p.tm! >= STILL_MS ? { type: 'grabRelease', slot: p.slot, why, still: true } : { type: 'grabRelease', slot: p.slot, why });
+        // (round 15: ... and so does a finger that is slow on the screen at the let go, FLICK_V; with no clock at all (every time equal) nothing is known: the hand decides)
+        emit(p.lift && !cancelled && (p.tLast - p.tm! >= STILL_MS || (p.tLast > p.t0 && p.fv! * Math.exp(-(p.tLast - p.ft!) / FLICK_TAU) < FLICK_V)) ? { type: 'grabRelease', slot: p.slot, why, still: true } : { type: 'grabRelease', slot: p.slot, why });
         if (p.mslot !== -1) emit({ type: 'grabRelease', slot: p.mslot, why });   // a Shift pull lets go of both hands, exactly once each
       } else {
         if (!cancelled && p.mode === 'press' && !p.squish) emit({ type: 'gesture', kind: 'tap', pointer: p.id, slot: p.slot });

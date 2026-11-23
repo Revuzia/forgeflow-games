@@ -521,7 +521,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     case BEH.USE: startUse(w, s, out, ev, i, bArg, (bs * 1000) | 0); break;
     case BEH.BASK: startBask(w, s, out, i, (bs * 1000) | 0); break;
     case BEH.NAP: startNap(w, s, out, ev, i, (bs * 1000) | 0); break;
-    case BEH.WANDER: if ((towardThing(w, s, i) || towardParty(w, s, i) || freeTarget(w, s, i, w.home ? 2500 : 4000)) && travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.WANDER, (bs * 1000) | 0, w.home ? 20000 : 32000); w.ph[i] = 1; } else w.coo[i * 26 + BEH.WANDER] = tb + 2; break;
+    case BEH.WANDER: if ((towardThing(w, s, i) || towardParty(w, s, i) || freeTarget(w, s, i, w.home && w.nO < 2 ? 2500 : 4000)) && travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.WANDER, (bs * 1000) | 0, w.home && w.nO < 2 ? 20000 : 32000); w.ph[i] = 1; } else w.coo[i * 26 + BEH.WANDER] = tb + 2; break;
   }
 }
 /** The seeded noise of +-0.05 is written inline as (rnd(w, i) * NZ - BRAIN.noise): rnd returns a small int, so nothing is boxed (LF-02). */
@@ -663,7 +663,9 @@ function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
     // place of several kinds a thing nobody in the party has used yet this visit draws it from 4.5 m (a new thing to try across the place)
     // (round 14, R14_ROOMS, D-104: the rooms are 1.62 times the live ones on each side, the things as much further apart) B04's reach grows with the room: 3 m -> 4.8 m,
     // and 4.5 m -> 7.2 m for a thing nobody has used yet, in a PLACE; Home keeps round 4's numbers (its lone squishy is the published toy)
-    const reach2 = w.home ? (variety && w.tU[k] < 0 ? 20.25 * CM2 : 9 * CM2) : variety && w.tU[k] < 0 ? 51.84 * CM2 : 23.04 * CM2;
+    // (round 15, R15_FIX F2; VERDICT_R14 F2: "LIFE's Home reach kept at 3 m": with two or more out Home is a room too (D-104) and its things stand up to 3.6 m from
+    // the middle of the party row: the room's numbers there; Home's LONE squishy keeps round 4's)
+    const reach2 = w.home && w.nO < 2 ? (variety && w.tU[k] < 0 ? 20.25 * CM2 : 9 * CM2) : variety && w.tU[k] < 0 ? 51.84 * CM2 : 23.04 * CM2;
     if (d2p(w, s, i) > reach2 && w.pl[i] <= 0.8 && !(floor && w.tU[k] < 0)) continue;
     let v = 0.3 + 0.5 * w.pl[i] + ((PREFS[f] & (1 << w.tM[k])) !== 0 ? 0.15 : 0) - 0.12 * w.uV[i];
     if (w.def && w.def.things[k].id === fav) v += 0.3;
@@ -1576,7 +1578,16 @@ function startNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvent
     for (let k = 0; k < w.nTD; k++) if (w.tM[k] === 0 && w.tPa[k] >= 0 && w.pN[w.tPa[k]] && w.rOL[k] >= 0) rug = k;
     let napperOnRug = false;
     for (let j = 0; j < s.n; j++) if (j !== i && w.ac[j] && w.beh[j] === BEH.NAP && w.tT[j] === rug && rug >= 0) napperOnRug = true;
-    if (rug >= 0 && napperOnRug && w.tUX[rug] === w.tUX[rug]) { w.f[F.X] = w.tUX[rug]; w.f[F.Z] = w.tUZ[rug]; w.tT[i] = rug; ok = true; }
+    // (round 15, R15_FIX F2) ... and, Home being a room with two or more out (D-104: a squishy lives where it was put, the party roams the felt), one whose own
+    // spot is not on the rug walks to the rug's use spot too, unless a napper already lies or is on its way there: the Snooze Rug is where Home's naps are, for
+    // every squishy of the party and not only the one whose mat slot is on it (VERDICT_R14 F2: on a phone no nap of 180 s was on the rug)
+    let offRug = false, spotTaken = false;
+    if (rug >= 0 && w.nO >= 2 && w.tUX[rug] === w.tUX[rug]) {
+      const pk = w.tPa[rug], hx = w.hX[i] === w.hX[i] ? w.hX[i] : s.x[i], hz = w.hX[i] === w.hX[i] ? w.hZ[i] : s.z[i], dx = hx - w.pX[pk], dz = hz - w.pZ[pk];
+      offRug = dx * dx + dz * dz > w.pR[pk] * w.pR[pk];
+      for (let j = 0; j < s.n; j++) if (j !== i && w.ac[j] && w.beh[j] === BEH.NAP && Math.abs(w.tx[j] - w.tUX[rug]) + Math.abs(w.tz[j] - w.tUZ[rug]) < 0.3) spotTaken = true;
+    }
+    if (rug >= 0 && (napperOnRug || offRug) && !spotTaken && w.tUX[rug] === w.tUX[rug]) { w.f[F.X] = w.tUX[rug]; w.f[F.Z] = w.tUZ[rug]; w.tT[i] = rug; ok = true; }
     else if (w.hX[i] === w.hX[i]) { w.f[F.X] = w.hX[i]; w.f[F.Z] = w.hZ[i]; w.tT[i] = rug; ok = true; }
   } else {
     // a ring within 3 m that is free: first to its gap's waypoint (0.6 m outside the mouth), then in
@@ -1625,7 +1636,9 @@ function settleNap(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEven
   voice(w, s, out, i, PHRASE.SLEEPY, 0, 3);
   // a nap on a nap thing (the Snug Basket, the Snooze Rug) is a use of it (USE NAP)
   const k = w.tT[i];
-  if (k >= 0 && (w.tM[k] === MECH.ring || (w.tPa[k] >= 0 && w.pN[w.tPa[k]])) && (w.oN[i] >= 0 || w.tM[k] === MECH.ring)) {
+  // (round 15, R15_FIX F2: at Home the napper at the rug's own USE SPOT counts too: on a phone that spot lies against the rug's edge, 0.3 m outside the patch (it is
+  // 2R from slot 0, the Home row's rule), so the second napper's nap was never a use of the rug there)
+  if (k >= 0 && (w.tM[k] === MECH.ring || (w.tPa[k] >= 0 && w.pN[w.tPa[k]])) && (w.oN[i] >= 0 || w.tM[k] === MECH.ring || (w.home && w.tUX[k] === w.tUX[k] && Math.abs(s.x[i] - w.tUX[k]) + Math.abs(s.z[i] - w.tUZ[k]) < 0.4))) {
     pushEvent(ev, LIFE_EV.USE, USE_VERB.NAP, i, -1, 1, w.tG[k]);
     if (w.uV[i] < 255) w.uV[i]++;
     if (w.ki[i] !== 0) pieceUse(w, s, ev, i, k);

@@ -176,7 +176,11 @@ const MAX_SPEED = 14;              // safety clamp on particle speed (m/s)
 const MAX_NUDGE = 12;              // nudge() clamps the velocity change to this (m/s)
 const REACT_REF = 20;              // metrics.reaction: push-back (m/s^2 per unit body mass) that maps to 1 - 1/e. tuned: 10 saturated every
                                    // contact impulse at ~1; at 20 a held full press reads soft 0.2-0.6, starter 0.3-0.6, firm 0.45-0.9
-const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.6;   // (round 14, D-104 "volume bigger": a floater hovers 0.6 m over its rest height, was 0.35)
+const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
+/** (round 14, D-104 "volume bigger": in a ROOM a floater hovers 0.6 m over its rest height and the fastest toss is 7.5 m/s (a straight-up toss peaks at 2.8 m, a
+ *  45 degree one flies 5.6 m). Round 15, R15_FIX F9 (VERDICT_R14 F9): round 14 changed the two constants for every body; they belong to the bigger rooms, so a body
+ *  takes them with a place's bounds (setBounds: a place; Home with two or more out) and Home's lone squishy, the published toy, keeps the published 0.35 m and 6 m/s) */
+const HOVER_ROOM = 0.6, TOSS_ROOM = 7.5;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
 /** D-97 (Table after Float "brings them down again gently"): for DESCEND_S after gravity comes back, or until the body reaches a support, it falls no faster than DESCEND_V m/s. */
 const DESCEND_S = 2, DESCEND_V = 0.9;
@@ -316,13 +320,14 @@ const CARRY_LIFT_K = 0.2;
  *  touches something, for SET_DESC_S; a floater's hover spot moves there). A faster let go is the published toss. */
 export const LVL_UP_M = 0.08, LVL_UP_K = 0.3;   // (exported: the shell's carry plane raises the hand over things by what this lift does not already clear)
 const LVL_UP_S = 0.12, LVL_LAG = 0.5, SET_V = 1.2, SET_DESC_S = 0.8;
-const TOSS_MAX = 7.5;             // m/s: the fastest throw (round 14, D-104 "volume bigger": was 6; a straight-up toss now peaks at 2.8 m, a 45 degree one flies 5.6 m)
+const TOSS_MAX = 6;               // m/s: the fastest throw of the published toy (in a room: TOSS_ROOM, with HOVER_ROOM above)
 // ---- LOCK (_spec/LOCK.md): up to 5 concurrent finger / grab slots (touch fingers) and up to 6 locked lobes
 const NSLOT = 5;                   // finger and grab slots
 const MAX_LOCKS = 6;               // locked lobes (the shell passes 4 on low quality: SoftBody.maxLocks)
 const LOCK_MIN_PULL = 0.95;        // a pull locks only when it is this fully stretched (STRETCH_FULL_INTENSITY)
 const LOCK_FLOAT_MIN = 0.25;       // float mode: a pull whose hand is at the limit locks when the lobe is at least this stretched (the body follows the hand there; pullLevel reads 0.3 .. 0.8 at the limit)
 const GRAB_FLOOR_Y = 0.02;         // GROUND FIX: on the table no grab target (the pointer's hand) goes lower than this (the Shift pair's SHIFT_FLOOR_Y of the shell, now for every hand)
+const PATCH_UNDER = 0.35;         // (round 15, R15_FIX F1) a pulled patch's particles are never asked for a point more than this x the rest radius under the table (pullPatch)
 const LOCK_REACH = 0.4;            // lockAt: a point this many rest radii from a locked patch's nearest vertex is on the lock
 const TOSS_NORM = 4;               // m/s of throw speed that maps to 'toss' intensity 1
 const RIM_BOUNCE = 0.35;           // past the mat's rim the outward speed is reflected with this restitution (the soft rim bounces it back)
@@ -556,6 +561,7 @@ export class SoftBody implements SoftBodyLike {
   private sleepOn = false;                    // sleepEnabled: a WHOLE body may sleep (the shell opts in place and party bodies)
   /** PLAYGROUND (contracts.ts): the shell's contact slot 0..31 (-1 = none). Strikes carry it (PropWorldLike.drainStrikes). */
   contactSlot = -1;
+  private hoverUp = HOVER_ABOVE; private tossCap = TOSS_MAX;   // (round 15) the float height over rest and the fastest toss: the published ones, or a room's (setBounds)
   private bndShape = -1; private bndCx = 0; private bndCz = 0; private bndA = 0; private bndB = 0; private bndR = 0;   // setBounds (shape -1: the home corral)
   private cyOn = false; private cyT0 = 0; private cyDur = 1; private cySx = 0; private cySy = 0; private cySz = 0; private cyEx = 0; private cyEy = 0; private cyEz = 0; private cyArc = 0;   // carryTo
   private contactsAcc = 0;                     // PH-19: the contact slots this body touched in this frame's collides (published as metrics.contacts at the next step)
@@ -1354,10 +1360,11 @@ export class SoftBody implements SoftBodyLike {
    *  Home's frame or party changes. */
   setBounds(shape: number, cx: number, cz: number, a: number, b: number, round: number): void {
     const sh = Math.floor(shape);
-    if (sh < 0) { this.bndShape = -1; this.wake(); return; }
+    if (sh < 0) { this.bndShape = -1; this.hoverUp = HOVER_ABOVE; this.tossCap = TOSS_MAX; this.wake(); return; }
     const bb = sh === 1 ? b : a;
     if (sh > 1 || cx !== +cx || cz !== +cz || !inWorld(cx, a, cz) || !inWorld(0, bb, 0) || !(a > 0) || !(bb > 0)) return;
     this.bndShape = sh; this.bndCx = cx; this.bndCz = cz; this.bndA = a; this.bndB = bb;
+    this.hoverUp = HOVER_ROOM; this.tossCap = TOSS_ROOM;   // (round 15: a room's float height and toss cap, D-104; see HOVER_ROOM)
     this.bndR = sh === 1 && round > 0 ? Math.min(round, a, bb) : 0;
     this.wake();   // (the corral acts on a body outside the new area; one at rest inside it falls asleep again within SLEEP.after)
   }
@@ -2031,7 +2038,7 @@ export class SoftBody implements SoftBodyLike {
         }
       }
       const sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
-      if (sp > TOSS_MAX) { const k = TOSS_MAX / sp; vx *= k; vy *= k; vz *= k; }
+      if (sp > this.tossCap) { const k = this.tossCap / sp; vx *= k; vy *= k; vz *= k; }
       const V = this.V;
       for (let i = 0; i < this.n * 3; i += 3) { V[i] = vx; V[i + 1] = vy; V[i + 2] = vz; }
       this.vcx = vx; this.vcy = vy; this.vcz = vz;
@@ -2963,7 +2970,7 @@ export class SoftBody implements SoftBodyLike {
   }
 
   private hoverY(t: number): number {
-    return (this.restCenterY > this.restRadius ? this.restCenterY : this.restRadius) + HOVER_ABOVE + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * t + this.seedPhase);
+    return (this.restCenterY > this.restRadius ? this.restCenterY : this.restRadius) + this.hoverUp + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * t + this.seedPhase);
   }
 
   private triNormal(a: number, b: number, c: number): [number, number, number] {
@@ -3484,14 +3491,24 @@ export class SoftBody implements SoftBodyLike {
     const p0 = o.p0;
     for (let j = 0; j < o.count * 3; j += 3) { p0[j] += mx; p0[j + 1] += my; p0[j + 2] += mz; }
   }
-  /** Pull the Gaussian patch of a grab (or a lock) toward its hand: p0 + (eased target - target at the grab), applied after the internal constraints. */
+  /** Pull the Gaussian patch of a grab (or a lock) toward its hand: p0 + (eased target - target at the grab), applied after the internal constraints.
+   *  (round 15, R15_FIX F1) THE PATCH'S FLOOR: no particle of the patch is asked for a point deep under the table (PATCH_UNDER x the rest radius under it on the
+   *  table; not under it at all in float mode, where nothing is glued and the whole body comes down with the hand). The hand's floor (reach, GRAB_FLOOR_Y) is
+   *  on the hand, and the patch moves by the hand's TRAVEL since the grab, so a hand that started far above its patch (a grab whose target is not at the
+   *  vertex), a carried patch, or any pull down in float mode (the hand has no floor there) sent the patch up to 0.8 m under the table: the table put it back
+   *  every substep and the fold limit and the edges answered the sheared patch with corrections of metres (VERDICT_R14 F1: slimegoo/wrigglo turned inside out
+   *  under the per-family hostile fuzz; measured in R15_FIX.md: 4 of 60 seeds at the live float height too). An honest pull never reaches the floor: the hand
+   *  is at the patch and stops GRAB_FLOOR_Y over the table, so its lowest patch particle is asked at most the patch's own radius (0.36 R) less that under it. */
   private pullPatch(g: Grab, XP: Float64Array): void {
     const px = g.ex - g.t0x, py = g.ey - g.t0y, pz = g.ez - g.t0z;
     const kg = 0.45 * g.ramp;
+    const lo = -PATCH_UNDER * this.restRadius * (this.gravityOn ? 1 : 0);   // (float mode: -0, the table itself; no int / double ternary)
     for (let j = 0; j < g.count; j++) {
       const i3 = g.verts[j] * 3, w = g.weights[j] * kg;
+      let ty = g.p0[j * 3 + 1] + py;
+      if (ty < lo) ty = lo;
       XP[i3] += (g.p0[j * 3] + px - XP[i3]) * w;
-      XP[i3 + 1] += (g.p0[j * 3 + 1] + py - XP[i3 + 1]) * w;
+      XP[i3 + 1] += (ty - XP[i3 + 1]) * w;
       XP[i3 + 2] += (g.p0[j * 3 + 2] + pz - XP[i3 + 2]) * w;
     }
   }
@@ -3707,7 +3724,7 @@ export class SoftBody implements SoftBodyLike {
         const yMin = this.restCenterY + CARRY_LIFT_K * this.restRadius;   // (round 8: held off the support, CARRY_LIFT_K)
         const a = 1 - Math.exp(-CARRY_OMEGA * H), ty = g.ey + this.carryOy, tyc = ty > yMin ? ty : yMin;
         let mx = (g.ex + this.carryOx - this.cx) * a, my = (tyc - this.cy) * a, mz = (g.ez + this.carryOz - this.cz) * a;
-        const vmax = TOSS_MAX * 2 * H, ml = Math.sqrt(mx * mx + my * my + mz * mz);
+        const vmax = this.tossCap * 2 * H, ml = Math.sqrt(mx * mx + my * my + mz * mz);
         if (ml > vmax) { const r = vmax / ml; mx *= r; my *= r; mz *= r; }
         for (let i = 0; i < n * 3; i += 3) { X[i] += mx; X[i + 1] += my; X[i + 2] += mz; }
         this.cx += mx; this.cy += my; this.cz += mz;
@@ -3764,7 +3781,7 @@ export class SoftBody implements SoftBodyLike {
       // a double would box both (two HeapNumbers per substep)
       // (R13: over the higher of its rest radius and its rest centre: a TALL species (Capnap, centre 0.61 m at rest) rose only 0.22 m over its table rest,
       //  less than every other squishy; now every one rises at least HOVER_ABOVE over where it rested)
-      const hy = (this.restCenterY > this.restRadius ? this.restCenterY : this.restRadius) + HOVER_ABOVE + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * this.simTime + this.seedPhase);
+      const hy = (this.restCenterY > this.restRadius ? this.restCenterY : this.restRadius) + this.hoverUp + BOB_AMP * Math.sin(2 * Math.PI * BOB_HZ * this.simTime + this.seedPhase);
       // (D-97, owner 2026-11-19: Float floats everyone everywhere: the spring holds the body over its HOME (the origin for the play body, as before; a mat
       //  squishy's or a piece's own spot; where LIFE last brought it to rest, setHome), so a party no longer collapses into the world origin)
       // (R13: a fling carries it: the spot follows while it drifts, only FLING_DRAG slows it; see FLING_V)

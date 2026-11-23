@@ -24,6 +24,12 @@ const arg = (k: string, d: string): string => process.argv.find((a) => a.startsW
 const QUICK = process.argv.includes('--quick'), TRACE = process.argv.includes('--trace'), SQ_ONLY = process.argv.includes('--squirt-only');
 // (round 11, R11_FIX 5) --su4-only: SU-04 (and SU-05 over its visits) alone, without SQ-01 and SU-01's five parties (about 10 min instead of 37)
 const SU4_ONLY = process.argv.includes('--su4-only');
+// (round 15, R15_FIX F2) --home-only: SU-06 alone (Home as a room with three out, 180 s, both frames at the low tier, two saves: about 4 min)
+const HOME_ONLY = process.argv.includes('--home-only');
+/** SU-06's saves (the journal's done-quest bits, as stored): EARLY = the first hello and the first capsule done (Home has the Felt Ball, the Music Box, the Snooze
+ *  Rug and the Warm Lamp: the save VERDICT_R14 measured with); ALL = the Home and cabin finales too (the Keepsake Shelf and the Bounce Pad have arrived) */
+const HOME_SAVES: ReadonlyArray<readonly [string, string]> = [['early (4 things)', 'GAAAAAAAAAAAAAAAAAAAAA=='], ['all six things', 'mAACAAAAAAAAAAAAAAAAAA==']];
+const homeJournal = (qd: string): string => JSON.stringify({ v: 1, dev: 'probe', bf: 1, st: 45, qd, qp: [], fx: [], fr: [], fd: [20776, []], ids: [], real: [], wm: [], wday: 20776, ks: 0, pl: 3, pv: [], wi: [], gift: [], gday: -1, fw: [0, 255], sg: 0, wg: 0, cur: { p: 0, party: [0, 1, 2] }, day: 20776 });
 const STAY = +arg('stay', QUICK ? '120' : '300');
 let STAY_NOW = STAY;   // (round 10: SU-04's visits are STAY4 s)
 // (round 9, R9_FIX 2) seed=N: LIFE's world seed (the host's deps.lifeSeed; default the shipped 0x5eed1e) and the party genomes' seed (default 8): another draw of the same parties
@@ -59,7 +65,7 @@ interface Visit { party: string; place: string; ok: boolean; things: string[]; f
 /** SQ-01's measurements (round 8). */
 interface Sq { carried: boolean; landed: string; inPoolS: number; outAt: number; movedAt: number; soakAt12: number; soak05At: number; dollopCarried: boolean; gap: number; heldFor: number; fx: number; social: number; target: string; place: number; trace: string[] }
 let SQ: Sq | null = null;
-async function runParty(party: string[], squirt = false): Promise<Visit[]> {
+async function runParty(party: string[], squirt = false, homeQd = ''): Promise<Visit[]> {
   const st = createMockStage() as ReturnType<typeof createMockStage> & Record<string, unknown>;
   const cam = st.camera as InstanceType<typeof THREE.PerspectiveCamera>;
   cam.fov = 35; cam.aspect = W / H; cam.near = 0.1; cam.far = 200;
@@ -89,6 +95,7 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
   for (const k of ['setTouching', 'autoThud', 'prop', 'musicBox', 'setAmbience', 'setMusicStyle']) audio[k] = () => {};
   audio.loadAmbience = async () => true;
   const mem = memoryStorage();
+  if (homeQd) mem.setItem('wobblehoard:v2:journal', homeJournal(homeQd));   // (round 15, SU-06: Home's things arrive by the journal's done quests)
   let clockT = 1000;
   const devSkew = { ms: 0 };
   const profile = createProfileStore(mem);
@@ -179,9 +186,9 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
   if (squirt) { SQ = await squirtScenario(); host.dispose?.(); app.dispose(); return []; }
   const out: Visit[] = [];
   const spName = (i: number): string => CATALOG[i]?.id ?? String(i);
-  for (const pl of PLACES) {
+  for (const pl of homeQd ? ['home'] : PLACES) {
     const t0 = Date.now();
-    const ok = await host.travel(pl, true);
+    const ok = homeQd ? true : await host.travel(pl, true);   // (round 15, SU-06: Home is where the party already is)
     await stepA(120);
     const tArr = clockT, r0 = recs.length;
     let three = -1, naps = 0, samples = 0;
@@ -233,7 +240,7 @@ async function runParty(party: string[], squirt = false): Promise<Visit[]> {
     });
     out.push({ party: ['dollop', ...party].join('+'), place: pl, ok, things: Object.keys(first), first, three, bySpecies, usesPer, episodes, how, napShare: +(naps / Math.max(1, samples)).toFixed(2), wallS: Math.round((Date.now() - t0) / 1000), flips });
     console.log('visit', JSON.stringify(out[out.length - 1]));
-    await host.travel('home', true); await stepA(120);
+    if (!homeQd) { await host.travel('home', true); await stepA(120); }
   }
   host.dispose?.();
   app.dispose();
@@ -244,7 +251,7 @@ let fails = 0;
 const check = (id: string, what: string, ok: boolean): void => { if (!ok) fails++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${id} ${what}`); };
 const info = (id: string, what: string): void => console.log(`info ${id} ${what}`);
 // SQ-01 (round 8): the squirt by ordinary play, on the real physics and host, autonomy on
-if (!SU4_ONLY) {
+if (!SU4_ONLY && !HOME_ONLY) {
   const t0 = Date.now();
   await runParty(['wisplet', 'chunkle'], true);
   const q = SQ as Sq | null;
@@ -258,14 +265,25 @@ if (!SU4_ONLY) {
   }
 }
 const all: Visit[] = [];
-if (!SQ_ONLY && !SU4_ONLY) for (const p of PARTIES) all.push(...(await runParty(p)));
+if (!SQ_ONLY && !SU4_ONLY && !HOME_ONLY) for (const p of PARTIES) all.push(...(await runParty(p)));
 // (round 10, R10_FIX 1) SU-04 runs after the default visits (its numbers below)
 const su4: Array<{ frame: string; tier: string; v: Visit[] }> = [];
-if (SU4 && !SQ_ONLY) {
+if (SU4 && !SQ_ONLY && !HOME_ONLY) {
   const stay0 = STAY;
   for (const [f, t] of SU4_RUNS) { setFrame(f, t); STAY_NOW = STAY4; su4.push({ frame: f, tier: t, v: await runParty(['glimglop', 'crimpo']) }); }
   STAY_NOW = stay0; setFrame('wide', 'high');
 }
+// (round 15, R15_FIX F2; VERDICT_R14 F2: "Home with 2+ out: the party uses 2 things by itself on desktop, 1 on the phone (bar 3)") SU-06: Home as a room. Dollop +
+// Glimglop + Crimpo out at Home, STAY4 s, no input, the low tier, 1280x800 and 390x844, on a save with Home's first four things and on one with all six: at least 3
+// different Home things used by themselves (counted as SU-04 counts a place's: a USE, a REACT that names the thing, a moment played around it, by SELF)
+const su6: Array<{ frame: string; save: string; v: Visit | undefined }> = [];
+if ((SU4 || HOME_ONLY) && !SQ_ONLY) {
+  const stay0 = STAY_NOW;
+  for (const f of ['tall', 'wide']) for (const [name, qd] of HOME_SAVES) { setFrame(f, 'low'); STAY_NOW = STAY4; su6.push({ frame: f, save: name, v: (await runParty(['glimglop', 'crimpo'], false, qd))[0] }); }
+  STAY_NOW = stay0; setFrame('wide', 'high');
+}
+for (const r of su6) check('SU-06', `(round 15) Home with three out ${r.frame === 'tall' ? '390x844 (tall layout)' : '1280x800'} at the low tier, the save with ${r.save}: at least 3 different Home things used by themselves in ${STAY4} s by Dollop + Glimglop + Crimpo, no input (${r.v ? `${r.v.things.length} [${r.v.how.join(' ')}]${r.v.three >= 0 ? ` 3 by ${r.v.three} s` : ''}, nap share ${r.v.napShare}` : 'not run'})`, !!r.v && r.v.things.length >= 3);
+if (HOME_ONLY) { console.log(fails ? `${fails} failed` : 'all selfuse checks passed (SU-06 only)'); process.exit(fails ? 1 : 0); }
 // (round 9, R9_FIX 2: tightened to EVERY party, the owner's "3 to 5 different things per visit at every place, reliably"; it was 4 of 5)
 const nParties = PARTIES.length, need = nParties;
 if (SQ_ONLY) { console.log(fails ? `${fails} failed` : 'all selfuse checks passed (SQ-01 only)'); process.exit(fails ? 1 : 0); }

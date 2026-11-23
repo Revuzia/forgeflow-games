@@ -70,7 +70,7 @@ export const GUIDE_TITLE = 'How to play';
 export const GUIDE_CARDS: readonly GuideCard[] = [
   { id: 'squish', title: 'Squish', text: 'Tap to poke. Press and hold to squash it flat, then let go and watch it spring back.' },
   // (round 14, R14_CARRY, D-105: with friends out, or at a place, a drag carries; a stretch starts from a hold there)
-  { id: 'stretch', title: 'Stretch', text: 'Press on the squishy and drag away to pull it long. With friends out, or at a place, a drag picks it up and carries it: hold it still a moment first to stretch it instead. Two fingers, or Shift and a drag, pull both sides at once.' },
+  { id: 'stretch', title: 'Stretch', text: 'Press on the squishy and drag away to pull it long. With friends out, or at a place, a drag picks it up and carries it: hold it still a moment first to stretch it instead. Two fingers, or Shift and a drag, pull both sides at once. In a room, pinch or turn the wheel to zoom, and drag with two fingers on the floor (or Shift and the right button) to look around.' },   // (round 15, F11: the room camera's zoom and pan)
   { id: 'capsule', title: 'Capsules', text: 'Squishing and stretching fills the ring. When it is full, a capsule drops in. Press Open, or hold the capsule, to see who is inside.' },
   { id: 'tools', title: 'Tools', text: 'Hand squishes. Cut splits the squishy into pieces, and Reconnect all joins them again. Snap takes a photo with a backdrop you pick. Table lets it rest on the mat; Float lets it drift in the air.' },
   { id: 'hoard', title: 'Hoard and merge', text: 'The Hoard keeps every squishy you find. Got two spare copies of one kind? Press and hold Merge to turn them into something that can come out rarer.' },
@@ -97,6 +97,9 @@ export const GUIDE_KEYS: readonly KeyRow[] = [
   { keys: ['Shift', 'drag'], does: 'Pull both sides' },
   { keys: ['Shift'], does: 'Lock a pull that is stretched all the way. Press the lobe, or Esc, to let go.' },
   { keys: ['Right-drag'], does: 'Turn the view' },
+  // (round 15, R15_FIX F11: the room camera, D-104; with friends out, or at a place)
+  { keys: ['Wheel', 'pinch'], does: 'Zoom, from close up out to the whole room' },
+  { keys: ['Shift', 'right-drag'], does: 'Look around a room. On a touch screen: drag with two fingers.' },
 ];
 
 // ---------------------------------------------------------------------------------------------------------------- Credits
