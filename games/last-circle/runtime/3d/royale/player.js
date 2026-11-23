@@ -3415,6 +3415,12 @@ function animate(W, a, dt) {
       const poseAim = (a._armMode === "gunReady" || a._armMode === "reload" || a._armMode === "lowReady" || a._armMode === "pistolAim" ||
         a._armMode === "pistolLow") && a._armW > 0.5;
       const mixamoAim = useMixamoGun && armed && !a.gliding && !a.swimming && a.onGround;
+      // (W10 anim fix 3, F3) a long gun on a SPRINT clip is carried at LOW READY across the body (the researched sprint carry: muzzle
+      // 20-60 deg down, inside the torso silhouette), eased in / out over SPRINT_LOW_S so the gun is back on the aim within 0.25 s of
+      // sprint ending, aiming or firing. It stayed level at the shoulder while the support arm pumped (blind check: below W9).
+      { const want = mixamoAim && !combat && SPRINT_CLIPS.has(a.anim) ? 1 : 0;
+        a._sprK = a._sprK == null ? want : a._sprK + K.clamp(want - a._sprK, -dt / SPRINT_LOW_S, dt / SPRINT_LOW_S);
+        a._sprC = layers && a._ikNear && deskHi(W); }
       // The weld is NOT additive (it sets the holder's world orientation from the
       // hand bone outright), so unlike the layers above it also runs OFF screen on
       // every frame the mixer re-keyed the bones: an off-screen pistol bot inside
@@ -3784,6 +3790,9 @@ import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => { _AU
 const RL_FALLBACK = [[0.05, "rl_rifle_out"], [0.55, "rl_rifle_in"], [0.86, "rl_rifle_rack"]];
 const RL_MAG = { rl_rifle_out: 1, rl_rifle_in: 1, rl_pistol_in: 1, rl_shell: 1, rl_ln_shell: 1 };
 const RL_KEYS = new Map();               // set name -> [[fraction, target kind], ...] (built once per set)
+// (W10 anim fix 3, F3) the sprint low ready: 0.2 s in / out, muzzle 0.6 rad (34 deg) down, canted 0.45 rad (26 deg) to the left across the chest
+const SPRINT_LOW_S = 0.2, SPRINT_PITCH = -0.6, SPRINT_CANT = 0.45, SPRINT_AHEAD = 0.3;
+const _spA = new THREE.Vector3(), _spB = new THREE.Vector3();
 const SWAP_S = 0.25, SWAP_DIP = 0.8;     // the swap: lower-and-raise over 0.25 s, muzzle down 0.8 rad (46 deg) at mid-swap
 const SWIM_CHEST = 0.14;                 // fallback (a rig without a Head bone): the swimmer's chest (Spine2) sits this far under the surface
 const SWIM_HEAD = 0.18;                  // the swimmer's Head bone sits this far ABOVE the surface (treading water: face and shoulders out)
@@ -4130,13 +4139,27 @@ function barrelWeld(a, bodyFwdYaw, twist, mixamoAim) {
   // (W10 R3B) - the swap dip: the muzzle goes down SWAP_DIP rad and back up over SWAP_S
   // (W10 anim fix 2) the low share is cross-faded with the arms (a._lowK), so raising the gun to the aim no longer pops the muzzle
   const lowK = mixamoAim ? 0 : (a._lowK != null ? a._lowK : (a._armMode === "lowReady" ? 1 : 0));
-  const bpitch = a.pitch + (-0.55 - a.pitch) * lowK - SWAP_DIP * a._swapK;
+  // (W10 anim fix 3, F3) the sprint low ready (a._sprK, smoothstep): muzzle SPRINT_PITCH down and canted SPRINT_CANT across the chest
+  const sk0 = mixamoAim && a._sprK > 0 ? a._sprK : 0, sk = sk0 * sk0 * (3 - 2 * sk0);
+  const bpitch = a.pitch + (-0.55 - a.pitch) * lowK + (SPRINT_PITCH - a.pitch) * sk - SWAP_DIP * a._swapK;
   const cp = Math.cos(bpitch), sp = Math.sin(bpitch);
   // barrel follows the TWISTED CHEST, not the raw camera yaw: when the
   // body runs at an angle to the aim, welding to camera yaw pointed the
   // gun sideways/backwards out of the hands. Shots still originate from
   // the crosshair raycast — this weld is purely the visual.
-  const gunYaw = bodyFwdYaw + twist;
+  let cant = SPRINT_CANT;
+  // (desktop medium+, near: the muzzle aimed across to a point SPRINT_AHEAD in front of the chest's centre, so it stays inside the torso
+  // while the clip's hand swings across with the stride; elsewhere the fixed cant)
+  if (sk > 0 && a._sprC && a.armBones && a.armBones.lArm && a.armBones.rArm) {
+    a.armBones.lArm.getWorldPosition(_spA); a.armBones.rArm.getWorldPosition(_spB); _spA.add(_spB).multiplyScalar(0.5);
+    a.handBone.getWorldPosition(_spB);
+    const dx = _spA.x - Math.sin(bodyFwdYaw) * SPRINT_AHEAD - _spB.x, dz = _spA.z - Math.cos(bodyFwdYaw) * SPRINT_AHEAD - _spB.z;
+    let d = Math.atan2(-dx, -dz) - bodyFwdYaw;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    cant = K.clamp(d, 0, 1.0);
+  }
+  const gunYaw = bodyFwdYaw + twist * (1 - sk) + cant * sk;
   _gf.set(-Math.sin(gunYaw) * cp, sp, -Math.cos(gunYaw) * cp).normalize();
   // explicit basis (not setFromUnitVectors) so the gun cannot roll: +Z is
   // the barrel, +Y stays world-up-ish, +X is right.
