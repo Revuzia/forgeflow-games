@@ -47,7 +47,7 @@ Cases (PLAN L9 / L3 / L4 gates):
        the first faulted GLB answer W.phase === "menu" and a notice on screen; CNJ when no GLB was requested within
        --l-reach s (240) or the match loaded anyway (the fault never reached the game)
   l2   every GLB aborted (network drop) at match start: the same (needs the loader timeout, L3 h)
-  m    esm.sh blocked, SQUAD UP -> real click on CREATE ROOM: an error text and enabled buttons within 10 s
+  m    the relay blocked (was esm.sh), PLAY WITH FRIENDS -> real click on START ROOM: an error text and enabled buttons within 10 s
 Exit 0 only when every selected case passes; 1 = a case failed; 2 = could not judge (browser / server / rAF).
 """
 from __future__ import annotations
@@ -634,7 +634,8 @@ def run_case(R, v, case, base, rehost_url, args):
     elif case in ("j", "k", "l1", "l2", "m"):
         ctx, pg, rec = R.case_page()
         if case == "m":
-            ctx.route("**/esm.sh/**", lambda r: r.abort("blockedbyclient"))
+            # FRIENDS PORT: the squad transport is the relay (ffg_cfroom.js); case m blocks it (its /health probe + room sockets) as it blocked esm.sh
+            ctx.route(lambda url: re.search(r"(127\.0\.0\.1:8791|localhost:8791|last-circle-net\.isimcha85\.workers\.dev)/", url) is not None, lambda r: r.abort("blockedbyclient"))
         t0 = time.time()
         R.goto(pg, base)
         if R.wait_lc(pg, args.boot_timeout) is None:
@@ -816,18 +817,18 @@ def run_case(R, v, case, base, rehost_url, args):
                     break
                 pg.mouse.click(g[0], g[1])
                 pg.wait_for_timeout(600)
-            # the control reads "🌐  SQUAD UP" (hud.js mkGhost): allow a leading glyph
-            opened = pg.evaluate("() => { const b = [...document.querySelectorAll('button, .lc-mode-card, div')].find((x) => x.offsetParent && /^[^A-Za-z0-9]*SQUAD UP\\s*$/i.test(x.textContent || '')); if (!b) return false; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }")
+            # the PLAY WITH FRIENDS card (hud.js, data-lc=friends-card; it replaced the SQUAD UP button)
+            opened = pg.evaluate("() => { const b = document.querySelector('[data-lc=friends-card]'); if (!b || !b.offsetParent) return false; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }")
             if opened:
                 pg.mouse.click(opened[0], opened[1])
             else:
                 pg.evaluate("() => window.__LC__.W.events.emit('openOnline', { mode: 'standard' })")
-                v.note("m: no SQUAD UP control found by text; opened the online panel through W.events 'openOnline' (setup only)")
+                v.note("m: no PLAY WITH FRIENDS card found; opened the online panel through W.events 'openOnline' (setup only)")
             pg.wait_for_timeout(1000)
             try:
-                pg.get_by_text("CREATE ROOM", exact=True).first.click(timeout=15000)
+                pg.get_by_text("START ROOM", exact=True).first.click(timeout=15000)
             except Exception as e:
-                v.cnj("m: esm.sh blocked -> error + enabled buttons", "CREATE ROOM not clickable: %s" % str(e).splitlines()[0][:160])
+                v.cnj("m: relay blocked -> error + enabled buttons", "START ROOM not clickable: %s" % str(e).splitlines()[0][:160])
                 R.close_ctx(ctx)
                 return out
             t5 = time.time()
@@ -835,13 +836,13 @@ def run_case(R, v, case, base, rehost_url, args):
             ok = None
             while time.time() - t5 < 10:
                 s = R.snap(pg)
-                btn = [b for b in s.get("buttons", []) if re.search(r"CREATE ROOM|JOIN", b)]
+                btn = [b for b in s.get("buttons", []) if re.search(r"START ROOM|JOIN FRIEND", b)]
                 if failure_text(s, before.get("text")) and btn and not any(b.endswith(":disabled") for b in btn):
                     ok = round(time.time() - t5, 1)
                     break
                 pg.wait_for_timeout(250)
-            v.check("m: esm.sh blocked -> an error text and enabled buttons within 10 s", ok is not None,
-                    {"at": ok, "buttons": [b for b in (s or {}).get("buttons", []) if re.search(r"CREATE|JOIN", b)],
+            v.check("m: relay blocked -> an error text and enabled buttons within 10 s", ok is not None,
+                    {"at": ok, "buttons": [b for b in (s or {}).get("buttons", []) if re.search(r"START ROOM|JOIN FRIEND", b)],
                      "notice": failure_text(s, before.get("text")) if s else None, "pageerrors": rec["pageerrors"][:2]})
         R.close_ctx(ctx)
     else:

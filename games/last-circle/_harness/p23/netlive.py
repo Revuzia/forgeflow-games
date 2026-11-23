@@ -15,9 +15,11 @@ itself and was refused with "already this peer's slot", so the key check never r
     python _harness/p23/netlive.py --disk --cases match --plant no-revive-gate   # negative control: the early-done row MUST FAIL
 
 CASES
-  mode    host + guest lobby (startMatch stubbed): the team-mode row (AUTO / DUOS / TRIOS / SQUADS) on the host, the host's pick on the guest
-          ("room" message), START carries teamMode + teamWant + roster teamIds, both stubbed starts get teamMode + each human's teamId
-  mode3   three humans: DUOS is disabled on the host, AUTO resolves to TRIOS, START plays trio
+  mode    host + guest lobby (startMatch stubbed): the room's MODE row (STANDARD / QUICK) and TEAMS row (ALL ON ONE TEAM / TWO TEAMS /
+          EVERYONE FOR THEMSELVES) on the host, the host's picks on the guest ("room" message), START carries the pace, teams, teamMode +
+          roster teamIds (TWO TEAMS: sqA / sqB), both stubbed starts get teamMode + each human's teamId
+          (FRIENDS PORT 2026-11-22: these replace the old AUTO / DUOS / TRIOS / SQUADS row; the team SIZE now starts from the menu's TEAM pick)
+  mode3   three humans: ALL ON ONE TEAM resolves to TRIOS; EVERYONE FOR THEMSELVES -> START plays solo, each human its own team
   match   host + guest, the REAL match on both pages, then:
             LC-49  every state packet stamped q (per-sender counter) + t (match clock ~= the host's); duplicates (DataChannel + relay copy) dropped;
                    an out-of-order forged packet never pulls the remote body back; a newer one does (positive control)
@@ -54,20 +56,20 @@ def _patient(pg, sel, s=240):
 
 
 def _host_create(pg):
-    _patient(pg, 'button:text-is("CREATE ROOM")')
+    _patient(pg, 'button:text-is("START ROOM")')
     try:
         st = pg.evaluate("() => ({ phase: __LC__.W.phase, btns: [...document.querySelectorAll('button')].filter((b) => b.offsetWidth > 0).map((b) => b.textContent.trim().slice(0, 24)).slice(0, 30) })")
     except Exception as e:
-        raise C.EnvFailure("host page unusable before CREATE ROOM (renderer crash / OOM on the shared box?): %s" % str(e).splitlines()[0][:160])
+        raise C.EnvFailure("host page unusable before START ROOM (renderer crash / OOM on the shared box?): %s" % str(e).splitlines()[0][:160])
     print("  (host lobby buttons: %s)" % st, flush=True)
-    if "CREATE ROOM" not in st["btns"]:
+    if "START ROOM" not in st["btns"]:
         shot(pg, "dbg_no_create_room")
-        raise C.EnvFailure("CREATE ROOM never painted within 240 s: %s" % st)
+        raise C.EnvFailure("START ROOM never painted within 240 s: %s" % st)
     # a real mouse click at the button's centre (the rig's locator.click hung in "waiting for locator" for 20 s on the starved renderer while a plain
     # evaluate answered): retry the click like a player until the room code shows, up to 240 s
     t0 = time.time()
     while time.time() - t0 < 240:
-        xy = _btn_xy(pg, "CREATE ROOM")
+        xy = _btn_xy(pg, "START ROOM")
         if xy:
             pg.mouse.click(xy[0], xy[1])
         if SG.wait(pg, r"() => /Room\s+[A-Z0-9]{4}\s+[-\u2014]/.test(document.body.innerText)", 30):
@@ -89,9 +91,9 @@ def _btn_xy(pg, label):
 
 
 def _guest_join(pg, code):
-    _patient(pg, 'button:text-is("JOIN")')
+    _patient(pg, 'button:text-is("JOIN FRIEND")')
     pg.fill('input[placeholder="CODE"]', code, timeout=120_000)
-    xy = _btn_xy(pg, "JOIN")
+    xy = _btn_xy(pg, "JOIN FRIEND")
     if xy:
         pg.mouse.click(xy[0], xy[1])
     else:
@@ -132,28 +134,32 @@ def _press_start(pg):
 
 SG.press_start = _press_start
 
-MODE_JS = r"""() => { const r = document.querySelector('[data-net-teammode]'); if (!r) return null;
+MODE_JS = r"""() => { const r = document.querySelector('[data-net-teammode]'), pr = document.querySelector('[data-net-pace]'); if (!r) return null;
   const vis = (b) => { const q = b.getBoundingClientRect(); return q.width > 0 && q.height > 0 && getComputedStyle(b).display !== 'none'; };
-  return { eff: r.getAttribute('data-net-teammode'), visible: vis(r), text: r.innerText.replace(/\s+/g, ' ').trim(),
-           buttons: [...r.querySelectorAll('button')].filter(vis).map((b) => b.textContent.trim() + (b.disabled ? ':disabled' : '') + (b.className.includes('pri') ? ':picked' : '')) }; }"""
+  const bs = (row) => [...row.querySelectorAll('button')].filter(vis).map((b) => b.textContent.trim() + (b.disabled ? ':disabled' : '') + (b.className.includes('pri') ? ':picked' : ''));
+  return { eff: r.getAttribute('data-net-teammode'), teams: r.getAttribute('data-net-teams'), visible: vis(r), text: r.innerText.replace(/\s+/g, ' ').trim(),
+           buttons: bs(r), pace: pr ? pr.getAttribute('data-net-pace') : null, paceText: pr ? pr.innerText.replace(/\s+/g, ' ').trim() : '', paceButtons: pr ? bs(pr) : [] }; }"""
 
 
-MODE_XY = r"""(label) => { const b = [...document.querySelectorAll('[data-net-teammode] button')].find((x) => x.offsetWidth > 0 && x.textContent.trim().startsWith(label) && !x.disabled);
+PICK_XY = r"""(label) => { const b = [...document.querySelectorAll('[data-net-teammode] button, [data-net-pace] button')].find((x) => x.offsetWidth > 0 && x.textContent.trim().startsWith(label) && !x.disabled);
   if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"""
+PICKS = {"ALL ON ONE TEAM": ("data-net-teams", "squad"), "TWO TEAMS": ("data-net-teams", "two"), "EVERYONE FOR THEMSELVES": ("data-net-teams", "ffa"),
+         "STANDARD": ("data-net-pace", "standard"), "QUICK": ("data-net-pace", "quick")}
 
 
 def click_mode(pg, label, s=120):
-    """real mouse click at the team-mode button's centre, retried until the row reports the pick (locator.click hung on a starved renderer)"""
-    want = {"DUOS": "duo", "TRIOS": "trio", "SQUADS": "squad"}.get(label)
+    """real mouse click at a room pick's centre (TEAMS or MODE row), retried until the row reports the pick (locator.click hung on a starved renderer)"""
+    attr, want = PICKS[label]
+    sel = "[data-net-teammode]" if attr == "data-net-teams" else "[data-net-pace]"
     t0 = time.time()
     while time.time() - t0 < s:
         try:
-            xy = pg.evaluate(MODE_XY, label)
+            xy = pg.evaluate(PICK_XY, label)
         except Exception:
             xy = None
         if xy:
             pg.mouse.click(xy[0], xy[1])
-        if SG.wait(pg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === %s; }" % json.dumps(want), 10):
+        if SG.wait(pg, "() => { const r = document.querySelector(%s); return r && r.getAttribute(%s) === %s; }" % (json.dumps(sel), json.dumps(attr), json.dumps(want)), 10):
             return True
     return False
 
@@ -200,7 +206,7 @@ def shot(pg, name):
     return p
 
 
-def boot_pages(rig, args, names, stub=True, plant=None):
+def boot_pages(rig, args, names, stub=True, plant=None, team=None):
     ctx = rig.new_ctx()
     pages = []
     for n in names:
@@ -221,6 +227,10 @@ def boot_pages(rig, args, names, stub=True, plant=None):
     if stub:
         for pg, _ in pages:
             pg.evaluate(SG.STUB_START_JS)
+    if team:
+        # D5 merge: the menu's TEAM pick (SOLO / DUOS / TRIOS / SQUADS, W.settings.teamMode) is the room's starting team size
+        for pg, rec in pages:
+            pg.evaluate("(t) => { const b = document.querySelector('[data-lc=teamrow] button[data-team=' + t + ']'); if (b) b.click(); return !!b; }", team)
     for pg, rec in pages:
         if not SG.open_lobby(pg):
             raise C.EnvFailure("%s: lobby never opened" % rec.name)
@@ -240,18 +250,19 @@ def case_mode(rig, v, args):
     gm = SG.wait(gpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') ? true : null; }", 10)
     gm = gpg.evaluate(MODE_JS)
     v.check("mode: 2 humans in both lobbies", bool(both), {})
-    v.check("mode: the host's TEAM MODE row is on screen with AUTO (picked, resolving to DUOS) / DUOS / TRIOS / SQUADS, none disabled for 2 players",
-            bool(hm) and hm["visible"] and hm["eff"] == "duo" and len(hm["buttons"]) == 4 and hm["buttons"][0].startswith("AUTO") and ":picked" in hm["buttons"][0]
-            and not any(":disabled" in b for b in hm["buttons"]), hm)
-    v.check("mode: the guest reads the host's pick (no buttons): 'TEAM MODE: DUOS (HOST'S PICK)'",
-            bool(gm) and gm["visible"] and gm["eff"] == "duo" and not gm["buttons"] and "DUOS" in gm["text"] and "HOST" in gm["text"], gm)
-    click_mode(hpg, "TRIOS")
-    g2 = SG.wait(gpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === 'trio'; }", 10)
+    v.check("mode: the host's TEAMS row is on screen: ALL ON ONE TEAM (picked, size DUOS for 2) / TWO TEAMS / EVERYONE FOR THEMSELVES; MODE row STANDARD / QUICK",
+            bool(hm) and hm["visible"] and hm["eff"] == "duo" and hm["teams"] == "squad" and len(hm["buttons"]) == 3 and hm["buttons"][0] == "ALL ON ONE TEAM:picked"
+            and len(hm["paceButtons"]) == 2 and any(":picked" in b for b in hm["paceButtons"]), hm)
+    v.check("mode: the guest reads the host's picks (no buttons): 'TEAMS: ALL ON ONE TEAM' + the MODE line",
+            bool(gm) and gm["visible"] and gm["eff"] == "duo" and not gm["buttons"] and not gm["paceButtons"] and "ALL ON ONE TEAM" in gm["text"] and "MODE:" in gm["paceText"], gm)
+    click_mode(hpg, "TWO TEAMS")
+    click_mode(hpg, "QUICK")
+    g2 = SG.wait(gpg, "() => { const r = document.querySelector('[data-net-teammode]'), p = document.querySelector('[data-net-pace]'); return r && r.getAttribute('data-net-teams') === 'two' && p && p.getAttribute('data-net-pace') === 'quick'; }", 10)
     hm2, gm2 = hpg.evaluate(MODE_JS), gpg.evaluate(MODE_JS)
     room_out = SG.msgs(hpg, "room", "out")
-    v.check("mode: the host clicks TRIOS -> its button is picked and the guest's line follows within 10 s ('room' {tm: trio, want: trio} on the wire)",
-            bool(g2) and any(b.startswith("TRIOS") and ":picked" in b for b in hm2["buttons"]) and "TRIOS" in gm2["text"]
-            and any(m["d"].get("tm") == "trio" and m["d"].get("want") == "trio" for m in room_out), {"host": hm2, "guest": gm2, "roomOut": [m["d"] for m in room_out]})
+    v.check("mode: the host clicks TWO TEAMS + QUICK -> its buttons are picked and the guest's lines follow within 10 s ('room' {teams: two, mode: quick, tm: duo} on the wire)",
+            bool(g2) and "TWO TEAMS:picked" in hm2["buttons"] and "TWO TEAMS" in gm2["text"] and "QUICK" in gm2["paceText"]
+            and any(m["d"].get("teams") == "two" and m["d"].get("mode") == "quick" and m["d"].get("tm") == "duo" for m in room_out), {"host": hm2, "guest": gm2, "roomOut": [m["d"] for m in room_out]})
     shot(hpg, "mode_host_lobby")
     shot(gpg, "mode_guest_lobby")
     lob = SG.lobby(hpg)
@@ -261,12 +272,12 @@ def case_mode(rig, v, args):
     hst, gst = hpg.evaluate(SG.STARTS_JS), gpg.evaluate(SG.STARTS_JS)
     st = SG.msgs(hpg, "start", "out")
     sd = st[0]["d"] if st else {}
-    v.check("mode: the start on the wire carries teamMode 'trio', teamWant 'trio', the pace in `mode` and teamId 't0' on every roster entry (old fields kept)",
-            sd.get("teamMode") == "trio" and sd.get("teamWant") == "trio" and sd.get("mode") in ("standard", "quick")
-            and all(r.get("teamId") == "t0" for r in sd.get("roster", [])) and all(k in sd for k in ("seed", "mapId", "gv", "roster")), sd)
-    ok = bool(hs) and bool(gs) and hst[0].get("teamMode") == "trio" and gst[0].get("teamMode") == "trio" \
-        and all(h.get("teamId") == "t0" for h in hst[0]["humans"] + gst[0]["humans"]) and hst[0]["seed"] == gst[0]["seed"]
-    v.check("mode: both pages' startMatch get teamMode 'trio' and each human's teamId (same seed)", ok,
+    v.check("mode: the start on the wire carries teamMode 'duo', teams 'two', the pace 'quick' in `mode` and teamIds sqA (host) / sqB (guest) (old fields kept)",
+            sd.get("teamMode") == "duo" and sd.get("teams") == "two" and sd.get("mode") == "quick"
+            and [r.get("teamId") for r in sd.get("roster", [])] == ["sqA", "sqB"] and all(k in sd for k in ("seed", "mapId", "gv", "roster", "teamWant")), sd)
+    ok = bool(hs) and bool(gs) and hst[0].get("teamMode") == "duo" and gst[0].get("teamMode") == "duo" and hst[0].get("mode") == "quick" \
+        and [h.get("teamId") for h in hst[0]["humans"]] == ["sqA", "sqB"] and [h.get("teamId") for h in gst[0]["humans"]] == ["sqA", "sqB"] and hst[0]["seed"] == gst[0]["seed"]
+    v.check("mode: both pages' startMatch get teamMode 'duo', mode 'quick' and each human's teamId sqA / sqB (same seed)", ok,
             {"host": hst[:1] and {k: hst[0].get(k) for k in ("teamMode", "humans", "seed", "mode")}, "guest": gst[:1] and {k: gst[0].get(k) for k in ("teamMode", "humans", "seed")}})
     v.check("mode: the lobby keeps squadguard's child order (status = 2nd child, roster before notices) - lobby() still parses",
             bool(lob.get("open")) and "Room" in (lob.get("status") or "") and len(lob.get("roster") or []) == 2, {"status": lob.get("status"), "roster": lob.get("roster")})
@@ -286,14 +297,16 @@ def case_mode3(rig, v, args):
     three = SG.wait(hpg, "() => document.body.innerText.includes('3 player')", 40)
     hm = SG.wait(hpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === 'trio'; }", 10)
     hm = hpg.evaluate(MODE_JS)
-    v.check("mode3: three humans -> AUTO resolves to TRIOS and DUOS is disabled on the host", bool(three) and hm["eff"] == "trio"
-            and any(b.startswith("DUOS") and ":disabled" in b for b in hm["buttons"]) and "TRIOS" in hm["buttons"][0], hm)
+    v.check("mode3: three humans, ALL ON ONE TEAM -> the team size resolves to TRIOS on the host", bool(three) and hm["eff"] == "trio" and hm["teams"] == "squad", hm)
+    click_mode(hpg, "EVERYONE FOR THEMSELVES")
+    hm3 = SG.wait(hpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === 'solo'; }", 10)
+    v.check("mode3: EVERYONE FOR THEMSELVES -> solo on the host", bool(hm3), hpg.evaluate(MODE_JS))
     shot(hpg, "mode3_host_lobby")
     SG.press_start(hpg)
     ok = [SG.wait(p, "() => (window.__SQ_START__ || []).length > 0", 30) for p in (hpg, gpg, g2pg)]
     sts = [p.evaluate(SG.STARTS_JS) for p in (hpg, gpg, g2pg)]
-    v.check("mode3: all three startMatch calls get teamMode 'trio', 3 humans all teamId 't0'",
-            all(ok) and all(s and s[0].get("teamMode") == "trio" and len(s[0]["humans"]) == 3 and all(h.get("teamId") == "t0" for h in s[0]["humans"]) for s in sts),
+    v.check("mode3: all three startMatch calls get teamMode 'solo', 3 humans, each its own teamId (s0 / s1 / s2)",
+            all(ok) and all(s and s[0].get("teamMode") == "solo" and len(s[0]["humans"]) == 3 and [h.get("teamId") for h in s[0]["humans"]] == ["s0", "s1", "s2"] for s in sts),
             [s[:1] and {"teamMode": s[0].get("teamMode"), "humans": s[0]["humans"]} for s in sts])
     SG.diag(v, "mode3", hrec, grec)
     v.check("mode3: guest2 - 0 console errors, 0 page errors, 0 failed requests", g2rec.clean(), g2rec.problems())
@@ -375,7 +388,7 @@ def wait_both_phase(hpg, gpg, timeout):
 
 
 def case_match(rig, v, args):
-    ctx, pages = boot_pages(rig, args, ["match/host", "match/guest"], stub=False, plant=args.plant)
+    ctx, pages = boot_pages(rig, args, ["match/host", "match/guest"], stub=False, plant=args.plant, team=None if args.until_drop else "squad")
     (hpg, hrec), (gpg, grec) = pages
     code = SG.host_create(hpg)
     if not code:
@@ -384,7 +397,7 @@ def case_match(rig, v, args):
     if not (SG.wait(hpg, "() => document.body.innerText.includes('2 player')", 30)):
         raise C.EnvFailure("match: the guest never showed in the host's lobby")
     if not args.until_drop:
-        click_mode(hpg, "SQUADS")
+        click_mode(hpg, "ALL ON ONE TEAM")       # (the room's team SIZE came from the host menu's SQUADS pick: boot_pages team="squad")
     SG.wait(gpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === 'squad'; }", 10)
     t0 = time.time()
     SG.press_start(hpg)
