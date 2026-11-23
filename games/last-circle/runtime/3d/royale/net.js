@@ -235,7 +235,7 @@ export class SquadHandshake {
   gvOf(id) { const r = this.peers.get(id); return r ? r.gv : 1; }
   /** HOST: the start roster from `names` (peer id -> name). Peers on another version are LEFT OUT (`left`), the rest are sorted by id and
    *  cut at `maxGuests` (`over`: stay in the room, told "room is full"). Host = slot 0. */
-  planStart(names, maxGuests, nowMs) {
+  planStart(names, maxGuests, nowMs, busy) {
     const roster = [{ peerId: this.id, slot: 0, name: this.name }];
     const left = [], over = [], gone = [];
     for (const pid of Object.keys(names).sort()) {
@@ -245,6 +245,8 @@ export class SquadHandshake {
       if (gv !== this.gv) { left.push({ peerId: pid, name: nm, gv }); continue; }
       // LC-11: a same-version peer that left the room before START gets NO slot (it is "gone", not left out: nobody is there to tell)
       if (!this.isPresent(pid, nowMs)) { gone.push({ peerId: pid, name: nm }); continue; }
+      // FRIENDS ROOMS: a friend still inside the last match plays the next one (no joining a match in progress, either way)
+      if (busy && busy[pid]) { gone.push({ peerId: pid, name: nm, busy: true }); continue; }
       if (roster.length - 1 >= maxGuests) { over.push({ peerId: pid, name: nm }); continue; }
       roster.push({ peerId: pid, slot: roster.length, name: nm });
     }
@@ -463,9 +465,49 @@ export function teamPartitionDiff(rows) {
   }
   return bad;
 }
-/** The start roster with each human's teamId (C-MODE: net.js carries mode + teamId in the handshake). */
-export function rosterWithTeams(roster, teamMode, K) {
-  return (Array.isArray(roster) ? roster : []).map((r) => Object.assign({}, r, { teamId: humanTeamId(r.slot, teamMode, K) }));
+/** FRIENDS ROOMS: how the HUMANS of a room group - "squad" all on one team, "two" two teams (alternating down the roster, the host on A),
+ *  "ffa" everyone for themselves. The team SIZE (solo / duo / trio / squad, bot teammates fill a team) follows from it: roomTeamMode. */
+export const TEAMS_PICKS = ["squad", "two", "ffa"];
+export const PACES = ["standard", "quick"];
+export function normTeams(x) { return TEAMS_PICKS.includes(x) ? x : null; }
+/** The team mode a room plays for its `teams` pick: squad = resolveTeamMode(want, n) (every human on one team, as before); two = the size
+ *  that holds the bigger half (at least duos: a team of one would just be solo); ffa = solo. `want` = the menu's size pick (D5) or null. */
+export function roomTeamMode(teams, want, nHumans, pace, K) {
+  const n = Math.max(1, nHumans | 0);
+  if (pace === "practice") return "solo";
+  if (teams === "ffa") return "solo";
+  if (teams === "two") return resolveTeamMode(want || "duo", Math.ceil(n / 2), pace, K);
+  return resolveTeamMode(want, n, pace, K);
+}
+/** The teamId of the human in roster slot `slot` for a `teams` pick: two = "sqA" (even slots, the host's) / "sqB"; otherwise humanTeamId. */
+export function roomHumanTeamId(slot, teamMode, K, teams) {
+  if (teams === "two" && (teamSizes(K)[normTeamMode(teamMode) || "solo"] || 1) > 1) return slot % 2 ? "sqB" : "sqA";
+  if (teams === "ffa") return "s" + slot;
+  return humanTeamId(slot, teamMode, K);
+}
+/** The start roster with each human's teamId (C-MODE: net.js carries mode + teamId in the handshake; `teams` = the friends room's pick). */
+export function rosterWithTeams(roster, teamMode, K, teams) {
+  return (Array.isArray(roster) ? roster : []).map((r) => Object.assign({}, r, { teamId: roomHumanTeamId(r.slot, teamMode, K, teams) }));
+}
+/** The link a friend opens to join room `code`: inside forgeflowgames.com the site's own game page (it forwards ?room= into the game frame),
+ *  else this page with ?room=CODE (any other params the page has survive), and the bare code where a URL is not shareable (file://). */
+export function inviteLink(code) {
+  const c = encodeURIComponent(code);
+  try {
+    if (typeof window !== "undefined" && window.top !== window && document.referrer) {
+      const o = new URL(document.referrer);
+      if (o.protocol === "https:" && /(^|\.)forgeflowgames\.com$/.test(o.hostname)) return o.origin + "/games/last-circle?room=" + c;
+    }
+  } catch (e) { /* no referrer / cross-origin top: fall through */ }
+  try {
+    if (/^https?:$/.test(location.protocol)) {
+      const u = new URL(location.href);
+      u.searchParams.delete("lcretry");
+      u.searchParams.set("room", code);
+      return u.toString();
+    }
+  } catch (e) {}
+  return String(code);
 }
 
 // ── LC-49: sequence numbers on the state stream ───────────────────────────────────────────────────────────────────────────────────────
@@ -1014,8 +1056,26 @@ function openLobby(W, sel) {
   root.appendChild(box);
   const html = (s) => { const d = document.createElement("div"); d.innerHTML = s; box.appendChild(d); return d; };
   html(`<div class="lcn-title">PLAY WITH FRIENDS</div>`);
-  const status = html(`Create a room or join a friend's code. Everyone else stays a bot.`);
+  const status = html(`Start a room and share its code, or join a friend's room. Every empty spot in the match is filled by opponents.`);
   status.className = "lcn-sub";              // on the OUTER line: status.textContent / innerHTML rewrite its content all through the lobby
+  // FRIENDS ROOMS (2026-11-22): the room panel - the code, big, and the invite link in a box the player can select (game_controls.js kills
+  // the context menu page-wide, so a plain text line could not even be right-click-copied). Shown once we are in a room.
+  const roomPanel = document.createElement("div");
+  roomPanel.setAttribute("data-net-room", "");
+  Object.assign(roomPanel.style, { display: "none", marginBottom: "12px" });
+  box.appendChild(roomPanel);
+  const bigCode = document.createElement("div");
+  bigCode.setAttribute("data-net-code-big", "");
+  bigCode.className = "lcn-title";
+  Object.assign(bigCode.style, { fontSize: "40px", letterSpacing: "12px", margin: "0 0 6px" });
+  const linkBox = document.createElement("input");
+  linkBox.readOnly = true;
+  linkBox.className = "lcn-code";
+  linkBox.setAttribute("data-net-link", "");
+  linkBox.setAttribute("aria-label", "Invite link");
+  Object.assign(linkBox.style, { width: "min(420px, calc(100vw - 110px))", fontSize: "12px", letterSpacing: "0.5px", textTransform: "none", fontFamily: "Rajdhani, 'Segoe UI', system-ui, sans-serif" });
+  linkBox.onfocus = () => { try { linkBox.select(); } catch (e) {} };
+  roomPanel.append(bigCode, linkBox);
   const row = document.createElement("div");
   row.className = "lcn-row";
   box.appendChild(row);
@@ -1026,53 +1086,101 @@ function openLobby(W, sel) {
     row.appendChild(b);
     return b;
   };
-  const createB = mk("CREATE ROOM", true);
+  const createB = mk("START ROOM", true);
+  const orEl = document.createElement("span");
+  orEl.className = "lcn-badge";
+  Object.assign(orEl.style, { marginLeft: "0", opacity: "0.7" });
+  orEl.textContent = "— OR —";
+  row.appendChild(orEl);
   const codeInp = document.createElement("input");
   codeInp.className = "lcn-code";
   codeInp.placeholder = "CODE";
-  codeInp.maxLength = 8;
+  codeInp.maxLength = 4;
+  codeInp.setAttribute("aria-label", "Room code");
+  codeInp.autocomplete = "off"; codeInp.spellcheck = false;
   row.appendChild(codeInp);
-  const joinB = mk("JOIN", false);
-  // game_controls.js:65 kills the context menu page-wide with capture:true, so a
-  // player could not even right-click-copy the room code. Hidden until we are in
-  // a room; both host and joined guest can share. Clipboard is a LOCAL API — no
-  // network call is added by this.
-  const inviteB = mk("COPY INVITE LINK", false);
-  inviteB.style.display = "none";
-  inviteB.onclick = async () => {
-    // build off the CURRENT href so any params the portal put there survive
-    let link = S.net.room;   // file:// etc: a URL would not be shareable, so hand over the bare code
-    if (/^https?:$/.test(location.protocol)) {
-      const u = new URL(location.href);
-      u.searchParams.set("room", S.net.room);
-      link = u.toString();
-    }
+  const joinB = mk("JOIN FRIEND", false);
+  // the code box: 4 characters, upper case; its keys never reach the game's own key handlers (WASD, Enter = drop in, ...)
+  codeInp.addEventListener("input", () => {
+    const v = codeInp.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    if (v !== codeInp.value) codeInp.value = v;
+  });
+  codeInp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter" && !e.repeat) { e.preventDefault(); joinB.onclick(); } });
+  codeInp.addEventListener("keyup", (e) => e.stopPropagation());
+  codeInp.addEventListener("keypress", (e) => e.stopPropagation());
+  // Hidden until we are in a room; both host and guests can share. Clipboard is a LOCAL API - no network call is added by this.
+  async function copyText(text, btn, idle) {
     let ok = false;
-    try { await navigator.clipboard.writeText(link); ok = true; } catch (e) {}
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
     if (!ok) {
-      // clipboard-write is denied outside a secure context; fall back to the
-      // deprecated-but-universal path, then to a selection the player can copy
+      // clipboard-write is denied outside a secure context; fall back to the deprecated-but-universal path, then to a selection to copy
       try {
         const ta = document.createElement("textarea");
-        ta.value = link; ta.style.position = "fixed"; ta.style.opacity = "0";
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
         root.appendChild(ta); ta.select();
         ok = document.execCommand("copy");
         ta.remove();
       } catch (e) {}
     }
-    if (ok) inviteB.textContent = "LINK COPIED";
-    else { codeInp.value = S.net.room; codeInp.select(); inviteB.textContent = "SELECT + CTRL-C"; }
-    setTimeout(() => { inviteB.textContent = "COPY INVITE LINK"; }, 1600);
-  };
-  const closeB = mk("CANCEL", false);
-  closeB.onclick = () => { attempt++; if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } root.remove(); };
+    if (ok) btn.textContent = "COPIED";
+    else { linkBox.focus(); linkBox.select(); btn.textContent = "SELECT + CTRL-C"; }
+    setTimeout(() => { btn.textContent = idle; }, 1600);
+  }
+  const inviteB = mk("COPY INVITE LINK", false);
+  inviteB.style.display = "none";
+  inviteB.onclick = () => { if (S && S.net.room) copyText(inviteLink(S.net.room), inviteB, "COPY INVITE LINK"); };
+  const copyCodeB = mk("COPY CODE", false);
+  copyCodeB.style.display = "none";
+  copyCodeB.onclick = () => { if (S && S.net.room) copyText(S.net.room, copyCodeB, "COPY CODE"); };
+  const closeB = mk("BACK", false);
+  closeB.setAttribute("data-net-leave", "");
+  // BACK (no room yet) / LEAVE ROOM: the relay hands the room to the longest-present player when its host leaves
+  closeB.onclick = () => { attempt++; if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } clearRejoin(); root.remove(); };
 
-  // Who is actually in the room. S.peers has held every peer's chosen name since
-  // the "hello" handler shipped, but it was read in exactly ONE place — building
-  // the roster at match start — so the lobby printed a bare count and never a
-  // name, and you could not tell whether the "2 players" was your friend.
-  // (rosterEl, not `roster` — startB.onclick below already owns that name for
-  //  the roster ARRAY it ships in the start packet)
+  // The room's choices (host picks, guests read them): the PACE and the TEAMS. Placed before the roster; START MATCH stays last.
+  // MODE: STANDARD / QUICK. TEAMS: ALL ON ONE TEAM / TWO TEAMS / EVERYONE FOR THEMSELVES. This REPLACES the room's old AUTO / DUOS / TRIOS
+  // / SQUADS row (C-MODE, D5): it was one picker of the team SIZE with every human on one team; the friends brief asks how the HUMANS
+  // group. The size is no longer a second picker: the menu's TEAM pick (W.settings.teamMode, D5) is its starting point and roomTeamMode
+  // fits it to each team's humans (bot teammates fill the rest of a team, as before).
+  let roomPace = sel && sel.mode === "quick" ? "quick" : "standard";
+  let roomTeams = sel && TEAMS_PICKS.includes(sel.teams) ? sel.teams : "squad";
+  let teamWant = normTeamMode(sel && (sel.teamMode || sel.team)) || normTeamMode(W.settings && W.settings.teamMode);
+  if (teamWant === "solo") teamWant = null;           // a room is for playing together: solo in a room = the smallest fit
+  const mkPick = (attr, label) => {
+    const r = document.createElement("div");
+    r.className = "lcn-row";
+    r.setAttribute(attr, "");
+    Object.assign(r.style, { display: "none", marginBottom: "8px" });
+    const l = document.createElement("span");
+    l.className = "lcn-badge";
+    Object.assign(l.style, { opacity: "0.8", marginLeft: "0", fontSize: "10.5px" });
+    l.textContent = label;
+    r.appendChild(l);
+    box.appendChild(r);
+    return { r, l, btns: [] };
+  };
+  const paceRow = mkPick("data-net-pace", "MODE");
+  const modeRow = mkPick("data-net-teammode", "TEAMS");       // (the attribute keeps the resolved team SIZE mode: solo / duo / trio / squad)
+  const PACE_LABEL = { standard: "STANDARD", quick: "QUICK · 4 MIN" };
+  const TEAMS_LABEL = { squad: "ALL ON ONE TEAM", two: "TWO TEAMS", ffa: "EVERYONE FOR THEMSELVES" };
+  const pickBtn = (pk, val, text, onPick) => {
+    const b = document.createElement("button");
+    b.className = "lcn-btn";
+    Object.assign(b.style, { padding: "7px 12px", fontSize: "12.5px" });
+    b._val = val; b.textContent = text;
+    b.onclick = () => { onPick(val); paintRoster(); sendRoom(); };
+    pk.r.appendChild(b); pk.btns.push(b);
+    return b;
+  };
+  for (const p of ["standard", "quick"]) pickBtn(paceRow, p, PACE_LABEL[p], (v) => { roomPace = v; });
+  for (const t of TEAMS_PICKS) pickBtn(modeRow, t, TEAMS_LABEL[t], (v) => { roomTeams = v; });
+  const pickNote = document.createElement("div");
+  pickNote.className = "lcn-badge";
+  Object.assign(pickNote.style, { display: "none", marginLeft: "0", marginBottom: "10px", opacity: "0.7" });
+  pickNote.setAttribute("data-net-picks", "");
+  box.appendChild(pickNote);
+
+  // Who is actually in the room (rosterEl, not `roster` - startB.onclick owns that name for the roster ARRAY it ships in the start packet)
   const rosterEl = document.createElement("div");
   rosterEl.className = "lcn-roster";
   box.appendChild(rosterEl);
@@ -1090,17 +1198,17 @@ function openLobby(W, sel) {
     while (noteEl.children.length > 3) noteEl.firstChild.remove();
     noteEl.style.display = "block";
   }
+  /** a peer that is inside a match right now (its hello said busy, a start rostered it, and no "back" since) */
+  const busy = (pid) => !!(S && S.inMatch && S.inMatch[pid]);
   function paintRoster() {
-    if (!S || !S.net.room) { rosterEl.innerHTML = ""; return; }
-    // The relay's OWNER is the host (slot 0), and startB.onclick
-    // hands out slots by sorted peer id — so sorting every id (peers + self) on
-    // any client reproduces the exact roster the host will build. No guessing.
-    // A peer on another WORLD VERSION never gets a slot (SquadHandshake.planStart), so it is shown as such and does not count towards the
-    // slot numbers or the room cap.
-    // LC-11: only peers still in the room (a friend who closed the tab is no longer listed, and gets no slot at START); a peer on another
-    // world version stays listed with its badge after it leaves, so the host can still read why it is not in the match
+    if (!S || !S.net.room) { rosterEl.innerHTML = ""; paintMode(); return; }
+    // The relay's OWNER is the host (slot 0), and startB.onclick hands out the other slots by sorted peer id - so this order on any client
+    // is the roster the host will build. A peer on another WORLD VERSION never gets a slot (SquadHandshake.planStart), nor does one still
+    // IN A MATCH (it plays the next one); neither counts towards the slot numbers or the room cap.
+    // LC-11: only peers still in the room; a peer on another world version stays listed with its badge after it leaves, so the host can
+    // still read why it is not in the match
     const nowP = performance.now();
-    const own = S.net.owner;      // the relay's host: slot 0 of the START roster (planStart), the rest by sorted id
+    const own = S.net.owner;
     const all = Object.keys(S.peers).filter((pid) => S.hs.isPresent(pid, nowP) || S.hs.gvOf(pid) !== S.hs.gv).concat([S.net.id]).sort()
       .sort((a, b) => (a === own ? -1 : b === own ? 1 : 0));
     const badge = (s) => `<span class="lcn-badge">${s}</span>`;
@@ -1108,18 +1216,21 @@ function openLobby(W, sel) {
     let i = -1;                  // index among the peers that can take a slot (self included)
     all.forEach((pid) => {
       const me = pid === S.net.id;
-      // names arrive from other machines — they go through esc() before innerHTML
+      // names arrive from other machines - they go through esc() before innerHTML
       const nm = esc(me ? S.myName : (S.peers[pid] || "Friend"));
       if (!me && S.hs.gvOf(pid) !== S.hs.gv) {
         h += `<div style="color:#ff9b8a" data-net-peer-gv="${S.hs.gvOf(pid)}">${nm}${badge("VERSION " + S.hs.gvOf(pid) + " — CAN'T JOIN, MUST RELOAD")}</div>`;
         return;
       }
+      const isHost = pid === own;
+      if (!me && !isHost && busy(pid)) { h += `<div style="color:#9fb6d0" data-net-peer-busy="1">${nm}${badge("IN A MATCH")}</div>`; return; }
       i++;
-      if (i > MAX_GUESTS) { h += `<div style="color:#ffb060">${nm}${badge("SPECTATING — ROOM FULL")}</div>`; return; }
-      h += `<div style="${me ? "color:#7fd3ff" : ""}">${me ? "<b>" + nm + "</b>" : nm}${badge(i === 0 ? "HOST" : "SLOT " + i)}</div>`;
+      if (i > MAX_GUESTS) { h += `<div style="color:#ffb060">${nm}${badge("WAITING — ROOM FULL")}</div>`; return; }
+      const tm = roomTeamsNow() === "two" ? (i % 2 ? " · TEAM B" : " · TEAM A") : "";
+      h += `<div style="${me ? "color:#7fd3ff" : ""}">${me ? "<b>" + nm + "</b>" : nm}${badge((i === 0 ? "HOST" : "PLAYER " + (i + 1)) + tm + (isHost && busy(pid) ? " · IN A MATCH" : ""))}</div>`;
     });
     rosterEl.innerHTML = h;
-    paintMode();                 // C-MODE: AUTO's pick and the too-small buttons follow the head count
+    paintMode();
   }
   // The guest-side refusal: the plain-language reason in the lobby, the buttons back, and a RELOAD button when THIS page is the stale one.
   let reloadB = null;
@@ -1143,9 +1254,7 @@ function openLobby(W, sel) {
       reloadB.onclick = () => { try { location.reload(); } catch (e) {} };
       status.after(reloadB);
     }
-    createB.disabled = joinB.disabled = false;
-    startB.style.display = "none";
-    inviteB.style.display = "none";
+    showJoin(true);
     rosterEl.innerHTML = "";
   }
 
@@ -1155,59 +1264,75 @@ function openLobby(W, sel) {
   Object.assign(startB.style, { display: "none", marginTop: "6px" });
   box.appendChild(startB);
 
-  // C-MODE (P3, owner OD-4): the TEAM mode of the room. The host picks it (AUTO = the smallest mode that holds everyone in the room; a pick too
-  // small for the room is played as the smallest that holds it - resolveTeamMode); the guests read the host's pick ("room" message). Every human
-  // in the room is one team; the boot fills the team's other seats with bot teammates. Placed AFTER the START button so the box keeps the
-  // child order squadguard_live.py reads (title, status, buttons row, roster, notices, START).
-  // D5: the menu's team pick comes along - the SQUAD UP button sends only { mode } (hud.js), and the pick lives in W.settings.teamMode (the
-  // mode card writes it), so a menu pick of SQUADS is the room's starting pick instead of AUTO.
-  let teamWant = normTeamMode(sel && (sel.teamMode || sel.team)) || normTeamMode(W.settings && W.settings.teamMode);
-  if (teamWant === "solo") teamWant = null;           // a room is for playing together: solo in a room = AUTO
-  const modeRow = document.createElement("div");
-  modeRow.className = "lcn-row";
-  modeRow.setAttribute("data-net-teammode", "");
-  Object.assign(modeRow.style, { display: "none", marginTop: "12px", marginBottom: "0" });
-  box.appendChild(modeRow);
-  const modeLbl = document.createElement("span");
-  modeLbl.className = "lcn-badge";
-  Object.assign(modeLbl.style, { opacity: "0.8", marginLeft: "0", fontSize: "10.5px" });
-  modeRow.appendChild(modeLbl);
-  const MODE_LABEL = { solo: "SOLO", duo: "DUOS", trio: "TRIOS", squad: "SQUADS" };
-  const modeBtns = [];
-  for (const m of [null, "duo", "trio", "squad"]) {
-    const b = document.createElement("button");
-    b.className = "lcn-btn";
-    Object.assign(b.style, { padding: "7px 13px", fontSize: "12.5px" });
-    b._mode = m;
-    b.onclick = () => { teamWant = m; paintMode(); sendRoom(); };
-    modeRow.appendChild(b);
-    modeBtns.push(b);
-  }
+  /** the room's teams pick as this page knows it (host: its own; guest: the host's last "room" message) */
+  function roomTeamsNow() { return S && S.net && !S.net.isHost() ? (S.roomTeams || "squad") : roomTeams; }
   /** how many humans the host's START would roster right now (itself included) */
-  const humansNow = () => (S && S.hs ? S.hs.planStart(S.peers, MAX_GUESTS, performance.now()).roster.length : 1);
+  const humansNow = () => (S && S.hs ? S.hs.planStart(S.peers, MAX_GUESTS, performance.now(), S.inMatch).roster.length : 1);
   function paintMode() {
-    if (!S || !S.net || !S.net.room) { modeRow.style.display = "none"; return; }
-    modeRow.style.display = "flex";
+    const inRoom = !!(S && S.net && S.net.room);
+    for (const pk of [paceRow, modeRow]) pk.r.style.display = inRoom ? "flex" : "none";
+    pickNote.style.display = inRoom ? "block" : "none";
+    if (!inRoom) return;
     const host = S.net.isHost();
-    const n = host ? humansNow() : null;
-    const eff = host ? resolveTeamMode(teamWant, n, sel && sel.mode, W.SIM) : (S.roomTm || null);
-    modeRow.setAttribute("data-net-teammode", eff || "");
-    modeLbl.textContent = host ? "TEAM MODE" : eff ? "TEAM MODE: " + MODE_LABEL[eff] + " (HOST'S PICK)" : "TEAM MODE: THE HOST PICKS";
-    for (const b of modeBtns) {
+    const pace = host ? roomPace : (S.roomPace || null);
+    const teams = roomTeamsNow();
+    const eff = host ? roomTeamMode(teams, teamWant, humansNow(), pace, W.SIM) : (S.roomTm || null);
+    modeRow.r.setAttribute("data-net-teammode", eff || "");
+    modeRow.r.setAttribute("data-net-teams", teams);
+    paceRow.r.setAttribute("data-net-pace", pace || "");
+    paceRow.l.textContent = host ? "MODE" : "MODE: " + (pace ? PACE_LABEL[pace] : "THE HOST PICKS");
+    modeRow.l.textContent = host ? "TEAMS" : "TEAMS: " + (S.roomTeams ? TEAMS_LABEL[S.roomTeams] : "THE HOST PICKS");
+    for (const [pk, cur] of [[paceRow, pace], [modeRow, teams]]) for (const b of pk.btns) {
       b.style.display = host ? "" : "none";
-      if (!host) continue;
-      const size = b._mode ? (W.SIM && W.SIM.TEAM_SIZE ? W.SIM.TEAM_SIZE[b._mode] : TEAM_SIZE_DEF[b._mode]) : null;
-      b.textContent = b._mode ? MODE_LABEL[b._mode] : "AUTO" + (teamWant == null ? " · " + MODE_LABEL[eff] : "");
-      b.disabled = b._mode != null && size < n;            // too small for everyone here
-      b.className = (b._mode === teamWant ? "lcn-btn pri" : "lcn-btn");
-      b.title = b.disabled ? "This room has " + n + " players" : "";
+      b.className = b._val === cur ? "lcn-btn pri" : "lcn-btn";
     }
+    pickNote.textContent = host ? "YOU ARE THE HOST: PICK THE MODE AND TEAMS, THEN START" : "THE HOST PICKS THE MODE AND TEAMS";
   }
-  /** HOST: tell the room the pick (on change, and to each newcomer) */
+  /** HOST: tell the room the picks (on change, and to each newcomer) */
   function sendRoom() {
     if (!S || !S.net || !S.net.isHost() || S.started) return;
     const n = humansNow();
-    send("room", { tm: resolveTeamMode(teamWant, n, sel && sel.mode, W.SIM), want: teamWant || "auto" });
+    send("room", { tm: roomTeamMode(roomTeams, teamWant, n, roomPace, W.SIM), want: teamWant || "auto", mode: roomPace, teams: roomTeams });
+  }
+  /** the join controls (no room yet) or the room controls */
+  function showJoin(on) {
+    for (const el of [createB, orEl, codeInp, joinB]) el.style.display = on ? "" : "none";
+    createB.disabled = joinB.disabled = false;
+    for (const el of [inviteB, copyCodeB]) el.style.display = on ? "none" : "inline-block";
+    roomPanel.style.display = on ? "none" : "block";
+    closeB.textContent = on ? "BACK" : "LEAVE ROOM";
+    if (on) { startB.style.display = "none"; paintMode(); }
+  }
+  /** in a room: the code, the link, who is here, START (host) or the wait line (guest). Called on every presence / owner change. */
+  function paintRoom() {
+    if (!S || !S.net || !S.net.room) return;
+    const net = S.net;
+    showJoin(false);
+    bigCode.textContent = net.room;
+    linkBox.value = inviteLink(net.room);
+    const n = Math.max(1, net.peerCount || 1);
+    const rj = status.getAttribute("data-net-rejoin");
+    if (rj !== "asking" && rj !== "busy" && rj !== "refused" && rj !== "gave-up") {
+      status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ${n} player(s) connected` + (net.isHost() ? "" : "<br>Waiting for the host to start…");
+    }
+    startB.style.display = net.isHost() ? "inline-block" : "none";
+    paintRoster();
+  }
+  /** this lobby's hooks on the session (a resumed room - BACK TO ROOM - rebinds them to its new lobby) */
+  function bind() {
+    S.paintMode = paintMode;       // the "room" message repaints the guest's picks through this
+    S.sendRoom = sendRoom;         // the host tells each newcomer its picks
+    S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
+    S.status = status;             // beginOnlineMatch reports a full room here
+    S.notice = notice;             // host: why a guest was left out / refused (lobby line; in a match it goes to the chat log)
+    S.showRefusal = showRefusal;   // guest: refuseRoom paints the reason + RELOAD button through this
+    S.root = root;
+    S.roomPicks = () => ({ mode: roomPace, teams: roomTeams, teamWant });
+    S.ui = { onPeer: paintRoom, onOwner: () => {
+      // a guest that just became the host keeps the picks the room had (the last "room" message it read)
+      if (S && S.net.isHost()) { if (PACES.includes(S.roomPace)) roomPace = S.roomPace; if (TEAMS_PICKS.includes(S.roomTeams)) roomTeams = S.roomTeams; }
+      paintRoom(); if (S && S.net.isHost()) sendRoom();
+    } };
   }
 
   // One attempt at a time. A newer attempt (or CANCEL) makes an older one stale: when
@@ -1235,9 +1360,7 @@ function openLobby(W, sel) {
     status.appendChild(document.createTextNode(say[1]));
     if (code != null) status.setAttribute("data-net-code", String(code));
     status.setAttribute("data-net-error", String((e && e.message) || e || "error").slice(0, 200));
-    createB.disabled = joinB.disabled = false;
-    startB.style.display = "none";
-    inviteB.style.display = "none";
+    showJoin(true);
     rosterEl.innerHTML = "";
   }
   async function enter(code, asHost) {
@@ -1245,7 +1368,7 @@ function openLobby(W, sel) {
     createB.disabled = joinB.disabled = true;
     status.textContent = "Connecting…";
     // a new attempt starts clean: the last refusal's reason, reload button and notices belong to the last room
-    for (const a of ["data-net-refused", "data-net-versions", "data-net-error"]) status.removeAttribute(a);
+    for (const a of ["data-net-refused", "data-net-versions", "data-net-error", "data-net-code", "data-net-rejoin"]) status.removeAttribute(a);
     if (reloadB) { reloadB.remove(); reloadB = null; }
     noteEl.textContent = ""; noteEl.style.display = "none";
     const net = new RoomNet(netBaseUrl());
@@ -1265,17 +1388,12 @@ function openLobby(W, sel) {
     const myName = (W.settings.playerName && W.settings.playerName !== "You")
       ? W.settings.playerName
       : "Player-" + net.id.slice(-3).toUpperCase();
-    S = { net, peers: {}, myName, started: false, lastState: 0, lastBots: 0, root, gv, refusals: [] };
+    S = { net, peers: {}, myName, started: false, lastState: 0, lastBots: 0, root, gv, refusals: [], inMatch: {} };
     S.hs = new SquadHandshake({ id: net.id, name: myName, gv, host: !!asHost });   // who is at which world version (C-VER)
     // LC-49 rejoin: this tab's secret for this room; only its hash (rk) ever goes on the wire, until a reloaded page asks for its slot back
     S.rjSecret = newRejoinSecret();
     S.rk = rejoinHash(S.rjSecret);
-    S.paintMode = paintMode;       // C-MODE: the "room" message repaints the guest's team-mode line through this
-    S.sendRoom = sendRoom;         // C-MODE: the host tells each newcomer its pick
-    S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
-    S.status = status;             // beginOnlineMatch reports a full room here
-    S.notice = notice;             // host: why a guest was left out / refused (lobby line; in a match it goes to the chat log)
-    S.showRefusal = showRefusal;   // guest: refuseRoom paints the reason + RELOAD button through this
+    bind();                        // this lobby's paint / notice hooks on the session
     // P2P overlay (ffg_rtc.js): the state envelope prefers DataChannels;
     // signaling + everything critical + the full fallback stay on Supabase.
     // ensurePeer is called lazily the first time a peer's state arrives (both
@@ -1304,10 +1422,7 @@ function openLobby(W, sel) {
           _waitCard.setAttribute("data-net-rematch-wait", "host-left");
         }
       }
-      status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ${Math.max(1, count)} player(s) connected` +
-        (net.isHost() ? "" : "<br>Waiting for the host to start…");
-      if (net.isHost()) startB.style.display = count >= 1 ? "inline-block" : "none";
-      paintRoster();
+      if (!S.started && S.ui) S.ui.onPeer();      // the lobby on screen now (a resumed room rebinds it)
     });
     const sess = S;
     try {
@@ -1382,18 +1497,33 @@ function openLobby(W, sel) {
       if (ms0 >= 0) { S.rjRescan = 1; setTimeout(() => rescan(1), ms0); }
     }
     send("hello", hello);
-    status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ` + (cands.length ? "rejoining your match…" : "share this code.") +
-      (asHost ? "" : "<br>Waiting for the host to start…");
-    if (cands.length) status.setAttribute("data-net-rejoin", "asking");
-    inviteB.style.display = "inline-block";
-    paintRoster();
-    if (net.isHost()) startB.style.display = "inline-block";
+    S.ui.onPeer();
+    if (cands.length) {
+      status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — rejoining your match…<br>Waiting for the host to start…`;
+      status.setAttribute("data-net-rejoin", "asking");
+    }
   }
 
   createB.onclick = () => enter(null, true);   // the relay picks the code
-  joinB.onclick = () => { if (codeInp.value.trim()) enter(codeInp.value.trim(), false); };
-  // arrived via ?room=CODE (see init): show the code we are joining, then join
-  if (sel && sel.room) { codeInp.value = sel.room; enter(sel.room, false); }
+  joinB.onclick = () => {
+    const c = codeInp.value.trim().toUpperCase();
+    if (c.length === 4) { enter(c, false); return; }
+    status.textContent = "";
+    const b = document.createElement("b"); b.style.color = "#ffb060"; b.textContent = "A room code is 4 characters.";
+    status.appendChild(b); status.appendChild(document.createElement("br"));
+    status.appendChild(document.createTextNode("Type the code your friend sees on their screen, or open their invite link."));
+    codeInp.focus();
+  };
+  if (sel && sel.resume && S && S.net && S.net.room) {
+    // BACK TO ROOM (returnToRoom): the same room, the same friends - this lobby takes over the session's paint hooks
+    bind();
+    if (S.net.isHost()) sendRoom();
+    S.ui.onPeer();
+  } else if (sel && sel.room) {
+    // arrived via ?room=CODE (see init): show the code we are joining, then join
+    codeInp.value = String(sel.room).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    enter(codeInp.value, false);
+  }
 
   startB.onclick = () => {
     if (!S) return;
@@ -1405,12 +1535,14 @@ function openLobby(W, sel) {
     // stay in the room and are rejected by name in beginOnlineMatch.
     // VERSION GUARD: a peer on another world version gets no slot (it would build
     // a different map from this seed) - planStart leaves it out and says so.
-    const plan = S.hs.planStart(S.peers, MAX_GUESTS, performance.now());
-    const pace = sel.mode === "practice" ? "standard" : sel.mode;
-    // C-MODE: the team mode rides the start next to the pace (`mode` stays the pace, as every build reads it); each roster entry names its teamId
-    const teamMode = resolveTeamMode(teamWant, plan.roster.length, pace, W.SIM);
-    const roster = rosterWithTeams(plan.roster, teamMode, W.SIM);
-    const cfg = S.hs.startMsg({ seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: pace, teamMode, teamWant: teamWant || "auto", roster });
+    // a friend still finishing the last match (IN A MATCH) is left out: they play the next one (planStart's `busy`)
+    const plan = S.hs.planStart(S.peers, MAX_GUESTS, performance.now(), S.inMatch);
+    const pace = roomPace;
+    // C-MODE: the team mode rides the start next to the pace (`mode` stays the pace, as every build reads it); `teams` = how the humans
+    // group (squad / two / ffa) and each roster entry names its teamId
+    const teamMode = roomTeamMode(roomTeams, teamWant, plan.roster.length, pace, W.SIM);
+    const roster = rosterWithTeams(plan.roster, teamMode, W.SIM, roomTeams);
+    const cfg = S.hs.startMsg({ seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: pace, teamMode, teams: roomTeams, teamWant: teamWant || "auto", roster });
     send("start", cfg);
     if (beginOnlineMatch(W, cfg) !== false) {
       // the host reads WHY someone is not in this match: in the lobby when their hello arrived, and in the chat log once the match is live
@@ -2000,7 +2132,13 @@ function onMsg(W, { from, t, d }) {
   }
   if (t === "room") {
     // C-MODE, lobby: the host's team-mode pick (display only - the start carries what is played)
-    if (!S.started && !S.net.isHost() && d && startFromHost(from, null)) { S.roomTm = normTeamMode(d.tm); if (S.paintMode) S.paintMode(); }
+    // FRIENDS ROOMS: plus the pace (mode) and how the humans group (teams); a guest that becomes host later keeps them (S.ui.onOwner)
+    if (!S.started && !S.net.isHost() && d && startFromHost(from, null)) {
+      S.roomTm = normTeamMode(d.tm);
+      if (PACES.includes(d.mode)) S.roomPace = d.mode;
+      if (normTeams(d.teams)) S.roomTeams = d.teams;
+      if (S.paintRoster) S.paintRoster();
+    }
     return;
   }
   if (t === "rejoin" && !S.started) {
@@ -2455,11 +2593,12 @@ export function rematch(W, opts) {
     // C-MODE / D5: the room keeps its team-mode PICK (re-resolved for who is still here): a pick of SQUADS stays SQUADS, AUTO stays AUTO (the
     // boot passes the mode the last match RESOLVED to, which for an AUTO room is not a pick); a start without teamWant (older host) -> opts
     const want = rematchTeamWant(S.cfg, opts.teamMode);
-    const teamMode = resolveTeamMode(want === "solo" ? null : want, plan.roster.length, pace, W.SIM);
+    const teamMode = roomTeamMode(normTeams(S.cfg && S.cfg.teams) || "squad", want === "solo" ? null : want, plan.roster.length, pace, W.SIM);
     const cfg = S.hs.startMsg({
       seed: (Math.random() * 0xffffffff) >>> 0,
       mapId: opts.mapId || (W.randomMap ? W.randomMap() : (S.cfg && S.cfg.mapId)),
-      mode: pace, teamMode, teamWant: want && want !== "solo" ? want : "auto", roster: rosterWithTeams(plan.roster, teamMode, W.SIM), rematch: S.rematchN,
+      mode: pace, teamMode, teams: normTeams(S.cfg && S.cfg.teams) || "squad", teamWant: want && want !== "solo" ? want : "auto",
+      roster: rosterWithTeams(plan.roster, teamMode, W.SIM, S.cfg && S.cfg.teams), rematch: S.rematchN,
     });
     send("start", cfg);
     return beginOnlineMatch(W, cfg) !== false;

@@ -722,11 +722,15 @@ function suiteP23(M, SIM, count) {
       "P23: revive / smoke / rejoin / room are CRITICAL and sent at once (never batched, never shed)");
     ok(/function myHello\(\) \{ return Object\.assign\(S\.hs\.helloMsg\(\), S\.rk \? \{ rk: S\.rk \} : \{\}\); \}/.test(src) && /hello\.rj = cands\.map/.test(src) && /if \(hr\.first\) send\("hello", myHello\(\)\);/.test(src),
       "LC-49: every hello carries the tab's rejoin commitment; a reloaded page's hello asks with its secret");
-    ok(/teamMode = resolveTeamMode\(teamWant, plan\.roster\.length, pace, W\.SIM\)/.test(src) && /rosterWithTeams\(plan\.roster, teamMode, W\.SIM\)/.test(src) && /if \(teamMode\) opts\.teamMode = teamMode;/.test(src),
+    ok(/teamMode = roomTeamMode\(roomTeams, teamWant, plan\.roster\.length, pace, W\.SIM\)/.test(src) && /rosterWithTeams\(plan\.roster, teamMode, W\.SIM, roomTeams\)/.test(src) && /if \(teamMode\) opts\.teamMode = teamMode;/.test(src),
       "C-MODE: START (and run-it-back) carry the team mode and the roster teamIds, and the guests hand them to startMatch");
     const lob = sl("function openLobby(W, sel) {", "// host + 3 guests.");
-    ok(lob.indexOf("box.appendChild(startB);") > 0 && lob.indexOf("box.appendChild(modeRow);") > lob.indexOf("box.appendChild(startB);") && lob.indexOf("box.appendChild(rosterEl);") < lob.indexOf("box.appendChild(noteEl);"),
-      "C-MODE: the team-mode row sits after START, so the lobby keeps the child order squadguard_live.py reads (title, status, buttons, roster, notices, START)");
+    // FRIENDS ROOMS (2026-11-22): the picks (MODE, TEAMS) moved ABOVE the roster for the player; what squadguard_live.py reads is box.children[1] =
+    // the status line and the roster = the notices' previous sibling, so those two are what this row pins (plus START last)
+    ok(lob.indexOf("box.appendChild(startB);") > lob.indexOf("box.appendChild(noteEl);") && lob.indexOf("box.appendChild(rosterEl);") < lob.indexOf("box.appendChild(noteEl);") &&
+      lob.indexOf('html(`<div class="lcn-title">') >= 0 && lob.indexOf('html(`<div class="lcn-title">') < lob.indexOf("const status = html(") &&
+      lob.indexOf("const status = html(") < lob.indexOf("box.appendChild(roomPanel);"),
+      "C-MODE / friends: the lobby keeps the children squadguard_live.py reads: [0] title, [1] status; roster right before the notices; START last");
     ok(/S\.rxGate = null; S\.reviveIn = null;/.test(src) && /if \(!a\.brain\) import\("\.\/bots\.js" \+ V\)/.test(src), "P23: run-it-back resets the order gate / revive / rejoin books; a re-taken body reuses its brain (never two brains on one body)");
     ok(/if \(a && S\.net\.isHost\(\) && !a\.netRemote && a !== W\.player\) reclaimSilentBody\(W, a, from, d\);\s*if \(a && a\.netRemote\) \{ applyRemoteState/.test(src) &&
       /if \(hostTakeOver\(W, id\)\) \(S\.silentTake = S\.silentTake \|\| \{\}\)\[id\] = now;/.test(src) && /if \(!gone\) \(S\.silentTake = S\.silentTake \|\| \{\}\)\[id\] = now;/.test(src) &&
@@ -734,7 +738,7 @@ function suiteP23(M, SIM, count) {
       "LC-49 reconnect: only the silence watchdogs mark a body reclaimable (a bye or a map fallback never does) and a fresh state packet reclaims it before it is applied");
     ok(/if \(d\.to && d\.to !== S\.net\.id\) return;/.test(sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState")), "LC-49: a sync addressed to a rejoining page is ignored by everyone else (no clock snap)");
     ok(/let teamWant = normTeamMode\(sel && \(sel\.teamMode \|\| sel\.team\)\) \|\| normTeamMode\(W\.settings && W\.settings\.teamMode\);/.test(src) &&
-      /const want = rematchTeamWant\(S\.cfg, opts\.teamMode\);\s*\r?\n\s*const teamMode = resolveTeamMode\(want === "solo" \? null : want/.test(src) && /mode: pace, teamMode, teamWant: teamWant \|\| "auto", roster/.test(src),
+      /const want = rematchTeamWant\(S\.cfg, opts\.teamMode\);\s*\r?\n\s*const teamMode = roomTeamMode\(normTeams\(S\.cfg && S\.cfg\.teams\) \|\| "squad", want === "solo" \? null : want/.test(src) && /mode: pace, teamMode, teams: roomTeams, teamWant: teamWant \|\| "auto", roster/.test(src),
       "D5: the room starts from the menu's team pick (W.settings.teamMode), START carries teamMode + teamWant, run it back re-resolves the room's pick");
     ok(/if \(S\.rejoinAsk\.tries >= REJOIN_ASK_TRIES\)/.test(src) && /setTimeout\(ask, REJOIN_ASK_EVERY_MS\);/.test(src) && !/tries >= 6/.test(src) &&
       /silentMs: typeof seen === "number" \? now - seen : null/.test(src) && /if \(S\.goneAt\) delete S\.goneAt\[id\];\s+\/\/ \(null when/.test(src) && /if \(S\.lastSeen\) delete S\.lastSeen\[id\];/.test(src) &&
