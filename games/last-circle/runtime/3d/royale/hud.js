@@ -1514,7 +1514,7 @@ export function showMenu(W, startMatch) {
       W.teamMode = team;
       startMatch({ mapId: randomMap(), mode: m.id, teamMode: team, team });   // lane boot reads opts.teamMode (C-MODE)
     };
-    // Tab-reachable. SQUAD UP / SETTINGS / HOW TO PLAY and the locker arrows are
+    // Tab-reachable. SETTINGS / HOW TO PLAY / CAREER and the locker arrows are
     // real <button>s, so the keyboard reached everything on this screen EXCEPT
     // the only three controls that start a match — these cards were plain divs
     // with a mouse handler. (Map stays random; this is focus, not a picker.)
@@ -1564,6 +1564,36 @@ export function showMenu(W, startMatch) {
     marginTop: short ? "2px" : "6px", marginBottom: "2px", animation: "lcGlow 3.2s ease-in-out infinite",
   }, "◂  CHOOSE A MODE TO DEPLOY  ▸", leftCol).className = "lc-touch-only";
 
+  // PLAY WITH FRIENDS (friends rooms, 2026-11-22): a card in the mode column (green accent), not the small "SQUAD UP" ghost button that
+  // used to sit in the row below and read as a squad MODE. It opens the friends lobby (royale/net.js): START ROOM gives a 4-character code
+  // + an invite link, JOIN FRIEND takes one. The menu's pace and TEAM pick come along as the room's starting choice (the host can change both).
+  {
+    const c = h("div", Object.assign({
+      padding: short ? "9px 20px 9px 16px" : "12px 20px 12px 16px", cursor: "pointer", minWidth: "300px",
+      position: "relative", overflow: "hidden", animation: `lcPanelIn .55s ${0.2 + cards.length * 0.06}s both`,
+    }, PANEL, { borderLeft: "3px solid #4ade80" }), null, leftCol);
+    c.className = "lc-mode-card lc-glass-scan";
+    c.dataset.lc = "friends-card";
+    const row = h("div", { display: "flex", gap: "14px", alignItems: "center" }, null, c);
+    h("div", {
+      width: "36px", height: "36px", borderRadius: "10px", display: "flex", alignItems: "center",
+      justifyContent: "center", fontSize: "17px",
+      background: "linear-gradient(145deg, rgba(74,222,128,0.28), rgba(30,110,70,0.15))",
+      border: "1px solid rgba(140,255,190,0.3)",
+    }, "👥", row);
+    const txt = h("div", { flex: "1" }, null, row);
+    h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontWeight: "800", fontSize: "14px", letterSpacing: "2px", color: "#eaf4ff" }, "PLAY WITH FRIENDS", txt);
+    h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "14px", fontWeight: "500", opacity: "0.72", marginTop: "2px", color: "#b8d0ea" }, "Start a room or join with a code", txt);
+    h("div", {
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "16px", fontWeight: "900",
+      color: "#8ff0b4", opacity: "0.85", paddingLeft: "6px", textShadow: "0 0 14px rgba(80,220,140,0.6)",
+    }, "▶", row);
+    c.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mode: selMode === "practice" ? "standard" : selMode, teamMode: selTeam }); };
+    c.tabIndex = 0;
+    c.setAttribute("role", "button");
+    c.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); c.onclick(); } };
+  }
+
   const subRow = h("div", { display: "flex", gap: "10px" }, null, leftCol);
   const mkGhost = (label, parent) => h("button", Object.assign({}, BTN, {
     flex: "1", fontSize: "12px", padding: short ? "10px 8px" : "12px 8px",
@@ -1571,16 +1601,12 @@ export function showMenu(W, startMatch) {
     border: "1px solid rgba(140,200,255,0.2)",
     fontFamily: "Rajdhani, " + FONT, fontWeight: "700", letterSpacing: "1.5px",
   }), label, parent);
-  const online = mkGhost("🌐  SQUAD UP", subRow);
-  online.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mode: selMode }); };
+  // (The friends room moved out of this row into its own card, above it.)
   const settings = mkGhost("⚙  SETTINGS", subRow);
   settings.onclick = () => { W.events.emit("uiClick"); showSettings(W); };
   const howTo = mkGhost("❔  HOW TO PLAY", subRow);
   howTo.onclick = () => { W.events.emit("uiClick"); showHowToPlay(W); };
-  // Own row: the three above are already ~93px wide inside a 300px column and a
-  // fourth would wrap "SQUAD UP" onto two lines.
-  const subRow2 = h("div", { display: "flex", gap: "10px" }, null, leftCol);
-  const career = mkGhost("📊  CAREER", subRow2);
+  const career = mkGhost("📊  CAREER", subRow);
   career.onclick = () => { W.events.emit("uiClick"); showCareer(W); };
   // First run gets it unprompted. A browser BR is opened cold from a link with
   // no manual and no install — there was no onboarding of ANY kind, and two of
