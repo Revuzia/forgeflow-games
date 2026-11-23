@@ -7,7 +7,7 @@ Running report (container may restart: continue from the last finished item).
 - [x] 2. fix - crawl.ts (turn in every mode, eased yaw, glide held + forward creep), softbody.ts (scootK, 3 lines), props.ts (untrack resets scootK); tsc clean
 - [x] 3. probe rows on the DRAWN face - probe_crawl CR-15a/b, CR-16 (17/17 pass after; the same rows on the old code: CR-15a 4/20, CR-15b 4/20)
 - [x] 4. browser after-run (`_harness/_reports/browser_facing_after.{log,json}`, before log `browser_facing_before.log`), screenshots `shots_facing/{before,after}_{desk,phone}_jellygel_[calm_]{right,away,left,toward}_{a_start,b_mid}.png` (DPR 2)
-- [~] 5. final probes, vite build (a floater-in-water regression found by PH-15 fixed: the hold only applies on the ground)
+- [x] 5. final probes: probe_crawl 17/17, probe_playground 74/74 (PH-15 first FAILED: a floater in a pool cannot turn (off the ground) so the hold froze its glide; fixed: the hold applies only on the ground), probe_life_selfuse all pass (54 visits), probe_gestures 176/176, probe_float 15/16 (F4 Table at hearthlog, see Open); tsc clean; vite build exit 0 (first-play 465 KB gzip, assets 2148.6 KB)
 
 ## What the player sees (before; measured in the browser on the drawn eye beads)
 - Face = two eye beads on the sim skin at rest +Z; the drawn face and the physics frame agree (median within 1-2 deg; up to ~7 deg while the crawl wave bends the skin).
@@ -27,6 +27,11 @@ Running report (container may restart: continue from the last finished item).
   tau 0.25 s): it arcs round instead of sliding sideways. The lean waits for the glide's share; the wave waits until within 35 deg (was 53).
 
 ## Open
+- probe_float F4 'Table at hearthlog' fails (16/16 on the pre-fix tree): its rest height for body 0 is sampled 3 s after arrival while that body is mid-crawl
+  (y 0.430 with the crawl hump; its rest is ~0.393), because walks now start later (turn first); after landing every body is at rest but body 0 is 3-5 cm under
+  the raised reference. Not a landing fault; the check's reference should be taken from a still body (lead's decision: not changed here).
+- The final browser after-run was made before the floater-on-the-ground fix (affects only off-ground bodies). CR-12 cost once read 71.6 us/body over 60 on a loaded
+  box, then passed on the rerun (17/17).
 - Blocked walks at Home bounce back each crawl cycle (Home does not detour round things, by design since R13): visible as a pulse backward. Not a facing fault.
 
 ## Measured after (browser, final code; drawn face vs travel over 0.2 s while walking)
