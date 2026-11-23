@@ -21,6 +21,7 @@ into bar rows.
     python _harness/p23/gunhold.py --disk --plant swim-sunk       # the sink keyed off the chest, clip lean kept - MUST FAIL swim-head
     python _harness/p23/gunhold.py --disk --plant swim-lean       # the upright correction off (clip lean kept) - MUST FAIL swim
     python _harness/p23/gunhold.py --disk --plant swim-arms-up    # the arms ride the straightened torso up     - MUST FAIL swim-arms
+    python _harness/p23/gunhold.py --disk --plant kerb-pop        # the arm / gun layers gated by onGround     - MUST FAIL kerb
     python _harness/p23/gunhold.py --rev 361c5ec3                 # the W10 base (W9 R1 live): every bar row MUST FAIL
 
 Rows (PLAN.md "Lane R1B" acceptance bars; the audit value each replaces in brackets):
@@ -61,6 +62,10 @@ Wave 10 round 3 lane R3B rows (parts reload, swim, swap):
   swim-arms      treading / stroking, not hands-up: on >= 80 % of the settled swimming frames of the same run BOTH wrists (LeftHand,
                  RightHand bones) at or below the drawn water surface, and on 0 settled frames a wrist above the Head bone
                  [verify3: both wrists 0.12-0.31 m above the water, a hand above the Head on 258 of 258 frames]
+  kerb           (W10 anim fix 4) a 20 cm kerb step-off (lifted 0.2 m at frame 12, >= 3 frames unsupported) with the AR, SMG, sniper and pistol,
+                 running and still, every skin: the right hand's and the muzzle tip's largest per-frame move in the hips' frame <= 2x that
+                 run's normal per-frame move (largest move on frames >= 8 away from the step and the landing) [fix3 head: 0.18-0.25 m hand,
+                 0.33-0.50 m muzzle in one frame; --plant kerb-pop MUST FAIL it]
   swap           a gun swap lowers the barrel >= 25 deg off the aim mid-swap (max over 0.08-0.20 s after the swap); with >= 9 armed
                  two-gun bots on screen within 35 m, 1 <= actors drawing a slung gun <= 8 and = min(8, eligible) [none]
 plus: 0 new programs over the run, 0 page / console errors, 0 failed requests, 0 shader errors, 0 [rig] lines.
@@ -129,6 +134,11 @@ PLANTS = {
     "swim-lean": [(RP + "player.js", [("swimUpright(a, a._swTilt);", "")])],
     # verify3 finding: straightening Hips..Head swung the clip's arms (posed for its 31 deg lean) up to the face - hands-up, not treading
     "swim-arms-up": [(RP + "player.js", [("const SWIM_ARMS_ON = true,", "const SWIM_ARMS_ON = false,")])],
+    # W10 anim fix 4 (F-B, check3 finding): the arm / gun layers gated hard by onGround again (fix3's form) - the rifle hold, the weld, the
+    # support hand, the pistol arm modes and the spine twist drop for the 7 frames of a 20 cm kerb: the AR's right hand jumps 0.18-0.25 m and
+    # its muzzle 0.33-0.50 m in one frame
+    "kerb-pop": [(RP + "player.js", [("const gndClip = !airClipOn;", "const gndClip = a.onGround;"),
+                                     ("const mixHold = mixamoAim || (mixGun && rhCls && a._rhW > 0);", "const mixHold = mixamoAim;")])],
 }
 
 EQUIP_JS = r"""(wid) => { const W = window.__LC__.W, K = W.SIM, p = W.player, inv = p.inventory;
@@ -610,6 +620,68 @@ def part_swim(s, v, R, shots):
     return out
 
 
+# (W10 anim fix 4, F-B) a 20 cm kerb step-off: the player is lifted KERB_DROP at frame KERB_AT and falls back (the ground clip keeps playing:
+# 7 frames unsupported); per frame the right hand and the muzzle tip in the HIPS' frame (a pop of the arms or the spine twist shows; the
+# whole body's own drop does not)
+KERB_JS = r"""([n, at, drop]) => { const W = window.__LC__.W, THREE = W.THREE, P = window.__H_PUMP__, A = W.player; const out = [];
+  let rh = null, hp = null; A.obj.traverse((o) => { if (!o.isBone) return; const nm = o.name.replace(/^mixamorig:?/i, ''); if (!rh && nm === 'RightHand') rh = o; if (!hp && nm === 'Hips') hp = o; });
+  for (let i = 0; i < n; i++) { if (i === at) { A.pos.y += drop; A.obj.position.y += drop; }
+    P.step(1, 1 / 60, false); W.scene.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(hp.matrixWorld).invert();
+    const h = rh.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+    const ud = A.weaponMesh && A.weaponMesh.userData, tp = A.hand && ud && ud.tip ? A.hand.localToWorld(new THREE.Vector3(ud.tip.x, ud.tip.y, ud.tip.z)).applyMatrix4(inv) : null;
+    out.push([i, A.onGround ? 1 : 0, A.anim, [h.x, h.y, h.z], tp ? [tp.x, tp.y, tp.z] : null]); }
+  return out; }"""
+KERB_AT, KERB_DROP, KERB_N = 12, 0.2, 44
+KERB_WIDS = ["ar", "smg", "sniper", "pistol"]
+
+
+def kerb_eval(rows):
+    """-> {pt: [largest per-frame move, frame, normal per-frame move]}; normal = the largest move on frames >= 8 away from the step and
+    the landing (the same clip's own motion, same run)"""
+    land = [b[0] for a, b in zip(rows, rows[1:]) if b[1] and not a[1]]
+    near = set()
+    for e in [KERB_AT] + land:
+        near.update(range(e - 2, e + 9))
+    out = {"air": sum(1 for r in rows if not r[1]), "anims": sorted(set(r[2] for r in rows))}
+    for k, nm in ((3, "rh"), (4, "tip")):
+        m, at, base = 0.0, None, 0.0
+        for a, b in zip(rows, rows[1:]):
+            if a[k] is None or b[k] is None:
+                continue
+            d = math.dist(a[k], b[k])
+            if d > m:
+                m, at = d, b[0]
+            if b[0] not in near and b[0] > 2:
+                base = max(base, d)
+        out[nm] = [round(m, 4), at, round(base, 4)]
+    return out
+
+
+def part_kerb(s, v, R, skin):
+    spot = L.flat_spot(s, clear=9.0, max_r=900) or {}
+    home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
+    out = {}
+    for wid in KERB_WIDS:
+        for sc, keys in (("run", ["KeyW"]), ("idle", [])):
+            s.release_all()
+            s.js(PLACE_JS, [home[0], home[1], 0.0])
+            s.js(EQUIP_JS, wid)
+            s.js(AIM_JS, [0.0, 0.0, False])
+            s.step_frames(130, 1 / 60, render=False)                    # out of combat, the hold eased in
+            if keys:
+                s.hold(keys)
+            s.step_frames(40, 1 / 60, render=False)
+            rows = s.js(KERB_JS, [KERB_N, KERB_AT, KERB_DROP])
+            s.release_all()
+            out["%s/%s" % (wid, sc)] = kerb_eval(rows)
+    s.step_frames(20, 1 / 60, render=False)
+    s.js(PLACE_JS, [home[0], home[1], 0.0])
+    R.setdefault(skin, {})["kerb"] = out
+    v.info("%s kerb step-off (pt: [max per-frame move m, frame, normal per-frame move m])" % skin, out)
+    return out
+
+
 def part_swap(s, v, R, skin):
     s.js(EQUIP_JS, "ar")
     s.js("() => { const W = window.__LC__.W, K = W.SIM, p = W.player; p.inventory.slots[2] = { kind: 'weapon', id: 'smg', rarity: 1, mag: K.WEAPONS.smg.mag }; return 1; }")
@@ -673,7 +745,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
     ap.add_argument("--skins", default="soldier,athlete")
-    ap.add_argument("--parts", default="guns,flash,pistol,flinch,death,sheen,reload,swim,swap")
+    ap.add_argument("--parts", default="guns,flash,pistol,flinch,death,sheen,reload,swim,swap,kerb")
     ap.add_argument("--shots", default=None)
     ap.add_argument("--no-cache", action="store_true", help="re-measure the W9 tip's sheen baseline")
     args = L.parse(ap)
@@ -694,7 +766,7 @@ def main():
         progs = []
         with C.Session(args, "w10_gunhold") as s:
             plant(s)
-            if want & {"guns", "flash", "pistol", "flinch", "sheen", "reload", "swap"}:
+            if want & {"guns", "flash", "pistol", "flinch", "sheen", "reload", "swap", "kerb"}:
                 for i, skin in enumerate(skins):
                     v.info("practice %s" % skin, boot_practice(s, skin))
                     p0 = L.programs(s)
@@ -710,6 +782,8 @@ def main():
                         part_reload(s, v, R, skin, shots)
                     if "swap" in want:
                         part_swap(s, v, R, skin)
+                    if "kerb" in want:
+                        part_kerb(s, v, R, skin)
                     s.step_frames(10, 1 / 60, render=True)
                     progs.append([skin, p0, L.programs(s)])
             if "swim" in want:
@@ -868,6 +942,19 @@ def main():
             okS = el is not None and el >= 9 and dr is not None and 1 <= dr <= 8 and dr == min(8, el)
             v.check("swap: the barrel lowered >= 25 deg off the aim mid-swap (every skin); slung second gun on 1-8 actors = min(8, eligible) with >= 9 eligible",
                     not bad and okS, {"bad": bad, "dip": sw, "sling": sl}, ">= 25 deg; <= 8")
+        if "kerb" in want:
+            kb, kr = [], {}
+            for skin in skins:
+                K_ = R.get(skin, {}).get("kerb") or {}
+                for key in ["%s/%s" % (w_, sc) for w_ in KERB_WIDS for sc in ("run", "idle")]:
+                    e = K_.get(key)
+                    kr["%s/%s" % (skin, key)] = e and {"rh": e["rh"], "tip": e["tip"], "air": e["air"]}
+                    # the step really left the ground (>= 3 frames unsupported) and neither point jumped more than 2x its own normal motion
+                    ok = bool(e) and e["air"] >= 3 and all(e[p][0] <= 2.0 * e[p][2] + 1e-9 for p in ("rh", "tip"))
+                    if not ok:
+                        kb.append("%s/%s" % (skin, key))
+            v.check("kerb: a 20 cm kerb step-off (AR / SMG / sniper / pistol, running and still): the right hand's and the muzzle's largest per-frame move (hips frame) <= 2x the same clip's normal per-frame move",
+                    not kb and bool(kr), {"bad": kb, "[max, frame, normal]": kr}, "<= 2x normal")
         if "sheen" in want:
             b = R.get("sheen")
             if b is None:
