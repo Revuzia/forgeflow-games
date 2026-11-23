@@ -32,6 +32,8 @@ export const ROOM_CAM = {
   /** metres kept around every body in the party's box, on a view whose closest half width is padRef m or more (a narrower one, a phone's, keeps a
    *  proportional share, never under padMin of it: 0.8 m each side of a party is most of a phone's frame); the lead keeps leadPad of the view's edge clear */
   pad: 0.8, padRef: 2.4, padMin: 0.4, leadPad: 0.5,
+  /** (round 15) Home: the air kept around a thing's spot in the box the camera frames by itself (spots()) */
+  spotPad: 0.25,
   /** the factor widens with tauOut, narrows with tauIn once the box has been under inBand of it for inWaitS; the centre eases with tauC (tauHeld under a hand) */
   tauOut: 0.5, tauIn: 1.5, inWaitS: 2.5, inBand: 0.86, tauC: 0.55, tauHeld: 0.16, tauU: 0.35,
   /** in hand: the share of the safe band (from its middle) where nothing scrolls, where the scroll is at full speed, and that speed (m/s at the `far` view) */
@@ -95,9 +97,22 @@ export class RoomCam {
   // the last frame's scale for pan(): metres per CSS px across and in depth at the aim, and the camera's yaw
   private mX = 0.01; private mZ = 0.01; private yaw = 0;
   private wasHeld = false;
+  // (round 15, R15_FIX F2) Home's things in view: their spots (x, z, r each) and how many; see spots()
+  private sp = new Float32Array(3 * 8); private nSp = 0;
   // the pointer this frame (NDC; NaN: none)
   private pnx = NaN; private pny = 0;
 
+  /**
+   * (round 15, R15_FIX F2; VERDICT_R14 F2: "the camera's own view shows only the Felt Ball") Home's things that stand out now: n spots (x, z, r in metres) in
+   * xzr. At Home the camera by itself frames the party AND these as far as its own range goes (between today's size and `far`): the view widens to their box
+   * and aims at its middle, as long as the party's own box stays inside the view; a party that has moved away from the things (or is carried away) is
+   * followed as before. A place (depthK 0) ignores them: it frames its play bounds.
+   */
+  spots(xzr: ArrayLike<number>, n: number): void {
+    const m = Math.max(0, Math.min(8, n | 0));
+    for (let i = 0; i < m * 3; i++) this.sp[i] = +xzr[i] || 0;
+    this.nSp = m;
+  }
   /** The pointer this frame (the stage's frame input: NDC, y up; null: none): a finger that holds a body at the frame's edge scrolls the view. */
   finger(n: { readonly x: number; readonly y: number } | null): void { if (n) { this.pnx = n.x; this.pny = n.y; } else this.pnx = NaN; }
 
@@ -175,7 +190,14 @@ export class RoomCam {
     // ---- the factor: by itself between near and far, out quickly and in slowly; the player's zoom stays ----
     const bx = (x0 + x1) / 2, bz = (z0 + z1) / 2, hX = (x1 - x0) / 2, hZ = (z1 - z0) / 2;
     const need = this.depthK > 0 ? (hX + this.depthK * hZ) / this.hx : Math.max(hX / this.hx, hZ / this.hz);
-    const uA = clamp(need, this.near, this.far);
+    // (round 15, F2) Home: the box of the party and the things that stand out (spots()): the factor reaches for it inside the camera's own range
+    let needAll = need, ux = bx, uz = bz;
+    if (this.depthK > 0 && this.nSp > 0) {
+      let a0 = x0, a1 = x1, c0 = z0, c1 = z1;
+      for (let i = 0; i < this.nSp; i++) { const sx = this.sp[i * 3], sz = this.sp[i * 3 + 1], sr = this.sp[i * 3 + 2] + T.spotPad; if (sx - sr < a0) a0 = sx - sr; if (sx + sr > a1) a1 = sx + sr; if (sz - sr < c0) c0 = sz - sr; if (sz + sr > c1) c1 = sz + sr; }
+      needAll = ((a1 - a0) / 2 + this.depthK * (c1 - c0) / 2) / this.hx; ux = (a0 + a1) / 2; uz = (c0 + c1) / 2;
+    }
+    const uA = clamp(needAll, this.near, this.far);
     if (this.fresh) { this.uT = uA; this.inT = 0; }
     else if (uA > this.uT) { this.uT += (uA - this.uT) * ease(dt, T.tauOut); this.inT = 0; }
     else if (uA < this.uT * T.inBand && !held) { this.inT += dt; if (this.inT > T.inWaitS) this.uT += (uA - this.uT) * ease(dt, T.tauIn); }
@@ -216,6 +238,11 @@ export class RoomCam {
       if (foc) { gx = fx; gz = fz; }
       else {
         gx = bx; gz = bz;
+        // (round 15, F2) Home: aim at the middle of the party and the things, as far as the party's own box stays inside the view
+        if (needAll > need && need <= uG) {
+          const dx = ux - bx, dz = uz - bz, cost = Math.abs(dx) + this.depthK * Math.abs(dz), lim = (uG - need) * this.hx, k = cost > lim ? (cost > 1e-9 ? lim / cost : 0) : 1;
+          gx = bx + dx * k; gz = bz + dz * k;
+        }
         // the party does not fit: the lead stays inside the view (the others are hinted at the frame's edge)
         if (need > uG + 1e-6 && lead) {
           const m = lr + T.leadPad;

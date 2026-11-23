@@ -1273,6 +1273,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // (round 14, D-104: the room camera; contracts.ts) a pan in CSS px, the camera brought to a body, and the director's view for the shell and the probes
     pan(dx, dy) { room?.pan(dx, dy); },
     focusBody(id) { room?.focus(id); },
+    roomSpots(xzr, n) { room?.spots(xzr, n); },
     roomView(out) { if (!room || !room.on) return false; out[0] = room.x; out[1] = room.z; out[2] = room.u; out[3] = room.scroll ? 1 : room.hand ? 0.5 : 0; out[4] = room.outside; out[5] = room.zoomed; return true; },
 
     spawnFx(kind: FxKind, at: V3, intensity: number) { primary()?.spawnFx(kind, at, intensity); },

@@ -812,6 +812,9 @@ export interface StageLike {
   pan?(dxPx: number, dyPx: number): void;
   focusBody?(id: number): void;
   roomView?(out: Float32Array): boolean;
+  /** ROUND 15 (R15_FIX F2; additive, optional): Home's things that stand out now, n spots (x, z, r in metres) in xzr (at most 8): with two or more out the
+   *  room camera by itself frames the party and these inside its own range (render/roomcam.ts spots()). n 0: none. */
+  roomSpots?(xzr: ArrayLike<number>, n: number): void;
   /** PLAYGROUND (Home): the table area visible inside the frame and outside the HUD safe insets at the REST framing (yaw 0, zoom 1, no
    *  ceremony push) of the mat slots in use, as ONE ground box inside it, [xMin, zMin, xMax, zMax] in metres into out[0..3]: its z range
    *  runs from the ground row under the top inset line to the ground row under the bottom inset line, and its x range is the near row's (the

@@ -580,6 +580,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       default: return false;
     }
   }
+  const homeSpots = new Float32Array(3 * 8);
   function homeThings(): void {
     if (placeIdx !== 0 || !world) return;
     const tall = layout === 1, n = Math.max(1, wholesOut());
@@ -593,6 +594,16 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const x = (spot ? spot.x : t.x) * bodyScale, z = (spot ? spot.z : t.z) * bodyScale, yaw = spot ? spot.yaw : t.yaw;
       try { stage.setHomeThing?.(k, show, x, z, yaw); } catch (e) { report(e); }
     }
+    // (round 15, R15_FIX F2) the things that stand out now (not the Felt Ball, which rolls; not the rug, which lies under the party): the room camera frames
+    // them with the party (stage.roomSpots)
+    let ns = 0;
+    for (let k = 0; k < HOME.things.length && ns < 8; k++) {
+      const t = HOME.things[k];
+      if (homeShown[k] !== 1 || t.mech === MECH.ball || t.mech === 0) continue;
+      const spot = tall ? HOME.tall.things[k] : null;
+      homeSpots[ns * 3] = (spot ? spot.x : t.x) * bodyScale; homeSpots[ns * 3 + 1] = (spot ? spot.z : t.z) * bodyScale; homeSpots[ns * 3 + 2] = t.size[0] * bodyScale; ns++;
+    }
+    try { stage.roomSpots?.(homeSpots, ns); } catch (e) { report(e); }
     // the Felt Ball's bounds: the visible table (the world shrinks it by the ball's radius, D-67); round 14: the whole felt with two or more out (homeRoom)
     try { if (homeRoom) world.setBallDisc(HOME.bounds.x, HOME.bounds.z, HOME.bounds.r ?? 5.5); else if (stage.visibleTable?.(vis)) world.setBallBounds(vis[0], vis[1], vis[2], vis[3]); } catch (e) { report(e); }
   }
