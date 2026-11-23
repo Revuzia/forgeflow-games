@@ -27,9 +27,10 @@ Running report (container may restart: continue from the last finished item).
   tau 0.25 s): it arcs round instead of sliding sideways. The lean waits for the glide's share; the wave waits until within 35 deg (was 53).
 
 ## Open
-- probe_float F4 'Table at hearthlog' fails (16/16 on the pre-fix tree): its rest height for body 0 is sampled 3 s after arrival while that body is mid-crawl
-  (y 0.430 with the crawl hump; its rest is ~0.393), because walks now start later (turn first); after landing every body is at rest but body 0 is 3-5 cm under
-  the raised reference. Not a landing fault; the check's reference should be taken from a still body (lead's decision: not changed here).
+- (RESOLVED, follow-up item 2) probe_float F4 'Table at hearthlog': with only crawl.ts reverted on today's tree the row passes 16/16; instrumented, BOTH trees
+  sample body 0's "rest" height mid-crawl (pre-fix 0.364, passing against its true rest 0.393 by 1 mm; with R15 0.430, failing). Float behaviour itself is
+  unchanged (the float branch of Crawl.step is untouched; the hold is let go when gravity is off). The row was wrong: re-specified in probe_float.ts (reference
+  taken when no body walks or crawls; same 3 cm / 3 s limit, reason at the row). Now 16/16 on today's tree and on the crawl-reverted tree.
 - The final browser after-run was made before the floater-on-the-ground fix (affects only off-ground bodies). CR-12 cost once read 71.6 us/body over 60 on a loaded
   box, then passed on the rerun (17/17).
 - Blocked walks at Home bounce back each crawl cycle (Home does not detour round things, by design since R13): visible as a pulse backward. Not a facing fault.
@@ -42,3 +43,19 @@ Running report (container may restart: continue from the last finished item).
 - LIFE, 3 out (desk): Home median 11.6 (p90 158: pushed-back blocked walks, 17 %), asked walks 4.3/4.8 (p90 28/37), Home Calm 6.7 (was 136), Ripple 3.7,
   Frostbell 1.4. Phone (2 out): Home 7.0, asked 2.4/7.5, Calm 6.6 (was 48.6), Ripple 10.4, Frostbell 1.1. Face vs its own way: median 0.4-6.2 everywhere.
 - Floaters: face the camera as before (median 0-7 deg), no drift over 4 cm/s seen in 15 s.
+
+## Follow-up 1: walks into a friend (Home 3 out, p90 158 deg)
+- Cause (browser, `--sec=surge`/`surge1`): not the crawl alone (1 body out: no backward motion; node, same genomes: none). With 3 out a walker reached a friend,
+  pushed it along (the friend, asleep, woke and slid away in step) and was thrown back once a crawl cycle: 1-3 cm backward pulses with its face ahead.
+- Fix, first version (stop at the friend, counted in scootBlocks): REJECTED by probe_life_selfuse (SU-04 hearthlog, SU-06 Home: 2 things used instead of 3;
+  SU-05 flip-flop): stopped walks made LIFE give up and re-plan.
+- Fix, final (crawl.ts): a friend touching it in the 55 deg cone ahead of its way makes it STEER ROUND: its way becomes the tangent round the friend on the
+  target's side (held until the friend is beside or behind it), the glide (straight at the target) is held and the forward creep along its face carries it
+  round; if its target is where the friend is (nearer the friend's centre than it is) it stops facing its way and LIFE's blocked rule ends the walk.
+  Contact approaches (<= 0.05 m/s) still touch. Nothing new is signalled to LIFE.
+- Measure: SELF-POWERED = its own drive (glide + forward creep) over 3 cm/s; every walking sample is still reported beside it.
+  Run with the first (stop) version (desk / phone, 3 out, self-powered: median / p90 / worst) - superseded by the final run below:
+  Home life 3.7/20.1/82.8 | 3.4/14.7/32.6; asked 5.1/13.4/94.6 and 3.0/10.8/100.9 | 2.6/9.8/35.6 and 6.6/37.2/111; Home Calm 3.2/17.9/83.8 (n 23) |
+  6.6/12.3/29.2; Ripple 1.8/10.2/110.5 | 1.4/14.8/80.8; Frostbell 1.2/9.8/41.1 | 1.2/17.2/122.4. Samples over 60 deg: 0-5 per 30 s section.
+  All walking samples (incl. shoved) p90: desk Home 117, Home Calm 160 (37 % pushed), phone Home 16.7.
+- Open: the few self-powered samples over 60 deg (single 0.1 s samples) are not diagnosed.

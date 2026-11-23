@@ -78,3 +78,43 @@ If this file is all you have: every edit named below is IN THE TREE; a row is ve
 - Method notes: a browser measurement must not be served from the working tree while another engineer saves files (vite reloads the page mid-run): `S/run.sh` serves a copy; `S/iso.sh <probe>` runs a node probe with the other engineer's three physics files at HEAD, to tell whose red a red is. The vite servers on 5380 to 5382 were started before this session and were left running.
 - OPEN: F5 ramp (physics: the set-down must right the squishy; see F5); F7's AUTO chip under a pinch finger; browser_rooms' phone flow; the two useRide fixes by real input in a browser; F8, F10, F12, F13 untouched; the Music Box, shelf and pad still have no by-itself use at Home (3 things used, the bar, with no margin: SU-06 desk reached 3 only at 180 s in one save of the end run).
 
+### Engineer 3, second pass (2026-11-23 night): progress notes (written as items land)
+- F5 RAMP, CAUSE CORRECTED: it is not the hanging pose (tilt at the let go is 1 degree). It is the squishy's YAW. A long squishy turned across the ramp's 0.9 m
+  channel wedges on the rails, set down OR dropped (node rig, crimpo placed at the ramp top: yaw -116 / -90 / 60 degrees travels 0.1 m from 1.0 and 1.3 m up;
+  yaw 0 / -45 glides 2.1 to 3.1 m). The live build never turns a squishy, so its drop always glides. A squishy picked up in the middle of a walk stayed turned
+  when the hand let go (crawl.ts: "a hand took it: it stays as it is left"). FIX in `src/physics/crawl.ts` (3 small edits: `put`, PUT_FRAMES): after a hand's
+  let go the squishy turns back to its rest facing (+Z), as a walk's end does, on the ground or (this turn only) standing on a thing. No softbody.ts change.
+  Real input, 2 runs x 3 squishies per frame (`S/v/logs/F5d_frost_{desk2,phone1,phone2}.out`, `F5c_frost_desk.out` first three): desk crimpo 3.00 / 3.02 m,
+  dollop 2.19 / 1.99 m, glimglop 0.78 / 0.82 m (ends beside the top); phone crimpo 2.36 / 2.39 m, dollop 1.38 / 1.67 m (still gliding at 6.4 s), glimglop
+  0.53 / 0.42 m. Live's drop: 1.6 to 2.47 m (dollop, crimpo).
+- probe_carry K9 re-specified (reason at the row: rim-limited 0.62 m once the napper faces front). probe_crawl green, probe_carry 13/13.
+- F2 margin: two levers tried and TAKEN OUT again (no gain): Home's Bounce Pad allowed as a by-itself use in a room (never chosen: identical results), the
+  place's use budget at Home as a room (one of 16 runs fell to 2). Range over 4 seeds x 2 frames x 2 saves (16 runs): 3 things in every run, the third by
+  60 to 180 s. The early save has exactly three things with a by-itself use (ball, rug, lamp): more needs a NEW by-itself use (Music Box / shelf): a design call.
+- browser_rooms phone flow repaired in the harness (Escape opened the Menu; browser_carry's tray flow; the one-out row pins the published camera): run pending.
+- F5 ramp, final code (the put-down turn only while something bears the squishy, never a floater) re-measured, real input, 3 per frame (`F5e_frost_{desk,phone}.out`):
+  desk crimpo 3.08 m, dollop 2.27 m, glimglop 0.82 m; phone crimpo 2.29 m, dollop 1.43 m, glimglop 0.45 m. All runs together: crimpo and dollop glide 3 of 3 on
+  each frame (desk 1.99 to 3.08 m, phone 1.38 to 2.39 m; live 1.6 to 2.47 m); GLIMGLOP (slime) 0 of 3 on each frame (it ends beside the ramp's top). No live
+  number for it: the live build's lift did not pick it up in 4 tries (`F5L3_frost_desk.out`, `F5L_frost_desk.out`). OPEN.
+- The other set-downs, desk, one each after the change (`F5d_*_desk.out`): Pillow Swing: on the seat (onProp 3); Rocker Board: on the board (onProp 1); Rock
+  Pool: floats in it (y 0.77; round 14: 0.88); Sand Mound: on it; Moss Bouncer: kicked (0.44 -> 1.07 m); Updraft: puffed (0.84 -> 0.96 m), stamp; Puff Pad
+  (crimpo): no bounce seen in 2.4 s, the same as before this pass (`F5a_cloud_desk.out`). Home back-rim carry (`F3e_home_{desk,phone}.out`, 6 carries each):
+  worst rest from the harness's let-go point 0.83 m desk, 0.78 m phone (was 3.5 m), every one picked and reached.
+- The two "Go play with... a ride" fixes by real input (`GP_cabin_{desk,phone}.out`, `S/v/scripts/gp.mjs`): Glimglop set on the Rocker Board by a carry (riding,
+  onProp 1), asked by its name-tag popover to play with the Pillow Swing: on the seat 3 s later and in 31 of 31 half-second samples after, on both frames.
+- node_checks: 186/186 after three more rows were made independent of the timeline (reasons at the rows: the carry-up rows aim at app.body's own disc, the
+  ride-ask row first takes the squishy off the swing when LIFE had already put it there, the pine click from the pine's own distance). probe_softbody 115/116
+  (= live), probe_crawl green, probe_carry 13/13, probe_playground 74/74, probe_gestures 176/176, probe_party 10/10, selfuse SQ-01 2/2, vite build exit 0
+  (first-play 473,921 B gzip; HEAD 473,903). probe_float 14/16: F4 and F8 are red WITHOUT this session's crawl edit too (`S/nomine.sh`: the tree with only the
+  put-down turn taken out) and green with crawl.ts at HEAD: the cause is the facing engineer's in-flight "friend block" follow-up in crawl.ts. PH-15 and CR-12
+  are green now.
+- `_harness/_f5_dbg.ts` was committed by accident (a temporary rig): it is deleted in the working tree; please keep it deleted.
+- browser_rooms, phone half repaired (`_harness/browser_rooms.mjs`: the Menu that Escape opens on a phone is closed; browser_carry's tray flow; the one-out row
+  pins the published camera, origin within 1.5 px of the live build's; the edge chips are re-read after the loop has run; the camera settles before a press).
+  Full run on both frames (`S/reg/browser_rooms2.out`, 41 min): 85 ok / 12 FAIL (was 79 / 17 with the phone half behind the Credits sheet). Then, with the
+  last harness edits, Home + cabin + Ripple on both frames (`browser_rooms3.out`): 60 ok / 2 FAIL: the phone trips, chips, ONE carry, whole-room and close views
+  are green on both frames. STILL RED, both frames: "Home: a hard toss at the side of the room" reads `carried false` (the press does not pick the squishy up
+  after the chip row). It is red with this session's crawl edit taken out too (`browser_rooms_nm.out`), and it was green in the first full run before the
+  harness's settle waits: harness pacing or the facing engineer's in-flight follow-up, NOT determined. The four places after Ripple were not re-run with the
+  last harness edits (in run 2 their phone trips did not arrive; Ripple's did in run 3).
+

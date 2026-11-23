@@ -96,6 +96,11 @@ await stepA(120);
 /** Float for `secs` (20 s): every body's lowest rise over its table rest, its widest horizontal drift from where it started, the closest pair, the gravity of every body */
 async function floatTrial(secs = 20): Promise<{ rest: number[]; minRise: number; maxDrift: number; minPair: number; grav: boolean[]; scoot0: number; scoot1: number; floatOn: boolean }> {
   await stepA(180);
+  // (R15 FACING, re-specified: the rest heights F4's Table row compares the landing with were taken at a fixed moment, 3 s after arrival, whether or not a body
+  // was walking then; a crawling body's centre rides its crawl hump, up to 4 cm off its rest (hearthlog's jelly: 0.364 on the pre-R15 tree, which passed against
+  // its true rest 0.393 by 1 mm, and 0.430 with R15's turn-first walks, which failed). The reference is now taken when no body walks or crawls (up to 12 s more):
+  // the same 3 cm / 3 s landing limit, against a height the body really rests at)
+  for (let k = 0; k < 72 && all().some(({ b }) => { const x = b as unknown as { scootOn: boolean; crawlOn: boolean }; return x.scootOn || x.crawlOn; }); k++) await stepA(10);
   const rest = pos();
   const scoot0 = dbg().counts.scoot ?? 0;
   setFloat(true);
@@ -117,7 +122,11 @@ async function tableTrial(rest: number[]): Promise<{ vmin: number; tRest: number
     step(1);
     const p = pos(), y = p.map((q) => q.y);
     if (tRest < 0) y.forEach((v, i) => { const vv = (v - prev[i]) * 60; if (vv < vmin) { vmin = vv; at = `body ${i} at ${(k / 60).toFixed(2)} s (${f3(p[i].x)}, ${f3(v)}, ${f3(p[i].z)})`; } });
-    if (tRest < 0 && y.every((v, i) => Math.abs(v - rest[i]) < 0.03 && Math.abs(v - prev[i]) * 60 < 0.05)) tRest = k / 60;
+    // (R15 FACING, re-specified: "back on the ground" was "back within 3 cm of the height it had before Float"; a body LIFE had walked onto a raised thing (hearthlog:
+    // 0.81 m on a thing, then floated off it and set down on the floor beside it at 0.60, still) never matched. Now: still (under 5 cm/s), and either within 3 cm
+    // of that height or standing on a support (physics' grounded: 3+ particles on the floor or an up-facing prop face). The fall cap is unchanged.)
+    const gr = all().map(({ b }) => b.metrics.grounded === true);
+    if (tRest < 0 && y.every((v, i) => (Math.abs(v - rest[i]) < 0.03 || gr[i]) && Math.abs(v - prev[i]) * 60 < 0.05)) tRest = k / 60;
     prev = y;
     if (k % 10 === 0) await tick();
   }

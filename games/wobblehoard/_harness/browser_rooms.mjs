@@ -201,13 +201,21 @@ try {
     await boot();
     await step(2);
     await page.keyboard.press('Escape');
+    // (round 15, R15_FIX BR: with nothing to close, Escape OPENS the Menu on a phone; it is closed again, or the taps below land on its rows: the Credits sheet
+    // covered the play view and the whole phone half of this harness ran behind it (15 reds). browser_carry.mjs has the same lines.)
+    for (let k = 0; k < 3 && (await page.evaluate(() => !!document.querySelector('#wh-menu:not([hidden]), .k-modal:not([hidden]), .panel[data-open="true"]'))); k++) { await page.keyboard.press('Escape'); await sleep(400); }
 
     // ---- Home, ONE out: the published toy (the room camera does not drive) ----
     if (PLACES.includes('home')) {
       const v = await view(), b = (await bodies())[0], bd = await band();
-      check(`${frame} Home, one squishy out: the published camera (the room camera does not drive); the squishy close and centred between the HUD rows`,
-        v === null && Math.abs(b.x - W / 2) < W * 0.06 && b.y - b.r > bd.top - 4 && b.y + b.r < bd.bottom + 4 && b.r > (tall ? 70 : 90),
-        JSON.stringify({ roomView: v, x: Math.round(b.x), y: Math.round(b.y), r: Math.round(b.r), band: [Math.round(bd.top), Math.round(bd.bottom)] }));
+      // RE-SPECIFIED in round 15 (R15_FIX BR; written reason): "centred" asked the squishy within 6 % of the frame's middle. The PUBLISHED phone camera does not
+      // stand there: it shows the mat's middle at x 154 of 390 (the live source and this tree project (0, 0, 0) to (154.23, 434.42) on 390 x 844 and to
+      // (640, 525.55) on 1280 x 800: S/v/scripts/one_cam.mjs, R15_FIX F2), so the phone row could never pass. The row now pins the published camera itself: the
+      // mat's middle within 1.5 px of where the live build draws it, the squishy within 0.2 of the frame's width of it, between the HUD rows, at its size.
+      const [o0] = await proj([[0, 0, 0]]), pub = tall ? [154.23, 434.42] : [640, 525.55];
+      check(`${frame} Home, one squishy out: the published camera (the room camera does not drive; the mat's middle where the live build draws it); the squishy close, by the mat's middle, between the HUD rows`,
+        v === null && !!o0 && Math.hypot(o0.x - pub[0], o0.y - pub[1]) < 1.5 && Math.abs(b.x - pub[0]) < W * 0.2 && b.y - b.r > bd.top - 4 && b.y + b.r < bd.bottom + 4 && b.r > (tall ? 70 : 90),
+        JSON.stringify({ roomView: v, origin: o0 && [+o0.x.toFixed(2), +o0.y.toFixed(2)], published: pub, x: Math.round(b.x), y: Math.round(b.y), r: Math.round(b.r), band: [Math.round(bd.top), Math.round(bd.bottom)] }));
       await shot('home_one');
     }
 
@@ -222,7 +230,18 @@ try {
     const count = () => page.evaluate(() => window.__WH__.shell.matInfo().count);
     await page.evaluate(() => window.__WH__.resume()); await sleep(600);
     if ((await count()) > 1) { await clickSel('.mat-chip'); await sleep(600); }
-    if (await clickSel('.pt-btn')) { for (let k = 0; k < 2; k++) await clickSel('.pt-chip[aria-pressed="false"]:not([data-play])'); await clickSel('.pt-close'); }
+    // (round 15, R15_FIX BR: browser_carry.mjs's flow, which works on a phone) the Friends strip hides while something covers the play view (a phone's "New stamp"
+    // moment after the capsules): a player waits for it; a chip below the sheet's fold is scrolled into view; Bring friends fills the party when one is not reached
+    for (let k = 0; k < 30 && !(await boxOf('.pt-btn')); k++) await sleep(500);
+    if (await clickSel('.pt-btn')) {
+      for (let k = 0; k < 6 && (await page.evaluate(() => document.querySelectorAll('.pt-chip[aria-pressed="true"]:not([data-play])').length)) < 2; k++) {
+        await page.evaluate(() => document.querySelector('.pt-chip[aria-pressed="false"]:not([data-play])')?.scrollIntoView({ block: 'center' }));
+        await sleep(200);
+        await clickSel('.pt-chip[aria-pressed="false"]:not([data-play])');
+      }
+      if ((await count()) < 3) await clickSel('.pt-bring');
+      await clickSel('.pt-close');
+    }
     await page.evaluate(() => window.__WH__.pause()); await step(1.5);
     check(`${frame}: three squishies out`, (await count()) === 3, `${await count()} out`);
 
@@ -384,6 +403,9 @@ try {
           const hitEl = await page.evaluate(([x, y]) => { const c = [...document.querySelectorAll('.rm-chip')].find((q) => !q.hidden); return { at: document.elementsFromPoint(x, y).slice(0, 3).map((e) => `${e.tagName}.${typeof e.className === 'string' ? e.className : ''}`), inert: !!c?.closest('[inert]'), pe: c ? getComputedStyle(c).pointerEvents : null, vis: c ? getComputedStyle(c).visibility : null }; }, [ch[0].x, ch[0].y]);
           await tapAt(ch[0].x, ch[0].y); await sleep(300);
           await step(2.5); await sleep(400);
+          // (round 15, R15_FIX BR: the chips are DOM, redrawn by the running loop: it runs a moment before they are read again, as before the first read above;
+          // read while paused, a chip of a squishy already back in the picture was still listed: "onScreen 3, gone false")
+          await page.evaluate(() => window.__WH__.resume()); await sleep(900); await page.evaluate(() => window.__WH__.pause()); await step(0.3); await sleep(300);
           const vF = await view(), bF = await bodies(), ch2 = await chips();
           const said = await page.evaluate((n) => window.__liveLog.slice(n).filter((t) => /^Looking at /.test(t)), live0);
           focus = { hitEl, said, moved: vE && vF ? r2(Math.hypot(vF[0] - vE[0], vF[1] - vE[1])) : 0, chipsAfter: ch2.map((c) => c.label), onScreen: bF.filter((b) => b.x > 0 && b.x < W && b.y > bd.top && b.y < bd.bottom).length, gone: !ch2.some((c) => c.label === ch[0].label) };
@@ -397,6 +419,9 @@ try {
         // ---- a hard toss (the fastest throw a hand makes) stays inside the room: the squishy is carried to 2.6 m from the left side of the room and flung
         //      at that side, without letting go in between (one press: the carry, then the fling) ----
         const tossFrom = freeSpot(home ? [cx - hx + 2.6, cz + 0.4] : [cx - hx + 2.6, cz + 0.15 * hz]);
+        // (round 15, R15_FIX BR: the press below is aimed at where the squishy stands on screen now: the camera, brought to a squishy by the chip row for 8 s
+        // (roomcam focusS), must have stopped easing back first, or the picture slides from under the press ("carried false"); 10 s at most)
+        for (let k = 0, v0 = await view(); k < 20; k++) { await step(0.5); const v1 = await view(); const still = v0 && v1 && Math.abs(v1[0] - v0[0]) + Math.abs(v1[1] - v0[1]) + Math.abs(v1[2] - v0[2]) < 0.004; v0 = v1; if (k >= 16 || !v1 || (still && k >= 2)) break; }
         const cT = await carryTo(i, tossFrom[0], tossFrom[1], 0.6, -90);
         const carried = cT.carried, stepPx = 90;
         let top = 0, far = 0, vMax = 0, last = (await bodies())[i].w;

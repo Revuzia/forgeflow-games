@@ -211,7 +211,11 @@ const ext = (id: string): SB => app.bodies.extras.find((x) => x.itemId === id)!.
   const p = pc(b), z0 = b.center.z;
   const r = await drag(b, p.x, p.y, p.x, p.y - 120);
   await settle(120);
-  check('K9 a napping squishy (asleep) is picked up by the same drag (carried once the drag passes the 14 px slop) and moved back', slept && r.liftAt >= 1 && r.liftAt <= 3 && z0 - r.held.z >= 0.8, JSON.stringify({ slept, liftAt: r.liftAt, back: f3(z0 - r.held.z) }));
+  check('K9 a napping squishy (asleep) is picked up by the same drag (carried once the drag passes the 14 px slop) and moved back', // RE-SPECIFIED in round 15 (R15_FIX F5; written reason): the bar was 0.8 m back. This squishy naps where K3 left it, at z -5.45, 0.05 m inside the
+    // felt's rim (5.5 m), and a carry stops 0.6 m past the rim (PG.boundsRim): there is 0.65 m of room behind it. 0.8 m was reached only while the squishy lay
+    // TURNED (-66 degrees, as a hand had left it: its centre hung further back); now a put-down squishy turns back to its rest facing and the same drag
+    // carries it to the rim's stop, 0.62 m. The row still asks that the napper is picked up at once and carried back as far as the room allows (0.55 m).
+    slept && r.liftAt >= 1 && r.liftAt <= 3 && z0 - r.held.z >= 0.55 && z0 - r.held.z <= 0.7, JSON.stringify({ slept, liftAt: r.liftAt, back: f3(z0 - r.held.z) }));
 }
 // K8 (Home with three out was the first room: the tip once; the pill line in a room)
 {

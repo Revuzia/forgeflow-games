@@ -60,7 +60,7 @@ const SAMPLE = () => {
     if (W && b) {
       let bi = -1, bd = 1e9;
       for (let k = 0; k < W.bodies.length; k++) { const B = W.bodies[k], d = Math.hypot(B.center.x - b.w[0], B.center.z - b.w[2]); if (d < bd) { bd = d; bi = k; } }
-      if (bi >= 0 && bd < 0.05) { const B = W.bodies[bi], C = W.crawls[bi]; dg = { held: B.heldF, move: B.moveOn, cy: B.cyOn, car: B.carried, grav: B.gravityOn, sl: B.asleep, air: +C.s[5].toFixed(2), turn: C.turn, nc: B.nearCount, sv: +B.sV.toFixed(3), so: B.scootOn, d: Math.hypot(B.stx - B.cx, B.stz - B.cz).toFixed(2), on: C.on, chunk: B.chunk || B.capFlat, fy: Math.round(Math.atan2(2 * (B.qr[0] * B.qr[2] + B.qr[3] * B.qr[1]), 1 - 2 * (B.qr[0] * B.qr[0] + B.qr[1] * B.qr[1])) * 57.3), hy: Math.round(Math.atan2(B.stx - B.cx, B.stz - B.cz) * 57.3), vy: Math.round(Math.atan2(B.vcx, B.vcz) * 57.3), vb: +Math.hypot(B.vcx, B.vcz).toFixed(2), cx: +B.center.x.toFixed(3), wx: +b.w[0].toFixed(3), cz: +B.center.z.toFixed(3), wz: +b.w[2].toFixed(3), calls: B.__calls ? { ...B.__calls } : null, nudge: B.__lastNudge || null }; if (B.__calls) B.__calls = {}; }
+      if (bi >= 0 && bd < 0.05) { const B = W.bodies[bi], C = W.crawls[bi]; dg = { held: B.heldF, move: B.moveOn, cy: B.cyOn, car: B.carried, grav: B.gravityOn, sl: B.asleep, air: +C.s[5].toFixed(2), turn: C.turn, nc: B.nearCount, sv: +B.sV.toFixed(3), so: B.scootOn, d: Math.hypot(B.stx - B.cx, B.stz - B.cz).toFixed(2), on: C.on, chunk: B.chunk || B.capFlat, fy: Math.round(Math.atan2(2 * (B.qr[0] * B.qr[2] + B.qr[3] * B.qr[1]), 1 - 2 * (B.qr[0] * B.qr[0] + B.qr[1] * B.qr[1])) * 57.3), hy: Math.round(Math.atan2(B.stx - B.cx, B.stz - B.cz) * 57.3), vy: Math.round(Math.atan2(B.vcx, B.vcz) * 57.3), vb: +Math.hypot(B.vcx, B.vcz).toFixed(2), cx: +B.center.x.toFixed(3), wx: +b.w[0].toFixed(3), cz: +B.center.z.toFixed(3), wz: +b.w[2].toFixed(3), calls: B.__calls ? { ...B.__calls } : null, nudge: B.__lastNudge || null, selfV: B.scootOn ? B.sV + C.s[11] : 0, touch: W.bodies.some((o) => o !== B && Math.hypot(o.center.x - B.center.x, o.center.y - B.center.y, o.center.z - B.center.z) < Math.max(B.bR || 0, B.restRadius) + Math.max(o.bR || 0, o.restRadius) + 0.03) }; if (B.__calls) B.__calls = {}; }
     }
     out.push({ dg, id: c.itemId, sp: c.species, x: b ? b.w[0] : c.x, z: b ? b.w[2] : c.z, y: b ? b.w[1] : 0, dfx, dfz, frame: c.face, scoot: c.scoot, flags: c.flags, asleep: c.asleep, carried: b ? b.carried : false });
   }
@@ -78,7 +78,7 @@ const DIAG = [];   // (walk samples more than 60 deg off travel, with the crawl'
 function analyse(hist) {
   const res = [];
   for (const [id, h] of hist) {
-    const by = { walk: [], air: [], other: [] }, frm = [], walks = [], perc = [], toWay = [];
+    const by = { walk: [], air: [], other: [] }, frm = [], walks = [], perc = [], toWay = [], free = [];
     let pushed = 0;
     let cur = null;
     for (let k = 1; k + 1 < h.length; k++) {
@@ -89,6 +89,9 @@ function analyse(hist) {
       if (!mode) continue;
       const ad = angBetween(c.dfx, c.dfz, vx, vz);
       by[mode].push(ad);
+      // SELF-POWERED: its own drive (the glide's speed + the crawl's forward creep) over 3 cm/s; a walker held still (by its turn or a friend in its way) that moves is
+      // being shoved. Both sets are reported: every walking sample (W) and the self-powered ones (free)
+      if (mode === 'walk' && c.dg && c.dg.selfV > 0.03) free.push(ad);
       if (mode === 'walk') {
         // the travel over +-0.5 s (what the eye reads as its way: a crawl cycle is about 1 s), and the glide's own heading (where it is going), and whether it is
         // pushed BACK (its travel more than 90 deg from its own heading: a walk blocked by a ball or a friend bounces off it each crawl cycle; not a turn's fault)
@@ -116,7 +119,7 @@ function analyse(hist) {
     for (const w of walks) for (let i = 0; i < w.angs.length; i++) byCls[cls(w.hd[i])].push(w.angs[i]);
     let vmax = 0;
     for (let k = 2; k < h.length; k++) vmax = Math.max(vmax, Math.hypot(h[k].x - h[k - 2].x, h[k].z - h[k - 2].z) / 0.2);
-    res.push({ raw: { W: W.map(r1), perc: perc.map(r1), way: toWay.map(r1), pushed }, id, sp: h[0].sp, samples: h.length, noFace: h.filter((c) => !(c.dfx === c.dfx)).length, asleep: h.filter((c) => c.asleep).length, vmax: Math.round(vmax * 100) / 100, walkN: W.length, walkMed: r1(pct(W, 0.5)), walk90: r1(pct(W, 0.9)), walkOver45: W.length ? r1((100 * W.filter((x) => x > 45).length) / W.length) : NaN, percMed: r1(pct(perc, 0.5)), perc90: r1(pct(perc, 0.9)), wayMed: r1(pct(toWay, 0.5)), way90: r1(pct(toWay, 0.9)), wayOver45: toWay.length ? r1((100 * toWay.filter((x) => x > 45).length) / toWay.length) : NaN, pushedPct: W.length ? r1((100 * pushed) / W.length) : NaN,
+    res.push({ raw: { W: W.map(r1), perc: perc.map(r1), way: toWay.map(r1), free: free.map(r1), pushed }, id, sp: h[0].sp, samples: h.length, noFace: h.filter((c) => !(c.dfx === c.dfx)).length, asleep: h.filter((c) => c.asleep).length, vmax: Math.round(vmax * 100) / 100, walkN: W.length, walkMed: r1(pct(W, 0.5)), walk90: r1(pct(W, 0.9)), walkOver45: W.length ? r1((100 * W.filter((x) => x > 45).length) / W.length) : NaN, percMed: r1(pct(perc, 0.5)), perc90: r1(pct(perc, 0.9)), wayMed: r1(pct(toWay, 0.5)), way90: r1(pct(toWay, 0.9)), wayOver45: toWay.length ? r1((100 * toWay.filter((x) => x > 45).length) / toWay.length) : NaN, pushedPct: W.length ? r1((100 * pushed) / W.length) : NaN,
       frameMed: r1(pct(frm, 0.5)), airN: by.air.length, airMed: r1(pct(by.air, 0.5)), otherN: by.other.length, otherMed: r1(pct(by.other, 0.5)),
       cls: Object.fromEntries(Object.entries(byCls).map(([k, a]) => [k, a.length ? `${a.length} med ${r1(pct(a, 0.5))} p90 ${r1(pct(a, 0.9))}` : '-'])),
       walks: walks.map((w) => ({ t0: r1(w.t0), dur: r1(w.angs.length * 0.1), first: r1(w.angs[0]), med: r1(pct(w.angs, 0.5)), max: r1(Math.max(...w.angs)), heading: r1(pct(w.hd, 0.5)), v: Math.round(pct(w.sp, 0.5) * 100) / 100 })) });
@@ -129,7 +132,8 @@ const pooled = (res) => {   // every squishy's walk samples together (a section'
   const starts = all.map((w) => w.first);
   const W = res.flatMap((r) => r.raw.W), P = res.flatMap((r) => r.raw.perc), Y = res.flatMap((r) => r.raw.way), pu = res.reduce((a, r) => a + r.raw.pushed, 0);
   const o45 = (a) => (a.length ? r1((100 * a.filter((x) => x > 45).length) / a.length) : NaN);
-  return { walks: all.length, startMed: r1(pct(starts, 0.5)), n: W.length, med: r1(pct(W, 0.5)), p90: r1(pct(W, 0.9)), over45: o45(W), percMed: r1(pct(P, 0.5)), perc90: r1(pct(P, 0.9)), percOver45: o45(P), wayMed: r1(pct(Y, 0.5)), way90: r1(pct(Y, 0.9)), wayOver45: o45(Y), pushedPct: W.length ? r1((100 * pu) / W.length) : NaN };
+  const F = res.flatMap((r) => r.raw.free);
+  return { walks: all.length, startMed: r1(pct(starts, 0.5)), n: W.length, med: r1(pct(W, 0.5)), p90: r1(pct(W, 0.9)), max: r1(Math.max(...W, NaN)), over45: o45(W), nFree: F.length, freeMed: r1(pct(F, 0.5)), free90: r1(pct(F, 0.9)), freeMax: r1(Math.max(...F, NaN)), percMed: r1(pct(P, 0.5)), perc90: r1(pct(P, 0.9)), percOver45: o45(P), wayMed: r1(pct(Y, 0.5)), way90: r1(pct(Y, 0.9)), wayOver45: o45(Y), pushedPct: W.length ? r1((100 * pu) / W.length) : NaN };
 };
 
 const report = { tag: TAG, frames: {} };
@@ -192,7 +196,7 @@ try {
       pm.PropWorld.prototype.beginFrame = function () { window.__PW__ = this; return orig.call(this); };
       // (diagnosis: LIFE's other drivers on a body, counted per sample)
       const sm = await import('/src/physics/softbody.ts');
-      for (const k of ['nudge', 'hop', 'setSquash', 'moveTo', 'carryTo']) { const o = sm.SoftBody.prototype[k]; if (typeof o === 'function') sm.SoftBody.prototype[k] = function (...a) { this.__calls = this.__calls || {}; this.__calls[k] = (this.__calls[k] || 0) + 1; if (k === 'nudge') this.__lastNudge = [a[0].x, a[0].y, a[0].z]; return o.apply(this, a); }; }
+      for (const k of ['nudge', 'hop', 'setSquash', 'moveTo', 'carryTo', 'scootTo', 'setHome', 'setSquashPose']) { const o = sm.SoftBody.prototype[k]; if (typeof o === 'function') sm.SoftBody.prototype[k] = function (...a) { this.__calls = this.__calls || {}; this.__calls[k] = (this.__calls[k] || 0) + 1; if (k === 'nudge') this.__lastNudge = [a[0].x, a[0].y, a[0].z]; return o.apply(this, a); }; }
     });
     log(frame, 'booted; life', JSON.stringify(await page.evaluate(() => { const L = window.__WH__.life(); return { place: L.place, chars: L.chars.map((c) => c.species) }; })));
 
@@ -353,25 +357,35 @@ try {
       await unquiet();
       log(frame, 'out:', await page.evaluate(() => window.__WH__.shell.matInfo().count), JSON.stringify(await page.evaluate(() => { const L = window.__WH__.life(); let tier = null; try { tier = window.__WH__.shell.stageObj().stats().tier; } catch { /* none */ } return { tier, units: L.units, quiet: L.quiet, autonomy: L.autonomy, floatParked: L.floatParked, flags: L.chars.map((c) => c.flags) }; })));
     }
-    if (SEC.includes('surge')) {
+    if (SEC.includes('surge1')) {
+      // (diagnosis: the same walks with ONE body out, the play squishy as each family)
+      for (const fam of ['beadsqueeze', 'firmsilicone']) { await setFam(fam); await step(3); await surge(); }
+    }
+    if (SEC.includes('surge')) await surge();
+    async function surge() {
       // (diagnosis) each body out, autonomy off: a scripted walk 1.2 m along -x then +x; the centre every 0.1 s, the crawl's phase and amplitude
       await page.evaluate(() => window.__WH__.setSetting('autonomy', false));
       await step(3);
+      for (const calmS of [false, true]) {
+      await page.evaluate((c) => window.__WH__.setSetting('calm', c), calmS);
       const tr = await page.evaluate(() => {
         const wh = window.__WH__, w = window.__PW__, out = [];
-        for (const bd of w.bodies) {
+        for (const bd of w.bodies) { bd.__calls = {};
           const C = w.crawls[w.bodies.indexOf(bd)], rows = [];
           for (const dir of [-1, 1]) {
             const x0 = bd.center.x, z0 = bd.center.z;
             bd.scootTo(x0 + dir * 1.2, z0, 0.26);
-            for (let k = 0; k < 60; k++) { wh.step(1 / 60, 6); rows.push([+bd.center.x.toFixed(3), +bd.center.z.toFixed(3), +C.s[0].toFixed(2), +C.s[1].toFixed(2), +bd.sV.toFixed(2), bd.family]); }
+            for (let k = 0; k < 60; k++) { wh.step(1 / 60, 6); rows.push([+bd.center.x.toFixed(3), +bd.center.z.toFixed(3), +C.s[0].toFixed(2), +C.s[1].toFixed(2), +bd.sV.toFixed(2), bd.family, bd.metrics.scootBlocks ?? 0, bd.asleep ? 1 : 0, bd.propNear ?? -1, bd.onPropIdx ?? -1, bd.scootBlock ? 1 : 0, w.bodies.filter((o) => o !== bd).map((o) => o.center.x.toFixed(3) + ',' + o.center.z.toFixed(3) + (o.asleep ? 'z' : '') + (o.scootOn ? 'S' : '')).join('/')]); }
             bd.scootTo(NaN, 0, 0); wh.step(1 / 60, 120);
           }
-          out.push(rows);
+          out.push(rows); rows.push([bd.restRadius, bd.family, JSON.stringify(bd.__calls ?? null), bd.center.x, bd.center.z, (() => { const i = w.bodies.indexOf(bd); return Array.from(w.bsf.subarray(i * 12, i * 12 + 12)).map((v) => +v.toFixed(3)); })(), bd.sqTarget, bd.sqNow, bd.tiltOn, bd.onMoving, bd.holdOn]); bd.__calls = {};
         }
         return out;
       });
-      for (const rows of tr) { let back = 0; for (let k = 1; k < rows.length; k++) { const dx = rows[k][0] - rows[k - 1][0]; if (k < 60 ? dx > 0.004 : dx < -0.004) back++; } log(frame, 'surge', rows[0][5], 'backward samples', back, '/', rows.length, JSON.stringify(rows.map((r) => [r[0], r[1], r[2], r[3], r[4]]))); }
+      for (const rows of tr) { log(frame, 'calm', calmS, 'r', JSON.stringify(rows.pop())); let back = 0; for (let k = 1; k < rows.length; k++) { const dx = rows[k][0] - rows[k - 1][0]; if (k < 60 ? dx > 0.004 : dx < -0.004) back++; } log(frame, 'surge', rows[0][5], 'backward samples', back, '/', rows.length, JSON.stringify(rows.map((r) => [r[0], r[1], r[3], r[4], r[6], r[7], r[8], r[9], r[10], r[11]]))); }
+      }
+      await page.evaluate(() => window.__WH__.setSetting('calm', false));
+      log(frame, 'things', JSON.stringify(await page.evaluate(() => { const w = window.__PW__; return Array.from({ length: w.count }, (_, i) => [i, +w.poses[i * 8].toFixed(2), +w.poses[i * 8 + 1].toFixed(2), +w.poses[i * 8 + 2].toFixed(2)]); })));
       await page.evaluate(() => window.__WH__.setSetting('autonomy', true));
     }
     if (SEC.includes('home3')) await obs('home_life', LIFE_S);

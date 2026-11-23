@@ -2007,7 +2007,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const SWING = 3;
     let seat = -1; if (bound.thing) for (let p = 0; p < bound.count; p++) if (bound.thing[p] === SWING) seat = p;
     const ride0 = (host.debug() as { counts: { ride: number } }).counts.ride;
+    // (round 15, R15_FIX; written reason: the row asks for a LIFT onto the seat (lifts + 1). In a run where LIFE's own get-on had already put the play squishy on
+    // the swing the ask had nothing to lift ("lifts 2 -> 2, on the seat after 10 frames") and the row failed with the squishy riding the seat: it is set on the
+    // floor in front first when it sits there, so the ask is always the lift the row is about.)
+    if ((app.body.metrics.onProp ?? -1) === seat) { try { app.body.placeAt?.({ x: 0, y: app.body.center.y, z: 0.6 }, { x: 0, y: 0, z: 0 }); } catch { /* none */ } await stepA(90); }
     const sp0 = app.hoard.meter().sp, cr0 = app.hoard.meter().credits;
+    const ride0b = (host.debug() as { counts: { ride: number } }).counts.ride;
     const asked = host.playWith?.(app.identity.itemId ?? '', SWING) === true;
     let onAt = -1;
     for (let k = 0; k < 60 && onAt < 0; k++) { await stepA(10); if ((app.body.metrics.onProp ?? -1) === seat && !(app.body as { carryingTo?: boolean }).carryingTo) onAt = k; }
@@ -2021,7 +2026,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const sx = bound.poses ? bound.poses[seat * 8] : NaN, sy = bound.poses ? bound.poses[seat * 8 + 1] : NaN, sz = bound.poses ? bound.poses[seat * 8 + 2] : NaN;
     const off = Math.hypot(app.body.center.x - sx, app.body.center.z - sz), above = app.body.center.y - sy;
     check('PLAYGROUND "Go play with..." a ride (playWith -> LIFE\'s USE -> physics carryTo): the play squishy is lifted onto the Pillow Swing\'s seat (still swinging from the push) and is still riding it 2 s later, ON it (its centre within 0.15 m of the seat\'s, above it); the lift pays nothing',
-      asked && seat >= 0 && ride1 === ride0 + 1 && onAt >= 0 && (app.body.metrics.onProp ?? -1) === seat && off < 0.15 && above > 0.1 && !paid,
+      asked && seat >= 0 && ride1 === ride0b + 1 && onAt >= 0 && (app.body.metrics.onProp ?? -1) === seat && off < 0.15 && above > 0.1 && !paid,
       `asked ${asked}, seat prop ${seat}, lifts ${ride0} -> ${ride1}, on the seat after ${onAt < 0 ? 'never' : `${(onAt + 1) * 10} frames`}, onProp now ${app.body.metrics.onProp}, centre ${off.toFixed(3)} m from the seat's, ${above.toFixed(3)} m above it, meter sp ${sp0} -> ${app.hoard.meter().sp}`);
     // round 5: the lift's steadying hand lets go once the squishy sits (the seat is free again: AUTO, which a hand would override, swings it with its rider holding on)
     {
@@ -2247,7 +2252,11 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     // in front of it, 0.4 m to the side of the trunk) stands between the rig's fixed camera and the trunk, and in round 14's room the pine is 1.2 m further back
     // (z -3.2, was -2): whether the squishy's edge hid the trunk's middle depended on where LIFE had it lean (it passed at x -0.34 and the click took the BODY at
     // x -0.70). The click is now on the trunk 1.05 m up, above the squishy's top and under the trunk's (1.2 m): still a still click on the trunk, every assertion kept.
-    await tap(thingPt(pineK, 0.45));
+    // (... and, second pass of round 15: the rig's camera, 6.4 m away, still saw the click land on a squishy standing before the trunk in another run ("tap body"):
+    // the camera looks at the pine from its own distance (lookAt: 3.2 m) and the click is 1.15 m up the 1.2 m trunk, over any squishy's top from there)
+    { let tp0 = -1; if (bound.thing) for (let p = 0; p < bound.count && tp0 < 0; p++) if (bound.thing[p] === pineK) tp0 = p; if (tp0 >= 0 && bound.poses) lookAt(bound.poses[tp0 * 8], bound.poses[tp0 * 8 + 2]); }
+    await tap(thingPt(pineK, 0.55));
+    lookHome();
     await stepA(10);
     const after = zd().chars.find((c) => c.slot === me?.slot), tapP = dbg().tap;
     const fx1 = log.of('thingFx').filter((x) => x.args[0] === pineK && x.args[1] === 1).length, rec1 = (host.debug() as { counts: { records: number } }).counts.records;
@@ -2364,7 +2373,11 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const carryUp = async (): Promise<Record<string, number | boolean>> => {
       meSet(0, app.body.center.y, 0.6);
       for (let i = 0; i < 3; i++) await stepA(60);
-      const d0 = app.host.bodyScreen();
+      // (round 15, R15_FIX; written reason: the press was aimed by host.bodyScreen(), the disc of the stage's PRIMARY view, which is the squishy the player touched
+      // last and not always the play squishy this row moves and reads (app.body): in a run where an earlier row had left a friend primary the press took the
+      // friend and the row read "carried false". The press is aimed at app.body's own disc, projected by the rig's camera; the assertions are the same.)
+      const bc = app.body.center, pc0 = proj(bc.x, bc.y, bc.z), pr0 = proj(bc.x + app.body.restRadius, bc.y, bc.z);
+      const d0 = pc0 && pr0 ? { x: pc0.x, y: pc0.y, r: Math.abs(pr0.x - pc0.x) } : app.host.bodyScreen();
       if (!d0) return { carried: false, dz: 0, dy: 0 };
       const x0 = d0.x, y0 = d0.y - 0.55 * d0.r;
       app.input.pointerDown({ id: 31, x: x0, y: y0, type: 'touch' });
