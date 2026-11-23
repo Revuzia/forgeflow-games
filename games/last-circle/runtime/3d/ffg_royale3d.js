@@ -1110,7 +1110,11 @@ register3d("royale", async function (kernel, content) {
     W.lastMatchError = { message: msg, t: Math.round(performance.now()) };
     try { teardownMatch(); } catch (e) { console.warn("[royale] teardown after a failed load threw:", e); }
     try { W.hooks.loadingStop(); } catch (e) {}
-    try { netMod.leave(W); } catch (e) {}   // also a room kept open after the host left (W.net is null then)
+    // FRIENDS ROOMS (fix 3): a player in a friends room STAYS in it - back to the room's lobby with the reason, shown to the others as waiting,
+    // its slot handed over for this match, and it plays the next one (net.returnToRoom). Offline (no room) exactly as before.
+    let inRoomNow = false;
+    try { inRoomNow = !!(netMod.inRoom && netMod.returnToRoom && netMod.inRoom(W)); } catch (e) {}
+    if (!inRoomNow) { try { netMod.leave(W); } catch (e) {} }   // also a room kept open after the host left (W.net is null then)
     removeLoadingLayer();
     W.paused = false;
     try {
@@ -1123,6 +1127,12 @@ register3d("royale", async function (kernel, content) {
     }
     W.phase = "menu";
     if (kernel.start && !kernel._running && !kernel.contextLost) kernel.start();
+    if (inRoomNow) {
+      let back = false;
+      try { back = netMod.returnToRoom(W, { loadFailed: msg }) !== false; } catch (e) { console.warn("[royale] back to the room after a failed load threw:", e); }
+      if (back) return { ok: false, error: msg, room: true };
+      try { netMod.leave(W); } catch (e) {}
+    }
     showMatchNotice("Couldn't load the match - check your connection", msg);
     return { ok: false, error: msg };
   }

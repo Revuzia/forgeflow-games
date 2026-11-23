@@ -13,6 +13,8 @@ itself and was refused with "already this peer's slot", so the key check never r
     python _harness/p23/netlive.py --serve --cases match        # the worktree from an in-process server (backlog 256)
     python _harness/p23/netlive.py --disk --cases match --plant no-order     # negative control: the order rows MUST FAIL
     python _harness/p23/netlive.py --disk --cases match --plant no-revive-gate   # negative control: the early-done row MUST FAIL
+    python _harness/p23/netlive.py --disk --cases late --plant late-cap-60       # friends fix 3 controls (each run stops after its row) - MUST FAIL:
+                                    late-no-reclaim / host-silence-8s / host-left-ignored (--cases late), loadfail-leaves (--cases loadfail)
 
 CASES
   mode    host + guest lobby (startMatch stubbed): the room's MODE row (STANDARD / QUICK) and TEAMS row (ALL ON ONE TEAM / TWO TEAMS /
@@ -27,6 +29,13 @@ CASES
             LC-14  a smoke cloud made on the guest appears in the host's W.smokes (once, marked _net); a frag throw replays as grenadeThrown {net}
             LC-49  rejoin: the guest's tab reloads on ?room=CODE inside 60 s and gets slot s1 back (its body, its kit); a third page with a
                    forged key for slot 1 is refused ("wrong rejoin key") and stays out of the match
+  late    (friends fix 3, R1 + R2) the guest's match start is HELD (its "loading" went out, its world build not begun) while the host plays; the
+          host's clock since its match went live is moved on (simulated): at 120 s the present, loading guest still has its slot; past the 240 s
+          cap it is handed over; the guest then arrives (70 s after the hand-over, past the old 60 s window) and takes its body back (placed at it).
+          Then the host's page is blocked 20 s (busy loop): the guest stays online with "Waiting for host..."; then the host's tab closes and the
+          guest continues offline within 6 s (the relay's presence), not after the 45 s wait
+  loadfail (friends fix 3, R3) the guest's character skins are aborted: its load fails with "Couldn't load the match" and it STAYS in the room
+          (lobby open, notice, bye + back on the wire); the host hands s1 over for this match and the next START rosters the guest
 """
 from __future__ import annotations
 
@@ -164,36 +173,47 @@ def click_mode(pg, label, s=120):
     return False
 
 
-def plant_route(rig, pg, edit):
-    """serve this page's net.js edited (negative controls)"""
+def plant_route(rig, pg, edit, rel="runtime/3d/royale/net.js"):
+    """serve this page's `rel` (net.js by default) edited (negative controls)"""
     me = urllib.parse.urlparse(rig.origin).netloc
+    suffix = "/" + rel.split("/", 2)[-1] if rel.startswith("runtime/") else "/" + rel
 
     def pred(url):
         u = urllib.parse.urlparse(url)
-        return u.netloc == me and u.path.endswith("/royale/net.js")
+        return u.netloc == me and u.path.endswith(suffix)
 
     def handler(route):
-        body = edit(SG.src_text("runtime/3d/royale/net.js", None))
+        body = edit(SG.src_text(rel, None))
         route.fulfill(status=200, body=body.encode("utf-8"), headers={"Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store"})
     pg.route(pred, handler)
 
 
+NET_REL, BOOT_REL = "runtime/3d/royale/net.js", "runtime/3d/ffg_royale3d.js"
+# name -> (file, anchor, replacement). Each anchor must occur exactly once in the working copy (a moved anchor is a harness error, never a no-op plant).
 PLANTS = {
-    "no-order": ('const order = (S.rxGate = S.rxGate || new SeqGate()).accept(from, d.q);', 'const order = "new"; (S.rxGate = S.rxGate || new SeqGate());'),
-    "no-revive-gate": ('if (!reviveDoneOk(rec, by.id, performance.now(), reviveMs)) {', 'if (false) {'),
+    "no-order": (NET_REL, 'const order = (S.rxGate = S.rxGate || new SeqGate()).accept(from, d.q);', 'const order = "new"; (S.rxGate = S.rxGate || new SeqGate());'),
+    "no-revive-gate": (NET_REL, 'if (!reviveDoneOk(rec, by.id, performance.now(), reviveMs)) {', 'if (false) {'),
+    # friends fix 3 controls (case late / loadfail): each puts back the pre-fix behaviour the row guards against
+    "late-cap-60": (NET_REL, "export const FIRST_TICK_CAP_MS = 240000;", "export const FIRST_TICK_CAP_MS = 60000;   // PLANTED: the old 60 s never-seen rule"),
+    "late-no-reclaim": (NET_REL, "  if (S.lateTake && S.lateTake[a.id]) return lateArrival(W, a, from);\n", "  // PLANTED: no late hand-back (only the old 60 s silent reclaim)\n"),
+    "host-silence-8s": (NET_REL, "export const HOST_SILENT_PRESENT_MS = 45000;", "export const HOST_SILENT_PRESENT_MS = 8000;   // PLANTED: the old 8 s guest rule"),
+    "host-left-ignored": (NET_REL, '  if (typeof c.hostGoneMs === "number" && c.hostGoneMs > PRESENCE_LEAVE_MS) return "lost";\n', "  // PLANTED: the relay's leave is ignored\n"),
+    "loadfail-leaves": (BOOT_REL, "try { inRoomNow = !!(netMod.inRoom && netMod.returnToRoom && netMod.inRoom(W)); } catch (e) {}", "/* PLANTED: a failed load leaves the room (the old matchLoadFailed) */"),
 }
 
 
-PLANT_ON = {"no-order": "/host", "no-revive-gate": "/guest"}
+PLANT_ON = {"no-order": "/host", "no-revive-gate": "/guest", "late-cap-60": "/host", "late-no-reclaim": "/host", "host-silence-8s": "/guest",
+            "host-left-ignored": "/guest", "loadfail-leaves": "/guest"}
 
 
 def apply_plant(rig, pg, plant):
     if not plant:
         return
-    a, b = PLANTS[plant]
-    if a not in SG.src_text("runtime/3d/royale/net.js", None):
-        raise C.HarnessError("plant %s: anchor moved" % plant)
-    plant_route(rig, pg, lambda t: t.replace(a, b, 1))
+    import anchors as A                    # line-ending independent (a CRLF checkout serves the same anchors)
+    rel, a, b = PLANTS[plant]
+    if A.count(SG.src_text(rel, None), a) != 1:
+        raise C.HarnessError("plant %s: anchor moved (%s)" % (plant, rel))
+    plant_route(rig, pg, lambda t: A.apply(t, a, b, 1, rel), rel)
 
 
 def shot(pg, name):
@@ -619,10 +639,231 @@ def case_match(rig, v, args):
     return ctx
 
 
+
+# ─────────────────────────────── friends fix 3: case late (R1 + R2) ───────────────────────────────
+# The guest's match start is HELD (a page whose world build has not begun: its "loading" went out, then nothing) while the host plays; the
+# host's clock since its match went live is moved on by editing its session's matchLiveAt (a simulated clock: 120 s / 245 s after match start),
+# then the guest is released and loads for real. Then the host page is stalled 20 s (a busy loop: a live page whose main thread is blocked,
+# as an 82 s long task under CPU x4 was in check2 t2), then it leaves the room.
+HOLD_JS = r"""() => { const C = window.__LC__; if (C.__held) return true; const real = C.startMatch; window.__HOLD__ = { held: 1, opts: null, at: null };
+  C.startMatch = (o) => { const H = window.__HOLD__; if (H.held) { H.opts = o; H.at = Math.round(performance.now()); return Promise.resolve(); } return real(o); };
+  window.__RELEASE__ = () => { const H = window.__HOLD__; H.held = 0; const o = H.opts; if (o) setTimeout(() => real(o), 0); return !!o; };
+  C.__held = true; return true; }"""
+HOSTVIEW_JS = r"""() => { const W = __LC__.W, S = W.net; if (!S) return null; const a = W.actorById && W.actorById.get('s1'); const now = performance.now();
+  return { phase: W.phase, sinceLiveS: S.matchLiveAt ? Math.round((now - S.matchLiveAt) / 1000) : null, tookOver: S.tookOver || null,
+    s1: a ? { netRemote: !!a.netRemote, isBot: !!a.isBot, alive: a.alive, pos: [+a.pos.x.toFixed(2), +a.pos.y.toFixed(2), +a.pos.z.toFixed(2)] } : null,
+    lateTake: S.lateTake ? Object.keys(S.lateTake) : null, lateBack: S.lateBack || null, loadNoted: S.loadNoted || null,
+    loadingFrom: S.loadingFrom ? Object.keys(S.loadingFrom).length : 0, everSeen: S.everSeen || null }; }"""
+GUESTVIEW_JS = r"""() => { const W = __LC__.W, S = W.net; const P = W.player;
+  return { phase: W.phase, net: !!S, lostRan: !!(S && S._hostLostRan), me: P ? { id: P.id, alive: P.alive, pos: [+P.pos.x.toFixed(2), +P.pos.y.toFixed(2), +P.pos.z.toFixed(2)] } : null,
+    lateDone: S ? S.lateDone || null : null, rejoin: S && S.rejoin ? S.rejoin.state : null, t: +(W.t || 0).toFixed(2),
+    wait: !!document.querySelector('[data-net-hostwait]'), waitStats: S ? S.hostWaitStats || null : null, err: W.lastMatchError || null }; }"""
+GUARD_S1_JS = r"""() => { const W = __LC__.W, k = W.kernel; if (window.__G1__) return true; window.__G1__ = true;
+  k._updaters.push(() => { const a = W.actorById && W.actorById.get('s1'); if (a && a.alive) { a.hp = Math.max(a.hp, 100); a.shield = Math.max(a.shield || 0, 100); a.downed = false; } }); return true; }"""
+
+
+def _xz(a, b):
+    return round(((a[0] - b[0]) ** 2 + (a[2] - b[2]) ** 2) ** 0.5, 2) if a and b else None
+
+
+def case_late(rig, v, args):
+    plant = args.plant if args.plant in ("late-cap-60", "late-no-reclaim", "host-silence-8s", "host-left-ignored") else None
+    hold = plant not in ("host-silence-8s", "host-left-ignored")      # the R2 controls need no late arrival
+    ctx, pages = boot_pages(rig, args, ["late/host", "late/guest"], stub=False, plant=plant)
+    (hpg, hrec), (gpg, grec) = pages
+    code = SG.host_create(hpg)
+    if not code:
+        raise C.EnvFailure("late: no room code")
+    SG.guest_join(gpg, code)
+    if not SG.wait(hpg, "() => document.body.innerText.includes('2 player')", 30):
+        raise C.EnvFailure("late: the guest never showed in the host's lobby")
+    if hold:
+        gpg.evaluate(HOLD_JS)
+    front(hpg)
+    t0 = time.time()
+    SG.press_start(hpg)
+    if hold:
+        if not wait_phase(hpg, args.load_timeout):
+            raise C.EnvFailure("late: the host never reached the drop (%s)" % json.dumps(hpg.evaluate("() => ({ phase: __LC__.W.phase, err: __LC__.W.lastMatchError || null })")))
+        held = SG.wait(gpg, "() => window.__HOLD__ && window.__HOLD__.opts ? window.__HOLD__ : null", 30)
+        v.info("late: host live after / guest held (its start arrived, its build not begun)", {"hostS": round(time.time() - t0), "held": bool(held)})
+        if not held:
+            raise C.EnvFailure("late: the guest's start never arrived (nothing to hold)")
+        hpg.evaluate(GUARD_S1_JS)
+        hpg.wait_for_timeout(3000)
+        lo = [m for m in SG.msgs(hpg, "loading", "in")]
+        v.check("late R1: the guest's 'loading' {slot 1} reached the host before its world build (sent once, right before startMatch)",
+                len(lo) == 1 and (lo[0]["d"] or {}).get("slot") == 1, {"loadingIn": [m["d"] for m in lo]})
+        # 120 s after the host's match went live (simulated), the guest still present and still loading
+        hpg.evaluate("() => { __LC__.W.net.matchLiveAt -= 120000; return true; }")
+        samples = []
+        for _ in range(8):
+            hpg.wait_for_timeout(1000)
+            samples.append(hpg.evaluate(HOSTVIEW_JS))
+        kept = all(x and x["s1"] and x["s1"]["netRemote"] and not x["s1"]["isBot"] and not (x["tookOver"] or {}).get("s1") for x in samples)
+        v.check("late R1: a guest still in the room and still loading 120 s after the host's match went live keeps its slot (s1 not handed over in 8 s of host ticks)",
+                kept and samples[-1]["sinceLiveS"] >= 120, {"first": samples[0], "last": samples[-1]})
+        if plant == "late-cap-60":
+            SG.diag(v, "late", hrec, grec)
+            return ctx
+        v.check("late: the host names the loading squad-mate once ('... is still loading the match. Their place is kept.' in its chat log)",
+                (samples[-1].get("loadNoted") or {}).get("s1") is not None, {"loadNoted": samples[-1].get("loadNoted")})
+        # past the cap (245 s): the slot is handed over
+        hpg.evaluate("() => { __LC__.W.net.matchLiveAt -= 125000; return true; }")
+        gone = SG.wait(hpg, "() => { const S = __LC__.W.net, a = __LC__.W.actorById.get('s1'); return S.tookOver && S.tookOver.s1 && a && a.isBot && !a.netRemote ? S.tookOver.s1 : null; }", 15)
+        hv0 = hpg.evaluate(HOSTVIEW_JS)
+        v.check("late R1: past the 240 s first-tick cap the host hands s1 over (why: never sent state) and keeps it reclaimable for a late arrival",
+                bool(gone) and (gone or {}).get("why") == "never sent state" and "s1" in (hv0["lateTake"] or []), {"tookOver": gone, "host": hv0})
+        # the guest arrives 70 s after that hand-over (simulated: past the old 60 s REJOIN_MS reclaim window)
+        hpg.evaluate("() => { const S = __LC__.W.net; if (S.lateTake && S.lateTake.s1) S.lateTake.s1.at -= 70000; if (S.silentTake && S.silentTake.s1) S.silentTake.s1 -= 70000; return true; }")
+        gpg.evaluate("() => window.__RELEASE__()")
+        tl = time.time()
+        front(gpg)
+        if not wait_phase(gpg, args.load_timeout):
+            raise C.EnvFailure("late: the released guest never reached the drop (%s)" % json.dumps(gpg.evaluate(GUESTVIEW_JS)))
+        v.info("late: the released guest's world build took", "%d s" % round(time.time() - tl))
+        back = SG.wait(hpg, "() => { const S = __LC__.W.net, a = __LC__.W.actorById.get('s1'); return a && a.netRemote && !a.isBot && (S.lateBack || []).some((x) => x.id === 's1') ? true : null; }", 120, 1.0)
+        gd = SG.wait(gpg, "() => __LC__.W.net && __LC__.W.net.lateDone ? true : null", 30, 0.5)
+        gpg.wait_for_timeout(1500)
+        hv, gv = hpg.evaluate(HOSTVIEW_JS), gpg.evaluate(GUESTVIEW_JS)
+        dist = _xz(gv["me"]["pos"] if gv["me"] else None, hv["s1"]["pos"] if hv["s1"] else None)
+        v.check("late R1: the late guest (arriving 70 s after the hand-over) takes its body back: on the host s1 is its human again (netRemote, not a bot, lateBack alive), "
+                "the guest was placed at the body (within 4 m x/z) and plays on in the squad",
+                bool(back) and bool(gd) and hv["s1"]["netRemote"] and not hv["s1"]["isBot"] and any(x["id"] == "s1" and x["alive"] for x in (hv["lateBack"] or []))
+                and dist is not None and dist <= 4.0 and gv["net"] and not gv["lostRan"] and gv["phase"] in ("drop", "match"),
+                {"host": hv, "guest": gv, "distM": dist})
+        shot(gpg, "late_guest_back")
+        if plant == "late-no-reclaim":
+            SG.diag(v, "late", hrec, grec)
+            return ctx
+    else:
+        if not wait_both_phase(hpg, gpg, args.load_timeout):
+            raise C.EnvFailure("late: a page never reached the drop")
+        held_ok = SG.wait(hpg, "() => { const a = __LC__.W.actorById.get('s1'); return a && a.netRemote && !a.isBot; }", 60)
+        if not held_ok:
+            raise C.EnvFailure("late (control): the host never drove s1 from the guest's packets")
+        hpg.evaluate(GUARD_S1_JS)
+    if plant != "host-left-ignored":
+        # ── R2: the host stalls 20 s (main thread blocked), still in the room ──
+        front(gpg)
+        gpg.wait_for_timeout(2000)
+        g0 = gpg.evaluate(GUESTVIEW_JS)
+        # the host goes SILENT for 20 s while it stays in the room: its page sends nothing (no state, so no bot snapshots and no clock either). A
+        # busy loop on the host's main thread was tried first (fix3 nl_late1): the two pages of one context share a renderer, so it froze the
+        # guest's page as well (its clock ran 5 s in 26 s) and measured nothing - what the guest sees of a stalled host is exactly this silence
+        hpg.evaluate("() => { const S = __LC__.W.net; S.__mute = S.lastState; S.lastState = 1e15; setTimeout(() => { S.lastState = 0; }, 20000); return true; }")
+        trace, saw_wait = [], False
+        ts = time.time()
+        while time.time() - ts < 26:
+            gpg.wait_for_timeout(500)
+            g = gpg.evaluate(GUESTVIEW_JS)
+            trace.append([round(time.time() - ts, 1), g["net"], g["lostRan"], g["wait"], g["t"]])
+            saw_wait = saw_wait or g["wait"]
+        gpg.wait_for_timeout(4000)
+        g1 = gpg.evaluate(GUESTVIEW_JS)
+        h1 = hpg.evaluate(HOSTVIEW_JS)
+        ran = (trace[-1][4] - g0["t"]) if trace else 0
+        name = ("late R2: the host goes silent 20 s (its page sends nothing) while still in the room -> the guest stays online (no host-lost), shows 'Waiting for host...' during it, "
+                "and it is gone once the host's packets resume; the host still drives s1 from the guest")
+        if ran < 10:
+            v.cnj(name, "SETUP missed: the guest's own match clock ran %.1f s over the 26 s window (the guest's page was starved too)" % ran)
+        else:
+            v.check(name, saw_wait and all(x[1] and not x[2] for x in trace) and g1["net"] and not g1["lostRan"] and not g1["wait"]
+                    and (g1["waitStats"] or {}).get("n", 0) >= 1 and bool(h1) and h1["s1"]["netRemote"] and not h1["s1"]["isBot"],
+                    {"trace [s, net, hostLost, waiting, guest t]": trace[::4] + trace[-1:], "after": g1, "hostS1": h1 and h1["s1"]})
+        if plant == "host-silence-8s":
+            SG.diag(v, "late", hrec, grec)
+            return ctx
+    # ── R2: the host leaves the room (its tab closes: the relay's presence drops it) -> offline at once, not after the 45 s wait ──
+    front(gpg)
+    SG.diag(v, "late", hrec, grec)
+    tc = time.time()
+    hpg.close()
+    lost = SG.wait(gpg, "() => __LC__.W.net === null ? true : null", 30, 0.25)
+    lost_s = round(time.time() - tc, 1)
+    v.check("late R2: the host's tab closes (the relay says it left) -> the guest continues offline within 6 s (presence), not after the 45 s silence wait",
+            bool(lost) and lost_s <= 6.0, {"s": lost_s, "guest": gpg.evaluate(GUESTVIEW_JS)})
+    v.check("late: guest - 0 console errors, 0 page errors, 0 failed requests (after the host left)", grec.clean(), grec.problems())
+    return ctx
+
+
+# ─────────────────────────────── friends fix 3: case loadfail (R3) ───────────────────────────────
+LOADFAIL_GUEST_JS = r"""() => { const W = __LC__.W, S = W.net; const st = document.querySelector('[data-net-loadfail]'); const n = document.querySelector('[data-net-notice]');
+  return { phase: W.phase, err: W.lastMatchError || null, net: !!S, started: S ? !!S.started : null, room: S && S.net ? S.net.room : null, loadFailed: S ? S.loadFailed || null : null,
+    attr: !!st, notice: n ? n.innerText : null, lobby: !![...document.querySelectorAll('div')].find((d) => d.style && d.style.minWidth === '380px'),
+    menuNotice: !!document.querySelector('[data-lc=matchnotice]') }; }"""
+
+
+def case_loadfail(rig, v, args):
+    plant = args.plant if args.plant == "loadfail-leaves" else None
+    ctx = rig.new_ctx()
+    hpg, hrec = rig.page(ctx, "loadfail/host")
+    gpg, grec = rig.page(ctx, "loadfail/guest")
+    if plant:
+        apply_plant(rig, gpg, plant)
+    # the guest's character skins never arrive (aborted, like a dropped connection): its match load fails with the clean message
+    aborted = []
+    gpg.route(lambda url: "/assets/chars/" in url and url.split("?")[0].endswith(".glb"), lambda r: (aborted.append(r.request.url[-60:]), r.abort("aborted")))
+    for pg, rec in ((hpg, hrec), (gpg, grec)):
+        front(pg)
+        if SG.boot_url(pg, args.base, args.boot_timeout) is None:
+            raise C.EnvFailure("%s: __LC__ never appeared" % rec.name)
+    for pg, rec in ((hpg, hrec), (gpg, grec)):
+        if not SG.open_lobby(pg):
+            raise C.EnvFailure("%s: lobby never opened" % rec.name)
+    code = SG.host_create(hpg)
+    if not code:
+        raise C.EnvFailure("loadfail: no room code")
+    SG.guest_join(gpg, code)
+    if not SG.wait(hpg, "() => document.body.innerText.includes('2 player')", 30):
+        raise C.EnvFailure("loadfail: the guest never showed in the host's lobby")
+    gpeer = gpg.evaluate("() => __LC__.W.net.net.id")
+    SG.press_start(hpg)
+    failed = None
+    t0 = time.time()
+    while time.time() - t0 < args.load_timeout:
+        front(gpg)
+        failed = gpg.evaluate("() => __LC__.W.lastMatchError ? true : null")
+        if failed:
+            break
+        if gpg.evaluate("() => ['drop', 'match'].includes(__LC__.W.phase)"):
+            break
+        gpg.wait_for_timeout(3000)
+    gpg.wait_for_timeout(3000)
+    g = gpg.evaluate(LOADFAIL_GUEST_JS)
+    v.info("loadfail: aborted skin requests on the guest", {"n": len(aborted), "first": aborted[:3]})
+    if not failed:
+        raise C.EnvFailure("loadfail: the fault did not bite - the guest's match load did not fail (%s)" % json.dumps(g))
+    v.check("loadfail R3: the guest whose skins never arrive gets 'Couldn't load the match' and STAYS IN THE ROOM: the room's lobby is open (same code, "
+            "no match running), the notice line says so", g["net"] and g["started"] is False and g["room"] == code and g["lobby"] and g["attr"]
+            and "Couldn't load the match" in (g["notice"] or "") and g["phase"] == "menu", g)
+    bye = [m["d"] for m in SG.msgs(gpg, "bye", "out")]
+    back = SG.msgs(gpg, "back", "out")
+    v.check("loadfail R3: it told the room - 'bye' for its slot s1 (the slot is handed over for this match) and 'back' (waiting in the room)",
+            any(d.get("slot") == "s1" for d in bye) and len(back) >= 1, {"bye": bye, "back": len(back)})
+    front(hpg)
+    if not wait_phase(hpg, args.load_timeout):
+        raise C.EnvFailure("loadfail: the host never reached the drop")
+    hs = SG.wait(hpg, "() => { const S = __LC__.W.net, a = __LC__.W.actorById.get('s1'); return a && a.isBot && !a.netRemote && S.tookOver && S.tookOver.s1 ? S.tookOver.s1 : null; }", 30)
+    pl = hpg.evaluate("(p) => { const S = __LC__.W.net; return { inMatch: S.inMatch ? S.inMatch[p] : null, present: S.hs.isPresent(p, performance.now()), "
+                      "next: S.hs.planStart(S.peers, 3, performance.now(), S.inMatch).roster.map((r) => r.peerId) }; }", gpeer)
+    v.check("loadfail R3: on the host the failed loader's slot s1 is handed over for this match (why: left the match), and the player is still in the room, "
+            "not IN A MATCH, so the next START rosters it",
+            bool(hs) and (hs or {}).get("why") == "left the match" and pl["present"] and pl["inMatch"] is False and gpeer in pl["next"], {"tookOver": hs, "room": pl})
+    shot(gpg, "loadfail_guest_room")
+    v.check("loadfail: host - 0 console errors, 0 page errors, 0 failed requests", hrec.clean(), hrec.problems())
+    gp = grec.problems()
+    exp = lambda x: ("chars/" in x) or ("failed to load" in x) or ("skin" in x.lower()) or ("Failed to load resource" in x)
+    other = {k: [x for x in vals if not exp(x)] for k, vals in gp.items()}
+    v.check("loadfail: guest - 0 console / page errors and failed requests other than the planted skin abort", not any(other.values()), {"unexpected": other, "all": gp})
+    return ctx
+
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
-    ap.add_argument("--cases", default="mode,mode3,match")
+    ap.add_argument("--cases", default="mode,mode3,match,late,loadfail")
     ap.add_argument("--plant", default=None, choices=sorted(PLANTS))
     ap.add_argument("--until-drop", action="store_true", help="case match: stop once both pages reach the drop (A/B against a base --rev, no team-mode click)")
     ap.add_argument("--serve", nargs="?", type=int, const=-1, default=0, metavar="PORT",
@@ -686,7 +927,7 @@ def main():
                 print("-- case %s" % c, flush=True)
                 ctx = None
                 try:
-                    ctx = {"mode": case_mode, "mode3": case_mode3, "match": case_match}[c](rig, v, args)
+                    ctx = {"mode": case_mode, "mode3": case_mode3, "match": case_match, "late": case_late, "loadfail": case_loadfail}[c](rig, v, args)
                 except C.EnvFailure as e:
                     v.cnj("%s: environment" % c, str(e))
                 finally:

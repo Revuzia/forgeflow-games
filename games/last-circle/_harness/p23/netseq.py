@@ -134,15 +134,38 @@ def rejoin_setup_miss(trace):
     return None
 
 
-SETTLE_JS = r"""([id, ms]) => new Promise((res) => { const W = window.__LC__.W; const t0 = performance.now(); let last = null, still = 0;
-  const iv = setInterval(() => { const a = W.actorById.get(id); const p = a ? [a.pos.x, a.pos.z] : null;
-    if (p && last && Math.hypot(p[0] - last[0], p[1] - last[1]) < 0.02) still++; else still = 0; last = p;
-    if (still >= 3 || performance.now() - t0 > ms) { clearInterval(iv); res({ settled: still >= 3, ms: Math.round(performance.now() - t0) }); } }, 100); })"""
+POS_JS = "(id) => { const a = window.__LC__.W.actorById.get(id); return a ? [a.pos.x, a.pos.z] : null; }"
+SETTLE_GAP_M = 0.05      # the copy must sit on the host's own position (horizontal) - the same 0.05 m as the no-backward bar
+SETTLE_STILL_M = 0.02    # ... and both must be still: 3 consecutive 100 ms polls within 2 cm
 
 
-def settle(gpg, h_id, ms=6000):
-    """wait until the guest's copy of the host stands still (3 x 100 ms within 2 cm), up to ms"""
-    return gpg.evaluate(SETTLE_JS, [h_id, ms])
+def settle(hpg, gpg, h_id, ms=15000):
+    """SETUP before a tracked walk: wait until the guest's copy of the host is STILL (3 x 100 ms within 2 cm), the host's own body is still,
+    AND the copy is within SETTLE_GAP_M of the host's own position (x/z), up to ms. Friends fix 3 (R5): the old settle only asked for a still
+    copy, and a copy that sat still in a gap of the background host's packets passed it while it still had the OLD walk to finish (the builder's
+    FAIL 0.056 m at sample 1: around [-45.354, -45.41, -45.45, -45.397]; checker r4 0.093 m at sample 2) - the catch-up then read as a pull-back.
+    Returns {settled, ms, gapM, still}; not settled = the walk is not measured (could-not-judge), never a pass."""
+    t0 = time.time()
+    lastg = lasth = None
+    still = 0
+    gap = None
+    while time.time() - t0 < ms / 1000.0:
+        try:
+            g = gpg.evaluate(POS_JS, h_id)
+            h = hpg.evaluate("() => { const p = window.__LC__.W.player.pos; return [p.x, p.z]; }")
+        except Exception:
+            g = h = None
+        if g and h:
+            gap = round(((g[0] - h[0]) ** 2 + (g[1] - h[1]) ** 2) ** 0.5, 3)
+            if lastg and lasth and ((g[0] - lastg[0]) ** 2 + (g[1] - lastg[1]) ** 2) ** 0.5 < SETTLE_STILL_M and ((h[0] - lasth[0]) ** 2 + (h[1] - lasth[1]) ** 2) ** 0.5 < SETTLE_STILL_M:
+                still += 1
+            else:
+                still = 0
+            lastg, lasth = g, h
+            if still >= 3 and gap <= SETTLE_GAP_M:
+                return {"settled": True, "ms": int((time.time() - t0) * 1000), "gapM": gap, "still": still}
+        time.sleep(0.1)
+    return {"settled": False, "ms": int((time.time() - t0) * 1000), "gapM": gap, "still": still}
 
 
 # which page is in FRONT during a tracked walk. Fix round 2: with the walker (host) in front, the observing guest ran at its background rate and
@@ -153,6 +176,15 @@ OBSERVER_FRONT = True
 
 
 def walk_and_track(hpg, gpg, h_id, ms=3000):
+    # a planted pull-back (--plant) bites only during the tracked walk (armed here, disarmed below); a no-op without a plant
+    gpg.evaluate("(id) => { if (window.__P23PB__) window.__P23PB__.id = id; }", h_id)
+    try:
+        return _walk_and_track(hpg, gpg, h_id, ms)
+    finally:
+        gpg.evaluate("() => { if (window.__P23PB__) window.__P23PB__.id = null; }")
+
+
+def _walk_and_track(hpg, gpg, h_id, ms=3000):
     yaw = hpg.evaluate("() => window.__LC__.W.player.input.yaw")
     import math
     dx, dz = -math.sin(yaw), -math.cos(yaw)
@@ -210,7 +242,9 @@ def main():
             v.info("guard (host page: both players' hp / shield topped up until the end)", {"guard": hpg.evaluate(GUARD_JS, [h_id, g_id])})
             if args.plant:
                 gpg.evaluate("() => { const W = window.__LC__.W, K = W.SIM; %s; return true; }" % PLANTS[args.plant])
-                gpg.evaluate("(id) => { window.__P23PB__.id = id; }", h_id)
+                # (armed only while a walk is TRACKED: fix3 - the new settle needs the copy to sit on the host before the walk, and a plant
+                # pulling the copy around during the settle made both walks could-not-judge, so the control was never judged; gate 14:45)
+                pass
             # the state envelope travels P2P first: ffg_rtc.js DataChannels, UNORDERED ({ordered:false, maxRetransmits:0}) - the relay stand-in's
             # REORDER switch never saw a state packet when the DCs were open (netseq_all3 10-26: 0 late packets). The same switch on the guest's
             # DataChannel receive (W.net.rtc.onMessage, read per message by RTCMesh) - out-of-order delivery as the wire can really do it
@@ -229,12 +263,20 @@ def main():
             hpg.bring_to_front()          # the walker's page must tick (a hidden tab gets no rAF)
             hpg.wait_for_timeout(1500)
             v.info("page visibility during the walks", {k: pg.evaluate("() => document.visibilityState") for k, pg in (("host", hpg), ("guest", gpg))})
-            v.data["settle1"] = settle(gpg, h_id)
-            b = walk_and_track(hpg, gpg, h_id)
+            v.data["settle1"] = settle(hpg, gpg, h_id)
+            b = walk_and_track(hpg, gpg, h_id, 6000)      # friends fix 3: 6 s (was 3 s: 4.32 m < 5 m at a 8.8 fps background walker, fix3 ns_9)
+            b["settle"] = v.data["settle1"]
             # the walk must be OBSERVED (>= 30 samples of the 50 ms track, > 5 m of progress on the guest's copy): a starved / background guest page
             # that sampled 10 times and saw 1.4 m (gateA2 10-27 06:43) is a setup miss (D16), not a verdict; any pull-back > 0.05 m seen is a FAIL
             def walk_row(name, r, extra_ok=True, extra_why=""):
                 back = (r["maxBackM"] or 0) > 0.05
+                st = r.get("settle") or {}
+                if not st.get("settled"):
+                    # R5: the walk started before the copy had caught up with the host (or before both stood still): whatever it measured is
+                    # the setup, not net.js - could-not-judge, never a pass and never a fail
+                    v.cnj(name, "SETUP missed: the guest's copy of the host never settled on the host's own position (<= %.2f m, both still) before the walk: %s"
+                          % (SETTLE_GAP_M, {"settle": st, "maxBackM": r.get("maxBackM")}))
+                    return
                 if not back and (r["samples"] < 30 or r["progress"] is None or r["progress"] <= 5 or not extra_ok):
                     v.cnj(name, "SETUP missed: the walk was not observed well enough (>= 30 samples, > 5 m%s): %s" % (extra_why, r))
                 else:
@@ -243,10 +285,14 @@ def main():
             hpg.evaluate("() => { const p = window.__LC__.W.player; p.input.yaw += Math.PI; }")
             # SETUP: the guest's copy of the host must have come to REST before the reversed walk is tracked (gateA 10-27 02:53: 800 ms was not
             # enough - the copy was still finishing the baseline walk, 5.4 m 'backwards' along the new direction at samples 1-4)
-            v.data["settle2"] = settle(gpg, h_id)
+            v.data["settle2"] = settle(hpg, gpg, h_id)
             gpg.evaluate("([ms, after]) => { window.__SQ_REORDER__ = { every: 3, holdMs: ms, after }; }", [REORDER_HOLD_MS, REORDER_AFTER])
             hpg.wait_for_timeout(300)
-            r = walk_and_track(hpg, gpg, h_id, 4000)
+            # friends fix 3: 8 s (was 4 s). The walker is the BACKGROUND page (4.5-11 fps measured in fix3 ns_1..6) and sends <= 1 state packet a
+            # frame, so a 4 s walk delivered only 5-8 late packets and 4.5-11 m: 4 of 6 runs could-not-judge on the >= 10 late / > 5 m setup rule
+            # (maxBackM 0.0 in every one). Same bars (0.05 m, >= 10 late, > 5 m); only the observed span is longer
+            r = walk_and_track(hpg, gpg, h_id, 8000)
+            r["settle"] = v.data["settle2"]
             held = gpg.evaluate("() => (window.__SQ_REORDER__ || {}).held || 0")
             r["afterNewer"] = gpg.evaluate("() => (window.__SQ_REORDER__ || {}).afterNewer || 0")
             gpg.evaluate("() => { window.__SQ_REORDER__ = null; }")

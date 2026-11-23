@@ -612,6 +612,66 @@ export function judgeReclaim(c) {
   return "ok";
 }
 
+// ── FRIENDS ROOMS robustness (fix 3): a slow loader / a stalled host is judged by ROOM PRESENCE, not by packet silence ─────────────────────
+// Measured on a loaded box (F:/lc_p23/friends/check2): a late joiner's world build took one 169 s synchronous step, so the host's old 60 s
+// never-seen rule turned a present, loading friend into an opponent (3 of 4 plain runs); a host stalled by an 82 s long task under CPU x4 read as
+// "host lost" after the guest's 8 s silence rule. The relay's presence list (ffg_cfroom.js "peer" ids) says who is still connected to the room.
+/** Before a player's FIRST live tick it keeps its slot while it is present in the room, up to this long after the match went live. */
+export const FIRST_TICK_CAP_MS = 240000;
+/** A guest waits this long after the host's last packet while the host is still present in the room (a stalled host page, not a gone one). */
+export const HOST_SILENT_PRESENT_MS = 45000;
+/** The old guest rule, kept for when this page cannot see presence (its own relay socket is down: the list is stale). */
+export const HOST_SILENT_BLIND_MS = 8000;
+/** A peer missing from presence this long has LEFT (a dropped socket rejoins with the same id inside ~0.6-2.4 s: ffg_cfroom.js retries). */
+export const PRESENCE_LEAVE_MS = 2000;
+/** The guest shows "Waiting for host..." after this much host silence. */
+export const HOST_WAIT_NOTICE_MS = 3000;
+/** Others are told "<name> is still loading" once a rostered player has not ticked this long after the match went live. */
+export const LOADING_NOTICE_MS = 15000;
+/** A page whose match load is still running repeats its "loading" this often (beginOnlineMatch). */
+export const LOADING_BEAT_MS = 10000;
+/** A late page repeats its "ready" (every 3 s) this many times; unanswered, it sends state again so the host offers the body once more. */
+const LATE_READY_TRIES = 6;
+
+/** HOST: a rostered guest that has not sent its first live tick. c = { goneMs (how long it has been missing from presence; null = present),
+ *  sinceLiveMs (since this host's match went live) }. "wait" (keep the slot, the body stays as it is), "left" (the relay says it is gone),
+ *  "cap" (FIRST_TICK_CAP_MS passed). */
+export function neverSeenVerdict(c) {
+  c = c || {};
+  if (typeof c.goneMs === "number" && c.goneMs > PRESENCE_LEAVE_MS) return "left";
+  if (typeof c.sinceLiveMs === "number" && c.sinceLiveMs > FIRST_TICK_CAP_MS) return "cap";
+  return "wait";
+}
+
+/** GUEST: is the host still there? c = { presenceLive (this page's relay socket is open, so the presence list is current), hostGoneMs (how
+ *  long the host has been missing from presence; null = present), silentMs (since the host's last packet; null = none yet this match),
+ *  sinceLiveMs (since this page's match went live) }. "ok", "wait" (show "Waiting for host..."), "lost" (continue offline). */
+export function hostSilenceVerdict(c) {
+  c = c || {};
+  const silent = typeof c.silentMs === "number" ? c.silentMs : null;
+  if (!c.presenceLive) {
+    // no current presence: the old rule (8 s after the host's last packet; before its first one, the first-tick cap)
+    if (silent == null) return typeof c.sinceLiveMs === "number" && c.sinceLiveMs > FIRST_TICK_CAP_MS ? "lost" : "ok";
+    return silent > HOST_SILENT_BLIND_MS ? "lost" : silent > HOST_WAIT_NOTICE_MS ? "wait" : "ok";
+  }
+  if (typeof c.hostGoneMs === "number" && c.hostGoneMs > PRESENCE_LEAVE_MS) return "lost";
+  if (silent == null) {
+    const since = typeof c.sinceLiveMs === "number" ? c.sinceLiveMs : 0;
+    return since > FIRST_TICK_CAP_MS ? "lost" : since > HOST_WAIT_NOTICE_MS ? "wait" : "ok";
+  }
+  return silent > HOST_SILENT_PRESENT_MS ? "lost" : silent > HOST_WAIT_NOTICE_MS ? "wait" : "ok";
+}
+
+/** HOST: a state packet from peer `from` for body `id`, which the never-seen watchdog handed over before that player's first live tick (a late
+ *  arrival). c = { senderSlot, id, from, rejoinedBy }. "ok" = offer the body back (no time limit while the match runs; a dead body is answered
+ *  with its death), "no". */
+export function judgeLateArrival(c) {
+  c = c || {};
+  if (!(c.senderSlot > 0) || "s" + c.senderSlot !== c.id) return "no";
+  if (c.rejoinedBy != null && c.rejoinedBy !== c.from) return "no";
+  return "ok";
+}
+
 // ── C-DBNO: knock and revive (owner OD-3: team modes only) ────────────────────────────────────────────────────────────────────────────
 /** Bit 256 of the state packet's stance byte: the actor is DOWNED (crawling, bleeding out). Older peers ignore unknown bits. */
 export const F_DOWNED = 256;
@@ -936,7 +996,8 @@ function isAuthority(W) { return S && S.net.isHost(); }
 // update() thins its contents first, so shedding never silently strands a
 // pickup or a chest open inside a discarded envelope.
 const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1, refuse: 1, mapfail: 1,
-  revive: 1, smoke: 1, rejoin: 1, room: 1 };      // P23: a life (revive), a sight line (smoke), a slot (rejoin), the room's team mode - all rare
+  revive: 1, smoke: 1, rejoin: 1, room: 1, loading: 1 };      // P23: a life (revive), a sight line (smoke), a slot (rejoin), the room's team mode - all rare
+                                                    // (fix 3: "loading" - once per player per match, before its world build)
 
 /** OUTBOUND BUDGET, in messages per rolling second. Supabase Realtime does not
  *  throttle a connection that exceeds its rate — it DISCONNECTS it, which
@@ -1556,9 +1617,9 @@ function openLobby(W, sel) {
 
 // host + 3 guests. Every extra human multiplies EVERY outbound message.
 const MAX_GUESTS = 3;
-// a rostered guest that never sends a state packet is handed to a bot this long after the host's match went live (LC-11, update()). The
-// slowest measured cold match load is ~30 s (parity audit, cold Quick 29.7 s); twice that is not a load any more.
-const NEVER_SEEN_MS = 60000;
+// a rostered guest that never sends a state packet keeps its slot while the relay says it is in the room, up to FIRST_TICK_CAP_MS after the
+// host's match went live (LC-11 + fix 3, update(): neverSeenVerdict). The old fixed 60 s rule (NEVER_SEEN_MS, removed) took a present friend whose world
+// build was one 169 s synchronous step on a loaded box.
 
 /** Peer names are typed on someone else's machine and this file puts them in
  *  innerHTML — escape before they reach the DOM. */
@@ -1800,10 +1861,28 @@ function onRejoinInMatch(W, from, d) {
       (S.lastSeen = S.lastSeen || {})[id] = now;
       (S.everSeen = S.everSeen || {})[id] = true;
       if (S.tookOver) delete S.tookOver[id];
+      if (rj.late) {
+        // fix 3: a late arrival (its slot was handed over before its first live tick) has its body back - or is told it died meanwhile
+        const L = S.lateTake && S.lateTake[id];
+        if (S.lateTake) delete S.lateTake[id];
+        if (S.silentTake) delete S.silentTake[id];
+        (S.lateBack = S.lateBack || []).push({ id, peer: from, alive: !!a.alive, afterMs: L ? Math.round(now - L.at) : null });
+        if (S.lateBack.length > 16) S.lateBack.shift();
+        if (a.alive) notify(W, String(((S.cfg.roster.find((r) => r.slot === slot) || {}).name) || "A squad-mate").slice(0, 24) + " finished loading and is in the match.");
+      }
       W.events.emit("squadRejoin", { slot, peerId: from, stage: "back" });
     }
     send("sync", { t: +W.t.toFixed(2), loot: W.lootSyncState ? W.lootSyncState() : null, to: from, dead: deadList(W) });
     send("rejoin", Object.assign({ k: "back", slot, to: from }, bodySnap(a)));
+    return;
+  }
+  if (d.k === "late") {
+    // fix 3, THE LATE PAGE: the host handed this page's body over before its first tick (its world build outlasted the host's wait). Ask for it
+    // back like a rejoined page: no state goes out until "back" places this player where the body is (or says it died meanwhile).
+    if (d.to !== S.net.id || slot !== S.mySlot || S.net.isHost() || (S.rejoin && S.rejoin.state !== "back")) return;
+    const now = performance.now();
+    S.rejoin = { slot, at: now, inv: null, state: "ready", readyAt: now, tries: 1, late: true };
+    send("rejoin", { k: "ready", slot });
     return;
   }
   if (d.k === "back") {
@@ -1826,7 +1905,7 @@ function applyRejoinBack(W, d) {
     clearRejoin();
     p.hp = 0; p.shield = 0;
     if (W.killActor) W.killActor(p, null, null);
-    notify(W, "You were eliminated while you were away.");
+    notify(W, rj && rj.late ? "You were eliminated while your match was loading." : "You were eliminated while you were away.");
     W.events.emit("squadRejoin", { slot: rj.slot, stage: "dead" });
     return;
   }
@@ -1846,7 +1925,8 @@ function applyRejoinBack(W, d) {
   restoreInventory(W, p, rj && rj.inv);
   S.rejoinDone = { slot: rj.slot, ms: Math.round(performance.now() - rj.at) };
   S.rjSavedAt = 0;                                                  // the new secret is written on the next update()
-  notify(W, "Back in the match.");
+  notify(W, rj && rj.late ? "You're in: your squad kept your place while the match loaded." : "Back in the match.");
+  if (rj && rj.late) S.lateDone = { slot: rj.slot, ms: S.rejoinDone.ms, x: d.x, z: d.z };
   W.events.emit("squadRejoin", { slot: rj.slot, stage: "back", ms: S.rejoinDone.ms });
 }
 /** The kit this tab saved before it reloaded (weapons, consumables, ammo, the active slot); anything the sim does not know is dropped. */
@@ -1977,6 +2057,7 @@ function takeOverBody(W, a) {
  *  the body goes back to the peer: its brain idles (bots.js skips netRemote actors), the packet's position wins (the guest's page kept
  *  simulating it), and every guest is told the body is a human's again ("rejoin" back, addressed to the peer, which ignores it). */
 function reclaimSilentBody(W, a, from, d) {
+  if (S.lateTake && S.lateTake[a.id]) return lateArrival(W, a, from);
   const at = S.silentTake && S.silentTake[a.id];
   if (at == null) return false;
   const now = performance.now();
@@ -1998,6 +2079,24 @@ function reclaimSilentBody(W, a, from, d) {
   send("rejoin", Object.assign({ k: "back", slot, to: from }, bodySnap(a)));
   notify(W, String(((S.cfg.roster.find((r) => r.slot === slot) || {}).name) || "A squad-mate").slice(0, 24) + " reconnected.");
   W.events.emit("squadRejoin", { slot, peerId: from, stage: "reconnect", ms: Math.round(now - at) });
+  return true;
+}
+
+/** HOST, fix 3 LATE ARRIVAL: the first state packet of a player whose slot the never-seen watchdog handed over before its first live tick (its
+ *  world build outlasted FIRST_TICK_CAP_MS, or the relay lost it for a moment). Whenever it arrives while the match runs, its body goes back to
+ *  it through the rejoin hand-back: "rejoin" { k: "late" } asks the page for its "ready" (it sends no state until "back"), and the "ready" handler
+ *  gives the body back with a loot sync and the list of the dead - or tells it the body died (it then spectates, as any dead player).
+ *  Until then the bot keeps the body (the page's fresh spawn must never pull it into the sky). Offered at most every 2 s. */
+function lateArrival(W, a, from) {
+  const L = S.lateTake[a.id];
+  const slot = slotOfPeer(S.cfg && S.cfg.roster, from);
+  const j = judgeLateArrival({ senderSlot: slot, id: a.id, from, rejoinedBy: S.rejoined && S.rejoined[a.id] && !S.rejoined[a.id].late ? S.rejoined[a.id].peer : null });
+  if (j !== "ok") return false;
+  const now = performance.now();
+  if (L.offerAt && now - L.offerAt < 2000) return true;
+  L.offerAt = now; L.offers = (L.offers | 0) + 1;
+  (S.rejoined = S.rejoined || {})[a.id] = { peer: from, at: now, ready: false, late: true };
+  send("rejoin", { k: "late", slot, to: from });
   return true;
 }
 
@@ -2087,6 +2186,19 @@ function beginOnlineMatch(W, cfg) {
   const opts = { mapId: cfg.mapId, mode: cfg.mode, seed: cfg.seed, humans, guestOf: S.net.isHost() ? null : "host" };
   if (teamMode) opts.teamMode = teamMode;
   if (cfg.rejoin) opts.rejoin = { slot: S.mySlot };     // (the boot may skip its lobby countdown for it; net.js places the body on "back")
+  // fix 3: one "loading" BEFORE the world build (on a slow device a single synchronous step of it took 169 s, and nothing goes out during it):
+  // the others can say who is still loading, and the host knows the slot is coming (it keeps it while the relay says this page is present)
+  send("loading", { slot: S.mySlot, rematch: cfg.rematch | 0 });
+  // ...and again every LOADING_BEAT_MS while this page's match load is still running (W._starting: set by startMatch, cleared when it ends -
+  // a page sitting in its lobby or its match sends none). Between the long synchronous steps of a slow build these get out: proof that the
+  // page is still loading, not hung. A guest's wait for a host that has not ticked yet counts from the host's last one (update()), so a host
+  // whose build takes 660 s under CPU x4 (fix3 e2e_c1) keeps its guests, and a host that stops making progress still loses them after 240 s.
+  if (S.loadBeat) { try { clearInterval(S.loadBeat); } catch (e) {} }
+  const sess = S, beatSlot = S.mySlot, beatN = cfg.rematch | 0;
+  S.loadBeat = setInterval(() => {
+    if (S !== sess || !sess.started || !W._starting || sess.matchLiveAt) { clearInterval(sess.loadBeat); sess.loadBeat = null; return; }
+    send("loading", { slot: beatSlot, rematch: beatN, beat: 1 });
+  }, LOADING_BEAT_MS);
   window.__LC__.startMatch(opts);
 }
 
@@ -2223,6 +2335,14 @@ function onMsg(W, { from, t, d }) {
     if (S.net.isHost()) { if (!hostTakeOver(W, r.id)) (S.pendingTakeovers = S.pendingTakeovers || new Set()).add(r.id); }
     else if (r.host) { if (W.player) hostLost(W); else S.hostGone = true; }
     W.events.emit("squadMapFallback", { peerId: from, name: r.name, wanted: r.wanted, built: r.built, host: r.host, by: "peer" });
+    return;
+  }
+  if (t === "loading") {
+    // fix 3: a rostered squad-mate is building this match's world (sent once, before its build): update() names it in the chat log if it has
+    // not ticked LOADING_NOTICE_MS after this page's match went live. Only a peer this match rostered, only for its own slot.
+    const sl = slotOfPeer(S.cfg && S.cfg.roster, from);
+    if (sl == null || !d || d.slot !== sl) { reject(t, from, "loading for another slot"); return; }
+    (S.loadingFrom = S.loadingFrom || {})[from] = performance.now();
     return;
   }
   if (t === "rtc") {
@@ -2408,7 +2528,20 @@ function onMsg(W, { from, t, d }) {
   if (t === "bye") {
     // a guest left mid-match: host re-attaches a bot brain so the slot fights on
     const a = W.actorById.get(d.slot);
-    { const sl = slotOfPeer(S.cfg && S.cfg.roster, from); if (sl > 0 && d.slot === "s" + sl) { markGone(sl); if (S.silentTake) delete S.silentTake[d.slot]; } }   // LC-49: the rejoin window opens (a bye is not a silence)
+    const bsl = slotOfPeer(S.cfg && S.cfg.roster, from);
+    { const sl = bsl; if (sl > 0 && d.slot === "s" + sl) { markGone(sl); if (S.silentTake) delete S.silentTake[d.slot]; } }   // LC-49: the rejoin window opens (a bye is not a silence)
+    // fix 3: a guest that said bye left THIS match on purpose (its load failed and it went back to the room, BACK TO ROOM, a closed tab): the
+    // never-seen watchdog must not keep its slot for it, and a late packet never takes the body back. Its bye can arrive while this host is still
+    // loading (no body yet): drainPending hands the slot over once the actors exist.
+    if (S.net.isHost() && bsl > 0 && d.slot === "s" + bsl) {
+      S.tookOver = S.tookOver || {};
+      if (!S.tookOver[d.slot]) S.tookOver[d.slot] = { at: S.matchLiveAt ? Math.round(performance.now() - S.matchLiveAt) : null, why: "left the match" };
+      if (S.lateTake) delete S.lateTake[d.slot];
+      if (!a) (S.pendingTakeovers = S.pendingTakeovers || new Set()).add(d.slot);
+    }
+    // fix 3: the HOST's own bye (its load failed and it went back to the room, or BACK TO ROOM) before this guest ever heard a host packet:
+    // S.hostSlot is unknown then, but the sender is the roster's slot 0 - continue offline (once this page's actors exist)
+    if (!S.net.isHost() && bsl === 0 && d.slot === "s0" && !S.hostSlot) { if (W.player) hostLost(W); else S.hostGone = true; return; }
     if (a && a.alive && S.net.isHost() && a.netRemote) takeOverBody(W, a);
     // the HOST left mid-match: this bye used to be silently ignored by guests
     // (the branch above is host-only), stranding them in a frozen world — all
@@ -2525,6 +2658,7 @@ function slewClock(W, hostT) {
 export function hostLost(W) {
   if (!S || S._hostLostRan) return;
   S._hostLostRan = true;
+  hideHostWait();
   clearRejoin();               // LC-49: the room is gone
   const converted = convertRemotesToBots(W);
   try { S.rtc && S.rtc.close(); } catch (e) {}
@@ -2541,7 +2675,7 @@ export function inRoom(W) { return !!(S && S.net && S.net.ws && S.net.ws.readySt
 
 /** BACK TO ROOM after a match: the party stays together, as in other battle royales. Clears the per-match state, un-freezes the host role
  *  (the room may have a new host by now) and reopens the room's lobby over the menu. The others see this player ready again ("back"). */
-export function returnToRoom(W) {
+export function returnToRoom(W, opts) {
   if (!inRoom(W)) { leave(W); return false; }
   hideWaitCard();
   clearRejoin();
@@ -2560,11 +2694,20 @@ export function returnToRoom(W) {
   send("back", {});
   send("hello", myHello());          // a newcomer who arrived during the match learns this player's name + that it is free again
   openLobby(W, Object.assign({ resume: true }, picks || {}));
+  // fix 3: this page's match failed to load (a required asset): it stays in the room and plays the next match - the "back" above shows it
+  // waiting in everyone's lobby, the "bye" handed its slot over for the match that is running. The reason goes on the room's notice line.
+  if (opts && opts.loadFailed && S) {
+    const line = "Couldn't load the match - check your connection. You're still in the room and will play the next match.";
+    S.loadFailed = { msg: String(opts.loadFailed).slice(0, 160), at: Math.round(performance.now()) };
+    try { if (S.notice) S.notice(line, "loadfail"); } catch (e) {}
+    try { if (S.status) S.status.setAttribute("data-net-loadfail", "1"); } catch (e) {}
+  }
   return true;
 }
 
 export function leave(W) {
   hideWaitCard();
+  hideHostWait();
   clearRejoin();               // LC-49: a player who LEAVES (main menu) is not coming back for the slot
   if (S) {
     try { S.rtc && S.rtc.close(); } catch (e) {}
@@ -2586,6 +2729,9 @@ function resetMatchState() {
   // P23: the receive order gate, the revive book, the rejoin book and the relayed smokes belong to the match that ended (txSeq keeps counting)
   S.rxGate = null; S.reviveIn = null; S.reviveOut = null; S.goneAt = null; S.rejoined = null; S.rejoin = null; S.slotKeys = null;
   S.teamCheck = null; S.rjSavedAt = 0; S.silentTake = null; S.reclaimed = null; S.lootDefer = null;
+  // fix 3: the late-arrival book, the "still loading" notes and the host-wait notice belong to the match that ended
+  S.lateTake = null; S.lateBack = null; S.lateDone = null; S.loadingFrom = null; S.loadNoted = null; S.hostAbsentSince = 0; S.hostWait = null;
+  hideHostWait(); S.hostWaitStats = null;
 }
 /** Keep chest-item takes until their chest opens on this client (the chestOpened listener in init applies them). */
 function deferTakes(ids) {
@@ -2593,6 +2739,36 @@ function deferTakes(ids) {
   const set = S.lootDefer = S.lootDefer || new Set();
   for (const id of ids) { set.delete(id); set.add(id); }
   while (set.size > LOOT_DEFER_MAX) set.delete(set.values().next().value);
+}
+
+// fix 3: the guest's small "Waiting for host..." line while a host that is still in the room has gone quiet (hostSilenceVerdict "wait"). It is a
+// note over the view, not a panel: no pointer events, no layout change to the HUD; the match coasts underneath as it always did during a silence.
+let _hostWaitEl = null;
+function hideHostWait() {
+  if (_hostWaitEl) {
+    try { _hostWaitEl.remove(); } catch (e) {}
+    _hostWaitEl = null;
+    if (S && S.hostWaitStats && S.hostWaitStats.shownAt != null) {
+      const st = S.hostWaitStats;
+      st.hiddenAt = Math.round(performance.now());
+      st.maxMs = Math.max(st.maxMs | 0, st.hiddenAt - st.shownAt);
+    }
+  }
+}
+function showHostWait(W, on) {
+  if (!on) { hideHostWait(); return; }
+  if (_hostWaitEl && _hostWaitEl.isConnected) return;
+  try {
+    const el = document.createElement("div");
+    el.setAttribute("data-net-hostwait", "");
+    el.textContent = "Waiting for host…";
+    Object.assign(el.style, { position: "fixed", left: "50%", top: "22%", transform: "translateX(-50%)", zIndex: "60", pointerEvents: "none",
+      padding: "6px 16px", borderRadius: "8px", background: "rgba(4,10,20,0.72)", border: "1px solid rgba(120,180,255,0.25)", color: "#dfeaff",
+      font: "600 15px Rajdhani, 'Segoe UI', system-ui, sans-serif", letterSpacing: "1px" });
+    (W.kernel && W.kernel.parent ? W.kernel.parent : document.body).appendChild(el);
+    _hostWaitEl = el;
+    if (S) { const st = S.hostWaitStats = S.hostWaitStats || { n: 0, maxMs: 0 }; st.n++; st.shownAt = Math.round(performance.now()); st.hiddenAt = null; }
+  } catch (e) { /* a notice must never break the frame */ }
 }
 
 let _waitCard = null;
@@ -2725,6 +2901,8 @@ export function update(W, dt) {
     S.rejoin.readyAt = now; S.rejoin.tries++;
     send("rejoin", { k: "ready", slot: S.rejoin.slot });
   }
+  // fix 3: a late page whose "ready"s all went unanswered sends state again, so the host offers the body once more ("late")
+  if (S.rejoin && S.rejoin.late && S.rejoin.state === "ready" && S.rejoin.tries >= LATE_READY_TRIES && now - S.rejoin.readyAt > 3000) S.rejoin = null;
   // ...and every guest keeps its rejoin record (secret + kit) fresh for a reload, every 2 s (one small storage write)
   if (!S.net.isHost() && !S.rejoin && W.player.alive && now - (S.rjSavedAt || 0) > 2000) { S.rjSavedAt = now; saveRejoin(W); }
   // LC-14 / C-SMOKE: a smoke cloud made here (weapons.js pushed it into W.smokes) goes to the room once
@@ -2842,10 +3020,23 @@ export function update(W, dt) {
   // missed packets, far past any transient. This also covers the channel-error
   // path with no extra API surface: an errored socket delivers nothing, so the
   // watchdog fires 8s later.
-  if (!S.net.isHost() && S.started && S.hostSeen &&
-      (W.phase === "match" || W.phase === "drop") &&
-      now - S.hostSeen > 8000) {
-    hostLost(W);
+  // fix 3: the 8 s rule fired on a host that was still in the room but stalled (an 82 s long task under CPU x4): the guest played on alone and
+  // the room split. Now the relay's presence list decides: a host still present gets HOST_SILENT_PRESENT_MS (45 s) after its last packet, or
+  // FIRST_TICK_CAP_MS (240 s) before its first one, with a small "Waiting for host..." on screen; a host the relay says has left (PRESENCE_LEAVE_MS)
+  // -> offline at once. With this page's own relay socket down (the list is stale) the old 8 s rule applies. The stall guard above still runs first.
+  if (!S.net.isHost() && S.started && (W.phase === "match" || W.phase === "drop")) {
+    const hp = S.cfg && Array.isArray(S.cfg.roster) && S.cfg.roster[0] ? S.cfg.roster[0].peerId : null;
+    const presenceLive = !!(S.net.ws && S.net.ws.readyState === 1 && S.hs.present);
+    const hostGone = !!hp && presenceLive && !S.hs.isPresent(hp, now);
+    if (!hostGone) S.hostAbsentSince = 0;
+    else if (!S.hostAbsentSince) S.hostAbsentSince = now;
+    // (before the host's first tick the 240 s count from the later of this page going live and the host's last "loading" beat: a host that is still
+    // building its world says so every LOADING_BEAT_MS between its long steps)
+    const hostBeat = hp && S.loadingFrom && S.loadingFrom[hp] ? S.loadingFrom[hp] : 0;
+    const v = hostSilenceVerdict({ presenceLive, hostGoneMs: hostGone ? now - S.hostAbsentSince : null, silentMs: S.hostSeen ? now - S.hostSeen : null,
+      sinceLiveMs: S.matchLiveAt ? now - Math.max(S.matchLiveAt, hostBeat) : 0 });
+    if (v === "lost") { S.hostLostWhy = hostGone ? "left the room" : "silent"; hostLost(W); return; }
+    showHostWait(W, v === "wait");
   }
   // host: silent-guest watchdog — no state for 12s mid-match → bot takes over
   // (it calls the take-over directly: a "bye" is bound to its sender's own slot now, LC-11)
@@ -2860,7 +3051,8 @@ export function update(W, dt) {
   // host: NEVER-SEEN watchdog (LC-11). The watchdog above only iterated S.lastSeen, i.e. guests that had sent at least one state packet; a
   // guest whose tab closed or crashed while its match was loading never got there, so its body hung in the sky forever, immortal (the storm
   // skips netRemote actors) and keeping the squad's team alive - the match could not end. A rostered guest that has sent nothing is handed to
-  // a bot once its presence has been gone for 2 s, or after NEVER_SEEN_MS from the moment this match went live (a slow load is not a crash).
+  // a bot once its presence has been gone for 2 s, or (fix 3) FIRST_TICK_CAP_MS after this match went live while it is still present (a slow load
+  // is not a crash: liveness before the first tick is the relay's presence list, not silence).
   if (S.net.isHost() && S.cfg && Array.isArray(S.cfg.roster) && S.matchLiveAt && (W.phase === "match" || W.phase === "drop")) {
     S.absentSince = S.absentSince || {};
     S.tookOver = S.tookOver || {};
@@ -2871,12 +3063,26 @@ export function update(W, dt) {
       const gone = !S.hs.isPresent(r.peerId, now);
       if (!gone) S.absentSince[id] = 0;
       else if (!S.absentSince[id]) S.absentSince[id] = now;
-      if ((gone && now - S.absentSince[id] > 2000) || now - S.matchLiveAt > NEVER_SEEN_MS) {
+      // fix 3: liveness before the first tick is the relay's presence, not silence: a present guest keeps its slot up to FIRST_TICK_CAP_MS
+      const v = neverSeenVerdict({ goneMs: gone ? now - S.absentSince[id] : null, sinceLiveMs: now - S.matchLiveAt });
+      if (v !== "wait") {
         if (hostTakeOver(W, id)) {
-          S.tookOver[id] = { at: Math.round(now - S.matchLiveAt), why: gone ? "left the room" : "never sent state" };
+          S.tookOver[id] = { at: Math.round(now - S.matchLiveAt), why: v === "left" ? "left the room" : "never sent state" };
           if (!gone) (S.silentTake = S.silentTake || {})[id] = now;        // LC-49: a slow load that finally arrives gets its body back
+          // fix 3: ...whenever it arrives while the match runs (no REJOIN_MS limit), through the late hand-back (lateArrival)
+          (S.lateTake = S.lateTake || {})[id] = { at: now, why: v };
         }
       }
+    }
+  }
+  // fix 3: "<name> is still loading" - once per squad-mate that sent "loading" and has not ticked LOADING_NOTICE_MS after this page went live
+  if (S.cfg && Array.isArray(S.cfg.roster) && S.matchLiveAt && now - S.matchLiveAt > LOADING_NOTICE_MS && S.loadingFrom && (W.phase === "match" || W.phase === "drop")) {
+    for (const r of S.cfg.roster) {
+      if (!r || r.peerId === S.net.id || !S.loadingFrom[r.peerId]) continue;
+      const id = "s" + r.slot;
+      if ((S.everSeen && S.everSeen[id]) || (S.loadNoted && S.loadNoted[id]) || (S.tookOver && S.tookOver[id]) || !S.hs.isPresent(r.peerId, now)) continue;
+      (S.loadNoted = S.loadNoted || {})[id] = Math.round(now - S.matchLiveAt);
+      notify(W, String(r.name || "A squad-mate").slice(0, 24) + " is still loading the match. Their place is kept.", "load" + r.slot);
     }
   }
   // host: bot snapshots 10Hz (only bots near any human get full rate; far bots 2Hz)

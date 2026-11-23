@@ -539,6 +539,30 @@ function suiteP23(M, SIM, count) {
     row(rc({ senderSlot: 2 }) === "no" && rc({ senderSlot: 0 }) === "no" && rc({ senderSlot: null }) === "no", "LC-49 reconnect: only the slot's own peer reclaims it (never another guest, never the host)");
     row(rc({ alive: false }) === "no" && rc({ isBot: false }) === "no" && rc({ takenAt: null }) === "no", "LC-49 reconnect: a dead body, a body nobody took over, or one not taken for silence is never reclaimed");
     row(rc({ rejoinedBy: "z_new" }) === "no" && rc({ rejoinedBy: "b_g1" }) === "ok", "LC-49 reconnect: a slot already handed to a reloaded page stays with that page");
+    // FRIENDS fix 3: liveness before the first tick = the relay's presence (R1), a stalled host still in the room is waited for (R2)
+    if (typeof M.neverSeenVerdict === "function" && typeof M.hostSilenceVerdict === "function" && typeof M.judgeLateArrival === "function") {
+      row(M.FIRST_TICK_CAP_MS === 240000 && M.HOST_SILENT_PRESENT_MS === 45000 && M.HOST_SILENT_BLIND_MS === 8000 && M.PRESENCE_LEAVE_MS === 2000,
+        "fix 3: first-tick cap 240 s, host silence 45 s while present (8 s without presence), a presence leave counts after 2 s");
+      const nv = (o) => M.neverSeenVerdict(o);
+      row(nv({ goneMs: null, sinceLiveMs: 120000 }) === "wait" && nv({ goneMs: null, sinceLiveMs: 239000 }) === "wait",
+        "fix 3 R1: a guest still in the room and still loading 120 s / 239 s after the host went live keeps its slot (was a bot at 60 s)");
+      row(nv({ goneMs: null, sinceLiveMs: 240001 }) === "cap", "fix 3 R1: past the 240 s cap the slot is handed over");
+      row(nv({ goneMs: 2001, sinceLiveMs: 5000 }) === "left" && nv({ goneMs: 1500, sinceLiveMs: 5000 }) === "wait" && nv({ goneMs: 0, sinceLiveMs: 5000 }) === "wait",
+        "fix 3 R1: a guest the relay says has left (2 s) is handed over at once; a socket blip (< 2 s) is not");
+      const hv = (o) => M.hostSilenceVerdict(Object.assign({ presenceLive: true, hostGoneMs: null, silentMs: null, sinceLiveMs: 10000 }, o));
+      row(hv({ silentMs: 20000 }) === "wait" && hv({ silentMs: 44900 }) === "wait" && hv({ silentMs: 45001 }) === "lost",
+        "fix 3 R2: a host still in the room but silent 20 s is waited for ('Waiting for host'); past 45 s the guest continues offline");
+      row(hv({ silentMs: 1000 }) === "ok" && hv({ silentMs: 3500 }) === "wait", "fix 3 R2: the notice shows after 3 s of host silence, not on a normal packet gap");
+      row(hv({ hostGoneMs: 2001, silentMs: 100 }) === "lost" && hv({ hostGoneMs: 1000, silentMs: 100 }) === "ok",
+        "fix 3 R2: a host the relay says has left -> continue offline (2 s presence leave), whatever its packets did");
+      row(hv({ silentMs: null, sinceLiveMs: 200000 }) === "wait" && hv({ silentMs: null, sinceLiveMs: 240001 }) === "lost" && hv({ silentMs: null, sinceLiveMs: 1000 }) === "ok",
+        "fix 3 R2: before the host's first live tick the guest waits up to 240 s");
+      row(hv({ presenceLive: false, silentMs: 8001 }) === "lost" && hv({ presenceLive: false, silentMs: 7000 }) === "wait" && hv({ presenceLive: false, hostGoneMs: 9999, silentMs: 100 }) === "ok",
+        "fix 3 R2: with this page's own relay socket down (presence stale) the old 8 s rule applies and a stale absence is not read");
+      const la = (o) => M.judgeLateArrival(Object.assign({ senderSlot: 1, id: "s1", from: "b_g1", rejoinedBy: null }, o));
+      row(la({}) === "ok" && la({ senderSlot: 2 }) === "no" && la({ senderSlot: 0, id: "s0" }) === "no" && la({ senderSlot: null }) === "no" && la({ rejoinedBy: "z_new" }) === "no" && la({ rejoinedBy: "b_g1" }) === "ok",
+        "fix 3 R1: a late arrival gets ITS slot's body back (only that slot's peer; a slot a reloaded page took stays with that page)");
+    } else row(false, "fix 3: neverSeenVerdict / hostSilenceVerdict / judgeLateArrival exported");
   }
   return bad;
 }
@@ -712,6 +736,11 @@ function suiteP23(M, SIM, count) {
     ["a page that never re-reads the records (one scan before the first hello)", { rejoinRescanMs: () => -1 }],
     ["a revive done range fixed at 5 m (not K.REVIVE_RANGE)", { reviveDoneRange: () => 5 }],
     ["a late-join sync that forgets the chest items for a crate that lands later", { applyLootSync: (loot, open, take) => { M.applyLootSync(loot, open, take); return []; } }],
+    ["fix 3: a never-seen watchdog on a fixed 60 s (the 169 s loader became an opponent)", { neverSeenVerdict: (c) => (c.goneMs > 2000 ? "left" : c.sinceLiveMs > 60000 ? "cap" : "wait") }],
+    ["fix 3: a never-seen watchdog that ignores the relay leaving", { neverSeenVerdict: (c) => (c.sinceLiveMs > M.FIRST_TICK_CAP_MS ? "cap" : "wait") }],
+    ["fix 3: a guest that drops a present host after 8 s of silence (the CPU x4 split)", { hostSilenceVerdict: (c) => (c.silentMs > 8000 ? "lost" : "ok") }],
+    ["fix 3: a guest that ignores the host leaving the room", { hostSilenceVerdict: (c) => M.hostSilenceVerdict(Object.assign({}, c, { hostGoneMs: null })) }],
+    ["fix 3: a late-arrival judge that gives any peer the body", { judgeLateArrival: () => "ok" }],
   ];
   for (const [name, over] of p23Mutants) {
     const bad = suiteP23(Object.assign({}, M, over), SIM, false);
@@ -771,6 +800,26 @@ function suiteP23(M, SIM, count) {
       /if \(t === "take"\) \{ W\.netTakeItem\(d\.id\); if \(isChestItem\(d\.id\)\) deferTakes\(\[d\.id\]\);/.test(src) &&
       /const pre = chestItemPrefix\(c\);[\s\S]{0,120}for \(const id of \[\.\.\.S\.lootDefer\]\) if \(id\.startsWith\(pre\)\) \{ S\.lootDefer\.delete\(id\); W\.netTakeItem\(id\); \}/.test(src) && /S\.lootDefer = null;/.test(src),
       "late join: the sync goes through applyLootSync (opened first) and a chest that opens here later drops the items taken from it");
+  }
+
+  // FRIENDS fix 3, the wiring: update() judges with the pure verdicts; a failed load in a room goes back to the room
+  {
+    const src = fs.readFileSync(NET_JS, "utf8");
+    ok(/const v = neverSeenVerdict\(\{ goneMs: gone \? now - S\.absentSince\[id\] : null, sinceLiveMs: now - S\.matchLiveAt \}\);/.test(src) && !/NEVER_SEEN_MS\)/.test(src) &&
+      /\(S\.lateTake = S\.lateTake \|\| \{\}\)\[id\] = \{ at: now, why: v \};/.test(src) && /if \(S\.lateTake && S\.lateTake\[a\.id\]\) return lateArrival\(W, a, from\);/.test(src),
+      "fix 3 R1: the host's never-seen watchdog asks neverSeenVerdict (presence, 240 s cap) and a body it hands over is offered back to a late arrival");
+    ok(/const v = hostSilenceVerdict\(\{ presenceLive,/.test(src) && !/now - S\.hostSeen > 8000/.test(src) && /showHostWait\(W, v === "wait"\);/.test(src) &&
+      /if \(!S\.tickAt \|\| now - S\.tickAt > 2000\)/.test(src),
+      "fix 3 R2: the guest's host watchdog asks hostSilenceVerdict (presence) and shows 'Waiting for host'; the stall guard (348bfea1e) stays");
+    ok(/send\("loading", \{ slot: S\.mySlot/.test(src) && src.indexOf('send("loading"') < src.indexOf("window.__LC__.startMatch(opts);") && /loading: 1 \}/.test(src),
+      "fix 3: a 'loading' message goes out once before the world build (critical: never shed)");
+    ok(/S\.loadBeat = setInterval\(\(\) => \{\s*if \(S !== sess \|\| !sess\.started \|\| !W\._starting \|\| sess\.matchLiveAt\)/.test(src) && M.LOADING_BEAT_MS === 10000 &&
+      /sinceLiveMs: S\.matchLiveAt \? now - Math\.max\(S\.matchLiveAt, hostBeat\) : 0/.test(src),
+      "fix 3: while its load runs a page repeats 'loading' every 10 s (only while W._starting), and a guest's 240 s wait for a host's first tick counts from the host's last beat");
+    const boot = fs.readFileSync(path.join(path.dirname(NET_JS), "..", "ffg_royale3d.js"), "utf8");
+    const mlf = boot.slice(boot.indexOf("function matchLoadFailed(err) {"), boot.indexOf("function removeLoadingLayer()"));
+    ok(/if \(!inRoomNow\) \{ try \{ netMod\.leave\(W\); \} catch \(e\) \{\} \}/.test(mlf) && /netMod\.returnToRoom\(W, \{ loadFailed: msg \}\)/.test(mlf),
+      "fix 3 R3: a failed match load in a friends room goes back to the room (returnToRoom with the reason); offline it leaves as before");
   }
 
   console.log("");

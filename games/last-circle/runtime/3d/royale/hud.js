@@ -2118,8 +2118,14 @@ export function showLobby(W, onDone) {
   // the last one's time, and how it ended ("drop" = finishLobby, "cancel" = showMenu's way out). A page found sitting in a lobby then tells
   // a slow countdown (tick times still moving) from a dead one (no tick since fullAt / an end with the layer still up).
   const t0 = performance.now();
-  const LF = W._lobbyFill = { lifelike, fillMs: Math.round(FILL_MS), full: false, shownAt: Math.round(t0), fullAt: null, ticks: 0, tickAt: null, endAt: null, end: null };
+  const LF = W._lobbyFill = { lifelike, fillMs: Math.round(FILL_MS), full: false, shownAt: Math.round(t0), fullAt: null, ticks: 0, tickAt: null, endAt: null, end: null, listenerErrors: 0 };
   let cdIv = null, ended = false;
+  // friends fix 3: every event this lobby's timers emit goes through here. A listener that throws (audio.js's countdownBeep handler, anything
+  // a later lane adds) used to throw out of the timer callback: before cdIv was set the countdown never started, inside it finishLobby never
+  // ran - the page sat in the lobby for good while the room dropped without it. The error is logged; the drop goes on.
+  const emitSafe = (name, ...args) => {
+    try { W.events.emit(name, ...args); } catch (e) { LF.listenerErrors++; console.error("[hud] a '" + name + "' listener threw in the match lobby (the countdown goes on):", e); }
+  };
   const fillIv = setInterval(() => {
     const el = performance.now() - t0;
     let want;
@@ -2139,14 +2145,14 @@ export function showLobby(W, onDone) {
       if (skipHints) skipHints.forEach((x) => { x.style.visibility = "visible"; });
       let n = W.mode === "practice" ? 1 : 3;
       cd.textContent = n;
-      W.events.emit("countdownBeep", false);
+      emitSafe("countdownBeep", false);
       cdIv = setInterval(() => {
         LF.ticks++; LF.tickAt = Math.round(performance.now());
         n--;
         if (n <= 0) {
-          W.events.emit("countdownBeep", true);
+          emitSafe("countdownBeep", true);
           finishLobby();
-        } else { cd.textContent = n; W.events.emit("countdownBeep", false); }
+        } else { cd.textContent = n; emitSafe("countdownBeep", false); }
       }, 900);
     }
   }, W.mode === "practice" ? 30 : 60);
