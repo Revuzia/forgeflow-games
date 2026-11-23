@@ -9,7 +9,7 @@
 // forward + nx tan(fov / 2) aspect right + ny tan(fov / 2) up. A ray that never reaches the ground (above the horizon) counts as the far clip.
 
 /** The felt's reach and the clip of every edge of the box (PLAYGROUND_BUILD.md 9: +-3.4 m). */
-export const TABLE_CLIP = 3.4;
+export const TABLE_CLIP = 5.5;   // (round 14, R14_ROOMS, D-104: the felt's reach is Home's room now, r 5.5 m; it was 3.4)
 
 /**
  * Writes [xMin, zMin, xMax, zMax] into out[0..3]. aim (ax, ay, az): the camera's look-at point; dist: its distance; pitch in radians;

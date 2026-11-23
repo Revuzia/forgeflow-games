@@ -69,7 +69,8 @@ export const GUIDE_TITLE = 'How to play';
 /** Five cards (UI.md 6). Each line is something the game really does (hint.ts, cut bar, merge pad); none names a price or a loss. */
 export const GUIDE_CARDS: readonly GuideCard[] = [
   { id: 'squish', title: 'Squish', text: 'Tap to poke. Press and hold to squash it flat, then let go and watch it spring back.' },
-  { id: 'stretch', title: 'Stretch', text: 'Press on the squishy and drag away to pull it long. Two fingers, or Shift and a drag, pull both sides at once.' },
+  // (round 14, R14_CARRY, D-105: with friends out, or at a place, a drag carries; a stretch starts from a hold there)
+  { id: 'stretch', title: 'Stretch', text: 'Press on the squishy and drag away to pull it long. With friends out, or at a place, a drag picks it up and carries it: hold it still a moment first to stretch it instead. Two fingers, or Shift and a drag, pull both sides at once.' },
   { id: 'capsule', title: 'Capsules', text: 'Squishing and stretching fills the ring. When it is full, a capsule drops in. Press Open, or hold the capsule, to see who is inside.' },
   { id: 'tools', title: 'Tools', text: 'Hand squishes. Cut splits the squishy into pieces, and Reconnect all joins them again. Snap takes a photo with a backdrop you pick. Table lets it rest on the mat; Float lets it drift in the air.' },
   { id: 'hoard', title: 'Hoard and merge', text: 'The Hoard keeps every squishy you find. Got two spare copies of one kind? Press and hold Merge to turn them into something that can come out rarer.' },

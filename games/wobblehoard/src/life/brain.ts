@@ -521,7 +521,7 @@ function choose(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents,
     case BEH.USE: startUse(w, s, out, ev, i, bArg, (bs * 1000) | 0); break;
     case BEH.BASK: startBask(w, s, out, i, (bs * 1000) | 0); break;
     case BEH.NAP: startNap(w, s, out, ev, i, (bs * 1000) | 0); break;
-    case BEH.WANDER: if ((towardThing(w, s, i) || towardParty(w, s, i) || freeTarget(w, s, i, 2500)) && travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.WANDER, (bs * 1000) | 0, 20000); w.ph[i] = 1; } else w.coo[i * 26 + BEH.WANDER] = tb + 2; break;
+    case BEH.WANDER: if ((towardThing(w, s, i) || towardParty(w, s, i) || freeTarget(w, s, i, w.home ? 2500 : 4000)) && travelTo(w, s, out, i, 0, 0)) { setBeh(w, i, BEH.WANDER, (bs * 1000) | 0, w.home ? 20000 : 32000); w.ph[i] = 1; } else w.coo[i * 26 + BEH.WANDER] = tb + 2; break;
   }
 }
 /** The seeded noise of +-0.05 is written inline as (rnd(w, i) * NZ - BRAIN.noise): rnd returns a small int, so nothing is boxed (LF-02). */
@@ -661,7 +661,9 @@ function useCandidate(w: LifeWorld, s: LifeSnapshot, i: number): number {
     w.f[F.PX] = w.f[F.X2]; w.f[F.PZ] = w.f[F.Z2];
     // within B04's 3 m; (my reading of LIFE 3's "at 0.8: a thing use") a squishy whose play is over 0.8 goes to it from anywhere in the place; (round 7) in a
     // place of several kinds a thing nobody in the party has used yet this visit draws it from 4.5 m (a new thing to try across the place)
-    const reach2 = variety && w.tU[k] < 0 ? 20.25 * CM2 : 9 * CM2;
+    // (round 14, R14_ROOMS, D-104: the rooms are 1.62 times the live ones on each side, the things as much further apart) B04's reach grows with the room: 3 m -> 4.8 m,
+    // and 4.5 m -> 7.2 m for a thing nobody has used yet, in a PLACE; Home keeps round 4's numbers (its lone squishy is the published toy)
+    const reach2 = w.home ? (variety && w.tU[k] < 0 ? 20.25 * CM2 : 9 * CM2) : variety && w.tU[k] < 0 ? 51.84 * CM2 : 23.04 * CM2;
     if (d2p(w, s, i) > reach2 && w.pl[i] <= 0.8 && !(floor && w.tU[k] < 0)) continue;
     let v = 0.3 + 0.5 * w.pl[i] + ((PREFS[f] & (1 << w.tM[k])) !== 0 ? 0.15 : 0) - 0.12 * w.uV[i];
     if (w.def && w.def.things[k].id === fav) v += 0.3;

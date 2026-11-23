@@ -138,10 +138,11 @@ const LOOK: PlaceLook = {
     g.add(kit.ground(loam));
     const gU = { uLeaf: { value: col(tok('lagoon', 'amber', 0.3, 0.5)) }, uLeafFar: { value: col(tok('lagoon', 'dusk', 0.45, 0.66)) }, uRib: { value: col(tok('lagoon', 'cream', 0.3, 0.75)) },
       uStem: { value: col(tok('cream', 'dusk', 0.3, 0.8)) }, uCap: { value: col(tok('coral', 'plum', 0.2, 0.95)) }, uMist: { value: col(tok('dusk', 'lagoon', 0.35, 0.75)) } };
-    const backZ = tall ? -5.4 : -4.4;
-    g.add(kit.card(GARDEN, gU, 30, 4.5, 0, 2.2, backZ, 0, -70));
-    g.add(kit.card(GARDEN, gU, 30, 4.5, tall ? -3.6 : -5.6, 2.2, 0, Math.PI / 2, -69));
-    g.add(kit.card(GARDEN, gU, 30, 4.5, tall ? 3.6 : 5.6, 2.2, 0, -Math.PI / 2, -68));
+    // (round 14, R14_ROOMS: the garden stands around the bigger play bounds as it stood around the live ones: 2.0 m (tall 2.4 m) behind their back edge, 2.2 m beside them)
+    const gb = tall ? PLACE.tall.bounds : PLACE.bounds, backZ = -((gb.hz ?? 3.9) + (tall ? 2.4 : 2.0)), sideX = (gb.hx ?? 5.5) + 2.2;
+    g.add(kit.card(GARDEN, gU, 44, 4.5, 0, 2.2, backZ, 0, -70));
+    g.add(kit.card(GARDEN, gU, 44, 4.5, -sideX, 2.2, 0, Math.PI / 2, -69));
+    g.add(kit.card(GARDEN, gU, 44, 4.5, sideX, 2.2, 0, -Math.PI / 2, -68));
 
     // ---- the Splash Spots: three shallow puddles mirroring the plum sky (no edge ring) ----
     const puddles: { u: Record<string, { value: number }> }[] = [];

@@ -214,7 +214,7 @@ export class Table {
     this.sky.scale.setScalar(90);
 
     // felt mat (cylinder: top at y = 0, a visible lip)
-    const MAT_R = 3.5;
+    const MAT_R = 5.6;   // (round 14, R14_ROOMS, D-104: Home is a room of r 5.5 m now, src/data/place_home.ts; it was 3.5 for the live 3.4)
     this.feltMat = makeFelt({ env: 0.2, color: PALETTE.felt, roughness: 0.92, fibre: 1, stitch: 1, vigIn: 0.9, vigOut: MAT_R * 0.98, matR: MAT_R, fogCol }, hub);
     const matGeo = new THREE.CylinderGeometry(MAT_R, MAT_R, 0.06, 128, 1);
     matGeo.translate(0, -0.03, 0);

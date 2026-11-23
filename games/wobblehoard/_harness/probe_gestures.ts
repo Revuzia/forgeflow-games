@@ -511,9 +511,12 @@ const pullTypes = (r: Rig): string => r.types().join();
     return JSON.stringify(r.log);
   };
   const empty = (r: Rig, S2: (id: number, x: number, y: number, t: number, b?: number) => PointerSample): void => { r.g.pointerDown(S2(1, 60, 60, 0)); r.g.pointerMove(S2(1, 90, 80, 30)); r.g.pointerUp(S2(1, 90, 80, 60)); };
-  check('Shift on empty space: the orbit is identical to the same drag without Shift', run(true, empty) === run(false, empty) && run(true, empty).includes('"orbit"'));
+  // (re-specified 2026-11-23 by R14_CARRY for owner decision D-104, R14_ROOMS: "PANS with two fingers or Shift + the right button": a Shift drag on empty space is
+  //  now the room camera's PAN, with exactly the deltas the plain drag gives the orbit; was "identical to the same drag without Shift")
+  check('Shift on empty space: a PAN (D-104) with exactly the deltas of the orbit the same drag makes without Shift', run(true, empty).replace(/"pan"/g, '"orbit"') === run(false, empty) && run(true, empty).includes('"pan"') && run(false, empty).includes('"orbit"'));
   const right = (r: Rig, S2: (id: number, x: number, y: number, t: number, b?: number) => PointerSample): void => { r.g.pointerDown(S2(1, 470, 300, 0, 2)); r.g.pointerMove(S2(1, 520, 300, 30, 2)); r.g.pointerUp(S2(1, 520, 300, 60, 2)); };
-  check('Shift with the right button on the body: orbit, identical to without Shift', run(true, right) === run(false, right) && !run(true, right).includes('"grab"'));
+  // (re-specified 2026-11-23 by R14_CARRY for owner decision D-104: Shift + the right button PANS; was "orbit, identical to without Shift". Never a grab, as before)
+  check('Shift with the right button on the body: a PAN (D-104) with the deltas of the plain right-drag orbit, never a grab', run(true, right).replace(/"pan"/g, '"orbit"') === run(false, right) && run(true, right).includes('"pan"') && !run(true, right).includes('"grab"'));
   const rub = (r: Rig, S2: (id: number, x: number, y: number, t: number, b?: number) => PointerSample): void => { r.g.pointerDown(S2(1, 450, 300, 0)); r.g.pointerMove(S2(1, 450, 340, 50)); r.g.pointerUp(S2(1, 450, 340, 90)); };
   check('Shift on a rub (a tangential drag): still a rub, identical, no grab', run(true, rub) === run(false, rub) && !run(true, rub).includes('"grab"'));
   const tap = (r: Rig, S2: (id: number, x: number, y: number, t: number, b?: number) => PointerSample): void => { r.g.pointerDown(S2(1, 450, 300, 0)); r.g.pointerUp(S2(1, 450, 300, 100)); };
@@ -529,9 +532,11 @@ const pullTypes = (r: Rig): string => r.types().join();
   const NOSHIFT_PIN = 303302604;   // computed by running this very fuzz against `git show 13bf8f55:games/wobblehoard/src/input/gestures.ts`
   const fnv = (s: string): number => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h >>> 0; };
   let pin = 0;
-  for (let s = 1; s <= 300; s++) pin = (Math.imul(pin, 31) + fnv(JSON.stringify(fuzz(s, 300).log))) >>> 0;
+  // (re-specified 2026-11-23 by R14_CARRY for owner decision D-104, R14_ROOMS: two fingers on empty space now also PAN (the midpoint's travel, a 'pan' action beside
+  //  the pinch's zoom); the streams with those pan actions taken out must still be the pre-Shift machine's, bit for bit: the same pin)
+  for (let s = 1; s <= 300; s++) pin = (Math.imul(pin, 31) + fnv(JSON.stringify(fuzz(s, 300).log.filter((a) => a.type !== 'pan')))) >>> 0;
   console.log(`  pin ${pin}`);
-  check('differential pin: the 300 no-Shift fuzz scripts give the very action streams of the pre-Shift machine (hash pinned from commit 13bf8f55)', pin === NOSHIFT_PIN, `${pin} vs ${NOSHIFT_PIN}`);
+  check('differential pin: the 300 no-Shift fuzz scripts give the very action streams of the pre-Shift machine (hash pinned from commit 13bf8f55), D-104\'s two-finger pan actions aside', pin === NOSHIFT_PIN, `${pin} vs ${NOSHIFT_PIN}`);
 }
 {
   // ---- the Shift fuzz: random multi-pointer scripts with Shift before / during / after the press, Space's synthetic pointer, cancels, a body that slides,
@@ -916,6 +921,267 @@ const T = (id: number, x: number, y: number, t: number): PointerSample => ({ id,
     if (down.some(Boolean) || grabbed.some(Boolean) || g.activeCount() !== 0) violations++;
   }
   check('fuzz (five slots): 150 random scripts x 300 events of touch fingers and a mouse keep every slot invariant', violations === 0 && maxSlot === 4, `${actions} actions, ${violations} violations, highest slot ${maxSlot}`);
+}
+
+// ============================================================ 13. CARRY (round 14, R14_CARRY, owner decision D-105: "make it easier to pick up and move squishies around")
+// Only where host.carryOn() is true (a place; Home with two or more out): a drag that starts on the body within carryMs (400 ms) carries it, in ANY direction; a
+// hold first, Shift, or a second finger on the body keeps the published pull / rub. Every row above runs on a host WITHOUT carryOn and is unchanged; C6 pins that
+// a host whose carryOn() is false is the published machine action for action.
+{
+  const CMS = DEFAULT_GESTURE_CONFIG.carryMs;
+  const crig = (on: boolean | undefined): Rig => {
+    const log: GestureAction[] = [];
+    const h: GestureHost = on === undefined ? host : { ...host, carryOn: () => on };
+    const g = createGestures(h, (a) => log.push(a));
+    return { g, log, types: () => log.map((a) => (a.type === 'gesture' ? `gesture:${a.kind}` : a.type)), take: () => log.splice(0), of: (t) => log.filter((a) => a.type === t), clear: () => { log.length = 0; } };
+  };
+  const carryOk = (r: Rig): boolean => {
+    const g = r.of('grab') as Array<{ lift?: true; slot: number }>, up = r.of('fingerUp') as Array<{ why: string }>;
+    return kinds(r) === 'carry' && g.length === 1 && g[0].lift === true && g[0].slot === 0 && up.length === 1 && up[0].why === 'pull';
+  };
+  // C1: every direction from every part of the body (outward, inward through the middle, along the edge) carries
+  let n = 0, ok = 0;
+  const bad1: string[] = [];
+  for (const [px, py] of [[340, 300], [400, 230], [400, 300], [450, 350], [470, 300], [400, 380]]) {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, -0.7]]) {
+      const r = crig(true);
+      r.g.pointerDown(S(1, px, py, 0)); r.g.pointerMove(S(1, px + dx * 20, py + dy * 20, 60));
+      n++; if (carryOk(r)) ok++; else bad1.push(`${px},${py} ${dx},${dy}: ${r.types().join()}`);
+    }
+  }
+  check('CARRY C1: with carryOn, a drag that starts on the body (30 presses: middle, edges, top, bottom x 5 directions incl. INWARD and toward the back) carries: gesture carry, fingerUp(pull), ONE grab with lift on slot 0',
+    ok === n, `${ok}/${n} ${bad1.slice(0, 3).join(' | ')}`);
+  // C2: the timing edge: a press that starts moving at carryMs carries; 1 ms later it is the published pull (outward) or rub (inward)
+  {
+    const a = crig(true); a.g.pointerDown(S(1, 450, 300, 0)); a.g.update(CMS); a.g.pointerMove(S(1, 480, 300, CMS));
+    const b = crig(true); b.g.pointerDown(S(1, 450, 300, 0)); b.g.update(CMS + 1); b.g.pointerMove(S(1, 480, 300, CMS + 1));
+    const c = crig(true); c.g.pointerDown(S(1, 450, 300, 0)); c.g.update(CMS + 1); c.g.pointerMove(S(1, 420, 300, CMS + 1));
+    const bg = b.of('grab') as Array<{ lift?: true }>;
+    check(`CARRY C2: the move at ${CMS} ms carries; at ${CMS + 1} ms (held still first: a squish) an outward drag is the published PULL (no lift) and an inward one a RUB`,
+      kinds(a) === 'squish,carry' && (a.of('grab') as Array<{ lift?: true }>)[0]?.lift === true && kinds(b) === 'squish,pull' && bg.length === 1 && bg[0].lift === undefined && kinds(c) === 'squish,rub', `${kinds(a)} | ${kinds(b)} | ${kinds(c)}`);
+  }
+  // C3: hold to squish, then stretch: the squeeze ramps as published, then the pull hands the contact over (a stretch, never a lift action)
+  {
+    const r = crig(true);
+    r.g.pointerDown(S(1, 460, 300, 0)); for (let t = 100; t <= 900; t += 100) r.g.update(t);
+    const p0 = pressures(r);
+    r.g.pointerMove(S(1, 520, 300, 950)); r.g.pointerMove(S(1, 600, 300, 1000)); r.g.pointerUp(S(1, 600, 300, 1050));
+    const g = r.of('grab') as Array<{ lift?: true }>;
+    check('CARRY C3: hold (the squeeze ramps 0.55 -> more), then drag out: the published stretch (pull, grab without lift, grabMove, grabRelease up)',
+      kinds(r) === 'squish,pull' && p0.length > 2 && p0[p0.length - 1] > 0.6 && g.length === 1 && g[0].lift === undefined && r.of('grabMove').length >= 1 && r.of('grabRelease').length === 1, `${kinds(r)}, pressures ${p0.length} up to ${p0[p0.length - 1]?.toFixed(2)}`);
+  }
+  // C4: Shift + a quick drag (mouse / pen) is the published Shift pull: two grabs, never a lift
+  {
+    const r = crig(true);
+    r.g.pointerDown({ id: 1, x: 450, y: 300, t: 0, button: 0, type: 'mouse' });
+    r.g.pointerMove({ id: 1, x: 480, y: 300, t: 40, type: 'mouse', shift: true });
+    const g = r.of('grab') as Array<{ lift?: true; mirrorOf?: number }>;
+    check('CARRY C4: Shift + a quick drag is the published Shift pull (two grabs, one mirrored), never a carry', kinds(r) === 'pull' && g.length === 2 && g.every((x) => x.lift === undefined) && g.some((x) => x.mirrorOf === 0), `${kinds(r)}, grabs ${g.length}`);
+  }
+  // C5: a second finger on the body: neither finger's quick drag carries (two hands on one squishy stretch it, as published)
+  {
+    const r = crig(true);
+    r.g.pointerDown(S(1, 350, 300, 0)); r.g.pointerDown(S(2, 450, 300, 20));
+    r.g.pointerMove(S(2, 490, 300, 60)); r.g.pointerMove(S(1, 310, 300, 70));
+    const g = r.of('grab') as Array<{ lift?: true }>;
+    check('CARRY C5: two fingers on the body: their quick outward drags are the published two-handed stretch (two pulls, no lift)', kinds(r) === 'pull,pull' && g.length === 2 && g.every((x) => x.lift === undefined), kinds(r));
+  }
+  // C6: carryOn() false = the published machine, action for action (and absent = the same)
+  {
+    const script = (on: boolean | undefined): string => {
+      const r = crig(on); const rnd = mulberry32(31); let t = 0;
+      for (let i = 0; i < 3000; i++) {
+        t += Math.floor(rnd() * 70); const id = 1 + Math.floor(rnd() * 3); const x = C.x + (rnd() - 0.5) * 280, y = C.y + (rnd() - 0.5) * 280; const k = rnd();
+        if (k < 0.25) r.g.pointerDown(S(id, x, y, t)); else if (k < 0.65) r.g.pointerMove({ id, x, y, t, ...(rnd() < 0.1 ? { shift: true } : {}) }); else if (k < 0.85) r.g.pointerUp(S(id, x, y, t)); else if (k < 0.9) r.g.pointerCancel(id, t); else r.g.update(t);
+      }
+      r.g.cancelAll(t + 1);
+      return JSON.stringify(r.log);
+    };
+    const pub = script(undefined), off = script(false), on = script(true);
+    check('CARRY C6: a host whose carryOn() is false gives the published action stream bit for bit (3000 random events); with carryOn true the same script carries',
+      pub === off && pub.length > 1000 && on !== pub && on.includes('"kind":"carry"'), `${pub.length} chars`);
+  }
+  // C7: a carry's life: moves are grabMoves of slot 0, the up is ONE grabRelease('up'), a cancel ONE grabRelease('cancel'); no finger action after the hand-over
+  {
+    const r = crig(true);
+    r.g.pointerDown(S(1, 400, 300, 0)); r.g.pointerMove(S(1, 400, 280, 50));
+    for (let i = 1; i <= 10; i++) r.g.pointerMove(S(1, 400 + i * 30, 280 - i * 20, 50 + i * 16));
+    r.g.update(2000); r.g.pointerUp(S(1, 700, 80, 2100));
+    const after = r.log.slice(r.log.findIndex((a) => a.type === 'grab') + 1);
+    const rel = r.of('grabRelease') as Array<{ why: string }>;
+    const c = crig(true); c.g.pointerDown(S(1, 400, 300, 0)); c.g.pointerMove(S(1, 430, 300, 30)); c.g.pointerCancel(1, 40);
+    const crel = c.of('grabRelease') as Array<{ why: string }>;
+    check('CARRY C7: carried moves are grabMoves (no squeeze ramp, no finger action after the hand-over), the up lets go ONCE (why up), a cancel ONCE (why cancel)',
+      r.of('grabMove').length === 10 && after.every((a) => a.type === 'grabMove' || a.type === 'grabRelease') && rel.length === 1 && rel[0].why === 'up' && crel.length === 1 && crel[0].why === 'cancel', `${r.of('grabMove').length} moves, after: ${[...new Set(after.map((a) => a.type))].join()}`);
+  }
+  // C9 (round 14, the still let go): a carry's finger that RESTED (no move over 3 px for 120 ms) before it lifts says so (grabRelease still: the body is set down,
+  // never thrown, even while the room view scrolls the hand along at the screen's edge); a carry that moves until the up, a rest then a move, a cancel and a
+  // published (held, then stretched) pull never say it
+  {
+    const carryUp = (moves: Array<[number, number, number]>, upT: number, cancel = false): GestureAction[] => {
+      const r = crig(true);
+      r.g.pointerDown(S(1, 400, 300, 0)); r.g.pointerMove(S(1, 400, 280, 50));
+      for (const [x, y, t] of moves) r.g.pointerMove(S(1, x, y, t));
+      if (cancel) r.g.pointerCancel(1, upT); else r.g.pointerUp(S(1, moves.length ? moves[moves.length - 1][0] : 400, moves.length ? moves[moves.length - 1][1] : 280, upT));
+      return r.of('grabRelease');
+    };
+    const st = (rel: GestureAction[]): string => rel.map((a) => (a.type === 'grabRelease' ? `${a.why}${a.still ? '+still' : ''}` : '?')).join();
+    const rested = carryUp([[480, 240, 80], [520, 220, 110], [521, 221, 200]], 400);       // moved, then a 1 px jiggle, then 290 ms still
+    const moving = carryUp([[480, 240, 80], [520, 220, 110], [560, 200, 130]], 140);        // moving to the very up
+    const restMove = carryUp([[480, 240, 80], [520, 220, 300], [600, 220, 320]], 340);      // rested 190 ms, then moved again just before the up
+    const edge = carryUp([[480, 240, 80], [520, 220, 110]], 110 + 120);                     // exactly STILL_MS still
+    const cancelled = carryUp([[480, 240, 80]], 600, true);
+    const h = crig(true);
+    h.g.pointerDown(S(1, 460, 300, 0)); for (let t = 100; t <= 900; t += 100) h.g.update(t);
+    h.g.pointerMove(S(1, 520, 300, 950)); h.g.pointerMove(S(1, 600, 300, 1000)); h.g.pointerUp(S(1, 600, 300, 1600));
+    check('CARRY C9: a carry let go after the finger RESTED >= 120 ms says still (set down, never thrown, even as the room view moves the hand); moving to the up, a rest then a move, a cancel and a published stretch never do',
+      st(rested) === 'up+still' && st(moving) === 'up' && st(restMove) === 'up' && st(edge) === 'up+still' && st(cancelled) === 'cancel' && st(h.of('grabRelease')) === 'up',
+      `rested ${st(rested)} | moving ${st(moving)} | rest+move ${st(restMove)} | edge ${st(edge)} | cancel ${st(cancelled)} | stretch ${st(h.of('grabRelease'))}`);
+  }
+  // C8: fuzz with carryOn true: every slot / grab / pressure invariant of section 8 holds
+  {
+    let v = 0, carries = 0;
+    for (let seed = 1; seed <= 150; seed++) {
+      const r = crig(true); const rnd = mulberry32(seed * 7 + 3); let t = 0;
+      const down = [false, false, false, false, false], grabbed = [false, false, false, false, false];
+      const inspect = (): void => {
+        for (const a of r.take()) {
+          if (a.type === 'gesture' && a.kind === 'carry') carries++;
+          if (a.type === 'fingerDown') { if (down[a.slot] || grabbed[a.slot]) v++; down[a.slot] = true; }
+          if (a.type === 'fingerUp') { if (!down[a.slot]) v++; down[a.slot] = false; }
+          if (a.type === 'fingerPressure' || a.type === 'fingerMove') { if (!down[a.slot]) v++; }
+          if (a.type === 'grab') { if (grabbed[a.slot] || down[a.slot]) v++; grabbed[a.slot] = true; }
+          if (a.type === 'grabMove') { if (!grabbed[a.slot]) v++; }
+          if (a.type === 'grabRelease') { if (!grabbed[a.slot]) v++; grabbed[a.slot] = false; }
+        }
+      };
+      for (let i = 0; i < 300; i++) {
+        t += Math.floor(rnd() * 120); const id = 1 + Math.floor(rnd() * 4); const x = C.x + (rnd() - 0.5) * 280, y = C.y + (rnd() - 0.5) * 280; const k = rnd();
+        if (k < 0.25) r.g.pointerDown(S(id, x, y, t)); else if (k < 0.65) r.g.pointerMove({ id, x, y, t, ...(rnd() < 0.1 ? { shift: true } : {}) }); else if (k < 0.85) r.g.pointerUp(S(id, x, y, t)); else if (k < 0.9) r.g.pointerCancel(id, t); else if (k < 0.97) r.g.update(t); else r.g.cancelAll(t);
+        inspect();
+      }
+      r.g.cancelAll(t + 1); inspect();
+      if (down.some(Boolean) || grabbed.some(Boolean) || r.g.activeCount() !== 0) v++;
+    }
+    check('CARRY C8: fuzz (150 scripts x 300 events, carryOn true) keeps every slot / grab / pressure invariant, and carries happen', v === 0 && carries > 100, `${carries} carries, ${v} violations`);
+  }
+}
+
+// ============================================================ 14. CARRY on the REAL physics (round 14, R14_CARRY): the gesture actions drive a real SoftBody through the real driver;
+// the hand's plane is the LEVEL plane at the press point's height once the body is carried (what later-life.ts carryPoint gives in a place, without things)
+{
+  const W = 1280, H = 800, DT = 1 / 60;
+  const cam = new THREE.PerspectiveCamera(35, W / H, 0.1, 200);
+  const dist = 4.2, pitch = 0.5;
+  cam.position.set(0, 0.42 + dist * Math.sin(pitch), dist * Math.cos(pitch)); cam.lookAt(0, 0.42, 0); cam.updateMatrixWorld(true);
+  interface CarryRun { moved: number; liftFrames: number; carried: boolean; lowLift: number; snapsHeld: number; backZ: number; riseMax: number; under: number; snapsAfter: Array<{ I: number }>; drift: number; landV: number; tossFly: number; finite: boolean; minYR: number; volLo: number; volHi: number; restY: number; endY: number; hoverOk: boolean }
+  const run = (species: string, opt: { float?: boolean; flick?: boolean; drag?: [number, number] } = {}): CarryRun | null => {
+    const b = new SoftBody(speciesTemplateGenome(species as never));
+    // (a place's area, as the life host sets it: without one the published corral glides a body back to its home spot, which is not a place's rule)
+    b.setBounds(1, 0, -2, 6, 5, 0);
+    if (opt.float) b.gravity = false;
+    for (let i = 0; i < (opt.float ? 200 : 90); i++) b.step(DT);
+    const base = createBodyHost({ camera: () => cam, body: () => b, viewport: () => ({ w: W, h: H }) });
+    let planeY = NaN;
+    const host: GestureHost = {
+      ...base, carryOn: () => true,
+      planePoint(x, y, through) {
+        if (!b.metrics.carried) { planeY = NaN; return base.planePoint(x, y, through); }
+        const r = cameraRay(cam, (x / W) * 2 - 1, 1 - (y / H) * 2);
+        if (planeY !== planeY) { const h = rayPlane(r.origin, r.dir, through, cameraForward(cam)); planeY = h ? h.y : through.y; }
+        const t = (planeY - r.origin.y) / r.dir.y;
+        return t > 0 ? { x: r.origin.x + r.dir.x * t, y: planeY, z: r.origin.z + r.dir.z * t } : null;
+      },
+    };
+    const disc = base.bodyScreen()!;
+    let simT = 0, steps = 0, now = 1000;
+    const driver = createDriver({ body: () => b, stage: { orbit() {}, zoom() {} } as unknown as StageLike, simTime: () => simT, stepCount: () => steps, panOfPoint: () => 0, extraSquish: () => false, interact() {}, dirty() {}, report: (e) => { throw e; } });
+    let gv = -1;
+    const gest = createGestures(host, (a) => { if (a.type === 'grab') gv = a.vertex; driver.onAction(a); });
+    const evs: SoftEvent[] = [];
+    const vol = (): number => { const P = b.positions, T = b.indices; let v = 0; for (let t = 0; t < T.length; t += 3) { const a = T[t] * 3, c = T[t + 1] * 3, d = T[t + 2] * 3; v += P[a] * (P[c + 1] * P[d + 2] - P[c + 2] * P[d + 1]) + P[a + 1] * (P[c + 2] * P[d] - P[c] * P[d + 2]) + P[a + 2] * (P[c] * P[d + 1] - P[c + 1] * P[d]); } return v / 6; };
+    const vol0 = vol(), restY = b.center.y, R = b.restRadius, x00 = b.center.x, z00 = b.center.z;
+    let minY = 1e9, finite = true, volLo = 1, volHi = 1, vyMin = 0, lastY = b.center.y;
+    const low = (): number => { const P = b.positions; let m = 1e9; for (let i = 1; i < P.length; i += 3) m = Math.min(m, P[i]); return m; };
+    const low0 = low();
+    const frame = (): void => {
+      now += DT * 1000; gest.update(now); driver.flushPendingUps(); b.step(DT); simT += DT; steps++; driver.notePress(); b.drainEvents(evs);
+      const P = b.positions;
+      for (let i = 0; i < P.length; i += 3) { if (!Number.isFinite(P[i] + P[i + 1] + P[i + 2])) finite = false; if (P[i + 1] < minY) minY = P[i + 1]; }
+      const vr = vol() / vol0; volLo = Math.min(volLo, vr); volHi = Math.max(volHi, vr);
+      vyMin = Math.min(vyMin, (b.center.y - lastY) / DT); lastY = b.center.y;
+    };
+    // press on the LOWER part of the body (a drag up the screen from there was a rub: nothing moved) and drag up and to the right, at a hand's pace
+    const px0 = disc.x, py0 = disc.y + 0.35 * disc.r;
+    if (!base.hitTest(px0, py0)) return null;
+    gest.pointerDown({ id: 1, x: px0, y: py0, t: now, button: 0 }); frame();
+    let liftFrames = -1;
+    const [dx, dy] = opt.drag ?? [120, -260];
+    for (let i = 1; i <= 30; i++) { gest.pointerMove({ id: 1, x: px0 + (dx * i) / 30, y: py0 + (dy * i) / 30, t: now, button: 0 }); frame(); if (liftFrames < 0 && b.metrics.carried) liftFrames = i; }
+    let riseMax = 0, lowLift = 0;
+    const snaps0 = evs.filter((e) => e.kind === 'snap').length;
+    for (let i = 0; i < 60; i++) { frame(); riseMax = Math.max(riseMax, b.center.y - restY); lowLift = low() - low0; }
+    // where the hand is: the plane point under the pointer now (the body should hang there: its centre within `under` of it, across the floor)
+    const hand = host.planePoint(px0 + dx, py0 + dy, { x: 0, y: planeY, z: 0 })!;
+    // (the held patch hangs from the hand: the grabbed vertex, across the floor, is where the hand is)
+    const under = gv >= 0 ? Math.hypot(b.positions[gv * 3] - hand.x, b.positions[gv * 3 + 2] - hand.z) : 9;
+    const carried = b.metrics.carried === true, heldX = b.center.x, heldZ = b.center.z, backZ = z00 - b.center.z, moved = Math.hypot(heldX - x00, heldZ - z00);
+    const nSnapBefore = evs.filter((e) => e.kind === 'snap').length;
+    if (opt.flick) {
+      for (let i = 1; i <= 4; i++) { gest.pointerMove({ id: 1, x: px0 + dx + i * 90, y: py0 + dy, t: now, button: 0 }); frame(); }
+      gest.pointerUp({ id: 1, x: px0 + dx + 360, y: py0 + dy, t: now, button: 0 });
+    } else gest.pointerUp({ id: 1, x: px0 + dx, y: py0 + dy, t: now, button: 0 });
+    vyMin = 0;
+    for (let i = 0; i < 180; i++) frame();
+    const snapsAfter = evs.filter((e) => e.kind === 'snap').slice(nSnapBefore).map((e) => ({ I: e.intensity }));
+    const drift = Math.hypot(b.center.x - heldX, b.center.z - heldZ);
+    return {
+      moved, liftFrames, carried, lowLift, snapsHeld: nSnapBefore - snaps0, backZ, riseMax, under, snapsAfter, drift, landV: -vyMin, tossFly: drift, finite, minYR: minY / R, volLo, volHi,
+      restY, endY: b.center.y, hoverOk: !opt.float || b.center.y > restY - 0.15,
+    };
+  };
+  const species = ['dollop', 'cushlet', 'munchip', 'twangle', 'wrigglo', 'chunkle'];
+  const runs = species.map((s) => [s, run(s)] as const).filter((x) => x[1] !== null) as Array<readonly [string, CarryRun]>;
+  const fmt = (s: string, r: CarryRun): string => `${s}: lift@${r.liftFrames} low +${r.lowLift.toFixed(2)} rise ${r.riseMax.toFixed(2)} under ${r.under.toFixed(2)} drift ${r.drift.toFixed(2)} landV ${r.landV.toFixed(2)} snaps ${r.snapsAfter.length} vol ${r.volLo.toFixed(2)}..${r.volHi.toFixed(2)}`;
+  check('CARRY P1 (real physics): a quick drag from the LOWER part of the body (was a rub) picks it up at once (metrics.carried within 2 moves of the commit) and lifts it a LITTLE (its lowest point 0.04 .. 0.35 m off the floor, its centre never more than 0.45 m up)',
+    runs.length >= 5 && runs.every(([, r]) => r.carried && r.liftFrames >= 1 && r.liftFrames <= 3 && r.lowLift >= 0.04 && r.lowLift <= 0.35 && r.riseMax <= 0.45), runs.map(([s, r]) => fmt(s, r)).join('; '));
+  check('CARRY P2: a drag UP the screen on the level plane takes it BACK across the floor (>= 0.8 m), not up into the air; held still, the squishy comes to hang UNDER the hand (within 0.15 m across the floor: never short of it)',
+    runs.every(([, r]) => r.backZ >= 0.8 && r.under <= 0.15), runs.map(([s, r]) => `${s} back ${r.backZ.toFixed(2)} under ${r.under.toFixed(2)}`).join('; '));
+  check('CARRY P3: a slow let go SETS IT DOWN where it hung: no snap (nothing thrown or stretched), it lands within 0.15 m across the floor of where it hung, falling no faster than 1.1 m/s',
+    runs.every(([, r]) => r.snapsAfter.length === 0 && r.drift <= 0.15 && r.landV <= 1.1), runs.map(([s, r]) => `${s} snaps ${r.snapsAfter.length} drift ${r.drift.toFixed(2)} fall ${r.landV.toFixed(2)}`).join('; '));
+  check('CARRY P4: no NaN, nothing through the floor (lowest particle >= -1% R), volume within 0.7 .. 1.3 through the carry and the set-down',
+    runs.every(([, r]) => r.finite && r.minYR >= -0.01 && r.volLo >= 0.7 && r.volHi <= 1.3), runs.map(([s, r]) => `${s} ${r.minYR.toFixed(3)} ${r.volLo.toFixed(2)}..${r.volHi.toFixed(2)}`).join('; '));
+  const fl = ['dollop', 'twangle'].map((s) => [s, run(s, { flick: true })] as const);
+  check('CARRY P5: a FAST let go (a flick) is the published toss: one full snap (intensity 1) and it flies on (>= 0.5 m)',
+    fl.every(([, r]) => !!r && r.snapsAfter.length === 1 && r.snapsAfter[0].I >= 0.99 && r.tossFly >= 0.5), fl.map(([s, r]) => `${s}: ${r ? `snaps ${r.snapsAfter.map((x) => x.I.toFixed(2)).join('/')} fly ${r.tossFly.toFixed(2)}` : 'no hit'}`).join('; '));
+  const fo = ['dollop', 'munchip', 'wrigglo'].map((s) => [s, run(s, { float: true, drag: [200, -160] })] as const);
+  check('CARRY P6: FLOATING (Float): a quick drag carries the floater (metrics.carried) >= 0.6 m, and let go it STAYS where it is put (3 s later within 0.15 m across the floor), still floating',
+    fo.every(([, r]) => !!r && r.carried && r.moved >= 0.6 && r.drift <= 0.15 && r.hoverOk && r.finite), fo.map(([s, r]) => (r ? `${s}: carried ${r.carried} moved ${r.moved.toFixed(2)} drift ${r.drift.toFixed(2)} y ${r.endY.toFixed(2)} (rest ${r.restY.toFixed(2)})` : `${s}: no hit`)).join('; '));
+  // P7 (the still let go, real physics): the hand is still moving at 2.5 m/s (the room view scrolls it along at the screen's edge) when a RESTED finger lets go:
+  // grabRelease(slot, still) sets the squishy down (no snap, it stops within 0.15 m across the floor); the same let go without `still` is the published toss
+  {
+    const still = (sp: boolean): { snaps: number; drift: number; fall: number; ok: boolean } => {
+      const b = new SoftBody(speciesTemplateGenome('dollop' as never));
+      b.setBounds(1, 0, -2, 6, 5, 0);
+      for (let i = 0; i < 90; i++) b.step(DT);
+      const P = b.positions; let v = 0;
+      for (let i = 1; i < P.length / 3; i++) if (P[i * 3 + 1] > P[v * 3 + 1]) v = i;
+      const tg = { x: P[v * 3], y: P[v * 3 + 1], z: P[v * 3 + 2] };
+      b.grab(0, v, tg);
+      if (b.lift?.(0) !== true) return { snaps: -1, drift: 9, fall: 9, ok: false };
+      for (let i = 0; i < 60; i++) { tg.z -= 2.5 * DT; b.grabMove(0, { ...tg }); b.step(DT); }
+      const evs: SoftEvent[] = []; b.drainEvents(evs);
+      const hx = b.center.x, hz = b.center.z;
+      b.grabRelease(0, sp);
+      let ly = b.center.y, fall = 0;
+      for (let i = 0; i < 180; i++) { b.step(DT); fall = Math.max(fall, (ly - b.center.y) / DT); ly = b.center.y; }
+      const after: SoftEvent[] = []; b.drainEvents(after);
+      return { snaps: after.filter((e) => e.kind === 'snap').length, drift: Math.hypot(b.center.x - hx, b.center.z - hz), fall, ok: Number.isFinite(b.center.y) };
+    };
+    const a = still(true), t = still(false);
+    check('CARRY P7: a STILL let go while the hand is still moving at 2.5 m/s (the room view at the edge) SETS IT DOWN (no snap, stops within 0.15 m, falls <= 1.1 m/s); without still it is the published toss (one snap, flies on >= 0.3 m)',
+      a.ok && a.snaps === 0 && a.drift <= 0.15 && a.fall <= 1.1 && t.snaps === 1 && t.drift >= 0.3, `still: snaps ${a.snaps} drift ${a.drift.toFixed(2)} fall ${a.fall.toFixed(2)} | toss: snaps ${t.snaps} drift ${t.drift.toFixed(2)}`);
+  }
 }
 
 console.log(`\n${total - bad}/${total} gesture checks passed`);

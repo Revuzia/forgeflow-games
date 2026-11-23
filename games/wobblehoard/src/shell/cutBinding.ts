@@ -30,11 +30,14 @@ export function bindCut(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, u
     const c = g.cut;
     const n = c.pieces, can = c.canSplit, undo = hasUndo(), canUndo = undo ? c.canUndo === true : undefined;
     if (n <= 1) hinted = false;                     // whole again (also while the Cut tool stays in hand): the next cut gets the hint again
-    const k = `${n},${c.maxPieces},${c.busy},${can},${c.style},${c.canChangeStyle},${canUndo}`;
+    // D-103 (several squishies cut at once, a party out): the party's piece budget has its own hint line (the count stays the plain "N pieces" of everything that is cut;
+    // the chips of ui/later-cutchips.ts say whose they are)
+    const bud = c.budget ?? null;
+    const k = `${n},${c.maxPieces},${c.busy},${can},${c.style},${c.canChangeStyle},${canUndo},${bud}`;
     if (!force && k === key) return;
     key = k;
     // (maxPieces is the safety ceiling: the bar disables Split in two only there. The counter is the plain number, labels.pieces; the hint is T.barText.)
-    bar.setPieces(n, c.maxPieces, c.busy, can, T.barText(n, c.maxPieces), c.style, c.canChangeStyle, canUndo);
+    bar.setPieces(n, c.maxPieces, c.busy, can, bud !== null && n >= bud ? T.barPartyFull(bud) : T.barText(n, c.maxPieces), c.style, c.canChangeStyle, canUndo);
   };
 
   const bar = createCutBar(root, {
@@ -55,9 +58,10 @@ export function bindCut(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, u
       bar.setBlade({ x0: c.left + b.x0, y0: c.top + b.y0, x1: c.left + b.x1, y1: c.top + b.y1 });
     }),
     g.on('cut', (r) => { if (r === 'miss') say(T.swipeMiss); }),
-    // (round 13, VERDICT_R12 4c) D-99's refusal is SHOWN as well as said: the line went only to the visually hidden live region, so a sighted player saw
-    // nothing. A toast at the top (the live region already has it from the notice: the toast itself does not say it again)
-    g.on('notice', (t) => { if (t === T.oneAtATime) { if (ui.show) ui.show(t); else ui.toast(t); } }),
+    // (round 13, VERDICT_R12 4c) a refusal the player must SEE as well as hear: a line that only went to the visually hidden live region was invisible to a sighted
+    // player. D-103: the party's piece budget (it replaces D-99's "One squishy at a time"). A toast at the top (the live region already has it from the notice:
+    // the toast itself does not say it again)
+    g.on('notice', (t) => { if (T.isShown(t)) { if (ui.show) ui.show(t); else ui.toast(t); } }),
     g.onStep(() => { if (g.tool === 'cut') refresh(false); }),
   );
 

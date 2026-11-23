@@ -18,7 +18,9 @@ import type { SpeciesId } from '../src/data/catalog.ts';
 import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES } from '../src/data/materials.ts';
 import { nameReason, proseReason } from './name_gate.ts';
 import { visibleTableAt } from '../src/render/homeview.ts';
-import { fitPlace, placeBand } from '../src/render/placeview.ts';
+import { fitPlace, placeBand, ROOM_K } from '../src/render/placeview.ts';
+import { RoomCam, ROOM_CAM, HOME_R } from '../src/render/roomcam.ts';
+import type { RoomView } from '../src/render/roomcam.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = resolve(HERE, '..');
 const VERBOSE = process.argv.includes('--verbose');
@@ -145,7 +147,16 @@ function checkPlace(P: PlaceDef, tall: boolean, spawnOut?: [number, number][]): 
   if ((tall ? P.tall.zones.length : P.zones.length) !== P.zones.length || P.tall.patches.length !== P.patches.length) probs.push('tall zones / patches do not match the PlaceDef');
   const fp = P.things.map((t, i) => footprints(t, pos[i].x, pos[i].z, pos[i].yaw, tall));
   const walls = L.walls.map(areaShape), b = L.bounds;
-  const inFrame = (x: number, z: number): boolean => tall ? (Math.abs(x) <= 1.82 - 0.128 * z + 1e-9 && z >= -3.7 - 1e-9 && z <= 3.4 + 1e-9) : (Math.abs(x) <= 3.4 + 1e-9 && z >= -2.4 - 1e-9 && z <= 2.4 + 1e-9);
+  // RE-SPECIFIED in round 14 (R14_ROOMS, D-104, the owner 2026-11-23: "Make sq footage of rooms wider and volume bigger"): the frame was P7's fixed one (wide: the
+  // live 6.8 x 4.8 m walls' rectangle; tall: the trapezoid a phone's fixed whole-place camera showed, |x| <= 1.82 - 0.128 z, z -3.7..3.4). The rooms are 2.6 times
+  // the floor now and the camera frames the party and moves (render/roomcam.ts), so "the frame" a thing must stand in is the layout's own bounds rectangle (the
+  // walls' rectangle of the layout in use, wide or tall): every collider and, on the tall layout, every pool's and patch thing's own area lies inside it.
+  const bhx = b.shape === 'disc' ? (b.r ?? 0) : (b.hx ?? 0), bhz = b.shape === 'disc' ? (b.r ?? 0) : (b.hz ?? 0);
+  const inFrame = (x: number, z: number): boolean => Math.abs(x - b.x) <= bhx + 1e-9 && Math.abs(z - b.z) <= bhz + 1e-9;
+  // RE-SPECIFIED in round 14 (same decision): P7's low front band began at z 1.3 in both live layouts (1.1 m from the wide front edge of hz 2.4, 1.7 m from the
+  // tall one of hz 3.0); it keeps its share of the depth in the bigger rooms: z > 1.3 x hz / (the live hz). Still what it was for: nothing tall and static stands
+  // between the camera (which looks from the front) and the room.
+  const FRONT = 1.3 * bhz / (tall ? 3.0 : 2.4);
   const colliders = (except: number): Shape[] => fp.flatMap((s, i) => (i === except ? [] : s));
   const clearOf = (x: number, z: number, except: number): number => Math.min(9, ...colliders(except).map((s) => dist(x, z, s)));
   const wallGap = (x: number, z: number): number => Math.min(9, ...walls.map((w) => dist(x, z, w)));
@@ -168,11 +179,11 @@ function checkPlace(P: PlaceDef, tall: boolean, spawnOut?: [number, number][]): 
     if (tall && (t.mech === MECH.pool || t.mech === 0)) for (const [k, pd] of P.patches.entries()) if (ownsArea(t.patch, pd.id)) { const a = tall ? P.tall.patches[k] : pd;
       for (const [x, z] of outline(areaShape(a))) if (!inFrame(x, z)) { probs.push(`${t.id}'s ${pd.id} outside the ${tall ? 'tall frame' : "walls' rectangle"} at (${f2(x)}, ${f2(z)})`); break; } }
     // (round 6, R6_DATA) a standing bar (a tree: the Shake Pine) is static where it stands, only its branch swings: P7's low front band holds it too
-    if ((!isMoving(t) || t.p.standing) && fp[i].length && pos[i].z > 1.3 && heightOf(t) > 0.4 + 1e-9) probs.push(`${t.id} in the front band is ${f2(heightOf(t))} m tall (at most 0.4)`);
+    if ((!isMoving(t) || t.p.standing) && fp[i].length && pos[i].z > FRONT && heightOf(t) > 0.4 + 1e-9) probs.push(`${t.id} in the front band is ${f2(heightOf(t))} m tall (at most 0.4)`);
     // a chime set's frame or rail is static and stands at least at its hang height (M10: 0.30..0.70 m), so P7's low front band holds none
-    if (t.mech === MECH.chime && pos[i].z > 1.3 && (t.p.hang ?? 0.5) > 0.4 + 1e-9) probs.push(`${t.id} in the front band: its static frame stands ${f2(t.p.hang ?? 0.5)} m tall (at most 0.4)`);
+    if (t.mech === MECH.chime && pos[i].z > FRONT && (t.p.hang ?? 0.5) > 0.4 + 1e-9) probs.push(`${t.id} in the front band: its static frame stands ${f2(t.p.hang ?? 0.5)} m tall (at most 0.4)`);
     // likewise a swing hangs from a frame, beam or line at its pivot height (M8: 1.5 m and more), so none stands in the front band either
-    if (t.mech === MECH.swing && pos[i].z > 1.3) probs.push(`${t.id} in the front band: its pivot frame stands ${f2(t.p.pivotY ?? (t.p.rope ?? 0) + 0.2)} m tall (at most 0.4)`);
+    if (t.mech === MECH.swing && pos[i].z > FRONT) probs.push(`${t.id} in the front band: its pivot frame stands ${f2(t.p.pivotY ?? (t.p.rope ?? 0) + 0.2)} m tall (at most 0.4)`);
     // rides and their spots
     if (t.mech === MECH.swing) {
       const sw = swingSweep(t), c = Math.cos(pos[i].yaw), s = Math.sin(pos[i].yaw);
@@ -340,7 +351,9 @@ function placeCam(P: PlaceDef, tall: boolean): { ok: boolean; why: string; proj:
     'default: hx = s[0]; hz = s[2] || s[0];', 'front = Math.max(front, sp.z + sn * hx + c * hz);'];
   // (round 8, R8_SHELL's request 3: place.ts PlaceHost.fit counts the play UI's slot (PLAY_SLOT_PX, the tracker pill and stamp moments) as one more top row on a
   // TALL frame when a top row is reported; the model follows it, and the line is pinned)
-  const pinsR = ['const B = placeBand({ top, right, bottom, left }, w, h, this.band);', 'return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3], pitchMin, pitchMax);',
+  // (round 14, R14_ROOMS, D-104: the rooms are 2.6 times the floor and the camera frames the party; this fit is the WHOLE-ROOM view (the room camera zoomed all the
+  // way out): fitPlace's `room` argument ROOM_K. The new line is pinned, and the stage's mapping of the director's view onto it (roomView below reads the same))
+  const pinsR = ['const B = placeBand({ top, right, bottom, left }, w, h, this.band);', 'return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3], pitchMin, pitchMax, ROOM_K);',
     'if (top > 0 && w < 0.9 * h) top += w > 380 ? PLACE_COL_PX : PLAY_SLOT_PX;', `export const PLAY_SLOT_PX = ${PLAY_SLOT};`, `export const PLACE_COL_PX = ${PLACE_COL};`];
   const missing = [...pins.filter((x) => !sh.includes(x)).map((x) => `later-life.ts: ${x}`), ...pinsR.filter((x) => !st.includes(x)).map((x) => `place.ts: ${x}`)];
   const none = (): [number, number] => [NaN, NaN];
@@ -350,10 +363,66 @@ function placeCam(P: PlaceDef, tall: boolean): { ok: boolean; why: string; proj:
   const z0 = b.z - hz, z1 = Math.max(b.z + hz, frontReachOf(P, tall) + 0.1);
   const B = placeBand({ top: I.t > 0 && W < 0.9 * H ? I.t + (W > 380 ? PLACE_COL : PLAY_SLOT) : I.t, right: 0, bottom: I.b, left: 0 }, W, H, new Float64Array(4));
   const pr = (tall ? P.tall.camPitch : undefined) ?? P.camera.pitch;
-  const f = fitPlace(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2, W, H, B[0], B[1], B[2], B[3], pr[0], pr[1]);
+  const f = fitPlace(b.x, (z0 + z1) / 2, hx, (z1 - z0) / 2, W, H, B[0], B[1], B[2], B[3], pr[0], pr[1], ROOM_K);
   if (!f) return { ok: false, why: 'no place camera fits', proj: none };
   const ty = Math.tan(f.fov * Math.PI / 360), tx = ty * W / H, sn = Math.sin(f.pitch), cs = Math.cos(f.pitch), C = [f.aimX, f.aimY + f.dist * sn, f.aimZ + f.dist * cs];
   return { ok: true, why: '', f, proj: (x, y, z) => { const rx = x - C[0], ry = y - C[1], rz = z - C[2], dep = -ry * sn - rz * cs; return [((rx / (dep * tx)) * 0.5 + 0.5) * W, (1 - ((ry * cs - rz * sn) / (dep * ty) * 0.5 + 0.5)) * H]; } };
+}
+
+/* ── Round 14 (R14_ROOMS, D-104; the owner 2026-11-23: "Make sq footage of rooms wider and volume bigger to allow easier exploration for our squishies") ──
+ *  THE ROOM CAMERA of a place, rebuilt from its pure parts: the whole-room fit above (placeCam), the director (render/roomcam.ts RoomCam, imported: the same code
+ *  the stage runs) and the stage's mapping of the director's view (centre x, z and factor u) onto the fit, pinned by text: aim = centre + u (A - C0), distance x u. */
+const LIVE = JSON.parse(readFileSync(resolve(HERE, 'data/live_rooms_6c495e9c1.json'), 'utf8')) as Record<string, { wide: { bounds: { r?: number; hx?: number; hz?: number } }; tall: { bounds: { r?: number; hx?: number; hz?: number }; camPitch?: [number, number] } }>;
+const STAGE_ROOM_PINS = ['if (room) room.place(dt, views, primaryId, camera, camera.position.distanceTo(tgt), yaw, pitch, cssW, cssH, framer.ins.top, framer.ins.bottom, playB[0], playB[1], playB[2], playB[3]);',
+  'const rk = room ? room.u : 1;', 'tgt.x += ((room ? room.x - rk * playB[0] : 0) + rk * play.aimX - tgt.x) * ka; tgt.y += (rk * play.aimY - tgt.y) * ka; tgt.z += ((room ? room.z - rk * playB[1] : 0) + rk * play.aimZ - tgt.z) * ka;',
+  'const d = pDist * rk * zoomF * cameraFx.dist;', 'if (room && room.on) { room.zoom(delta * k); return; }'];
+const mockView = (id: number, x: number, z: number, R = 0.5, held = false): RoomView => ({ visible: true, id, growth: 1, playerMoving: false, frameMode: 0, proxy: { center: { x, y: R, z }, restRadius: R, metrics: { fingers: held ? 1 : 0, carried: held } } });
+interface RoomShot { ok: boolean; why: string; x: number; z: number; u: number; outside: number; proj: (x: number, y: number, z: number) => [number, number]; px1m: (z: number) => number; livePx: { front: number; mid: number }; roomPx: { front: number; mid: number } }
+/** The room camera's own view of bodies standing at `at` (the director run to its rest: 12 s of frames), with `zoomOut` > 0 the player's zoom applied after it. */
+function roomShot(P: PlaceDef, tall: boolean, at: readonly (readonly [number, number])[], zoomOut = 0): RoomShot {
+  const bad = (why: string): RoomShot => ({ ok: false, why, x: 0, z: 0, u: 1, outside: 0, proj: () => [NaN, NaN], px1m: () => 0, livePx: { front: 0, mid: 0 }, roomPx: { front: 0, mid: 0 } });
+  const pc = placeCam(P, tall); if (!pc.ok || !pc.f) return bad(pc.why);
+  const st = readFileSync(resolve(ROOT, 'src/render/stage.ts'), 'utf8'), miss = STAGE_ROOM_PINS.filter((x) => !st.includes(x));
+  if (miss.length) return bad(`the stage's room camera code changed (missing: ${miss.join(' | ')})`);
+  const f = pc.f, L = tall ? P.tall : P, b = L.bounds, I = STAGE_INSETS[tall ? 'phone' : 'desktop'], W = tall ? 390 : 1280, H = tall ? 844 : 800;
+  const hx = b.hx ?? b.r ?? 3, hz0 = b.hz ?? b.r ?? 3, z0 = b.z - hz0, z1 = Math.max(b.z + hz0, frontReachOf(P, tall) + 0.1), cz = (z0 + z1) / 2, hz = (z1 - z0) / 2;
+  const cam = new RoomCam(), views = at.map(([x, z], i) => mockView(i + 1, x, z));
+  // the lens the director reads (a view matrix that puts every body in front of the camera: nobody is in hand, so only its fov and aspect count)
+  const lens = { matrixWorldInverse: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -30, 1] }, projectionMatrix: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.2, 0] }, fov: f.fov, aspect: W / H };
+  for (let i = 0; i < 720; i++) { cam.place(1 / 60, views, 1, lens, f.dist * cam.u, 0, f.pitch, W, H, I.t, I.b, b.x, cz, hx, hz); if (i === 360 && zoomOut > 0) cam.zoom(zoomOut); }
+  const u = cam.u, ax = cam.x - u * b.x + u * f.aimX, ay = u * f.aimY, az = cam.z - u * cz + u * f.aimZ, d = f.dist * u;
+  const ty = Math.tan(f.fov * Math.PI / 360), tx = ty * W / H, sn = Math.sin(f.pitch), cs = Math.cos(f.pitch), C = [ax, ay + d * sn, az + d * cs];
+  const proj = (x: number, y: number, z: number): [number, number] => { const rx = x - C[0], ry = y - C[1], rz = z - C[2], dep = -ry * sn - rz * cs; return [((rx / (dep * tx)) * 0.5 + 0.5) * W, (1 - ((ry * cs - rz * sn) / (dep * ty) * 0.5 + 0.5)) * H]; };
+  const px1m = (z: number): number => proj(cam.x + 0.5, 0.5, z)[0] - proj(cam.x - 0.5, 0.5, z)[0];
+  // today's size: the live bounds through the live fit (fitPlace with room 1, the live layout's own pitch range), the same frame and rows
+  const lb = LIVE[P.id][tall ? 'tall' : 'wide'].bounds, B = placeBand({ top: I.t > 0 && W < 0.9 * H ? I.t + (W > 380 ? PLACE_COL : PLAY_SLOT) : I.t, right: 0, bottom: I.b, left: 0 }, W, H, new Float64Array(4));
+  const lp = (tall ? LIVE[P.id].tall.camPitch : undefined) ?? P.camera.pitch, lf = fitPlace(0, 0, lb.hx ?? 3.4, lb.hz ?? 2.4, W, H, B[0], B[1], B[2], B[3], lp[0], lp[1]);
+  if (!lf) return bad('the live fit failed');
+  return { ok: true, why: '', x: cam.x, z: cam.z, u, outside: cam.outside, proj, px1m, livePx: { front: lf.frontPx, mid: lf.midPx }, roomPx: { front: f.frontPx, mid: f.midPx } };
+}
+/** DT-19 (round 14): the bigger room's rows of one layout: its floor against the live one, the room camera with three out at their spawn spots and with the
+ *  party spread to three corners (the owner's floor: a squishy no smaller than about 70 % of today's size), the whole-room view by the player's zoom. */
+function roomRows(P: PlaceDef, tall: boolean): void {
+  const label = `${P.name} ${tall ? 'tall (390 x 844)' : 'wide (1280 x 800)'}`, L = tall ? P.tall : P, b = L.bounds, lb = LIVE[P.id][tall ? 'tall' : 'wide'].bounds;
+  const hx = b.hx ?? b.r ?? 0, hz = b.hz ?? b.r ?? 0, lhx = lb.hx ?? lb.r ?? 1, lhz = lb.hz ?? lb.r ?? 1, area = (hx * hz) / (lhx * lhz);
+  row('DT-19', area >= 2.5 - 1e-9 && hx / lhx >= 1.55 && hz / lhz >= 1.55, `(round 14, D-104) ${label}: the floor is ${f2(2 * hx)} x ${f2(2 * hz)} m, ${f2(area)} times the live ${f2(2 * lhx)} x ${f2(2 * lhz)} m (at least 2.5), its sides x${f2(hx / lhx)} and x${f2(hz / lhz)} (at least 1.55 each)`);
+  if (L.spawn === 'matLayout') return;
+  const sp = L.spawn.slice(0, 3), sh = roomShot(P, tall, sp);
+  if (!sh.ok) { row('DT-19', false, `(round 14) ${label}: the room camera`, sh.why); return; }
+  const I = PLACE_HUD[tall ? 'phone' : 'desktop'], topRow = STAGE_INSETS[tall ? 'phone' : 'desktop'].t;
+  const inBand = (s: RoomShot, x: number, z: number): boolean => { const [ax, ay] = s.proj(x, 0, z), [, by] = s.proj(x, 1.0, z); return ax >= I.l && ax <= I.W - I.r && ay <= I.H - I.b + 1e-6 && by >= topRow - 1e-6; };
+  // a 1 m squishy at the view's middle depth against today's size at the live room's middle depth (the tall frame also at the front, RD-17's two bars)
+  const size = (s: RoomShot): number => s.px1m(s.z) / s.livePx.mid;
+  const k0 = size(sh), all0 = sp.every(([x, z]) => inBand(sh, x, z));
+  row('DT-19', k0 >= 0.7 && k0 <= 1.25 && all0 && sh.outside === 0, `(round 14) ${label}: three out at their spawn spots, the room camera by itself: view factor ${f2(sh.u)} around (${f2(sh.x)}, ${f2(sh.z)}), a 1 m squishy ${sh.px1m(sh.z).toFixed(0)} px at the view's middle = ${(k0 * 100).toFixed(0)}% of the live ${sh.livePx.mid.toFixed(0)} px (at least 70%), all three inside the frame between the HUD rows`,
+    all0 ? '' : 'a squishy stands outside the safe band');
+  // the party spread over the room: one near each of three corners (0.9 m inside the bounds): the widest view the camera takes by itself
+  const cx = hx - 0.9, czz = hz - 0.9, far = [[-cx, -czz], [cx, -czz], [cx, czz]] as const, s2 = roomShot(P, tall, far), k2 = size(s2);
+  row('DT-19', s2.ok && k2 >= 0.7 && Math.abs(s2.u - ROOM_CAM.far) < 0.01 && inBand(s2, far[0][0], far[0][1]), `(round 14) ${label}: the party spread to three corners: the camera goes no wider than factor ${f2(ROOM_CAM.far)} (it is at ${f2(s2.u)}), a 1 m squishy ${s2.px1m(s2.z).toFixed(0)} px = ${(k2 * 100).toFixed(0)}% of the live size (the owner's floor: at least 70%), the lead in view, ${s2.outside} of the others hinted at the frame's edge`);
+  // the player's zoom all the way out: the whole room (factor 1), every corner's body inside the safe band (the fit's own promise, through the director and the mapping)
+  const s3 = roomShot(P, tall, sp, 9), corners = [[-hx, -hz], [hx, -hz], [-hx, hz], [hx, hz]] as const;
+  const frontZ = Math.max(b.z + hz, frontReachOf(P, tall) + 0.1);
+  row('DT-19', s3.ok && Math.abs(s3.u - 1) < 1e-3 && corners.every(([x, z]) => inBand(s3, x, z > 0 ? frontZ : z)), `(round 14) ${label}: zoomed all the way out the view is the whole room (factor ${f2(s3.u)}): a body's centre at each corner of the bounds stands inside the frame between the HUD rows; a 1 m squishy is ${s3.px1m(b.z).toFixed(0)} px at the room's middle (${(s3.px1m(b.z) / s3.livePx.mid * 100).toFixed(0)}% of the live size)`);
 }
 
 /** B8 (round 5, VERDICT_PG: "the cabin's tall layout: the Rocker Board under the hint pill and the quick-switch row, the kettle cut by the left
@@ -448,7 +517,15 @@ function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: numbe
     'safe.top + ly * cssH * 0.5, safe.right + lx * cssW * 0.5, safe.bottom - ly * cssH * 0.5, safe.left - lx * cssW * 0.5',
     // round 8: R7_SHELL's ballFrames (the Felt Ball's spot in the one-body portrait framing), which the model now carries
     'const BALL_FRAME_R = 0.3;', 'if (ballAt[0] !== 1 || !(camera.aspect < 0.9) || placeHost?.active) return false;', 'const solo = n === 1 && (withCap || ex);',
-    'const fits = solo && Math.max(bcx - ax0, ax1 - bcx) + 0.06 <= want * hwPer;', 'if (f.multi) { ax = f.mx; az = f.mz * 0.8; ay = TARGET_Y * bodyScale; }'];
+    'const fits = solo && Math.max(bcx - ax0, ax1 - bcx) + 0.06 <= want * hwPer;', 'if (f.multi) { ax = f.mx; az = f.mz * 0.8; ay = TARGET_Y * bodyScale; }',
+    // round 14 (R14_ROOMS, D-104): the room camera at Home with two or more out, which the model now carries (homeView runs roomcam.ts RoomCam.home itself): the
+    // stage's call of it (the felt's radius 5.5, slotWant, the capsule), its view taken as the framing (want, mx, mz), the lift added to the pitch, every body
+    // counted where it is while it drives (atSlot), and the published slot framing kept as today's size (slotWant)
+    'room.home(dt, views, primaryId, camera, camera.position.distanceTo(tgt), yaw, pitch, cssW, cssH, framer.ins.top, framer.ins.bottom, 5.5, slotWant(), hwPerNow(),',
+    'if (room && room.on) { want = Math.max(room.want, framer.wantScale); multi = true; mx = room.ax; mz = room.az / 0.8; grp = false; tZoom = 1; }',
+    'pt = clamp(pitch + cameraFx.pitch + (room ? room.lift : 0), 0.06, 1.38)',
+    'const atSlot = (v: BodyView, rest: boolean): boolean => (rest || (autoFraming && !(room && room.on))) && (rest || !v.playerMoving);',
+    'function slotWant(): number { const fw = framer.wantScale; framer.wantScale = 0; const w = framingFor(false, 0, 0, 1, true).want; framer.wantScale = fw; return w; }'];
   const needF = ['enabled: true', 'marginMin: 3, marginFrac: 0.02', 'maxScale: 3.2', 'minBand: 0.35', 'sideFitFrom: 6',
     'p[0] = fs[0]; p[1] = fs[2]; p[2] = fs[1]; p[3] = fs[0]; p[4] = 0; p[5] = fs[1];', 'w[0] = fs[0]; w[1] = fs[3]; w[2] = fs[1]; w[6] = fs[4]; this.addDisc();',
     'w[6] = v.proxy.restRadius * v.growth; this.addDisc();', 'this.fitY = (top - bot) / Math.max(0.05, B[0] - B[1] - 2 * my);',
@@ -462,14 +539,22 @@ function stageModel(): { ok: boolean; why: string; TALL: number[][]; WIDE: numbe
   return { ok, why: ok ? '' : `stage.ts camera changed (fov ${fov}, pitch ${pitch}, TARGET_Y ${ty}, slots ${WIDE.length}/${TALL.length}, missing: ${missing.join(' | ')})`, TALL, WIDE, fov, pitch, ty };
 }
 const SM = stageModel();
-interface Cam { W: number; H: number; A: number; ins: { t: number; b: number; l: number; r: number; colX: number; colY: number }; si: { t: number; b: number }; slots: number[][]; s: number; C: number[]; f: number[]; u: number[]; aim: number[]; d: number; ly: number; want: number; sh: number }
+interface Cam { W: number; H: number; A: number; ins: { t: number; b: number; l: number; r: number; colX: number; colY: number }; si: { t: number; b: number }; slots: number[][]; s: number; C: number[]; f: number[]; u: number[]; aim: number[]; d: number; ly: number; want: number; sh: number;
+  /** (round 14) the party size, the slot framing's scale without the band's demand (stage.ts slotWant), the half width a framing of 1 shows, and whether this is a view of the room camera */
+  n: number; base0: number; hwPer: number; room: boolean }
+/** (round 14, R14_ROOMS) a view of the room camera at Home (render/roomcam.ts home(): centre x, z in metres, the framing scale, the pitch added at the whole-room view) */
+interface HomeView { x: number; z: number; want: number; lift: number;
+  /** false: the band framing measures nobody (roomcam.ts: zoomed out past homeBandOff every body is frameMode 2: no lens shift, no demand) */
+  band: boolean }
 const TF = Math.tan((SM.fov || 35) * D2R / 2);
 /** The camera settled at its target framing (yaw 0, zoom 1) for n slot bodies of scale s and rest shape SHAPES[sh]: framingFor's want (stage.ts:
  *  the one-body reach / the mat's extents, then SR2's demand), the aim (restAim for one body, the mat's middle for more), and SR2's lens goal
  *  (framing.ts measure + ease: the rest columns' extent in unshifted NDC centred in the band between the reported rows). The demand and the
  *  one-body aim depend on the scale they are measured at, so the three are iterated to their fixed point (as the eased camera settles). */
-function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number, ballSpot?: { x: number; z: number }): Cam {
-  const I = HUD_INSETS[fr], SI = STAGE_INSETS[fr], A = I.W / I.H, base = Math.max(3.0, 2.4 / Math.max(0.2, A)), hwPer = base * TF * A, P = SM.pitch;
+function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number, ballSpot?: { x: number; z: number }, view?: HomeView): Cam {
+  // (round 14: with `view` the camera is the room camera's: it aims at the view's centre (stage.ts: multi, mx = room.x, mz = room.z / 0.8), its framing scale is
+  // max(room.want, the band's demand) and its pitch the rest pitch + room.lift; the band framing measures the slot bodies as it measures them live at rest)
+  const I = HUD_INSETS[fr], SI = STAGE_INSETS[fr], A = I.W / I.H, base = Math.max(3.0, 2.4 / Math.max(0.2, A)), hwPer = base * TF * A, P = SM.pitch + (view ? view.lift : 0);
   const slots = (A < 0.9 ? SM.TALL : SM.WIDE).slice(0, n).map(([x, z]) => [x * s, z * s]);
   const R = 0.5 * s, S = SHAPES[sh], hw = S.hw * R, restH = S.h * R, restCy = S.cy * R;
   const f = [0, -Math.sin(P), -Math.cos(P)], u = [0, Math.cos(P), -Math.sin(P)];
@@ -491,7 +576,7 @@ function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number, ballSpot
     bx0 = Math.min(sx0 - t, fx - r); bx1 = Math.max(sx0 + t, fx + r); bz0 = Math.min(sz0 - t, fz - r); bz1 = Math.max(sz0 + t, fz + r); bmx = (bx0 + bx1) / 2; bmz = (bz0 + bz1) / 2; }
   let want = base0, ly = 0, aim = [0, 0, 0], C = [0, 0, 0], multiB = false;
   for (let it = 0; it < 40; it++) {
-    aim = multiB ? [bmx, SM.ty * s, bmz * 0.8] : n === 1 ? [slots[0][0] * 0.6, SM.ty * want + Math.max(0, restCy - SM.ty * want) * 0.7, slots[0][1] * 0.6] : [mx, SM.ty * s, mz * 0.8];
+    aim = view ? [view.x, SM.ty * s, view.z] : multiB ? [bmx, SM.ty * s, bmz * 0.8] : n === 1 ? [slots[0][0] * 0.6, SM.ty * want + Math.max(0, restCy - SM.ty * want) * 0.7, slots[0][1] * 0.6] : [mx, SM.ty * s, mz * 0.8];
     const d = want * base; C = [aim[0], aim[1] + d * Math.sin(P), aim[2] + d * Math.cos(P)];
     const ndcY = (x: number, y: number, z: number): [number, number] => { const vy = y - C[1], vz = z - C[2], dep = vy * f[1] + vz * f[2]; return [(vy * u[1] + vz * u[2]) / (dep * TF), dep]; };
     let top = -Infinity, bot = Infinity;
@@ -499,15 +584,25 @@ function cam(fr: 'phone' | 'desktop', n: number, s: number, sh: number, ballSpot
       top = Math.max(top, ndcY(x, restH, z)[0]); bot = Math.min(bot, ndcY(x, 0, z)[0]);
       for (const rr of [hw * 1.06, R]) { const [cy, dep] = ndcY(x, restCy, z), ry = rr / (dep * TF); top = Math.max(top, cy + ry); bot = Math.min(bot, cy - ry); }
     }
-    const fitY = (top - bot) / Math.max(0.05, B0 - B1 - 2 * my), demand = fitY > 1 ? Math.min(3.2, fitY * want) : 0;
-    ly = Math.max(-0.7, Math.min(0.7, (B0 + B1) / 2 - (top + bot) / 2));
-    let w2 = Math.max(base0, demand), mb = false;
+    const noBand = !!view && !view.band;
+    const fitY = (top - bot) / Math.max(0.05, B0 - B1 - 2 * my), demand = fitY > 1 && !noBand ? Math.min(3.2, fitY * want) : 0;
+    ly = noBand ? 0 : Math.max(-0.7, Math.min(0.7, (B0 + B1) / 2 - (top + bot) / 2));
+    let w2 = Math.max(view ? view.want : base0, demand), mb = false;
     if (fb) { const fits = Math.max(slots[0][0] - bx0, bx1 - slots[0][0]) + 0.06 <= w2 * hwPer;
       if (!fits) { mb = true; w2 = Math.max(w2, ((bx1 - bx0) / 2 + 0.06 + 0.12 * (bz1 - bz0) / 2) / hwPer); } }
     if (Math.abs(w2 - want) < 1e-10 && mb === multiB) break;
     want = w2; multiB = mb;
   }
-  return { W: I.W, H: I.H, A, ins: I, si: SI, slots, s, C, f, u, aim, d: want * base, ly, want, sh };
+  return { W: I.W, H: I.H, A, ins: I, si: SI, slots, s, C, f, u, aim, d: want * base, ly, want, sh, n, base0, hwPer, room: !!view };
+}
+/** (round 14, R14_ROOMS, D-104) The room camera at Home with two or more out (render/roomcam.ts RoomCam.home, imported: the code the stage runs), for the party
+ *  resting at its mat slots: `whole` false = the camera by itself (the party's box, between today's size and 70 % of it), true = the player zoomed all the way
+ *  out (the whole felt, the camera lifted). The stage's part is pinned in stageModel (the home() call, slotWant, the override of want / mx / mz, the lift). */
+function homeView(c0: Cam, whole: boolean): HomeView {
+  const rc = new RoomCam(), R = 0.5 * c0.s, views = c0.slots.map(([x, z], i) => mockView(i + 1, x, z, R));
+  const lens = { matrixWorldInverse: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -30, 1] }, projectionMatrix: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.2, 0] }, fov: SM.fov, aspect: c0.A };
+  for (let i = 0; i < 600; i++) { rc.home(1 / 60, views, 1, lens, 5, 0, SM.pitch, c0.W, c0.H, c0.si.t, c0.si.b, HOME_R, c0.base0, c0.hwPer, NaN, 0, 0); if (i === 60 && whole) rc.zoom(9); }
+  return { x: rc.ax, z: rc.az, want: rc.want, lift: rc.lift, band: views.some((v) => v.frameMode !== 2) };
 }
 /** CSS px of a world point in the shown frame: the camera's projection with SR2's lens shift (content up by ly in NDC; no side shift). */
 function proj(c: Cam, x: number, y: number, z: number): [number, number] {
@@ -531,14 +626,27 @@ function visibleTable(c: Cam): number[] {
   // (the reported rows moved by the lens, as the stage passes them, each kept inside the frame: homeview clamps an inset at 0)
   const { si, W, H } = c, t = Math.max(0, si.t + c.ly * H / 2) - c.ly * H / 2, b = Math.max(0, si.b - c.ly * H / 2) + c.ly * H / 2;
   const [xlN, zN] = ground(c, 0, H - b), [xrN] = ground(c, W, H - b), [, zF] = ground(c, 0, t);
-  return [Math.max(xlN, -3.4), Math.max(zF, -3.4), Math.min(xrN, 3.4), Math.min(zN, 3.4)];
+  return [Math.max(xlN, -HOME_R), Math.max(zF, -HOME_R), Math.min(xrN, HOME_R), Math.min(zN, HOME_R)];   // (round 14: the felt's reach, homeview.ts TABLE_CLIP, is Home's room now: r 5.5 m, was 3.4)
 }
 const inIns = (c: Cam, [sx, sy]: [number, number]): boolean => sx >= c.ins.l && sx <= c.W - c.ins.r && sy >= c.ins.t && sy <= c.H - c.ins.b && !(sx >= c.ins.colX && sy <= c.ins.colY);
-const CAMS = new Map<string, Cam[]>(); for (const fr of ['phone', 'desktop'] as const) for (let n = 1; n <= 5; n++) for (const s of SCALES) CAMS.set(`${fr}${n}${s}`, SHAPES.map((_, k) => cam(fr, n, s, k)));
+// (round 14, R14_ROOMS) three cameras per frame, party and scale: SLOT = the published rest framing of the mat slots (one squishy out: THE camera; with more out
+// it is still what visibleTable reports and the room camera's "today's size"); camsOf = the camera the player sees by default (one out: the slot camera; two or
+// more: the room camera by itself with the party at its slots); roomCams = the room camera zoomed all the way out (the whole felt; one out: the slot camera)
+const SLOT_CAMS = new Map<string, Cam[]>(), CAMS = new Map<string, Cam[]>(), ROOM_CAMS = new Map<string, Cam[]>();
+for (const fr of ['phone', 'desktop'] as const) for (let n = 1; n <= 5; n++) for (const s of SCALES) {
+  const slot = SHAPES.map((_, k) => cam(fr, n, s, k));
+  SLOT_CAMS.set(`${fr}${n}${s}`, slot);
+  CAMS.set(`${fr}${n}${s}`, n === 1 || !SM.ok ? slot : slot.map((c0, k) => cam(fr, n, s, k, undefined, homeView(c0, false))));
+  ROOM_CAMS.set(`${fr}${n}${s}`, n === 1 || !SM.ok ? slot : slot.map((c0, k) => cam(fr, n, s, k, undefined, homeView(c0, true))));
+}
 const camsOf = (fr: string, n: number, s: number): Cam[] => CAMS.get(`${fr}${n}${s}`)!;
+const slotCamsOf = (fr: string, n: number, s: number): Cam[] => SLOT_CAMS.get(`${fr}${n}${s}`)!;
+const roomCamsOf = (fr: string, n: number, s: number): Cam[] => ROOM_CAMS.get(`${fr}${n}${s}`)!;
 /** Where the free ball stands in a frame: its spot (x scale) pushed into its bounds, the visible table shrunk by its radius (props.ts setBallBounds,
  *  D-67: the world's first step does exactly this). */
 function ballAt(c: Cam, x: number, z: number, r: number): [number, number] {
+  // (round 14, D-104) two or more out: Home is a room and the ball's bounds are the whole felt's disc (later-life.ts homeRoom: world.setBallDisc), pinned in the Home row
+  if (c.n >= 2) { const d = Math.hypot(x, z), lim = HOME_R - r; return d > lim ? [x * lim / d, z * lim / d] : [x, z]; }
   const v = visibleTable(c);
   return [Math.min(v[2] - r, Math.max(v[0] + r, x)), Math.min(v[3] - r, Math.max(v[1] + r, z))];
 }
@@ -590,17 +698,25 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
       // slot gap (every slot of the frame, every scale) and on the felt
       let gap = 9; for (const s of SCALES) for (const [a, bz] of slotsAll) gap = Math.min(gap, dPt(k, sp.x * s, sp.z * s, a * s, bz * s) - 0.5 * s);
       const need = t.mech === MECH.ball ? 0.05 : 0.275; if (k.col && gap < need - 1e-9) issues.push(`slot gap ${f2(gap)} m (needs ${need})`);
-      for (const s of SCALES) for (const [x, z] of corners(k, sp.x * s, sp.z * s)) if (Math.hypot(x, z) > 3.4 + 1e-9) { issues.push('off the felt'); break; }
+      // RE-SPECIFIED in round 14 (R14_ROOMS, D-104): the felt is Home's room now, r 5.5 m (src/data/place_home.ts bounds.r, render/table.ts MAT_R 5.6); it was 3.4
+      for (const s of SCALES) for (const [x, z] of corners(k, sp.x * s, sp.z * s)) if (Math.hypot(x, z) > HOME_R + 1e-9) { issues.push('off the felt'); break; }
       // colliders 0.3 m apart
       H.things.forEach((u, j) => { if (j <= i) return; const ku = kind(u), su = spot(j); if (!k.col || !ku.col) return; let g = 9;
         for (const s of SCALES) { for (const [px, pz] of corners(k, sp.x * s, sp.z * s)) g = Math.min(g, dPt(ku, su.x * s, su.z * s, px, pz)); for (const [px, pz] of corners(ku, su.x * s, su.z * s)) g = Math.min(g, dPt(k, sp.x * s, sp.z * s, px, pz)); }
         if (g < 0.3 - 1e-9) issues.push(`${f2(g)} m from ${u.id}`); });
       // in view from fromN to 5 at every scale: footprint corners at y 0 and at its top inside the insets; its top centre seen
       // (round 5: the free ball where it really stands in that frame: its spot pushed into its bounds, ballAt)
+      // RE-SPECIFIED in round 14 (R14_ROOMS, D-104; the owner 2026-11-23: bigger rooms): "in view from its fromN" was the fixed slot framing. With ONE squishy out
+      // the camera is still that one (the published toy) and the rule is unchanged. With two or more out Home is a room and the camera frames the party where it is
+      // (roomcam.ts): a thing must be in view in the WHOLE-ROOM view (the player zooms out and finds it: its footprint inside the frame between the HUD bands), and
+      // in the camera's own view of the party at rest at its slots it is either out of the frame (the room has more than the party's corner of it) or seen: its top
+      // not behind a slot body or another thing (the tests below, run only when its top point is in the frame)
       const ball = t.mech === MECH.ball, rb = t.size[0];
-      for (let n = Math.min(from, 5); n <= 5; n++) for (const s of SCALES) for (const c of camsOf(fr, n, s)) { let x = sp.x * s, z = sp.z * s; if (ball) [x, z] = ballAt(c, x, z, rb);
-        for (const [px, pz] of corners(k, x, z)) { if (!inIns(c, proj(c, px, 0, pz)) || (k.h > 0 && !inIns(c, proj(c, px, k.h, pz)))) { issues.push(`n${n} out of view`); break; } }
+      for (let n = Math.min(from, 5); n <= 5; n++) for (const s of SCALES) for (const [ci, c] of camsOf(fr, n, s).entries()) { let x = sp.x * s, z = sp.z * s; if (ball) [x, z] = ballAt(c, x, z, rb);
+        const cv = n === 1 ? c : roomCamsOf(fr, n, s)[ci];
+        for (const [px, pz] of corners(k, x, z)) { if (!inIns(cv, proj(cv, px, 0, pz)) || (k.h > 0 && !inIns(cv, proj(cv, px, k.h, pz)))) { issues.push(`n${n} out of view${n === 1 ? '' : ' in the whole-room view'}`); break; } }
         const [tx, tyy, tz] = topPt(k, x, z), [psx, psy] = proj(c, tx, tyy, tz);
+        if (n >= 2 && !(psx >= 0 && psx <= c.W && psy >= 0 && psy <= c.H)) continue;
         for (const [bx, bz] of c.slots) { if (bz <= tz + 0.05) continue; const [cx, cy, ea, eb] = bodyEll(c, bx, bz);
           if (Math.hypot((psx - cx) / ea, (psy - cy) / eb) < 0.95) { issues.push(`n${n} behind a body`); break; } }
         H.things.forEach((u, j) => { if (j === i) return; const ku = kind(u), su = spot(j); if (!ku.col || ku.h < 0.05 || (su.fromN ?? 9) > n || su.z * s <= z) return;
@@ -641,7 +757,9 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
       // its use spot: a whole body in view from fromN to 5, clear of the other slot bodies (the lamp's: inside its glow, clear of its base)
       const use = sp.use; if (use) { const user = t.id === 'snoozerug' ? 1 : 0; let worst = 9;
         for (let n = Math.max(from, user + 1); n <= 5; n++) for (const s of SCALES) for (const c of camsOf(fr, n, s)) { const R = 0.5 * s, x = use[0] * s, z = use[1] * s, Sh = SHAPES[c.sh], hwR = Math.max(1, Sh.hw) * R;
-          let inv = Math.hypot(x, z) <= 3.4 - R; for (const dx of [-hwR, hwR]) for (const dz of [-hwR, hwR]) for (const y of [0, Sh.h * R]) if (!inIns(c, proj(c, x + dx, y, z + dz))) inv = false;
+          // (round 14: on the felt of r 5.5 m; with two or more out "in view" is the whole-room view's, as for the thing itself)
+          const cu = n === 1 ? c : roomCamsOf(fr, n, s)[c.sh];
+          let inv = Math.hypot(x, z) <= HOME_R - R; for (const dx of [-hwR, hwR]) for (const dz of [-hwR, hwR]) for (const y of [0, Sh.h * R]) if (!inIns(cu, proj(cu, x + dx, y, z + dz))) inv = false;
           if (!inv) { issues.push(`use spot n${n} s${s} not wholly in view`); break; }
           for (let q = 0; q < n; q++) { if (q === user) continue; const [ax, az] = slotsAll[q], d = Math.hypot(x - ax * s, z - az * s) - 2 * R; worst = Math.min(worst, d); if (d < -0.02) { issues.push(`use spot n${n} overlaps slot ${q}'s body`); break; } }
           if (t.id === 'warmlamp') { const zr = H.zones[0].r ?? 0, lx = sp.x * s, lz = sp.z * s; if (Math.hypot(x - lx, z - lz) > zr - 0.02) issues.push('use spot outside the glow');
@@ -654,7 +772,7 @@ function homeRow(H: PlaceDef): { probs: string[]; lines: string[] } {
       for (const u of uniq) probs.push(`${frame} ${t.id}: ${u}`);
     });
     // every slot centre inside the corral rectangle (visibleTable and every slot body in use + 0.05: D-87)
-    for (let n = 1; n <= 5; n++) for (const s of SCALES) for (const c of camsOf(fr, n, s)) { const v = visibleTable(c), R = 0.5 * s;
+    for (let n = 1; n <= 5; n++) for (const s of SCALES) for (const c of slotCamsOf(fr, n, s)) { const v = visibleTable({ ...c, n: 1 }), R = 0.5 * s;   // (the published slot framing: what stage.visibleTable reports at every party size)
       // the model's box against the stage's own pure projection (src/render/homeview.ts visibleTableAt, called as stage.visibleTable calls it: the
       // reported rows moved by the lens goal, no side rows)
       const real = [0, 0, 0, 0]; visibleTableAt(c.aim[0], c.aim[1], c.aim[2], c.d, SM.pitch, SM.fov, c.W, c.H, c.si.t + c.ly * c.H * 0.5, 0, c.si.b - c.ly * c.H * 0.5, 0, real);
@@ -769,6 +887,21 @@ for (const P of DEFS) {
         if (good && Math.hypot(gx - cur0.x, gz - cur0.z) < fd) { fd = Math.hypot(gx - cur0.x, gz - cur0.z); found = `${gx.toFixed(2)}, ${gz.toFixed(2)}`; } }
       row('DT-01', ok, 'Home B5, one squishy out on a phone (TALL n = 1): the Felt Ball where it stands covers no part of the squishy and hides behind none, with 0.25 m of first-play roll',
         o ? `${ok ? '' : found ? `the spot (${found}) would pass: re-lay it; ` : `no spot can with the shipped camera (${tried} spots tried; needs RENDER: PLAYGROUND_BUILD 24.1 (a), the one-out portrait framing makes room for the ball); `}it covers ${o.cover.toFixed(1)} px of the body (${(o.frac * 100).toFixed(1)}% of it, ${o.sq > 0 ? `${o.sq.toFixed(1)} px into` : 'clear of'} its squeeze area), ${(o.hide * 100).toFixed(0)}% hidden, ${f2(o.gap)} m from it, ${f2(o.room)} m of roll room (worst scale and shape)` : 'no ball'); }
+    // DT-19 (round 14, R14_ROOMS, D-104; the owner 2026-11-23: "Make sq footage of rooms wider and volume bigger"): Home's rows of the bigger room
+    { const lr = LIVE.home.wide.bounds.r ?? 3.4, r = P.bounds.r ?? 0, rt = P.tall.bounds.r ?? 0;
+      const tb = readFileSync(resolve(ROOT, 'src/render/table.ts'), 'utf8'), hv = readFileSync(resolve(ROOT, 'src/render/homeview.ts'), 'utf8'), stt = readFileSync(resolve(ROOT, 'src/render/stage.ts'), 'utf8'), ll2 = readFileSync(resolve(ROOT, 'src/shell/later-life.ts'), 'utf8');
+      const pins = [tb.includes('const MAT_R = 5.6;'), hv.includes('export const TABLE_CLIP = 5.5;'), stt.includes('framer.ins.bottom, 5.5, slotWant(), hwPerNow(),'), stt.includes('Math.max(1.9, 5.5 / (hwPerNow() * camScale))'),
+        ll2.includes('homeRoom = placeIdx === 0 && wholesOut() >= 2;'), ll2.includes('c.body.setBounds?.(homeRoom ? 0 : -1, b.x - c.offX, b.z - c.offZ, r, 0, 0);'), ll2.includes('if (homeRoom) world.setBallDisc(HOME.bounds.x, HOME.bounds.z, HOME.bounds.r ?? 5.5);')];
+      row('DT-19', r === HOME_R && rt === HOME_R && (r * r) / (lr * lr) >= 2.5 && pins.every(Boolean), `(round 14, D-104) Home: the felt is a disc of r ${f2(r)} m, ${f2((r * r) / (lr * lr))} times the live r ${f2(lr)} m (at least 2.5); the same radius in both frames, in roomcam.ts HOME_R, the stage's room camera call and zoom-out limit, the drawn mat (table.ts 5.6), the visible table's clip (homeview.ts) and the host's room rule (two or more out: the disc as bounds, the ball on the whole felt)`,
+        pins.every(Boolean) ? '' : `pins ${pins.map((x) => (x ? 1 : 0)).join('')}`);
+      // with two or more out the room camera drives: by itself (the party at its slots) a squishy is at least 70 % of today's size (the slot framing: today's
+      // camera); zoomed all the way out the whole felt (its four extreme points) stands inside the frame between the HUD bands
+      let worst = 9, at = '', feltOut = '';
+      for (const fr of ['phone', 'desktop'] as const) for (let n = 2; n <= 5; n++) for (const sc of SCALES) for (const [k, c] of camsOf(fr, n, sc).entries()) {
+        const k0 = slotCamsOf(fr, n, sc)[k].want / c.want; if (k0 < worst) { worst = k0; at = `${fr} n${n} s${sc}`; }
+        const cr = roomCamsOf(fr, n, sc)[k];
+        if (!feltOut) for (const [x, z] of [[0, HOME_R], [0, -HOME_R], [HOME_R, 0], [-HOME_R, 0]]) if (!inIns(cr, proj(cr, x, 0, z))) { feltOut = `${fr} n${n} s${sc}: (${x}, ${z}) at ${proj(cr, x, 0, z).map((v) => v.toFixed(0)).join(', ')} px`; break; } }
+      row('DT-19', worst >= 0.7 && !feltOut, `(round 14) Home with two to five out, phone and desktop, ${SCALES.length} scales x ${SHAPES.length} shapes: the room camera by itself (the party at its slots) shows a squishy at ${(worst * 100).toFixed(0)}% of today's size at the least (${at}; at least 70%); zoomed all the way out the whole felt stands inside the frame between the HUD bands`, feltOut); }
     { const r18 = hideRow(P);
       row('DT-18', r18.bad.length === 0, `(round 8) no Home thing hides behind a party slot: parties of 1 to 5 (from each thing's fromN), phone and desktop, ${SCALES.length} scales x ${SHAPES.length} rest shapes: at most ${HIDE_MAX * 100}% of its silhouette behind nearer squishies at their slots`,
         r18.bad.length ? r18.bad.slice(0, 6).join(' | ') : `worst: ${r18.worst.join('; ')}`);
@@ -788,8 +921,11 @@ for (const P of DEFS) {
     if (strict) row('DT-01', probs.length === 0, `${label}: frame, pad, zones, spawn, rides and push spots, use / peek / gap spots, clearances, bands, ranges, floor rule, opening, counts`,
       probs.length ? `${probs.length} problems: ${probs.slice(0, 6).join(' | ')}` : '0 problems');
     if (strict) { const cp = camProblems(P, tall);
-      row('DT-01', cp.length === 0, `${label} in the shipped place camera (B8, round 5; round 6: every strict place, and its pools, patches and zone things too): every thing inside the frame's sides and its floor above the bottom HUD (${tall ? 'the hint pill, 670 px' : 'the party row, 664 px'})`,
-        cp.length ? `${cp.length} problems: ${cp.join(' | ')}` : '0 problems'); }
+      // RE-SPECIFIED in round 14 (R14_ROOMS, D-104): "the shipped place camera" framed the whole place; the rooms are 2.6 times the floor now and the camera frames
+      // the party (DT-19 below), so this row is the WHOLE-ROOM view (the room camera zoomed all the way out: the same fit, with fitPlace's room argument)
+      row('DT-01', cp.length === 0, `${label} in the WHOLE-ROOM view of the room camera (B8, round 5; round 6: every strict place, and its pools, patches and zone things too; round 14: the view zoomed all the way out): every thing inside the frame's sides and its floor above the bottom HUD (${tall ? 'the hint pill, 670 px' : 'the party row, 664 px'})`,
+        cp.length ? `${cp.length} problems: ${cp.join(' | ')}` : '0 problems');
+      roomRows(P, tall); }
     if (!strict) { note('DT-01', `${label}: PENDING its slice (${P.id === 'ripple' || P.id === 'frostbell' || P.id === 'rainleaf' ? 'S2' : 'S3'}): ${probs.length} problems${probs.length && !VERBOSE ? ' (--verbose lists them)' : ''}`);
       if (VERBOSE) for (const p of probs) console.log('       ' + p); }
   }

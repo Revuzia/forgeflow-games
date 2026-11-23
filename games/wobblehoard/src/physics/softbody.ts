@@ -176,7 +176,7 @@ const MAX_SPEED = 14;              // safety clamp on particle speed (m/s)
 const MAX_NUDGE = 12;              // nudge() clamps the velocity change to this (m/s)
 const REACT_REF = 20;              // metrics.reaction: push-back (m/s^2 per unit body mass) that maps to 1 - 1/e. tuned: 10 saturated every
                                    // contact impulse at ~1; at 20 a held full press reads soft 0.2-0.6, starter 0.3-0.6, firm 0.45-0.9
-const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
+const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.6;   // (round 14, D-104 "volume bigger": a floater hovers 0.6 m over its rest height, was 0.35)
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
 /** D-97 (Table after Float "brings them down again gently"): for DESCEND_S after gravity comes back, or until the body reaches a support, it falls no faster than DESCEND_V m/s. */
 const DESCEND_S = 2, DESCEND_V = 0.9;
@@ -309,7 +309,14 @@ const CARRY_OMEGA = 18;           // rad/s: how tightly a carried body follows t
  *  set it down with no fall and a pad never kicked it (Rainleaf's Moss Bouncer on a phone, 0 of 3 in the browser; every pad, wide or tall, 0 kicks in node).
  *  0.2 R (8 cm for a whole of R 0.4) is a fall of about 1.25 m/s at the let go, over the pad's PAD_LAND 0.3 m/s. */
 const CARRY_LIFT_K = 0.2;
-const TOSS_MAX = 6;                // m/s: the fastest throw
+/** (round 14, R14_CARRY, D-105: "make it easier to pick up and move squishies around") the LEVEL carry, started by lift() (a drag that starts on a squishy carries it):
+ *  the hand rises LVL_UP_M + LVL_UP_K x the rest radius over where it took the body (eased in over about LVL_UP_S), it leads the body across the floor only (its
+ *  height is the shell's: the level plane, raised over things), the body sways behind the hand (LVL_LAG: the hand's change of velocity kicks the far side back,
+ *  the shape springs it back: a soft wobble), and a let go slower than SET_V m/s across the floor SETS IT DOWN where it hangs (no throw: its fall is capped at DESCEND_V until it
+ *  touches something, for SET_DESC_S; a floater's hover spot moves there). A faster let go is the published toss. */
+export const LVL_UP_M = 0.08, LVL_UP_K = 0.3;   // (exported: the shell's carry plane raises the hand over things by what this lift does not already clear)
+const LVL_UP_S = 0.12, LVL_LAG = 0.5, SET_V = 1.2, SET_DESC_S = 0.8;
+const TOSS_MAX = 7.5;             // m/s: the fastest throw (round 14, D-104 "volume bigger": was 6; a straight-up toss now peaks at 2.8 m, a 45 degree one flies 5.6 m)
 // ---- LOCK (_spec/LOCK.md): up to 5 concurrent finger / grab slots (touch fingers) and up to 6 locked lobes
 const NSLOT = 5;                   // finger and grab slots
 const MAX_LOCKS = 6;               // locked lobes (the shell passes 4 on low quality: SoftBody.maxLocks)
@@ -599,6 +606,8 @@ export class SoftBody implements SoftBodyLike {
   private twoHanded = false;           // two fingers have been on the body since the last time none was: no pick up (see updateGrabs)
   private carrier = 0;                 // the grab (0 | 1) whose hand carries the body
   private carryOx = 0; private carryOy = 0; private carryOz = 0;      // the body's centre relative to the hand while carried
+  private carryLvl = false; private lvlUp = 0; private lagW: Float64Array | null = null; private lagMean = 1;   // (round 14, R14_CARRY) the level carry (lift): on, the hand's rise now, the sway weights (made at a body's first lift)
+  private pvx = 0; private pvy = 0; private pvz = 0;                  // (round 14) the hand's velocity at the last substep (the sway's kick)
   private hvx = 0; private hvy = 0; private hvz = 0;                  // the hand's smoothed velocity (m/s)
   private phx = 0; private phy = 0; private phz = 0;                  // the hand target at the last substep
   // LOCK FIX: the pose just before the pick-up (made on the first lift of a body, not before), so a Shift tap on a body that was lifted anyway can put it back and lock the stretch (lockGrab)
@@ -1157,6 +1166,7 @@ export class SoftBody implements SoftBodyLike {
     if (on && this.flingAnch && this.bndShape < 0) { this.homeX = this.fAX; this.homeZ = this.fAZ; }
     this.flingOn = false; this.flingAnch = false; this.flingArmT = 0;
     if (!on) { this.pinned.fill(0); this.pinCount = 0; this.carried = false; this.liftOk = false; }   // a floating body has no table to be glued to (nor a carry)
+    this.carryLvl = false;   // (round 14, R14_CARRY: a change of mode ends a level carry too; lift() can start one again, floating or not)
   }
 
   // ------------------------------------------------------------------------------------------------ public API
@@ -1210,6 +1220,7 @@ export class SoftBody implements SoftBodyLike {
     this.latchOn = false; this.cutJob = null; this.cutOut = null; this.cutState = 0;   // (CUT2: a body put back to rest forgets its plan of a cut)
     this.vnStamp = -1; this.hashStamp = -1; this.contactWith.fill(-1000000);
     this.carried = false; this.liftOk = false; this.twoHanded = false; this.carrier = 0; this.carryOx = 0; this.carryOy = 0; this.carryOz = 0; this.hvx = 0; this.hvy = 0; this.hvz = 0; this.phx = 0; this.phy = 0; this.phz = 0;
+    this.carryLvl = false; this.lvlUp = 0;
     this.strain.fill(1);
     this.asleep = false; this.restT = 0; this.calmT = 0; this.restRefOn = false; this.bRvalid = false; this.restMem = 1;
     // PLAYGROUND: the LIFE drivers released, the prop contact state cleared (the bound world, sleepEnabled and contactSlot are configuration and stay)
@@ -1993,7 +2004,7 @@ export class SoftBody implements SoftBodyLike {
     g.rx = target.x; g.ry = target.y; g.rz = target.z;
   }
 
-  grabRelease(id: Slot): void {
+  grabRelease(id: Slot, still = false): void {
     const g = this.grabs[id];
     if (!g || !g.active) return;
     g.active = false;
@@ -2006,6 +2017,19 @@ export class SoftBody implements SoftBodyLike {
       // pull that got past the body's maximum is a full one (intensity 1): the shell plays its toss on it and the meter pays it as a pull.
       this.carried = false; this.liftOk = false;
       let vx = this.hvx, vy = this.hvy, vz = this.hvz;
+      if (this.carryLvl) {
+        // (round 14, R14_CARRY, D-105) the level carry's let go: a floater's hover spot is where it was let go (it stays where it is put; a fling carries the spot
+        // on, FLING_V); a slow hand SETS IT DOWN where it hangs: no throw, no snap (nothing was stretched or thrown), its fall capped at DESCEND_V until it
+        // touches something (a pad still kicks it, a pool takes it, a seat or a mound holds it). `still`: the finger rested before it let go (the room view
+        // may still be moving the hand at the screen's edge): set down, whatever the hand's speed
+        this.carryLvl = false; this.lvlUp = 0;
+        if (!this.gravityOn) { this.homeX = this.cx; this.homeZ = this.cz; }
+        if (still || vx * vx + vz * vz < SET_V * SET_V) {
+          this.V.fill(0); this.vcx = 0; this.vcy = 0; this.vcz = 0;
+          if (this.gravityOn) this.descendT = SET_DESC_S;
+          return;
+        }
+      }
       const sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
       if (sp > TOSS_MAX) { const k = TOSS_MAX / sp; vx *= k; vy *= k; vz *= k; }
       const V = this.V;
@@ -3300,6 +3324,9 @@ export class SoftBody implements SoftBodyLike {
     for (let k = 0; k < NSLOT; k++) if (this.grabs[k].active || this.fingers[k].down) hands++;
     if (hands >= 2) this.twoHanded = true; else if (hands === 0) this.twoHanded = false;
     for (let k = 0; k < MAX_LOCKS; k++) { const L = this.locks[k]; if (L.active) L.holdT += H; }   // a lock keeps counting the hold since its grab (its target is frozen)
+    // (round 14, R14_CARRY) the level carry's hand rises over where it took the body, eased in (the squishy comes up into the hand)
+    const lvl = this.carried && this.carryLvl;
+    if (lvl) { const up = LVL_UP_M + LVL_UP_K * this.restRadius; this.lvlUp += (up - this.lvlUp) * (1 - Math.exp(-H / LVL_UP_S)); }
     for (let k = 0; k < NSLOT; k++) {
       const g = this.grabs[k];
       if (!g.active) continue;
@@ -3309,7 +3336,7 @@ export class SoftBody implements SoftBodyLike {
       // out (the pointer's target went metres under the table; only a Shift pair had a floor, the shell's SHIFT_FLOOR_Y). The floor is on the raw target, so what the pick-up line and
       // the easing see is the reachable hand.
       this.reach(g);
-      const grx = this.rch[0], gry = this.rch[1], grz = this.rch[2];
+      const grx = this.rch[0], gry = this.rch[1] + (lvl && k === this.carrier ? this.lvlUp : 0), grz = this.rch[2];
       g.ex += (grx - g.ex) * ease; g.ey += (gry - g.ey) * ease; g.ez += (grz - g.ez) * ease;
       // B3 PICK UP: a hand that asks for more than LIFT_OVER x the body's maxPull (the raw target, not the clamped one) unsticks the body from
       // the mat and carries it (on the table only; a floating body is already in the hand's reach)
@@ -3327,7 +3354,11 @@ export class SoftBody implements SoftBodyLike {
         if (g.ey < GRAB_FLOOR_Y) g.ey = GRAB_FLOOR_Y;
         const hx = this.cx - this.carryOx, hy = this.cy - this.carryOy, hz = this.cz - this.carryOz;
         const lx = g.ex - hx, ly = g.ey - hy, lz = g.ez - hz, ll = Math.sqrt(lx * lx + ly * ly + lz * lz);
-        if (ll > maxD) { const s = maxD / ll; g.ex = hx + lx * s; g.ey = hy + ly * s; g.ez = hz + lz * s; }
+        if (lvl) {
+          // (round 14, R14_CARRY) the level carry: the hand leads across the floor only; its height is the shell's (the level plane, raised over things)
+          const lh = Math.sqrt(lx * lx + lz * lz);
+          if (lh > maxD) { const s = maxD / lh; g.ex = hx + lx * s; g.ez = hz + lz * s; }
+        } else if (ll > maxD) { const s = maxD / ll; g.ex = hx + lx * s; g.ey = hy + ly * s; g.ez = hz + lz * s; }
         // the hand's velocity (smoothed over ~40 ms): the throw
         const kv = 1 - Math.exp(-H / 0.04);
         this.hvx += ((g.ex - this.phx) / H - this.hvx) * kv; this.hvy += ((g.ey - this.phy) / H - this.hvy) * kv; this.hvz += ((g.ez - this.phz) / H - this.hvz) * kv;
@@ -3525,7 +3556,7 @@ export class SoftBody implements SoftBodyLike {
     this.X.set(X0); this.V.set(V0); this.pinned.set(P0);
     this.pinCount = this.liftPinCount; this.pinHold = this.liftPinHold;
     this.cx = this.liftCx; this.cy = this.liftCy; this.cz = this.liftCz; this.vcx = this.liftVcx; this.vcy = this.liftVcy; this.vcz = this.liftVcz;
-    this.carried = false; this.liftOk = false; this.hvx = 0; this.hvy = 0; this.hvz = 0;
+    this.carried = false; this.liftOk = false; this.hvx = 0; this.hvy = 0; this.hvz = 0; this.carryLvl = false; this.lvlUp = 0;
     g.ex = g.t0x + dx; g.ey = g.t0y + dy; g.ez = g.t0z + dz;
     this.vnStamp = -1; this.hashStamp = -1;   // (the cached vertex normals and state hash were of the carried pose)
     this.metrics.carried = false;
@@ -3598,6 +3629,31 @@ export class SoftBody implements SoftBodyLike {
     this.phx = g.ex; this.phy = g.ey; this.phz = g.ez; this.hvx = 0; this.hvy = 0; this.hvz = 0;
   }
 
+  /**
+   * (round 14, R14_CARRY, D-105; contracts.ts SoftBodyLike.lift) PICK IT UP NOW by the hand of grab `slot`: the drag that starts on a squishy carries it, with no
+   * stretch first and no pick-up line. The LEVEL carry (LVL_UP_M and the rest): the hand rises a little over where it took the body, the body hangs from it and
+   * sways, the shell's level plane steers it across the floor, and a slow let go sets it down where it hangs. Works on the table and FLOATING (a floater is
+   * carried too and stays where it is put). false (nothing changes) when the slot holds no grab, the body is carried already or a lobe is locked.
+   */
+  lift(slot: number): boolean {
+    const g = this.grabs[slot];
+    if (!g || !g.active || this.carried || this.lockN > 0) return false;
+    this.startCarry(slot);
+    this.carryLvl = true; this.lvlUp = 0;
+    // the sway weights: each particle's distance from the held patch in the rest shape, in diameters (at most 1): the hand's change of velocity kicks the far
+    // side back by LVL_LAG x it (see the carry in substep); the array is made at a body's first lift and refilled at every lift
+    if (this.lagW === null || this.lagW.length !== this.n) this.lagW = new Float64Array(this.n);
+    const Q = this.Q, a = g.anchor * 3, n = this.n, w = this.lagW, d2 = 1 / (2 * this.restRadius);
+    let s = 0;
+    for (let i = 0; i < n; i++) { const dx = Q[i * 3] - Q[a], dy = Q[i * 3 + 1] - Q[a + 1], dz = Q[i * 3 + 2] - Q[a + 2]; const d = Math.sqrt(dx * dx + dy * dy + dz * dz) * d2; w[i] = d > 1 ? 1 : d; s += w[i]; }
+    this.lagMean = n > 0 ? s / n : 0;
+    this.pvx = 0; this.pvy = 0; this.pvz = 0;
+    this.metrics.carried = true;
+    return true;
+  }
+  /** (round 14, R14_CARRY) a level carry is under way (the shell's carry plane reads it) */
+  get levelCarry(): boolean { return this.carried && this.carryLvl; }
+
   private substep(): void {
     const n = this.n, X = this.X, XP = this.XP, V = this.V, M = this.M, invM = this.invM, Q = this.Q;
     const GOAL = this.GOAL, GRAD = this.GRAD;
@@ -3657,6 +3713,14 @@ export class SoftBody implements SoftBodyLike {
         this.cx += mx; this.cy += my; this.cz += mz;
         // the OTHER hand (if it holds a lobe too) keeps its pull relative to the carried body: its rest patch and reference move with it, so
         // its maxPull clamp still applies (unclamped, it stretched the body 3 R across the room and inverted it: the hostile fuzz's two grabs)
+        // (round 14, R14_CARRY, D-105) the level carry SWAYS: the hand's change of velocity this substep kicks the far side of the body back (inertia: each
+        // particle's velocity changes by -LVL_LAG x (its distance weight from the held patch less the mean) x the hand's change; no net momentum, the carry keeps
+        // the centre), so the far side swings behind a hand that sets off and wobbles on when it stops; the shape springs it back
+        if (this.carryLvl && this.lagW !== null) {
+          const dvx = this.hvx - this.pvx, dvy = this.hvy - this.pvy, dvz = this.hvz - this.pvz, w = this.lagW, mean = this.lagMean;
+          this.pvx = this.hvx; this.pvy = this.hvy; this.pvz = this.hvz;
+          for (let i = 0, j = 0; i < n; i++, j += 3) { const k = -LVL_LAG * (w[i] - mean); V[j] += dvx * k; V[j + 1] += dvy * k; V[j + 2] += dvz * k; }
+        }
         this.shv[0] = mx; this.shv[1] = my; this.shv[2] = mz;
         for (let j = 0; j < NSLOT; j++) if (j !== this.carrier) this.shiftGrab(this.grabs[j]);
         for (let j = 0; j < MAX_LOCKS; j++) this.shiftGrab(this.locks[j]);
@@ -3733,6 +3797,7 @@ export class SoftBody implements SoftBodyLike {
         az = -w2 * (this.cz - this.homeZ) - c * this.vcz;
       }
       ay = -w2 * (this.cy - hy) - c * this.vcy;
+      if (this.carried) { ax = 0; ay = 0; az = 0; }   // (round 14, R14_CARRY: a floater in the hand (lift) is the hand's: no hover spring until it is let go)
     }
     if (this.holdOn) { ax += this.holdAx; ay += this.holdAy; az += this.holdAz; }   // D-95 AUTO: a rider holds on (propPass)
     const hax = ax * H, hay = ay * H, haz = az * H;

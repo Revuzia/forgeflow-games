@@ -30,6 +30,9 @@
 //   * Leaving reconnects (CUT.md 2.2): game.ts calls reconnectAll(false) (instant) before a switch, a card preview, a ceremony, after the tab was hidden over 60 s.
 //     Cutting and reconnecting feed nothing to the meter (rule 3): no SoftEvent is made here.
 //   * Feature-detected (CUT.md 5): the tool exists only when the play body offers measureCut / setNeck / setFrac.
+//   * D-103 (owner 2026-11-23: "allow ability to cut multiple squishies at the same time"): this cutter is still ONE set of pieces of ONE squishy. With a party out the life chunk's party cutter
+//     (shell/later-cut.ts) keeps one of these per cut squishy (the play squishy's is the one game.ts builds; each other one works on a member view of the body manager), so nothing here knows about
+//     the others: `name`, `keepCache`, `pieceCap` and `homeSpot` are how the party tells a set what it must know, and `piecesAfter` / `cutting` are what it reads. One squishy out: none of them is set.
 import type { CutPlan, CutPlane, PieceOpts, PieceRegion, QualityTier, Quat, SoftBodyLike, SquishAudio, StageLike, TierName, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { pitchRatio } from '../core/genome.ts';
@@ -163,8 +166,12 @@ export interface CutDeps {
   /** PLAYGROUND (11.4, SH-03): the most pieces while a party is out (min(the pieces cap, the characters cap - (wholes - 1))); null or absent = the
    *  safety ceiling alone (the published toy) */
   pieceCap?(): number | null;
-  /** D-99: where the cut squishy goes back together (its own spot when it was cut in a party after an exchange); null or absent = the middle of the table, as published */
+  /** D-99, D-103: where the cut squishy goes back together (its own spot when it was cut with a party out); null or absent = the middle of the table, as published */
   homeSpot?(): V3 | null;
+  /** D-103: the squishy's name while SEVERAL squishies are cut ("Cut Dollop into 2 pieces.", "Dollop is whole again."); null or absent = the published lines */
+  name?(): string | null;
+  /** D-103: another squishy is still in pieces, so the physics' piece cache (its built meshes and part hints) must stay when this one is whole again; absent = cleared, as published */
+  keepCache?(): boolean;
   panOf(p: V3): number;
   say(text: string): void;
   report(e: unknown): void;
@@ -199,7 +206,7 @@ type Anim =
   | NeckAnim
   | { kind: 'join'; recv: Piece; givers: Piece[]; t0: number; dur: number; flows: Map<Piece, Flow>; merged: Merged | null }
   | { kind: 'all'; t0: number; dur: number; recv: Piece; flows: Map<Piece, Flow> }
-  | { kind: 'home'; face: Piece; others: Piece[]; t0: number };
+  | { kind: 'home'; face: Piece; others: Piece[]; t0: number; hs: V3 | null };
 /** the scripted parting of a fresh cut (CUT2.md 6.5): every new piece opens from its flush place along s by its share of the gap g: the LIGHTER side moves more (k = the other side's share of the pair, so
  *  a tip that falls off slides away while the big body stays; 0.5 each for two halves) */
 /** `hold`: a tossed piece that must slide clear of the body is kept at its birth height while it slides (it drops when the script ends), else it would fall onto the body it is leaving */
@@ -246,7 +253,33 @@ export interface Cutter {
   readonly info: { ceiling: number; ceilingHits: number; lastParts: number; lastResult: CutResult | null; buildRefusals: number };
   /** tests and the dev hook only: lower (or restore, with null) the safety ceiling, so a browser row can reach the kind line without 63 cuts */
   setCeilingForTest(n: number | null): void;
+  /** D-103: the pieces this squishy has once the cut that plays now has parted (= `pieces` when no cut plays): the party's budget counts a cut from the stroke on, not from the swap */
+  readonly piecesAfter?: number;
+  /** D-103: a cut of this body is under way (its neck plays) */
+  cutting?(b: SoftBodyLike): boolean;
+  /** D-103 (the party cutter, shell/later-cut.ts; absent on one set): every squishy the Cut tool speaks for: the play squishy first (always there, whole or cut), then each other squishy that is cut
+   *  or being cut (and for one more step when it is whole again or gone, pieces 1). Live rows, reused: reading them allocates nothing. */
+  readonly sets?: readonly CutSetRow[];
+  /** D-103: just ONE cut squishy back together (its row's key), animated or at once; false = nothing to do */
+  reconnect?(key: string, animated: boolean): boolean;
+  /** D-103: the key (CutSetRow.key) of the cut squishy that body is a piece of, or null */
+  ownerOf?(b: SoftBodyLike): string | null;
+  /** D-103: the party's piece budget while it is in force (two or more squishies out): the most live pieces across every cut squishy; null = one squishy out (the published ceiling alone) */
+  readonly budget?: number | null;
   dispose(): void;
+}
+/** D-103: one squishy as the Cut tool sees it (Cutter.sets) */
+export interface CutSetRow {
+  /** its item id ('' for a play squishy without one) */
+  key: string;
+  /** the squishy you play with */
+  play: boolean;
+  /** its name (the Cut bar's chip, the lines) and catalog species (the chip's face) */
+  name: string;
+  species: string;
+  /** its pieces now (1 = whole) and whether a neck or a reconnect of ITS plays */
+  pieces: number;
+  busy: boolean;
 }
 
 const smooth = (x: number): number => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
@@ -399,11 +432,13 @@ export function createCutter(d: CutDeps): Cutter {
     const base = d.ceiling ?? PIECE_CEILING, cap = d.pieceCap?.() ?? null;   // (PLAYGROUND: a party's piece cap only ever lowers the safety ceiling)
     return cap !== null && Number.isFinite(cap) && cap >= 1 ? Math.min(base, Math.floor(cap)) : base;
   };
+  /** (D-103: ONE array for the whole squishy, never a new one per call: `pieces` is read every step by the Cut bar, the trophies and the party cutter; no caller changes what list() returns) */
+  const wholeList: Piece[] = [whole0];
   const list = (): Piece[] => {
     if (pieces.length) return pieces;
     whole0.body = d.bodies.body; whole0.leaf = tree.root; whole0.frac = 1; whole0.built = 1;
     try { wholeR = whole0.body.restRadius || wholeR; } catch { /* keep */ }
-    return [whole0];
+    return wholeList;
   };
   const fracOf = (p: Piece): number => { const f = p.body.frac; return typeof f === 'number' && Number.isFinite(f) ? f : p.frac; };
   const extraOf = (b: SoftBodyLike): ExtraBody | undefined => d.bodies.extras.find((x) => x.body === b && x.piece);
@@ -428,7 +463,7 @@ export function createCutter(d: CutDeps): Cutter {
     return { u, g: dd - supportAlong(b, u) - supportAlong(a, { x: -u.x, y: -u.y, z: -u.z }) };
   };
   /** best effort: the physics keeps a cache of the pieces it built (piece.ts); a whole squishy again has no use for it */
-  const clearPieceCache = (): void => { void import('../physics/piece.ts').then((m) => m.clearPieceCache()).catch(() => { /* a build without it */ }); };
+  const clearPieceCache = (): void => { if (d.keepCache?.()) return; void import('../physics/piece.ts').then((m) => m.clearPieceCache()).catch(() => { /* a build without it */ }); };
 
   function wobble(b: SoftBodyLike): void {
     try {
@@ -872,7 +907,7 @@ export function createCutter(d: CutDeps): Cutter {
     } catch (e) { d.report(e); }
     try { d.audio.cut?.({ phase: 'separate', frac: small, family: familyId(), pan: d.panOf(news[0].body.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
     try { d.haptics.poke(); } catch { /* optional */ }
-    d.say(T.cutDone(pieces.length, style));
+    d.say(T.cutDone(pieces.length, style, d.name?.() ?? null));
   }
 
   /* ───────────────────────────── joins ───────────────────────────── */
@@ -1066,7 +1101,7 @@ export function createCutter(d: CutDeps): Cutter {
   function whole(say: boolean, glide: boolean): void {
     const face = pieces[0];
     contact = null;
-    if (say) d.say(T.whole);
+    if (say) d.say(T.wholeOf(d.name?.() ?? null));
     if (!face) { pieces = []; locked = null; return; }
     const others = pieces.slice(1);
     if (!others.length && face.body === d.bodies.body && fracOf(face) >= 1 && face.built >= 1) { pieces = []; locked = null; tree = createCutTree(); nodeFrac.clear(); return; }
@@ -1074,7 +1109,7 @@ export function createCutter(d: CutDeps): Cutter {
     if (glide && typeof face.body.moveTo === 'function' && Math.hypot(c.x - hx, c.z - hz) > HOME_NEAR) {
       face.frac = 1;
       try { face.body.moveTo({ x: hx, y: c.y, z: hz }, 1.2); } catch (e) { d.report(e); swapWhole(face); return; }
-      anim = { kind: 'home', face, others, t0: d.simTime() };
+      anim = { kind: 'home', face, others, t0: d.simTime(), hs: hs ? { x: hx, y: 0, z: hz } : null };
       return;
     }
     swapWhole(face);
@@ -1348,12 +1383,18 @@ export function createCutter(d: CutDeps): Cutter {
           finishAll(true);
           try { d.audio.rejoin?.({ frac: 1, all: true, pan: d.panOf(d.bodies.body.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
           try { d.haptics.release(); } catch { /* optional */ }
-          d.say(T.whole);
+          d.say(T.wholeOf(d.name?.() ?? null));
         }
         return;
       }
       if (a && a.kind === 'home') {
-        const c = a.face.body.center;
+        const c = a.face.body.center, hs = a.hs;
+        if (hs) {
+          // D-103: the glide goes to the squishy's OWN spot (D-99 sent the anchor there but still measured the arrival, and steered what travels with it, from the middle of the table)
+          for (const o of a.others) { try { const oc = o.body.center; o.body.moveTo?.({ x: hs.x + (oc.x - c.x), y: oc.y, z: hs.z + (oc.z - c.z) }, 1.2); } catch { /* optional */ } }
+          if (Math.hypot(c.x - hs.x, c.z - hs.z) <= HOME_NEAR * 0.5 || t - a.t0 >= HOME_MAX_S) { anim = null; swapWhole(a.face); }
+          return;
+        }
         // whatever travels with the anchor (the other half of a mated pair) keeps its place relative to it: the same step toward the middle
         for (const o of a.others) { try { const oc = o.body.center; o.body.moveTo?.({ x: oc.x - c.x, y: oc.y, z: oc.z - c.z }, 1.2); } catch { /* optional */ } }
         if (Math.hypot(c.x, c.z) <= HOME_NEAR * 0.5 || t - a.t0 >= HOME_MAX_S) { anim = null; swapWhole(a.face); }
@@ -1365,7 +1406,9 @@ export function createCutter(d: CutDeps): Cutter {
       const touching = d.touching();
       const act = d.activeBody();
       let P: Piece | null = null;
-      for (const p of pieces) if (p.body === act) { P = p; break; }   // (no closure: this runs every frame, CUT3 X22 no per-step allocation)
+      // (no closure: this runs every frame, CUT3 X22 no per-step allocation. D-103: an index loop, not for-of: with several cutters sharing this code their piece arrays differ in kind,
+      //  the engine then walks them through the generic iterator, and that allocated an iterator and a result per piece every step, measured 544 B a step with 12 pieces in three sets)
+      for (let i = 0; i < pieces.length; i++) if (pieces[i].body === act) { P = pieces[i]; break; }
       if (touching && P) {
         let Q: Piece | null = null, bestD = Infinity;
         for (const q of pieces) {
@@ -1395,6 +1438,8 @@ export function createCutter(d: CutDeps): Cutter {
     },
     get info() { return { ceiling: maxN(), ceilingHits, lastParts, lastResult, buildRefusals }; },
     setCeilingForTest(n) { ceilingOverride = n !== null && Number.isFinite(n) && n >= 1 ? Math.floor(n) : null; },
+    get piecesAfter() { const a = anim; return a && a.kind === 'neck' ? list().length - 1 + (a.plan ? Math.max(2, a.parts.length) : 2) : list().length; },
+    cutting: (b) => { const a = anim; return a !== null && a.kind === 'neck' && a.p.body === b; },
     dispose() { abortAnim(); pieces = []; locked = null; contact = null; },
   };
   // what the last swipe / Split in two answered (the harness reads it through `info`)

@@ -13,7 +13,7 @@ import type { EnvHub, PanelDef } from './env.ts';
 import type { SkyLook } from './table.ts';
 import { linearToOklch, oklchToLinear, type Rgb } from './oklch.ts';
 import { Particles, type EmitSpec } from './particles.ts';
-import { fitPlace, placeBand, type PlayFrame } from './placeview.ts';
+import { fitPlace, placeBand, ROOM_K, type PlayFrame } from './placeview.ts';
 
 /** The eight theme tokens (src/ui/theme.ts PALETTE; table.ts's numbers, `ember` = coral). */
 export const TOKENS = { ink: 0x14102a, plum: 0x2a1744, dusk: 0x5b3a86, felt: 0x2a2150, amber: 0xffb347, lagoon: 0x59d6e6, coral: 0xff5a4d, cream: 0xfff1d6 } as const;
@@ -454,7 +454,9 @@ export class PlaceHost {
     if (top > 0 && w < 0.9 * h) top += w > 380 ? PLACE_COL_PX : PLAY_SLOT_PX;   // (and fitPlace keeps such a frame's pitch at TALL_PITCH_MIN or more)
     const B = placeBand({ top, right, bottom, left }, w, h, this.band);
     // (round 8, R8_LIFE's request 11: the layout's own pitch range, setPlayBounds' 5th and 6th arguments; placeview.ts fitPlace says why)
-    return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3], pitchMin, pitchMax);
+    // (round 14, D-104: the bigger rooms) this fit is the WHOLE-ROOM view; the room camera (roomcam.ts) frames a part of it around the party. ROOM_K: the lens and
+    // the bars of the live rooms' share of it (placeview.ts)
+    return fitPlace(cx, cz, hx, hz, w, h, B[0], B[1], B[2], B[3], pitchMin, pitchMax, ROOM_K);
   }
   private readonly band = new Float64Array(4);
   private applyLight(c: StageCtx, l: PlaceLight | null): void {

@@ -1,0 +1,15 @@
+/* Round 14 (R14_ROOMS, D-104): the edge chips of the room camera (ui/later-room.ts, in the later-play chunk): a squishy out of view has a round chip at the frame's
+   edge on its side (its face, a pointer toward it); a tap brings the camera to it. The layer covers the frame and takes no pointer; only the chips do. */
+/* (#ui > * gives every child of the UI root its pointer back, styles.css: the layer must out-rank it, or it takes every press meant for the stage) */
+#ui > .rm-hints, .rm-hints { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+.rm-chip { position: absolute; left: 0; top: 0; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; pointer-events: auto; cursor: pointer;
+  background: var(--k-surface-hi, var(--k-surface, #2a2150)); border: 2px solid var(--wh-amber, #ffb347); color: var(--k-fg, #fff1d6); box-shadow: 0 2px 10px rgba(20, 16, 42, .45);
+  transition: transform .14s linear; -webkit-tap-highlight-color: transparent; }
+.rm-chip[hidden] { display: none; }
+.rm-chip:focus-visible { outline: 3px solid var(--wh-lagoon, #59d6e6); outline-offset: 3px; }
+.rm-face { display: grid; place-items: center; width: 30px; height: 30px; }
+.rm-icon { width: 30px; height: 30px; }
+.rm-arrow { position: absolute; inset: -8px; pointer-events: none; }
+.rm-arrow::after { content: ''; position: absolute; right: -3px; top: 50%; margin-top: -7px; border: 7px solid transparent; border-left-color: var(--wh-amber, #ffb347); }
+body[data-ceremony] .rm-hints, body[data-tool="snap"] .rm-hints, body[data-tool="cut"] .rm-hints { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .rm-chip { transition: none; } }

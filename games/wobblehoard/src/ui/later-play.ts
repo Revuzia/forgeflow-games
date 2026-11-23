@@ -21,6 +21,9 @@ import { attachTooltip } from './tooltip.ts';
 import { cue } from './uiSound.ts';
 import { wishLine } from './later-journal.ts';
 import { attachPartyStrip } from './later-party.ts';
+import { attachRoomHints } from './later-room.ts';
+import { attachCutChips } from './later-cutchips.ts';
+import { chipLabel, chipsGroup, chipsLead, wholeOf } from '../shell/cutText.ts';
 import type { LifeHostApi } from '../shell/lifeLink.ts';
 import type { Game } from '../shell/game.ts';
 import { CATALOG } from '../data/catalog.ts';
@@ -304,6 +307,12 @@ export function attachPlayUi(o: PlayUiOpts): PlayUi {
   // R10_PLAYUX item 2: the Friends strip beside the name tag (ui/later-party.ts, in this chunk)
   const friends = attachPartyStrip({ game, root: o.root, say: o.say, covered });
   offs.push(() => friends.destroy());
+  // D-103: "Reconnect one": a chip per cut squishy in the Cut bar while two or more are in pieces (ui/later-cutchips.ts, in this chunk; the words are cutText.ts's)
+  const cutChips = attachCutChips({ game, labels: { group: chipsGroup, lead: chipsLead, chip: chipLabel, whole: wholeOf }, say: o.say });
+  offs.push(() => cutChips.destroy());
+  // round 14 (R14_ROOMS): the room camera's edge chips: a squishy out of view, a tap brings the camera to it (ui/later-room.ts, in this chunk)
+  const roomHints = attachRoomHints({ game, root: o.root, say: o.say, covered });
+  offs.push(() => roomHints.destroy());
 
   return {
     moment,

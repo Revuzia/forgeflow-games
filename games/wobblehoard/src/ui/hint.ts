@@ -26,9 +26,15 @@ export function createHintController(idleMs: number = HINT_IDLE_MS): HintControl
     interact(now) { if (touched && now - last >= idleMs) returns++; last = now; touched = true; },
     visible(now) { return !touched || now - last >= idleMs; },
     toolTried() { tried = true; },
-    line(mode) { return touched && mode !== 'touch' && returns % 2 === 1 ? HINT_LOCK[mode] : touched && !tried ? HINT_TOOLS[mode] : HINT_TEXT[mode]; },
+    line(mode) { return touched && mode !== 'touch' && returns % 2 === 1 ? HINT_LOCK[mode] : touched && !tried ? HINT_TOOLS[mode] : room !== null && mode !== 'keyboard' ? room[mode] : HINT_TEXT[mode]; },
   };
 }
+
+/** (round 14, R14_CARRY, D-105) where squishies are moved around (a place; Home with two or more out) a drag that starts on a squishy carries it and a stretch
+ *  starts from a hold: the gesture line says so there. The life host sets the lines (shell/later-carry.ts HINT_ROOM: they ride in the lazy chunk); null = the
+ *  published HINT_TEXT (Home with one squishy out) */
+let room: { readonly touch: string; readonly pointer: string } | null = null;
+export function setHintRoom(lines: { readonly touch: string; readonly pointer: string } | null): void { room = lines; }
 
 /** Wording per input style. One line, plain words, ONE wording for the pull everywhere ("drag out to stretch": press on the squishy,
  *  then drag away from it). The keyboard line appears once a key has been used (audit finding 17). The pointer line (a mouse or pen, never

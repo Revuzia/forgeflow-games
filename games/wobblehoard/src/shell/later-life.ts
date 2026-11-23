@@ -24,6 +24,12 @@
 import type { LifeEvents, LifeIntents, LifeSnapshot, PlayEventRing, SoftBodyLike, SoftEvent, TierName, V3 } from '../contracts.ts';
 import { cameraForward, cameraRay, projectToNdc, pxToNdc, raycastAt, rayPlane } from '../input/camera.ts';
 import type { Game } from './game.ts';
+import { createPartyCutter } from './later-cut.ts';
+import { carryPlane, carryTipDue, createHands, hitNear, nearBody, overTop, CARRY_TIP, HINT_ROOM, OVER_GAP } from './later-carry.ts';
+import type { CarryPlane } from './later-carry.ts';
+import type { BodyHit } from '../input/gestures.ts';
+import { LVL_UP_M, LVL_UP_K } from '../physics/softbody.ts';
+import { setHintRoom } from '../ui/hint.ts';
 import type { LifeHostApi, LifeNote } from './lifeLink.ts';
 import type { Genome } from '../core/genome.ts';
 import { pitchRatio } from '../core/genome.ts';
@@ -290,9 +296,11 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   function safeView(): JournalView | null { try { return journal ? journal.view() : null; } catch (e) { report(e); return null; } }
 
   // ---- the party: the play body, the squishies brought out, the cut's pieces (LIFE characters by stable slot) ----
-  let cutGroup = -1;            // the slot the cut squishy had as a whole (its pieces' group key), -1 while whole
+  // (D-103, owner 2026-11-23: several squishies can be in pieces at once: a piece group per cut squishy, where there was the one `cutGroup`)
+  const cutGroups = new Map<string, number>();   // a cut squishy's item id -> the slot it had as a whole (its pieces' group key; the slot stays empty while it is cut)
+  let cutSlots = 0;             // a bit per slot held as a group key
   const slotOfBody = (b: SoftBodyLike): number => { for (let i = 0; i < CAP; i++) if (chars[i].on && chars[i].body === b) return i; return -1; };
-  const freeSlot = (): number => { for (let i = 0; i < CAP; i++) if (!chars[i].on && i !== cutGroup) return i; return -1; };
+  const freeSlot = (): number => { for (let i = 0; i < CAP; i++) if (!chars[i].on && (cutSlots & (1 << i)) === 0) return i; return -1; };
   function wholesOut(): number { let n = 0; for (let i = 0; i < CAP; i++) if (chars[i].on && chars[i].kind === 0) n++; return n; }
   /** cheap: does the registry hold exactly the bodies on the mat now? (no allocation) */
   function partyChanged(): boolean {
@@ -360,44 +368,57 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const partyHeld = (): boolean => ceremonyOn || game.ceremonies.active || game.ceremonies.pending || restoreQ.length > 0;
   /** bring the registry in line with the bodies on the mat (allocates only when something changed: a squishy out or back, a cut, a join) */
   let partySynced = false;       // the first sync (the party the host found at attach) is done: later wholes are brought out by the player
-  let cutSignalled = -1;         // the whole that got its CUT touch frame (LIFE 9: the touch comes before the whole is removed)
+  let cutSignalled = 0;          // a bit per whole that got its CUT touch frame (LIFE 9: the touch comes before the whole is removed)
   function syncParty(): void {
     if (partyHeld() || !partyChanged()) return;
-    const cutNow = game.cut.pieces > 1;
-    if (!cutNow) cutSignalled = -1;
     const playId = game.identity.itemId;
-    // the bodies now (the play body first)
-    const list: Array<{ b: SoftBodyLike; g: Genome; id: string | null; off: V3; piece: boolean }> = [{ b: bodies.body, g: game.identity.genome, id: playId, off: { x: 0, y: 0, z: 0 }, piece: cutNow }];
-    for (const x of bodies.extras) list.push({ b: x.body, g: x.genome, id: x.itemId ?? (x.piece ? playId : null), off: x.position, piece: !!x.piece || game.cut.isPiece(x.body) });
-    // gone: off the mat, or replaced (a cut swaps the play body for its pieces; whole again swaps a fresh body in)
-    let wholeCut = -1;
+    // who is in pieces now: a squishy that a piece on the mat belongs to (D-103: `of` names the party member; a piece without it is the play squishy's, as published)
+    let playCut = false;
+    const cutIds: string[] = [];
+    for (const x of bodies.extras) if (x.piece) { if (x.of === undefined) playCut = true; else if (!cutIds.includes(x.of)) cutIds.push(x.of); }
+    const isCut = (id: string): boolean => (id === playId ? playCut : cutIds.includes(id));
+    if (!playCut && !cutIds.length) cutSignalled = 0;
+    // the bodies now (the play body first). `id`: the squishy it is (a piece: the squishy it is a piece of); `face`: the anchor piece of a cut squishy (the one that keeps its item)
+    const list: Array<{ b: SoftBodyLike; g: Genome; id: string | null; off: V3; piece: boolean; face: boolean }> = [{ b: bodies.body, g: game.identity.genome, id: playId, off: { x: 0, y: 0, z: 0 }, piece: playCut, face: true }];
+    for (const x of bodies.extras) {
+      const piece = !!x.piece || (x.itemId !== null && cutIds.includes(x.itemId));
+      list.push({ b: x.body, g: x.genome, id: x.itemId ?? (x.piece ? x.of ?? playId : null), off: x.position, piece, face: !x.piece });
+    }
+    const rebound = (c: Char): { b: SoftBodyLike; off: V3 } | undefined => list.find((x) => !x.piece && x.id === c.itemId && slotOfBody(x.b) < 0);
+    // every whole that was just cut (its body is gone and its squishy is in pieces) first gets ONE frame with the CUT touch, all of them in the same frame (PG_LIFE, step.ts,
+    // LIFE 9: the most curious other whole walks over to look; the Journal's CUT record per cut squishy); the registry waits that one frame
+    let wait = false;
+    for (let i = 0; i < CAP; i++) {
+      const c = chars[i];
+      if (!c.on || c.kind !== 0 || c.itemId === null || (cutSignalled & (1 << i)) !== 0 || list.some((e) => e.b === c.body)) continue;
+      if (isCut(c.itemId) && !rebound(c)) { cutSignalled |= 1 << i; c.touchKind = TOUCH.CUT; wait = true; }
+    }
+    if (wait) return;
+    // gone: off the mat, or replaced (a cut swaps a body for its pieces; whole again swaps a fresh body in)
     for (let i = 0; i < CAP; i++) {
       const c = chars[i];
       if (!c.on || list.some((e) => e.b === c.body)) continue;
-      // the same squishy, whole, in a new body (back from a ceremony's stash; a quick switch to a squishy that was out): it keeps its brain
       if (c.kind === 0 && c.itemId !== null) {
-        const e = list.find((x) => !x.piece && x.id === c.itemId && slotOfBody(x.b) < 0);
+        // the same squishy, whole, in a new body (back from a ceremony's stash; a quick switch to a squishy that was out): it keeps its brain
+        const e = rebound(c);
         if (e) { rebind(i, e); continue; }
+        // the whole that was cut: its slot is its pieces' group key
+        if (isCut(c.itemId)) { cutGroups.set(c.itemId, i); cutSlots |= 1 << i; }
       }
-      if (cutNow && c.kind === 0 && c.itemId !== null && c.itemId === playId) {
-        // the whole that was cut: its slot is its pieces' group key. PG_LIFE (step.ts, LIFE 9): the whole first gets one frame with the CUT touch (the most
-        // curious other whole walks over to look), then it is removed and its pieces join (the registry waits that one frame)
-        if (cutSignalled !== i) { cutSignalled = i; c.touchKind = TOUCH.CUT; return; }
-        wholeCut = i;
-      }
+      cutSignalled &= ~(1 << i);
       removeChar(i);
     }
-    if (wholeCut >= 0) { cutGroup = wholeCut; cutSignalled = -1; }
-    if (!cutNow && cutGroup >= 0) {
-      // whole again: the pieces are gone (removed above); the fresh whole takes the group's slot back
-      const g = cutGroup;
-      cutGroup = -1;
-      for (const e of list) if (!e.piece && slotOfBody(e.b) < 0 && e.id === playId) { addCharAt(g, e); break; }
+    // whole again: the pieces are gone (removed above); the group's slot is free again and the fresh whole comes back as a plain character (it never left: no BRING, no settling)
+    for (const [id, slot] of cutGroups) {
+      if (isCut(id)) continue;
+      cutGroups.delete(id); cutSlots &= ~(1 << slot);
+      for (const e of list) if (!e.piece && slotOfBody(e.b) < 0 && e.id === id) { addChar(e.b, e.g, e.id, e.off, 0, -1); break; }
     }
     // new: wholes, and pieces (the play body is the face piece, the rest chunks)
     for (const e of list) {
       if (slotOfBody(e.b) >= 0) continue;
-      if (e.piece && cutGroup >= 0) addChar(e.b, e.g, e.id, e.off, e.b === bodies.body ? 1 : 2, cutGroup);
+      const grp = e.piece && e.id !== null ? cutGroups.get(e.id) : undefined;
+      if (grp !== undefined) addChar(e.b, e.g, e.id, e.off, e.face ? 1 : 2, grp);
       else {
         // a capsule's newcomer arrives NEW (B09: the shy arrival, and its hello within 5 s); in a place a squishy who joins stands at a free spawn spot
         const isNew = e.id !== null && e.id === newcomerId;
@@ -427,14 +448,6 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const c = chars[i], b = lay.bounds;
     try { c.body!.setBounds?.(b.shape === 'disc' ? 0 : 1, b.x - c.offX, b.z - c.offZ, b.shape === 'disc' ? (b.r ?? 3) : (b.hx ?? 3), b.shape === 'disc' ? 0 : (b.hz ?? 2.4), b.round ?? 0); } catch (e) { report(e); }
   }
-  function addCharAt(slot: number, e: { b: SoftBodyLike; g: Genome; id: string | null; off: V3 }): void {
-    // a fresh whole in a given (free) slot: take the lowest free one, then move it if needed (slots are LIFE keys only)
-    const keep = cutGroup;
-    cutGroup = -1;
-    const i = addChar(e.b, e.g, e.id, e.off, 0, -1);
-    cutGroup = keep;
-    void slot; void i;
-  }
   /** a party change: sleep for several, the friendship pairs, Home's corral homes and things, the journal's party */
   function afterPartyChange(): void {
     const n = wholesOut();
@@ -459,7 +472,19 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     }
     try { const ids: string[] = []; for (const c of chars) if (c.on && c.kind === 0 && c.itemId) ids.push(c.itemId); game.hoard.setJournalParty?.(ids); } catch (e) { report(e); }
     floatRule();
-    if (placeIdx === 0) homeThings();
+    if (placeIdx === 0) { homeRoomRule(); homeThings(); }
+  }
+  // ---- round 14 (R14_ROOMS, D-104; the owner 2026-11-23: "Make sq footage of rooms wider ... to allow easier exploration for our squishies"): HOME IS A ROOM with
+  //      two or more squishies out. Every body is kept by the felt's disc (r 5.5 m, physics setBounds) instead of the published corral about its own spot, so a
+  //      carried or tossed squishy stays where it comes to rest; the Felt Ball rolls over the whole felt; a carry runs on the level plane as in a place (carryPoint).
+  //      One squishy alone keeps the published toy, bit for bit: the corral about its spot (setBounds -1), the ball inside the visible table. ----
+  let homeRoom = false;
+  const homePend = new Uint8Array(CAP);
+  function homeRoomRule(): void {
+    homeRoom = placeIdx === 0 && wholesOut() >= 2;
+    if (placeIdx !== 0) return;
+    const b = HOME.bounds, r = b.r ?? 5.5;
+    for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.body) { try { c.body.setBounds?.(homeRoom ? 0 : -1, b.x - c.offX, b.z - c.offZ, r, 0, 0); } catch (e) { report(e); } } }
   }
 
   // ---- the Float rule (D-97, owner 2026-11-19 "float doesnt actually make them float"; it replaced D-83, which forced the table with a party or in a place):
@@ -561,8 +586,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       const x = (spot ? spot.x : t.x) * bodyScale, z = (spot ? spot.z : t.z) * bodyScale, yaw = spot ? spot.yaw : t.yaw;
       try { stage.setHomeThing?.(k, show, x, z, yaw); } catch (e) { report(e); }
     }
-    // the Felt Ball's bounds: the visible table (the world shrinks it by the ball's radius, D-67)
-    try { if (stage.visibleTable?.(vis)) world.setBallBounds(vis[0], vis[1], vis[2], vis[3]); } catch (e) { report(e); }
+    // the Felt Ball's bounds: the visible table (the world shrinks it by the ball's radius, D-67); round 14: the whole felt with two or more out (homeRoom)
+    try { if (homeRoom) world.setBallDisc(HOME.bounds.x, HOME.bounds.z, HOME.bounds.r ?? 5.5); else if (stage.visibleTable?.(vis)) world.setBallBounds(vis[0], vis[1], vis[2], vis[3]); } catch (e) { report(e); }
   }
   /** (re)build Home's prop world for the frame in use (on attach, a frame change, a body-size change) */
   function buildHome(): void {
@@ -874,34 +899,67 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   // kept inside the place's reach (its bounds, their front reach, + CARRY_RIM): a drag up the frame takes it back over the floor, a drag down brings it forward, a
   // flick tosses it along the ground. Home (and every pull that is not a carry) keeps the published plane: null.
   const CARRY_RIM = 0.3, CARRY_LEAD = 0.9;   // (the lead under physics' maxPull, at least 1.0 x the rest radius: its own clamp never acts on a carry in a place)
-  let carryB: SoftBodyLike | null = null, carryY = 0;
+  // (round 14, R14_CARRY: a carry's plane is its own record, so a second finger's carry (later-carry.ts hands) keeps its own beside the gesture machine's carry0;
+  //  carry0.b / .base / .ux / .uz are round 8's carryB / carryY / carryUx / carryUz)
+  const carry0 = carryPlane();
   // (the seam lives in this chunk, not in the first-play download: the gesture machine asks game.host.planePoint at every move, so while the host is attached it
   //  asks carryPoint first for the squishy being carried (the pull's own body: `through` and the answer are in its space) and the published plane otherwise;
   //  dispose gives the published one back)
-  const gHost = game.host as { planePoint(x: number, y: number, through: V3): V3 | null };
-  const planeAt = gHost.planePoint;
+  const gHost = game.host as { planePoint(x: number, y: number, through: V3): V3 | null; hitTest(x: number, y: number): BodyHit | null; bodyScreen(): { x: number; y: number; r: number } | null; carryOn?(): boolean };
+  const planeAt = gHost.planePoint, hitAt = gHost.hitTest;
   gHost.planePoint = (x: number, y: number, through: V3): V3 | null => {
     let q: V3 | null = null;
-    if (placeIdx !== 0) for (let i = 0; i < CAP; i++) {
+    if (placeIdx !== 0 || homeRoom) for (let i = 0; i < CAP; i++) {   // (round 14: Home with two or more out carries on the level plane too, homeRoom)
       const c = chars[i];
-      if (c.on && c.body && c.body.metrics.carried === true) { q = carryPoint(x, y, through, c.body, { x: c.offX, y: c.offY, z: c.offZ }); break; }
+      // (round 14, CARRY: a body a second finger carries is that hand's, not the gesture machine's)
+      if (c.on && c.body && c.body.metrics.carried === true && !hands.carrying(c.body)) { q = carryPoint(x, y, through, c.body, { x: c.offX, y: c.offY, z: c.offZ }, carry0); break; }
     }
-    if (!q) carryB = null;   // (no carry now: the next carry takes its height afresh at its own pick-up)
+    if (!q) carry0.b = null;   // (no carry now: the next carry takes its height afresh at its own pick-up)
     return q ?? planeAt(x, y, through);
   };
-  function carryPoint(x: number, y: number, through: V3, body: SoftBodyLike, off: V3): V3 | null {
-    if (placeIdx === 0 || !world || body.metrics.carried !== true) { carryB = null; return null; }
+  // ---- (round 14, R14_CARRY, D-105: "make it easier to pick up and move squishies around") where squishies are moved around (a place; Home with two or more
+  //      out) a drag that starts on a squishy CARRIES it (gestures.ts CARRY, physics lift: the level carry); a press just beside a squishy takes it (hitNear,
+  //      nearBody); a second finger carries a second squishy (hands); "Drag to carry" once ----
+  const carryRoom = (): boolean => (placeIdx !== 0 || homeRoom) && !!world;
+  gHost.carryOn = () => carryRoom() && game.tool === 'hand' && !s.quiet;
+  gHost.hitTest = (x: number, y: number): BodyHit | null => { const h = hitAt(x, y); return h || !carryRoom() ? h : hitNear(gHost, hitAt, x, y); };
+  const hands = createHands({
+    game, cap: CAP, live: () => carryRoom() && game.tool === 'hand' && !s.quiet,
+    body: (i) => (chars[i].on ? chars[i].body : null),
+    off: (i, o) => { const c = chars[i]; o.x = c.offX; o.y = c.offY; o.z = c.offZ; },
+    point: (x, y, through, b, off, st) => carryPoint(x, y, through, b, off, st),
+    report,
+  });
+  let tipAsked = false;
+  /** once a frame (act): a second finger's carry asks its target again (the view moves under a still finger); the gesture line names the carry where it works;
+   *  "Drag to carry" once ever, the first time squishies can be carried here */
+  function carryFrame(): void {
+    hands.frame();
+    const on = carryRoom();
+    setHintRoom(on ? HINT_ROOM : null);
+    if (on && !tipAsked && game.tool === 'hand' && !s.quiet && !travelling) { tipAsked = true; if (carryTipDue(deps.storage)) deps.moment?.(CARRY_TIP); }
+  }
+  function carryPoint(x: number, y: number, through: V3, body: SoftBodyLike, off: V3, L: CarryPlane): V3 | null {
+    if ((placeIdx === 0 && !homeRoom) || !world || body.metrics.carried !== true) { L.b = null; return null; }
     const cam = stage.camera;
     if (!cam) return null;
     try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
     const n = pxToNdc(x, y, game.viewport), r = cameraRay(cam, n.x, n.y);
-    if (carryB !== body) {
+    const lvl = body.levelCarry === true, R0 = body.restRadius;
+    if (L.b !== body) {
       // the first move of this carry: the hand's height now, on the published plane (through the press point, in world space)
       const h = rayPlane(r.origin, r.dir, { x: through.x + off.x, y: through.y + off.y, z: through.z + off.z }, cameraForward(cam));
-      carryB = body; carryY = h ? h.y : body.center.y + off.y;
+      L.b = body; L.base = h ? h.y : body.center.y + off.y; L.raise = 0;
+      // (round 14, D-104) where the body hangs from the hand: the direction from the hand to the centre at the pick-up (physics startCarry keeps the centre at
+      // the anchor's rest distance along it). Its part across the floor is the lead's base, below.
+      L.ux = 0; L.uz = 0;
+      if (h) { const ux = body.center.x + off.x - h.x, uy = body.center.y + off.y - h.y, uz = body.center.z + off.z - h.z, ul = Math.hypot(ux, uy, uz); if (ul > 1e-6) { L.ux = ux / ul; L.uz = uz / ul; } }
+      // (round 14, CARRY: the level carry keeps its hand's height over the FLOOR: one picked up from the top of a thing is carried that high over the open floor and
+      // rises again over the next thing; the first raise below puts it back over the thing it stands on)
+      if (lvl) L.base -= overTop(world, body.center.x + off.x, body.center.z + off.z, R0);
     }
     let px: number, pz: number;
-    const t = r.dir.y < -1e-4 ? (carryY - r.origin.y) / r.dir.y : -1;
+    const t = r.dir.y < -1e-4 ? (L.base + L.raise - r.origin.y) / r.dir.y : -1;
     if (t > 0) { px = r.origin.x + r.dir.x * t; pz = r.origin.z + r.dir.z * t; }
     else { const l = Math.hypot(r.dir.x, r.dir.z) || 1; px = r.origin.x + (r.dir.x / l) * 60; pz = r.origin.z + (r.dir.z / l) * 60; }   // (at or above the horizon: far along it, clamped below)
     const b = (layout === 1 ? def.tall : def).bounds;
@@ -915,9 +973,23 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     // the hand leads the body by at most CARRY_LEAD x its rest radius across the floor (every move asks again from where the body is now, so a drag reaches the
     // spot under the pointer as it goes): a target metres ahead (the level plane near the horizon) put physics' own lead clamp and follow speed limit to work,
     // which left the height unheld (measured: a 120 px drag up the frame lifted the squishy 1.2 to 1.4 m at every place)
-    const cx = body.center.x + off.x, cz = body.center.z + off.z, ex = px - cx, ez = pz - cz, el = Math.hypot(ex, ez), lead = CARRY_LEAD * body.restRadius;
+    // (round 14, D-104: the lead is measured from where the HAND hangs, not from the centre. A squishy lifted by its side hangs a rest radius beside the hand; with
+    // the lead taken from its centre the hand's target never reached the pointer (the anchor's rest distance, up to 1.0 x the rest radius, is over the 0.9 lead), so
+    // the centre's target stayed ahead of the centre and the squishy RAN AWAY from the hand at over 1 m/s, out past the bounds: the browser check of the bigger
+    // rooms, a sideways lift at Home and in a place. A lift straight up (the hand over the centre) is as before: the base is the centre)
+    if (lvl) {
+      // (round 14, R14_CARRY) the LEVEL carry: no lead clamp (the physics hand leads across the floor by at most its maxPull, asked again every substep, so the
+      // squishy arrives UNDER the finger even when the finger stops: the clamp here, asked only when the pointer moved, left carries short of the spot); the hand
+      // rises over the things on the way (the body now, where it is going, between): over a pad, a mound, a nest or a seat it is carried over and set down on it
+      const bx = body.center.x + off.x, bz = body.center.z + off.z, tx = px + L.ux * R0, tz = pz + L.uz * R0;
+      const top = Math.max(overTop(world, bx, bz, R0), overTop(world, tx, tz, R0), overTop(world, (bx + tx) / 2, (bz + tz) / 2, R0));
+      // (the squishy already hangs the level carry's lift (physics LVL_UP_*) over the floor: the hand rises only by what that does not clear)
+      L.raise = top > 0 ? Math.max(0, top + OVER_GAP - (LVL_UP_M + LVL_UP_K * R0)) : 0;
+      return { x: px - off.x, y: L.base + L.raise - off.y, z: pz - off.z };
+    }
+    const cx = body.center.x + off.x - L.ux * body.restRadius, cz = body.center.z + off.z - L.uz * body.restRadius, ex = px - cx, ez = pz - cz, el = Math.hypot(ex, ez), lead = CARRY_LEAD * body.restRadius;
     if (el > lead) { px = cx + (ex * lead) / el; pz = cz + (ez * lead) / el; }
-    return { x: px - off.x, y: carryY - off.y, z: pz - off.z };
+    return { x: px - off.x, y: L.base - off.y, z: pz - off.z };
   }
   // ---- the steadying hand of a "Go play with..." lift onto a swing (useRide; its state is declared with the place's, a world rebuild clears it) ----
   function endSteady(): void {
@@ -1070,7 +1142,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // a carry let go: a toss until it lands (and a ride it lands on is one the player set up). (round 8) One let go while it already rests ON something (a ride's
       // top, the floor: the carry over the ground sets a squishy down there) never "lands" (no fall, no land event) and stayed a toss: R8's phone run set a squishy at
       // the Glide Ramp's top twice and the second (picked up from the ramp and set back) was no USE. Supported at the let go = set down, not tossed.
-      if (c.wasCarried && !carried) { c.tossed = !((m.onProp ?? -1) >= 0 || m.grounded === true); c.setT = t; if (placeIdx !== 0 && c.tossed && dt > 0) tossInside(c, x, z); }
+      if (c.wasCarried && !carried) { c.tossed = !((m.onProp ?? -1) >= 0 || m.grounded === true); c.setT = t; if (placeIdx !== 0 && c.tossed && dt > 0) tossInside(c, x, z); if (b.gravity === false) floatSpot(i, x, z); }   // (round 14, CARRY: a floater stays where it is put, inside the place)
       if (!c.wasCarried && carried) c.touchKind = TOUCH.CARRY;
       c.wasCarried = carried;
       let f = 0;
@@ -1088,6 +1160,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // R8's final run: the second squishy set on the Sand Mound's top (on target) stayed "tossed" and its ride (R9) was never the player's
       if (c.tossed && !carried && (onProp >= 0 || m.grounded === true) && c.vx * c.vx + c.vz * c.vz < 0.09) c.tossed = false;
       if (c.tossed) f |= LIFE_FLAG.TOSSED;
+      // (round 14, D-104) Home as a room (two or more out): a squishy the player carried lives where it comes to rest: its LIFE home moves there (B11 never walks
+      // it back to its mat slot, and its next wanders start from there)
+      if (homeRoom && c.kind === 0) { if (carried) homePend[i] = 1; else if (homePend[i] === 1 && !c.tossed && m.grounded === true && c.vx * c.vx + c.vz * c.vz < 0.01) { homePend[i] = 0; c.homeX = x; c.homeZ = z; lifeSetHome(w, i, x, z); } }
       if (s.sx[i] === s.sx[i]) f |= LIFE_FLAG.VISIBLE;
       if (m.memoryBusy === true) f |= LIFE_FLAG.MEMORY_BUSY;
       if ((m.submerged ?? 0) > 0) f |= LIFE_FLAG.IN_WATER;   // (S2: physics' water share; LIFE's float table reads its own zones first)
@@ -2042,12 +2117,13 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
   const handSlot = (id: number): number => { for (let j = 0; j < 4; j++) if (handOn[j] === 1 && handId[j] === id) return j; return -1; };
   const handFree = (): number => { for (let j = 0; j < 4; j++) if (handOn[j] === 0) return j; return -1; };
   function dropAll(): boolean {
-    let any = false;
+    let any = hands.dropAll();   // (round 14, CARRY: a second finger's carry lets go too)
     for (let j = 0; j < 4; j++) if (handOn[j] === 1) { any = true; handOn[j] = 0; try { world?.releaseProp(handProp[j]); } catch { /* gone */ } }
     endSteady();
     return any;
   }
   function grabAt(id: number, x: number, y: number): boolean {
+    if (hands.grab(id, x, y)) { playerTouchT = game.simTime; return true; }   // (round 14, CARRY: a second finger on another squishy carries that one)
     const W = world;
     if (!W || s.quiet || game.tool !== 'hand' || handSlot(id) >= 0) return false;   // (D-97: also while floating)
     const j = handFree();
@@ -2074,6 +2150,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     return true;
   }
   function dragAt(id: number, x: number, y: number): boolean {
+    if (hands.drag(id, x, y)) return true;
     const j = handSlot(id);
     if (j < 0) return false;
     const W = world, cam = stage.camera;
@@ -2086,6 +2163,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     return true;
   }
   function dropAt(id: number, x: number, y: number): boolean {
+    if (hands.drop(id)) return true;
     const W = world;
     const j = handSlot(id);
     if (j < 0) return false;
@@ -2295,6 +2373,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       homeShown.fill(0);
       // Home keeps the published corral about each body's own spot (setBounds -1; D-87's rectangle is not sent: one squishy alone stays the published toy)
       for (let i = 0; i < CAP; i++) { const c = chars[i]; if (c.on && c.body) { try { c.body.setBounds?.(-1, 0, 0, 0, 0, 0); } catch (e) { report(e); } } }
+      homeRoomRule();   // (round 14: with two or more out Home is a room: the felt's disc, set before its world is built)
       buildHome();
       vaneSetup();   // (none at Home)
       try { stage.setAutonomyFraming?.(true); } catch { /* ignore */ }
@@ -2410,6 +2489,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       if (dt > 0) weatherStep();   // (round 6: the gusts follow LIFE's clock before the props step; the bed hears each weather event)
       if (dt > 0 && world) world.beginFrame();   // (D-97: the world steps while floating too)
       steadyStep();
+      carryFrame();
       pumpRestore();
       syncParty();
       // the frame changed (a rotation, a resize across aspect 0.9) or the play body's size: Home re-lays its things (a place keeps its layout until the next trip)
@@ -2417,7 +2497,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         const tall = frameTall(), sc = measureScale();
         if (tall !== lastTall || Math.abs(sc - lastScale) > 1e-3) { lastTall = tall; lastScale = sc; buildHome(); }
         // the Felt Ball's bounds follow the rest framing the camera eases to after a party change (visibleTable is zero-allocation): 1 Hz
-        else if (world && ++boundsTick >= 60) { boundsTick = 0; try { if (stage.visibleTable?.(vis)) world.setBallBounds(vis[0], vis[1], vis[2], vis[3]); } catch { /* an old stage */ } }
+        else if (world && !homeRoom && ++boundsTick >= 60) { boundsTick = 0; try { if (stage.visibleTable?.(vis)) world.setBallBounds(vis[0], vis[1], vis[2], vis[3]); } catch { /* an old stage */ } }
       }
       kettleStep();
       showerStep();
@@ -2438,7 +2518,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     dragAt,
     dropAt,
     dropAll,
-    holds: (id) => handSlot(id) >= 0,
+    holds: (id) => handSlot(id) >= 0 || hands.holds(id),
+    nearBody: (x, y) => (carryRoom() ? nearBody(game, x, y) : undefined),
     autoThings() {
       const rows: Array<{ k: number; id: string; on: boolean; x: number; y: number }> = [];
       if (!hasAuto() || placeIdx === 0 || s.quiet || floatParked) return rows;
@@ -2540,6 +2621,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         if (!c.on || c.kind !== 0 || !c.body || c.body === bodies.body) continue;
         const m = c.body.metrics;
         if (m.fingers > 0 || m.grabbed || m.carried === true || c.tossed) continue;
+        if (game.cut.cutting?.(c.body)) continue;   // (D-103: one stroke can cut several: a whole whose own cut is under way is not put to sleep in its pinch)
         try { c.body.sleep?.(); } catch { /* a mock */ }
       }
       return 0;
@@ -2548,7 +2630,8 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     pieceCap() {
       // pieces = min(the tier's pieces cap, the characters cap - (wholes - 1)) while 2 or more wholes are out (the cut squishy counts as its whole);
       // one squishy out keeps the published safety ceiling (null)
-      const wholes = wholesOut() + (cutGroup >= 0 ? 1 : 0);
+      // (D-103: the Cut tool's own cap is now the PARTY's budget, later-cut.ts; this stays the host's answer for one cut squishy)
+      const wholes = wholesOut() + cutGroups.size;
       if (wholes < 2) return null;
       let t = 1;
       try { t = TIER_IDX[stage.stats().tier] ?? 1; } catch { t = 1; }
@@ -2640,6 +2723,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     dispose() {
       dropAll();
       gHost.planePoint = planeAt;
+      gHost.hitTest = hitAt; gHost.carryOn = undefined; setHintRoom(null);   // (round 14, CARRY: the published gesture host again)
       if (inPort && upPublished) inPort.pointerUp = upPublished;
       offEvents(); offCeremony(); offSettings();
       for (let i = 0; i < CAP; i++) if (chars[i].on) { clearBubbles(i); try { chars[i].body?.setPropWorld?.(null); } catch { /* ignore */ } }
@@ -2685,5 +2769,7 @@ export function attachLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi | nu
   if (game.life) return game.life as LifeHostApi;
   const h = createLifeHost(game, deps);
   game.attachLife(h);
+  // D-103 (owner 2026-11-23): one cutter per cut squishy. The party cutter (later-cut.ts) takes the play squishy's cutter in, once; a game without the seam keeps the published one
+  if (h && !game.cut.sets) { try { game.wrapCut?.((base, cd) => createPartyCutter(game, base, cd, { beforeCut: () => h.beforeCut?.() ?? 0 })); } catch { /* the published cutter */ } }
   return h;
 }

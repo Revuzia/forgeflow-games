@@ -12,7 +12,7 @@ import { Particles } from '../particles.ts';
 import type { PanelDef } from '../env.ts';
 import PLACE from '../../data/place_hearthlog.ts';
 
-const WALL_H = 2.4, LOG_R = 0.15;
+const WALL_H = 3.3, LOG_R = 0.15;   // (round 14, D-104 "volume bigger": the log walls stand 3.3 m (11 logs; physics' walls are PROPS.WALL_H 3.4), were 2.4 m)
 const UP = new THREE.Vector3(0, 1, 0);
 
 // the floor boards: dusk-dark planks along x, band-limited grain (no shimmer at grazing angles), top at y = 0
@@ -153,7 +153,11 @@ const LOOK: PlaceLook = {
     };
     floorMat.customProgramCacheKey = () => 'wh-boards-v1';
     // (round 3: 40 m, like PropKit.ground: with Home's band margin a tall frame's camera stands further back and saw the 16 m floor end at the HUD line)
-    const floor = kit.mesh(kit.geo('floor', () => new THREE.PlaneGeometry(40, 40).rotateX(-Math.PI / 2)), floorMat, 0, 0, 0, -50);
+    // (round 14, D-104: the boards end at the side walls' outer faces and at the back wall's. The whole-room view of the tall room is as wide as the frame is
+    // tall, so it sees past both side walls: the 40 m of boards read as more floor outside the cabin. They still run 20 m toward the camera, where the room is open)
+    let fox = 0, foz = 0;
+    for (const w of walls) { fox = Math.max(fox, Math.abs(w.x) + (w.hx ?? 0.15)); foz = Math.min(foz, w.z - (w.hz ?? 0.15)); }
+    const floor = kit.mesh(kit.geo(`floor${fox},${foz}`, () => new THREE.PlaneGeometry(2 * fox, 20 - foz).rotateX(-Math.PI / 2)), floorMat, 0, 0, (20 + foz) / 2, -50);
     g.add(floor);
 
     // ---- the rug (a patch: no collider) ----
@@ -192,7 +196,7 @@ const LOOK: PlaceLook = {
     g.add(kit.card('void main(){ float y = vUv.y * 4.4; float b = fract(y / 0.3); float k = mod(floor(y / 0.3), 2.0); vec3 c = mix(uA, uB, k) * (0.55 + 0.45 * sin(3.14159 * b)); c = mix(c, uTop, smoothstep(0.15, 0.9, vUv.y)); gl_FragColor = vec4(c, 1.0);\n#include <colorspace_fragment>\n}',
       upU, 2 * (back.hx ?? 3) + 1.2, 4.4, 0, WALL_H + 2.2, backZ - 0.32, 0, -60));
     const sideX = Math.abs(walls.find((w) => (w.hz ?? 0) > (w.hx ?? 0))!.x) + 0.32;
-    card(-sideX, WALL_H + 2.2, 0, 10, 4.4, Math.PI / 2, -59); card(sideX, WALL_H + 2.2, 0, 10, 4.4, -Math.PI / 2, -58);
+    card(-sideX, WALL_H + 2.2, 0, 16, 4.4, Math.PI / 2, -59); card(sideX, WALL_H + 2.2, 0, 16, 4.4, -Math.PI / 2, -58);   // (round 14: the side walls are 8.4 m and 10.4 m long now)
 
     // ---- the back window: night, pines, snow behind the pane ----
     const wz = tall ? PLACE.tall.zones[1] : PLACE.zones[1];

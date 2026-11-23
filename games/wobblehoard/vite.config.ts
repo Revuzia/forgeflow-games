@@ -62,7 +62,7 @@ const LATER_FACADES: ReadonlyArray<readonly [RegExp, (m: RegExpMatchArray) => st
 const LAZY_ONLY: readonly RegExp[] = [
   /[\\/]src[\\/]life[\\/]/, /[\\/]src[\\/]data[\\/](life|places|quests|journal_text|place_[a-z]+)\.ts$/, /[\\/]src[\\/]core[\\/]quests\.ts$/,
   /[\\/]src[\\/]collection[\\/]journal(_store)?\.ts$/, /[\\/]src[\\/]physics[\\/]props\.ts$/, /[\\/]src[\\/](shell|ui)[\\/]later-/, /[\\/]src[\\/]ui[\\/](wishes\.ts|journal\.css|play\.css)$/,
-  /[\\/]src[\\/]render[\\/](place|placeview|lifelook|homekit|emotes|postcard)\.ts$/, /[\\/]src[\\/]render[\\/]places[\\/]/, /[\\/]src[\\/]audio[\\/](ambience|props|things)\.ts$/, /[\\/]src[\\/]audio[\\/]places[\\/]/,
+  /[\\/]src[\\/]render[\\/](place|placeview|lifelook|homekit|emotes|postcard|roomcam)\.ts$/, /[\\/]src[\\/]render[\\/]places[\\/]/, /[\\/]src[\\/]audio[\\/](ambience|props|things)\.ts$/, /[\\/]src[\\/]audio[\\/]places[\\/]/,
 ];
 /** Round 7 (R7_SHELL; D-92's overflow rule "over a cap a lane packs, then moves into a lazier named chunk"): LIFE's brain (src/life/**) is a chunk of its own,
  *  `later-brain`, which the life chunk imports (so it loads with it, in parallel: vite's preload of a dynamic import's dependencies). The life chunk was 147.1 KB

@@ -2090,8 +2090,11 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     matB === 2 && sr === 'cut' && matCut === matB && idsCut === idsB && othersCut.length === matB - 1 && !notes.some((t) => /went back on the shelf/.test(t)) && cutC.length === 2 && new Set(cutC.map((c) => c.group)).size === 1
       && app.mat.count === matB && wholesA === wholesB && after.length === 1,
     JSON.stringify({ mat: [matB, matCut, app.mat.count], ids: [idsB, idsCut], others: othersCut.map((c) => [c.slot, c.species, c.asleep]), notes, wholes: [wholesB, wholesA] }));
-  check('PLAYGROUND (round 5, B2; SH-03) the piece limit with a party: min(the tier\'s pieces cap, the characters cap - (wholes - 1)) = min(6, 10 - 1) = 6 on high with 2 out (one squishy out keeps the published safety ceiling, 64)',
-    capB === 6, `maxPieces with 2 out on high: ${capB}`);
+  // RE-SPECIFIED 2026-11-23 for D-103 (owner: "allow ability to cut multiple squishies at the same time"). The row asserted 6 pieces on high with 2 out: SH-03's cap for the ONE cut squishy
+  // (min(the tier's pieces cap, the characters cap - (wholes - 1))). D-103 lets every squishy out be cut, so the cap is now the PARTY's budget shared by all cut squishies (later-cut.ts
+  // PARTY_PIECES 12, never more than LIFE's 16 character slots less the squishies out; derived from the measured cost per piece, R14_MULTICUT.md "Budget"): 12 with 2 out, at every tier.
+  check('PLAYGROUND (round 5, B2; SH-03; D-103) the piece limit with a party is the party\'s budget: min(12, 16 - squishies out) = 12 with 2 out, shared by every cut squishy (one squishy out keeps the published safety ceiling, 64)',
+    capB === 12, `maxPieces with 2 out on high: ${capB}`);
   // round 5 (VERDICT_PG B7; SH-22, D-61, D-85): 5 out on high, nobody touching: the over-budget rule brings the awake units back under unitCap (sleeping untouched
   // wholes, farthest first) and keeps them there; the verifier saw 3.06 to 4.28 units against 2.494 for 20 s
   {
@@ -2335,9 +2338,13 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     audio.setAmbience = amb0;
     await host.travel('home'); await stepA(60);
     // (round 8) ... and at Home the published carry is unchanged: the same pick-up and drag up the frame lifts the squishy more than it takes it back (camera-facing plane)
+    // RE-SPECIFIED 2026-11-23 (R14_CARRY) for owner decisions D-104 (Home with two or more out is a ROOM: its carries run on the level plane) and D-105 (where squishies
+    // are carried, a drag that starts on a squishy picks it up at once and a drag up the frame takes it BACK). This rig has the party out here, so Home is a room: the
+    // same drag now carries it back across the floor at about the height it was picked up at, as in a place. Home with ONE squishy out keeps the published pull, gesture
+    // for gesture: probe_carry K2 and probe_gestures C6 hold that. Was: "Home keeps the published carry: ... lifts the squishy more than it takes it back".
     const cuH = await carryUp();
-    check('PLAYGROUND (round 8) Home keeps the published carry: the same pick-up and 120 px drag up the frame lifts the squishy more than it takes it back (the camera-facing plane through the press)',
-      cuH.carried === true && (cuH.dy as number) > 0.15 && (cuH.dy as number) > (cuH.dz as number), JSON.stringify(cuH));
+    check('PLAYGROUND (round 8, re-specified for D-104 / D-105) Home with the party out is a room: the same pick-up and 120 px drag up the frame carries the squishy BACK (0.8 m or more) at about the height it was picked up at (within 0.3 m), picked up within 30 px of drag',
+      cuH.carried === true && (cuH.liftPx as number) <= 30 && (cuH.dz as number) >= 0.8 && Math.abs(cuH.dy as number) <= 0.3, JSON.stringify(cuH));
   }
   app.dispose();
   // round 6 (D-96, the brief's rule "a save that already holds a stamp, wish or fact of a dropped place must still load without error"): the HOST on such a save

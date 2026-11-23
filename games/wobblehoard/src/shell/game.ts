@@ -18,9 +18,8 @@
 import type {
   PieceOpts, Settings, SoftBodyLike, SoftEvent, SoftMetrics, SquishAudio, StageFrameInput, StageLike, TierName, V3,
 } from '../contracts.ts';
-import type { Cutter, CutResult } from './cut.ts';
+import type { CutDeps, Cutter, CutResult } from './cut.ts';
 import { createCutter } from './cut.ts';
-import { oneAtATime } from './cutText.ts';
 import type { Genome, SquishyInstance } from '../core/genome.ts';
 import { genomeEquals } from '../core/genome.ts';
 import { clamp } from '../core/rng.ts';
@@ -280,6 +279,9 @@ export interface Game {
   readonly life: LifeHostLike | null;
   /** attach the host (its act / sense / quest lines in simStep start at the next step); null detaches it (dispose is the host's own) */
   attachLife(h: LifeHostLike | null): void;
+  /** D-103 (owner 2026-11-23: cut several squishies at the same time): the life chunk's party cutter (shell/later-cut.ts) takes the play squishy's cutter in and becomes `game.cut`
+   *  (one cutter per cut squishy). `deps` is the very object the play squishy's cutter reads, so the party may set its optional members (pieceCap, homeSpot, name, keepCache, say). */
+  wrapCut(make: (base: Cutter, deps: CutDeps) => Cutter): void;
   /** the player's touches and capsules from before the host landed (the host turns them into ring records when it attaches) */
   readonly earlyLog: EarlyLog;
   dispose(): void;
@@ -468,7 +470,8 @@ export function createGame(deps: GameDeps): Game {
 
   // ---- CUT (cut.ts): the play squishy's pieces; the toy tray's tool
   let tool: Tool = 'hand';
-  const cut: Cutter = createCutter({
+  // (D-103: `cutDeps` is kept, and `cut` can be wrapped: the life chunk's party cutter, later-cut.ts, makes one cutter per cut squishy and takes this one in as the play squishy's)
+  const cutDeps: CutDeps = {
     bodies, stage, audio, haptics, createBody: deps.createBody,
     quality: () => { try { return stage.stats().tier; } catch { return 'low'; } },
     calm: () => S().calm, gravity: () => S().gravity, simTime: () => simTime, viewport: () => viewport,
@@ -478,35 +481,13 @@ export function createGame(deps: GameDeps): Game {
     // pieces join it as one group); the published toy (no host: the life chunk not landed, or one squishy out) clears the mat as before
     clearMat: () => { if (life?.beforeCut) { try { return life.beforeCut(); } catch (e) { report(e); return 0; } } const n = mat.count - 1; try { mat.clear(); } catch (e) { report(e); } return n; },
     pieceCap: () => { try { return life?.pieceCap?.() ?? null; } catch (e) { report(e); return null; } },
-    homeSpot: () => cutHome,
     panOf: (p) => panOfPoint(p),
     say: (t) => emit('notice', t),
     report,
-  });
-  /** D-99: the spot the play squishy goes back together at after a cut (set when a stroke made a squishy out the play one in place; null: the middle, as published) */
-  let cutHome: V3 | null = null;
-  /** D-99 (owner 2026-11-19: "if i have multiple squishies out i should be able to cut any/all of them"): the WHOLE squishy out (not the play one) that a stroke crosses
-   *  most (16 samples along it; the nearest body under each), or null. Only shared extras (in the play body's space) count. */
-  function strokeWhole(x0: number, y0: number, x1: number, y1: number): ExtraBody | null {
-    const cam = stage.camera;
-    if (!cam || !bodies.extras.length) return null;
-    try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
-    const hits = new Map<ExtraBody, number>();
-    for (let k = 0; k <= 16; k++) {
-      const n = pxToNdc(x0 + (x1 - x0) * k / 16, y0 + (y1 - y0) * k / 16, viewport), r = cameraRay(cam, n.x, n.y);
-      let best: ExtraBody | null = null, bestT = Infinity;
-      const h0 = raycastAt(bodies.body, r.origin, r.dir, ORIGIN);
-      if (h0) bestT = h0.t;
-      for (const xb of bodies.extras) { if (xb.piece || !xb.shared) continue; const h = raycastAt(xb.body, r.origin, r.dir, xb.position); if (h && h.t < bestT) { bestT = h.t; best = xb; } }
-      if (best) hits.set(best, (hits.get(best) ?? 0) + 1);
-    }
-    let out: ExtraBody | null = null, most = 0;
-    for (const [xb, nh] of hits) if (nh > most) { most = nh; out = xb; }
-    return out;
-  }
+  };
+  let cut: Cutter = createCutter(cutDeps);
   /** leaving puts a cut squishy back together at once (CUT.md 2.2: a switch, a card, a ceremony; the body is replaced right after) */
   function leaving(): void {
-    cutHome = null;
     releaseEverything();
     try { cut.reconnectAll(false); } catch (e) { report(e); }
   }
@@ -537,7 +518,8 @@ export function createGame(deps: GameDeps): Game {
     const h0 = raycastAt(bodies.body, r.origin, r.dir, ORIGIN);
     if (h0) bestT = h0.t;
     for (const xb of bodies.extras) { const h = raycastAt(xb.body, r.origin, r.dir, xb.position); if (h && h.t < bestT) { bestT = h.t; best = xb; } }
-    if (bestT === Infinity || best === active) return;   // a miss keeps the last body (an orbit or a pull from the air)
+    if (bestT === Infinity) { const nb = life?.nearBody?.(x, y); if (nb === undefined) return; best = nb; }   // (round 14, CARRY: just beside a squishy takes it)
+    if (best === active) return;   // a miss keeps the last body (an orbit or a pull from the air)
     active = best;
     try { feedback.resetBody(); } catch (e) { report(e); }
   }
@@ -656,8 +638,11 @@ export function createGame(deps: GameDeps): Game {
     feedback.sweep();
   }
 
+  const roomV = new Float32Array(6);
   function simStep(dt: number): void {
     gestures.update(clock.now());
+    // (round 14, R14_ROOMS: the room camera scrolls under a still finger while a squishy is carried to the frame's edge: the hand's target is asked again)
+    if (stage.roomView?.(roomV) && roomV[3] === 1) gestures.retarget();
     driver.flushPendingUps();
     // PLAYGROUND step 2 (D-58: its own line, never an onStep hook): LIFE act, the due intents through the one arbiter, before the bodies step
     if (life !== null) { try { life.act(dt); } catch (e) { report(e); } }
@@ -796,20 +781,8 @@ export function createGame(deps: GameDeps): Game {
         blade = null;
         emit('blade', null);
         if (!inputLive()) return;
-        let r = cut.swipe(b.x0, b.y0, p.x, p.y);
-        // D-99: a stroke that crosses only ANOTHER whole squishy out cuts that one: while the play squishy is whole, the crossed one becomes the play squishy where it
-        // stands (bodies.exchange: nothing rebuilt or moved; the one of before stays out) and the same stroke cuts it; while one is cut already, it is said in words
-        // (one cut squishy at a time: the cutter has one tree of pieces). With one squishy out nothing here runs: the published cut, bit for bit.
-        if (r === 'miss' && bodies.extras.length) {
-          const xb = strokeWhole(b.x0, b.y0, p.x, p.y);
-          if (xb && cut.pieces > 1) { emit('notice', oneAtATime); r = 'busy'; }
-          else if (xb && bodies.exchange?.(xb.body)) {
-            const c0 = bodies.body.center;
-            cutHome = { x: c0.x, y: 0, z: c0.z };
-            try { (bodies.body as { setHome?(x: number, z: number): void }).setHome?.(c0.x, c0.z); } catch { /* optional */ }
-            r = cut.swipe(b.x0, b.y0, p.x, p.y);
-          }
-        }
+        // (D-103: with a party out `cut` is the life chunk's party cutter, and the stroke cuts every squishy it crosses; D-99's one-at-a-time refusal is gone)
+        const r = cut.swipe(b.x0, b.y0, p.x, p.y);
         emit('cut', r);
         return;
       }
@@ -1033,6 +1006,7 @@ export function createGame(deps: GameDeps): Game {
     onPhase(cb) { return game.on('phase', cb); },
     get life() { return life; },
     attachLife(h) { life = h; },
+    wrapCut(make) { cut = make(cut, cutDeps); },
     get earlyLog() { return early; },
     dispose() {
       try { life?.dispose(); } catch (e) { report(e); }

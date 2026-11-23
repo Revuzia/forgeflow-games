@@ -30,7 +30,7 @@ export interface AchGameLike {
   readonly simTime: number;
   readonly body: { readonly metrics: Pick<SoftMetrics, 'carried'> };
   readonly bodies: { readonly extras: ReadonlyArray<{ readonly body: { readonly metrics: Pick<SoftMetrics, 'carried'> } }> };
-  readonly cut: { readonly pieces: number; readonly busy: boolean };
+  readonly cut: { readonly pieces: number; readonly busy: boolean; readonly sets?: ReadonlyArray<{ readonly key: string; readonly pieces: number; readonly busy: boolean }> };
   readonly ceremonies: { readonly active: boolean; readonly pending: boolean };
   readonly hoard: Pick<Collection, 'stacks' | 'onEvent'>;
   onStep(fn: (dt: number, simTime: number) => void): () => void;
@@ -181,7 +181,11 @@ export function createAchievements(deps: AchDeps): Achievements {
         let carried = g.body.metrics.carried === true;
         for (let i = 0; !carried && i < g.bodies.extras.length; i++) if (g.bodies.extras[i].body.metrics.carried === true) carried = true;
         evaluator.carried(carried);
-        evaluator.pieces(g.cut.pieces, g.cut.busy);
+        // D-103 (several squishies cut at once): every cut squishy is its own stream. The party cutter's rows (later-cut.ts): row 0 is the play squishy (always there: its
+        // stream is fed exactly as before), every other row a cut party member (it stays one more step at pieces 1 when it is whole again). No rows: the published cutter.
+        const rows = g.cut.sets;
+        if (!rows) evaluator.pieces(g.cut.pieces, g.cut.busy);
+        else for (let i = 0; i < rows.length; i++) { const r = rows[i]; if (i === 0) evaluator.pieces(r.pieces, r.busy); else evaluator.pieces(r.pieces, r.busy, r.key); }
         if (pendingToasts.length) drainToasts();
       });
       // (round 8: a Journal gift that lands on the shelf is counted at once, as a restock is: PG_QUESTS round 3's "trophies' gift sweep"; a pending gift's sweep

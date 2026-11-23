@@ -210,7 +210,15 @@ export interface SoftBodyLike {
   /** Pull: attach the vertices around `vertex` to a world target; move it; let go (-> springs back, emits 'snap'). */
   grab(id: Slot, vertex: number, target: V3): void;
   grabMove(id: Slot, target: V3): void;
-  grabRelease(id: 0 | 1): void;
+  /** `still` (round 14, R14_CARRY; optional, additive): the hand that lets go has rested (the room view may still move it): a carry started by lift() is set down, never thrown */
+  grabRelease(id: 0 | 1, still?: boolean): void;
+  /** (round 14, R14_CARRY, D-105; optional, additive) pick the body up NOW by the hand of grab `slot` (the drag that starts on a squishy carries it: no stretch first,
+   *  no pick-up line), on the table or floating. The hand rises a little, the body hangs from it and sways; grabMove's target is the hand over the floor (the shell's
+   *  level plane; its height raises the hand over things); grabRelease sets it down where it hangs when the hand is slow (no throw, no 'snap'), else tosses it as
+   *  the published carry does. False (nothing changes) without a grab on `slot`, when it is carried already or a lobe is locked. */
+  lift?(slot: number): boolean;
+  /** (round 14, R14_CARRY) a carry started by lift() is under way */
+  readonly levelCarry?: boolean;
 
   /* LOCK (optional, additive; _spec/LOCK.md). A pull that is FULLY stretched (pull level >= 0.95) can be locked where it is. */
   /** Lock the pull held on grab `slot`: true when it locked (that grab has a pull level >= 0.95, the body is not carried, and there is room: at most 6 locks, 4 on low quality).
@@ -794,6 +802,16 @@ export interface StageLike {
    *  bounds, never live LIFE positions; the player still orbits and zooms. Round 8 (additive): pitchMin / pitchMax, the layout's pitch range
    *  in radians for the fit (P8: the place's camera.pitch, or a layout's own); left out, 0.15 to 0.9 as before. */
   setPlayBounds?(cx: number, cz: number, hx: number, hz: number, pitchMin?: number, pitchMax?: number): void;
+  /** ROUND 14 (R14_ROOMS, D-104; additive, optional): THE ROOM CAMERA. The rooms are 2.6 times the live floor, so in a place (and at Home with two or more
+   *  squishies out) the stage frames WHERE THE PARTY IS (render/roomcam.ts) instead of the whole play bounds: setPlayBounds' fit is the whole-room view (zoomed
+   *  all the way out), `zoom` moves between it and a close view, the view follows a body in hand and scrolls when it is carried to the frame's edge.
+   *  pan: the picture follows the fingers by (dx, dy) CSS px (two fingers on a phone, Shift + the right button with a mouse); it eases back to the party after a
+   *  few seconds. focusBody: bring the camera to the body view `id` (a party chip's tap). roomView: the director's eased view into out[0..5] = centre x, z (m),
+   *  factor (1 = the whole room), 1 while the view scrolls under a hand (the shell then re-asks the hand's target; 0.5: in hand, the view still), bodies outside the view, the player's zoom
+   *  factor (0 = none); false while the director does not drive (Home with one out: the published camera). */
+  pan?(dxPx: number, dyPx: number): void;
+  focusBody?(id: number): void;
+  roomView?(out: Float32Array): boolean;
   /** PLAYGROUND (Home): the table area visible inside the frame and outside the HUD safe insets at the REST framing (yaw 0, zoom 1, no
    *  ceremony push) of the mat slots in use, as ONE ground box inside it, [xMin, zMin, xMax, zMax] in metres into out[0..3]: its z range
    *  runs from the ground row under the top inset line to the ground row under the bottom inset line, and its x range is the near row's (the

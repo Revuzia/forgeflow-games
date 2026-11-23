@@ -54,20 +54,33 @@ export const handHint = 'Reconnect all, in the Cut tool, puts the pieces back to
 /** a join is armed (once per arm): K = the group's size ("Joining 2 pieces." for twins) */
 export const joining = (k: number): string => `Joining ${k} pieces.`;
 
-/** a cut or Split in two is done; Minis says minis */
-export const cutDone = (n: number, style: CutStyle): string => (style === 'minis' ? `Cut into ${n} minis.` : `Cut into ${n} pieces.`);
+/** a cut or Split in two is done; Minis says minis. D-103: `name` (only while SEVERAL squishies are cut) says whose pieces they are */
+export const cutDone = (n: number, style: CutStyle, name?: string | null): string => (name
+  ? (style === 'minis' ? `Cut ${name} into ${n} minis.` : `Cut ${name} into ${n} pieces.`)
+  : style === 'minis' ? `Cut into ${n} minis.` : `Cut into ${n} pieces.`);
 /** a join is done: twins (N = pieces left), or the group swallowed others (K = pieces that came together) */
 export const joinedTwins = (n: number): string => `Joined. Now ${n} pieces.`;
 export const joinedGroup = (k: number): string => `Joined ${k} pieces into one.`;
 export const undone = (n: number): string => `Cut undone. Now ${n} pieces.`;
 export const whole = 'Whole again.';
+/** D-103: with several squishies cut, the line names the one that is whole again */
+export const wholeOf = (name?: string | null): string => (name ? `${name} is whole again.` : whole);
 /** nothing to join, nothing to undo */
 export const inOnePiece = 'It is in one piece.';
 
 /** a swipe that missed (a swipe under 24 px, a tap, says nothing); Split in two that found nothing */
 export const swipeMiss = 'Swipe across the squishy to cut it.';
-/** D-99 (round 13: also SHOWN, as a toast, not only said): a stroke across another whole squishy while one is in pieces cuts nothing */
-export const oneAtATime = 'One squishy at a time: Reconnect all, then cut another.';
+/** D-103 (owner 2026-11-23; it replaces D-99's "One squishy at a time: Reconnect all, then cut another."): with a party out the pieces of every cut squishy share ONE budget (later-cut.ts
+ *  PARTY_PIECES). A stroke or Split in two that would pass it cuts what fits and SAYS AND SHOWS why (a toast: `isShown`), never a silent no-op. */
+export const partyFull = (max: number): string => `That's ${max} pieces out, the most at once. Reconnect a squishy to cut more.`;
+/** the Cut bar's hint at the party's budget */
+export const barPartyFull = (max: number): string => `${max} pieces is the most at once. Reconnect one to cut more.`;
+/** a cut notice the player must SEE as well as hear (round 13, VERDICT_R12 4c: a refusal that only went to the hidden live region was invisible) */
+export const isShown = (t: string): boolean => /pieces out, the most at once\./.test(t);
+/** D-103, the Cut bar with a party out: a chip per cut squishy (tap = that one goes back together) */
+export const chipLabel = (name: string, n: number): string => `Reconnect ${name} (${n} pieces)`;
+export const chipsGroup = 'Reconnect one squishy';
+export const chipsLead = 'Reconnect one';
 export const nothingToCut = 'Nothing to cut there.';
 
 /** the refusals the physics makes (each with a tremble): `thin` (a sliver thinner than the mesh can hold, or a part it cannot build) and `loose` (a side of two separate parts: said ONLY by a physics

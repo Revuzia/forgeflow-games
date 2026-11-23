@@ -153,13 +153,14 @@ const LOOK: PlaceLook = {
     // ---- the Rock Pool: water (r 1.3, surface 0.28), a ring of dark rocks hiding its side, a foam band ----
     const pr = pool.r ?? 1.3, poolW = kit.water('disc', pool.x, pool.z, pr + 0.06, 0, 0, 0.28, tok('lagoon', 'dusk', 0.35, 0.72), tok('lagoon', 'cream', 0.2, 0.9), tok('lagoon', 'cream', 0.45, 0.95), tok('cream'), 0.7, 0.5);
     g.add(poolW.mesh);
-    const nR = 18;
+    const nR = Math.round(pr * 13.8);   // (round 14: the pool is r 1.8 m in the bigger room, 1.3 on a phone: a rock every 0.45 m of its rim, as the 18 of r 1.3)
     for (let i = 0; i < nR; i++) {
       const a = (i / nR) * Math.PI * 2 + 0.17 * Math.sin(i * 2.3), rr = 0.17 + 0.06 * Math.abs(Math.sin(i * 1.7));
       B.add('rock', unitIco, rock, pool.x + Math.cos(a) * (pr + 0.05), 0.17 + 0.04 * Math.sin(i * 3.1), pool.z + Math.sin(a) * (pr + 0.05), rr * 1.25, rr * 0.95, rr * 1.1, yawQ(i * 1.3));
     }
     // a few rocks on the sand, outside the bounds at the back corners and the sides
-    for (const [x, z, r] of tall ? [[-2.0, -3.3, 0.35], [2.05, 1.2, 0.3], [-2.1, 2.6, 0.26]] : [[-3.85, -2.0, 0.4], [3.9, 0.8, 0.32], [-3.95, 1.9, 0.28]]) {
+    // (round 14, R14_ROOMS: the bigger beach, 11 x 7.8 m and 4.6 x 9.8 m: the rocks stand 0.9 m and more outside the new bounds, past a carry's reach)
+    for (const [x, z, r] of tall ? [[-3.3, -5.4, 0.42], [3.3, 2.0, 0.36], [-3.3, 4.3, 0.3]] : [[-6.5, -3.2, 0.5], [6.6, 1.3, 0.4], [-6.6, 3.1, 0.36], [6.5, -3.5, 0.34]]) {
       B.add('rock', unitIco, rock, x, r * 0.55, z, r * 1.3, r, r * 1.15, yawQ(x * 2.1));
       kit.shadow(x, z, r * 1.2, r * 1.1, 0.35);
     }

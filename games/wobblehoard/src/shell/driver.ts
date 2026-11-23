@@ -217,10 +217,10 @@ export function createDriver(d: DriverDeps): Driver {
   };
 
   /** let go of a slot's grab (the caller checked it is active); a mirrored one marks its release so its 'snap' is recognised as the second hand's */
-  function endGrab(slot: Slot, body: SoftBodyLike): void {
+  function endGrab(slot: Slot, body: SoftBodyLike, still?: boolean): void {
     grabActive[slot] = false;
     if (mirrored[slot]) { mirrored[slot] = false; mirrorSnapStep[slot] = d.stepCount() + 1; }
-    body.grabRelease(slot as 0 | 1);   // (contracts.ts still types grabRelease / fingerUp 0 | 1; every slot of the five is accepted at run time)
+    body.grabRelease(slot as 0 | 1, still);   // (contracts.ts still types grabRelease / fingerUp 0 | 1; every slot of the five is accepted at run time; `still`: round 14 CARRY)
   }
 
   function executeUp(slot: Slot, why: 'tap' | 'release' | 'pull' | 'cancel'): void {
@@ -263,10 +263,11 @@ export function createDriver(d: DriverDeps): Driver {
         grabAt[a.slot] = d.simTime();
         grabVertex[a.slot] = a.vertex;
         body.grab(a.slot, a.vertex, handTarget(a.slot, a.target));
+        if (a.lift) body.lift?.(a.slot);   // (round 14, CARRY: the drag that starts on the body picks it up at once)
         break;
       case 'grabMove': if (grabActive[a.slot]) { body.grabMove(a.slot, handTarget(a.slot, a.target)); fingerPan[a.slot] = d.panOfPoint(a.target); notePull(a.slot, a.target); } break;
       case 'grabRelease':
-        if (grabActive[a.slot]) endGrab(a.slot, body);
+        if (grabActive[a.slot]) endGrab(a.slot, body, a.still);
         break;
       case 'orbit':
         d.stage.orbit(TUNING.orbitSignYaw * a.dx * TUNING.orbitRadPerPx, TUNING.orbitSignPitch * a.dy * TUNING.orbitRadPerPx);
@@ -274,6 +275,10 @@ export function createDriver(d: DriverDeps): Driver {
         break;
       case 'zoom':
         d.stage.zoom(a.delta * TUNING.zoomGain);
+        d.dirty();
+        break;
+      case 'pan':   // (round 14, R14_ROOMS: the room camera's pan; a stage without it ignores it)
+        d.stage.pan?.(a.dx, a.dy);
         d.dirty();
         break;
       case 'gesture':

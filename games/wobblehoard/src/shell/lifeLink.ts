@@ -37,13 +37,17 @@ export interface LifeHostLike {
   dropAt?(id: number, x: number, y: number): boolean;
   /** every hand lets go (a cancel of all input, releaseEverything, a trip); true when one held something */
   dropAll?(): boolean;
-  /** the host holds pointer `id` (a seat or board in the hand) */
+  /** the host holds pointer `id` (a seat or board in the hand; round 14: a second finger's carry) */
   holds?(id: number): boolean;
+  /** (round 14, R14_CARRY, D-105) the forgiving grab: a press that hit no squishy, where squishies are carried: the squishy it lands just beside (within a small
+   *  margin of its silhouette; at least a 44 px target): the mat body, null for the play squishy, undefined for none (game.ts pickBody keeps the last body) */
+  nearBody?(x: number, y: number): import('./bodies.ts').ExtraBody | null | undefined;
   /** round 5 (11.4, D-16, SH-03; VERDICT_PG B2): the first cut of the play squishy with the host attached: the party STAYS out (no mat clear);
    *  every untouched whole but the play squishy is put to sleep first. Returns how many squishies went back to the shelf (always 0). */
   beforeCut?(): number;
-  /** the most pieces the play squishy may be cut into now: min(the tier's pieces cap, the characters cap - (wholes - 1)) while 2 or more wholes
-   *  are out; null with one squishy out (the published safety ceiling alone, unchanged) */
+  /** the most pieces ONE cut squishy may be cut into: min(the tier's pieces cap, the characters cap - (wholes - 1)) while 2 or more wholes
+   *  are out; null with one squishy out (the published safety ceiling alone, unchanged). D-103: once the life chunk's party cutter (later-cut.ts) is in,
+   *  the Cut tool's cap is the PARTY's piece budget (Cutter.budget), shared by every cut squishy; this stays for a game without that cutter */
   pieceCap?(): number | null;
   /** the dev hook's view (allocates: dev only) */
   debug(): unknown;

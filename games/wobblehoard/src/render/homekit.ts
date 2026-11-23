@@ -110,13 +110,13 @@ export class HomeKit {
       add(t, geo(new THREE.CylinderGeometry(0.11, 0.2, 0.17, 24, 1, true)), shadeMat, 0, 0.515, 0);
       this.glowMat = new THREE.ShaderMaterial({
         vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-        fragmentShader: 'varying vec2 vP; uniform vec3 uCol; uniform float uAmt; void main(){ float r = length(vP) / 1.2; float a = (1.0 - smoothstep(0.0, 1.0, r)) * (1.0 - smoothstep(0.0, 1.0, r)) * uAmt; gl_FragColor = vec4(uCol * a, 1.0);\n#include <colorspace_fragment>\n}',
+        fragmentShader: 'varying vec2 vP; uniform vec3 uCol; uniform float uAmt; void main(){ float r = length(vP) / 1.6; float a = (1.0 - smoothstep(0.0, 1.0, r)) * (1.0 - smoothstep(0.0, 1.0, r)) * uAmt; gl_FragColor = vec4(uCol * a, 1.0);\n#include <colorspace_fragment>\n}',
         uniforms: { uCol: { value: mix(PALETTE.amber, PALETTE.ember, 0.15) }, uAmt: { value: 0.16 } },
         transparent: false, depthWrite: false, depthTest: true, toneMapped: false, fog: false, ...ADD_KEEP_ALPHA,
         polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
       });
       this.mats.push(this.glowMat);
-      const glow = new THREE.Mesh(geo(new THREE.PlaneGeometry(2.4, 2.4)), this.glowMat);
+      const glow = new THREE.Mesh(geo(new THREE.PlaneGeometry(3.2, 3.2)), this.glowMat);   // (round 14: the Lamp Warmth is r 1.6 m in the bigger Home, was 1.2)
       glow.rotation.x = -Math.PI / 2; glow.position.y = 0.005; glow.renderOrder = -38;
       t.group.add(glow); t.parts.push({ mesh: glow, mat: this.glowMat });
     }

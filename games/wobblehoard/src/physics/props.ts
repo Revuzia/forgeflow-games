@@ -45,7 +45,7 @@ import { Crawl } from './crawl.ts';
 
 /** Tunables (PROBES may read them). */
 export const PROPS = {
-  WALL_H: 2.4,          // wall height (m; PLACES 4.2: 2.4 m log walls)
+  WALL_H: 3.4,          // wall height (m; PLACES 4.2 wrote 2.4 m log walls; round 14, D-104 "volume bigger": 3.4, over the highest toss's apex, TOSS_MAX 7.5 m/s = 2.8 m)
   SWING_SEAT: 0.5,      // a swing seat's own mass (body masses)
   CHIME_RAIL_Y: 0.95,   // a chime's rail (PG_RENDER: the chime and bell rails at y 0.95 m)
   CHIME_MASS: 0.15,     // a chime part's mass (body masses)
@@ -861,6 +861,19 @@ export class PropWorld implements PropWorldLike {
       if (st[T + 3] !== 0 || st[T + 4] !== 0 || st[T + 5] !== 0) { this.ballPin[k] = 0; continue; }
       if (maxX - minX < 2 * r || maxZ - minZ < 2 * r) continue;   // (bounds narrower than the ball: leave it to the step's push)
       st[T] = Math.min(maxX - r, Math.max(minX + r, this.base[B])); st[T + 2] = Math.min(maxZ - r, Math.max(minZ + r, this.base[B + 2]));
+      this.writePose(k);
+    }
+  }
+  /** Round 14 (R14_ROOMS, D-104): the free ball's bounds as a DISC again (Home as a room with two or more out: the ball rolls over the whole felt, not only the
+   *  part the one-squishy camera shows). An untouched ball at rest goes back to its own spot, as in setBallBounds. */
+  setBallDisc(cx: number, cz: number, r: number): void {
+    if (!Number.isFinite(cx + cz + r) || !(r > 0)) return;
+    this.boundsShape = 0; this.bounds[0] = cx; this.bounds[1] = cz; this.bounds[2] = r;
+    for (let k = 0; k < this.count; k++) {
+      if (this.joint[k] !== JOINT_BALL || this.ballPin[k] === 0 || this.parked[k] === 1) continue;
+      const T = k * 12, B = k * 16, st = this.st;
+      if (st[T + 3] !== 0 || st[T + 4] !== 0 || st[T + 5] !== 0) { this.ballPin[k] = 0; continue; }
+      st[T] = this.base[B]; st[T + 2] = this.base[B + 2];
       this.writePose(k);
     }
   }

@@ -1,9 +1,11 @@
-// Browser check of D-98 (rotate with the right button while cutting) and D-99 (cut any squishy of a party): R10_PLAYUX items 3 and 4. REAL input only for the player's path.
+// Browser check of D-98 (rotate with the right button while cutting; R10_PLAYUX item 3) and D-103 (cut SEVERAL squishies of a party at the same time; R14_MULTICUT, which re-specified
+// D-99's rows here on 2026-11-23: the reason is written at the rows). REAL input only for the player's path.
 //   D-98, 1280x800: the Cut tool picked by a click on the dock; a RIGHT-button drag turns the camera (yaw changes) and cuts nothing; then a LEFT drag across the squishy
 //        cuts it (2 pieces); Reconnect all by its bar button.
-//   D-99, 1280x800 (mouse) and 390x844 (touch): three out (the Friends strip's Bring friends); with the Cut tool a stroke across a squishy that is not the play one cuts
-//        THAT one (the name tag follows, 2 pieces) and the other two stay whole; a stroke across another whole squishy while one is cut cuts nothing and says why;
-//        Reconnect all puts it back together; screenshots in _harness/_renders/cutparty/; 0 console errors.
+//   D-103, 1280x800 (mouse) and 390x844 (touch): three out (the Friends strip's Bring friends) at the LOW tier; with the Cut tool a stroke across a squishy that is not the
+//        play one cuts THAT one (the play squishy stays who it was); a stroke across the play squishy cuts it TOO (nothing refused; the bar counts both and shows a chip each);
+//        a tap on a chip reconnects only that one; one straight stroke cuts every squishy it crosses; Split in two up to the party's budget, one more stroke SHOWS the budget
+//        line; Reconnect all; the physics cost with every piece awake is printed; screenshots in _harness/_renders/cutparty/multicut_*; 0 console errors.
 // Usage: node _harness/browser_cutparty.mjs [--port=5363] [--only=desk|phone]   (exits 1 on a failure)
 import { launch, startVite, ROOT } from './pw.mjs';
 import { resolve } from 'node:path';
@@ -80,36 +82,115 @@ try {
       await tapSel('[data-key="join"]'); await page.evaluate(() => window.__WH__.pause()); await step(2); await page.evaluate(() => window.__WH__.resume());
       await tapSel('.dock-tool[data-tool="hand"]');
     }
-    // ---- D-99: three out (the Friends strip's Bring friends), cut one that is not the play squishy ----
-    await page.evaluate(() => window.__WH__.setSetting('quality', 'low'));   // (the cap 3: Bring friends fills to three)
+    // ---- D-103 (owner 2026-11-23: "allow ability to cut multiple squishies at the same time"): three out (the Friends strip's Bring friends) ----
+    // RE-SPECIFIED from D-99's rows (2026-11-23). D-99's two rows asserted what the owner asked to remove: "the crossed squishy becomes the play squishy" (it existed because the cutter had
+    // one tree of pieces) and "a stroke across another whole squishy while one is cut cuts nothing and says One squishy at a time". They are replaced by the rows below.
+    await page.evaluate(() => window.__WH__.setSetting('quality', 'low'));   // (the low tier: the cap is 3, Bring friends fills to three; the frame cost below is the low tier's)
     await sleep(600);
     await tapSel('.pt-btn'); await tapSel('.pt-bring');
     await sleep(600);
     const n = await page.evaluate(() => window.__WH__.shell.matInfo().count);
     await tapSel('.dock-tool[data-tool="cut"]');
-    await page.evaluate(() => window.__WH__.pause()); await step(2); await page.evaluate(() => window.__WH__.resume()); await sleep(500);
-    const info = await page.evaluate(() => ({ id: window.__WH__.shell.identity().itemId, bodies: window.__WH__.shell.matInfo().bodies.map((b) => ({ id: b.itemId, x: b.x, y: b.y, r: b.r })) }));
-    const target = info.bodies.filter((b) => b.id !== info.id && b.r > 0).sort((a, c) => Math.abs(c.x - info.bodies[0].x) - Math.abs(a.x - info.bodies[0].x))[0];
-    await shot('cutparty_before');
-    await drag(target.x + 6, target.y - target.r * 1.6, target.x - 6, target.y + target.r * 1.6, 16);
-    await page.evaluate(() => window.__WH__.pause()); await step(1.5); await page.evaluate(() => window.__WH__.resume()); await sleep(600);
-    const after = await page.evaluate(() => ({ id: window.__WH__.shell.identity().itemId, pieces: window.__WH__.shell.tools().pieces, out: window.__WH__.shell.matInfo().count, tag: document.querySelector('.nametag-name')?.textContent ?? '' }));
-    await shot('cutparty_cut');
-    check(`D-99 ${frame}: with ${n} out, a ${touch ? 'finger' : 'mouse'} stroke across a squishy that is not the play one cuts THAT one (it is the play squishy now, 2 pieces; the others stay out whole)`,
-      n === 3 && after.id === target.id && after.pieces === 2 && after.out === 3, JSON.stringify({ n, target: target.id, after }));
-    // another whole squishy while one is cut: refused in words
-    const other = await page.evaluate(([cut]) => window.__WH__.shell.matInfo().bodies.find((b) => b.itemId !== cut && b.r > 0 && b.itemId), [after.id]);
-    const live0 = await page.evaluate(() => document.getElementById('wh-live')?.textContent ?? '');
-    if (other) await drag(other.x + 6, other.y - other.r * 1.6, other.x - 6, other.y + other.r * 1.6, 16);
-    await sleep(800);
-    const said = await page.evaluate(() => [document.getElementById('wh-live')?.textContent ?? '', ...[...document.querySelectorAll('.toast, .k-toast, .opts-note, .cut-note')].map((e) => e.textContent ?? '')].join(' | '));
-    check(`D-99 ${frame}: while it is cut, a stroke across another whole squishy cuts nothing and says why ("One squishy at a time ...")`,
-      !!other && (await page.evaluate(() => window.__WH__.shell.tools().pieces)) === 2 && /One squishy at a time/.test(said), JSON.stringify({ said: said.slice(0, 200), live0: live0.slice(0, 80) }));
-    await tapSel('[data-key="join"]');
-    await page.evaluate(() => window.__WH__.pause()); await step(3); await page.evaluate(() => window.__WH__.resume()); await sleep(600);
-    const whole = await page.evaluate(() => ({ pieces: window.__WH__.shell.tools().pieces, out: window.__WH__.shell.matInfo().count }));
-    await shot('cutparty_whole');
-    check(`D-99 ${frame}: Reconnect all puts it back together (1 piece) and all ${n} stay out`, whole.pieces === 1 && whole.out === n, JSON.stringify(whole));
+    const settle = async (sec) => { await page.evaluate(() => window.__WH__.pause()); await step(sec); await page.evaluate(() => window.__WH__.resume()); await sleep(500); };
+    await settle(2);
+    const sets = () => page.evaluate(() => window.__WH__.shell.cutSets());
+    const tagOf = () => page.evaluate(() => document.querySelector('.nametag-name')?.textContent ?? '');
+    const shownText = () => page.evaluate(() => [...document.querySelectorAll('.toast, .k-toast, [class*="toast"]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden' && Number(getComputedStyle(e).opacity) > 0.2; }).map((e) => e.textContent ?? '').join(' | '));
+    const liveText = () => page.evaluate(() => document.getElementById('wh-live')?.textContent ?? '');
+    const across = async (b) => { await drag(b.x + 6, b.y - b.r * 1.6, b.x - 6, b.y + b.r * 1.6, 16); await settle(1.5); };
+    const s0 = await sets(), id0 = await page.evaluate(() => window.__WH__.shell.identity().itemId), tag0 = await tagOf();
+    // the physics cost of the three WHOLE squishies, every one awake (Float), in this Chromium: the yardstick for the pieces below
+    const cost0 = await page.evaluate(async () => {
+      const wh = window.__WH__; wh.pause();
+      const med = (f) => { const xs = []; for (let k = 0; k < 5; k++) xs.push(f()); return xs.sort((a, c) => a - c)[2]; };
+      wh.setSetting('gravity', false); wh.step(1 / 60, 45);
+      const ms = med(() => wh.shell.matStepCost(60).msPerFrame), info = wh.shell.cutInfo();
+      wh.setSetting('gravity', true); wh.step(1 / 60, 240); wh.resume();
+      return { ms: +ms.toFixed(2), awakeParticles: info.awakeParticles };
+    });
+    await shot('multicut_before');
+    // 1 a stroke across a squishy that is NOT the play one cuts that one; the play squishy stays who it was
+    const other = s0.out.filter((q) => !q.play).sort((a, c) => Math.abs(c.bodies[0].x - s0.out[0].bodies[0].x) - Math.abs(a.bodies[0].x - s0.out[0].bodies[0].x))[0];
+    await across(other.bodies[0]);
+    const s1 = await sets();
+    check(`D-103 ${frame}: with ${n} out, a ${touch ? 'finger' : 'mouse'} stroke across a squishy that is not the play one cuts THAT one (2 pieces); the play squishy stays who it was (the name tag does not change) and stays whole; all ${n} out`,
+      n === 3 && s1.out.find((q) => q.key === other.key)?.pieces === 2 && s1.out[0].pieces === 1 && s1.out[0].key === id0 && (await tagOf()) === tag0 && s1.out.length === 3, JSON.stringify({ n, tag0, out: s1.out.map((q) => [q.key.slice(0, 8), q.pieces]) }));
+    // 2 cut the play squishy too while the other is in pieces: no refusal; the bar counts both; a chip per cut squishy
+    await across(s1.out[0].bodies[0]);
+    const s2 = await sets();
+    const bar2 = await page.evaluate(() => ({ count: document.querySelector('.cutbar-count')?.textContent ?? '', chips: [...document.querySelectorAll('.cutbar-chip')].map((c) => { const r = c.getBoundingClientRect(); return { id: c.dataset.id, label: c.getAttribute('aria-label'), w: Math.round(r.width), h: Math.round(r.height), inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight }; }), row: !document.querySelector('.cutbar-chips')?.hidden }));
+    const said2 = (await shownText()) + ' || ' + (await liveText());
+    await shot('multicut_two');
+    check(`D-103 ${frame}: while that one is in pieces, a stroke across the play squishy cuts it TOO (two squishies in 2 pieces each, 4 in all); nothing is refused (no "One squishy at a time", no budget line); the bar counts "4 pieces" and shows a Reconnect chip for each cut squishy, on screen, at least 32 px high`,
+      s2.out[0].pieces === 2 && s2.out.find((q) => q.key === other.key)?.pieces === 2 && s2.total === 4 && !/One squishy at a time|most at once/.test(said2) && /^4 pieces$/.test(bar2.count) && bar2.row && bar2.chips.length === 2 && bar2.chips.every((c) => c.inView && c.h >= 32 && /^Reconnect .+ \(2 pieces\)$/.test(c.label ?? '')),
+      JSON.stringify({ out: s2.out.map((q) => [q.key.slice(0, 8), q.pieces]), bar2, said: said2.slice(0, 160) }));
+    // 3 Reconnect ONE by its chip (a real tap)
+    await tapSel(`.cutbar-chip[data-id="${other.key}"]`);
+    await settle(2);
+    const s3 = await sets();
+    const d3 = Math.hypot(s3.out.find((q) => q.key === other.key).bodies[0].w[0] - other.bodies[0].w[0], s3.out.find((q) => q.key === other.key).bodies[0].w[2] - other.bodies[0].w[2]);
+    check(`D-103 ${frame}: a tap on that squishy's chip puts ONLY it back together, where it stood (within 0.3 m); the play squishy stays in its 2 pieces; with one squishy cut the chips row is gone (Reconnect all is that chip)`,
+      s3.out.find((q) => q.key === other.key)?.pieces === 1 && s3.out[0].pieces === 2 && d3 <= 0.3 && (await page.evaluate(() => document.querySelector('.cutbar-chips')?.hidden === true)), JSON.stringify({ out: s3.out.map((q) => [q.key.slice(0, 8), q.pieces]), d3: +d3.toFixed(3) }));
+    // 4 Reconnect all, then ONE stroke across as many as line up (three on the wide frame's row)
+    await tapSel('[data-key="join"]'); await settle(2);
+    const s4 = await sets();
+    const cs = s4.out.map((q) => ({ key: q.key, ...q.bodies[0] }));
+    // the straight line through two centres that passes closest to the third: the squishies it runs through (within 0.75 of the radius) are the ones a player's one stroke crosses
+    let best = null;
+    for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+      const A = cs[i], B = cs[j], L = Math.hypot(B.x - A.x, B.y - A.y) || 1, ux = (B.x - A.x) / L, uy = (B.y - A.y) / L;
+      const hit = cs.filter((c) => Math.abs((c.x - A.x) * uy - (c.y - A.y) * ux) <= 0.75 * c.r);
+      if (!best || hit.length > best.hit.length) best = { A, B, ux, uy, L, hit };
+    }
+    { // from before the first squishy on that line to past the last one (the third may lie beyond the two that define the line)
+      const { A, ux, uy } = best; const vw = page.viewportSize().width, vh = page.viewportSize().height; const cl = (v, m) => Math.max(8, Math.min(m - 8, v));
+      const ts = best.hit.map((c) => ({ t: (c.x - A.x) * ux + (c.y - A.y) * uy, r: c.r })), lo = ts.reduce((a, c) => (c.t < a.t ? c : a)), hi = ts.reduce((a, c) => (c.t > a.t ? c : a));
+      await drag(cl(A.x + ux * (lo.t - lo.r * 1.7), vw), cl(A.y + uy * (lo.t - lo.r * 1.7), vh), cl(A.x + ux * (hi.t + hi.r * 1.7), vw), cl(A.y + uy * (hi.t + hi.r * 1.7), vh), 24); }
+    await settle(1.5);
+    const s5 = await sets();
+    await shot('multicut_one_stroke');
+    check(`D-103 ${frame}: after Reconnect all (everyone whole, ${n} out), ONE straight stroke across the ${best.hit.length} squishies that line up on this frame cuts every one of them (2 pieces each)`,
+      s4.total === 1 && s4.out.length === 3 && best.hit.length >= 2 && best.hit.every((c) => s5.out.find((q) => q.key === c.key)?.pieces === 2) && s5.total === 2 * best.hit.length, JSON.stringify({ lineUp: best.hit.length, out: s5.out.map((q) => [q.key.slice(0, 8), q.pieces]) }));
+    // 5 the budget: Split in two (real presses) up to the party's budget, one more is refused with a line the player can SEE
+    const B0 = s5.budget;
+    for (let k = 0; k < 14 && (await sets()).total < B0; k++) { await tapSel('[data-key="split"]'); await settle(1.2); }
+    const s6 = await sets();
+    const cost = await page.evaluate(async () => {
+      const wh = window.__WH__; wh.pause();
+      const med = (f) => { const xs = []; for (let k = 0; k < 5; k++) xs.push(f()); return xs.sort((a, c) => a - c)[2]; };
+      wh.step(1 / 60, 240);
+      const rest = { ms: med(() => wh.shell.matStepCost(60).msPerFrame), info: wh.shell.cutInfo() };
+      wh.setSetting('gravity', false); wh.step(1 / 60, 45);   // Float: every piece is awake and rising
+      const awake = { ms: med(() => wh.shell.matStepCost(60).msPerFrame), info: wh.shell.cutInfo() };
+      wh.setSetting('gravity', true); wh.step(1 / 60, 240);
+      wh.resume();
+      return { rest: { ms: +rest.ms.toFixed(2), awakeParticles: rest.info.awakeParticles, particles: rest.info.particles, sleeping: rest.info.sleeping }, awake: { ms: +awake.ms.toFixed(2), awakeParticles: awake.info.awakeParticles, sleeping: awake.info.sleeping }, tier: wh.state().stage.tier, frameMsEma: +wh.state().stage.frameMsEma.toFixed(1) };
+    });
+    console.log(`     (info) ${frame}, tier ${cost.tier}: three WHOLE squishies all awake: physics step ${cost0.ms} ms (${cost0.awakeParticles} particles)`);
+    console.log(`     (info) ${frame}, tier ${cost.tier}: ${s6.out.map((q) => q.pieces).join(' + ')} pieces: physics step in this Chromium ${cost.rest.ms} ms at rest (${cost.rest.sleeping} asleep, ${cost.rest.awakeParticles}/${cost.rest.particles} particles awake), ${cost.awake.ms} ms with every piece awake (Float: ${cost.awake.awakeParticles} particles awake); the whole frame here (software WebGL) ${cost.frameMsEma} ms`);
+    await sleep(400);
+    await shot('multicut_budget_pieces');
+    await tapSel('[data-key="split"]');
+    await sleep(700);
+    const said6 = { shown: await shownText(), live: await liveText(), hint: await page.evaluate(() => document.querySelector('.cutbar-text')?.textContent ?? ''), split: await page.evaluate(() => { const b = document.querySelector('.cutbar [data-key="split"]'); return { disabled: b.disabled, aria: b.getAttribute('aria-disabled') }; }) };
+    await shot('multicut_budget_line');
+    const s7 = await sets();
+    // (the Split button is off at the budget, with the bar's hint as its reason; a STROKE is the way a player still tries, so the visible line is checked on a stroke)
+    const big = s7.out.flatMap((q) => q.bodies).sort((a, c) => c.r - a.r)[0];
+    await drag(big.x + 6, big.y - big.r * 1.6, big.x - 6, big.y + big.r * 1.6, 16);
+    await sleep(350);
+    const said7 = { shown: await shownText(), live: await liveText() };
+    await shot('multicut_budget_toast');   // (taken while the toast is up: it stays 3.2 s)
+    await settle(1.5);
+    const s8 = await sets();
+    check(`D-103 ${frame}: Split in two (real presses) cuts up to the party's budget of ${B0} pieces (${s6.out.map((q) => q.pieces).join(' + ')}); there the Split button is off and the bar says why ("${said6.hint}"); one more STROKE cuts nothing and SHOWS the line on screen (a toast), also said: "${(said7.shown.match(/That's \d+ pieces out[^|]*/) ?? [''])[0].trim()}"`,
+      B0 === 12 && s6.total === B0 && (said6.split.disabled === true || said6.split.aria === 'true') && /most at once/.test(said6.hint) && s8.total === B0 && /pieces out, the most at once/.test(said7.shown), JSON.stringify({ B0, total: s6.total, said6, said7: { shown: said7.shown.slice(0, 120), live: said7.live.slice(0, 120) }, after: s8.total }));
+    // 6 Reconnect all: everyone whole again, all out
+    await tapSel('[data-key="join"]'); await settle(3);
+    const whole = await sets();
+    await shot('multicut_whole');
+    check(`D-103 ${frame}: Reconnect all puts EVERY squishy back together (three wholes, no piece left) and all ${n} stay out; the play squishy is who it was`,
+      whole.total === 1 && whole.out.length === 3 && whole.out.every((q) => q.pieces === 1 && q.bodies.length === 1) && whole.out[0].key === id0 && (await tagOf()) === tag0, JSON.stringify({ out: whole.out.map((q) => [q.key.slice(0, 8), q.pieces, q.bodies.length]) }));
     check(`${frame}: 0 console errors / warnings / page errors / failed requests`, errs.length === 0, errs.slice(0, 4).join(' | '));
     await ctx.close();
   }

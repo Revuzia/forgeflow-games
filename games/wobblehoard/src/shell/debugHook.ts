@@ -97,6 +97,11 @@ export interface ShellDevApi {
   cutSplit(): string;
   /** CUT3 (U04, browser): lower the safety ceiling to n pieces (null restores 64), so the kind line is reached without 63 cuts */
   setCutCeiling(n: number | null): void;
+  /** D-103 (several squishies cut at once): every squishy out (the play squishy first) with its pieces now, whether a cut or a join of ITS plays, and its bodies on screen (CSS px over the canvas, the
+   *  anchor first; `w` the world centre); the party's piece budget (null: one squishy out) and the pieces of all cut squishies */
+  cutSets(): { budget: number | null; total: number; out: Array<{ key: string; play: boolean; name: string; pieces: number; busy: boolean; bodies: Array<{ x: number; y: number; r: number; w: [number, number, number] }> }> };
+  /** D-103: the Cut bar's chip: just this squishy back together */
+  cutReconnect(key: string, animated: boolean): boolean;
   /** CUT3 (the harness reports to the owner, nothing is hidden): the safety ceiling, how many times its kind line was said, how many pieces the last cut made, the last result of a swipe or Split in two,
    *  the pieces now, and the physics' load: particles of every piece, of the awake ones (a sleeping piece takes no solver steps), and how many pieces sleep */
   cutInfo(): { ceiling: number; ceilingHits: number; lastParts: number; lastResult: string | null; pieces: number; particles: number; awakeParticles: number; sleeping: number; contact: { bodies: number; awake: number; pairs: number; skippedAsleep: number; naivePairs: number; tests: number } };
@@ -387,6 +392,21 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     setCutStyle: (style) => game.cut.setStyle(style),
     cutSplit: () => game.cut.splitInTwo(),
     setCutCeiling: (n) => game.cut.setCeilingForTest(n),
+    cutSets() {
+      const xs = game.bodies.extras, playKey = game.identity.itemId ?? '', rows = game.cut.sets;
+      const mi = shell.matInfo().bodies;   // (the play body, then the extras in order)
+      const ownerOf = (i: number): string => (i === 0 ? playKey : xs[i - 1].of ?? (xs[i - 1].piece ? playKey : xs[i - 1].itemId ?? ''));
+      const keys = [playKey, ...xs.filter((x) => !x.piece).map((x) => x.itemId ?? '')];
+      return {
+        budget: game.cut.budget ?? null, total: game.cut.pieces,
+        out: keys.map((key, k) => {
+          const row = rows ? (k === 0 ? rows[0] : rows.find((r, i) => i > 0 && r.key === key)) : undefined;
+          const bodies = mi.filter((_b, i) => ownerOf(i) === key).map((b) => ({ x: b.x, y: b.y, r: b.r, w: b.w }));
+          return { key, play: k === 0, name: row?.name ?? '', pieces: row ? row.pieces : k === 0 ? game.cut.pieces : 1, busy: row ? row.busy : k === 0 ? game.cut.busy : false, bodies };
+        }),
+      };
+    },
+    cutReconnect: (key, animated) => game.cut.reconnect?.(key, animated) ?? false,
     tipSwipe(dir, f) {
       const b = largestPiece(); const cam = game.stage.camera;
       try { cam.updateMatrixWorld(); } catch { /* ignore */ }

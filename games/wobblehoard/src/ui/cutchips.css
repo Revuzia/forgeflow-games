@@ -1,0 +1,16 @@
+/* D-103: the Cut bar's "Reconnect one" chips (ui/later-cutchips.ts, in the later-play chunk). Kit chips (k-chip) do the skinning; this file places and sizes. A row between the hint
+   line and the buttons, centred, wrapping when five squishies are cut on a narrow phone. The squishy's name shows where the dock is a full desktop one; elsewhere the face and the
+   count say it (the name stays in the accessible name and the tooltip). */
+.cutbar-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--wh-s2); min-width: 0; padding: 2px var(--wh-s2); }
+.cutbar-chips[hidden] { display: none; }
+.cutbar-chips-lead { flex: none; font: var(--wh-fb-small-3); color: var(--k-fg-dim); white-space: nowrap; }
+.k-chip.cutbar-chip { flex: none; gap: 5px; padding: 0 var(--wh-s3) 0 6px; min-height: var(--wh-chip-h); font-weight: 800; }
+.cutbar-chip-join { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--k-sel-fill); color: var(--k-fg); }
+.cutbar-chip-join .k-icon { width: 14px; height: 14px; stroke-width: 2.6; }
+.cutbar-chip-face { flex: none; width: 24px; height: 24px; }
+.cutbar-chip-name { white-space: nowrap; max-width: 9ch; overflow: hidden; text-overflow: ellipsis; }
+.cutbar-chip-n { min-width: 1ch; text-align: center; color: var(--k-accent); }
+/* anywhere but a full desktop dock: no lead word, no names (three to five chips must fit beside each other at 390 wide) */
+body:not([data-layout="wide"]) .cutbar-chips-lead, body[data-density="short"] .cutbar-chips-lead,
+body:not([data-layout="wide"]) .cutbar-chip-name, body[data-density="short"] .cutbar-chip-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (forced-colors: active) { .cutbar-chip-join { border: 1px solid CanvasText; } }

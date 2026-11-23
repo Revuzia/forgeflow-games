@@ -33,8 +33,11 @@ export interface PlayIdentity {
  *  `id` is the stage's view id (it changes on a re-add). */
 export interface ExtraBody {
   id: number; body: SoftBodyLike; genome: Genome; tier: TierName; itemId: string | null; position: V3; shared: boolean;
-  /** CUT (cut.ts): a piece of the play squishy (a real part of it, or a Minis copy), not a squishy brought out of the Hoard; the mat ignores it */
+  /** CUT (cut.ts): a piece of a cut squishy (a real part of it, or a Minis copy), not a squishy brought out of the Hoard; the mat ignores it */
   piece?: boolean;
+  /** D-103 (later-cut.ts): the item id of the cut PARTY MEMBER this body is a piece of (its anchor piece keeps `itemId` and no `piece` flag, so the mat still counts the squishy as out);
+   *  absent: a piece of the play squishy, or a whole squishy */
+  of?: string;
 }
 
 export interface BodyManager {
@@ -49,7 +52,7 @@ export interface BodyManager {
   adopt(body: SoftBodyLike, genome: Genome, opts?: { itemId?: string | null; nickname?: string | null; tier?: TierName }): void;
   /** Stage B seam: another shell-owned body on the mat (stage.addBody). Returns the stage id, or -1 when the stage cannot.
    *  `shared`: the body lives in the play body's world space (built at its spot) and takes part in body-to-body contact. */
-  addExtra(body: SoftBodyLike, genome: Genome, opts?: { tier?: TierName; position?: V3; itemId?: string | null; shared?: boolean; piece?: boolean; chunk?: boolean }): number;
+  addExtra(body: SoftBodyLike, genome: Genome, opts?: { tier?: TierName; position?: V3; itemId?: string | null; shared?: boolean; piece?: boolean; chunk?: boolean; of?: string }): number;
   removeExtra(id: number): void;
   /** Move the extras that stand APART to new render offsets (in order; shared ones keep their place): their views are re-added there;
    *  the physics bodies are kept. */
@@ -58,11 +61,6 @@ export interface BodyManager {
    *  (its view is removed). Identity (genome, item, nickname, tier) is unchanged and nothing is announced. false, and nothing changes, when `body` is not an extra or the stage cannot re-point
    *  its primary (an old stage: the caller falls back to swapTo, which shows every view again). */
   promote(body: SoftBodyLike): boolean;
-  /** D-99 (owner 2026-11-19: "if i have multiple squishies out i should be able to cut any/all of them"): a WHOLE squishy out (a shared extra, not a piece) becomes the play
-   *  squishy where it stands: the stage re-points its primary view (setPrimaryBody), the play squishy of before stays out as a shared extra with its own view and body,
-   *  nothing is rebuilt or moved, and the identity follows (afterSwap, not silent: the name tag says who is in play). false, and nothing changes, when `body` is not such
-   *  an extra or the stage cannot re-point its primary. */
-  exchange?(body: SoftBodyLike): boolean;
   /** the stage's view id of a body (the play body: the stage's primary; an extra: its id), or null */
   viewIdOf(body: SoftBodyLike): number | null;
   /** bodies that push against each other every step (body.collide; 0 when fewer than two can) */
@@ -153,6 +151,7 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
       const shared = !!opts.shared;
       const p = shared ? { x: 0, y: 0, z: 0 } : opts.position ?? { x: 0, y: 0, z: 0 };
       const x: ExtraBody = { id: -1, body: b, genome, tier: opts.tier ?? tierOfGenome(genome), itemId: opts.itemId ?? null, position: { x: p.x, y: p.y, z: p.z }, shared, piece: !!opts.piece };
+      if (opts.of) x.of = opts.of;
       if (!showExtra(x)) return -1;
       extras.push(x);
       rebuildContacts();
@@ -188,24 +187,6 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
       styleTier(d.stage, identity.tier);
       rebuildContacts();
       try { d.afterSwap(identity, body, true); } catch (e) { d.report(e); }
-      return true;
-    },
-    exchange(b) {
-      const i = extras.findIndex((x) => x.body === b && !x.piece && x.shared);
-      if (i < 0 || b === body || typeof d.stage.setPrimaryBody !== 'function') return false;
-      let oldView: number | null = null;
-      try { oldView = d.stage.primaryBodyId?.() ?? null; } catch { /* an old stage */ }
-      if (oldView === null || oldView < 0) return false;
-      const x = extras[i];
-      try { d.beforeSwap(false); } catch (e) { d.report(e); }
-      try { d.stage.setPrimaryBody(x.id); } catch (e) { d.report(e); return false; }
-      extras[i] = { id: oldView, body, genome: identity.genome, tier: identity.tier, itemId: identity.itemId, position: { x: 0, y: 0, z: 0 }, shared: true };
-      try { d.stage.setBodyTier?.(oldView, identity.tier); } catch { /* an old stage */ }
-      body = b;
-      identity = { genome: x.genome, tier: x.tier, itemId: x.itemId, nickname: null };
-      styleTier(d.stage, identity.tier);
-      rebuildContacts();
-      try { d.afterSwap(identity, body, false); } catch (e) { d.report(e); }
       return true;
     },
     viewIdOf(b) {

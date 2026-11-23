@@ -167,7 +167,8 @@ export const MECH_RANGES: Readonly<Record<number, Readonly<Record<string, readon
   [MECH.swing]: { rope: [1.2, 1.5], limit: [0, 30], seatR: [0.08, 0.1], seatY: [0.15, 0.22], seatLength: [0.5, 0.9], damping: [0.15, 0.7] },
   [MECH.turntable]: { r: [0.5, 0.8], motor: [0, 0.4] },
   [MECH.chime]: { note: [62, 83], limit: [0, 25], damping: [0.8, 0.8], hang: [0.3, 0.7] },
-  [MECH.pad]: { r: [0.35, 0.6], travel: [0, 0.1], gain: [1.0, 1.25], apex: [0, 0.35], maxBounces: [0, 5] },
+  // (apex: PLACES 2.1 M11 wrote 0..0.35 m; round 14, D-104, the owner 2026-11-23 "Make sq footage of rooms wider and volume bigger": bounces have more air, 0..0.5)
+  [MECH.pad]: { r: [0.35, 0.6], travel: [0, 0.1], gain: [1.0, 1.25], apex: [0, 0.5], maxBounces: [0, 5] },
   [MECH.floater]: { bob: [0, 0.04], bobHz: [0, 0.4] },
   [MECH.ball]: { r: [0.2, 0.3], mass: [0.1, 0.4], rollDamp: [0.3, 1.5] },
 };

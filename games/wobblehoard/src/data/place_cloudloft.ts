@@ -17,20 +17,20 @@ export const PLACE: PlaceDef = {
 
   ],
   zones: [
-    { id: 'updraft', kind: ZONE.updraft, strength: 1, shape: 'disc', x: 2.2, z: -0.8, r: 1 },
-    { id: 'breeze', kind: ZONE.wind, strength: 0.4, shape: 'box', x: 0, z: -1.825, hx: 3.4, hz: 0.575, gust: { everyS: [8, 16], forS: 2 } },
-    { id: 'sun', kind: ZONE.warm, strength: 0.4, shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4 },
+    { id: 'updraft', kind: ZONE.updraft, strength: 1, shape: 'disc', x: 3.6, z: -1.3, r: 1.4 },
+    { id: 'breeze', kind: ZONE.wind, strength: 0.4, shape: 'box', x: 0, z: -2.95, hx: 5.5, hz: 0.95, gust: { everyS: [8, 16], forS: 2 } },
+    { id: 'sun', kind: ZONE.warm, strength: 0.4, shape: 'box', x: 0, z: 0, hx: 5.5, hz: 3.9 },
   ],
   things: [
-    { id: 'puffpads', place: 'cloudloft', mech: MECH.pad, x: 2.61, z: -0.52, yaw: 0, size: [0.45, 0.05, 0], mu: 1, p: { n: 3, x1: -2.2, z1: -0.6, x2: 0, z2: -1.9, tx1: 0.21, tz1: -2.72, tx2: -1.58, tz2: -1.67, gain: 1.25, apex: 0.35, travel: 0.1, maxBounces: 5 }, ride: false, verb: V.BOUNCE, icon: E.star, look: 'puff', sound: S.boing },
-    { id: 'updraft', place: 'cloudloft', mech: 0, x: 2.2, z: -0.8, yaw: 0, size: [1, 0, 0], mu: 1, p: {  }, ride: false, zone: 'updraft', verb: V.STEP, icon: E.swirl, look: 'updraft', sound: S.whoosh },
-    { id: 'kiteswing', place: 'cloudloft', mech: MECH.swing, x: -2.4, z: 1.1, yaw: 0, size: [0.09, 0.9, 0], mu: 0.9, p: { rope: 1.4, pivotY: 1.62, limit: 30, seatY: 0.22, damping: 0.25 }, ride: true, push: [-0.4, 1.1], verb: V.SWING, icon: E.star, look: 'kite', sound: S.creak },
-    { id: 'sunbowarch', place: 'cloudloft', mech: MECH.bar, x: -1.75, z: -1.95, yaw: 0, size: [0.16, 1.6, 1.3], mu: 0.8, p: { arch: 1, width: 1.6, height: 1.3 }, ride: false, verb: V.STEP, icon: E.sparkle, look: 'sunbow', sound: 0 },
-    { id: 'cloudnest', place: 'cloudloft', mech: MECH.ring, x: 2.32, z: 1.26, yaw: -2.678, size: [0.95, 0.1, 115], mu: 0.9, p: { segments: 5, way: 0.6 }, ride: false, useSpot: [2.32, 1.26], verb: V.NAP, icon: E.zzz, look: 'cloudnest', sound: 0 },
-    { id: 'cloudball', place: 'cloudloft', mech: MECH.ball, x: -0.97, z: 2.02, yaw: 0, size: [0.26, 0, 0], mu: 0.8, p: { mass: 0.12, rollDamp: 0.8, updraftCatch: 1 }, ride: false, verb: V.ROLL, icon: E.ball, look: 'cloudball', sound: S.ball },
+    { id: 'puffpads', place: 'cloudloft', mech: MECH.pad, x: 4.2, z: -0.9, yaw: 0, size: [0.45, 0.05, 0], mu: 1, p: { n: 3, x1: -3.6, z1: -1, x2: 0, z2: -3.1, tx1: 0.9, tz1: -4, tx2: -2.1, tz2: -1.9, gain: 1.25, apex: 0.35, travel: 0.1, maxBounces: 5 }, ride: false, verb: V.BOUNCE, icon: E.star, look: 'puff', sound: S.boing },
+    { id: 'updraft', place: 'cloudloft', mech: 0, x: 3.6, z: -1.3, yaw: 0, size: [1.4, 0, 0], mu: 1, p: {  }, ride: false, zone: 'updraft', verb: V.STEP, icon: E.swirl, look: 'updraft', sound: S.whoosh },
+    { id: 'kiteswing', place: 'cloudloft', mech: MECH.swing, x: -3.9, z: 1.8, yaw: 0, size: [0.09, 0.9, 0], mu: 0.9, p: { rope: 1.4, pivotY: 1.62, limit: 30, seatY: 0.22, damping: 0.25 }, ride: true, push: [-1.9, 1.8], verb: V.SWING, icon: E.star, look: 'kite', sound: S.creak },
+    { id: 'sunbowarch', place: 'cloudloft', mech: MECH.bar, x: -2.8, z: -3.1, yaw: 0, size: [0.16, 1.6, 1.3], mu: 0.8, p: { arch: 1, width: 1.6, height: 1.3 }, ride: false, verb: V.STEP, icon: E.sparkle, look: 'sunbow', sound: 0 },
+    { id: 'cloudnest', place: 'cloudloft', mech: MECH.ring, x: 3.8, z: 2.2, yaw: -2.678, size: [0.95, 0.1, 115], mu: 0.9, p: { segments: 5, way: 0.6 }, ride: false, useSpot: [3.8, 2.2], verb: V.NAP, icon: E.zzz, look: 'cloudnest', sound: 0 },
+    { id: 'cloudball', place: 'cloudloft', mech: MECH.ball, x: -1.6, z: 3, yaw: 0, size: [0.26, 0, 0], mu: 0.8, p: { mass: 0.12, rollDamp: 0.8, updraftCatch: 1 }, ride: false, verb: V.ROLL, icon: E.ball, look: 'cloudball', sound: S.ball },
   ],
-  bounds: { shape: 'box', x: 0, z: 0, hx: 3.4, hz: 2.4, round: 0.8 }, walls: [],
-  pad: [0, 0, 1.2], spawn: [[-0.575, 0.525], [1.725, -1.575], [1.275, 0.725], [0.525, -0.625], [-0.825, -0.775], [0.225, 1.575]],
+  bounds: { shape: 'box', x: 0, z: 0, hx: 5.5, hz: 3.9, round: 1.3 }, walls: [],
+  pad: [0, 0, 1.2], spawn: [[-0.6, 0.5], [0.8, -0.3], [-0.4, -1], [0.6, 1.2], [-1.9, -0.2], [1.9, 0.6]],
   tall: { // (round 8, R8_LIFE: laid again for R8_SHELL's per-layout pitch range; DT-01 0 problems, 5 spawn spots) the bounds 1.8 x 3.0 seen from a pitch of
     // 0.6..0.9 rad (camPitch: the shipped place camera then frames them at 0.60 rad with a 35 degree lens, a 1 m squishy 104.7 px at the front and 87.7 px at
     // the middle on 390 x 844, RD-17's 100 / 80 met; R8_SHELL's report section 5): the three Puff Pads across the back (the first in the Updraft, parts 1 and 2
@@ -38,17 +38,17 @@ export const PLACE: PlaceDef = {
     // it a little toward the front: brain.ts selfPoint ARCH), the Kite Swing on the right swinging along z with its push spot in front, the Cloud Nest in the
     // front band with its gap toward the middle, the Cloud Ball front left; the Breeze over the back band and the Sun over all, full width. Found by
     // probe_pg_data's LAYOUTSEARCH dev tool (a local search from the round-6 draft under every DT-01 rule and the camera's).
-    bounds: { shape: 'box', x: 0, z: 0, hx: 1.8, hz: 3, round: 0.4 }, walls: [], camPitch: [0.6, 0.9],
-    spawn: [[-0.95, 0.5], [-0.9, -0.5], [-0.05, 0.05], [0.05, -0.95], [0.95, 0.05]],
+    bounds: { shape: 'box', x: 0, z: 0, hx: 2.9, hz: 4.9, round: 0.65 }, walls: [], camPitch: [0.6, 0.9],
+    spawn: [[-0.9, -0.6], [0.2, -0.5], [-0.4, 0.5], [0.8, 0.3], [0.1, 1.4]],
     things: [
-      { x: -1.11, z: -2.58, yaw: 0 },
-      { x: -1.11, z: -2.68, yaw: 0 },
-      { x: 1.42, z: -1.64, yaw: 1.571, push: [1.42, 0.36] },
-      { x: -0.54, z: -2.65, yaw: 1.571 },
-      { x: 0.5, z: 1.75, yaw: -1.64, use: [0.5, 1.75] },
-      { x: -1.08, z: 2.54, yaw: 0 },
+      { x: -1.5, z: -3.6, yaw: 0},
+      { x: -1.3, z: -3.5, yaw: 0},
+      { x: 1.9, z: -2.4, yaw: 1.571, push: [1.9, -0.4] },
+      { x: 0, z: -2.6, yaw: 1.571},
+      { x: 0.9, z: 3, yaw: -1.64, use: [0.9, 3] },
+      { x: -1.7, z: 3.6, yaw: 0},
     ],
-    zones: [{ shape: 'disc', x: -1.11, z: -2.68, r: 1 }, { shape: 'box', x: 0, z: -2.281, hx: 1.8, hz: 0.719 }, { shape: 'box', x: 0, z: 0, hx: 1.8, hz: 3 }],
+    zones: [{ shape: 'disc', x: -1.3, z: -3.5, r: 1.4 }, { shape: 'box', x: 0, z: -3.7, hx: 2.9, hz: 1.2 }, { shape: 'box', x: 0, z: 0, hx: 2.9, hz: 4.9 }],
     patches: [],
   },
   camera: { yawRange: 60, pitch: [0.15, 0.9], zoom: [0.7, 1.6] },

@@ -160,7 +160,9 @@ export interface Evaluator {
   readonly save: AchSave;
   touch(ev: TouchLike, tMs: number): void;
   carried(on: boolean): void;
-  pieces(n: number, busy: boolean): void;
+  /** `key` (D-103, owner 2026-11-23: several squishies can be cut at once): the cut squishy this count is of, so every cut squishy is its own stream (a cut, "four at once"
+   *  and "put back together" per squishy); absent = the play squishy's stream, as before */
+  pieces(n: number, busy: boolean, key?: string): void;
   opened(tierIdx: number): void;
   merged(tierIdx: number, tierUp: boolean): void;
   taskDone(): void;
@@ -180,6 +182,8 @@ export function createEvaluator(d: EvaluatorDeps): Evaluator {
   let lastSqueeze = -Infinity, lastStretch = -Infinity;
   let lifted = false;
   let prevPieces = 1, prevBusy = false;
+  /** D-103: the last count of every OTHER cut squishy (by its key): [pieces, busy]; an entry leaves when its squishy is whole again */
+  const prevOf = new Map<string, [number, boolean]>();
 
   const has = (slug: string): boolean => Object.prototype.hasOwnProperty.call(save.earned, slug);
   const bump = (k: keyof AchCounters): void => { if (c[k] < COUNTER_MAX) { c[k]++; d.onDirty?.(); } };
@@ -228,8 +232,17 @@ export function createEvaluator(d: EvaluatorDeps): Evaluator {
       }
     },
     carried(on) { lifted = !!on; },
-    pieces(n, busy) {
+    pieces(n, busy, key) {
       if (typeof n !== 'number' || !Number.isFinite(n)) return;
+      if (key !== undefined) {
+        // D-103: another cut squishy's own stream: the same three rules, on its own last count
+        const p = prevOf.get(key), pn = p ? p[0] : 1, pb = p ? p[1] : false;
+        if (n >= 2 && pn < 2) bump('cuts');
+        if (n >= 2 && n !== pn) fire('pieces', n);
+        if (n === 1 && pn >= 2 && pb) { bump('joins'); fire('join', 1); }
+        if (n >= 2 || busy) { if (p) { p[0] = n; p[1] = busy; } else prevOf.set(key, [n, busy]); } else if (p) prevOf.delete(key);
+        return;
+      }
       if (n >= 2 && prevPieces < 2) bump('cuts');
       if (n >= 2 && n !== prevPieces) fire('pieces', n);
       if (n === 1 && prevPieces >= 2 && prevBusy) { bump('joins'); fire('join', 1); }

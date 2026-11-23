@@ -108,6 +108,7 @@ import type { Emotes, EmoteFrame } from './emotes.ts';
 import type { HomeKit } from './homekit.ts';
 import { visibleTableAt } from './homeview.ts';
 import type { PlayFrame } from './placeview.ts';
+import type { RoomCam } from './roomcam.ts';
 import type { PlaceHost, StageCtx } from './place.ts';
 
 /** The camera's rest pitch (the default the player orbits from): visibleTable reports the table at it (PLAYGROUND_BUILD.md 9). */
@@ -244,6 +245,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   // is capped at 16 KB): loaded on first use, which only ever comes from the LIFE host; what was asked before it landed is replayed
   let emotes: Emotes | null = null;
   let home: HomeKit | null = null;
+  /** Round 14 (R14_ROOMS, D-104): the room camera's director (roomcam.ts, in the lazy lifelook chunk): it frames where the party is in the bigger rooms (a place;
+   *  Home with two or more out). null until the chunk lands (then the rigs frame as they did). */
+  let room: RoomCam | null = null;
   let lifeLoad: Promise<void> | null = null;
   const pendEm = new Float64Array(8 * 7), pendOn = new Uint8Array(8);
   const pendThing = new Float64Array(6 * 5);   // set, shown, x, z, yaw
@@ -254,7 +258,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (disposed) return;
       const em = new m.Emotes(), hk = new m.HomeKit(hub);
       scene.add(em.mesh); scene.add(hk.group);
-      emotes = em; home = hk;
+      emotes = em; home = hk; room = new m.RoomCam();
       em.setInPhoto(pendPhoto === 1);
       for (let i = 0; i < 8; i++) if (pendOn[i]) { const o = i * 7; em.show(i, pendEm[o], pendEm[o + 1], pendEm[o + 2], pendEm[o + 3], pendEm[o + 4], pendEm[o + 5]); }
       if (pendBind) hk.bind(pendBind[0], pendBind[1], pendBind[2]);
@@ -414,7 +418,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     }
   }
   /** True when this view counts at its slot (autonomy framing or the rest framing), not at its live centre. */
-  const atSlot = (v: BodyView, rest: boolean): boolean => (rest || autoFraming) && (rest || !v.playerMoving);
+  const atSlot = (v: BodyView, rest: boolean): boolean => (rest || (autoFraming && !(room && room.on))) && (rest || !v.playerMoving);   // (round 14: under the room camera every body counts where it is)
   function framePoint(v: BodyView, rest: boolean): boolean {
     if (!atSlot(v, rest)) { slotXZ.x = v.proxy.center.x; slotXZ.z = v.proxy.center.z; return true; }
     if (v.chunk) return false;
@@ -740,6 +744,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     governor.resetWindow(24);
   }
 
+  /** (round 14) the published framing of the party at its mat slots, without the band's live demand: the room camera's "today's size" at Home */
+  function slotWant(): number { const fw = framer.wantScale; framer.wantScale = 0; const w = framingFor(false, 0, 0, 1, true).want; framer.wantScale = fw; return w; }
   /** The camera's aim for ONE body at its slot and rest height (updateCamera's one-body follow with the live centre replaced). */
   const aimOut = { x: 0, y: 0, z: 0 };
   function restAim(p: BodyView, scale: number): void {
@@ -767,8 +773,12 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); }
     if (play) {
       const ka = pEase ? kr : kt;
-      tgt.x += (play.aimX - tgt.x) * ka; tgt.y += (play.aimY - tgt.y) * ka; tgt.z += (play.aimZ - tgt.z) * ka;
-      const d = pDist * zoomF * cameraFx.dist;
+      // (round 14, D-104) the room camera: the part of the room the director frames (roomcam.ts: centre x, z and factor u; u 1 = the fit of the whole room) is the
+      // similar picture about its own centre: aim = centre + u (aim - the room's centre), distance x u
+      if (room) room.place(dt, views, primaryId, camera, camera.position.distanceTo(tgt), yaw, pitch, cssW, cssH, framer.ins.top, framer.ins.bottom, playB[0], playB[1], playB[2], playB[3]);
+      const rk = room ? room.u : 1;
+      tgt.x += ((room ? room.x - rk * playB[0] : 0) + rk * play.aimX - tgt.x) * ka; tgt.y += (rk * play.aimY - tgt.y) * ka; tgt.z += ((room ? room.z - rk * playB[1] : 0) + rk * play.aimZ - tgt.z) * ka;
+      const d = pDist * rk * zoomF * cameraFx.dist;
       const yw = yaw + cameraFx.yaw, pt = clamp(pitch + cameraFx.pitch, 0.06, 1.38), cp = Math.cos(pt);
       camera.position.set(tgt.x + d * Math.sin(yw) * cp, tgt.y + d * Math.sin(pt), tgt.z + d * Math.cos(yw) * cp);
       camera.lookAt(tgt);
@@ -790,6 +800,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       fs[0] = slotXZ.x; fs[1] = slotXZ.z; fs[2] = (pw ? v.wholeH : v.restH) * g; fs[3] = (pw ? v.wholeCy : v.restCy) * g; fs[4] = (pw ? v.wholeHalfW : v.restHalfW) * 1.06 * g;
       v.frameMode = 1;
     }
+    // (round 14, D-104) Home with two or more out: the room camera's director frames the party where it is (roomcam.ts home(): it takes the published slot framing
+    // as today's size and leaves bodies outside its view out of the band framing); one squishy alone, a ceremony, LIFE off: untouched
+    const wc = capsule && !capsuleParked && capsule.group.visible ? capsule : null;
+    if (room) { if (autoFraming && !director.active) room.home(dt, views, primaryId, camera, camera.position.distanceTo(tgt), yaw, pitch, cssW, cssH, framer.ins.top, framer.ins.bottom, 5.5, slotWant(), hwPerNow(), wc ? wc.pos.x : NaN, wc ? wc.pos.z : 0, wc ? CAP_R * wc.size : 0); else if (room.on) room.off(); }
     if (framer.on && sized && !director.active && framerS > 0) { fcam.p0 = camera.projectionMatrix.elements[0]; fcam.p5 = camera.projectionMatrix.elements[5]; const t0 = import.meta.env.DEV ? performance.now() : 0; framer.measure(views, fcam, cssW, cssH, framerS, dt); if (import.meta.env.DEV) devFramerMs += (performance.now() - t0 - devFramerMs) * 0.1; }
     else framer.clear();
     // stage B1: with 2..5 bodies out on the mat, frame them all (their table extents, plus a margin) and aim at their middle
@@ -799,6 +813,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       const c = capsule && !capsuleParked && capsule.group.visible ? capsule : null;
       const f = c ? framingFor(true, c.pos.x, c.pos.z, c.size) : framingFor(false, 0, 0, 1);
       want = f.want; multi = f.multi; mx = f.mx; mz = f.mz; grp = f.grp; gx = f.gx; gy = f.gy; gz = f.gz;
+      if (room && room.on) { want = Math.max(room.want, framer.wantScale); multi = true; mx = room.ax; mz = room.az / 0.8; grp = false; tZoom = 1; }
     }
     // (quicker while a neck forms: the lobes of a cut body swell within a third of a second)
     let necking = false;
@@ -826,7 +841,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     }
     tgt.x += (wx - tgt.x) * kt; tgt.y += (wy - tgt.y) * kt; tgt.z += (wz - tgt.z) * kt;
     const d = fitDistance() * zoomF * cameraFx.dist;
-    const yw = yaw + cameraFx.yaw, pt = clamp(pitch + cameraFx.pitch, 0.06, 1.38);
+    const yw = yaw + cameraFx.yaw, pt = clamp(pitch + cameraFx.pitch + (room ? room.lift : 0), 0.06, 1.38);   // (round 14: zoomed out to the whole felt, the camera looks down on it)
     const cp = Math.cos(pt);
     camera.position.set(tgt.x + d * Math.sin(yw) * cp, tgt.y + d * Math.sin(pt), tgt.z + d * Math.cos(yw) * cp);
     // shake impulse: decaying trauma, smooth multi-sine noise (deterministic, no Math.random)
@@ -1151,6 +1166,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       // the ceremony runs first: it moves the puppets and returns the time scale (slow-mo dips slow physics and particles only)
       const ts = director.update(d);
       floatT += ((floatMode ? 1 : 0) - floatT) * (1 - Math.exp(-d * 5));
+      room?.finger(input.pointerNdc);   // (round 14: a finger that holds a squishy at the frame's edge scrolls the room camera)
       updateCamera(d, time);
       // a capsule dropped before the frame had a size lands now (the camera is up to date for it); a waiting one is re-checked once the frame,
       // the HUD rows or the bodies have stopped changing
@@ -1232,7 +1248,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     zoom(delta) {
       if (!Number.isFinite(delta)) return;
       const k = Math.abs(delta) > 4 ? 0.0016 : 0.12;
-      tZoom = clamp(tZoom * Math.exp(delta * k), play ? 0.7 : 0.55, play ? 1.6 : 1.9);
+      if (room && room.on) { room.zoom(delta * k); return; }   // (round 14: the room camera's zoom, from a close view to the whole room)
+      tZoom = clamp(tZoom * Math.exp(delta * k), play ? 0.7 : 0.55, play ? 1.6 : Math.max(1.9, 5.5 / (hwPerNow() * camScale)));   // (Home, one out: out to the whole felt)
     },
 
     shake(amount) {
@@ -1247,6 +1264,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     },
 
     setFloatMode(on) { floatMode = !!on; },
+    // (round 14, D-104: the room camera; contracts.ts) a pan in CSS px, the camera brought to a body, and the director's view for the shell and the probes
+    pan(dx, dy) { room?.pan(dx, dy); },
+    focusBody(id) { room?.focus(id); },
+    roomView(out) { if (!room || !room.on) return false; out[0] = room.x; out[1] = room.z; out[2] = room.u; out[3] = room.scroll ? 1 : room.hand ? 0.5 : 0; out[4] = room.outside; out[5] = room.zoomed; return true; },
 
     spawnFx(kind: FxKind, at: V3, intensity: number) { primary()?.spawnFx(kind, at, intensity); },
 
@@ -1328,6 +1349,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       // the swap hides under a snapshot crossfade (screenfx.ts: a fade from the frame as it was, never a flash)
       if (!lost && sized) { renderer.render(scene, camera); screen.beginCrossfade(renderer, Math.max(0.05, Number.isFinite(fadeS) ? fadeS : 0.35), 'linear'); }
       if (isHome) { playB.set([0, 0, NaN, NaN]); play = null; }
+      room?.off();
       return placeHost ? placeHost.enter(placeCtx, isHome ? null : id, camera.aspect < 0.9 ? 1 : 0) : true;
     },
     reactFx(kind, bodyId, x, y, z, amount, lifeS) { return !!placeHost?.react(kind, bodyId, x, y, z, amount, lifeS); },

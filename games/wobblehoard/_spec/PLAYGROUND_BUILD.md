@@ -1449,3 +1449,90 @@ features. Places and features load lazily (a player downloads only what they ope
 under `dist/assets`) is raised to **2250 KB**. The first-play cap (G0b, and the first-play delta) is unchanged: it is met. Cheap trims still go in
 (dead code of the three dropped places beyond their save tombstones, duplicate helpers), and the life code fetched at Wake should stay near its
 150 KB target (R11_FIX.md item 6).
+
+## OWNER DECISION 2026-11-23 (D-103): cut several squishies at the same time (this replaces D-99's rule 3 and its "Not done" note)
+The owner played the live game (6c495e9c1) and said: "allow ability to cut multiple squishies at the same time - now i can only cut 1 squishy at a time before being told
+to recombine to be able to cut another."
+1. With 2 to 5 out, the player can cut ANY of them and SEVERAL at once. One stroke that crosses two or three squishies cuts every one it crosses; a squishy can be cut while
+   others are already in pieces. The refusal "One squishy at a time: Reconnect all, then cut another." is gone.
+2. Each cut squishy keeps its OWN set of pieces: pieces of different squishies never merge with each other, and each piece can be pushed, squished, carried and tossed on its
+   own. The squishy you play with stays who it was (cutting no longer changes who you play with: D-99's rule 1 made the crossed squishy the play squishy only because the
+   cutter held one tree of pieces).
+3. "Reconnect all" rejoins every cut squishy, each at ITS OWN spot (where it stood when it was first cut; one squishy out: the middle of the table, as published). Rejoin just
+   ONE: while two or more squishies are in pieces the Cut bar shows a chip per cut squishy (the join mark, its face, its piece count); a tap puts that one back together.
+4. The budget is the party's: at most **12 live pieces across all cut squishies** while two or more squishies are out (`shell/later-cut.ts` PARTY_PIECES), and never more than
+   LIFE's 16 character slots hold (12 with up to four out, 11 with five). Derived from the measured cost per piece (the physics is the same at every tier, D-101): an awake piece
+   of under 35 % of its squishy costs 0.26 of an awake whole (measured 3.11 ms for 12 against 2.61 ms for three wholes, node; LIFE's UNIT.piece is the same 0.26), so three
+   squishies each in four pieces cost what D-101's party of three whole squishies costs (12 x 0.26 = 3.12 units against AWAKE_FLOOR 3.81). A stroke or Split in two that would
+   pass the budget cuts WHAT FITS (the play squishy first, then mat order) and says why in a line the player SEES (a toast, also in the live region): "That's 12 pieces out,
+   the most at once. Reconnect a squishy to cut more." One squishy out keeps the published safety ceiling of 64. Known cost peak (measured, R14_MULTICUT.md "Budget"): a piece
+   of 35 % or more keeps a whole's mesh and costs a whole, so three squishies each just cut in two are six such bodies (5.90 ms awake in node against 2.61 ms for three wholes)
+   until they come to rest and sleep.
+5. Split in two (the keyboard's cut) halves the biggest piece out (a whole counts 1; ties: the play squishy, then mat order), so the keyboard reaches every squishy.
+6. Per cut: a cut sound and a "Cut <name> into N pieces." line per squishy (the name only while several are cut), a rejoin sound and "<name> is whole again." per squishy;
+   trophies count every cut squishy as its own stream; LIFE gives each cut squishy its own piece group and its CUT touch (the Journal's records). Float floats every piece;
+   cut pieces keep today's piece motion (no crawl change).
+7. Leaving (a switch, a card, a ceremony, travel, a tab hidden over 60 s) reconnects EVERY cut squishy at once; hidden 30 s keeps them all; pieces are never saved (a reload is
+   whole). A cut party member sent back to the shelf takes its pieces with it.
+8. One squishy out: the published cut, unchanged: the same code path (`shell/cut.ts`, one cutter per cut squishy; the play squishy's is the published one), piece counts and
+   shares bit for bit against 6c495e9c1 (`_harness/dump_cut_single.ts`).
+Code: `src/shell/later-cut.ts` (the party cutter, in the life chunk), `shell/cut.ts` (additive: `name`, `keepCache`, `piecesAfter`, `cutting`, the home glide to a squishy's own
+spot), `shell/bodies.ts` (`ExtraBody.of`; `exchange` removed), `shell/game.ts` (`wrapCut`; D-99's stroke block removed), `shell/later-life.ts` (a piece group per cut squishy),
+`ui/later-cutchips.ts` (the chips, in the later-play chunk), `core/achievements.ts` (`pieces(n, busy, key?)`). Proof: `_harness/probe_partycut.ts` (re-specified, the reason at
+its top), `_harness/browser_cutparty.mjs` (re-specified), `_harness/measure_partycut.ts`; report `_handoff/reports/R14_MULTICUT.md`.
+
+## OWNER DECISION 2026-11-23 (D-104): bigger rooms, and a camera for them
+The owner played the live game (6c495e9c1) and said: "Make sq footage of rooms wider and volume bigger to allow easier exploration for our squishies."
+1. FLOOR. Every place is a clearly bigger room on both layouts: the wide rooms are 11.0 x 7.8 m (were 6.8 x 4.8: 2.63 times the floor, each side 1.62 times), the tall
+   (phone) rooms 4.6 x 9.8 m (were 2.8 x 6.0: 2.68 times; the cabin's was 2.5 wide: 3.0 times; Cloudloft's tall room 5.8 x 9.8, was 3.6 x 6.0), Home's felt a disc of
+   r 5.5 m (was 3.4: 2.62 times). The LIVE rooms are frozen in `_harness/data/live_rooms_6c495e9c1.json`; probe_pg_data's DT-19 rows hold every place and layout to
+   at least 2.5 times the live floor and 1.55 times each side. Things keep their sizes and stand further apart with open floor between them; every far corner has a
+   thing or a nap / peek spot (a reason to go there).
+2. VOLUME. Walls 3.4 m (`PROPS.WALL_H`, were 2.4), the fastest toss 7.5 m/s (`TOSS_MAX`, was 6: a straight-up toss peaks at 2.8 m, a 45 degree one flies 5.6 m), a
+   floater hovers 0.6 m over its rest height (was 0.35), the pads' apex range is 0..0.5 m (was 0..0.35; Home's Bounce Pad and the Moss Bouncer bounce to 0.42; the
+   Puff Pads keep 0.35, PH-17's in-the-updraft row rests on that cap).
+3. HOME. One squishy out: the published toy, unchanged (the same close, centred framing; the same corral). With two or more out Home is a ROOM: the whole felt is the
+   floor (a disc), a carried squishy stays where it is put (its LIFE home moves there), the Felt Ball rolls over the whole felt. On a wide frame the Keepsake Shelf
+   shows from two out (as on a phone): beside one centred squishy it stood behind it (DT-18's silhouette row, which now passes).
+4. THE CAMERA (`render/roomcam.ts`, lazy; the stage keeps small hooks). The view is a point on the floor and a factor (1 = the whole room).
+   - By itself it frames WHERE THE PARTY IS, between today's size (factor 0.62) and 72 % of today's size (0.86; the owner's floor for a readable squishy is about 70 %);
+     it widens quickly and narrows slowly. When the party does not fit, the squishy touched last (else the play squishy) stays in view.
+   - A squishy outside the picture is hinted by a CHIP at the frame's edge (its face, a pointer); a tap brings the camera to it (`ui/later-room.ts`).
+   - In hand the view follows the squishy; carried toward the frame's edge the view SCROLLS, so one carry reaches any spot of the room.
+   - The player ZOOMS (wheel, pinch) from the whole room to a close view and the zoom stays; PANS with two fingers or Shift + the right button (the plain right
+     button and one finger on empty space still turn the view, as published); a pan eases back after 6 s or when a squishy is picked up.
+5. LIFE. A squishy by itself reaches things 4.8 m away (7.2 m for one it has not used; were 3 m and 4.5 m) and wanders up to 4 m in a place (was 2.5 m); crawl and
+   glide speeds are UNCHANGED (SU-04 holds at every place on both layouts without it: 24 of 24).
+6. Also: Cloudloft's cloud floor is tinted under a standing squishy (pale bodies read against the white cloud tops).
+Code: `src/data/place_*.ts` (re-laid by `_harness/rooms_relay.ts` from `_harness/data/rooms_plan_r14.json`), `data/places.ts` (pad apex range), `render/roomcam.ts`,
+`render/placeview.ts` (`ROOM_K`, the room fit), `render/place.ts`, `render/stage.ts` (hooks), `render/table.ts` / `homeview.ts` / `homekit.ts` (the felt), `render/places/*`
+(walls, rocks, cards, the cloud tint), `physics/props.ts` (`WALL_H`, `setBallDisc`), `physics/softbody.ts` (`TOSS_MAX`, `HOVER_ABOVE`), `shell/later-life.ts` (Home as a
+room), `life/brain.ts` (reach, wander), `input/gestures.ts` (`pan`, `retarget`), `shell/driver.ts`, `shell/game.ts`, `ui/later-room.ts` + `room.css`, `contracts.ts`
+(`StageLike.pan / focusBody / roomView`, optional). Proof: `_harness/probe_pg_data.ts` (DT-01 re-specified for the bigger frames, the reasons at the rows; DT-19 new),
+`probe_playground`, `probe_life_selfuse` SU-04, `_harness/browser_rooms.mjs` (real input, 1280 x 800 and 390 x 844), `_harness/rooms_perf.mjs`; report
+`_handoff/reports/R14_ROOMS.md` (the measured numbers, what is not done).
+
+## OWNER DECISION 2026-11-23 (D-105): picking up and moving a squishy is the easiest thing in the game
+The owner played the live game (6c495e9c1) and said: "make it easier to pick up and move squishies around."
+(Numbered D-105: D-104 is R14_ROOMS's bigger rooms, recorded above.)
+1. ONE GESTURE. Where squishies are moved around (every place; Home with two or more out, D-104's room) a press on a squishy that starts moving within 0.4 s
+   CARRIES it, in any direction from any part of it (a whole or a cut piece): it comes up into the hand at once (no stretch first, no pick-up line), lifted a
+   little (0.08 m + 0.3 x its radius), hangs from the finger and sways (it swings behind a hand that sets off and wobbles when it stops), and follows the finger
+   closely; its soft shadow on the floor shows where it will land. "How the gesture starts" keeps the others distinct: a tap pokes; a hold squishes; a hold and
+   THEN a drag stretches (outward, as published: pulled far it still lifts) or rubs; Shift + a drag and a second finger on the same squishy are the published
+   pulls. Home with ONE squishy out is the published toy, gesture for gesture (a drag out stretches there).
+2. THE WHOLE ROOM IN ONE CARRY. The hand moves over the floor (a level plane at the height it took the squishy): a drag up the frame takes it BACK, on a tall
+   phone layout too; the view scrolls when the finger or the squishy nears the frame's edge (D-104's camera); things on the way (a pad, a mound, a nest, a seat:
+   anything up to 1.6 m) are passed OVER; taller things are gone round.
+3. LET GO. Slowly: it is SET DOWN where it hangs (its fall capped at 0.9 m/s, nothing thrown, no stretch paid); over a thing it lands on the thing and uses it (a
+   pad bounces it, a pool takes it, a ride carries it). Quickly: the published toss.
+4. FORGIVING. A press within 12 px of a squishy's outline takes it, and every squishy (the smallest piece too) is at least a 44 px target; a resting, napping or
+   riding squishy is picked up the same way.
+5. FLOAT. A floating squishy is carried the same way and stays where it is put (its hover spot moves there, inside the place).
+6. TWO HANDS. On a touch screen a second finger on another squishy carries that one at the same time.
+7. HINTS. "Drag to carry" once, the first time squishies can be carried (a moment line; stored, `wobblehoard:v2:carryTip`); the gesture line reads "Drag to carry ·
+   tap to poke · hold, then drag out to stretch" in a room (desktop adds "· Shift + drag pulls both sides"); How to play's Stretch card says it.
+Code: `src/input/gestures.ts` (CARRY), `src/shell/driver.ts` (`lift`), `src/physics/softbody.ts` (`lift`, the level carry, the set-down, the float carry),
+`src/shell/later-carry.ts` (things under a footprint, the forgiving grab, the second hand, the tip; life chunk), `src/shell/later-life.ts` (the level plane, the
+wiring), `src/shell/game.ts` (`pickBody` asks `nearBody`), `src/ui/hint.ts`, `src/ui/screens/screenCopy.ts`. Proof: `_harness/probe_gestures.ts` sections 13-14,
+`_harness/probe_carry.ts`, `_harness/browser_carry.mjs` (a scripted new player, real input, both frames); report `_handoff/reports/R14_CARRY.md`.

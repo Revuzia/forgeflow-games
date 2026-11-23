@@ -223,7 +223,8 @@ const LOOK: PlaceLook = {
 
     // ---- (round 6) a few snow-capped rocks outside the bounds: the tall frame's front corners and the wide frame's sides ----
     const rockM = kit.mat('rock', tok('dusk', 'ink', 0.35, 1.0), 0.9, 0.2);
-    for (const [x, z, r] of tall ? [[-1.5, 4.0, 0.28], [1.62, 4.7, 0.32], [-2.2, -1.0, 0.28]] : [[-4.2, 1.6, 0.34], [4.3, 2.3, 0.3], [-4.0, -1.2, 0.26]]) {
+    // (round 14, R14_ROOMS: the bigger ridge: the rocks stand outside the new bounds, 11 x 7.8 m and 4.6 x 9.8 m)
+    for (const [x, z, r] of tall ? [[-1.9, 6.0, 0.34], [2.2, 6.4, 0.38], [-3.3, -1.6, 0.32], [3.3, 2.4, 0.3]] : [[-6.5, 2.6, 0.4], [6.6, 3.4, 0.36], [-6.4, -1.9, 0.3], [6.5, -3.3, 0.34]]) {
       B.add('rock', kit.geo('rico', () => new THREE.IcosahedronGeometry(1, 1)), rockM, x, r * 0.35, z, r * 1.3, r * 0.8, r * 1.1, yawQ(x * 2.3));
       B.add('snowp', kit.sphere(1, 14, 8), snowPlain, x + 0.03, r * 0.82, z, r * 1.0, r * 0.3, r * 0.85, yawQ(x * 2.3));
       kit.shadow(x, z, r * 1.3, r * 1.1, 0.35);

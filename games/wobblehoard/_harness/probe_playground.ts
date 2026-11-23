@@ -1488,7 +1488,9 @@ if (run('wind')) {
     const w = buildPropWorld(LANTERN, 'wide', 1);
     w.setGust(zi, gust);
     for (let i = 0; i < 30; i++) w.endFrame(DT);
-    const b = placed(w, fam, 2.0, -1.6, 1.2), x0 = b.center.x, z0 = b.center.z; b.nudge(v3(0, 2, 0));
+    // (round 14, R14_ROOMS: the roof is 11 x 7.8 m now and the Night Breeze's band moved with it; the toss stands 0.6 m right of the band's middle, clear of the
+    // Vane Disc and the hammock, read from the data, where it was the fixed point (2.0, -1.6) inside the live band)
+    const b = placed(w, fam, LANTERN.zones[zi].x + 0.6, LANTERN.zones[zi].z + 0.2, 1.2), x0 = b.center.x, z0 = b.center.z; b.nudge(v3(0, 2, 0));
     for (let i = 0; i < 90; i++) frameW(w, [b], null);
     return { dx: b.center.x - x0, dz: b.center.z - z0 };
   };

@@ -66,7 +66,7 @@ function proj(x: number, y: number, z: number, ax: number, ay: number, az: numbe
  * px). Returns null when nothing fits (a frame smaller than its insets).
  */
 export function fitPlayBounds(cx: number, cz: number, hx: number, hz: number, fovDeg: number, cssW: number, cssH: number,
-  top: number, right: number, bottom: number, left: number, pitchMin = 0.15, pitchMax = 0.9, bodyR = R_MAX): PlayFrame | null {
+  top: number, right: number, bottom: number, left: number, pitchMin = 0.15, pitchMax = 0.9, bodyR = R_MAX, bars = 1): PlayFrame | null {
   if (!(cssW > 1 && cssH > 1 && hx > 0 && hz > 0)) return null;
   const ty = Math.tan((fovDeg * Math.PI) / 360), tx = ty * (cssW / cssH);
   const L = left, R = cssW - right, T = top, B = cssH - bottom;
@@ -88,8 +88,8 @@ export function fitPlayBounds(cx: number, cz: number, hx: number, hz: number, fo
     proj(cx - 0.5, 0.5, z, ax, ay, az, d, p, ty, tx, cssW, cssH, o); const a = o[0];
     proj(cx + 0.5, 0.5, z, ax, ay, az, d, p, ty, tx, cssW, cssH, o); return o[0] - a;
   };
-  let best: PlayFrame | null = null, bestScore = -Infinity;
-  const sx = Math.max(0.05, hx / 8), sz = Math.max(0.05, hz / 10);
+  let best: PlayFrame | null = null, bestScore = -Infinity, bestOff = Infinity;
+  const sx = Math.max(0.05, hx / 8), sz = Math.max(0.05, hz / 10), midX = 0.5 * (L + R);
   for (let p = pitchMin; p <= pitchMax + 1e-9; p += 0.05) {
     for (let ay = 0.2; ay <= 1.0 + 1e-9; ay += 0.4) {
       for (let az = cz - hz; az <= cz + hz + 1e-9; az += sz) {
@@ -99,8 +99,16 @@ export function fitPlayBounds(cx: number, cz: number, hx: number, hz: number, fo
           if (!fits(ax, ay, az, hi, p)) continue;
           for (let it = 0; it < 24; it++) { const mid = 0.5 * (lo + hi); if (fits(ax, ay, az, mid, p)) hi = mid; else lo = mid; }
           const d = hi, front = sizePx(cz + hz, ax, ay, az, d, p), mid = sizePx(cz, ax, ay, az, d, p);
-          const score = tall ? Math.min(front / 100, mid / 80) : mid / 150;
-          if (score > bestScore + 1e-9) { bestScore = score; best = { pitch: p, aimX: ax, aimY: ay, aimZ: az, dist: d, fov: fovDeg, frontPx: front, midPx: mid, meets: score >= MEET }; }
+          const score = tall ? Math.min(front / (100 * bars), mid / (80 * bars)) : mid / (150 * bars);
+          // (round 14, D-104: a fit bound by the frame's HEIGHT leaves room at the sides, and every aim across that room scores the same: the first one tried, the
+          // leftmost, won, so a tall room stood 55 px right of the frame's middle with its right wall on the frame's edge. Equal scores now go to the aim that
+          // stands the room's middle nearest the middle of the band between the side rows)
+          proj(cx, 0, cz, ax, ay, az, d, p, ty, tx, cssW, cssH, o);
+          const off = Math.abs(o[0] - midX);
+          if (score > bestScore * (1 + 1e-6) + 1e-9 || (score > bestScore * (1 - 1e-6) - 1e-9 && off < bestOff - 0.25)) {
+            bestScore = Math.max(score, bestScore); bestOff = off;
+            best = { pitch: p, aimX: ax, aimY: ay, aimZ: az, dist: d, fov: fovDeg, frontPx: front, midPx: mid, meets: score >= MEET };
+          }
         }
       }
     }
@@ -120,25 +128,34 @@ export function fitPlayBounds(cx: number, cz: number, hx: number, hz: number, fo
  *  seat behind Dollop, "a finger on the swing seat" took the squishy). At 0.60 a 1 m squishy is 108..111 px at the front and 89..92 mid on 390 x 844 (RD-17's
  *  bars 100 / 80 met), the depth 326..336 px. Inside fitPlace so every caller (the stage, probe_pg_data's model, pg_node_checks) frames alike. */
 export const TALL_PITCH_MIN = 0.6;
+/** Round 14 (R14_ROOMS, D-104: the owner 2026-11-23, "Make sq footage of rooms wider and volume bigger"): the rooms are 1.62 times the live ones on each side, so
+ *  a fit of the WHOLE room (the view zoomed all the way out) shows a squishy at ROOM_K of the live size. fitPlace's `room` argument (ROOM_K for a place) scales
+ *  RD-17's bars by it (the lens that framed the live room frames the same share of the new one: a view of the live room's size inside it, render/roomcam.ts's
+ *  factor ROOM_K, looks as the live game did) and fits a body column 1 / ROOM_K as tall (so at that view a real body's top still stands inside the HUD rows, and
+ *  a toss or a float has air above it in the whole-room view). When no lens meets the scaled bars the narrowest (the best) one is taken, not the 35 degree one:
+ *  every place keeps the same kind of picture. `room` 1 (the default) is the fit as it was, bit for bit. */
+export const ROOM_K = 0.62;
 const memo: [string, PlayFrame | null][] = [];
 /** Round 3: the index of the lens picked last (a refit after the HUD rows changed, e.g. the Cut bar in a place, starts its walk there). */
 let lastPick = 0;
 export function fitPlace(cx: number, cz: number, hx: number, hz: number, cssW: number, cssH: number,
-  top: number, right: number, bottom: number, left: number, pitchMin = 0.15, pitchMax = 0.9): PlayFrame | null {
+  top: number, right: number, bottom: number, left: number, pitchMin = 0.15, pitchMax = 0.9, room = 1): PlayFrame | null {
   if (!(pitchMin >= 0.05 && pitchMax <= 1.4 && pitchMax >= pitchMin)) { pitchMin = 0.15; pitchMax = 0.9; }
-  if (cssW < 0.9 * cssH && cssW > 380) pitchMin = Math.min(pitchMax, Math.max(pitchMin, TALL_PITCH_MIN));
-  const key = [cx, cz, hx, hz, cssW, cssH, top, right, bottom, left, pitchMin, pitchMax].join();
+  // (round 14: a room's fit never looks flatter than TALL_PITCH_MIN on any frame: with the taller body column the size-only search took the WIDE 11 x 7.8 m room at
+  // 0.15 rad, its 7.8 m of depth a thin band; at 0.60 the lens is 21 degrees and a 1 m squishy 95 px at mid depth on 1280 x 800, as the live 23 degrees / 153 px x 0.62)
+  if ((cssW < 0.9 * cssH && cssW > 380) || room !== 1) pitchMin = Math.min(pitchMax, Math.max(pitchMin, TALL_PITCH_MIN));
+  const key = [cx, cz, hx, hz, cssW, cssH, top, right, bottom, left, pitchMin, pitchMax, room].join();
   for (const m of memo) if (m[0] === key) return m[1];
   // the widest lens that meets the bars, else the stage's own (index 0). A narrower lens never frames smaller (the size grows as the depth
   // flattens), so the walk from the last pick (wider while the wider one meets, narrower while this one misses) lands where a scan from 35
   // degrees would, in two or three fits instead of up to eight (about 30 ms each).
   const n = PLACE_FOVS.length, got: (PlayFrame | null | undefined)[] = new Array(n);
-  const at = (i: number): PlayFrame | null => (got[i] === undefined ? (got[i] = fitPlayBounds(cx, cz, hx, hz, PLACE_FOVS[i], cssW, cssH, top, right, bottom, left, pitchMin, pitchMax)) : got[i]!);
+  const at = (i: number): PlayFrame | null => (got[i] === undefined ? (got[i] = fitPlayBounds(cx, cz, hx, hz, PLACE_FOVS[i], cssW, cssH, top, right, bottom, left, pitchMin, pitchMax, R_MAX / room, room)) : got[i]!);
   let i = Math.max(0, Math.min(n - 1, lastPick)), pick: PlayFrame | null = null;
   const fi = at(i);
   if (fi) {
     if (fi.meets) { while (i > 0 && at(i - 1)?.meets) i--; pick = at(i); }
-    else { while (i < n - 1 && !at(i)?.meets) i++; if (at(i)?.meets) pick = at(i); else { i = 0; pick = at(0); } }
+    else { while (i < n - 1 && !at(i)?.meets) i++; if (at(i)?.meets || room !== 1) pick = at(i); else { i = 0; pick = at(0); } }
     lastPick = i;
   }
   memo.unshift([key, pick]); if (memo.length > 4) memo.pop();

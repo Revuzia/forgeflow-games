@@ -5,3 +5,5 @@
 // life chunk (its content is the draw half of LIFE). Imports three by the bare specifier, so three stays in the stage chunk.
 export { Emotes, EMOTE_SLOTS, EMOTE_COLOURS, EMOTE_ACCENT } from './emotes.ts';
 export { HomeKit } from './homekit.ts';
+// (round 14, R14_ROOMS) the room camera's director (roomcam.ts): the stage reads its eased view; first-load keeps only the hooks
+export { RoomCam, HOME_R } from './roomcam.ts';

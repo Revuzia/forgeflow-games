@@ -26,16 +26,23 @@ const CLOUD = /* glsl */`
   ${/* (round 6, first shots: a flat noise read as a dusty plain; the billows are a height now, lit by the low sun through the bump) */ ''}
   pBH = (big * 0.65 + mid * 0.35) * 0.55 + fine * 0.015;
   vec3 c = mix(uHollow, uTop, 0.3 + 0.7 * b) * (0.96 + 0.06 * fine);
-  float dent = 0.0, rim = 0.0;
+  float dent = 0.0, rim = 0.0, tint = 0.0;
   for (int i = 0; i < ${DENTS}; i++) {
     vec4 d = uDent[i];
     if (d.w <= 0.0) continue;
+    ${/* (round 14, R14_ROOMS: the clear, see-through families were hard to see against the near-white cloud tops) under each body that STANDS on the cloud (its live */ ''}
+    ${/* dent, w > 1) the floor is tinted a deeper lavender-blue: a soft pool under it that reaches the way the camera looks, so the whole silhouette has it behind */ ''}
+    if (d.w > 1.2) {
+      vec2 vd = normalize(d.xy - cameraPosition.xz + 1e-4), q2 = p - (d.xy + vd * d.z * 1.3);
+      tint = max(tint, 1.0 - smoothstep(0.45, 1.0, length(vec2(dot(q2, vd) / (d.z * 3.0), dot(q2, vec2(-vd.y, vd.x)) / (d.z * 1.8)))));
+    }
     d.w = min(d.w, 1.0);
     vec2 q = p - d.xy; float r = length(q) / d.z;
     dent = max(dent, d.w * (1.0 - smoothstep(0.55, 1.0, r)));
     rim = max(rim, d.w * smoothstep(0.75, 1.0, r) * (1.0 - smoothstep(1.0, 1.25, r)) * (0.5 + 0.5 * dot(normalize(q + 1e-4), vec2(0.8, 0.6))));
   }
   c = mix(c, uHollow * 0.86, dent * 0.55) + uTop * rim * 0.18;
+  c = mix(c, uTint, tint * 0.62);
   vec3 V = normalize(cameraPosition - vWP);
   c += uSheen * pow(1.0 - clamp(V.y, 0.0, 1.0), 3.0) * (0.5 + 0.5 * b);
   diffuseColor.rgb = c;
@@ -164,7 +171,8 @@ const LOOK: PlaceLook = {
     const dent = Array.from({ length: DENTS }, () => new THREE.Vector4(0, 0, 1, 0));
     // (round 6, first shots: cream-dusk read as pink-brown dust; a cream-amber top in the sun and lavender hollows read as cloud)
     // (round 6, second shots: beige under the amber sun read as sand: near-white tops and blue-lavender hollows, the light gives the gold)
-    const cloudU = { uTop: { value: col(tok('cream', 'lagoon', 0.1, 0.81)) }, uHollow: { value: col(tok('dusk', 'lagoon', 0.4, 0.63)) }, uSheen: { value: col(tok('amber', 'cream', 0.45, 0.1)) }, uDent: { value: dent } };
+    const cloudU = { uTop: { value: col(tok('cream', 'lagoon', 0.1, 0.81)) }, uHollow: { value: col(tok('dusk', 'lagoon', 0.4, 0.63)) }, uSheen: { value: col(tok('amber', 'cream', 0.45, 0.1)) }, uDent: { value: dent },
+      uTint: { value: col(tok('dusk', 'lagoon', 0.42, 0.5)) } };   // (round 14: the tint under a standing body)
     const cloud = kit.surface('cloud', [1, 1, 1], 0.95, CLOUD, cloudU, 0.3, 1.0);
     // (round 6, first shots: a flat floor to the horizon read as a sandy plain from the place camera's low view) the cloud sea billows up
     // outside the play area, behind it and at its sides (never in front of it: the front band stays clear to the frame's foot); the bounds
