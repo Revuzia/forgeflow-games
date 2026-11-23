@@ -953,7 +953,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
     const n = pxToNdc(x, y, game.viewport), r = cameraRay(cam, n.x, n.y);
     const lvl = body.levelCarry === true, R0 = body.restRadius;
-    if (L.b !== body) { console.warn('R15DBG newplane t=' + game.simTime.toFixed(3) + ' through=' + [through.x, through.y, through.z].map((v) => v.toFixed(2)).join(',') + ' body=' + [body.center.x + off.x, body.center.y + off.y, body.center.z + off.z].map((v) => v.toFixed(2)).join(','));
+    if (L.b !== body) {
       // the first move of this carry: the hand's height now, on the published plane (through the press point, in world space)
       const h = rayPlane(r.origin, r.dir, { x: through.x + off.x, y: through.y + off.y, z: through.z + off.z }, cameraForward(cam));
       L.b = body; L.base = h ? h.y : body.center.y + off.y; L.raise = 0;
@@ -974,7 +974,6 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const t = r.dir.y < -1e-4 ? (L.base - r.origin.y) / r.dir.y : -1;
     if (t > 0) { px = r.origin.x + r.dir.x * t; pz = r.origin.z + r.dir.z * t; }
     else { const l = Math.hypot(r.dir.x, r.dir.z) || 1; px = r.origin.x + (r.dir.x / l) * 60; pz = r.origin.z + (r.dir.z / l) * 60; }   // (at or above the horizon: far along it, clamped below)
-    { const D = globalThis as any, lp = D.__lp, j = lp && lp[2] === L ? Math.hypot(px - lp[0], pz - lp[1]) : 0; let rv: any = [0, 0, 0, 0, 0, 0]; try { (stage as any).roomView?.(rv); } catch { /* */ } if (j > 0.5) console.warn('R15DBG jump ' + j.toFixed(2) + ' t=' + game.simTime.toFixed(3) + ' hand=' + px.toFixed(2) + ',' + pz.toFixed(2) + ' was ' + lp[0].toFixed(2) + ',' + lp[1].toFixed(2) + ' base ' + L.base.toFixed(2) + ' raise ' + L.raise.toFixed(2) + ' scr ' + x.toFixed(0) + ',' + y.toFixed(0) + ' was ' + lp[3].toFixed(0) + ',' + lp[4].toFixed(0) + ' cam ' + [cam.position.x, cam.position.y, cam.position.z].map((v: number) => v.toFixed(2)).join(',') + ' dir ' + [r.dir.x, r.dir.y, r.dir.z].map((v) => v.toFixed(3)).join(',') + ' wasdir ' + lp[5] + ' wascam ' + lp[6] + ' view ' + Array.from(rv).map((v: any) => (+v).toFixed(2)).join(',') + ' body ' + (body.center.x + off.x).toFixed(2) + ',' + (body.center.z + off.z).toFixed(2)); D.__lp = [px, pz, L, x, y, [r.dir.x, r.dir.y, r.dir.z].map((v) => v.toFixed(3)).join(','), [cam.position.x, cam.position.y, cam.position.z].map((v: number) => v.toFixed(2)).join(',')]; }
     const b = (layout === 1 ? def.tall : def).bounds;
     if (b.shape === 'disc') {
       const R = (b.r ?? 3) + CARRY_RIM, dx = px - b.x, dz = pz - b.z, d = Math.hypot(dx, dz);
