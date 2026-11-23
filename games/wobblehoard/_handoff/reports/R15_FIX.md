@@ -8,7 +8,7 @@ If this file is all you have: every edit named below is IN THE TREE; a row is ve
 | item | what | state |
 |---|---|---|
 | F1 | probe_softbody hostile fuzz (slime inverts with HOVER_ABOVE 0.6) | **DONE, measured**: `--families-hostile` 2/2 three times; full probe 115/116 = the live count; HOVER_ABOVE stays 0.6 |
-| F3 | Home back-rim let go jumps 4 m | IN PROGRESS: cause being traced on an instrumented copy; one fix written (the finger decides toss / set-down), unverified in a browser |
+| F3 | Home back-rim let go jumps 4 m | **DONE, measured** (engineer 2): cause = the finger ray met the RAISED carry plane (raise flickers 0 <-> 0.26 m over things; far back the ray is near level, so the hand jumped 1 to 2 m per frame toward the camera: `R15DBG` lines of the round-14 copy); fix in tree = later-life.ts carryPoint meets the ray with L.base, raise lifts straight up, plus the finger-speed set-down. Browser, working tree, desk Home 3 out, 6 FL->BR + 6 to-FL carries (`S/v/logs/F3_after_desk.out`): 6/6 picked and reached, 0 jumps toward the camera, 0 errors; after the mouse-up the squishy lands <= 0.5 m from where it hung. Left (F6, skipped): finger held still at the frame top (y < 90 px) the body keeps following the hand up to 1.8 m BACK before the let go. |
 | F2 | Home 2+ out: 3+ things used, things in the camera's view | WRITTEN (data re-laid, LIFE room reach + rug naps, row tightened, SU-06 added); node and browser measurement pending |
 | F5 | set-down in the Updraft / on the Glide Ramp top | todo |
 | F4 | node_checks 185/186 | todo |

@@ -1458,7 +1458,8 @@ function startBask(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, s
     if (d < bd) { bd = d; zk = k; }
   }
   if (zk < 0) { w.coo[i * 26 + BEH.BASK] = tb + 5; return; }
-  w.oV[i] |= 1 << zk;
+  // (round 15, R15_FIX F2) Home as a room: the lamp's warmth counts as visited when the squishy ARRIVES (runBask), so a walk a friend interrupted is tried again
+  if (!(w.home && w.nO >= 2)) w.oV[i] |= 1 << zk;
   const t = w.zT[zk];
   let ok = false;
   if (t >= 0 && w.tUX[t] === w.tUX[t]) { w.f[F.X] = w.tUX[t]; w.f[F.Z] = w.tUZ[t]; ok = true; }
@@ -1487,7 +1488,7 @@ function runBask(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents
   const f = w.fa[i];
   if (w.ph[i] === 1) {
     const r = travelStep(w, s, out, i, 80);
-    if (r === 2 || tb - w.bT[i] > 20) { endBeh(w, s, out, i, 20); return; }
+    if (r === 2 || tb - w.bT[i] > 20) {  endBeh(w, s, out, i, 20); return; }
     if (r === 1) { stopMove(w, out, i); w.ph[i] = 2; }
     return;
   }
@@ -1499,6 +1500,10 @@ function runBask(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, ev: LifeEvents
     const t = w.tT[i], fire = t >= 0 && w.tSw[t] === 6;
     emitEmote(w, s, out, i, fire ? EMOTE.flame : EMOTE.sun, STYLE.SAY, 2, 0, 0, 0);
     emitExpr(w, out, i, EXPR.happy, 60);
+    // (round 15, R15_FIX F2; VERDICT_R14 F2: "the party uses 2 things by itself" at Home: the Felt Ball and the Snooze Rug were the only Home things with a
+    // by-itself use record) Home as a room (two or more out): a squishy that walked to the Warm Lamp's spot and stands in its warmth USES the lamp (a USE LEAN
+    // by SELF naming it, once per bask). Home's lone squishy and the places: unchanged.
+    if (w.home && w.nO >= 2 && t >= 0) { for (let k = 0; k < w.nZ; k++) if (w.zK[k] === ZONE.warm && w.zT[k] === t) w.oV[i] |= 1 << k; if (w.zWK[i] >= 0) pushEvent(ev, LIFE_EV.USE, USE_VERB.LEAN, i, -1, 1, w.tG[t]); }
     return;
   }
   if (w.ph[i] === 3) {
