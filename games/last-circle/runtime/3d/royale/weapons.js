@@ -265,7 +265,10 @@ async function buildProtos(W) {
 }
 
 // support-hand anchor along the forward run of the gun (fraction of grip -> tip), clamped to what the support arm reaches
-const GUARD_F = { smg: 0.55, ar: 0.5, burst: 0.5, lmg: 0.42, dmr: 0.42, shotgun: 0.5, sniper: 0.44, glauncher: 0.45 };
+// (W10 anim fix 3, F6) the shouldered AR / SMG / LMG (player.js rifleHold) take the C-clamp station near the handguard's front (ar 0.5 ->
+// 0.62, burst 0.5 -> 0.62, smg 0.55 -> 0.72, lmg 0.42 -> 0.5): from the stock in the pocket the old station left the support elbow at
+// 75-87 deg (researched 100-160), the hand pulled back to the shoulder
+const GUARD_F = { smg: 0.72, ar: 0.62, burst: 0.62, lmg: 0.5, dmr: 0.42, shotgun: 0.5, sniper: 0.44, glauncher: 0.45 };
 const GUARD_ZMIN = 0.16, GUARD_ZMAX = 0.36;
 // (W10 anim fix 2) the support hand on the bolt gun's FOREND, measured from the held model (holder space, metres from the grip): the
 // sniper's forend runs 0.26-0.52 and a bolt gun is held nearer the action than a C-clamp: palm ~0.36 (was ~0.33, the elbow at
@@ -312,6 +315,10 @@ function measureProto(g, id) {
     // the WRIST sits just under and to the left (+X in holder space) of the guard, a little behind the palm
     guard = new THREE.Vector3((cn ? cx / cn : 0) + 0.04, yLo - 0.045, zg - 0.03);
   }
+  // (W10 anim fix 3, F6) the butt: the centre of the last 3 cm of the stock (player.js rifleHold puts it in the shoulder pocket)
+  let bx = 0, by = 0, bn = 0;
+  for (let i = 0; i < pts.length; i += 3) if (pts[i + 2] < zMin + 0.03) { bx += pts[i]; by += pts[i + 1]; bn++; }
+  g.userData.butt = new THREE.Vector3(bn ? bx / bn : 0, bn ? by / bn : 0, zMin);
   g.userData.tip = tip;
   g.userData.guard = guard;
   g.userData.len = +(zMax - zMin).toFixed(3);
