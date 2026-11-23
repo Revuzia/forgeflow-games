@@ -1769,8 +1769,14 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const { loadPlaceDef } = await import('../../src/data/places.ts');
     const cab = await loadPlaceDef('hearthlog');
     const tallF = frontReach(cab, 1), wideF = frontReach(cab, 0);
-    check('PLAYGROUND a place\'s framing reaches its front things: the cabin\'s tall layout frames to the Rocker Board\'s front edge (3.3 m, past the bounds\' 3.0); the wide layout\'s things all lie inside its bounds (2.4 m)',
-      Math.abs(tallF - 3.3) < 0.01 && wideF <= 2.4, `tall ${tallF.toFixed(3)} m, wide ${wideF.toFixed(3)} m`);
+    // RE-SPECIFIED in round 15 (R15_FIX F4; written reason): the row pinned the live cabin's numbers (the tall Rocker Board at z 3.0 on the bounds' front edge 3.0, so
+    // the framing had to reach 3.3; the wide bounds 2.4). Round 14's cabin (D-104) is 1.62 times that a side: the tall Rocker Board stands at z 4.0 inside bounds of
+    // 4.9, the wide bounds are 3.9. What the row guards is unchanged and now read from the data: frontReach is the front edge of the front-most thing's footprint
+    // (the tall layout's Rocker Board: its z + its half width 0.3), in each layout, whatever the bounds are (the host frames to max(bounds, frontReach))
+    const rkK = cab.things.findIndex((t) => t.id === 'rockerboard'), rkT = cab.tall.things[rkK] ?? cab.things[rkK];
+    const frontOf = (lay: 0 | 1): number => Math.max(...cab.things.map((t, k) => (lay === 1 ? cab.tall.things[k] ?? t : t).z));
+    check('PLAYGROUND a place\'s framing reaches its front things: the cabin\'s tall layout frames to the Rocker Board\'s front edge (its z + its half width 0.3: 4.3 m in round 14\'s cabin); the wide layout\'s reach is its front-most thing\'s front edge, inside its bounds (3.9 m)',
+      rkK >= 0 && Math.abs(tallF - (rkT.z + 0.3)) < 0.01 && Math.abs(rkT.z - frontOf(1)) < 1e-9 && wideF > frontOf(0) && wideF <= frontOf(0) + 1.2 && wideF <= (cab.bounds.hz ?? 0), `tall ${tallF.toFixed(3)} m (Rocker Board z ${rkT.z}), wide ${wideF.toFixed(3)} m (front-most thing z ${frontOf(0)}, bounds ${cab.bounds.hz})`);
   }
   // Home's one-part things shown and parked by physics' own setParked (R4b re-specification, written reason: PG_PHYS round 4 fixed the prop count, so the
   // shell's parkThing FALLBACK is gone; the row asserts the same outcomes on setParked alone, plus that the physics' first call already shows the ball)
@@ -1815,6 +1821,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   for (const k of ['setHomeThing', 'setAutonomyFraming', 'setBodyPose', 'setBodyGaze', 'setBodyExpression', 'setBodyLook', 'setBodyAsleep', 'setKeepsakes', 'setObstacles', 'setHeatPoint', 'setPlayBounds', 'thingFx']) st[k] = (...a: unknown[]) => log.rec(k, ...a);
   const v3 = new THREE.Vector3();
   const proj = (x: number, y: number, z: number): { x: number; y: number } | null => { v3.set(x, y, z).project(cam); return Math.abs(v3.x) > 1 || Math.abs(v3.y) > 1 ? null : { x: (v3.x * 0.5 + 0.5) * W, y: (0.5 - v3.y * 0.5) * H }; };
+  // (round 15, R15_FIX F4; VERDICT_R14 F4: "the reds are rigs pinned to old positions") this rig's camera stands still (mocks.ts: at (0, 0.9, 3.2), looking at the
+  // mat's middle) and round 14's rooms are 1.62 times the live ones a side (D-104): a place's things now stand outside that fixed frame, where the game's room camera
+  // follows the party to them. A row that needs a thing ON SCREEN (a tap on it, its AUTO chip) looks at it first: the same camera moved over the floor, the same
+  // distance and pitch (lookAt(x, z)), and back (lookHome()). Rows that set a squishy on a thing read the thing's spot from the place's data, not a copied number.
+  const lookAt = (x: number, z: number): void => { cam.position.set(x, 0.9, z + 3.2); cam.lookAt(x, 0.35, z); cam.updateMatrixWorld(true); };
+  const lookHome = (): void => lookAt(0, 0);
   st.bodyScreenPoint = (vid: number, out: Float32Array) => { const b = views.get(vid); const p = b ? proj(b.center.x, b.center.y, b.center.z) : null; if (!p) return false; out[0] = p.x; out[1] = p.y; out[2] = 40; return true; };
   const audio = createMockAudio() as ReturnType<typeof createMockAudio> & Record<string, unknown>;
   audio.creature = () => true;
@@ -1944,7 +1956,15 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const range = async (sec: number): Promise<number> => { let lo = Infinity, hi = -Infinity; for (let i = 0; i < sec * 6; i++) { await stepA(10); const x = seatX(); lo = Math.min(lo, x); hi = Math.max(hi, x); } return hi - lo; };
     const rows = host.autoThings();
     const api = (host.debug() as { auto: { api: boolean } }).auto.api;
-    const sw = rows.find((r) => r.id === 'pillowswing'), rk = rows.find((r) => r.id === 'rockerboard');
+    // RE-SPECIFIED in round 15 (R15_FIX F4; written reason): in round 14's cabin the Pillow Swing (0, -2.6) and the Rocker Board (2.8, 2.6) are 5.9 m apart and no
+    // longer stand in one frame of this rig's fixed camera (in the live cabin both did). A chip is offered for a hinge ride whose anchor is ON SCREEN (autoThings),
+    // as in the game, where the room camera shows the part of the room the party is in: the row looks at the Rocker Board for its chip, then back. Still one
+    // control each, OFF by default, on screen.
+    const rkDef = (await (await import('../../src/data/places.ts')).loadPlaceDef('hearthlog')).things.find((t) => t.id === 'rockerboard')!;
+    lookAt(rkDef.x, rkDef.z);
+    const rkRows = host.autoThings();
+    lookHome();
+    const sw = rows.find((r) => r.id === 'pillowswing'), rk = rkRows.find((r) => r.id === 'rockerboard');
     const propCalls: Array<{ kind: number; key?: number; held?: number }> = [];   // (copies: the host reuses one object per call kind)
     const prop0 = audio.prop; audio.prop = (q: { kind: number; key?: number; held?: number }) => { propCalls.push({ ...q }); };
     // (R4b: physics always has setAuto / grabProp now; the round-4 FALLBACK branch is gone, so a world without them FAILS here)
@@ -1960,8 +1980,8 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       await stepA(1800);
       const r2 = await range(3);
       check('PLAYGROUND D-95 AUTO (the player\'s toggle): the cabin offers one control each for the Pillow Swing and the Rocker Board, both OFF by default and on screen; AUTO on keeps the resting seat swinging a steady arc by itself; AUTO off lets it die down by its own damping',
-        !!sw && !!rk && !sw.on && !rk.on && sw.x > 0 && sw.x < W && sw.y > 0 && sw.y < H && okOn && onRow?.on === true && r0 < 0.02 && r1 > 0.25 && okOff && r2 < 0.25 * r1,
-        `seat x range at rest ${r0.toFixed(3)} m, AUTO on ${r1.toFixed(3)} m, 30 s after off ${r2.toFixed(3)} m; chips ${JSON.stringify(rows.map((r) => [r.id, r.on, Math.round(r.x), Math.round(r.y)]))}`);
+        !!sw && !!rk && !sw.on && !rk.on && sw.x > 0 && sw.x < W && sw.y > 0 && sw.y < H && rk.x > 0 && rk.x < W && rk.y > 0 && rk.y < H && okOn && onRow?.on === true && r0 < 0.02 && r1 > 0.25 && okOff && r2 < 0.25 * r1,
+        `seat x range at rest ${r0.toFixed(3)} m, AUTO on ${r1.toFixed(3)} m, 30 s after off ${r2.toFixed(3)} m; chips ${JSON.stringify([...rows, ...rkRows.filter((r) => r.id === 'rockerboard')].map((r) => [r.id, r.on, Math.round(r.x), Math.round(r.y)]))}`);
       // the hand: a mouse press on the seat takes it (the gesture machine never sees the press), a drag pulls it, the release lets it swing on (AUTO off: it dies down)
       const pt = thingPt(SWING);
       const x0 = seatX();
@@ -2212,15 +2232,29 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     let bx = NaN, bz = NaN;
     if (branch >= 0 && bound.poses) { bx = bound.poses[branch * 8]; bz = bound.poses[branch * 8 + 2] + 0.45; try { app.body.placeAt?.({ x: bx, y: app.body.center.y, z: bz }, { x: 0, y: 0, z: 0 }); } catch { /* none */ } }
     await stepA(90);
+    // (round 15, R15_FIX F4; written reason: the 1.5 s above is "for any bump's puff and the one-a-second limit to pass". When the squishy set here leans on the
+    // trunk as it settles, the pine is still shaking at 1.5 s (a puff drawn inside the last second: the click's poke cannot strike a branch that just struck, and
+    // the row failed with "puff [2,2]"). The row now waits until the pine has drawn no puff for 2 s (10 s at most) before it clicks; every assertion is kept.)
+    for (let w8 = 0, quiet = 0, n0 = log.of('thingFx').filter((x) => x.args[0] === pineK && x.args[1] === 1).length; w8 < 20 && quiet < 4; w8++) {
+      await stepA(30);
+      const n1 = log.of('thingFx').filter((x) => x.args[0] === pineK && x.args[1] === 1).length;
+      if (n1 === n0) quiet++; else { quiet = 0; n0 = n1; }
+    }
     const me = zd().chars.filter((c) => c.itemId === app.identity.itemId)[0];
     const rec0 = (host.debug() as { counts: { records: number } }).counts.records, fx0 = log.of('thingFx').filter((x) => x.args[0] === pineK && x.args[1] === 1).length;
     const snow0 = me?.looks?.[4] ?? 0;
-    await tap(thingPt(pineK, 0));
+    // RE-SPECIFIED in round 15 (R15_FIX F4; written reason): the click was aimed at the trunk's MIDDLE (0.6 m up). The squishy this row sets under the branch (0.45 m
+    // in front of it, 0.4 m to the side of the trunk) stands between the rig's fixed camera and the trunk, and in round 14's room the pine is 1.2 m further back
+    // (z -3.2, was -2): whether the squishy's edge hid the trunk's middle depended on where LIFE had it lean (it passed at x -0.34 and the click took the BODY at
+    // x -0.70). The click is now on the trunk 1.05 m up, above the squishy's top and under the trunk's (1.2 m): still a still click on the trunk, every assertion kept.
+    await tap(thingPt(pineK, 0.45));
     await stepA(10);
     const after = zd().chars.find((c) => c.slot === me?.slot), tapP = dbg().tap;
     const fx1 = log.of('thingFx').filter((x) => x.args[0] === pineK && x.args[1] === 1).length, rec1 = (host.debug() as { counts: { records: number } }).counts.records;
     check('PLAYGROUND (round 6) the Shake Pine (PLACES 4.4 "tap it: it shakes"): a still click on its trunk is a thing tap (one more record: USE SHAKE by PLAYER) that pokes its branch; the branch\'s strike drops the snow puff (its puff drawn) on the squishy under it (snow +0.5, the pine as its source)',
-      branch >= 0 && tapP === 'shakepine' && rec1 > rec0 && fx1 > fx0 && (after?.looks?.[4] ?? 0) - snow0 >= 0.4, JSON.stringify({ branch, set: [+bx.toFixed(2), +bz.toFixed(2)], tap: tapP, records: [rec0, rec1], puff: [fx0, fx1], snow: [snow0, after?.looks?.[4] ?? null], at: after && [after.x, after.z] }));
+      // (round 15, R15_FIX F4; written reason: the snow look is a coat from 0 to 1. A squishy that had leaned on the trunk before the click already wears some
+      // (0.62 in round 15's run: its own bumps shook the pine), and the click's +0.5 fills the coat (0.94 after a moment's melt): a rise of 0.4, OR the coat full)
+      branch >= 0 && tapP === 'shakepine' && rec1 > rec0 && fx1 > fx0 && ((after?.looks?.[4] ?? 0) - snow0 >= 0.4 || (snow0 > 0.5 && (after?.looks?.[4] ?? 0) >= 0.9)), JSON.stringify({ branch, set: [+bx.toFixed(2), +bz.toFixed(2)], tap: tapP, records: [rec0, rec1], puff: [fx0, fx1], snow: [snow0, after?.looks?.[4] ?? null], at: after && [after.x, after.z] }));
     // Rainleaf Garden: the Rain's shower envelope (40 s on, 30 s off, from the arrival) is heard by the bed as it turns on (1) and off (0)
     const a2 = wLog.length;
     const okG = await host.travel('rainleaf', true);
@@ -2255,7 +2289,15 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const a3 = wLog.length, fxW = log.of('thingFx').length;
     const okL = await host.travel('lanternroof', true);
     // (the Vane Disc has no prop: its spot from the wide layout, Lanternroof's things[1]; the play body set at rest on it)
-    meSet(2.3, app.body.center.y, -0.7);
+    // RE-SPECIFIED in round 15 (R15_FIX F4; written reason), this row and the four after it: they set the squishy at COPIED spots of the live rooms (the Vane Disc
+    // at (2.3, -0.7), the chimney at (-2.6, 0.6), the first Puff Pad at (2.61, -0.52), the Updraft at (2.2, -0.8), the arch at (-1.75, -1.95)); round 14 moved every
+    // thing with its room (D-104: 1.62 times a side), so the squishy was set on bare floor and the rows failed without a fault in the game (VERDICT_R14 F4: by real
+    // input the perch-downs, the vane ride, the scope and the pad work). The spots are now read from the place's data; every assertion is the same.
+    const pgD = await import('../../src/data/places.ts');
+    const LRd = await pgD.loadPlaceDef('lanternroof'), CLd = await pgD.loadPlaceDef('cloudloft');
+    const lrT = (id: string) => LRd.things.find((t) => t.id === id)!, clT = (id: string) => CLd.things.find((t) => t.id === id)!;
+    const vaneD = lrT('vanedisc'), scopeD = lrT('starscope'), chimD = lrT('chimneycorner'), padD = clT('puffpads'), upD = clT('updraft'), archD = clT('sunbowarch');
+    meSet(vaneD.x, app.body.center.y, vaneD.z);
     let lvMax = 0, turned = 0;
     for (let i = 0; i < 26; i++) { await stepA(60); const z = r7().zones?.find((q) => q[0] === 'nightbreeze'); if (z) lvMax = Math.max(lvMax, z[2]); if (r7().vane?.turning) turned++; }
     const lW = weathers(a3), sent = log.of('thingFx').slice(fxW).filter((x) => x.args[0] === -1 && x.args[1] === 3).map((x) => x.args[2] as number);
@@ -2264,7 +2306,10 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       JSON.stringify({ okL, weathers: lW, sentN: sent.length, sentMax: sent.length ? Math.max(...sent) : null, lvMax, turned, used: r7().selfUsed, vane: r7().vane }));
     // the Star Scope (things[5]): a still click is a thing tap: the comet (stage.thingFx(5, 1, 1)), a USE SWITCH by PLAYER and LIFE's GAZE_SKY for the squishy on
     // screen (two more records); a second tap while it flies is taken and adds nothing; the Chimney Corner (things[3]): a tap breathes deeper (thingFx(3, 1, 1))
-    meSet(0.3, app.body.center.y, 0.6); await stepA(60);
+    // (round 15: the scope stands at the front left of the bigger roof, outside the rig's fixed frame: the camera looks at it (lookAt), and the squishy stands in
+    // that frame beside it, as it stood in the frame before: 0.8 m to the right of and 0.6 m behind the look point)
+    lookAt(scopeD.x, scopeD.z);
+    meSet(scopeD.x + 0.8, app.body.center.y, scopeD.z - 0.6); await stepA(60);
     const sc0 = log.of('thingFx').filter((x) => x.args[0] === 5 && x.args[1] === 1).length, rc0 = r7().counts.records;
     await tap(thingPt(5));
     await stepA(10);
@@ -2274,9 +2319,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const sc2 = log.of('thingFx').filter((x) => x.args[0] === 5 && x.args[1] === 1).length;
     const ch0 = log.of('thingFx').filter((x) => x.args[0] === 3 && x.args[1] === 1).length;
     // (the chimney stands at x -2.6, at the edge of this rig's fixed Home camera: its right face, 0.22 m in from its centre, is in view)
+    // (round 15: the camera looks at the chimney where it stands now; the same point on its right face is tapped)
+    lookAt(chimD.x, chimD.z);
     let chPt: { x: number; y: number } | null = null;
     if (bound.poses && bound.thing) for (let p = 0; p < bound.count; p++) if (bound.thing[p] === 3) { chPt = proj(bound.poses[p * 8] + 0.22, bound.poses[p * 8 + 1], bound.poses[p * 8 + 2]); break; }
     await tap(chPt);
+    lookHome();
     await stepA(10);
     const ch1 = log.of('thingFx').filter((x) => x.args[0] === 3 && x.args[1] === 1).length, tapC = r7().tap;
     check('PLAYGROUND (round 7) Lanternroof\'s taps: the Star Scope sends the comet (thingFx(5, 1, 1)) with a USE SWITCH by PLAYER and LIFE\'s GAZE_SKY (2 or more records), one comet at a time (a tap while it flies adds nothing); the Chimney Corner breathes deeper (thingFx(3, 1, 1))',
@@ -2284,19 +2332,19 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       JSON.stringify({ tap1, comet1, comet: [sc0, sc1, sc2], records: [rc0, rc1], tapC, chimney: [ch0, ch1] }));
     // (round 7) a squishy set down on top of the Chimney Corner (a block 1.4 m tall, wide layout (-2.6, 0.6)) hops down beside it, toward the middle (the host's
     // perchDown after 1.5 s: up there it stood above the place camera's frame on a phone, s3run2)
-    meSet(-2.6, 2.0, 0.6);
+    meSet(chimD.x, 2.0, chimD.z);
     for (let i = 0; i < 5; i++) await stepA(60);
-    const pY = app.body.center.y, pX = app.body.center.x, pD = Math.hypot(pX + 2.6, app.body.center.z - 0.6);
+    const pY = app.body.center.y, pX = app.body.center.x, pD = Math.hypot(pX - chimD.x, app.body.center.z - chimD.z);
     check('PLAYGROUND (round 7) Lanternroof: a squishy set on top of the Chimney Corner (1.4 m) hops down beside it, toward the middle, within 5 s (the host\'s perchDown)',
-      okL && pY < 0.9 && pD > 0.5 && pX > -2.6, JSON.stringify({ y: +pY.toFixed(3), x: +pX.toFixed(3), d: +pD.toFixed(3) }));
+      okL && pY < 0.9 && pD > 0.5 && pX > chimD.x, JSON.stringify({ y: +pY.toFixed(3), x: +pX.toFixed(3), d: +pD.toFixed(3) }));
     // Cloudloft: the Breeze's gusts are heard (weather 0.4); a squishy dropped onto a Puff Pad bounces (a USE BOUNCE by itself); one let go 1.3 m up in the Updraft
     // floats down (LIFE's LIFT, its thing the Updraft)
     const a4 = wLog.length;
     const okU = await host.travel('cloudloft', true);
     await stepA(60);
-    meSet(2.61, 1.0, -0.52);   // (over the first Puff Pad, the wide layout's things[0] spot)
+    meSet(padD.x, 1.0, padD.z);   // (over the first Puff Pad, the wide layout's things[0] spot)
     for (let i = 0; i < 4; i++) await stepA(60);
-    meSet(2.2, 1.3, -0.8);     // (in the Updraft's column, its centre)
+    meSet(upD.x, 1.3, upD.z);     // (in the Updraft's column, its centre)
     for (let i = 0; i < 22; i++) await stepA(60);
     const uW = weathers(a4);
     check('PLAYGROUND (round 7) Cloudloft: the Breeze\'s gusts are heard (setAmbience weather 0.4, at least 1 in 26 s); a squishy dropped onto a Puff Pad bounces (USE BOUNCE by itself) and one let go 1.3 m up in the Updraft floats down (LIFE\'s LIFT naming the Updraft)',
@@ -2304,12 +2352,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       JSON.stringify({ okU, weathers: uW, used: r7().selfUsed, reacted: r7().selfReacted }));
     // (round 8, R8_SHELL 3) a squishy set on top of the Sunbow Arch (a STATIC bar: its top bar 1.3 m up, wide layout (-1.75, -1.95)) is set down on the floor beside it,
     // toward the middle, within 5 s: perchDown now covers every static bar's top (round 7's covered blocks only; R7_SHELL's list: one left up there stayed above the frame)
-    meSet(-1.75, 2.0, -1.95);
+    meSet(archD.x, 2.0, archD.z);
     let onArch = 0;
     for (let i = 0; i < 30; i++) { await stepA(10); if (app.body.center.y > 1.3 && (app.body.metrics.onProp ?? -1) >= 0) onArch++; }
     const aY = app.body.center.y, aX = app.body.center.x, aZ = app.body.center.z;
     check('PLAYGROUND (round 8) Cloudloft: a squishy set on top of the Sunbow Arch (its top bar 1.3 m up) rests on it, then is set down on the floor beside it, toward the middle, within 5 s (perchDown covers static bars)',
-      okU && onArch >= 3 && aY < 0.9 && Math.hypot(aX + 1.75, aZ + 1.95) > 0.3 && aZ > -1.95, JSON.stringify({ onArch, y: +aY.toFixed(3), x: +aX.toFixed(3), z: +aZ.toFixed(3) }));
+      okU && onArch >= 3 && aY < 0.9 && Math.hypot(aX - archD.x, aZ - archD.z) > 0.3 && aZ > archD.z, JSON.stringify({ onArch, y: +aY.toFixed(3), x: +aX.toFixed(3), z: +aZ.toFixed(3) }));
     // (round 8, R8_SHELL 3) in a place a CARRIED squishy moves over the ground (later-life.ts carryPoint): lifted by a pull from its upper part, then a drag straight up
     // the frame (120 px) takes it BACK, at about the height it was picked up at. Round 7's carries to things at the back ran out of frame (the camera-facing plane: a
     // drag up lifted more than it took back). At Home the same drag keeps the published plane (below, after the trip home): it rises more than it goes back.

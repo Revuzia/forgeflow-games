@@ -67,9 +67,11 @@ const SET_S = 6;         // a ride the body lands on within this many seconds of
 /** (round 15, R15_FIX F5; VERDICT_R14 F5: "the slow let go (set-down) changed published place actions": the carry holds a squishy 0.2 m over the floor and sets
  *  it down at rest, where the published pick-up dropped it from a height with speed) a squishy the player SETS DOWN (slow across the floor a moment after the
  *  let go) inside an updraft column is taken by the column: a puff of PUFF_VY m/s up (it rises about 0.4 m and floats down slowly: the set-down's capped fall, the
- *  column's lift; LIFE's LIFT reaction and the "Float down slowly" stamp follow as they did); one set down on a ramp gets RAMP_PUSH m/s down its slope (it glides,
- *  as it did when it was dropped there) */
-const PUFF_VY = 2.6, RAMP_PUSH = 0.9, SETDOWN_V = 0.6;
+ *  column's lift; LIFE's LIFT reaction and the "Float down slowly" stamp follow as they did). Only the LEVEL carry's set-down (Char.lvl): the published
+ *  hold-and-pull lift's high drop over the column falls as it did (the live build has no puff there).
+ *  (A push down the slope for a set-down on a RAMP was tried here, RAMP_PUSH 0.9 m/s, and taken out: measured, it changes nothing. The squishies that glide do so
+ *  without it and the ones that stay do so with it: R15_FIX.md F5.) */
+const PUFF_VY = 2.6, SETDOWN_V = 0.6;
 const LAND_V = 0.05, LAND_MAX_S = 3; // (round 12, D-97 with D-100) after Table LIFE's motion waits until every squishy out is on the ground and still (its centre's
                                      // vertical speed under LAND_V m/s, all in the same frame), at most LAND_MAX_S
 const PAD_USE_GAP_S = 2; // one USE BOUNCE per body per this many seconds of pad kicks (a landing's kicks in a row are one bounce)
@@ -128,7 +130,8 @@ interface Char {
   perchT: number;         // (round 7) how long it has rested on top of a tall block (perchDown hops it down)
   padRestT: number;       // (round 9) how long it has rested on a pad in a place (padOffHop hops it off)
   outT: number;           // (round 9) how long it has rested outside the place's bounds (backIn hops it in)
-  puffT: number;          // (round 15, R15_FIX F5) when the player let go of it (a pending look at where it was set down: the Updraft's puff, the ramp's push); -1e9: none
+  puffT: number;          // (round 15, R15_FIX F5) when the player SET IT DOWN from the level carry (a pending look at where: the Updraft's puff); -1e9: none
+  lvl: boolean;           // (round 15, R15_FIX F5) carried by the LEVEL carry at the last look (physics' levelCarry: the drag that carries; not the published hold-and-pull lift)
   stuckT: number; stuckX: number; stuckZ: number;   // (round 9) where and since when a LIFE scoot has made no headway (unstick)
   hushT: number;          // round 5 (B7): until this sim time LIFE's motion intents for it are dropped (the over-budget rule is putting it to sleep)
   askedT: number;         // round 5 (B7): sim time the player last asked it to play (playWith); -1e9 once it used the thing (round 6: see asked())
@@ -138,7 +141,7 @@ interface Char {
 }
 const mkChar = (): Char => ({ on: false, body: null, genome: null, itemId: null, view: -1, kind: 0, group: -1, species: 255, family: 0, flavour: 0, pitch: 1, frac: 1, r: 0.5,
   offX: 0, offY: 0, offZ: 0, lastX: 0, lastZ: 0, vx: 0, vz: 0, homeX: 0, homeZ: 0, outAt: 0, scooting: false, scootX: 0, scootZ: 0,
-  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, chimeT: -1e9, perchT: 0, padRestT: 0, puffT: -1e9, outT: 0, stuckT: 0, stuckX: 0, stuckZ: 0, hushT: -1e9, askedT: -1e9, scootV: 0.1, blkN: 0, detT: -1e9, detX: 0, detZ: 0, detN: 0, detSide: 1, detOx: 0, detOz: 0 });
+  tossed: false, wasCarried: false, touchKind: -1, asleepShown: false, rideUntil: -1e9, setT: -1e9, padT: -1e9, chimeT: -1e9, perchT: 0, padRestT: 0, puffT: -1e9, lvl: false, outT: 0, stuckT: 0, stuckX: 0, stuckZ: 0, hushT: -1e9, askedT: -1e9, scootV: 0.1, blkN: 0, detT: -1e9, detX: 0, detZ: 0, detN: 0, detSide: 1, detOx: 0, detOz: 0 });
 
 function mkSnapshot(): LifeSnapshot {
   const n = CAP;
@@ -335,7 +338,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const ce = b.center;
     c.lastX = ce.x + off.x; c.lastZ = ce.z + off.z; c.vx = 0; c.vz = 0;
     c.homeX = c.lastX; c.homeZ = c.lastZ;
-    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.chimeT = -1e9; c.perchT = 0; c.padRestT = 0; c.puffT = -1e9; c.outT = 0; c.stuckT = game.simTime; c.hushT = -1e9; c.askedT = -1e9; c.detT = -1e9; c.detN = 0; c.blkN = c.body?.metrics.scootBlocks ?? 0;
+    c.outAt = game.simTime; c.scooting = false; c.tossed = false; c.wasCarried = false; c.touchKind = -1; c.asleepShown = false; c.rideUntil = -1e9; c.setT = -1e9; c.padT = -1e9; c.chimeT = -1e9; c.perchT = 0; c.padRestT = 0; c.puffT = -1e9; c.lvl = false; c.outT = 0; c.stuckT = game.simTime; c.hushT = -1e9; c.askedT = -1e9; c.detT = -1e9; c.detN = 0; c.blkN = c.body?.metrics.scootBlocks ?? 0;
     try { (b as { contactSlot?: number }).contactSlot = i; } catch { /* a mock */ }
     if (world) { try { b.setPropWorld?.(world); } catch (e) { report(e); } }
     let warm = 0;
@@ -746,7 +749,17 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     const d = Math.hypot(x - c.lastX, z - c.lastZ), T = Math.min(5, Math.max(0.6, 0.5 + d * 0.45));
     let ok = false;
     try { ok = c.body.carryTo?.(x - c.offX, y - c.offY, z - c.offZ, T) === true; } catch (e) { report(e); }
-    if (ok) { c.scooting = false; if (!self) c.setT = game.simTime; counts.ride++; }
+    if (ok) {
+      c.scooting = false; if (!self) c.setT = game.simTime; counts.ride++;
+      // (round 15, R15_FIX F4) ... and the ride the player asked for is a NEW ride: playWith ended the one it sat on with "not re-armed for 25 s" (meant for an
+      // asked thing that is no ride), so on the asked seat LIFE never saw a rider: its nap went on and walked it off the swinging seat 9 s later (same row)
+      if (!self && c.rideUntil > game.simTime - 25) c.rideUntil = -1e9;
+    }
+    // (round 15, R15_FIX F4; found by shellview node_checks' "Go play with... a ride" row in round 14's cabin) the player's ask came while the body is still in
+    // another lift (asked of a squishy riding the Rocker Board to play with the Pillow Swing: playWith hops it down beside the board first, a carryTo of 0.9 s, and
+    // LIFE's USE for the swing comes one think later): physics refuses a second lift while one runs, and LIFE had already dropped the ask with its intent, so the
+    // squishy hopped down and never went. The ask is handed back to LIFE: it sends the USE again at its next thinks until the first lift has landed.
+    else if (!self && (c.body as { carryingTo?: boolean }).carryingTo === true) lifeScript(w, i, SCRIPT.PLAY_WITH, k);
     if (steady) {
       if (!ok) { endSteady(); return; }
       // the seat eases to rest over most of the lift (a smoothstep of the hand's point, never a snap), then the hand holds it there; at most 2 s past the
@@ -1165,8 +1178,9 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       // a carry let go: a toss until it lands (and a ride it lands on is one the player set up). (round 8) One let go while it already rests ON something (a ride's
       // top, the floor: the carry over the ground sets a squishy down there) never "lands" (no fall, no land event) and stayed a toss: R8's phone run set a squishy at
       // the Glide Ramp's top twice and the second (picked up from the ramp and set back) was no USE. Supported at the let go = set down, not tossed.
-      if (c.wasCarried && !carried) { c.tossed = !((m.onProp ?? -1) >= 0 || m.grounded === true); c.setT = t; c.puffT = placeIdx !== 0 ? t : -1e9; if (placeIdx !== 0 && c.tossed && dt > 0) tossInside(c, x, z); if (b.gravity === false) floatSpot(i, x, z); }   // (round 14, CARRY: a floater stays where it is put, inside the place)
+      if (c.wasCarried && !carried) { c.tossed = !((m.onProp ?? -1) >= 0 || m.grounded === true); c.setT = t; c.puffT = placeIdx !== 0 && c.lvl ? t : -1e9; if (placeIdx !== 0 && c.tossed && dt > 0) tossInside(c, x, z); if (b.gravity === false) floatSpot(i, x, z); }   // (round 14, CARRY: a floater stays where it is put, inside the place)
       if (!c.wasCarried && carried) c.touchKind = TOUCH.CARRY;
+      if (carried) c.lvl = (b as { levelCarry?: boolean }).levelCarry === true;
       c.wasCarried = carried;
       let f = 0;
       if (m.fingers > 0 || m.grabbed) f |= LIFE_FLAG.TOUCHED;
@@ -1204,12 +1218,6 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
         const th = onProp < world.count ? world.propThing[onProp] : -1;
         if (th >= 0 && def.things[th]?.ride && c.rideUntil < t - 25) {
           c.rideUntil = t + 20;
-          // (round 15, R15_FIX F5) set down on a RAMP by the player: a push down its slope (local +x is downhill, as LIFE's own climb reads it), so it glides
-          if (def.things[th].mech === MECH.ramp && t - c.setT < SET_S && c.vx * c.vx + c.vz * c.vz < SETDOWN_V * SETDOWN_V) {
-            const yaw = layout === 1 ? def.tall.things[th]?.yaw ?? def.things[th].yaw : def.things[th].yaw;
-            nudgeV.x = Math.cos(yaw) * RAMP_PUSH; nudgeV.y = 0; nudgeV.z = Math.sin(yaw) * RAMP_PUSH;
-            try { b.nudge(nudgeV); } catch (er) { report(er); }
-          }
           // QUESTS 4: "the shell [gives USE] for rides the player set up" (I7 "Set a squishy at the top of the ramp", R9 the Sand Mound): the ride's verb, by PLAYER
           if (t - c.setT < SET_S) write(EV.USE, def.things[th].verb, thingGlobal[th], c.species, 255, 1, BY.PLAYER, 0);
         }

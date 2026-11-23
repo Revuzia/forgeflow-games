@@ -220,6 +220,20 @@ const ext = (id: string): SB => app.bodies.extras.find((x) => x.itemId === id)!.
   check('K8a "Drag to carry" is shown once (a moment) the first time squishies can be carried, and stored; the gesture pill reads the room line in a room',
     tips === 1 && mem.getItem(CARRY_TIP_KEY) === '1' && createHintController().line('touch') === HINT_ROOM.touch && createHintController().line('pointer') === HINT_ROOM.pointer, JSON.stringify({ tips, stored: mem.getItem(CARRY_TIP_KEY) }));
 }
+// K8b (round 15, R15_FIX F11; VERDICT_R14 F11: the room camera's zoom and pan were taught nowhere) the pill's VIEW line in a room: on a touch screen it takes the
+// returning pill's every second turn; with a mouse it shares that turn with the lock line (the 1st return: lock, the 3rd: view); a keyboard never gets it; the
+// turns between show the room's gesture line; each view line is one line (no longer than the room's own pointer line)
+{
+  const { HINT_LOCK } = await import('../src/ui/hint.ts');
+  const c = createHintController(1000); c.interact(0); c.toolTried();
+  const seen: string[][] = [];
+  for (let k = 1; k <= 4; k++) { c.interact(k * 2000); seen.push([c.line('touch'), c.line('pointer'), c.line('keyboard')]); }
+  const V = HINT_ROOM.view;
+  check('K8b (round 15) the pill teaches the room camera: "Pinch to zoom · drag with two fingers to look around" on a touch screen at every second return, the wheel and Shift + right-drag line with a mouse at the 3rd (the 1st keeps the lock line), never on a keyboard; the room\'s gesture line between',
+    seen[0][0] === V.touch && seen[0][1] === HINT_LOCK.pointer && seen[1][0] === HINT_ROOM.touch && seen[1][1] === HINT_ROOM.pointer && seen[2][0] === V.touch && seen[2][1] === V.pointer && seen[3][0] === HINT_ROOM.touch
+      && seen.every((r) => r[2] !== V.touch && r[2] !== V.pointer) && V.touch.length <= HINT_ROOM.pointer.length && V.pointer.length <= HINT_ROOM.pointer.length && /zoom/.test(V.touch) && /zoom/.test(V.pointer),
+    JSON.stringify(seen.map((r) => [r[0].slice(0, 24), r[1].slice(0, 24)])));
+}
 // ---- K5: a place, ONE carry across the room ----
 {
   const ok = await host.travel('ripple', true);
@@ -326,17 +340,22 @@ const ext = (id: string): SB => app.bodies.extras.find((x) => x.itemId === id)!.
     const b = new SoftBody(speciesBaseGenome('dollop', 1)) as unknown as SB & { step(dt: number): void; raycast(o: unknown, d: unknown): { vertex: number; point: { x: number; y: number; z: number } } | null; grab(i: number, v: number, p: unknown): void; grabMove(i: number, p: unknown): void; grabRelease(i: number): void };
     if (room) b.setBounds?.(1, 0, 0, 5.5, 3.9, 0.4);
     const run = (n: number): void => { for (let i = 0; i < n; i++) b.step(1 / 60); };
-    run(30);
+    // (measured as the float is built, softbody.ts hoverY: the hover height is over max(the rest centre's height, the rest radius), the middle of its bob; the
+    // row's first writing took the height over the SETTLED centre (a dollop sags 0.12 m under its radius) and read 0.47 / 0.72 for a correct 0.35 / 0.6)
+    run(120);
     const rest = b.center.y;
-    b.gravity = false; run(240);
-    const hover = b.center.y - rest;
-    b.gravity = true; run(240);
-    // the fastest toss: picked up (lift), the hand swept 6 m to the side in 0.2 s and let go while it moves
+    b.gravity = false; run(300);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < 240; i++) { run(1); lo = Math.min(lo, b.center.y); hi = Math.max(hi, b.center.y); }
+    const hover = (lo + hi) / 2 - Math.max(rest, b.restRadius);
+    b.gravity = true; run(300);
+    // the fastest toss: picked up (lift), the hand swept 1.2 m to the side in 0.1 s (12 m/s: over both caps, and inside the mat's corral, where the published
+    // toy's hand stops: the first writing swept 6 m and read the toy's swing back from the corral) and let go while it moves; the speed of the first frame after
     const h = b.raycast({ x: b.center.x, y: b.center.y + 3, z: b.center.z }, { x: 0, y: -1, z: 0 })!;
     b.grab(0, h.vertex, h.point); b.lift?.(0); run(12);
-    for (let i = 1; i <= 12; i++) { b.grabMove(0, { x: h.point.x + i * 0.5, y: h.point.y + 0.3, z: h.point.z }); run(1); }
-    const x0 = b.center.x; b.grabRelease(0); run(3);
-    return { hover, toss: (b.center.x - x0) / (3 / 60) };
+    for (let i = 1; i <= 6; i++) { b.grabMove(0, { x: h.point.x + i * 0.2, y: h.point.y + 0.3, z: h.point.z }); run(1); }
+    const x0 = b.center.x; b.grabRelease(0); run(1);
+    return { hover, toss: (b.center.x - x0) * 60 };
   };
   const toy = measure(false), room = measure(true);
   check('K10 (round 15) the bigger rooms\' numbers belong to a room: a body with place bounds hovers 0.6 m over its rest height in Float and its fastest toss is 7.5 m/s; a body without (Home\'s lone squishy, the published toy) keeps the published 0.35 m and 6 m/s',

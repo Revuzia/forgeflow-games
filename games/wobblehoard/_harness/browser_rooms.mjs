@@ -163,8 +163,11 @@ try {
         await fUp();
         return out;
       }
-      // hold still until the squishy hangs still under the hand (at most a second), then let go
-      for (let k = 0, last = (await bodies())[i].w; k < 10; k++) { await frames(6); const w = (await bodies())[i].w, sp = Math.hypot(w[0] - last[0], w[2] - last[2]) / 0.1; last = w; if (k >= 2 && sp < 0.15) break; }
+      // (round 15, R15_FIX BR; RE-SPECIFIED with its reason) the hand LETS GO ON ARRIVAL, after 3 frames of a still finger. The row used to hold still "until the
+      // squishy hangs still under the hand (at most a second)": when the arrival has the finger at the frame's edge, the view goes on scrolling under a resting
+      // finger (the edge scroll, as designed: R15_FIX F6) and carries the squishy on for that second, so "rest" measured the harness's wait, not the game (desk
+      // Home: 1.2 to 3 m). A still finger at the let go is a set-down whatever the hand's speed (gestures.ts FLICK_V, R15_FIX F3), so no wait is needed for one.
+      await frames(3);
       const v1 = await view();
       if (out.view0 && v1) out.moved = Math.hypot(v1[0] - out.view0[0], v1[1] - out.view0[1]);
       const bh = (await bodies())[i];
@@ -174,6 +177,10 @@ try {
       else await step(2.5);
       const b1 = (await bodies())[i];
       out.at = [r2(b1.w[0]), r2(b1.w[2])]; out.rest = Math.hypot(b1.w[0] - tx, b1.w[2] - tz);
+      // (round 15, R15_FIX BR) the next row presses a squishy where it stands on screen NOW: wait (after the rest is measured) until the room camera has stopped
+      // easing back from the hand's view (it narrows from 2.5 s after the let go: with the let go on arrival the next press came exactly then, the picture slid
+      // from under the pointer during its 8 frames of press, and the Hearthlog and Frostbell toss rows read "carried false"); 6 s at most
+      for (let k = 0, v0 = await view(); k < 12; k++) { await step(0.5); const v1 = await view(); const still = v0 && v1 && Math.abs(v1[0] - v0[0]) + Math.abs(v1[1] - v0[1]) + Math.abs(v1[2] - v0[2]) < 0.004; v0 = v1; if (still || !v1) break; }
       return out;
     };
 

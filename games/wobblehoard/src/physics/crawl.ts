@@ -14,6 +14,12 @@
 //      glide) and once the glide stops: the wave eases out and the shape matching brings the body back to its rest shape.
 // Per family (CRAWL_FAMILY): stride (body half-lengths per cycle), the phase lead, the grip's sharpness (a square wave plants hard), the bunch's height
 // share, the head lift and the arch. Less grip (ice) scales the wave: the base slips. Zero allocation after construction.
+// R15 FACING (owner 2026-11-23: "when squishies walk they aren't facing the direction they walk. they need to be able to turn."; R15_FACING.md): measured in the
+// browser on the drawn eye beads, the turn of R10 did not do what a player sees: (1) in Calm and under prefers-reduced-motion (world.calm) the whole crawl, its
+// turn included, was off, so every walk was a sideways or backward glide with the face to the camera; (2) the glide reached full speed in 0.12 s while the
+// body still faced away, so each walk began with a slide sideways or backward; (3) the turn itself was a snap (up to 460 deg/s). Now the TURN is the body's
+// own in every mode (Calm keeps no wave: only the turn), the glide is HELD (SoftBody.scootK) while the face is more than acos(CRAWL.holdLo) away from the way and
+// eases in as it comes round (it turns, then goes), and the turn is a slug's: the yaw rate eases up and down (CRAWL.yawAcc) to at most CRAWL.yawMax.
 import type { SoftBody } from './softbody.ts';
 
 /** per family: stride (half-lengths per cycle), kappa (pi units: the front leads the rear by 2 kappa), sharpness of the grip, the local bunch's height share,
@@ -40,7 +46,11 @@ export const CRAWL_FMAX: Record<string, number> = {
   popdome: 0.8, gummy: 0.8, beadsqueeze: 0.8,
 };
 /** tuning shared by every family (PROBES may set them) */
-export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, yawTau: 0.12, yawMax: 8, bend: 0.14, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
+// (R15 FACING) the turn: the yaw rate eases toward min(yawMax, sqrt(2 yawAcc e), e / yawTau) at most yawAcc rad/s^2 (it speeds up, cruises at 200 deg/s and
+// slows to a stop on its heading: 90 deg in about 0.55 s, 180 in about 1.0 s; was a first-order snap at tau 0.12 s, up to 8 rad/s = 460 deg/s); the glide's
+// share: 0 while the face is more than acos(holdLo) = 25 deg from the way, full within acos(holdHi) = 8 deg (smoothstep between); arc: the forward creep's share
+// of the asked speed while the glide is held (along the face, so it arcs round instead of sliding sideways)
+export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, yawTau: 0.15, yawMax: 3.5, yawAcc: 15, holdLo: 0.9063, holdHi: 0.9903, arc: 0.5, arcTau: 0.25, bend: 0.14, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
 const NT = 256, TAU = Math.PI * 2;
 
 /** the private PropWorld state a crawl reads (props.ts: BF = 12 floats per tracked body, [4] the eased grip multiplier) */
@@ -50,12 +60,15 @@ interface Body {
   n: number; X: Float64Array; Q: Float64Array; M: Float64Array; Mtot: number; qr: Float64Array; cx: number; cz: number;
   scootOn: boolean; sV: number; stx: number; stz: number; heldF: boolean; moveOn: boolean; cyOn: boolean; carried: boolean; gravityOn: boolean; nearCount: number;
   asleep: boolean; crawlOn: boolean; crawlD: Float64Array; crawlF: Float64Array; V: Float64Array; center: { x: number; z: number }; chunk: boolean; capFlat: boolean;
+  scootK: number; sSpeed: number;
 }
 
 export class Crawl {
   on = false;
   /** after a walk the body turns back to face +Z (the camera's side: as it faces at rest, today) until it does, unless something holds it */
   private turn = false;
+  /** (R15 FACING) the glide is held (SoftBody.scootK under 1) by this crawl's turn */
+  private hold = false;
   private ext = 0;   // (frames since the extents were measured)
   readonly d: Float64Array;
   /** the rest shape + d (centred): what the body's rotation is fitted against while the crawl is on */
@@ -68,8 +81,8 @@ export class Crawl {
   /** the grip wave g(theta) (-1 planted .. 1 reaching) and its integral G (zero mean), interleaved: [g0, G0, g1, G1, ...] over a cycle in NT steps */
   private readonly T = new Float64Array((NT + 1) * 2);
   /** [0] phase, [1] amplitude, [2] ux, [3] uz (the wave's axis: the facing), [4] lean, [5] time in the air, [6..9] the body's extent along the axis and up (rest
-   *  frame, every 8th frame: s0, s1, y0, y1) */
-  readonly s = new Float64Array(10);
+   *  frame, every 8th frame: s0, s1, y0, y1), [10] the yaw rate of the turn (rad/s, R15), [11] the forward creep while the glide is held (m/s, R15) */
+  readonly s = new Float64Array(12);
   private readonly pf: [number, number, number, number, number, number];
   private readonly fMax: number;
   private readonly keep: boolean;
@@ -107,13 +120,17 @@ export class Crawl {
     const b = this.body as unknown as Body, S = this.s;
     // (R13_FIX 6, owner: "when Float starts each squishy slowly turns to face the camera so none floats edge-on with its face hidden") a FLOATING body, once its
     // crawl has let go (it fades under the gate below first), turns slowly back to face +Z, the camera's side, as a walk's end does on the floor
-    if (!b.gravityOn && !this.on) { S[5] = 0; this.turn = false; if (!b.asleep) this.floatFace(b, w.hNow); return; }
-    if (b.asleep || (!this.on && !this.turn && (!b.scootOn || calm || !CRAWL.on || b.heldF))) { S[5] = 0; return; }   // (`on` mirrors s[1] > 0: an element of a Float64Array read by code not yet optimised is a HeapNumber)
+    if (this.hold && (b.asleep || !b.scootOn || b.heldF || !b.gravityOn)) { this.hold = false; b.scootK = 1; }   // (R15: a held glide is let go once nothing walks)
+    if (!b.gravityOn && !this.on) { S[5] = 0; S[10] = 0; S[11] = 0; this.turn = false; if (!b.asleep) this.floatFace(b, w.hNow); return; }
+    // (R15 FACING: Calm and CRAWL.on no longer stop the TURN; they stop the wave below)
+    if (b.asleep || (!this.on && !this.turn && (!b.scootOn || b.heldF))) { S[5] = 0; S[10] = 0; S[11] = 0; return; }   // (`on` mirrors s[1] > 0: an element of a Float64Array read by code not yet optimised is a HeapNumber)
     const n = b.n, dt = w.hNow, grip = w.bsf[i * 12 + 4];
     if (!(dt > 0)) return;
     const tx = b.stx - b.cx, tz = b.stz - b.cz, tl = Math.sqrt(tx * tx + tz * tz);
-    const go = b.scootOn && tl > 0.03, v = go ? b.sV : 0;   // (a glide that has arrived keeps a creep of speed at its target: no crawl there)
-    const free = CRAWL.on && !calm && !b.heldF && !b.moveOn && !b.cyOn && !b.carried && b.gravityOn;
+    const go = b.scootOn && tl > 0.03;   // (a glide that has arrived keeps a creep of speed at its target: no crawl there)
+    let v = go ? b.sV : 0;
+    // free: nothing holds or drives it, so it turns to its way (in every mode); crawls: it may also crawl (not in Calm or reduced motion, not with the module off)
+    const free = !b.heldF && !b.moveOn && !b.cyOn && !b.carried && b.gravityOn, crawls = free && CRAWL.on && !calm;
     S[5] = b.nearCount > 0 ? 0 : S[5] + dt;
     const ground = S[5] < CRAWL.airS;
     // ---- FACING: a slug leads with its head. The body's front is its rest +Z (where the face is: render/wholeRef.ts); while it walks it turns toward the
@@ -132,8 +149,19 @@ export class Crawl {
     if (fl > 0.5) {   // (upright enough to have a facing: a body on its side is not turned)
       fx /= fl; fz /= fl;
       e = Math.atan2(fx * hz - fz * hx, fx * hx + fz * hz);   // the heading's angle from the facing (+: toward the facing's left, (-fz, fx))
-      if (free && ground && (go || this.turn)) {
-        const mx = CRAWL.yawMax * dt, k = e * (1 - Math.exp(-dt / CRAWL.yawTau)), dl = k > mx ? mx : k < -mx ? -mx : k;
+      // (R15: after the walk it turns back once the glide's last centimetres are done: turning while that creep ran carried it a few cm sideways)
+      if (free && ground && (go || (this.turn && !(b.scootOn && b.sV > 0.03)))) {
+        // (R15) the yaw rate wy eases (at most yawAcc) toward the rate that still stops on the heading: it speeds up, cruises at yawMax, slows down
+        const ae = e < 0 ? -e : e, r1 = Math.sqrt(2 * CRAWL.yawAcc * ae), r2 = ae / CRAWL.yawTau;
+        let wt = r1 < r2 ? r1 : r2;
+        if (wt > CRAWL.yawMax) wt = CRAWL.yawMax;
+        if (e < 0) wt = -wt;
+        const dw = CRAWL.yawAcc * dt;
+        let wy = S[10];
+        wy = wt > wy + dw ? wy + dw : wt < wy - dw ? wy - dw : wt;
+        let dl = wy * dt;
+        if ((e >= 0 && dl > e) || (e < 0 && dl < e)) { dl = e; wy = 0; }   // (never past its heading)
+        S[10] = wy;
         if (!go && e < 0.03 && e > -0.03) this.turn = false;
         const c = Math.cos(dl), sn = Math.sin(dl);
         if (real && (e > 0.009 || e < -0.009)) {   // (within half a degree of its way it is not turned: a pass over the particles each frame for nothing)
@@ -149,12 +177,38 @@ export class Crawl {
         }
         const gx = fx * c - fz * sn, gz = fx * sn + fz * c;
         fx = gx; fz = gz; e -= dl; rate = dl / dt;
-      } else if (!free) this.turn = false;   // (a hand took it: it stays as it is left)
-    } else if (!go) this.turn = false;
+      } else { S[10] = 0; if (!free) this.turn = false; }   // (a hand took it: it stays as it is left)
+    } else { S[10] = 0; if (!go) this.turn = false; }
+    // (R15 FACING) the glide waits for the face: none while it faces more than 25 degrees from its way, full within 8 (a cut piece and a body on its side
+    // have no face to lead with: their glide is as before; nor is a body off the ground, which cannot turn: a floater in a pool glides as before). The glide's speed now is capped at once (a walk retargeted 90 degrees on its way does not run
+    // on sideways while it eases out: it stops, turns, goes)
+    let kq = 1;
+    if (go && free && real && fl > 0.5 && ground) { const ch = (Math.cos(e) - CRAWL.holdLo) / (CRAWL.holdHi - CRAWL.holdLo); kq = ch >= 1 ? 1 : ch <= 0 ? 0 : ch * ch * (3 - 2 * ch); }
+    let lost = 0;
+    if (kq < 1 || this.hold) { b.scootK = kq; this.hold = kq < 1; if (kq < 1 && b.sV > b.sSpeed * kq) { lost = b.sV - b.sSpeed * kq; b.sV = b.sSpeed * kq; } }
+    // ... and while the glide is held it creeps FORWARD, along its face, as it turns (a slug turns on the move: it arcs round to its way and leans into it), from
+    // nothing with its way 90 degrees or more off to CRAWL.arc of the asked speed within 30, handing over to the glide as it comes round; the speed the held glide
+    // gives up (a walk retargeted on its way) carries on forward and eases into that (time constant CRAWL.arcTau): no stop dead, no slide sideways; a move of X
+    // like the glide
+    if ((kq < 1 || S[11] > 0) && ground && go && free) {
+      const cf = Math.cos(e) * 1.1547, sf = cf >= 1 ? 1 : cf <= 0 ? 0 : cf * cf * (3 - 2 * cf), vt = b.sSpeed * (1 - kq) * CRAWL.arc * sf;
+      let vf = S[11] + lost;
+      vf += (vt - vf) * (1 - Math.exp(-dt / CRAWL.arcTau));
+      if (vf > b.sSpeed - b.sV) vf = b.sSpeed - b.sV;   // (with the glide, never faster than the asked speed)
+      if (vf < 0.002) vf = 0;
+      S[11] = vf;
+      if (vf > 0) {
+        const mx = fx * vf * dt, mz = fz * vf * dt, X = b.X;
+        for (let j = 0; j < n * 3; j += 3) { X[j] += mx; X[j + 2] += mz; }
+        b.cx += mx; b.cz += mz;
+      }
+      v = b.sV + vf;
+    } else { S[11] = 0; v = go ? b.sV : 0; }
     // (no crawl under vMin: LIFE's contact approach, the last centimetres at 0.04 m/s, glides as before; full from vFull; and none while it still faces
-    // more than about 50 degrees away from its way, full within 18: it turns first)
-    const u0 = (v - CRAWL.vMin) / (CRAWL.vFull - CRAWL.vMin), ce = (Math.cos(e) - 0.6) / 0.35, al = fl > 0.5 ? (ce >= 1 ? 1 : ce <= 0 ? 0 : ce * ce * (3 - 2 * ce)) : 1;
-    const want = free && ground && u0 > 0 ? (u0 >= 1 ? 1 : u0 * u0 * (3 - 2 * u0)) * al : 0;
+    // more than 35 degrees away from its way, full within 12: it turns first (R15: was 53 and 18; the wave running on a body still coming round on its forward
+    // creep bent it sideways: the firm families' centre drifted 40-50 degrees off the face))
+    const u0 = (v - CRAWL.vMin) / (CRAWL.vFull - CRAWL.vMin), ce = (Math.cos(e) - 0.82) / 0.158, al = fl > 0.5 ? (ce >= 1 ? 1 : ce <= 0 ? 0 : ce * ce * (3 - 2 * ce)) : 1;
+    const want = crawls && ground && u0 > 0 ? (u0 >= 1 ? 1 : u0 * u0 * (3 - 2 * u0)) * al : 0;
     let a = S[1];
     const fresh = a === 0;
     a += (want - a) * (1 - Math.exp(-dt / (!free ? CRAWL.tauHeld : want > a ? CRAWL.tauIn : CRAWL.tauOut)));
@@ -167,7 +221,8 @@ export class Crawl {
     // at the start of a walk does not lean: leaning there rolled the body and drifted it 20 degrees off its way)
     const ux = fl > 0.5 ? fx : hx, uz = fl > 0.5 ? fz : hz;
     S[2] = ux; S[3] = uz;
-    const lw = CRAWL.leanK * rate * v * a, lt = lw > CRAWL.leanMax ? CRAWL.leanMax : lw < -CRAWL.leanMax ? -CRAWL.leanMax : lw;
+    // (R15: x the glide's share kq: while it still comes round on its forward creep it does not lean (leaning there rolled the body and drifted it off its face))
+    const lw = CRAWL.leanK * rate * v * a * kq, lt = lw > CRAWL.leanMax ? CRAWL.leanMax : lw < -CRAWL.leanMax ? -CRAWL.leanMax : lw;
     S[4] += (lt - S[4]) * (1 - Math.exp(-dt / 0.2));
     const bend = CRAWL.bend * (e > 1 ? 1 : e < -1 ? -1 : e);   // (the front swings toward the heading first: x the remaining yaw, saturating at a radian)
     // ---- the rest frame (the body's rotation from the last substep): travel u, up and lateral (u x up) in rest coordinates

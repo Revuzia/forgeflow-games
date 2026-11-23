@@ -573,6 +573,8 @@ export class SoftBody implements SoftBodyLike {
    *  crawlOn, crawlD (3 per particle) is added to the goal in the rest frame and the rotation is fitted against crawlF (the rest shape + crawlD, centred: a cut
    *  chunk's goal is not, and a fit against it ran away); off: scootTo's glide of before, bit for bit */
   crawlOn = false; crawlD = new Float64Array(0); crawlF: Float64Array = new Float64Array(0);
+  /** R15 FACING: the share of scootTo's speed the glide may reach now (the crawl's turn holds it while the body still faces away from its way: it turns, then goes) */
+  scootK = 1;
   private sqTarget = 1; private sqNow = 1; private sqTau = 0.12; private sqAskTau = 0;   // setSquash: the asked squash (1 = released), the eased one, its time constant, the call in force
   private descendT = 0;                     // D-97: seconds left of the gentle descent after gravity came back (DESCEND_S)
   private flingOn = false; private flingAnch = false; private fAX = 0; private fAZ = 0; private flingArmT = 0;   // R13: a fling in the air (FLING_V): on, and Home's anchor (set at the first fling)
@@ -1533,7 +1535,7 @@ export class SoftBody implements SoftBodyLike {
   private scootStep(): void {
     const dx = this.stx - this.cx, dz = this.stz - this.cz, d = Math.sqrt(dx * dx + dz * dz);
     const acc = this.sSpeed / PG.scootEase, dv = acc * H, gate = this.heldF || this.moveOn || this.scootBlock;
-    const want = Math.min(this.sSpeed, Math.sqrt(2 * acc * d)) * (gate ? 0 : 1);
+    const want = Math.min(this.sSpeed * this.scootK, Math.sqrt(2 * acc * d)) * (gate ? 0 : 1);
     const v0 = this.sV, v = v0 < want ? Math.min(want, v0 + dv) : Math.max(want, v0 - (gate ? dv / 0.9 : dv));   // (under the gate: at rest inside 0.9 x PG.scootEase, so within it at frame granularity)
     this.sV = v;
     if (gate && v <= 0) {

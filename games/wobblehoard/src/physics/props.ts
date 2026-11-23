@@ -310,7 +310,7 @@ export class PropWorld implements PropWorldLike {
       this.bmods.push(m);
     } else if (!on && i >= 0) {
       this.surfRestore(i);
-      b.crawlOn = false; this.crawls.splice(i, 1);
+      b.crawlOn = false; b.scootK = 1; this.crawls.splice(i, 1);   // (R15 FACING: a glide the crawl's turn held is let go)
       this.bodies.splice(i, 1);
       const nb = new Float64Array(this.bodies.length * BS);
       nb.set(this.bst.subarray(0, i * BS)); nb.set(this.bst.subarray((i + 1) * BS), i * BS); this.bst = nb;

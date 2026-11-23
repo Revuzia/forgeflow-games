@@ -1,7 +1,7 @@
 // R10 LOCOMOTION (owner, 2026-11-19, D-100): squishies CRAWL like slugs / snails instead of gliding. The crawl's rows on the real physics (plain node, type stripping).
 //   node _harness/probe_crawl.ts            the quick set: 4 families on the flat, turns, ice, water, ramp and mound, scales, pieces, the gate, Calm, cost (about 40 s: one short heavy job)
 //   node _harness/probe_crawl.ts --full     every family (12) and every row (about 2 min)
-//   node _harness/probe_crawl.ts --only=flat,turn,face,surf,scale,gate,cost   some sections
+//   node _harness/probe_crawl.ts --only=flat,turn,face,drawn,surf,scale,gate,cost   some sections
 // Every walk is a scootTo (LIFE's own travel driver) at the family's glide speed (src/data/life.ts GAITS), on a prop world (the crawl is the world's: props.ts trk),
 // measured against the same walk with the crawl off (CRAWL.on false: today's rigid glide, bit for bit). Own meters: the ground-contact footprint (particles under
 // 12 mm) and the whole body's extent along the travel, each third's velocity phase, the centre's speed, the volume, the fold, the planted base's slip.
@@ -19,6 +19,7 @@ import { PLACE as FROSTBELL } from '../src/data/place_frostbell.ts';
 import { PLACE as RIPPLE } from '../src/data/place_ripple.ts';
 import type { PlaceDef } from '../src/data/places.ts';
 import type { SoftEvent, V3 } from '../src/contracts.ts';
+import { wholeRefFor } from '../src/render/wholeRef.ts';
 
 const FULL = process.argv.includes('--full');
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice(7).split(',').filter(Boolean);
@@ -303,6 +304,96 @@ if (sec('face')) {
     `${ok}/${n}; worst ${f(worst, 1)} deg, turned back after ${f(worstBack)} s at most: ${ls.join('; ')}`, '<= 25 deg; back <= 1.5 s', ok === n);
 }
 
+/* ───────────── CR-15 the DRAWN face leads, from the first step, in every mode (R15 FACING) ───────────── */
+// (R15 FACING, owner 2026-11-23: "when squishies walk they aren't facing the direction they walk. they need to be able to turn.") CR-14 above reads the physics
+// frame from 0.6 s after the start, in the crawl mode only. In the browser (_harness/browser_facing.mjs, R15_FACING.md) what the player saw was different: every
+// walk STARTED with a slide sideways or backward (the glide was at full speed in 0.12 s, the turn took 0.2-0.4 s: CR-14's 0.6 s skip hid it), and in Calm or
+// with prefers-reduced-motion (world.calm) there was no turn at all (CR-14 never walks in Calm). So these rows read what is DRAWN, from the first frame,
+// in both modes: the two eye beads are placed on the sim skin at the triangle and weights the renderer uses (render/wholeRef.ts, a pure module: the same
+// numbers face.ts draws from), the drawn face's forward is the normal of the line between them on the floor, the travel is the centre's motion over 0.2 s.
+type Eyes = { tri: number; u: number; v: number; w: number }[];
+function drawnWalk(fam: string, calm: boolean, to: V3, turnAt?: number, turnTo?: V3, speed?: number): { yaw: number[]; fyaw: number[]; cx: number[]; cz: number[]; arrive: number } {
+  const w = buildPropWorld(flatDef, 'wide', 1);
+  w.calm = calm;
+  const b = new SoftBody(G0, { family: fam });
+  b.setPropWorld(w);
+  const bb = b as unknown as { restLocal: Float32Array; restRadius: number };
+  const ref = wholeRefFor({ vertexCount: (bb.restLocal.length / 3) | 0, indices: b.indices, restLocal: bb.restLocal }, bb.restRadius, G0);
+  const eyes: Eyes = ref.eyes.map((e) => e.hit);
+  const I = b.indices, P = b.positions;
+  const eye = (k: number, o: number[]): void => { const h = eyes[k], a = I[h.tri * 3] * 3, c = I[h.tri * 3 + 1] * 3, d = I[h.tri * 3 + 2] * 3; o[0] = h.u * P[a] + h.v * P[c] + h.w * P[d]; o[1] = h.u * P[a + 2] + h.v * P[c + 2] + h.w * P[d + 2]; };
+  const e0 = [0, 0], e1 = [0, 0];
+  const fr = (): void => { w.beginFrame(); b.step(DT); ev.length = 0; b.drainEvents(ev); w.endFrame(DT); };
+  for (let i = 0; i < 60; i++) fr();
+  const sp = speed ?? GLIDE[fam].glide;
+  b.scootTo(to.x, to.z, sp);
+  const out = { yaw: [] as number[], fyaw: [] as number[], cx: [] as number[], cz: [] as number[], arrive: -1 };
+  let turned = false;
+  for (let k = 0; k < 25 / DT; k++) {   // (the slowest glide, the slime's 0.1 m/s, takes 15 s and the turn on 1.5 m)
+    fr();
+    const t = (k + 1) * DT;
+    if (turnAt !== undefined && turnTo && !turned && t >= turnAt) { turned = true; b.scootTo(turnTo.x, turnTo.z, sp); }
+    eye(0, e0); eye(1, e1);
+    out.yaw.push(Math.atan2(-(e1[1] - e0[1]), e1[0] - e0[0]));   // the forward (-ez, ex) of e1 - e0 as atan2(x, z)
+    const q = b.frame; out.fyaw.push(Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y)));
+    out.cx.push(b.center.x); out.cz.push(b.center.z);
+    const tg = turned && turnTo ? turnTo : to;
+    if (Math.hypot(b.center.x - tg.x, b.center.z - tg.z) < 0.05 && (turnAt === undefined || turned)) { out.arrive = t; break; }
+  }
+  return out;
+}
+const ang = (a: number, b: number): number => Math.abs(wrap(a - b)) * 180 / Math.PI;
+if (sec('drawn')) {
+  const dirs: [string, V3, number?, V3?][] = [['+x', v3(1.5, 0, 0)], ['-x', v3(-1.5, 0, 0)], ['away (-z)', v3(0, 0, -1.5)], ['toward (+z)', v3(0, 0, 1.5)], ['+x then away', v3(1.5, 0, 0), 2.5, v3(0.6, 0, -1.2)]];
+  for (const calm of [false, true]) {
+    let ok = 0, n = 0, worstMov = 0, worstP95 = 0, worstSlide = 0, peakRate = 0, worstTurn = 0, worstDiff = 0;
+    const ls: string[] = [];
+    for (const fam of FAMS) {
+      const parts: string[] = [];
+      for (const [nm, to, ta, tt] of dirs) {
+        const r = drawnWalk(fam, calm, to, ta, tt);
+        const N = r.yaw.length, movs: number[] = [];
+        let slide = 0, tTurn = -1, rate = 0, mov = 0, diff = 0;
+        const way0 = Math.atan2(to.x, to.z);
+        for (let k = 6; k + 6 < N; k++) {
+          const vx = (r.cx[k + 6] - r.cx[k - 6]) / (12 * DT), vz = (r.cz[k + 6] - r.cz[k - 6]) / (12 * DT);
+          if (Math.hypot(vx, vz) > 0.03) { const a = ang(r.yaw[k], Math.atan2(vx, vz)); movs.push(a); if (a > mov) mov = a; }
+          // (the travel made sideways or backward: this frame's move while the face is more than 45 deg from the travel)
+          if (ang(r.yaw[k], Math.atan2(vx, vz)) > 45) slide += Math.hypot(r.cx[k] - r.cx[k - 1], r.cz[k] - r.cz[k - 1]);
+          rate = Math.max(rate, Math.abs(wrap(r.yaw[k + 3] - r.yaw[k - 3])) / (6 * DT) * 180 / Math.PI);
+          diff = Math.max(diff, ang(r.yaw[k], r.fyaw[k]));
+        }
+        for (let k = 0; k < N && tTurn < 0; k++) if (ang(r.yaw[k], way0) < 30) tTurn = k * DT;
+        movs.sort((a, c) => a - c);
+        const p95 = movs.length ? movs[Math.min(movs.length - 1, Math.floor(0.95 * movs.length))] : NaN;
+        n++;
+        // limits: the drawn face within 45 deg of its travel at every moving sample (30 at the 95th percentile) from the very start; under 1 cm of travel made
+        // sideways or backward (more than 45 deg from the face) in the whole walk (a turn on the move arcs FORWARD round to its way: that is not a slide);
+        // the turn reads as a slug's, not a snap: its drawn peak at most 250 deg/s (about half of R10's 465; the crawl's bend of the front adds some 30 deg/s
+        // on the skin to the body's 200), and it still turns round (its face within 30 deg of its way inside 1.8 s);
+        // it arrives. (Drawn vs the physics frame is reported, not judged: the crawl's wave bends the skin under the eyes a few degrees off the fitted rotation.)
+        const pass = r.arrive > 0 && mov <= 45 && p95 <= 30 && slide <= 0.01 && rate <= 250 && tTurn >= 0 && tTurn <= 1.8;
+        if (pass) ok++;
+        worstMov = Math.max(worstMov, mov); worstP95 = Math.max(worstP95, p95); worstSlide = Math.max(worstSlide, slide); peakRate = Math.max(peakRate, rate); worstTurn = Math.max(worstTurn, tTurn < 0 ? 99 : tTurn); worstDiff = Math.max(worstDiff, diff);
+        parts.push(`${nm} max ${f(mov, 0)} p95 ${f(p95, 0)} deg, ${f(slide * 100, 1)} cm sideways/back, turned in ${f(tTurn)} s at up to ${f(rate, 0)} deg/s${pass ? '' : ' FAIL'}`);
+      }
+      ls.push(`${fam}: ${parts.join(', ')}`);
+    }
+    add(`CR-15${calm ? 'b' : 'a'} the DRAWN face (the eye beads on the skin, wholeRef.ts) leads its travel from the first step${calm ? ' in CALM / reduced motion (world.calm: no crawl wave, the turn stays)' : ''}: a 1.5 m walk from rest (facing the camera) in four directions and one retargeted 90 deg on its way; the face vs the centre's travel over 0.2 s at every moving sample (> 3 cm/s); the travel made sideways or backward; the turn's peak rate and the time until the face is within 30 deg of its way (drawn vs physics frame reported)`,
+      `${ok}/${n}; worst ${f(worstMov, 1)} deg (p95 ${f(worstP95, 1)}), ${f(worstSlide * 100, 1)} cm sideways/back, peak ${f(peakRate, 0)} deg/s, turned within ${f(worstTurn)} s, drawn vs frame ${f(worstDiff, 1)} deg: ${ls.join('; ')}`,
+      '<= 45 deg (p95 <= 30); <= 1 cm; <= 250 deg/s; <= 1.8 s', ok === n);
+  }
+  // LIFE's travelStep calls a walk BLOCKED when it gains under 2 cm in 2 s (life/act.ts): the turn holds the glide, so the slowest walk LIFE makes (the contact
+  // approach at 0.04 m/s), started facing straight away from its way, must still gain 2 cm inside 2 s (in both modes)
+  let worstGain = 9; const gs: string[] = [];
+  for (const calm of [false, true]) for (const fam of FAMS) {
+    const r = drawnWalk(fam, calm, v3(0, 0, -0.5), undefined, undefined, 0.04);
+    const k2 = Math.min(r.cx.length - 1, Math.round(2 / DT) - 1), gain = Math.hypot(r.cx[k2] - r.cx[0], r.cz[k2] - r.cz[0]);
+    worstGain = Math.min(worstGain, gain); gs.push(`${fam}${calm ? ' calm' : ''} ${f(gain * 100, 1)} cm`);
+  }
+  add('CR-16 the turn never makes LIFE call a walk blocked: a 0.04 m/s walk (the contact approach) set off straight away from the face gains at least 2 cm in its first 2 s (life/act.ts travelStep\'s rule)', `worst ${f(worstGain * 100, 1)} cm: ${gs.join(', ')}`, '>= 2 cm', worstGain >= 0.02);
+}
+
 /* ───────────── CR-08 ice, water, ramp, mound ───────────── */
 if (sec('surf')) {
   // each on a flat place with the one surface or shape (the real data: Frostbell's ice, Ripple's surf depth, Frostbell's Glide Ramp, Ripple's Sand Mound)
@@ -398,7 +489,9 @@ if (sec('gate')) {
   const same = (a: number[], c: number[]): boolean => a.length === c.length && a.every((x, i) => x === c[i]);
   const calmEq = same(hashRun(true, true, true), hashRun(false, false, true)), inertEq = same(hashRun(false, true, false), hashRun(false, false, false));
   const differs = !same(hashRun(false, true, true), hashRun(false, false, true));
-  add('CR-11 Calm falls back to today\'s motion: with world.calm a walk steps bit for bit as the glide (200 frames, state hash every frame); a body that does not walk is untouched; the crawl does change a walk', `calm = glide ${calmEq}; no walk = before ${inertEq}; crawl differs ${differs}`, 'true, true, true', calmEq && inertEq && differs);
+  // (R15 FACING: the TURN to the way is no longer part of the crawl: CRAWL.on false and world.calm both keep it (the owner: "they need to be able to turn"; in Calm
+  // there was no turn at all), so 'the glide' here is scootTo's glide with the body's turn; the check is as strict: Calm adds no wave, bit for bit)
+  add('CR-11 Calm falls back to today\'s motion: with world.calm a walk steps bit for bit as the glide (the glide with its turn to the way, R15) (200 frames, state hash every frame); a body that does not walk is untouched; the crawl does change a walk', `calm = glide ${calmEq}; no walk = before ${inertEq}; crawl differs ${differs}`, 'true, true, true', calmEq && inertEq && differs);
 }
 
 let failed = 0;
