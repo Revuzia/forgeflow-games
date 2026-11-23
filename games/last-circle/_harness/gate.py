@@ -773,6 +773,10 @@ NEGATIVE = [
     ("w10_gunhold-plant-sling-all", "p23/gunhold.py", ["--skins", "soldier", "--plant", "sling-all", "--parts", "swap"], 1800),   # swap
     # ---- W10 anim fix 4 (F-B): the arm / gun layers gated hard by onGround again must FAIL the kerb row (a 20 cm step-off pops the hand)
     ("w10_gunhold-plant-kerb-pop", "p23/gunhold.py", ["--skins", "soldier", "--plant", "kerb-pop", "--parts", "kerb"], 1800),   # kerb
+    # ---- W10 anim fix 5 (G2): the transition pops and the chase-camera visibility, each planted fault MUST FAIL its own row
+    ("w10_gunhold-plant-inert-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "inert-off", "--parts", "trans"], 1800),   # swap-pop + ads-pop
+    ("w10_gunhold-plant-air-hold-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "air-hold-off", "--parts", "trans"], 1800),   # land-pop
+    ("w10_gunhold-plant-ready-hidden", "p23/gunhold.py", ["--skins", "soldier", "--plant", "ready-hidden", "--parts", "chase"], 1800),   # chase
     ("w10_lootlook-plant-box-ammo", "p23/lootlook.py", ["--plant", "box-ammo"], 3600),           # loot-shapes (primitive ammo)
     ("w10_lootlook-plant-same-grenade", "p23/lootlook.py", ["--plant", "same-grenade"], 3600),   # loot-shapes (frag vs smoke IoU)
     ("w10_lootlook-plant-zero-normal", "p23/lootlook.py", ["--plant", "zero-normal"], 3600),   # (R3B fix5) loot-nan: the loot models' zero-normal slivers back (lootNormalsSafe off) -> black frames + zero-normal tris

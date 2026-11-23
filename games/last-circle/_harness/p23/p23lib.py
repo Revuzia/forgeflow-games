@@ -245,8 +245,12 @@ def gpu_ms(s, frames=60, dt=1 / 60):
     ok = s.js("() => { const g = window.__LC__.W.kernel.gpuTimer; if (!g || !g.supported) return false; g.on = true; g.ms.length = 0; return true; }")
     if not ok:
         return None
-    s.step_frames(frames, dt, render=True)
-    s.step_frames(6, dt, render=True)          # drain the queries in flight
+    # (W10 anim fix 5, G1) ONE frame per JS call: WebGL makes a timer query's result visible only after control returns to the browser, and
+    # the kernel's timer keeps at most 6 queries in flight, so a 60-frame synchronous chunk harvested <= 6 results per chunk boundary (12 of
+    # 96 frames measured on --disk, fix5 gtprobe) - and none at all when the GPU had not finished those 6 by the boundary (tierprof's
+    # "order" row COULD-NOT-JUDGE on LOW, check4 3 of 3). Stepping one frame per call lets each result be read a frame or two later.
+    s.step_frames(frames, dt, render=True, chunk=1)
+    s.step_frames(6, dt, render=True, chunk=1)          # drain the queries in flight
     return s.js("() => { const g = window.__LC__.W.kernel.gpuTimer; const m = g.ms.slice(); g.on = false; return m; }")
 
 
