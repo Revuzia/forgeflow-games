@@ -511,7 +511,7 @@ export function inviteLink(code) {
 }
 
 // ── LC-49: sequence numbers on the state stream ───────────────────────────────────────────────────────────────────────────────────────
-/** Every state packet carries q = a per-sender counter (pack()). The DataChannel is unordered and a peer without one ALSO gets the Supabase
+/** Every state packet carries q = a per-sender counter (pack()). The DataChannel is unordered and a peer without one ALSO gets the relay
  *  copy of the same packet, so packets arrive late, early and twice; nothing used to say which was newest, and a late packet pulled the remote
  *  body back to where it was 100-300 ms ago (the audit's "out-of-order packet can pull remote back"). accept(sender, q) ->
  *    "new"   newer than anything seen from this sender: apply everything
@@ -1395,7 +1395,7 @@ function openLobby(W, sel) {
     S.rk = rejoinHash(S.rjSecret);
     bind();                        // this lobby's paint / notice hooks on the session
     // P2P overlay (ffg_rtc.js): the state envelope prefers DataChannels;
-    // signaling + everything critical + the full fallback stay on Supabase.
+    // signaling + everything critical + the full fallback stay on the room relay.
     // ensurePeer is called lazily the first time a peer's state arrives (both
     // sides converge; the lower-id offerer rule breaks the tie).
     S.rtc = new RTCMesh(net.id, (to, payload) => send("rtc", Object.assign({ to }, payload)));
@@ -2810,7 +2810,7 @@ export function update(W, dt) {
       S.pendingBots = null;
     }
     // P2P FIRST: the envelope goes over DataChannels to every peer whose
-    // channel is open; ONE Supabase broadcast only if any peer lacks one
+    // channel is open; ONE relay broadcast only if any peer lacks one
     // (that peer filters by `from` exactly as before; a DC peer seeing the
     // duplicate just re-applies the same snapshot — harmless by design).
     // Any RTC failure therefore degrades to the exact pre-RTC behaviour.

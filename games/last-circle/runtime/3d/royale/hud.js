@@ -2114,8 +2114,11 @@ export function showLobby(W, onDone) {
     arrive[arrive.length - 1] = FILL_MS;   // the lobby is full exactly at FILL_MS
   }
   // read-only for the browser gates (a real Enter only skips once the lobby is full): { lifelike, fillMs, full }
-  W._lobbyFill = { lifelike, fillMs: Math.round(FILL_MS), full: false };
+  // + a DIAGNOSTIC timeline (friends port fix 2, nothing reads it in the game): when this lobby opened / filled, how many countdown ticks ran and
+  // the last one's time, and how it ended ("drop" = finishLobby, "cancel" = showMenu's way out). A page found sitting in a lobby then tells
+  // a slow countdown (tick times still moving) from a dead one (no tick since fullAt / an end with the layer still up).
   const t0 = performance.now();
+  const LF = W._lobbyFill = { lifelike, fillMs: Math.round(FILL_MS), full: false, shownAt: Math.round(t0), fullAt: null, ticks: 0, tickAt: null, endAt: null, end: null };
   let cdIv = null, ended = false;
   const fillIv = setInterval(() => {
     const el = performance.now() - t0;
@@ -2132,12 +2135,13 @@ export function showLobby(W, onDone) {
     if (filled >= cells.length) {
       clearInterval(fillIv);
       count.textContent = W.actors.length + "/" + W.actors.length + "  —  ALL OPERATIVES READY";
-      if (W._lobbyFill) W._lobbyFill.full = true;
+      LF.full = true; LF.fullAt = Math.round(performance.now());
       if (skipHints) skipHints.forEach((x) => { x.style.visibility = "visible"; });
       let n = W.mode === "practice" ? 1 : 3;
       cd.textContent = n;
       W.events.emit("countdownBeep", false);
       cdIv = setInterval(() => {
+        LF.ticks++; LF.tickAt = Math.round(performance.now());
         n--;
         if (n <= 0) {
           W.events.emit("countdownBeep", true);
@@ -2152,6 +2156,7 @@ export function showLobby(W, onDone) {
   function finishLobby() {
     if (ended) return;
     ended = true;
+    LF.endAt = Math.round(performance.now()); LF.end = "drop";
     R._lobbyCancel = null;
     clearInterval(fillIv);
     if (cdIv) clearInterval(cdIv);
@@ -2164,6 +2169,7 @@ export function showLobby(W, onDone) {
   R._lobbyCancel = () => {
     if (ended) return;
     ended = true;
+    LF.endAt = Math.round(performance.now()); LF.end = "cancel";
     clearInterval(fillIv);
     if (cdIv) clearInterval(cdIv);
     window.removeEventListener("keydown", onKey);

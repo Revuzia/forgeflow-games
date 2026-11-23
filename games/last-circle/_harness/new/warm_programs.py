@@ -225,6 +225,7 @@ def one_run(args, v, mp, seed):
                 break
         lob = s.js("() => ({ ctx: window.__PP__.ctx.length, phase: window.__LC__.W.phase })")
         ctx0 = lob["ctx"]
+        s.wait_lobby_full()      # step 8: a real Enter only skips a FULL offline lobby
         for _ in range(3):
             s.page.keyboard.press("Enter")
             if s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 5, 0.1) is not None:

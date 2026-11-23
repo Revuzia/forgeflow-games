@@ -50,6 +50,7 @@ def main():
             res["lobby"] = s.js(AUD_JS)
             lob = [a for a in res["lobby"] if not a["paused"] and a["i"] == 0]
             v.check("in the lobby (player in the world) the title music is NOT playing", not lob, {"lobby": res["lobby"]})
+            s.wait_lobby_full()          # step 8: a real Enter only skips a FULL offline lobby
             s.page.keyboard.press("Enter")
             s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 20, 0.1)
             s.sleep(3.0)

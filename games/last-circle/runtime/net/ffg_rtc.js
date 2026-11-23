@@ -1,12 +1,13 @@
 /**
  * ffg_rtc.js — P2P DataChannel overlay for the high-rate state envelope.
  *
- * WHY: the envelope merge fits Supabase's 100 msg/s ceiling (80 worst-case at
+ * WHY (written for the old Supabase transport; the room channel is the Cloudflare relay since 2026-11-22, ffg_cfroom.js):
+ * the envelope merge fits Supabase's 100 msg/s ceiling (80 worst-case at
  * 4 humans), but the 2M msgs/month project quota still caps the portfolio at
  * ~20 full-room matches a month. Moving ONLY the state envelope to unreliable
  * P2P DataChannels removes ceiling and quota for ~95% of traffic and drops a
  * relay hop of latency. Everything else — signaling, hitYou/died/start/bye/
- * takeover/sync/chat, and the complete fallback path — STAYS on Supabase, so
+ * takeover/sync/chat, and the complete fallback path — STAYS on the room relay, so
  * any RTC failure is byte-identical to the pre-RTC behaviour.
  *
  * Topology: full mesh, at most 3 connections per client (4-human rooms).
@@ -14,7 +15,7 @@
  * (net.js sends {t:"rtc", d:{to, kind, ...}}). Deterministic offerer — the
  * LEXICALLY LOWER peer id creates the offer per pair — so no glare. Google
  * STUN only, no TURN: a NAT-blocked pair simply never opens and that peer
- * keeps riding Supabase.
+ * keeps riding the room relay.
  *
  * The data channel is UNRELIABLE ({ordered:false, maxRetransmits:0}) on
  * purpose: the state envelope is a snapshot stream — a lost packet is
@@ -53,7 +54,7 @@ export class RTCMesh {
       this._wireChannel(p, pc.createDataChannel("state", { ordered: false, maxRetransmits: 0 }));
       pc.createOffer().then((offer) => pc.setLocalDescription(offer))
         .then(() => this.signal(peerId, { kind: "offer", sdp: pc.localDescription.toJSON() }))
-        .catch(() => { /* stay on the Supabase path */ });
+        .catch(() => { /* stay on the relay path */ });
     } else {
       pc.ondatachannel = (e) => this._wireChannel(p, e.channel);
     }
@@ -74,12 +75,12 @@ export class RTCMesh {
       } else if (d.kind === "ice" && d.cand) {
         await p.pc.addIceCandidate(d.cand);
       }
-    } catch (e) { /* negotiation hiccup — that pair stays on Supabase */ }
+    } catch (e) { /* negotiation hiccup — that pair stays on the relay */ }
   }
 
   /** Send the envelope to every open channel. Returns {sent, allCovered}:
    *  allCovered is true only when EVERY known peer got it P2P — the caller
-   *  broadcasts once via Supabase otherwise (receivers dedupe by design: a
+   *  broadcasts once via the room relay otherwise (receivers dedupe by design: a
    *  peer with an open DC that also sees the broadcast just applies the same
    *  snapshot twice, which a snapshot protocol tolerates). */
   sendState(msg) {
