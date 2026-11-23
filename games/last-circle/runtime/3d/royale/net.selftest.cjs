@@ -355,6 +355,20 @@ function suiteP23(M, SIM, count) {
     const hs = new M.SquadHandshake({ id: "a", name: "H", gv: 6, host: true });
     const msg = rt(hs.startMsg({ seed: 7, mapId: "ashgrid", mode: "quick", teamMode: "trio", roster: rt2 }));
     row(msg.mode === "quick" && msg.teamMode === "trio" && msg.gv === 6 && msg.roster[1].teamId === "t0", "C-MODE: the start keeps `mode` = the pace and adds teamMode + roster teamIds (JSON round trip)", msg);
+    // FRIENDS ROOMS: the teams pick (squad / two / ffa) -> team size + each human's teamId
+    const R4 = [0, 1, 2, 3].map((i) => ({ peerId: "p" + i, slot: i, name: "N" + i }));
+    const tmS = M.roomTeamMode("squad", null, 4, "standard", SIM), tmT = M.roomTeamMode("two", null, 4, "standard", SIM), tmF = M.roomTeamMode("ffa", "squad", 4, "standard", SIM);
+    const two = M.rosterWithTeams(R4, tmT, SIM, "two").map((r) => r.teamId), ffa = M.rosterWithTeams(R4, tmF, SIM, "ffa").map((r) => r.teamId), sq = M.rosterWithTeams(R4, tmS, SIM, "squad").map((r) => r.teamId);
+    row(tmS === "squad" && tmT === "duo" && tmF === "solo" && M.roomTeamMode("two", null, 2, "quick", SIM) === "duo" && M.roomTeamMode("two", "trio", 3, "standard", SIM) === "trio" &&
+      M.roomTeamMode("squad", null, 2, "standard", SIM) === "duo" && M.roomTeamMode("squad", null, 1, "standard", SIM) === "solo",
+      "friends: ALL ON ONE TEAM = the smallest size for everyone, TWO TEAMS = at least duos for the bigger half, EVERYONE FOR THEMSELVES = solo", [tmS, tmT, tmF]);
+    row(two.join() === "sqA,sqB,sqA,sqB" && ffa.join() === "s0,s1,s2,s3" && sq.join() === "t0,t0,t0,t0" && M.normTeams("x") === null && M.normTeams("two") === "two",
+      "friends: TWO TEAMS alternates sqA / sqB down the roster (host on A), FFA gives each human its own id, ALL ON ONE TEAM = t0", { two, ffa, sq });
+    const hs4 = new M.SquadHandshake({ id: "p0", name: "H", gv: 6, host: true });
+    for (const i of [1, 2, 3]) hs4.onHello("p" + i, { name: "N" + i, gv: 6 }, 0);
+    const pl4 = hs4.planStart({ p1: "N1", p2: "N2", p3: "N3" }, 3, 0, { p2: true });
+    row(pl4.roster.map((r) => r.peerId).join() === "p0,p1,p3" && pl4.roster[2].slot === 2 && pl4.gone.some((g) => g.peerId === "p2" && g.busy),
+      "friends: START leaves out a friend still IN A MATCH (they play the next one); the others keep consecutive slots", pl4);
   }
   // ── LC-49: order ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   {

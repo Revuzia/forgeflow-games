@@ -2062,7 +2062,9 @@ function beginOnlineMatch(W, cfg) {
   const teamMode = normTeamMode(cfg.teamMode);
   const humans = cfg.roster.map((r) => {
     const h = { slot: r.slot, name: r.name, self: r.peerId === S.net.id };
-    if (teamMode) h.teamId = typeof r.teamId === "string" && r.teamId.length <= 24 ? r.teamId : humanTeamId(r.slot, teamMode, W.SIM);
+    // FRIENDS ROOMS: cfg.teams = how the humans group (squad: one team "t0"; two: "sqA" / "sqB" down the roster; ffa: each its own) - the
+    // boot groups the humans by these ids (D5 humanTeamIdsOf) and fills each team's other seats with bot teammates
+    if (teamMode) h.teamId = typeof r.teamId === "string" && r.teamId.length <= 24 ? r.teamId : roomHumanTeamId(r.slot, teamMode, W.SIM, normTeams(cfg.teams));
     return h;
   });
   if (S.started) resetMatchState();          // LC-18 rematch: the room stays, everything about the last match goes
