@@ -378,7 +378,7 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
         # default ("netseq guest never booted") - a pair gets at least 1200 s per page
         if SQ.boot_url(pg, args.base, max(args.boot_timeout or 0, 1200)) is None:
             raise C.EnvFailure("%s %s never booted" % (name, label))
-    create_vis = r"() => [...document.querySelectorAll('button')].some((b) => b.offsetParent && /^\s*START ROOM\s*$/.test(b.textContent || ''))"
+    create_vis = r"() => [...document.querySelectorAll('button')].some((b) => b.offsetParent && /^\s*(START|CREATE) ROOM\s*$/.test(b.textContent || ''))"   # (an old build says CREATE ROOM)
     veils = "() => document.querySelectorAll('[data-net=\"lobby\"]').length"
     for label, pg in (("host", hpg), ("guest", gpg)):
         pg.bring_to_front()
@@ -408,7 +408,7 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
     # enabled and on top, the host's click timed out at 30 s in pl_netseq_pullback)
     hpg.bring_to_front()
     try:
-        hpg.locator(top).locator('button:text-is("START ROOM")').first.click(timeout=30_000)
+        hpg.locator(top).locator('button:text-is("START ROOM"), button:text-is("CREATE ROOM")').first.click(timeout=30_000)
         code = None
         if SQ.wait(hpg, r"() => /Room\s+[A-Z0-9]{4}\s+[-—]/.test(document.body.innerText)", 40):
             m = re.search(r"Room\s+([A-Z0-9]{4})", hpg.evaluate("() => document.body.innerText"))
@@ -422,7 +422,7 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
         raise C.EnvFailure("%s: no room code; host screen: %s" % (name, _screen_text(hpg)))
     gpg.bring_to_front()
     gpg.locator(top).locator('input[placeholder="CODE"]').first.fill(code)
-    gpg.locator(top).locator('button:text-is("JOIN FRIEND")').first.click(timeout=30_000)
+    gpg.locator(top).locator('button:text-is("JOIN FRIEND"), button:text-is("JOIN")').first.click(timeout=30_000)
     if not SQ.wait(hpg, "() => document.body.innerText.includes('2 player')", 40):
         raise C.EnvFailure("%s: the guest never showed in the host's lobby" % name)
     hpg.bring_to_front()

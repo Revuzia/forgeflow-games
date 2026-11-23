@@ -329,11 +329,15 @@ NET_JS = r"""() => { const W = __LC__.W, S = W.net; if (!S) return null;
 
 # the guest stops sending its own state (its counter keeps its value) so the probe owns the sequence for a moment
 FREEZE_JS = "(on) => { const S = __LC__.W.net; S.lastState = on ? 1e15 : 0; return S.txSeq | 0; }"
-# a forged state packet for the guest's own body, straight onto the relay channel (the host's copy of the channel receives it)
+# a forged state packet for the guest's own body, straight onto the room's channel (the host's socket receives it; the stand-in for the relay
+# since the friends port: fake_relay.js, room-scoped; the Supabase stand-in for older builds)
 FORGE_JS = r"""(o) => { const W = __LC__.W, S = W.net, p = W.player;
-  const bc = new BroadcastChannel('fake-sb:ffg:last-circle:' + S.net.room);
   const d = { id: p.id, x: o.x, y: o.y, z: o.z, yw: 0, pt: 0, hp: Math.round(p.hp), sh: Math.round(p.shield || 0), wp: p.weapon && p.weapon.id, f: 0, q: o.q, t: +W.t.toFixed(2) };
-  bc.postMessage({ k: 'bc', event: 'msg', payload: { from: S.net.id, t: 'state', d } }); bc.close(); return d; }"""
+  const payload = { from: S.net.id, t: 'state', d };
+  // FRIENDS PORT: a relay build's room rides fake_relay.js's channel; an older (Supabase) build's the fake-sb one - each build hears only its own
+  const r = new BroadcastChannel('fake-lc-relay'); r.postMessage({ k: 'bc', room: S.net.room, to: null, payload }); r.close();
+  const bc = new BroadcastChannel('fake-sb:ffg:last-circle:' + S.net.room);
+  bc.postMessage({ k: 'bc', event: 'msg', payload }); bc.close(); return d; }"""
 REJECTS_JS = "() => { const S = window.__LC__.W.net; return S && S.rejected ? S.rejected.last.slice(-8) : []; }"
 # the guest stands next to its view of the host's body (both may still be gliding: the revive distance check is 5 m)
 CLOSE_JS = "() => { const W = __LC__.W, h = W.actorById.get('s0'), P = W.player; const q = h.netTarget ? h.netTarget.pos : h.pos; P.pos.set(q.x + 1.2, q.y, q.z); return true; }"

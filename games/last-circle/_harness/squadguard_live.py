@@ -539,7 +539,7 @@ def case_mismatch(rig, v, args, N, name, guest_kw, gv_label, newer=False):
                 "out of date" in st.lower() and "reload the page" in st.lower() and ("version %d" % N) in st and gv_txt in st and bool(gl.get("reload")),
                 {"status": st, "reload": gl.get("reload")})
     v.check("%s: the guest's create/join buttons are usable again, no START button" % name,
-            any(b.startswith("START ROOM") and ":disabled" not in b for b in gl.get("buttons", [])) and not any(b.startswith("START") and ":hidden" not in b for b in gl.get("buttons", [])), gl.get("buttons"))
+            any(b.startswith("START ROOM") and ":disabled" not in b for b in gl.get("buttons", [])) and not any(b.startswith("START") and not b.startswith("START ROOM") and ":hidden" not in b for b in gl.get("buttons", [])), gl.get("buttons"))
     # the host reads why
     sawn = wait(hpg, "() => { const n = document.querySelector('[data-net-notice]'); return !!(n && n.children.length); }", 20)
     hl = lobby(hpg)
