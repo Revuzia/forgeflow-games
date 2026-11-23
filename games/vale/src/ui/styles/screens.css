@@ -687,13 +687,12 @@
   .hband__cell { padding: var(--u) calc(1.25 * var(--u)); }
   .hband__win.is-lit .hband__s { display: none; }
   .tile__art { aspect-ratio: 16 / 7; }
-  /* Play: the dial a little lower, the queues as compact rows (the stage caption carries the description) */
+  /* Play: the dial a little lower, the queues stay cards two across but slimmer (no description: the stage caption
+     carries it), so Find match is on screen at 1280 x 720 (the owner preferred the cards to plain rows) */
   .dial { max-height: min(calc(36 * var(--u)), 30vh); }
-  .qcards { grid-template-columns: minmax(0, 1fr); gap: calc(0.75 * var(--u)); }
-  .qcard { flex-direction: row; flex-wrap: wrap; align-items: center; gap: calc(0.5 * var(--u)) calc(1.5 * var(--u)); padding: var(--u) calc(1.5 * var(--u)); }
-  .qcard__head { flex: 1 1 auto; min-width: 0; }
+  .qcards { gap: var(--u); }
+  .qcard { gap: calc(0.5 * var(--u)); padding: var(--u) calc(1.5 * var(--u)); }
   .qcard__desc { display: none; }
-  .qcard .chip { order: 2; }
   .play .sect { margin-top: calc(1.5 * var(--u)); }
   .play .sect__head { margin-bottom: var(--u); }
   /* draft: the compact cards' portraits go 5:4, so the showcase band keeps its 200 px */

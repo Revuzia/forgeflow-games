@@ -7,7 +7,7 @@
 // and the chosen one crossfades in as the gnomon swings, with the chosen queue's whole description and terms under it.
 // Fit (client F6/F9): the mode's name sits in the dial's open hub (the gnomon only draws its outer face), the cards
 // carry name, kind, description, the Candles line and the lock; the per-minute, first-win, bans and bots lines are the
-// stage caption's. Below 820 px of height the cards turn into compact rows (no description: the stage has it), so the
+// stage caption's. Below 820 px of height the cards stay two across but slimmer (no description: the stage has it), so the
 // selected queue and Find match are on screen at 1280x720 without scrolling.
 
 import type { JSX } from 'preact';
