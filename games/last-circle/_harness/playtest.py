@@ -202,6 +202,7 @@ def main():
                         if ok is None:
                             break
                         s.sleep(0.3)
+                        s.wait_lobby_full()
                         s.page.keyboard.press("Enter")
                         s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 20, 0.1)
                         s.step_frames(60, 1 / 60, render=30)

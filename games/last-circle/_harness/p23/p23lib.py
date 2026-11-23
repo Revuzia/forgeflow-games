@@ -283,6 +283,7 @@ def start(s, pace="standard", seed=7, map_id=None, team=None, guard=True, enter=
     if enter:
         s.stage("lobby")
         s.sleep(0.3)
+        s.wait_lobby_full()
         for attempt in range(3):
             s.page.keyboard.press("Enter")
             if s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 5, 0.1) is not None:

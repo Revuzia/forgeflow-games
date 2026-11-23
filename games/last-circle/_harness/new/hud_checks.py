@@ -576,6 +576,7 @@ def desktop(v, args):
                         {"before": m0, "after": m1, "pinnedWouldPick": pinned, "load_s": ok})
                 if ok is not None:
                     s.sleep(0.3)
+                    s.wait_lobby_full()
                     s.page.keyboard.press("Enter")
                     s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 20, 0.1)
                     s.guard_player(True)

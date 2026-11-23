@@ -2094,20 +2094,46 @@ export function showLobby(W, onDone) {
   // reads the same at 0.7 s as it did at 1.4 s. The 900 ms countdown below is
   // NOT touched — the 3-count is an audible beat (countdownBeep) and shortening
   // it desyncs the beeps from the numbers.
-  const FILL_MS = W.mode === "practice" ? 200 : 700;
+  //
+  // MATCHMAKING FEEL (owner, 2026-11-22): an OFFLINE Quick / Battle Royale lobby no longer fills in 0.7 s - players arrive over time, in
+  // uneven bursts over a steady trickle, and the drop comes 8-15 s after the lobby opens (the fill + the 2.7 s count). The join order is
+  // shuffled across the grid. Practice keeps its instant fill, and ONLINE keeps the short fixed fill: every client must leave on one clock.
+  const lifelike = !W.net && W.mode !== "practice";
+  const FILL_MS = W.mode === "practice" ? 200 : lifelike ? (8000 + Math.random() * 7000) - 2700 : 700;
+  const order = [];
+  for (let i = filled; i < cells.length; i++) order.push(i);
+  const filled0 = filled;
+  let arrive = null;   // ms after open of each arrival in `order` (lifelike only)
+  if (lifelike && order.length) {
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    const bursts = [];                     // a few parties joining at once, over the trickle
+    for (let k = 3 + Math.floor(Math.random() * 4); k > 0; k--) bursts.push(Math.random() * FILL_MS);
+    arrive = order.map(() => (Math.random() < 0.45
+      ? bursts[Math.floor(Math.random() * bursts.length)] + Math.random() * 400
+      : Math.pow(Math.random(), 0.85) * FILL_MS)).map((t) => Math.min(FILL_MS, Math.max(150, t))).sort((a, b) => a - b);
+    arrive[arrive.length - 1] = FILL_MS;   // the lobby is full exactly at FILL_MS
+  }
+  // read-only for the browser gates (a real Enter only skips once the lobby is full): { lifelike, fillMs, full }
+  W._lobbyFill = { lifelike, fillMs: Math.round(FILL_MS), full: false };
   const t0 = performance.now();
   let cdIv = null, ended = false;
   const fillIv = setInterval(() => {
-    const want = Math.min(cells.length, 1 + Math.round((cells.length - 1) * (performance.now() - t0) / FILL_MS));
+    const el = performance.now() - t0;
+    let want;
+    if (arrive) { want = filled0; while (want - filled0 < arrive.length && arrive[want - filled0] <= el) want++; }
+    else want = Math.min(cells.length, 1 + Math.round((cells.length - 1) * el / FILL_MS));
     for (; filled < want; filled++) {
-      cells[filled].style.color = "#dfeaff";
-      cells[filled].style.background = "rgba(255,255,255,0.07)";
-      cells[filled].style.borderColor = "rgba(140,180,220,0.18)";
+      const c = cells[filled - filled0 < order.length ? order[filled - filled0] : filled];
+      c.style.color = "#dfeaff";
+      c.style.background = "rgba(255,255,255,0.07)";
+      c.style.borderColor = "rgba(140,180,220,0.18)";
     }
     count.textContent = (W.net ? "WAITING FOR SQUAD… " : "FILLING LOBBY… ") + filled + "/" + W.actors.length;
     if (filled >= cells.length) {
       clearInterval(fillIv);
       count.textContent = W.actors.length + "/" + W.actors.length + "  —  ALL OPERATIVES READY";
+      if (W._lobbyFill) W._lobbyFill.full = true;
+      if (skipHints) skipHints.forEach((x) => { x.style.visibility = "visible"; });
       let n = W.mode === "practice" ? 1 : 3;
       cd.textContent = n;
       W.events.emit("countdownBeep", false);
@@ -2145,19 +2171,24 @@ export function showLobby(W, onDone) {
   // e.repeat is rejected so a held ENTER cannot double-fire the hand-off. (It
   // originally guarded the drop-select screen's own ENTER listener; that screen
   // is no longer shown — the lobby now hands straight to the drop.)
-  const onKey = (e) => { if (!e.repeat && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); finishLobby(); } };
+  // Skipping is for the countdown only: during a lifelike fill the lobby is still finding players, so there is nothing to skip to yet.
+  const canSkip = () => !lifelike || filled >= cells.length;
+  const onKey = (e) => { if (!e.repeat && (e.key === "Enter" || e.key === " ") && canSkip()) { e.preventDefault(); finishLobby(); } };
+  let skipHints = null;
   // Offline ONLY. Online keeps the fixed timer because guests have to leave this
   // screen on the same clock as the host.
   if (!W.net) {
     L.style.cursor = "pointer";
-    L.onclick = finishLobby;
+    L.onclick = () => { if (canSkip()) finishLobby(); };
     window.addEventListener("keydown", onKey);
     const skipSt = {
       fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "700",
       letterSpacing: "2.5px", opacity: "0.6", color: "#9fd0ff",
     };
-    h("div", skipSt, "CLICK OR PRESS ENTER TO DROP IN NOW", wrap).className = "kbd-hint";
-    h("div", skipSt, "TAP ANYWHERE TO DROP IN NOW", wrap).className = "lc-touch-only";
+    const k1 = h("div", skipSt, "CLICK OR PRESS ENTER TO DROP IN NOW", wrap); k1.className = "kbd-hint";
+    const k2 = h("div", skipSt, "TAP ANYWHERE TO DROP IN NOW", wrap); k2.className = "lc-touch-only";
+    skipHints = [k1, k2];
+    if (!canSkip()) skipHints.forEach((x) => { x.style.visibility = "hidden"; });
   }
 }
 
