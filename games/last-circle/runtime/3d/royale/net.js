@@ -1567,8 +1567,10 @@ function esc(s) {
 }
 
 // ── P23 wiring helpers ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** Our hello: the handshake's body + this tab's rejoin commitment (LC-49). */
-function myHello() { return Object.assign(S.hs.helloMsg(), S.rk ? { rk: S.rk } : {}); }
+/** Our hello: the handshake's body + this tab's rejoin commitment (LC-49) + busy (FRIENDS ROOMS: inside a match right now). */
+function myHello() { return Object.assign(S.hs.helloMsg(), S.rk ? { rk: S.rk } : {}, { busy: S.started && !S._hostLostRan ? 1 : 0 }); }
+// What a page that is NOT in the room's running match still handles (FRIENDS ROOMS): the lobby's own messages
+const LOBBY_MSG = { hello: 1, back: 1, room: 1, start: 1, rejoin: 1, refuse: 1, rtc: 1 };
 
 /** LC-49: roster slot `slot`'s player left (bye / presence / watchdog take-over): the REJOIN_MS window opens (the earliest sighting counts). */
 function markGone(slot) {
@@ -1747,10 +1749,10 @@ function onRejoinAnswer(W, from, d) {
         st.textContent = "";
         const b = document.createElement("b");
         b.style.color = "#ffb060";
-        b.textContent = d.code === "busy" ? "A match is already running in this room." : "Couldn't get your place back.";
+        b.textContent = d.code === "busy" ? "The host is finishing a match — you'll play in the next one." : "Couldn't get your place back.";
         st.appendChild(b);
         st.appendChild(document.createElement("br"));
-        st.appendChild(document.createTextNode(d.code === "busy" ? "Stay here: when the host runs it back, you are in the next match." : "The host said: " + String(d.why || "").slice(0, 80) + ". Wait here for the next match."));
+        st.appendChild(document.createTextNode(d.code === "busy" ? "Stay in this room: when the host starts the next match, you are in it." : "The host said: " + String(d.why || "").slice(0, 80) + ". Wait here for the next match."));
         st.setAttribute("data-net-rejoin", d.code === "busy" ? "busy" : "refused");
       }
     }
@@ -2114,14 +2116,29 @@ function onMsg(W, { from, t, d }) {
   // batched cosmetic envelope (see qsend) — unwrap and dispatch in order.
   // A nested "ev" is skipped rather than recursed: we never send one, so it
   // could only ever be a malformed packet, and recursing on it is unbounded.
+  // FRIENDS ROOMS: in the lobby, or playing on alone after the host left, the room's NEXT match runs on the same actor ids (s0..s49): its
+  // hits, deaths and snapshots must never reach this world. Same for a friend who has already moved on to the next match while this page
+  // is still in the last one (S.moved: their start did not roster us).
+  if ((!S.started || S._hostLostRan || (S.moved && S.moved[from])) && !LOBBY_MSG[t]) return;
   if (t === "ev") { for (const m of d.list || []) if (m && m.t !== "ev") onMsg(W, { from, t: m.t, d: m.d }); return; }
+  if (t === "back") {
+    // that friend finished their match and is in the room's lobby again
+    if (S.inMatch) S.inMatch[from] = false;
+    if (S.moved) delete S.moved[from];
+    // the host is back in the room: a newcomer told "the host is finishing a match" now reads the normal room line
+    if (!S.started && S.status && from === S.net.owner && S.status.getAttribute("data-net-rejoin") === "busy") S.status.removeAttribute("data-net-rejoin");
+    if (!S.started && S.ui) S.ui.onPeer();
+    return;
+  }
   if (t === "hello") {
     // REPLY to a peer we had not seen. "hello" was broadcast once on join and
     // never replayed, so the third person to join learned nobody's name and the
     // two already in the room learned only theirs. Bounded — the reply fires
     // only for a first sighting, and everyone already in the room has us.
     const hr = S.hs.onHello(from, d, performance.now());
-    S.peers[from] = d && d.name;
+    S.peers[from] = d && typeof d.name === "string" ? d.name.slice(0, 24) : "Friend";
+    // busy = that friend is inside a match right now (a newcomer waits for the next one; START leaves them out)
+    if (S.inMatch && d && "busy" in d) S.inMatch[from] = !!d.busy;
     // a peer heard for the first time may be ahead of its own presence: repaint once the grace window ends, so a ghost hello leaves the list
     if (hr.first && S.paintRoster) setTimeout(() => { if (S && S.paintRoster && !S.started) S.paintRoster(); }, PRESENCE_GRACE_MS + 100);
     if (hr.first) send("hello", myHello());
@@ -2171,6 +2188,13 @@ function onMsg(W, { from, t, d }) {
   // REMATCH (parity LC-18): the host of the match that just ended starts the next one in the same room (net.rematch on its side). A guest
   // follows it: at once when its own match is over, else as soon as it is (update() / rematch()).
   if (t === "start" && S.started) {
+    // FRIENDS ROOMS: the host started the room's next match from the lobby while this page is still in the last one - not for us (no
+    // joining a match in progress): those friends are IN A MATCH now and their traffic is not this world's (S.moved)
+    if (d && Array.isArray(d.roster) && !d.rematch && !d.roster.some((r) => r && r.peerId === S.net.id) && startFromHost(from, d)) {
+      S.moved = S.moved || {};
+      for (const r of d.roster) if (r && r.peerId && r.peerId !== S.net.id) { S.inMatch[r.peerId] = true; S.moved[r.peerId] = 1; }
+      return;
+    }
     if (!d || !d.rematch || !S.cfg || !Array.isArray(S.cfg.roster) || !S.cfg.roster[0] || S.cfg.roster[0].peerId !== from) { reject(t, from, "start mid-match"); return; }
     if (S.hs.judgeStart(d)) { reject(t, from, "rematch on another world version"); return; }
     if ((d.rematch | 0) <= (S.rematchN | 0)) return;          // a repeat of one we already took
@@ -2504,10 +2528,39 @@ export function hostLost(W) {
   clearRejoin();               // LC-49: the room is gone
   const converted = convertRemotesToBots(W);
   try { S.rtc && S.rtc.close(); } catch (e) {}
-  try { S.net && S.net.leave && S.net.leave(); } catch (e) {}
+  // FRIENDS ROOMS: the ROOM stays open - the host leaving the match (BACK TO ROOM, a drop) must not throw the guests out of the party. This
+  // match goes on locally (update() stops sending, onMsg ignores match traffic) and BACK TO ROOM afterwards returns to the same room;
+  // MAIN MENU leaves it.
   W.net = null;                                 // frame gates (hitstop etc.) read this
   W.events.emit("hostLost", converted);
   console.warn(`[net] host lost — converted ${converted} remote actors to bots, continuing offline`);
+}
+
+/** Still in a friends room (the room's socket is open)? True also for a guest playing on after its host left (W.net is null then). */
+export function inRoom(W) { return !!(S && S.net && S.net.ws && S.net.ws.readyState === 1 && S.net.room && !S.refused && !S.fallbackDone); }
+
+/** BACK TO ROOM after a match: the party stays together, as in other battle royales. Clears the per-match state, un-freezes the host role
+ *  (the room may have a new host by now) and reopens the room's lobby over the menu. The others see this player ready again ("back"). */
+export function returnToRoom(W) {
+  if (!inRoom(W)) { leave(W); return false; }
+  hideWaitCard();
+  clearRejoin();
+  // leaving a match the others are still in: say so, like closing the tab - a guest's slot gets a brain on the host at once, and if this is
+  // the host the guests carry on locally right away instead of after the silence watchdog
+  if (S.started && !S._hostLostRan && S.mySlot != null) send("bye", { slot: "s" + S.mySlot });
+  try { S.rtc && S.rtc.close(); } catch (e) {}
+  S.rtc = new RTCMesh(S.net.id, (to, payload) => send("rtc", Object.assign({ to }, payload)));
+  S.rtc.onMessage = (m) => { if (m && m.t) onMsg(W, { from: m.from, t: m.t, d: m.d }); };
+  resetMatchState();
+  const picks = S.roomPicks ? S.roomPicks() : null;
+  Object.assign(S, { started: false, cfg: null, mySlot: null, _hostLostRan: false, moved: null, droppedMsgs: 0, sendWinT: null, sendWinN: 0 });
+  if (S.net.setFrozen) S.net.setFrozen(false);
+  S.hs.host = S.net.isHost();
+  W.net = S;
+  send("back", {});
+  send("hello", myHello());          // a newcomer who arrived during the match learns this player's name + that it is free again
+  openLobby(W, Object.assign({ resume: true }, picks || {}));
+  return true;
 }
 
 export function leave(W) {
@@ -2651,7 +2704,7 @@ export function onMatchStart(W) {
 }
 
 export function update(W, dt) {
-  if (!S || !S.started || !W.player) return;
+  if (!S || !S.started || S._hostLostRan || !W.player) return;
   if (S.pendingRematch && tryFollowRematch(W)) return;      // LC-18: the host started the next match and ours is over
   if (S.mapFallback && !S.fallbackDone) { leaveForFallback(W, detectMapFallback(W, S.gv, S.mapFallback)); return; }   // (onMatchStart normally got there first)
   if (S.pendingTakeovers || S.hostGone) drainPending(W);

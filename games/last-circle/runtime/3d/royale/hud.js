@@ -5878,7 +5878,13 @@ export function showPostMatch(W, res) {
   // Going back to the menu tears the match down, rebuilds the cinematic menu world and
   // re-reads the skin GLBs just to press PLAY again, which is why this is not the default.
   const row = h("div", null, null, box); row.className = "lc-pm-act";
-  if (res.onAgain) {
+  if (res.onAgain && res.againLabel) {
+    // FRIENDS ROOMS: after a match in a friends room the one way on is back to that room (the host starts the next match there)
+    const back = h("button", null, null, row); back.className = "lc-pbtn pri"; back.dataset.lc = "backtoroom";
+    h("span", null, null, back).className = "ic"; back.firstChild.innerHTML = IC.rerun;
+    h("span", null, res.againLabel, back);
+    back.onclick = () => { L.remove(); R.post = null; res.onAgain(); };
+  } else if (res.onAgain) {
     const again = h("button", null, null, row); again.className = "lc-pbtn pri"; again.dataset.lc = "runitback";
     h("span", null, null, again).className = "ic"; again.firstChild.innerHTML = IC.rerun;
     h("span", null, "Run it back", again);

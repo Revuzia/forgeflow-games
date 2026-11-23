@@ -734,7 +734,7 @@ function suiteP23(M, SIM, count) {
       "C-DBNO: the downed bit rides the stance byte and, while it is set, the hp field carries the bleed pool (no extra key: per-tick bytes unchanged); remotes get downedHp = hp, hp = 0");
     ok(/revive: 1, smoke: 1, rejoin: 1, room: 1/.test(src) && !/qsend\("revive"/.test(src) && /send\("revive", \{ k: "done"/.test(src) && /send\("smoke"/.test(src),
       "P23: revive / smoke / rejoin / room are CRITICAL and sent at once (never batched, never shed)");
-    ok(/function myHello\(\) \{ return Object\.assign\(S\.hs\.helloMsg\(\), S\.rk \? \{ rk: S\.rk \} : \{\}\); \}/.test(src) && /hello\.rj = cands\.map/.test(src) && /if \(hr\.first\) send\("hello", myHello\(\)\);/.test(src),
+    ok(/function myHello\(\) \{ return Object\.assign\(S\.hs\.helloMsg\(\), S\.rk \? \{ rk: S\.rk \} : \{\}/.test(src) && /hello\.rj = cands\.map/.test(src) && /if \(hr\.first\) send\("hello", myHello\(\)\);/.test(src),
       "LC-49: every hello carries the tab's rejoin commitment; a reloaded page's hello asks with its secret");
     ok(/teamMode = roomTeamMode\(roomTeams, teamWant, plan\.roster\.length, pace, W\.SIM\)/.test(src) && /rosterWithTeams\(plan\.roster, teamMode, W\.SIM, roomTeams\)/.test(src) && /if \(teamMode\) opts\.teamMode = teamMode;/.test(src),
       "C-MODE: START (and run-it-back) carry the team mode and the roster teamIds, and the guests hand them to startMatch");
