@@ -859,7 +859,13 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     camera.lookAt(tgt);
     camera.updateMatrixWorld();
     framerS = camScale * zoomF * cameraFx.dist;
-    framer.ease(dt);
+    // (round 15, R15_FIX F3; VERDICT_R14 F3: "a carry let go by Home's back rim jumps about 4 m across the felt") while a hand holds a squishy in Home's room the
+    // lens shift stays where it is. The band framing measures the squishies INSIDE the room camera's view (roomcam.ts: frameMode 2 for those outside), so as a
+    // carry scrolls the view a friend entering or leaving it moved the lens goal, the picture slid by up to 0.3 NDC within 0.2 s, and the still finger's ray
+    // pitched by up to 0.1 rad: at the back of the felt, where that ray is 6 to 10 degrees from level, the hand's spot on the floor ran 3 to 5 m toward the
+    // camera and the squishy flew after it (traced: R15_FIX.md F3; the finger at rest, room.outside 2 -> 1 -> 0, ray dir.y -0.156 -> -0.256 in three frames).
+    // The lens eases to its goal as soon as the hand lets go (nothing follows it then).
+    if (!(room && room.on && room.hand) || framer.fresh) framer.ease(dt);
     applyLens(false);
   }
   /** SR2: the lens shift (the principal point moves by framer.lensX / lensY in NDC: the picture slides inside the frame, the camera does not move); also after a resize. */
