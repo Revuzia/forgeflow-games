@@ -166,7 +166,9 @@ PLANTS = {
     "ready-hidden": [(RP + "player.js", [("const RH_RDY_S = 0.2, RH_RDY_PITCH = -0.05, RH_RDY_CANT = -0.18, RH_RDY_IN = -0.10,",
                                           "const RH_RDY_S = 0.2, RH_RDY_PITCH = -0.18, RH_RDY_CANT = 0, RH_RDY_IN = -0.08,"),
                                          ("const RH_RDY_LIFT = 0.05,", "const RH_RDY_LIFT = 0,"),
-                                         ("* rhK * (1 - (a._rdyE || 0)) : 0;", "* rhK : 0;")])],
+                                         # (fix6) the chest turned back to RH_BLADE at the ready too, no per-skin extra blade
+                                         ("Math.max(0, Math.abs(a._pBlade) - RH_BLADE) * (1 - (a._rdyE || 0)) -\n        K.clamp(a._pBlade / RH_RDY_BSIDE, -1, 1) * a._rdyBlade * a._rdyBF * (a._rdyE || 0)) * rhK",
+                                          "Math.max(0, Math.abs(a._pBlade) - RH_BLADE)) * rhK")])],
     "kerb-pop": [(RP + "player.js", [("const gndClip = !airClipOn;", "const gndClip = a.onGround;"),
                                      ("const mixHold = mixamoAim || (mixGun && rhCls && a._rhW > 0);", "const mixHold = mixamoAim;")])],
 }
@@ -758,12 +760,15 @@ def trans_eval(rows, evs, win, pts):
     return out
 
 
-def part_trans(s, v, R, skin):
+def part_trans(s, v, R, skin, only=None):
     spot = L.flat_spot(s, clear=9.0, max_r=900) or {}
     home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
     out = {}
     for wid in ("ar", "smg"):
         for sc in (("swap", "ads", "land") if wid == "ar" else ("ads", "land")):
+            # (W10 anim fix 6) --trans: a planted control measures only its own event, so its FAIL can only come from its own row
+            if only and sc not in only:
+                continue
             s.release_all()
             s.js(PLACE_JS, [home[0], home[1], 0.0])
             s.js(EQUIP_JS, wid)
@@ -823,6 +828,17 @@ CHASE_JS = r"""async ([n, every]) => { const W = window.__LC__.W, THREE = W.THRE
   for (const o of hid) o.visible = true;
   return out; }"""
 CHASE_SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"]
+CHASE_YAW = -1.5707963    # facing +X (chasevis / capture.py YAW)
+# (W10 anim fix 6) chasevis's spot finder, verbatim (ANIM check3/check4 capture.py PAVED_JS): level within 0.3 m over 20 x 8 m, a paved / dirt
+# / sand / stone surface, nothing standing in front of the camera
+CHASE_SPOT_JS = r"""([clear, maxR]) => { const W = window.__LC__.W, M = W.map, p = W.player, wy = M.waterY; const x0 = p.pos.x, z0 = p.pos.z;
+  const ok = (x, z) => { const h = M.heightAt(x, z); if (h < wy + 1) return false;
+    for (let dx = -4; dx <= 16; dx += 2) for (let dz = -4; dz <= 4; dz += 2) { if (Math.abs(M.heightAt(x + dx, z + dz) - h) > 0.3) return false; if (!/concrete|dirt|sand|stone/.test(M.surfaceAt(x + dx, z + dz) || '')) return false; }
+    for (const c of M.queryColliders(x + 6, z, clear + 12, [])) { if (c.dead) continue; if (c.maxY > h + 0.2 && c.minX < x + 18 && c.maxX > x - 5 && c.minZ < z + 6 && c.maxZ > z - 6) return false; }
+    return true; };
+  for (let r = 0; r < maxR; r += 8) for (let k = 0; k < 32; k++) { const a = k / 32 * Math.PI * 2, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r;
+    if (Math.abs(x) < 740 && Math.abs(z) < 740 && ok(x, z)) return { x, z, h: M.heightAt(x, z), surf: M.surfaceAt(x, z, M.heightAt(x, z) + 0.1) }; }
+  return null; }"""
 CHASE_LIVE = {   # the live build's medians (fix5 chasevis --rev 8ccb6efce)
     "soldier": {"idle_ar": 0.87, "run_ar": 0.80, "idle_smg": 0.77, "run_smg": 0.47, "idle_lmg": 0.76, "run_lmg": 0.59},
     "athlete": {"idle_ar": 0.91, "run_ar": 0.66, "idle_smg": 0.91, "run_smg": 0.70, "idle_lmg": 0.90, "run_lmg": 0.60},
@@ -835,15 +851,20 @@ CHASE_LIVE = {   # the live build's medians (fix5 chasevis --rev 8ccb6efce)
 def part_chase(s, v, R, skin):
     s.js("() => window.__LC__.W.setGfx('tier', 'high')")
     s.step_frames(60, 1 / 60, render=True)
-    spot = L.flat_spot(s, clear=9.0, max_r=900) or {}
+    # (W10 anim fix 6) the SAME spot as the measurement CHASE_LIVE came from (chasevis: a paved, level, open patch ahead of the camera); fix5's
+    # row stood on L.flat_spot's grass, where the same build read up to 0.08 lower (gate_20261123_130217 viper idle_lmg 0.608 vs chasevis
+    # 0.690, athlete idle_ar 0.829 vs 0.884): the build and its reference were measured on different ground
+    spot = s.js(CHASE_SPOT_JS, [10.0, 1200]) or L.flat_spot(s, clear=9.0, max_r=900) or {}
+    v.info("%s chase spot" % skin, spot)
     home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
     out = {}
     for wid in ("ar", "smg", "lmg"):
         for nm, keys in (("idle", []), ("run", ["KeyW"])):
             s.release_all()
-            s.js(PLACE_JS, [home[0], home[1], 0.0])
+            # (W10 anim fix 6) ...facing +X along the clear 20 m the spot finder checked (chasevis's yaw), not -Z
+            s.js(PLACE_JS, [home[0], home[1], CHASE_YAW])
             s.js(EQUIP_JS, wid)
-            s.js(AIM_JS, [0.0, 0.0, False])
+            s.js(AIM_JS, [CHASE_YAW, 0.0, False])
             s.step_frames(130, 1 / 60, render=True)
             if keys:
                 s.hold(keys)
@@ -921,6 +942,7 @@ def main():
     ap.add_argument("--skins", default="soldier,athlete")
     ap.add_argument("--parts", default="guns,flash,pistol,flinch,death,sheen,reload,swim,swap,kerb,trans,chase")
     ap.add_argument("--shots", default=None)
+    ap.add_argument("--trans", default="swap,ads,land", help="(W10 anim fix 6) the transition events part trans measures (a control names its own)")
     ap.add_argument("--no-cache", action="store_true", help="re-measure the W9 tip's sheen baseline")
     args = L.parse(ap)
     want = set(args.parts.split(","))
@@ -959,7 +981,7 @@ def main():
                     if "kerb" in want:
                         part_kerb(s, v, R, skin)
                     if "trans" in want:
-                        part_trans(s, v, R, skin)
+                        part_trans(s, v, R, skin, set(args.trans.split(",")))
                     s.step_frames(10, 1 / 60, render=True)
                     progs.append([skin, p0, L.programs(s)])
             if "chase" in want:
@@ -1141,6 +1163,9 @@ def main():
             for row, keys, txt in (("swap-pop", ["ar/swap"], "a gun swap (AR -> SMG, still): the right hand"),
                                    ("ads-pop", ["ar/ads", "smg/ads"], "an ADS release (AR / SMG, still): the right hand and the muzzle"),
                                    ("land-pop", ["ar/land", "smg/land"], "a jump's landing (AR / SMG, still, a real Space press): the right hand and the muzzle")):
+                # (W10 anim fix 6) a row whose event --trans left out is not judged (never passed: it is not in the table)
+                if not any(k_.split("/")[1] in set(args.trans.split(",")) for k_ in keys):
+                    continue
                 bad, rr = [], {}
                 for skin in skins:
                     T = R.get(skin, {}).get("trans") or {}

@@ -171,10 +171,10 @@ export function createActor(W, opts) {
     _bodies: null, _lod0Geo: null, _lod1Geo: null, _lod: 0, _bodyShadow: true, _wpnRef: null, _wpnMeshes: null, _wpnShadow: null,
     _evalNow: false, _mixT: 0, _skipUsed: false, _mixRate: 1, _onScreen: false, _dEff: 0, _agl: 0, _synced: false,
     _bodyYaw: 0, _hasBodyYaw: false, _tiltX: 0, _tiltZ: 0, _eyeY: 0, _hasEyeY: false,
-    _armW: 0, _hasArmW: false, _armMode: null, _weldFor: null, _animTS: 1, _adsT: 0, _stepAcc: 0,
+    _armW: 0, _hasArmW: false, _armXS: 0.2, _armMode: null, _weldFor: null, _animTS: 1, _adsT: 0, _stepAcc: 0,
     hitReactT: 0, _hitReactAt: -9, _portalT: 0, _portalBoost: false, _ovReload: false,
     // (W10 R3B) swap dip, reload layer, surface swim and the slung second gun (created here: no hidden-class change mid-match)
-    _swapAt: -9, _eqWid: null, _swapK: 0, _inS: null, _rdyLift: 0, _rdyCant: RH_RDY_CANT, _rhSh: 0, _rhShW: null, _rlOn: false, _rlW: 0, _rlAnim: null, _aimHL: new THREE.Vector3(), _hasAimHL: false,
+    _swapAt: -9, _eqWid: null, _swapK: 0, _inS: null, _rdyLift: 0, _rdyTuck: 0, _rdyBlade: 0, _rdyBF: null, _rdyCant: RH_RDY_CANT, _rhSh: 0, _rhShW: null, _rlOn: false, _rlW: 0, _rlAnim: null, _aimHL: new THREE.Vector3(), _hasAimHL: false,
     _swimOff: 0, _swimObjY: -1e9, _swTilt: null, _sling: null, _slingId: null, _slingOn: false, _rlKey: null,
     // rim light (P1.8): 0 = not applied yet, 1 = the faint cool rim, 2 = SQUAD UP ally rim.
     // _sinkT: corpse timeline on SIM time (killActor / corpseStep), -1 = not a corpse;
@@ -1028,11 +1028,14 @@ export async function loadActorModels(W) {
     // the capsule only shrinks when this actor can actually be SEEN crouching
     a.hasCrouchClip = !!a.clips.crouch;
     a.armBones = findArmBones(rig.scene);   // runtime arm-pose layer (pose.js)
-    // (W10 anim fix 5, V1) the skin's shoulder span, measured once: the rifle ready's lift (RH_RDY_LIFT, rifleHold)
+    // (W10 anim fix 5, V1) the skin's shoulder span, measured once: the rifle ready's cant (rifleHold)
+    // (W10 anim fix 6, V1) ...and the skin's own ready tune (READY_SKIN: lift, extra blade, the firing elbow's tuck)
     if (a.armBones) { rig.scene.updateMatrixWorld(true); a.armBones.lArm.getWorldPosition(_v3); const sx = _v3.x, sy = _v3.y, sz = _v3.z;
       a.armBones.rArm.getWorldPosition(_v3); const span = Math.hypot(_v3.x - sx, _v3.y - sy, _v3.z - sz);
       const sk = K.clamp((span - RH_RDY_SPAN0) / RH_RDY_SPANW, 0, 1);
-      a._rdyLift = RH_RDY_LIFT * sk; a._rdyCant = RH_RDY_CANT_N + (RH_RDY_CANT - RH_RDY_CANT_N) * sk; }
+      const rt = READY_SKIN[a.skin] || {};
+      a._rdyLift = rt.lift != null ? rt.lift : RH_RDY_LIFT * sk; a._rdyBlade = rt.blade || 0; a._rdyTuck = rt.tuck || 0;
+      a._rdyCant = RH_RDY_CANT_N + (RH_RDY_CANT - RH_RDY_CANT_N) * sk; }
     a._grip = captureGrip(rig.scene, a.armBones);   // (W10 R1B) support-hand palm + finger curl (rest pose, before any clip plays)
     // detect a defective slouching rig (Meshy shipped drifter at ~27°; the
     // rest sit at 1-5°) → straighten its torso every frame
@@ -3360,7 +3363,9 @@ function animate(W, a, dt) {
         // (F-D) the shouldered, cheeked hold is for ADS, firing and the 1.5 s after a shot (combat), and the reload starts from it; otherwise
         // the patrol READY (stock at the shoulder, muzzle down and across, the gun on the right of the torso), cross-faded over RH_RDY_S
         const rw = combat || a.weapon && a.weapon.state === "reloading" ? 0 : 1;
-        a._rdyK = a._rdyK == null ? rw : a._rdyK + K.clamp(rw - a._rdyK, -dt / RH_RDY_S, dt / RH_RDY_S);
+        // (W10 anim fix 6, item 3) ...up to the aim over RH_RDY_S, back down to the ready over RH_RDY_OUT_S: letting go of the aim moved the
+        // hand 0.035 m a frame standing, 0.054 m walking over the 0.2 s blend (fix6 meas6 xprobe; live, which has no ready, 0.001 / 0.025)
+        a._rdyK = a._rdyK == null ? rw : a._rdyK + K.clamp(rw - a._rdyK, -dt / RH_RDY_S, dt / RH_RDY_OUT_S);
         a._rdyE = smooth01(a._rdyK); }
       // (F-B) the support clavicle's retraction is taken back as soon as the hold is off for any reason (a swap, a throw, a reload clip...)
       if (layers && !(rhCls && a._rhW > 0)) rhRelease(a);
@@ -3369,7 +3374,17 @@ function animate(W, a, dt) {
       const rhK = rhCls && a._rhW > 0 ? a._rhW * a._rhW * (3 - 2 * a._rhW) : 0;
       // (W10 anim fix 5, V1) ...while aiming / firing only: at the patrol ready the clip keeps its own blade (turning the chest back put the
       // right shoulder and arm between the chase camera and the gun: fix5 sweep, soldier 0.58 -> 0.01 visible)
-      const rhBlade = rhK > 0 && a._pBlade ? Math.sign(a._pBlade) * Math.max(0, Math.abs(a._pBlade) - RH_BLADE) * rhK * (1 - (a._rdyE || 0)) : 0;
+      // (W10 anim fix 6, V1) ...and at the ready the chest turns FURTHER into the clip's own blade by the skin's a._rdyBlade (READY_SKIN):
+      // the right shoulder comes back toward the chase camera and the gun at it clears the torso (fix6 sweeps sw1-sw8, chasevis pixels:
+      // juggernaut run AR 0.23 -> 0.36, athlete idle LMG 0.74 -> 0.84-0.89; squaring it instead, -0.2 rad, dropped every skin to 0.11-0.59)
+      // (its side follows the clip's blade, faded in over the first RH_RDY_BSIDE rad of it: by the sign alone it flipped in one frame where a
+      // strafe / backpedal clip's blade crosses zero - the juggernaut's right elbow 12.4-13.0 deg a frame on strafeR / back / diag, fix6 t3)
+      // ...and only standing or moving forward (a._rdyBF, eased): on a strafe / backpedal / diagonal clip the extra turn took the
+      // juggernaut's right elbow 12.4-13.0 deg a frame (fix6 t4; 10.0-11.2 without it), and the chase camera's view it is for is the forward one
+      { const fw = gs < 0.7 ? 1 : K.clamp((Math.cos(Math.atan2(-a.vel.x, -a.vel.z) - a.yaw) - 0.5) / 0.4, 0, 1);
+        a._rdyBF = a._rdyBF == null ? fw : a._rdyBF + K.clamp(fw - a._rdyBF, -dt * RH_RDY_BF_RATE, dt * RH_RDY_BF_RATE); }
+      const rhBlade = rhK > 0 && a._pBlade ? (Math.sign(a._pBlade) * Math.max(0, Math.abs(a._pBlade) - RH_BLADE) * (1 - (a._rdyE || 0)) -
+        K.clamp(a._pBlade / RH_RDY_BSIDE, -1, 1) * a._rdyBlade * a._rdyBF * (a._rdyE || 0)) * rhK : 0;
       const pistolTwist = !useMixamoGun && !pistolRifle && armed && isPistol(a) && (combat || a._turnT >= 0) && gndClip && !a.gliding &&
         !a.swimming && !a.emoting && a.alive && !a.downed && !a.mantleT;
       if (!useMixamoGun && !pistolTwist && !pistolRifle) twist = K.clamp(aimDelta, -0.6, 0.6);
@@ -3433,9 +3448,12 @@ function animate(W, a, dt) {
       if (mode && a._armMode && mode !== a._armMode && a._armW > 0.02) {
         if (!(a._armFrom && a._armFrom !== mode && W.t - a._armXT < ARM_XFADE_S * 0.5)) a._armFrom = a._armMode;
         a._armXT = W.t;
+        // (W10 anim fix 6, item 3) ...and a pistol coming DOWN from the aim fades over ARM_XFADE_OUT_S (the gun lowered, not snapped: over
+        // 0.2 s the walking release moved the hand 0.063 m a frame, live 0.018 - fix6 xprobe soldier pistol ads_walk)
+        a._armXS = a._armFrom === "pistolAim" && a._ikNear && deskHi(W) ? ARM_XFADE_OUT_S : ARM_XFADE_S;
       }
       if (mode) a._armMode = mode;
-      const xu = a._armFrom ? K.clamp((W.t - a._armXT) / ARM_XFADE_S, 0, 1) : 1;
+      const xu = a._armFrom ? K.clamp((W.t - a._armXT) / (a._armXS || ARM_XFADE_S), 0, 1) : 1;
       if (xu >= 1) a._armFrom = null;
       const fromK = a._armFrom ? 1 - xu * xu * (3 - 2 * xu) : 0;
       // the muzzle-down share of the carry (barrelWeld): the low modes, cross-faded with the arms
@@ -3740,7 +3758,7 @@ function pistolLegs(a) {
 // (W10 anim fix 4) LOW_MODES: the muzzle pitch (rad, world) each low mode carries the gun at (pistolCompact: the researched 30-45 deg)
 const SPINE_RAMP_S = 0.15;   // (W10 anim fix 4) s: the gun chest's ease off / on at an air clip's start / end
 const SWING_RATE = 6;        // (W10 anim fix 4) rad/s: the free arm's swing input rate limit
-const ARM_XFADE_S = 0.2, IK_RAMP_S = 0.2, PISTOL_LOW_GS = 0.7, LOW_MODES = { lowReady: -0.55, pistolLow: -0.55, pistolCompact: -0.65 };
+const ARM_XFADE_S = 0.2, ARM_XFADE_OUT_S = 0.4, IK_RAMP_S = 0.2, PISTOL_LOW_GS = 0.7, LOW_MODES = { lowReady: -0.55, pistolLow: -0.55, pistolCompact: -0.65 };
 // (W10 anim fix 4, F-A) a pistol moving FORWARD (within ~55 deg of the aim; latched 0.57 / 0.4 so a diagonal does not flicker) keeps the
 // one-hand run carry; sideways and backwards take the compact two-hand ready
 const PFWD_ON = 0.57, PFWD_OFF = 0.4;
@@ -4089,7 +4107,9 @@ function smooth01(x) { return x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x); }
 // (W10 anim fix 3, F6) RIFLE HOLD: the weapon classes it shoulders, its ramp, the blade it leaves (rad), the stock's offset from the
 // RightArm joint toward the eye (m, the shoulder pocket), how far under the eye the bore runs aiming / at the ready (m), the pocket's
 // depth in front of the joint (m)
-const RH_CLS = { ar: 1, smg: 1, lmg: 1 }, RH_RAMP_S = 0.2, RH_BLADE = 0.75, RH_POCKET = 0.1, RH_EYE = 0.03, RH_READY = 0.09, RH_FWD = 0.03;
+// (W10 anim fix 6, item 5) + the pump shotgun: shouldered like the rifles (stock in the pocket, the support hand on the pump - weapons.js
+// GUARD_Z - the elbow under it); on the Mixamo clip's own hold its support elbow sat outside 120-160 deg on 14 of 15 sequences (check4)
+const RH_CLS = { ar: 1, smg: 1, lmg: 1, shotgun: 1 }, RH_RAMP_S = 0.2, RH_BLADE = 0.75, RH_POCKET = 0.1, RH_EYE = 0.03, RH_READY = 0.09, RH_FWD = 0.03;
 const RH_SIGHT = 0.05;   // m: the sight line over the bore (holder +Y)
 const RH_POLE_R = 0.6;  // m: the support elbow's pole, this far to the body's right of the point under the hand (the elbow tucks under the gun)
 const _rhF = new THREE.Vector3(), _rhR = new THREE.Vector3(), _rhU = new THREE.Vector3(), _rhS = new THREE.Vector3(), _rhE = new THREE.Vector3();
@@ -4097,8 +4117,15 @@ const _rhG = new THREE.Vector3(), _rhO = new THREE.Vector3(), _rhP = new THREE.V
 const _rhQ = new THREE.Quaternion(), _rhQ2 = new THREE.Quaternion(), _rhQ3 = new THREE.Quaternion();
 // rad: the support clavicle drawn back; m: the most the gun is drawn back (a short arm) / out (a short gun at the ready); rad: 105 deg interior
 const RH_RETRACT = 0.2, RH_BACK_MAX = 0.12, RH_OUT_MAX = 0.12, RH_ELBOW_MIN = 1.83, RH_EASE_K = 6, RH_POCKET_MAX = 0.11;
+// rad: (W10 anim fix 6, item 5) the elbow the support shoulder's retraction aims at (110 deg: aiming at 105 left the soldier's ADS walk at
+// 99.2 deg on average, the clip's shoulder bob outrunning the eased retraction), and its most (rad)
+const RH_ELBOW_RT = 1.92, RH_RETRACT_MAX = 0.28;
+// rad: (W10 anim fix 6, item 5) the pump shotgun's: its support elbow's least opening (123 deg; 132 deg left the juggernaut's hand 5.4 cm off the pump on the run, fix6 capture) and the most its support shoulder is drawn back
+const RH_ELBOW_SG = 2.15, RH_RETRACT_SG = 0.45;
 // m/s: the fastest the ready's shift toward the chest may change (rifleHold)
 const RH_SH_RATE = 2.4;
+// m: (W10 anim fix 6) the farthest the ready's butt centre sits from the RightArm joint (the pocket bar: 0.12)
+const RH_RDY_POCKET = 0.115;
 // (W10 anim fix 4, F-D) the PATROL READY out of combat: blend time (s), muzzle pitch (rad, world) and cant across the body (rad, + = to the
 // left); the butt's centre RH_RDY_IN in from the RightArm joint toward the chest (negative = out), RH_RDY_DROP under it (negative = up) and
 // RH_RDY_FWD in front (m).
@@ -4111,17 +4138,34 @@ const RH_SH_RATE = 2.4;
 // AR / LMG, idle / run; fix5 sweep5): the butt 2 cm further out (10 cm), the muzzle 3 deg down and 10 deg out to the RIGHT (cant -0.18: its front
 // half clears the shoulder seen from behind-right; barrel . aim = cos(-0.05) cos(-0.18) = 0.983, inside smg-dir's 0.98), the clip's own blade
 // kept: juggernaut AR 0.00 -> 0.28-0.32 visible (live 0.26), soldier 0.55 -> 0.84-0.87 (live 0.86).
+// s: (W10 anim fix 6) the ready coming back after the aim / a shot (rifleHold's own blend, eased: a lowered gun, not a snap)
+const RH_RDY_OUT_S = 0.4;
 const RH_RDY_S = 0.2, RH_RDY_PITCH = -0.05, RH_RDY_CANT = -0.18, RH_RDY_IN = -0.10, RH_RDY_DROP = -0.03, RH_RDY_FWD = 0.04;
 // m: the extra lift of the ready on a broad frame, full from a shoulder span (LeftArm - RightArm joints) of RH_RDY_SPAN0 + RH_RDY_SPANW up
 // (soldier 0.39, wraith 0.38, juggernaut 0.44 m: 5 cm higher; athlete 0.29, viper 0.30 m: none - their short support arm pulls the gun in)
 const RH_RDY_LIFT = 0.05, RH_RDY_SPAN0 = 0.30, RH_RDY_SPANW = 0.08;
+// (W10 anim fix 6, V1) the PATROL READY TUNED PER SKIN (like HAND_AIM_ROT / SKIN_STRIDE): lift (m, replaces the span's RH_RDY_LIFT), blade
+// (rad, the chest turned further into the clip's own blade at the ready), tuck (0..1, the firing elbow's pole moved from 0.3 m out to
+// RH_RDY_TUCK). Measured with chasevis's pixels from the chase camera (fix6 sweeps sw1-sw8, AR / LMG idle + run): one setting does not
+// serve every skin - the extra blade that shows the juggernaut's and the athlete's gun (juggernaut run AR 0.23 -> 0.36, athlete idle LMG
+// 0.74 -> 0.91) hides the soldier's (idle AR 0.86 -> 0.83) and the viper's (0.89 at 0.1 rad -> 0.84 at 0.15); the tuck helps the
+// juggernaut only (viper -0.03)
+const READY_SKIN = {
+  juggernaut: { lift: 0, blade: 0.2, tuck: 1 },
+  athlete: { blade: 0.4 },
+  viper: { blade: 0.1 },
+};
+// rad: the clip blade over which the extra blade's side fades in; /s: the rate the extra blade follows the move's direction (a._rdyBF)
+const RH_RDY_TUCK = -0.15, RH_RDY_BSIDE = 0.35, RH_RDY_BF_RATE = 3;
 // rad: the ready's cant on a NARROW frame (span RH_RDY_SPAN0 and under; RH_RDY_CANT from SPAN0 + SPANW up): the short support arm pulls the gun
 // in toward the chest there, and the broad frame's 10 deg out turned its front half back behind the shoulder (fix5 sweep J/F, chasevis AR:
 // athlete 0.83 -> 0.86 idle, viper 0.80 -> 0.85 idle, 0.68 -> 0.84 run; butt <= 0.108 m off the joint, support hand on the guard)
 const RH_RDY_CANT_N = -0.10;
 // m: the most a short support arm brings the ready's gun in toward the chest; rad: the most the support clavicle rolls forward for the reach;
 // m: the head's centre (Head + 7 cm) kept this far from the top of the gun's rear half, RH_RDY_TOP over the bore (rifleHold)
-const RH_RDY_SHIFT = 0.16, RH_PROTRACT = 0.35, RH_RDY_HEAD = 0.2, RH_RDY_TOP = 0.09;
+// (W10 anim fix 6, V1) RH_PROTRACT 0.35 -> 0.6: the support shoulder reaches further for a short arm's guard, so less of the shift toward the
+// chest is needed (fix6 sw1: viper idle AR 0.82 -> 0.89, athlete idle LMG 0.74 -> 0.78)
+const RH_RDY_SHIFT = 0.16, RH_PROTRACT = 0.6, RH_RDY_HEAD = 0.2, RH_RDY_TOP = 0.09;
 /** (W10 anim fix 4, F-B) the rifle hold is off this frame: the support clavicle's retraction (rifleHold) taken back - a clip that does not
  *  key the clavicle otherwise kept it drawn back after the hold stopped - and the eased state reset */
 function rhRelease(a) {
@@ -4158,6 +4202,7 @@ function rifleHold(a, bodyFwdYaw, twist, w, dt) {
   if (rd > 0) {
     const by = bodyFwdYaw + twist, fx = -Math.sin(by), fz = -Math.cos(by);
     // (W10 anim fix 5, V1) a broad frame (shoulder span over RH_RDY_SPAN0) carries it up to RH_RDY_LIFT higher: over its wider shoulder line
+    // (W10 anim fix 6) ...per skin (READY_SKIN: not the juggernaut, whose butt it took 0.124-0.136 m off the joint)
     _rhO.copy(_rhS); _rhO.x += fz * RH_RDY_IN + fx * RH_RDY_FWD; _rhO.z += -fx * RH_RDY_IN + fz * RH_RDY_FWD; _rhO.y -= RH_RDY_DROP - a._rdyLift;   // left = (fz, -fx)
     // (holder +X is the shooter's LEFT under the weld: -_rhR)
     _rhO.addScaledVector(_rhR, ud.butt.x).addScaledVector(_rhU, -hb).addScaledVector(_rhF, -ud.butt.z);
@@ -4179,17 +4224,20 @@ function rifleHold(a, bodyFwdYaw, twist, w, dt) {
     _rhP.copy(_rhG).addScaledVector(_rhR, -gd.x).addScaledVector(_rhU, gd.y).addScaledVector(_rhF, gd.z);
     B.lArm.getWorldPosition(_rhO); B.lFore.getWorldPosition(_rhE);
     const l1 = _rhO.distanceTo(_rhE), l2 = _rhE.distanceTo(B.lHand.getWorldPosition(_rhQV));
-    const r0 = (l1 + l2) * 0.86, kw = (l1 + l2) * 0.08, want = Math.sqrt(l1 * l1 + l2 * l2 - 2 * l1 * l2 * Math.cos(RH_ELBOW_MIN));
+    // (W10 anim fix 6, item 5) the pump shotgun's support elbow opens to RH_ELBOW_SG (the researched push-pull hold: 120-160 deg)
+    const sg = (K.WEAPONS[a.weapon.id] || {}).cls === "shotgun", elMin = sg ? RH_ELBOW_SG : RH_ELBOW_MIN;
+    const r0 = (l1 + l2) * 0.86, kw = (l1 + l2) * 0.08, want = Math.sqrt(l1 * l1 + l2 * l2 - 2 * l1 * l2 * Math.cos(elMin));
     let d = _rhP.distanceTo(_rhO);
     // the support shoulder drawn back (the clavicle about world up) where the handguard sits too close for the elbow to open to
     // RH_ELBOW_MIN (the left shoulder sat 0.27 m ahead of the right on the bladed clips); never on a long-armed reach
     // (eased at RH_EASE_K: the run clip's shoulder bob otherwise switched it on and off, the support elbow 12 deg a frame)
     const ek = Math.min(1, dt * RH_EASE_K);
-    a._rhRt = (a._rhRt || 0) + (K.clamp((want - d) / 0.05, 0, 1) - (a._rhRt || 0)) * ek;
+    const wantR = Math.sqrt(l1 * l1 + l2 * l2 - 2 * l1 * l2 * Math.cos(sg ? RH_ELBOW_SG + 0.09 : RH_ELBOW_RT));
+    a._rhRt = (a._rhRt || 0) + (K.clamp((wantR - d) / 0.05, 0, 1) - (a._rhRt || 0)) * ek;
     // (W10 anim fix 4, F-D) ...and at the ready, where the handguard sits past the support arm's reach (the gun out at the shoulder's edge,
     // seen from the chase camera), the support shoulder rolled FORWARD (up to RH_PROTRACT), as a shooter reaches with it
     a._rhPt = (a._rhPt || 0) + (K.clamp((d - r0) / 0.08, 0, 1) * rd - (a._rhPt || 0)) * ek;
-    const sh = B.lArm.parent, rt = RH_RETRACT * w * a._rhRt - RH_PROTRACT * w * a._rhPt, u = sh && sh.userData;
+    const sh = B.lArm.parent, rt = (sg ? RH_RETRACT_SG : RH_RETRACT_MAX) * w * a._rhRt - RH_PROTRACT * w * a._rhPt, u = sh && sh.userData;
     // non-compounding (like addLeanTwist): a clip that does not key the clavicle leaves last frame's write in place - take it back first
     if (u && u._rtPost && sh.quaternion.equals(u._rtPost)) { sh.quaternion.copy(u._rtPre); u._rtPost = null; }
     if (Math.abs(rt) > 0.001 && sh && sh.isBone && sh.parent) {
@@ -4251,9 +4299,20 @@ function rifleHold(a, bodyFwdYaw, twist, w, dt) {
     a._rhSh = a._rhShW === wid ? a._rhSh + K.clamp(shT - a._rhSh, -RH_SH_RATE * dt, RH_SH_RATE * dt) : shT; a._rhShW = wid;
     if (a._rhSh > 0) { const by = bodyFwdYaw + twist; _rhQV.set(-Math.cos(by), 0, Math.sin(by)); _rhG.addScaledVector(_rhQV, a._rhSh); }
   }
+  // (W10 anim fix 6) at the ready the butt's centre never leaves the pocket: whatever the offsets above added up to (the broad frame's lift,
+  // the push out, the clip's shoulder bob), it is pulled back to RH_RDY_POCKET from the RightArm joint (the juggernaut's ready sat
+  // 0.124-0.136 m off it: fix6 sweep sw1, bar 0.12)
+  if (rd > 0) {
+    _rhQV.copy(_rhG).addScaledVector(_rhR, -ud.butt.x).addScaledVector(_rhU, hb).addScaledVector(_rhF, ud.butt.z).sub(_rhS);
+    const bl = _rhQV.length();
+    if (bl > RH_RDY_POCKET) _rhG.addScaledVector(_rhQV, -(1 - RH_RDY_POCKET / bl) * rd);
+  }
   // the hand bone sits off the holder's origin: aim the BONE so the holder's origin lands on the grip target (two passes: the offset turns
   // with the hand)
-  _rhP.copy(_rhS).addScaledVector(_rhR, 0.3).addScaledVector(_rhF, -0.15); _rhP.y -= 0.45;   // pole: the firing elbow down and out
+  // pole: the firing elbow down and out; (W10 anim fix 6, V1) at the ready the elbow tucks in under the gun on the skins READY_SKIN says (RH_RDY_TUCK): out
+  // at the shoulder's side it covered the gun's receiver from the chase camera (fix6 sw1: juggernaut LMG run 0.27 -> 0.39; on the viper it
+  // covered more of it, -0.03; a pole straight under the joint instead, fix6 t2: the same right-elbow rate, run AR 0.36 -> 0.30)
+  _rhP.copy(_rhS).addScaledVector(_rhR, 0.3 + (RH_RDY_TUCK - 0.3) * rd * a._rdyTuck).addScaledVector(_rhF, -0.15); _rhP.y -= 0.45;
   for (let pass = 0; pass < 2; pass++) {
     a.hand.updateWorldMatrix(true, false);
     a.handBone.getWorldPosition(_rhO);

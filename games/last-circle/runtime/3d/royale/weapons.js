@@ -270,6 +270,10 @@ async function buildProtos(W) {
 // 75-87 deg (researched 100-160), the hand pulled back to the shoulder
 const GUARD_F = { smg: 0.72, ar: 0.62, burst: 0.62, lmg: 0.5, dmr: 0.42, shotgun: 0.5, sniper: 0.44, glauncher: 0.45 };
 const GUARD_ZMIN = 0.16, GUARD_ZMAX = 0.36;
+// (W10 anim fix 6, item 5) m from the grip: the pump shotgun's support wrist, now that the gun is shouldered (player.js rifleHold): the palm on
+// the pump just ahead of its centre (pump z 0.32-0.52, the researched 'forend centre + 0-3 cm'); a short arm's reach is met by the hold's
+// draw-back along the bore, not by sliding the hand back
+const GUARD_Z = { shotgun: 0.42 };
 // (W10 anim fix 2) the support hand on the bolt gun's FOREND, measured from the held model (holder space, metres from the grip): the
 // sniper's forend runs 0.26-0.52 and a bolt gun is held nearer the action than a C-clamp: palm ~0.36 (was ~0.33, the elbow at
 // 95-100 deg on the soldier). The shotgun stays at the cap (wrist 0.33, palm 0.35-0.38 on the pump's rear half, z 0.32-0.52): the
@@ -302,7 +306,7 @@ function measureProto(g, id) {
     // -0.085, -0.02: 8.5-9 cm apart, the support arm at full stretch in the isosceles aim)
     guard = new THREE.Vector3(0.03, -0.035, -0.03);
   } else {
-    const zg = Math.min(GUARD_ZMAX, Math.max(GUARD_ZMIN, (GUARD_F[id] || 0.5) * zMax));
+    const zg = GUARD_Z[id] || Math.min(GUARD_ZMAX, Math.max(GUARD_ZMIN, (GUARD_F[id] || 0.5) * zMax));
     // the underside of the handguard at that station (the narrow central band, so a side rail or bipod leg does not count)
     let yLo = 1e9, cx = 0, cn = 0;
     for (let i = 0; i < pts.length; i += 3) {

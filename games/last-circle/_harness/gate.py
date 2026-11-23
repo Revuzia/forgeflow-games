@@ -774,8 +774,11 @@ NEGATIVE = [
     # ---- W10 anim fix 4 (F-B): the arm / gun layers gated hard by onGround again must FAIL the kerb row (a 20 cm step-off pops the hand)
     ("w10_gunhold-plant-kerb-pop", "p23/gunhold.py", ["--skins", "soldier", "--plant", "kerb-pop", "--parts", "kerb"], 1800),   # kerb
     # ---- W10 anim fix 5 (G2): the transition pops and the chase-camera visibility, each planted fault MUST FAIL its own row
-    ("w10_gunhold-plant-inert-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "inert-off", "--parts", "trans"], 1800),   # swap-pop + ads-pop
-    ("w10_gunhold-plant-air-hold-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "air-hold-off", "--parts", "trans"], 1800),   # land-pop
+    # (W10 anim fix 6) each transition control measures ONLY its own event (--trans), so the FAIL must come from its own row: fix5's
+    # air-hold-off (which also switches the inertial blend off) failed swap-pop / ads-pop and PASSED land-pop on one run (fix5 gh_plant2)
+    ("w10_gunhold-plant-inert-off-swap", "p23/gunhold.py", ["--skins", "soldier", "--plant", "inert-off", "--parts", "trans", "--trans", "swap"], 1800),   # swap-pop
+    ("w10_gunhold-plant-inert-off-ads", "p23/gunhold.py", ["--skins", "soldier", "--plant", "inert-off", "--parts", "trans", "--trans", "ads"], 1800),   # ads-pop
+    ("w10_gunhold-plant-air-hold-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "air-hold-off", "--parts", "trans", "--trans", "land"], 1800),   # land-pop
     ("w10_gunhold-plant-ready-hidden", "p23/gunhold.py", ["--skins", "soldier", "--plant", "ready-hidden", "--parts", "chase"], 1800),   # chase
     ("w10_lootlook-plant-box-ammo", "p23/lootlook.py", ["--plant", "box-ammo"], 3600),           # loot-shapes (primitive ammo)
     ("w10_lootlook-plant-same-grenade", "p23/lootlook.py", ["--plant", "same-grenade"], 3600),   # loot-shapes (frag vs smoke IoU)
