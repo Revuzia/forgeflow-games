@@ -1545,7 +1545,7 @@ export function showMenu(W, startMatch) {
   const teamBtns = TEAM_OPTS.map(([id, lbl]) => {
     const b = h("button", null, lbl, teamRow);
     b.dataset.team = id;
-    b.title = id === "solo" ? "Every player for themselves" : "You and " + (TEAM_MODES[id] - 1) + " bot teammate" + (TEAM_MODES[id] > 2 ? "s" : "") + " — knocked players can be revived";
+    b.title = id === "solo" ? "Every player for themselves" : "You and " + (TEAM_MODES[id] - 1) + " teammate" + (TEAM_MODES[id] > 2 ? "s" : "") + " — knocked players can be revived";
     b.onclick = () => { selTeam = id; W.settings.teamMode = id; save(W); W.events.emit("uiClick"); paintTeam(); };
     return b;
   });
@@ -5036,7 +5036,7 @@ function wireEvents(W) {
   // local continuation — the announcement is the difference between "the game
   // broke" and "the host left, keep playing"
   W.events.on("hostLost", (converted) => {
-    const sub = "MATCH CONTINUES OFFLINE — " + converted + " PLAYERS NOW BOT-CONTROLLED";
+    const sub = "THE MATCH CONTINUES — KEEP FIGHTING";   // (player-facing text never says bots / AI / CPU outside Practice)
     // A DEAD player (spectating) never saw this: announce() drops everything below victory priority while the death banner owns the band
     // (parity audit: guest spectating, host left, no banner). The news still matters to them - the match they watch just changed hands - so it
     // goes on the line under the death banner (flashMsg, held longer) and into the chat log, where it stays readable.

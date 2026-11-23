@@ -128,8 +128,8 @@ export function leftOutLine(name, peerGv, hostGv) {
   const nm = String(name == null || name === "" ? "A player" : name).slice(0, 24);
   const g = normGv(peerGv), h = normGv(hostGv);
   return g < h
-    ? `${nm} is not in this match: their game is out of date (version ${g}, this room runs version ${h}). A bot has their place; they need to reload the page.`
-    : `${nm} is not in this match: this room runs version ${h} and they run version ${g}. A bot has their place; reload this page to match them.`;
+    ? `${nm} is not in this match: their game is out of date (version ${g}, this room runs version ${h}). Their spot is filled; they need to reload the page.`
+    : `${nm} is not in this match: this room runs version ${h} and they run version ${g}. Their spot is filled; reload this page to match them.`;
 }
 
 // ── MAP FALLBACK: pure part (contract C-FALLBACK) ─────────────────────────────────────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ export function fallbackLine(name, host) {
   const nm = String(name == null || name === "" ? "A player" : name).slice(0, 24);
   return host
     ? `${nm} (the host) had to leave: part of their map failed to load, so they would have played a different world. The match carries on offline.`
-    : `${nm} left the squad: part of their map failed to load, so they would have played a different world. A bot has their place; they need to reload the page.`;
+    : `${nm} left the squad: part of their map failed to load, so they would have played a different world. Their spot is filled; they need to reload the page.`;
 }
 
 /** Does the world this page BUILT differ from the one it advertised? `advertised` = the MAP_GEN_VERSION it sent in its hello, `seen` = what the
@@ -1161,7 +1161,7 @@ function openLobby(W, sel) {
   };
   const paceRow = mkPick("data-net-pace", "MODE");
   const modeRow = mkPick("data-net-teammode", "TEAMS");       // (the attribute keeps the resolved team SIZE mode: solo / duo / trio / squad)
-  const PACE_LABEL = { standard: "STANDARD", quick: "QUICK · 4 MIN" };
+  const PACE_LABEL = { standard: "STANDARD", quick: "QUICK · 5 MIN" };
   const TEAMS_LABEL = { squad: "ALL ON ONE TEAM", two: "TWO TEAMS", ffa: "EVERYONE FOR THEMSELVES" };
   const pickBtn = (pk, val, text, onPick) => {
     const b = document.createElement("button");
