@@ -618,6 +618,9 @@ export function judgeReclaim(c) {
 // "host lost" after the guest's 8 s silence rule. The relay's presence list (ffg_cfroom.js "peer" ids) says who is still connected to the room.
 /** Before a player's FIRST live tick it keeps its slot while it is present in the room, up to this long after the match went live. */
 export const FIRST_TICK_CAP_MS = 240000;
+/** Hard ceiling on a guest waiting for a host that has never sent a live tick, however many "loading" beats arrive (a host whose load hangs
+ *  but whose page still runs would otherwise hold its guests forever; the slowest honest load measured was 662 s under CPU x4). */
+export const FIRST_TICK_HARD_CAP_MS = 900000;
 /** A guest waits this long after the host's last packet while the host is still present in the room (a stalled host page, not a gone one). */
 export const HOST_SILENT_PRESENT_MS = 45000;
 /** The old guest rule, kept for when this page cannot see presence (its own relay socket is down: the list is stale). */
@@ -3035,6 +3038,7 @@ export function update(W, dt) {
     const hostBeat = hp && S.loadingFrom && S.loadingFrom[hp] ? S.loadingFrom[hp] : 0;
     const v = hostSilenceVerdict({ presenceLive, hostGoneMs: hostGone ? now - S.hostAbsentSince : null, silentMs: S.hostSeen ? now - S.hostSeen : null,
       sinceLiveMs: S.matchLiveAt ? now - Math.max(S.matchLiveAt, hostBeat) : 0 });
+    if (!S.hostSeen && S.matchLiveAt && now - S.matchLiveAt > FIRST_TICK_HARD_CAP_MS) { S.hostLostWhy = "never started"; hostLost(W); return; }
     if (v === "lost") { S.hostLostWhy = hostGone ? "left the room" : "silent"; hostLost(W); return; }
     showHostWait(W, v === "wait");
   }
