@@ -293,6 +293,7 @@ try {
     await page.evaluate(() => window.__WH__.pause()); await step(1.5);
     check(`${frame}: three squishies out`, (await count()) === 3, `${await count()} out`);
 
+    let chipPairDone = false;
     for (const place of PLACES) {
       const def = DEFS[place], lay = tall && def.tall ? def.tall : def, B = lay.bounds;
       const home = place === 'home', cx = B.x, cz = B.z, hx = home ? (B.r ?? HOME_R) : B.hx, hz = home ? (B.r ?? HOME_R) : B.hz;
@@ -458,8 +459,40 @@ try {
         const chips = () => page.evaluate(() => [...document.querySelectorAll('.rm-chip')].filter((c) => !c.hidden).map((c) => { const r = c.getBoundingClientRect(); return { label: c.getAttribute('aria-label'), x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height }; }));
         await shot(`${place}_chips`);
         await sleep(300);
-        const ch = await chips(), vE = await view(), bE = await bodies();
-        const offNow = bE.filter((b) => !(b.x > 0 && b.x < W && b.y > bd.top && b.y < bd.bottom)).length;
+        let ch = await chips(), vE = await view(), bE = await bodies();
+        // (R15_CLOSE, RE-SPECIFIED with its reason: the row counted a squishy as outside the picture as soon as its MIDDLE left the frame or the band; the game
+        // shows a chip once it is half hidden or more (ui/later-room.ts: the middle 10 px past a side, 18 px past the band). A squishy in between read
+        // "off screen 1, chips none" (Rainleaf, phone). The row now counts by the game's own written rule.)
+        let offNow = bE.filter((b) => !(b.x > -10 && b.x < W + 10 && b.y > bd.top - 18 && b.y < bd.bottom + 18)).length;
+        // (R15_CLOSE: TWO OFF THE SAME SIDE (the overlapping chips of Lanternroof): at each place that is not Home, the two squishies
+        // that are not nearest the view's middle are set close together far off one side (by the physics' own placeAt), and their chips must stand apart)
+        // (at EVERY place: the close view by itself does not always leave a squishy outside the picture (Lanternroof, phone: "off screen 0, chips none"), and
+        // then the chip row below had nothing to test; with two set off one side it always has)
+        if (!home) {
+          chipPairDone = true;
+          const res = await page.evaluate(async ([px, pz]) => {
+            const pm = await import('/src/physics/props.ts');
+            const orig = pm.PropWorld.prototype.beginFrame;
+            let W0 = null; pm.PropWorld.prototype.beginFrame = function () { W0 = this; return orig.call(this); };
+            window.__WH__.step(1 / 60, 2);
+            pm.PropWorld.prototype.beginFrame = orig;
+            if (!W0) return 'no world';
+            const bs = W0.bodies.filter((b) => !b.chunk && !b.capFlat);
+            if (bs.length < 3) return 'bodies ' + bs.length;
+            const st = window.__WH__.shell.stageObj(), o = new Float32Array(6); st.roomView(o);
+            bs.sort((a, b) => Math.hypot(a.center.x - o[0], a.center.z - o[1]) - Math.hypot(b.center.x - o[0], b.center.z - o[1]));
+            bs[1].placeAt({ x: px, y: bs[1].center.y, z: pz - 0.55 }, { x: 0, y: 0, z: 0 });
+            bs[2].placeAt({ x: px, y: bs[2].center.y, z: pz + 0.55 }, { x: 0, y: 0, z: 0 });
+            window.__WH__.step(1 / 60, 30);
+            return 'placed';
+          }, [vE && vE[0] > cx ? cx - hx + 0.9 : cx + hx - 0.9, vE ? vE[1] : cz]);   // (0.9 m inside the side: at 0.5 m the camera, kept inside the room, could not bring the squishy fully into a phone's frame, and its chip stayed after the tap: Cloudloft)
+          await page.evaluate(() => window.__WH__.resume()); await sleep(900); await page.evaluate(() => window.__WH__.pause()); await step(0.3); await sleep(300);
+          const cp = await chips();
+          const apart = cp.every((c, a) => cp.every((d, b) => a === b || Math.abs(c.x - d.x) >= 44 || Math.abs(c.y - d.y) >= 44));
+          check(`${label}: two squishies off the SAME side of the picture: their chips do not lie on each other (44 px apart at least)`, res === 'placed' && cp.length >= 2 && apart, JSON.stringify({ res, chips: cp.map((c) => [c.label, Math.round(c.x), Math.round(c.y)]) }));
+          ch = cp; vE = await view(); bE = await bodies();
+          offNow = bE.filter((b) => !(b.x > -10 && b.x < W + 10 && b.y > bd.top - 18 && b.y < bd.bottom + 18)).length;
+        }
         let focus = null;
         if (ch.length) {
           const live0 = await page.evaluate(() => window.__liveLog.length);

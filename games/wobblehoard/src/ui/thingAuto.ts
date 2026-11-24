@@ -26,15 +26,40 @@ export function attachThingAuto(root: HTMLElement, canvas: HTMLCanvasElement, ho
   const layer = h('div', { class: 'thing-auto-layer' });
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2;';
   const btns: HTMLButtonElement[] = [];
+  let held: { id: number; x: number; y: number; given: boolean } | null = null, noClick = false;
+  const sceneTouches = new Set<number>();
+  const give = (): void => {
+    if (!held || held.given) return;
+    held.given = true; noClick = true;
+    try { canvas.dispatchEvent(new PointerEvent('pointerdown', { pointerId: held.id, pointerType: 'touch', clientX: held.x, clientY: held.y, button: 0, buttons: 1, bubbles: true, cancelable: true })); } catch { /* an old browser: the chip keeps its finger */ }
+  };
+  const onSceneDown = (e: PointerEvent): void => { if (e.pointerType !== 'touch' || e.target !== canvas || !e.isTrusted) return; if (held && !held.given) give(); sceneTouches.add(e.pointerId); };
+  const onSceneUp = (e: PointerEvent): void => { sceneTouches.delete(e.pointerId); if (held && held.id === e.pointerId) held = null; };
+  window.addEventListener('pointerdown', onSceneDown, true);
+  window.addEventListener('pointerup', onSceneUp, true);
+  window.addEventListener('pointercancel', onSceneUp, true);
   /** (round 7) each chip's spot last placement (its NEAR index, -1 none): kept while it stays free, so a squishy walking by moves a chip once, not to and fro */
   const spotOf = new Int8Array(MAX).fill(-1);
   for (let i = 0; i < MAX; i++) {
     const b = h('button', { class: 'k-chip thing-auto', attrs: { type: 'button', 'aria-pressed': 'false', hidden: '' } }, icon('reset'), h('span', { class: 'thing-auto-label', text: 'Auto' }));
     b.style.cssText = 'position:absolute;left:0;top:0;pointer-events:auto;white-space:nowrap;';
     // (the press never reaches the canvas: the toy under the chip is not poked)
-    b.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+    b.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      // (R15_CLOSE: a PINCH with a finger on this chip. The chip is a DOM button over the scene: its finger never reached the canvas, so the canvas saw
+      // one finger of the two (the published one-finger turn) and the view turned instead of zooming (R15_FIX F7, browser_rooms Cloudloft and Rainleaf on a
+      // phone). A finger on a chip is remembered; when a second finger is on the scene (already, or within the press) the chip's finger is handed to the
+      // canvas as a finger of its own (the canvas takes its pointer capture) and this press is no tap: the chip does not toggle.)
+      if (e.pointerType !== 'touch') return;
+      held = { id: e.pointerId, x: e.clientX, y: e.clientY, given: false };
+      noClick = false;
+      if (sceneTouches.size > 0) give();
+    });
+    for (const t of ['pointerup', 'pointercancel'] as const) b.addEventListener(t, (e) => { if (held && held.id === e.pointerId) held = null; });
+    b.style.touchAction = 'none';
     b.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (noClick) { noClick = false; return; }
       const k = Number(b.dataset.k), id = b.dataset.thing ?? '';
       if (!Number.isFinite(k)) return;
       const on = b.getAttribute('aria-pressed') !== 'true';
@@ -96,5 +121,5 @@ export function attachThingAuto(root: HTMLElement, canvas: HTMLCanvasElement, ho
     }
   };
   const timer = window.setInterval(place, 250);
-  return { el: layer, destroy() { window.clearInterval(timer); layer.remove(); } };
+  return { el: layer, destroy() { window.clearInterval(timer); layer.remove(); window.removeEventListener('pointerdown', onSceneDown, true); window.removeEventListener('pointerup', onSceneUp, true); window.removeEventListener('pointercancel', onSceneUp, true); } };
 }

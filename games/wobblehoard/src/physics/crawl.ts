@@ -229,7 +229,11 @@ export class Crawl {
       }
     }
     if (!blk) this.fr = null;
-    if (b.metrics.steering !== (blk && !stuck)) b.metrics.steering = blk && !stuck;
+    // (R15_CLOSE, SU-05: stopped at a friend that is on its target it WAITS (the host is told as for the way round) while it is still over 0.6 m from the
+    // target: LIFE's blocked rule ended such a walk after 2 s, the next plan met the same friend, and a squishy switched plans every 2 s without moving
+    // (Frostbell: a puddlo in the Steam Pool, 4 plans in 8 s, 0.7 cm). Within 0.6 m LIFE's rule still ends the walk: there "near enough still acts".)
+    const told = blk && (!stuck || tl > 0.6);
+    if (b.metrics.steering !== told) b.metrics.steering = told;
     this.was = this.blk; this.blk = blk;
     if (!real && fx * fx + fz * fz < 0.25) { fx = hx; fz = hz; }
     const fl = Math.sqrt(fx * fx + fz * fz);

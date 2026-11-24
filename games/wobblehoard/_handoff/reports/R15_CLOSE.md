@@ -283,3 +283,23 @@ Scratch: `<scratchpad>/close/` (can be wiped). If this file is all you have: eve
   not looked into. THE FULL PHONE RUN WAS NOT REPEATED after this last row correction. PRODUCT, still open: a pinch with a finger on an AUTO chip (DOM) is
   not a pinch (R15_FIX F7).
 - Pictures: `shots_facing/after_*` retaken, jellygel and firmsilicone (opaque: the turn away shows without eyes through the body).
+
+## AFTER THE VERIFIER'S SNAPSHOT (third brief; each change small; nothing committed by me)
+| file | lines (about) | what |
+|---|---|---|
+| `src/physics/crawl.ts` | 232-236 | SU-05: a walker stopped at a friend that is ON its target is reported as steering (it WAITS) while over 0.6 m from the target; within 0.6 m LIFE's blocked rule still ends the walk |
+| `src/ui/thingAuto.ts` | 31-41 (state + window listeners), 44-58 (the chip's pointerdown / up / click), the last line (destroy) | a finger on an AUTO chip is handed to the canvas when a second finger makes it a pinch; that press does not toggle the chip |
+| `_harness/browser_rooms.mjs` | the chip row (about 461-500) and one `let chipPairDone` before the places loop | the row counts "outside the picture" by the game's own rule; a new check: two squishies set off the same side, their chips 44 px apart |
+| `_harness/shellview/node_checks.ts`, `_harness/browser_facing.mjs` | (before the snapshot, see FOLLOW-UP FINAL) | |
+### T-1 SU-05, the new Frostbell flip-flop: CAUSE FOUND, fixed
+- Reproduced alone (`parties=puddlo+boingle places=hearthlog,ripple,frostbell`, traced): a puddlo in the Steam Pool planned a walk to a spot 0.5 m from
+  where Dollop stood; physics stopped it at once (a friend on the target, the new stop); LIFE's blocked rule ended the walk 2 s later; the next plan
+  met the same friend: 4 plans in 8 s, 0.7 cm moved. With the push it had moved, so the row never saw it. Not the beside-spot retarget.
+- Fix (crawl.ts): stopped at a friend on its target and still over 0.6 m from it, the walker waits (told to the host as the way round is). The same three
+  visits after: all selfuse checks passed.
+### T-2 a pinch with a finger on an AUTO chip: fixed, checked by real touch input
+- Cloudloft, 390 x 844, CDP touch (`<scratchpad>/close/pinchchip.out`): one finger on the Kite Swing's AUTO chip, the second 60 px beside it, spread
+  120 px, twice: zoom target 0 -> 0.528 -> 0.45, view factor 0.62 -> 0.469, yaw 0 / 0 / 0 (before: the view turned), the chip not toggled; a plain tap on
+  the chip afterwards toggles it (aria-pressed true).
+### T-3 the chip slide seen in a browser
+- Lanternroof, phone: two squishies set 1.1 m apart far off one side: chips at (360, 382) and (360, 332): 50 px apart (the new check, green).
