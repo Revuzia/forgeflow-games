@@ -17,7 +17,7 @@ stand-in below (the squad transport, esm.sh): the run never touches Supabase or 
 cold cache). N (the build's MAP_GEN_VERSION) is read from the served maps.js. Two extra rows judge the mode itself: the first document is the 200 the URL names, and
 no request left the build's own origin except the stand-in (a request to supabase.co is aborted by the rig AND fails the row).
 
-THE RELAY. Last Circle squads ride Supabase Realtime (ffg_netplay.js imports supabase-js from esm.sh); the repo has no local Last Circle relay
+THE RELAY. (Friends port 2026-11-22: squads now ride the Cloudflare relay, ffg_cfroom.js; the stand-in is _harness/fake_relay.js.) Before: Supabase Realtime (ffg_netplay.js imports supabase-js from esm.sh); the repo had no local Last Circle relay
 (DYEFIELD's online.py drives its own wrangler Worker, not this transport). So this is the cheapest honest harness: the esm.sh module is answered
 by a ~60-line stand-in (FAKE_SB below) whose channels are BroadcastChannels between the two pages of ONE browser context. Everything above the
 transport is the real code: ffg_netplay.js, net.js, the lobby DOM, the buttons (real mouse clicks), MAP_GEN_VERSION read from the real maps.js.
@@ -34,9 +34,9 @@ CASES (N = the working copy's MAP_GEN_VERSION, read from maps.js):
                   host alone; the guest never starts a match
   newer           guest forced to N+1: refused, told to ask the host to reload (no reload button)
   v1              guest's maps.js has no MAP_GEN_VERSION (value undefined) = version 1: same as older
-  preguard-guest  guest = the build committed at --old-rev (60b854d0, no guard): the host (N) leaves it out; the old guest is told "room is full"
+  preguard-guest  guest = the build committed at --old-rev (60b854d0, no guard; Supabase transport): it never reaches the new (relay) host's room
                   by its own (unchanged) code and starts no match
-  preguard-host   host = the old build, guest = N: the guest refuses at the old host's START (no gv on it), says why, sends `refuse` and the `bye`
+  preguard-host   host = the old build (Supabase), guest = N (relay): the guest's join finds no room (4004, plain words); the old host plays alone
                   that frees the slot the old host gave it
   refuse-live     both N, START, then the guest sends a late `refuse` (a guest that learned its version only after START): the host's chat log
                   (W.pushChat) and W.net.refusals say who and why, and the `squadRefused` event fires
@@ -77,7 +77,16 @@ DEFAULT_CASES = [c for c in ALL_CASES if c not in ("older-full", "fallback-full"
 COLD_V = "424242"            # the ?v= both pages of `same` are loaded with (the build's own is different)
 
 # ─────────────────────────────── the relay stand-in ───────────────────────────────
-FAKE_SB = r"""
+# FRIENDS PORT (2026-11-22): the squad transport is the Cloudflare relay (runtime/net/ffg_cfroom.js -> workers/last-circle-net), no longer
+# supabase-js from esm.sh. The stand-in is now _harness/fake_relay.js, an init script that replaces window.WebSocket for the relay's room
+# URLs with a BroadcastChannel socket speaking the relay's wire (welcome / presence / owner hand-over / err 4004 / directed `to`); the relay's
+# GET /health is answered by the rig (RELAY_HEALTH). It logs the same window.__SQ_LOG__ rows the old stand-in did.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_relay.js"), encoding="utf-8") as _fh:
+    FAKE_RELAY = _fh.read()
+FAKE_SB = FAKE_RELAY            # (old name, kept for callers)
+# The pre-port stand-in, kept for the committed OLD builds a case or a control serves (--old-rev, --rev): their net.js still imports supabase-js
+# from esm.sh. An old page and a new page can never meet - different transports, exactly as in production after the port.
+FAKE_SB_OLD = r"""
 // stand-in for https://esm.sh/@supabase/supabase-js: channels = BroadcastChannels between the pages of one browser context
 const LOG = () => (window.__SQ_LOG__ = window.__SQ_LOG__ || []);
 const note = (dir, p) => { try { const L = LOG(); if (L.length < 600 && p && p.t !== 'state' && p.t !== 'bots') L.push({ dir, t: p.t, from: p.from, d: JSON.parse(JSON.stringify(p.d === undefined ? null : p.d)), at: Math.round(performance.now()) }); } catch (e) {} };
@@ -114,6 +123,17 @@ export function createClient() {
 }
 export default { createClient };
 """
+
+RELAY_HEALTH_RE = re.compile(r"^https?://(127\.0\.0\.1:8791|localhost:8791|last-circle-net\.isimcha85\.workers\.dev)/health")
+RELAY_HEALTH = '{"ok":true,"mode":"strict","open":true,"stand_in":true}'
+
+
+def route_relay(ctx):
+    """the relay stand-in on a context: the WebSocket init script + /health answered here (never the network, local or production)"""
+    ctx.add_init_script(FAKE_RELAY)
+    ctx.route(lambda url: RELAY_HEALTH_RE.match(url) is not None, lambda r: r.fulfill(status=200, body=RELAY_HEALTH, headers={
+        "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
+
 
 # ─────────────────────────────── in-page snippets ───────────────────────────────
 LOBBY_JS = r"""() => {
@@ -162,7 +182,7 @@ FAILS_JS = r"""() => { const n = window.__LC__.W.net; return n ? { fails: n.mapF
 LOG_JS = "() => window.__SQ_LOG__ || []"
 STARTS_JS = "() => window.__SQ_START__ || []"
 GOTIT_JS = r"""() => { const b = [...document.querySelectorAll('button')].find((x) => x.offsetParent && /^\s*GOT IT\s*$/i.test(x.textContent || '')); if (!b) return null; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"""
-SQUAD_JS = r"""() => { const b = [...document.querySelectorAll('button, .lc-mode-card, div')].find((x) => x.offsetParent && /^[^A-Za-z0-9]*SQUAD UP\s*$/i.test(x.textContent || '')); if (!b) return null; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"""
+SQUAD_JS = r"""() => { const b = document.querySelector('[data-lc=friends-card]'); if (!b || !b.offsetParent) return null; const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"""   # the PLAY WITH FRIENDS card (was the SQUAD UP button)
 WORLD_JS = r"""() => { const W = window.__LC__.W, M = W.map; if (!M) return null;
   let h = 2166136261 >>> 0; const cs = M.colliders || [];
   for (const c of cs) { for (const v of [c.minX, c.maxX, c.minY, c.maxY, c.minZ, c.maxZ]) { h ^= Math.round(v * 1000) | 0; h = Math.imul(h, 16777619) >>> 0; } }
@@ -280,8 +300,9 @@ class Rig:
         if not self.live:
             disk = C.DiskServer([self.origin], getattr(self.args, "rev", None), self.gpath)
             ctx.route(lambda url: disk.matches(url), disk.handle)
-        # supabase-js from esm.sh -> the stand-in (CORS: the page origin is http://127.0.0.1)
-        ctx.route(lambda url: "esm.sh/" in url, lambda r: r.fulfill(status=200, body=FAKE_SB, headers={
+        # the relay -> the stand-in (fake_relay.js + /health); an OLD build's supabase-js (esm.sh) -> the old stand-in
+        route_relay(ctx)
+        ctx.route(lambda url: "esm.sh/" in url, lambda r: r.fulfill(status=200, body=FAKE_SB_OLD, headers={
             "Content-Type": "text/javascript; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
         if self.live:
             # the run must not touch production: the relay is the stand-in above; if anything still reached for Supabase it is aborted (and the `no external` row fails)
@@ -289,6 +310,8 @@ class Rig:
                 self.blocked.append(route.request.url)
                 route.abort()
             ctx.route(lambda url: ".supabase.co" in url, hit_prod)
+            # ... and so is any request to the production relay other than /health (answered above; its WebSocket never leaves the page)
+            ctx.route(lambda url: "last-circle-net.isimcha85.workers.dev" in url and RELAY_HEALTH_RE.match(url) is None, hit_prod)
         self.ctxs.append(ctx)
         return ctx
 
@@ -400,7 +423,7 @@ def lobby(pg):
 
 
 def host_create(pg):
-    pg.locator('button:text-is("CREATE ROOM")').first.click(timeout=20_000)
+    pg.locator('button:text-is("START ROOM"), button:text-is("CREATE ROOM")').first.click(timeout=20_000)   # (an old build says CREATE ROOM)
     # the status line reads "Room ABCD - share this code." (or "... N player(s) connected" for an instant: either carries the code)
     ok = wait(pg, r"() => /Room\s+[A-Z0-9]{4}\s+[-\u2014]/.test(document.body.innerText)", 30)
     if not ok:
@@ -411,7 +434,7 @@ def host_create(pg):
 
 def guest_join(pg, code):
     pg.fill('input[placeholder="CODE"]', code)
-    pg.locator('button:text-is("JOIN")').first.click(timeout=20_000)
+    pg.locator('button:text-is("JOIN FRIEND"), button:text-is("JOIN")').first.click(timeout=20_000)   # (an old build says JOIN)
 
 
 def msgs(pg, t=None, dir=None):
@@ -516,7 +539,7 @@ def case_mismatch(rig, v, args, N, name, guest_kw, gv_label, newer=False):
                 "out of date" in st.lower() and "reload the page" in st.lower() and ("version %d" % N) in st and gv_txt in st and bool(gl.get("reload")),
                 {"status": st, "reload": gl.get("reload")})
     v.check("%s: the guest's create/join buttons are usable again, no START button" % name,
-            any(b.startswith("CREATE ROOM") and ":disabled" not in b for b in gl.get("buttons", [])) and not any(b.startswith("START") and ":hidden" not in b for b in gl.get("buttons", [])), gl.get("buttons"))
+            any(b.startswith("START ROOM") and ":disabled" not in b for b in gl.get("buttons", [])) and not any(b.startswith("START") and not b.startswith("START ROOM") and ":hidden" not in b for b in gl.get("buttons", [])), gl.get("buttons"))
     # the host reads why
     sawn = wait(hpg, "() => { const n = document.querySelector('[data-net-notice]'); return !!(n && n.children.length); }", 20)
     hl = lobby(hpg)
@@ -541,31 +564,41 @@ def case_mismatch(rig, v, args, N, name, guest_kw, gv_label, newer=False):
 
 
 def case_preguard_guest(rig, v, args, N):
+    """FRIENDS PORT (2026-11-22): the old build (--old-rev, no guard) rides Supabase Realtime and the new build the relay, so the old guest can
+    no longer reach the new host's room at all - a stronger separation than the guard (which still covers two relay builds: older / newer /
+    v1). Before the port these rows proved the host left the old guest out by version; now they prove it never arrives."""
     name = "preguard-guest"
-    ctx, hpg, hrec, gpg, grec, code = case_pair(rig, v, args, name, dict(), dict(rev=args.old_rev), N)
-    hh = wait(hpg, "() => { const n = document.querySelector('[data-net-notice]'); return !!(n && n.children.length); }", 30)
-    hl = lobby(hpg)
+    ctx = rig.new_ctx()
+    hpg, hrec = rig.page(ctx, name + "/host", plant=args.plant)
+    gpg, grec = rig.page(ctx, name + "/guest", rev=args.old_rev)
+    for label, pg in (("host", hpg), ("guest", gpg)):
+        if boot_url(pg, args.base, args.boot_timeout) is None:
+            raise C.EnvFailure("%s %s: __LC__ never appeared" % (name, label))
+        pg.evaluate(STUB_START_JS)
+        if not open_lobby(pg):
+            raise C.EnvFailure("%s %s: lobby never opened" % (name, label))
+    code = host_create(hpg)
+    if not code:
+        raise C.EnvFailure("%s: no room code" % name)
+    guest_join(gpg, code)
+    gpg.wait_for_timeout(6000)
+    hl, gl = lobby(hpg), lobby(gpg)
     gh = msgs(gpg, "hello", "out")
-    v.check("%s: the old guest's hello has no gv (it is the live %s build)" % (name, args.old_rev), bool(gh) and "gv" not in gh[0]["d"], gh[:1])
-    v.check("%s: the host's lobby says the old guest cannot join (version 1) and badges its roster row" % name,
-            bool(hh) and any("version 1" in n for n in hl["notices"]) and any("VERSION 1" in r for r in hl["roster"]), {"notices": hl["notices"], "roster": hl["roster"]})
+    v.check("%s: the old guest's hello has no gv (it is the %s build, Supabase transport)" % (name, args.old_rev), bool(gh) and "gv" not in gh[0]["d"], gh[:1])
+    v.check("%s: the old guest never reaches the new host's room (relay vs Supabase): the host's roster stays 1, nothing from it arrived" % name,
+            len(hl.get("roster") or []) == 1 and not msgs(hpg, "hello", "in"), {"roster": hl.get("roster"), "helloIn": msgs(hpg, "hello", "in")[:2]})
     press_start(hpg)
     wait(hpg, "() => (window.__SQ_START__ || []).length > 0", 20)
     hst = hpg.evaluate(STARTS_JS)
-    gl = None
-    for _ in range(40):
-        gl = lobby(gpg)
-        if gl.get("open") and "Room is full" in (gl.get("text") or ""):
-            break
-        gpg.wait_for_timeout(250)
-    v.check("%s: START rosters the host alone" % name, bool(hst) and len(hst[0]["humans"]) == 1, hst[:1] and hst[0]["humans"])
-    v.check("%s: the old guest gets its own (unchanged) 'Room is full ... started without you' and starts no match" % name,
-            bool(gl) and "Room is full" in (gl.get("text") or "") and not gpg.evaluate(STARTS_JS), {"text": (gl or {}).get("text", "")[:240]})
+    v.check("%s: START rosters the host alone; the old guest starts no match" % name, bool(hst) and len(hst[0]["humans"]) == 1 and not gpg.evaluate(STARTS_JS),
+            {"host": hst[:1] and hst[0]["humans"], "guestText": (gl.get("text") or "")[:160]})
     diag(v, name, hrec, grec)
     return ctx
 
 
 def case_preguard_host(rig, v, args, N):
+    """FRIENDS PORT (2026-11-22): the old host's room lives on Supabase, so the new guest's relay join of that code finds no room (4004) and
+    says so in plain words; nothing reaches the old host. (Before the port: the guest refused at the old host's START.)"""
     name = "preguard-host"
     ctx = rig.new_ctx()
     hpg, hrec = rig.page(ctx, name + "/host", rev=args.old_rev)
@@ -582,26 +615,17 @@ def case_preguard_host(rig, v, args, N):
     if not code:
         raise C.EnvFailure("%s: the old host's room code never appeared" % name)
     guest_join(gpg, code)
-    wait(hpg, "() => document.body.innerText.includes('2 player')", 30)
+    got = wait(gpg, "() => { const b = [...document.querySelectorAll('div')].find((d) => d.style && d.style.minWidth === '380px'); const s = b && b.children[1]; return s && s.getAttribute('data-net-code') === '4004' ? s.innerText : null; }", 30)
     gl = lobby(gpg)
     hh = msgs(hpg, "hello", "out")
     v.check("%s: the old host's hello has no gv / host flag" % name, bool(hh) and "gv" not in hh[0]["d"] and "host" not in hh[0]["d"], hh[:1])
-    v.check("%s: before START the new guest has no reason to refuse (the old host does not say it is the host)" % name, not gl.get("refused"), gl.get("status"))
+    v.check("%s: the new guest's join of the old host's code finds no room (4004) and says so in plain words, buttons back" % name,
+            bool(got) and "No room with that code" in got and any(b.startswith("JOIN FRIEND") and ":disabled" not in b and ":hidden" not in b for b in gl.get("buttons", [])),
+            {"status": got, "buttons": gl.get("buttons")})
     press_start(hpg)
     wait(hpg, "() => (window.__SQ_START__ || []).length > 0", 20)
     hst = hpg.evaluate(STARTS_JS)
-    refused = wait(gpg, "() => { const b = [...document.querySelectorAll('div')].find((d) => d.style && d.style.minWidth === '380px'); const s = b && b.children[1]; return !!(s && s.getAttribute('data-net-refused')); }", 30)
-    gl = lobby(gpg)
-    st = gl.get("status") or ""
-    v.check("%s: the old host rostered the guest (2 humans) - the case being protected" % name, bool(hst) and len(hst[0]["humans"]) == 2, hst[:1] and hst[0]["humans"])
-    v.check("%s: the guest refuses at the old host's START and says the HOST is out of date (ask them to reload)" % name,
-            bool(refused) and "host's game is out of date" in st.lower() and "ask the host to reload" in st.lower() and "version 1" in st and not gl.get("reload"), {"status": st, "reload": gl.get("reload")})
-    gout = msgs(gpg, "refuse", "out")
-    bye = msgs(gpg, "bye", "out")
-    v.check("%s: the guest sent refuse{gv=%d, hostGv=1} and a bye for the slot the old host gave it (s1)" % (name, N),
-            bool(gout) and gout[0]["d"].get("gv") == N and gout[0]["d"].get("hostGv") == 1 and bool(bye) and bye[0]["d"].get("slot") == "s1", {"refuse": gout[:1], "bye": bye[:1]})
-    hbye = msgs(hpg, "bye", "in")
-    v.check("%s: the old host received the bye (it hands the body to a bot brain)" % name, bool(hbye) and hbye[0]["d"].get("slot") == "s1", hbye[:1])
+    v.check("%s: the old host rosters itself alone (the new guest never arrived)" % name, bool(hst) and len(hst[0]["humans"]) == 1, hst[:1] and hst[0]["humans"])
     v.check("%s: the guest never starts a match" % name, not gpg.evaluate(STARTS_JS), gpg.evaluate(STARTS_JS))
     diag(v, name, hrec, grec)
     return ctx
@@ -983,7 +1007,7 @@ def live_rows(v, rig, args):
             {"badDocs": bad[:4], "docs": [(r.name, r.first_doc and r.first_doc[0]) for r, _ in pages][:8]})
     ext = sorted(set((urllib.parse.urlparse(u).netloc) for _, u in rig.external))
     prod = [u for _, u in rig.external if ".supabase.co" in u] + list(rig.blocked)
-    v.check("live: nothing reached Supabase / production (the relay is the stand-in: esm.sh is answered by the rig)", not prod,
+    v.check("live: nothing reached Supabase / production (the relay is the stand-in: fake_relay.js + /health answered by the rig)", not prod,
             {"supabaseRequests": prod[:4], "otherHosts": ext})
     v.info("live: hosts other than the build's own origin that any page requested", ext)
 

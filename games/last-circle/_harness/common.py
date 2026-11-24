@@ -689,6 +689,11 @@ class DiskServer:
 
 
 # ─────────────────────────────── browser session ───────────────────────────────
+# FRIENDS port step 8: true once an offline lifelike lobby is FULL (a real Enter only skips then), at once for practice / online / an old build
+# (no W._lobbyFill) and once the lobby is gone. Session.wait_lobby_full polls it; a script with its own page class (lc_liveprobe) polls the same.
+LOBBY_FULL_JS = "() => { const W = window.__LC__ && window.__LC__.W, f = W && W._lobbyFill; return !f || f.full || W.phase !== 'lobby'; }"
+
+
 class Session:
     """One Chrome + one context + one page with every collector attached."""
 
@@ -863,6 +868,12 @@ class Session:
         else:
             time.sleep(s)
 
+    def wait_lobby_full(self, timeout_s=20):
+        """FRIENDS port (2026-11-22): an OFFLINE Quick / Battle Royale lobby now fills like matchmaking (players arrive over 5-12 s, the drop
+        8-15 s after it opens) and a real Enter / click only skips once it is FULL (hud.js W._lobbyFill). SETUP: wait for that before the
+        real Enter, so the Enter is still what leaves the lobby. Returns seconds waited or None (practice / online / an old build: at once)."""
+        return self.wait_js(LOBBY_FULL_JS, timeout_s, 0.1)
+
     def wait_js(self, cond, timeout_s, poll=0.2, arg=None):
         """Poll a JS predicate (interval polling, never rAF polling). Returns seconds waited or None."""
         t0 = time.time()
@@ -968,6 +979,7 @@ class Session:
         if enter:
             self.stage("lobby")
             self.sleep(0.3)
+            res["lobbyFillWait_s"] = self.wait_lobby_full()
             want = "() => ['drop', 'match'].includes(window.__LC__.W.phase)"
             for attempt in range(3):
                 self.page.keyboard.press("Enter")

@@ -242,11 +242,28 @@ const NOOP_PROF = (_profMod && _profMod.NOOP_PROF) || Object.freeze({
   dump() { return { enabled: false, frames: 0 }; },
 });
 
+/** A gap longer than this between two ticks of a load's timeout clock means the PAGE was not running (a long synchronous step of the
+ *  match build, a starved tab): it counts as this much, not as its wall time (friends fix 3). */
+export const LOAD_STALL_GAP_MS = 2000;
+
+/** `promise`, or a rejection once it has been pending `ms` of the page's OWN running time. Friends fix 3: the plain 30 s setTimeout counted
+ *  the page's own stalls - a guest whose world build ran one 46-169 s synchronous step (measured on a loaded box, F:/lc_p23/friends/fix2 +
+ *  fix3 e2e_p2) had every in-flight skin "time out" the moment that step ended, although the bytes had arrived: "no character skins
+ *  available", the match lost. Now the clock ticks every 500 ms and a gap over LOAD_STALL_GAP_MS counts as LOAD_STALL_GAP_MS (the same
+ *  stall rule as net.js's silence watchdogs), so a request that really never settles still fails after ~ms of live page time. */
 function _withTimeout(promise, ms, url) {
   if (!(ms > 0)) return promise;
-  let to = 0;
-  const timer = new Promise((_, rej) => { to = setTimeout(() => rej(new Error("timed out loading " + url)), ms); });
-  return Promise.race([promise, timer]).finally(() => clearTimeout(to));
+  let iv = 0;
+  const timer = new Promise((_, rej) => {
+    let live = 0, last = performance.now();
+    iv = setInterval(() => {
+      const now = performance.now();
+      live += Math.min(now - last, LOAD_STALL_GAP_MS);
+      last = now;
+      if (live >= ms) { clearInterval(iv); rej(new Error("timed out loading " + url)); }
+    }, 500);
+  });
+  return Promise.race([promise, timer]).finally(() => clearInterval(iv));
 }
 
 export const genres3d = {};
@@ -947,6 +964,9 @@ export class Kernel3D {
     }
     return this._charInflight[url];
   }
+
+  /** `promise` bounded by this kernel's load timeout, counted in the page's own running time (_withTimeout). */
+  withLoadTimeout(promise, url) { return _withTimeout(promise, this.loadTimeoutMs, url); }
 
   async loadCharacter(url) {
     if (!this._charCache[url]) await this._charLoad(url);

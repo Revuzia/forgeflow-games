@@ -116,7 +116,8 @@ SOURCES = [
     # bespoke applicators
     ("citykit_probe.py", lambda m: {k: [(RB + "citykit.js", list(v["patch"]), 1, True)] for k, v in m.PLANTS.items()}),
     ("p23/sfxcheck.py", lambda m: {k: [(RB + "audio.js", list(v[1]), "+", True)] for k, v in m.PLANTS.items() if v[0] == "audio" and _pairs(v[1])}),
-    ("p23/netlive.py", lambda m: {k: [(RB + "net.js", [tuple(v)], "+", False)] for k, v in m.PLANTS.items()}),
+    ("p23/netlive.py", lambda m: {k: [(v[0], [(v[1], v[2])], 1, True)] if len(v) == 3 else [(RB + "net.js", [tuple(v)], "+", False)] for k, v in m.PLANTS.items()}),   # friends fix 3: (rel, old, new)
+    ("p23/lobbycd.py", lambda m: {k: [(RB + "hud.js", [tuple(e) for e in v], 1, True)] for k, v in m.PLANTS.items()}),
     ("new/sky_probe.py", lambda m: _plants_pairs(m, RB + "maps.js", eol=False, want="+")),
     ("new/sky_lowtier.py", lambda m: _plants_pairs(m, RB + "maps.js", eol=False, want="+")),
     ("new/player_dive.py", lambda m: {k: [(RB + "player.js", [tuple(v)], 1, False)] for k, v in m.PLANTS.items()}),

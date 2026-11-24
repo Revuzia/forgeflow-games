@@ -369,6 +369,8 @@ GATES = [
     # ---- Parity waves P2 + P3 (lane P2-F). The P1 probes promoted (COUNTED: P1 is in the base; each also FAILS on PREP1_REV, see NEGATIVE):
     ("p23_spray", "p23/spray.py", [], 3600, False),             # LC-01 recoil climb 3-4 deg + identical pattern, LC-33 bloom, disc pellets, LC-25 blast LOS, frag arc
     ("p23_lobby", "p23/lobby.py", [], 600, False),              # LC-11 phantom slot + 8 forgeries + grace, LC-07 ping streams (Node)
+    # friends rooms fix 3 (R4), beside p23_lobby: the match lobby's countdown with a planted THROWING countdownBeep listener still drops (practice + online)
+    ("p23_lobbycd", "p23/lobbycd.py", [], 1800, False),
     ("p23_ping", "p23/ping.py", [], 3600, False),               # LC-07 ping: one tick, 120 m, rate, MMB, edge, expiry, big-map pin, pointer regrab
     ("p23_loadbar", "p23/loadbar.py", [], 3600, False),         # LC-23 bar never backwards, LC-82 FIGHT copy, LC-19 Quick challenges
     ("p23_audiotap", "p23/audiotap.py", [], 3600, False),       # LC-02 listener, LC-08 tail / 450 m delay, LC-26 occlusion 4-8 dB, LC-53 mix >= 6 dB (tap on the output)
@@ -391,7 +393,10 @@ GATES = [
     ("p23_botbatch", "p23/botbatch.py", [], 36000, P23_PENDING),          # P2-B 24-match AFK batch: re-sight, cover, shields, AFK survival, frags, match length
     ("p23_netseq", "p23/netseq.py", [], 3600, P23_PENDING),               # LC-49: late (reordered) state packets never pull a remote back; rejoin <= 60 s on ?room=
     # lane net's live probe, promoted in the fix round (cases mode / mode3 / match; the in-process server with backlog 256; a browser-level wrong-key rejoin)
-    ("p23_netlive", "p23/netlive.py", [], 5400, P23_PENDING),
+    # + friends fix 3: case late (R1 a present loader keeps its slot 120 s in, the cap hands it over, a late arrival takes the body back; R2 a host stalled
+    # 20 s keeps its guests, a host that leaves sends them offline at once) and case loadfail (R3 a failed loader stays in the room). Two more match
+    # loads on a slow box: the timeout grew with them (5400 -> 10800 s)
+    ("p23_netlive", "p23/netlive.py", [], 10800, P23_PENDING),
     # INFORMATION (never counted): the live-measure probe on the iGPU profile (a player's first run; perfcheck's own default is the dGPU)
     # ---- Wave 10 R1B (guns in hand): w10_gunhold - grip, flash-tip, smg-dir, pistol (slide <= 1.1 m/s on EVERY skin), lengths, death, flinch, flash-size, sheen
     ("w10_gunhold", "p23/gunhold.py", [], 3600, False),
@@ -700,6 +705,7 @@ NEGATIVE = [
     ("p23_lobby-plant-presence-blind", "p23/lobby.py", ["--plant", "presence-blind"], 600),
     ("p23_lobby-plant-forgery-open", "p23/lobby.py", ["--plant", "forgery-open"], 600),
     ("p23_lobby-plant-ping-merged", "p23/lobby.py", ["--plant", "ping-merged"], 600),
+    ("p23_lobbycd-plant-unguarded", "p23/lobbycd.py", ["--plant", "unguarded"], 1800),    # friends fix 3 R4: hud.js's lobby timers emit unguarded again -> MUST FAIL
     ("p23_ping-rev-pre-p1", "p23/ping.py", ["--rev", PREP1_REV], 3600),
     ("p23_ping-plant-no-expiry", "p23/ping.py", ["--plant", "no-expiry"], 3600),
     ("p23_ping-plant-flood", "p23/ping.py", ["--plant", "flood"], 3600),
@@ -865,6 +871,12 @@ P23_PENDING_NEG = [
     # FAIL the early-done row
     ("p23_netlive-plant-no-order", "p23/netlive.py", ["--cases", "match", "--plant", "no-order"], 5400),
     ("p23_netlive-plant-no-revive-gate", "p23/netlive.py", ["--cases", "match", "--plant", "no-revive-gate"], 5400),
+    # friends fix 3: each control puts back the pre-fix rule its row guards against (each run stops after that row) - MUST FAIL
+    ("p23_netlive-plant-late-cap-60", "p23/netlive.py", ["--cases", "late", "--plant", "late-cap-60"], 5400),            # R1: the old 60 s never-seen rule
+    ("p23_netlive-plant-late-no-reclaim", "p23/netlive.py", ["--cases", "late", "--plant", "late-no-reclaim"], 7200),    # R1: no late hand-back (old 60 s reclaim only)
+    ("p23_netlive-plant-host-silence-8s", "p23/netlive.py", ["--cases", "late", "--plant", "host-silence-8s"], 5400),    # R2: the old 8 s guest rule
+    ("p23_netlive-plant-host-left-ignored", "p23/netlive.py", ["--cases", "late", "--plant", "host-left-ignored"], 5400),  # R2: the relay's leave ignored
+    ("p23_netlive-plant-loadfail-leaves", "p23/netlive.py", ["--cases", "loadfail", "--plant", "loadfail-leaves"], 5400),  # R3: the old matchLoadFailed (leaves the room)
 ]
 if not P23_PENDING:
     NEGATIVE = NEGATIVE + P23_PENDING_NEG

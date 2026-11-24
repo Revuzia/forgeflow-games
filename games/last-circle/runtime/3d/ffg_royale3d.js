@@ -1110,7 +1110,11 @@ register3d("royale", async function (kernel, content) {
     W.lastMatchError = { message: msg, t: Math.round(performance.now()) };
     try { teardownMatch(); } catch (e) { console.warn("[royale] teardown after a failed load threw:", e); }
     try { W.hooks.loadingStop(); } catch (e) {}
-    if (W.net) { try { netMod.leave(W); } catch (e) {} }
+    // FRIENDS ROOMS (fix 3): a player in a friends room STAYS in it - back to the room's lobby with the reason, shown to the others as waiting,
+    // its slot handed over for this match, and it plays the next one (net.returnToRoom). Offline (no room) exactly as before.
+    let inRoomNow = false;
+    try { inRoomNow = !!(netMod.inRoom && netMod.returnToRoom && netMod.inRoom(W)); } catch (e) {}
+    if (!inRoomNow) { try { netMod.leave(W); } catch (e) {} }   // also a room kept open after the host left (W.net is null then)
     removeLoadingLayer();
     W.paused = false;
     try {
@@ -1123,6 +1127,12 @@ register3d("royale", async function (kernel, content) {
     }
     W.phase = "menu";
     if (kernel.start && !kernel._running && !kernel.contextLost) kernel.start();
+    if (inRoomNow) {
+      let back = false;
+      try { back = netMod.returnToRoom(W, { loadFailed: msg }) !== false; } catch (e) { console.warn("[royale] back to the room after a failed load threw:", e); }
+      if (back) return { ok: false, error: msg, room: true };
+      try { netMod.leave(W); } catch (e) {}
+    }
     showMatchNotice("Couldn't load the match - check your connection", msg);
     return { ok: false, error: msg };
   }
@@ -1240,7 +1250,7 @@ register3d("royale", async function (kernel, content) {
       if (W._overT) { clearTimeout(W._overT); W._overT = null; }
       W._winHold = false;
       teardownMatch();
-      if (W.net) netMod.leave(W);
+      netMod.leave(W);   // safe without a room; also closes one kept open after the host left
       // hud.showMenu removes the HUD / death / post-match layers but not the pause,
       // settings or loading layers; showLoading clears every match screen (its own
       // list) and the loading layer it adds is removed straight after.
@@ -1655,7 +1665,16 @@ register3d("royale", async function (kernel, content) {
       // host, or waits on a card whose MAIN MENU is opts.onMenu) and FALSE when there is no live squad - it has already left the
       // room then, and the caller starts the solo match. (The P1 wiring ignored the boolean: a squad whose room had emptied
       // was left on the post-match panel with nothing loading.) The team mode carries over like the pace.
+      // FRIENDS ROOMS: in a friends room the party stays together (the usual party flow): BACK TO ROOM returns to the room's lobby with
+      // the same code and friends, and the host starts the next match from there (net.returnToRoom). MAIN MENU leaves the room.
+      againLabel: netMod.inRoom && netMod.inRoom(W) ? "BACK TO ROOM" : null,
       onAgain: () => {
+        if (netMod.inRoom && netMod.inRoom(W)) {
+          if (W._overT) { clearTimeout(W._overT); W._overT = null; }
+          W.phase = "menu"; shadowsEveryFrame(); hudMod.showMenu(W, startMatch);
+          netMod.returnToRoom(W);
+          return;
+        }
         const mapId = hudMod.randomMap();
         const next = { mapId, mode: W.mode, teamMode: W.teamMode };
         if (W.net && typeof netMod.rematch === "function") {

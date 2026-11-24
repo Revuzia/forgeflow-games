@@ -283,6 +283,7 @@ def start(s, pace="standard", seed=7, map_id=None, team=None, guard=True, enter=
     if enter:
         s.stage("lobby")
         s.sleep(0.3)
+        s.wait_lobby_full()
         for attempt in range(3):
             s.page.keyboard.press("Enter")
             if s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 5, 0.1) is not None:
@@ -312,19 +313,12 @@ def pin_actor(s, aid, xyz=None):
 
 # ───────────────────────── two pages over the squad relay stand-in (squadguard_live's FAKE_SB) ─────────────────────────
 def fake_sb_plus():
-    """squadguard_live's relay stand-in + (1) every OUTGOING 'state' payload's JSON size kept in window.__SQ_STATE__ (the stand-in's own log skips
-    state packets), (2) an inbound REORDER switch: while window.__SQ_REORDER__ = { every: n, holdMs: ms } every n-th inbound 'state' broadcast
-    is held back holdMs and delivered late, after newer ones (LC-49: out-of-order injection on the wire)."""
+    """the relay stand-in (squadguard_live.FAKE_RELAY = _harness/fake_relay.js). Its two test hooks are built in since the friends port:
+    (1) every OUTGOING 'state' payload's JSON size in window.__SQ_STATE__, (2) the inbound REORDER switch: while window.__SQ_REORDER__ =
+    { every: n, holdMs: ms } every n-th inbound 'state' is held back holdMs and delivered late, after newer ones (LC-49)."""
     import squadguard_live as SQ
-    src = SQ.FAKE_SB
-    a = "send(msg) { if (closed) return Promise.resolve('error'); note('out', msg.payload);"
-    assert a in src, "FAKE_SB send() anchor moved"
-    src = src.replace(a, a + " try { if (msg.payload && msg.payload.t === 'state') { const S = window.__SQ_STATE__ = window.__SQ_STATE__ || []; S.push(JSON.stringify(msg.payload).length); if (S.length > 600) S.shift(); } } catch (e) {}", 1)
-    b = "if (m.k === 'bc') { note('in', m.payload); L.broadcast.forEach("
-    assert b in src, "FAKE_SB onmessage anchor moved"
-    src = src.replace(b, "if (m.k === 'bc' && m.payload && m.payload.t === 'state' && window.__SQ_REORDER__ && !m.__late) { const R = window.__SQ_REORDER__; R.n = (R.n || 0) + 1;"
-                         " if (R.n % R.every === 0) { R.held = (R.held || 0) + 1; const mm = Object.assign({}, m, { __late: true }); setTimeout(() => bc.onmessage({ data: mm }), R.holdMs); return; } }"
-                         "\n        " + b, 1)
+    src = SQ.FAKE_RELAY
+    assert "window.__SQ_STATE__" in src and "window.__SQ_REORDER__" in src, "fake_relay.js lost a test hook"
     return src
 
 
@@ -340,8 +334,7 @@ def squad_rig(args):
             if ovl and not self.live:
                 disk = C.DiskServer([self.origin], getattr(self.args, "rev", None), self.gpath, overlays=ovl)
                 ctx.route(lambda url: disk.matches(url), disk.handle)
-            ctx.route(lambda url: "esm.sh/" in url, lambda r: r.fulfill(status=200, body=fsb, headers={
-                "Content-Type": "text/javascript; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}))
+            # (the relay stand-in is on the context already: SQ.Rig.new_ctx -> route_relay)
             for f in (getattr(self.args, "inject", None) or []):
                 with open(f, encoding="utf-8") as fh:
                     ctx.add_init_script(fh.read())
@@ -385,7 +378,7 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
         # default ("netseq guest never booted") - a pair gets at least 1200 s per page
         if SQ.boot_url(pg, args.base, max(args.boot_timeout or 0, 1200)) is None:
             raise C.EnvFailure("%s %s never booted" % (name, label))
-    create_vis = r"() => [...document.querySelectorAll('button')].some((b) => b.offsetParent && /^\s*CREATE ROOM\s*$/.test(b.textContent || ''))"
+    create_vis = r"() => [...document.querySelectorAll('button')].some((b) => b.offsetParent && /^\s*(START|CREATE) ROOM\s*$/.test(b.textContent || ''))"   # (an old build says CREATE ROOM)
     veils = "() => document.querySelectorAll('[data-net=\"lobby\"]').length"
     for label, pg in (("host", hpg), ("guest", gpg)):
         pg.bring_to_front()
@@ -415,7 +408,7 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
     # enabled and on top, the host's click timed out at 30 s in pl_netseq_pullback)
     hpg.bring_to_front()
     try:
-        hpg.locator(top).locator('button:text-is("CREATE ROOM")').first.click(timeout=30_000)
+        hpg.locator(top).locator('button:text-is("START ROOM"), button:text-is("CREATE ROOM")').first.click(timeout=30_000)
         code = None
         if SQ.wait(hpg, r"() => /Room\s+[A-Z0-9]{4}\s+[-—]/.test(document.body.innerText)", 40):
             m = re.search(r"Room\s+([A-Z0-9]{4})", hpg.evaluate("() => document.body.innerText"))
@@ -429,7 +422,7 @@ def squad_pair(rig, SQ, args, name, team_mode=None):
         raise C.EnvFailure("%s: no room code; host screen: %s" % (name, _screen_text(hpg)))
     gpg.bring_to_front()
     gpg.locator(top).locator('input[placeholder="CODE"]').first.fill(code)
-    gpg.locator(top).locator('button:text-is("JOIN")').first.click(timeout=30_000)
+    gpg.locator(top).locator('button:text-is("JOIN FRIEND"), button:text-is("JOIN")').first.click(timeout=30_000)
     if not SQ.wait(hpg, "() => document.body.innerText.includes('2 player')", 40):
         raise C.EnvFailure("%s: the guest never showed in the host's lobby" % name)
     hpg.bring_to_front()

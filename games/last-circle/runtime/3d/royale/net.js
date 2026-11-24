@@ -1,6 +1,6 @@
 /**
- * royale/net.js — play-with-friends multiplayer over Supabase Realtime
- * (NetPlay transport — pure WebSocket relay, $0, no Postgres).
+ * royale/net.js — play-with-friends multiplayer over the Last Circle relay
+ * (RoomNet transport, runtime/net/ffg_cfroom.js: a Cloudflare Worker + one Durable Object per room code).
  *
  * Model: room code lobby, up to 4 humans. The old header said 8 and nothing
  * enforced any number — but Supabase Realtime bills one message per RECEIVING
@@ -78,12 +78,12 @@
  *   LC-14    frag throws ("nade", cosmetic: remote clients can draw the arc / play the toss) and smoke clouds ("smoke": W.smokes entries made
  *            here are relayed once, so the host's bots and every screen see the same smoke; at most SMOKE_MAX_PER_SENDER per sender).
  */
-import { NetPlay } from "../../net/ffg_netplay.js";
+// TRANSPORT (friends rooms, 2026-11-22): the Cloudflare relay workers/last-circle-net (ffg_cfroom.js) replaced the shared Supabase Realtime
+// project (ffg_netplay.js), whose message ceiling was shared by every ForgeFlow game and DROPPED the connection when exceeded. The relay
+// picks the room code, stamps `from` itself, addresses rtc signaling to its `to` only, and names the room's OWNER (the host); served from
+// this machine the game talks to a local `wrangler dev` on 127.0.0.1:8791, anywhere else to the live relay.
+import { RoomNet, netBaseUrl } from "../../net/ffg_cfroom.js";
 import { RTCMesh } from "../../net/ffg_rtc.js";
-
-const SUPABASE_URL = "https://wugoxdewcdxzfppgzohy.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves";
 
 let S = null; // session
 
@@ -128,8 +128,8 @@ export function leftOutLine(name, peerGv, hostGv) {
   const nm = String(name == null || name === "" ? "A player" : name).slice(0, 24);
   const g = normGv(peerGv), h = normGv(hostGv);
   return g < h
-    ? `${nm} is not in this match: their game is out of date (version ${g}, this room runs version ${h}). A bot has their place; they need to reload the page.`
-    : `${nm} is not in this match: this room runs version ${h} and they run version ${g}. A bot has their place; reload this page to match them.`;
+    ? `${nm} is not in this match: their game is out of date (version ${g}, this room runs version ${h}). Their spot is filled; they need to reload the page.`
+    : `${nm} is not in this match: this room runs version ${h} and they run version ${g}. Their spot is filled; reload this page to match them.`;
 }
 
 // ── MAP FALLBACK: pure part (contract C-FALLBACK) ─────────────────────────────────────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ export function fallbackLine(name, host) {
   const nm = String(name == null || name === "" ? "A player" : name).slice(0, 24);
   return host
     ? `${nm} (the host) had to leave: part of their map failed to load, so they would have played a different world. The match carries on offline.`
-    : `${nm} left the squad: part of their map failed to load, so they would have played a different world. A bot has their place; they need to reload the page.`;
+    : `${nm} left the squad: part of their map failed to load, so they would have played a different world. Their spot is filled; they need to reload the page.`;
 }
 
 /** Does the world this page BUILT differ from the one it advertised? `advertised` = the MAP_GEN_VERSION it sent in its hello, `seen` = what the
@@ -235,7 +235,7 @@ export class SquadHandshake {
   gvOf(id) { const r = this.peers.get(id); return r ? r.gv : 1; }
   /** HOST: the start roster from `names` (peer id -> name). Peers on another version are LEFT OUT (`left`), the rest are sorted by id and
    *  cut at `maxGuests` (`over`: stay in the room, told "room is full"). Host = slot 0. */
-  planStart(names, maxGuests, nowMs) {
+  planStart(names, maxGuests, nowMs, busy) {
     const roster = [{ peerId: this.id, slot: 0, name: this.name }];
     const left = [], over = [], gone = [];
     for (const pid of Object.keys(names).sort()) {
@@ -245,6 +245,8 @@ export class SquadHandshake {
       if (gv !== this.gv) { left.push({ peerId: pid, name: nm, gv }); continue; }
       // LC-11: a same-version peer that left the room before START gets NO slot (it is "gone", not left out: nobody is there to tell)
       if (!this.isPresent(pid, nowMs)) { gone.push({ peerId: pid, name: nm }); continue; }
+      // FRIENDS ROOMS: a friend still inside the last match plays the next one (no joining a match in progress, either way)
+      if (busy && busy[pid]) { gone.push({ peerId: pid, name: nm, busy: true }); continue; }
       if (roster.length - 1 >= maxGuests) { over.push({ peerId: pid, name: nm }); continue; }
       roster.push({ peerId: pid, slot: roster.length, name: nm });
     }
@@ -463,13 +465,53 @@ export function teamPartitionDiff(rows) {
   }
   return bad;
 }
-/** The start roster with each human's teamId (C-MODE: net.js carries mode + teamId in the handshake). */
-export function rosterWithTeams(roster, teamMode, K) {
-  return (Array.isArray(roster) ? roster : []).map((r) => Object.assign({}, r, { teamId: humanTeamId(r.slot, teamMode, K) }));
+/** FRIENDS ROOMS: how the HUMANS of a room group - "squad" all on one team, "two" two teams (alternating down the roster, the host on A),
+ *  "ffa" everyone for themselves. The team SIZE (solo / duo / trio / squad, bot teammates fill a team) follows from it: roomTeamMode. */
+export const TEAMS_PICKS = ["squad", "two", "ffa"];
+export const PACES = ["standard", "quick"];
+export function normTeams(x) { return TEAMS_PICKS.includes(x) ? x : null; }
+/** The team mode a room plays for its `teams` pick: squad = resolveTeamMode(want, n) (every human on one team, as before); two = the size
+ *  that holds the bigger half (at least duos: a team of one would just be solo); ffa = solo. `want` = the menu's size pick (D5) or null. */
+export function roomTeamMode(teams, want, nHumans, pace, K) {
+  const n = Math.max(1, nHumans | 0);
+  if (pace === "practice") return "solo";
+  if (teams === "ffa") return "solo";
+  if (teams === "two") return resolveTeamMode(want || "duo", Math.ceil(n / 2), pace, K);
+  return resolveTeamMode(want, n, pace, K);
+}
+/** The teamId of the human in roster slot `slot` for a `teams` pick: two = "sqA" (even slots, the host's) / "sqB"; otherwise humanTeamId. */
+export function roomHumanTeamId(slot, teamMode, K, teams) {
+  if (teams === "two" && (teamSizes(K)[normTeamMode(teamMode) || "solo"] || 1) > 1) return slot % 2 ? "sqB" : "sqA";
+  if (teams === "ffa") return "s" + slot;
+  return humanTeamId(slot, teamMode, K);
+}
+/** The start roster with each human's teamId (C-MODE: net.js carries mode + teamId in the handshake; `teams` = the friends room's pick). */
+export function rosterWithTeams(roster, teamMode, K, teams) {
+  return (Array.isArray(roster) ? roster : []).map((r) => Object.assign({}, r, { teamId: roomHumanTeamId(r.slot, teamMode, K, teams) }));
+}
+/** The link a friend opens to join room `code`: inside forgeflowgames.com the site's own game page (it forwards ?room= into the game frame),
+ *  else this page with ?room=CODE (any other params the page has survive), and the bare code where a URL is not shareable (file://). */
+export function inviteLink(code) {
+  const c = encodeURIComponent(code);
+  try {
+    if (typeof window !== "undefined" && window.top !== window && document.referrer) {
+      const o = new URL(document.referrer);
+      if (o.protocol === "https:" && /(^|\.)forgeflowgames\.com$/.test(o.hostname)) return o.origin + "/games/last-circle?room=" + c;
+    }
+  } catch (e) { /* no referrer / cross-origin top: fall through */ }
+  try {
+    if (/^https?:$/.test(location.protocol)) {
+      const u = new URL(location.href);
+      u.searchParams.delete("lcretry");
+      u.searchParams.set("room", code);
+      return u.toString();
+    }
+  } catch (e) {}
+  return String(code);
 }
 
 // ── LC-49: sequence numbers on the state stream ───────────────────────────────────────────────────────────────────────────────────────
-/** Every state packet carries q = a per-sender counter (pack()). The DataChannel is unordered and a peer without one ALSO gets the Supabase
+/** Every state packet carries q = a per-sender counter (pack()). The DataChannel is unordered and a peer without one ALSO gets the relay
  *  copy of the same packet, so packets arrive late, early and twice; nothing used to say which was newest, and a late packet pulled the remote
  *  body back to where it was 100-300 ms ago (the audit's "out-of-order packet can pull remote back"). accept(sender, q) ->
  *    "new"   newer than anything seen from this sender: apply everything
@@ -567,6 +609,69 @@ export function judgeReclaim(c) {
   if (!(c.senderSlot > 0) || "s" + c.senderSlot !== c.id) return "no";
   if (c.rejoinedBy != null && c.rejoinedBy !== c.from) return "no";
   if (c.nowMs - c.takenAt > REJOIN_MS) return "expired";
+  return "ok";
+}
+
+// ── FRIENDS ROOMS robustness (fix 3): a slow loader / a stalled host is judged by ROOM PRESENCE, not by packet silence ─────────────────────
+// Measured on a loaded box (F:/lc_p23/friends/check2): a late joiner's world build took one 169 s synchronous step, so the host's old 60 s
+// never-seen rule turned a present, loading friend into an opponent (3 of 4 plain runs); a host stalled by an 82 s long task under CPU x4 read as
+// "host lost" after the guest's 8 s silence rule. The relay's presence list (ffg_cfroom.js "peer" ids) says who is still connected to the room.
+/** Before a player's FIRST live tick it keeps its slot while it is present in the room, up to this long after the match went live. */
+export const FIRST_TICK_CAP_MS = 240000;
+/** Hard ceiling on a guest waiting for a host that has never sent a live tick, however many "loading" beats arrive (a host whose load hangs
+ *  but whose page still runs would otherwise hold its guests forever; the slowest honest load measured was 662 s under CPU x4). */
+export const FIRST_TICK_HARD_CAP_MS = 900000;
+/** A guest waits this long after the host's last packet while the host is still present in the room (a stalled host page, not a gone one). */
+export const HOST_SILENT_PRESENT_MS = 45000;
+/** The old guest rule, kept for when this page cannot see presence (its own relay socket is down: the list is stale). */
+export const HOST_SILENT_BLIND_MS = 8000;
+/** A peer missing from presence this long has LEFT (a dropped socket rejoins with the same id inside ~0.6-2.4 s: ffg_cfroom.js retries). */
+export const PRESENCE_LEAVE_MS = 2000;
+/** The guest shows "Waiting for host..." after this much host silence. */
+export const HOST_WAIT_NOTICE_MS = 3000;
+/** Others are told "<name> is still loading" once a rostered player has not ticked this long after the match went live. */
+export const LOADING_NOTICE_MS = 15000;
+/** A page whose match load is still running repeats its "loading" this often (beginOnlineMatch). */
+export const LOADING_BEAT_MS = 10000;
+/** A late page repeats its "ready" (every 3 s) this many times; unanswered, it sends state again so the host offers the body once more. */
+const LATE_READY_TRIES = 6;
+
+/** HOST: a rostered guest that has not sent its first live tick. c = { goneMs (how long it has been missing from presence; null = present),
+ *  sinceLiveMs (since this host's match went live) }. "wait" (keep the slot, the body stays as it is), "left" (the relay says it is gone),
+ *  "cap" (FIRST_TICK_CAP_MS passed). */
+export function neverSeenVerdict(c) {
+  c = c || {};
+  if (typeof c.goneMs === "number" && c.goneMs > PRESENCE_LEAVE_MS) return "left";
+  if (typeof c.sinceLiveMs === "number" && c.sinceLiveMs > FIRST_TICK_CAP_MS) return "cap";
+  return "wait";
+}
+
+/** GUEST: is the host still there? c = { presenceLive (this page's relay socket is open, so the presence list is current), hostGoneMs (how
+ *  long the host has been missing from presence; null = present), silentMs (since the host's last packet; null = none yet this match),
+ *  sinceLiveMs (since this page's match went live) }. "ok", "wait" (show "Waiting for host..."), "lost" (continue offline). */
+export function hostSilenceVerdict(c) {
+  c = c || {};
+  const silent = typeof c.silentMs === "number" ? c.silentMs : null;
+  if (!c.presenceLive) {
+    // no current presence: the old rule (8 s after the host's last packet; before its first one, the first-tick cap)
+    if (silent == null) return typeof c.sinceLiveMs === "number" && c.sinceLiveMs > FIRST_TICK_CAP_MS ? "lost" : "ok";
+    return silent > HOST_SILENT_BLIND_MS ? "lost" : silent > HOST_WAIT_NOTICE_MS ? "wait" : "ok";
+  }
+  if (typeof c.hostGoneMs === "number" && c.hostGoneMs > PRESENCE_LEAVE_MS) return "lost";
+  if (silent == null) {
+    const since = typeof c.sinceLiveMs === "number" ? c.sinceLiveMs : 0;
+    return since > FIRST_TICK_CAP_MS ? "lost" : since > HOST_WAIT_NOTICE_MS ? "wait" : "ok";
+  }
+  return silent > HOST_SILENT_PRESENT_MS ? "lost" : silent > HOST_WAIT_NOTICE_MS ? "wait" : "ok";
+}
+
+/** HOST: a state packet from peer `from` for body `id`, which the never-seen watchdog handed over before that player's first live tick (a late
+ *  arrival). c = { senderSlot, id, from, rejoinedBy }. "ok" = offer the body back (no time limit while the match runs; a dead body is answered
+ *  with its death), "no". */
+export function judgeLateArrival(c) {
+  c = c || {};
+  if (!(c.senderSlot > 0) || "s" + c.senderSlot !== c.id) return "no";
+  if (c.rejoinedBy != null && c.rejoinedBy !== c.from) return "no";
   return "ok";
 }
 
@@ -894,7 +999,8 @@ function isAuthority(W) { return S && S.net.isHost(); }
 // update() thins its contents first, so shedding never silently strands a
 // pickup or a chest open inside a discarded envelope.
 const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1, refuse: 1, mapfail: 1,
-  revive: 1, smoke: 1, rejoin: 1, room: 1 };      // P23: a life (revive), a sight line (smoke), a slot (rejoin), the room's team mode - all rare
+  revive: 1, smoke: 1, rejoin: 1, room: 1, loading: 1 };      // P23: a life (revive), a sight line (smoke), a slot (rejoin), the room's team mode - all rare
+                                                    // (fix 3: "loading" - once per player per match, before its world build)
 
 /** OUTBOUND BUDGET, in messages per rolling second. Supabase Realtime does not
  *  throttle a connection that exceeds its rate — it DISCONNECTS it, which
@@ -1014,8 +1120,26 @@ function openLobby(W, sel) {
   root.appendChild(box);
   const html = (s) => { const d = document.createElement("div"); d.innerHTML = s; box.appendChild(d); return d; };
   html(`<div class="lcn-title">PLAY WITH FRIENDS</div>`);
-  const status = html(`Create a room or join a friend's code. Everyone else stays a bot.`);
+  const status = html(`Start a room and share its code, or join a friend's room. Every empty spot in the match is filled by opponents.`);
   status.className = "lcn-sub";              // on the OUTER line: status.textContent / innerHTML rewrite its content all through the lobby
+  // FRIENDS ROOMS (2026-11-22): the room panel - the code, big, and the invite link in a box the player can select (game_controls.js kills
+  // the context menu page-wide, so a plain text line could not even be right-click-copied). Shown once we are in a room.
+  const roomPanel = document.createElement("div");
+  roomPanel.setAttribute("data-net-room", "");
+  Object.assign(roomPanel.style, { display: "none", marginBottom: "12px" });
+  box.appendChild(roomPanel);
+  const bigCode = document.createElement("div");
+  bigCode.setAttribute("data-net-code-big", "");
+  bigCode.className = "lcn-title";
+  Object.assign(bigCode.style, { fontSize: "40px", letterSpacing: "12px", margin: "0 0 6px" });
+  const linkBox = document.createElement("input");
+  linkBox.readOnly = true;
+  linkBox.className = "lcn-code";
+  linkBox.setAttribute("data-net-link", "");
+  linkBox.setAttribute("aria-label", "Invite link");
+  Object.assign(linkBox.style, { width: "min(420px, calc(100vw - 110px))", fontSize: "12px", letterSpacing: "0.5px", textTransform: "none", fontFamily: "Rajdhani, 'Segoe UI', system-ui, sans-serif" });
+  linkBox.onfocus = () => { try { linkBox.select(); } catch (e) {} };
+  roomPanel.append(bigCode, linkBox);
   const row = document.createElement("div");
   row.className = "lcn-row";
   box.appendChild(row);
@@ -1026,53 +1150,101 @@ function openLobby(W, sel) {
     row.appendChild(b);
     return b;
   };
-  const createB = mk("CREATE ROOM", true);
+  const createB = mk("START ROOM", true);
+  const orEl = document.createElement("span");
+  orEl.className = "lcn-badge";
+  Object.assign(orEl.style, { marginLeft: "0", opacity: "0.7" });
+  orEl.textContent = "— OR —";
+  row.appendChild(orEl);
   const codeInp = document.createElement("input");
   codeInp.className = "lcn-code";
   codeInp.placeholder = "CODE";
-  codeInp.maxLength = 8;
+  codeInp.maxLength = 4;
+  codeInp.setAttribute("aria-label", "Room code");
+  codeInp.autocomplete = "off"; codeInp.spellcheck = false;
   row.appendChild(codeInp);
-  const joinB = mk("JOIN", false);
-  // game_controls.js:65 kills the context menu page-wide with capture:true, so a
-  // player could not even right-click-copy the room code. Hidden until we are in
-  // a room; both host and joined guest can share. Clipboard is a LOCAL API — no
-  // network call is added by this.
-  const inviteB = mk("COPY INVITE LINK", false);
-  inviteB.style.display = "none";
-  inviteB.onclick = async () => {
-    // build off the CURRENT href so any params the portal put there survive
-    let link = S.net.room;   // file:// etc: a URL would not be shareable, so hand over the bare code
-    if (/^https?:$/.test(location.protocol)) {
-      const u = new URL(location.href);
-      u.searchParams.set("room", S.net.room);
-      link = u.toString();
-    }
+  const joinB = mk("JOIN FRIEND", false);
+  // the code box: 4 characters, upper case; its keys never reach the game's own key handlers (WASD, Enter = drop in, ...)
+  codeInp.addEventListener("input", () => {
+    const v = codeInp.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    if (v !== codeInp.value) codeInp.value = v;
+  });
+  codeInp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter" && !e.repeat) { e.preventDefault(); joinB.onclick(); } });
+  codeInp.addEventListener("keyup", (e) => e.stopPropagation());
+  codeInp.addEventListener("keypress", (e) => e.stopPropagation());
+  // Hidden until we are in a room; both host and guests can share. Clipboard is a LOCAL API - no network call is added by this.
+  async function copyText(text, btn, idle) {
     let ok = false;
-    try { await navigator.clipboard.writeText(link); ok = true; } catch (e) {}
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
     if (!ok) {
-      // clipboard-write is denied outside a secure context; fall back to the
-      // deprecated-but-universal path, then to a selection the player can copy
+      // clipboard-write is denied outside a secure context; fall back to the deprecated-but-universal path, then to a selection to copy
       try {
         const ta = document.createElement("textarea");
-        ta.value = link; ta.style.position = "fixed"; ta.style.opacity = "0";
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
         root.appendChild(ta); ta.select();
         ok = document.execCommand("copy");
         ta.remove();
       } catch (e) {}
     }
-    if (ok) inviteB.textContent = "LINK COPIED";
-    else { codeInp.value = S.net.room; codeInp.select(); inviteB.textContent = "SELECT + CTRL-C"; }
-    setTimeout(() => { inviteB.textContent = "COPY INVITE LINK"; }, 1600);
-  };
-  const closeB = mk("CANCEL", false);
-  closeB.onclick = () => { attempt++; if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } root.remove(); };
+    if (ok) btn.textContent = "COPIED";
+    else { linkBox.focus(); linkBox.select(); btn.textContent = "SELECT + CTRL-C"; }
+    setTimeout(() => { btn.textContent = idle; }, 1600);
+  }
+  const inviteB = mk("COPY INVITE LINK", false);
+  inviteB.style.display = "none";
+  inviteB.onclick = () => { if (S && S.net.room) copyText(inviteLink(S.net.room), inviteB, "COPY INVITE LINK"); };
+  const copyCodeB = mk("COPY CODE", false);
+  copyCodeB.style.display = "none";
+  copyCodeB.onclick = () => { if (S && S.net.room) copyText(S.net.room, copyCodeB, "COPY CODE"); };
+  const closeB = mk("BACK", false);
+  closeB.setAttribute("data-net-leave", "");
+  // BACK (no room yet) / LEAVE ROOM: the relay hands the room to the longest-present player when its host leaves
+  closeB.onclick = () => { attempt++; if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } clearRejoin(); root.remove(); };
 
-  // Who is actually in the room. S.peers has held every peer's chosen name since
-  // the "hello" handler shipped, but it was read in exactly ONE place — building
-  // the roster at match start — so the lobby printed a bare count and never a
-  // name, and you could not tell whether the "2 players" was your friend.
-  // (rosterEl, not `roster` — startB.onclick below already owns that name for
-  //  the roster ARRAY it ships in the start packet)
+  // The room's choices (host picks, guests read them): the PACE and the TEAMS. Placed before the roster; START MATCH stays last.
+  // MODE: STANDARD / QUICK. TEAMS: ALL ON ONE TEAM / TWO TEAMS / EVERYONE FOR THEMSELVES. This REPLACES the room's old AUTO / DUOS / TRIOS
+  // / SQUADS row (C-MODE, D5): it was one picker of the team SIZE with every human on one team; the friends brief asks how the HUMANS
+  // group. The size is no longer a second picker: the menu's TEAM pick (W.settings.teamMode, D5) is its starting point and roomTeamMode
+  // fits it to each team's humans (bot teammates fill the rest of a team, as before).
+  let roomPace = sel && sel.mode === "quick" ? "quick" : "standard";
+  let roomTeams = sel && TEAMS_PICKS.includes(sel.teams) ? sel.teams : "squad";
+  let teamWant = normTeamMode(sel && (sel.teamMode || sel.team)) || normTeamMode(W.settings && W.settings.teamMode);
+  if (teamWant === "solo") teamWant = null;           // a room is for playing together: solo in a room = the smallest fit
+  const mkPick = (attr, label) => {
+    const r = document.createElement("div");
+    r.className = "lcn-row";
+    r.setAttribute(attr, "");
+    Object.assign(r.style, { display: "none", marginBottom: "8px" });
+    const l = document.createElement("span");
+    l.className = "lcn-badge";
+    Object.assign(l.style, { opacity: "0.8", marginLeft: "0", fontSize: "10.5px" });
+    l.textContent = label;
+    r.appendChild(l);
+    box.appendChild(r);
+    return { r, l, btns: [] };
+  };
+  const paceRow = mkPick("data-net-pace", "MODE");
+  const modeRow = mkPick("data-net-teammode", "TEAMS");       // (the attribute keeps the resolved team SIZE mode: solo / duo / trio / squad)
+  const PACE_LABEL = { standard: "STANDARD", quick: "QUICK · 5 MIN" };
+  const TEAMS_LABEL = { squad: "ALL ON ONE TEAM", two: "TWO TEAMS", ffa: "EVERYONE FOR THEMSELVES" };
+  const pickBtn = (pk, val, text, onPick) => {
+    const b = document.createElement("button");
+    b.className = "lcn-btn";
+    Object.assign(b.style, { padding: "7px 12px", fontSize: "12.5px" });
+    b._val = val; b.textContent = text;
+    b.onclick = () => { onPick(val); paintRoster(); sendRoom(); };
+    pk.r.appendChild(b); pk.btns.push(b);
+    return b;
+  };
+  for (const p of ["standard", "quick"]) pickBtn(paceRow, p, PACE_LABEL[p], (v) => { roomPace = v; });
+  for (const t of TEAMS_PICKS) pickBtn(modeRow, t, TEAMS_LABEL[t], (v) => { roomTeams = v; });
+  const pickNote = document.createElement("div");
+  pickNote.className = "lcn-badge";
+  Object.assign(pickNote.style, { display: "none", marginLeft: "0", marginBottom: "10px", opacity: "0.7" });
+  pickNote.setAttribute("data-net-picks", "");
+  box.appendChild(pickNote);
+
+  // Who is actually in the room (rosterEl, not `roster` - startB.onclick owns that name for the roster ARRAY it ships in the start packet)
   const rosterEl = document.createElement("div");
   rosterEl.className = "lcn-roster";
   box.appendChild(rosterEl);
@@ -1090,34 +1262,39 @@ function openLobby(W, sel) {
     while (noteEl.children.length > 3) noteEl.firstChild.remove();
     noteEl.style.display = "block";
   }
+  /** a peer that is inside a match right now (its hello said busy, a start rostered it, and no "back" since) */
+  const busy = (pid) => !!(S && S.inMatch && S.inMatch[pid]);
   function paintRoster() {
-    if (!S || !S.net.room) { rosterEl.innerHTML = ""; return; }
-    // ffg_netplay.js:64 makes the LOWEST peer id the host, and startB.onclick
-    // hands out slots by sorted peer id — so sorting every id (peers + self) on
-    // any client reproduces the exact roster the host will build. No guessing.
-    // A peer on another WORLD VERSION never gets a slot (SquadHandshake.planStart), so it is shown as such and does not count towards the
-    // slot numbers or the room cap.
-    // LC-11: only peers still in the room (a friend who closed the tab is no longer listed, and gets no slot at START); a peer on another
-    // world version stays listed with its badge after it leaves, so the host can still read why it is not in the match
+    if (!S || !S.net.room) { rosterEl.innerHTML = ""; paintMode(); return; }
+    // The relay's OWNER is the host (slot 0), and startB.onclick hands out the other slots by sorted peer id - so this order on any client
+    // is the roster the host will build. A peer on another WORLD VERSION never gets a slot (SquadHandshake.planStart), nor does one still
+    // IN A MATCH (it plays the next one); neither counts towards the slot numbers or the room cap.
+    // LC-11: only peers still in the room; a peer on another world version stays listed with its badge after it leaves, so the host can
+    // still read why it is not in the match
     const nowP = performance.now();
-    const all = Object.keys(S.peers).filter((pid) => S.hs.isPresent(pid, nowP) || S.hs.gvOf(pid) !== S.hs.gv).concat([S.net.id]).sort();
+    const own = S.net.owner;
+    const all = Object.keys(S.peers).filter((pid) => S.hs.isPresent(pid, nowP) || S.hs.gvOf(pid) !== S.hs.gv).concat([S.net.id]).sort()
+      .sort((a, b) => (a === own ? -1 : b === own ? 1 : 0));
     const badge = (s) => `<span class="lcn-badge">${s}</span>`;
     let h = "";
     let i = -1;                  // index among the peers that can take a slot (self included)
     all.forEach((pid) => {
       const me = pid === S.net.id;
-      // names arrive from other machines — they go through esc() before innerHTML
+      // names arrive from other machines - they go through esc() before innerHTML
       const nm = esc(me ? S.myName : (S.peers[pid] || "Friend"));
       if (!me && S.hs.gvOf(pid) !== S.hs.gv) {
         h += `<div style="color:#ff9b8a" data-net-peer-gv="${S.hs.gvOf(pid)}">${nm}${badge("VERSION " + S.hs.gvOf(pid) + " — CAN'T JOIN, MUST RELOAD")}</div>`;
         return;
       }
+      const isHost = pid === own;
+      if (!me && !isHost && busy(pid)) { h += `<div style="color:#9fb6d0" data-net-peer-busy="1">${nm}${badge("IN A MATCH")}</div>`; return; }
       i++;
-      if (i > MAX_GUESTS) { h += `<div style="color:#ffb060">${nm}${badge("SPECTATING — ROOM FULL")}</div>`; return; }
-      h += `<div style="${me ? "color:#7fd3ff" : ""}">${me ? "<b>" + nm + "</b>" : nm}${badge(i === 0 ? "HOST" : "SLOT " + i)}</div>`;
+      if (i > MAX_GUESTS) { h += `<div style="color:#ffb060">${nm}${badge("WAITING — ROOM FULL")}</div>`; return; }
+      const tm = roomTeamsNow() === "two" ? (i % 2 ? " · TEAM B" : " · TEAM A") : "";
+      h += `<div style="${me ? "color:#7fd3ff" : ""}">${me ? "<b>" + nm + "</b>" : nm}${badge((i === 0 ? "HOST" : "PLAYER " + (i + 1)) + tm + (isHost && busy(pid) ? " · IN A MATCH" : ""))}</div>`;
     });
     rosterEl.innerHTML = h;
-    paintMode();                 // C-MODE: AUTO's pick and the too-small buttons follow the head count
+    paintMode();
   }
   // The guest-side refusal: the plain-language reason in the lobby, the buttons back, and a RELOAD button when THIS page is the stale one.
   let reloadB = null;
@@ -1141,9 +1318,7 @@ function openLobby(W, sel) {
       reloadB.onclick = () => { try { location.reload(); } catch (e) {} };
       status.after(reloadB);
     }
-    createB.disabled = joinB.disabled = false;
-    startB.style.display = "none";
-    inviteB.style.display = "none";
+    showJoin(true);
     rosterEl.innerHTML = "";
   }
 
@@ -1153,59 +1328,75 @@ function openLobby(W, sel) {
   Object.assign(startB.style, { display: "none", marginTop: "6px" });
   box.appendChild(startB);
 
-  // C-MODE (P3, owner OD-4): the TEAM mode of the room. The host picks it (AUTO = the smallest mode that holds everyone in the room; a pick too
-  // small for the room is played as the smallest that holds it - resolveTeamMode); the guests read the host's pick ("room" message). Every human
-  // in the room is one team; the boot fills the team's other seats with bot teammates. Placed AFTER the START button so the box keeps the
-  // child order squadguard_live.py reads (title, status, buttons row, roster, notices, START).
-  // D5: the menu's team pick comes along - the SQUAD UP button sends only { mode } (hud.js), and the pick lives in W.settings.teamMode (the
-  // mode card writes it), so a menu pick of SQUADS is the room's starting pick instead of AUTO.
-  let teamWant = normTeamMode(sel && (sel.teamMode || sel.team)) || normTeamMode(W.settings && W.settings.teamMode);
-  if (teamWant === "solo") teamWant = null;           // a room is for playing together: solo in a room = AUTO
-  const modeRow = document.createElement("div");
-  modeRow.className = "lcn-row";
-  modeRow.setAttribute("data-net-teammode", "");
-  Object.assign(modeRow.style, { display: "none", marginTop: "12px", marginBottom: "0" });
-  box.appendChild(modeRow);
-  const modeLbl = document.createElement("span");
-  modeLbl.className = "lcn-badge";
-  Object.assign(modeLbl.style, { opacity: "0.8", marginLeft: "0", fontSize: "10.5px" });
-  modeRow.appendChild(modeLbl);
-  const MODE_LABEL = { solo: "SOLO", duo: "DUOS", trio: "TRIOS", squad: "SQUADS" };
-  const modeBtns = [];
-  for (const m of [null, "duo", "trio", "squad"]) {
-    const b = document.createElement("button");
-    b.className = "lcn-btn";
-    Object.assign(b.style, { padding: "7px 13px", fontSize: "12.5px" });
-    b._mode = m;
-    b.onclick = () => { teamWant = m; paintMode(); sendRoom(); };
-    modeRow.appendChild(b);
-    modeBtns.push(b);
-  }
+  /** the room's teams pick as this page knows it (host: its own; guest: the host's last "room" message) */
+  function roomTeamsNow() { return S && S.net && !S.net.isHost() ? (S.roomTeams || "squad") : roomTeams; }
   /** how many humans the host's START would roster right now (itself included) */
-  const humansNow = () => (S && S.hs ? S.hs.planStart(S.peers, MAX_GUESTS, performance.now()).roster.length : 1);
+  const humansNow = () => (S && S.hs ? S.hs.planStart(S.peers, MAX_GUESTS, performance.now(), S.inMatch).roster.length : 1);
   function paintMode() {
-    if (!S || !S.net || !S.net.room) { modeRow.style.display = "none"; return; }
-    modeRow.style.display = "flex";
+    const inRoom = !!(S && S.net && S.net.room);
+    for (const pk of [paceRow, modeRow]) pk.r.style.display = inRoom ? "flex" : "none";
+    pickNote.style.display = inRoom ? "block" : "none";
+    if (!inRoom) return;
     const host = S.net.isHost();
-    const n = host ? humansNow() : null;
-    const eff = host ? resolveTeamMode(teamWant, n, sel && sel.mode, W.SIM) : (S.roomTm || null);
-    modeRow.setAttribute("data-net-teammode", eff || "");
-    modeLbl.textContent = host ? "TEAM MODE" : eff ? "TEAM MODE: " + MODE_LABEL[eff] + " (HOST'S PICK)" : "TEAM MODE: THE HOST PICKS";
-    for (const b of modeBtns) {
+    const pace = host ? roomPace : (S.roomPace || null);
+    const teams = roomTeamsNow();
+    const eff = host ? roomTeamMode(teams, teamWant, humansNow(), pace, W.SIM) : (S.roomTm || null);
+    modeRow.r.setAttribute("data-net-teammode", eff || "");
+    modeRow.r.setAttribute("data-net-teams", teams);
+    paceRow.r.setAttribute("data-net-pace", pace || "");
+    paceRow.l.textContent = host ? "MODE" : "MODE: " + (pace ? PACE_LABEL[pace] : "THE HOST PICKS");
+    modeRow.l.textContent = host ? "TEAMS" : "TEAMS: " + (S.roomTeams ? TEAMS_LABEL[S.roomTeams] : "THE HOST PICKS");
+    for (const [pk, cur] of [[paceRow, pace], [modeRow, teams]]) for (const b of pk.btns) {
       b.style.display = host ? "" : "none";
-      if (!host) continue;
-      const size = b._mode ? (W.SIM && W.SIM.TEAM_SIZE ? W.SIM.TEAM_SIZE[b._mode] : TEAM_SIZE_DEF[b._mode]) : null;
-      b.textContent = b._mode ? MODE_LABEL[b._mode] : "AUTO" + (teamWant == null ? " · " + MODE_LABEL[eff] : "");
-      b.disabled = b._mode != null && size < n;            // too small for everyone here
-      b.className = (b._mode === teamWant ? "lcn-btn pri" : "lcn-btn");
-      b.title = b.disabled ? "This room has " + n + " players" : "";
+      b.className = b._val === cur ? "lcn-btn pri" : "lcn-btn";
     }
+    pickNote.textContent = host ? "YOU ARE THE HOST: PICK THE MODE AND TEAMS, THEN START" : "THE HOST PICKS THE MODE AND TEAMS";
   }
-  /** HOST: tell the room the pick (on change, and to each newcomer) */
+  /** HOST: tell the room the picks (on change, and to each newcomer) */
   function sendRoom() {
     if (!S || !S.net || !S.net.isHost() || S.started) return;
     const n = humansNow();
-    send("room", { tm: resolveTeamMode(teamWant, n, sel && sel.mode, W.SIM), want: teamWant || "auto" });
+    send("room", { tm: roomTeamMode(roomTeams, teamWant, n, roomPace, W.SIM), want: teamWant || "auto", mode: roomPace, teams: roomTeams });
+  }
+  /** the join controls (no room yet) or the room controls */
+  function showJoin(on) {
+    for (const el of [createB, orEl, codeInp, joinB]) el.style.display = on ? "" : "none";
+    createB.disabled = joinB.disabled = false;
+    for (const el of [inviteB, copyCodeB]) el.style.display = on ? "none" : "inline-block";
+    roomPanel.style.display = on ? "none" : "block";
+    closeB.textContent = on ? "BACK" : "LEAVE ROOM";
+    if (on) { startB.style.display = "none"; paintMode(); }
+  }
+  /** in a room: the code, the link, who is here, START (host) or the wait line (guest). Called on every presence / owner change. */
+  function paintRoom() {
+    if (!S || !S.net || !S.net.room) return;
+    const net = S.net;
+    showJoin(false);
+    bigCode.textContent = net.room;
+    linkBox.value = inviteLink(net.room);
+    const n = Math.max(1, net.peerCount || 1);
+    const rj = status.getAttribute("data-net-rejoin");
+    if (rj !== "asking" && rj !== "busy" && rj !== "refused" && rj !== "gave-up") {
+      status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ${n} player(s) connected` + (net.isHost() ? "" : "<br>Waiting for the host to start…");
+    }
+    startB.style.display = net.isHost() ? "inline-block" : "none";
+    paintRoster();
+  }
+  /** this lobby's hooks on the session (a resumed room - BACK TO ROOM - rebinds them to its new lobby) */
+  function bind() {
+    S.paintMode = paintMode;       // the "room" message repaints the guest's picks through this
+    S.sendRoom = sendRoom;         // the host tells each newcomer its picks
+    S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
+    S.status = status;             // beginOnlineMatch reports a full room here
+    S.notice = notice;             // host: why a guest was left out / refused (lobby line; in a match it goes to the chat log)
+    S.showRefusal = showRefusal;   // guest: refuseRoom paints the reason + RELOAD button through this
+    S.root = root;
+    S.roomPicks = () => ({ mode: roomPace, teams: roomTeams, teamWant });
+    S.ui = { onPeer: paintRoom, onOwner: () => {
+      // a guest that just became the host keeps the picks the room had (the last "room" message it read)
+      if (S && S.net.isHost()) { if (PACES.includes(S.roomPace)) roomPace = S.roomPace; if (TEAMS_PICKS.includes(S.roomTeams)) roomTeams = S.roomTeams; }
+      paintRoom(); if (S && S.net.isHost()) sendRoom();
+    } };
   }
 
   // One attempt at a time. A newer attempt (or CANCEL) makes an older one stale: when
@@ -1222,14 +1413,18 @@ function openLobby(W, sel) {
     status.textContent = "";
     const b = document.createElement("b");
     b.style.color = "#ff9b8a";
-    b.textContent = "Couldn't reach the online service.";
+    const code = e && e.code;
+    const say = code === 4004 ? ["No room with that code.", "Check the code with your friend - a room closes once everyone has left it."]
+      : code === 4009 ? ["That room is full.", "Ask your friend to start a new room, or play solo from the menu."]
+      : code === 4029 ? ["Online play is full for today.", "Try again tomorrow, or play solo from the menu."]
+      : ["Couldn't reach the online service.", "Check your connection and try again, or play solo from the menu."];
+    b.textContent = say[0];
     status.appendChild(b);
     status.appendChild(document.createElement("br"));
-    status.appendChild(document.createTextNode("Check your connection and try again, or play solo from the menu."));
+    status.appendChild(document.createTextNode(say[1]));
+    if (code != null) status.setAttribute("data-net-code", String(code));
     status.setAttribute("data-net-error", String((e && e.message) || e || "error").slice(0, 200));
-    createB.disabled = joinB.disabled = false;
-    startB.style.display = "none";
-    inviteB.style.display = "none";
+    showJoin(true);
     rosterEl.innerHTML = "";
   }
   async function enter(code, asHost) {
@@ -1237,21 +1432,15 @@ function openLobby(W, sel) {
     createB.disabled = joinB.disabled = true;
     status.textContent = "Connecting…";
     // a new attempt starts clean: the last refusal's reason, reload button and notices belong to the last room
-    for (const a of ["data-net-refused", "data-net-versions", "data-net-error"]) status.removeAttribute(a);
+    for (const a of ["data-net-refused", "data-net-versions", "data-net-error", "data-net-code", "data-net-rejoin"]) status.removeAttribute(a);
     if (reloadB) { reloadB.remove(); reloadB = null; }
     noteEl.textContent = ""; noteEl.style.display = "none";
-    const net = new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, "last-circle");
-    // joinRoom resolves (it does not reject) on CHANNEL_ERROR / TIMED_OUT and reports
-    // them through "error" — without this the lobby printed a room code for a room
-    // nobody could ever reach.
-    let chanErr = null;
-    net.on("error", (e) => { chanErr = (e && e.status) || "error"; });
+    const net = new RoomNet(netBaseUrl());
     try {
       await connectWithin(net, 20000);
     } catch (e) {
-      // esm.sh unreachable, supabase-js failed to load, or no answer: say so and give the
-      // buttons back. Before this, enter() had no catch — "Connecting…" forever with
-      // CREATE ROOM and JOIN both disabled.
+      // the relay did not answer its health probe: say so and give the buttons back (before enter() had a catch it stayed on
+      // "Connecting…" forever with both buttons disabled)
       console.warn("[net] online service unreachable:", e);
       if (my === attempt && root.isConnected) offline(e);
       return;
@@ -1263,19 +1452,14 @@ function openLobby(W, sel) {
     const myName = (W.settings.playerName && W.settings.playerName !== "You")
       ? W.settings.playerName
       : "Player-" + net.id.slice(-3).toUpperCase();
-    S = { net, peers: {}, myName, started: false, lastState: 0, lastBots: 0, root, gv, refusals: [] };
+    S = { net, peers: {}, myName, started: false, lastState: 0, lastBots: 0, root, gv, refusals: [], inMatch: {} };
     S.hs = new SquadHandshake({ id: net.id, name: myName, gv, host: !!asHost });   // who is at which world version (C-VER)
     // LC-49 rejoin: this tab's secret for this room; only its hash (rk) ever goes on the wire, until a reloaded page asks for its slot back
     S.rjSecret = newRejoinSecret();
     S.rk = rejoinHash(S.rjSecret);
-    S.paintMode = paintMode;       // C-MODE: the "room" message repaints the guest's team-mode line through this
-    S.sendRoom = sendRoom;         // C-MODE: the host tells each newcomer its pick
-    S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
-    S.status = status;             // beginOnlineMatch reports a full room here
-    S.notice = notice;             // host: why a guest was left out / refused (lobby line; in a match it goes to the chat log)
-    S.showRefusal = showRefusal;   // guest: refuseRoom paints the reason + RELOAD button through this
+    bind();                        // this lobby's paint / notice hooks on the session
     // P2P overlay (ffg_rtc.js): the state envelope prefers DataChannels;
-    // signaling + everything critical + the full fallback stay on Supabase.
+    // signaling + everything critical + the full fallback stay on the room relay.
     // ensurePeer is called lazily the first time a peer's state arrives (both
     // sides converge; the lower-id offerer rule breaks the tie).
     S.rtc = new RTCMesh(net.id, (to, payload) => send("rtc", Object.assign({ to }, payload)));
@@ -1302,15 +1486,12 @@ function openLobby(W, sel) {
           _waitCard.setAttribute("data-net-rematch-wait", "host-left");
         }
       }
-      status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ${Math.max(1, count)} player(s) connected` +
-        (net.isHost() ? "" : "<br>Waiting for the host to start…");
-      if (net.isHost()) startB.style.display = count >= 1 ? "inline-block" : "none";
-      paintRoster();
+      if (!S.started && S.ui) S.ui.onPeer();      // the lobby on screen now (a resumed room rebinds it)
     });
     const sess = S;
     try {
-      await within(net.joinRoom(code, asHost), 20000, "the room did not answer in 20 s");
-      if (chanErr) throw new Error("realtime channel " + chanErr);
+      // the relay picks the code for a new room (createRoom); a join rejects with err.code 4004 / 4009 / 4029 / "unreachable"
+      await within(asHost ? net.createRoom() : net.joinRoom(code), 20000, "the room did not answer in 20 s");
     } catch (e) {
       console.warn("[net] could not join the room:", e);
       if (S === sess) { try { S.rtc && S.rtc.close(); } catch (x) {} try { net.leave(); } catch (x) {} S = null; W.net = null; }
@@ -1319,6 +1500,15 @@ function openLobby(W, sel) {
       return;
     }
     if (S !== sess || my !== attempt) { try { net.leave(); } catch (x) {} return; }   // cancelled while joining
+    // HOST = the room's OWNER (the relay's word, not "the lowest peer id"): the creator, and when it leaves the room the longest-present player
+    // (a dropped host keeps it for a 20 s grace). The transport freezes the role during a match (beginOnlineMatch) - host = authority over the
+    // opponents - and re-reads it after (returnToRoom). Our hello's host flag follows it, so a newcomer reads who the host is now.
+    S.hs.host = net.isHost();
+    net.on("owner", () => {
+      if (S !== sess) return;
+      S.hs.host = net.isHost();
+      if (!S.started) { if (net.isHost()) send("hello", myHello()); if (S.paintRoster) S.paintRoster(); if (S.ui) S.ui.onOwner(); }
+    });
     // LC-49 REJOIN: a page that played in this room a moment ago (this tab's record, or one a closed tab of this browser left) asks for its
     // slot back in its hello; the host answers "rejoin" ok (the match's start) or no (why). Asked again every REJOIN_ASK_EVERY_MS while the
     // host has not yet seen the old page leave (a reload can beat its own presence-leave), for the whole rejoin window (REJOIN_ASK_TRIES; it
@@ -1371,18 +1561,33 @@ function openLobby(W, sel) {
       if (ms0 >= 0) { S.rjRescan = 1; setTimeout(() => rescan(1), ms0); }
     }
     send("hello", hello);
-    status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ` + (cands.length ? "rejoining your match…" : "share this code.") +
-      (asHost ? "" : "<br>Waiting for the host to start…");
-    if (cands.length) status.setAttribute("data-net-rejoin", "asking");
-    inviteB.style.display = "inline-block";
-    paintRoster();
-    if (net.isHost()) startB.style.display = "inline-block";
+    S.ui.onPeer();
+    if (cands.length) {
+      status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — rejoining your match…<br>Waiting for the host to start…`;
+      status.setAttribute("data-net-rejoin", "asking");
+    }
   }
 
-  createB.onclick = () => enter(randCode(), true);
-  joinB.onclick = () => { if (codeInp.value.trim()) enter(codeInp.value.trim(), false); };
-  // arrived via ?room=CODE (see init): show the code we are joining, then join
-  if (sel && sel.room) { codeInp.value = sel.room; enter(sel.room, false); }
+  createB.onclick = () => enter(null, true);   // the relay picks the code
+  joinB.onclick = () => {
+    const c = codeInp.value.trim().toUpperCase();
+    if (c.length === 4) { enter(c, false); return; }
+    status.textContent = "";
+    const b = document.createElement("b"); b.style.color = "#ffb060"; b.textContent = "A room code is 4 characters.";
+    status.appendChild(b); status.appendChild(document.createElement("br"));
+    status.appendChild(document.createTextNode("Type the code your friend sees on their screen, or open their invite link."));
+    codeInp.focus();
+  };
+  if (sel && sel.resume && S && S.net && S.net.room) {
+    // BACK TO ROOM (returnToRoom): the same room, the same friends - this lobby takes over the session's paint hooks
+    bind();
+    if (S.net.isHost()) sendRoom();
+    S.ui.onPeer();
+  } else if (sel && sel.room) {
+    // arrived via ?room=CODE (see init): show the code we are joining, then join
+    codeInp.value = String(sel.room).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    enter(codeInp.value, false);
+  }
 
   startB.onclick = () => {
     if (!S) return;
@@ -1394,12 +1599,14 @@ function openLobby(W, sel) {
     // stay in the room and are rejected by name in beginOnlineMatch.
     // VERSION GUARD: a peer on another world version gets no slot (it would build
     // a different map from this seed) - planStart leaves it out and says so.
-    const plan = S.hs.planStart(S.peers, MAX_GUESTS, performance.now());
-    const pace = sel.mode === "practice" ? "standard" : sel.mode;
-    // C-MODE: the team mode rides the start next to the pace (`mode` stays the pace, as every build reads it); each roster entry names its teamId
-    const teamMode = resolveTeamMode(teamWant, plan.roster.length, pace, W.SIM);
-    const roster = rosterWithTeams(plan.roster, teamMode, W.SIM);
-    const cfg = S.hs.startMsg({ seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: pace, teamMode, teamWant: teamWant || "auto", roster });
+    // a friend still finishing the last match (IN A MATCH) is left out: they play the next one (planStart's `busy`)
+    const plan = S.hs.planStart(S.peers, MAX_GUESTS, performance.now(), S.inMatch);
+    const pace = roomPace;
+    // C-MODE: the team mode rides the start next to the pace (`mode` stays the pace, as every build reads it); `teams` = how the humans
+    // group (squad / two / ffa) and each roster entry names its teamId
+    const teamMode = roomTeamMode(roomTeams, teamWant, plan.roster.length, pace, W.SIM);
+    const roster = rosterWithTeams(plan.roster, teamMode, W.SIM, roomTeams);
+    const cfg = S.hs.startMsg({ seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: pace, teamMode, teams: roomTeams, teamWant: teamWant || "auto", roster });
     send("start", cfg);
     if (beginOnlineMatch(W, cfg) !== false) {
       // the host reads WHY someone is not in this match: in the lobby when their hello arrived, and in the chat log once the match is live
@@ -1413,9 +1620,9 @@ function openLobby(W, sel) {
 
 // host + 3 guests. Every extra human multiplies EVERY outbound message.
 const MAX_GUESTS = 3;
-// a rostered guest that never sends a state packet is handed to a bot this long after the host's match went live (LC-11, update()). The
-// slowest measured cold match load is ~30 s (parity audit, cold Quick 29.7 s); twice that is not a load any more.
-const NEVER_SEEN_MS = 60000;
+// a rostered guest that never sends a state packet keeps its slot while the relay says it is in the room, up to FIRST_TICK_CAP_MS after the
+// host's match went live (LC-11 + fix 3, update(): neverSeenVerdict). The old fixed 60 s rule (NEVER_SEEN_MS, removed) took a present friend whose world
+// build was one 169 s synchronous step on a loaded box.
 
 /** Peer names are typed on someone else's machine and this file puts them in
  *  innerHTML — escape before they reach the DOM. */
@@ -1423,16 +1630,11 @@ function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-function randCode() {
-  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let s = "";
-  for (let i = 0; i < 4; i++) s += A[Math.floor(Math.random() * A.length)];
-  return s;
-}
-
 // ── P23 wiring helpers ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** Our hello: the handshake's body + this tab's rejoin commitment (LC-49). */
-function myHello() { return Object.assign(S.hs.helloMsg(), S.rk ? { rk: S.rk } : {}); }
+/** Our hello: the handshake's body + this tab's rejoin commitment (LC-49) + busy (FRIENDS ROOMS: inside a match right now). */
+function myHello() { return Object.assign(S.hs.helloMsg(), S.rk ? { rk: S.rk } : {}, { busy: S.started && !S._hostLostRan ? 1 : 0 }); }
+// What a page that is NOT in the room's running match still handles (FRIENDS ROOMS): the lobby's own messages
+const LOBBY_MSG = { hello: 1, back: 1, room: 1, start: 1, rejoin: 1, refuse: 1, rtc: 1 };
 
 /** LC-49: roster slot `slot`'s player left (bye / presence / watchdog take-over): the REJOIN_MS window opens (the earliest sighting counts). */
 function markGone(slot) {
@@ -1611,10 +1813,10 @@ function onRejoinAnswer(W, from, d) {
         st.textContent = "";
         const b = document.createElement("b");
         b.style.color = "#ffb060";
-        b.textContent = d.code === "busy" ? "A match is already running in this room." : "Couldn't get your place back.";
+        b.textContent = d.code === "busy" ? "The host is finishing a match — you'll play in the next one." : "Couldn't get your place back.";
         st.appendChild(b);
         st.appendChild(document.createElement("br"));
-        st.appendChild(document.createTextNode(d.code === "busy" ? "Stay here: when the host runs it back, you are in the next match." : "The host said: " + String(d.why || "").slice(0, 80) + ". Wait here for the next match."));
+        st.appendChild(document.createTextNode(d.code === "busy" ? "Stay in this room: when the host starts the next match, you are in it." : "The host said: " + String(d.why || "").slice(0, 80) + ". Wait here for the next match."));
         st.setAttribute("data-net-rejoin", d.code === "busy" ? "busy" : "refused");
       }
     }
@@ -1662,10 +1864,28 @@ function onRejoinInMatch(W, from, d) {
       (S.lastSeen = S.lastSeen || {})[id] = now;
       (S.everSeen = S.everSeen || {})[id] = true;
       if (S.tookOver) delete S.tookOver[id];
+      if (rj.late) {
+        // fix 3: a late arrival (its slot was handed over before its first live tick) has its body back - or is told it died meanwhile
+        const L = S.lateTake && S.lateTake[id];
+        if (S.lateTake) delete S.lateTake[id];
+        if (S.silentTake) delete S.silentTake[id];
+        (S.lateBack = S.lateBack || []).push({ id, peer: from, alive: !!a.alive, afterMs: L ? Math.round(now - L.at) : null });
+        if (S.lateBack.length > 16) S.lateBack.shift();
+        if (a.alive) notify(W, String(((S.cfg.roster.find((r) => r.slot === slot) || {}).name) || "A squad-mate").slice(0, 24) + " finished loading and is in the match.");
+      }
       W.events.emit("squadRejoin", { slot, peerId: from, stage: "back" });
     }
     send("sync", { t: +W.t.toFixed(2), loot: W.lootSyncState ? W.lootSyncState() : null, to: from, dead: deadList(W) });
     send("rejoin", Object.assign({ k: "back", slot, to: from }, bodySnap(a)));
+    return;
+  }
+  if (d.k === "late") {
+    // fix 3, THE LATE PAGE: the host handed this page's body over before its first tick (its world build outlasted the host's wait). Ask for it
+    // back like a rejoined page: no state goes out until "back" places this player where the body is (or says it died meanwhile).
+    if (d.to !== S.net.id || slot !== S.mySlot || S.net.isHost() || (S.rejoin && S.rejoin.state !== "back")) return;
+    const now = performance.now();
+    S.rejoin = { slot, at: now, inv: null, state: "ready", readyAt: now, tries: 1, late: true };
+    send("rejoin", { k: "ready", slot });
     return;
   }
   if (d.k === "back") {
@@ -1688,7 +1908,7 @@ function applyRejoinBack(W, d) {
     clearRejoin();
     p.hp = 0; p.shield = 0;
     if (W.killActor) W.killActor(p, null, null);
-    notify(W, "You were eliminated while you were away.");
+    notify(W, rj && rj.late ? "You were eliminated while your match was loading." : "You were eliminated while you were away.");
     W.events.emit("squadRejoin", { slot: rj.slot, stage: "dead" });
     return;
   }
@@ -1708,7 +1928,8 @@ function applyRejoinBack(W, d) {
   restoreInventory(W, p, rj && rj.inv);
   S.rejoinDone = { slot: rj.slot, ms: Math.round(performance.now() - rj.at) };
   S.rjSavedAt = 0;                                                  // the new secret is written on the next update()
-  notify(W, "Back in the match.");
+  notify(W, rj && rj.late ? "You're in: your squad kept your place while the match loaded." : "Back in the match.");
+  if (rj && rj.late) S.lateDone = { slot: rj.slot, ms: S.rejoinDone.ms, x: d.x, z: d.z };
   W.events.emit("squadRejoin", { slot: rj.slot, stage: "back", ms: S.rejoinDone.ms });
 }
 /** The kit this tab saved before it reloaded (weapons, consumables, ammo, the active slot); anything the sim does not know is dropped. */
@@ -1839,6 +2060,7 @@ function takeOverBody(W, a) {
  *  the body goes back to the peer: its brain idles (bots.js skips netRemote actors), the packet's position wins (the guest's page kept
  *  simulating it), and every guest is told the body is a human's again ("rejoin" back, addressed to the peer, which ignores it). */
 function reclaimSilentBody(W, a, from, d) {
+  if (S.lateTake && S.lateTake[a.id]) return lateArrival(W, a, from);
   const at = S.silentTake && S.silentTake[a.id];
   if (at == null) return false;
   const now = performance.now();
@@ -1860,6 +2082,24 @@ function reclaimSilentBody(W, a, from, d) {
   send("rejoin", Object.assign({ k: "back", slot, to: from }, bodySnap(a)));
   notify(W, String(((S.cfg.roster.find((r) => r.slot === slot) || {}).name) || "A squad-mate").slice(0, 24) + " reconnected.");
   W.events.emit("squadRejoin", { slot, peerId: from, stage: "reconnect", ms: Math.round(now - at) });
+  return true;
+}
+
+/** HOST, fix 3 LATE ARRIVAL: the first state packet of a player whose slot the never-seen watchdog handed over before its first live tick (its
+ *  world build outlasted FIRST_TICK_CAP_MS, or the relay lost it for a moment). Whenever it arrives while the match runs, its body goes back to
+ *  it through the rejoin hand-back: "rejoin" { k: "late" } asks the page for its "ready" (it sends no state until "back"), and the "ready" handler
+ *  gives the body back with a loot sync and the list of the dead - or tells it the body died (it then spectates, as any dead player).
+ *  Until then the bot keeps the body (the page's fresh spawn must never pull it into the sky). Offered at most every 2 s. */
+function lateArrival(W, a, from) {
+  const L = S.lateTake[a.id];
+  const slot = slotOfPeer(S.cfg && S.cfg.roster, from);
+  const j = judgeLateArrival({ senderSlot: slot, id: a.id, from, rejoinedBy: S.rejoined && S.rejoined[a.id] && !S.rejoined[a.id].late ? S.rejoined[a.id].peer : null });
+  if (j !== "ok") return false;
+  const now = performance.now();
+  if (L.offerAt && now - L.offerAt < 2000) return true;
+  L.offerAt = now; L.offers = (L.offers | 0) + 1;
+  (S.rejoined = S.rejoined || {})[a.id] = { peer: from, at: now, ready: false, late: true };
+  send("rejoin", { k: "late", slot, to: from });
   return true;
 }
 
@@ -1926,7 +2166,9 @@ function beginOnlineMatch(W, cfg) {
   const teamMode = normTeamMode(cfg.teamMode);
   const humans = cfg.roster.map((r) => {
     const h = { slot: r.slot, name: r.name, self: r.peerId === S.net.id };
-    if (teamMode) h.teamId = typeof r.teamId === "string" && r.teamId.length <= 24 ? r.teamId : humanTeamId(r.slot, teamMode, W.SIM);
+    // FRIENDS ROOMS: cfg.teams = how the humans group (squad: one team "t0"; two: "sqA" / "sqB" down the roster; ffa: each its own) - the
+    // boot groups the humans by these ids (D5 humanTeamIdsOf) and fills each team's other seats with bot teammates
+    if (teamMode) h.teamId = typeof r.teamId === "string" && r.teamId.length <= 24 ? r.teamId : roomHumanTeamId(r.slot, teamMode, W.SIM, normTeams(cfg.teams));
     return h;
   });
   if (S.started) resetMatchState();          // LC-18 rematch: the room stays, everything about the last match goes
@@ -1934,6 +2176,11 @@ function beginOnlineMatch(W, cfg) {
   S.mySlot = me ? me.slot : 0;
   S.started = true;
   S.rematchN = Math.max(S.rematchN | 0, cfg.rematch | 0);
+  // HOST = authority over the opponents: the role is FROZEN for the match (the relay may hand the room's ownership on while it runs - a
+  // host that left - and that must never flip who simulates the bots under a running match; a lost host is hostLost's job). returnToRoom
+  // un-freezes it. Everyone this start rostered is IN A MATCH for the room's lobby until their "back".
+  if (S.net.setFrozen) S.net.setFrozen(true);
+  for (const r of cfg.roster) if (r && r.peerId && r.peerId !== S.net.id) S.inMatch[r.peerId] = true;
   // LC-49: the host files each guest's rejoin commitment by slot; a guest keeps its secret (and, from update(), its kit) for a reload
   if (S.net.isHost()) {
     S.slotKeys = new Map();
@@ -1942,6 +2189,19 @@ function beginOnlineMatch(W, cfg) {
   const opts = { mapId: cfg.mapId, mode: cfg.mode, seed: cfg.seed, humans, guestOf: S.net.isHost() ? null : "host" };
   if (teamMode) opts.teamMode = teamMode;
   if (cfg.rejoin) opts.rejoin = { slot: S.mySlot };     // (the boot may skip its lobby countdown for it; net.js places the body on "back")
+  // fix 3: one "loading" BEFORE the world build (on a slow device a single synchronous step of it took 169 s, and nothing goes out during it):
+  // the others can say who is still loading, and the host knows the slot is coming (it keeps it while the relay says this page is present)
+  send("loading", { slot: S.mySlot, rematch: cfg.rematch | 0 });
+  // ...and again every LOADING_BEAT_MS while this page's match load is still running (W._starting: set by startMatch, cleared when it ends -
+  // a page sitting in its lobby or its match sends none). Between the long synchronous steps of a slow build these get out: proof that the
+  // page is still loading, not hung. A guest's wait for a host that has not ticked yet counts from the host's last one (update()), so a host
+  // whose build takes 660 s under CPU x4 (fix3 e2e_c1) keeps its guests, and a host that stops making progress still loses them after 240 s.
+  if (S.loadBeat) { try { clearInterval(S.loadBeat); } catch (e) {} }
+  const sess = S, beatSlot = S.mySlot, beatN = cfg.rematch | 0;
+  S.loadBeat = setInterval(() => {
+    if (S !== sess || !sess.started || !W._starting || sess.matchLiveAt) { clearInterval(sess.loadBeat); sess.loadBeat = null; return; }
+    send("loading", { slot: beatSlot, rematch: beatN, beat: 1 });
+  }, LOADING_BEAT_MS);
   window.__LC__.startMatch(opts);
 }
 
@@ -1958,6 +2218,8 @@ function reject(t, from, why) {
 
 /** Is a "start" from the room's host? The peer whose hello said host: 1 - or, when no such hello arrived, the peer the roster puts in slot 0. */
 function startFromHost(from, d) {
+  // the relay names the room's owner (= the host) on every welcome / presence: that is the answer when we have it
+  if (S.net && typeof S.net.owner === "string" && S.net.owner) return from === S.net.owner;
   let knownHost = null;
   for (const [pid, rec] of S.hs.peers) if (rec && rec.host) { knownHost = pid; break; }
   if (knownHost) return from === knownHost;
@@ -1969,14 +2231,29 @@ function onMsg(W, { from, t, d }) {
   // batched cosmetic envelope (see qsend) — unwrap and dispatch in order.
   // A nested "ev" is skipped rather than recursed: we never send one, so it
   // could only ever be a malformed packet, and recursing on it is unbounded.
+  // FRIENDS ROOMS: in the lobby, or playing on alone after the host left, the room's NEXT match runs on the same actor ids (s0..s49): its
+  // hits, deaths and snapshots must never reach this world. Same for a friend who has already moved on to the next match while this page
+  // is still in the last one (S.moved: their start did not roster us).
+  if ((!S.started || S._hostLostRan || (S.moved && S.moved[from])) && !LOBBY_MSG[t]) return;
   if (t === "ev") { for (const m of d.list || []) if (m && m.t !== "ev") onMsg(W, { from, t: m.t, d: m.d }); return; }
+  if (t === "back") {
+    // that friend finished their match and is in the room's lobby again
+    if (S.inMatch) S.inMatch[from] = false;
+    if (S.moved) delete S.moved[from];
+    // the host is back in the room: a newcomer told "the host is finishing a match" now reads the normal room line
+    if (!S.started && S.status && from === S.net.owner && S.status.getAttribute("data-net-rejoin") === "busy") S.status.removeAttribute("data-net-rejoin");
+    if (!S.started && S.ui) S.ui.onPeer();
+    return;
+  }
   if (t === "hello") {
     // REPLY to a peer we had not seen. "hello" was broadcast once on join and
     // never replayed, so the third person to join learned nobody's name and the
     // two already in the room learned only theirs. Bounded — the reply fires
     // only for a first sighting, and everyone already in the room has us.
     const hr = S.hs.onHello(from, d, performance.now());
-    S.peers[from] = d && d.name;
+    S.peers[from] = d && typeof d.name === "string" ? d.name.slice(0, 24) : "Friend";
+    // busy = that friend is inside a match right now (a newcomer waits for the next one; START leaves them out)
+    if (S.inMatch && d && "busy" in d) S.inMatch[from] = !!d.busy;
     // a peer heard for the first time may be ahead of its own presence: repaint once the grace window ends, so a ghost hello leaves the list
     if (hr.first && S.paintRoster) setTimeout(() => { if (S && S.paintRoster && !S.started) S.paintRoster(); }, PRESENCE_GRACE_MS + 100);
     if (hr.first) send("hello", myHello());
@@ -1994,7 +2271,13 @@ function onMsg(W, { from, t, d }) {
   }
   if (t === "room") {
     // C-MODE, lobby: the host's team-mode pick (display only - the start carries what is played)
-    if (!S.started && !S.net.isHost() && d && startFromHost(from, null)) { S.roomTm = normTeamMode(d.tm); if (S.paintMode) S.paintMode(); }
+    // FRIENDS ROOMS: plus the pace (mode) and how the humans group (teams); a guest that becomes host later keeps them (S.ui.onOwner)
+    if (!S.started && !S.net.isHost() && d && startFromHost(from, null)) {
+      S.roomTm = normTeamMode(d.tm);
+      if (PACES.includes(d.mode)) S.roomPace = d.mode;
+      if (normTeams(d.teams)) S.roomTeams = d.teams;
+      if (S.paintRoster) S.paintRoster();
+    }
     return;
   }
   if (t === "rejoin" && !S.started) {
@@ -2020,6 +2303,13 @@ function onMsg(W, { from, t, d }) {
   // REMATCH (parity LC-18): the host of the match that just ended starts the next one in the same room (net.rematch on its side). A guest
   // follows it: at once when its own match is over, else as soon as it is (update() / rematch()).
   if (t === "start" && S.started) {
+    // FRIENDS ROOMS: the host started the room's next match from the lobby while this page is still in the last one - not for us (no
+    // joining a match in progress): those friends are IN A MATCH now and their traffic is not this world's (S.moved)
+    if (d && Array.isArray(d.roster) && !d.rematch && !d.roster.some((r) => r && r.peerId === S.net.id) && startFromHost(from, d)) {
+      S.moved = S.moved || {};
+      for (const r of d.roster) if (r && r.peerId && r.peerId !== S.net.id) { S.inMatch[r.peerId] = true; S.moved[r.peerId] = 1; }
+      return;
+    }
     if (!d || !d.rematch || !S.cfg || !Array.isArray(S.cfg.roster) || !S.cfg.roster[0] || S.cfg.roster[0].peerId !== from) { reject(t, from, "start mid-match"); return; }
     if (S.hs.judgeStart(d)) { reject(t, from, "rematch on another world version"); return; }
     if ((d.rematch | 0) <= (S.rematchN | 0)) return;          // a repeat of one we already took
@@ -2048,6 +2338,14 @@ function onMsg(W, { from, t, d }) {
     if (S.net.isHost()) { if (!hostTakeOver(W, r.id)) (S.pendingTakeovers = S.pendingTakeovers || new Set()).add(r.id); }
     else if (r.host) { if (W.player) hostLost(W); else S.hostGone = true; }
     W.events.emit("squadMapFallback", { peerId: from, name: r.name, wanted: r.wanted, built: r.built, host: r.host, by: "peer" });
+    return;
+  }
+  if (t === "loading") {
+    // fix 3: a rostered squad-mate is building this match's world (sent once, before its build): update() names it in the chat log if it has
+    // not ticked LOADING_NOTICE_MS after this page's match went live. Only a peer this match rostered, only for its own slot.
+    const sl = slotOfPeer(S.cfg && S.cfg.roster, from);
+    if (sl == null || !d || d.slot !== sl) { reject(t, from, "loading for another slot"); return; }
+    (S.loadingFrom = S.loadingFrom || {})[from] = performance.now();
     return;
   }
   if (t === "rtc") {
@@ -2233,7 +2531,20 @@ function onMsg(W, { from, t, d }) {
   if (t === "bye") {
     // a guest left mid-match: host re-attaches a bot brain so the slot fights on
     const a = W.actorById.get(d.slot);
-    { const sl = slotOfPeer(S.cfg && S.cfg.roster, from); if (sl > 0 && d.slot === "s" + sl) { markGone(sl); if (S.silentTake) delete S.silentTake[d.slot]; } }   // LC-49: the rejoin window opens (a bye is not a silence)
+    const bsl = slotOfPeer(S.cfg && S.cfg.roster, from);
+    { const sl = bsl; if (sl > 0 && d.slot === "s" + sl) { markGone(sl); if (S.silentTake) delete S.silentTake[d.slot]; } }   // LC-49: the rejoin window opens (a bye is not a silence)
+    // fix 3: a guest that said bye left THIS match on purpose (its load failed and it went back to the room, BACK TO ROOM, a closed tab): the
+    // never-seen watchdog must not keep its slot for it, and a late packet never takes the body back. Its bye can arrive while this host is still
+    // loading (no body yet): drainPending hands the slot over once the actors exist.
+    if (S.net.isHost() && bsl > 0 && d.slot === "s" + bsl) {
+      S.tookOver = S.tookOver || {};
+      if (!S.tookOver[d.slot]) S.tookOver[d.slot] = { at: S.matchLiveAt ? Math.round(performance.now() - S.matchLiveAt) : null, why: "left the match" };
+      if (S.lateTake) delete S.lateTake[d.slot];
+      if (!a) (S.pendingTakeovers = S.pendingTakeovers || new Set()).add(d.slot);
+    }
+    // fix 3: the HOST's own bye (its load failed and it went back to the room, or BACK TO ROOM) before this guest ever heard a host packet:
+    // S.hostSlot is unknown then, but the sender is the roster's slot 0 - continue offline (once this page's actors exist)
+    if (!S.net.isHost() && bsl === 0 && d.slot === "s0" && !S.hostSlot) { if (W.player) hostLost(W); else S.hostGone = true; return; }
     if (a && a.alive && S.net.isHost() && a.netRemote) takeOverBody(W, a);
     // the HOST left mid-match: this bye used to be silently ignored by guests
     // (the branch above is host-only), stranding them in a frozen world — all
@@ -2350,17 +2661,56 @@ function slewClock(W, hostT) {
 export function hostLost(W) {
   if (!S || S._hostLostRan) return;
   S._hostLostRan = true;
+  hideHostWait();
   clearRejoin();               // LC-49: the room is gone
   const converted = convertRemotesToBots(W);
   try { S.rtc && S.rtc.close(); } catch (e) {}
-  try { S.net && S.net.leave && S.net.leave(); } catch (e) {}
+  // FRIENDS ROOMS: the ROOM stays open - the host leaving the match (BACK TO ROOM, a drop) must not throw the guests out of the party. This
+  // match goes on locally (update() stops sending, onMsg ignores match traffic) and BACK TO ROOM afterwards returns to the same room;
+  // MAIN MENU leaves it.
   W.net = null;                                 // frame gates (hitstop etc.) read this
   W.events.emit("hostLost", converted);
   console.warn(`[net] host lost — converted ${converted} remote actors to bots, continuing offline`);
 }
 
+/** Still in a friends room (the room's socket is open)? True also for a guest playing on after its host left (W.net is null then). */
+export function inRoom(W) { return !!(S && S.net && S.net.ws && S.net.ws.readyState === 1 && S.net.room && !S.refused && !S.fallbackDone); }
+
+/** BACK TO ROOM after a match: the party stays together, as in other battle royales. Clears the per-match state, un-freezes the host role
+ *  (the room may have a new host by now) and reopens the room's lobby over the menu. The others see this player ready again ("back"). */
+export function returnToRoom(W, opts) {
+  if (!inRoom(W)) { leave(W); return false; }
+  hideWaitCard();
+  clearRejoin();
+  // leaving a match the others are still in: say so, like closing the tab - a guest's slot gets a brain on the host at once, and if this is
+  // the host the guests carry on locally right away instead of after the silence watchdog
+  if (S.started && !S._hostLostRan && S.mySlot != null) send("bye", { slot: "s" + S.mySlot });
+  try { S.rtc && S.rtc.close(); } catch (e) {}
+  S.rtc = new RTCMesh(S.net.id, (to, payload) => send("rtc", Object.assign({ to }, payload)));
+  S.rtc.onMessage = (m) => { if (m && m.t) onMsg(W, { from: m.from, t: m.t, d: m.d }); };
+  resetMatchState();
+  const picks = S.roomPicks ? S.roomPicks() : null;
+  Object.assign(S, { started: false, cfg: null, mySlot: null, _hostLostRan: false, moved: null, droppedMsgs: 0, sendWinT: null, sendWinN: 0 });
+  if (S.net.setFrozen) S.net.setFrozen(false);
+  S.hs.host = S.net.isHost();
+  W.net = S;
+  send("back", {});
+  send("hello", myHello());          // a newcomer who arrived during the match learns this player's name + that it is free again
+  openLobby(W, Object.assign({ resume: true }, picks || {}));
+  // fix 3: this page's match failed to load (a required asset): it stays in the room and plays the next match - the "back" above shows it
+  // waiting in everyone's lobby, the "bye" handed its slot over for the match that is running. The reason goes on the room's notice line.
+  if (opts && opts.loadFailed && S) {
+    const line = "Couldn't load the match - check your connection. You're still in the room and will play the next match.";
+    S.loadFailed = { msg: String(opts.loadFailed).slice(0, 160), at: Math.round(performance.now()) };
+    try { if (S.notice) S.notice(line, "loadfail"); } catch (e) {}
+    try { if (S.status) S.status.setAttribute("data-net-loadfail", "1"); } catch (e) {}
+  }
+  return true;
+}
+
 export function leave(W) {
   hideWaitCard();
+  hideHostWait();
   clearRejoin();               // LC-49: a player who LEAVES (main menu) is not coming back for the slot
   if (S) {
     try { S.rtc && S.rtc.close(); } catch (e) {}
@@ -2378,10 +2728,13 @@ function resetMatchState() {
   S.pendingBots = null; S.evQ = []; S.lastState = 0; S.lastBots = 0; S.botsTick = 0;
   S.pendingTakeovers = null; S.hostGone = false; S.mapFails = null; S.pendingNotices = null;
   S.pendingRematch = null; S.wantRematch = false;
-  S.pingIn = null; S.pingOut = null;
+  S.pingIn = null; S.pingOut = null; S.tickAt = 0;
   // P23: the receive order gate, the revive book, the rejoin book and the relayed smokes belong to the match that ended (txSeq keeps counting)
   S.rxGate = null; S.reviveIn = null; S.reviveOut = null; S.goneAt = null; S.rejoined = null; S.rejoin = null; S.slotKeys = null;
   S.teamCheck = null; S.rjSavedAt = 0; S.silentTake = null; S.reclaimed = null; S.lootDefer = null;
+  // fix 3: the late-arrival book, the "still loading" notes and the host-wait notice belong to the match that ended
+  S.lateTake = null; S.lateBack = null; S.lateDone = null; S.loadingFrom = null; S.loadNoted = null; S.hostAbsentSince = 0; S.hostWait = null;
+  hideHostWait(); S.hostWaitStats = null;
 }
 /** Keep chest-item takes until their chest opens on this client (the chestOpened listener in init applies them). */
 function deferTakes(ids) {
@@ -2389,6 +2742,36 @@ function deferTakes(ids) {
   const set = S.lootDefer = S.lootDefer || new Set();
   for (const id of ids) { set.delete(id); set.add(id); }
   while (set.size > LOOT_DEFER_MAX) set.delete(set.values().next().value);
+}
+
+// fix 3: the guest's small "Waiting for host..." line while a host that is still in the room has gone quiet (hostSilenceVerdict "wait"). It is a
+// note over the view, not a panel: no pointer events, no layout change to the HUD; the match coasts underneath as it always did during a silence.
+let _hostWaitEl = null;
+function hideHostWait() {
+  if (_hostWaitEl) {
+    try { _hostWaitEl.remove(); } catch (e) {}
+    _hostWaitEl = null;
+    if (S && S.hostWaitStats && S.hostWaitStats.shownAt != null) {
+      const st = S.hostWaitStats;
+      st.hiddenAt = Math.round(performance.now());
+      st.maxMs = Math.max(st.maxMs | 0, st.hiddenAt - st.shownAt);
+    }
+  }
+}
+function showHostWait(W, on) {
+  if (!on) { hideHostWait(); return; }
+  if (_hostWaitEl && _hostWaitEl.isConnected) return;
+  try {
+    const el = document.createElement("div");
+    el.setAttribute("data-net-hostwait", "");
+    el.textContent = "Waiting for host…";
+    Object.assign(el.style, { position: "fixed", left: "50%", top: "22%", transform: "translateX(-50%)", zIndex: "60", pointerEvents: "none",
+      padding: "6px 16px", borderRadius: "8px", background: "rgba(4,10,20,0.72)", border: "1px solid rgba(120,180,255,0.25)", color: "#dfeaff",
+      font: "600 15px Rajdhani, 'Segoe UI', system-ui, sans-serif", letterSpacing: "1px" });
+    (W.kernel && W.kernel.parent ? W.kernel.parent : document.body).appendChild(el);
+    _hostWaitEl = el;
+    if (S) { const st = S.hostWaitStats = S.hostWaitStats || { n: 0, maxMs: 0 }; st.n++; st.shownAt = Math.round(performance.now()); st.hiddenAt = null; }
+  } catch (e) { /* a notice must never break the frame */ }
 }
 
 let _waitCard = null;
@@ -2449,11 +2832,12 @@ export function rematch(W, opts) {
     // C-MODE / D5: the room keeps its team-mode PICK (re-resolved for who is still here): a pick of SQUADS stays SQUADS, AUTO stays AUTO (the
     // boot passes the mode the last match RESOLVED to, which for an AUTO room is not a pick); a start without teamWant (older host) -> opts
     const want = rematchTeamWant(S.cfg, opts.teamMode);
-    const teamMode = resolveTeamMode(want === "solo" ? null : want, plan.roster.length, pace, W.SIM);
+    const teamMode = roomTeamMode(normTeams(S.cfg && S.cfg.teams) || "squad", want === "solo" ? null : want, plan.roster.length, pace, W.SIM);
     const cfg = S.hs.startMsg({
       seed: (Math.random() * 0xffffffff) >>> 0,
       mapId: opts.mapId || (W.randomMap ? W.randomMap() : (S.cfg && S.cfg.mapId)),
-      mode: pace, teamMode, teamWant: want && want !== "solo" ? want : "auto", roster: rosterWithTeams(plan.roster, teamMode, W.SIM), rematch: S.rematchN,
+      mode: pace, teamMode, teams: normTeams(S.cfg && S.cfg.teams) || "squad", teamWant: want && want !== "solo" ? want : "auto",
+      roster: rosterWithTeams(plan.roster, teamMode, W.SIM, S.cfg && S.cfg.teams), rematch: S.rematchN,
     });
     send("start", cfg);
     return beginOnlineMatch(W, cfg) !== false;
@@ -2499,18 +2883,29 @@ export function onMatchStart(W) {
 }
 
 export function update(W, dt) {
-  if (!S || !S.started || !W.player) return;
+  if (!S || !S.started || S._hostLostRan || !W.player) return;
   if (S.pendingRematch && tryFollowRematch(W)) return;      // LC-18: the host started the next match and ours is over
   if (S.mapFallback && !S.fallbackDone) { leaveForFallback(W, detectMapFallback(W, S.gv, S.mapFallback)); return; }   // (onMatchStart normally got there first)
   if (S.pendingTakeovers || S.hostGone) drainPending(W);
   if (S.pingOut && S.pingOut.pending) flushPingOut(W, S.pingOut);   // LC-07: a held map pin goes out as soon as its 1/s frees
   if (S.pingIn && S.pingIn.pending) flushPingIn(W, S.pingIn);
   const now = performance.now();
+  // LOCAL STALL: the silence watchdogs below judge the OTHER side by when its last packet was handled HERE. While this page itself was not
+  // ticking (a long world build on a slow device - the guest of a rematch measured 19 s on its first drop tick -, a hidden tab), the
+  // packets that arrived sit unhandled in the queue, and the first tick after it read the stall as the host's silence: hostLost, the guest
+  // played on alone and the host handed its body to a bot. A gap of more than 2 s between two ticks restarts every silence clock from now.
+  if (!S.tickAt || now - S.tickAt > 2000) {                  // (the first tick of a match counts: the load before it was a stall)
+    if (S.hostSeen) S.hostSeen = now;
+    if (S.lastSeen) for (const id in S.lastSeen) S.lastSeen[id] = now;
+  }
+  S.tickAt = now;
   // LC-49 REJOIN, the returning page: "ready" is repeated every 3 s until the host hands the body back ("back")
   if (S.rejoin && S.rejoin.state === "ready" && now - S.rejoin.readyAt > 3000 && S.rejoin.tries < 6) {
     S.rejoin.readyAt = now; S.rejoin.tries++;
     send("rejoin", { k: "ready", slot: S.rejoin.slot });
   }
+  // fix 3: a late page whose "ready"s all went unanswered sends state again, so the host offers the body once more ("late")
+  if (S.rejoin && S.rejoin.late && S.rejoin.state === "ready" && S.rejoin.tries >= LATE_READY_TRIES && now - S.rejoin.readyAt > 3000) S.rejoin = null;
   // ...and every guest keeps its rejoin record (secret + kit) fresh for a reload, every 2 s (one small storage write)
   if (!S.net.isHost() && !S.rejoin && W.player.alive && now - (S.rjSavedAt || 0) > 2000) { S.rjSavedAt = now; saveRejoin(W); }
   // LC-14 / C-SMOKE: a smoke cloud made here (weapons.js pushed it into W.smokes) goes to the room once
@@ -2596,7 +2991,7 @@ export function update(W, dt) {
       S.pendingBots = null;
     }
     // P2P FIRST: the envelope goes over DataChannels to every peer whose
-    // channel is open; ONE Supabase broadcast only if any peer lacks one
+    // channel is open; ONE relay broadcast only if any peer lacks one
     // (that peer filters by `from` exactly as before; a DC peer seeing the
     // duplicate just re-applies the same snapshot — harmless by design).
     // Any RTC failure therefore degrades to the exact pre-RTC behaviour.
@@ -2628,10 +3023,24 @@ export function update(W, dt) {
   // missed packets, far past any transient. This also covers the channel-error
   // path with no extra API surface: an errored socket delivers nothing, so the
   // watchdog fires 8s later.
-  if (!S.net.isHost() && S.started && S.hostSeen &&
-      (W.phase === "match" || W.phase === "drop") &&
-      now - S.hostSeen > 8000) {
-    hostLost(W);
+  // fix 3: the 8 s rule fired on a host that was still in the room but stalled (an 82 s long task under CPU x4): the guest played on alone and
+  // the room split. Now the relay's presence list decides: a host still present gets HOST_SILENT_PRESENT_MS (45 s) after its last packet, or
+  // FIRST_TICK_CAP_MS (240 s) before its first one, with a small "Waiting for host..." on screen; a host the relay says has left (PRESENCE_LEAVE_MS)
+  // -> offline at once. With this page's own relay socket down (the list is stale) the old 8 s rule applies. The stall guard above still runs first.
+  if (!S.net.isHost() && S.started && (W.phase === "match" || W.phase === "drop")) {
+    const hp = S.cfg && Array.isArray(S.cfg.roster) && S.cfg.roster[0] ? S.cfg.roster[0].peerId : null;
+    const presenceLive = !!(S.net.ws && S.net.ws.readyState === 1 && S.hs.present);
+    const hostGone = !!hp && presenceLive && !S.hs.isPresent(hp, now);
+    if (!hostGone) S.hostAbsentSince = 0;
+    else if (!S.hostAbsentSince) S.hostAbsentSince = now;
+    // (before the host's first tick the 240 s count from the later of this page going live and the host's last "loading" beat: a host that is still
+    // building its world says so every LOADING_BEAT_MS between its long steps)
+    const hostBeat = hp && S.loadingFrom && S.loadingFrom[hp] ? S.loadingFrom[hp] : 0;
+    const v = hostSilenceVerdict({ presenceLive, hostGoneMs: hostGone ? now - S.hostAbsentSince : null, silentMs: S.hostSeen ? now - S.hostSeen : null,
+      sinceLiveMs: S.matchLiveAt ? now - Math.max(S.matchLiveAt, hostBeat) : 0 });
+    if (!S.hostSeen && S.matchLiveAt && now - S.matchLiveAt > FIRST_TICK_HARD_CAP_MS) { S.hostLostWhy = "never started"; hostLost(W); return; }
+    if (v === "lost") { S.hostLostWhy = hostGone ? "left the room" : "silent"; hostLost(W); return; }
+    showHostWait(W, v === "wait");
   }
   // host: silent-guest watchdog — no state for 12s mid-match → bot takes over
   // (it calls the take-over directly: a "bye" is bound to its sender's own slot now, LC-11)
@@ -2646,7 +3055,8 @@ export function update(W, dt) {
   // host: NEVER-SEEN watchdog (LC-11). The watchdog above only iterated S.lastSeen, i.e. guests that had sent at least one state packet; a
   // guest whose tab closed or crashed while its match was loading never got there, so its body hung in the sky forever, immortal (the storm
   // skips netRemote actors) and keeping the squad's team alive - the match could not end. A rostered guest that has sent nothing is handed to
-  // a bot once its presence has been gone for 2 s, or after NEVER_SEEN_MS from the moment this match went live (a slow load is not a crash).
+  // a bot once its presence has been gone for 2 s, or (fix 3) FIRST_TICK_CAP_MS after this match went live while it is still present (a slow load
+  // is not a crash: liveness before the first tick is the relay's presence list, not silence).
   if (S.net.isHost() && S.cfg && Array.isArray(S.cfg.roster) && S.matchLiveAt && (W.phase === "match" || W.phase === "drop")) {
     S.absentSince = S.absentSince || {};
     S.tookOver = S.tookOver || {};
@@ -2657,12 +3067,26 @@ export function update(W, dt) {
       const gone = !S.hs.isPresent(r.peerId, now);
       if (!gone) S.absentSince[id] = 0;
       else if (!S.absentSince[id]) S.absentSince[id] = now;
-      if ((gone && now - S.absentSince[id] > 2000) || now - S.matchLiveAt > NEVER_SEEN_MS) {
+      // fix 3: liveness before the first tick is the relay's presence, not silence: a present guest keeps its slot up to FIRST_TICK_CAP_MS
+      const v = neverSeenVerdict({ goneMs: gone ? now - S.absentSince[id] : null, sinceLiveMs: now - S.matchLiveAt });
+      if (v !== "wait") {
         if (hostTakeOver(W, id)) {
-          S.tookOver[id] = { at: Math.round(now - S.matchLiveAt), why: gone ? "left the room" : "never sent state" };
+          S.tookOver[id] = { at: Math.round(now - S.matchLiveAt), why: v === "left" ? "left the room" : "never sent state" };
           if (!gone) (S.silentTake = S.silentTake || {})[id] = now;        // LC-49: a slow load that finally arrives gets its body back
+          // fix 3: ...whenever it arrives while the match runs (no REJOIN_MS limit), through the late hand-back (lateArrival)
+          (S.lateTake = S.lateTake || {})[id] = { at: now, why: v };
         }
       }
+    }
+  }
+  // fix 3: "<name> is still loading" - once per squad-mate that sent "loading" and has not ticked LOADING_NOTICE_MS after this page went live
+  if (S.cfg && Array.isArray(S.cfg.roster) && S.matchLiveAt && now - S.matchLiveAt > LOADING_NOTICE_MS && S.loadingFrom && (W.phase === "match" || W.phase === "drop")) {
+    for (const r of S.cfg.roster) {
+      if (!r || r.peerId === S.net.id || !S.loadingFrom[r.peerId]) continue;
+      const id = "s" + r.slot;
+      if ((S.everSeen && S.everSeen[id]) || (S.loadNoted && S.loadNoted[id]) || (S.tookOver && S.tookOver[id]) || !S.hs.isPresent(r.peerId, now)) continue;
+      (S.loadNoted = S.loadNoted || {})[id] = Math.round(now - S.matchLiveAt);
+      notify(W, String(r.name || "A squad-mate").slice(0, 24) + " is still loading the match. Their place is kept.", "load" + r.slot);
     }
   }
   // host: bot snapshots 10Hz (only bots near any human get full rate; far bots 2Hz)

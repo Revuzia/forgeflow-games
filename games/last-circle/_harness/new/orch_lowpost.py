@@ -173,6 +173,7 @@ def canvas_ok(shaders):
 
 def drop_frame_one(s, v, label):
     """Freeze the loop, press Enter into the drop, count programs around ONE stepped rendered frame (framecheck's method)."""
+    s.wait_lobby_full()          # step 8: a real Enter only skips a FULL offline lobby (the fill is a timer: wait before the freeze)
     s.freeze_loop()
     before = s.js(PROGRAMS_JS)
     s.page.keyboard.press("Enter")

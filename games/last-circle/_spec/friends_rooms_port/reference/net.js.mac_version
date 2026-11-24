@@ -1,0 +1,990 @@
+/**
+ * royale/net.js — play-with-friends multiplayer.
+ *
+ * TRANSPORT (2026-11-22): the Cloudflare friends-room relay, workers/last-circle-net, through
+ * runtime/net/ffg_cfroom.js (one Durable Object room per 4-character code, origin allow-list, daily
+ * meter). It replaced the shared free Supabase Realtime project (runtime/net/ffg_netplay.js, kept on
+ * disk but no longer imported), whose 2M msgs/month and 100 msg/s ceiling were shared by every
+ * ForgeFlow game and which dropped the connection when exceeded. The per-second send budget below was
+ * sized for that ceiling and is kept as-is: it also keeps the new relay's daily meter well inside the
+ * Workers Free plan.
+ *
+ * Model: room code lobby, up to 4 humans (host + MAX_GUESTS). Truncated at
+ * start: every extra human multiplies every outbound message.
+ *
+ * The world is DETERMINISTIC from the shared seed (terrain, POIs, loot spawns,
+ * chest contents, storm plan), so only live state is relayed:
+ *   - each human simulates their OWN actor and broadcasts state at 12/8/5 Hz
+ *     depending on how many humans are in the room
+ *   - the HOST simulates all 49-minus-guests opponents; snapshots (10/8/6.25 Hz)
+ *     ride the host's state packet (guests render them as netRemote actors)
+ *   - hits on a human are sent to the victim's client ("hitYou") — the victim
+ *     applies damage to itself (client authority over own HP)
+ *   - chest opens / item pickups / gunfire / emotes mirror as cosmetic events,
+ *     batched and RIDING THE STATE PACKET (envelope merge — one message per
+ *     client per state tick carries state + evs + [host] opponent snapshots)
+ *   - eliminations mirror immediately (authoritative, never batched)
+ *
+ * JOIN = TAKE OVER AN OPPONENT SLOT: humans occupy slots s0..sK (sorted by peer id,
+ * host = s0); every other slot keeps its computer-run opponent. A guest joining the
+ * lobby claims the next slot before match start; when a guest disconnects mid-match
+ * the host re-attaches a brain to that slot — the actor keeps fighting.
+ */
+import { RoomNet, netBaseUrl } from "../../net/ffg_cfroom.js";
+import { RTCMesh } from "../../net/ffg_rtc.js";
+
+let S = null; // session
+
+export function init(W) {
+  W.net = null;
+  W.events.on("openOnline", (sel) => openLobby(W, sel));
+  // weapons.js routes hits on netRemote humans here (victim applies to itself).
+  // `attackerId` is LAST so the old 4-arg call order still works. It exists
+  // because this fires for everything simulated locally — on the host that is
+  // all 46 bots, not just W.player — and the hardcoded `attacker: W.player.id`
+  // credited the host personally for every bot bullet that landed on a guest:
+  // wrong kill feed, wrong killer cam, wrong "eliminated by" on the death screen.
+  W.reportRemoteHit = (target, dmg, weaponId, isHead, attackerId) => {
+    if (S && W.player) send("hitYou", { target: target.id, dmg, attacker: attackerId || W.player.id, weapon: weaponId, isHead });
+  };
+  // mirror local events out. Broadcast chests opened by ANYTHING simulated locally
+  // (own player + the host's bots) — matches the pickup handler below. The old
+  // `a === W.player` guard dropped host-bot opens, so guest clients kept those
+  // chests interactable (loot beam + re-open) and the shared world diverged.
+  // Replayed opens (loot.js netOpenChest) pass a=null → filtered by the `a &&` guard.
+  W.events.on("chestOpened", (a, c) => { if (S && a && !a.netRemote) qsend("chest", { id: c.id }); });
+  // pickups by anything simulated locally (own player + host's bots) despawn everywhere
+  W.events.on("pickedUp", (a, data, id) => { if (S && a && !a.netRemote) qsend("take", { id }); });
+  // relay OUR gunfire so guests see remote muzzle flash + tracers and HEAR the shot
+  // (remote actors aren't simulated locally, so their FX never fired online). Throttled
+  // for full-auto. Replayed on the other clients via the "fire" case in onMsg.
+  W.events.on("shotFired", (a, weaponId, muzzle, dir) => {
+    if (!S || !a || a.netRemote || !W.player) return;
+    // AUDIBILITY GATE. The 90 ms throttle below bounds one shooter to 11 sends/s
+    // but nothing bounded how MANY shooters fire at once: on the host this ran
+    // for all 46 bots, and a busy mid-game firefight in three POIs at once was
+    // the single largest uncontrolled term in the outbound budget. Nobody can
+    // see a muzzle flash or hear a shot 250 m away, so a shot no remote human is
+    // near is pure spend. `eyes` mirrors the bot-snapshot construction below;
+    // it always contains W.player.pos, so our OWN shots are never gated.
+    const eyes = [W.player.pos];
+    for (const h of W.actors) if (h.netRemote && !h.isBot && h.alive) eyes.push(h.netTarget ? h.netTarget.pos : h.pos);
+    if (eyes.every((p) => a.pos.distanceToSquared(p) > 250 * 250)) return;
+    const now = performance.now();
+    if (now - (a._fireRelayT || 0) < 90) return;
+    a._fireRelayT = now;
+    qsend("fire", { id: a.id, w: weaponId, x: +muzzle.x.toFixed(2), y: +muzzle.y.toFixed(2), z: +muzzle.z.toFixed(2), dx: +dir.x.toFixed(3), dy: +dir.y.toFixed(3), dz: +dir.z.toFixed(3) });
+  });
+  // Emotes are the ONLY expressive act this game has and they were never
+  // relayed — with no voice and no text chat, a friend waving at you across a
+  // rooftop simply did not happen on their screen. Same shape as the gunfire
+  // relay above: only things simulated locally are broadcast.
+  W.events.on("emote", (a, kind) => { if (S && a && !a.netRemote) qsend("emote", { id: a.id, k: kind }); });
+  W.events.on("netDropItem", (d) => { if (S) qsend("drop", d); });
+  // squad chat: rate-limited, rides the ev envelope (one billed message = the
+  // state packet it boards). Returns true when accepted so hud can echo it.
+  W.sendChat = (m) => {
+    if (!S || !W.player) return false;
+    const now = performance.now();
+    if (now - (S._lastChatT || 0) < 1500) return false;
+    S._lastChatT = now;
+    qsend("chat", { id: W.player.id, m: String(m).slice(0, 80) });
+    return true;
+  };
+  W.events.on("actorDied", (victim, killerId, weaponId) => {
+    if (!S) return;
+    // own death, or a host-simulated bot's death → tell everyone
+    if (victim === W.player || (S.net.isHost() && victim.isBot && !victim.netRemote)) {
+      send("died", { slot: victim.id, killer: killerId, weapon: weaponId });
+    }
+  });
+  // INVITE DEEP LINK: ?room=CODE opens the lobby and joins straight away.
+  // Getting a friend in used to mean reading four randCode() characters aloud.
+  // The setTimeout is required, not cosmetic: init() runs at ffg_royale3d.js:90
+  // but hudMod.showMenu(W, startMatch) runs synchronously at :384, so opening
+  // the lobby inline would build it and then have the menu painted over it.
+  try {
+    const rc = new URLSearchParams(location.search).get("room");
+    if (rc) setTimeout(() => W.events.emit("openOnline", { mode: "standard", room: rc.trim().toUpperCase() }), 0);
+  } catch (e) {}
+}
+
+function isAuthority(W) { return S && S.net.isHost(); }
+
+// Message types that must never be shed by the budget below: authoritative
+// (someone's HP, someone's death, the roster) or latency-critical. `ev` is on
+// the list because the ENVELOPE is not the right thing to drop — the flush in
+// update() thins its contents first, so shedding never silently strands a
+// pickup or a chest open inside a discarded envelope.
+const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1, back: 1, mode: 1 };
+
+/** OUTBOUND BUDGET, in messages per rolling second. Supabase Realtime does not
+ *  throttle a connection that exceeds its rate — it DISCONNECTS it, which
+ *  mid-match means the game simply ends for everyone in the room. So the load
+ *  shedding has to live on this side, and it has to shed the cheap things: a
+ *  missing tracer is invisible, a dropped socket is the match. 100 msg/s is the
+ *  free-project ceiling and every send is billed once per receiving subscriber,
+ *  hence 100/H. Returns the headroom left in the current window. */
+function sendBudgetLeft() {
+  if (!S) return 0;
+  const now = performance.now();
+  if (S.sendWinT == null || now - S.sendWinT >= 1000) { S.sendWinT = now; S.sendWinN = 0; }
+  const H = Math.max(1, (S.cfg && S.cfg.roster ? S.cfg.roster.length : S.net.peerCount) || 1);
+  return Math.max(8, Math.floor(100 / H)) - (S.sendWinN || 0);
+}
+
+function send(t, d) {
+  if (!S) return;
+  if (sendBudgetLeft() <= 0 && !CRITICAL_MSG[t]) { S.droppedMsgs = (S.droppedMsgs || 0) + 1; return; }
+  S.sendWinN = (S.sendWinN || 0) + 1;
+  S.net.send(t, d);
+}
+
+/** Queue a COSMETIC event instead of sending it now. Five separate relays
+ *  (fire/emote/take/chest/drop) each used to be its own message the instant it
+ *  happened; a single loot run could fire six sends in one frame. update()
+ *  flushes the queue INTO THE STATE PACKET (st.evs) on the state tick, so a
+ *  burst costs zero extra messages — the ride-along is free because messages,
+ *  not bytes, are the billed unit. */
+function qsend(t, d) {
+  if (!S) return;
+  if (!S.evQ) S.evQ = [];
+  // hard ceiling so a pathological frame cannot grow one envelope without bound
+  if (S.evQ.length >= 60) { S.droppedMsgs = (S.droppedMsgs || 0) + 1; return; }
+  S.evQ.push({ t, d });
+}
+
+// ── lobby UI ─────────────────────────────────────────────────────────────────
+/** The link a friend opens to land in this room. Inside the forgeflowgames.com game page (an iframe) the
+ *  site page is the link to share — it forwards ?room= into the game (GamePlayer.tsx); the referrer only
+ *  carries the site's origin, so the path is rebuilt. Standalone, the current page with ?room=CODE. */
+export function inviteLink(code) {
+  const c = encodeURIComponent(code);
+  try {
+    if (window.top !== window && document.referrer) {
+      const o = new URL(document.referrer).origin;
+      if (/forgeflowgames\.com$/.test(new URL(o).hostname)) return o + "/games/last-circle?room=" + c;
+    }
+  } catch (e) { /* cross-origin top: fall through */ }
+  if (/^https?:$/.test(location.protocol)) {
+    // build off the CURRENT href so any params the portal put there survive
+    const u = new URL(location.href);
+    u.searchParams.delete("lcretry");
+    u.searchParams.set("room", code);
+    return u.toString();
+  }
+  return code;   // file:// etc: a URL would not be shareable, so hand over the bare code
+}
+
+/** Plain-text reason for a failed start/join, by ffg_cfroom.js error code. */
+function failText(e, code) {
+  const c = e && e.code;
+  if (c === 4004) return ["No room with the code " + (code || "") + ".", "Check the code with your friend. A room closes 15 minutes after everyone leaves."];
+  if (c === 4009) return ["That room is full.", "Ask your friend to start a new room, or play solo from the menu."];
+  if (c === 4029) return ["Friend rooms are full for today.", "Try again tomorrow, or play solo from the menu."];
+  return ["Couldn't reach the online service.", "Check your connection and try again, or play solo from the menu."];
+}
+
+function openLobby(W, sel) {
+  // clickable overlay: pointer lock would send every click to the canvas
+  try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
+  if (W.__lcLobbyRoot && W.__lcLobbyRoot.isConnected) W.__lcLobbyRoot.remove();
+  const root = document.createElement("div");
+  W.__lcLobbyRoot = root;
+  root.dataset.lc = "friends-lobby";
+  Object.assign(root.style, {
+    position: "absolute", inset: "0", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center",
+    background: "rgba(4,8,16,0.9)", pointerEvents: "auto", fontFamily: "system-ui, sans-serif", color: "#eaf2ff",
+    padding: "16px", overflow: "auto",
+  });
+  W.kernel.parent.appendChild(root);
+  const box = document.createElement("div");
+  Object.assign(box.style, { background: "rgba(10,19,31,0.95)", border: "1px solid rgba(120,180,255,0.25)", borderRadius: "14px", padding: "26px 30px", textAlign: "center", width: "min(460px, 100%)", margin: "auto" });
+  root.appendChild(box);
+  const el = (tag, style, text, parent) => {
+    const d = document.createElement(tag);
+    if (style) Object.assign(d.style, style);
+    if (text != null) d.textContent = text;
+    (parent || box).appendChild(d);
+    return d;
+  };
+  el("div", { fontSize: "22px", fontWeight: "900", letterSpacing: "2px", marginBottom: "10px" }, "PLAY WITH FRIENDS");
+  const status = el("div", { fontSize: "14px", opacity: ".8", marginBottom: "16px", lineHeight: "1.5" });
+  const intro = "Start a room and send your friends the code or link, or join a friend's room. Every empty spot in the match is filled by opponents, as usual.";
+  status.textContent = intro;
+
+  const btn = (label, kind, parent) => {
+    const b = el("button", {
+      padding: "11px 20px", borderRadius: "10px", border: "none", cursor: "pointer", fontWeight: "800", fontSize: "14px", letterSpacing: "1px",
+      background: kind === "primary" ? "#57b0ff" : kind === "go" ? "#4ade80" : "rgba(255,255,255,0.12)",
+      color: kind === "primary" ? "#fff" : kind === "go" ? "#08131f" : "#cfe4ff",
+    }, label, parent);
+    b.type = "button";
+    return b;
+  };
+
+  // ── not in a room yet: START ROOM / JOIN FRIEND ──
+  const pick = el("div", { display: "flex", flexDirection: "column", gap: "12px", alignItems: "stretch" });
+  const createB = btn("START ROOM", "primary", pick);
+  createB.dataset.lc = "start-room";
+  el("div", { fontSize: "12px", opacity: ".55", letterSpacing: "2px" }, "— OR —", pick);
+  const joinRow = el("div", { display: "flex", gap: "10px", justifyContent: "center" }, null, pick);
+  const codeInp = el("input", { padding: "10px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.25)", background: "rgba(0,0,0,0.4)", color: "#fff", width: "120px", textAlign: "center", fontWeight: "800", fontSize: "16px", letterSpacing: "4px", textTransform: "uppercase" }, null, joinRow);
+  codeInp.placeholder = "CODE";
+  codeInp.maxLength = 4;
+  codeInp.autocomplete = "off";
+  codeInp.spellcheck = false;
+  codeInp.setAttribute("aria-label", "Room code");
+  codeInp.dataset.lc = "room-code-input";
+  // the page swallows keys for the game (WASD etc.); keep typing inside the box
+  codeInp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") joinB.onclick(); });
+  codeInp.addEventListener("keyup", (e) => e.stopPropagation());
+  codeInp.addEventListener("input", () => { codeInp.value = codeInp.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); });
+  const joinB = btn("JOIN FRIEND", "secondary", joinRow);
+  joinB.dataset.lc = "join-friend";
+
+  // ── in a room: code, invite link, mode, roster, start ──
+  const inRoom = el("div", { display: "none" });
+  el("div", { fontSize: "12px", letterSpacing: "2px", opacity: ".6" }, "ROOM CODE", inRoom);
+  const codeBig = el("div", { fontSize: "40px", fontWeight: "900", letterSpacing: "10px", color: "#7fd3ff", margin: "2px 0 8px" }, "", inRoom);
+  codeBig.dataset.lc = "room-code";
+  const linkInp = el("input", { width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(0,0,0,0.35)", color: "#b9cbe0", fontSize: "12px", marginBottom: "8px" }, null, inRoom);
+  linkInp.readOnly = true;
+  linkInp.setAttribute("aria-label", "Invite link");
+  linkInp.dataset.lc = "invite-link";
+  linkInp.addEventListener("focus", () => linkInp.select());
+  const shareRow = el("div", { display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap", marginBottom: "14px" }, null, inRoom);
+  const inviteB = btn("COPY INVITE LINK", "primary", shareRow);
+  const copyCodeB = btn("COPY CODE", "secondary", shareRow);
+  // game_controls.js kills the context menu page-wide with capture:true, so right-click-copy is gone.
+  // Clipboard is a LOCAL API — no network call is added by this.
+  async function copy(text, b, label) {
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
+    if (!ok) {
+      // clipboard-write is denied outside a secure context / in some iframes: the old path, then a selection
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        root.appendChild(ta); ta.select();
+        ok = document.execCommand("copy");
+        ta.remove();
+      } catch (e) {}
+    }
+    if (ok) b.textContent = "COPIED";
+    else { linkInp.focus(); linkInp.select(); b.textContent = "SELECT + COPY"; }
+    setTimeout(() => { b.textContent = label; }, 1600);
+  }
+  inviteB.onclick = () => { if (S && S.net.room) copy(inviteLink(S.net.room), inviteB, "COPY INVITE LINK"); };
+  copyCodeB.onclick = () => { if (S && S.net.room) copy(S.net.room, copyCodeB, "COPY CODE"); };
+
+  // match length: the host picks, everyone sees it. Practice has no online variant.
+  const modeRow = el("div", { display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", marginBottom: "12px", fontSize: "13px" }, null, inRoom);
+  const MODES = [{ id: "standard", label: "STANDARD" }, { id: "quick", label: "QUICK · 5 MIN" }];
+  let roomMode = sel && sel.mode === "quick" ? "quick" : "standard";
+  const modeBtns = MODES.map((m) => {
+    const b = btn(m.label, "secondary", modeRow);
+    b.style.padding = "8px 14px"; b.style.fontSize = "12px";
+    b.onclick = () => { if (!S || !S.net.isHost()) return; roomMode = m.id; paintMode(); send("mode", { mode: roomMode, teams: roomTeams }); };
+    return { m, b };
+  });
+  // teams: the host picks; the opponents filling the other spots are always against everyone
+  const teamRow = el("div", { display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }, null, inRoom);
+  const TEAMS = [{ id: "squad", label: "ALL ON ONE TEAM" }, { id: "two", label: "TWO TEAMS" }, { id: "ffa", label: "EVERYONE FOR THEMSELVES" }];
+  let roomTeams = sel && (sel.teams === "two" || sel.teams === "ffa") ? sel.teams : "squad";
+  const teamBtns = TEAMS.map((m) => {
+    const b = btn(m.label, "secondary", teamRow);
+    b.style.padding = "8px 12px"; b.style.fontSize = "11px";
+    b.dataset.lc = "teams-" + m.id;
+    b.onclick = () => { if (!S || !S.net.isHost()) return; roomTeams = m.id; paintMode(); send("mode", { mode: roomMode, teams: roomTeams }); };
+    return { m, b };
+  });
+  const modeNote = el("div", { fontSize: "12px", opacity: ".6", marginTop: "-6px", marginBottom: "10px" }, "", inRoom);
+  function paintMode() {
+    const host = !!(S && S.net.isHost());
+    modeBtns.forEach(({ m, b }) => {
+      const on = m.id === roomMode;
+      b.style.background = on ? "#57b0ff" : "rgba(255,255,255,0.08)";
+      b.style.color = on ? "#fff" : "#cfe4ff";
+      b.style.cursor = host ? "pointer" : "default";
+      b.disabled = !host;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    teamBtns.forEach(({ m, b }) => {
+      const on = m.id === roomTeams;
+      b.style.background = on ? "#4ade80" : "rgba(255,255,255,0.08)";
+      b.style.color = on ? "#08131f" : "#cfe4ff";
+      b.style.cursor = host ? "pointer" : "default";
+      b.disabled = !host;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    const teamHint = roomTeams === "two" ? " Teams alternate down the list below." : "";
+    modeNote.textContent = (host ? "You pick the mode and teams, then start the match." : "The host picks the mode and teams, then starts the match.") + teamHint;
+    if (typeof paintRoster === "function" && S) paintRoster();
+  }
+
+  // Who is actually in the room (names arrive in "hello").
+  const rosterEl = el("div", { fontSize: "14px", lineHeight: "1.7", margin: "2px 0 12px", minHeight: "22px", opacity: ".9" }, null, inRoom);
+  rosterEl.dataset.lc = "room-roster";
+  function paintRoster() {
+    if (!S || !S.net.room) { rosterEl.innerHTML = ""; return; }
+    // the HOST is slot 0 and startB.onclick hands out the other slots by sorted peer id — reproduce it here
+    const hostId = S.net.owner;
+    const others = (S.net.ids || []).filter((pid) => pid !== hostId).sort();
+    const all = (hostId && (S.net.ids || []).includes(hostId) ? [hostId] : []).concat(others);
+    const badge = (s) => `<span style="font-size:10px;letter-spacing:1px;opacity:.6;margin-left:6px">${s}</span>`;
+    let h = "";
+    all.forEach((pid, i) => {
+      const me = pid === S.net.id;
+      // names arrive from other machines — they go through esc() before innerHTML
+      const nm = esc(me ? S.myName : (S.peers[pid] || "Friend"));
+      const busy = !me && S.inMatch && S.inMatch[pid];
+      if (i > MAX_GUESTS) { h += `<div style="color:#ffb060">${nm}${badge("WATCHING — ROOM FULL")}</div>`; return; }
+      const team = roomTeams === "two" ? (i % 2 ? " · TEAM B" : " · TEAM A") : "";
+      h += `<div style="${me ? "color:#7fd3ff" : busy ? "opacity:.6" : ""}">${me ? "<b>" + nm + "</b>" : nm}${badge((pid === hostId ? "HOST" : "PLAYER " + (i + 1)) + team + (busy ? " · IN A MATCH" : ""))}</div>`;
+    });
+    rosterEl.innerHTML = h;
+  }
+
+  const startB = btn("START MATCH", "go", inRoom);
+  Object.assign(startB.style, { padding: "12px 34px", fontSize: "16px", fontWeight: "900", display: "none" });
+  startB.dataset.lc = "start-match";
+  const waitEl = el("div", { fontSize: "13px", opacity: ".75", display: "none" }, "Waiting for the host to start…", inRoom);
+
+  const closeRow = el("div", { marginTop: "16px" });
+  const closeB = btn("BACK", "secondary", closeRow);
+  closeB.onclick = () => { attempt++; if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } root.remove(); };
+  /** Point the open session's UI hooks at THIS lobby (a fresh one, or the one BACK TO ROOM rebuilds). */
+  function bindUi() {
+    S.root = root;
+    S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
+    S.status = status;             // beginOnlineMatch reports a full room here
+    S.onMode = (m, t) => {
+      if (m === "standard" || m === "quick") roomMode = m;
+      if (t === "squad" || t === "two" || t === "ffa") roomTeams = t;
+      paintMode();
+    };
+    S.roomMode = () => roomMode;
+    S.roomTeams = () => roomTeams;
+    S.ui = {
+      onPeer: () => { if (S && S.net.room && !S.started && root.isConnected) showRoom(S.net); },
+      onLost: (retrying) => { if (S && !S.started && root.isConnected) status.textContent = retrying ? "Connection dropped — reconnecting…" : "Lost the connection to the room."; },
+    };
+  }
+
+  function showRoom(net) {
+    pick.style.display = "none";
+    inRoom.style.display = "block";
+    codeBig.textContent = net.room;
+    linkInp.value = inviteLink(net.room);
+    const host = net.isHost();
+    startB.style.display = host ? "inline-block" : "none";
+    waitEl.style.display = host ? "none" : "block";
+    closeB.textContent = "LEAVE ROOM";
+    const hostBusy = !host && S && S.inMatch && S.inMatch[net.owner];
+    status.textContent = host
+      ? "Room ready. Send your friends the code or the invite link, then start when everyone is in."
+      : hostBusy ? "You're in! The host is finishing a match — you'll play in the next one."
+      : "You're in! The match starts when the host is ready.";
+    waitEl.textContent = hostBusy ? "Waiting for the host's match to end…" : "Waiting for the host to start…";
+    paintMode();
+    paintRoster();
+  }
+
+  // One attempt at a time. A newer attempt (or BACK) makes an older one stale: when
+  // its await finally settles it only cleans up after itself.
+  let attempt = 0;
+  function failed(e, code) {
+    const [head, tail] = failText(e, code);
+    status.textContent = "";
+    const b = document.createElement("b");
+    b.style.color = "#ff9b8a";
+    b.textContent = head;
+    status.appendChild(b);
+    status.appendChild(document.createElement("br"));
+    status.appendChild(document.createTextNode(tail));
+    status.setAttribute("data-net-error", String((e && e.message) || e || "error").slice(0, 200));
+    createB.disabled = joinB.disabled = false;
+    pick.style.display = "flex";
+    inRoom.style.display = "none";
+    closeB.textContent = "BACK";
+  }
+  async function enter(code, asHost) {
+    const my = ++attempt;
+    createB.disabled = joinB.disabled = true;
+    status.textContent = asHost ? "Starting a room…" : "Joining " + code + "…";
+    const net = new RoomNet(netBaseUrl());
+    try {
+      await net.connect();
+    } catch (e) {
+      console.warn("[net] online service unreachable:", e);
+      if (my === attempt && root.isConnected) failed(e, code);
+      return;
+    }
+    if (my !== attempt || !root.isConnected) return;   // cancelled / superseded while loading
+    // distinct default names online — two "You"s in one lobby is confusing
+    const myName = (W.settings.playerName && W.settings.playerName !== "You")
+      ? W.settings.playerName
+      : "Player-" + net.id.slice(-3).toUpperCase();
+    S = { net, peers: {}, inMatch: {}, myName, started: false, lastState: 0, lastBots: 0, root };
+    bindUi();
+    // P2P overlay (ffg_rtc.js): the state envelope prefers DataChannels;
+    // signaling + everything critical + the full fallback stay on the relay.
+    S.rtc = new RTCMesh(net.id, (to, payload) => send("rtc", Object.assign({ to }, payload)));
+    S.rtc.onMessage = (m) => { if (m && m.t) onMsg(W, { from: m.from, t: m.t, d: m.d }); };
+    W.net = S;
+    const sess = S;
+    net.on("msg", (m) => onMsg(W, m));
+    // these outlive this lobby (BACK TO ROOM builds a new one): they go through S.ui, which bindUi() re-points
+    net.on("peer", () => {
+      if (S !== sess) return;
+      // forget peers who left, so the roster and the start roster agree
+      for (const pid of Object.keys(S.peers)) if (!net.ids.includes(pid)) { delete S.peers[pid]; delete S.inMatch[pid]; }
+      S.ui.onPeer();
+    });
+    net.on("owner", () => { if (S === sess) S.ui.onPeer(); });
+    net.on("lost", ({ retrying }) => { if (S === sess) S.ui.onLost(retrying); });
+    net.on("rejoined", () => { if (S === sess) { send("hello", { name: S.myName, busy: S.started }); S.ui.onPeer(); } });
+    try {
+      if (asHost) await net.createRoom();
+      else await net.joinRoom(code);
+    } catch (e) {
+      console.warn("[net] could not " + (asHost ? "start" : "join") + " the room:", e);
+      if (S === sess) { try { S.rtc && S.rtc.close(); } catch (x) {} S = null; W.net = null; }
+      try { net.leave(); } catch (x) {}
+      if (my === attempt && root.isConnected) failed(e, code);
+      return;
+    }
+    if (S !== sess || my !== attempt) { try { net.leave(); } catch (x) {} return; }   // cancelled while joining
+    send("hello", { name: S.myName, busy: false });
+    showRoom(net);
+  }
+
+  createB.onclick = () => { W.events.emit("uiClick"); enter(null, true); };
+  joinB.onclick = () => {
+    const c = codeInp.value.trim().toUpperCase();
+    if (c.length !== 4) { status.textContent = "Type the 4-character code your friend sent you."; codeInp.focus(); return; }
+    W.events.emit("uiClick");
+    enter(c, false);
+  };
+  if (sel && sel.resume && S) { bindUi(); showRoom(S.net); }
+  // arrived via ?room=CODE (see init): show the code we are joining, then join
+  else if (sel && sel.room) { codeInp.value = String(sel.room).slice(0, 4); enter(codeInp.value, false); }
+  else setTimeout(() => { try { codeInp.focus({ preventScroll: true }); } catch (e) {} }, 0);
+
+  startB.onclick = () => {
+    if (!S || !S.net.isHost()) return;
+    // roster: host = slot 0; peers by sorted id = slots 1..k. TRUNCATED at
+    // MAX_GUESTS: every extra human multiplies every outbound message.
+    // START is deliberately NOT disabled past the cap: a 5th peer wandering in
+    // would otherwise lock the host out of ever starting the match. The extras
+    // stay in the room and are rejected by name in beginOnlineMatch.
+    // players still finishing the previous match sit this one out (they come back to the room after it)
+    const ids = (S.net.ids || []).filter((pid) => pid !== S.net.id && !S.inMatch[pid]).sort().slice(0, MAX_GUESTS);
+    const roster = [{ peerId: S.net.id, slot: 0, name: S.myName }];
+    ids.forEach((pid, i) => roster.push({ peerId: pid, slot: i + 1, name: S.peers[pid] || "Friend" }));
+    const cfg = { seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: roomMode, teams: roomTeams, roster };
+    send("start", cfg);
+    if (beginOnlineMatch(W, cfg) !== false) root.remove();
+  };
+}
+
+// host + 3 guests. Every extra human multiplies EVERY outbound message.
+const MAX_GUESTS = 3;
+
+/** Peer names are typed on someone else's machine and this file puts them in
+ *  innerHTML — escape before they reach the DOM. */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function randCode() {
+  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 4; i++) s += A[Math.floor(Math.random() * A.length)];
+  return s;
+}
+
+window.addEventListener("beforeunload", () => {
+  try { if (S && S.started && S.mySlot != null) S.net.send("bye", { slot: "s" + S.mySlot }); } catch (e) {}
+});
+
+function beginOnlineMatch(W, cfg) {
+  const me = cfg.roster.find((r) => r.peerId === S.net.id);
+  if (!me) {
+    // Not in the roster — the room hit MAX_GUESTS before we did. The old
+    // `me ? me.slot : 0` fallback silently handed this client slot 0, which is
+    // the HOST's own actor: two machines driving one body, each fighting the
+    // other's lerp. Refuse instead, and say so in the lobby that is still open.
+    if (S.status) S.status.innerHTML = `Room is full (${MAX_GUESTS + 1} players). This match started without you.`;
+    return false;
+  }
+  // teams: "squad" = everyone together, "two" = alternate down the roster (host on A), "ffa" = no team
+  const teamOf = (slot) => cfg.teams === "ffa" ? null : cfg.teams === "two" ? (slot % 2 ? "sqB" : "sqA") : "sq";
+  const humans = cfg.roster.map((r) => ({ slot: r.slot, name: r.name, self: r.peerId === S.net.id, team: teamOf(r.slot) }));
+  S.cfg = cfg;
+  S.mySlot = me ? me.slot : 0;
+  S.started = true;
+  for (const r of cfg.roster) if (r.peerId !== S.net.id) S.inMatch[r.peerId] = true;
+  if (S.net.setFrozen) S.net.setFrozen(true);   // host = authority over the opponents: fixed for the match
+  window.__LC__.startMatch({ mapId: cfg.mapId, mode: cfg.mode, seed: cfg.seed, humans, guestOf: S.net.isHost() ? null : "host" });
+}
+
+// ── message handling ─────────────────────────────────────────────────────────
+// What a player who is NOT in this room's running match still listens to.
+const LOBBY_MSG = { hello: 1, back: 1, mode: 1, start: 1, rtc: 1 };
+
+function onMsg(W, { from, t, d }) {
+  if (!S) return;
+  // In the lobby, or playing on alone after the host left: the room's NEXT match
+  // runs on the same actor ids (s0..s49), so its hits, deaths and snapshots must
+  // never reach this world.
+  if ((!S.started || S._hostLostRan) && !LOBBY_MSG[t]) return;
+  // batched cosmetic envelope (see qsend) — unwrap and dispatch in order.
+  // A nested "ev" is skipped rather than recursed: we never send one, so it
+  // could only ever be a malformed packet, and recursing on it is unbounded.
+  if (t === "ev") { for (const m of d.list || []) if (m && m.t !== "ev") onMsg(W, { from, t: m.t, d: m.d }); return; }
+  if (t === "hello") {
+    // REPLY to a peer we had not seen. "hello" was broadcast once on join and
+    // never replayed, so the third person to join learned nobody's name and the
+    // two already in the room learned only theirs. Bounded — the reply fires
+    // only for a first sighting, and everyone already in the room has us.
+    const known = !!S.peers[from];
+    S.peers[from] = String((d && d.name) || "Friend").slice(0, 24);
+    // busy = that player is inside a match right now (a newcomer then waits for the next one)
+    S.inMatch[from] = !!(d && d.busy);
+    if (!known) send("hello", { name: S.myName, busy: !!S.started });
+    // the host tells a newcomer which mode the room is set to
+    if (!known && S.net.isHost() && S.roomMode && !S.started) send("mode", { mode: S.roomMode(), teams: S.roomTeams ? S.roomTeams() : "squad" });
+    if (S.paintRoster) S.paintRoster();
+    if (S.ui) S.ui.onPeer();
+    return;
+  }
+  if (t === "back") {
+    // that player finished their match and is in the room's lobby again
+    S.inMatch[from] = false;
+    if (S.ui) S.ui.onPeer();
+    return;
+  }
+  if (t === "mode") {
+    // only the room's owner (the host) sets the mode
+    if (from === S.net.owner && S.onMode && !S.started) S.onMode(d && d.mode, d && d.teams);
+    return;
+  }
+  if (t === "start" && d && Array.isArray(d.roster)) {
+    // everyone in that roster is now in a match (players already in one ignore the start below)
+    for (const r of d.roster) if (r && r.peerId && r.peerId !== S.net.id) S.inMatch[r.peerId] = true;
+    if (S.ui && S.started) S.ui.onPeer();
+  }
+  if (t === "start" && !S.started && (!S.net.owner || from === S.net.owner)) {
+    // remove the lobby only if we actually got a slot — beginOnlineMatch writes
+    // the "room is full" message into the lobby that is still on screen
+    if (beginOnlineMatch(W, d) !== false && S && S.root) S.root.remove();
+    return;
+  }
+  if (t === "rtc") {
+    // P2P signaling relayed over the room channel — only the addressee acts
+    if (S.rtc && d && d.to === S.net.id && from) S.rtc.handleSignal(from, d);
+    return;
+  }
+  if (t === "state") {
+    // lazy mesh negotiation: the first state we SEE from a peer starts the
+    // DataChannel handshake for that pair (both sides converge on it)
+    if (S.rtc && from) S.rtc.ensurePeer(from);
+    const a = W.actorById.get(d.id);
+    if (a && a.netRemote) { applyRemoteState(W, a, d); S.lastSeen = S.lastSeen || {}; S.lastSeen[d.id] = performance.now(); }
+    // OUTSIDE the actor guard on purpose: the match clock rides the host's own
+    // state packet, and a packet whose actor has not been created yet (or has
+    // been removed) must still deliver the clock.
+    if (d.t != null && !S.net.isHost()) {
+      slewClock(W, d.t);
+      // Only the HOST's state packet carries the match clock, so this line
+      // doubles as host identification — the one fact the guest-side watchdog
+      // below needs and previously had nowhere to learn.
+      S.hostSlot = d.id;
+      S.hostSeen = performance.now();
+    }
+    // ENVELOPE MERGE (sender side in update()): bot snapshots and the batched
+    // ev list now ride the state packet — one billed message instead of three
+    // streams. The standalone "bots"/"ev" handlers below stay for cross-version
+    // rooms mid-deploy.
+    if (d.bots && !S.net.isHost()) {
+      for (const b of d.bots) {
+        const ba = W.actorById.get(b.id);
+        if (ba && ba.netRemote) applyRemoteState(W, ba, b);
+      }
+    }
+    if (d.evs) { for (const m of d.evs) if (m && m.t !== "ev") onMsg(W, { from, t: m.t, d: m.d }); }
+    return;
+  }
+  if (t === "bots" && !S.net.isHost()) {
+    S.hostSeen = performance.now();          // bot snapshots only ever come from the host
+    for (const b of d.list) {
+      const a = W.actorById.get(b.id);
+      if (a && a.netRemote) applyRemoteState(W, a, b);
+    }
+    return;
+  }
+  if (t === "hitYou") {
+    const victim = W.actorById.get(d.target);
+    if (!victim) return;
+    // I own this actor if it's me, or I'm the host and it's a live bot
+    const mine = victim === W.player || (S.net.isHost() && victim.isBot && !victim.netRemote);
+    if (mine && victim.alive) W.hurtActor(victim, d.dmg, d.attacker, d.weapon, d.isHead);
+    return;
+  }
+  if (t === "fire") {
+    // a remote-owned actor fired — replay the cosmetic FX locally (muzzle flash +
+    // gunfire indicator + positional gunshot via shotFired, plus a flying tracer).
+    // No damage here (that's the authoritative hitYou path); this is FX only.
+    const a = W.actorById.get(d.id);
+    if (!a || !a.netRemote) return;
+    // weapons.js:453 stamps this on the LOCAL fire path only, and player.js:952
+    // reads `W.t - a.lastShotT < 1.5` to decide the combat stance. Without it a
+    // remote actor shooting at you kept turning to face its run direction and
+    // held the relaxed lowReady arm pose (player.js:1028) with the gun down.
+    a.lastShotT = W.t;
+    const dir = { x: d.dx, y: d.dy, z: d.dz };
+    W.events.emit("shotFired", a, d.w, { x: d.x, y: d.y, z: d.z }, dir);
+    W.events.emit("tracer", { x: d.x, y: d.y, z: d.z, vx: d.dx * 180, vy: d.dy * 180, vz: d.dz * 180, weaponId: d.w });
+    return;
+  }
+  if (t === "emote") {
+    const a = W.actorById.get(d.id);
+    if (a && a.netRemote && a.alive) W.playRemoteEmote && W.playRemoteEmote(a, d.k);
+    return;
+  }
+  if (t === "chat") {
+    // squad text — hud renders it via textContent (remote strings never touch
+    // innerHTML). Rides the ev envelope; NOT in the fire/emote shed list, so
+    // the budget can't silently eat a message.
+    if (d.id !== undefined && typeof d.m === "string") W.events.emit("chatMsg", d.id, d.m.slice(0, 80));
+    return;
+  }
+  if (t === "drop") { W.netSpawnItem && W.netSpawnItem(d); return; }
+  if (t === "chest") { W.netOpenChest(d.id); return; }
+  if (t === "take") { W.netTakeItem(d.id); return; }
+  if (t === "died") {
+    const a = W.actorById.get(d.slot);
+    if (a && a.alive) { a.hp = 0; a.shield = 0; W.killActor(a, d.killer, d.weapon); }
+    return;
+  }
+  if (t === "bye") {
+    // a guest left mid-match: host re-attaches a bot brain so the slot fights on
+    const a = W.actorById.get(d.slot);
+    if (a && a.alive && S.net.isHost() && a.netRemote) {
+      a.netRemote = false; a.isBot = true;
+      import("./bots.js" + (new URL(import.meta.url).search || "")).then((m) => m.attachBrain(W, a));
+      send("takeover", { slot: a.id });
+    }
+    // the HOST left mid-match: this bye used to be silently ignored by guests
+    // (the branch above is host-only), stranding them in a frozen world — all
+    // ~46 host-simulated bots stop at their last lerp target, the clock stops,
+    // and nothing on screen says why. A clean host exit now converts the match
+    // immediately instead of waiting for the 8s watchdog.
+    if (!S.net.isHost() && S.hostSlot && d.slot === S.hostSlot &&
+        (W.phase === "match" || W.phase === "drop")) hostLost(W);
+    return;
+  }
+  if (t === "takeover") {
+    const a = W.actorById.get(d.slot);
+    if (a && W.player && a !== W.player) { a.netRemote = true; a.isBot = true; }
+    return;
+  }
+  if (t === "sync" && !S.net.isHost()) {
+    // late-join / drift correction from host
+    W.t = d.t;
+    for (const id of (d.loot && d.loot.taken) || []) W.netTakeItem(id);
+    for (const id of (d.loot && d.loot.opened) || []) W.netOpenChest(id);
+    return;
+  }
+}
+
+function applyRemoteState(W, a, d) {
+  // STALE-PACKET GUARD, moved from the bottom of this function to the top. It
+  // used to run after every field had already been written, so it guarded
+  // nothing: a packet still in flight when the actor died dragged the corpse
+  // across the ground and refilled its HP bar. Now it drops the packet.
+  if (!a.alive && d.hp > 0) return;
+  if (!a.netTarget) a.netTarget = { pos: new W.THREE.Vector3(), yaw: 0 };
+  a.netTarget.pos.set(d.x, d.y, d.z);
+  a.netTarget.yaw = d.yw;
+  a.hp = d.hp; a.shield = d.sh;
+  a.gliding = !!d.gl;
+  // STANCE. player.js drives the whole remote body off fields that only
+  // stepActor ever wrote, and stepActor does not run for a netRemote actor — so
+  // every peer and (on a guest) every bot was frozen at createActor's defaults:
+  // never crouching (:995 picks the crouch clip off a.crouching), never swimming
+  // (:993), never reloading (:1027 reads a.weapon.state), never aiming (:952),
+  // and pitch 0 forever so :1040's applyArmPose held the gun dead level no
+  // matter where the shooter was actually looking.
+  a.pitch = d.pt || 0;
+  const f = d.f | 0;
+  a.crouching = !!(f & 1);
+  a.input.ads = !!(f & 2);
+  a.swimming = !!(f & 8);
+  a.netChute = !!(f & 16);   // canopy vs freefall; player.js owns the mesh
+  // remotes never run stepActor, so these fields are only read by syncObj's
+  // anim branches (mantle tuck; hit flinch — whose decay runs in syncObj,
+  // which interpRemote calls). Refresh-while-set, decay after.
+  a.mantleT = (f & 32) ? 0.2 : null;
+  if (f & 64) a.hitReactT = Math.max(a.hitReactT || 0, 0.25);
+  if (d.wp && (!a.weapon || a.weapon.id !== d.wp)) {
+    a.weapon = { id: d.wp, rarity: 0, magAmmo: 0, state: (f & 4) ? "reloading" : "ready", cd: 0, reloadT: 0 };
+    // remotes never pass through equipSlot, so without this their rendered gun
+    // stayed the SPAWN PISTOL all match while a.weapon.id advanced — every peer
+    // and, on a guest, all ~45 host-driven bots (adversarial review finding).
+    // Also keeps the support-hand foregrip measure coherent: it gates on the
+    // mesh's wid stamp, which only this refresh updates.
+    if (W.refreshWeaponMesh) W.refreshWeaponMesh(a);
+  } else if (a.weapon) {
+    a.weapon.state = (f & 4) ? "reloading" : "ready";
+  }
+}
+
+/** Slew this client's match clock toward the host's. Rate-limited rather than
+ *  snapped: at 12 packets/s the 0.05 s clamp buys 0.6 s of catch-up per second,
+ *  so a one-second error closes in under two seconds and the storm wall never
+ *  visibly jumps. The >3 s escape hatch covers a BACKGROUNDED TAB — rAF throttles
+ *  to ~1 Hz while ffg_royale3d.js:364 caps each step at Math.min(dt, 0.05), so
+ *  that clock falls behind without bound and could never slew back.
+ *  A backward correction across a phase boundary can re-emit stormPhase once
+ *  (storm.js:99-103); at 0.05 s granularity that is a duplicate warning, nothing
+ *  more. Worth it: storm.stateAt(W.t) (storm.js:72) is what puts the wall on
+ *  screen and storm damage is applied locally by each client to its own actors
+ *  (storm.js:111-140), so a free-running clock means two players disagree about
+ *  where the wall is and one takes damage the other believes is impossible. */
+function slewClock(W, hostT) {
+  const err = hostT - W.t;
+  if (Math.abs(err) > 3) { W.t = hostT; return; }
+  W.t += Math.max(-0.05, Math.min(0.05, err * 0.25));
+}
+
+// ── frame update: outbound state ─────────────────────────────────────────────
+/** Tear the session down. W.net/S were cleared in exactly ONE place — the lobby
+ *  CANCEL button — so after a single online match every subsequent OFFLINE match
+ *  kept broadcasting 12 Hz player state and 10 Hz bot snapshots into the dead
+ *  room, replaying phantom kills against deterministic s0..s49 ids that collide
+ *  by construction. Worse for solo players: togglePause reads !!W.net, so ESC
+ *  stopped pausing offline matches for the rest of the page session.
+ *  Called on MAIN MENU rather than inside endMatch, so a future REMATCH can
+ *  still reuse the room. */
+/** The host is gone (clean bye, crash, or dead socket): convert the match to a
+ *  LOCAL CONTINUATION rather than stranding the guest in a frozen world. Every
+ *  client runs the full simulation — netRemote actors merely follow snapshots —
+ *  so recovery is: hand every remote actor a bot brain, drop the dead link, and
+ *  tell the player what happened. The match stays winnable; XP still counts. */
+export function hostLost(W) {
+  if (!S || S._hostLostRan) return;
+  S._hostLostRan = true;
+  let converted = 0;
+  for (const a of W.actors) {
+    if (a.netRemote && a !== W.player) {
+      a.netRemote = false; a.isBot = true;
+      import("./bots.js" + (new URL(import.meta.url).search || "")).then((m) => m.attachBrain(W, a));
+      converted++;
+    }
+  }
+  try { S.rtc && S.rtc.close(); } catch (e) {}
+  // The ROOM stays open: in a friends room the host leaving the match (BACK TO
+  // ROOM, or a drop) must not throw the guests out of the party. This match goes
+  // on locally; update() stops sending and onMsg ignores match traffic, and
+  // BACK TO ROOM after it returns to the same room. MAIN MENU leaves it.
+  W.net = null;                                 // frame gates (hitstop etc.) read this
+  W.events.emit("hostLost", converted);
+  console.warn(`[net] host lost — converted ${converted} remote actors to bots, continuing offline`);
+}
+
+/** Still in a friends room (the room's socket is open and the host was not lost)? */
+export function inRoom(W) { return !!(S && S.net && S.net.ws && S.net.ws.readyState === 1); }
+
+/** BACK TO ROOM after a match: the party stays together, as in other battle royales. Clears the
+ *  per-match state, un-freezes the host role (the room may have a new host by now) and reopens the
+ *  room's lobby over the menu. The others see this player as ready again ("back"). */
+export function returnToRoom(W) {
+  if (!inRoom(W)) { leave(W); return; }
+  // leaving a match the others are still in: say so, exactly like closing the tab
+  // (beforeunload) — a guest's slot gets a brain on the host at once, and if this
+  // is the host the guests carry on locally right away instead of after the 8 s watchdog
+  if (S.started && !S._hostLostRan && S.mySlot != null) send("bye", { slot: "s" + S.mySlot });
+  W.net = S;   // hostLost() cleared it for the rest of that match
+  Object.assign(S, {
+    _hostLostRan: false, started: false, cfg: null, mySlot: null, hostSlot: null, hostSeen: 0, lastSeen: {}, evQ: [],
+    lastState: 0, lastBots: 0, botsTick: 0, pendingBots: null, droppedMsgs: 0, sendWinT: null, sendWinN: 0,
+  });
+  if (S.net.setFrozen) S.net.setFrozen(false);
+  send("back", {});
+  openLobby(W, { resume: true, mode: S.roomMode ? S.roomMode() : "standard", teams: S.roomTeams ? S.roomTeams() : "squad" });
+}
+
+export function leave(W) {
+  if (S) {
+    try { S.rtc && S.rtc.close(); } catch (e) {}
+    try { S.net.leave(); } catch (e) {}
+    S = null;
+  }
+  W.net = null;
+}
+
+export function onMatchStart(W) {
+  // host sends world sync for any guest that joined at the boundary
+  if (S && S.net.isHost()) {
+    send("sync", { t: W.t, loot: W.lootSyncState() });
+  }
+}
+
+export function update(W, dt) {
+  if (!S || !S.started || S._hostLostRan || !W.player) return;
+  const now = performance.now();
+  // OWN STATE, rate scaled by room size. Every send is billed once per receiving
+  // subscriber, so H humans at 12 Hz cost 12·H·H messages/s: 48 for a pair but
+  // 192 for four, against a 100 msg/s ceiling shared with every other ForgeFlow
+  // title. 12/8/6 Hz keeps the state term at 48/72/96. The interpolation
+  // constant has to follow the rate or a 6 Hz peer smears — player.js's
+  // interpRemote reads W._netLerpK when it is set (default 10 ≈ 12 Hz).
+  const H = Math.max(1, (S.cfg && S.cfg.roster ? S.cfg.roster.length : S.net.peerCount) || 1);
+  // 12/8/5 Hz. The 4-human floor moved 6 -> 5 as part of the ENVELOPE MERGE
+  // below: the state packet is now the ONLY periodic message a client sends —
+  // evs ride it, and on the host the bot snapshots ride it too. Messages are
+  // the billed unit (each send costs one per receiving subscriber), so the
+  // steady-state worst case is exactly the state term: 12·2·2=48 for a pair,
+  // 8·3·3=72 at three, 5·4·4=80 at four — under the 100 msg/s ceiling WITH
+  // everything aboard, where the old separate state+ev+bots streams could
+  // stack to ~300 msg/s in a 4-human fight and Supabase answers over-rate by
+  // dropping the connection.
+  const _humans = 1 + (S.lastSeen ? Object.keys(S.lastSeen).length : 0);
+  const _botsMs = _humans >= 4 ? 160 : _humans === 3 ? 125 : 100;
+  if (S.net.isHost() && now - S.lastBots > _botsMs) {
+    S.lastBots = now;
+    S.botsTick = (S.botsTick || 0) + 1;
+    // "near a human" used to mean near W.player.pos — which on the host is the
+    // HOST's own actor. A guest fighting a bot on the far side of the map got
+    // that bot at 2 Hz, i.e. a lerp target up to 500 ms stale, and their hit
+    // tests resolve against the rendered position. Measure from every live human
+    // instead: at most 7 extra distanceToSquared per bot.
+    const eyes = [W.player.pos];
+    for (const h of W.actors) if (h.netRemote && !h.isBot && h.alive) eyes.push(h.netTarget ? h.netTarget.pos : h.pos);
+    const list = [];
+    for (const a of W.actors) {
+      if (!a.isBot || !a.alive || a.netRemote) continue;
+      const far = eyes.every((p) => a.pos.distanceToSquared(p) > 300 * 300);
+      if (far && S.botsTick % 5 !== 0) continue;
+      list.push(pack(a));
+    }
+    // STAGED, not sent: the list rides the host's next state packet (see the
+    // envelope merge above). If two bot ticks elapse before a state tick —
+    // impossible at current rates, host state Hz >= bot Hz at every room size
+    // — the newer list simply replaces the staler one, which is what a
+    // snapshot protocol wants anyway.
+    if (list.length) S.pendingBots = list;
+  }
+  const stateMs = H <= 2 ? 83 : H === 3 ? 125 : 200;
+  W._netLerpK = Math.max(4, 800 / stateMs);
+  if (now - S.lastState > stateMs) {
+    S.lastState = now;
+    const st = pack(W.player);
+    // MATCH CLOCK rides the packet that already goes out — zero extra messages.
+    // W.t starts at 0 per client (ffg_royale3d.js:218) and free-runs at :366;
+    // the only other carrier of `t` is the one-shot "sync" from onMatchStart,
+    // so across the 735 s of a standard match the clients drift apart without
+    // limit and each one draws the storm somewhere else. Host stamps, guests slew.
+    if (S.net.isHost()) st.t = +W.t.toFixed(2);
+    // EVS RIDE THE STATE TICK (was a separate 10 Hz "ev" stream). Same
+    // over-budget shedding: drop the PURE-FX half (tracer/emote — invisible a
+    // second later), keep the world-state half (take/chest/drop — a missing
+    // one leaves a ghost item every other client can still try to pick up).
+    if (S.evQ && S.evQ.length) {
+      let list = S.evQ;
+      S.evQ = [];
+      if (sendBudgetLeft() <= 0) {
+        const kept = list.filter((m) => m.t !== "fire" && m.t !== "emote");
+        S.droppedMsgs = (S.droppedMsgs || 0) + (list.length - kept.length);
+        list = kept;
+      }
+      if (list.length) st.evs = list;
+    }
+    // HOST: bot snapshots ride the same packet when due (cadence unchanged —
+    // the attach below only fires when _botsMs has elapsed, and the host's
+    // state rate is always >= the bot rate at every room size). Chunking to 24
+    // was message-size prudence from the multi-stream era; one 46-bot list is
+    // ~3.7 KB, far under Realtime's payload limit, and one packet beats three.
+    if (S.net.isHost() && S.pendingBots) {
+      st.bots = S.pendingBots;
+      S.pendingBots = null;
+    }
+    // P2P FIRST: the envelope goes over DataChannels to every peer whose
+    // channel is open; ONE Supabase broadcast only if any peer lacks one
+    // (that peer filters by `from` exactly as before; a DC peer seeing the
+    // duplicate just re-applies the same snapshot — harmless by design).
+    // Any RTC failure therefore degrades to the exact pre-RTC behaviour.
+    let covered = false;
+    if (S.rtc) {
+      const r = S.rtc.sendState({ from: S.net.id, t: "state", d: st });
+      covered = r.allCovered;
+    }
+    if (!covered) send("state", st);
+  }
+  // link freshness for the HUD perf readout: age of the most recent state we
+  // received from ANY peer. Not RTT — the HUD labels it SYNC, not ping.
+  if (S.lastSeen) {
+    let freshest = null;
+    for (const id in S.lastSeen) {
+      const age = now - S.lastSeen[id];
+      if (freshest == null || age < freshest) freshest = age;
+    }
+    W._netStats = W._netStats || {};
+    W._netStats.lastSeenAgeMs = freshest;
+    W._netStats.peers = Object.keys(S.lastSeen).length;
+    W._netStats.dropped = S.droppedMsgs || 0;   // shed by the outbound budget, not lost in transit
+  }
+  // guest: silent-HOST watchdog. The host-side guest watchdog below has existed
+  // all along, but nothing watched the other direction — a host tab closing,
+  // crashing, or losing its socket left guests in a dead match forever. The
+  // host feeds guests at 12Hz (state) + 10Hz (bots); 8s of silence is ~100
+  // missed packets, far past any transient. This also covers the channel-error
+  // path with no extra API surface: an errored socket delivers nothing, so the
+  // watchdog fires 8s later.
+  if (!S.net.isHost() && S.started && S.hostSeen &&
+      (W.phase === "match" || W.phase === "drop") &&
+      now - S.hostSeen > 8000) {
+    hostLost(W);
+  }
+  // host: silent-guest watchdog — no state for 12s mid-match → bot takes over
+  if (S.net.isHost() && S.lastSeen && (W.phase === "match" || W.phase === "drop")) {
+    for (const id in S.lastSeen) {
+      if (now - S.lastSeen[id] > 12000) {
+        delete S.lastSeen[id];
+        onMsg(W, { from: "watchdog", t: "bye", d: { slot: id } });
+      }
+    }
+  }
+  // host: bot snapshots 10Hz (only bots near any human get full rate; far bots 2Hz)
+  // The outbound budget cannot shed state/bots/hitYou/died (all CRITICAL), so
+  // at 4 humans a busy host is billed x3 receivers and can breach Supabase's
+  // 100 msg/s ceiling — which drops the connection, the exact failure the
+  // budget exists to prevent. Scale the bot-snapshot interval with the human
+  // count instead: 10Hz solo-guest, 8Hz at 3, 6.25Hz at 4. interpRemote already
+  // follows the actual snapshot cadence rather than a hardcoded rate, so guests
+  // adapt automatically.
+}
+
+/** Used for the local player AND (on the host) for every bot, so one packet
+ *  shape covers both. `pt` + the `f` stance byte cost ~18 bytes on a packet
+ *  that already carries three float coordinates — see applyRemoteState for what
+ *  player.js does with them and what it did without them. */
+function pack(a) {
+  return {
+    id: a.id,
+    x: +a.pos.x.toFixed(2), y: +a.pos.y.toFixed(2), z: +a.pos.z.toFixed(2),
+    yw: +a.yaw.toFixed(3), pt: +a.pitch.toFixed(2),
+    hp: Math.round(a.hp), sh: Math.round(a.shield),
+    gl: a.gliding ? 1 : 0, wp: a.weapon ? a.weapon.id : null,
+    // bits 32/64: mantle + hit-react — transient states, but 0.25-0.5 s spans
+    // 2-6 packets at 5-12 Hz so remotes catch them; older peers ignore
+    // unknown bits (sweep findings: both were invisible to other clients)
+    f: (a.crouching ? 1 : 0) | (a.input.ads ? 2 : 0) |
+       (a.weapon && a.weapon.state === "reloading" ? 4 : 0) |
+       (a.swimming ? 8 : 0) | (a.chute ? 16 : 0) |
+       (a.mantleT != null ? 32 : 0) | (a.hitReactT > 0 ? 64 : 0),
+  };
+}

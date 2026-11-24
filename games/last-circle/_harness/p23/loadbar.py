@@ -83,6 +83,7 @@ def main():
                     {"samples": len(vals), "drops": drops[:5], "first": vals[:5], "last": vals[-3:], "toLobby_s": t}, "0 drops")
             v.check("card (map name + QUICK MATCH + a tip on the loading card)", any("QUICK MATCH" in m for m in lb["maps"]) and bool(lb["tips"]),
                     {"maps": lb["maps"], "tips": lb["tips"][:3]}, "present")
+            s.wait_lobby_full()  # step 8: a real Enter only skips a FULL offline lobby
             for _ in range(3):
                 s.page.keyboard.press("Enter")
                 if s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 5, 0.1) is not None:

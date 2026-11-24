@@ -452,6 +452,13 @@ def summarize(raw):
     }
 
 
+def _lobby_full_js():
+    """common.LOBBY_FULL_JS (the predicate common.Session.wait_lobby_full polls), imported on first use: this probe has its own page class."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import common
+    return common.LOBBY_FULL_JS
+
+
 class Run:
     @property
     def stage(self):
@@ -599,6 +606,7 @@ class Run:
             self.out["load"] = r
             # the lobby DOM is up; a real Enter skips the 0.7 s fill + 3 x 0.9 s countdown (hud.js finishLobby)
             _sleep(0.4)
+            self.wait_js(_lobby_full_js(), 20)    # step 8: a real Enter only skips a FULL offline lobby (common.Session.wait_lobby_full's predicate)
             self.js(SKIP_STAMP_JS)
             tk = time.time()
             self.page.keyboard.press("Enter")
@@ -696,6 +704,7 @@ class Run:
                 self.out["again_load_s"] = None if ok is None else round(time.time() - t0, 2)
                 self.out["again_map"] = self.js("() => window.__LC__.W.mapId")
                 _sleep(0.3)
+                self.wait_js(_lobby_full_js(), 20)    # step 8: a real Enter only skips a FULL offline lobby
                 self.page.keyboard.press("Enter")
                 self.wait_js("() => window.__LC__.W.phase === 'drop' || window.__LC__.W.phase === 'match'", 15, 0.05)
                 self.stage = "again_drop"

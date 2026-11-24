@@ -250,6 +250,7 @@ def main():
                 snaps.append(snap)
                 print("  snapshot m%d_lobby: textures %s geometries %s programs %s (load %.0f s)" % (
                     m, snap["infoTextures"], snap["geometries"], snap["programs"], snap["load_s"]), flush=True)
+                s.wait_lobby_full()      # step 8: a real Enter only skips a FULL offline lobby
                 s.page.keyboard.press("Enter")
                 if s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 15, 0.1) is None:
                     s.page.keyboard.press("Enter")
