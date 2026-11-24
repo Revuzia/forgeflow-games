@@ -110,6 +110,8 @@ SOURCES = [
     ("p23/gunhold.py", lambda m: _plants_editlist(m)),
     ("p23/lootlook.py", lambda m: _plants_editlist(m)),
     ("p23/dmgdir.py", lambda m: _plants_editlist(m)),
+    ("p23/pause.py", lambda m: _plants_editlist(m)),
+    ("p23/waterblink.py", lambda m: _plants_editlist(m)),
     ("probe_match.py", lambda m: _plants_pairs(m, RB + "bots.js")),
     ("p23/dbno.py", lambda m: _consts(m, {"no-commit": "NO_COMMIT", "no-revive-threat": "NO_REVIVE_THREAT"}, RB + "bots.js")),
     ("p23/fall.py", lambda m: _consts(m, {"no-fall-guard": "NO_FALL_GUARD", "no-turn-reprobe": "NO_TURN_REPROBE", "calm-guard-off": "CALM_GUARD_OFF"}, RB + "bots.js")),
