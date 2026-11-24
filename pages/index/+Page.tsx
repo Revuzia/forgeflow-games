@@ -87,8 +87,10 @@ export default function HomePage() {
 
       {/* Game Sections */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-12 py-12">
-        {popular.data && popular.data.length > 0 && (
-          <GameCarousel title="Trending Now" games={popular.data} accentColor="#ff3366" viewAllHref="/games?sort=popular" />
+        {/* Trending Now = the newest games (owner, 2026-11-24). It used to be "most played", but every
+            play_count is still 0, so that order was arbitrary and old board games led the page. */}
+        {newest.data && newest.data.length > 0 && (
+          <GameCarousel title="Trending Now" games={newest.data} accentColor="#ff3366" viewAllHref="/games?sort=new" />
         )}
 
         <GenreTiles games={allGames} />
