@@ -196,6 +196,7 @@ def main():
                     s.js("() => { window.__H_GUARD_N__ = {}; }")      # fresh per-phase frame counts for this round
                     lobby_phase = s.phase()
                     guard_call = s.guard_player(True)                 # BEFORE Enter (the race fix)
+                    s.wait_lobby_full()                               # step 8: a real Enter only skips a FULL offline lobby
                     s.page.keyboard.press("Enter")
                     s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 20, 0.1)
                     s.guard_player(True)

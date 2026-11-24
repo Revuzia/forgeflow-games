@@ -42,7 +42,7 @@ import common as C  # noqa: E402
 
 GATE = "coldcache"
 COLD_V = "1799999999"
-UNVERSIONED_OK = ("runtime/ffg_handles.js", "runtime/net/ffg_netplay.js", "runtime/net/ffg_rtc.js")      # never carried the query (shared pipeline files); judged byte-for-byte against live
+UNVERSIONED_OK = ("runtime/ffg_handles.js", "runtime/net/ffg_netplay.js", "runtime/net/ffg_rtc.js", "runtime/net/ffg_cfroom.js")      # never carried the query (shared pipeline files); judged byte-for-byte against live
 VQ_RE = re.compile(r"\?v=\d+")
 
 

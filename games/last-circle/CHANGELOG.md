@@ -3,6 +3,14 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-23 — Play with friends (LIVE ?v=1795485001)
+
+- New: PLAY WITH FRIENDS card on the menu. START ROOM gives a 4-character code and an invite link (?room=CODE); up to 4 players (host + 3), every other spot filled by opponents. Host picks mode (Standard / Quick) and teams (all on one team / two teams / everyone for themselves, merged with the menu team pick); only the host starts; a match in progress cannot be joined (late joiners wait); BACK TO ROOM keeps the room together; host leaving hands the room to the longest-present player.
+- Transport: Cloudflare relay rooms (workers/last-circle-net, runtime/net/ffg_cfroom.js) replace the Supabase room path.
+- Robustness: liveness by room presence (a slow loader keeps its slot up to 240 s and can take its body back; guests wait for a stalled-but-present host, 45 s in a match, 15 min hard ceiling before the first tick); a failed loader stays in the room; load timeouts count live page time only; lobby countdown immune to listener errors.
+- Offline Quick / Battle Royale lobbies fill in uneven bursts and drop 8-15 s after opening; Practice stays instant. No bot/AI wording outside Practice.
+- Gates: p23_lobbycd (new), p23_netlive late/loadfail cases + 5 controls, fake_relay.js stand-in; netseq settle() requires position agreement (bar unchanged).
+
 ## 2026-11-22 — damage direction (LIVE ?v=1795386861)
 
 - New: a damage-direction arc around the crosshair points at whoever hit you and keeps pointing there as you turn (blue dashed = shield hit, solid red = health hit; bigger hits draw wider, brighter arcs; several attackers at once; 1.5 s). Its own setting 'Damage direction' (default ON), independent of Sound indicators; honours the colour-blind palettes and Reduce flashes. Replaces the small damage glyph on the sound ring.

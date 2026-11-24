@@ -590,6 +590,8 @@ function sharedClipUrl(W, name) { return W.assetBase + "assets/chars/clips/" + n
  *  instead of wedging the match-start await (the kernel's own loads already do this). */
 function loadBounded(W, url) {
   const p = W.kernel.loader.loadAsync(url);
+  // friends fix 3: the kernel's stall-aware bound (a long synchronous step of the build no longer "times out" a file that has arrived)
+  if (typeof W.kernel.withLoadTimeout === "function") return W.kernel.withLoadTimeout(p, url);
   const ms = W.kernel.loadTimeoutMs > 0 ? W.kernel.loadTimeoutMs : 30000;
   let to = 0;
   const timer = new Promise((_, rej) => { to = setTimeout(() => rej(new Error("timed out loading " + url)), ms); });

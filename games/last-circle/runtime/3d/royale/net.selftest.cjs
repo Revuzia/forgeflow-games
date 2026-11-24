@@ -154,7 +154,7 @@ function suite(M, label, count) {
     row(jf0.wanted === 1 && jf0.built === null && jf0.reload === true, "judgeFallback: a missing record still gives a card (version 1, built unknown)", jf0);
 
     const fl = fallbackLine("Ann", false), flh = fallbackLine("Bob", true);
-    row(/Ann/.test(fl) && /map failed to load/i.test(fl) && /reload the page/i.test(fl) && /bot has their place/i.test(fl), "fallbackLine: a guest line names the player, the map failure, the bot and the reload", fl);
+    row(/Ann/.test(fl) && /map failed to load/i.test(fl) && /reload the page/i.test(fl) && /spot is filled/i.test(fl) && !/(bots?|AI|CPU)/.test(fl), "fallbackLine: a guest line names the player, the map failure, that the spot is filled (never 'bot') and the reload", fl);
     row(/Bob/.test(flh) && /the host/i.test(flh) && /map failed to load/i.test(flh) && /offline/i.test(flh), "fallbackLine: a host line says the host left and the match carries on offline", flh);
     row(fallbackLine("", false).startsWith("A player") && fallbackLine("x".repeat(80), false).indexOf("x".repeat(25)) === -1, "fallbackLine: a missing name is 'A player', a long one is cut at 24");
 
@@ -355,6 +355,20 @@ function suiteP23(M, SIM, count) {
     const hs = new M.SquadHandshake({ id: "a", name: "H", gv: 6, host: true });
     const msg = rt(hs.startMsg({ seed: 7, mapId: "ashgrid", mode: "quick", teamMode: "trio", roster: rt2 }));
     row(msg.mode === "quick" && msg.teamMode === "trio" && msg.gv === 6 && msg.roster[1].teamId === "t0", "C-MODE: the start keeps `mode` = the pace and adds teamMode + roster teamIds (JSON round trip)", msg);
+    // FRIENDS ROOMS: the teams pick (squad / two / ffa) -> team size + each human's teamId
+    const R4 = [0, 1, 2, 3].map((i) => ({ peerId: "p" + i, slot: i, name: "N" + i }));
+    const tmS = M.roomTeamMode("squad", null, 4, "standard", SIM), tmT = M.roomTeamMode("two", null, 4, "standard", SIM), tmF = M.roomTeamMode("ffa", "squad", 4, "standard", SIM);
+    const two = M.rosterWithTeams(R4, tmT, SIM, "two").map((r) => r.teamId), ffa = M.rosterWithTeams(R4, tmF, SIM, "ffa").map((r) => r.teamId), sq = M.rosterWithTeams(R4, tmS, SIM, "squad").map((r) => r.teamId);
+    row(tmS === "squad" && tmT === "duo" && tmF === "solo" && M.roomTeamMode("two", null, 2, "quick", SIM) === "duo" && M.roomTeamMode("two", "trio", 3, "standard", SIM) === "trio" &&
+      M.roomTeamMode("squad", null, 2, "standard", SIM) === "duo" && M.roomTeamMode("squad", null, 1, "standard", SIM) === "solo",
+      "friends: ALL ON ONE TEAM = the smallest size for everyone, TWO TEAMS = at least duos for the bigger half, EVERYONE FOR THEMSELVES = solo", [tmS, tmT, tmF]);
+    row(two.join() === "sqA,sqB,sqA,sqB" && ffa.join() === "s0,s1,s2,s3" && sq.join() === "t0,t0,t0,t0" && M.normTeams("x") === null && M.normTeams("two") === "two",
+      "friends: TWO TEAMS alternates sqA / sqB down the roster (host on A), FFA gives each human its own id, ALL ON ONE TEAM = t0", { two, ffa, sq });
+    const hs4 = new M.SquadHandshake({ id: "p0", name: "H", gv: 6, host: true });
+    for (const i of [1, 2, 3]) hs4.onHello("p" + i, { name: "N" + i, gv: 6 }, 0);
+    const pl4 = hs4.planStart({ p1: "N1", p2: "N2", p3: "N3" }, 3, 0, { p2: true });
+    row(pl4.roster.map((r) => r.peerId).join() === "p0,p1,p3" && pl4.roster[2].slot === 2 && pl4.gone.some((g) => g.peerId === "p2" && g.busy),
+      "friends: START leaves out a friend still IN A MATCH (they play the next one); the others keep consecutive slots", pl4);
   }
   // ── LC-49: order ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   {
@@ -525,6 +539,30 @@ function suiteP23(M, SIM, count) {
     row(rc({ senderSlot: 2 }) === "no" && rc({ senderSlot: 0 }) === "no" && rc({ senderSlot: null }) === "no", "LC-49 reconnect: only the slot's own peer reclaims it (never another guest, never the host)");
     row(rc({ alive: false }) === "no" && rc({ isBot: false }) === "no" && rc({ takenAt: null }) === "no", "LC-49 reconnect: a dead body, a body nobody took over, or one not taken for silence is never reclaimed");
     row(rc({ rejoinedBy: "z_new" }) === "no" && rc({ rejoinedBy: "b_g1" }) === "ok", "LC-49 reconnect: a slot already handed to a reloaded page stays with that page");
+    // FRIENDS fix 3: liveness before the first tick = the relay's presence (R1), a stalled host still in the room is waited for (R2)
+    if (typeof M.neverSeenVerdict === "function" && typeof M.hostSilenceVerdict === "function" && typeof M.judgeLateArrival === "function") {
+      row(M.FIRST_TICK_CAP_MS === 240000 && M.HOST_SILENT_PRESENT_MS === 45000 && M.HOST_SILENT_BLIND_MS === 8000 && M.PRESENCE_LEAVE_MS === 2000,
+        "fix 3: first-tick cap 240 s, host silence 45 s while present (8 s without presence), a presence leave counts after 2 s");
+      const nv = (o) => M.neverSeenVerdict(o);
+      row(nv({ goneMs: null, sinceLiveMs: 120000 }) === "wait" && nv({ goneMs: null, sinceLiveMs: 239000 }) === "wait",
+        "fix 3 R1: a guest still in the room and still loading 120 s / 239 s after the host went live keeps its slot (was a bot at 60 s)");
+      row(nv({ goneMs: null, sinceLiveMs: 240001 }) === "cap", "fix 3 R1: past the 240 s cap the slot is handed over");
+      row(nv({ goneMs: 2001, sinceLiveMs: 5000 }) === "left" && nv({ goneMs: 1500, sinceLiveMs: 5000 }) === "wait" && nv({ goneMs: 0, sinceLiveMs: 5000 }) === "wait",
+        "fix 3 R1: a guest the relay says has left (2 s) is handed over at once; a socket blip (< 2 s) is not");
+      const hv = (o) => M.hostSilenceVerdict(Object.assign({ presenceLive: true, hostGoneMs: null, silentMs: null, sinceLiveMs: 10000 }, o));
+      row(hv({ silentMs: 20000 }) === "wait" && hv({ silentMs: 44900 }) === "wait" && hv({ silentMs: 45001 }) === "lost",
+        "fix 3 R2: a host still in the room but silent 20 s is waited for ('Waiting for host'); past 45 s the guest continues offline");
+      row(hv({ silentMs: 1000 }) === "ok" && hv({ silentMs: 3500 }) === "wait", "fix 3 R2: the notice shows after 3 s of host silence, not on a normal packet gap");
+      row(hv({ hostGoneMs: 2001, silentMs: 100 }) === "lost" && hv({ hostGoneMs: 1000, silentMs: 100 }) === "ok",
+        "fix 3 R2: a host the relay says has left -> continue offline (2 s presence leave), whatever its packets did");
+      row(hv({ silentMs: null, sinceLiveMs: 200000 }) === "wait" && hv({ silentMs: null, sinceLiveMs: 240001 }) === "lost" && hv({ silentMs: null, sinceLiveMs: 1000 }) === "ok",
+        "fix 3 R2: before the host's first live tick the guest waits up to 240 s");
+      row(hv({ presenceLive: false, silentMs: 8001 }) === "lost" && hv({ presenceLive: false, silentMs: 7000 }) === "wait" && hv({ presenceLive: false, hostGoneMs: 9999, silentMs: 100 }) === "ok",
+        "fix 3 R2: with this page's own relay socket down (presence stale) the old 8 s rule applies and a stale absence is not read");
+      const la = (o) => M.judgeLateArrival(Object.assign({ senderSlot: 1, id: "s1", from: "b_g1", rejoinedBy: null }, o));
+      row(la({}) === "ok" && la({ senderSlot: 2 }) === "no" && la({ senderSlot: 0, id: "s0" }) === "no" && la({ senderSlot: null }) === "no" && la({ rejoinedBy: "z_new" }) === "no" && la({ rejoinedBy: "b_g1" }) === "ok",
+        "fix 3 R1: a late arrival gets ITS slot's body back (only that slot's peer; a slot a reloaded page took stays with that page)");
+    } else row(false, "fix 3: neverSeenVerdict / hostSilenceVerdict / judgeLateArrival exported");
   }
   return bad;
 }
@@ -698,6 +736,11 @@ function suiteP23(M, SIM, count) {
     ["a page that never re-reads the records (one scan before the first hello)", { rejoinRescanMs: () => -1 }],
     ["a revive done range fixed at 5 m (not K.REVIVE_RANGE)", { reviveDoneRange: () => 5 }],
     ["a late-join sync that forgets the chest items for a crate that lands later", { applyLootSync: (loot, open, take) => { M.applyLootSync(loot, open, take); return []; } }],
+    ["fix 3: a never-seen watchdog on a fixed 60 s (the 169 s loader became an opponent)", { neverSeenVerdict: (c) => (c.goneMs > 2000 ? "left" : c.sinceLiveMs > 60000 ? "cap" : "wait") }],
+    ["fix 3: a never-seen watchdog that ignores the relay leaving", { neverSeenVerdict: (c) => (c.sinceLiveMs > M.FIRST_TICK_CAP_MS ? "cap" : "wait") }],
+    ["fix 3: a guest that drops a present host after 8 s of silence (the CPU x4 split)", { hostSilenceVerdict: (c) => (c.silentMs > 8000 ? "lost" : "ok") }],
+    ["fix 3: a guest that ignores the host leaving the room", { hostSilenceVerdict: (c) => M.hostSilenceVerdict(Object.assign({}, c, { hostGoneMs: null })) }],
+    ["fix 3: a late-arrival judge that gives any peer the body", { judgeLateArrival: () => "ok" }],
   ];
   for (const [name, over] of p23Mutants) {
     const bad = suiteP23(Object.assign({}, M, over), SIM, false);
@@ -720,13 +763,17 @@ function suiteP23(M, SIM, count) {
       "C-DBNO: the downed bit rides the stance byte and, while it is set, the hp field carries the bleed pool (no extra key: per-tick bytes unchanged); remotes get downedHp = hp, hp = 0");
     ok(/revive: 1, smoke: 1, rejoin: 1, room: 1/.test(src) && !/qsend\("revive"/.test(src) && /send\("revive", \{ k: "done"/.test(src) && /send\("smoke"/.test(src),
       "P23: revive / smoke / rejoin / room are CRITICAL and sent at once (never batched, never shed)");
-    ok(/function myHello\(\) \{ return Object\.assign\(S\.hs\.helloMsg\(\), S\.rk \? \{ rk: S\.rk \} : \{\}\); \}/.test(src) && /hello\.rj = cands\.map/.test(src) && /if \(hr\.first\) send\("hello", myHello\(\)\);/.test(src),
+    ok(/function myHello\(\) \{ return Object\.assign\(S\.hs\.helloMsg\(\), S\.rk \? \{ rk: S\.rk \} : \{\}/.test(src) && /hello\.rj = cands\.map/.test(src) && /if \(hr\.first\) send\("hello", myHello\(\)\);/.test(src),
       "LC-49: every hello carries the tab's rejoin commitment; a reloaded page's hello asks with its secret");
-    ok(/teamMode = resolveTeamMode\(teamWant, plan\.roster\.length, pace, W\.SIM\)/.test(src) && /rosterWithTeams\(plan\.roster, teamMode, W\.SIM\)/.test(src) && /if \(teamMode\) opts\.teamMode = teamMode;/.test(src),
+    ok(/teamMode = roomTeamMode\(roomTeams, teamWant, plan\.roster\.length, pace, W\.SIM\)/.test(src) && /rosterWithTeams\(plan\.roster, teamMode, W\.SIM, roomTeams\)/.test(src) && /if \(teamMode\) opts\.teamMode = teamMode;/.test(src),
       "C-MODE: START (and run-it-back) carry the team mode and the roster teamIds, and the guests hand them to startMatch");
     const lob = sl("function openLobby(W, sel) {", "// host + 3 guests.");
-    ok(lob.indexOf("box.appendChild(startB);") > 0 && lob.indexOf("box.appendChild(modeRow);") > lob.indexOf("box.appendChild(startB);") && lob.indexOf("box.appendChild(rosterEl);") < lob.indexOf("box.appendChild(noteEl);"),
-      "C-MODE: the team-mode row sits after START, so the lobby keeps the child order squadguard_live.py reads (title, status, buttons, roster, notices, START)");
+    // FRIENDS ROOMS (2026-11-22): the picks (MODE, TEAMS) moved ABOVE the roster for the player; what squadguard_live.py reads is box.children[1] =
+    // the status line and the roster = the notices' previous sibling, so those two are what this row pins (plus START last)
+    ok(lob.indexOf("box.appendChild(startB);") > lob.indexOf("box.appendChild(noteEl);") && lob.indexOf("box.appendChild(rosterEl);") < lob.indexOf("box.appendChild(noteEl);") &&
+      lob.indexOf('html(`<div class="lcn-title">') >= 0 && lob.indexOf('html(`<div class="lcn-title">') < lob.indexOf("const status = html(") &&
+      lob.indexOf("const status = html(") < lob.indexOf("box.appendChild(roomPanel);"),
+      "C-MODE / friends: the lobby keeps the children squadguard_live.py reads: [0] title, [1] status; roster right before the notices; START last");
     ok(/S\.rxGate = null; S\.reviveIn = null;/.test(src) && /if \(!a\.brain\) import\("\.\/bots\.js" \+ V\)/.test(src), "P23: run-it-back resets the order gate / revive / rejoin books; a re-taken body reuses its brain (never two brains on one body)");
     ok(/if \(a && S\.net\.isHost\(\) && !a\.netRemote && a !== W\.player\) reclaimSilentBody\(W, a, from, d\);\s*if \(a && a\.netRemote\) \{ applyRemoteState/.test(src) &&
       /if \(hostTakeOver\(W, id\)\) \(S\.silentTake = S\.silentTake \|\| \{\}\)\[id\] = now;/.test(src) && /if \(!gone\) \(S\.silentTake = S\.silentTake \|\| \{\}\)\[id\] = now;/.test(src) &&
@@ -734,7 +781,7 @@ function suiteP23(M, SIM, count) {
       "LC-49 reconnect: only the silence watchdogs mark a body reclaimable (a bye or a map fallback never does) and a fresh state packet reclaims it before it is applied");
     ok(/if \(d\.to && d\.to !== S\.net\.id\) return;/.test(sl('if (t === "sync" && !S.net.isHost())', "function applyRemoteState")), "LC-49: a sync addressed to a rejoining page is ignored by everyone else (no clock snap)");
     ok(/let teamWant = normTeamMode\(sel && \(sel\.teamMode \|\| sel\.team\)\) \|\| normTeamMode\(W\.settings && W\.settings\.teamMode\);/.test(src) &&
-      /const want = rematchTeamWant\(S\.cfg, opts\.teamMode\);\s*\r?\n\s*const teamMode = resolveTeamMode\(want === "solo" \? null : want/.test(src) && /mode: pace, teamMode, teamWant: teamWant \|\| "auto", roster/.test(src),
+      /const want = rematchTeamWant\(S\.cfg, opts\.teamMode\);\s*\r?\n\s*const teamMode = roomTeamMode\(normTeams\(S\.cfg && S\.cfg\.teams\) \|\| "squad", want === "solo" \? null : want/.test(src) && /mode: pace, teamMode, teams: roomTeams, teamWant: teamWant \|\| "auto", roster/.test(src),
       "D5: the room starts from the menu's team pick (W.settings.teamMode), START carries teamMode + teamWant, run it back re-resolves the room's pick");
     ok(/if \(S\.rejoinAsk\.tries >= REJOIN_ASK_TRIES\)/.test(src) && /setTimeout\(ask, REJOIN_ASK_EVERY_MS\);/.test(src) && !/tries >= 6/.test(src) &&
       /silentMs: typeof seen === "number" \? now - seen : null/.test(src) && /if \(S\.goneAt\) delete S\.goneAt\[id\];\s+\/\/ \(null when/.test(src) && /if \(S\.lastSeen\) delete S\.lastSeen\[id\];/.test(src) &&
@@ -753,6 +800,26 @@ function suiteP23(M, SIM, count) {
       /if \(t === "take"\) \{ W\.netTakeItem\(d\.id\); if \(isChestItem\(d\.id\)\) deferTakes\(\[d\.id\]\);/.test(src) &&
       /const pre = chestItemPrefix\(c\);[\s\S]{0,120}for \(const id of \[\.\.\.S\.lootDefer\]\) if \(id\.startsWith\(pre\)\) \{ S\.lootDefer\.delete\(id\); W\.netTakeItem\(id\); \}/.test(src) && /S\.lootDefer = null;/.test(src),
       "late join: the sync goes through applyLootSync (opened first) and a chest that opens here later drops the items taken from it");
+  }
+
+  // FRIENDS fix 3, the wiring: update() judges with the pure verdicts; a failed load in a room goes back to the room
+  {
+    const src = fs.readFileSync(NET_JS, "utf8");
+    ok(/const v = neverSeenVerdict\(\{ goneMs: gone \? now - S\.absentSince\[id\] : null, sinceLiveMs: now - S\.matchLiveAt \}\);/.test(src) && !/NEVER_SEEN_MS\)/.test(src) &&
+      /\(S\.lateTake = S\.lateTake \|\| \{\}\)\[id\] = \{ at: now, why: v \};/.test(src) && /if \(S\.lateTake && S\.lateTake\[a\.id\]\) return lateArrival\(W, a, from\);/.test(src),
+      "fix 3 R1: the host's never-seen watchdog asks neverSeenVerdict (presence, 240 s cap) and a body it hands over is offered back to a late arrival");
+    ok(/const v = hostSilenceVerdict\(\{ presenceLive,/.test(src) && !/now - S\.hostSeen > 8000/.test(src) && /showHostWait\(W, v === "wait"\);/.test(src) &&
+      /if \(!S\.tickAt \|\| now - S\.tickAt > 2000\)/.test(src),
+      "fix 3 R2: the guest's host watchdog asks hostSilenceVerdict (presence) and shows 'Waiting for host'; the stall guard (348bfea1e) stays");
+    ok(/send\("loading", \{ slot: S\.mySlot/.test(src) && src.indexOf('send("loading"') < src.indexOf("window.__LC__.startMatch(opts);") && /loading: 1 \}/.test(src),
+      "fix 3: a 'loading' message goes out once before the world build (critical: never shed)");
+    ok(/S\.loadBeat = setInterval\(\(\) => \{\s*if \(S !== sess \|\| !sess\.started \|\| !W\._starting \|\| sess\.matchLiveAt\)/.test(src) && M.LOADING_BEAT_MS === 10000 &&
+      /sinceLiveMs: S\.matchLiveAt \? now - Math\.max\(S\.matchLiveAt, hostBeat\) : 0/.test(src),
+      "fix 3: while its load runs a page repeats 'loading' every 10 s (only while W._starting), and a guest's 240 s wait for a host's first tick counts from the host's last beat");
+    const boot = fs.readFileSync(path.join(path.dirname(NET_JS), "..", "ffg_royale3d.js"), "utf8");
+    const mlf = boot.slice(boot.indexOf("function matchLoadFailed(err) {"), boot.indexOf("function removeLoadingLayer()"));
+    ok(/if \(!inRoomNow\) \{ try \{ netMod\.leave\(W\); \} catch \(e\) \{\} \}/.test(mlf) && /netMod\.returnToRoom\(W, \{ loadFailed: msg \}\)/.test(mlf),
+      "fix 3 R3: a failed match load in a friends room goes back to the room (returnToRoom with the reason); offline it leaves as before");
   }
 
   console.log("");

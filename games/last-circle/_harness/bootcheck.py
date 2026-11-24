@@ -92,6 +92,7 @@ def main():
                 return
             s.stage("lobby")
             s.sleep(0.4)
+            s.wait_lobby_full()
             s.page.keyboard.press("Enter")
             dropped = s.wait_js("() => ['drop', 'match'].includes(window.__LC__.W.phase)", 20, 0.1)
             v.check("a REAL Enter leaves the lobby", dropped is not None, {"s": dropped, "phase": s.phase()})

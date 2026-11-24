@@ -13,11 +13,15 @@ itself and was refused with "already this peer's slot", so the key check never r
     python _harness/p23/netlive.py --serve --cases match        # the worktree from an in-process server (backlog 256)
     python _harness/p23/netlive.py --disk --cases match --plant no-order     # negative control: the order rows MUST FAIL
     python _harness/p23/netlive.py --disk --cases match --plant no-revive-gate   # negative control: the early-done row MUST FAIL
+    python _harness/p23/netlive.py --disk --cases late --plant late-cap-60       # friends fix 3 controls (each run stops after its row) - MUST FAIL:
+                                    late-no-reclaim / host-silence-8s / host-left-ignored (--cases late), loadfail-leaves (--cases loadfail)
 
 CASES
-  mode    host + guest lobby (startMatch stubbed): the team-mode row (AUTO / DUOS / TRIOS / SQUADS) on the host, the host's pick on the guest
-          ("room" message), START carries teamMode + teamWant + roster teamIds, both stubbed starts get teamMode + each human's teamId
-  mode3   three humans: DUOS is disabled on the host, AUTO resolves to TRIOS, START plays trio
+  mode    host + guest lobby (startMatch stubbed): the room's MODE row (STANDARD / QUICK) and TEAMS row (ALL ON ONE TEAM / TWO TEAMS /
+          EVERYONE FOR THEMSELVES) on the host, the host's picks on the guest ("room" message), START carries the pace, teams, teamMode +
+          roster teamIds (TWO TEAMS: sqA / sqB), both stubbed starts get teamMode + each human's teamId
+          (FRIENDS PORT 2026-11-22: these replace the old AUTO / DUOS / TRIOS / SQUADS row; the team SIZE now starts from the menu's TEAM pick)
+  mode3   three humans: ALL ON ONE TEAM resolves to TRIOS; EVERYONE FOR THEMSELVES -> START plays solo, each human its own team
   match   host + guest, the REAL match on both pages, then:
             LC-49  every state packet stamped q (per-sender counter) + t (match clock ~= the host's); duplicates (DataChannel + relay copy) dropped;
                    an out-of-order forged packet never pulls the remote body back; a newer one does (positive control)
@@ -25,6 +29,13 @@ CASES
             LC-14  a smoke cloud made on the guest appears in the host's W.smokes (once, marked _net); a frag throw replays as grenadeThrown {net}
             LC-49  rejoin: the guest's tab reloads on ?room=CODE inside 60 s and gets slot s1 back (its body, its kit); a third page with a
                    forged key for slot 1 is refused ("wrong rejoin key") and stays out of the match
+  late    (friends fix 3, R1 + R2) the guest's match start is HELD (its "loading" went out, its world build not begun) while the host plays; the
+          host's clock since its match went live is moved on (simulated): at 120 s the present, loading guest still has its slot; past the 240 s
+          cap it is handed over; the guest then arrives (70 s after the hand-over, past the old 60 s window) and takes its body back (placed at it).
+          Then the host's page is blocked 20 s (busy loop): the guest stays online with "Waiting for host..."; then the host's tab closes and the
+          guest continues offline within 6 s (the relay's presence), not after the 45 s wait
+  loadfail (friends fix 3, R3) the guest's character skins are aborted: its load fails with "Couldn't load the match" and it STAYS in the room
+          (lobby open, notice, bye + back on the wire); the host hands s1 over for this match and the next START rosters the guest
 """
 from __future__ import annotations
 
@@ -54,20 +65,20 @@ def _patient(pg, sel, s=240):
 
 
 def _host_create(pg):
-    _patient(pg, 'button:text-is("CREATE ROOM")')
+    _patient(pg, 'button:text-is("START ROOM")')
     try:
         st = pg.evaluate("() => ({ phase: __LC__.W.phase, btns: [...document.querySelectorAll('button')].filter((b) => b.offsetWidth > 0).map((b) => b.textContent.trim().slice(0, 24)).slice(0, 30) })")
     except Exception as e:
-        raise C.EnvFailure("host page unusable before CREATE ROOM (renderer crash / OOM on the shared box?): %s" % str(e).splitlines()[0][:160])
+        raise C.EnvFailure("host page unusable before START ROOM (renderer crash / OOM on the shared box?): %s" % str(e).splitlines()[0][:160])
     print("  (host lobby buttons: %s)" % st, flush=True)
-    if "CREATE ROOM" not in st["btns"]:
+    if "START ROOM" not in st["btns"]:
         shot(pg, "dbg_no_create_room")
-        raise C.EnvFailure("CREATE ROOM never painted within 240 s: %s" % st)
+        raise C.EnvFailure("START ROOM never painted within 240 s: %s" % st)
     # a real mouse click at the button's centre (the rig's locator.click hung in "waiting for locator" for 20 s on the starved renderer while a plain
     # evaluate answered): retry the click like a player until the room code shows, up to 240 s
     t0 = time.time()
     while time.time() - t0 < 240:
-        xy = _btn_xy(pg, "CREATE ROOM")
+        xy = _btn_xy(pg, "START ROOM")
         if xy:
             pg.mouse.click(xy[0], xy[1])
         if SG.wait(pg, r"() => /Room\s+[A-Z0-9]{4}\s+[-\u2014]/.test(document.body.innerText)", 30):
@@ -89,9 +100,9 @@ def _btn_xy(pg, label):
 
 
 def _guest_join(pg, code):
-    _patient(pg, 'button:text-is("JOIN")')
+    _patient(pg, 'button:text-is("JOIN FRIEND")')
     pg.fill('input[placeholder="CODE"]', code, timeout=120_000)
-    xy = _btn_xy(pg, "JOIN")
+    xy = _btn_xy(pg, "JOIN FRIEND")
     if xy:
         pg.mouse.click(xy[0], xy[1])
     else:
@@ -132,62 +143,77 @@ def _press_start(pg):
 
 SG.press_start = _press_start
 
-MODE_JS = r"""() => { const r = document.querySelector('[data-net-teammode]'); if (!r) return null;
+MODE_JS = r"""() => { const r = document.querySelector('[data-net-teammode]'), pr = document.querySelector('[data-net-pace]'); if (!r) return null;
   const vis = (b) => { const q = b.getBoundingClientRect(); return q.width > 0 && q.height > 0 && getComputedStyle(b).display !== 'none'; };
-  return { eff: r.getAttribute('data-net-teammode'), visible: vis(r), text: r.innerText.replace(/\s+/g, ' ').trim(),
-           buttons: [...r.querySelectorAll('button')].filter(vis).map((b) => b.textContent.trim() + (b.disabled ? ':disabled' : '') + (b.className.includes('pri') ? ':picked' : '')) }; }"""
+  const bs = (row) => [...row.querySelectorAll('button')].filter(vis).map((b) => b.textContent.trim() + (b.disabled ? ':disabled' : '') + (b.className.includes('pri') ? ':picked' : ''));
+  return { eff: r.getAttribute('data-net-teammode'), teams: r.getAttribute('data-net-teams'), visible: vis(r), text: r.innerText.replace(/\s+/g, ' ').trim(),
+           buttons: bs(r), pace: pr ? pr.getAttribute('data-net-pace') : null, paceText: pr ? pr.innerText.replace(/\s+/g, ' ').trim() : '', paceButtons: pr ? bs(pr) : [] }; }"""
 
 
-MODE_XY = r"""(label) => { const b = [...document.querySelectorAll('[data-net-teammode] button')].find((x) => x.offsetWidth > 0 && x.textContent.trim().startsWith(label) && !x.disabled);
+PICK_XY = r"""(label) => { const b = [...document.querySelectorAll('[data-net-teammode] button, [data-net-pace] button')].find((x) => x.offsetWidth > 0 && x.textContent.trim().startsWith(label) && !x.disabled);
   if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"""
+PICKS = {"ALL ON ONE TEAM": ("data-net-teams", "squad"), "TWO TEAMS": ("data-net-teams", "two"), "EVERYONE FOR THEMSELVES": ("data-net-teams", "ffa"),
+         "STANDARD": ("data-net-pace", "standard"), "QUICK": ("data-net-pace", "quick")}
 
 
 def click_mode(pg, label, s=120):
-    """real mouse click at the team-mode button's centre, retried until the row reports the pick (locator.click hung on a starved renderer)"""
-    want = {"DUOS": "duo", "TRIOS": "trio", "SQUADS": "squad"}.get(label)
+    """real mouse click at a room pick's centre (TEAMS or MODE row), retried until the row reports the pick (locator.click hung on a starved renderer)"""
+    attr, want = PICKS[label]
+    sel = "[data-net-teammode]" if attr == "data-net-teams" else "[data-net-pace]"
     t0 = time.time()
     while time.time() - t0 < s:
         try:
-            xy = pg.evaluate(MODE_XY, label)
+            xy = pg.evaluate(PICK_XY, label)
         except Exception:
             xy = None
         if xy:
             pg.mouse.click(xy[0], xy[1])
-        if SG.wait(pg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === %s; }" % json.dumps(want), 10):
+        if SG.wait(pg, "() => { const r = document.querySelector(%s); return r && r.getAttribute(%s) === %s; }" % (json.dumps(sel), json.dumps(attr), json.dumps(want)), 10):
             return True
     return False
 
 
-def plant_route(rig, pg, edit):
-    """serve this page's net.js edited (negative controls)"""
+def plant_route(rig, pg, edit, rel="runtime/3d/royale/net.js"):
+    """serve this page's `rel` (net.js by default) edited (negative controls)"""
     me = urllib.parse.urlparse(rig.origin).netloc
+    suffix = "/" + rel.split("/", 2)[-1] if rel.startswith("runtime/") else "/" + rel
 
     def pred(url):
         u = urllib.parse.urlparse(url)
-        return u.netloc == me and u.path.endswith("/royale/net.js")
+        return u.netloc == me and u.path.endswith(suffix)
 
     def handler(route):
-        body = edit(SG.src_text("runtime/3d/royale/net.js", None))
+        body = edit(SG.src_text(rel, None))
         route.fulfill(status=200, body=body.encode("utf-8"), headers={"Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store"})
     pg.route(pred, handler)
 
 
+NET_REL, BOOT_REL = "runtime/3d/royale/net.js", "runtime/3d/ffg_royale3d.js"
+# name -> (file, anchor, replacement). Each anchor must occur exactly once in the working copy (a moved anchor is a harness error, never a no-op plant).
 PLANTS = {
-    "no-order": ('const order = (S.rxGate = S.rxGate || new SeqGate()).accept(from, d.q);', 'const order = "new"; (S.rxGate = S.rxGate || new SeqGate());'),
-    "no-revive-gate": ('if (!reviveDoneOk(rec, by.id, performance.now(), reviveMs)) {', 'if (false) {'),
+    "no-order": (NET_REL, 'const order = (S.rxGate = S.rxGate || new SeqGate()).accept(from, d.q);', 'const order = "new"; (S.rxGate = S.rxGate || new SeqGate());'),
+    "no-revive-gate": (NET_REL, 'if (!reviveDoneOk(rec, by.id, performance.now(), reviveMs)) {', 'if (false) {'),
+    # friends fix 3 controls (case late / loadfail): each puts back the pre-fix behaviour the row guards against
+    "late-cap-60": (NET_REL, "export const FIRST_TICK_CAP_MS = 240000;", "export const FIRST_TICK_CAP_MS = 60000;   // PLANTED: the old 60 s never-seen rule"),
+    "late-no-reclaim": (NET_REL, "  if (S.lateTake && S.lateTake[a.id]) return lateArrival(W, a, from);\n", "  // PLANTED: no late hand-back (only the old 60 s silent reclaim)\n"),
+    "host-silence-8s": (NET_REL, "export const HOST_SILENT_PRESENT_MS = 45000;", "export const HOST_SILENT_PRESENT_MS = 8000;   // PLANTED: the old 8 s guest rule"),
+    "host-left-ignored": (NET_REL, '  if (typeof c.hostGoneMs === "number" && c.hostGoneMs > PRESENCE_LEAVE_MS) return "lost";\n', "  // PLANTED: the relay's leave is ignored\n"),
+    "loadfail-leaves": (BOOT_REL, "try { inRoomNow = !!(netMod.inRoom && netMod.returnToRoom && netMod.inRoom(W)); } catch (e) {}", "/* PLANTED: a failed load leaves the room (the old matchLoadFailed) */"),
 }
 
 
-PLANT_ON = {"no-order": "/host", "no-revive-gate": "/guest"}
+PLANT_ON = {"no-order": "/host", "no-revive-gate": "/guest", "late-cap-60": "/host", "late-no-reclaim": "/host", "host-silence-8s": "/guest",
+            "host-left-ignored": "/guest", "loadfail-leaves": "/guest"}
 
 
 def apply_plant(rig, pg, plant):
     if not plant:
         return
-    a, b = PLANTS[plant]
-    if a not in SG.src_text("runtime/3d/royale/net.js", None):
-        raise C.HarnessError("plant %s: anchor moved" % plant)
-    plant_route(rig, pg, lambda t: t.replace(a, b, 1))
+    import anchors as A                    # line-ending independent (a CRLF checkout serves the same anchors)
+    rel, a, b = PLANTS[plant]
+    if A.count(SG.src_text(rel, None), a) != 1:
+        raise C.HarnessError("plant %s: anchor moved (%s)" % (plant, rel))
+    plant_route(rig, pg, lambda t: A.apply(t, a, b, 1, rel), rel)
 
 
 def shot(pg, name):
@@ -200,7 +226,7 @@ def shot(pg, name):
     return p
 
 
-def boot_pages(rig, args, names, stub=True, plant=None):
+def boot_pages(rig, args, names, stub=True, plant=None, team=None):
     ctx = rig.new_ctx()
     pages = []
     for n in names:
@@ -221,6 +247,10 @@ def boot_pages(rig, args, names, stub=True, plant=None):
     if stub:
         for pg, _ in pages:
             pg.evaluate(SG.STUB_START_JS)
+    if team:
+        # D5 merge: the menu's TEAM pick (SOLO / DUOS / TRIOS / SQUADS, W.settings.teamMode) is the room's starting team size
+        for pg, rec in pages:
+            pg.evaluate("(t) => { const b = document.querySelector('[data-lc=teamrow] button[data-team=' + t + ']'); if (b) b.click(); return !!b; }", team)
     for pg, rec in pages:
         if not SG.open_lobby(pg):
             raise C.EnvFailure("%s: lobby never opened" % rec.name)
@@ -240,18 +270,19 @@ def case_mode(rig, v, args):
     gm = SG.wait(gpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') ? true : null; }", 10)
     gm = gpg.evaluate(MODE_JS)
     v.check("mode: 2 humans in both lobbies", bool(both), {})
-    v.check("mode: the host's TEAM MODE row is on screen with AUTO (picked, resolving to DUOS) / DUOS / TRIOS / SQUADS, none disabled for 2 players",
-            bool(hm) and hm["visible"] and hm["eff"] == "duo" and len(hm["buttons"]) == 4 and hm["buttons"][0].startswith("AUTO") and ":picked" in hm["buttons"][0]
-            and not any(":disabled" in b for b in hm["buttons"]), hm)
-    v.check("mode: the guest reads the host's pick (no buttons): 'TEAM MODE: DUOS (HOST'S PICK)'",
-            bool(gm) and gm["visible"] and gm["eff"] == "duo" and not gm["buttons"] and "DUOS" in gm["text"] and "HOST" in gm["text"], gm)
-    click_mode(hpg, "TRIOS")
-    g2 = SG.wait(gpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === 'trio'; }", 10)
+    v.check("mode: the host's TEAMS row is on screen: ALL ON ONE TEAM (picked, size DUOS for 2) / TWO TEAMS / EVERYONE FOR THEMSELVES; MODE row STANDARD / QUICK",
+            bool(hm) and hm["visible"] and hm["eff"] == "duo" and hm["teams"] == "squad" and len(hm["buttons"]) == 3 and hm["buttons"][0] == "ALL ON ONE TEAM:picked"
+            and len(hm["paceButtons"]) == 2 and any(":picked" in b for b in hm["paceButtons"]), hm)
+    v.check("mode: the guest reads the host's picks (no buttons): 'TEAMS: ALL ON ONE TEAM' + the MODE line",
+            bool(gm) and gm["visible"] and gm["eff"] == "duo" and not gm["buttons"] and not gm["paceButtons"] and "ALL ON ONE TEAM" in gm["text"] and "MODE:" in gm["paceText"], gm)
+    click_mode(hpg, "TWO TEAMS")
+    click_mode(hpg, "QUICK")
+    g2 = SG.wait(gpg, "() => { const r = document.querySelector('[data-net-teammode]'), p = document.querySelector('[data-net-pace]'); return r && r.getAttribute('data-net-teams') === 'two' && p && p.getAttribute('data-net-pace') === 'quick'; }", 10)
     hm2, gm2 = hpg.evaluate(MODE_JS), gpg.evaluate(MODE_JS)
     room_out = SG.msgs(hpg, "room", "out")
-    v.check("mode: the host clicks TRIOS -> its button is picked and the guest's line follows within 10 s ('room' {tm: trio, want: trio} on the wire)",
-            bool(g2) and any(b.startswith("TRIOS") and ":picked" in b for b in hm2["buttons"]) and "TRIOS" in gm2["text"]
-            and any(m["d"].get("tm") == "trio" and m["d"].get("want") == "trio" for m in room_out), {"host": hm2, "guest": gm2, "roomOut": [m["d"] for m in room_out]})
+    v.check("mode: the host clicks TWO TEAMS + QUICK -> its buttons are picked and the guest's lines follow within 10 s ('room' {teams: two, mode: quick, tm: duo} on the wire)",
+            bool(g2) and "TWO TEAMS:picked" in hm2["buttons"] and "TWO TEAMS" in gm2["text"] and "QUICK" in gm2["paceText"]
+            and any(m["d"].get("teams") == "two" and m["d"].get("mode") == "quick" and m["d"].get("tm") == "duo" for m in room_out), {"host": hm2, "guest": gm2, "roomOut": [m["d"] for m in room_out]})
     shot(hpg, "mode_host_lobby")
     shot(gpg, "mode_guest_lobby")
     lob = SG.lobby(hpg)
@@ -261,12 +292,12 @@ def case_mode(rig, v, args):
     hst, gst = hpg.evaluate(SG.STARTS_JS), gpg.evaluate(SG.STARTS_JS)
     st = SG.msgs(hpg, "start", "out")
     sd = st[0]["d"] if st else {}
-    v.check("mode: the start on the wire carries teamMode 'trio', teamWant 'trio', the pace in `mode` and teamId 't0' on every roster entry (old fields kept)",
-            sd.get("teamMode") == "trio" and sd.get("teamWant") == "trio" and sd.get("mode") in ("standard", "quick")
-            and all(r.get("teamId") == "t0" for r in sd.get("roster", [])) and all(k in sd for k in ("seed", "mapId", "gv", "roster")), sd)
-    ok = bool(hs) and bool(gs) and hst[0].get("teamMode") == "trio" and gst[0].get("teamMode") == "trio" \
-        and all(h.get("teamId") == "t0" for h in hst[0]["humans"] + gst[0]["humans"]) and hst[0]["seed"] == gst[0]["seed"]
-    v.check("mode: both pages' startMatch get teamMode 'trio' and each human's teamId (same seed)", ok,
+    v.check("mode: the start on the wire carries teamMode 'duo', teams 'two', the pace 'quick' in `mode` and teamIds sqA (host) / sqB (guest) (old fields kept)",
+            sd.get("teamMode") == "duo" and sd.get("teams") == "two" and sd.get("mode") == "quick"
+            and [r.get("teamId") for r in sd.get("roster", [])] == ["sqA", "sqB"] and all(k in sd for k in ("seed", "mapId", "gv", "roster", "teamWant")), sd)
+    ok = bool(hs) and bool(gs) and hst[0].get("teamMode") == "duo" and gst[0].get("teamMode") == "duo" and hst[0].get("mode") == "quick" \
+        and [h.get("teamId") for h in hst[0]["humans"]] == ["sqA", "sqB"] and [h.get("teamId") for h in gst[0]["humans"]] == ["sqA", "sqB"] and hst[0]["seed"] == gst[0]["seed"]
+    v.check("mode: both pages' startMatch get teamMode 'duo', mode 'quick' and each human's teamId sqA / sqB (same seed)", ok,
             {"host": hst[:1] and {k: hst[0].get(k) for k in ("teamMode", "humans", "seed", "mode")}, "guest": gst[:1] and {k: gst[0].get(k) for k in ("teamMode", "humans", "seed")}})
     v.check("mode: the lobby keeps squadguard's child order (status = 2nd child, roster before notices) - lobby() still parses",
             bool(lob.get("open")) and "Room" in (lob.get("status") or "") and len(lob.get("roster") or []) == 2, {"status": lob.get("status"), "roster": lob.get("roster")})
@@ -286,14 +317,16 @@ def case_mode3(rig, v, args):
     three = SG.wait(hpg, "() => document.body.innerText.includes('3 player')", 40)
     hm = SG.wait(hpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === 'trio'; }", 10)
     hm = hpg.evaluate(MODE_JS)
-    v.check("mode3: three humans -> AUTO resolves to TRIOS and DUOS is disabled on the host", bool(three) and hm["eff"] == "trio"
-            and any(b.startswith("DUOS") and ":disabled" in b for b in hm["buttons"]) and "TRIOS" in hm["buttons"][0], hm)
+    v.check("mode3: three humans, ALL ON ONE TEAM -> the team size resolves to TRIOS on the host", bool(three) and hm["eff"] == "trio" and hm["teams"] == "squad", hm)
+    click_mode(hpg, "EVERYONE FOR THEMSELVES")
+    hm3 = SG.wait(hpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === 'solo'; }", 10)
+    v.check("mode3: EVERYONE FOR THEMSELVES -> solo on the host", bool(hm3), hpg.evaluate(MODE_JS))
     shot(hpg, "mode3_host_lobby")
     SG.press_start(hpg)
     ok = [SG.wait(p, "() => (window.__SQ_START__ || []).length > 0", 30) for p in (hpg, gpg, g2pg)]
     sts = [p.evaluate(SG.STARTS_JS) for p in (hpg, gpg, g2pg)]
-    v.check("mode3: all three startMatch calls get teamMode 'trio', 3 humans all teamId 't0'",
-            all(ok) and all(s and s[0].get("teamMode") == "trio" and len(s[0]["humans"]) == 3 and all(h.get("teamId") == "t0" for h in s[0]["humans"]) for s in sts),
+    v.check("mode3: all three startMatch calls get teamMode 'solo', 3 humans, each its own teamId (s0 / s1 / s2)",
+            all(ok) and all(s and s[0].get("teamMode") == "solo" and len(s[0]["humans"]) == 3 and [h.get("teamId") for h in s[0]["humans"]] == ["s0", "s1", "s2"] for s in sts),
             [s[:1] and {"teamMode": s[0].get("teamMode"), "humans": s[0]["humans"]} for s in sts])
     SG.diag(v, "mode3", hrec, grec)
     v.check("mode3: guest2 - 0 console errors, 0 page errors, 0 failed requests", g2rec.clean(), g2rec.problems())
@@ -316,11 +349,15 @@ NET_JS = r"""() => { const W = __LC__.W, S = W.net; if (!S) return null;
 
 # the guest stops sending its own state (its counter keeps its value) so the probe owns the sequence for a moment
 FREEZE_JS = "(on) => { const S = __LC__.W.net; S.lastState = on ? 1e15 : 0; return S.txSeq | 0; }"
-# a forged state packet for the guest's own body, straight onto the relay channel (the host's copy of the channel receives it)
+# a forged state packet for the guest's own body, straight onto the room's channel (the host's socket receives it; the stand-in for the relay
+# since the friends port: fake_relay.js, room-scoped; the Supabase stand-in for older builds)
 FORGE_JS = r"""(o) => { const W = __LC__.W, S = W.net, p = W.player;
-  const bc = new BroadcastChannel('fake-sb:ffg:last-circle:' + S.net.room);
   const d = { id: p.id, x: o.x, y: o.y, z: o.z, yw: 0, pt: 0, hp: Math.round(p.hp), sh: Math.round(p.shield || 0), wp: p.weapon && p.weapon.id, f: 0, q: o.q, t: +W.t.toFixed(2) };
-  bc.postMessage({ k: 'bc', event: 'msg', payload: { from: S.net.id, t: 'state', d } }); bc.close(); return d; }"""
+  const payload = { from: S.net.id, t: 'state', d };
+  // FRIENDS PORT: a relay build's room rides fake_relay.js's channel; an older (Supabase) build's the fake-sb one - each build hears only its own
+  const r = new BroadcastChannel('fake-lc-relay'); r.postMessage({ k: 'bc', room: S.net.room, to: null, payload }); r.close();
+  const bc = new BroadcastChannel('fake-sb:ffg:last-circle:' + S.net.room);
+  bc.postMessage({ k: 'bc', event: 'msg', payload }); bc.close(); return d; }"""
 REJECTS_JS = "() => { const S = window.__LC__.W.net; return S && S.rejected ? S.rejected.last.slice(-8) : []; }"
 # the guest stands next to its view of the host's body (both may still be gliding: the revive distance check is 5 m)
 CLOSE_JS = "() => { const W = __LC__.W, h = W.actorById.get('s0'), P = W.player; const q = h.netTarget ? h.netTarget.pos : h.pos; P.pos.set(q.x + 1.2, q.y, q.z); return true; }"
@@ -375,7 +412,7 @@ def wait_both_phase(hpg, gpg, timeout):
 
 
 def case_match(rig, v, args):
-    ctx, pages = boot_pages(rig, args, ["match/host", "match/guest"], stub=False, plant=args.plant)
+    ctx, pages = boot_pages(rig, args, ["match/host", "match/guest"], stub=False, plant=args.plant, team=None if args.until_drop else "squad")
     (hpg, hrec), (gpg, grec) = pages
     code = SG.host_create(hpg)
     if not code:
@@ -384,7 +421,7 @@ def case_match(rig, v, args):
     if not (SG.wait(hpg, "() => document.body.innerText.includes('2 player')", 30)):
         raise C.EnvFailure("match: the guest never showed in the host's lobby")
     if not args.until_drop:
-        click_mode(hpg, "SQUADS")
+        click_mode(hpg, "ALL ON ONE TEAM")       # (the room's team SIZE came from the host menu's SQUADS pick: boot_pages team="squad")
     SG.wait(gpg, "() => { const r = document.querySelector('[data-net-teammode]'); return r && r.getAttribute('data-net-teammode') === 'squad'; }", 10)
     t0 = time.time()
     SG.press_start(hpg)
@@ -602,10 +639,231 @@ def case_match(rig, v, args):
     return ctx
 
 
+
+# ─────────────────────────────── friends fix 3: case late (R1 + R2) ───────────────────────────────
+# The guest's match start is HELD (a page whose world build has not begun: its "loading" went out, then nothing) while the host plays; the
+# host's clock since its match went live is moved on by editing its session's matchLiveAt (a simulated clock: 120 s / 245 s after match start),
+# then the guest is released and loads for real. Then the host page is stalled 20 s (a busy loop: a live page whose main thread is blocked,
+# as an 82 s long task under CPU x4 was in check2 t2), then it leaves the room.
+HOLD_JS = r"""() => { const C = window.__LC__; if (C.__held) return true; const real = C.startMatch; window.__HOLD__ = { held: 1, opts: null, at: null };
+  C.startMatch = (o) => { const H = window.__HOLD__; if (H.held) { H.opts = o; H.at = Math.round(performance.now()); return Promise.resolve(); } return real(o); };
+  window.__RELEASE__ = () => { const H = window.__HOLD__; H.held = 0; const o = H.opts; if (o) setTimeout(() => real(o), 0); return !!o; };
+  C.__held = true; return true; }"""
+HOSTVIEW_JS = r"""() => { const W = __LC__.W, S = W.net; if (!S) return null; const a = W.actorById && W.actorById.get('s1'); const now = performance.now();
+  return { phase: W.phase, sinceLiveS: S.matchLiveAt ? Math.round((now - S.matchLiveAt) / 1000) : null, tookOver: S.tookOver || null,
+    s1: a ? { netRemote: !!a.netRemote, isBot: !!a.isBot, alive: a.alive, pos: [+a.pos.x.toFixed(2), +a.pos.y.toFixed(2), +a.pos.z.toFixed(2)] } : null,
+    lateTake: S.lateTake ? Object.keys(S.lateTake) : null, lateBack: S.lateBack || null, loadNoted: S.loadNoted || null,
+    loadingFrom: S.loadingFrom ? Object.keys(S.loadingFrom).length : 0, everSeen: S.everSeen || null }; }"""
+GUESTVIEW_JS = r"""() => { const W = __LC__.W, S = W.net; const P = W.player;
+  return { phase: W.phase, net: !!S, lostRan: !!(S && S._hostLostRan), me: P ? { id: P.id, alive: P.alive, pos: [+P.pos.x.toFixed(2), +P.pos.y.toFixed(2), +P.pos.z.toFixed(2)] } : null,
+    lateDone: S ? S.lateDone || null : null, rejoin: S && S.rejoin ? S.rejoin.state : null, t: +(W.t || 0).toFixed(2),
+    wait: !!document.querySelector('[data-net-hostwait]'), waitStats: S ? S.hostWaitStats || null : null, err: W.lastMatchError || null }; }"""
+GUARD_S1_JS = r"""() => { const W = __LC__.W, k = W.kernel; if (window.__G1__) return true; window.__G1__ = true;
+  k._updaters.push(() => { const a = W.actorById && W.actorById.get('s1'); if (a && a.alive) { a.hp = Math.max(a.hp, 100); a.shield = Math.max(a.shield || 0, 100); a.downed = false; } }); return true; }"""
+
+
+def _xz(a, b):
+    return round(((a[0] - b[0]) ** 2 + (a[2] - b[2]) ** 2) ** 0.5, 2) if a and b else None
+
+
+def case_late(rig, v, args):
+    plant = args.plant if args.plant in ("late-cap-60", "late-no-reclaim", "host-silence-8s", "host-left-ignored") else None
+    hold = plant not in ("host-silence-8s", "host-left-ignored")      # the R2 controls need no late arrival
+    ctx, pages = boot_pages(rig, args, ["late/host", "late/guest"], stub=False, plant=plant)
+    (hpg, hrec), (gpg, grec) = pages
+    code = SG.host_create(hpg)
+    if not code:
+        raise C.EnvFailure("late: no room code")
+    SG.guest_join(gpg, code)
+    if not SG.wait(hpg, "() => document.body.innerText.includes('2 player')", 30):
+        raise C.EnvFailure("late: the guest never showed in the host's lobby")
+    if hold:
+        gpg.evaluate(HOLD_JS)
+    front(hpg)
+    t0 = time.time()
+    SG.press_start(hpg)
+    if hold:
+        if not wait_phase(hpg, args.load_timeout):
+            raise C.EnvFailure("late: the host never reached the drop (%s)" % json.dumps(hpg.evaluate("() => ({ phase: __LC__.W.phase, err: __LC__.W.lastMatchError || null })")))
+        held = SG.wait(gpg, "() => window.__HOLD__ && window.__HOLD__.opts ? window.__HOLD__ : null", 30)
+        v.info("late: host live after / guest held (its start arrived, its build not begun)", {"hostS": round(time.time() - t0), "held": bool(held)})
+        if not held:
+            raise C.EnvFailure("late: the guest's start never arrived (nothing to hold)")
+        hpg.evaluate(GUARD_S1_JS)
+        hpg.wait_for_timeout(3000)
+        lo = [m for m in SG.msgs(hpg, "loading", "in")]
+        v.check("late R1: the guest's 'loading' {slot 1} reached the host before its world build (sent once, right before startMatch)",
+                len(lo) == 1 and (lo[0]["d"] or {}).get("slot") == 1, {"loadingIn": [m["d"] for m in lo]})
+        # 120 s after the host's match went live (simulated), the guest still present and still loading
+        hpg.evaluate("() => { __LC__.W.net.matchLiveAt -= 120000; return true; }")
+        samples = []
+        for _ in range(8):
+            hpg.wait_for_timeout(1000)
+            samples.append(hpg.evaluate(HOSTVIEW_JS))
+        kept = all(x and x["s1"] and x["s1"]["netRemote"] and not x["s1"]["isBot"] and not (x["tookOver"] or {}).get("s1") for x in samples)
+        v.check("late R1: a guest still in the room and still loading 120 s after the host's match went live keeps its slot (s1 not handed over in 8 s of host ticks)",
+                kept and samples[-1]["sinceLiveS"] >= 120, {"first": samples[0], "last": samples[-1]})
+        if plant == "late-cap-60":
+            SG.diag(v, "late", hrec, grec)
+            return ctx
+        v.check("late: the host names the loading squad-mate once ('... is still loading the match. Their place is kept.' in its chat log)",
+                (samples[-1].get("loadNoted") or {}).get("s1") is not None, {"loadNoted": samples[-1].get("loadNoted")})
+        # past the cap (245 s): the slot is handed over
+        hpg.evaluate("() => { __LC__.W.net.matchLiveAt -= 125000; return true; }")
+        gone = SG.wait(hpg, "() => { const S = __LC__.W.net, a = __LC__.W.actorById.get('s1'); return S.tookOver && S.tookOver.s1 && a && a.isBot && !a.netRemote ? S.tookOver.s1 : null; }", 15)
+        hv0 = hpg.evaluate(HOSTVIEW_JS)
+        v.check("late R1: past the 240 s first-tick cap the host hands s1 over (why: never sent state) and keeps it reclaimable for a late arrival",
+                bool(gone) and (gone or {}).get("why") == "never sent state" and "s1" in (hv0["lateTake"] or []), {"tookOver": gone, "host": hv0})
+        # the guest arrives 70 s after that hand-over (simulated: past the old 60 s REJOIN_MS reclaim window)
+        hpg.evaluate("() => { const S = __LC__.W.net; if (S.lateTake && S.lateTake.s1) S.lateTake.s1.at -= 70000; if (S.silentTake && S.silentTake.s1) S.silentTake.s1 -= 70000; return true; }")
+        gpg.evaluate("() => window.__RELEASE__()")
+        tl = time.time()
+        front(gpg)
+        if not wait_phase(gpg, args.load_timeout):
+            raise C.EnvFailure("late: the released guest never reached the drop (%s)" % json.dumps(gpg.evaluate(GUESTVIEW_JS)))
+        v.info("late: the released guest's world build took", "%d s" % round(time.time() - tl))
+        back = SG.wait(hpg, "() => { const S = __LC__.W.net, a = __LC__.W.actorById.get('s1'); return a && a.netRemote && !a.isBot && (S.lateBack || []).some((x) => x.id === 's1') ? true : null; }", 120, 1.0)
+        gd = SG.wait(gpg, "() => __LC__.W.net && __LC__.W.net.lateDone ? true : null", 30, 0.5)
+        gpg.wait_for_timeout(1500)
+        hv, gv = hpg.evaluate(HOSTVIEW_JS), gpg.evaluate(GUESTVIEW_JS)
+        dist = _xz(gv["me"]["pos"] if gv["me"] else None, hv["s1"]["pos"] if hv["s1"] else None)
+        v.check("late R1: the late guest (arriving 70 s after the hand-over) takes its body back: on the host s1 is its human again (netRemote, not a bot, lateBack alive), "
+                "the guest was placed at the body (within 4 m x/z) and plays on in the squad",
+                bool(back) and bool(gd) and hv["s1"]["netRemote"] and not hv["s1"]["isBot"] and any(x["id"] == "s1" and x["alive"] for x in (hv["lateBack"] or []))
+                and dist is not None and dist <= 4.0 and gv["net"] and not gv["lostRan"] and gv["phase"] in ("drop", "match"),
+                {"host": hv, "guest": gv, "distM": dist})
+        shot(gpg, "late_guest_back")
+        if plant == "late-no-reclaim":
+            SG.diag(v, "late", hrec, grec)
+            return ctx
+    else:
+        if not wait_both_phase(hpg, gpg, args.load_timeout):
+            raise C.EnvFailure("late: a page never reached the drop")
+        held_ok = SG.wait(hpg, "() => { const a = __LC__.W.actorById.get('s1'); return a && a.netRemote && !a.isBot; }", 60)
+        if not held_ok:
+            raise C.EnvFailure("late (control): the host never drove s1 from the guest's packets")
+        hpg.evaluate(GUARD_S1_JS)
+    if plant != "host-left-ignored":
+        # ── R2: the host stalls 20 s (main thread blocked), still in the room ──
+        front(gpg)
+        gpg.wait_for_timeout(2000)
+        g0 = gpg.evaluate(GUESTVIEW_JS)
+        # the host goes SILENT for 20 s while it stays in the room: its page sends nothing (no state, so no bot snapshots and no clock either). A
+        # busy loop on the host's main thread was tried first (fix3 nl_late1): the two pages of one context share a renderer, so it froze the
+        # guest's page as well (its clock ran 5 s in 26 s) and measured nothing - what the guest sees of a stalled host is exactly this silence
+        hpg.evaluate("() => { const S = __LC__.W.net; S.__mute = S.lastState; S.lastState = 1e15; setTimeout(() => { S.lastState = 0; }, 20000); return true; }")
+        trace, saw_wait = [], False
+        ts = time.time()
+        while time.time() - ts < 26:
+            gpg.wait_for_timeout(500)
+            g = gpg.evaluate(GUESTVIEW_JS)
+            trace.append([round(time.time() - ts, 1), g["net"], g["lostRan"], g["wait"], g["t"]])
+            saw_wait = saw_wait or g["wait"]
+        gpg.wait_for_timeout(4000)
+        g1 = gpg.evaluate(GUESTVIEW_JS)
+        h1 = hpg.evaluate(HOSTVIEW_JS)
+        ran = (trace[-1][4] - g0["t"]) if trace else 0
+        name = ("late R2: the host goes silent 20 s (its page sends nothing) while still in the room -> the guest stays online (no host-lost), shows 'Waiting for host...' during it, "
+                "and it is gone once the host's packets resume; the host still drives s1 from the guest")
+        if ran < 10:
+            v.cnj(name, "SETUP missed: the guest's own match clock ran %.1f s over the 26 s window (the guest's page was starved too)" % ran)
+        else:
+            v.check(name, saw_wait and all(x[1] and not x[2] for x in trace) and g1["net"] and not g1["lostRan"] and not g1["wait"]
+                    and (g1["waitStats"] or {}).get("n", 0) >= 1 and bool(h1) and h1["s1"]["netRemote"] and not h1["s1"]["isBot"],
+                    {"trace [s, net, hostLost, waiting, guest t]": trace[::4] + trace[-1:], "after": g1, "hostS1": h1 and h1["s1"]})
+        if plant == "host-silence-8s":
+            SG.diag(v, "late", hrec, grec)
+            return ctx
+    # ── R2: the host leaves the room (its tab closes: the relay's presence drops it) -> offline at once, not after the 45 s wait ──
+    front(gpg)
+    SG.diag(v, "late", hrec, grec)
+    tc = time.time()
+    hpg.close()
+    lost = SG.wait(gpg, "() => __LC__.W.net === null ? true : null", 30, 0.25)
+    lost_s = round(time.time() - tc, 1)
+    v.check("late R2: the host's tab closes (the relay says it left) -> the guest continues offline within 6 s (presence), not after the 45 s silence wait",
+            bool(lost) and lost_s <= 6.0, {"s": lost_s, "guest": gpg.evaluate(GUESTVIEW_JS)})
+    v.check("late: guest - 0 console errors, 0 page errors, 0 failed requests (after the host left)", grec.clean(), grec.problems())
+    return ctx
+
+
+# ─────────────────────────────── friends fix 3: case loadfail (R3) ───────────────────────────────
+LOADFAIL_GUEST_JS = r"""() => { const W = __LC__.W, S = W.net; const st = document.querySelector('[data-net-loadfail]'); const n = document.querySelector('[data-net-notice]');
+  return { phase: W.phase, err: W.lastMatchError || null, net: !!S, started: S ? !!S.started : null, room: S && S.net ? S.net.room : null, loadFailed: S ? S.loadFailed || null : null,
+    attr: !!st, notice: n ? n.innerText : null, lobby: !![...document.querySelectorAll('div')].find((d) => d.style && d.style.minWidth === '380px'),
+    menuNotice: !!document.querySelector('[data-lc=matchnotice]') }; }"""
+
+
+def case_loadfail(rig, v, args):
+    plant = args.plant if args.plant == "loadfail-leaves" else None
+    ctx = rig.new_ctx()
+    hpg, hrec = rig.page(ctx, "loadfail/host")
+    gpg, grec = rig.page(ctx, "loadfail/guest")
+    if plant:
+        apply_plant(rig, gpg, plant)
+    # the guest's character skins never arrive (aborted, like a dropped connection): its match load fails with the clean message
+    aborted = []
+    gpg.route(lambda url: "/assets/chars/" in url and url.split("?")[0].endswith(".glb"), lambda r: (aborted.append(r.request.url[-60:]), r.abort("aborted")))
+    for pg, rec in ((hpg, hrec), (gpg, grec)):
+        front(pg)
+        if SG.boot_url(pg, args.base, args.boot_timeout) is None:
+            raise C.EnvFailure("%s: __LC__ never appeared" % rec.name)
+    for pg, rec in ((hpg, hrec), (gpg, grec)):
+        if not SG.open_lobby(pg):
+            raise C.EnvFailure("%s: lobby never opened" % rec.name)
+    code = SG.host_create(hpg)
+    if not code:
+        raise C.EnvFailure("loadfail: no room code")
+    SG.guest_join(gpg, code)
+    if not SG.wait(hpg, "() => document.body.innerText.includes('2 player')", 30):
+        raise C.EnvFailure("loadfail: the guest never showed in the host's lobby")
+    gpeer = gpg.evaluate("() => __LC__.W.net.net.id")
+    SG.press_start(hpg)
+    failed = None
+    t0 = time.time()
+    while time.time() - t0 < args.load_timeout:
+        front(gpg)
+        failed = gpg.evaluate("() => __LC__.W.lastMatchError ? true : null")
+        if failed:
+            break
+        if gpg.evaluate("() => ['drop', 'match'].includes(__LC__.W.phase)"):
+            break
+        gpg.wait_for_timeout(3000)
+    gpg.wait_for_timeout(3000)
+    g = gpg.evaluate(LOADFAIL_GUEST_JS)
+    v.info("loadfail: aborted skin requests on the guest", {"n": len(aborted), "first": aborted[:3]})
+    if not failed:
+        raise C.EnvFailure("loadfail: the fault did not bite - the guest's match load did not fail (%s)" % json.dumps(g))
+    v.check("loadfail R3: the guest whose skins never arrive gets 'Couldn't load the match' and STAYS IN THE ROOM: the room's lobby is open (same code, "
+            "no match running), the notice line says so", g["net"] and g["started"] is False and g["room"] == code and g["lobby"] and g["attr"]
+            and "Couldn't load the match" in (g["notice"] or "") and g["phase"] == "menu", g)
+    bye = [m["d"] for m in SG.msgs(gpg, "bye", "out")]
+    back = SG.msgs(gpg, "back", "out")
+    v.check("loadfail R3: it told the room - 'bye' for its slot s1 (the slot is handed over for this match) and 'back' (waiting in the room)",
+            any(d.get("slot") == "s1" for d in bye) and len(back) >= 1, {"bye": bye, "back": len(back)})
+    front(hpg)
+    if not wait_phase(hpg, args.load_timeout):
+        raise C.EnvFailure("loadfail: the host never reached the drop")
+    hs = SG.wait(hpg, "() => { const S = __LC__.W.net, a = __LC__.W.actorById.get('s1'); return a && a.isBot && !a.netRemote && S.tookOver && S.tookOver.s1 ? S.tookOver.s1 : null; }", 30)
+    pl = hpg.evaluate("(p) => { const S = __LC__.W.net; return { inMatch: S.inMatch ? S.inMatch[p] : null, present: S.hs.isPresent(p, performance.now()), "
+                      "next: S.hs.planStart(S.peers, 3, performance.now(), S.inMatch).roster.map((r) => r.peerId) }; }", gpeer)
+    v.check("loadfail R3: on the host the failed loader's slot s1 is handed over for this match (why: left the match), and the player is still in the room, "
+            "not IN A MATCH, so the next START rosters it",
+            bool(hs) and (hs or {}).get("why") == "left the match" and pl["present"] and pl["inMatch"] is False and gpeer in pl["next"], {"tookOver": hs, "room": pl})
+    shot(gpg, "loadfail_guest_room")
+    v.check("loadfail: host - 0 console errors, 0 page errors, 0 failed requests", hrec.clean(), hrec.problems())
+    gp = grec.problems()
+    exp = lambda x: ("chars/" in x) or ("failed to load" in x) or ("skin" in x.lower()) or ("Failed to load resource" in x)
+    other = {k: [x for x in vals if not exp(x)] for k, vals in gp.items()}
+    v.check("loadfail: guest - 0 console / page errors and failed requests other than the planted skin abort", not any(other.values()), {"unexpected": other, "all": gp})
+    return ctx
+
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
-    ap.add_argument("--cases", default="mode,mode3,match")
+    ap.add_argument("--cases", default="mode,mode3,match,late,loadfail")
     ap.add_argument("--plant", default=None, choices=sorted(PLANTS))
     ap.add_argument("--until-drop", action="store_true", help="case match: stop once both pages reach the drop (A/B against a base --rev, no team-mode click)")
     ap.add_argument("--serve", nargs="?", type=int, const=-1, default=0, metavar="PORT",
@@ -669,7 +927,7 @@ def main():
                 print("-- case %s" % c, flush=True)
                 ctx = None
                 try:
-                    ctx = {"mode": case_mode, "mode3": case_mode3, "match": case_match}[c](rig, v, args)
+                    ctx = {"mode": case_mode, "mode3": case_mode3, "match": case_match, "late": case_late, "loadfail": case_loadfail}[c](rig, v, args)
                 except C.EnvFailure as e:
                     v.cnj("%s: environment" % c, str(e))
                 finally:
