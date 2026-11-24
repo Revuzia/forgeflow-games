@@ -3,6 +3,12 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-24 — only Practice can pause (LIVE ?v=1795557862)
+
+- Battle Royale, Quick Match and friends rooms never freeze: Esc opens the MENU card ("The match keeps running while this is open"), a hidden tab, a phone turned upright and a context restore no longer pause. Practice pauses as before. One rule: hud.js canPause(W) = practice && offline.
+- Gate p23_pause (24 rows, desktop + touch; plant br-pausable).
+- NOT in this release: water blink from altitude fix (branch w10-waterblink; w10_waterlook wet-sand-from-air 1.32 % > 1 % and low-identical fail, deepwood could-not-judge).
+
 ## 2026-11-23 — Play with friends (LIVE ?v=1795485001)
 
 - New: PLAY WITH FRIENDS card on the menu. START ROOM gives a 4-character code and an invite link (?room=CODE); up to 4 players (host + 3), every other spot filled by opponents. Host picks mode (Standard / Quick) and teams (all on one team / two teams / everyone for themselves, merged with the menu team pick); only the host starts; a match in progress cannot be joined (late joiners wait); BACK TO ROOM keeps the room together; host leaving hands the room to the longest-present player.

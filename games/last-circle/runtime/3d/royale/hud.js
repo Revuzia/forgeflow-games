@@ -573,9 +573,10 @@ function hudTapUp(e) {
 }
 
 // rotate overlay: touch + portrait. Same rule as DYEFIELD's CONTRACT_MOBILE M4:
-// shown while the page is in touch mode and taller than wide; a live solo
-// match pauses under it, and turning back never auto-resumes (the pause card is
-// waiting). Online matches cannot pause — the overlay still covers.
+// shown while the page is in touch mode and taller than wide; a PRACTICE match
+// pauses under it, and turning back never auto-resumes (the pause card is
+// waiting). Every other match keeps running (canPause): the overlay covers and
+// says so, and turning back drops the player straight back into the live match.
 let _rotOn = false;
 function ensureRotate() {
   if (R.rotate && R.rotate.isConnected) return R.rotate;
@@ -596,8 +597,9 @@ function ensureRotate() {
     + '<path d="M22 86a42 42 0 0 0 30 22" fill="none" stroke="#eaf2ff" stroke-width="5" stroke-linecap="round"/>'
     + '<path d="M44 100l10 8-12 5" fill="none" stroke="#eaf2ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "18px", fontWeight: "900", letterSpacing: "2px" }, "TURN YOUR PHONE SIDEWAYS", card);
-  h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600", opacity: "0.8", lineHeight: "1.45" },
-    "Last Circle plays in landscape. A match in progress is paused until you turn back.", card);
+  R.rotateMsg = h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600", opacity: "0.8", lineHeight: "1.45" },
+    "Last Circle plays in landscape.", card);
+  R.rotateMsg.dataset.lc = "rotatemsg";
   R.rotate = el;
   return el;
 }
@@ -610,7 +612,14 @@ function updateRotate() {
   el.style.display = on ? "flex" : "none";
   if (!on) return;
   const W = _tW;
-  if (W && !W.net && !W.paused && (W.phase === "match" || W.phase === "drop") && W.player && W.player.alive) {
+  const inMatch = !!W && (W.phase === "match" || W.phase === "drop") && !!W.player && W.player.alive;
+  // the line under the title tells the truth for the match it covers: Practice waits, a live match does not
+  if (R.rotateMsg) {
+    R.rotateMsg.textContent = !inMatch ? "Last Circle plays in landscape."
+      : canPause(W) ? "Last Circle plays in landscape. Practice is paused until you turn back."
+      : "Last Circle plays in landscape. The match keeps going - turn back to keep fighting.";
+  }
+  if (inMatch && canPause(W) && !W.paused) {
     if (R.bigmap) toggleBigMap(W);
     requestPause(W, true);
   }
@@ -5433,18 +5442,31 @@ export function requestPause(W, forceOn) {
   togglePause(W);
 }
 
+/** THE one rule for freezing the match (owner 2026-11-24: "only PRACTICE should be pausable"). The match simulation may stop
+ *  (W.paused = true) ONLY in Practice, the sandbox; Battle Royale and Quick Match are live matches, offline or online, solo or
+ *  with friends - Esc, the Pause button, the menu card, settings, a hidden tab, a phone turned upright, a GPU context coming
+ *  back: none of them stops the world there. W.mode is the pace the menu / lobby hands _startMatch (standard | quick | practice);
+ *  an online room never carries practice (the menu sends it as standard), and !W.net keeps the old online rule regardless.
+ *  Every place that sets W.paused = true goes through this (togglePause here; ffg_royale3d.js pauseForHide reads it too). */
+export function canPause(W) {
+  return !!W && W.mode === "practice" && !W.net;
+}
+
 function togglePause(W) {
-  // ONLINE: never freeze the sim. W.paused early-returns the whole frame pipeline,
-  // which also skips netMod.update — the 12Hz state broadcast stops and the host's
-  // silent-guest watchdog swaps you for a bot after 12s, i.e. opening the menu used
-  // to EJECT you from a match with friends. Online shows a non-blocking overlay.
+  // Only PRACTICE freezes the sim (canPause). Every other match keeps running behind the same card, the way online always
+  // has: W.paused early-returns the whole frame pipeline, which online also skips netMod.update (the host's silent-guest
+  // watchdog swaps you out after 12 s), and in a solo Battle Royale it handed the player a free time-out mid-fight.
   const online = !!W.net;
-  if (R.pause) { R.pause.remove(); R.pause = null; if (!online) W.paused = false; return; }
-  if (!online) W.paused = true;
+  const freeze = canPause(W);
+  if (R.pause) { R.pause.remove(); R.pause = null; if (R._pauseFroze) W.paused = false; R._pauseFroze = false; return; }
+  if (freeze) W.paused = true;
+  R._pauseFroze = freeze;
   document.exitPointerLock && document.exitPointerLock();
   const L = layer("pause", { pointerEvents: "auto", background: "rgba(4,8,16,0.82)", display: "flex", alignItems: "center", justifyContent: "center" });
   const box = h("div", Object.assign({ padding: "34px 44px", textAlign: "center", display: "flex", flexDirection: "column", gap: "14px", minWidth: "300px" }, PANEL), null, L);
-  h("div", { fontSize: "26px", fontWeight: "900", letterSpacing: "2px" }, "PAUSED", box);
+  h("div", { fontSize: "26px", fontWeight: "900", letterSpacing: "2px" }, freeze ? "PAUSED" : "MENU", box);
+  L.dataset.lc = "pause";                 // test surface (read-only by probes)
+  L.dataset.live = freeze ? "0" : "1";
   const resume = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "RESUME", box);
   resume.onclick = () => togglePause(W);
   const st = h("button", Object.assign({}, BTN, { background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "SETTINGS", box);
@@ -5462,14 +5484,15 @@ function togglePause(W) {
       alive ? "You are still in it. Leaving now counts as being eliminated." : "You will go back to the main menu.", box);
     const yes = h("button", Object.assign({}, BTN, { background: "rgba(255,80,80,0.32)", color: "#ffd0d0", border: "1px solid rgba(255,120,120,0.5)" }), "LEAVE MATCH", box);
     yes.dataset.lc = "quityes";
-    yes.onclick = () => { if (R.pause) { R.pause.remove(); R.pause = null; } if (!online) W.paused = false; W.endMatch(false); };
+    yes.onclick = () => { if (R.pause) { R.pause.remove(); R.pause = null; } if (R._pauseFroze) W.paused = false; R._pauseFroze = false; W.endMatch(false); };
     const no = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "STAY", box);
     no.dataset.lc = "quitno";
     no.onclick = () => { togglePause(W); togglePause(W); };     // close and reopen: the pause card as it was
   };
   h("div", { fontSize: FS(11), opacity: "0.6" },
-    online ? "ONLINE — the match keeps running while this is open. Stay sharp."
-           : "Single-player: the match is paused while this is open.", box);
+    freeze ? "Practice: the match is paused while this is open."
+           : online ? "ONLINE — the match keeps running while this is open. Stay sharp."
+                    : "The match keeps running while this is open. Stay sharp.", box);
 }
 
 /** P4.3: the death card is a banner over the LIVE view now. It takes the announcement
