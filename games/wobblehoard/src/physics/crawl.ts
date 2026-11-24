@@ -52,7 +52,7 @@ export const CRAWL_FMAX: Record<string, number> = {
 // of the asked speed while the glide is held (along the face, so it arcs round instead of sliding sideways)
 /** (round 15, R15_FIX F5) how long after a hand's let go the squishy may still start its turn back to its rest facing (frames: 5 s) */
 const PUT_FRAMES = 300;
-export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, yawTau: 0.15, yawMax: 3.5, yawAcc: 15, holdLo: 0.9063, holdHi: 0.9903, arc: 0.5, arcTau: 0.25, friendGap: 0.02, bend: 0.14, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
+export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, yawTau: 0.15, yawMax: 3.5, yawAcc: 15, holdLo: 0.9063, holdHi: 0.9903, arc: 0.5, arcTau: 0.25, friendGap: 0.02, pushV: 0.12, bend: 0.14, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
 const NT = 256, TAU = Math.PI * 2;
 
 /** the private PropWorld state a crawl reads (props.ts: BF = 12 floats per tracked body, [4] the eased grip multiplier) */
@@ -74,7 +74,7 @@ export class Crawl {
   private put = 0;
   /** (R15 FACING) the glide is held (SoftBody.scootK under 1) by this crawl's turn */
   private hold = false;
-  /** (R15 FACING) a friend touches it ahead of its way: it steers round (its way is the tangent round the friend, the glide is held) */
+  /** (R15 FACING) a friend touches it ahead of its way: the walk is a slow push (no wave, the glide at most CRAWL.pushV) */
   private blk = false;
   private ext = 0;   // (frames since the extents were measured)
   readonly d: Float64Array;
@@ -157,14 +157,14 @@ export class Crawl {
     let qx = q[0], qy = q[1], qz = q[2], qw = q[3];
     let fx = real ? 2 * (qx * qz + qw * qy) : S[2], fz = real ? 1 - 2 * (qx * qx + qy * qy) : S[3];   // R (0, 0, 1) on the floor: the facing
     const hx = go ? tx / tl : 0, hz = go ? tz / tl : 1;
-    // (R15 FACING, follow-up 1: Home with 3 out, the p90 of 158 deg) a walk into a FRIEND (another body this world tracks) pushed it along and bounced back once a
-    // crawl cycle: the body went backward with its face ahead. A friend touching it in the cone ahead of its way (within 55 deg: bounding spheres, then both
-    // bodies' horizontal particle support + collide's skin + 2 frames of glide + friendGap; 4 cm more to let go) makes it STEER ROUND: its way becomes the
-    // tangent round the friend on the side of its target, the glide (which runs straight at the target) is held, and the forward creep along its face carries it
-    // round; once the friend is out of the cone the glide takes it on. (Stopping instead made LIFE's walks give up and re-plan: probe_life_selfuse SU-04/05/06.)
-    // LIFE's contact approach (<= 0.05 m/s) still touches. A move under its own power always goes where its face points.
-    let blk = false, stuck = false, wx = hx, wz = hz;
-    if (go && free && b.sSpeed > 0.05) {
+    // (R15 FACING, follow-up 1: Home with 3 out, the p90 of 158 deg) a walk into a FRIEND (another body this world tracks; often asleep, and a sleeping body
+    // is a fixed support until woken) planted the crawl's wave against it and was thrown back once a crawl cycle: 1-3 cm backward pulses with its face ahead.
+    // A friend touching it in the cone ahead of its way (within 55 deg: bounding spheres, then both bodies' horizontal particle support + collide's skin +
+    // 2 frames of glide + friendGap; 4 cm more to let go) makes the walk a slow, steady PUSH: no crawl wave, the glide capped at CRAWL.pushV, the face leading;
+    // the friend is eased aside and the walk gets where it was going, as before. (Measured alternatives: stopping, and steering round on the tangent, both
+    // cost LIFE its uses at a crowded Home: probe_life_selfuse SU-06, the Warm Lamp beside a resting friend, and SU-04/05.) Contact approaches are unchanged.
+    let blk = false;
+    if (go && free && b.sSpeed > CRAWL.pushV) {
       const OB = w.bodies, hd = b.center;
       for (let k = 0; k < OB.length; k++) {
         const o = OB[k] as unknown as Body;
@@ -172,17 +172,7 @@ export class Crawl {
         const dx = o.center.x - hd.x, dy = o.center.y - hd.y, dz = o.center.z - hd.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz), dh = Math.sqrt(dx * dx + dz * dz);
         const gap = CRAWL.friendGap + 0.25 * (b.meanEdge + o.meanEdge) + 2 * b.sSpeed * dt + (this.blk ? 0.04 : 0);
         const rr = (b.bR > b.restRadius ? b.bR : b.restRadius) + (o.bR > o.restRadius ? o.bR : o.restRadius) + gap;
-        // (the cone: 55 deg to meet a friend; once steering round it, until it is beside or behind (90 deg): no flicker between steering and gliding at it)
-        if (dh > 1e-6 && d < rr && dx * hx + dz * hz > (this.blk ? 0 : 0.57 * dh) && dh < support(b, dx / dh, 0, dz / dh) + support(o, -dx / dh, 0, -dz / dh) + gap) {
-          blk = true;
-          // (its target is under the friend (within the friend's own rest radius of its centre): there is no way round; it stops facing its way, the glide and
-          // the creep held, and LIFE's blocked rule ends the walk. A target merely beyond the friend is steered round to.)
-          const ex = b.stx - o.center.x, ez = b.stz - o.center.z;
-          if (ex * ex + ez * ez < o.restRadius * o.restRadius) { stuck = true; break; }
-          const nx = dx / dh, nz = dz / dh, side = hx * -nz + hz * nx >= 0 ? 1 : -1;   // (the tangent on the target's side of the friend)
-          wx = -nz * side; wz = nx * side;
-          break;
-        }
+        if (dh > 1e-6 && d < rr && dx * hx + dz * hz > 0.57 * dh && dh < support(b, dx / dh, 0, dz / dh) + support(o, -dx / dh, 0, -dz / dh) + gap) { blk = true; break; }
       }
     }
     this.blk = blk;
@@ -192,7 +182,7 @@ export class Crawl {
     if (go && free && real) this.turn = true;
     if (fl > 0.5) {   // (upright enough to have a facing: a body on its side is not turned)
       fx /= fl; fz /= fl;
-      e = Math.atan2(fx * wz - fz * wx, fx * wx + fz * wz);   // the way's angle from the facing (+: toward the facing's left, (-fz, fx)); the way is the heading, or the tangent round a friend in it
+      e = Math.atan2(fx * hz - fz * hx, fx * hx + fz * hz);   // the heading's angle from the facing (+: toward the facing's left, (-fz, fx))
       // (R15: after the walk it turns back once the glide's last centimetres are done: turning while that creep ran carried it a few cm sideways)
       if (this.put > 1 && (go || (e < 0.03 && e > -0.03))) this.put = 0;
       if (free && (this.put > 1 ? b.nearCount > 0 || b.propNearM > 0 : ground) && (go || (this.turn && !(b.scootOn && b.sV > 0.03)))) {
@@ -228,8 +218,8 @@ export class Crawl {
     // have no face to lead with: their glide is as before; nor is a body off the ground, which cannot turn: a floater in a pool glides as before). The glide's speed now is capped at once (a walk retargeted 90 degrees on its way does not run
     // on sideways while it eases out: it stops, turns, goes)
     let kq = 1;
-    if (blk) kq = 0;
-    else if (go && free && real && fl > 0.5 && ground) { const ch = (Math.cos(e) - CRAWL.holdLo) / (CRAWL.holdHi - CRAWL.holdLo); kq = ch >= 1 ? 1 : ch <= 0 ? 0 : ch * ch * (3 - 2 * ch); }
+    if (go && free && real && fl > 0.5 && ground) { const ch = (Math.cos(e) - CRAWL.holdLo) / (CRAWL.holdHi - CRAWL.holdLo); kq = ch >= 1 ? 1 : ch <= 0 ? 0 : ch * ch * (3 - 2 * ch); }
+    if (blk) { const kp = CRAWL.pushV / b.sSpeed; if (kq > kp) kq = kp; }   // (the push: at most pushV, and still only once it faces its way)
     let lost = 0;
     if (kq < 1 || this.hold) { b.scootK = kq; this.hold = kq < 1; if (kq < 1 && b.sV > b.sSpeed * kq) { lost = b.sV - b.sSpeed * kq; b.sV = b.sSpeed * kq; } }
     // ... and while the glide is held it creeps FORWARD, along its face, as it turns (a slug turns on the move: it arcs round to its way and leans into it), from
@@ -237,8 +227,8 @@ export class Crawl {
     // gives up (a walk retargeted on its way) carries on forward and eases into that (time constant CRAWL.arcTau): no stop dead, no slide sideways; a move of X
     // like the glide
     if ((kq < 1 || S[11] > 0) && ground && go && free) {
-      const cf = Math.cos(e) * 1.1547, sf = cf >= 1 ? 1 : cf <= 0 ? 0 : cf * cf * (3 - 2 * cf), vt = stuck ? 0 : b.sSpeed * (1 - kq) * CRAWL.arc * sf;
-      let vf = stuck ? 0 : S[11] + lost;
+      const cf = Math.cos(e) * 1.1547, sf = cf >= 1 ? 1 : cf <= 0 ? 0 : cf * cf * (3 - 2 * cf), vt = blk ? 0 : b.sSpeed * (1 - kq) * CRAWL.arc * sf;
+      let vf = blk ? 0 : S[11] + lost;
       vf += (vt - vf) * (1 - Math.exp(-dt / CRAWL.arcTau));
       if (vf > b.sSpeed - b.sV) vf = b.sSpeed - b.sV;   // (with the glide, never faster than the asked speed)
       if (vf < 0.002) vf = 0;
@@ -254,7 +244,7 @@ export class Crawl {
     // more than 35 degrees away from its way, full within 12: it turns first (R15: was 53 and 18; the wave running on a body still coming round on its forward
     // creep bent it sideways: the firm families' centre drifted 40-50 degrees off the face))
     const u0 = (v - CRAWL.vMin) / (CRAWL.vFull - CRAWL.vMin), ce = (Math.cos(e) - 0.82) / 0.158, al = fl > 0.5 ? (ce >= 1 ? 1 : ce <= 0 ? 0 : ce * ce * (3 - 2 * ce)) : 1;
-    const want = crawls && ground && u0 > 0 ? (u0 >= 1 ? 1 : u0 * u0 * (3 - 2 * u0)) * al : 0;
+    const want = crawls && ground && !blk && u0 > 0 ? (u0 >= 1 ? 1 : u0 * u0 * (3 - 2 * u0)) * al : 0;
     let a = S[1];
     const fresh = a === 0;
     a += (want - a) * (1 - Math.exp(-dt / (!free ? CRAWL.tauHeld : want > a ? CRAWL.tauIn : CRAWL.tauOut)));
