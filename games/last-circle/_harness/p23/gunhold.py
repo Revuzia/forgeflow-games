@@ -25,6 +25,10 @@ into bar rows.
     python _harness/p23/gunhold.py --disk --plant inert-off       # the inertial blend never fires              - MUST FAIL swap-pop, ads-pop
     python _harness/p23/gunhold.py --disk --plant air-hold-off    # the hold dropped in the air, snapped back   - MUST FAIL land-pop
     python _harness/p23/gunhold.py --disk --plant ready-hidden    # the fix-4 patrol ready (gun behind the body) - MUST FAIL chase
+    python _harness/p23/gunhold.py --disk --plant aim-arms-only   # (fix r1) no spine / head share of the aim pitch - MUST FAIL aimpitch
+    python _harness/p23/gunhold.py --disk --plant low-gate-off    # (fix r1) Low / phones take the branch's arm modes - MUST FAIL lowlook
+    python _harness/p23/gunhold.py --disk --plant recoil-off      # (fix r1) no recoil on the hold              - MUST FAIL recoil
+    python _harness/p23/gunhold.py --disk --plant sg-fold         # (fix r1) the trigger-elbow floor off         - MUST FAIL sghold
     python _harness/p23/gunhold.py --rev 361c5ec3                 # the W10 base (W9 R1 live): every bar row MUST FAIL
 
 Rows (PLAN.md "Lane R1B" acceptance bars; the audit value each replaces in brackets):
@@ -82,6 +86,17 @@ Wave 10 round 3 lane R3B rows (parts reload, swim, swap):
                  [check4: juggernaut AR / SMG 0.00 (live 0.26 / 0.04); --plant ready-hidden MUST FAIL it]
   swap           a gun swap lowers the barrel >= 25 deg off the aim mid-swap (max over 0.08-0.20 s after the swap); with >= 9 armed
                  two-gun bots on screen within 35 m, 1 <= actors drawing a slung gun <= 8 and = min(8, eligible) [none]
+W10 anim fix r1 rows (parts trans, chase, aimpitch, lowlook, recoil, sghold; ANIM/STANDARD.md):
+  trans bar      the 0.01 m floor is gone: a point passes when its largest move <= 2x the run's normal move or <= live's on the same row
+                 (TRANS_LIVE, 3 decimals, gunhold --rev 8ccb6efce --parts trans, 5 skins); new rows crouch-pop, loco-pop (idle -> run,
+                 run -> sprint), turn-pop, adswalk-pop (AR and pistol), pistol-pop (pistol ADS release + landing)
+  chase          now 17 cells per skin at 3 decimals: AR / SMG / LMG / shotgun / sniper still + running, the pistol idle / run / crouch walk /
+                 crouched / strafe / backpedal / turn; the juggernaut's pistol ready > 0
+  aimpitch       +-45 deg, ADS and hip fire, AR / LMG / SMG / shotgun, 5 skins: butt <= 0.15 m from the RightArm joint, both wrists under
+                 HeadTop_End, head pitch follows >= 0.7 of the aim pitch
+  lowlook        desktop Low: pistol gunReady in idle / run / strafe / back / crouch / ADS, no rifle hold, no pistol chest squaring
+  recoil         >= 0.015 m muzzle kick within the shot frame + 1 (SMG / AR / LMG / pistol, aimed, 5 skins)
+  sghold         the pump shotgun's trigger elbow >= 52 deg (live's least) at the ready, running, crouched, aimed, backpedalling
 plus: 0 new programs over the run, 0 page / console errors, 0 failed requests, 0 shader errors, 0 [rig] lines.
 Screenshots (what the player sees + side views per gun) go to --shots (default _harness/_shots/gunhold_<tag>).
 Exit 0 pass / 1 fail / 2 could-not-judge.
@@ -169,6 +184,20 @@ PLANTS = {
                                          # (fix6) the chest turned back to RH_BLADE at the ready too, no per-skin extra blade
                                          ("Math.max(0, Math.abs(a._pBlade) - RH_BLADE) * (1 - (a._rdyE || 0)) -\n        K.clamp(a._pBlade / RH_RDY_BSIDE, -1, 1) * a._rdyBlade * a._rdyBF * (a._rdyE || 0)) * rhK",
                                           "Math.max(0, Math.abs(a._pBlade) - RH_BLADE)) * rhK")])],
+    # (W10 anim fix r1, D2 / D15) the mesh-space aim offset off (the spine and the head take none of the aim pitch): the arms alone aim up and
+    # down, the support hand over the head at +45 (MUST FAIL aimpitch)
+    "aim-arms-only": [(RP + "player.js", [("const AO_SHARE = 0.75, AO_UP = 0.75, AO_DN = 0.75, AO_W = [0.25, 0.35, 0.40], AO_HEAD = 0.95,",
+                                           "const AO_SHARE = 0, AO_UP = 0.75, AO_DN = 0.75, AO_W = [0.25, 0.35, 0.40], AO_HEAD = 0,"),
+                                          ("const RH_PITCH_DROP = 0.3;", "const RH_PITCH_DROP = 0;"),
+                                          ("const GRIP_UP_SLIDE = 0.35;", "const GRIP_UP_SLIDE = 0;")])],
+    # (W10 anim fix r1, D4) the desktop-medium+ near gate removed: phones / Low take the branch's pistol arm modes, the squared chest (MUST FAIL lowlook)
+    "low-gate-off": [(RP + "player.js", [("const hiNear = a._ikNear && deskHi(W);", "const hiNear = a._ikNear;")])],
+    # (W10 anim fix r1, D12) no recoil on the hold (MUST FAIL recoil)
+    "recoil-off": [(RP + "player.js", [("const RC_RISE = { pistol: 0.09, smg: 0.055, ar: 0.07, lmg: 0.06, dmr: 0.10, shotgun: 0.15, sniper: 0.17, launcher: 0.12 }, RC_TAU = 0.05, RC_S = 0.3, RC_BACK = 0.025;",
+                                         "const RC_RISE = {}, RC_TAU = 0.05, RC_S = 0.3, RC_BACK = 0;"),
+                                        ("const u = W.t - a.lastShotT, cls = armed ? (K.WEAPONS[a.weapon.id] || {}).cls : null;", "const u = -1, cls = null;")])],
+    # (W10 anim fix r1, D9) the trigger-elbow floor off and the fix-6 pump-shotgun constants: the elbow folds to 30-39 deg (MUST FAIL sghold)
+    "sg-fold": [(RP + "player.js", [("const RH_TRIG_MIN = 1.05,", "const RH_TRIG_MIN = 0.01,")])],
     "kerb-pop": [(RP + "player.js", [("const gndClip = !airClipOn;", "const gndClip = a.onGround;"),
                                      ("const mixHold = mixamoAim || (mixGun && rhCls && a._rhW > 0);", "const mixHold = mixamoAim;")])],
 }
@@ -731,7 +760,116 @@ TRANS_JS = r"""([n]) => { const W = window.__LC__.W, THREE = W.THREE, P = window
     const ud = A.weaponMesh && A.weaponMesh.userData, tp = A.hand && ud && ud.tip ? A.hand.localToWorld(new THREE.Vector3(ud.tip.x, ud.tip.y, ud.tip.z)).applyMatrix4(inv) : null;
     out.push([A.onGround ? 1 : 0, A.weapon && A.weapon.id, [h.x, h.y, h.z], tp ? [tp.x, tp.y, tp.z] : null]); }
   return out; }"""
-TRANS_FLOOR = 0.01    # m per frame (0.6 m/s): a still body's hand moving under this is not a pop at any normal
+# (W10 anim fix r1, D17) the 0.01 m floor is gone (a snap 18x a still body's motion passed under it): a point passes when its largest move in the
+# event window <= 2x the run's normal per-frame move, or <= the live build's largest move on the same row (TRANS_LIVE, 3 decimals, measured with
+# this part on 8ccb6efce: ANIM/fix_r1 gh_live.log); a row without a live value has the 2x-normal bar only
+TRANS_LIVE = {
+    "soldier/ar/swap": {"rh": 0.001},
+    "soldier/ar/ads": {"rh": 0.0, "tip": 0.001},
+    "soldier/ar/land": {"rh": 0.017, "tip": 0.063},
+    "soldier/ar/crouchin": {"rh": 0.013, "tip": 0.031},
+    "soldier/ar/crouchout": {"rh": 0.014, "tip": 0.031},
+    "soldier/ar/idlerun": {"rh": 0.012, "tip": 0.035},
+    "soldier/ar/runsprint": {"rh": 0.075, "tip": 0.094},
+    "soldier/ar/adswalk": {"rh": 0.04, "tip": 0.082},
+    "soldier/ar/turn": {"rh": 0.017, "tip": 0.034},
+    "soldier/smg/ads": {"rh": 0.001, "tip": 0.001},
+    "soldier/smg/land": {"rh": 0.017, "tip": 0.055},
+    "soldier/pistol/ads": {"rh": 0.0, "tip": 0.0},
+    "soldier/pistol/land": {"rh": 0.026, "tip": 0.026},
+    "soldier/pistol/crouchin": {"rh": 0.031, "tip": 0.033},
+    "soldier/pistol/crouchout": {"rh": 0.027, "tip": 0.032},
+    "soldier/pistol/idlerun": {"rh": 0.021, "tip": 0.033},
+    "soldier/pistol/runsprint": {"rh": 0.049, "tip": 0.063},
+    "soldier/pistol/adswalk": {"rh": 0.05, "tip": 0.08},
+    "soldier/pistol/turn": {"rh": 0.016, "tip": 0.025},
+    "athlete/ar/swap": {"rh": 0.0},
+    "athlete/ar/ads": {"rh": 0.0, "tip": 0.001},
+    "athlete/ar/land": {"rh": 0.013, "tip": 0.065},
+    "athlete/ar/crouchin": {"rh": 0.009, "tip": 0.027},
+    "athlete/ar/crouchout": {"rh": 0.009, "tip": 0.027},
+    "athlete/ar/idlerun": {"rh": 0.011, "tip": 0.034},
+    "athlete/ar/runsprint": {"rh": 0.058, "tip": 0.086},
+    "athlete/ar/adswalk": {"rh": 0.035, "tip": 0.085},
+    "athlete/ar/turn": {"rh": 0.014, "tip": 0.031},
+    "athlete/smg/ads": {"rh": 0.001, "tip": 0.001},
+    "athlete/smg/land": {"rh": 0.013, "tip": 0.055},
+    "athlete/pistol/ads": {"rh": 0.0, "tip": 0.0},
+    "athlete/pistol/land": {"rh": 0.022, "tip": 0.022},
+    "athlete/pistol/crouchin": {"rh": 0.025, "tip": 0.027},
+    "athlete/pistol/crouchout": {"rh": 0.021, "tip": 0.025},
+    "athlete/pistol/idlerun": {"rh": 0.016, "tip": 0.028},
+    "athlete/pistol/runsprint": {"rh": 0.042, "tip": 0.057},
+    "athlete/pistol/adswalk": {"rh": 0.041, "tip": 0.07},
+    "athlete/pistol/turn": {"rh": 0.013, "tip": 0.022},
+    "wraith/ar/swap": {"rh": 0.0},
+    "wraith/ar/ads": {"rh": 0.001, "tip": 0.001},
+    "wraith/ar/land": {"rh": 0.017, "tip": 0.063},
+    "wraith/ar/crouchin": {"rh": 0.015, "tip": 0.032},
+    "wraith/ar/crouchout": {"rh": 0.015, "tip": 0.032},
+    "wraith/ar/idlerun": {"rh": 0.013, "tip": 0.036},
+    "wraith/ar/runsprint": {"rh": 0.074, "tip": 0.092},
+    "wraith/ar/adswalk": {"rh": 0.038, "tip": 0.083},
+    "wraith/ar/turn": {"rh": 0.017, "tip": 0.034},
+    "wraith/smg/ads": {"rh": 0.001, "tip": 0.001},
+    "wraith/smg/land": {"rh": 0.017, "tip": 0.055},
+    "wraith/pistol/ads": {"rh": 0.0, "tip": 0.0},
+    "wraith/pistol/land": {"rh": 0.026, "tip": 0.026},
+    "wraith/pistol/crouchin": {"rh": 0.031, "tip": 0.033},
+    "wraith/pistol/crouchout": {"rh": 0.026, "tip": 0.031},
+    "wraith/pistol/idlerun": {"rh": 0.021, "tip": 0.033},
+    "wraith/pistol/runsprint": {"rh": 0.048, "tip": 0.061},
+    "wraith/pistol/adswalk": {"rh": 0.049, "tip": 0.079},
+    "wraith/pistol/turn": {"rh": 0.016, "tip": 0.025},
+    "juggernaut/ar/swap": {"rh": 0.001},
+    "juggernaut/ar/ads": {"rh": 0.001, "tip": 0.001},
+    "juggernaut/ar/land": {"rh": 0.016, "tip": 0.064},
+    "juggernaut/ar/crouchin": {"rh": 0.014, "tip": 0.031},
+    "juggernaut/ar/crouchout": {"rh": 0.014, "tip": 0.031},
+    "juggernaut/ar/idlerun": {"rh": 0.011, "tip": 0.035},
+    "juggernaut/ar/runsprint": {"rh": 0.073, "tip": 0.089},
+    "juggernaut/ar/adswalk": {"rh": 0.034, "tip": 0.078},
+    "juggernaut/ar/turn": {"rh": 0.016, "tip": 0.032},
+    "juggernaut/smg/ads": {"rh": 0.001, "tip": 0.001},
+    "juggernaut/smg/land": {"rh": 0.016, "tip": 0.055},
+    "juggernaut/pistol/ads": {"rh": 0.0, "tip": 0.0},
+    "juggernaut/pistol/land": {"rh": 0.025, "tip": 0.025},
+    "juggernaut/pistol/crouchin": {"rh": 0.028, "tip": 0.03},
+    "juggernaut/pistol/crouchout": {"rh": 0.024, "tip": 0.029},
+    "juggernaut/pistol/idlerun": {"rh": 0.019, "tip": 0.031},
+    "juggernaut/pistol/runsprint": {"rh": 0.05, "tip": 0.061},
+    "juggernaut/pistol/adswalk": {"rh": 0.046, "tip": 0.075},
+    "juggernaut/pistol/turn": {"rh": 0.015, "tip": 0.023},
+    "viper/ar/swap": {"rh": 0.0},
+    "viper/ar/ads": {"rh": 0.001, "tip": 0.001},
+    "viper/ar/land": {"rh": 0.012, "tip": 0.064},
+    "viper/ar/crouchin": {"rh": 0.01, "tip": 0.028},
+    "viper/ar/crouchout": {"rh": 0.011, "tip": 0.028},
+    "viper/ar/idlerun": {"rh": 0.011, "tip": 0.035},
+    "viper/ar/runsprint": {"rh": 0.058, "tip": 0.083},
+    "viper/ar/adswalk": {"rh": 0.036, "tip": 0.089},
+    "viper/ar/turn": {"rh": 0.014, "tip": 0.03},
+    "viper/smg/ads": {"rh": 0.001, "tip": 0.001},
+    "viper/smg/land": {"rh": 0.012, "tip": 0.055},
+    "viper/pistol/ads": {"rh": 0.0, "tip": 0.0},
+    "viper/pistol/land": {"rh": 0.023, "tip": 0.022},
+    "viper/pistol/crouchin": {"rh": 0.025, "tip": 0.026},
+    "viper/pistol/crouchout": {"rh": 0.02, "tip": 0.024},
+    "viper/pistol/idlerun": {"rh": 0.015, "tip": 0.028},
+    "viper/pistol/runsprint": {"rh": 0.039, "tip": 0.052},
+    "viper/pistol/adswalk": {"rh": 0.038, "tip": 0.068},
+    "viper/pistol/turn": {"rh": 0.012, "tip": 0.021},
+}
+
+
+# (W10 anim fix r1, D8 / D17) more transition events: [keys held before] and the event (keys after or None = unchanged, ADS after or None)
+TRANS_MORE = ("crouchin", "crouchout", "idlerun", "runsprint", "adswalk", "turn")
+TRANS_PRE = {"crouchout": ["KeyC"], "runsprint": ["KeyW"], "adswalk": ["KeyW"]}
+TRANS_EV = {"crouchin": (["KeyC"], None), "crouchout": ([], None), "idlerun": (["KeyW"], None), "runsprint": (["KeyW", "ShiftLeft"], None),
+            "adswalk": (None, False), "turn": (None, None)}
+# a turn in place: the aim swept `turn` rad over the first 30 frames (the body steps round with the turn clip)
+TRANS_TURN_JS = TRANS_JS.replace("for (let i = 0; i < n; i++) { P.step(1, 1 / 60, false);",
+                                 "const y0 = A.input.yaw; for (let i = 0; i < n; i++) { if (i < 30) { A.input.yaw = y0 + ang * (i + 1) / 30; } P.step(1, 1 / 60, false);").replace("([n]) =>", "([n, ang]) =>")
 
 
 def trans_eval(rows, evs, win, pts):
@@ -764,8 +902,8 @@ def part_trans(s, v, R, skin, only=None):
     spot = L.flat_spot(s, clear=9.0, max_r=900) or {}
     home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
     out = {}
-    for wid in ("ar", "smg"):
-        for sc in (("swap", "ads", "land") if wid == "ar" else ("ads", "land")):
+    for wid in ("ar", "smg", "pistol"):
+        for sc in (("swap", "ads", "land") + TRANS_MORE if wid == "ar" else ("ads", "land") if wid == "smg" else ("ads", "land") + TRANS_MORE):
             # (W10 anim fix 6) --trans: a planted control measures only its own event, so its FAIL can only come from its own row
             if only and sc not in only:
                 continue
@@ -773,10 +911,27 @@ def part_trans(s, v, R, skin, only=None):
             s.js(PLACE_JS, [home[0], home[1], 0.0])
             s.js(EQUIP_JS, wid)
             s.js("() => { const W = window.__LC__.W, K = W.SIM, p = W.player; p.inventory.slots[2] = { kind: 'weapon', id: 'smg', rarity: 1, mag: K.WEAPONS.smg.mag }; return 1; }")
-            s.js(AIM_JS, [0.0, 0.0, sc == "ads"])
+            s.js(AIM_JS, [0.0, 0.0, sc in ("ads", "adswalk")])
+            pre = TRANS_PRE.get(sc) or []
+            if pre:
+                s.hold(pre)
             s.step_frames(130, 1 / 60, render=False)
             rows = s.js(TRANS_JS, [20])
-            if sc == "swap":
+            if sc in TRANS_EV:
+                # (W10 anim fix r1, D8 / D17) crouch in / out, idle -> run, run -> sprint, an ADS release while walking, a turn in place, a slide
+                k2, aim2 = TRANS_EV[sc]
+                if k2 is not None:
+                    s.release_all()
+                    if k2:
+                        s.hold(k2)
+                if aim2 is not None:
+                    s.js(AIM_JS, [None, None, aim2])
+                if sc == "turn":
+                    rows += s.js(TRANS_TURN_JS, [70, 1.6])
+                else:
+                    rows += s.js(TRANS_JS, [70])
+                pts = ((2, "rh"), (3, "tip"))
+            elif sc == "swap":
                 s.js("() => { window.__LC__.W.equipSlot(window.__LC__.W.player, 2); return 1; }")
                 rows += s.js(TRANS_JS, [70])
                 pts = ((2, "rh"),)
@@ -803,13 +958,14 @@ def part_trans(s, v, R, skin, only=None):
 # normal / without the gun / the gun alone; visible = the gun's pixels that change when it is hidden, over the lone gun's pixels (check4's
 # chasevis method). Median of 8 samples (every 5th frame), idle and running, AR / SMG / LMG; bar: >= the live build's (8ccb6efce) median measured
 # the same way (fix5 cv_live5, 2026-11-23), no tolerance.
-CHASE_JS = r"""async ([n, every]) => { const W = window.__LC__.W, THREE = W.THREE, k = W.kernel, P = window.__H_PUMP__, A = W.player, r = k.renderer, cam = k.camera;
+CHASE_JS = r"""async ([n, every, dyaw]) => { const W = window.__LC__.W, THREE = W.THREE, k = W.kernel, P = window.__H_PUMP__, A = W.player, r = k.renderer, cam = k.camera;
   const gl = r.getContext(); const Wd = r.domElement.width, Hd = r.domElement.height;
   const render = () => { if (k.composer) k.composer.render(1 / 60); else r.render(k.scene, cam); };
   const grab = () => { const px = new Uint8Array(Wd * Hd * 4); gl.readPixels(0, 0, Wd, Hd, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
   const hid = []; W.scene.traverse((o) => { if (o.visible && /^(clutter|grass-blades)$|grass/i.test(o.name || '')) { o.visible = false; hid.push(o); } });
   const out = [];
   for (let i = 0; i < n * every; i++) {
+    if (dyaw) A.input.yaw += dyaw;
     P.step(1, 1 / 60, false); W.scene.updateMatrixWorld(true);
     if (i % every !== every - 1) continue;
     const wm = A.weaponMesh; if (!wm || wm.visible === false) { out.push(null); continue; }
@@ -839,7 +995,29 @@ CHASE_SPOT_JS = r"""([clear, maxR]) => { const W = window.__LC__.W, M = W.map, p
   for (let r = 0; r < maxR; r += 8) for (let k = 0; k < 32; k++) { const a = k / 32 * Math.PI * 2, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r;
     if (Math.abs(x) < 740 && Math.abs(z) < 740 && ok(x, z)) return { x, z, h: M.heightAt(x, z), surf: M.surfaceAt(x, z, M.heightAt(x, z) + 0.1) }; }
   return null; }"""
-CHASE_LIVE = {   # the live build's medians (fix5 chasevis --rev 8ccb6efce)
+# (W10 anim fix r1, D17) at 3 decimals (check4 / fix5 / fix6 chasevis --rev 8ccb6efce, ANIM/check7/cv_cmp7.txt live column), plus the shotgun,
+# the sniper and the pistol (idle, run, crouch walk, crouched still, strafe left, backpedal, turn in place); the juggernaut's pistol ready (live
+# 0.000) must be > 0 (owner ruling 2026-11-23: CHASE_GT0)
+CHASE_LIVE = {
+    "soldier": {"idle_ar": 0.865, "run_ar": 0.803, "idle_smg": 0.770, "run_smg": 0.458, "idle_lmg": 0.765, "run_lmg": 0.591, "idle_shotgun": 0.844, "run_shotgun": 0.623,
+                "idle_sniper": 0.783, "run_sniper": 0.554, "idle_pistol": 0.438, "run_pistol": 0.517, "crouch_pistol": 0.328, "crouchidle_pistol": 0.301,
+                "strafeL_pistol": 0.0, "back_pistol": 0.526, "turn_pistol": 0.269},
+    "athlete": {"idle_ar": 0.903, "run_ar": 0.657, "idle_smg": 0.903, "run_smg": 0.687, "idle_lmg": 0.896, "run_lmg": 0.597, "idle_shotgun": 0.945, "run_shotgun": 0.618,
+                "idle_sniper": 0.964, "run_sniper": 0.798, "idle_pistol": 0.663, "run_pistol": 0.733, "crouch_pistol": 0.679, "crouchidle_pistol": 0.718,
+                "strafeL_pistol": 0.0, "back_pistol": 0.672, "turn_pistol": 0.627},
+    "wraith": {"idle_ar": 0.695, "run_ar": 0.567, "idle_smg": 0.565, "run_smg": 0.362, "idle_lmg": 0.481, "run_lmg": 0.377, "idle_shotgun": 0.641, "run_shotgun": 0.593,
+               "idle_sniper": 0.757, "run_sniper": 0.566, "idle_pistol": 0.494, "run_pistol": 0.544, "crouch_pistol": 0.574, "crouchidle_pistol": 0.570,
+               "strafeL_pistol": 0.0, "back_pistol": 0.388, "turn_pistol": 0.497},
+    "juggernaut": {"idle_ar": 0.255, "run_ar": 0.301, "idle_smg": 0.037, "run_smg": 0.015, "idle_lmg": 0.227, "run_lmg": 0.178, "idle_shotgun": 0.225, "run_shotgun": 0.185,
+                   "idle_sniper": 0.174, "run_sniper": 0.132, "idle_pistol": 0.0, "run_pistol": 0.0, "crouch_pistol": 0.0, "crouchidle_pistol": 0.0,
+                   "strafeL_pistol": 0.0, "back_pistol": 0.466, "turn_pistol": 0.0},
+    "viper": {"idle_ar": 0.909, "run_ar": 0.810, "idle_smg": 0.840, "run_smg": 0.725, "idle_lmg": 0.854, "run_lmg": 0.794, "idle_shotgun": 0.868, "run_shotgun": 0.810,
+              "idle_sniper": 0.927, "run_sniper": 0.933, "idle_pistol": 0.396, "run_pistol": 0.686, "crouch_pistol": 0.684, "crouchidle_pistol": 0.710,
+              "strafeL_pistol": 0.0, "back_pistol": 0.643, "turn_pistol": 0.167},
+}
+CHASE_GT0 = {"juggernaut": ("idle_pistol",)}
+CHASE_KEYS = {"idle": [], "run": ["KeyW"], "crouch": ["KeyW", "KeyC"], "crouchidle": ["KeyC"], "strafeL": ["KeyA"], "back": ["KeyS"], "turn": []}
+CHASE_OLD = {   # the fix-5 2-decimal table this replaces (kept for the record, not used)
     "soldier": {"idle_ar": 0.87, "run_ar": 0.80, "idle_smg": 0.77, "run_smg": 0.47, "idle_lmg": 0.76, "run_lmg": 0.59},
     "athlete": {"idle_ar": 0.91, "run_ar": 0.66, "idle_smg": 0.91, "run_smg": 0.70, "idle_lmg": 0.90, "run_lmg": 0.60},
     "wraith": {"idle_ar": 0.69, "run_ar": 0.57, "idle_smg": 0.57, "run_smg": 0.37, "idle_lmg": 0.48, "run_lmg": 0.38},
@@ -858,8 +1036,10 @@ def part_chase(s, v, R, skin):
     v.info("%s chase spot" % skin, spot)
     home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
     out = {}
-    for wid in ("ar", "smg", "lmg"):
-        for nm, keys in (("idle", []), ("run", ["KeyW"])):
+    for cell in CHASE_LIVE[skin]:
+        nm, wid = cell.split("_")
+        keys = CHASE_KEYS[nm]
+        if True:
             s.release_all()
             # (W10 anim fix 6) ...facing +X along the clear 20 m the spot finder checked (chasevis's yaw), not -Z
             s.js(PLACE_JS, [home[0], home[1], CHASE_YAW])
@@ -869,11 +1049,145 @@ def part_chase(s, v, R, skin):
             if keys:
                 s.hold(keys)
             s.step_frames(40, 1 / 60, render=True)
-            xs = sorted(x for x in s.js(CHASE_JS, [8, 5]) if x is not None)
+            if nm == "turn":
+                s.step_frames(20, 1 / 60, render=True)
+            # (W10 anim fix r1) 16 samples (2 per clip phase at 5-frame spacing) on the held states: 8 read +-0.014 between two runs of one build
+            # (fix_r1 swC soldier idle 0.448 / 0.462); the turn keeps live's 8 x 2 deg sweep (the same motion as its reference)
+            xs = sorted(x for x in s.js(CHASE_JS, [8 if nm == "turn" else 16, 5, 3.14159 / 90 if nm == "turn" else 0]) if x is not None)
             s.release_all()
             out["%s_%s" % (nm, wid)] = round(xs[len(xs) // 2], 3) if xs else None
     R.setdefault(skin, {})["chase"] = out
     v.info("%s chase-camera gun visibility (median share of the gun's pixels the body does not hide)" % skin, out)
+    return out
+
+
+# (W10 anim fix r1, D2 / D4 / D9 / D12 / D15 / D17) per-frame pose probe for the aimpitch / lowlook / recoil / sghold parts
+POSE_JS = r"""([n]) => { const W = window.__LC__.W, THREE = W.THREE, P = window.__H_PUMP__, A = W.player; const out = []; const bn = {};
+  A.obj.traverse((o) => { if (!o.isBone) return; const nm = o.name.replace(/^mixamorig:?/i, ''); if (!bn[nm]) bn[nm] = o; });
+  const wp = (b) => b.getWorldPosition(new THREE.Vector3()); let shot = A.lastShotT;
+  for (let i = 0; i < n; i++) { P.step(1, 1 / 60, false); W.scene.updateMatrixWorld(true);
+    const ud = A.weaponMesh && A.weaponMesh.userData; const inv = new THREE.Matrix4().copy(bn.Hips.matrixWorld).invert();
+    const hd = wp(bn.Head), top = bn.HeadTop_End ? wp(bn.HeadTop_End) : hd.clone().add(new THREE.Vector3(0, 0.2, 0));
+    const m = bn.Head.matrixWorld.elements, up = [m[4], m[5], m[6]];
+    const el = (s1, m1, h1) => +(wp(bn[s1]).sub(wp(bn[m1])).angleTo(wp(bn[h1]).sub(wp(bn[m1]))) * 180 / Math.PI).toFixed(1);
+    const R = { mode: A._armMode || null, rhW: A._rhW == null ? null : +A._rhW.toFixed(3), pbK: A._pbK == null ? null : +A._pbK.toFixed(3), anim: A.anim,
+      headTopY: top.y, rhY: wp(bn.RightHand).y, lhY: wp(bn.LeftHand).y, up, yaw: A.yaw, elR: el('RightArm', 'RightForeArm', 'RightHand'), elL: el('LeftArm', 'LeftForeArm', 'LeftHand') };
+    if (ud && ud.butt && A.hand) R.butt = +A.hand.localToWorld(new THREE.Vector3(ud.butt.x, ud.butt.y, ud.butt.z)).distanceTo(wp(bn.RightArm)).toFixed(4);
+    if (ud && ud.tip && A.hand) { const t = A.hand.localToWorld(new THREE.Vector3(ud.tip.x, ud.tip.y, ud.tip.z)).applyMatrix4(inv); R.tip = [t.x, t.y, t.z]; }
+    if (A.lastShotT !== shot) { R.shot = 1; shot = A.lastShotT; }
+    out.push(R); }
+  return out; }"""
+AIMP_WIDS = ("ar", "lmg", "smg", "shotgun")
+
+
+def head_pitch(r):
+    """the Head bone's up axis tilt (deg) toward the aim's horizontal forward: + = tipped back (looking up)"""
+    fx, fz = -math.sin(r["yaw"]), -math.cos(r["yaw"])
+    u = r["up"]
+    return math.degrees(math.atan2(-(u[0] * fx + u[2] * fz), u[1]))
+
+
+def part_aimpitch(s, v, R, skin):
+    """(W10 anim fix r1, D2 / D15) the long guns at +-45 deg of aim pitch, aimed (ADS) and hip-firing"""
+    spot = s.js(CHASE_SPOT_JS, [10.0, 1200]) or L.flat_spot(s, clear=9.0, max_r=900) or {}
+    home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
+    out = {}
+    for wid in AIMP_WIDS:
+        for st in ("ads", "hip"):
+            hp = {}
+            for pit in (0.7854, -0.7854):
+                s.release_all(); s.js(PLACE_JS, [home[0], home[1], CHASE_YAW]); s.js(EQUIP_JS, wid)
+                s.js(AIM_JS, [CHASE_YAW, pit, st == "ads"])
+                s.step_frames(90, 1 / 60, render=False)
+                if st == "hip":
+                    s.js(FIRE_ON)
+                rows = s.js(POSE_JS, [30])
+                s.js(FIRE_OFF)
+                r_ = rows[-1]
+                key = "%s/%s/%s" % (wid, st, "up" if pit > 0 else "dn")
+                out[key] = {"butt": r_.get("butt"), "lhOverTop": round(r_["lhY"] - r_["headTopY"], 3), "rhOverTop": round(r_["rhY"] - r_["headTopY"], 3),
+                            "head": round(head_pitch(r_), 1), "mode": r_["mode"], "rhW": r_["rhW"]}
+                hp[pit] = head_pitch(r_)
+            out["%s/%s/headFollow" % (wid, st)] = round((hp[0.7854] - hp[-0.7854]) / 90.0, 3)
+    s.js(AIM_JS, [CHASE_YAW, 0.0, False])
+    R.setdefault(skin, {})["aimpitch"] = out
+    v.info("%s aim pitch +-45 (butt to the RightArm joint m, wrists over the head top m, head pitch deg, head follow share)" % skin, out)
+    return out
+
+
+def part_lowlook(s, v, R, skin):
+    """(W10 anim fix r1, D4) desktop Low: the pistol in live's gunReady in every state, no squared chest; the long gun without the rifle hold"""
+    s.js("() => window.__LC__.W.setGfx('tier', 'low')")
+    s.step_frames(30, 1 / 60, render=True)
+    spot = s.js(CHASE_SPOT_JS, [10.0, 1200]) or L.flat_spot(s, clear=9.0, max_r=900) or {}
+    home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
+    out = {"tier": s.js("() => window.__LC__.W.gfxTier || null")}
+    for wid, nm, keys, ads in (("pistol", "idle", [], False), ("pistol", "run", ["KeyW"], False), ("pistol", "strafeL", ["KeyA"], False),
+                               ("pistol", "back", ["KeyS"], False), ("pistol", "crouch", ["KeyC"], False), ("pistol", "ads", [], True),
+                               ("ar", "idle", [], False), ("ar", "run", ["KeyW"], False)):
+        s.release_all(); s.js(PLACE_JS, [home[0], home[1], CHASE_YAW]); s.js(EQUIP_JS, wid); s.js(AIM_JS, [CHASE_YAW, 0.0, ads])
+        s.step_frames(60, 1 / 60, render=False)
+        if keys:
+            s.hold(keys)
+        rows = s.js(POSE_JS, [40])
+        s.release_all()
+        out["%s/%s" % (wid, nm)] = {"modes": sorted(set(str(r_["mode"]) for r_ in rows)), "rhWmax": max((r_["rhW"] or 0) for r_ in rows),
+                                     "pbKmax": max((r_["pbK"] or 0) for r_ in rows)}
+    s.js(AIM_JS, [CHASE_YAW, 0.0, False])
+    s.js("() => window.__LC__.W.setGfx('tier', 'high')")
+    s.step_frames(30, 1 / 60, render=True)
+    R.setdefault(skin, {})["lowlook"] = out
+    v.info("%s desktop Low look (arm modes, rifle-hold weight, pistol chest squaring)" % skin, out)
+    return out
+
+
+RECOIL_WIDS = ("smg", "ar", "lmg", "pistol")
+
+
+def part_recoil(s, v, R, skin):
+    """(W10 anim fix r1, D12) the muzzle's kick on each shot: its largest displacement (hips frame) in the 2 frames from the shot frame,
+    against the frame before the shot"""
+    spot = s.js(CHASE_SPOT_JS, [10.0, 1200]) or L.flat_spot(s, clear=9.0, max_r=900) or {}
+    home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
+    out = {}
+    for wid in RECOIL_WIDS:
+        s.release_all(); s.js(PLACE_JS, [home[0], home[1], CHASE_YAW]); s.js(EQUIP_JS, wid); s.js(AIM_JS, [CHASE_YAW, 0.0, True])
+        s.step_frames(90, 1 / 60, render=False)
+        rows = []
+        for k_ in range(4):
+            s.js(FIRE_ON)
+            rows += s.js(POSE_JS, [2])
+            s.js(FIRE_OFF)
+            rows += s.js(POSE_JS, [28])
+        kicks = []
+        for i, r_ in enumerate(rows):
+            if r_.get("shot") and i >= 1 and rows[i - 1].get("tip"):
+                b = rows[i - 1]["tip"]
+                kicks.append(round(max(math.dist(b, rows[j]["tip"]) for j in range(i, min(len(rows), i + 2)) if rows[j].get("tip")), 4))
+        out[wid] = {"kicks": kicks}
+    s.js(AIM_JS, [CHASE_YAW, 0.0, False])
+    R.setdefault(skin, {})["recoil"] = out
+    v.info("%s recoil (the muzzle's move in the shot frame and the next, m, hips frame)" % skin, out)
+    return out
+
+
+def part_sghold(s, v, R, skin):
+    """(W10 anim fix r1, D9) the pump shotgun's trigger elbow at the ready, running, crouched and aimed"""
+    spot = s.js(CHASE_SPOT_JS, [10.0, 1200]) or L.flat_spot(s, clear=9.0, max_r=900) or {}
+    home = [spot["x"], spot["z"]] if spot else s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }")
+    out = {}
+    for nm, keys, ads in (("idle", [], False), ("run", ["KeyW"], False), ("crouch", ["KeyC"], False), ("ads", [], True), ("back", ["KeyS"], False)):
+        s.release_all(); s.js(PLACE_JS, [home[0], home[1], CHASE_YAW]); s.js(EQUIP_JS, "shotgun"); s.js(AIM_JS, [CHASE_YAW, 0.0, ads])
+        s.step_frames(60, 1 / 60, render=False)
+        if keys:
+            s.hold(keys)
+        s.step_frames(30, 1 / 60, render=False)
+        rows = s.js(POSE_JS, [30])
+        s.release_all()
+        out[nm] = {"elRmin": min(r_["elR"] for r_ in rows), "elLmed": sorted(r_["elL"] for r_ in rows)[len(rows) // 2]}
+    s.js(AIM_JS, [CHASE_YAW, 0.0, False])
+    R.setdefault(skin, {})["sghold"] = out
+    v.info("%s shotgun hold (trigger elbow min deg, support elbow median deg)" % skin, out)
     return out
 
 
@@ -940,9 +1254,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
     ap.add_argument("--skins", default="soldier,athlete")
-    ap.add_argument("--parts", default="guns,flash,pistol,flinch,death,sheen,reload,swim,swap,kerb,trans,chase")
+    ap.add_argument("--parts", default="guns,flash,pistol,flinch,death,sheen,reload,swim,swap,kerb,trans,chase,aimpitch,lowlook,recoil,sghold")
     ap.add_argument("--shots", default=None)
-    ap.add_argument("--trans", default="swap,ads,land", help="(W10 anim fix 6) the transition events part trans measures (a control names its own)")
+    ap.add_argument("--trans", default="swap,ads,land,crouchin,crouchout,idlerun,runsprint,adswalk,turn", help="(W10 anim fix 6) the transition events part trans measures (a control names its own)")
     ap.add_argument("--no-cache", action="store_true", help="re-measure the W9 tip's sheen baseline")
     args = L.parse(ap)
     want = set(args.parts.split(","))
@@ -989,6 +1303,21 @@ def main():
                 for skin in CHASE_SKINS:
                     v.info("practice chase %s" % skin, boot_practice(s, skin))
                     part_chase(s, v, R.setdefault("chaseRows", {}), skin)
+            if want & {"aimpitch", "lowlook", "recoil", "sghold"}:
+                # (W10 anim fix r1) every skin, its own practice boot
+                for skin in CHASE_SKINS:
+                    v.info("practice r1 %s" % skin, boot_practice(s, skin))
+                    s.js("() => window.__LC__.W.setGfx('tier', 'high')")
+                    s.step_frames(30, 1 / 60, render=True)
+                    RR = R.setdefault("r1Rows", {})
+                    if "aimpitch" in want:
+                        part_aimpitch(s, v, RR, skin)
+                    if "recoil" in want:
+                        part_recoil(s, v, RR, skin)
+                    if "sghold" in want:
+                        part_sghold(s, v, RR, skin)
+                    if "lowlook" in want:
+                        part_lowlook(s, v, RR, skin)
             if "swim" in want:
                 # a practice match on the island map (deep water near the range)
                 v.info("practice swim", boot_practice(s, "soldier", seed=5, map_id="isla_viva"))
@@ -1160,7 +1489,12 @@ def main():
             v.check("kerb: a 20 cm kerb step-off (AR / SMG / sniper / pistol, running and still): the right hand's and the muzzle's largest per-frame move (hips frame and drawn-root frame) <= 2x the same clip's normal per-frame move",
                     not kb and bool(kr), {"bad": kb, "[max, frame, normal]": kr}, "<= 2x normal")
         if "trans" in want:
-            for row, keys, txt in (("swap-pop", ["ar/swap"], "a gun swap (AR -> SMG, still): the right hand"),
+            for row, keys, txt in (("crouch-pop", ["ar/crouchin", "ar/crouchout", "pistol/crouchin", "pistol/crouchout"], "crouch in / out (AR, pistol): the right hand and the muzzle"),
+                                   ("loco-pop", ["ar/idlerun", "ar/runsprint", "pistol/idlerun", "pistol/runsprint"], "idle -> run, run -> sprint (AR, pistol): the right hand and the muzzle"),
+                                   ("turn-pop", ["ar/turn", "pistol/turn"], "a turn in place (aim swept 92 deg; AR, pistol): the right hand and the muzzle"),
+                                   ("adswalk-pop", ["ar/adswalk", "pistol/adswalk"], "an ADS release while walking (AR, pistol): the right hand and the muzzle"),
+                                   ("pistol-pop", ["pistol/ads", "pistol/land"], "the pistol's ADS release and jump landing (still): the right hand and the muzzle"),
+                                   ("swap-pop", ["ar/swap"], "a gun swap (AR -> SMG, still): the right hand"),
                                    ("ads-pop", ["ar/ads", "smg/ads"], "an ADS release (AR / SMG, still): the right hand and the muzzle"),
                                    ("land-pop", ["ar/land", "smg/land"], "a jump's landing (AR / SMG, still, a real Space press): the right hand and the muzzle")):
                 # (W10 anim fix 6) a row whose event --trans left out is not judged (never passed: it is not in the table)
@@ -1173,12 +1507,13 @@ def main():
                         e = T.get(key)
                         rr["%s/%s" % (skin, key)] = e
                         pts = [p_ for p_ in ("rh", "tip") if e and p_ in e]
+                        lv = TRANS_LIVE.get("%s/%s" % (skin, key)) or {}
                         ok = bool(e) and bool(pts) and (key.endswith("/land") is False or bool(e.get("land"))) and \
-                            all(e[p_][1] is not None and e[p_][0] <= max(2.0 * e[p_][2], TRANS_FLOOR) + 1e-9 for p_ in pts)
+                            all(e[p_][1] is not None and (e[p_][0] <= 2.0 * e[p_][2] + 1e-9 or (lv.get(p_) is not None and e[p_][0] <= lv[p_] + 1e-9)) for p_ in pts)
                         if not ok:
                             bad.append("%s/%s" % (skin, key))
-                v.check("%s: %s - largest per-frame move (hips frame) in the 17 frames from the event <= max(2x the run's normal per-frame move, %.2f m)" % (row, txt, TRANS_FLOOR),
-                        not bad and bool(rr), {"bad": bad, "[max, frame, normal]": rr}, "<= max(2x normal, %.2f m)" % TRANS_FLOOR)
+                v.check("%s: %s - largest per-frame move (hips frame) in the 17 frames from the event <= 2x the run's normal per-frame move, or <= live's on the same row" % (row, txt),
+                        not bad and bool(rr), {"bad": bad, "[max, frame, normal]": rr, "live": {k_: TRANS_LIVE.get(k_) for k_ in rr}}, "<= 2x normal or <= live")
         if "chase" in want:
             CR = R.get("chaseRows") or {}
             bad, rr = [], {}
@@ -1187,10 +1522,72 @@ def main():
                 for key, lv in CHASE_LIVE[skin].items():
                     g = got.get(key)
                     rr["%s/%s" % (skin, key)] = [g, lv]
-                    if g is None or g < lv:
+                    if g is None or g < lv or (key in CHASE_GT0.get(skin, ()) and not g > 0):
                         bad.append("%s/%s" % (skin, key))
-            v.check("chase: the long gun at the patrol ready (AR / SMG / LMG, still and running, all 5 skins) as visible from the chase camera as on the live build (median share of its pixels the body does not hide >= live's)",
-                    not bad and len(rr) == 30, {"bad": bad, "[build, live]": rr}, ">= live")
+            nwant = sum(len(x) for x in CHASE_LIVE.values())
+            v.check("chase: the held gun seen from the chase camera as much as on the live build, 3 decimals (AR / SMG / LMG / shotgun / sniper still and running, the pistol in 7 states, all 5 skins; the juggernaut's pistol ready > 0)",
+                    not bad and len(rr) == nwant, {"bad": bad, "[build, live]": rr}, ">= live")
+        RR = R.get("r1Rows") or {}
+        if "aimpitch" in want:
+            # (W10 anim fix r1, D2 / D15, STANDARD A1 / A4 / W2) at +-45 deg (ADS and hip fire; AR, LMG, SMG, shotgun; 5 skins): the butt within 0.15 m of
+            # the RightArm joint (the 0.10 m pocket + 5 cm), both wrists under the top of the head, the head following >= 0.7 of the aim pitch
+            bad, rr = [], {}
+            for skin in CHASE_SKINS:
+                A_ = (RR.get(skin) or {}).get("aimpitch") or {}
+                for wid in AIMP_WIDS:
+                    for st in ("ads", "hip"):
+                        for d_ in ("up", "dn"):
+                            e = A_.get("%s/%s/%s" % (wid, st, d_))
+                            rr["%s/%s/%s/%s" % (skin, wid, st, d_)] = e
+                            if not e or e["butt"] is None or e["butt"] > 0.15 or e["lhOverTop"] > 0 or e["rhOverTop"] > 0:
+                                bad.append("%s/%s/%s/%s" % (skin, wid, st, d_))
+                        hf = A_.get("%s/%s/headFollow" % (wid, st))
+                        rr["%s/%s/%s/headFollow" % (skin, wid, st)] = hf
+                        if hf is None or hf < 0.7:
+                            bad.append("%s/%s/%s/headFollow" % (skin, wid, st))
+            v.check("aimpitch: at +-45 deg of aim (ADS and hip fire, AR / LMG / SMG / shotgun, 5 skins) the butt <= 0.15 m from the shoulder joint, both wrists under the head top, the head following >= 0.7 of the pitch",
+                    not bad and len(rr) == 5 * len(AIMP_WIDS) * 2 * 3, {"bad": bad, "rows": rr}, "butt <= 0.15 m, wrists < head top, follow >= 0.7")
+        if "lowlook" in want:
+            # (W10 anim fix r1, D4, owner rule: phones / Low look as live) desktop Low: the pistol in gunReady in every state (live's only mode), no
+            # squared pistol chest, no rifle hold
+            bad, rr = [], {}
+            for skin in CHASE_SKINS:
+                A_ = (RR.get(skin) or {}).get("lowlook") or {}
+                for key, e in A_.items():
+                    if key == "tier":
+                        continue
+                    rr["%s/%s" % (skin, key)] = e
+                    # (a long gun has no arm mode: _armMode keeps the last one, so only its rifle-hold weight is read)
+                    if (key.startswith("pistol") and e["modes"] != ["gunReady"]) or e["rhWmax"] > 0 or e["pbKmax"] > 0:
+                        bad.append("%s/%s" % (skin, key))
+                if A_.get("tier") != "low":
+                    bad.append("%s/tier=%s" % (skin, A_.get("tier")))
+            v.check("lowlook: desktop Low keeps live's arm modes (pistol gunReady in idle / run / strafe / back / crouch / ADS; long gun no arm mode), no rifle hold, no pistol chest squaring",
+                    not bad and len(rr) == 40, {"bad": bad, "rows": rr}, "as live")
+        if "recoil" in want:
+            # (W10 anim fix r1, D12, STANDARD W4) every shot kicks the muzzle >= 1.5 cm within the shot frame and the next (SMG, AR, LMG, pistol; aimed)
+            bad, rr = [], {}
+            for skin in CHASE_SKINS:
+                A_ = (RR.get(skin) or {}).get("recoil") or {}
+                for wid in RECOIL_WIDS:
+                    k_ = (A_.get(wid) or {}).get("kicks") or []
+                    rr["%s/%s" % (skin, wid)] = k_
+                    if len(k_) < 3 or min(k_) < 0.015:
+                        bad.append("%s/%s" % (skin, wid))
+            v.check("recoil: each shot moves the muzzle >= 0.015 m (hips frame) within 1 frame of the shot (SMG / AR / LMG / pistol, aimed, >= 3 shots, 5 skins)",
+                    not bad and len(rr) == 20, {"bad": bad, "kicks": rr}, ">= 0.015 m")
+        if "sghold" in want:
+            # (W10 anim fix r1, D9, STANDARD B2 / W1) the pump shotgun's trigger elbow >= 52 deg interior (live's least, 52-68) in every state
+            bad, rr = [], {}
+            for skin in CHASE_SKINS:
+                A_ = (RR.get(skin) or {}).get("sghold") or {}
+                for nm in ("idle", "run", "crouch", "ads", "back"):
+                    e = A_.get(nm)
+                    rr["%s/%s" % (skin, nm)] = e
+                    if not e or e["elRmin"] < 52:
+                        bad.append("%s/%s" % (skin, nm))
+            v.check("sghold: the pump shotgun's trigger elbow >= 52 deg interior at the ready, running, crouched, aimed and backpedalling (5 skins)",
+                    not bad and len(rr) == 25, {"bad": bad, "rows": rr}, ">= 52 deg")
         if "sheen" in want:
             b = R.get("sheen")
             if b is None:

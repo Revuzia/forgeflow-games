@@ -483,6 +483,25 @@ async function refreshWeaponMesh(W, a) {
   if (a.weaponMesh) { a.hand && a.hand.remove(a.weaponMesh); a.weaponMesh = null; }
   const id = a.weapon && a.weapon.id;
   const proto = P[id];
+  // (W10 anim fix r1, D5 / W8) a held THROWABLE is drawn in the hand: the in-flight round's geometry and material type (no new shader program),
+  // a real grenade's size (~8 x 9.5 cm), the fuse glow off until it is thrown (player.js hides it from the release to the end of the toss)
+  if (!proto && a.hand && (id === "consumable:frag" || id === "consumable:smoke")) {
+    ensureShell();
+    const sm = id === "consumable:smoke";
+    if (!_heldFragMat) {
+      _heldFragMat = _fragMat.clone(); _heldFragMat.emissiveIntensity = 0.04; _heldFragMat.color.setHex(0x5a6a40);
+      _heldSmokeMat = _smokeMat.clone(); _heldSmokeMat.emissiveIntensity = 0.04;
+    }
+    const g = new THREE.Group(), m = new THREE.Mesh(_shellGeo, sm ? _heldSmokeMat : _heldFragMat);
+    m.scale.set(HELD_G_R, HELD_G_R * 1.2, HELD_G_R);
+    m.position.set(0, HELD_G_UP, HELD_G_FWD);
+    m.castShadow = true;
+    g.add(m);
+    g.userData.wid = id; g.userData.throwable = true;
+    a.weaponMesh = g;
+    a.hand.add(g);
+    return;
+  }
   if (!proto || !a.hand) return;
   a.weaponMesh = proto.clone();
   // identity stamp: a.weapon.id changes SYNCHRONOUSLY in equipSlot but this
@@ -1142,6 +1161,10 @@ function launchRound(W, p) {
 }
 
 let _shellGeo = null, _shellMat = null, _fragMat = null, _smokeMat = null;
+// (W10 anim fix r1, D5) the held grenade's materials (clones of the round's: same program) and its scale of the 0.15 m shell sphere and offset
+// in the holder (m: up, forward of the grip point, into the palm)
+let _heldFragMat = null, _heldSmokeMat = null;
+const HELD_G_R = 0.3, HELD_G_UP = 0.0, HELD_G_FWD = 0.05;
 /** The shell geometry and its three materials (launcher shell, frag, smoke canister): page-lifetime, built once. */
 function ensureShell() {
   if (_shellGeo) return;

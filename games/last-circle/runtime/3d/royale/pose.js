@@ -40,6 +40,7 @@ export function findArmBones(root) {
       case "Hips": b.hips = o; break;
       case "neck": case "Neck": b.neck = o; break;
       case "Head": b.head = o; break;
+      case "HeadTop_End": b.headTop = o; break;
     }
   });
   return (b.rArm && b.lArm) ? b : null;
@@ -138,7 +139,10 @@ export const POSES = {
   pistolAim: [[0.40, -0.40, 0.82], [0.30, -0.25, 0.92], [-0.30, -0.22, 0.93], [-0.12, -0.04, 0.99]],
   // (W10 anim fix 2) two-hand pistol READY (still / firing from the hip): the gun on the chest's centre line ~0.3 m out, elbows bent
   // (compressed ready); gunReady's rifle table held it in front of the right shoulder
-  pistolReady: [[-0.05, -0.95, 0.30], [0.55, 0.05, 0.83], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
+  // (W10 anim fix r1, D1 / V1) ...moved back to gunReady's rows (the gun in front of the right shoulder, live's hold) with the chest left on the clip's
+  // blade (player.js PISTOL_SQ_RDY): centred on a squared chest it was hidden from the chase camera on 4 skins (0.00 vs live 0.27-0.73); the support
+  // hand cups the grip by IK (supportHandIK). Was [[-0.05, -0.95, 0.30], [0.55, 0.05, 0.83], ...]
+  pistolReady: [[-0.14, -0.97, 0.18], [-0.06, 0.1, 0.99], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
   // (W10 anim fix 2) one-hand pistol CARRY on the move, not aiming (the commercial pistol run sets): the firing hand low by the
   // hip, muzzle down (barrelWeld); the support arm free, swinging with the stride (rows 2-3 rebuilt from `swing`, see armDirs)
   // (W10 anim fix 3, F1) the free arm's still rows = armDirs at swing 0: the upper arm a little behind the body, the forearm down and
@@ -148,6 +152,9 @@ export const POSES = {
   // by the ribs, the forearm angled down and in so the gun sits low on the centre line (lower chest / belly) ~0.25 m out, the support
   // arm mirrored onto it (supportHandIK lands the hand on the grip); the muzzle LOW_MODES.pistolCompact down (barrelWeld)
   pistolCompact: [[0.05, -0.93, 0.36], [0.62, -0.3, 0.72], [-0.05, -0.93, 0.36], [-0.62, -0.3, 0.72]],
+  // (W10 anim fix r1, D5 / W8) a held grenade READY: the throwing hand up in front of the right chest (the grenade at the chest, elbow down by the
+  // ribs, ~75 deg), the free arm relaxed a little forward of the hip
+  throwReady: [[-0.18, -0.94, 0.28], [0.42, 0.5, 0.76], [0.24, -0.96, 0.12], [0.06, -0.8, 0.6]],
 };
 // the modes whose arms track the aim pitch
 const PITCHED = { gunReady: 1, reload: 1, pistolAim: 1, pistolReady: 1 };
