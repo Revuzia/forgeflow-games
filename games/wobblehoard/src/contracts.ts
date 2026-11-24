@@ -665,6 +665,8 @@ export interface SoftMetrics {
   /** PLAYGROUND (round 13): how many scootTo glides a STATIC prop has stopped head-on so far (the glide eased out against it and let go). The shell's
    *  host reads a change of it as "this walk is blocked" and steers an asked walk round the thing in its way. Absent = never counted. */
   scootBlocks?: number;
+  /** (round 15) its walk is going round a friend in its way (physics/crawl.ts): the way to its target is not straight for now */
+  steering?: boolean;
 }
 
 export interface SoftBodyLike {

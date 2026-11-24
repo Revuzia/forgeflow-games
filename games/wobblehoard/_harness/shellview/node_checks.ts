@@ -2010,7 +2010,11 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     // (round 15, R15_FIX; written reason: the row asks for a LIFT onto the seat (lifts + 1). In a run where LIFE's own get-on had already put the play squishy on
     // the swing the ask had nothing to lift ("lifts 2 -> 2, on the seat after 10 frames") and the row failed with the squishy riding the seat: it is set on the
     // floor in front first when it sits there, so the ask is always the lift the row is about.)
-    if ((app.body.metrics.onProp ?? -1) === seat) { try { app.body.placeAt?.({ x: 0, y: app.body.center.y, z: 0.6 }, { x: 0, y: 0, z: 0 }); } catch { /* none */ } await stepA(90); }
+    // (R15_CLOSE, written reason: the same for a squishy the shared timeline has left far off. The row waits 10 s for the lift; in this run the play squishy
+    // stood 4.6 m from the seat when asked and walked there freely at 0.22 m/s (traced: no block, no friend in its way), 2.2 m in the row's 10 s: "on the
+    // seat after never". Over 2 m from the seat's rest spot it is set on the same floor spot in front first: the row is about the lift and the ride.)
+    const farFromSeat = bound.poses ? Math.hypot(app.body.center.x - 0, app.body.center.z - bound.poses[seat * 8 + 2]) > 2 : false;
+    if ((app.body.metrics.onProp ?? -1) === seat || farFromSeat) { try { app.body.placeAt?.({ x: 0, y: app.body.center.y, z: 0.6 }, { x: 0, y: 0, z: 0 }); } catch { /* none */ } await stepA(90); }
     const sp0 = app.hoard.meter().sp, cr0 = app.hoard.meter().credits;
     const ride0b = (host.debug() as { counts: { ride: number } }).counts.ride;
     const asked = host.playWith?.(app.identity.itemId ?? '', SWING) === true;

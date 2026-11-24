@@ -132,13 +132,18 @@ try {
       const out = { carried: false, scrolled: 0, moved: 0, dist: NaN, from: [r2(b0.w[0]), r2(b0.w[2])], view0: await view(), steps: 0 };
       const [ux, uy] = liftDir(b0, bd, await bodies());
       let px = b0.x + 0.55 * b0.r * ux, py = b0.y + 0.55 * b0.r * uy;
+      if (fling !== 0 && process.env.ROOMS_DBG) { await shot(`dbg_tosspress_${i}`); console.log('dbg press', JSON.stringify({ i, press: [Math.round(px), Math.round(py)], bodies: (await bodies()).map((q) => [Math.round(q.x), Math.round(q.y), Math.round(q.r), q.w.map(r2)]) })); }
       await fDown(px, py); await frames(8);
       for (let k = 1; k <= 40; k++) {
         px = Math.min(W - 10, Math.max(10, px + ux * 14)); py = Math.min(bd.bottom - 10, Math.max(bd.top + 10, py + uy * 14));
         await fMove(px, py); await frames(2);
-        if ((await bodies())[i].carried) { out.carried = true; out.liftPx = k * 14; break; }
+        // (R15_CLOSE 3, RE-SPECIFIED with its reason: the press takes the squishy the PLAYER SEES under the pointer (game.ts pickBody: the nearest hit on the
+        // ray). The row aimed by screen discs of the rest radius and asked that squishy `i` itself be carried; with the party bunched (phone Home, after the
+        // chip row: `i` stood behind another, their discs 24 px apart) the same press rightly picked up the one in front and the row read "carried false".
+        // The squishy in the hand is the one this carry is about (out.who); everything measured after is measured on it.)
+        { const bb = await bodies(), w = bb[i].carried ? i : bb.findIndex((q) => q.carried); if (w >= 0) { out.carried = true; out.who = w; i = w; out.liftPx = k * 14; break; } }
       }
-      if (!out.carried) { await fUp(); await step(1); return out; }
+      if (!out.carried) { const bb = await bodies(); out.miss = { press: [Math.round(b0.x + 0.55 * b0.r * ux), Math.round(b0.y + 0.55 * b0.r * uy)], dir: [ux, uy], body: [Math.round(b0.x), Math.round(b0.y), Math.round(b0.r)], now: [Math.round(bb[i].x), Math.round(bb[i].y)], fingers: bb.map((q) => q.fingers), carried: bb.map((q) => q.carried), tool: await page.evaluate(() => { const s = window.__WH__.state(); return { tool: s.tool, phase: s.phase, quiet: window.__WH__.life()?.quiet, open: [...document.querySelectorAll('[role="dialog"], .sheet, .pt')].filter((e) => !e.hidden && e.getBoundingClientRect().width > 0).map((e) => (e.className || e.id || '').toString().slice(0, 30)) }; }) }; await fUp(); await step(1); return out; }
       const x0 = bd.top + 14, x1 = bd.bottom - 14;
       for (let k = 0; k < 420; k++) {
         const b = (await bodies())[i], d = Math.hypot(b.w[0] - tx, b.w[2] - tz);
@@ -159,7 +164,22 @@ try {
       }
       if (fling !== 0) {
         // the FLING: from where it hangs, the hand goes `fling` px a frame across the frame for 5 frames (as fast as a hand goes), then lets go
-        for (let k = 0; k < 5; k++) { px = Math.min(W - 4, Math.max(4, px + fling)); await fMove(px, py); await frames(1); }
+        // (R15_CLOSE 3, RE-SPECIFIED for a narrow frame, with its reason: 5 frames of 90 px are 450 px, more than a 390 px phone is wide. The carry toward the
+        // side of the room leaves the finger near that edge of the screen (the view scrolls under it), so the "fling" ran into the screen's edge on its first
+        // frame and the finger then stood still for 4 frames before the let go: a still finger is a set-down (gestures.ts FLICK_V), and the row read
+        // "fastest 0.4 m/s" (no toss) on every phone run. Where the screen has no room for the fling the hand first swings BACK toward the middle (a slow
+        // carry, 300 px/s, as a thrower does), then flings with what the screen allows (at least 3000 px/s on 390 px), letting go while it moves.)
+        const dirF = Math.sign(fling), need = 5 * Math.abs(fling);
+        let room = dirF < 0 ? px - 4 : W - 4 - px, stepF = Math.abs(fling);
+        if (room < need) {
+          const bx = dirF < 0 ? Math.min(Math.round(W * 0.74), px + (need - room)) : Math.max(Math.round(W * 0.26), px - (need - room));
+          while (Math.abs(bx - px) > 1) { px += Math.sign(bx - px) * Math.min(10, Math.abs(bx - px)); await fMove(px, py); await frames(2); }
+          await frames(4);
+          room = dirF < 0 ? px - 4 : W - 4 - px; stepF = Math.min(stepF, Math.floor(room / 5));
+          out.backswing = Math.round(px);
+        }
+        out.flingPx = stepF; { const bf = (await bodies())[i]; out.flingFrom = [r2(bf.w[0]), r2(bf.w[2])]; }
+        for (let k = 0; k < 5; k++) { px = Math.min(W - 4, Math.max(4, px + dirF * stepF)); await fMove(px, py); await frames(1); }
         await fUp();
         return out;
       }
@@ -255,7 +275,10 @@ try {
         await page.evaluate(() => window.__WH__.resume());
         const opened = await clickSel('.dock-places');
         let go = false;
-        for (let k = 0; k < 24 && !go; k++) { await sleep(400); go = await clickSel(`.jn-go[data-place="${place}"]`); }
+        // (R15_CLOSE 5, RE-SPECIFIED with its reason: on a 390 x 844 phone the Places sheet scrolls; the Go buttons of the fourth place on lie below its fold,
+        // and the tap went to where the button would be without scrolling (go true, arrived false: Frostbell, Rainleaf, Lanternroof, Cloudloft on every phone
+        // run, while the first three places arrived). A player scrolls the sheet to the place: the button is scrolled into view, then tapped.)
+        for (let k = 0; k < 24 && !go; k++) { await sleep(400); await page.evaluate((q) => document.querySelector(q)?.scrollIntoView({ block: 'center' }), `.jn-go[data-place="${place}"]`); await sleep(150); go = await clickSel(`.jn-go[data-place="${place}"]`); }
         if (!go) console.log('debug sheet', JSON.stringify(await page.evaluate(() => { const d = document.getElementById('wh-travel'); return { sheet: !!d, cards: d ? [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`) : null, go: d ? [...d.querySelectorAll('.jn-go')].map((b) => `${b.dataset.place}:${b.disabled}`) : null, places: !!document.querySelector('.dock-places'), reasons: window.__WH__.shell.pauseReasons(), live: window.__liveLog.slice(-3) }; })));
         await page.evaluate(() => window.__WH__.pause());
         let arrived = false;
@@ -361,7 +384,7 @@ try {
         const cand = bs.filter(freeSide), pool = cand.length ? cand : bs;
         const i = pool.reduce((a, b) => (Math.hypot(b.w[0] - front[0], b.w[2] - front[1]) < Math.hypot(bs[a].w[0] - front[0], bs[a].w[2] - front[1]) ? b.i : a), pool[0].i);
         const c1 = await carryTo(i, front[0], front[1]);
-        const c2 = await carryTo(i, back[0], back[1]);
+        const c2 = await carryTo(c1.who ?? i, back[0], back[1]);
         const span = Math.hypot(back[0] - front[0], back[1] - front[1]);
         const inside = (p) => (home ? Math.hypot(p[0] - cx, p[1] - cz) <= hx + 0.05 : Math.abs(p[0] - cx) <= hx + 0.05 && Math.abs(p[1] - cz) <= hz + 0.05);
         check(`${label}: ONE carry (one press, one release) takes a squishy from the front of the room to the far back ${home ? 'side of the felt' : 'corner'} (${r2(span)} m across the room); the view scrolls under the hand`,
@@ -422,21 +445,27 @@ try {
         // (round 15, R15_FIX BR: the press below is aimed at where the squishy stands on screen now: the camera, brought to a squishy by the chip row for 8 s
         // (roomcam focusS), must have stopped easing back first, or the picture slides from under the press ("carried false"); 10 s at most)
         for (let k = 0, v0 = await view(); k < 20; k++) { await step(0.5); const v1 = await view(); const still = v0 && v1 && Math.abs(v1[0] - v0[0]) + Math.abs(v1[1] - v0[1]) + Math.abs(v1[2] - v0[2]) < 0.004; v0 = v1; if (k >= 16 || !v1 || (still && k >= 2)) break; }
-        const cT = await carryTo(i, tossFrom[0], tossFrom[1], 0.6, -90);
-        const carried = cT.carried, stepPx = 90;
-        let top = 0, far = 0, vMax = 0, last = (await bodies())[i].w;
+        // (R15_CLOSE 5, RE-SPECIFIED with its reason: the toss row pressed squishy `i` wherever it stood; on the phone at the cabin it stood at the frame's very
+        // edge (disc (17, 315) r 25 on a 390 px frame, under the edge chip's place) and the press took nothing. A player throws a squishy they can see: the
+        // one pressed is `i` when its disc is inside the frame, else the one nearest the frame's middle.)
+        const bsT = await bodies(), bdT = await band(), inFrame = (q) => q.x > q.r + 24 && q.x < W - q.r - 24 && q.y > bdT.top + q.r && q.y < bdT.bottom - q.r;
+        const iPress = inFrame(bsT[i]) ? i : bsT.reduce((a, q) => (Math.hypot(q.x - W / 2, q.y - (bdT.top + bdT.bottom) / 2) < Math.hypot(bsT[a].x - W / 2, bsT[a].y - (bdT.top + bdT.bottom) / 2) ? q.i : a), bsT[0].i);
+        const cT = await carryTo(iPress, tossFrom[0], tossFrom[1], 0.6, -90);
+        const carried = cT.carried, stepPx = 90, iT = cT.who ?? iPress;
+        let top = 0, far = 0, vMax = 0, last = (await bodies())[iT].w;
         for (let k = 0; k < 60; k++) {
           await frames(5);
-          const w = (await bodies())[i].w;
+          const w = (await bodies())[iT].w;
+          if (process.env.ROOMS_DBG && k % 4 === 3) console.log('dbg toss', k, JSON.stringify({ w: w.map(r2), out: r2(home ? Math.hypot(w[0] - cx, w[2] - cz) - hx : 0), v: r2(Math.hypot(w[0] - last[0], w[1] - last[1], w[2] - last[2]) / (5 / 60)) }));
           vMax = Math.max(vMax, Math.hypot(w[0] - last[0], w[1] - last[1], w[2] - last[2]) / (5 / 60)); last = w;
           top = Math.max(top, w[1]);
           far = Math.max(far, home ? Math.hypot(w[0] - cx, w[2] - cz) - hx : Math.max(Math.abs(w[0] - cx) - hx, Math.abs(w[2] - cz) - hz));
         }
-        const end = (await bodies())[i].w;
+        const end = (await bodies())[iT].w;
         // (an open place has no wall: its edge turns a squishy back within the physics' rim, PG.boundsRim 0.6 m past the bounds, and it glides back inside)
         check(`${label}: a hard toss at the side of the room 2.6 m away stays inside (the squishy's middle never passes the ${home ? "felt's rim" : 'bounds'} by more than the 0.6 m rim, stays under the ${PROPS.WALL_H} m wall top, and comes to rest in the room)`,
           carried && vMax > 2.5 && far < 0.7 && top < PROPS.WALL_H && inside([end[0], end[2]]) && end[1] < 1.2 && end[1] > -0.2,
-          JSON.stringify({ carried, from: tossFrom.map(r2), fling: Math.round(stepPx), fastest: r2(vMax), highest: r2(top), pastBounds: r2(far), end: end.map(r2) }));
+          JSON.stringify({ carried, miss: cT.miss, who: cT.who, from: tossFrom.map(r2), flungFrom: cT.flingFrom, backswing: cT.backswing, fling: cT.flingPx ?? Math.round(stepPx), fastest: r2(vMax), highest: r2(top), pastBounds: r2(far), end: end.map(r2) }));
         await step(1);
       }
       const errsHere = errs.slice(e0);

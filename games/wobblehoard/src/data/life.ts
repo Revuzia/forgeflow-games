@@ -32,10 +32,11 @@ export const TOUCH = { POKE: 0, SQUEEZE: 1, STRETCH: 2, TOSS: 3, CARRY: 4, SQUEE
 /** LifeIntents.kind (contracts.ts). No intent kind can press, grab or lock: autonomy never pays (LIFE L3). 0 = none. */
 export const INTENT = { GAZE: 1, SCOOT: 2, HOP: 3, SQUASH: 4, POSE: 5, GLIDE: 6, SETTLE: 7, EXPRESS: 8, EMOTE: 9, VOICE: 10, CANCEL: 11, USE: 12 } as const;
 /** LifeSnapshot.flags bits. HELD (its own brain) = TOUCHED | CARRIED | LOCKED; "the player is touching" = TOUCHED | CARRIED, never LOCKED alone
- *  (D-86). RIDE: the player set it on a ride (D-74), cleared after 20 s, at the end of its joint moment, or on a touch. */
+ *  (D-86). RIDE: the player set it on a ride (D-74), cleared after 20 s, at the end of its joint moment, or on a touch.
+ *  STEER (round 15, append-only): its walk is going round a friend in its way (physics steers it): the way there is not straight for now. */
 export const LIFE_FLAG = {
   TOUCHED: 1, CARRIED: 2, LOCKED: 4, ASLEEP: 8, GROUNDED: 16, ON_PROP: 32, IN_WATER: 64, AIRBORNE: 128, TOSSED: 256, NEW: 512, VISIBLE: 1024,
-  MEMORY_BUSY: 2048, RIDE: 4096,
+  MEMORY_BUSY: 2048, RIDE: 4096, STEER: 8192,
 } as const;
 /** LifeEvents.kind: what happened in LIFE this tick, for the play-event ring. SIGNATURE: B08 on its loved touch (QUESTS 4). 0 = none.
  *  SQUIRT (round 6, R6_DATA; append-only): a soaked foam the player squeezed squirts a little arc of water (the S14 squirt game, LIFE 6.1):

@@ -1224,6 +1224,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
       }
       if ((f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) !== 0) c.rideUntil = -1e9;
       if (c.rideUntil > t) f |= LIFE_FLAG.RIDE;
+      if (m.steering === true) f |= LIFE_FLAG.STEER;   // (round 15: physics is taking its walk round a friend in its way)
       // (round 7) a squishy set down on top of a TALL block (Lanternroof's Chimney Corner, 1.4 m; the cabin's hearth, 0.9 m) hops down beside it after PERCH_S:
       // up there it stood above the place camera's frame (s3run2's phone shot: on the chimney, half out of the top edge, behind the HUD's buttons)
       if (dt > 0 && onProp >= 0 && world && onProp < world.count && !c.tossed && (f & (LIFE_FLAG.TOUCHED | LIFE_FLAG.CARRIED)) === 0) {

@@ -291,6 +291,10 @@ export function travelStep(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: n
   const tb = w.f[F.NOW];
   const dx = w.tx[i] - s.x[i], dz = w.tz[i] - s.z[i], d = Math.sqrt(dx * dx + dz * dz);
   if (d <= arriveMm * 0.001) return 1;
+  // (round 15, R15_CLOSE 1) a walk physics is taking round a friend in its way (LIFE_FLAG.STEER) is not "blocked" while it goes round: the way round a friend
+  // met head-on gains under 2 cm toward the target in its first 2 s (measured geometry: a 0.7 m circle at 0.1 m/s gains 1.7 cm), and the rule below ended
+  // those walks short of their thing. The walk's own time budget (the caller's) still ends one that never gets round.
+  if ((s.flags[i] & LIFE_FLAG.STEER) !== 0) { w.pD[i] = d; w.pT1[i] = tb; }
   if (tb - w.pT1[i] >= 2) {
     if (w.pD[i] - d < 0.02) return 2;
     w.pD[i] = d; w.pT1[i] = tb;

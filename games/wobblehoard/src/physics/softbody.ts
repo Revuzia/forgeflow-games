@@ -498,7 +498,7 @@ export class SoftBody implements SoftBodyLike {
   readonly metrics: SoftMetrics = {
     compression: 0, compressionRate: 0, stretch: 0, volume: 1, kinetic: 0, grounded: true, fingers: 0, grabbed: false, press: 0, reaction: 0, strands: 0, slosh: 0,
     pull: 0, carried: false, locked: 0,
-    asleep: false, onProp: -1, airborne: false, memoryBusy: false, contacts: 0, submerged: 0, scootBlocks: 0,   // PLAYGROUND (PG_PHYS; submerged: props.ts writes it in a water zone; scootBlocks round 13)
+    asleep: false, onProp: -1, airborne: false, memoryBusy: false, contacts: 0, submerged: 0, scootBlocks: 0, steering: false,   // PLAYGROUND (PG_PHYS; submerged: props.ts writes it in a water zone; scootBlocks round 13)
   };
   restRadius!: number;
   /** Harness-only counters (not part of SoftBodyLike). `safetyResets` must stay 0: it counts emergency non-finite recoveries. */

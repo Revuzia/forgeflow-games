@@ -79,7 +79,11 @@ async function runParty(party: string[], squirt = false, homeQd = ''): Promise<V
     addBody: (b: SB) => { const vid = ++viewId; views.set(vid, b); return vid; },
     removeBody: (vid: number) => { views.delete(vid); },
     setBodyTier: () => {},
-    matLayout: (n: number) => [[0, 0], [1.3, 0], [-1.3, 0], [2.6, 0], [-2.6, 0]].slice(0, Math.max(1, Math.min(5, n))).map(([x, z]) => ({ x, y: 0, z })),
+    // (R15_CLOSE, RE-SPECIFIED with its reason: the rig's mat was the WIDE frame's row on both frames. The real stage (render/stage.ts MAT_SLOTS_TALL) brings the
+    // party out in a chevron on a tall frame; the row on the TALL layout stood Crimpo 0.18 m from the Warm Lamp's middle and Glimglop's skirt on the Music Box
+    // (R15_FIX F2 moved Home's things for the tall frame), so two of the three had every walk stopped by a thing at once (metrics.scootBlocks 8 to 11 in 80 s,
+    // on the committed code too) and SU-06's tall rows measured one squishy. The tall rows now come out where the game puts them.)
+    matLayout: (n: number) => (FRAME === 'tall' ? [[0, 0], [0.9, -1.3], [-0.9, -1.3], [1.8, -2.6], [-1.8, -2.6]] : [[0, 0], [1.3, 0], [-1.3, 0], [2.6, 0], [-2.6, 0]]).slice(0, Math.max(1, Math.min(5, n))).map(([x, z]) => ({ x, y: 0, z })),
     visibleTable: (out: Float32Array) => { out[0] = -3.0; out[1] = -2.6; out[2] = 3.0; out[3] = 0.9; return true; },
     stats: () => ({ drawCalls: 0, triangles: 0, tier: TIER, frameMsEma: 0 }),
     emote: () => {}, clearEmote: () => {}, emoteScreen: (_k: number, o: Float32Array) => { o[0] = 600; o[1] = 300; o[2] = 20; return true; },

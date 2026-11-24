@@ -60,7 +60,7 @@ const SAMPLE = () => {
     if (W && b) {
       let bi = -1, bd = 1e9;
       for (let k = 0; k < W.bodies.length; k++) { const B = W.bodies[k], d = Math.hypot(B.center.x - b.w[0], B.center.z - b.w[2]); if (d < bd) { bd = d; bi = k; } }
-      if (bi >= 0 && bd < 0.05) { const B = W.bodies[bi], C = W.crawls[bi]; dg = { held: B.heldF, move: B.moveOn, cy: B.cyOn, car: B.carried, grav: B.gravityOn, sl: B.asleep, air: +C.s[5].toFixed(2), turn: C.turn, nc: B.nearCount, sv: +B.sV.toFixed(3), so: B.scootOn, d: Math.hypot(B.stx - B.cx, B.stz - B.cz).toFixed(2), on: C.on, chunk: B.chunk || B.capFlat, fy: Math.round(Math.atan2(2 * (B.qr[0] * B.qr[2] + B.qr[3] * B.qr[1]), 1 - 2 * (B.qr[0] * B.qr[0] + B.qr[1] * B.qr[1])) * 57.3), hy: Math.round(Math.atan2(B.stx - B.cx, B.stz - B.cz) * 57.3), vy: Math.round(Math.atan2(B.vcx, B.vcz) * 57.3), vb: +Math.hypot(B.vcx, B.vcz).toFixed(2), cx: +B.center.x.toFixed(3), wx: +b.w[0].toFixed(3), cz: +B.center.z.toFixed(3), wz: +b.w[2].toFixed(3), calls: B.__calls ? { ...B.__calls } : null, nudge: B.__lastNudge || null, selfV: B.scootOn ? B.sV + C.s[11] : 0, touch: W.bodies.some((o) => o !== B && Math.hypot(o.center.x - B.center.x, o.center.y - B.center.y, o.center.z - B.center.z) < Math.max(B.bR || 0, B.restRadius) + Math.max(o.bR || 0, o.restRadius) + 0.03) }; if (B.__calls) B.__calls = {}; }
+      if (bi >= 0 && bd < 0.05) { const B = W.bodies[bi], C = W.crawls[bi]; dg = { held: B.heldF, move: B.moveOn, cy: B.cyOn, car: B.carried, grav: B.gravityOn, sl: B.asleep, air: +C.s[5].toFixed(2), turn: C.turn, nc: B.nearCount, sv: +B.sV.toFixed(3), so: B.scootOn, d: Math.hypot(B.stx - B.cx, B.stz - B.cz).toFixed(2), on: C.on, chunk: B.chunk || B.capFlat, fy: Math.round(Math.atan2(2 * (B.qr[0] * B.qr[2] + B.qr[3] * B.qr[1]), 1 - 2 * (B.qr[0] * B.qr[0] + B.qr[1] * B.qr[1])) * 57.3), hy: Math.round(Math.atan2(B.stx - B.cx, B.stz - B.cz) * 57.3), vy: Math.round(Math.atan2(B.vcx, B.vcz) * 57.3), vb: +Math.hypot(B.vcx, B.vcz).toFixed(2), cx: +B.center.x.toFixed(3), wx: +b.w[0].toFixed(3), cz: +B.center.z.toFixed(3), wz: +b.w[2].toFixed(3), calls: B.__calls ? { ...B.__calls } : null, nudge: B.__lastNudge || null, selfV: B.scootOn ? B.sV + C.s[11] : 0, blk: C.blk, steer: B.metrics.steering === true, side: C.side, creep: +C.s[11].toFixed(3), wy: +C.s[10].toFixed(2), amp: +C.s[1].toFixed(2), gaps: W.bodies.filter((o) => o !== B).map((o) => { const dx = o.center.x - B.center.x, dz = o.center.z - B.center.z, dh = Math.hypot(dx, dz) || 1, nx = dx / dh, nz = dz / dh; const sup = (q, ux, uz) => { let m = 0; for (let i = 0; i < q.n * 3; i += 3) { const v = (q.X[i] - q.center.x) * ux + (q.X[i + 2] - q.center.z) * uz; if (v > m) m = v; } return m; }; return [Math.round(Math.atan2(dx, dz) * 57.3), +(dh - sup(B, nx, nz) - sup(o, -nx, -nz)).toFixed(3)]; }), touch: W.bodies.some((o) => o !== B && Math.hypot(o.center.x - B.center.x, o.center.y - B.center.y, o.center.z - B.center.z) < Math.max(B.bR || 0, B.restRadius) + Math.max(o.bR || 0, o.restRadius) + 0.03) }; if (B.__calls) B.__calls = {}; }
     }
     out.push({ dg, id: c.itemId, sp: c.species, x: b ? b.w[0] : c.x, z: b ? b.w[2] : c.z, y: b ? b.w[1] : 0, dfx, dfz, frame: c.face, scoot: c.scoot, flags: c.flags, asleep: c.asleep, carried: b ? b.carried : false });
   }
@@ -71,6 +71,7 @@ const angBetween = (ax, az, bx, bz) => { const d = (ax * bx + az * bz) / ((Math.
 const pct = (a, q) => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
 const r1 = (v) => Math.round(v * 10) / 10;
 const AIR = 128, TOUCH = 1 | 2;
+let TRACE_N = 0;
 const DIAG = [];   // (walk samples more than 60 deg off travel, with the crawl's inputs)
 
 /** a history (samples every 0.1 s) -> per squishy: the travel samples (> 4 cm/s, not held or carried) split by how it travels (walk: LIFE's scoot; air: a hop or
@@ -78,7 +79,7 @@ const DIAG = [];   // (walk samples more than 60 deg off travel, with the crawl'
 function analyse(hist) {
   const res = [];
   for (const [id, h] of hist) {
-    const by = { walk: [], air: [], other: [] }, frm = [], walks = [], perc = [], toWay = [], free = [];
+    const by = { walk: [], air: [], other: [] }, frm = [], walks = [], perc = [], toWay = [], free = [], freeT = [], freeC = [];
     let pushed = 0;
     let cur = null;
     for (let k = 1; k + 1 < h.length; k++) {
@@ -92,6 +93,9 @@ function analyse(hist) {
       // SELF-POWERED: its own drive (the glide's speed + the crawl's forward creep) over 3 cm/s; a walker held still (by its turn or a friend in its way) that moves is
       // being shoved. Both sets are reported: every walking sample (W) and the self-powered ones (free)
       if (mode === 'walk' && c.dg && c.dg.selfV > 0.03) free.push(ad);
+      // (R15_CLOSE: the same self-powered samples split by whether a friend's skin is on it (horizontal gap under 2 cm): a walker another body runs into is
+      // shoved while it walks; the split is reported beside the whole set, which stays the measure)
+      if (mode === 'walk' && c.dg && c.dg.selfV > 0.03) (c.dg.gaps && c.dg.gaps.some((g) => g[1] < 0.02) ? freeT : freeC).push(ad);
       if (mode === 'walk') {
         // the travel over +-0.5 s (what the eye reads as its way: a crawl cycle is about 1 s), and the glide's own heading (where it is going), and whether it is
         // pushed BACK (its travel more than 90 deg from its own heading: a walk blocked by a ball or a friend bounces off it each crawl cycle; not a turn's fault)
@@ -119,7 +123,7 @@ function analyse(hist) {
     for (const w of walks) for (let i = 0; i < w.angs.length; i++) byCls[cls(w.hd[i])].push(w.angs[i]);
     let vmax = 0;
     for (let k = 2; k < h.length; k++) vmax = Math.max(vmax, Math.hypot(h[k].x - h[k - 2].x, h[k].z - h[k - 2].z) / 0.2);
-    res.push({ raw: { W: W.map(r1), perc: perc.map(r1), way: toWay.map(r1), free: free.map(r1), pushed }, id, sp: h[0].sp, samples: h.length, noFace: h.filter((c) => !(c.dfx === c.dfx)).length, asleep: h.filter((c) => c.asleep).length, vmax: Math.round(vmax * 100) / 100, walkN: W.length, walkMed: r1(pct(W, 0.5)), walk90: r1(pct(W, 0.9)), walkOver45: W.length ? r1((100 * W.filter((x) => x > 45).length) / W.length) : NaN, percMed: r1(pct(perc, 0.5)), perc90: r1(pct(perc, 0.9)), wayMed: r1(pct(toWay, 0.5)), way90: r1(pct(toWay, 0.9)), wayOver45: toWay.length ? r1((100 * toWay.filter((x) => x > 45).length) / toWay.length) : NaN, pushedPct: W.length ? r1((100 * pushed) / W.length) : NaN,
+    res.push({ raw: { W: W.map(r1), perc: perc.map(r1), way: toWay.map(r1), free: free.map(r1), freeT: freeT.map(r1), freeC: freeC.map(r1), pushed }, id, sp: h[0].sp, samples: h.length, noFace: h.filter((c) => !(c.dfx === c.dfx)).length, asleep: h.filter((c) => c.asleep).length, vmax: Math.round(vmax * 100) / 100, walkN: W.length, walkMed: r1(pct(W, 0.5)), walk90: r1(pct(W, 0.9)), walkOver45: W.length ? r1((100 * W.filter((x) => x > 45).length) / W.length) : NaN, percMed: r1(pct(perc, 0.5)), perc90: r1(pct(perc, 0.9)), wayMed: r1(pct(toWay, 0.5)), way90: r1(pct(toWay, 0.9)), wayOver45: toWay.length ? r1((100 * toWay.filter((x) => x > 45).length) / toWay.length) : NaN, pushedPct: W.length ? r1((100 * pushed) / W.length) : NaN,
       frameMed: r1(pct(frm, 0.5)), airN: by.air.length, airMed: r1(pct(by.air, 0.5)), otherN: by.other.length, otherMed: r1(pct(by.other, 0.5)),
       cls: Object.fromEntries(Object.entries(byCls).map(([k, a]) => [k, a.length ? `${a.length} med ${r1(pct(a, 0.5))} p90 ${r1(pct(a, 0.9))}` : '-'])),
       walks: walks.map((w) => ({ t0: r1(w.t0), dur: r1(w.angs.length * 0.1), first: r1(w.angs[0]), med: r1(pct(w.angs, 0.5)), max: r1(Math.max(...w.angs)), heading: r1(pct(w.hd, 0.5)), v: Math.round(pct(w.sp, 0.5) * 100) / 100 })) });
@@ -133,7 +137,8 @@ const pooled = (res) => {   // every squishy's walk samples together (a section'
   const W = res.flatMap((r) => r.raw.W), P = res.flatMap((r) => r.raw.perc), Y = res.flatMap((r) => r.raw.way), pu = res.reduce((a, r) => a + r.raw.pushed, 0);
   const o45 = (a) => (a.length ? r1((100 * a.filter((x) => x > 45).length) / a.length) : NaN);
   const F = res.flatMap((r) => r.raw.free);
-  return { walks: all.length, startMed: r1(pct(starts, 0.5)), n: W.length, med: r1(pct(W, 0.5)), p90: r1(pct(W, 0.9)), max: r1(Math.max(...W, NaN)), over45: o45(W), nFree: F.length, freeMed: r1(pct(F, 0.5)), free90: r1(pct(F, 0.9)), freeMax: r1(Math.max(...F, NaN)), percMed: r1(pct(P, 0.5)), perc90: r1(pct(P, 0.9)), percOver45: o45(P), wayMed: r1(pct(Y, 0.5)), way90: r1(pct(Y, 0.9)), wayOver45: o45(Y), pushedPct: W.length ? r1((100 * pu) / W.length) : NaN };
+  const FT = res.flatMap((r) => r.raw.freeT), FC = res.flatMap((r) => r.raw.freeC);
+  return { walks: all.length, startMed: r1(pct(starts, 0.5)), n: W.length, med: r1(pct(W, 0.5)), p90: r1(pct(W, 0.9)), max: W.length ? r1(Math.max(...W)) : NaN, over45: o45(W), nFree: F.length, freeMed: r1(pct(F, 0.5)), free90: r1(pct(F, 0.9)), freeMax: F.length ? r1(Math.max(...F)) : NaN, freeOver60: F.filter((x) => x > 60).length, clear: { n: FC.length, med: r1(pct(FC, 0.5)), p90: r1(pct(FC, 0.9)), max: FC.length ? r1(Math.max(...FC)) : NaN, over60: FC.filter((x) => x > 60).length }, touched: { n: FT.length, med: r1(pct(FT, 0.5)), p90: r1(pct(FT, 0.9)), max: FT.length ? r1(Math.max(...FT)) : NaN, over60: FT.filter((x) => x > 60).length }, percMed: r1(pct(P, 0.5)), perc90: r1(pct(P, 0.9)), percOver45: o45(P), wayMed: r1(pct(Y, 0.5)), way90: r1(pct(Y, 0.9)), wayOver45: o45(Y), pushedPct: W.length ? r1((100 * pu) / W.length) : NaN };
 };
 
 const report = { tag: TAG, frames: {} };
@@ -217,6 +222,7 @@ try {
         const ss = await page.evaluate(() => { window.__WH__.step(1 / 60, 6); return window.__SAMPLE__(); });
         for (const c of ss) { if (!hist.has(c.id)) hist.set(c.id, []); hist.get(c.id).push({ t, ...c }); }
       }
+      if (process.env.FACING_TRACE) writeFileSync(resolve(ROOT, `_harness/_reports/browser_facing_${TAG}_trace_${frame}_${TRACE_N++}.json`), JSON.stringify([...hist]));   // (diagnosis: the raw samples)
       return analyse(hist);
     };
     const obs = async (label, secs) => {

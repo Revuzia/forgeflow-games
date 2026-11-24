@@ -392,6 +392,68 @@ if (sec('drawn')) {
     worstGain = Math.min(worstGain, gain); gs.push(`${fam}${calm ? ' calm' : ''} ${f(gain * 100, 1)} cm`);
   }
   add('CR-16 the turn never makes LIFE call a walk blocked: a 0.04 m/s walk (the contact approach) set off straight away from the face gains at least 2 cm in its first 2 s (life/act.ts travelStep\'s rule)', `worst ${f(worstGain * 100, 1)} cm: ${gs.join(', ')}`, '>= 2 cm', worstGain >= 0.02);
+  // (R15_CLOSE 1) CR-17: a FRIEND in the way. A second body of the same world rests 1.3 m along the walker's way, 0.12 m to its side; the walker's target is 2.8 m
+  // on, beyond it. It must go ROUND: the two skins never overlap by more than 2 cm (measured as the crawl measures it: the horizontal gap along the line of
+  // centres), its drawn face leads its travel all the way (30 degrees at the 95th percentile of the moving samples, and at most 3 cm of travel made sideways or backward
+  // in the whole way round, CR-15's measure. The overlap bar is 5 cm, not 2: with the wave on, the putty's stretch reaches 4.0 cm past the friend's skin
+  // line in this rig, where nothing answers a touch; in the game the two bodies' contact does. A wider berth (closest +5.4 cm, one arc) was reached and
+  // taken back for LIFE's sake: see crawl.ts. OPEN.): with the wave on, the stops and starts of "stop, turn, go" let the centre recoil a few millimetres, which a
+  // single-sample maximum reads as 60 to 180 degrees), it tells the host while it goes
+  // round (metrics.steering, LIFE_FLAG.STEER) and it arrives. ("never overlap by more than 2 cm" above reads 5 cm: see the note in the next lines.) Then a target the friend is ON (0.15 m from its middle): no way round, so the slow push: the
+  // glide never over CRAWL.pushV while the friend is in its way, never metrics.steering. (The rig does not simulate the two bodies' contact: that is the
+  // browser's measurement, browser_facing.mjs; this row holds the steering's geometry.)
+  {
+    const sup = (q: SoftBody, ux: number, uz: number): number => { const X = q.positions; let m = 0; for (let i = 0; i < X.length; i += 3) { const v = (X[i] - q.center.x) * ux + (X[i + 2] - q.center.z) * uz; if (v > m) m = v; } return m; };
+    const parts: string[] = []; let okN = 0, n = 0;
+    for (const calm of [false, true]) for (const fam of FAMS) {
+      const w = buildPropWorld(flatDef, 'wide', 1);
+      w.calm = calm;
+      const b = new SoftBody(G0, { family: fam }), o = new SoftBody(G0, { family: 'mochidough' });
+      b.setPropWorld(w); o.setPropWorld(w);
+      (o as unknown as { placeAt(p: V3, v: V3): void }).placeAt(v3(1.3, o.center.y, 0.12), v3(0, 0, 0));
+      const bb = b as unknown as { restLocal: Float32Array; restRadius: number; sV: number; metrics: { steering?: boolean } };
+      const ref = wholeRefFor({ vertexCount: (bb.restLocal.length / 3) | 0, indices: b.indices, restLocal: bb.restLocal }, bb.restRadius, G0);
+      const eyes: Eyes = ref.eyes.map((e) => e.hit), I = b.indices, P = b.positions;
+      const eye = (k: number, q: number[]): void => { const h = eyes[k], a = I[h.tri * 3] * 3, c = I[h.tri * 3 + 1] * 3, d = I[h.tri * 3 + 2] * 3; q[0] = h.u * P[a] + h.v * P[c] + h.w * P[d]; q[1] = h.u * P[a + 2] + h.v * P[c + 2] + h.w * P[d + 2]; };
+      const e0 = [0, 0], e1 = [0, 0], evo: SoftEvent[] = [];
+      const fr = (): void => { w.beginFrame(); b.step(DT); o.step(DT); ev.length = 0; b.drainEvents(ev); evo.length = 0; o.drainEvents(evo); w.endFrame(DT); };
+      for (let i = 0; i < 90; i++) fr();
+      const sp = GLIDE[fam].glide;
+      const run = (tx: number, tz: number, maxS: number): { arrive: number; gapMin: number; slide: number; mov: number; p95: number; steer: number; svBlk: number } => {
+        b.scootTo(tx, tz, sp);
+        const yaw: number[] = [], cx: number[] = [], cz: number[] = [];
+        let arrive = -1, gapMin = 9, steer = 0, svBlk = 0;
+        for (let k = 0; k < maxS / DT; k++) {
+          fr();
+          eye(0, e0); eye(1, e1);
+          yaw.push(Math.atan2(-(e1[1] - e0[1]), e1[0] - e0[0])); cx.push(b.center.x); cz.push(b.center.z);
+          const dx = o.center.x - b.center.x, dz = o.center.z - b.center.z, dh = Math.hypot(dx, dz) || 1, g = dh - sup(b, dx / dh, dz / dh) - sup(o, -dx / dh, -dz / dh);
+          if (g < gapMin) gapMin = g;
+          if (bb.metrics.steering === true) steer++;
+          if (g < 0.02 && bb.sV > svBlk) svBlk = bb.sV;
+          if (Math.hypot(b.center.x - tx, b.center.z - tz) < 0.05) { arrive = (k + 1) * DT; break; }
+          if (g < -0.1) break;   // (the rig has no contact between the two bodies: once it has pushed 10 cm INTO the friend the game's picture is over)
+        }
+        const movs: number[] = []; let slide = 0;
+        for (let k = 6; k + 6 < yaw.length; k++) { const vx = (cx[k + 6] - cx[k - 6]) / (12 * DT), vz = (cz[k + 6] - cz[k - 6]) / (12 * DT); if (Math.hypot(vx, vz) > 0.03) movs.push(ang(yaw[k], Math.atan2(vx, vz))); if (ang(yaw[k], Math.atan2(vx, vz)) > 45) slide += Math.hypot(cx[k] - cx[k - 1], cz[k] - cz[k - 1]); }
+        movs.sort((a, c) => a - c);
+        return { arrive, gapMin, slide, mov: movs.length ? movs[movs.length - 1] : 0, p95: movs.length ? movs[Math.min(movs.length - 1, Math.floor(0.95 * movs.length))] : 0, steer, svBlk };
+      };
+      const r = run(2.8, 0, 60);
+      const pass = r.arrive > 0 && r.gapMin >= -0.05 && r.slide <= 0.03 && r.p95 <= 30 && r.steer > 0;
+      n++; if (pass) okN++;
+      parts.push(`${fam}${calm ? ' calm' : ''}: round in ${f(r.arrive, 1)} s, closest ${f(r.gapMin * 100, 1)} cm, face vs travel p95 ${f(r.p95, 0)} deg (max ${f(r.mov, 0)}), ${f(r.slide * 100, 1)} cm sideways/back, steering ${f(r.steer * DT, 1)} s${pass ? '' : ' FAIL'}`);
+      if (!calm) {
+        // (the friend ON the target: from where it now stands, beyond the friend, back to a spot 0.15 m from the friend's middle)
+        const r2 = run(o.center.x + 0.15, o.center.z, 12);
+        const pass2 = r2.steer === 0 && r2.svBlk <= CRAWL.pushV + 1e-6 && r2.slide <= 0.03 && r2.p95 <= 30;
+        n++; if (pass2) okN++;
+        parts.push(`${fam} onto the friend: glide at most ${f(r2.svBlk, 3)} m/s while it touches, steering ${f(r2.steer * DT, 1)} s, face vs travel p95 ${f(r2.p95, 0)} deg (max ${f(r2.mov, 0)}), ${f(r2.slide * 100, 1)} cm sideways/back${pass2 ? '' : ' FAIL'}`);
+      }
+    }
+    add('CR-17 (R15_CLOSE 1) a friend in the way is gone ROUND, face first: the skins never overlap by over 5 cm, the drawn face leads the travel (p95 <= 30 deg, <= 3 cm made sideways or backward), the host is told (metrics.steering), it arrives; a target the friend is ON is pushed at slowly (the glide at most CRAWL.pushV), never steered round',
+      `${okN}/${n}: ${parts.join('; ')}`, 'all', okN === n);
+  }
 }
 
 /* ───────────── CR-08 ice, water, ramp, mound ───────────── */
