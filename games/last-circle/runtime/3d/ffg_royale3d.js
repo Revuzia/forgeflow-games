@@ -1273,8 +1273,9 @@ register3d("royale", async function (kernel, content) {
   // driver reset, threw the whole match away. three re-creates every GPU object from its CPU copy on first use
   // (textures from their images, buffers from their arrays, render targets and the shadow map from their
   // descriptions, programs recompile), and the sim never ran while the loop was stopped. So a match picks up where it
-  // was: the card closes, the tier is re-applied, the loop restarts, and a SOLO match comes back paused, exactly as
-  // from a hidden tab (the player resumes it). On the menu or mid-load there is nothing to keep: reload, as before.
+  // was: the card closes, the tier is re-applied, the loop restarts, and a PRACTICE match comes back paused, exactly as
+  // from a hidden tab (the player resumes it); a live match (anything but Practice, hud.canPause) comes back running.
+  // On the menu or mid-load there is nothing to keep: reload, as before.
   function resumable() { return !!W.match && (W.phase === "match" || W.phase === "drop" || W.phase === "over") && !W._starting; }
   kernel.onContextRestored = () => {
     if (!resumable()) { try { location.reload(); } catch (e) {} return; }
@@ -1875,15 +1876,17 @@ register3d("royale", async function (kernel, content) {
     }
   });
 
-  // ── lifecycle: leaving the tab pauses a solo match ──────────────────────────
-  // Hidden tabs stop rAF, so the sim froze anyway — and resumed mid-firefight the
-  // instant the player came back, with no warning. Solo (and practice) now opens
-  // the PAUSED menu on visibilitychange-hidden / pagehide, so coming back is a
-  // RESUME the player chooses. Online the sim must keep running (the host swaps a
-  // silent guest for a bot), and audio.js already mutes on hide (audio.js
-  // visibilitychange) — so net modes get the mute and nothing else.
+  // ── lifecycle: leaving the tab pauses a PRACTICE match only ─────────────────
+  // Practice opens the PAUSED menu on visibilitychange-hidden / pagehide, so coming
+  // back is a RESUME the player chooses. Every other match (Battle Royale, Quick,
+  // friends rooms; offline or online) is live and is NEVER paused (owner
+  // 2026-11-24; hud.canPause is the one rule): it gets audio.js's mute on hide and
+  // nothing else, exactly as online always has. While hidden the browser stops rAF,
+  // so the world simply does not advance; on return the loop carries on from where
+  // it was - the first frame's dt is capped (MAX_FRAME_DT, MAX_STEPS, the
+  // spiral-of-death guard below), so there is no giant catch-up step.
   function pauseForHide() {
-    if (W.net || W.paused) return;
+    if (W.paused || !(hudMod.canPause && hudMod.canPause(W))) return;
     if (W.phase !== "match" && W.phase !== "drop") return;
     if (typeof hudMod.requestPause !== "function") return;
     // requestPause(W, true) only OPENS, but declines while a modal (big map,
