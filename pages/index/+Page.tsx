@@ -42,7 +42,6 @@ export default function HomePage() {
     }
   }, []);
 
-  const popular = useGames({ sort: "popular", limit: 12 }, gamesSeed);
   const all = useGames({ sort: "popular", limit: 100 }, gamesSeed);
   const newest = useGames({ sort: "new", limit: 12 }, gamesSeed);
   const platformers = useGames({ genre: "platformer", limit: 12 }, gamesSeed);
@@ -71,7 +70,7 @@ export default function HomePage() {
   ];
   const bigRows = genreRows.filter((r) => (r.q.data?.length || 0) >= MIN_ROW);
   const shown = new Set<number>(
-    [...(popular.data || []), ...(newest.data || []), ...bigRows.flatMap((r) => r.q.data || [])].map((g) => g.id),
+    [...(newest.data || []), ...bigRows.flatMap((r) => r.q.data || [])].map((g) => g.id),
   );
   const moreGames: Game[] = [];
   for (const r of genreRows) {
@@ -87,17 +86,14 @@ export default function HomePage() {
 
       {/* Game Sections */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-12 py-12">
-        {/* Trending Now = the newest games (owner, 2026-11-24). It used to be "most played", but every
-            play_count is still 0, so that order was arbitrary and old board games led the page. */}
-        {newest.data && newest.data.length > 0 && (
-          <GameCarousel title="Trending Now" games={newest.data} accentColor="#ff3366" viewAllHref="/games?sort=new" />
-        )}
-
-        <GenreTiles games={allGames} />
-
+        {/* New Releases leads the page (owner, 2026-11-24). The "Trending Now" row is removed for now: it
+            sorted by play_count, and every play_count is still 0, so its order was arbitrary. Bring it back
+            (useGames({ sort: "popular" })) once plays are being counted. */}
         {newest.data && newest.data.length > 0 && (
           <GameCarousel title="New Releases" games={newest.data} accentColor="#00ff88" viewAllHref="/games?sort=new" />
         )}
+
+        <GenreTiles games={allGames} />
 
         {/* Between the two discovery rows and the genre rows: a natural content break. Renders nothing until ads are enabled. */}
         <AdSlot slot="homeMid" />
@@ -123,7 +119,7 @@ export default function HomePage() {
         )}
 
         {/* Empty state when no games yet */}
-        {!popular.isLoading && (!popular.data || popular.data.length === 0) && (
+        {!newest.isLoading && (!newest.data || newest.data.length === 0) && (
           <div className="text-center py-20">
             <div className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-brand-blue/20 to-brand-green/20 flex items-center justify-center">
               <svg className="w-12 h-12 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
