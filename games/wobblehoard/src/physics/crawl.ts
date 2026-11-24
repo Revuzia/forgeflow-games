@@ -52,7 +52,7 @@ export const CRAWL_FMAX: Record<string, number> = {
 // of the asked speed while the glide is held (along the face, so it arcs round instead of sliding sideways)
 /** (round 15, R15_FIX F5) how long after a hand's let go the squishy may still start its turn back to its rest facing (frames: 5 s) */
 const PUT_FRAMES = 300;
-export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, yawTau: 0.15, yawMax: 3.5, yawAcc: 15, holdLo: 0.9063, holdHi: 0.9903, arc: 0.5, arcTau: 0.25, friendGap: 0.02, pushV: 0.12, friendOut: 0.12, friendBy: 0.1, friendIn: 0.25, friendOff: 0.03, friendFit: 0.9, yawGap: 0.03, yawTouch: 0.05, yawWalk: 0.4, bend: 0.14, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
+export const CRAWL = { vMin: 0.045, vFull: 0.09, tauIn: 0.25, tauOut: 0.15, tauHeld: 0.04, yawTau: 0.15, yawMax: 3.5, yawAcc: 15, holdLo: 0.9063, holdHi: 0.9903, arc: 0.5, arcTau: 0.25, friendGap: 0.02, friendOut: 0.12, friendBy: 0.1, friendIn: 0.25, friendOff: 0.03, friendFit: 0.9, yawGap: 0.03, yawTouch: 0.05, yawWalk: 0.4, bend: 0.14, leanK: 0.5, leanMax: 0.12, airS: 0.25, gripMin: 0.35, beta: 0.35, on: true };
 const NT = 256, TAU = Math.PI * 2;
 
 /** the private PropWorld state a crawl reads (props.ts: BF = 12 floats per tracked body, [4] the eased grip multiplier) */
@@ -172,7 +172,7 @@ export class Crawl {
     // way becomes the tangent round the friend on its target's side, leaning out while it presses and in while it is clear (it follows the friend's side
     // at the gap), until the friend is beside it (CRAWL.friendBy) or left behind (the gap + CRAWL.friendOut); the forward creep along its face (at the walk's
     // own speed here, only once it faces within 45 deg of that way: it stops, turns, goes) carries it round. A target it cannot stand on (the friend is on it)
-    // has no way round: see the push below. metrics.steering tells the host (LIFE does not count the way round as "no progress"). LIFE's contact approach (<= 0.05 m/s) still touches.
+    // is gone round to its nearest point, where it stops (below). metrics.steering tells the host (LIFE does not count the way round as "no progress"). LIFE's contact approach (<= 0.05 m/s) still touches.
     // gmin: the nearest friend's skin gap on any side (raw), for the turn below.
     let blk = false, stuck = false, wx = hx, wz = hz, gmin = 1;
     // (Between WHOLE squishies only: a cut squishy's pieces walk into each other on purpose (they come back together, a carried piece is held against
@@ -209,11 +209,13 @@ export class Crawl {
         const cr = hx * -nz + hz * nx;   // (the heading's share along the friend's left-hand tangent (-nz, nx))
         const ex = b.stx - o.center.x, ez = b.stz - o.center.z, sum = CRAWL.friendFit * (fdh - sg), far = ex * ex + ez * ez >= sum * sum;   // (far: it could stand on its target beside this friend: the target is at least friendFit (0.9) of the two bodies' reach from the friend's centre)
         if (fresh) this.side = cr >= 0 ? 1 : -1;
-        // (a target it cannot stand on without moving the friend (see far): there is no way round. It goes on straight at
-        // it as a slow, steady PUSH, its face leading: no crawl wave (the wave planted against the friend threw it back each cycle), the glide at most
-        // CRAWL.pushV; the friend is eased aside and it gets where it was going, as it always did. (Stopping there instead cost LIFE its uses at a crowded Home:
-        // probe_life_selfuse SU-06, the Warm Lamp's spot beside a friend, 3 of 4 runs.) LIFE's own blocked rule judges this walk.)
-        if (!far) stuck = true;
+        // (a target it cannot stand on without moving the friend (see far): it goes round to the point nearest its target (the friend's side toward the
+        // target, from whichever side that is) and STOPS there facing it; LIFE's blocked rule ends the walk (near enough still acts). The slow push that
+        // was here (CRAWL.pushV 0.12 or 0.05, no wave) still went backward: browser, Home 3 out, 56 of 62 self-powered samples over 60 degrees were pushes.
+        // LIFE no longer sends a walk to a spot a friend stands on (life/act.ts travelTo takes the free spot beside it), so this is the rare case of a
+        // friend that came to the spot after the walk began.)
+        if (!far) { if (cr < 0.26 && cr > -0.26) stuck = true; else if (!fresh) this.side = cr >= 0 ? 1 : -1; }
+        if (stuck) { /* stopped: its way stays its heading */ }
         else {
           const tx2 = -nz * this.side, tz2 = nx * this.side;
           // (leans out while nearer than the gap + friendOff, in while farther: gently, 0.3 at 5 cm; out harder (35 deg) while it presses. TRIED AND TAKEN
@@ -277,9 +279,8 @@ export class Crawl {
     // have no face to lead with: their glide is as before; nor is a body off the ground, which cannot turn: a floater in a pool glides as before). The glide's speed now is capped at once (a walk retargeted 90 degrees on its way does not run
     // on sideways while it eases out: it stops, turns, goes)
     let kq = 1;
-    if (blk && !stuck) kq = 0;   // (the glide runs straight at the target, through the friend: held while it goes round)
+    if (blk) kq = 0;   // (the glide runs straight at the target, through the friend: held while it goes round, and where it has stopped at it)
     else if (go && free && real && fl > 0.5 && ground) { const ch = (Math.cos(e) - CRAWL.holdLo) / (CRAWL.holdHi - CRAWL.holdLo); kq = ch >= 1 ? 1 : ch <= 0 ? 0 : ch * ch * (3 - 2 * ch); }
-    if (stuck) { const kp = CRAWL.pushV / b.sSpeed; if (kq > kp) kq = kp; }   // (the push: at most pushV, and only once it faces its way)
     let lost = 0;
     if (kq < 1 || this.hold) { b.scootK = kq; this.hold = kq < 1; if (kq < 1 && b.sV > b.sSpeed * kq) { lost = b.sV - b.sSpeed * kq; b.sV = b.sSpeed * kq; } }
     // ... and while the glide is held it creeps FORWARD, along its face, as it turns (a slug turns on the move: it arcs round to its way and leans into it), from
@@ -291,8 +292,10 @@ export class Crawl {
       // while it turns, and the speed the glide gave up is not carried on into it)
       const cf = blk ? (Math.cos(e) - 0.7071) * 3.866 : Math.cos(e) * 1.1547, sf = cf >= 1 ? 1 : cf <= 0 ? 0 : cf * cf * (3 - 2 * cf);
       const vt = stuck ? 0 : b.sSpeed * (1 - kq) * (blk ? 1 : CRAWL.arc) * sf;
-      let vf = stuck || (blk && !this.was) ? 0 : S[11] + lost;
-      vf += (vt - vf) * (1 - Math.exp(-dt / CRAWL.arcTau));
+      // (where it stops at a friend the glide's speed runs out forward over 0.1 s (2-3 cm, inside the gap it stopped at): stopped dead, the wave let go all at
+      // once and the body's middle settled 3 cm back)
+      let vf = blk && !stuck && !this.was ? 0 : S[11] + lost;
+      vf += (vt - vf) * (1 - Math.exp(-dt / (stuck ? 0.1 : CRAWL.arcTau)));
       if (vf > b.sSpeed - b.sV) vf = b.sSpeed - b.sV;   // (with the glide, never faster than the asked speed)
       if (vf < 0.002) vf = 0;
       S[11] = vf;

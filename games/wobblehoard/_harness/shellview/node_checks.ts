@@ -1983,6 +1983,18 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
         !!sw && !!rk && !sw.on && !rk.on && sw.x > 0 && sw.x < W && sw.y > 0 && sw.y < H && rk.x > 0 && rk.x < W && rk.y > 0 && rk.y < H && okOn && onRow?.on === true && r0 < 0.02 && r1 > 0.25 && okOff && r2 < 0.25 * r1,
         `seat x range at rest ${r0.toFixed(3)} m, AUTO on ${r1.toFixed(3)} m, 30 s after off ${r2.toFixed(3)} m; chips ${JSON.stringify([...rows, ...rkRows.filter((r) => r.id === 'rockerboard')].map((r) => [r.id, r.on, Math.round(r.x), Math.round(r.y)]))}`);
       // the hand: a mouse press on the seat takes it (the gesture machine never sees the press), a drag pulls it, the release lets it swing on (AUTO off: it dies down)
+      // (R15_CLOSE F-3, written reason: a squishy on or in front of the seat takes the press itself (later-life.ts grabAt: "the rider takes the press", the
+      // game's own rule), so in every run where the shared timeline had left one there this row read "owned true, seat 0.000 -> -0.000" with the tap line
+      // still the last row's ("took hearth"). The row is about the hand on an EMPTY seat: every squishy on the seat or between it and the camera (within 1.2 m
+      // of the seat's line across the room) is first set on the floor 2.1 m to a side.)
+      { let seatP = -1; if (bound.thing) for (let p = 0; p < bound.count; p++) if (bound.thing[p] === SWING) seatP = p;
+        if (seatP >= 0 && bound.poses) {
+          const sx2 = bound.poses[seatP * 8], sz2 = bound.poses[seatP * 8 + 2];
+          const all2 = [{ b: app.body, off: { x: 0, y: 0, z: 0 } }, ...app.bodies.extras.map((x) => ({ b: x.body, off: x.position }))];
+          let moved2 = 0;
+          for (const { b, off } of all2) if ((Math.abs(b.center.x + off.x - sx2) < 1.2 && b.center.z + off.z > sz2 - 0.6) || (b.metrics.onProp ?? -1) === seatP) { try { b.placeAt?.({ x: sx2 + (moved2 % 2 ? -2.1 : 2.1) - off.x, y: b.center.y, z: 0.4 + 1.2 * (moved2 >> 1) - off.z }, { x: 0, y: 0, z: 0 }); } catch { /* none */ } moved2++; }
+          if (moved2) await stepA(120);
+        } }
       const pt = thingPt(SWING);
       const x0 = seatX();
       if (pt) app.input.pointerDown({ id: 9, x: pt.x, y: pt.y, type: 'mouse', button: 0 });

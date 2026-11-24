@@ -446,12 +446,12 @@ if (sec('drawn')) {
       if (!calm) {
         // (the friend ON the target: from where it now stands, beyond the friend, back to a spot 0.15 m from the friend's middle)
         const r2 = run(o.center.x + 0.15, o.center.z, 12);
-        const pass2 = r2.steer === 0 && r2.svBlk <= CRAWL.pushV + 1e-6 && r2.slide <= 0.03 && r2.p95 <= 30;
+        const pass2 = r2.svBlk <= 1e-6 && r2.gapMin >= -0.05 && r2.slide <= 0.03;   // (after the stop the only moving samples are its settle: the travel made backward is the measure, not a percentile of them)
         n++; if (pass2) okN++;
-        parts.push(`${fam} onto the friend: glide at most ${f(r2.svBlk, 3)} m/s while it touches, steering ${f(r2.steer * DT, 1)} s, face vs travel p95 ${f(r2.p95, 0)} deg (max ${f(r2.mov, 0)}), ${f(r2.slide * 100, 1)} cm sideways/back${pass2 ? '' : ' FAIL'}`);
+        parts.push(`${fam} onto the friend: glide ${f(r2.svBlk, 3)} m/s while it touches, closest ${f(r2.gapMin * 100, 1)} cm, face vs travel p95 ${f(r2.p95, 0)} deg (max ${f(r2.mov, 0)}), ${f(r2.slide * 100, 1)} cm sideways/back${pass2 ? '' : ' FAIL'}`);
       }
     }
-    add('CR-17 (R15_CLOSE 1) a friend in the way is gone ROUND, face first: the skins never overlap by over 5 cm, the drawn face leads the travel (p95 <= 30 deg, <= 3 cm made sideways or backward), the host is told (metrics.steering), it arrives; a target the friend is ON is pushed at slowly (the glide at most CRAWL.pushV), never steered round',
+    add('CR-17 (R15_CLOSE 1) a friend in the way is gone ROUND, face first: the skins never overlap by over 5 cm, the drawn face leads the travel (p95 <= 30 deg, <= 3 cm made sideways or backward), the host is told (metrics.steering), it arrives; a target the friend is ON: it stops at the friend (no glide while they touch)',
       `${okN}/${n}: ${parts.join('; ')}`, 'all', okN === n);
   }
 }

@@ -212,3 +212,74 @@ Scratch: `<scratchpad>/close/` (can be wiped). If this file is all you have: eve
 - Files changed (nothing committed): src/physics/crawl.ts, softbody.ts (metrics.steering), contracts.ts, data/life.ts (LIFE_FLAG.STEER, appended),
   life/act.ts, shell/later-life.ts; _harness/browser_facing.mjs, browser_rooms.mjs, probe_crawl.ts (CR-17), probe_life_selfuse.ts (tall mat),
   shellview/node_checks.ts (ride row start); the after pictures; this report.
+
+## FOLLOW-UP (second brief; everything here is IN THE TREE, tsc clean; nothing committed by me)
+### F-1 the five phone browser_rooms reds (diagnosed by real input; `<scratchpad>/close/rooms_d1..d5.out`, `ROOMS_DBG=1`)
+- Lanternroof overlapping edge chips: PRODUCT, fixed (`src/ui/later-room.ts`: a chip keeps 50 px from every chip placed before it, sliding along its
+  edge). The row now also asserts no chip lies on another. Seen with two chips at once (Rainleaf: (30, 332) and (30, 552)); the exact two-on-one-side case
+  did not recur in the reruns, so the slide itself is NOT yet seen working in a browser.
+- Ripple toss 2.42 vs 2.5 m/s: ROW. The same fling read 2.42, 3.87 and 8.12 m/s in three runs: "fastest" was a 5-frame mean (83 ms) of a toss that lands
+  in about 0.3 s. Now read frame by frame for the first 20 frames (reason at the row; the 2.5 bar unchanged): Rainleaf 7.64, Lanternroof 5.18 m/s.
+  NOT compared with the live build: live has no carry, so there is no "same flick" to make there.
+- Rainleaf pinch-in (3 rows): MIXED. (a) ROW: a pinch IN starts 30 px either side of the row's middle and only the middle and the ends were tested for
+  squishies; a finger started inside a squishy's disc (a carry, no pinch). Corrected (reason at the line). (b) PRODUCT: a finger that lands on a swing seat
+  or a rocker board is the host's hand, so a pinch with one finger on a ride (the Leaf Teeter lies mid-frame in the whole-room view) did not zoom. Fixed:
+  `later-life.ts yieldHand` + `game.ts` (a hand that came down under 300 ms ago and has not moved gives its finger back when a second finger lands; a
+  second finger does not take a ride while the first is on the empty scene). After both: Rainleaf phone 11 ok / 0 FAIL in one run. NOT PROVEN which of the
+  two was the cause there; one pinch in three still did nothing in the traces (the row retries), cause not found.
+- The trip tap: the harness now waits for a still Go button and taps again if the trip has not begun (a tap on the sliding sheet missed in 2 of 5 runs).
+### F-2 a friend ON the target (in the tree; measured so far: probe_crawl CR-17 12/12, `--su4-only` ALL PASSED)
+- LIFE (`src/life/act.ts travelTo`): a walk whose spot another whole squishy stands on takes the free spot BESIDE it (their radii + 8 cm out, on the line
+  from the friend through the asked spot), only where that is a spot: at most 0.75 m from the asked one, clear of every other squishy and every thing.
+  Its use counts on arrival there as before (LIFE's arrival is at the walk's own target).
+- Physics (`crawl.ts`): NO PUSH any more. A friend that is on the target anyway (it came later, or no free spot): the walker goes round to the nearest
+  point and stops facing it; LIFE's blocked rule ends the walk (near enough still acts).
+- First version of the free spot (two passes, no limits) sent a napper 3 m off onto the Keepsake Shelf and lost SU-06 wide (1 of 4); the limits fixed it.
+### F-4 SU-05 flip-flop: the SAME single cabin flip-flop the live build has
+- Live source (`git archive 6c495e9c1`, its own full probe_life_selfuse, `<scratchpad>/close/su_live.out`): 34 ok, 1 FAIL = SU-05, Hearthlog, Wisplet at
+  77 s: 4 switches (ZONE > NOTICE > BASK > NOTICE > USE) with 0.079 m moved.
+- Tree (chain 3): 38 ok, 1 FAIL = SU-05, Hearthlog, Dollop at 1 s: 4 switches with 0.064 m. One flip-flop, the same place, the same count (4 against the
+  bar of 3), another squishy and moment. Known issue, not new. (The wider-berth step had THREE, at Frostbell and Cloudloft: that was new, and is taken back.)
+### F-5 the "away" pictures were right
+- Logged at the shot (`<scratchpad>/close/shots_dbg.out`): away, mid-walk: physics yaw 179 deg, walking at 0.26 m/s. The squishy IS turned away; the two
+  slits are its eyes seen THROUGH the translucent jelly from behind. The final chain also takes the set with an opaque family (firmsilicone).
+### F-3 node_checks: the rows that flipped today, and why (as far as found)
+| run | count | red rows | cause |
+|---|---|---|---|
+| committed crawl.ts (push, d0890791c) | 182 | D-95 hand on the swing seat; SH-22 5 out "awake units under the cap" (2 rows); N1 PLAY_WITH MED | not traced |
+| chain 2 (wider berth) | 184 | "Go play with... a ride" lift; "after the lift AUTO swings it" | TRACED: the timeline left the play squishy 4.6 m from the swing; a free 0.22 m/s walk, the row's 10 s ran out. Rig fixed: over 2 m away it starts from the row's own floor spot |
+| after that fix | 185 | N1 PLAY_WITH MED (Home, the Warm Lamp: the asked squishy's walk had not started in 8 s) | not traced; the row that is red on live |
+| chain 3 | 186 | none | |
+- Every row of this probe runs on ONE shared timeline: each row inherits where the rows before left three squishies, so any change in a walk moves which
+  rows meet a crowded or far start. Two rows are now independent of it (the ride lift). D-95, SH-22 (2) and N1 are NOT made deterministic: not done.
+  The final chain runs node_checks three times on the same code (same code = same timeline = same result each time; the flip is between code versions).
+
+### FOLLOW-UP FINAL (chain 4, the code in the tree; `<scratchpad>/close/end4/*.out`)
+- tsc clean. probe_crawl 18/18. probe_playground 74/74. probe_float 16/16. probe_partycut 27/27. probe_carry 13/13. probe_gestures 176/176. probe_app
+  188/188. vite build exit 0: first-play 466 KB gzip, T1 2152.1 KB of 2250.
+- node_checks: 185/186 three times (the same red each time: D-95 "the hand on the seat"). TRACED: a squishy standing between the camera and the swing
+  seat takes the press itself (the game's own rule: the rider takes the press), so the row depended on where the rows before left the party. Rig fixed
+  (reason at the row: squishies on the seat or in the line to it are set aside first). After it: **186/186 three times**. (A first attempt that moved the
+  rig's camera broke two later rows and was taken out.) SH-22 (2 rows) and N1 PLAY_WITH MED, red only with the committed push crawl / one earlier state,
+  are NOT made independent: not done.
+- probe_life_selfuse FULL: 38 ok, 1 FAIL. SU-04 and SU-06 (4/4) GREEN. SU-05 has TWO flip-flops: Hearthlog Dollop at 1 s (the cabin one, as live's single
+  one) and Frostbell Puddlo at 281 s (BASK > HOLDON > BASK > WANDER > COMEBACK, 0.7 cm): the second is NEW with this code (live: 1). Not diagnosed.
+- browser_facing, 3 out, 60 s a section, self-powered: median / p90 / worst deg, share over 90 deg (`browser_facing_close_f4.log`, Home again in
+  `..._close_f4b.log`):
+  | section | desk | phone |
+  |---|---|---|
+  | Home, run 1 | 5.0 / 33.9 / 174, 1.6 % | 3.9 / 13.3 / 102, 0.2 % |
+  | Home, run 2 | 5.2 / 17.6 / 150, 0.3 % | 3.8 / 16.5 / 139, 0.1 % |
+  | Home Calm, run 1 | 6.5 / 12.1 / 104, 0.4 % | 2.7 / 8.0 / 23, 0 % |
+  | Home Calm, run 2 | 5.0 / 15.5 / 170, 1.5 % | 6.4 / 11.8 / 179, 4.4 % |
+  | Ripple | 2.4 / 10.5 / 94, 0.2 % | 5.4 / 32.4 / 144, 0.8 % |
+  | Frostbell | 2.2 / 10.2 / 60, 0 % | 1.1 / 13.1 / 170, 4.2 % |
+  Ripple phone p90 49 -> 32 and Home Calm phone 30 -> 8 / 12 with the push gone. NOT DIAGNOSED: what is left at Ripple phone (p90 32), the 4.4 % of Home
+  Calm phone run 2, and Frostbell phone's 27 samples over 90 (in chain 3 that was one squishy sliding back on the ice; not re-traced on this code).
+- browser_rooms both frames: DESK 71 ok / 0 FAIL. PHONE 66 ok / 5 FAIL in the chain: Rainleaf 4 rows (one cause: the pinch IN) and Cloudloft's whole-room
+  view turned. CAUSE FOUND AFTER: a pinch IN's inner starting points lay on a ride's AUTO chip (a DOM button): the canvas saw one finger. Row corrected
+  (every starting point tested against the DOM, reason at the line). Rerun of Rainleaf + Cloudloft on the phone: 20 ok / 1 FAIL, every pinch zooms.
+  The 1: Rainleaf's chip row once read "off screen 1, chips none" (the row counts a middle outside the frame, the game shows a chip from 10 px outside):
+  not looked into. THE FULL PHONE RUN WAS NOT REPEATED after this last row correction. PRODUCT, still open: a pinch with a finger on an AUTO chip (DOM) is
+  not a pinch (R15_FIX F7).
+- Pictures: `shots_facing/after_*` retaken, jellygel and firmsilicone (opaque: the turn away shows without eyes through the body).

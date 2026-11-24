@@ -2170,8 +2170,24 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     endSteady();
     return any;
   }
-  function grabAt(id: number, x: number, y: number): boolean {
+  /** (R15_CLOSE: a PINCH with a finger on a ride. A finger that landed on a swing seat or a rocker board was the host's hand; the second finger of a pinch
+   *  then reached the gesture machine alone, and nothing zoomed (Rainleaf on a phone: the Leaf Teeter lies in the middle of the whole-room view; measured, the
+   *  pinch there did nothing 60 times). A hand on a ride that has not moved yet gives its finger back when another finger comes down: yieldHand lets go of the
+   *  ride and returns that finger (the caller hands it to the gesture machine: two fingers, a pinch); and a finger that comes down while another is already
+   *  on the scene does not take a ride (noRide).) */
+  const YIELD_MS = 300;
+  function yieldHand(): { id: number; x: number; y: number } | null {
+    // (only a hand that has just come down, YIELD_MS: a seat held still on purpose stays held while another finger plays)
+    for (let j = 0; j < 4; j++) if (handOn[j] === 1 && handMoved[j] === 0 && game.clock.now() - handT[j] <= YIELD_MS) {
+      handOn[j] = 0;
+      try { world?.releaseProp(handProp[j]); } catch (e) { report(e); }
+      return { id: handId[j], x: handX[j], y: handY[j] };
+    }
+    return null;
+  }
+  function grabAt(id: number, x: number, y: number, noRide = false): boolean {
     if (hands.grab(id, x, y)) { playerTouchT = game.simTime; return true; }   // (round 14, CARRY: a second finger on another squishy carries that one)
+    if (noRide) return false;
     const W = world;
     if (!W || s.quiet || game.tool !== 'hand' || handSlot(id) >= 0) return false;   // (D-97: also while floating)
     const j = handFree();
@@ -2562,7 +2578,7 @@ export function createLifeHost(game: Game, deps: LifeHostDeps): LifeHostApi {
     noteEvent,
     pressAt,
     releaseAt,
-    grabAt,
+    grabAt, yieldHand,
     dragAt,
     dropAt,
     dropAll,

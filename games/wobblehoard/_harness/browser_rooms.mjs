@@ -88,7 +88,16 @@ try {
         if (x0 < 12 || x1 > W - 12) continue;
         const clear = (x) => bs.every((b) => Math.hypot(b.x - x, b.y - y) > b.r + 26);
         if (!clear(x0) || !clear(x1) || !clear((x0 + x1) / 2)) continue;
-        const onCanvas = await page.evaluate(([a, b, yy]) => [a, b].every((x) => document.elementFromPoint(x, yy)?.tagName === 'CANVAS'), [x0, x1, y]);
+        // (R15_CLOSE 1, RE-SPECIFIED with its reason: a pinch IN starts with the fingers 30 px either side of the row's middle; only the middle and the ends
+        // were tested. At Rainleaf on a phone, after the first notch, a squishy stood 31 px from a starting finger (inside its 35 px disc): that finger began a
+        // carry, and 60 pinches there moved nothing, while the same pinch at 17 other spots of the frame zoomed to the close view (traced). Every point a
+        // finger of either pinch starts on is now clear of every squishy.)
+        const mid0 = (x0 + x1) / 2;
+        if (![mid0 - 30, mid0 + 30, mid0 - 110, mid0 + 110].every((x) => bs.every((b) => Math.hypot(b.x - x, b.y - y) > b.r + 14))) continue;
+        // (R15_CLOSE: and every starting point is on the canvas: a pinch IN's inner points (30 px either side) were not tested, and at Cloudloft on a phone one
+        // lay on the Kite Swing's AUTO chip (a DOM button): the canvas saw ONE finger, the published one-finger turn, and the next row's whole-room view was
+        // turned (R15_FIX F7 found the same by hand))
+        const onCanvas = await page.evaluate(([a, b, yy]) => [a, b, (a + b) / 2 - 30, (a + b) / 2 + 30].every((x) => [0, -9, 9].every((dy) => document.elementFromPoint(x, yy + dy)?.tagName === 'CANVAS')), [x0, x1, y]);
         if (onCanvas) return { x0, x1, y };
       }
       return null;
@@ -106,11 +115,30 @@ try {
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp([[mid - a0, row.y]]) });
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp([[mid - a0, row.y], [mid + a0, row.y]]) });
           for (let i = 1; i <= 6; i++) { const a = a0 + ((a1 - a0) * i) / 6; await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: tp([[mid - a, row.y], [mid + a, row.y]]) }); await frames(1); }
+          if (process.env.ROOMS_DBG && k < 4) console.log('dbg pinch mid', dir, k, JSON.stringify({ row, st: await page.evaluate(() => { const L = window.__WH__.life(); const m = window.__WH__.shell.matInfo(); return { auto: L.auto, tap: L.tapWhy ?? L.tap ?? null, fingers: m.bodies.map((b) => [b.fingers, b.carried]), quiet: L.quiet, keys: Object.keys(L).slice(0, 40) }; }) }));
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         }
         await frames(24);
+        if (process.env.ROOMS_DBG && touch && k < 3) console.log('dbg pinch', dir, k, JSON.stringify({ before: v && v.map(r2), after: (await view())?.map(r2) }));
       }
       const v = await view();
+      if (process.env.ROOMS_DBG && touch && !(v && done(v))) {
+        // (diagnosis: the same pinch at a grid of spots: which move the view)
+        const bd = await band(), out = [];
+        for (const fy of [0.15, 0.3, 0.45, 0.6, 0.75, 0.9]) for (const fx of [0.3, 0.5, 0.7]) {
+          const y = bd.top + (bd.bottom - bd.top) * fy, mid = W * fx, a0 = dir > 0 ? 110 : 30, a1 = dir > 0 ? 30 : 110, v0 = await view();
+          const el = await page.evaluate(([a, b, yy]) => [a, b].map((x) => document.elementFromPoint(x, yy)?.tagName + '.' + (document.elementFromPoint(x, yy)?.className ?? '')), [mid - a0, mid + a0, y]);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp([[mid - a0, y]]) });
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp([[mid - a0, y], [mid + a0, y]]) });
+          for (let i = 1; i <= 6; i++) { const a = a0 + ((a1 - a0) * i) / 6; await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: tp([[mid - a, y], [mid + a, y]]) }); await frames(1); }
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await frames(24);
+          const v1 = await view();
+          out.push([fx, fy, Math.round(y), el.join('|').slice(0, 60), v0 && r2(v0[5]), v1 && r2(v1[5]), v1 && r2(v1[2])]);
+        }
+        console.log('dbg pinch grid', JSON.stringify(out), 'bodies', JSON.stringify((await bodies()).map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.r)])));
+        await shot('dbg_pinchfail');
+      }
       return !!v && done(v);
     };
     /** the lift's direction on screen: up when the frame has 380 px above the squishy, else toward the side with the most room (a player pulls a squishy that
@@ -278,7 +306,19 @@ try {
         // (R15_CLOSE 5, RE-SPECIFIED with its reason: on a 390 x 844 phone the Places sheet scrolls; the Go buttons of the fourth place on lie below its fold,
         // and the tap went to where the button would be without scrolling (go true, arrived false: Frostbell, Rainleaf, Lanternroof, Cloudloft on every phone
         // run, while the first three places arrived). A player scrolls the sheet to the place: the button is scrolled into view, then tapped.)
-        for (let k = 0; k < 24 && !go; k++) { await sleep(400); await page.evaluate((q) => document.querySelector(q)?.scrollIntoView({ block: 'center' }), `.jn-go[data-place="${place}"]`); await sleep(150); go = await clickSel(`.jn-go[data-place="${place}"]`); }
+        // (the sheet slides in: the button is tapped once it stands still (two reads 150 ms apart agree), and the tap is made again if the trip has not
+        // begun 0.9 s later: a tap on a button still moving went beside it, "go true, arrived false", in one run of three)
+        const started = () => page.evaluate((ix) => { const L = window.__WH__.life(); return !!L && (L.travelling === true || L.place === ix); }, IDX[place]);
+        for (let k = 0; k < 24 && !(go && (await started())); k++) {
+          await sleep(400);
+          const q = `.jn-go[data-place="${place}"]`;
+          await page.evaluate((qq) => document.querySelector(qq)?.scrollIntoView({ block: 'center', behavior: 'instant' }), q);
+          let b0 = await boxOf(q), still = false;
+          for (let j = 0; j < 12 && !still; j++) { await sleep(150); const b1 = await boxOf(q); still = !!b0 && !!b1 && Math.abs(b1.x - b0.x) + Math.abs(b1.y - b0.y) < 1 && b1.y > 60 && b1.y < H - 30; b0 = b1; }
+          if (!still) continue;
+          go = (await clickSel(q)) || go;
+          await sleep(900);
+        }
         if (!go) console.log('debug sheet', JSON.stringify(await page.evaluate(() => { const d = document.getElementById('wh-travel'); return { sheet: !!d, cards: d ? [...d.querySelectorAll('.jn-card')].map((c) => `${c.dataset.place}:${c.dataset.open}`) : null, go: d ? [...d.querySelectorAll('.jn-go')].map((b) => `${b.dataset.place}:${b.disabled}`) : null, places: !!document.querySelector('.dock-places'), reasons: window.__WH__.shell.pauseReasons(), live: window.__liveLog.slice(-3) }; })));
         await page.evaluate(() => window.__WH__.pause());
         let arrived = false;
@@ -433,8 +473,8 @@ try {
           const said = await page.evaluate((n) => window.__liveLog.slice(n).filter((t) => /^Looking at /.test(t)), live0);
           focus = { hitEl, said, moved: vE && vF ? r2(Math.hypot(vF[0] - vE[0], vF[1] - vE[1])) : 0, chipsAfter: ch2.map((c) => c.label), onScreen: bF.filter((b) => b.x > 0 && b.x < W && b.y > bd.top && b.y < bd.bottom).length, gone: !ch2.some((c) => c.label === ch[0].label) };
         }
-        check(`${label}: a squishy outside the picture is hinted by a chip at the frame's edge (44 px, inside the frame, named); a ${touch ? 'tap' : 'click'} on it brings the camera to that squishy ("Looking at ...")`,
-          offNow > 0 && ch.length >= 1 && ch.every((c) => c.w >= 44 && c.h >= 44 && c.x > 20 && c.x < W - 20 && c.y > bd.top && c.y < bd.bottom && /^Go to /.test(c.label ?? '')) && !!focus && focus.said.length === 1 && focus.moved > 0.3 && focus.gone,
+        check(`${label}: a squishy outside the picture is hinted by a chip at the frame's edge (44 px, inside the frame, named, no chip on another); a ${touch ? 'tap' : 'click'} on it brings the camera to that squishy ("Looking at ...")`,
+          offNow > 0 && ch.length >= 1 && ch.every((c, a) => ch.every((d, b) => a === b || Math.abs(c.x - d.x) >= 44 || Math.abs(c.y - d.y) >= 44)) && ch.every((c) => c.w >= 44 && c.h >= 44 && c.x > 20 && c.x < W - 20 && c.y > bd.top && c.y < bd.bottom && /^Go to /.test(c.label ?? '')) && !!focus && focus.said.length === 1 && focus.moved > 0.3 && focus.gone,
           JSON.stringify({ view: vE && vE.slice(0, 3).map(r2), offScreen: offNow, chips: ch.map((c) => [c.label, Math.round(c.x), Math.round(c.y)]), focus }));
         await zoomBy(1, (v) => v[5] >= 0.93 * own, 30);
         await step(1);
@@ -453,7 +493,11 @@ try {
         const cT = await carryTo(iPress, tossFrom[0], tossFrom[1], 0.6, -90);
         const carried = cT.carried, stepPx = 90, iT = cT.who ?? iPress;
         let top = 0, far = 0, vMax = 0, last = (await bodies())[iT].w;
-        for (let k = 0; k < 60; k++) {
+        // (R15_CLOSE 1, RE-SPECIFIED with its reason: "fastest" was read over 5 frames at a time (83 ms). A phone's toss lands in about 0.3 s in these rooms, so
+        // the 5-frame mean depended on where the window fell: the same fling read 2.42, 3.87 and 8.12 m/s in three runs (traced). The first 20 frames after
+        // the let go are now read frame by frame (the speed the toss really has); the 2.5 m/s bar is unchanged.)
+        for (let k = 0; k < 20; k++) { await frames(1); const w = (await bodies())[iT].w; vMax = Math.max(vMax, Math.hypot(w[0] - last[0], w[1] - last[1], w[2] - last[2]) * 60); last = w; top = Math.max(top, w[1]); far = Math.max(far, home ? Math.hypot(w[0] - cx, w[2] - cz) - hx : Math.max(Math.abs(w[0] - cx) - hx, Math.abs(w[2] - cz) - hz)); }
+        for (let k = 0; k < 56; k++) {
           await frames(5);
           const w = (await bodies())[iT].w;
           if (process.env.ROOMS_DBG && k % 4 === 3) console.log('dbg toss', k, JSON.stringify({ w: w.map(r2), out: r2(home ? Math.hypot(w[0] - cx, w[2] - cz) - hx : 0), v: r2(Math.hypot(w[0] - last[0], w[1] - last[1], w[2] - last[2]) / (5 / 60)) }));

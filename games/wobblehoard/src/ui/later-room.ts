@@ -21,7 +21,7 @@ export interface RoomHintOpts {
   /** something covers the play view (later-play's own rule) */
   covered(): boolean;
 }
-const MAX = 5, EDGE = 30, HALF = 22;
+const MAX = 5, EDGE = 30, HALF = 22, GAP = 2 * HALF + 6;
 
 export function attachRoomHints(o: RoomHintOpts): RoomHints {
   const g = o.game;
@@ -99,6 +99,21 @@ export function attachRoomHints(o: RoomHintOpts): RoomHints {
         const side = tx <= ty;   // on the left or right edge
         if (side) { const up = ry0 >= y0 && (py - ry0 <= ry1 - py || ry1 > y1); py = Math.round(up ? ry0 : Math.min(y1, ry1)); }
         else { const lf = rx0 >= x0 && (px - rx0 <= rx1 - px || rx1 > x1); px = Math.round(lf ? rx0 : Math.min(x1, rx1)); }
+      }
+      // (R15_CLOSE: two squishies off the same side had chips on top of each other (Lanternroof on a phone: (360, 391) and (360, 405); a tap on the one under
+      // was taken by the one over it: "Looking at" the wrong squishy). A chip keeps GAP px from every chip placed before it this tick: it slides along its
+      // edge, away from the other (the other way where the band ends).)
+      const side2 = tx <= ty;
+      for (let pass = 0; pass < MAX; pass++) {
+        let moved = false;
+        for (let j = 0; j < k; j++) {
+          const e = chips[j];
+          if (Math.abs(px - e.x) >= GAP || Math.abs(py - e.y) >= GAP) continue;
+          if (side2) { let ny = py >= e.y ? e.y + GAP : e.y - GAP; if (ny > y1) ny = e.y - GAP; else if (ny < y0) ny = e.y + GAP; py = ny; }
+          else { let nx = px >= e.x ? e.x + GAP : e.x - GAP; if (nx > x1) nx = e.x - GAP; else if (nx < x0) nx = e.x + GAP; px = nx; }
+          moved = true;
+        }
+        if (!moved) break;
       }
       const c = chips[k++];
       if (c.species !== species) { c.species = species; c.face.replaceChildren(speciesIcon(species, { cls: 'rm-icon' })); }

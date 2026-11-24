@@ -265,13 +265,42 @@ export { EMOTE };
 
 /* ───────────────────────────── travel (SCOOT with the gait overlay, 5.1) ───────────────────────────── */
 
+/** (round 15) how far from the asked spot the free spot beside a friend may lie (m) */
+const SPOT_SHIFT = 0.75;
 /** Start travelling character i to (w.f[F.X], w.f[F.Z]) at its gait's glide speed (contact = 1: the contact approach at 0.04 m/s). Asks the
  *  motion gate (with `allowanceMilli` of ride allowance); false = no token now (nothing emitted). */
 export function travelTo(w: LifeWorld, s: LifeSnapshot, out: LifeIntents, i: number, contact: number, allowanceMilli: number): boolean {
   const tb = w.f[F.NOW];
   if (!motionAllowed(w, s, i)) return false;
   if (!gateStart(w, s, i, 0, allowanceMilli)) return false;
-  const tx = w.f[F.X], tz = w.f[F.Z];
+  let tx = w.f[F.X], tz = w.f[F.Z];
+  // (round 15, R15_CLOSE: A SPOT A FRIEND STANDS ON. A walk whose spot another whole squishy occupies (the two could not both stand there: the spot nearer the
+  // friend's middle than 0.8 of their two radii) used to push the friend off it, and the pusher was thrown back each step (the owner: "they aren't facing the
+  // direction they walk"). It takes the free spot BESIDE the friend instead: on the line from the friend's middle through the asked spot (toward itself when
+  // the spot is the friend's own middle), their radii + 8 cm out, so the two stand side by side at the thing; physics takes it round the friend to it. The
+  // contact approach (a touch on purpose) keeps its spot.)
+  if (!contact && w.ki[i] === 0) {
+    let jj = -1;
+    for (let j = 0; j < s.n; j++) {
+      if (j === i || !w.ac[j] || w.ki[j] !== 0 || (s.flags[j] & (LIFE_FLAG.AIRBORNE | LIFE_FLAG.CARRIED)) !== 0) continue;
+      const ex = tx - s.x[j], ez = tz - s.z[j], lim = 0.8 * (s.r[i] + s.r[j]);
+      if (ex * ex + ez * ez < lim * lim) { jj = j; break; }
+    }
+    if (jj >= 0) {
+      let ux = tx - s.x[jj], uz = tz - s.z[jj], ul = Math.sqrt(ux * ux + uz * uz);
+      if (ul < 0.05) { ux = s.x[i] - s.x[jj]; uz = s.z[i] - s.z[jj]; ul = Math.sqrt(ux * ux + uz * uz); }
+      if (ul > 1e-4) {
+        const R = s.r[i] + s.r[jj] + 0.08, nx = s.x[jj] + (ux / ul) * R, nz = s.z[jj] + (uz / ul) * R;
+        // (taken only where it is a spot: at most SPOT_SHIFT from the asked one, clear of every other squishy and of every thing with a body; else the asked
+        // spot stays and physics stops the walker at the friend: LIFE's blocked rule decides, near enough still acts)
+        let free = (nx - tx) * (nx - tx) + (nz - tz) * (nz - tz) <= SPOT_SHIFT * SPOT_SHIFT;
+        for (let j = 0; free && j < s.n; j++) { if (j === i || j === jj || !w.ac[j] || w.ki[j] !== 0) continue; const ex = nx - s.x[j], ez = nz - s.z[j], lim = 0.8 * (s.r[i] + s.r[j]); if (ex * ex + ez * ez < lim * lim) free = false; }
+        for (let k = 0; free && k < w.nTD; k++) { if (w.tM[k] === 0) continue; const ex = nx - w.tX[k], ez = nz - w.tZ[k], lim = w.tS[k] + 0.6 * s.r[i]; if (ex * ex + ez * ez < lim * lim) free = false; }
+        if (free) { tx = nx; tz = nz; }
+      }
+    }
+  }
+  w.f[F.X] = tx; w.f[F.Z] = tz;
   let sp = contact ? 40 : (G_GLIDE[w.fa[i]] * 1000) | 0;
   if (!contact && w.zC[i] > 0) sp = (sp * COLD_SPEED[w.fa[i]]) | 0;
   if (sp < 40) sp = 40;

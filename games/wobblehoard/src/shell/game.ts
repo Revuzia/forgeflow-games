@@ -739,7 +739,14 @@ export function createGame(deps: GameDeps): Game {
           return;
         }
       }
-      if (life !== null && (p.button ?? 0) === 0 && life.grabAt?.(p.id, p.x, p.y)) { emit('interaction'); return; }   // PLAYGROUND D-95: the hand takes a swing seat or a rocker board
+      // (R15_CLOSE: two fingers are a pinch even when one of them lies on a ride: see later-life.ts yieldHand)
+      let twoFingers = false;
+      if (life !== null && p.type === 'touch' && (p.button ?? 0) === 0) {
+        const y = life.yieldHand?.();
+        if (y) gestures.pointerDown({ id: y.id, x: y.x, y: y.y, t: clock.eventTime(p.t), button: 0, type: 'touch' });
+        twoFingers = y != null || (gestures.activeCount() > 0 && !driver.touch.contact());   // (a finger already on the empty scene: this one is the pinch's second; a finger on a squishy leaves the ride to the other hand)
+      }
+      if (life !== null && (p.button ?? 0) === 0 && life.grabAt?.(p.id, p.x, p.y, twoFingers)) { emit('interaction'); return; }   // PLAYGROUND D-95: the hand takes a swing seat or a rocker board
       if (life !== null && (p.button ?? 0) === 0) life.pressAt(p.id, p.x, p.y);   // PLAYGROUND: a still tap may land on a thing (the host decides at the release)
       gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0, type: p.type, ...shiftOf(p) });
     },

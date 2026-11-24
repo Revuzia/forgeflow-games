@@ -138,7 +138,7 @@ const pooled = (res) => {   // every squishy's walk samples together (a section'
   const o45 = (a) => (a.length ? r1((100 * a.filter((x) => x > 45).length) / a.length) : NaN);
   const F = res.flatMap((r) => r.raw.free);
   const FT = res.flatMap((r) => r.raw.freeT), FC = res.flatMap((r) => r.raw.freeC);
-  return { walks: all.length, startMed: r1(pct(starts, 0.5)), n: W.length, med: r1(pct(W, 0.5)), p90: r1(pct(W, 0.9)), max: W.length ? r1(Math.max(...W)) : NaN, over45: o45(W), nFree: F.length, freeMed: r1(pct(F, 0.5)), free90: r1(pct(F, 0.9)), freeMax: F.length ? r1(Math.max(...F)) : NaN, freeOver60: F.filter((x) => x > 60).length, clear: { n: FC.length, med: r1(pct(FC, 0.5)), p90: r1(pct(FC, 0.9)), max: FC.length ? r1(Math.max(...FC)) : NaN, over60: FC.filter((x) => x > 60).length }, touched: { n: FT.length, med: r1(pct(FT, 0.5)), p90: r1(pct(FT, 0.9)), max: FT.length ? r1(Math.max(...FT)) : NaN, over60: FT.filter((x) => x > 60).length }, percMed: r1(pct(P, 0.5)), perc90: r1(pct(P, 0.9)), percOver45: o45(P), wayMed: r1(pct(Y, 0.5)), way90: r1(pct(Y, 0.9)), wayOver45: o45(Y), pushedPct: W.length ? r1((100 * pu) / W.length) : NaN };
+  return { walks: all.length, startMed: r1(pct(starts, 0.5)), n: W.length, med: r1(pct(W, 0.5)), p90: r1(pct(W, 0.9)), max: W.length ? r1(Math.max(...W)) : NaN, over45: o45(W), nFree: F.length, freeMed: r1(pct(F, 0.5)), free90: r1(pct(F, 0.9)), freeMax: F.length ? r1(Math.max(...F)) : NaN, freeOver60: F.filter((x) => x > 60).length, freeOver90: F.filter((x) => x > 90).length, freeOver90Pct: F.length ? r1((100 * F.filter((x) => x > 90).length) / F.length) : NaN, clear: { n: FC.length, med: r1(pct(FC, 0.5)), p90: r1(pct(FC, 0.9)), max: FC.length ? r1(Math.max(...FC)) : NaN, over60: FC.filter((x) => x > 60).length }, touched: { n: FT.length, med: r1(pct(FT, 0.5)), p90: r1(pct(FT, 0.9)), max: FT.length ? r1(Math.max(...FT)) : NaN, over60: FT.filter((x) => x > 60).length }, percMed: r1(pct(P, 0.5)), perc90: r1(pct(P, 0.9)), percOver45: o45(P), wayMed: r1(pct(Y, 0.5)), way90: r1(pct(Y, 0.9)), wayOver45: o45(Y), pushedPct: W.length ? r1((100 * pu) / W.length) : NaN };
 };
 
 const report = { tag: TAG, frames: {} };
@@ -317,6 +317,7 @@ try {
         }, [dx, dz]);
         await shot(`${fam}${calm ? '_calm' : ''}_${nm}_a_start`);
         await page.evaluate(() => window.__WH__.step(1 / 60, 57));
+        log(frame, 'shot', nm, calm ? 'calm' : '', JSON.stringify(await page.evaluate(() => { const w = window.__PW__, bd = w.bodies.find((b) => !b.chunk) ?? w.bodies[0], q = bd.qr; return { yawDeg: Math.round(Math.atan2(2 * (q[0] * q[2] + q[3] * q[1]), 1 - 2 * (q[0] * q[0] + q[1] * q[1])) * 57.3), scootOn: bd.scootOn, sV: +bd.sV.toFixed(2), asleep: bd.asleep, held: bd.heldF, c: [+bd.center.x.toFixed(2), +bd.center.z.toFixed(2)], tgt: [+bd.stx.toFixed(2), +bd.stz.toFixed(2)], bodies: w.bodies.length }; })));
         await shot(`${fam}${calm ? '_calm' : ''}_${nm}_b_mid`);
         await page.evaluate(() => { const w = window.__PW__, bd = w.bodies.find((b) => !b.chunk) ?? w.bodies[0]; bd.scootTo(NaN, 0, 0); window.__WH__.step(1 / 60, 120); });
       }

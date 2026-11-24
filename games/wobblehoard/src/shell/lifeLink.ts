@@ -30,7 +30,9 @@ export interface LifeHostLike {
   releaseAt(id: number, x: number, y: number): boolean;
   /** D-95 (revised): a Hand press on a hinge ride's seat or board (the swing, the rocker) with no squishy in front: the hand takes it (physics grabProp).
    *  true = the press is the host's until dropAt (the gesture machine never sees it, so it never turns the view) */
-  grabAt?(id: number, x: number, y: number): boolean;
+  grabAt?(id: number, x: number, y: number, noRide?: boolean): boolean;
+  /** (round 15) a hand resting on a ride gives its finger back (a second finger came down: a pinch) */
+  yieldHand?(): { id: number; x: number; y: number } | null;
   /** the pointer of a held seat or board moved: the hand pulls or pushes it; true when `id` is the host's */
   dragAt?(id: number, x: number, y: number): boolean;
   /** the pointer of a held seat or board was let go (x, y NaN: a cancel): it swings on from the hand's motion; true when it was the host's */
