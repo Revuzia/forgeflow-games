@@ -1,0 +1,11 @@
+{
+  "name": "dewpoint",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DEWPOINT - a 3D browser puzzle-platformer about a drop of water. No build step, no dependencies.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run.js",
+    "serve": "python -m http.server 8080"
+  }
+}

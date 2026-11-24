@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>DEWPOINT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="DEWPOINT - a 3D puzzle-platformer. Play as a drop of water, a live coal or a thumb of clay, and change state to get through a storybook kiln works.">
+  <meta name="theme-color" content="#73bfe0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 68'%3E%3Cpath d='M32 5C42 21 55 31 55 43a23 22 0 0 1-46 0C9 31 22 21 32 5Z' fill='%232fb4f0' stroke='%2312303f' stroke-width='4' stroke-linejoin='round'/%3E%3Cellipse cx='24.500' cy='44' rx='6' ry='7.500' fill='%23fff' stroke='%2312303f' stroke-width='2.500'/%3E%3Cellipse cx='40.500' cy='44' rx='6' ry='7.500' fill='%23fff' stroke='%2312303f' stroke-width='2.500'/%3E%3Cellipse cx='26' cy='45.500' rx='3' ry='4.200' fill='%230b1c44'/%3E%3Cellipse cx='42' cy='45.500' rx='3' ry='4.200' fill='%230b1c44'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="src/ui/ui.css">
+</head>
+<body>
+  <!-- ForgeFlow shared control layer (pipeline/templates/shared/game_controls.js): the fullscreen / mute /
+       pause / report bar and the device classes. DEWPOINT draws its own touch controls, so the layer's
+       synthesised touch overlay is switched off. Must load before any game code (it wraps AudioContext). -->
+  <script>window.GAME_CONFIG = { slug: 'dewpoint', touch: false };</script>
+  <script src="game_controls.js"></script>
+  <script>if (window.__FFG_CONTROLS_LOADED__) document.documentElement.classList.add('has-ffg-bar');</script>
+  <canvas id="game" tabindex="0" aria-label="DEWPOINT game view"></canvas>
+  <div id="ui" data-skin="water"></div>
+  <div id="boot" role="status">
+    <svg class="boot-drop" viewBox="0 0 64 68" aria-hidden="true"><path d="M32 5C42 21 55 31 55 43a23 22 0 0 1-46 0C9 31 22 21 32 5Z" fill="#2fb4f0" stroke="#12303f" stroke-width="4" stroke-linejoin="round"/><path d="M15 50a23 22 0 0 0 38-2c-6 8-22 12-38 2Z" fill="#1668c9"/><path d="M20 31c2-6 5-10 9-15" stroke="#fff" stroke-width="4.5" fill="none" stroke-linecap="round"/><ellipse cx="24.5" cy="44" rx="6" ry="7.5" fill="#fff" stroke="#12303f" stroke-width="2.5"/><ellipse cx="40.5" cy="44" rx="6" ry="7.5" fill="#fff" stroke="#12303f" stroke-width="2.5"/><ellipse cx="26" cy="45.5" rx="3" ry="4.2" fill="#0b1c44"/><ellipse cx="42" cy="45.5" rx="3" ry="4.2" fill="#0b1c44"/><circle cx="27.3" cy="43.6" r="1.3" fill="#fff"/><circle cx="43.3" cy="43.6" r="1.3" fill="#fff"/></svg>
+    <div class="boot-text">Waking the kiln works...</div>
+    <noscript>DEWPOINT needs JavaScript to run.</noscript>
+  </div>
+  <script>
+    // If any module fails to download (a flaky connection, or a simple static server dropping a
+    // request under a burst) nothing would run and the page would sit on the loading screen.
+    // Retry once by reloading; if that fails too, say so and offer a button.
+    window.__dewBootFail = function () {
+      var nav = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+      if (!nav || nav.type !== 'reload') { location.reload(); return; }
+      var boot = document.getElementById('boot');
+      boot.hidden = false; boot.className = 'error';
+      boot.querySelector('.boot-text').textContent = 'DEWPOINT could not load all of its files.';
+      if (!boot.querySelector('button')) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn primary'; b.textContent = 'Try again';
+        b.onclick = function () { location.reload(); };
+        boot.appendChild(b);
+      }
+    };
+    // Start the game. On a local development server only (localhost, 127.0.0.1, *.localhost) every
+    // source module is first re-checked against the server, so an edited level or script is never
+    // served stale from the browser's cache: a plain static server sends no caching headers, and
+    // browsers then guess. Anywhere else the game simply starts.
+    (function () {
+      var start = function () {
+        var s = document.createElement('script');
+        s.type = 'module'; s.src = 'src/main.js'; s.onerror = window.__dewBootFail;
+        document.body.appendChild(s);
+      };
+      var h = location.hostname;
+      if (!(h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || /\.localhost$/.test(h)) || !window.fetch) { start(); return; }
+      var seen = {}, pending = 0, done = false;
+      var finish = function () { if (!done) { done = true; start(); } };
+      var visit = function (url) {
+        if (seen[url]) return;
+        seen[url] = 1; pending++;
+        fetch(url, { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (text) {
+          // follow the static imports of what came back (relative specifiers only: there are no others)
+          var re = /(?:import|export)\s[^'"]*?from\s*['"](\.[^'"]+)['"]|import\s*['"](\.[^'"]+)['"]/g, m;
+          while ((m = re.exec(text))) visit(new URL(m[1] || m[2], url).href);
+        }).catch(function () {}).then(function () { if (--pending === 0) finish(); });
+      };
+      setTimeout(finish, 4000);          // whatever happens, the game starts
+      visit(new URL('src/main.js', location.href).href);
+      fetch('src/ui/ui.css', { cache: 'no-cache' }).catch(function () {});
+    })();
+  </script>
+</body>
+</html>

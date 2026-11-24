@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEWPOINT audio demo</title>
+<style>
+  :root { color-scheme: dark; --bg:#0d1020; --fg:#e8e4d8; --dim:#8d90a8; --line:#2a3050; --water:#52d6ff; --ember:#ff9b4a; --clay:#d9a273; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:15px/1.4 system-ui, sans-serif; max-width:920px; margin-inline:auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); margin:22px 0 8px; }
+  h3 { font-size:12px; color:var(--dim); margin:12px 0 6px; font-weight:600; }
+  p.note { color:var(--dim); margin:0 0 12px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  button { background:#171c36; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 13px; font:inherit; cursor:pointer; min-height:40px; }
+  button:hover { border-color:var(--water); }
+  button:active { background:#202850; }
+  button.on { background:var(--water); color:#06101a; border-color:var(--water); }
+  button.warm { border-color:#5a4030; }
+  #elements button.on[data-el=fire] { background:var(--ember); border-color:var(--ember); }
+  #elements button.on[data-el=clay] { background:var(--clay); border-color:var(--clay); }
+  #sfx-fire button { border-color:#6a3d20; }
+  #sfx-clay button { border-color:#5e4a33; }
+  label { display:flex; gap:8px; align-items:center; color:var(--dim); }
+  input[type=range] { width:180px; }
+  #status, #report { font:13px/1.5 ui-monospace, Consolas, monospace; color:var(--dim); background:#0a0d1a; border:1px solid var(--line); border-radius:8px; padding:10px 12px; white-space:pre-wrap; }
+  #report { max-height:420px; overflow:auto; white-space:pre; }
+  .ctl { display:flex; flex-wrap:wrap; gap:16px 24px; align-items:center; }
+  .opt { display:flex; gap:12px; flex-wrap:wrap; }
+  #meterwrap { height:10px; background:#0a0d1a; border:1px solid var(--line); border-radius:5px; overflow:hidden; margin-top:8px; }
+  #meter { height:100%; width:0; background:var(--water); transition:width .05s linear; }
+  #meter.hot { background:#ff5a4a; }
+</style>
+</head>
+<body>
+<h1>DEWPOINT audio demo</h1>
+<p class="note">Everything here is synthesised live. Audio starts on your first click or tap (browser autoplay rules).</p>
+
+<div class="row"><button id="start">Start audio</button><button id="mute" aria-pressed="false">Mute: off</button></div>
+
+<h2>Element</h2>
+<p class="note">Picks the form family below, the looping layer for each, and the colour of the music. Water is the original sound; Fire and Clay are new.</p>
+<div id="elements" class="row"></div>
+
+<h2>Volume</h2>
+<div class="ctl">
+  <label>Music <input id="vmusic" type="range" min="0" max="1" step="0.01" value="0.7"><output id="omusic">0.70</output></label>
+  <label>SFX <input id="vsfx" type="range" min="0" max="1" step="0.01" value="0.8"><output id="osfx">0.80</output></label>
+</div>
+
+<h2>SFX options</h2>
+<div class="ctl opt">
+  <label>Intensity <input id="inten" type="range" min="0" max="2" step="0.05" value="1"><output id="ointen">1.00</output></label>
+  <label>Pan <input id="pan" type="range" min="-1" max="1" step="0.05" value="0"><output id="opan">0.00</output></label>
+</div>
+
+<h2>Sound effects</h2>
+<h3>Original (water and general)</h3>
+<div id="sfx" class="row"></div>
+<h3>Fire (Cinder)</h3>
+<div id="sfx-fire" class="row"></div>
+<h3>Clay (Dab)</h3>
+<div id="sfx-clay" class="row"></div>
+<div class="row" style="margin-top:10px">
+  <button id="spam">Rapid fire (rate limit test)</button>
+  <button id="storm">Storm: 60 random sfx in 2 s (voice cap test)</button>
+  <button id="tour">Play every new sfx in turn</button>
+</div>
+
+<h2>Form ambience (follows the element)</h2>
+<div id="forms" class="row"></div>
+
+<h2>Music (palette follows the element)</h2>
+<div id="moods" class="row"></div>
+
+<h2>Context</h2>
+<div class="row"><button id="susp">suspend()</button><button id="res">resume()</button></div>
+<div id="status" style="margin-top:10px">not started</div>
+<div id="meterwrap"><div id="meter"></div></div>
+<div class="row" style="margin-top:8px"><button id="meterreset">Reset peak / clip counter</button></div>
+
+<h2>Loudness report (live capture)</h2>
+<p class="note">Records what the module actually sends to your speakers (a tap after the compressor, limiter and mute, at the current volumes) while it plays each sound, so the numbers are what you hear. Run it with the sliders at their defaults (music 0.70, sfx 0.80). It plays in real time: about 3 minutes for all sfx, 1.5 minutes for layers, 4 minutes for music. Peak is the largest sample; RMS is over the part that is not silent (sfx) or the steady part (layers, music). An OfflineAudioContext render is deliberately not used: measured in Chromium it came out several dB quieter than the live output for loud sounds (jump: about -31 dBFS offline against -23 live) while agreeing for quiet ones (the form layers), so it cannot be used to balance sounds against each other. The cause was not established.</p>
+<div class="row"><button id="rep-sfx">Report: all sfx</button><button id="rep-forms">Report: form layers</button><button id="rep-music">Report: music (12 s each)</button></div>
+<div id="report" style="margin-top:10px">press a button</div>
+
+<script type="module">
+import { audio, SFX_NAMES_BASE, SFX_NAMES_NEW, SFX_NAMES, ELEMENTS, ELEMENT_FORMS, MOODS } from '../src/audio.js';
+window.__audio = audio;
+
+const $ = (id) => document.getElementById(id);
+const opts = () => ({ intensity: parseFloat($('inten').value), pan: parseFloat($('pan').value) });
+let muted = false, element = 'water', form = 'liquid', mood = null;
+
+function mk(parent, label, fn, cls) {
+  const b = document.createElement('button');
+  b.textContent = label; if (cls) b.className = cls;
+  b.addEventListener('click', () => { audio.init(); hookMeter(); fn(b); refresh(); });
+  parent.appendChild(b);
+  return b;
+}
+
+$('start').addEventListener('click', () => { audio.init(); hookMeter(); refresh(); });
+$('mute').addEventListener('click', () => {
+  audio.init(); hookMeter();
+  muted = !muted; audio.setMuted(muted);
+  $('mute').textContent = 'Mute: ' + (muted ? 'on' : 'off');
+  $('mute').setAttribute('aria-pressed', String(muted));
+  $('mute').classList.toggle('on', muted);
+  refresh();
+});
+
+function vol() {
+  audio.setVolume(parseFloat($('vmusic').value), parseFloat($('vsfx').value));
+  $('omusic').textContent = parseFloat($('vmusic').value).toFixed(2);
+  $('osfx').textContent = parseFloat($('vsfx').value).toFixed(2);
+  refresh();
+}
+$('vmusic').addEventListener('input', vol);
+$('vsfx').addEventListener('input', vol);
+$('inten').addEventListener('input', () => { $('ointen').textContent = parseFloat($('inten').value).toFixed(2); });
+$('pan').addEventListener('input', () => { $('opan').textContent = parseFloat($('pan').value).toFixed(2); });
+
+for (const n of SFX_NAMES_BASE) mk($('sfx'), n, () => audio.playSfx(n, opts()));
+const FIRE_SFX = ['ignite', 'flare', 'smoke_puff', 'spark_zip', 'wire_ride', 'fuse_burn', 'wood_burn', 'ice_melt', 'wax_melt', 'gas_blast', 'extinguish', 'coal'];
+const CLAY_SFX = ['squish', 'slip_pour', 'fire_harden', 'shell_shed', 'shell_crumble', 'dust_puff', 'soak', 'mould_cast', 'piston', 'wheel_spin', 'climb_stick'];
+// every new name must appear on exactly one of the two lists (fails loudly if the module gains a name this page lacks)
+const missing = SFX_NAMES_NEW.filter((n) => !FIRE_SFX.includes(n) && !CLAY_SFX.includes(n));
+if (missing.length) throw new Error('audio-demo: new sfx without a button: ' + missing.join(', '));
+for (const n of FIRE_SFX) mk($('sfx-fire'), n, () => audio.playSfx(n, opts()));
+for (const n of CLAY_SFX) mk($('sfx-clay'), n, () => audio.playSfx(n, opts()));
+
+$('spam').addEventListener('click', () => {
+  audio.init(); hookMeter();
+  let i = 0;
+  const id = setInterval(() => { audio.playSfx('splash', opts()); audio.playSfx('ui_tap'); if (++i > 30) clearInterval(id); }, 8);
+});
+$('storm').addEventListener('click', () => {
+  audio.init(); hookMeter();
+  let i = 0;
+  const id = setInterval(() => {
+    audio.playSfx(SFX_NAMES[(Math.random() * SFX_NAMES.length) | 0], { intensity: Math.random() * 1.6, pan: Math.random() * 2 - 1 });
+    if (++i >= 60) clearInterval(id);
+  }, 33);
+});
+$('tour').addEventListener('click', () => {
+  audio.init(); hookMeter();
+  let i = 0;
+  const id = setInterval(() => {
+    if (i >= SFX_NAMES_NEW.length) { clearInterval(id); return; }
+    audio.playSfx(SFX_NAMES_NEW[i++], opts());
+  }, 1500);
+});
+
+// ---- element selector + the forms that belong to it
+const elBtns = {};
+const formBtns = {};
+const formsBox = $('forms');
+function buildForms() {
+  formsBox.textContent = '';
+  for (const k of Object.keys(formBtns)) delete formBtns[k];
+  for (const f of ELEMENT_FORMS[element]) formBtns[f] = mk(formsBox, f, () => { form = f; audio.setForm(f); });
+  mk(formsBox, 'none', () => { form = null; audio.setForm(null); });
+}
+for (const el of ELEMENTS) {
+  const b = mk($('elements'), el, () => {
+    element = el;
+    audio.setElement(el);
+    form = audio.getState().form;       // the module moves to that element's default form
+    buildForms();
+  });
+  b.dataset.el = el;
+  elBtns[el] = b;
+}
+buildForms();
+
+const moodBtns = {};
+for (const m of MOODS) moodBtns[m] = mk($('moods'), m, () => { mood = m; audio.setMusic(m); }, 'warm');
+mk($('moods'), 'stop music', () => { mood = null; audio.setMusic(null); });
+
+$('susp').addEventListener('click', () => { audio.suspend(); refresh(); });
+$('res').addEventListener('click', () => { audio.resume(); setTimeout(refresh, 100); });
+
+// ---- live output meter (taps the final node before the destination)
+let analyser = null, buf = null, peakNow = 0, peakMax = 0, clips = 0;
+function hookMeter() {
+  if (analyser) return;
+  const S = audio._debug();
+  if (!S.ready || !S.ctx || !S.nodes.mute) return;
+  analyser = S.ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  S.nodes.mute.connect(analyser);
+  buf = new Float32Array(analyser.fftSize);
+  setInterval(() => {
+    analyser.getFloatTimeDomainData(buf);
+    let p = 0;
+    for (let i = 0; i < buf.length; i++) { const x = Math.abs(buf[i]); if (x > p) p = x; if (x >= 0.999) clips++; }
+    peakNow = p; if (p > peakMax) peakMax = p;
+    $('meter').style.width = Math.min(100, p * 100) + '%';
+    $('meter').classList.toggle('hot', p >= 0.95);
+  }, 20);
+}
+$('meterreset').addEventListener('click', () => { peakMax = 0; clips = 0; refresh(); });
+window.__meter = () => ({ peakNow, peakMax, clips });
+
+function refresh() {
+  for (const el of ELEMENTS) elBtns[el].classList.toggle('on', element === el);
+  for (const f of Object.keys(formBtns)) formBtns[f].classList.toggle('on', form === f);
+  for (const m of MOODS) moodBtns[m].classList.toggle('on', mood === m);
+  const s = audio.getState();
+  $('status').textContent =
+    'initialised ' + s.initialised + '   context ' + s.ctxState + '   available ' + s.available + '\n' +
+    'muted ' + s.muted + '   music vol ' + s.musicVolume.toFixed(2) + '   sfx vol ' + s.sfxVolume.toFixed(2) + '\n' +
+    'element ' + s.element + '   form ' + s.form + '   mood ' + s.mood + '   live voices ' + s.voices + '/' + s.maxVoices + '   internal errors ' + s.errors +
+    '\noutput peak (now/max) ' + peakNow.toFixed(3) + ' / ' + peakMax.toFixed(3) + '   clipped samples ' + clips +
+    (s.lastError ? '\n' + s.lastError : '');
+}
+setInterval(refresh, 500);
+refresh();
+
+// ---------------------------------------------------------------------------
+// Live loudness report
+// ---------------------------------------------------------------------------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let tap = null;
+function liveTap() {
+  if (tap) return tap;
+  audio.init();
+  const S = audio._debug();
+  if (!S.ready) throw new Error('audio is not available');
+  const sp = S.ctx.createScriptProcessor(2048, 2, 2);          // deprecated but universal and sample-accurate
+  tap = { L: [], R: [], rec: false, sr: S.ctx.sampleRate };
+  sp.onaudioprocess = (e) => {
+    if (!tap.rec) return;
+    tap.L.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    tap.R.push(new Float32Array(e.inputBuffer.getChannelData(1)));
+  };
+  S.nodes.mute.connect(sp);
+  sp.connect(S.ctx.destination);                               // (outputs silence; needed for it to run)
+  return tap;
+}
+async function capture(ms, start) {
+  const t = liveTap();
+  t.L = []; t.R = []; t.rec = true;
+  if (start) start();
+  await sleep(ms);
+  t.rec = false;
+  const cat = (a) => { const o = new Float32Array(a.reduce((n, x) => n + x.length, 0)); let p = 0; for (const x of a) { o.set(x, p); p += x.length; } return o; };
+  const L = cat(t.L), R = cat(t.R);
+  return { sampleRate: t.sr, length: L.length, getChannelData: (i) => (i ? R : L) };
+}
+function measure(out, from, to, active) {
+  const SR = out.sampleRate, L = out.getChannelData(0), R = out.getChannelData(1);
+  const a0 = Math.max(0, Math.floor(from * SR)), a1 = Math.min(L.length, Math.floor(to * SR));
+  let peak = 0, first = -1, last = -1;
+  for (let i = a0; i < a1; i++) {
+    const m = Math.max(Math.abs(L[i]), Math.abs(R[i]));
+    if (m > peak) peak = m;
+    if (active && m > 1e-3) { if (first < 0) first = i; last = i; }
+  }
+  const s = active ? Math.max(first, a0) : a0, e = active ? Math.max(last, s + 1) : a1;
+  let ss = 0, nan = 0;
+  for (let i = s; i < e; i++) ss += L[i] * L[i] + R[i] * R[i];
+  for (let i = a0; i < a1; i++) if (!Number.isFinite(L[i]) || !Number.isFinite(R[i])) nan++;
+  const rms = Math.sqrt(ss / (2 * Math.max(1, e - s)));
+  return { peak, rmsDb: rms > 0 ? 20 * Math.log10(rms) : -Infinity, ms: Math.round(((e - s) / SR) * 1000), nan };
+}
+// Spectral shape of a steady stretch: centroid, share of energy in five bands, and how uneven the
+// 10 ms envelope is (a crackle or a scrape is uneven, a hiss is smooth).
+function spectrum(out, from, to) {
+  const SR = out.sampleRate, N = 8192, L = out.getChannelData(0), R = out.getChannelData(1);
+  const re = new Float64Array(N), im = new Float64Array(N), P = new Float64Array(N / 2), win = new Float64Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1));
+  const fft = () => {
+    for (let i = 1, j = 0; i < N; i++) { let b = N >> 1; for (; j & b; b >>= 1) j ^= b; j ^= b; if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+    for (let len = 2; len <= N; len <<= 1) {
+      const ang = (-2 * Math.PI) / len, wr = Math.cos(ang), wi = Math.sin(ang), h = len / 2;
+      for (let i = 0; i < N; i += len) {
+        let cr = 1, ci = 0;
+        for (let k = 0; k < h; k++) {
+          const ur = re[i + k], ui = im[i + k], xr = re[i + k + h], xi = im[i + k + h];
+          const vr = xr * cr - xi * ci, vi = xr * ci + xi * cr;
+          re[i + k] = ur + vr; im[i + k] = ui + vi; re[i + k + h] = ur - vr; im[i + k + h] = ui - vi;
+          const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+        }
+      }
+    }
+  };
+  for (let s = Math.floor(from * SR); s + N <= Math.min(L.length, Math.floor(to * SR)); s += N) {
+    for (let i = 0; i < N; i++) { re[i] = 0.5 * (L[s + i] + R[s + i]) * win[i]; im[i] = 0; }
+    fft();
+    for (let k = 0; k < N / 2; k++) P[k] += re[k] * re[k] + im[k] * im[k];
+  }
+  const edges = [0, 150, 600, 2000, 5000, 1e9], bands = [0, 0, 0, 0, 0];
+  let tot = 0, cen = 0;
+  for (let k = 1; k < N / 2; k++) {
+    const f = (k * SR) / N;
+    tot += P[k]; cen += P[k] * f;
+    for (let b = 0; b < 5; b++) if (f >= edges[b] && f < edges[b + 1]) { bands[b] += P[k]; break; }
+  }
+  const w = Math.round(SR * 0.01), v = [];
+  for (let s = Math.floor(from * SR); s + w <= Math.min(L.length, Math.floor(to * SR)); s += w) { let ss = 0; for (let i = 0; i < w; i++) { const x = 0.5 * (L[s + i] + R[s + i]); ss += x * x; } v.push(Math.sqrt(ss / w)); }
+  const mean = v.reduce((a, b) => a + b, 0) / v.length, sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / v.length);
+  return { centroid: Math.round(cen / tot), bands: bands.map((b) => Math.round((100 * b) / tot)), envCV: +(sd / mean).toFixed(2) };
+}
+const fmt = (n, w) => String(n).padStart(w);
+function row(name, m) {
+  return name.padEnd(16) + ' peak ' + fmt(m.peak.toFixed(3), 6) + '  rms ' + fmt(m.rmsDb.toFixed(1), 6) + ' dBFS' +
+    (m.ms !== undefined ? '  len ' + fmt(m.ms, 5) + ' ms' : '') +
+    (m.spec ? '  centroid ' + fmt(m.spec.centroid, 5) + ' Hz  energy <150/<600/<2k/<5k/above ' + m.spec.bands.join('/') + ' %  envelope CV ' + m.spec.envCV : '') +
+    (m.nan ? '  NaN SAMPLES ' + m.nan : '') + (m.errors ? '  ERRORS ' + m.errors : '');
+}
+// run `fn` with the page's own state (element / form / music) parked, and put it back after
+async function parked(fn) {
+  const keep = { element, form, mood };
+  audio.init(); liveTap();
+  audio.setMusic(null); audio.setForm(null);
+  await sleep(2600);                                           // old layer and music finish fading
+  try { return await fn(); }
+  finally {
+    audio.setElement(keep.element); audio.setForm(keep.form); audio.setMusic(keep.mood);
+    element = keep.element; form = audio.getState().form; mood = keep.mood;
+    buildForms(); refresh();
+  }
+}
+// intensity 1, `reps` plays each (random variation per call): mean RMS, worst peak
+async function sfxStats(names, reps = 2, intensity = 1) {
+  return parked(async () => {
+    const res = {};
+    const e0 = audio.getState().errors;
+    for (const n of names) {
+      let peak = 0, db = 0, ms = 0, nan = 0;
+      for (let k = 0; k < reps; k++) {
+        const out = await capture(2300, () => audio.playSfx(n, { intensity }));
+        const m = measure(out, 0, out.length / out.sampleRate, true);
+        peak = Math.max(peak, m.peak); db += m.rmsDb; ms = Math.max(ms, m.ms); nan += m.nan;
+      }
+      res[n] = { peak, rmsDb: db / reps, ms, nan, errors: audio.getState().errors - e0 };
+    }
+    return res;
+  });
+}
+async function formStats(secs = 6) {
+  return parked(async () => {
+    const res = {};
+    for (const el of ELEMENTS) for (const f of ELEMENT_FORMS[el]) {
+      audio.setElement(el); audio.setForm(f);
+      await sleep(3500);                                       // fade-in settled
+      const e0 = audio.getState().errors;
+      const out = await capture(secs * 1000);
+      const m = measure(out, 0, secs, false);
+      res[el + '/' + f] = { peak: m.peak, rmsDb: m.rmsDb, nan: m.nan, errors: audio.getState().errors - e0, spec: spectrum(out, 0, secs) };
+      audio.setForm(null); await sleep(2600);
+    }
+    return res;
+  });
+}
+async function musicStats(secs = 12) {
+  return parked(async () => {
+    const res = {};
+    for (const el of ELEMENTS) for (const mo of MOODS) {
+      audio.setElement(el); audio.setForm(null); audio.setMusic(mo);
+      await sleep(8000);                                       // fade-in settled
+      const e0 = audio.getState().errors;
+      const out = await capture(secs * 1000);
+      const m = measure(out, 0, secs, false);
+      res[el + '/' + mo] = { peak: m.peak, rmsDb: m.rmsDb, nan: m.nan, errors: audio.getState().errors - e0, spec: spectrum(out, 0, secs) };
+      audio.setMusic(null); await sleep(3200);
+    }
+    return res;
+  });
+}
+function show(title, res) {
+  $('report').textContent = title + '\n' + Object.keys(res).map((k) => row(k, res[k])).join('\n');
+}
+async function run(btn, title, fn) {
+  btn.disabled = true; $('report').textContent = 'recording live output...';
+  try { const r = await fn(); show(title, r); window.__last = r; return r; }
+  catch (e) { $('report').textContent = 'ERROR ' + (e && e.stack || e); }
+  finally { btn.disabled = false; }
+}
+$('rep-sfx').addEventListener('click', (e) => run(e.target, 'SFX at intensity 1, live (original, then new)', () => sfxStats(SFX_NAMES)));
+$('rep-forms').addEventListener('click', (e) => run(e.target, 'Form layers, live steady state (element/form)', () => formStats()));
+$('rep-music').addEventListener('click', (e) => run(e.target, 'Music, live steady state after the fade-in (element/mood)', () => musicStats(12)));
+window.__loudness = { sfxStats, formStats, musicStats, capture, measure, spectrum };
+</script>
+</body>
+</html>

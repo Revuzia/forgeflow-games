@@ -1,0 +1,29 @@
+{
+  "title": "Dewpoint",
+  "slug": "dewpoint",
+  "short_description": "A 3D puzzle-platformer where you change state to get through a storybook kiln works: play a drop of water, then a live coal, across 24 hand-built levels.",
+  "description": "Dewpoint is a 3D puzzle-platformer set in a sleeping ceramics works. You start as Mote, a single drop of water with four forms: a nimble liquid, heavy sliding ice, rising steam and a flat film that slips under low walls and through floor slots. Press plates, shove crates, ride fans and ferries, smash cracked glass, douse embers, grow climbing plants and close circuits across twelve levels that each travel through five named areas, from the Slip Room to the Great Kiln. Finish the Wet Road and the Lit Road opens: you play Cinder, a live coal with its own four forms. The ember lights lanterns and fuses, the blaze burns wood and melts ice, smoke crawls along ceilings and the spark rides wires and sets off gas, all on a heat gauge that only fuel refills, in a world where water puts you out. Every level has three hidden collectibles, checkpoints at each area and a best time to beat. Levels open one at a time, and a third road for Dab, a thumb of clay, is on the way. Everything you see and hear is made in code. Plays with keyboard and mouse, a gamepad, or on-screen touch controls in portrait or landscape.",
+  "tagline": "Change state. Wake the kiln works.",
+  "genre": "platformer",
+  "sub_genre": "puzzle-platformer",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD / arrows move · Space jump (hold to jump higher) · 1-4 or Q/E change form (press your current form again for its special) · Mouse drag to look · R restart from checkpoint · Esc / P pause",
+  "controls_gamepad": "Left stick move · Right stick look · A jump · X / Y / B / RB change form · Start pause",
+  "has_mobile_support": true,
+  "mobile_support": "full",
+  "tags": [
+    "platformer",
+    "puzzle",
+    "3d",
+    "three.js",
+    "physics",
+    "water",
+    "fire",
+    "elements",
+    "singleplayer",
+    "touch",
+    "gamepad"
+  ],
+  "credits": "All original: heroes, levels, art, sound effects and music are generated in code. No third-party art, models, samples or music. Rendering uses three.js (MIT licence, bundled).",
+  "version": "1.0.0"
+}

@@ -1,0 +1,12 @@
+{
+  "title": "Dewpoint",
+  "slug": "dewpoint",
+  "genre": "platformer",
+  "tagline": "Change state. Wake the kiln works.",
+  "view": {
+    "width": 1280,
+    "height": 720,
+    "background": "#73bfe0"
+  },
+  "assets": {}
+}

@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- The player's-eye test page: loads the real game (index.html) in an iframe of an exact window size and plays it
+     with real input events - key presses, mouse drags, touches on the on-screen stick and buttons - then measures
+     what a player sees. Run by tests/play.test.js in a headless browser (tests/lib/browser.js), which reads the
+     result this page POSTs to /__result. Open it by hand at http://localhost:PORT/tests/play/play.html?suite=facing
+     to watch it (the result is also written into the page). See play.js for the suites. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>DEWPOINT player's-eye tests</title>
+  <style>body { margin: 0; font: 12px monospace; background: #222; color: #ddd; } iframe { position: absolute; left: 0; top: 0; border: 0; background: #000; } pre { position: absolute; left: 0; bottom: 0; margin: 0; max-height: 30vh; overflow: auto; white-space: pre-wrap; }</style>
+</head>
+<body>
+  <pre id="out">running</pre>
+  <script type="module" src="./play.js"></script>
+</body>
+</html>

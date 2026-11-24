@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- One audit frame: the real stylesheet, the real UI scale, the real Menus and Hud on stub data. Loaded by
+     tests/layout/audit.html in an iframe of an exact size; exposes runCase(spec) for it. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>DEWPOINT layout audit frame</title>
+  <link rel="stylesheet" href="../../src/ui/ui.css">
+  <style>*, *::before, *::after { animation: none !important; transition: none !important; }</style>
+</head>
+<body>
+  <div id="ui" data-skin="water"></div>
+  <script type="module">
+    import { applyUiScale } from '../../src/ui/scale.js';
+    import { Menus } from '../../src/ui/menus.js';
+    import { Hud } from '../../src/ui/hud.js';
+    import { createSave } from '../../src/save.js';
+    import { campaigns, ELEMENT_ORDER, CAMPAIGN_LENGTH } from '../../src/levels/index.js';
+    import { levelAreas } from '../../src/render/areas.js';
+    import { auditLayout } from './audit.js';
+
+    const extra = new URLSearchParams(location.search).get('css');
+    if (extra) { const st = document.createElement('style'); st.textContent = extra; document.head.appendChild(st); }
+    const ui = document.getElementById('ui');
+    const nothing = { getItem: () => null, setItem() {}, removeItem() {} };
+    const save = createSave(nothing);
+    const levels = ELEMENT_ORDER.flatMap((e) => (campaigns[e] ? campaigns[e].levels : []));
+    const longest = (list) => list.reduce((a, b) => (b.length > a.length ? b : a), '');
+    const levelName = longest(levels.map((l) => l.name));
+    const areaNames = levels.flatMap((l) => levelAreas(l).map((a) => a.name)).sort((a, b) => b.length - a.length);
+    const hints = levels.flatMap((l) => Object.values(l.hints || {}).map((v) => (typeof v === 'string' ? v : v && v.text) || '').filter(Boolean)).sort((a, b) => b.length - a.length);
+    let cur = 'water';
+    const api = {
+      campaigns, order: ELEMENT_ORDER, total: CAMPAIGN_LENGTH, save,
+      element: () => cur, playing: () => cur, setElement: (e) => { cur = e; }, skin: (e) => { ui.dataset.skin = e; },
+      play() {}, resume() {}, restartLevel() {}, restartCheckpoint() {}, quit() {}, next() {}, setting() {}, resetProgress() {}, sfx() {},
+    };
+    const input = { requestForm() {}, setTouchMove() {}, setTouchJump() {} };
+    const cb = { onPause() {}, onOrbit() {}, onGesture() {} };
+    let menus = null, hud = null;
+    const hasLevels = (e) => !!(campaigns[e] && campaigns[e].levels.length);
+
+    window.runCase = (spec) => {
+      const w = innerWidth, h = innerHeight;
+      const scale = applyUiScale(document, w, h);
+      ui.replaceChildren();
+      menus = new Menus(ui, api); hud = new Hud(ui, input, cb);
+      cur = spec.element || 'water'; ui.dataset.skin = cur;
+      if (spec.screen === 'title') menus.title();
+      else if (spec.screen === 'levels') menus.levelSelect(cur);
+      else if (spec.screen === 'settings') menus.settings();
+      else if (spec.screen === 'pause') {
+        const names = areaNames.slice(0, 5);
+        menus.pause({ name: levelName, element: cur, number: 12, areas: names.map((n, i) => ({ name: n, seen: i < 3, here: i === 2 })), shards: [true, false, true] });
+      } else if (spec.screen === 'complete') {
+        menus.complete({ element: cur, name: levelName, timeMs: 123456, bestMs: 99000, newBest: true, shards: [0, 2], allShards: [0, 1, 2], deaths: 12, hasNext: true, nextName: levelName, count: 12, total: 12 });
+      } else if (spec.screen === 'hud') {
+        hud.setElement(cur); hud.setLevel(levelName, cur); hud.setInputMode(spec.touch ? 'touch' : 'keyboard'); hud.show(true);
+        for (let i = 0; i < 3; i++) hud.shardEls[i].classList.add('got');
+        if (spec.state === 'banner') { hud.showArea(areaNames[0] || 'The Long Way Round', 1, 5); hud.root.classList.add('has-banner'); }
+        else if (spec.state === 'hint') hud.showHint(hints[0] || 'Press SPACE to jump over the gap, then {form4} to cross.');
+        else if (spec.state === 'both') { hud.showArea(areaNames[0] || 'The Long Way Round', 1, 5); hud.showHint(hints[0] || 'Press SPACE to jump.'); hud.root.classList.add('has-banner'); }
+      }
+      const violations = auditLayout(ui, { w, h, scale });
+      return { w, h, scale, screen: spec.screen, element: cur, state: spec.state || '', touch: !!spec.touch, violations };
+    };
+    window.hasLevels = hasLevels;
+    window.caseList = () => {
+      const cases = [];
+      for (const e of ELEMENT_ORDER) if (hasLevels(e)) cases.push({ screen: 'title', element: e });      // (a campaign without levels cannot be the chosen one)
+      for (const e of ELEMENT_ORDER) if (hasLevels(e)) cases.push({ screen: 'levels', element: e });
+      cases.push({ screen: 'settings', element: 'water' }, { screen: 'pause', element: 'water' }, { screen: 'pause', element: 'fire' }, { screen: 'complete', element: 'water' }, { screen: 'complete', element: 'fire' });
+      for (const e of ELEMENT_ORDER) if (hasLevels(e)) for (const touch of [false, true]) for (const state of ['banner', 'hint']) cases.push({ screen: 'hud', element: e, touch, state });
+      return cases;
+    };
+    window.frameReady = true;
+  </script>
+</body>
+</html>

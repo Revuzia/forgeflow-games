@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Runs the layout audit in one iframe per window size and writes the result as JSON into <pre id="out">.
+     Open it in a browser (http://localhost:PORT/tests/layout/audit.html) or let tests/layout.test.js run it headless.
+     ?sizes=360x640,280x600 limits the sizes, ?screens=title,hud the screens; ?css=... adds CSS to every frame (used to prove the audit can fail). -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>DEWPOINT layout audit</title>
+  <style>body { margin: 0; font: 12px monospace; } iframe { position: absolute; left: 0; top: 0; border: 0; visibility: hidden; } pre { white-space: pre-wrap; }</style>
+</head>
+<body>
+  <pre id="out">running</pre>
+  <script>
+    const SIZES = [[260, 560], [280, 600], [320, 568], [360, 640], [375, 812], [414, 896], [640, 360], [844, 390], [1280, 800], [1920, 1080]];
+    const q = new URLSearchParams(location.search).get('sizes');
+    const css = new URLSearchParams(location.search).get('css');     // extra CSS for the frames: the audit's own self-test breaks the layout on purpose
+    const only = new URLSearchParams(location.search).get('screens');     // ?screens=title,hud limits the screens
+    const sizes = q ? q.split(',').map((s) => s.split('x').map(Number)) : SIZES;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    (async () => {
+      const results = [];
+      let fatal = '';
+      try {
+        for (const [w, h] of sizes) {
+          const f = document.createElement('iframe');
+          f.style.width = `${w}px`; f.style.height = `${h}px`;
+          f.src = `frame.html${css ? `?css=${encodeURIComponent(css)}` : ''}`;
+          document.body.appendChild(f);
+          for (let i = 0; i < 400 && !(f.contentWindow && f.contentWindow.frameReady); i++) await wait(25);
+          if (!f.contentWindow.frameReady) throw new Error(`frame ${w}x${h} did not load`);
+          await wait(30);
+          for (const spec of f.contentWindow.caseList().filter((c) => !only || only.split(',').includes(c.screen))) {
+            const r = f.contentWindow.runCase(spec);
+            results.push(r);
+            await wait(0);
+          }
+          f.remove();
+        }
+      } catch (e) { fatal = String((e && e.stack) || e); }
+      document.getElementById('out').textContent = JSON.stringify({ fatal, results });
+      document.title = 'done';
+    })();
+  </script>
+</body>
+</html>
