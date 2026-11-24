@@ -1,3 +1,21 @@
+# SESSION 4 STATE (2026-11-24): rounds 14/15 pushed, NOT deployed
+
+Live is still 6c495e9c1 (2026-11-19). Branch head holds, unreleased: bigger rooms + room camera (D-104), multi-cut (D-103), drag to carry (D-105),
+squishies turning to face where they walk (Calm / Reduce Motion included), and the fixes to VERDICT_R14. Work stopped at the owner's weekly usage limit.
+
+Verified on the final tree (orchestrator run, node): tsc 0; vite build exit 0 (G0 2573, first-play 466 KB gzip, T1 2153.1 of 2250); node_checks 186/186;
+probe_app 188/188; gestures 176/176; carry 13/13; partycut 27/27; float 16/16; crawl 18/18. probe_life_selfuse ran 15 min with no failure and was cut by its timeout.
+Verifier (VERDICT_R15.md, partial, on snapshot ff711b46d): build gates, hostile fuzz 2/2 three times, softbody 115/116 (= live), node_checks 186/186 x3,
+re-specified rows read one by one (three noted as slightly weaker).
+
+NOT verified independently (do this before a deploy): Home 180 s self-use and view, carries incl. back rim, Updraft / Glide Ramp set-downs, facing in a
+browser vs live, multicut smoke, published steps on both frames, saves both ways, one-out cut vs live, frame cost. Three edits landed after the verifier's
+snapshot (crawl.ts wait-for-friend, thingAuto.ts pinch on an AUTO chip, browser_rooms chip row): engineer-checked only. Full phone browser_rooms run not repeated.
+
+Open: Home party uses exactly 3 things (more needs a new Music Box / Shelf use); slime on the Glide Ramp glides 3 of 12 (live 2 of 12); R14 minors F8, F10,
+F12, F13; rare walking samples still over 90 deg off (0 to 4.4 %). Reports: R14_*.md, VERDICT_R14.md, R15_FIX.md, R15_FACING.md, R15_CLOSE.md, VERDICT_R15.md.
+Next step: finish VERDICT_R15 from its "how to continue" header (one mid-model agent), fix what it finds, then deploy by the R2 method below.
+
 # SESSION 3 STATE (2026-11-19, after the second PLAYGROUND deploy)
 
 **LIVE NOW: commit 6c495e9c1**, deployed 2026-11-19 to the R2 bucket `forgeflow-games` under `squish-keeper/` (57 files; every file byte-identical at the CDN; boots and plays on 1280x800 and 390x844 with 0 errors).
