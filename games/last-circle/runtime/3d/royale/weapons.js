@@ -236,6 +236,7 @@ async function buildProtos(W) {
       });
       const g = new THREE.Group();
       g.add(m);
+      if (STOCK_ADD[id]) stretchStock(g, STOCK_ADD[id]);
       protos[id] = g;
     } catch (e) { /* not generated yet — composed/GLB fallback stays */ }
   }
@@ -264,6 +265,29 @@ async function buildProtos(W) {
   return protos;
 }
 
+// (W10 anim fix r2, D9 / W1 / B2) the pump shotgun's STOCK lengthened (an edit of the existing model at load, no re-roll): the hand sits on the
+// stock's wrist (no pistol grip) and the butt was so close behind it (a short length of pull) that, with the butt in the shoulder pocket, the
+// trigger elbow folded to 34-47 deg interior (live 50-68, gate sghold >= 52). Every vertex behind STOCK_Z0 (m behind the grip) moves back,
+// fully from STOCK_Z1: the wrist stays, the butt plate moves STOCK_ADD back (a real pump gun's ~0.35 m length of pull)
+const STOCK_ADD = { shotgun: 0.07 }, STOCK_Z0 = -0.06, STOCK_Z1 = -0.16;
+function stretchStock(g, dz) {
+  g.updateMatrixWorld(true);
+  const v = new THREE.Vector3(), M = new THREE.Matrix4(), Mi = new THREE.Matrix4(), done = new Set();
+  g.traverse((o) => {
+    // (once per geometry: a cached GLB shared by a later match / loot is never stretched twice)
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position || done.has(o.geometry) || o.geometry.userData.lcStock) return;
+    done.add(o.geometry); o.geometry.userData.lcStock = dz;
+    M.copy(o.matrixWorld); Mi.copy(M).invert();
+    const pa = o.geometry.attributes.position;
+    for (let i = 0; i < pa.count; i++) {
+      v.fromBufferAttribute(pa, i).applyMatrix4(M);
+      if (v.z >= STOCK_Z0) continue;
+      v.z -= dz * Math.min(1, (STOCK_Z0 - v.z) / (STOCK_Z0 - STOCK_Z1));
+      v.applyMatrix4(Mi); pa.setXYZ(i, v.x, v.y, v.z);
+    }
+    pa.needsUpdate = true; o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere();
+  });
+}
 // support-hand anchor along the forward run of the gun (fraction of grip -> tip), clamped to what the support arm reaches
 // (W10 anim fix 3, F6) the shouldered AR / SMG / LMG (player.js rifleHold) take the C-clamp station near the handguard's front (ar 0.5 ->
 // 0.62, burst 0.5 -> 0.62, smg 0.55 -> 0.72, lmg 0.42 -> 0.5): from the stock in the pocket the old station left the support elbow at
@@ -496,6 +520,8 @@ async function refreshWeaponMesh(W, a) {
     m.scale.set(HELD_G_R, HELD_G_R * 1.2, HELD_G_R);
     m.position.set(0, HELD_G_UP, HELD_G_FWD);
     m.castShadow = true;
+    // (W10 anim fix r2, D16) hidden until player.js shows it on a desktop medium+ near actor (phones / Low / far actors: live's empty hand)
+    m.visible = false;
     g.add(m);
     g.userData.wid = id; g.userData.throwable = true;
     a.weaponMesh = g;

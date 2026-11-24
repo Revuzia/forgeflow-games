@@ -136,7 +136,10 @@ export const POSES = {
   reload: [[-0.2, -0.7, 0.6], [-0.05, -0.25, 0.95], [0.28, -0.75, 0.5], [-0.3, -0.15, 0.9]],
   // (W10 anim fix 2) two-hand pistol AIM, modern isosceles: both arms run forward and in from square shoulders to the gun on
   // the centre line, near-straight (elbow interior ~165 deg), the support hand cupping the grip (supportHandIK)
-  pistolAim: [[0.40, -0.40, 0.82], [0.30, -0.25, 0.92], [-0.30, -0.22, 0.93], [-0.12, -0.04, 0.99]],
+  // (W10 anim fix r2, D1 / V3) ...the gun in line with the RIGHT eye / shoulder instead of the centre line: centred, the head and the raised right
+  // shoulder hid it from the over-the-shoulder aim camera on every skin (aim-camera share soldier .296, athlete .562 vs live .543 / .700;
+  // here .682 / .800, fix_r2 sw3). Was [[0.40, -0.40, 0.82], [0.30, -0.25, 0.92], [-0.30, -0.22, 0.93], [-0.12, -0.04, 0.99]]
+  pistolAim: [[0.10, -0.42, 0.90], [0.0, -0.28, 0.96], [-0.55, -0.22, 0.80], [-0.40, -0.06, 0.91]],
   // (W10 anim fix 2) two-hand pistol READY (still / firing from the hip): the gun on the chest's centre line ~0.3 m out, elbows bent
   // (compressed ready); gunReady's rifle table held it in front of the right shoulder
   // (W10 anim fix r1, D1 / V1) ...moved back to gunReady's rows (the gun in front of the right shoulder, live's hold) with the chest left on the clip's

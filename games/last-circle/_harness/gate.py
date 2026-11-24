@@ -394,7 +394,9 @@ GATES = [
     ("p23_netlive", "p23/netlive.py", [], 5400, P23_PENDING),
     # INFORMATION (never counted): the live-measure probe on the iGPU profile (a player's first run; perfcheck's own default is the dGPU)
     # ---- Wave 10 R1B (guns in hand): w10_gunhold - grip, flash-tip, smg-dir, pistol (slide <= 1.1 m/s on EVERY skin), lengths, death, flinch, flash-size, sheen
-    ("w10_gunhold", "p23/gunhold.py", [], 3600, False),
+    # (W10 anim fix r2, D5) every part on the 5 skins (STANDARD: all 5 skins; the trans and pistol rows ran on soldier / athlete only and passed
+    # while the snaps were red on the other three)
+    ("w10_gunhold", "p23/gunhold.py", ["--skins", "soldier,athlete,wraith,juggernaut,viper"], 7200, False),
     # ---- Wave 10 R2A (water, sky and light): w10_waterlook - water-detail, glint, fresnel, shore (+ shore lip at crest / level / trough), storm-early / late,
     #      light (interiors on every map >= 0.9x base, far-sea edge, wet sand from the air: land <= 10 %, live frame <= 6 % / <= 1 % under the water), grass,
     #      grass-sand, low-identical, underwater, tiers, programs. stormfx_fx (above) judges the meshopt round trip again (in-repo fixture, _harness/new/fixtures)
@@ -780,6 +782,17 @@ NEGATIVE = [
     ("w10_gunhold-plant-inert-off-ads", "p23/gunhold.py", ["--skins", "soldier", "--plant", "inert-off", "--parts", "trans", "--trans", "ads"], 1800),   # ads-pop
     ("w10_gunhold-plant-air-hold-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "air-hold-off", "--parts", "trans", "--trans", "land"], 1800),   # land-pop
     ("w10_gunhold-plant-ready-hidden", "p23/gunhold.py", ["--skins", "soldier", "--plant", "ready-hidden", "--parts", "chase"], 1800),   # chase
+    # (W10 anim fix r2, D8) the fix-r1 plants, registered (they were only run by ANIM/fix_r1/controls.sh); the r1 parts run on the 5 skins
+    ("w10_gunhold-plant-aim-arms-only", "p23/gunhold.py", ["--skins", "soldier", "--plant", "aim-arms-only", "--parts", "aimpitch"], 3600),   # aimpitch
+    ("w10_gunhold-plant-low-gate-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "low-gate-off", "--parts", "lowlook"], 3600),   # lowlook
+    ("w10_gunhold-plant-recoil-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "recoil-off", "--parts", "recoil"], 3600),   # recoil
+    ("w10_gunhold-plant-sg-fold", "p23/gunhold.py", ["--skins", "soldier", "--plant", "sg-fold", "--parts", "sghold"], 3600),   # sghold
+    # (W10 anim fix r2) the r2 rows' plants: each MUST FAIL its own row
+    ("w10_gunhold-plant-pistol-gaze-off", "p23/gunhold.py", ["--skins", "soldier", "--plant", "pistol-gaze-off", "--parts", "aimpitch"], 3600),   # aimpitch (pistol)
+    ("w10_gunhold-plant-xfade-linear", "p23/gunhold.py", ["--skins", "soldier", "--plant", "xfade-linear", "--parts", "trans", "--trans", "idlerun"], 1800),   # loco-pop
+    ("w10_gunhold-plant-diag-side", "p23/gunhold.py", ["--skins", "soldier", "--plant", "diag-side", "--parts", "diagclip"], 3600),   # diagclip
+    ("w10_gunhold-plant-ready-cant-out", "p23/gunhold.py", ["--skins", "soldier", "--plant", "ready-cant-out", "--parts", "firstshot"], 3600),   # firstshot
+    ("w10_gunhold-plant-ads-centred", "p23/gunhold.py", ["--skins", "soldier", "--plant", "ads-centred", "--parts", "chase"], 3600),   # adscam
     ("w10_lootlook-plant-box-ammo", "p23/lootlook.py", ["--plant", "box-ammo"], 3600),           # loot-shapes (primitive ammo)
     ("w10_lootlook-plant-same-grenade", "p23/lootlook.py", ["--plant", "same-grenade"], 3600),   # loot-shapes (frag vs smoke IoU)
     ("w10_lootlook-plant-zero-normal", "p23/lootlook.py", ["--plant", "zero-normal"], 3600),   # (R3B fix5) loot-nan: the loot models' zero-normal slivers back (lootNormalsSafe off) -> black frames + zero-normal tris
