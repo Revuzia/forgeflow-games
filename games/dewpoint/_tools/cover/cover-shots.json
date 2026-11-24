@@ -1,0 +1,6 @@
+[
+  { "name": "mote-a.png", "level": "l01", "keys": [["d", "KeyD", 0.35]], "stage": { "facing": 0.3, "pitch": 0.06, "dist": 3.6, "fov": 34 } },
+  { "name": "mote-b.png", "level": "l05", "keys": [["d", "KeyD", 0.3]], "stage": { "facing": 0.3, "pitch": 0.08, "dist": 3.6, "fov": 34 } },
+  { "name": "cinder-a.png", "level": "f03", "keys": [["a", "KeyA", 0.3]], "form": "blaze", "stage": { "facing": -0.3, "pitch": 0.06, "dist": 3.8, "fov": 34 } },
+  { "name": "cinder-b.png", "level": "f07", "keys": [["a", "KeyA", 0.25]], "form": "blaze", "stage": { "facing": -0.3, "pitch": 0.08, "dist": 3.8, "fov": 34 } }
+]
