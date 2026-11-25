@@ -1160,6 +1160,7 @@ def gen_stunned(profile: dict) -> Clip:
 # root) and the hasted lean are authored once for VALE_BIPED_1 as a presentation layer in src/render/actors.ts (LifeRig):
 # every fighter and skin gets them and no GLB grows (every fighter GLB sits within a few KiB of its 1172 KiB budget).
 MOTION_CLIPS = ("walk",)
+NO_WALK = frozenset({"hesmi", "burdam", "ervet", "rishal"})   # ruling 70: no walk clip on these bodies
 WALK_SHARE = 0.4          # the walk is authored for this share of run_ref_speed
 WALK_LEAD = 0.08          # the walk's contact starts this share of a cycle early: the heel lands and the foot is flat (in
                           # the renderer's stance band) on the run's own touchdown (_harness/probe_fighter_motion.ts phase)
@@ -1336,8 +1337,10 @@ def standard_clips(skel: Skeleton, profile: dict, overrides: dict | None = None,
     for o in optional:
         clips[o] = gens[o](profile)
     # W3-B (ruling 68): the walk ships with every fighter (a rebuild keeps it; the shipped GLBs got it from
-    # art/blender/fighters/_motion_pass.py without a rebuild)
-    clips["walk"] = gen_walk(profile)
+    # art/blender/fighters/_motion_pass.py without a rebuild), except the bodies whose run and walk do not blend
+    # (ruling 70): they play the planted run when slowed, so they carry no walk (its bytes went back to their menu loops)
+    if (skel.arm.get("vale_fighter", "") if skel is not None else "") not in NO_WALK:
+        clips["walk"] = gen_walk(profile)
     for k, v in (overrides or {}).items():
         clips[k] = v
     import os as _os

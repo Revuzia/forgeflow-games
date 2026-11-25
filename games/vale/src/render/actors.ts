@@ -1493,6 +1493,7 @@ export class Actor implements CrowdActor {
     this.lastStateTime = v.stateTime;
     const key = role;
     let act = this.current;
+    let runAct: ActionLike | undefined;
     const held = !!this.hold && v.state !== 'cast' && role === this.hold.role;     // a held cast must not restart
     if (key !== this.currentKey || (restarted && !held && !LOOPING.has(role) && role !== 'run' && role !== 'death')) {
       const next = this.action(role);
@@ -1533,6 +1534,7 @@ export class Actor implements CrowdActor {
       } else if (role === 'run') {
         const speed = Math.hypot(v.vx, v.vy);
         act.timeScale = Math.max(0.35, Math.min(2.2, speed / Math.max(0.1, this.runRef)));
+        runAct = act;
       } else if ((role.startsWith('attack') || role === 'crit') && v.state === 'attack') {
         const impact = Math.max(0.05, this.attackWindup * (v.stateDuration || 1));
         act.timeScale = 0;
@@ -1570,6 +1572,9 @@ export class Actor implements CrowdActor {
     this.prevLocoKey = key;
     this.blendWalk(role === 'run', dt);
     this.mixer!.update(dt);
+    // W3-B fix round 2 (ruling 70): a body without a walk (walkRef undefined) plays the run at its own timeScale; its
+    // phase is the run's own time, so the LifeRig's hasted arm pump and the taunt tug step with the feet
+    if (runAct) this.locoPhase = ((runAct.time / (runAct.getClip().duration || 1)) % 1 + 1) % 1;
     const cc = v.alive ? ccKindOf(v) : null;
     const airU = role === 'airborne' && v.stateDuration > 0 ? Math.min(1, (v.stateTime + alpha * TICK_DT) / v.stateDuration) : 0;
     this.life?.apply(v.alive ? role : 'death', dt, cc, role === 'run' ? hasteWeight(Math.hypot(v.vx, v.vy) / Math.max(0.1, this.runRef)) : 0, this.locoPhase, airU);

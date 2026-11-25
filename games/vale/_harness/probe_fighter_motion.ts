@@ -1,7 +1,8 @@
 // VALE probe — orch1 W3-B (FU-7 / FU-9, ruling 68): fighter locomotion blend and CC bodies, on the shipped GLBs (textures
 // stripped) in node with the real blend math (src/render/stride.ts) and three's AnimationMixer.
 //
-//   budget   every fighter base and skin GLB <= 1172 KiB; every base GLB carries a `walk` clip
+//   budget   every fighter base and skin GLB <= 1172 KiB; every base GLB carries a `walk` clip, except the four bodies
+//            ruling 70 keeps on the planted run (NO_WALK: their GLBs carry none, fix round 2), which must not carry one
 //   walk     the walk clip's planted-foot speed (measureStride over LOCO.walkRange) and the planted foot's world speed while
 //            the body moves at 0.25 / 0.4 / 0.55 x runRef (walk alone): gate <= 10 % of the body's speed (stride.ts bar)
 //   blend    run and walk on the shared phase (locoCycleRate, walkWeight) at 0.57 / 0.6 / 0.63 x runRef: the planted foot's
@@ -18,6 +19,9 @@
 //   → _harness/_reports/w3b_fighter_motion.json
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+
+/** ruling 70: the bodies whose run and walk do not blend play the live planted run and ship no walk clip */
+const NO_WALK = new Set(['hesmi', 'burdam', 'ervet', 'rishal']);
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { type AnimationClip, AnimationMixer, type Object3D, PropertyBinding, Vector3 } from 'three';
@@ -76,8 +80,9 @@ for (const f of fighters) {
   const { scene, clips } = await load(base);
   const run = clips.find((c) => c.name === (f.art.clips?.run ?? 'run'));
   const walk = clips.find((c) => c.name === 'walk');
-  if (ONLY.has('budget') && !walk) fails.push(`walk ${f.id}: no walk clip in ${f.art.model}`);
-  if (!run || !walk) { row.skipped = !run ? 'no run' : 'no walk'; continue; }
+  if (ONLY.has('budget') && !walk && !NO_WALK.has(f.id)) fails.push(`walk ${f.id}: no walk clip in ${f.art.model}`);
+  if (ONLY.has('budget') && walk && NO_WALK.has(f.id)) fails.push(`walk ${f.id}: carries an unused walk clip (ruling 70)`);
+  if (!run || !walk) { row.skipped = !run ? 'no run' : 'no walk'; if (run && NO_WALK.has(f.id)) row.blend = 'off (no walk clip: run only, as live)'; continue; }
   const feet = [f.art.sockets?.foot_l, f.art.sockets?.foot_r].filter((x): x is string => !!x);
   const sc = f.art.scale ?? 1;
   const rm = measureStride(scene, run, feet, sc), wm = measureStride(scene, walk, feet, sc, LOCO.walkRange);

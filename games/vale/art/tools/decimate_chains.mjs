@@ -13,6 +13,14 @@
 //
 //   node art/tools/decimate_chains.mjs art/out/fighters/burdam/burdam.glb [out.glb] [--every 2] [--prefix x_skirt]
 //        [--orm-q 40]
+//
+// The inverse (W3-B fix round 2, ruling 70): --restore-from <live.glb> --clip a,b puts back, in those clips, every rotation
+// track that differs from the live GLB's by more than --restore-deg (default 0.5) at any of either file's keys, copied
+// key for key (its time accessor shared per live accessor). --drop-clip walk removes clips (a body that does not play
+// them, ruling 70) to pay for it. With either option no thinning runs.
+//
+//   node art/tools/decimate_chains.mjs burdam.glb --restore-from live/burdam.glb --clip idle_lobby,victory,recall
+//        --drop-clip walk
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { statSync } from 'node:fs';
@@ -20,7 +28,7 @@ import sharp from 'sharp';
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
-const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--every', '--prefix', '--orm-q', '--normal-q', '--clip'].includes(args[i - 1])));
+const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--every', '--prefix', '--orm-q', '--normal-q', '--clip', '--restore-from', '--restore-deg', '--drop-clip'].includes(args[i - 1])));
 if (!files.length) {
   console.error('usage: node art/tools/decimate_chains.mjs in.glb [out.glb] [--every 2] [--prefix x_]');
   process.exit(2);
@@ -45,7 +53,8 @@ const pick = (n) => {
   if (idx[idx.length - 1] !== n - 1) idx.push(n - 1);
   return idx;
 };
-for (const anim of root.listAnimations()) {
+const restoreFrom = opt('--restore-from', null);
+for (const anim of restoreFrom || args.includes('--drop-clip') ? [] : root.listAnimations()) {
   if (clips && !clips.has(anim.getName())) continue;
   for (const ch of anim.listChannels()) {
     const node = ch.getTargetNode();
@@ -76,6 +85,69 @@ for (const anim of root.listAnimations()) {
     keysBefore += n;
     keysAfter += idx.length;
   }
+}
+let restored = 0;
+if (restoreFrom) {
+  if (!clips) throw new Error('--restore-from needs --clip');
+  const tol = Number(opt('--restore-deg', 0.5));
+  const live = await io.read(restoreFrom);
+  const liveTimes = new Map();
+  const quat = (acc, i) => { const e = []; acc.getElement(i, e); const l = Math.hypot(...e) || 1; return e.map((x) => x / l); };
+  const at = (s, t) => {           // the track's rotation at time t (linear, normalized lerp: enough to compare)
+    const ti = s.getInput().getArray(), n = ti.length;
+    if (t <= ti[0]) return quat(s.getOutput(), 0);
+    if (t >= ti[n - 1]) return quat(s.getOutput(), n - 1);
+    let i = 0; while (ti[i + 1] < t) i++;
+    const a = quat(s.getOutput(), i), b = quat(s.getOutput(), i + 1);
+    if (s.getInterpolation() === 'STEP') return a;
+    const u = (t - ti[i]) / (ti[i + 1] - ti[i]);
+    const sg = a.reduce((d, x, k) => d + x * b[k], 0) < 0 ? -1 : 1;
+    const q = a.map((x, k) => x + (sg * b[k] - x) * u); const l = Math.hypot(...q); return q.map((x) => x / l);
+  };
+  const deg = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(a.reduce((d, x, k) => d + x * b[k], 0)))) * 180 / Math.PI;
+  for (const name of clips) {
+    const la = live.getRoot().listAnimations().find((a) => a.getName() === name);
+    const ha = root.listAnimations().find((a) => a.getName() === name);
+    if (!la || !ha) { console.log(`[restore] ${name}: not in ${la ? input : restoreFrom}`); continue; }
+    for (const lc of la.listChannels()) {
+      if (lc.getTargetPath() !== 'rotation' || !lc.getTargetNode()) continue;
+      const nodeName = lc.getTargetNode().getName();
+      const node = root.listNodes().find((n) => n.getName() === nodeName);
+      if (!node) continue;
+      const ls = lc.getSampler();
+      let hc = ha.listChannels().find((c) => c.getTargetPath() === 'rotation' && c.getTargetNode() === node);
+      if (hc) {
+        const hs = hc.getSampler();
+        const times = new Set([...ls.getInput().getArray(), ...hs.getInput().getArray()]);
+        let worst = 0;
+        for (const t of times) worst = Math.max(worst, deg(at(ls, t), at(hs, t)));
+        if (worst <= tol) continue;
+      }
+      let ti = liveTimes.get(ls.getInput());
+      if (!ti) {
+        const a = ls.getInput().getArray();
+        ti = doc.createAccessor().setType('SCALAR').setArray(new a.constructor(a)).setBuffer(buffer);
+        liveTimes.set(ls.getInput(), ti);
+      }
+      const lo = ls.getOutput(), oa = lo.getArray();
+      const to = doc.createAccessor().setType(lo.getType()).setArray(new oa.constructor(oa)).setNormalized(lo.getNormalized())
+        .setBuffer(buffer);
+      if (hc) hc.getSampler().setInput(ti).setOutput(to).setInterpolation(ls.getInterpolation());
+      else {
+        const s = doc.createAnimationSampler().setInput(ti).setOutput(to).setInterpolation(ls.getInterpolation());
+        ha.addSampler(s).addChannel(doc.createAnimationChannel().setTargetNode(node).setTargetPath('rotation').setSampler(s));
+      }
+      restored++;
+      keysAfter += ls.getInput().getCount();
+    }
+  }
+}
+const drop = (opt('--drop-clip', '') || '').split(',').filter(Boolean);
+for (const a of root.listAnimations().filter((x) => drop.includes(x.getName()))) {
+  console.log(`[decimate] dropped clip ${a.getName()}`);
+  for (const c of a.listChannels()) c.dispose();
+  for (const s of a.listSamplers()) s.dispose();
+  a.dispose();
 }
 const ormQ = opt('--orm-q', null);
 if (ormQ) {
@@ -109,5 +181,6 @@ for (const a of root.listAccessors()) {           // drop the accessors nothing 
 }
 await io.write(output, doc);
 const after = statSync(output).size;
-console.log(`[decimate] ${tracks} ${prefix}* rotation tracks, keys ${keysBefore} -> ${keysAfter} (every ${every}); ` +
+if (restoreFrom) console.log(`[restore] ${restored} rotation tracks put back from ${restoreFrom} (${keysAfter} keys)`);
+else console.log(`[decimate] ${tracks} ${prefix}* rotation tracks, keys ${keysBefore} -> ${keysAfter} (every ${every}); ` +
   `${(before / 1024).toFixed(1)} -> ${(after / 1024).toFixed(1)} KiB`);
