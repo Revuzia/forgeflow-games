@@ -64,6 +64,7 @@ import type { CatalogT, FighterDefT, UnitDefT } from '../contracts/catalog.ts';
 import type { EntityView, SimEvent, TeamId } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
 import { type Assets, collectGpu, disposeGpu, type LoadedModel } from './assets.ts';
+import { nextTask } from './slice.ts';
 import { INK, type Palette } from './palette.ts';
 import { BakedMixer, bakeCrowd, type CrowdActor, type CrowdBake } from './crowd.ts';
 import {
@@ -538,8 +539,10 @@ export class ModelLibrary {
         for (const c of base?.gltf.animations ?? []) clips.set(c.name, c);
         for (const c of body.gltf.animations) if (!clips.has(c.name)) clips.set(c.name, c);
         this.patchMaterials(body.gltf.scene, charLight('fighter'), def.art.accentMaterial);
+        await nextTask();                                                  // W4-C fix round: each heavy step its own task
         const hull = hullPlan(body.gltf.scene);
         await lodReady;                                                    // perf PERF-m5: the match body's LOD1
+        await nextTask();
         const roles = def.art.clips as Record<string, string | undefined>;
         // CW1 bar clearance: the bar anchor that keeps this body's focal props out from under its own bar (once per
         // template, at load: the loading screen pays the ~50-100 ms of CPU skinning, never a frame in play)
@@ -549,6 +552,7 @@ export class ModelLibrary {
           const moves = [roles.idle, roles.run].map((n) => (n ? clips.get(n) : undefined)).filter((c): c is AnimationClip => !!c);
           barAnchor = fighterBarAnchor(body.gltf.scene, moves, def.art.sockets, floor, def.art.scale, { pitchDeg: CAMERA.pitchDeg, fovDeg: CAMERA.fovDeg, distance: CAMERA.distance, viewH: 1080 });
         } catch (e) { console.warn('[vale] bar clearance', def.id, e); }
+        await nextTask();
         // CW1 input-feel: the run clip's own planted-foot speed (stride.ts) replaces the authored runRefSpeed when it
         // can be measured and is within a sane band of it
         let runRef: number | undefined;
@@ -557,6 +561,7 @@ export class ModelLibrary {
           const r = plantedRunRef(body.gltf.scene, roles.run ? clips.get(roles.run) : undefined, feet, def.art.scale);
           if (r !== null && r > def.art.runRefSpeed * 0.6 && r < def.art.runRefSpeed * 1.6) runRef = r;
         } catch (e) { console.warn('[vale] stride', def.id, e); }
+        await nextTask();
         return { scene: body.gltf.scene, clips, roles, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull), barAnchor, runRef };
       }
       if (this.opts.dev && this.opts.devModelUrl) {
@@ -571,7 +576,7 @@ export class ModelLibrary {
         }
       }
       return null;
-    })().then((t) => this.ready(t, def.art.accentMaterial, charLight('fighter'))).then((t) => this.land(key, p!, t));
+    })().then(async (t) => { await nextTask(); return this.ready(t, def.art.accentMaterial, charLight('fighter')); }).then((t) => this.land(key, p!, t));
     this.templates.set(key, p);
     return p;
   }
@@ -624,6 +629,30 @@ export class ModelLibrary {
 
   /** every template built so far, warmed again (the match's lighting and environment are part of a program's key) */
   warmAll(): void { for (const b of this.built) this.warm(b, true); }
+  /** W4-C fix round: warmAll, one template per turn (each warm-up's synchronous part, the program set-up, was paid
+   *  for every template in one task at the match's start: 0.1-0.2 s under a 4x CPU throttle) */
+  async warmAllSliced(alive: () => boolean): Promise<void> {
+    for (const b of [...this.built]) { if (!alive()) return; this.warm(b, true); await nextTask(); }
+  }
+  /** W4-C fix round: every landed template's outline LOD (outlineGeometry: the first match actor of a template built it
+   *  on the match's first frames), a hull part per turn, behind the loading screen */
+  async prepareLods(alive: () => boolean): Promise<void> {
+    for (const t of [...this.landed.values()]) {
+      if (!t) continue;
+      // orch1 W2-A's LOD2 body and its hull plan (built on the first far frame: 10 fighters were one 0.47 s frame), from
+      // the template's body at rest, as its LOD1 is (bodyLodOf)
+      if (t.bodyLod && t.bodyLod.lod2 === undefined) {
+        const b = meshesOf(t.scene)[t.bodyLod.mesh] as SkinnedMesh | undefined;
+        if (b?.isSkinnedMesh) { if (!alive()) return; bodyLod2Parts(t.bodyLod, b); await nextTask(); }
+      }
+      for (const p of t.bodyLod ? t.bodyLod.hull : t.hull) {
+        if (p.ink || outlineLod.has(p.geometry)) continue;
+        if (!alive()) return;
+        outlineGeometry(p.geometry);
+        await nextTask();
+      }
+    }
+  }
 
   private warm(b: { t: Template; accentName: string; char: CharLight; structure: boolean }, again: boolean): void {
     const t = b.t;
@@ -658,14 +687,16 @@ export class ModelLibrary {
         this.patchMaterials(m.gltf.scene, charLight(def.kind), 'accent');
         const roles: Record<string, string | undefined> = { ...def.art.clips };
         for (const c of clips.keys()) if (!(c in roles)) roles[c] = c;
+        await nextTask();                                                  // W4-C fix round: each heavy step its own task
         const hull = hullPlan(m.gltf.scene);
         if (def.art.instanced) await lodReady;                             // perf PERF-m5: the crowd's LODs (crowd.ts)
+        await nextTask();
         const crowd = def.art.instanced && this.opts.crowd !== false ? bakeCrowd(m.gltf.scene, clips, hull, 'accent', CROWD_MAX_ROWS, def.kind === 'monster') : null;
         return { scene: m.gltf.scene, clips, roles, fit: 1, dev: false, hull, crowd };
       }
       if (this.opts.dev) return devUnitTemplate(def);
       return null;
-    })().then((t) => this.ready(t, 'accent', charLight(def.kind), rigidProgram(def.kind))).then((t) => this.land(key, p!, t));
+    })().then(async (t) => { await nextTask(); return this.ready(t, 'accent', charLight(def.kind), rigidProgram(def.kind)); }).then((t) => this.land(key, p!, t));
     this.templates.set(key, p);
     return p;
   }

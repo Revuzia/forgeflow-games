@@ -83,6 +83,7 @@ import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack, tickFern } from './ter
 import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
 import { INK_SWAY, OCCLUDER_ORDER, swayDepth } from './ink.ts';
 import { CellInstances, type CullView, decimate, splitGeometry } from './instance_cull.ts';
+import { runNow } from './slice.ts';
 
 /** env F4: the cover grid's cell (m), how far along the sight line from a unit cover counts (m), and the lowest
  *  block that counts as cover (m; a unit's feet stay in view over an hour stone lower than this) */
@@ -601,7 +602,18 @@ function greyTex(): DataTexture {
 interface Clearing { x: number; y: number; r: number; camp?: boolean; room?: boolean }
 type Surface = 'dial' | 'span' | 'plate';
 
-export function buildTerrain(map: MapDefT): TerrainBuild {
+/** the procedural terrain in one piece (this task): the Home vale, tools and probes */
+export function buildTerrain(map: MapDefT, o: TerrainOpts = {}): TerrainBuild { return runNow(terrainSteps(map, o)); }
+/** W4-C fix round: the scatter level and AO the build starts at (setScatter), so a match's terrain is built once at the
+ *  player's quality, not at 2 and rebuilt */
+export interface TerrainOpts { scatter?: 0 | 1 | 2; ao?: boolean }
+/**
+ * W4-C fix round (ruling 67): the terrain build as steps. Each yield ends a step of a few to some tens of ms (4x CPU
+ * throttle); runSliced (slice.ts) gives the page a turn between them, so the loading screen never freezes on the
+ * build (it was one task of 0.65-0.75 s). The steps run in order and nothing outside reads the build before it
+ * returns, so the result is the same terrain as buildTerrain's.
+ */
+export function* terrainSteps(map: MapDefT, o: TerrainOpts = {}): Generator<string | void, TerrainBuild, void> {
   const group = new Group();
   group.name = 'vale_terrain';
   const [SX, SY] = map.size;
@@ -831,6 +843,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       splat2[o + 2] = Math.round((wi / 4) * 255);
       splat2[o + 3] = Math.round(((ch + 4) / 8) * 255);
     }
+    if ((j & 15) === 15) yield 'splat rows';
   }
   const field = (f: Float32Array, x: number, y: number): number => {
     const i = Math.min(W - 1, Math.max(0, Math.round(x / texel))), j = Math.min(H - 1, Math.max(0, Math.round(y / texel)));
@@ -845,6 +858,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   };
   const splatTex = mkTex(splat), splat2Tex = mkTex(splat2);
 
+  yield 'splat';
   // ── inlay strokes (engraved and inlaid marks) ──────────────────────────────────────────────────
   const strokes = new StrokeSet();
   const inWall = (x: number, y: number): boolean => field(F.wd, x, y) <= 0.01;
@@ -974,6 +988,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     for (const o of [-0.26, 0.26]) strokes.seg(P(r0, o), P(r1 - 0.7, o), 0.05, INLAY.groove);
     strokes.poly([P(r1 - 0.7), P(r1, -0.32), P(r1 + 0.7), P(r1, 0.32)], 0.08, INLAY.chalk, true);
   }
+  yield 'strokes';
   const inlay = bakeInlay(strokes, [SX, SY], 0.125);
   disposables.push(inlay.tex, inlay.fine, inlay.index);
   const inlayU = {
@@ -982,6 +997,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     uInlayAtlas: { value: new Vector2(inlay.atlas[0], inlay.atlas[1]) },
   };
 
+  yield 'inlay';
   const grey: Texture = greyTex();
   disposables.push(grey);
   const tempField = (tr.temperatureField ?? {}) as { west?: unknown; east?: unknown; strength?: unknown };
@@ -998,6 +1014,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     uMapSize: { value: new Vector2(SX, SY) },
   };
 
+  yield 'ground uniforms';
   // ── ground ───────────────────────────────────────────────────────────────────────────────────
   const gz0 = -MARGIN, gz1 = SY + MARGIN;
   const groundGeo = new PlaneGeometry(SX + MARGIN * 2, gz1 - gz0, 1, 1);
@@ -1062,6 +1079,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   group.add(ground);
   disposables.push(groundGeo, groundMat);
 
+  yield 'ground';
   // ── walls ───────────────────────────────────────────────────────────────────────────────────────
   // authored landmarks (map.art.terrain.landmarks with a model): scatter keeps out of their footprint (and
   // well clear on the camera side, +y, so canopies never hide them); a landmark that covers a whole wall
@@ -1162,6 +1180,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     sweep(wm, resample([...poly, poly[0]], 0.6).slice(0, -1), strips, { closed: true, ccw, seed: 50 + k, chisel: 0.012 }, 0.15);
   });
 
+  yield 'walls';
   // ── the gorge (wallStyle "gorge"): the deck's flank, raw rock, far walls, carved bands, spires ──────
   const stackPos: number[] = [], stackIdx: number[] = [];
   /** the carved hour-bands' notches (groundAt: a critter perched on a band stands on its crown, bandH) */
@@ -1271,6 +1290,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   }
   const wallGeo = wm.geometry();
   const wallMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.86, metalness: 0 });
+  yield 'gorge';
   const wu = {
     ...shared,
     uFace: { value: lin(colors.cliffFace) }, uLip: { value: lin(colors.cliffLip) }, uEdgeLight: { value: edgeLight },
@@ -1300,6 +1320,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   };
   wallMat.customProgramCacheKey = () => 'vale_walls_v10';
   patchWorldMaterial(wallMat);
+  yield 'wall material';
   // r12 B4: the cliffs in 16 m chunks (same triangles), so the view draws only the ones it sees and the shadow map
   // only the ones whose shadow can reach the view (casters, below)
   const wallParts = splitGeometry(wallGeo, 16);
@@ -1420,6 +1441,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     });
   }
 
+  yield 'wall parts';
   // ── Needlegrass (brush) ────────────────────────────────────────────────────────────────────────
   // r12 M11: the blades lean away from every unit the viewer sees within 0.8 m and fade to 35 % round your own
   // and allied fighters (terrain_brush.ts; the renderer feeds the field). The material is TRANSPARENT so a faded
@@ -1488,6 +1510,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   setGrass(1);
   disposables.push(clump, grassMat, grassDepth);
 
+  yield 'grass';
   // ── Standing Shadow + Fallen Shaft (terrain marks from the map's terrain block) ────────────────
   // the shadow's frame: from its tip toward the needle that casts it (the Seat), the core wedge's length and
   // half-width at the needle
@@ -1717,6 +1740,7 @@ float valeMouthWide( vec2 p ) {
     }
   }
 
+  yield 'marks';
   // ── scatter (quality dependent) ─────────────────────────────────────────────────────────────
   const scatterGroup = new Group();
   scatterGroup.name = 'vale_scatter';
@@ -1901,6 +1925,7 @@ float valeMouthWide( vec2 p ) {
   });
   const stoneSpots: LooseSpot[] = [];
   const nStones = surface === 'dial' ? Math.round(SX * SY * 0.02) : 0;
+  yield 'tree spots';
   for (let k = 0; k < nStones; k++) {
     const x = rand() * SX, y = rand() * SY;
     let ok = field(F.ld, x, y) > LANE_HALF + 1.2 && field(F.wd, x, y) > 0.6 && field(F.td, x, y) > 0.2;
@@ -1912,6 +1937,7 @@ float valeMouthWide( vec2 p ) {
   // never on the open deck). The far lips: broken drums and slabs strewn along the rim plateau across the drop.
   // The Snap's broken edges: small chips lying right on the lip of the drop where the shaft cracked (on the
   // chalk band, never out on the floor). The stubs: see the landmark hook below (their broken tops).
+  yield 'stones';
   if (gorge) {
     const lr = mulberry(4711);
     for (const side of [-1, 1]) {
@@ -2172,7 +2198,9 @@ float valeMouthWide( vec2 p ) {
     }
     for (const g of scatterParts) scatterGroup.add(g);
   };
-  setScatter(2);
+  yield 'scatter spots';
+  setScatter(o.scatter ?? 2, o.ao);
+  yield 'scatter';
 
   // Needlespan's stubs: when a landmark that stands in for a wall polygon arrives (the renderer adds it to this
   // group), a few needle fragments are laid on its broken top — found by casting down onto the model, so they

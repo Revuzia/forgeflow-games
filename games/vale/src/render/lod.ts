@@ -33,6 +33,7 @@
 // A mesh with several material groups keeps its full index (a LOD would cross the group ranges). Until the WASM is
 // ready (a few ms after boot; the loading screen awaits `lodReady`) nothing is simplified and every mesh draws whole.
 
+import { later } from './slice.ts';
 import { BufferAttribute, BufferGeometry, type Camera, type Group, type Material, Matrix4, type Mesh, type Object3D, type SkinnedMesh, Vector3, type WebGLRenderer } from 'three';
 import { MeshoptSimplifier } from 'meshoptimizer/simplifier';
 
@@ -204,22 +205,44 @@ export function shadowLods(root: Object3D, budgetMs = Infinity): void {
   if (!ready) return;
   const t0 = performance.now();
   root.traverse((o) => {
-    const m = o as Mesh;
-    if (!m.isMesh || !m.castShadow || hooked.has(m)) return;
     if (performance.now() - t0 > budgetMs) return;
-    hooked.add(m);
-    const g = m.geometry;
-    if (!g) return;
-    if (!shadowLod.has(g)) {
-      // an instanced caster draws its mesh once per instance, a crowd part (an instanced view) once per unit
-      const min = (m as { isInstancedMesh?: boolean }).isInstancedMesh ? LOD.minTrisInstanced
-        : (g as { isInstancedBufferGeometry?: boolean }).isInstancedBufferGeometry ? LOD.minTrisCrowd : LOD.minTris;
-      // a caster that knows its dequantization (crowd parts: crowd.ts) takes the 3 cm in metres
-      const l = lodIndex(g, 'shadow', min, (m.userData as { valeLodUnit?: number }).valeLodUnit ?? 1);
-      if (!l) return;
-      shadowLod.set(g, l);
-    }
-    hook(m);
+    lodOne(o as Mesh);
+  });
+}
+
+/** one caster: its geometry's shadow LOD (shared by every mesh drawing it) and its hooks */
+function lodOne(m: Mesh): void {
+  if (!m.isMesh || !m.castShadow || hooked.has(m)) return;
+  hooked.add(m);
+  const g = m.geometry;
+  if (!g) return;
+  if (!shadowLod.has(g)) {
+    // an instanced caster draws its mesh once per instance, a crowd part (an instanced view) once per unit
+    const min = (m as { isInstancedMesh?: boolean }).isInstancedMesh ? LOD.minTrisInstanced
+      : (g as { isInstancedBufferGeometry?: boolean }).isInstancedBufferGeometry ? LOD.minTrisCrowd : LOD.minTris;
+    // a caster that knows its dequantization (crowd parts: crowd.ts) takes the 3 cm in metres
+    const l = lodIndex(g, 'shadow', min, (m.userData as { valeLodUnit?: number }).valeLodUnit ?? 1);
+    if (!l) return;
+    shadowLod.set(g, l);
+  }
+  hook(m);
+}
+
+/** W4-C fix round: shadowLods a few casters per turn (slice.ts later): a whole scene's LODs were one 0.15-0.3 s task
+ *  at the match's start (4x CPU throttle). Resolves when every caster under `root` (as it was when called) is done */
+export function shadowLodsSliced(root: Object3D, alive: () => boolean = () => true): Promise<void> {
+  if (!ready) return Promise.resolve();
+  const todo: Mesh[] = [];
+  root.traverse((o) => { const m = o as Mesh; if (m.isMesh && m.castShadow && !hooked.has(m) && m.geometry) todo.push(m); });
+  if (!todo.length) return Promise.resolve();
+  return new Promise((res) => {
+    let i = 0;
+    later(() => {
+      if (!alive()) { res(); return false; }
+      if (i < todo.length) lodOne(todo[i++]);
+      if (i < todo.length) return true;
+      res(); return false;
+    });
   });
 }
 

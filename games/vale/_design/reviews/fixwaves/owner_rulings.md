@@ -1411,3 +1411,44 @@ Lane W4-C. The owner, 2026-11-24: a tester's computer froze and "we need faster 
 - **Other browsers.** Safari and Firefox were not run: Playwright WebKit is not installed, safaridriver needs Remote Automation consent, and Firefox is absent. The code paths they take are guarded: no deviceMemory, a masked GPU string falls back to the sample, no parallel compile means the held view ends at once, and a resize that is ignored falls back to a canvas.
 - **High co-op 5v5 memory is 1.44 GB**, under the 1.5 GB bar but close. Low is 0.69 GB.
 - **High look.** The same code paths at High: no texture cap, the same PMREM output, the same terrain. Only the first 0.6 s of a match shows the view plate instead of frames. No pixel diff was run.
+
+### 67, fix round (W4-C, after verify r1 scored 6.8): no main-thread stall over 250 ms on the weak profile, Home compiles in parallel, a match decodes one variant per sound (lead, by delegation, 2026-11-25)
+
+**Decided** (industry standard: a game that loads in a browser cuts its CPU work into steps and lets the page draw between them, and never draws a frame whose shaders are still compiling).
+- **Work is cut into steps** (`src/render/slice.ts`). `nextTask()` starts a new task through a MessageChannel. When the page has not drawn for 40 ms, the step waits for the next frame first; when no frame comes, it waits 50 ms at most (a hidden tab). `runSliced()` runs a generator for 24 ms per turn; `later()` is a queue that runs 12 ms per turn.
+- **Terrain.** The procedural terrain is a generator (`terrainSteps`, which yields every 16 splat rows and between sections). It is built while the draft and loading-screen downloads run, at the player's scatter level, so it is built once instead of at level 2 and then again. Its props are laid in before the match, and `setupMatch` takes it ready-made.
+- **Templates.** Each fighter and unit template yields between its heavy steps: hull, LOD1, bar anchor, stride, and the warm-up upload and compile. The loading screen builds, one item per turn, the outline LODs, the LOD2 bodies and hull plans, and the shadow LODs of every template. Before, the first match frames built them: 10 LOD2 bodies alone were one 0.47 s frame.
+- **Match start.** The template warm-ups, the structures, the terrain compile and the casters' shadow LODs each take their own turn. While the view is held, each actor is dressed in its own turn. In play an actor is dressed at once, as before.
+- **Home.** The first Home frame waits, 6 s at most, until the Home sky has landed. Then the vale's programs and the post chain's full-screen materials compile through compileAsync (KHR_parallel_shader_compile). The first-run sample starts only once the vale is drawn. Boot yields between loading the render module, building the renderer and mounting the UI.
+- **Memory.** The PMREM generator's ping-pong target (32 MB at High) is freed after each bake; its programs stay. A match decodes one variant of each combat sound up front. A variant that is not decoded yet gives way to one that is, so the hit still starts in its own call, and the missing variant loads for a later play.
+- **Device report.** The report adds `sliced`: the longest single step and its name.
+
+**Measured.** Two cold runs each, before = ./deploy (live 2026.11.17), after = this build. Weak = Chrome headless on an Apple M5 (ANGLE Metal), 1366x768, CPU 4x, 20 Mbit / 5 Mbit / 40 ms, `?calibrate=1`. Intel = weak + `?fakegpu=` set to an Intel UHD 620 D3D11 string.
+
+| | before (live) | after |
+|---|---|---|
+| Frames over 250 ms after first paint, Practice | 2 / 2, worst 1.69-1.70 s | 0 / 0, worst 194-209 ms |
+| Frames over 250 ms after first paint, Quick RIFT 5v5 | 5 / 5, worst 1.72-1.73 s | 0 / 0, worst 192-196 ms |
+| The same, Intel-class Low, 5v5, at 4x / at 6x CPU | - | 0, worst 192 ms / 1 frame of 279 ms |
+| First 60 s of the match, frames over 250 ms | 0 | 0 |
+| Loading screen to HUD, Practice / 5v5 | 4.44-4.51 s / 8.42-9.33 s | 3.80-3.84 s (view 4.41-4.45 s) / 6.62-7.51 s |
+| Home shown, weak / fast | 1.18-1.33 s / 0.31 s | 1.18-1.26 s / 0.24 s |
+| Programs compiled before Home (synchronously) | 19 | 2 |
+| Programs polled first (parallel compile) / blocking compile in total, Practice | 18 of 49 / 104-129 ms | 42 of 52 / 37-42 ms |
+| Bytes and requests, Home to HUD, Practice | 30.5 MB, 366-368 | 29.9 MB, 298 |
+| Bytes and requests, Home to HUD, 5v5 | 41.3-43.4 MB, 560-623 | 41.5-42.2 MB, 414-442 |
+| Decoded audio in the match, Practice / 5v5 | 222 files 134 MB / 380-445 files 165-183 MB | 154 files 123 MB / 237-263 files 145-152 MB |
+| Peak heap + GPU, 5v5 High / Intel-class Low | 1.31-1.36 GB / - | 1.34-1.35 GB / 0.62 GB |
+| Match fps (30 s) | 60 | 60 (Intel-class Low at 6x: 59.8) |
+| SwiftShader, Practice at Low (`?tier=low`; live ignores it and runs High) | 1.6 fps, 79 frames over 250 ms, worst 7.0 s | 4.2 fps, 19 over 250 ms, worst 6.3 s; the plate warns first |
+| `--disable-gpu` / SwiftShader without `?tier` | - | the plate at once |
+| High look, Home pixels over 8/255 | noise 0.15 % | live vs new 0.08-0.16 % (same as noise) |
+
+**Not met or not done, said plainly.**
+- **Not reproduced here.** I could not reproduce Windows, ANGLE on Direct3D 11, an integrated Intel or AMD GPU, or Chrome's GPU watchdog. The parallel compile and the step cutting should matter most there, but that must be confirmed with the device report from the tester's laptop.
+- **KTX2/Basis.** Not adopted: no encoder is on this machine, and a download was not cleared. Lossless meshopt compression of the GLBs was tried on 3 files and saved only 6-12 % after gzip, against a change to every GLB; it was not adopted.
+- **Bytes per match fell only a little** (2 % in Practice; 20-30 % fewer requests in 5v5). A real cut needs compressed textures or a smaller art budget.
+- **The large fragment programs** (88-140 KB, up to 15 loops) are unchanged, to keep the High look.
+- **SwiftShader stays unplayable.** It has no parallel compile, so its programs still block.
+- **Safari and Firefox were not run.** Playwright has no WebKit or Firefox here, Firefox is not installed, and safaridriver needs a settings change.
+- **Practice Start to HUD is 36 s**, the same as live. Most of it is the draft's clocks; changing them is not this lane's to rule.

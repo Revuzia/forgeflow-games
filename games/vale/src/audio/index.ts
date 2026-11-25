@@ -53,8 +53,9 @@
 //               A decoded cue starts synchronously in the event's call (not in a promise's then(), which ran after the
 //               frame's render: one or two 256-frame device callbacks late, measured +5.3 / +10.7 ms); a
 //               one-shot skips LEAD_SKIP_S of the cue build's silent codec lead under a 1 ms fade-in. A match's
-//               combat cues (the event-bound sfx cues, the kits of its fighters) decode while it loads (prewarm),
-//               so first hits start in their call too.
+//               combat cues (the event-bound sfx cues, the kits of its fighters) decode while it loads (prewarm: one
+//               variant of each; a variant not decoded yet gives way to one that is and loads for later), so first hits
+//               start in their call too.
 //               _harness/probe_audio_runtime.mjs sync measures the hit heard at the output against the impact frame.
 //               Nothing is scheduled ahead; the mastering chain's only latency is fixed and known: the limiter's
 //               built-in 6 ms look-ahead (WebAudio DynamicsCompressor) and the soft clip's 4x oversampler (4 ms)
@@ -1322,7 +1323,9 @@ class Engine implements ValeAudioPort {
 
   get format(): 'ogg' | 'm4a' | null { return this.fmt; }
 
-  private buffer(ref: string): Promise<AudioBuffer | null> {
+  private buffer(ref: string): Promise<AudioBuffer | null> { return this.fileBuffer(ref); }
+  /** the file's buffer promise, fetched and decoded once (buffer() is a play's request; this is also the fetch-ahead) */
+  private fileBuffer(ref: string): Promise<AudioBuffer | null> {
     let p = this.buffers.get(ref);
     if (!p) {
       const ctx = this.ctx;
@@ -1518,7 +1521,16 @@ class Engine implements ValeAudioPort {
     // past the sfx duck; else its bus
     const toPrio = c.bus === 'sfx' && !alert && (!!o.you || !!o.onYou || (!!o.aware && this.nearMe(pos)));
     const into = alert ? this.alertBus.get(c.bus)! : toPrio ? this.prio : c.bus === 'sfx' && o.aware ? this.threat : this.bus.get(c.bus)!;
-    const file = c.files[this.take(cueId, c.files.length)];
+    let file = c.files[this.take(cueId, c.files.length)];
+    // W4-C fix round (load fast): a match decodes ONE variant of each combat cue while it loads (prewarm); a variant not
+    // decoded yet gives way to one that is, so the hit still starts in its event's call, and is fetched for a later play
+    if (c.files.length > 1) {
+      const q = this.buffers.get(file);
+      if (!q || !this.settled.get(q)) {
+        const alt = c.files.find((f) => { const r = this.buffers.get(f); return !!r && !!this.settled.get(r); });
+        if (alt) { void this.fileBuffer(file); file = alt; }
+      }
+    }
     // the slot is held from now (a burst of cues decoding at once must not overrun the budget)
     const v: Voice = { src: null, gain: null, cue: cueId, bus: c.bus, priority: prio, rank, pooled: !alert, started: now };
     this.voices.push(v);
@@ -2362,7 +2374,9 @@ class Engine implements ValeAudioPort {
       const k = this.kits.get(p.fighter);
       if (k) for (const [slot, id] of Object.entries(k)) if (slot !== 'call' && id) ids.add(id);
     }
-    for (const id of ids) for (const f of this.cues[id]?.files ?? []) void this.buffer(f);
+    // W4-C fix round: one variant per cue up front (the rest load as they are first picked: see play), not every variant
+    // of every cue (a 5v5 decoded ~500 files, 175-195 MB of PCM, before the first hit)
+    for (const id of ids) { const f = this.cues[id]?.files?.[0]; if (f) void this.buffer(f); }
   }
 
   /** the lock-in calls live only while a draft runs (see `memory` in the header): decoded when it opens (a lock-in

@@ -5,6 +5,7 @@
 //   node _harness/perf_load.mjs --url http://localhost:5199/ --profile weak [--journey home|practice|coop] [--sec 30]
 //        [--calibrate] [--tier low|medium|high|ultra] [--ctxloss] [--dump-shaders <dir>] [--out <json>] [--max-min 12]
 //        [--query "fakegpu=<renderer string>&diag=1"]   extra page parameters
+//        [--cpuprofile <file>]   CDP CPU profile from Start to 3 s after the HUD (summarise: _harness/perf_profile_sum.mjs)
 //   node _harness/perf_load.mjs --serve deploy [--port 5199] ...      serve a folder like the live CDN, then measure it
 //   node _harness/perf_load.mjs --serve-only deploy [--mount /bench=<dir>]   only serve (Ctrl-C stops)
 //   node _harness/perf_load.mjs --bench <render_bench URL> --profile weak --tiers low,medium,high [--t 600] [--sec 12]
@@ -392,6 +393,8 @@ async function runJourney({ url, profileName, journey, sec, calibrate, tier, ctx
         await click(page.getByRole('button', { name: 'Find match' }));
       }
       await page.evaluate(() => { window.__pl.ms.start = Math.round(performance.now()); });
+      // --cpuprofile <file>: the CDP sampling profiler from Start to 3 s after the HUD (a build with --minify false reads best)
+      if (opt('cpuprofile')) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 500 }); await cdp.send('Profiler.start'); }
       const until = Date.now() + T(240000);
       let lockTries = 0;
       while (!(await page.evaluate(() => window.__pl.ms.hud !== undefined).catch(() => false))) {
@@ -409,6 +412,13 @@ async function runJourney({ url, profileName, journey, sec, calibrate, tier, ctx
       }
       mark = 'match';
       log('in the match');
+      if (opt('cpuprofile')) {
+        await page.waitForTimeout(3000);
+        const { profile } = await cdp.send('Profiler.stop');
+        const t0 = await page.evaluate(() => performance.timeOrigin);
+        writeFileSync(resolve(ROOT, opt('cpuprofile')), JSON.stringify({ timeOriginMs: t0, profile }));
+        log(`cpu profile -> ${opt('cpuprofile')}`);
+      }
       await page.evaluate(() => window.__pl.fpsStart());
       // play a little: move toward mid on the minimap, level and press abilities (the decoded audio and kit VFX come in)
       const end = Date.now() + sec * 1000; let k = 0;
@@ -548,6 +558,8 @@ async function analyse(d, res, sent) {
     screens: Object.fromEntries(Object.entries(ms).filter(([k]) => /^(scr|dialog):/.test(k)).sort((a, b) => a[1] - b[1])),
     progress: d.progress.length ? { steps: d.progress.length, first: d.progress[0], last: d.progress.at(-1), longestStallMs: d.progress.slice(1).reduce((m, p, i) => Math.max(m, p.t - d.progress[i].t), 0) } : null,
     waterfall: by, biggest: { beforeHome: biggest('beforeHome'), homeToHud: biggest('homeToHud') }, audioFilesBeforeHud: audioBeforeHud,
+    // W4-C fix round: every response (name, bytes on the wire, phase), for the before/after byte tables
+    files: res.map((r) => ({ f: new URL(r.u).pathname.replace(/.*\//, ''), b: r.tx || r.enc, s: r.s, e: r.e, phase: phaseOf(r.e) })),
     serverSent: sentBy,
     stalls: {
       longFramesOver100: d.loaf.length, over250: over(d.loaf, 250), over1000: over(d.loaf, 1000),

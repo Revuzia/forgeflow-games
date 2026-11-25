@@ -88,12 +88,17 @@ loadCatalog().then(
     const loadRender = Object.values(renderLoaders)[0];
     const canvas = document.getElementById('view') as HTMLCanvasElement | null;
     if (loadRender && canvas && !noRender) {
-      try { renderer = ((await loadRender()).createRenderer?.(canvas, c.catalog as never, session.profile().settings as never, c.assetUrl, {
+      // W4-C fix round: the render module's start-up, the renderer and the UI mount each take their own task
+      const yieldTask = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+      const mod = await loadRender().catch((e: unknown) => { console.warn('[vale] renderer unavailable', e); return null; });
+      await yieldTask();
+      try { renderer = ((mod ?? {}).createRenderer?.(canvas, c.catalog as never, session.profile().settings as never, c.assetUrl, {
         dev, eventVfx: c.catalog.client.vfxEvents, statusVfx: c.catalog.client.vfxStatus,
       }) ?? null) as typeof renderer; }
       catch (e) { console.warn('[vale] renderer unavailable', e); }
       // a shipped build never mounts a menu that can queue a match that draws nothing (a dev build keeps the backdrop)
       if (!renderer && !dev) { showDevicePlate(ui, { kind: 'webgl', tryAnyway: false }, () => {}); return; }
+      await yieldTask();
     }
     // the audio listener rides the camera's ground focus (Renderer.listenerFocus), so a fight watched while dead or
     // scouting is heard where you look; with no renderer the engine hears from your fighter

@@ -87,6 +87,10 @@ export class Sky {
     // bake measured on this Mac under a 4x CPU throttle, 4 bakes a journey, most of it the programs' compile)
     const pmrem = (this.pmrem ??= new PMREMGenerator(this.renderer));
     const rt = pmrem.fromEquirectangular(src);
+    // W4-C fix round: the generator's ping-pong target (32 MB at High) goes after the bake; its programs stay (three
+    // makes a new target on the next bake when this one is null, and keeps its materials)
+    const pp = pmrem as unknown as { _pingPongRenderTarget: { dispose(): void } | null };
+    if (pp._pingPongRenderTarget) { pp._pingPongRenderTarget.dispose(); pp._pingPongRenderTarget = null; }
     this.envRT?.dispose();
     this.envRT = rt;
     this.background = src;

@@ -486,6 +486,27 @@ export class PostChain {
 
   render(dt: number): void { this.composer.render(dt); }
 
+  /** W4-C fix round: every material the built passes draw with (their full-screen materials, the effects' own passes),
+   *  found by walking the passes' fields a few levels deep, so the renderer can compile their programs in parallel
+   *  (compileAsync) before the first frame instead of the first frame compiling them one after another */
+  materials(): import('three').Material[] {
+    const out = new Set<import('three').Material>();
+    const seen = new WeakSet<object>();
+    const walk = (o: unknown, depth: number): void => {
+      if (!o || typeof o !== 'object' || seen.has(o)) return;
+      seen.add(o);
+      const x = o as Record<string, unknown> & { isMaterial?: boolean; isTexture?: boolean; isWebGLRenderTarget?: boolean; isWebGLRenderer?: boolean; isScene?: boolean; isCamera?: boolean; isBufferGeometry?: boolean };
+      if (x.isMaterial) { out.add(x as unknown as import('three').Material); return; }
+      if (x.isTexture || x.isWebGLRenderTarget || x.isWebGLRenderer || x.isScene || x.isCamera || x.isBufferGeometry || depth <= 0) return;
+      if (Array.isArray(o)) { for (const v of o) walk(v, depth - 1); return; }
+      for (const k of Object.keys(x)) { if (k === 'renderer' || k === 'mainScene' || k === 'mainCamera' || k === 'scene' || k === 'camera') continue; walk(x[k], depth - 1); }
+      const fm = (x as { fullscreenMaterial?: unknown }).fullscreenMaterial;
+      if (fm) walk(fm, depth - 1);
+    };
+    for (const pass of this.composer.passes) walk(pass, 5);
+    return [...out];
+  }
+
   /** every pass this chain built, freed (the overlay and VFX passes are kept: they are re-added) */
   private disposeBuilt(): void {
     for (const p of this.composer.passes) if (p !== this.overlay && p !== this.vfx) disposePass(p);

@@ -39,7 +39,7 @@
 // Neutral tone map → LUT → vignette → overlay → SMAA).
 
 import {
-  Color, Frustum, Matrix4, type Mesh, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, Sphere, SRGBColorSpace,
+  BufferGeometry, Color, Float32BufferAttribute, Frustum, Matrix4, Mesh, NoToneMapping, PCFShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, Sphere, SRGBColorSpace,
   Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import type { CatalogT, MapDefT } from '../contracts/catalog.ts';
@@ -57,7 +57,7 @@ import { BAR_KIND, BarLayer, type BarSpec, CC_PLATE, GLYPH, SHAPE } from './over
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { HoverOutline, hoverRimUniforms } from './overlay/hover.ts';
 import { inkShadows, releaseShadowRefs } from './ink.ts';
-import { LOD, lodReady, lodSwitch, shadowLods } from './lod.ts';
+import { LOD, lodReady, lodSwitch, shadowLods, shadowLodsSliced } from './lod.ts';
 import { CROWD_INK_TRIS_HIGH, CROWD_INK_TRIS_LOW, CROWD_OUTLINE_CROWDED, CROWD_OUTLINE_MAX, CrowdHardLatch, CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
 import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
@@ -70,7 +70,8 @@ import { DynamicResolution, type FrameBound, GpuTimer, PRESETS, resolveQuality, 
 import { Sky } from './sky.ts';
 import { TEXTURE_CAP } from './device_tier.ts';
 import { FrameLog, GlProbe, mb, mountDiagOverlay } from './diag.ts';
-import { buildTerrain, landmarkCull, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
+import { buildTerrain, landmarkCull, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, terrainSteps, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
+import { later, nextTask, runSliced, sliceStats } from './slice.ts';
 import { SocketResolver } from './vfx/sockets.ts';
 import { VfxSystem } from './vfx/system.ts';
 import { StructureFx } from './structures.ts';
@@ -219,6 +220,8 @@ const RESTORE_MAX_WAIT_MS = 8000;
  * this cap (the old behaviour, late).
  */
 const WARM_MAX_WAIT_MS = 12000;
+/** W4-C fix round: the longest Home is held for its programs (warmMenu), and for its sky first */
+const MENU_WARM_MAX_MS = 6000, MENU_WARM_SKY_MS = 3000;
 /** combat F5: which hard CC names itself on the plate when several hold a unit (most control lost first) */
 const CC_PLATE_ORDER = ['airborne', 'stun', 'sleep', 'taunt', 'fear', 'root', 'silence'];
 const _v = new Vector3();
@@ -512,6 +515,8 @@ class ValeRenderer implements Renderer {
         imagesShrunk: this.assets.shrunkImages, contextLosses: this.contextLosses,
       },
       frames: { fps: Math.round(this.fpsEma), drawn: this.frameLog.frames, over50ms: this.frameLog.over50, over250ms: this.frameLog.over250, worst: this.frameLog.worst, longTasks: this.frameLog.longTasks },
+      // W4-C fix round: the longest single step of the sliced load work (slice.ts) and the Home warm-up
+      sliced: { ...sliceStats, worstStepMs: Math.round(sliceStats.worstStepMs) },
       memory: heap ? { jsHeapMB: Math.round(heap.usedJSHeapSize / 1048576), limitMB: Math.round(heap.jsHeapSizeLimit / 1048576) } : null,
       mode: this.mode, uptimeS: Math.round(performance.now() / 1000),
     };
@@ -599,6 +604,7 @@ class ValeRenderer implements Renderer {
       lodSwitch.outline = lodSwitch.body = false;                          // perf PERF-m5: the showcase keeps its full body and hull
       this.assets.mark();
       this.menu.build(this.catalog, this.assets);
+      if (!this.menuWarmed) this.warmMenu();
       this.releaseMatchContent();
       this.mode = 'menu';
       this.post.setScene(this.menu.scene, this.menu.camera);
@@ -661,27 +667,41 @@ class ValeRenderer implements Renderer {
       if (gen !== this.matchGen) return;
       if (t) this.sky.apply(this.scene, t, L.ambient);
       this.envReady = true;
-      for (const o of this.ambientPending.splice(0)) this.warmAmbient(o);
-      this.lib.warmAll();
-      this.structs.warmAll(this.actors.values());
-      // perf PERF-m5: the terrain's own programs too (the Fallen Shaft's water was first compiled when the camera first
-      // passed it, 14-18 minutes in), and every caster already in the scene gets its shadow LOD now, not over the sweeps
-      if (this.terrain) { const tg = this.terrain.group; this.asIfComposer(() => void this.gl.compileAsync(tg, this.rig.camera, this.scene).catch(() => undefined)); }
-      shadowLods(this.scene);
-      // ruling 67: everything in the scene now (terrain, the map scene, actors placed so far, ambient), the VFX shapes,
-      // then the scene once more for whatever landed meanwhile; the view is drawn when both are done
-      void this.warmMatch(gen).then(() => { clearTimeout(warmCap); if (gen === this.matchGen && this.view === 'warming') this.setView('ok'); });
+      const alive = (): boolean => gen === this.matchGen;
+      // W4-C fix round: the warm-ups below were one 0.4-0.6 s task at the match's start (4x CPU throttle); each now
+      // takes its own turn (a template, the structures, the terrain, the casters' LODs a few per turn)
+      void (async () => {
+        for (const o of this.ambientPending.splice(0)) this.warmAmbient(o);
+        await nextTask();
+        await this.lib.warmAllSliced(alive);
+        if (!alive()) return;
+        this.structs.warmAll(this.actors.values());
+        await nextTask();
+        if (!alive()) return;
+        // perf PERF-m5: the terrain's own programs too (the Fallen Shaft's water was first compiled when the camera first
+        // passed it, 14-18 minutes in), and every caster already in the scene gets its shadow LOD now, not over the sweeps
+        if (this.terrain) { const tg = this.terrain.group; this.asIfComposer(() => void this.gl.compileAsync(tg, this.rig.camera, this.scene).catch(() => undefined)); }
+        void shadowLodsSliced(this.scene, alive);
+        await nextTask();
+        if (!alive()) return;
+        // ruling 67: everything in the scene now (terrain, the map scene, actors placed so far, ambient), the VFX shapes,
+        // then the scene once more for whatever landed meanwhile; the view is drawn when both are done
+        await this.warmMatch(gen);
+        clearTimeout(warmCap); if (alive() && this.view === 'warming') this.setView('ok');
+      })();
     });
     this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
     // world: procedural terrain now; the Blender scene replaces it when it exists
-    const pre = this.prebuilt?.map === map.id ? this.prebuilt.build : null;
+    const preRec = this.prebuilt?.map === map.id ? this.prebuilt : null;
+    const pre = preRec?.build ?? null;
     this.prebuilt = null;
     if (pre) {                                                             // buildTerrain's own global, set again now
       const cs = (map.art.terrain as { cloudShadow?: unknown } | undefined)?.cloudShadow;
       setCloudShadow({ map: typeof cs === 'number' && Number.isFinite(cs) && cs > 0 ? cs : 0 });
     }
-    this.terrain = pre ?? buildTerrain(map);
-    this.terrain.setScatter(this.q.scatter, this.q.ao > 0);
+    this.terrain = pre ?? buildTerrain(map, { scatter: this.q.scatter, ao: this.q.ao > 0 });
+    // W4-C fix round: a prebuilt terrain already stands at this scatter level (and has its props): no rebuild
+    if (preRec && (preRec.scatter !== this.q.scatter || preRec.ao !== this.q.ao > 0)) this.terrain.setScatter(this.q.scatter, this.q.ao > 0);
     this.ambient = new AmbientLayer(map, this.catalog.vfx, this.vfx.textures.atlas, ATLAS_GRID, (r) => this.assets.model(r), this.terrain.groundAt);
     // its programs (skinned critters, swaying cloth, the particle shader) compile as each part lands, not on first sight
     this.ambient.onPart = (o) => { if (gen === this.matchGen) { if (this.envReady) this.warmAmbient(o); else this.ambientPending.push(o); } };
@@ -690,12 +710,13 @@ class ValeRenderer implements Renderer {
     this.scene.add(this.terrain.group);
     inkShadows(this.terrain.group);
     this.loadTerrainTextures(map, gen);
-    void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) { this.terrain.setProps(p ?? {}); inkShadows(this.terrain.group); shadowLods(this.terrain.group); } });
+    if (preRec?.props) { inkShadows(this.terrain.group); shadowLodsSliced(this.terrain.group, () => gen === this.matchGen); }
+    else void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) { this.terrain.setProps(p ?? {}); inkShadows(this.terrain.group); shadowLodsSliced(this.terrain.group, () => gen === this.matchGen); } });
     // round 4 MEM-1 refix: a landmark's textures upload soon after it lands, one a frame (queueUploads), not on first
     // sight: the decoded ImageBitmap closes on upload (assets.ts closeAfterUpload), so a landmark the camera has not
     // reached yet no longer keeps its images decoded for the whole match (RIFT: 22 open bitmaps, 126 MB: numerals, camp
     // marks, the low skirt), and the frame that first sees one no longer pays its 2048² upload
-    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); shadowLods(o); this.terrain.group.add(o); this.queueUploads(o); } });
+    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); void shadowLodsSliced(o, () => gen === this.matchGen); this.terrain.group.add(o); this.queueUploads(o); } });
     this.assets.model(map.art.scene).then((m) => {
       if (gen !== this.matchGen || !m?.renderable) return;
       const root = m.gltf.scene;
@@ -781,6 +802,40 @@ class ValeRenderer implements Renderer {
     this.mode = 'none';
   }
 
+  /** W4-C fix round: the first Home frame waited on every program of the vale and the post chain, compiled one after
+   *  another on the draw (22 at High: on ANGLE over Direct3D 11 each is a driver compile, seconds in all, the page frozen).
+   *  They are compiled in parallel first (KHR_parallel_shader_compile through compileAsync), after the Home sky has
+   *  landed (its environment is part of every lit program's key), and the vale is drawn when they are ready (capped) */
+  private menuWarmed = false;
+  private menuHold = false;
+  private menuCleared = false;
+  private warmMenu(): void {
+    this.menuWarmed = true;
+    this.menuHold = true; this.menuCleared = false;
+    const release = (): void => { this.menuHold = false; };
+    const cap = setTimeout(release, MENU_WARM_MAX_MS);
+    const sky = (this.catalog.client.menuScene as { sky?: string }).sky;
+    void (async () => {
+      if (sky) await Promise.race([this.assets.hdr(sky).catch(() => null), new Promise((r) => setTimeout(r, MENU_WARM_SKY_MS))]);
+      await nextTask();
+      const jobs: Promise<unknown>[] = [];
+      this.asIfComposer(() => { jobs.push(this.gl.compileAsync(this.menu.scene, this.menu.camera).catch(() => undefined)); });
+      await nextTask();
+      const mats = this.post.materials();
+      if (mats.length) {
+        const tri = new BufferGeometry();
+        tri.setAttribute('position', new Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+        tri.setAttribute('uv', new Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
+        const holder = new Scene();
+        for (const m of mats) { const q = new Mesh(tri, m); q.frustumCulled = false; holder.add(q); }
+        this.asIfComposer(() => { jobs.push(this.gl.compileAsync(holder, this.menu.camera).catch(() => undefined)); });
+        void Promise.all(jobs).then(() => tri.dispose());
+      }
+      await Promise.all(jobs);
+      clearTimeout(cap); release();
+    })();
+  }
+
   /** ruling 67: compile the match scene's programs in parallel (two passes, a few seconds apart at most) */
   private async warmMatch(gen: number): Promise<void> {
     const pass = (): Promise<unknown> => {
@@ -795,7 +850,7 @@ class ValeRenderer implements Renderer {
     // the map scene GLB and the fighters' templates land during the first pass: wait for them briefly, then compile
     // what they added (compileAsync skips every program already built)
     const until = performance.now() + 4000;
-    while (gen === this.matchGen && (this.lib.pending > 0 || !this.mapScene && this.map?.art.scene) && performance.now() < until) await new Promise((r) => setTimeout(r, 100));
+    while (gen === this.matchGen && (this.lib.pending > 0 || this.attachQueued > 0 || !this.mapScene && this.map?.art.scene) && performance.now() < until) await new Promise((r) => setTimeout(r, 100));
     if (gen !== this.matchGen) return;
     await pass();
   }
@@ -931,6 +986,16 @@ class ValeRenderer implements Renderer {
   }
 
   // ── per-frame match update ─────────────────────────────────────────────────────────────────────
+  /** W4-C fix round: while the match's view is held (the start), each actor is dressed in its own turn (slice.ts later):
+   *  every actor of the field was dressed on the first match frame (outline hulls, structure shells and occlusion
+   *  proxies: a 0.25-0.6 s frame under a 4x CPU throttle). In play an actor is dressed at once, as before */
+  private attachSoon(job: () => void): void {
+    if (this.view !== 'warming') { job(); return; }
+    const gen = this.matchGen;
+    this.attachQueued++;
+    later(() => { this.attachQueued--; if (gen === this.matchGen) job(); });
+  }
+  private attachQueued = 0;
   private syncActors(view: WorldView): void {
     const tick = view.tick;
     const newTick = tick !== this.lastTick;
@@ -949,20 +1014,20 @@ class ValeRenderer implements Renderer {
           const def = this.lib.fighter(e.def);
           if (def) {
             a.configureFighter(def);
-            this.lib.fighterTemplate(e.def, e.skin).then((t) => {
+            this.lib.fighterTemplate(e.def, e.skin).then((t) => this.attachSoon(() => {
               actor.attach(t, def.art.scale, def.art.accentMaterial);
               // orch1 W2-A fix 2: the fighter's own exposure (lighting.ts CHAR_LIGHT.exposure; world_material.ts valeCharExpo)
               this.applyCharExpo(actor);
-            });
+            }));
           }
         } else {
           const def = this.lib.unit(e.def);
           if (def) {
             a.configureUnit(def);
-            this.lib.unitTemplate(e.def, this.palette.ffa ? null : e.team).then((t) => {
+            this.lib.unitTemplate(e.def, this.palette.ffa ? null : e.team).then((t) => this.attachSoon(() => {
               actor.attach(t, def.art.scale, 'accent');
               if (def.kind === 'structure' && actor.model) this.structs.attach(actor, def);
-            });
+            }));
           }
         }
         a.pushTick(e, tick);
@@ -1376,6 +1441,12 @@ class ValeRenderer implements Renderer {
     if (this.mode === 'match' && this.client) this.frameMatch(d);
     else if (this.mode === 'menu') { this.menu.update(d); this.vfx.update(d); }
 
+    if (this.menuHold && this.mode === 'menu' && this.view === 'ok') {
+      // W4-C fix round: Home's programs compile in parallel first (warmMenu); one clear, no draws until they are in
+      if (!this.menuCleared) { this.menuCleared = true; const prev = this.gl.getRenderTarget(); this.gl.setRenderTarget(null); this.gl.clear(true, true, false); this.gl.setRenderTarget(prev); }
+      this.frameMs = performance.now() - t0;
+      return;
+    }
     if (this.view === 'warming' && this.mode === 'match') {
       // ruling 67: held while the match's programs compile; one clear to the fog colour, no draws (no program used)
       if (!this.warmCleared) {
@@ -1524,8 +1595,9 @@ class ValeRenderer implements Renderer {
   private warmed = new WeakSet<import('three').Object3D>();
   private warmTemplate(root: import('three').Object3D, programs = true, again = false): void {
     const gl = this.gl;
-    // perf PERF-m5: the template's shadow LODs, built once and shared by every clone (a no-op until lodReady)
-    shadowLods(root);
+    // perf PERF-m5: the template's shadow LODs, built once and shared by every clone (a no-op until lodReady); W4-C fix
+    // round: a caster per turn, not the whole template in the task that built it
+    void shadowLodsSliced(root);
     if (!again) {
       if (this.warmed.has(root)) return;
       this.warmed.add(root);
@@ -1699,22 +1771,42 @@ class ValeRenderer implements Renderer {
     for (const s of setup.seats) jobs.push(this.lib.fighterTemplate(s.fighter, s.skin));
     // unit templates too (per side): their textures upload and their programs compile behind the loading screen
     for (const u of units) for (const t of teams ? [...new Set(teams)] : [null]) jobs.push(this.lib.unitTemplate(u, t));
+    // W4-C fix round: the procedural terrain is built in steps (runSliced: the page gets a turn every ~24 ms) WHILE the
+    // models download, at the player's scatter level (built once, not at 2 and rebuilt), and its props are laid in
+    // here too; it was one 0.65-0.75 s task after every download (4x CPU throttle)
+    const gen = this.matchGen;
+    const alive = (): boolean => this.mode !== 'match' && gen === this.matchGen;
+    let terrainJob: Promise<unknown> = Promise.resolve();
+    if (map && this.prebuilt?.map !== map.id) {
+      this.prebuilt?.build.dispose(); this.prebuilt = null;
+      const scatter = this.q.scatter, ao = this.q.ao > 0;
+      terrainJob = runSliced(terrainSteps(map, { scatter, ao }), 24, alive).then(async (build) => {
+        if (!build) return;
+        if (!alive()) { build.dispose(); return; }
+        const rec = { map: map.id, build, scatter, ao, props: false };
+        this.prebuilt = rec;
+        const p = await loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null);
+        await nextTask();
+        if (this.prebuilt !== rec || !alive()) return;
+        build.setProps(p ?? {}); rec.props = true;
+      });
+    }
     let done = 0;
+    const total = jobs.length + 1;
     onProgress?.(0);
-    await Promise.all(jobs.map((j) => j.then(() => { done++; onProgress?.(done / jobs.length); })));
+    await Promise.all([...jobs, terrainJob].map((j) => j.then(() => { done++; onProgress?.(Math.min(0.95, done / total)); })));
     this.evictUnusedImages();
+    await nextTask();
     // the VFX programs (every mesh shape, ribbons, decals, distortion) compile here, not on the first ultimate
     this.asIfComposer(() => this.vfx.prewarm(this.gl, this.rig.camera));
-    // ruling 67: the procedural terrain (0.73 s in one piece under a 4x CPU throttle) is built here, behind the loading
-    // screen, after a yield; the match's first task takes it ready-made instead of stalling the HUD's first frame
-    if (map && this.prebuilt?.map !== map.id) {
-      await new Promise((r) => setTimeout(r, 0));
-      if (this.mode !== 'match') { this.prebuilt?.build.dispose(); this.prebuilt = { map: map.id, build: buildTerrain(map) }; }
-    }
+    await nextTask();
+    // W4-C fix round: every template's shadow LOD and ink (outline) LOD, a mesh per step, behind the loading screen (they
+    // were built on the match's first frames: 0.3-0.6 s tasks under a 4x CPU throttle)
+    await this.lib.prepareLods(alive);
     onProgress?.(1);
   }
   /** ruling 67: a terrain built by preload() for the coming match (setupMatch takes it) */
-  private prebuilt: { map: string; build: TerrainBuild } | null = null;
+  private prebuilt: { map: string; build: TerrainBuild; scatter: 0 | 1 | 2; ao: boolean; props: boolean } | null = null;
 
   // ── first-run calibration (perf PERF-C1) ───────────────────────────────────────────────────────
   private calib: { start: number; end: number; last: number; iv: number[]; windows: CalibWindow[]; seconds: number; video: Settings['video']; hidden: boolean; tier: 'high' | 'medium' | 'low'; done: (r: CalibrationResult) => void } | null = null;
@@ -1743,6 +1835,8 @@ class ValeRenderer implements Renderer {
 
   private calibSample(now: number): void {
     const c = this.calib!;
+    // W4-C fix round: frames held for Home's programs draw nothing; the sample window starts once the vale is drawn
+    if (this.menuHold && this.mode === 'menu') { const span = c.end - c.start; c.start = now; c.end = now + span; c.last = 0; return; }
     if (typeof document !== 'undefined' && document.hidden) c.hidden = true;
     if (now >= c.start && c.last > 0) c.iv.push(now - c.last);
     c.last = now;
