@@ -1,0 +1,66 @@
+{
+ "verifier": "lane AI (opponents, W1-A / W3-A), independent verifier round 1 for the ruling 66 carve-out, at HEAD 7cb0f4a5d (src/sim/bots unchanged since 784a9bdd0; git diff 784a9bdd0..HEAD -- src/sim is empty)",
+ "date": "2026-11-25 CST",
+ "pass": true,
+ "score": 7.8,
+ "safeToShip": true,
+ "blockers": [],
+ "method": {
+  "arms": "One tree, no worktree. git archive of 8c95deb52's src/sim/bots into src/sim/_vfy9_live; the probes take VALE_BOTS. Both arms ran HEAD's sim and HEAD's probes (the sim outside bots is identical between 8c95deb52 and HEAD). Proof the arms differ: the live arm says 0 pings in every game, HEAD 0.50 / 1.21 / 1.23 a team-minute.",
+  "sim": "probe_sim_bot_tactics through heavy.py, paired by seed, both teams one tier, cut 30:00: RIFT s701-764 (64 a tier), fresh RIFT s1001-1032 (32 a tier), BRIDGE + FRAY s701-724 (24 each a tier). probe_sim_bot_pings --seeds 8 at s701 and s1001 per tier on both arms. probe_sim_determinism. probe_sim_bot_soak (quick).",
+  "live": "Real Chrome (pw.mjs, installed channel, GPU on, 1920x1080) on my own vite dev servers (hmr off, frozen, private dep cache): :5391 served HEAD, :5392 the same tree with a resolveId plugin pointing src/sim/bots at the 8c95deb52 copy; the page's resource list confirmed which bots were served (HEAD: /sim/bots/ incl. comms.ts; live: /_vfy9_live/ only). The real client with HUD: custom RIFT, my seat on team 0 with four computer-run teammates, five computer-run opponents, all at the tier. My walking was the dev autopilot with its own pings stripped; my pings were sent through client.send by an in-page watcher in real situations: assist when in a fight with a seen enemy within 11 m and no ally within 20 m (every 50 s at most), retreat when outnumbered by 2+, danger on 3+ enemies seen together, push on the nearest enemy Needle within 60 m from 12:00, objective on the biggest camp from 10:00. Matches: HEAD adept s7 (23:37, full game), HEAD veteran s5 (21:57, full game), and live 8c95deb52 adept s7 (25:26) as the comparison. Screenshots looked at: the HUD's 'belle_of_noon is heading there' line and world mark at 13:52 with the teammate walking in.",
+  "cleanup": "Stopped both vite servers (ports free), removed src/sim/_vfy9_live, my _harness/_tmp_vfy_ai9_* driver, watcher and vite config, and my vite caches. No worktree made. Raw JSON, logs and shots stayed in the session scratchpad."
+ },
+ "items": {
+  "tactics_and_pace_vs_live": {
+   "verdict": "INDISTINGUISHABLE from 8c95deb52. Not a single non-ping difference in 432 paired games.",
+   "facts": [
+    "RIFT s701-764: game length, winner and every non-ping per-game counter identical in 64 / 64 / 64 games (novice / adept / veteran). Mean length 24.43 / 22.98 / 23.41 min on both arms, paired difference +0.00. Games at 30:00: 7 / 2 / 3 on both.",
+    "Fresh RIFT s1001-1032: identical in 32 / 32 / 32. Length 25.80 / 23.79 / 23.35 min on both; 30:00 games 4 / 2 / 1 on both.",
+    "BRIDGE s701-724 and FRAY s701-724: identical in 24 of 24 at every tier (144 of 144).",
+    "Gate fails are the same on both arms: s701 4 (novice fit-and-away 31.8 s, adept undefended inner+base 37.0 %, veteran dither 1.84, veteran peel 70.9 %); s1001 3 (novice fit-and-away 26.9, veteran dither, veteran peel 68.6 %); FRAY 2 (adept / veteran low-and-stayed 65.5 / 63.0 %). All old, all live's.",
+    "Team-play reads are live's by construction (same games): group sieges adept 44.0 %, veteran 37.6 %; won fight to structure blow 21.2 / 21.2 %; lone deaths into three 13.5 / 12.7 % (s701)."
+   ]
+  },
+  "pings_said": {
+   "verdict": "Quiet, never about the unseen, never spam, no push or objective calls; what my teammates said in the played matches made sense.",
+   "facts": [
+    "Sim: rate a team-minute 0.50 / 1.21 / 1.23 (s701), 0.53 / 1.24 / 1.24 (s1001). Pings about something the team could not see 0, fighter-twice-in-10 s 0, team-over-3-in-10 s 0, push / objective said 0 / 0 at every tier on both seed sets.",
+    "Played, HEAD adept: 27 pings from my teammates in 23.6 min (1.14 a minute): 11 assist, 7 danger, 5 onMyWay, 3 retreat, 1 missing. Every assist came from a fighter in a fight (2-4 enemies within 20 m, or itself hurt to 19-44 %); every danger marked 3-5 enemy fighters seen together; retreats came at 4-84 % health with 4-5 enemies there. None about an unseen target.",
+    "Played, HEAD veteran: 36 in 22.0 min (1.64 a minute): 16 assist, 7 onMyWay, 7 missing, 5 danger, 1 retreat. Missings came from a laner whose lane opponent was gone (no enemy within 20 m), which is the genre's use. A few late assists were said at 97-100 % health in a 3v3 (a teamfight call), sensible.",
+    "Played, live 8c95deb52 adept: 0 pings from teammates in 25.4 min (live says none)."
+   ]
+  },
+  "help_ping_answered": {
+   "verdict": "CLEARLY MORE than live, and real: every 'heading there' was followed by the teammate arriving.",
+   "facts": [
+    "probe_sim_bot_pings, a person's assist answered within 5 s, HEAD / live: novice 64 % of 59 + 63 % of 56 vs 10 % of 61 + 15 % of 54; adept 70 % of 50 + 44 % of 25 vs 20 % of 40 + 4 % of 24; veteran 74 % of 47 + 71 % of 48 vs 12 % of 41 + 8 % of 50 (s701 + s1001). Pooled about 64 / 61 / 73 % against 12 / 14 / 10 %. HEAD passes the >= 35 % gate on all six runs, live fails all six.",
+    "Played, my assist pings (25 m inside 10 s, counting only teammates who were not already there): HEAD adept s7 5 of 16, HEAD veteran s5 6 of 7, together 11 of 23. Live adept s7 3 of 15 (and 0 acknowledged). On the very same first situation (s7 1:40, nearest ally 48 m) HEAD's grovehunter said 'heading there' in 3.5 s and a teammate reached me in 9.4 s; live sent nobody.",
+    "HEAD adept's 11 unanswered asks: 9 were laning-phase 1v1 lane trades (before 14:00; 5 of 14 answered there) with the only eligible helper (that road's laners and the grovehunter) far or busy, as ruling 66 designs; the other 2 (15:23, 22:54) came with every teammate 48-79 m away. Veteran: 3 of 4 before 14:00 and 3 of 3 after, two of them by two or three teammates.",
+    "No false acknowledgements: all 12 onMyWay replies to my assists (5 adept, 7 veteran) were followed by that fighter coming within 0-19 m of the ping inside 12 s. Push pings 8 sent, objective 8, retreat 11, danger 14: 0 onMyWay to any of them (push and objective are ignored by design; danger is said but not acted on; retreat is only weighed).",
+    "probe_sim_bot_pings: push acknowledged 0 % at every tier on both seed sets; 'acknowledged and not followed' 0."
+   ]
+  },
+  "enemy_pings": {
+   "verdict": "Never shown or heard.",
+   "facts": [
+    "Sim: enemy-team pings 62-147 a run, shown to the person 0 in all six HEAD runs.",
+    "Played: HUD world marks seen 64 (adept) and 63 (veteran), enemy-team marks 0 in both; no enemy ping line in the feed. The audio uses the same rule (src/audio/index.ts case 'ping': only a ping by a player of your team sounds)."
+   ]
+  },
+  "determinism_and_soak": {
+   "verdict": "PASS.",
+   "facts": [
+    "probe_sim_determinism 6 / 6 PASS.",
+    "probe_sim_bot_soak quick PASS: Wicks last-hit 44.9 / 47.3 %, cs at 10:00 50.5 / 56.9, laners in lane 68.7 / 66.9 %, takedowns by 10:00 8.75 / 6.38 a game (adept / veteran)."
+   ]
+  }
+ },
+ "watched_as_a_player": "On the team with them, the computer-played teammates now talk like players and the talk is believable: 'needs a hand' when one of them is in a fight, 'trouble here' on a group of three, 'lost sight' when its lane opponent walks off, about one to one and a half calls a minute and never two from one fighter in a row. When I asked for help and one of them said it was heading there, it came every time (12 of 12). The enemy's calls never reached my screen. In the laning phase my help calls in a 1v1 lane trade were often left alone, which a player would accept; from mid game a call usually brought one or two. Their play otherwise is exactly the live build's, game for game, so there is no new weakness and no new strength in how they attack or defend.",
+ "problems": [
+  "Adept laning-phase help calls are answered less than later ones (5 of 14 before 14:00 in the played adept match, 0 of 2 after; adept s1001 sim 44 % against 70 % on s701). By design (only that road's laners and the grovehunter go), still clearly above live (20 % / 4 %). Not a blocker.",
+  "A computer-played teammate's own 'needs a hand' is not answered by its computer-played mates (13-15 % reached, the live wander-by rate). It reads as a call to the person, not a broken promise, because no 'heading there' is said. Ruling 66 drops this knowingly.",
+  "Old, unchanged, live's own: novice fit-and-away, adept undefended inner+base 37 %, veteran dither 1.84, veteran peel 69-71 %, FRAY low-and-stayed at adept and veteran."
+ ],
+ "next": "Ship the carve-out. Bot-to-bot answering and the push / objective follow-through stay for a later lane that pays for its pace."
+}
