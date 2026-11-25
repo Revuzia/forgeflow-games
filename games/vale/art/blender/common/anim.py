@@ -1245,6 +1245,76 @@ def gen_walk(profile: dict) -> Clip:
                                                "cycle_s": round(T, 3)})
 
 
+# FU-8 (ruling 69): the line-of-action re-keys, per fighter: clip -> (extra counter-twist deg, impact hold frames). The worst
+# 30 % of each fighter's attack and cast clips by _harness/probe_clip_line.ts (ults first), sized to bring the counter-twist
+# to about 24 deg and to hold the impact 2 frames. standard_clips applies them (a rebuild keeps them); the shipped GLBs got
+# the same re-key on their SHIPPED clip data (art/blender/fighters/_loa_rekey.mjs: a regenerated clip does not match the
+# shipped one for seven fighters whose hands were fixed on the GLB after their build).
+LOA_REKEY = {
+    "ardit": {"cast_ult": (24, 0), "attack2": (15, 2)},
+    "burdam": {"attack1": (42, 2), "cast_a1": (40, 2)},
+    "dunsom": {"cast_ult": (0, 2), "attack1": (18, 2)},
+    "ervet": {"cast_ult": (24, 2), "cast_a3": (23, 2)},
+    "hesmi": {"cast_ult": (24, 2), "cast_a3": (24, 2)},
+    "ilsheta": {"cast_ult": (24, 0), "attack2": (14, 2)},
+    "kemdo": {"cast_ult": (44, 0), "cast_a2": (24, 2)},
+    "lisvel": {"cast_ult": (13, 2), "attack1": (0, 2)},
+    "marund": {"cast_ult": (32, 0), "cast_a2": (35, 2)},
+    "nurrow": {"cast_ult": (24, 2), "cast_a1": (26, 2)},
+    "odrum": {"cast_ult": (0, 2), "cast_a3": (29, 2)},
+    "rishal": {"cast_ult": (34, 0), "crit": (24, 2)},
+    "sukri": {"cast_ult": (6, 0), "attack1": (21, 2)},
+    "tunlan": {"cast_ult": (24, 2), "cast_a3": (16, 2)},
+    "ulkro": {"cast_ult": (24, 0), "cast_a2": (24, 2)},
+    "vashil": {"cast_ult": (24, 2), "cast_a2": (21, 2)},
+}
+
+
+def line_of_action(clip: Clip, twist_deg: float = 0.0, hold_frames: int = 0) -> Clip:
+    """orch1 W3-B FU-8 (ruling 69): a line-of-action re-key over an existing attack or cast clip, impact kept at IMPACT.
+      * counter-twist: spine and chest turn AWAY from the strike's own turn by up to `twist_deg` (half each; the hips and
+        the planted feet stay as keyed; the head counter-turns 30 % to hold its gaze), wound up over 0.05-0.27 of the clip, held to 0.30, unwound
+        on an accelerating ease into the impact;
+      * impact hold: the impact pose held `hold_frames` frames, the follow-through after it compressed into what is left,
+        so the clip's length and its impact frame are unchanged.
+    The strike's turn is read from the clip itself (hips + spine + chest yaw at the impact against frame 0; a clip with
+    no turn of its own winds up to the right-hand side's back, as a right-handed swing does)."""
+    base = clip.sample
+    ti = clip.impact if clip.impact is not None else IMPACT
+    h = hold_frames / max(1, clip.frames)
+    yaw = lambda p: sum(p.get(b, (0.0, 0.0, 0.0))[1] for b in ("hips", "spine", "chest"))  # noqa: E731
+    d = yaw(base(ti)) - yaw(base(0.0))
+    sgn = 1.0 if d > 1.0 else -1.0 if d < -1.0 else 1.0
+
+    def env(t):
+        if t < 0.05:
+            return 0.0
+        if t < 0.27:
+            return sine((t - 0.05) / 0.22)
+        if t < 0.30:
+            return 1.0
+        if t < ti:
+            return 1.0 - ease_in((t - 0.30) / max(1e-6, ti - 0.30))
+        return 0.0
+
+    def remap(t):
+        if h <= 0 or t <= ti:
+            return t
+        if t <= ti + h:
+            return ti
+        return ti + (t - ti - h) * (1.0 - ti) / max(1e-6, 1.0 - ti - h)
+
+    def sample(t):
+        p = base(remap(t))
+        if twist_deg <= 0:
+            return p
+        e = -sgn * twist_deg * env(remap(t))
+        return add(p, P(spine=(0, 0.5 * e, 0), chest=(0, 0.5 * e, 0), head=(0, -0.30 * e, 0)))
+
+    return Clip(clip.name, clip.frames, clip.loop, sample, clip.impact, clip.secondary,
+                dict(clip.meta, loa={"twist_deg": twist_deg, "hold_frames": hold_frames, "turn_sign": sgn}))
+
+
 def standard_clips(skel: Skeleton, profile: dict, overrides: dict | None = None,
                    optional=("channel", "dash", "stunned")) -> dict:
     """The full required set (+ optional) for a motion profile; overrides replace/add clips."""
@@ -1270,6 +1340,11 @@ def standard_clips(skel: Skeleton, profile: dict, overrides: dict | None = None,
     clips["walk"] = gen_walk(profile)
     for k, v in (overrides or {}).items():
         clips[k] = v
+    import os as _os
+    loa = {} if _os.environ.get("VALE_NO_LOA") else LOA_REKEY.get(skel.arm.get("vale_fighter", "") if skel is not None else "", {})
+    for k, (tw, hf) in loa.items():
+        if k in clips and "loa" not in clips[k].meta:      # once (a fighter script may call standard_clips itself)
+            clips[k] = line_of_action(clips[k], tw, hf)
     return clips
 
 

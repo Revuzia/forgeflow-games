@@ -8,7 +8,8 @@ build's optimize does); no texture, mesh or other clip of the shipped file chang
 untouched (skins read the base model's clips by bone name).
 
     Blender -b --factory-startup --python-exit-code 1 --python art/blender/fighters/_motion_pass.py -- \
-        <fighter id> <out_anim.glb> walk,sprint,airborne,sleep
+        <fighter id> <out_anim.glb> walk[,attack1,...] [--loa attack1:18:2,cast_ult:24:2]
+--loa re-keys a clip's line of action (anim.line_of_action: extra counter-twist in degrees, impact hold in frames).
 
 Secondary motion runs on the x_<chain>_<n> bones grouped by chain (the spec's chain_config when it has one).
 """
@@ -29,6 +30,14 @@ from common.fighter import Context  # noqa: E402
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    loa = {}
+    if "--loa" in argv:
+        # FU-8: clip:twist_deg:hold_frames,... (anim.line_of_action over the fighter's own clip)
+        i = argv.index("--loa")
+        for item in argv[i + 1].split(","):
+            c, tw, hf = item.split(":")
+            loa[c] = (float(tw), int(hf))
+        argv = argv[:i] + argv[i + 2:]
     fid, out, want = argv[0], argv[1], argv[2].split(",")
     path = os.path.join(scene.BLENDER_DIR, "fighters", f"{fid}.py")
     s = importlib.util.spec_from_file_location(f"fighter_{fid}", path)
@@ -61,7 +70,8 @@ def main():
         ad.action = None
     for a in list(bpy.data.actions):
         bpy.data.actions.remove(a)
-    info = anim.write_clips(arm, {c: clips[c] for c in want}, chains)
+    sel = {c: (anim.line_of_action(clips[c], *loa[c]) if c in loa else clips[c]) for c in want}
+    info = anim.write_clips(arm, sel, chains)
     export.export_glb([arm], out, animations=True)
     print("motion_pass:", fid, json.dumps(info))
 
