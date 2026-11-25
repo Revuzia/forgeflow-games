@@ -3,6 +3,13 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-25 — water blink from altitude fixed (LIVE ?v=1795589138)
+
+- Owner bug "water blinks when floating from high above". Cause: the sea was ONE 5.6 km quad (clip float error against the seabed at the shore lip) + a 0.1 m near plane while gliding. Fix (maps.js): WATER_SEG 64 (64 x 64 sea plane) + glide near plane 0.1 m (<= 30 m up) -> 1.0 m (from 120 m). Toggle share of water pixels: isla_viva 5 % -> 0.01-0.04 %, deepwood river 1.5-3.7 % -> 0.04-0.13 %.
+- Wet sand from the air: nothing under the live waterline is darkened (the old build only passed because the blink left gaps in the water at the lip).
+- Gate p23_waterblink (plants one-quad, ground-near). A view over BAR is judged on its excess over the error-free reference render of the same view (thin-river waterline aliasing; BAR unchanged). w10_waterlook low-identical split: non-water pixels identical to base, water pixels at least as close to the 512-seg reference as the base (edited with the code it judges - LOW had to lose the blink too).
+- KNOWN RED at release: p23_waterblink "ground-level look unchanged" on deepwood medium/ultra river close-ups - fixed vs reference 1.0-1.4 % of pixels (bar 0.2 %); live was 17 %, so not a regression; 128 segments gave 0.85 % (not adopted). Needs a better remedy than grid density.
+
 ## 2026-11-24 — only Practice can pause (LIVE ?v=1795557862)
 
 - Battle Royale, Quick Match and friends rooms never freeze: Esc opens the MENU card ("The match keeps running while this is open"), a hidden tab, a phone turned upright and a context restore no longer pause. Practice pauses as before. One rule: hud.js canPause(W) = practice && offline.

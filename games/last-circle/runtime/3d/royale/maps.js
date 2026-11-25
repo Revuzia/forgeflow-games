@@ -620,8 +620,11 @@ const LC_FRAG_ALBEDO = `
   // every coast a thick dark halo in the drop view and turned a submerged neck muddy. Close up (<= ~180 m, gone by ~300 m: the drop view is >= 330 m up) the shallow seabed keeps its
   // darker wet tone (it carries the in-water / looking-down detail). The swash band on land is 3-7 m of slope close up (it carries the shore's wet look
   // there) and narrows to 2-4 m from the air (a thin line, not a wide dark rim round every islet).
+  // water-blink fix (owner 2026-11-24, gate p23_waterblink): from the air the seabed is not darkened at all under the live waterline (was its first
+  // 0.12 m). That sliver only ever showed because the 1-quad sea lost the depth test at the shallow lip (the blink); with the water drawn there it
+  // read as a dark rim through the translucent lip (w10_waterlook live-frame seabed 0.056 -> 1.32 % of the drop view; 0.88 % with this, fix4's bar 1 %)
   float lnear = 1.0 - smoothstep( 180.0, 300.0, length( cameraPosition - vLcW ) );
-  float lsub = max( smoothstep( -0.12, -0.02, lhw ), lnear * step( -8.0, lhw ) );
+  float lsub = max( smoothstep( -0.02, 0.0, lhw ), lnear * step( -8.0, lhw ) );
   diffuseColor.rgb *= 1.0 - uLcWetK.x * ( 1.0 - smoothstep( mix( 0.05, 0.3, lnear ), mix( 0.35, 1.1, lnear ), lhw ) ) * ( 1.0 - smoothstep( mix( 2.0, 3.0, lnear ), mix( 4.0, 7.0, lnear ), lwd ) ) * lsub;
 }
 #endif`;
@@ -1755,7 +1758,14 @@ export async function buildMap(W, mapId) {
     // where even the thinned fog is >= 96% blended, so the horizon is the far-plane clip instead. 2 triangles either way; the
     // ripple repeat below scales with the plane so the tile stays ~28 m.
     const WATER_W = SIZE * 3.5;
-    const wgeo = new THREE.PlaneGeometry(WATER_W, WATER_W, 1, 1);
+    // WATER BLINK FROM ALTITUDE (owner 2026-11-24, gate p23_waterblink): the plane was ONE quad (2 triangles, 5.6 km a side). Every frame the
+    // camera moved, those two triangles were re-clipped against the view volume (most of each lies behind the camera or past the 2000 m far
+    // plane), and the clipped vertices' float error tilted the water's interpolated depth by more than the few cm of water over the beach:
+    // from the drop the shore lip / shallows flipped between water and the seabed under it, frame to frame (up to 3.6 % of the water pixels;
+    // 0 with the camera still; polygonOffset -4 units did not help - not quantisation). 64 x 64 cells (~87 m, 8 k triangles, no fragment cost)
+    // keep the triangles in view unclipped: 0.1 % (gate floor). Shading is unchanged: the plane is flat, every varying is linear across it.
+    const WATER_SEG = 64;
+    const wgeo = new THREE.PlaneGeometry(WATER_W, WATER_W, WATER_SEG, WATER_SEG);
     wgeo.rotateX(-Math.PI / 2);
     // roughness 0.13 + metalness 0.3 was two bugs at once. (a) With NoToneMapping
     // (line 276) nothing compresses highlights, and GGX at roughness 0.13 pushes
@@ -2027,6 +2037,31 @@ export async function buildMap(W, mapId) {
       const u = ag <= FOG_LO ? 0 : ag >= FOG_HI ? 1 : (ag - FOG_LO) / (FOG_HI - FOG_LO);
       fog.density = K.fog * (1 - (1 - FOG_MIN) * (u * u * (3 - 2 * u)));
     });
+
+    // ── WATER BLINK FROM ALTITUDE, part 2 (owner 2026-11-24, gate p23_waterblink): the depth buffer's resolution at range is ~ d^2 / near,
+    // and with the kernel's 0.1 m near plane a beach seen from the drop (300-1500 m away) resolves only 5 cm - 1.3 m of depth, coarser than
+    // the water over the sand at the foam lip: with the sea subdivided (above) the lip still sparkled between water and seabed (0.16 % of
+    // the water pixels per frame; 0.01 % with a 1 m near plane). While the camera's focus is GLIDING (free fall / canopy: the camera rides
+    // 9-10 m behind the diver, nothing of the world within metres of it) the near plane grows with the height over the ground / water,
+    // 0.1 m at <= 30 m to 1.0 m from 120 m up: 10x the depth resolution where the whole island is in view. On the ground (first person,
+    // ADS, a wall at the camera) it is the kernel's own near plane, untouched. No shader / draw cost (a projection matrix the camera
+    // rebuilds every frame anyway). The far plane is unchanged.
+    const NEAR_AG0 = 30, NEAR_AG1 = 120, NEAR_HI = 1.0;
+    if (W.kernel._nearGround == null) W.kernel._nearGround = W.camera ? W.camera.near : 0.1;
+    const glideNear = () => {
+      const cam = W.camera, f = W._camFocus || W.player, n0 = W.kernel._nearGround;
+      if (!cam) return null;
+      let n = n0;
+      if (f && f.gliding && !W._underwater) {
+        const ag = cam.position.y - Math.max(heightAt0(cam.position.x, cam.position.z), waterY);
+        const u = Math.max(0, Math.min(1, (ag - NEAR_AG0) / (NEAR_AG1 - NEAR_AG0)));
+        n = n0 + (NEAR_HI - n0) * u;
+      }
+      if (Math.abs(cam.near - n) > 1e-4) { cam.near = n; cam.updateProjectionMatrix(); }
+      return n;
+    };
+    trackUpdater(glideNear);
+    W._lcGlideNear = glideNear;      // (the harness re-applies it after placing a pinned camera: p23_waterblink)
   }
 
   // ── constant texel density ────────────────────────────────────────────────
