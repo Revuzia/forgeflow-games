@@ -794,10 +794,27 @@ LOW_CAMS = {
     "shore": [193.004, 2.499, -331.283, 216.02, 0.3, -368.152, 70],
     "inwater": [184.87, 0.45, -360.333, 204.669, 2.5, -397.102, 70],
 }
-LOW_CAMS_ID = "lowcams1w"   # (w: the storm wall's uTime pinned in these frames - base views cached before the pin are not reused)
+LOW_CAMS_ID = "lowcams1w_hr"  # (w: the storm wall's uTime pinned in these frames - base views cached before the pin are not reused; _h: + each view
+                               # with the water hidden, for the water / shoreline mask of the split row below; r: + the base's 512 x 512 reference-plane render)
+LOW_CAMS_PREV = "lowcams1w"    # the previous cache of the same base views (no hidden frames): the re-render is checked against it (info)
+# water-blink fix (owner 2026-11-24; ORCHESTRATOR RULING, gate p23_waterblink): the blink is fixed on LOW and phones too (maps.js WATER_SEG = 64: the
+# 1-quad sea's depth float error is gone), so the low tier's WATER pixels may change - only as the removal of that error. The low-identical row
+# splits each view: the water / shoreline pixels (the water layer changes them in the build, in the 512 x 512 reference plane frame or in the base,
+# each against its own session's frame with the water hidden; + LOW_SHORE_PX of rim for the edge's anti-aliasing) must be at least as close to
+# the BASE's own 512 x 512 reference-plane render (the base's water shading without its float error: a water shading change in the build is
+# then a distance, not hidden by a reference the build drew itself) as the base is - mean |d| <= the base's, and the share > 8 / 255 <= the
+# base's + the row's own noise allowance (0.001 % of the frame, 9 px); EVERY other pixel identical to the base (<= 0.001 %, unchanged)
+LOW_SHORE_PX = 1
+LOW_REF_SEG = 512
+LOW_SWAP_JS = r"""(seg) => { const W = window.__LC__.W, T = W.THREE, w = W.map && W.map.water; if (!w) return null;
+  if (!w.userData.__lowShip) w.userData.__lowShip = w.geometry;
+  const p = w.userData.__lowShip.parameters;
+  if (seg) { if (!w.userData.__lowRef) { const g = new T.PlaneGeometry(p.width, p.height, seg, seg); g.rotateX(-Math.PI / 2); w.userData.__lowRef = g; } w.geometry = w.userData.__lowRef; }
+  else w.geometry = w.userData.__lowShip;
+  return w.geometry.parameters.widthSegments; }"""
 
 
-def part_low(s, v, R, shots, tag):
+def part_low(s, v, R, shots, tag, extra=()):
     """the low tier on isla_viva: 4 views with the map clock pinned (t 100), for the pixel compare with the base. The loot group is hidden in
     these frames (its beams pulse on the sim clock: W.t differs run to run; loot.js is not this lane's file), and so are the launch portals'
     rings / swirls (animated off the frame loop) and the door leaves (bots open them): none of them changed by this lane"""
@@ -805,9 +822,23 @@ def part_low(s, v, R, shots, tag):
     out = {}
     for nm in ("ground", "groundlow", "shore", "inwater"):
         if nm in cams and cams[nm]:
-            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=("loot", "portals", "doors"), settle=100.0, wall_t=100.0)
+            hide = ["loot", "portals", "doors"]
+            r = shoot(s, cams[nm], shots, "%s_low_%s" % (tag, nm), hide=hide, settle=100.0, wall_t=100.0)
             out[nm] = r["A"]
+            # (the same frame - no step between - with the water hidden; with the water drawn on the 512 x 512 reference plane)
+            if "hid" in extra:
+                out[nm + "__hid"] = decode(s.js(RENDER_JS, [cams[nm], hide + ["water"], None])["png"])
+            if "ref" in extra:
+                out[nm + "__seg"] = s.js(LOW_SWAP_JS, LOW_REF_SEG)
+                out[nm + "__ref"] = decode(s.js(RENDER_JS, [cams[nm], hide, None])["png"])
+                s.js(LOW_SWAP_JS, 0)
+                save_arr(out[nm + "__ref"], shots, "%s_low_%s_ref512.png" % (tag, nm))
     return out
+
+
+def save_arr(A, d, name):
+    os.makedirs(d, exist_ok=True)
+    Image.fromarray(np.clip(A, 0, 255).astype(np.uint8)).save(os.path.join(d, name))
 
 
 def base_cache(args, v, shots):
@@ -863,9 +894,17 @@ def _base_low(args, v, shots, lstem):
     a2.plant = None
     with C.Session(a2, "w10_waterlook_base_low") as s:
         info = start(s, "low", "isla_viva")
-        low = part_low(s, v, {}, os.path.join(shots, "base"), "base")
+        low = part_low(s, v, {}, os.path.join(shots, "base"), "base", extra=("hid", "ref"))
+    # the re-render against the previous cache of the same base views (it must be 0 px: the base build is deterministic at these pinned frames)
+    prev = {}
+    for k in low:
+        pf = lstem.replace(LOW_CAMS_ID, LOW_CAMS_PREV) + "_low_%s.npy" % k
+        if "__" not in k and LOW_CAMS_PREV != LOW_CAMS_ID and os.path.exists(pf):
+            prev[k] = round(_lowdiff(low[k], np.load(pf))[1], 5)
+    info = dict(info, rerenderVsPrevCachePct=prev)
     with open(lstem + "_low.json", "w") as f:
-        json.dump({"infoLow": info, "lowViews": sorted(low), "lowCams": LOW_CAMS}, f, default=str)
+        json.dump({"infoLow": info, "lowViews": sorted(k for k in low if isinstance(low[k], np.ndarray)), "lowCams": LOW_CAMS}, f, default=str)
+    low = {k: A for k, A in low.items() if isinstance(A, np.ndarray)}
     for k, A in low.items():
         np.save(lstem + "_low_%s.npy" % k, A)
     return info, low
@@ -874,6 +913,33 @@ def _base_low(args, v, shots, lstem):
 def _lowdiff(a, b):
     d = np.abs(a.astype(np.float64) - b.astype(np.float64)).max(axis=2)
     return float(d.max()), float((d > 0).mean() * 100)
+
+
+def _dilate(m, r):
+    out = m.copy()
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            out |= np.roll(np.roll(m, dy, axis=0), dx, axis=1)
+    return out
+
+
+def _lowsplit(build, base, bhid, refw, basehid, bref):
+    """the low-identical split (ruling above): the water / shoreline mask, the non-water pixels against the base, the water pixels' distance
+    from the base's 512 x 512 reference render (mean |d| and share > 8 / 255), build vs base; the build's own reference vs the base's (info)"""
+    nz = lambda a, b: np.abs(a.astype(np.float64) - b.astype(np.float64)).max(axis=2) > 0
+    wsrc = nz(build, bhid) | nz(refw, bhid) | nz(base, basehid) | nz(bref, basehid)
+    own = refw
+    refw = bref
+    wm = _dilate(wsrc, LOW_SHORE_PX)
+    dbb = nz(build, base)
+    d8 = lambda a: np.abs(a.astype(np.float64) - refw.astype(np.float64)).max(axis=2) > 8
+    ma = lambda a: float(np.abs(a.astype(np.float64) - refw.astype(np.float64)).max(axis=2)[wm].mean()) if wm.any() else 0.0
+    n = max(1, int(wm.sum()))
+    return {"waterPct": round(float(wm.mean() * 100), 3), "nonWaterDiffPct": round(float((dbb & ~wm).mean() * 100), 5), "nonWaterDiffPx": int((dbb & ~wm).sum()),
+            "waterDiffPct": round(float((dbb & wm).mean() * 100), 4),
+            "vsRef": {"build": round(float((d8(build) & wm).sum()) / n * 100, 4), "base": round(float((d8(base) & wm).sum()) / n * 100, 4)},
+            "meanAbsVsRef": {"build": round(ma(build), 4), "base": round(ma(base), 4)},
+            "hiddenDiffPct": round(_lowdiff(bhid, basehid)[1], 5), "ownRefVsBaseRefPct": round(_lowdiff(own, bref)[1], 4), "maskPx": n}, (dbb & ~wm)
 
 
 def main():
@@ -923,7 +989,7 @@ def main():
                 info = start(s, "low", "isla_viva")
                 v.info("isla_viva low", info)
                 p0 = L.programs(s)
-                R["lowBuild"] = part_low(s, v, R, shots, "build")
+                R["lowBuild"] = part_low(s, v, R, shots, "build", extra=("hid", "ref"))
                 s.step_frames(6, 1 / 30, render=True)
                 progs.append(["isla_viva low", p0, L.programs(s)])
                 diag.append(s.diagnostics())
@@ -1087,21 +1153,30 @@ def main():
             bl = (base or {}).get("low") or {}
             lb = R.get("lowBuild") or {}
             res, verdicts = {}, {}
-            for nm in sorted(set(bl) | set(lb)):
-                if not (nm in bl and nm in lb and bl[nm].shape == lb[nm].shape):
-                    res[nm] = {"missingOrSize": [nm in bl, nm in lb]}
+            for nm in sorted(k for k in set(bl) | set(lb) if "__" not in k):
+                ks = [(bl, nm), (lb, nm), (lb, nm + "__hid"), (lb, nm + "__ref"), (bl, nm + "__hid"), (bl, nm + "__ref")]
+                if not all(k in d and d[k].shape == lb[nm].shape for d, k in ks if k in d) or not all(k in d for d, k in ks):
+                    res[nm] = {"missingOrSize": [k in d for d, k in ks]}
                     verdicts[nm] = "fail"
                     continue
                 hm, hp = _lowdiff(lb[nm], bl[nm])
-                res[nm] = {"maxDiff": hm, "pctDiff": round(hp, 4)}
-                verdicts[nm] = "pass" if hp <= 0.001 else "fail"
+                sp, nwm = _lowsplit(lb[nm], bl[nm], lb[nm + "__hid"], lb[nm + "__ref"], bl[nm + "__hid"], bl[nm + "__ref"])
+                res[nm] = dict({"maxDiff": hm, "pctDiff": round(hp, 4), "refSeg": lb.get(nm + "__seg")}, **sp)
+                # every non-water / non-shoreline pixel identical to the base (<= 0.001 %, as before); the water / shoreline pixels at least as close
+                # to the 512 x 512 reference render as the base's (share > 8 / 255; the mean |d| reported)
+                allow = 0.001 / 100 * lb[nm].shape[0] * lb[nm].shape[1] / sp["maskPx"] * 100      # the row's 0.001 %-of-frame allowance, as a % of the mask
+                closer = sp["meanAbsVsRef"]["build"] <= sp["meanAbsVsRef"]["base"] and sp["vsRef"]["build"] <= sp["vsRef"]["base"] + allow
+                verdicts[nm] = "pass" if sp["nonWaterDiffPct"] <= 0.001 and closer else "fail"
+                Image.fromarray((nwm * 255).astype(np.uint8)).save(os.path.join(shots, "lowdiff_nonwater_%s.png" % nm))
                 print("  [low-identical %s] %s" % (nm, json.dumps(res[nm])))
             # identical up to the sim's own noise: the base build against its own cache (control --rev cbf0a1ff) differs in ONE pixel of one view
             # (0.0001 %: a far object the sim moves between runs); <= 0.001 % (9 px at 1280 x 720) per view - the grass-on-low plant moves 0.2-12 %.
             # LOWID fix1: with the storm wall's shader clock pinned (WALL_PIN_JS) base vs base is 0 px at all 4 LOW_CAMS views (3 runs)
-            v.check("low-identical: low tier, isla_viva, the views identical to the base build (<= 0.001 % of the pixels differ per view: the base's own run-to-run noise is 1 px)",
-                    bool(res) and len(res) >= 3 and all(x == "pass" for x in verdicts.values()), res, "<= 0.001 %")
-            for nm in lb:
+            # water-blink fix (ruling above): split into the water / shoreline pixels (allowed to change only toward the 512 x 512 reference render:
+            # the old 1-quad depth error going away) and every other pixel (identical, <= 0.001 %, as before)
+            v.check("low-identical: low tier, isla_viva, the views identical to the base build outside the water / shoreline (<= 0.001 % of the pixels differ per view: the base's own run-to-run noise is 1 px); the water / shoreline pixels at least as close to the base's 512 x 512 reference-plane render as the base's (mean |d| <= the base's; share > 8 / 255 <= the base's + 0.001 % of the frame)",
+                    bool(res) and len(res) >= 3 and all(x == "pass" for x in verdicts.values()), res, "<= 0.001 % non-water; water: meanAbsVsRef build <= base, vsRef build <= base + 9 px")
+            for nm in [k for k in lb if "__" not in k]:
                 Image.fromarray(np.clip(np.abs(lb[nm] - bl.get(nm, lb[nm])) * 8, 0, 255).astype(np.uint8)).save(os.path.join(shots, "lowdiff_x8_%s.png" % nm))
         if "uw" in want:
             bu, uu = (base or {}).get("underup") or {}, I.get("underup") or {}
