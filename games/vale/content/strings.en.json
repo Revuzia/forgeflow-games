@@ -580,6 +580,8 @@
   "hud.pregame_shop": "Buy items and set your abilities before the bell.",
   "hud.view.restoring": "Restoring the view",
   "hud.view.restoring_sub": "The match carries on while the picture returns.",
+  "hud.view.warming": "Preparing the view",
+  "hud.view.warming_sub": "The battlefield appears in a moment.",
   "hud.live": "Live",
   "hud.objectives": "Objectives",
   "hud.ledger.tfa": "T/F/A",

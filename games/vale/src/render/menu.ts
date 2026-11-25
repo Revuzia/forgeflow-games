@@ -102,7 +102,7 @@ export class MenuWorld {
     this.sun.configure({ sunDir: MENU_SUN.dir, sunColor: MENU_SUN.color, sunIntensity: MENU_SUN.intensity });
     const sc = new Color().setStyle(MENU_SUN.color);
     this.sky.makeFallback(MENU_SUN.dir, sc, new Color(0.18, 0.26, 0.42), new Color(0.75, 0.62, 0.5));
-    this.sky.apply(this.scene, null, MENU_SUN.env);
+    if (!assets.hdrLanded(ms.sky)) this.sky.apply(this.scene, null, MENU_SUN.env);   // ruling 67: no stand-in bake when the sky is in
     assets.hdr(ms.sky).then((t) => { if (t) this.sky.apply(this.scene, t, MENU_SUN.env); });
     // backdrop: the painted set (menuScene.backdrop) or a team map's terrain (procedural), replaced by the
     // menu GLB when it exists

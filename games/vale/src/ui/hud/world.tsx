@@ -281,8 +281,13 @@ export function ViewPlate(): JSX.Element | null {
     <div class={`viewplate is-${view}`} role="status" aria-live="polite">
       <span class="viewplate__rule" aria-hidden="true" />
       <span class="viewplate__dial" aria-hidden="true" />
-      <span class="viewplate__title t-h3">{cv.t('hud.view.restoring', 'Restoring the view')}</span>
-      <span class="viewplate__sub t-body-s">{cv.t('hud.view.restoring_sub', 'The match carries on while the picture returns.')}</span>
+      {view === 'warming' ? <>
+        <span class="viewplate__title t-h3">{cv.t('hud.view.warming', 'Preparing the view')}</span>
+        <span class="viewplate__sub t-body-s">{cv.t('hud.view.warming_sub', 'The battlefield appears in a moment.')}</span>
+      </> : <>
+        <span class="viewplate__title t-h3">{cv.t('hud.view.restoring', 'Restoring the view')}</span>
+        <span class="viewplate__sub t-body-s">{cv.t('hud.view.restoring_sub', 'The match carries on while the picture returns.')}</span>
+      </>}
     </div>
   );
 }

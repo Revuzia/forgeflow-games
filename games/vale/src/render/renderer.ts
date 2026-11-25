@@ -20,7 +20,9 @@
 //     camera                          lock mode, scout, pointer (edge pan), key pan, zoom, focus
 //     setStation(name) · setMenuView  menu camera moves (720 ms) and the plinth fighter
 //     preload(setup, onProgress)      loading screen: every model, the sky and the grade of a match
-//     viewState · onViewState(fn)     perf PERF-m4: 'lost' while the GPU context is gone, 'restoring' from its return
+//     viewState · onViewState(fn)     ruling 67: 'warming' from a match's setup until its programs have compiled in
+//                                     parallel (nothing is drawn meanwhile: WARM_MAX_WAIT_MS caps it);
+//                                     perf PERF-m4: 'lost' while the GPU context is gone, 'restoring' from its return
 //                                     until the scene's programs are rebuilt, then 'ok' (the HUD's 'Restoring the
 //                                     view' plate). On loss the GPU timer and dynamic resolution freeze; on restore the
 //                                     timer is rebuilt on the new context, the generated textures (VFX atlas, sky
@@ -74,7 +76,7 @@ import { VfxSystem } from './vfx/system.ts';
 import { StructureFx } from './structures.ts';
 import { AmbientLayer, type AmbientStats } from './ambient.ts';
 import { ATLAS_GRID } from './vfx/atlas.ts';
-import { patchWorldMaterial, worldUniforms } from './world_material.ts';
+import { patchWorldMaterial, setCloudShadow, worldUniforms } from './world_material.ts';
 import { FrameProfiler, type ProfileRoot, type RenderProfile } from './profile.ts';
 import type { CullView } from './instance_cull.ts';
 
@@ -142,7 +144,8 @@ export interface CalibrationResult {
 const CALIB_WARM_MS = 500;
 
 /** perf PERF-m4: the 3D view's health (see the header) */
-export type ViewState = 'ok' | 'lost' | 'restoring';
+/** ruling 67: 'warming' = a new match's programs are still compiling (the view is held, not drawn half-compiled) */
+export type ViewState = 'ok' | 'lost' | 'restoring' | 'warming';
 
 export interface CameraControl {
   setMode(m: CameraMode): void;
@@ -207,6 +210,15 @@ const HARD_CC = new Set(['stun', 'root', 'airborne', 'taunt', 'fear', 'sleep', '
 const RESTORE_DYN_HOLD_MS = 3000;
 /** perf PERF-m4: the longest a restored view waits for its parallel compiles before it says 'ok' */
 const RESTORE_MAX_WAIT_MS = 8000;
+/**
+ * ruling 67: a new match does not draw until the programs its first frames need have compiled in parallel
+ * (KHR_parallel_shader_compile through three's compileAsync): the scene is cleared to the map's fog colour and the HUD
+ * shows its view plate ('warming'). Drawing before that makes the first frame wait on every program synchronously: 1.0 s
+ * of a 3.2 s frame on this Mac under a 4x CPU throttle, and on Windows (ANGLE on Direct3D 11, an integrated GPU) a wait
+ * inside the GPU process that stalls the whole browser. A driver that never reports the compile done is drawn after
+ * this cap (the old behaviour, late).
+ */
+const WARM_MAX_WAIT_MS = 12000;
 /** combat F5: which hard CC names itself on the plate when several hold a unit (most control lost first) */
 const CC_PLATE_ORDER = ['airborne', 'stun', 'sleep', 'taunt', 'fear', 'root', 'silence'];
 const _v = new Vector3();
@@ -583,6 +595,7 @@ class ValeRenderer implements Renderer {
   setScene(scene: 'menu' | MatchClient): void {
     if (scene === 'menu') {
       this.teardownMatch();
+      if (this.prebuilt) { this.prebuilt.build.dispose(); this.prebuilt = null; }
       lodSwitch.outline = lodSwitch.body = false;                          // perf PERF-m5: the showcase keeps its full body and hull
       this.assets.mark();
       this.menu.build(this.catalog, this.assets);
@@ -599,6 +612,9 @@ class ValeRenderer implements Renderer {
 
   private setupMatch(client: MatchClient): void {
     const gen = ++this.matchGen;
+    // ruling 67: hold the view until the match's programs are compiled (WARM_MAX_WAIT_MS)
+    if (this.view === 'ok') { this.warmCleared = false; this.setView('warming'); }
+    const warmCap = setTimeout(() => { if (gen === this.matchGen && this.view === 'warming') this.setView('ok'); }, WARM_MAX_WAIT_MS);
     this.client = client;
     this.mode = 'match';
     // round 4 MEM-1 refix: the Home sun's shadow map is not drawn in a match (Ultra: a 4096² depth texture and its colour
@@ -635,7 +651,9 @@ class ValeRenderer implements Renderer {
     this.sky.makeFallback(L.sunDir, sc, new Color(0.16, 0.25, 0.42), new Color().setStyle(L.fogColor).multiplyScalar(0.9));
     // r12 B4: the match draws no sky box (never on screen at the lane camera): one program and a full-screen draw less
     this.sky.solid = new Color().setStyle(L.fogColor);
-    this.sky.apply(this.scene, null, L.ambient);
+    // ruling 67: the stand-in sky is baked only when the map's sky has not landed yet (the loading screen preloads it):
+    // a bake is synchronous, and baking twice paid it twice
+    if (!this.assets.hdrLanded(map.art.sky)) this.sky.apply(this.scene, null, L.ambient);
     // the environment map is part of every lit program's key: once this match's sky is final, warm every built
     // template against it (and every template built later, as it is built)
     this.envReady = false;
@@ -650,10 +668,19 @@ class ValeRenderer implements Renderer {
       // passed it, 14-18 minutes in), and every caster already in the scene gets its shadow LOD now, not over the sweeps
       if (this.terrain) { const tg = this.terrain.group; this.asIfComposer(() => void this.gl.compileAsync(tg, this.rig.camera, this.scene).catch(() => undefined)); }
       shadowLods(this.scene);
+      // ruling 67: everything in the scene now (terrain, the map scene, actors placed so far, ambient), the VFX shapes,
+      // then the scene once more for whatever landed meanwhile; the view is drawn when both are done
+      void this.warmMatch(gen).then(() => { clearTimeout(warmCap); if (gen === this.matchGen && this.view === 'warming') this.setView('ok'); });
     });
     this.assets.lut(map.art.lut).then((l) => { if (gen === this.matchGen) this.post.setLUT(l); });
     // world: procedural terrain now; the Blender scene replaces it when it exists
-    this.terrain = buildTerrain(map);
+    const pre = this.prebuilt?.map === map.id ? this.prebuilt.build : null;
+    this.prebuilt = null;
+    if (pre) {                                                             // buildTerrain's own global, set again now
+      const cs = (map.art.terrain as { cloudShadow?: unknown } | undefined)?.cloudShadow;
+      setCloudShadow({ map: typeof cs === 'number' && Number.isFinite(cs) && cs > 0 ? cs : 0 });
+    }
+    this.terrain = pre ?? buildTerrain(map);
     this.terrain.setScatter(this.q.scatter, this.q.ao > 0);
     this.ambient = new AmbientLayer(map, this.catalog.vfx, this.vfx.textures.atlas, ATLAS_GRID, (r) => this.assets.model(r), this.terrain.groundAt);
     // its programs (skinned critters, swaying cloth, the particle shader) compile as each part lands, not on first sight
@@ -720,6 +747,7 @@ class ValeRenderer implements Renderer {
 
   private teardownMatch(): void {
     this.matchGen++;
+    if (this.view === 'warming') this.setView('ok');
     this.offEvents?.();
     this.offEvents = null;
     this.pending.length = 0;
@@ -752,6 +780,26 @@ class ValeRenderer implements Renderer {
     this.map = null;
     this.mode = 'none';
   }
+
+  /** ruling 67: compile the match scene's programs in parallel (two passes, a few seconds apart at most) */
+  private async warmMatch(gen: number): Promise<void> {
+    const pass = (): Promise<unknown> => {
+      const jobs: Promise<unknown>[] = [];
+      this.asIfComposer(() => {
+        jobs.push(this.gl.compileAsync(this.scene, this.rig.camera).catch(() => undefined));
+        this.vfx.prewarm(this.gl, this.rig.camera);
+      });
+      return Promise.all(jobs);
+    };
+    await pass();
+    // the map scene GLB and the fighters' templates land during the first pass: wait for them briefly, then compile
+    // what they added (compileAsync skips every program already built)
+    const until = performance.now() + 4000;
+    while (gen === this.matchGen && (this.lib.pending > 0 || !this.mapScene && this.map?.art.scene) && performance.now() < until) await new Promise((r) => setTimeout(r, 100));
+    if (gen !== this.matchGen) return;
+    await pass();
+  }
+  private warmCleared = false;
 
   /** the map's painted tiling textures (map.art.terrain.textures: role → asset ref) into the terrain */
   private loadTerrainTextures(map: MapDefT, gen: number): void {
@@ -1328,6 +1376,21 @@ class ValeRenderer implements Renderer {
     if (this.mode === 'match' && this.client) this.frameMatch(d);
     else if (this.mode === 'menu') { this.menu.update(d); this.vfx.update(d); }
 
+    if (this.view === 'warming' && this.mode === 'match') {
+      // ruling 67: held while the match's programs compile; one clear to the fog colour, no draws (no program used)
+      if (!this.warmCleared) {
+        this.warmCleared = true;
+        const prev = this.gl.getRenderTarget();
+        const cc = this.gl.getClearColor(new Color()), ca = this.gl.getClearAlpha();
+        this.gl.setRenderTarget(null);
+        this.gl.setClearColor(this.sky.solid ?? 0x101418, 1);
+        this.gl.clear(true, true, false);
+        this.gl.setClearColor(cc, ca);
+        this.gl.setRenderTarget(prev);
+      }
+      this.frameMs = performance.now() - t0;
+      return;
+    }
     const info = this.gl.info;
     info.reset();
     const timed = this.dyn.enabled && this.mode === 'match' && this.view !== 'lost';
@@ -1642,8 +1705,16 @@ class ValeRenderer implements Renderer {
     this.evictUnusedImages();
     // the VFX programs (every mesh shape, ribbons, decals, distortion) compile here, not on the first ultimate
     this.asIfComposer(() => this.vfx.prewarm(this.gl, this.rig.camera));
+    // ruling 67: the procedural terrain (0.73 s in one piece under a 4x CPU throttle) is built here, behind the loading
+    // screen, after a yield; the match's first task takes it ready-made instead of stalling the HUD's first frame
+    if (map && this.prebuilt?.map !== map.id) {
+      await new Promise((r) => setTimeout(r, 0));
+      if (this.mode !== 'match') { this.prebuilt?.build.dispose(); this.prebuilt = { map: map.id, build: buildTerrain(map) }; }
+    }
     onProgress?.(1);
   }
+  /** ruling 67: a terrain built by preload() for the coming match (setupMatch takes it) */
+  private prebuilt: { map: string; build: TerrainBuild } | null = null;
 
   // ── first-run calibration (perf PERF-C1) ───────────────────────────────────────────────────────
   private calib: { start: number; end: number; last: number; iv: number[]; windows: CalibWindow[]; seconds: number; video: Settings['video']; hidden: boolean; tier: 'high' | 'medium' | 'low'; done: (r: CalibrationResult) => void } | null = null;

@@ -156,6 +156,8 @@ function pageProbe() {
     if (q('[data-plate]') && !P.plate) P.plate = (q('[data-plate]').textContent ?? '').trim().slice(0, 300);
     seen('loading', !!q('.loading'));
     seen('hud', !!q('.hud .dbar'));
+    // ruling 67: the match picture is up (the HUD shows and no view plate: 'Preparing the view' holds it while programs compile)
+    seen('view', !!q('.hud .dbar') && !q('.viewplate'));
     // the screen timeline (each .scr--<name> the first time it shows)
     for (const el of document.querySelectorAll('.scr')) { const m = /scr--([\w-]+)/.exec(el.className); if (m) seen(`scr:${m[1]}`, true); }
     for (const el of document.querySelectorAll('[role="dialog"]')) seen(`dialog:${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 30)}`, true);
@@ -541,7 +543,7 @@ async function analyse(d, res, sent) {
   }
   const sentBy = sent ? (() => { const o = {}; for (const s of sent) { const k = kindOf(s.path); const v = (o[k] ??= { mb: 0, n: 0 }); v.mb += s.bytes / 1048576; v.n++; } for (const v of Object.values(o)) v.mb = +v.mb.toFixed(2); return { totalMb: +sent.reduce((a, s) => a + s.bytes / 1048576, 0).toFixed(2), requests: sent.length, kinds: o }; })() : null;
   return {
-    milestonesMs: { firstPaint, ui: ms.ui ?? null, home, homeQuiet, plate: ms.plate ?? null, start: ms.start ?? null, loading: ms.loading ?? null, hud, startToHud: hud != null && ms.start != null ? hud - ms.start : null,
+    milestonesMs: { firstPaint, ui: ms.ui ?? null, home, homeQuiet, plate: ms.plate ?? null, start: ms.start ?? null, loading: ms.loading ?? null, hud, view: ms.view ?? null, hudToView: ms.view != null && hud != null ? ms.view - hud : null, startToHud: hud != null && ms.start != null ? hud - ms.start : null,
       loadingToHud: hud != null && ms.loading != null ? hud - ms.loading : null },
     screens: Object.fromEntries(Object.entries(ms).filter(([k]) => /^(scr|dialog):/.test(k)).sort((a, b) => a[1] - b[1])),
     progress: d.progress.length ? { steps: d.progress.length, first: d.progress[0], last: d.progress.at(-1), longestStallMs: d.progress.slice(1).reduce((m, p, i) => Math.max(m, p.t - d.progress[i].t), 0) } : null,

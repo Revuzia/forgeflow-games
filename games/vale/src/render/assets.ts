@@ -431,6 +431,12 @@ export class Assets {
     return r;
   }
 
+  /** ruling 67: a sky that has already landed (undefined: not yet, or never asked for), so a caller can skip baking
+   *  the stand-in sky first */
+  hdrLanded(ref: string | undefined | null): DataTexture | null | undefined {
+    return ref && this.hdrs.has(ref) ? this.landedHdrs.get(ref) : undefined;
+  }
+
   hdr(ref: string | undefined | null): Promise<DataTexture | null> {
     if (!ref || !built(ref)) return Promise.resolve(null);
     this.touched.add(ref);

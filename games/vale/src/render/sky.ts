@@ -24,8 +24,10 @@ export class Sky {
   solid: Color | null = null;
   /** the last apply(), baked again on a restored context */
   private last: { scene: Scene; hdr: Texture | null; env: number; bg: number } | null = null;
+  private pmrem: PMREMGenerator | null = null;
   private readonly onRestored = (): void => {
     const l = this.last;
+    this.pmrem = null;                                                     // its GL objects died with the context
     // the old target's GL objects died with the context: drop it undisposed (its dispose would ask the restored context
     // to delete objects it never had, a warning per object)
     this.envRT = null;
@@ -80,11 +82,11 @@ export class Sky {
     if (!src) return;
     this.last = { scene, hdr, env: envIntensity, bg: backgroundIntensity };
     src.mapping = EquirectangularReflectionMapping;
-    // r12 B4: a generator per bake, disposed right after: its two programs (equirect → cube UV, GGX convolution)
-    // are released instead of staying live for the whole match
-    const pmrem = new PMREMGenerator(this.renderer);
+    // ruling 67 (was r12 B4: a generator per bake, disposed right after): one generator per Sky, kept, so its two small
+    // programs (equirect -> cube UV, GGX blur) compile once, not on every bake (each bake is synchronous: 146-164 ms per
+    // bake measured on this Mac under a 4x CPU throttle, 4 bakes a journey, most of it the programs' compile)
+    const pmrem = (this.pmrem ??= new PMREMGenerator(this.renderer));
     const rt = pmrem.fromEquirectangular(src);
-    pmrem.dispose();
     this.envRT?.dispose();
     this.envRT = rt;
     this.background = src;
@@ -108,6 +110,7 @@ export class Sky {
 
   dispose(): void {
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onRestored, false);
+    this.pmrem?.dispose(); this.pmrem = null;
     this.last = null;
     this.envRT?.dispose();
     this.fallback?.dispose();

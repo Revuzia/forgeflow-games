@@ -69,7 +69,7 @@ export interface RendererPort {
 }
 
 /** the renderer's view state (perf PERF-m4; the same union as render/index.ts ViewState, kept structural) */
-export type ViewState = 'ok' | 'lost' | 'restoring';
+export type ViewState = 'ok' | 'lost' | 'restoring' | 'warming';
 
 export class AppState {
   readonly session: Session;
