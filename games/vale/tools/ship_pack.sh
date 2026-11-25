@@ -38,7 +38,10 @@ mp=f'{new}/manifest.json'; mraw=open(mp).read(); m=json.loads(mraw)
 m['schemas']['1']['sha256']=hashlib.sha256(out.encode()).hexdigest()
 open(mp,'w').write(json.dumps(m,indent=2 if mraw.startswith('{\n') else None))
 E
-node tools/package_deploy.ts --catalog dist-catalog-ship --out deploy_ship 2>&1 | tail -1
+# GATE_OVERRIDE="<reason>": the browser gate was run with config.js server: null, because vale-net
+# refuses WebSocket connections from a localhost test page (403) and the gate fails on that console error.
+if [ -n "$GATE_OVERRIDE" ]; then node tools/package_deploy.ts --catalog dist-catalog-ship --out deploy_ship --override "$GATE_OVERRIDE" 2>&1 | tail -1
+else node tools/package_deploy.ts --catalog dist-catalog-ship --out deploy_ship 2>&1 | tail -1; fi
 grep -q "vale-net" deploy_ship/config.js || { echo "config.js lost the vale-net server line"; exit 1; }
 SEC=$MAIN/state/.secrets
 export CLOUDFLARE_API_TOKEN="$(cat $SEC/cf_api_token.txt)" CLOUDFLARE_ACCOUNT_ID="$(cat $SEC/cf_account_id.txt)"
