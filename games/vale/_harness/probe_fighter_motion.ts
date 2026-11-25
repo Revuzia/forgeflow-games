@@ -6,7 +6,8 @@
 //            the body moves at 0.25 / 0.4 / 0.55 x runRef (walk alone): gate <= 10 % of the body's speed (stride.ts bar)
 //   blend    run and walk on the shared phase (locoCycleRate, walkWeight) at 0.57 / 0.6 / 0.63 x runRef: the planted foot's
 //            world speed (median over the stance samples of the blended pose); gate <= LOCO.blendSlipMax (15 %). A body
-//            whose blend slips past it at walk weight 0.8 switches at the band's middle instead (as the renderer decides)
+//            whose blend slips past it at walk weight 0.8 gets no walk and keeps the planted run, as live (ruling 70, as the
+//            renderer decides); its walk, phase and pop rows are then informational
 //   phase    the left foot's touchdown (stride.ts touchdown) in run and in walk on the shared phase (the walk offset by the
 //            renderer's walkPhase): gate |run - walk| <= 0.03 of a cycle
 //   pop      a ramp 0.85 -> 0.25 -> 0.85 x runRef over 3 s at 60 Hz (the renderer's eased weight): the largest jump in the
@@ -98,13 +99,13 @@ for (const f of fighters) {
     }
     row.walkSlipPct = out;
   }
-  // the renderer's choice (actors.ts fighterTemplate): blend, or switch at the band's middle when the blend slips
+  // the renderer's choice (actors.ts fighterTemplate): blend, or no walk at all when the blend slips (ruling 70)
   const pw = LOCO.blendProbeW, pk = LOCO.walkEdge - pw * (LOCO.walkEdge - LOCO.walkFull);
   const ptr = blendFootTracks(scene, run, walk, pw, feet, sc, off);
   const probe = ptr ? blendSlipPct(ptr, pk, pw, runC, walkC) : Infinity;
   const sw = probe > LOCO.blendSlipMax;
   if (ONLY.has('blend')) {
-    const out: Record<string, number | string> = { mode: sw ? 'switch' : 'blend', probeW08: +probe.toFixed(1) };
+    const out: Record<string, number | string> = { mode: sw ? 'off (run only, as live)' : 'blend', probeW08: +probe.toFixed(1) };
     if (!sw) for (const k of [0.57, 0.6, 0.63]) {
       const w = walkWeight(k);
       const tr = blendFootTracks(scene, run, walk, w, feet, sc, off);
@@ -136,7 +137,7 @@ for (const f of fighters) {
     row.touchdown = { run: r3(a), walkRaw: r3(down(walk)), walkOnPhase: r3(b), diff: r3(d) };
     if (d > 0.03) fails.push(`phase ${f.id}: left touchdown run ${a.toFixed(3)} vs walk ${b.toFixed(3)} on the shared phase (${d.toFixed(3)} of a cycle) > 0.03`);
   }
-  if (ONLY.has('pop')) {
+  if (ONLY.has('pop') && !sw) {
     // the renderer's blend driven frame by frame (actors.ts animate: shared phase, run weight 1 - w, walk weight w)
     scene.scale.setScalar(sc);
     const names = ['hips', ...feet];
@@ -146,8 +147,8 @@ for (const f of fighters) {
     a.play(); b.play();
     let lw = -1;
     const step = (k: number, ph: number, dt: number): number => {
-      const target = sw ? (k < (LOCO.walkFull + LOCO.walkEdge) / 2 ? 1 : 0) : walkWeight(k), speed = k * runRef;
-      const rate = dt * (sw ? LOCO.switchRate : LOCO.wRate);
+      const target = walkWeight(k), speed = k * runRef;
+      const rate = dt * LOCO.wRate;
       lw = lw < 0 ? target : lw + Math.max(-rate, Math.min(rate, target - lw));
       const w = lw;
       ph = (ph + dt * locoCycleRate(speed, runC, walkC, w)) % 1;

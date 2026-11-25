@@ -169,8 +169,6 @@ interface Template {
   walkRef?: number;
   /** the walk's phase offset on the shared run phase (its touchdown minus the run's) */
   walkPhase?: number;
-  /** the blend slips on this body: walk and run switch at the band's middle (eased) instead of blending */
-  walkSwitch?: boolean;
 }
 
 /** the AnimationAction / AnimationMixer surface the Actor drives (three's, or crowd.ts' baked stand-ins) */
@@ -581,19 +579,19 @@ export class ModelLibrary {
           if (m) { walkRef = m.ref; walkPhase = (((m.touchdown - runTouch) % 1) + 1) % 1; }
         } catch (e) { console.warn('[vale] walk stride', def.id, e); }
         await nextTask();
-        // a blend whose planted foot slips past LOCO.blendSlipMax switches at the band's middle instead (stride.ts LOCO)
-        let walkSwitch = false;
+        // W3-B fix round (ruling 70): a body whose run / walk blend slips past LOCO.blendSlipMax gets no walk: it keeps the
+        // live planted run at a lower timeScale (the switch these four bodies had glided in the renderer: verify r1)
         try {
           const feet = [def.art.sockets.foot_l, def.art.sockets.foot_r].filter((b): b is string => !!b);
           const run = roles.run ? clips.get(roles.run) : undefined, walk = clips.get('walk');
           if (run && walk && runRef !== undefined && walkRef !== undefined) {
             const w = LOCO.blendProbeW, k = LOCO.walkEdge - w * (LOCO.walkEdge - LOCO.walkFull);
             const tr = blendFootTracks(body.gltf.scene, run, walk, w, feet, def.art.scale, walkPhase);
-            if (tr) walkSwitch = blendSlipPct(tr, k, w, { ref: runRef, dur: run.duration }, { ref: walkRef, dur: walk.duration }) > LOCO.blendSlipMax;
+            if (!tr || blendSlipPct(tr, k, w, { ref: runRef, dur: run.duration }, { ref: walkRef, dur: walk.duration }) > LOCO.blendSlipMax) walkRef = undefined;
           }
-        } catch (e) { console.warn('[vale] walk blend', def.id, e); }
+        } catch (e) { walkRef = undefined; console.warn('[vale] walk blend', def.id, e); }
         await nextTask();
-        return { scene: body.gltf.scene, clips, roles, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull), barAnchor, runRef, walkRef, walkPhase, walkSwitch };
+        return { scene: body.gltf.scene, clips, roles, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull), barAnchor, runRef, walkRef, walkPhase };
       }
       if (this.opts.dev && this.opts.devModelUrl) {
         const m = await this.assets.modelUrl(this.opts.devModelUrl);
@@ -1112,7 +1110,6 @@ export class Actor implements CrowdActor {
   /** orch1 W3-B (FU-9): the walk's planted speed (stride.ts), the shared run / walk phase and the walk's fade */
   private walkRef: number | undefined;
   private walkPhase = 0;
-  private walkSwitch = false;
   private locoPhase = 0;
   private locoFade = 0;
   private locoW = 0;
@@ -1231,7 +1228,6 @@ export class Actor implements CrowdActor {
     if (this.kind === 'fighter' && t.runRef !== undefined) this.runRef = t.runRef;
     this.walkRef = this.kind === 'fighter' ? t.walkRef : undefined;
     this.walkPhase = t.walkPhase ?? 0;
-    this.walkSwitch = !!t.walkSwitch;
     if (t.crowd) {
       // the crowd draws this unit (crowd.ts): an empty body node carries the root placement and the scale/squash
       const body = new Group();
@@ -1525,10 +1521,10 @@ export class Actor implements CrowdActor {
         const speed = Math.hypot(v.vx, v.vy);
         const walk = this.action('walk')!;
         const r = speed / Math.max(0.1, this.runRef);
-        const target = this.walkSwitch ? (r < (LOCO.walkFull + LOCO.walkEdge) / 2 ? 1 : 0) : walkWeight(r);
+        const target = walkWeight(r);
         // eased, so a slow landing or running out never snaps the legs (a fresh run starts at its target)
         if (key !== this.prevLocoKey) this.locoW = target;
-        else { const k = dt * (this.walkSwitch ? LOCO.switchRate : LOCO.wRate); this.locoW += Math.max(-k, Math.min(k, target - this.locoW)); }
+        else { const k = dt * LOCO.wRate; this.locoW += Math.max(-k, Math.min(k, target - this.locoW)); }
         const w = this.locoW;
         if (key !== this.prevLocoKey) this.locoPhase = 0;
         this.locoPhase = (this.locoPhase + dt * locoCycleRate(speed, { ref: this.runRef, dur: clipDur }, { ref: this.walkRef, dur: walk.getClip().duration }, w)) % 1;

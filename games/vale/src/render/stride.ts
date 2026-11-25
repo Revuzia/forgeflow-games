@@ -99,10 +99,10 @@ export function measureStride(scene: Object3D, run: AnimationClip | undefined, f
 // speed (walkRef / runRef, plantedRunRef) × its duration, so a planted foot stays put at any speed. Over LOCO.hasteFrom ×
 // runRef the body leans into the run and pumps its arms (actors.ts LifeRig), full at LOCO.hasteFull. Presentation only.
 export const LOCO = { walkFull: 0.55, walkEdge: 0.65, hasteFrom: 1.3, hasteFull: 1.7, walkRange: [0.6, 3] as const,
-  /** a template whose blended pose slips more than this (% of speed, at walk weight `blendProbeW`) switches between walk
-   *  and run at the band's middle instead of blending (Rishal's bespoke low run against the upright walk); the switch,
-   *  eases its weight at `switchRate` per second (the blend at `wRate`) */
-  blendSlipMax: 15, blendProbeW: 0.8, wRate: 6, switchRate: 2.5,
+  /** a template whose blended pose slips more than this (% of speed, at walk weight `blendProbeW`) gets no walk and keeps
+   *  the planted run at a lower timeScale, as live (W3-B fix round, ruling 70: the walk / run switch these bodies had
+   *  glided in the renderer). The blend eases its weight at `wRate` per second */
+  blendSlipMax: 15, blendProbeW: 0.8, wRate: 6,
   /** the shared phase's rate stays within these multiples of the blended clip's own rate (the run's old clamp) */
   minRate: 0.35, maxRate: 2.2 } as const;
 
