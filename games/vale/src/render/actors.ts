@@ -78,7 +78,8 @@ import { structureMaterial } from './structures.ts';
 import { BAR_CLEAR, fighterBarAnchor } from './bar_clearance.ts';
 import { CAMERA } from './camera.ts';
 import { turnToward } from './turn.ts';
-import { plantedRunRef } from './stride.ts';
+import { blendFootTracks, blendSlipPct, hasteWeight, LOCO, locoCycleRate, measureStride, walkWeight } from './stride.ts';
+import { type CcKind, ccKindOf } from '../contracts/sim.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
 /** baked rows a crowd texture may hold (WebGL2 guarantees 2048; every desktop GPU VALE targets has ≥ 8192) */
@@ -128,6 +129,8 @@ export const CLIP_CHAIN: Readonly<Record<string, readonly string[]>> = {
   cast_a1: ['cast_a1', 'cast_a2', 'attack1'], cast_a2: ['cast_a2', 'cast_a1', 'attack1'], cast_a3: ['cast_a3', 'cast_a1', 'attack1'],
   cast_ult: ['cast_ult', 'cast_a1', 'attack1'], channel: ['channel', 'cast_a1', 'idle'], dash: ['dash', 'run'],
   stunned: ['stunned', 'idle'], recall: ['recall', 'channel', 'idle'], death: ['death'], run: ['run', 'idle'], idle: ['idle'],
+  // orch1 W3-B (ruling 68): the CC bodies; airborne and sleep play on the stunned clip with their own LifeRig layer
+  airborne: ['airborne', 'stunned', 'idle'], sleep: ['sleep', 'stunned', 'idle'], walk: ['walk'],
   idle_lobby: ['idle_lobby', 'idle'], victory: ['victory', 'idle_lobby', 'idle'], spawn: ['spawn', 'idle'], taunt: ['taunt', 'idle'],
 };
 const ANIM_FAR_DT = 1 / 15;
@@ -140,7 +143,7 @@ interface CharLight { fighter: boolean; unit: boolean; monster: boolean }
  *  fades on it: SF_OFF), its accent one program with the Needles' instead of one of its own */
 const rigidProgram = (kind: string): boolean => kind === 'structure' || kind === 'ward';
 const charLight = (kind: string): CharLight => ({ fighter: kind === 'fighter', unit: kind === 'minion' || kind === 'monster', monster: kind === 'monster' });
-const LOOPING = new Set(['idle', 'run', 'recall', 'channel', 'stunned', 'idle_lobby', 'victory', 'taunt']);
+const LOOPING = new Set(['idle', 'run', 'recall', 'channel', 'stunned', 'idle_lobby', 'victory', 'taunt', 'airborne', 'sleep', 'walk']);
 
 interface Template {
   scene: Object3D;
@@ -162,6 +165,12 @@ interface Template {
   barAnchor?: number;
   /** CW1 input-feel: the run clip's measured planted-foot speed (stride.ts), replacing art.runRefSpeed */
   runRef?: number;
+  /** orch1 W3-B (FU-9): the walk clip's measured planted-foot speed; undefined = no walk (the run alone, as before) */
+  walkRef?: number;
+  /** the walk's phase offset on the shared run phase (its touchdown minus the run's) */
+  walkPhase?: number;
+  /** the blend slips on this body: walk and run switch at the band's middle (eased) instead of blending */
+  walkSwitch?: boolean;
 }
 
 /** the AnimationAction / AnimationMixer surface the Actor drives (three's, or crowd.ts' baked stand-ins) */
@@ -555,14 +564,36 @@ export class ModelLibrary {
         await nextTask();
         // CW1 input-feel: the run clip's own planted-foot speed (stride.ts) replaces the authored runRefSpeed when it
         // can be measured and is within a sane band of it
-        let runRef: number | undefined;
+        let runRef: number | undefined, runTouch = 0;
         try {
           const feet = [def.art.sockets.foot_l, def.art.sockets.foot_r].filter((b): b is string => !!b);
-          const r = plantedRunRef(body.gltf.scene, roles.run ? clips.get(roles.run) : undefined, feet, def.art.scale);
+          const m = measureStride(body.gltf.scene, roles.run ? clips.get(roles.run) : undefined, feet, def.art.scale);
+          if (m) runTouch = m.touchdown;
+          const r = m?.ref ?? null;
           if (r !== null && r > def.art.runRefSpeed * 0.6 && r < def.art.runRefSpeed * 1.6) runRef = r;
         } catch (e) { console.warn('[vale] stride', def.id, e); }
         await nextTask();
-        return { scene: body.gltf.scene, clips, roles, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull), barAnchor, runRef };
+        // orch1 W3-B (FU-9): the walk's own planted-foot speed, measured the same way (its own task on the loading screen)
+        let walkRef: number | undefined, walkPhase = 0;
+        try {
+          const feet = [def.art.sockets.foot_l, def.art.sockets.foot_r].filter((b): b is string => !!b);
+          const m = clips.get('walk') && runRef !== undefined ? measureStride(body.gltf.scene, clips.get('walk'), feet, def.art.scale, LOCO.walkRange) : null;
+          if (m) { walkRef = m.ref; walkPhase = (((m.touchdown - runTouch) % 1) + 1) % 1; }
+        } catch (e) { console.warn('[vale] walk stride', def.id, e); }
+        await nextTask();
+        // a blend whose planted foot slips past LOCO.blendSlipMax switches at the band's middle instead (stride.ts LOCO)
+        let walkSwitch = false;
+        try {
+          const feet = [def.art.sockets.foot_l, def.art.sockets.foot_r].filter((b): b is string => !!b);
+          const run = roles.run ? clips.get(roles.run) : undefined, walk = clips.get('walk');
+          if (run && walk && runRef !== undefined && walkRef !== undefined) {
+            const w = LOCO.blendProbeW, k = LOCO.walkEdge - w * (LOCO.walkEdge - LOCO.walkFull);
+            const tr = blendFootTracks(body.gltf.scene, run, walk, w, feet, def.art.scale, walkPhase);
+            if (tr) walkSwitch = blendSlipPct(tr, k, w, { ref: runRef, dur: run.duration }, { ref: walkRef, dur: walk.duration }) > LOCO.blendSlipMax;
+          }
+        } catch (e) { console.warn('[vale] walk blend', def.id, e); }
+        await nextTask();
+        return { scene: body.gltf.scene, clips, roles, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull), barAnchor, runRef, walkRef, walkPhase, walkSwitch };
       }
       if (this.opts.dev && this.opts.devModelUrl) {
         const m = await this.assets.modelUrl(this.opts.devModelUrl);
@@ -776,7 +807,48 @@ const LIFE = {
   still: { eps: 0.0015, after: 0.15, gain: 1.8, rise: 4, fall: 0.8, tau: 0.25, hold: 2.8 },
   /** state weights fade at this rate (1/s) */
   fade: 5,
+  /** orch1 W3-B (FU-7 / FU-9, ruling 68): the CC bodies and the hasted lean, authored once for VALE_BIPED_1 (rad; actor
+   *  axes: x the body's left, y up, z forward; + about x bows a spine forward and swings a hanging limb back). `fadeAir`
+   *  (1/s) brings the airborne body in and out faster than the rest: a knock-up lasts 0.5-1 s */
+  cc: { fadeAir: 14, sleepPeriod: 3.2, fearShake: 9, tugPeriod: 0.9 },
 } as const;
+
+/** orch1 W3-B: the airborne body over a displacement's progress u (0..1): the blow snaps the head and chest back, the legs
+ *  tuck on the rise, the limbs splay at the top, the legs reach and the landing crouches (hips drop `hipDrop` m). Each
+ *  key: u, ease into it, [bone, ax, ay, az][]; mirrored pairs are written out (L az + = out, R az - = out). */
+type AirKey = { u: number; ease: (x: number) => number; hipDrop: number; b: Record<string, [number, number, number]> };
+const easeOut = (x: number): number => 1 - (1 - x) ** 3, easeIn = (x: number): number => x * x * x;
+const easeIO = (x: number): number => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2), easeSnap = (x: number): number => 1 - (1 - x) ** 5;
+const AIR_KEYS: AirKey[] = [
+  { u: 0, ease: easeOut, hipDrop: 0, b: {} },
+  { u: 0.08, ease: easeSnap, hipDrop: 0, b: { spine: [-0.18, 0.08, 0.06], chest: [-0.22, 0.1, 0.05], neck: [-0.16, 0, 0], head: [-0.3, 0.15, 0.1],
+    'upper_arm.L': [0, 0, 0.5], 'upper_arm.R': [0, 0, -0.5], 'thigh.L': [-0.25, 0, 0], 'thigh.R': [-0.1, 0, 0], 'shin.L': [0.3, 0, 0], 'shin.R': [0.2, 0, 0] } },
+  { u: 0.34, ease: easeOut, hipDrop: 0, b: { spine: [0.3, 0, -0.05], chest: [0.22, 0, 0], neck: [0.08, 0, 0], head: [-0.08, -0.1, -0.06],
+    'upper_arm.L': [-0.6, 0, 0.15], 'upper_arm.R': [-0.6, 0, -0.15], 'forearm.L': [-0.5, 0, 0], 'forearm.R': [-0.5, 0, 0],
+    'thigh.L': [-1.15, 0, 0.1], 'thigh.R': [-0.95, 0, -0.1], 'shin.L': [1.45, 0, 0], 'shin.R': [1.25, 0, 0] } },
+  { u: 0.58, ease: easeIO, hipDrop: 0, b: { spine: [-0.22, -0.06, -0.08], chest: [-0.2, -0.08, -0.06], neck: [-0.1, 0.06, 0], head: [-0.22, 0.12, 0.12],
+    'upper_arm.L': [0, 0, 1.1], 'upper_arm.R': [0, 0, -1.0], 'forearm.L': [-0.3, 0, 0], 'forearm.R': [-0.25, 0, 0],
+    'thigh.L': [-0.55, 0, 0.25], 'thigh.R': [0.2, 0, -0.2], 'shin.L': [0.65, 0, 0], 'shin.R': [0.9, 0, 0] } },
+  { u: 0.84, ease: easeIO, hipDrop: 0, b: { spine: [0.1, 0, 0], chest: [0.06, 0, 0], neck: [-0.06, 0, 0], head: [-0.1, 0, 0],
+    'upper_arm.L': [-0.4, 0, 0.5], 'upper_arm.R': [-0.4, 0, -0.5], 'thigh.L': [-0.18, 0, 0.05], 'thigh.R': [-0.12, 0, -0.05], 'shin.L': [0.25, 0, 0], 'shin.R': [0.2, 0, 0] } },
+  { u: 1, ease: easeIn, hipDrop: 0.11, b: { spine: [0.24, 0, 0], chest: [0.12, 0, 0], neck: [-0.14, 0, 0], head: [-0.14, 0, 0],
+    'upper_arm.L': [-0.5, 0, 0.3], 'upper_arm.R': [-0.5, 0, -0.3], 'thigh.L': [-0.55, 0, 0.06], 'thigh.R': [-0.5, 0, -0.06], 'shin.L': [1.0, 0, 0], 'shin.R': [0.95, 0, 0] } },
+];
+const AIR_BONES = [...new Set(AIR_KEYS.flatMap((k) => Object.keys(k.b)))];
+const _air: Record<string, [number, number, number]> = {};
+/** the airborne layer at u: bone -> (ax, ay, az), and the hips drop */
+function airPose(u: number): number {
+  let i = 1;
+  while (i < AIR_KEYS.length - 1 && u > AIR_KEYS[i].u) i++;
+  const a = AIR_KEYS[i - 1], b = AIR_KEYS[i];
+  const k = b.ease(Math.max(0, Math.min(1, (u - a.u) / Math.max(1e-6, b.u - a.u))));
+  for (const n of AIR_BONES) {
+    const p = a.b[n] ?? [0, 0, 0], q = b.b[n] ?? [0, 0, 0];
+    const o = (_air[n] ??= [0, 0, 0]);
+    for (let j = 0; j < 3; j++) o[j] = p[j] + (q[j] - p[j]) * k;
+  }
+  return a.hipDrop + (b.hipDrop - a.hipDrop) * k;
+}
 type LifeBone = { o: Object3D; saved: Quaternion; x: Vector3; y: Vector3; z: Vector3 };
 const _lq = new Quaternion();
 const _lv = new Vector3();
@@ -794,13 +866,18 @@ class LifeRig {
   private readonly handPrev = [new Vector3(), new Vector3()];
   private handInit = false;
   private stillT = 0; private fid = 0; private mvAvg = 0;
+  // W3-B: the CC bodies' weights, the hasted lean, and the hips (landing crouch)
+  private wAir = 0; private wSleep = 0; private wFear = 0; private wTaunt = 0; private wRoot = 0; private wHaste = 0;
+  private hips: { o: Object3D; saved: Vector3; up: Vector3 } | null = null;
+  private side = 1;
 
   constructor(root: Object3D, model: Object3D, seed: number) {
     this.t = (seed * 1.6180339) % 97;
     root.updateMatrixWorld(true);
     const rootQ = root.getWorldQuaternion(new Quaternion()).invert();
     const pq = new Quaternion();
-    for (const n of ['spine', 'chest', 'neck', 'head', 'shoulder.L', 'shoulder.R', 'upper_arm.L', 'upper_arm.R', 'forearm.L', 'forearm.R']) {
+    for (const n of ['spine', 'chest', 'neck', 'head', 'shoulder.L', 'shoulder.R', 'upper_arm.L', 'upper_arm.R', 'forearm.L', 'forearm.R',
+      'thigh.L', 'thigh.R', 'shin.L', 'shin.R']) {
       const o = model.getObjectByName(PropertyBinding.sanitizeNodeName(n)) ?? model.getObjectByName(n);
       if (!o || !o.parent) continue;
       // the actor's axes (x lateral, y up, z forward: models face +Z) in the bone's parent frame, from the bind pose
@@ -812,6 +889,14 @@ class LifeRig {
       const o = model.getObjectByName(PropertyBinding.sanitizeNodeName(n)) ?? model.getObjectByName(n);
       if (o) this.hands.push(o);
     }
+    // W3-B: the hips' position offset for a landing crouch: the actor's up (1 m) in the hips' parent frame, scale included
+    const hips = model.getObjectByName('hips');
+    if (hips?.parent) {
+      const p0 = hips.parent.worldToLocal(root.localToWorld(new Vector3(0, 0, 0)));
+      const p1 = hips.parent.worldToLocal(root.localToWorld(new Vector3(0, 1, 0)));
+      this.hips = { o: hips, saved: hips.position.clone(), up: p1.sub(p0) };
+    }
+    this.side = (seed & 1) ? 1 : -1;
     model.traverse((o) => {
       const seg = /^x_[a-z]+[a-z0-9]*(?:_[a-z0-9]+)*_(\d+)$/i.exec(o.name);
       if (seg) this.chains.push({ o, shown: new Quaternion(), tau: LIFE.chain.tau * (1 + 0.6 * (Number(seg[1]) - 1)), init: false });
@@ -825,6 +910,7 @@ class LifeRig {
   restore(): void {
     if (!this.applied) return;
     for (const b of this.bones.values()) b.o.quaternion.copy(b.saved);
+    if (this.hips) this.hips.o.position.copy(this.hips.saved);
     this.applied = false;
   }
 
@@ -848,8 +934,72 @@ class LifeRig {
     b.o.quaternion.premultiply(_lq);
   }
 
+  /** W3-B (FU-7 / FU-9, ruling 68): the CC bodies and the hasted lean over the clip (weights faded in apply) */
+  private applyCc(phase: number, airU: number): void {
+    const TAU = Math.PI * 2, t = this.t, side = this.side;
+    if (this.wAir > 1e-3) {
+      const drop = airPose(airU), w = this.wAir;
+      for (const n of AIR_BONES) { const r = _air[n]; this.rot(n, w * r[0], w * r[1] * side, w * r[2]); }
+      if (this.hips && drop > 0) this.hips.o.position.addScaledVector(this.hips.up, -drop * w);
+    }
+    if (this.wSleep > 1e-3) {
+      // asleep on its feet (on the stunned clip, its stagger faded out): folded forward, the head hung and rolled to one
+      // side, one slow breath per period, the head sinking on the out-breath, now and then a nod caught
+      const w = this.wSleep, b = Math.sin(TAU * t / LIFE.cc.sleepPeriod), nod = Math.max(0, Math.sin(TAU * t / 5.3)) ** 6;
+      this.rot('spine', w * (0.2 - 0.02 * b), 0, 0);
+      this.rot('chest', w * (0.16 - 0.05 * b), 0, 0);
+      this.rot('neck', w * (0.24 + 0.03 * b), 0, w * 0.05 * side);
+      this.rot('head', w * (0.32 - 0.06 * b + 0.16 * nod), w * 0.1 * side, w * 0.22 * side);
+      this.rot('shoulder.L', 0, 0, -w * (0.1 - 0.03 * b)); this.rot('shoulder.R', 0, 0, w * (0.1 - 0.03 * b));
+      this.rot('upper_arm.L', w * 0.12, 0, -w * 0.08); this.rot('upper_arm.R', w * 0.12, 0, w * 0.08);
+      this.rot('forearm.L', w * 0.25, 0, 0); this.rot('forearm.R', w * 0.25, 0, 0);
+      this.rot('thigh.L', -w * 0.12, 0, 0); this.rot('thigh.R', -w * 0.1, 0, 0);
+      this.rot('shin.L', w * 0.22, 0, 0); this.rot('shin.R', w * 0.2, 0, 0);
+      if (this.hips) this.hips.o.position.addScaledVector(this.hips.up, -0.035 * w);
+    }
+    if (this.wFear > 1e-3) {
+      // cowering as it runs away: hunched, shoulders up, the forearms up before the face, the head turned back over the
+      // shoulder toward what it flees, a fast tremble
+      const w = this.wFear, sh = Math.sin(TAU * t * LIFE.cc.fearShake) * 0.025;
+      this.rot('spine', w * 0.16, 0, 0);
+      this.rot('chest', w * (0.14 + sh), 0, 0);
+      this.rot('neck', w * 0.05, w * 0.45 * side, 0);
+      this.rot('head', w * (0.12 + sh), w * 0.5 * side, w * 0.08 * side);
+      this.rot('shoulder.L', 0, 0, w * 0.16); this.rot('shoulder.R', 0, 0, -w * 0.16);
+      this.rot('upper_arm.L', -w * 0.85, 0, -w * 0.15); this.rot('upper_arm.R', -w * 0.85, 0, w * 0.15);
+      this.rot('forearm.L', -w * 0.9, 0, 0); this.rot('forearm.R', -w * 0.9, 0, 0);
+    }
+    if (this.wTaunt > 1e-3) {
+      // dragged toward the taunter: the chest pulled ahead of the hips, the chin up and locked on it, the arms flung back
+      // and a tug on every step
+      const w = this.wTaunt, tug = 0.5 + 0.5 * Math.cos(TAU * 2 * phase);
+      this.rot('spine', w * (0.16 + 0.05 * tug), 0, 0);
+      this.rot('chest', w * (0.12 + 0.04 * tug), 0, 0);
+      this.rot('neck', -w * 0.14, 0, 0);
+      this.rot('head', -w * 0.2, 0, 0);
+      this.rot('upper_arm.L', w * 0.55, 0, w * 0.18); this.rot('upper_arm.R', w * 0.55, 0, -w * 0.18);
+      this.rot('forearm.L', w * 0.2, 0, 0); this.rot('forearm.R', w * 0.2, 0, 0);
+    }
+    if (this.wRoot > 1e-3) {
+      // the feet held: the upper body wrenches against them, side to side on an uneven beat, the arms out for balance
+      const w = this.wRoot, P = LIFE.cc.tugPeriod;
+      const yank = Math.sin(TAU * t / P) + 0.45 * Math.sin(TAU * t / (P * 0.61) + 0.9);
+      this.rot('spine', w * 0.08, w * 0.16 * yank, w * 0.05 * yank);
+      this.rot('chest', w * 0.06, w * 0.12 * yank, 0);
+      this.rot('head', -w * 0.06, -w * 0.1 * yank, 0);
+      this.rot('upper_arm.L', 0, 0, w * (0.3 + 0.08 * yank)); this.rot('upper_arm.R', 0, 0, -w * (0.3 - 0.08 * yank));
+    }
+    if (this.wHaste > 1e-3) {
+      // hasted (over 1.3 runRef): a deeper lean from the hips, the head kept level, a bigger arm pump on the run's phase
+      const w = this.wHaste, pump = Math.cos(TAU * phase);
+      this.rot('spine', w * 0.12, 0, 0); this.rot('chest', w * 0.1, 0, 0);
+      this.rot('neck', -w * 0.1, 0, 0); this.rot('head', -w * 0.1, 0, 0);
+      this.rot('upper_arm.R', -w * 0.22 * pump, 0, 0); this.rot('upper_arm.L', w * 0.22 * pump, 0, 0);
+    }
+  }
+
   /** after the mixer: the chain follow-through, then the state's life and the recoil */
-  apply(role: string, dt: number): void {
+  apply(role: string, dt: number, cc: CcKind | null = null, haste = 0, phase = 0, airU = 0): void {
     const C = LIFE.chain;
     const cap = C.maxStep * Math.max(1, dt * 60);
     if (!ACTOR_LIFE.chains) for (const c of this.chains) c.init = false;
@@ -870,7 +1020,7 @@ class LifeRig {
       // back to the local the mixer writes: parent⁻¹ × shown
       c.o.quaternion.copy(_lq2.invert()).multiply(c.shown);
     }
-    if (!ACTOR_LIFE.on) { this.recT = -1; this.fid = 0; this.mvAvg = 0; this.handInit = false; return; }
+    if (!ACTOR_LIFE.on) { this.recT = -1; this.fid = 0; this.mvAvg = 0; this.handInit = false; this.wAir = this.wSleep = this.wFear = this.wTaunt = this.wRoot = this.wHaste = 0; return; }
     this.t += dt;
     // the stillness watch: the clip's own hand motion this frame (before this layer writes; actor-space drift from a
     // turn counts as motion)
@@ -893,6 +1043,15 @@ class LifeRig {
     const f = Math.min(1, dt * LIFE.fade);
     const idle = role === 'idle' ? 1 : 0, hold = role === 'channel' || role === 'recall' ? 1 : 0, stun = role === 'stunned' ? 1 : 0;
     this.wIdle += (idle - this.wIdle) * f; this.wHold += (hold - this.wHold) * f; this.wStun += (stun - this.wStun) * f;
+    // W3-B (ruling 68): the CC bodies. airborne / sleep are their roles; fear and taunt ride the run (and fear the stand),
+    // root the stand only (a rooted fighter still swings and casts with its own clips); the hasted lean rides the run
+    const fa = Math.min(1, dt * LIFE.cc.fadeAir), loco = role === 'run' || role === 'idle';
+    this.wAir += ((role === 'airborne' ? 1 : 0) - this.wAir) * fa;
+    this.wSleep += ((role === 'sleep' ? 1 : 0) - this.wSleep) * f;
+    this.wFear += ((cc === 'fear' && loco ? 1 : 0) - this.wFear) * f;
+    this.wTaunt += ((cc === 'taunt' && role === 'run' ? 1 : 0) - this.wTaunt) * f;
+    this.wRoot += ((cc === 'root' && role === 'idle' ? 1 : 0) - this.wRoot) * f;
+    this.wHaste += ((role === 'run' ? haste : 0) - this.wHaste) * f;
     let rec = 0;
     if (this.recT >= 0) {
       this.recT += dt;
@@ -902,9 +1061,12 @@ class LifeRig {
       rec *= this.recA;
     }
     const wi = this.wIdle, wh = this.wHold, ws = this.wStun;
-    if (wi + wh + ws < 1e-3 && rec === 0) return;
+    const wcc = this.wAir + this.wSleep + this.wFear + this.wTaunt + this.wRoot + this.wHaste;
+    if (wi + wh + ws + wcc < 1e-3 && rec === 0) return;
     for (const b of this.bones.values()) b.saved.copy(b.o.quaternion);
+    if (this.hips) this.hips.saved.copy(this.hips.o.position);
     this.applied = true;
+    if (wcc > 1e-3) this.applyCc(phase, airU);
     const TAU = Math.PI * 2, t = this.t, B = LIFE.breath, S = LIFE.shift, L = LIFE.look, A = LIFE.arms, U = LIFE.stun;
     const br = Math.sin(TAU * t / B.period), brL = Math.sin(TAU * t / B.period - 0.5);
     const breath = wi + 1.35 * wh, sway = wi + 0.5 * wh, look = wi + 0.5 * wh;
@@ -947,6 +1109,13 @@ export class Actor implements CrowdActor {
   artHeight = 1.9;
   radius = 0.5;
   runRef = 3.6;
+  /** orch1 W3-B (FU-9): the walk's planted speed (stride.ts), the shared run / walk phase and the walk's fade */
+  private walkRef: number | undefined;
+  private walkPhase = 0;
+  private walkSwitch = false;
+  private locoPhase = 0;
+  private locoFade = 0;
+  private locoW = 0;
   attackWindup = 0.3;
   /** interpolation state */
   px = 0; py = 0; ph = 0; pf = 0;
@@ -1060,6 +1229,9 @@ export class Actor implements CrowdActor {
     this.dev = t.dev;
     if (this.kind === 'fighter' && t.barAnchor !== undefined) this.barHeight = t.barAnchor;
     if (this.kind === 'fighter' && t.runRef !== undefined) this.runRef = t.runRef;
+    this.walkRef = this.kind === 'fighter' ? t.walkRef : undefined;
+    this.walkPhase = t.walkPhase ?? 0;
+    this.walkSwitch = !!t.walkSwitch;
     if (t.crowd) {
       // the crowd draws this unit (crowd.ts): an empty body node carries the root placement and the scale/squash
       const body = new Group();
@@ -1262,8 +1434,9 @@ export class Actor implements CrowdActor {
       case 'attack': return v.anim === 'crit' || v.anim === 'attack2' ? v.anim : 'attack1';
       case 'cast': return v.anim && v.anim !== 'cast' ? v.anim : 'cast_a1';
       case 'channel': return 'channel';
-      case 'dash': return v.anim === 'stunned' ? 'stunned' : v.anim || 'dash';
-      case 'stunned': return 'stunned';
+      // a displacement (the sim's dash anim 'stunned': knock-up, knockback, pull) is the airborne body (W3-B, ruling 68)
+      case 'dash': return v.anim === 'stunned' ? 'airborne' : v.anim || 'dash';
+      case 'stunned': return ccKindOf(v) === 'sleep' ? 'sleep' : 'stunned';
       case 'dead': return 'death';
       case 'recall': return 'recall';
       default: return 'idle';
@@ -1327,7 +1500,10 @@ export class Actor implements CrowdActor {
     const held = !!this.hold && v.state !== 'cast' && role === this.hold.role;     // a held cast must not restart
     if (key !== this.currentKey || (restarted && !held && !LOOPING.has(role) && role !== 'run' && role !== 'death')) {
       const next = this.action(role);
-      if (next) {
+      // W3-B: a CC role that plays the clip already running (airborne / sleep on the stunned loop) keeps it going
+      if (next && next === this.current && LOOPING.has(role) && !restarted) {
+        act = next;
+      } else if (next) {
         // orch1 W2-B (VFX-O4): the collapse starts on the death tick: a near cut into the death clip, no 0.1 s blend of standing
         const fade = role.startsWith('attack') || role === 'crit' ? 0.06 : role === 'death' ? DEATH_FADE_S : 0.1;
         next.reset();
@@ -1344,7 +1520,21 @@ export class Actor implements CrowdActor {
     if (act) {
       const clipDur = act.getClip().duration || 1;
       const st = Math.max(0, v.stateTime + (v.state === 'dead' ? 0 : alpha * TICK_DT));
-      if (role === 'run') {
+      if (role === 'run' && this.walkRef !== undefined && this.ownClip('walk')) {
+        // orch1 W3-B (FU-9, stride.ts LOCO): run and walk on one shared phase, blended by speed
+        const speed = Math.hypot(v.vx, v.vy);
+        const walk = this.action('walk')!;
+        const r = speed / Math.max(0.1, this.runRef);
+        const target = this.walkSwitch ? (r < (LOCO.walkFull + LOCO.walkEdge) / 2 ? 1 : 0) : walkWeight(r);
+        // eased, so a slow landing or running out never snaps the legs (a fresh run starts at its target)
+        if (key !== this.prevLocoKey) this.locoW = target;
+        else { const k = dt * (this.walkSwitch ? LOCO.switchRate : LOCO.wRate); this.locoW += Math.max(-k, Math.min(k, target - this.locoW)); }
+        const w = this.locoW;
+        if (key !== this.prevLocoKey) this.locoPhase = 0;
+        this.locoPhase = (this.locoPhase + dt * locoCycleRate(speed, { ref: this.runRef, dur: clipDur }, { ref: this.walkRef, dur: walk.getClip().duration }, w)) % 1;
+        act.timeScale = 0; act.time = this.locoPhase * clipDur; (act as unknown as { weight: number }).weight = 1 - w;
+        walk.timeScale = 0; walk.time = ((this.locoPhase + this.walkPhase) % 1) * walk.getClip().duration;
+      } else if (role === 'run') {
         const speed = Math.hypot(v.vx, v.vy);
         act.timeScale = Math.max(0.35, Math.min(2.2, speed / Math.max(0.1, this.runRef)));
       } else if ((role.startsWith('attack') || role === 'crit') && v.state === 'attack') {
@@ -1360,7 +1550,7 @@ export class Actor implements CrowdActor {
         act.timeScale = 0;
         // past the release (stateDuration), keep playing the follow-through at the same rate
         act.time = Math.min(clipDur - 1e-3, st * (IMPACT_AT * clipDur) / impact);
-      } else if (v.state === 'dash' && role !== 'stunned' && v.stateDuration > 0) {
+      } else if (v.state === 'dash' && role !== 'stunned' && role !== 'airborne' && v.stateDuration > 0) {
         // any clip played in the dash state (the plain dash, or a leap like a 'domefall_leap' role): its apex
         // and landing ride the dash's own progress
         act.timeScale = 0;
@@ -1381,8 +1571,27 @@ export class Actor implements CrowdActor {
         act.timeScale = 1;
       }
     }
+    this.prevLocoKey = key;
+    this.blendWalk(role === 'run', dt);
     this.mixer!.update(dt);
-    this.life?.apply(v.alive ? role : 'death', dt);
+    const cc = v.alive ? ccKindOf(v) : null;
+    const airU = role === 'airborne' && v.stateDuration > 0 ? Math.min(1, (v.stateTime + alpha * TICK_DT) / v.stateDuration) : 0;
+    this.life?.apply(v.alive ? role : 'death', dt, cc, role === 'run' ? hasteWeight(Math.hypot(v.vx, v.vy) / Math.max(0.1, this.runRef)) : 0, this.locoPhase, airU);
+  }
+
+  private prevLocoKey = '';
+  /** the walk's weight: its share of the run (locoW) × the locomotion's own fade (in and out with the run's 0.1 s crossfade) */
+  private blendWalk(running: boolean, dt: number): void {
+    if (this.walkRef === undefined) return;
+    this.locoFade = running ? Math.min(1, this.locoFade + dt / 0.1) : Math.max(0, this.locoFade - dt / 0.1);
+    const walk = this.actions.get('walk');
+    const w = this.locoW * this.locoFade;
+    if (!walk) { if (w > 0 && running) this.action('walk'); else return; }
+    const a = this.actions.get('walk') as unknown as { weight: number; time: number; timeScale: number; enabled: boolean; reset(): unknown; play(): unknown; isRunning(): boolean; stop(): unknown; getClip(): AnimationClip } | undefined;
+    if (!a) return;
+    if (w <= 1e-3) { if (a.isRunning()) a.stop(); return; }
+    if (!a.isRunning()) { a.reset(); a.enabled = true; a.play(); a.timeScale = 0; a.time = ((this.locoPhase + this.walkPhase) % 1) * a.getClip().duration; }
+    a.weight = w;
   }
 
   /** showcase (menu plinth): loop one role regardless of any view */

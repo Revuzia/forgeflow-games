@@ -136,6 +136,23 @@ export interface EntityView {
   readonly height: number;            // airborne / dash arc height in metres (0 on ground)
 }
 
+/** CHANGED(W3-B, ruling 68), additive: the dominant crowd control on a unit, as the presentation reads it from the view's
+ *  own statuses (no new sim field: the sim, its state and its hash are untouched). The order is the CC plate's
+ *  (renderer.ts CC_PLATE_ORDER) so the body and the plate always name the same kind; slow and disarm follow. A tie
+ *  goes to the status with more time left. The body plays it: airborne (a displacement's arc), stun (stagger),
+ *  sleep (slumped loop), taunt (forced stride), fear (cower run), root (pinned feet, the upper body tugs), slow (the
+ *  walk blend, by speed); silence and disarm have no body state (plate and status look only). */
+export type CcKind = 'airborne' | 'stun' | 'sleep' | 'taunt' | 'fear' | 'root' | 'silence' | 'slow' | 'disarm';
+export const CC_ORDER: readonly CcKind[] = ['airborne', 'stun', 'sleep', 'taunt', 'fear', 'root', 'silence', 'slow', 'disarm'];
+export function ccKindOf(v: Pick<EntityView, 'statuses'>): CcKind | null {
+  let best: CcKind | null = null, rank = CC_ORDER.length, left = 0;
+  for (const s of v.statuses) {
+    const r = CC_ORDER.indexOf(s.kind as CcKind);
+    if (r >= 0 && (r < rank || (r === rank && s.remaining > left))) { rank = r; best = s.kind as CcKind; left = s.remaining; }
+  }
+  return best;
+}
+
 export interface FighterStatsView {
   ad: number; ap: number; armor: number; resist: number; attackSpeed: number; moveSpeed: number;
   crit: number; haste: number; range: number; lifesteal: number; tenacity: number; armorPen: number; magicPen: number;

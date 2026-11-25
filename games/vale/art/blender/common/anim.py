@@ -21,7 +21,7 @@ animation per clip.
 
 Standard generators: standard_clips(skel, profile, overrides) -> {name: Clip} for
   idle, run, attack1, attack2, cast_a1 (thrust), cast_a2 (sweep), cast_a3 (overhead slam),
-  cast_ult (channel-raise), death, recall, idle_lobby, victory, channel, dash, stunned.
+  cast_ult (channel-raise), death, recall, idle_lobby, victory, channel, dash, stunned, walk.
 Fighters override/add any clip: pass {name: Clip} or {name: callable(ctx) -> Clip}; the helpers
 (keyed, cyclic, stance poses, weapon holds) are public for bespoke clips.
 """
@@ -1154,6 +1154,97 @@ def gen_stunned(profile: dict) -> Clip:
     return Clip("stunned", N, True, sample)
 
 
+# ── locomotion blend (orch1 W3-B, FU-9, ruling 68) ─────────────────────────────────────────────────────────────────
+# walk shares run's phase convention (the left foot's contact begins at t = 0, the right's at t = 0.5), so the renderer
+# plays both on ONE phase and blends them by speed (walk under 0.65 runRef). The CC bodies (airborne, sleep, fear, taunt,
+# root) and the hasted lean are authored once for VALE_BIPED_1 as a presentation layer in src/render/actors.ts (LifeRig):
+# every fighter and skin gets them and no GLB grows (every fighter GLB sits within a few KiB of its 1172 KiB budget).
+MOTION_CLIPS = ("walk",)
+WALK_SHARE = 0.4          # the walk is authored for this share of run_ref_speed
+WALK_LEAD = 0.08          # the walk's contact starts this share of a cycle early: the heel lands and the foot is flat (in
+                          # the renderer's stance band) on the run's own touchdown (_harness/probe_fighter_motion.ts phase)
+
+
+def gen_walk(profile: dict) -> Clip:
+    """A walk for slowed fighters (FU-9): double support (each foot planted 62 % of the cycle), a low swing that rolls
+    heel -> flat -> toe, a small bob peaking at mid-stance, the hips swaying over the planted foot, a short arm swing and
+    almost no lean. Planted feet travel backward at exactly WALK_SHARE x run_ref_speed."""
+    v = profile["run_ref_speed"] * WALK_SHARE
+    tm, amp, drop, _c, bob, lean = WEIGHTS[profile["weight"]]
+    cadence = profile.get("cadence", 1.0)
+    N = int(round(30 * math.sqrt(tm) / cadence / 2)) * 2
+    T = N / FPS
+    c = 0.62
+    Ls = v * c * T
+    weapon = profile["weapon"]
+    arm_amp = 0.55 * profile.get("arm_swing", 1.0)
+    swing = [(0.00, Ls / 2, 0.0, -22.0), (0.25, Ls / 4, 0.085, -30.0), (0.50, 0.0, 0.11, -12.0),
+             (0.78, -Ls / 2 * 0.92, 0.055, 6.0), (1.00, -Ls / 2, 0.0, 12.0)]
+
+    def swing_at(s):
+        for i in range(1, len(swing)):
+            if s <= swing[i][0]:
+                a, b = swing[i - 1], swing[i]
+                u = sine((s - a[0]) / (b[0] - a[0]))
+                return tuple(a[k] + (b[k] - a[k]) * u for k in (1, 2, 3))
+        return swing[-1][1:]
+
+    def foot_at(q):
+        q %= 1.0
+        if q < c:                                               # contact: exact v backward (heel, flat, heel rise)
+            u = q / c
+            y = -Ls / 2 + Ls * u
+            pitch = 12.0 * (1 - sine(min(1.0, u / 0.18))) - 22.0 * max(0.0, (u - 0.7) / 0.3) ** 1.5
+            return (0.0, y, 0.0), pitch
+        dy, dz, pitch = swing_at((q - c) / (1 - c))
+        return (0.0, dy, dz), pitch
+
+    bw = bob * 0.45
+
+    def sample(t):
+        q = (t + WALK_LEAD) % 1.0
+        fl, pl = foot_at(q)
+        fr, pr = foot_at(q + 0.5)
+        z = -drop * 0.5 - bw + bw * math.cos(4 * math.pi * (q - c / 2))     # high over each mid-stance
+        x = 0.02 * math.cos(2 * math.pi * (q - c / 2))                     # over the planted foot
+        yaw = -4.5 * amp * math.cos(2 * math.pi * q)
+        roll = 2.5 * amp * math.sin(2 * math.pi * (q - c / 2))
+        ch_yaw = 6.0 * amp * math.cos(2 * math.pi * q)
+        sw = arm_amp * math.cos(2 * math.pi * (q - 0.04))
+        lw = lean * 0.22
+        pose = merge(arms_relaxed(), P(
+            hips=(lw * 0.5, yaw, roll), spine=(lw * 0.3, ch_yaw * 0.4, -roll * 0.6),
+            chest=(lw * 0.2 + 0.8 * math.cos(4 * math.pi * q), ch_yaw * 0.6, -roll * 0.3),
+            neck=(-lw * 0.4, -(yaw + ch_yaw) * 0.35, 0), head=(-lw * 0.3, -(yaw + ch_yaw) * 0.25, 0),
+            shoulder_L=(0, 0, -2 - 1.2 * sw), shoulder_R=(0, 0, 2 - 1.2 * sw)))
+        tR = 0.5 - 0.5 * sw
+        arms = arm_block(profile, "run_fwd", tR, "run_back")
+        ikL = {}
+        if weapon not in ("two_hand", "staff", "dual", "bow"):
+            blk = arm_block(profile, "run_fwd", 0.5 + 0.5 * sw, "run_back")["ik"]
+            if "hand.L" in blk:
+                ikL["hand.L"] = blk["hand.L"]
+        if weapon == "none":
+            arms = {"ik": {}}
+            for side, tt in (("R", tR), ("L", 0.5 + 0.5 * sw)):
+                f, bk = ONE_HAND["run_fwd"][0], ONE_HAND["run_back"][0]
+                r = tuple(f[i] + (bk[i] - f[i]) * tt for i in range(3))
+                r = (r[0], r[1], r[2] - 0.08)                       # a lower carry than the run's
+                if side == "L":
+                    r = (-r[0], r[1], r[2])
+                arms["ik"][f"hand.{side}"] = HandTarget(rel=r)
+        ik = dict(arms["ik"])
+        ik.update(ikL)
+        ik["foot.L"] = FootTarget((0.03 + fl[0], fl[1] - 0.02, fl[2]), pl, -4, 0, 0)
+        ik["foot.R"] = FootTarget((-0.03 + fr[0], fr[1] - 0.02, fr[2]), pr, 4, 0, 0)
+        pose["hips_loc"] = (x, 0.015, z)
+        pose["ik"] = ik
+        return pose
+
+    return Clip("walk", N, True, sample, meta={"run_ref_speed": round(v, 4), "stride_m": round(v * T / 2, 3),
+                                               "cycle_s": round(T, 3)})
+
+
 def standard_clips(skel: Skeleton, profile: dict, overrides: dict | None = None,
                    optional=("channel", "dash", "stunned")) -> dict:
     """The full required set (+ optional) for a motion profile; overrides replace/add clips."""
@@ -1174,6 +1265,9 @@ def standard_clips(skel: Skeleton, profile: dict, overrides: dict | None = None,
     gens = {"channel": gen_channel, "dash": gen_dash, "stunned": gen_stunned}
     for o in optional:
         clips[o] = gens[o](profile)
+    # W3-B (ruling 68): the walk ships with every fighter (a rebuild keeps it; the shipped GLBs got it from
+    # art/blender/fighters/_motion_pass.py without a rebuild)
+    clips["walk"] = gen_walk(profile)
     for k, v in (overrides or {}).items():
         clips[k] = v
     return clips
