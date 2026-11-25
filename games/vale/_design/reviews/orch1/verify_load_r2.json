@@ -1,0 +1,105 @@
+{
+  "lane": "W4-C load and weak devices (ruling 67), fix round",
+  "round": 2,
+  "verifier": "independent; own measurement script (scratchpad vmeas.mjs, deleted after use), not _harness/perf_load.mjs",
+  "head": "911f90d199ea626ef61e7ca76de9bee8734d97f9",
+  "date": "2026-11-25",
+  "pass": true,
+  "score": 7.8,
+  "safeToShip": true,
+  "before": "./deploy, the local mirror of live (catalog 2026.11.17, index-CWkE0yR7.js)",
+  "after": "HEAD 911f90d19: npm run content + npm run build + node tools/package_deploy.ts into a temp folder (deleted after the runs). The packager's --override was used because check:browser is RED only on vale-net's 403 to a localhost page (see checks).",
+  "serving": "own Node static server per build: html/js/css/json/svg brotli, glb gzip, other files raw, code no-store and catalog max-age 86400 (cache disabled in the browser anyway). Bytes counted as sent on the wire. The page's WebSocket was routed to nothing (offline local queues).",
+  "profiles": {
+    "fast": "Chrome (channel chrome, headless) on an Apple M5, ANGLE Metal, 1366x768, DPR 1, cold cache, no throttling",
+    "weak": "fast plus CDP CPU throttle 4x and network 20 Mbit/s down, 5 up, 40 ms",
+    "weak6": "weak with CPU 6x",
+    "intel": "weak (or weak6) plus ?fakegpu='ANGLE (Intel, Intel(R) UHD Graphics 620 (0x00005917) Direct3D11 vs_5_0 ps_5_0, D3D11)'. Shows the tier and work an Intel UHD laptop would get, on the M5's speed. Live ignores the parameter, so its intel runs are High.",
+    "swift": "weak CPU and network, --use-angle=swiftshader --enable-unsafe-swiftshader",
+    "nogpu": "weak CPU and network, --disable-gpu",
+    "all": "?calibrate=1, so the automatic tier logic runs as for a player. Practice timing is from the Start practice click; the script picks the first fighter and presses Lock in on both draft screens as a player would."
+  },
+  "numbersTable": {
+    "columns": ["metric", "before (live)", "after (HEAD)"],
+    "rows": [
+      ["Weak: Home shown / usable (1 s with no task over 50 ms)", "1.17 s / 2.63-2.66 s", "1.17-1.19 s / 1.17-1.19 s"],
+      ["Bytes and requests until Home shows", "4.11 MB / 25 (weak), 4.47 MB / 29 (fast)", "4.12 MB / 25 (weak), 4.48 MB / 29 (fast): unchanged"],
+      ["Fast: Home shown", "0.21-0.24 s", "0.23 s"],
+      ["Worst task / frame, first paint to Home (weak)", "193-201 ms / 271-289 ms (1 frame over 250)", "120-126 ms / 127-132 ms"],
+      ["Weak Practice: Start practice to match view (2 runs each)", "11.9 s", "11.8-11.9 s"],
+      ["Weak Practice: loading screen to view", "8.1-8.5 s", "7.8-7.9 s"],
+      ["Weak Practice, Intel-class: loading to view", "8.0-8.1 s (High)", "7.4-7.5 s (Low); 7.1 s at 6x CPU"],
+      ["Weak Quick RIFT 5v5: loading screen to view (3 runs)", "6.6 / 9.7 / 9.1 s", "4.5 / 7.3 / 7.0 s"],
+      ["Weak Quick, Intel-class: loading to view", "6.3 s (High)", "7.0 s (Low); 7.8 s at 6x CPU"],
+      ["Bytes / requests, Start to view: Practice", "25.1 MB / 299-305", "24.4 MB / 227"],
+      ["Bytes / requests, Start to view: Quick 5v5", "43.3-43.6 MB / 589-627", "39.0-41.1 MB / 379-389"],
+      ["Audio bytes downloaded, Start to view (Practice / Quick)", "8.1 / 12.3-12.6 MB", "7.5 / 7.7-10.5 MB"],
+      ["Fast Practice: loading to view", "2.90 s", "2.70 s"],
+      ["Tasks over 250 ms, Start to view (weak Practice / Quick)", "2 / 3-4; worst 1.16-1.21 s", "0 / 0; worst 120-132 ms"],
+      ["Animation frames over 250 ms, Start to view (weak Practice / Quick)", "1 / 2-3; worst 1.56-1.63 s", "0 / 0; worst 127-149 ms"],
+      ["Same, Intel-class Low at 4x / 6x CPU", "n/a (live runs High)", "0 / 0; worst task 113-178 ms, worst frame 116-226 ms"],
+      ["Any task over 250 ms after first paint, whole weak run (incl. Home)", "2-4 per match journey", "0 at 4x; one of 251-254 ms on Home at 6x Intel-class"],
+      ["Page answering an outside evaluate (worst wait), weak", "1.27-1.57 s", "79-192 ms"],
+      ["First 60 s of the match: tasks over 250 ms (weak, all journeys)", "0", "0"],
+      ["Match fps, 60-90 s from view (M5 GPU, weak CPU, High and Low)", "60 (worst 10 s window 59.8)", "60 (worst 10 s window 59.7-60)"],
+      ["Peak JS heap (weak Practice / Quick)", "121-170 MB / 165-191 MB", "114-170 MB / 119-206 MB"],
+      ["GPU estimate (own GL tracking: textures + mips + buffers + renderbuffers + 3 canvas buffers): Practice", "~1000 MB (High)", "~998 MB High; 381-382 MB Intel-class Low"],
+      ["GPU estimate: Quick 5v5", "1343-1409 MB (High)", "1342-1345 MB High; 439-448 MB Intel-class Low"],
+      ["Heap + GPU estimate, Quick 5v5", "1.48-1.54 GB (High, every device)", "1.50-1.51 GB High (unchanged); 0.54-0.62 GB Intel-class Low"],
+      ["Home GPU estimate, High", "266 MB", "265 MB"],
+      ["Tier picked: Apple M5 / Intel UHD 620 string / SwiftShader / --disable-gpu", "High / High / High / High", "High / Low (render scale 0.75) / Low after the plate / Low after the plate"],
+      ["Programs linked before Home without parallel-compile polling", "19-20 (largest fragment 34.8 KB, 12 loops)", "2-3 (8.6 KB)"],
+      ["Programs whose completion was polled (KHR_parallel_shader_compile)", "17 of 48-49", "42 of 51-52 (High); 27-28 of 37-38 (Low)"],
+      ["Blocking program queries, total (weak Practice)", "84-100 ms", "38 ms"],
+      ["Largest fragment program in a match", "140 KB, 11 loops", "140 KB (137 KB at Low), 11 loops: unchanged"],
+      ["Compressed GPU textures uploaded", "0", "0 (no KTX2/Basis)"],
+      ["--disable-gpu (weak CPU)", "Home at 3.8 s, tasks of 2.3 s and 1.8 s, usable at 18.1 s, High", "plain plate at 0.37 s; Play on Low: Home at 1.3 s, then one 2.8 s task, usable 1.6 s after Home"],
+      ["SwiftShader Practice (weak CPU)", "Home at 4.9 s (High); 1.6 fps; tasks up to 4.7 s while loading, 2.1 s in the first minute", "plate at 1.45 s; Play on Low: Home at 3.6 s, match view 9.4 s after Start; 3.5 fps; tasks up to 5.3 s in the first minute; never stuck (it recovers)"],
+      ["WebGL context loss in a match (WEBGL_lose_context on the view canvas, restore after 4 s)", "'Restoring the view' plate shown; 60 fps after restore", "the same"],
+      ["High-tier look: Home pixel diff (share of pixels with max channel delta > 8)", "noise live vs live 0.11 %; new vs new 0.20 %", "live vs new 0.15-0.21 %: unchanged"],
+      ["High-tier look: Practice start frame", "-", "same picture; 4.0 % differ live vs new against 1.9 % new vs new, all in animated tower bolts, glow and the clock text"]
+    ]
+  },
+  "targets": {
+    "Home usable in 5 s or less (weak)": "met: shown and usable at 1.2 s (live 2.6 s usable)",
+    "Practice starts in 20 s or less (weak)": "met: 11.8-11.9 s from Start practice to the match view, the same as live",
+    "no main-thread stall over 250 ms after first paint": "met on the weak profile: 0 tasks and 0 animation frames over 250 ms in every 4x journey (worst 132 ms task, 149 ms frame); live has 2-4 tasks up to 1.21 s and frames up to 1.63 s. At 6x CPU Intel-class, one 251-254 ms task on Home: a margin nobody notices.",
+    "30 fps or better in a 5v5 fight at Low": "60 fps on this Mac. Not proven for an integrated GPU (fill rate not testable here).",
+    "heap + GPU well under 1.5 GB": "met for the device class at risk (Intel-class Low 0.52-0.62 GB). High 5v5 is 1.50-1.51 GB by this estimate, the same as live; it only applies to strong GPUs.",
+    "High-tier look unchanged": "met",
+    "nothing hangs on software rendering": "met: plain plate in 0.4-1.5 s; Play on Low reaches Home and a playable (3.5 fps) match; long tasks of up to 5.3 s recur but the page always recovers"
+  },
+  "implementerClaims": {
+    "reproduced": [
+      "0 frames over 250 ms after first paint at 4x CPU in Practice and Quick (my worst 127-149 ms frames; implementer said 192-209 ms)",
+      "live has 2 (Practice) and 2-3 (Quick) frames over 250 ms, worst about 1.6 s",
+      "programs compiled without polling before Home 19 -> 2; polled 17-18 of 49 -> 42 of 52",
+      "Intel-class Low at 6x CPU has a single task just over 250 ms",
+      "Practice requests down by about a quarter (mine 299-305 -> 227) and Quick requests down by about a third (589-627 -> 379-389)",
+      "the High look is unchanged; the first 60 s of a match are clean in both builds; match fps 60"
+    ],
+    "notReproducedOrDifferent": [
+      "heap + GPU at High 5v5: my estimate 1.50-1.51 GB (live 1.48-1.54) vs the implementer's 1.34-1.35 GB. It is a different estimator; either way there is no change from live",
+      "the 5v5 loading-to-view times vary from run to run (4.5-7.3 s new, 6.3-9.7 s live); I could not reproduce a fixed saving"
+    ]
+  },
+  "checks": {
+    "npm run probe": "80 of 83 pass; the 3 failures are the known sim ones (probe_sim_bot_tactics, probe_sim_click_waves, probe_sim_minion_lane_line). probe_sim_determinism passes (rift idle seed 7 hash a3aaba2a both runs).",
+    "node tools/check_browser.ts": "RED 3 of 6 in e2e_ship. All three failures are only console noise from vale-net returning 403 to a localhost page (the config.js server line is live). The flow suites (dodge, ready check, server down) pass. This is the same environment artefact r1 and ship_pack's GATE_OVERRIDE record.",
+    "sim untouched": "git diff 0d0e69729..HEAD has no changes under src/sim, src/net, src/session, server or public/config.js",
+    "config.js": "server line intact: wss://vale-net.isimcha85.workers.dev/ws. A raw HTTP/1.1 WebSocket upgrade with the live CDN origin gets 101 Switching Protocols, so the server is up.",
+    "friend rooms / quick match": "Quick match (RIFT, Lantern Drill) starts offline in every run. Friend rooms and online quick match were NOT run end to end: vale-net refuses a localhost origin and the network code has not changed since live."
+  },
+  "blockers": [],
+  "problems": [
+    "Cannot reproduce here: no Windows, no Chrome on ANGLE Direct3D 11, no Intel or AMD integrated GPU, no GPU watchdog. All compile timings are Metal timings. Whether the tester's freeze is gone depends on the device report (Settings > Video > Copy device report) from that laptop.",
+    "The match fragment programs are unchanged: up to 140 KB with 11 loops. They are now compiled with polling behind the loading screen, but are no cheaper for the D3D11 driver (FXC) to compile.",
+    "Goal 2 (load fast) is only partly done. Bytes to Home are unchanged (4.1 MB, 25 requests). Match bytes are down by only 3 % (Practice) and 6-10 % (Quick), though requests are down 24-38 %. There is no KTX2/Basis compression. Practice Start-to-view is the same as live (11.9 s); only the loading screen is a little faster.",
+    "Software rendering is still very slow (3.5 fps, tasks up to 5.3 s). It does not hang, and the plate warns first.",
+    "High 5v5 heap + GPU is about 1.5 GB by my estimate, unchanged from live. It is not 'well under 1.5 GB' on strong GPUs; the at-risk class (Low) is at 0.5-0.6 GB.",
+    "The Medium tier (Iris Xe / AMD integrated string) was not measured; only the Intel UHD 620 -> Low path was.",
+    "WebKit and Firefox were not tested: Playwright has no webkit or firefox browsers installed on this Mac (no ms-playwright cache), and installing them is a download that was not authorised here.",
+    "On a context loss the 'Restoring the view' plate shows and frames run at 60 fps, but the plate was still up 6 s after restoreContext() in both live and new. This is not a regression, but recovery time was not confirmed."
+  ],
+  "verdict": "Pass. The hard bar that failed in r1 (no stall over 250 ms after first paint) is now met on the weak profile with room to spare, against 1.2-1.6 s freezes in live. Home is usable 1.5 s sooner, an Intel UHD string starts on Low at about 0.55 GB, software rendering gets a plain plate and never hangs, and the High look and strong-device timings are unchanged or slightly better. Load-size work (KTX2, fewer bytes) is still thin, and the real Windows/D3D11 freeze cannot be confirmed from this Mac."
+}
