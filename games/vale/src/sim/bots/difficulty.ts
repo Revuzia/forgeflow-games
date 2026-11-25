@@ -215,14 +215,25 @@ export interface DifficultyProfile {
   /** ruling 65: a won fight takes the structure nearest where the team stands, and a won defence counter-pushes (off: the
    *  live 8c95deb52 siege choice) */
   readonly teamPush: boolean;
-  /** ruling 65: the team says push ("group here") and objective ("take this") pings, and weighs a person's push and camp
-   *  pings as team calls (and acknowledges a push with onMyWay). Off by ruling 66: a push acknowledged and not followed is a
-   *  broken promise (verify r8); with it off a person's push and objective pings are neither answered nor acknowledged */
-  readonly planPings: boolean;
+  // (ruling 71: ruling 65's planPings, split in three so each can ship alone)
+  /** ruling 71: the team says objective ("take this") pings on its own camp call (desire 0.6+, held 2 s). Changes nothing
+   *  in the game but the pings: teammates already walk to the camp call */
+  readonly sayObjective: boolean;
+  /** ruling 65 / 71: the team says push ("group here") pings on its group call. Off: followed 18-21 % of the time within 10 s
+   *  (teamplay review 2026-11-25), a promise the team does not keep */
+  readonly sayPush: boolean;
+  /** ruling 65 / 71: a person's push and camp pings are weighed as team calls (and a push acknowledged with onMyWay). Off by
+   *  ruling 66: a push acknowledged and not followed is a broken promise (verify r8); an honest push ping is a later piece */
+  readonly hearPersonPlan: boolean;
   /** ruling 65: a computer-played teammate's own assist and retreat calls are heard (answered / weighed) like a person's.
    *  Off by ruling 66: with them on, games between computer-played teams ran longer than live 8c95deb52 (RIFT veteran +0.93 /
-   *  adept +0.97 min pooled n96, veteran 11 games at 30:00 against 5); a person's assist and retreat pings are always heard */
+   *  adept +0.97 min pooled n96, veteran 11 games at 30:00 against 5); a person's assist and retreat pings are always heard.
+   *  Since ruling 71 this is the retreat half (and the unfiltered answer); the answer alone is hearMatesAssist */
   readonly hearMates: boolean;
+  /** ruling 71: a computer-played teammate's own "help here" is answered, by fighters that are only laning, farming, roaming
+   *  or walking back (never one on a team push, a camp call or a post); the answerer says "heading there" itself, and only
+   *  once it has turned (a fighter that has not turned 2 s after it was asked hands the answer on) */
+  readonly hearMatesAssist: boolean;
 }
 
 export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
@@ -251,7 +262,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     baseAnswerDelay: 5, baseAnswerUntil: 1500,
     // (ruling 66: the team-play tactics of ruling 65 are off — joinAt Infinity (was 3), loneStop Infinity (was 4) — pings stay)
     guardFrom: 2, pingGap: 15, pingTeam: 2, pingReads: false, assistReach: 30, assistMax: 1, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
-    teamPush: false, planPings: false, hearMates: false,
+    teamPush: false, sayObjective: false, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
   },
   // (CW3s r3, CL-1: adept's longest quiet stretch fell at 3:00-12:00 with the laners 9 m apart at 75 % health; deaths a minute run under veteran's from 5:00 to 13:00. It now contests an enemy start at a camp, the fight veteran's team takes there, and reads a kill as veteran does. A flat +0.08 on the trade edge was tried and dropped: stretch 3.2 min, takedowns by 10:00 7.15 -> 6.70. team.ts thinkGank and bot.ts's roam read widen for every tier: gaps at 8:00-12:00. Laning retreat bias -0.04: takedowns by 10:00 5.95 -> 6.50 on seeds 8101-8120. Untuned seeds 8501-8520 / 8701-8720: stretch 2.7 / 2.8 min, was 3.4 / 3.6)
   adept: {
@@ -270,7 +281,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     // (ruling 66: posts (ruling 65: true), joinAt (2), regroupWait (8), loneStop (3), teamPush and planPings off — the live
     // 8c95deb52 tactics; the pings that held up in verify r8 stay)
     guardFrom: 2, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 45, assistMax: 2, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
-    teamPush: false, planPings: false, hearMates: false,
+    teamPush: false, sayObjective: false, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -288,7 +299,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     // (ruling 66: posts with recall-to-defend (ruling 65: true from the inner Needles), joinAt (2), regroupWait (10), loneStop (3),
     // teamPush and planPings off — the live 8c95deb52 tactics; the pings that held up in verify r8 stay)
     guardFrom: 1, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 55, assistMax: 2, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
-    teamPush: false, planPings: false, hearMates: false,
+    teamPush: false, sayObjective: false, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
   },
 };
 

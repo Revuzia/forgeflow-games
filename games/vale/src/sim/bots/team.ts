@@ -233,7 +233,11 @@ export class TeamBrain {
   private readonly botSeats: PlayerId[] = [];
   private readonly humans = new Set<PlayerId>();
   /** ruling 65: fighters answering an assist ping — where, until when, and the ping's key */
-  readonly helpers = new Map<PlayerId, { x: number; y: number; until: number; key: string }>();
+  readonly helpers = new Map<PlayerId, { x: number; y: number; until: number; key: string; mate?: { since: number; said: boolean } }>();
+  /** ruling 71: each computer-played fighter's mode at its last think (read by the mates' help answer) */
+  readonly modeOf = new Map<PlayerId, string>();
+  /** ruling 71: a fighter that did not turn to a mate's help it was given, until when it is not asked again */
+  readonly assistDeclined = new Map<PlayerId, number>();
   /** ruling 65: a computer-played teammate's own "help here" (said through the team, heard here at once) */
   readonly selfAssist = new Map<PlayerId, { x: number; y: number; t: number }>();
   /** ruling 65: a person's push or objective ping the team is weighing, until when */
@@ -435,15 +439,16 @@ export class TeamBrain {
     for (const f of this.perc.enemyFighters) if (f.alive) this.foePos.set(f.id, { x: f.x, y: f.y, t: now });
     const tp = { enemyFighters: steady, allyFighters: this.perc.allyFighters };
     // push: a group call on a structure that has held 2 s (from 10:00 on a road map; at once on one road)
-    // (ruling 66: push and objective pings only with planPings — off, so no team call is said that the team may not follow)
+    // (ruling 66: push and objective pings only with planPings — off, so no team call is said that the team may not follow;
+    // ruling 71: split — sayPush for the group call, sayObjective for the camp call)
     const single = k.kind !== 'rift';
     const sg = this.siege;
-    if (d.planPings && this.held(`pk${sg ? sg.id : -1}`, !!sg && this.group && (single || now >= 600) && (this.window || this.press || this.joined || this.rush || this.stage || this.phase === 'late'), now, 2) && sg) {
+    if (d.sayPush && this.held(`pk${sg ? sg.id : -1}`, !!sg && this.group && (single || now >= 600) && (this.window || this.press || this.joined || this.rush || this.stage || this.phase === 'late'), now, 2) && sg) {
       this.callOut(w, 'push', sg.x, sg.y, `push:${sg.id}`, 45);
     }
     // objective: the camp call (desire 0.6+, held 2 s)
     const o = this.objective;
-    if (d.planPings && o && this.held(`ok${o.camp.index}`, o.desire >= 0.6, now, 2)) this.callOut(w, 'objective', o.camp.x, o.camp.y, `obj:${o.camp.index}`, 60);
+    if (d.sayObjective && o && this.held(`ok${o.camp.index}`, o.desire >= 0.6, now, 2)) this.callOut(w, 'objective', o.camp.x, o.camp.y, `obj:${o.camp.index}`, 60);
     if (k.kind !== 'rift') return;
     // assist: a structure of ours with enemy fighters on it (a post or base answer called for a fight)
     for (const g of this.guard.values()) {
@@ -501,7 +506,7 @@ export class TeamBrain {
       if (h.t <= this.heardSeen) continue;
       // (ruling 66: a person's push and camp pings are weighed — and a push acknowledged — only with planPings: off, they are
       // neither followed nor answered, so no onMyWay is said to a call the team does not take)
-      if (!h.human || !this.diff.planPings) continue;
+      if (!h.human || !this.diff.hearPersonPlan) continue;
       if (h.kind === 'push') this.pingPush = { x: h.x, y: h.y, until: h.t + 25, by: h.player, on: false };
       else if (h.kind === 'objective') this.pingObj = { x: h.x, y: h.y, until: h.t + 25, by: h.player };
     }
@@ -527,11 +532,13 @@ export class TeamBrain {
     }
     for (const [p, a] of [...this.selfAssist]) if (now - a.t > 6) this.selfAssist.delete(p);
     if (this.k.kind !== 'rift' || d.assistReach <= 0) return;
-    const calls: { x: number; y: number; t: number; from: PlayerId }[] = [];
-    for (const h of this.comms.heard) if (h.human && h.kind === 'assist' && now - h.t <= 6) calls.push({ x: h.x, y: h.y, t: h.t, from: h.player });
+    const calls: { x: number; y: number; t: number; from: PlayerId; mate: boolean }[] = [];
+    for (const h of this.comms.heard) if (h.human && h.kind === 'assist' && now - h.t <= 6) calls.push({ x: h.x, y: h.y, t: h.t, from: h.player, mate: false });
     // (ruling 66: a computer-played teammate's own call is answered only where the tier hears its mates — hearMates, off: the
     // answers between computer-played fighters moved the pace; a person's call is always heard)
-    if (d.hearMates) for (const [p, a] of this.selfAssist) calls.push({ x: a.x, y: a.y, t: a.t, from: p });
+    // (ruling 71: hearMatesAssist answers it alone — from fighters only laning, farming, roaming or walking back, and the answerer
+    // says "heading there" itself once it has turned, bot.ts)
+    if (d.hearMates || d.hearMatesAssist) for (const [p, a] of this.selfAssist) calls.push({ x: a.x, y: a.y, t: a.t, from: p, mate: !d.hearMates });
     for (const c of calls) {
       const key = `as:${c.from}:${Math.round(c.t * 10)}`;
       let foes = 0, ours = 0;
@@ -549,6 +556,10 @@ export class TeamBrain {
       const cand: { p: PlayerId; dd: number }[] = [];
       for (const p of this.botSeats) {
         if (p === c.from || this.helpers.has(p) || this.guard.has(p) || this.answer.has(p) || this.hunters.has(p)) continue;
+        if (c.mate) {
+          const m = this.modeOf.get(p);
+          if ((m !== 'lane' && m !== 'farm' && m !== 'roam' && m !== 'return') || now < (this.assistDeclined.get(p) ?? -1e9)) continue;
+        }
         const e = w.players[p]?.ent;
         if (!e || !e.alive || e.hp < e.maxHp * 0.55 || e.stateOverride === 'recall') continue;
         const dd = dhypot(e.x - c.x, e.y - c.y);
@@ -563,8 +574,11 @@ export class TeamBrain {
       cand.sort((x, y) => x.dd - y.dd || x.p - y.p);
       for (const cd of cand) {
         if (have >= need) break;
-        this.helpers.set(cd.p, { x: c.x, y: c.y, until: now + 8, key });
-        this.callOut(w, 'onMyWay', c.x, c.y, `omw:${key}:${cd.p}`, 20, cd.p);
+        if (c.mate) this.helpers.set(cd.p, { x: c.x, y: c.y, until: now + 8, key, mate: { since: now, said: false } });
+        else {
+          this.helpers.set(cd.p, { x: c.x, y: c.y, until: now + 8, key });
+          this.callOut(w, 'onMyWay', c.x, c.y, `omw:${key}:${cd.p}`, 20, cd.p);
+        }
         have++;
       }
     }

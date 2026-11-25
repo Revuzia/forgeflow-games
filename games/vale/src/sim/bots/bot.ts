@@ -196,6 +196,7 @@ export class Bot extends BotBase implements BotController {
       if (this.recentDps <= 0 && this.nearestEnemyFighter(8) === null) return out;
     }
     if ((w.tick + this.stagger) % MODE_TICKS === 0) this.selectMode();
+    if (this.brain) this.brain.modeOf.set(this.player, this.mode);
     this.clearPlan();
     this.execute();
     this.clearOwn();
@@ -205,6 +206,15 @@ export class Bot extends BotBase implements BotController {
     // (ruling 65: a call the team brain gave me to say)
     const call = this.brain ? this.brain.comms.takeCall(this.player, this.now) : null;
     if (call) this.say(call.kind, call.x, call.y, call.key, call.hold);
+    // (ruling 71: a mate's "help here" I was given — I say "heading there" myself, and only once I have turned to it; not
+    // turned 2 s after it was given, I hand it on and am not asked again for 10 s)
+    const hm = this.brain ? this.brain.helpers.get(this.player) : undefined;
+    if (hm && hm.mate && !hm.mate.said) {
+      const b = this.brain!;
+      if (this.mode === 'defend' && !b.answer.has(this.player) && !b.guard.has(this.player)) {
+        if (this.say('onMyWay', hm.x, hm.y, `omw:${hm.key}:${this.player}`, 20)) hm.mate.said = true;
+      } else if (this.now - hm.mate.since >= 2) { b.helpers.delete(this.player); b.assistDeclined.set(this.player, this.now + 10); }
+    }
     // publish the focus target for teammates
     if (this.brain) { if (this.pFight && this.pFight.kind === 'fighter') this.brain.focus.set(this.player, this.pFight.id); else this.brain.focus.delete(this.player); }
     return out;
