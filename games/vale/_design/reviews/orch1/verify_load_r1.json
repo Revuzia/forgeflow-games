@@ -1,0 +1,103 @@
+{
+  "lane": "W4-C load and weak devices (ruling 67)",
+  "round": 1,
+  "verifier": "independent, own scripts (not _harness/perf_load.mjs)",
+  "head": "729e0e011",
+  "date": "2026-11-25",
+  "pass": false,
+  "score": 6.8,
+  "safeToShip": true,
+  "before": "./deploy, the mirror of live catalog 2026.11.17 (index-CWkE0yR7.js; none of the W4-C code is in it)",
+  "after": "HEAD 729e0e011: npm run content + npm run build + tools/package_deploy.ts into a temp folder (deleted). Its catalog matches live apart from re-encoded splash/portrait webps. The --override was logged because the browser gate was GREEN 6/6 only with config.js server: null (vale-net returns 403 to a localhost page), the same as ship_pack's GATE_OVERRIDE.",
+  "profiles": {
+    "fast": "Chrome (channel chrome, headless) on an Apple M5, ANGLE Metal, 1366x768, DPR 1, cold cache, no throttling",
+    "weak": "as fast, plus CDP CPU throttle 4x and network 20 Mbit/s down, 5 up, 40 ms RTT",
+    "intel": "weak plus ?fakegpu='ANGLE (Intel, Intel(R) UHD Graphics 620 ... Direct3D11 ...)'. This shows the tier an Intel UHD laptop would get, not that laptop's speed. Live ignores the parameter, so its 'intel' run is High.",
+    "swift": "weak CPU and network, --use-angle=swiftshader --enable-unsafe-swiftshader",
+    "nogpu": "weak CPU and network, --disable-gpu",
+    "all": "?calibrate=1, so the automatic first-run tier logic runs under automation as it would for a player. The vale-net WebSocket is routed to nothing (offline local queues)."
+  },
+  "numbers": "see numbersTable; the summary string is in the StructuredOutput",
+  "numbersTable": {
+    "columns": ["metric", "before (live)", "after (HEAD)"],
+    "rows": [
+      ["Weak: Home shown / usable (1 s with no task over 50 ms)", "1.16-1.27 s / 2.63-2.76 s", "1.26-1.43 s / 2.71-3.01 s"],
+      ["Bytes and requests until Home shows (includes the backdrop in flight)", "4.18 MB / 26 (weak), 4.47 MB / 29 (fast)", "4.19 MB / 26, 4.48 MB / 29 (no change)"],
+      ["Fast: Home shown", "0.31-0.37 s", "0.38-0.40 s"],
+      ["Weak Practice: Start to match view", "12.2-13.3 s (3 runs)", "13.2-14.9 s (3 runs)"],
+      ["Weak Practice: loading screen to view", "7.8-8.7 s", "8.8-10.1 s"],
+      ["Weak Practice, Intel-class: start to view / loading to view", "12.3 s / 7.95 s (High)", "13.4-14.6 s / 8.8-9.3 s (Low)"],
+      ["Weak Quick RIFT 5v5: Start to view (includes queue and draft timers)", "30.4-32.2 s", "36.2-38.1 s"],
+      ["Weak Quick RIFT 5v5: loading to view", "15.2-15.7 s", "16.9-18.0 s"],
+      ["Weak Quick, Intel-class: loading to view", "15.1 s (High)", "15.4-18.8 s (Low)"],
+      ["Bytes, Start to match view (Practice / Quick)", "33.3 MB / 45.5-46.6 MB", "33.3 MB (High), 30.1 MB (Low) / 45.5-46.8 MB"],
+      ["Fast Practice: loading to view", "2.90 s", "3.10 s"],
+      ["Longest task, first paint to Home (weak)", "195-246 ms", "217-243 ms"],
+      ["Longest task, Home idle incl. first-run sample (weak)", "172-204 ms", "171-291 ms"],
+      ["Longest task on the loading screen (weak Practice / Quick)", "1.19 s / 1.23 s", "0.69 s / 0.87 s"],
+      ["Tasks over 250 ms on the loading screen (Practice / Quick)", "2 / 3", "3 / 6-9"],
+      ["Main-thread time blocked on the loading screen (Practice / Quick)", "1.87 s / 3.89 s", "1.73 s / 4.59-5.57 s"],
+      ["Longest animation frame before the HUD (weak Practice / Quick)", "1.6-2.3 s / 1.7-1.8 s", "1.08-1.35 s plus a second 0.9-1.1 s / 1.48-1.49 s plus 2-3 more of about 1.0 s"],
+      ["First 60 s of the match: tasks over 250 ms / worst frame (weak, all journeys)", "0 / 36-66 ms", "0 / 36-65 ms"],
+      ["Match fps (60 s from view, weak, Practice and Quick, High and Low)", "60", "60"],
+      ["5v5 fight fps on the render bench, RIFT t=600, 4x CPU (HEAD only)", "n/a", "Low 60 (p95 19 ms), Medium 60, High 60 (p95 20 ms), on the M5 GPU"],
+      ["Peak JS heap (weak Practice / Quick, High)", "98-103 MB / 107-111 MB", "98-106 MB / 120-135 MB"],
+      ["GPU estimate (textures x1.33 + buffers + renderbuffers + canvas), Practice", "1059-1064 MB (High)", "1098-1104 MB High; 462-466 MB Intel-class Low"],
+      ["GPU estimate, Quick 5v5", "1430-1461 MB (High)", "1465 MB High; 540 MB Intel-class Low"],
+      ["Heap + GPU estimate, Quick 5v5", "about 1.54-1.57 GB (High, every device)", "about 1.59 GB High (unchanged class); 0.67 GB Intel-class Low"],
+      ["Home GPU estimate, High", "324 MB", "356 MB (+32 MB: the kept PMREM generator's targets)"],
+      ["Tier picked automatically: Apple M5", "High", "High (Apple, ceiling high)"],
+      ["Tier picked automatically: Intel UHD 620 string", "High", "Low (applied before the renderer exists)"],
+      ["Tier picked automatically: SwiftShader / --disable-gpu", "High", "Low, after a plain 'without graphics acceleration' plate"],
+      ["Match programs whose compile was polled (KHR_parallel_shader_compile) / linked while loading", "17 of 25", "22 of 24 (High), 21 of 23 (Low)"],
+      ["Boot and Home programs compiled synchronously (no polling)", "23 (largest fragment 34.8 KB, 12 loops)", "22 High, 11 Low (largest 24.7 KB at Low)"],
+      ["Largest match fragment program", "140 KB, 15 loops", "140 KB, 15 loops (137 KB at Low): unchanged"],
+      ["--disable-gpu: first thing on screen", "Home at 4.7 s, quiet at 19.5 s, still High", "plate at 0.47 s; Play on Low: Home at 4.1 s"],
+      ["SwiftShader: first thing on screen", "Home at 7.4 s (High)", "plate at 2.4 s; Play on Low: Home at 8.9-9.3 s"],
+      ["SwiftShader Practice on Low", "not run", "starts; 2 fps; one 12.4 s frame and a 10.6 s task in the first minute (not a hang: it recovers)"],
+      ["High-tier look: Home frame pixel diff (max channel delta > 8)", "noise floor 0.16 % (same build twice)", "0.05-0.11 % before vs after: unchanged"],
+      ["High-tier look: match frame at Practice start", "-", "same picture; the 2 % of pixels that differ are animated effects, the tower glow, and the player name"]
+    ]
+  },
+  "targets": {
+    "Home usable in 5 s or less (weak)": "met: 1.3-1.4 s shown, 2.7-3.0 s usable (live already met it)",
+    "Practice starts in 20 s or less (weak)": "met: 13.2-14.9 s Start to view. The implementer's '37 s, not met' was not reproduced. This is 1-2 s slower than live (12.2-13.3 s).",
+    "no main-thread stall over 250 ms after first paint": "NOT met: 3-9 tasks over 250 ms on the loading screen, the worst 0.69-0.87 s, and animation frames up to 1.5 s. Live also misses it (worst task 1.2 s). The match's first 60 s is clean in both.",
+    "30 fps or better in a 5v5 fight at Low": "met on this Mac (60 fps at 4x CPU). The integrated-GPU fill rate could not be tested.",
+    "heap + GPU well under 1.5 GB": "met for the device class at risk (Intel-class Low 0.47-0.67 GB). High 5v5 is about 1.6 GB by this estimate, the same as live.",
+    "High-tier look unchanged": "met",
+    "nothing hangs on software rendering": "met: a plain plate within 0.5-2.4 s, and Play on Low reaches Home and a match"
+  },
+  "blockers": [
+    "The hard bar 'no main-thread stall over 250 ms after first paint' is missed by a margin a player notices. On the weak profile the loading screen freezes for 0.7-0.9 s tasks (frames up to 1.5 s) 3-9 times per match load. In a 5v5 load that is more often than live: 6-9 long tasks against 3, and 4.6-5.6 s of blocked time against 3.9 s. The terrain build was moved into preload() as one synchronous 0.9-1.1 s frame instead of being split up.",
+    "Goal 2 (load fast) is not delivered. Bytes and requests to Home are unchanged (4.2 MB / 26), and so are the bytes to start a match (30-47 MB). There is no KTX2/Basis, no lazy or on-demand audio, and nothing was cut. Loading-screen-to-view got 1-3 s slower on the weak profile (Practice 7.8-8.7 s to 8.8-10.1 s; Quick 15.2-15.7 s to 16.9-18.0 s)."
+  ],
+  "problems": [
+    "Not reproducible here, as the implementer says: no Windows, no ANGLE on Direct3D 11, no Intel or AMD integrated GPU, no GPU watchdog. All shader timings are Metal timings, so whether the tester's freeze is fixed depends on the device report from that laptop.",
+    "Boot and Home programs are still compiled synchronously, with no KHR_parallel_shader_compile polling: 22 at High (fragments up to 35 KB, 12 loops) and 11 at Low. On D3D11 they would be translated and compiled by FXC while the page waits. The device tier lowers the count on Intel-class GPUs but does not make these compiles parallel.",
+    "The 88-140 KB match fragment programs with 12-15 loops are unchanged. They now compile in parallel, behind the 'Preparing the view' plate (up to a 12 s cap), but are no cheaper for the driver.",
+    "Several implementer figures were not reproduced. 'Match-start frame 0.9-1.0 s': measured 1.08-1.49 s, plus a new ~1 s terrain frame. 'Loading to HUD 5.5 s to 4.4 s': measured slower (7.8-8.7 s to 8.8-10.1 s to the view, 7.9 s to 8.6-9.5 s to the HUD). 'Practice 37 s': measured 13-15 s.",
+    "At Low the texture cap shrinks images while loading: the Intel-class Quick load reached 18.8 s in one of two runs (15.4 s in the other).",
+    "Home holds 32 MB more texture memory at High because the PMREM generator's targets are now kept for the visit.",
+    "On the SwiftShader 'Play on Low' path a Practice match runs at 2 fps, with a 10.6 s main-thread task in its first minute. The plate warns about this first, so it is allowed by the brief, but it is not playable.",
+    "Safari and Firefox were not run. Playwright has no WebKit or Firefox build on this Mac, downloading one was not cleared, and Safari's 'Allow Remote Automation' is a settings change this lane may not make.",
+    "Online play could not be started from a local build because vale-net refuses localhost origins (403). Friend rooms and Quick match online are unverified end to end. Nothing in src/net, src/session or public/config.js changed since live; the packaged config.js keeps the vale-net server line, and the offline Quick RIFT match starts.",
+    "The 5v5 fight fps was measured on the dev render bench (HEAD only) with the M5 GPU. It shows the CPU side at 4x throttle, not an integrated GPU's fill rate.",
+    "npm run typecheck fails, but only in another agent's untracked _harness/_tmp_vfy_ai42_fog.ts. The lane's own files typecheck."
+  ],
+  "checks": {
+    "npm run probe": "80 pass, 3 fail: exactly the known probe_sim_bot_tactics, probe_sim_click_waves and probe_sim_minion_lane_line. probe_device_tier, probe_calibrate, probe_boot_gate, probe_frame_guard and probe_copy_no_bots pass.",
+    "node tools/check_browser.ts": "RED as configured (vale-net 403 from localhost, plus one Vite 'Outdated Optimize Dep' 504). GREEN 6/6 (flow 3/3, ship 6/6) with config.js server null, the established GATE_OVERRIDE recipe. config.js was restored at once (git checkout).",
+    "content:check": "OK, 0 warnings",
+    "sim untouched": "git diff 3e9176ff6..HEAD -- src/sim is empty; the sim and determinism probes pass",
+    "player-facing text": "the new plates and toasts say 'this device', with no mention of bots, AI or CPU; probe_copy_no_bots passes",
+    "config.js server line": "intact in public/config.js and in the packaged build"
+  },
+  "whySafeToShip": "For the device at risk it is strictly safer than live. An Intel UHD string starts at Low before any High program is built (live: High). Match GPU memory drops from about 1.06-1.46 GB to 0.46-0.54 GB. The match programs compile in parallel behind a plate. Software rendering gets a plain plate in 0.5-2.4 s instead of silently running High. A lost GPU context now offers Low. The tester can send a device report. For a strong machine the High look is unchanged, Home costs +32 MB, and a match load costs 0.2 s more unthrottled (1-3 s more at 4x CPU). It does not meet the lane's hard stall and load-speed bars, so it is not a PASS.",
+  "fixRound": [
+    "Split the terrain build and the match-start work (HUD mount, first actor build) into yielded steps of 50 ms or less on the loading screen; there should be no single task over 250 ms.",
+    "Compile the boot and Home programs through compileAsync as well, behind the boot plate.",
+    "Load fast: KTX2/Basis (or at least lazy audio and per-match sound banks), and cut the bytes before Home and the bytes per match. Report before/after bytes."
+  ],
+  "cleanup": "Temp package, screenshots, results and scripts were in the session scratchpad (deleted). The Vite dev server (:5197) and every measurement server are stopped. No upload to Cloudflare."
+}
