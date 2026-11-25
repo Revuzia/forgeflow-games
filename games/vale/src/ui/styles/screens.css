@@ -103,6 +103,11 @@
 .play__mode .t-body-l { color: var(--text-1); }
 .dial__arc--face { stroke: var(--line-1); stroke-dasharray: 2 5; }
 .play__links { display: flex; gap: var(--u); margin-top: var(--u); flex-wrap: wrap; }
+.play__new { display: inline-flex; align-items: center; gap: var(--u); padding: 2px calc(var(--u) * 1.5) 2px 2px; border: 1px solid var(--chalk); border-radius: var(--radius); box-shadow: 0 0 0 3px color-mix(in srgb, var(--chalk) 22%, transparent); animation: newpulse 2.4s var(--ease-std) infinite; }
+.play__newtxt { color: var(--text-1); }
+@keyframes newpulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--chalk) 8%, transparent); } }
+.reduce-motion .play__new { animation: none; }
+@media (prefers-reduced-motion: reduce) { .play__new { animation: none; } }
 .qcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(1.5 * var(--u)); }   /* 2 x 2: all four queues above the fold */
 .qcard { display: flex; flex-direction: column; gap: var(--u); padding: calc(2 * var(--u)); text-align: left; transition: background-color 100ms var(--ease-std), transform 60ms linear; }
 .qcard:hover, .qcard:focus-visible { background: var(--plate-bg-raised); box-shadow: var(--ring); }

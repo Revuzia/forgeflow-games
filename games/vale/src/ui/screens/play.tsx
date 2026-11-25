@@ -31,10 +31,17 @@ const SIDE_KINDS: QueueDefT['kind'][] = ['custom', 'practice'];
 /** the Play with friends card's id in the queue row (not a catalog queue: it opens a friend room) */
 const FRIENDS = 'friends';
 
+const PRACTICE_SEEN_KEY = 'vale.practice_seen';
+/** per-device: has this player opened Practice (the new-player pointer on Play stops once they have) */
+function practiceSeen(set?: boolean): boolean {
+  try { if (set) localStorage.setItem(PRACTICE_SEEN_KEY, '1'); return localStorage.getItem(PRACTICE_SEEN_KEY) === '1'; } catch { return true; }
+}
+
 export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
   const { cv, router, state, session, sound } = useApp();
   const profile = state.profile.value;
   const prefs = state.prefs.value;
+  const newHere = profile.history.length === 0 && !practiceSeen();
   const live = cv.c.client.modeSlots.filter((s) => s.mode && s.status === 'live' && cv.mode(s.mode));
   const modeId = [p.params.mode, prefs.lastMode, live[0]?.mode].find((m) => m && live.some((s) => s.mode === m)) ?? null;
   const mode = cv.mode(modeId);
@@ -125,11 +132,17 @@ export function PlayScreen(p: { params: Record<string, string> }): JSX.Element {
           </div>
           {anySide.length ? (
             <div class="play__links">
-              {anySide.map((q) => (
-                <Button variant="quiet" size="s" iconAfter="arrow" onPress={() => router.go(q.kind)}>
-                  {q.kind === 'practice' ? cv.t('play.practice_card', 'Practice') : cv.t('play.custom_card', 'Custom game')}
-                </Button>
-              ))}
+              {anySide.map((q) => {
+                const b = (
+                  <Button variant="quiet" size="s" iconAfter="arrow" onPress={() => { if (q.kind === 'practice') practiceSeen(true); router.go(q.kind); }}>
+                    {q.kind === 'practice' ? cv.t('play.practice_card', 'Practice') : cv.t('play.custom_card', 'Custom game')}
+                  </Button>
+                );
+                /* a player with no match yet is pointed at Practice (owner, 2026-11-25): a ring and one line, gone once opened */
+                return q.kind === 'practice' && newHere
+                  ? <span class="play__new">{b}<span class="play__newtxt t-caption">{cv.t('play.practice_new', 'New here? Start in Practice.')}</span></span>
+                  : b;
+              })}
             </div>
           ) : null}
         </Section>
