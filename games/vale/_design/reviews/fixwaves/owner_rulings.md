@@ -1359,3 +1359,55 @@ Lane AI carve-out after verify r8 failed ruling 65's build (6.0, `_design/review
 - No attack or defence gain over live in games between computer-played teams. This build changes nothing there by design.
 - Pace in games with a person on the team is not separately measured. The person's own assist and retreat pings are the only behaviour change, and only for that person's teammates.
 - The lead's "teammate's help ping answered" is shipped for people only. Bot-to-bot answering stays off until a lane pays for its pace.
+
+## 67. A device starts at the quality it can hold: its GPU sets the ceiling before anything heavy runs, a match is not drawn until its shaders have compiled in parallel, and Low uploads smaller textures (lead, by delegation, 2026-11-25)
+
+Lane W4-C. The owner, 2026-11-24: a tester's computer froze and "we need faster loading so everyone can use the game this is VITAL"; 2026-11-25: the tester has 16 GB, Google Chrome, a Windows laptop. Base: live catalog 2026.11.16; client commits c69ca6d51 (step 1) and 0d032460d (step 2) on claude/youthful-ramanujan-gdud5w. Industry standard followed: the browser games and engines that ship on integrated GPUs pick a default tier from the GPU string and machine facts, let the player override it, never present a frame while its shaders are still compiling, and say plainly when there is no GPU acceleration.
+
+**Decided.**
+- **How a device is classified** (`src/render/device_tier.ts`, read before the renderer exists). The GPU string comes from WEBGL_debug_renderer_info.
+  - Software renderer (SwiftShader, llvmpipe, Microsoft Basic Render Driver, or a context that fails `failIfMajorPerformanceCaveat`): Low, and a plain plate first: "This device is drawing VALE without graphics acceleration ..." with Play on Low and Reload.
+  - Intel UHD / HD and other Intel integrated, Direct3D 9 drivers, ARM Mali / PowerVR: Low.
+  - Intel Iris (Xe, Plus, Pro), Intel Arc integrated, AMD integrated (Radeon(TM) Graphics, Vega N, 680M-890M), NVIDIA MX, Qualcomm Adreno: Medium.
+  - NVIDIA GeForce / RTX, AMD RX / Pro, Intel Arc A/B, Apple, or an unknown string: High, and the first-run sample decides.
+  - Then the machine: deviceMemory 2 GB or less, or 2 cores or fewer: Low. 4 GB or less, or 4 cores or fewer: at most Medium. MAX_TEXTURE_SIZE under 4096: Low.
+- **When it applies.** Only to a profile still on the untouched High default, once per device (`vale.devtier.v1`). Any preset the player picks in Settings > Video is theirs, and the toast says what was set, with a link to Video settings. `?tier=` forces a start tier for QA. `?fakegpu=<string>` classifies as if the GPU said that (QA on this Mac). An automated browser keeps the fixed default unless `?calibrate=1`.
+- **The first-run sample** (calibration.ts) is drawn at the ceiling, never above it, and can only step down from it. A visible window that drew fewer than 30 frames is a machine under 10 fps, so the answer is Low. Before this it kept High: SwiftShader's single 9.9 s frame, 10 fps, and a 2.5 s stall followed by 20 frames all stayed on High. A stored verdict from the old rule that drew under 30 frames counts as no verdict, so that device is judged again. A sample that starves even at Low says "VALE is running very slowly on this device ...".
+- **Texture memory per tier.** Every image from a model, and every tiling ground texture, is downscaled before its first upload: Low to 512 px at most, Medium to 1024. High and Ultra are unchanged, so the live look stays. The Home backdrop is exempt.
+- **Texture format.** WebP inside the GLBs stays. KTX2/Basis is not adopted in this lane: no encoder (toktx/basisu) is on this machine, and downloading one was not cleared. The per-tier cap stands in for it on the GPU-memory side. KTX2 remains TECH-06's open item.
+- **Shaders.** A new match is not drawn until its scene, its VFX shapes and the fighter templates that land meanwhile have compiled in parallel (compileAsync with KHR_parallel_shader_compile). The HUD shows "Preparing the view / The battlefield appears in a moment." over the fog colour, with a 12 s cap. The PMREM generator is kept, so its programs compile once, not on every bake. The stand-in sky is not baked when the real one has already landed.
+- **Main thread.** The procedural terrain is built in `preload()`, behind the draft prefetch and loading screen, not in the match's first task.
+- **Lost picture.** The plate gets a "Switch to Low quality" button, which saves the setting and reloads. Two GPU context losses in one visit step down to Low by themselves and say so.
+- **Diagnostics for the tester.** `?diag=1` shows a corner readout. Settings > Video "Copy device report" copies: GPU string, class, ceiling and tier, texture cap, programs linked and blocking compile ms (worst program), texture MB (estimate from the WebGL allocations), worst frames, long tasks, JS heap, context losses.
+- **What stays lazy or eager is unchanged.** Home already loads 1.1 MB in 18 requests. A match's models, sky and grade prefetch during the draft as before. Audio per match is not changed (audio lane).
+
+**Measured** (`_harness/perf_load.mjs` on this build served like the CDN, live catalog 2026.11.16, a fresh profile and cold HTTP cache per run). "Weak" is Chrome at 1366x768, CPU throttled 4x, 20 Mbit / 40 ms, on an Apple M5 (ANGLE Metal). The Intel row is the same run with `?fakegpu=` set to an Intel UHD 620 Direct3D 11 string, so it shows the tier the laptop would get, not its speed. Before figures are the W4-C baseline (3e9176ff6).
+
+| | before | after |
+|---|---|---|
+| Intel UHD class, first-run tier | High (Low only if it drew 30+ frames under 55 fps) | Low |
+| Weak Practice GPU estimate, High / Intel-class Low | 812 MB / (Low was 801 MB in the bench) | 842 MB / 363 MB |
+| Weak co-op 5v5, heap + GPU peak, High / Intel-class Low | 1.40 GB incl. audio / - | 1.44 GB / 0.69 GB |
+| Weak Practice blocking shader compile, home to HUD | 1031 ms, worst 413 ms (Low) | 8.5 ms (High), 10.5 ms (Low); all 17-21 match programs polled first |
+| Worst frame in the first minute of a match (weak Practice / co-op) | 1178 ms ('stone' at 608 ms) | 0 frames over 100 ms (both, High and Low) |
+| Match-start frame (matchReady task + first frame) | 2.54-3.21 s | 0.90-1.00 s |
+| setScene(match) | 754 ms | 30 ms |
+| Home, weak | 1.36 s | 1.18 s |
+| Loading screen to HUD, weak Practice / co-op | 5.5 s / 10.6 s | 4.4 s / 10.1 s, plus 0.6-0.7 s of "Preparing the view" in Practice |
+| fps, weak, 30-45 s of the match | 60 | 60 (High and Low, Practice and co-op) |
+| SwiftShader | High; Home 25.4 s, HUD 214 s | the plate at once; Play on Low: Home 4.0 s, loading to HUD 4.5 s, about 4 fps |
+| `--disable-gpu` | Home 5.6 s, settles 27.7 s | the plate at 0.36 s |
+| Context loss in a match | restored in 668 ms, no Low retry | restored in 536 ms; Low retry on the lost plate; 2 losses drop to Low |
+
+**Not met, said plainly.**
+- **Not reproduced here.** I could not reproduce Windows, ANGLE on Direct3D 11, an Intel or AMD integrated GPU, or Chrome's GPU watchdog. Every shader time above is a Metal time. Whether the parallel compile and the held view keep the tester's laptop responsive must be confirmed with the device report from that laptop.
+- **Fragment programs.** The 88-140 KB world and fighter fragment programs and their fixed loops are unchanged, because changing them risks the High look. They compile in parallel now, but they are as large as before.
+- **Stalls over 250 ms remain in the weak profile.** None is in the first minute of the match:
+  - the match-start task, about 0.6 s of HUD mount plus about 0.35 s of first-frame actor build;
+  - the terrain build, about 0.7 s, now during the draft or loading screen;
+  - the render chunk's import, 0.3 s, before Home.
+  The bar is none over 250 ms after first paint.
+- **Practice in 20 s or less: not met.** Start to HUD is 37 s, and 33 s of that is the draft clocks (DRAFT_DEFAULTS). Changing the Practice draft is a session/draft ruling for the owner, not this lane.
+- **Other browsers.** Safari and Firefox were not run: Playwright WebKit is not installed, safaridriver needs Remote Automation consent, and Firefox is absent. The code paths they take are guarded: no deviceMemory, a masked GPU string falls back to the sample, no parallel compile means the held view ends at once, and a resize that is ignored falls back to a canvas.
+- **High co-op 5v5 memory is 1.44 GB**, under the 1.5 GB bar but close. Low is 0.69 GB.
+- **High look.** The same code paths at High: no texture cap, the same PMREM output, the same terrain. Only the first 0.6 s of a match shows the view plate instead of frames. No pixel diff was run.
