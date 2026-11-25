@@ -14,7 +14,7 @@ export interface DeviceFacts {
   height: number;
 }
 
-export type DeviceKind = 'webgl' | 'touch' | 'small';
+export type DeviceKind = 'webgl' | 'touch' | 'small' | 'slow';
 export interface DeviceProblem { kind: DeviceKind; /** hybrids and small windows may go on; a device that cannot draw may not */ tryAnyway: boolean }
 
 export const MIN_WIDTH = 1024;
@@ -60,6 +60,10 @@ export const SHIP_TEXT = {
   'ship.match.interrupted': 'The match hit a problem and was ended. Your rating is unchanged.',
   'ship.view.lost': 'The picture stopped drawing',
   'ship.view.lost_sub': 'Trying to bring it back. If it stays blank, reload the page.',
+  'ship.device.slow': "This device is drawing VALE without graphics acceleration, so it will run very slowly. Turn on hardware acceleration in your browser's settings and restart the browser, or play on Low anyway.",
+  'ship.device.slow_try': 'Play on Low',
+  'ship.device.struggle': 'VALE is running very slowly on this device. Graphics are on Low; closing other tabs and apps can help.',
+  'ship.view.low': 'Switch to Low quality',
 } as const;
 export type ShipKey = keyof typeof SHIP_TEXT;
 

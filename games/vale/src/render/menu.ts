@@ -110,7 +110,7 @@ export class MenuWorld {
     this.map = map ?? null;
     if (ms.backdrop) {
       this.buildPaintedSet();
-      assets.texture(ms.backdrop).then((t) => {
+      assets.texture(ms.backdrop, true).then((t) => {
         if (!t) return;
         this.bdUniforms.uTex.value = t;
         const img = t.image as { width?: number; height?: number } | undefined;

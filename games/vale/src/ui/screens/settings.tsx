@@ -99,7 +99,19 @@ function opts<T extends string | number>(cv: ReturnType<typeof useApp>['cv'], ke
 }
 
 function Video(p: { s: Settings; set: SetFn }): JSX.Element {
-  const { cv } = useApp();
+  const { cv, state } = useApp();
+  // ruling 67: a plain-text report of this device (GPU, tier, shader and texture counters, worst frames) for a tester
+  const copyReport = (): void => {
+    const text = state.renderer?.deviceReport?.() ?? `VALE device report\n${navigator.userAgent}`;
+    const done = (): void => state.toast(cv.t('settings.video.report.copied', 'Device report copied. Paste it into your message to us.'), 'info');
+    const fallback = (): void => {
+      try {
+        const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); done();
+      } catch { state.toast(cv.t('settings.video.report.failed', 'This browser would not copy the report.'), 'warn'); }
+    };
+    try { void navigator.clipboard.writeText(text).then(done, fallback); } catch { fallback(); }
+  };
   const v = p.s.video;
   const L = (k: string, f: string): string => cv.t(`settings.video.${k}.label`, f);
   const D = (k: string): string => cv.t(`settings.video.${k}.desc`, '');
@@ -149,6 +161,9 @@ function Video(p: { s: Settings; set: SetFn }): JSX.Element {
       </Row>
       <Row id="v-fs" label={L('fullscreen', 'Fullscreen')} desc={D('fullscreen')}>
         <Toggle id="v-fs" label={L('fullscreen', 'Fullscreen')} checked={v.fullscreen} onChange={fullscreen} />
+      </Row>
+      <Row id="v-report" label={L('report', 'Device report')} desc={D('report')}>
+        <button type="button" id="v-report" class="btn btn--secondary btn--s" onClick={copyReport}><span class="btn__label">{cv.t('settings.video.report.action', 'Copy device report')}</span></button>
       </Row>
       <p class="t-body-s muted settings__note">{cv.t('settings.video.note', 'Every quality level draws danger areas the same way.')}</p>
     </div>

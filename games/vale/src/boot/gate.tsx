@@ -31,6 +31,8 @@ export function showDevicePlate(root: HTMLElement, p: DeviceProblem, tryAnyway: 
   const reload = (): void => location.reload();
   const t = (k: ShipKey): string => shipText(k);
   if (p.kind === 'webgl') showPlate(root, { text: t('state.error.webgl'), actions: [{ label: t('ship.device.reload'), primary: true, run: reload }] });
+  // ruling 67: a software renderer (no GPU acceleration) is told so before any heavy work; "Play on Low" goes on at Low
+  else if (p.kind === 'slow') showPlate(root, { text: t('ship.device.slow'), actions: [{ label: t('ship.device.slow_try'), primary: true, run: tryAnyway }, { label: t('ship.device.reload'), run: reload }] });
   else showPlate(root, {
     text: p.kind === 'touch' ? t('ship.device.touch') : t('ship.device.small'),
     actions: [p.kind === 'touch'

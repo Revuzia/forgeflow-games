@@ -4,6 +4,7 @@
 //
 //   node _harness/perf_load.mjs --url http://localhost:5199/ --profile weak [--journey home|practice|coop] [--sec 30]
 //        [--calibrate] [--tier low|medium|high|ultra] [--ctxloss] [--dump-shaders <dir>] [--out <json>] [--max-min 12]
+//        [--query "fakegpu=<renderer string>&diag=1"]   extra page parameters
 //   node _harness/perf_load.mjs --serve deploy [--port 5199] ...      serve a folder like the live CDN, then measure it
 //   node _harness/perf_load.mjs --serve-only deploy [--mount /bench=<dir>]   only serve (Ctrl-C stops)
 //   node _harness/perf_load.mjs --bench <render_bench URL> --profile weak --tiers low,medium,high [--t 600] [--sec 12]
@@ -348,6 +349,8 @@ async function runJourney({ url, profileName, journey, sec, calibrate, tier, ctx
     server?.reset();
     const q = new URLSearchParams();
     if (calibrate) q.set('calibrate', '1');
+    // --query "fakegpu=ANGLE (Intel, ...)&diag=1": extra page parameters (ruling 67 QA: ?fakegpu= stands in a renderer string)
+    for (const [k, v] of new URLSearchParams(opt('query', ''))) q.set(k, v);
     const target = url + (q.toString() ? `?${q}` : '');
     log(`${profileName}/${journey}: ${target}`);
     await page.goto(target, { waitUntil: 'domcontentloaded', timeout: T(60000) });

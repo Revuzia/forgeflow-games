@@ -26,6 +26,9 @@ import type { AudioPort } from '../ui/audio_port.ts';
 import { deviceProblem, readDeviceFacts, shipText } from './device.ts';
 import { showDevicePlate, showTabPlate } from './gate.tsx';
 import { acquireTab, stealTab, tabLocksSupported } from './tabs.ts';
+import { classifyDevice, readGpuFacts } from '../render/device_tier.ts';
+import { applyPreset, detectPreset } from '../session/settings.ts';
+import { CALIB_KEY, calibStillValid, DEVTIER_KEY, parseTier, startPreset, type StartRecord } from './start_tier.ts';
 
 const ui = document.getElementById('ui')!;
 const query = new URLSearchParams(location.search);
@@ -65,6 +68,7 @@ loadCatalog().then(
     const store = new LocalProfileStore();
     const session = new ShipSession({ catalog: c.catalog, dev, online, store, ...(autopilot !== undefined ? { autopilot } : {}), ...(seed !== undefined ? { seed } : {}) });
     named = session;
+    applyStartTier(session);
     if (speed > 1 || autoflow) {
       session.on((e) => {
         if (e.type === 'match' && speed > 1) e.client.setTimeScale(speed);
@@ -112,6 +116,36 @@ loadCatalog().then(
 );
 }
 
+// ── ruling 67: the device's start ceiling, before the renderer exists ─────────────────────────────
+// render/device_tier.ts reads the GPU string (WEBGL_debug_renderer_info), software rendering, deviceMemory, cores; a
+// profile still on the untouched High default starts at that ceiling (Intel UHD -> Low, Iris Xe / AMD integrated ->
+// Medium), so no High program is compiled on a laptop that should not start there. boot/start_tier.ts decides.
+const gpuFacts = readGpuFacts();
+// QA: ?fakegpu=<renderer string> classifies as if the GPU said that (the Windows strings cannot be had on this Mac)
+if (query.get('fakegpu')) gpuFacts.renderer = query.get('fakegpu')!;
+const deviceClass = classifyDevice(gpuFacts);
+const autoTier = !navigator.webdriver || query.get('calibrate') === '1';
+const forcedTier = parseTier(query.get('tier'));
+const SLOW_KEY = 'vale.gate.slow.v1';
+const playOnLow = (): boolean => { try { return sessionStorage.getItem(SLOW_KEY) === '1'; } catch { return false; } };
+const lsGet = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
+function applyStartTier(session: ShipSession): void {
+  const v = session.profile().settings.video;
+  const untouchedHigh = v.preset === 'high' && detectPreset(v) === 'high';
+  // the old first-run rule's under-30-frame "high" verdict is no verdict: that device is judged again (start_tier.ts)
+  if (lsGet(CALIB_KEY) && !calibStillValid(lsGet(CALIB_KEY))) { try { localStorage.removeItem(CALIB_KEY); } catch { /* per-device */ } }
+  // a software renderer's ceiling is already Low, so "Play on Low" needs nothing more here
+  const preset = startPreset({ cls: deviceClass, forced: forcedTier, auto: autoTier, untouchedHigh, devtierDone: !!lsGet(DEVTIER_KEY) });
+  if (preset) session.updateSettings({ video: applyPreset(v, preset) });
+  if (preset && !forcedTier && autoTier) { try { localStorage.setItem(DEVTIER_KEY, JSON.stringify({ cap: deviceClass.cap, applied: preset, gpu: deviceClass.gpu, at: new Date().toISOString() })); } catch { /* per-device */ } }
+  const rec: StartRecord = {
+    cls: deviceClass, renderer: gpuFacts.renderer, vendor: gpuFacts.vendor, applied: preset, ceiling: deviceClass.cap,
+    facts: { deviceMemory: gpuFacts.deviceMemory ?? null, cores: gpuFacts.cores ?? null, maxTextureSize: gpuFacts.maxTextureSize ?? null, parallelCompile: !!gpuFacts.parallelCompile, caveat: gpuFacts.caveat, auto: autoTier, forced: forcedTier },
+  };
+  (window as unknown as { __valeStart?: StartRecord }).__valeStart = rec;
+  console.info(`[vale] device: ${deviceClass.gpu}, start ceiling ${deviceClass.cap} (${deviceClass.reasons.join('; ')})${preset ? `, start preset ${preset}` : ''} — ${gpuFacts.renderer}`);
+}
+
 // ── ship gates, then start ────────────────────────────────────────────────────────────────────────
 const TRIED_KEY = 'vale.gate.try.v1';
 const tried = (): boolean => { try { return sessionStorage.getItem(TRIED_KEY) === '1'; } catch { return false; } };
@@ -128,7 +162,13 @@ function startOneTab(): void {
 }
 
 const problem = deviceProblem(readDeviceFacts(), { noRender, dev, tried: tried() });
-if (problem) {
+if (!problem && deviceClass.software && autoTier && !forcedTier && !playOnLow()) {
+  // ruling 67: no GPU acceleration: say so before any heavy work; "Play on Low" goes on at Low (this visit)
+  showDevicePlate(ui, { kind: 'slow', tryAnyway: true }, () => {
+    try { sessionStorage.setItem(SLOW_KEY, '1'); } catch { /* the preset below still applies */ }
+    startOneTab();
+  });
+} else if (problem) {
   showDevicePlate(ui, problem, () => {
     try { sessionStorage.setItem(TRIED_KEY, '1'); } catch { /* per-visit only */ }
     startOneTab();

@@ -4,7 +4,7 @@
 // vsync-jitter tail whose p95 wandered 17.4-18.2 ms and flipped its verdict at 18 ms. Such a player must get High every
 // time, at 1080p and on 4K; a buffer of 9x the pixels never gets High; machines that really miss 60 still step down.
 // The live half (the real GPU, three calls at 1080p): node _harness/perf_1080.mjs --prod --calibrate-only.
-import { CALIB_HIGH_MAX_PIXELS, calibAgain, calibVerdict, calibWindow, holds60, type CalibWindow } from '../src/render/calibration.ts';
+import { CALIB_HIGH_MAX_PIXELS, calibAgain, calibVerdict, calibWindow, capVerdict, holds60, type CalibWindow } from '../src/render/calibration.ts';
 
 let fails = 0;
 const expect = (ok: boolean, m: string): void => { if (ok) console.log(`ok   ${m}`); else { fails++; console.log(`FAIL ${m}`); } };
@@ -69,6 +69,20 @@ expect(run([frames(181, 16.67, 12, 18.1)], P4K).preset === 'high' && P4K <= CALI
 {
   const r = run([[16, 17, 16]], P1080);
   expect(r.preset === 'high' && r.taken === 1, `a window of 3 frames: ${r.preset}, ${r.taken} window`);
+}
+// ruling 67: a visible window that drew too few frames is a machine under 10 fps -> low (was: kept High)
+{
+  const at = (iv: number[], span: number, hidden = false): string => calibVerdict([calibWindow(iv, span, hidden)], 1366 * 768).preset;
+  expect(at([9932], 9932) === 'low', `one 9.9 s frame in a visible window (SwiftShader): ${at([9932], 9932)}`);
+  expect(at([], 13000) === 'low', `no frame at all in 13 s, visible: ${at([], 13000)}`);
+  expect(at(frames(29, 100), 3000) === 'low', `10 fps, 29 intervals: ${at(frames(29, 100), 3000)}`);
+  expect(at([2500, ...frames(19, 25)], 3000) === 'low', `a 2.5 s stall then 20 frames: ${at([2500, ...frames(19, 25)], 3000)}`);
+  expect(at([16, 17, 16], 3000, true) === 'high', `a window the page spent hidden keeps the default: ${at([16, 17, 16], 3000, true)}`);
+  expect(at([16, 17], 200) === 'high', `a caller that stopped drawing at once (0.2 s) keeps the default: ${at([16, 17], 200)}`);
+  expect(at(frames(90, 33.3), 3000) === 'low' && at(frames(135, 22.2), 3000) === 'medium', '30 fps low and 45 fps medium are unchanged');
+  // the sample drawn at the device ceiling: the verdict maps onto it and never rises above it
+  expect(capVerdict('high', 'medium') === 'medium' && capVerdict('medium', 'medium') === 'low' && capVerdict('high', 'low') === 'low', 'capVerdict at a Medium / Low ceiling');
+  expect(capVerdict('high', 'high') === 'high' && capVerdict('medium', 'high') === 'medium' && capVerdict('low', 'high') === 'low', 'capVerdict at High is the timed verdict');
 }
 console.log(fails ? `probe_calibrate: ${fails} FAILURE(S)` : 'probe_calibrate: PASS');
 process.exit(fails ? 1 : 0);

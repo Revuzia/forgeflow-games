@@ -56,7 +56,9 @@ export interface RendererPort {
   /** OPTIONAL (requested): point the menu camera at a station / show a fighter on the plinth */
   setMenuView?(view: { screen: string; fighter?: string; skin?: string; mode?: string }): void;
   /** perf PERF-C1: a ~3 s sample at High (keep calling render(dt) while it is pending) -> the first-run preset */
-  calibrate?(seconds?: number): Promise<{ preset: 'high' | 'medium' | 'low'; frames: number; p50Ms: number; p95Ms: number }>;
+  calibrate?(seconds?: number, tier?: 'high' | 'medium' | 'low'): Promise<{ preset: 'high' | 'medium' | 'low'; frames: number; p50Ms: number; p95Ms: number; starved?: boolean }>;
+  /** ruling 67: the plain-text device report (Settings > Video "Copy device report", ?diag=1) */
+  deviceReport?(): string;
   /** OPTIONAL (requested): load a match's assets, reporting 0..1 */
   preload?(setup: MatchSetup, onProgress: (p: number) => void): Promise<void>;
   /** perf PERF-m4: 'lost' while the GPU context is gone (the 3D view is blank), 'restoring' while its programs

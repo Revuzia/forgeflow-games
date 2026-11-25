@@ -63,9 +63,11 @@ import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './pale
 import { PostChain } from './post.ts';
 import { pickUnit, type Pickable, type PickOptions } from './pick.ts';
 export type { PickOptions } from './pick.ts';
-import { calibAgain, calibVerdict, calibWindow, type CalibWindow } from './calibration.ts';
+import { calibAgain, calibVerdict, calibWindow, capVerdict, type CalibWindow } from './calibration.ts';
 import { DynamicResolution, type FrameBound, GpuTimer, PRESETS, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
+import { TEXTURE_CAP } from './device_tier.ts';
+import { FrameLog, GlProbe, mb, mountDiagOverlay } from './diag.ts';
 import { buildTerrain, landmarkCull, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
 import { SocketResolver } from './vfx/sockets.ts';
 import { VfxSystem } from './vfx/system.ts';
@@ -132,6 +134,8 @@ export interface CalibrationResult {
   frames: number; p50Ms: number; p95Ms: number;
   /** windows sampled (a narrow miss samples again) and whether the buffer's size alone held it off High (calibration.ts) */
   windows?: number; capped?: boolean;
+  /** ruling 67: the window drew under 10 fps while visible; the tier the sample was drawn at */
+  starved?: boolean; sampledAt?: 'high' | 'medium' | 'low';
 }
 
 /** the first 0.5 s after the switch to High is warm-up (programs, shadow maps), not the machine's pace */
@@ -176,8 +180,10 @@ export interface Renderer {
   setMenuView(view: { screen: string; fighter?: string; skin?: string; mode?: string }): void;
   preload(setup: MatchSetup, onProgress?: (p: number) => void): Promise<void>;
   stats(): RenderStats;
+  /** ruling 67: the plain-text device report (diag.ts) */
+  deviceReport(): string;
   /** perf PERF-C1: the first-run preset from a short sample of the Home vale at High (see the header) */
-  calibrate(seconds?: number): Promise<CalibrationResult>;
+  calibrate(seconds?: number, tier?: 'high' | 'medium' | 'low'): Promise<CalibrationResult>;
   /** perf PERF-m4: 'lost' while the GPU context is gone, 'restoring' until its programs are rebuilt, then 'ok' */
   readonly viewState: ViewState;
   /** call `fn` on every viewState change; returns the unsubscribe */
@@ -367,6 +373,8 @@ class ValeRenderer implements Renderer {
     this.gl.shadowMap.type = PCFShadowMap;
     this.gl.info.autoReset = false;
     this.gpuTimer = new GpuTimer(this.gl.getContext() as WebGL2RenderingContext);
+    // ruling 67: the device report's counters (diag.ts), from the first program on
+    this.probe = new GlProbe(this.gl.getContext() as WebGL2RenderingContext);
     // perf PERF-m4: registered after three's own handlers (which keep the context restorable and rebuild its state first)
     canvas.addEventListener('webglcontextlost', this.onContextLost, false);
     canvas.addEventListener('webglcontextrestored', this.onContextRestored, false);
@@ -448,6 +456,54 @@ class ValeRenderer implements Renderer {
     this.applySettings(settings);
     this.setQuality(settings.video);
     this.resize();
+    try { if (new URLSearchParams(location.search).get('diag') === '1') mountDiagOverlay(() => this.diagLines()); } catch { /* no page */ }
+  }
+
+  // ── ruling 67: the device report ─────────────────────────────────────────────────────────────────
+  private readonly probe: GlProbe;
+  private readonly frameLog = new FrameLog();
+  private contextLosses = 0;
+
+  private diagLines(): string[] {
+    const st = (window as unknown as { __valeStart?: { renderer?: string; ceiling?: string; applied?: string | null; cls?: { gpu?: string; reasons?: string[] } } }).__valeStart;
+    const p = this.probe.stats();
+    const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize;
+    const size = this.gl.getDrawingBufferSize(new Vector2());
+    return [
+      `${st?.renderer ?? '?'}`,
+      `class ${st?.cls?.gpu ?? '?'} · ceiling ${st?.ceiling ?? '?'} · tier ${this.q.tier} (${this.video.preset}) · tex cap ${this.assets.maxTextureSize || 'none'}`,
+      `programs ${this.gl.info.programs?.length ?? 0} live · ${p.programs} linked · blocking compile ${p.blockingMs} ms (worst ${p.worstProgramMs})`,
+      `textures ${p.textureCount} · ${mb(p.textureBytes)} (peak ${mb(p.peakTextureBytes)}) · shrunk ${this.assets.shrunkImages}`,
+      `fps ${this.fpsEma.toFixed(0)} · ${size.x}x${size.y} @${this.dyn.scale.toFixed(2)} · frames >50 ms ${this.frameLog.over50}, >250 ms ${this.frameLog.over250}`,
+      `worst frames ${this.frameLog.worst.slice(0, 5).map((w) => w.ms).join(', ') || '-'} ms · long tasks ${this.frameLog.longTasks.slice(0, 3).map((w) => w.ms).join(', ') || '-'} ms`,
+      `heap ${heap ? mb(heap) : '?'} · context losses ${this.contextLosses}`,
+    ];
+  }
+
+  /** the whole report, plain text (Settings > Video "Copy device report") */
+  deviceReport(): string {
+    const w = window as unknown as { __valeStart?: unknown };
+    let calib: unknown = null, devtier: unknown = null;
+    try { calib = JSON.parse(localStorage.getItem('vale.calib.v1') ?? 'null'); devtier = JSON.parse(localStorage.getItem('vale.devtier.v1') ?? 'null'); } catch { /* no storage */ }
+    const gl = this.gl.getContext() as WebGL2RenderingContext;
+    const nav = navigator as Navigator & { deviceMemory?: number; userAgentData?: { platform?: string } };
+    const heap = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+    const report = {
+      when: new Date().toISOString(), userAgent: nav.userAgent, platform: nav.userAgentData?.platform ?? nav.platform,
+      screen: `${screen.width}x${screen.height}`, window: `${innerWidth}x${innerHeight}`, dpr: devicePixelRatio,
+      deviceMemory: nav.deviceMemory ?? null, cores: nav.hardwareConcurrency ?? null,
+      start: w.__valeStart ?? null, firstRun: calib, devtier,
+      quality: { tier: this.q.tier, preset: this.video.preset, renderScale: this.q.renderScale, dynScale: this.dyn.scale, shadows: this.q.shadows, ao: this.q.ao, bloom: this.q.bloom, textureCap: this.assets.maxTextureSize },
+      gl: {
+        parallelCompile: !!gl.getExtension('KHR_parallel_shader_compile'), timerQuery: this.gpuTimer.available,
+        maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE), programsLive: this.gl.info.programs?.length ?? 0, ...this.probe.stats(),
+        imagesShrunk: this.assets.shrunkImages, contextLosses: this.contextLosses,
+      },
+      frames: { fps: Math.round(this.fpsEma), drawn: this.frameLog.frames, over50ms: this.frameLog.over50, over250ms: this.frameLog.over250, worst: this.frameLog.worst, longTasks: this.frameLog.longTasks },
+      memory: heap ? { jsHeapMB: Math.round(heap.usedJSHeapSize / 1048576), limitMB: Math.round(heap.jsHeapSizeLimit / 1048576) } : null,
+      mode: this.mode, uptimeS: Math.round(performance.now() / 1000),
+    };
+    return `VALE device report\n${this.diagLines().join('\n')}\n\n${JSON.stringify(report, null, 1)}`;
   }
 
   // ── settings / quality ─────────────────────────────────────────────────────────────────────────
@@ -480,6 +536,8 @@ class ValeRenderer implements Renderer {
   setQuality(video: Settings['video']): void {
     this.video = video;
     this.q = resolveQuality(video);
+    // ruling 67: the tier's texture cap applies to every image loaded from now on (a calibration sample never changes it)
+    if (!this.calib) this.assets.maxTextureSize = TEXTURE_CAP[this.q.tier];
     // dynamic resolution: the caller's option (harness benches turn it off) and the player's Settings › Video choice
     // (`video.dynamicResolution`, on unless false)
     this.dyn.enabled = this.opts.dynamicResolution !== false && (video as { dynamicResolution?: boolean }).dynamicResolution !== false;
@@ -1233,7 +1291,7 @@ class ValeRenderer implements Renderer {
 
   // ── frame ──────────────────────────────────────────────────────────────────────────────────────
   render(dt: number): void {
-    if (typeof document !== 'undefined' && document.hidden) return;
+    if (typeof document !== 'undefined' && document.hidden) { if (this.calib) this.calib.hidden = true; this.frameLog.skip(); return; }
     const d = Math.max(0, Math.min(0.25, Number.isFinite(dt) ? dt : 0));
     // the display's own frame interval (every call is one display frame, drawn or skipped by a cap)
     if (d > 0.002 && d < 0.1) this.displayMs = this.displayMs > 0 ? this.displayMs * 0.95 + d * 50 : d * 1000;
@@ -1245,6 +1303,7 @@ class ValeRenderer implements Renderer {
       this.skipAcc = 0;
     }
     const t0 = performance.now();
+    this.frameLog.frame(t0);
     if (this.calib) this.calibSample(t0);
     if (this.lastFrameAt > 0) {
       const iv = t0 - this.lastFrameAt;
@@ -1481,6 +1540,8 @@ class ValeRenderer implements Renderer {
 
   private readonly onContextLost = (): void => {
     this.restoreGen++;
+    this.contextLosses++;
+    this.probe.contextLost();
     // the timer's queries died with the context: never poll them again (a restored context calls them foreign objects)
     this.gpuTimer.abandon();
     this.dyn.reset();
@@ -1585,14 +1646,15 @@ class ValeRenderer implements Renderer {
   }
 
   // ── first-run calibration (perf PERF-C1) ───────────────────────────────────────────────────────
-  private calib: { start: number; end: number; last: number; iv: number[]; windows: CalibWindow[]; seconds: number; video: Settings['video']; done: (r: CalibrationResult) => void } | null = null;
+  private calib: { start: number; end: number; last: number; iv: number[]; windows: CalibWindow[]; seconds: number; video: Settings['video']; hidden: boolean; tier: 'high' | 'medium' | 'low'; done: (r: CalibrationResult) => void } | null = null;
 
-  calibrate(seconds = 3): Promise<CalibrationResult> {
-    if (this.calib) return Promise.resolve({ preset: 'high', frames: 0, p50Ms: 0, p95Ms: 0 });
+  /** `tier` (ruling 67): the device's start ceiling; the sample is drawn there, never above it, and the verdict is mapped onto it */
+  calibrate(seconds = 3, tier: 'high' | 'medium' | 'low' = 'high'): Promise<CalibrationResult> {
+    if (this.calib) return Promise.resolve({ preset: tier, frames: 0, p50Ms: 0, p95Ms: 0 });
     return new Promise((res) => {
       const video = this.video;
-      // the sample is taken at High whatever the player has now (dynamic resolution off: it would hide the cost)
-      this.setQuality({ ...video, ...PRESETS.high, preset: 'high', fpsCap: 0 });
+      // the sample is taken at the ceiling whatever the player has now (dynamic resolution off: it would hide the cost)
+      this.setQuality({ ...video, ...PRESETS[tier], preset: tier, fpsCap: 0 });
       this.dyn.enabled = false;
       this.applySize();
       const now = performance.now();
@@ -1604,12 +1666,13 @@ class ValeRenderer implements Renderer {
       };
       // a hidden page or a caller that stops drawing: give up after 3× the window and keep the default (High)
       const guard = setTimeout(() => { if (this.calib) this.calibFinish(true); }, (seconds * 4 + 1) * 1000);
-      this.calib = { start: now + CALIB_WARM_MS, end: now + CALIB_WARM_MS + seconds * 1000, last: 0, iv: [], windows: [], seconds, video, done: finish };
+      this.calib = { start: now + CALIB_WARM_MS, end: now + CALIB_WARM_MS + seconds * 1000, last: 0, iv: [], windows: [], seconds, video, hidden: typeof document !== 'undefined' && document.hidden, tier, done: finish };
     });
   }
 
   private calibSample(now: number): void {
     const c = this.calib!;
+    if (typeof document !== 'undefined' && document.hidden) c.hidden = true;
     if (now >= c.start && c.last > 0) c.iv.push(now - c.last);
     c.last = now;
     if (now >= c.end) this.calibFinish();
@@ -1617,17 +1680,20 @@ class ValeRenderer implements Renderer {
 
   private calibFinish(force = false): void {
     const c = this.calib!;
-    c.windows.push(calibWindow(c.iv));
+    const now = performance.now();
+    if (typeof document !== 'undefined' && document.hidden) c.hidden = true;
+    // ruling 67: a window that drew too few frames while visible is a machine under 10 fps (calibration.ts starved)
+    c.windows.push(calibWindow(c.iv, Math.max(0, now - c.start), c.hidden));
     if (!force && calibAgain(c.windows)) {
       // a narrow miss samples again (calibration.ts): the verdict is the machine's pace, not one moment's jitter
-      const now = performance.now();
       c.iv = []; c.start = now; c.end = now + c.seconds * 1000; c.last = 0;
+      c.hidden = typeof document !== 'undefined' && document.hidden;
       return;
     }
     const size = this.gl.getDrawingBufferSize(new Vector2());
     const v = calibVerdict(c.windows, size.x * size.y);
     const ms = (x: number | undefined): number => Math.round((x ?? 0) * 100) / 100;
-    c.done({ preset: v.preset, frames: v.best?.frames ?? 0, p50Ms: ms(v.best?.p50Ms), p95Ms: ms(v.best?.p95Ms), windows: c.windows.length, capped: v.capped });
+    c.done({ preset: capVerdict(v.preset, c.tier), frames: v.best?.frames ?? 0, p50Ms: ms(v.best?.p50Ms), p95Ms: ms(v.best?.p95Ms), windows: c.windows.length, capped: v.capped, starved: !!v.starved, sampledAt: c.tier });
   }
 
   stats(): RenderStats {

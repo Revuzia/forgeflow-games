@@ -154,6 +154,18 @@ function bindRenderer(state: AppState, router: Router, r: RendererPort | null): 
     const s = state.settings.value;
     try { r.setQuality?.(s.video); r.setSettings?.(s); } catch (e) { console.error('[vale] renderer settings', e); }
   });
+  // ruling 67: a GPU that resets twice in one visit (on Windows a driver reset after a long shader compile or a full
+  // video memory) steps down to Low by itself and says so; the player can raise it again in Settings > Video
+  let losses = 0;
+  r.onViewState?.((v) => {
+    if (v !== 'lost' || ++losses < 2) return;
+    const cur = state.settings.peek().video;
+    if (cur.preset === 'low') return;
+    try { state.session.updateSettings({ video: applyPreset(cur, 'low') }); } catch (e) { console.error('[vale] low quality', e); return; }
+    const name = state.cv.t('settings.video.preset.opt.low', 'Low');
+    state.toast(state.cv.t('calibrate.notice', 'Graphics set to {preset} so the vale runs smoothly on this machine.', { preset: name }), 'info',
+      { label: state.cv.t('calibrate.notice.action', 'Video settings'), run: () => router.go('settings', { tab: 'video' }) }, 9000);
+  });
   effect(() => {
     const route = router.route.value;
     if (state.match.value) return;
@@ -175,29 +187,40 @@ function bindRenderer(state: AppState, router: Router, r: RendererPort | null): 
 // their shots keep the fixed default, unless the URL asks with ?calibrate=1 (?calibrate=0 always skips; QA of the
 // notice: ?calibrate=low or =medium takes that verdict without sampling).
 const CALIB_KEY = 'vale.calib.v1';
+// ruling 67: boot/main.ts may already have moved an untouched profile down to the device's ceiling (window.__valeStart,
+// boot/start_tier.ts); the sample is then drawn AT that ceiling and the verdict can only step further down. A window that
+// drew under 10 fps while visible is 'low' (calibration.ts starved), and one that starved even at Low says so plainly.
 function firstRunCalibrate(ctx: AppCtx, r: RendererPort | null): void {
   const { state, router, session, cv } = ctx;
   if (!r?.calibrate) return;
   const q = new URLSearchParams(location.search).get('calibrate');
   if (q === '0') return;
   const forced = q === 'low' || q === 'medium' ? q : null;
+  const start = (window as unknown as { __valeStart?: { applied: 'low' | 'medium' | 'high' | 'ultra' | null; ceiling: 'low' | 'medium' | 'high'; facts?: { forced?: string | null } } }).__valeStart;
+  if (start?.facts?.forced) return;                                   // ?tier= is a QA choice: never sampled over
+  const ceiling: 'low' | 'medium' | 'high' = start?.applied && start.applied !== 'ultra' ? start.applied : 'high';
   if (q !== '1' && !forced) {
     if (navigator.webdriver) return;
     try { if (localStorage.getItem(CALIB_KEY)) return; } catch { return; }
     const v = state.settings.peek().video;
-    if (v.preset !== 'high' || detectPreset(v) !== 'high') return;   // the player has already chosen
+    if (v.preset !== ceiling || detectPreset(v) !== ceiling) return;   // the player has already chosen
   }
   let started = false;
   const stop = effect(() => {
     if (started || router.route.value.screen !== 'home' || state.match.value) return;
     started = true;
     queueMicrotask(() => stop());
-    const sample: ReturnType<NonNullable<RendererPort['calibrate']>> = forced ? Promise.resolve({ preset: forced, frames: 0, p50Ms: 0, p95Ms: 0 }) : r.calibrate!(3);
+    const sample: ReturnType<NonNullable<RendererPort['calibrate']>> = forced ? Promise.resolve({ preset: forced, frames: 0, p50Ms: 0, p95Ms: 0 }) : r.calibrate!(3, ceiling);
     void sample.then((res) => {
-      try { localStorage.setItem(CALIB_KEY, JSON.stringify({ ...res, at: new Date().toISOString() })); } catch { /* per-device only */ }
+      try { localStorage.setItem(CALIB_KEY, JSON.stringify({ ...res, ceiling, at: new Date().toISOString() })); } catch { /* per-device only */ }
       const cur = state.settings.peek().video;
-      if (res.preset === 'high' || cur.preset !== 'high') return;      // High holds, or the player changed it meanwhile
-      session.updateSettings({ video: applyPreset(cur, res.preset) });
+      const starvedAtLow = (res as { starved?: boolean }).starved === true && ceiling === 'low';
+      if (starvedAtLow) state.toast(cv.t('ship.device.struggle', SHIP_TEXT['ship.device.struggle']), 'warn', { label: cv.t('calibrate.notice.action', 'Video settings'), run: () => router.go('settings', { tab: 'video' }) }, 15000);
+      if (cur.preset !== ceiling) return;                              // the player changed it meanwhile
+      const moved = res.preset !== cur.preset;
+      if (moved) session.updateSettings({ video: applyPreset(cur, res.preset) });
+      // a device that boot started below High hears it once too (the ceiling was this machine's, not the player's)
+      if (starvedAtLow || (!moved && ceiling === 'high') || res.preset === 'high') return;
       const name = cv.t(`settings.video.preset.opt.${res.preset}`, res.preset);
       state.toast(cv.t('calibrate.notice', 'Graphics set to {preset} so the vale runs smoothly on this machine.', { preset: name }), 'info',
         { label: cv.t('calibrate.notice.action', 'Video settings'), run: () => router.go('settings', { tab: 'video' }) }, 9000);
@@ -265,6 +288,18 @@ function lostPlate(state: AppState, on: boolean): void {
   const title = document.createElement('span'); title.className = 'viewplate__title t-h3'; title.textContent = state.cv.t('ship.view.lost', SHIP_TEXT['ship.view.lost']);
   const sub = document.createElement('span'); sub.className = 'viewplate__sub t-body-s'; sub.textContent = state.cv.t('ship.view.lost_sub', SHIP_TEXT['ship.view.lost_sub']);
   el.append(title, sub);
+  // ruling 67: a picture that keeps failing gets a plain way out: Low quality, then a reload (the profile saves first)
+  if (state.settings.peek().video.preset !== 'low') {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn btn--chalk btn--m'; b.style.pointerEvents = 'auto'; b.style.marginTop = '12px';
+    const l = document.createElement('span'); l.className = 'btn__label'; l.textContent = state.cv.t('ship.view.low', SHIP_TEXT['ship.view.low']);
+    b.append(l);
+    b.onclick = () => {
+      try { state.session.updateSettings({ video: applyPreset(state.settings.peek().video, 'low') }); } catch (e) { console.error('[vale] low quality', e); }
+      setTimeout(() => location.reload(), 300);
+    };
+    el.append(b);
+  }
   document.body.append(el);
 }
 

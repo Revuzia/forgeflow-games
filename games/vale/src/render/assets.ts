@@ -18,6 +18,11 @@
 //                         bitmap), then restoreImages() fetches and decodes every such GLB again and swaps each
 //                         texture's source in place (GLTFLoader's parser.associations gives each texture its glTF
 //                         index), disposing the stand-in's GL texture so the real size is allocated.
+//   maxTextureSize        ruling 67: the tier's texture cap (device_tier.ts TEXTURE_CAP: Low 512, Medium 1024, High and
+//                         Ultra none). A GLB image or tiling texture larger than it is downscaled before its first
+//                         upload (createImageBitmap resize, off the main thread where the browser does it; a canvas
+//                         where the browser ignores the resize), so Low uploads a quarter or less of the High memory.
+//                         Restored and re-fetched images are capped the same way.
 
 import {
   type BufferGeometry, type DataTexture, type Material, type Mesh, type SkinnedMesh, FloatType, HalfFloatType, LinearMipmapLinearFilter, type Object3D, RepeatWrapping, SRGBColorSpace, type Texture,
@@ -116,6 +121,40 @@ export class Assets {
   /** bitmaps closed so far (perf_1080's memory step reads it) */
   closedBitmaps = 0;
   private readonly texLoader = new TextureLoader();
+  /** ruling 67: the largest image edge uploaded (0 = no cap; see the header) */
+  maxTextureSize = 0;
+  /** images downscaled so far (the device report reads it) */
+  shrunkImages = 0;
+
+  /** ruling 67: every image in a landed GLB over the cap, downscaled in place before its first upload */
+  private async capImages(gltf: GLTF): Promise<void> {
+    const cap = this.maxTextureSize;
+    if (!cap || typeof createImageBitmap === 'undefined') return;
+    const res = new Set<object>();
+    collectGpu(gltf.scene, res);
+    const sources = new Map<object, Texture[]>();
+    for (const t of res) {
+      const x = t as Texture;
+      if (!x.isTexture || !x.source) continue;
+      const l = sources.get(x.source) ?? []; l.push(x); sources.set(x.source, l);
+    }
+    const jobs: Promise<void>[] = [];
+    for (const [src, list] of sources) {
+      const img = (src as { data?: unknown }).data as (ImageBitmap | HTMLImageElement | null);
+      const w = (img as { width?: number } | null)?.width ?? 0, h = (img as { height?: number } | null)?.height ?? 0;
+      if (!img || Math.max(w, h) <= cap) continue;
+      if (!(typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) && !(typeof HTMLImageElement !== 'undefined' && img instanceof HTMLImageElement)) continue;
+      const k = cap / Math.max(w, h);
+      jobs.push(shrinkImage(img, Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k))).then((small) => {
+        if (!small) return;
+        (src as { data: unknown }).data = small;
+        if (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) img.close();
+        for (const t of list) t.needsUpdate = true;
+        this.shrunkImages++;
+      }));
+    }
+    await Promise.all(jobs);
+  }
   readonly failed = new Set<string>();
   /** silence per-asset warnings (missing art is expected while the art lane works) */
   quiet = false;
@@ -187,7 +226,7 @@ export class Assets {
       return p;
     }
     if (!p) {
-      p = this.track(this.gate(() => this.gltfLoader.loadAsync(url)).then((gltf) => {
+      p = this.track(this.gate(() => this.gltfLoader.loadAsync(url).then(async (g) => { await this.capImages(g); return g; })).then((gltf) => {
         let renderable = false, skinned = false;
         gltf.scene.traverse((o: Object3D) => {
           const m = o as Object3D & { isMesh?: boolean; isSkinnedMesh?: boolean };
@@ -257,7 +296,8 @@ export class Assets {
       collectGpu(m.gltf.scene, res);
       const closed = [...res].filter((t) => (t as Texture).isTexture && ((t as Texture).source as { closed?: boolean }).closed) as Texture[];
       if (!closed.length) continue;
-      jobs.push(new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url).then((fresh) => {
+      jobs.push(new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url).then(async (fresh) => {
+        await this.capImages(fresh);
         const byIndex = new Map<number, Texture>();
         const fr = new Set<object>();
         collectGpu(fresh.scene, fr);
@@ -331,7 +371,8 @@ export class Assets {
     collectGpu(m.gltf.scene, res);
     const closed = [...res].filter((t) => (t as Texture).isTexture && ((t as Texture).source as { closed?: boolean }).closed) as Texture[];
     if (!closed.length) return Promise.resolve(0);
-    return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url).then((fresh) => {
+    return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url).then(async (fresh) => {
+        await this.capImages(fresh);
       const byIndex = new Map<number, Texture>();
       const fr = new Set<object>();
       collectGpu(fresh.scene, fr);
@@ -406,13 +447,24 @@ export class Assets {
     return p;
   }
 
-  /** a tiling colour texture (sRGB, repeat, trilinear + anisotropic); null when missing */
-  texture(ref: string | undefined | null): Promise<Texture | null> {
+  /** a tiling colour texture (sRGB, repeat, trilinear + anisotropic); null when missing. `full`: never capped (a
+   *  full-screen backdrop: the cap is for things drawn small in the world) */
+  texture(ref: string | undefined | null, full = false): Promise<Texture | null> {
     if (!ref || !built(ref)) return Promise.resolve(null);
     this.touched.add(ref);
     let p = this.textures.get(ref);
     if (!p) {
       p = this.track(this.texLoader.loadAsync(this.url(ref)).then((t) => {
+        // ruling 67: a tiling texture over the tier's cap is drawn down once (a canvas keeps three's flipY upload)
+        const img = t.image as HTMLImageElement | undefined;
+        const cap = full ? 0 : this.maxTextureSize;
+        if (cap && img && Math.max(img.width, img.height) > cap && typeof document !== 'undefined') {
+          const k = cap / Math.max(img.width, img.height);
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+          const g = c.getContext('2d');
+          if (g) { g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height); (t as { image: unknown }).image = c; this.shrunkImages++; }
+        }
         t.colorSpace = SRGBColorSpace;
         t.wrapS = t.wrapT = RepeatWrapping;
         t.minFilter = LinearMipmapLinearFilter;
@@ -440,4 +492,24 @@ export class Assets {
     }
     return p;
   }
+}
+
+/**
+ * ruling 67: `img` at w x h, as a new ImageBitmap (premultiply and colour space untouched, as GLTFLoader decodes them).
+ * A browser that ignores the resize options gets a canvas pass instead; null when neither works (the original stays).
+ */
+async function shrinkImage(img: ImageBitmap | HTMLImageElement, w: number, h: number): Promise<ImageBitmap | null> {
+  try {
+    const b = await createImageBitmap(img, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+    if (b.width === w && b.height === h) return b;
+    b.close();
+  } catch { /* fall through to the canvas */ }
+  try {
+    const c: OffscreenCanvas | HTMLCanvasElement = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+    const g = c.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+    if (!g) return null;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, 0, 0, w, h);
+    return await createImageBitmap(c);
+  } catch { return null; }
 }
