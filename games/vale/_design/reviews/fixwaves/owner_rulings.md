@@ -1505,3 +1505,95 @@ Lane W4-C. The owner, 2026-11-24: a tester's computer froze and "we need faster 
 - **Phase** (`src/render/actors.ts`): on a body without walkRef, locoPhase is the run action's own time / duration after the mixer update, so the hasted arm pump and the taunt tug step with the feet on the four (they were frozen at phase 0).
 - **Bytes** (B, HEAD r2 -> now; live): burdam 1,200,036 -> 1,198,020 (1169.9 KiB; live 1,199,632), rishal 1,190,968 -> 1,192,088 (1164.1; live 1,192,324), ulkro 1,195,524 -> 1,198,376 (1170.3; live 1,189,656), hesmi 1,151,984 -> 1,144,648 (1117.8; live 1,143,684), ervet 1,191,616 -> 1,182,004 (1154.3; live 1,183,936). Roster -14,992 B against round 2; the lane is now +110,628 B over live across the 16 base GLBs. All <= 1172 KiB, three load test OK.
 - **Not done (parked):** the hasted stride, FU-12 value zones, the FU-13 Wick step.
+
+## 71. Team play, second attempt: computer-played fighters say "take this" on their own camp call; joining a road two allies commit to and answering a teammate's "help here" are built behind their own switches and stay off, because each misses its pace or visible bar (lead, by delegation, 2026-11-25)
+
+Lane AI, team play second attempt, pieces 1-3 of `_design/reviews/orch1/teamplay_review_2026-11-25.md`. The owner, 2026-11-25: "review team play for 2nd attempt to see what we find", with the earlier asks on opponents ("If bots see that 2-3 people are going into a line to attack, all should join", "use markers like WATCH OUT, or HELP HERE, without spamming them ... according to industry standard"). Base: the live bots (ruling 66, catalog 2026.11.18; `src/sim/bots` at 784a9bdd0). Genre practice in VALE's own terms; League of Legends a gauge only, nothing copied.
+
+**Decided (src/sim/bots; every piece is its own switch in difficulty.ts, so each ships or stays off alone).**
+- **Ruling 65's `planPings` is split in three:** `sayObjective` (the team says "take this" on its own camp call, desire 0.6+, held 2 s), `sayPush` (the team says "group here" on its group call) and `hearPersonPlan` (a person's push and camp pings weighed as team calls, a push acknowledged with onMyWay).
+- **New `hearMatesAssist`,** split from `hearMates`, which keeps only the retreat half (and the old unfiltered answer). With it on, a computer-played teammate's own "help here" is answered:
+  - only by fighters whose mode is lane, farm, roam or return, never one on a team push, a camp call or a post;
+  - the answering fighter says "heading there" itself (bot.ts), and only once it has turned to it (mode defend, not on another answer or post);
+  - a fighter that has not turned 2 s after it was asked hands the answer on and is not asked again for 10 s.
+  - Adept and veteran only.
+- **The tier table (on / off):**
+
+  | switch | novice | adept | veteran | why |
+  |---|---|---|---|---|
+  | `sayObjective` | **on** | **on** | **on** | followed by another teammate inside 10 s 50 / 55 / 54 % (bar 45 %), the game unchanged |
+  | `joinAt` (piece 1) | off (Infinity; was to be 3) | off (was to be 2) | off (was to be 2) | games at 30:00 over live at every tier on n 96, adept +0.57 min; no gain in thirds arriving |
+  | `hearMatesAssist` (piece 3) | off (not offered) | off | off | answered and reached 5-6 % (bar 45 %); adept +1.14 min, 12 games at 30:00 against 4 |
+  | `sayPush`, `hearPersonPlan` | off | off | off | not built in this round (the team's push pings: 18-21 % followed; an honest person's push is piece 4) |
+  | `hearMates`, `guardPosts`, `regroupWait`, `loneStop`, `teamPush` | off | off | off | unchanged from ruling 66 |
+
+- Ping budget and anti-spam rules of ruling 66 stand: one ping per event, one a fighter every 10 s (novice 15 s), three a team every 10 s (novice two). Spam measured 0 / 0 in every arm below.
+- BRIDGE and FRAY play unchanged: BRIDGE says no objective pings (no camp call there), the join and the mates' answer are RIFT-only.
+
+**Method.** One tree, no worktree, no bots copy. A throwaway `_harness/_tmp_tp2_pair.ts` (deleted) set the switches on the loaded tier profiles before the first match; both teams computer-played at one tier, the tactics probe's lineup, cut at 30:00, paired by seed, all through heavy.py. RIFT s701-764 (64 a tier) plus a fresh window s901-932 (32 a tier) for the arms that change play, BRIDGE s701-712 (12 a tier). The base arm ran on the unmodified tree (HEAD 4ec54753f, bots 784a9bdd0) before any edit. Δ is arm − base in minutes, ± paired SE. "Identical play" compares a hash of every sim event except pings; "all events" includes pings.
+- Measures: games at 30:00; late stalls (3+ min from 14:00 with no structure damage by fighters, a game); alone deaths from 14:00 (no teammate within 20 m, a game); team 0 wins; games with a core hit.
+- Join (piece 1's visible bar): from 14:00, two fit (50 %+) fighters of a team within 22 m of an enemy non-core structure; a third arrives within 20 s.
+- Objective: a teammate not within 30 m at the ping comes within 30 m inside 10 s; contested: the team hits a camp unit within 25 m inside 30 s, or takes the objective inside 60 s.
+- Mates' help (piece 3's visible bar): a computer-played fighter's assist; "heading there" by another teammate within 30 m inside 5 s, and a teammate 15 m+ away reaching 12 m inside 5 s.
+
+**Measured.**
+
+*Switches off: the sim is byte-identical to HEAD.* With every new switch explicitly off, 228 of 228 paired games (RIFT s701-764 and BRIDGE s701-712, every tier) give the very same full event stream, pings included. `probe_sim_determinism` 6 / 6 PASS.
+
+*Base (live), RIFT s701-764:* length 24.43 / 22.98 / 23.41 min (novice / adept / veteran); games at 30:00 6 / 2 / 3 (s901-932: 2 / 2 / 2); late stalls 0.59 / 0.33 / 0.72 a game; alone deaths 6.23 / 4.14 / 4.27; a third joining two at a tower within 20 s 52 / 66 / 62 %; mates' help reached within 5 s 12 / 12 / 13 % (by chance; nobody answers).
+
+*Piece 2, `sayObjective` alone (RIFT s701-764):*
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| identical play (non-ping events) | 64 / 64 | 64 / 64 | 64 / 64 |
+| Δ length, games at 30:00 | +0.00, 6 (6) | +0.00, 2 (2) | +0.00, 3 (3) |
+| objective pings said | 678 | 871 | 1,185 |
+| followed by another teammate inside 10 s (bar 45 %) | **50 %** | **55 %** | **54 %** |
+| camp contested or taken | 54 % | 76 % | 67 % |
+| pings per team-minute, all kinds (live) | 0.71 (0.50) | 1.49 (1.21) | 1.61 (1.23) |
+
+BRIDGE: identical in 36 of 36 (no camp calls there). The objective pings spend the team's budget, so a few other pings go unsaid (assist 1,474 → 1,450 at adept); nothing in the game moves.
+
+*Piece 1, `joinAt` 3 / 2 / 2 alone:*
+
+| | novice | adept | veteran |
+|---|---|---|---|
+| Δ length s701-764 | −0.18 ± 0.23 | +0.23 ± 0.53 | −0.36 ± 0.46 |
+| Δ length s901-932 | +0.30 ± 0.30 | +1.25 ± 0.68 | +1.22 ± 0.57 |
+| Δ length, n 96 | −0.02 ± 0.19 | **+0.57 ± 0.42** | +0.16 ± 0.37 |
+| games at 30:00, n 96 (live) | **9 (8)** | **6 (4)** | **7 (5)** |
+| late stalls a game, s701-764 (live) | 0.59 (0.59) | 0.36 (0.33) | 0.73 (0.72) |
+| alone deaths a game, s701-764 (live) | 6.00 (6.23) | 4.03 (4.14) | 3.91 (4.27) |
+| a third joins two within 20 s (live) | 51 % (52) | 65 % (66) | 64 % (62) |
+| team 0 wins / winner flips, s701-764 | 28 / 4 | 27 / 25 | 27 / 21 |
+| identical play, s701-764 | 44 / 64 | 6 / 64 | 12 / 64 |
+
+Pooled RIFT n 288: +0.24 ± 0.20 (the bar was ≤ +0.3), but the review's second pace bar (games at 30:00 at or below live) is missed at every tier, adept is +0.57 alone, and the visible bar shows no change: the live opponents already bring a third to two at a tower inside 20 s about as often (52-66 %). The review's −0.33 pooled (s701-732) did not hold on the fresh window. **Off at every tier.**
+
+*Piece 3, `hearMatesAssist` alone (adept, veteran):*
+
+| | adept | veteran |
+|---|---|---|
+| Δ length, n 96 | **+1.14 ± 0.53** | +0.62 ± 0.44 |
+| games at 30:00, n 96 (live; bar ≤ live + 2) | **12 (4)** | 5 (5) |
+| late stalls a game, s701-764 (live) | 0.59 (0.33) | 0.89 (0.72) |
+| alone deaths a game, s701-764 (live) | 4.73 (4.14) | 4.55 (4.27) |
+| mates' help: "heading there" inside 5 s | 26 % | 27 % |
+| mates' help: reached inside 5 s (live 13 %) | 16 % | 16 % |
+| "heading there" and an arrival inside 5 s (bar 45 %) | **5 %** | **6 %** |
+| a "heading there" fighter there inside 10 s | 67 % | 53 % |
+| "heading there" said by a fighter that had not turned | 0 | 0 |
+
+The honest "heading there" works (said only by a fighter that turned, and two thirds of them arrive inside 10 s), but the mode filter leaves few answerers: after the laning phase most fighters are on a push, so three in four of a mate's calls get nobody, and the ones pulled off a road cost adept a minute a game. The review's 54-63 % was without the filter and with the team saying "on my way" for whoever it picked. **Off at both tiers.**
+
+*All three together (joinAt 3 / 2 / 2, sayObjective, hearMatesAssist at adept and veteran), n 96:* novice −0.02 ± 0.19, 9 at 30:00 (8); adept +0.57 ± 0.47, 4 (4); veteran +0.53 ± 0.40, 5 (5); pooled n 288 +0.36 ± 0.22. Late stalls s701-764 0.59 / 0.45 / 0.86; alone deaths 6.00 / 4.80 / 4.22; team 0 wins 28 / 35 / 26 of 64; mates' help answered and reached 5 / 6 %. Not shipped (pieces 1 and 3 are off).
+
+*The build as shipped (sayObjective on, the rest off), against live:* identical play in 192 of 192 RIFT and 36 of 36 BRIDGE games; Δ +0.00 at every tier; games at 30:00 6 / 2 / 3; every non-ping number is live's.
+
+**Gates.** New `_harness/probe_sim_bot_teamplay.ts` (in `npm run probe`), per tier on RIFT s701+3: push pings 0; sayPush, hearPersonPlan, hearMates off at every tier and hearMatesAssist off at novice; objective pings said exactly where sayObjective is on, followed inside 10 s ≥ 35 %; flipping sayObjective changes no non-ping event; hearMatesAssist forced on for one seed (adept, veteran) says "heading there" only from a fighter that has turned; joins, where on, bring a third ≥ 50 %; spam 0 / 0. `probe_sim_bot_tactics`: push pings 0, objective pings > 0 exactly where sayObjective is on (was 0 / 0).
+
+**Not met, said plainly.**
+- The owner's "if 2-3 go into a line, all should join" is not shipped in this round. As built (ruling 65's join, 15 s siege on the road two committed to) it lengthens adept games and adds games at 30:00 at every tier, and the live opponents already send a third inside 20 s in half or more of the cases. A join that holds pace needs the free fighters' walk to end in a hit (the review's piece 4 problem: the call dies before the walk ends), not a re-pointed siege.
+- Computer-played teammates still do not answer each other's "help here" (a person's is answered, ruling 66). The filtered answer is honest but rarely available; the unfiltered one moved pace in ruling 66. A later lane could let a fighter on a plain group push answer when the help is on its way, and measure that alone.
+- Attack and defence between computer-played teams are unchanged from live: this build adds only the "take this" pings.
