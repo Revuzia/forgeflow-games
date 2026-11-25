@@ -1,0 +1,449 @@
+{
+ "picks": [
+  "burdam",
+  "kemdo",
+  "hesmi",
+  "lisvel",
+  "rishal",
+  "tunlan",
+  "odrum"
+ ],
+ "kinds": [
+  "stun",
+  "airborne",
+  "sleep",
+  "fear",
+  "taunt",
+  "root",
+  "walk"
+ ],
+ "log": [
+  {
+   "t": 0.2,
+   "info": [
+    {
+     "def": "burdam",
+     "state": "stunned",
+     "anim": "stunned",
+     "role": "",
+     "h": 0,
+     "sts": "stun",
+     "w": null,
+     "locoW": 0
+    },
+    {
+     "def": "kemdo",
+     "state": "dash",
+     "anim": "stunned",
+     "role": "",
+     "h": 0.77,
+     "sts": "airborne",
+     "w": null,
+     "locoW": 0
+    },
+    {
+     "def": "hesmi",
+     "state": "stunned",
+     "anim": "stunned",
+     "role": "",
+     "h": 0,
+     "sts": "sleep",
+     "w": null,
+     "locoW": 0
+    },
+    {
+     "def": "lisvel",
+     "state": "move",
+     "anim": "run",
+     "role": "",
+     "h": 0,
+     "sts": "fear",
+     "w": null,
+     "locoW": 0
+    },
+    {
+     "def": "rishal",
+     "state": "move",
+     "anim": "run",
+     "role": "",
+     "h": 0,
+     "sts": "taunt",
+     "w": null,
+     "locoW": 0
+    },
+    {
+     "def": "tunlan",
+     "state": "idle",
+     "anim": "idle",
+     "role": "",
+     "h": 0,
+     "sts": "root",
+     "w": null,
+     "locoW": 0
+    },
+    {
+     "def": "odrum",
+     "state": "move",
+     "anim": "run",
+     "role": "",
+     "h": 0,
+     "sts": "slow",
+     "w": null,
+     "locoW": 0
+    }
+   ]
+  },
+  {
+   "t": 0.5,
+   "info": [
+    {
+     "def": "burdam",
+     "state": "stunned",
+     "anim": "stunned",
+     "role": "stunned",
+     "h": 0,
+     "sts": "stun",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "kemdo",
+     "state": "dash",
+     "anim": "stunned",
+     "role": "airborne",
+     "h": 1.2,
+     "sts": "airborne",
+     "w": {
+      "air": 1,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "hesmi",
+     "state": "stunned",
+     "anim": "stunned",
+     "role": "sleep",
+     "h": 0,
+     "sts": "sleep",
+     "w": {
+      "air": 0,
+      "sleep": 1,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "lisvel",
+     "state": "move",
+     "anim": "run",
+     "role": "run",
+     "h": 0,
+     "sts": "fear",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0.93,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "rishal",
+     "state": "move",
+     "anim": "run",
+     "role": "run",
+     "h": 0,
+     "sts": "taunt",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0.92,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "tunlan",
+     "state": "idle",
+     "anim": "idle",
+     "role": "idle",
+     "h": 0,
+     "sts": "root",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0.93
+     },
+     "locoW": 0
+    },
+    {
+     "def": "odrum",
+     "state": "move",
+     "anim": "run",
+     "role": "",
+     "h": 0,
+     "sts": "slow",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    }
+   ]
+  },
+  {
+   "t": 0.85,
+   "info": [
+    {
+     "def": "burdam",
+     "state": "stunned",
+     "anim": "stunned",
+     "role": "stunned",
+     "h": 0,
+     "sts": "stun",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "kemdo",
+     "state": "dash",
+     "anim": "stunned",
+     "role": "airborne",
+     "h": 0.67,
+     "sts": "airborne",
+     "w": {
+      "air": 1,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "hesmi",
+     "state": "stunned",
+     "anim": "stunned",
+     "role": "sleep",
+     "h": 0,
+     "sts": "sleep",
+     "w": {
+      "air": 0,
+      "sleep": 1,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "lisvel",
+     "state": "move",
+     "anim": "run",
+     "role": "run",
+     "h": 0,
+     "sts": "fear",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0.99,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "rishal",
+     "state": "move",
+     "anim": "run",
+     "role": "run",
+     "h": 0,
+     "sts": "taunt",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0.99,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "tunlan",
+     "state": "idle",
+     "anim": "idle",
+     "role": "idle",
+     "h": 0,
+     "sts": "root",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0.99
+     },
+     "locoW": 0
+    },
+    {
+     "def": "odrum",
+     "state": "move",
+     "anim": "run",
+     "role": "",
+     "h": 0,
+     "sts": "slow",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    }
+   ]
+  },
+  {
+   "t": 1.6,
+   "info": [
+    {
+     "def": "burdam",
+     "state": "stunned",
+     "anim": "stunned",
+     "role": "stunned",
+     "h": 0,
+     "sts": "stun",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "kemdo",
+     "state": "idle",
+     "anim": "idle",
+     "role": "idle",
+     "h": 0,
+     "sts": "",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "hesmi",
+     "state": "stunned",
+     "anim": "stunned",
+     "role": "sleep",
+     "h": 0,
+     "sts": "sleep",
+     "w": {
+      "air": 0,
+      "sleep": 1,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "lisvel",
+     "state": "move",
+     "anim": "run",
+     "role": "run",
+     "h": 0,
+     "sts": "fear",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 1,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "rishal",
+     "state": "move",
+     "anim": "run",
+     "role": "run",
+     "h": 0,
+     "sts": "taunt",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 1,
+      "root": 0
+     },
+     "locoW": 0
+    },
+    {
+     "def": "tunlan",
+     "state": "idle",
+     "anim": "idle",
+     "role": "idle",
+     "h": 0,
+     "sts": "root",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 1
+     },
+     "locoW": 0
+    },
+    {
+     "def": "odrum",
+     "state": "move",
+     "anim": "run",
+     "role": "run",
+     "h": 0,
+     "sts": "slow",
+     "w": {
+      "air": 0,
+      "sleep": 0,
+      "fear": 0,
+      "taunt": 0,
+      "root": 0
+     },
+     "locoW": 1
+    }
+   ]
+  }
+ ],
+ "pageErrors": []
+}

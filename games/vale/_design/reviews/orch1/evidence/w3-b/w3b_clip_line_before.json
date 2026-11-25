@@ -1,0 +1,1172 @@
+{
+ "at": "2026-11-25T13:18:07.068Z",
+ "fighters": {
+  "ardit": {
+   "melee": true,
+   "tip": "x_spear_tip",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 40,
+     "counterDeg": 0,
+     "swingDeg": 0,
+     "strikeM": 0.67,
+     "peakAt": 0.2,
+     "peakMps": 3.2,
+     "hold": 16
+    },
+    {
+     "clip": "attack1",
+     "frames": 25,
+     "counterDeg": 17.3,
+     "swingDeg": 33.2,
+     "strikeM": 2.54,
+     "peakAt": 0.16,
+     "peakMps": 22.53,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 25,
+     "counterDeg": 25.9,
+     "swingDeg": 49.7,
+     "strikeM": 0.73,
+     "peakAt": 0.4,
+     "peakMps": 14.16,
+     "hold": 1
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 20,
+     "counterDeg": 0,
+     "swingDeg": 0,
+     "strikeM": 2.19,
+     "peakAt": 0.85,
+     "peakMps": 23.41,
+     "hold": 4
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 30,
+     "counterDeg": 0,
+     "swingDeg": 6,
+     "strikeM": 1.03,
+     "peakAt": 0.23,
+     "peakMps": 8.7,
+     "hold": 9
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 25,
+     "counterDeg": 0,
+     "swingDeg": 9.1,
+     "strikeM": 0.48,
+     "peakAt": 0.16,
+     "peakMps": 4.86,
+     "hold": 4
+    }
+   ],
+   "worst30": [
+    "attack2",
+    "attack1"
+   ],
+   "reKeyed": []
+  },
+  "burdam": {
+   "melee": true,
+   "tip": "x_blade_tip",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 45,
+     "counterDeg": 22,
+     "swingDeg": 40.8,
+     "strikeM": 5.43,
+     "peakAt": 0.4,
+     "peakMps": 58.56,
+     "hold": 12
+    },
+    {
+     "clip": "attack1",
+     "frames": 30,
+     "counterDeg": 0,
+     "swingDeg": 26.4,
+     "strikeM": 6.76,
+     "peakAt": 0.4,
+     "peakMps": 72.81,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 40,
+     "counterDeg": 74.7,
+     "swingDeg": 103.7,
+     "strikeM": 10.94,
+     "peakAt": 0.4,
+     "peakMps": 72.12,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 25,
+     "counterDeg": 0,
+     "swingDeg": 19.7,
+     "strikeM": 3.14,
+     "peakAt": 0.84,
+     "peakMps": 72.04,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 30,
+     "counterDeg": 0,
+     "swingDeg": 5,
+     "strikeM": 8.08,
+     "peakAt": 0.1,
+     "peakMps": 71.4,
+     "hold": 14
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 30,
+     "counterDeg": 73.4,
+     "swingDeg": 135.6,
+     "strikeM": 9.71,
+     "peakAt": 0.33,
+     "peakMps": 65.76,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "attack1",
+    "cast_a1"
+   ],
+   "reKeyed": []
+  },
+  "dunsom": {
+   "melee": false,
+   "tip": "x_crook_hook",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 45,
+     "counterDeg": 122.3,
+     "swingDeg": 149.1,
+     "strikeM": 3.51,
+     "peakAt": 0.36,
+     "peakMps": 40.06,
+     "hold": 0
+    },
+    {
+     "clip": "attack1",
+     "frames": 25,
+     "counterDeg": 6.5,
+     "swingDeg": 25.5,
+     "strikeM": 1.97,
+     "peakAt": 0.4,
+     "peakMps": 42.17,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 25,
+     "counterDeg": 12,
+     "swingDeg": 44,
+     "strikeM": 2.58,
+     "peakAt": 0.4,
+     "peakMps": 59.8,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 30,
+     "counterDeg": 15.9,
+     "swingDeg": 35.7,
+     "strikeM": 1.5,
+     "peakAt": 0.4,
+     "peakMps": 30.17,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 35,
+     "counterDeg": 43.7,
+     "swingDeg": 45.7,
+     "strikeM": 4.56,
+     "peakAt": 0.4,
+     "peakMps": 32.26,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 20,
+     "counterDeg": 24,
+     "swingDeg": 24,
+     "strikeM": 0.36,
+     "peakAt": 0.35,
+     "peakMps": 5.87,
+     "hold": 12
+    }
+   ],
+   "worst30": [
+    "attack1",
+    "attack2"
+   ],
+   "reKeyed": []
+  },
+  "ervet": {
+   "melee": true,
+   "tip": "propR",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 35,
+     "counterDeg": 0,
+     "swingDeg": 13.3,
+     "strikeM": 0.37,
+     "peakAt": 0.63,
+     "peakMps": 31.23,
+     "hold": 0
+    },
+    {
+     "clip": "attack1",
+     "frames": 25,
+     "counterDeg": 39.5,
+     "swingDeg": 81,
+     "strikeM": 1.28,
+     "peakAt": 0.4,
+     "peakMps": 24.76,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 25,
+     "counterDeg": 66.9,
+     "swingDeg": 119.5,
+     "strikeM": 0.91,
+     "peakAt": 0.4,
+     "peakMps": 15.79,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 20,
+     "counterDeg": 68.5,
+     "swingDeg": 115.6,
+     "strikeM": 0.75,
+     "peakAt": 0.4,
+     "peakMps": 13.86,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 25,
+     "counterDeg": 29.4,
+     "swingDeg": 29.5,
+     "strikeM": 0.88,
+     "peakAt": 0.16,
+     "peakMps": 16.9,
+     "hold": 6
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 30,
+     "counterDeg": 0.8,
+     "swingDeg": 1.5,
+     "strikeM": 1.89,
+     "peakAt": 0.4,
+     "peakMps": 30.47,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "cast_ult",
+    "cast_a3"
+   ],
+   "reKeyed": []
+  },
+  "hesmi": {
+   "melee": true,
+   "tip": "propR",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 50,
+     "counterDeg": 0.4,
+     "swingDeg": 0,
+     "strikeM": 1.7,
+     "peakAt": 0.4,
+     "peakMps": 25.24,
+     "hold": 0
+    },
+    {
+     "clip": "attack1",
+     "frames": 40,
+     "counterDeg": 47.4,
+     "swingDeg": 73.4,
+     "strikeM": 2.25,
+     "peakAt": 0.4,
+     "peakMps": 47.69,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 40,
+     "counterDeg": 44.3,
+     "swingDeg": 69.7,
+     "strikeM": 0.81,
+     "peakAt": 0.4,
+     "peakMps": 14.88,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 35,
+     "counterDeg": 27,
+     "swingDeg": 29.8,
+     "strikeM": 2.2,
+     "peakAt": 0.03,
+     "peakMps": 17.77,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 25,
+     "counterDeg": 3.4,
+     "swingDeg": 44.2,
+     "strikeM": 0.74,
+     "peakAt": 0.16,
+     "peakMps": 5.94,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 25,
+     "counterDeg": 0.1,
+     "swingDeg": 0,
+     "strikeM": 0.72,
+     "peakAt": 0.84,
+     "peakMps": 18.08,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "cast_a3",
+    "cast_ult"
+   ],
+   "reKeyed": []
+  },
+  "ilsheta": {
+   "melee": false,
+   "tip": "x_lamp",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 45,
+     "counterDeg": 2.8,
+     "swingDeg": 0,
+     "strikeM": 1.34,
+     "peakAt": 0.18,
+     "peakMps": 9.6,
+     "hold": 13
+    },
+    {
+     "clip": "attack1",
+     "frames": 20,
+     "counterDeg": 16,
+     "swingDeg": 37,
+     "strikeM": 0.41,
+     "peakAt": 0.4,
+     "peakMps": 9.15,
+     "hold": 1
+    },
+    {
+     "clip": "attack2",
+     "frames": 20,
+     "counterDeg": 9.6,
+     "swingDeg": 19.5,
+     "strikeM": 0.9,
+     "peakAt": 0.4,
+     "peakMps": 17.61,
+     "hold": 0
+    },
+    {
+     "clip": "crit",
+     "frames": 25,
+     "counterDeg": 21.8,
+     "swingDeg": 48,
+     "strikeM": 0.48,
+     "peakAt": 0.4,
+     "peakMps": 9.56,
+     "hold": 5
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 25,
+     "counterDeg": 32.9,
+     "swingDeg": 61.9,
+     "strikeM": 1.12,
+     "peakAt": 0.4,
+     "peakMps": 15.19,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 30,
+     "counterDeg": 9,
+     "swingDeg": 23,
+     "strikeM": 0.24,
+     "peakAt": 0.77,
+     "peakMps": 3.26,
+     "hold": 9
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 20,
+     "counterDeg": 2,
+     "swingDeg": 0,
+     "strikeM": 0.51,
+     "peakAt": 0.4,
+     "peakMps": 6.19,
+     "hold": 4
+    }
+   ],
+   "worst30": [
+    "attack2",
+    "attack1"
+   ],
+   "reKeyed": []
+  },
+  "kemdo": {
+   "melee": true,
+   "tip": "x_blade_tip",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 40,
+     "counterDeg": 0,
+     "swingDeg": 44.7,
+     "strikeM": 1.61,
+     "peakAt": 0.35,
+     "peakMps": 6.71,
+     "hold": 14
+    },
+    {
+     "clip": "attack1",
+     "frames": 25,
+     "counterDeg": 48.1,
+     "swingDeg": 69,
+     "strikeM": 3.05,
+     "peakAt": 0.4,
+     "peakMps": 18.31,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 30,
+     "counterDeg": 45.1,
+     "swingDeg": 67.8,
+     "strikeM": 2.84,
+     "peakAt": 0.37,
+     "peakMps": 21.32,
+     "hold": 1
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 25,
+     "counterDeg": 2.2,
+     "swingDeg": 21.1,
+     "strikeM": 3.79,
+     "peakAt": 0.32,
+     "peakMps": 19.22,
+     "hold": 2
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 20,
+     "counterDeg": 7.4,
+     "swingDeg": 47.9,
+     "strikeM": 2.54,
+     "peakAt": 0.4,
+     "peakMps": 23.46,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 25,
+     "counterDeg": 1.1,
+     "swingDeg": 0.1,
+     "strikeM": 0.47,
+     "peakAt": 0.04,
+     "peakMps": 5.9,
+     "hold": 11
+    }
+   ],
+   "worst30": [
+    "cast_a2",
+    "cast_ult"
+   ],
+   "reKeyed": []
+  },
+  "lisvel": {
+   "melee": false,
+   "tip": "x_arrow_nock",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 35,
+     "counterDeg": 10.7,
+     "swingDeg": 12.7,
+     "strikeM": 0.92,
+     "peakAt": 0.11,
+     "peakMps": 10.61,
+     "hold": 0
+    },
+    {
+     "clip": "attack1",
+     "frames": 20,
+     "counterDeg": 0,
+     "swingDeg": 27,
+     "strikeM": 0.8,
+     "peakAt": 0.05,
+     "peakMps": 10.38,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 20,
+     "counterDeg": 0,
+     "swingDeg": 21,
+     "strikeM": 0.45,
+     "peakAt": 0.05,
+     "peakMps": 10.27,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 25,
+     "counterDeg": 0,
+     "swingDeg": 31,
+     "strikeM": 0.56,
+     "peakAt": 0.08,
+     "peakMps": 14.46,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 15,
+     "counterDeg": 0,
+     "swingDeg": 20,
+     "strikeM": 0.52,
+     "peakAt": 0.73,
+     "peakMps": 7.46,
+     "hold": 1
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 20,
+     "counterDeg": 0,
+     "swingDeg": 10.5,
+     "strikeM": 0.8,
+     "peakAt": 0.65,
+     "peakMps": 10.14,
+     "hold": 1
+    }
+   ],
+   "worst30": [
+    "attack1",
+    "attack2"
+   ],
+   "reKeyed": []
+  },
+  "marund": {
+   "melee": true,
+   "tip": "handR",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 45,
+     "counterDeg": 0,
+     "swingDeg": 0,
+     "strikeM": 1.31,
+     "peakAt": 0.56,
+     "peakMps": 26.9,
+     "hold": 4
+    },
+    {
+     "clip": "attack1",
+     "frames": 40,
+     "counterDeg": 36.3,
+     "swingDeg": 63.1,
+     "strikeM": 2.35,
+     "peakAt": 0.4,
+     "peakMps": 28.45,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 40,
+     "counterDeg": 59.8,
+     "swingDeg": 106.3,
+     "strikeM": 2.13,
+     "peakAt": 0.4,
+     "peakMps": 26.65,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 25,
+     "counterDeg": 32.4,
+     "swingDeg": 82,
+     "strikeM": 1.37,
+     "peakAt": 0.4,
+     "peakMps": 20.35,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 40,
+     "counterDeg": 0.8,
+     "swingDeg": 10.3,
+     "strikeM": 0.91,
+     "peakAt": 0.4,
+     "peakMps": 10.63,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 30,
+     "counterDeg": 30.7,
+     "swingDeg": 70.7,
+     "strikeM": 0.64,
+     "peakAt": 0.4,
+     "peakMps": 8.1,
+     "hold": 6
+    }
+   ],
+   "worst30": [
+    "cast_a2",
+    "cast_ult"
+   ],
+   "reKeyed": []
+  },
+  "nurrow": {
+   "melee": true,
+   "tip": "x_blade_tip",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 40,
+     "counterDeg": 2.7,
+     "swingDeg": 0,
+     "strikeM": 2.18,
+     "peakAt": 0.4,
+     "peakMps": 51.55,
+     "hold": 0
+    },
+    {
+     "clip": "attack1",
+     "frames": 20,
+     "counterDeg": 37.3,
+     "swingDeg": 76.2,
+     "strikeM": 2.25,
+     "peakAt": 0.4,
+     "peakMps": 49.14,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 20,
+     "counterDeg": 15.4,
+     "swingDeg": 54.7,
+     "strikeM": 2.1,
+     "peakAt": 0.4,
+     "peakMps": 51.08,
+     "hold": 0
+    },
+    {
+     "clip": "crit",
+     "frames": 25,
+     "counterDeg": 62.5,
+     "swingDeg": 114.8,
+     "strikeM": 2.21,
+     "peakAt": 0.4,
+     "peakMps": 54.7,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 15,
+     "counterDeg": 4.5,
+     "swingDeg": 7.8,
+     "strikeM": 1.71,
+     "peakAt": 0.4,
+     "peakMps": 19.85,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 25,
+     "counterDeg": 20.8,
+     "swingDeg": 44,
+     "strikeM": 0.24,
+     "peakAt": 0.36,
+     "peakMps": 6.56,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 20,
+     "counterDeg": 29.4,
+     "swingDeg": 52.9,
+     "strikeM": 2.11,
+     "peakAt": 0.25,
+     "peakMps": 40.97,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "cast_ult",
+    "cast_a1"
+   ],
+   "reKeyed": []
+  },
+  "odrum": {
+   "melee": false,
+   "tip": "x_sling_pouch",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 45,
+     "counterDeg": 34,
+     "swingDeg": 67.2,
+     "strikeM": 1.74,
+     "peakAt": 0.4,
+     "peakMps": 46.11,
+     "hold": 0
+    },
+    {
+     "clip": "attack1",
+     "frames": 25,
+     "counterDeg": 15.1,
+     "swingDeg": 33.3,
+     "strikeM": 0.73,
+     "peakAt": 0.4,
+     "peakMps": 15.66,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 25,
+     "counterDeg": 0,
+     "swingDeg": 39,
+     "strikeM": 1.74,
+     "peakAt": 0.24,
+     "peakMps": 27.54,
+     "hold": 3
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 30,
+     "counterDeg": 33.8,
+     "swingDeg": 67.2,
+     "strikeM": 1.54,
+     "peakAt": 0.3,
+     "peakMps": 33.72,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 30,
+     "counterDeg": 50,
+     "swingDeg": 183.5,
+     "strikeM": 3.72,
+     "peakAt": 0.43,
+     "peakMps": 19.97,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 20,
+     "counterDeg": 0.1,
+     "swingDeg": 11.7,
+     "strikeM": 1.23,
+     "peakAt": 0.05,
+     "peakMps": 15.78,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "cast_a3",
+    "attack1"
+   ],
+   "reKeyed": []
+  },
+  "rishal": {
+   "melee": true,
+   "tip": "propR",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 35,
+     "counterDeg": 2.7,
+     "swingDeg": 0,
+     "strikeM": 0.78,
+     "peakAt": 0.34,
+     "peakMps": 16.69,
+     "hold": 12
+    },
+    {
+     "clip": "attack1",
+     "frames": 20,
+     "counterDeg": 41.5,
+     "swingDeg": 61,
+     "strikeM": 1.21,
+     "peakAt": 0.4,
+     "peakMps": 22.88,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 20,
+     "counterDeg": 39.5,
+     "swingDeg": 56.5,
+     "strikeM": 0.42,
+     "peakAt": 0.35,
+     "peakMps": 3.52,
+     "hold": 0
+    },
+    {
+     "clip": "crit",
+     "frames": 20,
+     "counterDeg": 0.5,
+     "swingDeg": 0,
+     "strikeM": 0.88,
+     "peakAt": 0.4,
+     "peakMps": 17.66,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 15,
+     "counterDeg": 1.9,
+     "swingDeg": 0,
+     "strikeM": 0.52,
+     "peakAt": 0.07,
+     "peakMps": 8.16,
+     "hold": 9
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 25,
+     "counterDeg": 48.6,
+     "swingDeg": 100.1,
+     "strikeM": 1.16,
+     "peakAt": 0.4,
+     "peakMps": 14.45,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 20,
+     "counterDeg": 36.9,
+     "swingDeg": 37,
+     "strikeM": 2.12,
+     "peakAt": 0.15,
+     "peakMps": 23.28,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "crit",
+    "attack2"
+   ],
+   "reKeyed": []
+  },
+  "sukri": {
+   "melee": false,
+   "tip": "x_cup",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 40,
+     "counterDeg": 20.9,
+     "swingDeg": 20.9,
+     "strikeM": 1.21,
+     "peakAt": 0.07,
+     "peakMps": 7.73,
+     "hold": 15
+    },
+    {
+     "clip": "attack1",
+     "frames": 20,
+     "counterDeg": 3.2,
+     "swingDeg": 8.1,
+     "strikeM": 0.65,
+     "peakAt": 0.3,
+     "peakMps": 6.91,
+     "hold": 1
+    },
+    {
+     "clip": "attack2",
+     "frames": 20,
+     "counterDeg": 29.9,
+     "swingDeg": 58.8,
+     "strikeM": 2.38,
+     "peakAt": 0.35,
+     "peakMps": 27.31,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 25,
+     "counterDeg": 13,
+     "swingDeg": 25.8,
+     "strikeM": 2.03,
+     "peakAt": 0.08,
+     "peakMps": 19.74,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 15,
+     "counterDeg": 9.9,
+     "swingDeg": 17.8,
+     "strikeM": 1.11,
+     "peakAt": 0.07,
+     "peakMps": 29.89,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 25,
+     "counterDeg": 8.9,
+     "swingDeg": 20.5,
+     "strikeM": 0.28,
+     "peakAt": 0.4,
+     "peakMps": 5.19,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "attack1",
+    "cast_a3"
+   ],
+   "reKeyed": []
+  },
+  "tunlan": {
+   "melee": false,
+   "tip": "propR",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 40,
+     "counterDeg": 0.2,
+     "swingDeg": 0,
+     "strikeM": 1.18,
+     "peakAt": 0.35,
+     "peakMps": 9.38,
+     "hold": 0
+    },
+    {
+     "clip": "attack1",
+     "frames": 20,
+     "counterDeg": 32.1,
+     "swingDeg": 67.8,
+     "strikeM": 1.34,
+     "peakAt": 0.4,
+     "peakMps": 27.55,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 20,
+     "counterDeg": 35.4,
+     "swingDeg": 71.1,
+     "strikeM": 0.47,
+     "peakAt": 0.4,
+     "peakMps": 7.45,
+     "hold": 1
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 30,
+     "counterDeg": 20,
+     "swingDeg": 35.4,
+     "strikeM": 0.64,
+     "peakAt": 0.37,
+     "peakMps": 6.66,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 25,
+     "counterDeg": 23,
+     "swingDeg": 34.9,
+     "strikeM": 0.51,
+     "peakAt": 0.4,
+     "peakMps": 14.8,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 15,
+     "counterDeg": 8,
+     "swingDeg": 21.9,
+     "strikeM": 0.29,
+     "peakAt": 0.27,
+     "peakMps": 6.36,
+     "hold": 1
+    }
+   ],
+   "worst30": [
+    "cast_ult",
+    "cast_a3"
+   ],
+   "reKeyed": []
+  },
+  "ulkro": {
+   "melee": false,
+   "tip": "propR",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 25,
+     "counterDeg": 0,
+     "swingDeg": 0,
+     "strikeM": 0.15,
+     "peakAt": 0.36,
+     "peakMps": 4.3,
+     "hold": 2
+    },
+    {
+     "clip": "attack1",
+     "frames": 20,
+     "counterDeg": 12.8,
+     "swingDeg": 22.8,
+     "strikeM": 0.68,
+     "peakAt": 0.4,
+     "peakMps": 14.37,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 20,
+     "counterDeg": 27.8,
+     "swingDeg": 43.7,
+     "strikeM": 1.07,
+     "peakAt": 0.4,
+     "peakMps": 22.05,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 30,
+     "counterDeg": 47.9,
+     "swingDeg": 67.6,
+     "strikeM": 1.58,
+     "peakAt": 0.4,
+     "peakMps": 33.49,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 15,
+     "counterDeg": 0,
+     "swingDeg": 0,
+     "strikeM": 1.06,
+     "peakAt": 0.73,
+     "peakMps": 11.33,
+     "hold": 1
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 20,
+     "counterDeg": 11.9,
+     "swingDeg": 25.6,
+     "strikeM": 0.3,
+     "peakAt": 0.4,
+     "peakMps": 4.82,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "cast_a2",
+    "cast_a3"
+   ],
+   "reKeyed": []
+  },
+  "vashil": {
+   "melee": false,
+   "tip": "x_rod_head",
+   "clips": [
+    {
+     "clip": "cast_ult",
+     "frames": 40,
+     "counterDeg": 0,
+     "swingDeg": 0,
+     "strikeM": 2.76,
+     "peakAt": 0.25,
+     "peakMps": 9.21,
+     "hold": 0
+    },
+    {
+     "clip": "attack1",
+     "frames": 20,
+     "counterDeg": 6.4,
+     "swingDeg": 25.4,
+     "strikeM": 1.19,
+     "peakAt": 0.4,
+     "peakMps": 26.3,
+     "hold": 0
+    },
+    {
+     "clip": "attack2",
+     "frames": 20,
+     "counterDeg": 11,
+     "swingDeg": 34.9,
+     "strikeM": 1.67,
+     "peakAt": 0.4,
+     "peakMps": 32.38,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a1",
+     "frames": 25,
+     "counterDeg": 6,
+     "swingDeg": 19.9,
+     "strikeM": 1.33,
+     "peakAt": 0.64,
+     "peakMps": 9.97,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a2",
+     "frames": 15,
+     "counterDeg": 3,
+     "swingDeg": 11,
+     "strikeM": 1.33,
+     "peakAt": 0.4,
+     "peakMps": 23.17,
+     "hold": 0
+    },
+    {
+     "clip": "cast_a3",
+     "frames": 20,
+     "counterDeg": 45.9,
+     "swingDeg": 75.8,
+     "strikeM": 2.53,
+     "peakAt": 0.4,
+     "peakMps": 52.68,
+     "hold": 0
+    }
+   ],
+   "worst30": [
+    "cast_ult",
+    "cast_a2"
+   ],
+   "reKeyed": []
+  }
+ },
+ "fails": []
+}
