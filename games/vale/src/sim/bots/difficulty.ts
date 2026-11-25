@@ -262,7 +262,10 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     baseAnswerDelay: 5, baseAnswerUntil: 1500,
     // (ruling 66: the team-play tactics of ruling 65 are off — joinAt Infinity (was 3), loneStop Infinity (was 4) — pings stay)
     guardFrom: 2, pingGap: 15, pingTeam: 2, pingReads: false, assistReach: 30, assistMax: 1, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
-    teamPush: false, sayObjective: false, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
+    teamPush: false, sayObjective: true, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
+    // (ruling 71: sayObjective on — followed by another teammate inside 10 s 50 % (RIFT s701-764), the game unchanged; joinAt
+    // stays Infinity — 3 would cost a game at 30:00 over live on n96 with no gain in thirds arriving — and hearMatesAssist is
+    // adept and veteran's piece only)
   },
   // (CW3s r3, CL-1: adept's longest quiet stretch fell at 3:00-12:00 with the laners 9 m apart at 75 % health; deaths a minute run under veteran's from 5:00 to 13:00. It now contests an enemy start at a camp, the fight veteran's team takes there, and reads a kill as veteran does. A flat +0.08 on the trade edge was tried and dropped: stretch 3.2 min, takedowns by 10:00 7.15 -> 6.70. team.ts thinkGank and bot.ts's roam read widen for every tier: gaps at 8:00-12:00. Laning retreat bias -0.04: takedowns by 10:00 5.95 -> 6.50 on seeds 8101-8120. Untuned seeds 8501-8520 / 8701-8720: stretch 2.7 / 2.8 min, was 3.4 / 3.6)
   adept: {
@@ -281,7 +284,10 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     // (ruling 66: posts (ruling 65: true), joinAt (2), regroupWait (8), loneStop (3), teamPush and planPings off — the live
     // 8c95deb52 tactics; the pings that held up in verify r8 stay)
     guardFrom: 2, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 45, assistMax: 2, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
-    teamPush: false, sayObjective: false, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
+    teamPush: false, sayObjective: true, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
+    // (ruling 71: sayObjective on — followed inside 10 s 53-55 %, the game unchanged; joinAt 2 stays off (RIFT n96: adept
+    // +0.57 min, 6 games at 30:00 against 4; veteran 7 against 5) and hearMatesAssist stays off (mates' help answered and
+    // reached 5-6 %, bar 45 %; adept +1.14 min, 12 games at 30:00 against 4))
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
@@ -299,7 +305,10 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
     // (ruling 66: posts with recall-to-defend (ruling 65: true from the inner Needles), joinAt (2), regroupWait (10), loneStop (3),
     // teamPush and planPings off — the live 8c95deb52 tactics; the pings that held up in verify r8 stay)
     guardFrom: 1, pingGap: 10, pingTeam: 3, pingReads: true, assistReach: 55, assistMax: 2, joinAt: Infinity, regroupWait: 0, loneStop: Infinity,
-    teamPush: false, sayObjective: false, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
+    teamPush: false, sayObjective: true, sayPush: false, hearPersonPlan: false, hearMates: false, hearMatesAssist: false,
+    // (ruling 71: sayObjective on — followed inside 10 s 53-55 %, the game unchanged; joinAt 2 stays off (RIFT n96: adept
+    // +0.57 min, 6 games at 30:00 against 4; veteran 7 against 5) and hearMatesAssist stays off (mates' help answered and
+    // reached 5-6 %, bar 45 %; adept +1.14 min, 12 games at 30:00 against 4))
   },
 };
 
