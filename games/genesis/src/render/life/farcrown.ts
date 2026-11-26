@@ -20,13 +20,17 @@ export function leafTileMeans(tex: Texture | null): [number, number, number][] |
     const W = cv.width, H = cv.height, T = W >> 1;
     const px = g.getImageData(0, 0, W, H).data;
     const out: [number, number, number][] = [];
+    // (LOADTIME: the 256 possible values once — the same numbers in the same order as toLin(px / 255) per texel,
+    // which was ~0.9 s of pow() on the main thread before the first frame)
+    const lin = new Float64Array(256);
+    for (let i = 0; i < 256; i++) lin[i] = toLin(i / 255);
     for (let t = 0; t < 4; t++) {
       const x0 = (t & 1) * T, y0 = (t >> 1) * T;
       let r = 0, gg = 0, b = 0, n = 0;
       for (let y = y0; y < y0 + T; y += 2) for (let x = x0; x < x0 + T; x += 2) {
         const o = (y * W + x) * 4;
         if (px[o + 3] < 115) continue;
-        r += toLin(px[o] / 255); gg += toLin(px[o + 1] / 255); b += toLin(px[o + 2] / 255); n++;
+        r += lin[px[o]]; gg += lin[px[o + 1]]; b += lin[px[o + 2]]; n++;
       }
       out.push(n ? [r / n, gg / n, b / n] : [0.1, 0.15, 0.05]);
     }

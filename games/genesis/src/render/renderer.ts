@@ -260,7 +260,7 @@ export class Renderer {
     });
     confirmDepthMode(this.three);
     bootTrace.install(this.three.getContext() as WebGL2RenderingContext);
-    bootTrace.setThree(this.three);
+    bootTrace.setThree(this.three, this.scene);
     // (PERF s14) the live GPU memory audit from the first allocation on (the perf report's 'gpu mem' lines)
     try { gpuMem.install(this.three.getContext() as WebGL2RenderingContext); } catch { /* unaudited */ }
     setRingGL(this.three.getContext() as WebGL2RenderingContext);

@@ -10,7 +10,7 @@
 // over the selection. The sim's events and chronicle become toasts (src/ui/toasts.ts) and sound (src/audio/**).
 
 import { setPanelSound } from './ui/panel.ts';
-import { Vector2, type IUniform } from 'three';
+import { Vector2, type IUniform, type ShaderMaterial } from 'three';
 import type { Command, CommandResult, EntityRef, UnitVec } from './sim/types.ts';
 import type { ContentPack } from './sim/content.ts';
 import { AgentFlag } from './sim/types.ts';
@@ -20,7 +20,8 @@ import type { PlanetView } from './client/worldview.ts';
 import { qRotate, qRotateInv } from './client/orbits.ts';
 import { tangentBasis } from './sim/core/vec3.ts';
 import { Renderer } from './render/renderer.ts';
-import { bootTrace } from './render/boot.ts';
+import { perfNum } from './render/perfswitch.ts';
+import { bootCompileOn, bootTrace, guardedFrame, programsReady, requestPasses, showBootTrace } from './render/boot.ts';
 import { newPose, copyPose, type CameraPose } from './render/frame.ts';
 import { capturePhoto } from './render/camera/photo.ts';
 import { CameraRig } from './render/camera/rig.ts';
@@ -285,6 +286,8 @@ export class App implements UiHost {
     this.applyGraphics();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    // (LOADTIME) the full-screen passes' shaders start compiling now, in the browser's own threads, while the world is made
+    if (bootCompileOn()) requestPasses(this.renderer.three, this.renderer.post.hdr);
     progress('Waking the simulation…', 0.1);
     this.sim.onFatal = (msg) => this.onFatal?.('the simulation stopped', msg);
     const boot = await this.bootWorld();
@@ -379,11 +382,26 @@ export class App implements UiHost {
     bootTrace.mark('ui');
     progress('The first light…', 0.86);
     // warm-up frames: build the near terrain, the LUTs and the cloud noise before the boot card fades
+    // (LOADTIME, `?bootc=0` off) first every shader those frames draw with is compiled without waiting on any: the page
+    // stays alive and the boot card counts them, instead of the frames freezing on each link in turn
+    const count = (done: number, total: number) => progress(`Preparing graphics… ${done} of ${total}`, total ? 0.86 + 0.12 * (done / total) : -1);
+    const bootc = bootCompileOn();
+    if (bootc) {
+      await this.bootCompile(count);
+      // …then every shader the scene holds, hidden effects included (no first-use hitch in play; draws nothing): asked
+      // for now and waited for with the count on the card, at most `?bootwait=` seconds (30) — what is still compiling
+      // then goes on behind the game (none of it is on screen yet; the boot trace says how many)
+      perfmon.warmed = await this.renderer.warmUp(1);
+      const left = await programsReady(count, 1000 * (perfNum('bootwait', 30) ?? 30));
+      bootTrace.mark(left.left ? `warm (${left.left} left)` : 'warm');
+      this.renderer.cut();
+    }
     for (let i = 0; i < 3; i++) { this.frame(performance.now()); bootTrace.firstFrame(); }
     bootTrace.mark('frames');
-    // …and link every shader the scene holds, hidden effects included, before play (no first-use hitch; draws nothing)
-    perfmon.warmed = await this.renderer.warmUp();
+    // (the old path, `?bootc=0` or no KHR_parallel_shader_compile: the frames above linked what they drew, one at a time)
+    if (!bootc) perfmon.warmed = await this.renderer.warmUp();
     bootTrace.playable();
+    if (/[?&]boottrace=1(&|$)/.test(location.search)) showBootTrace();
     this.startAt = performance.now();
     progress('', 1);
     this.running = true;
@@ -477,6 +495,39 @@ export class App implements UiHost {
       else { packs.push(pack); scenario = pack.scenarios![0].id; }
     }
     return { scenario, packs, slot: null };
+  }
+
+  /**
+   * (LOADTIME, render/boot.ts) compile what the first frames draw without blocking: the planets' visuals are made, their
+   * full-screen passes asked for, then whole frames run with each draw of the scene held back until its programs have
+   * finished (guardedFrame) — the boot waits in between with the page alive. Ends when a frame drew everything and asked
+   * for nothing new (the terrain's patches, the plants and the houses arrive over the first frames), or after 10 frames.
+   */
+  private async bootCompile(tick: (done: number, total: number) => void): Promise<void> {
+    const R = this.renderer, r = R.three;
+    try {
+      // the worlds' visuals now (Renderer.render would make them in its first frame), so their passes are known
+      (R as unknown as { syncPlanets(v: unknown): void }).syncPlanets(this.sim.view);
+      bootTrace.mark('visuals');
+      requestPasses(r, R.post.hdr);
+      // (the last pass draws to the canvas: another output, another program)
+      requestPasses(r, null, [(R.post as unknown as { fxaaMat?: ShaderMaterial }).fxaaMat]);
+      await programsReady(tick);
+      bootTrace.mark('passes');
+      // (no terrain tile is baked meanwhile: a bake reads the last frame's shadow maps, and a held-back shadow pass left none)
+      const vis = [...R.planets.values()] as unknown as { bakeTerrainCache(...a: unknown[]): void }[];
+      for (let i = 0, clean = 0; i < 10 && clean < 1; i++) {
+        const own = vis.map((v) => Object.prototype.hasOwnProperty.call(v, 'bakeTerrainCache'));
+        for (const v of vis) v.bakeTerrainCache = () => { /* not during the boot compile */ };
+        let st: { skipped: number; asked: number };
+        try { st = guardedFrame(r, R.scene, () => this.frame(performance.now())); }
+        finally { vis.forEach((v, k) => { if (!own[k]) delete (v as { bakeTerrainCache?: unknown }).bakeTerrainCache; }); }
+        const left = await programsReady(tick);
+        if (!st.skipped && !st.asked) clean++;
+        if (left.left) break;   // (gave up waiting: the frames below wait for the rest, as before)
+      }
+      bootTrace.mark('compiled');
+    } catch (e) { console.warn('[genesis] boot compile failed (the first frames link their shaders as before)', e); }
   }
 
   private async startSim(boot: { scenario: string; packs: ContentPack[]; slot: SaveRecord | null }, progress: (msg: string, frac: number, note?: string) => void = () => {}): Promise<void> {
