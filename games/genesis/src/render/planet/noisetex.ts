@@ -19,13 +19,14 @@ import {
   type IUniform, type Texture, type WebGLRenderer,
 } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
-import { perfList, perfSwitch } from '../perfswitch.ts';
+import { perfList, perfNumEff } from '../perfswitch.ts';
 
 const SET = perfList('tnoise');
 /** the terrain fragment reads its simplex noise from the volume */
 export const TNOISE = SET.has('tex') || SET.has('tex256');
-/** PERF s21 `?wfast=1` (ocean.ts): the water reads the same volume, so it is built when either switch is on */
-export const WNOISE = perfSwitch('wfast', false);
+/** PERF s21 `?wfast=1` (ocean.ts): the water reads the same volume, so it is built when either switch is on
+ *  (`wfast` is a number: 3 = the default water (oceanfast.ts), 0 = the reference water, 1 / 2 = the s21 variants) */
+export const WNOISE = perfNumEff('wfast', 3) === 1;
 const TN_N = SET.has('tex256') ? 256 : 128;
 const TN_TEXELS = 8;                  // texels per lattice unit of snoise
 const TN_PERIOD = TN_N / TN_TEXELS;   // lattice units before the volume repeats

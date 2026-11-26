@@ -1,4 +1,5 @@
-// GENESIS — PERF s25 `?wfast=3` (default OFF until the owner's Mac confirms it): the water fragment restructured to the
+// GENESIS — PERF s25 `wfast=3` (THE DEFAULT since the owner's Mac confirmed it, rounds 18-22; `?wfast=0` = the reference
+// water of ocean.ts, exactly as before): the water fragment restructured to the
 // cost class of three.js's Water.js (examples/jsm/objects/Water.js, MIT, (c) 2010-2024 three.js authors: a few tiling
 // normal-map taps + an analytic sun specular + Schlick Fresnel; the technique, not its code, is reused here), keeping
 // every part of the GENESIS look: wave shape, sky / cloud mirror, screen-space reflection of the banks, Beer-Lambert
@@ -38,12 +39,12 @@ import {
   Vector4 as V4, WebGLRenderTarget, type IUniform, type Matrix3, type Matrix4, type Texture, type Vector3, type Vector4, type WebGLRenderer,
 } from 'three';
 import type { FullscreenQuad } from '../post/fsquad.ts';
-import { perfList, perfNum } from '../perfswitch.ts';
+import { perfList, perfNum, perfNumEff } from '../perfswitch.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 
-/** `?wfast=3`: the restructured water (this file) */
-export const WFAST3 = perfNum('wfast', 0) === 3;
+/** `wfast=3` (the default since the release; `?wfast=0` = ocean.ts's reference water, 1 / 2 = the s21 variants): the restructured water (this file) */
+export const WFAST3 = perfNumEff('wfast', 3) === 3;
 const CUT = perfList('wshade3');
 /** (s25b) `wshade3=seamold`: the per-level lattice spacing of s25 (the Mac's seam), for A/B */
 const SEAMOLD = CUT.has('seamold');

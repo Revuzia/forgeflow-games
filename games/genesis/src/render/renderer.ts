@@ -50,6 +50,7 @@ import { ringTick, setRingGL } from './bufring.ts';
 import { flushUploads, setUploadGL, uploadFrameBegin } from './uploadsched.ts';
 import { BOOT_PROBES, GPU_PROBE, probeGpu, probeLine, type ProbeResult } from './gpuprobe.ts';
 import { perfList, perfNum, perfSwitch, perfSwitchNote } from './perfswitch.ts';
+import { bootTrace } from './boot.ts';
 // PERF s12 BISECTION switches (owner's M5 is GPU-bound: ~100x per pixel vs Vale). Each turns a heavy pass / feature
 // OFF for an A/B run only (`?msaa=0`, `?clouds=0`, ...); all default ON (the game's look), and the perf report header
 // prints their effective values. NOT quality settings: diagnostics.
@@ -249,6 +250,8 @@ export class Renderer {
         powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false,
       }) as WebGL2RenderingContext | null;
     } catch { ctx = null; }
+    // (LOADTIME, boot.ts) the boot trace wraps the shader calls before anything links
+    if (ctx) bootTrace.install(ctx);
     const revz = chooseDepthMode(ctx);
     this.three = new WebGLRenderer({
       canvas, ...(ctx ? { context: ctx } : {}), antialias: false, alpha: false, depth: true, stencil: false,
@@ -256,6 +259,8 @@ export class Renderer {
       powerPreference: 'high-performance', preserveDrawingBuffer: false,
     });
     confirmDepthMode(this.three);
+    bootTrace.install(this.three.getContext() as WebGL2RenderingContext);
+    bootTrace.setThree(this.three);
     // (PERF s14) the live GPU memory audit from the first allocation on (the perf report's 'gpu mem' lines)
     try { gpuMem.install(this.three.getContext() as WebGL2RenderingContext); } catch { /* unaudited */ }
     setRingGL(this.three.getContext() as WebGL2RenderingContext);
@@ -579,6 +584,8 @@ export class Renderer {
     // PERF s22/s26 `?tcache=1`: the frame's terrain tile bakes, here in the uploads slot before any pass (the forest
     // floor mask reads the previous frame's shadow maps with their matrices, a consistent pair; a no-op when off)
     primaryVis?.bakeTerrainCache(r, cam);
+    // (default-on: only the primary planet's cache holds tile arrays; a no-op for a cache that holds none)
+    if (this.planets.size > 1) for (const v of this.planets.values()) if (v !== primaryVis) v.idleTerrainCache(r);
     perfmon.end('uploads');
     perfmon.begin('shadows');
     triStats.pass = 'shadow';

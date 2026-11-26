@@ -28,7 +28,7 @@
 import { shadeCut } from '../shaders/shadecut.ts';
 /** PERF s19 bisection `?wshade=` (shaders/shadecut.ts): nonoise novor fbm1 noshadow all */
 const WSHADE = shadeCut('wshade');
-import { perfList, perfNum, perfSwitch } from '../perfswitch.ts';
+import { perfList, perfNum, perfNumEff, perfSwitch, perfSwitchNote } from '../perfswitch.ts';
 import { NOISETEX_FN_GLSL, TNOISE_UNIFORMS, WNOISE } from './noisetex.ts';
 /**
  * PERF s21 `?waterland=0` = the old behaviour. On (default): a water fragment whose ground stands above the sheet
@@ -39,17 +39,17 @@ import { NOISETEX_FN_GLSL, TNOISE_UNIFORMS, WNOISE } from './noisetex.ts';
  * depth test, and where that let them through they drew at up to 70 % (the shore's noise bite) over low ground.
  */
 const WATERLAND = perfSwitch('waterland');
-/** PERF s21 `?wfast=1` (default off): the fragment's simplex noise from the noise volume, the ripples' per-wavelet
+/** PERF s21 `?wfast=1` (the default is `wfast=3`, oceanfast.ts; `wfast=0` = this file's reference water): the fragment's simplex noise from the noise volume, the ripples' per-wavelet
  *  constants precomputed, the ripples' shared noises taken once for both flow phases. Same formulas otherwise. */
 const WFAST = WNOISE;
 /**
- * PERF s21 `?wfast=2` (default off): the sibling games' method (three's Water.js, pirates-cove): the fine ripples are
+ * PERF s21 `?wfast=2` (not the default): the sibling games' method (three's Water.js, pirates-cove): the fine ripples are
  * taps of ONE tiling normal map (made once here from wavelets of the ripples' own steepness law, mips + anisotropy),
  * two scales x two scroll directions, projected along the body axes (1-3 projections by the up vector). The Gerstner
  * and swell normals, depth colour, glint and foam stay; the foam's and the shore bite's noises (still arithmetic: the
  * waterline does not move) run only where their term can be non-zero; the SSR march is 8 steps (x1.9) + the sky.
  */
-const WFAST2 = perfNum('wfast', 0) === 2;
+const WFAST2 = perfNumEff('wfast', 3) === 2;
 /** PERF s21 Mac bisection, `?wshade=` (debug, the look changes): nossr nopcf noripple nofoam norefr (+ nonoise ...) */
 const WCUT = perfList('wshade');
 /** PERF s21 `?wclock=<s>`: the water's clock pinned (probes: pixel-comparable water) */
@@ -1069,9 +1069,11 @@ export function makeOceanMaterial(shared: Record<string, IUniform>, morph: IUnif
   if (WCLOCK != null) uniforms.uTime = { value: WCLOCK };
   if (WWIND != null) uniforms.uWind = { value: WWIND };
   uniforms.uMorph = morph;
-  // ── PERF s25 hook (water agent): `?wfast=3` = oceanfast.ts's restructured shaders built from these; default off ──
+  // ── PERF s25 hook (water agent): `wfast=3` (THE DEFAULT) = oceanfast.ts's restructured shaders built from these;
+  // `?wfast=0` (or its anchors not found: fastOceanShaders returns null) = the reference shaders as they are ──
   const f3 = WFAST3 ? fastOceanShaders(OCEAN_VERT, OCEAN_FRAG, rippleMap, morph) : null;
   if (f3) Object.assign(uniforms, f3.uniforms);
+  else if (WFAST3) perfSwitchNote('wfast', '0(fallback: anchors)'); // (the header prints what runs: the reference water)
   // ── end PERF s25 hook ──
   const m = new ShaderMaterial({
     vertexShader: WVDIAG ? (f3 ? f3.vert : OCEAN_VERT).replace(TERRAIN_VERT_CORE, VDIAG_CORE) : f3 ? f3.vert : OCEAN_VERT, // (s25c hook: wvdiag)

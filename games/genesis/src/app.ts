@@ -20,6 +20,7 @@ import type { PlanetView } from './client/worldview.ts';
 import { qRotate, qRotateInv } from './client/orbits.ts';
 import { tangentBasis } from './sim/core/vec3.ts';
 import { Renderer } from './render/renderer.ts';
+import { bootTrace } from './render/boot.ts';
 import { newPose, copyPose, type CameraPose } from './render/frame.ts';
 import { capturePhoto } from './render/camera/photo.ts';
 import { CameraRig } from './render/camera/rig.ts';
@@ -273,7 +274,9 @@ export class App implements UiHost {
 
   async start(progress: (msg: string, frac: number, note?: string) => void): Promise<void> {
     progress('Lighting the star…', 0.06);
+    bootTrace.mark('app');
     this.renderer = new Renderer(this.canvas);
+    bootTrace.mark('renderer');
     const gl = this.renderer.three.getContext() as WebGL2RenderingContext;
     this.autoQuality = detectQuality(gl);
     this.quality = this.opts.quality === 'auto' ? (this.prefs.value.quality === 'auto' ? this.autoQuality : this.prefs.value.quality) : this.opts.quality;
@@ -286,6 +289,7 @@ export class App implements UiHost {
     this.sim.onFatal = (msg) => this.onFatal?.('the simulation stopped', msg);
     const boot = await this.bootWorld();
     await this.startSim(boot, progress);
+    bootTrace.mark('world');
     progress('Gathering the air…', 0.8);
     this.sim.setSpeed(this.opts.speed);
     void this.loadPowers();
@@ -372,11 +376,14 @@ export class App implements UiHost {
     }
     if (this.opts.cam) await this.applyCameraPreset(this.opts.cam);
     if (this.opts.hour != null) await this.setLocalHour(this.opts.hour);
+    bootTrace.mark('ui');
     progress('The first light…', 0.86);
     // warm-up frames: build the near terrain, the LUTs and the cloud noise before the boot card fades
-    for (let i = 0; i < 3; i++) this.frame(performance.now());
+    for (let i = 0; i < 3; i++) { this.frame(performance.now()); bootTrace.firstFrame(); }
+    bootTrace.mark('frames');
     // …and link every shader the scene holds, hidden effects included, before play (no first-use hitch; draws nothing)
     perfmon.warmed = await this.renderer.warmUp();
+    bootTrace.playable();
     this.startAt = performance.now();
     progress('', 1);
     this.running = true;

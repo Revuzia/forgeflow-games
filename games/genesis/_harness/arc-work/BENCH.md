@@ -32,7 +32,7 @@ shows the last finished run's text again (kept in this browser's local storage).
   spec: orbit over 18 N / 35 W, heading 0, the automatic tilt, distance = the boot distance (2.6 radii) x
   exp(0.0013 x (4 x -800 + 2 x 80)) — the hand protocol's "wheel 4 x 10 ticks in, 2 out" in the orbit camera's own
   zoom formula. The altitude it lands at is in the results (column `alt m`).
-- Then the settle time (30 s; a variant running with `tcache=1` gets 60 s so the cache fills), then the recording
+- Then the settle time (60 s so the terrain cache fills; 30 s for a variant with `tcache=0`), then the recording
   window (15 s). During the window the page runs its own requestAnimationFrame callback and takes the wall time
   between two callbacks as a frame interval (the numbers the summary uses: fps = frames counted / the time from the
   first callback to the end of the window, p50 and p95 of the intervals) and runs the perf report over the same
@@ -59,22 +59,22 @@ shows the last finished run's text again (kept in this browser's local storage).
 - a built-in name: `water`, `terrain`, `full`, `noise` (below);
 - `custom` with a typed list `&bv=<list>`: variants separated by `|`, each `label~params`; inside the parameters `;`
   stands for `&` and `:` for `=`, so nothing needs percent-encoding:
-  `?bench=custom&bv=N~|fast~wfast:3;wshade3:nossr|nowater~water:0`
+  `?bench=custom&bv=N~|old~tcache:0;wfast:0;deepbed:0|nossr~wshade3:nossr|nowater~water:0`
   (no `~`: the parameters are their own label; a bare word is a label for the unchanged game; percent-encoded `&` `=`
   work too; a parameter value that itself holds `:` `;` `|` `~` needs the JSON form). `bv=` after a built-in name
-  ADDS variants to it: `?bench=water&bv=P+seamold~scene:0;shadows:0;wfast:3;wshade3:seamold`;
+  ADDS variants to it: `?bench=water&bv=P+seamold~scene:0;shadows:0;wshade3:seamold`;
 - base64url of JSON (safe in any chat or mail): a list `[["label","a=1&b=2"], ...]` or an object
   `{"name":"round21","variants":[...],"reps":5,"settle":30,"rec":15,"base":"wclock=100"}`. Raw (percent-encoded) JSON
   works too. Make one with:
-  `node -e "import('./src/render/bench.ts').then(m=>console.log(m.encodePlan([['N',''],['fix','tcache=1&wfast=3']])))"`
+  `node -e "import('./src/render/bench.ts').then(m=>console.log(m.encodePlan([['N',''],['OLD','tcache=0&wfast=0&deepbed=0']])))"`
 - `last`: no run, the last finished run's text.
 
 Bench options (all optional):
 | parameter | default | meaning |
 |---|---|---|
 | `breps` | 3 | interleaved repeats of the whole list |
-| `bsettle` | 30 | seconds between the landing and the recording |
-| `bsettletc` | 60 (or 2 x `bsettle` when that is given) | the same for variants with `tcache=1` |
+| `bsettle` | 30 | seconds between the landing and the recording, for variants with `tcache=0` |
+| `bsettletc` | 60 (or 2 x `bsettle` when that is given) | the same for variants running the terrain cache (the default: every variant without `tcache=0`) |
 | `brec` | 15 | seconds recorded |
 | `bload` | 240 | seconds a world may take to load before the step is FAILED |
 | `bpreset` | ultra | the preset every step is forced to (`quality=` in the link means the same) |
@@ -86,18 +86,25 @@ Bench options (all optional):
 Anything else in the link is a base parameter for every step (`gltrace=0`, `wclock=100`, another `scenario=` / `seed=`).
 
 Examples
-- `<BASE>/index.html?bench=water` — 5 variants x 3 = 15 steps, about 18 min.
+- `<BASE>/index.html?bench=water` — 5 variants x 3 = 15 steps, about 24 min (60 s settles: the cache is on by default).
 - `<BASE>/index.html?bench=terrain` — 9 variants x 3 = 27 steps, about 45 min.
-- `<BASE>/index.html?bench=full&breps=5` — N against every fix, 5 pairs.
+- `<BASE>/index.html?bench=full&breps=5` — N (the game as shipped) against OLD (the three fixes off), 5 pairs.
 - `<BASE>/index.html?bench=noise` — the unchanged game twice per repeat: how far apart two runs of one build are now.
 - `<BASE>/index.html?bench=custom&bv=P~scene:0;shadows:0|ssrall~scene:0;shadows:0;wfast:3;wshade3:ssrall|mask~scene:0;shadows:0;wfast:3&breps=4`
 - quick trial of the machinery: `<BASE>/index.html?bench=noise&breps=1&bsettle=3&brec=3`
 
-## Built-in plans (P = `scene=0&shadows=0`, FIX = `tcache=1&wfast=3&deepbed=1`)
-- `water`: P · P+wfast3 (`wfast=3`) · P+wfast3+nossr (`wfast=3&wshade3=nossr`) · P+wfrag0 (`wfrag=0`) · P+water0 (`water=0`)
-- `terrain`: N · N+tcache (`tcache=1`) · FIX · FIX+water0 · FIX+shadows0 · FIX+msaa0 · FIX+hide (`hide=veg,cover,life`) ·
-  FIX+P · FIX+rscale.5 (`rscale=0.5`) — the frame bisect on top of the combined fix
-- `full`: N · FIX
+## Built-in plans (P = `scene=0&shadows=0`, OLD = `tcache=0&wfast=0&deepbed=0`)
+Since the release the three fixes are ON with no switch in the link: the terrain cache (`tcache`), the fast water
+(`wfast=3`) and the deep sea-bed skip (`deepbed`). So **N = the game as it ships = what earlier rounds called FIX**
+(`tcache=1&wfast=3&deepbed=1`), and **OLD = the three switched off = what earlier rounds called N**. Results of rounds
+up to 22 keep their old labels: read their "N" as today's OLD and their "FIX" as today's N. (One difference: a typed
+`tcache=1` takes the fixed 256 MB of tile arrays as those rounds did; with no switch the arrays follow the render
+pixels, the same 12 layers at the Mac's 1686x963 and less on smaller views.)
+- `water`: P (the default water, wfast=3) · P+OLD (the old water) · P+nossr (`wshade3=nossr`) · P+wfrag0 (`wfrag=0`) ·
+  P+water0 (`water=0`)
+- `terrain`: N · OLD · OLD+tcache (`tcache=1&wfast=0&deepbed=0`: the cache alone) · N+water0 · N+shadows0 · N+msaa0 ·
+  N+hide (`hide=veg,cover,life`) · N+P · N+rscale.5 (`rscale=0.5`) — the frame bisect on top of the shipped game
+- `full`: N · OLD
 - `noise`: N-a · N-b (identical)
 
 ## Limits
@@ -110,8 +117,8 @@ Examples
   dropped and the numbers kept.
 - The window size and device pixel ratio are NOT forced: earlier rounds forced 1686x963 at 1x by hand. Set the window
   the same way before opening the link; the results print the canvas line and warn when it changes mid-run.
-- The game clock runs during the settle time, so a 60 s settle (tcache variants) records about half a game minute
-  later than a 30 s one. For equal clocks give both: `bsettle=60&bsettletc=60`.
+- The game clock runs during the settle time, so a 60 s settle (every variant but `tcache=0` ones) records about half a
+  game minute later than a 30 s one. For equal clocks give both: `bsettle=60&bsettletc=60`.
 - The preset is forced by `quality=` in the step URL (what Settings sets, without touching the stored preference);
   the other graphics toggles of Settings stay as stored in that browser.
 - The perf report runs during the window as in the hand protocol (its GL call tracing included; `gltrace=0` and

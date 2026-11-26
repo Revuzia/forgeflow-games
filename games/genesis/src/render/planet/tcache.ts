@@ -1,4 +1,20 @@
-// GENESIS — PERF s22 / s26 `?tcache=1` (default OFF): the terrain MATERIAL CACHE — texture-space shading of the ground.
+// GENESIS — PERF s22 / s26 `tcache` (ON BY DEFAULT since the release; `?tcache=0` = the full shader everywhere, exactly
+// as before): the terrain MATERIAL CACHE — texture-space shading of the ground.
+//
+// DEFAULT-ON RULES (the release): every WebGL2 feature the cache uses is core (array textures, texStorage3D, MRT, flat
+// varyings, gl_VertexID) except the float render target of T1. What it does when something is missing — always the
+// full shader on every patch, i.e. the picture and the cost of `tcache=0`, never a black or missing ground:
+//   * no EXT_color_buffer_float / _half_float: the cache stays off (the 8-bit normal store of s22 would be a coarser
+//     normal than the live path's; only a typed `?tcache=1` still takes it);
+//   * the tile arrays cannot be allocated (GL error / incomplete framebuffer): half the layers are tried, down to 2,
+//     then the cache stays off;
+//   * MEMORY follows the render target's pixel count, not the preset: tiles are texels ~ pixels, so a view of N render
+//     megapixels wants ~81 MB x N (Mac round 22: want 132 MB at 1.62 MP, Ultra) — the arrays are sized 160 MB x N
+//     (the 2x that run had: slab rounding, tiles of patches just off screen), at least 2 layers (40 MB), at most
+//     `tcmb` (256 MB = the Mac's set-up). Low / Medium and small or mobile screens so take 40-120 MB instead of 243;
+//     a view that outgrows its arrays (window enlarged, preset raised) re-allocates them larger, and whatever does not
+//     fit a full cache draws with the full shader. A typed `?tcmb=` is taken as given.
+// The header's `tcache=` prints what runs: `1(243MB,12L)`, or `0(fallback: <reason>)`.
 //
 // The surface function (terrainmat.ts evalTerrain: ~40-125 simplex evaluations a fragment) is evaluated ONCE per texel
 // into per-patch tiles, and again only when its inputs change; the per-frame terrain fragment then takes 3 texture
@@ -30,14 +46,19 @@ import {
   Vector3, Vector4, WebGLRenderTarget, NearestFilter,
   type BatchedMesh, type Camera, type IUniform, type Material, type Matrix3, type Texture, type WebGLRenderer,
 } from 'three';
-import { perfNum, perfSwitch, perfSwitchNote } from '../perfswitch.ts';
+import { perfGiven, perfNum, perfSwitch, perfSwitchNote } from '../perfswitch.ts';
 import { texUpload } from '../uploadsched.ts';
 import { NPTS, NVERT, PATCH_RES } from './patchbuild.ts';
 import type { ChunkLOD, Patch } from './chunks.ts';
 
-export const TCACHE = perfSwitch('tcache', false);
-/** memory cap (MB) for the tiles + the bake scratch; `?tcmb=` */
+export const TCACHE = perfSwitch('tcache', true);
+/** `?tcache=1` typed: the cache as s22-s27 ran it (8-bit normals where no float target exists); absent = automatic */
+const TC_FORCED = TCACHE && perfGiven('tcache', '1');
+/** memory cap (MB) for the tiles; `?tcmb=` (typed: exactly that much; absent: by the render pixels, at most 256) */
 const TC_MB = TCACHE ? perfNum('tcmb', 256)! : 256;
+const TC_MB_AUTO = !(TCACHE && perfGiven('tcmb'));
+/** MB of tile arrays per render megapixel (automatic size): 2x the ~81 MB / MP the landing view asked for on the Mac */
+const TC_MB_PER_MP = 160;
 /**
  * texels evaluated per frame at most; `?tcbudget=`. A texel costs about one full-shader terrain pixel on the GPU
  * (~0.2 us on the M5 by the round-14 numbers: 64 k texels ~ 13 ms), so this caps the bake's GPU time a frame
@@ -309,6 +330,17 @@ export class TerrainCache {
   private readonly tex: DataArrayTexture[] = [];
   private glTex: WebGLTexture[] = [];
   private layers = 0;
+  /** the cache could not be set up on this context: every patch keeps the full shader (see ensureGL) */
+  private dead = false;
+  /** the view's render pixels (the automatic size), MB a layer, the context's layer limit, the largest size GL gave */
+  private pix = 0;
+  private layerMB = TC_SL * TC_SL * BPT / 1048576;
+  private maxLayers = 2048;
+  private allocCeil = 1e9;
+  /** the view outgrew the arrays: every tile is given back (update), then the arrays are made larger (bake) */
+  private regrow = false;
+  /** the last update's `primary` (only the primary planet's cache holds arrays: see idle) */
+  private primaryNow = false;
   private slabs: Slab[] = [];
   private tiles = new Map<Patch, Tile>();
   private queue: Patch[] = [];
@@ -353,57 +385,123 @@ export class TerrainCache {
     this.scene.add(this.mesh);
   }
 
-  /** the GL side, made at the first bake: three array textures with MIPS levels, the scratch targets, two framebuffers */
-  private ensureGL(r: WebGLRenderer): boolean {
-    if (this.glTex.length) return true;
+  /** the layers the view's pixel count asks for (automatic), or the typed / forced size; never over the cap */
+  private wantLayers(): number {
+    const cap = Math.min(this.allocCeil, Math.max(1, Math.min(this.maxLayers, Math.floor(TC_MB / this.layerMB))));
+    if (!TC_MB_AUTO || TC_FORCED || !(this.pix > 0)) return cap;
+    return Math.min(cap, Math.max(2, Math.ceil(this.pix * 1e-6 * TC_MB_PER_MP / this.layerMB)));
+  }
+
+  /** the cache cannot run here: every patch keeps the full shader (the picture and cost of `tcache=0`) */
+  private fail(why: string): false {
+    this.dead = true;
+    this.stats.on = false; this.stats.layers = 0; this.stats.mb = 0;
+    perfSwitchNote('tcache', `0(fallback: ${why})`);
+    console.warn(`[genesis] terrain cache off (${why}): the full terrain shader is used`);
+    return false;
+  }
+
+  /** the three tile arrays with `layers` layers and a framebuffer per layer; null (nothing left behind) if GL refuses */
+  private allocGL(r: WebGLRenderer, layers: number, float: boolean): { tex: WebGLTexture[]; fb: WebGLFramebuffer[] } | null {
     const gl = r.getContext() as WebGL2RenderingContext;
-    const float = r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
-    this.stats.float = float;
-    const bpt = 4 + (float ? 8 : 4) + 4;
-    const scratchMB = 0;
-    const layerMB = TC_SL * TC_SL * bpt / 1048576;
-    const maxLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
-    this.layers = Math.max(1, Math.min(maxLayers, Math.floor((TC_MB - scratchMB) / layerMB)));
-    this.stats.layers = this.layers;
-    this.stats.mb = Math.round((this.layers * layerMB + scratchMB) * 10) / 10;
+    // (errors raised before this call are not this allocation's)
+    for (let i = 0; i < 8 && gl.getError() !== gl.NO_ERROR; i++) { /* drain */ }
     const fmts = [gl.SRGB8_ALPHA8, float ? gl.RGBA16F : gl.RGBA8, gl.RGBA8];
-    for (let i = 0; i < 3; i++) {
-      const t = gl.createTexture()!;
+    const tex: WebGLTexture[] = [], fbs: WebGLFramebuffer[] = [];
+    let ok = true;
+    for (let i = 0; i < 3 && ok; i++) {
+      const t = gl.createTexture();
+      if (!t) { ok = false; break; }
+      tex.push(t);
       r.state.bindTexture(gl.TEXTURE_2D_ARRAY, t);
-      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, MIPS, fmts[i], TC_SL, TC_SL, this.layers);
+      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, MIPS, fmts[i], TC_SL, TC_SL, layers);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, MIPS - 1);
       r.state.unbindTexture();
-      this.glTex.push(t);
+    }
+    // the bake draws straight into the tile's layer: its half only (the partner half is never touched), no scratch, no
+    // blits (s26b: the uploads slot was 55 ms mean on the Mac with a draw + 3-6 blits + re-attachments a bake)
+    for (let l = 0; l < layers && ok; l++) {
+      const fb = gl.createFramebuffer();
+      if (!fb) { ok = false; break; }
+      fbs.push(fb);
+      r.state.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      for (let i = 0; i < 3; i++) gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, tex[i], 0, l);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+      // (one status query: the layers are alike)
+      if (l === 0 && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) ok = false;
+      r.state.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+    if (ok && gl.getError() !== gl.NO_ERROR) ok = false;
+    if (ok) return { tex, fb: fbs };
+    for (const t of tex) gl.deleteTexture(t);
+    for (const f of fbs) gl.deleteFramebuffer(f);
+    return null;
+  }
+
+  /** the GL side given back (a re-allocation, the end): the tile arrays, the per-layer framebuffers and their targets */
+  private freeGL(r?: WebGLRenderer): void {
+    const gl = r?.getContext() as WebGL2RenderingContext | undefined;
+    if (r) for (let i = 0; i < this.tex.length; i++) {
+      const props = r.properties.get(this.tex[i]) as { __webglTexture?: WebGLTexture; __webglInit?: boolean };
+      if (props.__webglTexture && this.glTex.includes(props.__webglTexture)) { props.__webglTexture = undefined; props.__webglInit = false; }
+    }
+    if (gl) { for (const t of this.glTex) gl.deleteTexture(t); for (const fb of this.layerFb) gl.deleteFramebuffer(fb); }
+    this.glTex = [];
+    this.layerFb = []; this.layerRT = [];
+    this.slabs = [];
+    this.layers = 0;
+  }
+
+  /**
+   * the GL side, made at the first bake: three array textures with MIPS levels and a framebuffer per layer. `false`:
+   * the cache cannot run on this context (see the DEFAULT-ON RULES at the top) and stays off for good.
+   */
+  private ensureGL(r: WebGLRenderer): boolean {
+    if (this.dead) return false;
+    if (this.glTex.length) return true;
+    const gl = r.getContext() as WebGL2RenderingContext;
+    if (typeof gl.texStorage3D !== 'function' || typeof gl.framebufferTextureLayer !== 'function') return this.fail('no WebGL2 array textures');
+    const float = r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
+    this.stats.float = float;
+    // (the 8-bit store is a coarser normal than the live path's: only a typed ?tcache=1 takes it)
+    if (!float && !TC_FORCED) return this.fail('no float render targets');
+    const bpt = 4 + (float ? 8 : 4) + 4;
+    this.layerMB = TC_SL * TC_SL * bpt / 1048576;
+    this.maxLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
+    if ((gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) < TC_SL || (gl.getParameter(gl.MAX_DRAW_BUFFERS) as number) < 3) return this.fail('texture limits');
+    let layers = this.wantLayers();
+    let got = this.allocGL(r, layers, float);
+    // (out of memory: half as many, down to 2; a size that failed is not asked for again)
+    while (!got && layers > 2) { this.allocCeil = layers = Math.max(2, layers >> 1); got = this.allocGL(r, layers, float); }
+    if (!got) return this.fail('tile arrays not allocated');
+    this.layers = layers;
+    this.stats.layers = layers;
+    this.stats.mb = Math.round(layers * this.layerMB * 10) / 10;
+    this.glTex = got.tex;
+    for (let i = 0; i < 3; i++) {
       // (three binds this GL texture for the sampler: version 0 = it never uploads)
       const props = r.properties.get(this.tex[i]) as { __webglTexture?: WebGLTexture; __webglInit?: boolean };
-      props.__webglTexture = t;
+      props.__webglTexture = got.tex[i];
       props.__webglInit = true;
     }
     // 8-bit D (no float render targets): [-2, 2] in a byte
     const k = this.shared.uTcK.value as Vector4;
     const bk = (this.bakeMat.userData.uTcBakeK as IUniform<Vector4>).value;
     if (float) { k.y = 1; k.z = 0; bk.set(1, 0, 0, 0); } else { k.y = 4; k.z = -2; bk.set(0.25, 0.5, 0, 0); console.warn('[genesis] tcache: no float render targets, 8-bit normals'); }
-    for (let l = 0; l < this.layers; l++) for (let y = 0; y < TC_SL; y += SLAB) for (let x = 0; x < TC_SL; x += SLAB) this.slabs.push({ layer: l, x, y, cls: -1, free: [], used: 0, owner: [], head: null });
-    // the bake draws straight into the tile's layer: its half only (the partner half is never touched), no scratch, no
-    // blits (s26b: the uploads slot was 55 ms mean on the Mac with a draw + 3-6 blits + re-attachments a bake)
-    for (let l = 0; l < this.layers; l++) {
-      const fb = gl.createFramebuffer()!;
-      r.state.bindFramebuffer(gl.FRAMEBUFFER, fb);
-      for (let i = 0; i < 3; i++) gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, this.glTex[i], 0, l);
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
-      r.state.bindFramebuffer(gl.FRAMEBUFFER, null);
+    for (let l = 0; l < layers; l++) for (let y = 0; y < TC_SL; y += SLAB) for (let x = 0; x < TC_SL; x += SLAB) this.slabs.push({ layer: l, x, y, cls: -1, free: [], used: 0, owner: [], head: null });
+    for (let l = 0; l < layers; l++) {
       const rt = new WebGLRenderTarget(TC_SL, TC_SL, { depthBuffer: false, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
       rt.texture.colorSpace = SRGBColorSpace;
       rt.scissorTest = true;
       // (three r186 has it; its typings do not)
-      (r as unknown as { setRenderTargetFramebuffer: (t: WebGLRenderTarget, f: WebGLFramebuffer) => void }).setRenderTargetFramebuffer(rt, fb);
-      this.layerFb.push(fb); this.layerRT.push(rt);
+      (r as unknown as { setRenderTargetFramebuffer: (t: WebGLRenderTarget, f: WebGLFramebuffer) => void }).setRenderTargetFramebuffer(rt, got.fb[l]);
+      this.layerFb.push(got.fb[l]); this.layerRT.push(rt);
     }
-    perfSwitchNote('tcache', `1(${this.stats.mb}MB,${this.layers}L${float ? '' : ',d8'})`);
+    perfSwitchNote('tcache', `1(${this.stats.mb}MB,${layers}L${float ? '' : ',d8'})`);
     return true;
   }
 
@@ -565,6 +663,12 @@ export class TerrainCache {
   update(camBody: Vector3, pxPerRad: number, frame: number, sunBody: Vector3, yearFrac: number, primary = true, halfH = 0, halfW = 0): void {
     const st = this.stats, u = this.shared;
     this.frame = frame; this.pxPerRad = pxPerRad; this.cam.copy(camBody);
+    // the automatic size follows the primary view's render pixels; larger than the arrays in hand: every tile back to
+    // the full shader this frame (the slot tables below), the larger arrays at this frame's bake
+    this.primaryNow = primary;
+    if (primary && halfH > 0 && halfW > 0) this.pix = 4 * halfH * halfW;
+    if (this.glTex.length && !this.dead && !this.regrow && this.wantLayers() > this.layers) this.regrow = true;
+    if (this.regrow) for (const t of this.tiles.values()) if (t.slab) { if (t.baked) st.why.evict++; this.release(t); }
     { const now = performance.now(); if (this.lastT) this.frameMs = 0.8 * this.frameMs + 0.2 * Math.min(2000, now - this.lastT); this.lastT = now; }
     // the view direction in the body frame (row 2 of body -> view, negated)
     const m = (u.uBodyToView.value as Matrix3).elements;
@@ -657,7 +761,7 @@ export class TerrainCache {
       t.area = vis ? Math.min(4 * f2, t.areaW * cEff * f2 * inv2 / 15) : t.areaW * cEff * f2 / Math.max(dc0 * dc0, 0.25) / 15;
       pixAll += t.area;
       if (t.hotEpoch !== this.fieldEpoch) { t.hotEpoch = this.fieldEpoch; t.hot = this.isHot(p); }
-      let valid = this.enabled && primary && t.baked && !t.dirty && !t.hot && !nearLive && t.gkey === gkey;
+      let valid = this.enabled && !this.dead && primary && t.baked && !t.dirty && !t.hot && !nearLive && t.gkey === gkey;
       const moved = valid ? t.cam.distanceTo(camBody) / dn : 0;
       const usable = t.cls >= 0 ? CLASSES[t.cls] - PAD : 0;
       // moved far (the distance fades, the footprint): the full shader until re-baked
@@ -687,7 +791,7 @@ export class TerrainCache {
         d[o] = l; d[o + 1] = ox; d[o + 2] = oy; d[o + 3] = sz; d[o + 4] = t.cam.x; d[o + 5] = t.cam.y; d[o + 6] = t.cam.z; d[o + 7] = hf;
         texUpload(tab);
       }
-      if (!this.enabled || !primary) continue;
+      if (!this.enabled || this.dead || !primary) continue;
       if (t.hot) { st.hot++; continue; }
       if (nearLive) { st.near++; continue; }
       if (need * TC_DENS > CLASSES[CLASSES.length - 1] - PAD) { st.near++; if (!valid && t.slab) this.release(t); continue; }
@@ -725,9 +829,11 @@ export class TerrainCache {
   bake(r: WebGLRenderer, camera: Camera): void {
     const st = this.stats;
     st.bakes = 0; st.texels = 0; st.full = 0;
-    if (!this.enabled || !this.queue.length) { st.bakeMs = 0; return; }
+    if (!this.enabled || this.dead || !this.queue.length) { st.bakeMs = 0; return; }
     const t0 = performance.now();
-    this.ensureGL(r);
+    // (update gave every tile back this frame: nothing drawn reads the arrays that go)
+    if (this.regrow) { this.regrow = false; for (const rt of this.layerRT) rt.dispose(); this.freeGL(r); }
+    if (!this.ensureGL(r)) { st.bakeMs = 0; return; }
     const q = this.queue;
     // the bake program compiles off the main thread first (KHR_parallel_shader_compile; a synchronous first compile
     // was the 3.5 s main-thread bake on the Mac)
@@ -822,13 +928,22 @@ export class TerrainCache {
     if (st.bakes) { st.bakeMsPer = st.bakeMsPer ? st.bakeMsPer * 0.9 + 0.1 * ms / st.bakes : ms / st.bakes; st.bakeMsMax = Math.max(st.bakeMsMax, ms); }
   }
 
+  /**
+   * Renderer, once a frame for every planet that is NOT the primary one: a cache whose planet stopped being the
+   * primary gives its arrays back (its update already put every drawn patch on the full shader), so a system of
+   * several worlds holds one set of arrays, not one per world visited. They are made again when it is primary again.
+   */
+  idle(r: WebGLRenderer): void {
+    if (!this.glTex.length || this.primaryNow) return;
+    for (const t of this.tiles.values()) if (t.slab) this.release(t);
+    for (const rt of this.layerRT) rt.dispose();
+    this.freeGL(r);
+    this.regrow = false;
+  }
+
   dispose(r?: WebGLRenderer): void {
-    const gl = r?.getContext() as WebGL2RenderingContext | undefined;
-    if (gl) { for (const t of this.glTex) gl.deleteTexture(t); for (const fb of this.layerFb) gl.deleteFramebuffer(fb); }
-    this.glTex = [];
-    this.layerFb = []; this.layerRT = [];
+    this.freeGL(r);
     this.tiles.clear();
-    this.slabs = [];
     const g = globalThis as unknown as { __TCACHE__?: TerrainCache };
     if (g.__TCACHE__ === this) delete g.__TCACHE__;
   }

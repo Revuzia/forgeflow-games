@@ -31,9 +31,9 @@ import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS, WSPILL } from './terrainvert.glsl
 import { GROUND_FRAG_PARS, GROUND_UNIFORMS, GROUND_VERT_MAIN, GROUND_VERT_PARS } from './groundfloor.ts';
 import { orthoDepth } from '../shaders/zcons.ts';
 import { TNOISE, TNOISE_GLSL, TNOISE_UNIFORMS } from './noisetex.ts';
-import { perfNum, perfSwitch } from '../perfswitch.ts';
+import { perfNumEff, perfSwitch, perfSwitchNote } from '../perfswitch.ts';
 /**
- * PERF s23 `?deepbed=1` (default off): ground the water above it hides completely is not shaded. The water pass
+ * PERF s23 `deepbed=1` (THE DEFAULT since the release; `?deepbed=0` = every bed fragment shaded, as before): ground the water above it hides completely is not shaded. The water pass
  * (ocean.ts) shows the opaque scene under it as refr * Tw, Tw = exp(-(sigmaA + sigmaS) * 1.25 * path), and its
  * smallest extinction (blue, open warm salt sea, no silt / coast / river terms) is (0.11 + 0.05) * 1.25 = 0.2 / m.
  * The path from a bed point to the surface toward the eye is uw / cos(angle to the vertical) exactly (the straight ray
@@ -44,8 +44,10 @@ import { perfNum, perfSwitch } from '../perfswitch.ts';
  * screen's terrain fragments, which the water drawn in a LATER pass cannot hide from the GPU.
  */
 // (`?deepbed=2` debug: the skipped fragments painted magenta, also with `?water=0`, to count them)
-const DEEPBED_N = perfNum('deepbed', 0)!;
+const DEEPBED_N = perfNumEff('deepbed', 1);
 const DEEPBED = DEEPBED_N === 2 || (DEEPBED_N === 1 && perfSwitch('water'));
+// (the header prints what runs: without the water pass nothing hides the bed, so the skip is off)
+if (DEEPBED_N === 1 && !DEEPBED) perfSwitchNote('deepbed', '0(water=0)');
 const DEEPBED_GLSL = /* glsl */ `
 #if !defined(TC_BAKE)
   {

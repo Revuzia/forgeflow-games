@@ -294,6 +294,11 @@ export class PlanetVisual {
     this.tcache?.bake(renderer, camera);
   }
 
+  /** a planet that is not the primary one holds no tile arrays (Renderer, each frame; tcache.ts idle) */
+  idleTerrainCache(renderer: WebGLRenderer): void {
+    this.tcache?.idle(renderer);
+  }
+
   /** fire, smoke and embers over the composited image (Renderer, after the atmosphere): see render/fx/particles.ts */
   renderFx(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget | null, depth: Texture, w: number, h: number): void {
     this.life.renderFx(renderer, scene, camera, target, depth, w, h);

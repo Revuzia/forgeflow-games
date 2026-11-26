@@ -3,19 +3,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BENCH_PLANS, BENCH_WHEEL, aggregate, benchWarnings, decodePlan, encodePlan, encodeVariantList, estimateSeconds, frameStats, landingDist, median,
+  BENCH_OLD, BENCH_PLANS, BENCH_WHEEL, aggregate, benchWarnings, decodePlan, encodePlan, encodeVariantList, estimateSeconds, frameStats, landingDist, median,
   parseBench, parseReport, parseVariantList, resultsText, settleFor, stepOrder, stepSearch, tcstatOf, usesTcache, type BenchResult, type BenchRun,
 } from '../src/render/bench.ts';
 import { PerfRecorder } from '../src/render/perfreport.ts';
 
 test('built-in plans: water, terrain, full hold the open questions', () => {
   const P = 'scene=0&shadows=0';
-  assert.deepEqual(BENCH_PLANS.water.map((v) => v.params), [P, `${P}&wfast=3`, `${P}&wfast=3&wshade3=nossr`, `${P}&wfrag=0`, `${P}&water=0`]);
+  // N = the game as it ships (the three fixes on by default); OLD = them switched off
+  const OLD = 'tcache=0&wfast=0&deepbed=0';
+  assert.equal(BENCH_OLD, OLD);
+  assert.deepEqual(BENCH_PLANS.water.map((v) => v.params), [P, `${P}&${OLD}`, `${P}&wshade3=nossr`, `${P}&wfrag=0`, `${P}&water=0`]);
   const T = BENCH_PLANS.terrain.map((v) => v.params);
-  const FIX = 'tcache=1&wfast=3&deepbed=1';
-  assert.deepEqual(T.slice(0, 3), ['', 'tcache=1', FIX]);
-  for (const cut of ['water=0', 'shadows=0', 'msaa=0', 'hide=veg,cover,life', 'scene=0&shadows=0', 'rscale=0.5']) assert.ok(T.includes(`${FIX}&${cut}`), cut);
-  assert.deepEqual(BENCH_PLANS.full.map((v) => v.params), ['', FIX]);
+  assert.deepEqual(T.slice(0, 3), ['', OLD, 'tcache=1&wfast=0&deepbed=0']);
+  assert.deepEqual(BENCH_PLANS.terrain.slice(0, 2).map((v) => v.label), ['N', 'OLD']);
+  for (const cut of ['water=0', 'shadows=0', 'msaa=0', 'hide=veg,cover,life', 'scene=0&shadows=0', 'rscale=0.5']) assert.ok(T.includes(cut), cut);
+  assert.deepEqual(BENCH_PLANS.full.map((v) => v.params), ['', OLD]);
+  assert.deepEqual(BENCH_PLANS.full.map((v) => v.label), ['N', 'OLD']);
   // labels are unique inside a plan (the summary is keyed by them)
   for (const [name, vs] of Object.entries(BENCH_PLANS)) assert.equal(new Set(vs.map((v) => v.label)).size, vs.length, name);
 });
@@ -112,13 +116,17 @@ test('stepSearch: the variant over the base, the preset, the bookkeeping', () =>
 
 test('tcache variants settle longer; the estimate adds up', () => {
   const plan = parseBench('?bench=terrain');
-  assert.equal(usesTcache(plan.base, plan.variants[0]), false);
-  assert.equal(usesTcache(plan.base, plan.variants[1]), true);
+  // (the cache is on by default: only tcache=0 runs without it)
+  assert.equal(usesTcache(plan.base, plan.variants[0]), true);
+  assert.equal(usesTcache(plan.base, plan.variants[1]), false);
+  assert.equal(usesTcache(plan.base, plan.variants[2]), true);
+  assert.equal(usesTcache('', { label: 'N', params: '' }), true);
   assert.equal(usesTcache('tcache=1', { label: 'N', params: '' }), true);
   assert.equal(usesTcache('tcache=1', { label: 'off', params: 'tcache=0' }), false);
-  assert.equal(settleFor(plan, plan.variants[0]), 30);
-  assert.equal(settleFor(plan, plan.variants[2]), 60);
-  // 9 variants x 3: N settles 30 s, the other eight 60 s; + 15 s recorded, 25 s load, 2 s between
+  assert.equal(usesTcache('tcache=0', { label: 'N', params: '' }), false);
+  assert.equal(settleFor(plan, plan.variants[0]), 60);
+  assert.equal(settleFor(plan, plan.variants[1]), 30);
+  // 9 variants x 3: OLD settles 30 s, the other eight 60 s; + 15 s recorded, 25 s load, 2 s between
   assert.equal(estimateSeconds(plan, stepOrder(9, 3)), 3 * ((30 + 42) + 8 * (60 + 42)));
   assert.equal(estimateSeconds(plan, stepOrder(9, 3), 26, 10), 60 + 27);
 });

@@ -34,6 +34,21 @@ export function perfNum(name: string, def: number | null = null): number | null 
   REG.set(name, v != null ? String(v) : 'def');
   return v ?? def;
 }
+/**
+ * a numeric switch whose DEFAULT is a fix that is on (`?wfast=`, `?deepbed=`): the value given, or `def`; unlike
+ * perfNum the header prints the EFFECTIVE number (`wfast=3` with no switch in the URL), so a report labels itself
+ */
+export function perfNumEff(name: string, def: number): number {
+  const q = query().get(name);
+  const v = q != null && q !== '' && Number.isFinite(Number(q)) ? Number(q) : def;
+  REG.set(name, String(v));
+  return v;
+}
+/** was the switch typed in the URL (with `value`: as exactly that)? `?tcache=1` typed = forced on; absent = the automatic default */
+export function perfGiven(name: string, value?: string): boolean {
+  const q = query().get(name);
+  return value != null ? q === value : q != null && q !== '';
+}
 /** (bisection) a comma list (`?hide=veg,cover`): the set of names; the header prints it, or 'none' */
 export function perfList(name: string): Set<string> {
   const q = query().get(name);

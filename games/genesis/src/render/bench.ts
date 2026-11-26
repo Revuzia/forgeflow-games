@@ -19,7 +19,7 @@ export interface BenchOpts {
   reps: number;
   /** seconds between the landing and the recording */
   settle: number;
-  /** the same for variants with tcache=1 (the cache has to fill) */
+  /** the same for variants running the terrain cache (the default; not with tcache=0): the cache has to fill */
   settleTc: number;
   /** seconds recorded */
   rec: number;
@@ -102,34 +102,40 @@ export function landingDist(radius: number, wheel = BENCH_WHEEL): number {
 }
 
 const P = 'scene=0&shadows=0';
-const FIX = 'tcache=1&wfast=3&deepbed=1';
+/** the game as it ran before the release turned the three fixes on (terrain cache, the fast water, the deep-bed skip) */
+export const BENCH_OLD = 'tcache=0&wfast=0&deepbed=0';
+const OLD = BENCH_OLD;
 
-/** the built-in plans: the open questions of the current rounds (PERF.md's newest lead notes) */
+/**
+ * the built-in plans: the open questions of the current rounds (PERF.md's newest lead notes). N = the game as it
+ * ships (no switch: tcache on, wfast=3, deepbed on); OLD = the three fixes switched off.
+ */
 export const BENCH_PLANS: Record<string, BenchVariant[]> = {
-  // water alone (P = no scene pass, no shadows): the fast water, its SSR, the fragment's ceiling, no water at all
+  // water alone (P = no scene pass, no shadows; the default water is wfast=3): the old water, the SSR, the fragment's
+  // ceiling, no water at all
   water: [
     { label: 'P', params: P },
-    { label: 'P+wfast3', params: `${P}&wfast=3` },
-    { label: 'P+wfast3+nossr', params: `${P}&wfast=3&wshade3=nossr` },
+    { label: 'P+OLD', params: `${P}&${OLD}` },
+    { label: 'P+nossr', params: `${P}&wshade3=nossr` },
     { label: 'P+wfrag0', params: `${P}&wfrag=0` },
     { label: 'P+water0', params: `${P}&water=0` },
   ],
-  // the full game: the terrain cache, the combined fix, and what is left of the frame under it (one cut each)
+  // the full game: as shipped, the fixes off, the cache alone, and what is left of the frame (one cut each)
   terrain: [
     { label: 'N', params: '' },
-    { label: 'N+tcache', params: 'tcache=1' },
-    { label: 'FIX', params: FIX },
-    { label: 'FIX+water0', params: `${FIX}&water=0` },
-    { label: 'FIX+shadows0', params: `${FIX}&shadows=0` },
-    { label: 'FIX+msaa0', params: `${FIX}&msaa=0` },
-    { label: 'FIX+hide', params: `${FIX}&hide=veg,cover,life` },
-    { label: 'FIX+P', params: `${FIX}&${P}` },
-    { label: 'FIX+rscale.5', params: `${FIX}&rscale=0.5` },
+    { label: 'OLD', params: OLD },
+    { label: 'OLD+tcache', params: 'tcache=1&wfast=0&deepbed=0' },
+    { label: 'N+water0', params: 'water=0' },
+    { label: 'N+shadows0', params: 'shadows=0' },
+    { label: 'N+msaa0', params: 'msaa=0' },
+    { label: 'N+hide', params: 'hide=veg,cover,life' },
+    { label: 'N+P', params: P },
+    { label: 'N+rscale.5', params: 'rscale=0.5' },
   ],
-  // the full game as shipped against every fix
+  // the full game as shipped against the fixes off
   full: [
     { label: 'N', params: '' },
-    { label: 'FIX', params: FIX },
+    { label: 'OLD', params: OLD },
   ],
   // the same thing twice: how far apart two runs of ONE build are on this machine right now
   noise: [
@@ -277,7 +283,7 @@ export function parseBench(search: string): BenchPlan {
 
   const settleGiven = p.has('bsettle') || json?.settle != null;
   const settle = num('bsettle', json?.settle ?? BENCH_DEFAULTS.settle, 0, 3600);
-  // (tcache variants: twice the settle time, 60 s by default, unless bsettletc says otherwise)
+  // (variants running the terrain cache — all but tcache=0: twice the settle time, 60 s by default, unless bsettletc says otherwise)
   const settleTc = num('bsettletc', json?.settleTc ?? (settleGiven ? 2 * settle : BENCH_DEFAULTS.settleTc), 0, 3600);
   const base = new URLSearchParams(search);
   for (const k of BENCH_KEYS) base.delete(k);
@@ -311,11 +317,11 @@ export function stepOrder(nVariants: number, reps: number, mode: 'seq' | 'rot' =
   return out;
 }
 
-/** does a variant (over the base) run with the terrain cache on? (the longer settle time) */
+/** does a variant (over the base) run with the terrain cache on — the default, unless `tcache=0`? (the longer settle time) */
 export function usesTcache(base: string, v: BenchVariant): boolean {
   const q = new URLSearchParams(base);
   for (const [k, val] of new URLSearchParams(v.params)) q.set(k, val);
-  return q.get('tcache') === '1';
+  return q.get('tcache') !== '0';
 }
 
 /** a step's settle time (s) */

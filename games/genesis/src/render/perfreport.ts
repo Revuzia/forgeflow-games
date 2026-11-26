@@ -15,6 +15,7 @@ import { revzReport } from './shaders/revz.ts';
 import { gpuMem } from './gpumem.ts';
 import { BOOT_PROBES, GPU_PROBE, probeLine, type ProbeResult } from './gpuprobe.ts';
 import { FREEZE, freezeLine } from './freeze.ts';
+import { bootTrace } from './boot.ts';
 
 // ROADMAP-60FPS step 1: `?gputimer=0` records without the EXT_disjoint_timer_query TIME_ELAPSED queries (on ANGLE-Metal
 // they are summed command-buffer spans, and may themselves cost: the A/B says how much)
@@ -507,6 +508,8 @@ export class PerfRecorder {
     if (env) L.push(`gpu: ${env.gpu} | preset ${env.preset} | canvas ${env.canvas} | dpr ${env.dpr}${env.extra ? ' | ' + env.extra : ''}`);
     L.push(`perf fixes (A/B switches, effective): ${perfSwitchLine() || 'none'}`);
     for (const l of revzReport()) L.push(l);
+    // (LOADTIME) the start-up: marks, program links, synchronous waits (boot.ts)
+    try { L.push(...bootTrace.lines()); } catch { /* untraced */ }
     {
       const pm = (globalThis.performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
       const dm = typeof navigator !== 'undefined' ? (navigator as unknown as { deviceMemory?: number }).deviceMemory : undefined;

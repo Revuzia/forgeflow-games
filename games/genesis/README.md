@@ -62,6 +62,16 @@ node --test tests/ui-meta.test.ts      # one suite
 URL parameters: `?scenario=barren|twoworlds|twoworlds-late|system|sandbox`, `?seed=<n>`, `?mod=<address of a JSON
 pack>`, `?quality=low|medium|high|ultra|cinematic`.
 
+Speed fixes that are ON by default, each with a switch back to the earlier renderer (same picture, earlier cost;
+`src/render/perfswitch.ts`, and the perf report's "perf fixes" line prints the values in effect):
+- `?tcache=0`: no terrain material cache, the full ground shader on every pixel. (Default: on, on every preset. Its
+  tile arrays follow the render pixels, 40 to 256 MB, `?tcmb=<MB>` fixes the size. Where the GPU has no float render
+  targets or cannot allocate the arrays it switches itself off and the line reads `tcache=0(fallback: ...)`.)
+- `?wfast=0`: the reference water shader (default `wfast=3`, the restructured water; `1` and `2` are older variants).
+- `?deepbed=0`: sea bed under deep water is shaded although the water hides it (default `1`: skipped).
+- All three off, the game as it ran before: `?tcache=0&wfast=0&deepbed=0` (the bench's `OLD` variant,
+  `_harness/arc-work/BENCH.md`).
+
 ## Publishing
 
 The site reads `public/game_meta.json` (title, descriptions, controls, genre) and `public/thumbnail.png` (the cover,
