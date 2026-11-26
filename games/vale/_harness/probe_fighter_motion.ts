@@ -13,7 +13,7 @@
 //            renderer's walkPhase): gate |run - walk| <= 0.03 of a cycle
 //   pop      a ramp 0.85 -> 0.25 -> 0.85 x runRef over 3 s at 60 Hz (the renderer's eased weight): the largest jump in the
 //            hips' and feet's frame-to-frame velocity, against the steady gaits' (run at 0.85, walk at walkFull x runRef): gate <= 1.25 x
-//   run      (ruling 72) a body with no walk: its run at speed / runRef (the renderer's floor, per fighter) at 0.3-1.5 x runRef,
+//   run      (ruling 72) a body with no walk: its run at speed / runRef (the renderer's floor, per fighter) at 0.15-1.5 x runRef,
 //            the planted ankle's and toe's median world speed over the stance samples; gate <= 10 % on Ervet and Rishal (whose
 //            run contact was re-authored), informational on Hesmi and Burdam
 //   cc       the dominant CC order (contracts/sim.ts ccKindOf): stun over root, airborne over stun, the longer of a tie
@@ -27,7 +27,7 @@ import { dirname, join } from 'node:path';
 const NO_WALK = new Set(['hesmi', 'burdam', 'ervet', 'rishal']);
 /** ruling 72: the no-walk bodies whose run contact was re-authored: their slowed / hasted run is gated (<= 10 % at RUN_KS) */
 const RUN_GATED = new Set(['ervet', 'rishal']);
-const RUN_KS = [0.3, 0.4, 0.55, 0.72, 1, 1.3, 1.5];
+const RUN_KS = [0.15, 0.2, 0.3, 0.4, 0.55, 0.72, 1, 1.3, 1.5];   // 0.15: the sim's slowest move (MIN_MOVE_SPEED 0.5 m/s), fix round 1
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { type AnimationClip, AnimationMixer, type Object3D, PropertyBinding, Vector3 } from 'three';
@@ -106,7 +106,7 @@ for (const f of fighters) {
       act.play();
       const out: Record<string, string> = {};
       for (const k of RUN_KS) {
-        const speed = k * ref, rate = Math.max(floor, Math.min(LOCO.maxRate, k)), F = 240;
+        const speed = k * ref, rate = Math.max(floor, Math.min(LOCO.maxRate, k)), F = Math.max(240, Math.ceil(3 * run.duration / rate * 60));   // >= 3 cycles
         const tr: Vector3[][] = nodes.map(() => []);
         for (let i = 0; i < F; i++) {
           act.time = ((i / 60) * rate) % run.duration; mixer.update(0); scene.updateMatrixWorld(true);

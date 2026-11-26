@@ -786,6 +786,35 @@ def gen_idle(profile: dict) -> Clip:
     return Clip("idle", N, True, sample)
 
 
+def _pchip(xs, ys, m0, m1):
+    """ruling 72 fix round 1: a monotone cubic Hermite curve through (xs, ys) (Fritsch-Carlson slopes: no overshoot between
+    keys, so a foot path never dips under the floor key), the end slopes m0 / m1 given (limited to keep it monotone)"""
+    n = len(xs)
+    h = [xs[i + 1] - xs[i] for i in range(n - 1)]
+    d = [(ys[i + 1] - ys[i]) / h[i] for i in range(n - 1)]
+    m = [0.0] * n
+    for i in range(1, n - 1):
+        if d[i - 1] * d[i] > 0:
+            w1, w2 = 2 * h[i] + h[i - 1], h[i] + 2 * h[i - 1]
+            m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
+
+    def end(mm, dd):
+        if dd == 0 or mm * dd <= 0:
+            return 0.0
+        return dd * min(mm / dd, 3.0)
+    m[0], m[-1] = end(m0, d[0]), end(m1, d[-1])
+
+    def f(x):
+        i = 0
+        while i < n - 2 and x > xs[i + 1]:
+            i += 1
+        t = (x - xs[i]) / h[i]
+        t2, t3 = t * t, t * t * t
+        return ((2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h[i] * m[i]
+                + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h[i] * m[i + 1])
+    return f
+
+
 def gen_run(profile: dict) -> Clip:
     """Run cycle authored for profile['run_ref_speed']: contact / down / passing / up with exact
     planted-foot speed (no foot slide when played at that speed)."""
@@ -812,12 +841,30 @@ def gen_run(profile: dict) -> Clip:
     # speed rises (ease-in) to `match` x the stance's at the contact key, and the drop accelerates (power `drop`), so
     # the foot meets the ground moving with it and spends little time near it before the contact
     land = profile.get("run_land")
+    curves = None
+    # ruling 72 fix round 1 (`run_land` "heel", deg): the heel strike's pitch (the shared run's 9). The roll down about the
+    # heel carries the ankle forward against the stance, so the stride measure's planted speed (runRef) reads under the
+    # stance's own and the planted foot drifts back ~5 % of body speed; a flatter strike keeps the stance speed even
+    heel = land.get("heel", 9.0) if land else 9.0
     if land:
         s_r = land.get("at", 0.82)
-        r = land.get("match", 0.8) * (Ls / c) * (1 - c) * (1 - s_r) / 2     # quadratic ease-in: end speed 2r per unit
-        swing = swing[:4] + [(s_r, -Ls / 2 - r, land.get("lift", 0.08), 10.0), (1.00, -Ls / 2, 0.0, 9.0)]
+        vs = (Ls / c) * (1 - c)                                 # the stance's backward speed, m per unit of swing
+        r = land.get("match", 0.8) * vs * (1 - s_r) / 2         # the reach ahead of the contact key
+        swing = swing[:4] + [(s_r, -Ls / 2 - r, land.get("lift", 0.08), heel + 1.0), (1.00, -Ls / 2, 0.0, heel)]
+        if land.get("spline"):
+            # ruling 72 fix round 1 (opt-in `spline`): one smooth (C1, monotone cubic) curve per channel through the swing
+            # keys instead of a sine ease per segment, which stops the foot dead at every key: at the reach the foot
+            # hovered a frame, then the leg snapped to full reach (Ervet: a one-frame leg speed-up at each touchdown,
+            # verify_slide_r1). The swing leaves the stance at its backward speed, turns over smoothly at the reach and
+            # meets the contact sweeping back at `match` x the stance speed, coming down at `vz` m per unit of swing
+            ss = [k[0] for k in swing]
+            curves = [_pchip(ss, [k[1] for k in swing], vs, land.get("match", 0.8) * vs),
+                      _pchip(ss, [k[2] for k in swing], 0.0, -land.get("vz", 0.8)),
+                      _pchip(ss, [k[3] for k in swing], 0.0, 0.0)]
 
     def swing_at(s):
+        if curves:
+            return tuple(cv(min(1.0, max(0.0, s))) for cv in curves)
         for i in range(1, len(swing)):
             if s <= swing[i][0]:
                 a, b = swing[i - 1], swing[i]
@@ -829,15 +876,20 @@ def gen_run(profile: dict) -> Clip:
                 return tuple(a[k] + (b[k] - a[k]) * u for k in (1, 2, 3))
         return swing[-1][1:]
 
+    # ruling 72 fix round 1 (`run_land` "back", m): the whole foot path (stance and swing) sits that far further back under
+    # the body, so the leg is not at full reach (the IK's straight-leg lock, where a cm of foot travel turns the knee 20-30
+    # degrees in a frame) at the late swing and the touchdown; the stride length and the stance speed are unchanged
+    back = land.get("back", 0.0) if land else 0.0
+
     def foot_at(q):
         q %= 1.0
         if q < c:                                               # contact: exact v backward
             u = q / c
-            y = -Ls / 2 + Ls * u
-            pitch = 9.0 * (1 - sine(min(1.0, u / 0.25))) - 32.0 * max(0.0, (u - 0.62) / 0.38) ** 1.6
+            y = -Ls / 2 + Ls * u + back
+            pitch = heel * (1 - sine(min(1.0, u / 0.25))) - 32.0 * max(0.0, (u - 0.62) / 0.38) ** 1.6
             return (0.0, y, 0.0), pitch
         dy, dz, pitch = swing_at((q - c) / (1 - c))
-        return (0.0, dy, dz), pitch
+        return (0.0, dy + back, dz), pitch
 
     def sample(t):
         q = t % 1.0

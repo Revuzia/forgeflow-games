@@ -110,8 +110,10 @@ export const LOCO = { walkFull: 0.55, walkEdge: 0.65, hasteFrom: 1.3, hasteFull:
 export const RUN_MIN_RATE = 0.35;
 /** ruling 72: the bodies whose run contact was re-authored (anim.py gen_run run_land, true foot pitch) and that keep no walk
  *  (ruling 70) play the planted run down to this share of runRef, so a slow past 65 % does not slide them: under the 0.35
- *  floor the run plays 0.35 / r too fast (17 % at r 0.3). Every other body keeps RUN_MIN_RATE */
-export const RUN_MIN_RATE_BY_FIGHTER: Readonly<Record<string, number>> = { ervet: 0.2, rishal: 0.2 };
+ *  floor the run plays 0.35 / r too fast (17 % at r 0.3). Fix round 1: 0.13, under the slowest a moving fighter can go
+ *  (the sim's MIN_MOVE_SPEED 0.5 m/s: 0.15 x Ervet's runRef 3.30, 0.14 x Rishal's 3.68), so no slow slides them (at
+ *  0.2 the run played 33 % too fast at 0.15 x runRef). Every other body keeps RUN_MIN_RATE */
+export const RUN_MIN_RATE_BY_FIGHTER: Readonly<Record<string, number>> = { ervet: 0.13, rishal: 0.13 };
 
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 /** the walk's share of the locomotion blend at r = speed / runRef */

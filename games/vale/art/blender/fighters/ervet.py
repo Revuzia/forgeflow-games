@@ -1730,9 +1730,12 @@ BLOCKS = {
 MOTION = anim.motion_profile(weight="medium", weapon="two_hand", stance="guard", run_ref_speed=3.45, blocks=BLOCKS)
 # ruling 72: the run's feet turn as anim.FootTarget documents (true_pitch: the heel lands first and rises at toe-off; on the
 # shared biped the pitch had the toe touching down first while the foot still hovered, and the heel sinking at toe-off), and
-# the swing sweeps back into the contact (anim.gen_run run_land): the planted toe 15-19 % (Ervet) / 22-31 % (Rishal) of body
-# speed in the renderer -> toe 2.4-3.5 %, ankle 4.6-5.3 % at 0.3-1.5 x runRef
-RUN_LAND = {"match": 0.8, "at": 0.82, "lift": 0.08, "drop": 2.5, "true_pitch": True}
+# the swing sweeps back into the contact (anim.gen_run run_land): the planted toe 15-19 % of body speed in the renderer ->
+# about 2-5 %. Fix round 1 (verify_slide_r1): the swing is one smooth curve (spline: no dead stop at the reach, then a snap to
+# full reach at the touchdown), the foot path sits 10 cm further back under her (back: her leg reached 1.000 of thigh + shin
+# at the touchdown, the IK's straight-leg lock), and the heel strike is 7 degrees (heel: an even stance speed)
+RUN_LAND = {"match": 0.8, "at": 0.82, "lift": 0.08, "spline": True, "vz": 0.8, "back": 0.10, "heel": 7.0,
+            "true_pitch": True}
 GRIP_L = -0.125         # the left hand on the grip, toward the pommel from the right palm (m along the blade)
 F = FootTarget
 
