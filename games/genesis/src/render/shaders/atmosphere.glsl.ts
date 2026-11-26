@@ -9,6 +9,18 @@
 // Positions are relative to the planet CENTRE, in metres, in whatever frame the caller uses (only dot products).
 
 import { DEPTH_DECODE } from './revz.ts';
+import { perfSwitch } from '../perfswitch.ts';
+
+/**
+ * (LOADTIME, `?lutlod=0` = as before) the transmittance and multiple-scattering LUTs are read at an explicit level 0.
+ * Both are LINEAR / LINEAR targets with no mip chain (sky/atmosphere.ts lutTarget), so the level of detail selects
+ * nothing: the texel values are the same as texture()'s. But sunTransmittance / msLookup are called inside loops with a
+ * `break` (atmoIntegrate's 64 steps, the cloud march's 480), and a sample with implicit derivatives in such a loop is
+ * what Direct3D cannot compile as written: ANGLE has to emit a second "Lod0" copy of every function on the way and
+ * the compiler has to prove the loop's shape. With textureLod there is no gradient in those loops at all.
+ */
+const LUT_LOD = perfSwitch('lutlod');
+const lutTap = (sampler: string, uv: string) => (LUT_LOD ? `textureLod(${sampler}, ${uv}, 0.0)` : `texture(${sampler}, ${uv})`);
 
 export const ATMO_PARS = /* glsl */ `
 #ifndef GENESIS_ATMO
@@ -75,13 +87,13 @@ vec3 sunTransmittance(float r, float mu) {
   }
   r = clamp(r, uRg + 0.5, uRt);
   float muH = -sqrt(max(0.0, 1.0 - (uRg * uRg) / (r * r)));
-  vec3 t = texture(uTransLUT, transLutUV(r, max(mu, muH + 0.004))).rgb;
+  vec3 t = ${lutTap('uTransLUT', 'transLutUV(r, max(mu, muH + 0.004))')}.rgb;
   return t * smoothstep(muH - 0.012, muH + 0.006, mu);
 }
 
 vec3 msLookup(float r, float muS) {
   vec2 uv = vec2(0.5 / 32.0 + (muS * 0.5 + 0.5) * (31.0 / 32.0), 0.5 / 32.0 + clamp((r - uRg) / (uRt - uRg), 0.0, 1.0) * (31.0 / 32.0));
-  return texture(uMsLUT, uv).rgb;
+  return ${lutTap('uMsLUT', 'uv')}.rgb;
 }
 
 // Integrate single (+ multiple) scattering along o + d·t for t in [t0, t1]. o is relative to the planet centre.

@@ -37,7 +37,7 @@ for f in sorted(os.listdir(D), reverse=True):
         bound = re.split(r'<=|<|>=|>|!=', cond)[-1].strip()
         const = bool(re.fullmatch(r'[0-9.]+|[A-Z_][A-Z0-9_]*', bound))
         tex = bool(imp.search(b)); viafn = [x for x in implicit_fn if re.search(r'\b' + re.escape(x) + r'\s*\(', b)]
-        owner = next((n for n, fb in funcs.items() if m.group(0) in fb), '?')
+        owner = min((n for n, fb in funcs.items() if m.group(0) in fb), key=lambda n: len(funcs[n]), default='?')
         loops.append((owner, cond.strip(), const, tex, viafn[:3], 'discard' in b, 'break' in b, len(b)))
     rows.append((len(s), f, s, funcs, loops))
 rows.sort(key=lambda r: -r[0])

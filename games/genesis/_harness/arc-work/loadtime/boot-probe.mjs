@@ -89,9 +89,11 @@ if (opts.land) {
     const G = window.__GENESIS__, st = G.state();
     const id = st.camera?.planet ?? st.planets?.[0]?.id ?? 0, radius = st.planets.find((p) => p.id === id).radius;
     await G.camera({ mode: 'orbit', planet: id, lat: 18, lon: -35, dist: Math.max(2, radius * 2.6 * Math.exp((4 * -800 + 2 * 80) * 0.0013)), yaw: 0, blend: 0 });
+    const t0 = performance.now();
     await G.frames(n);
     G.hold(true);
-  }, Number(opts.land));
+    return Math.round(performance.now() - t0);
+  }, Number(opts.land)).then((ms) => console.log(`landing: ${opts.land} frames in ${ms} ms`));
   await page.locator('#game').screenshot({ path: join(OUT, `${tag}-land.png`) });
 }
 if (opts.dump) {
