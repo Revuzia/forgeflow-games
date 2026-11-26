@@ -20,7 +20,8 @@ import type { PlanetView } from './client/worldview.ts';
 import { qRotate, qRotateInv } from './client/orbits.ts';
 import { tangentBasis } from './sim/core/vec3.ts';
 import { Renderer } from './render/renderer.ts';
-import { perfNum } from './render/perfswitch.ts';
+import { perfNum, perfSwitchNote } from './render/perfswitch.ts';
+import { showGpuNotice } from './ui/gpunotice.ts';
 import { bootCompileOn, bootTrace, guardedFrame, programsReady, requestPasses, showBootTrace } from './render/boot.ts';
 import { newPose, copyPose, type CameraPose } from './render/frame.ts';
 import { capturePhoto } from './render/camera/photo.ts';
@@ -396,12 +397,18 @@ export class App implements UiHost {
       bootTrace.mark(left.left ? `warm (${left.left} left)` : 'warm');
       this.renderer.cut();
     }
-    for (let i = 0; i < 3; i++) { this.frame(performance.now()); bootTrace.firstFrame(); }
+    for (let i = 0; i < 3; i++) { if (bootc) this.noBakes(() => this.frame(performance.now())); else this.frame(performance.now()); bootTrace.firstFrame(); }
     bootTrace.mark('frames');
     // (the old path, `?bootc=0` or no KHR_parallel_shader_compile: the frames above linked what they drew, one at a time)
     if (!bootc) perfmon.warmed = await this.renderer.warmUp();
     bootTrace.playable();
     if (/[?&]boottrace=1(&|$)/.test(location.search)) showBootTrace();
+    // (LOADTIME) software rendering or the processor's built-in graphics: a small notice with the way to fix it
+    try {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = String(gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+      perfSwitchNote('gpuclass', showGpuNotice(name));
+    } catch { /* hidden renderer string: no notice */ }
     this.startAt = performance.now();
     progress('', 1);
     this.running = true;
@@ -514,20 +521,29 @@ export class App implements UiHost {
       requestPasses(r, null, [(R.post as unknown as { fxaaMat?: ShaderMaterial }).fxaaMat]);
       await programsReady(tick);
       bootTrace.mark('passes');
-      // (no terrain tile is baked meanwhile: a bake reads the last frame's shadow maps, and a held-back shadow pass left none)
-      const vis = [...R.planets.values()] as unknown as { bakeTerrainCache(...a: unknown[]): void }[];
       for (let i = 0, clean = 0; i < 10 && clean < 1; i++) {
-        const own = vis.map((v) => Object.prototype.hasOwnProperty.call(v, 'bakeTerrainCache'));
-        for (const v of vis) v.bakeTerrainCache = () => { /* not during the boot compile */ };
-        let st: { skipped: number; asked: number };
-        try { st = guardedFrame(r, R.scene, () => this.frame(performance.now())); }
-        finally { vis.forEach((v, k) => { if (!own[k]) delete (v as { bakeTerrainCache?: unknown }).bakeTerrainCache; }); }
+        const st = this.noBakes(() => guardedFrame(r, R.scene, () => this.frame(performance.now())));
         const left = await programsReady(tick);
         if (!st.skipped && !st.asked) clean++;
         if (left.left) break;   // (gave up waiting: the frames below wait for the rest, as before)
       }
+      // the terrain cache's bake program (244 k chars): its first call only asks for the compile (tcache.ts bake:
+      // nothing is baked before `compiled`), so it joins the wait below instead of starting after the first frame
+      for (const v of R.planets.values()) { try { (v as unknown as { bakeTerrainCache(r: unknown, c: unknown): void }).bakeTerrainCache(r, R.camera); } catch { /* no cache */ } }
       bootTrace.mark('compiled');
     } catch (e) { console.warn('[genesis] boot compile failed (the first frames link their shaders as before)', e); }
+  }
+
+  /**
+   * run `fn` with the terrain cache's bakes off (a bake reads the last frame's shadow maps: none while the boot compile
+   * holds the shadow pass back; and the old boot never baked in its warm-up frames either — the bake program was not
+   * compiled yet)
+   */
+  private noBakes<T>(fn: () => T): T {
+    const vis = [...this.renderer.planets.values()] as unknown as { bakeTerrainCache?: unknown }[];
+    const own = vis.map((v) => Object.prototype.hasOwnProperty.call(v, 'bakeTerrainCache'));
+    for (const v of vis) v.bakeTerrainCache = () => { /* not during the boot */ };
+    try { return fn(); } finally { vis.forEach((v, k) => { if (!own[k]) delete v.bakeTerrainCache; }); }
   }
 
   private async startSim(boot: { scenario: string; packs: ContentPack[]; slot: SaveRecord | null }, progress: (msg: string, frac: number, note?: string) => void = () => {}): Promise<void> {

@@ -3108,3 +3108,30 @@ min-max spread up to 2x, so only medians and only large differences count. P = s
 - Mac round 23 (automatic, link in the chat of 2026-11-20 01:09 UTC, build 31d84347 on genesis-next) is NOT run yet: churn fix
   (FIX vs sun0), shcache, revz re-test, water msaa question, and look checks for edits and 1000x.
 - Then: upload the default-on build to genesis-preview and to `genesis/`, do the listing, portal rebuild.
+
+## RELEASE DEFAULTS (2026-11-26, implementer) — the three fixes are ON with no switch in the URL
+- DEFAULTS: `tcache` on (perfSwitch default true), `wfast=3`, `deepbed=1`, on every preset. `?tcache=0`, `?wfast=0` (1 / 2
+  as before), `?deepbed=0` give the earlier programs: the water's and the terrain's shader text and program keys are
+  byte-identical to commit 9c283c0a under every one of '' -> OLD, wfast=1, wfast=2, wfast=3, deepbed=1, tcache=1, FIX
+  (`_harness/scratch/arc/defaults/cmp.mjs`, sha1 of the sources built in node from both trees).
+- HEADER: `perf fixes` prints the values in effect: `deepbed=1 ... tcache=1(40.5MB,2L) ... wfast=3` with a bare URL
+  (was `deepbed=def tcache=0 wfast=def`); `tcache=0(fallback: <reason>)`, `wfast=0(fallback: anchors)`,
+  `deepbed=0(water=0)` when a fix cannot run. New helpers perfNumEff / perfGiven (perfswitch.ts).
+- FALLBACKS (tcache.ts top comment): no float render target -> cache off (the 8-bit normal store only with a typed
+  `?tcache=1`); tile arrays not allocated (GL error, null object, incomplete framebuffer) -> half the layers, down to 2,
+  then off; off = every patch on the full shader through the same program (slot table layer -1) = the old picture.
+- MEMORY BY PIXELS, NOT PRESET: arrays = 160 MB per render megapixel (2x the 81 MB / MP round 22 asked for), 2 layers
+  (40.5 MB) at least, `tcmb` (256) at most; grows (all tiles re-baked) when the view outgrows it; a typed `tcmb=` or
+  `tcache=1` = the fixed size of rounds 14-22. Mac Ultra 1686x963: 12 layers, 243 MB, as measured. Only the primary
+  planet's cache holds arrays (TerrainCache.idle).
+- BENCH: N = the shipped game; OLD = `tcache=0&wfast=0&deepbed=0` (plans water / terrain / full, BENCH.md). Rounds up
+  to 22: their "N" = today's OLD, their "FIX" = today's N.
+- GATE: check 1059 pass 0 fail (`_harness/scratch/arc/defaults/check1.log`), `npm run build` exit 0.
+- BOOTS (SwiftShader 480x270, High, full scene, landing y0, bare URL + wclock=100; logs in the same folder):
+  def / def2: `tcache=1(40.5MB,2L)`, 521 patches cached, 0 live, pix 100 %, used 18 MB, want 8 MB, full 0, bakes
+  658-691; `wfast=3`, `deepbed=1`; 0 page errors, no GL / shader message; shot LOOKED (sea, foam grain, coast, hills).
+  fb (texStorage3D of the 1152^2 arrays made a no-op by an init script = an allocation that fails):
+  `tcache=0(fallback: tile arrays not allocated)`, 521 live, ground and water drawn as in def, 0 page errors.
+- NOT VERIFIED HERE: any real GPU (Mac round with the bare URL); a GPU without float render targets; a real
+  out-of-memory; the regrow path (window enlarged / preset raised mid-session) and the idle path (two worlds) were
+  not exercised in a browser; Low / Medium / Ultra presets were not booted (High only).
