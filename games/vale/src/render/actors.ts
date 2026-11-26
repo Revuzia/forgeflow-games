@@ -78,7 +78,7 @@ import { structureMaterial } from './structures.ts';
 import { BAR_CLEAR, fighterBarAnchor } from './bar_clearance.ts';
 import { CAMERA } from './camera.ts';
 import { turnToward } from './turn.ts';
-import { blendFootTracks, blendSlipPct, hasteWeight, LOCO, locoCycleRate, measureStride, walkWeight } from './stride.ts';
+import { blendFootTracks, blendSlipPct, hasteWeight, LOCO, locoCycleRate, measureStride, RUN_MIN_RATE, RUN_MIN_RATE_BY_FIGHTER, walkWeight } from './stride.ts';
 import { type CcKind, ccKindOf } from '../contracts/sim.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
@@ -1109,6 +1109,8 @@ export class Actor implements CrowdActor {
   runRef = 3.6;
   /** orch1 W3-B (FU-9): the walk's planted speed (stride.ts), the shared run / walk phase and the walk's fade */
   private walkRef: number | undefined;
+  /** the run's lowest playback rate when it has no walk (stride.ts RUN_MIN_RATE; ruling 72 per fighter) */
+  private runMinRate = RUN_MIN_RATE;
   private walkPhase = 0;
   private locoPhase = 0;
   private locoFade = 0;
@@ -1202,6 +1204,7 @@ export class Actor implements CrowdActor {
     this.artHeight = def.art.height * def.art.scale;
     this.barHeight = this.artHeight + 0.35;
     this.runRef = def.art.runRefSpeed;
+    this.runMinRate = RUN_MIN_RATE_BY_FIGHTER[def.id] ?? RUN_MIN_RATE;     // ruling 72
     this.attackWindup = def.attack.windup;
     this.socketNames = def.art.sockets;
   }
@@ -1533,7 +1536,7 @@ export class Actor implements CrowdActor {
         walk.timeScale = 0; walk.time = ((this.locoPhase + this.walkPhase) % 1) * walk.getClip().duration;
       } else if (role === 'run') {
         const speed = Math.hypot(v.vx, v.vy);
-        act.timeScale = Math.max(0.35, Math.min(2.2, speed / Math.max(0.1, this.runRef)));
+        act.timeScale = Math.max(this.runMinRate, Math.min(2.2, speed / Math.max(0.1, this.runRef)));
         runAct = act;
       } else if ((role.startsWith('attack') || role === 'crit') && v.state === 'attack') {
         const impact = Math.max(0.05, this.attackWindup * (v.stateDuration || 1));

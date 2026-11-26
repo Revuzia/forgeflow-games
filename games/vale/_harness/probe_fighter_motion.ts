@@ -13,20 +13,26 @@
 //            renderer's walkPhase): gate |run - walk| <= 0.03 of a cycle
 //   pop      a ramp 0.85 -> 0.25 -> 0.85 x runRef over 3 s at 60 Hz (the renderer's eased weight): the largest jump in the
 //            hips' and feet's frame-to-frame velocity, against the steady gaits' (run at 0.85, walk at walkFull x runRef): gate <= 1.25 x
+//   run      (ruling 72) a body with no walk: its run at speed / runRef (the renderer's floor, per fighter) at 0.3-1.5 x runRef,
+//            the planted ankle's and toe's median world speed over the stance samples; gate <= 10 % on Ervet and Rishal (whose
+//            run contact was re-authored), informational on Hesmi and Burdam
 //   cc       the dominant CC order (contracts/sim.ts ccKindOf): stun over root, airborne over stun, the longer of a tie
 //
-//   node _harness/probe_fighter_motion.ts [--dir <art out fighters dir>] [--only budget,walk,blend,phase,pop,cc] [--out <json>]
+//   node _harness/probe_fighter_motion.ts [--dir <art out fighters dir>] [--only budget,run,walk,blend,phase,pop,cc] [--out <json>]
 //   → _harness/_reports/w3b_fighter_motion.json
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 /** ruling 70: the bodies whose run and walk do not blend play the live planted run and ship no walk clip */
 const NO_WALK = new Set(['hesmi', 'burdam', 'ervet', 'rishal']);
+/** ruling 72: the no-walk bodies whose run contact was re-authored: their slowed / hasted run is gated (<= 10 % at RUN_KS) */
+const RUN_GATED = new Set(['ervet', 'rishal']);
+const RUN_KS = [0.3, 0.4, 0.55, 0.72, 1, 1.3, 1.5];
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { type AnimationClip, AnimationMixer, type Object3D, PropertyBinding, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { blendFootTracks, blendSlipPct, footTracks, LOCO, locoCycleRate, measureStride, STRIDE, stanceVelocities, walkWeight } from '../src/render/stride.ts';
+import { blendFootTracks, blendSlipPct, footTracks, LOCO, locoCycleRate, measureStride, RUN_MIN_RATE, RUN_MIN_RATE_BY_FIGHTER, STRIDE, stanceVelocities, walkWeight } from '../src/render/stride.ts';
 import { ccKindOf, type StatusView } from '../src/contracts/sim.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -34,7 +40,7 @@ const ROOT = join(HERE, '..');
 const arg = (k: string, d: string): string => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
 const DIR = arg('dir', join(ROOT, 'art', 'out', 'fighters'));
 const OUT = arg('out', join(HERE, '_reports', 'w3b_fighter_motion.json'));
-const ONLY = new Set(arg('only', 'budget,walk,blend,phase,pop,cc').split(','));
+const ONLY = new Set(arg('only', 'budget,run,walk,blend,phase,pop,cc').split(','));
 const BUDGET_KIB = 1172;
 mkdirSync(dirname(OUT), { recursive: true });
 
@@ -82,9 +88,54 @@ for (const f of fighters) {
   const walk = clips.find((c) => c.name === 'walk');
   if (ONLY.has('budget') && !walk && !NO_WALK.has(f.id)) fails.push(`walk ${f.id}: no walk clip in ${f.art.model}`);
   if (ONLY.has('budget') && walk && NO_WALK.has(f.id)) fails.push(`walk ${f.id}: carries an unused walk clip (ruling 70)`);
-  if (!run || !walk) { row.skipped = !run ? 'no run' : 'no walk'; if (run && NO_WALK.has(f.id)) row.blend = 'off (no walk clip: run only, as live)'; continue; }
   const feet = [f.art.sockets?.foot_l, f.art.sockets?.foot_r].filter((x): x is string => !!x);
   const sc = f.art.scale ?? 1;
+  if (run && !walk && ONLY.has('run')) {
+    // ruling 72: a no-walk body plays its run at speed / runRef (floor RUN_MIN_RATE_BY_FIGHTER / RUN_MIN_RATE). Played at 60 Hz
+    // for 4 s with the body moving at k x runRef: a contact span is a point (ankle = foot socket, toe = toe bone) within 3 cm of
+    // its 5th-percentile height for >= 4 frames; slip = its horizontal travel over the span / the body's (the renderer
+    // measure of ruling 72, verify_anim_r3's method); the median span, % per point
+    const rm = measureStride(scene, run, feet, sc);
+    const ref = rm && rm.ref > f.art.runRefSpeed * 0.6 && rm.ref < f.art.runRefSpeed * 1.6 ? rm.ref : f.art.runRefSpeed;
+    const floor = RUN_MIN_RATE_BY_FIGHTER[f.id] ?? RUN_MIN_RATE;
+    const names = [...feet, ...feet.map((b) => b.replace(/^foot/, 'toe'))];
+    const nodes = names.map((b) => scene.getObjectByName(PropertyBinding.sanitizeNodeName(b)) ?? scene.getObjectByName(b));
+    if (nodes.every((n) => !!n)) {
+      scene.scale.setScalar(sc);
+      const mixer = new AnimationMixer(scene), act = mixer.clipAction(run);
+      act.play();
+      const out: Record<string, string> = {};
+      for (const k of RUN_KS) {
+        const speed = k * ref, rate = Math.max(floor, Math.min(LOCO.maxRate, k)), F = 240;
+        const tr: Vector3[][] = nodes.map(() => []);
+        for (let i = 0; i < F; i++) {
+          act.time = ((i / 60) * rate) % run.duration; mixer.update(0); scene.updateMatrixWorld(true);
+          nodes.forEach((n, j) => { const q = n!.getWorldPosition(new Vector3()); q.z += speed * i / 60; tr[j].push(q); });
+        }
+        const spans = (t: Vector3[]): number[] => {
+          const ys = t.map((q) => q.y).sort((a, b) => a - b), th = ys[Math.floor(ys.length * 0.05)] + 0.03, res: number[] = [];
+          let s0 = -1;
+          for (let i = 0; i <= t.length; i++) {
+            const on = i < t.length && t[i].y <= th;
+            if (on && s0 < 0) s0 = i;
+            if (!on && s0 >= 0) {
+              if (i - s0 >= 4 && s0 > 0 && i < t.length) res.push(100 * Math.hypot(t[i - 1].x - t[s0].x, t[i - 1].z - t[s0].z) / (speed * (i - 1 - s0) / 60));
+              s0 = -1;
+            }
+          }
+          return res;
+        };
+        const half = feet.length;
+        const ank = med(tr.slice(0, half).flatMap(spans)), toe = med(tr.slice(half).flatMap(spans));
+        out[`r${k}`] = `${ank.toFixed(1)} / ${toe.toFixed(1)}`;
+        if (RUN_GATED.has(f.id) && !(Math.max(ank, toe) <= 10)) fails.push(`run slip ${f.id} at ${k} runRef: ankle ${ank.toFixed(1)} / toe ${toe.toFixed(1)} % > 10 %`);
+      }
+      mixer.stopAllAction(); mixer.uncacheRoot(scene); scene.scale.setScalar(1);
+      row.runRef = r3(ref); row.runSlipPctAnkleToe = out;
+      if (!RUN_GATED.has(f.id)) row.runSlipNote = 'informational (not re-authored)';
+    }
+  }
+  if (!run || !walk) { row.skipped = !run ? 'no run' : 'no walk'; if (run && NO_WALK.has(f.id)) row.blend = 'off (no walk clip: run only, as live)'; continue; }
   const rm = measureStride(scene, run, feet, sc), wm = measureStride(scene, walk, feet, sc, LOCO.walkRange);
   const runRef = rm?.ref ?? f.art.runRefSpeed, walkRef = wm?.ref ?? null;
   // the renderer's walk phase offset (actors.ts fighterTemplate): the walk's touchdown minus the run's

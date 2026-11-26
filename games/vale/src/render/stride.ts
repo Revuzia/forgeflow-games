@@ -106,6 +106,13 @@ export const LOCO = { walkFull: 0.55, walkEdge: 0.65, hasteFrom: 1.3, hasteFull:
   /** the shared phase's rate stays within these multiples of the blended clip's own rate (the run's old clamp) */
   minRate: 0.35, maxRate: 2.2 } as const;
 
+/** a body without a walk plays its run at speed / runRef, never under this rate (the legs would freeze when it stops) */
+export const RUN_MIN_RATE = 0.35;
+/** ruling 72: the bodies whose run contact was re-authored (anim.py gen_run run_land, true foot pitch) and that keep no walk
+ *  (ruling 70) play the planted run down to this share of runRef, so a slow past 65 % does not slide them: under the 0.35
+ *  floor the run plays 0.35 / r too fast (17 % at r 0.3). Every other body keeps RUN_MIN_RATE */
+export const RUN_MIN_RATE_BY_FIGHTER: Readonly<Record<string, number>> = { ervet: 0.2, rishal: 0.2 };
+
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 /** the walk's share of the locomotion blend at r = speed / runRef */
 export const walkWeight = (r: number): number => clamp01((LOCO.walkEdge - r) / (LOCO.walkEdge - LOCO.walkFull));
