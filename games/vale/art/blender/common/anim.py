@@ -252,11 +252,15 @@ class FootTarget:
     toe: float = 0.0
     knee: float = 0.0
     weight: float = 1.0
+    # ruling 72 (opt-in): on the shared biped the pitch turns the foot the other way from this docstring (a pitch < 0 turns
+    # the toes UP about the ball, sinking the heel; > 0 the toes down about the heel). `true_pitch` turns it as documented
+    true_pitch: bool = False
 
     def lerp(self, o: "FootTarget", t: float) -> "FootTarget":
         f = lambda a, b: a + (b - a) * t  # noqa: E731
         return FootTarget(tuple(f(self.ankle[i], o.ankle[i]) for i in range(3)), f(self.pitch, o.pitch),
-                          f(self.yaw, o.yaw), f(self.toe, o.toe), f(self.knee, o.knee), f(self.weight, o.weight))
+                          f(self.yaw, o.yaw), f(self.toe, o.toe), f(self.knee, o.knee), f(self.weight, o.weight),
+                          self.true_pitch)
 
     def mirrored(self) -> "FootTarget":
         return FootTarget((-self.ankle[0], self.ankle[1], self.ankle[2]), self.pitch, -self.yaw, self.toe,
@@ -476,7 +480,8 @@ def _solve_foot(skel: Skeleton, pose: dict, M: dict, side: str, ft: FootTarget) 
     off = V(ft.ankle)
     # foot rotation in world: yaw about Z at the ankle, then pitch about the foot's lateral axis
     lat = rest_f.to_3x3().col[0].normalized()                     # foot local X ~ -X world
-    rot = Matrix.Rotation(math.radians(ft.yaw), 3, "Z") @ Matrix.Rotation(math.radians(-ft.pitch), 3, lat)
+    sg = -1.0 if ft.true_pitch else 1.0                           # ruling 72: see FootTarget.true_pitch
+    rot = Matrix.Rotation(math.radians(ft.yaw), 3, "Z") @ Matrix.Rotation(math.radians(-ft.pitch * sg), 3, lat)
     pivot = (heel0 if ft.pitch > 0 else ball0) + off
     ankle_t = pivot + rot @ (ankle0 + off - pivot)
     knee_dir = Matrix.Rotation(math.radians(ft.yaw + ft.knee), 3, "Z") @ V((0, -1, 0))
@@ -786,6 +791,10 @@ def gen_run(profile: dict) -> Clip:
     planted-foot speed (no foot slide when played at that speed)."""
     v = profile["run_ref_speed"]
     tm, amp, drop, c, bob, lean = WEIGHTS[profile["weight"]]
+    # ruling 72 (opt-in, per fighter): a body whose legs run straight at the ends of the shared stride gets its own
+    # contact share and a deeper stance drop (more knee, so the IK reaches the planted foot through the whole contact)
+    c = profile.get("run_contact", c)
+    drop += profile.get("run_drop", 0.0)
     cadence = profile.get("cadence", 1.0)
     N = int(round(20 * tm / cadence / 2)) * 2                  # frames per cycle (2 steps)
     T = N / FPS
@@ -796,12 +805,27 @@ def gen_run(profile: dict) -> Clip:
     # swing path keys relative to the rest ankle: (q in swing 0..1, dy, dz, pitch)
     swing = [(0.00, Ls / 2, 0.0, -32.0), (0.18, Ls / 2 + 0.10, 0.20, -58.0), (0.42, 0.10, 0.36, -38.0),
              (0.66, -Ls / 2 - 0.06, 0.24, -4.0), (0.86, -Ls / 2 - 0.03, 0.08, 10.0), (1.00, -Ls / 2, 0.0, 9.0)]
+    # ruling 72 (opt-in, `run_land`): the shared swing eases into its contact key, so the foot comes down slowly with no
+    # backward speed and hovers the last ~14 % of the swing within a few cm of the floor, carried forward with the body:
+    # on a body whose toe reaches the floor first (Ervet, Rishal) that is a forward skid at touchdown. With run_land the
+    # foot reaches out to its furthest at `at` (of the swing), held `lift` m up, then sweeps back and down: the backward
+    # speed rises (ease-in) to `match` x the stance's at the contact key, and the drop accelerates (power `drop`), so
+    # the foot meets the ground moving with it and spends little time near it before the contact
+    land = profile.get("run_land")
+    if land:
+        s_r = land.get("at", 0.82)
+        r = land.get("match", 0.8) * (Ls / c) * (1 - c) * (1 - s_r) / 2     # quadratic ease-in: end speed 2r per unit
+        swing = swing[:4] + [(s_r, -Ls / 2 - r, land.get("lift", 0.08), 10.0), (1.00, -Ls / 2, 0.0, 9.0)]
 
     def swing_at(s):
         for i in range(1, len(swing)):
             if s <= swing[i][0]:
                 a, b = swing[i - 1], swing[i]
-                u = sine((s - a[0]) / (b[0] - a[0]))
+                x = (s - a[0]) / (b[0] - a[0])
+                if land and i == len(swing) - 1:                # ruling 72: the sweep into the contact
+                    ud, uz = x * x, x ** land.get("drop", 2.5)
+                    return (a[1] + (b[1] - a[1]) * ud, a[2] + (b[2] - a[2]) * uz, a[3] + (b[3] - a[3]) * sine(x))
+                u = sine(x)
                 return tuple(a[k] + (b[k] - a[k]) * u for k in (1, 2, 3))
         return swing[-1][1:]
 
@@ -850,8 +874,9 @@ def gen_run(profile: dict) -> Clip:
                 arms["ik"][f"hand.{side}"] = HandTarget(rel=r)
         ik = dict(arms["ik"])
         ik.update(ikL)
-        ik["foot.L"] = FootTarget((0.012 + fl[0], fl[1] - 0.02, fl[2]), pl, -4, 0, 0)
-        ik["foot.R"] = FootTarget((-0.012 + fr[0], fr[1] - 0.02, fr[2]), pr, 4, 0, 0)
+        tp = bool(land and land.get("true_pitch", True))        # ruling 72: the heel rises at toe-off, not sinks
+        ik["foot.L"] = FootTarget((0.012 + fl[0], fl[1] - 0.02, fl[2]), pl, -4, 0, 0, 1.0, tp)
+        ik["foot.R"] = FootTarget((-0.012 + fr[0], fr[1] - 0.02, fr[2]), pr, 4, 0, 0, 1.0, tp)
         pose["hips_loc"] = (x, 0.02, z)
         pose["ik"] = ik
         return pose

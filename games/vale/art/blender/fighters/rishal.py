@@ -57,6 +57,11 @@ PALETTE = materials.bible_palette(dawnglass="#B9D0E2", chalk="#CDCECB", stone="#
                                   ink="#17181B", accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 MOTION = anim.motion_profile(weight="light", weapon="dual", stance="low", run_ref_speed=3.55)
+# ruling 72: the run's feet turn as anim.FootTarget documents (true_pitch: the heel lands first and rises at toe-off; on the
+# shared biped the pitch had the toe touching down first while the foot still hovered, and the heel sinking at toe-off), and
+# the swing sweeps back into the contact (anim.gen_run run_land): the planted toe 15-19 % (Ervet) / 22-31 % (Rishal) of body
+# speed in the renderer -> toe 2.4-3.5 %, ankle 4.6-5.3 % at 0.3-1.5 x runRef
+RUN_LAND = {"match": 0.8, "at": 0.82, "lift": 0.08, "drop": 2.5, "true_pitch": True}
 SOCKETS = {"weapon": "prop.R", "knife_tip_r": "x_knife_tip_r", "knife_tip_l": "x_knife_tip_l",
            "visor_ridge": "x_visor_ridge"}
 # the brief's splash (victory hold, yaw 22) and portrait (idle_lobby t 0, yaw 28); hero renders matte (HERO_SPEC: the
@@ -3738,7 +3743,7 @@ def _idle(g) -> anim.Clip:
 def _run() -> anim.Clip:
     """run at 3.55 m/s (the shared generator's planted feet, 16 f), a 15 degree lean, sprinter's arms swinging
     opposite the legs, the knives trailing behind the fists"""
-    base = anim.gen_run(dict(MOTION, weapon="none"))
+    base = anim.gen_run(dict(MOTION, weapon="none", run_land=RUN_LAND))
     N = base.frames
 
     def sample(t):
@@ -3764,7 +3769,7 @@ def _run() -> anim.Clip:
             ft = ik[f"foot.{side}"]      # the contact (ankle offset z 0) and its heel-ball roll are left exact
             if ft.ankle[2] > 1e-4:
                 ik[f"foot.{side}"] = FootTarget((ft.ankle[0], ft.ankle[1], ft.ankle[2] * 0.74), ft.pitch, ft.yaw,
-                                                ft.toe, ft.knee, ft.weight)
+                                                ft.toe, ft.knee, ft.weight, ft.true_pitch)
         p["ik"] = ik
         return p
     return anim.Clip("run", N, True, sample, meta=base.meta)

@@ -21,6 +21,13 @@
 //
 //   node art/tools/decimate_chains.mjs burdam.glb --restore-from live/burdam.glb --clip idle_lobby,victory,recall
 //        --drop-clip walk
+//
+// --bones <regex> (ruling 72) limits --restore-from to the nodes whose names match: with an animation-only GLB of a re-authored
+// clip (art/blender/fighters/_motion_pass.py) as the source it splices those bones' tracks into the shipped clip and keeps every
+// other track (the hands and props fixed on the GLB after its build) as shipped.
+//
+//   node art/tools/decimate_chains.mjs ervet.glb --restore-from ervet_run_anim.glb --clip run --restore-deg 0
+//        --bones '^(thigh|shin|foot|toe)\.[LR]$'
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { statSync } from 'node:fs';
@@ -28,7 +35,7 @@ import sharp from 'sharp';
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
-const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--every', '--prefix', '--orm-q', '--normal-q', '--clip', '--restore-from', '--restore-deg', '--drop-clip'].includes(args[i - 1])));
+const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--every', '--prefix', '--orm-q', '--normal-q', '--clip', '--restore-from', '--restore-deg', '--drop-clip', '--bones'].includes(args[i - 1])));
 if (!files.length) {
   console.error('usage: node art/tools/decimate_chains.mjs in.glb [out.glb] [--every 2] [--prefix x_]');
   process.exit(2);
@@ -90,6 +97,7 @@ let restored = 0;
 if (restoreFrom) {
   if (!clips) throw new Error('--restore-from needs --clip');
   const tol = Number(opt('--restore-deg', 0.5));
+  const bones = opt('--bones', null) ? new RegExp(opt('--bones', '')) : null;
   const live = await io.read(restoreFrom);
   const liveTimes = new Map();
   const quat = (acc, i) => { const e = []; acc.getElement(i, e); const l = Math.hypot(...e) || 1; return e.map((x) => x / l); };
@@ -112,6 +120,7 @@ if (restoreFrom) {
     for (const lc of la.listChannels()) {
       if (lc.getTargetPath() !== 'rotation' || !lc.getTargetNode()) continue;
       const nodeName = lc.getTargetNode().getName();
+      if (bones && !bones.test(nodeName)) continue;
       const node = root.listNodes().find((n) => n.getName() === nodeName);
       if (!node) continue;
       const ls = lc.getSampler();

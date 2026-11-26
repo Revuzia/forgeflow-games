@@ -1728,6 +1728,11 @@ BLOCKS = {
     "dash":    ((0.05, 0.40, -0.85), (-0.7, 0.5, 0.2), (-0.30, 0.80, -0.50), (0.20, 0.60, -0.70), None),
 }
 MOTION = anim.motion_profile(weight="medium", weapon="two_hand", stance="guard", run_ref_speed=3.45, blocks=BLOCKS)
+# ruling 72: the run's feet turn as anim.FootTarget documents (true_pitch: the heel lands first and rises at toe-off; on the
+# shared biped the pitch had the toe touching down first while the foot still hovered, and the heel sinking at toe-off), and
+# the swing sweeps back into the contact (anim.gen_run run_land): the planted toe 15-19 % (Ervet) / 22-31 % (Rishal) of body
+# speed in the renderer -> toe 2.4-3.5 %, ankle 4.6-5.3 % at 0.3-1.5 x runRef
+RUN_LAND = {"match": 0.8, "at": 0.82, "lift": 0.08, "drop": 2.5, "true_pitch": True}
 GRIP_L = -0.125         # the left hand on the grip, toward the pommel from the right palm (m along the blade)
 F = FootTarget
 
@@ -1797,7 +1802,7 @@ def clip_overrides(ctx) -> dict:
     skel = anim.Skeleton(ctx.info.armature)
     _GUARD["pose"] = _build_guard(ctx, skel)
     g = anim.guard(prof)
-    run = anim.gen_run(prof)                                         # both hands on the grip, the blade trailing
+    run = anim.gen_run(dict(prof, run_land=RUN_LAND))                # both hands on the grip, the blade trailing
     run_fn = run.sample
 
     def run_sample(t):
