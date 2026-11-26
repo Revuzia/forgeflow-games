@@ -1,0 +1,281 @@
+{
+ "picks": [
+  [
+   "ervet",
+   "ervet_base"
+  ],
+  [
+   "rishal",
+   "rishal_base"
+  ]
+ ],
+ "res": [
+  {
+   "rWant": 0.4,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.53,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.4,
+   "speed": 1.412,
+   "ankle": 4.9,
+   "ankleP90": 4.9,
+   "toe": 18.5,
+   "toeP90": 18.5,
+   "spans": [
+    5,
+    6
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.4,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 4.45,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.4,
+   "speed": 1.78,
+   "ankle": 19,
+   "ankleP90": 31.7,
+   "toe": 23.7,
+   "toeP90": 23.7,
+   "spans": [
+    11,
+    7
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 0.5,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.53,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.5,
+   "speed": 1.765,
+   "ankle": 4.2,
+   "ankleP90": 5.8,
+   "toe": 16.5,
+   "toeP90": 16.5,
+   "spans": [
+    7,
+    7
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.5,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 4.45,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.5,
+   "speed": 2.225,
+   "ankle": 2.5,
+   "ankleP90": 32.7,
+   "toe": 23.2,
+   "toeP90": 23.2,
+   "spans": [
+    19,
+    8
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 0.6,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.53,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.6,
+   "speed": 2.118,
+   "ankle": 4.9,
+   "ankleP90": 5.5,
+   "toe": 17.5,
+   "toeP90": 18.5,
+   "spans": [
+    9,
+    8
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.6,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 4.45,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.6,
+   "speed": 2.67,
+   "ankle": 23.5,
+   "ankleP90": 31.7,
+   "toe": 24,
+   "toeP90": 26.3,
+   "spans": [
+    21,
+    10
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 0.72,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.53,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.72,
+   "speed": 2.542,
+   "ankle": 5.1,
+   "ankleP90": 5.8,
+   "toe": 16.8,
+   "toeP90": 18.5,
+   "spans": [
+    10,
+    10
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.72,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 4.45,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.72,
+   "speed": 3.204,
+   "ankle": 31.7,
+   "ankleP90": 35.3,
+   "toe": 23.9,
+   "toeP90": 25.4,
+   "spans": [
+    15,
+    13
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 1,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.53,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1,
+   "speed": 3.53,
+   "ankle": 4.1,
+   "ankleP90": 4.1,
+   "toe": 16.3,
+   "toeP90": 16.3,
+   "spans": [
+    14,
+    14
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 1,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 4.45,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1,
+   "speed": 4.45,
+   "ankle": null,
+   "ankleP90": null,
+   "toe": null,
+   "toeP90": null,
+   "spans": [
+    0,
+    0
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 1.3,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.53,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1.3,
+   "speed": 4.589,
+   "ankle": 3.3,
+   "ankleP90": 5.5,
+   "toe": 15.4,
+   "toeP90": 18.1,
+   "spans": [
+    19,
+    19
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 1.3,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 4.45,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1.3,
+   "speed": 5.785,
+   "ankle": 31.9,
+   "ankleP90": 33.3,
+   "toe": 22.2,
+   "toeP90": 24.7,
+   "spans": [
+    7,
+    24
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 1.5,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.53,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1.5,
+   "speed": 5.295,
+   "ankle": 2.5,
+   "ankleP90": 4.1,
+   "toe": 16.3,
+   "toeP90": 19.7,
+   "spans": [
+    22,
+    22
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 1.5,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 4.45,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1.498,
+   "speed": 6.666,
+   "ankle": 26.3,
+   "ankleP90": 26.3,
+   "toe": 20.7,
+   "toeP90": 23.2,
+   "spans": [
+    18,
+    28
+   ],
+   "skin": "rishal_base"
+  }
+ ],
+ "logs": []
+}

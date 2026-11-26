@@ -1,0 +1,475 @@
+{
+ "picks": [
+  [
+   "ervet",
+   "ervet_base"
+  ],
+  [
+   "ervet",
+   "ervet_stillwater"
+  ],
+  [
+   "ervet",
+   "ervet_lamplit"
+  ]
+ ],
+ "res": [
+  {
+   "rWant": 0.3,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.3,
+   "speed": 0.981,
+   "ankle": 5,
+   "ankleP90": 5.2,
+   "toe": 2.5,
+   "toeP90": 2.7,
+   "spans": [
+    4,
+    4
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.3,
+   "i": 1,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.3,
+   "speed": 0.981,
+   "ankle": 5,
+   "ankleP90": 5.2,
+   "toe": 2.5,
+   "toeP90": 2.7,
+   "spans": [
+    4,
+    4
+   ],
+   "skin": "ervet_stillwater"
+  },
+  {
+   "rWant": 0.3,
+   "i": 2,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.3,
+   "speed": 0.981,
+   "ankle": 5,
+   "ankleP90": 5.2,
+   "toe": 2.5,
+   "toeP90": 2.7,
+   "spans": [
+    4,
+    4
+   ],
+   "skin": "ervet_lamplit"
+  },
+  {
+   "rWant": 0.4,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.4,
+   "speed": 1.308,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 2.7,
+   "toeP90": 2.7,
+   "spans": [
+    6,
+    5
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.4,
+   "i": 1,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.4,
+   "speed": 1.308,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 2.7,
+   "toeP90": 2.7,
+   "spans": [
+    6,
+    5
+   ],
+   "skin": "ervet_stillwater"
+  },
+  {
+   "rWant": 0.4,
+   "i": 2,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.4,
+   "speed": 1.308,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 2.7,
+   "toeP90": 2.7,
+   "spans": [
+    6,
+    5
+   ],
+   "skin": "ervet_lamplit"
+  },
+  {
+   "rWant": 0.5,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.5,
+   "speed": 1.635,
+   "ankle": 5.2,
+   "ankleP90": 5.2,
+   "toe": 2.7,
+   "toeP90": 2.7,
+   "spans": [
+    7,
+    7
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.5,
+   "i": 1,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.5,
+   "speed": 1.635,
+   "ankle": 5.2,
+   "ankleP90": 5.2,
+   "toe": 2.7,
+   "toeP90": 2.7,
+   "spans": [
+    7,
+    7
+   ],
+   "skin": "ervet_stillwater"
+  },
+  {
+   "rWant": 0.5,
+   "i": 2,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.5,
+   "speed": 1.635,
+   "ankle": 5.2,
+   "ankleP90": 5.2,
+   "toe": 2.7,
+   "toeP90": 2.7,
+   "spans": [
+    7,
+    7
+   ],
+   "skin": "ervet_lamplit"
+  },
+  {
+   "rWant": 0.6,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.6,
+   "speed": 1.962,
+   "ankle": 4.8,
+   "ankleP90": 5,
+   "toe": 2.4,
+   "toeP90": 2.7,
+   "spans": [
+    9,
+    9
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.6,
+   "i": 1,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.6,
+   "speed": 1.962,
+   "ankle": 4.8,
+   "ankleP90": 5,
+   "toe": 2.4,
+   "toeP90": 2.7,
+   "spans": [
+    9,
+    9
+   ],
+   "skin": "ervet_stillwater"
+  },
+  {
+   "rWant": 0.6,
+   "i": 2,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.6,
+   "speed": 1.962,
+   "ankle": 4.8,
+   "ankleP90": 5,
+   "toe": 2.4,
+   "toeP90": 2.7,
+   "spans": [
+    9,
+    9
+   ],
+   "skin": "ervet_lamplit"
+  },
+  {
+   "rWant": 0.72,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.72,
+   "speed": 2.354,
+   "ankle": 5,
+   "ankleP90": 5.1,
+   "toe": 2.4,
+   "toeP90": 2.7,
+   "spans": [
+    10,
+    10
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 0.72,
+   "i": 1,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.72,
+   "speed": 2.354,
+   "ankle": 5,
+   "ankleP90": 5.1,
+   "toe": 2.4,
+   "toeP90": 2.7,
+   "spans": [
+    10,
+    10
+   ],
+   "skin": "ervet_stillwater"
+  },
+  {
+   "rWant": 0.72,
+   "i": 2,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 0.72,
+   "speed": 2.354,
+   "ankle": 5,
+   "ankleP90": 5.1,
+   "toe": 2.4,
+   "toeP90": 2.7,
+   "spans": [
+    10,
+    10
+   ],
+   "skin": "ervet_lamplit"
+  },
+  {
+   "rWant": 1,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1,
+   "speed": 3.27,
+   "ankle": 4.9,
+   "ankleP90": 4.9,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    14,
+    14
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 1,
+   "i": 1,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1,
+   "speed": 3.27,
+   "ankle": 4.9,
+   "ankleP90": 4.9,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    14,
+    14
+   ],
+   "skin": "ervet_stillwater"
+  },
+  {
+   "rWant": 1,
+   "i": 2,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1,
+   "speed": 3.27,
+   "ankle": 4.9,
+   "ankleP90": 4.9,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    14,
+    14
+   ],
+   "skin": "ervet_lamplit"
+  },
+  {
+   "rWant": 1.3,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1.3,
+   "speed": 4.251,
+   "ankle": 5.1,
+   "ankleP90": 5.3,
+   "toe": 2.5,
+   "toeP90": 3.4,
+   "spans": [
+    19,
+    19
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 1.3,
+   "i": 1,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1.3,
+   "speed": 4.251,
+   "ankle": 5.1,
+   "ankleP90": 5.3,
+   "toe": 2.5,
+   "toeP90": 3.4,
+   "spans": [
+    19,
+    19
+   ],
+   "skin": "ervet_stillwater"
+  },
+  {
+   "rWant": 1.3,
+   "i": 2,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1.3,
+   "speed": 4.251,
+   "ankle": 5.1,
+   "ankleP90": 5.3,
+   "toe": 2.5,
+   "toeP90": 3.4,
+   "spans": [
+    19,
+    19
+   ],
+   "skin": "ervet_lamplit"
+  },
+  {
+   "rWant": 1.5,
+   "i": 0,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1.5,
+   "speed": 4.905,
+   "ankle": 5.2,
+   "ankleP90": 5.3,
+   "toe": 2.7,
+   "toeP90": 3.1,
+   "spans": [
+    22,
+    22
+   ],
+   "skin": "ervet_base"
+  },
+  {
+   "rWant": 1.5,
+   "i": 1,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1.5,
+   "speed": 4.905,
+   "ankle": 5.2,
+   "ankleP90": 5.3,
+   "toe": 2.7,
+   "toeP90": 3.1,
+   "spans": [
+    22,
+    22
+   ],
+   "skin": "ervet_stillwater"
+  },
+  {
+   "rWant": 1.5,
+   "i": 2,
+   "def": "ervet",
+   "runRef": 3.27,
+   "walk": false,
+   "ms": 3.45,
+   "r": 1.5,
+   "speed": 4.905,
+   "ankle": 5.2,
+   "ankleP90": 5.3,
+   "toe": 2.7,
+   "toeP90": 3.1,
+   "spans": [
+    22,
+    22
+   ],
+   "skin": "ervet_lamplit"
+  }
+ ],
+ "logs": []
+}

@@ -1,0 +1,475 @@
+{
+ "picks": [
+  [
+   "rishal",
+   "rishal_base"
+  ],
+  [
+   "rishal",
+   "rishal_chalkline"
+  ],
+  [
+   "rishal",
+   "rishal_lamplit"
+  ]
+ ],
+ "res": [
+  {
+   "rWant": 0.3,
+   "i": 0,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.3,
+   "speed": 1.104,
+   "ankle": 5.3,
+   "ankleP90": 5.4,
+   "toe": 3,
+   "toeP90": 3.1,
+   "spans": [
+    5,
+    5
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 0.3,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.3,
+   "speed": 1.104,
+   "ankle": 5.3,
+   "ankleP90": 5.4,
+   "toe": 3,
+   "toeP90": 3.1,
+   "spans": [
+    5,
+    5
+   ],
+   "skin": "rishal_chalkline"
+  },
+  {
+   "rWant": 0.3,
+   "i": 2,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.3,
+   "speed": 1.104,
+   "ankle": 5.3,
+   "ankleP90": 5.4,
+   "toe": 3,
+   "toeP90": 3.1,
+   "spans": [
+    5,
+    5
+   ],
+   "skin": "rishal_lamplit"
+  },
+  {
+   "rWant": 0.4,
+   "i": 0,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.4,
+   "speed": 1.472,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    7,
+    7
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 0.4,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.4,
+   "speed": 1.472,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    7,
+    7
+   ],
+   "skin": "rishal_chalkline"
+  },
+  {
+   "rWant": 0.4,
+   "i": 2,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.4,
+   "speed": 1.472,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    7,
+    7
+   ],
+   "skin": "rishal_lamplit"
+  },
+  {
+   "rWant": 0.5,
+   "i": 0,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.5,
+   "speed": 1.84,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    9,
+    9
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 0.5,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.5,
+   "speed": 1.84,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    9,
+    9
+   ],
+   "skin": "rishal_chalkline"
+  },
+  {
+   "rWant": 0.5,
+   "i": 2,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.5,
+   "speed": 1.84,
+   "ankle": 5,
+   "ankleP90": 5,
+   "toe": 3.1,
+   "toeP90": 3.1,
+   "spans": [
+    9,
+    9
+   ],
+   "skin": "rishal_lamplit"
+  },
+  {
+   "rWant": 0.6,
+   "i": 0,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.6,
+   "speed": 2.208,
+   "ankle": 4.7,
+   "ankleP90": 5.4,
+   "toe": 3,
+   "toeP90": 3.1,
+   "spans": [
+    10,
+    10
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 0.6,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.6,
+   "speed": 2.208,
+   "ankle": 4.7,
+   "ankleP90": 5.4,
+   "toe": 3,
+   "toeP90": 3.1,
+   "spans": [
+    10,
+    10
+   ],
+   "skin": "rishal_chalkline"
+  },
+  {
+   "rWant": 0.6,
+   "i": 2,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.6,
+   "speed": 2.208,
+   "ankle": 4.7,
+   "ankleP90": 5.4,
+   "toe": 3,
+   "toeP90": 3.1,
+   "spans": [
+    10,
+    10
+   ],
+   "skin": "rishal_lamplit"
+  },
+  {
+   "rWant": 0.72,
+   "i": 0,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.72,
+   "speed": 2.65,
+   "ankle": 4.7,
+   "ankleP90": 5.6,
+   "toe": 3.1,
+   "toeP90": 3.2,
+   "spans": [
+    13,
+    13
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 0.72,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.72,
+   "speed": 2.65,
+   "ankle": 4.7,
+   "ankleP90": 5.6,
+   "toe": 3.1,
+   "toeP90": 3.2,
+   "spans": [
+    13,
+    13
+   ],
+   "skin": "rishal_chalkline"
+  },
+  {
+   "rWant": 0.72,
+   "i": 2,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 0.72,
+   "speed": 2.65,
+   "ankle": 4.7,
+   "ankleP90": 5.6,
+   "toe": 3.1,
+   "toeP90": 3.2,
+   "spans": [
+    13,
+    13
+   ],
+   "skin": "rishal_lamplit"
+  },
+  {
+   "rWant": 1,
+   "i": 0,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1,
+   "speed": 3.68,
+   "ankle": 4.6,
+   "ankleP90": 4.6,
+   "toe": 3.3,
+   "toeP90": 3.3,
+   "spans": [
+    19,
+    18
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 1,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1,
+   "speed": 3.68,
+   "ankle": 4.6,
+   "ankleP90": 4.6,
+   "toe": 3.3,
+   "toeP90": 3.3,
+   "spans": [
+    19,
+    18
+   ],
+   "skin": "rishal_chalkline"
+  },
+  {
+   "rWant": 1,
+   "i": 2,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1,
+   "speed": 3.68,
+   "ankle": 4.6,
+   "ankleP90": 4.6,
+   "toe": 3.3,
+   "toeP90": 3.3,
+   "spans": [
+    19,
+    18
+   ],
+   "skin": "rishal_lamplit"
+  },
+  {
+   "rWant": 1.3,
+   "i": 0,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1.3,
+   "speed": 4.784,
+   "ankle": 4.8,
+   "ankleP90": 5.3,
+   "toe": 3.5,
+   "toeP90": 4.4,
+   "spans": [
+    24,
+    24
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 1.3,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1.3,
+   "speed": 4.784,
+   "ankle": 4.8,
+   "ankleP90": 5.3,
+   "toe": 3.5,
+   "toeP90": 4.4,
+   "spans": [
+    24,
+    24
+   ],
+   "skin": "rishal_chalkline"
+  },
+  {
+   "rWant": 1.3,
+   "i": 2,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1.3,
+   "speed": 4.784,
+   "ankle": 4.8,
+   "ankleP90": 5.3,
+   "toe": 3.5,
+   "toeP90": 4.4,
+   "spans": [
+    24,
+    24
+   ],
+   "skin": "rishal_lamplit"
+  },
+  {
+   "rWant": 1.5,
+   "i": 0,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1.5,
+   "speed": 5.52,
+   "ankle": 5.3,
+   "ankleP90": 5.6,
+   "toe": 3.3,
+   "toeP90": 4.3,
+   "spans": [
+    28,
+    27
+   ],
+   "skin": "rishal_base"
+  },
+  {
+   "rWant": 1.5,
+   "i": 1,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1.5,
+   "speed": 5.52,
+   "ankle": 5.3,
+   "ankleP90": 5.6,
+   "toe": 3.3,
+   "toeP90": 4.3,
+   "spans": [
+    28,
+    27
+   ],
+   "skin": "rishal_chalkline"
+  },
+  {
+   "rWant": 1.5,
+   "i": 2,
+   "def": "rishal",
+   "runRef": 3.68,
+   "walk": false,
+   "ms": 3.55,
+   "r": 1.5,
+   "speed": 5.52,
+   "ankle": 5.3,
+   "ankleP90": 5.6,
+   "toe": 3.3,
+   "toeP90": 4.3,
+   "spans": [
+    28,
+    27
+   ],
+   "skin": "rishal_lamplit"
+  }
+ ],
+ "logs": []
+}
